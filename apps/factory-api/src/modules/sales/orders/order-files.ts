@@ -32,6 +32,11 @@ import type { OrderRow } from './store'
 import { shipmentsOfOrderWhere } from '../../shipping/shipments/orders-of'
 // B-CP-023 (customer page plan, the money wall D6, L1; review B1, D1): a priced file only for someone who sees prices.
 import { seesPrices } from '@nexus/factory-domain/files/priced'
+// B-PT-013 (order production tab R13): the customer's tech pack — the inquiry the order came from (the inquiries' own finder) and
+// its files at their version in force.
+import { SALES_INQUIRIES_VIEW } from '@nexus/factory-domain/sales/inquiries/permissions'
+import { inquiryOfOrder } from '../inquiries/quote'
+import { techPackOf } from '../inquiries/views'
 
 /**
  * B-SA-036 (Sales page plan N9, P14, R7; 13-backend B11; review BW-1): EVERY file of one sales order for the office, by where it
@@ -51,6 +56,13 @@ import { seesPrices } from '@nexus/factory-domain/files/priced'
  *                                                                                                    quality.inspections.view
  *   SHIPMENTS  Shipments & invoices   its shipments (POD), DDTs                         shipping.view; its invoices invoices.view
  *   RETURNS    Returns & complaints   its returns                               sales.returns.view; its complaints quality.complaints.view
+ *   TECH_PACK  Customer's tech pack   B-PT-013: the files of the inquiry the order came from (sales/inquiries quote inquiryOfOrder: its
+ *                                     quote's inquiry, else the one naming the order), each at its version in force (inquiries
+ *                                     techPackOf) with `techPack` {named, inForce, newer}       sales.inquiries.view (else counted)
+ *                                     Fail closed: an inquiry of another customer or company linked by mistake gives no group; a file
+ *                                     whose record cannot be placed (unknown scope) or names another customer is counted, never listed;
+ *                                     a file of a record that names no party (a mail's) passes on the company — the reader reached THIS
+ *                                     order and its inquiry first
  *
  * The brand wall (Owner rule 2026-11-16): the order is found with orders.view over its company and customer (else "Sales order not
  * found.", the words of an unknown id); each file again through the office's own file rule — its RECORD's scope
@@ -66,7 +78,8 @@ import { seesPrices } from '@nexus/factory-domain/files/priced'
  * files and anything not known. The small previews and PDF links of the cards are POST …/files/previews (./order-files-previews.ts).
  */
 
-export const ORDER_FILE_GROUPS = ['ORDER', 'LINES', 'REQUESTS', 'PRODUCTION', 'QUALITY', 'SHIPMENTS', 'RETURNS'] as const
+// B-PT-013: + TECH_PACK (after the lines: what the order is made to). The web reads the key as a string.
+export const ORDER_FILE_GROUPS = ['ORDER', 'LINES', 'TECH_PACK', 'REQUESTS', 'PRODUCTION', 'QUALITY', 'SHIPMENTS', 'RETURNS'] as const
 export type OrderFileGroup = (typeof ORDER_FILE_GROUPS)[number]
 
 /** The groups' words (the catalogue's: "conversazione" for the thread, R9). */
@@ -78,6 +91,7 @@ export const ORDER_FILE_GROUP_WORDS: Readonly<Record<OrderFileGroup, Words>> = O
   QUALITY: { it: 'Qualità', en: 'Quality' },
   SHIPMENTS: { it: 'Spedizioni e fatture', en: 'Shipments & invoices' },
   RETURNS: { it: 'Resi e reclami', en: 'Returns & complaints' },
+  TECH_PACK: { it: 'Scheda tecnica del cliente', en: "Customer's tech pack" }, // B-PT-013
 })
 
 export const FILE_AUDIENCES = ['CUSTOMER_CAN_SEE', 'OFFICE_ONLY'] as const
@@ -144,6 +158,15 @@ export interface OrderFile {
   readonly inThread: { readonly messageId: string } | null
   /** B-OP-050: who added it (null: the system, or not known). */
   readonly addedBy: AddedBy | null
+  /** B-PT-013: a file of the customer's tech pack — the version the request named, shown at its version in force; null: any other file. */
+  readonly techPack: TechPackMark | null
+}
+
+/** B-PT-013: a tech pack file — the version number the request named, at its version in force (`newer`: a later one than named). */
+export interface TechPackMark {
+  readonly named: number
+  readonly inForce: true
+  readonly newer: boolean
 }
 
 export interface OrderWorksheet {
@@ -236,6 +259,8 @@ async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow
   const invoices = await db.invoice.findMany({ where: { salesOrderId: order.id }, select: { id: true, number: true } })
   const returns = await db.returnAuthorisation.findMany({ where: { salesOrderId: order.id }, select: { id: true, number: true } })
   const complaints = await db.complaint.findMany({ where: { salesOrderId: order.id }, select: { id: true, number: true } })
+  // B-PT-013: the customer's tech pack (null: no inquiry, or one of another customer or company: no group).
+  const pack = await techPackOfOrder(db, actor, order)
 
   // Each record: its group, its label, the work order it belongs to (the production and quality rights ask it), its line.
   const records = new Map<string, { group: OrderFileGroup; label: string; workOrderId: string | null; lineId: string | null; right: Permission | null }>()
@@ -269,7 +294,11 @@ async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow
     where: {
       status: 'AVAILABLE',
       supersededAt: null,
-      OR: [...[...byType].map(([recordType, ids]) => ({ recordType, recordId: { in: ids } })), ...(upstream.size > 0 ? [{ id: { in: [...upstream.keys()] } }] : [])],
+      OR: [
+        ...[...byType].map(([recordType, ids]) => ({ recordType, recordId: { in: ids } })),
+        ...(upstream.size > 0 ? [{ id: { in: [...upstream.keys()] } }] : []),
+        ...(pack && pack.mayRead && pack.files.size > 0 ? [{ id: { in: [...pack.files.keys()] } }] : []), // B-PT-013
+      ],
     },
     select: FILE_SELECT,
     orderBy: [{ availableAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
@@ -299,18 +328,29 @@ async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow
     return true
   }
   const groups = new Map(ORDER_FILE_GROUPS.map((key) => [key, { key, files: [] as OrderFile[], worksheets: [] as OrderWorksheet[], leftOut: 0, measurementsLeftOut: 0, pricedLeftOut: 0 /* B-CP-023 */ }]))
+  // B-PT-013: without sales.inquiries.view the tech pack's files are counted, never named.
+  if (pack && !pack.mayRead) groups.get('TECH_PACK')!.leftOut += pack.files.size
   // B-CP-023: a reader who does not see prices gets the order's priced files counted, never named (the Files tab, its open route,
   // the previews and the dock's files line all read this answer).
   const sees = seesPrices(actor)
   const shown: { file: FileRow; view: OrderFile }[] = []
   for (const file of files) {
-    const lineId = file.recordType === 'SalesOrderLine' ? file.recordId : (upstream.get(file.id) ?? null)
-    const record = upstream.has(file.id) ? { group: 'LINES' as const, label: `${order.number} · ${lineOf.get(lineId!)?.seq ?? ''}`, workOrderId: null, lineId, right: null } : records.get(keyOf(file.recordType, file.recordId))
+    // B-PT-013: a file of the customer's tech pack (its version in force), first.
+    const packed = pack && pack.mayRead ? (pack.files.get(file.id) ?? null) : null
+    const lineId = packed ? null : file.recordType === 'SalesOrderLine' ? file.recordId : (upstream.get(file.id) ?? null)
+    const record = packed
+      ? { group: 'TECH_PACK' as const, label: pack!.label, workOrderId: null, lineId: null, right: null }
+      : upstream.has(file.id)
+        ? { group: 'LINES' as const, label: `${order.number} · ${lineOf.get(lineId!)?.seq ?? ''}`, workOrderId: null, lineId, right: null }
+        : records.get(keyOf(file.recordType, file.recordId))
     if (!record) continue
     const group = groups.get(record.group)!
     const workOrder = record.workOrderId ? workOrderOf.get(record.workOrderId) : undefined
     const rightHeld = record.right === null || (may(record.right) && (!workOrder || reachesWorkOrder(actor, record.right, workOrder)))
-    const reached = rightHeld && reachesFileRecord(actor, FILES_READ, await scopeOf(upstream.has(file.id) ? 'SalesOrderLine' : file.recordType, upstream.has(file.id) ? lineId! : file.recordId), file.companyId) && (await sourcesReached(file))
+    const found = await scopeOf(!packed && upstream.has(file.id) ? 'SalesOrderLine' : file.recordType, !packed && upstream.has(file.id) ? lineId! : file.recordId)
+    // B-PT-013, fail closed: a tech pack file whose record cannot be placed, or names another customer, is counted only.
+    const packWalled = packed !== null && (found.kind === 'unknown' || (fileRecordParty(found) !== null && fileRecordParty(found) !== order.partyId))
+    const reached = rightHeld && !packWalled && reachesFileRecord(actor, FILES_READ, found, file.companyId) && (await sourcesReached(file))
     if (!reached) {
       group.leftOut += 1
       continue
@@ -340,7 +380,7 @@ async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow
         sizeBytes: file.sizeBytes,
         versionNo: file.versionNo,
         at: file.availableAt ?? file.createdAt,
-        from: { type: upstream.has(file.id) ? 'SalesOrderLine' : file.recordType, id: upstream.has(file.id) ? lineId! : file.recordId, label: record.label },
+        from: { type: !packed && upstream.has(file.id) ? 'SalesOrderLine' : file.recordType, id: !packed && upstream.has(file.id) ? lineId! : file.recordId, label: record.label },
         line: line ? { id: line.id, seq: line.seq } : null,
         audience: file.visibility.includes('PARTNER') && file.partyId === order.partyId ? 'CUSTOMER_CAN_SEE' : 'OFFICE_ONLY',
         bodyData,
@@ -348,6 +388,7 @@ async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow
         alsoOnOther: 0,
         inThread: null,
         addedBy: null,
+        techPack: packed, // B-PT-013
       },
     })
   }
@@ -402,6 +443,21 @@ async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow
     truncated,
   }
 }
+
+// ── B-PT-013 (order production tab R13): the customer's tech pack ──
+/**
+ * The tech pack of the inquiry this order came from (null: none, or — fail closed — an inquiry of another customer or company
+ * linked by mistake): each file named at its version in force (`files`: that version's id → the mark), the inquiry's number for
+ * the cards ("From INQ-0042"), and whether the reader reads inquiries of this order's customer (else its files are only counted).
+ */
+async function techPackOfOrder(db: Db, actor: Actor, order: OrderRow): Promise<{ label: string; mayRead: boolean; files: Map<string, TechPackMark> } | null> {
+  const inquiry = await inquiryOfOrder(db, order)
+  if (!inquiry || inquiry.partyId !== order.partyId || inquiry.companyId !== order.companyId) return null
+  const files = new Map<string, TechPackMark>()
+  for (const entry of (await techPackOf(db, inquiry)).files) if (entry.current) files.set(entry.current.id, { named: entry.named.versionNo, inForce: true, newer: entry.newer })
+  return { label: inquiry.number, mayRead: can(actor, SALES_INQUIRIES_VIEW, { companyId: order.companyId, partyId: order.partyId }), files }
+}
+// ── end B-PT-013 ──
 
 // ── B-OP-050 (order page plan N7): who added a file ──
 /**
@@ -545,6 +601,11 @@ export const orderFileView = output({
    * customer (`name`). Null: the system's own document, or not known.
    */
   addedBy: output({ kind: z.enum(ADDED_BY_KINDS), name: z.string().nullable() }).nullable(),
+  /**
+   * B-PT-013: a file of the customer's tech pack (the TECH_PACK group) — the version the request named, shown at its version in force,
+   * and whether that one is newer than the request ("Newer than the request"); null: any other file.
+   */
+  techPack: output({ named: z.number().int(), inForce: z.literal(true), newer: z.boolean() }).nullable(),
 })
 
 export const orderFilesContract = defineContract({

@@ -196,7 +196,8 @@ describe('GET /sales/orders/:orderId/files — every file of the order by where 
   it('groups by source with who can see each file; the production unit sees the mixed work order’s file in Production', async () => {
     const list = await ok('office.all', 'GET', listOf(w.a.salesOrderId))
     expect(list.order).toMatchObject({ id: w.a.salesOrderId })
-    expect((list.groups as Json[]).map((group) => group.key)).toEqual(['ORDER', 'LINES', 'REQUESTS', 'PRODUCTION', 'QUALITY', 'SHIPMENTS', 'RETURNS'])
+    // B-PT-013: + TECH_PACK (the customer's tech pack, after the lines).
+    expect((list.groups as Json[]).map((group) => group.key)).toEqual(['ORDER', 'LINES', 'TECH_PACK', 'REQUESTS', 'PRODUCTION', 'QUALITY', 'SHIPMENTS', 'RETURNS'])
     expect(groupOf(list, 'ORDER').words).toEqual({ it: 'Ordine e conversazione', en: 'Order & thread' })
     expect(list.cap).toBe(500)
     expect(list.truncated).toBe(false)
@@ -450,3 +451,113 @@ describe('the brand wall: Beta’s person never reaches Alpha’s order files', 
     expect(found).toEqual([])
   })
 })
+
+// ── B-PT-013 (order production tab R13) ──
+/**
+ * The customer's tech pack in the order's files: the TECH_PACK group lists the files of the inquiry the order came from (the
+ * inquiries' own finder), each at its version in force, marked {named, inForce, newer}; opened through the order's own route. Without
+ * sales.inquiries.view the files are counted, never named; a priced pack file is counted for a reader without the price grain; a file
+ * whose record cannot be placed (unknown scope) is counted only; an inquiry of another customer linked to an order by mistake gives no
+ * group. The inquiries and files are made up (the admin pool writes the inquiry rows and the second version of a series, its rules
+ * off for that; the files are written as the office writes them).
+ */
+describe('B-PT-013: the customer’s tech pack in the order’s files, at its version in force, fail closed', { timeout: 60_000 }, () => {
+  const inquiry = { id: newId(), number: 'T-PT013-INQ-1' }
+  const wrong = { inquiry: newId(), order: newId(), file: '' }
+  const pack = { v1: '', v2: '', chart: '', priced: '', ghost: '' }
+
+  beforeAll(async () => {
+    SESSIONS['pt.inquiries'] = session(grant([...PERMISSIONS, 'sales.inquiries.view'], 'all'))
+    SESSIONS['pt.price'] = session(grant([...PERMISSIONS, 'sales.inquiries.view', 'money.price'], 'all'))
+    const t = lit(ids.tenantId)
+    // Alpha's inquiry of this order (by its quote when the order has one, and by the order itself: the finder takes either).
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       INSERT INTO "Inquiry" (id, "tenantId", "companyId", number, source, "receivedAt", "partyId", request, "salesOrderId", "quoteId")
+         SELECT ${lit(inquiry.id)}, ${t}, o."companyId", '${inquiry.number}', 'OFFICE', now(), o."partyId", 'Made-up: a jacket like the sample', o.id, (SELECT v."quoteId" FROM "QuoteVersion" v WHERE v.id = o."quoteVersionId")
+         FROM "SalesOrder" o WHERE o.id = ${lit(w.a.salesOrderId)};
+       COMMIT;`,
+    )
+    pack.v1 = await fileOn('Inquiry', inquiry.id, 'T-PT013 tech pack.pdf')
+    pack.v2 = newId()
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       INSERT INTO "StoredFile" SELECT (jsonb_populate_record(NULL::"StoredFile", to_jsonb(f) || jsonb_build_object('id', ${lit(pack.v2)}, 'seriesId', f.id, 'versionNo', 2, 'originalName', 'T-PT013 tech pack v2.pdf', 'storageKey', 't/${ids.tenantId}/c/${companyA}/2026/${newId()}'))).* FROM "StoredFile" f WHERE f.id = ${lit(pack.v1)};
+       COMMIT;`,
+    )
+    pack.chart = await fileOn('Inquiry', inquiry.id, 'T-PT013 size chart.pdf')
+    pack.priced = await fileOn('Inquiry', inquiry.id, 'T-PT013 target costing.pdf')
+    pack.ghost = newId()
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       UPDATE "StoredFile" SET priced = true WHERE id = ${lit(pack.priced)};
+       INSERT INTO "StoredFile" SELECT (jsonb_populate_record(NULL::"StoredFile", to_jsonb(f) || jsonb_build_object('id', ${lit(pack.ghost)}, 'recordId', ${lit(newId())}, 'originalName', 'T-PT013 unplaced.pdf', 'storageKey', 't/${ids.tenantId}/c/${companyA}/2026/${newId()}'))).* FROM "StoredFile" f WHERE f.id = ${lit(pack.chart)};
+       UPDATE "Inquiry" SET "techPackFileIds" = ARRAY[${[pack.v1, pack.chart, pack.priced, pack.ghost].map(lit).join(', ')}]::uuid[], "techPackVersion" = 'v1' WHERE id = ${lit(inquiry.id)};
+       COMMIT;`,
+    )
+    // A fresh order of Alpha with no quote, and an inquiry of BETA naming it by mistake (made before any rule: the admin pool).
+    const [owner] = await admin<{ companyId: string }>(`SELECT "companyId" FROM "SalesOrder" WHERE id = $1`, [w.a.salesOrderId])
+    await database.withScope({ audience: 'office', tenantId: ids.tenantId, actorId: seedUuid(ns, 'actor') }, (client) =>
+      client.salesOrder.create({
+        data: { id: wrong.order, companyId: owner!.companyId, partyId: ids.a, number: 'T-PT013-SO-W', customerRef: 'T-PT013-PO-W', status: 'CONFIRMED', orderDate: new Date('2026-11-03T00:00:00.000Z'), taxMode: 'IT_B2B', billTo: { legalName: 'Made-up customer' }, shipTo: { name: 'Made-up workshop' } },
+        select: { id: true },
+      }),
+    )
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       INSERT INTO "Inquiry" (id, "tenantId", "companyId", number, source, "receivedAt", "partyId", request, "salesOrderId")
+         VALUES (${lit(wrong.inquiry)}, ${t}, ${lit(owner!.companyId)}, 'T-PT013-INQ-B', 'OFFICE', now(), ${lit(ids.b)}, 'Made-up: Beta asks', ${lit(wrong.order)});
+       COMMIT;`,
+    )
+    wrong.file = await fileOn('Inquiry', wrong.inquiry, 'T-PT013 Beta pack.pdf')
+    await admin(`BEGIN; SET LOCAL session_replication_role = replica; UPDATE "Inquiry" SET "techPackFileIds" = ARRAY[${lit(wrong.file)}]::uuid[] WHERE id = ${lit(wrong.inquiry)}; COMMIT;`)
+  })
+
+  it('the pack at its version in force (v2 of the tech pack, "newer than the request"), from the inquiry; the named v1 never listed', async () => {
+    const group = groupOf(await ok('pt.inquiries', 'GET', listOf(w.a.salesOrderId)), 'TECH_PACK')
+    expect(group.words).toEqual({ it: 'Scheda tecnica del cliente', en: "Customer's tech pack" })
+    const byId = new Map((group.files as Json[]).map((file) => [file.id as string, file]))
+    expect([...byId.keys()].sort()).toEqual([pack.v2, pack.chart].sort())
+    expect(byId.get(pack.v2)).toMatchObject({ name: 'T-PT013 tech pack v2.pdf', versionNo: 2, from: { type: 'Inquiry', id: inquiry.id, label: inquiry.number }, techPack: { named: 1, inForce: true, newer: true } })
+    expect(byId.get(pack.chart)).toMatchObject({ techPack: { named: 1, inForce: true, newer: false } })
+    // A priced file for a reader without the price grain, and a file whose record cannot be placed: counted, never named.
+    expect({ pricedLeftOut: group.pricedLeftOut, leftOut: group.leftOut }).toEqual({ pricedLeftOut: 1, leftOut: 1 })
+    // Every other file of the order says it is no tech pack file.
+    for (const file of everyFile(await ok('pt.inquiries', 'GET', listOf(w.a.salesOrderId)))) if (!byId.has(file.id)) expect(file.techPack, file.id).toBeNull()
+  })
+
+  it('a reader who sees prices gets the priced pack file too; the unplaced one stays counted', async () => {
+    const group = groupOf(await ok('pt.price', 'GET', listOf(w.a.salesOrderId)), 'TECH_PACK')
+    expect((group.files as Json[]).map((file) => file.id).sort()).toEqual([pack.v2, pack.chart, pack.priced].sort())
+    expect({ pricedLeftOut: group.pricedLeftOut, leftOut: group.leftOut }).toEqual({ pricedLeftOut: 0, leftOut: 1 })
+  })
+
+  it('without sales.inquiries.view: every pack file counted, never named', async () => {
+    const answer = await call('office.all', 'GET', listOf(w.a.salesOrderId))
+    const group = groupOf(answer.body, 'TECH_PACK')
+    expect(group).toMatchObject({ files: [], leftOut: 4 })
+    for (const name of ['T-PT013 tech pack', 'T-PT013 size chart', 'T-PT013 target costing', inquiry.number]) expect(answer.raw).not.toContain(name)
+  })
+
+  it('opens through the order’s own route (the one viewer); the named, superseded v1 and the unplaced file do not open', async () => {
+    const opened = await ok('pt.inquiries', 'POST', openOf(w.a.salesOrderId, pack.v2), { mode: 'preview' })
+    expect(opened.file).toMatchObject({ id: pack.v2, name: 'T-PT013 tech pack v2.pdf' })
+    for (const fileId of [pack.v1, pack.ghost, pack.priced]) await notFound('pt.inquiries', 'POST', openOf(w.a.salesOrderId, fileId), 'File not found.')
+    await notFound('office.all', 'POST', openOf(w.a.salesOrderId, pack.v2), 'File not found.')
+  })
+
+  it('fail closed: an inquiry of another customer linked to Alpha’s order by mistake gives no group; Beta’s person never reaches Alpha’s pack', async () => {
+    const answer = await call('pt.inquiries', 'GET', listOf(wrong.order))
+    expect(answer.status).toBe(200)
+    expect(groupOf(answer.body, 'TECH_PACK')).toMatchObject({ files: [], leftOut: 0, pricedLeftOut: 0 })
+    expect(answer.raw).not.toContain('T-PT013 Beta pack')
+    await notFound('pt.inquiries', 'POST', openOf(wrong.order, wrong.file), 'File not found.')
+    await notFound('office.p2', 'GET', listOf(w.a.salesOrderId), 'Sales order not found.')
+    await notFound('office.p2', 'POST', openOf(w.a.salesOrderId, pack.v2), 'Sales order not found.')
+  })
+})
+// ── end B-PT-013 ──
