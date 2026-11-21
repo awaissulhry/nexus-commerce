@@ -455,6 +455,12 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
   const revisions = new Map((revisionIds.length > 0 ? await db.styleRevision.findMany({ where: { id: { in: revisionIds } }, select: { id: true, revision: true, status: true } }) : []).map((row) => [row.id, row]))
   const version = order.quoteVersionId ? await db.quoteVersion.findUnique({ where: { id: order.quoteVersionId }, select: { id: true, quoteId: true, revision: true } }) : null
   const quote = version ? await db.quote.findUnique({ where: { id: version.quoteId }, select: { id: true, number: true } }) : null
+  // ── B-OC-016 (order changes tab R12; 13-backend §5): the customer's portal order this order was made from (the threads' own
+  // finder, platform/threads/summary.ts), and the customer's own portal person who sent it (never anyone else's name) ──
+  const portalRequest = await db.portalOrderRequest.findFirst({ where: { salesOrderId: order.id, partyId: order.partyId }, select: { id: true, number: true, sentAt: true, sentById: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
+  const portalSender = portalRequest?.sentById ? await db.user.findUnique({ where: { id: portalRequest.sentById }, select: { displayName: true, partyId: true } }) : null
+  const portalOrder = portalRequest ? { id: portalRequest.id, number: portalRequest.number, sentAt: instantOrNull(portalRequest.sentAt), sentBy: portalSender && portalSender.partyId === order.partyId ? portalSender.displayName : null } : null
+  // ── end B-OC-016 ──
   const deposits = await db.depositRequest.findMany({
     where: { OR: [{ orderId: order.id }, ...(order.quoteVersionId ? [{ quoteVersionId: order.quoteVersionId }] : [])] },
     select: DEPOSIT_COLUMNS,
@@ -580,6 +586,7 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
     progress: strip(facts.progress.totals),
     chain: {
       quote: quote && version ? { id: quote.id, number: quote.number, versionId: version.id, revision: version.revision } : null,
+      portalOrder, // B-OC-016
       depositRequests: deposits.map((row) => {
         const view = depositViewOf(row)
         // The percentage as the database holds it ("30.0000" → "30"; deposits.ts's own text turns a whole "30" into "3").

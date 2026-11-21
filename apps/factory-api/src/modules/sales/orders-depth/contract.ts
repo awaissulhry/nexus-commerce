@@ -80,7 +80,10 @@ const confirmationState = output({
   /** The newest version still shows the order as it is (null: none yet, or the order may not have one). */
   upToDate: z.boolean().nullable(),
   mayMake: z.boolean(),
+  /** B-OC-014: `sent` — the version was sent at least once (was: the last one sent only). */
   versions: z.array(output({ id: id(), version: z.number().int(), number: z.string().nullable(), language: z.string(), fileId: id(), createdAt: instant(), createdBy: z.string().nullable(), sent: z.boolean() })),
+  /** B-OC-014 (order changes tab R10): every send, newest first (at most 20): the version, when, to which addresses, by which office person. */
+  sends: z.array(output({ version: z.number().int(), at: instant(), to: z.array(z.string()), by: z.string().nullable() })),
 })
 export const getConfirmationContract = defineContract({ params: orderParams, response: { 200: output({ confirmation: confirmationState }) } })
 export const makeConfirmationContract = defineContract({

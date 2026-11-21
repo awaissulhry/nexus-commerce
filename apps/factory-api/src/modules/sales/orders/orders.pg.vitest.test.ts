@@ -365,7 +365,8 @@ describe('the order from the accepted quote (SAL-200, SAL-203; Owner answer S1: 
       daysLate: 0,
       netAmount: 624000,
       grossAmount: 761280,
-      chain: { quote: { id: accepted.quoteId, number: accepted.number, versionId: accepted.versionId, revision: 1 }, workOrders: [], shipments: [], invoices: [] },
+      // B-OC-016: an order made from a quote names no portal order.
+      chain: { quote: { id: accepted.quoteId, number: accepted.number, versionId: accepted.versionId, revision: 1 }, portalOrder: null, workOrders: [], shipments: [], invoices: [] },
       settlement: { settled: false, source: 'invoicing' },
       actions: [
         { action: 'changePromise', allowed: true },
@@ -1462,5 +1463,20 @@ describe('SEED-SO-0002 is seeded PARTLY_SHIPPED, the status its facts give (B-OO
     expect(so2Of('BLK').find((source) => source.size === '50')).toMatchObject({ pieces: 1, quantity: '48.1600', issued: '48.1600' })
     // (SEED-SH-0001's other piece, RED 52, has no red leather issued in the seeds: the plan counts it, as the release check does.)
   })
+
+  // ── B-OC-016 (order changes tab R12): the order names the customer's portal order it was made from ──
+  it('B-OC-016: SEED-SO-0002 names the portal order it was made from — its number, when, the customer’s own person who sent it', async () => {
+    SESSIONS['h.reader'] = () => ({ audience: 'office', tenantId: TH, actorId: newId(), grants: [grant(['orders.view'])] })
+    SESSIONS['h.otherParty'] = () => ({ audience: 'office', tenantId: TH, actorId: newId(), grants: [grant(['orders.view'], 'all', [seedUuid(NS_H, 'party:P3')])] })
+    const request = await one<{ id: string; number: string | null; sentAt: Date | null; sentById: string | null }>(`SELECT id, number, "sentAt", "sentById" FROM "PortalOrderRequest" WHERE "salesOrderId" = $1`, [so2])
+    const sender = await one<{ displayName: string; partyId: string }>('SELECT "displayName", "partyId" FROM "User" WHERE id = $1', [request.sentById])
+    const owner = await one<{ partyId: string }>('SELECT "partyId" FROM "SalesOrder" WHERE id = $1', [so2])
+    expect(sender.partyId).toBe(owner.partyId)
+    const read = (await ok('h.reader', 'GET', orderUrl(so2))).order
+    expect(read.chain.portalOrder).toEqual({ id: request.id, number: request.number, sentAt: request.sentAt!.toISOString(), sentBy: sender.displayName })
+    // A person limited to another customer: the order is the unknown id's (never its portal order).
+    expect((await call('h.otherParty', 'GET', orderUrl(so2))).status).toBe(404)
+  })
+  // ── end B-OC-016 ──
 })
 // ── end B-OO-016 ──
