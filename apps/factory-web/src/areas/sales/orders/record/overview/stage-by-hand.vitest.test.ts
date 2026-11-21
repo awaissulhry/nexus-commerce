@@ -297,47 +297,89 @@ describe('F-MS-103: the hook — Set, Change and Clear through the page\'s one w
   })
 })
 
-describe('F-MS-103: the dialog drawn — the stages held with their words, Change… pre-picked, the lines, Go held in words', () => {
+describe('F-SC-W2: the dialog drawn — the stages with their words, the step picked, the lines, the Ready warning, Go held in words', () => {
   const recordOf = (id: string): OrderRecordModel => (designScreen.cases.find((item) => item.id === id)!.model as { record: OrderRecordModel }).record
   const draw = (id: string, locale: 'en' | 'it' = 'en') => {
     const model = recordOf(id)
     return render(createElement(StageHandDialogs, { order: model.order.status === 'ready' ? model.order.value : order('IN_PRODUCTION'), model }), locale)
   }
+  const checked = (html: string): string | null => html.match(/<input type="radio"[^>]*value="([A-Z]+)"[^>]*checked=""|<input type="radio"[^>]*checked=""[^>]*value="([A-Z]+)"/)?.slice(1).find(Boolean) ?? null
 
-  it('Set: the floor\'s Sewing and what it did never picked ("from the floor\'s counts"), Ready never; the reason, the note; R3b and R18; Go held', () => {
+  it('Set: only the stage the customer reads held ("Now — the customer reads it"); back and ahead open, Ready to ship with its warning; R3b and R18; Go held', () => {
     const html = draw('f-ms-dialog-set')
     const text = textOf(html)
-    for (const words of ['Set the stage of SO-2026-0088 by hand', 'Where the work really is', "Done, from the floor's counts", "Now, from the floor's counts", "Only quality's release of every piece makes it Ready to ship.", 'Reason (office only)', 'Note (office only)', 'One line, at most 200 characters. Never name a person on the floor.', 'The customer reads it as a plain stage', 'the customer is told after 10 minutes', "The customer's changes are judged on the floor's records: key the cuts in as soon as the floor can."]) expect(text, words).toContain(words)
+    for (const words of ['Set the stage of SO-2026-0088 by hand', 'Set where the work really is.', 'Where the work really is', 'Now — the customer reads it', 'Below what the customer reads', 'Quality has not released every piece', 'Reason (office only)', 'Note (office only)', 'One line, at most 200 characters. Never name a person on the floor.', 'The customer reads it as a plain stage', 'the customer is told after 10 minutes', 'a move back is told as a correction', "The customer's changes are judged on the floor's records: key the cuts in as soon as the floor can."]) expect(text, words).toContain(words)
     expect(text).not.toMatch(/urgent/i)
-    // Preparing, Cutting (done), Sewing (now) and Ready disabled; Quality check open; nothing picked.
-    expect(html.match(/<input type="radio"[^>]*disabled=""/g)?.length).toBe(4)
-    expect(html).not.toMatch(/<input type="radio"[^>]*checked=""/)
+    for (const gone of ["Done, from the floor's counts", "Only quality's release of every piece makes it Ready to ship."]) expect(text, gone).not.toContain(gone)
+    // Only Sewing (the floor's, what the customer reads) disabled; nothing picked; no warning banner until Ready is picked.
+    expect(html.match(/<input type="radio"[^>]*disabled=""/g)?.length).toBe(1)
+    expect(checked(html)).toBeNull()
+    expect(html).not.toContain('nds-banner warning')
     // Go waits for a stage, in words; ⌘↵ / Ctrl↵ through its aria-keyshortcuts, never a key hint on screen.
     expect(html).toMatch(/aria-keyshortcuts="Meta\+Enter Control\+Enter"[^>]*aria-disabled="true"[^>]*aria-description="Pick a stage first\."|aria-disabled="true"[^>]*aria-description="Pick a stage first\."[^>]*aria-keyshortcuts="Meta\+Enter Control\+Enter"/)
     expect(text).not.toMatch(/⌘|Ctrl|\bEsc\b/)
     const it = textOf(draw('f-ms-dialog-set', 'it'))
-    for (const words of ['Imposta a mano la fase di SO-2026-0088', 'Dove si trova davvero il lavoro', 'Fatta, dai conteggi del reparto', 'Ora, dai conteggi del reparto', 'Motivo (solo ufficio)', 'Nota (solo ufficio)', 'Non nominare chi lavora in reparto.']) expect(it, words).toContain(words)
+    for (const words of ['Imposta a mano la fase di SO-2026-0088', 'Dove si trova davvero il lavoro', 'Ora — la legge il cliente', 'Sotto quella che legge il cliente', 'La qualità non ha rilasciato tutti i capi', 'Motivo (solo ufficio)', 'Nota (solo ufficio)', 'Non nominare chi lavora in reparto.']) expect(it, words).toContain(words)
   })
 
-  it('Change…: the stage set pre-picked with its reason and note; "Something else" without a note holds Go; a refusal is said in the dialog', () => {
+  it('a step picked on the stages: the dialog opens on it — Cutting below the floor\'s Sewing: told as a correction, clears when the floor comes back or passes', () => {
+    const html = draw('f-ms-dialog-pick')
+    expect(checked(html)).toBe('CUTTING')
+    const text = textOf(html)
+    expect(text).toContain('Going back: the customer reads Cutting, told as a correction after 10 minutes (only if it was told the stage it leaves).')
+    expect(text).toContain("It clears by itself when the floor's counts come back to Cutting or pass Sewing.")
+    // Go waits only for the reason now (a stage is picked).
+    expect(html).toMatch(/aria-disabled="true"[^>]*aria-description="[^"]*"[^>]*>Set the stage</)
+    expect(html).not.toMatch(/aria-description="Pick a stage first\."/)
+  })
+
+  it('Ready to ship picked while quality has not released every piece: the warning (a DS Banner) — once, never a hold of Go', () => {
+    const html = draw('f-ms-dialog-ready')
+    expect(checked(html)).toBe('READY')
+    expect(html).toContain('nds-banner warning')
+    expect(textOf(html).split('Quality has not released every piece').length - 1).toBe(1)
+    expect(textOf(html)).toContain("It clears by itself once the floor's counts reach Ready to ship.")
+    expect(html).not.toMatch(/aria-description="Quality has not released every piece/)
+    expect(textOf(draw('f-ms-dialog-ready', 'it'))).toContain('La qualità non ha rilasciato tutti i capi')
+  })
+
+  it('Change…: the reason and note pre-filled; the stage shown and the floor\'s own held (Clear… goes back to the floor); "Something else" without a note holds Go; a refusal said', () => {
     const html = draw('f-ms-dialog-change')
-    expect(textOf(html)).toContain('Change the stage set by hand on SO-2026-0088')
-    expect(html).toMatch(/<input type="radio"[^>]*value="SEWING"[^>]*checked=""|<input type="radio"[^>]*checked=""[^>]*value="SEWING"/)
+    const text = textOf(html)
+    expect(text).toContain('Change the stage set by hand on SO-2026-0088')
+    expect(checked(html)).toBe('CUTTING')
     expect(html).toContain('<option value="OUTAGE" selected="">System or scanners down</option>')
-    expect(textOf(html)).toContain('Set by hand now')
-    expect(textOf(html)).toContain('The customer keeps reading Sewing: it is not told again.')
+    for (const words of ['Now — the customer reads it', "The floor's stage — Clear… goes back to it", 'Going back: the customer reads Cutting, told as a correction']) expect(text, words).toContain(words)
+    expect(html.match(/<input type="radio"[^>]*disabled=""/g)?.length).toBe(2)
+    expect(text).not.toContain('it is not told again')
     expect(draw('f-ms-dialog-other')).toMatch(/aria-disabled="true"[^>]*aria-description="Something else needs a note\."[^>]*>Change the stage</)
     expect(textOf(draw('f-ms-dialog-refused'))).toContain('The stage changed meanwhile: it was read again.')
   })
 
-  it('source: the view fetches nothing (the page\'s one write); the dialog is the page\'s Frame; Clear… the DS ActionConfirm', () => {
+  it('Clear…: down to the floor — told the correction after the window; up to the floor (a set back) — the usual notice; the button names the floor\'s stage', () => {
+    const down = textOf(draw('f-ms-clear'))
+    expect(down).toContain('The customer was told Sewing: it is told the correction after 10 minutes.')
+    expect(down).toContain('Back to Preparing')
+    const up = textOf(draw('f-ms-clear-back'))
+    expect(up).toContain('The customer reads Quality check and gets the usual notice.')
+    expect(up).toContain('Back to Quality check')
+    for (const text of [down, up]) expect(text).not.toContain('it is not told it again')
+  })
+
+  it('source: the view fetches nothing (the page\'s one write); the dialog is the page\'s Frame, mounted ONCE (OrderDialogs); Clear… the DS ActionConfirm', () => {
     const view = readFileSync(new URL('../view/overview/StageByHandDialog.tsx', import.meta.url), 'utf8')
     expect(view).not.toMatch(/lib\/api\/|fetch\(|use-overview-acts/)
     expect(view).toContain("import { Frame } from '../Dialogs'")
     expect(view).toContain('<ActionConfirm')
     expect(view).toContain('variant="row"')
+    expect(view).toContain('<Banner tone="warning"')
+    expect(view).toContain('pick={dialog.pick ?? null}')
+    const dialogs = readFileSync(new URL('../view/Dialogs.tsx', import.meta.url), 'utf8')
+    expect(dialogs).toContain("case 'stageByHand':")
+    expect(dialogs).toContain("case 'stageClear':")
+    expect(dialogs.match(/<StageHandDialogs /g)?.length).toBe(1)
     const card = readFileSync(new URL('../view/overview/WhereCard.tsx', import.meta.url), 'utf8')
-    expect(card).toContain('<StageHandDialogs order={order} model={model} actions={actions} />')
+    expect(card).not.toContain('<StageHandDialogs')
   })
 })
 

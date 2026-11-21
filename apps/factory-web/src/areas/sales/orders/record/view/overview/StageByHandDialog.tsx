@@ -45,19 +45,24 @@ function useLineText(): (line: DialogLine) => string {
   return (line) => t(line.key, { ...(line.stage ? { stage: w.t(`parts.stage.${line.stage}`) } : {}), ...(line.past ? { past: w.t(`parts.stage.${line.past}`) } : {}), ...(line.customer ? { customer: say(line.customer, locale) } : {}), ...(line.minutes !== undefined ? { minutes: line.minutes } : {}) })
 }
 
+/**
+ * F-SC-W2: the page's ONE mount (OrderDialogs' `stageByHand` / `stageClear`) — Overview's door, the hand row's Change… and Clear…, and the
+ * steps of the stages on Overview and Production open these. Keyed by the mode only: a refusal re-opens it without the pick, and what
+ * the person picked and typed stays.
+ */
 export function StageHandDialogs({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const dialog = model.dialog
-  if (dialog?.kind === 'stageByHand') return <StageByHandDialog key={dialog.mode} order={order} model={model} actions={actions} mode={dialog.mode} refused={dialog.refused ?? null} />
+  if (dialog?.kind === 'stageByHand') return <StageByHandDialog key={dialog.mode} order={order} model={model} actions={actions} mode={dialog.mode} pick={dialog.pick ?? null} refused={dialog.refused ?? null} />
   if (dialog?.kind === 'stageClear') return <StageClearDialog model={model} actions={actions} refused={dialog.refused ?? null} />
   return null
 }
 
-function StageByHandDialog({ order, model, actions, mode, refused }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; mode: 'set' | 'change'; refused: Phrase | Words | null }) {
+function StageByHandDialog({ order, model, actions, mode, pick: picked, refused }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; mode: 'set' | 'change'; pick: PlainStage | null; refused: Phrase | Words | null }) {
   const t = useT('orders')
   const w = useProductionWords()
   const sayHand = useSayHand()
   const lineText = useLineText()
-  const start = stageByHandStartOf(mode, readOf(model.production)?.headline ?? null)
+  const start = stageByHandStartOf(mode, readOf(model.production)?.headline ?? null, picked) // F-SC-W2: opens on the step picked
   const [pick, setPick] = useState<PlainStage | null>(start.pick)
   const [reasonCode, setReasonCode] = useState<string>(model.draft?.reasonCode ?? start.reasonCode)
   const [note, setNote] = useState<string>(model.draft?.reason ?? start.note)

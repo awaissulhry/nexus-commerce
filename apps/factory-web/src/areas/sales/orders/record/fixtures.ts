@@ -984,15 +984,21 @@ const F_MS_102: DesignCase<RecordCase>[] = [
   { id: 'f-ms-read-only', label: 'F-MS-102 · Read-only · the row says it, no door', model: readOnlyCase(base('sales', production, { tab: 'overview', production: ready(HAND_READ), liveState: 'live', ...handCan(READ_ONLY_PERMISSIONS) })) },
 ]
 // ---- end F-MS-102
-// ---- F-MS-103 (set the stage by hand, 04 §3; R3b, R18, R20): the ONE dialog — Set (nothing picked yet), Change… (the stage, reason
-// and note pre-filled), "Something else" without a note (Go held), a refusal said inside it (what was typed stays) — and Clear…'s confirm.
+// ---- F-MS-103 (set the stage by hand, 04 §3; R3b, R18, R20): the ONE dialog — Set (nothing picked yet), Change… (the reason and note
+// pre-filled), "Something else" without a note (Go held), a refusal said inside it (what was typed stays) — and Clear…'s confirm.
+// F-SC-W2 (stage control B): a step of the stages clicked opens it with that step picked (back below the floor: told as a correction;
+// Ready to ship while quality has not released every piece: the warning); Clear… up to the floor (a set back cleared): the usual notice.
 // Keyboard only: Tab, the arrow keys in the radios, Esc, ⌘↵ / Ctrl↵ (no key hint text anywhere).
 const F_MS_103: DesignCase<RecordCase>[] = [
-  { id: 'f-ms-dialog-set', label: 'F-MS-103 · Planner · Set the stage by hand…: the floor\'s Sewing and what it did held, Ready to ship never; the reason, the note; what the customer reads and when', model: plannerCase(production, { production: ready(HAND_FREE_READ), dialog: { kind: 'stageByHand', mode: 'set' } }) },
-  { id: 'f-ms-dialog-change', label: 'F-MS-103 · Planner · Change…: Sewing set by hand pre-picked with its reason and note; Cutting above the floor may be picked (a correction, not told)', model: plannerCase(production, { production: ready(HAND_READ), dialog: { kind: 'stageByHand', mode: 'change' } }) },
-  { id: 'f-ms-dialog-other', label: 'F-MS-103 · Planner · Change… to "Something else" without a note: Change the stage held — it needs a note', model: plannerCase(production, { production: ready(HAND_READ), dialog: { kind: 'stageByHand', mode: 'change' }, draft: { reasonCode: 'OTHER', reason: '' } }) },
+  { id: 'f-ms-dialog-set', label: 'F-MS-103 · Planner · Set the stage by hand…: the floor\'s Sewing, what the customer reads (never picked); every other stage ahead or back, Ready to ship warned; the reason, the note; what the customer reads and when', model: plannerCase(production, { production: ready(HAND_FREE_READ), dialog: { kind: 'stageByHand', mode: 'set' } }) },
+  { id: 'f-ms-dialog-pick', label: 'F-SC-W2 · Planner · Cutting clicked on the stages (the floor at Sewing): the dialog opens on Cutting — below what the customer reads, told as a correction; it clears when the floor\'s counts come back to Cutting or pass Sewing', model: plannerCase(production, { production: ready(HAND_FREE_READ), dialog: { kind: 'stageByHand', mode: 'set', pick: 'CUTTING' } }) },
+  { id: 'f-ms-dialog-ready', label: 'F-SC-W2 · Planner · Ready to ship clicked (the floor at Quality check): "Quality has not released every piece" — a warning, never a hold', model: plannerCase(production, { production: ready(HAND_QUALITY_READ), dialog: { kind: 'stageByHand', mode: 'set', pick: 'READY' } }) },
+  { id: 'f-ms-dialog-change', label: 'F-MS-103 · Planner · Change…: Sewing set by hand over the floor\'s Preparing, its reason and note pre-filled; Sewing and the floor\'s Preparing (Clear…) never picked; Cutting picked — told as a correction', model: plannerCase(production, { production: ready(HAND_READ), dialog: { kind: 'stageByHand', mode: 'change', pick: 'CUTTING' } }) },
+  { id: 'f-ms-dialog-other', label: 'F-MS-103 · Planner · Change… to "Something else" without a note: Change the stage held — it needs a note', model: plannerCase(production, { production: ready(HAND_READ), dialog: { kind: 'stageByHand', mode: 'change', pick: 'CUTTING' }, draft: { reasonCode: 'OTHER', reason: '' } }) },
   { id: 'f-ms-dialog-refused', label: 'F-MS-103 · Planner · Change… refused: "The stage changed meanwhile: it was read again." — what was typed stays', model: plannerCase(production, { production: ready(HAND_READ), dialog: { kind: 'stageByHand', mode: 'change', refused: { key: 'where.manual.refused' } } }) },
-  { id: 'f-ms-clear', label: 'F-MS-103 · Planner · Clear…: back to the floor\'s Preparing — the customer was told Sewing and is not told it again; it reads Preparing, with no notice', model: plannerCase(production, { production: ready(HAND_READ), dialog: { kind: 'stageClear' } }) },
+  { id: 'f-ms-clear', label: 'F-MS-103 · Planner · Clear…: back to the floor\'s Preparing — the customer was told Sewing, so it is told the correction after 10 minutes', model: plannerCase(production, { production: ready(HAND_READ), dialog: { kind: 'stageClear' } }) },
+  { id: 'f-ms-dialog-production', label: 'F-SC-W2 · Planner · Production tab: Quality check clicked on Production now\'s stage bar — the SAME dialog as Overview\'s, on Quality check', model: plannerCase(production, { tab: 'production', production: ready(HAND_FREE_READ), dialog: { kind: 'stageByHand', mode: 'set', pick: 'QUALITY' } }) },
+  { id: 'f-ms-clear-back', label: 'F-SC-W2 · Planner · Clear… of Cutting set back below the floor\'s Quality check: back to Quality check — the customer reads it and gets the usual notice', model: plannerCase(production, { production: ready(HAND_BACK_READ), dialog: { kind: 'stageClear' } }) },
 ]
 // ---- end F-MS-103
 

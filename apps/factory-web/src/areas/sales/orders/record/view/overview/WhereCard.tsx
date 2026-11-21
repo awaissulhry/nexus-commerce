@@ -37,7 +37,7 @@ import { formatDateTime } from '../../../../../../lib/i18n/format'
 import type { PlainStage } from '../../../../../../lib/production/model'
 import { handDoorOf, handRowOf, type HandDoor, type HandRow } from '../../overview/where'
 // ---- end F-MS-102
-import { StageHandDialogs, useSayHand } from './StageByHandDialog' // F-MS-103: the dialog (Set / Change) and Clear…'s confirm
+import { useSayHand } from './StageByHandDialog' // F-MS-103: the door's words (F-SC-W2: the dialogs are the page's, OrderDialogs)
 import { CREDIT_NS, StripRow } from './StripRow' // F-PT-301: the ONE strip row (Production › Problems & holds draws it too)
 
 /**
@@ -129,8 +129,7 @@ export function WhereCard({ order, model, actions, waiting }: { order: Order; mo
       <Moves order={order} model={model} actions={actions} />
       {/* F-OO-106: the credit strip's dialogs, in the page's one slot (Overview's own: use-overview-acts). */}
       <CreditDialogs order={order} model={model} actions={actions} />
-      {/* F-MS-103: the stage set by hand — Set / Change (one dialog) and Clear…, in the page's one slot (use-overview-acts). */}
-      <StageHandDialogs order={order} model={model} actions={actions} />
+      {/* F-SC-W2: the stage set by hand's dialogs (Set / Change, Clear…) are mounted once for the page (OrderDialogs). */}
     </Card>
   )
 }

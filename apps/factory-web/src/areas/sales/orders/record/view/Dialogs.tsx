@@ -17,6 +17,7 @@ import { SplitOrderDialog } from './SplitOrderDialog' // F-OP-111
 import { RequestedDateDialog } from './RequestedDateDialog' // F-OO-144
 import { OrderNoteDialog } from './OrderNoteDialog' // F-OO-210
 import { CustomerRefDialog, ShipToDialog } from './OrderFactsDialogs' // F-OL-04: Order facts' Customer PO and Ship to windows
+import { StageHandDialogs } from './overview/StageByHandDialog' // F-SC-W2: the stage set by hand — one dialog for Overview and Production
 import { followUpOf } from '../overview/dates' // F-OO-143: the promise dialog opened by Decide… names the customer's refusal
 // F-OO-142 (order overview §4.3; B-OO-009): the reason list — what the customer reads, in Italian and English; the office's own note.
 import { isPromiseReasonCode, promiseReasonChoices, promiseReasonPreview } from '../../model'
@@ -76,6 +77,11 @@ export function OrderDialogs({ order, model, actions }: { order: Order; model: O
     // Overview (use-overview-acts; F-OO-210: Order facts' office note — the Orders sheet's own write).
     case 'note':
       return <OrderNoteDialog order={order} model={model} actions={actions} />
+    // F-SC-W2 (stage control B): the stage set by hand (use-overview-acts opens it) — Set / Change (one dialog, `pick`) and Clear… —
+    // mounted ONCE here, so Overview's strip and door and Production's stage bar open the same one.
+    case 'stageByHand':
+    case 'stageClear':
+      return <StageHandDialogs order={order} model={model} actions={actions} />
     // Changes (the container's own read).
     case 'compare':
       return <CompareDialog order={order} amendmentId={dialog.amendmentId} model={model} actions={actions} />

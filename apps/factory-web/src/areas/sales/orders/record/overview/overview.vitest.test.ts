@@ -1302,6 +1302,18 @@ describe('F-MS-102: "Where it is now" draws a stage set by hand — the door on 
     for (const door of ['Set the stage by hand…', '>Change…<', '>Clear…<']) expect(readOnly, door).not.toContain(door)
   })
 
+  it('F-SC-W2: the dialog is the page\'s, mounted ONCE (OrderDialogs) — the card opens it (door, Change…, Clear…, a step) and never mounts it', () => {
+    const card = read('../view/overview/WhereCard.tsx')
+    expect(card).not.toContain('<StageHandDialogs')
+    expect(card).toContain("actions?.onDialog?.({ kind: 'stageByHand', mode: 'set' })")
+    const dialogs = read('../view/Dialogs.tsx')
+    expect(dialogs).toContain("import { StageHandDialogs } from './overview/StageByHandDialog'")
+    expect(dialogs.match(/<StageHandDialogs /g)?.length).toBe(1)
+    // The step picked reaches the dialog: the slot carries it, the dialog starts on it.
+    expect(read('../record-model.ts')).toContain("{ kind: 'stageByHand'; mode: 'set' | 'change'; pick?: PlainStage; refused?: Phrase | Words }")
+    expect(read('../view/overview/StageByHandDialog.tsx')).toContain('stageByHandStartOf(mode, readOf(model.production)?.headline ?? null, picked)')
+  })
+
   it('the moves row is untouched (the door is not a move); the frame\'s source keeps the row and its door under the dots, where.css tokens only', () => {
     const html = draw('f-ms-hand')
     const from = html.indexOf('class="fw-so-where-moves"')

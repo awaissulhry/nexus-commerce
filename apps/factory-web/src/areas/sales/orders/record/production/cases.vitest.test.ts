@@ -22,6 +22,14 @@ const draw = (id: string, locale: 'it' | 'en' = 'en') => {
 const text = (id: string, locale: 'it' | 'en' = 'en') => textOf(draw(id, locale))
 
 describe('T.1: the Production tab’s states, by role', () => {
+  it('F-SC-W2: a step of Production now\'s stage bar opens the SAME stage dialog as Overview (mounted once for the page), on that step', () => {
+    const html = draw('f-ms-dialog-production')
+    expect(html.match(/role="dialog"/g)?.length).toBe(1)
+    expect(textOf(html)).toContain('Set the stage of SO-2026-0088 by hand')
+    expect(html).toMatch(/<input type="radio"[^>]*value="QUALITY"[^>]*checked=""|<input type="radio"[^>]*checked=""[^>]*value="QUALITY"/)
+    expect(textOf(html)).toContain("It clears by itself once the floor's counts reach Quality check.")
+  })
+
   it('holds: the three strips and the office’s note for the Owner; Sales sees no hold door and one line says who does it (D2)', () => {
     const owner = text('pt-holds-owner')
     // The customer's pause is one strip in the office's own words (where.strip.pause), never the customer's headline words.
