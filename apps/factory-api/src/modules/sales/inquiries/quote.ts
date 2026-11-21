@@ -17,6 +17,7 @@ import { duplicateInto } from '../quotes/duplicate'
 import { quotePartyOf } from '../quotes/store'
 import { emitClosed, lockForChange, viewInCommand, writeInquiry } from './inquiries'
 import { databaseRefusal, dayOrNull, factsOf, INQUIRY_COLUMNS, LINE_COLUMNS, may, officeInquiry, officeOf, refuse } from './store'
+import type { Reader } from './store' // B-PT-013
 import { price, techPackOf } from './views'
 
 /**
@@ -99,6 +100,17 @@ export async function quoteInquiry(caller: CommandCaller, inquiryId: string, bod
 }
 
 /**
+ * B-PT-013 (order production tab R13): the inquiry an ORDER came from — its quote's (the order's quote version), else one that names
+ * the order itself (B-TH-025: an order made straight from a request, no quote between); null: none. THE finder: the source read
+ * below and the order's files (sales/orders order-files, the TECH_PACK group) both use it. No right is checked here.
+ */
+export async function inquiryOfOrder(db: Reader, order: { readonly id: string; readonly quoteVersionId: string | null }) {
+  const version = order.quoteVersionId ? await db.quoteVersion.findUnique({ where: { id: order.quoteVersionId }, select: { quoteId: true } }) : null
+  const quoteId = version?.quoteId ?? null
+  return quoteId ? db.inquiry.findFirst({ where: { quoteId }, select: INQUIRY_COLUMNS }) : db.inquiry.findFirst({ where: { salesOrderId: order.id }, select: INQUIRY_COLUMNS })
+}
+
+/**
  * GET /sales/inquiries/source?quoteId=|salesOrderId=|styleId=: the inquiry it came from, with the tech pack in force (null: none).
  * B-TH-261: a style draft made from a request (B-TH-026) — the style must be one the reader may see (its company and its brand, as
  * the style's own read: another brand's style is "not found", never "exists"); the request is answered only to a reader of it.
@@ -111,7 +123,8 @@ export async function inquirySource(caller: CommandCaller, query: SourceQuery) {
   return caller.withClient(async (db) => {
     let quoteId: string | null = null
     // B-TH-025: an order made straight from a request names it itself (Inquiry.salesOrderId), no quote between.
-    let orderId: string | null = null
+    // B-PT-013: the order's inquiry by the one finder (inquiryOfOrder).
+    let orderRow: { id: string; quoteVersionId: string | null } | null = null
     // ---- B-TH-261: the request that named this style among its drafts (the first one, if a style was ever named twice) ----
     let styleId: string | null = null
     if (query.styleId) {
@@ -125,16 +138,14 @@ export async function inquirySource(caller: CommandCaller, query: SourceQuery) {
     } else {
       const order = isUuid(query.salesOrderId!) ? await db.salesOrder.findUnique({ where: { id: query.salesOrderId! }, select: { id: true, companyId: true, partyId: true, quoteVersionId: true } }) : null
       if (!order || !can(actor, ORDERS_VIEW, { companyId: order.companyId, partyId: order.partyId })) throw new NotFoundError('Order not found.')
-      const version = order.quoteVersionId ? await db.quoteVersion.findUnique({ where: { id: order.quoteVersionId }, select: { quoteId: true } }) : null
-      quoteId = version?.quoteId ?? null
-      orderId = order.id
+      orderRow = { id: order.id, quoteVersionId: order.quoteVersionId }
     }
     const row = styleId
       ? await db.inquiry.findFirst({ where: { styleIds: { has: styleId } }, orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }], select: INQUIRY_COLUMNS }) // B-TH-261
       : quoteId
         ? await db.inquiry.findFirst({ where: { quoteId }, select: INQUIRY_COLUMNS })
-        : orderId
-          ? await db.inquiry.findFirst({ where: { salesOrderId: orderId }, select: INQUIRY_COLUMNS })
+        : orderRow
+          ? await inquiryOfOrder(db, orderRow) // B-PT-013
           : null
     if (!row || !may(context, SALES_INQUIRIES_VIEW, row)) return { inquiry: null }
     return {

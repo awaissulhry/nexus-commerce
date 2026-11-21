@@ -3,6 +3,7 @@ import type { EventEnvelope } from '@nexus/factory-domain/events/envelope'
 import { eventFor } from '@nexus/factory-domain/events/define'
 import { productionIssueAnswered } from '@nexus/factory-domain/production-brand/events'
 import { answeredAtOf, answersBrandIssue, issueAfterTask, ISSUE_TASK_MOVES, type AnsweringMessage, type IssueSource, type IssueStatus, type IssueTaskMove } from '@nexus/factory-domain/production-brand/issues'
+import { answersOfficeAsk, type ReplyingMessage } from '@nexus/factory-domain/production-brand/issues' // B-PT-015
 import { events as taskEvents } from '@nexus/factory-domain/tasks/events'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { defineHandler, type EventHandler } from '../../../platform/outbox/dispatch'
@@ -24,6 +25,12 @@ import { issueEscalationTaskId } from './raise'
  *                           other open issue of their batches, on any order of the batch (R-43: the others read "Answered in
  *                           SO-xxxx", `answeredInOrderId`); decided on the payload first, then ONE indexed read of the order's
  *                           open BRAND issues, else nothing (this event is the most frequent)
+ *                           B-PT-015 (order production tab C1): FIRST, on a sales order's or a work order's thread, a reply a
+ *                           person wrote to the note an OFFICE issue was raised with (not the asker: factory-domain
+ *                           answersOfficeAsk) answers it and every open OFFICE issue of the same task (one task per batch and
+ *                           supervisor: ticking it answers them all, so the reply does the same — the task's state is the issues'),
+ *                           closing that task and its escalation tasks; the others read "Answered in SO-xxxx" when on another order.
+ *                           ONE indexed read of the record's open OFFICE issues, else nothing (this event stays cheap)
  *   email.status_changed    SENT / FAILED of a mail from a thread's composer that waited in its undo window (B-TH-048): its
  *                           message was held (no customer read it) and is released now — it answers as above (a mail taken
  *                           back, WITHDRAWN, never does). The rule is the customer's own read of "Answered" (brand-portal
@@ -218,13 +225,70 @@ async function answerByMessage(caller: CommandCaller, eventId: string, orderId: 
   return result
 }
 
+// ── B-PT-015 (order production tab C1): a reply in the thread answers the office's ask ──────────────────────────────────────────
+/** An OFFICE issue as the reply rule reads it: the note it was raised with and who asked. */
+const OFFICE_ISSUE = { ...ISSUE, messageId: true, createdById: true } as const
+/** The reply, read: who wrote it, what it answers, whether it is held, when. */
+const REPLY = { at: true, authorKind: true, authorId: true, held: true, replyToMessageId: true } as const
+
+/**
+ * A reply on a sales order's or a work order's thread (the records the office asks on): the record's open OFFICE issues it answers
+ * (factory-domain answersOfficeAsk) and every open OFFICE issue of the same task — answered at the reply's time, the task and its
+ * escalation tasks closed. A batch never spans two customers (raise.ts), so every mate is this customer's.
+ */
+async function answerOfficeAsk(caller: CommandCaller, eventId: string, recordType: 'SalesOrder' | 'WorkOrder', recordId: string, messageId: string): Promise<AnsweredOutcome> {
+  const plan = await caller.withClient(async (db) => {
+    // One indexed read (tenantId, recordType, recordId): the record's open OFFICE issues; none: nothing more is read.
+    const own = (await db.productionIssue.findMany({ where: { recordType, recordId, status: 'OPEN', source: 'OFFICE' }, select: OFFICE_ISSUE })) as (IssueRow & { messageId: string; createdById: string | null })[]
+    if (own.length === 0) return null
+    const message = (await db.message.findUnique({ where: { id: messageId }, select: REPLY })) as (ReplyingMessage & { at: Date }) | null
+    if (!message) return null
+    const matched = own.filter((issue) => answersOfficeAsk(issue, message))
+    if (matched.length === 0) return null
+    // Their tasks' other open OFFICE issues (the batch's mates on other records): one customer always.
+    const partyId = matched[0]!.partyId
+    const taskIds = [...new Set(matched.map((issue) => issue.taskId))]
+    const mates = (await db.productionIssue.findMany({ where: { taskId: { in: taskIds }, partyId, status: 'OPEN', source: 'OFFICE' }, select: ISSUE })) as IssueRow[]
+    // The order the reply was written on: the record itself, or the work order's single order (its issue names it).
+    const repliedOrderId = recordType === 'SalesOrder' ? recordId : (matched[0]!.salesOrderId ?? null)
+    return { at: message.at, repliedOrderId, matchedIds: new Set(matched.map((issue) => issue.id)), ids: [...new Set([...matched.map((issue) => issue.id), ...mates.map((issue) => issue.id)])] }
+  })
+  if (!plan) return NOTHING
+  const { result } = await command(caller, { name: ISSUE_ANSWERED_HANDLER, input: { eventId, recordType, recordId, messageId, by: 'reply' }, causationId: eventId }, async (tools) => {
+    const changed: { issue: IssueRow; to: IssueStatus }[] = []
+    for (const issue of await lockedIssues(tools.tx, plan.ids)) {
+      if (issue.status !== 'OPEN' || issue.source !== 'OFFICE') continue
+      if (await moveIssue(tools, issue, 'ANSWERED', plan.at)) changed.push({ issue, to: 'ANSWERED' })
+    }
+    // The batch task and B-PR-45's escalation tasks of it: done, as ticking the task does.
+    let tasksClosed = 0
+    for (const id of await openTasksOfIssues(tools.tx, changed.map((entry) => entry.issue))) if (await closeTask(tools, id, 'DONE')) tasksClosed++
+    for (const { issue } of changed) {
+      // A mate on another order reads "Answered in SO-xxxx" (the order the reply was written on); the replied ones: null.
+      const answeredInOrderId = !plan.matchedIds.has(issue.id) && plan.repliedOrderId !== null && issue.salesOrderId !== plan.repliedOrderId ? plan.repliedOrderId : null
+      tools.emit(eventFor(productionIssueAnswered, { subject: issue.id, companyId: issue.companyId, siteId: issue.siteId, payload: { issueId: issue.id, partyId: issue.partyId, source: 'OFFICE', salesOrderId: issue.salesOrderId, batchId: issue.batchId, answeredInOrderId } }))
+    }
+    if (changed.length > 0) auditPerCustomer(tools, changed, { by: 'reply', messageId })
+    else tools.audit({ action: 'production.issuesAnswered', recordType, recordId, after: { by: 'reply', messageId, changed: 0 } })
+    return { answered: changed.length, reopened: 0, cancelled: 0, tasksClosed }
+  })
+  return result
+}
+
+const plus = (a: AnsweredOutcome, b: AnsweredOutcome): AnsweredOutcome => ({ answered: a.answered + b.answered, reopened: a.reopened + b.reopened, cancelled: a.cancelled + b.cancelled, tasksClosed: a.tasksClosed + b.tasksClosed })
+// ── end B-PT-015 ──
+
 /** thread.message_posted: the most frequent event — decided on its payload first, with no read. */
 async function onMessage(caller: CommandCaller, event: Pick<EventEnvelope, 'eventId' | 'type' | 'payload'>): Promise<AnsweredOutcome> {
-  if (text(event.payload, 'recordType') !== 'SalesOrder' || text(event.payload, 'audience') !== 'PARTNER' || text(event.payload, 'direction') !== 'OUTBOUND') return NOTHING
-  const orderId = text(event.payload, 'recordId')
+  // B-PT-015: FIRST, a reply on the thread of a record the office asks on (a sales order or a work order) may answer its ask.
+  const recordType = text(event.payload, 'recordType')
+  const recordId = text(event.payload, 'recordId')
   const messageId = text(event.payload, 'messageId')
-  if (!orderId || !messageId || !isUuid(orderId) || !isUuid(messageId)) return NOTHING
-  return answerByMessage(caller, event.eventId, orderId, messageId)
+  const office = (recordType === 'SalesOrder' || recordType === 'WorkOrder') && recordId && messageId && isUuid(recordId) && isUuid(messageId) ? await answerOfficeAsk(caller, event.eventId, recordType, recordId, messageId) : NOTHING
+  // The customer's issues (BRAND), unchanged: a shared office message on a sales order's thread.
+  if (recordType !== 'SalesOrder' || text(event.payload, 'audience') !== 'PARTNER' || text(event.payload, 'direction') !== 'OUTBOUND') return office
+  if (!recordId || !messageId || !isUuid(recordId) || !isUuid(messageId)) return office
+  return plus(office, await answerByMessage(caller, event.eventId, recordId, messageId))
 }
 
 /** email.status_changed: a windowed mail of a sales order's thread left its window (sent or failed): its message is released now. */

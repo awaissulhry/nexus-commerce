@@ -15,6 +15,7 @@ import {
   problemTaskWords,
   type EscalatingIssue,
 } from './issues'
+import { answersOfficeAsk } from './issues' // B-PT-015
 
 /**
  * B-PR-45 (production plan §1 "Report a problem", §3 "Issues", §7.12; R-41, R-43, R-44): the pure rules of the customer's report
@@ -142,3 +143,35 @@ describe('B-PR-45 the words (it + en), within the task limits', () => {
     expect(PROBLEM_ORDERS_MAX).toBe(50)
   })
 })
+
+// ── B-PT-015 (order production tab C1) ──
+describe('B-PT-015 answersOfficeAsk: a reply in the thread answers the office’s ask', () => {
+  const ASK = id(101)
+  const ASKER = id(102)
+  const SUPERVISOR = id(103)
+  const issue = { source: 'OFFICE' as const, status: 'OPEN' as const, messageId: ASK, createdById: ASKER }
+  const reply = { authorKind: 'USER', authorId: SUPERVISOR, held: false, replyToMessageId: ASK }
+
+  it('a person other than the asker replies to the very note it was raised with: answered', () => {
+    expect(answersOfficeAsk(issue, reply)).toBe(true)
+    // Raised by nobody we know (no maker): any person's reply answers it.
+    expect(answersOfficeAsk({ ...issue, createdById: null }, reply)).toBe(true)
+  })
+
+  it('never: the asker’s own "any news?", a worker or the system, a held mail, a plain note, a reply to another message', () => {
+    expect(answersOfficeAsk(issue, { ...reply, authorId: ASKER })).toBe(false)
+    expect(answersOfficeAsk(issue, { ...reply, authorKind: 'WORKER' })).toBe(false)
+    expect(answersOfficeAsk(issue, { ...reply, authorKind: 'SYSTEM', authorId: null })).toBe(false)
+    expect(answersOfficeAsk(issue, { ...reply, authorId: null })).toBe(false)
+    expect(answersOfficeAsk(issue, { ...reply, held: true })).toBe(false)
+    expect(answersOfficeAsk(issue, { ...reply, replyToMessageId: null })).toBe(false)
+    expect(answersOfficeAsk(issue, { ...reply, replyToMessageId: id(104) })).toBe(false)
+  })
+
+  it('never a customer’s issue (BRAND: only a shared reply answers it, answersBrandIssue), nor one no longer open', () => {
+    expect(answersOfficeAsk({ ...issue, source: 'BRAND' }, reply)).toBe(false)
+    expect(answersOfficeAsk({ ...issue, status: 'ANSWERED' }, reply)).toBe(false)
+    expect(answersOfficeAsk({ ...issue, status: 'CANCELLED' }, reply)).toBe(false)
+  })
+})
+// ── end B-PT-015 ──

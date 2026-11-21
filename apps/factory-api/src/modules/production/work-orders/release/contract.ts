@@ -55,8 +55,27 @@ export const listReadinessContract = defineContract({
           date: businessDate().nullable(),
           /** Materials that are not there in time (NOT_ENOUGH, DELAYED, REQUESTED, NOT_BOOKED). */
           open: z.number().int(),
-          /** Each material's word (the record's Materials tab). */
-          materials: z.array(output({ itemId: id(), itemColourId: id().nullable(), word: word.exclude(['NOT_PLANNED']), date: businessDate().nullable() })),
+          /**
+           * Each material's word (the record's Materials tab). B-PT-014: + its name and unit, how much is needed and short (null for a
+           * work order shared with other customers), by when it is needed, and the purchase orders it counts on (only with
+           * purchasing.view; none for a shared work order). Quantities are decimal strings in the material's base unit; no money.
+           */
+          materials: z.array(
+            output({
+              itemId: id(),
+              itemColourId: id().nullable(),
+              word: word.exclude(['NOT_PLANNED']),
+              date: businessDate().nullable(),
+              // ── B-PT-014 ──
+              label: z.string(),
+              uom: z.enum(UOMS),
+              needed: z.string().nullable(),
+              short: z.string().nullable(),
+              neededOn: businessDate().nullable(),
+              purchaseOrders: z.array(output({ id: id(), number: z.string(), status: z.string(), dueDate: businessDate() })),
+              // ── end B-PT-014 ──
+            }),
+          ),
           asOf: businessDate(),
         }),
       ),
