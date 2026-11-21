@@ -387,7 +387,6 @@
     "fromRequest": "Creato dalla richiesta {number} (senza preventivo)"
   },
   "gate": {
-    "title": "Blocco acconto",
     "state": {
       "NOT_NEEDED": "Non serve",
       "WAITING": "In attesa di pagamento",
@@ -395,13 +394,6 @@
       "WAIVED": "Rinunciato",
       "MISSING": "Non chiesto"
     },
-    "waiting": "La produzione aspetta l'acconto (scade il {date}).",
-    "paid": "Acconto pagato il {date}: la produzione può partire.",
-    "paidNoDate": "Acconto pagato: la produzione può partire.",
-    "waived": "Acconto rinunciato: la produzione può partire.",
-    "missing": "L'ordine richiede un acconto, ma non è stato chiesto: la produzione aspetta.",
-    "notNeeded": "Nessun acconto necessario: la produzione può partire.",
-    "amount": "{amount} come {kind}",
     "money": "Importi ›"
   },
   "lines": {
@@ -728,39 +720,16 @@
     "planNone": "Ancora niente lo pianifica",
     "fromPlan": "(dal piano)",
     "requestedByCustomer": "Richiesto dal cliente",
-    "title": "Date e tappe",
-    "ordered": "Ordinato",
     "requested": "Richiesto",
     "promised": "Promesso",
     "firstPromised": "Prima promessa",
-    "late_one": "{count} giorno di ritardo",
-    "late_other": "{count} giorni di ritardo",
-    "left_one": "tra {count} giorno",
-    "left_other": "tra {count} giorni",
-    "linesLabel": "Date per riga",
     "asOrder": "{date} (dell'ordine)",
-    "historyTitle": "Spostamenti della promessa",
-    "never": "Mai cambiata",
-    "neverBody": "La promessa è ancora quella data quando l'ordine è nato.",
     "someone": "Qualcuno dell'ufficio",
     "fromTo": "{from} → {to}",
     "wholeOrder": "Tutto l'ordine",
     "col": {
-      "line": "Riga",
-      "requested": "Richiesto",
-      "promised": "Promesso",
-      "state": "In tempo?",
-      "when": "Quando",
-      "who": "Chi",
-      "change": "Cambio",
-      "reason": "Perché"
+      "state": "In tempo?"
     },
-    "historyCount_one": "Spostamenti della promessa ({count})",
-    "historyCount_other": "Spostamenti della promessa ({count})",
-    "cutStart": "Inizio taglio",
-    "sewStart": "Inizio confezione",
-    "finish": "Fine",
-    "customerSees": "Il cliente vede {date}",
     "shippedOn": "Spedito il {shipped}",
     "shippedDelivered": "Spedito il {shipped} · consegnato il {delivered}",
     "decide": "Decidi…",
@@ -782,7 +751,6 @@
     "waitsOnSupplier": "aspetta il fornitore"
   },
   "production": {
-    "title": "Ordini di lavoro",
     "empty": {
       "title": "Ancora nessun ordine di lavoro",
       "body": "La produzione crea gli ordini di lavoro dalle righe dell'ordine quando l'acconto lo consente."
@@ -793,27 +761,13 @@
     "notReleased": "Non ancora rilasciato",
     "col": {
       "number": "Ordine di lavoro",
-      "style": "Modello",
       "status": "Stato",
       "progress": "Avanzamento",
-      "due": "Scadenza",
       "released": "Rilasciato",
       "own": "Per questo ordine",
       "materials": "Materiali"
     },
-    "notCounted": {
-      "cut": "Il taglio non si conta qui",
-      "sewn": "La cucitura non si conta qui",
-      "finished": "La finitura non si conta qui"
-    },
-    "step": {
-      "cut": "Tagliati",
-      "sewn": "Cuciti",
-      "finished": "Finiti"
-    },
     "held": "In sospeso",
-    "rush": "Urgente",
-    "progressHeld": "Per l'avanzamento serve il permesso sugli ordini di lavoro",
     "mtmRow": "{style} · {colour} — Su misura · {units} unità · {workOrders} ordini di lavoro",
     "own": {
       "of": "Per questo ordine: {own} di {total}",
@@ -825,18 +779,8 @@
       "cutTogether": "tagliato insieme ad altro lavoro"
     },
     "quality": {
-      "title": "Sospensioni, qualità e problemi",
       "notes": "Note dell'ufficio sulle sospensioni",
       "officeOnly": "Solo ufficio · dal {date}",
-      "issuesHeld": "Per i problemi serve il permesso sugli ordini di lavoro",
-      "needsAnswer_one": "Serve una risposta: {count}",
-      "needsAnswer_other": "Serve una risposta: {count}",
-      "issue": "Chiesto il {since} · risposta entro il {due}",
-      "escalated_one": "Sollecitato {count} volta",
-      "escalated_other": "Sollecitato {count} volte",
-      "ncrsHeld": "Per le non conformità serve il permesso qualità",
-      "ncrs_one": "{count} non conformità aperta:",
-      "ncrs_other": "{count} non conformità aperte:",
       "finalHeld": "Per i controlli finali serve il permesso sui controlli",
       "final": "Controlli finali",
       "finalRow": "{number} · {checked} controllati",
@@ -844,8 +788,7 @@
         "PASSED": "Superato il {date}",
         "FAILED": "Non superato il {date}",
         "WAITING": "In attesa"
-      },
-      "nothing": "Nessuna sospensione, problema o rilievo di qualità"
+      }
     },
     "specs": {
       "title": "Specifiche in vigore"
@@ -1084,13 +1027,11 @@
     "note": "La tua nota (solo ufficio)",
     "reason": "Perché",
     "reasonHint": "Resta nella cronologia della promessa.",
-    "tellCustomer": "Avvisa il cliente nella conversazione dell'ordine (Attività).",
     "go": "Cambia la data",
     "problem": {
       "date": "Scegli una data",
       "past": "Una nuova promessa è un giorno da oggi in poi",
       "same": "È già la data promessa",
-      "reason": "Indica il perché",
       "code": "Scegli il perché",
       "lines": "Scegli almeno una riga"
     }
@@ -2264,14 +2205,10 @@
     "makeNext": "Crea il prossimo: {style}",
     "made": "{number} creato (bozza)",
     "col": {
-      "priority": "Priorità",
       "acts": "Azioni"
     },
     "acts": "Azioni per {number}",
     "dueOf": "Consegna di {number}",
-    "priorityOf": "Priorità di {number}",
-    "priorityHint": "Più alta viene prima",
-    "rushOf": "Urgenza per {number}",
     "heldHold": "Lo fa la produzione — un pianificatore o il responsabile di produzione",
     "heldHint": "Date di consegna, priorità, urgenza e azioni degli ordini di lavoro: lo fa la produzione — un pianificatore o il responsabile di produzione.",
     "act": {

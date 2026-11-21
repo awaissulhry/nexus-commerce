@@ -387,7 +387,6 @@
     "fromRequest": "Made from request {number} (no quote)"
   },
   "gate": {
-    "title": "Deposit gate",
     "state": {
       "NOT_NEEDED": "Not needed",
       "WAITING": "Waiting for payment",
@@ -395,13 +394,6 @@
       "WAIVED": "Waived",
       "MISSING": "Not asked"
     },
-    "waiting": "Production waits for the deposit (due {date}).",
-    "paid": "Deposit paid on {date}: production may start.",
-    "paidNoDate": "Deposit paid: production may start.",
-    "waived": "Deposit waived: production may start.",
-    "missing": "The order needs a deposit, but none was asked: production waits.",
-    "notNeeded": "No deposit needed: production may start.",
-    "amount": "{amount} as {kind}",
     "money": "Money ›"
   },
   "lines": {
@@ -728,39 +720,16 @@
     "planNone": "Nothing plans it yet",
     "fromPlan": "(from the plan)",
     "requestedByCustomer": "Requested by customer",
-    "title": "Dates & milestones",
-    "ordered": "Ordered",
     "requested": "Requested",
     "promised": "Promised",
     "firstPromised": "First promised",
-    "late_one": "{count} day late",
-    "late_other": "{count} days late",
-    "left_one": "in {count} day",
-    "left_other": "in {count} days",
-    "linesLabel": "Dates by line",
     "asOrder": "{date} (the order's)",
-    "historyTitle": "Promise moves",
-    "never": "Never changed",
-    "neverBody": "The promise is still the one given when the order was made.",
     "someone": "Someone in the office",
     "fromTo": "{from} → {to}",
     "wholeOrder": "The whole order",
     "col": {
-      "line": "Line",
-      "requested": "Requested",
-      "promised": "Promised",
-      "state": "On time?",
-      "when": "When",
-      "who": "Who",
-      "change": "Change",
-      "reason": "Why"
+      "state": "On time?"
     },
-    "historyCount_one": "Promise moves ({count})",
-    "historyCount_other": "Promise moves ({count})",
-    "cutStart": "Cut start",
-    "sewStart": "Sew start",
-    "finish": "Finish",
-    "customerSees": "Customer sees {date}",
     "shippedOn": "Shipped {shipped}",
     "shippedDelivered": "Shipped {shipped} · delivered {delivered}",
     "decide": "Decide…",
@@ -782,7 +751,6 @@
     "waitsOnSupplier": "waits on the supplier"
   },
   "production": {
-    "title": "Work orders",
     "empty": {
       "title": "No work orders yet",
       "body": "Production makes work orders from the order's lines once the deposit allows it."
@@ -793,27 +761,13 @@
     "notReleased": "Not released yet",
     "col": {
       "number": "Work order",
-      "style": "Style",
       "status": "State",
       "progress": "Progress",
-      "due": "Due",
       "released": "Released",
       "own": "Made for this order",
       "materials": "Materials"
     },
-    "notCounted": {
-      "cut": "Cutting not counted here",
-      "sewn": "Sewing not counted here",
-      "finished": "Finishing not counted here"
-    },
-    "step": {
-      "cut": "Cut",
-      "sewn": "Sewn",
-      "finished": "Finished"
-    },
     "held": "On hold",
-    "rush": "Urgent",
-    "progressHeld": "Progress needs the work orders right",
     "mtmRow": "{style} · {colour} — Made to measure · {units} units · {workOrders} work orders",
     "own": {
       "of": "Made for this order: {own} of {total}",
@@ -825,18 +779,8 @@
       "cutTogether": "cut together with other work"
     },
     "quality": {
-      "title": "Holds, quality & problems",
       "notes": "Office notes on the holds",
       "officeOnly": "Office only · since {date}",
-      "issuesHeld": "Problems need the work orders right",
-      "needsAnswer_one": "Needs an answer: {count}",
-      "needsAnswer_other": "Needs an answer: {count}",
-      "issue": "Asked {since} · answer by {due}",
-      "escalated_one": "Escalated {count}×",
-      "escalated_other": "Escalated {count}×",
-      "ncrsHeld": "Nonconformities need the quality right",
-      "ncrs_one": "{count} open nonconformity:",
-      "ncrs_other": "{count} open nonconformities:",
       "finalHeld": "Final inspections need the inspections right",
       "final": "Final inspections",
       "finalRow": "{number} · {checked} checked",
@@ -844,8 +788,7 @@
         "PASSED": "Passed {date}",
         "FAILED": "Failed {date}",
         "WAITING": "Waiting"
-      },
-      "nothing": "No holds, problems or quality findings"
+      }
     },
     "specs": {
       "title": "Specs in force"
@@ -1084,13 +1027,11 @@
     "note": "Your note (office only)",
     "reason": "Why",
     "reasonHint": "Kept in the promise history.",
-    "tellCustomer": "Tell the customer in the order's thread (Activity).",
     "go": "Change the date",
     "problem": {
       "date": "Choose a date",
       "past": "A new promise is a day from today on",
       "same": "It is the promise already",
-      "reason": "Say why",
       "code": "Pick why",
       "lines": "Choose at least one line"
     }
@@ -2264,14 +2205,10 @@
     "makeNext": "Make the next one: {style}",
     "made": "{number} made (draft)",
     "col": {
-      "priority": "Priority",
       "acts": "Actions"
     },
     "acts": "Actions for {number}",
     "dueOf": "Due date of {number}",
-    "priorityOf": "Priority of {number}",
-    "priorityHint": "Higher comes first",
-    "rushOf": "Rush for {number}",
     "heldHold": "Production does this — a planner or the production manager",
     "heldHint": "Due dates, priority, rush and the work orders’ actions: Production does this — a planner or the production manager.",
     "act": {

@@ -222,11 +222,6 @@ export function stillDoorOf(row: Pick<StillRowOf, 'kind' | 'ref'>, place: { read
 // ---- end F-SA-243
 
 // ---- F-OP-116 (10-order-page §5.2, §5.3; review R-12): decide in place ------------------------------------------------------------
-/** The changes waiting on one work order (PROPOSED), the oldest first: its row says "Change waits: 40 → 28 · Apply… / Leave as is…". */
-export function waitingChangesOf(list: readonly WorkOrderChange[] | null | undefined, workOrderId: string): WorkOrderChange[] {
-  return (list ?? []).filter((change) => change.status === 'PROPOSED' && change.workOrder?.id === workOrderId).sort((a, b) => a.proposedAt.localeCompare(b.proposedAt) || a.id.localeCompare(b.id))
-}
-
 /** A change's pieces before → after (its cells summed: what the work order makes now for them, what it would make). */
 export function changeFiguresOf(change: Pick<WorkOrderChange, 'cells'>): { readonly before: number; readonly after: number } {
   return change.cells.reduce((sum, cell) => ({ before: sum.before + cell.from, after: sum.after + cell.to }), { before: 0, after: 0 })
