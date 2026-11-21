@@ -721,3 +721,75 @@ async function escalationTasksOf(taskId: string): Promise<Json[]> {
   const wanted = [...Object.values(people), ...Object.values(staff)].flatMap((userId) => [issueEscalationTaskId(taskId, 1, userId), issueEscalationTaskId(taskId, 2, userId)])
   return admin(`SELECT id::text FROM "Task" WHERE id = ANY($1::uuid[])`, [wanted])
 }
+
+// ── B-PT-010 (order production tab R10) ──
+/**
+ * Inside ONE sales order the list says, for a reader of the record's thread, the note an issue was raised with, who asked an office
+ * ask and the reply that answers it (B-PT-015's rule) — office people that order's thread already shows; a list over several orders
+ * names no one; a reader without threads.read gets none of it; another customer's order stays "Sales order not found.". The asker is
+ * a real office person (T Backup Alpha) asking on A's order; T Supervisor Alpha replies to the note through threads' own seam.
+ */
+describe('B-PT-010 the list inside one order: the note, who asked, the reply that answers it', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  let ask: Json
+  let reply = ''
+
+  beforeAll(async () => {
+    SESSIONS['pt.asker'] = { audience: 'office', tenantId: T, actorId: people.backupA, grants: [grant(OFFICE_PERMISSIONS, 'all')] }
+    SESSIONS['pt.nothreads'] = { audience: 'office', tenantId: T, actorId: newId(), grants: [grant(['workorders.view', 'orders.view'], 'all')] }
+    await answerAll()
+    const raised = await ok('pt.asker', '/production/notes', { records: [{ type: 'SalesOrder', id: w.a.salesOrderId }], body: 'Made-up: where is this order? Is the date safe?', needsAnswer: true }, 'POST')
+    ask = (raised.written as Json[])[0]!
+    const caller = callerFor(h.database, { audience: 'office', tenantId: T, actorId: people.supervisorA, grants: [grant(OFFICE_PERMISSIONS, [ids.a])], requestId: newId() })
+    reply = (
+      await command(caller, { name: 'test.replyToAsk', input: { orderId: w.a.salesOrderId } }, async (tools) => {
+        const { thread } = await ensureThread(tools, { type: 'SalesOrder', id: w.a.salesOrderId }, people.supervisorA)
+        const message = await writeMessage(tools, thread, { direction: 'INTERNAL_NOTE', channel: 'APP', author: { kind: 'USER', id: people.supervisorA, name: 'T Supervisor Alpha' }, bodyText: 'Made-up: cut 120, sewn 80, the date holds.', replyToMessageId: ask.messageId })
+        return message.id
+      })
+    ).result
+    // The reply answers it (B-PT-015).
+    expect(await answerAll()).toBeGreaterThanOrEqual(1)
+  })
+
+  const rowIn = async (session: string, url: string) => ((await ok(session, url)).issues as Json[]).find((issue) => issue.id === ask.issueId)
+
+  it('one order, a thread reader: the note, the asker, the reply (when, who, its first words); the issue answered', async () => {
+    const row = await rowIn('office.all', `/production/issues?salesOrderId=${w.a.salesOrderId}&status=ALL&limit=200`)
+    const at = (await one<{ at: Date }>(`SELECT at FROM "Message" WHERE id = $1`, [reply]))!.at
+    expect(row).toMatchObject({
+      source: 'OFFICE',
+      status: 'ANSWERED',
+      messageId: ask.messageId,
+      askedBy: { id: people.backupA, name: 'T Backup Alpha' },
+      reply: { at: at.toISOString(), messageId: reply, by: { id: people.supervisorA, name: 'T Supervisor Alpha' }, excerpt: 'Made-up: cut 120, sewn 80, the date holds.' },
+    })
+    // A person limited to Alpha reads the same inside Alpha's order.
+    expect(await rowIn('office.p1', `/production/issues?salesOrderId=${w.a.salesOrderId}&status=ALL&limit=200`)).toMatchObject({ askedBy: { id: people.backupA }, reply: { messageId: reply } })
+  })
+
+  it('a list over several orders names no one: the note for a thread reader, no asker, no reply', async () => {
+    const row = await rowIn('office.all', `/production/issues?partyId=${ids.a}&status=ALL&limit=200`)
+    expect(row).toMatchObject({ messageId: ask.messageId, askedBy: null, reply: null })
+    expect(JSON.stringify(row)).not.toContain('T Backup Alpha')
+    expect(JSON.stringify(row)).not.toContain('T Supervisor Alpha')
+  })
+
+  it('a reader without threads.read: no note, no words, no asker, no reply — even inside the order', async () => {
+    const row = await rowIn('pt.nothreads', `/production/issues?salesOrderId=${w.a.salesOrderId}&status=ALL&limit=200`)
+    expect(row).toMatchObject({ messageId: null, excerpt: null, askedBy: null, reply: null })
+  })
+
+  it('a customer’s own report (BRAND) names no asker and no reply inside its order', async () => {
+    const row = ((await ok('office.all', `/production/issues?salesOrderId=${w.b.salesOrderId}&status=ALL&limit=200`)).issues as Json[]).find((issue) => issue.id === w.production.issue.id)!
+    expect(row).toMatchObject({ source: 'BRAND', askedBy: null, reply: null })
+  })
+
+  it('the wall: Alpha’s order to a Beta-limited reader is "Sales order not found." — no asker, no reply, nothing of A', async () => {
+    const refused = await call('office.p2', `/production/issues?salesOrderId=${w.a.salesOrderId}&status=ALL`)
+    expect([refused.status, refused.body.error?.message]).toEqual([404, 'Sales order not found.'])
+    expect(refused.raw).not.toContain(reply)
+    expect(refused.raw).not.toContain('T Supervisor Alpha')
+    expect(findMarkers(refused.body, aMarkers)).toEqual([])
+  })
+})
+// ── end B-PT-010 ──

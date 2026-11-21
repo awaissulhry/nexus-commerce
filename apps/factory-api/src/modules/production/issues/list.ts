@@ -11,6 +11,7 @@ import {
   ISSUE_TASK_MOVES,
   ISSUE_WORDS,
   officeIssueNote,
+  answersOfficeAsk, // B-PT-015's rule: the reply that answers an office ask
   type IssueRecordType,
   type IssueSource,
   type IssueStatus,
@@ -43,6 +44,10 @@ import { wallOf } from './tasks'
  *               escalation's, ./raise issueEscalationTaskId), its batch, and the words it was raised with — only for a reader
  *               of the record's thread (threads' mayOnThread over the record's WALL scope)
  *   counts      open, no reply yet, escalated, mine — over the customer filter (the Overview tile, the Customer card badge)
+ *   B-PT-010    (order production tab R10) for a reader of the record's thread: the note it was raised with (`messageId`); and
+ *               ONLY when the list names one sales order (inside one order the thread already shows these office people): who
+ *               asked an office ask (`askedBy`) and the reply that answers it (`reply`: B-PT-015's rule — the first reply a person
+ *               other than the asker wrote to that note, never a worker's or the system's). Lists over several orders name no one.
  *
  * Reads at most READ_CAP issues of the filter (`more` says when there are more); OPEN oldest first, the rest newest first.
  */
@@ -95,6 +100,7 @@ const ISSUE_SELECT = {
   answeredAt: true,
   escalationStep: true,
   escalatedAt: true,
+  createdById: true, // B-PT-010: who asked (named inside one order only)
 } as const satisfies Prisma.ProductionIssueSelect
 
 const isMove = (value: string): value is IssueTaskMove => (ISSUE_TASK_MOVES as readonly string[]).includes(value)
@@ -186,8 +192,30 @@ export async function listIssues(caller: CommandCaller, query: IssueListQuery, n
     const batchSizes = new Map<string, number>()
     if (batchIds.length) for (const row of await db.productionIssue.groupBy({ by: ['batchId'], where: { batchId: { in: batchIds } }, _count: { _all: true } })) if (row.batchId) batchSizes.set(row.batchId, row._count._all)
     const readable = shown.filter((issue) => mayOnThread(actor, THREADS_READ, issue.recordType, wallOf(issue)))
-    const bodies = new Map((readable.length ? await db.message.findMany({ where: { id: { in: readable.map((issue) => issue.messageId) } }, select: { id: true, bodyText: true } }) : []).map((row) => [row.id, row.bodyText]))
+    // B-PT-010: + each note's thread (the reply is read by it: Message has no index on replyToMessageId).
+    const raisedWith = readable.length ? await db.message.findMany({ where: { id: { in: readable.map((issue) => issue.messageId) } }, select: { id: true, bodyText: true, threadId: true } }) : []
+    const bodies = new Map(raisedWith.map((row) => [row.id, row.bodyText]))
     const readableIds = new Set(readable.map((issue) => issue.id))
+
+    // ── B-PT-010 (R10): inside ONE order, for a reader of the record's thread — who asked an office ask and the reply that answers it ──
+    const asks = order ? readable.filter((issue) => issue.source === 'OFFICE') : []
+    const replies = new Map<string, { id: string; at: Date; authorId: string; bodyText: string }>()
+    if (asks.length > 0) {
+      const threadOf = new Map(raisedWith.map((row) => [row.id, row.threadId]))
+      const threadIds = [...new Set(asks.flatMap((issue) => threadOf.get(issue.messageId) ?? []))]
+      const answering = threadIds.length
+        ? await db.message.findMany({ where: { threadId: { in: threadIds }, replyToMessageId: { in: asks.map((issue) => issue.messageId) }, authorKind: 'USER' }, select: { id: true, at: true, authorKind: true, authorId: true, held: true, replyToMessageId: true, bodyText: true }, orderBy: [{ at: 'asc' }, { id: 'asc' }] })
+        : []
+      for (const issue of asks) {
+        // The rule B-PT-015 answers by (read as if still open: an answered ask still names its reply).
+        const first = answering.find((message) => answersOfficeAsk({ source: 'OFFICE', status: 'OPEN', messageId: issue.messageId, createdById: issue.createdById }, message))
+        if (first && first.authorId) replies.set(issue.id, { id: first.id, at: first.at, authorId: first.authorId, bodyText: first.bodyText })
+      }
+    }
+    const personIds = [...new Set([...asks.flatMap((issue) => (issue.createdById ? [issue.createdById] : [])), ...[...replies.values()].map((reply) => reply.authorId)])]
+    const persons = new Map((personIds.length ? await db.user.findMany({ where: { id: { in: personIds } }, select: { id: true, displayName: true } }) : []).map((row) => [row.id, { id: row.id, name: row.displayName }]))
+    const askIds = new Set(asks.map((issue) => issue.id))
+    // ── end B-PT-010 ──
 
     return {
       asOf: toUtcIso(now),
@@ -218,6 +246,14 @@ export async function listIssues(caller: CommandCaller, query: IssueListQuery, n
           mine: issue.status === 'OPEN' && isMine(issue.taskId),
           batch: issue.batchId ? { id: issue.batchId, issues: batchSizes.get(issue.batchId) ?? 1 } : null,
           excerpt: readableIds.has(issue.id) ? excerptOf(bodies.get(issue.messageId) ?? '') : null,
+          // ── B-PT-010 ──
+          messageId: readableIds.has(issue.id) ? issue.messageId : null,
+          askedBy: askIds.has(issue.id) && issue.createdById ? (persons.get(issue.createdById) ?? null) : null,
+          reply: (() => {
+            const found = replies.get(issue.id)
+            return found ? { at: toUtcIso(found.at), messageId: found.id, by: persons.get(found.authorId) ?? null, excerpt: excerptOf(found.bodyText) } : null
+          })(),
+          // ── end B-PT-010 ──
         }
       }),
       more: capped || wanted.length > shown.length,

@@ -8,7 +8,8 @@ import { TASK_STATUSES } from '@nexus/factory-domain/tasks/rules'
  * B-PR-45 — the office's list of the issues that need an answer (production plan §5 Customer card "open problems", Overview
  * "open issues"; L24; R-42 "No reply sent yet"). Office only, every customer the reader reaches (the brand wall: a person
  * limited to some customers reads only theirs). Words in Italian and English. Lists name no person (worker privacy): the task's
- * assignee is Me / Someone else / Not set.
+ * assignee is Me / Someone else / Not set. B-PT-010: inside ONE sales order (`salesOrderId`), for a reader of the record's thread,
+ * an office ask names who asked and who replied — office people the order's thread already shows; never a worker.
  */
 
 const words = output({ it: z.string(), en: z.string() })
@@ -67,6 +68,17 @@ export const listIssuesContract = defineContract({
           batch: output({ id: id(), issues: z.number().int() }).nullable(),
           /** The words it was raised with, only for a reader of the record's thread. */
           excerpt: z.string().nullable(),
+          // ── B-PT-010 (order production tab R10) ──
+          /** The note it was raised with ("Show in the thread"), only for a reader of the record's thread; else null. */
+          messageId: id().nullable(),
+          /** An office ask's asker, only inside ONE sales order (`salesOrderId`) and for a reader of the thread; else null. */
+          askedBy: output({ id: id(), name: z.string() }).nullable(),
+          /**
+           * The reply that answers an office ask (B-PT-015's rule: the first reply to its note by a person other than the asker),
+           * only inside ONE sales order and for a reader of the thread; else null ("Latest update · Mario · 21 Nov 14:10 · …").
+           */
+          reply: output({ at: instant(), messageId: id(), by: output({ id: id(), name: z.string() }).nullable(), excerpt: z.string() }).nullable(),
+          // ── end B-PT-010 ──
         }),
       ),
       /** More issues than `limit` (or than the read's cap) match. */
