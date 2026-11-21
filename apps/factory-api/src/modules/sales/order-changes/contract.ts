@@ -76,7 +76,10 @@ export const updateFreezeRuleContract = defineContract({
 })
 
 const stageOut = { stage: stage.nullable(), on: businessDate().nullable(), words }
-const verdict = output({ field, fieldWords: words, state: z.enum(FREEZE_STATES), frozenFrom: stage.nullable(), ruleId: id().nullable(), words })
+// ── B-OC-017 (order changes tab R13b): what freezes next (from which stage, to what; null: nothing more), and whether the deciding
+// rule is the customer's own set ("Rule of {customer}") — never a date ──
+const next = output({ stage, action }).nullable()
+const verdict = output({ field, fieldWords: words, state: z.enum(FREEZE_STATES), frozenFrom: stage.nullable(), ruleId: id().nullable(), words, next, customerRule: z.boolean() })
 
 export const orderFreezeContract = defineContract({
   params: orderParams,
@@ -93,7 +96,7 @@ export const orderFreezeContract = defineContract({
           seq: z.number().int(),
           ...stageOut,
           fields: z.array(verdict),
-          sizes: z.array(output({ size: z.string(), ...stageOut, locked: z.boolean(), state: z.enum(FREEZE_STATES), words })),
+          sizes: z.array(output({ size: z.string(), ...stageOut, locked: z.boolean(), state: z.enum(FREEZE_STATES), words, /* B-OC-017 */ next, customerRule: z.boolean() })),
         }),
       ),
     }),

@@ -199,6 +199,10 @@ describe('what is frozen on an order in production (SAL-218)', () => {
     expect(first).toMatchObject({ stage: 'CUT' })
     expect(first.sizes.find((size: Json) => size.size === cutSize)).toMatchObject({ stage: 'CUT', locked: true, state: 'CHANGE_REQUEST', words: { en: 'Cutting started: size frozen' } })
     expect(first.sizes.find((size: Json) => size.size === openSize)).toMatchObject({ stage: 'RELEASED', locked: false, state: 'OPEN' })
+    // B-OC-017 (order changes tab R13b): what comes next per size cell — the cut one is blocked from finishing, the open one needs a
+    // priced change from cutting; the company's rules decide (not a customer's own).
+    expect(first.sizes.find((size: Json) => size.size === cutSize)).toMatchObject({ next: { stage: 'FINISHED', action: 'BLOCKED' }, customerRule: false })
+    expect(first.sizes.find((size: Json) => size.size === openSize)).toMatchObject({ next: { stage: 'CUT', action: 'CHANGE_REQUEST' }, customerRule: false })
     expect(first.fields.find((field: Json) => field.field === 'PRICE')).toMatchObject({ state: 'BLOCKED', words: { en: 'Cut leather is priced: no price change any more (made-up)' } })
     expect(reading.lines.find((entry: Json) => entry.lineId === line20.id)).toMatchObject({ stage: null })
   })
@@ -539,6 +543,8 @@ describe("a customer's own freeze rules beat the company's for that customer (B-
 
     const reading = await ok('reader', 'GET', `/sales/orders/${order.id}/freeze`)
     expect(field(reading, 'DELIVERY_DATE')).toMatchObject({ state: 'BLOCKED', ruleId: own.id })
+    // B-OC-017: "Rule of {customer}" — P1's own set decides the date; blocked already, nothing comes next.
+    expect(field(reading, 'DELIVERY_DATE')).toMatchObject({ customerRule: true, next: null })
     const first = reading.lines.find((entry: Json) => entry.lineId === line10.id)
     expect(first.sizes.find((size: Json) => size.size === cutSize)).toMatchObject({ state: 'CHANGE_REQUEST', words: { en: 'Cutting started: size frozen' } })
     expect(first.sizes.find((size: Json) => size.size === openSize)).toMatchObject({ locked: false, state: 'OPEN' })
