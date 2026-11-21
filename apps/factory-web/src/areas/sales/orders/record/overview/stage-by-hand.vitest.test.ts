@@ -36,7 +36,7 @@ vi.mock('@nexus/ui/components', async (original) => {
 
 type HandStage = NonNullable<Headline['stage']>['byHand']
 const at = (code: BrandStage, byHand: HandStage = null, version: number | null | undefined = 3): Headline => ({ ...HEADLINE, stage: { ...HEADLINE.stage!, code, byHand, version } })
-const choices = (floor: BrandStage, shown: BrandStage, hand: BrandStage | null) => stageChoicesOf({ floor, shown, hand }).map((row) => `${row.stage}:${row.choice}${row.disabled ? '×' : ''}`)
+const choices = (floor: BrandStage, shown: BrandStage, hand: BrandStage | null, changing = false) => stageChoicesOf({ floor, shown, hand, changing }).map((row) => `${row.stage}:${row.choice}${row.disabled ? '×' : ''}`)
 const M = (key: string) => `where.manual.${key}`
 
 describe('F-SC-W1: the stages the dialog offers — the domain\'s handStageChoicesOf, in the dialog\'s words', () => {
@@ -61,15 +61,26 @@ describe('F-SC-W1: the stages the dialog offers — the domain\'s handStageChoic
     expect(stageChoicesOf({ floor: 'QUALITY', shown: 'CUTTING', hand: 'CUTTING' })[1]!.note).toEqual({ key: M('rowNow') })
   })
 
+  it('F-SC-W6: Change… keeps the hand stage standing pickable (its reason or note may change alone); the floor\'s own stays Clear…\'s', () => {
+    expect(choices('PREPARING', 'SEWING', 'SEWING', true)).toEqual(['PREPARING:FLOOR×', 'CUTTING:BACK', 'SEWING:NOW', 'QUALITY:AHEAD', 'READY:AHEAD'])
+    expect(choices('QUALITY', 'CUTTING', 'CUTTING', true)).toEqual(['PREPARING:BACK', 'CUTTING:NOW', 'SEWING:AHEAD', 'QUALITY:FLOOR×', 'READY:AHEAD'])
+    expect(stageChoicesOf({ floor: 'PREPARING', shown: 'SEWING', hand: 'SEWING', changing: true })[2]!.note).toEqual({ key: M('rowKeep') })
+    // A Set never keeps the stage shown (the server refuses a Set at the stage the customer reads), nor a "Change" with nothing standing.
+    expect(choices('SEWING', 'SEWING', null, true)).toEqual(['PREPARING:BACK', 'CUTTING:BACK', 'SEWING:NOW×', 'QUALITY:AHEAD', 'READY:AHEAD'])
+  })
+
   it('what it opens on: the step picked (when it may be picked); Change… — the reason and note set, nothing pre-picked; a hand stage gone meanwhile — a Set', () => {
     expect(stageByHandStartOf('set', HAND_FREE_READ.headline)).toMatchObject({ changing: false, floor: 'SEWING', shown: 'SEWING', hand: null, pick: null, reasonCode: '', note: '' })
     // A step of the stages picked opens the dialog on it — ahead, back below the floor, or Ready to ship; never the stage shown.
     for (const pick of ['PREPARING', 'CUTTING', 'QUALITY', 'READY'] as const) expect(stageByHandStartOf('set', HAND_FREE_READ.headline, pick).pick, pick).toBe(pick)
     expect(stageByHandStartOf('set', HAND_FREE_READ.headline, 'SEWING').pick).toBeNull()
-    expect(stageByHandStartOf('change', HAND_READ.headline)).toMatchObject({ changing: true, floor: 'PREPARING', shown: 'SEWING', hand: 'SEWING', pick: null, reasonCode: 'OUTAGE', note: HAND_BY.note })
+    // F-SC-W6: Change… pre-picks the hand stage standing, with what stands (Go waits while nothing differs from it).
+    expect(stageByHandStartOf('change', HAND_READ.headline)).toMatchObject({ changing: true, floor: 'PREPARING', shown: 'SEWING', hand: 'SEWING', pick: 'SEWING', reasonCode: 'OUTAGE', note: HAND_BY.note, kept: { stage: 'SEWING', reasonCode: 'OUTAGE', note: HAND_BY.note } })
     expect(stageByHandStartOf('change', HAND_READ.headline, 'CUTTING').pick).toBe('CUTTING')
-    // The floor's own step is Clear…'s, never the dialog's.
-    expect(stageByHandStartOf('change', HAND_READ.headline, 'PREPARING').pick).toBeNull()
+    // The floor's own step is Clear…'s, never the dialog's: Change… falls back to the hand stage standing.
+    expect(stageByHandStartOf('change', HAND_READ.headline, 'PREPARING').pick).toBe('SEWING')
+    expect(stageByHandStartOf('set', HAND_FREE_READ.headline).kept).toBeNull()
+    expect(stageByHandStartOf('change', HAND_BACK_READ.headline).floorAtSet).toBe('QUALITY')
     expect(stageByHandStartOf('change', HAND_FREE_READ.headline)).toMatchObject({ changing: false, hand: null, pick: null })
     // The floor of a standing hand stage is the API's live one (byHand.floor), never the shown stage; not known: Preparing (the API judges).
     expect(stageByHandStartOf('set', at('SEWING', { ...HAND_BY, floor: null })).floor).toBe('PREPARING')
@@ -93,6 +104,18 @@ describe('F-MS-103: why Go waits, and the request it sends', () => {
     expect(ask({ rows: standing, stage: 'SEWING' })).toEqual({ key: M('held.stage') })
     expect(ask({ rows: standing, stage: 'PREPARING' })).toEqual({ key: M('held.stage') })
     expect(ask({ rows: standing, stage: 'CUTTING' })).toBeNull()
+    // F-SC-W6: Change… — the stage standing kept: held only while the reason and the note are what stands (the domain's 409 words).
+    const changing = stageChoicesOf({ floor: 'PREPARING', shown: 'SEWING', hand: 'SEWING', changing: true })
+    const kept = { stage: 'SEWING' as const, reasonCode: 'OUTAGE', note: 'Tablet offline.' }
+    const keep = (over: Partial<{ stage: BrandStage; reasonCode: string; note: string }>) => stageByHandHeld({ rows: changing, stage: 'SEWING', reasonCode: 'OUTAGE', note: 'Tablet offline.', busy: false, kept, ...over })
+    expect(keep({})).toEqual(STAGE_SET_REFUSAL_WORDS.NOTHING_TO_CHANGE)
+    expect(keep({ note: '  Tablet offline.  ' })).toEqual(STAGE_SET_REFUSAL_WORDS.NOTHING_TO_CHANGE)
+    expect(keep({ reasonCode: 'FEW_PEOPLE' })).toBeNull()
+    expect(keep({ note: 'Tablets back at 15:00.' })).toBeNull()
+    expect(keep({ note: '' })).toBeNull()
+    expect(keep({ stage: 'CUTTING' })).toBeNull()
+    expect(stageByHandHeld({ rows: changing, stage: 'SEWING', reasonCode: 'OUTAGE', note: '', busy: false, kept: { ...kept, note: '' } })).toEqual(STAGE_SET_REFUSAL_WORDS.NOTHING_TO_CHANGE)
+    expect(stageByHandHeld({ rows: changing, stage: 'SEWING', reasonCode: 'OUTAGE', note: 'Tablet offline.', busy: true, kept })).toEqual({ key: 'held.busy' })
     expect(ask({ reasonCode: '' })).toEqual({ key: 'raise.held.pick', ns: 'production' })
     expect(ask({ reasonCode: 'NOT_A_CODE' })).toEqual({ key: 'raise.held.pick', ns: 'production' })
     expect(ask({ reasonCode: 'OTHER' })).toEqual(STAGE_SET_REFUSAL_WORDS.NOTE_NEEDED)
@@ -131,6 +154,11 @@ describe('F-SC-W1: the lines the dialogs say — R3b and R18 always, never an ur
     expect(keys('PREPARING', 'SEWING', 'CUTTING')).toEqual([M('customer'), M('told'), M('back'), M('cuts'), M('clears')])
     // A hand stage back changed up, still below the floor: a move forward; clears once the floor comes back or passes.
     expect(keys('QUALITY', 'CUTTING', 'SEWING')).toEqual([M('customer'), M('told'), M('cuts'), M('clearsBack')])
+    // F-SC-W6: the same stage kept in a Change…: the customer is told nothing; it clears by the floor at the set (a words-only Change keeps it).
+    expect(keys('PREPARING', 'SEWING', 'SEWING')).toEqual([M('customer'), M('told'), M('same'), M('cuts'), M('clears')])
+    expect(stageDialogLinesOf({ floor: 'PREPARING', shown: 'SEWING', pick: 'SEWING' })[2]).toEqual({ key: M('same'), customer: { it: 'Cucitura', en: 'Sewing' } })
+    expect(stageDialogLinesOf({ floor: 'QUALITY', shown: 'CUTTING', pick: 'CUTTING', floorAtSet: 'SEWING' }).at(-1)).toEqual({ key: M('clearsBack'), stage: 'CUTTING', past: 'SEWING' })
+    expect(stageDialogLinesOf({ floor: 'QUALITY', shown: 'CUTTING', pick: 'PREPARING', floorAtSet: 'SEWING' }).at(-1)).toEqual({ key: M('clearsBack'), stage: 'PREPARING', past: 'QUALITY' })
     expect(stageDialogLinesOf({ floor: 'SEWING', shown: 'SEWING', pick: null })[1]).toEqual({ key: M('told'), minutes: NOTICE_WAIT_MINUTES })
     expect(NOTICE_WAIT_MINUTES).toBe(10)
     // What the customer reads is named in the customer's own words (the portal's: Taglio), a stage of the office in the office's.
@@ -164,14 +192,14 @@ describe('F-SC-W1: the lines the dialogs say — R3b and R18 always, never an ur
   })
 
   it('every word in both languages (office "tu", "la fase" feminine); the hint says never name a person on the floor; no key hint text; the old keys gone', () => {
-    const keys = ['title', 'changeTitle', 'body', 'pick', 'rowNow', 'rowFloor', 'rowBack', 'reason', 'noteHint', 'customer', 'told', 'back', 'cuts', 'clears', 'clearsBack', 'go', 'changeGo', 'refused', 'notice', 'cleared', 'clearedPlain', 'clearTitle', 'clearCorrection', 'clearForward', 'clearUntold', 'clearNever' /* B-MS-008 (ms-fx1) */, 'clearFloor', 'clearGo', 'clearGoPlain', 'held.stage', 'stepAria']
+    const keys = ['title', 'changeTitle', 'body', 'pick', 'rowNow', 'rowFloor', 'rowBack', 'rowKeep' /* F-SC-W6 */, 'same' /* F-SC-W6 */, 'reason', 'noteHint', 'customer', 'told', 'back', 'cuts', 'clears', 'clearsBack', 'go', 'changeGo', 'refused', 'notice', 'cleared', 'clearedPlain', 'clearTitle', 'clearCorrection', 'clearForward', 'clearUntold', 'clearNever' /* B-MS-008 (ms-fx1) */, 'clearFloor', 'clearGo', 'clearGoPlain', 'held.stage', 'stepAria']
     const params = { number: 'SO-1', max: 200, minutes: 10, customer: 'x', stage: 'x', floor: 'x', past: 'x' }
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
       for (const key of keys) expect(t(M(key), params), `${locale} ${key}`).not.toBe(M(key))
       for (const key of keys) expect(t(M(key), params), `${locale} ${key}`).not.toMatch(/\{\w+\}/)
       // F-SC-W1: the rows and lines of the old rules are gone (nothing unused stays).
-      for (const key of ['rowDone', 'rowSet', 'same', 'clearTold']) expect(t(M(key)), `${locale} ${key}`).toBe(M(key))
+      for (const key of ['rowDone', 'rowSet', 'clearTold']) expect(t(M(key)), `${locale} ${key}`).toBe(M(key))
       expect(t(M('noteHint'), { max: 200 })).toBe(locale === 'en' ? 'One line, at most 200 characters. Never name a person on the floor.' : 'Una riga, al massimo 200 caratteri. Non nominare chi lavora in reparto.')
       for (const key of keys) expect(t(M(key), params), `${locale} ${key}`).not.toMatch(/⌘|Ctrl|\bEsc\b|urgent|urgente/i)
     }
@@ -186,6 +214,8 @@ describe('F-SC-W1: the lines the dialogs say — R3b and R18 always, never an ur
     expect(en(M('clearCorrection'), { customer: 'Sewing', minutes: 10 })).toBe('The customer was told Sewing: it is told the correction after 10 minutes.')
     expect(en(M('clearForward'), { customer: 'Quality check' })).toBe('The customer reads Quality check and gets the usual notice.')
     expect(en(M('body'))).toBe('Set where the work really is. Only the stage changes: work orders, counts, quality and shipments stay as recorded.')
+    expect(en(M('same'), { customer: 'Sewing' })).toBe('The customer keeps reading Sewing and is told nothing: only the reason or the note changes.')
+    expect(it(M('same'), { customer: 'Cucitura' })).toBe('Il cliente continua a leggere Cucitura e non riceve avvisi: cambiano solo il motivo o la nota.')
     expect(en(M('cuts'))).toBe("The customer's changes are judged on the floor's records: key the cuts in as soon as the floor can.")
   })
 })
@@ -197,6 +227,7 @@ describe('F-MS-103: refusals and notices in the page\'s words', () => {
     expect(stageRefusalOf(refusal('conflict', STAGE_SET_REFUSAL_WORDS.PAUSED.en))).toEqual(STAGE_SET_REFUSAL_WORDS.PAUSED)
     expect(stageRefusalOf(refusal('conflict', STAGE_SET_REFUSAL_WORDS.NOT_STARTED.en))).toEqual(STAGE_SET_REFUSAL_WORDS.NOT_STARTED)
     expect(stageRefusalOf(refusal('conflict', STAGE_SET_REFUSAL_WORDS.ALREADY_READY.en))).toEqual(STAGE_SET_REFUSAL_WORDS.ALREADY_READY)
+    expect(stageRefusalOf(refusal('conflict', STAGE_SET_REFUSAL_WORDS.NOTHING_TO_CHANGE.en))).toEqual(STAGE_SET_REFUSAL_WORDS.NOTHING_TO_CHANGE) // F-SC-W6
     expect(stageRefusalOf(refusal('invalid', STAGE_SET_REFUSAL_WORDS.NOTE_NEEDED.en, 'body/note'))).toEqual(STAGE_SET_REFUSAL_WORDS.NOTE_NEEDED)
     // F-SC-W1: "The customer already reads Sewing." / "Preparing is the floor's own stage: clear the stage set by hand to go back to it."
     for (const stage of ['PREPARING', 'SEWING', 'READY'] as const) {
@@ -349,11 +380,22 @@ describe('F-SC-W2: the dialog drawn — the stages with their words, the step pi
     expect(text).toContain('Change the stage set by hand on SO-2026-0088')
     expect(checked(html)).toBe('CUTTING')
     expect(html).toContain('<option value="OUTAGE" selected="">System or scanners down</option>')
-    for (const words of ['Now — the customer reads it', "The floor's stage — Clear… goes back to it", 'Going back: the customer reads Cutting, told as a correction']) expect(text, words).toContain(words)
-    expect(html.match(/<input type="radio"[^>]*disabled=""/g)?.length).toBe(2)
+    for (const words of ['Now, set by hand — keep it to change only the reason or the note', "The floor's stage — Clear… goes back to it", 'Going back: the customer reads Cutting, told as a correction']) expect(text, words).toContain(words)
+    // F-SC-W6: only the floor's own row is held in Change… (the hand stage standing may be kept).
+    expect(html.match(/<input type="radio"[^>]*disabled=""/g)?.length).toBe(1)
     expect(text).not.toContain('it is not told again')
     expect(draw('f-ms-dialog-other')).toMatch(/aria-disabled="true"[^>]*aria-description="Something else needs a note\."[^>]*>Change the stage</)
     expect(textOf(draw('f-ms-dialog-refused'))).toContain('The stage changed meanwhile: it was read again.')
+  })
+
+  it('F-SC-W6: Change… opens on the hand stage standing with its reason and note; Go held while nothing differs (the domain\'s words); the customer told nothing', () => {
+    const html = draw('f-ms-dialog-keep')
+    expect(checked(html)).toBe('SEWING')
+    expect(html).toContain('<option value="OUTAGE" selected="">System or scanners down</option>')
+    expect(html).toMatch(/aria-disabled="true"[^>]*aria-description="Nothing to change: the stage set by hand already reads so, with the same reason and note\."[^>]*>Change the stage</)
+    expect(textOf(html)).toContain('The customer keeps reading Sewing and is told nothing: only the reason or the note changes.')
+    expect(textOf(html)).not.toContain('told as a correction after 10 minutes (only')
+    expect(textOf(draw('f-ms-dialog-keep', 'it'))).toContain('Il cliente continua a leggere Cucitura e non riceve avvisi')
   })
 
   it('Clear…: down to the floor — told the correction after the window; up to the floor (a set back) — the usual notice; the button names the floor\'s stage', () => {

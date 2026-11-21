@@ -66,7 +66,7 @@ function StageByHandDialog({ order, model, actions, mode, pick: picked, refused 
   const [pick, setPick] = useState<PlainStage | null>(start.pick)
   const [reasonCode, setReasonCode] = useState<string>(model.draft?.reasonCode ?? start.reasonCode)
   const [note, setNote] = useState<string>(model.draft?.reason ?? start.note)
-  const held = stageByHandHeld({ rows: start.rows, stage: pick, reasonCode, note, busy: model.busy })
+  const held = stageByHandHeld({ rows: start.rows, stage: pick, reasonCode, note, busy: model.busy, kept: start.kept /* F-SC-W6: a Change… of words only */ })
   const ready = readyWarningOf(start.rows, pick) // F-SC-W1: Ready to ship by hand, quality not done — a warning, never a refusal
   const go = () => {
     if (!held) actions?.stageHand?.onSet?.({ mode, stage: pick, reasonCode, note })
@@ -111,7 +111,7 @@ function StageByHandDialog({ order, model, actions, mode, pick: picked, refused 
       <Field label={w.t('raise.note')} hint={t('where.manual.noteHint', { max: STAGE_SET_NOTE_MAX })} required={reasonCode === 'OTHER'}>
         <Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} maxLength={STAGE_SET_NOTE_MAX} />
       </Field>
-      {stageDialogLinesOf({ floor: start.floor, shown: start.shown, pick }).map((line) => (
+      {stageDialogLinesOf({ floor: start.floor, shown: start.shown, pick, floorAtSet: start.floorAtSet }).map((line) => (
         <p key={line.key} className="fw-so-hint">
           {lineText(line)}
         </p>

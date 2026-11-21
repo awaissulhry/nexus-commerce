@@ -20,7 +20,8 @@ import { plainStageOf, type HandWords } from './where'
  * also below what the floor recorded (a wrong scan), and Ready to ship by hand with a warning. Only the stage moves: work orders, counts,
  * quality and shipments stay as recorded.
  *
- *   the stages   one row per stage, Preparing to Ready to ship: the stage the customer reads now (never picked: it is there already);
+ *   the stages   one row per stage, Preparing to Ready to ship: the stage the customer reads now (never picked in a Set: it is there
+ *                already; F-SC-W6: in Change… it is the hand stage standing, pre-picked, so its reason or note can be changed alone);
  *                while a hand stage stands, the floor's own stage (never picked: Clear… is the one way back to it); every other one
  *                ahead or back of what the customer reads — Ready to ship with the warning when quality has not released every piece
  *   the reason   one of the domain's four (office only; a wrong record is "Something else" with a note); the note is optional except for
@@ -62,22 +63,31 @@ const ROW_NOTE: Readonly<Record<HandStageChoice, HandWords | null>> = Object.fre
   BACK: { key: 'where.manual.rowBack' },
 })
 
-/** What the rows are judged against: the floor's own stage, the stage the customer reads now, the hand stage standing (if any). */
+/**
+ * What the rows are judged against: the floor's own stage, the stage the customer reads now, the hand stage standing (if any), and —
+ * F-SC-W6 — whether it is a Change… of that hand stage (its own row may then be kept, to change the reason or the note alone).
+ */
 export interface StageChoiceInput {
   readonly floor: BrandStage
   readonly shown: BrandStage
   readonly hand: BrandStage | null
+  readonly changing?: boolean
 }
 
 /** The rows: the domain's handStageChoicesOf, in the dialog's words (Ready to ship not yet released by quality: the domain's warning). */
 export function stageChoicesOf(input: StageChoiceInput): readonly StageChoiceRow[] {
-  return handStageChoicesOf(input).map((row) => ({
-    stage: plainStageOf(row.stage),
-    choice: row.choice,
-    disabled: row.choice === 'NOW' || row.choice === 'FLOOR',
-    note: row.readyUnreleased && row.choice === 'AHEAD' ? READY_UNRELEASED_WORDS : ROW_NOTE[row.choice],
-    readyUnreleased: row.readyUnreleased,
-  }))
+  const { changing = false, ...against } = input
+  return handStageChoicesOf(against).map((row) => {
+    // F-SC-W6: a Change… keeps the hand stage standing pickable (the server takes it when the reason or the note differs).
+    const keep = changing && row.choice === 'NOW' && row.stage === input.hand
+    return {
+      stage: plainStageOf(row.stage),
+      choice: row.choice,
+      disabled: (row.choice === 'NOW' && !keep) || row.choice === 'FLOOR',
+      note: keep ? { key: 'where.manual.rowKeep' } : row.readyUnreleased && row.choice === 'AHEAD' ? READY_UNRELEASED_WORDS : ROW_NOTE[row.choice],
+      readyUnreleased: row.readyUnreleased,
+    }
+  })
 }
 
 /** What the dialog opens on: the floor, the stage shown, the hand stage standing, the rows, and what it pre-fills. */
@@ -88,18 +98,25 @@ export interface StageByHandStart {
   /** The stage the customer reads now (the headline's). */
   readonly shown: BrandStage
   readonly hand: BrandStage | null
+  /** F-SC-W6: where the floor was when the hand stage was set (headline byHand.floorAtSet; a Change of words only keeps it). */
+  readonly floorAtSet: BrandStage | null
   readonly rows: readonly StageChoiceRow[]
-  /** The step picked on the stages (Overview's strip, Production's stage bar), when it may be picked; else nothing. */
+  /**
+   * The step picked on the stages (Overview's strip, Production's stage bar), when it may be picked; else Change… pre-picks the hand
+   * stage standing (F-SC-W6); else nothing.
+   */
   readonly pick: PlainStage | null
   readonly reasonCode: string
   readonly note: string
+  /** F-SC-W6: Change… — what stands now (the hand stage, its reason, its note): Go waits while nothing differs from it. */
+  readonly kept: StageByHandAsk | null
 }
 
 /**
  * The floor's own stage: while a hand stage stands the headline's `byHand.floor` (read live by the API); else the headline's stage is
  * the floor's. Not known (an older answer, a read without it): Preparing — the API judges against the live floor and refuses in words.
  * `pick`: the step picked on the stages (the dialog's `pick`) — kept only when its row may be picked. Change… pre-fills the reason and
- * the note set; the stage it changes is the one shown, so nothing is pre-picked but the step the person clicked.
+ * the note set and — F-SC-W6 — pre-picks the hand stage standing when no other step was clicked (its reason or note may change alone).
  */
 export function stageByHandStartOf(mode: 'set' | 'change', headline: Headline | null | undefined, pick: PlainStage | null = null): StageByHandStart {
   const stage = headline?.stage ?? null
@@ -108,17 +125,20 @@ export function stageByHandStartOf(mode: 'set' | 'change', headline: Headline | 
   const shown: BrandStage = stage?.code ?? floor
   const changing = mode === 'change' && !!standing
   const hand = standing ? standing.stage : null
-  const rows = stageChoicesOf({ floor, shown, hand })
+  const rows = stageChoicesOf({ floor, shown, hand, changing })
   const known = !!standing && (STAGE_SET_REASON_CODES as readonly string[]).includes(standing.reasonCode)
+  const pickable = (stage: PlainStage | null) => !!stage && rows.some((row) => row.stage === stage && !row.disabled)
   return {
     changing,
     floor,
     shown,
     hand,
+    floorAtSet: standing?.floorAtSet ?? null,
     rows,
-    pick: pick && rows.some((row) => row.stage === pick && !row.disabled) ? pick : null,
+    pick: pickable(pick) ? pick : changing && hand && pickable(hand) ? hand : null,
     reasonCode: changing && known ? standing!.reasonCode : '',
     note: changing ? (standing!.note ?? '') : '',
+    kept: changing && hand ? { stage: hand, reasonCode: standing!.reasonCode, note: standing!.note ?? '' } : null,
   }
 }
 
@@ -135,16 +155,20 @@ const REFUSAL_BY_EN: ReadonlyMap<string, Words> = new Map(Object.values(STAGE_SE
 const STAGE_BY_EN: ReadonlyMap<string, Words> = new Map(BRAND_STAGES.flatMap((stage) => [sameStageWords(stage), floorStageWords(stage)].map((words) => [words.en, words] as const)))
 
 /**
- * Why Go waits (null: it may go), in this order: a write running; no stage picked (or the one the customer reads, or the floor's own
- * while a hand stage stands); no reason; then the domain's own rule of the note (stageSetAskProblems: "Something else" needs a note; one
- * line of at most 200 characters, spaces around it not counted).
+ * Why Go waits (null: it may go), in this order: a write running; no stage picked (or the one the customer reads in a Set, or the
+ * floor's own while a hand stage stands); no reason; then the domain's own rule of the note (stageSetAskProblems: "Something else" needs
+ * a note; one line of at most 200 characters, spaces around it not counted); F-SC-W6: a Change… where the stage, the reason and the
+ * note are all what stands (`kept`; the note compared trimmed, empty = none) — the domain's NOTHING_TO_CHANGE words (the server's 409).
  */
-export function stageByHandHeld(input: StageByHandAsk & { readonly rows: readonly StageChoiceRow[]; readonly busy: boolean }): HandWords | null {
+export function stageByHandHeld(input: StageByHandAsk & { readonly rows: readonly StageChoiceRow[]; readonly busy: boolean; readonly kept?: StageByHandAsk | null }): HandWords | null {
   if (input.busy) return { key: 'held.busy' }
   if (!input.stage || !input.rows.some((row) => row.stage === input.stage && !row.disabled)) return { key: 'where.manual.held.stage' }
   if (!(STAGE_SET_REASON_CODES as readonly string[]).includes(input.reasonCode)) return { key: 'raise.held.pick', ns: 'production' }
   const issue = stageSetAskProblems({ stage: input.stage, reasonCode: input.reasonCode, note: input.note })[0]
-  return issue ? (REFUSAL_BY_EN.get(issue.message ?? '') ?? { key: 'where.manual.held.stage' }) : null
+  if (issue) return REFUSAL_BY_EN.get(issue.message ?? '') ?? { key: 'where.manual.held.stage' }
+  const kept = input.kept ?? null
+  if (kept && kept.stage === input.stage && kept.reasonCode === input.reasonCode && kept.note.trim() === input.note.trim()) return STAGE_SET_REFUSAL_WORDS.NOTHING_TO_CHANGE
+  return null
 }
 
 /** The body of PUT …/stage: the stage, the reason, the note only when typed (trimmed), the production row's version as read. */
@@ -180,14 +204,18 @@ export interface DialogLine {
 
 /**
  * The lines under the fields, always in this order: the customer reads a plain stage; the notice and its 10-minute window (R3b); going
- * back of what the customer reads — told as a correction after the window, only if it was told the stage it leaves; the customer's
+ * back of what the customer reads — told as a correction after the window, only if it was told the stage it leaves (F-SC-W6: the same
+ * stage kept in a Change… — the customer is told nothing, only the reason or the note changes); the customer's
  * changes judged on the floor's records (R18); with a stage picked, when it clears by itself — ahead of the floor once the floor reaches
- * it, below the floor once the floor comes back to it or passes the stage it is at now. No Mark urgent line (R8).
+ * it, below the floor once the floor comes back to it or passes the stage it is at now (F-SC-W6: the same stage kept — judged against
+ * where the floor was at the set, which a Change of words only keeps). No Mark urgent line (R8).
  */
-export function stageDialogLinesOf(input: { readonly floor: BrandStage; readonly shown: BrandStage; readonly pick: PlainStage | null }): DialogLine[] {
-  const { floor, shown, pick } = input
+export function stageDialogLinesOf(input: { readonly floor: BrandStage; readonly shown: BrandStage; readonly pick: PlainStage | null; readonly floorAtSet?: BrandStage | null }): DialogLine[] {
+  const { shown, pick } = input
+  const floor = pick && handMoveOf(shown, pick) === 'SAME' ? (input.floorAtSet ?? input.floor) : input.floor
   const lines: DialogLine[] = [{ key: 'where.manual.customer' }, { key: 'where.manual.told', minutes: NOTICE_WAIT_MINUTES }]
   if (pick && handMoveOf(shown, pick) === 'BACK') lines.push({ key: 'where.manual.back', customer: STAGE_WORDS[pick], minutes: NOTICE_WAIT_MINUTES })
+  else if (pick && handMoveOf(shown, pick) === 'SAME') lines.push({ key: 'where.manual.same', customer: STAGE_WORDS[pick] }) // F-SC-W6
   lines.push({ key: 'where.manual.cuts' })
   if (pick) {
     const move = handMoveOf(floor, pick)
