@@ -295,6 +295,8 @@ export interface ViewFacts {
   readonly reasons: ReadonlyMap<string, Words>
   /** B-PR-26: where each counter-offer stands, by its approval request's id (readCounterStates); none: read as waiting. */
   readonly counters?: ReadonlyMap<string, CounterState> | undefined
+  /** B-OC-003: when each counter-offer lapses, by its approval request's id (readCounterFacts); none: not said. */
+  readonly counterDues?: ReadonlyMap<string, Date> | undefined
   /** B-PR-26: whose words the counter's state is said in (the customer's portal, or the office). */
   readonly audience?: 'customer' | 'office' | undefined
 }
@@ -361,24 +363,32 @@ export function requestView(row: RequestRow, cells: readonly AskedCell[], facts:
  * the office every one it reads.
  */
 export async function readCounterStates(db: Reader, rows: readonly { readonly counterApprovalId: string | null }[]): Promise<Map<string, CounterState>> {
+  return (await readCounterFacts(db, rows)).states
+}
+
+// ---- B-OC-003 (order changes tab R3a; 13-backend §2): + when each counter-offer lapses (its approval's due time), one read ----
+/** Where each counter-offer stands (readCounterStates) and when it lapses, by its approval request's id. */
+export async function readCounterFacts(db: Reader, rows: readonly { readonly counterApprovalId: string | null }[]): Promise<{ states: Map<string, CounterState>; dues: Map<string, Date> }> {
   const ids = [...new Set(rows.flatMap((row) => (row.counterApprovalId ? [row.counterApprovalId] : [])))]
-  if (ids.length === 0) return new Map()
+  if (ids.length === 0) return { states: new Map(), dues: new Map() }
   // ---- B-PR-40: + whether its answer was put back (a yes put back lapses: factory-domain counterStateOf).
-  const found = await db.approvalRequest.findMany({ where: { id: { in: ids } }, select: { id: true, status: true, reversedAt: true } })
-  return new Map(found.map((row) => [row.id, counterStateOf(row.status, row.reversedAt !== null) ?? 'LAPSED']))
+  const found = await db.approvalRequest.findMany({ where: { id: { in: ids } }, select: { id: true, status: true, reversedAt: true, /* B-OC-003 */ dueAt: true } })
+  return { states: new Map(found.map((row) => [row.id, counterStateOf(row.status, row.reversedAt !== null) ?? 'LAPSED'])), dues: new Map(found.map((row) => [row.id, row.dueAt])) }
   // ---- end B-PR-40
 }
+// ---- end B-OC-003
 
 /**
  * Our counter-offer as both audiences read it: the date, the fee (a price: dropped for a reader without the grain, who reads only
  * that a price applies), our words, where it stands (factory-domain counter COUNTER_STATES) in the reader's words. null: never
  * countered.
  */
-export function counterView(row: Pick<RequestRow, 'counterApprovalId' | 'counteredAt' | 'counterDate' | 'counterFee' | 'counterNote'>, facts: Pick<ViewFacts, 'counters' | 'audience'>) {
+export function counterView(row: Pick<RequestRow, 'counterApprovalId' | 'counteredAt' | 'counterDate' | 'counterFee' | 'counterNote'>, facts: Pick<ViewFacts, 'counters' | 'audience' | /* B-OC-003 */ 'counterDues'>) {
   if (!row.counterApprovalId || !row.counteredAt) return null
   const counter: Counter = { date: dayOrNull(row.counterDate), fee: row.counterFee, note: row.counterNote }
   const state: CounterState = facts.counters?.get(row.counterApprovalId) ?? 'WAITING'
   const words = COUNTER_STATE_WORDS[state][facts.audience ?? 'customer']
+  const due = facts.counterDues?.get(row.counterApprovalId) // B-OC-003
   return {
     approvalRequestId: row.counterApprovalId,
     at: toUtcIso(row.counteredAt),
@@ -390,6 +400,8 @@ export function counterView(row: Pick<RequestRow, 'counterApprovalId' | 'counter
     offer: counteredWords(counter),
     state,
     words: { it: words.it, en: words.en },
+    /** B-OC-003: when it lapses — its approval's due time ("lapses 26 Nov"); null: not read. Both audiences (the customer's own counter). */
+    dueAt: due ? toUtcIso(due) : null,
   }
 }
 

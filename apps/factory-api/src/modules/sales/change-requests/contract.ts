@@ -124,6 +124,8 @@ export const counterOut = output({
   offer: words,
   state: z.enum(COUNTER_STATES),
   words,
+  /** B-OC-003 (order changes tab R3a): when it lapses — its approval's due time ("lapses 26 Nov"); null: not read. */
+  dueAt: instant().nullable(),
 })
 
 export const requestFields = {

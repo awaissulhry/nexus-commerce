@@ -87,7 +87,7 @@ import {
   reasonWordsOf,
   REQUEST_COLUMNS,
   requestView,
-  readCounterStates,
+  readCounterFacts, // B-OC-003: + when each counter-offer lapses
   ruleLinesOf,
   feeLinesOf,
   askedColourwayNames, // B-PR-27a
@@ -800,7 +800,8 @@ async function viewFacts(request: FastifyRequest, reader: PortalReader, order: P
   const cells = await request.withClient((client) => readCells(client, rows.map((row) => row.id)))
   const addresses = await request.withClient((client) => addressesOf(client, rows.map((row) => row.shipToAddressId)))
   // B-PR-26: where each of our counter-offers stands (the customer reads its own approval requests).
-  const counters = await request.withClient((client) => readCounterStates(client, rows))
+  // B-OC-003: + when each lapses (its approval's due time), from the same read.
+  const { states: counters, dues: counterDues } = await request.withClient((client) => readCounterFacts(client, rows))
   const tenant = await reader.inTenant(async (client) => ({
     catalogue: await readCatalogue(client, lines),
     reasons: await reasonWordsOf(client, rows.flatMap((row) => (row.reasonCode ? [row.reasonCode] : []))),
@@ -829,6 +830,7 @@ async function viewFacts(request: FastifyRequest, reader: PortalReader, order: P
       fee: reader.seesPrices ? { pct: tenant.cancelFeePct, currency: order.currency, lines: feeLinesOf(lines) } : null,
       // B-PR-26: our counter-offers, in the customer's words (its fee a price: dropped without the grain).
       counters,
+      counterDues, // B-OC-003
       audience: 'customer' as const,
     },
   }

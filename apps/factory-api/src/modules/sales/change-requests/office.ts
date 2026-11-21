@@ -49,7 +49,7 @@ import { can, type Permission } from '@nexus/factory-domain/core/permissions'
 import { blindPriceHeld } from '@nexus/factory-domain/sales/blind-price'
 import { counterPriced } from '@nexus/factory-domain/sales/change-requests/counter'
 import {
-  readCounterStates,
+  readCounterFacts, // B-OC-003: + when each counter-offer lapses
   askedColourwayNames, // B-PR-27a
   addressesOf,
   dayOrNull,
@@ -125,7 +125,8 @@ export async function officeViews(db: Reader, context: ReturnType<typeof officeC
   const amendmentIds = rows.flatMap((row) => (row.amendmentId ? [row.amendmentId] : []))
   const amendments = new Map((amendmentIds.length > 0 ? await db.salesOrderAmendment.findMany({ where: { id: { in: amendmentIds } }, select: { id: true, revision: true } }) : []).map((row) => [row.id, row]))
   // B-PR-26: where each counter-offer stands (its approval's status).
-  const counters = await readCounterStates(db, rows)
+  // B-OC-003: + when each lapses (its approval's due time), from the same read.
+  const { states: counters, dues: counterDues } = await readCounterFacts(db, rows)
   // B-W2b-F14: the cancel fee in force per company, for the waiting cancels.
   const feeCompanies = [...new Set(rows.filter((row) => row.kind === 'CANCEL' && row.status === 'OPEN').map((row) => row.companyId))]
   const feePct = new Map<string, string | null>()
@@ -143,6 +144,7 @@ export async function officeViews(db: Reader, context: ReturnType<typeof officeC
       fee: feePct.has(row.companyId) ? { pct: feePct.get(row.companyId) ?? null, currency: order?.currency ?? 'EUR', lines: feeLinesOf(lines.filter((line) => line.orderId === row.orderId)) } : null,
       // B-PR-26
       counters,
+      counterDues, // B-OC-003
       audience: 'office' as const,
     }
     // B-PR-26: an OPEN request, or a COUNTERED one the customer said yes to (accept) or whose counter lapsed (refuse).
