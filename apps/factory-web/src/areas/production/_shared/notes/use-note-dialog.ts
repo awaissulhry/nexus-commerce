@@ -13,6 +13,7 @@ import {
   mergePeople,
   NEW_DRAFT,
   peopleSources,
+  presetDraftOf, // F-PT-103
   recordsOf,
   resultOf,
   sendHeld,
@@ -21,6 +22,7 @@ import {
   type NoteDialogActions,
   type NoteDialogModel,
   type NoteFrom,
+  type NotePreset, // F-PT-103
   type NoteTargets,
   type PeopleState,
   type WriteOn,
@@ -81,13 +83,14 @@ export function useNoteDialog(api: ApiClient, options: { readonly can: boolean; 
   /** Opens the dialog over these records (the caller holds a selection over 100 with its words). */
   const open = useCallback(
     // F-SA-230: the sales order's "Ask the supervisor…" writes on the order itself (`on` 'salesOrders'); the work order's on itself.
-    (targets: NoteTargets, from: NoteFrom, on: WriteOn = NEW_DRAFT.on) => {
+    // F-PT-103: `preset` — a ready ask (its title, the starter question, "Needs an answer" ticked, its Send word).
+    (targets: NoteTargets, from: NoteFrom, on: WriteOn = NEW_DRAFT.on, preset: NotePreset | null = null) => {
       writeKey.current = null
       setCheck({ status: 'idle' })
       // F-SA-280: records without work orders (the Orders sheet's orders) are written on as they are: their own threads.
       const wanted: WriteOn = targets.workOrders.length === 0 ? 'salesOrders' : on
-      const draft = wanted === NEW_DRAFT.on ? NEW_DRAFT : { ...NEW_DRAFT, on: wanted }
-      setState({ from, targets, draft, people: { status: 'loading' }, busy: false, problem: null, result: null })
+      const draft = presetDraftOf(wanted === NEW_DRAFT.on ? NEW_DRAFT : { ...NEW_DRAFT, on: wanted }, preset)
+      setState({ from, targets, draft, people: { status: 'loading' }, busy: false, problem: null, result: null, preset })
       readPeople(targets, wanted)
     },
     [readPeople],
