@@ -149,6 +149,16 @@ const LIVE_RULES: readonly { readonly match: (type: string) => boolean; readonly
   // The customer's own materials planned or counted again: the Production tab's Materials re-reads (its live fields: orderId, number).
   { match: (type) => type === 'customer_material.changed', parts: ['materials'] },
   // ── end B-PT-017 ──
+  // ── B-OC-008 (order changes tab R4d; 13-backend §3): what moves the Changes tab's Waiting and Still to do ──
+  // A yes we asked of the customer — on the order, on one of its revisions (an amendment: `changeIds`), our counter-offer (a request:
+  // `requestIds`) — asked, answered, withdrawn, expired, decided for it or put back: the order (its wait for the yes), the headline
+  // (the ONE waiting list) and the changes. Live only to readers with partners.approvals.view; others re-read on the next order event.
+  { match: (type) => type.startsWith('approval_request.'), parts: ['order', 'headline', 'changes'] },
+  // A production task done or changed on one of its work orders, a scrap posted or decided there (`workOrderIds`): Still to do.
+  { match: (type) => ['task.completed', 'task.changed', 'production.scrap_posted', 'production.scrap_over_limit_decided'].includes(type), parts: ['changes'] },
+  // A style change one of its DESIGN requests raised moved on (`styleChangeIds`): Still to do.
+  { match: (type) => type === 'change_request.changed', parts: ['changes'] },
+  // ── end B-OC-008 ──
 ]
 
 /** Each declared event the order page re-reads on, with its parts (declared types only, sorted). */
@@ -181,8 +191,12 @@ async function liveOf(db: Reader, order: OrderRow, facts: OrderFacts, depositIds
   const workOrderIds = facts.workOrders.map((row) => row.id)
   const reach = viewer && workOrderIds.length > 0 ? await db.workOrder.findMany({ where: { id: { in: workOrderIds }, status: { not: 'CANCELLED' } }, select: { id: true, companyId: true, siteId: true, partyId: true }, orderBy: { id: 'asc' } }) : []
   const reachedWorkOrders = viewer ? reach.filter((row) => reachesWorkOrder(viewer, WORKORDERS_VIEW, row)).map((row) => row.id) : []
-  const requestIds = (await db.orderChangeRequest.findMany({ where: { orderId: order.id }, select: { id: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })).map((row) => row.id)
+  const requests = await db.orderChangeRequest.findMany({ where: { orderId: order.id }, select: { id: true, /* B-OC-008 */ kind: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
+  const requestIds = requests.map((row) => row.id)
   const changeIds = (await db.salesOrderAmendment.findMany({ where: { orderId: order.id }, select: { id: true }, orderBy: { revision: 'asc' } })).map((row) => row.id)
+  // B-OC-008: the product change requests this order's DESIGN requests raised (their change_request.changed moves Still to do).
+  const designIds = requests.filter((row) => row.kind === 'DESIGN').map((row) => row.id)
+  const styleChangeIds = designIds.length > 0 ? (await db.changeRequest.findMany({ where: { orderChangeRequestId: { in: designIds } }, select: { id: true }, orderBy: { id: 'asc' } })).map((row) => row.id) : []
   const ids = {
     workOrderIds: reachedWorkOrders,
     shipmentIds: facts.shipments.map((row) => row.id),
@@ -191,6 +205,7 @@ async function liveOf(db: Reader, order: OrderRow, facts: OrderFacts, depositIds
     requestIds,
     changeIds,
     approvalTaskIds: [...approvalTaskIds], // B-OP-020
+    styleChangeIds, // B-OC-008
   }
   const records: PartRecords = { order: [order.id], changes: requestIds, work: reachedWorkOrders, shipments: ids.shipmentIds, money: { invoices: ids.invoiceIds, deposits: ids.depositRequestIds } }
   return { live: { events: ORDER_LIVE_EVENTS.map((entry) => ({ type: entry.type, parts: [...entry.parts] })), ids }, lastChange: await lastChangeOf(db, order, records) }

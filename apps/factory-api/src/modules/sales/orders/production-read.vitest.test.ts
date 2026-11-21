@@ -400,6 +400,25 @@ describe('B-PT-017: the order page re-reads the Production tab’s dates, headli
 })
 // ── end B-PT-017 ──
 
+// ── B-OC-008 (order changes tab R4d; 13-backend §3) ──
+describe('B-OC-008: the order page re-reads the Changes tab’s Waiting and Still to do on the events that move them', () => {
+  const partsOf = (type: string) => ORDER_LIVE_EVENTS.find((entry) => entry.type === type)?.parts ?? []
+
+  it('every approval_request event (asked, answered, withdrawn, expired, decided for the party, put back): the order, the headline and the changes', () => {
+    for (const type of ['approval_request.asked', 'approval_request.answered', 'approval_request.withdrawn', 'approval_request.expired', 'approval_request.decided_for_party', 'approval_request.reversed']) {
+      expect(partsOf(type), type).toEqual(['order', 'headline', 'changes'])
+    }
+  })
+
+  it('a production task done or changed, a scrap posted or decided, a style change moved on: the changes (Still to do)', () => {
+    for (const type of ['task.completed', 'task.changed', 'production.scrap_posted', 'production.scrap_over_limit_decided', 'change_request.changed']) expect(partsOf(type), type).toEqual(['changes'])
+    // A task made or handed to someone moves no row of the order (Home's own lists follow those).
+    expect(partsOf('task.created')).toEqual([])
+    expect(partsOf('task.assigned')).toEqual([])
+  })
+})
+// ── end B-OC-008 ──
+
 // ── B-OC-002 / B-OC-004 (order changes tab R2, R3b; L11) ──
 describe('B-OC-002 / B-OC-004: a refused revision by its number; when an approval or a portal task is due, and what a task asks', () => {
   const kinds = new Map([['a-revised', 'REVISED_ORDER' as const]])
