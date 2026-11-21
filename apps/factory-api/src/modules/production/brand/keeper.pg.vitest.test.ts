@@ -446,3 +446,60 @@ describe('B-MS-004: the stage set by hand (design A; R2, R6, R7)', () => {
   })
 })
 // ── end B-MS-004 ──
+
+// ── B-PT-016 (order production tab C2) ──
+/**
+ * "Waiting on the customer's material": a CustomerMaterial row of the order expecting more than was received raises the
+ * CUSTOMER_MATERIAL blocker (since that row was made) while the order is CONFIRMED or IN_PRODUCTION with work still to do, so the
+ * order waits on the customer; a receipt that covers it takes it away; an order whose work is done (READY) never waits on it. The
+ * keeper follows customer_material.changed (its orderId). The row is written by the admin pool as inventory/receipts' plan writes
+ * one (a BOM line of the seeds; made-up quantities), the receipt as its recount does.
+ */
+describe('B-PT-016: waiting on the customer’s material', () => {
+  let order: { orderId: string; lineId: string }
+  const material = newId()
+  const blockerOf = async (orderId: string) => (await factsOf(orderId))!.blockers.filter((blocker) => blocker.kind === 'CUSTOMER_MATERIAL')
+  const changed = (orderId: string) => run('customer_material.changed', { orderId, number: 'T-PT016', change: 'RECOUNTED', rows: 1, partyId: ids.a })
+
+  beforeAll(async () => {
+    order = await newOrder(ids.a, 'CM')
+    const bomLine = await one<{ id: string; revisionId: string; itemId: string }>(`SELECT id, "revisionId", "itemId" FROM "BomLine" WHERE "tenantId" = $1 ORDER BY id LIMIT 1`, [ids.tenantId])
+    await raw(
+      `UPDATE "SalesOrder" SET "depositRequired" = false WHERE id = ${lit(order.orderId)};
+       INSERT INTO "CustomerMaterial" (id, "tenantId", "companyId", "partyId", "orderId", "orderLineId", "bomRevisionId", "bomLineId", "itemId", uom, "expectedQuantity", "receivedQuantity", "createdAt", "updatedAt")
+         VALUES (${lit(material)}, ${lit(ids.tenantId)}, ${lit(w.companyId)}, ${lit(ids.a)}, ${lit(order.orderId)}, ${lit(order.lineId)}, ${lit(bomLine.revisionId)}, ${lit(bomLine.id)}, ${lit(bomLine.itemId)}, 'M', 8, 0, '2026-11-10T08:00:00.000Z', now());`,
+    )
+  })
+
+  it('expected 8, received 0: the order waits on the customer, since the row was made; the keeper keeps it so', async () => {
+    expect(await blockerOf(order.orderId)).toEqual([{ kind: 'CUSTOMER_MATERIAL', since: new Date('2026-11-10T08:00:00.000Z'), ref: null }])
+    expect((await factsOf(order.orderId))!.waiting.on).toBe('BRAND')
+    // The keeper follows customer_material.changed by its orderId, and keeps the order waiting on the customer.
+    expect((await system().withClient((client) => ordersOfEvent(client, { type: 'customer_material.changed', payload: { orderId: order.orderId, number: 'T-PT016', change: 'PLANNED', rows: 1, partyId: ids.a } }))).orderIds).toEqual([order.orderId])
+    await changed(order.orderId)
+    expect(await rowOf(order.orderId)).toMatchObject({ waitingOn: 'BRAND' })
+  })
+
+  it('half arrived: still waiting; a receipt that covers it: no longer (the keeper follows the event)', async () => {
+    await raw(`UPDATE "CustomerMaterial" SET "receivedQuantity" = 4 WHERE id = ${lit(material)};`)
+    expect(await blockerOf(order.orderId)).toHaveLength(1)
+    await raw(`UPDATE "CustomerMaterial" SET "receivedQuantity" = 8 WHERE id = ${lit(material)};`)
+    expect(await blockerOf(order.orderId)).toEqual([])
+    await changed(order.orderId)
+    expect((await rowOf(order.orderId)).waitingOn).not.toBe('BRAND')
+  })
+
+  it('an order whose work is done (READY) never waits on the customer’s material, even with some still to come', async () => {
+    await raw(`UPDATE "CustomerMaterial" SET "receivedQuantity" = 2 WHERE id = ${lit(material)}; UPDATE "SalesOrder" SET status = 'READY' WHERE id = ${lit(order.orderId)};`)
+    expect(await blockerOf(order.orderId)).toEqual([])
+    await raw(`UPDATE "SalesOrder" SET status = 'CONFIRMED' WHERE id = ${lit(order.orderId)};`)
+    expect(await blockerOf(order.orderId)).toHaveLength(1)
+  })
+
+  it('the wall: only the order’s own rows count — another customer’s order never waits on A’s material', async () => {
+    expect(await blockerOf(w.b.salesOrderId)).toEqual([])
+    const facts = await factsOf(order.orderId)
+    expect(findMarkers(JSON.stringify(facts!.blockers), await markersOf(db, ids.b))).toEqual([])
+  })
+})
+// ── end B-PT-016 ──

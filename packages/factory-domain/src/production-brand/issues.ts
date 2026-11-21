@@ -79,6 +79,36 @@ export function answersBrandIssue(issue: { readonly source: IssueSource; readonl
   )
 }
 
+// ── B-PT-015 (order production tab C1): a reply in the thread answers the office's ask ──────────────────────────────────────────
+/** A thread message as the office-ask rule reads it (Message: author kind and id, held, what it replies to). */
+export interface ReplyingMessage {
+  readonly authorKind: string
+  readonly authorId: string | null
+  /** An OUTBOUND mail still in its undo window: nobody reads it yet, it answers nothing. */
+  readonly held: boolean
+  readonly replyToMessageId: string | null
+}
+
+/**
+ * B-PT-015 (C1): whether a message answers an OFFICE issue (a note that needs an answer) — a reply a PERSON wrote (author USER,
+ * never the system nor a worker) to the very note the issue was raised with (`replyToMessageId` = the issue's `messageId`: a reply
+ * is in the same thread by its reference), not held, by someone other than the one who asked (the asker's own "any news?" never
+ * answers), while the issue is open. Internal or shared alike. Ticking its task still answers it too (`issueAfterTask`).
+ */
+export function answersOfficeAsk(issue: { readonly source: IssueSource; readonly status: IssueStatus; readonly messageId: string; readonly createdById: string | null }, message: ReplyingMessage): boolean {
+  return (
+    issue.source === 'OFFICE' &&
+    issue.status === 'OPEN' &&
+    message.authorKind === 'USER' &&
+    !message.held &&
+    message.replyToMessageId !== null &&
+    message.replyToMessageId === issue.messageId &&
+    message.authorId !== null &&
+    message.authorId !== issue.createdById
+  )
+}
+// ── end B-PT-015 ──
+
 /** What the office reads beside an issue (null: nothing more than its status). */
 export type OfficeIssueNote = 'NO_REPLY_YET'
 

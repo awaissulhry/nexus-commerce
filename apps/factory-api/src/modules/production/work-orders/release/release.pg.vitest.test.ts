@@ -275,3 +275,57 @@ describe('the plan\'s readiness beside the material check (PLN-086)', () => {
     expect(released.json().workOrder.release.materialOverride).toBeNull()
   })
 })
+
+// ── B-PT-014 (order production tab R14) ──
+/**
+ * The readiness list says, per material, what is missing and by when — its name and unit, how much is needed and short, the day it
+ * is needed — and the purchase orders it counts on, as picking's popover does (one purchaseOrdersOf): the purchase orders only for
+ * a reader with purchasing.view (else none: hidden, fail closed); a work order shared with other customers (made before the
+ * one-customer rule, here by hand) says no quantity and no purchase order. Never a price or a PO total.
+ */
+describe('B-PT-014: the readiness list says what is missing, how much and by when; purchase orders only with purchasing.view', () => {
+  let workOrder: Json
+  const list = async (session: string) => (await ok(session, 'GET', `/production/work-orders/readiness?ids=${workOrder.id}`)).workOrders[0] as Json
+  const redOf = (row: Json) => (row.materials as Json[]).find((entry) => entry.itemId === A.leather && entry.itemColourId === A.leatherRED)!
+
+  beforeAll(async () => {
+    SESSIONS.buyer = office(A.tenant, [grant(['workorders.view', 'purchasing.view'])])
+    workOrder = await draft('RED', { '54': 1 })
+  })
+
+  it('each material: its name, unit, need, shortfall and need day; the red leather counts on the sent purchase order — for a buyer', async () => {
+    const row = await list('buyer')
+    for (const material of row.materials as Json[]) {
+      expect(material).toMatchObject({ label: expect.any(String), uom: expect.any(String), needed: expect.stringMatching(/^\d+(\.\d+)?$/), short: expect.stringMatching(/^-?\d+(\.\d+)?$/) })
+      expect(material.label.length).toBeGreaterThan(0)
+      expect(material.neededOn === null || /^\d{4}-\d{2}-\d{2}$/.test(material.neededOn)).toBe(true)
+    }
+    const red = redOf(row)
+    expect(red).toMatchObject({ uom: 'FT2', purchaseOrders: [{ id: redOrder!.orderId, number: `T-${run}-PO-DRAFT`, status: 'SENT', dueDate: '2026-11-15' }] })
+    // The same as the release check's readiness of the same work order (one rule).
+    const check = (await releaseCheck(workOrder.id)).readiness.materials.find((entry: Json) => entry.itemId === A.leather && entry.itemColourId === A.leatherRED)
+    expect({ label: red.label, needed: red.needed, short: red.short }).toEqual({ label: check.label, needed: check.needed, short: check.short })
+    // No money, no person.
+    expect(JSON.stringify(row)).not.toMatch(/price|cost|amount|total|worker|createdBy/i)
+  })
+
+  it('without purchasing.view: the same need and shortfall, no purchase order (hidden, never a count of them)', async () => {
+    const red = redOf(await list('viewer'))
+    expect(red.purchaseOrders).toEqual([])
+    expect(red.needed).toBe(redOf(await list('buyer')).needed)
+    expect(JSON.stringify(await list('viewer'))).not.toContain(redOrder!.orderId)
+  })
+
+  it('a work order shared with other customers: the words and days stay; no quantity, no purchase order — even for a buyer', async () => {
+    await admin(`BEGIN; SET LOCAL session_replication_role = replica; UPDATE "WorkOrder" SET "partyId" = NULL WHERE id = '${workOrder.id}'; COMMIT;`)
+    try {
+      const row = await list('buyer')
+      for (const material of row.materials as Json[]) expect(material, material.itemId).toMatchObject({ needed: null, short: null, purchaseOrders: [] })
+      expect(redOf(row)).toMatchObject({ word: expect.any(String), label: expect.any(String) })
+      expect(JSON.stringify(row)).not.toContain(redOrder!.orderId)
+    } finally {
+      await admin(`BEGIN; SET LOCAL session_replication_role = replica; UPDATE "WorkOrder" SET "partyId" = '${A.brand}' WHERE id = '${workOrder.id}'; COMMIT;`)
+    }
+  })
+})
+// ── end B-PT-014 ──

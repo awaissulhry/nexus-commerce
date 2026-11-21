@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { orderStageOf } from '@nexus/factory-domain/production-brand/stages'
 import { lineStageFactsOf, type LineSizeRow } from './facts'
 import { brandKeeperHandler, HOLD_EVENTS, KEEPER_EVENTS, planChanges, planKeep, STAGE_EVENTS, type KeeperRow, type KeeperTarget } from './keeper'
+import { customerMaterialWaits, earliestMissingOf } from './facts' // B-PT-016
 import { planLeaving } from './keeper' // B-MS-004
 import type { BrandStage } from '@nexus/factory-domain/production-brand/stages' // B-MS-004
 import { HAND_STAGE_NOTICE_DELAY_MS } from '@nexus/factory-domain/production-brand/stage-set' // B-MS-008
@@ -279,3 +280,21 @@ describe('B-MS-008 (ms-fx1): the notice of the stage set by hand that stands —
   })
 })
 // ── end B-MS-008 (ms-fx1) ──
+
+// ── B-PT-016 (order production tab C2) ──
+describe('B-PT-016: when an order waits on its customer’s material', () => {
+  it('confirmed or in production with work still to do (no live work order yet, or one not made); never once the work is done', () => {
+    expect(customerMaterialWaits('CONFIRMED', [])).toBe(true)
+    expect(customerMaterialWaits('IN_PRODUCTION', ['COMPLETED', 'IN_PROGRESS'])).toBe(true)
+    expect(customerMaterialWaits('IN_PRODUCTION', ['COMPLETED', 'CLOSED'])).toBe(false)
+    for (const status of ['READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CANCELLED', 'AWAITING_APPROVAL']) expect(customerMaterialWaits(status, []), status).toBe(false)
+  })
+
+  it('since the earliest row still expecting more than was received; none missing: null', () => {
+    const at = (iso: string) => new Date(iso)
+    expect(earliestMissingOf([{ expected: '8', received: '0', createdAt: at('2026-11-12T08:00:00.000Z') }, { expected: '2.5000', received: '1.0000', createdAt: at('2026-11-10T08:00:00.000Z') }, { expected: '3', received: '3', createdAt: at('2026-11-01T08:00:00.000Z') }])).toEqual(at('2026-11-10T08:00:00.000Z'))
+    expect(earliestMissingOf([{ expected: '3.0000', received: '3.0000', createdAt: at('2026-11-01T08:00:00.000Z') }, { expected: '0', received: '0', createdAt: at('2026-11-01T08:00:00.000Z') }])).toBeNull()
+    expect(earliestMissingOf([])).toBeNull()
+  })
+})
+// ── end B-PT-016 ──

@@ -151,6 +151,9 @@ export const ORDER_EVENTS = [
   'task.created',
   'task.completed',
   'task.changed',
+  // B-PT-016 (order production tab C2): the customer's own materials planned or counted again (a receipt, a return): whether the
+  // order waits on them moves.
+  'customer_material.changed',
 ] as const
 export const KEEPER_EVENTS: readonly string[] = Object.freeze([...ORDER_EVENTS, ...STAGE_EVENTS, ...HOLD_EVENTS])
 
@@ -715,6 +718,7 @@ export async function ordersOfEvent(db: Reader, event: Pick<EventEnvelope, 'type
     case 'order_change_request.countered':
     case 'order_change_request.counter_answered':
     case 'deposit_request.waived':
+    case 'customer_material.changed': // B-PT-016
       return { orderIds: asStrings([text('orderId')]), hold: null }
     case 'order_gate.changed':
       return { orderIds: asStrings([text('salesOrderId')]), hold: null }

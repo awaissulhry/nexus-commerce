@@ -27,6 +27,7 @@ import { readProblems } from '../brand-portal/access'
 import { findMarkers, markersOf, productionTwoBrands, supervisorPeople, supervisorPeopleIds, twoBrandIds, twoBrandSessions, type ProductionTwoBrands } from '../testing/two-brands'
 import { issueAnswered, issueAnsweredHandler, ISSUE_ANSWERED_EVENTS, ISSUE_ANSWERED_HANDLER } from './answered'
 import { issueDueOn, issueEscalationTaskId } from './raise'
+import { runIssueEscalation } from './escalate' // B-PT-015: the scan raises nothing of an answered ask
 
 /**
  * B-PR-43b — needs an answer (production plan §1 "'Needs an answer' makes it a task; no answer in 1 working day → the backup",
@@ -553,3 +554,111 @@ describe('B-PR-43b a customer’s issue is answered by our reply', { timeout: 12
     expect(await issueAnswered(system, { eventId: newId(), type: 'thread.message_posted', payload: { threadId: newId(), messageId: newId(), recordType: 'SalesOrder', recordId: w.a.salesOrderId, direction: 'INTERNAL_NOTE', audience: 'OFFICE' } })).toEqual(nothing)
   })
 })
+
+// ── B-PT-015 (order production tab C1) ──
+/**
+ * A reply in the thread answers the office's ask: "Needs an answer" on two orders of A (one batch, ONE task for their supervisor)
+ * and on B's order (its own batch and task). The supervisor's reply to the ask's own note on SEED-SO-0002 answers A's two issues
+ * (the other: "Answered in SEED-SO-0002"), closes the batch task and its escalation task, emits production_issue.answered with
+ * source OFFICE, one audit row of A {by: 'reply'}; B's issue is never touched. Before that: the asker's own reply, a plain note
+ * and a reply to another message answer nothing. A repeat, and the task.completed the close emits, change nothing; the
+ * escalation scan raises nothing of them. Messages are written through threads' own seam.
+ */
+describe('B-PT-015: a reply in the thread answers the office’s ask, its batch and its tasks', { timeout: 120_000 }, () => {
+  let batch: Json
+  let so2 = ''
+  const issueIdOf: Record<string, string> = {}
+  const messageOf: Record<string, string> = {}
+  let task: Json
+  let escalation = ''
+
+  /** A note in a record's thread written by `authorId` as a person of the office, optionally replying to a message. */
+  async function noteOn(record: { type: string; id: string }, authorId: string, replyToMessageId?: string): Promise<string> {
+    const caller = callerFor(database, { audience: 'office', tenantId: ids.tenantId, actorId: authorId, grants: [grant(PERMISSIONS, 'all')], requestId: newId() })
+    const { result } = await command(caller, { name: 'test.replyOnRecord', input: { record, replyToMessageId: replyToMessageId ?? null } }, async (tools) => {
+      const { thread } = await ensureThread(tools, record, authorId)
+      const message = await writeMessage(tools, thread, { direction: 'INTERNAL_NOTE', channel: 'APP', author: { kind: 'USER', id: authorId, name: 'T Office (made up)' }, bodyText: 'Made-up: cut 120, sewn 80, the date holds.', ...(replyToMessageId ? { replyToMessageId } : {}) })
+      return message.id
+    })
+    return result
+  }
+
+  beforeAll(async () => {
+    so2 = w.production.urgent[0]!
+    await answering()
+    batch = await ok('office.all', '/production/notes', { records: [SO(w.a.salesOrderId), SO(so2), SO(w.b.salesOrderId)], body: 'Made-up: where is this order? What is cut, sewn, packed? Is the date safe?', needsAnswer: true })
+    for (const entry of batch.written as Json[]) {
+      issueIdOf[entry.id] = entry.issueId
+      messageOf[entry.id] = entry.messageId
+    }
+    task = (await taskOf((await issueOf(issueIdOf[so2]!))!.taskId))!
+    escalation = await escalationTask(task, 1, people.backupA)
+    await answering()
+  })
+
+  it('one batch of A’s two orders with ONE task, B apart; the asker’s own reply, a plain note and a reply to another message answer nothing', async () => {
+    const [a1, a2, b] = [await issueOf(issueIdOf[w.a.salesOrderId]!), await issueOf(issueIdOf[so2]!), await issueOf(issueIdOf[w.b.salesOrderId]!)]
+    expect(a1!.taskId).toBe(a2!.taskId)
+    expect(b!.taskId).not.toBe(a1!.taskId)
+    // The asker (office.all) replies to its own ask: "any news?" answers nothing.
+    await noteOn(SO(so2), SESSIONS['office.all']!.actorId, messageOf[so2])
+    // The supervisor writes a plain note (no reply), then a reply to another message of the thread.
+    const plain = await noteOn(SO(so2), people.supervisorA)
+    await noteOn(SO(so2), people.supervisorA, plain)
+    expect(await work(await answering())).toEqual({ answered: 0, reopened: 0, cancelled: 0, tasksClosed: 0 })
+    for (const id of Object.values(issueIdOf)) expect((await issueOf(id))!.status).toBe('OPEN')
+    expect((await taskOf(task.id))!.status).toBe('OPEN')
+  })
+
+  it('the supervisor replies to the ask on SEED-SO-0002: A’s two issues ANSWERED at the reply’s time, the batch task and its escalation task DONE; B untouched', async () => {
+    const bBefore = await issueOf(issueIdOf[w.b.salesOrderId]!)
+    const reply = await noteOn(SO(so2), people.supervisorA, messageOf[so2])
+    const events = await answering()
+    expect(await work(events)).toEqual({ answered: 2, reopened: 0, cancelled: 0, tasksClosed: 2 })
+    const at = (await one<{ at: Date }>(`SELECT at FROM "Message" WHERE id = $1`, [reply]))!.at
+    for (const orderId of [w.a.salesOrderId, so2]) expect(await issueOf(issueIdOf[orderId]!), orderId).toMatchObject({ status: 'ANSWERED', answeredAt: at })
+    expect((await taskOf(task.id))!.status).toBe('DONE')
+    expect((await taskOf(escalation))!.status).toBe('DONE')
+    expect(await issueOf(issueIdOf[w.b.salesOrderId]!)).toEqual(bBefore)
+    // One production_issue.answered per issue, source OFFICE; the mate on the other order: "Answered in SEED-SO-0002".
+    const answered = (await outbox('production_issue.answered')).filter((event) => [issueIdOf[w.a.salesOrderId], issueIdOf[so2]].includes((event.payload as Json).issueId))
+    expect(answered.map((event) => [(event.payload as Json).salesOrderId, (event.payload as Json).source, (event.payload as Json).answeredInOrderId, (event.payload as Json).partyId]).sort()).toEqual(
+      [
+        [w.a.salesOrderId, 'OFFICE', so2, ids.a],
+        [so2, 'OFFICE', null, ids.a],
+      ].sort(),
+    )
+    // R-48: one audit row, of A, by the reply.
+    const audit = await admin<{ recordId: string }>(`SELECT "recordId" FROM "AuditLog" WHERE "tenantId" = $1 AND action = 'production.issuesAnswered' AND after->>'by' = 'reply' AND after->>'messageId' = $2`, [ids.tenantId, reply])
+    expect(audit.map((row) => row.recordId)).toEqual([ids.a])
+    // The same job again: nothing left; the task.completed the close emitted moves nothing (task state = issue state).
+    expect(await work(events)).toEqual({ answered: 0, reopened: 0, cancelled: 0, tasksClosed: 0 })
+    expect(await work(await answering())).toEqual({ answered: 0, reopened: 0, cancelled: 0, tasksClosed: 0 })
+  })
+
+  it('a reply in A’s thread never answers B’s ask; B’s supervisor’s reply on B’s order answers B’s alone', async () => {
+    expect((await issueOf(issueIdOf[w.b.salesOrderId]!))!.status).toBe('OPEN')
+    await noteOn(SO(w.b.salesOrderId), people.officeB, messageOf[w.b.salesOrderId])
+    expect(await work(await answering())).toEqual({ answered: 1, reopened: 0, cancelled: 0, tasksClosed: 1 })
+    expect((await issueOf(issueIdOf[w.b.salesOrderId]!))!.status).toBe('ANSWERED')
+    const answered = (await outbox('production_issue.answered')).filter((event) => (event.payload as Json).issueId === issueIdOf[w.b.salesOrderId])
+    expect(answered.map((event) => [(event.payload as Json).partyId, (event.payload as Json).answeredInOrderId])).toEqual([[ids.b, null]])
+  })
+
+  it('an ask on a work order: the reply on the work order’s own thread answers it', async () => {
+    const raised = await ok('office.all', '/production/notes', { records: [WO(w.a.workOrderId)], body: 'Made-up: how far is this work order?', needsAnswer: true })
+    await answering()
+    const entry = (raised.written as Json[])[0]!
+    await noteOn(WO(w.a.workOrderId), people.supervisorA, entry.messageId)
+    expect(await work(await answering())).toEqual({ answered: 1, reopened: 0, cancelled: 0, tasksClosed: 1 })
+    expect((await issueOf(entry.issueId))!.status).toBe('ANSWERED')
+  })
+
+  it('the escalation scan raises nothing of an ask a reply answered (it reads open issues only)', async () => {
+    const log = { info() {}, warn() {}, error() {} }
+    await runIssueEscalation({ database, log, clock: { now: () => new Date(Date.now() + 10 * 86_400_000) } })
+    for (const orderId of [w.a.salesOrderId, so2, w.b.salesOrderId]) expect(await one(`SELECT status::text AS status, "escalationStep" FROM "ProductionIssue" WHERE id = $1`, [issueIdOf[orderId]]), orderId).toEqual({ status: 'ANSWERED', escalationStep: 0 })
+    expect((await outbox('production_issue.escalated')).filter((event) => Object.values(issueIdOf).includes((event.payload as Json).issueId))).toEqual([])
+  })
+})
+// ── end B-PT-015 ──

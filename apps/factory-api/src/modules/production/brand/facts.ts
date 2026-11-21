@@ -9,6 +9,7 @@ import { waitingOn, type Blocker, type Waiting } from '@nexus/factory-domain/pro
 import type { OrderFreezeStage } from '@nexus/factory-domain/sales/order-changes/freeze'
 import { depositGate, type DepositStatus } from '@nexus/factory-domain/production/work-orders/release'
 import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
+import { Dec } from '@nexus/factory-domain/tax/decimal' // B-PT-016: the customer's material quantities
 import { SYSTEM_ACTOR_ID, type OfficeContext } from '../../../core/context'
 import { promiseLinesOf, LINES_LIMIT } from '../../planning/promise-keep/lines'
 import { dayOf, SITE_COLUMNS, type SiteRow } from '../../planning/store'
@@ -44,7 +45,9 @@ import { readOrderFacts, type Reader } from '../../sales/orders/store'
  *            released; its accepted pause = an ACTIVE BRAND hold), a SUPPLIER (a trims gate waiting; a work order the plan moves
  *            later for its material), a WORKSHOP (an operation out at a subcontractor), US (its request or reported problem
  *            waiting for our answer, a gate we own, a quality hold, our own production hold; B-PR-28: a new date it did not
- *            accept while the follow-up task is open). Customer-supplied material has no record yet (left out).
+ *            accept while the follow-up task is open). B-PT-016 (order production tab C2): the CUSTOMER's own material still to
+ *            come — a CustomerMaterial row of the order expecting more than was received, while the order is CONFIRMED or
+ *            IN_PRODUCTION and its work is still to do (`customerMaterialWaits`).
  *   held     a live work order of the order's lines is ON_HOLD (the customer's "On hold" mark; brand_production.hold_changed).
  */
 
@@ -277,6 +280,14 @@ export async function readOrderProductionFacts(db: Reader, context: OfficeContex
       blockers.push({ kind: 'DEPOSIT', since: open[0]?.createdAt ?? null, ref: open[0] ? { type: 'DepositRequest', id: open[0].id } : null })
     }
   }
+  // ── B-PT-016 (order production tab C2): waiting on the customer's own material (its CustomerMaterial rows, owned by the order's
+  // customer: inventory/receipts' plan and recount keep them) ──
+  if (customerMaterialWaits(order.status, live.map((row) => row.status))) {
+    const missing = await db.customerMaterial.findMany({ where: { orderId: order.id, partyId: order.partyId }, select: { expectedQuantity: true, receivedQuantity: true, createdAt: true } })
+    const since = earliestMissingOf(missing.map((row) => ({ expected: row.expectedQuantity.toString(), received: row.receivedQuantity.toString(), createdAt: row.createdAt })))
+    if (since) blockers.push({ kind: 'CUSTOMER_MATERIAL', since, ref: null })
+  }
+  // ── end B-PT-016 ──
   const holds = liveIds.length > 0 ? await db.workOrderHold.findMany({ where: { workOrderId: { in: liveIds }, status: 'ACTIVE' }, select: { workOrderId: true, kind: true, placedAt: true } }) : []
   // B-OP-021: a hold, a quality hold and work at a workshop name their work order (the office read keeps it only for a reader who
   // reaches that work order: sales/orders production-read).
@@ -326,6 +337,29 @@ export async function readOrderProductionFacts(db: Reader, context: OfficeContex
     blockers, // B-SA-031
   }
 }
+
+// ── B-PT-016 (order production tab C2) ──────────────────────────────────────────────────────────────────────────────────────────
+/** The orders the customer's material can hold up: confirmed and not yet ready (READY or later: the work is done). */
+const MATERIAL_WAIT_STATES: readonly string[] = ['CONFIRMED', 'IN_PRODUCTION']
+/** Work orders whose making is over. */
+const MADE: readonly string[] = ['COMPLETED', 'CLOSED']
+
+/**
+ * B-PT-016: whether the order can wait on its customer's material — CONFIRMED or IN_PRODUCTION and its work still to do: no live
+ * work order yet (cutting has not started), or one of them not COMPLETED or CLOSED. Pure.
+ */
+export function customerMaterialWaits(orderStatus: string, liveWorkOrderStatuses: readonly string[]): boolean {
+  if (!MATERIAL_WAIT_STATES.includes(orderStatus)) return false
+  return liveWorkOrderStatuses.length === 0 || liveWorkOrderStatuses.some((status) => !MADE.includes(status))
+}
+
+/** B-PT-016: since when the customer's material is missing — the earliest row still expecting more than was received (null: none). Pure. */
+export function earliestMissingOf(rows: readonly { readonly expected: string; readonly received: string; readonly createdAt: Date }[]): Date | null {
+  const missing = rows.filter((row) => new Dec(row.expected).gt(new Dec(row.received)))
+  if (missing.length === 0) return null
+  return new Date(Math.min(...missing.map((row) => row.createdAt.getTime())))
+}
+// ── end B-PT-016 ──
 
 /** The lines with the order's promise where the line has none (the fallback's promise). */
 async function withOrderPromise(db: Reader, orderId: string, lines: readonly RiskLine[]): Promise<RiskLine[]> {
