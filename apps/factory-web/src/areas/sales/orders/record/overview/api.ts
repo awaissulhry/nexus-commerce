@@ -116,6 +116,10 @@ export const headlineSchema = z.object({
         since: instant.nullable(),
         ref: z.object({ type: z.string(), id: z.string(), messageId: z.string().optional() }).nullable().optional(),
         sub: z.enum(BLOCKER_SUBS).nullable().optional(),
+        // F-OC-103 (B-OC-004): by when the customer answers (an approval, a portal task) and what a portal task asks — absent until the
+        // server sends them: the row then says its kind only (no due day, no "late").
+        due: instant.nullable().optional(),
+        task: z.object({ kind: z.string(), label: z.string() }).nullable().optional(),
       }),
     ),
   }),
@@ -334,6 +338,11 @@ const stillRowSchema = z.object({
   waitingOn: z.string(),
   mayAct: z.boolean(),
   requestId: z.string().nullable(),
+  // F-OC-104 (B-OC-006, B-OC-007): the office revision a row belongs to, and the work-order change a workshop's row waits on —
+  // absent until the server sends them: the office's rows are one "Office change" group and a workshop's row its own row.
+  amendmentId: z.string().nullable().optional(),
+  revision: z.number().int().nullable().optional(),
+  waitsOn: z.string().nullable().optional(),
 })
 export type StillRow = z.infer<typeof stillRowSchema>
 export const changesSchema = z.object({

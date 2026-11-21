@@ -152,8 +152,8 @@ export function nextStepOf(headline: Headline | null | undefined): NextStep | nu
   return null
 }
 
-/** Where a door lands on the page: a section of this tab (#holds, #dates) or another tab (Changes). */
-export const placeAnchorOf = (place: BlockerPlace): { readonly tab: 'production' | 'changes'; readonly anchor: string | null } => (place === 'HOLD' ? { tab: 'production', anchor: 'holds' } : place === 'DATE' ? { tab: 'production', anchor: 'dates' } : { tab: 'changes', anchor: null })
+/** Where a door lands on the page: a section of this tab (#holds, #dates) or another tab (Changes › Waiting, F-OC-104). */
+export const placeAnchorOf = (place: BlockerPlace): { readonly tab: 'production' | 'changes'; readonly anchor: string | null } => (place === 'HOLD' ? { tab: 'production', anchor: 'holds' } : place === 'DATE' ? { tab: 'production', anchor: 'dates' } : { tab: 'changes', anchor: 'waiting' })
 
 // ---- the urgency line (L5) ----------------------------------------------------------------------------------------------------
 

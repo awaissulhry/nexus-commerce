@@ -3013,5 +3013,53 @@
       },
       "done": "Ricevimento {number} registrato"
     }
+  },
+  "changesTab": {
+    "today": "oggi {time}",
+    "dayTime": "{date} {time}",
+    "waiting": {
+      "title": "In attesa",
+      "info": "Cosa aspetta una risposta o un passo su questo ordine: a chi tocca, da quanto aspetta e la sua unica porta. È lo stesso elenco di Richieste e modifiche in Panoramica e del conteggio della scheda. Le età contano fino al minuto in cui l'elenco è stato letto.",
+      "asOf": "Alle {when}",
+      "reading": "Lettura di cosa è in attesa…",
+      "nothing": "Niente in attesa.",
+      "lastRevision": "Ultima modifica: revisione {revision}, {date}.",
+      "total_one": "{count} cosa in attesa: {parts}.",
+      "total_other": "{count} cose in attesa: {parts}.",
+      "partUs": "{count} da noi",
+      "partCustomer": "{count} da {customer}",
+      "partSteps_one": "{count} passo ancora da fare",
+      "partSteps_other": "{count} passi ancora da fare",
+      "onlySteps_one": "{count} passo ancora da fare.",
+      "onlySteps_other": "{count} passi ancora da fare.",
+      "holdsAndDates": "Blocchi e date sono in Produzione ›",
+      "mine_one": "{count} tocca a te",
+      "mine_other": "{count} toccano a te",
+      "noneUs": "Niente tocca a noi.",
+      "noneCustomer": "Niente tocca a {customer}.",
+      "manage": "Gestisci nella conversazione…"
+    },
+    "open": "Apri ›",
+    "row": {
+      "approval": "Attende l'approvazione: {kind}",
+      "askedBy": "Chiesta da {name} · {when}",
+      "whenAsked": "Al momento della richiesta: {words}",
+      "theySee": "Il cliente vede: {words}",
+      "lapses": "scade il {date}",
+      "late": "in ritardo di {count} g"
+    },
+    "who": {
+      "sales": "Rispondono le vendite",
+      "production": "Risponde il responsabile di produzione o il pianificatore",
+      "problem": "Si risponde in Produzione › Problemi e blocchi",
+      "decides": "Decide {who}",
+      "youAsked": "Hai chiesto tu questa approvazione: decide {who}",
+      "salesDecides": "Decidono le vendite"
+    },
+    "still": {
+      "revision": "Revisione {revision} · {when}",
+      "newDates": "Vedi le nuove date ›",
+      "seeYes": "Vedi il sì ›"
+    }
   }
 }

@@ -627,14 +627,7 @@ fieldset.fw-so-colours {
   cursor: default;
 }
 
-/* F-SA-243: a Still to do row — the step and who acts; its state and door at the end (they wrap under it on a phone) */
-.fw-so-datelist > li.fw-so-still {
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--nds-space-8);
-}
+/* F-OC-105: the Changes tab's old Still to do / waiting rows (.fw-so-still) went — Changes › Waiting draws its rows with changes.css. */
 
 /* F-OP-203: All of <customer> in the order's dock is the dock's one card now (DockColumn: .fw-rt-scroll, .fw-rt-foot in record-thread.css);
    the old .fw-so-dock-all / .fw-so-dock-write went with it. */

@@ -109,7 +109,7 @@ export function useProductionActs(input: {
     if (!orderId) return
     const mine = ++changesTurn.current
     setChanges((known) => known ?? { value: null, problem: null })
-    listWorkOrderChanges(api, { salesOrderId: orderId, status: 'ALL', limit: 50 })
+    listWorkOrderChanges(api, { salesOrderId: orderId, status: 'ALL', limit: 200 /* F-OC-105: the contract's most (an order's whole story) */ })
       .then((list) => mine === changesTurn.current && setChanges({ value: list.items, problem: null }))
       .catch((error: unknown) => mine === changesTurn.current && setChanges((known) => (known?.value ? known : { value: null, problem: readProblem(error) })))
   }, [api, orderId])

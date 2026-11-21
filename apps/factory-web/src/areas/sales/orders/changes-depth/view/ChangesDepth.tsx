@@ -1,7 +1,6 @@
 'use client'
 
-import Link from 'next/link'
-import { Hourglass, Lock } from 'lucide-react'
+import { Lock } from 'lucide-react'
 import { Banner, Card, KeyValue } from '@nexus/ui/components'
 import { Button, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../lib/i18n/format'
@@ -26,47 +25,22 @@ export function verdictText(row: { state: string; frozenFrom: string | null }, d
  * Changes › What is frozen (design order.changes.freeze, SAL-218; GET …/freeze): each field of the order — sizes and
  * quantities, colourway, options, delivery date, delivery address, prices — and what a change of it needs at the stage the
  * order reached: still open, a priced change the customer accepts, or nothing any more. A company with no rule: every field
- * open (F-SA-236: "What can still change"). The new yes a change waits for stays above it; the priced changes (SAL-219) are rows of
- * Changes › History with their Put back. Fetches nothing.
+ * open (F-SA-236: "What can still change"). The priced changes (SAL-219) are rows of Changes › History with their Put back. F-OC-102
+ * (10-design §3, O4): the approval an old change waits for is a row of Changes › Waiting on us (its Confirm / Refuse… in place) — the
+ * banner that said it a second time here went. Fetches nothing.
  */
-export function ChangesDepth({ order, model, actions, prefix }: { order: Order; model: OrderDepthModel | undefined; actions?: OrderDepthActions; prefix: string }) {
+export function ChangesDepth({ order, model, actions }: { order: Order; model: OrderDepthModel | undefined; actions?: OrderDepthActions }) {
   if (!model) return null
   return (
     <WithMessages namespaces={[NAMESPACE]}>
-      <Depth order={order} model={model} actions={actions} prefix={prefix} />
+      <Depth order={order} model={model} actions={actions} />
     </WithMessages>
   )
 }
 
-function Depth({ model, actions, prefix }: { order: Order; model: OrderDepthModel; actions?: OrderDepthActions; prefix: string }) {
-  return (
-    <>
-      <YesBanner model={model} prefix={prefix} />
-      {/* F-SA-236: What can still change; the priced changes are rows of Changes › History (with Put back). */}
-      <FreezePanel model={model} actions={actions} />
-    </>
-  )
-}
-
-function YesBanner({ model, prefix }: { model: OrderDepthModel; prefix: string }) {
-  const d = useT(NAMESPACE)
-  const locale = useLocale()
-  const waiting = model.changes?.value?.waitingForYes ?? null
-  if (!waiting) return null
-  return (
-    <Banner
-      tone="warning"
-      icon={<Hourglass size={16} aria-hidden />}
-      title={d('changeYes.waiting', { date: formatDate(waiting.since, { locale }) })}
-      action={
-        <Button size="sm" variant="quiet" asChild>
-          <Link href={`${prefix}/home/approvals`}>{d('wait.openApprovals')}</Link>
-        </Button>
-      }
-    >
-      {d('changeYes.waitingBody')}
-    </Banner>
-  )
+function Depth({ model, actions }: { order: Order; model: OrderDepthModel; actions?: OrderDepthActions }) {
+  // F-SA-236: What can still change; the priced changes are rows of Changes › History (with Put back).
+  return <FreezePanel model={model} actions={actions} />
 }
 
 function FreezePanel({ model, actions }: { model: OrderDepthModel; actions?: OrderDepthActions }) {
