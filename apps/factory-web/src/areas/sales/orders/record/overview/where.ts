@@ -599,22 +599,22 @@ export const HOLD_ORDER_FROM: readonly Order['status'][] = Object.freeze(['CONFI
 
 /**
  * Hold the whole order…: the ONE Hold dialog on the domain's plan (`orderHoldPlanOf`, through the acts' `orderHoldOf`: no web copy) —
- * held, with words, while the work orders are not read yet (`work` undefined), when they are withheld from this reader (null) or the
- * acts are not here (Production does it), with the plan's own words
- * when it holds none (nothing to hold yet, every open one on hold already, every one completed …; NO_RIGHT: "Production does this —
- * a planner or the production manager", the row's own words); with only made-to-measure units in work: each is held on its own page.
+ * held, with words, while the work orders are not read yet (`work` undefined), and with the plan's own words when it holds none
+ * (nothing to hold yet, every open one on hold already, every one completed …); with only made-to-measure units in work: each is held
+ * on its own page. Plan D2 / L9 (lead, round T): NOT drawn for a reader without the right — the work orders withheld (null), the acts
+ * not here, or the plan's NO_RIGHT — never a grey door; the strips' own line says who does it.
  */
 export function holdOrderMoveOf(order: Pick<Order, 'status'>, work: Pick<Work, 'workOrders' | 'workOrdersLeftOut' | 'mtm'> | null | undefined, acts: Pick<ActsCan, 'view'> | null): WhereMove | null {
   if (!HOLD_ORDER_FROM.includes(order.status)) return null
   const label = phrase('where.hold.label')
   if (work === undefined) return { id: 'hold', label, held: phrase('where.hold.reading') }
-  if (work === null) return { id: 'hold', label, held: HELD_FOR_SALES }
+  if (work === null) return null // D2: no right to see the work orders — hidden
   const plan = orderHoldOf(work.workOrders, { leftOut: work.workOrdersLeftOut, waitingForYes: false })
   const units = work.mtm.reduce((sum, group) => sum + group.workOrders, 0)
   const hold = { plan, units }
-  if (!acts?.view) return { id: 'hold', label, held: HELD_FOR_SALES, hold }
+  if (!acts?.view) return null // D2: the acts are not here — hidden
   if (!plan.held) return { id: 'hold', label, held: null, hold }
-  if (plan.held.code === 'NO_RIGHT') return { id: 'hold', label, held: HELD_FOR_SALES, hold }
+  if (plan.held.code === 'NO_RIGHT') return null // D2: Production does this — hidden (held with words only by state)
   if (plan.held.code === 'NONE_YET' && units > 0) return { id: 'hold', label, held: phrase('where.hold.onlyUnits'), hold }
   return { id: 'hold', label, held: plan.held.words, hold }
 }

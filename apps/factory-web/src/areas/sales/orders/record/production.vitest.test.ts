@@ -6,7 +6,6 @@ import { designScreen } from './fixtures'
 import { LOCALES } from '../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
 import { madeForOf, ownProgress } from './production'
-import { ready, WORK_READ } from './overview/fixtures'
 import { LINE_BLK, LINE_RED } from '../_demo/fixtures'
 // F-SA-235b
 import { designScreen as workOrderScreen } from '../../../production/work-orders/record/fixtures'

@@ -1,0 +1,84 @@
+import { createElement, type ComponentType } from 'react'
+import { describe, expect, it, vi } from 'vitest'
+import { renderView, textOf } from '../../../../../lib/record-thread/parts/testing'
+import { designScreen } from '../fixtures'
+
+// T.1 (order PRODUCTION tab): the design cases of the states the seed lacks — each says what it shows, in the words the tab uses.
+
+// The DS Modal opens only in a browser (after hydration, in a portal): here it draws in place, so a dialog's words are checked.
+vi.mock('@nexus/ui/components', async (original) => {
+  const actual = await original<typeof import('@nexus/ui/components')>()
+  const Modal = ({ open, title, children, footer }: { open: boolean; title?: unknown; children?: unknown; footer?: unknown }) => (open ? createElement('section', { role: 'dialog' }, createElement('h2', null, title as never), children as never, footer as never) : null)
+  return { ...actual, Modal }
+})
+
+const view = designScreen.view as ComponentType<{ model: unknown }>
+const draw = (id: string, locale: 'it' | 'en' = 'en') => {
+  const found = designScreen.cases.find((item) => item.id === id)
+  expect(found, id).toBeDefined()
+  return renderView(view, found!.model, locale)
+}
+const text = (id: string, locale: 'it' | 'en' = 'en') => textOf(draw(id, locale))
+
+describe('T.1: the Production tab’s states, by role', () => {
+  it('holds: the three strips and the office’s note for the Owner; Sales sees no hold door and one line says who does it (D2)', () => {
+    const owner = text('pt-holds-owner')
+    for (const words of ['Production hold — the lining roll is short', 'Paused at your request', 'Shade difference on the leather', 'Made-up: rotolo di fodera in arrivo giovedì.']) expect(owner, words).toContain(words)
+    const sales = text('pt-holds-sales')
+    expect(sales).not.toContain('Lift the hold…')
+    expect(sales).not.toContain('Release on Quality ›')
+    expect(sales).toContain('Production does this — a planner or the production manager')
+  })
+
+  it('asks: open, escalated (late), answered by a reply on a batch (L8); the customer’s problem with Reply in the thread', () => {
+    expect(text('pt-asks-open')).toContain('Ask for an update')
+    const escalated = text('pt-asks-escalated')
+    for (const words of ['Escalated 1× — now with the backup', 'late']) expect(escalated, words).toContain(words)
+    const answered = text('pt-asks-answered')
+    for (const words of ['Latest update', 'Bea Esempio', 'Made-up: cutting is done', 'Answered for SO-2026-0090 and 1 more']) expect(answered, words).toContain(words)
+    const problem = text('pt-customer-problem')
+    for (const words of ['Reported by the customer', 'Reply in the thread']) expect(problem, words).toContain(words)
+  })
+
+  it('the promise set then moved twice: the history counts two moves, the first promise is “Date set”, the line moved from its own day', () => {
+    const moves = text('pt-promise-moves')
+    expect(moves).toContain('Date set')
+    expect(moves).toContain('Show 1 earlier move')
+  })
+
+  it('gates: late, waiting on the customer’s sample (Decide for the customer…), started before', () => {
+    const gates = text('pt-gates-planner')
+    expect(gates).toMatch(/Decide for .+…/)
+    expect(gates).toContain('late')
+  })
+
+  it('What we make it to: a replaced pattern with its change note and the work order’s decision; no inquiry said in one line', () => {
+    const replaced = text('pt-specs-replaced')
+    for (const words of ['Pattern v3 · replaced by v4', 'v4 changed: Made-up: the knee pad pocket 2 cm lower.', 'ECO-2026-0004', 'finish on v3']) expect(replaced, words).toContain(words)
+    expect(text('pt-specs-no-pack')).toContain('No customer tech pack on this order.')
+  })
+
+  it('Materials: missing, partly, all here; the receipt dialog says the leather by the hide; what we buy short, then asked', () => {
+    expect(text('pt-goods-missing')).toContain('Record what arrived…')
+    expect(text('pt-goods-partly')).toContain('still to come (2 of 6 pz arrived)')
+    expect(text('pt-goods-all-here')).toContain('Everything is here for the work orders made so far')
+    const receipt = text('pt-receipt')
+    for (const words of ['Record what the customer sent ·', 'Leather received hide by hide goes through a purchase receipt.', 'Record the receipt']) expect(receipt, words).toContain(words)
+    const short = text('pt-buy-short')
+    for (const words of ['Zip 60 cm · Navy', 'Open PO-2026-0091', 'Ask the buyers…']) expect(short, words).toContain(words)
+    expect(text('pt-buy-asked')).toContain('Asked 20/11/2026')
+    expect(text('pt-warehouse')).toContain('Record what the customer sent…')
+  })
+
+  it('Finance and Read-only: the tab read, no act (L7); Read-only never reads a price', () => {
+    for (const id of ['pt-finance', 'pt-read-only']) {
+      const words = text(id)
+      for (const act of ['Ask for an update', 'Lift the hold…', 'Record what the customer sent…', 'Make work orders']) expect(words, `${id} ${act}`).not.toContain(act)
+    }
+    expect(text('pt-read-only')).not.toContain('€')
+  })
+
+  it('every new case draws in Italian too', () => {
+    for (const item of designScreen.cases.filter((entry) => entry.id.startsWith('pt-'))) expect(text(item.id, 'it').length, item.id).toBeGreaterThan(200)
+  })
+})

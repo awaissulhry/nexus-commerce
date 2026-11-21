@@ -287,8 +287,7 @@ export type Gate = Dates['gates'][number]
 export type DateMilestone = Dates['milestones'][number]
 
 export const qualitySchema = z.object({
-  // F-PT-302: the tab reads the order's issues from the ONE issues list now (B-PT-010) — this part stays optional until B-PT-018 drops it.
-  issues: z.array(z.object({ id: z.string(), source: z.string(), recordType: z.string(), since: instant, dueOn: day, escalation: z.number() })).nullable().optional(),
+  // B-PT-018: no issues block — the tab reads the order's issues from the ONE issues list (B-PT-010).
   // F-PT-302 (B-PT-009, optional): + the NCR's title (cut at 80 characters by the server).
   ncrs: z.array(z.object({ id: z.string(), number: z.string(), stage: z.string(), severity: z.string(), sharedWorkOrder: z.boolean(), title: z.string().optional() })).nullable(),
   // F-PT-302 (B-PT-008, optional): + the inspection's id (the row's key), lot, inspected so far, defects per class, shared work order.
@@ -338,7 +337,8 @@ export const changesSchema = z.object({
   stillToDo: z.object({ rows: z.array(stillRowSchema), count: z.number(), workOrdersLeftOut: z.number() }).optional(),
 })
 
-export const WITHHELD_KEYS = ['work', 'people', 'headline.notes', 'quality.issues', 'quality.ncrs', 'quality.final', 'dates.forecast'] as const
+// B-PT-018: `quality.issues` is gone from the read (the order's issues are the ONE issues list's, production/api listOrderIssues).
+export const WITHHELD_KEYS = ['work', 'people', 'headline.notes', 'quality.ncrs', 'quality.final', 'dates.forecast'] as const
 export type WithheldKey = (typeof WITHHELD_KEYS)[number]
 
 export const productionSchema = z.object({

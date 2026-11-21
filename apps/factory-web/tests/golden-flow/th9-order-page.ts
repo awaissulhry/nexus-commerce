@@ -10,6 +10,8 @@ import { startsWith, words } from './_harness/words'
 import { COUNT_TO_FOLLOW_WORDS } from '@nexus/factory-domain/production-brand/portal-read'
 import { STAGE_SET_REFUSAL_WORDS } from '@nexus/factory-domain/production-brand/stage-set'
 import { STAGE_WORDS } from '@nexus/factory-domain/production-brand/words'
+// F-PT T.2 (order PRODUCTION tab): step 12's world, made through the real API (th9-production-world.ts, no stage of its own).
+import { askState, productionWorld, WORLD_WORDS } from './th9-production-world'
 
 /**
  * F-OP-129 — UI golden flow TH-9: THE ORDER PAGE AT THE END (order page plan N1–N6; 10-order-page §2, §5, §7, §8, §13; review R-4,
@@ -46,6 +48,11 @@ import { STAGE_WORDS } from '@nexus/factory-domain/production-brand/words'
  *      floor counts sewing only on a work order), may still mark it Urgent (nothing cut), never "by hand"; Change… down to Cutting
  *      (a correction) — the buyer reads "Cutting · Count to follow"; Clear… says Cutting was never told (ms-fx1) → Preparing again;
  *      Sales sees the door held in words, and so does a Confirmed order.
+ *  12  F-PT (order PRODUCTION tab, T.2): the tab at the end, on the order of steps 1–3 — its world made by the API (supervisor, a
+ *      production hold, Ask for an update as the tab sends it, the supervisor's reply in the thread, the promise moved twice): Sales'
+ *      Ask for an update opens the ready ask; the reply answered it (C1) — Production now's "Latest update" quotes it; Dates & plan's
+ *      promise history shows the moves and its We promised door opens the ONE promise dialog with its honest hint; the planner lifts
+ *      the hold from Problems & holds (the strip's own Lift…, the ONE lift dialog); a Read-only person reads the tab with no act.
  * Not here, said in the report: cut pieces (the floor's flow: the extra-pieces outcome is held by the design case
  * lines-review-outcome, B-OP-071 O1 and the unit tests of F-OP-107), the record of a shipment made elsewhere whose garments the seeds
  * date in the story's days ahead (B-OP-071 O4 records one), and the invoices of a shared shipment that left (B-OP-045).
@@ -62,6 +69,9 @@ const SHIP = words('shipments')
 // F-MS-106: the portal's production list and the order's History.
 const PPROD = words('portal-production')
 const FEED = words('record-thread-feed')
+// F-PT T.2: the lift dialog's and the note dialog's own words.
+const PWO = words('production-work-orders')
+const NOTES = words('production-notes')
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 /** A catalogue sentence's words before its first placeholder (the key's raw text). */
@@ -78,6 +88,7 @@ const PAPER_DDT = 'T-TH9-77/2026'
 const AMEND_REASON = 'Made-up: Brand Alpha wants two more 50 and one fewer 52.'
 const DSW = words('ds-words') // F-OL-06: the DS bar's own words (its region)
 const REFUSE_WORDS = 'Made-up: asked about an older version of the order; ask it again on this one.'
+const LIFT_REASON = 'Made-up: the lining roll came in (TH9).' // F-PT T.2
 // ---- F-OO-215 (order overview lane): SEED-SO-0002's Overview ----
 /**
  * SEED-SO-0002's headline as the seed gives it: its status words (its stage follows them, "Partly shipped · …"). B-OO-016 (Owner D9,
@@ -186,7 +197,7 @@ async function refusedToBeta(beta: PortalDesk, path: string, ofAlpha: readonly s
 
 export default defineStage({
   proves:
-    'the order page at the end: the yes in place (a waiting order confirmed, a stale change refused with its reason; a yes the Owner asked is held for her); a work order made in place; edit mode’s strip says which work order follows now and which waits, Apply, the planner decides the waiting one on the order page; tracking typed, corrected and cleared ("No live tracking"); the made-elsewhere dialog with its paper DDT and its live rules; a combined shipment of two orders made in place (B-OP-047); the files viewer walk by keys; customer B never offered or shown A’s orders, A’s ids answer B’s neutral refusal; SEED-SO-0002’s Overview sections 1–8 (F-OO-215): the headline, strips and moves, a line’s ⋯, People, Next dates, Requests & changes = the Changes badge, Linked records = the tab badges, a custom value saved beside Order facts at the order’s version (the sheet’s edit at the old version stale), the office note saved after it',
+    'the order page at the end: the yes in place (a waiting order confirmed, a stale change refused with its reason; a yes the Owner asked is held for her); a work order made in place; edit mode’s strip says which work order follows now and which waits, Apply, the planner decides the waiting one on the order page; tracking typed, corrected and cleared ("No live tracking"); the made-elsewhere dialog with its paper DDT and its live rules; a combined shipment of two orders made in place (B-OP-047); the files viewer walk by keys; customer B never offered or shown A’s orders, A’s ids answer B’s neutral refusal; SEED-SO-0002’s Overview sections 1–8 (F-OO-215): the headline, strips and moves, a line’s ⋯, People, Next dates, Requests & changes = the Changes badge, Linked records = the tab badges, a custom value saved beside Order facts at the order’s version (the sheet’s edit at the old version stale), the office note saved after it; the Production tab at the end (F-PT T.2): the ready ask, the supervisor’s reply answering it (“Latest update”), the promise history and its door, a hold lifted from Problems & holds, Read-only with no act',
   async run(flow: Flow) {
     const sales = await flow.desk('sales')
     const alphaId = await flow.seedId('party:P1')
@@ -288,10 +299,11 @@ export default defineStage({
       expect(((after.openApprovals ?? []) as Json[]).filter((row) => row.kind === 'SALES_ORDER_CHANGE'), 'the change’s yes is decided').toEqual([])
     })
 
-    const workOrder = await flow.step('2 · make a work order in place: the planner on the Production tab → New work order → its DRAFT; released by the production lane', async () => {
+    const workOrder = await flow.step('2 · make a work order in place: the planner on the Production tab (Work orders’ own Make work orders) → New work order → its DRAFT; released by the production lane', async () => {
       const planner = await flow.desk('planner')
       await planner.go(`/sales/orders/${world.order.id}?tab=production`)
-      const make = planner.page.getByRole('button', { name: new RegExp(`^(${escape(OD('step.makeWorkOrders'))}|${escape(lead(OD('wo.makeNext')))})`) }).first()
+      // F-PT-104 (T.2): the button is the Work orders section's own (#work-orders), in its head — the same words as before.
+      const make = planner.page.locator('#work-orders').getByRole('button', { name: new RegExp(`^(${escape(OD('step.makeWorkOrders'))}|${escape(lead(OD('wo.makeNext')))})`) }).first()
       await seen(make, 60_000)
       const box = dialog(planner.page)
       const created = await answerOf(planner.page, 'POST', /^\/production\/work-orders$/, async () => {
@@ -368,16 +380,15 @@ export default defineStage({
       await expect(size52).toHaveValue('3')
       await flow.settle()
 
-      // The planner decides it on the order page (F-OP-116, A14): under the work order's row "Change waits: 4 → 3 · Apply… /
-      // Leave as is…"; Apply… opens the ONE review window (Approvals' WorkOrderChangeReview as is) → Lower to the order.
+      // The planner decides it on the order page (F-OP-116, A14) — F-PT-105 (T.2): in Work orders' ONE strip "Waiting for a
+      // decision", each change one row with its Decide…, which opens the ONE review window (Approvals' WorkOrderChangeReview as is)
+      // → Lower to the order.
       const planner = await flow.desk('planner')
       await planner.go(`/sales/orders/${world.order.id}?tab=production`)
-      const waits = startsWith(lead(OD('wo.changeWaits')))
-      const line = planner.page.getByText(waits).first()
-      await seen(line, 60_000)
-      const beside = line.locator('xpath=..')
-      await expect(beside.getByRole('button', { name: OD('wo.changeLeave'), exact: true })).toBeVisible()
-      await press(beside.getByRole('button', { name: OD('wo.changeApply'), exact: true }))
+      const strip = planner.page.locator('#work-orders .fw-pt-dec')
+      await seen(strip.getByText(OD('productionTab.wo.decisions'), { exact: true }), 60_000)
+      const waiting = strip.locator('.fw-pt-dec-row').first()
+      await press(waiting.getByRole('button', { name: OD('productionTab.wo.decide'), exact: true }))
       const review = dialog(planner.page)
       await seen(review, 60_000)
       await answerOf(planner.page, 'POST', /^\/production\/work-order-changes\/[^/]+\/apply$/, async () => {
@@ -386,7 +397,8 @@ export default defineStage({
       })
       await seen(planner.page.getByText(OD('wo.changeApplied', { number: workOrder.number })).first(), 60_000)
       await flow.settle()
-      await expect(planner.page.getByText(waits)).toHaveCount(0, { timeout: 60_000 })
+      // Decided: the strip is gone (nothing waits on this order any more).
+      await expect(planner.page.locator('#work-orders .fw-pt-dec')).toHaveCount(0, { timeout: 60_000 })
       await flow.shot(planner.page, 'change-decided')
     })
 
@@ -833,5 +845,70 @@ export default defineStage({
       await flow.settle()
     })
     // ---- end F-MS-106
+
+    // ---- F-PT T.2 (order PRODUCTION tab, 15-steps T.2; C1, L7, L9): the Production tab at the end -----------------------------------
+    await flow.step('12 · the Production tab: Ask for an update opens the ready ask; the supervisor’s reply answered it — "Latest update"; the promise history and the promise door in Dates & plan; a hold lifted from Problems & holds; Read-only reads it with no act', async () => {
+      const made = await productionWorld(flow, world.order.id)
+
+      // Sales: Production now's Ask for an update is the ready ask (the note dialog with its own title) — the world sent the same ask
+      // by the API, so this one is closed unsent.
+      await sales.go(`/sales/orders/${world.order.id}?tab=production`)
+      const now = sales.page.locator('#now')
+      const ask = now.getByRole('button', { name: OD('productionTab.ask.button'), exact: true })
+      await seen(ask, 60_000)
+      await press(ask)
+      const box = dialog(sales.page)
+      await seen(box.getByText(OD('productionTab.ask.title', { number: world.order.number }), { exact: true }).first())
+      await press(box.getByRole('button', { name: NOTES('cancel'), exact: true }))
+      await expect(dialog(sales.page)).toHaveCount(0)
+      // C1 (B-PT-015): the supervisor's reply in the thread answered the ask — the tab's latest update names it and quotes it.
+      expect((await askState(flow, world.order.id, made.ask.issueId)).status).toBe('ANSWERED')
+      await seen(now.getByText(startsWith(lead(OD('productionTab.now.latest')))).first(), 60_000)
+      await seen(now.getByText(WORLD_WORDS.reply).first())
+      await flow.shot(sales.page, 'production-now-answered')
+
+      // Dates & plan: the promise history (the newest move open, the earlier one folded); We promised's Change… is the ONE promise
+      // dialog with its honest hint (the portal tells the customer; the floor is not told) — closed unsaved (the world moved it).
+      const dates = sales.page.locator('#dates')
+      const history = sales.page.locator('#promise-moves')
+      await seen(history.getByText(OD('productionTab.history.title'), { exact: true }), 60_000)
+      await seen(history.getByText(WORLD_WORDS.lineMove).first())
+      await seen(history.getByText(OD('productionTab.history.earlier', { count: 1 }), { exact: true }))
+      const promised = dates.locator('.fw-pt-tile', { hasText: OD('productionTab.dates.promised') })
+      await press(promised.getByRole('button', { name: OD('doors.change'), exact: true }))
+      const promise = dialog(sales.page)
+      await seen(promise.getByText(OD('productionTab.promise.hint'), { exact: true }))
+      await press(promise.getByRole('button', { name: OD('common.cancel'), exact: true }))
+      await flow.shot(sales.page, 'production-dates-history')
+
+      // The planner (the hold right): the hold is Problems & holds' strip — Overview's own — with its office note; its Lift the hold…
+      // opens the ONE lift dialog; the reason typed, released; the strip goes.
+      const planner = await flow.desk('planner')
+      await planner.go(`/sales/orders/${world.order.id}?tab=production`)
+      const holds = planner.page.locator('#holds')
+      const strip = holds.locator('li', { hasText: made.hold.workOrderNumber }).filter({ has: planner.page.getByRole('button', { name: OD('wo.act.lift'), exact: true }) }).first()
+      await seen(strip, 60_000)
+      await seen(holds.getByText(WORLD_WORDS.holdNote).first())
+      await press(strip.getByRole('button', { name: OD('wo.act.lift'), exact: true }))
+      const lift = dialog(planner.page)
+      await seen(lift.getByText(PWO('liftHold.title')).first(), 60_000)
+      await lift.getByRole('textbox', { name: PWO('liftHold.reason') }).fill(LIFT_REASON)
+      await answerOf(planner.page, 'POST', /^\/quality\/holds\/[^/]+\/release$/, async () => {
+        await press(lift.getByRole('button', { name: PWO('liftHold.go'), exact: true }))
+        await flow.stepUp(planner.page, planner.person)
+      })
+      await flow.settle()
+      await expect(holds.getByRole('button', { name: OD('wo.act.lift'), exact: true })).toHaveCount(0, { timeout: 60_000 })
+      await flow.shot(planner.page, 'production-hold-lifted')
+
+      // L7: Read-only reads the whole tab and finds no act — no Ask, no Lift, no Change…, no Make work orders, no Record.
+      const reader = await flow.desk('reader')
+      await reader.go(`/sales/orders/${world.order.id}?tab=production`)
+      await seen(reader.page.locator('#now'), 60_000)
+      await seen(reader.page.locator('#holds'))
+      for (const name of [OD('productionTab.ask.button'), OD('wo.act.lift'), OD('doors.change'), OD('step.makeWorkOrders'), OD('productionTab.receipt.open')]) await expect(reader.page.locator('.fw-pt').getByRole('button', { name, exact: true }), name).toHaveCount(0)
+      await flow.shot(reader.page, 'production-read-only')
+    })
+    // ---- end F-PT T.2
   },
 })

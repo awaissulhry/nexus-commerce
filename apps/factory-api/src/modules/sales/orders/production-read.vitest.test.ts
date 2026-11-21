@@ -44,12 +44,12 @@ describe('partsOf: the parts a read asks', () => {
 describe('withheldOf: a part or block the reader may not read is named, never an empty part', () => {
   const holding = (...rights: Permission[]) => (permission: Permission) => rights.includes(permission)
 
-  it('the Sales template (orders.view, no workorders.view, no planning.promise.view): work, people, the office notes, issues, NCRs, final and forecast withheld', () => {
+  // B-PT-018: the issues are the ONE issues list's (GET /production/issues), no block of this read any more.
+  it('the Sales template (orders.view, no workorders.view, no planning.promise.view): work, people, the office notes, NCRs, final and forecast withheld', () => {
     expect(withheldOf(['headline', 'lines', 'work', 'dates', 'quality', 'people', 'changes'], holding('orders.view'))).toEqual([
       'work',
       'people',
       'headline.notes',
-      'quality.issues',
       'quality.ncrs',
       'quality.final',
       'dates.forecast',
