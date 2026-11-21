@@ -25,3 +25,11 @@
   max-width: 100%;
 }
 /* ── end F-OO-121 */
+
+/* pt-sc-fx3 (stage walk #3): in a narrow card (a phone) the line's pills take the cell's whole width, under the picture too, so a short
+   pill like "Not in work orders yet" is never cut (it lost 3 px beside the picture at 375). Wider cards keep them under the name. */
+@container fw-so-ov-card (max-width: 479px) {
+  .fw-so-ov-line > .fw-so-inline {
+    grid-column: 1 / -1;
+  }
+}

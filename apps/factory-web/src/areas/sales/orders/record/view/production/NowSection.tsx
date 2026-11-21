@@ -1,6 +1,7 @@
 'use client'
 
 import { AlertTriangle, Hourglass, Lock, MessageSquare, Send, User } from 'lucide-react'
+import { Pencil } from 'lucide-react' // pt-sc-fx3: a step that may be picked shows it at rest (as Overview's strip)
 import { Banner, ProgressBar, type MenuItemDef } from '@nexus/ui/components'
 import { Button, Tag } from '@nexus/ui/primitives'
 import { useSearchParams } from 'next/navigation'
@@ -374,7 +375,8 @@ function PeopleBlock({ order, model, actions, onAsk }: { order: Order; model: Or
  * fx5 #4: the five stages as the picture's ONE horizontal segmented bar (done · now · to come), the same steps as Overview's strip
  * (lib/production stageSteps) — never a tall vertical list beside two short columns. Nothing reached yet or a stopped order: no bar
  * (the stage line above says it); blocked: the mark beside it. F-SC-W3: a step that may be picked wraps its content in a real <button>
- * (its name says what it does; 44 px to tap), the rest stay words; held, one quiet line says why.
+ * (its name says what it does; 44 px to tap), the rest stay words; held, one quiet line says why. pt-sc-fx3 (stage walk #2): at rest a
+ * small pencil after its word says it can be picked — the same cue as Overview's strip.
  */
 function StageBar({ strip, label, note, picks, held }: { strip: StageStripInput; label: string; note: string | null; picks: readonly { readonly stage: PlainStage; readonly label: string; readonly open: () => void }[] | null; held: string | null }) {
   const w = useProductionWords()
@@ -385,20 +387,21 @@ function StageBar({ strip, label, note, picks, held }: { strip: StageStripInput;
       <ol className="fw-pt-segs" aria-label={label}>
         {steps.map((step) => {
           const pick = picks?.find((entry) => entry.stage === step.id) ?? null
-          const content = (
-            <>
-              <span className="fw-pt-seg-bar" aria-hidden />
-              <span>{w.say(step.label)}</span>
-            </>
-          )
           return (
             <li key={step.id} className={`fw-pt-seg is-${step.state}`} aria-current={step.state === 'current' ? 'step' : undefined}>
               {pick ? (
                 <button type="button" className="fw-pt-seg-go" aria-label={pick.label} onClick={pick.open}>
-                  {content}
+                  <span className="fw-pt-seg-bar" aria-hidden />
+                  <span>
+                    {w.say(step.label)}
+                    <Pencil size={12} aria-hidden className="fw-pt-seg-mark" />
+                  </span>
                 </button>
               ) : (
-                content
+                <>
+                  <span className="fw-pt-seg-bar" aria-hidden />
+                  <span>{w.say(step.label)}</span>
+                </>
               )}
             </li>
           )

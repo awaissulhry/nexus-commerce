@@ -243,6 +243,9 @@
 .fw-pt-seg-go { display: flex; flex-direction: column; gap: var(--nds-space-4); width: 100%; min-height: 44px; margin: 0; padding: 0 0 var(--nds-space-4); border: 0; border-radius: var(--nds-radius-xs); background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
 .fw-pt-seg-go > span:last-child { overflow-wrap: anywhere; padding-right: var(--nds-space-4); line-height: 1.25; }
 .fw-pt-seg-go:hover { background: var(--nds-surface-hover); }
+/* pt-sc-fx3 (stage walk #2): the resting cue — a small pencil after the step's word (Overview's strip shows the same). */
+.fw-pt-seg-mark { margin-inline-start: var(--nds-space-4); vertical-align: middle; color: var(--nds-text-muted); }
+.fw-pt-seg-go:hover .fw-pt-seg-mark { color: var(--nds-text); }
 .fw-pt-seg-go:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; }
 .fw-pt-count .nds-progress { margin-top: var(--nds-space-2); }
 

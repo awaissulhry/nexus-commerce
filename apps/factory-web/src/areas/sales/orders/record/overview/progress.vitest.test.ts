@@ -242,6 +242,10 @@ describe('F-OO-121: the card draws the clean line cell', () => {
     const css = read('../view/overview/progress.css')
     expect(css).toContain('grid-template-columns: subgrid')
     expect(css).not.toMatch(/#[0-9a-f]{3,8}\b/i)
+    // pt-sc-fx3 (stage walk #3): a narrow card (a phone) gives the pills the cell's whole width, so "Not in work orders yet" is never cut.
+    expect(css).toMatch(/@container fw-so-ov-card \(max-width: 479px\) \{\s*\.fw-so-ov-line > \.fw-so-inline \{\s*grid-column: 1 \/ -1;/)
+    // The pills are the line cell's own inline group (the class the rule reads).
+    expect(read('../view/overview/ProgressCard.tsx')).toContain('<span className="fw-so-inline">')
   })
 })
 // ---- end F-OO-121

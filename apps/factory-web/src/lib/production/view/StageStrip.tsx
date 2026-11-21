@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react' // F-SC-W3: the steps' buttons, measured
 import NextLink from 'next/link'
 import { PauseCircle } from 'lucide-react'
+import { Pencil } from 'lucide-react' // pt-sc-fx3: a step that may be picked shows it at rest
 import { EmptyState } from '@nexus/ui/components'
 import { MilestoneTracker, type MilestonePromise, type MilestoneStep } from '@nexus/ui/components/MilestoneTracker/index'
 import { Button, Pill, Skeleton } from '@nexus/ui/primitives'
@@ -141,7 +142,8 @@ export function StageStrip({ face, layout = 'auto', label, promise, loading, pro
  * idea of the DS PressableRow, never a div with a role. The tracker sits on top and lets the pointer through (production-parts.css), so
  * its own look stays and a click on a step reaches its button; the hover and the focus ring show through around the words. Tab goes
  * through the steps in order, Enter opens; across (wide box) or down (narrow, a phone) each step is one target. Before the first measure
- * (the server's markup) the buttons are there, named, with no size.
+ * (the server's markup) the buttons are there, named, with no size. pt-sc-fx3 (stage walk #2): at rest each one shows a small pencil
+ * in its step's lower corner (the one cue it can be picked, the same as on Production's stage bar), not only on hover or focus.
  */
 function StepPicks({ tracker, steps, picks, onPick }: { tracker: ReactNode; steps: readonly PlainStage[]; picks: readonly StageStripPick[]; onPick: (stage: PlainStage) => void }) {
   const box = useRef<HTMLDivElement>(null)
@@ -173,7 +175,9 @@ function StepPicks({ tracker, steps, picks, onPick }: { tracker: ReactNode; step
     <div ref={box} className="fw-prp-strip-picks">
       {tracker}
       {picks.map((pick) => (
-        <button key={pick.stage} type="button" className="fw-prp-strip-pick" data-stage={pick.stage} style={rects[pick.stage]} aria-label={pick.label} onClick={() => onPick(pick.stage)} />
+        <button key={pick.stage} type="button" className="fw-prp-strip-pick" data-stage={pick.stage} style={rects[pick.stage]} aria-label={pick.label} onClick={() => onPick(pick.stage)}>
+          <Pencil size={12} aria-hidden className="fw-prp-strip-pick-mark" />
+        </button>
       ))}
     </div>
   )

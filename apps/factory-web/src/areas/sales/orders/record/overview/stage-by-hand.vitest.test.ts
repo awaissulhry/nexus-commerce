@@ -16,6 +16,7 @@ import { useOverviewActs } from '../use-overview-acts'
 import { StageHandDialogs } from '../view/overview/StageByHandDialog'
 import type { BrandStage, Headline } from './api'
 import { HAND_AT, HAND_BACK_READ, HAND_BY, HAND_FREE_READ, HAND_READ, HEADLINE, ready } from './fixtures'
+import { PICK_LINE_KEYS, splitDialogLines } from './stage-by-hand' // pt-sc-fx3: the picked step's lines under the stages
 import { NOTICE_WAIT_MINUTES, clearLinesOf, clearNoticeOf, readyWarningOf, setNoticeOf, stageByHandBodyOf, stageByHandHeld, stageByHandStartOf, stageChoicesOf, stageDialogLinesOf, stageRefusalOf, versionOf } from './stage-by-hand'
 
 // The DS Modal draws only after it mounts in a browser — here a plain section, so the dialog's words are read on the server too (as the
@@ -170,6 +171,15 @@ describe('F-SC-W1: the lines the dialogs say — R3b and R18 always, never an ur
     expect(stageDialogLinesOf({ floor: 'SEWING', shown: 'SEWING', pick: 'READY' }).at(-1)).toEqual({ key: M('clears'), stage: 'READY' })
     // No line about Mark urgent, in any case (R8: the customer's own urgent mark keeps reading the real cuts).
     for (const floor of ['PREPARING', 'SEWING', 'QUALITY'] as const) for (const pick of [null, 'PREPARING', 'CUTTING', 'SEWING', 'QUALITY', 'READY'] as const) expect(JSON.stringify(stageDialogLinesOf({ floor, shown: floor, pick }))).not.toMatch(/urgent/i)
+  })
+
+  it('pt-sc-fx3: the lines split in two places — what the picked step does (under the stages), the rules that always hold (under the fields)', () => {
+    const { pick, after } = splitDialogLines(stageDialogLinesOf({ floor: 'SEWING', shown: 'SEWING', pick: 'CUTTING' }))
+    expect(pick.map((line) => line.key)).toEqual([M('back'), M('clearsBack')])
+    expect(after.map((line) => line.key)).toEqual([M('customer'), M('told'), M('cuts')])
+    expect(splitDialogLines(stageDialogLinesOf({ floor: 'PREPARING', shown: 'SEWING', pick: 'SEWING' })).pick.map((line) => line.key)).toEqual([M('same'), M('clears')])
+    expect(splitDialogLines(stageDialogLinesOf({ floor: 'SEWING', shown: 'SEWING', pick: null })).pick).toEqual([])
+    expect([...PICK_LINE_KEYS].sort()).toEqual([M('back'), M('clears'), M('clearsBack'), M('same')])
   })
 
   it('Ready to ship picked while quality has not released every piece: the domain\'s warning (never a hold); none at a floor already Ready', () => {
@@ -359,6 +369,12 @@ describe('F-SC-W2: the dialog drawn — the stages with their words, the step pi
   it('a step picked on the stages: the dialog opens on it — Cutting below the floor\'s Sewing: told as a correction, clears when the floor comes back or passes', () => {
     const html = draw('f-ms-dialog-pick')
     expect(checked(html)).toBe('CUTTING')
+    // pt-sc-fx3: the step's own lines right under the stages; the rules that always hold under the note.
+    const reason = html.indexOf('Reason (office only)')
+    expect(html.indexOf('Going back: the customer reads Cutting')).toBeGreaterThan(html.lastIndexOf('<input type="radio"'))
+    expect(html.indexOf('Going back: the customer reads Cutting')).toBeLessThan(reason)
+    expect(html.indexOf('It clears by itself when the floor&#x27;s counts come back to Cutting')).toBeLessThan(reason)
+    expect(html.indexOf('The customer reads it as a plain stage')).toBeGreaterThan(html.indexOf('One line, at most 200 characters.'))
     const text = textOf(html)
     expect(text).toContain('Going back: the customer reads Cutting, told as a correction after 10 minutes (only if it was told the stage it leaves).')
     expect(text).toContain("It clears by itself when the floor's counts come back to Cutting or pass Sewing.")
@@ -369,6 +385,12 @@ describe('F-SC-W2: the dialog drawn — the stages with their words, the step pi
 
   it('Ready to ship picked while quality has not released every piece: the warning (a DS Banner) — once, never a hold of Go', () => {
     const html = draw('f-ms-dialog-ready')
+    // pt-sc-fx3 (stage walk #1): in sight when the dialog opens — right after the stages, before the reason and the note.
+    const radios = html.lastIndexOf('<input type="radio"')
+    const warning = html.indexOf('nds-banner warning')
+    expect(warning).toBeGreaterThan(radios)
+    expect(warning).toBeLessThan(html.indexOf('Reason (office only)'))
+    expect(html.indexOf("It clears by itself once the floor&#x27;s counts reach Ready to ship.")).toBeLessThan(html.indexOf('Reason (office only)'))
     expect(checked(html)).toBe('READY')
     expect(html).toContain('nds-banner warning')
     expect(textOf(html).split('Quality has not released every piece').length - 1).toBe(1)
@@ -418,6 +440,11 @@ describe('F-SC-W2: the dialog drawn — the stages with their words, the step pi
     expect(view).toContain('<ActionConfirm')
     expect(view).toContain('variant="row"')
     expect(view).toContain('<Banner tone="warning"')
+    // pt-sc-fx3: opened on a step, its lines are brought into sight once (the nearest scroll), never on a plain open.
+    expect(view).toContain("requestAnimationFrame(() => node.scrollIntoView({ block: 'nearest' }))")
+    expect(view).toContain('if (!node || !picked || shown.current) return')
+    expect(view.indexOf('{lines.pick.map(')).toBeLessThan(view.indexOf("<Field label={t('where.manual.reason')}>"))
+    expect(view.indexOf('{lines.after.map(')).toBeGreaterThan(view.indexOf("<Field label={w.t('raise.note')}"))
     expect(view).toContain('pick={dialog.pick ?? null}')
     const dialogs = readFileSync(new URL('../view/Dialogs.tsx', import.meta.url), 'utf8')
     expect(dialogs).toContain("case 'stageByHand':")
