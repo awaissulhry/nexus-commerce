@@ -9,6 +9,7 @@ import type { Order } from '../../../api'
 import { isHide, receivePlacesOf, type ReceiptActions, type ReceiptModel } from '../../production/receipt'
 import { Frame } from '../Dialogs'
 import { PartFailed, PartReading } from './Kit'
+import './receipt.css' // F-PT-304: laid out by the screen (the dialog is outside the tab's size container)
 
 /**
  * F-PT-304 (order PRODUCTION tab, 10-design §9 D3) — "Record what the customer sent · SO-…": the site and the place the goods go
