@@ -230,13 +230,24 @@ describe('B-MS-006: the headline reads the stage set by hand (who and the note b
       sewingNotCountedWords: null,
       next: { code: 'QUALITY', words: { it: 'Controllo qualità', en: 'Quality check' } },
       partlyShipped: false,
-      byHand: { stage: 'SEWING', reasonCode: 'OUTAGE', floor: { code: 'PREPARING', words: { it: 'In preparazione', en: 'Preparing' } }, at: '2026-11-18T09:30:00.000Z', note: 'Made-up: the tablets were down all morning.', by: planner, notice: null },
+      byHand: { stage: 'SEWING', reasonCode: 'OUTAGE', floor: { code: 'PREPARING', words: { it: 'In preparazione', en: 'Preparing' } }, floorAtSet: null, at: '2026-11-18T09:30:00.000Z', note: 'Made-up: the tablets were down all morning.', by: planner, notice: null },
       version: 4,
     })
   })
 
+  // B-SC-004 (stage control B): the floor's stage when it was set or changed (keeper readHandFloor), office only like the rest.
+  it('B-SC-004: byHand.floorAtSet — a stage set back below the floor says where the floor stood at the set; none: null', () => {
+    const back = headlineStageOf({ row: stored({ stage: 'SEWING', stageSet: 'SEWING' }), live: { stage: 'QUALITY', ahead: 0, next: 'READY', sewingNotCounted: false }, partlyShipped: false, notes: false, setBy: null, floorAtSet: 'QUALITY' })
+    expect(back?.code).toBe('SEWING')
+    expect(back?.byHand).toMatchObject({ stage: 'SEWING', floor: { code: 'QUALITY' }, floorAtSet: 'QUALITY', note: null, by: null })
+    expect(headlineStageOf({ row: stored(), live: floor, partlyShipped: false, notes: true, setBy: null, floorAtSet: null })?.byHand?.floorAtSet).toBeNull()
+    // Ready to ship and Preparing by hand are read as any other stage.
+    expect(headlineStageOf({ row: stored({ stage: 'READY', stageSet: 'READY' }), live: floor, partlyShipped: false, notes: true, setBy: null, floorAtSet: 'PREPARING' })).toMatchObject({ code: 'READY', next: null, byHand: { stage: 'READY', floorAtSet: 'PREPARING' } })
+    expect(headlineStageOf({ row: stored({ stage: 'PREPARING', stageSet: 'PREPARING' }), live: { stage: 'CUTTING', ahead: 0, next: 'SEWING', sewingNotCounted: false }, partlyShipped: false, notes: true, setBy: null, floorAtSet: 'CUTTING' })).toMatchObject({ code: 'PREPARING', byHand: { stage: 'PREPARING', floor: { code: 'CUTTING' }, floorAtSet: 'CUTTING' } })
+  })
+
   it('without workorders.view (the notes gate): why, the floor and when stay; the note and who are null', () => {
-    expect(headlineStageOf({ row: stored(), live: floor, partlyShipped: false, notes: false, setBy: planner })?.byHand).toEqual({ stage: 'SEWING', reasonCode: 'OUTAGE', floor: { code: 'PREPARING', words: { it: 'In preparazione', en: 'Preparing' } }, at: '2026-11-18T09:30:00.000Z', note: null, by: null, notice: null })
+    expect(headlineStageOf({ row: stored(), live: floor, partlyShipped: false, notes: false, setBy: planner })?.byHand).toEqual({ stage: 'SEWING', reasonCode: 'OUTAGE', floor: { code: 'PREPARING', words: { it: 'In preparazione', en: 'Preparing' } }, floorAtSet: null, at: '2026-11-18T09:30:00.000Z', note: null, by: null, notice: null })
   })
 
   // B-MS-008 (ms-fx1; Z01 note 2): what Clear… says comes from the keeper's markers (keeper readHandNotice), never the set's time.

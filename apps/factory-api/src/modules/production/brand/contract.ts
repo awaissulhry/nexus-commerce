@@ -175,14 +175,15 @@ export const customerUrgencyContract = defineContract({
 // ── B-MS-005 ──
 /**
  * B-MS-005 (set the stage by hand, plan.md D1–D9; review fixes R1, R4, R9, R11, R12, R19): the office sets an order's stage by hand
- * while the floor cannot record the work — Cutting, Sewing or Quality check, only ahead of the live floor, with a reason and an
- * office-only note — changes it (the same PUT while one stands; it may go lower while it stays above the floor), or clears it.
+ * with a reason and an office-only note — B-SC-004 (stage control B, the Owner's pick 2026-11-21): ANY of the five stages, forward
+ * or back, also below the live floor and Ready to ship — changes it (the same PUT while one stands, forward or back), or clears it.
  * production.brand.manage over the order's company and customer. Every write takes an Idempotency-Key and the production state's
  * version as read: a required key, null only while the order has no production state yet (R1: the set makes it). Refusals in words:
- * `body/<field>` (400: Preparing or Ready asked, a reason not in the list, Something else without a note, a note of two lines or
- * too long), the order's state (409: not In production or Partly shipped, nothing left to make, the customer's own pause, the floor
- * already there; a Clear with none standing), a stale version (409, path `version`). The customer never reads any of it: its portal
- * reads the plain stage only (no route here is a portal route).
+ * `body/<field>` (400: a reason not in the list, Something else without a note, a note of two lines or too long), the order's state
+ * (409: not In production or Partly shipped — Ready to ship: quality released every piece —, nothing left to make, the customer's
+ * own pause, the stage the customer reads already, the floor's own stage while a hand stage stands; a Clear with none standing),
+ * a stale version (409, path `version`). The customer never reads any of it: its portal reads the plain stage only (no route here
+ * is a portal route), and a move back of a stage it was told as one correction notice.
  */
 export const stageByHandView = output({
   orderId: id(),
@@ -199,7 +200,7 @@ export const stageByHandView = output({
 export const setStageContract = defineContract({
   params: orderParams,
   body: input({
-    /** Any stage: only Cutting, Sewing and Quality check are taken (Preparing and Ready are refused in words). */
+    /** B-SC-004: any of the five stages, forward or back (the one the customer reads already is refused in words). */
     stage: z.enum(BRAND_STAGES),
     /** Why the floor could not record it (office only). */
     reasonCode: z.enum(STAGE_SET_REASON_CODES),

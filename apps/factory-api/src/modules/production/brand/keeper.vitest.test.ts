@@ -292,6 +292,14 @@ describe('B-MS-008: which stages a move leaves untold — a by-hand tell still i
       { stage: 'QUALITY', at: later(2) },
     ])
   })
+
+  // B-SC-004 (stage control B): a correction's tell waits the window too, and says so (its notice has the correction's key).
+  it('B-SC-004: a correction still in its window, no longer read, is left untold with its flag; the floor never moved it', () => {
+    const correction: StageMarker = { action: STAGE_TOLD, stage: 'CUTTING', byHand: true, at: later(1), requestId: 'req-back', correction: true }
+    expect(waitingTellsOff([correction, untold('SEWING', later(1)), told('SEWING')], 'PREPARING', later(3))).toEqual([{ stage: 'CUTTING', at: later(1), correction: true }])
+    expect(waitingTellsOff([correction], 'CUTTING', later(3))).toEqual([])
+    expect(waitingTellsOff([correction], 'PREPARING', later(11))).toEqual([])
+  })
 })
 // ── end B-MS-008 ──
 

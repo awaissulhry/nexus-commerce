@@ -263,3 +263,19 @@ describe('B-MS-008: a stage set by hand says so with one flag, and its notice wa
   })
 })
 // ── end B-MS-008 ──
+
+// ── B-SC-004 (stage control B: a move back by hand of a stage the customer was told) ──
+describe('B-SC-004: a correction says so with one more flag, by hand, and waits the same window', () => {
+  const CORRECTION = { orderId: A1, partyId: P1, stage: 'CUTTING', previous: 'SEWING', byHand: true, correction: true }
+  const AT = '2026-11-21T10:00:00.000Z'
+
+  it('the strict payload takes correction as an optional boolean, nothing else; it is no live field', () => {
+    expect(() => EVENT_CATALOGUE.parse('brand_production.stage_reached', 1, CORRECTION)).not.toThrow()
+    expect(() => EVENT_CATALOGUE.parse('brand_production.stage_reached', 1, { ...CORRECTION, stage: 'PREPARING', previous: 'CUTTING' })).not.toThrow()
+    for (const value of ['true', 1, null, 'Brand Alpha Spa']) expect(() => EVENT_CATALOGUE.parse('brand_production.stage_reached', 1, { ...CORRECTION, correction: value }), String(value)).toThrow()
+    expect(messageOf('brand_production.stage_reached', CORRECTION).fields).toEqual({ orderId: A1, partyId: P1, stage: 'CUTTING' })
+    // By hand: its notice waits the undo window, as every person's move.
+    expect(stageNoticeWaitMs({ type: 'brand_production.stage_reached', payload: CORRECTION, occurredAt: AT }, new Date(AT))).toBe(600_000)
+  })
+})
+// ── end B-SC-004 ──

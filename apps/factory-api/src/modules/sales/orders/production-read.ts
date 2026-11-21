@@ -38,6 +38,7 @@ import { readProductionSettings } from '../../production/brand-portal/access' //
 import type { OrderFilter } from '../../production/issues/list'
 import { brandProductionKey, supervisorOfOrder } from '../../production/supervisor/resolver'
 import { readHandNotice, type HandNotice } from '../../production/brand/keeper' // B-MS-008 (ms-fx1): Clear…'s words read the markers
+import { readHandFloor } from '../../production/brand/keeper' // B-SC-004: byHand.floorAtSet
 import { reachesWorkOrder } from '../../production/work-orders/scope'
 import { ncrsOfOrderWhere } from '../../quality/ncr/reads'
 import { ncrListWhere } from '../../quality/wall'
@@ -403,8 +404,10 @@ export interface HeadlinePerson {
  * B-MS-008 (ms-fx1; Z01 note 2): `byHand.notice` — the customer's notice of that stage as the keeper's markers say it (keeper
  * readHandNotice): told, or when it goes (`waitsUntil`), or neither (never told); null when not read. Clear… says it, never the set's
  * time (a Change to the same stage writes a new one and tells nothing).
+ * B-SC-004 (stage control B): `byHand.floorAtSet` — the floor's stage when it was set or changed (keeper readHandFloor; null: not
+ * known), office only like the rest: the web says when a stage set back clears by itself ("… or pass {floorAtSet}").
  */
-export function headlineStageOf(input: { readonly row: HeadlineStageRow | null; readonly live: OrderStage | null; readonly partlyShipped: boolean; readonly notes: boolean; readonly setBy: HeadlinePerson | null; readonly notice?: HandNotice | null }) {
+export function headlineStageOf(input: { readonly row: HeadlineStageRow | null; readonly live: OrderStage | null; readonly partlyShipped: boolean; readonly notes: boolean; readonly setBy: HeadlinePerson | null; readonly notice?: HandNotice | null; readonly floorAtSet?: BrandStage | null }) {
   const { row, live, notes } = input
   const code: BrandStage | null = row ? (row.stage as BrandStage) : (live?.stage ?? null)
   if (code === null) return null
@@ -426,6 +429,7 @@ export function headlineStageOf(input: { readonly row: HeadlineStageRow | null; 
           stage: hand.stage,
           reasonCode: hand.reasonCode,
           floor: live ? { code: live.stage, words: STAGE_WORDS[live.stage] } : null,
+          floorAtSet: input.floorAtSet ?? null, // B-SC-004
           at: toUtcIso(hand.at),
           note: notes ? hand.note : null,
           by: notes ? input.setBy : null,
@@ -525,7 +529,9 @@ async function headlinePart(db: Db, context: OfficeContext, order: OrderRow, loa
   const handBy = row && notes && row.stageSet !== null && row.stageSetById ? ((await peopleById(db, [row.stageSetById])).get(row.stageSetById) ?? null) : null
   // B-MS-008 (ms-fx1): the customer's notice of the stage set by hand, from the keeper's markers (only while one stands).
   const notice = row && row.stageSet !== null ? await readHandNotice(db, row.id, order.id, row.stageSet as BrandStage, now) : null
-  const stage = headlineStageOf({ row, live, partlyShipped: order.status === 'PARTLY_SHIPPED', notes, setBy: handBy, notice })
+  // B-SC-004: the floor's stage when it was set or changed (the set's own audit row; only while one stands).
+  const floorAtSet = row && row.stageSet !== null ? await readHandFloor(db, row.id) : null
+  const stage = headlineStageOf({ row, live, partlyShipped: order.status === 'PARTLY_SHIPPED', notes, setBy: handBy, notice, floorAtSet })
 
   // What is in work: the order's ACTIVE bundles of work orders past their draft, and its pieces between the steps.
   const cells = await load.cells()
