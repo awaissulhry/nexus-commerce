@@ -22,6 +22,11 @@ describe('F-PT-202: the steps', () => {
     expect(rows.find((row) => row.kind === 'START')?.who).toEqual({ kind: 'production' })
     expect(rows.find((row) => row.kind === 'SHIP')?.who).toEqual({ kind: 'shipping' })
     expect(rows.find((row) => row.kind === 'GATE')?.who).toEqual({ kind: 'planner', name: 'Dora Campione' })
+    // The deposit's paidAt is an instant: the step's done is its Rome day (the view formats a day; an instant there threw).
+    const deposit = rows.find((row) => row.kind === 'DEPOSIT')
+    if (deposit?.done) expect(deposit.done).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    const paid = stepsOf({ ...so, depositRequired: true, chain: { ...so.chain, depositRequests: [{ ...so.chain.depositRequests[0]!, status: 'PAID', paidAt: '2026-11-02T23:30:00Z' }] } }, datesWith([]), TODAY)[0]!
+    expect(paid).toMatchObject({ kind: 'DEPOSIT', done: '2026-11-03', status: { kind: 'done' } })
   })
 
   it('one status word set: late (open past its day) · waiting soon (≤ 3 days, warning) · waiting · started before · to come · done', () => {

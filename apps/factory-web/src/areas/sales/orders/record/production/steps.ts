@@ -1,5 +1,5 @@
 import type { Order } from '../../api'
-import { depositGate } from '../../model'
+import { depositGate, romeToday } from '../../model'
 import type { DateMilestone, Dates, Gate, GateAction } from '../overview/api'
 import { daysBetween } from './now'
 
@@ -77,7 +77,8 @@ export function stepsOf(order: Pick<Order, 'depositRequired' | 'chain'>, dates: 
             gateKind: null,
             label: null,
             planned: gate.request?.dueDate ?? null,
-            done: gate.state === 'PAID' ? (gate.request?.paidAt ?? null) : null,
+            // The quick check of b1ccbe2859: paidAt is an instant — the row's `done` is a day (its Rome day), as every other step's.
+            done: gate.state === 'PAID' && gate.request?.paidAt ? romeToday(new Date(gate.request.paidAt)) : null,
             status: gate.state === 'PAID' || gate.state === 'WAIVED' ? { kind: 'done' } : gate.request && gate.request.dueDate < today ? { kind: 'late', days: daysBetween(gate.request.dueDate, today) } : { kind: 'waiting' },
             who: { kind: 'customerDeposit' },
             gate: null,

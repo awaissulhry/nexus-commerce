@@ -2911,7 +2911,7 @@
       "earlier_one": "Show {count} earlier move",
       "earlier_other": "Show {count} earlier moves",
       "tell": "Tell the customer…",
-      "pointer": "Promise moves are on Production › Dates & plan ›"
+      "pointer": "Promise moves are on the Production tab, under Dates & plan ›"
     },
     "promise": {
       "hint": "The customer gets a notice in the portal (and an e-mail if they chose it). The floor is not told."

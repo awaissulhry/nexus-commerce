@@ -2911,7 +2911,7 @@
       "earlier_one": "Mostra {count} spostamento precedente",
       "earlier_other": "Mostra {count} spostamenti precedenti",
       "tell": "Avvisa il cliente…",
-      "pointer": "Gli spostamenti della promessa sono in Produzione › Date e piano ›"
+      "pointer": "Gli spostamenti della promessa sono nella scheda Produzione, in Date e piano ›"
     },
     "promise": {
       "hint": "Il cliente riceve un avviso nel portale (e un'e-mail se l'ha scelto). Il reparto non viene avvisato."

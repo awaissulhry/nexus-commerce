@@ -192,7 +192,14 @@ export const NO_WORK_READ: OrderProduction = { ...PRODUCTION_READ, work: null, p
 /** F-SA-235: a quality hold on WO-00022 with the office's note, one open problem, one NCR, a final inspection waiting. */
 export const QUALITY_READ: OrderProduction = {
   ...WORK_READ,
-  headline: { ...HEADLINE, held: true, holds: [{ kind: 'QUALITY', words: w('Shade difference on the leather', 'Differenza di tonalità della pelle'), since: '2026-11-14' }], holdNotes: [{ workOrderId: WORK_ORDERS[1]!.id, number: 'WO-00022', kind: 'QUALITY', note: 'Lotto pelle in verifica col fornitore.', since: '2026-11-14T08:30:00Z' }] },
+  headline: {
+    ...HEADLINE,
+    held: true,
+    holds: [{ kind: 'QUALITY', words: w('Shade difference on the leather', 'Differenza di tonalità della pelle'), since: '2026-11-14' }],
+    holdNotes: [{ workOrderId: WORK_ORDERS[1]!.id, number: 'WO-00022', kind: 'QUALITY', note: 'Lotto pelle in verifica col fornitore.', since: '2026-11-14T08:30:00Z' }],
+    // F-PT-301: the server's ONE waiting list names the hold too (a QUALITY_HOLD blocker on WO-00022) — the strip Production and Overview draw.
+    waiting: { ...HEADLINE.waiting, blockers: [...HEADLINE.waiting.blockers, { kind: 'QUALITY_HOLD', on: 'US', words: w('Shade difference on the leather', 'Differenza di tonalità della pelle'), since: '2026-11-14T08:30:00Z', ref: { type: 'WorkOrder', id: WORK_ORDERS[1]!.id }, sub: null }] },
+  },
   quality: {
     issues: [{ id: '0190f0e2-7171-7000-8000-000000000301', source: 'FLOOR', recordType: 'WorkOrder', since: '2026-11-16T10:00:00Z', dueOn: '2026-11-19', escalation: 1 }],
     // F-PT-302 (B-PT-009): + the NCR's title.

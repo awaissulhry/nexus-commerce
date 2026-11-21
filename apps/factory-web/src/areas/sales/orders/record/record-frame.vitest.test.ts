@@ -82,7 +82,8 @@ describe('the order on RecordFrame', () => {
     expect(html).toContain('id="dates"')
     const tab = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
     // F-PT-101: Production now first, then Work orders (each its own section file), then the dates (#dates).
-    expect(tab).toMatch(/<NowSection order=\{order\} model=\{model\} actions=\{actions\} \/>\s*<WorkOrdersSection order=\{order\} model=\{model\} actions=\{actions\} \/>\s*<section id="dates"/)
+    // F-PT-201: the dates are Dates & plan's own section file (#dates).
+    expect(tab).toMatch(/<NowSection order=\{order\} model=\{model\} actions=\{actions\} \/>\s*<WorkOrdersSection order=\{order\} model=\{model\} actions=\{actions\} \/>\s*<DatesSection order=\{order\} model=\{model\} actions=\{actions\} \/>/)
     expect(html.indexOf('id="now"')).toBeLessThan(html.indexOf('id="work-orders"'))
     expect(html.indexOf('id="work-orders"')).toBeLessThan(html.indexOf('id="dates"'))
     // F-SA-235: the tech pack in force is Production's "Specs in force" (inside the tab, no longer at its foot).
@@ -217,7 +218,8 @@ describe('B-TH-256 — what points at the order', () => {
   })
 
   it('planning’s re-promise in the one notice: the sizes from → to, who proposed it, Accept / Decline and the "Tell the customer" tick', () => {
-    const html = draw('th-256-repromise')
+    // F-PT-201 (W2): on a tab other than Production it is the page's one notice …
+    const html = draw('th-256-repromise-overview')
     const text = textOf(html)
     expect(text).toContain('Planning proposes new dates for line 20 · AX-100')
     expect(text).toContain('Proposed by Paola Esempio')
@@ -228,6 +230,14 @@ describe('B-TH-256 — what points at the order', () => {
     const notices = html.slice(html.indexOf('fw-rcf-notices-list'), html.indexOf('class="fw-so-main"'))
     expect(notices).toContain('Planning proposes new dates')
     expect(html.slice(html.indexOf('class="fw-rcf-dock"'))).not.toContain('Planning proposes new dates')
+    // … and on Production it is Dates & plan's own (the page notice steps back: never twice), with the same doors.
+    const production = draw('th-256-repromise')
+    const at = production.indexOf('Planning proposes new dates')
+    expect(at).toBeGreaterThan(production.indexOf('id="dates"'))
+    expect(production.indexOf('id="dates"')).toBeGreaterThan(-1)
+    const notices = production.indexOf('fw-rcf-notices-list')
+    if (notices > -1) expect(production.slice(notices, production.indexOf('class="fw-so-main"'))).not.toContain('Planning proposes new dates')
+    for (const words of ['Accept', 'Decline…', 'Tell the customer']) expect(textOf(production.slice(at)), words).toContain(words)
   })
 
   it('who may not decide (the production manager; the proposer) reads it with Accept and Decline held, and why', () => {
