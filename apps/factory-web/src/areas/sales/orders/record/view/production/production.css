@@ -218,7 +218,10 @@
 .fw-pt-miss-what { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
 .fw-pt-miss-do { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); }
 @container sec (min-width: 640px) {
-  .fw-pt-miss-row { grid-template-columns: minmax(0, 1fr) minmax(9rem, auto) minmax(0, auto); }
+  /* fx9 N1: ONE set of columns for every row (the list's grid, the rows its subgrid): the doors column keeps its width on a row with no
+     door, so each row's "Waits on …" pill lines up with the others. */
+  .fw-pt-miss { display: grid; grid-template-columns: minmax(0, 1fr) minmax(9rem, auto) minmax(0, auto); }
+  .fw-pt-miss-row { grid-column: 1 / -1; grid-template-columns: subgrid; }
   .fw-pt-miss-do { justify-content: flex-end; }
 }
 
