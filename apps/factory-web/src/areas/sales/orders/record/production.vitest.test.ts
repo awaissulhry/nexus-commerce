@@ -610,7 +610,9 @@ describe('F-OP-116: decide in place — a change waiting under its row, Still to
     // F-PT-105 (B5): the waiting changes moved into ONE strip above the rows — one Decide… each (the same ONE decide window).
     const section = readFileSync(new URL('./view/production/WorkOrdersSection.tsx', import.meta.url), 'utf8')
     expect(section).not.toContain('<WorkOrderActsDialogs')
-    expect(section).toContain("t('productionTab.wo.decisionLine', { title: say(row.title, locale), cells: row.cells, date: formatDate(row.at, { locale }) })")
+    // fx5 #13: each change is said as a sentence (decisionSentenceOf), never the raw cells.
+    expect(section).toContain('decisionsOf(model.orderChanges?.list?.value, order.lines)')
+    expect(section).toContain("t('productionTab.wo.decision.proposed', { date: formatDate(row.at, { locale }) })")
     expect(section).toContain('onClick={() => actions?.orderChanges?.onOpen?.(row.id)}')
   })
 

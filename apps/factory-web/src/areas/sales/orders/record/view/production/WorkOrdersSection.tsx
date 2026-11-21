@@ -130,6 +130,8 @@ function ChainOnly({ order, href }: { order: Order; href: (row: { id: string; nu
 /** The rows, the waiting decisions above them, the row's window and the Priority and rush dialog (one at a time). */
 function Rows({ order, model, actions, href }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; href: (row: { id: string; number: string }) => string }) {
   const t = useT('orders')
+  /** fx5 #6: "160 of 160" — this order's pieces of the work order's (its whole not read: the pieces alone). */
+  const ownWords = (own: number, total: number | null): string => (total === null ? String(own) : t('productionTab.wo.ownOf', { own, total: Math.max(total, own) }))
   const r = useT(WORK_ORDERS_NS)
   const w = useProductionWords()
   const scoped = useScopedT('orders') // a refusal may name another catalogue (production:error.changed)
@@ -178,7 +180,7 @@ function Rows({ order, model, actions, href }: { order: Order; model: OrderRecor
   }
   return (
     <>
-      <Decisions model={model} actions={actions} recordHref={`${model.prefix}/sales/orders/${order.id}`} search={search} />
+      <Decisions order={order} model={model} actions={actions} recordHref={`${model.prefix}/sales/orders/${order.id}`} search={search} />
       <div className="fw-pt-wo" role="list" aria-label={t('productionTab.wo.title')}>
         <div className="fw-pt-wo-hd" aria-hidden>
           <div>{t('production.col.number')}</div>
@@ -213,13 +215,16 @@ function Rows({ order, model, actions, href }: { order: Order; model: OrderRecor
             <div key={row.id} role="listitem" className="fw-pt-wo-row" id={rowAnchor('WorkOrder', row.id)} tabIndex={0} aria-label={t('productionTab.wo.openDetail', { number: row.number })} onClick={openFrom(row.id)} onKeyDown={openByKey(row.id)}>
               <div className="fw-pt-c-no">
                 <span className="fw-pt-inline">
-                  <button type="button" className="fw-pt-link fw-pt-wo-num" onClick={() => setOpen(row.id)}>
-                    {row.number}
-                  </button>
+                  {/* fx5 #10: ONE row shape — the number and its Ask door never part (the pill and tags wrap after them). */}
+                  <span className="fw-pt-wo-id">
+                    <button type="button" className="fw-pt-link fw-pt-wo-num" onClick={() => setOpen(row.id)}>
+                      {row.number}
+                    </button>
+                    {mayAsk && !row.sharedWithOtherCustomers ? <ToolbarButton icon={<MessageSquarePlus size={14} aria-hidden />} label={t('productionTab.wo.ask', { number: row.number })} onClick={() => ask(row)} /> : null}
+                  </span>
                   <Pill tone={WO_TONE[row.status] ?? 'neutral'}>{t(statusKeyOf(row.status))}</Pill>
                   {row.held && row.status !== 'ON_HOLD' ? <Tag tone="warning">{t('productionTab.wo.onHold')}</Tag> : null}
                   {row.rush ? <Tag tone="neutral">{t('productionTab.wo.rush')}</Tag> : null}
-                  {mayAsk && !row.sharedWithOtherCustomers ? <ToolbarButton icon={<MessageSquarePlus size={14} aria-hidden />} label={t('productionTab.wo.ask', { number: row.number })} onClick={() => ask(row)} /> : null}
                 </span>
                 <span className="fw-pt-sub fw-pt-sub-mk">{[row.style?.code ?? null, colours || null].filter(Boolean).join(' · ')}</span>
                 {where ? <span className="fw-pt-sub fw-pt-sub-mk">{where}</span> : null}
@@ -238,8 +243,10 @@ function Rows({ order, model, actions, href }: { order: Order; model: OrderRecor
                 {where ? <span className="fw-pt-sub">{where}</span> : null}
               </div>
               <div className="fw-pt-c-own">
-                {madeFor.map((entry, index) => (
-                  <span key={entry.key} className={index === 0 ? undefined : 'fw-pt-sub'}>
+                {/* fx5 #6: the column says "For this order"; the cell its own pieces of the work order's ("160 of 160"), one line. */}
+                <span className="fw-pt-own-n">{ownWords(row.own.pieces, totals.get(row.id) ?? null)}</span>
+                {madeFor.slice(1).map((entry) => (
+                  <span key={entry.key} className="fw-pt-sub">
                     {t(entry.key, entry.params)}
                   </span>
                 ))}
@@ -316,7 +323,7 @@ function Rows({ order, model, actions, href }: { order: Order; model: OrderRecor
                 <span>{name}</span>
               </div>
               <div className="fw-pt-c-own">
-                <span>{t('production.own.all', { own: group.own.pieces })}</span>
+                <span className="fw-pt-own-n">{ownWords(group.own.pieces, group.own.pieces)}</span>
               </div>
               <div className="fw-pt-c-pr">
                 <span className="fw-pt-bar">
@@ -378,17 +385,18 @@ function Rows({ order, model, actions, href }: { order: Order; model: OrderRecor
  * oldest first, ONE Decide… each (the ONE decide window, Approvals' own); who may not decide reads who does and when they were told
  * (the day and the time — B2). At most three, then "+N more on Changes ›".
  */
-function Decisions({ model, actions, recordHref, search }: { model: OrderRecordModel; actions?: OrderRecordActions; recordHref: string; search: string }) {
+function Decisions({ order, model, actions, recordHref, search }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; recordHref: string; search: string }) {
   const t = useT('orders')
   const locale = useLocale()
-  const { shown, more } = decisionsOf(model.orderChanges?.list?.value)
+  const { shown, more } = decisionsOf(model.orderChanges?.list?.value, order.lines)
   if (shown.length === 0) return null
   return (
     <div className="fw-pt-dec">
       <h3>{t('productionTab.wo.decisions')}</h3>
       {shown.map((row) => (
         <div key={row.id} className="fw-pt-dec-row">
-          <span>{t('productionTab.wo.decisionLine', { title: say(row.title, locale), cells: row.cells, date: formatDate(row.at, { locale }) })}</span>
+          {/* fx5 #13: a sentence — what it makes, of what, who changed which line, when it was proposed. */}
+          <span>{[[t(row.sentence.verb.key, row.sentence.verb.params), row.sentence.why ? t(row.sentence.why.key, row.sentence.why.params) : null].filter(Boolean).join(' — '), t('productionTab.wo.decision.proposed', { date: formatDate(row.at, { locale }) })].join(' · ')}</span>
           {row.mayDecide ? (
             <Button size="sm" heldReason={model.busy ? t('held.busy') : null} onClick={() => actions?.orderChanges?.onOpen?.(row.id)}>
               {t('productionTab.wo.decide')}

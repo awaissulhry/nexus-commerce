@@ -2681,7 +2681,6 @@
       "ask": "Chiedi di {number}",
       "decisions": "In attesa di una decisione",
       "decide": "Decidi…",
-      "decisionLine": "{title} · {cells} · proposta il {date}",
       "decisionsMore_one": "+{count} altra in Modifiche ›",
       "decisionsMore_other": "+{count} altre in Modifiche ›",
       "waitsPlanner": "Attende un pianificatore · avvisato il {time}",
@@ -2695,7 +2694,23 @@
         "making": "Cosa fa",
         "dates": "Date"
       },
-      "infoBody": "Ogni ordine di lavoro di questo ordine, con i soli capi di questo ordine. Una riga apre le sue taglie; Invio la apre da tastiera, ‹ › passano tra gli ordini di lavoro. Urgente (fabbrica) è la nostra urgenza; l'urgenza del cliente è in Produzione ora."
+      "infoBody": "Ogni ordine di lavoro di questo ordine, con i soli capi di questo ordine. Una riga apre le sue taglie; Invio la apre da tastiera, ‹ › passano tra gli ordini di lavoro. Urgente (fabbrica) è la nostra urgenza; l'urgenza del cliente è in Produzione ora.",
+      "ownOf": "{own} di {total}",
+      "decision": {
+        "more_one": "Produrre {count} in più: {what}",
+        "more_other": "Produrre {count} in più: {what}",
+        "moreLines_one": "Produrre {count} in più su {lines} righe",
+        "moreLines_other": "Produrre {count} in più su {lines} righe",
+        "fewer_one": "Produrre {count} in meno su {number}: {what}",
+        "fewer_other": "Produrre {count} in meno su {number}: {what}",
+        "fewerLines_one": "Produrre {count} in meno su {number}",
+        "fewerLines_other": "Produrre {count} in meno su {number}",
+        "byCustomer": "il cliente ha cambiato la riga {seq}",
+        "byCustomerLines": "il cliente ha cambiato {count} righe",
+        "byOrder": "l'ordine ha cambiato la riga {seq}",
+        "byOrderLines": "l'ordine ha cambiato {count} righe",
+        "proposed": "proposta il {date}"
+      }
     },
     "step": {
       "cut": "Tagliati",
@@ -2703,7 +2718,6 @@
       "checked": "Controllati"
     },
     "detail": {
-      "title": "{number} — per {order}",
       "sizes": "I capi di questo ordine",
       "step": {
         "ordered": "Ordinati",
@@ -2722,7 +2736,8 @@
       "unitsMore_other": "e altre {count}",
       "noRider": "Il pilota non è mai mostrato qui.",
       "open": "Apri l’ordine di lavoro",
-      "noun": "ordine di lavoro"
+      "noun": "ordine di lavoro",
+      "forOrder": "— per {order}"
     },
     "priority": {
       "title": "Priorità e urgenza · {number}",

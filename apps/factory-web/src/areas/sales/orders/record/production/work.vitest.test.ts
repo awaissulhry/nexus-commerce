@@ -4,7 +4,7 @@ import { LOCALES } from '../../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
 import { actsCanOf, rowActsOf } from '../../../../../lib/production/work-order-acts/model'
 import { WORK, workActsRead } from '../overview/fixtures'
-import { afterDueOf, decisionsOf, priorityShownOf, shownActsOf, statusKeyOf, unitStateKeyOf, unitsOf, workDatesOf, workProgressOf, workSummaryOf, WO_TONE } from './work'
+import { afterDueOf, decisionSentenceOf, decisionsOf, priorityShownOf, shownActsOf, statusKeyOf, unitStateKeyOf, unitsOf, workDatesOf, workProgressOf, workSummaryOf, WO_TONE } from './work'
 
 // F-PT-104 (order PRODUCTION tab, W1): the Work orders rows — the head's answer, On hold in words (B1), Rush ≠ Urgent (B3), Checked
 // (B4), one Decide… per waiting change incl. MAKE_MORE (B5), a draft unit "not released yet" (B6), hidden acts without the right (L9).
@@ -91,7 +91,7 @@ describe('F-PT-105: the waiting decisions and the made-to-measure units', () => 
     const view = decisionsOf(list)
     expect(view.shown.map((row) => row.id)).toEqual(['c1', 'c2', 'c4'])
     expect(view.more).toBe(1)
-    expect(view.shown[0]).toEqual({ id: 'c1', title: w('Make 6 more', 'Crea altri 6'), cells: 'Red 6', at: '2026-11-20T09:00:00Z', mayDecide: true })
+    expect(view.shown[0]).toMatchObject({ id: 'c1', at: '2026-11-20T09:00:00Z', mayDecide: true })
     expect(decisionsOf(null)).toEqual({ shown: [], more: 0 })
   })
 
@@ -115,5 +115,31 @@ describe('F-PT-105: the waiting decisions and the made-to-measure units', () => 
     const section = readFileSync(new URL('../view/production/WorkOrdersSection.tsx', import.meta.url), 'utf8')
     expect(section).toContain("id={rowAnchor('WorkOrder', row.id)}")
     expect(section).toContain("t('productionTab.wo.toldAt', { time: formatDateTime(floorAt, { locale }) })")
+  })
+})
+
+// ---- fx5 #13 (30-walk.md): the waiting change as a sentence, never "54 1 → 0" -----------------------------------------------------------
+describe('fx5: the decision strip says what the change does', () => {
+  const lines = [{ seq: 1, style: { code: 'SEED-JKT-02' }, colourway: { code: 'BLK', name: 'Black' } }, { seq: 2, style: { code: 'SEED-JKT-02' }, colourway: { code: 'RED', name: 'Red' } }]
+  const cell = (lineSeq: number | null, from: number, to: number) => ({ salesOrderLineId: 'l', lineSeq, size: '50', from, to, workOrderSizeId: null })
+
+  it('make more of one line, raised by the customer: "Make 6 more SEED-JKT-02 · Red — the customer changed line 2"', () => {
+    const sentence = decisionSentenceOf({ kind: 'MAKE_MORE', cells: [cell(2, 0, 4), cell(2, 0, 2)], workOrder: null, requestId: 'r1' } as never, lines)
+    expect(sentence).toEqual({ verb: { key: 'productionTab.wo.decision.more', params: { count: 6, what: 'SEED-JKT-02 · Red', lines: 1 } }, why: { key: 'productionTab.wo.decision.byCustomer', params: { seq: 2 } } })
+  })
+
+  it('fewer on a work order, by the order’s own change; several lines say how many', () => {
+    expect(decisionSentenceOf({ kind: 'LOWER_TO_ORDER', cells: [cell(1, 1, 0)], workOrder: { id: 'w', number: 'SEED-WO-0001', status: 'RELEASED' }, requestId: null } as never, lines)).toEqual({ verb: { key: 'productionTab.wo.decision.fewer', params: { count: 1, what: 'SEED-JKT-02 · Black', lines: 1, number: 'SEED-WO-0001' } }, why: { key: 'productionTab.wo.decision.byOrder', params: { seq: 1 } } })
+    expect(decisionSentenceOf({ kind: 'LOWER_TO_ORDER', cells: [cell(1, 2, 1), cell(2, 3, 1)], workOrder: { id: 'w', number: 'SEED-WO-0001', status: 'RELEASED' }, requestId: null } as never, lines).why).toEqual({ key: 'productionTab.wo.decision.byOrderLines', params: { count: 2 } })
+  })
+
+  it('its words exist in both languages and never show the raw cells', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      expect(t('productionTab.wo.decision.more', { count: 6, what: 'SEED-JKT-02 · Red' }), locale).toMatch(/6.*SEED-JKT-02 · Red/)
+      for (const key of ['fewer', 'moreLines', 'fewerLines', 'byCustomer', 'byCustomerLines', 'byOrder', 'byOrderLines', 'proposed']) expect(t(`productionTab.wo.decision.${key}`, { count: 2, what: 'x', lines: 2, number: 'N', seq: 1, date: 'd' }), `${locale} ${key}`).not.toMatch(/productionTab\.|\{/)
+    }
+    const view = readFileSync(new URL('../view/production/WorkOrdersSection.tsx', import.meta.url), 'utf8')
+    expect(view).not.toContain('row.cells')
   })
 })
