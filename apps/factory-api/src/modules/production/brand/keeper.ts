@@ -577,16 +577,34 @@ export async function untellWaiting(
   const since = new Date(tools.now.getTime() - HAND_STAGE_NOTICE_DELAY_MS)
   const rows = await tools.tx.auditLog.findMany({ where: { recordType: 'BrandOrderProduction', recordId: rowId, action: { in: STAGE_MARKERS }, at: { gte: since } }, select: MARKER_SELECT, orderBy: { id: 'desc' }, take: 50 })
   const untold: BrandStage[] = []
-  for (const { stage, at, correction } of waitingTellsOff(rows.flatMap((row) => markerOf(row) ?? []), shown, tools.now)) {
+  const markers = rows.flatMap((row) => markerOf(row) ?? [])
+  for (const { stage } of waitingTellsOff(markers, shown, tools.now)) {
     if (skip.includes(stage)) continue
-    const key = noticeKeyOf({ stage, correction }) // B-SC-004
-    const made = key ? await tools.tx.notification.findFirst({ where: { eventType: brandStageReached.type, recordId: order.id, messageKey: key, createdAt: { gte: at } }, select: { id: true } }) : null
-    if (made) continue
+    // pt-sc-fx2: the notice of THIS tell (the newest marker of the stage: markers are newest first), never one of an earlier tell.
+    const tell = markers.find((marker) => marker.stage === stage)!
+    if (await tellNoticeMade(tools.tx, order.id, tell)) continue
     tools.audit({ action: STAGE_UNTOLD, recordType: 'BrandOrderProduction', recordId: rowId, companyId: order.companyId, after: { salesOrderId: order.id, stage } })
     untold.push(stage)
   }
   return untold
 }
+
+// ── pt-sc-fx2 (end check 44940732743: a notice of an EARLIER tell of the same stage read as this tell's) ──
+/**
+ * Was the partner notice of ONE tell made (a job run early, or its window over)? The notice of that very tell's event: the
+ * `brand_production.stage_reached` its own command wrote (the outbox's correlation id is the marker's request; the (tenant, subject)
+ * index) — never another notice of the same stage. A time ("made at or after the tell") cannot say it: two acts may share one clock
+ * instant (a test clock that runs only when moved, or one millisecond), and a stage told, cleared and told again would read the
+ * first tell's notice as the second's. A marker whose event is not found (none written with it) falls back to that time, as before.
+ */
+async function tellNoticeMade(db: Reader, orderId: string, tell: Pick<StageMarker, 'stage' | 'at' | 'requestId' | 'correction'>): Promise<boolean> {
+  const key = noticeKeyOf(tell)
+  if (!key) return false
+  const events = await db.outboxEvent.findMany({ where: { type: brandStageReached.type, subject: orderId, correlationId: tell.requestId }, select: { id: true } })
+  const which = events.length > 0 ? { eventId: { in: events.map((event) => event.id) } } : { createdAt: { gte: tell.at } }
+  return (await db.notification.findFirst({ where: { eventType: brandStageReached.type, recordId: orderId, messageKey: key, ...which }, select: { id: true } })) !== null
+}
+// ── end pt-sc-fx2 ──
 
 /**
  * The partner notice's side (platform/portal/notifications/rules/production): a stage told by hand is made only while ITS tell — the
@@ -633,8 +651,7 @@ export async function readHandNotice(db: Reader, rowId: string, orderId: string,
   const newest = await newestMarkerOf(db, rowId, stage)
   const key = newest ? noticeKeyOf(newest) : undefined // B-SC-004: a correction's tell has the correction's key
   if (!newest || newest.action !== STAGE_TOLD || !newest.byHand || !key || now.getTime() - newest.at.getTime() >= HAND_STAGE_NOTICE_DELAY_MS) return handNoticeOf(newest, false, now)
-  const made = (await db.notification.findFirst({ where: { eventType: brandStageReached.type, recordId: orderId, messageKey: key, createdAt: { gte: newest.at } }, select: { id: true } })) !== null
-  return handNoticeOf(newest, made, now)
+  return handNoticeOf(newest, await tellNoticeMade(db, orderId, newest), now) // pt-sc-fx2: this tell's own notice
 }
 // ── end B-MS-008 (ms-fx1) ──
 

@@ -489,7 +489,8 @@ describe('B-PR-31: the customer is told of its own production', { timeout: SLOW_
       ['told', 'CUTTING', true],
     ])
     // B-MS-008 (ms-fx1; Z01 note 2): the office's headline (what Clear… says) reads the keeper's markers and the notice made, never
-    // the set's time: set again, Cutting's newest tell waits its window.
+    // the set's time: set again, Cutting's newest tell waits its window. pt-sc-fx2: the world's clock stands still between these acts,
+    // so the first Cutting notice shares the new tell's instant — only that tell's OWN notice (its event) counts as made.
     const noticeOf = async (orderId: string) => (await office('GET', `/sales/orders/${orderId}/production?parts=headline`)).headline.stage.byHand.notice
     expect(await noticeOf(left.orderId)).toEqual({ told: false, waitsUntil: expect.any(String) })
     await fanOut()
