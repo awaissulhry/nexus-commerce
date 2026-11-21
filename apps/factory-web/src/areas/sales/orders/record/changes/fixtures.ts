@@ -36,6 +36,9 @@ export const designScreen = defineDesignScreen<ChangesCase>({
     { id: 'compare', label: 'Owner · Before → after of revision 1 (VersionCompare): sizes, unit price and net per line', model: view('owner', { dialog: { kind: 'compare', amendmentId: AMENDMENTS.amendments[0]!.id } }) }, // B-CP-011
     { id: 'compare-header', label: 'Sales · Before → after of revision 2: only the customer PO changed', model: view('sales', { dialog: { kind: 'compare', amendmentId: AMENDMENTS.amendments[1]!.id } }) },
     { id: 'compare-manager', label: 'Production manager · Before → after without prices (sizes only)', model: view('manager', { dialog: { kind: 'compare', amendmentId: AMENDMENTS.amendments[0]!.id } }) },
+    // F-OC-303: the window opens while its snapshots are read (never an empty window), and says it when they cannot be read.
+    { id: 'compare-reading', label: 'Owner · Before → after while the change is read', model: view('owner', { amendments: { value: null, problem: null }, dialog: { kind: 'compare', amendmentId: AMENDMENTS.amendments[0]!.id } }) },
+    { id: 'compare-failed', label: 'Owner · Before → after: the change could not be read (Try again)', model: view('owner', { amendments: { value: null, problem: 'problem.read.unavailable' }, dialog: { kind: 'compare', amendmentId: AMENDMENTS.amendments[0]!.id } }) },
     { id: 'empty', label: 'Sales · No changes since confirmation', model: base('sales', order('CONFIRMED'), { tab: 'changes', amendments: { value: NO_AMENDMENTS, problem: null } }) },
     { id: 'empty-cancelled', label: 'Sales · A cancelled order that never changed', model: base('sales', order('CANCELLED', { actions: [] }), { tab: 'changes', amendments: { value: NO_AMENDMENTS, problem: null } }) },
     { id: 'loading', label: 'Reading the amendments', model: view('sales', { amendments: { value: null, problem: null } }) },

@@ -285,14 +285,11 @@ export function sizeMoves(line: Change['diff']['lines'][number]): Array<{ size: 
   return line.sizes.filter((size) => size.after !== size.before).map((size) => ({ size: size.size, delta: size.after - size.before }))
 }
 
-/** The put-back is offered for a change turned down (its yes) or refused (the customer). */
+/** The put-back is offered for a change turned down (its yes), refused or expired (the customer) — until the server says `offered`. */
 export const putBackOffered = (change: Pick<Change, 'yes' | 'customer' | 'putBack'>): boolean => change.putBack.may && (change.yes.state === 'TURNED_DOWN' || change.customer.decision === 'REFUSED' || change.customer.decision === 'EXPIRED')
 
-export function putBackHeld(change: Pick<Change, 'putBack'>, can: Pick<DepthCan, 'manage'>): Phrase | null {
-  if (!can.manage) return phrase('held.noManage')
-  if (!change.putBack.may) return phrase('held.putBackNot')
-  return null
-}
+// F-OC-303: Restore as before… is shown to orders.manage only and held with the server's own words (record/changes/history.ts
+// restoreOf); the old held rule (putBackHeld) went with the old History.
 
 // ---- the customer's own materials (SAL-306) -------------------------------------------------------------------------------
 

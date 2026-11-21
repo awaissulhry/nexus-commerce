@@ -22,7 +22,7 @@
     "notWaiting": "The order does not wait for a yes",
     "askStanding": "A request is open already, or the customer’s credit holds the order",
     "withdrawNotYours": "Only the person who asked can take the request back",
-    "putBackNot": "This change can no longer be put back",
+    "putBackNot": "This change can no longer be restored as before",
     "confirmationWaiting": "The order waits for a yes: the confirmation comes after it",
     "confirmationCancelled": "The order was cancelled: no confirmation",
     "confirmationNot": "A confirmation cannot be made for this order now"
@@ -116,7 +116,7 @@
     "confirmationSame": "Nothing changed since version {version}: it is still the confirmation.",
     "planned": "Planned from the BOM: {made} new, {changed} changed, {removed} removed.",
     "putBack": "The order is back as it was.",
-    "putBackDeposit": "Revision {revision} put back; its open extra deposit was cancelled.",
+    "putBackDeposit": "Revision {revision} restored as before; its open extra deposit was cancelled.",
     "priced": "Priced change {revision} recorded: the customer accepts it on the link we send."
   },
   "problem": {
@@ -285,13 +285,12 @@
     "waitingBody": "No other change of the order is taken until it is decided."
   },
   "putBack": {
-    "title": "Put back revision {revision} of {number}?",
-    "body": "The order goes back to how it was before revision {revision}, as a new revision; nothing is deleted.",
+    "title": "Restore {number} as before revision {revision}?",
+    "body": "The order goes back to how it was before revision {revision}, as a new revision. Nothing is deleted.",
     "deposit": "Its extra deposit still open is cancelled with it.",
     "reason": "Why",
     "reasonHint": "Optional.",
-    "go": "Put back",
-    "of": "Put back revision {revision}"
+    "go": "Restore as before"
   },
   "materials": {
     "title": "Customer-supplied materials",

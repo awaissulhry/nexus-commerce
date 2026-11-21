@@ -22,7 +22,7 @@
     "notWaiting": "L’ordine non è in attesa di approvazione",
     "askStanding": "C’è già una richiesta aperta, oppure il fido del cliente blocca l’ordine",
     "withdrawNotYours": "Solo chi ha chiesto può ritirare la richiesta",
-    "putBackNot": "Questa modifica non si può più annullare",
+    "putBackNot": "Questa modifica non si può più ripristinare com'era",
     "confirmationWaiting": "L’ordine è in attesa di approvazione: la conferma viene dopo",
     "confirmationCancelled": "L’ordine è stato annullato: nessuna conferma",
     "confirmationNot": "Ora non si può fare la conferma di questo ordine"
@@ -116,7 +116,7 @@
     "confirmationSame": "Nulla è cambiato dalla versione {version}: la conferma resta quella.",
     "planned": "Pianificato dalla distinta: {made} nuovi, {changed} cambiati, {removed} tolti.",
     "putBack": "L’ordine è tornato com’era.",
-    "putBackDeposit": "Revisione {revision} annullata; l’acconto aggiuntivo ancora aperto è stato annullato.",
+    "putBackDeposit": "Revisione {revision} ripristinata com'era; l'acconto aggiuntivo ancora aperto è stato annullato.",
     "priced": "Modifica con prezzo {revision} registrata: il cliente la accetta dal link che inviamo."
   },
   "problem": {
@@ -285,13 +285,12 @@
     "waitingBody": "Nessun’altra modifica dell’ordine è accettata finché non viene decisa."
   },
   "putBack": {
-    "title": "Annullare la revisione {revision} di {number}?",
-    "body": "L’ordine torna com’era prima della revisione {revision}, come nuova revisione; nulla viene cancellato.",
+    "title": "Ripristinare {number} com'era prima della revisione {revision}?",
+    "body": "L'ordine torna com'era prima della revisione {revision}, come nuova revisione. Non viene cancellato nulla.",
     "deposit": "L’acconto aggiuntivo ancora aperto viene annullato con essa.",
     "reason": "Perché",
     "reasonHint": "Facoltativo.",
-    "go": "Annulla la modifica",
-    "of": "Annulla la revisione {revision}"
+    "go": "Ripristina com'era"
   },
   "materials": {
     "title": "Materiali forniti dal cliente",
