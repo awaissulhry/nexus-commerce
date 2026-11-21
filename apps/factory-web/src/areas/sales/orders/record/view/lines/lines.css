@@ -77,44 +77,44 @@
   overflow-x: auto;
   min-width: 0;
 }
+/* OL fix 3: under the table, for who changes lines: Add a colour · Add a size */
+.fw-lt-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  min-width: 0;
+}
 
-/* ---- S3: the table ---- */
+/* ---- S3: the table ----
+ * OL fix 3: every column has its width in the colgroup (StyleTable COL_WIDTH), sized so its DS box, 🔒 or ⋯ fits inside the cell;
+ * the colour column takes the rest and the table never goes under --fw-lt-min (the card scrolls it sideways instead). Each cell's
+ * first line is one control high (--fw-lt-line), so a plain number, a box's number, the colour name and the ⋯ share one middle.
+ * Sizes are centred: the size, the box's number and the size total sit on one axis. In the price column a plain text or a small line
+ * keeps the box's own inset (--fw-lt-inset = the DS xs box's border + padding) so it lines up with the typed price. */
 .fw-lt-table {
+  --fw-lt-line: var(--nds-control-h-md);
+  --fw-lt-inset: 10px;
   width: 100%;
+  min-width: var(--fw-lt-min, 0);
   table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
   font-variant-numeric: tabular-nums;
 }
-.fw-lt-table col.fw-lt-col-size {
-  width: 76px;
-}
-.fw-lt-table col.fw-lt-col-plus {
-  width: 52px;
-}
-.fw-lt-table col.fw-lt-col-pieces {
-  width: 76px;
-}
-.fw-lt-table col.fw-lt-col-price {
-  width: 108px;
-}
-.fw-lt-table col.fw-lt-col-total {
-  width: 124px;
-}
-.fw-lt-table col.fw-lt-col-ready {
-  width: 96px;
-}
-.fw-lt-table col.fw-lt-col-more {
-  width: 44px;
-}
 .fw-lt-table th,
 .fw-lt-table td {
-  padding: var(--nds-space-6) var(--nds-space-8);
+  padding: var(--nds-space-6);
   vertical-align: top;
   border-bottom: 1px solid var(--nds-border-subtle);
   text-align: left;
 }
+.fw-lt-table th:first-child,
+.fw-lt-table td:first-child {
+  padding-inline-start: var(--nds-space-8);
+}
 .fw-lt-table th {
+  vertical-align: bottom;
   color: var(--nds-text-muted);
   font-size: var(--nds-font-size-sm);
   font-weight: 600;
@@ -125,6 +125,16 @@
 }
 .fw-lt-table .fw-lt-num {
   text-align: right;
+}
+.fw-lt-table .fw-lt-size {
+  text-align: center;
+}
+.fw-lt-table.has-boxes th.fw-lt-price {
+  padding-inline-end: calc(var(--nds-space-6) + var(--fw-lt-inset));
+}
+.fw-lt-table.has-boxes td.fw-lt-price .fw-lt-plain,
+.fw-lt-table.has-boxes td.fw-lt-price .fw-lt-cell > :not(.fw-lt-cell-value) {
+  padding-inline-end: var(--fw-lt-inset);
 }
 .fw-lt-colour {
   position: sticky;
@@ -148,7 +158,11 @@
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--nds-space-6);
+  gap: var(--nds-space-2) var(--nds-space-6);
+  min-height: var(--fw-lt-line);
+}
+.fw-lt-notes-toggle {
+  text-align: left;
 }
 .fw-lt-sub,
 .fw-lt-was,
@@ -163,22 +177,47 @@
   flex-direction: column;
   align-items: flex-end;
   gap: var(--nds-space-2);
+  min-width: 0;
+}
+.fw-lt-size .fw-lt-cell {
+  align-items: center;
 }
 .fw-lt-cell-value {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--nds-space-4);
-}
-.fw-lt-box {
   width: 100%;
-  max-width: 72px;
+  min-width: 0;
+  min-height: var(--fw-lt-line);
+}
+.fw-lt-size .fw-lt-cell-value {
+  justify-content: center;
+}
+.fw-lt-na {
+  line-height: var(--fw-lt-line);
+}
+/* The box fills what its cell leaves (beside a 🔒 it gets narrower), never wider than the cell. */
+.fw-lt-box {
+  flex: 1 1 0;
+  min-width: 0;
 }
 .fw-lt-box input {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.fw-lt-price .fw-lt-box {
-  max-width: 104px;
+.fw-lt-size .fw-lt-box input {
+  text-align: center;
+}
+/* The row's ⋯ stays at the right edge while a narrow table scrolls under it (as the colour column stays at the left). */
+.fw-lt-table .fw-lt-more {
+  position: sticky;
+  right: 0;
+  background: var(--nds-surface);
+  text-align: right;
+}
+.fw-lt-muted {
+  color: var(--nds-text-muted);
 }
 .fw-lt-changed {
   background: var(--nds-info-soft);
@@ -191,7 +230,7 @@
   color: var(--nds-warning-text);
   font-size: var(--nds-font-size-xs);
 }
-.fw-lt-na {
+.fw-lt-table td.fw-lt-na {
   color: var(--nds-text-muted);
 }
 .fw-lt-mtm {
@@ -203,14 +242,14 @@
 .fw-lt-line.is-new .fw-lt-colour {
   box-shadow: inset 3px 0 0 var(--nds-info);
 }
-.fw-lt-line.is-removed .fw-lt-main > td {
+/* A removed row fades and is struck; its "Removed" tag and Put back stay clear. */
+.fw-lt-line.is-removed .fw-lt-main > td:not(.fw-lt-colour):not(.fw-lt-keep) > *,
+.fw-lt-line.is-removed .fw-lt-cc > :first-child:not(.fw-lt-cc-text),
+.fw-lt-line.is-removed .fw-lt-cc-label {
   opacity: 0.55;
 }
-.fw-lt-line.is-removed .fw-lt-main > td .fw-lt-cc-name {
+.fw-lt-line.is-removed .fw-lt-cc-label {
   text-decoration: line-through;
-}
-.fw-lt-line.is-removed .fw-lt-main > td.fw-lt-keep {
-  opacity: 1;
 }
 .fw-lt-line.is-moved .fw-lt-main > td {
   box-shadow: inset 0 1px 0 var(--nds-info), inset 0 -1px 0 var(--nds-info);
@@ -251,6 +290,7 @@
 .fw-lt-table tfoot td {
   border-bottom: 0;
   font-weight: 600;
+  line-height: var(--fw-lt-line);
 }
 .fw-lt-foot {
   display: inline-flex;
@@ -292,6 +332,16 @@
   bottom: var(--nds-space-12);
   z-index: 2;
 }
+/* OL fix 3: on a phone the office's bottom menu (64 px + the safe area, office-shell.css) covers the page's last 64 px: the bar
+   sits above it, so Discard and Review and save stay reachable. A phone has no keyboard: the DS bar's "· Save with ⌘S" goes. */
+@media (max-width: 719px) {
+  .fw-office-main .fw-lt-bar {
+    bottom: calc(64px + env(safe-area-inset-bottom) + var(--nds-space-8));
+  }
+  .fw-lt-bar .nds-actionbar-key {
+    display: none;
+  }
+}
 .fw-lt-bar-words {
   display: inline-flex;
   flex-wrap: wrap;
@@ -313,6 +363,13 @@
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+/* OL fix 3: the window's headings read as the DS field labels under them ("Words for the customer"), not lighter. */
+.fw-lt-review .fw-so-h3,
+.fw-lt-review .fw-so-legend {
+  font-size: var(--nds-font-size-sm-plus);
+  font-weight: 600;
+  color: var(--nds-text-strong);
+}
 .fw-lt-chips {
   display: flex;
   flex-wrap: wrap;
@@ -323,6 +380,9 @@
 @media (max-width: 639px) {
   .fw-lt-scroll {
     overflow-x: visible;
+  }
+  .fw-lt-table {
+    min-width: 0;
   }
   .fw-lt-table,
   .fw-lt-table tbody,
@@ -356,12 +416,14 @@
     flex: 1 1 calc(100% - 52px);
   }
   .fw-lt-table tr.fw-lt-main > td.fw-lt-more {
+    position: static;
     flex: 0 0 auto;
     width: auto;
   }
   .fw-lt-table tr.fw-lt-main > td.fw-lt-size {
     flex: 0 0 calc((100% - 4 * var(--nds-space-6)) / 5);
     width: auto;
+    min-width: 0;
   }
   .fw-lt-table tr.fw-lt-main > td.fw-lt-size::before,
   .fw-lt-table tr.fw-lt-main > td.fw-lt-fact::before {
@@ -381,15 +443,26 @@
   .fw-lt-table tr.fw-lt-main > td.fw-lt-span {
     flex: 1 1 100%;
   }
-  .fw-lt-table td.fw-lt-plus,
   .fw-lt-table td.fw-lt-empty {
     display: none;
   }
-  .fw-lt-cell {
-    align-items: stretch;
+  /* A new row's blue mark: the card's left edge (the colour cell has no padding here). */
+  .fw-lt-line.is-new .fw-lt-colour {
+    box-shadow: none;
   }
-  .fw-lt-box {
-    max-width: none;
+  .fw-lt-table tbody.fw-lt-line.is-new {
+    border-left: 3px solid var(--nds-info);
+  }
+  .fw-lt-table td.fw-lt-price .fw-lt-cell,
+  .fw-lt-table td.fw-lt-fact .fw-lt-cell {
+    align-items: flex-start;
+  }
+  .fw-lt-table td.fw-lt-fact .fw-lt-cell-value {
+    justify-content: flex-start;
+  }
+  .fw-lt-table.has-boxes td.fw-lt-price .fw-lt-plain,
+  .fw-lt-table.has-boxes td.fw-lt-price .fw-lt-cell > :not(.fw-lt-cell-value) {
+    padding-inline-end: 0;
   }
   .fw-lt-table tfoot tr {
     display: flex;

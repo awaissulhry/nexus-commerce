@@ -145,7 +145,7 @@ export function ReviewSave({ order, draft, review, seesPrices, freeze, floors, p
         <div className="fw-lt-review-total">
           {seesPrices ? (
             before !== undefined && after !== undefined ? (
-              <span>{t(vat ? 'review.totalVat' : 'review.total', { before: money(before, order.currency, locale), after: money(after, order.currency, locale), delta: signed(after - before, (n) => money(n, order.currency, locale)) })}</span>
+              <span>{t(vat ? 'review.totalVat' : 'review.total', { before: money(before, order.currency, locale), after: money(after, order.currency, locale), delta: signed(after - before, (n) => `\u2060${money(n, order.currency, locale)}`) /* OL fix 3: a word joiner keeps the sign on the amount */ })}</span>
             ) : review.phase === 'reading' ? (
               <span className="fw-so-hint" role="status">
                 <Spinner size={12} /> {t('review.held.reading')}

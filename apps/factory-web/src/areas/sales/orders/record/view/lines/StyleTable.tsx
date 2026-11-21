@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { ChevronDown, ChevronRight, FileImage, Lock, Plus, Ruler } from 'lucide-react'
 import { Card, Menu } from '@nexus/ui/components'
@@ -87,7 +87,7 @@ const priceText = (price: string | null, locale: 'it' | 'en'): string => (price 
 export const rowName = (row: CardRow): string => (row.kind === 'new' ? row.row.colour : row.line.colourway ? `${row.line.colourway.code} · ${row.line.colourway.name}` : '—')
 
 /** A thin DS box: typing goes to the draft at once; Esc puts the box back as before this edit; Enter / Shift+Enter go down / up. */
-function Box({ id, label, value, decimal, onType, below, above, invalid, describedBy }: { id: string; label: string; value: string; decimal?: boolean; onType: (text: string) => void; below?: string | null; above?: string | null; invalid?: boolean; describedBy?: string }) {
+function Box({ id, label, value, decimal, onType, below, above, invalid, describedBy, lead }: { id: string; label: string; value: string; decimal?: boolean; onType: (text: string) => void; below?: string | null; above?: string | null; invalid?: boolean; describedBy?: string; lead?: ReactNode }) {
   const [text, setText] = useState<string | null>(null)
   const start = useRef('')
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -106,6 +106,7 @@ function Box({ id, label, value, decimal, onType, below, above, invalid, describ
       id={id}
       size="xs"
       fieldClassName="fw-lt-box"
+      leadingIcon={lead}
       inputMode={decimal ? 'decimal' : 'numeric'}
       autoComplete="off"
       aria-label={label}
@@ -147,6 +148,12 @@ export function StyleTable({ card, first, ctx }: { card: StyleCardModel; first: 
   const style = ctx.styles[card.styleId]
   const columns = columnsOf(reader, card.sizes, ctx.readyBy)
   const locks = locksOfCard(card, ctx.freeze)
+  // OL fix 3: who changes lines reads the style's sizes with the tab (not on the first focus), so "Add a size" is there at once.
+  const onReadStyle = actions?.linesTab?.onReadStyle
+  useEffect(() => {
+    if (ctx.boxes) onReadStyle?.(card.styleId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per style while boxes show
+  }, [ctx.boxes, card.styleId])
   const keyOf = (row: CardRow) => row.key
   // Enter / Shift+Enter: the same size of the row below / above (a row with no box there is skipped).
   const boxBelow = (index: number, size: string, step: 1 | -1): string | null => {
@@ -158,7 +165,7 @@ export function StyleTable({ card, first, ctx }: { card: StyleCardModel; first: 
     return null
   }
   return (
-    <Card padded className="fw-lt-card" aria-label={`${card.code} · ${card.name}`} onFocus={() => (reader.writes ? actions?.linesTab?.onReadStyle?.(card.styleId) : undefined)}>
+    <Card padded className="fw-lt-card" aria-label={`${card.code} · ${card.name}`}>
       <CardHead card={card} ctx={ctx} />
       {locks.length > 0 && (
         <p className="fw-lt-quiet">
@@ -168,17 +175,17 @@ export function StyleTable({ card, first, ctx }: { card: StyleCardModel; first: 
       )}
       {model.depth?.freeze?.problem && <p className="fw-lt-quiet">{t('lines.freezeUnread')}</p>}
       <div className="fw-lt-scroll">
-        <table className="fw-lt-table">
+        <table className={`fw-lt-table${ctx.boxes ? ' has-boxes' : ''}`} style={{ ['--fw-lt-min' as string]: `${tableMinWidth(columns)}px` } as CSSProperties}>
           <caption className="nds-vh">{t('lines.gridCaption', { style: card.code })}</caption>
           <colgroup>
             {columns.map((column, index) => (
-              <col key={`${column.key}-${column.size ?? index}`} className={column.key === 'colour' ? undefined : `fw-lt-col-${COL_CLASS[column.key]}`} />
+              <col key={`${column.key}-${column.size ?? index}`} style={column.key === 'colour' ? undefined : { width: `${COL_WIDTH[column.key]}px` }} />
             ))}
           </colgroup>
           <thead>
             <tr>
               {columns.map((column, index) => (
-                <HeadCell key={`${column.key}-${column.size ?? index}`} column={column} card={card} ctx={ctx} style={style} />
+                <HeadCell key={`${column.key}-${column.size ?? index}`} column={column} ctx={ctx} />
               ))}
             </tr>
           </thead>
@@ -188,11 +195,43 @@ export function StyleTable({ card, first, ctx }: { card: StyleCardModel; first: 
           <Foot card={card} columns={columns} ctx={ctx} first={first} />
         </table>
       </div>
+      {ctx.boxes && <CardFoot card={card} ctx={ctx} style={style} />}
     </Card>
   )
 }
 
-const COL_CLASS: Readonly<Record<Column['key'], string>> = Object.freeze({ colour: 'colour', size: 'size', plus: 'plus', pieces: 'pieces', unitPrice: 'price', lineTotal: 'total', readyBy: 'ready', more: 'more' })
+/**
+ * OL fix 3: each column's width in px. They fit the DS boxes (a size box, the price box with its 🔒, the row's ⋯), so nothing sticks
+ * out of its cell. The colour column takes the rest and never goes under COLOUR_MIN: on a narrow screen the table scrolls inside its
+ * card (the colour column and the row's ⋯ stay in view), instead of crushing the colour names.
+ */
+const COL_WIDTH: Readonly<Record<Exclude<Column['key'], 'colour'>, number>> = Object.freeze({ size: 64, pieces: 64, unitPrice: 100, lineTotal: 108, readyBy: 92, more: 44 })
+const COLOUR_MIN = 160
+const tableMinWidth = (columns: readonly Column[]): number => columns.reduce((sum, column) => sum + (column.key === 'colour' ? COLOUR_MIN : COL_WIDTH[column.key]), 0)
+
+/** Under the table, for who changes lines: Add a colour, and Add a size when the style has sizes not on the order yet. */
+function CardFoot({ card, ctx, style }: { card: StyleCardModel; ctx: LinesCtx; style: StyleDetail | null | undefined }) {
+  const t = useT('orders')
+  const more = (style?.sizes ?? []).filter((size) => !card.sizes.includes(size))
+  return (
+    <div className="fw-lt-card-foot">
+      <Button size="sm" variant="quiet" onClick={() => ctx.actions?.linesTab?.onAddColourOpen?.(card.styleId)}>
+        <Plus size={13} aria-hidden /> {t('lines.addColour')}
+      </Button>
+      {more.length > 0 && (
+        <Menu
+          label={
+            <>
+              <Plus size={13} aria-hidden /> {t('lines.addSizeLabel')}
+            </>
+          }
+          triggerProps={{ className: 'nds-btn quiet sm' }}
+          items={more.map((size) => ({ id: size, label: size, onSelect: () => ctx.actions?.linesTab?.onAddSize?.(card.styleId, size) }))}
+        />
+      )}
+    </div>
+  )
+}
 
 /** The card's head: the picture (it opens large in the thread's viewer), the style's name (its page), the pattern, the artwork chip. */
 function CardHead({ card, ctx }: { card: StyleCardModel; ctx: LinesCtx }) {
@@ -244,7 +283,7 @@ function CardHead({ card, ctx }: { card: StyleCardModel; ctx: LinesCtx }) {
   )
 }
 
-function HeadCell({ column, card, ctx, style }: { column: Column; card: StyleCardModel; ctx: LinesCtx; style: StyleDetail | null | undefined }) {
+function HeadCell({ column, ctx }: { column: Column; ctx: LinesCtx }) {
   const t = useT('orders')
   const vat = ctx.basis.kind === 'vat' || ctx.basis.kind === 'vatNone'
   switch (column.key) {
@@ -252,19 +291,10 @@ function HeadCell({ column, card, ctx, style }: { column: Column; card: StyleCar
       return <th scope="col">{t('lines.col.colour')}</th>
     case 'size':
       return (
-        <th scope="col" className="fw-lt-num">
+        <th scope="col" className="fw-lt-size">
           {column.size}
         </th>
       )
-    case 'plus': {
-      // "+ Size": the style's sizes not shown yet (read when the card is first focused); none to add: nothing to open.
-      const more = (style?.sizes ?? []).filter((size) => !card.sizes.includes(size))
-      return (
-        <th scope="col" className="fw-lt-plus">
-          {ctx.boxes && more.length > 0 ? <Menu align="right" label={<><Plus size={12} aria-hidden /> {t('lines.addSize')}</>} triggerProps={{ 'aria-label': t('lines.addSizeLabel') }} items={more.map((size) => ({ id: size, label: size, onSelect: () => ctx.actions?.linesTab?.onAddSize?.(card.styleId, size) }))} /> : <span className="nds-vh">{t('lines.addSizeLabel')}</span>}
-        </th>
-      )
-    }
     case 'pieces':
       return (
         <th scope="col" className="fw-lt-num">
@@ -273,7 +303,7 @@ function HeadCell({ column, card, ctx, style }: { column: Column; card: StyleCar
       )
     case 'unitPrice':
       return (
-        <th scope="col" className="fw-lt-num">
+        <th scope="col" className="fw-lt-num fw-lt-price">
           {ctx.basis.kind === 'gross' ? t('lines.col.unitGross') : t('lines.col.unitPrice')}
           {vat && <small>{t('lines.col.exVat')}</small>}
         </th>
@@ -355,7 +385,7 @@ function SizeCell({ row, size, ctx, offered, typeable, below, above }: { row: Ca
   const name = rowName(row)
   if (!cell.offered)
     return (
-      <td className="fw-lt-size fw-lt-num fw-lt-na" data-label={size}>
+      <td className="fw-lt-size fw-lt-na" data-label={size}>
         <span aria-hidden>–</span>
         <span className="nds-vh">{t('lines.cell.notOffered')}</span>
       </td>
@@ -371,14 +401,15 @@ function SizeCell({ row, size, ctx, offered, typeable, below, above }: { row: Ca
   const id = cellId(row.key, size)
   const label = t('lines.cell.label', { colour: name, size })
   return (
-    <td className={`fw-lt-size fw-lt-num${cell.was !== null ? ' fw-lt-changed' : ''}`} data-label={size} title={lockTitle ?? (box ? floorTitle : undefined)}>
+    <td className={`fw-lt-size${cell.was !== null ? ' fw-lt-changed' : ''}`} data-label={size} title={lockTitle ?? (box ? floorTitle : undefined)}>
       <span className="fw-lt-cell">
         <span className="fw-lt-cell-value">
-          {cell.lock && <Lock size={12} aria-label={lockTitle} />}
+          {cell.lock && !box && <Lock size={12} aria-label={lockTitle} />}
           {box ? (
             <Box
               id={id}
               label={label}
+              lead={cell.lock ? <Lock size={11} aria-label={lockTitle} /> : undefined}
               value={cell.value === 0 ? '' : String(cell.value)}
               onType={(text) => {
                 const pieces = piecesOfText(text)
@@ -436,17 +467,19 @@ function FactCell({ column, row, card, ctx, typeable, notes, open, onOpen }: { c
           <ColourCell row={row} ctx={ctx} notes={notes} open={open} onOpen={onOpen} />
         </td>
       )
-    case 'plus':
-      return <td className="fw-lt-plus" />
     case 'pieces': {
       const pieces = row.kind === 'new' ? Object.values(row.row.sizes).reduce((sum, value) => sum + value, 0) : piecesNow(row, draft)
       const was = row.kind === 'line' && !removed && pieces !== row.line.quantity ? row.line.quantity : null
       const shipped = line?.progress.shipped ?? 0
       return (
         <td className={`fw-lt-fact fw-lt-num${was !== null ? ' fw-lt-changed' : ''}`} data-label={t('lines.col.pieces')}>
-          <strong>{pieces}</strong>
-          {was !== null && <span className="fw-lt-was">{t('lines.cell.was', { value: was })}</span>}
-          {shipped > 0 && <span className="fw-lt-sub">{t('lines.row.shipped', { count: shipped })}</span>}
+          <span className="fw-lt-cell">
+            <span className="fw-lt-cell-value">
+              <strong>{pieces}</strong>
+            </span>
+            {was !== null && <span className="fw-lt-was">{t('lines.cell.was', { value: was })}</span>}
+            {shipped > 0 && <span className="fw-lt-sub">{t('lines.row.shipped', { count: shipped })}</span>}
+          </span>
         </td>
       )
     }
@@ -464,15 +497,14 @@ function FactCell({ column, row, card, ctx, typeable, notes, open, onOpen }: { c
         <td className={`fw-lt-fact fw-lt-num fw-lt-price${changed ? ' fw-lt-changed' : ''}`} data-label={t('lines.col.unitPrice')} title={shipped ? t('lines.cell.priceShipped', { count: line!.progress.shipped }) : lock ? lockWords(lock, t, d) : undefined}>
           <span className="fw-lt-cell">
             <span className="fw-lt-cell-value">
-              {(lock || shipped) && <Lock size={12} aria-hidden />}
+              {(lock || shipped) && !box && <Lock size={12} aria-hidden />}
               {box ? (
-                <Box id={priceCellId(row.key)} label={t('editor.priceOf', { colour: name })} value={typed ?? (price === null ? '' : price)} decimal onType={(text) => ctx.actions?.linesTab?.onPrice?.(row.key, text)} invalid={badPriceText(typed)} />
+                <Box id={priceCellId(row.key)} label={t('editor.priceOf', { colour: name })} value={typed ?? (price === null ? '' : price)} decimal onType={(text) => ctx.actions?.linesTab?.onPrice?.(row.key, text)} invalid={badPriceText(typed)} lead={lock ? <Lock size={11} aria-hidden /> : undefined} />
               ) : (
-                <span>{priceText(price, locale)}</span>
+                <span className="fw-lt-plain">{priceText(price, locale)}</span>
               )}
             </span>
             {clash ? <ClashChoice clash={clash} ctx={ctx} /> : changed && line ? <span className="fw-lt-was">{t('lines.cell.was', { value: priceText(line.unitPrice ?? null, locale) })}</span> : null}
-            {row.kind === 'new' && price === null && <span className="fw-lt-sub">{t('lines.row.listPrice', { customer: order.party?.legalName ?? '' })}</span>}
             {apart > 0 && <span className="fw-lt-sub">{t('lines.row.sizesApart', { count: apart })}</span>}
           </span>
         </td>
@@ -482,8 +514,10 @@ function FactCell({ column, row, card, ctx, typeable, notes, open, onOpen }: { c
       const amount = lineAmountOf(row, draft, ctx.figures) // F-OL-09
       return (
         <td className={`fw-lt-fact fw-lt-num${amount.was !== null ? ' fw-lt-changed' : ''}`} data-label={t('lines.col.lineTotal')}>
-          <span>{amountText(amount.now, locale)}</span>
-          {amount.was !== null && <span className="fw-lt-was">{t('lines.cell.was', { value: amountText(amount.was, locale) })}</span>}
+          <span className="fw-lt-cell">
+            <span className="fw-lt-cell-value">{amountText(amount.now, locale)}</span>
+            {amount.was !== null && <span className="fw-lt-was">{t('lines.cell.was', { value: amountText(amount.was, locale) })}</span>}
+          </span>
         </td>
       )
     }
@@ -492,7 +526,9 @@ function FactCell({ column, row, card, ctx, typeable, notes, open, onOpen }: { c
       const date = own ?? order.promiseDate
       return (
         <td className="fw-lt-fact fw-lt-num" data-label={t('lines.col.readyBy')}>
-          {date ? own ? <strong>{formatDate(dayInstant(date), { locale })}</strong> : <span className="fw-lt-sub" title={t('lines.row.orderDate')}>{formatDate(dayInstant(date), { locale })}</span> : '—'}
+          <span className="fw-lt-cell">
+            <span className="fw-lt-cell-value">{date ? own ? <strong>{formatDate(dayInstant(date), { locale })}</strong> : <span className="fw-lt-muted" title={t('lines.row.orderDate')}>{formatDate(dayInstant(date), { locale })}</span> : '—'}</span>
+          </span>
         </td>
       )
     }
@@ -541,14 +577,16 @@ function ColourCell({ row, ctx, notes, open, onOpen }: { row: CardRow; ctx: Line
     )
   }
   // The rider is named only when the read gives it (sales.measurements.view); without the right only "Made to measure" (F-SA-231b).
+  // OL fix 3: a new row with no price typed says where its price comes from on its quiet line (the price cell is too narrow).
+  if (row.kind === 'new' && ctx.reader.prices && unitPriceOf(row, ctx.draft) === null) quiet.push(<span key="list">{t('lines.row.listPrice', { customer: order.party?.legalName ?? '' })}</span>)
   if (mtm && line?.rider) quiet.push(<span key="rider">{t('lines.rider', { rider: line.rider.name, garment: line.rider.garmentType, revision: line.rider.revision })}</span>)
   const hasNotes = notes.notes > 0 || notes.files > 0
   if (!removed && (hasNotes || ctx.boxes))
     quiet.push(
-      <button key="notes" type="button" className="fw-lt-notes-toggle fw-so-link" aria-expanded={open} onClick={onOpen}>
-        {hasNotes ? [notes.notes > 0 ? t('lines.notes.count', { count: notes.notes }) : null, notes.files > 0 ? t('lines.notes.files', { count: notes.files }) : null].filter(Boolean).join(' · ') : t('lines.notes.add')}{' '}
+      <Button key="notes" variant="link" inline wrap className="fw-lt-notes-toggle" aria-expanded={open} onClick={onOpen}>
+        {hasNotes ? [notes.notes > 0 ? t('lines.notes.count', { count: notes.notes }) : null, notes.files > 0 ? t('lines.notes.files', { count: notes.files }) : null].filter(Boolean).join(' · ') : t('lines.notes.add')}
         {open ? <ChevronDown size={12} aria-hidden /> : <ChevronRight size={12} aria-hidden />}
-      </button>,
+      </Button>,
     )
   return (
     <span className="fw-lt-cc">
@@ -564,11 +602,16 @@ function ColourCell({ row, ctx, notes, open, onOpen }: { row: CardRow; ctx: Line
       )}
       <span className="fw-lt-cc-text">
         <span className="fw-lt-cc-name">
-          <span>{rowName(row)}</span>
+          <span className="fw-lt-cc-label">{rowName(row)}</span>
           {row.kind === 'new' && <Tag tone="info">{t('lines.row.new')}</Tag>}
           {mtm && <Tag tone="neutral">{t('record.madeToMeasure')}</Tag>}
           {closed && <Tag tone="warning">{t('lines.short.tag')}</Tag>}
           {removed && <Tag tone="danger">{t('lines.row.removed')}</Tag>}
+          {removed && ctx.reader.writes && (
+            <Button size="xs" onClick={() => ctx.actions?.linesTab?.onPutBack?.(row.key)}>
+              {t('lineMenu.putBack')}
+            </Button>
+          )}
           {line && model.lineCost?.(line) /* B-W2b-380: cost changed since priced */}
         </span>
         {quiet.length > 0 && <span className="fw-lt-quietline">{quiet}</span>}
@@ -616,12 +659,7 @@ function RowMore({ row, card, ctx }: { row: CardRow; card: StyleCardModel; ctx: 
   const t = useT('orders')
   if (!ctx.reader.moves) return null
   const name = `${card.code} ${rowName(row)}`
-  if (row.kind === 'line' && row.removed && ctx.reader.writes)
-    return (
-      <Button size="xs" variant="quiet" onClick={() => ctx.actions?.linesTab?.onPutBack?.(row.key)}>
-        {t('lineMenu.putBack')}
-      </Button>
-    )
+  if (row.kind === 'line' && row.removed && ctx.reader.writes) return null // OL fix 3: Put back sits beside the row's "Removed" tag
   const moves = ctx.menu.movesOf([row.key], row.kind === 'new' ? { isNew: true } : row.removed ? { removed: true } : undefined)
   if (moves.length === 0) return null
   const seq = row.kind === 'line' ? row.line.seq : 0
@@ -650,17 +688,12 @@ function Foot({ card, columns, ctx, first }: { card: StyleCardModel; columns: re
                   <span className="fw-lt-foot">
                     {t('lines.total')}
                     {first && ctx.boxes && <InfoTip tip={`${t('lines.keys')}: ${t('lines.keysList')}`} />}
-                    {ctx.boxes && (
-                      <Button size="sm" variant="quiet" onClick={() => ctx.actions?.linesTab?.onAddColourOpen?.(card.styleId)}>
-                        <Plus size={13} aria-hidden /> {t('lines.addColour')}
-                      </Button>
-                    )}
                   </span>
                 </td>
               )
             case 'size':
               return (
-                <td key={`s-${column.size}`} className="fw-lt-size fw-lt-num">
+                <td key={`s-${column.size}`} className="fw-lt-size">
                   {sizeTotal(column.size!) || '–'}
                 </td>
               )
@@ -677,7 +710,7 @@ function Foot({ card, columns, ctx, first }: { card: StyleCardModel; columns: re
                 </td>
               )
             default:
-              return <td key={`${column.key}-${index}`} className="fw-lt-empty" />
+              return <td key={`${column.key}-${index}`} className={column.key === 'more' ? 'fw-lt-empty fw-lt-more' : 'fw-lt-empty'} />
           }
         })}
       </tr>

@@ -103,7 +103,7 @@ export function useLineMenu(order: Order, model: OrderRecordModel, actions?: Ord
   }
 }
 
-/** The row's ⋯ (the DS Menu; its name says the line: "Actions for line 2 · SEED-JKT-02 Red"). */
+/** The row's ⋯ (the DS Menu; its name says the line: "Actions for line 2 · SEED-JKT-02 Red"). A square DS icon button (OL fix 3). */
 export function LineMenuButton({ label, items }: { label: string; items: MenuItemDef[] }) {
-  return <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': label }} items={items} />
+  return <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': label, className: 'nds-btn icon' }} items={items} />
 }

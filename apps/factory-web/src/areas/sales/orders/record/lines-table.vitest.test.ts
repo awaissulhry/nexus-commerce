@@ -47,13 +47,13 @@ describe('F-OL-01 (d): columns by reader', () => {
   it('the Owner: Colour | sizes | + Size | Pieces | Unit price | Line total | Ready by (own dates) | ⋯', () => {
     const owner = linesReaderOf(canOf('owner'))
     expect(owner).toEqual({ writes: true, prices: true, salesHint: false, moves: true })
-    expect(columnsOf(owner, ['50', '52'], true).map((column) => column.key)).toEqual(['colour', 'size', 'size', 'plus', 'pieces', 'unitPrice', 'lineTotal', 'readyBy', 'more'])
+    expect(columnsOf(owner, ['50', '52'], true).map((column) => column.key)).toEqual(['colour', 'size', 'size', 'pieces', 'unitPrice', 'lineTotal', 'readyBy', 'more'])
   })
 
   it('Sales: no money column anywhere and one line why; Finance reads prices, types nothing; Read-only: plain numbers, no ⋯', () => {
     const sales = linesReaderOf(canOf('sales'))
     expect(sales).toEqual({ writes: true, prices: false, salesHint: true, moves: true })
-    expect(columnsOf(sales, ['50'], false).map((column) => column.key)).toEqual(['colour', 'size', 'plus', 'pieces', 'more'])
+    expect(columnsOf(sales, ['50'], false).map((column) => column.key)).toEqual(['colour', 'size', 'pieces', 'more'])
     expect(columnsOf(linesReaderOf(canOf('finance')), ['50'], false).map((column) => column.key)).toEqual(['colour', 'size', 'pieces', 'unitPrice', 'lineTotal', 'more'])
     expect(columnsOf(linesReaderOf(abilitiesOf(['orders.view'])), ['50'], false).map((column) => column.key)).toEqual(['colour', 'size', 'pieces'])
   })
