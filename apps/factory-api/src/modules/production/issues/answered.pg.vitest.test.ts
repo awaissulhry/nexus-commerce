@@ -601,7 +601,7 @@ describe('B-PT-015: a reply in the thread answers the office’s ask, its batch 
     expect(a1!.taskId).toBe(a2!.taskId)
     expect(b!.taskId).not.toBe(a1!.taskId)
     // The asker (office.all) replies to its own ask: "any news?" answers nothing.
-    await noteOn(SO(so2), SESSIONS['office.all']!.actorId, messageOf[so2])
+    await noteOn(SO(so2), (SESSIONS['office.all'] as Json).actorId as string, messageOf[so2])
     // The supervisor writes a plain note (no reply), then a reply to another message of the thread.
     const plain = await noteOn(SO(so2), people.supervisorA)
     await noteOn(SO(so2), people.supervisorA, plain)
