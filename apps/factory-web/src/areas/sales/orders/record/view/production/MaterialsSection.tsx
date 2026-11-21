@@ -28,7 +28,7 @@ const WORK_ORDERS_NS = 'production-work-orders'
  * made so far" / "2 things are missing"), the missing things first (the customer's goods still to come — "Waits on the customer", Ask
  * the customer (the thread's Reply box: the customer's own words, never a work-order or PO number) — and what we buy not there yet —
  * "Waits on the supplier", Open PO-… with purchasing.view), then "From the customer" (Arrived, used, left, still to come; its lots) and
- * "What we buy" (by material, the ready ones folded). Quantities only; never a price. "Arrived" is this tab's word for the customer's
+ * "What we buy" (by material, the ready ones folded). Quantities only, never money. "Arrived" is this tab's word for the customer's
  * goods (L4: the shared readiness words stay as they are). ⋯ Update from the BOM (orders.manage, the depth's own act).
  */
 export function MaterialsSection(props: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {

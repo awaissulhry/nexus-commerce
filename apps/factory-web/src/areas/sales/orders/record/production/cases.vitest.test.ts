@@ -1,6 +1,7 @@
 import { createElement, type ComponentType } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { renderView, textOf } from '../../../../../lib/record-thread/parts/testing'
+import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
 import { designScreen } from '../fixtures'
 
 // T.1 (order PRODUCTION tab): the design cases of the states the seed lacks — each says what it shows, in the words the tab uses.
@@ -23,7 +24,10 @@ const text = (id: string, locale: 'it' | 'en' = 'en') => textOf(draw(id, locale)
 describe('T.1: the Production tab’s states, by role', () => {
   it('holds: the three strips and the office’s note for the Owner; Sales sees no hold door and one line says who does it (D2)', () => {
     const owner = text('pt-holds-owner')
-    for (const words of ['Production hold — the lining roll is short', 'Paused at your request', 'Shade difference on the leather', 'Made-up: rotolo di fodera in arrivo giovedì.']) expect(owner, words).toContain(words)
+    // The customer's pause is one strip in the office's own words (where.strip.pause), never the customer's headline words.
+    const pause = createTranslator('en', messagesFor('en', ['orders']).orders!)('where.strip.pause')
+    for (const words of ['Production hold — the lining roll is short', pause, 'Shade difference on the leather', 'Made-up: rotolo di fodera in arrivo giovedì.']) expect(owner, words).toContain(words)
+    expect(owner).not.toContain('Paused at your request')
     const sales = text('pt-holds-sales')
     expect(sales).not.toContain('Lift the hold…')
     expect(sales).not.toContain('Release on Quality ›')
