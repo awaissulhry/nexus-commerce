@@ -893,10 +893,9 @@ export default defineStage({
       const lift = dialog(planner.page)
       await seen(lift.getByText(PWO('liftHold.title')).first(), 60_000)
       await lift.getByRole('textbox', { name: PWO('liftHold.reason') }).fill(LIFT_REASON)
-      await answerOf(planner.page, 'POST', /^\/quality\/holds\/[^/]+\/release$/, async () => {
-        await press(lift.getByRole('button', { name: PWO('liftHold.go'), exact: true }))
-        await flow.stepUp(planner.page, planner.person)
-      })
+      // fx8: a production hold is lifted through the work order's own lift route (workorders.hold, no step-up) — one work order's
+      // POST /production/work-orders/:id/holds/:holdId/lift, or the ONE lift of several (POST /production/work-orders/holds/lift).
+      await answerOf(planner.page, 'POST', /^\/production\/work-orders\/(?:[^/]+\/holds\/[^/]+|holds)\/lift$/, () => press(lift.getByRole('button', { name: PWO('liftHold.go'), exact: true })))
       await flow.settle()
       await expect(holds.getByRole('button', { name: OD('wo.act.lift'), exact: true })).toHaveCount(0, { timeout: 60_000 })
       await flow.shot(planner.page, 'production-hold-lifted')

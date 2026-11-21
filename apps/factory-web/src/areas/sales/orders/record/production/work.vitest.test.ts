@@ -84,7 +84,9 @@ describe('F-PT-104: the row’s acts — hidden without the right (L9), held onl
 })
 
 describe('F-PT-105: the waiting decisions and the made-to-measure units', () => {
-  const change = (over: Record<string, unknown>) => ({ id: 'c1', status: 'PROPOSED', proposedAt: '2026-11-20T09:00:00Z', mayDecide: true, words: { title: w('Make 6 more', 'Crea altri 6'), status: w('x', 'x'), cells: 'Red 6' }, ...over }) as never
+  // fx8: a change as the read sends it — its kind, its cells (the schema requires them: never absent), its work order (none: a MAKE_MORE)
+  // and the request it came from.
+  const change = (over: Record<string, unknown>) => ({ id: 'c1', status: 'PROPOSED', kind: 'MAKE_MORE', proposedAt: '2026-11-20T09:00:00Z', mayDecide: true, workOrder: null, requestId: null, cells: [{ salesOrderLineId: 'l1', lineSeq: 10, size: '50', from: 0, to: 6, workOrderSizeId: null }], words: { title: w('Make 6 more', 'Crea altri 6'), status: w('x', 'x'), cells: 'Red 6' }, ...over }) as never
 
   it('every PROPOSED change, oldest first — a MAKE_MORE with no work order too (B5); at most 3, then how many more', () => {
     const list = [change({ id: 'c2', proposedAt: '2026-11-21T09:00:00Z' }), change({ id: 'c1' }), change({ id: 'c3', status: 'APPLIED' }), change({ id: 'c4', proposedAt: '2026-11-22T09:00:00Z' }), change({ id: 'c5', proposedAt: '2026-11-23T09:00:00Z', workOrder: null })]
@@ -92,6 +94,8 @@ describe('F-PT-105: the waiting decisions and the made-to-measure units', () => 
     expect(view.shown.map((row) => row.id)).toEqual(['c1', 'c2', 'c4'])
     expect(view.more).toBe(1)
     expect(view.shown[0]).toMatchObject({ id: 'c1', at: '2026-11-20T09:00:00Z', mayDecide: true })
+    // Each row says its change as a sentence (here: six more on line 10, the order's own change).
+    expect(view.shown[0]!.sentence).toEqual({ verb: { key: 'productionTab.wo.decision.moreLines', params: { count: 6, what: '', lines: 1 } }, why: { key: 'productionTab.wo.decision.byOrder', params: { seq: 10 } } })
     expect(decisionsOf(null)).toEqual({ shown: [], more: 0 })
   })
 
