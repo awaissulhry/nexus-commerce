@@ -57,7 +57,7 @@ describe('F-PT-105: Priority and rush… — one write for both, only what chang
     expect(hook).toContain("onPriorityRush: (row, body) => inline(row, body.priority !== undefined ? 'priority' : 'rush', { ...body }), // F-PT-105")
     const detail = readFileSync(new URL('../view/production/WorkOrderDetail.tsx', import.meta.url), 'utf8')
     expect(detail).toContain('<DetailModal')
-    expect(detail).toContain('nav={{ ids')
+    expect(detail).toContain('const nav = { ids: entries.map((item) => item.id), current: entry.id, onGo')
     expect(detail).not.toMatch(/from '[^']*use-[^']*'/)
   })
 
