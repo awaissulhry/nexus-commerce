@@ -39,7 +39,9 @@ export const PRODUCTION_PARTS = ['headline', 'lines', 'work', 'dates', 'quality'
 export type ProductionPart = (typeof PRODUCTION_PARTS)[number]
 
 /** What `withheld` may name: a whole part, or one block of a part. */
-export const WITHHELD_KEYS = ['work', 'people', 'headline.notes', 'quality.issues', 'quality.ncrs', 'quality.final', 'dates.forecast'] as const
+// B-PT-018 (order production tab): `quality.issues` is gone — the page reads the order's issues from the ONE issues list
+// (GET /production/issues?salesOrderId=, orders.view), never a second copy here.
+export const WITHHELD_KEYS = ['work', 'people', 'headline.notes', 'quality.ncrs', 'quality.final', 'dates.forecast'] as const
 export type WithheldKey = (typeof WITHHELD_KEYS)[number]
 
 const words = output({ it: z.string(), en: z.string() })
@@ -381,8 +383,6 @@ export const datesView = output({
 })
 
 export const qualityView = output({
-  /** Its open problems (on the order, or on its work orders), workorders.view; null: withheld. */
-  issues: z.array(output({ id: id(), source: z.string(), recordType: z.string(), since: instant(), dueOn: businessDate(), escalation: z.number().int() })).nullable(),
   /** Its open NCRs behind the brand wall, quality.ncr.view; null: withheld. */
   // B-PT-009 (order production tab R9): + its title (at most NCR_TITLE_LIMIT characters, cut with "…"); never its description, cost
   // or who found it. Severity and stage words are the web's quality catalogue.

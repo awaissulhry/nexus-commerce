@@ -220,10 +220,10 @@ describe('B-SA-031 GET /sales/orders/:orderId/production — the order’s OWN p
 
   it('the parts by right: the Sales template reads lines, headline, dates and changes; work, people, the office notes, quality and the forecast are withheld (null), never empty', async () => {
     const answer = await ok('sales.all', production(w.a.salesOrderId))
-    expect(answer.withheld).toEqual(['work', 'people', 'headline.notes', 'quality.issues', 'quality.ncrs', 'quality.final', 'dates.forecast'])
+    expect(answer.withheld).toEqual(['work', 'people', 'headline.notes', 'quality.ncrs', 'quality.final', 'dates.forecast']) // B-PT-018
     expect(answer.work).toBeNull()
     expect(answer.people).toBeNull()
-    expect(answer.quality).toEqual({ issues: null, ncrs: null, final: null })
+    expect(answer.quality).toEqual({ ncrs: null, final: null }) // B-PT-018: no issues block
     expect(answer.dates.forecast).toBeNull()
     expect(answer.headline.holdNotes).toBeNull()
     // The raise is read (the chip and its reason), never the office's note or who raised it.
@@ -347,15 +347,15 @@ describe('B-SA-032 work, dates and quality: what is made together with other wor
     expect(refused.body.error?.message).toBe(unknown.body.error?.message)
   })
 
-  it('quality: the order’s own open issues and NCRs behind the wall; Beta’s order reads its harness issue', async () => {
+  // B-PT-018: the order's issues left this read (the ONE issues list holds them and their wall: production/issues tests); the
+  // quality part keeps its NCRs and final checks behind the wall, and never names another customer.
+  it('quality: the order’s own NCRs and final checks behind the wall, no issues block; nothing of the other customer', async () => {
     const answer = await ok('office.p2', production(w.b.salesOrderId, 'quality'))
-    expect((answer.quality.issues as Json[]).map((issue) => issue.id)).toContain(w.production.issue.id)
+    expect(Object.keys(answer.quality as Json).sort()).toEqual(['final', 'ncrs'])
     expect(Array.isArray(answer.quality.ncrs)).toBe(true)
     expect(Array.isArray(answer.quality.final)).toBe(true)
     expect(findMarkers(answer, aMarkers)).toEqual([])
-    // Alpha's order has none of Beta's issues.
-    const alphaAnswer = await ok('office.all', production(w.a.salesOrderId, 'quality'))
-    expect((alphaAnswer.quality.issues as Json[]).map((issue) => issue.id)).not.toContain(w.production.issue.id)
+    expect(JSON.stringify(answer)).not.toContain(w.production.issue.id)
   })
 
   it('nothing Beta’s person got names anything of Alpha', () => {

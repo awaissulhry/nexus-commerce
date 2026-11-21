@@ -330,7 +330,7 @@ describe('F-OO-126: lineWorkOf / lineFinalsOf — from the cells to the work ord
     expect(lineFinalsOf(work, WINDOW_READ)).toEqual({ kind: 'rows', rows: QUALITY_READ.quality!.final })
     expect(lineFinalsOf(lineWorkOf(red, WINDOW_READ), WINDOW_READ)).toEqual({ kind: 'rows', rows: [] })
     expect(lineFinalsOf(lineWorkOf(black, NO_WORK_READ), NO_WORK_READ)).toEqual({ kind: 'withheld' })
-    expect(lineFinalsOf(work, { ...WINDOW_READ, quality: { issues: [], ncrs: [], final: null }, withheld: ['quality.final'] })).toEqual({ kind: 'withheld' })
+    expect(lineFinalsOf(work, { ...WINDOW_READ, quality: { ncrs: [], final: null }, withheld: ['quality.final'] })).toEqual({ kind: 'withheld' })
     expect(lineFinalsOf({ kind: 'withheld' }, WINDOW_READ)).toEqual({ kind: 'unread' })
     expect(lineFinalsOf(work, { ...WINDOW_READ, quality: undefined })).toEqual({ kind: 'unread' })
   })

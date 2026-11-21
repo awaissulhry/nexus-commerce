@@ -35,7 +35,7 @@ import { GOODS_LINE_KINDS, readOrderProductionFacts } from '../../production/bra
 import { countedUrgencyOf } from '../../production/brand/urgency-of'
 import { readPlanned, readWork, workOf } from '../../production/brand-portal/access'
 import { readProductionSettings } from '../../production/brand-portal/access' // B-PT-005: what the customer is shown
-import { issueReadWhere, issuesOfOrderWhere, type OrderFilter } from '../../production/issues/list'
+import type { OrderFilter } from '../../production/issues/list'
 import { brandProductionKey, supervisorOfOrder } from '../../production/supervisor/resolver'
 import { readHandNotice, type HandNotice } from '../../production/brand/keeper' // B-MS-008 (ms-fx1): Clear…'s words read the markers
 import { reachesWorkOrder } from '../../production/work-orders/scope'
@@ -122,7 +122,6 @@ export const PART_RIGHTS: Readonly<Record<WithheldKey, Permission>> = Object.fre
   work: WORKORDERS_VIEW,
   people: WORKORDERS_VIEW,
   'headline.notes': WORKORDERS_VIEW,
-  'quality.issues': WORKORDERS_VIEW,
   'quality.ncrs': QUALITY_NCR_VIEW,
   'quality.final': QUALITY_INSPECTIONS_VIEW,
   'dates.forecast': PLANNING_PROMISE_VIEW,
@@ -867,14 +866,10 @@ async function datesPart(db: Db, context: OfficeContext, order: OrderRow, load: 
   }
 }
 
-async function qualityPart(db: Db, context: OfficeContext, load: Loaders, may: { readonly issues: boolean; readonly ncrs: boolean; readonly final: boolean }) {
+// B-PT-018: the order's issues are the ONE issues list's (GET /production/issues?salesOrderId=), no longer a block of this part.
+async function qualityPart(db: Db, context: OfficeContext, load: Loaders, may: { readonly ncrs: boolean; readonly final: boolean }) {
   const actor = actorOf(context)
   const filter = await load.filter()
-  const issueReach = may.issues ? issueReadWhere(actor) : null
-  const issues =
-    may.issues && issueReach
-      ? await db.productionIssue.findMany({ where: { AND: [issueReach, issuesOfOrderWhere(filter), { status: 'OPEN' }] }, select: { id: true, source: true, recordType: true, raisedAt: true, dueDate: true, escalationStep: true }, orderBy: [{ raisedAt: 'asc' }, { id: 'asc' }], take: 200 })
-      : null
   const ncrsRead = async () => {
     const own: Prisma.NonconformanceWhereInput = { AND: [scopeWhere(actor, QUALITY_NCR_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.NonconformanceWhereInput, ncrsOfOrderWhere(filter), { stage: { in: [...OPEN_NCR_STAGES] } }] }
     // The brand wall: an NCR of a work order of several customers (or of none) only for people who reach every customer.
@@ -910,7 +905,6 @@ async function qualityPart(db: Db, context: OfficeContext, load: Loaders, may: {
   }
   const final = may.final ? await finalRead() : null
   return {
-    issues: issues ? issues.map((row) => ({ id: row.id, source: row.source as string, recordType: row.recordType, since: toUtcIso(row.raisedAt), dueOn: dayOf(row.dueDate), escalation: row.escalationStep })) : null,
     ncrs,
     final,
   }
@@ -983,7 +977,7 @@ export async function readOrderProduction(caller: CommandCaller, context: Office
     const lines = parts.includes('lines') ? await linesPart(db, load, context, order) : undefined
     const work = parts.includes('work') ? (kept('work') ? await workPart(db, context, order, load, today) : null) : undefined
     const dates = parts.includes('dates') ? await datesPart(db, context, order, load, now) : undefined
-    const quality = parts.includes('quality') ? await qualityPart(db, context, load, { issues: kept('quality.issues'), ncrs: kept('quality.ncrs'), final: kept('quality.final') }) : undefined
+    const quality = parts.includes('quality') ? await qualityPart(db, context, load, { ncrs: kept('quality.ncrs'), final: kept('quality.final') }) : undefined
     const people = parts.includes('people') ? (kept('people') ? await peoplePart(db, context, order, load) : null) : undefined
     const changes = parts.includes('changes') ? await changesPart(db, order, context) : undefined
     const progress = parts.includes('lines') || parts.includes('headline') ? await load.progress() : null
