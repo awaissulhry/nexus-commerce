@@ -94,6 +94,8 @@ export const headlineSchema = z.object({
       words,
       computed: z.enum(BRAND_HEALTHS).nullable(),
       raise: z.object({ reasonCode: z.string(), words, until: day, note: z.string().nullable(), by: person.nullable(), at: instant.nullable() }).nullable(),
+      // F-PT-404 (B-PT-007; optional in an older answer): the production state's version — the mark's writes send it from this read.
+      version: z.number().int().optional(),
     })
     .nullable(),
   waiting: z.object({

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ApiClient } from '../../../../lib/api/client'
 import { useBrandHealth } from '../../../../lib/production/health/use-health' // F-SA-235: the one HealthCard (moved to lib)
+import type { BrandHealthView } from '../../../../lib/production/health/api' // F-PT-404
 import type { Order } from '../api'
 import type { OrderAbilities, RecordTab } from '../model'
 import type { OrderRecordActions, OrderRecordModel } from './record-model'
@@ -50,11 +51,16 @@ export function useProductionActs(input: {
   readonly rereadWork?: () => void
   /** F-OP-116: the live stream is offline (the decide window holds its writes). */
   readonly offline?: boolean
+  /** F-PT-404 (B-PT-007): the order's health from the production read's headline, and its re-read after a mark is written. */
+  readonly health?: { readonly view: BrandHealthView | null; readonly reread: () => void }
 }): { model: ProductionActsModel; actions: ProductionActsActions; /* F-OP-116 */ rereadChanges: () => void } {
   const { api, order, tab, can, permissions, setNotice, reload } = input
   // ---- F-SA-235: the order's health, read while Production shows (workorders.view) ----
   const healthOwner = useMemo(() => (order && tab === 'production' && can.viewWorkOrders ? { orders: [{ id: order.id, number: order.number }], version: order.version } : null), [order, tab, can.viewWorkOrders])
-  const health = useBrandHealth(api, healthOwner, permissions, (words) => setNotice({ tone: 'success', words: { key: words.key === 'health.clearedNotice' ? 'notice.healthCleared' : 'notice.healthRaised' } }))
+  // F-PT-404: with the headline's version the mark reads nothing more (one read for the page) and re-reads the headline after a write.
+  const headlineHealth = input.health ?? null
+  const known = useMemo(() => (headlineHealth?.view && order ? { views: new Map([[order.id, headlineHealth.view]]), reread: headlineHealth.reread } : null), [headlineHealth?.view, headlineHealth?.reread, order])
+  const health = useBrandHealth(api, healthOwner, permissions, (words) => setNotice({ tone: 'success', words: { key: words.key === 'health.clearedNotice' ? 'notice.healthCleared' : 'notice.healthRaised' } }), known)
   // ---- end F-SA-235
   // ---- F-OP-112: Make work orders… in place ----
   const productionCan = useMemo(() => productionAbilitiesOf(permissions), [permissions])

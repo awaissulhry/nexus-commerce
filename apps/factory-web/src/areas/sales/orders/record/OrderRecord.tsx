@@ -66,6 +66,7 @@ import { SUPERVISOR_NS } from '../../../_shared/production-supervisor/model'
 import { NOTES_NS } from '../../../production/_shared/notes/model'
 import { useOrderProduction } from './overview/use-order-production' // F-SA-232: Overview's production read (the order's own pieces)
 import { useOrderAsks } from './production/use-order-asks' // F-PT-103: the order's asks (the issues list)
+import { healthViewOf } from './production/now' // F-PT-404: the health mark through the page's one read
 import { getReadiness, type ReadinessRow } from '../../../production/work-orders/daily/api' // F-SA-234: the work orders' materials
 // F-SA-236: this order's customer requests and the approvals we asked it (Changes).
 import { listOrderRequests, type BrandRequest } from '../../../home/approvals/requests/api'
@@ -351,6 +352,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
     // F-OP-113: a work order changed in place reads the order's work again, in place (its rows keep their places).
     rereadWork: () => production.again(['work', 'headline', 'changes']),
     offline: liveState === 'offline', // F-OP-116: the decide window holds its writes offline
+    // F-PT-404 (B-PT-007): the mark reads the production read's headline (no second GET) and reads it again after a write.
+    health: { view: ready && production.state?.status === 'ready' ? healthViewOf(ready, production.state.read.headline) : null, reread: () => production.again(['headline']) },
   })
   const shipments = useShipmentsActs({ order: ready, prefix, permissions: session.permissions, reload: () => void load() /* F-OP-119 */, api /* F-OP-121 */, setNotice /* F-OP-121 */ })
   const money = useMoneyActs({
