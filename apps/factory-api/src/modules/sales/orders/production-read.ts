@@ -3,6 +3,7 @@ import { ValidationError } from '@nexus/factory-domain/core/errors'
 import { can, scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import type { Words } from '@nexus/factory-domain/portal/tasks/kinds'
+import type { PartnerTaskKind } from '@nexus/factory-domain/portal/tasks/kinds' // B-OC-004
 import { PLANNING_PROMISE_VIEW } from '@nexus/factory-domain/planning/promise/permissions'
 import { effectiveHealth, type BrandHealth, type HealthRaise } from '@nexus/factory-domain/production-brand/health'
 import { standingRaiseOf } from './production-columns' // B-SA-070
@@ -329,7 +330,17 @@ export const BLOCKER_WORDS: Readonly<Record<BlockerKind, Words>> = Object.freeze
   QUALITY_HOLD: { it: 'In blocco qualità', en: 'On a quality hold' },
   NONCONFORMANCE: { it: 'Una non conformità aperta', en: 'An open nonconformance' },
   NO_MOVE: { it: 'Fermo di produzione', en: 'Production hold' },
+  // B-OC-002 (L11): a revision the customer said no to (its number, when read: blockerWordsOf).
+  REVISION_REFUSED: { it: 'Il cliente ha detto no a una revisione · decidi: ripristina o cambia di nuovo', en: 'The customer said no to a revision · decide: restore or change again' },
 })
+
+// ── B-OC-002 (order changes tab, lead settle L11): a revision the customer said no to, by its number ──
+/** "The customer said no to revision 2 · decide: restore or change again" (never what changed, never an amount). */
+export const revisionRefusedWords = (revision: number): Words => ({
+  it: `Il cliente ha detto no alla revisione ${revision} · decidi: ripristina o cambia di nuovo`,
+  en: `The customer said no to revision ${revision} · decide: restore or change again`,
+})
+// ── end B-OC-002 ──
 
 // ── walk #3 (order overview walk fix round): an approval we asked of the customer says what it asks ──────────────────────────────
 /**
@@ -337,20 +348,72 @@ export const BLOCKER_WORDS: Readonly<Record<BlockerKind, Words>> = Object.freeze
  * ("Waiting for the customer's yes: Artwork"), so it never reads like the order's own yes. Never its question: that is free text the
  * approvals list shows only with partners.approvals.view (and a revised order's names money). A kind not read: the plain words.
  */
-export function blockerWordsOf(blocker: Pick<Blocker, 'kind' | 'ref'>, askedKinds: ReadonlyMap<string, ApprovalKind>): Words {
+// B-OC-002 (L11): + `revisions` — a revision the customer said no to names its number (by the amendment's id; none read: the plain words).
+export function blockerWordsOf(blocker: Pick<Blocker, 'kind' | 'ref'>, askedKinds: ReadonlyMap<string, ApprovalKind>, revisions: ReadonlyMap<string, number> = new Map()): Words {
+  const revision = blocker.kind === 'REVISION_REFUSED' && blocker.ref?.type === 'SalesOrderAmendment' ? revisions.get(blocker.ref.id) : undefined
+  if (revision !== undefined) return revisionRefusedWords(revision)
   const kind = blocker.kind === 'APPROVAL' && blocker.ref?.type === 'ApprovalRequest' ? askedKinds.get(blocker.ref.id) : undefined
   const name = kind ? KIND_RULES[kind].name : null
   return name ? { it: `${BLOCKER_WORDS.APPROVAL.it}: ${name.it}`, en: `${BLOCKER_WORDS.APPROVAL.en}: ${name.en}` } : BLOCKER_WORDS[blocker.kind]
 }
 
-/** walk #3: the kinds of the approvals we asked that the blockers name (one read; a kind the schema does not know is left out). */
-async function askedKindsOf(db: Db, blockers: readonly Blocker[]): Promise<Map<string, ApprovalKind>> {
-  const ids = [...new Set(blockers.flatMap((blocker) => (blocker.kind === 'APPROVAL' && blocker.ref?.type === 'ApprovalRequest' ? [blocker.ref.id] : [])))]
-  if (ids.length === 0) return new Map()
-  const rows = await db.approvalRequest.findMany({ where: { id: { in: ids } }, select: { id: true, kind: true } })
-  const known: ReadonlySet<string> = new Set(APPROVAL_KINDS)
-  return new Map(rows.flatMap((row) => (known.has(row.kind) ? [[row.id, row.kind as ApprovalKind] as const] : [])))
+// ── B-OC-004 (order changes tab R3b; 13-backend §2): walk #3's kinds read became `askedOf` — beside each approval's kind, by when it
+// is due (an open counter-offer's too, by the request it counters) and what a portal task asks (its kind and the label it was made
+// with), and a refused revision's number (B-OC-002, L11). One read per table; never the question (free text behind
+// partners.approvals.view, the approvals list), never an amount. ──
+/** What the blockers' records say beside their kind (each map by the blocker's record id). */
+export interface AskedFacts {
+  /** walk #3: the kind of each approval we asked (a kind the schema does not know is left out). */
+  readonly kinds: ReadonlyMap<string, ApprovalKind>
+  /** The due time of each approval we asked (ApprovalRequest id) and of each open counter-offer (OrderChangeRequest id). */
+  readonly approvalDue: ReadonlyMap<string, Date>
+  /** Each open portal task: its kind, its label, its due time (null: none). */
+  readonly tasks: ReadonlyMap<string, { readonly kind: PartnerTaskKind; readonly label: string; readonly dueAt: Date | null }>
+  /** B-OC-002 (L11): each refused revision's number (SalesOrderAmendment id). */
+  readonly revisions: ReadonlyMap<string, number>
 }
+
+const refIdsOf = (blockers: readonly Blocker[], kind: Blocker['kind'], type: string): string[] => [...new Set(blockers.flatMap((blocker) => (blocker.kind === kind && blocker.ref?.type === type ? [blocker.ref.id] : [])))]
+
+async function askedOf(db: Db, blockers: readonly Blocker[]): Promise<AskedFacts> {
+  const approvalIds = refIdsOf(blockers, 'APPROVAL', 'ApprovalRequest')
+  const counterIds = refIdsOf(blockers, 'APPROVAL', 'OrderChangeRequest')
+  const taskIds = refIdsOf(blockers, 'PARTNER_TASK', 'PartnerTask')
+  const amendmentIds = refIdsOf(blockers, 'REVISION_REFUSED', 'SalesOrderAmendment')
+  const known: ReadonlySet<string> = new Set(APPROVAL_KINDS)
+  const kinds = new Map<string, ApprovalKind>()
+  const approvalDue = new Map<string, Date>()
+  for (const row of approvalIds.length > 0 ? await db.approvalRequest.findMany({ where: { id: { in: approvalIds } }, select: { id: true, kind: true, dueAt: true } }) : []) {
+    if (known.has(row.kind)) kinds.set(row.id, row.kind as ApprovalKind)
+    approvalDue.set(row.id, row.dueAt)
+  }
+  // An open counter-offer is named by the request it counters: its due time is its COUNTER_OFFER approval's.
+  const countered = counterIds.length > 0 ? await db.orderChangeRequest.findMany({ where: { id: { in: counterIds } }, select: { id: true, counterApprovalId: true } }) : []
+  const counterApprovalIds = countered.flatMap((row) => (row.counterApprovalId ? [row.counterApprovalId] : []))
+  const counterDue = new Map((counterApprovalIds.length > 0 ? await db.approvalRequest.findMany({ where: { id: { in: counterApprovalIds } }, select: { id: true, dueAt: true } }) : []).map((row) => [row.id, row.dueAt]))
+  for (const row of countered) {
+    const due = row.counterApprovalId ? counterDue.get(row.counterApprovalId) : undefined
+    if (due) approvalDue.set(row.id, due)
+  }
+  const tasks = new Map((taskIds.length > 0 ? await db.partnerTask.findMany({ where: { id: { in: taskIds } }, select: { id: true, kind: true, recordLabel: true, dueAt: true } }) : []).map((row) => [row.id, { kind: row.kind as PartnerTaskKind, label: row.recordLabel, dueAt: row.dueAt }]))
+  const revisions = new Map((amendmentIds.length > 0 ? await db.salesOrderAmendment.findMany({ where: { id: { in: amendmentIds } }, select: { id: true, revision: true } }) : []).map((row) => [row.id, row.revision]))
+  return { kinds, approvalDue, tasks, revisions }
+}
+
+/** B-OC-004: by when a blocker is due — an approval we asked (or an open counter-offer), a portal task; null for every other kind. */
+export function blockerDueOf(blocker: Pick<Blocker, 'kind' | 'ref'>, asked: Pick<AskedFacts, 'approvalDue' | 'tasks'>): Date | null {
+  if (!blocker.ref) return null
+  if (blocker.kind === 'APPROVAL') return asked.approvalDue.get(blocker.ref.id) ?? null
+  if (blocker.kind === 'PARTNER_TASK' && blocker.ref.type === 'PartnerTask') return asked.tasks.get(blocker.ref.id)?.dueAt ?? null
+  return null
+}
+
+/** B-OC-004: what a portal task asks (its kind and the label it was made with); null for every other kind. */
+export function blockerTaskOf(blocker: Pick<Blocker, 'kind' | 'ref'>, asked: Pick<AskedFacts, 'tasks'>): { readonly kind: PartnerTaskKind; readonly label: string } | null {
+  const task = blocker.kind === 'PARTNER_TASK' && blocker.ref?.type === 'PartnerTask' ? asked.tasks.get(blocker.ref.id) : undefined
+  return task ? { kind: task.kind, label: task.label } : null
+}
+// ── end B-OC-004 ──
 // ── end walk #3 ──
 
 // ── B-OO-007 (order overview plan §6; review F11; N10b) ──────────────────────────────────────────────────────────────────────
@@ -570,15 +633,22 @@ async function headlinePart(db: Db, context: OfficeContext, order: OrderRow, loa
   // B-OP-021 (B4): each with the record it is about (a work order only for a reader who reaches it) and what a request waiting on us is.
   const reached = workOrders.filter((workOrder) => reachesWorkOrder(actor, WORKORDERS_VIEW, workOrder))
   const reachedWork = new Set(reached.map((workOrder) => workOrder.id))
-  const askedKinds = await askedKindsOf(db, waits) // walk #3
-  const blockers = waits.map((blocker: Blocker) => ({
-    kind: blocker.kind,
-    on: BLOCKER_OWNER[blocker.kind],
-    words: blockerWordsOf(blocker, askedKinds), // walk #3: an approval we asked names what it asks
-    since: blocker.since ? toUtcIso(blocker.since) : null,
-    ref: blockerRefFor(blocker.ref, (workOrderId) => reachedWork.has(workOrderId)),
-    sub: blocker.kind === 'BRAND_REQUEST' ? (blocker.sub ?? null) : null,
-  }))
+  const asked = await askedOf(db, waits) // walk #3; B-OC-004: + due, task; B-OC-002 (L11): + a refused revision's number
+  const blockers = waits.map((blocker: Blocker) => {
+    const due = blockerDueOf(blocker, asked) // B-OC-004
+    return {
+      kind: blocker.kind,
+      on: BLOCKER_OWNER[blocker.kind],
+      words: blockerWordsOf(blocker, asked.kinds, asked.revisions), // walk #3: an approval we asked names what it asks; B-OC-002: a refused revision its number
+      since: blocker.since ? toUtcIso(blocker.since) : null,
+      ref: blockerRefFor(blocker.ref, (workOrderId) => reachedWork.has(workOrderId)),
+      sub: blocker.kind === 'BRAND_REQUEST' ? (blocker.sub ?? null) : null,
+      // ── B-OC-004 (order changes tab R3b) ──
+      due: due ? toUtcIso(due) : null,
+      task: blockerTaskOf(blocker, asked),
+      // ── end B-OC-004 ──
+    }
+  })
 
   // The holds in plain words (the customer's own reader: a hold of a work order of several customers reads its reason's words).
   const lines = await load.lines()
