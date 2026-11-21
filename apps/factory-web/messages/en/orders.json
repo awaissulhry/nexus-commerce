@@ -387,7 +387,6 @@
     "fromRequest": "Made from request {number} (no quote)"
   },
   "gate": {
-    "title": "Deposit gate",
     "state": {
       "NOT_NEEDED": "Not needed",
       "WAITING": "Waiting for payment",
@@ -395,20 +394,11 @@
       "WAIVED": "Waived",
       "MISSING": "Not asked"
     },
-    "waiting": "Production waits for the deposit (due {date}).",
-    "paid": "Deposit paid on {date}: production may start.",
-    "paidNoDate": "Deposit paid: production may start.",
-    "waived": "Deposit waived: production may start.",
-    "missing": "The order needs a deposit, but none was asked: production waits.",
-    "notNeeded": "No deposit needed: production may start.",
-    "amount": "{amount} as {kind}",
     "money": "Money ›"
   },
   "lines": {
     "readOnly": "What the customer ordered, as accepted. Changes go through Amend order.",
     "vatNature": "VAT {nature}",
-    "revision": "Made to rev {revision}",
-    "noRevision": "Revision chosen by the work order",
     "gridCaption": "{style}: ordered pieces by colour and size",
     "pricesOf": "Prices of {style}",
     "col": {
@@ -728,39 +718,16 @@
     "planNone": "Nothing plans it yet",
     "fromPlan": "(from the plan)",
     "requestedByCustomer": "Requested by customer",
-    "title": "Dates & milestones",
-    "ordered": "Ordered",
     "requested": "Requested",
     "promised": "Promised",
     "firstPromised": "First promised",
-    "late_one": "{count} day late",
-    "late_other": "{count} days late",
-    "left_one": "in {count} day",
-    "left_other": "in {count} days",
-    "linesLabel": "Dates by line",
     "asOrder": "{date} (the order's)",
-    "historyTitle": "Promise moves",
-    "never": "Never changed",
-    "neverBody": "The promise is still the one given when the order was made.",
     "someone": "Someone in the office",
     "fromTo": "{from} → {to}",
     "wholeOrder": "The whole order",
     "col": {
-      "line": "Line",
-      "requested": "Requested",
-      "promised": "Promised",
-      "state": "On time?",
-      "when": "When",
-      "who": "Who",
-      "change": "Change",
-      "reason": "Why"
+      "state": "On time?"
     },
-    "historyCount_one": "Promise moves ({count})",
-    "historyCount_other": "Promise moves ({count})",
-    "cutStart": "Cut start",
-    "sewStart": "Sew start",
-    "finish": "Finish",
-    "customerSees": "Customer sees {date}",
     "shippedOn": "Shipped {shipped}",
     "shippedDelivered": "Shipped {shipped} · delivered {delivered}",
     "decide": "Decide…",
@@ -782,7 +749,6 @@
     "waitsOnSupplier": "waits on the supplier"
   },
   "production": {
-    "title": "Work orders",
     "empty": {
       "title": "No work orders yet",
       "body": "Production makes work orders from the order's lines once the deposit allows it."
@@ -793,27 +759,13 @@
     "notReleased": "Not released yet",
     "col": {
       "number": "Work order",
-      "style": "Style",
       "status": "State",
       "progress": "Progress",
-      "due": "Due",
       "released": "Released",
       "own": "Made for this order",
       "materials": "Materials"
     },
-    "notCounted": {
-      "cut": "Cutting not counted here",
-      "sewn": "Sewing not counted here",
-      "finished": "Finishing not counted here"
-    },
-    "step": {
-      "cut": "Cut",
-      "sewn": "Sewn",
-      "finished": "Finished"
-    },
     "held": "On hold",
-    "rush": "Urgent",
-    "progressHeld": "Progress needs the work orders right",
     "mtmRow": "{style} · {colour} — Made to measure · {units} units · {workOrders} work orders",
     "own": {
       "of": "Made for this order: {own} of {total}",
@@ -825,18 +777,8 @@
       "cutTogether": "cut together with other work"
     },
     "quality": {
-      "title": "Holds, quality & problems",
       "notes": "Office notes on the holds",
       "officeOnly": "Office only · since {date}",
-      "issuesHeld": "Problems need the work orders right",
-      "needsAnswer_one": "Needs an answer: {count}",
-      "needsAnswer_other": "Needs an answer: {count}",
-      "issue": "Asked {since} · answer by {due}",
-      "escalated_one": "Escalated {count}×",
-      "escalated_other": "Escalated {count}×",
-      "ncrsHeld": "Nonconformities need the quality right",
-      "ncrs_one": "{count} open nonconformity:",
-      "ncrs_other": "{count} open nonconformities:",
       "finalHeld": "Final inspections need the inspections right",
       "final": "Final inspections",
       "finalRow": "{number} · {checked} checked",
@@ -844,11 +786,7 @@
         "PASSED": "Passed {date}",
         "FAILED": "Failed {date}",
         "WAITING": "Waiting"
-      },
-      "nothing": "No holds, problems or quality findings"
-    },
-    "specs": {
-      "title": "Specs in force"
+      }
     }
   },
   "woStatus": {
@@ -1084,13 +1022,11 @@
     "note": "Your note (office only)",
     "reason": "Why",
     "reasonHint": "Kept in the promise history.",
-    "tellCustomer": "Tell the customer in the order's thread (Activity).",
     "go": "Change the date",
     "problem": {
       "date": "Choose a date",
       "past": "A new promise is a day from today on",
       "same": "It is the promise already",
-      "reason": "Say why",
       "code": "Pick why",
       "lines": "Choose at least one line"
     }
@@ -2264,14 +2200,10 @@
     "makeNext": "Make the next one: {style}",
     "made": "{number} made (draft)",
     "col": {
-      "priority": "Priority",
       "acts": "Actions"
     },
     "acts": "Actions for {number}",
     "dueOf": "Due date of {number}",
-    "priorityOf": "Priority of {number}",
-    "priorityHint": "Higher comes first",
-    "rushOf": "Rush for {number}",
     "heldHold": "Production does this — a planner or the production manager",
     "heldHint": "Due dates, priority, rush and the work orders’ actions: Production does this — a planner or the production manager.",
     "act": {
@@ -2943,7 +2875,6 @@
       "sharedCheck": "Covers other work too — not for the customer",
       "qualityWithheld": "Not shown to you: final checks, nonconformances (Production and Quality see them)",
       "noFinal": "No final check yet.",
-      "liftHint": "Lifting a hold: Production does this — a planner or the production manager.",
       "infoBody": "What stops this order right now, who acts and the one button to act; the questions that wait for an answer; then its quality in plain words. The customer reads a hold's own words, never the office's note.",
       "raiseNcr": "Raise a nonconformance…"
     },
@@ -2977,7 +2908,86 @@
       "openPo": "Open {number}",
       "howTitle": "How this is counted",
       "howBody": "Never valued. The customer's goods count to its oldest order first. What we buy is ready when it is reserved for or issued to the work order; reservations follow the work orders' priority.",
-      "infoBody": "Do we have everything to make this order: the customer's own goods (Arrived) and what we buy — the missing things first, with who they wait on."
+      "infoBody": "Do we have everything to make this order: the customer's own goods (Arrived) and what we buy — the missing things first, with who they wait on.",
+      "askBuyers": "Ask the buyers…",
+      "asked": "Asked {date}"
+    },
+    "specs": {
+      "title": "What we make it to",
+      "styles_one": "{count} style",
+      "styles_other": "{count} styles",
+      "needDecision_one": "{count} needs a decision",
+      "needDecision_other": "{count} need a decision",
+      "packNewerShort": "the customer's tech pack is newer than the request",
+      "ourTitle": "Our pattern",
+      "noStyle": "No style on this order yet.",
+      "state": {
+        "inForce": "Pattern v{revision} · in force",
+        "replaced": "Pattern v{revision} · replaced by v{by} on {date}",
+        "replacedNoDay": "Pattern v{revision} · replaced by v{by}",
+        "replacedNoNumber": "Pattern v{revision} · replaced",
+        "withdrawn": "Pattern v{revision} · withdrawn, no pattern version in force: ask Product",
+        "notFixedUses": "Not fixed · {number} uses v{revision}",
+        "notFixedWill": "Not fixed yet · the work order will take v{revision}"
+      },
+      "changeNote": "v{revision} changed: {note}",
+      "older": "{number} is made to v{revision}; v{newer} is in force since {date}",
+      "olderNoDay": "{number} is made to v{revision}; v{newer} is in force",
+      "olderNoNewer": "{number} is made to v{revision}",
+      "decision": "{changeOrder}: {what}",
+      "noDecision": "no decision yet (Product decides)",
+      "disposition": {
+        "FINISH_OLD": "finish on v{revision}",
+        "REWORK": "rework to the new pattern",
+        "SCRAP": "scrap",
+        "HOLD": "on hold until Product decides"
+      },
+      "partStyle": "the style {code}",
+      "versions": "Versions & changes ›",
+      "askChange": "Ask for a design change…",
+      "moreStyles_one": "{count} more style: open it on its page.",
+      "moreStyles_other": "{count} more styles: open them on their pages.",
+      "packTitle": "Customer's tech pack",
+      "noPack": "No customer tech pack on this order.",
+      "packNewer": "Newer than the request: we make to the version in force.",
+      "askCustomer": "Ask the customer…",
+      "infoBody": "For each style, the pattern we make it to and whether that is still the right one; then the customer's own files behind it. A pattern never moves here: Product decides on the style's page."
+    },
+    "receipt": {
+      "open": "Record what the customer sent…",
+      "openRow": "Record what arrived…",
+      "title": "Record what the customer sent · {number}",
+      "go": "Record the receipt",
+      "sites": "the sites",
+      "site": "Site",
+      "sitePick": "Pick the site",
+      "place": "Where the goods go",
+      "placePick": "Pick the place",
+      "noPlace": "This site has no goods-in dock or store place.",
+      "ddt": "Their delivery note no. (DDT)",
+      "ddtDate": "Delivery note date",
+      "col": {
+        "quantity": "Arrived now",
+        "lot": "Their lot ref."
+      },
+      "quantityOf": "Quantity of {material}",
+      "lotOf": "Lot reference of {material}",
+      "hide": "Leather received hide by hide goes through a purchase receipt.",
+      "hint": "Each line becomes a lot of the customer's own, released. The customer's materials are counted again for this order first.",
+      "held": {
+        "site": "Pick the site",
+        "place": "Pick where the goods go",
+        "nothing": "Tick at least one material",
+        "quantity": "A quantity above 0 with at most 4 decimals"
+      },
+      "refused": {
+        "hide": "{material} is tracked hide by hide: it is received through a purchase receipt, not as the customer's lot.",
+        "lot": "{material} is not tracked by lot: it cannot be the customer's own lot.",
+        "quantity": "{material}: a quantity above 0 with at most 4 decimals.",
+        "place": "That place takes no stock now: pick another.",
+        "right": "Recording the customer's goods at this site needs the right to receive goods."
+      },
+      "done": "Receipt {number} recorded"
     }
   }
 }

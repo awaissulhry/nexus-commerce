@@ -116,7 +116,6 @@ export interface OrderDepthActions {
   onPricedDraft?: (next: Partial<PricedDraft>) => void
   onPricedApply?: () => void
   onRetry?: (part: 'depth' | 'approval' | 'freeze' | 'changes' | 'materials' | 'confirmation' | 'techPack') => void
-  onOpenFile?: (fileId: string) => void
   onDismissNotice?: () => void
 }
 
@@ -168,8 +167,9 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
   const [materials, againMaterials, putMaterials] = usePart(on('production'), (signal) => getMaterials(api, id!, signal))
   // ---- B-TH-214 (tabs 9 → 5): the confirmation is on Confirmation & changes; the tech pack and the dates on Production & dates ----
   const [confirmation, againConfirmation, putConfirmation] = usePart(at && tab === 'changes' ? at : null, (signal) => getConfirmation(api, id!, signal))
-  // F-SA-230: the tech pack is read ONCE per order (the band's "Made from INQ-…" and Production's Specs in force both draw it).
-  const [techPack, againTechPack] = usePart(can.inquiries && at ? `${id}` : null, (signal) => getTechPack(api, id!, signal))
+  // F-SA-230: the tech pack is read once per order version (the band's "Made from INQ-…" and Production's What we make it to both draw
+  // it); F-PT-402 (B39): again on the order's version and on a file event of the inquiry while Production shows (the container).
+  const [techPack, againTechPack] = usePart(can.inquiries && at ? at : null, (signal) => getTechPack(api, id!, signal))
   // F-SA-234: the milestones come with the order's own production read (orders.view, P16), no longer the planner's read here.
   // F-SA-234b: and the finish forecast per line too (`dates.forecast`): no read of every site's promise lines from the order page.
 
@@ -390,11 +390,7 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
         setNotice({ tone: 'success', words: { key: 'notice.priced', params: { revision: answer.change.revision } } })
       }, null)
     },
-    onOpenFile: (fileId) => {
-      downloadLink(api, fileId)
-        .then(({ download }) => window.open(storeUrl(download.url), '_blank', 'noopener,noreferrer'))
-        .catch((error: unknown) => setNotice({ tone: 'danger', words: { key: readProblemOf(error) } }))
-    },
+    // F-PT-402 (B-PT-013): the tech pack's files open through the order's own open route (the ONE viewer), never a bare download.
   }
 
   // A dialog left open over another order (a reload to a new id) closes.

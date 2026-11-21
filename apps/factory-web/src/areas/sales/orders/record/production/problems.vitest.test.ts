@@ -89,7 +89,7 @@ describe('F-PT-301: one strip rule on both tabs', () => {
   it('its words exist in both languages', () => {
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-      for (const key of ['title', 'stopsNothing', 'noQuestions', 'final.PASSED', 'final.FAILED', 'final.WAITING', 'final.none', 'stopsTitle', 'answersTitle', 'late', 'answers.ME', 'answers.SOMEONE_ELSE', 'answers.NOT_SET', 'reply', 'qualityTitle', 'sharedCheck', 'qualityWithheld', 'noFinal', 'liftHint', 'infoBody', 'raiseNcr']) expect(t(`productionTab.problems.${key}`), `${locale} ${key}`).not.toBe(`productionTab.problems.${key}`)
+      for (const key of ['title', 'stopsNothing', 'noQuestions', 'final.PASSED', 'final.FAILED', 'final.WAITING', 'final.none', 'stopsTitle', 'answersTitle', 'late', 'answers.ME', 'answers.SOMEONE_ELSE', 'answers.NOT_SET', 'reply', 'qualityTitle', 'sharedCheck', 'qualityWithheld', 'noFinal', 'infoBody', 'raiseNcr'] /* liftHint: the strip's own line now (StripRow, wo.heldHold — both tabs) */) expect(t(`productionTab.problems.${key}`), `${locale} ${key}`).not.toBe(`productionTab.problems.${key}`)
       expect(t('productionTab.problems.stops', { count: 1 }), locale).toMatch(/1/)
       expect(t('productionTab.problems.defects', { critical: 0, major: 1, minor: 2 }), locale).toMatch(/0.*1.*2/)
       expect(t('productionTab.problems.inspected', { inspected: 5, lot: 40 }), locale).toMatch(/5.*40/)

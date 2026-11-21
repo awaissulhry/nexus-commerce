@@ -412,29 +412,7 @@ p.fw-so-hint[role='status'] {
   color: var(--nds-text-muted);
 }
 
-/* ---- the deposit gate and the deposit's steps ---- */
-.fw-so-gate {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--nds-space-10, var(--nds-space-8)) var(--nds-space-12);
-  min-width: 0;
-}
-
-.fw-so-gate-body {
-  display: flex;
-  flex: 1 1 260px;
-  flex-direction: column;
-  gap: var(--nds-space-4);
-  min-width: 0;
-}
-
-.fw-so-gate-words {
-  margin: 0;
-  color: var(--nds-text-strong);
-  font-size: var(--nds-font-size-sm);
-}
-
+/* ---- the deposit's steps (F-PT-403: the deposit gate's card went with W2's Dates & plan) ---- */
 .fw-so-ico {
   flex: none;
   margin-top: 2px;
@@ -680,14 +658,3 @@ fieldset.fw-so-colours {
 }
 /* ---- end F-OP-307 */
 
-/* ---- F-OP-309 (order page walk #15): the Production tab's work-order table beside the dock — the work order's number on one line,
-   the sub lines (where it is made, its progress words) wrap instead of being cut; the columns' widths are the table's own. */
-.fw-so-wotable .fw-so-link {
-  white-space: nowrap;
-}
-
-.fw-so-wotable .fw-so-cell-sub {
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-/* ---- end F-OP-309 */

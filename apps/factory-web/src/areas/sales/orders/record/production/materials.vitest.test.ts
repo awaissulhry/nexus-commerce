@@ -41,6 +41,10 @@ describe('F-PT-303: what we buy', () => {
       ['Thread 40', 'RECEIVED', 120, null, ['WO-00021'], []],
     ])
     expect(bought[0]!.date).toBe('2026-11-28')
+    // F-PT-304: each work order short of it, as Ask the buyers… asks (per work order); a ready material has none.
+    expect(bought[0]!.shortages).toEqual([{ workOrderId: 'w2', number: 'WO-00022', word: 'DELAYED', short: '80', neededOn: '2026-11-24' }])
+    expect(bought[1]!.shortages).toEqual([])
+    expect(bought[0]).toMatchObject({ itemId: 'i1', itemColourId: null })
     expect(bought.map(isThere)).toEqual([false, true])
   })
 
@@ -54,7 +58,7 @@ describe('F-PT-303: what we buy', () => {
 describe('F-PT-303: the answer line', () => {
   it('missing first: the customer’s still to come and what we buy not there yet count together', () => {
     const goods = customerGoodsOf(MATERIALS)
-    expect(materialsAnswerOf(goods, [{ key: 'k', label: null, uom: null, word: 'NOT_ENOUGH', date: null, needed: null, short: null, workOrders: [], purchaseOrders: [] }], 2)).toEqual({ kind: 'missing', count: 2 })
+    expect(materialsAnswerOf(goods, [{ key: 'k', itemId: 'i9', itemColourId: null, shortages: [], label: null, uom: null, word: 'NOT_ENOUGH', date: null, needed: null, short: null, workOrders: [], purchaseOrders: [] }], 2)).toEqual({ kind: 'missing', count: 2 })
     expect(materialsAnswerOf([], [], 2)).toEqual({ kind: 'allHere' })
     expect(materialsAnswerOf([], null, 0)).toEqual({ kind: 'noWork' })
     expect(materialsAnswerOf(null, null, 3)).toEqual({ kind: 'reading' })

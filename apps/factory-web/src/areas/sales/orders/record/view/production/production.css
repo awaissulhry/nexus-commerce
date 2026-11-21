@@ -183,3 +183,30 @@
   .fw-pt-mat { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
   .fw-pt-mat-buy { padding-left: var(--nds-space-22); border-left: 1px solid var(--nds-border-subtle); }
 }
+
+/* ── 4 · What we make it to (F-PT-401 / 402): our pattern | the customer's tech pack, side by side from 880 px of the section ── */
+.fw-pt-mk { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-16) var(--nds-space-22); min-width: 0; }
+@container sec (min-width: 880px) {
+  .fw-pt-mk.is-pair { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+  .fw-pt-mk.is-pair .fw-pt-mk-pack { padding-left: var(--nds-space-22); border-left: 1px solid var(--nds-border-subtle); }
+}
+.fw-pt-specs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--nds-space-12); }
+.fw-pt-spec { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--nds-space-10); align-items: start; min-width: 0; scroll-margin-top: var(--nds-space-4); }
+.fw-pt-spec-b { display: flex; flex-direction: column; gap: var(--nds-space-4); min-width: 0; font-size: var(--nds-font-size-sm); overflow-wrap: anywhere; }
+
+/* ── F-PT-304: Record what the customer sent… — the delivery note's two fields side by side when the dialog has room ── */
+.fw-pt-rc-ddt { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-12); }
+@media (min-width: 640px) {
+  .fw-pt-rc-ddt { grid-template-columns: minmax(0, 1fr) minmax(0, 12rem); }
+}
+.fw-pt-rc input { min-width: 0; max-width: 12rem; }
+/* F-PT-404: the dialog draws outside the tab's size container (a centred modal): on a phone its rows fold by the screen instead. */
+@media (max-width: 639px) {
+  .fw-pt-rc thead { display: none; }
+  .fw-pt-rc, .fw-pt-rc tbody { display: block; }
+  .fw-pt-rc tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--nds-space-4) var(--nds-space-12); padding: var(--nds-space-10); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg); margin-bottom: var(--nds-space-8); }
+  .fw-pt-rc td { display: block; padding: 0; border: 0; }
+  .fw-pt-rc td.fw-pt-first { grid-column: 1 / -1; font-weight: var(--nds-font-weight-semibold); }
+  .fw-pt-rc td[data-label]::before { content: attr(data-label); display: block; font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-muted); }
+  .fw-pt-rc input { max-width: none; width: 100%; }
+}

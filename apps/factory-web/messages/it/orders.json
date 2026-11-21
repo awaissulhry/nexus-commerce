@@ -387,7 +387,6 @@
     "fromRequest": "Creato dalla richiesta {number} (senza preventivo)"
   },
   "gate": {
-    "title": "Blocco acconto",
     "state": {
       "NOT_NEEDED": "Non serve",
       "WAITING": "In attesa di pagamento",
@@ -395,20 +394,11 @@
       "WAIVED": "Rinunciato",
       "MISSING": "Non chiesto"
     },
-    "waiting": "La produzione aspetta l'acconto (scade il {date}).",
-    "paid": "Acconto pagato il {date}: la produzione può partire.",
-    "paidNoDate": "Acconto pagato: la produzione può partire.",
-    "waived": "Acconto rinunciato: la produzione può partire.",
-    "missing": "L'ordine richiede un acconto, ma non è stato chiesto: la produzione aspetta.",
-    "notNeeded": "Nessun acconto necessario: la produzione può partire.",
-    "amount": "{amount} come {kind}",
     "money": "Importi ›"
   },
   "lines": {
     "readOnly": "Cosa ha ordinato il cliente, come accettato. Le modifiche passano da Modifica ordine.",
     "vatNature": "IVA {nature}",
-    "revision": "Fatto sulla rev. {revision}",
-    "noRevision": "Revisione scelta dall'ordine di lavoro",
     "gridCaption": "{style}: capi ordinati per colore e taglia",
     "pricesOf": "Prezzi di {style}",
     "col": {
@@ -728,39 +718,16 @@
     "planNone": "Ancora niente lo pianifica",
     "fromPlan": "(dal piano)",
     "requestedByCustomer": "Richiesto dal cliente",
-    "title": "Date e tappe",
-    "ordered": "Ordinato",
     "requested": "Richiesto",
     "promised": "Promesso",
     "firstPromised": "Prima promessa",
-    "late_one": "{count} giorno di ritardo",
-    "late_other": "{count} giorni di ritardo",
-    "left_one": "tra {count} giorno",
-    "left_other": "tra {count} giorni",
-    "linesLabel": "Date per riga",
     "asOrder": "{date} (dell'ordine)",
-    "historyTitle": "Spostamenti della promessa",
-    "never": "Mai cambiata",
-    "neverBody": "La promessa è ancora quella data quando l'ordine è nato.",
     "someone": "Qualcuno dell'ufficio",
     "fromTo": "{from} → {to}",
     "wholeOrder": "Tutto l'ordine",
     "col": {
-      "line": "Riga",
-      "requested": "Richiesto",
-      "promised": "Promesso",
-      "state": "In tempo?",
-      "when": "Quando",
-      "who": "Chi",
-      "change": "Cambio",
-      "reason": "Perché"
+      "state": "In tempo?"
     },
-    "historyCount_one": "Spostamenti della promessa ({count})",
-    "historyCount_other": "Spostamenti della promessa ({count})",
-    "cutStart": "Inizio taglio",
-    "sewStart": "Inizio confezione",
-    "finish": "Fine",
-    "customerSees": "Il cliente vede {date}",
     "shippedOn": "Spedito il {shipped}",
     "shippedDelivered": "Spedito il {shipped} · consegnato il {delivered}",
     "decide": "Decidi…",
@@ -782,7 +749,6 @@
     "waitsOnSupplier": "aspetta il fornitore"
   },
   "production": {
-    "title": "Ordini di lavoro",
     "empty": {
       "title": "Ancora nessun ordine di lavoro",
       "body": "La produzione crea gli ordini di lavoro dalle righe dell'ordine quando l'acconto lo consente."
@@ -793,27 +759,13 @@
     "notReleased": "Non ancora rilasciato",
     "col": {
       "number": "Ordine di lavoro",
-      "style": "Modello",
       "status": "Stato",
       "progress": "Avanzamento",
-      "due": "Scadenza",
       "released": "Rilasciato",
       "own": "Per questo ordine",
       "materials": "Materiali"
     },
-    "notCounted": {
-      "cut": "Il taglio non si conta qui",
-      "sewn": "La cucitura non si conta qui",
-      "finished": "La finitura non si conta qui"
-    },
-    "step": {
-      "cut": "Tagliati",
-      "sewn": "Cuciti",
-      "finished": "Finiti"
-    },
     "held": "In sospeso",
-    "rush": "Urgente",
-    "progressHeld": "Per l'avanzamento serve il permesso sugli ordini di lavoro",
     "mtmRow": "{style} · {colour} — Su misura · {units} unità · {workOrders} ordini di lavoro",
     "own": {
       "of": "Per questo ordine: {own} di {total}",
@@ -825,18 +777,8 @@
       "cutTogether": "tagliato insieme ad altro lavoro"
     },
     "quality": {
-      "title": "Sospensioni, qualità e problemi",
       "notes": "Note dell'ufficio sulle sospensioni",
       "officeOnly": "Solo ufficio · dal {date}",
-      "issuesHeld": "Per i problemi serve il permesso sugli ordini di lavoro",
-      "needsAnswer_one": "Serve una risposta: {count}",
-      "needsAnswer_other": "Serve una risposta: {count}",
-      "issue": "Chiesto il {since} · risposta entro il {due}",
-      "escalated_one": "Sollecitato {count} volta",
-      "escalated_other": "Sollecitato {count} volte",
-      "ncrsHeld": "Per le non conformità serve il permesso qualità",
-      "ncrs_one": "{count} non conformità aperta:",
-      "ncrs_other": "{count} non conformità aperte:",
       "finalHeld": "Per i controlli finali serve il permesso sui controlli",
       "final": "Controlli finali",
       "finalRow": "{number} · {checked} controllati",
@@ -844,11 +786,7 @@
         "PASSED": "Superato il {date}",
         "FAILED": "Non superato il {date}",
         "WAITING": "In attesa"
-      },
-      "nothing": "Nessuna sospensione, problema o rilievo di qualità"
-    },
-    "specs": {
-      "title": "Specifiche in vigore"
+      }
     }
   },
   "woStatus": {
@@ -1084,13 +1022,11 @@
     "note": "La tua nota (solo ufficio)",
     "reason": "Perché",
     "reasonHint": "Resta nella cronologia della promessa.",
-    "tellCustomer": "Avvisa il cliente nella conversazione dell'ordine (Attività).",
     "go": "Cambia la data",
     "problem": {
       "date": "Scegli una data",
       "past": "Una nuova promessa è un giorno da oggi in poi",
       "same": "È già la data promessa",
-      "reason": "Indica il perché",
       "code": "Scegli il perché",
       "lines": "Scegli almeno una riga"
     }
@@ -2264,14 +2200,10 @@
     "makeNext": "Crea il prossimo: {style}",
     "made": "{number} creato (bozza)",
     "col": {
-      "priority": "Priorità",
       "acts": "Azioni"
     },
     "acts": "Azioni per {number}",
     "dueOf": "Consegna di {number}",
-    "priorityOf": "Priorità di {number}",
-    "priorityHint": "Più alta viene prima",
-    "rushOf": "Urgenza per {number}",
     "heldHold": "Lo fa la produzione — un pianificatore o il responsabile di produzione",
     "heldHint": "Date di consegna, priorità, urgenza e azioni degli ordini di lavoro: lo fa la produzione — un pianificatore o il responsabile di produzione.",
     "act": {
@@ -2943,7 +2875,6 @@
       "sharedCheck": "Copre anche altro lavoro — non per il cliente",
       "qualityWithheld": "Non visibile per te: controlli finali, non conformità (li vedono Produzione e Qualità)",
       "noFinal": "Ancora nessun controllo finale.",
-      "liftHint": "Togliere un blocco: lo fa la produzione — un pianificatore o il responsabile di produzione.",
       "infoBody": "Cosa blocca l'ordine adesso, chi agisce e l'unico pulsante per agire; le domande che aspettano una risposta; poi la sua qualità in parole semplici. Il cliente legge le parole del blocco, mai la nota dell'ufficio.",
       "raiseNcr": "Apri una non conformità…"
     },
@@ -2977,7 +2908,86 @@
       "openPo": "Apri {number}",
       "howTitle": "Come si conta",
       "howBody": "Mai valorizzato. I materiali del cliente vanno prima al suo ordine più vecchio. Ciò che compriamo è pronto quando è riservato o consegnato all'ordine di lavoro; le riserve seguono la priorità degli ordini di lavoro.",
-      "infoBody": "Abbiamo tutto per produrre questo ordine: i materiali del cliente (Arrivato) e ciò che compriamo — prima quello che manca, con chi lo aspetta."
+      "infoBody": "Abbiamo tutto per produrre questo ordine: i materiali del cliente (Arrivato) e ciò che compriamo — prima quello che manca, con chi lo aspetta.",
+      "askBuyers": "Chiedi agli acquisti…",
+      "asked": "Chiesto il {date}"
+    },
+    "specs": {
+      "title": "Su quali specifiche produciamo",
+      "styles_one": "{count} modello",
+      "styles_other": "{count} modelli",
+      "needDecision_one": "{count} da decidere",
+      "needDecision_other": "{count} da decidere",
+      "packNewerShort": "la scheda tecnica del cliente è più recente della richiesta",
+      "ourTitle": "Il nostro cartamodello",
+      "noStyle": "Ancora nessun modello in questo ordine.",
+      "state": {
+        "inForce": "Cartamodello v{revision} · in vigore",
+        "replaced": "Cartamodello v{revision} · sostituito dalla v{by} il {date}",
+        "replacedNoDay": "Cartamodello v{revision} · sostituito dalla v{by}",
+        "replacedNoNumber": "Cartamodello v{revision} · sostituito",
+        "withdrawn": "Cartamodello v{revision} · ritirato, nessuna versione in vigore: chiedi al Prodotto",
+        "notFixedUses": "Non fissato · {number} usa la v{revision}",
+        "notFixedWill": "Non ancora fissato · l'ordine di lavoro prenderà la v{revision}"
+      },
+      "changeNote": "La v{revision} cambia: {note}",
+      "older": "{number} si produce sulla v{revision}; la v{newer} è in vigore dal {date}",
+      "olderNoDay": "{number} si produce sulla v{revision}; la v{newer} è in vigore",
+      "olderNoNewer": "{number} si produce sulla v{revision}",
+      "decision": "{changeOrder}: {what}",
+      "noDecision": "ancora nessuna decisione (decide il Prodotto)",
+      "disposition": {
+        "FINISH_OLD": "finire sulla v{revision}",
+        "REWORK": "rilavorare sul nuovo cartamodello",
+        "SCRAP": "scartare",
+        "HOLD": "fermo finché decide il Prodotto"
+      },
+      "partStyle": "il modello {code}",
+      "versions": "Versioni e modifiche ›",
+      "askChange": "Chiedi una modifica al modello…",
+      "moreStyles_one": "Ancora {count} modello: aprilo dalla sua pagina.",
+      "moreStyles_other": "Ancora {count} modelli: aprili dalle loro pagine.",
+      "packTitle": "Scheda tecnica del cliente",
+      "noPack": "Nessuna scheda tecnica del cliente per questo ordine.",
+      "packNewer": "Più recente della richiesta: produciamo sulla versione in vigore.",
+      "askCustomer": "Chiedi al cliente…",
+      "infoBody": "Per ogni modello, il cartamodello su cui lo produciamo e se è ancora quello giusto; poi i file del cliente dietro. Il cartamodello non si cambia qui: decide il Prodotto dalla pagina del modello."
+    },
+    "receipt": {
+      "open": "Registra cosa ha mandato il cliente…",
+      "openRow": "Registra cosa è arrivato…",
+      "title": "Registra cosa ha mandato il cliente · {number}",
+      "go": "Registra il ricevimento",
+      "sites": "gli stabilimenti",
+      "site": "Stabilimento",
+      "sitePick": "Scegli lo stabilimento",
+      "place": "Dove va la merce",
+      "placePick": "Scegli il posto",
+      "noPlace": "Questo stabilimento non ha un posto di ricevimento o di magazzino.",
+      "ddt": "Il loro DDT n.",
+      "ddtDate": "Data del DDT",
+      "col": {
+        "quantity": "Arrivato ora",
+        "lot": "Il loro lotto"
+      },
+      "quantityOf": "Quantità di {material}",
+      "lotOf": "Riferimento lotto di {material}",
+      "hide": "La pelle ricevuta pelle per pelle passa da un ricevimento d'acquisto.",
+      "hint": "Ogni riga diventa un lotto del cliente, rilasciato. I materiali del cliente si ricontano prima per questo ordine.",
+      "held": {
+        "site": "Scegli lo stabilimento",
+        "place": "Scegli dove va la merce",
+        "nothing": "Spunta almeno un materiale",
+        "quantity": "Una quantità sopra 0 con al massimo 4 decimali"
+      },
+      "refused": {
+        "hide": "{material} si gestisce pelle per pelle: si riceve con un ricevimento d'acquisto, non come lotto del cliente.",
+        "lot": "{material} non si gestisce a lotti: non può essere un lotto del cliente.",
+        "quantity": "{material}: una quantità sopra 0 con al massimo 4 decimali.",
+        "place": "Quel posto ora non prende merce: scegline un altro.",
+        "right": "Registrare la merce del cliente in questo stabilimento richiede il diritto di ricevere merce."
+      },
+      "done": "Ricevimento {number} registrato"
     }
   }
 }

@@ -1,4 +1,6 @@
 import { BLOCKER_KINDS, placeOf, type BlockerKind, type BlockerPlace } from '@nexus/factory-domain/production-brand/waiting'
+import { HEALTH_REASON_CODES, type HealthReasonCode } from '@nexus/factory-domain/production-brand/health'
+import type { BrandHealthView } from '../../../../../lib/production/health/api'
 import type { Order } from '../../api'
 import type { Dates, Headline, OrderProduction, ProductionLine, Words } from '../overview/api'
 import { AFTER } from '../overview/model'
@@ -20,6 +22,33 @@ export function nowStateOf(order: Pick<Order, 'status'>, headline: Headline | nu
   if (AFTER.includes(order.status)) return 'after'
   return headline?.health ? 'kept' : 'notKept'
 }
+
+// ---- F-PT-404 (B-PT-007): the health mark through the page's ONE read --------------------------------------------------------------
+/**
+ * The order's health as the mark's rule and its dialog read it (lib/production/health `BrandHealthView`), from the production read's
+ * headline — no second GET on the order page. Null: not followed now, or an older answer without the state's version (the page then
+ * reads the health on its own, as before).
+ */
+export function healthViewOf(order: Pick<Order, 'id' | 'number' | 'partyId' | 'status'>, headline: Headline | null | undefined): BrandHealthView | null {
+  const health = headline?.health ?? null
+  if (!health || health.version === undefined || AFTER.includes(order.status)) return null
+  const reason = health.raise && (HEALTH_REASON_CODES as readonly string[]).includes(health.raise.reasonCode) ? (health.raise.reasonCode as HealthReasonCode) : null
+  return {
+    orderId: order.id,
+    number: order.number,
+    partyId: order.partyId,
+    kept: true,
+    computed: health.computed,
+    health: health.code,
+    reasonCode: reason,
+    // The headline sends a raise only while it stands (the keeper's standingRaiseOf).
+    raise: health.raise && reason ? { reasonCode: reason, note: health.raise.note, setAt: health.raise.at ?? '', setBy: health.raise.by, until: health.raise.until, stands: true } : null,
+    waitingOn: headline?.waiting?.on ?? null,
+    waitingSince: headline?.waiting?.since ?? null,
+    version: health.version,
+  }
+}
+// ---- end F-PT-404
 
 // ---- the pieces per step ------------------------------------------------------------------------------------------------------
 

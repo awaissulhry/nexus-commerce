@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { Reply } from 'lucide-react'
+import { PackagePlus, Reply, ShoppingCart } from 'lucide-react'
 import { Disclosure, ProgressBar, type MenuItemDef } from '@nexus/ui/components'
-import { Tag, ToolbarButton } from '@nexus/ui/primitives'
+import { Button, Tag, ToolbarButton } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../../../lib/records/record-links'
@@ -12,13 +12,14 @@ import { OFFICE_PAGES } from '../../../../../../shell/nav/office-nav'
 import { useRecordFrame } from '../../../../../_shared/record-frame/RecordFrame'
 import { ReadinessPill } from '../../../../../production/work-orders/daily/view/DailyParts'
 import type { Order } from '../../../api'
-import { dayInstant } from '../../../model'
+import { dayInstant, isFinal } from '../../../model'
 import { NAMESPACE as DEPTH, planHeld, quantityText } from '../../../depth/model'
 import { readOf } from '../../overview/model'
-import { boughtOf, customerGoodsOf, isThere, materialsAnswerOf } from '../../production/materials'
+import { askOf, boughtOf, customerGoodsOf, isThere, materialsAnswerOf } from '../../production/materials'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { LineMenuButton } from '../LineMenu'
 import { PartFailed, PartReading, Quiet, Section } from './Kit'
+import { ReceiptDialog } from './ReceiptDialog' // F-PT-304
 
 const WORK_ORDERS_NS = 'production-work-orders'
 
@@ -61,10 +62,19 @@ function Materials({ order, model, actions }: { order: Order; model: OrderRecord
   const missingGoods = (goods ?? []).filter((good) => good.toCome > 0)
   const missingBought = (bought ?? []).filter((material) => !isThere(material))
   const readyBought = (bought ?? []).filter((material) => isThere(material))
+  // F-PT-304: Record what the customer sent… (inventory.receive; hidden without it, L9; held in words on a finished order or a write).
+  const receiveHeld = model.busy ? t('held.busy') : isFinal(order) ? d('held.final') : null
+  const record = (only: string | null, label: string) =>
+    model.receipt ? (
+      <Button key={`record-${only ?? 'all'}`} size="sm" variant={only ? 'quiet' : undefined} heldReason={receiveHeld} onClick={() => actions?.receipt?.onOpen(only)}>
+        <PackagePlus size={14} aria-hidden /> {label}
+      </Button>
+    ) : null
+  const workOrderSites = order.chain.workOrders.map((row) => ({ id: row.id, siteId: row.siteId }))
   const answerWords = answer.kind === 'missing' ? t('productionTab.materials.missing', { count: answer.count }) : answer.kind === 'allHere' ? t('productionTab.materials.allHere') : answer.kind === 'noWork' ? t('productionTab.materials.noWork') : null
 
   return (
-    <Section id="materials" title={t('productionTab.materials.title')} answer={answerWords} more={items.length > 0 ? <LineMenuButton label={t('productionTab.more', { section: t('productionTab.materials.title') })} items={items} /> : null} info={<p>{t('productionTab.materials.infoBody')}</p>}>
+    <Section id="materials" title={t('productionTab.materials.title')} answer={answerWords} buttons={model.receipt && goods && goods.length > 0 ? [record(null, t('productionTab.receipt.open'))] : undefined} more={items.length > 0 ? <LineMenuButton label={t('productionTab.more', { section: t('productionTab.materials.title') })} items={items} /> : null} info={<p>{t('productionTab.materials.infoBody')}</p>}>
       {missingGoods.length + missingBought.length > 0 ? (
         <ul className="fw-pt-moves" aria-label={t('productionTab.materials.missingTitle')}>
           {missingGoods.map((good) => (
@@ -74,6 +84,7 @@ function Materials({ order, model, actions }: { order: Order; model: OrderRecord
               <span className="fw-pt-inline">
                 <Tag tone="warning">{t('productionTab.materials.waitsCustomer')}</Tag>
                 {mayAsk ? <ToolbarButton icon={<Reply size={14} aria-hidden />} label={t('productionTab.materials.askCustomer')} onClick={() => frame?.compose?.({ messageId: null, mode: 'reply' })} /> : null}
+                {record(good.id, t('productionTab.receipt.openRow'))}
               </span>
             </li>
           ))}
@@ -93,6 +104,18 @@ function Materials({ order, model, actions }: { order: Order; model: OrderRecord
                     {po.dueDate ? ` · ${day(po.dueDate)}` : ''}
                   </Link>
                 ))}
+                {(() => {
+                  // F-PT-304: Ask the buyers… (the Material plan's own dialog, per work order short of it); once asked "Asked 20 Nov".
+                  if (!model.askBuyers) return null
+                  const ask = askOf(material, workOrderSites, model.askBuyers.asked, model.today)
+                  if (!ask) return null
+                  if (ask.kind === 'asked') return <span className="fw-pt-sub">{t('productionTab.materials.asked', { date: formatDate(ask.at, { locale }) })}</span>
+                  return (
+                    <Button size="sm" variant="quiet" heldReason={model.busy ? t('held.busy') : null} onClick={() => actions?.onAskBuyers?.(ask.line)}>
+                      <ShoppingCart size={14} aria-hidden /> {t('productionTab.materials.askBuyers')}
+                    </Button>
+                  )
+                })()}
               </span>
             </li>
           ))}
@@ -172,6 +195,8 @@ function Materials({ order, model, actions }: { order: Order; model: OrderRecord
       <Disclosure summary={t('productionTab.materials.howTitle')}>
         <p className="fw-pt-hint">{t('productionTab.materials.howBody')}</p>
       </Disclosure>
+      {model.receipt?.dialog ? <ReceiptDialog order={order} model={model.receipt.dialog} actions={actions?.receipt} /> : null}
+      {model.askBuyers?.element ?? null}
     </Section>
   )
 }

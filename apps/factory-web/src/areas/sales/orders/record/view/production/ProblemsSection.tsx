@@ -16,7 +16,7 @@ import { orderWaitingOf, readOf, say } from '../../overview/model'
 import { stripDoorsOf, whereStripsOf, type StripDoorsInput } from '../../overview/where'
 import { finalChecksOf, ncrsOf, qualityVerdictOf, waitingAnswersOf } from '../../production/problems'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
-import { ShowInThreadDoor } from '../Discuss'
+import { DiscussDoor, ShowInThreadDoor } from '../Discuss'
 import { CREDIT_NS, StripRow } from '../overview/StripRow'
 import { PartFailed, PartReading, Quiet, Section } from './Kit'
 
@@ -54,8 +54,6 @@ function Problems({ order, model, actions }: { order: Order; model: OrderRecordM
   const readOnly = readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold })
   const input: StripDoorsInput = { prefix: model.prefix, order, can: model.can, readOnly, busy: model.busy, approval, depthCan: model.depth?.can ?? null, work: read?.work?.workOrders ?? [], acts: model.workOrderActs?.can ?? null, credit: model.credit ?? null }
   const doors = strips.map((strip) => ({ strip, doors: stripDoorsOf(strip, input) }))
-  // L9: a hold of this order's own work orders whose Lift the reader may not use — one line says who does it (no grey door).
-  const liftHidden = !readOnly && doors.some(({ strip, doors: shown }) => (strip.kind === 'production' || strip.kind === 'pause') && shown.length === 0 && strip.workOrders.reached.some((entry) => !entry.shared))
   const notes = read?.headline?.holdNotes ?? null
   const asks = model.asks ?? null
   const answers = asks?.value ? waitingAnswersOf(asks.value.issues, model.today) : null
@@ -101,13 +99,14 @@ function Problems({ order, model, actions }: { order: Order; model: OrderRecordM
                 <li key={`${note.workOrderId}-${note.since}`} className="fw-pt-mark" id={`about-ProductionHold-${note.workOrderId}`}>
                   <span className="fw-pt-inline">
                     <Lock size={12} aria-hidden /> <b>{note.number}</b> {note.note}
+                    {/* F-SA-266: a hold is discussed in an office note only. */}
+                    <DiscussDoor order={order} part={t('discuss.hold', { number: note.number })} target={{ kind: 'WorkOrder', id: note.workOrderId }} officeOnly />
                   </span>
                   <span className="fw-pt-sub">{t('production.quality.officeOnly', { date: formatDate(note.since, { locale }) })}</span>
                 </li>
               ))}
             </ul>
           ) : null}
-          {liftHidden ? <p className="fw-pt-hint">{t('productionTab.problems.liftHint')}</p> : null}
 
           {asks ? <h3 className="fw-pt-h3">{t('productionTab.problems.answersTitle')}</h3> : null}
           {asks && !asks.value && !asks.problem ? <PartReading rows={1} height={22} /> : null}
@@ -158,6 +157,8 @@ function Problems({ order, model, actions }: { order: Order; model: OrderRecordM
                   <span className="fw-pt-inline">
                     <Tag tone={check.status === 'PASSED' ? 'success' : check.status === 'FAILED' ? 'danger' : 'neutral'}>{t(`production.quality.finalState.${check.status}`, { date: check.on ? day(check.on) : '—' })}</Tag>
                     <span>{t('production.quality.finalRow', { number: check.number ?? '—', checked: check.checked })}</span>
+                    {/* F-SA-266: quality is discussed in an office note only. */}
+                    <DiscussDoor order={order} part={t('discuss.quality', { number: check.number ?? '—' })} target={{ kind: 'WorkOrder', id: check.workOrderId }} officeOnly />
                   </span>
                   {check.inspected !== null && check.lot !== null ? <span className="fw-pt-sub">{t('productionTab.problems.inspected', { inspected: check.inspected, lot: check.lot })}</span> : null}
                   {check.defects ? <span className="fw-pt-sub">{t('productionTab.problems.defects', check.defects)}</span> : null}

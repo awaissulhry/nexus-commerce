@@ -46,6 +46,9 @@ import type { LinesTabActions, LinesTabModel } from './lines-tab-model' // F-OL-
 import type { Words } from './overview/api' // F-MS-102: a refusal of the stage set by hand in the domain's own words
 import type { StageByHandAsk } from './overview/stage-by-hand' // F-MS-103: what the stage dialog sends
 import type { OrderIssues } from './production/api' // F-PT-103: the order's asks (the issues list)
+import type { StyleView } from '../../../products/styles/api' // F-PT-401: the order's styles (What we make it to)
+import type { ReceiptActions, ReceiptModel } from './production/receipt' // F-PT-304
+import type { ShortageLine } from '../../../purchasing/requests/ask/model' // F-PT-304
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -321,6 +324,18 @@ export interface OrderRecordModel {
   asks?: Part<OrderIssues> | null
   /** F-SA-234: the materials' readiness of the work orders on Production (the production lane's word per work order); null: not read. */
   readiness?: Part<ReadinessRow[]> | null
+  /**
+   * F-PT-401 (L6): the order's styles as "What we make it to" reads them — each style's own read (GET /product/styles/:id, at most 10,
+   * read once the section came into view), `more` beyond the ten, and what the reader may open; null: no product.styles.view (the rows
+   * still draw from the lines' pins and the work orders' specs).
+   */
+  styleSpecs?: { readonly parts: ReadonlyMap<string, Part<StyleView>>; readonly more: number } | null
+  /** F-PT-401: the style page's versions tab (product.bom.view) and Ask for a design change… (product.changes.request + view, L11). */
+  specCan?: { readonly versions: boolean; readonly changeRequest: boolean }
+  /** F-PT-304: Record what the customer sent… (inventory.receive; null: hidden, L9) and its dialog while it is open. */
+  receipt?: { readonly dialog: ReceiptModel | null } | null
+  /** F-PT-304: Ask the buyers… — the Material plan's own dialog and the asks already made ("Asked 20 Nov"); null: hidden (L9). */
+  askBuyers?: { readonly element: ReactNode; readonly asked: ReadonlyMap<string, string> } | null
   /** F-SA-237: the order's files (the Files tab; the same read as the thread's Files window); absent: not read here. */
   files?: OrderFilesModel | null
   /** F-OP-119: the tracking dialog of the one shipment opened on Shipments (its container: use-shipments-acts); null: none open. */
@@ -456,6 +471,16 @@ export interface OrderRecordActions {
   onRetryProduction?: () => void
   /** F-PT-103: read the order's asks again (Try again on Production now's asks line). */
   onRetryAsks?: () => void
+  /** F-PT-401 (L6): "What we make it to" came into view — its style reads start. */
+  onSpecsSeen?: () => void
+  /** F-PT-401: read one style again (its row's Try again). */
+  onRetrySpec?: (styleId: string) => void
+  /** F-PT-402: open one of the order's files in the ONE viewer (the Files tab, through the order's open route). */
+  onOpenOrderFile?: (fileId: string, opener: HTMLElement | null) => void
+  /** F-PT-304: the receipt dialog's acts. */
+  receipt?: ReceiptActions
+  /** F-PT-304: ask the buyers for one work order's shortage (the from-shortage dialog). */
+  onAskBuyers?: (line: ShortageLine) => void
   onOpenLine?: (rowId: string | null) => void
   /** F-OP-104: Next dates' requested date "Change…"; F-OO-144: it opens the small dialog (`{ kind: 'requested' }`), no page hop. */
   onRequestedChange?: () => void

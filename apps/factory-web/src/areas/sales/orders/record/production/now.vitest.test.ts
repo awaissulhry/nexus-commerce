@@ -5,7 +5,9 @@ import { order } from '../../_demo/fixtures'
 import { LINE_BLK, LINE_RED } from '../../_demo/fixtures'
 import { HEADLINE, LINES, PRODUCTION_READ } from '../overview/fixtures'
 import type { Headline } from '../overview/api'
-import { daysBetween, healthWhyOf, lineLabelOf, nextStepOf, nowStateOf, piecesOf, placeAnchorOf, urgencyOf } from './now'
+import { readFileSync } from 'node:fs'
+import { markActsOf } from '../../../../../lib/production/health/model'
+import { daysBetween, healthViewOf, healthWhyOf, lineLabelOf, nextStepOf, nowStateOf, piecesOf, placeAnchorOf, urgencyOf } from './now'
 
 // F-PT-102 (order PRODUCTION tab, W1): Production now — the pieces per step, the ONE sentence that agrees with the stored health,
 // one door per blocker, the urgency line.
@@ -92,3 +94,34 @@ describe('F-PT-102: one door per blocker, the state, the urgency', () => {
     }
   })
 })
+
+// ---- F-PT-404 (B-PT-007): the health mark through the page's ONE read --------------------------------------------------------------
+describe('F-PT-404: the mark reads the headline (no second GET) and re-reads it after a write', () => {
+  const so = order('IN_PRODUCTION')
+  const w = (en: string, it: string) => ({ en, it })
+  const at = (over: Partial<NonNullable<Headline['health']>>): Headline => ({ ...HEADLINE, health: { ...HEADLINE.health!, version: 7, ...over } })
+
+  it('the headline as the mark rule reads it: kept, the stored and computed words, a standing raise, the version', () => {
+    const view = healthViewOf(so, at({ code: 'AT_RISK', computed: 'ON_TRACK', raise: { reasonCode: 'MATERIAL_LATE', words: w('Material late', 'Materiale in ritardo'), until: '2026-11-30', note: 'Pelle in ritardo.', by: { id: 'u1', name: 'Sara Prova' }, at: '2026-11-20T09:00:00Z' } }))
+    expect(view).toMatchObject({ orderId: so.id, kept: true, health: 'AT_RISK', computed: 'ON_TRACK', version: 7, raise: { reasonCode: 'MATERIAL_LATE', stands: true, until: '2026-11-30', setBy: { name: 'Sara Prova' } } })
+    // A standing mark over dates that say On track: Change… and Remove the mark (the one rule of both pages).
+    expect(markActsOf(view, true)).toEqual({ mark: 'change', remove: true })
+    expect(markActsOf(healthViewOf(so, at({ code: 'ON_TRACK', computed: 'ON_TRACK', raise: null })), true)).toEqual({ mark: 'raise', remove: false })
+    expect(markActsOf(healthViewOf(so, at({ code: 'LATE', computed: 'LATE', raise: null })), true)).toEqual({ mark: null, remove: false })
+  })
+
+  it('an older answer (no version), no health or after production: null — the page reads the health itself, as before', () => {
+    expect(healthViewOf(so, { ...HEADLINE, health: { ...HEADLINE.health!, version: undefined } })).toBeNull()
+    expect(healthViewOf(so, { ...HEADLINE, health: null })).toBeNull()
+    expect(healthViewOf(order('SHIPPED'), at({}))).toBeNull()
+  })
+
+  it('the wiring: the container hands the headline\'s view and a headline re-read; the hook skips its GET with it', () => {
+    const container = readFileSync(new URL('../OrderRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toContain("health: { view: ready && production.state?.status === 'ready' ? healthViewOf(ready, production.state.read.headline) : null, reread: () => production.again(['headline']) }")
+    const hook = readFileSync(new URL('../../../../../lib/production/health/use-health.ts', import.meta.url), 'utf8')
+    expect(hook).toContain('if (!fromPage) read()')
+    expect(hook).toContain('if (knownRef.current) knownRef.current.reread()')
+  })
+})
+// ---- end F-PT-404

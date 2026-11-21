@@ -5,11 +5,8 @@ import { renderView, textOf } from '../../../../lib/record-thread/parts/testing'
 import { designScreen } from './fixtures'
 import { LOCALES } from '../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
-import { productionWordsFor } from '../../../../lib/production/words'
-import { COUNTED_STEPS, madeForOf, ownProgress, productionProgress } from './production'
-// F-SA-234b
-import { forecastPart } from './production'
-import { FAILED_STATE, LOADING_STATE, ready, WORK_READ } from './overview/fixtures'
+import { madeForOf, ownProgress } from './production'
+import { ready, WORK_READ } from './overview/fixtures'
 import { LINE_BLK, LINE_RED } from '../_demo/fixtures'
 // F-SA-235b
 import { designScreen as workOrderScreen } from '../../../production/work-orders/record/fixtures'
@@ -19,43 +16,7 @@ import { actsCanOf, cancelHeld, planningHref, rowActsOf, type ActsRow } from '..
 // op-fx1: a source without its comments (block, JSX and line comments), for a pin about what the code does — never about its notes.
 const codeOf = (source: string): string => source.replace(/\{?\/\*[\s\S]*?\*\/\}?/g, '').replace(/(^|\s)\/\/.*$/gm, '$1')
 
-/**
- * Lead fix (production-page lane): the order's Production tab wrote `sewn ?? 0` — "0 sewn" where the site does not scan sewing.
- * Now ONE figure (lib/production progressFigure: the bar shows what its words name) and, for a step the site does not count, "—"
- * with the reason in words.
- */
-
-describe('the Production tab’s progress, honest where a step is not scanned', () => {
-  const row = (progress: { cut: number | null; bundled: number | null; sewn: number | null; finished: number | null } | null, status = 'IN_PROGRESS') => ({ progress, pieces: 100, status }) as Parameters<typeof productionProgress>[0]
-
-  it('a site that does not scan sewing: no "0 sewn", the step says it is not counted', () => {
-    const { figure, notCounted } = productionProgress(row({ cut: 100, bundled: null, sewn: null, finished: 40 }))
-    expect(notCounted).toEqual(['sewn'])
-    expect(figure.step).toBe('finished')
-    expect(figure.percent).toBe(40)
-    for (const locale of LOCALES) {
-      const words = productionWordsFor(locale)(figure.words.key, figure.words.params)
-      expect(words).toMatch(/40/)
-      expect(words).not.toMatch(/\b0\b/)
-      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-      expect(t('production.notCounted.sewn')).not.toMatch(/production\.|\{/)
-      for (const step of COUNTED_STEPS) expect(t(`production.step.${step}`)).not.toMatch(/production\./)
-    }
-  })
-
-  it('the bar shows the figure its words name: sewn 80 of 100 is 80 %, never finished 0 %', () => {
-    const { figure, notCounted } = productionProgress(row({ cut: 100, bundled: 90, sewn: 80, finished: 0 }))
-    expect(figure).toMatchObject({ step: 'sewn', done: 80, percent: 80 })
-    expect(notCounted).toEqual([])
-  })
-
-  it('every step counted: none is marked; a draft has no figure and no steps', () => {
-    expect(productionProgress(row({ cut: 0, bundled: 0, sewn: 0, finished: 0 })).notCounted).toEqual([])
-    const draft = productionProgress(row(null, 'DRAFT'))
-    expect(draft.figure.percent).toBeNull()
-    expect(draft.notCounted).toEqual([])
-  })
-})
+// F-PT-403: the old per-work-order progress (productionProgress) went with its card; ownProgress below keeps the rule (never "0 sewn").
 
 // ---- F-SA-234: the order's OWN pieces on a work order, and what else it makes (no other customer named or counted) ------------
 describe('F-SA-234: Production › Work orders — the order’s own pieces', () => {
@@ -82,7 +43,7 @@ describe('F-SA-234: Production › Work orders — the order’s own pieces', ()
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
       for (const entry of [...madeForOf(own, 100, { orders: [{ number: 'SO-1' }], more: 2 }, true, true)]) expect(t(entry.key, entry.params), `${locale}: ${entry.key}`).not.toMatch(/production\.|\{/)
-      for (const key of ['production.held', 'production.rush', 'production.progressHeld', 'production.col.own', 'production.col.materials', 'gate.money', 'dates.customerSees', 'dates.cutStart', 'dates.sewStart', 'dates.finish']) expect(t(key, { date: 'x' }), `${locale}: ${key}`).not.toBe(key)
+      for (const key of ['production.held', 'production.col.own', 'production.col.materials', 'gate.money']) expect(t(key, { date: 'x' }), `${locale}: ${key}`).not.toBe(key)
       expect(t('production.mtmRow', { style: 'S', colour: 'C', units: 12, workOrders: 12 })).toMatch(/12/)
     }
   })
@@ -96,7 +57,7 @@ describe('F-SA-235 / F-PT-301…302: Production’s Problems & holds — each bl
   it('a quality hold in plain words, the office note marked office only, a question that needs an answer, the NCR, the final inspection', () => {
     const text = textOf(draw('production-quality'))
     // F-PT-301: the hold is Overview's own strip; F-PT-302: the asks come from the ONE issues list, the final check and NCR in words.
-    for (const words of ['Problems & holds', 'What stops it', 'Shade difference on the leather', 'WO-00022', 'Lotto pelle in verifica col fornitore.', 'Office only', 'Needs an answer', 'Question for production', 'Escalated 1× — now with the backup', 'When does the leather come back from the supplier?', 'Sara Prova', 'NCR-2026-0041', 'Minor', 'Loose stitching on the collar', 'FI-2026-0088', '5 of 40 inspected', '0 critical · 1 major · 2 minor', 'Final check waiting', 'Specs in force']) expect(text, words).toContain(words)
+    for (const words of ['Problems & holds', 'What stops it', 'Shade difference on the leather', 'WO-00022', 'Lotto pelle in verifica col fornitore.', 'Office only', 'Needs an answer', 'Question for production', 'Escalated 1× — now with the backup', 'When does the leather come back from the supplier?', 'Sara Prova', 'NCR-2026-0041', 'Minor', 'Loose stitching on the collar', 'FI-2026-0088', '5 of 40 inspected', '0 critical · 1 major · 2 minor', 'Final check waiting', 'What we make it to', 'Our pattern']) expect(text, words).toContain(words)
     expect(text).not.toContain('Nothing stops this order')
     expect(text).not.toContain('Holds, quality & problems')
   })
@@ -122,7 +83,9 @@ describe('F-SA-235 / F-PT-301…302: Production’s Problems & holds — each bl
     // F-PT-303: the materials card gave way to Production's own Materials section (the customer's goods and what we buy, missing first).
     expect(tab).toContain('<MaterialsSection order={order} model={model} actions={actions} />')
     expect(tab).not.toContain('<MaterialsCard')
-    expect(tab).toContain('<TechPackCard model={model.depth} actions={actions?.depth} />')
+    // F-PT-402 / 403: the customer's tech pack is What we make it to's own half (the old TechPackCard is gone).
+    expect(tab).toContain('<MakeToSection order={order} model={model} actions={actions} />')
+    expect(tab).not.toContain('TechPackCard')
     const workOrder = readFileSync(new URL('../../../production/work-orders/record/view/OverviewTab.tsx', import.meta.url), 'utf8')
     expect(workOrder).toContain("from '../../../../../lib/production/health/view/HealthCard'")
     expect(readFileSync(new URL('./view/LinesTab.tsx', import.meta.url), 'utf8')).not.toContain('<MaterialsCard')
@@ -132,23 +95,7 @@ describe('F-SA-235 / F-PT-301…302: Production’s Problems & holds — each bl
 
 // ---- F-SA-234b (sa-7's follow-up): the by-line finish forecast reads the order's own production read (`dates.forecast`) ----------
 describe('F-SA-234b — the by-line finish forecast from the order’s own production read, not every site’s promise lines', () => {
-  it('ready: per line its finish, what sets it, the days to spare or short; an unknown risk word is no risk', () => {
-    const part = forecastPart(ready(WORK_READ))
-    expect(part?.problem).toBeNull()
-    expect(part?.value?.get(LINE_BLK)).toEqual({ finish: '2026-12-08', source: 'BOARD', slackDays: 7, risk: 'ON_TIME' })
-    expect(part?.value?.get(LINE_RED)).toEqual({ finish: '2026-12-29', source: 'WORK_ORDER_DUE', slackDays: -7, risk: 'AT_RISK' })
-    const odd = forecastPart(ready({ ...WORK_READ, dates: { ...WORK_READ.dates!, forecast: [{ ...WORK_READ.dates!.forecast![0]!, risk: 'SOMETHING_NEW' }] } }))
-    expect(odd?.value?.get(LINE_BLK)?.risk).toBeNull()
-  })
-
-  it('withheld (no planning.promise.view) or not read: null — "—" per line, never "not planned"; reading and failed as the read is', () => {
-    expect(forecastPart(ready({ ...WORK_READ, withheld: ['dates.forecast'], dates: { ...WORK_READ.dates!, forecast: null } }))).toBeNull()
-    expect(forecastPart(null)).toBeNull()
-    expect(forecastPart(undefined)).toBeNull()
-    expect(forecastPart(LOADING_STATE)).toEqual({ value: null, problem: null })
-    expect(forecastPart(FAILED_STATE)).toEqual({ value: null, problem: 'problem.read.unavailable' })
-  })
-
+  // F-PT-403: the forecast per line is by-line's (production/by-line.vitest.test.ts); the old forecastPart helper is gone.
   it('Production draws it by line: 7 days to spare (the planning board), 7 days short (a work order’s due day); withheld: no figure', () => {
     const text = textOf(draw('w2b-323-dates'))
     expect(text).toContain('7 days to spare')
@@ -466,7 +413,7 @@ describe('F-OP-113: the work-order rows act in place; a work order shared with o
   it('the words in it + en', () => {
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-      for (const key of ['wo.col.priority', 'wo.col.acts', 'wo.priorityHint', 'wo.heldHold', 'wo.heldHint', 'wo.act.note', 'wo.note.title', 'wo.note.label', 'wo.note.hint', 'wo.note.save', 'wo.note.saved', 'wo.reading', 'wo.readingShort', 'wo.readFailed', 'wo.acts', 'wo.dueOf', 'wo.priorityOf', 'wo.rushOf'])
+      for (const key of ['wo.col.acts', 'wo.heldHold', 'wo.heldHint', 'wo.act.note', 'wo.note.title', 'wo.note.label', 'wo.note.hint', 'wo.note.save', 'wo.note.saved', 'wo.reading', 'wo.readingShort', 'wo.readFailed', 'wo.acts', 'wo.dueOf'] /* F-PT-403: wo.col.priority, priorityHint, priorityOf, rushOf went with the in-row priority (F-PT-105) */)
         expect(t(key, { number: 'WO-00021' }), `${locale} ${key}`).not.toMatch(/^wo\.|\{/)
     }
   })
@@ -609,11 +556,9 @@ describe('F-OP-116: decide in place — a change waiting under its row, Still to
       ...over,
     }) as never
 
-  it('a row\'s waiting changes: PROPOSED on that work order only, the oldest first; "Change waits: 40 → 28"; held for who may not decide', async () => {
-    const { changeFiguresOf, changeHeldOf, waitingChangesOf } = await import('./changes/model')
-    const list = [change({ id: 'c2', proposedAt: '2026-11-19T09:00:00Z' }), change(), change({ id: 'c3', status: 'APPLIED' }), change({ id: 'c4', workOrder: { id: 'wo-2', number: 'WO-2', status: 'RELEASED' } })]
-    expect(waitingChangesOf(list, 'wo-1').map((entry: { id: string }) => entry.id)).toEqual(['c1', 'c2'])
-    expect(waitingChangesOf(null, 'wo-1')).toEqual([])
+  // F-PT-403: the row's own "Change waits" list went with F-PT-105's ONE strip (waitingChangesOf removed); the figures and the hold stay.
+  it('a change: "40 → 28"; held for who may not decide', async () => {
+    const { changeFiguresOf, changeHeldOf } = await import('./changes/model')
     expect(changeFiguresOf(change())).toEqual({ before: 40, after: 28 })
     expect(changeHeldOf(change())).toBeNull()
     expect(changeHeldOf(change({ mayDecide: false }))).toEqual({ key: 'wo.waitsPlanner', params: { at: '2026-11-18T09:30:00Z' } })

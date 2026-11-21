@@ -94,6 +94,8 @@ export const headlineSchema = z.object({
       words,
       computed: z.enum(BRAND_HEALTHS).nullable(),
       raise: z.object({ reasonCode: z.string(), words, until: day, note: z.string().nullable(), by: person.nullable(), at: instant.nullable() }).nullable(),
+      // F-PT-404 (B-PT-007; optional in an older answer): the production state's version — the mark's writes send it from this read.
+      version: z.number().int().optional(),
     })
     .nullable(),
   waiting: z.object({
@@ -182,6 +184,18 @@ export const workSchema = z.object({
       // Production list's own facts (null: finished, or shared with other customers).
       risk: workOrderRisk.nullable().optional(),
       // ---- end F-PT-104
+      // ---- F-PT-401 (B-PT-004; optional in an older answer): the pattern this work order is made to, whether a newer one is in force
+      // and the change order's decision; null for a work order shared with other customers. Revision numbers only, never words.
+      spec: z
+        .object({
+          revision: z.object({ revision: z.number().int(), status: z.string() }).nullable(),
+          state: z.string(),
+          newer: z.object({ revision: z.number().int(), releasedOn: day.nullable() }).nullable(),
+          decision: z.object({ disposition: z.string(), changeOrder: z.string() }).nullable(),
+        })
+        .nullable()
+        .optional(),
+      // ---- end F-PT-401
     }),
   ),
   mtm: z.array(

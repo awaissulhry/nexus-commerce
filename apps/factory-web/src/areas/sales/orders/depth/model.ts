@@ -9,7 +9,6 @@ import type {
   ChangeYesState,
   DepositKinds,
   ExtraDepositKind,
-  FinishSource,
   Freeze,
   FreezeField,
   FreezeStage,
@@ -398,15 +397,7 @@ export function packRows(pack: TechPack | null): PackRow[] {
 
 // ---- the production finish forecast (from the plan, B-W2b-317) --------------------------------------------------------------
 
-export interface Forecast {
-  finish: string | null
-  source: FinishSource
-  slackDays: number | null
-  risk: RiskState | null
-}
-
-// F-SA-234b: the forecast per line comes with the order's own production read (record/production `forecastPart`); no read of
-// every site's promise lines builds it any more.
+// F-PT-403: the forecast per line is Dates & plan's (record/production/by-line.ts, from the order's own production read).
 export const RISK_TONE: Readonly<Record<RiskState, Tone>> = Object.freeze({ LATE: 'danger', AT_RISK: 'warning', NOT_PROMISED: 'neutral', ON_TIME: 'success' })
 
 // ---- milestones (SO3:01) ----------------------------------------------------------------------------------------------------
