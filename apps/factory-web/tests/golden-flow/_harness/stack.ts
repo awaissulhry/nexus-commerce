@@ -173,7 +173,15 @@ const relay = startRelay({ database, publish: queuePublisher(kit), log: workerLo
 const { resumeOnReplyHandler } = await imp<typeof import('../../../../factory-api/src/modules/sales/inquiries/resume-on-reply')>('modules/sales/inquiries/resume-on-reply.ts')
 const THREADS_HANDLERS = [resumeOnReplyHandler()]
 // ── end B-TH-227 ──
-const workers = startEventWorkers({ kit, handlers: [...handlers(), ...THREADS_HANDLERS], database, live: queueRedis, log: workerLog, handlerBackoffMs: 300 })
+// ── PT fx3 (order production tab C1, B-PT-015): background.ts's `production.issueAnswered` (W2B_PR43B_HANDLERS) — a reply in the
+// thread answers the office's ask (and a ticked task, a shared reply to a customer's report, as in production). th9-order-page's
+// step 12 walks it: without it the stack never answered the ask (the reply's event had no handler here). It moves only production
+// issues: none is raised by a stage before th9's step 12, and the seeds' one open customer report (SEED-SO-B001) waits for a shared
+// reply on its order that no browser stage sends — so the other stages are untouched. ──
+const { issueAnsweredHandler } = await imp<typeof import('../../../../factory-api/src/modules/production/issues/answered')>('modules/production/issues/answered.ts')
+const PRODUCTION_TAB_HANDLERS = [issueAnsweredHandler()]
+// ── end PT fx3 ──
+const workers = startEventWorkers({ kit, handlers: [...handlers(), ...THREADS_HANDLERS, /* PT fx3 */ ...PRODUCTION_TAB_HANDLERS], database, live: queueRedis, log: workerLog, handlerBackoffMs: 300 })
 
 // ---- control ---------------------------------------------------------------------------------------------------------------
 interface Person {

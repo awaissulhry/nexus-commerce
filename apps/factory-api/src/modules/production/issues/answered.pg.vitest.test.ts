@@ -662,3 +662,33 @@ describe('B-PT-015: a reply in the thread answers the office’s ask, its batch 
   })
 })
 // ── end B-PT-015 ──
+
+// ── PT fx3 (B-PT-015 end to end, as the order page and the browser golden flow write it) ──
+/**
+ * The same path as th9-order-page's step 12: the ask through POST /production/notes {askSupervisor, needsAnswer}, the supervisor's
+ * reply through the thread's OWN route (POST /threads/SalesOrder/:id/notes {body, replyToMessageId}) as the supervisor's session;
+ * then the outbox drained through the worker's handler (as every test here does): the ask is ANSWERED, its task DONE.
+ */
+describe('PT fx3: the supervisor’s reply through POST /threads/SalesOrder/:id/notes answers the ask', { timeout: 120_000 }, () => {
+  it('the route keeps replyToMessageId; once the outbox is drained the ask reads ANSWERED and its task DONE', async () => {
+    SESSIONS['pt.supervisorA'] = { audience: 'office', tenantId: ids.tenantId, actorId: people.supervisorA, grants: [grant([...PERMISSIONS, 'orders.view'], [ids.a])] }
+    await answering()
+    const raised = await ok('office.all', '/production/notes', { records: [SO(w.a.salesOrderId)], body: 'Made-up: where is this order? Is the date safe?', askSupervisor: true, needsAnswer: true })
+    const entry = (raised.written as Json[]).find((written) => written.id === w.a.salesOrderId)!
+    const issue = (await issueOf(entry.issueId))!
+    expect(issue).toMatchObject({ source: 'OFFICE', status: 'OPEN', messageId: entry.messageId })
+    await answering()
+
+    const reply = await call('pt.supervisorA', `/threads/SalesOrder/${w.a.salesOrderId}/notes`, { body: 'Made-up: cutting is done, sewing is on the line, the date holds.', replyToMessageId: entry.messageId })
+    expect(reply.status, reply.raw.slice(0, 600)).toBe(201)
+    const stored = (await one<{ replyToMessageId: string | null; authorId: string | null; authorKind: string }>(`SELECT "replyToMessageId", "authorId", "authorKind"::text AS "authorKind" FROM "Message" WHERE id = $1`, [reply.body.message.id]))!
+    expect(stored).toEqual({ replyToMessageId: entry.messageId, authorId: people.supervisorA, authorKind: 'USER' })
+
+    const events = await answering()
+    expect(events.map((event) => event.type)).toContain('thread.message_posted')
+    expect(await work(events)).toMatchObject({ answered: 1 })
+    expect(await issueOf(entry.issueId)).toMatchObject({ status: 'ANSWERED', answeredAt: expect.any(Date) })
+    expect((await taskOf(issue.taskId))!.status).toBe('DONE')
+  })
+})
+// ── end PT fx3 ──

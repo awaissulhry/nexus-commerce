@@ -1121,7 +1121,8 @@ describe('B-PT-004: each work order’s spec — in force, replaced by a newer o
     )
     const spec = await specOf()
     expect(spec).toEqual({ revision: { revision: inForce.revision, status: 'OBSOLETE' }, state: 'NEWER_RELEASED', newer: { revision: top, releasedOn: '2026-11-12' }, decision: null })
-    const versions = (await ok('office.all', `/production/work-orders/${alpha.workOrderId}/spec/versions`)).newer
+    // pt-fx3: the route answers { spec: WorkOrderSpecView } (product/versions/routes.ts); its banner is `spec.newer`.
+    const versions = (await ok('office.all', `/production/work-orders/${alpha.workOrderId}/spec/versions`)).spec.newer
     expect({ state: spec.state, newer: spec.newer }).toEqual({ state: versions.state, newer: { revision: versions.newer.revision, releasedOn: versions.newer.releasedOn } })
     // The rule's English message is never sent: the screen says the state in its own words.
     expect(JSON.stringify(spec)).not.toContain(versions.message)
