@@ -191,6 +191,25 @@ export async function listIssues(caller: CommandCaller, query: IssueListQuery, n
     const batchIds = [...new Set(shown.flatMap((issue) => (issue.batchId ? [issue.batchId] : [])))]
     const batchSizes = new Map<string, number>()
     if (batchIds.length) for (const row of await db.productionIssue.groupBy({ by: ['batchId'], where: { batchId: { in: batchIds } }, _count: { _all: true } })) if (row.batchId) batchSizes.set(row.batchId, row._count._all)
+    // ── B-PT-010b (order production tab, 18-lead-settles L8 "Answered for SEED-SO-0088, SEED-SO-0090"): the OTHER orders an office
+    // ask is answered together with — the orders of the asks that share its task (one reply or one tick answers them all, B-PT-015);
+    // named only when the reader may open the order (orders.view over it, as the list's own wall), the rest counted, never named ──
+    const orderOfIssue = (issue: { readonly recordType: string; readonly recordId: string; readonly salesOrderId: string | null }): string | null => issue.salesOrderId ?? (issue.recordType === 'SalesOrder' ? issue.recordId : null)
+    const askTaskIds = [...new Set(shown.filter((issue) => issue.source === 'OFFICE' && issue.batchId).map((issue) => issue.taskId))]
+    const taskMates = askTaskIds.length ? await db.productionIssue.findMany({ where: { taskId: { in: askTaskIds }, source: 'OFFICE' }, select: { id: true, taskId: true, recordType: true, recordId: true, salesOrderId: true } }) : []
+    const mateOrderIds = [...new Set(taskMates.flatMap((mate) => orderOfIssue(mate) ?? []))]
+    const mateOrders = new Map((mateOrderIds.length ? await db.salesOrder.findMany({ where: { id: { in: mateOrderIds } }, select: { id: true, number: true, companyId: true, partyId: true } }) : []).map((row) => [row.id, row]))
+    const batchOrdersOf = (issue: (typeof shown)[number]): { orders: { id: string; number: string }[]; more: number } => {
+      if (issue.source !== 'OFFICE') return { orders: [], more: 0 }
+      const own = orderOfIssue(issue)
+      const others = [...new Set(taskMates.filter((mate) => mate.taskId === issue.taskId && mate.id !== issue.id).flatMap((mate) => orderOfIssue(mate) ?? []))].filter((orderId) => orderId !== own)
+      const named = others.flatMap((orderId) => {
+        const row = mateOrders.get(orderId)
+        return row && can(actor, ORDERS_VIEW, { companyId: row.companyId, partyId: row.partyId }) ? [{ id: row.id, number: row.number }] : []
+      })
+      return { orders: named.sort((a, b) => a.number.localeCompare(b.number)), more: others.length - named.length }
+    }
+    // ── end B-PT-010b ──
     const readable = shown.filter((issue) => mayOnThread(actor, THREADS_READ, issue.recordType, wallOf(issue)))
     // B-PT-010: + each note's thread (the reply is read by it: Message has no index on replyToMessageId).
     const raisedWith = readable.length ? await db.message.findMany({ where: { id: { in: readable.map((issue) => issue.messageId) } }, select: { id: true, bodyText: true, threadId: true } }) : []
@@ -244,7 +263,7 @@ export async function listIssues(caller: CommandCaller, query: IssueListQuery, n
           escalation: step && issue.escalatedAt ? { step, at: toUtcIso(issue.escalatedAt), words: ESCALATION_STEP_WORDS[step] } : null,
           task: task ? { id: task.id, status: task.status, assignee } : null,
           mine: issue.status === 'OPEN' && isMine(issue.taskId),
-          batch: issue.batchId ? { id: issue.batchId, issues: batchSizes.get(issue.batchId) ?? 1 } : null,
+          batch: issue.batchId ? { id: issue.batchId, issues: batchSizes.get(issue.batchId) ?? 1, /* B-PT-010b */ ...batchOrdersOf(issue) } : null,
           excerpt: readableIds.has(issue.id) ? excerptOf(bodies.get(issue.messageId) ?? '') : null,
           // ── B-PT-010 ──
           messageId: readableIds.has(issue.id) ? issue.messageId : null,

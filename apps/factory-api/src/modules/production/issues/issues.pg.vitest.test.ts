@@ -793,3 +793,64 @@ describe('B-PT-010 the list inside one order: the note, who asked, the reply tha
   })
 })
 // ── end B-PT-010 ──
+
+// ── B-PT-010b (order production tab, 18-lead-settles L8) ──
+/**
+ * "Answered for SEED-SO-0088, SEED-SO-0090": an office ask names the OTHER orders of the asks that share its task (one reply or one
+ * tick answers them all) — only those the reader may open, the rest counted, never named. An ask on two of A's orders in one action
+ * names the other order on each; a B-limited reader never sees an A order's number — here an issue of A put on B's ask's task by hand
+ * (a batch never spans two customers: made before any rule, the admin pool) is counted for B's person, named for the production unit.
+ */
+describe('B-PT-010b an office ask names the other orders it is answered together with', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  let soA2 = ''
+  let numbers: Record<string, string> = {}
+  let pair: Json
+  let onB: Json
+  const mate = newId()
+
+  beforeAll(async () => {
+    SESSIONS['pt.asker'] ??= { audience: 'office', tenantId: T, actorId: people.backupA, grants: [grant(OFFICE_PERMISSIONS, 'all')] }
+    soA2 = w.production.urgent[0]!
+    numbers = Object.fromEntries((await admin<{ id: string; number: string }>(`SELECT id, number FROM "SalesOrder" WHERE id = ANY($1::uuid[])`, [[w.a.salesOrderId, soA2, w.b.salesOrderId]])).map((row) => [row.id, row.number]))
+    pair = await ok('pt.asker', '/production/notes', { records: [{ type: 'SalesOrder', id: w.a.salesOrderId }, { type: 'SalesOrder', id: soA2 }], body: 'Made-up: how far are these two orders?', needsAnswer: true }, 'POST')
+    onB = (await ok('pt.asker', '/production/notes', { records: [{ type: 'SalesOrder', id: w.b.salesOrderId }], body: 'Made-up: how far is this order?', needsAnswer: true }, 'POST')).written[0]
+    // An issue of A on B's ask's task (never by the rules: a batch is one customer's).
+    await replica([
+      {
+        sql: `INSERT INTO "ProductionIssue" SELECT (jsonb_populate_record(NULL::"ProductionIssue", to_jsonb(i) || jsonb_build_object('id', $1::text, 'partyId', $2::text, 'recordType', 'SalesOrder', 'recordId', $3::text, 'salesOrderId', $3::text))).* FROM "ProductionIssue" i WHERE i.id = $4`,
+        values: [mate, ids.a, w.a.salesOrderId, onB.issueId],
+      },
+    ])
+    await answerAll()
+  })
+
+  const rowOf = async (session: string, orderId: string, issueId: string) => ((await ok(session, `/production/issues?salesOrderId=${orderId}&status=ALL&limit=200`)).issues as Json[]).find((issue) => issue.id === issueId)!
+
+  it('an ask on two orders of one action: each names the other order (one task), none more', async () => {
+    const first = (pair.written as Json[]).find((entry) => entry.id === w.a.salesOrderId)!
+    const second = (pair.written as Json[]).find((entry) => entry.id === soA2)!
+    // One action, one supervisor (A's default): ONE task for both asks.
+    const tasks = await admin<{ taskId: string }>(`SELECT "taskId" FROM "ProductionIssue" WHERE id = ANY($1::uuid[])`, [[first.issueId, second.issueId]])
+    expect(new Set(tasks.map((row) => row.taskId)).size).toBe(1)
+    expect((await rowOf('office.all', w.a.salesOrderId, first!.issueId)).batch).toMatchObject({ issues: 2, orders: [{ id: soA2, number: numbers[soA2] }], more: 0 })
+    expect((await rowOf('office.all', soA2, second!.issueId)).batch).toMatchObject({ orders: [{ id: w.a.salesOrderId, number: numbers[w.a.salesOrderId] }], more: 0 })
+    // A person limited to A reads the same (A's own orders).
+    expect((await rowOf('office.p1', w.a.salesOrderId, first!.issueId)).batch).toMatchObject({ orders: [{ id: soA2 }], more: 0 })
+  })
+
+  it('a customer’s own report names no order (its words are the portal’s)', async () => {
+    expect((await rowOf('office.all', w.b.salesOrderId, w.production.issue.id)).batch?.orders ?? []).toEqual([])
+  })
+
+  it('the wall: B’s person reads B’s ask with the A order counted, never named; the production unit sees it named', async () => {
+    const answer = await call('office.p2', `/production/issues?salesOrderId=${w.b.salesOrderId}&status=ALL&limit=200`)
+    expect(answer.status).toBe(200)
+    const row = (answer.body.issues as Json[]).find((issue) => issue.id === onB.issueId)!
+    expect(row.batch).toMatchObject({ orders: [], more: 1 })
+    expect(answer.raw).not.toContain(numbers[w.a.salesOrderId]!)
+    expect(answer.raw).not.toContain(w.a.salesOrderId)
+    expect(findMarkers(answer.body, aMarkers)).toEqual([])
+    expect((await rowOf('office.all', w.b.salesOrderId, onB.issueId)).batch).toMatchObject({ orders: [{ id: w.a.salesOrderId, number: numbers[w.a.salesOrderId] }], more: 0 })
+  })
+})
+// ── end B-PT-010b ──

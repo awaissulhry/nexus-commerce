@@ -64,8 +64,13 @@ export const listIssuesContract = defineContract({
           task: output({ id: id(), status: z.enum(TASK_STATUSES), assignee: z.enum(SUPERVISOR_MARKS) }).nullable(),
           /** The reader holds its open task (the batch's or an escalation's). */
           mine: z.boolean(),
-          /** Its batch and how many issues it holds (answered together). */
-          batch: output({ id: id(), issues: z.number().int() }).nullable(),
+          /**
+           * Its batch and how many issues it holds (answered together). B-PT-010b (18-lead-settles L8): for an office ask, the OTHER
+           * orders of the asks that share its task (one reply or tick answers them all: "Answered for SEED-SO-0088, SEED-SO-0090") —
+           * `orders` those the reader may open (orders.view over each), `more` the rest, counted, never named; a customer's report and
+           * an ask alone: none ([] and 0).
+           */
+          batch: output({ id: id(), issues: z.number().int(), orders: z.array(output({ id: id(), number: z.string() })), more: z.number().int() }).nullable(),
           /** The words it was raised with, only for a reader of the record's thread. */
           excerpt: z.string().nullable(),
           // ── B-PT-010 (order production tab R10) ──
