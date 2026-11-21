@@ -76,6 +76,8 @@ export interface OrderAbilities {
   margin: boolean
   /** F-SA-214 / B-SA-020: rider profiles (sales.measurements.view): the riders' names, the review's door, the rider term. */
   measurements: boolean
+  /** F-PT-302: raise a nonconformance from the order's final check (quality.ncr.raise; Quality's own New NCR). */
+  raiseNcr?: boolean
 }
 
 export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
@@ -98,6 +100,7 @@ export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
     cost: held.has('money.cost'),
     margin: held.has('money.margin'),
     measurements: held.has('sales.measurements.view'), // F-SA-214
+    raiseNcr: held.has('quality.ncr.raise'), // F-PT-302
   }
 }
 

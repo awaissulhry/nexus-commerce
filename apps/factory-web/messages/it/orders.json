@@ -2707,7 +2707,11 @@
       "changeMark": "Cambia il segno…",
       "removeMark": "Togli il segno",
       "notKept": "Non ancora seguito: la produzione parte quando l'ordine è confermato.",
-      "infoBody": "Dove si trova l'ordine ora, quanti dei suoi capi hanno passato ogni fase, se mantiene la promessa e a chi chiedere. I conteggi sono del reparto e della qualità, al minuto indicato. Il cliente non legge mai le richieste."
+      "infoBody": "Dove si trova l'ordine ora, quanti dei suoi capi hanno passato ogni fase, se mantiene la promessa e a chi chiedere. I conteggi sono del reparto e della qualità, al minuto indicato. Il cliente non legge mai le richieste.",
+      "answeredFor": "Risposta valida anche per {orders}",
+      "answeredForMore": "Risposta valida anche per {orders} e altri {count}",
+      "answeredForCount_one": "Risposta valida anche per {count} altro ordine",
+      "answeredForCount_other": "Risposta valida anche per altri {count} ordini"
     },
     "ask": {
       "button": "Chiedi un aggiornamento",
@@ -2910,6 +2914,37 @@
     },
     "promise": {
       "hint": "Il cliente riceve un avviso nel portale (e un'e-mail se l'ha scelto). Il reparto non viene avvisato."
+    },
+    "problems": {
+      "title": "Problemi e blocchi",
+      "stops_one": "{count} cosa blocca l'ordine",
+      "stops_other": "{count} cose bloccano l'ordine",
+      "stopsNothing": "Niente blocca l'ordine",
+      "noQuestions": "Nessuna domanda aspetta una risposta",
+      "final": {
+        "PASSED": "Controllo finale superato",
+        "FAILED": "Controllo finale non superato",
+        "WAITING": "Controllo finale in attesa",
+        "none": "Controllo finale: non ancora"
+      },
+      "stopsTitle": "Cosa lo blocca",
+      "answersTitle": "Aspetta una risposta",
+      "late": "in ritardo",
+      "answers": {
+        "ME": "Rispondi tu",
+        "SOMEONE_ELSE": "Risponde un'altra persona",
+        "NOT_SET": "Ancora nessuno risponde"
+      },
+      "reply": "Rispondi nella conversazione",
+      "qualityTitle": "Qualità",
+      "inspected": "{inspected} su {lot} controllati",
+      "defects": "{critical} critici · {major} maggiori · {minor} minori",
+      "sharedCheck": "Copre anche altro lavoro — non per il cliente",
+      "qualityWithheld": "Non visibile per te: controlli finali, non conformità (li vedono Produzione e Qualità)",
+      "noFinal": "Ancora nessun controllo finale.",
+      "liftHint": "Togliere un blocco: lo fa la produzione — un pianificatore o il responsabile di produzione.",
+      "infoBody": "Cosa blocca l'ordine adesso, chi agisce e l'unico pulsante per agire; le domande che aspettano una risposta; poi la sua qualità in parole semplici. Il cliente legge le parole del blocco, mai la nota dell'ufficio.",
+      "raiseNcr": "Apri una non conformità…"
     }
   }
 }

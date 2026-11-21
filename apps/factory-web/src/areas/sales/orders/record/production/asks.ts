@@ -40,6 +40,15 @@ export interface LatestUpdate {
   readonly by: string | null
   readonly text: string | null
   readonly messageId: string | null
+  /** L8: one answer answered the asks of other orders too (one note, one task) — those the reader may open, the rest counted. */
+  readonly answeredFor: { readonly orders: readonly string[]; readonly more: number } | null
+}
+
+/** L8: "Answered for SEED-SO-0088, SEED-SO-0090 and 1 more" — null when the ask stood alone (or the server does not say). */
+export function answeredForOf(batch: OrderIssue['batch']): LatestUpdate['answeredFor'] {
+  const orders = (batch?.orders ?? []).map((order) => order.number)
+  const more = batch?.more ?? 0
+  return orders.length > 0 || more > 0 ? { orders, more } : null
 }
 
 export interface AsksView {
@@ -84,8 +93,8 @@ export function asksOf(issues: readonly OrderIssue[] | null | undefined): AsksVi
     latest:
       answered && (answered.reply || answered.answeredAt)
         ? answered.reply
-          ? { at: answered.reply.at, by: answered.reply.by?.name ?? null, text: firstLineOf(answered.reply.excerpt), messageId: answered.reply.messageId }
-          : { at: answered.answeredAt!, by: null, text: null, messageId: null }
+          ? { at: answered.reply.at, by: answered.reply.by?.name ?? null, text: firstLineOf(answered.reply.excerpt), messageId: answered.reply.messageId, answeredFor: answeredForOf(answered.batch) }
+          : { at: answered.answeredAt!, by: null, text: null, messageId: null, answeredFor: answeredForOf(answered.batch) }
         : null,
     waiting: issues.filter((issue) => issue.status === 'OPEN').length,
   }

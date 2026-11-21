@@ -273,9 +273,27 @@ export type Gate = Dates['gates'][number]
 export type DateMilestone = Dates['milestones'][number]
 
 export const qualitySchema = z.object({
-  issues: z.array(z.object({ id: z.string(), source: z.string(), recordType: z.string(), since: instant, dueOn: day, escalation: z.number() })).nullable(),
-  ncrs: z.array(z.object({ id: z.string(), number: z.string(), stage: z.string(), severity: z.string(), sharedWorkOrder: z.boolean() })).nullable(),
-  final: z.array(z.object({ workOrderId: z.string(), number: z.string().nullable(), status: z.string(), sampleSize: z.number(), on: day.nullable() })).nullable(),
+  // F-PT-302: the tab reads the order's issues from the ONE issues list now (B-PT-010) — this part stays optional until B-PT-018 drops it.
+  issues: z.array(z.object({ id: z.string(), source: z.string(), recordType: z.string(), since: instant, dueOn: day, escalation: z.number() })).nullable().optional(),
+  // F-PT-302 (B-PT-009, optional): + the NCR's title (cut at 80 characters by the server).
+  ncrs: z.array(z.object({ id: z.string(), number: z.string(), stage: z.string(), severity: z.string(), sharedWorkOrder: z.boolean(), title: z.string().optional() })).nullable(),
+  // F-PT-302 (B-PT-008, optional): + the inspection's id (the row's key), lot, inspected so far, defects per class, shared work order.
+  final: z
+    .array(
+      z.object({
+        workOrderId: z.string(),
+        number: z.string().nullable(),
+        status: z.string(),
+        sampleSize: z.number(),
+        on: day.nullable(),
+        id: z.string().optional(),
+        lotSize: z.number().optional(),
+        inspectedCount: z.number().nullable().optional(),
+        defects: z.object({ critical: z.number(), major: z.number(), minor: z.number() }).nullable().optional(),
+        sharedWorkOrder: z.boolean().optional(),
+      }),
+    )
+    .nullable(),
 })
 export type Quality = z.infer<typeof qualitySchema>
 

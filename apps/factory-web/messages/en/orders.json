@@ -2707,7 +2707,11 @@
       "changeMark": "Change the mark…",
       "removeMark": "Remove the mark",
       "notKept": "Not followed yet: production starts when the order is confirmed.",
-      "infoBody": "Where the order is now, how many of its pieces passed each step, whether it keeps the promise and who to ask. The counts are the floor's and quality's, as of the minute shown. The customer never reads the asks."
+      "infoBody": "Where the order is now, how many of its pieces passed each step, whether it keeps the promise and who to ask. The counts are the floor's and quality's, as of the minute shown. The customer never reads the asks.",
+      "answeredFor": "Answered for {orders}",
+      "answeredForMore": "Answered for {orders} and {count} more",
+      "answeredForCount_one": "Answered for {count} other order",
+      "answeredForCount_other": "Answered for {count} other orders"
     },
     "ask": {
       "button": "Ask for an update",
@@ -2910,6 +2914,37 @@
     },
     "promise": {
       "hint": "The customer gets a notice in the portal (and an e-mail if they chose it). The floor is not told."
+    },
+    "problems": {
+      "title": "Problems & holds",
+      "stops_one": "{count} thing stops this order",
+      "stops_other": "{count} things stop this order",
+      "stopsNothing": "Nothing stops this order",
+      "noQuestions": "No question waits for an answer",
+      "final": {
+        "PASSED": "Final check passed",
+        "FAILED": "Final check failed",
+        "WAITING": "Final check waiting",
+        "none": "Final check: not yet"
+      },
+      "stopsTitle": "What stops it",
+      "answersTitle": "Needs an answer",
+      "late": "late",
+      "answers": {
+        "ME": "You answer it",
+        "SOMEONE_ELSE": "Someone else answers it",
+        "NOT_SET": "Nobody answers it yet"
+      },
+      "reply": "Reply in the thread",
+      "qualityTitle": "Quality",
+      "inspected": "{inspected} of {lot} inspected",
+      "defects": "{critical} critical · {major} major · {minor} minor",
+      "sharedCheck": "Covers other work too — not for the customer",
+      "qualityWithheld": "Not shown to you: final checks, nonconformances (Production and Quality see them)",
+      "noFinal": "No final check yet.",
+      "liftHint": "Lifting a hold: Production does this — a planner or the production manager.",
+      "infoBody": "What stops this order right now, who acts and the one button to act; the questions that wait for an answer; then its quality in plain words. The customer reads a hold's own words, never the office's note.",
+      "raiseNcr": "Raise a nonconformance…"
     }
   }
 }

@@ -80,7 +80,7 @@ import type { ScopeChoice } from './dock/model'
 import { CostChangedMark } from '../../_shared/cost-changed/view/CostChangedMark'
 import { MARGIN, marginAs } from './margin/fixtures'
 // F-SA-232: Overview's made-up production reads.
-import { CONFIRMED_READ, FAILED_STATE, LOADING_STATE, NO_WORK_READ, ORDER_FILES, QUALITY_READ, ready, WORK_READ } from './overview/fixtures'
+import { CONFIRMED_READ, FAILED_STATE, LOADING_STATE, NO_WORK_READ, ORDER_FILES, QUALITY_ASKS, QUALITY_READ, ready, WORK_READ } from './overview/fixtures'
 // F-OP-113: the work-order rows' acts (a read with each row's version and rights; the acts' model as the container holds it).
 import { workActsRead, type WorkRights } from './overview/fixtures'
 import { ROLES } from '../_demo/fixtures'
@@ -1057,7 +1057,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'wo-cancel-cut', label: 'F-OP-115 · Production manager · Cancel… a started work order: 8 pieces are cut — refused in the API’s words, no outcome to pick (R-16)', model: base('manager', production, { tab: 'production', production: ready(workActsRead(MANAGE_ALL)), workOrderActs: woActs('manager', { dialog: woDialog('cancel', productionWorkOrder('IN_PROGRESS'), { cancelCheck: { value: CANCEL_CUT, problem: null } }) }) }) },
     { id: 'wo-cancel-draft', label: 'F-OP-115 · Production manager · Cancel… a draft: nothing cut — the reason, then Cancel work order', model: base('manager', production, { tab: 'production', production: ready(workActsRead(MANAGE_ALL)), workOrderActs: woActs('manager', { dialog: woDialog('cancel', productionWorkOrder('DRAFT'), { cancelCheck: { value: { ...CANCEL_CUT, status: 'DRAFT', cancellable: true, refusal: null, cut: { pieces: 0, cells: [] }, issued: [], atWorkshop: [] }, problem: null } }) }) }) },
     { id: 'wo-acts-sales', label: 'F-OP-113 · Sales · Production: the rows as they are, the acts held in words — “Production does this — a planner or the production manager”', model: base('sales', production, { tab: 'production', production: ready(workActsRead(NO_RIGHTS)), workOrderActs: woActs('sales') }) },
-    { id: 'production-quality', label: 'F-SA-235 · Sales · Production: a quality hold with the office’s note, a problem that needs an answer, an NCR, a final inspection waiting; the specs in force', model: base('sales', production, { tab: 'production', production: ready(QUALITY_READ) }) },
+    { id: 'production-quality', label: 'F-SA-235 · Sales · Production: a quality hold with the office’s note, a problem that needs an answer, an NCR, a final inspection waiting; the specs in force', model: base('sales', production, { tab: 'production', production: ready(QUALITY_READ), asks: { value: QUALITY_ASKS, problem: null } /* F-PT-302 */ }) },
     { id: 'production-no-right', label: 'Finance · Production: the work orders by number (no floor progress right)', model: base('finance', production, { tab: 'production', production: ready(NO_WORK_READ) }) },
     { id: 'production-error', label: 'Sales · Production: the work orders could not be read (Try again)', model: base('sales', production, { tab: 'production', production: FAILED_STATE }) },
     { id: 'dates', label: 'Sales · Production: first promise kept, two changes with who and why', model: base('sales', late, { tab: 'production', production: ready(LATE_READ) }) },

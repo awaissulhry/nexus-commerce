@@ -322,6 +322,16 @@ function PeopleBlock({ order, model, actions, onAsk }: { order: Order; model: Or
                 ) : null}
               </span>
               {view.latest.messageId ? <ShowInThreadDoor order={order} at={view.latest.at} /> : null}
+              {/* L8 (C1, B-PT-010b): one reply answered the asks of other orders on the same note — those the reader may open, named. */}
+              {view.latest.answeredFor ? (
+                <span className="fw-pt-sub">
+                  {view.latest.answeredFor.orders.length > 0
+                    ? view.latest.answeredFor.more > 0
+                      ? t('productionTab.now.answeredForMore', { orders: view.latest.answeredFor.orders.join(', '), count: view.latest.answeredFor.more })
+                      : t('productionTab.now.answeredFor', { orders: view.latest.answeredFor.orders.join(', ') })
+                    : t('productionTab.now.answeredForCount', { count: view.latest.answeredFor.more })}
+                </span>
+              ) : null}
             </p>
           ) : null}
           {!view.open && !view.latest ? <Quiet>{t('productionTab.now.none')}</Quiet> : null}

@@ -3,6 +3,7 @@ import { MILESTONES } from '../../depth/demo/fixtures'
 import type { Headline, OrderProduction, ProductionLine, Work } from './api'
 import type { Gate, People } from './api' // F-OO-208
 import type { ProductionState } from './model'
+import type { OrderIssues } from '../production/api' // F-PT-302
 import type { OrderFilesRead } from '../../../../../lib/record-thread/files-view/model' // F-SA-237
 
 /**
@@ -194,9 +195,36 @@ export const QUALITY_READ: OrderProduction = {
   headline: { ...HEADLINE, held: true, holds: [{ kind: 'QUALITY', words: w('Shade difference on the leather', 'Differenza di tonalità della pelle'), since: '2026-11-14' }], holdNotes: [{ workOrderId: WORK_ORDERS[1]!.id, number: 'WO-00022', kind: 'QUALITY', note: 'Lotto pelle in verifica col fornitore.', since: '2026-11-14T08:30:00Z' }] },
   quality: {
     issues: [{ id: '0190f0e2-7171-7000-8000-000000000301', source: 'FLOOR', recordType: 'WorkOrder', since: '2026-11-16T10:00:00Z', dueOn: '2026-11-19', escalation: 1 }],
-    ncrs: [{ id: '0190f0e2-7272-7000-8000-000000000041', number: 'NCR-2026-0041', stage: 'OPEN', severity: 'MINOR', sharedWorkOrder: false }],
-    final: [{ workOrderId: WORK_ORDERS[0]!.id, number: 'FI-2026-0088', status: 'OPEN', sampleSize: 8, on: null }],
+    // F-PT-302 (B-PT-009): + the NCR's title.
+    ncrs: [{ id: '0190f0e2-7272-7000-8000-000000000041', number: 'NCR-2026-0041', stage: 'OPEN', severity: 'MINOR', sharedWorkOrder: false, title: 'Loose stitching on the collar' }],
+    // F-PT-302 (B-PT-008): + the inspection's id, the lot, inspected so far and the defects per class.
+    final: [{ workOrderId: WORK_ORDERS[0]!.id, number: 'FI-2026-0088', status: 'OPEN', sampleSize: 8, on: null, id: '0190f0e2-7373-7000-8000-000000000088', lotSize: 40, inspectedCount: 5, defects: { critical: 0, major: 1, minor: 2 }, sharedWorkOrder: false }],
   },
+}
+
+/** F-PT-302: the order's asks (made up): one open office question on WO-00022, past its day and escalated once. */
+export const QUALITY_ASKS: OrderIssues = {
+  asOf: '2026-11-20T09:00:00Z',
+  more: false,
+  issues: [
+    {
+      id: '0190f0e2-7171-7000-8000-000000000301',
+      source: 'OFFICE',
+      sourceWords: w('Question for production', 'Domanda per la produzione'),
+      status: 'OPEN',
+      record: { type: 'WorkOrder', id: WORK_ORDERS[1]!.id, label: 'WO-00022' },
+      raisedAt: '2026-11-16T10:00:00Z',
+      dueOn: '2026-11-19',
+      answeredAt: null,
+      escalation: { step: 1, at: '2026-11-19T07:00:00Z', words: w('Escalated 1× — now with the backup', 'Sollecitata 1× — ora al sostituto') },
+      task: { id: '0190f0e2-7474-7000-8000-000000000001', assignee: 'SOMEONE_ELSE' },
+      batch: null,
+      excerpt: 'When does the leather come back from the supplier?',
+      messageId: '0190f0e2-8282-7000-8000-000000000301',
+      askedBy: { id: '0190f0e2-1111-7000-8000-000000000007', name: 'Sara Prova' },
+      reply: null,
+    },
+  ],
 }
 
 export const ready = (read: OrderProduction = PRODUCTION_READ): ProductionState => ({ status: 'ready', read })
