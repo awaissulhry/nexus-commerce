@@ -38,6 +38,7 @@ import type { PlainStage } from '../../../../../../lib/production/model'
 import { handDoorOf, handRowOf, type HandDoor, type HandRow } from '../../overview/where'
 // ---- end F-MS-102
 import { useSayHand } from './StageByHandDialog' // F-MS-103: the door's words (F-SC-W2: the dialogs are the page's, OrderDialogs)
+import { stagePicksOf } from '../../overview/where' // F-SC-W3: the steps of the stages open the stage dialog
 import { CREDIT_NS, StripRow } from './StripRow' // F-PT-301: the ONE strip row (Production › Problems & holds draws it too)
 
 /**
@@ -45,7 +46,7 @@ import { CREDIT_NS, StripRow } from './StripRow' // F-PT-301: the ONE strip row 
  *
  * F-OO-103 (order overview §1.1, §1.6; review F8, F14): the section 1 frame. It keeps the title, "Live · as of 10:42", the headline
  * (the status and the stage, F-OO-101) with its quiet line, and the five stages with their link to Production's work orders and their
- * quiet line (F-OO-102). Between the headline and the stages sits the strips slot (one strip per hold or wait, most blocking first,
+ * quiet line (F-OO-102) — F-SC-W3: for who may set the stage by hand, the steps are buttons into the stage dialog instead of the link. Between the headline and the stages sits the strips slot (one strip per hold or wait, most blocking first,
  * F-OO-104 / F-OO-105: they read OverviewTab's ONE waiting list, `waiting.holds`); under the stages the moves slot (the order's own
  * moves, F-OO-107). What left, each living on in ONE other place: Who acts next (Requests & changes' groups), Ex-factory and how it
  * moved (Next dates' Promised row), Health and the customer's Urgent (the band's chip and tag), Bundles in work (Progress by line's
@@ -71,6 +72,14 @@ export function WhereCard({ order, model, actions, waiting }: { order: Order; mo
   const hand = handRowOf(order, headline, model.today)
   const handDoor = model.stageHand ? handDoorOf(order, headline, model.stageHand.can, readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold }), model.busy) : null
   const sayHand = useSayHand()
+  // F-SC-W3 (stage control B): with the right and the door not held, each step but the one the customer reads opens the stage dialog on
+  // it (the floor's own step while a hand stage stands: Clear…); the strip's ONE link is then not drawn. Otherwise the link stays.
+  const picks = stagePicksOf(headline, handDoor)
+  const stepPicks = picks?.map((pick) => ({ stage: pick.stage, label: pick.kind === 'clear' ? t('where.manual.clearAria', { number: order.number }) : t('where.manual.stepAria', { number: order.number, stage: w.t(`parts.stage.${pick.stage}`) }) })) ?? null
+  const onPick = (stage: PlainStage) => {
+    const pick = picks?.find((entry) => entry.stage === stage)
+    if (pick) actions?.onDialog?.(pick.dialog)
+  }
   // ---- end F-MS-102
   // F-OP-301 (walk #2): section 1 names no wait at all now (Who acts next lives in Requests & changes' groups, F-OO-103), so it can
   // never say a stale "Waiting on us · 5 d" beside a card that says nothing waits — and it never reads the headline's kept waiting list
@@ -93,7 +102,8 @@ export function WhereCard({ order, model, actions, waiting }: { order: Order; mo
       </WithMessages>
       {stagesShown(words.state) ? (
         <div className="fw-so-where-stages">
-          {/* F-OP-104: the stages are one real link to Production's work orders. F-OO-102: drawn in the headline's own state. */}
+          {/* F-OP-104: the stages are one real link to Production's work orders. F-OO-102: drawn in the headline's own state. F-SC-W3:
+              with the right (the door not held) the steps are buttons into the stage dialog instead — Sales and Read-only keep the link. */}
           <StageStrip
             face="office"
             layout="auto"
@@ -102,6 +112,8 @@ export function WhereCard({ order, model, actions, waiting }: { order: Order; mo
             note={hand ? t(hand.stripNote.key) : strip.note /* F-MS-102: the current dot says "Set by hand" (shown here, never set) */}
             stageHref={`${tabHref(`${model.prefix}/sales/orders/${order.id}`, 'production', search)}#work-orders`}
             stageLinkLabel={words.state === 'ALL_DONE' ? t('where.stagesDone') : hand && strip.stage ? t('where.manual.stagesLink', { stage: w.t(`parts.stage.${strip.stage}`) }) : t('doors.stages', { stage: strip.stage ? w.t(`parts.stage.${strip.stage}`) : w.t('parts.stage.unknown') })}
+            picks={stepPicks}
+            onPick={onPick}
             loading={loading}
             problem={state?.status === 'failed'}
             onRetry={() => actions?.onRetryProduction?.()}

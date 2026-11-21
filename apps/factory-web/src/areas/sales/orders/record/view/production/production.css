@@ -238,6 +238,12 @@
 .fw-pt-seg.is-done .fw-pt-seg-bar { background: var(--nds-success); box-shadow: none; }
 .fw-pt-seg.is-current .fw-pt-seg-bar { background: var(--nds-primary); box-shadow: none; }
 .fw-pt-seg.is-current { color: var(--nds-text); font-weight: var(--nds-font-weight-semibold); }
+/* F-SC-W3 (stage control B): a step that may be picked is a real button into the stage dialog — the segment's own look, 44 px to tap,
+   the hover and the focus ring in tokens. */
+.fw-pt-seg-go { display: flex; flex-direction: column; gap: var(--nds-space-4); width: 100%; min-height: 44px; margin: 0; padding: 0 0 var(--nds-space-4); border: 0; border-radius: var(--nds-radius-xs); background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.fw-pt-seg-go > span:last-child { overflow-wrap: anywhere; padding-right: var(--nds-space-4); line-height: 1.25; }
+.fw-pt-seg-go:hover { background: var(--nds-surface-hover); }
+.fw-pt-seg-go:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; }
 .fw-pt-count .nds-progress { margin-top: var(--nds-space-2); }
 
 /* ── fx5 #5: a paired section's card stretches to the pair's height — no hole under the shorter one ── */

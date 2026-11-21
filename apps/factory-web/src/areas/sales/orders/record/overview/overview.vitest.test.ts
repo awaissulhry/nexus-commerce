@@ -1208,21 +1208,50 @@ describe('F-MS-102: "Where it is now" draws a stage set by hand — the door on 
   const SET_BY = { en: 'Stages are set by the floor and quality, or by hand when their records are wrong or missing', it: 'Le fasi le segnano il reparto e la qualità, o a mano quando le registrazioni sono sbagliate o mancano' } as const
   const HELD_SALES = 'Production does this — a planner or the production manager'
 
-  it('section 1 keeps its order: the headline, the strip\'s one link, the quiet line, the hand row, the moves row', () => {
+  it('section 1 keeps its order: the headline, the strip\'s steps (F-SC-W3: buttons for a Planner), the quiet line, the hand row, the moves row', () => {
     const html = sectionOf(draw('f-ms-hand'))
-    const at = ['<p class="fw-so-headline">In production · Sewing</p>', 'class="fw-prp-strip-go"', SET_BY.en, 'class="fw-so-ov-row fw-so-hand"', 'class="fw-so-where-moves"'].map((part) => html.indexOf(part))
+    const at = ['<p class="fw-so-headline">In production · Sewing</p>', 'class="fw-prp-strip-picks"', SET_BY.en, 'class="fw-so-ov-row fw-so-hand"', 'class="fw-so-where-moves"'].map((part) => html.indexOf(part))
     expect(at.every((index) => index >= 0), at.join(',')).toBe(true)
     expect([...at].sort((a, b) => a - b)).toEqual(at)
-    // The strip stays ONE link holding no control; its current dot says "Set by hand" (shown, never set there), and its name too.
-    const from = html.indexOf('class="fw-prp-strip-go"')
-    const link = html.slice(from, html.indexOf('</a>', from))
-    expect(link).not.toContain('<button')
-    expect(link).toContain('<span class="nds-milestone-note">Set by hand</span>')
-    expect(html).toContain('aria-label="Open the work orders in Production · now Sewing, set by hand"')
-    // Tab order: the strip's link, then Change… and Clear…, then the moves.
+    // F-SC-W3: no link for who may set the stage; the current dot still says "Set by hand"; each other step a named button — the
+    // floor's own Preparing opens Clear…, the others Change… on that step.
+    expect(html).not.toContain('class="fw-prp-strip-go"')
+    expect(html).toContain('<span class="nds-milestone-note">Set by hand</span>')
+    expect(html).toContain('data-stage="PREPARING" aria-label="Clear the stage set by hand on SO-2026-0088: back to the floor&#x27;s stage"')
+    for (const stage of ['Cutting', 'Quality check', 'Ready to ship']) expect(html, stage).toContain(`aria-label="Set the stage of SO-2026-0088 to ${stage}…"`)
+    expect(html).not.toContain('data-stage="SEWING"')
+    // Tab order: the strip's steps, then Change… and Clear…, then the moves.
+    expect(html.indexOf('>Change…<')).toBeGreaterThan(html.lastIndexOf('fw-prp-strip-pick'))
     expect(html.indexOf('>Change…<')).toBeGreaterThan(html.indexOf('class="fw-so-ov-row fw-so-hand"'))
     expect(html.indexOf('>Clear…<')).toBeGreaterThan(html.indexOf('>Change…<'))
     expect(html.indexOf('>Clear…<')).toBeLessThan(html.indexOf('class="fw-so-where-moves"'))
+  })
+
+  it('F-SC-W3: the strip\'s ONE link stays only without the right or while the door is held (Sales, Read-only, Confirmed, the customer\'s pause)', () => {
+    // Sales: the link with its name (now Sewing, set by hand) holding no control; the door held in words (manual-stage D6).
+    const sales = sectionOf(draw('f-ms-sales'))
+    const from = sales.indexOf('class="fw-prp-strip-go"')
+    expect(from).toBeGreaterThan(-1)
+    const link = sales.slice(from, sales.indexOf('</a>', from))
+    expect(link).not.toContain('<button')
+    expect(link).toContain('<span class="nds-milestone-note">Set by hand</span>')
+    expect(sales).toContain('aria-label="Open the work orders in Production · now Sewing, set by hand"')
+    for (const id of ['f-ms-sales', 'f-ms-read-only', 'f-ms-confirmed', 'f-ms-paused']) {
+      const html = sectionOf(draw(id))
+      expect(html, id).not.toContain('fw-prp-strip-pick')
+      if (id !== 'f-ms-confirmed') expect(html, id).toContain('class="fw-prp-strip-go"')
+    }
+    // A Planner, nothing set: four step buttons (every stage but the floor's Sewing), each opening Set on it — Ready to ship included.
+    for (const locale of ['en', 'it'] as const) {
+      const door = sectionOf(draw('f-ms-door', locale))
+      expect(door.match(/class="fw-prp-strip-pick"/g)?.length, locale).toBe(4)
+      expect(door, locale).toContain(locale === 'en' ? 'aria-label="Set the stage of SO-2026-0088 to Ready to ship…"' : 'aria-label="Imposta la fase di SO-2026-0088 su Pronto per la spedizione…"')
+      // The door stays (the keyboard, phone and screen-reader path).
+      expect(door, locale).toMatch(locale === 'en' ? />Set the stage by hand…<\/button>/ : />Imposta la fase a mano…<\/button>/)
+    }
+    const card = read('../view/overview/WhereCard.tsx')
+    expect(card).toContain('picks={stepPicks}')
+    expect(card).toContain('actions?.onDialog?.(pick.dialog)')
   })
 
   it('a Planner, nothing set: "Set the stage by hand…" open on the quiet line under the dots, no row', () => {

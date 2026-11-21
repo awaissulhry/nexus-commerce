@@ -982,6 +982,10 @@ const F_MS_102: DesignCase<RecordCase>[] = [
   { id: 'f-ms-shipped', label: 'F-MS-102 · Planner · a shipped order: every stage done, no door (R5)', model: plannerCase(shipped, { production: ready() }) },
   { id: 'f-ms-sales', label: 'F-MS-102 · Sales · the row, Change… and Clear… held — production does this (a planner or the production manager)', model: base('sales', production, { tab: 'overview', production: ready(HAND_READ), liveState: 'live', ...handCan(rolePermissions('sales')) }) },
   { id: 'f-ms-read-only', label: 'F-MS-102 · Read-only · the row says it, no door', model: readOnlyCase(base('sales', production, { tab: 'overview', production: ready(HAND_READ), liveState: 'live', ...handCan(READ_ONLY_PERMISSIONS) })) },
+  // F-SC-W3 (stage control B): Production now's stage bar — a Planner's steps are buttons into the same dialog; Sales reads them as words
+  // with one quiet line (production does this).
+  { id: 'f-sc-production-steps', label: 'F-SC-W3 · Planner · Production now: every stage but Sewing (what the customer reads) a button into the stage dialog', model: plannerCase(production, { tab: 'production', production: ready(HAND_FREE_READ) }) },
+  { id: 'f-sc-production-held', label: 'F-SC-W3 · Sales · Production now: the stages as words, one quiet line — production does this (a planner or the production manager)', model: base('sales', production, { tab: 'production', production: ready(HAND_READ), liveState: 'live', ...handCan(rolePermissions('sales')) }) },
 ]
 // ---- end F-MS-102
 // ---- F-MS-103 (set the stage by hand, 04 §3; R3b, R18, R20): the ONE dialog — Set (nothing picked yet), Change… (the reason and note

@@ -22,6 +22,27 @@ const draw = (id: string, locale: 'it' | 'en' = 'en') => {
 const text = (id: string, locale: 'it' | 'en' = 'en') => textOf(draw(id, locale))
 
 describe('T.1: the Production tab’s states, by role', () => {
+  it('F-SC-W3: Production now\'s stage bar — a Planner\'s steps are real buttons (named, 44 px); Sales reads words and one held line; Read-only neither', () => {
+    const now = (id: string) => {
+      const html = draw(id)
+      return html.slice(html.indexOf('id="now"'), html.indexOf('</section>', html.indexOf('id="now"')))
+    }
+    const planner = now('f-sc-production-steps')
+    const bar = planner.slice(planner.indexOf('class="fw-pt-segs"'), planner.indexOf('</ol>', planner.indexOf('class="fw-pt-segs"')))
+    expect(bar.match(/<button type="button" class="fw-pt-seg-go"/g)?.length).toBe(4)
+    for (const stage of ['Preparing', 'Cutting', 'Quality check', 'Ready to ship']) expect(bar, stage).toContain(`aria-label="Set the stage of SO-2026-0088 to ${stage}…"`)
+    // The current step (what the customer reads) stays words, never a button.
+    expect(bar).toMatch(/<li class="fw-pt-seg is-current" aria-current="step"><span class="fw-pt-seg-bar"/)
+    expect(planner).not.toContain('Production does this — a planner or the production manager')
+    const sales = now('f-sc-production-held')
+    expect(sales).not.toContain('fw-pt-seg-go')
+    expect(sales).toContain('Production does this — a planner or the production manager')
+    // The hint to the hand row on Overview stays.
+    expect(textOf(sales)).toContain('Set by hand')
+    expect(now('pt-read-only')).not.toContain('fw-pt-seg-go')
+    expect(now('pt-read-only')).not.toContain('Production does this')
+  })
+
   it('F-SC-W2: a step of Production now\'s stage bar opens the SAME stage dialog as Overview (mounted once for the page), on that step', () => {
     const html = draw('f-ms-dialog-production')
     expect(html.match(/role="dialog"/g)?.length).toBe(1)
