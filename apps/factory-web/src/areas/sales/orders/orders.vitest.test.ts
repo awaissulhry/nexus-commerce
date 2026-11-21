@@ -450,7 +450,8 @@ describe('the band’s daily verbs, held with this app’s words', () => {
     expect(closeLinesHeld(single, canOf('sales'))?.key).toBe('held.closeLinesOnly')
     expect(closeChoiceProblem(order('CONFIRMED'), [], 'x')?.key).toBe('closeLines.problem.none')
     expect(closeChoiceProblem(order('CONFIRMED'), order('CONFIRMED').lines.map((line) => line.id), 'x')?.key).toBe('closeLines.problem.all')
-    expect(closeChoiceProblem(partly, partly.lines.map((line) => line.id), ' ')?.key).toBe('closeLines.problem.reason')
+    // B-OL-004 (Owner D2): the reason is optional — a blank one is no problem (the server stores its automatic words).
+    expect(closeChoiceProblem(partly, partly.lines.map((line) => line.id), ' ')).toBeNull()
     expect(closeChoiceProblem(partly, partly.lines.map((line) => line.id), 'non vuole il resto')).toBeNull()
   })
   it('Reopen: only closed lines, not on a final order; Copy as quote needs quotes.manage', () => {
@@ -1836,7 +1837,7 @@ describe('F-OO-142: the promise dialog picks a curated reason the customer reads
   it('one dialog for every door (band, ⋯, Production #dates, Next dates, Decide…): the ONE PromiseDialog sends through the band\'s onPromise', () => {
     const dialogs = readFileSync(new URL('./record/view/Dialogs.tsx', import.meta.url), 'utf8')
     expect(dialogs.match(/function PromiseDialog\(/g)).toHaveLength(1)
-    expect(dialogs).toContain('actions?.onPromise?.({ date, reasonCode, note, lineIds: scope === \'lines\' ? lineIds : null })')
+    expect(dialogs).toContain('actions?.onPromise?.({ date, reasonCode: isPromiseReasonCode(reasonCode) ? reasonCode : null, note, lineIds: scope === \'lines\' ? lineIds : null })') // F-OL-04: the reason is optional (no code → null)
     expect(dialogs).toContain('const followUp = followUpOf(model.dialog)')
     for (const name of ['export type CommandDialogModel', 'export type CommandDialogActions', 'export /* F-CP-108 */ function ReadyDialog(', 'export /* F-CP-108 */ function CloseDialog(']) expect(dialogs, name).toContain(name)
   })
