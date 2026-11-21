@@ -15,6 +15,9 @@ import { APPLY_TEAMS, STILL_KINDS } from '@nexus/factory-domain/sales/change-req
 import { OWNER_SOURCES } from '../../../platform/threads/owner'
 // B-PT-001: a work order's risk, the Production list's own shape (one rule for both screens).
 import { riskFacts } from '../../production/work-orders/contract'
+// B-PT-004: the spec a work order is made to (the domain's states, revision statuses and change-order dispositions).
+import { DISPOSITIONS, NEWER_SPEC_STATES } from '@nexus/factory-domain/product/versions/drift'
+import { REVISION_STATUSES } from '@nexus/factory-domain/product/styles/revisions'
 
 /**
  * B-SA-031 / B-SA-032 (Sales page plan P2, P3, P4, P15, P16; 13-backend B1, B12; 10-order-page OR1, OR2): the office's read of ONE
@@ -248,6 +251,20 @@ export const workView = output({
        */
       risk: riskFacts.nullable(),
       // ── end B-PT-001 ──
+      // ── B-PT-004 (order production tab R4): the spec it is made to ──
+      /**
+       * Its revision (null: none chosen yet), the state by the domain's rule (CURRENT, NEWER_RELEASED, WITHDRAWN, NOT_RELEASED,
+       * NO_REVISION — the screen says it in its own words; never the rule's English message), the newer released revision and its
+       * day (NEWER_RELEASED only), and what a change order decided for it (NEWER_RELEASED only; null: not decided). null: shared with
+       * other customers. "What changed" opens the existing compare (product.bom.view), never a diff here.
+       */
+      spec: output({
+        revision: output({ revision: z.number().int(), status: z.enum(REVISION_STATUSES) }).nullable(),
+        state: z.enum(NEWER_SPEC_STATES),
+        newer: output({ revision: z.number().int(), releasedOn: businessDate().nullable() }).nullable(),
+        decision: output({ disposition: z.enum(DISPOSITIONS), changeOrder: z.string() }).nullable(),
+      }).nullable(),
+      // ── end B-PT-004 ──
     }),
   ),
   /** Made to measure: one work order per unit, grouped per style × colourway (one row, never twelve). */

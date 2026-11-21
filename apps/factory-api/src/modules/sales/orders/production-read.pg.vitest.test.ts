@@ -1059,3 +1059,97 @@ describe('B-PT-001…003: each work order’s risk and workshop days, sewn and c
   })
 })
 // ── end B-PT-001 / B-PT-002 / B-PT-003 ──
+
+// ── B-PT-004 (order production tab R4) ──
+/**
+ * Each work order says the spec it is made to, as GET /production/work-orders/:id/spec/versions says it (the domain's newerSpecOf
+ * and the change order's decision): the revision in force (CURRENT); a newer one released after it (NEWER_RELEASED, with the newer
+ * number and day); a change order's decision for it; a draft revision (NOT_RELEASED). A work order shared with other customers has
+ * none. The test moves the style's revisions and pins Alpha's work order by hand (made-up facts: only the read is under test), and
+ * puts the pin and the released revision back after.
+ */
+describe('B-PT-004: each work order’s spec — in force, replaced by a newer one (with a change order’s decision), a draft; shared: none', { timeout: 60_000 }, () => {
+  const revisions = { newer: newId(), draft: newId() }
+  const eco = { id: newId(), item: newId(), number: 'T-PT004-ECO-1' }
+  let pin: string | null = null
+  let inForce: { id: string; revision: number }
+  let top = 0
+  const specOf = async () => workOrderOf(await ok('office.all', production(alpha.so1, 'work')), alpha.workOrderId)!.spec
+  const pinTo = (revisionId: string | null) => admin(`BEGIN; SET LOCAL session_replication_role = replica; UPDATE "WorkOrder" SET "styleRevisionId" = ${revisionId ? lit(revisionId) : 'NULL'} WHERE id = ${lit(alpha.workOrderId)}; COMMIT;`)
+
+  beforeAll(async () => {
+    const [stored] = await admin<{ styleRevisionId: string | null }>(`SELECT "styleRevisionId" FROM "WorkOrder" WHERE id = $1`, [alpha.workOrderId])
+    pin = stored!.styleRevisionId
+    const all = await admin<{ id: string; revision: number; status: string }>(`SELECT id, revision, status::text AS status FROM "StyleRevision" WHERE "styleId" = $1 ORDER BY revision`, [w.styleId])
+    top = Math.max(0, ...all.map((row) => row.revision))
+    const released = all.find((row) => row.status === 'RELEASED')
+    if (released) inForce = { id: released.id, revision: released.revision }
+    else {
+      // No revision in force on the harness's style: one made here (released yesterday).
+      inForce = { id: newId(), revision: ++top }
+      await admin(`BEGIN; SET LOCAL session_replication_role = replica; INSERT INTO "StyleRevision" (id, "tenantId", "styleId", revision, status, "releasedAt") VALUES (${lit(inForce.id)}, ${lit(ids.tenantId)}, ${lit(w.styleId)}, ${inForce.revision}, 'RELEASED', now() - interval '1 day'); COMMIT;`)
+    }
+    await pinTo(inForce.id)
+  })
+
+  afterAll(async () => {
+    await pinTo(pin)
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       DELETE FROM "ChangeOrderItem" WHERE id = ${lit(eco.item)};
+       DELETE FROM "ChangeOrder" WHERE id = ${lit(eco.id)};
+       UPDATE "StyleRevision" SET status = 'OBSOLETE' WHERE id = ${lit(revisions.newer)};
+       UPDATE "StyleRevision" SET status = 'RELEASED' WHERE id = ${lit(inForce.id)};
+       COMMIT;`,
+    )
+  })
+
+  it('made to the revision in force: CURRENT, no newer, no decision', async () => {
+    expect(await specOf()).toEqual({ revision: { revision: inForce.revision, status: 'RELEASED' }, state: 'CURRENT', newer: null, decision: null })
+  })
+
+  it('a newer revision released on 12 Nov: NEWER_RELEASED with the newer number and day — what …/spec/versions says', async () => {
+    top += 1
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       UPDATE "StyleRevision" SET status = 'OBSOLETE' WHERE id = ${lit(inForce.id)};
+       INSERT INTO "StyleRevision" (id, "tenantId", "styleId", revision, status, "releasedAt") VALUES (${lit(revisions.newer)}, ${lit(ids.tenantId)}, ${lit(w.styleId)}, ${top}, 'RELEASED', '2026-11-12T10:00:00.000Z');
+       COMMIT;`,
+    )
+    const spec = await specOf()
+    expect(spec).toEqual({ revision: { revision: inForce.revision, status: 'OBSOLETE' }, state: 'NEWER_RELEASED', newer: { revision: top, releasedOn: '2026-11-12' }, decision: null })
+    const versions = (await ok('office.all', `/production/work-orders/${alpha.workOrderId}/spec/versions`)).newer
+    expect({ state: spec.state, newer: spec.newer }).toEqual({ state: versions.state, newer: { revision: versions.newer.revision, releasedOn: versions.newer.releasedOn } })
+    // The rule's English message is never sent: the screen says the state in its own words.
+    expect(JSON.stringify(spec)).not.toContain(versions.message)
+  })
+
+  it('a change order decided for it: its disposition and number', async () => {
+    const [company] = await admin<{ companyId: string }>(`SELECT "companyId" FROM "WorkOrder" WHERE id = $1`, [alpha.workOrderId])
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       INSERT INTO "ChangeOrder" (id, "tenantId", "companyId", number, "styleId", "fromRevisionId", "toRevisionId", title, reason, status, "authorId", "decidedAt")
+         VALUES (${lit(eco.id)}, ${lit(ids.tenantId)}, ${lit(company!.companyId)}, '${eco.number}', ${lit(w.styleId)}, ${lit(inForce.id)}, ${lit(revisions.newer)}, 'Made-up: a longer zip', 'Made-up reason', 'APPROVED', ${lit(seedUuid(ns, 'actor'))}, now());
+       INSERT INTO "ChangeOrderItem" (id, "tenantId", "changeOrderId", seq, kind, "workOrderId", disposition) VALUES (${lit(eco.item)}, ${lit(ids.tenantId)}, ${lit(eco.id)}, 1, 'WORK_IN_PROGRESS', ${lit(alpha.workOrderId)}, 'FINISH_OLD');
+       COMMIT;`,
+    )
+    expect(await specOf()).toMatchObject({ state: 'NEWER_RELEASED', decision: { disposition: 'FINISH_OLD', changeOrder: eco.number } })
+  })
+
+  it('pinned to a draft revision: NOT_RELEASED (no newer, no decision)', async () => {
+    await admin(`BEGIN; SET LOCAL session_replication_role = replica; INSERT INTO "StyleRevision" (id, "tenantId", "styleId", revision, status) VALUES (${lit(revisions.draft)}, ${lit(ids.tenantId)}, ${lit(w.styleId)}, ${top + 1}, 'DRAFT'); COMMIT;`)
+    await pinTo(revisions.draft)
+    expect(await specOf()).toEqual({ revision: { revision: top + 1, status: 'DRAFT' }, state: 'NOT_RELEASED', newer: null, decision: null })
+    await pinTo(inForce.id)
+  })
+
+  it('a work order shared with other customers: no spec (null) — no plan or spec detail of shared work', async () => {
+    const mixed = workOrderOf(await ok('office.all', production(w.a.salesOrderId, 'work')), w.mixed.workOrderId)!
+    expect(mixed.sharedWithOtherCustomers).toBe(true)
+    expect(mixed.spec).toBeNull()
+  })
+})
+// ── end B-PT-004 ──

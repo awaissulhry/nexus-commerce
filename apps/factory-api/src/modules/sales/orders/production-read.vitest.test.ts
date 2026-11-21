@@ -14,6 +14,7 @@ import { headlineStageOf, type HeadlineStageRow } from './production-read'
 import { productionWords, whereText } from '../../../platform/exports/sources/sales-orders'
 // B-PT-001 / B-PT-003: a work order's workshops with their days; a made-to-measure row's units.
 import { MTM_UNITS_LIMIT, mtmUnitsOf, workshopsOf } from './production-read'
+import { workOrderSpecOf, type SpecRevision } from './production-read' // B-PT-004
 
 /**
  * B-SA-031 / B-SA-032 — the office's read of one order's production, its pure parts (the PG suite production-read.pg.vitest.test.ts
@@ -312,3 +313,29 @@ describe('B-PT-003: a made-to-measure row lists its units by number, at most 50,
   })
 })
 // ── end B-PT-001 / B-PT-003 ──
+
+// ── B-PT-004 (order production tab R4) ──
+describe('B-PT-004: the spec a work order is made to, by the domain rule; the screen\'s words come from the state, never the English message', () => {
+  const revision = (n: number, status: string, releasedAt: string | null = null): SpecRevision => ({ id: `rev-${n}`, styleId: 'style-1', revision: n, status, releasedAt: releasedAt ? new Date(releasedAt) : null })
+
+  it('made to the revision in force: CURRENT, no newer, no decision', () => {
+    expect(workOrderSpecOf(revision(2, 'RELEASED'), revision(2, 'RELEASED'), null)).toEqual({ revision: { revision: 2, status: 'RELEASED' }, state: 'CURRENT', newer: null, decision: null })
+  })
+
+  it('a newer revision is released: NEWER_RELEASED with its number and day; a change order’s decision only then', () => {
+    const newer = revision(3, 'RELEASED', '2026-11-12T10:00:00.000Z')
+    expect(workOrderSpecOf(revision(2, 'OBSOLETE'), newer, null)).toEqual({ revision: { revision: 2, status: 'OBSOLETE' }, state: 'NEWER_RELEASED', newer: { revision: 3, releasedOn: '2026-11-12' }, decision: null })
+    const decided = workOrderSpecOf(revision(2, 'OBSOLETE'), newer, { disposition: 'FINISH_OLD', changeOrder: 'ECO-T-1' })
+    expect(decided.decision).toEqual({ disposition: 'FINISH_OLD', changeOrder: 'ECO-T-1' })
+    // A decision of a work order on the spec in force says nothing.
+    expect(workOrderSpecOf(newer, newer, { disposition: 'REWORK', changeOrder: 'ECO-T-2' }).decision).toBeNull()
+  })
+
+  it('a draft revision: NOT_RELEASED; none chosen: NO_REVISION; withdrawn with nothing in force: WITHDRAWN — never a message', () => {
+    expect(workOrderSpecOf(revision(4, 'DRAFT'), revision(3, 'RELEASED'), null)).toMatchObject({ state: 'NOT_RELEASED', newer: null })
+    expect(workOrderSpecOf(null, revision(3, 'RELEASED'), null)).toEqual({ revision: null, state: 'NO_REVISION', newer: null, decision: null })
+    expect(workOrderSpecOf(revision(2, 'OBSOLETE'), null, null)).toMatchObject({ state: 'WITHDRAWN', newer: null })
+    expect(Object.keys(workOrderSpecOf(null, null, null)).sort()).toEqual(['decision', 'newer', 'revision', 'state'])
+  })
+})
+// ── end B-PT-004 ──

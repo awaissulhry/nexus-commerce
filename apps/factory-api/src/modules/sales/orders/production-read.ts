@@ -54,6 +54,10 @@ import { stillToDoOf } from './still-to-do'
 import { ownerOf } from '../../../platform/threads/owner'
 // B-PT-001 (order production tab R1): a work order's risk by the Production list's own rule (one rule for both screens).
 import { riskFactsOf, type RiskRow } from '../../production/work-orders/risk'
+// B-PT-004 (R4): the spec each work order is made to — the domain's rule and the change order's decision, as …/spec/versions reads them.
+import { newerSpecOf, type Decision } from '@nexus/factory-domain/product/versions/drift'
+import type { RevisionStatus } from '@nexus/factory-domain/product/styles/revisions'
+import { decisionFor } from '../../product/versions/drift'
 
 /**
  * B-SA-031 / B-SA-032 (Sales page plan P2, P3, P4, P15, P16; 13-backend B1, B12; 10-order-page OR1, OR2; review WP-3): the office's
@@ -223,6 +227,35 @@ export function mtmUnitsOf<T extends { readonly number: string }>(units: readonl
   return { unitList: sorted.slice(0, limit), unitsMore: Math.max(0, sorted.length - limit) }
 }
 // ── end B-PT-001 / B-PT-003 ──
+
+// ── B-PT-004 (order production tab R4): the spec each work order is made to ──────────────────────────────────────────────────
+/** A revision as the spec of a work order reads it. */
+export interface SpecRevision {
+  readonly id: string
+  readonly styleId: string
+  readonly revision: number
+  readonly status: string
+  readonly releasedAt: Date | null
+}
+
+/**
+ * B-PT-004: the spec a work order is made to, by the domain's rule (product/versions/drift newerSpecOf, as GET …/spec/versions
+ * says it): its revision, the state (CURRENT, NEWER_RELEASED, WITHDRAWN, NOT_RELEASED, NO_REVISION), the newer released revision
+ * with its day (only when NEWER_RELEASED) and what a change order decided for it (only then). Never the rule's `message` (English
+ * only): the screen's words come from `state`.
+ */
+export function workOrderSpecOf(pinned: SpecRevision | null, released: SpecRevision | null, decision: Decision | null) {
+  const ref = (row: SpecRevision) => ({ id: row.id, revision: row.revision, status: row.status })
+  const spec = newerSpecOf({ pinned: pinned ? ref(pinned) : null, released: released ? ref(released) : null, decision })
+  const newer = spec.state === 'NEWER_RELEASED' && released ? { revision: released.revision, releasedOn: released.releasedAt ? businessDate(released.releasedAt) : null } : null
+  return {
+    revision: pinned ? { revision: pinned.revision, status: pinned.status as RevisionStatus } : null,
+    state: spec.state,
+    newer,
+    decision: spec.state === 'NEWER_RELEASED' ? decision : null,
+  }
+}
+// ── end B-PT-004 ──
 
 /** The pieces between the steps (what is in work now): counts only, from the order's own settled figures. */
 export function inWorkPiecesOf(input: { readonly started: number; readonly cut: number | null; readonly sewn: number | null; readonly checked: number | null; readonly packed: number | null }) {
@@ -422,7 +455,7 @@ function loaders(db: Db, context: OfficeContext, order: OrderRow, now: Date) {
     if (ids.length === 0) return []
     return db.workOrder.findMany({
       where: { id: { in: ids } },
-      select: { id: true, number: true, status: true, kind: true, companyId: true, siteId: true, lineId: true, partyId: true, styleId: true, rush: true, dueDate: true, /* B-OP-021 */ version: true, releasedAt: true, priority: true },
+      select: { id: true, number: true, status: true, kind: true, companyId: true, siteId: true, lineId: true, partyId: true, styleId: true, rush: true, dueDate: true, /* B-OP-021 */ version: true, releasedAt: true, priority: true, /* B-PT-004 */ styleRevisionId: true },
       orderBy: { number: 'asc' },
     })
   })
@@ -593,6 +626,32 @@ async function linesPart(db: Db, load: Loaders, /* B-SA-043 */ context: OfficeCo
   })
 }
 
+// ── B-PT-004 (R4) ──
+const SPEC_REVISION = { id: true, styleId: true, revision: true, status: true, releasedAt: true } as const
+
+/**
+ * B-PT-004: the spec of each work order (one read of the pinned revisions, one of the styles' RELEASED ones; the change order's
+ * decision only for a work order a newer released revision exists for — what GET …/spec/versions shows under workorders.view).
+ */
+async function specsOf(db: Db, rows: readonly { readonly id: string; readonly styleId: string; readonly styleRevisionId: string | null }[]): Promise<Map<string, ReturnType<typeof workOrderSpecOf>>> {
+  const out = new Map<string, ReturnType<typeof workOrderSpecOf>>()
+  if (rows.length === 0) return out
+  const pinnedIds = [...new Set(rows.flatMap((row) => (row.styleRevisionId ? [row.styleRevisionId] : [])))]
+  const pinned = new Map<string, SpecRevision>((pinnedIds.length === 0 ? [] : await db.styleRevision.findMany({ where: { id: { in: pinnedIds } }, select: SPEC_REVISION })).map((row) => [row.id, row]))
+  const released = new Map<string, SpecRevision>()
+  for (const row of await db.styleRevision.findMany({ where: { styleId: { in: [...new Set(rows.map((entry) => entry.styleId))] }, status: 'RELEASED' }, select: SPEC_REVISION, orderBy: { revision: 'desc' } })) {
+    if (!released.has(row.styleId)) released.set(row.styleId, row)
+  }
+  for (const row of rows) {
+    const pin = row.styleRevisionId ? (pinned.get(row.styleRevisionId) ?? null) : null
+    const now = released.get(row.styleId) ?? null
+    const newer = workOrderSpecOf(pin, now, null).state === 'NEWER_RELEASED'
+    out.set(row.id, workOrderSpecOf(pin, now, newer ? await decisionFor(db, row.id) : null))
+  }
+  return out
+}
+// ── end B-PT-004 ──
+
 async function workPart(db: Db, context: OfficeContext, order: OrderRow, load: Loaders, today: BusinessDate) {
   const actor = actorOf(context)
   const cells = await load.cells()
@@ -641,6 +700,8 @@ async function workPart(db: Db, context: OfficeContext, order: OrderRow, load: L
   })
   const risks = await riskFactsOf(db, riskRows, today)
   // ── end B-PT-001 ──
+  // B-PT-004 (R4): the spec each one is made to; none for one shared with other customers (no plan or spec detail of shared work).
+  const specs = await specsOf(db, reached.filter((row) => row.partyId !== null && row.kind !== 'MADE_TO_MEASURE'))
 
   const ownOf = (workOrderId: string) => cells.filter((cell) => cell.workOrderId === workOrderId)
   const rows = reached.map((workOrder) => {
@@ -677,6 +738,8 @@ async function workPart(db: Db, context: OfficeContext, order: OrderRow, load: L
       // ── end B-OP-021 ──
       // B-PT-001: null when finished or shared with other customers.
       risk: workOrder.partyId === null ? null : (risks.get(workOrder.id)?.risk ?? null),
+      // B-PT-004: null when shared with other customers.
+      spec: workOrder.partyId === null ? null : (specs.get(workOrder.id) ?? null),
     }
   })
   // B-OP-021: the row keeps its kind (the contract names it); only the grouping's own keys go.
