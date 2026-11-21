@@ -209,7 +209,8 @@ describe('TH-6 part B: a request the customer withdrew is never "Quote being pre
   })
 
   it('the order’s link to its accepted quote opens Approval & sending (where the quote’s Documents went), not an old tab', () => {
-    const orderDocs = readFileSync(new URL('../orders/record/view/DocumentsTab.tsx', import.meta.url), 'utf8')
+    // F-OC-203: the order's accepted quote is shown in its Changes › Customer's agreement (the old Documents card went).
+    const orderDocs = readFileSync(new URL('../orders/record/changes/view/AgreementSection.tsx', import.meta.url), 'utf8')
     expect(orderDocs).toContain('/sales/quotes/${quote.id}?tab=approval')
     expect(orderDocs).not.toContain('?tab=documents')
   })

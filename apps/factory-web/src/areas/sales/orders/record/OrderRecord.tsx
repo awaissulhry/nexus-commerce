@@ -400,7 +400,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     session,
     order: order.status === 'ready' ? order.value : null,
     tab,
-    language: locale === 'en' ? 'en' : 'it',
+    // F-OC-203 (L9): the confirmation is made and sent in the order's own language (the hook reads it from the order).
     onOrder: (next) => {
       setValue(next)
       loadParts(next)

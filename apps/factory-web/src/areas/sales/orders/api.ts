@@ -573,6 +573,8 @@ export const orderSchema = z.object({
   progress: progressSchema,
   chain: z.object({
     quote: quoteRef.nullable(),
+    // F-OC-203 (B-OC-016): the portal order this order was made from (its customer's own person who sent it); absent: not sent yet.
+    portalOrder: z.object({ id: z.string(), number: z.string().nullable(), sentAt: z.string().nullable(), sentBy: z.string().nullable() }).nullable().optional(),
     depositRequests: z.array(depositRequestSchema),
     workOrders: z.array(z.object({ id: z.string(), number: z.string(), status: z.string(), siteId: z.string(), releasedAt: instant.nullable() })),
     shipments: z.array(

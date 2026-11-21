@@ -466,8 +466,8 @@
       "minCut": "{count} già tagliati",
       "cutBeyond": "{count} tagliati in più: scegli dove vanno quando rivedi",
       "was": "era {value}",
-      "locked": "Bloccata da {stage} per regola dell'azienda: un cambio qui va accettato dal cliente.",
-      "lockedForGood": "Bloccata per sempre da {stage}: non può cambiare.",
+      "locked": "Serve il sì del cliente da {stage} (regola dell'azienda): un cambio qui va accettato dal cliente.",
+      "lockedForGood": "Non si può più cambiare da {stage}.",
       "priceShipped_one": "{count} spedito: il prezzo resta. Un prezzo spedito si cambia con una nota di credito.",
       "priceShipped_other": "{count} spediti: il prezzo resta. Un prezzo spedito si cambia con una nota di credito."
     },
@@ -1063,7 +1063,6 @@
   },
   "docs": {
     "acceptedTitle": "Preventivo accettato",
-    "openQuote": "Apri il preventivo {number}",
     "noQuote": {
       "title": "Inserito dall'ufficio — nessun preventivo"
     },
@@ -1074,9 +1073,6 @@
       "LINK": "Dal link del cliente",
       "OFFICE": "Registrato dall'ufficio"
     },
-    "document": "Il PDF firmato",
-    "matches": "Uguale al PDF inviato",
-    "differs": "Diverso dal PDF inviato",
     "terms": "Versione delle condizioni",
     "fromRequest": {
       "title": "Creato dalla richiesta {number} — senza preventivo"
@@ -1533,10 +1529,6 @@
       "reaccept": "L'ordine modificato aspetta il nuovo sì del cliente",
       "since": "dal {date}",
       "due": "entro il {date}"
-    },
-    "confirmation": {
-      "title": "Conferma e sì del cliente",
-      "yes": "Come ha detto sì il cliente"
     },
     "history": {
       "title": "Cronologia",
@@ -2430,9 +2422,6 @@
   "priced": {
     "fromList": "Prezzi dal listino di {customer}"
   },
-  "pricedPdf": {
-    "held": "Mostra dei prezzi: lo invia chi vede i prezzi."
-  },
   "priceCheck": {
     "EQUAL": "Uguale",
     "NOT_EQUAL": "Diverso",
@@ -3060,6 +3049,128 @@
       "revision": "Revisione {revision} · {when}",
       "newDates": "Vedi le nuove date ›",
       "seeYes": "Vedi il sì ›"
+    },
+    "freeze": {
+      "title": "Si può ancora cambiare?",
+      "info": "Cosa richiede ora una modifica di questo ordine: in base alla fase raggiunta e alle regole di blocco (dell'azienda, o del cliente). La scheda Righe è l'unico posto dove cambiare l'ordine; il cliente può anche chiedere dal suo portale.",
+      "reading": "Lettura di cosa si può ancora cambiare…",
+      "verdict": {
+        "cancelled": "Ordine annullato: non cambia nulla.",
+        "closed": "Ordine chiuso: non cambia più nulla.",
+        "goodsLeft": "Della merce è partita: le righe non cambiano più. Un cambio successivo è un reso.",
+        "firstYes": "Attende il primo sì: cambia le righe nella scheda Righe.",
+        "blocked": "Bloccato: la revisione {revision} attende l'approvazione dal {date}. Nient'altro cambia finché non è decisa.",
+        "blockedAny": "Bloccato: una modifica attende l'approvazione dal {date}. Nient'altro cambia finché non è decisa.",
+        "nothingOnFloor": "Niente è ancora in reparto: si può cambiare tutto.",
+        "needsYes": "Ora serve il sì del cliente (può avere un costo): {parts}.",
+        "cantChange": "Non si può più cambiare: {parts}.",
+        "allOpen": "Si può ancora cambiare tutto."
+      },
+      "seeIt": "Vedi ↑",
+      "lines": "Cambia le righe ›",
+      "heldRevision": "Si apre quando la revisione {revision} è decisa.",
+      "heldAny": "Si apre quando la modifica in attesa di approvazione è decisa.",
+      "floor": "In reparto: {stage} · dal {date}",
+      "floorStage": "In reparto: {stage}",
+      "floorNothing": "In reparto: ancora niente",
+      "portal": "Il cliente può anche chiedere una modifica dal portale.",
+      "changesUnread": "Impossibile leggere se una modifica attende l'approvazione.",
+      "noRules": "L'azienda non tiene regole di blocco: ogni parte resta aperta.",
+      "parts": "Parte per parte",
+      "col": {
+        "part": "Parte",
+        "now": "Ora",
+        "next": "Dopo"
+      },
+      "word": {
+        "canChange": "Si può cambiare",
+        "needsYes": "Serve il sì del cliente",
+        "cantChange": "Non si può più cambiare"
+      },
+      "of": {
+        "sizes": "{count} di {total} taglie",
+        "lines": "{count} di {total} righe"
+      },
+      "customerRule": "Regola di {customer}",
+      "shipToChecked": "Controllato quando chiede il cliente",
+      "next": "Da {stage}: {word}"
+    },
+    "agreement": {
+      "title": "Accordo del cliente",
+      "info": "Come il cliente ha detto sì, e se la nostra conferma stampa l'ordine com'è adesso. La conferma mostra i prezzi: la apre e la invia chi vede i prezzi. Si crea e si invia nella lingua dell'ordine.",
+      "tag": {
+        "cancelled": "Annullato",
+        "afterApproval": "Dopo la nostra approvazione",
+        "saidNo": "Hanno detto no",
+        "waiting": "In attesa del loro sì",
+        "notAsked": "Non ancora chiesto",
+        "sendNew": "Invia una nuova conferma",
+        "notSent": "Non ancora inviata",
+        "agreed": "Accordato · confermato"
+      },
+      "answer": {
+        "cancelled": "Per un ordine annullato non si invia nulla.",
+        "afterApproval": "La conferma si crea quando approviamo l'ordine.",
+        "saidNo": "{customer} ha detto no alla revisione {revision} il {date}: decidi in In attesa — ripristinala com'era, o cambiala di nuovo.",
+        "saidNoNoDate": "{customer} ha detto no alla revisione {revision}: decidi in In attesa — ripristinala com'era, o cambiala di nuovo.",
+        "waiting": "La revisione {revision} attende il loro sì dal {date}: è elencata in Tocca a {customer}.",
+        "notAsked": "La revisione {revision} richiede il loro sì, ma non è mai stato chiesto: chiedilo a {customer} ora.",
+        "expired": "La revisione {revision} richiede il loro sì, e la richiesta è scaduta: chiedilo di nuovo a {customer}.",
+        "sendNew": "Invia una nuova conferma: l'ordine è cambiato dopo l'invio della v{version}.",
+        "notSent": "La conferma non è ancora inviata.",
+        "agreed": "Accordato e confermato: v{version} inviata il {date}."
+      },
+      "toWaiting": "In attesa ↑",
+      "theirs": "Il loro sì",
+      "ours": "La nostra conferma",
+      "quote": "Preventivo {number} ›",
+      "accepted": "Preventivo {quote} accettato",
+      "emailChecked": "e-mail verificata",
+      "signed": {
+        "kept": "PDF firmato conservato",
+        "missing": "Non troviamo il PDF firmato",
+        "differs": "Il PDF firmato è diverso",
+        "unchecked": "Non possiamo verificare il PDF firmato"
+      },
+      "noWithdrawal": "Su misura: rinuncia al recesso accettata nel preventivo.",
+      "portal": "Inviato dal portale come {number} il {date}",
+      "portalBy": "Inviato dal portale da {name} come {number} il {date}",
+      "revision": {
+        "waiting": "Revisione {revision}: chiesto, in attesa del loro sì dal {date}",
+        "saidNo": "Revisione {revision}: hanno detto no",
+        "notAsked": "Revisione {revision}: il loro sì non è mai stato chiesto",
+        "expired": "Revisione {revision}: la richiesta è scaduta senza risposta"
+      },
+      "ask": "Chiedi a {customer}…",
+      "state": {
+        "upToDate": "Aggiornata",
+        "outdated": "Non aggiornata",
+        "none": "Non ancora creata",
+        "notYet": "Non ancora possibile"
+      },
+      "sentTo": "v{version} inviata il {date} a {to}",
+      "language": "In {language}, la lingua dell'ordine",
+      "lang": {
+        "it": "italiano",
+        "en": "inglese"
+      },
+      "send": "Invia la versione {version}…",
+      "more": "Altro per la conferma",
+      "makeOnly": "Crea soltanto (da stampare)",
+      "openToPrint": "Apri per stampare",
+      "noPrice": "La conferma mostra i prezzi: la invia chi vede i prezzi."
+    },
+    "ask": {
+      "title": "Chiedere a {customer} di riconfermare la revisione {revision}?",
+      "body": "{customer} riceve un compito nel suo portale e, con un indirizzo e-mail in archivio, un'e-mail: “Riconfermate l'ordine modificato {number}”. Rispondono scrivendo il proprio nome.",
+      "dueLabel": "Risposta entro",
+      "toLabel": "A",
+      "reading": "Lettura del destinatario…",
+      "portalOnly": "Nessun indirizzo e-mail in archivio: chiesto solo nel portale di {customer}",
+      "until": "Finché non rispondono, la riga resta in Tocca a {customer}.",
+      "go": "Chiedi a {customer}",
+      "doneEmail": "Chiesto a {customer}: è partita un'e-mail a {email}, e il compito è nel suo portale.",
+      "donePortal": "Chiesto nel portale di {customer}: nessun indirizzo e-mail in archivio."
     }
   }
 }

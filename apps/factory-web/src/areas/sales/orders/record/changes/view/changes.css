@@ -1,7 +1,7 @@
 /*
  * F-OC-101 … 104 (order CHANGES tab, 10-design §1–§3; 18-lead-settles L6) — the tab's own stylesheet (orders.css is the Lines lane's,
  * production.css the kit's, reused in place). The kit gives the room container (`pt`), each section's own (`sec`) and the heads; this
- * file adds Waiting's groups and rows. Room, not screen: each Waiting group is one more size container (`grp`), so its rows follow
+ * file adds Waiting's groups and rows and the agreement's two halves (F-OC-203). Room, not screen: each Waiting group is one more size container (`grp`), so its rows follow
  * the room they really have — stacked under 560 px, words · who + age · door from 560, words · detail · who + age · door from 1100 —
  * and opening or closing the thread dock re-lays them at once. The door column has a fixed width, so doors line up across rows and
  * groups. DS tokens only (no raw colour): light and dark come from the tokens.
@@ -45,4 +45,21 @@
 }
 @container grp (min-width: 1100px) {
   .fw-oc-row { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) 240px 224px; grid-template-areas: "h x m d"; }
+}
+
+/* ── Customer's agreement (F-OC-203): their yes | our confirmation — stacked, side by side when the section has the room (≥ 900) ── */
+.fw-oc-ag { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-16) var(--nds-space-22); min-width: 0; }
+.fw-oc-ag > .fw-oc-ag-half { border-top: 0; padding-top: 0; }
+.fw-oc-ag-row { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--nds-space-8) var(--nds-space-12); min-width: 0; }
+.fw-oc-ag-txt { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; font-size: var(--nds-font-size-sm); overflow-wrap: anywhere; }
+.fw-oc-ag-doors { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); }
+@container sec (min-width: 900px) {
+  .fw-oc-ag { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .fw-oc-ag > .fw-oc-ag-half + .fw-oc-ag-half { padding-left: var(--nds-space-22); border-left: 1px solid var(--nds-border-subtle); }
+}
+@container sec (max-width: 899px) {
+  .fw-oc-ag > .fw-oc-ag-half + .fw-oc-ag-half { padding-top: var(--nds-space-14); border-top: 1px solid var(--nds-border-subtle); }
+}
+@container pt (max-width: 719px) {
+  .fw-oc-ag-doors > .nds-btn, .fw-oc-ag-row > .nds-btn { min-height: 44px; }
 }

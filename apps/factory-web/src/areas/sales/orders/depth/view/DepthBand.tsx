@@ -46,7 +46,7 @@ function Pills({ model }: { model: OrderDepthModel }) {
       )}
       {level === 'URGENT' && depth.priority.urgentReason && <span className="fw-sod-reason">{depth.priority.urgentReason}</span>}
       {depth.season && <Tag tone="neutral">{d('season.tag', { code: depth.season.code })}</Tag>}
-      {depth.confirmation.sentAt && depth.confirmation.sentVersion !== null && <Tag tone="success">{d('confirmation.sentTag', { version: depth.confirmation.sentVersion })}</Tag>}
+      {/* F-OC-203 (C4-B6): no green "Confirmation v1 sent" on the band — the Customer's agreement says whether it is still the order. */}
     </>
   )
 }

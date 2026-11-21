@@ -67,9 +67,7 @@ import {
   depositKindChoices,
   depthCanOf,
   depthEditHeld,
-  freezeRows,
   frozenCells,
-  frozenGroups,
   frozenOffer,
   onlyMeasurements,
   frozenProblemsOf,
@@ -161,15 +159,16 @@ describe('what is frozen (SAL-218)', () => {
   it('the cut sizes are locked with the stage they reached; none without a rule', () => {
     const cells = frozenCells(FREEZE_CUT)
     expect(cells.map((cell) => `${cell.seq}:${cell.size}:${cell.stage}:${cell.state}`)).toEqual(['10:48:CUT:CHANGE_REQUEST', '10:50:CUT:CHANGE_REQUEST'])
-    expect(frozenGroups(cells, LINE_BLK)).toEqual([{ stage: 'CUT', state: 'CHANGE_REQUEST', sizes: ['48', '50'] }])
-    expect(frozenGroups(cells, LINE_RED)).toEqual([])
+    expect(cells.filter((cell) => cell.lineId === LINE_RED)).toEqual([])
     expect(frozenCells(FREEZE_NONE)).toEqual([])
   })
 
-  it('each field at its strictest verdict', () => {
-    const rows = Object.fromEntries(freezeRows(FREEZE_CUT).map((row) => [row.field, `${row.state}:${row.frozenFrom}`]))
-    expect(rows).toEqual({ SIZE_QUANTITY: 'CHANGE_REQUEST:CUT', COLOURWAY: 'CHANGE_REQUEST:CUT', OPTION: 'OPEN:null', DELIVERY_DATE: 'OPEN:null', SHIP_TO: 'OPEN:null', PRICE: 'CHANGE_REQUEST:RELEASED' })
-    expect(freezeRows(FREEZE_FINISHED).find((row) => row.field === 'SIZE_QUANTITY')?.state).toBe('BLOCKED')
+  // F-OC-202: the freeze panel's rows went into Changes › Can it still change? — each part at its strictest verdict, in three words.
+  it('each part at its strictest verdict, in three words (Options not shown, L3)', async () => {
+    const { freezePartsOf } = await import('../record/changes/freeze')
+    const words = Object.fromEntries(freezePartsOf(FREEZE_CUT).map((part) => [part.field, part.word]))
+    expect(words).toEqual({ SIZE_QUANTITY: 'needsYes', COLOURWAY: 'needsYes', DELIVERY_DATE: 'canChange', SHIP_TO: 'canChange', PRICE: 'needsYes' })
+    expect(freezePartsOf(FREEZE_FINISHED).find((part) => part.field === 'SIZE_QUANTITY')?.word).toBe('cantChange')
   })
 
   it('an amendment’s frozen refusals and what they may become', () => {

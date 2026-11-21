@@ -162,6 +162,8 @@ export const confirmationSchema = z.object({
   upToDate: z.boolean().nullable(),
   mayMake: z.boolean(),
   versions: z.array(z.object({ id: z.string(), version: z.number(), number: z.string().nullable(), language: z.string(), fileId: z.string(), createdAt: instant, createdBy: z.string().nullable(), sent: z.boolean() })),
+  // F-OC-203 (B-OC-014): every send, newest first (the version, when, to whom, by which office person); absent: the last send only.
+  sends: z.array(z.object({ version: z.number(), at: instant, to: z.array(z.string()), by: z.string().nullable() })).optional(),
 })
 export type Confirmation = z.infer<typeof confirmationSchema>
 
@@ -190,14 +192,19 @@ export function sendConfirmation(api: ApiClient, orderId: string, body: SendConf
 // ---- B-W2b-309: what is frozen, the changes, priced changes, the put-back, the deposit kinds, the customer's materials ------
 
 const stageOf = { stage: z.enum(FREEZE_STAGES).nullable(), on: day.nullable() }
-const verdictSchema = z.object({ field: z.enum(FREEZE_FIELDS), state: z.enum(FREEZE_STATES), frozenFrom: z.enum(FREEZE_STAGES).nullable() })
+// ---- F-OC-202 (13-backend R13a, B-OC-017): the verdict in words (the rule's own note, else the rule in words) is kept; what freezes
+// NEXT and whether the deciding rule is the customer's own set come with S2 — absent until then: the Now column only, no "Rule of …".
+const freezeWords = z.object({ en: z.string(), it: z.string() })
+const freezeNext = z.object({ stage: z.enum(FREEZE_STAGES), action: z.enum(FREEZE_STATES) }).nullable().optional()
+const verdictSchema = z.object({ field: z.enum(FREEZE_FIELDS), state: z.enum(FREEZE_STATES), frozenFrom: z.enum(FREEZE_STAGES).nullable(), words: freezeWords.optional(), next: freezeNext, customerRule: z.boolean().optional() })
+// ---- end F-OC-202
 
 export const freezeSchema = z.object({
   orderId: z.string(),
   number: z.string(),
   rules: z.number(),
   order: z.object({ ...stageOf, fields: z.array(verdictSchema) }),
-  lines: z.array(z.object({ lineId: z.string(), seq: z.number(), ...stageOf, fields: z.array(verdictSchema), sizes: z.array(z.object({ size: z.string(), ...stageOf, locked: z.boolean(), state: z.enum(FREEZE_STATES) })) })),
+  lines: z.array(z.object({ lineId: z.string(), seq: z.number(), ...stageOf, fields: z.array(verdictSchema), sizes: z.array(z.object({ size: z.string(), ...stageOf, locked: z.boolean(), state: z.enum(FREEZE_STATES), words: freezeWords.optional() /* F-OC-202 */, next: freezeNext /* F-OC-202 */ })) })),
 })
 export type Freeze = z.infer<typeof freezeSchema>
 
