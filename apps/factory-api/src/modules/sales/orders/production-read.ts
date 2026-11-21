@@ -33,6 +33,7 @@ import { SITE_COLUMNS, type SiteRow } from '../../planning/store'
 import { GOODS_LINE_KINDS, readOrderProductionFacts } from '../../production/brand/facts'
 import { countedUrgencyOf } from '../../production/brand/urgency-of'
 import { readPlanned, readWork, workOf } from '../../production/brand-portal/access'
+import { readProductionSettings } from '../../production/brand-portal/access' // B-PT-005: what the customer is shown
 import { issueReadWhere, issuesOfOrderWhere, type OrderFilter } from '../../production/issues/list'
 import { brandProductionKey, supervisorOfOrder } from '../../production/supervisor/resolver'
 import { readHandNotice, type HandNotice } from '../../production/brand/keeper' // B-MS-008 (ms-fx1): Clear…'s words read the markers
@@ -58,6 +59,8 @@ import { riskFactsOf, type RiskRow } from '../../production/work-orders/risk'
 import { newerSpecOf, type Decision } from '@nexus/factory-domain/product/versions/drift'
 import type { RevisionStatus } from '@nexus/factory-domain/product/styles/revisions'
 import { decisionFor } from '../../product/versions/drift'
+// B-PT-008 (R8): the garments with a defect per class, the customer's own reader's rule.
+import { defectTotalsOf } from '@nexus/factory-domain/production-brand/quality-read'
 
 /**
  * B-SA-031 / B-SA-032 (Sales page plan P2, P3, P4, P15, P16; 13-backend B1, B12; 10-order-page OR1, OR2; review WP-3): the office's
@@ -256,6 +259,24 @@ export function workOrderSpecOf(pinned: SpecRevision | null, released: SpecRevis
   }
 }
 // ── end B-PT-004 ──
+
+// ── B-PT-008 / B-PT-009 (order production tab R8, R9) ──────────────────────────────────────────────────────────────────────────
+/** B-PT-009: the most characters of an NCR's title the read sends (a longer one is cut with "…"). */
+export const NCR_TITLE_LIMIT = 80
+
+/** B-PT-009: an NCR's title as the order page shows it: trimmed, at most NCR_TITLE_LIMIT characters (cut with "…"). */
+export function ncrTitleOf(title: string): string {
+  const chars = Array.from(title.trim())
+  return chars.length <= NCR_TITLE_LIMIT ? chars.join('') : `${chars.slice(0, NCR_TITLE_LIMIT - 1).join('').trimEnd()}…`
+}
+
+/** B-PT-008: a final check's garments with a defect per class (the domain's defectTotalsOf); null while it is OPEN (nothing decided). */
+export function finalDefectsOf(status: string, defects: readonly { readonly defectClass: string; readonly quantity: number }[]): { critical: number; major: number; minor: number } | null {
+  if (status === 'OPEN') return null
+  const totals = defectTotalsOf(defects)
+  return { critical: totals.CRITICAL, major: totals.MAJOR, minor: totals.MINOR }
+}
+// ── end B-PT-008 / B-PT-009 ──
 
 /** The pieces between the steps (what is in work now): counts only, from the order's own settled figures. */
 export function inWorkPiecesOf(input: { readonly started: number; readonly cut: number | null; readonly sewn: number | null; readonly checked: number | null; readonly packed: number | null }) {
@@ -529,6 +550,7 @@ async function headlinePart(db: Db, context: OfficeContext, order: OrderRow, loa
           words: HEALTH_WORDS[effective.health],
           computed: (row.health as BrandHealth | null) ?? null,
           raise: raise ? { reasonCode: raise.reasonCode, words: HEALTH_REASON_WORDS[raise.reasonCode], until: raise.until, note: notes ? row.healthNote : null, by: raisedBy, at: notes && row.healthSetAt ? toUtcIso(row.healthSetAt) : null } : null,
+          version: row.version, // B-PT-007: Mark at risk… and Remove the mark send it back
         }
       : null
 
@@ -821,6 +843,13 @@ async function datesPart(db: Db, context: OfficeContext, order: OrderRow, load: 
       // B-OO-010 (N9): its version and what THIS reader may do, as Planning's own read built them (writes stay Planning's routes).
       version: gate.version,
       actions: gate.actions,
+      // B-PT-006 (R6): what Planning's MilestoneDialog, Add and Remove need, as readWorld built it (today's order page filled
+      // holds 0, makerId null).
+      holds: gate.holds,
+      passedAt: gate.passedAt,
+      passedBy: gate.passedBy,
+      ownerId: gate.ownerId,
+      makerId: gate.makerId,
     })),
     milestones: (view?.milestones ?? []).map((row) => ({ id: row.id, kind: row.kind, gateId: row.gateId, gateKind: row.gateKind, label: row.label, target: row.target, actual: row.actual, state: row.state, late: row.late, owner: row.owner })),
     late: view?.late ?? 0,
@@ -828,6 +857,12 @@ async function datesPart(db: Db, context: OfficeContext, order: OrderRow, load: 
     planned,
     // Filled after this read, in a transaction of its own (forecastOf); null while withheld.
     forecast: null as Awaited<ReturnType<typeof forecastOf>> | null,
+    // B-PT-005 (R5): what this order's own customer is shown (one PK read; no row: STATUS). Office only.
+    customer: { level: (await readProductionSettings(db, order.partyId)).level },
+    // B-PT-006 (R6): Planning's own order fields for THIS reader. readWorld reads the order the caller reached under the same right,
+    // so `view` is always there; the fallback never offers Add.
+    mayAddGate: view?.mayAddGate ?? { allowed: false, needs: null, refusal: null },
+    waiting: view?.waiting ?? [],
   }
 }
 
@@ -843,16 +878,34 @@ async function qualityPart(db: Db, context: OfficeContext, load: Loaders, may: {
     const own: Prisma.NonconformanceWhereInput = { AND: [scopeWhere(actor, QUALITY_NCR_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.NonconformanceWhereInput, ncrsOfOrderWhere(filter), { stage: { in: [...OPEN_NCR_STAGES] } }] }
     // The brand wall: an NCR of a work order of several customers (or of none) only for people who reach every customer.
     const where = await ncrListWhere(db, actor, QUALITY_NCR_VIEW, own)
-    const rows = await db.nonconformance.findMany({ where, select: { id: true, number: true, stage: true, severity: true, workOrderId: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 100 })
+    const rows = await db.nonconformance.findMany({ where, select: { id: true, number: true, stage: true, severity: true, workOrderId: true, /* B-PT-009 */ title: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 100 })
     const workOrderIds = unique(rows.flatMap((row) => (row.workOrderId ? [row.workOrderId] : [])))
     const shared = new Set(workOrderIds.length === 0 ? [] : (await db.workOrder.findMany({ where: { id: { in: workOrderIds }, partyId: null }, select: { id: true } })).map((row) => row.id))
-    return rows.map((row) => ({ id: row.id, number: row.number, stage: row.stage as string, severity: row.severity as string, sharedWorkOrder: row.workOrderId !== null && shared.has(row.workOrderId) }))
+    return rows.map((row) => ({ id: row.id, number: row.number, stage: row.stage as string, severity: row.severity as string, sharedWorkOrder: row.workOrderId !== null && shared.has(row.workOrderId), /* B-PT-009 */ title: ncrTitleOf(row.title) }))
   }
   const ncrs = may.ncrs ? await ncrsRead() : null
   const finalRead = async () => {
-    const reached = (await load.workOrders()).filter((workOrder) => reachesWorkOrder(actor, QUALITY_INSPECTIONS_VIEW, workOrder)).map((workOrder) => workOrder.id)
-    const rows = reached.length === 0 ? [] : await db.inspection.findMany({ where: { workOrderId: { in: reached }, status: { not: 'CANCELLED' } }, select: { workOrderId: true, number: true, status: true, sampleSize: true, decidedAt: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 100 })
-    return rows.map((row) => ({ workOrderId: row.workOrderId, number: row.number, status: row.status as string, sampleSize: row.sampleSize, on: row.decidedAt ? businessDate(row.decidedAt) : null }))
+    const workOrders = await load.workOrders()
+    const reached = workOrders.filter((workOrder) => reachesWorkOrder(actor, QUALITY_INSPECTIONS_VIEW, workOrder)).map((workOrder) => workOrder.id)
+    // B-PT-008 (R8): + id, lot, units inspected so far; never the inspector (not selected).
+    const rows = reached.length === 0 ? [] : await db.inspection.findMany({ where: { workOrderId: { in: reached }, status: { not: 'CANCELLED' } }, select: { workOrderId: true, number: true, status: true, sampleSize: true, decidedAt: true, /* B-PT-008 */ id: true, lotSize: true, inspectedCount: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 100 })
+    // B-PT-008: one grouped read of the defects (garments per inspection and class); shared from the loader's customer.
+    const defects = rows.length === 0 ? [] : await db.inspectionDefect.groupBy({ by: ['inspectionId', 'defectClass'], where: { inspectionId: { in: rows.map((row) => row.id) } }, _sum: { quantity: true } })
+    const sharedWork = new Set(workOrders.filter((workOrder) => workOrder.partyId === null).map((workOrder) => workOrder.id))
+    return rows.map((row) => ({
+      workOrderId: row.workOrderId,
+      number: row.number,
+      status: row.status as string,
+      sampleSize: row.sampleSize,
+      on: row.decidedAt ? businessDate(row.decidedAt) : null,
+      // ── B-PT-008 ──
+      id: row.id,
+      lotSize: row.lotSize,
+      inspectedCount: row.inspectedCount,
+      defects: finalDefectsOf(row.status as string, defects.filter((entry) => entry.inspectionId === row.id).map((entry) => ({ defectClass: entry.defectClass as string, quantity: entry._sum.quantity ?? 0 }))),
+      sharedWorkOrder: sharedWork.has(row.workOrderId),
+      // ── end B-PT-008 ──
+    }))
   }
   const final = may.final ? await finalRead() : null
   return {

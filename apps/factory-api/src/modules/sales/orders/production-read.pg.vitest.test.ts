@@ -324,7 +324,8 @@ describe('B-SA-032 work, dates and quality: what is made together with other wor
       edit: { allowed: false, needs: 'planning.milestones.manage' },
       remove: { allowed: false, needs: 'planning.milestones.manage' },
     })
-    expect(answer.dates).not.toHaveProperty('mayAddGate')
+    // B-PT-006: the dates part now carries Planning's own mayAddGate — for the Sales template refused by the right it lacks.
+    expect(answer.dates.mayAddGate).toEqual({ allowed: false, needs: 'planning.milestones.manage', refusal: null })
     expect((answer.dates.milestones as Json[]).map((row) => row.kind)).toEqual(expect.arrayContaining(['GATE', 'SHIP']))
     expect(answer.dates.planned).toEqual({ cutStart: null, sewStart: null, finish: null })
     expect(answer.withheld).toEqual(['dates.forecast'])
@@ -1153,3 +1154,120 @@ describe('B-PT-004: each work order’s spec — in force, replaced by a newer o
   })
 })
 // ── end B-PT-004 ──
+
+// ── B-PT-005 … B-PT-009 (order production tab R5–R9) ──
+/**
+ * The dates part says what the order's customer is shown (its sharing level) and carries Planning's own gate fields and mayAddGate
+ * (the order page then opens Planning's dialogs unchanged); the headline's health carries the production state's version (Mark at
+ * risk… sends it back from this one read); each final check has its id, lot, units inspected and the garments with a defect per
+ * class (never the inspector); each NCR its title, cut at 80. The test sets Alpha's sharing level, adds three final checks of
+ * Alpha's work order (failed, re-inspected and passed, one open), one of the mixed work order, and an NCR with a long title — by
+ * hand (made-up facts: only the read is under test) — and puts the level back after.
+ */
+describe('B-PT-005…009: the customer’s level, Planning’s gate fields, the health version, final checks with totals, NCR titles', { timeout: 60_000 }, () => {
+  const PLANNER = newId()
+  const checks = { failed: newId(), passed: newId(), open: newId(), mixed: newId() }
+  const ncr = newId()
+  const LONG_TITLE = `Made-up: the left sleeve seam opens under load ${'and the binding frays '.repeat(4)}`.trim()
+  const DESCRIPTION = 'T-PT009 made-up description, never sent to the order page'
+  let level: string | null = null
+
+  beforeAll(async () => {
+    SESSIONS['pt.planner'] = { audience: 'office', tenantId: ids.tenantId, actorId: PLANNER, grants: [grant(['orders.view', 'planning.view', 'planning.milestones.manage', 'planning.milestones.override'], 'all')] }
+    const [stored] = await admin<{ level: string }>(`SELECT "productionLevel"::text AS level FROM "PortalSettings" WHERE id = $1 AND "partyId" = $1`, [ids.a])
+    level = stored?.level ?? null
+    const t = lit(ids.tenantId)
+    const inspector = lit(seedUuid(ns, 'actor'))
+    const check = (id: string, workOrderId: string, number: string, status: string, inspected: number | null, createdAt: string) =>
+      `INSERT INTO "Inspection" (id, "tenantId", "companyId", "siteId", "workOrderId", number, "lotSize", "sampleSize", "inspectionLevel", "aqlMajor", "aqlMinor", "acceptMajor", "acceptMinor", status, "inspectorUserId", "decidedAt", "signatureSha256", "computedResult", "inspectedCount", version, "createdAt", "updatedAt")
+         SELECT ${lit(id)}, ${t}, "companyId", "siteId", id, '${number}', 100, 32, 'II', 2.5, 4.0, 1, 2, '${status}'::"InspectionStatus", ${status === 'OPEN' ? 'NULL' : inspector}, ${status === 'OPEN' ? 'NULL' : `'${createdAt}'`}, ${status === 'OPEN' ? 'NULL' : `'${'a'.repeat(64)}'`}, ${status === 'OPEN' ? 'NULL' : status === 'PASSED' ? `'PASS'::"InspectionResult"` : `'FAIL'::"InspectionResult"`}, ${inspected === null ? 'NULL' : inspected}, 1, '${createdAt}', '${createdAt}'
+         FROM "WorkOrder" WHERE id = ${lit(workOrderId)};`
+    const defect = (inspectionId: string, defectClass: string, code: string, quantity: number) =>
+      `INSERT INTO "InspectionDefect" (id, "tenantId", "siteId", "workOrderId", "inspectionId", "defectClass", code, quantity)
+         SELECT ${lit(newId())}, ${t}, "siteId", "workOrderId", id, '${defectClass}', '${code}', ${quantity} FROM "Inspection" WHERE id = ${lit(inspectionId)};`
+    await admin(
+      `BEGIN;
+       SET LOCAL session_replication_role = replica;
+       ${check(checks.failed, alpha.workOrderId, 'T-PT008-INS-1', 'FAILED', 32, '2026-11-18T09:00:00.000Z')}
+       ${check(checks.passed, alpha.workOrderId, 'T-PT008-INS-2', 'PASSED', null, '2026-11-19T09:00:00.000Z')}
+       ${check(checks.open, alpha.workOrderId, 'T-PT008-INS-3', 'OPEN', 5, '2026-11-20T09:00:00.000Z')}
+       ${check(checks.mixed, w.mixed.workOrderId, 'T-PT008-INS-4', 'PASSED', 32, '2026-11-19T10:00:00.000Z')}
+       ${defect(checks.failed, 'MAJOR', 'SEAM-OPEN', 2)}
+       ${defect(checks.failed, 'MINOR', 'THREAD-END', 1)}
+       ${defect(checks.passed, 'MINOR', 'THREAD-END', 1)}
+       ${defect(checks.open, 'CRITICAL', 'CE-MISSING', 1)}
+       INSERT INTO "Nonconformance" (id, "tenantId", "companyId", "siteId", number, title, description, source, "foundAt", "foundOn", "foundById", "quantityAffected", uom, severity, "workOrderId", stage)
+         SELECT ${lit(ncr)}, ${t}, "companyId", "siteId", 'T-PT009-NCR-1', '${LONG_TITLE}', '${DESCRIPTION}', 'INSPECTION', 'FINAL', now(), ${inspector}, 2, 'PCS', 'MAJOR', id, 'OPEN' FROM "WorkOrder" WHERE id = ${lit(alpha.workOrderId)};
+       COMMIT;`,
+    )
+  })
+
+  afterAll(async () => {
+    const restore = level === null ? `DELETE FROM "PortalSettings" WHERE id = ${lit(ids.a)};` : `UPDATE "PortalSettings" SET "productionLevel" = '${level}' WHERE id = ${lit(ids.a)};`
+    await admin(`BEGIN; SET LOCAL session_replication_role = replica; ${restore} COMMIT;`)
+  })
+
+  it('B-PT-005: the customer’s sharing level — its stored one (none stored: STATUS), then GATES once it is set', async () => {
+    const beta = await ok('office.p2', production(w.b.salesOrderId, 'dates'))
+    const [betaLevel] = await admin<{ level: string }>(`SELECT "productionLevel"::text AS level FROM "PortalSettings" WHERE id = $1 AND "partyId" = $1`, [ids.b])
+    expect(beta.dates.customer).toEqual({ level: betaLevel?.level ?? 'STATUS' })
+    expect((await ok('office.all', production(alpha.so1, 'dates'))).dates.customer).toEqual({ level: level ?? 'STATUS' })
+    await admin(
+      `BEGIN; SET LOCAL session_replication_role = replica;
+       INSERT INTO "PortalSettings" (id, "tenantId", "partyId", "productionLevel") VALUES (${lit(ids.a)}, ${lit(ids.tenantId)}, ${lit(ids.a)}, 'GATES') ON CONFLICT (id) DO UPDATE SET "productionLevel" = 'GATES';
+       COMMIT;`,
+    )
+    expect((await ok('office.all', production(alpha.so1, 'dates'))).dates.customer).toEqual({ level: 'GATES' })
+    // The Sales template reads it too (orders.view: the dates part); Beta's person never reads Alpha's.
+    expect((await ok('sales.p1', production(alpha.so1, 'dates'))).dates.customer).toEqual({ level: 'GATES' })
+    expect((await call('office.p2', production(alpha.so1, 'dates'))).status).toBe(404)
+  })
+
+  it('B-PT-006: each gate carries Planning’s own holds, passed at and by, planner and maker; mayAddGate and waiting are Planning’s', async () => {
+    const office = await ok('pt.planner', production(alpha.so1, 'dates'))
+    const planning = ((await ok('pt.planner', `/planning/milestones?orderId=${alpha.so1}`)).orders as Json[]).find((row) => row.id === alpha.so1)!
+    const pick = (gate: Json) => ({ id: gate.id, holds: gate.holds, passedAt: gate.passedAt, passedBy: gate.passedBy, ownerId: gate.ownerId, makerId: gate.makerId })
+    expect((office.dates.gates as Json[]).map(pick).sort((a, b) => a.id.localeCompare(b.id))).toEqual((planning.gates as Json[]).map(pick).sort((a, b) => a.id.localeCompare(b.id)))
+    expect(office.dates.mayAddGate).toEqual(planning.mayAddGate)
+    expect(office.dates.mayAddGate).toEqual({ allowed: true, needs: null, refusal: null })
+    expect(office.dates.waiting).toEqual(planning.waiting)
+    // A passed gate names when and the office person who passed it (B-OO-010 passed one by hand as the seeds' owner).
+    const passed = (office.dates.gates as Json[]).find((gate) => gate.state === 'PASSED')
+    expect(passed).toMatchObject({ passedAt: expect.any(String), passedBy: { id: seedUuid(ns, 'actor'), name: expect.any(String) } })
+    for (const gate of office.dates.gates as Json[]) expect(typeof gate.holds).toBe('number')
+    // The Sales template: mayAddGate refused by the right it lacks, in Planning's own words.
+    expect((await ok('sales.p1', production(alpha.so1, 'dates'))).dates.mayAddGate).toEqual({ allowed: false, needs: 'planning.milestones.manage', refusal: null })
+  })
+
+  it('B-PT-007: the headline’s health carries the production state’s version (what Mark at risk… sends back)', async () => {
+    const { headline } = await ok('office.all', production(w.a.salesOrderId, 'headline'))
+    const [row] = await admin<{ version: number }>(`SELECT version FROM "BrandOrderProduction" WHERE "salesOrderId" = $1`, [w.a.salesOrderId])
+    expect(headline.health).toMatchObject({ code: 'AT_RISK', version: row!.version })
+    // The health GET of the same order names the same version.
+    expect((await ok('office.all', `/production/brand-orders/${w.a.salesOrderId}/health`)).health.version).toBe(row!.version)
+  })
+
+  it('B-PT-008: a failed, a re-inspected and an open final check: three rows by id, each with lot, units and the defects per class; never the inspector', async () => {
+    const finals = (await ok('office.all', production(alpha.so1, 'quality'))).quality.final as Json[]
+    const byId = new Map(finals.map((row) => [row.id as string, row]))
+    expect(new Set(finals.map((row) => row.id)).size).toBe(finals.length)
+    expect(byId.get(checks.failed)).toEqual({ id: checks.failed, workOrderId: alpha.workOrderId, number: 'T-PT008-INS-1', status: 'FAILED', lotSize: 100, sampleSize: 32, inspectedCount: 32, on: '2026-11-18', defects: { critical: 0, major: 2, minor: 1 }, sharedWorkOrder: false })
+    expect(byId.get(checks.passed)).toMatchObject({ number: 'T-PT008-INS-2', status: 'PASSED', inspectedCount: null, defects: { critical: 0, major: 0, minor: 1 }, sharedWorkOrder: false })
+    expect(byId.get(checks.open)).toMatchObject({ status: 'OPEN', inspectedCount: 5, defects: null, on: null })
+    expect(keysOf(finals).filter((key) => /inspector|worker|operator/i.test(key))).toEqual([])
+    // The mixed work order's check: shown to an every-customer reader as shared; a person limited to Alpha does not reach it.
+    expect((((await ok('office.all', production(w.a.salesOrderId, 'quality'))).quality.final) as Json[]).find((row) => row.id === checks.mixed)).toMatchObject({ sharedWorkOrder: true })
+    expect(JSON.stringify(await ok('office.p1', production(w.a.salesOrderId, 'quality')))).not.toContain(checks.mixed)
+  })
+
+  it('B-PT-009: an NCR says its title, cut at 80 with "…"; never its description or who found it', async () => {
+    const answer = await ok('office.all', production(alpha.so1, 'quality'))
+    const row = (answer.quality.ncrs as Json[]).find((entry) => entry.id === ncr)!
+    expect(Array.from(row.title as string)).toHaveLength(80)
+    expect(row.title.endsWith('…')).toBe(true)
+    expect(LONG_TITLE.startsWith((row.title as string).slice(0, -1))).toBe(true)
+    expect(Object.keys(row).sort()).toEqual(['id', 'number', 'severity', 'sharedWorkOrder', 'stage', 'title'])
+    expect(JSON.stringify(answer)).not.toContain(DESCRIPTION)
+  })
+})
+// ── end B-PT-005 … B-PT-009 ──

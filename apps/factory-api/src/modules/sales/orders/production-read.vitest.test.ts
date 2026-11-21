@@ -15,6 +15,7 @@ import { productionWords, whereText } from '../../../platform/exports/sources/sa
 // B-PT-001 / B-PT-003: a work order's workshops with their days; a made-to-measure row's units.
 import { MTM_UNITS_LIMIT, mtmUnitsOf, workshopsOf } from './production-read'
 import { workOrderSpecOf, type SpecRevision } from './production-read' // B-PT-004
+import { finalDefectsOf, NCR_TITLE_LIMIT, ncrTitleOf } from './production-read' // B-PT-008, B-PT-009
 
 /**
  * B-SA-031 / B-SA-032 — the office's read of one order's production, its pure parts (the PG suite production-read.pg.vitest.test.ts
@@ -339,3 +340,27 @@ describe('B-PT-004: the spec a work order is made to, by the domain rule; the sc
   })
 })
 // ── end B-PT-004 ──
+
+// ── B-PT-008 / B-PT-009 (order production tab R8, R9) ──
+describe('B-PT-008: a final check says its garments with a defect per class; nothing while it is open', () => {
+  it('sums the defect rows per class (the domain rule); an unknown class is left out', () => {
+    expect(finalDefectsOf('FAILED', [{ defectClass: 'MAJOR', quantity: 2 }, { defectClass: 'MINOR', quantity: 1 }, { defectClass: 'MAJOR', quantity: 1 }, { defectClass: 'COSMETIC', quantity: 9 }])).toEqual({ critical: 0, major: 3, minor: 1 })
+    expect(finalDefectsOf('PASSED', [])).toEqual({ critical: 0, major: 0, minor: 0 })
+  })
+
+  it('an OPEN check: null (never a made-up 0)', () => {
+    expect(finalDefectsOf('OPEN', [{ defectClass: 'CRITICAL', quantity: 1 }])).toBeNull()
+  })
+})
+
+describe('B-PT-009: an NCR title is at most 80 characters, cut with "…"', () => {
+  it('a short title stays (trimmed); a long one is cut to 80 with the ellipsis', () => {
+    expect(ncrTitleOf('  Made-up: seam open on the left sleeve  ')).toBe('Made-up: seam open on the left sleeve')
+    const long = `Made-up: ${'x'.repeat(120)}`
+    expect(NCR_TITLE_LIMIT).toBe(80)
+    expect(Array.from(ncrTitleOf(long))).toHaveLength(80)
+    expect(ncrTitleOf(long).endsWith('…')).toBe(true)
+    expect(ncrTitleOf('y'.repeat(80))).toBe('y'.repeat(80))
+  })
+})
+// ── end B-PT-008 / B-PT-009 ──

@@ -9,6 +9,8 @@ import { SALES_ORDER_PRIORITY_LEVELS } from '@nexus/factory-domain/sales/orders-
 import { GATE_KINDS, GATE_STATES, LEATHER_STATES, MILESTONE_KINDS, MILESTONE_STATES, PASS_VIAS } from '@nexus/factory-domain/planning/milestones/rules'
 import { FINISH_SOURCES } from '@nexus/factory-domain/planning/promise-keep/risk' // F-SA-234b
 import { gateView as planningGateView } from '../../planning/milestones/contract' // B-OO-010: a gate's version and actions, Planning's own shape
+import { orderView as planningOrderView } from '../../planning/milestones/contract' // B-PT-006: mayAddGate and waiting, Planning's own shapes
+import { PRODUCTION_SHARE_LEVELS } from '@nexus/factory-domain/production-brand/levels' // B-PT-005
 // B-SA-050: Still to do (its kinds; who it waits on: the apply plan's teams).
 import { APPLY_TEAMS, STILL_KINDS } from '@nexus/factory-domain/sales/change-requests/apply-plan'
 // B-OO-008: where "Answers the customer" comes from — the threads' own owner chain.
@@ -115,6 +117,11 @@ export const headlineView = output({
       by: person.nullable(),
       at: instant().nullable(),
     }).nullable(),
+    /**
+     * B-PT-007 (order production tab R7): the production state's version — Mark at risk… and Remove the mark send it back
+     * (PUT | DELETE /production/brand-orders/:orderId/health) from this one read, with no second GET on the order page.
+     */
+    version: z.number().int(),
   }).nullable(),
   waiting: output({
     on: z.enum(WAITING_ON),
@@ -313,6 +320,16 @@ const gateRow = output({
    */
   actions: planningGateView.shape.actions,
   // ── end B-OO-010 ──
+  // ── B-PT-006 (order production tab R6): what Planning's own dialogs need, Planning's own shapes (readWorld built them) ──
+  /** This order's production work orders not started that the waiting gate holds on the board (never a sample or a repair). */
+  holds: planningGateView.shape.holds,
+  passedAt: planningGateView.shape.passedAt,
+  /** The office person who marked it done (null when its event passed it: `via` says which). */
+  passedBy: planningGateView.shape.passedBy,
+  /** Its planner and maker: who may not start before it (Planning's rule). */
+  ownerId: planningGateView.shape.ownerId,
+  makerId: planningGateView.shape.makerId,
+  // ── end B-PT-006 ──
 })
 
 export const datesView = output({
@@ -351,15 +368,49 @@ export const datesView = output({
       }),
     )
     .nullable(),
+  // ── B-PT-005 (order production tab R5): what this order's customer is shown (PortalSettings.productionLevel; no row: STATUS) ──
+  /** STATUS · PROGRESS · GATES (+ its gates and the published plan's days) · QUALITY (+ the quality of its own work). Office only. */
+  customer: output({ level: z.enum(PRODUCTION_SHARE_LEVELS) }),
+  // ── end B-PT-005 ──
+  // ── B-PT-006 (R6): Planning's own order fields, as readWorld built them for THIS reader ──
+  /** The reader may add a gate to this order (planning.milestones.manage over it, the order not closed), else the right or the refusal. */
+  mayAddGate: planningOrderView.shape.mayAddGate,
+  /** The kinds of its gates that wait (the order cannot go on the planning board while one does). */
+  waiting: planningOrderView.shape.waiting,
+  // ── end B-PT-006 ──
 })
 
 export const qualityView = output({
   /** Its open problems (on the order, or on its work orders), workorders.view; null: withheld. */
   issues: z.array(output({ id: id(), source: z.string(), recordType: z.string(), since: instant(), dueOn: businessDate(), escalation: z.number().int() })).nullable(),
   /** Its open NCRs behind the brand wall, quality.ncr.view; null: withheld. */
-  ncrs: z.array(output({ id: id(), number: z.string(), stage: z.string(), severity: z.string(), sharedWorkOrder: z.boolean() })).nullable(),
-  /** The final inspections of the work orders the reader reaches, quality.inspections.view; null: withheld. */
-  final: z.array(output({ workOrderId: id(), number: z.string().nullable(), status: z.string(), sampleSize: z.number().int(), on: businessDate().nullable() })).nullable(),
+  // B-PT-009 (order production tab R9): + its title (at most NCR_TITLE_LIMIT characters, cut with "…"); never its description, cost
+  // or who found it. Severity and stage words are the web's quality catalogue.
+  ncrs: z.array(output({ id: id(), number: z.string(), stage: z.string(), severity: z.string(), sharedWorkOrder: z.boolean(), title: z.string() })).nullable(),
+  /**
+   * The final inspections of the work orders the reader reaches, quality.inspections.view; null: withheld. B-PT-008 (R8): + its id
+   * (the row's key: a failed and a re-inspected one of one work order are two rows), the lot, the units inspected so far (null: not
+   * counted), the garments with a defect per class (null while OPEN) and whether its work order is shared with other customers.
+   * Never the inspector.
+   */
+  final: z
+    .array(
+      output({
+        workOrderId: id(),
+        number: z.string().nullable(),
+        status: z.string(),
+        sampleSize: z.number().int(),
+        on: businessDate().nullable(),
+        // ── B-PT-008 ──
+        id: id(),
+        lotSize: z.number().int(),
+        inspectedCount: z.number().int().nullable(),
+        defects: output({ critical: z.number().int(), major: z.number().int(), minor: z.number().int() }).nullable(),
+        sharedWorkOrder: z.boolean(),
+        // ── end B-PT-008 ──
+      }),
+    )
+    .nullable(),
 })
 
 // ── B-OO-008 (order overview N8): what a place is — our own plant (a site and its line) or an outside workshop ──
