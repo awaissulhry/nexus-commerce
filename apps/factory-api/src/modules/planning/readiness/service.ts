@@ -63,6 +63,18 @@ export const purchaseFactsOf = (live: LivePlan) => {
   }
 }
 
+// ── B-PT-014 (order production tab R14): moved here from inventory/issue/kits.ts — ONE copy, read by picking's popover and the
+// work orders' readiness list alike ──
+/** The purchase orders a readiness material counts on (its plan's purchase order lines), each once, by number ("Open PO"). */
+export function purchaseOrdersOf(live: LivePlan | undefined, lineIds: readonly string[]): { id: string; number: string; status: string; dueDate: BusinessDate }[] {
+  if (!live) return []
+  const lines = live.inputs.purchases.filter((line) => lineIds.includes(line.purchaseOrderLineId))
+  const seen = new Map<string, { id: string; number: string; status: string; dueDate: BusinessDate }>()
+  for (const line of lines) if (!seen.has(line.purchaseOrderId)) seen.set(line.purchaseOrderId, { id: line.purchaseOrderId, number: line.purchaseOrderNumber, status: line.purchaseOrderStatus, dueDate: line.dueDate })
+  return [...seen.values()].sort((a, b) => (a.number < b.number ? -1 : 1))
+}
+// ── end B-PT-014 ──
+
 /** One word per work order (PLN-086), computed now. A work order the plan has no demand for is NOT_PLANNED. */
 export async function readinessFor(db: Reader, site: SiteRow, workOrderIds: readonly string[], live?: LivePlan): Promise<WorkOrderReadiness[]> {
   const plan = live ?? (await livePlanOf(db, site))

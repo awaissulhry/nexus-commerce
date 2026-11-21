@@ -12,6 +12,7 @@ import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { SITE_COLUMNS, type SiteRow } from '../../planning/store'
 import { livePlanOf, readinessFor, type LivePlan } from '../../planning/readiness/service'
+import { purchaseOrdersOf } from '../../planning/readiness/service' // B-PT-014: the one copy (moved from here)
 import { mayAt, stockContextOf, type StockContext } from '../ledger/access'
 import { workOrderWhere } from '../../production/work-orders/scope' // B-PR-05
 import { reserve, type ReserveLineInput } from '../reservations/reserve'
@@ -79,14 +80,7 @@ async function readinessBySite(db: Reader, sites: readonly SiteRow[], workOrders
   return { readiness, plans }
 }
 
-/** The purchase order lines a readiness material counts on, with their order (the popover's "Open PO"). */
-function purchaseOrdersOf(live: LivePlan | undefined, lineIds: readonly string[]) {
-  if (!live) return []
-  const lines = live.inputs.purchases.filter((line) => lineIds.includes(line.purchaseOrderLineId))
-  const seen = new Map<string, { id: string; number: string; status: string; dueDate: string }>()
-  for (const line of lines) if (!seen.has(line.purchaseOrderId)) seen.set(line.purchaseOrderId, { id: line.purchaseOrderId, number: line.purchaseOrderNumber, status: line.purchaseOrderStatus, dueDate: line.dueDate })
-  return [...seen.values()].sort((a, b) => (a.number < b.number ? -1 : 1))
-}
+// B-PT-014: purchaseOrdersOf (the purchase orders a readiness material counts on) moved to planning/readiness/service.ts (one copy).
 
 function readinessView(answer: WorkOrderReadiness | undefined, live: LivePlan | undefined) {
   if (!answer) return { word: 'NOT_PLANNED' as const, label: 'Not planned', date: null, reason: 'The plan has no material need for this work order.', materials: [] }
