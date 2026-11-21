@@ -5,6 +5,7 @@ import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedReasons } from '../../../../../../packages/factory-db/seed/reasons'
 import { seed as seedShipping } from '../../../../../../packages/factory-db/seed/shipping'
+import { seed as seedSubcontract } from '../../../../../../packages/factory-db/seed/subcontract' // B-OC-007: a workshop's job
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { callerFor } from '../../../core/command'
 import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
@@ -19,6 +20,8 @@ import { orderProduction } from './production-read'
 import { wipTaskIdOf } from '../../product/changes/hooks'
 import { changePromise } from './moves'
 import { doneStillToDoTask } from './still-to-do'
+// B-OC-005 (order changes tab R4a): the real Sales template's rights, as the role gives them.
+import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 
 /**
  * B-SA-050 — the order's "Still to do" (sales page plan R1, P6; 13-backend B4; review C-8), computed from the records, on the local
@@ -99,6 +102,7 @@ beforeAll(async () => {
   await seedCore({ db: h.database, namespace: NS })
   await seedShipping({ db: h.database, namespace: NS })
   await seedReasons({ db: h.database, namespace: NS })
+  await seedSubcontract({ db: h.database, namespace: NS }) // B-OC-007
   const actorId = newId()
   officeId = newId()
   await h.database.withScope({ audience: 'office', tenantId: T, actorId }, async (client) => {
@@ -190,18 +194,28 @@ describe('B-OP-025: a production task is ticked off from the order only by its o
     ])
     return taskId
   }
-  const salesReads = () => caller(['orders.view', 'orders.manage', 'workorders.view', 'workorders.manage'])
-  const production = () => caller(['orders.view', 'workorders.view', 'tasks.manage'] as Permission[])
+  // B-OC-005 (order changes tab R4a; Owner D6): the right is production's — workorders.manage over the task's work order, or its
+  // assignee. The real Sales template holds tasks.manage and workorders.view, never workorders.manage (the test once gave "Sales"
+  // workorders.manage and no tasks.manage: the opposite of the role, so it pinned the wrong right).
+  const SALES_TEMPLATE = templateOf('sales')!
+  const realSales = () => caller([...SALES_TEMPLATE.permissions])
+  const tasksOnly = () => caller(['orders.view', 'workorders.view', 'tasks.manage'] as Permission[])
+  const production = () => caller(['orders.view', 'workorders.view', 'workorders.manage'] as Permission[])
   const taskOf = (taskId: string) => one<{ status: string; closedById: string | null; version: number }>('SELECT status::text AS status, "closedById"::text AS "closedById", version FROM "Task" WHERE id = $1', [taskId])
   const PRODUCTION_DOES_THIS = 'Production does this.'
 
-  it('Sales (orders.manage, workorders.manage, no tasks.manage) reads "Production does this" and is refused; tasks.manage over the work order ticks it off', async () => {
+  it('the real Sales template (orders.manage, tasks.manage, workorders.view; no workorders.manage) reads "Production does this" and is refused; workorders.manage without tasks.manage ticks it off', async () => {
+    expect(SALES_TEMPLATE.permissions).toEqual(expect.arrayContaining(['orders.view', 'orders.manage', 'tasks.manage', 'workorders.view']))
+    expect(SALES_TEMPLATE.permissions).not.toContain('workorders.manage')
     const world = await inWork(0, 4)
     const taskId = await reworkTask(world, newId())
-    const row = (await stillToDo(salesReads(), world.order)).rows.find((entry) => entry.kind === 'WORK_IN_PROGRESS_TASK')
+    const row = (await stillToDo(realSales(), world.order)).rows.find((entry) => entry.kind === 'WORK_IN_PROGRESS_TASK')
     expect(row).toMatchObject({ ref: { type: 'Task', id: taskId, version: 1 }, mayAct: false, waitingOn: 'PLANNER' })
-    const refusal = await thrown(doneStillToDoTask(salesReads(), world.order, taskId, { version: 1 }))
+    const refusal = await thrown(doneStillToDoTask(realSales(), world.order, taskId, { version: 1 }))
     expect(refusal).toMatchObject({ code: 'forbidden', message: PRODUCTION_DOES_THIS, issues: [{ path: 'refusal/PRODUCTION_DOES_THIS', message: PRODUCTION_DOES_THIS }] })
+    // tasks.manage alone (Warehouse, Finance, Buyer hold it too) is no longer the right: the same words, the same 403.
+    expect((await stillToDo(tasksOnly(), world.order)).rows.find((entry) => entry.kind === 'WORK_IN_PROGRESS_TASK')).toMatchObject({ mayAct: false })
+    expect(await thrown(doneStillToDoTask(tasksOnly(), world.order, taskId, { version: 1 }))).toMatchObject({ code: 'forbidden', message: PRODUCTION_DOES_THIS })
     expect((await taskOf(taskId)).status).toBe('OPEN')
     expect((await stillToDo(production(), world.order)).rows.find((entry) => entry.kind === 'WORK_IN_PROGRESS_TASK')).toMatchObject({ mayAct: true })
     const done = await doneStillToDoTask(production(), world.order, taskId, { version: 1 })
@@ -257,3 +271,54 @@ describe('B-OP-025: a production task is ticked off from the order only by its o
   })
 })
 // ── end B-OP-025 ──
+
+// ── B-OC-006 / B-OC-007 (order changes tab R4b, R4c; 13-backend §3) ──
+describe('B-OC-006 / B-OC-007: each row names the revision it comes from; a workshop row the work-order change it waits on', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('two revisions: each work-order change names its own amendment and number; rows of no revision say null', async () => {
+    const world = await inWork(0, 3)
+    await acceptRequest(salesOnly(), world.request, { version: 1 }, undefined, h.clock)
+    const first = await one<{ id: string; amendmentId: string }>('SELECT id::text AS id, "amendmentId"::text AS "amendmentId" FROM "WorkOrderChange" WHERE "requestId" = $1', [world.request])
+    const firstRevision = (await one<{ revision: number }>('SELECT revision FROM "SalesOrderAmendment" WHERE id = $1', [first.amendmentId])).revision
+    // A second revision of the order (an office change: no request) with its own proposed change, planted whole as an import would.
+    const second = { amendment: newId(), change: newId() }
+    await planted([
+      copy('SalesOrderAmendment', first.amendmentId, { id: second.amendment, revision: firstRevision + 1, reason: 'Made-up: the office lowers it again.', requestId: `T-OC006-${second.amendment.slice(-6)}`, depositRequestId: null }),
+      copy('WorkOrderChange', first.id, { id: second.change, amendmentId: second.amendment, requestId: null, version: 1 }),
+    ])
+    // (The copy keeps the first one's time: the two may come in either order.)
+    const rows = (await stillToDo(everyone(), world.order)).rows.filter((row) => row.kind === 'WORK_ORDER_CHANGE').sort((a, b) => (a.revision ?? 0) - (b.revision ?? 0))
+    expect(rows.map((row) => [row.ref?.id, row.amendmentId, row.revision, row.requestId, row.waitsOn])).toEqual([
+      [first.id, first.amendmentId, firstRevision, world.request, null],
+      [second.change, second.amendment, firstRevision + 1, null, null],
+    ])
+    // A style change names no revision.
+    const design = newId()
+    const raised = newId()
+    await planted([
+      { sql: `INSERT INTO "OrderChangeRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, status, reason, "answeredAt", "answeredById", version) VALUES ($1, $2, $3, $4, $5, 'DESIGN', 'ACCEPTED', 'Made-up: move the logo.', now(), $6, 2)`, values: [design, T, companyA, P1, world.order, officeId] },
+      { sql: `INSERT INTO "ChangeRequest" (id, "tenantId", "companyId", number, source, "partyId", "styleId", title, reason, status, "orderChangeRequestId") VALUES ($1, $2, $3, $4, 'CUSTOMER', $5, $6, 'Made-up: customer design change', 'Made-up: move the logo.', 'OPEN', $7)`, values: [raised, T, companyA, `CR-T006-${raised.slice(-6)}`, P1, world.styleId, design] },
+    ])
+    const style = (await stillToDo(everyone(), world.order)).rows.find((row) => row.kind === 'STYLE_CHANGE')
+    expect(style).toMatchObject({ amendmentId: null, revision: null, waitsOn: null })
+  })
+
+  it('the workshop row waits on the proposed change of the same request on the same work order; for a reader who does not reach it: no change named', async () => {
+    const world = await inWork(0, 3)
+    const seeded = await one<{ id: string }>(`SELECT id::text AS id FROM "SubcontractOrder" WHERE "tenantId" = $1 AND number = 'SEED-SC-0001'`, [T])
+    const job = newId()
+    await planted([copy('SubcontractOrder', seeded.id, { id: job, number: `${world.number}-SC`, workOrderId: world.workOrder, status: 'ISSUED', version: 1 })])
+    await acceptRequest(salesOnly(), world.request, { version: 1 }, undefined, h.clock)
+    const change = await one<{ id: string }>(`SELECT id::text AS id FROM "WorkOrderChange" WHERE "requestId" = $1 AND status = 'PROPOSED'`, [world.request])
+    const rows = (await stillToDo(everyone(), world.order)).rows
+    expect(rows.find((row) => row.kind === 'TELL_WORKSHOP')).toMatchObject({ ref: { type: 'SubcontractOrder', id: job }, waitsOn: change.id, requestId: world.request, mayAct: false, amendmentId: null, revision: null })
+    expect(rows.find((row) => row.kind === 'WORK_ORDER_CHANGE')).toMatchObject({ ref: { id: change.id }, waitsOn: null })
+    // No workorders.view: the workshop row has no door and names no change (the work order is "a work order").
+    const blind = (await stillToDo(salesOnly(), world.order)).rows.find((row) => row.kind === 'TELL_WORKSHOP')
+    expect(blind).toMatchObject({ ref: null, waitsOn: null })
+    // Declined ("Left as is"): the work order does not change, so there is no workshop to tell and nothing to wait on.
+    const version = (await one<{ version: number }>('SELECT version FROM "WorkOrderChange" WHERE id = $1', [change.id])).version
+    await declineChange(everyone(), change.id, { version, words: 'Made-up: left as is.' })
+    expect((await stillToDo(everyone(), world.order)).rows.filter((row) => row.kind === 'TELL_WORKSHOP' || row.kind === 'WORK_ORDER_CHANGE')).toEqual([])
+  })
+})
+// ── end B-OC-006 / B-OC-007 ──

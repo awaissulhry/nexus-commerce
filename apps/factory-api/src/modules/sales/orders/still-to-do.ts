@@ -18,7 +18,6 @@ import type { OrderRow, Reader } from './store'
 import { z } from 'zod'
 import { defineContract, id, input, output } from '@nexus/factory-domain/core/contracts'
 import { DomainError, NotFoundError } from '@nexus/factory-domain/core/errors'
-import { TASKS_MANAGE } from '@nexus/factory-domain/tasks/permissions'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { markTaskDoneInCommand } from '../../../platform/tasks/tasks'
 import { askedOf } from '../../planning/promise-keep/brand-answer'
@@ -39,8 +38,9 @@ import { officeOrder } from './moves'
  *                          request DONE) or it is REJECTED                                                  waits on PRODUCT
  *   WORK_IN_PROGRESS_TASK  the task a released change order's REWORK or SCRAP line left on one of the order's work orders
  *                          (product/changes/hooks wipTaskIdOf) — closed when DONE or CANCELLED                waits on PLANNER
- *                          B-OP-025 (R-12): floor work — Done from the order only by the task's own right (tasks.manage over its
- *                          work order, or its assignee: POST …/still-to-do/tasks/:taskId/done); anyone else reads "Production does this"
+ *                          B-OP-025 (R-12): floor work — Done from the order only by production's own right (B-OC-005: its
+ *                          assignee, or workorders.manage over its work order: POST …/still-to-do/tasks/:taskId/done); anyone else
+ *                          (Sales, and every other holder of tasks.manage alone) reads "Production does this"
  *   REPROMISE              planning's re-promise of one of its lines still WAITING for sales — closed when accepted or
  *                          declined                                                                           waits on SALES
  *   TELL_WORKSHOP          an open subcontract order of a work order an accepted change changed — closed once a notice is
@@ -48,7 +48,10 @@ import { officeOrder } from './moves'
  *
  * `requestId` names the customer's request a row carries out (B-SA-046c: also a work-in-progress task of the change order a DESIGN
  * request's product change request is carried by); the portal reads only whether one is left per request ("Accepted · we are
- * carrying it out" / "Accepted · done"), never the rows.
+ * carrying it out" / "Accepted · done"), never the rows. B-OC-006 (order changes tab R4b): `amendmentId` and `revision` name the
+ * order's revision a row comes from (a work-order change and its extra pieces: the change's amendment; null for the rest), so the
+ * tab groups an office change per revision. B-OC-007 (R4c): a TELL_WORKSHOP row `waitsOn` the PROPOSED work-order change of the
+ * same request on the same work order (the workshop is told by itself when it is applied); null for every other row.
  *
  * THE WALL: only this order's own records are read (its requests, its WorkOrderChanges, the work orders of its own lines); a work
  * order the reader does not reach (another customer's, a mixed one made before the one-customer rule) reads "a work order", with no
@@ -71,6 +74,14 @@ export interface StillRow {
   readonly mayAct: boolean
   /** The customer's request it carries out (null: an office change, or none). */
   readonly requestId: string | null
+  // ── B-OC-006 / B-OC-007 (order changes tab R4b, R4c; 13-backend §3) ──
+  /** The order's revision it comes from (a work-order change and its extra pieces); null: none (a style change, a task, …). */
+  readonly amendmentId: string | null
+  /** That revision's number (null with `amendmentId`). */
+  readonly revision: number | null
+  /** TELL_WORKSHOP: the PROPOSED work-order change of the same request on the same work order it waits on; null for every other row. */
+  readonly waitsOn: string | null
+  // ── end B-OC-006 / B-OC-007 ──
 }
 
 const STILL_WORDS = {
@@ -85,6 +96,9 @@ const STILL_WORDS = {
   repromise: (seq: number): Words => ({ en: `A new date for line ${seq} waits for your answer`, it: `Una nuova data per la riga ${seq} aspetta la tua risposta` }),
   workshop: (number: string | null): Words => (number ? { en: `Tell the outside workshop on ${number}`, it: `Avvisa il terzista su ${number}` } : { en: 'Tell an outside workshop', it: 'Avvisa un terzista' }),
 } as const
+
+/** B-OC-006: a row that comes from no revision of the order. */
+const NO_REVISION = Object.freeze({ amendmentId: null, revision: null })
 
 /** Subcontract orders whose pieces are out at the workshop (production/brand facts' own set). */
 const AT_WORKSHOP = ['ISSUED', 'AT_WORKSHOP', 'PARTLY_RECEIVED'] as const
@@ -118,6 +132,13 @@ export async function stillToDoOf(db: Reader, context: OfficeContext | SystemCon
   const own = lines.length > 0 ? await db.workOrderSize.findMany({ where: { salesOrderLineId: { in: lines.map((line) => line.id) } }, select: { workOrderId: true }, distinct: ['workOrderId'] }) : []
   const workOrderIds = [...new Set([...own.map((cell) => cell.workOrderId), ...changes.flatMap((change) => (change.workOrderId ? [change.workOrderId] : []))])]
   const workOrders = new Map((workOrderIds.length > 0 ? await db.workOrder.findMany({ where: { id: { in: workOrderIds } }, select: { id: true, number: true, status: true, kind: true, companyId: true, siteId: true, partyId: true, version: true /* B-OP-021 */ } }) : []).map((row) => [row.id, row]))
+  // B-OC-006: the revisions the changes come from, in one read (a CHARGE row's re-acceptance too).
+  const amendmentIds = [...new Set(changes.flatMap((change) => (change.amendmentId ? [change.amendmentId] : [])))]
+  const amendments = new Map((amendmentIds.length > 0 ? await db.salesOrderAmendment.findMany({ where: { id: { in: amendmentIds } }, select: { id: true, revision: true, reacceptanceNeeded: true } }) : []).map((row) => [row.id, row]))
+  const revisionOf = (amendmentId: string | null) => {
+    const amendment = amendmentId ? amendments.get(amendmentId) : undefined
+    return amendment ? { amendmentId: amendment.id, revision: amendment.revision } : NO_REVISION
+  }
   const reached = (id: string | null) => {
     const workOrder = id ? workOrders.get(id) : undefined
     return workOrder && reachesWorkOrder(actor, WORKORDERS_VIEW, workOrder) ? workOrder : null
@@ -135,6 +156,7 @@ export async function stillToDoOf(db: Reader, context: OfficeContext | SystemCon
     const cells: readonly ChangeCell[] = cellsOf(change)
     const extra: readonly ExtraPieces[] = extraOf(change)
     const count = extra.reduce((sum, piece) => sum + piece.count, 0)
+    const revision = revisionOf(change.amendmentId) // B-OC-006
     if (change.status === 'PROPOSED') {
       rows.push({
         kind: 'WORK_ORDER_CHANGE',
@@ -144,15 +166,18 @@ export async function stillToDoOf(db: Reader, context: OfficeContext | SystemCon
         waitingOn: 'PLANNER',
         mayAct: (!change.workOrderId || workOrder !== null) && mayDecide(actor, change, workOrder),
         requestId: change.requestId,
+        ...revision,
+        waitsOn: null,
       })
     }
     // EXTRA_PIECES by their outcome (LEFTOVER: recorded with the change, nothing waits).
     const outcome = (change.extraOutcome as ExtraOutcome | null) ?? null
     if (count === 0 || outcome === null || outcome === 'LEFTOVER') continue
     if (outcome === 'CHARGE') {
-      const amendment = change.amendmentId ? await db.salesOrderAmendment.findUnique({ where: { id: change.amendmentId }, select: { id: true, revision: true, reacceptanceNeeded: true } }) : null
+      // B-OC-006: the amendment from the one read above (was one read per change).
+      const amendment = change.amendmentId ? amendments.get(change.amendmentId) : undefined
       if (amendment && amendment.reacceptanceNeeded && order.reapprovalNeededAt !== null) {
-        rows.push({ kind: 'EXTRA_PIECES', ref: { type: 'SalesOrderAmendment', id: amendment.id, number: String(amendment.revision), version: null }, words: STILL_WORDS.extraCharged(count), since: toUtcIso(change.createdAt), waitingOn: 'CUSTOMER', mayAct: false, requestId: change.requestId })
+        rows.push({ kind: 'EXTRA_PIECES', ref: { type: 'SalesOrderAmendment', id: amendment.id, number: String(amendment.revision), version: null }, words: STILL_WORDS.extraCharged(count), since: toUtcIso(change.createdAt), waitingOn: 'CUSTOMER', mayAct: false, requestId: change.requestId, ...revision, waitsOn: null })
       }
       continue
     }
@@ -169,6 +194,8 @@ export async function stillToDoOf(db: Reader, context: OfficeContext | SystemCon
         waitingOn: 'PLANNER',
         mayAct: workOrder !== null && reachesWorkOrder(actor, WORKORDERS_MANAGE, workOrder),
         requestId: change.requestId,
+        ...revision,
+        waitsOn: null,
       })
     }
   }
@@ -179,7 +206,7 @@ export async function stillToDoOf(db: Reader, context: OfficeContext | SystemCon
   const raised = designIds.length > 0 ? await db.changeRequest.findMany({ where: { orderChangeRequestId: { in: designIds }, status: { notIn: ['DONE', 'REJECTED'] } }, select: { id: true, number: true, companyId: true, styleId: true, createdAt: true, orderChangeRequestId: true, version: true /* B-OP-021 */ }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }) : []
   const styles = new Map((raised.length > 0 ? await db.style.findMany({ where: { id: { in: [...new Set(raised.map((row) => row.styleId))] } }, select: { id: true, code: true } }) : []).map((style) => [style.id, style.code]))
   for (const request of raised) {
-    rows.push({ kind: 'STYLE_CHANGE', ref: { type: 'ChangeRequest', id: request.id, number: request.number, version: request.version }, words: STILL_WORDS.styleWaiting(request.number, styles.get(request.styleId) ?? ''), since: toUtcIso(request.createdAt), waitingOn: 'PRODUCT', mayAct: can(actor, PRODUCT_CHANGES_MANAGE, { companyId: request.companyId }), requestId: request.orderChangeRequestId })
+    rows.push({ kind: 'STYLE_CHANGE', ref: { type: 'ChangeRequest', id: request.id, number: request.number, version: request.version }, words: STILL_WORDS.styleWaiting(request.number, styles.get(request.styleId) ?? ''), since: toUtcIso(request.createdAt), waitingOn: 'PRODUCT', mayAct: can(actor, PRODUCT_CHANGES_MANAGE, { companyId: request.companyId }), requestId: request.orderChangeRequestId, ...NO_REVISION, waitsOn: null })
   }
 
   // WORK_IN_PROGRESS_TASK: the tasks released change orders' REWORK and SCRAP lines left on the order's own work orders.
@@ -204,16 +231,18 @@ export async function stillToDoOf(db: Reader, context: OfficeContext | SystemCon
       words: STILL_WORDS.wipTask(item.disposition as WipDisposition, workOrder?.number ?? null, revision),
       since: toUtcIso(task.createdAt),
       waitingOn: 'PLANNER',
-      // B-OP-025 (R-12): the task's own right — tasks.manage over its work order (the wall), or its assignee — never orders.manage.
+      // B-OP-025 (R-12): the task's own right, never orders.manage — B-OC-005: its assignee, or workorders.manage over its work order.
       mayAct: workOrder !== null && mayDoTask(actor, context.actorId, task, workOrder),
       requestId: carried.get(item.changeOrderId) ?? null, // B-SA-046c
+      ...NO_REVISION,
+      waitsOn: null,
     })
   }
 
   // REPROMISE: planning's re-promises of its lines still waiting for sales (never answered by who proposed it).
   const manages = can(actor, ORDERS_MANAGE, place)
   for (const proposal of (await readProposals(db, [order.id])).filter((entry) => entry.state === 'WAITING')) {
-    rows.push({ kind: 'REPROMISE', ref: { type: 'RePromise', id: proposal.id, number: null, version: null }, words: STILL_WORDS.repromise(seqOf.get(proposal.orderLineId) ?? 0), since: toUtcIso(proposal.proposedAt), waitingOn: 'SALES', mayAct: manages && proposal.proposedById !== context.actorId, requestId: null })
+    rows.push({ kind: 'REPROMISE', ref: { type: 'RePromise', id: proposal.id, number: null, version: null }, words: STILL_WORDS.repromise(seqOf.get(proposal.orderLineId) ?? 0), since: toUtcIso(proposal.proposedAt), waitingOn: 'SALES', mayAct: manages && proposal.proposedById !== context.actorId, requestId: null, ...NO_REVISION, waitsOn: null })
   }
 
   // TELL_WORKSHOP: the workshops of the work orders an accepted request's changes name, not told since its answer.
@@ -225,7 +254,10 @@ export async function stillToDoOf(db: Reader, context: OfficeContext | SystemCon
     for (const entry of outside) {
       if (told.has(entry.id)) continue
       const workOrder = named(entry.workOrderId)
-      rows.push({ kind: 'TELL_WORKSHOP', ref: workOrder ? { type: 'SubcontractOrder', id: entry.id, number: entry.number, version: entry.version } : null, words: STILL_WORDS.workshop(workOrder ? entry.number : null), since: toUtcIso(request.answeredAt), waitingOn: 'PLANNER', mayAct: false, requestId: request.id })
+      // B-OC-007 (R4c): the PROPOSED change of the same request on the same work order (the workshop is told by itself when it is
+      // applied); a work order the reader does not reach names no change either (the row's door is closed too).
+      const waiting = workOrder ? changes.find((change) => change.status === 'PROPOSED' && change.requestId === request.id && change.workOrderId === entry.workOrderId) : undefined
+      rows.push({ kind: 'TELL_WORKSHOP', ref: workOrder ? { type: 'SubcontractOrder', id: entry.id, number: entry.number, version: entry.version } : null, words: STILL_WORDS.workshop(workOrder ? entry.number : null), since: toUtcIso(request.answeredAt), waitingOn: 'PLANNER', mayAct: false, requestId: request.id, ...NO_REVISION, waitsOn: waiting?.id ?? null })
     }
   }
 
@@ -237,9 +269,14 @@ export async function stillToDoOf(db: Reader, context: OfficeContext | SystemCon
 /** The words of a production task the reader may not tick off (403 `refusal/PRODUCTION_DOES_THIS`). */
 export const PRODUCTION_DOES_THIS: Words = Object.freeze({ en: 'Production does this.', it: 'Lo fa la produzione.' })
 
-/** May the person mark the task done: its assignee, or a holder of tasks.manage over its work order (a mixed one: every customer). */
+/**
+ * May the person mark the task done: its assignee, or — B-OC-005 (order changes tab R4a; 13-backend §3; Owner D6) — a holder of
+ * workorders.manage over its work order (a work order of several customers: over every one), the production right. Was tasks.manage,
+ * which nine office templates hold (Sales, Warehouse, Finance, Buyer ticked rework off). ONE rule for the row's `mayAct` and the
+ * route's 403. Home › Tasks still closes it with tasks.manage (a later job, the Owner's call).
+ */
 export const mayDoTask = (actor: ReturnType<typeof actorOf>, actorId: string, task: { readonly assigneeId: string | null }, workOrder: WorkOrderReach): boolean =>
-  task.assigneeId === actorId || reachesWorkOrder(actor, TASKS_MANAGE, workOrder)
+  task.assigneeId === actorId || reachesWorkOrder(actor, WORKORDERS_MANAGE, workOrder)
 
 export const stillToDoTaskDoneContract = defineContract({
   params: input({ orderId: id(), taskId: id() }),
@@ -251,8 +288,8 @@ export const stillToDoTaskDoneContract = defineContract({
  * POST /sales/orders/:orderId/still-to-do/tasks/:taskId/done (orders.view to reach the order): ONE of the order's own production
  * tasks — the task a released change order's REWORK or SCRAP line left on a work order that makes this order's lines (wipTaskIdOf)
  * — marked DONE, as the tasks platform marks it (the machine, the audit, task.completed), plus an audit row on the order. Checked
- * by the TASK's own right (R-12): its assignee, or tasks.manage over its work order; anyone else (Sales: orders.manage alone) is
- * refused 403 "Production does this". Another order's task, a task of a work order the reader does not reach, and an unknown id are
+ * by production's own right (R-12; B-OC-005: mayDoTask — its assignee, or workorders.manage over its work order); anyone else (Sales,
+ * with orders.manage and tasks.manage) is refused 403 "Production does this". Another order's task, a task of a work order the reader does not reach, and an unknown id are
  * all "Task not found."; another customer's order is "Sales order not found." (the words of an unknown id).
  */
 export async function doneStillToDoTask(caller: CommandCaller, orderId: string, taskId: string, body: { readonly version: number }, idempotencyKey?: string) {

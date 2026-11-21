@@ -472,8 +472,17 @@ export const changesView = output({
         words,
         since: instant(),
         waitingOn: z.enum(APPLY_TEAMS),
+        /** B-OC-005: a production task (WORK_IN_PROGRESS_TASK): its assignee, or workorders.manage over its work order. */
         mayAct: z.boolean(),
         requestId: id().nullable(),
+        // ── B-OC-006 / B-OC-007 (order changes tab R4b, R4c; 13-backend §3) ──
+        /** The order's revision the row comes from (a work-order change and its extra pieces: the change's amendment); null: none. */
+        amendmentId: id().nullable(),
+        /** That revision's number ("Office change, revision 3"); null with `amendmentId`. */
+        revision: z.number().int().nullable(),
+        /** TELL_WORKSHOP: the PROPOSED work-order change of the same request on the same work order (told by itself when applied); else null. */
+        waitsOn: id().nullable(),
+        // ── end B-OC-006 / B-OC-007 ──
       }),
     ),
     count: z.number().int(),
