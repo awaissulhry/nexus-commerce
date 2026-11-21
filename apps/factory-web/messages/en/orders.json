@@ -2945,6 +2945,38 @@
       "liftHint": "Lifting a hold: Production does this — a planner or the production manager.",
       "infoBody": "What stops this order right now, who acts and the one button to act; the questions that wait for an answer; then its quality in plain words. The customer reads a hold's own words, never the office's note.",
       "raiseNcr": "Raise a nonconformance…"
+    },
+    "materials": {
+      "title": "Materials",
+      "allHere": "Everything is here for the work orders made so far",
+      "missing_one": "{count} thing is missing",
+      "missing_other": "{count} things are missing",
+      "noWork": "Make work orders to check what we buy.",
+      "missingTitle": "Missing",
+      "waitsCustomer": "Waits on the customer",
+      "waitsSupplier": "Waits on the supplier",
+      "stillToCome": "{quantity} still to come ({arrived} of {expected} arrived)",
+      "toCome": "{quantity} still to come",
+      "allArrived": "All here",
+      "arrivedOf": "{arrived} of {expected}",
+      "customerTitle": "From the customer",
+      "buyTitle": "What we buy",
+      "col": {
+        "material": "Material",
+        "arrived": "Arrived",
+        "used": "Used",
+        "left": "Left",
+        "state": "State"
+      },
+      "lots": "Lots: {lots}",
+      "nothingFromCustomer": "The customer sends nothing for this order.",
+      "needed": "needed {quantity}",
+      "folded": "{word} ({count})",
+      "askCustomer": "Ask the customer",
+      "openPo": "Open {number}",
+      "howTitle": "How this is counted",
+      "howBody": "Never valued. The customer's goods count to its oldest order first. What we buy is ready when it is reserved for or issued to the work order; reservations follow the work orders' priority.",
+      "infoBody": "Do we have everything to make this order: the customer's own goods (Arrived) and what we buy — the missing things first, with who they wait on."
     }
   }
 }

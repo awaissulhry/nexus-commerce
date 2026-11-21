@@ -177,3 +177,9 @@
   .fw-pt-ph-q { padding-left: var(--nds-space-22); border-left: 1px solid var(--nds-border-subtle); }
 }
 
+/* ── 5 · Materials (F-PT-303) ── */
+.fw-pt-mat { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-16) var(--nds-space-22); min-width: 0; padding-top: var(--nds-space-12); border-top: 1px solid var(--nds-border-subtle); }
+@container sec (min-width: 1200px) {
+  .fw-pt-mat { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+  .fw-pt-mat-buy { padding-left: var(--nds-space-22); border-left: 1px solid var(--nds-border-subtle); }
+}

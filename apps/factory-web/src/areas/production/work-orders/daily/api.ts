@@ -22,7 +22,22 @@ const readinessRowSchema = z.object({
   word: z.enum(READINESS_WORDS),
   date: z.string().nullable(),
   open: z.number(),
-  materials: z.array(z.object({ itemId: z.string(), itemColourId: z.string().nullable(), word: z.enum(READINESS_WORDS), date: z.string().nullable() })),
+  // F-PT-303 (order PRODUCTION tab; B-PT-014, optional): + what each material is, how much is needed and short, when, and the
+  // purchase orders that bring it (purchasing.view only; none on a work order shared with other customers).
+  materials: z.array(
+    z.object({
+      itemId: z.string(),
+      itemColourId: z.string().nullable(),
+      word: z.enum(READINESS_WORDS),
+      date: z.string().nullable(),
+      label: z.string().optional(),
+      uom: z.string().optional(),
+      needed: z.union([z.string(), z.number()]).nullable().optional(),
+      short: z.union([z.string(), z.number()]).nullable().optional(),
+      neededOn: z.string().nullable().optional(),
+      purchaseOrders: z.array(z.object({ id: z.string(), number: z.string(), status: z.string(), dueDate: z.string().nullable() })).optional(),
+    }),
+  ),
   asOf: z.string(),
 })
 export type ReadinessRow = z.infer<typeof readinessRowSchema>

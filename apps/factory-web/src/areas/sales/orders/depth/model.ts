@@ -14,7 +14,6 @@ import type {
   FreezeField,
   FreezeStage,
   FreezeState,
-  Materials,
   PricedBody,
   PrioritiesAnswer,
   PriorityLevel,
@@ -329,37 +328,7 @@ export function quantityText(value: string, locale: string): string {
   return new Intl.NumberFormat(locale === 'it' ? 'it-IT' : 'en-GB', { maximumFractionDigits: 4 }).format(number)
 }
 
-export interface MaterialRow {
-  id: string
-  item: string
-  itemCode: string
-  colour: string | null
-  uom: string
-  expected: string
-  received: string
-  used: string
-  left: string
-  /** More used than received (the customer must send more). */
-  short: boolean
-  lots: Array<{ id: string; code: string; receiptId: string | null; receiptNumber: string | null }>
-}
-
-/** The rows of the grid (Material · Colour · Expected · Received · Used · Left), each with the customer's lots of its material. */
-export function materialRows(view: Materials): MaterialRow[] {
-  return view.rows.map((row) => ({
-    id: row.id,
-    item: row.item.name,
-    itemCode: row.item.code,
-    colour: row.colour ? (row.colour.name ? `${row.colour.code} · ${row.colour.name}` : row.colour.code) : null,
-    uom: row.uom,
-    expected: row.expected,
-    received: row.received,
-    used: row.used,
-    left: row.left,
-    short: Number(row.used) > Number(row.received),
-    lots: view.lots.filter((lot) => lot.itemId === row.item.id && (row.colour === null || lot.itemColourId === null || lot.itemColourId === row.colour.id)).map((lot) => ({ id: lot.id, code: lot.code, receiptId: lot.receiptId, receiptNumber: lot.receiptNumber })),
-  }))
-}
+// F-PT-303: the customer's materials' rows moved to record/production/materials.ts (customerGoodsOf) with Production's Materials.
 
 export function planHeld(can: Pick<DepthCan, 'manage'>, status: OrderStatus): Phrase | null {
   if (!can.manage) return phrase('held.noManage')

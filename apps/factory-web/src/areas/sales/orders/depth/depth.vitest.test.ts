@@ -54,7 +54,6 @@ import {
   FREEZE_CUT,
   FREEZE_FINISHED,
   FREEZE_NONE,
-  MATERIALS,
   orderDepth,
   PROMISE_LINES,
   TECH_PACK,
@@ -74,7 +73,6 @@ import {
   frozenOffer,
   onlyMeasurements,
   frozenProblemsOf,
-  materialRows,
   NAMESPACE,
   packRows,
   PRICED_EMPTY,
@@ -233,14 +231,6 @@ describe('the priced change (SAL-219)', () => {
 })
 
 describe('materials, the confirmation, the tech pack, the forecast', () => {
-  it('the customer’s materials with their lots; more used than received is said', () => {
-    const rows = materialRows(MATERIALS)
-    expect(rows.map((row) => [row.itemCode, row.short, row.lots.map((lot) => lot.code)])).toEqual([
-      ['ETI-DEMO-01', false, ['LOT-CLI-0012']],
-      ['ZIP-DEMO-07', true, ['LOT-CLI-0013']],
-    ])
-  })
-
   it('the confirmation’s state, why Make and Send are held, the row verb', () => {
     expect(confirmationState(CONFIRMATION_SENT)).toBe('upToDate')
     expect(confirmationState(CONFIRMATION_OUTDATED)).toBe('outdated')

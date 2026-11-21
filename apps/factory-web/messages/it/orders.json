@@ -2945,6 +2945,38 @@
       "liftHint": "Togliere un blocco: lo fa la produzione — un pianificatore o il responsabile di produzione.",
       "infoBody": "Cosa blocca l'ordine adesso, chi agisce e l'unico pulsante per agire; le domande che aspettano una risposta; poi la sua qualità in parole semplici. Il cliente legge le parole del blocco, mai la nota dell'ufficio.",
       "raiseNcr": "Apri una non conformità…"
+    },
+    "materials": {
+      "title": "Materiali",
+      "allHere": "C'è tutto per gli ordini di lavoro creati",
+      "missing_one": "Manca {count} cosa",
+      "missing_other": "Mancano {count} cose",
+      "noWork": "Crea gli ordini di lavoro per controllare cosa compriamo.",
+      "missingTitle": "Manca",
+      "waitsCustomer": "Aspetta il cliente",
+      "waitsSupplier": "Aspetta il fornitore",
+      "stillToCome": "ancora da arrivare {quantity} ({arrived} su {expected} arrivati)",
+      "toCome": "ancora da arrivare {quantity}",
+      "allArrived": "Tutto arrivato",
+      "arrivedOf": "{arrived} su {expected}",
+      "customerTitle": "Dal cliente",
+      "buyTitle": "Cosa compriamo",
+      "col": {
+        "material": "Materiale",
+        "arrived": "Arrivato",
+        "used": "Usato",
+        "left": "Rimasto",
+        "state": "Stato"
+      },
+      "lots": "Lotti: {lots}",
+      "nothingFromCustomer": "Il cliente non manda niente per questo ordine.",
+      "needed": "necessario {quantity}",
+      "folded": "{word} ({count})",
+      "askCustomer": "Chiedi al cliente",
+      "openPo": "Apri {number}",
+      "howTitle": "Come si conta",
+      "howBody": "Mai valorizzato. I materiali del cliente vanno prima al suo ordine più vecchio. Ciò che compriamo è pronto quando è riservato o consegnato all'ordine di lavoro; le riserve seguono la priorità degli ordini di lavoro.",
+      "infoBody": "Abbiamo tutto per produrre questo ordine: i materiali del cliente (Arrivato) e ciò che compriamo — prima quello che manca, con chi lo aspetta."
     }
   }
 }

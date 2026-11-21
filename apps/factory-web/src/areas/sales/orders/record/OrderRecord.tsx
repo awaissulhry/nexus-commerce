@@ -445,6 +445,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
   // ---- end F-OO-213
   // ---- F-SA-234: the materials' readiness of the work orders the production read names (Production › Work orders, while it shows) ----
   const [readiness, setReadiness] = useState<Part<ReadinessRow[]> | null>(null)
+  const [readinessAgain, setReadinessAgain] = useState(0) // F-PT-303: the live 'materials' part reads it again
   const readWork = production.state?.status === 'ready' ? production.state.read.work : null
   const workIds = (readWork?.workOrders ?? []).map((row) => row.id).join(',')
   useEffect(() => {
@@ -455,7 +456,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
       .then((rows) => !abort.signal.aborted && setReadiness(part(rows)))
       .catch((error: unknown) => !abort.signal.aborted && setReadiness({ value: null, problem: readProblem(error) }))
     return () => abort.abort()
-  }, [api, tab, workIds])
+  }, [api, tab, workIds, readinessAgain])
   // ---- end F-SA-234
   // F-SA-235: the order's health (raise to At risk / clear) is use-production-acts' (F-OP-134).
   // ---- F-SA-236: the order's customer requests (every state; the API's wall) and the approvals we asked it (partners.approvals.view),
@@ -632,6 +633,11 @@ function RecordContainer({ orderId }: { orderId: string }) {
     if (parts.includes('changes')) productionActs.rereadChanges() // F-OP-116: a work-order change proposed, applied or left as is
     if (parts.includes('quality')) asks.again() // F-PT-103: an ask raised, answered or escalated (production_issue.*)
     if (parts.includes('files')) orderFiles.reload() // F-OP-125: read again when shown, else the next time it is wanted
+    // F-PT-303 (B-PT-017): the customer's goods received or used, or what we buy reserved or issued — Materials reads both again.
+    if (parts.includes('materials')) {
+      depth.actions.onRetry?.('materials')
+      setReadinessAgain((count) => count + 1)
+    }
   }
   reconnectRef.current = () => {
     void load()

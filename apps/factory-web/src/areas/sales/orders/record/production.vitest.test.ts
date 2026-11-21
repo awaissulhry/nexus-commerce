@@ -119,7 +119,9 @@ describe('F-SA-235 / F-PT-301…302: Production’s Problems & holds — each bl
     const now = readFileSync(new URL('./view/production/NowSection.tsx', import.meta.url), 'utf8')
     expect(now).toContain("import { RaiseDialog } from '../../../../../../lib/production/health/view/HealthCard'")
     expect(now).toContain('markActsOf(view, !!health?.can)')
-    expect(tab).toContain('<MaterialsCard order={order} model={model.depth}')
+    // F-PT-303: the materials card gave way to Production's own Materials section (the customer's goods and what we buy, missing first).
+    expect(tab).toContain('<MaterialsSection order={order} model={model} actions={actions} />')
+    expect(tab).not.toContain('<MaterialsCard')
     expect(tab).toContain('<TechPackCard model={model.depth} actions={actions?.depth} />')
     const workOrder = readFileSync(new URL('../../../production/work-orders/record/view/OverviewTab.tsx', import.meta.url), 'utf8')
     expect(workOrder).toContain("from '../../../../../lib/production/health/view/HealthCard'")
@@ -565,9 +567,10 @@ describe('the Overview’s doors land on Production: #work-orders, #holds, #line
     expect(readFileSync(new URL('./view/production/WorkOrdersSection.tsx', import.meta.url), 'utf8')).toContain('<Section id="work-orders"')
     expect(readFileSync(new URL('./view/production/NowSection.tsx', import.meta.url), 'utf8')).toContain('<Section id="now"')
     expect(readFileSync(new URL('./view/production/Kit.tsx', import.meta.url), 'utf8')).toContain('<section id={id} className="fw-pt-sec fw-so-anchor" aria-labelledby={headId}>')
-    // F-PT-301: Problems & holds is a kit section with its old address.
+    // F-PT-301 / 303: Problems & holds and Materials are kit sections with their old addresses.
     expect(tab).toContain('<ProblemsSection order={order} model={model} actions={actions} />')
     expect(readFileSync(new URL('./view/production/ProblemsSection.tsx', import.meta.url), 'utf8')).toContain('<Section id="holds"')
+    expect(readFileSync(new URL('./view/production/MaterialsSection.tsx', import.meta.url), 'utf8')).toContain('<Section id="materials"')
     // F-PT-203: by line keeps the older #line-<lineId> address on each line's row (and the row's about-SalesOrderLine-<id>).
     expect(readFileSync(new URL('./view/production/DatesSection.tsx', import.meta.url), 'utf8')).toContain('id={`line-${row.lineId}`}')
   })

@@ -17,7 +17,8 @@ import { knownIds } from '../model'
  */
 
 /** The parts of the order page an event re-reads (the API's ORDER_PAGE_PARTS). */
-export const ORDER_PAGE_PARTS = ['order', 'headline', 'lines', 'work', 'dates', 'quality', 'people', 'changes', 'money', 'shipments', 'files'] as const
+// F-PT-303 (B-PT-017): + 'materials' — the customer's goods received or used, what we buy reserved or issued (Production › Materials).
+export const ORDER_PAGE_PARTS = ['order', 'headline', 'lines', 'work', 'dates', 'quality', 'people', 'changes', 'money', 'shipments', 'files', 'materials'] as const
 export type OrderPagePart = (typeof ORDER_PAGE_PARTS)[number]
 
 /** The ONE coalesce table of the plan (C-18). */
