@@ -223,7 +223,7 @@ function Steps({ order, model, actions }: { order: Order; model: OrderRecordMode
                 {/* W3 extra: a gate waiting on the customer's sample round — Planning's MilestoneDialog, which holds Decide for {customer}. */}
                 {acts.primary === 'decide' && opens ? (
                   <Button size="sm" heldReason={busy ? t('held.busy') : null} onClick={() => gateActs?.onOpen?.(opens)}>
-                    {t('productionTab.steps.decide', { customer: order.partyName })}
+                    {t('productionTab.steps.decide', { customer: order.party?.legalName ?? '' })}
                   </Button>
                 ) : null}
                 {acts.askOnly && mayAsk && row.who.kind === 'planner' && row.who.name ? (

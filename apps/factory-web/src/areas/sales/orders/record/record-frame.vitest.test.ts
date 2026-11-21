@@ -235,8 +235,8 @@ describe('B-TH-256 — what points at the order', () => {
     const at = production.indexOf('Planning proposes new dates')
     expect(at).toBeGreaterThan(production.indexOf('id="dates"'))
     expect(production.indexOf('id="dates"')).toBeGreaterThan(-1)
-    const notices = production.indexOf('fw-rcf-notices-list')
-    if (notices > -1) expect(production.slice(notices, production.indexOf('class="fw-so-main"'))).not.toContain('Planning proposes new dates')
+    const noticesAt = production.indexOf('fw-rcf-notices-list')
+    if (noticesAt > -1) expect(production.slice(noticesAt, production.indexOf('class="fw-so-main"'))).not.toContain('Planning proposes new dates')
     for (const words of ['Accept', 'Decline…', 'Tell the customer']) expect(textOf(production.slice(at)), words).toContain(words)
   })
 
