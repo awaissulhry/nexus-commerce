@@ -34,19 +34,18 @@ export const linesReaderOf = (can: OrderAbilities): LinesReader => ({ writes: ca
 /** Ready by is a column only when some goods line has its own date (adaptive: no "As the order" noise). */
 export const ownDatesOf = (order: Pick<Order, 'lines' | 'promiseDate'>): boolean => goodsLines(order).some((line) => line.promiseDate !== null && line.promiseDate !== order.promiseDate)
 
-export type ColumnKey = 'colour' | 'size' | 'plus' | 'pieces' | 'unitPrice' | 'lineTotal' | 'readyBy' | 'more'
+export type ColumnKey = 'colour' | 'size' | 'pieces' | 'unitPrice' | 'lineTotal' | 'readyBy' | 'more'
 export interface Column {
   readonly key: ColumnKey
   /** A size column's size. */
   readonly size?: string
 }
 
-/** The columns of a style's table, in order (Colour | sizes | + Size | Pieces | Unit price | Line total | Ready by | ⋯). */
+/** The columns of a style's table, in order (Colour | sizes | Pieces | Unit price | Line total | Ready by | ⋯). "Add a size" sits under the table (OL fix 3). */
 export function columnsOf(reader: LinesReader, sizes: readonly string[], readyBy: boolean): Column[] {
   return [
     { key: 'colour' },
     ...sizes.map((size) => ({ key: 'size' as const, size })),
-    ...(reader.writes ? [{ key: 'plus' as const }] : []),
     { key: 'pieces' },
     ...(reader.prices ? [{ key: 'unitPrice' as const }, { key: 'lineTotal' as const }] : []),
     ...(readyBy ? [{ key: 'readyBy' as const }] : []),
