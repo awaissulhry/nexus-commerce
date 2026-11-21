@@ -46,7 +46,7 @@ describe('T.1: the Production tab’s states, by role', () => {
     const words = holds('f-sc-gate-words')
     for (const text of ['Work order release blocked: WO-2026-0140', 'Compliance clears or overrides it.']) expect(textOf(words), text).toContain(text)
     expect(words).not.toContain('/compliance/status?gate=')
-    expect(words).toContain(`id="about-GateEvent-${gate.subject.id}"`)
+    expect(words).toContain(`id="about-GateEvent-${gate.subject.id}-${gate.gate}-${Date.parse(gate.at)}"`)
     // Never a code in its place (the read says the warning's own words: the server's part).
     expect(textOf(row)).not.toMatch(/warning\.[a-z-]+/)
   })

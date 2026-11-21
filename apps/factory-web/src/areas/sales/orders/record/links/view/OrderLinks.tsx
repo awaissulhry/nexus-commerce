@@ -13,7 +13,7 @@ import { Frame } from '../../view/Dialogs'
 import type { OrderGate, OrderRePromise } from '../api'
 import '../links.css'
 import { COMPLAINT_TONE, complaintHref, declineHeld, decideHeld, gateHref, RETURN_TONE, returnHref, showsPointers, type LinksActions, type LinksModel } from '../model'
-import { gateAnchorOf, gatesOf } from '../model' // F-SC-W4
+import { gateAnchorsOf, gatesOf } from '../model' // F-SC-W4 (+ W7: each row's anchor its gate's own id)
 
 /**
  * B-TH-256 — what points at the order, drawn (O-SAL-ORD-REC.notice-F04, -F06, .body-F07; picture 29):
@@ -120,12 +120,14 @@ function GateDoor({ href }: { href: string }) {
  */
 export function GateRows({ model, prefix }: { model: LinksModel | null | undefined; prefix: string }) {
   const title = useGateTitle()
+  const gates = gatesOf(model)
+  const anchors = gateAnchorsOf(gates) // F-SC-W7: one anchor per row, never shared (two gates on one work order included)
   return (
     <>
-      {gatesOf(model).map((gate) => {
+      {gates.map((gate, index) => {
         const href = gateHref(prefix, gate)
         return (
-          <li key={`${gate.gate}:${gate.subject.id}:${gate.at}`} className="fw-so-ov-row fw-so-strip" data-tone="danger" id={gateAnchorOf(gate)} tabIndex={-1}>
+          <li key={anchors[index]} className="fw-so-ov-row fw-so-strip" data-tone="danger" id={anchors[index]} tabIndex={-1}>
             <span className="fw-so-strip-mark">
               <ShieldAlert size={14} aria-hidden />
             </span>

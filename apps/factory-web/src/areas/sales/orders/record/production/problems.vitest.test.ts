@@ -5,6 +5,12 @@ import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
 import type { OrderProduction } from '../overview/api'
 import type { OrderIssue } from './api'
 import { finalChecksOf, ncrsOf, qualityVerdictOf, waitingAnswersOf } from './problems'
+// F-SC-W7: the gate rows' anchors — each its gate's own id, never shared
+import { createElement } from 'react'
+import { render } from '../../../../../lib/record-thread/parts/testing'
+import { gateAnchorsOf, gateIdOf } from '../links/model'
+import { LINKS_FULL, LINKS_MANAGER, linksModel } from '../links/fixtures'
+import { GateRows } from '../links/view/OrderLinks'
 
 // F-PT-301 / F-PT-302 (order PRODUCTION tab, W3): Problems & holds — what waits for an answer, the quality in plain words.
 
@@ -96,11 +102,30 @@ describe('F-PT-301: one strip rule on both tabs', () => {
     // One title, one sentence, one door for the notice and the row (never a second copy of their words).
     expect(links.match(/t\('links\.gate\.title'/g)?.length).toBe(1)
     expect(links.match(/t\('links\.gate\.open'\)/g)?.length).toBe(1)
-    expect(links).toContain('id={gateAnchorOf(gate)}')
+    expect(links).toContain('id={anchors[index]}')
     // The page notice: drawn for every tab (no tab condition in front of it), inside the page's notices.
     const page = readFileSync(new URL('../view/OrderRecordView.tsx', import.meta.url), 'utf8')
     expect(page).toMatch(/\n\s*<GateNotices model=\{model\.links\} prefix=\{model\.prefix\} \/>/)
     expect(page.match(/<GateNotices /g)?.length).toBe(1)
+  })
+
+  it('F-SC-W7: each gate row\'s anchor carries the gate\'s own id — about-GateEvent-<id> — and two gates on one work order never share one', () => {
+    const base = LINKS_FULL.gates[0]!
+    expect(gateAnchorsOf([base])).toEqual([`about-GateEvent-${base.eventId}`])
+    // Without the compliance view right the event's id is not sent: the gate's own gate, subject and instant make its id.
+    const label = { ...base, eventId: null, gate: 'LABEL_PRINT' as const, at: '2026-11-15T14:30:00.000Z' }
+    const release = { ...base, eventId: null }
+    expect(gateIdOf(release)).toBe(`${base.subject.id}-WORK_ORDER_RELEASE-${Date.parse(base.at)}`)
+    const two = gateAnchorsOf([release, label])
+    expect(new Set(two).size).toBe(2)
+    for (const anchor of two) expect(anchor).toMatch(/^about-GateEvent-[\w-]+$/)
+    // Even the same gate twice at the same instant: never one anchor for two rows.
+    expect(new Set(gateAnchorsOf([release, release, release])).size).toBe(3)
+    // Drawn: two gates on one work order, words only — two rows, two ids.
+    const html = render(createElement('ul', null, createElement(GateRows, { model: linksModel({ ...LINKS_MANAGER, gates: [release, label] }), prefix: '/w/demo' })), 'en')
+    const ids = [...html.matchAll(/id="(about-GateEvent-[^"]+)"/g)].map((match) => match[1])
+    expect(ids).toHaveLength(2)
+    expect(new Set(ids).size).toBe(2)
   })
 
   it('its words exist in both languages', () => {
