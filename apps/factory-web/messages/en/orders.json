@@ -3013,5 +3013,53 @@
       },
       "done": "Receipt {number} recorded"
     }
+  },
+  "changesTab": {
+    "today": "today {time}",
+    "dayTime": "{date} {time}",
+    "waiting": {
+      "title": "Waiting",
+      "info": "What waits for an answer or a step on this order: whose turn it is, how long it waits and its one door. The same list as Overview's Requests & changes and the tab's count. Ages count to the minute the list was read.",
+      "asOf": "As of {when}",
+      "reading": "Reading what waits…",
+      "nothing": "Nothing waits.",
+      "lastRevision": "Last change: revision {revision}, {date}.",
+      "total_one": "{count} thing waits: {parts}.",
+      "total_other": "{count} things wait: {parts}.",
+      "partUs": "{count} on us",
+      "partCustomer": "{count} on {customer}",
+      "partSteps_one": "{count} step still to do",
+      "partSteps_other": "{count} steps still to do",
+      "onlySteps_one": "{count} step is still to do.",
+      "onlySteps_other": "{count} steps are still to do.",
+      "holdsAndDates": "Holds and dates are on Production ›",
+      "mine_one": "{count} is your turn",
+      "mine_other": "{count} are your turn",
+      "noneUs": "Nothing waits on us.",
+      "noneCustomer": "Nothing waits on {customer}.",
+      "manage": "Manage in the thread…"
+    },
+    "open": "Open ›",
+    "row": {
+      "approval": "Waits for approval: {kind}",
+      "askedBy": "Asked by {name} · {when}",
+      "whenAsked": "When they asked: {words}",
+      "theySee": "They see: {words}",
+      "lapses": "lapses {date}",
+      "late": "{count} d late"
+    },
+    "who": {
+      "sales": "Sales answers it",
+      "production": "The production manager or the planner answers it",
+      "problem": "Answered on Production › Problems & holds",
+      "decides": "{who} decides",
+      "youAsked": "You asked for this approval: {who} decides",
+      "salesDecides": "Sales decides"
+    },
+    "still": {
+      "revision": "Revision {revision} · {when}",
+      "newDates": "See the new dates ›",
+      "seeYes": "See the yes ›"
+    }
   }
 }

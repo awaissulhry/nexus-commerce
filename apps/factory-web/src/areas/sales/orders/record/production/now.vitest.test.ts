@@ -64,7 +64,7 @@ describe('F-PT-102: the health sentence agrees with the stored word (S5 §3.2)',
 describe('F-PT-102: one door per blocker, the state, the urgency', () => {
   it('the first blocker → its ONE place (a request → Changes; a hold → #holds; a material → #dates); none and at risk → Ask', () => {
     expect(nextStepOf(HEADLINE)).toEqual({ kind: 'blocker', words: HEADLINE.waiting.blockers[0]!.words, place: 'REQUEST' })
-    expect(placeAnchorOf('REQUEST')).toEqual({ tab: 'changes', anchor: null })
+    expect(placeAnchorOf('REQUEST')).toEqual({ tab: 'changes', anchor: 'waiting' }) // F-OC-104: Changes › Waiting
     expect(placeAnchorOf('HOLD')).toEqual({ tab: 'production', anchor: 'holds' })
     expect(placeAnchorOf('DATE')).toEqual({ tab: 'production', anchor: 'dates' })
     const free = { ...HEADLINE, waiting: { ...HEADLINE.waiting, blockers: [] } }

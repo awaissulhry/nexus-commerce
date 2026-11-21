@@ -131,7 +131,7 @@ describe('F-SA-244: Who was told — office people by name and why, the floor an
     expect(record).toContain('readToldChanges(api, readyId)')
     expect(record).toContain('<WhoWasToldDialog orderId={readyId} messageId={toldOpen}')
     expect(record).toContain('changeSide={changeSide /* F-SA-244 */}')
-    const changes = readFileSync(new URL('./changes/view/ChangesTab.tsx', import.meta.url), 'utf8')
+    const changes = readFileSync(new URL('./changes/view/HistorySection.tsx', import.meta.url), 'utf8') // F-OC-101: What changed's own file
     expect(changes).toContain('actions?.onWhoWasTold?.(change.messageId)')
     // F-PT-104 (B2): the row says the day and the time ("Told the floor 21 Nov 10:42"), in the Work orders section's own file.
     const production = readFileSync(new URL('./view/production/WorkOrdersSection.tsx', import.meta.url), 'utf8')

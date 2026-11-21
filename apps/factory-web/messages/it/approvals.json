@@ -487,7 +487,7 @@
     "leave": "Lascia così…",
     "leaveTitle": "Lascia così · {number}",
     "leaveWhy": "Perché resta così",
-    "leaveHint": "Fino a {max} caratteri. L'Ancora da fare dell'ordine li mostra.",
+    "leaveHint": "Fino a {max} caratteri. La scheda Modifiche dell'ordine li mostra.",
     "leaveSend": "Lascia così",
     "back": "Indietro",
     "apply": {

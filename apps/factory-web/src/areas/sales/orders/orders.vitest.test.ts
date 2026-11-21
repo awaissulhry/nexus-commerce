@@ -977,13 +977,15 @@ describe('F-SA-266: what a row discusses — the chip per audience, the office-o
     for (const door of ["target={{ kind: 'DepositRequest', id: request.id }} officeOnly", "target={{ kind: 'Invoice', id: invoice.id }} officeOnly", 'target={null} officeOnly']) expect(money).toContain(door)
     const shipments = read('./record/view/ShipmentsTab.tsx')
     expect(shipments).toContain("target={{ kind: 'Shipment', id: row.id }} />")
-    const requests = read('./record/view/RequestsSection.tsx')
-    expect(requests).toContain("target={{ kind: 'OrderChangeRequest', id: request.id }} />")
+    // F-OC-102: a request waiting on us is a row of Changes › Waiting — its Discuss by the request's reference.
+    const requests = read('./record/changes/view/WaitingSection.tsx')
+    expect(requests).toContain("target={{ kind: 'OrderChangeRequest', id: request.id }} align=\"end\" />")
     // F-OO-100: Overview's cards are one file each (view/overview/): Next dates and People hold these doors.
     // F-OO-145: a gate's Discuss is an item of its More ▾ now — still by the gate's reference.
     expect(read('./record/view/overview/DatesCard.tsx')).toContain("target: row.gateId ? { kind: 'OrderGate', id: row.gateId } : null")
     expect(read('./record/view/overview/PeopleCard.tsx')).toContain('<FollowersDoor />')
-    const changes = read('./record/changes/view/ChangesTab.tsx')
+    // F-OC-101: What changed is its own section file (the tab is its layout only).
+    const changes = read('./record/changes/view/HistorySection.tsx')
     expect(changes).toContain('<ShowInThreadDoor order={order} at={entry.at} />')
     expect(changes).toContain('id={`change-${entry.id}`}')
     // A thread card jumps back to its row: a replace (no history entry), then the row in view with the focus.
@@ -1522,19 +1524,16 @@ describe('F-OP-117: the Changes tab — work-order changes of this order, the Hi
       ...over,
     }) as never
 
-  it('the section: waiting first (oldest first), then decided newest first; only this order\'s; the floor told once carried out', async () => {
-    const { workOrderChangeRowsOf, floorToldOfChange } = await import('./record/changes/model')
-    const list = [
-      change({ id: 'applied', status: 'APPLIED', decidedAt: '2026-11-18T10:00:00Z' }),
-      change({ id: 'late', proposedAt: '2026-11-18T09:00:00Z' }),
-      change({ id: 'early' }),
-      change({ id: 'declined', status: 'DECLINED', decidedAt: '2026-11-19T10:00:00Z' }),
-      change({ id: 'other-order', salesOrder: { id: 'o2', number: 'SO-2' } }),
-    ]
-    expect(workOrderChangeRowsOf(list, 'o1').map((entry: { id: string }) => entry.id)).toEqual(['early', 'late', 'declined', 'applied'])
-    expect(floorToldOfChange(change({ status: 'APPLIED', decidedAt: '2026-11-18T10:00:00Z' }))).toBe('2026-11-18T10:00:00Z')
-    expect(floorToldOfChange(change())).toBeNull()
-    expect(floorToldOfChange(change({ status: 'DECLINED', decidedAt: '2026-11-18T10:00:00Z' }))).toBeNull()
+  // F-OC-105 (C3-B1): flipped — this asserted the bug: the old card said "Told the floor at hh:mm" from the decision's time, whether or
+  // not the floor was told (a draft work order is never told). The card went; "Told" is said only where the told read names it.
+  it('"Told the floor" only where the told read names it — never guessed from a decision\'s time; the old card and its rows are gone', async () => {
+    const model = await import('./record/changes/model')
+    for (const gone of ['workOrderChangeRowsOf', 'floorToldOfChange']) expect(gone in model, gone).toBe(false)
+    const history = readFileSync(new URL('./record/changes/view/HistorySection.tsx', import.meta.url), 'utf8')
+    const waiting = readFileSync(new URL('./record/changes/view/WaitingSection.tsx', import.meta.url), 'utf8')
+    for (const source of [history, waiting]) expect(source).not.toContain("t('told.floorAt'")
+    // History's Told line is the told read's own (toldOfHistory → Who was told…).
+    expect(history).toContain('const change = toldOfHistory(')
   })
 
   it('History: a decided work-order change is an entry at its decision under the chip Work orders; a waiting one is not history yet', () => {
@@ -1561,9 +1560,10 @@ describe('F-OP-117: the Changes tab — work-order changes of this order, the Hi
     const view = readFileSync(new URL('./record/view/OrderRecordView.tsx', import.meta.url), 'utf8')
     expect(view).toContain('const changesCount = waitingCard ? changesBadgeOf(waitingCard) : null')
     expect(view).toContain('tabCountOf(tab, order, { changes: changesCount /* F-OP-117 */, viewInvoices: model.can.viewInvoices /* F-OP-306 */ })')
+    // F-OC-101: the tab is its layout only — What changed (HistorySection) reads the work-order changes for its chip.
     const tab = readFileSync(new URL('./record/changes/view/ChangesTab.tsx', import.meta.url), 'utf8')
-    expect(tab).toContain('<WorkOrderChanges order={order} model={model} actions={actions} />')
-    expect(tab).toContain('workOrderChanges: model.orderChanges?.list?.value ?? null')
+    expect(tab).toContain('<HistorySection order={order} model={model} actions={actions} />')
+    expect(readFileSync(new URL('./record/changes/view/HistorySection.tsx', import.meta.url), 'utf8')).toContain('workOrderChanges: model.orderChanges?.list?.value ?? null')
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
       for (const key of ['wocs.title', 'wocs.none', 'wocs.newDraft', 'badge.yourTurn', 'changes.history.chips.workOrders']) expect(t(key), `${locale} ${key}`).not.toBe(key)

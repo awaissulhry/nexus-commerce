@@ -1,0 +1,48 @@
+/*
+ * F-OC-101 … 104 (order CHANGES tab, 10-design §1–§3; 18-lead-settles L6) — the tab's own stylesheet (orders.css is the Lines lane's,
+ * production.css the kit's, reused in place). The kit gives the room container (`pt`), each section's own (`sec`) and the heads; this
+ * file adds Waiting's groups and rows. Room, not screen: each Waiting group is one more size container (`grp`), so its rows follow
+ * the room they really have — stacked under 560 px, words · who + age · door from 560, words · detail · who + age · door from 1100 —
+ * and opening or closing the thread dock re-lays them at once. The door column has a fixed width, so doors line up across rows and
+ * groups. DS tokens only (no raw colour): light and dark come from the tokens.
+ */
+
+/* ── the shell (F-OC-101) ── */
+.fw-oc #waiting { position: relative; }
+/* The addresses of the two cards that went into Waiting: an element at its top, out of the flow (no gap, nothing drawn). */
+.fw-oc-alias { position: absolute; top: 0; left: 0; width: 1px; height: 1px; overflow: hidden; }
+.fw-oc-foot { flex-wrap: wrap; }
+
+/* ── Waiting: the groups (F-OC-102 … 104) — always stacked, read top-down in Overview's order (no holes under a short group) ── */
+.fw-oc-groups { display: flex; flex-direction: column; gap: var(--nds-space-16); min-width: 0; }
+.fw-oc-grp { container: grp / inline-size; display: flex; flex-direction: column; min-width: 0; scroll-margin-top: var(--nds-space-4); }
+.fw-oc-grp-h { display: flex; align-items: center; gap: var(--nds-space-6) var(--nds-space-12); flex-wrap: wrap; padding: 0 var(--nds-space-4) var(--nds-space-6); border-bottom: 1px solid var(--nds-border); }
+.fw-oc-grp-h h3 { margin: 0; font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-bold); color: var(--nds-text-strong); }
+.fw-oc-sp { flex: 1; }
+/* Still to do: the head of each accepted change, its rows under it. */
+.fw-oc-chg-h { display: flex; align-items: center; gap: var(--nds-space-4) var(--nds-space-12); flex-wrap: wrap; padding: var(--nds-space-8) var(--nds-space-4) var(--nds-space-2); font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-semibold); }
+
+/* ── Waiting: one row — words | detail | who + age | one door (stacked at S, the door full width and 44 px to tap) ── */
+.fw-oc-row { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "h" "x" "m" "d"; gap: var(--nds-space-2) var(--nds-space-16); padding: var(--nds-space-10) var(--nds-space-4); border-bottom: 1px solid var(--nds-border-subtle); min-width: 0; scroll-margin-top: var(--nds-space-4); }
+.fw-oc-row:last-child { border-bottom: 0; }
+.fw-oc-row:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; border-radius: var(--nds-radius-xs); }
+.fw-oc-row > div { min-width: 0; }
+.fw-oc-row-h { grid-area: h; display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-2) var(--nds-space-6); font-size: var(--nds-font-size-sm); line-height: 1.45; overflow-wrap: anywhere; }
+.fw-oc-row-h b { font-weight: var(--nds-font-weight-semibold); }
+.fw-oc-row-x { grid-area: x; display: flex; flex-direction: column; gap: var(--nds-space-2); font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); line-height: 1.45; overflow-wrap: anywhere; }
+.fw-oc-row-x .fw-oc-q { color: var(--nds-text-2); }
+.fw-oc-row-m { grid-area: m; display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-4) var(--nds-space-8); font-size: var(--nds-font-size-xs); color: var(--nds-text-2); margin-top: var(--nds-space-4); }
+.fw-oc-row-m .fw-so-rq-age { font-variant-numeric: tabular-nums; color: var(--nds-text-muted); white-space: nowrap; }
+.fw-oc-row-d { grid-area: d; display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); margin-top: var(--nds-space-6); }
+.fw-oc-row-d:empty { display: none; }
+.fw-oc-row-d > .nds-btn { min-height: 44px; flex: 1 1 auto; justify-content: center; }
+@container grp (min-width: 560px) {
+  .fw-oc-row { grid-template-columns: minmax(0, 1fr) 210px 224px; grid-template-areas: "h m d" "x m d"; align-items: start; }
+  .fw-oc-row-m { flex-direction: column; align-items: flex-start; gap: var(--nds-space-2); margin-top: 1px; }
+  .fw-oc-row-d { justify-content: flex-end; flex-wrap: nowrap; margin-top: 0; }
+  .fw-oc-row-d:empty { display: flex; }
+  .fw-oc-row-d > .nds-btn { min-height: var(--nds-control-h-sm); flex: none; }
+}
+@container grp (min-width: 1100px) {
+  .fw-oc-row { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) 240px 224px; grid-template-areas: "h x m d"; }
+}

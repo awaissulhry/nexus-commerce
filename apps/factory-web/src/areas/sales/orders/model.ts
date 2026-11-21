@@ -80,6 +80,8 @@ export interface OrderAbilities {
   raiseNcr?: boolean
   /** Lead's W3 extra: decide a gate's sample round for the customer (production.brand.override; Planning's MilestoneDialog). */
   decideForCustomer?: boolean
+  /** F-OC-103: ask the customer for an approval and see what was asked (partners.approvals.ask): Changes › "Manage in the thread…". */
+  askCustomer?: boolean
 }
 
 export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
@@ -104,6 +106,7 @@ export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
     measurements: held.has('sales.measurements.view'), // F-SA-214
     raiseNcr: held.has('quality.ncr.raise'), // F-PT-302
     decideForCustomer: held.has('production.brand.override'), // W3 extra: Decide for {customer}…
+    askCustomer: held.has('partners.approvals.ask'), // F-OC-103
   }
 }
 

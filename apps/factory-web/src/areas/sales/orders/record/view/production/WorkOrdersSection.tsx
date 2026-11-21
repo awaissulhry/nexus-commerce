@@ -408,7 +408,7 @@ function Decisions({ order, model, actions, recordHref, search }: { order: Order
         </div>
       ))}
       {more > 0 ? (
-        <TabLink className="fw-pt-link" href={tabHref(recordHref, 'changes', search)}>
+        <TabLink className="fw-pt-link" href={`${tabHref(recordHref, 'changes', search)}#waiting` /* F-OC-104: the rest wait in Changes › Waiting */}>
           {t('productionTab.wo.decisionsMore', { count: more })}
         </TabLink>
       ) : null}

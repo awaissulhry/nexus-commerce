@@ -234,7 +234,7 @@ function HealthBlock({ order, model, recordHref, search, day, onAsk }: { order: 
               {t(`productionTab.now.nextPlace.${place.anchor}`)}
             </a>
           ) : (
-            <TabLink className="fw-pt-link" href={tabHref(recordHref, 'changes', search)}>
+            <TabLink className="fw-pt-link" href={`${tabHref(recordHref, 'changes', search)}${place.anchor ? `#${place.anchor}` : ''}` /* F-OC-104: Changes › Waiting */}>
               {t('productionTab.now.nextPlace.changes')}
             </TabLink>
           )}
