@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { ApiClient } from '../../../../../lib/api/client'
 import { FINISH_SOURCES } from '../../depth/api' // F-SA-234b
 import { GATE_REFUSALS } from '@nexus/factory-domain/planning/milestones/rules' // F-OO-208: a gate's refusal codes, as Planning reads them
+import { BLOCKED_BY, WORK_ORDER_RISKS } from '../../../../production/_shared/api' // F-PT-104: the Production list's risk words
 
 /**
  * F-SA-232 (sales page plan N2; 10-order-page §3 OR1, OR2) — the order page's reads of production, the office twin of the portal's
@@ -138,6 +139,12 @@ export const productionLineSchema = z.object({
 })
 export type ProductionLine = z.infer<typeof productionLineSchema>
 
+// ---- F-PT-104 / F-PT-105: the shapes the server's S1 adds (B-PT-001, B-PT-003), each read only when it is there ----
+const workOrderRisk = z.object({ state: z.enum(WORK_ORDER_RISKS), daysLate: z.number().nullable(), plannedEnd: day.nullable(), planAfterDue: z.boolean(), raised: z.string().nullable(), blockedBy: z.enum(BLOCKED_BY).nullable() })
+export type WorkOrderRiskRead = z.infer<typeof workOrderRisk>
+const mtmUnit = z.object({ id: z.string(), number: z.string(), status: z.string(), lineSeq: z.number().nullable() })
+export type MtmUnitRead = z.infer<typeof mtmUnit>
+// ---- end F-PT-104 / F-PT-105
 const ownShare = z.object({ cells: z.number(), pieces: z.number(), cut: z.number().nullable(), sewn: z.number().nullable(), checked: z.number().nullable() })
 export const workSchema = z.object({
   workOrders: z.array(
@@ -151,7 +158,8 @@ export const workSchema = z.object({
       colourways: z.array(named),
       site: named.nullable(),
       line: named.nullable(),
-      workshops: z.array(z.object({ name: z.string() })),
+      // F-PT-104 (B-PT-001, optional until S1): + an outside workshop's issue day and the day it is expected back.
+      workshops: z.array(z.object({ name: z.string(), since: day.nullable().optional(), expectedBack: day.nullable().optional() })),
       own: ownShare,
       alsoMakes: z.object({ orders: z.array(z.object({ id: z.string(), number: z.string() })), more: z.number() }),
       sharedWithOtherCustomers: z.boolean(),
@@ -165,9 +173,14 @@ export const workSchema = z.object({
       kind: z.string().optional(),
       releasedAt: z.string().nullable().optional(),
       priority: z.number().optional(),
-      cells: z.array(z.object({ id: z.string(), salesOrderLineId: z.string(), size: z.string(), quantity: z.number(), cut: z.number().nullable() })).optional(),
+      // F-PT-105 (B-PT-002, optional until S1): + sewn and checked per cell (null: not counted there — never a made-up 0).
+      cells: z.array(z.object({ id: z.string(), salesOrderLineId: z.string(), size: z.string(), quantity: z.number(), cut: z.number().nullable(), sewn: z.number().nullable().optional(), checked: z.number().nullable().optional() })).optional(),
       rights: z.object({ manage: z.boolean(), release: z.boolean(), hold: z.boolean(), why: words.nullable() }).optional(),
       // ---- end F-OP-113
+      // ---- F-PT-104 (B-PT-001; optional until the server's S1 lands — absent: hidden, never a made-up 0): the row's risk, the
+      // Production list's own facts (null: finished, or shared with other customers).
+      risk: workOrderRisk.nullable().optional(),
+      // ---- end F-PT-104
     }),
   ),
   mtm: z.array(
@@ -178,6 +191,11 @@ export const workSchema = z.object({
       workOrders: z.number(),
       byStatus: z.array(z.object({ status: z.string(), count: z.number() })),
       own: ownShare,
+      // ---- F-PT-105 (B-PT-003; optional until S1): the group's units by number and state (never the rider), at most 50, and how many
+      // more (`units` above stays the group's count).
+      unitList: z.array(mtmUnit).optional(),
+      unitsMore: z.number().optional(),
+      // ---- end F-PT-105
     }),
   ),
   workOrdersLeftOut: z.number(),

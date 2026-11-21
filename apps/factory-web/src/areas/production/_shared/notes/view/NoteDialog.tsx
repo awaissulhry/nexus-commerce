@@ -52,7 +52,7 @@ function Dialog({ model, actions }: { model: NoteDialogModel; actions?: NoteDial
       open
       size="md"
       onClose={() => actions?.onClose?.()}
-      title={say(titleOf(model))}
+      title={model.preset?.title ?? say(titleOf(model)) /* F-PT-103: a ready ask's own title */}
       footer={
         model.result ? (
           <>
@@ -68,7 +68,7 @@ function Dialog({ model, actions }: { model: NoteDialogModel; actions?: NoteDial
               {t('cancel')}
             </Button>
             <Button size="sm" variant="primary" heldReason={held ? say(held) : null} onClick={() => actions?.onSend?.()}>
-              {t('send', { count: records.length })}
+              {model.preset?.send ?? t('send', { count: records.length }) /* F-PT-103 */}
             </Button>
           </>
         )

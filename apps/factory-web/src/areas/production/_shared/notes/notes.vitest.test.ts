@@ -347,3 +347,24 @@ describe('F-PR-22 — the bell: one row for a note batch on several orders (thre
     expect(rowWords({ ...mention(12), messageKey: 'notifications.following.note' }, words('en'), 'en')).toBe('Alex Demo wrote a note on WO-0301, which you follow')
   })
 })
+
+// ---- F-PT-103 (order PRODUCTION tab: "Ask for an update"): the ONE note dialog opened as a ready ask (preset only) -------------
+describe('F-PT-103: a ready ask — the starter question typed in, Needs an answer ticked, its own title and Send word', () => {
+  it('the preset sets the text and the tick; without one the dialog opens as before', async () => {
+    const { presetDraftOf } = await import('./model')
+    const preset = { title: 'Ask for an update · SO-1', body: 'Where is SO-1 now?', needsAnswer: true, send: 'Ask for an update' }
+    expect(presetDraftOf(NEW_DRAFT, preset)).toEqual({ ...NEW_DRAFT, body: 'Where is SO-1 now?', needsAnswer: true, askSupervisor: true })
+    expect(presetDraftOf({ ...NEW_DRAFT, on: 'salesOrders' }, preset).on).toBe('salesOrders')
+    expect(presetDraftOf(NEW_DRAFT, null)).toBe(NEW_DRAFT)
+  })
+
+  it('the wiring: open takes the preset, the dialog says its title and Send word (the check, @ and result stay the dialog’s own)', () => {
+    const hook = readFileSync(new URL('./use-note-dialog.ts', import.meta.url), 'utf8')
+    expect(hook).toContain('(targets: NoteTargets, from: NoteFrom, on: WriteOn = NEW_DRAFT.on, preset: NotePreset | null = null) => {')
+    expect(hook).toContain('const draft = presetDraftOf(')
+    const dialog = readFileSync(new URL('./view/NoteDialog.tsx', import.meta.url), 'utf8')
+    expect(dialog).toContain('title={model.preset?.title ?? say(titleOf(model))')
+    expect(dialog).toContain("{model.preset?.send ?? t('send', { count: records.length })")
+  })
+})
+// ---- end F-PT-103

@@ -14,6 +14,7 @@ import type { BrandUrgency } from '@nexus/factory-domain/production-brand/urgenc
 import { BLOCKER_OWNER, type Blocker, type BlockerKind, type BlockerRef, type WaitingOn } from '@nexus/factory-domain/production-brand/waiting' // B-OP-021: + BlockerRef
 import { placeOf, waitingOn } from '@nexus/factory-domain/production-brand/waiting' // B-OO-007
 import type { SalesOrderStatus } from '@nexus/factory-domain/sales/orders/orders' // B-OO-007
+import { isFirstPromise } from '@nexus/factory-domain/sales/orders/promise-moves' // B-PT-011: one rule for a first promise
 import { aheadWords, customerUrgencyChipWords, HEALTH_REASON_WORDS, HEALTH_WORDS, OFFICE_WAITING_WORDS, SEWING_NOT_COUNTED_WORDS, STAGE_WORDS, URGENCY_WORDS } from '@nexus/factory-domain/production-brand/words'
 import { daysLate, type WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine'
 import { WORKORDERS_HOLD, WORKORDERS_MANAGE, WORKORDERS_RELEASE, WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions' // B-OP-021: + manage, release, hold
@@ -33,6 +34,7 @@ import { SITE_COLUMNS, type SiteRow } from '../../planning/store'
 import { GOODS_LINE_KINDS, readOrderProductionFacts } from '../../production/brand/facts'
 import { countedUrgencyOf } from '../../production/brand/urgency-of'
 import { readPlanned, readWork, workOf } from '../../production/brand-portal/access'
+import { readProductionSettings } from '../../production/brand-portal/access' // B-PT-005: what the customer is shown
 import { issueReadWhere, issuesOfOrderWhere, type OrderFilter } from '../../production/issues/list'
 import { brandProductionKey, supervisorOfOrder } from '../../production/supervisor/resolver'
 import { readHandNotice, type HandNotice } from '../../production/brand/keeper' // B-MS-008 (ms-fx1): Clear…'s words read the markers
@@ -52,6 +54,14 @@ import { APPROVAL_KINDS, KIND_RULES, type ApprovalKind } from '@nexus/factory-do
 import { stillToDoOf } from './still-to-do'
 // B-OO-008 (order overview N7, N8): who answers the customer by the threads' own owner chain, office only (W08).
 import { ownerOf } from '../../../platform/threads/owner'
+// B-PT-001 (order production tab R1): a work order's risk by the Production list's own rule (one rule for both screens).
+import { riskFactsOf, type RiskRow } from '../../production/work-orders/risk'
+// B-PT-004 (R4): the spec each work order is made to — the domain's rule and the change order's decision, as …/spec/versions reads them.
+import { newerSpecOf, type Decision } from '@nexus/factory-domain/product/versions/drift'
+import type { RevisionStatus } from '@nexus/factory-domain/product/styles/revisions'
+import { decisionFor } from '../../product/versions/drift'
+// B-PT-008 (R8): the garments with a defect per class, the customer's own reader's rule.
+import { defectTotalsOf } from '@nexus/factory-domain/production-brand/quality-read'
 
 /**
  * B-SA-031 / B-SA-032 (Sales page plan P2, P3, P4, P15, P16; 13-backend B1, B12; 10-order-page OR1, OR2; review WP-3): the office's
@@ -183,6 +193,92 @@ export function mtmGroupsOf<T extends { readonly styleId: string; readonly colou
   })
 }
 
+// ── B-PT-001 / B-PT-003 (order production tab R1, R3) ──────────────────────────────────────────────────────────────────────────
+/** A job of a work order at an outside workshop, as the work part reads it. */
+export interface WorkshopJob {
+  readonly partyId: string
+  readonly issuedAt: Date | null
+  readonly expectedBackDate: Date | null
+}
+
+/**
+ * B-PT-001: the outside workshops of one work order, each once (in the order met): `since` the day its first job still out there
+ * was issued, `expectedBack` the latest day a job there is due back (null: not given) — "out at a workshop, back on 4 Dec". A work
+ * order shared with other customers keeps the names only (both null), as before.
+ */
+export function workshopsOf(jobs: readonly WorkshopJob[], names: ReadonlyMap<string, string>, shared: boolean): { name: string; since: BusinessDate | null; expectedBack: BusinessDate | null }[] {
+  return [...new Set(jobs.map((job) => job.partyId))].map((partyId) => {
+    const mine = jobs.filter((job) => job.partyId === partyId)
+    const issued = mine.flatMap((job) => (job.issuedAt ? [job.issuedAt.getTime()] : []))
+    const back = mine.flatMap((job) => (job.expectedBackDate ? [dayOf(job.expectedBackDate)] : [])).sort()
+    return {
+      name: names.get(partyId) ?? '',
+      since: shared || issued.length === 0 ? null : businessDate(new Date(Math.min(...issued))),
+      expectedBack: shared || back.length === 0 ? null : back[back.length - 1]!,
+    }
+  })
+}
+
+/** B-PT-003: the most unit numbers one made-to-measure row lists; the rest are counted (`unitsMore`). */
+export const MTM_UNITS_LIMIT = 50
+
+/**
+ * B-PT-003: a made-to-measure row's units in number order (WO-9 before WO-10), at most `limit`, and how many more. `unitList`, not
+ * 13-backend's `units`: the row's `units` is already its count of pieces (the web reads it).
+ */
+export function mtmUnitsOf<T extends { readonly number: string }>(units: readonly T[], limit: number = MTM_UNITS_LIMIT): { unitList: T[]; unitsMore: number } {
+  const sorted = [...units].sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true }))
+  return { unitList: sorted.slice(0, limit), unitsMore: Math.max(0, sorted.length - limit) }
+}
+// ── end B-PT-001 / B-PT-003 ──
+
+// ── B-PT-004 (order production tab R4): the spec each work order is made to ──────────────────────────────────────────────────
+/** A revision as the spec of a work order reads it. */
+export interface SpecRevision {
+  readonly id: string
+  readonly styleId: string
+  readonly revision: number
+  readonly status: string
+  readonly releasedAt: Date | null
+}
+
+/**
+ * B-PT-004: the spec a work order is made to, by the domain's rule (product/versions/drift newerSpecOf, as GET …/spec/versions
+ * says it): its revision, the state (CURRENT, NEWER_RELEASED, WITHDRAWN, NOT_RELEASED, NO_REVISION), the newer released revision
+ * with its day (only when NEWER_RELEASED) and what a change order decided for it (only then). Never the rule's `message` (English
+ * only): the screen's words come from `state`.
+ */
+export function workOrderSpecOf(pinned: SpecRevision | null, released: SpecRevision | null, decision: Decision | null) {
+  const ref = (row: SpecRevision) => ({ id: row.id, revision: row.revision, status: row.status })
+  const spec = newerSpecOf({ pinned: pinned ? ref(pinned) : null, released: released ? ref(released) : null, decision })
+  const newer = spec.state === 'NEWER_RELEASED' && released ? { revision: released.revision, releasedOn: released.releasedAt ? businessDate(released.releasedAt) : null } : null
+  return {
+    revision: pinned ? { revision: pinned.revision, status: pinned.status as RevisionStatus } : null,
+    state: spec.state,
+    newer,
+    decision: spec.state === 'NEWER_RELEASED' ? decision : null,
+  }
+}
+// ── end B-PT-004 ──
+
+// ── B-PT-008 / B-PT-009 (order production tab R8, R9) ──────────────────────────────────────────────────────────────────────────
+/** B-PT-009: the most characters of an NCR's title the read sends (a longer one is cut with "…"). */
+export const NCR_TITLE_LIMIT = 80
+
+/** B-PT-009: an NCR's title as the order page shows it: trimmed, at most NCR_TITLE_LIMIT characters (cut with "…"). */
+export function ncrTitleOf(title: string): string {
+  const chars = Array.from(title.trim())
+  return chars.length <= NCR_TITLE_LIMIT ? chars.join('') : `${chars.slice(0, NCR_TITLE_LIMIT - 1).join('').trimEnd()}…`
+}
+
+/** B-PT-008: a final check's garments with a defect per class (the domain's defectTotalsOf); null while it is OPEN (nothing decided). */
+export function finalDefectsOf(status: string, defects: readonly { readonly defectClass: string; readonly quantity: number }[]): { critical: number; major: number; minor: number } | null {
+  if (status === 'OPEN') return null
+  const totals = defectTotalsOf(defects)
+  return { critical: totals.CRITICAL, major: totals.MAJOR, minor: totals.MINOR }
+}
+// ── end B-PT-008 / B-PT-009 ──
+
 /** The pieces between the steps (what is in work now): counts only, from the order's own settled figures. */
 export function inWorkPiecesOf(input: { readonly started: number; readonly cut: number | null; readonly sewn: number | null; readonly checked: number | null; readonly packed: number | null }) {
   const less = (from: number, minus: number) => Math.max(0, from - minus)
@@ -271,11 +367,11 @@ export function officeBlockersOf(status: SalesOrderStatus, blockers: readonly Bl
 /**
  * How many times the promise MOVED: the order's `orders.changePromise` audit rows (their `before`), less the ones that set a first
  * promise — an order with no promise yet records `before.originalPromiseDate: null` (sales/orders moves.ts, the order's and the
- * lines' change alike). A row that does not say counts, as before.
+ * lines' change alike). A row that does not say counts, as before. B-PT-011: the ONE rule (sales/orders promise-moves
+ * isFirstPromise), the order read's promise history says SET / MOVED by it too.
  */
 export function promiseMovesOf(befores: readonly unknown[]): number {
-  const first = (before: unknown): boolean => before !== null && typeof before === 'object' && 'originalPromiseDate' in before && (before as { originalPromiseDate: unknown }).originalPromiseDate === null
-  return befores.filter((before) => !first(before)).length
+  return befores.filter((before) => !isFirstPromise(before)).length
 }
 // ── end B-OO-007 ──
 
@@ -381,7 +477,7 @@ function loaders(db: Db, context: OfficeContext, order: OrderRow, now: Date) {
     if (ids.length === 0) return []
     return db.workOrder.findMany({
       where: { id: { in: ids } },
-      select: { id: true, number: true, status: true, kind: true, companyId: true, siteId: true, lineId: true, partyId: true, styleId: true, rush: true, dueDate: true, /* B-OP-021 */ version: true, releasedAt: true, priority: true },
+      select: { id: true, number: true, status: true, kind: true, companyId: true, siteId: true, lineId: true, partyId: true, styleId: true, rush: true, dueDate: true, /* B-OP-021 */ version: true, releasedAt: true, priority: true, /* B-PT-004 */ styleRevisionId: true },
       orderBy: { number: 'asc' },
     })
   })
@@ -455,6 +551,7 @@ async function headlinePart(db: Db, context: OfficeContext, order: OrderRow, loa
           words: HEALTH_WORDS[effective.health],
           computed: (row.health as BrandHealth | null) ?? null,
           raise: raise ? { reasonCode: raise.reasonCode, words: HEALTH_REASON_WORDS[raise.reasonCode], until: raise.until, note: notes ? row.healthNote : null, by: raisedBy, at: notes && row.healthSetAt ? toUtcIso(row.healthSetAt) : null } : null,
+          version: row.version, // B-PT-007: Mark at risk… and Remove the mark send it back
         }
       : null
 
@@ -552,6 +649,32 @@ async function linesPart(db: Db, load: Loaders, /* B-SA-043 */ context: OfficeCo
   })
 }
 
+// ── B-PT-004 (R4) ──
+const SPEC_REVISION = { id: true, styleId: true, revision: true, status: true, releasedAt: true } as const
+
+/**
+ * B-PT-004: the spec of each work order (one read of the pinned revisions, one of the styles' RELEASED ones; the change order's
+ * decision only for a work order a newer released revision exists for — what GET …/spec/versions shows under workorders.view).
+ */
+async function specsOf(db: Db, rows: readonly { readonly id: string; readonly styleId: string; readonly styleRevisionId: string | null }[]): Promise<Map<string, ReturnType<typeof workOrderSpecOf>>> {
+  const out = new Map<string, ReturnType<typeof workOrderSpecOf>>()
+  if (rows.length === 0) return out
+  const pinnedIds = [...new Set(rows.flatMap((row) => (row.styleRevisionId ? [row.styleRevisionId] : [])))]
+  const pinned = new Map<string, SpecRevision>((pinnedIds.length === 0 ? [] : await db.styleRevision.findMany({ where: { id: { in: pinnedIds } }, select: SPEC_REVISION })).map((row) => [row.id, row]))
+  const released = new Map<string, SpecRevision>()
+  for (const row of await db.styleRevision.findMany({ where: { styleId: { in: [...new Set(rows.map((entry) => entry.styleId))] }, status: 'RELEASED' }, select: SPEC_REVISION, orderBy: { revision: 'desc' } })) {
+    if (!released.has(row.styleId)) released.set(row.styleId, row)
+  }
+  for (const row of rows) {
+    const pin = row.styleRevisionId ? (pinned.get(row.styleRevisionId) ?? null) : null
+    const now = released.get(row.styleId) ?? null
+    const newer = workOrderSpecOf(pin, now, null).state === 'NEWER_RELEASED'
+    out.set(row.id, workOrderSpecOf(pin, now, newer ? await decisionFor(db, row.id) : null))
+  }
+  return out
+}
+// ── end B-PT-004 ──
+
 async function workPart(db: Db, context: OfficeContext, order: OrderRow, load: Loaders, today: BusinessDate) {
   const actor = actorOf(context)
   const cells = await load.cells()
@@ -583,13 +706,25 @@ async function workPart(db: Db, context: OfficeContext, order: OrderRow, load: L
   )
 
   // Where each is made: its site and line, the outside workshops its pieces are at now.
-  const sites = new Map((reached.length === 0 ? [] : await db.site.findMany({ where: { id: { in: unique(reached.map((row) => row.siteId)) } }, select: { id: true, code: true, name: true } })).map((row) => [row.id, row]))
+  // B-PT-001: + the site's zone (the day a bar ends), each job's issued day and the day it is expected back.
+  const sites = new Map((reached.length === 0 ? [] : await db.site.findMany({ where: { id: { in: unique(reached.map((row) => row.siteId)) } }, select: { id: true, code: true, name: true, timezone: true } })).map((row) => [row.id, row]))
   const lineIds = unique(reached.flatMap((row) => (row.lineId ? [row.lineId] : [])))
   const floorLines = new Map((lineIds.length === 0 ? [] : await db.line.findMany({ where: { id: { in: lineIds } }, select: { id: true, code: true, name: true } })).map((row) => [row.id, row]))
-  const outside = reachedIds.length === 0 ? [] : await db.subcontractOrder.findMany({ where: { workOrderId: { in: reachedIds }, status: { in: [...AT_WORKSHOP] } }, select: { workOrderId: true, partyId: true } })
+  const outside = reachedIds.length === 0 ? [] : await db.subcontractOrder.findMany({ where: { workOrderId: { in: reachedIds }, status: { in: [...AT_WORKSHOP] } }, select: { workOrderId: true, partyId: true, issuedAt: true, expectedBackDate: true } })
   const workshopNames = new Map((outside.length === 0 ? [] : await db.party.findMany({ where: { id: { in: unique(outside.map((row) => row.partyId)) } }, select: { id: true, legalName: true, tradeName: true } })).map((row) => [row.id, row.tradeName ?? row.legalName]))
   const styles = new Map((reached.length === 0 ? [] : await db.style.findMany({ where: { id: { in: unique(reached.map((row) => row.styleId)) } }, select: { id: true, code: true, name: true } })).map((row) => [row.id, row]))
   const colourways = new Map((cells.length === 0 ? [] : await db.colourway.findMany({ where: { id: { in: unique(cells.map((cell) => cell.colourwayId)) } }, select: { id: true, code: true, name: true } })).map((row) => [row.id, row]))
+
+  // ── B-PT-001 (R1): the risk of each reached work order by the Production list's own rule (riskFactsOf, one call: a planVersion read
+  // and a groupBy per site, two reads); none for one shared with other customers (its waiting merges other customers' orders). ──
+  const riskRows: RiskRow[] = reached.flatMap((row) => {
+    const site = sites.get(row.siteId)
+    return row.partyId !== null && row.kind !== 'MADE_TO_MEASURE' && site ? [{ id: row.id, status: row.status as WorkOrderStatus, dueDate: dayOrNull(row.dueDate), siteId: row.siteId, timezone: site.timezone }] : []
+  })
+  const risks = await riskFactsOf(db, riskRows, today)
+  // ── end B-PT-001 ──
+  // B-PT-004 (R4): the spec each one is made to; none for one shared with other customers (no plan or spec detail of shared work).
+  const specs = await specsOf(db, reached.filter((row) => row.partyId !== null && row.kind !== 'MADE_TO_MEASURE'))
 
   const ownOf = (workOrderId: string) => cells.filter((cell) => cell.workOrderId === workOrderId)
   const rows = reached.map((workOrder) => {
@@ -608,7 +743,8 @@ async function workPart(db: Db, context: OfficeContext, order: OrderRow, load: L
       colourways: unique(own.map((cell) => cell.colourwayId)).flatMap((id) => (colourways.has(id) ? [named(colourways.get(id))!] : [])),
       site: named(sites.get(workOrder.siteId)),
       line: named(workOrder.lineId ? floorLines.get(workOrder.lineId) : undefined),
-      workshops: unique(outside.filter((row) => row.workOrderId === workOrder.id).map((row) => row.partyId)).map((partyId) => ({ name: workshopNames.get(partyId) ?? '' })),
+      // B-PT-001: + since and expected back (a shared work order: the names only).
+      workshops: workshopsOf(outside.filter((row) => row.workOrderId === workOrder.id), workshopNames, workOrder.partyId === null),
       own: ownShareOf(own, counts),
       alsoMakes: alsoMakesOf(othersOf(workOrder.id), order.partyId, (other) => can(actor, ORDERS_VIEW, { companyId: other.companyId, partyId: other.partyId })),
       sharedWithOtherCustomers: workOrder.partyId === null,
@@ -619,13 +755,19 @@ async function workPart(db: Db, context: OfficeContext, order: OrderRow, load: L
       version: workOrder.version,
       releasedAt: workOrder.releasedAt ? toUtcIso(workOrder.releasedAt) : null,
       priority: workOrder.priority,
-      cells: own.map((cell) => ({ id: cell.cellId, salesOrderLineId: cell.lineId, size: cell.size, quantity: cell.quantity, cut: counts.get(cell.cellId)?.cut ?? null })),
+      // B-PT-002: + sewn and checked per cell, from the same counts (null: not counted there).
+      cells: own.map((cell) => ({ id: cell.cellId, salesOrderLineId: cell.lineId, size: cell.size, quantity: cell.quantity, cut: counts.get(cell.cellId)?.cut ?? null, sewn: counts.get(cell.cellId)?.sewn ?? null, checked: counts.get(cell.cellId)?.inspected ?? null })),
       rights: workOrderRightsOf((permission) => reachesWorkOrder(actor, permission, workOrder), workOrder.partyId === null),
       // ── end B-OP-021 ──
+      // B-PT-001: null when finished or shared with other customers.
+      risk: workOrder.partyId === null ? null : (risks.get(workOrder.id)?.risk ?? null),
+      // B-PT-004: null when shared with other customers.
+      spec: workOrder.partyId === null ? null : (specs.get(workOrder.id) ?? null),
     }
   })
   // B-OP-021: the row keeps its kind (the contract names it); only the grouping's own keys go.
   const strip = ({ styleId: _styleId, colourwayId: _colourwayId, units: _units, ...row }: (typeof rows)[number]) => row
+  const seqOfLine = new Map(lines.map((line) => [line.id, line.seq])) // B-PT-003
   const mtm = mtmGroupsOf(rows.filter((row) => row.kind === 'MADE_TO_MEASURE')).map((group) => ({
     style: named(styles.get(group.styleId)),
     colourway: named(colourways.get(group.colourwayId)),
@@ -633,6 +775,8 @@ async function workPart(db: Db, context: OfficeContext, order: OrderRow, load: L
     workOrders: group.workOrders,
     byStatus: group.byStatus,
     own: ownShareOf(group.rows.flatMap((row) => ownOf(row.id)), counts),
+    // B-PT-003 (R3): its units by number with the line of each one's first own cell (reached rows only), at most MTM_UNITS_LIMIT.
+    ...mtmUnitsOf(group.rows.map((row) => ({ id: row.id, number: row.number, status: row.status, lineSeq: seqOfLine.get(ownOf(row.id)[0]?.lineId ?? '') ?? null }))),
   }))
 
   // Goods lines no live work order makes yet (a line closed short is done).
@@ -700,6 +844,13 @@ async function datesPart(db: Db, context: OfficeContext, order: OrderRow, load: 
       // B-OO-010 (N9): its version and what THIS reader may do, as Planning's own read built them (writes stay Planning's routes).
       version: gate.version,
       actions: gate.actions,
+      // B-PT-006 (R6): what Planning's MilestoneDialog, Add and Remove need, as readWorld built it (today's order page filled
+      // holds 0, makerId null).
+      holds: gate.holds,
+      passedAt: gate.passedAt,
+      passedBy: gate.passedBy,
+      ownerId: gate.ownerId,
+      makerId: gate.makerId,
     })),
     milestones: (view?.milestones ?? []).map((row) => ({ id: row.id, kind: row.kind, gateId: row.gateId, gateKind: row.gateKind, label: row.label, target: row.target, actual: row.actual, state: row.state, late: row.late, owner: row.owner })),
     late: view?.late ?? 0,
@@ -707,6 +858,12 @@ async function datesPart(db: Db, context: OfficeContext, order: OrderRow, load: 
     planned,
     // Filled after this read, in a transaction of its own (forecastOf); null while withheld.
     forecast: null as Awaited<ReturnType<typeof forecastOf>> | null,
+    // B-PT-005 (R5): what this order's own customer is shown (one PK read; no row: STATUS). Office only.
+    customer: { level: (await readProductionSettings(db, order.partyId)).level },
+    // B-PT-006 (R6): Planning's own order fields for THIS reader. readWorld reads the order the caller reached under the same right,
+    // so `view` is always there; the fallback never offers Add.
+    mayAddGate: view?.mayAddGate ?? { allowed: false, needs: null, refusal: null },
+    waiting: view?.waiting ?? [],
   }
 }
 
@@ -722,16 +879,34 @@ async function qualityPart(db: Db, context: OfficeContext, load: Loaders, may: {
     const own: Prisma.NonconformanceWhereInput = { AND: [scopeWhere(actor, QUALITY_NCR_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.NonconformanceWhereInput, ncrsOfOrderWhere(filter), { stage: { in: [...OPEN_NCR_STAGES] } }] }
     // The brand wall: an NCR of a work order of several customers (or of none) only for people who reach every customer.
     const where = await ncrListWhere(db, actor, QUALITY_NCR_VIEW, own)
-    const rows = await db.nonconformance.findMany({ where, select: { id: true, number: true, stage: true, severity: true, workOrderId: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 100 })
+    const rows = await db.nonconformance.findMany({ where, select: { id: true, number: true, stage: true, severity: true, workOrderId: true, /* B-PT-009 */ title: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 100 })
     const workOrderIds = unique(rows.flatMap((row) => (row.workOrderId ? [row.workOrderId] : [])))
     const shared = new Set(workOrderIds.length === 0 ? [] : (await db.workOrder.findMany({ where: { id: { in: workOrderIds }, partyId: null }, select: { id: true } })).map((row) => row.id))
-    return rows.map((row) => ({ id: row.id, number: row.number, stage: row.stage as string, severity: row.severity as string, sharedWorkOrder: row.workOrderId !== null && shared.has(row.workOrderId) }))
+    return rows.map((row) => ({ id: row.id, number: row.number, stage: row.stage as string, severity: row.severity as string, sharedWorkOrder: row.workOrderId !== null && shared.has(row.workOrderId), /* B-PT-009 */ title: ncrTitleOf(row.title) }))
   }
   const ncrs = may.ncrs ? await ncrsRead() : null
   const finalRead = async () => {
-    const reached = (await load.workOrders()).filter((workOrder) => reachesWorkOrder(actor, QUALITY_INSPECTIONS_VIEW, workOrder)).map((workOrder) => workOrder.id)
-    const rows = reached.length === 0 ? [] : await db.inspection.findMany({ where: { workOrderId: { in: reached }, status: { not: 'CANCELLED' } }, select: { workOrderId: true, number: true, status: true, sampleSize: true, decidedAt: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 100 })
-    return rows.map((row) => ({ workOrderId: row.workOrderId, number: row.number, status: row.status as string, sampleSize: row.sampleSize, on: row.decidedAt ? businessDate(row.decidedAt) : null }))
+    const workOrders = await load.workOrders()
+    const reached = workOrders.filter((workOrder) => reachesWorkOrder(actor, QUALITY_INSPECTIONS_VIEW, workOrder)).map((workOrder) => workOrder.id)
+    // B-PT-008 (R8): + id, lot, units inspected so far; never the inspector (not selected).
+    const rows = reached.length === 0 ? [] : await db.inspection.findMany({ where: { workOrderId: { in: reached }, status: { not: 'CANCELLED' } }, select: { workOrderId: true, number: true, status: true, sampleSize: true, decidedAt: true, /* B-PT-008 */ id: true, lotSize: true, inspectedCount: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 100 })
+    // B-PT-008: one grouped read of the defects (garments per inspection and class); shared from the loader's customer.
+    const defects = rows.length === 0 ? [] : await db.inspectionDefect.groupBy({ by: ['inspectionId', 'defectClass'], where: { inspectionId: { in: rows.map((row) => row.id) } }, _sum: { quantity: true } })
+    const sharedWork = new Set(workOrders.filter((workOrder) => workOrder.partyId === null).map((workOrder) => workOrder.id))
+    return rows.map((row) => ({
+      workOrderId: row.workOrderId,
+      number: row.number,
+      status: row.status as string,
+      sampleSize: row.sampleSize,
+      on: row.decidedAt ? businessDate(row.decidedAt) : null,
+      // ── B-PT-008 ──
+      id: row.id,
+      lotSize: row.lotSize,
+      inspectedCount: row.inspectedCount,
+      defects: finalDefectsOf(row.status as string, defects.filter((entry) => entry.inspectionId === row.id).map((entry) => ({ defectClass: entry.defectClass as string, quantity: entry._sum.quantity ?? 0 }))),
+      sharedWorkOrder: sharedWork.has(row.workOrderId),
+      // ── end B-PT-008 ──
+    }))
   }
   const final = may.final ? await finalRead() : null
   return {

@@ -1848,8 +1848,7 @@
       "goTo": "Go to",
       "copy": "Copy"
     },
-    "assignSupervisor": "Assign supervisor…",
-    "askSupervisor": "Ask the supervisor…"
+    "assignSupervisor": "Assign supervisor…"
   },
   "where": {
     "headline": {
@@ -2638,6 +2637,167 @@
       "creditNote_other": "{count} credit notes",
       "deposit_one": "{count} deposit invoice",
       "deposit_other": "{count} deposit invoices"
+    }
+  },
+  "productionTab": {
+    "countsAsOf": "Counts as of {time}",
+    "info": "About {section}",
+    "more": "More for {section}",
+    "partAsks": "the asks",
+    "now": {
+      "title": "Production now",
+      "stageLabel": "Stage",
+      "next": "next: {stage}",
+      "since": "since {date}",
+      "byHand": "Set by hand · the counts are the floor's",
+      "byHandLink": "Change on Overview ›",
+      "piecesLabel": "Pieces of this order",
+      "of": "of {of}",
+      "step": {
+        "cut": "Cut",
+        "sewn": "Sewn",
+        "checked": "Checked",
+        "packed": "Packed",
+        "shipped": "Shipped"
+      },
+      "healthLabel": "Health",
+      "why": {
+        "late_one": "Promised {promise}; {count} piece still to ship.",
+        "late_other": "Promised {promise}; {count} pieces still to ship.",
+        "lineLate_one": "{line} is planned ready {finish}, {count} day after the promise ({promise}).",
+        "lineLate_other": "{line} is planned ready {finish}, {count} days after the promise ({promise}).",
+        "lineNoDate": "Nothing says yet when {line} will be ready. Promised {promise}.",
+        "gateLate": "{gate} is past its day ({target}). Promised {promise}.",
+        "marked": "Marked by {name}, {day}: {reason}. The dates alone say {health}.",
+        "markedNoName": "Marked {day}: {reason}. The dates alone say {health}.",
+        "noDate": "No promise date given yet.",
+        "onTrack_one": "Planned ready {finish}, {count} day before the promise ({promise}).",
+        "onTrack_other": "Planned ready {finish}, {count} days before the promise ({promise}).",
+        "onTrackOnDay": "Planned ready {finish}, the day of the promise."
+      },
+      "markLapses": "Lapses {date}, or sooner if the dates change.",
+      "nextDoor": "Next: {words}",
+      "nextPlace": {
+        "holds": "Problems & holds ›",
+        "dates": "Dates & plan ›",
+        "changes": "Changes ›"
+      },
+      "nextAsk": "Ask {name} for an update…",
+      "nextAskNobody": "Ask for an update…",
+      "urgentCustomer": "Urgent (customer)",
+      "rush": "Rush (factory)",
+      "priority": "Priority: {words}",
+      "urgencyLabel": "Urgency",
+      "peopleLabel": "Who is on it",
+      "supervisor": "production supervisor",
+      "supervisorMe": "production supervisor (you)",
+      "backup": "Backup: {name}",
+      "nobody": "No production supervisor yet",
+      "asked": "Asked {at}",
+      "askedBy": "Asked by {by} · {at}",
+      "answersBy": "{name} answers by {due}",
+      "answerBy": "answer by {due}",
+      "about": "about {number}",
+      "latest": "Latest update · {by} · {at}",
+      "latestNoName": "Latest update · {at}",
+      "answered": "Last ask answered {at}",
+      "none": "No update asked yet.",
+      "questions_one": "{count} question waits for an answer",
+      "questions_other": "{count} questions wait for an answer",
+      "markAtRisk": "Mark at risk…",
+      "changeMark": "Change the mark…",
+      "removeMark": "Remove the mark",
+      "notKept": "Not followed yet: production starts when the order is confirmed.",
+      "infoBody": "Where the order is now, how many of its pieces passed each step, whether it keeps the promise and who to ask. The counts are the floor's and quality's, as of the minute shown. The customer never reads the asks."
+    },
+    "ask": {
+      "button": "Ask for an update",
+      "menu": "Ask for an update…",
+      "title": "Ask for an update · {number}",
+      "titleAbout": "Ask about {number}",
+      "starter": "Where is {number} now? What is cut, sewn and packed? Any problem? Is the promise of {promise} still safe?",
+      "starterNoPromise": "Where is {number} now? What is cut, sewn and packed? Any problem? When will it be ready?",
+      "starterWo": "Where is {number} now? What is cut, sewn and checked? Any problem? Is its due date of {due} still safe?",
+      "starterWoNoDue": "Where is {number} now? What is cut, sewn and checked? Any problem? When will it be done?",
+      "send": "Ask for an update",
+      "noSupervisor": "No supervisor yet: the production managers get it after 1 working day"
+    },
+    "wo": {
+      "title": "Work orders",
+      "summary_one": "{count} work order",
+      "summary_other": "{count} work orders",
+      "pieces_one": "{count} piece for this order",
+      "pieces_other": "{count} pieces for this order",
+      "onHoldCount_one": "{count} on hold",
+      "onHoldCount_other": "{count} on hold",
+      "afterDueCount_one": "{count} after due",
+      "afterDueCount_other": "{count} after due",
+      "onHold": "On hold",
+      "rush": "Rush",
+      "figure": "{step} {done} of {total}",
+      "toldAt": "Told the floor {time}",
+      "due": "Due {date}",
+      "noDue": "No due date",
+      "planEnds": "Plan ends {date}",
+      "notPlanned": "Not on the plan yet",
+      "afterDue": "after due",
+      "priority": "Priority {value}",
+      "priorityRush": "Priority and rush…",
+      "ask": "Ask about {number}",
+      "decisions": "Waiting for a decision",
+      "decide": "Decide…",
+      "decisionLine": "{title} · {cells} · proposed {date}",
+      "decisionsMore_one": "+{count} more on Changes ›",
+      "decisionsMore_other": "+{count} more on Changes ›",
+      "waitsPlanner": "Waits for a planner · told {time}",
+      "unitDraft": "Draft · not released yet",
+      "details": "Details ›",
+      "openDetail": "Open the detail of {number}",
+      "emptyLines_one": "No work orders yet · {count} line waits for a work order",
+      "emptyLines_other": "No work orders yet · {count} lines wait for a work order",
+      "withheld": "Not shown to you: the progress (Production and Sales see it)",
+      "col": {
+        "making": "Making",
+        "dates": "Dates"
+      },
+      "infoBody": "Each work order of this order, with only this order's own pieces. A row opens its sizes; Enter opens it from the keyboard, ‹ › walk the work orders. Rush is our own factory rush; the customer's urgency is shown in Production now."
+    },
+    "step": {
+      "cut": "Cut",
+      "sewn": "Sewn",
+      "checked": "Checked"
+    },
+    "detail": {
+      "title": "{number} — for {order}",
+      "sizes": "This order's pieces",
+      "step": {
+        "ordered": "Ordered",
+        "cut": "Cut",
+        "sewn": "Sewn",
+        "checked": "Checked"
+      },
+      "total": "Total",
+      "workshop": "Outside workshop: {name}",
+      "workshopBack": "{name} · since {since} · back {back}",
+      "plan": "Plan ends {end} · due {due}",
+      "held": "On hold",
+      "units_one": "{count} unit · one work order per unit",
+      "units_other": "{count} units · one work order per unit",
+      "unitsMore_one": "and {count} more",
+      "unitsMore_other": "and {count} more",
+      "noRider": "The rider is never shown here.",
+      "open": "Open the work order",
+      "noun": "work order"
+    },
+    "priority": {
+      "title": "Priority and rush · {number}",
+      "label": "Priority",
+      "hint": "Higher comes first ({min} … {max}); 0 is normal.",
+      "rush": "Rush (factory)",
+      "rushHint": "Our own rush: the floor puts it first. The customer's urgency is not this.",
+      "save": "Save",
+      "problem": "A whole number from {min} to {max}.",
+      "same": "Nothing changed yet."
     }
   }
 }

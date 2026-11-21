@@ -12,6 +12,13 @@ import type { Blocker } from '@nexus/factory-domain/production-brand/waiting'
 // B-MS-006: the headline's stage block with a stage set by hand, and the export's words for it.
 import { headlineStageOf, type HeadlineStageRow } from './production-read'
 import { productionWords, whereText } from '../../../platform/exports/sources/sales-orders'
+// B-PT-001 / B-PT-003: a work order's workshops with their days; a made-to-measure row's units.
+import { MTM_UNITS_LIMIT, mtmUnitsOf, workshopsOf } from './production-read'
+import { workOrderSpecOf, type SpecRevision } from './production-read' // B-PT-004
+import { finalDefectsOf, NCR_TITLE_LIMIT, ncrTitleOf } from './production-read' // B-PT-008, B-PT-009
+// B-PT-017: the order page's live rules and parts.
+import { ORDER_LIVE_EVENTS } from './views'
+import { ORDER_PAGE_PARTS } from './contract'
 
 /**
  * B-SA-031 / B-SA-032 — the office's read of one order's production, its pure parts (the PG suite production-read.pg.vitest.test.ts
@@ -267,3 +274,116 @@ describe('B-MS-006: the headline reads the stage set by hand (who and the note b
   })
 })
 // ── end B-MS-006 ──
+
+// ── B-PT-001 / B-PT-003 (order production tab R1, R3) ──
+describe('B-PT-001: the outside workshops of a work order, with the day it went and the day it comes back', () => {
+  const names = new Map([
+    ['p-1', 'Made-up Stitching Lab'],
+    ['p-2', 'Made-up Embroidery Lab'],
+  ])
+  const job = (partyId: string, issuedAt: string | null, back: string | null) => ({ partyId, issuedAt: issuedAt ? new Date(issuedAt) : null, expectedBackDate: back ? new Date(`${back}T00:00:00.000Z`) : null })
+
+  it('each workshop once, in the order met: since its first job was issued, back on its latest expected day', () => {
+    const jobs = [job('p-1', '2026-11-14T09:00:00.000Z', '2026-12-01'), job('p-2', null, null), job('p-1', '2026-11-12T09:00:00.000Z', '2026-12-04')]
+    expect(workshopsOf(jobs, names, false)).toEqual([
+      { name: 'Made-up Stitching Lab', since: '2026-11-12', expectedBack: '2026-12-04' },
+      { name: 'Made-up Embroidery Lab', since: null, expectedBack: null },
+    ])
+  })
+
+  it('a work order shared with other customers: the names only, as before (no day)', () => {
+    expect(workshopsOf([job('p-1', '2026-11-12T09:00:00.000Z', '2026-12-04')], names, true)).toEqual([{ name: 'Made-up Stitching Lab', since: null, expectedBack: null }])
+    expect(workshopsOf([], names, false)).toEqual([])
+  })
+})
+
+describe('B-PT-003: a made-to-measure row lists its units by number, at most 50, the rest counted', () => {
+  const unit = (n: number) => ({ id: `id-${n}`, number: `T-MTM-${n}`, status: 'DRAFT', lineSeq: n * 10 })
+
+  it('three units: all three, in number order (9 before 10)', () => {
+    const { unitList, unitsMore } = mtmUnitsOf([unit(10), unit(9), unit(11)])
+    expect(unitList.map((row) => row.number)).toEqual(['T-MTM-9', 'T-MTM-10', 'T-MTM-11'])
+    expect(unitsMore).toBe(0)
+  })
+
+  it('sixty units: the first 50 by number, 10 more counted (never listed)', () => {
+    const { unitList, unitsMore } = mtmUnitsOf(Array.from({ length: 60 }, (_, index) => unit(60 - index)))
+    expect(MTM_UNITS_LIMIT).toBe(50)
+    expect(unitList).toHaveLength(50)
+    expect(unitList[0]!.number).toBe('T-MTM-1')
+    expect(unitList[49]!.number).toBe('T-MTM-50')
+    expect(unitsMore).toBe(10)
+    expect(mtmUnitsOf([])).toEqual({ unitList: [], unitsMore: 0 })
+  })
+})
+// ── end B-PT-001 / B-PT-003 ──
+
+// ── B-PT-004 (order production tab R4) ──
+describe('B-PT-004: the spec a work order is made to, by the domain rule; the screen\'s words come from the state, never the English message', () => {
+  const revision = (n: number, status: string, releasedAt: string | null = null): SpecRevision => ({ id: `rev-${n}`, styleId: 'style-1', revision: n, status, releasedAt: releasedAt ? new Date(releasedAt) : null })
+
+  it('made to the revision in force: CURRENT, no newer, no decision', () => {
+    expect(workOrderSpecOf(revision(2, 'RELEASED'), revision(2, 'RELEASED'), null)).toEqual({ revision: { revision: 2, status: 'RELEASED' }, state: 'CURRENT', newer: null, decision: null })
+  })
+
+  it('a newer revision is released: NEWER_RELEASED with its number and day; a change order’s decision only then', () => {
+    const newer = revision(3, 'RELEASED', '2026-11-12T10:00:00.000Z')
+    expect(workOrderSpecOf(revision(2, 'OBSOLETE'), newer, null)).toEqual({ revision: { revision: 2, status: 'OBSOLETE' }, state: 'NEWER_RELEASED', newer: { revision: 3, releasedOn: '2026-11-12' }, decision: null })
+    const decided = workOrderSpecOf(revision(2, 'OBSOLETE'), newer, { disposition: 'FINISH_OLD', changeOrder: 'ECO-T-1' })
+    expect(decided.decision).toEqual({ disposition: 'FINISH_OLD', changeOrder: 'ECO-T-1' })
+    // A decision of a work order on the spec in force says nothing.
+    expect(workOrderSpecOf(newer, newer, { disposition: 'REWORK', changeOrder: 'ECO-T-2' }).decision).toBeNull()
+  })
+
+  it('a draft revision: NOT_RELEASED; none chosen: NO_REVISION; withdrawn with nothing in force: WITHDRAWN — never a message', () => {
+    expect(workOrderSpecOf(revision(4, 'DRAFT'), revision(3, 'RELEASED'), null)).toMatchObject({ state: 'NOT_RELEASED', newer: null })
+    expect(workOrderSpecOf(null, revision(3, 'RELEASED'), null)).toEqual({ revision: null, state: 'NO_REVISION', newer: null, decision: null })
+    expect(workOrderSpecOf(revision(2, 'OBSOLETE'), null, null)).toMatchObject({ state: 'WITHDRAWN', newer: null })
+    expect(Object.keys(workOrderSpecOf(null, null, null)).sort()).toEqual(['decision', 'newer', 'revision', 'state'])
+  })
+})
+// ── end B-PT-004 ──
+
+// ── B-PT-008 / B-PT-009 (order production tab R8, R9) ──
+describe('B-PT-008: a final check says its garments with a defect per class; nothing while it is open', () => {
+  it('sums the defect rows per class (the domain rule); an unknown class is left out', () => {
+    expect(finalDefectsOf('FAILED', [{ defectClass: 'MAJOR', quantity: 2 }, { defectClass: 'MINOR', quantity: 1 }, { defectClass: 'MAJOR', quantity: 1 }, { defectClass: 'COSMETIC', quantity: 9 }])).toEqual({ critical: 0, major: 3, minor: 1 })
+    expect(finalDefectsOf('PASSED', [])).toEqual({ critical: 0, major: 0, minor: 0 })
+  })
+
+  it('an OPEN check: null (never a made-up 0)', () => {
+    expect(finalDefectsOf('OPEN', [{ defectClass: 'CRITICAL', quantity: 1 }])).toBeNull()
+  })
+})
+
+describe('B-PT-009: an NCR title is at most 80 characters, cut with "…"', () => {
+  it('a short title stays (trimmed); a long one is cut to 80 with the ellipsis', () => {
+    expect(ncrTitleOf('  Made-up: seam open on the left sleeve  ')).toBe('Made-up: seam open on the left sleeve')
+    const long = `Made-up: ${'x'.repeat(120)}`
+    expect(NCR_TITLE_LIMIT).toBe(80)
+    expect(Array.from(ncrTitleOf(long))).toHaveLength(80)
+    expect(ncrTitleOf(long).endsWith('…')).toBe(true)
+    expect(ncrTitleOf('y'.repeat(80))).toBe('y'.repeat(80))
+  })
+})
+// ── end B-PT-008 / B-PT-009 ──
+
+// ── B-PT-017 (order production tab C3) ──
+describe('B-PT-017: the order page re-reads the Production tab’s dates, headline and materials on the events that move them', () => {
+  const partsOf = (type: string) => ORDER_LIVE_EVENTS.find((entry) => entry.type === type)?.parts ?? []
+
+  it('a promise moved: + dates and headline (beside the order, its lines and changes)', () => {
+    expect(partsOf('sales_order.promise_changed')).toEqual(expect.arrayContaining(['order', 'lines', 'changes', 'dates', 'headline']))
+  })
+
+  it('a work order made, changed or moved on: + dates (its forecast); a floor scan does not re-read the dates', () => {
+    for (const type of ['workorder.created', 'workorder.changed', 'workorder.status_changed']) expect(partsOf(type), type).toEqual(expect.arrayContaining(['work', 'headline', 'people', 'dates']))
+    expect(partsOf('production.scan_recorded')).not.toContain('dates')
+  })
+
+  it('the customer’s own materials planned or counted again: the new materials part alone', () => {
+    expect(ORDER_PAGE_PARTS).toContain('materials')
+    expect(partsOf('customer_material.changed')).toEqual(['materials'])
+  })
+})
+// ── end B-PT-017 ──

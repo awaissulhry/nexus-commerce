@@ -64,6 +64,7 @@ import { bandHealthOf, healthInputOf, readOf } from '../overview/model'
 import { changesBadgeOf, changesDotOf, orderWaitingOf } from '../overview/model' // F-OP-117: the Changes count, R-22 (F-OP-301: the ONE call)
 import { createShipmentDoor } from '../shipments/model' // F-OP-121
 import { answerHeldOf, OWNER_WORDS_NS } from '../overview/people' // F-OO-111 (BC-2): "Who answers the customer…" held in the card's words
+import { askStarterOf } from '../production/asks' // F-PT-103: the band's "Ask for an update…" is a ready ask
 // ---- end F-SA-232
 
 export type { OrderRecordActions, OrderRecordModel } from '../record-model'
@@ -274,6 +275,10 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
   const notes = useT(NOTES_NS)
   const people = model.people ?? null
   const askWait = people ? noteHeld(people.mayNote, 1) : null
+  // ---- F-PT-103: the ready ask (its title, the starter question naming the promise, Needs an answer ticked), said in the page's words ----
+  const starter = askStarterOf({ number: order.number, promise: production?.headline?.promise.date ?? order.promiseDate }, (value) => formatDate(dayInstant(value), { locale }))
+  const askPreset = { title: t(starter.title.key, starter.title.params), body: t(starter.body.key, starter.body.params), needsAnswer: true, send: t(starter.send.key) }
+  // ---- end F-PT-103
   // ---- F-OO-111 (BC-2, 10-design §1.7): "Who answers the customer…" is held without threads.post — the People card's own rule and words
   // for the same door (answerHeldOf: choosing who answers needs the right to write in the conversation), never hidden.
   const head = useT(OWNER_WORDS_NS)
@@ -316,7 +321,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
         ...(people
           ? [
               { id: 'assignSupervisor', label: t('menu.assignSupervisor'), disabled: !people.mayAssign, description: people.mayAssign ? undefined : sup('held.noRight'), onSelect: () => actions?.people?.onAssign?.() },
-              { id: 'askSupervisor', label: t('menu.askSupervisor'), disabled: !!askWait, description: askWait ? notes(askWait.key, askWait.params) : undefined, onSelect: () => actions?.people?.onAsk?.() },
+              // F-PT-103: "Ask the supervisor…" → "Ask for an update…" — the same act, opened as a ready ask (Production now's own).
+              { id: 'askSupervisor', label: t('productionTab.ask.menu'), disabled: !!askWait, description: askWait ? notes(askWait.key, askWait.params) : undefined, onSelect: () => actions?.people?.onAsk?.(askPreset) },
             ]
           : []),
         // F-OP-102 (N-1): who answers the customer is the order conversation's owner — its own dialog (the frame's door).

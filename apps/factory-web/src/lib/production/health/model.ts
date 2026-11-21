@@ -126,6 +126,26 @@ export function raiseOpenHeld(view: BrandHealthView | null, can: boolean): Phras
   return null
 }
 
+// ---- F-PT-102 (order PRODUCTION tab; S5 G1–G3, G6; plan D2 / lead settle L9): the mark's doors — ONE rule for both pages ----------
+/** What the health offers its reader: the mark's door (set one, or change the one that stands) and Remove; none: nothing shown. */
+export interface MarkActs {
+  readonly mark: 'raise' | 'change' | null
+  readonly remove: boolean
+}
+
+/**
+ * The mark's doors, HIDDEN where they cannot be used (never a grey button): without production.brand.manage; before the order is
+ * followed or after production (not kept); while the dates already say At risk or Late (a mark would add nothing — the API refuses it
+ * too: raiseOpenHeld); nothing left to make. Change… and Remove the mark only while a mark STANDS (a lapsed one is not "cleared", G6).
+ * The work order page's Health card and the sales order's Production now draw the same doors from this.
+ */
+export function markActsOf(view: BrandHealthView | null, can: boolean): MarkActs {
+  if (!can || !view || !view.kept) return { mark: null, remove: false }
+  const stands = !!view.raise && view.raise.stands
+  return { mark: raiseOpenHeld(view, can) === null ? (stands ? 'change' : 'raise') : null, remove: stands }
+}
+// ---- end F-PT-102
+
 /** Why the dialog's "Raise to At risk" waits: the order's state, a reason to pick, a note of one line and at most 200 characters. */
 export function raiseHeld(view: BrandHealthView | null, can: boolean, reasonCode: string, note: string, busy: boolean): Phrase | null {
   const open = raiseOpenHeld(view, can)

@@ -35,6 +35,8 @@ export function useBandActs(
     readonly setDialog: (dialog: RecordDialog | null) => void
     /** F-OO-142 (W10's follow-up): read parts of the production read again (its `again`), after a promise save. */
     readonly againProduction?: (parts?: readonly ProductionPart[]) => void
+    /** F-PT-103: read the order's asks again (Production now's asks line) once a note went. */
+    readonly againAsks?: () => void
   },
 ): { model: BandActsModel; actions: BandActsActions; opened: (next: RecordDialog | null) => void } {
   const { api, orderId, current, write, version, setNotice, load, order, permissions, stepUp, setDialog } = input
@@ -88,7 +90,14 @@ export function useBandActs(
   // note on THIS order, its supervisor asked), the production lane's own dialogs. A Send reads the order again.
   const assign = useAssignSupervisor(api, () => void load())
   const mayNote = permissions.includes('threads.post')
-  const note = useNoteDialog(api, { can: mayNote, onDone: () => void load() })
+  // F-PT-103: a sent ask reads the order's asks again too (Production now's "Carlo Prova answers by …").
+  const note = useNoteDialog(api, {
+    can: mayNote,
+    onDone: () => {
+      void load()
+      input.againAsks?.()
+    },
+  })
   const people = {
     mayAssign: permissions.includes('production.brand.manage'),
     mayNote,
@@ -115,10 +124,12 @@ export function useBandActs(
         if (!value || !people.mayAssign) return
         assign.open([{ orderId: value.id, number: value.number, customerRef: value.customerRef, partyId: value.partyId, partyName: value.party?.legalName ?? value.party?.code ?? '—', companyId: value.companyId }])
       },
-      onAsk: () => {
+      // F-PT-103: "Ask for an update…" (the band ⋯, Production now, a work order's row) — the same note on THIS order, opened as a
+      // ready ask (its title, the starter question, Needs an answer ticked) when the door hands one.
+      onAsk: (preset) => {
         const value = current.current
         if (!value || !mayNote) return
-        note.open({ workOrders: [], salesOrders: [{ type: 'SalesOrder', id: value.id, label: value.number, partyId: value.partyId, partyName: value.party?.legalName ?? value.party?.code ?? null, companyId: value.companyId }], withoutOrder: 0 }, 'band', 'salesOrders')
+        note.open({ workOrders: [], salesOrders: [{ type: 'SalesOrder', id: value.id, label: value.number, partyId: value.partyId, partyName: value.party?.legalName ?? value.party?.code ?? null, companyId: value.companyId }], withoutOrder: 0 }, 'band', 'salesOrders', preset ?? null)
       },
       assign: assign.actions,
       note: note.actions,

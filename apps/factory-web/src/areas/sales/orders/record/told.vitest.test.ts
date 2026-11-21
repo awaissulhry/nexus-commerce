@@ -133,8 +133,9 @@ describe('F-SA-244: Who was told — office people by name and why, the floor an
     expect(record).toContain('changeSide={changeSide /* F-SA-244 */}')
     const changes = readFileSync(new URL('./changes/view/ChangesTab.tsx', import.meta.url), 'utf8')
     expect(changes).toContain('actions?.onWhoWasTold?.(change.messageId)')
-    const production = readFileSync(new URL('./view/ProductionTab.tsx', import.meta.url), 'utf8')
-    expect(production).toContain("t('told.floorAt', { time: formatTime(floorAt, { locale }) })")
+    // F-PT-104 (B2): the row says the day and the time ("Told the floor 21 Nov 10:42"), in the Work orders section's own file.
+    const production = readFileSync(new URL('./view/production/WorkOrdersSection.tsx', import.meta.url), 'utf8')
+    expect(production).toContain("t('productionTab.wo.toldAt', { time: formatDateTime(floorAt, { locale }) })")
     // F-OO-131 (10-design §3; review F15): the count left People for the foot of Requests & changes (F-OO-205): one place per fact.
     const people = readFileSync(new URL('./view/overview/PeopleCard.tsx', import.meta.url), 'utf8') // F-OO-100: People is its own file
     expect(people).not.toContain("t('told.aboutChanges'")

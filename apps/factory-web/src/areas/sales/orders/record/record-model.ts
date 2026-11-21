@@ -11,7 +11,7 @@ import type { OrderDepthActions, OrderDepthModel } from '../depth/use-order-dept
 import type { LinksActions, LinksModel } from './links/model' // B-TH-256
 // F-SA-230: the ⋯ menu's People (the production lane's dialogs, reused in place).
 import type { AssignSupervisorActions, AssignSupervisorModel } from '../../../_shared/production-supervisor/model'
-import type { NoteDialogActions, NoteDialogModel } from '../../../production/_shared/notes/model'
+import type { NoteDialogActions, NoteDialogModel, NotePreset } from '../../../production/_shared/notes/model' // F-PT-103: + the ready ask
 // F-SA-232: Overview's production read (the order's own pieces) and the live stream's state.
 import type { ProductionState } from './overview/model'
 import type { LiveState } from '../hooks'
@@ -45,6 +45,7 @@ import type { CreditState } from './overview/where' // F-OO-106: the order's own
 import type { LinesTabActions, LinesTabModel } from './lines-tab-model' // F-OL-01: the Lines tab (use-lines-draft.ts)
 import type { Words } from './overview/api' // F-MS-102: a refusal of the stage set by hand in the domain's own words
 import type { StageByHandAsk } from './overview/stage-by-hand' // F-MS-103: what the stage dialog sends
+import type { OrderIssues } from './production/api' // F-PT-103: the order's asks (the issues list)
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -313,6 +314,11 @@ export interface OrderRecordModel {
   people?: { readonly mayAssign: boolean; readonly mayNote: boolean; readonly assign: AssignSupervisorModel | null; readonly note: NoteDialogModel | null }
   /** F-SA-232: the order's production read (OR1: stage, health, waiting, own pieces per line …); absent: not read here (a design case). */
   production?: ProductionState | null
+  /**
+   * F-PT-103: the order's issues — the update asks and the customer's questions, every state (GET /production/issues?salesOrderId=,
+   * orders.view; read while Production shows, again on the `quality` part); null / absent: not read here.
+   */
+  asks?: Part<OrderIssues> | null
   /** F-SA-234: the materials' readiness of the work orders on Production (the production lane's word per work order); null: not read. */
   readiness?: Part<ReadinessRow[]> | null
   /** F-SA-237: the order's files (the Files tab; the same read as the thread's Files window); absent: not read here. */
@@ -448,6 +454,8 @@ export interface OrderRecordActions {
   health?: HealthActions
   /** F-SA-232: read the production again (Try again); open a line's sizes (null closes the window). */
   onRetryProduction?: () => void
+  /** F-PT-103: read the order's asks again (Try again on Production now's asks line). */
+  onRetryAsks?: () => void
   onOpenLine?: (rowId: string | null) => void
   /** F-OP-104: Next dates' requested date "Change…"; F-OO-144: it opens the small dialog (`{ kind: 'requested' }`), no page hop. */
   onRequestedChange?: () => void
@@ -467,7 +475,8 @@ export interface OrderRecordActions {
    */
   stageHand?: { readonly onSet?: (ask: StageByHandAsk & { readonly mode: 'set' | 'change' }) => void; readonly onClear?: () => void }
   /** F-SA-230: ⋯ People — open the assign dialog or the note to the supervisor; the dialogs' own actions. */
-  people?: { readonly onAssign?: () => void; readonly onAsk?: () => void; readonly assign?: AssignSupervisorActions; readonly note?: NoteDialogActions }
+  // F-PT-103: onAsk opens the note as a ready ask when it is handed one ("Ask for an update", its words said by the door).
+  people?: { readonly onAssign?: () => void; readonly onAsk?: (preset?: NotePreset | null) => void; readonly assign?: AssignSupervisorActions; readonly note?: NoteDialogActions }
   /** F-CP-142: the Price check card (Customer's price…, Take them over, Try again) and the ONE window's own actions. */
   priceCheck?: PriceCheckCardActions
   priceCheckDialog?: PriceCheckDialogActions

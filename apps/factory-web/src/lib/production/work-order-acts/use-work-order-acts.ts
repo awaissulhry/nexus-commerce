@@ -117,6 +117,8 @@ export interface WorkOrderActsActions {
   onDue?: (row: ActsRow, day: string | null) => void
   onPriority?: (row: ActsRow, priority: number) => void
   onRush?: (row: ActsRow, rush: boolean) => void
+  /** F-PT-105 (order PRODUCTION tab): "Priority and rush…" — both in ONE write (the same PATCH, the row's version), only what changed. */
+  onPriorityRush?: (row: ActsRow, body: { readonly priority?: number; readonly rush?: boolean }) => void
   /** A row ⋯ act: its dialog opens on the work order read afresh. */
   onAct?: (row: ActsRow, act: MenuAct) => void
   onCloseDialog?: () => void
@@ -373,6 +375,7 @@ export function useWorkOrderActs(api: ApiClient, permissions: readonly string[],
     onDue: (row, day) => inline(row, 'due', { dueDate: day || null }),
     onPriority: (row, priority) => inline(row, 'priority', { priority }),
     onRush: (row, rush) => inline(row, 'rush', { rush }),
+    onPriorityRush: (row, body) => inline(row, body.priority !== undefined ? 'priority' : 'rush', { ...body }), // F-PT-105
     onAct: open,
     onCloseDialog: () => setDialog((now) => (now?.busy ? now : null)),
     onRetryDialog: () => {

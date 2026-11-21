@@ -12,7 +12,7 @@ import { useLocale, useT } from '../../../i18n/provider'
 import { HealthPill } from '../../view/HealthPill'
 import { WaitingOnPill } from '../../view/WaitingOnPill'
 import type { BrandHealthView } from '../api'
-import { clearHeld, healthInputOf, healthStateOf, raiseHeld, raiseOpenHeld, type HealthActions, type HealthModel, type HealthPart } from '../model'
+import { healthInputOf, healthStateOf, markActsOf /* F-PT-102 */, raiseHeld, type HealthActions, type HealthModel, type HealthPart } from '../model'
 import './health-card.css' // F-SA-235b: its own look, the same on the work order and the sales order
 
 const day = (value: string, locale: 'it' | 'en') => formatDate(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00Z` : value, { locale })
@@ -78,8 +78,10 @@ function OrderHealth({ part, many, model, daysLate, actions }: { part: HealthPar
     )
   }
   const raise = view.raise && view.raise.stands ? view.raise : null
-  const openHeld = raiseOpenHeld(view, model.can)
-  const clearWait = clearHeld(view, model.can, model.busy)
+  // F-PT-102 (plan D2 / L9): the doors are hidden where they cannot be used (markActsOf, one rule with the order's Production now);
+  // only a write running holds them, in words.
+  const acts = markActsOf(view, model.can)
+  const busy = model.busy ? t('held.busy') : null
   const computed = healthStateOf(view.computed)
   return (
     <div className="fw-phc-stack">
@@ -105,16 +107,20 @@ function OrderHealth({ part, many, model, daysLate, actions }: { part: HealthPar
           <p className="fw-phc-hint">{t('health.until', { date: day(raise.until, locale) })}</p>
         </div>
       )}
-      <span className="fw-phc-actions">
-        <Button size="sm" heldReason={openHeld ? t(openHeld.key, openHeld.params) : model.busy ? t('held.busy') : null} onClick={() => actions?.onDialog?.(part.orderId)}>
-          <AlertTriangle size={13} aria-hidden /> {raise ? t('health.change') : t('health.raise')}
-        </Button>
-        {view.raise && (
-          <Button size="sm" variant="quiet" heldReason={clearWait ? t(clearWait.key, clearWait.params) : null} onClick={() => actions?.onClear?.(part.orderId)}>
-            {model.busy ? <Spinner size={12} /> : <X size={13} aria-hidden />} {t('health.clear')}
-          </Button>
-        )}
-      </span>
+      {(acts.mark || acts.remove) && (
+        <span className="fw-phc-actions">
+          {acts.mark && (
+            <Button size="sm" heldReason={busy} onClick={() => actions?.onDialog?.(part.orderId)}>
+              <AlertTriangle size={13} aria-hidden /> {acts.mark === 'change' ? t('health.change') : t('health.raise')}
+            </Button>
+          )}
+          {acts.remove && (
+            <Button size="sm" variant="quiet" heldReason={busy} onClick={() => actions?.onClear?.(part.orderId)}>
+              {model.busy ? <Spinner size={12} /> : <X size={13} aria-hidden />} {t('health.clear')}
+            </Button>
+          )}
+        </span>
+      )}
     </div>
   )
 }

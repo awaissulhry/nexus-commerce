@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs' // F-PT-102
+
 import { describe, expect, it } from 'vitest'
 import type { ComponentType } from 'react'
 import { leftKeys, renderView, textOf } from '../../../../../lib/record-thread/parts/testing'
@@ -13,6 +15,7 @@ import {
   healthInputOf,
   healthOrdersOf,
   healthStateOf,
+  markActsOf, // F-PT-102: the mark's doors, hidden where they cannot be used (both pages)
   raiseHeld,
   raiseOpenHeld,
   raiseProblem,
@@ -163,6 +166,25 @@ describe('F-PR-05a — Health and Raise to At risk (B-PR-35)', () => {
     expect(raiseHeld(fine, true, 'CAPACITY', '', false)).toBeNull()
     expect(clearHeld(fine, true, false)).toEqual({ key: 'raise.held.noRaise' })
   })
+
+  // ---- F-PT-102 (order PRODUCTION tab, plan D2 / L9): ONE rule for the Health card here and the order's Production now ----
+  it('F-PT-102: the mark’s doors are hidden (never grey) without the right, before / after production, while the dates already say it', () => {
+    const raise = { reasonCode: 'CAPACITY' as const, note: null, setAt: '2026-10-27T15:20:00Z', setBy: null, until: '2026-11-03', stands: true }
+    expect(markActsOf(healthView(), true)).toEqual({ mark: 'raise', remove: false })
+    expect(markActsOf(healthView(), false)).toEqual({ mark: null, remove: false })
+    expect(markActsOf(healthView({ kept: false }), true)).toEqual({ mark: null, remove: false })
+    expect(markActsOf(healthView({ computed: 'LATE' }), true)).toEqual({ mark: null, remove: false })
+    expect(markActsOf(healthView({ computed: 'AT_RISK' }), true)).toEqual({ mark: null, remove: false })
+    expect(markActsOf(null, true)).toEqual({ mark: null, remove: false })
+    // A mark that stands: Change… and Remove; one that lapsed: no Remove (G6) — only a new mark.
+    expect(markActsOf(healthView({ raise, health: 'AT_RISK' }), true)).toEqual({ mark: 'change', remove: true })
+    expect(markActsOf(healthView({ raise: { ...raise, stands: false } }), true)).toEqual({ mark: 'raise', remove: false })
+    // The card reads the rule, never a held button for the right.
+    const card = readFileSync(new URL('../../../../../lib/production/health/view/HealthCard.tsx', import.meta.url), 'utf8')
+    expect(card).toContain('const acts = markActsOf(view, model.can)')
+    expect(card).not.toContain('raiseOpenHeld(view, model.can)')
+  })
+  // ---- end F-PT-102
 
   it('a refused raise in this app’s words (never the API’s English)', () => {
     expect(raiseProblem(new Error('x'))).toEqual({ key: 'error.write' })

@@ -9,10 +9,17 @@ import { SALES_ORDER_PRIORITY_LEVELS } from '@nexus/factory-domain/sales/orders-
 import { GATE_KINDS, GATE_STATES, LEATHER_STATES, MILESTONE_KINDS, MILESTONE_STATES, PASS_VIAS } from '@nexus/factory-domain/planning/milestones/rules'
 import { FINISH_SOURCES } from '@nexus/factory-domain/planning/promise-keep/risk' // F-SA-234b
 import { gateView as planningGateView } from '../../planning/milestones/contract' // B-OO-010: a gate's version and actions, Planning's own shape
+import { orderView as planningOrderView } from '../../planning/milestones/contract' // B-PT-006: mayAddGate and waiting, Planning's own shapes
+import { PRODUCTION_SHARE_LEVELS } from '@nexus/factory-domain/production-brand/levels' // B-PT-005
 // B-SA-050: Still to do (its kinds; who it waits on: the apply plan's teams).
 import { APPLY_TEAMS, STILL_KINDS } from '@nexus/factory-domain/sales/change-requests/apply-plan'
 // B-OO-008: where "Answers the customer" comes from — the threads' own owner chain.
 import { OWNER_SOURCES } from '../../../platform/threads/owner'
+// B-PT-001: a work order's risk, the Production list's own shape (one rule for both screens).
+import { riskFacts } from '../../production/work-orders/contract'
+// B-PT-004: the spec a work order is made to (the domain's states, revision statuses and change-order dispositions).
+import { DISPOSITIONS, NEWER_SPEC_STATES } from '@nexus/factory-domain/product/versions/drift'
+import { REVISION_STATUSES } from '@nexus/factory-domain/product/styles/revisions'
 
 /**
  * B-SA-031 / B-SA-032 (Sales page plan P2, P3, P4, P15, P16; 13-backend B1, B12; 10-order-page OR1, OR2): the office's read of ONE
@@ -110,6 +117,11 @@ export const headlineView = output({
       by: person.nullable(),
       at: instant().nullable(),
     }).nullable(),
+    /**
+     * B-PT-007 (order production tab R7): the production state's version — Mark at risk… and Remove the mark send it back
+     * (PUT | DELETE /production/brand-orders/:orderId/health) from this one read, with no second GET on the order page.
+     */
+    version: z.number().int(),
   }).nullable(),
   waiting: output({
     on: z.enum(WAITING_ON),
@@ -203,8 +215,12 @@ export const workView = output({
       colourways: z.array(named),
       site: named.nullable(),
       line: named.nullable(),
-      /** The outside workshops its operations are at now (office only: never told to the customer). */
-      workshops: z.array(output({ name: z.string() })),
+      /**
+       * The outside workshops its operations are at now (office only: never told to the customer). B-PT-001: + `since` the day its
+       * first job still out there was issued, `expectedBack` the latest day a job there is due back (null: not given); a work order
+       * shared with other customers keeps the names only (both null).
+       */
+      workshops: z.array(output({ name: z.string(), since: businessDate().nullable(), expectedBack: businessDate().nullable() })),
       /** What it makes for THIS order (its cells of this order's lines). */
       own: ownShare,
       /** Other orders of this order's customer it also makes, that the reader reaches; `more`: this customer's others, counted. */
@@ -221,8 +237,11 @@ export const workView = output({
       kind: z.string(),
       releasedAt: instant().nullable(),
       priority: z.number().int(),
-      /** Its cells of THIS order's lines only (never another order's or another customer's), each with its pieces cut (null: none counted). */
-      cells: z.array(output({ id: id(), salesOrderLineId: id(), size: z.string(), quantity: z.number().int(), cut: z.number().int().nullable() })),
+      /**
+       * Its cells of THIS order's lines only (never another order's or another customer's), each with its pieces cut (null: none
+       * counted). B-PT-002: + sewn and checked, from the same counts (null: not counted there — never a made-up 0).
+       */
+      cells: z.array(output({ id: id(), salesOrderLineId: id(), size: z.string(), quantity: z.number().int(), cut: z.number().int().nullable(), sewn: z.number().int().nullable(), checked: z.number().int().nullable() })),
       /**
        * What the reader may do to it from here, by its own rights over the work order (can(): its company, site and customer). One
        * shared with other customers (`sharedWithOtherCustomers`, made before the one-customer rule) is changed on its own page only:
@@ -230,6 +249,29 @@ export const workView = output({
        */
       rights: output({ manage: z.boolean(), release: z.boolean(), hold: z.boolean(), why: words.nullable() }),
       // ── end B-OP-021 ──
+      // ── B-PT-001 (order production tab R1): its risk, the Production list's own rule (production/work-orders/risk riskFactsOf) ──
+      /**
+       * LATE, AT_RISK (its bars on the site's WORKING plan end after its due: `planAfterDue`, `plannedEnd`; or a standing raise),
+       * BLOCKED (`blockedBy`: on hold, the customer, material) or ON_TRACK — what the Production list says of the same work order.
+       * null: finished, or shared with other customers (its waiting merges other customers' orders). A board drag emits nothing to
+       * this page: the row is as of the read.
+       */
+      risk: riskFacts.nullable(),
+      // ── end B-PT-001 ──
+      // ── B-PT-004 (order production tab R4): the spec it is made to ──
+      /**
+       * Its revision (null: none chosen yet), the state by the domain's rule (CURRENT, NEWER_RELEASED, WITHDRAWN, NOT_RELEASED,
+       * NO_REVISION — the screen says it in its own words; never the rule's English message), the newer released revision and its
+       * day (NEWER_RELEASED only), and what a change order decided for it (NEWER_RELEASED only; null: not decided). null: shared with
+       * other customers. "What changed" opens the existing compare (product.bom.view), never a diff here.
+       */
+      spec: output({
+        revision: output({ revision: z.number().int(), status: z.enum(REVISION_STATUSES) }).nullable(),
+        state: z.enum(NEWER_SPEC_STATES),
+        newer: output({ revision: z.number().int(), releasedOn: businessDate().nullable() }).nullable(),
+        decision: output({ disposition: z.enum(DISPOSITIONS), changeOrder: z.string() }).nullable(),
+      }).nullable(),
+      // ── end B-PT-004 ──
     }),
   ),
   /** Made to measure: one work order per unit, grouped per style × colourway (one row, never twelve). */
@@ -241,6 +283,14 @@ export const workView = output({
       workOrders: z.number().int(),
       byStatus: z.array(output({ status: z.string(), count: z.number().int() })),
       own: ownShare,
+      // ── B-PT-003 (order production tab R3): its units by number (at most MTM_UNITS_LIMIT, number order), the rest counted ──
+      /**
+       * Each unit's work order and the seq of the line its first own cell makes (null: none). Never the rider (the order read's).
+       * Named `unitList` (13-backend said `units`): `units` above is already the row's count and the web reads it as one.
+       */
+      unitList: z.array(output({ id: id(), number: z.string(), status: z.string(), lineSeq: z.number().int().nullable() })),
+      unitsMore: z.number().int(),
+      // ── end B-PT-003 ──
     }),
   ),
   /** Live work orders of the order's lines the reader does not reach: counted, never named ("1 work order not shown"). */
@@ -270,6 +320,16 @@ const gateRow = output({
    */
   actions: planningGateView.shape.actions,
   // ── end B-OO-010 ──
+  // ── B-PT-006 (order production tab R6): what Planning's own dialogs need, Planning's own shapes (readWorld built them) ──
+  /** This order's production work orders not started that the waiting gate holds on the board (never a sample or a repair). */
+  holds: planningGateView.shape.holds,
+  passedAt: planningGateView.shape.passedAt,
+  /** The office person who marked it done (null when its event passed it: `via` says which). */
+  passedBy: planningGateView.shape.passedBy,
+  /** Its planner and maker: who may not start before it (Planning's rule). */
+  ownerId: planningGateView.shape.ownerId,
+  makerId: planningGateView.shape.makerId,
+  // ── end B-PT-006 ──
 })
 
 export const datesView = output({
@@ -308,15 +368,49 @@ export const datesView = output({
       }),
     )
     .nullable(),
+  // ── B-PT-005 (order production tab R5): what this order's customer is shown (PortalSettings.productionLevel; no row: STATUS) ──
+  /** STATUS · PROGRESS · GATES (+ its gates and the published plan's days) · QUALITY (+ the quality of its own work). Office only. */
+  customer: output({ level: z.enum(PRODUCTION_SHARE_LEVELS) }),
+  // ── end B-PT-005 ──
+  // ── B-PT-006 (R6): Planning's own order fields, as readWorld built them for THIS reader ──
+  /** The reader may add a gate to this order (planning.milestones.manage over it, the order not closed), else the right or the refusal. */
+  mayAddGate: planningOrderView.shape.mayAddGate,
+  /** The kinds of its gates that wait (the order cannot go on the planning board while one does). */
+  waiting: planningOrderView.shape.waiting,
+  // ── end B-PT-006 ──
 })
 
 export const qualityView = output({
   /** Its open problems (on the order, or on its work orders), workorders.view; null: withheld. */
   issues: z.array(output({ id: id(), source: z.string(), recordType: z.string(), since: instant(), dueOn: businessDate(), escalation: z.number().int() })).nullable(),
   /** Its open NCRs behind the brand wall, quality.ncr.view; null: withheld. */
-  ncrs: z.array(output({ id: id(), number: z.string(), stage: z.string(), severity: z.string(), sharedWorkOrder: z.boolean() })).nullable(),
-  /** The final inspections of the work orders the reader reaches, quality.inspections.view; null: withheld. */
-  final: z.array(output({ workOrderId: id(), number: z.string().nullable(), status: z.string(), sampleSize: z.number().int(), on: businessDate().nullable() })).nullable(),
+  // B-PT-009 (order production tab R9): + its title (at most NCR_TITLE_LIMIT characters, cut with "…"); never its description, cost
+  // or who found it. Severity and stage words are the web's quality catalogue.
+  ncrs: z.array(output({ id: id(), number: z.string(), stage: z.string(), severity: z.string(), sharedWorkOrder: z.boolean(), title: z.string() })).nullable(),
+  /**
+   * The final inspections of the work orders the reader reaches, quality.inspections.view; null: withheld. B-PT-008 (R8): + its id
+   * (the row's key: a failed and a re-inspected one of one work order are two rows), the lot, the units inspected so far (null: not
+   * counted), the garments with a defect per class (null while OPEN) and whether its work order is shared with other customers.
+   * Never the inspector.
+   */
+  final: z
+    .array(
+      output({
+        workOrderId: id(),
+        number: z.string().nullable(),
+        status: z.string(),
+        sampleSize: z.number().int(),
+        on: businessDate().nullable(),
+        // ── B-PT-008 ──
+        id: id(),
+        lotSize: z.number().int(),
+        inspectedCount: z.number().int().nullable(),
+        defects: output({ critical: z.number().int(), major: z.number().int(), minor: z.number().int() }).nullable(),
+        sharedWorkOrder: z.boolean(),
+        // ── end B-PT-008 ──
+      }),
+    )
+    .nullable(),
 })
 
 // ── B-OO-008 (order overview N8): what a place is — our own plant (a site and its line) or an outside workshop ──
