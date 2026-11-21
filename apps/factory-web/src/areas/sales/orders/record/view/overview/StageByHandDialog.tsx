@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Banner, Field } from '@nexus/ui/components'
 import { RadioCard, Select } from '@nexus/ui/primitives'
 import { STAGE_SET_NOTE_MAX, STAGE_SET_REASON_CODES } from '@nexus/factory-domain/production-brand/stage-set'
@@ -12,7 +12,7 @@ import type { Order } from '../../../api'
 import type { Phrase } from '../../../model'
 import type { Words } from '../../overview/api'
 import { readOf, say } from '../../overview/model'
-import { clearLinesOf, readyWarningOf, stageByHandHeld, stageByHandStartOf, stageDialogLinesOf, type DialogLine } from '../../overview/stage-by-hand'
+import { clearLinesOf, readyWarningOf, splitDialogLines, stageByHandHeld, stageByHandStartOf, stageDialogLinesOf, type DialogLine } from '../../overview/stage-by-hand'
 import type { HandWords } from '../../overview/where'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { Frame } from '../Dialogs'
@@ -27,6 +27,9 @@ import { Frame } from '../Dialogs'
  * F-SC-W1 (stage control B): every stage but the one the customer reads (and, while a hand stage stands, the floor's own: Clear… goes
  * back to it) may be picked, ahead or back; Ready to ship picked while quality has not released every piece warns (a DS Banner, never a
  * refusal). The lines say a move back is told as a correction and when a set back clears by itself.
+ * pt-sc-fx3 (stage walk #1): what the picked step does — the Ready warning, the move's line, when it clears — sits right under the
+ * stages, above the reason and the note, and a dialog opened on a step brings it into sight (the nearest scroll, once); the rules that
+ * always hold stay under the fields.
  */
 
 /** The row's, the door's and the dialogs' words: the orders catalogue, production's (`ns`), or the domain's own words. */
@@ -68,6 +71,15 @@ function StageByHandDialog({ order, model, actions, mode, pick: picked, refused 
   const [note, setNote] = useState<string>(model.draft?.reason ?? start.note)
   const held = stageByHandHeld({ rows: start.rows, stage: pick, reasonCode, note, busy: model.busy, kept: start.kept /* F-SC-W6: a Change… of words only */ })
   const ready = readyWarningOf(start.rows, pick) // F-SC-W1: Ready to ship by hand, quality not done — a warning, never a refusal
+  const lines = splitDialogLines(stageDialogLinesOf({ floor: start.floor, shown: start.shown, pick, floorAtSet: start.floorAtSet }))
+  // pt-sc-fx3: opened on a step (Overview's strip, Production's bar), the step's own lines are brought into sight once, when they mount
+  // (the DS Modal draws its body after it opens, so a ref callback, not an effect).
+  const shown = useRef(false)
+  const intoSight = (node: HTMLElement | null) => {
+    if (!node || !picked || shown.current) return
+    shown.current = true
+    requestAnimationFrame(() => node.scrollIntoView({ block: 'nearest' }))
+  }
   const go = () => {
     if (!held) actions?.stageHand?.onSet?.({ mode, stage: pick, reasonCode, note })
   }
@@ -94,10 +106,17 @@ function StageByHandDialog({ order, model, actions, mode, pick: picked, refused 
             disabled={row.disabled}
             onChange={() => setPick(row.stage)}
             title={w.t(`parts.stage.${row.stage}`)}
-            description={(ready && row.readyUnreleased ? null : sayHand(row.note)) ?? undefined /* F-SC-W1: once picked, the warning below says it */}
+            description={(ready && row.readyUnreleased ? null : sayHand(row.note)) ?? undefined /* once picked, the warning right under says it */}
           />
         ))}
       </fieldset>
+      {/* pt-sc-fx3: what the picked step does, right under the stages (in sight when the dialog opens on a step). */}
+      {ready ? <Banner tone="warning" title={sayHand(ready) ?? ''} /> : null}
+      {lines.pick.map((line, index) => (
+        <p key={line.key} className="fw-so-hint" ref={index === lines.pick.length - 1 ? intoSight : undefined}>
+          {lineText(line)}
+        </p>
+      ))}
       <Field label={t('where.manual.reason')}>
         <Select value={reasonCode} onChange={(event) => setReasonCode(event.target.value)} aria-label={t('where.manual.reason')}>
           <option value="">{w.t('raise.reasonPick')}</option>
@@ -111,12 +130,11 @@ function StageByHandDialog({ order, model, actions, mode, pick: picked, refused 
       <Field label={w.t('raise.note')} hint={t('where.manual.noteHint', { max: STAGE_SET_NOTE_MAX })} required={reasonCode === 'OTHER'}>
         <Textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} maxLength={STAGE_SET_NOTE_MAX} />
       </Field>
-      {stageDialogLinesOf({ floor: start.floor, shown: start.shown, pick, floorAtSet: start.floorAtSet }).map((line) => (
+      {lines.after.map((line) => (
         <p key={line.key} className="fw-so-hint">
           {lineText(line)}
         </p>
       ))}
-      {ready ? <Banner tone="warning" title={sayHand(ready) ?? ''} /> : null}
     </Frame>
   )
 }

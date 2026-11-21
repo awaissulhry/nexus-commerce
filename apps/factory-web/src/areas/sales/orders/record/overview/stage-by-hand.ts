@@ -225,6 +225,19 @@ export function stageDialogLinesOf(input: { readonly floor: BrandStage; readonly
   return lines
 }
 
+// ---- pt-sc-fx3 (stage walk #1): what the picked step does is in sight when the dialog opens on it ----
+/** The lines of the step picked — the move (back: told as a correction; the same stage kept: told nothing) and when it clears. */
+export const PICK_LINE_KEYS: ReadonlySet<string> = new Set(['where.manual.back', 'where.manual.same', 'where.manual.clears', 'where.manual.clearsBack'])
+
+/**
+ * The dialog's lines in their two places: `pick` — what the step picked does, drawn right under the stages with the Ready warning (in
+ * sight when the dialog opens on a step: never under the reason and the note); `after` — the rules that always hold, under the fields.
+ */
+export function splitDialogLines(lines: readonly DialogLine[]): { readonly pick: readonly DialogLine[]; readonly after: readonly DialogLine[] } {
+  return { pick: lines.filter((line) => PICK_LINE_KEYS.has(line.key)), after: lines.filter((line) => !PICK_LINE_KEYS.has(line.key)) }
+}
+// ---- end pt-sc-fx3
+
 /** F-SC-W1: the warning when Ready to ship is picked while quality has not released every piece (the domain's words; never a refusal). */
 export function readyWarningOf(rows: readonly StageChoiceRow[], pick: PlainStage | null): Words | null {
   return pick === 'READY' && rows.some((row) => row.stage === 'READY' && row.readyUnreleased) ? READY_UNRELEASED_WORDS : null
