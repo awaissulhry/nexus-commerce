@@ -21,7 +21,9 @@ describe('fx5 #1, #8, #9: the page never scrolls sideways; Discuss only for who 
 
   it('#9 (L7): no Discuss door and no "Discuss this date" without threads.post; #8: a wrapped name starts at the left', () => {
     expect(source('../view/production/ProblemsSection.tsx')).toContain('const mayDiscuss = model.people?.mayNote !== false')
-    expect(source('../view/production/DatesSection.tsx')).toContain('model.people?.mayNote !== false ? <DiscussDoor')
+    // fx9: the check is named once (mayDiscuss) and guards the line's Discuss door.
+    expect(source('../view/production/DatesSection.tsx')).toContain('const mayDiscuss = !!frame?.discuss && model.people?.mayNote !== false')
+    expect(source('../view/production/DatesSection.tsx')).toContain('mayDiscuss ? <DiscussDoor')
     expect(source('../view/production/StepsBlock.tsx')).toContain("frame?.discuss && model.people?.mayNote !== false ? [{ id: 'discuss'")
     expect(css()).toMatch(/\.fw-pt-link \{[^}]*text-align: start;/)
   })
