@@ -851,6 +851,12 @@ export async function ordersOfEvent(db: Reader, event: Pick<EventEnvelope, 'type
         const gates = await db.orderGate.findMany({ where: { sampleRoundId: recordId }, select: { salesOrderId: true } })
         return { orderIds: [...new Set(gates.map((gate) => gate.salesOrderId))].sort(), hold: null }
       }
+      // B-OC-002 (order changes tab R2): the customer's new yes for a revised order is asked on the order's amendment — asked,
+      // answered or ended, it moves who the order waits on (facts.ts revisedOrderBlockersOf).
+      if (recordType === 'SalesOrderAmendment') {
+        const amendment = await db.salesOrderAmendment.findUnique({ where: { id: recordId }, select: { orderId: true } })
+        return { orderIds: amendment ? [amendment.orderId] : [], hold: null }
+      }
       return { orderIds: [], hold: null }
     }
     case 'workorder.released':

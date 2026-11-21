@@ -11,7 +11,8 @@ import type { ApprovalTaskKind } from '../approvals/rules' // B-OO-011
  *   a supplier     a material is short and its purchase comes after the need, or a trims gate waits for the goods
  *   a workshop     an operation is out at a subcontractor and the pieces are not back
  *   us             a request of the customer waits for our answer; a gate we own, a release check, a quality hold or
- *                  nonconformance, or work that does not move
+ *                  nonconformance, or work that does not move; B-OC-002 (L11): the customer said no to the order's latest
+ *                  revision while it still waits for its yes (we restore the order as it was, or change it again)
  *
  * The order waits on the first owner with a blocker in this order: customer → supplier → workshop → us, since its earliest
  * blocker; with no blocker it waits on us (the work is ours). The office reads the four; the customer reads only two: "You"
@@ -34,6 +35,8 @@ export const BLOCKER_KINDS = [
   'QUALITY_HOLD',
   'NONCONFORMANCE',
   'NO_MOVE',
+  // B-OC-002 (order changes tab, lead settle L11): the customer said no to the order's latest revision — ours to decide.
+  'REVISION_REFUSED',
 ] as const
 export type BlockerKind = (typeof BLOCKER_KINDS)[number]
 
@@ -52,6 +55,7 @@ export const BLOCKER_OWNER: Readonly<Record<BlockerKind, WaitingOn>> = Object.fr
   QUALITY_HOLD: 'US',
   NONCONFORMANCE: 'US',
   NO_MOVE: 'US',
+  REVISION_REFUSED: 'US', // B-OC-002 (L11)
 })
 
 // ── B-OP-021 (order page plan N1; 13-backend §3 B4): what an office blocker names — the office only (the customer's reads keep
@@ -108,7 +112,8 @@ export function waitingOn(blockers: readonly Blocker[]): Waiting {
  *   DATE     something has a day: a gate, a short material, work out at a workshop, the customer's own material, and a new date
  *            the customer refused (BRAND_REQUEST · REPROMISE: answered with the promise, so it leaves the Changes badge) — Next dates
  *   REQUEST  someone must answer: a customer request still open, a counter-offer agreed or lapsed, a problem it reported, a yes
- *            asked of the customer, an open task on its portal — Requests & changes
+ *            asked of the customer, an open task on its portal; B-OC-002 (L11): a revision the customer said no to — Requests &
+ *            changes (the Changes tab's Waiting: one list with Overview's card)
  *
  * Who acts next stays `waitingOn` (the keeper's one rule, read by the orders list and the portal): a place never changes it.
  */
@@ -130,6 +135,7 @@ export const BLOCKER_PLACE: Readonly<Record<BlockerKind, BlockerPlace>> = Object
   QUALITY_HOLD: 'HOLD',
   NONCONFORMANCE: 'HOLD',
   NO_MOVE: 'HOLD',
+  REVISION_REFUSED: 'REQUEST', // B-OC-002 (L11)
 })
 
 /** A customer request waiting on us, by what it is: a refused new date is a date (F3); the others are requests. */

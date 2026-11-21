@@ -561,3 +561,59 @@ describe('B-PT-016: waiting on the customer’s material', () => {
   })
 })
 // ── end B-PT-016 ──
+
+// ── B-OC-002 (order changes tab R2; 13-backend §2; lead settle L11) ──
+describe('B-OC-002: the customer’s new yes for a revised order is asked on the amendment — the keeper follows it', () => {
+  let order: { orderId: string; lineId: string }
+  let other: { orderId: string; lineId: string }
+  const amendment = newId()
+  const otherAmendment = newId()
+  const asked = newId()
+  const payload = (requestId: string, recordId: string, partyId: string, extra: Json = {}) => ({ requestId, kind: 'REVISED_ORDER', recordType: 'SalesOrderAmendment', recordId, partyId, ...extra })
+  const revisedOf = async (orderId: string) => (await factsOf(orderId))!.blockers.filter((blocker) => blocker.ref?.type === 'ApprovalRequest' || blocker.kind === 'REVISION_REFUSED')
+
+  beforeAll(async () => {
+    order = await newOrder(ids.a, 'OC')
+    other = await newOrder(ids.b, 'OCB')
+    const amendmentRow = (id: string, orderId: string, partyId: string) => `(${lit(id)}, ${lit(ids.tenantId)}, ${lit(w.companyId)}, ${lit(orderId)}, ${lit(partyId)}, 1, 'T-OC002 made-up revision', '{}'::jsonb, '{}'::jsonb, 40000, 50000, 48800, 61000, true, 'T-OC002-request', now() - interval '1 day')`
+    await raw(
+      `UPDATE "SalesOrder" SET "depositRequired" = false, "reapprovalNeededAt" = now() WHERE id IN (${lit(order.orderId)}, ${lit(other.orderId)});
+       INSERT INTO "SalesOrderAmendment" (id, "tenantId", "companyId", "orderId", "partyId", revision, reason, before, after, "netAmountBefore", "netAmountAfter", "grossAmountBefore", "grossAmountAfter", "reacceptanceNeeded", "requestId", "createdAt") VALUES
+         ${amendmentRow(amendment, order.orderId, ids.a)}, ${amendmentRow(otherAmendment, other.orderId, ids.b)};`,
+    )
+    // Kept before the ask: the order waits on us (nothing of the customer's to do).
+    await run('sales_order.amended', { orderId: order.orderId })
+    expect((await rowOf(order.orderId)).waitingOn).toBe('US')
+  })
+
+  it('ordersOfEvent maps an approval event on a SalesOrderAmendment to its own order (and only it)', async () => {
+    for (const type of ['approval_request.asked', 'approval_request.answered', 'approval_request.withdrawn', 'approval_request.expired']) {
+      expect(await system().withClient((client) => ordersOfEvent(client, { type, payload: payload(asked, amendment, ids.a) })), type).toEqual({ orderIds: [order.orderId], hold: null })
+    }
+    expect(await system().withClient((client) => ordersOfEvent(client, { type: 'approval_request.asked', payload: payload(newId(), otherAmendment, ids.b) }))).toEqual({ orderIds: [other.orderId], hold: null })
+    // An unknown amendment names no order.
+    expect(await system().withClient((client) => ordersOfEvent(client, { type: 'approval_request.asked', payload: payload(newId(), newId(), ids.a) }))).toEqual({ orderIds: [], hold: null })
+  })
+
+  it('after the ask the kept who-acts-next is the customer’s; after its no it is ours again (L11), while the order still waits for the yes', async () => {
+    const dueAt = new Date(Date.now() + 5 * 86_400_000).toISOString()
+    await raw(
+      `INSERT INTO "ApprovalRequest" (id, "tenantId", "companyId", "recordType", "recordId", "partyId", kind, question, "dueAt", status, "createdAt") VALUES
+         (${lit(asked)}, ${lit(ids.tenantId)}, ${lit(w.companyId)}, 'SalesOrderAmendment', ${lit(amendment)}, ${lit(ids.a)}, 'REVISED_ORDER', 'T-OC002 please confirm (made up)', '${dueAt}', 'OPEN', now());`,
+    )
+    expect(await revisedOf(order.orderId)).toEqual([expect.objectContaining({ kind: 'APPROVAL', ref: { type: 'ApprovalRequest', id: asked } })])
+    await run('approval_request.asked', payload(asked, amendment, ids.a, { dueAt, linkId: newId(), taskId: newId(), files: 0 }))
+    expect(await rowOf(order.orderId)).toMatchObject({ waitingOn: 'BRAND' })
+    await raw(`UPDATE "ApprovalRequest" SET status = 'REFUSED', "answeredAt" = now(), answer = 'T-OC002 made up: no.' WHERE id = ${lit(asked)};`)
+    expect(await revisedOf(order.orderId)).toEqual([expect.objectContaining({ kind: 'REVISION_REFUSED', ref: { type: 'SalesOrderAmendment', id: amendment } })])
+    await run('approval_request.answered', payload(asked, amendment, ids.a, { status: 'REFUSED', via: 'PORTAL', markedUp: false }))
+    expect(await rowOf(order.orderId)).toMatchObject({ waitingOn: 'US' })
+  })
+
+  it('the wall: the other customer’s order never reads Alpha’s ask, and every event the keeper wrote names its own customer', async () => {
+    expect(await revisedOf(other.orderId)).toEqual([])
+    expect(findMarkers(JSON.stringify((await factsOf(other.orderId))!.blockers), aMarkers)).toEqual([])
+    await expectOwnCustomer(await told())
+  })
+})
+// ── end B-OC-002 ──

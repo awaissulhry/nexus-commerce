@@ -57,7 +57,7 @@ export const manifest = defineManifest({
   // wall per file, body data never an address).
   'POST /sales/orders/:orderId/files/previews': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   // B-OP-025 (order page plan N1; review R-12): Done on one of the order's production tasks — reached with orders.view, decided by the
-  // TASK's own right (tasks.manage over its work order, or its assignee; else 403 "Production does this").
+  // TASK's own right (B-OC-005: workorders.manage over its work order, or its assignee; else 403 "Production does this").
   'POST /sales/orders/:orderId/still-to-do/tasks/:taskId/done': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   // B-SA-056 (Sales page plan P8, R2, R8): who was told about one change (can() on the order, threads.read on its conversation;
   // office people by name, the floor and the workshops by when and which work order — never who read anything).

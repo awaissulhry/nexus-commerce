@@ -340,6 +340,8 @@ export const orderView = output({
       changeIds: z.array(id()),
       /** B-OP-020: the open requests for a yes the read lists to this reader (`openApprovals`). */
       approvalTaskIds: z.array(id()),
+      /** B-OC-008: the product change requests this order's DESIGN requests raised (change_request.changed re-reads Still to do). */
+      styleChangeIds: z.array(id()),
     }),
   }),
   /** Per part, the newest change: an office person or the order's own customer by name, "the floor" or "Nexus"; null: none. */

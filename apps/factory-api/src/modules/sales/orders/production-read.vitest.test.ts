@@ -8,6 +8,7 @@ import { BLOCKER_KINDS } from '@nexus/factory-domain/production-brand/waiting'
 // B-OO-007: what still waits after production; a first promise is not a move.
 import { officeBlockersOf, promiseMovesOf } from './production-read'
 import { blockerWordsOf } from './production-read' // walk #3
+import { blockerDueOf, blockerTaskOf, revisionRefusedWords, type AskedFacts } from './production-read' // B-OC-002, B-OC-004
 import type { Blocker } from '@nexus/factory-domain/production-brand/waiting'
 // B-MS-006: the headline's stage block with a stage set by hand, and the export's words for it.
 import { headlineStageOf, type HeadlineStageRow } from './production-read'
@@ -398,3 +399,58 @@ describe('B-PT-017: the order page re-reads the Production tab’s dates, headli
   })
 })
 // ── end B-PT-017 ──
+
+// ── B-OC-008 (order changes tab R4d; 13-backend §3) ──
+describe('B-OC-008: the order page re-reads the Changes tab’s Waiting and Still to do on the events that move them', () => {
+  const partsOf = (type: string) => ORDER_LIVE_EVENTS.find((entry) => entry.type === type)?.parts ?? []
+
+  it('every approval_request event (asked, answered, withdrawn, expired, decided for the party, put back): the order, the headline and the changes', () => {
+    for (const type of ['approval_request.asked', 'approval_request.answered', 'approval_request.withdrawn', 'approval_request.expired', 'approval_request.decided_for_party', 'approval_request.reversed']) {
+      expect(partsOf(type), type).toEqual(['order', 'headline', 'changes'])
+    }
+  })
+
+  it('a production task done or changed, a scrap posted or decided, a style change moved on: the changes (Still to do)', () => {
+    for (const type of ['task.completed', 'task.changed', 'production.scrap_posted', 'production.scrap_over_limit_decided', 'change_request.changed']) expect(partsOf(type), type).toEqual(['changes'])
+    // A task made or handed to someone moves no row of the order (Home's own lists follow those).
+    expect(partsOf('task.created')).toEqual([])
+    expect(partsOf('task.assigned')).toEqual([])
+  })
+})
+// ── end B-OC-008 ──
+
+// ── B-OC-002 / B-OC-004 (order changes tab R2, R3b; L11) ──
+describe('B-OC-002 / B-OC-004: a refused revision by its number; when an approval or a portal task is due, and what a task asks', () => {
+  const kinds = new Map([['a-revised', 'REVISED_ORDER' as const]])
+  const at = new Date('2026-11-26T10:00:00.000Z')
+  const tasks: AskedFacts['tasks'] = new Map<string, { kind: 'RECONFIRM_ORDER' | 'ANSWER_MESSAGE'; label: string; dueAt: Date | null }>([
+    ['t-1', { kind: 'RECONFIRM_ORDER', label: 'SEED-SO-0002', dueAt: at }],
+    ['t-2', { kind: 'ANSWER_MESSAGE', label: 'SEED-SO-0002', dueAt: null }],
+  ])
+  const asked: Pick<AskedFacts, 'approvalDue' | 'tasks'> = { approvalDue: new Map<string, Date>([['a-revised', at], ['r-counter', new Date('2026-11-25T10:00:00.000Z')]]), tasks }
+
+  it('a revised order asked of the customer names its kind; a revision it said no to names its number (EN + IT), never an amount', () => {
+    expect(blockerWordsOf({ kind: 'APPROVAL', ref: { type: 'ApprovalRequest', id: 'a-revised' } }, kinds)).toEqual({ en: "Waiting for the customer's yes: Revised order", it: 'In attesa del sì del cliente: Ordine modificato' })
+    const refused = { kind: 'REVISION_REFUSED' as const, ref: { type: 'SalesOrderAmendment', id: 'am-2' } }
+    expect(blockerWordsOf(refused, kinds, new Map([['am-2', 2]]))).toEqual(revisionRefusedWords(2))
+    expect(revisionRefusedWords(2)).toEqual({ en: 'The customer said no to revision 2 · decide: restore or change again', it: 'Il cliente ha detto no alla revisione 2 · decidi: ripristina o cambia di nuovo' })
+    // Its number not read: the plain words (no number made up).
+    expect(blockerWordsOf(refused, kinds)).toEqual(BLOCKER_WORDS.REVISION_REFUSED)
+  })
+
+  it('due: an approval we asked and an open counter-offer (by its request), a portal task; null for every other kind and with no record', () => {
+    expect(blockerDueOf({ kind: 'APPROVAL', ref: { type: 'ApprovalRequest', id: 'a-revised' } }, asked)).toEqual(at)
+    expect(blockerDueOf({ kind: 'APPROVAL', ref: { type: 'OrderChangeRequest', id: 'r-counter' } }, asked)).toEqual(new Date('2026-11-25T10:00:00.000Z'))
+    expect(blockerDueOf({ kind: 'PARTNER_TASK', ref: { type: 'PartnerTask', id: 't-1' } }, asked)).toEqual(at)
+    expect(blockerDueOf({ kind: 'PARTNER_TASK', ref: { type: 'PartnerTask', id: 't-2' } }, asked)).toBeNull()
+    expect(blockerDueOf({ kind: 'APPROVAL', ref: null }, asked)).toBeNull()
+    for (const kind of BLOCKER_KINDS.filter((entry) => entry !== 'APPROVAL' && entry !== 'PARTNER_TASK')) expect(blockerDueOf({ kind, ref: { type: 'ApprovalRequest', id: 'a-revised' } }, asked), kind).toBeNull()
+  })
+
+  it('task: a portal task says its kind and label (never who it is assigned to); every other kind: null', () => {
+    expect(blockerTaskOf({ kind: 'PARTNER_TASK', ref: { type: 'PartnerTask', id: 't-1' } }, asked)).toEqual({ kind: 'RECONFIRM_ORDER', label: 'SEED-SO-0002' })
+    expect(blockerTaskOf({ kind: 'PARTNER_TASK', ref: { type: 'PartnerTask', id: 'unknown' } }, asked)).toBeNull()
+    expect(blockerTaskOf({ kind: 'APPROVAL', ref: { type: 'PartnerTask', id: 't-1' } }, asked)).toBeNull()
+  })
+})
+// ── end B-OC-002 / B-OC-004 ──

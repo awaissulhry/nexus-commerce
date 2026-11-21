@@ -20,6 +20,8 @@ import { riskFacts } from '../../production/work-orders/contract'
 // B-PT-004: the spec a work order is made to (the domain's states, revision statuses and change-order dispositions).
 import { DISPOSITIONS, NEWER_SPEC_STATES } from '@nexus/factory-domain/product/versions/drift'
 import { REVISION_STATUSES } from '@nexus/factory-domain/product/styles/revisions'
+// B-OC-004: what a portal task asks (its kind).
+import { PARTNER_TASK_KINDS } from '@nexus/factory-domain/portal/tasks/kinds'
 
 /**
  * B-SA-031 / B-SA-032 (Sales page plan P2, P3, P4, P15, P16; 13-backend B1, B12; 10-order-page OR1, OR2): the office's read of ONE
@@ -156,6 +158,17 @@ export const headlineView = output({
         /** A BRAND_REQUEST waiting on us: a request still open, a counter-offer agreed or lapsed, a reported problem, a refused new date. */
         sub: z.enum(BLOCKER_SUBS).nullable(),
         // ── end B-OP-021 ──
+        // ── B-OC-004 (order changes tab R3b; 13-backend §2) ──
+        /**
+         * By when it is due: an approval we asked (its request's due time; an open counter-offer's, by the request it counters) or an
+         * open portal task (its due time); null for every other kind, or none set. Never the question we asked, never an amount.
+         * B-OC-002: a revised order asked of the customer is an APPROVAL naming its ApprovalRequest ("…: Revised order"); L11: a
+         * revision the customer said no to is a REVISION_REFUSED waiting on us, naming its SalesOrderAmendment (no due time).
+         */
+        due: instant().nullable(),
+        /** An open portal task (PARTNER_TASK): what it asks — its kind and the label it was made with; null for every other kind. */
+        task: output({ kind: z.enum(PARTNER_TASK_KINDS), label: z.string() }).nullable(),
+        // ── end B-OC-004 ──
       }),
     ),
   }),
@@ -459,8 +472,17 @@ export const changesView = output({
         words,
         since: instant(),
         waitingOn: z.enum(APPLY_TEAMS),
+        /** B-OC-005: a production task (WORK_IN_PROGRESS_TASK): its assignee, or workorders.manage over its work order. */
         mayAct: z.boolean(),
         requestId: id().nullable(),
+        // ── B-OC-006 / B-OC-007 (order changes tab R4b, R4c; 13-backend §3) ──
+        /** The order's revision the row comes from (a work-order change and its extra pieces: the change's amendment); null: none. */
+        amendmentId: id().nullable(),
+        /** That revision's number ("Office change, revision 3"); null with `amendmentId`. */
+        revision: z.number().int().nullable(),
+        /** TELL_WORKSHOP: the PROPOSED work-order change of the same request on the same work order (told by itself when applied); else null. */
+        waitsOn: id().nullable(),
+        // ── end B-OC-006 / B-OC-007 ──
       }),
     ),
     count: z.number().int(),

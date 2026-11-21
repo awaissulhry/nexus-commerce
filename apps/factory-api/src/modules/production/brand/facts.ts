@@ -47,7 +47,8 @@ import { readOrderFacts, type Reader } from '../../sales/orders/store'
  *            waiting for our answer, a gate we own, a quality hold, our own production hold; B-PR-28: a new date it did not
  *            accept while the follow-up task is open). B-PT-016 (order production tab C2): the CUSTOMER's own material still to
  *            come — a CustomerMaterial row of the order expecting more than was received, while the order is CONFIRMED or
- *            IN_PRODUCTION and its work is still to do (`customerMaterialWaits`).
+ *            IN_PRODUCTION and its work is still to do (`customerMaterialWaits`). B-OC-002 (order changes tab R2, L11): the
+ *            CUSTOMER's new yes for a revised order (asked on the order's amendment), and US once it said no to the latest one.
  *   held     a live work order of the order's lines is ON_HOLD (the customer's "On hold" mark; brand_production.hold_changed).
  */
 
@@ -187,7 +188,7 @@ export function lineStageFactsOf(rows: readonly LineSizeRow[], reached: OrderFre
   return { reached, allReleased: !done && rows.filter((row) => row.toShip > 0).every((row) => row.released + row.closedShort >= row.ordered), done, sewingCounted }
 }
 
-const ORDER_SELECT = { id: true, companyId: true, partyId: true, number: true, status: true, depositRequired: true, quoteVersionId: true } as const satisfies Prisma.SalesOrderSelect
+const ORDER_SELECT = { id: true, companyId: true, partyId: true, number: true, status: true, depositRequired: true, quoteVersionId: true, /* B-OC-002 (L11) */ reapprovalNeededAt: true } as const satisfies Prisma.SalesOrderSelect
 
 /**
  * The facts of one order (null: no such order). `context` is the planning read's scope (keeperPlanningContext); `now` the
@@ -266,6 +267,10 @@ export async function readOrderProductionFacts(db: Reader, context: OfficeContex
     select: { id: true, createdAt: true },
   })
   for (const row of approvals) blockers.push({ kind: 'APPROVAL', since: row.createdAt, ref: { type: 'ApprovalRequest', id: row.id } })
+  // ── B-OC-002 (order changes tab R2; 13-backend §2; lead settle L11): the customer's new yes for a revised order is asked on the
+  // order's AMENDMENT, never on the order — each OPEN ask waits on the customer; a no to the latest revision waits on us ──
+  for (const blocker of await revisedOrderBlockersOf(db, order)) blockers.push(blocker)
+  // ── end B-OC-002 ──
   const tasks = await db.partnerTask.findMany({ where: { partyId: order.partyId, status: 'OPEN', recordType: 'SalesOrder', recordId: order.id }, select: { id: true, createdAt: true } })
   for (const row of tasks) blockers.push({ kind: 'PARTNER_TASK', since: row.createdAt, ref: { type: 'PartnerTask', id: row.id } })
   if (order.depositRequired && !live.some((row) => row.releasedAt !== null)) {
@@ -337,6 +342,36 @@ export async function readOrderProductionFacts(db: Reader, context: OfficeContex
     blockers, // B-SA-031
   }
 }
+
+// ── B-OC-002 (order changes tab R2; 13-backend §2; lead settle L11) ───────────────────────────────────────────────────────────────
+/** The order states in which a revision the customer said no to is no longer ours to decide (the re-acceptance adapter's own). */
+const REVISION_SETTLED_STATES: readonly string[] = ['CLOSED', 'CANCELLED']
+
+/**
+ * B-OC-002: the revised orders asked of the order's own customer — REVISED_ORDER requests on THIS order's amendments and of ITS
+ * party (another customer's ask never lands here). Each OPEN one waits on the customer (an APPROVAL since it was asked: its words
+ * name the kind, "…: Revised order", never the question or an amount). L11: when the NEWEST ask on the order's LATEST revision was
+ * refused while the order still waits for the yes (`reapprovalNeededAt`), the order waits on us — restore it as it was or change it
+ * again (REVISION_REFUSED since the answer, naming the amendment); an ask made again after the no (open or answered) wins, and a
+ * closed or cancelled order has nothing left to decide.
+ */
+async function revisedOrderBlockersOf(db: Reader, order: { readonly id: string; readonly partyId: string; readonly status: string; readonly reapprovalNeededAt: Date | null }): Promise<Blocker[]> {
+  const amendments = await db.salesOrderAmendment.findMany({ where: { orderId: order.id }, select: { id: true, revision: true }, orderBy: { revision: 'desc' } })
+  if (amendments.length === 0) return []
+  const asks = await db.approvalRequest.findMany({
+    where: { partyId: order.partyId, kind: 'REVISED_ORDER', recordType: 'SalesOrderAmendment', recordId: { in: amendments.map((row) => row.id) } },
+    select: { id: true, recordId: true, status: true, createdAt: true, answeredAt: true },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+  })
+  const blockers = asks.filter((row) => row.status === 'OPEN').map((row): Blocker => ({ kind: 'APPROVAL', since: row.createdAt, ref: { type: 'ApprovalRequest', id: row.id } }))
+  const latest = amendments[0]!
+  const newest = asks.find((row) => row.recordId === latest.id)
+  if (newest?.status === 'REFUSED' && order.reapprovalNeededAt !== null && !REVISION_SETTLED_STATES.includes(order.status)) {
+    blockers.push({ kind: 'REVISION_REFUSED', since: newest.answeredAt, ref: { type: 'SalesOrderAmendment', id: latest.id } })
+  }
+  return blockers
+}
+// ── end B-OC-002 ──
 
 // ── B-PT-016 (order production tab C2) ──────────────────────────────────────────────────────────────────────────────────────────
 /** The orders the customer's material can hold up: confirmed and not yet ready (READY or later: the work is done). */

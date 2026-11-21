@@ -190,6 +190,9 @@ describe('B-PR-26: the factory answers its customers’ requests', { timeout: SL
     expect(countered.status, JSON.stringify(countered.body)).toBe(200)
     expect(countered.body.request).toMatchObject({ status: 'COUNTERED', waitingOn: 'CUSTOMER', counter: { date: offered, fee: 2500, priced: true, state: 'WAITING' }, may: { accept: false, refuse: false, counter: false } })
     const approvalId = countered.body.approvalRequestId as string
+    // B-OC-003 (order changes tab R3a): our counter-offer says when it lapses — its approval's due time ("lapses 26 Nov").
+    const lapses = (await admin<{ dueAt: Date }>('SELECT "dueAt" FROM "ApprovalRequest" WHERE id = $1', [approvalId]))[0]!.dueAt.toISOString()
+    expect(countered.body.request.counter.dueAt).toBe(lapses)
     expect((await outbox('order_change_request.countered')).map((row) => row.payload).find((payload) => payload.requestId === change.id)).toEqual({ requestId: change.id, orderId: orders.so1.orderId, partyId: world.ids.a, kind: 'CHANGE', approvalRequestId: approvalId })
     // The question never names the amount.
     const question = (await admin<{ question: string; kind: string; recordType: string }>('SELECT question, kind::text AS kind, "recordType" FROM "ApprovalRequest" WHERE id = $1', [approvalId]))[0]!
@@ -213,6 +216,9 @@ describe('B-PR-26: the factory answers its customers’ requests', { timeout: SL
     // The buyer reads the fee (prices) and may answer; the order page does not withdraw a countered request.
     const buyerView = ((await ok(buyerA, `/portal/sales-orders/${orders.so1.orderId}/change-requests`)).items as Json[]).find((item) => item.id === change.id)!
     expect(buyerView.counter).toMatchObject({ fee: 2500, priced: true, words: { en: 'Our counter-offer waits for your answer' } })
+    // B-OC-003: the customer reads its own counter-offer's lapse day too (both audiences).
+    expect(buyerView.counter.dueAt).toBe(lapses)
+    expect(productionView.counter.dueAt).toBe(lapses)
     expect((await send(buyerA, 'POST', `/portal/sales-orders/${orders.so1.orderId}/change-requests/${change.id}/withdraw`, { version: 2 })).status).toBe(409)
     expect((await ok(buyerA, `/portal/approvals/${approvalId}`)).may).toMatchObject({ answer: true })
 
