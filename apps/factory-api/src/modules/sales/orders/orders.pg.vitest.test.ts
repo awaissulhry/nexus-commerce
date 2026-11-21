@@ -403,13 +403,16 @@ describe('dates (SAL-206): a new promise keeps its reason (B-OL-004: none needed
 
     const changed = (await ok('a.sales', 'PUT', `${orderUrl(order.id)}/promise`, { version: order.version, promiseDate: later, reason: 'The red leather arrives two weeks late.' })).order
     expect(changed).toMatchObject({ promiseDate: later, originalPromiseDate: PROMISE, version: order.version + 1 })
-    expect(changed.promiseHistory).toEqual([expect.objectContaining({ from: PROMISE, to: later, lineIds: [], reason: 'The red leather arrives two weeks late.' })])
+    // B-PT-011: a move of the first promise the order was confirmed with: MOVED, no line days (a move of the whole order).
+    expect(changed.promiseHistory).toEqual([expect.objectContaining({ from: PROMISE, to: later, lineIds: [], reason: 'The red leather arrives two weeks late.', kind: 'MOVED', fromByLine: null })])
     const red = changed.lines.find((line: Json) => line.colourway.code === 'RED')
     const lineLater = addDays(TODAY, 90)
     const lineChanged = (await ok('a.sales', 'PUT', `${orderUrl(order.id)}/promise`, { version: changed.version, promiseDate: lineLater, reason: 'Red needs a second dye bath.', lineIds: [red.id] })).order
     expect(lineChanged.lines.map((line: Json) => [line.colourway.code, line.promiseDate])).toEqual([['BLK', null], ['RED', lineLater]])
     expect(lineChanged).toMatchObject({ promiseDate: later, originalPromiseDate: PROMISE })
     expect(lineChanged.promiseHistory[0]).toMatchObject({ from: later, to: lineLater, lineIds: [red.id], reason: 'Red needs a second dye bath.' })
+    // B-PT-011: a lines' move names each line's own day before it (the red line had the order's).
+    expect(lineChanged.promiseHistory[0]).toMatchObject({ kind: 'MOVED', fromByLine: [{ lineId: red.id, from: later }] })
     expect((await admin(`SELECT payload FROM "OutboxEvent" WHERE type = 'sales_order.promise_changed' AND subject = $1 ORDER BY "occurredAt"`, [order.id])).map((row) => row.payload.previous)).toEqual([PROMISE, later])
     // The database holds the first promise for every login, the owner included.
     await expect(admin(`UPDATE "SalesOrder" SET "originalPromiseDate" = '2027-01-01' WHERE id = $1`, [order.id])).rejects.toThrow(/first promised date .* is set once/)

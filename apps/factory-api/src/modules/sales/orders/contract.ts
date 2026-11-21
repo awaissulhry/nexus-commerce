@@ -27,6 +27,7 @@ import { OWN_TRANSPORT_REFUSALS } from '@nexus/factory-domain/shipping/own-trans
 import { TRANSPORT_BY } from '@nexus/factory-domain/shipping/shipments'
 import { PRICE_MATCHES } from '@nexus/factory-domain/sales/brand-prices/match' // B-CP-018
 import { PROMISE_REASON_CODES } from '@nexus/factory-domain/sales/portal-orders/promise' // B-OO-009
+import { PROMISE_MOVE_KINDS } from '@nexus/factory-domain/sales/orders/promise-moves' // B-PT-011
 
 /**
  * The sales orders' contracts (B-W1-25; A2 SCR-038 "Orders", SCR-039 "Order record"). Money is marked: prices and totals
@@ -172,7 +173,9 @@ const openApprovalView = output({
 // ── end B-OP-020 ──
 
 // ── B-SA-034: the parts of the order page a live message re-reads, and those whose last change the order read names ──
-export const ORDER_PAGE_PARTS = ['order', 'headline', 'lines', 'work', 'dates', 'quality', 'people', 'changes', 'money', 'shipments', 'files'] as const
+// B-PT-017 (order production tab C3): + `materials` (the Production tab's Materials re-read on customer_material.changed); the web
+// reads parts as strings and drops one it does not know.
+export const ORDER_PAGE_PARTS = ['order', 'headline', 'lines', 'work', 'dates', 'quality', 'people', 'changes', 'money', 'shipments', 'files', 'materials'] as const
 export type OrderPagePart = (typeof ORDER_PAGE_PARTS)[number]
 export const LAST_CHANGE_PARTS = ['order', 'changes', 'work', 'shipments', 'money'] as const
 export type LastChangePart = (typeof LAST_CHANGE_PARTS)[number]
@@ -293,7 +296,25 @@ export const orderView = output({
     invoices: z.array(output({ id: id(), number: z.string().nullable(), docType: z.string(), status: z.string(), issueDate: z.string().nullable(), /** A TD02: the deposit request it bills. */ depositRequestId: id().nullable() })),
   }),
   /** Every promise change, newest first: who, when, from → to, which lines (none: the order), why. */
-  promiseHistory: z.array(output({ at: instant(), actorId: id(), from: z.string().nullable(), to: z.string(), lineIds: z.array(id()), reason: z.string().nullable() })),
+  /**
+   * Every promise change, newest first. B-PT-011: + `kind` SET (the order's first promise: never a move) or MOVED, by the production
+   * read's own rule (factory-domain sales/orders/promise-moves), and `fromByLine` — a lines' move: each line's own day before it
+   * (null: a move of the whole order) — so a move of lines on different days never reads "— → 19 Dec".
+   */
+  promiseHistory: z.array(
+    output({
+      at: instant(),
+      actorId: id(),
+      from: z.string().nullable(),
+      to: z.string(),
+      lineIds: z.array(id()),
+      reason: z.string().nullable(),
+      // ── B-PT-011 ──
+      kind: z.enum(PROMISE_MOVE_KINDS),
+      fromByLine: z.array(output({ lineId: id(), from: businessDate().nullable() })).nullable(),
+      // ── end B-PT-011 ──
+    }),
+  ),
   /** The names of the people the record names (promise changes, who made it). */
   people: z.array(output({ id: id(), name: z.string() })),
   settlement: settlementView,

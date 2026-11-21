@@ -25,7 +25,10 @@ export const brandHealthView = output({
   /** The order's number (the office's). */
   number: z.string(),
   partyId: id(),
-  /** The keeper made the order's production state (B-PR-17: at CONFIRMED); false: nothing below is known yet. */
+  /**
+   * The keeper made the order's production state (B-PR-17: at CONFIRMED); false: nothing below is known yet. B-PT-012: false too once
+   * production is over (shipped, delivered, closed, cancelled: the keeper no longer keeps it) — health, raise and wait then null.
+   */
   kept: z.boolean(),
   /** The computed health (the keeper's; null: nothing left to make, or not kept yet). */
   computed: z.enum(BRAND_HEALTHS).nullable(),

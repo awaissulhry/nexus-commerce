@@ -55,8 +55,9 @@ const customerFacts = {
  * A work order's risk on the list (null: finished): LATE (open past its due date, `daysLate`), AT_RISK (its bars on the WORKING
  * plan end after its due date, or a person raised its order to At risk: `raised` is that raise's reason), BLOCKED (on hold, or its
  * order waits on the customer or on material), ON_TRACK; `blockedBy` whatever the state. Computed per read from what is stored.
+ * B-PT-001: exported — the order page's work orders carry the same shape (sales/orders production-contract), one rule for both.
  */
-const riskFacts = output({
+export const riskFacts = output({
   state: z.enum(WORK_ORDER_RISKS),
   daysLate: z.number().int().nullable(),
   plannedEnd: businessDate().nullable(),
