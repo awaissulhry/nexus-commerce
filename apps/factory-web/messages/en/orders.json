@@ -1945,6 +1945,7 @@
       "clear": "Clear…",
       "clearAria": "Clear the stage set by hand on {number}: back to the floor's stage",
       "stepAria": "Set the stage of {number} to {stage}…",
+      "stepFloorAria": "{stage}: back to the floor's stage — clears the stage set by hand on {number}…",
       "held": {
         "reading": "The stage is still being read",
         "stage": "Pick a stage first."

@@ -1217,7 +1217,13 @@ describe('F-MS-102: "Where it is now" draws a stage set by hand — the door on 
     // floor's own Preparing opens Clear…, the others Change… on that step.
     expect(html).not.toContain('class="fw-prp-strip-go"')
     expect(html).toContain('<span class="nds-milestone-note">Set by hand</span>')
-    expect(html).toContain('data-stage="PREPARING" aria-label="Clear the stage set by hand on SO-2026-0088: back to the floor&#x27;s stage"')
+    // pt-sc-fx1: the floor's step has a name of its own, its stage first — never the Clear… door's (two controls, one name).
+    expect(html).toContain('data-stage="PREPARING" aria-label="Preparing: back to the floor&#x27;s stage — clears the stage set by hand on SO-2026-0088…"')
+    expect(html.match(/aria-label="Clear the stage set by hand on SO-2026-0088: back to the floor&#x27;s stage"/g)?.length).toBe(1)
+    // No two buttons of section 1 share a name.
+    const names = [...html.matchAll(/<button[^>]*aria-label="([^"]+)"/g)].map((match) => match[1])
+    expect(names.length).toBeGreaterThan(4)
+    expect(new Set(names).size).toBe(names.length)
     for (const stage of ['Cutting', 'Quality check', 'Ready to ship']) expect(html, stage).toContain(`aria-label="Set the stage of SO-2026-0088 to ${stage}…"`)
     expect(html).not.toContain('data-stage="SEWING"')
     // Tab order: the strip's steps, then Change… and Clear…, then the moves.

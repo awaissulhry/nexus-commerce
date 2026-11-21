@@ -76,7 +76,8 @@ export function WhereCard({ order, model, actions, waiting }: { order: Order; mo
   // F-SC-W3 (stage control B): with the right and the door not held, each step but the one the customer reads opens the stage dialog on
   // it (the floor's own step while a hand stage stands: Clear…); the strip's ONE link is then not drawn. Otherwise the link stays.
   const picks = stagePicksOf(headline, handDoor)
-  const stepPicks = picks?.map((pick) => ({ stage: pick.stage, label: pick.kind === 'clear' ? t('where.manual.clearAria', { number: order.number }) : t('where.manual.stepAria', { number: order.number, stage: w.t(`parts.stage.${pick.stage}`) }) })) ?? null
+  // pt-sc-fx1: the floor's own step has a name of its own (never the Clear… door's: two controls, one name), starting with its stage.
+  const stepPicks = picks?.map((pick) => ({ stage: pick.stage, label: t(pick.kind === 'clear' ? 'where.manual.stepFloorAria' : 'where.manual.stepAria', { number: order.number, stage: w.t(`parts.stage.${pick.stage}`) }) })) ?? null
   const onPick = (stage: PlainStage) => {
     const pick = picks?.find((entry) => entry.stage === stage)
     if (pick) actions?.onDialog?.(pick.dialog)
