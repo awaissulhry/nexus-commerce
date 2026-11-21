@@ -1945,6 +1945,7 @@
       "clear": "Togli…",
       "clearAria": "Togli la fase impostata a mano su {number}: torna alla fase del reparto",
       "stepAria": "Imposta la fase di {number} su {stage}…",
+      "stepFloorAria": "{stage}: torna alla fase del reparto — toglie la fase impostata a mano su {number}…",
       "held": {
         "reading": "La fase è ancora in lettura",
         "stage": "Scegli prima una fase."

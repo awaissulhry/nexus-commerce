@@ -876,7 +876,10 @@ export default defineStage({
       // API's notice (the keeper's markers, ms-fx1), so the dialog's line is read from it — told: the correction after the window; its
       // notice still waiting: not told yet, never now; never told: not told now (then what it reads, with no notice).
       await planner.go(`/sales/orders/${order.id}?tab=overview`)
-      await press(where.getByRole('button', { name: OD('where.manual.clearAria', { number: order.number }), exact: true }))
+      // pt-sc-fx1: the hand row's Clear… door (the floor's own step on the strip has a name of its own and opens the same confirm).
+      await expect(step(where, 'PREPARING'), 'the floor\'s step is not a Set').toHaveCount(0)
+      await seen(where.getByRole('button', { name: OD('where.manual.stepFloorAria', { number: order.number, stage: stageWord('PREPARING') }), exact: true }))
+      await press(handRow.getByRole('button', { name: OD('where.manual.clearAria', { number: order.number }), exact: true }))
       const clear = dialog(page)
       await seen(clear.getByText(OD('where.manual.clearTitle'), { exact: true }), 60_000)
       const notice = ((await flow.read(page, `/sales/orders/${order.id}/production?parts=headline`)).headline as Json | null)?.stage?.byHand?.notice as { told: boolean; waitsUntil: string | null } | null | undefined
