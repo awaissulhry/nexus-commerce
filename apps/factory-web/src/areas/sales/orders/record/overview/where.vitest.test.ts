@@ -948,19 +948,19 @@ describe('F-OO-108: Hold the whole order… in the moves row — the domain plan
   const owner = actsCanOf(rolePermissions('owner'))
   const sales = actsCanOf(rolePermissions('sales'))
 
-  it('offered while there is work to stop; held while not read, for Sales, and with the plan\'s words when it holds none', () => {
+  it('offered while there is work to stop; held while not read and with the plan\'s words when it holds none; hidden without the right (D2)', () => {
     expect(HOLD_ORDER_FROM).toEqual(['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED'])
     for (const status of ['PENDING_APPROVAL', 'SHIPPED', 'DELIVERED', 'CLOSED', 'CANCELLED'] as const) expect(holdOrderMoveOf(order(status), workActsRead(MANAGE).work, owner), status).toBeNull()
     expect(holdOrderMoveOf(order('IN_PRODUCTION'), undefined, owner)!.held).toEqual({ key: 'where.hold.reading' })
-    // The work orders withheld from this reader (no right to see them): Production does it.
-    expect(holdOrderMoveOf(order('IN_PRODUCTION'), null, owner)!.held).toEqual({ key: 'wo.heldHold' })
+    // Plan D2 / L9: the work orders withheld from this reader (no right to see them): not drawn (never a grey door).
+    expect(holdOrderMoveOf(order('IN_PRODUCTION'), null, owner)).toBeNull()
     // The Owner: live, on the plan (WO-00021 held with its version; WO-00022 on hold already and WO-00019 shared are left out with why).
     const live = holdOrderMoveOf(order('IN_PRODUCTION'), workActsRead(MANAGE).work, owner)!
     expect(live.held).toBeNull()
     expect([live.hold!.plan.numbers, live.hold!.plan.versions, live.hold!.plan.left.map((entry) => entry.number), live.hold!.plan.notReached, live.hold!.units]).toEqual([['WO-00021'], { [WORK.workOrders[0]!.id]: 7 }, ['WO-00022', 'WO-00019'], 1, 12])
-    // Sales: Production does this (the row's own words); without the acts on the page: the same.
-    expect(holdOrderMoveOf(order('IN_PRODUCTION'), workActsRead(NONE).work, sales)!.held).toEqual({ key: 'wo.heldHold' })
-    expect(holdOrderMoveOf(order('IN_PRODUCTION'), workActsRead(MANAGE).work, null)!.held).toEqual({ key: 'wo.heldHold' })
+    // D2: Sales (the plan's NO_RIGHT) and a page without the acts: hidden — held with words only by the order's state.
+    expect(holdOrderMoveOf(order('IN_PRODUCTION'), workActsRead(NONE).work, sales)).toBeNull()
+    expect(holdOrderMoveOf(order('IN_PRODUCTION'), workActsRead(MANAGE).work, null)).toBeNull()
     // Nothing in work yet: the plan's words; only made-to-measure units: each from its own page.
     const empty = { ...WORK, workOrders: [], mtm: [], workOrdersLeftOut: 0 }
     expect(holdOrderMoveOf(order('CONFIRMED'), empty, owner)!.held).toEqual({ it: 'Ancora niente da fermare: nessun ordine di lavoro è stato creato per questo ordine.', en: 'Nothing to hold yet: no work order is made for this order.' })
@@ -987,14 +987,15 @@ describe('F-OO-108: Hold the whole order… in the moves row — the domain plan
     const draw = (id: string, locale: 'it' | 'en' = 'en') => renderView(view, designScreen.cases.find((item) => item.id === id)!.model, locale)
     const rowOf = (html: string) => html.slice(html.indexOf('class="fw-so-where-moves"'), html.indexOf('</div>', html.indexOf('class="fw-so-where-moves"')))
 
-    it('the Owner: Hold the whole order… live beside Mark ready…; Sales: held — Production does it; nothing yet: the plan\'s words; no Release door for Sales', () => {
+    it('the Owner: Hold the whole order… live beside Mark ready…; Sales: hidden; nothing yet: the plan\'s words; no Release door for Sales', () => {
       expect(rowOf(draw('f-oo-108-moves'))).toMatch(/<button[^>]*>Hold the whole order…<\/button>/)
       expect(rowOf(draw('f-oo-108-moves'))).not.toMatch(/aria-description="[^"]*"[^>]*>Hold the whole order…/)
-      expect(rowOf(draw('f-oo-108-moves-sales'))).toMatch(/aria-disabled="true"[^>]*aria-description="Production does this — a planner or the production manager"[^>]*>Hold the whole order…/)
+      // D2 (lead, round T): Sales has no Hold the whole order… at all (hidden, never grey).
+      expect(draw('f-oo-108-moves-sales')).not.toContain('Hold the whole order…')
       expect(rowOf(draw('f-oo-108-nothing'))).toMatch(/aria-description="Nothing to hold yet: no work order is made for this order\."[^>]*>Hold the whole order…/)
       expect(rowOf(draw('f-oo-108-moves', 'it'))).toContain("Metti in sospeso tutto l'ordine…".replace("'", '&#x27;'))
       // F-PT-301 (L9): Sales' Release on Quality › is not drawn (the Quality page would refuse it); the strip's own line says who
-      // releases it. Hold the whole order… stays a move held in words (whereMovesOf, not a strip door).
+      // releases it.
       const sales = draw('f-oo-105-holds-sales')
       expect(sales).not.toContain('Release on Quality ›')
       expect(textOf(sales)).toContain(createTranslator('en', messagesFor('en', ['orders']).orders!)('where.strip.qualityWho'))
