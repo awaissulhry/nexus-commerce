@@ -18,6 +18,8 @@ import { acceptRequest } from '../change-requests/office'
 import { orderChangeNotes } from './change-notes'
 import { whoWasTold } from './told'
 import { toldChanges } from './told' // F-SA-244
+// B-OC-009: a work-order change applied from planning speaks for its own line.
+import { applyChange } from '../../production/work-order-changes/apply'
 
 /**
  * B-SA-056 — who was told about one change of a sales order (sales page plan P8, R2, R8; 14-change-flow §5.2; review WP-1, WP-2), on
@@ -213,3 +215,62 @@ describe('F-SA-244: the told lines of every change of the order, one read', { ti
   })
 })
 // ---- end F-SA-244
+
+// ── B-OC-009 (order changes tab R5 + R7; 13-backend §4): each told line names what spoke for its change ──
+describe('B-OC-009: the told read names what spoke for each change — ids and dates, a pause’s work order only when reached', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const PLANNER: Permission[] = ['orders.view', 'workorders.view', 'workorders.manage']
+
+  it('the customer’s request it carried out (REQUEST), then the work-order change planning applied (WORK_ORDER_CHANGE, by its id)', async () => {
+    const world = await inWork()
+    await follow(people.supervisor, 'SalesOrder', world.order)
+    const accepted = newId()
+    // Sales accepts (no workorders.manage): the lowering waits for planning as a PROPOSED work-order change.
+    await acceptRequest(caller(['orders.view', 'orders.manage'], 'all', accepted), world.request, { version: 1 }, undefined, h.clock)
+    await asTheWorker(accepted)
+    const change = await one<{ id: string; version: number }>(`SELECT id::text AS id, version FROM "WorkOrderChange" WHERE "requestId" = $1 AND status = 'PROPOSED'`, [world.request])
+    const applied = newId()
+    await applyChange(caller(PLANNER, 'all', applied), change.id, { version: change.version })
+    await asTheWorker(applied)
+    const list = await toldChanges(caller(READER), world.order)
+    const byBatch = new Map(list.changes.map((entry) => [entry.batchId, entry]))
+    expect(byBatch.get(accepted)?.speaker).toEqual({ kind: 'REQUEST', requestId: world.request })
+    expect(byBatch.get(applied)).toMatchObject({ eventType: 'work_order_change.applied', speaker: { kind: 'WORK_ORDER_CHANGE', workOrderChangeId: change.id } })
+  })
+
+  it('a pause on the order’s work order: named for a reader who reaches it; for one who does not, no work order and counted in leftOut', async () => {
+    const world = await inWork()
+    const hold = newId()
+    const correlation = newId()
+    const placedAt = new Date(h.clock.now().getTime() - 1_000)
+    await planted([
+      { sql: `INSERT INTO "WorkOrderHold" (id, "tenantId", "companyId", "siteId", "workOrderId", kind, "reasonCode", status, "placedAt", "placedById") SELECT $1, "tenantId", "companyId", "siteId", id, 'PRODUCTION', 'OTHER', 'ACTIVE', $2, $3 FROM "WorkOrder" WHERE id = $4::uuid`, values: [hold, placedAt, officeId, world.workOrder] },
+    ])
+    // The worker's handler on the hold's event (as the hold command emits it), at the instant it was placed.
+    const event = { eventId: newId(), type: 'work_order_hold.placed', version: 1, context: 'production', tenantId: T, companyId: companyA, siteId: null, subject: world.workOrder, correlationId: correlation, causationId: null, source: 'test', occurredAt: placedAt.toISOString(), payload: { holdId: hold, workOrderId: world.workOrder, kind: 'PRODUCTION' } } as unknown as EventEnvelope
+    await orderChangeNotes(callerFor(h.database, systemContext(T, correlation)), event)
+    const reader = (await toldChanges(caller(READER), world.order)).changes.find((entry) => entry.batchId === correlation)
+    expect(reader?.speaker).toEqual({ kind: 'HOLD', hold: { placed: true, workOrder: { id: world.workOrder, number: world.number }, leftOut: 0 } })
+    // No workorders.view: the pause is told, its work order is not named (counted).
+    const blind = (await toldChanges(caller(['orders.view', 'threads.read']), world.order)).changes.find((entry) => entry.batchId === correlation)
+    expect(blind?.speaker).toEqual({ kind: 'HOLD', hold: { placed: true, workOrder: null, leftOut: 1 } })
+    expect(JSON.stringify(blind)).not.toContain(world.number)
+    // A person limited to another customer reads nothing of the order (the unknown id's words).
+    expect(await thrown(toldChanges(caller(READER, [betaPartyId]), world.order))).toMatchObject({ message: 'Sales order not found.' })
+  })
+
+  it('a line written before the row kept its speaker: speaker null (the web says the kind by its event words)', async () => {
+    const world = await inWork()
+    const correlation = newId()
+    await acceptRequest(caller(['orders.view', 'orders.manage'], 'all', correlation), world.request, { version: 1 }, undefined, h.clock)
+    await asTheWorker(correlation)
+    const row = await one<{ id: string; after: Json }>(`SELECT id::text AS id, after FROM "AuditLog" WHERE "tenantId" = $1 AND action = 'sales.orderChangeNotes' AND "recordId" = $2 AND after->>'written' = 'true'`, [T, world.order])
+    expect(row.after.speaker).toBeDefined()
+    const { speaker: _kept, ...older } = row.after
+    const before = `T-OC009-old-${newId()}`
+    await planted([copy('AuditLog', row.id, { id: newId(), requestId: before, after: older })])
+    const old = (await toldChanges(caller(READER), world.order)).changes.find((entry) => entry.batchId === before)
+    expect(old).toBeDefined()
+    expect(old!.speaker).toBeNull()
+  })
+})
+// ── end B-OC-009 ──

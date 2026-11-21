@@ -97,6 +97,8 @@ export interface FreezeRuleFacts {
   readonly action: OrderFreezeAction
   readonly active: boolean
   readonly note: string | null
+  /** B-OC-017: the customer whose own set the rule belongs to (null or absent: the company's set). */
+  readonly partyId?: string | null
 }
 
 export interface FreezeVerdict {
@@ -144,6 +146,36 @@ export function rulesForParty<R extends Pick<FreezeRuleFacts, 'field' | 'active'
   const own = new Set(partyId === null ? [] : rules.filter((rule) => rule.partyId === partyId && rule.active).map((rule) => rule.field))
   return rules.filter((rule) => (own.has(rule.field) ? rule.partyId === partyId : rule.partyId === null))
 }
+
+// ── B-OC-017 (order changes tab R13b; 13-backend §6): what freezes next, and whose rule decides ──
+/** The next verdict of a field: from which stage it changes, and to what. */
+export interface NextVerdict {
+  readonly stage: OrderFreezeStage
+  readonly action: OrderFreezeAction
+}
+
+/**
+ * What comes next for a field after the stage reached (nothing reached: from the first rule on): the first later stage with an
+ * active rule of the field whose verdict differs from the verdict now — { stage, action }; null when nothing more comes. Never a
+ * date: the web says "From {stage}: …". Pure.
+ */
+export function nextVerdictOf(rules: readonly FreezeRuleFacts[], field: OrderFreezeField, stage: OrderFreezeStage | null): NextVerdict | null {
+  const now = freezeVerdict(rules, field, stage).state
+  const later = [...new Set(rules.filter((rule) => rule.active && rule.field === field && (stage === null || stageRank(rule.frozenFrom) > stageRank(stage))).map((rule) => rule.frozenFrom))].sort((a, b) => stageRank(a) - stageRank(b))
+  for (const at of later) {
+    const then = freezeVerdict(rules, field, at).state
+    if (then !== now && then !== 'OPEN') return { stage: at, action: then }
+  }
+  return null
+}
+
+/** The verdict's deciding rule is the customer's own set (B-PR-14), not the company's: "Rule of {customer}". Pure. */
+export function customerRuleOf(rules: readonly FreezeRuleFacts[], ruleId: string | null): boolean {
+  if (ruleId === null) return false
+  const rule = rules.find((entry) => entry.id === ruleId)
+  return rule !== undefined && rule.partyId !== undefined && rule.partyId !== null
+}
+// ── end B-OC-017 ──
 
 /** Every field's verdict at a stage (the "What is frozen" panel's rows). */
 export const verdictsAt = (rules: readonly FreezeRuleFacts[], stage: OrderFreezeStage | null): FreezeVerdict[] => ORDER_FREEZE_FIELDS.map((field) => freezeVerdict(rules, field, stage))

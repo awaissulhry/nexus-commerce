@@ -26,6 +26,7 @@ import {
   type OrderFreezeStage,
   type StageReached,
 } from '@nexus/factory-domain/sales/order-changes/freeze'
+import { customerRuleOf, nextVerdictOf } from '@nexus/factory-domain/sales/order-changes/freeze' // B-OC-017
 import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { SALES_SETTINGS_MANAGE } from '@nexus/factory-domain/sales/quotes/permissions'
 import { command, type CommandCaller } from '../../../core/command'
@@ -68,7 +69,8 @@ import { readStages, stageOfLine, stageOfSize } from './stages'
 export const RULE_COLUMNS = { id: true, companyId: true, partyId: true, field: true, frozenFrom: true, action: true, active: true, note: true, updatedById: true, version: true, createdAt: true, updatedAt: true } as const satisfies Prisma.OrderFreezeRuleSelect
 type RuleRow = Prisma.OrderFreezeRuleGetPayload<{ select: typeof RULE_COLUMNS }>
 
-const factsOf = (row: RuleRow): FreezeRuleFacts => ({ id: row.id, field: row.field as OrderFreezeField, frozenFrom: row.frozenFrom as OrderFreezeStage, action: row.action as OrderFreezeAction, active: row.active, note: row.note })
+// B-OC-017: + its set (the customer's own, or the company's: null) — "Rule of {customer}".
+const factsOf = (row: RuleRow): FreezeRuleFacts => ({ id: row.id, field: row.field as OrderFreezeField, frozenFrom: row.frozenFrom as OrderFreezeStage, action: row.action as OrderFreezeAction, active: row.active, note: row.note, partyId: row.partyId })
 
 const RULE_ORDER: Prisma.OrderFreezeRuleOrderByWithRelationInput[] = [{ field: 'asc' }, { frozenFrom: 'asc' }, { id: 'asc' }]
 
@@ -278,7 +280,8 @@ const stageView = (reached: StageReached) => ({ stage: reached.stage, on: reache
 
 function verdictView(rules: readonly FreezeRuleFacts[], field: OrderFreezeField, stage: OrderFreezeStage | null) {
   const verdict = freezeVerdict(rules, field, stage)
-  return { field, fieldWords: FIELD_WORDS[field], state: verdict.state, frozenFrom: verdict.frozenFrom, ruleId: verdict.ruleId, words: verdict.words }
+  // B-OC-017 (order changes tab R13b): what comes next, and whether the deciding rule is the customer's own.
+  return { field, fieldWords: FIELD_WORDS[field], state: verdict.state, frozenFrom: verdict.frozenFrom, ruleId: verdict.ruleId, words: verdict.words, next: nextVerdictOf(rules, field, stage), customerRule: customerRuleOf(rules, verdict.ruleId) }
 }
 
 /** The order's freeze reading: what the "What is frozen" panel and the locked size cells show (B-PR-14: its customer's rules too). */
@@ -299,7 +302,7 @@ export async function freezeReadingOf(db: Reader, order: Pick<OrderRow, 'id' | '
         sizes: line.sizes.map((size) => {
           const cell = stageOfSize(stages, line.id, size.size)
           const verdict = verdictView(rules, 'SIZE_QUANTITY', cell.stage)
-          return { size: size.size, ...stageView(cell), locked: verdict.state !== 'OPEN', state: verdict.state, words: verdict.words }
+          return { size: size.size, ...stageView(cell), locked: verdict.state !== 'OPEN', state: verdict.state, words: verdict.words, /* B-OC-017 */ next: verdict.next, customerRule: verdict.customerRule }
         }),
       }
     }),

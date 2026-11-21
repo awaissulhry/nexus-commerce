@@ -294,6 +294,20 @@ describe('the order confirmation (SAL-208)', () => {
     expect(await outbox('sales_order.confirmation_sent', orderA.id)).toEqual([expect.objectContaining({ version: 2, outboundId: sent.outboundId })])
     await no('reader', 'POST', `/sales/orders/${orderA.id}/confirmation`, {}, 403)
   })
+
+  // ── B-OC-014 (order changes tab R10): every send, not only the last ──
+  it('B-OC-014: a second version sent (made in English) — both read sent, two sends newest first, with their addresses and who sent them', async () => {
+    const again = await ok('owner', 'POST', `/sales/orders/${orderA.id}/confirmation/send`, { to: ['buyer.p1@example.com'], language: 'en' }, 201)
+    expect(again).toMatchObject({ version: 3, made: true, confirmation: { sentVersion: 3 } })
+    const read = (await ok('reader', 'GET', `/sales/orders/${orderA.id}/confirmation`)).confirmation
+    expect(read.versions.map((version: Json) => [version.version, version.sent])).toEqual([[3, true], [2, true], [1, false]])
+    expect(read.sends).toEqual([
+      { version: 3, at: expect.any(String), to: ['buyer.p1@example.com'], by: 'Made-up owner' },
+      { version: 2, at: expect.any(String), to: ['buyer.p1@example.com'], by: 'Made-up owner' },
+    ])
+    expect(Date.parse(read.sends[0].at)).toBeGreaterThanOrEqual(Date.parse(read.sends[1].at))
+  })
+  // ── end B-OC-014 ──
 })
 
 // ---- an order waiting for a yes (SAL-205) -----------------------------------------------------------------------------------

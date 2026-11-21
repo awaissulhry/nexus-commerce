@@ -244,6 +244,8 @@ export const orderView = output({
   /** The record chain: quote and version → order → deposit requests → work orders → shipments → invoices. */
   chain: output({
     quote: output({ id: id(), number: z.string(), versionId: id(), revision: z.number().int() }).nullable(),
+    /** B-OC-016 (order changes tab R12): the customer's portal order it was made from — its number, when and by which of the customer's own people it was sent; null: none (a quote's order, the office's own). */
+    portalOrder: output({ id: id(), number: z.string().nullable(), sentAt: instant().nullable(), sentBy: z.string().nullable() }).nullable(),
     depositRequests: z.array(depositView),
     workOrders: z.array(output({ id: id(), number: z.string(), status: z.string(), siteId: id(), releasedAt: instant().nullable() })),
     shipments: z.array(

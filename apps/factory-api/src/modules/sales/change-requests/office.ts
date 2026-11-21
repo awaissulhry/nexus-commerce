@@ -47,6 +47,7 @@ import { agreedDateOf, answerableIn, counterOfRow, counterStateIn } from './coun
 import { grainPermission } from '@nexus/factory-domain/auth/grains/grains'
 import { can, type Permission } from '@nexus/factory-domain/core/permissions'
 import { blindPriceHeld } from '@nexus/factory-domain/sales/blind-price'
+import { requestReasonWords } from '@nexus/factory-domain/sales/amendments/reasons' // B-OC-012
 import { counterPriced } from '@nexus/factory-domain/sales/change-requests/counter'
 import {
   readCounterFacts, // B-OC-003: + when each counter-offer lapses
@@ -209,11 +210,13 @@ export async function officeRequest(db: Reader, context: ReturnType<typeof offic
   return { row, order }
 }
 
-/** The amendment's reason (kept with the order): the office's own, else the request said in a sentence. */
+/**
+ * The amendment's reason (kept with the order): the office's own, else the request said in a sentence. B-OC-012: the sentence is the
+ * domain's template (requestReasonWords), which its recognizer serverReasonOf reads back as REQUEST — one source.
+ */
 function reasonOf(row: OfficeRequestRow, given: string | undefined): string {
   if (given !== undefined && given.trim() !== '') return given.trim()
-  const what = row.kind === 'CANCEL' ? `cancel request (${row.reasonCode})` : 'change request'
-  return `The customer's ${what} of ${businessDate(row.createdAt)} from the portal${row.reason ? `: ${row.reason}` : ''}`.slice(0, MAX_REASON)
+  return requestReasonWords({ kind: row.kind, reasonCode: row.reasonCode, askedOn: businessDate(row.createdAt), reason: row.reason }).slice(0, MAX_REASON)
 }
 
 /**

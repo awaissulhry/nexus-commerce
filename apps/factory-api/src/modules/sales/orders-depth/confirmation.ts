@@ -202,11 +202,42 @@ async function keepInCommand(tools: CommandTools, order: OrderRow, prepared: Pre
   return { id, version, fileId: file.id, made: true }
 }
 
+// ── B-OC-014 (order changes tab R10; 13-backend §5): every send of the confirmation, from the order's own audit rows ──
+/** The newest sends the read lists. */
+export const CONFIRMATION_SENDS_LIMIT = 20
+
+/** One send as its `orders.sendConfirmation` audit row kept it: the version, when, to whom, and the office person who sent it. */
+export interface ConfirmationSend {
+  readonly version: number
+  readonly at: Date
+  readonly to: readonly string[]
+  readonly byId: string | null
+}
+
+/** The sends of the audit rows, newest first (a row that names no version is left out; only an office person is ever named). Pure. */
+export function sendsOf(rows: readonly { readonly at: Date; readonly actorId: string; readonly audience: string; readonly after: unknown }[]): ConfirmationSend[] {
+  return rows
+    .flatMap((row) => {
+      const after = (row.after ?? {}) as Record<string, unknown>
+      const version = after.confirmationVersion
+      const sentTo = after.to
+      if (typeof version !== 'number') return []
+      const to = Array.isArray(sentTo) ? sentTo.filter((entry): entry is string => typeof entry === 'string') : []
+      return [{ version, at: row.at, to, byId: row.audience === 'OFFICE' ? row.actorId : null }]
+    })
+    .sort((a, b) => b.at.getTime() - a.at.getTime())
+}
+// ── end B-OC-014 ──
+
 async function readState(caller: CommandCaller, order: OrderRow) {
   return caller.withClient(async (db) => {
     const rows = await db.generatedDocument.findMany({ where: { recordType: 'SalesOrder', recordId: order.id, kind: CONFIRMATION_KIND }, select: VERSION_COLUMNS, orderBy: { version: 'desc' } })
     const sent = await db.salesOrder.findUniqueOrThrow({ where: { id: order.id }, select: { confirmationSentAt: true, confirmationVersion: true, status: true, version: true } })
-    const names = new Map((await db.user.findMany({ where: { id: { in: rows.flatMap((row) => (row.createdById ? [row.createdById] : [])) } }, select: { id: true, displayName: true } })).map((row) => [row.id, row.displayName]))
+    // B-OC-014: every send (this order's own audit rows only), newest first.
+    const sends = sendsOf(await db.auditLog.findMany({ where: { recordType: 'SalesOrder', recordId: order.id, action: 'orders.sendConfirmation' }, orderBy: [{ at: 'desc' }, { id: 'desc' }], take: CONFIRMATION_SENDS_LIMIT, select: { at: true, actorId: true, audience: true, after: true } }))
+    const sentVersions = new Set(sends.map((send) => send.version))
+    const peopleIds = [...new Set([...rows.flatMap((row) => (row.createdById ? [row.createdById] : [])), ...sends.flatMap((send) => (send.byId ? [send.byId] : []))])]
+    const names = new Map((await db.user.findMany({ where: { id: { in: peopleIds } }, select: { id: true, displayName: true } })).map((row) => [row.id, row.displayName]))
     let upToDate: boolean | null = null
     if (rows[0] && !NOT_NOW.has(sent.status)) {
       const fresh = (await readOrder(db, order.id))!
@@ -221,7 +252,10 @@ async function readState(caller: CommandCaller, order: OrderRow) {
       sentVersion: sent.confirmationVersion,
       upToDate,
       mayMake: !NOT_NOW.has(sent.status),
-      versions: rows.map((row) => ({ id: row.id, version: row.version, number: row.number, language: row.language, fileId: row.fileId, createdAt: toUtcIso(row.createdAt), createdBy: row.createdById ? (names.get(row.createdById) ?? null) : null, sent: row.version === sent.confirmationVersion })),
+      // B-OC-014: `sent` for every version ever sent (was the last one only).
+      versions: rows.map((row) => ({ id: row.id, version: row.version, number: row.number, language: row.language, fileId: row.fileId, createdAt: toUtcIso(row.createdAt), createdBy: row.createdById ? (names.get(row.createdById) ?? null) : null, sent: row.version === sent.confirmationVersion || sentVersions.has(row.version) })),
+      // B-OC-014: each send, newest first: the version, when, the addresses it went to, the office person who sent it.
+      sends: sends.map((send) => ({ version: send.version, at: toUtcIso(send.at), to: [...send.to], by: send.byId ? (names.get(send.byId) ?? null) : null })),
     }
   })
 }

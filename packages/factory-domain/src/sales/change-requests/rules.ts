@@ -232,7 +232,8 @@ export function dayWords(day: BusinessDate, locale: 'it' | 'en'): string {
   return `${Number(date)} ${MONTHS[locale][Number(month) - 1]}`
 }
 
-const STATUS_NAMES: Readonly<Record<SalesOrderStatus, Words>> = Object.freeze({
+// B-OC-010 (order changes tab R6a): exported — the changes read says why a change is not restored in the same words.
+export const STATUS_NAMES: Readonly<Record<SalesOrderStatus, Words>> = Object.freeze({
   CONFIRMED: { it: 'confermato', en: 'confirmed' },
   IN_PRODUCTION: { it: 'in produzione', en: 'in production' },
   READY: { it: 'pronto per la spedizione', en: 'ready to ship' },
