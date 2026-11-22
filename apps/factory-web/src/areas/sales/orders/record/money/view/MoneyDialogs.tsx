@@ -5,7 +5,7 @@ import { Lock, Mail, UserRound } from 'lucide-react'
 import { Banner, Field } from '@nexus/ui/components'
 import { Input, RadioCard, Select, Spinner } from '@nexus/ui/primitives'
 import { DateField, Textarea } from '../../../../../../lib/i18n/ds-parts'
-import { formatDate } from '../../../../../../lib/i18n/format'
+import { formatDate, formatTime } from '../../../../../../lib/i18n/format'
 import { INTL_LOCALE } from '../../../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { money } from '../../../../quotes/model'
@@ -20,7 +20,7 @@ import { acceptBodyOf, diffWordOf } from '../price' // F-OM-301
 import { costAmountOf, HAND_COST_KINDS, marginAfterOf, targetOf, targetPctOf } from '../margin' // F-OM-302
 import type { CostLineKind } from '../../../../../finance/margins/api' // F-OM-302
 import { stillToPayOf } from '../totals'
-import { pctOf, useSay } from './say' // F-OM-fx3 (W-19): pctOf, the page's one percent format
+import { lineOf, pctOf, useSay } from './say' // F-OM-fx3 (W-19): pctOf, the page's one percent format; (W-11) lineOf, the sub-line
 
 /**
  * F-OM-101 / 201 / 202 (order MONEY tab, 10-design §9) — the payment plan's windows, mounted ONCE by the page (OrderRecordView, the
@@ -99,7 +99,7 @@ function PlanDialog({ order, act, stepId, requestId, model, actions }: { order: 
   const request = row?.request ?? (requestId ? (order.chain.depositRequests.find((entry) => entry.id === requestId) ?? null) : null)
   const [input, setInput] = useState<HandInput>(() => handInputOf(act, { row, order, openSteps: plan?.openSteps ?? [], today: model.today }))
   const set = (patch: Partial<HandInput>) => setInput((now) => ({ ...now, ...patch }))
-  const shape = handWindowOf(act, { order, row, price: model.can.price })
+  const shape = handWindowOf(act, { order, row, price: model.can.price, tolerance: schedule?.tolerance ?? null /* F-OM-fx3 (W-11) */ })
   const built = handBodyOf(act, input, { step, request, order, today: model.today, steps: schedule?.steps ?? [] })
   const state = model.moneyPlan
   // The preview is the act's own body (its reason too: the server's rule), read a moment after typing stops.
@@ -118,6 +118,11 @@ function PlanDialog({ order, act, stepId, requestId, model, actions }: { order: 
   const held = model.busy ? t('held.busy') : built.problem ? say(built.problem) : built.reasonProblem ? say(built.reasonProblem) : planned
   const refused = state?.refused ? <Banner tone="danger" title={words(state.refused)} /> : <DialogProblem model={model} />
   const rows = beforeAfterOf(answer)
+  // F-OM-fx3 (W-11): the who line as the design says it — "Saved as Alex Demo · today 10:44 · …" (the name from the session; without
+  // it, "under your name"); a fresh code said where the act needs one.
+  const code = shape.code || answer?.preview?.needsFreshCode === true
+  const me = model.moneyPlan?.me ?? null
+  const who = me ? t(code ? 'moneyTab.hand.whoAsCode' : 'moneyTab.hand.whoAs', { name: me, time: formatTime(new Date(), { locale }) }) : undefined
   const choices = (list: readonly { readonly id: string; readonly title: Parameters<typeof say>[0] }[]) => list.map((entry) => <option key={entry.id} value={entry.id}>{say(entry.title)}</option>)
   const fields: Record<string, ReactNode> = {
     share: (
@@ -208,7 +213,7 @@ function PlanDialog({ order, act, stepId, requestId, model, actions }: { order: 
       problem={refused}
       size={act === 'CHANGE_TERMS' ? 'lg' : 'md'}
     >
-      {shape.sub ? <p className="fw-so-hint">{say(shape.sub)}</p> : null}
+      {shape.sub.length > 0 ? <p className="fw-so-hint">{lineOf(shape.sub.map(say))}</p> : null}
       {shape.fields.length > 0 ? <div className="fw-om-dlg-grid">{shape.fields.map((field) => fields[field])}</div> : null}
       {/* The plan before → after, from the server's preview — read once the act and its reason are typed; its refusal said here. */}
       {planned ? (
@@ -242,7 +247,7 @@ function PlanDialog({ order, act, stepId, requestId, model, actions }: { order: 
           <Spinner size={12} /> {t('moneyTab.hand.ba.reading')}
         </p>
       ) : null}
-      <HandParts happens={shape.happens.map(say)} told={say(shape.told)} never={say(shape.never)} reason={input.reason} onReason={(reason) => set({ reason })} reasonError={built.reasonProblem ? say(built.reasonProblem) : null} code={shape.code || answer?.preview?.needsFreshCode === true} />
+      <HandParts happens={shape.happens.map(say)} told={say(shape.told)} never={say(shape.never)} reason={input.reason} onReason={(reason) => set({ reason })} reasonError={built.reasonProblem ? say(built.reasonProblem) : null} code={code} who={who} />
     </Frame>
   )
 }

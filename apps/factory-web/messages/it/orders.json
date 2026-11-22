@@ -3638,10 +3638,20 @@
           "td02": "La sua fattura di acconto (TD02) resta com'è: l'importo pagato."
         },
         "told": "non viene avvisato; il suo portale mostra l'acconto come pagato.",
-        "never": "Il pagamento resta come è arrivato; qui non si fa nessun abbuono; l'acconto resta pagato (non si può annullare)."
+        "never": "Il pagamento resta come è arrivato; qui non si fa nessun abbuono; l'acconto resta pagato (non si può annullare).",
+        "within": "Mancano {amount}: entro la tolleranza di abbuono dell'azienda ({tolerance}).",
+        "over": "Mancano {amount}: oltre la tolleranza di abbuono dell'azienda ({tolerance}) — lo accetta solo il titolare, con un codice nuovo."
       },
       "reason": "Perché",
-      "whoKept": "Salvato a tuo nome con la data di oggi; la cronologia lo conserva."
+      "whoKept": "Salvato a tuo nome con la data di oggi; la cronologia lo conserva.",
+      "sub": {
+        "amount": "{amount}",
+        "openNothing": "aperto · niente pagato",
+        "openPart": "aperto · pagato in parte",
+        "pageSent": "pagina inviata il {date}"
+      },
+      "whoAs": "Salvato come {name} · oggi {time} · la riga è segnata “Impostata a mano” · la cronologia conserva il valore precedente.",
+      "whoAsCode": "Salvato come {name} · oggi {time} · la cronologia conserva il valore precedente · confermi con un codice nuovo dalla tua app di autenticazione."
     },
     "refusal": {
       "OTHER": "Il piano non può cambiare così: rileggi la pagina.",
@@ -3872,7 +3882,7 @@
         "go": "Imposta il costo",
         "sub": "Margine attuale {pct}",
         "kind": "Voce",
-        "kindHint": "Una riga AGGIUNTA al costo calcolato; sostituire una voce calcolata arriva dopo.",
+        "kindHint": "Una riga aggiunta al costo calcolato; sostituire una voce calcolata arriva dopo.",
         "amount": "Importo ({currency})",
         "problem": "Scrivi un importo sopra 0, per esempio 320,00.",
         "happens": {

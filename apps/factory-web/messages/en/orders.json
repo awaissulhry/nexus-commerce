@@ -3505,7 +3505,7 @@
       "problem": {
         "reasonShort": "Say why in at least 3 characters.",
         "reasonLong": "At most 500 characters.",
-        "share": "Type a share of the order total (25 %) or an amount (3.050,00).",
+        "share": "Type a share of the order total (25 %) or an amount (3,050.00).",
         "day": "Pick a day.",
         "past": "Pick today or a later day.",
         "gone": "This step or request is not on the plan any more: close the window and read the page again.",
@@ -3518,7 +3518,7 @@
       },
       "field": {
         "share": "Share or amount",
-        "shareHint": "A share of the order total (25 %) or an amount (3.050,00).",
+        "shareHint": "A share of the order total (25 %) or an amount (3,050.00).",
         "day": "Due day",
         "dayHint": "Today or later.",
         "dayOptional": "Optional · a deposit or a step before shipping asks it when it is opened.",
@@ -3638,10 +3638,20 @@
           "td02": "Its deposit invoice (TD02) stays as it is: the amount paid."
         },
         "told": "not told; their portal shows the deposit as paid.",
-        "never": "The payment stays as received; no write-off is made here; the deposit stays paid (this cannot be undone)."
+        "never": "The payment stays as received; no write-off is made here; the deposit stays paid (this cannot be undone).",
+        "within": "Short by {amount}: within the company's write-off tolerance ({tolerance}).",
+        "over": "Short by {amount}: over the company's write-off tolerance ({tolerance}) — only the Owner accepts it, with a fresh code."
       },
       "reason": "Why",
-      "whoKept": "Saved under your name with today's date; the history keeps it."
+      "whoKept": "Saved under your name with today's date; the history keeps it.",
+      "sub": {
+        "amount": "{amount}",
+        "openNothing": "open · nothing paid",
+        "openPart": "open · part paid",
+        "pageSent": "page sent {date}"
+      },
+      "whoAs": "Saved as {name} · today {time} · the row is tagged “Set by hand” · the history keeps the old value.",
+      "whoAsCode": "Saved as {name} · today {time} · the history keeps the old value · you confirm with a fresh code from your authenticator app."
     },
     "refusal": {
       "OTHER": "The plan could not change this way: read the page again.",
@@ -3872,7 +3882,7 @@
         "go": "Set the cost",
         "sub": "Margin now {pct}",
         "kind": "Part",
-        "kindHint": "A line ADDED to the computed cost; replacing a computed part comes later.",
+        "kindHint": "A line added to the computed cost; replacing a computed part comes later.",
         "amount": "Amount ({currency})",
         "problem": "Type an amount above 0, for example 320.00.",
         "happens": {

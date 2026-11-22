@@ -28,7 +28,9 @@ export interface HandInput {
 
 export interface HandWindow {
   readonly title: MoneyWord
-  readonly sub: MoneyWord | null
+  /** The row it acts on, said under the title (its parts one after the other, " · "); [] the plan's head. F-OM-fx3 (W-11): Change the
+   * deposit… says the deposit as it is now ("Deposit · 30 % · € 3,660.00 · open · nothing paid · page sent 20 Nov"). */
+  readonly sub: readonly MoneyWord[]
   readonly go: MoneyWord
   readonly fields: readonly HandField[]
   readonly happens: readonly MoneyWord[]
@@ -78,14 +80,18 @@ const ACT_WINDOWS: Readonly<Record<MoneyPlanAct, { readonly fields: readonly Han
  * The window of one act on one row (or the plan's head): its title, what it asks and its five parts. `row` is the row the act is on
  * (null: the head's Change payment terms… / Add a step…); `price`: amounts in its words only with the grain.
  */
-export function handWindowOf(act: MoneyPlanAct, context: { readonly order: Pick<Order, 'number' | 'currency'>; readonly row: PlanRow | null; readonly price: boolean }): HandWindow {
+export function handWindowOf(act: MoneyPlanAct, context: { readonly order: Pick<Order, 'number' | 'currency'>; readonly row: PlanRow | null; readonly price: boolean; /** F-OM-fx3 (B-OM-024): the company's write-off tolerance (price grain; null / absent: not known). */ readonly tolerance?: number | null }): HandWindow {
   const { order, row, price } = context
   const shape = ACT_WINDOWS[act]
   const what = row?.title ?? word('moneyTab.hand.thePlan')
   const request = row?.request ?? null
   const left = request && price ? stillToPay(request) : null
   const td02 = request?.fiscalDocument === 'TD02'
+  // F-OM-fx3 (W-11): Accept short says the tolerance first — within it, or over it (only the Owner, with a fresh code).
+  const tolerance = price && typeof context.tolerance === 'number' ? context.tolerance : null
+  const short = act === 'ACCEPT_SHORT' ? (row?.short ?? null) : null
   const happens = [
+    ...(short && (short.amount ?? left) !== null && tolerance !== null ? [word(short.within ? 'moneyTab.hand.ACCEPT_SHORT.within' : 'moneyTab.hand.ACCEPT_SHORT.over', { money: { amount: (short.amount ?? left)!, tolerance } })] : []),
     ...shape.happens
       .filter((key) => !(act === 'ACCEPT_SHORT' && key === 'td02' && !td02))
       .map((key) => (act === 'ASK_AGAIN' && key === 'waits' && row?.kind === 'BEFORE_SHIPPING' ? word('moneyTab.hand.ASK_AGAIN.holds') : word(`moneyTab.hand.${act}.happens.${key}`))),
@@ -103,7 +109,15 @@ export function handWindowOf(act: MoneyPlanAct, context: { readonly order: Pick<
           ? word(`moneyTab.hand.${act}.title`, { params: { number: order.number } })
           : word(`moneyTab.hand.${act}.title`, { words: { row: what } })
   const go = act === 'ACCEPT_SHORT' ? (left !== null ? word('moneyTab.hand.ACCEPT_SHORT.go', { money: { amount: left } }) : word('moneyTab.hand.ACCEPT_SHORT.goWords')) : word(`moneyTab.hand.${act}.go`)
-  return { title, sub: row ? row.due : null, go, fields: shape.fields, happens, told, never: word(`moneyTab.hand.${act}.never`), code: shape.code ?? false, danger: shape.danger ?? false }
+  // F-OM-fx3 (W-11): the deposit as it is now (what is replaced), else the row's due words.
+  const placed = (request?.paidAmount ?? 0) > 0 || !!row?.short
+  const sub: MoneyWord[] = !row
+    ? []
+    : act === 'REPLACE_DEPOSIT'
+      ? [row.title, ...(price && row.amount !== null ? [word('moneyTab.hand.sub.amount', { money: { amount: row.amount } })] : []), word(placed ? 'moneyTab.hand.sub.openPart' : 'moneyTab.hand.sub.openNothing'), ...(request?.link ? [word('moneyTab.hand.sub.pageSent', { instants: { date: request.link.sentAt } })] : [])]
+      : [row.due]
+  // A fresh code follows the terms, and an Accept short over the tolerance (the server's rule: only the Owner, orders.waive).
+  return { title, sub, go, fields: shape.fields, happens, told, never: word(`moneyTab.hand.${act}.never`), code: (shape.code ?? false) || (!!short && !short.within), danger: shape.danger ?? false }
 }
 
 /** What a window opens with: the row's own day, the first open step to take from or give to, the current terms, bank charges. */
