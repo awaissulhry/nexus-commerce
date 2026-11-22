@@ -465,6 +465,8 @@ export const orderFilePreviewsSchema = z.object({
       inline: presignedAddress.nullable(),
       /** This call's addresses were spent: ask for it again. */
       later: z.boolean(),
+      /** F-OF-104 (B-OF-006, S3; optional until it lands): a picture that never gets a small (HEIC, GIF, TIFF) — stop asking. */
+      never: z.boolean().optional(),
     }),
   ),
 })

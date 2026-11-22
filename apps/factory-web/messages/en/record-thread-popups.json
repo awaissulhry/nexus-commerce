@@ -33,7 +33,9 @@
       "other": "This file cannot be shown here. Download it to open it."
     },
     "locked": "Body data — it opens only when you ask, and the opening is recorded.",
-    "openRecorded": "Open — this opening is recorded"
+    "openRecorded": "Open — this opening is recorded",
+    "failed": "The file could not be opened.",
+    "retry": "Try again"
   },
   "original": {
     "title": "Original e-mail",

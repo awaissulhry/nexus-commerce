@@ -158,6 +158,8 @@ export function useOrderFiles(
     onViewerIndex: viewer.onIndex,
     onViewerClose: viewer.onClose,
     onViewerOpenLocked: viewer.onOpenLocked,
+    onViewerRetry: viewer.onRetry, // F-OF-104 (F7-B1)
+    onOrderPreviewFailed: previews.stale, // F-OF-104 (F7-B3)
     onViewerDownload: (fileId) => void download(fileId),
     // F-OP-125 (B5): a worksheet through the made-to-measure route (it records the opening on the profile), in a new tab.
     onOrderWorksheet: (sheet) => {

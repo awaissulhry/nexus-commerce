@@ -377,3 +377,52 @@ describe('F-OF-103: Add files… — the ONE upload, "Where it goes", no "Fiscal
     expect(source('../../../areas/sales/orders/record/view/FilesTab.tsx')).toContain("const buttons = files.may?.upload && actions?.onOrderAdd && !files.problem")
   })
 })
+
+// ---- F-OF-104 (order FILES tab, W1): the viewer's failed open (F7-B1) and the previews (F7-B2/B3/B4) ------------------------------------
+describe('F-OF-104: a failed open says so with Try again — no loop; the previews ask every card in view, once', () => {
+  it('a failed file is a state of the walk: never fetched again by itself; Try again takes it off', async () => {
+    const { fetchesOf, viewerFilesOf } = await import('./use-order-file-viewer')
+    const files = [file('spec'), file('collar', { kind: 'PHOTO', contentType: 'image/jpeg' })]
+    const walk = viewerFilesOf(files, new Map(), new Set(), new Set(['collar']))
+    expect(walk.map((one) => [one.id, !!one.failed])).toEqual([
+      ['spec', false],
+      ['collar', true],
+    ])
+    expect(walk.map((one) => fetchesOf(one, new Map()))).toEqual([true, false])
+    // Without a failed set (the callers of before): as it was.
+    expect(viewerFilesOf(files, new Map(), new Set()).every((one) => !one.failed)).toBe(true)
+  })
+
+  it('the ONE viewer draws "The file could not be opened" with Try again, in both languages (no spinner forever)', async () => {
+    const { FileViewer } = await import('../popups/view/FileViewer')
+    const { viewerFilesOf } = await import('./use-order-file-viewer')
+    const walk = viewerFilesOf([file('spec')], new Map(), new Set(), new Set(['spec']))
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['record-thread-popups'])['record-thread-popups']!)
+      const html = render(createElement(FileViewer, { walk: 'all', files: walk, index: 0, onIndex: () => undefined, onClose: () => undefined, onRetry: () => undefined }), locale)
+      expect(textOf(html)).toContain(t('viewer.failed'))
+      expect(textOf(html)).toContain(t('viewer.retry'))
+      expect(textOf(html)).not.toContain(t('viewer.opening'))
+    }
+  })
+
+  it('the code: the walk is made again only when it changes; a failed fetch marks the file (no notice that re-draws the page); the body hands Try again', () => {
+    const hook = readFileSync(new URL('./use-order-file-viewer.ts', import.meta.url), 'utf8')
+    expect(hook).toContain('const list = useMemo(() => viewerFilesOf(files ?? [], sources, opened, failed), [files, sources, opened, failed])')
+    expect(hook).toContain('setFailed((known) => new Set(known).add(file.id))')
+    expect(hook.slice(hook.indexOf('const fetchOne'), hook.indexOf('// The file shown is fetched'))).not.toContain("onProblem.current?.('order.openFailed')")
+    const view = readFileSync(new URL('./view/FilesView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('onRetry={actions?.onViewerRetry /* F-OF-104 */}')
+    const container = readFileSync(new URL('../../../areas/_shared/record-thread/use-order-files.ts', import.meta.url), 'utf8')
+    expect(container).toContain('onViewerRetry: viewer.onRetry, // F-OF-104 (F7-B1)')
+    expect(container).toContain('onOrderPreviewFailed: previews.stale, // F-OF-104 (F7-B3)')
+  })
+
+  it('the previews: every card in view is asked at once, ≤ 24 a call (F7-B2); a picture that no longer loads is asked again (F7-B3)', () => {
+    const hook = readFileSync(new URL('./use-file-previews.ts', import.meta.url), 'utf8')
+    expect(hook).toContain('while (ids.length > 0) {\n      askBatch(call, ids)\n      ids = next()')
+    expect(hook).toContain('return { previews, visible, stale }')
+    const view = readFileSync(new URL('./view/FilesView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("onError={preview.kind === 'picture' ? () => actions?.onOrderPreviewFailed?.(file.id) : undefined}")
+  })
+})

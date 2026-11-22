@@ -112,6 +112,10 @@ export interface FilesViewActions {
   onOrderUploadCancel?: () => void
   onOrderUploadDismiss?: () => void
   // ---- end F-OF-103
+  // ---- F-OF-104 (F7-B1, F7-B3): "Try again" on a file the viewer could not open; a card's picture that no longer loads is asked again
+  onViewerRetry?: (fileId: string) => void
+  onOrderPreviewFailed?: (fileId: string) => void
+  // ---- end F-OF-104
 }
 
 // ---- B-TH-280: the files in depth (B-W2b-177) in this window — the container (the docked thread) fills these slots with the depth
@@ -795,6 +799,7 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
           onClose={() => actions?.onViewerClose?.()}
           onOpenLocked={actions?.onViewerOpenLocked}
           onDownload={actions?.onViewerDownload}
+          onRetry={actions?.onViewerRetry /* F-OF-104 */}
           onGoToMessage={actions?.onOrderMessage ? (messageId) => {
             actions.onViewerClose?.()
             actions.onOrderMessage?.(messageId)
@@ -909,8 +914,9 @@ function OrderCard({ file, orderId, customer, older, chosen, onChoose, actions, 
               <span>{t('card.bodyData')}</span>
             </>
           ) : preview?.kind === 'picture' || preview?.kind === 'page' ? (
-            // F-OP-126: the small preview, or PDF page 1 drawn here (never the original, never an iframe).
-            <img src={preview.src} alt="" loading="lazy" decoding="async" />
+            // F-OP-126: the small preview, or PDF page 1 drawn here (never the original, never an iframe). F-OF-104: a picture kept while
+            // the page stays; one that no longer loads (drawn again after its address expired) is asked again.
+            <img src={preview.src} alt="" loading="lazy" decoding="async" onError={preview.kind === 'picture' ? () => actions?.onOrderPreviewFailed?.(file.id) : undefined} />
           ) : preview?.kind === 'largePdf' ? (
             <>
               {KIND_ICON[kind]}

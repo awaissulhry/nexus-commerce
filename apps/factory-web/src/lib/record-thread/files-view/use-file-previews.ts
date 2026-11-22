@@ -40,6 +40,8 @@ export interface PreviewAnswer {
   readonly pdfDrawable: boolean
   readonly inline: { readonly url: string; readonly expiresAt: string } | null
   readonly later: boolean
+  /** F-OF-104 (B-OF-006): a picture that will never get a small — asked once, never again (F7-B4). */
+  readonly never?: boolean
 }
 
 /** What the cache keeps of one file at one version: what the card shows, and until when (a picture's address expires). */
@@ -77,9 +79,14 @@ export function wantedOf(visible: readonly string[], files: ReadonlyMap<string, 
   return out
 }
 
-/** A picture's answer as the card keeps it: its small preview until the address expires; none made yet: the icon, asked again later. */
-export function keptPicture(answer: Pick<PreviewAnswer, 'small'>, now: number): Kept {
-  return answer.small ? { preview: { kind: 'picture', src: answer.small.url }, until: Date.parse(answer.small.expiresAt) - EXPIRY_MARGIN_MS } : { preview: { kind: 'icon' }, until: now + NOT_MADE_AGAIN_MS }
+/**
+ * A picture's answer as the card keeps it. F-OF-104 (F7-B3): a small preview, once drawn, is kept while the page stays (the browser holds
+ * the picture; it is never fetched again every minute) — a card drawn again after its address expired asks again (`stale`). None made
+ * yet: the icon, asked again a minute later; F-OF-104 (F7-B4): one that will never be made (`never`): the icon, never asked again.
+ */
+export function keptPicture(answer: Pick<PreviewAnswer, 'small' | 'never'>, now: number): Kept {
+  if (answer.small) return { preview: { kind: 'picture', src: answer.small.url }, until: Infinity }
+  return { preview: { kind: 'icon' }, until: answer.never ? Infinity : now + NOT_MADE_AGAIN_MS }
 }
 
 /** A session LRU (the PDF pages drawn here): the newest `max` kept; reading one makes it the newest. */
@@ -141,7 +148,7 @@ async function drawFirstPage(inline: { readonly url: string; readonly expiresAt:
  * The previews of the cards: `files` the order's files (null: not read), `ask` the route (null: none — the portal's face). Returns what
  * each card shows and the body's report of the cards in view.
  */
-export function useFilePreviews(input: { readonly files: readonly OrderFile[] | null; readonly ask: ((fileIds: readonly string[]) => Promise<readonly PreviewAnswer[]>) | null }): { previews: Readonly<Record<string, CardPreview>>; visible: (fileIds: readonly string[]) => void } {
+export function useFilePreviews(input: { readonly files: readonly OrderFile[] | null; readonly ask: ((fileIds: readonly string[]) => Promise<readonly PreviewAnswer[]>) | null }): { previews: Readonly<Record<string, CardPreview>>; visible: (fileIds: readonly string[]) => void; /* F-OF-104 */ stale: (fileId: string) => void } {
   const { files, ask } = input
   const [kept, setKept] = useState<ReadonlyMap<string, Kept>>(new Map())
   const keptRef = useRef(kept)
@@ -166,8 +173,18 @@ export function useFilePreviews(input: { readonly files: readonly OrderFile[] | 
       const page = file ? pages.get(keyOf(file)) : undefined
       if (file && page && !freshOf(keptRef.current.get(keyOf(file)), now)) keep(keyOf(file), { preview: { kind: 'page', src: page }, until: Infinity })
     }
-    const ids = wantedOf(visibleRef.current, byId.current, keptRef.current, asking.current, now).filter((id) => !pages.get(keyOf(byId.current.get(id)!)))
+    const next = () => wantedOf(visibleRef.current, byId.current, keptRef.current, asking.current, now).filter((id) => !pages.get(keyOf(byId.current.get(id)!)))
+    let ids = next()
     if (ids.length === 0) return schedule()
+    // F-OF-104 (F7-B2): every card in view is asked now, ≤ 24 a call — the 25th on no longer waits for the next scroll.
+    while (ids.length > 0) {
+      askBatch(call, ids)
+      ids = next()
+    }
+  }, [keep])
+
+  /** One call of ≤ 24 ids: what comes back is kept (a picture, PDF page 1 drawn here, "Large PDF", the icon). */
+  const askBatch = (call: (fileIds: readonly string[]) => Promise<readonly PreviewAnswer[]>, ids: readonly string[]) => {
     for (const id of ids) asking.current.add(id)
     call(ids)
       .then((answers) => {
@@ -197,7 +214,7 @@ export function useFilePreviews(input: { readonly files: readonly OrderFile[] | 
         for (const id of ids) asking.current.delete(id)
         schedule()
       })
-  }, [keep])
+  }
 
   // The next turn: soon (`later`, or more than one batch in view), else when the first kept picture in view expires.
   const schedule = (after?: number) => {
@@ -218,10 +235,31 @@ export function useFilePreviews(input: { readonly files: readonly OrderFile[] | 
     turnRef.current()
   }, [])
 
+  // F-OF-104 (F7-B3): a card's picture that no longer loads (drawn again after its address expired) is asked again — once a minute at
+  // most (a second failure inside the minute keeps the icon until then).
+  const failedAt = useRef(new Map<string, number>())
+  const stale = useCallback(
+    (fileId: string) => {
+      const file = byId.current.get(fileId)
+      if (!file) return
+      const now = Date.now()
+      const last = failedAt.current.get(fileId)
+      failedAt.current.set(fileId, now)
+      if (last !== undefined && now - last < NOT_MADE_AGAIN_MS) return keep(keyOf(file), { preview: { kind: 'icon' }, until: now + NOT_MADE_AGAIN_MS })
+      setKept((known) => {
+        const left = new Map(known)
+        left.delete(keyOf(file))
+        return left
+      })
+      schedule(LATER_AGAIN_MS)
+    },
+    [keep],
+  )
+
   const previews: Record<string, CardPreview> = {}
   for (const file of files ?? []) {
     const known = knownWithoutAsking(file) ?? kept.get(keyOf(file))?.preview
     if (known) previews[file.id] = known
   }
-  return { previews, visible }
+  return { previews, visible, stale }
 }

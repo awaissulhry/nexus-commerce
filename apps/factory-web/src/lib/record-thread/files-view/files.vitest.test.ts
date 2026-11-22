@@ -384,19 +384,19 @@ describe('F-OP-126: lazy previews — visible-only asks, the cache by address ex
     expect([asksPreview(file('a', { contentType: 'image/heic' })), asksPreview(file('b', { contentType: 'application/pdf', sizeBytes: 100 })), asksPreview(file('c', { bodyData: true }))]).toEqual([true, true, false])
   })
 
-  it('a picture is kept until its address expires (less 5 s) and asked again then, while in view; one not made yet, a minute later', async () => {
-    const { EXPIRY_MARGIN_MS, freshOf, keptPicture, keyOf, NOT_MADE_AGAIN_MS, wantedOf } = await import('./use-file-previews')
+  // F-OF-104 (F7-B3, F7-B4): this test asserted the bug (a drawn picture asked again every ~55 s while in view) — flipped with the fix.
+  it('a picture once drawn is kept while the page stays (never asked again every minute); one not made yet, a minute later; one never made, never again', async () => {
+    const { freshOf, keptPicture, keyOf, NOT_MADE_AGAIN_MS, wantedOf } = await import('./use-file-previews')
     const kept = keptPicture({ small: { url: 'https://store.example.com/s1?sig=1', expiresAt: new Date(NOW + 60_000).toISOString() } }, NOW)
-    expect(kept).toEqual({ preview: { kind: 'picture', src: 'https://store.example.com/s1?sig=1' }, until: NOW + 60_000 - EXPIRY_MARGIN_MS })
-    expect(freshOf(kept, NOW + 54_000)).toBe(true)
-    expect(freshOf(kept, NOW + 56_000)).toBe(false)
+    expect(kept).toEqual({ preview: { kind: 'picture', src: 'https://store.example.com/s1?sig=1' }, until: Infinity })
+    expect(freshOf(kept, NOW + 3_600_000)).toBe(true)
     const files = new Map([['s1', file('s1')]])
     const cache = new Map([[keyOf(file('s1')), kept]])
-    expect(wantedOf(['s1'], files, cache, new Set(), NOW + 10_000)).toEqual([])
-    expect(wantedOf(['s1'], files, cache, new Set(), NOW + 56_000)).toEqual(['s1'])
+    expect(wantedOf(['s1'], files, cache, new Set(), NOW + 56_000)).toEqual([])
     // A new version is another key: asked again at once.
     expect(wantedOf(['s1'], new Map([['s1', file('s1', { versionNo: 2 })]]), cache, new Set(), NOW)).toEqual(['s1'])
     expect(keptPicture({ small: null }, NOW)).toEqual({ preview: { kind: 'icon' }, until: NOW + NOT_MADE_AGAIN_MS })
+    expect(keptPicture({ small: null, never: true }, NOW)).toEqual({ preview: { kind: 'icon' }, until: Infinity })
   })
 
   it('a PDF over 3 MiB says "Large PDF: open it to see it" without a call; pages are drawn 2 at a time and the session keeps 60', async () => {
