@@ -40,7 +40,12 @@ const LIVE = { events: ['partner_notification.created'] }
 
 // ── B-OS-006 (order shipments tab; X2-B1) ──
 /** A parcel's tracking number the customer may read: a carrier's label only — a TEST label (test mode) is never one. */
-const customerNumberOfParcel = (parcel: { readonly trackingNumber: string | null; readonly carrierParcelId: string | null }): string | null => (parcel.trackingNumber !== null && !isTestLabel(parcel.carrierParcelId) ? parcel.trackingNumber : null)
+// B-OS-022 (order shipments 1/1): else the number typed by hand for a parcel no label tracks (an air waybill, a courier's number).
+type CustomerParcel = { readonly trackingNumber: string | null; readonly carrierParcelId: string | null; readonly trackingUrl: string | null; readonly manualTrackingNumber: string | null; readonly manualTrackingUrl: string | null }
+const labelShown = (parcel: CustomerParcel): boolean => parcel.trackingNumber !== null && !isTestLabel(parcel.carrierParcelId)
+const customerNumberOfParcel = (parcel: CustomerParcel): string | null => (labelShown(parcel) ? parcel.trackingNumber : parcel.trackingNumber === null && parcel.carrierParcelId === null ? parcel.manualTrackingNumber : null)
+/** The carrier page of the number the customer reads (the label's, or the link typed beside the typed number). */
+const customerUrlOfParcel = (parcel: CustomerParcel): string | null => (labelShown(parcel) ? parcel.trackingUrl : customerNumberOfParcel(parcel) !== null ? parcel.manualTrackingUrl : null)
 // ── end B-OS-006 ──
 
 /** The customer's ETA (B-W2b-F14): while packed or on the way. */
@@ -154,7 +159,7 @@ export async function orderShipments(app: FastifyInstance, request: FastifyReque
           return {
             seq: parcel.seq,
             trackingNumber: number,
-            trackingLink: number === null ? null : trackingLinkOf(parcel.trackingUrl),
+            trackingLink: number === null ? null : trackingLinkOf(customerUrlOfParcel(parcel)), // B-OS-022
             status: last?.status ?? null,
             words: last ? TRACKING_WORDS[last.status] : null,
             lastEvent: last ? eventView(last, parcel.seq) : null,
@@ -225,11 +230,11 @@ export async function inTransit(app: FastifyInstance, request: FastifyRequest, n
         expectedDeliveryAt: etaOf(shipment),
         typedTrackingNumber: shipment.manualTrackingNumber, // B-OP-031
         typedTrackingUrl: trackingPageOf(shipment.manualTrackingUrl), // B-OP-034
-        // B-OS-006: carrier labels only (a TEST label's number never reaches the customer).
+        // B-OS-006: carrier labels only (a TEST label's number never reaches the customer); B-OS-022: and the parcels' typed numbers.
         trackingNumbers: read.parcels.flatMap((parcel) => (parcel.shipmentId === shipment.id && customerNumberOfParcel(parcel) !== null ? [customerNumberOfParcel(parcel)!] : [])),
         trackingLinks: read.parcels.flatMap((parcel) => {
           const number = parcel.shipmentId === shipment.id ? customerNumberOfParcel(parcel) : null
-          const link = number !== null ? trackingLinkOf(parcel.trackingUrl) : null
+          const link = number !== null ? trackingLinkOf(customerUrlOfParcel(parcel)) : null // B-OS-022
           return number !== null && link ? [{ trackingNumber: number, ...link }] : []
         }),
         lastEvent: last ? eventView(last, last.parcelId ? (parcelSeq.get(last.parcelId) ?? null) : null) : null,

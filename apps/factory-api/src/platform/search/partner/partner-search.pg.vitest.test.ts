@@ -196,3 +196,35 @@ describe('B-OP-044: a shared delivery is found by every order it carries', { tim
   })
 })
 // ---- end B-OP-044
+
+// ---- B-OS-023 (order shipments 1/1, X2-B4): a number typed by hand the customer was given — the shipment's or a parcel's (an air
+// waybill) — finds its delivery in the customer's portal. Written past the guards on SEED-SH-0001 (a third parcel): the search is
+// what is tested.
+describe('B-OS-023: a tracking number typed by hand finds the delivery', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('the shipment’s and a parcel’s, for its own customer; a workshop never', async () => {
+    const parcelId = newId()
+    const [sh1] = await admin<{ id: string }>(`SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND number = 'SEED-SH-0001'`, [world.tenantId])
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin(`UPDATE "Shipment" SET "manualTrackingNumber" = 'BRT-OS023-P001' WHERE id = $1`, [sh1!.id])
+      await admin(`INSERT INTO "Parcel" (id, "tenantId", "siteId", "partyId", "shipmentId", seq, "manualTrackingNumber") SELECT $1, "tenantId", "siteId", "partyId", id, 3, 'AWB-OS023-P003' FROM "Shipment" WHERE id = $2`, [parcelId, sh1!.id])
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
+    try {
+      for (const typed of ['AWB-OS023-P003', 'BRT-OS023-P001']) {
+        expect(all(await search(buyer, q(typed))).find((result) => result.recordType === 'Shipment'), typed).toMatchObject({ ourRef: 'SEED-SH-0001', status: 'SHIPPED' })
+      }
+      expect((await search(workshop, q('AWB-OS023-P003'))).found).toBe(0)
+    } finally {
+      await admin('SET session_replication_role = replica')
+      try {
+        await admin('DELETE FROM "Parcel" WHERE id = $1', [parcelId])
+        await admin(`UPDATE "Shipment" SET "manualTrackingNumber" = NULL WHERE id = $1`, [sh1!.id])
+      } finally {
+        await admin('SET session_replication_role = DEFAULT')
+      }
+    }
+  })
+})
+// ---- end B-OS-023

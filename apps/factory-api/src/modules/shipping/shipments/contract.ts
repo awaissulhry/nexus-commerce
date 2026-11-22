@@ -147,6 +147,8 @@ export const listShipmentsContract = defineContract({
           /** Parcels with a carrier label, and the first tracking numbers (by parcel). */
           labelled: z.number().int(),
           trackingNumbers: z.array(z.string()),
+          /** B-OS-023: the numbers typed by hand where no label tracks it — the shipment's, then its parcels' (the first three). */
+          typedTrackingNumbers: z.array(z.string()),
           /** The live DDT (none: not issued, or cancelled and not replaced yet). */
           ddt: output({ id: id(), number: z.string() }).nullable(),
           packedAt: instant().nullable(),

@@ -55,6 +55,9 @@ describe('buying labels (LOG-025, LOG-032; Owner Q20)', () => {
     expect(messages(facts({}, { transportBy: 'SENDER' }))).toEqual([expect.stringContaining('no carrier label is needed')])
     expect(messages(facts({ liveDdtNumber: null }))).toEqual([expect.stringContaining('issue the DDT first')])
     expect(messages(facts({ account: null }))).toEqual([expect.stringContaining("only through the company's own Sendcloud account")])
+    // B-OS-022: no label is bought beside a parcel's number typed by hand.
+    expect(messages(facts({ typedParcels: 2 }))).toEqual(['A parcel of this shipment has a tracking number typed by hand: no label is bought beside it. Clear it first.'])
+    expect(buyStateProblems(facts({ typedParcels: 0 }))).toEqual([])
   })
 
   it('refuses another company, a tenant-wide account, another provider, FAKE outside local and test, a paused or disabled account', () => {

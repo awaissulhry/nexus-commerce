@@ -273,3 +273,63 @@ export function eventTimeProblems(occurredAt: Date, shippedAt: Date | null, now:
 
 /** The move a typed status makes: DELIVERED and RETURNED end the journey; the others are news. */
 export const moveOfStatus = (status: ManualEventStatus): 'DELIVERED' | 'RETURNED' | null => (status === 'DELIVERED' || status === 'RETURNED' ? status : null)
+
+// ── B-OS-022 (order shipments 1/1; Owner D4; 13-backend §3): a tracking number typed by hand per parcel ───────────────────────
+/**
+ * One parcel's tracking number typed by hand (an air waybill, a courier's number), in ONE command with the shipment's: only for a
+ * carrier booked by hand (trackingRefusal: never on a shipment whose parcels carry a carrier label), from PACKED on (also after the
+ * goods left), never on a parcel with a label (a TEST one too: the database keeps a label and a typed number apart). Once the goods
+ * left, changing or clearing a number the customer could read says why (3 to 500).
+ */
+export const PARCEL_TRACKING_REFUSALS = ['PARCEL_LABELLED', 'NOT_PACKED'] as const
+export type ParcelTrackingRefusalCode = (typeof PARCEL_TRACKING_REFUSALS)[number]
+
+export const PARCEL_TRACKING_WORDS: Readonly<Record<ParcelTrackingRefusalCode, string>> = Object.freeze({
+  PARCEL_LABELLED: 'This parcel carries a label: its number comes from the label, never typed.',
+  NOT_PACKED: 'Parcels get their numbers once the shipment is packed.',
+})
+
+export const PARCEL_TRACKING_LIMITS = Object.freeze({ parcels: 200, reasonMin: 3, reasonMax: 500 })
+
+export interface ParcelTrackingAsk {
+  readonly parcelId: string
+  /** null clears it. */
+  readonly trackingNumber: string | null
+  /** Left out: kept (cleared with the number); null clears it. */
+  readonly trackingUrl?: string | null | undefined
+}
+
+/** The asks' field problems (400, paths under body/parcels/<i>): each parcel once, each number and link as the shipment's own. */
+export function parcelTrackingProblems(asks: readonly ParcelTrackingAsk[]): Issue[] {
+  const problems: Issue[] = []
+  if (asks.length > PARCEL_TRACKING_LIMITS.parcels) return [{ path: 'body/parcels', message: `At most ${PARCEL_TRACKING_LIMITS.parcels} parcels at a time.` }]
+  const seen = new Set<string>()
+  asks.forEach((ask, index) => {
+    const at = `body/parcels/${index}`
+    if (seen.has(ask.parcelId)) problems.push({ path: `${at}/parcelId`, message: 'Name each parcel once.' })
+    seen.add(ask.parcelId)
+    problems.push(...trackingNumberProblems(ask.trackingNumber, `${at}/trackingNumber`), ...trackingUrlProblems(ask.trackingUrl, clean(ask.trackingNumber) !== null, `${at}/trackingUrl`))
+  })
+  return problems
+}
+
+/** Why one parcel takes no typed number now (null: it may): a DRAFT shipment's parcels wait; a labelled parcel never. */
+export function parcelTrackingRefusal(status: ShipmentStatus, parcel: OwnTransportParcel): ParcelTrackingRefusalCode | null {
+  if (status === 'DRAFT') return 'NOT_PACKED'
+  if (labelled(parcel)) return 'PARCEL_LABELLED'
+  return null
+}
+
+/** A number the customer could read (the goods left) changes or is cleared: the command says why. */
+export const parcelReasonNeeded = (status: ShipmentStatus, before: string | null, after: string | null): boolean =>
+  (status === 'SHIPPED' || status === 'DELIVERED' || status === 'RETURNED') && before !== null && before !== after
+
+/** The reason given for it: 3 to 500 characters (a 400 at body/reason). */
+export function parcelReasonProblems(reason: string | null | undefined): Issue[] {
+  const text = (reason ?? '').trim()
+  if (text.length < PARCEL_TRACKING_LIMITS.reasonMin || text.length > PARCEL_TRACKING_LIMITS.reasonMax) {
+    return [{ path: 'body/reason', message: `The customer could read this tracking number: say why it changes (${PARCEL_TRACKING_LIMITS.reasonMin} to ${PARCEL_TRACKING_LIMITS.reasonMax} characters).` }]
+  }
+  return []
+}
+// ── end B-OS-022 ──
