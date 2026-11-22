@@ -782,19 +782,13 @@
     "CANCELLED": "Cancelled"
   },
   "ship": {
-    "leftTitle": "Left to ship",
     "figures": "{ordered} ordered · {released} released · {shipped} shipped · {toShip} left",
     "gridCaption": "{style}: pieces left to ship by colour and size",
     "listTitle": "Shipments",
-    "empty": {
-      "title": "Nothing shipped yet",
-      "body": "Shipments made in the warehouse for this order appear here."
-    },
     "col": {
       "number": "Shipment",
       "status": "State",
       "shipped": "Left",
-      "delivered": "Delivered",
       "carrier": "Carrier",
       "tracking": "Tracking"
     },
@@ -808,24 +802,8 @@
     "noLive": "No live tracking",
     "copy": "Copy",
     "copied": "Copied",
-    "trackingOpen": "Tracking number…",
     "showCancelled": "Show {count} cancelled",
     "hideCancelled": "Hide cancelled",
-    "tracking": {
-      "held": {
-        "LABELLED": "A carrier label is bought: void the labels first.",
-        "NOT_A_CARRIER": "Only a carrier shipment takes a typed tracking number.",
-        "NOT_A_CARRIER_LEFT": "Only a carrier shipment takes a typed tracking number. The goods have left.",
-        "CANCELLED": "The shipment is cancelled.",
-        "CARRIER_TRACKED": "The carrier's own tracking follows it: nothing to type.",
-        "NO_RIGHT": "A warehouse person adds tracking.",
-        "other": "Not possible now."
-      },
-      "door": {
-        "shipment": "Open the shipment ›",
-        "arrange": "Change how it travels…"
-      }
-    },
     "created": "{number} made (draft)",
     "createdDoor": "Pack and ship it in Warehouse ›",
     "create": {
@@ -1571,26 +1549,12 @@
   },
   "links": {
     "title": "Complaints and returns",
-    "hint": "Only this order's own; each opens its record.",
     "loading": "Reading the order's complaints and returns…",
-    "failed": "The order's complaints and returns couldn't be read",
     "complaints": {
-      "title": "Complaints",
-      "none": "No complaints about this order."
+      "title": "Complaints"
     },
     "returns": {
-      "title": "Returns",
-      "none": "No returns of this order."
-    },
-    "col": {
-      "number": "Number",
-      "status": "Status",
-      "severity": "Severity",
-      "received": "Received",
-      "answerDue": "Answer due",
-      "wanted": "Customer wants",
-      "requested": "Requested",
-      "closed": "Closed"
+      "title": "Returns"
     },
     "complaintStatus": {
       "NEW": "New",

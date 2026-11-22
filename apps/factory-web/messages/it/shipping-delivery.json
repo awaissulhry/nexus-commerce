@@ -124,46 +124,9 @@
     }
   },
   "dv": {
-    "title": "Consegnato (dal vettore)",
-    "what": "Quando è arrivata ogni spedizione, come lo sappiamo e la prova di consegna per una contestazione. Quando tutte le spedizioni sono arrivate l’ordine è consegnato e scadono le rate che decorrono dalla consegna.",
-    "loading": "Lettura delle consegne…",
-    "failed": "Impossibile leggere le consegne.",
-    "waiting": "L’ordine è consegnato quando arriva ogni spedizione partita.",
-    "orderDelivered": "Consegnato il {day}",
-    "stepsDue": "Rate che decorrono dalla consegna: {steps}.",
-    "step": "rata {seq} in scadenza il {day}",
-    "stepsSettled": "Le rate che decorrono dalla consegna sono saldate.",
-    "noSteps": "Nessuna rata decorre dalla consegna.",
-    "empty": {
-      "title": "Ancora nulla spedito",
-      "body": "Ogni spedizione compare qui quando parte."
-    },
-    "col": {
-      "shipment": "Spedizione",
-      "arrival": "Come lo sappiamo",
-      "when": "Consegnata",
-      "signed": "Firmato da",
-      "proof": "Prova"
-    },
     "arrival": {
-      "carrier": "Dal vettore",
-      "typed": "Inserito da una persona",
-      "travelling": "In viaggio",
       "returned": "Rientrata"
-    },
-    "signedAt": "{name} · {at}",
-    "noSigner": "Non indicato",
-    "problems_one": "{count} problema di tracciamento",
-    "problems_other": "{count} problemi di tracciamento",
-    "download": "Scarica la prova",
-    "downloadFailed": "Impossibile scaricare la prova: riprova.",
-    "held": {
-      "noImage": "Il vettore non ha ancora dato un’immagine della prova.",
-      "right": "Per scaricare la prova serve il permesso di vedere le spedizioni.",
-      "offline": "Nessuna connessione: riprova quando torna la rete.",
-      "busy": "Un momento: un download è in corso."
-    },
-    "view": "Apri la prova"
+    }
   },
   "link": {
     "title": "Il tuo reso {number}",

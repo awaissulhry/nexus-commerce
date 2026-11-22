@@ -20,7 +20,6 @@
   },
   "where": {
     "title": "Where every garment is",
-    "part": "the counts",
     "info": "Every garment of this order is in one bucket, and the buckets add up to what was ordered. Nothing here is typed: it is counted, and a number changes only through its cause (a shipment, a release, a line closed).",
     "more": "More for Where every garment is",
     "openLines": "Open on Lines ›",
@@ -335,7 +334,6 @@
       "open": "Open it ›"
     }
   },
-  "copied": "Link copied",
   "door": {
     "wordsOptional": "Your words (optional)",
     "officeOnly": "Office only: the customer never reads them.",

@@ -20,7 +20,6 @@
   },
   "where": {
     "title": "Dove si trova ogni capo",
-    "part": "i conteggi",
     "info": "Ogni capo dell'ordine è in un solo gruppo, e i gruppi danno il totale ordinato. Qui non si inserisce nulla: si conta, e un numero cambia solo per la sua causa (una spedizione, un rilascio, una riga chiusa).",
     "more": "Altro per Dove si trova ogni capo",
     "openLines": "Apri in Righe ›",
@@ -335,7 +334,6 @@
       "open": "Aprilo ›"
     }
   },
-  "copied": "Link copiato",
   "door": {
     "wordsOptional": "Le tue parole (facoltativo)",
     "officeOnly": "Solo ufficio: il cliente non le legge mai.",

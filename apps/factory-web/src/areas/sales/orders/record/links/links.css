@@ -23,11 +23,3 @@
 .fw-so-links-sizes {
   font-variant-numeric: tabular-nums;
 }
-
-.fw-so-links-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-8);
-  margin-top: var(--nds-space-16);
-  min-width: 0;
-}

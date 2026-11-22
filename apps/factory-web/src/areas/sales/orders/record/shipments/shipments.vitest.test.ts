@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carrierOf, httpsOrNull, shownShipments, trackingDoorOf, trackingOf, type ShipmentRow } from './model'
+import { carrierOf, httpsOrNull, mayTypeTrackingHere, shownShipments, trackingOf, type ShipmentRow } from './model'
 // F-OP-121: where Create shipment… leads.
 import { createShipmentDoor } from './model'
 import { canOf, order } from '../../_demo/fixtures'
@@ -12,8 +12,8 @@ import { LOCALES } from '../../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
 
 /**
- * F-OP-119 (order page plan N5) — the Shipments tab's rows, pure: who carries each shipment, its tracking, the tracking door held
- * with its words and the door that fixes it, the cancelled rows behind "Show N cancelled". Every number is made up.
+ * F-OP-119 (order page plan N5) — the Shipments tab's rows, pure: who carries each shipment, its tracking, the tracking door (F-OS-304:
+ * drawn or not, never held), the cancelled rows behind "Show N cancelled". Every number is made up.
  */
 
 const row = (over: Partial<ShipmentRow> = {}): ShipmentRow => ({
@@ -46,7 +46,7 @@ describe('who carries it', () => {
     const blind = row({ carrier: null, tracking: null, withheld: ['shipments.detail'], mayTypeTracking: { allowed: false, code: 'NO_RIGHT', why: 'x' } })
     expect(carrierOf(blind)).toBeNull()
     expect(trackingOf(blind)).toBeNull()
-    expect(trackingDoorOf(blind)).toEqual({ kind: 'held', words: { key: 'ship.tracking.held.NO_RIGHT' }, door: null })
+    expect(mayTypeTrackingHere(blind)).toBe(false)
     // How it travels is not withheld: our van still says so.
     expect(carrierOf(row({ transportBy: 'SENDER', carrier: null, withheld: ['shipments.detail'] }))).toEqual({ key: 'ship.carrier.ownVan' })
   })
@@ -68,23 +68,12 @@ describe('its tracking', () => {
   })
 })
 
-describe('the tracking door: open, or held with its words and the door that fixes it', () => {
-  it('open when the read allows it', () => {
-    expect(trackingDoorOf(row())).toEqual({ kind: 'open' })
-  })
-
-  it('a carrier label: void it on the shipment’s page; our van before it leaves: change how it travels; after: words only', () => {
-    expect(trackingDoorOf(row({ mayTypeTracking: { allowed: false, code: 'LABELLED', why: 'x' } }))).toEqual({ kind: 'held', words: { key: 'ship.tracking.held.LABELLED' }, door: 'shipment' })
-    expect(trackingDoorOf(row({ status: 'PACKED', transportBy: 'SENDER', mayTypeTracking: { allowed: false, code: 'NOT_A_CARRIER', why: 'x' } }))).toEqual({ kind: 'held', words: { key: 'ship.tracking.held.NOT_A_CARRIER' }, door: 'arrange' })
-    expect(trackingDoorOf(row({ status: 'SHIPPED', transportBy: 'SENDER', mayTypeTracking: { allowed: false, code: 'NOT_A_CARRIER', why: 'x' } }))).toEqual({ kind: 'held', words: { key: 'ship.tracking.held.NOT_A_CARRIER_LEFT' }, door: null })
-  })
-
-  it('cancelled, tracked by the carrier, or no right (a warehouse person adds it): words, no door', () => {
-    for (const code of ['CANCELLED', 'CARRIER_TRACKED', 'NO_RIGHT'] as const) {
-      expect(trackingDoorOf(row({ mayTypeTracking: { allowed: false, code, why: 'x' } }))).toEqual({ kind: 'held', words: { key: `ship.tracking.held.${code}` }, door: null })
-    }
-    expect(trackingDoorOf(row({ mayTypeTracking: undefined }))).toEqual({ kind: 'held', words: { key: 'ship.tracking.held.NO_RIGHT' }, door: null })
-    expect(trackingDoorOf(row({ mayTypeTracking: { allowed: false, code: 'SOMETHING_NEW', why: 'x' } }))).toEqual({ kind: 'held', words: { key: 'ship.tracking.held.other' }, door: null })
+// F-OS-304 (P0-B3, D2): the tracking door is drawn or not — never held with words (the held words went with F-OP-119's card).
+describe('Tracking numbers…: drawn only where the read lets this reader type here', () => {
+  it('open when the read allows it; a carrier label, not a carrier, cancelled, carrier-tracked, no right or an older answer: not drawn', () => {
+    expect(mayTypeTrackingHere(row())).toBe(true)
+    for (const code of ['LABELLED', 'NOT_A_CARRIER', 'CANCELLED', 'CARRIER_TRACKED', 'NO_RIGHT', 'SOMETHING_NEW'] as const) expect(mayTypeTrackingHere(row({ mayTypeTracking: { allowed: false, code, why: 'x' } })), code).toBe(false)
+    expect(mayTypeTrackingHere(row({ mayTypeTracking: undefined }))).toBe(false)
   })
 })
 

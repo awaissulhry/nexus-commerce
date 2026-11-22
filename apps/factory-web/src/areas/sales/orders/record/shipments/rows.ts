@@ -5,7 +5,7 @@ import { rowAnchor } from '../dock/discuss'
 import type { DeliveryRow } from './delivered/api'
 import { proofFileOf } from './delivered/model'
 import { madeElsewhereChip } from './elsewhere/model'
-import { alsoCarries, carrierOf, trackingDoorOf, trackingOf, typedLinkOf } from './model'
+import { alsoCarries, carrierOf, mayTypeTrackingHere, trackingOf, typedLinkOf } from './model'
 import { piecesOf, type ShipmentRow } from './where'
 import { word, wordOf, type ShipWord } from './word'
 
@@ -238,7 +238,7 @@ export function travelsOf(row: ShipmentRow): TravelsCell {
     labels,
     hints,
     parcels: parcels && parcels.length > 0 ? { count: parcels.length, tracked: parcels.filter((parcel) => parcel.number !== null).length } : null,
-    trackingDoor: trackingDoorOf(row).kind === 'open',
+    trackingDoor: mayTypeTrackingHere(row), // F-OS-304
   }
 }
 
