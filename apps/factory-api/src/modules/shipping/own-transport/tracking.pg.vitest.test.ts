@@ -105,7 +105,8 @@ describe('B-OP-030: a typed tracking number tells the office, once per change', 
     const same = await call('desk', 'PUT', tracking(seeded.draftShipmentId), { version: await versionOf(seeded.draftShipmentId), trackingNumber: 'T-OP030-BRT-0001' })
     expect(same.statusCode, same.body).toBe(200)
     expect(await eventsOf(seeded.draftShipmentId)).toHaveLength(1)
-    const cleared = await call('desk', 'PUT', tracking(seeded.draftShipmentId), { version: await versionOf(seeded.draftShipmentId), trackingNumber: null })
+    // B-OS-022 (os-fx3): the goods left, so clearing the number the customer could read says why.
+    const cleared = await call('desk', 'PUT', tracking(seeded.draftShipmentId), { version: await versionOf(seeded.draftShipmentId), trackingNumber: null, reason: 'The carrier withdrew the booking.' })
     expect(cleared.statusCode, cleared.body).toBe(200)
     const events = await eventsOf(seeded.draftShipmentId)
     expect(events.map((event) => event.payload.hasNumber)).toEqual([true, false])
@@ -171,7 +172,7 @@ describe('B-OP-034: the typed tracking link', () => {
     const read = (partyId: string) => database.withScope({ audience: 'partner', tenantId: T, actorId: newId(), partyId }, (client) => client.shipment.findMany({ where: { id: seeded.draftShipmentId }, select: { manualTrackingUrl: true } }))
     expect(await read(seedUuid(ns, 'party:P1'))).toEqual([{ manualTrackingUrl: LINK }])
     expect(await read(newId())).toEqual([])
-    const cleared = await put({ trackingNumber: null })
+    const cleared = await put({ trackingNumber: null, reason: 'Typed on the wrong shipment.' }) // B-OS-022 (os-fx3): a seen number says why
     expect(cleared.statusCode, cleared.body).toBe(200)
     expect((cleared.json() as Json).shipment).toMatchObject({ manualTrackingNumber: null, manualTrackingUrl: null })
     expect((await eventsOf(seeded.draftShipmentId)).at(-1)!.payload).toMatchObject({ hasNumber: false, hasLink: false })
@@ -352,6 +353,45 @@ describe('B-OS-022: a tracking number typed by hand per parcel', () => {
       reason,
     })
     expect((await eventsOf(sh2())).at(-1)!.payload).toMatchObject({ parcels: 2 })
+  })
+
+  it('os-fx3: the shipment’s own consignment number the customer could read changes or is cleared only with a reason; audited with it', async () => {
+    const consignment = async () => (await admin<{ number: string | null }>(`SELECT "manualTrackingNumber" AS number FROM "Shipment" WHERE id = $1`, [sh2()]))[0]!.number
+    const lastAudit = async () => (await admin<{ before: Json | null; after: Json; reason: string | null }>(`SELECT before, after, reason FROM "AuditLog" WHERE action = 'shipping.typeTrackingNumber' AND "recordId"::text = $1 ORDER BY at DESC, id DESC LIMIT 1`, [sh2()]))[0]!
+    // Typed for the first time after the goods left: no reason asked (the customer read none).
+    const first = await put({ trackingNumber: 'AWB-OS022-C001' })
+    expect(first.statusCode, first.body).toBe(200)
+    expect(await consignment()).toBe('AWB-OS022-C001')
+    // Changed or cleared: refused at body/reason without a reason of 3 to 500 characters, in the parcel's words; nothing changes.
+    const changeOnly = await put({ trackingNumber: 'AWB-OS022-C002' })
+    expect(changeOnly.statusCode, changeOnly.body).toBe(400)
+    expect(issuesOf(changeOnly)).toEqual([{ path: 'body/reason', message: 'The customer could read this tracking number: say why it changes (3 to 500 characters).' }])
+    const clearShort = await put({ trackingNumber: null, reason: 'no' })
+    expect(clearShort.statusCode, clearShort.body).toBe(400)
+    expect(issuesOf(clearShort)[0]!.path).toBe('body/reason')
+    // With parcels sent as well (none changing), the consignment number alone still asks it.
+    const withParcels = await put({ trackingNumber: 'AWB-OS022-C002', parcels: [{ parcelId: parcelIds[0], trackingNumber: 'AWB-OS022-0001' }] })
+    expect(withParcels.statusCode, withParcels.body).toBe(400)
+    expect(issuesOf(withParcels)[0]!.path).toBe('body/reason')
+    expect(await consignment()).toBe('AWB-OS022-C001')
+    // The link alone changing is no new number: no reason.
+    const link = await put({ trackingNumber: 'AWB-OS022-C001', trackingUrl: 'https://track.example.com/AWB-OS022-C001' })
+    expect(link.statusCode, link.body).toBe(200)
+    // With the reason: changed, and the reason kept on the shipment's one audit row with the number before → after.
+    const reason = 'The forwarder re-issued the air waybill.'
+    const changed = await put({ trackingNumber: 'AWB-OS022-C002', reason })
+    expect(changed.statusCode, changed.body).toBe(200)
+    expect(await consignment()).toBe('AWB-OS022-C002')
+    expect(await lastAudit()).toEqual({
+      before: { manualTrackingNumber: 'AWB-OS022-C001', manualTrackingUrl: 'https://track.example.com/AWB-OS022-C001' },
+      after: { manualTrackingNumber: 'AWB-OS022-C002', manualTrackingUrl: 'https://track.example.com/AWB-OS022-C001' },
+      reason,
+    })
+    // Cleared with a reason (the shipment's own number back to none, as the other cases here read it).
+    const cleared = await put({ trackingNumber: null, reason: 'The forwarder cancelled the air waybill.' })
+    expect(cleared.statusCode, cleared.body).toBe(200)
+    expect(await consignment()).toBeNull()
+    expect(await lastAudit()).toMatchObject({ after: { manualTrackingNumber: null, manualTrackingUrl: null }, reason: 'The forwarder cancelled the air waybill.' })
   })
 
   it('refused in words: a parcel with a label (a TEST one too) PARCEL_LABELLED, a shipment with carrier labels LABELLED, another shipment’s parcel 404, a viewer 403', async () => {

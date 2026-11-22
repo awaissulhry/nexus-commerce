@@ -1,10 +1,12 @@
-import type { Prisma } from '@nexus/factory-db'
+import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { InvalidStateError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { trackingPageOf } from '@nexus/factory-domain/shipping/labels/tracking'
 import { packingProblems, type PackLine, type PackParcel, type ShipmentFacts, type ShipmentStatus } from '@nexus/factory-domain/shipping/shipments'
 import type { CommandTools, CommandTx } from '../../core/command'
+// B-OS-022 (os-fx3): when the shipping notice last went to the customer (its outbound rows).
+import { NOTICE_TEMPLATE } from '@nexus/factory-domain/shipping/notices/rules'
 
 /**
  * The shipping module's reads (every read names its columns) and the views its answers share. A reader takes the
@@ -205,3 +207,22 @@ export function headerView(shipment: ShipmentHeader) {
     updatedAt: toUtcIso(shipment.updatedAt),
   }
 }
+
+// ── B-OS-022 (os-fx3; 10-design D5 "Customer told {day}"): when the shipping notice last went to the customer ──
+/**
+ * Each shipment's newest shipping notice that went (the notice's outbound rows, template `shipping.customer_notice`: their `sentAt`),
+ * in ONE read for all of them; a shipment whose notice never went is absent. Office and system readers only (EmailOutbound has no
+ * floor or partner grant); the callers show it with shipping.view.
+ */
+export async function noticeSentAtOf(db: FactoryClient | CommandTx, shipmentIds: readonly string[]): Promise<Map<string, Date>> {
+  const out = new Map<string, Date>()
+  if (shipmentIds.length === 0) return out
+  const rows = await db.emailOutbound.findMany({
+    where: { recordType: 'Shipment', recordId: { in: [...shipmentIds] }, templateKey: NOTICE_TEMPLATE, sentAt: { not: null } },
+    select: { recordId: true, sentAt: true },
+    orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
+  })
+  for (const row of rows) if (row.recordId !== null && row.sentAt !== null && !out.has(row.recordId)) out.set(row.recordId, row.sentAt)
+  return out
+}
+// ── end B-OS-022 ──

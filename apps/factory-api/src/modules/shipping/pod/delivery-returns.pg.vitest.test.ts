@@ -223,6 +223,23 @@ describe('the shipping notice to the customer (LOG-061)', () => {
     expect((await post(viewer, `/shipping/shipments/${SH1}/notice`)).status).toBe(403)
   }, SLOW_TEST_TIMEOUT_MS)
 
+  // os-fx3 (B-OS-022; 10-design D5 "Customer told {day}"): the tracking window and the order's row say when the notice last went, and
+  // each parcel's weight ("Parcel 2 of 3 · 27.5 kg"), as Warehouse's parcels read it.
+  it('os-fx3: the tracking window’s read and the order’s row say when the notice last went, and each parcel’s weight', async () => {
+    const { at } = await one<{ at: Date }>(`SELECT max("sentAt") AS at FROM "EmailOutbound" WHERE "recordType" = 'Shipment' AND "recordId" = $1 AND "templateKey" = 'shipping.customer_notice'`, [SH1])
+    expect(at).not.toBeNull()
+    const weights = (await admin<{ weight: string | null }>(`SELECT "grossWeightKg"::text AS weight FROM "Parcel" WHERE "shipmentId" = $1 ORDER BY seq`, [SH1])).map((row) => row.weight)
+    const transport = await viewer.get(`/shipping/shipments/${SH1}/own-transport`)
+    expect(transport.status, JSON.stringify(transport.body)).toBe(200)
+    expect(transport.body.shipment.noticeSentAt).toBe(new Date(at).toISOString())
+    expect((transport.body.parcels as Json[]).map((parcel) => parcel.grossWeightKg)).toEqual(weights)
+    const order = await viewer.get(`/sales/orders/${SO2}`)
+    expect(order.status, JSON.stringify(order.body)).toBe(200)
+    const row = (order.body.order.chain.shipments as Json[]).find((entry) => entry.id === SH1)!
+    expect(row.noticeSentAt).toBe(new Date(at).toISOString())
+    expect((row.parcels as Json[]).map((parcel) => parcel.grossWeightKg)).toEqual(weights)
+  }, SLOW_TEST_TIMEOUT_MS)
+
   it('never gives a customer a TEST tracking number: notice and tracking link held for a TEST-labelled shipment', async () => {
     const parcel = (await one<{ id: string; carrierParcelId: string; trackingNumber: string }>(`SELECT id, "carrierParcelId", "trackingNumber" FROM "Parcel" WHERE "shipmentId" = $1 ORDER BY seq LIMIT 1`, [SH1]))
     await asReplica(() => admin(`UPDATE "Parcel" SET "carrierParcelId" = 'test:' || id || '.v1', "trackingNumber" = 'TEST-0a1b2c3d4e-1' WHERE id = $1`, [parcel.id]))
