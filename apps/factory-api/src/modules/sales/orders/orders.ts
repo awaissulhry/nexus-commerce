@@ -32,6 +32,9 @@ import { shippedNotInvoiced } from '@nexus/factory-domain/sales/orders/invoiced'
 import { officeOrder, recordAfter } from './moves'
 // B-SA-070: the production columns, the `waiting=us` term and the `ids=` re-read (the customer's Work tab).
 import { idsTermOf, orderProductionColumns, waitingUsWhere } from './production-columns'
+// B-CW-002 / B-CW-003 (customer Work tab): the `phase` term and the board's counts by phase — one rule.
+import { ORDER_PHASES, phaseCountsOf, type OrderPhase } from '@nexus/factory-domain/production-brand/stages'
+import { phaseWhere } from './production-columns'
 import { asDay, dayOf, dayOrNull, LEFT } from './store'
 import type { OrderView } from './views'
 // B-OP-043 (order page N6, lines-derived): the orders a shipment carries.
@@ -96,6 +99,8 @@ export interface ListFilters {
   readonly waiting?: 'us' | undefined
   /** B-CP-018: the orders whose price check reads so (a price holder's term: 403 in words otherwise). */
   readonly priceMatch?: PriceMatch | undefined
+  /** B-CW-002: the orders in one phase (factory-domain orderPhaseOf, as ./production-columns phaseWhere): the list, the totals and the file. */
+  readonly phase?: OrderPhase | undefined
 }
 
 export interface ListQuery extends ListFilters {
@@ -161,6 +166,7 @@ export function whereOf(context: OfficeContext, filters: ListFilters, today: Bus
       filters.customerUrgency ? customerUrgencyWhere(filters.customerUrgency) : {}, // B-TH-059 (agreement T10)
       filters.kind === 'mtm' ? MTM_WHERE : {}, // B-SA-020
       filters.waiting === 'us' ? waitingUsWhere : {}, // B-SA-070
+      filters.phase ? phaseWhere(filters.phase) : {}, // B-CW-002
     ],
   }
 }
@@ -452,6 +458,15 @@ export async function orderBoard(caller: CommandCaller, filters: Pick<ListFilter
     const late = await client.salesOrder.count({ where: { AND: [base, lateWhere(today)] } })
     const deposit = await client.salesOrder.count({ where: { AND: [base, depositOpenWhere] } })
     const reaccept = await client.salesOrder.count({ where: { AND: [base, reacceptWhere] } }) // B-W2b-323
+    // ── B-CW-003: the seven phases' counts (the counts by status above + ONE count of the started orders, through the one rule
+    // phaseCountsOf) and the two exact whys inside "Not sent": waiting for a yes (the status count), confirmed with the deposit
+    // still open (ONE count; the tile `waitingForDeposit` counts every state, so it could count an order already in production) ──
+    const statusCounts: Partial<Record<SalesOrderStatus, number>> = {}
+    for (const row of grouped) statusCounts[row.status] = row._count._all
+    const started = await client.salesOrder.count({ where: { AND: [base, phaseWhere('IN_PRODUCTION')] } })
+    const phases = phaseCountsOf(statusCounts, started)
+    const waitsForDeposit = await client.salesOrder.count({ where: { AND: [base, { status: 'CONFIRMED' }, depositOpenWhere] } })
+    // ── end B-CW-003 ──
     const counts: Record<(typeof TILES)[number], { count: number; filter: Record<string, string> }> = {
       late: { count: late, filter: { late: 'true' } },
       waitingForApproval: { count: countOf('PENDING_APPROVAL'), filter: { status: 'PENDING_APPROVAL' } }, // B-SA-012
@@ -462,6 +477,9 @@ export async function orderBoard(caller: CommandCaller, filters: Pick<ListFilter
     }
     return {
       byStatus: SALES_ORDER_STATUSES.map((status) => ({ status, count: countOf(status) })),
+      // B-CW-003: the seven phases in order (0 is sent as 0); they add up to the sum of byStatus.
+      byPhase: ORDER_PHASES.map((phase) => ({ phase, count: phases[phase] })),
+      notSent: { waitsForYes: countOf('PENDING_APPROVAL'), waitsForDeposit },
       lanes: [...BOARD_LANES],
       tiles: TILES.map((key) => ({ key, ...counts[key] })),
       asOf: toUtcIso(serverClock.now()),

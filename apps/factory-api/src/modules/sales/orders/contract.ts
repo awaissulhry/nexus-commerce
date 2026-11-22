@@ -18,6 +18,7 @@ import { pictureIds, smallPicturesView } from '../../product/images/small-pictur
 // B-SA-070: the production columns of a row (the customer's Work tab).
 import { BRAND_HEALTHS } from '@nexus/factory-domain/production-brand/health'
 import { BRAND_STAGES } from '@nexus/factory-domain/production-brand/stages'
+import { ORDER_PHASES } from '@nexus/factory-domain/production-brand/stages' // B-CW-002 / B-CW-003
 import { SUPERVISOR_MARKS } from '@nexus/factory-domain/production-brand/supervisor'
 import { WAITING_ON } from '@nexus/factory-domain/production-brand/waiting'
 import { IDS_TERM_MAX, PRODUCTION_WITHHELD } from './production-columns'
@@ -499,6 +500,11 @@ const viewTermFields = {
   /** The orders whose price check reads so (Not equal, No customer price yet, Equal); never a sort by a price field. */
   priceMatch: z.enum(PRICE_MATCHES).optional(),
   // ── end B-CP-018 ──
+  // ── B-CW-002 (customer Work tab plan §1): the orders in one phase — the list, the totals and the file alike (the board counts
+  // every phase in `byPhase`, so it takes no phase, as it takes no status); another value is a 400 ──
+  /** NOT_SENT, NOT_STARTED, IN_PRODUCTION, READY, SHIPPED, DONE or CANCELLED (factory-domain production-brand/stages orderPhaseOf). */
+  phase: z.enum(ORDER_PHASES).optional(),
+  // ── end B-CW-002 ──
   ...filterFields,
 }
 
@@ -646,6 +652,12 @@ export const boardContract = defineContract({
   response: {
     200: output({
       byStatus: z.array(output({ status, count: z.number().int() })),
+      // ── B-CW-003 (customer Work tab plan §1): the big picture — counts only, never a value per phase (that would be price grain) ──
+      /** The seven phases in order, each with its count (0 is sent as 0): every order is in exactly one, so they add up to byStatus. */
+      byPhase: z.array(output({ phase: z.enum(ORDER_PHASES), count: z.number().int() })),
+      /** Inside NOT_SENT, the two exact whys: waiting for a yes (PENDING_APPROVAL), and CONFIRMED with its deposit request still OPEN. */
+      notSent: output({ waitsForYes: z.number().int(), waitsForDeposit: z.number().int() }),
+      // ── end B-CW-003 ──
       /** The board's lanes, in order (closed and cancelled are counted in byStatus). */
       lanes: z.array(status),
       /** Each tile's count is the list's total under its filter (the same query parameters). */

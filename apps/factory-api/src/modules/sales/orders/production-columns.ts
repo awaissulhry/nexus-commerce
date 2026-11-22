@@ -4,6 +4,9 @@ import { can, type Actor } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { effectiveHealth, type BrandHealth, type HealthRaise, type HealthReasonCode } from '@nexus/factory-domain/production-brand/health'
 import type { BrandStage } from '@nexus/factory-domain/production-brand/stages'
+// B-CW-002 / B-CW-003: the phase rule (its statuses, its counts).
+import { PHASE_STATUSES, phaseCountsOf, type OrderPhase } from '@nexus/factory-domain/production-brand/stages'
+import type { SalesOrderStatus } from '@nexus/factory-domain/sales/orders/orders'
 import type { SupervisorMark } from '@nexus/factory-domain/production-brand/supervisor'
 import type { WaitingOn } from '@nexus/factory-domain/production-brand/waiting'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
@@ -86,6 +89,55 @@ export function shownHealthOf(row: StoredHealth, today: BusinessDate): BrandHeal
 
 /** `waiting=us`: the keeper says the order waits on us, or a customer request on it is still OPEN. */
 export const waitingUsWhere: Prisma.SalesOrderWhereInput = { OR: [{ brandProductions: { some: { waitingOn: 'US' } } }, { changeRequests: { some: { status: 'OPEN' } } }] }
+
+// ── B-CW-002 / B-CW-003 (customer Work tab plan §1; lead settle S17): the `phase` term and the phases' counts — ONE rule ──
+/**
+ * `phase=<PHASE>`: the orders in that phase — factory-domain production-brand/stages `orderPhaseOf` as a filter. The status decides;
+ * only the status IN_PRODUCTION is split by the kept stage: started = a kept row past PREPARING (`some`), not started = none such
+ * (`none`: also an order with no kept row yet). The two are exact opposites, so together they are the status IN_PRODUCTION. The
+ * relation is read without the key filter, as `waitingUsWhere` reads it (production keeps one row per order). The list, the totals,
+ * the file and the board's `byPhase` read this one where, so a count opens exactly the rows it counts.
+ */
+export function phaseWhere(phase: OrderPhase): Prisma.SalesOrderWhereInput {
+  if (phase === 'NOT_STARTED') return { status: 'IN_PRODUCTION', brandProductions: { none: { stage: { not: 'PREPARING' } } } }
+  if (phase === 'IN_PRODUCTION') return { status: 'IN_PRODUCTION', brandProductions: { some: { stage: { not: 'PREPARING' } } } }
+  return { status: { in: [...PHASE_STATUSES[phase]] } }
+}
+
+/**
+ * The seven phases' counts of the orders a where keeps (every phase, 0 as 0): the counts by status and ONE count of the started
+ * orders (`phaseWhere('IN_PRODUCTION')`), through factory-domain `phaseCountsOf`. The caller's where is the wall: pass the reader's
+ * own (the list's `viewWhere`), never a bare one.
+ */
+export async function phaseCounts(client: Reader, where: Prisma.SalesOrderWhereInput): Promise<Record<OrderPhase, number>> {
+  const grouped = await client.salesOrder.groupBy({ by: ['status'], where, _count: { _all: true } })
+  const started = await client.salesOrder.count({ where: { AND: [where, phaseWhere('IN_PRODUCTION')] } })
+  const byStatus: Partial<Record<SalesOrderStatus, number>> = {}
+  for (const row of grouped) byStatus[row.status] = row._count._all
+  return phaseCountsOf(byStatus, started)
+}
+
+/**
+ * The same counts per customer (by party id; a customer with no order the where keeps is absent): the counts by customer and
+ * status and ONE count of the started orders by customer, each customer through `phaseCountsOf` — so a customer's counts are
+ * `phaseCounts` of the where narrowed to it. The caller's where is the wall, as above.
+ */
+export async function phaseCountsByParty(client: Reader, where: Prisma.SalesOrderWhereInput): Promise<Map<string, Record<OrderPhase, number>>> {
+  const grouped = await client.salesOrder.groupBy({ by: ['partyId', 'status'], where, _count: { _all: true } })
+  const started = await client.salesOrder.groupBy({ by: ['partyId'], where: { AND: [where, phaseWhere('IN_PRODUCTION')] }, _count: { _all: true } })
+  const startedOf = new Map<string, number>()
+  for (const row of started) startedOf.set(row.partyId, row._count._all)
+  const statusesOf = new Map<string, Partial<Record<SalesOrderStatus, number>>>()
+  for (const row of grouped) {
+    const byStatus: Partial<Record<SalesOrderStatus, number>> = statusesOf.get(row.partyId) ?? {}
+    byStatus[row.status] = row._count._all
+    statusesOf.set(row.partyId, byStatus)
+  }
+  const out = new Map<string, Record<OrderPhase, number>>()
+  for (const [partyId, byStatus] of statusesOf) out.set(partyId, phaseCountsOf(byStatus, startedOf.get(partyId) ?? 0))
+  return out
+}
+// ── end B-CW-002 / B-CW-003 ──
 
 /** The most rows `ids=` re-reads at once. */
 export const IDS_TERM_MAX = 50

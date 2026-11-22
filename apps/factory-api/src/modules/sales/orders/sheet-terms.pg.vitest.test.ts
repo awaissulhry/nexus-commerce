@@ -17,6 +17,12 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { callerFor } from '../../../core/command'
 import { completeContext } from '../../../core/context'
 import { exportSourceOf } from '../../../platform/exports/registry'
+// B-CW-001 / B-CW-002 / B-CW-003: the phase rule, and the counts by phase read as a person (their where is the wall).
+import { businessDate } from '@nexus/factory-domain/core/time'
+import { ORDER_PHASES, type OrderPhase } from '@nexus/factory-domain/production-brand/stages'
+import { officeContextOf } from './access'
+import { whereOf } from './orders'
+import { phaseCounts, phaseCountsByParty } from './production-columns'
 
 /**
  * The orders sheet's own terms (threads plan TH-1a, pictures 23 + 24; B-TH-225 / B-TH-226, API part): `brand` narrows
@@ -371,3 +377,234 @@ describe('waiting=us narrows the list, the board, the totals and the file alike,
   })
 })
 // ── end B-SA-070 ──
+
+// ── B-CW-001 / B-CW-002 / B-CW-003 (customer Work tab plan §1; lead settle S17): the phase — screen = file = count ──
+/**
+ * Stands on made-up copies of the seeds' SEED-SO-0001 (customer SEED-C1, a deposit needed: the copies keep that), each made CONFIRMED
+ * and then put in its state past the order's own rules (the guards off: only the reads are under test):
+ *
+ *   SEED-C1   T-CW-C1-YES waiting for a yes · T-CW-C1-DEP confirmed, its deposit request OPEN, a kept row at QUALITY (still not
+ *             sent) · T-CW-C1-REL in production, no kept row · T-CW-C1-PREP in production, kept at PREPARING · T-CW-C1-CUT in
+ *             production, kept at CUTTING, a deposit request OPEN · T-CW-C1-RDY ready · T-CW-C1-PART partly shipped ·
+ *             T-CW-C1-SHIP shipped · T-CW-C1-CLOSED closed · T-CW-C1-CX cancelled
+ *   SEED-R1   T-CW-R1-YES waiting for a yes · T-CW-R1-SEW in production, kept at SEWING
+ */
+describe('phase: the list, the totals and the file hold the same rows, and the board counts every phase (B-CW-002, B-CW-003)', () => {
+  const rulesOff = (statements: string) => admin(`BEGIN; SET LOCAL session_replication_role = replica; ${statements} COMMIT;`)
+  const sumOf = (counts: readonly number[]): number => counts.reduce((sum, count) => sum + count, 0)
+
+  /** SEED-SO-0001 copied for `partyId` as `number`, CONFIRMED with its lines and sizes (the copies above, without a change of line). */
+  async function plainCopy(number: string, partyId: string): Promise<void> {
+    const salt = number.toLowerCase()
+    await admin(`
+      CREATE TEMP TABLE o AS SELECT * FROM "SalesOrder" WHERE "tenantId" = '${tenant}' AND number = 'SEED-SO-0001';
+      CREATE TEMP TABLE l AS SELECT * FROM "SalesOrderLine" WHERE "orderId" = (SELECT id FROM o);
+      CREATE TEMP TABLE s AS SELECT * FROM "SalesOrderLineSize" WHERE "lineId" IN (SELECT id FROM l);
+      UPDATE s SET id = ${v4('id', salt)}, "lineId" = ${v4('"lineId"', salt)}, "partyId" = '${partyId}';
+      UPDATE l SET id = ${v4('id', salt)}, "orderId" = ${v4('"orderId"', salt)}, "partyId" = '${partyId}', "quoteLineId" = NULL, "styleRevisionId" = NULL;
+      UPDATE o SET id = ${v4('id', salt)}, "partyId" = '${partyId}', number = '${number}', "quoteVersionId" = NULL, "customerRef" = NULL, "customerSeq" = NULL,
+        status = 'CONFIRMED', "cancelReason" = NULL, "closedAt" = NULL;
+      INSERT INTO "SalesOrder" SELECT * FROM o;
+      INSERT INTO "SalesOrderLine" SELECT * FROM l;
+      INSERT INTO "SalesOrderLineSize" SELECT * FROM s;
+      DROP TABLE o, l, s;`)
+  }
+  const setStatus = (number: string, status: string) =>
+    rulesOff(`UPDATE "SalesOrder" SET status = '${status}', "closedAt" = ${status === 'CLOSED' || status === 'CANCELLED' ? 'now()' : 'NULL'}, "cancelReason" = ${status === 'CANCELLED' ? "'Made-up: the customer withdrew it.'" : 'NULL'} WHERE "tenantId" = '${tenant}' AND number = '${number}';`)
+  /** The order's kept production row at a stage (made, or moved to it). */
+  const keep = (number: string, stage: string) =>
+    rulesOff(`INSERT INTO "BrandOrderProduction" (id, "tenantId", "companyId", "partyId", "salesOrderId", key, stage, "stageAt")
+      SELECT '${newId()}', o."tenantId", o."companyId", o."partyId", o.id, 'brand-production:' || o.id, '${stage}', now() FROM "SalesOrder" o WHERE o."tenantId" = '${tenant}' AND o.number = '${number}'
+      ON CONFLICT ("tenantId", key) DO UPDATE SET stage = EXCLUDED.stage, "stageAt" = now();`)
+  /** An OPEN deposit request of the order (no schedule step: the deposit itself, not a balance before shipping). */
+  const askDeposit = (number: string) =>
+    rulesOff(`INSERT INTO "DepositRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, currency, amount, "dueDate", "fiscalDocument", "fiscalRule")
+      SELECT '${newId()}', o."tenantId", o."companyId", o."partyId", o.id, 'ACCONTO', 'EUR', 30000, (now() + interval '10 days')::date, 'NONE', 'test.deposit.EU_B2B_VIES' FROM "SalesOrder" o WHERE o."tenantId" = '${tenant}' AND o.number = '${number}';`)
+
+  /** Each phase's order numbers, counted here in SQL: the status first; a kept row past PREPARING splits the status IN_PRODUCTION. */
+  async function phaseTruth(partyId?: string): Promise<Record<OrderPhase, string[]>> {
+    const rows = await admin<{ number: string; phase: OrderPhase }>(
+      `SELECT o.number,
+              CASE WHEN o.status IN ('PENDING_APPROVAL', 'CONFIRMED') THEN 'NOT_SENT'
+                   WHEN o.status = 'IN_PRODUCTION' AND EXISTS (SELECT 1 FROM "BrandOrderProduction" p WHERE p."salesOrderId" = o.id AND p.stage <> 'PREPARING') THEN 'IN_PRODUCTION'
+                   WHEN o.status = 'IN_PRODUCTION' THEN 'NOT_STARTED'
+                   WHEN o.status = 'READY' THEN 'READY'
+                   WHEN o.status IN ('PARTLY_SHIPPED', 'SHIPPED') THEN 'SHIPPED'
+                   WHEN o.status IN ('DELIVERED', 'CLOSED') THEN 'DONE'
+                   ELSE 'CANCELLED' END AS phase
+         FROM "SalesOrder" o WHERE o."tenantId" = $1 AND ($2::uuid IS NULL OR o."partyId" = $2::uuid)`,
+      [tenant, partyId ?? null],
+    )
+    const out: Record<OrderPhase, string[]> = { NOT_SENT: [], NOT_STARTED: [], IN_PRODUCTION: [], READY: [], SHIPPED: [], DONE: [], CANCELLED: [] }
+    for (const row of rows) out[row.phase].push(row.number)
+    for (const phase of ORDER_PHASES) out[phase].sort()
+    return out
+  }
+  const countOf = (board: Json, phase: OrderPhase): number => (board.byPhase as Json[]).find((entry) => entry.phase === phase)!.count as number
+  /** The orders CONFIRMED with a deposit needed and a deposit request still OPEN, counted here in SQL. */
+  async function confirmedDepositOpen(partyId?: string): Promise<number> {
+    const [row] = await admin<{ n: number }>(
+      `SELECT count(*)::int AS n FROM "SalesOrder" o WHERE o."tenantId" = $1 AND ($2::uuid IS NULL OR o."partyId" = $2::uuid) AND o.status = 'CONFIRMED' AND o."depositRequired"
+          AND EXISTS (SELECT 1 FROM "DepositRequest" r WHERE r."orderId" = o.id AND r.status = 'OPEN'
+                        AND NOT EXISTS (SELECT 1 FROM "SalesOrderMilestone" m WHERE m."depositRequestId" = r.id AND m.kind = 'BEFORE_SHIPPING'))`,
+      [tenant, partyId ?? null],
+    )
+    return row!.n
+  }
+  const waitingForYes = async (partyId?: string): Promise<number> =>
+    (await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "SalesOrder" o WHERE o."tenantId" = $1 AND ($2::uuid IS NULL OR o."partyId" = $2::uuid) AND o.status = 'PENDING_APPROVAL'`, [tenant, partyId ?? null]))[0]!.n
+
+  beforeAll(async () => {
+    const WORLD: readonly (readonly [number: string, party: string, status: string, stage: string | null])[] = [
+      ['T-CW-C1-YES', C1, 'PENDING_APPROVAL', null],
+      ['T-CW-C1-DEP', C1, 'CONFIRMED', 'QUALITY'],
+      ['T-CW-C1-REL', C1, 'IN_PRODUCTION', null],
+      ['T-CW-C1-PREP', C1, 'IN_PRODUCTION', 'PREPARING'],
+      ['T-CW-C1-CUT', C1, 'IN_PRODUCTION', 'CUTTING'],
+      ['T-CW-C1-RDY', C1, 'READY', 'READY'],
+      ['T-CW-C1-PART', C1, 'PARTLY_SHIPPED', null],
+      ['T-CW-C1-SHIP', C1, 'SHIPPED', null],
+      ['T-CW-C1-CLOSED', C1, 'CLOSED', null],
+      ['T-CW-C1-CX', C1, 'CANCELLED', null],
+      ['T-CW-R1-YES', R1, 'PENDING_APPROVAL', null],
+      ['T-CW-R1-SEW', R1, 'IN_PRODUCTION', 'SEWING'],
+    ]
+    for (const [number, party, status, stage] of WORLD) {
+      await plainCopy(number, party)
+      if (stage !== null) await keep(number, stage)
+      if (status !== 'CONFIRMED') await setStatus(number, status)
+    }
+    await askDeposit('T-CW-C1-DEP')
+    await askDeposit('T-CW-C1-CUT')
+  }, 120_000)
+
+  it('each phase: the same rows on the list, in the totals (their door keeps the term) and in the file; the board counts exactly them', async () => {
+    const truth = await phaseTruth()
+    // The made-up world has an order in every phase.
+    for (const phase of ORDER_PHASES) expect(truth[phase].length, phase).toBeGreaterThan(0)
+    expect(truth.NOT_SENT).toEqual(expect.arrayContaining(['T-CW-C1-DEP', 'T-CW-C1-YES', 'T-CW-R1-YES']))
+    const board = await ok('all', '/sales/orders/board')
+    expect((board.byPhase as Json[]).map((entry) => entry.phase)).toEqual([...ORDER_PHASES])
+    for (const phase of ORDER_PHASES) {
+      const expected = truth[phase]
+      expect(await numbers('all', `phase=${phase}`), phase).toEqual(expected)
+      const summary = await ok('all', `/sales/orders/summary?phase=${phase}`)
+      expect(summary.all.orders.count, phase).toBe(expected.length)
+      expect(summary.all.orders.filter, phase).toMatchObject({ phase })
+      expect(await fileNumbers('all', `phase=${phase}&rows=all`), phase).toEqual(expected)
+      expect(countOf(board, phase), phase).toBe(expected.length)
+    }
+    // Every order is in exactly one phase: the seven add up to the counts by status, and to every order of the list.
+    const byStatus = sumOf((board.byStatus as Json[]).map((entry) => entry.count as number))
+    expect(sumOf((board.byPhase as Json[]).map((entry) => entry.count as number))).toBe(byStatus)
+    expect(byStatus).toBe((await numbers('all', '')).length)
+    // The term keeps every other term: one customer's orders of a phase.
+    expect(await numbers('all', `phase=IN_PRODUCTION&partyId=${R1}`)).toEqual(['T-CW-R1-SEW'])
+    expect(await fileNumbers('all', `phase=IN_PRODUCTION&rows=all&party=${R1}`)).toEqual(['T-CW-R1-SEW'])
+  })
+
+  it('the kept stage splits only the orders in production: no kept row or PREPARING is not started, CUTTING moves the order; a confirmed order kept at QUALITY is still not sent', async () => {
+    const before = await ok('all', '/sales/orders/board')
+    expect(await numbers('all', 'phase=NOT_STARTED')).toEqual(expect.arrayContaining(['T-CW-C1-PREP', 'T-CW-C1-REL']))
+    expect(await numbers('all', 'phase=IN_PRODUCTION')).toEqual(expect.arrayContaining(['T-CW-C1-CUT', 'T-CW-R1-SEW']))
+    expect(await numbers('all', 'phase=IN_PRODUCTION')).not.toContain('T-CW-C1-PREP')
+    expect(await numbers('all', 'phase=NOT_SENT')).toContain('T-CW-C1-DEP')
+    expect(await numbers('all', 'phase=IN_PRODUCTION')).not.toContain('T-CW-C1-DEP')
+    await keep('T-CW-C1-PREP', 'CUTTING')
+    try {
+      expect(await numbers('all', 'phase=IN_PRODUCTION')).toContain('T-CW-C1-PREP')
+      expect(await numbers('all', 'phase=NOT_STARTED')).not.toContain('T-CW-C1-PREP')
+      const after = await ok('all', '/sales/orders/board')
+      expect(countOf(after, 'IN_PRODUCTION')).toBe(countOf(before, 'IN_PRODUCTION') + 1)
+      expect(countOf(after, 'NOT_STARTED')).toBe(countOf(before, 'NOT_STARTED') - 1)
+      // The status count did not move: the two phases are the status IN_PRODUCTION, split.
+      const inProduction = (board: Json): number => (board.byStatus as Json[]).find((entry) => entry.status === 'IN_PRODUCTION')!.count as number
+      expect(inProduction(after)).toBe(inProduction(before))
+      expect(countOf(after, 'IN_PRODUCTION') + countOf(after, 'NOT_STARTED')).toBe(inProduction(after))
+    } finally {
+      await keep('T-CW-C1-PREP', 'PREPARING')
+    }
+    expect(await numbers('all', 'phase=NOT_STARTED')).toContain('T-CW-C1-PREP')
+  })
+
+  it('notSent: the two exact whys inside Not sent — waiting for a yes, and confirmed with the deposit still open (the deposit tile counts every state)', async () => {
+    const board = await ok('all', '/sales/orders/board')
+    const waitsForDeposit = await confirmedDepositOpen()
+    expect(waitsForDeposit).toBeGreaterThan(0) // T-CW-C1-DEP
+    expect(board.notSent).toEqual({ waitsForYes: await waitingForYes(), waitsForDeposit })
+    expect(board.notSent.waitsForYes + board.notSent.waitsForDeposit).toBeLessThanOrEqual(countOf(board, 'NOT_SENT'))
+    // T-CW-C1-CUT is in production with its deposit request still open: the tile counts it, the why of "Not sent" does not.
+    const tile = (board.tiles as Json[]).find((entry) => entry.key === 'waitingForDeposit')!.count as number
+    expect(tile).toBeGreaterThan(board.notSent.waitsForDeposit)
+    expect(await numbers('all', 'deposit=OPEN')).toEqual(expect.arrayContaining(['T-CW-C1-CUT', 'T-CW-C1-DEP']))
+    // Counts only: the picture holds no amount.
+    expect(JSON.stringify({ byPhase: board.byPhase, notSent: board.notSent })).not.toMatch(/amount|net|gross|price/i)
+  })
+
+  it('another value is refused in words, on the list, in the totals and for the file (never a file of every order)', async () => {
+    for (const url of ['/sales/orders?phase=NOPE', '/sales/orders/summary?phase=NOPE', '/sales/orders?phase=in_production']) {
+      expect((await app.inject({ method: 'GET', url, headers: { 'x-test-session': 'all' } })).statusCode, url).toBe(400)
+    }
+    expect(() => exportSourceOf('sales.orders')!.query(new URLSearchParams('phase=NOPE'))).toThrow('Not a value of phase: the file would not follow the screen.')
+  })
+
+  it('a person limited to SEED-R1 reads the phases and the whys of its own customers only; naming SEED-C1 counts nothing', async () => {
+    const mine = await phaseTruth(R1)
+    expect(mine.IN_PRODUCTION).toEqual(['T-CW-R1-SEW'])
+    const board = await ok('onlyR1', '/sales/orders/board')
+    for (const phase of ORDER_PHASES) {
+      expect(countOf(board, phase), phase).toBe(mine[phase].length)
+      expect(await numbers('onlyR1', `phase=${phase}`), phase).toEqual(mine[phase])
+      expect(await fileNumbers('onlyR1', `phase=${phase}&rows=all`), phase).toEqual(mine[phase])
+      expect((await ok('onlyR1', `/sales/orders/summary?phase=${phase}`)).all.orders.count, phase).toBe(mine[phase].length)
+    }
+    expect(board.notSent).toEqual({ waitsForYes: await waitingForYes(R1), waitsForDeposit: await confirmedDepositOpen(R1) })
+    expect(board.notSent.waitsForYes).toBe(1) // T-CW-R1-YES; SEED-C1's T-CW-C1-YES is not counted
+    expect(JSON.stringify(board)).not.toContain(C1)
+    // Naming the other customer: every phase 0, both whys 0, no row, no file row.
+    const other = await ok('onlyR1', `/sales/orders/board?partyId=${C1}`)
+    expect((other.byPhase as Json[]).map((entry) => entry.count)).toEqual(ORDER_PHASES.map(() => 0))
+    expect(other.notSent).toEqual({ waitsForYes: 0, waitsForDeposit: 0 })
+    expect(await numbers('onlyR1', `phase=IN_PRODUCTION&partyId=${C1}`)).toEqual([])
+    expect((await ok('onlyR1', `/sales/orders/summary?phase=IN_PRODUCTION&partyId=${C1}`)).all.orders.count).toBe(0)
+    expect(await fileNumbers('onlyR1', `phase=IN_PRODUCTION&rows=all&party=${C1}`)).toEqual([])
+  })
+
+  it('phaseCountsByParty: each customer reads phaseCounts narrowed to it, together they are phaseCounts; a limited reader\'s where gives its own customers only', async () => {
+    const today = businessDate(new Date())
+    const read = async (session: string) => {
+      const reader = callerFor(database, completeContext(SESSIONS[session]!(), `test-${newId()}`))
+      const where = whereOf(officeContextOf(reader), {}, today)
+      return reader.withClient(async (client) => {
+        const all = await phaseCounts(client, where)
+        const byParty = await phaseCountsByParty(client, where)
+        const narrowed = new Map<string, Record<OrderPhase, number>>()
+        for (const partyId of byParty.keys()) narrowed.set(partyId, await phaseCounts(client, { AND: [where, { partyId }] }))
+        return { all, byParty, narrowed }
+      })
+    }
+    const every = await read('all')
+    // A where over two customers (SEED-C1 and SEED-R1 both have orders).
+    expect([...every.byParty.keys()]).toEqual(expect.arrayContaining([C1, R1]))
+    for (const phase of ORDER_PHASES) expect(sumOf([...every.byParty.values()].map((counts) => counts[phase])), phase).toBe(every.all[phase])
+    for (const [partyId, counts] of every.byParty) {
+      expect(Object.keys(counts).sort(), partyId).toEqual([...ORDER_PHASES].sort())
+      expect(counts, partyId).toEqual(every.narrowed.get(partyId))
+    }
+    // The same numbers as the truth in SQL and as the board's byPhase (one rule, never a third way to count).
+    const truth = await phaseTruth()
+    const board = await ok('all', '/sales/orders/board')
+    for (const phase of ORDER_PHASES) {
+      expect(every.all[phase], phase).toBe(truth[phase].length)
+      expect(every.all[phase], phase).toBe(countOf(board, phase))
+    }
+    const r1 = await phaseTruth(R1)
+    expect(every.byParty.get(R1)).toEqual(Object.fromEntries(ORDER_PHASES.map((phase) => [phase, r1[phase].length])))
+    // The limited reader's where: its own customers only, with the same counts.
+    const limited = await read('onlyR1')
+    expect([...limited.byParty.keys()]).toEqual([R1])
+    expect(limited.byParty.get(R1)).toEqual(every.byParty.get(R1))
+    expect(limited.all).toEqual(every.byParty.get(R1))
+  })
+})
+// ── end B-CW-001 / B-CW-002 / B-CW-003 ──

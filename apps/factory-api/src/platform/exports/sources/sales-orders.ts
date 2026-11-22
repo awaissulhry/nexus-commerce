@@ -25,6 +25,7 @@ import { HEALTH_WORDS, OFFICE_WAITING_WORDS, STAGE_WORDS } from '@nexus/factory-
 import { STAGE_BY_HAND_WORDS } from '@nexus/factory-domain/production-brand/stage-set' // B-MS-006
 import { BRAND_HEALTHS } from '@nexus/factory-domain/production-brand/health'
 import { BRAND_STAGES } from '@nexus/factory-domain/production-brand/stages'
+import { ORDER_PHASES, type OrderPhase } from '@nexus/factory-domain/production-brand/stages' // B-CW-002
 import { WAITING_ON } from '@nexus/factory-domain/production-brand/waiting'
 // B-CP-018: the price check's term and columns (the price grain only).
 import { heldGrains } from '@nexus/factory-domain/auth/grains/grains'
@@ -80,6 +81,10 @@ import { NOT_A_PRICE_HOLDER } from '../../../modules/sales/brand-prices/store'
  * B-CP-018 (customer page plan C2d; screen = file): `?priceMatch=NOT_EQUAL|NO_BRAND_PRICE|EQUAL` narrows the file as it narrows the
  * screen (another value: refused in words; a person without the price grain is refused the file in the list's own words), and the
  * file writes `ourPrice`, `brandPrice`, `priceMatch` and `priceDiff` (modules/sales/brand-prices columns.ts), each of the price grain.
+ *
+ * B-CW-002 (customer Work tab plan §1; screen = file = count): `?phase=NOT_SENT|NOT_STARTED|IN_PRODUCTION|READY|SHIPPED|DONE|CANCELLED`
+ * (a door of the customer's big picture; the screen writes it with `rows=all`) narrows the file as it narrows the screen; another
+ * value is refused in words.
  */
 
 // B-TH-018: a list row with what the sheet reads beside it (priority and season, the company's name).
@@ -230,6 +235,14 @@ function priceMatchTerm(address: URLSearchParams): Pick<ListFilters, 'priceMatch
 }
 // ── end B-CP-018 ──
 
+// ── B-CW-002 (customer Work tab plan §1; screen = file) ──
+/** The `phase` term of the address, or nothing; another value is refused (the file would not follow the screen), never dropped. */
+function phaseTerm(address: URLSearchParams): Pick<ListFilters, 'phase'> {
+  const value = oneOf<OrderPhase>(address, 'phase', ORDER_PHASES)
+  return value ? { phase: value } : {}
+}
+// ── end B-CW-002 ──
+
 /**
  * The Where it is cell: the plain stage and the shown health ("Sewing · At risk"); nothing kept yet: empty. B-MS-006 (R17): a stage
  * set by hand reads "Sewing (by hand) · At risk" (the office's file only; exported for its unit test).
@@ -266,7 +279,7 @@ export const salesOrders = defineExportSource<Query, Row>({
     const q = address.get('q')?.trim().slice(0, 100) || undefined
     const status = address.get('status')
     const profile = idTerm(address, ['profile', 'profileId'], 'rider') // B-SA-021
-    const kept = { ...narrowing(address) /* B-TH-008 */, ...orderTerms(address) /* B-TH-057 */, ...doorTerms(address) /* B-TH-058 / B-TH-059 */, ...kindTerm(address) /* B-SA-020 */, ...(profile ? { profile } : {}) /* B-SA-021 */, ...waitingTerm(address) /* B-SA-070 */, ...priceMatchTerm(address) /* B-CP-018 */ }
+    const kept = { ...narrowing(address) /* B-TH-008 */, ...orderTerms(address) /* B-TH-057 */, ...doorTerms(address) /* B-TH-058 / B-TH-059 */, ...kindTerm(address) /* B-SA-020 */, ...(profile ? { profile } : {}) /* B-SA-021 */, ...waitingTerm(address) /* B-SA-070 */, ...priceMatchTerm(address) /* B-CP-018 */, ...phaseTerm(address) /* B-CW-002 */ }
     if (address.get('late') === 'true') return { ...kept, late: 'true', q }
     if (address.get('deposit') === 'OPEN') return { ...kept, deposit: 'OPEN', q }
     if (address.get('reaccept') === 'true') return { ...kept, reaccept: 'true', q } // B-TH-008: Waiting for the customer

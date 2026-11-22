@@ -141,3 +141,78 @@ export function officeStripStateOf(status: SalesOrderStatus): OfficeStripState {
 /** Production is over for the office (shipped, delivered, closed or cancelled): nothing of it is "now" any more. */
 export const isAfterProduction = (state: OfficeStripState): boolean => state === 'ALL_DONE' || state === 'STOPPED'
 // ── end B-OO-007 ──
+
+// ── B-CW-001 (customer Work tab plan §1; lead settle S17): the ONE phase of an order — the band's groups, their doors, the row's chip ──
+/**
+ * Where an order is, as one of seven phases. Every order is in exactly one, by its status first; the SHOWN stage
+ * (BrandOrderProduction.stage: the floor's, or the one set by hand) splits only the status IN_PRODUCTION:
+ *
+ *   NOT_SENT        waiting for a yes, or confirmed: no work order is released yet (not sent to the factory)
+ *   NOT_STARTED     in production with no stage kept yet, or PREPARING: released, nothing cut (production not started)
+ *   IN_PRODUCTION   in production at any later stage: its first pieces are cut
+ *   READY           ready to ship
+ *   SHIPPED         partly shipped, or shipped
+ *   DONE            delivered, or closed
+ *   CANCELLED       cancelled
+ *
+ * A confirmed order whose kept row says "Quality check" is still NOT_SENT (the status decides). Derived, never typed: the list's
+ * `phase` term, the board's `byPhase` and the web's chip all read this one rule (`PHASE_STATUSES` is the same rule the other
+ * way round, for a filter). Office only: the customer's portal keeps its own six steps (sales/portal-orders/status).
+ */
+export const ORDER_PHASES = ['NOT_SENT', 'NOT_STARTED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'DONE', 'CANCELLED'] as const
+export type OrderPhase = (typeof ORDER_PHASES)[number]
+
+export const isOrderPhase = (value: unknown): value is OrderPhase => typeof value === 'string' && (ORDER_PHASES as readonly string[]).includes(value)
+
+export function orderPhaseOf(status: SalesOrderStatus, stage: BrandStage | null): OrderPhase {
+  switch (status) {
+    case 'PENDING_APPROVAL':
+    case 'CONFIRMED':
+      return 'NOT_SENT'
+    case 'IN_PRODUCTION':
+      return stage === null || stage === 'PREPARING' ? 'NOT_STARTED' : 'IN_PRODUCTION'
+    case 'READY':
+      return 'READY'
+    case 'PARTLY_SHIPPED':
+    case 'SHIPPED':
+      return 'SHIPPED'
+    case 'DELIVERED':
+    case 'CLOSED':
+      return 'DONE'
+    case 'CANCELLED':
+      return 'CANCELLED'
+  }
+}
+
+/** The statuses of each phase (NOT_STARTED and IN_PRODUCTION share the status IN_PRODUCTION: the stage splits them). */
+export const PHASE_STATUSES: Record<OrderPhase, readonly SalesOrderStatus[]> = {
+  NOT_SENT: ['PENDING_APPROVAL', 'CONFIRMED'],
+  NOT_STARTED: ['IN_PRODUCTION'],
+  IN_PRODUCTION: ['IN_PRODUCTION'],
+  READY: ['READY'],
+  SHIPPED: ['PARTLY_SHIPPED', 'SHIPPED'],
+  DONE: ['DELIVERED', 'CLOSED'],
+  CANCELLED: ['CANCELLED'],
+}
+
+/**
+ * The seven phases' counts from the counts by status and `started` (the orders of status IN_PRODUCTION past PREPARING): every
+ * phase is there (0 as 0) and the seven always add up to the sum of `byStatus`. IN_PRODUCTION = `started`, NOT_STARTED = the
+ * rest of the status IN_PRODUCTION; a `started` read a moment apart from the status counts never takes the sum off (it is held
+ * between 0 and the status count).
+ */
+export function phaseCountsOf(byStatus: Readonly<Partial<Record<SalesOrderStatus, number>>>, started: number): Record<OrderPhase, number> {
+  const ofStatuses = (phase: OrderPhase): number => PHASE_STATUSES[phase].reduce((sum, status) => sum + (byStatus[status] ?? 0), 0)
+  const inProduction = byStatus.IN_PRODUCTION ?? 0
+  const begun = Math.min(Math.max(started, 0), inProduction)
+  return {
+    NOT_SENT: ofStatuses('NOT_SENT'),
+    NOT_STARTED: inProduction - begun,
+    IN_PRODUCTION: begun,
+    READY: ofStatuses('READY'),
+    SHIPPED: ofStatuses('SHIPPED'),
+    DONE: ofStatuses('DONE'),
+    CANCELLED: ofStatuses('CANCELLED'),
+  }
+}
+// ── end B-CW-001 ──
