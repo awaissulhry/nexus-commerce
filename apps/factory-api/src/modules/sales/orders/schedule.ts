@@ -23,6 +23,9 @@ import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { officeContextOf } from './access'
 import { orderMoneyFactsOf } from './later-columns'
+// B-OM-024 (order money tab W-01, W-02): a request short, within the company's write-off tolerance (the rule ACCEPT_SHORT uses).
+import { beyondToleranceOf, shortOf } from '@nexus/factory-domain/sales/orders/money-plan'
+import { toleranceOf } from '../../payments/write-offs/sums'
 
 /**
  * An order's payment schedule (B-W2a-30; SAL-216; the design's order.money.schedule card): its SalesOrderMilestone rows,
@@ -377,10 +380,13 @@ async function planFactsOf(db: Reader, order: OrderRow, rows: readonly Milestone
   const money = await orderMoneyFactsOf(db, [order.id], lines)
   const parts = orderMoneyPartsOf(money.factsOf({ id: order.id, grossAmount: order.grossAmount, status: order.status }))
   const hand = await handChangesOf(db, order.id)
+  const tolerance = (await toleranceOf(db, order.companyId)).amount // B-OM-024
   return {
     requests,
     paid,
     hand,
+    /** B-OM-024: the company's write-off tolerance in force (minor units), null when it sets none. */
+    tolerance,
     /** The order's still to pay (B-OM-002) and what its goods' invoices paid (less refunds, plus written off): the ON_* steps' money. */
     stillOpen: parts.balance,
     goodsMoney: parts.paid - money.depositsPaidOf(order.id) + parts.writtenOff,
@@ -433,6 +439,8 @@ export async function getSchedule(caller: CommandCaller, orderId: string) {
       const step = stepOf(request.id)
       const paid = facts.paid.get(request.id) ?? 0
       const short = facts.hand.acceptedShortOf(request.id)
+      // B-OM-024: an OPEN request with money on it and less than asked is short; within the tolerance or not (the word stays without prices).
+      const missing = shortOf({ status: request.status, amount: request.amount, paid })
       return {
         id: request.id,
         milestoneId: step?.id ?? null,
@@ -450,6 +458,7 @@ export async function getSchedule(caller: CommandCaller, orderId: string) {
         // Accepted short by hand (PR S2's ACCEPT_SHORT): PAID with less than asked; the rest stays owed on the goods' invoice.
         acceptedShort: request.status === 'PAID' && paid < request.amount ? { short: asMoney('price', request.amount - paid), reason: asMoney('price', short?.reason ?? null), why: short?.why ?? null, at: short?.at ?? (request.paidAt === null ? null : toUtcIso(request.paidAt)), by: short?.by ?? null } : null,
         byHand: facts.hand.ofRequest(request.id),
+        short: missing === null ? null : { amount: asMoney('price', missing), withinTolerance: beyondToleranceOf(missing, facts.tolerance) === null }, // B-OM-024
         payments: !seesPayments
           ? []
           : facts.paymentsOf(request.id).map((allocation) => ({
@@ -486,6 +495,7 @@ export async function getSchedule(caller: CommandCaller, orderId: string) {
       stillOpen: asMoney('price', facts.stillOpen),
       overdue: asMoney('price', overdueOf(live.map(planStep), coverage, today)),
       // ── end B-OM-004 ──
+      tolerance: asMoney('price', facts.tolerance), // B-OM-024: the company's write-off tolerance (null: none set)
     }
   })
 }

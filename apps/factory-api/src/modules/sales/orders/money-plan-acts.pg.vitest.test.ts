@@ -336,9 +336,19 @@ describe('B-OM-016 accept a deposit short (lead L1: PAID by hand, the short part
     const plan = await planOf(order.id)
     const request = requestOf(plan, stepOf(plan, 'DEPOSIT').depositRequestId)
     await paid([{ depositRequestId: request.id, amount: request.amount - 2_000 }], 'OM-S2-0009')
-    const now = requestOf(await planOf(order.id), request.id)
+    const before = await planOf(order.id)
+    const now = requestOf(before, request.id)
+    // B-OM-024: 20.00 short, within the tenant-wide tolerance of 25.00 (the plan read says it, by ACCEPT_SHORT's own rule).
+    expect(before.tolerance).toBe(2_500)
+    expect(now.short).toEqual({ amount: 2_000, withinTolerance: true })
+    // Without the price grain: the word stays, never the amount nor the tolerance.
+    const blind = await ok('planNoPrice', 'GET', `${orderUrl(order.id)}/schedule`)
+    expect(blind).not.toHaveProperty('tolerance')
+    expect(requestOf(blind, request.id).short).toEqual({ withinTolerance: true })
     const answer = await ok('finance', 'POST', planUrl(order.id), { act: 'ACCEPT_SHORT', requestId: request.id, version: now.version, why: 'BANK_CHARGES', reason: 'Made-up: the bank kept 20.00.' })
     expect(requestOf(answer, request.id)).toMatchObject({ status: 'PAID', paid: request.amount - 2_000, acceptedShort: { short: 2_000, why: 'BANK_CHARGES', reason: 'Made-up: the bank kept 20.00.' } })
+    // B-OM-024: PAID now — nothing is short any more (the accepted short part is `acceptedShort`).
+    expect(requestOf(answer, request.id).short).toBeNull()
     expect(stepOf(answer, 'DEPOSIT').status).toBe('PAID')
     const [audit] = await admin(`SELECT after FROM "AuditLog" WHERE action = 'payments.depositPaid' AND "recordId" = $1`, [request.id])
     expect(audit!.after).toMatchObject({ status: 'PAID', acceptedShort: { why: 'BANK_CHARGES', overridden: false } })
@@ -356,6 +366,8 @@ describe('B-OM-016 accept a deposit short (lead L1: PAID by hand, the short part
     const request = requestOf(plan, stepOf(plan, 'DEPOSIT').depositRequestId)
     await paid([{ depositRequestId: request.id, amount: request.amount - 5_000 }], 'OM-S2-0010')
     const now = requestOf(await planOf(order.id), request.id)
+    // B-OM-024: 50.00 short is over the tolerance of 25.00: a part payment, not bank charges (Accept short is the Owner's here).
+    expect(now.short).toEqual({ amount: 5_000, withinTolerance: false })
     const body = { act: 'ACCEPT_SHORT', requestId: request.id, version: now.version, why: 'OTHER', reason: 'Made-up: agreed with the customer.' }
     expect(await refused('finance', 'POST', planUrl(order.id), body, 409)).toMatchObject({ issues: [{ path: 'moneyPlan/OVER_TOLERANCE', message: MONEY_PLAN_REFUSAL_WORDS.OVER_TOLERANCE.en }] })
     // The Owner (orders.waive) may: the preview says a fresh code is asked, and how short it is.

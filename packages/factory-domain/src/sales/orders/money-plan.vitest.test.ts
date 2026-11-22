@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { coverageOf, overdueOf, planByHandMarkOf, settledByOf, UNDO_HELD, UNDO_HELD_WORDS, undoVerdictOf, type PlanStep, type UndoFacts } from './money-plan'
 // B-OM-011 … 016: the hand planner.
 import { amountOfPct, BY_HAND_NOTES, MONEY_PLAN_REFUSALS, MONEY_PLAN_REFUSAL_WORDS, planByHand, sharePctOf, type MoneyPlanAction, type MoneyPlanOutcome, type PlannerFacts, type PlannerRequest, type PlannerStep } from './money-plan'
+// B-OM-024: a request short, within the tolerance — one rule for the plan read and ACCEPT_SHORT.
+import { beyondToleranceOf, shortOf } from './money-plan'
 
 /** B-OM-004 (order money tab M4-B1, B12): the plan read's pure rules. Every amount is made up. */
 
@@ -85,6 +87,24 @@ describe('undo a payment on a deposit: the verdict, held in words', () => {
     }
     expect(UNDO_HELD_WORDS.DEPOSIT_INVOICE_ISSUED.en).toContain('a credit note first, in Finance')
     expect(UNDO_HELD_WORDS.DEPOSIT_INVOICE_ISSUED.it).toContain('prima una nota di credito')
+  })
+})
+
+// ── B-OM-024 (order money tab W-01, W-02): short only within the company's tolerance; a plain part payment is not "short" for Accept ──
+describe('B-OM-024: a request short, and within the write-off tolerance or not', () => {
+  it('short only on an OPEN request with money on it and less than asked', () => {
+    expect(shortOf({ status: 'OPEN', amount: 30_000, paid: 28_500 })).toBe(1_500)
+    expect(shortOf({ status: 'OPEN', amount: 30_000, paid: 0 })).toBeNull()
+    expect(shortOf({ status: 'OPEN', amount: 30_000, paid: 30_000 })).toBeNull()
+    expect(shortOf({ status: 'PAID', amount: 30_000, paid: 29_000 })).toBeNull()
+    expect(shortOf({ status: 'CANCELLED', amount: 30_000, paid: 10_000 })).toBeNull()
+  })
+
+  it('within the tolerance up to it; beyond it over; no tolerance set: beyond, whatever the part', () => {
+    expect(beyondToleranceOf(1_500, 2_500)).toBeNull()
+    expect(beyondToleranceOf(2_500, 2_500)).toBeNull()
+    expect(beyondToleranceOf(2_501, 2_500)).toBe('OVER_TOLERANCE')
+    expect(beyondToleranceOf(1, null)).toBe('NO_TOLERANCE')
   })
 })
 

@@ -178,6 +178,21 @@ export function undoVerdictOf(facts: UndoFacts): UndoVerdict {
   return { may: true, why: null, code: null }
 }
 
+// ── B-OM-024 (order money tab W-01, W-02): a request short, and whether that is within the company's write-off tolerance — ONE
+// rule, read by the plan read (`requests[].short`) and by ACCEPT_SHORT (the planner below and the API's fresh-code check) ──
+/** What is missing on an OPEN request with money on it and less than its amount (minor units); null: nothing is short. */
+export function shortOf(request: { readonly status: string; readonly amount: number; readonly paid: number }): number | null {
+  if (request.status !== 'OPEN' || request.paid <= 0 || request.paid >= request.amount) return null
+  return request.amount - request.paid
+}
+
+/** Why a short part goes beyond the company's write-off tolerance (it sets none, or the part is more), or null: within it. */
+export function beyondToleranceOf(short: number, tolerance: number | null): 'NO_TOLERANCE' | 'OVER_TOLERANCE' | null {
+  if (tolerance === null) return 'NO_TOLERANCE'
+  return short > tolerance ? 'OVER_TOLERANCE' : null
+}
+// ── end B-OM-024 ──
+
 // ════ the hand planner (PR S2; B-OM-011 … 016; 13-backend §3) ════════════════════════════════════════════════════════════════
 /**
  * ONE pure planner for every hand act on an order's money plan: what the act writes (steps changed or added, requests cancelled,
@@ -548,9 +563,10 @@ export function planByHand(facts: PlannerFacts, action: MoneyPlanAction): MoneyP
     case 'ACCEPT_SHORT': {
       const request = requestOf(action.requestId)
       if (!request || request.status !== 'OPEN') return refuse('NOT_OPEN')
-      if (request.paid <= 0 || request.paid >= request.amount) return refuse('NOTHING_SHORT')
-      const short = request.amount - request.paid
-      const beyond = action.tolerance === null ? 'NO_TOLERANCE' : short > action.tolerance ? 'OVER_TOLERANCE' : null
+      // B-OM-024: the one rule the plan read's `short` says too.
+      const short = shortOf(request)
+      if (short === null) return refuse('NOTHING_SHORT')
+      const beyond = beyondToleranceOf(short, action.tolerance)
       if (beyond && !action.override) return refuse(beyond)
       return result({ payRequest: request.id, short, overridden: beyond !== null })
     }

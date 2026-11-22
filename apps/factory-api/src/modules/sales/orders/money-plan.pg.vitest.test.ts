@@ -181,6 +181,18 @@ describe('B-OM-004 the plan read: paid per step, ON_* covered, set by hand, ever
     expect(requestOf(ids.r3)).toMatchObject({ milestoneId: null, stepKind: null, amount: 5000, paid: 0, fromChange: { amendmentId: ids.amendment, revision: 1 }, payments: [] })
   })
 
+  // ── B-OM-024 (order money tab W-01, W-02): short, and within the company's write-off tolerance or not ──
+  it('B-OM-024: a part-paid open request is short; with no tolerance set it is never within it; nothing paid is not short', async () => {
+    const answer = await plan('finance')
+    const requestOf = (id: string) => (answer.requests as Json[]).find((row) => row.id === id)!
+    // This world sets no write-off tolerance (neither the company's nor the tenant-wide one).
+    expect(answer.tolerance).toBeNull()
+    expect(requestOf(ids.r1).short).toEqual({ amount: 20000, withinTolerance: false })
+    expect(requestOf(ids.r2).short).toEqual({ amount: 45000, withinTolerance: false })
+    // Nothing placed on the extra deposit: not short (Accept short is not its act).
+    expect(requestOf(ids.r3).short).toBeNull()
+  })
+
   it('still open is the order read’s one figure (B-OM-002)', async () => {
     const answer = await plan('finance')
     const order = (await read('finance', `/sales/orders/${orderId}`)).order
@@ -197,7 +209,7 @@ describe('B-OM-004 the plan read: paid per step, ON_* covered, set by hand, ever
 describe('B-OM-004 the walls: the money wall and the brand wall', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('the real Sales template reads the plan with no amount, no reason and no payment amount', async () => {
     const answer = await plan('sales')
-    for (const key of ['grossAmount', 'openAmount', 'paidAmount', 'stillOpen', 'overdue']) expect(answer, key).not.toHaveProperty(key)
+    for (const key of ['grossAmount', 'openAmount', 'paidAmount', 'stillOpen', 'overdue', /* B-OM-024 */ 'tolerance']) expect(answer, key).not.toHaveProperty(key)
     for (const row of answer.steps as Json[]) for (const key of ['amount', 'paidSoFar', 'coveredByInvoices']) expect(row, key).not.toHaveProperty(key)
     const balance = (answer.steps as Json[]).find((row) => row.id === ids.balanceStep)!
     expect(balance.byHand).toMatchObject({ act: 'MOVE_DUE', by: 'Made-up Finance Person' })
@@ -207,6 +219,8 @@ describe('B-OM-004 the walls: the money wall and the brand wall', { timeout: SLO
       for (const key of ['amount', 'paid']) expect(row, key).not.toHaveProperty(key)
       for (const paid of row.payments as Json[]) expect(paid).not.toHaveProperty('amount')
     }
+    // B-OM-024: the short word is kept without prices (within the tolerance or not), never its amount.
+    expect((answer.requests as Json[]).find((row) => row.id === ids.r1)!.short).toEqual({ withinTolerance: false })
     expect(JSON.stringify(answer)).not.toContain('a week more')
   })
 

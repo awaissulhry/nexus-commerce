@@ -426,6 +426,12 @@ const planRequestView = output({
   /** PAID with less than asked (accepted short by hand): the short part (it stays owed on the goods' invoice), why and who. */
   acceptedShort: output({ short: money.price(z.number().int()), reason: money.price(z.string().nullable()), why: z.string().nullable(), at: instant().nullable(), by: z.string().nullable() }).nullable(),
   byHand: byHandView.nullable(),
+  /**
+   * B-OM-024 (order money tab W-01, W-02): an OPEN request with money on it and less than its amount — what is missing (price grain)
+   * and whether that is within the company's write-off tolerance (ACCEPT_SHORT's own rule; no tolerance set: false, the word is
+   * sent without prices too); null otherwise (nothing paid, paid in full, or not open).
+   */
+  short: output({ amount: money.price(z.number().int()), withinTolerance: z.boolean() }).nullable(),
   /** Its payments (live allocations), with payments.view only (else empty). */
   payments: z.array(planPaymentView),
 })
@@ -472,6 +478,8 @@ const scheduleFields = {
   /** What of the OPEN steps is past due (the business day), less what is paid on them and what the invoices cover. */
   overdue: money.price(z.number().int()),
   // ── end B-OM-004 ──
+  /** B-OM-024: the company's write-off tolerance in force (its own, else the tenant-wide one); null: none set. */
+  tolerance: money.price(z.number().int().nullable()),
 }
 
 export const scheduleContract = defineContract({
