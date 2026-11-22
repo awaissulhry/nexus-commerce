@@ -73,6 +73,8 @@ const grant = (permissions: Permission[], companies: Grant['companies'] = 'all')
 const office = (tenantId: string, grants: Grant[]): SessionContext => ({ audience: 'office', tenantId, actorId: newId(), grants })
 const SESSIONS: Record<string, () => SessionContext> = {
   sales: () => office(A.tenant, [grant(SALES)]),
+  // B-OM-018 (order money tab L9): "Open for payment" is the money plan's right (Owner, Finance): a holder without prices.
+  moneyPlan: () => office(A.tenant, [grant(['orders.view', 'orders.moneyPlan'])]),
   owner: () => office(A.tenant, [grant([...SALES, 'money.price', 'money.cost', 'money.margin'])]),
   viewer: () => office(A.tenant, [grant(['orders.view', 'money.price'])]),
   warehouse: () => office(A.tenant, [grant(SHIPPING)]),
@@ -199,29 +201,31 @@ describe('the office opens the balance before shipping: a deposit request of its
     const url = (milestoneId: string) => `${scheduleUrl()}/${milestoneId}/request`
     const balance = await stepOf(ids.balanceStep)
     expect(balance).toMatchObject({ kind: 'BEFORE_SHIPPING', status: 'OPEN', depositRequestId: null, dueDate: null })
-    expect((await wall('sales', 'POST', url(ids.invoiceStep), { version: 1, dueDate: addDays(TODAY(), 10) }, 409)).body.error.message).toBe(
+    expect((await wall('moneyPlan', 'POST', url(ids.invoiceStep), { version: 1, dueDate: addDays(TODAY(), 10) }, 409)).body.error.message).toBe(
       'This step of order SEED-SO-0003 falls due with the invoice of the shipped goods (on the invoice): it has no deposit request; only a step before shipping is opened here.',
     )
-    expect((await wall('sales', 'POST', url(ids.depositStep), { version: 1 }, 409)).body.error.message).toContain('The deposit step of order SEED-SO-0003 has its request from the order itself')
-    const noDay = (await wall('sales', 'POST', url(ids.balanceStep), { version: balance.version }, 400)).body.error
+    expect((await wall('moneyPlan', 'POST', url(ids.depositStep), { version: 1 }, 409)).body.error.message).toContain('The deposit step of order SEED-SO-0003 has its request from the order itself')
+    const noDay = (await wall('moneyPlan', 'POST', url(ids.balanceStep), { version: balance.version }, 400)).body.error
     expect(noDay.issues).toEqual([{ path: 'body/dueDate', message: 'This step of order SEED-SO-0003 has no due day (the order had no promise date when it was made): give the day the customer pays it.' }])
-    expect((await wall('sales', 'POST', url(ids.balanceStep), { version: balance.version + 1, dueDate: addDays(TODAY(), 10) })).status).toBe(409)
+    expect((await wall('moneyPlan', 'POST', url(ids.balanceStep), { version: balance.version + 1, dueDate: addDays(TODAY(), 10) })).status).toBe(409)
     expect((await wall('viewer', 'POST', url(ids.balanceStep), { version: balance.version, dueDate: addDays(TODAY(), 10) })).status).toBe(403)
+    // B-OM-018: Sales (orders.manage, no prices) no longer opens a step for payment: it would ask money it cannot see.
+    expect((await wall('sales', 'POST', url(ids.balanceStep), { version: balance.version, dueDate: addDays(TODAY(), 10) })).status).toBe(403)
     expect((await wall('floor', 'POST', url(ids.balanceStep), { version: balance.version, dueDate: addDays(TODAY(), 10) })).status).toBe(403)
     expect((await wall('partner', 'POST', url(ids.balanceStep), { version: balance.version, dueDate: addDays(TODAY(), 10) })).status).toBe(403)
     expect((await wall('otherTenant', 'POST', url(ids.balanceStep), { version: balance.version, dueDate: addDays(TODAY(), 10) })).status).toBe(404)
     // Nothing was made.
     expect(await admin('SELECT count(*)::int AS n FROM "DepositRequest" WHERE "orderId" = $1', [moneyA.shipping.quality.serialSalesOrderId])).toEqual([{ n: 1 }])
     // The invoice of the step waits for its request, and says which route opens it.
-    expect((await refused('POST', '/invoicing/invoices/from-milestone', { milestoneId: ids.balanceStep }, 409)).message).toContain('Sales opens it first')
+    expect((await refused('POST', '/invoicing/invoices/from-milestone', { milestoneId: ids.balanceStep }, 409)).message).toContain('Finance opens it for payment first')
   }, 60_000)
 
   it('opened: an advance of the step\'s amount, due the day given, the deposit\'s fiscal rule; the step names it; once only', async () => {
     const balance = await stepOf(ids.balanceStep)
     const due = addDays(TODAY(), 10)
-    const opened = (await wall('sales', 'POST', `${scheduleUrl()}/${ids.balanceStep}/request`, { version: balance.version, dueDate: due }, 201)).body
+    const opened = (await wall('moneyPlan', 'POST', `${scheduleUrl()}/${ids.balanceStep}/request`, { version: balance.version, dueDate: due }, 201)).body
     S.balanceRequest = opened.depositRequestId
-    // B-CP-011: Sales opens it but sees no amount (the keys are absent); the Owner reads the step's amount.
+    // B-CP-011 / B-OM-018: a money-plan holder without prices opens it but sees no amount (the keys are absent); the Owner reads it.
     expect(opened).not.toHaveProperty('grossAmount')
     expect(opened.steps.every((entry: Json) => !('amount' in entry))).toBe(true)
     const priced = (await wall('owner', 'GET', scheduleUrl(), undefined, 200)).body
@@ -236,7 +240,7 @@ describe('the office opens the balance before shipping: a deposit request of its
     expect(event!.payload).toMatchObject({ change: 'REQUESTED', milestoneIds: [ids.balanceStep] })
     // Once: a second call says it has its request.
     const again = await stepOf(ids.balanceStep)
-    expect((await wall('sales', 'POST', `${scheduleUrl()}/${ids.balanceStep}/request`, { version: again.version, dueDate: due }, 409)).body.error.message).toBe(
+    expect((await wall('moneyPlan', 'POST', `${scheduleUrl()}/${ids.balanceStep}/request`, { version: again.version, dueDate: due }, 409)).body.error.message).toBe(
       'This step of order SEED-SO-0003 has its deposit request already: the customer pays it (payments: deposit received).',
     )
     // The order record names which step each request is for; the release gate and the list read the deposit only.

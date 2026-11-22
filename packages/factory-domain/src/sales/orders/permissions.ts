@@ -27,11 +27,26 @@ export const ORDERS_DEFINITIONS = definePermissions('orders', {
   manage: { risk: 'write', description: "Work on sales orders: make an accepted quote's order, change a promise date with a reason, mark an order ready, cancel one before production starts, close a settled one." },
   close: { risk: 'write', description: 'Close a shipped order that is not settled (not every line invoiced and paid), with a reason kept in its history.' },
   waive: { risk: 'stepUp', description: "Waive an order's deposit or a payment step before shipping (and its deposit request while nothing is paid on it), with a reason and a fresh step-up." },
+  // B-OM-010 (order money tab D6): the Owner (every permission) and Finance (ORDERS_MONEY_PLAN_ADDS); Sales sees no money.
+  moneyPlan: {
+    risk: 'write',
+    description: "Change an order's money plan by hand: replace the deposit, move a due day, ask again after a waive, accept a short deposit, add, change, rename or remove a payment step, open a step for payment or undo the opening, change the payment terms; a reason each time, kept in the history.",
+  },
 })
 
 export const ORDERS_VIEW = 'orders.view' satisfies Permission
 export const ORDERS_MANAGE = 'orders.manage' satisfies Permission
 export const ORDERS_CLOSE = 'orders.close' satisfies Permission
 export const ORDERS_WAIVE = 'orders.waive' satisfies Permission
+export const ORDERS_MONEY_PLAN = 'orders.moneyPlan' satisfies Permission // B-OM-010
 
-export const ORDERS_PERMISSIONS: readonly Permission[] = Object.freeze([ORDERS_VIEW, ORDERS_MANAGE, ORDERS_CLOSE, ORDERS_WAIVE])
+export const ORDERS_PERMISSIONS: readonly Permission[] = Object.freeze([ORDERS_VIEW, ORDERS_MANAGE, ORDERS_CLOSE, ORDERS_WAIVE, ORDERS_MONEY_PLAN])
+
+/**
+ * B-OM-010 (order money tab D6, lead L9): who changes an order's money plan by hand (auth/roles/templates; the Owner from every()):
+ * Finance. Sales does not (it sees no amount: "Open for payment" moved from orders.manage to this right, B-OM-018), nor Production,
+ * nor Read-only (a write). A custom copy of the Finance role does not get it by itself (its templateAdds say so).
+ */
+export const ORDERS_MONEY_PLAN_ADDS: Readonly<Record<string, readonly Permission[]>> = Object.freeze({
+  finance: [ORDERS_MONEY_PLAN],
+})

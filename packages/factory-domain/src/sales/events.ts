@@ -311,8 +311,8 @@ export const events = [
   defineEvent({
     type: 'sales_order.schedule_changed',
     context: 'sales',
-    description: "A sales order's payment schedule was made, made again after an amendment, a step paid with its deposit request, its open steps cancelled with the order, a before-shipping step's deposit request made when the office opened the step, or a step waived by the owner.",
-    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), change: z.enum(['MADE', 'REMADE', 'PAID', 'CANCELLED', 'REQUESTED', 'WAIVED']), milestoneIds: z.array(z.uuid()), partyId: livePartyId() /* B-SA-001 */ }),
+    description: "A sales order's payment schedule was made, made again after an amendment, a step paid with its deposit request, its open steps cancelled with the order, a before-shipping step's deposit request made when the office opened the step, a step waived by the owner, or changed by hand (B-OM-011…016: the money plan's hand acts).",
+    payload: z.strictObject({ orderId: z.uuid(), number: z.string(), change: z.enum(['MADE', 'REMADE', 'PAID', 'CANCELLED', 'REQUESTED', 'WAIVED', /* B-OM-011 */ 'BY_HAND']), milestoneIds: z.array(z.uuid()), partyId: livePartyId() /* B-SA-001 */ }),
     live: { ...orderLive, fields: ['orderId', 'number', 'change'] },
   }),
   // B-W2a-43: customer returns (ids, numbers and what changed; never an amount, a price or a credit value).

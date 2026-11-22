@@ -317,3 +317,15 @@ describe('B-CP-016: the office role "Factory designer" sees no money', () => {
   })
 })
 // ── end B-CP-016 ──
+
+// ── B-OM-010 (order money tab D6, lead L9): the right to change an order's money plan ──
+describe('B-OM-010: orders.moneyPlan — the Owner and Finance; never Sales, Production or Read-only', () => {
+  it('is a declared write permission: Finance holds it, the Owner from every permission, nobody else', () => {
+    expect(FACTORY_PERMISSIONS.get('orders.moneyPlan')?.risk).toBe('write')
+    expect(templateOf('finance')?.permissions).toContain('orders.moneyPlan')
+    expect(templateOf('owner')?.permissions).toContain('orders.moneyPlan')
+    for (const key of ['sales', 'production_manager', 'planner', 'read_only', 'admin', 'designer']) expect(templateOf(key)?.permissions ?? [], key).not.toContain('orders.moneyPlan')
+    expect(ROLE_TEMPLATES.filter((entry) => entry.permissions.includes('orders.moneyPlan' as Permission)).map((entry) => entry.key)).toEqual(['owner', 'finance'])
+  })
+})
+// ── end B-OM-010 ──
