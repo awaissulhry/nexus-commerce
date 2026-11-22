@@ -3,6 +3,7 @@ import { fileSeries, recordFiles, type FileOrigin, type FileSeries, type FilesPa
 import { namedSeries, pricedLockedOf } from '../files/model' // F-CP-144
 import { isPicture } from '@nexus/factory-domain/files/thumbs/strip' // F-OP-125: the previews route's own picture rule
 import type { ViewerFile } from '../popups/model' // F-OP-127
+import type { AsksState } from './asks/asks' // F-OF-201
 
 /**
  * B-TH-299 — the Files view (threads plan T9; features T9-F01…F06, F09, F10, F13): every file of ONE record (its POST /files
@@ -128,14 +129,17 @@ export interface UploadAsk {
   /** The chosen place's key. */
   readonly place?: string
   // ---- end F-OF-103
+  /** F-OF-203: "Upload for this ask" — the asker's words on top (null: a priced ask, no words for this reader), and the ask answered after. */
+  readonly forAsk?: { readonly id: string; readonly words: string | null; readonly by: string; readonly dueOn: string; readonly target: string }
 }
 
 /** F-OF-103: a place a file can go to from the order's Files ("Where it goes"): the order itself, or one of its lines. */
 export interface UploadPlace {
   readonly key: string
-  readonly record: { readonly type: 'SalesOrder' | 'SalesOrderLine'; readonly id: string }
-  /** The words: "The order", or "Line {seq} · {what}" (the line's style and colour). */
-  readonly kind: 'order' | 'line'
+  /** F-OF-203: a work order too — the place a floor ask's file lands on, when the office uploads for it. */
+  readonly record: { readonly type: 'SalesOrder' | 'SalesOrderLine' | 'WorkOrder'; readonly id: string }
+  /** The words: "The order", or "Line {seq} · {what}" (the line's style and colour); F-OF-203: a work order by its number (`what`). */
+  readonly kind: 'order' | 'line' | 'workOrder'
   readonly seq?: number
   readonly what?: string | null
   /** Who may be asked to see a file there (a line's sharing waits for the read's `may`: B-OF-014). */
@@ -208,6 +212,8 @@ export interface OrderFile {
   /** F-OF-102: the TRUE audiences beyond the office (empty: office only); absent: the two-state `audience`. */
   readonly audiences?: readonly OrderFileReach[]
   // ---- end F-OF-101
+  /** F-OF-201 (B-OF-033, S2): the ask this file answered (arrived or accepted); absent until S2. */
+  readonly askId?: string | null
 }
 
 /** F-OP-125 (B5): a made-to-measure line's newest worksheet (body data; opened by the made-to-measure route, each opening recorded). */
@@ -248,6 +254,13 @@ export interface OrderFilesRead {
   readonly may?: OrderFilesMay
   readonly cap?: number
   // ---- end F-OF-101 / F-OF-102
+  // ---- F-OF-201 (B-OF-033, S2; optional until it lands: no band until then) ----
+  readonly asks?: readonly FileAsk[]
+  /** Asks the reader does not read (a work order out of reach, body data without the right): counted, never named. */
+  readonly asksLeftOut?: number
+  /** The customer's open portal tasks "upload a document" on this order (its own home: no ask command on them). */
+  readonly customerAsks?: readonly CustomerAsk[]
+  // ---- end F-OF-201
 }
 
 /** The order's files on screen: the read (null while it is read), a failed read, and what this person may do. */
@@ -275,6 +288,8 @@ export interface OrderFilesModel {
   /** The last upload's outcome: files refused (with why) and files the virus scan holds (said, never lost: F5-B6). */
   readonly uploadOutcome?: { readonly refused: readonly { readonly name: string; readonly reason: string }[]; readonly held: readonly string[] }
   // ---- end F-OF-101 / F-OF-103
+  /** F-OF-201: "Waiting for files" — what the reader may do, the open window, its picks, a refusal (use-file-asks); absent: no band. */
+  readonly asks?: AsksState
 }
 
 /**
@@ -558,3 +573,42 @@ export function chipMarksOf(file: Pick<OrderFile, 'audience' | 'audiences'>): Or
 /** Why the reader's own upload is held, in the body's words (record-thread-files-view `keep.*`). */
 export const heldReasonKey = (held: Pick<OrderHeldFile, 'reason'>): string => (held.reason === 'SCAN_PENDING' ? 'keep.scanPending' : held.reason === 'INFECTED' ? 'keep.infected' : 'keep.held')
 // ── end F-OF-102
+
+// ── F-OF-201 (order FILES tab W2; 13-backend B-OF-031…033): an ask for a file, as the order's files read sends it ──
+export type FileAskWho = 'PERSON' | 'OFFICE_ROLE' | 'FLOOR_ROLE' | 'FLOOR_TEAM' | 'STEP'
+export type FileAskTarget = 'SalesOrder' | 'SalesOrderLine' | 'WorkOrder'
+/** One open ask (OPEN or ARRIVED; an accepted one leaves the band — its file says it). `words` null: priced, the reader sees no prices. */
+export interface FileAsk {
+  readonly id: string
+  readonly version: number
+  readonly status: 'OPEN' | 'ARRIVED'
+  readonly words: string | null
+  readonly priced: boolean
+  readonly bodyData: boolean
+  readonly fileKind: string
+  readonly lands: { readonly type: FileAskTarget; readonly id: string; readonly label: string; readonly step: { readonly id: string; readonly seq: number; readonly name: string } | null }
+  /** An office person's name, a role's or team's name, the step's words — never a floor worker. */
+  readonly who: { readonly kind: FileAskWho; readonly label: string }
+  /** The reader holds one of its open Tasks ("Upload for this ask"). */
+  readonly forMe: boolean
+  readonly dueOn: string
+  /** Derived on the server (the company's day); 0: not late. */
+  readonly lateDays: number
+  readonly askedBy: { readonly name: string }
+  readonly askedAt: string
+  readonly rounds: number
+  readonly lastReason: string | null
+  readonly chasedAt: string | null
+  readonly answered: { readonly at: string; readonly by: { readonly kind: 'OFFICE'; readonly name: string } | { readonly kind: 'FLOOR' }; readonly fileIds: readonly string[]; readonly held: number } | null
+  readonly may: { readonly answer: boolean; readonly decide: boolean; readonly change: boolean }
+}
+/** The customer's portal task "upload a document" on the order (PartnerTask): shown as a row with its own home only. */
+export interface CustomerAsk {
+  readonly id: string
+  /** What the portal task asks, in both languages (the read's words, as the groups' are). */
+  readonly words: { readonly it: string; readonly en: string } | null
+  readonly dueOn: string | null
+  readonly lateDays: number
+  readonly status: string
+}
+// ── end F-OF-201

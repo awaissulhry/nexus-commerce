@@ -284,5 +284,24 @@
     "back": "Delete",
     "empty": "Type a number",
     "range": "From {min} to {max}"
+  },
+  "asked": {
+    "title_one": "Files asked ({count})",
+    "title_other": "Files asked ({count})",
+    "forStep": "Photos for step {seq} · {name}",
+    "forOrder": "Photos for this work order",
+    "customer": "customer {code}",
+    "due": "due {date}",
+    "late_one": "{count} day late",
+    "late_other": "{count} days late",
+    "office": "The office asks: “{words}”",
+    "again": "Asked again: {reason}",
+    "chased": "The office asked for an update, {date}",
+    "photo": "Photo for this ask",
+    "offline": "Photos need the network — the camera waits while offline.",
+    "sending": "The photo is being sent.",
+    "sent": "Sent to the office.",
+    "closed": "This ask is closed: the photo goes on the work order as a note.",
+    "failed": "The photo did not go: try again."
   }
 }

@@ -20,6 +20,10 @@ import type { OrderRecordModel } from '../record-model'
 import { copyLinkTo } from '../shipments/view/hrefs'
 import { LineMenuButton } from './LineMenu'
 import { Section } from './production/Kit' // F-OF-101: the Production kit, in place (Kit.tsx untouched; its Section draws the ONE ⓘ)
+// F-OF-201 (order FILES tab W2): "Waiting for files" (#asks) — the band beside the files from 1200 px of the tab's room, above them below.
+import { useSearchParams } from 'next/navigation'
+import { ASKS_NS, AskButton, AsksBody, useAsksAnswer } from '../../../../../lib/record-thread/files-view/asks/view/AsksBody'
+import type { AsksState } from '../../../../../lib/record-thread/files-view/asks/asks'
 
 /**
  * F-SA-237 (sales page plan N9, picks P14, R7; 10-order-page §2.7) — Files: every file of the order by where it comes from, the SAME
@@ -50,15 +54,41 @@ export function FilesTab({ order, model, actions }: { order: Order; model: Order
   }
   const readOnly = readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold })
   const party = order.party ? { name: order.party.legalName } : null
+  // F-OF-201: the band only once the read sends `asks` (S2); `?tab=files&ask=<id>` marks its row.
+  const askParam = useSearchParams()?.get('ask') ?? null
+  const asks = files.read && !files.problem && files.read.asks !== undefined && files.asks ? { read: files.read, state: { ...files.asks, focus: askParam } } : null
   return (
     <WithMessages namespaces={ORDER_FILES_NS}>
       <div className="fw-pt fw-of">
         {files.read && !files.problem && <FilesHead read={files.read} readOnly={readOnly} />}
-        <FilesSection files={files} party={party} actions={actions?.files}>
-          <OrderFilesBody model={files} party={party} actions={{ ...actions?.files, onOrderMessage: showMessage }} />
-        </FilesSection>
+        <div className={`fw-of-z${asks ? ' has-asks' : ''}`}>
+          {asks && <AsksSection read={asks.read} state={asks.state} actions={actions?.files} customer={party?.name ?? null} />}
+          <FilesSection files={files} party={party} actions={actions?.files}>
+            <OrderFilesBody model={files} party={party} actions={{ ...actions?.files, onOrderMessage: showMessage }} />
+          </FilesSection>
+        </div>
       </div>
     </WithMessages>
+  )
+}
+
+/** F-OF-201: the kit's Section for "Waiting for files" (#asks) — its answer, [Ask for a file…], ⋯ and ONE ⓘ; the rows are the band's. */
+const asksKitId = (id: 'asks'): SectionId => id as string as SectionId
+
+function AsksSection({ read, state, actions, customer }: { read: OrderFilesRead; state: AsksState; actions?: FilesViewActions | undefined; customer: string | null }) {
+  const t = useT(ASKS_NS)
+  const answer = useAsksAnswer(read)
+  const items: MenuItemDef[] = [{ id: 'copy-link', label: t('band.menu.copyLink'), onSelect: () => copyLinkTo('asks') }]
+  const info = (
+    <>
+      <p>{t('band.info.what')}</p>
+      <p>{t('band.info.who')}</p>
+    </>
+  )
+  return (
+    <Section id={asksKitId('asks')} title={t('band.title')} answer={answer} buttons={[<AskButton key="ask" state={state} onAsk={actions?.onAskNew} />]} more={<LineMenuButton label={t('band.menu.label')} items={items} />} info={info}>
+      <AsksBody read={read} state={state} actions={actions} customer={customer} />
+    </Section>
   )
 }
 

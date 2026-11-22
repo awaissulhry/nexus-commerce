@@ -29,7 +29,8 @@ import { syncDraftOperations } from '../../production/work-orders/store'
  * Test sessions hold the role templates' grants (Sales holds no price grain).
  *
  *   S2.1  make / change / reassign / cancel and §2.1's people: a role of 3 holders → 3 Tasks, an Alpha-limited holder skipped on
- *         Beta's order (and alone: 409 NOBODY_WITH_ROLE); a Planner can be asked (the designer once S3.4 gives it tasks.manage); a
+ *         Beta's order (and alone: 409 NOBODY_WITH_ROLE); a Planner can be asked, and the Factory designer (S3.4, B-OF-016: its template
+ *         keeps tasks); a
  *         person who cannot see the order, or does not see prices for a priced ask: 409 in words that name them; the floor only on a
  *         work order, never priced or body data (400); no new ask on a closed order (409); the brand wall (Beta's Owner: Alpha's order
  *         as an unknown one; Alpha's ask through Beta's order: "File ask not found."); the version (409); the Tasks follow a change,
@@ -40,6 +41,8 @@ import { syncDraftOperations } from '../../production/work-orders/store'
  *         held file arrives but the accept is refused (409 FILES_HELD) until the scan cleared it; the addressees' Tasks done and the
  *         asker's "Check: …" written, then done; asked again: OPEN, rounds 1, the Tasks open again; "Ask for an update" writes an
  *         office note mentioning the open Tasks' people — never a priced ask's words; a floor ask only moves its chase time
+ *   S3    B-OF-035 the "Ask for a file…" window's choices: Sales reads them (people, office roles, the floor's teams and roles of the
+ *         order's plants, lines, work orders and steps), never a floor worker's name; an Alpha-limited person on Beta's order: 404
  *
  * Every name and number is made up. Not run in the build (Owner rule: checks at the end). Run with
  * `node scripts/factory/run-pg-tests.mjs sales/file-asks/file-asks`.
@@ -64,7 +67,8 @@ const TEAM_A1 = sid('people:team:A1:L1-A')
 const AT = new Date('2026-11-22T08:00:00.000Z')
 
 /** The people: role templates, all customers unless said (planners in three custom roles below). */
-const PEOPLE = { owner: newId(), sales: newId(), planner: newId(), betaOwner: newId(), p1: newId(), p2: newId(), p3: newId(), alphaOnly: newId() } as const
+// S3 (B-OF-016): + the Factory designer.
+const PEOPLE = { owner: newId(), sales: newId(), planner: newId(), betaOwner: newId(), p1: newId(), p2: newId(), p3: newId(), alphaOnly: newId(), designer: newId() } as const
 type Person = keyof typeof PEOPLE
 const SESSIONS: Record<string, SessionContext> = {}
 function grantsOf(role: string, parties: Grant['parties'] = 'all'): Grant[] {
@@ -188,7 +192,7 @@ beforeAll(async () => {
   await admin(`INSERT INTO "Role" (id, "tenantId", key, name, permissions, grains) VALUES ($1, $2, 'custom.of031_alpha', 'Made-up Alpha planner', $3::text[], ARRAY[]::text[])`, [ROLES.alpha, T, [...planner.permissions]])
   const assign = (person: Person, roleId: string, parties: readonly string[] = []) =>
     admin(`INSERT INTO "RoleAssignment" (id, "tenantId", "userId", "roleId", "allCompanies", "companyIds", "partyIds", "validFrom") VALUES ($1, $2, $3, $4, true, '{}'::uuid[], $5::uuid[], now() - interval '30 days')`, [newId(), T, PEOPLE[person], roleId, [...parties]])
-  const ROLE_OF: Partial<Record<Person, string>> = { owner: 'owner', sales: 'sales', planner: 'planner', betaOwner: 'owner' }
+  const ROLE_OF: Partial<Record<Person, string>> = { owner: 'owner', sales: 'sales', planner: 'planner', betaOwner: 'owner', designer: 'designer' }
   for (const person of Object.keys(PEOPLE) as Person[]) {
     await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, $3, $4, 'ACTIVE')`, [PEOPLE[person], T, `of031-${person}-${run}@example.com`, `Made-up ${person}`])
     const role = ROLE_OF[person]
@@ -237,6 +241,10 @@ describe('S2.1 make: who becomes people (§2.1), the walls, the shape', { timeou
   it('a person: a Planner can be asked (one Task); someone who cannot see the order, or no prices for a priced ask, is refused by name', async () => {
     const asked = await made('owner', SO2, askBody({ kind: 'PERSON', userId: PEOPLE.planner }))
     expect(asked.tasks).toBe(1)
+    // S3 (B-OF-016, Owner D6): the Factory designer keeps tasks now — the pattern maker can be asked for the pattern PDF on a line.
+    const designer = await made('owner', SO2, askBody({ kind: 'PERSON', userId: PEOPLE.designer }, { words: 'Made-up: the pattern PDF, size 50', target: { type: 'SALES_ORDER_LINE', lineId: SO2_LINES[0] } }))
+    expect(designer.tasks).toBe(1)
+    expect(await tasksOf((await askRow(designer.ask.id)).taskIds)).toEqual([expect.objectContaining({ assigneeId: PEOPLE.designer, status: 'OPEN' })])
     const row = await askRow(asked.ask.id)
     expect(await tasksOf(row.taskIds)).toEqual([expect.objectContaining({ assigneeId: PEOPLE.planner, status: 'OPEN', recordId: SO2 })])
     const blind = await no('owner', 'POST', asks(SO2), askBody({ kind: 'PERSON', userId: PEOPLE.betaOwner }), 409)
@@ -453,5 +461,36 @@ describe('S2.2 answer, accept, ask again, chase', { timeout: SLOW_TEST_TIMEOUT_M
     expect((await outbox(ask.ask.id)).at(-1)).toMatchObject({ type: 'file_ask.changed', payload: { change: 'CHASED', workOrderId: WO1 } })
     // The office answers a floor ask with a file of the work order, as anyone who adds files there may.
     expect(await ok('owner', 'POST', url(ask.ask.id, 'answer'), { version: 2, fileIds: [await fileOf('WorkOrder', WO1)] })).toMatchObject({ ask: { status: 'ARRIVED' } })
+  })
+})
+
+// =================================================================================================================================
+describe('B-OF-035 the "Ask for a file…" window’s choices', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const choicesOf = (orderId: string) => `/sales/orders/${orderId}/file-asks/choices`
+
+  it('Sales reads them: people, office roles, the floor’s teams and roles of the order’s plants, lines, work orders and steps', async () => {
+    const choices = await ok('sales', 'GET', choicesOf(SO2))
+    const people = (choices.people as Json[]).map((row) => row.id)
+    for (const person of ['owner', 'planner', 'designer', 'p1', 'alphaOnly'] as const) expect(people, person).toContain(PEOPLE[person])
+    // Beta's Owner reaches no Alpha order: never offered on it.
+    expect(people).not.toContain(PEOPLE.betaOwner)
+    expect((choices.officeRoles as Json[]).map((row) => row.id)).toContain(ROLES.three)
+    expect((choices.teams as Json[]).find((row) => row.id === TEAM_A1)).toMatchObject({ siteId: sid('site:A1') })
+    expect((choices.lines as Json[]).map((row) => row.id).sort()).toEqual([...SO2_LINES].sort())
+    const workOrder = (choices.workOrders as Json[]).find((row) => row.id === WO1)!
+    expect(workOrder).toMatchObject({ siteId: sid('site:A1') })
+    expect((workOrder.steps as Json[]).map((step) => step.id)).toContain(WO1_SEW)
+    for (const role of choices.floorRoles as Json[]) expect(role.siteIds.length).toBeGreaterThan(0)
+    expect(choices.truncated).toBe(false)
+    // Never a floor worker's name, never a count per worker.
+    const text = JSON.stringify(choices)
+    for (const row of await admin<{ displayName: string }>(`SELECT "displayName" FROM "Worker" WHERE "tenantId" = $1`, [T])) expect(text).not.toContain(row.displayName)
+    expect(text).not.toMatch(/"members?"|"count"/)
+  })
+
+  it('on Beta’s order Alpha’s planner gets the unknown order’s words; Beta’s Owner on Alpha’s order too', async () => {
+    const unknown = await no('alphaOnly', 'GET', choicesOf(randomUUID()), undefined, 404)
+    expect((await no('alphaOnly', 'GET', choicesOf(beta.salesOrderId), undefined, 404)).message).toBe(unknown.message)
+    expect((await no('betaOwner', 'GET', choicesOf(SO2), undefined, 404)).message).toBe('Sales order not found.')
   })
 })

@@ -1,0 +1,67 @@
+/*
+ * F-OF-201 … F-OF-203 (order FILES tab W2; 10-design §1, §4, §6) — "Waiting for files" and its windows. Room, not screen: the rows' list is
+ * a size container (`al`): rows stack (state + due · what · who · buttons, 44 px taps) below 680 px of its own room and use five columns
+ * (what · who · due · state · buttons) from there; beside the files (a 400–440 px column) they stack again. DS tokens only.
+ */
+.fw-ask-list { container: al / inline-size; display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
+.fw-ask-rows { display: flex; flex-direction: column; min-width: 0; }
+.fw-ask-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "st due" "w w" "who who" "act act"; gap: var(--nds-space-6) var(--nds-space-10); padding: var(--nds-space-10) var(--nds-space-2); border-bottom: 1px solid var(--nds-border-subtle); font-size: var(--nds-font-size-sm); min-width: 0; scroll-margin-top: var(--nds-space-24); }
+.fw-ask-row:last-child { border-bottom: none; }
+.fw-ask-row > div { min-width: 0; }
+.fw-ask-row.is-mine { background: var(--nds-wash-primary); border-radius: var(--nds-radius-lg); padding-inline: var(--nds-space-8); }
+.fw-ask-row.is-marked { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-lg); }
+.fw-ask-row:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; }
+.fw-ask-w { grid-area: w; display: flex; flex-direction: column; gap: var(--nds-space-2); }
+.fw-ask-w b { font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); overflow-wrap: anywhere; }
+.fw-ask-lands { display: inline-flex; align-items: center; gap: var(--nds-space-4); color: var(--nds-text-2); overflow-wrap: anywhere; }
+.fw-ask-mu { font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); overflow-wrap: anywhere; }
+.fw-ask-who { grid-area: who; display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-2); }
+.fw-ask-who b { display: inline-flex; align-items: center; gap: var(--nds-space-6); font-weight: var(--nds-font-weight-semibold); }
+.fw-ask-due { grid-area: due; display: flex; flex-direction: column; align-items: flex-end; gap: var(--nds-space-2); font-variant-numeric: tabular-nums; }
+.fw-ask-st { grid-area: st; display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-4); }
+.fw-ask-st .nds-tag, .fw-ask-due .nds-tag { display: inline-flex; align-items: center; gap: var(--nds-space-4); white-space: normal; }
+.fw-ask-act { grid-area: act; display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); }
+.fw-ask-held { font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); max-width: 22ch; line-height: 1.4; }
+@container al (max-width: 679px) {
+  .fw-ask-act .nds-btn:not(.icon) { min-height: 44px; }
+}
+@container al (min-width: 680px) {
+  .fw-ask-row { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 0.62fr) minmax(0, 0.95fr) auto; grid-template-areas: "w who due st act"; align-items: start; }
+  .fw-ask-due { align-items: flex-start; }
+  .fw-ask-act { justify-content: flex-end; flex-wrap: nowrap; }
+}
+.fw-ask-counted, .fw-ask-quiet { margin: 0; font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); line-height: 1.45; }
+.fw-ask-quiet { font-size: var(--nds-font-size-sm); }
+.fw-ask-notice { margin: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--nds-space-6); padding: var(--nds-space-6) var(--nds-space-10); border: 1px solid var(--nds-warning-border); border-radius: var(--nds-radius-lg); background: var(--nds-warning-soft); color: var(--nds-warning-text); font-size: var(--nds-font-size-sm); }
+.fw-ask-more { align-self: flex-start; }
+
+/* ── the order's thread window: its own head over the rows ── */
+.fw-ask-whead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--nds-space-6) var(--nds-space-10); }
+.fw-ask-whead-t { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
+.fw-ask-whead h3 { margin: 0; display: inline-flex; align-items: center; gap: var(--nds-space-6); font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-bold); color: var(--nds-text-strong); }
+.fw-of-asks-w { display: flex; flex-direction: column; gap: var(--nds-space-8); padding: var(--nds-space-10) var(--nds-space-12); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-xl); background: var(--nds-surface-raised); min-width: 0; }
+
+/* ── the windows ── */
+.fw-ask-form { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; }
+.fw-ask-form p { margin: 0; }
+.fw-ask-fieldset { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: var(--nds-space-6); min-width: 0; }
+.fw-ask-legend { margin-bottom: var(--nds-space-6); font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); }
+.fw-ask-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: var(--nds-space-6); }
+.fw-ask-cards.is-three { grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr)); }
+.fw-ask-hint { font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); line-height: 1.45; }
+.fw-ask-problem { padding: var(--nds-space-6) var(--nds-space-10); border-radius: var(--nds-radius-lg); background: var(--nds-danger-soft); color: var(--nds-danger-text); font-size: var(--nds-font-size-sm); }
+.fw-ask-files { margin: 0; padding-left: var(--nds-space-16); display: flex; flex-direction: column; gap: var(--nds-space-4); }
+.fw-ask-lines { display: flex; flex-direction: column; gap: var(--nds-space-6); padding-top: var(--nds-space-8); border-top: 1px solid var(--nds-border-subtle); font-size: var(--nds-font-size-xs); color: var(--nds-text-2); }
+.fw-ask-lines p { display: flex; gap: var(--nds-space-6); align-items: flex-start; }
+.fw-ask-lines svg { flex: none; margin-top: var(--nds-space-2); }
+.fw-ask-never { color: var(--nds-text-muted); }
+
+/* ── the tab: the asks beside the files from 1200 px of the tab's room (sticky while the files scroll), above them below ── */
+.fw-of-z { display: flex; flex-direction: column; gap: var(--nds-space-16); min-width: 0; }
+@container pt (min-width: 1200px) {
+  .fw-of-z.has-asks { display: grid; grid-template-columns: 400px minmax(0, 1fr); align-items: start; }
+  .fw-of-z.has-asks > #asks { position: sticky; top: var(--nds-space-8); }
+}
+@container pt (min-width: 1600px) {
+  .fw-of-z.has-asks { grid-template-columns: 440px minmax(0, 1fr); }
+}

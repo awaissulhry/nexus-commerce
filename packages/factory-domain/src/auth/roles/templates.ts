@@ -257,7 +257,9 @@ const every = (filter: (risk: string) => boolean = () => true): Permission[] =>
  * B-W2a-20 (tasks on any record, COL-037): every office template that writes notes on records (threads.post) makes and
  * keeps tasks too. Listed here, one line per template, so the long permission lists below stay as their steps wrote them.
  */
-const TASKS_TEMPLATES: ReadonlySet<string> = new Set(['admin', 'finance', 'sales', 'planner', 'buyer', 'warehouse', 'production_manager', 'quality_inspector', 'floor_supervisor'])
+// B-OF-016 (order files tab; Owner D6): + designer — the Factory designer may be given tasks and asked for files (the pattern PDF); a side
+// effect the Owner said yes to: the designer may also make and assign tasks, and ask for files.
+const TASKS_TEMPLATES: ReadonlySet<string> = new Set(['admin', 'finance', 'sales', 'planner', 'buyer', 'warehouse', 'production_manager', 'quality_inspector', 'floor_supervisor', 'designer'])
 /**
  * B-W2a-35 (the plant; QHS-162, QHS-178, QHS-184; Owner answer H1): who sees and works the machines, requests and jobs,
  * one line per template. Every floor role reports a machine problem (H1: anyone at the station marks a machine unsafe at

@@ -3,6 +3,7 @@ import { defineRoutes } from '../../../core/manifest'
 import { acceptAskContract, answerAskContract, askAgainContract, cancelAskContract, changeAskContract, chaseAskContract, makeAskContract, reassignAskContract } from './contract'
 import { acceptAsk, answerAsk, askAgain, cancelAsk, changeAsk, chaseAsk, makeAsk, reassignAsk } from './file-asks'
 import { manifest } from './manifest'
+import { askChoices, askChoicesContract } from './choices' // B-OF-035
 
 /**
  * Ask for a file on a sales order (order files tab B-OF-031): make one, change its words or due day, ask someone else, cancel it with
@@ -25,4 +26,7 @@ export default defineRoutes('sales.file-asks', manifest, async (app) => {
   app.post('/sales/orders/:orderId/file-asks/:askId/ask-again', { schema: askAgainContract }, async (request) => askAgain(request, request.params.orderId, request.params.askId, request.body, idempotencyKeyFrom(request)))
 
   app.post('/sales/orders/:orderId/file-asks/:askId/chase', { schema: chaseAskContract }, async (request) => chaseAsk(request, request.params.orderId, request.params.askId, request.body, idempotencyKeyFrom(request)))
+
+  // B-OF-035 (S3): the people, office roles, floor roles, teams, lines, work orders and steps the "Ask for a file…" window may pick.
+  app.get('/sales/orders/:orderId/file-asks/choices', { schema: askChoicesContract }, async (request) => askChoices(request, request.params.orderId))
 })

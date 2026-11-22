@@ -14,6 +14,7 @@ import { grainPermission } from '@nexus/factory-domain/auth/grains/grains' // B-
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedAuth } from '../../../../../../packages/factory-db/seed/auth'
 import { seed as seedFiles } from '../../../../../../packages/factory-db/seed/files'
+import { seed as seedMoney } from '../../../../../../packages/factory-db/seed/money' // B-OF-003: SH-0001's DDTs (143 annulled) and SO-0002's draft TD24
 import { seed as seedNumbering } from '../../../../../../packages/factory-db/seed/numbering'
 import { seed as seedProduction } from '../../../../../../packages/factory-db/seed/production'
 import { seed as seedRoles } from '../../../../../../packages/factory-db/seed/roles'
@@ -61,6 +62,8 @@ const SESSIONS: Record<string, SessionContext> = {
   'office.p1.thin': session(grant(['orders.view', 'files.read'], [ids.a])),
   // B-OF-033: Alpha's person who sees prices too.
   'office.p1.prices': session(grant([...PERMISSIONS, grainPermission('price') as Permission], [ids.a])),
+  // B-OF-001: Alpha's person who adds, deletes and shares files and keeps tasks (the doors the read's `may` names).
+  'office.p1.acts': session(grant([...PERMISSIONS, 'files.upload', 'files.delete', 'files.manage', 'tasks.manage', 'threads.post'], [ids.a])),
 }
 const B_SESSIONS = new Set(['office.p2'])
 
@@ -423,6 +426,17 @@ describe('B-OP-050: POST …/files/previews — small pictures and PDF links in 
     const thin = await ok('office.p1.thin', 'POST', previewsOf(w.a.salesOrderId), { fileIds: [files.measure, files.onMixed, files.onWorkOrder, files.shared] })
     expect(thin.previews.map((row: Json) => row.fileId)).toEqual([files.shared])
   })
+
+  // B-OF-006 (order files tab, PR S3.2; F7-B4): a picture whose type never gets a small preview says so: the card stops asking.
+  it('B-OF-006: a HEIC picture reads never: true; a JPEG whose small preview is not made yet never: false', async () => {
+    const heic = await cardFile('T-OF006 sleeve.heic', { kind: 'PHOTO', contentType: 'image/jpeg' })
+    await admin(`BEGIN; SET LOCAL session_replication_role = replica; UPDATE "StoredFile" SET "contentType" = 'image/heic' WHERE id = ${lit(heic.id)}; COMMIT;`)
+    const answer = await ok('office.all', 'POST', previewsOf(w.a.salesOrderId), { fileIds: [heic.id, cards.notYet.id] })
+    expect(answer.previews.map((row: Json) => [row.fileId, row.kind, row.small, row.later, row.never])).toEqual([
+      [heic.id, 'PICTURE', null, false, true],
+      [cards.notYet.id, 'PICTURE', null, false, false],
+    ])
+  })
 })
 // ── end B-OP-050 ──
 
@@ -618,3 +632,91 @@ describe('B-OF-033: the order’s asks for files in its files read — counted, 
   })
 })
 // ---- end B-OF-033
+
+// ---- B-OF-001 / B-OF-002 / B-OF-003 (order files tab, PR S3.1; 13-backend §3): each file's facts, held files, papers ------------
+describe('B-OF-001…003: versions, what keeps a file, papers Nexus made, the true audiences, held files, an annulled DDT, a credit note', { timeout: 120_000 }, () => {
+  const made = { v1: '', v2: '', confirmation: '', foreignCopy: '', ownHeld: '', otherHeld: '', ddtPaper: '', creditPaper: '', shipment: '', ddt: '' }
+  const plant = async (sql: string, values: unknown[] = []) => {
+    await admin('BEGIN')
+    try {
+      await admin("SET LOCAL session_replication_role = 'replica'")
+      await admin(sql, values)
+      await admin('COMMIT')
+    } catch (error) {
+      await admin('ROLLBACK')
+      throw error
+    }
+  }
+  /** A copy of row `id` of "StoredFile" with `changes`, planted (the owner, triggers off). */
+  const plantFile = (sourceId: string, changes: Json) =>
+    plant(`INSERT INTO "StoredFile" SELECT * FROM jsonb_populate_record(NULL::"StoredFile", (SELECT to_jsonb(f) || $1::jsonb FROM "StoredFile" f WHERE f.id = $2::uuid))`, [JSON.stringify({ storageKey: `t/${ids.tenantId}/c/${companyA}/2026/${newId()}`, ...changes }), sourceId])
+
+  beforeAll(async () => {
+    // Versions: v1 then v2 of one series, v1 superseded; v2 on legal hold.
+    made.v1 = await fileOn('SalesOrder', w.a.salesOrderId, 'T-OF001 cutting plan.pdf')
+    made.v2 = newId()
+    await plantFile(made.v1, { id: made.v2, seriesId: made.v1, versionNo: 2, legalHold: true })
+    await plant(`UPDATE "StoredFile" SET "supersededAt" = now() WHERE id = $1::uuid`, [made.v1])
+    // A confirmation PDF Nexus made (an ORDER_CONFIRMATION generated document): never deleted, born priced by its kind.
+    made.confirmation = await fileOn('SalesOrder', w.a.salesOrderId, 'T-OF001 order confirmation.pdf')
+    await plant(`INSERT INTO "GeneratedDocument" (id, "tenantId", "companyId", "recordType", "recordId", kind, version, fingerprint, language, "fileId") VALUES ($1, $2, $3, 'SalesOrder', $4, 'ORDER_CONFIRMATION', 1, 'made-up', 'it', $5)`, [newId(), ids.tenantId, companyA, w.a.salesOrderId, made.confirmation])
+    // A copy on Alpha's order of Beta's file, shared with Alpha: its content is another customer's — never "Customer".
+    made.foreignCopy = newId()
+    await plantFile(files.office, { id: made.foreignCopy, sourceFileId: w.second.fileId, visibility: ['OFFICE', 'PARTNER'], partyId: ids.a, originalName: 'T-OF001 old copy.pdf' })
+    // Held by the virus scan: one the reader uploaded, one someone else did.
+    made.ownHeld = await fileOn('SalesOrder', w.a.salesOrderId, 'T-OF002 my scan.pdf')
+    made.otherHeld = await fileOn('SalesOrderLine', w.a.salesOrderLineId, 'T-OF002 their scan.pdf')
+    const reader = (SESSIONS['office.p1'] as { readonly actorId: string }).actorId
+    await plant(`UPDATE "StoredFile" SET status = 'QUARANTINED', "quarantineReason" = 'scan_pending', "scanStatus" = 'PENDING', "availableAt" = NULL, "createdById" = $2::uuid WHERE id = $1::uuid`, [made.ownHeld, reader])
+    await plant(`UPDATE "StoredFile" SET status = 'QUARANTINED', "quarantineReason" = 'scan_pending', "scanStatus" = 'INFECTED', "availableAt" = NULL, "createdById" = $2::uuid WHERE id = $1::uuid`, [made.otherHeld, newId()])
+    // SEED-SO-0002's SH-0001 with DDT 143/2026 cancelled (the shipping seed) and the draft TD24 (the money seed): a paper of the
+    // annulled DDT, and a credit note of the TD24 with a paper of its own.
+    await seedMoney({ db: database, namespace: ns })
+    const [ddt] = await admin<{ id: string; shipmentId: string }>(`SELECT d.id, d."shipmentId" FROM "Ddt" d WHERE d."tenantId" = $1 AND EXISTS (SELECT 1 FROM "DdtCancellation" c WHERE c."ddtId" = d.id) ORDER BY d.id LIMIT 1`, [ids.tenantId])
+    made.ddt = ddt!.id
+    made.shipment = ddt!.shipmentId
+    made.ddtPaper = await fileOn('Ddt', made.ddt, 'T-OF003 DDT 143.pdf')
+    const [draft] = await admin<{ id: string }>(`SELECT id FROM "Invoice" WHERE "tenantId" = $1 AND "salesOrderId" = $2 AND "docType" = 'TD24' ORDER BY id LIMIT 1`, [ids.tenantId, otherOrder.id])
+    const credit = newId()
+    await plant(`INSERT INTO "Invoice" SELECT * FROM jsonb_populate_record(NULL::"Invoice", (SELECT to_jsonb(i) || $1::jsonb FROM "Invoice" i WHERE i.id = $2::uuid))`, [JSON.stringify({ id: credit, docType: 'TD04', creditOfId: draft!.id, salesOrderId: null, shipmentId: null, number: null, xmlFileId: null, pdfFileId: null }), draft!.id])
+    made.creditPaper = await fileOn('Invoice', credit, 'T-OF003 credit note.pdf')
+  })
+
+  it('each file: its version, its series and how many versions it keeps, what keeps it, fiscal, priced', async () => {
+    const list = await ok('office.p1', 'GET', listOf(w.a.salesOrderId))
+    expect(fileOfList(list, made.v1)).toBeUndefined()
+    expect(fileOfList(list, made.v2)).toMatchObject({ version: 1, seriesId: made.v1, versions: 2, kept: { legalHold: true, retainUntil: null }, fiscal: false, priced: false, made: null, bornPriced: false })
+    expect(fileOfList(list, files.office)).toMatchObject({ seriesId: null, versions: 1, audiences: [] })
+  })
+
+  it('a confirmation Nexus made reads made: GENERATED and bornPriced; the true audiences: a share with this customer, an old foreign copy', async () => {
+    const list = await ok('office.p1', 'GET', listOf(w.a.salesOrderId))
+    expect(fileOfList(list, made.confirmation)).toMatchObject({ made: 'GENERATED', bornPriced: true })
+    expect(fileOfList(list, files.shared)?.audiences).toEqual(['CUSTOMER'])
+    const all = await ok('office.all', 'GET', listOf(w.a.salesOrderId))
+    expect(fileOfList(all, made.foreignCopy)).toMatchObject({ audience: 'CUSTOMER_CAN_SEE', audiences: [] })
+  })
+
+  it('held files: counted per group; the reader’s OWN as a card, another’s only counted', async () => {
+    const list = await ok('office.p1', 'GET', listOf(w.a.salesOrderId))
+    expect(groupOf(list, 'ORDER').heldCount).toBeGreaterThanOrEqual(1)
+    expect(groupOf(list, 'LINES').heldCount).toBeGreaterThanOrEqual(1)
+    expect(list.held).toEqual([{ id: made.ownHeld, name: 'T-OF002 my scan.pdf', group: 'ORDER', at: expect.any(String), reason: 'SCAN_PENDING' }])
+    expect(fileOfList(list, made.ownHeld)).toBeUndefined()
+    expect(JSON.stringify(list)).not.toContain('T-OF002 their scan.pdf')
+  })
+
+  it('papers: an annulled DDT’s paper says so and names its shipment; a credit note of the order’s invoice is listed', async () => {
+    const list = await ok('office.all', 'GET', listOf(otherOrder.id))
+    const ddtPaper = fileOfList(list, made.ddtPaper)!
+    expect(ddtPaper.from).toMatchObject({ type: 'Ddt', id: made.ddt, state: 'ANNULLED', shipment: { id: made.shipment, label: expect.any(String) } })
+    expect(groupOf(list, 'SHIPMENTS').files.map((file: Json) => file.id)).toContain(made.creditPaper)
+    expect(fileOfList(list, made.creditPaper)?.from).toMatchObject({ type: 'Invoice', state: null, shipment: null })
+  })
+
+  it('may: the doors over THIS order’s scope by the reader’s rights', async () => {
+    expect((await ok('office.p1', 'GET', listOf(w.a.salesOrderId))).may).toEqual({ upload: false, delete: false, share: false, ask: false, askCustomer: false })
+    expect((await ok('office.p1.acts', 'GET', listOf(w.a.salesOrderId))).may).toEqual({ upload: true, delete: true, share: true, ask: true, askCustomer: false })
+  })
+})
+// ---- end B-OF-001 / B-OF-002 / B-OF-003

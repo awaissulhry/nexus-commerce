@@ -3,7 +3,7 @@ import type { FastifyRequest } from 'fastify'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { ValidationError } from '@nexus/factory-domain/core/errors'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
-import { isPicture } from '@nexus/factory-domain/files/thumbs/strip'
+import { isPicture, isStrippable } from '@nexus/factory-domain/files/thumbs/strip'
 import { systemCallerOf } from '../../../platform/files/files'
 import { previewFile } from '../../../platform/files/preview/preview'
 import { processFiles } from '../../../platform/files/service'
@@ -71,6 +71,8 @@ export const orderFilePreviewsContract = defineContract({
           inline: address.nullable(),
           /** This call's addresses are spent (at most 8): ask for this file again. */
           later: z.boolean(),
+          /** B-OF-006 (order files tab; F7-B4): a picture whose type never gets a small preview (HEIC, GIF, TIFF …): do not ask again. */
+          never: z.boolean(),
         }),
       ),
       asOf: instant(),
@@ -133,6 +135,7 @@ export async function orderFilePreviews(request: FastifyRequest, orderId: string
       pdfDrawable: entry.pdfDrawable,
       inline: made[index]!.inline,
       later: entry.later,
+      never: entry.kind === 'PICTURE' && !isStrippable(entry.file.contentType), // B-OF-006
     })),
     asOf: toUtcIso(serverClock.now()),
   }

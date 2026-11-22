@@ -15,6 +15,7 @@ import { orderSectionsOf, orderShownFilesOf, type OrderFileRef } from '../../../
 import { useFileUpload } from '../../../lib/record-thread/files-view/use-file-upload'
 import type { OrderFilesMay, UploadPlace } from '../../../lib/record-thread/files-view/model'
 import { uploadChoices } from '../../../record-panels/model'
+import { useFileAsks } from './use-file-asks' // F-OF-201: "Waiting for files"
 import { listFiles } from '../../../record-panels/api'
 import { storeUrl } from '../../../record-panels/store'
 import { openOrderFile, readOrderFiles, shareWithParty } from './api'
@@ -56,6 +57,16 @@ export function useOrderFiles(
     /** After an upload, what else reads again (the dock: its record's own files); the ORDER's read is read again here (F5-B8). */
     readonly onUploaded?: () => void
     // ---- end F-OF-103
+    // ---- F-OF-201: "Waiting for files" — the order's work orders (a floor ask lands on one), the order's state (L1), the session's rights
+    // until the read's `may` lands (tasks.manage + threads.post; partners.tasks.manage), Read-only (L3), today, the ask the address names
+    readonly workOrders?: readonly { readonly id: string; readonly number: string; readonly siteId: string | null }[]
+    readonly closed?: boolean
+    readonly canAsk?: boolean
+    readonly canAskCustomer?: boolean
+    readonly readOnly?: boolean
+    readonly today?: string
+    readonly focusAsk?: string | null
+    // ---- end F-OF-201
   },
 ) {
   const { orderId, enabled, partyId, canShare, keep = false } = input
@@ -141,12 +152,38 @@ export function useOrderFiles(
     partyId,
     choices,
     ...(places ? { places } : {}),
-    onDone: () => {
+    onDone: (result) => {
+      // F-OF-203: an ask's upload answers the ask with its files (the read is read again after the answer).
+      if (result.ask.forAsk && result.fileIds.length > 0) void asks.answer(result.ask.forAsk.id, result.fileIds)
       load()
       input.onUploaded?.()
     },
   })
   // ---- end F-OF-103
+  // ---- F-OF-201 … F-OF-203: "Waiting for files" — the band's windows, pickers and commands (use-file-asks); the same in the tab and the
+  // order's thread window. "Ask for a file…" by the read's `may.ask` when S3 lands, else the session's rights — only once the read sends `asks`.
+  const askCan = {
+    ask: read?.asks !== undefined && (read?.may ? read.may.ask : (input.canAsk ?? false)),
+    askCustomer: !!partyId && (read?.may ? read.may.askCustomer : (input.canAskCustomer ?? false)),
+    share: shareRight,
+    closed: input.closed ?? false,
+    readOnly: input.readOnly ?? false,
+  }
+  const asks = useFileAsks(api, {
+    orderId,
+    read,
+    partyId,
+    companyId: input.companyId ?? null,
+    lines: input.lines ?? [],
+    workOrders: input.workOrders ?? [],
+    can: askCan,
+    today: input.today ?? new Date().toISOString().slice(0, 10),
+    focus: input.focusAsk ?? null,
+    reload: load,
+    openForAsk: upload.openForAsk,
+    openFile: (fileId) => viewer.openAt(fileId, null),
+  })
+  // ---- end F-OF-201
 
   const actions: FilesViewActions = {
     onRetry: load,
@@ -196,9 +233,10 @@ export function useOrderFiles(
     onOrderUploadCancel: upload.cancel,
     onOrderUploadDismiss: upload.dismiss,
     // ---- end F-OF-103
+    ...asks.actions, // F-OF-201 … F-OF-203: the band's doors and windows
   }
 
-  const model: OrderFilesModel = { read, problem, selected, canShare: shareRight /* F-OF-103: the read's `may` when it says it */, busy: busy || upload.busy, previews: previews.previews /* F-OP-126 */, viewer: viewer.model /* F-OP-127 */, may, upload: upload.ask, uploadOutcome: upload.outcome /* F-OF-103 */ }
+  const model: OrderFilesModel = { read, problem, selected, canShare: shareRight /* F-OF-103: the read's `may` when it says it */, busy: busy || upload.busy, previews: previews.previews /* F-OP-126 */, viewer: viewer.model /* F-OP-127 */, may, upload: upload.ask, uploadOutcome: upload.outcome /* F-OF-103 */, asks: asks.state /* F-OF-201 */ }
   return { model, actions, reload: again }
 }
 

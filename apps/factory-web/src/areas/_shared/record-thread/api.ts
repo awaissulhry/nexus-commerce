@@ -417,11 +417,46 @@ const orderFileSchema = z.object({
   priced: z.boolean().optional(),
   audiences: z.array(z.enum(['CUSTOMER', 'LINK', 'FLOOR'])).optional(),
   // ---- end F-OF-101
+  // F-OF-201 (B-OF-033, S2; optional until it lands): the ask this file answered (arrived or accepted).
+  askId: z.string().nullable().optional(),
 })
 // F-OF-102 (B-OF-002, S3): one of the reader's own uploads the virus scan holds (a card; never opened, never previewed).
 const orderHeldSchema = z.object({ id: z.string(), name: z.string(), group: z.string(), at: z.string(), reason: z.enum(['SCAN_PENDING', 'INFECTED', 'SCAN_FAILED', 'OTHER']) })
 // F-OF-101 (B-OF-001, S3): what the reader may do over THIS order's scope.
 const orderFilesMaySchema = z.object({ upload: z.boolean(), delete: z.boolean(), share: z.boolean(), ask: z.boolean(), askCustomer: z.boolean() })
+// ---- F-OF-201 (13-backend B-OF-033, S2): one open ask of the order as the read sends it (`words` null: priced, the reader sees no prices) ----
+const askRef = z.object({ id: z.string(), seq: z.number(), name: z.string() })
+const fileAskSchema = z.object({
+  id: z.string(),
+  version: z.number(),
+  status: z.enum(['OPEN', 'ARRIVED']),
+  words: z.string().nullable(),
+  priced: z.boolean(),
+  bodyData: z.boolean(),
+  fileKind: z.string(),
+  lands: z.object({ type: z.enum(['SalesOrder', 'SalesOrderLine', 'WorkOrder']), id: z.string(), label: z.string(), step: askRef.nullable() }),
+  who: z.object({ kind: z.enum(['PERSON', 'OFFICE_ROLE', 'FLOOR_ROLE', 'FLOOR_TEAM', 'STEP']), label: z.string() }),
+  forMe: z.boolean(),
+  dueOn: z.string(),
+  lateDays: z.number(),
+  askedBy: z.object({ name: z.string() }),
+  askedAt: z.string(),
+  rounds: z.number(),
+  lastReason: z.string().nullable(),
+  chasedAt: z.string().nullable(),
+  answered: z
+    .object({
+      at: z.string(),
+      by: z.union([z.object({ kind: z.literal('OFFICE'), name: z.string() }), z.object({ kind: z.literal('FLOOR') })]),
+      fileIds: z.array(z.string()),
+      held: z.number(),
+    })
+    .nullable(),
+  may: z.object({ answer: z.boolean(), decide: z.boolean(), change: z.boolean() }),
+})
+// S2 (#1881): a customer's portal ask says what it asks in both languages, as the groups' words do; its due day may be absent.
+const customerAskSchema = z.object({ id: z.string(), words: z.object({ it: z.string(), en: z.string() }).nullable(), dueOn: z.string().nullable(), lateDays: z.number(), status: z.string() })
+// ---- end F-OF-201
 // F-OP-125 (B5): the newest MTM worksheet of each made-to-measure line (sent only with the measurements right; else counted).
 const orderWorksheetSchema = z.object({ documentId: z.string(), profileId: z.string(), line: z.object({ id: z.string(), seq: z.number() }), version: z.number(), number: z.string().nullable(), language: z.string(), createdAt: z.string() })
 export const orderFilesSchema = z.object({
@@ -434,6 +469,11 @@ export const orderFilesSchema = z.object({
   may: orderFilesMaySchema.optional(),
   cap: z.number().optional(),
   // ---- end F-OF-101 / F-OF-102
+  // ---- F-OF-201 (B-OF-033, S2; optional until it lands): the open asks of the order, those counted, and the customer's portal asks ----
+  asks: z.array(fileAskSchema).optional(),
+  asksLeftOut: z.number().optional(),
+  customerAsks: z.array(customerAskSchema).optional(),
+  // ---- end F-OF-201
 })
 
 /** GET /sales/orders/:orderId/files — every file of the order by where it comes from (orders.view + files.read per file). */
