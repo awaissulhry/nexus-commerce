@@ -2968,12 +2968,13 @@
     },
     "open": "Apri ›",
     "row": {
-      "approval": "Attende l'approvazione: {kind}",
+      "approval": "Attende la nostra approvazione: {kind}",
       "askedBy": "Chiesta da {name} · {when}",
       "whenAsked": "Al momento della richiesta: {words}",
       "theySee": "Il cliente vede: {words}",
       "lapses": "scade il {date}",
-      "late": "in ritardo di {count} g"
+      "late": "in ritardo di {count} g",
+      "approvalChange": "Attende la nostra approvazione: una modifica dell'ordine"
     },
     "who": {
       "sales": "Rispondono le vendite",
@@ -2981,7 +2982,8 @@
       "problem": "Si risponde in Problemi e blocchi, nella scheda Produzione",
       "decides": "Decide {who}",
       "youAsked": "Hai chiesto tu questa approvazione: decide {who}",
-      "salesDecides": "Decidono le vendite"
+      "salesDecides": "Decidono le vendite",
+      "roleDecides": "Decide il ruolo {who}"
     },
     "still": {
       "revision": "Revisione {revision} · {when}",
@@ -3062,7 +3064,8 @@
         "expired": "La revisione {revision} richiede il loro sì, e la richiesta è scaduta: chiedilo di nuovo a {customer}.",
         "sendNew": "L'ordine è cambiato dopo l'invio della v{version}.",
         "notSent": "Creala e inviala qui sotto, in La nostra conferma.",
-        "agreed": "Accordato e confermato: v{version} inviata il {date}."
+        "agreed": "Accordato e confermato: v{version} inviata il {date}.",
+        "notSentNoPrice": "Non ancora inviata: la crea e la invia chi vede i prezzi."
       },
       "toWaiting": "In attesa ↑",
       "theirs": "Il loro sì",
@@ -3105,7 +3108,8 @@
       "noPrice": "La conferma mostra i prezzi: la invia chi vede i prezzi.",
       "changedAfter": "l'ordine è cambiato dopo",
       "sendsListed": "Ogni invio è elencato in Cosa è cambiato › Conferme.",
-      "signedPriced": "Il PDF firmato mostra i prezzi: lo apre chi vede i prezzi."
+      "signedPriced": "Il PDF firmato mostra i prezzi: lo apre chi vede i prezzi.",
+      "version": "v{version}"
     },
     "ask": {
       "title": "Chiedere a {customer} di riconfermare la revisione {revision}?",
@@ -3122,7 +3126,8 @@
     "menu": {
       "label": "Altro per questa riga",
       "told": "Chi è stato avvisato…",
-      "copyLink": "Copia il link a questa riga"
+      "copyLink": "Copia il link a questa riga",
+      "discussRequest": "Discuti la richiesta di {kind} del cliente…"
     },
     "history": {
       "title": "Cosa è cambiato",

@@ -272,7 +272,6 @@
       "notYet": "Non ancora possibile"
     },
     "notSent": "Non ancora inviata",
-    "rowTitle": "Conferma d'ordine v{version}",
     "rowMade": "fatta il {date}",
     "rowSent": "inviata il {date} (v{version})",
     "open": "Apri",

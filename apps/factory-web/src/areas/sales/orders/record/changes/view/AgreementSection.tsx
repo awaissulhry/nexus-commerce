@@ -48,6 +48,9 @@ export function AgreementSection({ order, model, actions }: { order: Order; mode
         return t('changesTab.agreement.answer.sendNew', { version: s.version })
       case 'agreed':
         return t('changesTab.agreement.answer.agreed', { version: s.version, date: formatDate(s.at, { locale }) })
+      case 'notSent':
+        // fx8 (N1, L10): a reader without the price grain can neither make nor send it — said so, never told to.
+        return t(model.can.price ? 'changesTab.agreement.answer.notSent' : 'changesTab.agreement.answer.notSentNoPrice')
       default:
         return t(`changesTab.agreement.answer.${s.kind}`)
     }

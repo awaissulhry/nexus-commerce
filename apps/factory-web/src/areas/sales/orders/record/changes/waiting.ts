@@ -100,7 +100,7 @@ export function waitingItemOf(row: WaitingRow, can: { readonly manage: boolean }
   if (row.kind === 'BRAND_REQUEST' && row.sub === 'PROBLEM') return { row, face: 'problem', mine: false, who: { key: 'changesTab.who.problem' }, anchor: row.ref ? `about-ProductionIssue-${row.ref.id}` : null }
   if (door.kind === 'yes') {
     const yes = yesDoorOf(door.task)
-    return { row, face: 'approval', mine: yes.kind === 'decide', who: { key: yes.kind === 'selfAsked' ? 'changesTab.who.youAsked' : 'changesTab.who.decides', params: { who: door.task.approver.name } }, anchor: `about-Approval-${door.task.taskId}` }
+    return { row, face: 'approval', mine: yes.kind === 'decide', who: { key: yes.kind === 'selfAsked' ? 'changesTab.who.youAsked' : door.task.approver.kind === 'ROLE' ? 'changesTab.who.roleDecides' /* fx8: "The Owner decides" */ : 'changesTab.who.decides', params: { who: door.task.approver.name } }, anchor: `about-Approval-${door.task.taskId}` }
   }
   if (door.kind === 'refused') return { row, face: 'refused', mine: can.manage, who: { key: 'changesTab.who.salesDecides' }, anchor: rowAnchor('Amendment', door.amendmentId) }
   if (door.kind === 'open') return { row, face: 'counter', mine: false, who: { key: 'waiting.theirTurn' }, anchor: rowAnchor('OrderChangeRequest', door.requestId) }

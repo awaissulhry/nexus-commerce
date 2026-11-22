@@ -14,7 +14,7 @@ import { LineMenuButton } from '../../view/LineMenu'
  * was told… (a change the told read names) and Copy link to this row (`?tab=changes#<row>`, the dock's scope kept). Only the items
  * this row has; none: no ⋯ at all (never an empty menu). The doors of the frame are the page's own (Discuss.tsx's).
  */
-export function RowMenu({ order, prefix, label, anchor, discuss, at, toldMessageId, onWhoWasTold }: { order: { readonly id: string; readonly number: string; readonly customerSeq?: number | null | undefined }; prefix: string; label: string; anchor: string | null; discuss?: DiscussPart | null; at?: string | null; toldMessageId?: string | null; onWhoWasTold?: (messageId: string) => void }) {
+export function RowMenu({ order, prefix, label, anchor, discuss, discussLabel, at, toldMessageId, onWhoWasTold }: { order: { readonly id: string; readonly number: string; readonly customerSeq?: number | null | undefined }; prefix: string; label: string; anchor: string | null; discuss?: DiscussPart | null; /** fx8: the item's own words (a customer's request: "Discuss the customer's change request…"). */ discussLabel?: string | null; at?: string | null; toldMessageId?: string | null; onWhoWasTold?: (messageId: string) => void }) {
   const t = useT('orders')
   const f = useT('record-frame')
   const frame = useRecordFrame()
@@ -24,7 +24,7 @@ export function RowMenu({ order, prefix, label, anchor, discuss, at, toldMessage
     // The customer reads its own number of the order ("your order 12"), never the office's SO-….
     const yourOrder = order.customerSeq ? t('discuss.yourOrderSeq', { seq: order.customerSeq }) : t('discuss.yourOrder')
     const about = discussAboutOf(order, { yourOrder, firstLine: (words) => t('discuss.firstLine', { thing: words }) }, discuss)
-    items.push({ id: 'discuss', label: f('discuss.of', { thing: discuss.part }), onSelect: () => frame.discuss?.({ record: { type: 'SalesOrder', id: order.id }, about }) })
+    items.push({ id: 'discuss', label: discussLabel ?? f('discuss.of', { thing: discuss.part }), onSelect: () => frame.discuss?.({ record: { type: 'SalesOrder', id: order.id }, about }) })
   }
   if (at && frame?.showInThread) items.push({ id: 'show', label: f('discuss.showInThread'), onSelect: () => frame.showInThread?.({ record: { type: 'SalesOrder', id: order.id }, at }) })
   if (toldMessageId && onWhoWasTold) items.push({ id: 'told', label: t('changesTab.menu.told'), onSelect: () => onWhoWasTold(toldMessageId) })

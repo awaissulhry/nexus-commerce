@@ -2968,12 +2968,13 @@
     },
     "open": "Open ›",
     "row": {
-      "approval": "Waits for approval: {kind}",
+      "approval": "Waits for our approval: {kind}",
       "askedBy": "Asked by {name} · {when}",
       "whenAsked": "When they asked: {words}",
       "theySee": "They see: {words}",
       "lapses": "lapses {date}",
-      "late": "{count} d late"
+      "late": "{count} d late",
+      "approvalChange": "Waits for our approval: a change of the order"
     },
     "who": {
       "sales": "Sales answers it",
@@ -2981,7 +2982,8 @@
       "problem": "Answered in Problems & holds, on the Production tab",
       "decides": "{who} decides",
       "youAsked": "You asked for this approval: {who} decides",
-      "salesDecides": "Sales decides"
+      "salesDecides": "Sales decides",
+      "roleDecides": "The {who} decides"
     },
     "still": {
       "revision": "Revision {revision} · {when}",
@@ -3062,7 +3064,8 @@
         "expired": "Revision {revision} needs their yes, and the ask expired: ask {customer} again.",
         "sendNew": "The order changed after v{version} was sent.",
         "notSent": "Make it and send it in Our confirmation below.",
-        "agreed": "Agreed and confirmed: v{version} sent {date}."
+        "agreed": "Agreed and confirmed: v{version} sent {date}.",
+        "notSentNoPrice": "Not sent yet: someone who sees prices makes and sends it."
       },
       "toWaiting": "Waiting ↑",
       "theirs": "Their yes",
@@ -3105,7 +3108,8 @@
       "noPrice": "The confirmation shows prices: someone who sees prices sends it.",
       "changedAfter": "the order changed after it",
       "sendsListed": "Every send is listed in What changed › Confirmations.",
-      "signedPriced": "The signed PDF shows prices: someone who sees prices opens it."
+      "signedPriced": "The signed PDF shows prices: someone who sees prices opens it.",
+      "version": "v{version}"
     },
     "ask": {
       "title": "Ask {customer} to re-confirm revision {revision}?",
@@ -3122,7 +3126,8 @@
     "menu": {
       "label": "More for this row",
       "told": "Who was told…",
-      "copyLink": "Copy link to this row"
+      "copyLink": "Copy link to this row",
+      "discussRequest": "Discuss the customer's {kind} request…"
     },
     "history": {
       "title": "What changed",

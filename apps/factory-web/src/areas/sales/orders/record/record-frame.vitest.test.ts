@@ -114,7 +114,7 @@ describe('the order on RecordFrame', () => {
       expect(html.indexOf('id="history"')).toBeLessThan(html.indexOf('id="confirmation"'))
       const text = textOf(html)
       // F-OC-203: the last section is the Customer's agreement — their yes and our confirmation.
-      for (const words of locale === 'en' ? ['Waiting', 'Nothing waits.', "Customer's agreement", 'Their yes', 'Our confirmation', 'Order confirmation v2', 'What changed', 'Can it still change?'] : ['In attesa', 'Niente in attesa.', 'Accordo del cliente', 'Il loro sì', 'La nostra conferma', "Conferma d'ordine v2", 'Cosa è cambiato', 'Si può ancora cambiare?'] /* F-OC-301: History is What changed */) expect(text, words).toContain(words)
+      for (const words of locale === 'en' ? ['Waiting', 'Nothing waits.', "Customer's agreement", 'Their yes', 'Our confirmation', 'What changed', 'Can it still change?'] : ['In attesa', 'Niente in attesa.', 'Accordo del cliente', 'Il loro sì', 'La nostra conferma', 'Cosa è cambiato', 'Si può ancora cambiare?'] /* F-OC-301: History is What changed */) expect(text, words).toContain(words)
     }
     expect(draw('w2b-323-documents')).not.toMatch(/min\(70vh/)
     expect(landingOf('documents')).toMatchObject({ tab: 'changes', anchor: 'confirmation' })

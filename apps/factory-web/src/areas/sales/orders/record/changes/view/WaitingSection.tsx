@@ -12,7 +12,7 @@ import { useRecordFrame } from '../../../../../_shared/record-frame/RecordFrame'
 import { tabHref } from '../../../../../_shared/record-frame/address'
 import { said } from '../../../../../home/approvals/requests/model'
 import type { Order } from '../../../api'
-import { NAMESPACE as DEPTH, yesDoorOf } from '../../../depth/model'
+import { CHANGE_YES_KIND, NAMESPACE as DEPTH, yesDoorOf } from '../../../depth/model'
 import { YesDoorView } from '../../../depth/view/DepthBand'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { orderWaitingOf, readOf, rowWordsOf } from '../../overview/model'
@@ -206,7 +206,9 @@ function WaitingItemRow({ item, order, model, actions, asOf, when }: { item: Wai
   const approval = row.ref?.type === 'ApprovalRequest' ? ((model.askedOfCustomer?.value ?? []).find((entry) => entry.id === row.ref!.id) ?? null) : null
   const words =
     door.kind === 'yes'
-      ? t('changesTab.row.approval', { kind: locale === 'en' ? door.task.kindLabel.en : door.task.kindLabel.it })
+      ? door.task.kind === CHANGE_YES_KIND // fx8: our approval of an old change, in this tab's words
+        ? t('changesTab.row.approvalChange')
+        : t('changesTab.row.approval', { kind: locale === 'en' ? door.task.kindLabel.en : door.task.kindLabel.it })
       : approval?.question ??
         rowWordsOf(row, { t, kindWords: (kind) => w.t(`parts.request.kind.${kind}`), locale, customer: order.party?.legalName ?? '', askWords: (asked) => askWordsOf(asked, { kind: w.t(`parts.request.kind.${asked.kind}`), say: t, day: w.day }) })
   // The detail lines: who asked and when, their words, what it meant when they asked, what the customer reads of it.
@@ -273,7 +275,7 @@ function WaitingItemRow({ item, order, model, actions, asOf, when }: { item: Wai
           <WaitingDoorView door={door} order={order} model={model} actions={actions} here="changes" />
         )}
         {/* F-OC-302: the ONE row ⋯ — Discuss a request (by its reference: the customer reads its own words) · Copy link to this row. */}
-        <RowMenu order={order} prefix={model.prefix} label={t('changesTab.menu.label')} anchor={item.anchor} discuss={request && model.people?.mayNote !== false /* fx6 (walk 1): Discuss only with threads.post */ ? { part: t('discuss.request', { kind: w.t(`parts.request.kind.${request.kind}`) }), target: { kind: 'OrderChangeRequest', id: request.id } } : null} />
+        <RowMenu order={order} prefix={model.prefix} label={t('changesTab.menu.label')} anchor={item.anchor} discuss={request && model.people?.mayNote !== false /* fx6 (walk 1): Discuss only with threads.post */ ? { part: t('discuss.request', { kind: w.t(`parts.request.kind.${request.kind}`) }), target: { kind: 'OrderChangeRequest', id: request.id } } : null} discussLabel={request ? t('changesTab.menu.discussRequest', { kind: w.t(`parts.request.kind.${request.kind}`).toLocaleLowerCase(locale) }) /* fx8 */ : null} />
       </div>
     </div>
   )

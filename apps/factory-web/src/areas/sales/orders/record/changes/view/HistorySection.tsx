@@ -295,7 +295,7 @@ function ChangeRowView({ row, order, model, actions }: { row: ChangeRow; order: 
               <Undo2 size={13} aria-hidden /> {t('changesTab.history.restore')}
             </Button>
           )}
-          <RowMenu order={order} prefix={model.prefix} label={t('changesTab.menu.label')} anchor={`change-${row.id}`} discuss={model.people?.mayNote !== false ? discuss : null /* fx6 (walk 1): Discuss only with threads.post */} at={row.at} toldMessageId={told?.messageId ?? null} onWhoWasTold={actions?.onWhoWasTold} />
+          <RowMenu order={order} prefix={model.prefix} label={t('changesTab.menu.label')} anchor={`change-${row.id}`} discuss={model.people?.mayNote !== false ? discuss : null /* fx6 (walk 1): Discuss only with threads.post */} at={row.at} toldMessageId={told?.messageId ?? null} onWhoWasTold={actions?.onWhoWasTold} discussLabel={row.kind === 'request' ? t('changesTab.menu.discussRequest', { kind: w.t(`parts.request.kind.${row.request.kind}`).toLocaleLowerCase(locale) }) /* fx8 */ : null} />
       </div>
     </li>
   )
