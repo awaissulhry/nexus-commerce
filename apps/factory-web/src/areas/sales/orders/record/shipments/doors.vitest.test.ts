@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { canOf, order } from '../../_demo/fixtures'
-import { bandStepOf, mayCreateShipment, readyToShipOf } from '../../model'
+import { abilitiesOf, bandStepOf, mayCreateShipment, readyToShipOf } from '../../model'
 import { createDoorOf, createHeldWords, elsewhereDoorOf } from './doors'
 import { rowActsOf } from './doors' // F-OS-202
+import { afterSalesDoorsOf, afterSalesRowActs } from './doors' // F-OS-303
 import { headOf } from './head'
 import { whereOf, type ShipmentRow, type WhereModel } from './where'
 
@@ -160,3 +161,46 @@ describe('F-OS-202: the row ⋯ by the shipment\'s state', () => {
   })
 })
 // ---- end F-OS-202
+
+// ---- F-OS-303 (order SHIPMENTS tab, 10-design §5 "SHIPPED, DELIVERED", §6 head, §8; 18-lead-settles L8) ----
+describe('F-OS-303: the after-sales doors — Open a return…, Log a complaint…, Send a claim link… (their pages\' own windows, in place)', () => {
+  const ORDER_ID = 'so-2'
+  const row = (status: string, over: Partial<ShipmentRow> = {}): ShipmentRow => ({ id: 'sh-1', number: 'SEED-SH-0012', status, shippedAt: null, deliveredAt: null, transportBy: 'CARRIER', origin: 'NEXUS', ddt: null, ddtRequired: true, orders: [{ id: ORDER_ID, number: 'SEED-SO-0002', customerRef: null }], ...over })
+  const BOTH = { returnsManage: true, complaintsLog: true }
+  const ids = (acts: ReturnType<typeof rowActsOf>) => acts.map((entry) => entry.id)
+
+  it('the rights: sales.returns.manage opens a return and sends a claim link, quality.complaints.log logs a complaint', () => {
+    expect(abilitiesOf(['sales.returns.manage'])).toMatchObject({ returnsManage: true, complaintsLog: false })
+    expect(abilitiesOf(['quality.complaints.log'])).toMatchObject({ returnsManage: false, complaintsLog: true })
+  })
+
+  it('a shipped or delivered row offers them by right, in their own group, last before the danger acts; hidden without the right (D2)', () => {
+    expect(ids(afterSalesRowActs(row('SHIPPED'), BOTH))).toEqual(['return', 'complaint', 'claim'])
+    expect(ids(afterSalesRowActs(row('DELIVERED'), { complaintsLog: true }))).toEqual(['complaint'])
+    expect(ids(afterSalesRowActs(row('DELIVERED'), { returnsManage: true }))).toEqual(['return', 'claim'])
+    expect(afterSalesRowActs(row('SHIPPED'), {})).toEqual([])
+    for (const status of ['DRAFT', 'PACKED', 'RETURNED', 'CANCELLED']) expect(afterSalesRowActs(row(status), BOTH), status).toEqual([])
+    expect(afterSalesRowActs(row('SHIPPED'), BOTH).every((entry) => entry.group === 'after' && entry.held === null)).toBe(true)
+    // Beside Warehouse's own acts (the row's `may`), and also on an older answer without `may` (the order's rights, not the row's).
+    expect(ids(rowActsOf(row('SHIPPED', { may: { manage: true, pack: true, ddt: true, holdsManage: true, holdsRelease: true } }), ORDER_ID, null, BOTH))).toEqual(['delivered', 'returned', 'eta', 'return', 'complaint', 'claim'])
+    expect(ids(rowActsOf(row('DELIVERED'), ORDER_ID, null, BOTH))).toEqual(['return', 'complaint', 'claim'])
+    expect(afterSalesRowActs(row('SHIPPED'), BOTH).map((entry) => entry.label)).toEqual([{ key: 'ships.act.return' }, { key: 'ships.act.complaint' }, { key: 'ships.act.claim' }])
+  })
+
+  it('the head: Open a return… and Log a complaint… as buttons, Send a claim link… in its ⋯; a return and a link wait until something left', () => {
+    const none = { chain: { ...ready.chain, shipments: [row('DRAFT')] } }
+    expect(afterSalesDoorsOf(none, BOTH)).toEqual({
+      buttons: [
+        { kind: 'return', label: { key: 'after.act.return' }, held: { key: 'after.held.return' } },
+        { kind: 'complaint', label: { key: 'after.act.complaint' }, held: null },
+      ],
+      claim: { kind: 'claim', label: { key: 'after.act.claim' }, held: { key: 'after.held.claim' } },
+    })
+    const left = { chain: { ...ready.chain, shipments: [row('DRAFT'), row('RETURNED', { id: 'sh-2' })] } }
+    expect(afterSalesDoorsOf(left, BOTH).buttons.map((door) => door.held)).toEqual([null, null])
+    expect(afterSalesDoorsOf(left, BOTH).claim?.held).toBeNull()
+    expect(afterSalesDoorsOf(left, {})).toEqual({ buttons: [], claim: null })
+    expect(afterSalesDoorsOf(left, { complaintsLog: true }).buttons.map((door) => door.kind)).toEqual(['complaint'])
+  })
+})
+// ---- end F-OS-303

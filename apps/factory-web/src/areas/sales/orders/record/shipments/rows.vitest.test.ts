@@ -5,6 +5,7 @@ import { LOCALES } from '../../../../../lib/i18n/locales'
 import { CATALOGUE } from '../../../../../lib/i18n/messages'
 import type { DeliveryRow } from './delivered/api'
 import { carriesOf, chipsOf, datesOf, nextOf, rowOf, shipmentsAnswer, stateOf, travelsOf } from './rows'
+import { parcelWordsOf } from './rows' // F-OS-301
 import type { ShipmentRow } from './where'
 
 /**
@@ -191,3 +192,35 @@ describe('F-OS-101: the tab\'s own words (order-shipments) exist in it and en', 
     }
   })
 })
+
+// ---- W3 (F-OS-301; plan D6): each parcel's contents in the Tracking numbers window; the DDT choice said on a packed row ----
+describe('W3: what each parcel holds of this order, and the DDT choice on a packed row', () => {
+  it('F-OS-301: "SEED-JKT-02 Black · 46 ×4 · 48 ×8" by parcel id — codes and numbers only; a parcel with nothing of it has none', () => {
+    const words = parcelWordsOf(
+      {
+        parcels: [
+          { id: 'p1', seq: 1, number: null, url: null, source: null, live: false, contents: [{ lineId: BLK!.id, size: '46', pieces: 4 }, { lineId: BLK!.id, size: '48', pieces: 8 }, { lineId: RED!.id, size: '50', pieces: 2 }] },
+          { id: 'p2', seq: 2, number: null, url: null, source: null, live: false, contents: [] },
+          { id: 'p3', seq: 3, number: null, url: null, source: null, live: false },
+        ],
+      },
+      ORDER.lines,
+    )
+    expect(Object.keys(words)).toEqual(['p1'])
+    expect(words.p1).toContain(' · 46 ×4 · 48 ×8')
+    expect(words.p1!.split(' — ')).toHaveLength(2)
+  })
+
+  it('plan D6: a PACKED Nexus shipment waiting for its DDT says the choice — only to a reader who may make it; no country is read', () => {
+    const may = { manage: true, pack: true, ddt: true, holdsRelease: false }
+    expect(stateOf(row({ may }), null)).toMatchObject({ next: { kind: 'step', step: 'ddt' }, ddtChoice: true })
+    expect(stateOf(row({ may: { ...may, ddt: false } }), null).ddtChoice).toBe(false)
+    expect(stateOf(row(), null).ddtChoice).toBe(false)
+    expect(stateOf(row({ may, ddtRequired: false }), null).ddtChoice).toBe(false)
+    expect(stateOf(row({ may, ddt: { number: '151/2026', date: '2026-11-18' } }), null).ddtChoice).toBe(false)
+    expect(stateOf(row({ may, origin: 'ELSEWHERE' }), null).ddtChoice).toBe(false)
+    for (const locale of LOCALES) expect(CATALOGUE[locale]['order-shipments']?.['ships.next.ddtChoice'], locale).toBeTruthy()
+    expect(readFileSync(new URL('./view/ShipmentRow.tsx', import.meta.url), 'utf8')).toContain("{t('ships.next.ddtChoice')}")
+  })
+})
+// ---- end W3

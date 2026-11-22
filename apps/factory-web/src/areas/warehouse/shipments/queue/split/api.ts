@@ -40,10 +40,21 @@ export interface SplitBody {
   transportBy?: 'CARRIER' | 'SENDER' | 'RECIPIENT'
   carrierCode?: string | null
   serviceCode?: string | null
+  /** F-OS-302 (B-OS-010, X1-B4): another delivery address of the customer (the reason SHIP_TO). */
+  shipToAddressId?: string
 }
 
-export function splitByHand(api: ApiClient, shipmentId: string, body: SplitBody, idempotencyKey: string): Promise<{ id: string; number: string }[]> {
-  return api.post(`${base(shipmentId)}/split`, { body, schema: z.object({ shipment: made }), idempotencyKey }).then((answer) => [answer.shipment])
+// ── F-OS-302 (order SHIPMENTS tab; B-OS-010): several new shipments in ONE command — each with its reason, garments and delivery ──
+export type SplitGroup = Omit<SplitBody, 'version'>
+export interface SplitGroupsBody {
+  version: number
+  groups: SplitGroup[]
+}
+// ── end F-OS-302 ──
+
+export function splitByHand(api: ApiClient, shipmentId: string, body: SplitBody | SplitGroupsBody, idempotencyKey: string): Promise<{ id: string; number: string }[]> {
+  // F-OS-302 (B-OS-010): the answer names every new shipment (`shipments`; an older answer only its first, `shipment`).
+  return api.post(`${base(shipmentId)}/split`, { body, schema: z.object({ shipment: made, shipments: z.array(made).optional() }), idempotencyKey }).then((answer) => answer.shipments ?? [answer.shipment])
 }
 
 export function splitByRule(api: ApiClient, shipmentId: string, version: number, idempotencyKey: string): Promise<{ id: string; number: string }[]> {

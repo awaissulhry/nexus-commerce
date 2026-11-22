@@ -9,16 +9,12 @@ import { downloadText, liveMatches, useLive } from '../../quality/_shared/hooks'
 import { problemKey } from '../../quality/_shared/model'
 import {
   createRepair,
-  createReturn,
   getReturn,
   listCustomers,
   listPeople,
   listRepairs,
-  listReturnable,
-  listReturnReasons,
   listReturns,
   previewRepair,
-  previewReturn,
   repairCounts,
   returnCounts,
   type Person,
@@ -29,13 +25,10 @@ import {
 } from './api'
 import {
   BLANK_REPAIR,
-  BLANK_RETURN,
   LIVE_TYPES,
   mergedRows,
   newRepairBody,
   newRepairProblems,
-  newReturnBody,
-  newReturnProblems,
   queryOf,
   addressOf,
   refusalOf,
@@ -50,11 +43,12 @@ import {
   type AfterSalesRow,
   type ListAddress,
 } from './model'
-import type { CloseModel, NewRepairModel, NewReturnModel, Notice, ReturnsListModel } from './view-model'
+import type { CloseModel, NewRepairModel, Notice, ReturnsListModel } from './view-model'
 import { ReturnsMessages, say, useWords } from './view/parts'
 import { ReturnsView } from './view/ReturnsView'
 import { finishReturn, getOutcomes, listArrivedLate } from './depth/api'
 import { getParty } from '../quotes/api'
+import { useNewReturn } from './use-new-return' // F-OS-303
 import { finishOptionsOf, lateRowsOf } from './depth/model'
 
 /**
@@ -220,67 +214,10 @@ function ReturnsContainer() {
   }, [counts, returns.truncated, repairs.truncated, can.repairsView, dismissed, prefix, lateView, late])
 
   // ---- New return -------------------------------------------------------------------------------------------------------------
-  const [newReturn, setNewReturn] = useState<NewReturnModel | null>(null)
-  const returnKey = useRef<string | null>(null)
-  const openNewReturn = useCallback(() => {
-    returnKey.current = newIdempotencyKey()
-    setNewReturn({ draft: BLANK_RETURN, customers: { items: null, problem: can.partiesView ? null : 'newReturn.customerNoRight' }, returnable: { value: null, loading: false, problem: null }, reasons: null, preview: null, previewing: false, showProblems: false, busy: false, problem: null, today, price: can.price })
-    if (can.partiesView)
-      listCustomers(api)
-        .then((items) => setNewReturn((current) => (current ? { ...current, customers: { items, problem: null } } : current)))
-        .catch((error) => setNewReturn((current) => (current ? { ...current, customers: { items: null, problem: `quality:${problemKey(error)}` } } : current)))
-    listReturnReasons(api)
-      .then((reasons) => setNewReturn((current) => (current ? { ...current, reasons } : current)))
-      .catch(() => setNewReturn((current) => (current ? { ...current, reasons: [] } : current)))
-  }, [api, can.partiesView, can.price, today])
-
-  const partyId = newReturn?.draft.partyId ?? ''
-  useEffect(() => {
-    if (!partyId || !companyId) return
-    setNewReturn((current) => (current ? { ...current, returnable: { value: null, loading: true, problem: null }, preview: null } : current))
-    listReturnable(api, { companyId, partyId })
-      .then((value) => setNewReturn((current) => (current && current.draft.partyId === partyId ? { ...current, returnable: { value, loading: false, problem: null } } : current)))
-      .catch((error) => setNewReturn((current) => (current ? { ...current, returnable: { value: null, loading: false, problem: `quality:${problemKey(error)}` } } : current)))
-  }, [api, companyId, partyId])
-
-  // The preview while typing (debounced): what the API would make, its problems by place.
-  const returnDraftKey = newReturn ? JSON.stringify(newReturn.draft) : ''
-  useEffect(() => {
-    if (!newReturn || !newReturn.returnable.value) return
-    const body = newReturnBody(newReturn.draft, newReturn.returnable.value.lines, companyId)
-    if (body.lines.length === 0) return
-    const controller = new AbortController()
-    const timer = window.setTimeout(() => {
-      setNewReturn((current) => (current ? { ...current, previewing: true } : current))
-      previewReturn(api, body, controller.signal)
-        .then((preview) => setNewReturn((current) => (current ? { ...current, preview, previewing: false } : current)))
-        .catch(() => setNewReturn((current) => (current ? { ...current, previewing: false } : current)))
-    }, 350)
-    return () => {
-      window.clearTimeout(timer)
-      controller.abort()
-    }
-    // The draft's text is the dependency (the model object changes on every answer).
-  }, [api, companyId, returnDraftKey, !!newReturn?.returnable.value])
-
-  const submitNewReturn = useCallback(async () => {
-    const current = newReturn
-    if (!current || current.busy) return
-    const returnable = current.returnable.value?.lines ?? null
-    const problems = newReturnProblems(current.draft, returnable)
-    if (problems.length > 0 || !returnable || (current.preview && !current.preview.ok)) {
-      setNewReturn({ ...current, showProblems: true })
-      return
-    }
-    setNewReturn({ ...current, busy: true, problem: null })
-    try {
-      const answer = await createReturn(api, newReturnBody(current.draft, returnable, companyId), returnKey.current ?? newIdempotencyKey())
-      setNewReturn(null)
-      router.push(returnHref(prefix, answer.return.id, '?created=1'))
-    } catch (error) {
-      setNewReturn((latest) => (latest ? { ...latest, busy: false, showProblems: true, problem: refusalOf(error) } : latest))
-    }
-  }, [api, companyId, newReturn, prefix, router])
+  // F-OS-303: its state is the extracted hook (the order's Shipments tab opens the same window); created, the new return opens.
+  const { model: newReturn, open: openReturnDoor, actions: newReturnActions } = useNewReturn({ api, companyId, today, can: { partiesView: can.partiesView, price: can.price }, onCreated: (made) => router.push(returnHref(prefix, made.id, '?created=1')) })
+  // Blank on this page (an event handed to it is never a seed).
+  const openNewReturn = useCallback(() => openReturnDoor(), [openReturnDoor])
 
   // ---- New repair -------------------------------------------------------------------------------------------------------------
   const [newRepair, setNewRepair] = useState<NewRepairModel | null>(null)
@@ -446,15 +383,7 @@ function ReturnsContainer() {
           }),
         onDismissReceipt: () => setReceipt(null),
         onNewReturn: openNewReturn,
-        onNewReturnDraft: (patch) => setNewReturn((current) => (current ? { ...current, draft: { ...current.draft, ...patch } } : current)),
-        onNewReturnLine: (key, patch) =>
-          setNewReturn((current) => {
-            if (!current) return current
-            const before = current.draft.lines[key] ?? { quantity: '', reasonCode: '', note: '' }
-            return { ...current, draft: { ...current.draft, lines: { ...current.draft.lines, [key]: { ...before, ...patch } } } }
-          }),
-        onNewReturnSubmit: () => void submitNewReturn(),
-        onNewReturnClose: () => setNewReturn(null),
+        ...newReturnActions, // F-OS-303: the draft, a line, create, close — the extracted hook's
         onNewRepair: openNewRepair,
         onNewRepairDraft: (patch) => setNewRepair((current) => (current ? { ...current, draft: { ...current.draft, ...patch } } : current)),
         onNewRepairLookUp: () => void lookUpRepair(),

@@ -62,6 +62,9 @@ export interface RecordDepthInput {
     /** F-OS-203: whether it needs a DDT, and whether it was made in Nexus (travels without a DDT…). */
     readonly ddtRequired?: boolean
     readonly origin?: 'NEXUS' | 'ELSEWHERE'
+    /** F-OS-302 (X1-B4): its customer (the delivery addresses Split may choose) and its own delivery address (left out of them). */
+    readonly partyId?: string
+    readonly shipToAddressId?: string | null
   } | null
   readonly prefix: string
   readonly tab: string
@@ -166,7 +169,7 @@ export function useRecordDepth(input: RecordDepthInput): ShipmentDepthSlots {
     dialogs: (
       <>
         <HoldsDialogsView model={holds.model} actions={holds.actions} />
-        {splitOpen && <Split shipmentId={shipment.id} prefix={input.prefix} onClose={() => setSplitOpen(false)} onDone={input.onReload} />}
+        {splitOpen && <Split shipmentId={shipment.id} prefix={input.prefix} onClose={() => setSplitOpen(false)} onDone={input.onReload} partyId={shipment.partyId} shipToAddressId={shipment.shipToAddressId ?? null} /* F-OS-302 */ />}
         {/* F-OS-203 (L6): the shared windows; done, the record reads itself again. */}
         {door && door.kind !== 'door' && (
           <Move

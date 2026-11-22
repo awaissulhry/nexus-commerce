@@ -36,7 +36,7 @@ import type { PromiseInput } from '../model' // F-OO-142: the promise dialog's i
 import type { NewWorkOrderModel, WorkOrdersListActions } from '../../../production/work-orders/list-model'
 import type { ProductionCan } from '../../../production/_shared/model'
 import type { JoinableRow } from './shipments/model' // F-OP-122
-import type { RowActId } from './shipments/doors' // F-OS-202
+import type { AfterSalesKind, RowActId } from './shipments/doors' // F-OS-202, F-OS-303
 import type { Deliveries } from './shipments/delivered/api' // F-OS-101: the deliveries read, drawn in each Shipments row
 import type { Bench } from '../../../warehouse/shipments/cartons/api' // F-OS-103: Warehouse's cartons read, the Parcels (n) fold
 // F-OP-113: the work-order rows' acts in place (lib/production/work-order-acts, mounted by use-production-acts).
@@ -393,6 +393,8 @@ export interface OrderRecordModel {
   shipmentDeliveries?: Part<Deliveries> | null
   /** Each row's Parcels (n) fold opened: Warehouse's cartons read of that shipment (loaded on open), by shipment id. */
   shipmentParcels?: Readonly<Record<string, Part<Bench>>> | null
+  /** F-OS-303: the after-sales window open (Returns' New return, Quality's Log complaint, the claim link; its container); null: none. */
+  afterSalesDoor?: ReactNode | null
   // ---- end F-OS-101
   /** F-SA-236: the order's customer requests, every state (Changes: waiting on us, history); null: not read here. */
   requests?: Part<BrandRequest[]> | null
@@ -488,7 +490,7 @@ export interface OrderRecordActions {
   /** F-OP-123: open "Record a shipment made elsewhere…" (⋯ Next steps, the Shipments card head). */
   onRecordElsewhere?: () => void
   /** F-OS-101: the Shipments tab's reads — the deliveries again; a row's Parcels (n) opened (its cartons read once); the proof's image. */
-  shipmentsTab?: { readonly onRetryDeliveries?: () => void; readonly onOpenParcels?: (shipmentId: string) => void; readonly onDownloadProof?: (shipmentId: string) => void; /* F-OS-202: a row ⋯ item opens its Warehouse window */ readonly onAct?: (shipmentId: string, act: RowActId, holdId?: string) => void }
+  shipmentsTab?: { readonly onRetryDeliveries?: () => void; readonly onOpenParcels?: (shipmentId: string) => void; readonly onDownloadProof?: (shipmentId: string) => void; /* F-OS-202: a row ⋯ item opens its Warehouse window */ readonly onAct?: (shipmentId: string, act: RowActId, holdId?: string) => void; /* F-OS-303: Open a return… · Log a complaint… · Send a claim link… (a row's shipment, or the order) */ readonly onAfterSales?: (kind: AfterSalesKind, shipmentId?: string) => void }
   /** F-OP-111: split the parts off into new orders (the dialog's parts as typed, the optional reason). */
   onSplit?: (input: { parts: readonly SplitPartDraft[]; reason: string }) => void
   /** B-W2b-180 (design sales.orders conn "Portal › Orders & tracking"): open the order in the customer's portal, read-only. */

@@ -20,7 +20,6 @@
   },
   "where": {
     "title": "Dove si trova ogni capo",
-    "part": "i conteggi",
     "info": "Ogni capo dell'ordine è in un solo gruppo, e i gruppi danno il totale ordinato. Qui non si inserisce nulla: si conta, e un numero cambia solo per la sua causa (una spedizione, un rilascio, una riga chiusa).",
     "more": "Altro per Dove si trova ogni capo",
     "openLines": "Apri in Righe ›",
@@ -185,7 +184,8 @@
       "pack": "Prossimo: imballala ›",
       "ddt": "Prossimo: emetti il DDT ›",
       "labels": "Prossimo: compra le etichette ›",
-      "hand": "Prossimo: consegnala al vettore ›"
+      "hand": "Prossimo: consegnala al vettore ›",
+      "ddtChoice": "Una spedizione Nexus parte con un DDT. Se il DDT non si può emettere (il Magazzino elenca i controlli aperti), scegli «Questa spedizione viaggia senza DDT…» in ⋯, poi consegnala al vettore."
     },
     "travels": {
       "withheld": "Non visibile al tuo ruolo",
@@ -249,7 +249,11 @@
         "carrierFed": "La segue il tracciamento del vettore: niente da inserire.",
         "proofKept": "Ogni parte della prova è conservata: non cambia mai.",
         "received": "I capi sono già stati ricevuti."
-      }
+      },
+      "tracking": "Numeri di tracciamento…",
+      "return": "Apri un reso per questa spedizione…",
+      "complaint": "Registra un reclamo su questa spedizione…",
+      "claim": "Invia un link di reclamo…"
     },
     "done": {
       "split": "{number} è stata divisa.",
@@ -260,19 +264,23 @@
       "placeHold": "{number} è bloccata.",
       "releaseHold": "Un blocco di {number} è sbloccato.",
       "proof": "La prova di consegna di {number} è salvata.",
-      "resolve": "Il problema di tracciamento di {number} è risolto."
+      "resolve": "Il problema di tracciamento di {number} è risolto.",
+      "tracking": "I numeri di tracciamento di {number} sono salvati."
     },
     "told": {
       "draft": "Il cliente non viene avvisato: una bozza non si vede mai.",
       "portal": "Il cliente non riceve e-mail; il suo portale lo mostra subito.",
-      "ddtOff": "Il cliente vede la spedizione da Imballata in poi, senza DDT."
+      "ddtOff": "Il cliente vede la spedizione da Imballata in poi, senza DDT.",
+      "tracking": "Il cliente vede subito i numeri nel suo portale; nessuna e-mail.",
+      "noticeSent": "L'avviso di spedizione è stato inviato di nuovo al cliente.",
+      "noticeHeld": "L'avviso di spedizione non è partito; l'avviso al cliente della spedizione in Magazzino dice perché."
     }
   },
   "after": {
     "part": "i reclami e i resi",
     "info": "Cosa ha segnalato il cliente sulla merce spedita, e a che punto è ogni caso. La scheda elenca soltanto un caso: ognuno vive nella sua pagina.",
     "more": "Altro per reclami e resi",
-    "openReturns": "Apri Vendite › Resi ›",
+    "openReturns": "Apri Vendite › Resi e riparazioni ›",
     "openComplaints": "Apri Qualità › Reclami ›",
     "answer": {
       "open_one": "{count} aperto",
@@ -308,9 +316,24 @@
     "showClosed_one": "Mostra {count} chiuso",
     "showClosed_other": "Mostra {count} chiusi",
     "hideClosed": "Nascondi i chiusi",
-    "truncated": "Mostrati gli ultimi 50"
+    "truncated": "Mostrati gli ultimi 50",
+    "act": {
+      "return": "Apri un reso…",
+      "complaint": "Registra un reclamo…",
+      "claim": "Invia un link di reclamo…"
+    },
+    "held": {
+      "return": "Un reso si apre quando qualcosa è stato spedito.",
+      "claim": "Il link si invia per una spedizione partita."
+    },
+    "done": {
+      "return": "Il reso {number} è aperto.",
+      "complaint": "Il reclamo {number} è registrato.",
+      "complaintPhotos_one": "Il reclamo {number} è registrato; {count} foto non è stata aggiunta.",
+      "complaintPhotos_other": "Il reclamo {number} è registrato; {count} foto non sono state aggiunte.",
+      "open": "Aprilo ›"
+    }
   },
-  "copied": "Link copiato",
   "door": {
     "wordsOptional": "Le tue parole (facoltativo)",
     "officeOnly": "Solo ufficio: il cliente non le legge mai.",
@@ -415,6 +438,54 @@
       "ddtOff": "{number} viaggia senza DDT.",
       "ddtBack": "{number} parte di nuovo con un DDT.",
       "received": "{count} capi di {number} sono di nuovo nei prodotti finiti."
+    },
+    "tracking": {
+      "title": "Numeri di tracciamento di {number}",
+      "consignment": "Numero principale (tracking, AWB o B/L)",
+      "awbFits": "Sembra una lettera di vettura aerea, e l'ultima cifra corrisponde.",
+      "awbOff": "Sembra una lettera di vettura aerea, ma l'ultima cifra non corrisponde: controllala.",
+      "parcels": "Colli ({count}) · un numero ciascuno",
+      "parcelOf": "Collo {seq} di {count}",
+      "parcelNumber": "Collo {seq}: numero",
+      "parcelLinkLabel": "Collo {seq}: pagina di tracciamento (https)",
+      "fromLabel": "Dall'etichetta: il numero viene dal corriere.",
+      "refusal": {
+        "PARCEL_LABELLED": "Questo collo ha un'etichetta: il numero viene dall'etichetta, mai inserito a mano.",
+        "NOT_PACKED": "I colli ricevono i numeri quando la spedizione è imballata."
+      },
+      "afterLeft": "Il numero inserito di un collo può cambiare dopo la partenza; il cliente vede subito quello nuovo.",
+      "fromPacked": "Da Imballata in poi. Si inserisce un numero solo su un collo senza etichetta del corriere.",
+      "seen": "Il cliente ha visto il numero vecchio: di' perché cambia.",
+      "why": "Di' perché il numero cambia (almeno {min} caratteri).",
+      "parcelTooLong": "Collo {seq}: il numero è una riga di al massimo {max} caratteri.",
+      "parcelLinkNeedsNumber": "Collo {seq}: il link va solo con il suo numero.",
+      "parcelLink": "Collo {seq}: il link inizia con https:// e ha al massimo {max} caratteri.",
+      "go": "Salva i numeri",
+      "notify": "Invia di nuovo l'avviso di spedizione",
+      "notifyHint": "Spento di default: il cliente vede subito i numeri nuovi nel portale e nella pagina di tracciamento; l'e-mail parte solo se lo spunti.",
+      "toldPacked": "Il cliente vede i numeri nel suo portale; nessuna e-mail da questa finestra.",
+      "never": "Un numero da etichetta del corriere non si sovrascrive mai. Il DDT non si tocca. La cronologia conserva ogni numero vecchio; la conversazione riceve una riga dell'ufficio.",
+      "done": "I numeri di tracciamento sono salvati.",
+      "doneNotice": "I numeri di tracciamento sono salvati e l'avviso di spedizione è partito di nuovo.",
+      "doneNoticeHeld": "I numeri di tracciamento sono salvati; l'avviso di spedizione non è partito."
+    },
+    "split": {
+      "into": "In quante spedizioni",
+      "intoHint": "Questa e fino a {max} nuove, in un solo passo (tutto o niente).",
+      "col": {
+        "new": "Nuova spedizione {n}"
+      },
+      "movesTo": "Capi di {line} {size} per la nuova spedizione {n}",
+      "goInto": "Dividi in {count} spedizioni",
+      "shipComplete": "Il cliente vuole tutto in una sola consegna (spedizione completa): dividi solo se è d'accordo.",
+      "eachTakes": "Ogni nuova spedizione prende almeno un capo: danne alla nuova spedizione {n}, o dividi in meno spedizioni.",
+      "reasonShipTo": "Un altro indirizzo di consegna",
+      "address": "Indirizzo di consegna delle nuove spedizioni",
+      "pickAddress": "Scegli l'indirizzo di consegna.",
+      "pickAddressOption": "Scegli un indirizzo",
+      "addressesReading": "Lettura degli indirizzi di consegna del cliente…",
+      "noAddress": "Questo cliente non ha un altro indirizzo di consegna approvato: prima aggiungine uno sul cliente.",
+      "onlyOwn": "Ogni nuova spedizione compare solo sugli ordini di cui porta i capi; i blocchi in vigore vanno con lei."
     }
   },
   "move": {
@@ -463,6 +534,36 @@
       "moved_one": "{count} capo spostato su {number}.",
       "moved_other": "{count} capi spostati su {number}.",
       "merged": "{number} è unita a {into}."
+    }
+  },
+  "claim": {
+    "title": "Invia un link di reclamo per {number}",
+    "what": "Il cliente riceve un link per chiedere un reso o segnalare un problema di qualità, con le foto. Il link è solo per lui.",
+    "to": "Invialo a",
+    "pickTo": "Scegli un contatto",
+    "other": "Un altro indirizzo…",
+    "email": "Indirizzo e-mail",
+    "reading": "Lettura dei contatti del cliente…",
+    "noContact": "Nessun contatto del cliente ha qui un indirizzo e-mail: scrivine uno.",
+    "never": "Non cambia nient'altro: nessun reso o reclamo si apre finché il cliente non ne invia uno.",
+    "go": "Invia il link",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "held": {
+      "pickTo": "Scegli a chi va.",
+      "email": "Scrivi un indirizzo e-mail."
+    },
+    "refusal": {
+      "SUPPRESSED": "Questo indirizzo è rimbalzato o ha segnalato spam: prima correggilo.",
+      "email": "Quell'indirizzo non può ricevere il link: controllalo.",
+      "notFound": "Un link di reclamo indica una spedizione partita o un ordine aperto: questo ora non lo è.",
+      "other": "Il link non è partito: riprova tra un momento."
+    },
+    "sent": {
+      "sent": "Il link è stato inviato a {email}.",
+      "queued": "Il link è in coda per {email}.",
+      "failed": "Il link è stato creato, ma l'e-mail a {email} non è partita: inviane uno nuovo più tardi.",
+      "until": "Vale fino al {day}."
     }
   }
 }

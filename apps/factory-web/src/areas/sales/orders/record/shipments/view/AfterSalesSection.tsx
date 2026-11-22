@@ -12,6 +12,8 @@ import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { LineMenuButton } from '../../view/LineMenu'
 import { PartFailed, PartReading, Section } from '../../view/production/Kit' // F-OS-104: the Production kit, in place
 import { afterSalesOf, type CaseRow } from '../after-sales'
+import { Button } from '@nexus/ui/primitives' // F-OS-303
+import { afterSalesDoorsOf } from '../doors' // F-OS-303
 import { copyLinkTo, kitId } from './hrefs'
 import { sentenceOf, useShipSay } from './say'
 
@@ -20,7 +22,8 @@ import { sentenceOf, useShipSay } from './say'
  * tab), drawn: titled by what the reader may see; the answer ("2 open · 1 waiting for your yes · 1 closed"); ONE list, newest first —
  * Case (kind + number, a real link to its page) · About (its shipment's row, or the whole order) · What · Status · Next — the closed
  * cases behind "Show N closed", "Showing the latest 50" when the list is cut. Nothing reported: one line. Neither right: no section.
- * Open a return… and Log a complaint… (their pages' own windows, in place) come with W3. Draws its model (shipments/after-sales.ts).
+ * F-OS-303: Open a return… and Log a complaint… on the head, Send a claim link… in its ⋯ — their pages' own windows, in place (the
+ * container mounts them). Draws its model (shipments/after-sales.ts, doors.ts).
  */
 export function AfterSalesSection({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('order-shipments')
@@ -43,7 +46,19 @@ export function AfterSalesSection({ order, model, actions }: { order: Order; mod
       </Section>
     )
   const links = model.links?.state === 'ready' ? model.links.links : null
+  // F-OS-303: Open a return… · Log a complaint… (their pages' own windows, in place; hidden without the right, held only while nothing
+  // has left), and Send a claim link… in the ⋯ (the order's link).
+  const doors = afterSalesDoorsOf(order, model.can)
+  const onAfter = actions?.shipmentsTab?.onAfterSales
+  const buttons = onAfter
+    ? doors.buttons.map((door) => (
+        <Button key={door.kind} size="sm" heldReason={door.held ? say(door.held) : null} onClick={() => onAfter(door.kind)}>
+          {say(door.label)}
+        </Button>
+      ))
+    : []
   const items: MenuItemDef[] = [
+    ...(doors.claim && onAfter ? [{ id: 'claim', label: say(doors.claim.label), disabled: !!doors.claim.held, description: doors.claim.held ? say(doors.claim.held) : undefined, onSelect: doors.claim.held ? undefined : () => onAfter('claim') }] : []),
     ...(links?.returns !== null ? [{ id: 'returns', label: t('after.openReturns'), href: `${model.prefix}/sales/returns` }] : []),
     ...(links?.complaints !== null ? [{ id: 'complaints', label: t('after.openComplaints'), href: `${model.prefix}/quality/complaints` }] : []),
     { id: 'copy', label: t('where.copyLink'), onSelect: () => copyLinkTo('after-sales') },
@@ -51,7 +66,7 @@ export function AfterSalesSection({ order, model, actions }: { order: Order; mod
   const title = say(after.title)
   const shown = [...after.open, ...(showClosed ? after.closed : [])]
   return (
-    <Section id={kitId('after-sales')} title={title} answer={sentenceOf(after.answer.map(say))} info={info} more={<LineMenuButton label={t('after.more')} items={items} />}>
+    <Section id={kitId('after-sales')} title={title} answer={sentenceOf(after.answer.map(say))} buttons={buttons} info={info} more={<LineMenuButton label={t('after.more')} items={items} />}>
       {shown.length > 0 ? (
         <div className="fw-os-al" role="table" aria-label={title}>
           <div className="fw-os-ar is-hd" role="row">

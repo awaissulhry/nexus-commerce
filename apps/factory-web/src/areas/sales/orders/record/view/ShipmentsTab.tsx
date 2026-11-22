@@ -45,6 +45,7 @@ export function ShipmentsTab({ order, model, actions }: { order: Order; model: O
         {model.newShipment /* F-OP-121: Warehouse's New shipment, opened in place (its container) */}
         {/* F-OP-123: Record a shipment made elsewhere… — its dialog is the page's, mounted once (OrderRecordView, F-OO-111). */}
         <AfterSalesSection order={order} model={model} actions={actions} />
+        {model.afterSalesDoor /* F-OS-303: Returns' New return, Quality's Log complaint or the claim link, opened in place (its container) */}
         <p className="fw-so-hint">
           {/* F-OM-104 (P0-B11): the door lands on Money › Invoices & credit notes (invoices.view), else on Payments. */}
           <TabLink className="fw-so-link" href={`${tabHref(recordHref, 'money', search) /* F-OP-119: F-OP-210's tab link */}#${model.can.viewInvoices ? 'invoices' : 'payments'}`}>

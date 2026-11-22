@@ -305,10 +305,12 @@ describe('F-OS-101 — the Shipments tab: its answer, then #left · #shipments (
   it('in that order, in the Production kit\'s room container (the dock re-lays it live); the Money door stays at its foot', () => {
     for (const locale of ['en', 'it'] as const) {
       const html = draw('th-256-links', locale)
-      for (const id of ['id="left"', 'id="shipments"', 'id="deliveries"', 'id="after-sales"']) expect(html, id).toContain(id)
-      expect(html.indexOf('id="left"')).toBeLessThan(html.indexOf('id="shipments"'))
-      expect(html.indexOf('id="shipments"')).toBeLessThan(html.indexOf('id="deliveries"'))
-      expect(html.indexOf('id="deliveries"')).toBeLessThan(html.indexOf('id="after-sales"'))
+      // F-OS-W3 step 0: an element's own id (a leading space) — the tab bar's `data-tab-id="shipments"` comes first on the page.
+      const at = (id: string) => html.indexOf(` id="${id}"`)
+      for (const id of ['left', 'shipments', 'deliveries', 'after-sales']) expect(at(id), id).toBeGreaterThan(-1)
+      expect(at('left')).toBeLessThan(at('shipments'))
+      expect(at('shipments')).toBeLessThan(at('deliveries'))
+      expect(at('deliveries')).toBeLessThan(at('after-sales'))
       expect(html).toContain('class="fw-pt fw-os"')
       expect(textOf(html)).toContain(locale === 'en' ? 'Where every garment is' : 'Dove si trova ogni capo')
     }
@@ -830,11 +832,12 @@ describe('F-OP-129 — the order page at the end in the design screen: Review an
     expect(owner).toContain('0123456789')
     expect(owner).toContain('No live tracking')
     expect(owner).toContain('GLS-778899')
-    // F-OS-101 (D2): Sales reads the number and no door — Tracking number… is hidden, never held for a right.
+    // F-OS-101 (D2): Sales reads the number and no door — Tracking numbers… (F-OS-301) is hidden, never held for a right; the Owner's opens.
     const sales = draw('f-op-129-ship-tracking-sales')
     expect(textOf(sales)).toContain('0123456789')
     expect(sales).not.toContain('A warehouse person adds tracking.')
-    expect(textOf(sales.slice(sales.indexOf('id="shipments"')))).not.toContain('Tracking number…')
+    expect(textOf(sales.slice(sales.indexOf(' id="shipments"')))).not.toContain('Tracking numbers…')
+    expect(owner).toContain('Tracking numbers…')
   })
 
   it('a shared shipment names the other order it carries; one made elsewhere names its paper DDT (F-OP-122, F-OP-123)', () => {

@@ -306,7 +306,8 @@ export type ReturnableLine = z.infer<typeof returnableLineSchema>
 const returnableSchema = z.object({ lines: z.array(returnableLineSchema), policy: policyView })
 export type Returnable = z.infer<typeof returnableSchema>
 
-export const listReturnable = (api: ApiClient, query: { companyId: string; partyId: string; salesOrderId?: string | null }, signal?: AbortSignal): Promise<Returnable> =>
+// F-OS-303 (B-OS-005, L8): + `shipmentId` — a shipment's row offers that shipment's shipped lines only (an invoice line names none).
+export const listReturnable = (api: ApiClient, query: { companyId: string; partyId: string; salesOrderId?: string | null; shipmentId?: string | null }, signal?: AbortSignal): Promise<Returnable> =>
   api.get('/sales/returns/returnable', { query: clean(query), schema: returnableSchema, signal })
 
 export interface NewReturnLine {
