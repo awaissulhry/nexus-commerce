@@ -3276,7 +3276,8 @@
       "part": "il piano dei pagamenti",
       "earlier": "Rate precedenti ({count})",
       "earlierHint": "sostituite o tolte; conservate con chi, quando e perché",
-      "more": "Altro per il piano dei pagamenti"
+      "more": "Altro per il piano dei pagamenti",
+      "history": "Cronologia ›"
     },
     "plan": {
       "kind": {
@@ -3436,7 +3437,13 @@
       },
       "sub": {
         "credits": "Storna {number}",
-        "deducted": "Detratta nella fattura della merce"
+        "deducted": "Detratta nella fattura della merce",
+        "deducts": "Storna la TD02 {number} ({amount})",
+        "deductsWords": "Storna la TD02 {number}",
+        "forShipment": "per la spedizione {numbers}",
+        "forShipments": "per le spedizioni {numbers}",
+        "deductedOn": "Detratta in {number}",
+        "forPayment": "Per il pagamento del {date}"
       },
       "door": {
         "record": "Registra pagamento…",
@@ -3451,7 +3458,12 @@
       },
       "sdiFailed": "Stato SDI non letto",
       "copyNumber": "Copia il numero",
-      "more": "Altro per {number}"
+      "more": "Altro per {number}",
+      "finance": "Apri in Finanza › Fatture ›",
+      "headMore": "Altro per Fatture e note di credito",
+      "state": {
+        "rejected": "Scartata — correggi e reinvia"
+      }
     },
     "menu": {
       "copyLinkTotals": "Copia il link a Totali",
@@ -3461,7 +3473,9 @@
       "undo": "Annulla questo pagamento…",
       "open": "Apri in Finanza › Pagamenti ›",
       "copyRef": "Copia il riferimento bancario",
-      "more": "Altro per il pagamento del {date}"
+      "more": "Altro per il pagamento del {date}",
+      "td02": "Per questo è stata emessa la TD02 {number}",
+      "td02Words": "Per questo è stata emessa una fattura di acconto"
     },
     "hand": {
       "thePlan": "il piano",

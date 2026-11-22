@@ -96,6 +96,9 @@ export function PlanRowView({ row, order, model, actions, say, final }: { row: P
     const about = discussAboutOf(order, { yourOrder, firstLine: (words) => t('discuss.firstLine', { thing: words }) }, { part, target: row.discuss.target, officeOnly: true })
     items.push({ id: 'discuss', label: f('discuss.of', { thing: part }), onSelect: () => frame.discuss?.({ record: { type: 'SalesOrder', id: order.id }, about }) })
   }
+  // F-OM-fx3 (W-08): Show in the thread — a read door (Read-only keeps it): the feed at this row's newest moment.
+  const showAt = row.showAt
+  if (showAt && frame?.showInThread) items.push({ id: 'show', label: f('discuss.showInThread'), onSelect: () => frame.showInThread?.({ record: { type: 'SalesOrder', id: order.id }, at: showAt }) })
   items.push({
     id: 'link',
     label: t('moneyTab.menu.copyLinkRow'),
@@ -280,6 +283,33 @@ function RequestBox({ row, request, order, model, actions, invoiceHref, say }: {
     { key: 'sdi', state: steps.sdi, label: t('deposit.step.sdi'), words: sdiWords, door: sendSdi },
   ]
   const payments = row.payments
+  // F-OM-fx3 (W-17): "Its payments" is never a heading over nothing — "No payment yet." whenever the read says so.
+  const paymentLines = payments ? (
+    payments.length === 0 ? (
+      <p className="fw-pt-quiet">{t('moneyTab.plan.payments.none')}</p>
+    ) : (
+      payments.map((payment) => {
+        const method = t(`moneyTab.plan.method.${payment.method}`)
+        const how = method === `moneyTab.plan.method.${payment.method}` ? null : method
+        // F-OM-fx3 (B-OM-027, W-14): the deposit invoice issued for it — its number for a reader of invoices, else in words.
+        const td02 = payment.td02 ? (model.can.viewInvoices && payment.td02.number ? t('moneyTab.payment.td02', { number: payment.td02.number }) : t('moneyTab.payment.td02Words')) : null
+        return (
+          <div key={payment.allocationId} className="fw-om-py-r">
+            <span className="fw-om-py-w">{[day(payment.receivedOn), how, t('moneyTab.plan.payments.ref', { ref: payment.externalRef })].filter(Boolean).join(' · ')}</span>
+            <span className="fw-om-py-a">
+              {model.can.price && payment.amount !== undefined ? money(payment.amount, request.currency, locale) : null}
+              <PaymentMenu payment={payment} request={request} model={model} actions={actions} />
+            </span>
+            {td02 ? <span className="fw-om-py-x">{td02}</span> : null}
+          </div>
+        )
+      })
+    )
+  ) : model.can.price && (request.paidAmount ?? 0) > 0 ? (
+    <p className="fw-pt-quiet">{t('moneyTab.plan.payments.paidSoFar', { amount: money(request.paidAmount, request.currency, locale) })}</p>
+  ) : request.status === 'OPEN' && request.paidAmount === 0 /* known only with the price grain: never "none" when it is not known */ ? (
+    <p className="fw-pt-quiet">{t('moneyTab.plan.payments.none')}</p>
+  ) : null
   return (
     <div className="fw-om-rq">
       <ol className="fw-om-sx" aria-label={t('deposit.stepsLabel')}>
@@ -301,34 +331,10 @@ function RequestBox({ row, request, order, model, actions, invoiceHref, say }: {
           <span>{say(row.hint)}</span>
         </p>
       ) : null}
-      {model.can.viewPayments ? (
+      {model.can.viewPayments && paymentLines ? (
         <div className="fw-om-py">
           <span className="fw-om-py-h">{t('moneyTab.plan.payments.title')}</span>
-          {payments ? (
-            payments.length === 0 ? (
-              <p className="fw-pt-quiet">{t('moneyTab.plan.payments.none')}</p>
-            ) : (
-              payments.map((payment) => {
-                const method = t(`moneyTab.plan.method.${payment.method}`)
-                const how = method === `moneyTab.plan.method.${payment.method}` ? null : method
-                return (
-                  <div key={payment.allocationId} className="fw-om-py-r">
-                    <span className="fw-om-py-w">
-                      {[day(payment.receivedOn), how, t('moneyTab.plan.payments.ref', { ref: payment.externalRef })].filter(Boolean).join(' · ')}
-                    </span>
-                    <span className="fw-om-py-a">
-                      {model.can.price && payment.amount !== undefined ? money(payment.amount, request.currency, locale) : null}
-                      <PaymentMenu payment={payment} request={request} model={model} actions={actions} />
-                    </span>
-                  </div>
-                )
-              })
-            )
-          ) : model.can.price && (request.paidAmount ?? 0) > 0 ? (
-            <p className="fw-pt-quiet">{t('moneyTab.plan.payments.paidSoFar', { amount: money(request.paidAmount, request.currency, locale) })}</p>
-          ) : request.status === 'OPEN' && request.paidAmount === 0 /* known only with the price grain: never "none" when it is not known */ ? (
-            <p className="fw-pt-quiet">{t('moneyTab.plan.payments.none')}</p>
-          ) : null}
+          {paymentLines}
         </div>
       ) : null}
     </div>

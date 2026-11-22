@@ -124,7 +124,9 @@
 .fw-om-py-r { display: flex; justify-content: space-between; gap: var(--nds-space-4) var(--nds-space-12); flex-wrap: wrap; padding: var(--nds-space-6) 0; border-bottom: 1px solid var(--nds-border-subtle); font-size: var(--nds-font-size-sm); }
 .fw-om-py-r:last-child { border-bottom: 0; }
 .fw-om-py-w { min-width: 0; overflow-wrap: anywhere; }
-.fw-om-py-a { font-variant-numeric: tabular-nums; font-weight: var(--nds-font-weight-semibold); white-space: nowrap; }
+.fw-om-py-a { font-variant-numeric: tabular-nums; font-weight: var(--nds-font-weight-semibold); white-space: nowrap; display: inline-flex; align-items: center; gap: var(--nds-space-8); /* F-OM-fx3 (W-21): a gap before the payment's ⋯ */ }
+/* F-OM-fx3 (W-14): "TD02 FT-… was issued for it", under the payment. */
+.fw-om-py-x { flex-basis: 100%; font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); overflow-wrap: anywhere; }
 .fw-om-py > .fw-pt-quiet { padding-top: var(--nds-space-6); }
 .fw-om-pl-foot { display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-4); padding-top: var(--nds-space-4); }
 .fw-om-er { margin: 0; display: flex; gap: var(--nds-space-8); font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); padding: var(--nds-space-2) 0 var(--nds-space-2) 30px; }

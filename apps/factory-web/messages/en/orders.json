@@ -3276,7 +3276,8 @@
       "part": "the payment plan",
       "earlier": "Earlier steps ({count})",
       "earlierHint": "replaced or removed; kept with who, when and why",
-      "more": "More for the payment plan"
+      "more": "More for the payment plan",
+      "history": "History ›"
     },
     "plan": {
       "kind": {
@@ -3436,7 +3437,13 @@
       },
       "sub": {
         "credits": "Credits {number}",
-        "deducted": "Deducted on the goods' invoice"
+        "deducted": "Deducted on the goods' invoice",
+        "deducts": "Deducts TD02 {number} ({amount})",
+        "deductsWords": "Deducts TD02 {number}",
+        "forShipment": "for shipment {numbers}",
+        "forShipments": "for shipments {numbers}",
+        "deductedOn": "Deducted on {number}",
+        "forPayment": "For the payment of {date}"
       },
       "door": {
         "record": "Record payment…",
@@ -3451,7 +3458,12 @@
       },
       "sdiFailed": "Couldn't read the SDI state",
       "copyNumber": "Copy number",
-      "more": "More for {number}"
+      "more": "More for {number}",
+      "finance": "Open in Finance › Invoices ›",
+      "headMore": "More for Invoices & credit notes",
+      "state": {
+        "rejected": "Rejected — fix and resend"
+      }
     },
     "menu": {
       "copyLinkTotals": "Copy link to Totals",
@@ -3461,7 +3473,9 @@
       "undo": "Undo this payment…",
       "open": "Open in Finance › Payments ›",
       "copyRef": "Copy the bank reference",
-      "more": "More for the payment of {date}"
+      "more": "More for the payment of {date}",
+      "td02": "TD02 {number} was issued for it",
+      "td02Words": "A deposit invoice was issued for it"
     },
     "hand": {
       "thePlan": "the plan",

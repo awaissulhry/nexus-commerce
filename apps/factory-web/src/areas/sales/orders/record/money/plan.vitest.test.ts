@@ -7,7 +7,7 @@ import type { DepositRequest, Milestone, Order, Schedule } from '../../api'
 import { depositGate } from '../../model'
 import { stepAbilitiesOf, type StepAbilities } from '../schedule/model'
 import { MONEY_PLAN_ACTS, MONEY_PLAN_REFUSAL_WORDS } from '@nexus/factory-domain/sales/orders/money-plan'
-import { planOf, planRefusalOf, softLockedOf, type PlanRow } from './plan'
+import { planHistoryHref, planOf, planRefusalOf, softLockedOf, type PlanRow } from './plan'
 import { ApiError } from '../../../../../lib/api/errors'
 import { amountsOf } from './word'
 
@@ -332,6 +332,20 @@ describe('F-OM-fx3: a cancelled order shows no money due', () => {
     // The server's own mark (a step it cancelled) reads the same.
     const marked: Schedule = { ...SCHEDULE, steps: SCHEDULE.steps.map((entry) => (entry.kind === 'BEFORE_SHIPPING' ? { ...entry, status: 'CANCELLED' as const } : entry)), stillOpen: 0, overdue: 0 }
     expect(plan(order('CANCELLED'), { schedule: marked }).rows[1]!.pill.word.key).toBe('moneyTab.plan.pill.CANCELLED')
+  })
+})
+
+// ---- F-OM-fx3 (W-08): the read doors — Show in the thread (the row's newest moment), History › (the audit of the plan's hand changes) ----
+describe('F-OM-fx3: the read doors', () => {
+  it('a row knows its newest moment (a hand change, paid, the page sent, asked); History › is the audit of the order', () => {
+    const sent = plan(withRequests(order('CONFIRMED'), [deposit({ link: SENT_LINK })])).rows[0]!
+    expect(sent.showAt).toBe(SENT_LINK.sentAt)
+    const hand = { act: 'MOVE_DUE', at: '2026-11-18T10:44:00.000Z', by: 'Bea Esempio', reason: 'The customer pays before the fair.' }
+    const moved = plan(order('CONFIRMED'), { schedule: { ...SCHEDULE_OPEN, steps: SCHEDULE_OPEN.steps.map((entry) => (entry.kind === 'BEFORE_SHIPPING' ? { ...entry, byHand: hand } : entry)) } }).rows[1]!
+    expect(moved.showAt).toBe(hand.at)
+    // A step with nothing behind it yet: no moment, no door.
+    expect(plan(order('CONFIRMED')).rows[1]!.showAt).toBeNull()
+    expect(planHistoryHref('/w/DEMO', 'o-1')).toBe('/w/DEMO/admin/audit?type=SalesOrder&record=o-1')
   })
 })
 

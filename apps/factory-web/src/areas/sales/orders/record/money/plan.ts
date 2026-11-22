@@ -71,6 +71,8 @@ export interface PlanRow {
   readonly short: { readonly amount: number | null; readonly within: boolean } | null
   /** F-OM-fx3 (W-01): short within the tolerance, the hint in its box (price grain): "€ 15.00 short: banks often keep a fee …". */
   readonly hint: MoneyWord | null
+  /** F-OM-fx3 (W-08): the row's newest moment (a hand change, paid, the page sent, asked): "Show in the thread" opens the feed there. */
+  readonly showAt: string | null
   readonly fromChange: { readonly amendmentId: string; readonly revision: number } | null
   /** The ONE next act on the row; the others are in `more` (its ⋯). */
   readonly act: PlanAct | null
@@ -313,6 +315,7 @@ export function planOf(input: {
       byHand: byHandOf(newestHandOf([step?.byHand, plan?.byHand, acceptedHandOf(accepted)])),
       short,
       hint: short?.within && price && short.amount !== null && !final ? word('moneyTab.plan.shortHint', { money: { amount: short.amount } }) : null,
+      showAt: [step?.byHand?.at, plan?.byHand?.at, accepted?.at, paidAt, request?.link?.sentAt, request?.createdAt].reduce<string | null>((newest, at) => (at && (!newest || at > newest) ? at : newest), null),
       fromChange,
       act,
       more: acts.filter((entry) => entry !== act),
@@ -383,6 +386,11 @@ function answerOf(rows: readonly PlanRow[], schedule: Schedule, stillToPay: numb
     ]
   }
   return [said, ...tail]
+}
+
+/** F-OM-fx3 (W-08): History › — the audit of this order's plan changed by hand (`orders.planByHand` on the SalesOrder; audit.read). */
+export function planHistoryHref(prefix: string, orderId: string): string {
+  return `${prefix}/admin/audit?${new URLSearchParams({ type: 'SalesOrder', record: orderId }).toString()}`
 }
 
 // ---- F-OM-201 / 202: a refused act in this page's words, and a SOFT-locked month ----

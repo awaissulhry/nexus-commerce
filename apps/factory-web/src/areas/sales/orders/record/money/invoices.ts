@@ -75,12 +75,20 @@ export function invoicesOf(input: { readonly order: Order; readonly settlement: 
     const td04 = invoice.docType === 'TD04' ? (settlement?.creditNotes?.find((entry) => entry.id === invoice.id) ?? null) : null
     const read = !draft ? (sdi?.[invoice.id] ?? null) : null
     const sdiValue = read?.value ?? null
-    const state = sdiValue ? { word: word(`sdi.state.${sdiValue.state.code}`), tone: SDI_TONE[sdiValue.state.code] } : { word: word(`invoiceStatus.${invoice.status}`), tone: INVOICE_TONE[invoice.status] ?? 'neutral' }
+    // F-OM-fx3 (W-13): a rejected invoice says what to do: "Rejected — fix and resend".
+    const rejected = sdiValue ? sdiValue.state.code === 'REJECTED' : invoice.status === 'REJECTED'
+    const state = rejected
+      ? { word: word('moneyTab.invoices.state.rejected'), tone: 'danger' as const }
+      : sdiValue
+        ? { word: word(`sdi.state.${sdiValue.state.code}`), tone: SDI_TONE[sdiValue.state.code] }
+        : { word: word(`invoiceStatus.${invoice.status}`), tone: INVOICE_TONE[invoice.status] ?? 'neutral' }
     const total = !price ? null : goods ? (amounts?.grossTotal ?? null) : (td02?.gross ?? td04?.gross ?? null)
     const share = !price ? null : goods ? (amounts?.share ?? amounts?.grossTotal ?? null) : total
-    const open = !price || draft ? null : goods ? (amounts?.openAmount ?? null) : invoice.docType === 'TD02' && td02 ? 0 : null
+    // F-OM-fx3 (W-13): a deposit invoice has no Open of its own (it is paid by the money it was issued for): no cell, never "€ 0.00".
+    const open = !price || draft || !goods ? null : (amounts?.openAmount ?? null)
     let payment: InvoiceRow['payment'] = null
-    const coded = !draft ? (amounts?.paymentState ?? null) : null
+    // F-OM-fx3 (B-OM-026, W-12): a deposit invoice's and a credit note's word-code too — every invoices.view reader, no amount.
+    const coded = !draft ? (amounts?.paymentState ?? td02?.paymentState ?? td04?.paymentState ?? null) : null
     if (coded) payment = { word: word(PAYMENT_WORD[coded].key), tone: PAYMENT_WORD[coded].tone }
     else if (price && !draft) {
       if (invoice.docType === 'TD04') payment = { word: word('moneyTab.invoices.pay.credited'), tone: 'neutral' }
@@ -102,7 +110,15 @@ export function invoicesOf(input: { readonly order: Order; readonly settlement: 
     const subs: MoneyWord[] = []
     const credits = td04?.creditOfId ? numberOf(td04.creditOfId) : null
     if (credits) subs.push(word('moneyTab.invoices.sub.credits', { params: { number: credits } }))
-    if (td02 && (td02.deductedNet ?? 0) > 0) subs.push(word('moneyTab.invoices.sub.deducted'))
+    // F-OM-fx3 (B-OM-028, W-13): what a goods invoice deducts and bills; where a TD02 was deducted and the payment it was issued for.
+    for (const deducted of amounts?.deducts ?? []) {
+      if (deducted.number) subs.push(price && typeof deducted.amount === 'number' ? word('moneyTab.invoices.sub.deducts', { params: { number: deducted.number }, money: { amount: deducted.amount } }) : word('moneyTab.invoices.sub.deductsWords', { params: { number: deducted.number } }))
+    }
+    const shipments = amounts?.forShipments ?? []
+    if (shipments.length > 0) subs.push(word(shipments.length === 1 ? 'moneyTab.invoices.sub.forShipment' : 'moneyTab.invoices.sub.forShipments', { params: { numbers: shipments.map((shipment) => shipment.number).join(', ') } }))
+    if (td02?.deductedOn?.number) subs.push(word('moneyTab.invoices.sub.deductedOn', { params: { number: td02.deductedOn.number } }))
+    else if (td02 && (td02.deductedNet ?? 0) > 0) subs.push(word('moneyTab.invoices.sub.deducted'))
+    if (td02?.forPayment) subs.push(word('moneyTab.invoices.sub.forPayment', { days: { date: td02.forPayment.receivedOn } }))
     const freight = amounts && price ? freightOf(amounts) : null
     if (freight !== null) subs.push(word('money.freight', { money: { amount: freight } }))
     // ---- the doors into Finance: each only with its right; held only by the invoice's state ----
