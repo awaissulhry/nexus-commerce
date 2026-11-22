@@ -82,6 +82,8 @@ export interface OrderAbilities {
   decideForCustomer?: boolean
   /** F-OC-103: ask the customer for an approval and see what was asked (partners.approvals.ask): Changes › "Manage in the thread…". */
   askCustomer?: boolean
+  /** F-OM-101 (P0-B9): write in the order's conversation (threads.post): Money's rows offer Discuss only with it. */
+  threadsPost?: boolean
 }
 
 export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
@@ -107,6 +109,7 @@ export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
     raiseNcr: held.has('quality.ncr.raise'), // F-PT-302
     decideForCustomer: held.has('production.brand.override'), // W3 extra: Decide for {customer}…
     askCustomer: held.has('partners.approvals.ask'), // F-OC-103
+    threadsPost: held.has('threads.post'), // F-OM-101
   }
 }
 
@@ -605,18 +608,22 @@ export const actionOf = (order: Pick<Order, 'actions'>, action: OrderAction) => 
 /** The deposit gate the work orders' release reads: production waits for a PAID or WAIVED request. */
 export type GateState = 'NOT_NEEDED' | 'WAITING' | 'PAID' | 'WAIVED' | 'MISSING'
 
+// ---- F-OM-103 (M3-B3, P0-B1): the web gate = the server's gate, in the domain's order (factory-domain production/work-orders/release.ts
+// depositGate, the release command's): no deposit needed → passed; no live request → missing; ANY open request blocks (a priced
+// change's extra deposit too: "Deposit paid" while it waits was the bug), the earliest due first; then paid, else waived (every live
+// request waived). The band's Make work orders, the deposit banner and Money's head read this one rule.
 export function depositGate(order: Pick<Order, 'depositRequired' | 'chain'>): { state: GateState; request: DepositRequest | null } {
   // B-W2a-F2: the balance before shipping has a request of its own; only the deposit's request gates production.
   const requests = order.chain.depositRequests.filter((request) => request.status !== 'CANCELLED' && request.stepKind !== 'BEFORE_SHIPPING')
   if (!order.depositRequired) return { state: 'NOT_NEEDED', request: requests[0] ?? null }
+  if (requests.length === 0) return { state: 'MISSING', request: null }
+  const open = requests.filter((request) => request.status === 'OPEN').sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+  if (open.length > 0) return { state: 'WAITING', request: open[0]! }
   const paid = requests.find((request) => request.status === 'PAID')
   if (paid) return { state: 'PAID', request: paid }
-  const waived = requests.find((request) => request.status === 'WAIVED')
-  if (waived) return { state: 'WAIVED', request: waived }
-  const open = requests.find((request) => request.status === 'OPEN')
-  if (open) return { state: 'WAITING', request: open }
-  return { state: 'MISSING', request: null }
+  return { state: 'WAIVED', request: requests.find((request) => request.status === 'WAIVED') ?? requests[0]! }
 }
+// ---- end F-OM-103
 
 // F-OP-102: + PENDING_APPROVAL — the approver's Confirm the order (its task), anyone else's Ask for a yes / Take the request back.
 export type StepKind = 'makeWorkOrders' | 'changePromise' | 'close' | /* F-OP-121 */ 'createShipment' | 'confirmYes' | 'askYes'

@@ -59,7 +59,8 @@ export default defineStage({
       const finance = await flow.desk('finance')
       const before = await flow.mailsTo(to)
       await finance.go(`/sales/orders/${order.id}?tab=money`)
-      await press(finance.page.getByRole('button', { name: 'Send the bank-details page' }).first())
+      // F-OM-103: the deposit is the payment plan's first row; its ONE act while the page was never sent is "Send the page".
+      await press(finance.page.getByRole('button', { name: 'Send the page', exact: true }).first())
       const form = dialog(finance.page)
       await answerOf(finance.page, 'POST', /^\/payments\/deposit-requests\/[0-9a-f-]+\/link$/, () => press(form.getByRole('button', { name: 'Send the page' })))
       await expect(form.getByText(new RegExp(`Sent to ${to.replace(/\./g, '\\.')}`)).first()).toBeVisible()

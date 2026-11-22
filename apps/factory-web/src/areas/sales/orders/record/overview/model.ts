@@ -180,7 +180,8 @@ function doorOf(blocker: Blocker, inputs: WaitingInputs): WaitingDoor {
     if (blocker.sub === 'PROBLEM') return { kind: 'reply', messageId: ref?.messageId ?? null }
     return { kind: 'tab', tab: 'production', anchor: 'dates' }
   }
-  if (blocker.kind === 'DEPOSIT') return inputs.recordPayment && ref?.type === 'DepositRequest' ? { kind: 'payment', requestId: ref.id } : { kind: 'tab', tab: 'money', anchor: null }
+  // F-OM-104 (P0-B11): without the payment right the door lands on Money › Payments (the deposit is the plan's first step).
+  if (blocker.kind === 'DEPOSIT') return inputs.recordPayment && ref?.type === 'DepositRequest' ? { kind: 'payment', requestId: ref.id } : { kind: 'tab', tab: 'money', anchor: 'payments' }
   // F-OO-204: our open counter-offer opens the ONE review window; anything else we asked the customer is theirs to answer.
   if (blocker.kind === 'APPROVAL' && ref?.type === 'OrderChangeRequest') return { kind: 'open', requestId: ref.id, request: (inputs.requests ?? []).find((request) => request.id === ref.id) ?? null }
   if (blocker.kind === 'APPROVAL' || blocker.kind === 'PARTNER_TASK') return { kind: 'their' }

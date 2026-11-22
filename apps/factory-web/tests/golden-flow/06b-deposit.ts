@@ -11,7 +11,8 @@ export default defineStage({
 
     const td02 = await flow.step('finance records the deposit received by bank transfer (step-up) and issues the TD02 at once', async () => {
       await finance.go(`/sales/orders/${order.id}?tab=money`)
-      await press(page.getByRole('button', { name: 'Record the payment' }).first())
+      // F-OM-103: the deposit's row on Money › Payments — its ONE act once the page went is "Record a payment".
+      await press(page.getByRole('button', { name: 'Record a payment', exact: true }).first())
       const form = dialog(page)
       await form.getByRole('textbox', { name: 'Bank reference (CRO / TRN)' }).fill('CRO-GOLDEN-0001')
       await expect(form.getByRole('checkbox', { name: 'Issue the deposit invoice (TD02) now' })).toBeChecked()

@@ -8,6 +8,7 @@ import { formatTime } from '../../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { headButtonsOf, type SectionId } from '../../production/layout'
 import type { ChangesSectionId } from '../../changes/layout' // F-OC-101: the Changes tab draws its four sections with this kit, in place (L6)
+import type { MoneySectionId } from '../../money/layout' // F-OM-101: the Money tab draws its sections with this kit, in place (L6); a type only
 import './production.css'
 
 /**
@@ -21,7 +22,7 @@ import './production.css'
  */
 
 /** A section of the tab: a DS Card (padded), its address and its head; the body below. */
-export function Section({ id, title, answer, asOf, buttons, info, more, children }: { id: SectionId | ChangesSectionId /* F-OC-101 */; title: string; answer?: ReactNode; asOf?: string | null; buttons?: readonly ReactNode[]; info?: ReactNode; more?: ReactNode; children: ReactNode }) {
+export function Section({ id, title, answer, asOf, buttons, info, more, children }: { id: SectionId | ChangesSectionId /* F-OC-101 */ | MoneySectionId /* F-OM-101 */; title: string; answer?: ReactNode; asOf?: string | null; buttons?: readonly ReactNode[]; info?: ReactNode; more?: ReactNode; children: ReactNode }) {
   const { shown } = headButtonsOf(buttons ?? [])
   const headId = `fw-pt-h-${id}`
   return (
