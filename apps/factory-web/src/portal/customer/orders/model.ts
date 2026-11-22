@@ -251,18 +251,25 @@ export function shipToLines(shipTo: Readonly<Record<string, unknown>>): string[]
 /** The deposits that still wait for money (OPEN). */
 export const openDeposits = (deposits: readonly DepositRead[]): DepositRead[] => deposits.filter((deposit) => deposit.status === 'OPEN')
 
-/** The deposits paid, in minor units (null without the grain). */
+/**
+ * The deposits paid, in minor units (null without the grain). F-OM-204 (B-OM-005, M3-B6): what the payments placed on each request
+ * (a part payment counts, not only a request PAID in full); an older answer without it: the PAID requests' amounts, as before.
+ */
 export function depositPaid(deposits: readonly DepositRead[]): number | null {
   if (deposits.some((deposit) => deposit.amount === undefined || deposit.amount === null)) return deposits.length === 0 ? 0 : null
+  if (deposits.every((deposit) => typeof deposit.paidAmount === 'number')) return deposits.filter((deposit) => deposit.status !== 'CANCELLED').reduce((sum, deposit) => sum + (deposit.paidAmount ?? 0), 0)
   return deposits.filter((deposit) => deposit.status === 'PAID').reduce((sum, deposit) => sum + (deposit.amount ?? 0), 0)
 }
 
-/** Net · VAT · total · deposit paid · to pay on invoice (null without the grain). */
+/**
+ * Net · VAT · total · deposit paid · to pay (null without the grain). F-OM-204 (B-OM-005): to pay is the office's own still-to-pay
+ * when the read sends it (one rule for the office and the portal), else the total less the deposits paid.
+ */
 export function totalsOf(record: Pick<OrderRecord, 'order' | 'deposits'>): { net: number; vat: number; gross: number; depositPaid: number; toPay: number } | null {
   const { netAmount, vatAmount, grossAmount } = record.order
   const paid = depositPaid(record.deposits)
   if (netAmount == null || vatAmount == null || grossAmount == null || paid === null) return null
-  return { net: netAmount, vat: vatAmount, gross: grossAmount, depositPaid: paid, toPay: Math.max(0, grossAmount - paid) }
+  return { net: netAmount, vat: vatAmount, gross: grossAmount, depositPaid: paid, toPay: typeof record.order.stillToPay === 'number' ? record.order.stillToPay : Math.max(0, grossAmount - paid) }
 }
 
 /** A line's own promise when it differs from the order's. */
