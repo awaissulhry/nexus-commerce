@@ -52,6 +52,19 @@ export function sizeBackorder(facts: SizeFacts): SizeBackorder {
   return { ...facts, closed, backorder, readyNow, inProduction: backorder - readyNow }
 }
 
+// ── B-OS-002 (order shipments tab; H1-B8) ──
+/**
+ * Whether a shipment still holds the released garments it carries (what `onShipments`, and so `readyNow`, counts): every shipment
+ * but a CANCELLED one, and a RETURNED one only until its garments are received back (Shipment.carrierReturnReceivedAt: they are in
+ * finished goods again and ship on a new shipment). The database's cap and the API's cell counts (modules/shipping cells.ts) read
+ * the same, so a received carrier return frees its garments for the next shipment everywhere.
+ */
+export function holdsReleasedGarments(shipment: { readonly status: string; readonly carrierReturnReceivedAt: Date | null }): boolean {
+  if (shipment.status === 'CANCELLED') return false
+  return !(shipment.status === 'RETURNED' && shipment.carrierReturnReceivedAt !== null)
+}
+// ── end B-OS-002 ──
+
 /** An order's backorder in total (the sizes of every line). */
 export function backorderTotals(sizes: readonly SizeBackorder[]): { ordered: number; closed: number; shipped: number; open: number; thisShipment: number; backorder: number; readyNow: number; inProduction: number } {
   const total = (pick: (size: SizeBackorder) => number) => sizes.reduce((sum, size) => sum + pick(size), 0)

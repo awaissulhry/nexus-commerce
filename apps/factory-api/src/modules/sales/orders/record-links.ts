@@ -27,9 +27,12 @@ import { approvedTexts } from '../../compliance/phrases/store'
  * .notice, picture 29): GET /sales/orders/:orderId/links (orders.view over the order). One read for the order's record:
  *
  *   complaints  the complaints made against it (Complaint.salesOrderId): number, status, when, the triage — with
- *               quality.complaints.view over each (null: the reader holds no complaint right, the section is not drawn)
+ *               quality.complaints.view over each (null: the reader holds no complaint right, the section is not drawn).
+ *               B-OS-004: also those about one of its shipments only (Complaint.shipmentId), each naming its shipment
  *   returns     its returns (ReturnAuthorisation.salesOrderId): number, status, when — with sales.returns.view over each
- *               (null: the reader holds no return right)
+ *               (null: the reader holds no return right). B-OS-004: also a return whose lines are of this order's lines (one
+ *               across two orders shows on both), with its pieces of this order and its replacement order; `truncated` says
+ *               when a list stopped at 50
  *   rePromises  planning's re-promise proposals still WAITING for sales (B-W2b-317): the line, the dates per size, the reason,
  *               who proposed; accept and decline go to the planning routes (POST /planning/promises/re-promises/:id/accept |
  *               decline), with orders.manage over the order and never by the person who proposed (`may`); the production
@@ -61,9 +64,38 @@ export const recordLinksContract = defineContract({
     200: output({
       order: output({ id: id(), number: z.string() }),
       complaints: z
-        .array(output({ id: id(), number: z.string(), status: z.string(), receivedAt: instant(), category: z.string().nullable(), severity: z.string().nullable(), answerDueOn: businessDateSchema().nullable() }))
+        .array(
+          output({
+            id: id(),
+            number: z.string(),
+            status: z.string(),
+            receivedAt: instant(),
+            category: z.string().nullable(),
+            severity: z.string().nullable(),
+            answerDueOn: businessDateSchema().nullable(),
+            /** B-OS-004: the shipment it is about (one of the order's), when it names one. */
+            shipment: output({ id: id(), number: z.string() }).nullable(),
+          }),
+        )
         .nullable(),
-      returns: z.array(output({ id: id(), number: z.string(), status: z.string(), requestedAt: instant(), closedAt: instant().nullable(), outcomeWanted: z.string().nullable() })).nullable(),
+      returns: z
+        .array(
+          output({
+            id: id(),
+            number: z.string(),
+            status: z.string(),
+            requestedAt: instant(),
+            closedAt: instant().nullable(),
+            outcomeWanted: z.string().nullable(),
+            // ── B-OS-004: its pieces of THIS order's lines (a return across two orders shows on both, each with its own), and the
+            // replacement order made for it. A return line names no shipment: which shipment the pieces came from is not known. ──
+            pieces: z.number().int(),
+            replacementOrder: output({ id: id(), number: z.string() }).nullable(),
+          }),
+        )
+        .nullable(),
+      /** B-OS-004 (H4-B3): a list stopped at 50 rows while more exist ("N more ›": its own page lists them all). */
+      truncated: output({ complaints: z.boolean(), returns: z.boolean() }),
       rePromises: z.array(
         output({
           id: id(),
@@ -163,34 +195,75 @@ export async function orderLinks(caller: CommandCaller, orderId: string) {
   const order = await officeOrder(caller, orderId)
   const now = serverClock.now()
   const today = businessDate(now)
-  const own = { salesOrderId: order.id, partyId: order.partyId, companyId: order.companyId }
-  return caller.withClient(async (db) => {
+    return caller.withClient(async (db) => {
     const head = await db.salesOrder.findUniqueOrThrow({ where: { id: order.id }, select: { id: true, number: true } })
+
+    // ── B-OS-004 (order shipments tab; H4-B1, H4-B2, H4-B3): the order's lines and shipments first (all of its customer and company:
+    // W27) — a complaint about one of its shipments and a return of its lines show too; a list says when it stopped at LIMIT ──
+    const orderLineIds = (await db.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id)
+    // B-OP-043 (order page N6): the shipments made for it or carrying its garments (all of its customer and company).
+    const shipments = await db.shipment.findMany({ where: { ...shipmentsOfOrderWhere(order.id), partyId: order.partyId, companyId: order.companyId }, select: { id: true, number: true } })
+    const shipmentNumbers = new Map(shipments.map((row) => [row.id, row.number]))
+    const truncated = { complaints: false, returns: false }
+    // ── end B-OS-004 ──
 
     // Complaints and returns: the order's own customer's only (W27), each by its own right.
     const complaints = holds(actor, QUALITY_COMPLAINTS_VIEW)
-      ? (
-          await db.complaint.findMany({
-            where: own,
-            select: { id: true, companyId: true, partyId: true, number: true, status: true, receivedAt: true, category: true, severity: true, answerDueOn: true },
+      ? await (async () => {
+          const rows = await db.complaint.findMany({
+            // B-OS-004 (H4-B1): also those about one of its shipments only (Complaint.shipmentId), still of its own customer and company.
+            where: { partyId: order.partyId, companyId: order.companyId, OR: [{ salesOrderId: order.id }, ...(shipments.length > 0 ? [{ shipmentId: { in: shipments.map((row) => row.id) } }] : [])] },
+            select: { id: true, companyId: true, partyId: true, number: true, status: true, receivedAt: true, category: true, severity: true, answerDueOn: true, /* B-OS-004 */ shipmentId: true },
             orderBy: [{ receivedAt: 'desc' }, { id: 'desc' }],
-            take: LIMIT,
+            take: LIMIT + 1, // B-OS-004 (H4-B3): one more says there are more
           })
-        )
-          .filter((row) => can(actor, QUALITY_COMPLAINTS_VIEW, { companyId: row.companyId, partyId: row.partyId }))
-          .map((row) => ({ id: row.id, number: row.number, status: row.status, receivedAt: toUtcIso(row.receivedAt), category: row.category, severity: row.severity, answerDueOn: day(row.answerDueOn) }))
+          truncated.complaints = rows.length > LIMIT
+          return rows
+            .slice(0, LIMIT)
+            .filter((row) => can(actor, QUALITY_COMPLAINTS_VIEW, { companyId: row.companyId, partyId: row.partyId }))
+            .map((row) => ({
+              id: row.id,
+              number: row.number,
+              status: row.status,
+              receivedAt: toUtcIso(row.receivedAt),
+              category: row.category,
+              severity: row.severity,
+              answerDueOn: day(row.answerDueOn),
+              shipment: row.shipmentId && shipmentNumbers.has(row.shipmentId) ? { id: row.shipmentId, number: shipmentNumbers.get(row.shipmentId)! } : null, // B-OS-004
+            }))
+        })()
       : null
     const returns = holds(actor, SALES_RETURNS_VIEW)
-      ? (
-          await db.returnAuthorisation.findMany({
-            where: own,
-            select: { id: true, companyId: true, siteId: true, partyId: true, number: true, status: true, requestedAt: true, closedAt: true, outcomeWanted: true },
+      ? await (async () => {
+          const rows = await db.returnAuthorisation.findMany({
+            // B-OS-004 (H4-B2): also a return naming another order (or none) whose lines are of this order's lines.
+            where: { partyId: order.partyId, companyId: order.companyId, OR: [{ salesOrderId: order.id }, ...(orderLineIds.length > 0 ? [{ lines: { some: { salesOrderLineId: { in: orderLineIds } } } }] : [])] },
+            select: { id: true, companyId: true, siteId: true, partyId: true, number: true, status: true, requestedAt: true, closedAt: true, outcomeWanted: true, /* B-OS-004 */ replacementOrderId: true },
             orderBy: [{ requestedAt: 'desc' }, { id: 'desc' }],
-            take: LIMIT,
+            take: LIMIT + 1, // B-OS-004 (H4-B3)
           })
-        )
-          .filter((row) => can(actor, SALES_RETURNS_VIEW, { companyId: row.companyId, siteId: row.siteId, partyId: row.partyId }))
-          .map((row) => ({ id: row.id, number: row.number, status: row.status, requestedAt: toUtcIso(row.requestedAt), closedAt: iso(row.closedAt), outcomeWanted: row.outcomeWanted }))
+          truncated.returns = rows.length > LIMIT
+          const visible = rows.slice(0, LIMIT).filter((row) => can(actor, SALES_RETURNS_VIEW, { companyId: row.companyId, siteId: row.siteId, partyId: row.partyId }))
+          // B-OS-004: each return's pieces of THIS order's lines (one read), and its replacement order's number (one read).
+          const pieces =
+            visible.length > 0 && orderLineIds.length > 0
+              ? new Map((await db.returnLine.groupBy({ by: ['returnId'], where: { returnId: { in: visible.map((row) => row.id) }, salesOrderLineId: { in: orderLineIds } }, _sum: { quantity: true } })).map((row) => [row.returnId, row._sum.quantity ?? 0]))
+              : new Map<string, number>()
+          const replacementIds = [...new Set(visible.flatMap((row) => (row.replacementOrderId ? [row.replacementOrderId] : [])))]
+          const replacements = new Map((replacementIds.length > 0 ? await db.salesOrder.findMany({ where: { id: { in: replacementIds }, partyId: order.partyId }, select: { id: true, number: true } }) : []).map((row) => [row.id, row.number]))
+          return visible.map((row) => ({
+            id: row.id,
+            number: row.number,
+            status: row.status,
+            requestedAt: toUtcIso(row.requestedAt),
+            closedAt: iso(row.closedAt),
+            outcomeWanted: row.outcomeWanted,
+            // ── B-OS-004 ──
+            pieces: pieces.get(row.id) ?? 0,
+            replacementOrder: row.replacementOrderId && replacements.has(row.replacementOrderId) ? { id: row.replacementOrderId, number: replacements.get(row.replacementOrderId)! } : null,
+            // ── end B-OS-004 ──
+          }))
+        })()
       : null
 
     // Planning's re-promises still waiting for sales: accept or decline with orders.manage, never one's own.
@@ -221,15 +294,13 @@ export async function orderLinks(caller: CommandCaller, orderId: string) {
       ]
     })
 
-    // The gates' refusals that still block the order's work orders (every cell of this customer) and shipments.
-    const orderLineIds = (await db.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true } })).map((line) => line.id)
+    // The gates' refusals that still block the order's work orders (every cell of this customer) and shipments (B-OS-004: the
+    // order's lines and shipments read above).
     const cells = orderLineIds.length > 0 ? await db.workOrderSize.findMany({ where: { salesOrderLineId: { in: orderLineIds } }, select: { workOrderId: true } }) : []
     const touched = [...new Set(cells.map((cell) => cell.workOrderId))]
     const foreign = touched.length > 0 ? await db.workOrderSize.findMany({ where: { workOrderId: { in: touched }, OR: [{ partyId: null }, { partyId: { not: order.partyId } }] }, select: { workOrderId: true }, distinct: ['workOrderId'] }) : []
     const mixed = new Set(foreign.map((cell) => cell.workOrderId))
     const workOrderIds = touched.filter((workOrderId) => !mixed.has(workOrderId))
-    // B-OP-043 (order page N6): the shipments made for it or carrying its garments (all of its customer and company).
-    const shipments = await db.shipment.findMany({ where: { ...shipmentsOfOrderWhere(order.id), partyId: order.partyId, companyId: order.companyId }, select: { id: true, number: true } })
     const workOrders = workOrderIds.length > 0 ? await db.workOrder.findMany({ where: { id: { in: workOrderIds } }, select: { id: true, number: true } }) : []
     const numbers = new Map([...workOrders, ...shipments].map((row) => [row.id, row.number]))
     const subjects = [
@@ -272,6 +343,6 @@ export async function orderLinks(caller: CommandCaller, orderId: string) {
         reason: plainReasonOf(row.reason, row.explanation, phraseWords),
       })
     }
-    return { order: { id: head.id, number: head.number }, complaints, returns, rePromises, gates, asOf: toUtcIso(now) }
+    return { order: { id: head.id, number: head.number }, complaints, returns, /* B-OS-004 */ truncated, rePromises, gates, asOf: toUtcIso(now) }
   })
 }

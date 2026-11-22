@@ -86,6 +86,12 @@ export interface ReturnableQuery {
   readonly partyId: string
   readonly salesOrderId?: string | null | undefined
   readonly invoiceId?: string | null | undefined
+  /**
+   * B-OS-005 (order shipments tab; L8): only the order lines and sizes this shipment carries (the return opened from its row, with
+   * its lines filled in). The sums stay those of every shipment and invoice (an invoice line names no shipment); listReturnable
+   * applies it.
+   */
+  readonly shipmentId?: string | null | undefined
   /** Lines of an RMA being changed: their own pieces are not "taken". */
   readonly exceptLineIds?: readonly string[] | undefined
 }
@@ -256,6 +262,27 @@ export async function listReturnable(caller: CommandCaller, query: ReturnableQue
   return caller.withClient(async (client) => {
     const policy = await policyOf(client, query.companyId)
     const rows = await returnableRows(client, query, policy, serverClock.now())
+    // ── B-OS-005: the lines of one shipment of this customer and company (another's: as an unknown one) ──
+    if (query.shipmentId) {
+      const carried = await carriedBy(client, query.shipmentId, { companyId: query.companyId, partyId: query.partyId })
+      return { lines: rows.filter((row) => carried(row)).map(rowView), policy }
+    }
+    // ── end B-OS-005 ──
     return { lines: rows.map(rowView), policy }
   })
 }
+
+// ── B-OS-005 (order shipments tab; L8; 13-backend §1) ──
+/**
+ * Whether a returnable row is of an order line and size the shipment carries: the shipment of this customer and company only (else
+ * "Shipment not found.", as an unknown id: the brand wall). A row of a made-to-measure line (no size) matches its line.
+ */
+async function carriedBy(db: Reader, shipmentId: string, place: { readonly companyId: string; readonly partyId: string }): Promise<(row: SoldKey) => boolean> {
+  const shipment = isUuid(shipmentId) ? await db.shipment.findUnique({ where: { id: shipmentId }, select: { id: true, companyId: true, partyId: true } }) : null
+  if (!shipment || shipment.companyId !== place.companyId || shipment.partyId !== place.partyId) throw new NotFoundError('Shipment not found.')
+  const lines = await db.shipmentLine.findMany({ where: { shipmentId: shipment.id }, select: { salesOrderLineId: true, size: true } })
+  const cells = new Set(lines.map((line) => `${line.salesOrderLineId}|${line.size}`))
+  const orderLines = new Set(lines.map((line) => line.salesOrderLineId))
+  return (row) => row.salesOrderLineId !== null && (cells.has(`${row.salesOrderLineId}|${row.size ?? ''}`) || (row.size === null && orderLines.has(row.salesOrderLineId)))
+}
+// ── end B-OS-005 ──

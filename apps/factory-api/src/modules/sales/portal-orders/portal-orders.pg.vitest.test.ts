@@ -549,3 +549,39 @@ describe('B-OP-044: a shared shipment in the portal', { timeout: SLOW_TEST_TIMEO
   })
 })
 // ---- end B-OP-044
+
+// ---- B-OS-006 (order shipments tab; X2-B1): a TEST label's number never reaches the customer. SEED-SH-0001's second parcel is given
+// a TEST label (test mode) past the guards: the read is what is tested.
+describe('B-OS-006: a TEST label is never shown to the customer', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('its parcel is listed untracked (no number, no link); On the way lists the carrier labels only', async () => {
+    const so2 = await orderId('SEED-SO-0002')
+    const shipment = await one<{ id: string }>('SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND number = $2', [T, 'SEED-SH-0001'])
+    const parcels = await admin<{ id: string; seq: number; trackingNumber: string; carrierParcelId: string | null }>('SELECT id, seq, "trackingNumber", "carrierParcelId" FROM "Parcel" WHERE "shipmentId" = $1 ORDER BY seq', [shipment.id])
+    const [real, test] = [parcels[0]!, parcels[1]!]
+    const relabel = async (providerId: string | null, number: string) => {
+      await admin('SET session_replication_role = replica')
+      try {
+        await admin('UPDATE "Parcel" SET "carrierParcelId" = $2, "trackingNumber" = $3 WHERE id = $1', [test.id, providerId, number])
+      } finally {
+        await admin('SET session_replication_role = DEFAULT')
+      }
+    }
+    await relabel('test:os-006-parcel-2', 'TEST-OS006-0002')
+    try {
+      const answer = await ok(browsers.viewer, `/portal/sales-orders/${so2}/shipments`)
+      const row = (answer.shipments as Json[]).find((entry) => entry.number === 'SEED-SH-0001')!
+      expect(row.parcels).toHaveLength(2)
+      expect((row.parcels as Json[]).find((parcel) => parcel.seq === test.seq)).toMatchObject({ trackingNumber: null, trackingLink: null })
+      expect((row.parcels as Json[]).find((parcel) => parcel.seq === real.seq)).toMatchObject({ trackingNumber: real.trackingNumber })
+      expect(JSON.stringify(answer)).not.toContain('TEST-OS006')
+      const transit = await ok(browsers.buyer, '/portal/sales-orders/in-transit')
+      const item = (transit.items as Json[]).find((entry) => entry.number === 'SEED-SH-0001')!
+      expect(item.trackingNumbers).toEqual([real.trackingNumber])
+      expect((item.trackingLinks as Json[]).map((link) => link.trackingNumber)).not.toContain('TEST-OS006-0002')
+      expect(JSON.stringify(transit)).not.toContain('TEST-OS006')
+    } finally {
+      await relabel(test.carrierParcelId, test.trackingNumber)
+    }
+  })
+})
+// ---- end B-OS-006
