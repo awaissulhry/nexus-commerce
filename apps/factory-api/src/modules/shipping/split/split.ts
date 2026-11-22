@@ -187,23 +187,28 @@ async function splitInCommand(tools: CommandTools, parent: ShipmentHeader, group
   const facts = await tx.shipment.findUniqueOrThrow({ where: { id: parent.id }, select: { integrationAccountId: true, express: true, dutyPayer: true, paperless: true, transportMode: true } })
   const actorId = tools.context.audience === 'office' ? tools.context.actorId : null
   const from = await lockShipmentRow(tx, parent.id)
-  // B-OP-041 (order page N6, lines-derived): the orders the parent carries before; a child keeps the parent's first order
-  // (salesOrderId: the database's split rule) and carries the orders of its own lines, a subset of the parent's.
+  // B-OP-041 (order page N6, lines-derived): the orders the parent carries before; B-OS-021: a child is made for one of its own
+  // lines' orders (the parent's first order when it carries one) and carries the orders of its own lines, a subset of the parent's.
   const parentOrdersBefore = await ordersOfShipment(tx, parent)
   const made: string[] = []
   // B-OS-010: what each old line still holds as the new shipments take from it (a line may give to several).
   const left = new Map(lines.map((line) => [line.id, line.quantity]))
+  // ── B-OS-021 (order shipments 1/1, X1-B1; reverses B-OP-041's "a child keeps the parent's first order"): each child is made
+  // for one of its own orders — the parent's first order when a garment of it moves, else the earliest-numbered order of its
+  // garments — so it shows only on the orders it carries, its DDT names them, the other order can be DELIVERED. ──
+  const lineOrders = await tx.salesOrderLine.findMany({ where: { id: { in: [...new Set(lines.map((line) => line.salesOrderLineId))] } }, select: { id: true, orderId: true } })
+  const orderOfLine = new Map(lineOrders.map((row) => [row.id, row.orderId]))
+  const orderNumbers = new Map((await tx.salesOrder.findMany({ where: { id: { in: [...new Set(lineOrders.map((row) => row.orderId))] } }, select: { id: true, number: true } })).map((row) => [row.id, row.number]))
+  const firstOrderOf = (moves: readonly MoveAsk[]): string => {
+    const orders = [...new Set(moves.flatMap((move) => { const orderId = orderOfLine.get(byId.get(move.lineId)!.salesOrderLineId); return orderId ? [orderId] : [] }))]
+    if (orders.length === 0 || orders.includes(parent.salesOrderId)) return parent.salesOrderId
+    return orders.sort((a, b) => (orderNumbers.get(a) ?? '').localeCompare(orderNumbers.get(b) ?? '', undefined, { numeric: true }) || a.localeCompare(b))[0]!
+  }
+  // ── end B-OS-021 ──
   for (const group of groups) {
-    // Garments come off the old lines first: a cell's lines over every shipment never pass its releases (the triggers).
-    for (const move of group.moves) {
-      const line = byId.get(move.lineId)!
-      const before = left.get(line.id)!
-      const after = before - move.quantity
-      if (after === 0) await tx.shipmentLine.delete({ where: { id: line.id }, select: { id: true } })
-      else await tx.shipmentLine.update({ where: { id: line.id }, data: { quantity: after, version: { increment: 1 } }, select: { id: true } })
-      left.set(line.id, after)
-      tools.audit({ action: 'shipping.splitLine', recordType: 'ShipmentLine', recordId: line.id, companyId: parent.companyId, siteId: parent.siteId, before: { quantity: before }, after: { quantity: after } })
-    }
+    const firstOrder = firstOrderOf(group.moves) // B-OS-021
+    // B-OS-021: the child's header first — the database checks its first order against the lines the parent carries NOW (the
+    // packing check), then the parent's lines shrink, then the child's lines follow (the caps need the shrink first).
     const id = newId()
     const number = await allocateNumber(tools, { companyId: parent.companyId, kind: 'SHIPMENT' }, { type: 'Shipment', id })
     const delivery = group.delivery
@@ -213,7 +218,7 @@ async function splitInCommand(tools: CommandTools, parent: ShipmentHeader, group
         companyId: parent.companyId,
         siteId: parent.siteId,
         partyId: parent.partyId,
-        salesOrderId: parent.salesOrderId,
+        salesOrderId: firstOrder, // B-OS-021: was the parent's first order
         number: number.formatted,
         shipToAddressId: delivery.shipToAddressId,
         shipTo: group.shipTo ?? (parent.shipTo as Prisma.InputJsonValue),
@@ -232,6 +237,17 @@ async function splitInCommand(tools: CommandTools, parent: ShipmentHeader, group
       },
       select: { id: true },
     })
+    // Garments come off the old lines (after the child's header, B-OS-021), before the child's lines: a cell's lines over every
+    // shipment never pass its releases (the triggers).
+    for (const move of group.moves) {
+      const line = byId.get(move.lineId)!
+      const before = left.get(line.id)!
+      const after = before - move.quantity
+      if (after === 0) await tx.shipmentLine.delete({ where: { id: line.id }, select: { id: true } })
+      else await tx.shipmentLine.update({ where: { id: line.id }, data: { quantity: after, version: { increment: 1 } }, select: { id: true } })
+      left.set(line.id, after)
+      tools.audit({ action: 'shipping.splitLine', recordType: 'ShipmentLine', recordId: line.id, companyId: parent.companyId, siteId: parent.siteId, before: { quantity: before }, after: { quantity: after } })
+    }
     const added: { lineId: string; workOrderSizeId: string; quantity: number }[] = []
     for (const move of group.moves) {
       const line = byId.get(move.lineId)!
@@ -248,16 +264,17 @@ async function splitInCommand(tools: CommandTools, parent: ShipmentHeader, group
       recordId: id,
       companyId: parent.companyId,
       siteId: parent.siteId,
-      after: { number: number.formatted, status: 'DRAFT', salesOrderId: parent.salesOrderId, splitFromId: parent.id, splitReason: group.reason, byRule, ...delivery, lines: added },
+      after: { number: number.formatted, status: 'DRAFT', salesOrderId: firstOrder /* B-OS-021 */, splitFromId: parent.id, splitReason: group.reason, byRule, ...delivery, lines: added },
     })
     tools.audit({ action: 'shipping.split', recordType: 'Shipment', recordId: parent.id, companyId: parent.companyId, siteId: parent.siteId, after: { into: { shipmentId: id, number: number.formatted }, reason: group.reason, byRule, moved: group.moves } })
-    tools.emit({ type: 'shipment.created', subject: id, companyId: parent.companyId, siteId: parent.siteId, payload: { shipmentId: id, number: number.formatted, salesOrderId: parent.salesOrderId, siteId: parent.siteId, lines: added.length, garments, partyId: parent.partyId /* B-SA-004 */ } })
+    tools.emit({ type: 'shipment.created', subject: id, companyId: parent.companyId, siteId: parent.siteId, payload: { shipmentId: id, number: number.formatted, salesOrderId: firstOrder /* B-OS-021 */, siteId: parent.siteId, lines: added.length, garments, partyId: parent.partyId /* B-SA-004 */ } })
     tools.emit({ type: 'shipment.split', subject: id, companyId: parent.companyId, siteId: parent.siteId, payload: { shipmentId: id, number: number.formatted, splitFromId: parent.id, fromNumber: parent.number, reason: group.reason, byRule, partyId: parent.partyId /* B-SA-004 */, lines: added.length, garments } })
     tools.emit({ type: 'shipment.packing_changed', subject: id, companyId: parent.companyId, siteId: parent.siteId, payload: { shipmentId: id, number: number.formatted, status: 'DRAFT', change: 'lines', partyId: parent.partyId /* B-SA-004 */ } })
     const to = await lockShipmentRow(tx, id)
     await carryHoldsInCommand(tools, from, to)
     // B-OP-041: a child with lines of another order of the customer carries that order too (after the switch only).
-    ordersChanged(tools, { id, number: number.formatted, companyId: parent.companyId, siteId: parent.siteId, partyId: parent.partyId }, [parent.salesOrderId], await ordersOfShipment(tx, { id, salesOrderId: parent.salesOrderId }))
+    // B-OS-021: against the child's own first order.
+    ordersChanged(tools, { id, number: number.formatted, companyId: parent.companyId, siteId: parent.siteId, partyId: parent.partyId }, [firstOrder], await ordersOfShipment(tx, { id, salesOrderId: firstOrder }))
     made.push(id)
   }
   // B-OP-041: an order whose last line moved to a child leaves the parent.

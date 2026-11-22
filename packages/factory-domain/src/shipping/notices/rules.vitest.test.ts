@@ -28,6 +28,9 @@ describe('when the notice goes', () => {
     expect(noticeHeld(facts({ status: 'CANCELLED' }))).toBe('CANCELLED')
     expect(noticeHeld(facts({ parcels: [{ carrierParcelId: null, trackingNumber: null }] }))).toBe('NO_TRACKING')
     expect(noticeHeld(facts({ parcels: [{ carrierParcelId: null, trackingNumber: null }], manualTrackingNumber: 'MAN-1' }))).toBeNull()
+    // B-OS-022: a parcel's number typed by hand is something to follow too.
+    expect(noticeHeld(facts({ parcels: [{ carrierParcelId: null, trackingNumber: null, manualTrackingNumber: 'AWB-OS022-1' }] }))).toBeNull()
+    expect(noticeHeld(facts({ parcels: [{ carrierParcelId: null, trackingNumber: null, manualTrackingNumber: null }] }))).toBe('NO_TRACKING')
     expect(noticeHeld(facts({ recipients: 0, automatic: false }))).toBe('NO_RECIPIENT')
   })
 })

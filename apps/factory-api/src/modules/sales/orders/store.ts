@@ -309,7 +309,8 @@ const SHIPMENT_DETAIL = {
   packedAt: true,
   // ── end B-OS-001 ──
 } as const satisfies Prisma.ShipmentSelect
-const PARCEL_DETAIL = { shipmentId: true, seq: true, trackingNumber: true, trackingUrl: true, carrierParcelId: true, /* B-OS-001 */ id: true } as const satisfies Prisma.ParcelSelect
+// B-OS-022: + the number (and link) typed by hand for a parcel no label tracks — named, an office read (the floor reads none of it).
+const PARCEL_DETAIL = { shipmentId: true, seq: true, trackingNumber: true, trackingUrl: true, carrierParcelId: true, /* B-OS-001 */ id: true, /* B-OS-022 */ manualTrackingNumber: true, manualTrackingUrl: true } as const satisfies Prisma.ParcelSelect
 /** B-OS-001: one shipment of the order as its detail is read. */
 export type ShipmentDetailRow = Prisma.ShipmentGetPayload<{ select: typeof SHIPMENT_DETAIL }>
 

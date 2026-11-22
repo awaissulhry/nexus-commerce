@@ -151,9 +151,10 @@ export async function listShipments(caller: CommandCaller, query: ListShipmentsQ
         // B-W2a-48: the freight charged (money.price in the answer) and the transport evidence's state.
         freightCharge: true,
         transportEvidence: true,
+        manualTrackingNumber: true, // B-OS-023 (an office list)
         salesOrder: { select: { number: true, currency: true, party: { select: { legalName: true } } } },
         lines: { select: { quantity: true } },
-        parcels: { select: { seq: true, grossWeightKg: true, trackingNumber: true, labelledAt: true }, orderBy: { seq: 'asc' } },
+        parcels: { select: { seq: true, grossWeightKg: true, trackingNumber: true, labelledAt: true, /* B-OS-023 */ manualTrackingNumber: true }, orderBy: { seq: 'asc' } },
         ddts: { where: { cancellations: { none: {} } }, select: { id: true, number: true }, take: 1 },
       },
     }),
@@ -199,6 +200,8 @@ export async function listShipments(caller: CommandCaller, query: ListShipmentsQ
       grossWeightKg: weight(row.parcels),
       labelled: row.parcels.filter((parcel) => parcel.trackingNumber !== null && parcel.labelledAt !== null).length,
       trackingNumbers: row.parcels.flatMap((parcel) => (parcel.trackingNumber ? [parcel.trackingNumber] : [])).slice(0, 3),
+      // B-OS-023 (order shipments 1/1): the numbers typed by hand — the shipment's, then its parcels' (the first three).
+      typedTrackingNumbers: [...(row.manualTrackingNumber ? [row.manualTrackingNumber] : []), ...row.parcels.flatMap((parcel) => (parcel.manualTrackingNumber ? [parcel.manualTrackingNumber] : []))].slice(0, 3),
       ddt: row.ddts[0] ? { id: row.ddts[0].id, number: row.ddts[0].number } : null,
       packedAt: at(row.packedAt),
       shippedAt: at(row.shippedAt),

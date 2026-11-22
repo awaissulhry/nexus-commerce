@@ -59,7 +59,8 @@ describe('F-OP-118: Money = this order\'s share', () => {
     const invoices = readFileSync(new URL('./money/invoices.ts', import.meta.url), 'utf8')
     expect(invoices).toContain('const freight = amounts && price ? freightOf(amounts) : null')
     expect(invoices).toContain("const total = !price ? null :")
-    expect(readFileSync(new URL('./money/view/InvoicesSection.tsx', import.meta.url), 'utf8')).toContain("<div className={`fw-om-il${price ? '' : ' is-np'}`}>")
+    // F-OM-203 (B-OM-023): without the price grain no amount column; the Payment words only (has-pay) once the settlement names them.
+    expect(readFileSync(new URL('./money/view/InvoicesSection.tsx', import.meta.url), 'utf8')).toContain("<div className={`fw-om-il${price ? '' : ` is-np${words ? ' has-pay' : ''}`}`}>")
     expect(totalsOf({ order: value, settlement: settlement() as never, can: canOf('sales'), today: '2026-11-20' }).tiles).toBeNull()
     expect(readFileSync(new URL('./money/head.ts', import.meta.url), 'utf8')).toContain("...(price ? [] : [word('moneyTab.head.wallPrice')])")
     for (const locale of LOCALES) {

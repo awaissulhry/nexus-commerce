@@ -38,7 +38,8 @@ export const noticeHeldPath = (code: NoticeHeld): string => `refusal/${code}`
 
 export interface NoticeFacts {
   readonly status: string
-  readonly parcels: readonly { readonly carrierParcelId: string | null; readonly trackingNumber: string | null }[]
+  /** B-OS-022 (order shipments 1/1): `manualTrackingNumber` — the number typed by hand for a parcel no label tracks. */
+  readonly parcels: readonly { readonly carrierParcelId: string | null; readonly trackingNumber: string | null; readonly manualTrackingNumber?: string | null }[]
   /** B-W2b-390: a carrier booked by hand has its tracking number typed on the shipment. */
   readonly manualTrackingNumber: string | null
   readonly recipients: number
@@ -54,7 +55,8 @@ export function noticeHeld(facts: NoticeFacts): NoticeHeld | null {
   if (facts.status === 'CANCELLED') return 'CANCELLED'
   if (facts.status !== 'SHIPPED' && facts.status !== 'DELIVERED' && facts.status !== 'RETURNED') return 'NOT_LEFT'
   if (hasTestLabel(facts.parcels) || (facts.manualTrackingNumber ?? '').startsWith('TEST-')) return 'TEST_LABELS'
-  if (!facts.parcels.some((parcel) => parcel.trackingNumber !== null) && !facts.manualTrackingNumber) return 'NO_TRACKING'
+  // B-OS-022: a parcel's number typed by hand is something to follow too.
+  if (!facts.parcels.some((parcel) => parcel.trackingNumber !== null || Boolean(parcel.manualTrackingNumber)) && !facts.manualTrackingNumber) return 'NO_TRACKING'
   if (facts.automatic && !facts.switchOn) return 'SWITCH_OFF'
   if (facts.automatic && facts.sentBefore) return 'SENT'
   if (facts.recipients === 0) return 'NO_RECIPIENT'

@@ -147,7 +147,8 @@ describe('F-OO-209: Order facts drawn', () => {
   })
 
   it('F-OM-204 (L7): with the money plan right the terms row says "Change on Money ›" — Money › Payments, the dock\'s scope kept', () => {
-    const value = withFacts('IN_PRODUCTION')
+    // om-fx1 #5: the order of the Sales case above (with its Incoterm), so the two Fixed facts are language · tax mode and the Incoterm.
+    const value = withFacts('IN_PRODUCTION', { incoterm: 'EXW', incotermPlace: 'Prato', shipComplete: false })
     const base = modelOf('sales', value)
     const html = draw(value, { ...base, can: { ...base.can, moneyPlan: true } } as typeof base, 'en')
     expect(html).toMatch(/href="[^"]*\?tab=money#payments"[^>]*>Change on Money ›<\/a>/)

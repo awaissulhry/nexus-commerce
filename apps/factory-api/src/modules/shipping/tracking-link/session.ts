@@ -105,7 +105,8 @@ export async function trackingPage(request: FastifyRequest) {
     // of the customer's other orders on it as a count only ("and N pieces of other orders"), never their numbers.
     const otherPieces = (await db.shipmentLine.findMany({ where: { shipmentId: shipment.id, salesOrderLine: { orderId: { not: shipment.salesOrderId } } }, select: { quantity: true } })).reduce((sum, line) => sum + line.quantity, 0)
     const site = await db.site.findUnique({ where: { id: shipment.siteId }, select: { timezone: true } })
-    const parcels = await db.parcel.findMany({ where: { shipmentId: shipment.id }, select: { id: true, seq: true, trackingNumber: true, trackingUrl: true, carrierParcelId: true }, orderBy: { seq: 'asc' } })
+    // B-OS-022: + each parcel's number typed by hand (named; the tenant's system for the link, never the floor).
+    const parcels = await db.parcel.findMany({ where: { shipmentId: shipment.id }, select: { id: true, seq: true, trackingNumber: true, trackingUrl: true, carrierParcelId: true, manualTrackingNumber: true, manualTrackingUrl: true }, orderBy: { seq: 'asc' } })
     const events = await db.trackingEvent.findMany({ where: { shipmentId: shipment.id }, select: { id: true, status: true, location: true, occurredAt: true, parcelId: true }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }], take: 200 })
     const papers = papersShown(via) ? await papersOf(db, shipment) : []
     // ── B-OP-031 (order page plan N5): the number typed for a carrier booked by hand ──
@@ -141,7 +142,12 @@ export async function trackingPage(request: FastifyRequest) {
     problem: tracker.problem,
     steps: tracker.steps.map((step) => ({ code: step.code, state: step.state, at: iso(step.at) })),
     // B-W2b-398: a TEST label's number (test mode, B-W2b-390) is never shown to a customer.
-    parcels: parcels.map((parcel) => ({ seq: parcel.seq, trackingNumber: hasTestLabel([parcel]) ? null : parcel.trackingNumber, carrierPage: hasTestLabel([parcel]) ? null : trackingPageOf(parcel.trackingUrl), status: latestOf(parcel.id) })),
+    // B-OS-022: a parcel no label tracks shows the number typed for it (and its typed link), no carrier feeding it.
+    parcels: parcels.map((parcel) => {
+      if (hasTestLabel([parcel])) return { seq: parcel.seq, trackingNumber: null, carrierPage: null, status: latestOf(parcel.id) }
+      const typed = parcel.trackingNumber === null && parcel.carrierParcelId === null ? parcel.manualTrackingNumber : null
+      return { seq: parcel.seq, trackingNumber: parcel.trackingNumber ?? typed, carrierPage: typed !== null ? trackingPageOf(parcel.manualTrackingUrl) : trackingPageOf(parcel.trackingUrl), status: latestOf(parcel.id) }
+    }),
     events: events.map((event) => ({ id: event.id, status: event.status, place: event.location?.trim() || null, occurredAt: toUtcIso(event.occurredAt), parcelSeq: event.parcelId ? (seqOf.get(event.parcelId) ?? null) : null })),
     delivery: deliveryPlaceOf(shipment.shipTo),
     papers: { shown: papersShown(via), files: page.papers },
