@@ -52,7 +52,8 @@ const T = seedUuid(NS, 'tenant')
 const companyA = seedUuid(NS, 'company:A')
 
 // B-SA-070: + noWork, a Sales reader without workorders.view (the session alone: no assignment needed for a read).
-const PEOPLE = { owner: newId(), planner: newId(), limited: newId(), noWork: newId() } as const
+// B-CW-022: + sales, the real Sales template over every customer (the session alone: the money wall of the new fields).
+const PEOPLE = { owner: newId(), planner: newId(), limited: newId(), noWork: newId(), sales: newId() } as const
 type Person = keyof typeof PEOPLE
 const SESSIONS: Partial<Record<Person, SessionContext>> = {}
 function grantOf(role: string, parties: 'all' | string[]): Grant {
@@ -642,6 +643,80 @@ describe('B-CW-010…015 the row: the urgency state, a new yes, an extra deposit
     expect(row.progress.ordered).toBe(goods)
     // The order read (the order page's source) says the same pieces ordered.
     expect((await ok('owner', 'GET', `/sales/orders/${order2}`)).order.progress.ordered).toBe(goods)
+  })
+
+  // ── B-CW-022 (customer Work tab plan §2.8): the file says what the row says ──
+  it('B-CW-022 the file writes the urgency state with its place and the extra deposit with its due day', async () => {
+    const file = await filed('owner', 'rows=all', [
+      { key: 'number', label: 'Number' },
+      { key: 'customerUrgency', label: 'Customer urgency' },
+      { key: 'deposit', label: 'Deposit' },
+    ])
+    const cell = (number: string, label: string): string => file.rows.find((row) => row.Number === number)![label]!
+    expect(cell('T-CW-A-U2', 'Customer urgency')).toBe('Urgent (customer) 2')
+    expect(cell('T-CW-A-ASK', 'Customer urgency')).toBe('Urgent – asked')
+    expect(cell('T-CW-A-BACK', 'Customer urgency')).toBe('Set to Regular by us')
+    expect(cell('T-CW-A-LOCK', 'Customer urgency')).toBe('Set to Regular by us')
+    expect(cell('T-CW-A-REG', 'Customer urgency')).toBe('Regular')
+    // None counts: no kept row, or the customer's switch off — an empty cell, never a made-up Regular.
+    expect(cell('T-CW-A-XDEP', 'Customer urgency')).toBe('')
+    expect(cell('T059-B-01', 'Customer urgency')).toBe('')
+    expect(cell('T-CW-A-XDEP', 'Deposit')).toBe(`Not needed · an extra deposit is open, due ${dayPlus(9)}`)
+    expect(cell('T-CW-A-DEP', 'Deposit')).toBe('Open')
+    expect(cell('T-CW-A-U2', 'Deposit')).toBe('Not asked')
+  })
+
+  // ── the walls of the new fields (13-backend §7) ──
+  it("brand wall: a person limited to customer B reads none of customer A's urgency state, ready now or asked-since; its own state is its own", async () => {
+    const mine = await rows('limited', 'rows=all&production=true&progress=true')
+    expect(mine.map((row) => row.partyId)).toEqual(mine.map(() => partyB))
+    expect(mine.map((row) => row.number)).toContain('T059-B-01')
+    const text = JSON.stringify(mine)
+    for (const hidden of [made.u2, made.ask, made.lock, made.xdep, ask, older.toISOString(), 'T-CW-A-']) expect(text, hidden).not.toContain(hidden)
+    // Naming customer A, its orders by id, or its marks: no row and no count.
+    expect(await rows('limited', `rows=all&production=true&partyId=${partyA}`)).toEqual([])
+    expect(await rows('limited', `rows=all&production=true&ids=${made.u2},${made.ask}`)).toEqual([])
+    expect(await rows('limited', `customerUrgency=URGENT&partyId=${partyA}`)).toEqual([])
+    expect(await rows('limited', `phase=NOT_SENT&partyId=${partyA}`)).toEqual([])
+    const board = await ok('limited', 'GET', `/sales/orders/board?partyId=${partyA}`)
+    expect((board.byPhase as Json[]).map((entry) => entry.count)).toEqual((board.byPhase as Json[]).map(() => 0))
+    expect(board.notSent).toEqual({ waitsForYes: 0, waitsForDeposit: 0 })
+    // Its own order: the customer's switch is off, so no state; nothing released, so nothing ready.
+    const own = mine.find((row) => row.number === 'T059-B-01')!
+    expect(own.customerUrgencyState).toBeNull()
+    expect(own.production.readyNow).toBe(0)
+    expect(own.production.openIssuesSince).toBeNull()
+    // With customer B's switch on, its person reads B's own place: customer A's Urgent orders never count into it.
+    await urgencySwitch(partyB, true)
+    try {
+      expect((await rowOf('limited', 'T059-B-01')).customerUrgencyState).toEqual({ state: 'URGENT', urgentRank: 1, locked: false, requestId: null })
+    } finally {
+      await urgencySwitch(partyB, false)
+    }
+  })
+
+  it('money wall: the real Sales template reads every new field, and none of them is an amount', async () => {
+    SESSIONS.sales ??= { audience: 'office', tenantId: T, actorId: PEOPLE.sales, companyId: companyA, grants: [grantOf('sales', 'all')] }
+    const mine = await rows('sales', 'rows=all&production=true&progress=true')
+    const row = (number: string): Json => mine.find((entry) => entry.number === number)!
+    expect(row('T-CW-A-U2').customerUrgencyState).toEqual({ state: 'URGENT', urgentRank: 2, locked: false, requestId: null })
+    expect(row('T-CW-A-ASK').customerUrgencyState).toMatchObject({ state: 'ASKED', requestId: ask })
+    expect(row('T-CW-A-ASK').production).toMatchObject({ openIssues: 2, openIssuesSince: older.toISOString(), readyNow: 0 })
+    expect(row('T-CW-A-YES').reaccept).toBe(true)
+    expect(row('T-CW-A-XDEP').deposit).toEqual({ state: 'NOT_NEEDED', dueDate: dayPlus(9), extraOpenDue: dayPlus(9) })
+    expect(row('SEED-SO-0002').progress.ordered).toEqual(expect.any(Number))
+    expect(row('SEED-SO-0002').production.readyNow).toEqual(expect.any(Number))
+    // Sales holds no price grain: the money of a row is absent, and the new fields carry words, days, counts and ids only.
+    for (const entry of mine) for (const money of ['netAmount', 'grossAmount', 'paid', 'balance']) expect(entry, `${entry.number} ${money}`).not.toHaveProperty(money)
+    for (const entry of mine) {
+      expect(Object.keys(entry.deposit).sort(), entry.number).toEqual(['dueDate', 'extraOpenDue', 'state'])
+      if (entry.customerUrgencyState !== null) expect(Object.keys(entry.customerUrgencyState).sort(), entry.number).toEqual(['locked', 'requestId', 'state', 'urgentRank'])
+      if (entry.progress) expect(Object.keys(entry.progress).sort(), entry.number).toEqual(['cut', 'finished', 'inWork', 'ordered', 'sewn'])
+    }
+    // The big picture is counts only: never a value per phase.
+    const board = await ok('sales', 'GET', '/sales/orders/board')
+    for (const entry of board.byPhase as Json[]) expect(Object.keys(entry).sort()).toEqual(['count', 'phase'])
+    expect(Object.keys(board.notSent).sort()).toEqual(['waitsForDeposit', 'waitsForYes'])
   })
 })
 // ── end B-CW-010 / B-CW-011 / B-CW-012 / B-CW-014 / B-CW-015 ──
