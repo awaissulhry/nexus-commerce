@@ -6,7 +6,7 @@ import { CheckCircle2 } from 'lucide-react'
 import { Banner, Field, KeyValue, SummaryTable } from '@nexus/ui/components'
 import { Button, Checkbox, Pill, Select, Spinner, Tag } from '@nexus/ui/primitives'
 import { ConfirmPhraseField, Textarea } from '../../../../../lib/i18n/ds-parts'
-import { formatDate } from '../../../../../lib/i18n/format'
+import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
@@ -437,7 +437,7 @@ export function CompareDialog({ order, amendmentId, model, actions }: { order: O
             dense
             labelCase="sentence"
             items={[
-              { label: t('changes.madeBy'), value: t('changes.byAt', { name: amendment.createdBy ?? t('changes.someone'), date: formatDate(amendment.createdAt, { locale }) }) },
+              { label: t('changes.madeBy'), value: t('changes.byAt', { name: amendment.createdBy ?? t('changes.someone'), date: formatDateTime(amendment.createdAt, { locale }) /* walk 13: with its time */ }) },
               { label: t('changes.reason'), value: reason ? t(reason.key) : amendment.reason.trim() || t('changesTab.history.noWhy') },
               ...(model.can.price && moved ? [{ label: t('changes.money'), value: `${money(moved.before, order.currency, locale)} → ${money(moved.after, order.currency, locale)}` }] : []),
               { label: t('changesTab.compare.answer'), value: answer },

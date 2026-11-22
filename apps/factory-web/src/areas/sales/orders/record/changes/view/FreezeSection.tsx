@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Button, Tag } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../../lib/i18n/format'
@@ -36,6 +37,9 @@ function Freeze({ order, model, actions }: { order: Order; model: OrderRecordMod
   const d = useT(DEPTH)
   const locale = useLocale()
   const search = useSearchParams()?.toString() ?? ''
+  // fx6 (walk 8, PICK 4): at S the parts fold unless something is locked; this opens them.
+  const [partsOpen, setPartsOpen] = useState(false)
+  const lowerFirst = (text: string) => text.charAt(0).toLocaleLowerCase(locale) + text.slice(1) // walk 13: "From Cutting: needs…"
   const depth = model.depth
   const changes = depth?.changes ?? null
   const freezePart = depth?.freeze ?? null
@@ -99,11 +103,14 @@ function Freeze({ order, model, actions }: { order: Order; model: OrderRecordMod
       </Section>
     )
   }
-  // An order that no longer changes is the head's one line.
+  // An order that no longer changes: a cancelled or closed one is the head's one line; goods that left keep what left and the
+  // customer's own ask (fx6, walk 9; PICK 6).
   if (isFinalVerdict(verdict)) {
+    const left = verdict.kind === 'goodsLeft' ? order.chain.shipments.filter((shipment) => shipment.shippedAt !== null) : []
     return (
       <Section id="freeze" title={title} answer={answer} info={info}>
-        {null}
+        {left.length > 0 ? <p className="fw-pt-quiet fw-oc-foot">{t('changesTab.freeze.shipped', { shipments: left.map((shipment) => `${shipment.number} · ${formatDate(shipment.shippedAt!, { locale })}`).join(', ') })}</p> : null}
+        {verdict.kind === 'goodsLeft' ? <p className="fw-pt-quiet">{t('changesTab.freeze.portal')}</p> : null}
       </Section>
     )
   }
@@ -113,15 +120,30 @@ function Freeze({ order, model, actions }: { order: Order; model: OrderRecordMod
   // "On the floor: Sewing started · since 19/11/2026" (the stage the order reached and its day only; no worker, no station).
   const reached = freeze?.order.stage ?? null
   const floor = !freeze ? null : !reached ? t('changesTab.freeze.floorNothing') : freeze.order.on ? t('changesTab.freeze.floor', { stage: d(`stage.${reached}`), date: formatDate(`${freeze.order.on}T12:00:00Z`, { locale }) }) : t('changesTab.freeze.floorStage', { stage: d(`stage.${reached}`) })
+  const locked = verdict.kind === 'locked'
+  const allOpen = parts.length > 0 && parts.every((part) => part.word === 'canChange')
   return (
     <Section id="freeze" title={title} answer={answer} info={info} buttons={buttons}>
-      <p className="fw-pt-quiet fw-oc-foot">{[floor, t('changesTab.freeze.portal')].filter(Boolean).join(' · ')}</p>
-      {/* A failed changes read never claims "not blocked": it says it could not read whether our approval waits. */}
-      {changes?.problem ? <p className="fw-pt-quiet">{t('changesTab.freeze.changesUnread')}</p> : null}
-      {freeze && freeze.rules === 0 ? <p className="fw-pt-quiet">{t('changesTab.freeze.noRules')}</p> : null}
+      {/* fx6 (walk 11): where the floor is and the customer's own ask | each part — side by side from 1000 (changes.css). */}
+      <div className="fw-oc-fz">
+        <div className="fw-oc-fz-a">
+          <p className="fw-pt-quiet fw-oc-foot">{[floor, t('changesTab.freeze.portal')].filter(Boolean).join(' · ')}</p>
+          {/* A failed changes read never claims "not blocked": it says it could not read whether our approval waits. */}
+          {changes?.problem ? <p className="fw-pt-quiet">{t('changesTab.freeze.changesUnread')}</p> : null}
+          {freeze && freeze.rules === 0 ? <p className="fw-pt-quiet">{t('changesTab.freeze.noRules')}</p> : null}
+        </div>
       {parts.length > 0 && (
-        <div className="fw-pt-blk">
-          <h3 className="fw-pt-h3">{t('changesTab.freeze.parts')}</h3>
+        <div className="fw-pt-blk fw-oc-fz-b" data-open={partsOpen || locked ? 'true' : 'false'}>
+          <div className="fw-oc-fz-h">
+            <h3 className="fw-pt-h3">{allOpen ? t('changesTab.freeze.partsAll', { count: parts.length }) : t('changesTab.freeze.parts')}</h3>
+            {!locked && (
+              <span className="fw-oc-fz-toggle">
+                <Button size="sm" variant="link" inline aria-expanded={partsOpen} onClick={() => setPartsOpen((open) => !open)}>
+                  {t(partsOpen ? 'changesTab.freeze.partsHide' : 'changesTab.freeze.partsShow')}
+                </Button>
+              </span>
+            )}
+          </div>
           <table className="fw-pt-table">
             <thead>
               <tr>
@@ -142,13 +164,14 @@ function Freeze({ order, model, actions }: { order: Order; model: OrderRecordMod
                     {/* L3: the office's own address change is not checked against the rules yet — the customer's ask is. */}
                     {part.field === 'SHIP_TO' && <span className="fw-pt-sub">{t('changesTab.freeze.shipToChecked')}</span>}
                   </td>
-                  {withNext && <td data-label={t('changesTab.freeze.col.next')}>{part.next ? t('changesTab.freeze.next', { stage: d(`stage.${part.next.stage}`), word: t(`changesTab.freeze.word.${part.next.word}`) }) : null}</td>}
+                  {withNext && <td data-label={t('changesTab.freeze.col.next')}>{part.next ? t('changesTab.freeze.next', { stage: d(`stage.${part.next.stage}`), word: lowerFirst(t(`changesTab.freeze.word.${part.next.word}`)) }) : null}</td>}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+      </div>
     </Section>
   )
 }

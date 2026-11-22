@@ -1,8 +1,9 @@
+import { WAITING_REQUEST_STATUSES } from '@nexus/factory-domain/sales/change-requests/rules' // fx6 (walk 10)
 import type { BrandRequest } from '../../../../home/approvals/requests/api'
 import type { WorkOrderChange } from '../../../../home/approvals/work-order-changes/api'
 import type { Amendment } from '../../api'
 import type { Change, Confirmation } from '../../depth/api'
-import { changeCounts, putBackOffered } from '../../depth/model'
+import { putBackOffered } from '../../depth/model'
 import { toldOfHistory, type ToldChange } from '../told'
 
 /**
@@ -34,8 +35,10 @@ export interface RevisionFacts {
   readonly by: string | null
   readonly reason: string
   readonly reasonCode: 'AUTOMATIC' | 'REQUEST' | 'PUT_BACK' | null
-  readonly counts: { readonly changed: number; readonly added: number; readonly removed: number; readonly before: number; readonly after: number }
-  readonly lines: number
+  /** fx6 (walk 6): what changed, line by line (the diff's own lines) and the order's own fields (the amendments read's; none from
+   * the changes read, which names lines only). */
+  readonly lines: Change['diff']['lines'] | Amendment['diff']['lines']
+  readonly header: Amendment['diff']['header']
   /** The changes read's change (null: drawn from the amendments read — no yes, no answer, no Restore). */
   readonly change: Change | null
 }
@@ -60,11 +63,11 @@ export interface HistoryInput {
 }
 
 function factsOfChange(change: Change): RevisionFacts {
-  return { id: change.id, revision: change.revision, at: change.createdAt, by: change.createdBy, reason: change.reason, reasonCode: change.reasonCode ?? null, counts: changeCounts(change), lines: change.diff.lines.length, change }
+  return { id: change.id, revision: change.revision, at: change.createdAt, by: change.createdBy, reason: change.reason, reasonCode: change.reasonCode ?? null, lines: change.diff.lines, header: [], change }
 }
 
 function factsOfAmendment(amendment: Amendment): RevisionFacts {
-  return { id: amendment.id, revision: amendment.revision, at: amendment.createdAt, by: amendment.createdBy, reason: amendment.reason, reasonCode: null, counts: changeCounts(amendment), lines: amendment.diff.lines.length, change: null }
+  return { id: amendment.id, revision: amendment.revision, at: amendment.createdAt, by: amendment.createdBy, reason: amendment.reason, reasonCode: null, lines: amendment.diff.lines, header: amendment.diff.header, change: null }
 }
 
 /** The told line of a change by the speaker's own ids; a line written before the speaker was kept: the old match (null: none). */
@@ -91,7 +94,9 @@ export function changeRowsOf(input: HistoryInput): ChangeRow[] {
   const carried = new Set<string>()
   const rows: ChangeRow[] = []
   // The customer's requests, each with the revision it became (B-OC-010 `changeRequestId`) and the work-order changes it proposed.
+  // fx6 (walk 10): a request that still waits (open, or our counter-offer out) changed nothing yet — it is Waiting's row, not one here.
   for (const request of input.requests) {
+    if ((WAITING_REQUEST_STATUSES as readonly string[]).includes(request.status)) continue
     const revision = revisions.find((entry) => entry.change?.changeRequestId === request.id) ?? null
     const workOrderChanges = decided.filter((change) => change.requestId === request.id || (revision !== null && change.amendmentId === revision.id))
     for (const change of workOrderChanges) carried.add(change.id)

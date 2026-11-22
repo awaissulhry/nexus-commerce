@@ -1478,14 +1478,6 @@
     },
     "someone": "Someone",
     "headerOnly": "Order details only",
-    "count": {
-      "CHANGED_one": "{count} line changed",
-      "CHANGED_other": "{count} lines changed",
-      "ADDED_one": "{count} line added",
-      "ADDED_other": "{count} lines added",
-      "REMOVED_one": "{count} line removed",
-      "REMOVED_other": "{count} lines removed"
-    },
     "piecesMoved": "Pieces {before} → {after}",
     "reaccept": {
       "NEEDED": "Must accept again",
@@ -1509,7 +1501,7 @@
     },
     "still": {
       "since": "since {when}",
-      "none": "Nothing left to do for the accepted changes.",
+      "none": "Nothing still to do for the accepted changes.",
       "changeOf": "{kind} accepted · {when}",
       "office": "Office change · {when}",
       "leftOut_one": "{count} work order not shown: it is outside what you can open.",
@@ -2042,7 +2034,6 @@
     "asks": "{customer} asks: {what}",
     "answer": "Answer…",
     "answerNone": "Answered from the order's page.",
-    "askCell": "line {line} · {size} {from} → {to}",
     "askLine": "line {line}",
     "askWhole": "the whole order",
     "moreRequests_one": "{count} more request",
@@ -2210,7 +2201,6 @@
     },
     "changeApplied": "The change of {number} is applied: the floor was told",
     "changeDeclined": "The change of {number} is left as is",
-    "done": "Done",
     "taskDone": "Done: the task is ticked off",
     "repromiseHeld": "Sales answers it, never the planner who proposed it",
     "liftPause": "Lift the customer's pause…",
@@ -2996,7 +2986,9 @@
     "still": {
       "revision": "Revision {revision} · {when}",
       "newDates": "See the new dates ›",
-      "seeYes": "See the yes ›"
+      "seeYes": "See the yes ›",
+      "waitsPlanner": "Waits for a planner · since {when}",
+      "markDone": "Mark done"
     },
     "freeze": {
       "title": "Can it still change?",
@@ -3041,7 +3033,11 @@
       },
       "customerRule": "Rule of {customer}",
       "shipToChecked": "Checked when the customer asks",
-      "next": "From {stage}: {word}"
+      "next": "From {stage}: {word}",
+      "partsAll": "Each part · all {count} can change",
+      "partsShow": "Show each part",
+      "partsHide": "Hide the parts",
+      "shipped": "Shipped: {shipments}"
     },
     "agreement": {
       "title": "Customer's agreement",
@@ -3064,8 +3060,8 @@
         "waiting": "Revision {revision} waits for their yes since {date}: it is listed in Waiting on {customer}.",
         "notAsked": "Revision {revision} needs their yes, but it was never asked: ask {customer} now.",
         "expired": "Revision {revision} needs their yes, and the ask expired: ask {customer} again.",
-        "sendNew": "Send a new confirmation: the order changed after v{version} was sent.",
-        "notSent": "The confirmation is not sent yet.",
+        "sendNew": "The order changed after v{version} was sent.",
+        "notSent": "Make it and send it in Our confirmation below.",
         "agreed": "Agreed and confirmed: v{version} sent {date}."
       },
       "toWaiting": "Waiting ↑",
@@ -3106,7 +3102,10 @@
       "more": "More for the confirmation",
       "makeOnly": "Make only (to print)",
       "openToPrint": "Open to print",
-      "noPrice": "The confirmation shows prices: someone who sees prices sends it."
+      "noPrice": "The confirmation shows prices: someone who sees prices sends it.",
+      "changedAfter": "the order changed after it",
+      "sendsListed": "Every send is listed in What changed › Confirmations.",
+      "signedPriced": "The signed PDF shows prices: someone who sees prices opens it."
     },
     "ask": {
       "title": "Ask {customer} to re-confirm revision {revision}?",
@@ -3206,7 +3205,14 @@
         "paused": "Paused",
         "pauseLifted": "Pause lifted",
         "styleReleased": "Released"
-      }
+      },
+      "lineOf": "Line {line}",
+      "lineAdded": "Line {line} added",
+      "lineRemoved": "Line {line} removed",
+      "moreLines_one": "+{count} more line",
+      "moreLines_other": "+{count} more lines",
+      "headerMove": "{field}: {from} → {to}",
+      "answeredBy": "Answered by {name} · {when}"
     },
     "compare": {
       "titleAny": "Before → after · {number}",
@@ -3231,6 +3237,10 @@
       "bothEmail": "Saved · {changed} changed · waiting for production: {waits} — decide on this page · asked {customer} by e-mail.",
       "bothPortal": "Saved · {changed} changed · waiting for production: {waits} — decide on this page · asked in {customer}'s portal: no e-mail address on file.",
       "askedAlready": "{customer} is asked already: the ask waits under Waiting on {customer}."
+    },
+    "request": {
+      "size": "{size}: {from} → {to}",
+      "date": "Ready by {date}"
     }
   }
 }

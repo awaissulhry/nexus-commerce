@@ -50,7 +50,8 @@
 /* ── Customer's agreement (F-OC-203): their yes | our confirmation — stacked, side by side when the section has the room (≥ 900) ── */
 .fw-oc-ag { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-16) var(--nds-space-22); min-width: 0; }
 .fw-oc-ag > .fw-oc-ag-half { border-top: 0; padding-top: 0; }
-.fw-oc-ag-row { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--nds-space-8) var(--nds-space-12); min-width: 0; }
+/* fx6 (walk 12): the doors beside their words, never stranded at the far right. */
+.fw-oc-ag-row { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: flex-start; gap: var(--nds-space-8) var(--nds-space-12); min-width: 0; }
 .fw-oc-ag-txt { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; font-size: var(--nds-font-size-sm); overflow-wrap: anywhere; }
 .fw-oc-ag-doors { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); }
 @container sec (min-width: 900px) {
@@ -75,7 +76,30 @@
 @container pt (max-width: 719px) {
   .fw-oc-hrow-doors > .nds-btn { min-height: 44px; }
 }
+/* fx6 (walk 11): the story | who and when, the doors under them; from 1400 the doors in their own column (the picture's 3). */
+.fw-oc-hrow { grid-template-areas: "a" "b" "d"; }
+.fw-oc-hrow-a { grid-area: a; }
+.fw-oc-hrow-b { grid-area: b; }
+.fw-oc-hrow-doors { grid-area: d; }
 @container sec (min-width: 1000px) {
-  .fw-oc-hrow { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
-  .fw-oc-hrow-doors { justify-content: flex-end; }
+  .fw-oc-hrow { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); grid-template-areas: "a b" "a d"; align-items: start; }
+}
+@container sec (min-width: 1400px) {
+  .fw-oc-hrow { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 260px; grid-template-areas: "a b d"; }
+  .fw-oc-hrow-doors { margin-top: 0; }
+}
+.fw-oc-chips { width: fit-content; max-width: 100%; }
+
+/* fx6 (walk 8, 11): Can it still change? — the floor and the customer's ask | each part, side by side from 1000; at S the parts
+   fold unless something is locked (PICK 4). */
+.fw-oc-fz { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-12) var(--nds-space-22); min-width: 0; }
+.fw-oc-fz-a { display: flex; flex-direction: column; gap: var(--nds-space-6); min-width: 0; }
+.fw-oc-fz-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--nds-space-4) var(--nds-space-12); }
+.fw-oc-fz-toggle { display: none; }
+@container pt (max-width: 719px) {
+  .fw-oc-fz-toggle { display: inline-flex; }
+  .fw-oc-fz-b[data-open="false"] > table { display: none; }
+}
+@container sec (min-width: 1000px) {
+  .fw-oc-fz { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: start; }
 }

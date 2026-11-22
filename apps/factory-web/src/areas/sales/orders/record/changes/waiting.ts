@@ -1,7 +1,9 @@
 import type { Order } from '../../api'
 import type { WaitingCard, WaitingRow, WaitingState } from '../overview/model'
 // ---- F-OC-102: whose turn a row is and who does it ----
-import { waitsForMe } from '../../../../home/approvals/requests/model'
+import { said, waitsForMe } from '../../../../home/approvals/requests/model'
+import type { WorkOrderChange } from '../../../../home/approvals/work-order-changes/api'
+import { decisionSentenceOf } from '../production/work' // fx6 (walk 7): the ONE sentence of a work-order change
 import { yesDoorOf } from '../../depth/model'
 import { rowAnchor } from '../dock/discuss'
 // ---- end F-OC-102
@@ -143,3 +145,15 @@ export function stillItemsOf(rows: readonly StillRowOf[]): StillItem[] {
   return rows.flatMap((row, index) => (folded(row) ? [] : [{ row, index, workshops: row.kind === 'WORK_ORDER_CHANGE' && row.ref ? rows.filter((other) => folded(other) && other.waitsOn === row.ref!.id) : [] }]))
 }
 // ---- end F-OC-104
+
+// ---- fx6 (walk 7; 10-design §3): a Still to do row in ONE sentence, Changes' and Overview's card alike ----------------------------
+/**
+ * A work-order change in the shared builder's words ("Make 1 fewer on SEED-WO-0001: SEED-JKT-02 · Red — the customer changed line
+ * 20"), the same as Production's strip; any other row (or a change this page did not read) in the read's own words.
+ */
+export function stillWordsOf(row: Pick<StillRowOf, 'kind' | 'ref' | 'words'>, changes: readonly WorkOrderChange[] | null | undefined, lines: Order['lines'], t: (key: string, params?: Record<string, string | number>) => string, locale: string): string {
+  const change = row.kind === 'WORK_ORDER_CHANGE' && row.ref ? ((changes ?? []).find((entry) => entry.id === row.ref!.id) ?? null) : null
+  const sentence = change ? decisionSentenceOf(change, lines) : null
+  return sentence ? [t(sentence.verb.key, sentence.verb.params), sentence.why ? t(sentence.why.key, sentence.why.params) : null].filter(Boolean).join(' — ') : said(row.words, locale)
+}
+// ---- end fx6

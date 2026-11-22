@@ -142,3 +142,24 @@ describe('F-OC T.1: the Changes tab cases the seed lacks', () => {
     expect(stack).toContain('/* F-OC T.2 */ ...CHANGES_TAB_HANDLERS')
   })
 })
+
+// fx6 (order changes walk): What changed says what changed; a request that still waits is Waiting's; Discuss needs threads.post.
+describe('fx6: the walk\'s fixes in What changed', () => {
+  it('walk 10: a request that still waits (open, or our counter-offer out) changed nothing yet — no row here', () => {
+    expect(changeRowsOf(input({ requests: [request('r1', { status: 'OPEN', answeredAt: null }), request('r2', { status: 'COUNTERED' })] }))).toEqual([])
+  })
+
+  it('walk 6: each line in words — style, colour, size from → to; the PO and the requested date; "+N more lines" after three', async () => {
+    const { whatOf } = await import('./view/HistorySection')
+    const t = (key: string, params: Record<string, string | number> = {}) => `${key}(${Object.values(params).join('|')})`
+    const order = { lines: [{ id: 'l1', style: { code: 'SEED-JKT-05', name: 'x' }, colourway: { code: 'BLK', name: 'Black' } }] } as never
+    const line = (seq: number, over: Record<string, unknown> = {}) => ({ change: 'CHANGED', lineId: 'l1', seq, sizes: [{ size: '52', before: 2, after: 3 }], piecesBefore: 6, piecesAfter: 7, ...over })
+    expect(whatOf([line(10)], [], order, t, String)).toEqual(['changesTab.history.lineOf(10) · SEED-JKT-05 · Black · changesTab.request.size(52|2|3)'])
+    expect(whatOf([line(10), line(20), line(30), line(40)], [{ field: 'customerRef', before: 'PO-1', after: 'PO-2' }], order, t, String).slice(3)).toEqual(['changesTab.history.moreLines(1)', 'changesTab.history.headerMove(amend.field.customerRef()|PO-1|PO-2)'])
+    const view = readFileSync(new URL('./view/HistorySection.tsx', import.meta.url), 'utf8')
+    expect(view).not.toContain('changes.count.')
+    // walk 1: the row ⋯ offers Discuss only to who may write in the thread (threads.post), as Production does.
+    expect(view).toContain('discuss={model.people?.mayNote !== false ? discuss : null')
+    expect(readFileSync(new URL('./view/WaitingSection.tsx', import.meta.url), 'utf8')).toContain('discuss={request && model.people?.mayNote !== false')
+  })
+})

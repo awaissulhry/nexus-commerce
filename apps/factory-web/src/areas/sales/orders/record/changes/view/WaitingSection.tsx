@@ -16,12 +16,11 @@ import { NAMESPACE as DEPTH, yesDoorOf } from '../../../depth/model'
 import { YesDoorView } from '../../../depth/view/DepthBand'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { orderWaitingOf, readOf, rowWordsOf } from '../../overview/model'
-import { decisionSentenceOf } from '../../production/work' // F-OC-104: the ONE sentence of a work-order change (Production's strip's)
 import { PartFailed, PartReading, Section } from '../../view/production/Kit' // F-OC-101 (L6): the Production kit, in place
 import { AnswerDoor, RowAge, StillDoorView, WaitingDoorView } from '../../view/RequestsSection' // the rows' doors, shared with Overview
 import { dayTimeOf, WAITING_ALIASES } from '../layout'
 import { askWordsOf, stillGroupsOf, type StillGroup } from '../model'
-import { countsOf, holdsPointerOf, lastRevisionOf, lateDaysOf, mineCountOf, stillItemsOf, waitingAnswerOf, waitingItemOf, type StillItem, type WaitingAnswer, type WaitingItem } from '../waiting'
+import { countsOf, holdsPointerOf, lastRevisionOf, lateDaysOf, mineCountOf, stillItemsOf, stillWordsOf, waitingAnswerOf, waitingItemOf, type StillItem, type WaitingAnswer, type WaitingItem } from '../waiting'
 import { RowMenu } from './RowMenu' // F-OC-302: the ONE row ⋯
 import './changes.css'
 
@@ -78,7 +77,8 @@ function Waiting({ order, model, actions }: { order: Order; model: OrderRecordMo
       <p>{t('changesTab.waiting.info')}</p>
     </>
   )
-  const stamp = asOf ? <span className="fw-pt-asof">{t('changesTab.waiting.asOf', { when: when(asOf) })}</span> : null
+  // walk 13: "As of 10:44" today (the picture's), the day only on another day.
+  const stamp = asOf ? <span className="fw-pt-asof">{t('changesTab.waiting.asOf', { when: dayTimeOf(asOf, asOf, locale).today ? dayTimeOf(asOf, asOf, locale).time : when(asOf) })}</span> : null
   // F-OC-105: the two cards that went into Waiting keep their addresses (the band's "Open", Overview's "N more on Changes ›", the
   // dock's change lines): an element at its top; Still to do's own group carries #still-to-do when it is drawn.
   const aliases = (stillDrawn: boolean) => WAITING_ALIASES.filter((alias) => !(stillDrawn && alias === 'still-to-do')).map((alias) => <span key={alias} id={alias} className="fw-oc-alias" tabIndex={-1} />)
@@ -116,7 +116,7 @@ function Waiting({ order, model, actions }: { order: Order; model: OrderRecordMo
   const onCustomer = waiting.card.onCustomer.map((row) => waitingItemOf(row, model.can))
   const mine = mineCountOf([...onUs, ...onCustomer], waiting.card.still)
   // The groups with nothing in them: one quiet line at the foot (never an empty box), then L4's pointer.
-  const none = [counts.onUs === 0 ? t('changesTab.waiting.noneUs') : null, counts.onCustomer === 0 ? t('changesTab.waiting.noneCustomer', { customer }) : null, counts.still === 0 ? t('changes.still.none') : null].filter(Boolean)
+  const none = [counts.onUs === 0 ? t('changesTab.waiting.noneUs') : null, counts.onCustomer === 0 ? t('changesTab.waiting.noneCustomer', { customer: customer.replace(/\.$/, '') /* walk 13: "S.r.l.." */ }) : null, counts.still === 0 ? t('changes.still.none') : null].filter(Boolean)
   // F-OC-104: the work orders of the order this reader does not reach — counted, never named (a shared work order is "a work order").
   const leftOut = readOf(model.production)?.changes?.stillToDo?.workOrdersLeftOut ?? 0
   const rowOf = (item: WaitingItem) => <WaitingItemRow key={item.row.key} item={item} order={order} model={model} actions={actions} asOf={asOf} when={when} />
@@ -273,7 +273,7 @@ function WaitingItemRow({ item, order, model, actions, asOf, when }: { item: Wai
           <WaitingDoorView door={door} order={order} model={model} actions={actions} here="changes" />
         )}
         {/* F-OC-302: the ONE row ⋯ — Discuss a request (by its reference: the customer reads its own words) · Copy link to this row. */}
-        <RowMenu order={order} prefix={model.prefix} label={t('changesTab.menu.label')} anchor={item.anchor} discuss={request ? { part: t('discuss.request', { kind: w.t(`parts.request.kind.${request.kind}`) }), target: { kind: 'OrderChangeRequest', id: request.id } } : null} />
+        <RowMenu order={order} prefix={model.prefix} label={t('changesTab.menu.label')} anchor={item.anchor} discuss={request && model.people?.mayNote !== false /* fx6 (walk 1): Discuss only with threads.post */ ? { part: t('discuss.request', { kind: w.t(`parts.request.kind.${request.kind}`) }), target: { kind: 'OrderChangeRequest', id: request.id } } : null} />
       </div>
     </div>
   )
@@ -297,13 +297,13 @@ function StillGroupView({ group, order, model, actions, asOf, when }: { group: S
         <span>{head}</span>
       </div>
       {stillItemsOf(group.rows).map((item) => (
-        <StillItemRow key={`${item.row.kind}:${item.row.ref?.id ?? item.index}`} item={item} order={order} model={model} actions={actions} asOf={asOf} />
+        <StillItemRow key={`${item.row.kind}:${item.row.ref?.id ?? item.index}`} item={item} order={order} model={model} actions={actions} asOf={asOf} when={when} />
       ))}
     </>
   )
 }
 
-function StillItemRow({ item, order, model, actions, asOf }: { item: StillItem; order: Order; model: OrderRecordModel; actions?: OrderRecordActions; asOf: string | null }) {
+function StillItemRow({ item, order, model, actions, asOf, when }: { item: StillItem; order: Order; model: OrderRecordModel; actions?: OrderRecordActions; asOf: string | null; when: (at: string) => string }) {
   const t = useT('orders')
   const a = useT(APPROVALS_NS)
   const locale = useLocale()
@@ -312,9 +312,7 @@ function StillItemRow({ item, order, model, actions, asOf }: { item: StillItem; 
   const team = TEAM_WORDS[row.waitingOn as ApplyTeam]
   // A work-order change in ONE sentence — the same builder as Production's strip ("Make 1 fewer on SEED-WO-0411: SEED-JKT-02 · Red —
   // the customer changed line 2"); the read's words when the change itself is not read here.
-  const change = row.kind === 'WORK_ORDER_CHANGE' && row.ref ? ((model.orderChanges?.list?.value ?? []).find((entry) => entry.id === row.ref!.id) ?? null) : null
-  const sentence = change ? decisionSentenceOf(change, order.lines) : null
-  const words = sentence ? [t(sentence.verb.key, sentence.verb.params), sentence.why ? t(sentence.why.key, sentence.why.params) : null].filter(Boolean).join(' — ') : said(row.words, locale)
+  const words = stillWordsOf(row, model.orderChanges?.list?.value, order.lines, t, locale) // fx6 (walk 7): the ONE sentence
   const recordHref = `${model.prefix}/sales/orders/${order.id}`
   const anchor = row.ref ? `still-${row.kind}-${row.ref.id}` : undefined
   return (
@@ -332,7 +330,8 @@ function StillItemRow({ item, order, model, actions, asOf }: { item: StillItem; 
       </div>
       <div className="fw-oc-row-m">
         {row.mayAct && <Tag tone="warning">{a('customerRequest.next.state.yourTurn')}</Tag>}
-        {team && <span>{said(team, locale)}</span>}
+        {/* fx6 (walk 4, L1): a work-order change says who decides and since when — the same words for every reader. */}
+        {row.kind === 'WORK_ORDER_CHANGE' ? <span>{t('changesTab.still.waitsPlanner', { when: when(row.since) })}</span> : team && <span>{said(team, locale)}</span>}
         <RowAge since={row.since} asOf={asOf} />
       </div>
       <div className="fw-oc-row-d">
@@ -347,7 +346,7 @@ function StillItemRow({ item, order, model, actions, asOf }: { item: StillItem; 
             <a href="#confirmation">{t('changesTab.still.seeYes')}</a>
           </Button>
         ) : (
-          <StillDoorView row={row} order={order} model={model} actions={actions} />
+          <StillDoorView row={row} order={order} model={model} actions={actions} heldWords={false} />
         )}
         <RowMenu order={order} prefix={model.prefix} label={t('changesTab.menu.label')} anchor={anchor ?? null} />
       </div>

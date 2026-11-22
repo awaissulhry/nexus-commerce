@@ -500,7 +500,7 @@ describe('F-OP-304: Still to do — "Nothing left to do" only when no step stand
     for (const locale of ['en', 'it'] as const) {
       const html = draw('f-op-304-still-extra', locale)
       const text = textOf(html)
-      expect(text.split(locale === 'en' ? 'Nothing left to do for the accepted changes.' : 'Per le modifiche accettate non resta nulla da fare.').length - 1).toBe(1)
+      expect(text.split(locale === 'en' ? 'Nothing still to do for the accepted changes.' : 'Per le modifiche accettate non resta più nulla da fare.' /* fx6 (walk 13) */).length - 1).toBe(1)
       expect(html).not.toContain('id="fw-oc-g-still"')
       expect(text).not.toContain(locale === 'en' ? 'Made extra' : 'Fatti in più')
     }
@@ -993,8 +993,8 @@ describe('F-OO-204: request rows — the age, the words of §5.2, Open… on our
     expect(counter.door).toMatchObject({ kind: 'open', requestId: RQ_COUNTERED.id, request: { id: RQ_COUNTERED.id } })
     expect(counter.words).toEqual({ kind: 'phrase', phrase: { key: 'waiting.counterOpen' }, requestKind: 'CHANGE' })
     const want = {
-      en: ['Moto Demo S.r.l. asks: Change · line 10 · M 40 → 36', 'Moto Demo S.r.l. agreed to your counter-offer: Change · line 10 · L 30 → 32', 'Our counter-offer: Change · line 20 · L 2 → 3'],
-      it: ['Moto Demo S.r.l. chiede: Modifica · riga 10 · M 40 → 36', 'Moto Demo S.r.l. ha accettato la tua controproposta: Modifica · riga 10 · L 30 → 32', 'La nostra controproposta: Modifica · riga 20 · L 2 → 3'],
+      en: ['Moto Demo S.r.l. asks: Change · line 10 · JKT-DEMO-01 · Nero · M: 40 → 36', 'Moto Demo S.r.l. agreed to your counter-offer: Change · line 10 · JKT-DEMO-01 · Nero · L: 30 → 32', 'Our counter-offer: Change · line 20 · JKT-DEMO-01 · Nero · L: 2 → 3'],
+      it: ['Moto Demo S.r.l. chiede: Modifica · riga 10 · JKT-DEMO-01 · Nero · M: 40 → 36', 'Moto Demo S.r.l. ha accettato la tua controproposta: Modifica · riga 10 · JKT-DEMO-01 · Nero · L: 30 → 32', 'La nostra controproposta: Modifica · riga 20 · JKT-DEMO-01 · Nero · L: 2 → 3'],
     } as const
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
@@ -1018,12 +1018,12 @@ describe('F-OO-204: request rows — the age, the words of §5.2, Open… on our
     const state = stateOf(record)
     const ask = drawRow(record, state.card.onUs[0]!)
     expect(ask).toContain('<li class="fw-so-ov-row fw-so-rq-row">')
-    expect(textOf(ask)).toContain('Moto Demo S.r.l. asks: Change · line 10 · M 40 → 36')
+    expect(textOf(ask)).toContain('Moto Demo S.r.l. asks: Change · line 10 · JKT-DEMO-01 · Nero · M: 40 → 36')
     // (the attribute's spelling is React's: matched without case)
     expect(ask).toMatch(/<time class="fw-so-rq-age" datetime="2026-11-03T09:00:00Z" title="since [^"]+">15 d<\/time>/i)
     expect(ask).toMatch(new RegExp(`<a [^>]*href="[^"]*\\?tab=changes&amp;open=${RQ_ASK.id}"[^>]*>Answer…</a>`))
     const counter = drawRow(record, state.card.onCustomer.find((row) => row.door.kind === 'open')!)
-    expect(textOf(counter)).toContain('Our counter-offer: Change · line 20 · L 2 → 3')
+    expect(textOf(counter)).toContain('Our counter-offer: Change · line 20 · JKT-DEMO-01 · Nero · L: 2 → 3')
     expect(textOf(counter)).toContain('5 d')
     expect(counter).toMatch(new RegExp(`<a [^>]*href="[^"]*\\?tab=changes&amp;open=${RQ_COUNTERED.id}"[^>]*>Open…</a>`))
     for (const locale of ['en', 'it'] as const) {
@@ -1065,7 +1065,7 @@ describe('F-OO-204: request rows — the age, the words of §5.2, Open… on our
       const onCustomerAt = html.indexOf('id="fw-oc-g-customer"')
       expect(onCustomerAt).toBeGreaterThan(-1)
       const onCustomer = textOf(html.slice(onCustomerAt, html.indexOf('id="still-to-do"', onCustomerAt)))
-      expect(onCustomer).toContain(locale === 'en' ? 'Our counter-offer: Change · line 20 · L 2 → 3' : 'La nostra controproposta: Modifica · riga 20 · L 2 → 3')
+      expect(onCustomer).toContain(locale === 'en' ? 'Our counter-offer: Change · line 20 · JKT-DEMO-01 · Nero · L: 2 → 3' : 'La nostra controproposta: Modifica · riga 20 · JKT-DEMO-01 · Nero · L: 2 → 3')
       expect(onCustomer).not.toMatch(/Counter-offer sent|Controproposta inviata/)
       expect(onCustomer).toContain(locale === 'en' ? 'Their turn' : 'Tocca a loro')
       // What we asked: its own question, its due day and its state (the record-approvals' words) — and no door on Changes.
@@ -1110,7 +1110,7 @@ describe('F-OO-204: request rows — the age, the words of §5.2, Open… on our
     expect(section.match(/stillDoorsOf\(/g)).toHaveLength(1)
     // F-OC-104: Changes' Still to do rows are Waiting's own (changes/view/WaitingSection.tsx) and draw the same door.
     const stillRow = read('../changes/view/WaitingSection.tsx')
-    expect(stillRow).toContain('<StillDoorView row={row} order={order} model={model} actions={actions} />')
+    expect(stillRow).toContain('<StillDoorView row={row} order={order} model={model} actions={actions} heldWords={false} />') // fx6 (walk 4): the who column says it
     expect(stillRow).not.toContain("door.kind === 'change'")
     // L1: ONE Decide… for who may decide, words for everyone else — never Apply… / Leave as is… beside each other.
     expect(section).toContain("{t('productionTab.wo.decide')}")
@@ -1143,8 +1143,8 @@ describe('F-OO-205: Requests & changes — Waiting on us · N, Waiting on <custo
     return html.slice(from, next < 0 ? undefined : next)
   }
   const WORDS = {
-    en: ['Requests & changes', 'Changes (12) ›', 'Waiting on us · 3', 'Moto Demo S.r.l. asks: Change · line 10 · M 40 → 36', '15 d', 'Moto Demo S.r.l. agreed to your counter-offer: Change · line 10 · L 30 → 32', 'Moto Demo S.r.l. reported a problem', 'Waiting on Moto Demo S.r.l. · 5', 'Our counter-offer: Change · line 20 · L 2 → 3', 'Their turn', '2 more on Changes ›', 'Still to do · 4', 'WO-00021: make 54 → 0 · Planning', '4 d', '1 more on Changes ›', 'Told about changes: 4 people'],
-    it: ['Richieste e modifiche', 'Modifiche (12) ›', 'Tocca a noi · 3', 'Moto Demo S.r.l. chiede: Modifica · riga 10 · M 40 → 36', '15 g', 'Moto Demo S.r.l. ha accettato la tua controproposta: Modifica · riga 10 · L 30 → 32', 'Moto Demo S.r.l. ha segnalato un problema', 'Tocca a Moto Demo S.r.l. · 5', 'La nostra controproposta: Modifica · riga 20 · L 2 → 3', 'Tocca a loro', 'Altri 2 in Modifiche ›', 'Ancora da fare · 4', 'WO-00021: produci 54 → 0 · Pianificazione', '4 g', '1 altro in Modifiche ›', 'Avvisati delle modifiche: 4 persone'],
+    en: ['Requests & changes', 'Changes (12) ›', 'Waiting on us · 3', 'Moto Demo S.r.l. asks: Change · line 10 · JKT-DEMO-01 · Nero · M: 40 → 36', '15 d', 'Moto Demo S.r.l. agreed to your counter-offer: Change · line 10 · JKT-DEMO-01 · Nero · L: 30 → 32', 'Moto Demo S.r.l. reported a problem', 'Waiting on Moto Demo S.r.l. · 5', 'Our counter-offer: Change · line 20 · JKT-DEMO-01 · Nero · L: 2 → 3', 'Their turn', '2 more on Changes ›', 'Still to do · 4', 'WO-00021: make 54 → 0' /* fx6 (walk 4, 7): the door column says who decides */, '4 d', '1 more on Changes ›', 'Told about changes: 4 people'],
+    it: ['Richieste e modifiche', 'Modifiche (12) ›', 'Tocca a noi · 3', 'Moto Demo S.r.l. chiede: Modifica · riga 10 · JKT-DEMO-01 · Nero · M: 40 → 36', '15 g', 'Moto Demo S.r.l. ha accettato la tua controproposta: Modifica · riga 10 · JKT-DEMO-01 · Nero · L: 30 → 32', 'Moto Demo S.r.l. ha segnalato un problema', 'Tocca a Moto Demo S.r.l. · 5', 'La nostra controproposta: Modifica · riga 20 · JKT-DEMO-01 · Nero · L: 2 → 3', 'Tocca a loro', 'Altri 2 in Modifiche ›', 'Ancora da fare · 4', 'WO-00021: produci 54 → 0', '4 g', '1 altro in Modifiche ›', 'Avvisati delle modifiche: 4 persone'],
   } as const
 
   it('draws EN + IT: the three groups with their counts, every row on us, 3 of the customer\'s and of Still to do, then "N more on Changes ›"', () => {

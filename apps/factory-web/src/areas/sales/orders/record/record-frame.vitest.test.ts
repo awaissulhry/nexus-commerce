@@ -288,7 +288,7 @@ describe('F-SA-243: the order page opens the same review window as Home › Appr
     for (const locale of ['en', 'it'] as const) {
       const html = draw('f-sa-243-band', locale)
       const text = textOf(html)
-      expect(text).toContain(locale === 'en' ? 'asks: Change · line 10 · 50 6 → 4' : 'chiede: Modifica · riga 10 · 50 6 → 4')
+      expect(text).toContain(locale === 'en' ? 'asks: Change · line 10 · JKT-DEMO-01 · Nero · 50: 6 → 4' : 'chiede: Modifica · riga 10 · JKT-DEMO-01 · Nero · 50: 6 → 4') // fx6 (walk 5): each line once, its style and colour
       expect(text).toContain(locale === 'en' ? '1 more request' : '1 altra richiesta')
       expect(text).toContain(locale === 'en' ? 'Answer…' : 'Rispondi…')
       expect(text).toContain(locale === 'en' ? 'Still to do · 2' : 'Ancora da fare · 2') // F-OO-205: the group's head
@@ -320,7 +320,9 @@ describe('F-SA-243: the order page opens the same review window as Home › Appr
     const { askingOf, askWordsOf, decisionBandOf, stillDoorOf, stillGroupsOf } = await import('./changes/model')
     const say = (key: string, params?: Record<string, string | number>) => `${key}:${JSON.stringify(params ?? {})}`
     const request = { kind: 'CHANGE' as const, wholeOrder: false, requestedDate: null, cells: [1, 2, 3, 4].map((seq) => ({ lineId: `l${seq}`, seq, style: null, colourway: null, size: 'M', before: 4, asked: 2, askedColourway: null })) }
-    expect(askWordsOf(request, { kind: 'Change', say, day: String }).split(' · ')).toHaveLength(5) // the kind, three cells, "…"
+    // fx6 (walk 5): each line once with its sizes — the kind, three lines (line + size), "…"; a date alone is the date asked.
+    expect(askWordsOf(request, { kind: 'Change', say, day: String }).split(' · ')).toHaveLength(8)
+    expect(askWordsOf({ kind: 'CHANGE', wholeOrder: false, requestedDate: '2026-12-22', cells: [] }, { kind: 'Change', say, day: String })).toBe('changesTab.request.date:{"date":"2026-12-22"}')
     expect(askingOf([])).toBeNull()
     const rows = [
       { kind: 'WORK_ORDER_CHANGE', ref: { type: 'WorkOrderChange', id: 'c1', number: null }, words: { en: 'a', it: 'a' }, since: '2026-11-17T13:02:00Z', waitingOn: 'PLANNER', mayAct: false, requestId: 'r1' },
@@ -352,7 +354,7 @@ describe('F-SA-243: the order page opens the same review window as Home › Appr
 
   it('every new word in it + en (the band, Still to do, the amend review tick)', async () => {
     const { CATALOGUE, placeholdersOf } = await import('../../../../lib/i18n/messages')
-    const keys = ['band.asks', 'band.answer', 'band.answerNone', 'band.askCell', 'band.askLine', 'band.askWhole', 'band.moreRequests_one', 'band.moreRequests_other', 'band.decision_one', 'band.decision_other', 'band.open', /* F-OC-304: the old Still to do card's title, Open and Made extra went */ 'changes.still.since', 'changes.still.none', 'changes.still.changeOf', 'changes.still.office', 'changes.still.leftOut_one', 'changes.still.leftOut_other', 'overview.requests.still', 'amend.tell.words', 'amend.tell.hint', /* F-OP-106: the told notice names the work orders */ 'edit.done.plainTold', 'notice.amendedNotTold', 'notice.amendedNotReached']
+    const keys = ['band.asks', 'band.answer', 'band.answerNone', 'changesTab.request.size', 'changesTab.request.date', 'band.askLine', 'band.askWhole', 'band.moreRequests_one', 'band.moreRequests_other', 'band.decision_one', 'band.decision_other', 'band.open', /* F-OC-304: the old Still to do card's title, Open and Made extra went */ 'changes.still.since', 'changes.still.none', 'changes.still.changeOf', 'changes.still.office', 'changes.still.leftOut_one', 'changes.still.leftOut_other', 'overview.requests.still', 'amend.tell.words', 'amend.tell.hint', /* F-OP-106: the told notice names the work orders */ 'edit.done.plainTold', 'notice.amendedNotTold', 'notice.amendedNotReached']
     for (const key of keys) {
       expect(CATALOGUE.en.orders?.[key]?.trim(), `en ${key}`).toBeTruthy()
       expect(CATALOGUE.it.orders?.[key]?.trim(), `it ${key}`).toBeTruthy()

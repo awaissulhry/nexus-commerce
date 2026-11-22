@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { GitCompare, Undo2 } from 'lucide-react'
 import { Button, SegmentedControl, Tag } from '@nexus/ui/primitives'
+import { formatDate } from '../../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { useProductionWords } from '../../../../../../lib/production/words'
 import { TabLink } from '../../../../../../lib/tab-link/TabLink'
@@ -102,7 +103,10 @@ function History({ order, model, actions }: { order: Order; model: OrderRecordMo
       {reading && rows.length === 0 ? <PartReading rows={3} height={44} /> : null}
       {rows.length > 0 && (
         <>
+          {/* fx6 (walk 11): compact chips at the left, never a full-width bar. */}
+          <div className="fw-oc-chips">
           <SegmentedControl size="sm" ariaLabel={t('changesTab.history.chipsLabel')} value={chip} onChange={(value) => choose(value as HistoryChip)} options={HISTORY_CHIPS.map((value) => ({ value, label: `${t(`changesTab.history.chips.${value}`)} ${counts[value]}` }))} wrap />
+          </div>
           {shown.length === 0 ? (
             <p className="fw-pt-quiet">{t(`changesTab.history.emptyChip.${chip}`)}</p>
           ) : (
@@ -152,8 +156,9 @@ function ChangeRowView({ row, order, model, actions }: { row: ChangeRow; order: 
       if (request.note) lines.push({ key: 'note', text: `“${request.note}”`, quote: true })
       if (row.revision) lines.push({ key: 'doneAs', text: t('changesTab.history.doneAs', { revision: row.revision.revision }) })
       if (request.answer) lines.push({ key: 'answer', text: t('changesTab.history.ourAnswer', { answer: request.answer }) })
-      meta.push([request.askedBy, when(request.askedAt)].filter(Boolean).join(' · '))
-      if (request.answeredAt) meta.push([request.answeredBy, when(request.answeredAt)].filter(Boolean).join(' · '))
+      // fx6 (walk 10): who is who — "Asked by …" and "Answered by …", never two bare names.
+      meta.push(request.askedBy ? t('changesTab.row.askedBy', { name: request.askedBy, when: when(request.askedAt) }) : when(request.askedAt))
+      if (request.answeredAt) meta.push(request.answeredBy ? t('changesTab.history.answeredBy', { name: request.answeredBy, when: when(request.answeredAt) }) : when(request.answeredAt))
       discuss = { part: t('discuss.request', { kind: w.t(`parts.request.kind.${request.kind}`) }), target: { kind: 'OrderChangeRequest', id: request.id } }
       told = row.told
       revision = row.revision
@@ -205,7 +210,11 @@ function ChangeRowView({ row, order, model, actions }: { row: ChangeRow; order: 
   if (revision) {
     const change = revision.change
     if (row.kind === 'revision') {
-      lines.push({ key: 'what', text: revision.lines > 0 ? [...(['changed', 'added', 'removed'] as const).filter((kind) => revision!.counts[kind] > 0).map((kind) => t(`changes.count.${kind.toUpperCase()}`, { count: revision!.counts[kind] })), t('changes.piecesMoved', { before: revision.counts.before, after: revision.counts.after })].join(' · ') : t('changes.headerOnly') })
+      // fx6 (walk 6, 10-design §5): WHAT changed, in words — each line with its style, colour and sizes, the PO, the requested date.
+      const amendment = (model.amendments?.value?.amendments ?? []).find((entry) => entry.id === revision!.id) ?? null
+      const what = whatOf(revision.lines, revision.header.length > 0 ? revision.header : (amendment?.diff.header ?? []), order, t, (value) => (value === null ? t('changesTab.compare.none') : /^\d{4}-\d{2}-\d{2}$/.test(value) ? formatDate(`${value}T12:00:00Z`, { locale }) : value))
+      what.forEach((text, index) => lines.push({ key: `what-${index}`, text }))
+      if (what.length === 0) lines.push({ key: 'what', text: t('changes.headerOnly') })
       lines.push({ key: 'why', text: whyOf(revision, t) })
     }
     if (change) {
@@ -268,7 +277,9 @@ function ChangeRowView({ row, order, model, actions }: { row: ChangeRow; order: 
         ))}
         {toldLine}
         {draftUntold && <span className="fw-pt-sub">{draftUntold}</span>}
-        <span className="fw-oc-hrow-doors">
+      </div>
+      {/* fx6 (walk 11): the doors under the meta (2 columns), their own column from 1400 (3 columns) — never stranded far right. */}
+      <div className="fw-oc-hrow-doors">
           {revision && (
             <Button size="sm" variant="quiet" aria-label={t('changesTab.history.compareOf', { revision: revision.revision })} onClick={() => actions?.onDialog?.({ kind: 'compare', amendmentId: revision!.id })}>
               <GitCompare size={13} aria-hidden /> {t('changesTab.history.compare')}
@@ -284,14 +295,29 @@ function ChangeRowView({ row, order, model, actions }: { row: ChangeRow; order: 
               <Undo2 size={13} aria-hidden /> {t('changesTab.history.restore')}
             </Button>
           )}
-          <RowMenu order={order} prefix={model.prefix} label={t('changesTab.menu.label')} anchor={`change-${row.id}`} discuss={discuss} at={row.at} toldMessageId={told?.messageId ?? null} onWhoWasTold={actions?.onWhoWasTold} />
-        </span>
+          <RowMenu order={order} prefix={model.prefix} label={t('changesTab.menu.label')} anchor={`change-${row.id}`} discuss={model.people?.mayNote !== false ? discuss : null /* fx6 (walk 1): Discuss only with threads.post */} at={row.at} toldMessageId={told?.messageId ?? null} onWhoWasTold={actions?.onWhoWasTold} />
       </div>
     </li>
   )
 }
 
 type Translate = (key: string, params?: Record<string, string | number>) => string
+
+/** fx6 (walk 6): a revision's changes in words — at most three lines, then "+N more lines"; the order's own fields after them. */
+type DiffLine = { readonly change: string; readonly lineId: string; readonly seq: number; readonly sizes: readonly { readonly size: string; readonly before: number; readonly after: number }[]; readonly piecesBefore: number; readonly piecesAfter: number }
+type HeaderMove = { readonly field: 'customerRef' | 'requestedDate'; readonly before: string | null; readonly after: string | null }
+export function whatOf(lines: readonly DiffLine[], header: readonly HeaderMove[], order: Pick<Order, 'lines'>, t: Translate, day: (value: string | null) => string): string[] {
+  const out = lines.slice(0, 3).map((line) => {
+    const own = order.lines.find((entry) => entry.id === line.lineId)
+    const head = line.change === 'ADDED' ? t('changesTab.history.lineAdded', { line: line.seq }) : line.change === 'REMOVED' ? t('changesTab.history.lineRemoved', { line: line.seq }) : t('changesTab.history.lineOf', { line: line.seq })
+    const sizes = line.sizes.map((size) => t('changesTab.request.size', { size: size.size, from: size.before, to: size.after }))
+    const pieces = sizes.length === 0 && line.piecesBefore !== line.piecesAfter ? [t('changes.piecesMoved', { before: line.piecesBefore, after: line.piecesAfter })] : []
+    return [head, ...(own?.style?.code ? [own.style.code] : []), ...(own?.colourway?.name ? [own.colourway.name] : []), ...sizes, ...pieces].join(' · ')
+  })
+  if (lines.length > 3) out.push(t('changesTab.history.moreLines', { count: lines.length - 3 }))
+  for (const entry of header) out.push(t('changesTab.history.headerMove', { field: t(`amend.field.${entry.field}`), from: entry.field === 'requestedDate' ? day(entry.before) : (entry.before ?? t('changesTab.compare.none')), to: entry.field === 'requestedDate' ? day(entry.after) : (entry.after ?? t('changesTab.compare.none')) }))
+  return out
+}
 
 /** Why a revision was made, in words: the server's own words said in the reader's ("Done for the customer's request"), else as typed. */
 function whyOf(revision: RevisionFacts, t: Translate): string {
