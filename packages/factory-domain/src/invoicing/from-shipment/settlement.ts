@@ -264,3 +264,95 @@ export function invoicePaymentStateOf(invoice: SettlementInvoice & { readonly op
   return placed > 0 ? 'PART_PAID' : 'OPEN'
 }
 // ── end B-OM-023 ──
+
+// ── B-OM-026 (order money tab W-12): the payment words of the deposit invoices (TD02) and the credit notes (TD04), no amount ──
+/**
+ * Each deposit invoice's payment state by B-OM-023's rule (`invoicePaymentStateOf`). A TD02 bills money received (DPR 633/1972
+ * art. 6 c.4), so what is paid on it is its request's money — its payments, less what refunds of its credit notes gave back —
+ * laid against the request's TD02s in the order given (the order they were made): first their live part (gross less credit
+ * notes), then what their credit notes took back and no refund gave back yet (a refund due, as the settlement counts it). A
+ * TD02 of no request read here bills the money it was issued for (paid = its gross).
+ */
+export function depositInvoicePaymentStatesOf(facts: Pick<SettlementFacts, 'depositRequests' | 'depositInvoices'>): Map<string, InvoicePaymentState> {
+  const paidOf = new Map<string, MinorUnits>()
+  for (const request of facts.depositRequests) {
+    const own = facts.depositInvoices.filter((invoice) => invoice.depositRequestId === request.id)
+    let money = Math.max(0, request.paid - own.reduce((sum, invoice) => sum + (invoice.refunded ?? 0), 0))
+    const take = (room: MinorUnits): MinorUnits => {
+      const taken = Math.min(money, Math.max(0, room))
+      money -= taken
+      return taken
+    }
+    const live = own.map((invoice) => take(invoice.grossTotal - invoice.creditedGross))
+    const back = own.map((invoice) => take(invoice.creditedGross - (invoice.refunded ?? 0)))
+    own.forEach((invoice, index) => paidOf.set(invoice.id, (live[index] ?? 0) + (back[index] ?? 0) + (invoice.refunded ?? 0)))
+  }
+  const states = new Map<string, InvoicePaymentState>()
+  for (const invoice of facts.depositInvoices) {
+    const refunded = invoice.refunded ?? 0
+    const paid = paidOf.get(invoice.id) ?? invoice.grossTotal
+    const open = invoice.grossTotal - invoice.creditedGross - (paid - refunded)
+    states.set(invoice.id, invoicePaymentStateOf({ id: invoice.id, docType: 'TD02', number: invoice.number, status: invoice.status, grossTotal: invoice.grossTotal, creditedGross: invoice.creditedGross, paid, refunded, open: Math.max(0, open), refundDue: Math.max(0, -open) }))
+  }
+  return states
+}
+
+/**
+ * A credit note's payment state: REFUND_DUE while the document it credits has a refund due and the note's own refunds gave back
+ * less than it credits (the money is still the customer's to get back); else CREDITED.
+ */
+export function creditNotePaymentStateOf(note: { readonly gross: MinorUnits; readonly refunded: MinorUnits }, credited: InvoicePaymentState | null): InvoicePaymentState {
+  return credited === 'REFUND_DUE' && note.refunded < note.gross ? 'REFUND_DUE' : 'CREDITED'
+}
+// ── end B-OM-026 ──
+
+// ── B-OM-027 / B-OM-028 (order money tab W-14, W-13): which deposit invoice was issued for which payment ──
+/** A payment's money placed on a deposit request: one live allocation (reversals left out), in the order it was placed. */
+export interface DepositPaymentPart {
+  readonly allocationId: string
+  readonly depositRequestId: string
+  readonly amount: MinorUnits
+}
+/** An issued deposit invoice (not a draft) of a request, in the order it was made: its gross and what its credit notes took back. */
+export interface DepositInvoicePart {
+  readonly id: string
+  readonly depositRequestId: string
+  readonly gross: MinorUnits
+  readonly credited: MinorUnits
+}
+
+/**
+ * Which TD02 was issued for which payment, by the issuing rule itself (payments deposit-invoice.ts: a payment's TD02 bills what
+ * it placed on the request beyond what the request's TD02s, less their credit notes, invoice already — so a TD02 kept after its
+ * payment was taken back bills the next payment's money). Per request, the payments' money (in the order given) is laid against
+ * its TD02s' (each its gross less its credit notes, in the order given; one credited in full holds nothing): a payment's TD02 is
+ * the newest whose money overlaps its own; a TD02's payment is the newest whose money overlaps it (the one that brought it about).
+ * Absent from a map: none (nothing invoiced for that money yet, or credited in full).
+ */
+export function depositInvoicePaymentsOf(payments: readonly DepositPaymentPart[], invoices: readonly DepositInvoicePart[]): { readonly invoiceOf: ReadonlyMap<string, string>; readonly paymentOf: ReadonlyMap<string, string> } {
+  const invoiceOf = new Map<string, string>()
+  const paymentOf = new Map<string, string>()
+  for (const requestId of new Set(payments.map((payment) => payment.depositRequestId))) {
+    const spans: { readonly id: string; readonly from: number; readonly to: number }[] = []
+    let end = 0
+    for (const invoice of invoices) {
+      if (invoice.depositRequestId !== requestId) continue
+      const size = Math.max(0, invoice.gross - invoice.credited)
+      if (size > 0) spans.push({ id: invoice.id, from: end, to: end + size })
+      end += size
+    }
+    let from = 0
+    for (const payment of payments) {
+      if (payment.depositRequestId !== requestId || payment.amount <= 0) continue
+      const to = from + payment.amount
+      for (const span of spans) {
+        if (span.from >= to || span.to <= from) continue
+        invoiceOf.set(payment.allocationId, span.id)
+        paymentOf.set(span.id, payment.allocationId)
+      }
+      from = to
+    }
+  }
+  return { invoiceOf, paymentOf }
+}
+// ── end B-OM-027 / B-OM-028 ──

@@ -210,6 +210,9 @@ describe('a balance before shipping paid, its TD02, the order cancelled: credit 
     const before = (await as('GET', `/invoicing/orders/${seeded.money.sales.orderId}/settlement`)).settlement
     expect(before.refundDueAmount).toBe(50000)
     expect(before.gaps).toContain('REFUND_DUE')
+    // B-OM-026 (W-12): the TD02 credited in full with its money kept, and its credit note, both read "Refund due" (no amount needed).
+    expect((before.depositInvoices as Json[]).find((row) => row.id === td02.id)).toMatchObject({ paymentState: 'REFUND_DUE' })
+    expect((before.creditNotes as Json[]).find((row) => row.id === issued.id)).toMatchObject({ paymentState: 'REFUND_DUE' })
 
     const open = await as('GET', `/payments/refunds/open?partyId=${A.P1}`)
     expect(open.creditNotesToRefund.find((row: Json) => row.creditNoteId === issued.id)).toMatchObject({ creditOfId: td02.id, creditOfDocType: 'TD02', refundableAmount: 50000, refundedAmount: 0 })
@@ -230,6 +233,11 @@ describe('a balance before shipping paid, its TD02, the order cancelled: credit 
     expect(blindTd02).toMatchObject({ depositRequestId: ids.balanceRequest })
     for (const key of ['gross', 'credited', 'deductedNet']) expect(blindTd02).not.toHaveProperty(key)
     expect((blind.creditNotes as Json[]).find((row) => row.id === issued.id)).not.toHaveProperty('gross')
+    // ── B-OM-026 (W-12): refunded — both read "Credited"; the same words for the reader without prices (Sales' Payment column) ──
+    expect((after.depositInvoices as Json[]).find((row) => row.id === td02.id)).toMatchObject({ paymentState: 'CREDITED' })
+    expect((after.creditNotes as Json[]).find((row) => row.id === issued.id)).toMatchObject({ paymentState: 'CREDITED' })
+    expect(blindTd02).toMatchObject({ paymentState: 'CREDITED' })
+    expect((blind.creditNotes as Json[]).find((row) => row.id === issued.id)).toMatchObject({ paymentState: 'CREDITED' })
     // ── B-OM-002 (M1-B9): the cancelled order owes nothing more — the settlement's share and the order read say the same 0 ──
     expect(after.thisOrder.stillToPay).toBe(0)
     expect((await wall('pricedReturns', 'GET', `/sales/orders/${seeded.money.sales.orderId}`)).order.money).toMatchObject({ stillToPay: 0 })

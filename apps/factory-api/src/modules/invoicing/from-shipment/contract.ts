@@ -281,6 +281,12 @@ export const settlementContract = defineContract({
             /** Its buyer's other orders the reader does not reach: counted, never named. */
             otherOrdersHidden: z.number().int(),
             // ── end B-OP-022 ──
+            // ── B-OM-028 (order money tab W-13): what it deducts and what it bills ──
+            /** The deposit invoices (TD02) it deducts, in line order, each with the gross it takes off (its deduction lines; price grain). */
+            deducts: z.array(output({ id: id(), number: z.string().nullable(), amount: money.price(z.number().int()) })),
+            /** The shipments it bills (its goods lines' DDTs), by number; empty for goods invoiced without a DDT. */
+            forShipments: z.array(output({ id: id(), number: z.string() })),
+            // ── end B-OM-028 ──
           }),
         ),
         // ── B-OM-003 (order money tab M5-B3): the deposit invoices (TD02) of its requests and the credit notes (TD04) of its
@@ -298,9 +304,31 @@ export const settlementContract = defineContract({
             /** What issued invoices deduct from it (net, positive). */
             deductedNet: money.price(z.number().int()),
             depositRequestId: id().nullable(),
+            /**
+             * B-OM-026 (order money tab W-12): where its payment stands, a word-code with no amount, for every invoices.view reader —
+             * its request's money laid against its TD02s (B-OM-023's rule): PAID · CREDITED · REFUND_DUE (· OPEN when the money it
+             * billed was taken back).
+             */
+            paymentState: z.enum(INVOICE_PAYMENT_STATES),
+            /** B-OM-028 (W-13): the issued invoice that deducted it (the newest, when several did), or null. */
+            deductedOn: output({ id: id(), number: z.string().nullable() }).nullable(),
+            /** B-OM-028: the payment it was issued for (the issuing rule, as the plan read's `payments[].td02` says it) and its day, or null. */
+            forPayment: output({ paymentId: id(), receivedOn: businessDate() }).nullable(),
           }),
         ),
-        creditNotes: z.array(output({ id: id(), number: z.string().nullable(), status: z.string(), issueDate: businessDate().nullable(), gross: money.price(z.number().int()), /** The invoice or deposit invoice it credits. */ creditOfId: id() })),
+        creditNotes: z.array(
+          output({
+            id: id(),
+            number: z.string().nullable(),
+            status: z.string(),
+            issueDate: businessDate().nullable(),
+            gross: money.price(z.number().int()),
+            /** The invoice or deposit invoice it credits. */
+            creditOfId: id(),
+            /** B-OM-026: CREDITED, or REFUND_DUE while what it credits has a refund due its refunds did not give back (no amount). */
+            paymentState: z.enum(INVOICE_PAYMENT_STATES),
+          }),
+        ),
         // ── end B-OM-003 ──
         invoicedAmount: money.price(z.number().int()),
         creditedAmount: money.price(z.number().int()),

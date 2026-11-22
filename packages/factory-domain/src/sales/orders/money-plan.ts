@@ -156,6 +156,19 @@ export interface UndoFacts {
   readonly writeOffStanding: boolean
   /** The payment's day is inside a HARD period lock. */
   readonly hardLocked: boolean
+  /**
+   * B-OM-027 (order money tab W-14): the number of the TD02 issued for THIS payment (issued, not rejected, not credited in full),
+   * when the reader may read it (invoices.view): the held words then name it. Absent or null: the plain words.
+   */
+  readonly depositInvoiceNumber?: string | null | undefined
+}
+
+/** B-OM-027: the held words when the TD02 issued for this very payment is known (10-design §5). */
+export function heldByDepositInvoiceWords(number: string): Words {
+  return {
+    en: `A deposit invoice (TD02 ${number}) was issued for this payment: a credit note first, in Finance.`,
+    it: `Per questo pagamento è stata emessa una fattura di acconto (TD02 ${number}): prima una nota di credito, in Finanza.`,
+  }
 }
 
 export interface UndoVerdict {
@@ -171,12 +184,27 @@ export function undoVerdictOf(facts: UndoFacts): UndoVerdict {
   const held = (code: UndoHeld): UndoVerdict => ({ may: false, why: UNDO_HELD_WORDS[code], code })
   if (facts.request.status === 'PAID' && facts.request.fiscalDocument === 'NONE') return held('CARRIED')
   if (facts.request.status === 'PAID') return held('PAID')
-  if (facts.depositInvoiceIssued) return held('DEPOSIT_INVOICE_ISSUED')
+  if (facts.depositInvoiceIssued) return facts.depositInvoiceNumber ? { may: false, why: heldByDepositInvoiceWords(facts.depositInvoiceNumber), code: 'DEPOSIT_INVOICE_ISSUED' } : held('DEPOSIT_INVOICE_ISSUED') // B-OM-027
   if (facts.depositInvoiceDraft) return held('DEPOSIT_INVOICE_DRAFT')
   if (facts.writeOffStanding) return held('WRITE_OFF')
   if (facts.hardLocked) return held('HARD_LOCKED')
   return { may: true, why: null, code: null }
 }
+
+// ── B-OM-024 (order money tab W-01, W-02): a request short, and whether that is within the company's write-off tolerance — ONE
+// rule, read by the plan read (`requests[].short`) and by ACCEPT_SHORT (the planner below and the API's fresh-code check) ──
+/** What is missing on an OPEN request with money on it and less than its amount (minor units); null: nothing is short. */
+export function shortOf(request: { readonly status: string; readonly amount: number; readonly paid: number }): number | null {
+  if (request.status !== 'OPEN' || request.paid <= 0 || request.paid >= request.amount) return null
+  return request.amount - request.paid
+}
+
+/** Why a short part goes beyond the company's write-off tolerance (it sets none, or the part is more), or null: within it. */
+export function beyondToleranceOf(short: number, tolerance: number | null): 'NO_TOLERANCE' | 'OVER_TOLERANCE' | null {
+  if (tolerance === null) return 'NO_TOLERANCE'
+  return short > tolerance ? 'OVER_TOLERANCE' : null
+}
+// ── end B-OM-024 ──
 
 // ════ the hand planner (PR S2; B-OM-011 … 016; 13-backend §3) ════════════════════════════════════════════════════════════════
 /**
@@ -548,9 +576,10 @@ export function planByHand(facts: PlannerFacts, action: MoneyPlanAction): MoneyP
     case 'ACCEPT_SHORT': {
       const request = requestOf(action.requestId)
       if (!request || request.status !== 'OPEN') return refuse('NOT_OPEN')
-      if (request.paid <= 0 || request.paid >= request.amount) return refuse('NOTHING_SHORT')
-      const short = request.amount - request.paid
-      const beyond = action.tolerance === null ? 'NO_TOLERANCE' : short > action.tolerance ? 'OVER_TOLERANCE' : null
+      // B-OM-024: the one rule the plan read's `short` says too.
+      const short = shortOf(request)
+      if (short === null) return refuse('NOTHING_SHORT')
+      const beyond = beyondToleranceOf(short, action.tolerance)
       if (beyond && !action.override) return refuse(beyond)
       return result({ payRequest: request.id, short, overridden: beyond !== null })
     }
