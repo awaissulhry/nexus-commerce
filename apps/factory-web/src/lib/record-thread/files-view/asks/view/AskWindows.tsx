@@ -49,7 +49,7 @@ export function AskWindows({ read, state, actions, customer, orderLabel }: { rea
   const ask = window.kind === 'ask' ? null : (read.asks?.find((one) => one.id === window.askId) ?? null)
   if (window.kind !== 'ask' && !ask) return null
   if (window.kind === 'ask') return <AskForAFile window={window} state={state} actions={actions} customer={customer} orderLabel={orderLabel} />
-  return <AskWindow window={window} ask={ask!} read={read} state={state} actions={actions} customer={customer} />
+  return <AskActWindow window={window} ask={ask!} read={read} state={state} actions={actions} customer={customer} />
 }
 
 /** The footer of every window: Cancel (or Keep) and the act, held with its words. */
@@ -268,7 +268,7 @@ function AskForAFile({ window, state, actions, customer, orderLabel }: { window:
 }
 
 // ---- F-OF-203: the ask's own windows ------------------------------------------------------------------------------------------------
-function AskWindow({ window, ask, read, state, actions, customer }: { window: Exclude<AskWindow, { kind: 'ask' }>; ask: FileAsk; read: OrderFilesRead; state: AsksState; actions?: AskWindowsActions | undefined; customer: string | null }) {
+function AskActWindow({ window, ask, read, state, actions, customer }: { window: Exclude<AskWindow, { kind: 'ask' }>; ask: FileAsk; read: OrderFilesRead; state: AsksState; actions?: AskWindowsActions | undefined; customer: string | null }) {
   const t = useT(ASKS_NS)
   const v = useT('record-thread-files-view')
   const locale = useLocale()

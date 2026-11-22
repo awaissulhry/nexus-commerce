@@ -157,12 +157,13 @@ export function newAskDraft(dueOn: string): AskDraft {
 }
 
 /** The kinds of "Who uploads it" this reader is offered: a list the reader may not read hides its kind (a right missing). */
-export function whoKindsOf(choices: Pick<AskChoices, 'people' | 'officeRoles' | 'floorRoles' | 'teams'>, can: Pick<AskAbilities, 'askCustomer'>): readonly AskWhoKind[] {
+export function whoKindsOf(choices: Pick<AskChoices, 'people' | 'officeRoles' | 'floorRoles' | 'teams'> & Partial<Pick<AskChoices, 'steps'>>, can: Pick<AskAbilities, 'askCustomer'>): readonly AskWhoKind[] {
   return ASK_WHO.filter((kind) => {
     if (kind === 'PERSON') return choices.people.state !== 'hidden'
     if (kind === 'OFFICE_ROLE') return choices.officeRoles.state !== 'hidden'
     if (kind === 'FLOOR_ROLE') return choices.floorRoles.state !== 'hidden'
     if (kind === 'FLOOR_TEAM') return choices.teams.state !== 'hidden'
+    if (kind === 'STEP') return choices.steps?.state !== 'hidden' // a work order's steps the reader may not read (workorders.view)
     if (kind === 'CUSTOMER') return can.askCustomer
     return true
   })
