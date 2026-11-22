@@ -130,6 +130,10 @@ describe('F-OL-03: the container — only my changes sent, the ask after a ticke
     expect(hook).toContain('const reach = ask && target ? await askCustomer(target, customerQuestionOf(value, question), value) : null')
     expect(hook).toContain("savedNotice(done.workOrders, reach?.reach ?? null, value.party?.legalName ?? '')")
     expect(hook).toContain('const reach = await askRevisedOrder(api, value, amendmentId, question, { quotes: can.viewQuotes })')
+    // F-OC fx4: "Ask again" when the first ask did go (one open ask per revision, 409 conflict) says so — no failure, no new door.
+    expect(hook).toContain("if (isApiError(error) && error.code === 'conflict') {")
+    expect(hook).toContain("words: { key: 'changesTab.saved.askedAlready', params: { customer: value.party?.legalName ?? '' } }")
+    for (const locale of LOCALES) expect(createTranslator(locale, messagesFor(locale, ['orders']).orders!)('changesTab.saved.askedAlready', { customer: 'Brand Alpha' }), locale).not.toMatch(/changesTab|\{/)
     expect(read('./revised-order-ask.ts')).toContain("recordType: 'SalesOrderAmendment'")
     expect(hook).toContain("if (words.key === 'problem.write.moved')")
     expect(hook).toContain('const rebased = rebaseDraft(base, order, historyRef.current.draft)')
@@ -166,7 +170,8 @@ describe('F-OL-08: the REVISED_ORDER question — the words typed, else the defa
     expect(review).not.toContain("t('review.question'")
     const hook = read('./use-lines-draft.ts')
     expect(hook).toContain('customerQuestionOf(value, question)')
-    expect(hook).toContain('language: customerLocaleOf(value) })')
+    // F-OC-201 (W2): the ask moved to the ONE helper on the revision — it sends the order's language.
+    expect(read('./revised-order-ask.ts')).toContain('language: customerLocaleOf(order),')
   })
 })
 // ---- end F-OL-08

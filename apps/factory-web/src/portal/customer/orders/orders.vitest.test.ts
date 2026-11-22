@@ -234,6 +234,22 @@ describe('Re-confirm version N', () => {
     expect(pickRevision([])).toBeNull()
   })
 
+  // F-OC fx4 (end check 1, th9 step 13): the approval page names the order by the party's own number (F-PR-16): the order page
+  // looks for its revision by that number too — it found none by the office's SO-… alone, and waited for ever.
+  it('a revised order is this order’s by the party’s own number ("#12") or, in an older answer, the office’s', async () => {
+    const { findRevision, orderNumbersOf } = await import('./api')
+    expect(orderNumbersOf('SO-2026-0042', 12)).toEqual(['SO-2026-0042', '#12'])
+    expect(orderNumbersOf('SO-2026-0042', null)).toEqual(['SO-2026-0042'])
+    const own = { ...approvalPage({ id: 'r-own' }), content: { revisedOrder: { ...approvalPage().content.revisedOrder!, orderNumber: '#12' } } }
+    const other = { ...approvalPage({ id: 'r-other' }), content: { revisedOrder: { ...approvalPage().content.revisedOrder!, orderNumber: '#13' } } }
+    const pages: Record<string, unknown> = { 'r-own': own, 'r-other': other }
+    const api = { get: async (path: string) => (path === '/portal/approvals' ? { state: 'OPEN', items: [{ id: 'r-own', kind: 'REVISED_ORDER', dueAt: '2026-11-30T16:00:00Z', status: 'OPEN' }, { id: 'r-other', kind: 'REVISED_ORDER', dueAt: '2026-11-30T16:00:00Z', status: 'OPEN' }] } : pages[decodeURIComponent(path.split('/').pop()!)]) } as never
+    expect((await findRevision(api, orderNumbersOf('SO-2026-0042', 12)))?.request.id).toBe('r-own')
+    expect(await findRevision(api, ['SO-2026-0042'])).toBeNull()
+    const view = readFileSync(new URL('./OrderPage.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('const revisionNumbers = useMemo(() => (number ? orderNumbersOf(number, ownSeq) : null), [number, ownSeq])')
+  })
+
   it('held: a preview, not open, may not approve, the request closed, offline', () => {
     const page = approvalPage()
     const facts = { preview: false, mayApprove: true, offline: false }

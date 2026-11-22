@@ -27,6 +27,7 @@ import {
   fetchRules,
   fetchShipments,
   findRevision,
+  orderNumbersOf, // F-OC fx4
   // B-W2b-170
   makeTrackingLink,
   openDocument,
@@ -223,10 +224,10 @@ function OrderContainer({ id }: { id: string }) {
     }
   }, [api, id])
 
-  const loadRevision = useCallback(async (number: string) => {
+  const loadRevision = useCallback(async (numbers: readonly string[]) => {
     if (!readsApprovals) return setRevision({ state: 'noAccess', page: null })
     try {
-      setRevision({ state: 'ready', page: await findRevision(api, number) })
+      setRevision({ state: 'ready', page: await findRevision(api, numbers) })
     } catch (error) {
       setRevision({ state: isApiError(error) && error.kind === 'forbidden' ? 'noAccess' : 'error', page: null })
     }
@@ -392,9 +393,12 @@ function OrderContainer({ id }: { id: string }) {
 
   const number = record?.order.number ?? null
   const reconfirmNeeded = record?.order.reconfirmNeeded ?? false
+  // F-OC fx4: the revised order names this order by the party's own number ("#12"), else (an older answer) the office's.
+  const ownSeq = record?.order.yourNumber?.seq ?? null
+  const revisionNumbers = useMemo(() => (number ? orderNumbersOf(number, ownSeq) : null), [number, ownSeq])
   useEffect(() => {
-    if (number && reconfirmNeeded) void loadRevision(number)
-  }, [number, reconfirmNeeded, loadRevision])
+    if (revisionNumbers && reconfirmNeeded) void loadRevision(revisionNumbers)
+  }, [revisionNumbers, reconfirmNeeded, loadRevision])
 
   // F-PR-12b: today's progress read only where the order's production read does not draw the pieces (by level).
   const shared = record !== null && shares(record.productionLevel, 'progress') && !productionOwnsProgress(production)
@@ -1110,7 +1114,7 @@ function OrderContainer({ id }: { id: string }) {
           setState('loading')
           void load()
         },
-        onRetryRevision: () => (number ? void loadRevision(number) : undefined),
+        onRetryRevision: () => (revisionNumbers ? void loadRevision(revisionNumbers) : undefined),
         onRetryProgress: () => void loadProgress(),
         onRetryRequests: () => void loadRequests(),
         onRetryShipments: () => {
@@ -1243,7 +1247,7 @@ function OrderContainer({ id }: { id: string }) {
             onSign: sign,
             onClose: () => {
               setDialog((current) => (current?.kind === 'reconfirm' && current.busy ? current : null))
-              if (number) void loadRevision(number)
+              if (revisionNumbers) void loadRevision(revisionNumbers)
             },
             onRetry: () => void openReconfirm(),
           },

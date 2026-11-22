@@ -2988,7 +2988,7 @@
     "who": {
       "sales": "Rispondono le vendite",
       "production": "Risponde il responsabile di produzione o il pianificatore",
-      "problem": "Si risponde in Produzione › Problemi e blocchi",
+      "problem": "Si risponde in Problemi e blocchi, nella scheda Produzione",
       "decides": "Decide {who}",
       "youAsked": "Hai chiesto tu questa approvazione: decide {who}",
       "salesDecides": "Decidono le vendite"
@@ -3229,7 +3229,8 @@
       "waitsEmail": "Salvato · in attesa della produzione: {waits} — decidi in questa pagina · chiesto a {customer} per e-mail.",
       "waitsPortal": "Salvato · in attesa della produzione: {waits} — decidi in questa pagina · chiesto nel portale di {customer}: nessun indirizzo e-mail in archivio.",
       "bothEmail": "Salvato · ordini di lavoro cambiati: {changed} · in attesa della produzione: {waits} — decidi in questa pagina · chiesto a {customer} per e-mail.",
-      "bothPortal": "Salvato · ordini di lavoro cambiati: {changed} · in attesa della produzione: {waits} — decidi in questa pagina · chiesto nel portale di {customer}: nessun indirizzo e-mail in archivio."
+      "bothPortal": "Salvato · ordini di lavoro cambiati: {changed} · in attesa della produzione: {waits} — decidi in questa pagina · chiesto nel portale di {customer}: nessun indirizzo e-mail in archivio.",
+      "askedAlready": "{customer} è già stato interpellato: la richiesta aspetta in Tocca a {customer}."
     }
   }
 }

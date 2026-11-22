@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { GitCompare, Undo2 } from 'lucide-react'
 import { Button, SegmentedControl, Tag } from '@nexus/ui/primitives'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { useProductionWords } from '../../../../../../lib/production/words'
 import { TabLink } from '../../../../../../lib/tab-link/TabLink'
 import { WithMessages } from '../../../../../../record-panels/i18n'
-import { tabHref } from '../../../../../_shared/record-frame/address'
+import { tabHref, writeSearch } from '../../../../../_shared/record-frame/address'
 import { said } from '../../../../../home/approvals/requests/model'
 import type { WorkOrderChange } from '../../../../../home/approvals/work-order-changes/api'
 import { money } from '../../../../quotes/model'
@@ -48,8 +48,6 @@ function History({ order, model, actions }: { order: Order; model: OrderRecordMo
   const t = useT('orders')
   const params = useSearchParams()
   const search = params?.toString() ?? ''
-  const router = useRouter()
-  const pathname = usePathname()
   const [all, setAll] = useState(false)
   const chip = historyChipOf(params?.get('history'))
   const title = t('changesTab.history.title')
@@ -76,7 +74,9 @@ function History({ order, model, actions }: { order: Order; model: OrderRecordMo
     if (next === 'all') query.delete('history')
     else query.set('history', next)
     const text = query.toString()
-    router.replace(`${pathname}${text ? `?${text}` : ''}#history`, { scroll: false })
+    // F-OC fx4: THE history writer of the record pages (a replace; the App Router's search follows it) — never the router's hook: a
+    // page drawn outside the App Router (a design case, a test) has none, and it threw there.
+    writeSearch(`${window.location.pathname}${text ? `?${text}` : ''}#history`)
   }
   // The promise's own history lives in Production › Dates & plan — one pointer, only when the date moved (F-PT-204).
   const moves = readOf(model.production)?.headline?.promise.moves ?? 0

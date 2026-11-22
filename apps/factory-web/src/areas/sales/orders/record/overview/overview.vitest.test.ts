@@ -1071,7 +1071,10 @@ describe('F-OO-204: request rows — the age, the words of §5.2, Open… on our
       // What we asked: its own question, its due day and its state (the record-approvals' words) — and no door on Changes.
       const artwork = rowOf(html, RQ_ASKED[0]!.question)
       expect(textOf(artwork)).toContain(locale === 'en' ? 'Waiting for the answer' : 'In attesa di risposta')
-      expect(artwork).not.toContain('<button')
+      // F-OC-302 (lead W1 answer 2): only the ONE row ⋯ (Copy link to this row) — no act of its own.
+      const rowMenu = locale === 'en' ? 'More for this row' : 'Altro per questa riga'
+      expect(artwork.match(/<button/g) ?? []).toHaveLength(1)
+      expect(artwork).toContain(`aria-label="${rowMenu}"`)
       expect(artwork).not.toContain('<a ')
       // F-OC-103: by when (every time with its day), and what the customer reads in its portal's "Waiting for you"; not late yet.
       expect(textOf(artwork)).toContain(locale === 'en' ? 'due 02/12/2026' : 'entro il 02/12/2026')
@@ -1080,7 +1083,7 @@ describe('F-OO-204: request rows — the age, the words of §5.2, Open… on our
       // L2: the problem the customer reported is a counted pointer row — "Production ›" to Problems & holds, never Reply here.
       const problem = rowOf(html, locale === 'en' ? 'reported a problem' : 'ha segnalato un problema')
       expect(problem).toMatch(/href="[^"]*\?tab=production[^"]*#holds"/)
-      expect(textOf(problem)).toContain(locale === 'en' ? 'Answered on Production › Problems & holds' : 'Si risponde in Produzione › Problemi e blocchi')
+      expect(textOf(problem)).toContain(locale === 'en' ? 'Answered in Problems & holds, on the Production tab' : 'Si risponde in Problemi e blocchi, nella scheda Produzione') // fx4: no "Area › Page" that is not a page
       expect(textOf(problem)).not.toContain(locale === 'en' ? 'Reply in the thread' : 'Rispondi nella conversazione')
     }
     expect(draw('f-oo-204-changes')).toMatch(new RegExp(`<a [^>]*href="[^"]*\\?tab=changes&amp;open=${RQ_COUNTERED.id}"[^>]*>Open…</a>`))

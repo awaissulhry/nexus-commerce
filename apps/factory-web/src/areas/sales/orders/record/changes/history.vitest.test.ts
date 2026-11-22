@@ -82,7 +82,9 @@ describe('F-OC-301 / 303: chips in the address, the fold, Restore as before…',
 
   it('the view: chips with counts kept in the address, Restore only for orders.manage, the ONE row ⋯ on every row, Before → after on a revision', () => {
     const view = readFileSync(new URL('./view/HistorySection.tsx', import.meta.url), 'utf8')
-    expect(view).toContain("router.replace(`${pathname}${text ? `?${text}` : ''}#history`, { scroll: false })")
+    expect(view).toContain("writeSearch(`${window.location.pathname}${text ? `?${text}` : ''}#history`)")
+    // F-OC fx4: never useRouter (a design case and the tests draw the page outside the router: it threw there).
+    expect(view).not.toMatch(/useRouter|usePathname/)
     expect(view).toContain('const restore = !ask && model.can.manage ? restoreOf(revised, locale) : null')
     expect(view).toContain("actions?.onDialog?.({ kind: 'compare', amendmentId: revision!.id })")
     expect(view).toContain('<RowMenu order={order} prefix={model.prefix}')

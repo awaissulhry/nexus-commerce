@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { CUSTOMER_SHIPMENT_STATUSES, SHIPMENT_MILESTONES } from '@nexus/factory-domain/sales/portal-orders/shipments'
 import { CUSTOMER_ORDER_STATUSES, MILESTONE_STATES, MILESTONES, ORDER_CHIPS } from '@nexus/factory-domain/sales/portal-orders/status'
+import { customerRefOf } from '@nexus/factory-domain/sales/customer-numbers' // F-OC fx4: the party's own order number
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import { browserAddress } from '../../../lib/api/browser-address' // F-OP-317
 // F-PR-13: the production asks (B-PR-25), the freeze states and the sample kinds, as the API names them.
@@ -573,15 +574,26 @@ export const approvalPageSchema = z.object({
 export type ApprovalPage = z.infer<typeof approvalPageSchema>
 
 /**
- * The OPEN REVISED_ORDER requests of the organisation, each read once: of this order's (by its number) the newest revision
- * that still takes an answer, else the newest (an older request the office left open is held by the API in words).
+ * F-OC fx4 (end check 1, th9 step 13): the numbers a revised order may name THIS order by. The approval page says the party's own
+ * number ("#12", F-PR-16: never the office's SO-… series) — an older answer the office's; matching the office's number alone never
+ * found it, and the order page said "We will ask you to confirm" for ever while the ask waited.
  */
-export async function findRevision(api: ApiClient, orderNumber: string, signal?: AbortSignal): Promise<ApprovalPage | null> {
+export function orderNumbersOf(number: string, ownSeq: number | null | undefined): string[] {
+  const own = customerRefOf('ORDER', ownSeq)
+  return own ? [number, own] : [number]
+}
+
+/**
+ * The OPEN REVISED_ORDER requests of the organisation, each read once: of this order's (by one of its numbers, orderNumbersOf) the
+ * newest revision that still takes an answer, else the newest (an older request the office left open is held by the API in words).
+ */
+export async function findRevision(api: ApiClient, orderNumbers: readonly string[], signal?: AbortSignal): Promise<ApprovalPage | null> {
   const list = await api.get('/portal/approvals', { query: { state: 'OPEN' }, schema: approvalsListSchema, signal })
   const mine: ApprovalPage[] = []
   for (const item of list.items.filter((entry) => entry.kind === 'REVISED_ORDER').slice(0, 10)) {
     const page = await fetchApproval(api, item.id, signal)
-    if (page.content.revisedOrder?.orderNumber === orderNumber) mine.push(page)
+    const named = page.content.revisedOrder?.orderNumber
+    if (named !== undefined && orderNumbers.includes(named)) mine.push(page)
   }
   return pickRevision(mine)
 }
