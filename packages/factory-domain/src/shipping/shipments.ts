@@ -401,6 +401,27 @@ export const unpackProblems = (facts: Pick<ShipmentFacts, 'parcels' | 'liveDdts'
 /** What cancelling (from DRAFT or PACKED) needs: no carrier label and no live DDT. */
 export const cancelProblems = (facts: Pick<ShipmentFacts, 'parcels' | 'liveDdts'>): string[] => declaredProblems(facts)
 
+// ── B-OS-014 (order shipments tab; 13-backend §2): the goods handed over at a time the office types ──
+/**
+ * When the goods were handed over, typed (the driver left before it was recorded): not more than 5 minutes ahead of now, at most
+ * 60 days back (as a shipment made elsewhere), never before they were packed nor before their live DDT was issued; more than 15
+ * minutes back it says why (3 to 500 characters). Stock and cost of sales still post at the command's time.
+ */
+export const HAND_OVER_LIMITS = Object.freeze({ futureSkewMs: 5 * 60_000, pastDays: 60, reasonAfterMs: 15 * 60_000, reasonMin: 3, reasonMax: 500 })
+
+export function handOverTimeProblems(at: Date, facts: { readonly now: Date; readonly packedAt: Date | null; readonly ddtIssuedAt: Date | null; readonly reason: string | null | undefined }): Issue[] {
+  const problems: Issue[] = []
+  const reason = (facts.reason ?? '').trim()
+  if (at.getTime() > facts.now.getTime() + HAND_OVER_LIMITS.futureSkewMs) problems.push({ path: 'body/shippedAt', message: 'The time is in the future.' })
+  else if (at.getTime() < facts.now.getTime() - HAND_OVER_LIMITS.pastDays * 86_400_000) problems.push({ path: 'body/shippedAt', message: `At most ${HAND_OVER_LIMITS.pastDays} days back.` })
+  else if (facts.packedAt && at.getTime() < facts.packedAt.getTime()) problems.push({ path: 'body/shippedAt', message: 'The time is before the goods were packed.' })
+  else if (facts.ddtIssuedAt && at.getTime() < facts.ddtIssuedAt.getTime()) problems.push({ path: 'body/shippedAt', message: 'The time is before the DDT was issued.' })
+  if (reason.length > HAND_OVER_LIMITS.reasonMax) problems.push({ path: 'body/reason', message: `A reason is at most ${HAND_OVER_LIMITS.reasonMax} characters.` })
+  else if (facts.now.getTime() - at.getTime() > HAND_OVER_LIMITS.reasonAfterMs && reason.length < HAND_OVER_LIMITS.reasonMin) problems.push({ path: 'body/reason', message: 'Say why the goods are recorded as handed over at another time (3 to 500 characters).' })
+  return problems
+}
+// ── end B-OS-014 ──
+
 /**
  * What leaving (PACKED → SHIPPED, B-W1-47) needs: a live DDT (DPR 472/1996), unless an immediate invoice travels with
  * the goods instead (ddtRequired false). The …_quality_shipping_guards trigger checks the same at commit.

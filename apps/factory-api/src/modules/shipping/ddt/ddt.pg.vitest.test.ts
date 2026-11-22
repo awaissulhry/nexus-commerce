@@ -576,3 +576,87 @@ describe('reading, and the walls', () => {
     }
   })
 })
+
+// ---- B-OS-014, B-OS-017 (order shipments tab; O7 B, L13, Owner D6): handed over at a typed time; travels without a DDT ------------
+// Three more of WO-0001's garments released past the guards (made-up facts: copies of the seeded BLK 52 release) give three
+// packed one-garment shipments of SO-0002: Z (its DDT, handed over yesterday), X and Y (no DDT).
+describe('B-OS-014, B-OS-017: handed over at a time; this shipment travels without a DDT (and back)', () => {
+  const T: Record<string, string> = {}
+  const force = async (sql: string, values: unknown[] = []) => {
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin(sql, values)
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
+  }
+  const versionOf = async (id: string) => (await admin<{ version: number }>(`SELECT version FROM "Shipment" WHERE id = $1`, [id]))[0]!.version
+  async function packed(cellKey: 'BLK-54' | 'RED-50' | 'RED-54'): Promise<string> {
+    const made = (await ok('warehouse', 'POST', '/shipping/shipments', { salesOrderId: seedA.quality.production.salesOrderId, lines: [{ workOrderSizeId: seedA.quality.production.cellIds[cellKey], quantity: 1 }] }, 201)).shipment
+    const parcel = (await ok('warehouse', 'POST', `/shipping/packing/${made.id}/parcels`, { grossWeightKg: '2.5' }, 201)).parcelId
+    await ok('warehouse', 'PUT', `/shipping/packing/${made.id}/lines/${made.lines[0].id}/parcel`, { parcelId: parcel })
+    expect((await ok('warehouse', 'POST', `/shipping/packing/${made.id}/pack`, {})).shipment.status).toBe('PACKED')
+    return made.id as string
+  }
+
+  beforeAll(async () => {
+    SESSIONS.manager = office(A.tenant, [grant(['shipping.view', 'shipping.manage'])])
+    for (const [index, key] of (['BLK-54', 'RED-50', 'RED-54'] as const).entries()) {
+      await force(
+        `INSERT INTO "QualityRelease" SELECT * FROM jsonb_populate_record(NULL::"QualityRelease", (SELECT to_jsonb(r) || jsonb_build_object('id', $1::uuid, 'number', $2::text, 'workOrderSizeId', $3::uuid, 'quantity', 1) FROM "QualityRelease" r WHERE id = $4))`,
+        [newId(), `SEED-REL-OS-DDT-${index + 1}`, seedA.quality.production.cellIds[key], seedA.quality.releaseIds['BLK-52']],
+      )
+    }
+    T.z = await packed('BLK-54')
+    T.x = await packed('RED-50')
+    T.y = await packed('RED-54')
+  }, 120_000)
+
+  it('B-OS-014: handed over yesterday at 16:30 with its reason; never before packing or its DDT, never ahead of now; no reason, no past time', async () => {
+    await ok('warehouse', 'POST', `/shipping/shipments/${T.z}/ddt`, { carrier: { name: 'Seed Express' } }, 201)
+    const yesterday = new Date(Date.now() - 86_400_000)
+    yesterday.setUTCHours(15, 30, 0, 0)
+    const at = yesterday.toISOString()
+    const url = `/shipping/shipments/${T.z}/ship`
+    // Packed and its DDT issued just now: yesterday is before both.
+    expect((await refused('warehouse', 'POST', url, { shippedAt: at, reason: 'The driver left before it was recorded.' }, 400)).issues[0]).toEqual({ path: 'body/shippedAt', message: 'The time is before the goods were packed.' })
+    await force(`UPDATE "Shipment" SET "packedAt" = now() - interval '2 days' WHERE id = $1`, [T.z])
+    expect((await refused('warehouse', 'POST', url, { shippedAt: at, reason: 'The driver left before it was recorded.' }, 400)).issues[0]).toEqual({ path: 'body/shippedAt', message: 'The time is before the DDT was issued.' })
+    await force(`UPDATE "Ddt" SET "issuedAt" = now() - interval '2 days' WHERE "shipmentId" = $1`, [T.z])
+    expect((await refused('warehouse', 'POST', url, { shippedAt: new Date(Date.now() + 3_600_000).toISOString() }, 400)).issues[0].message).toBe('The time is in the future.')
+    expect((await refused('warehouse', 'POST', url, { shippedAt: at }, 400)).issues[0].path).toBe('body/reason')
+    const shipped = (await ok('warehouse', 'POST', url, { version: await versionOf(T.z!), shippedAt: at, reason: 'The driver left before it was recorded.' })).shipment
+    expect(shipped).toMatchObject({ status: 'SHIPPED', shippedAt: at })
+    expect(await admin(`SELECT reason, after->>'shippedAt' AS "shippedAt", after->>'byHand' AS "byHand" FROM "AuditLog" WHERE "recordType" = 'Shipment' AND "recordId" = $1 AND after->>'status' = 'SHIPPED'`, [T.z])).toEqual([
+      { reason: 'The driver left before it was recorded.', shippedAt: at, byHand: 'true' },
+    ])
+  })
+
+  it('B-OS-017: travels without a DDT (with its reason): no DDT is issued for it; put back, the DDT is issued; a live DDT keeps it', async () => {
+    const url = `/shipping/shipments/${T.x}/ddt-required`
+    const reason = 'An immediate invoice travels with these goods.'
+    const without = (await ok('warehouse', 'PUT', url, { version: await versionOf(T.x!), required: false, reason })).shipment
+    expect(without.ddtRequired).toBe(false)
+    expect(await admin(`SELECT before->>'ddtRequired' AS before, after->>'ddtRequired' AS after, reason FROM "AuditLog" WHERE "recordId" = $1 AND action = 'shipping.ddtRequired'`, [T.x])).toEqual([{ before: 'true', after: 'false', reason }])
+    expect((await refused('warehouse', 'POST', `/shipping/shipments/${T.x}/ddt`, { carrier: { name: 'Seed Express' } }, 409)).issues[0].path).toBe('refusal/DDT_NOT_NEEDED')
+    expect((await refused('warehouse', 'PUT', url, { required: false, reason }, 409)).issues[0].path).toBe('refusal/SAME')
+    expect((await refused('warehouse', 'PUT', url, { required: true, reason: 'x' }, 400)).code).toBe('validation_failed')
+    expect((await ok('warehouse', 'PUT', url, { required: true, reason: 'The invoice is not ready: the DDT travels.' })).shipment.ddtRequired).toBe(true)
+    await ok('warehouse', 'POST', `/shipping/shipments/${T.x}/ddt`, { carrier: { name: 'Seed Express' } }, 201)
+    expect((await refused('warehouse', 'PUT', url, { required: false, reason }, 409)).issues[0].path).toBe('refusal/DDT_LIVE')
+    // The right: shipping.manage AND shipping.ddt.issue (as a shipment made elsewhere); a viewer is refused by the route.
+    expect((await refused('manager', 'PUT', url, { required: false, reason }, 403)).code).toBe('forbidden')
+    expect((await refused('issuer', 'PUT', url, { required: false, reason }, 403)).code).toBe('forbidden')
+    expect((await refused('companyB', 'PUT', url, { required: false, reason }, 404)).code).toBe('not_found')
+  })
+
+  it('B-OS-017: without a DDT the packed shipment leaves (the deferred check reads the same column); once left, the choice is kept', async () => {
+    const url = `/shipping/shipments/${T.y}/ddt-required`
+    await ok('warehouse', 'PUT', url, { required: false, reason: 'No DDT travels with these goods.' })
+    const shipped = (await ok('warehouse', 'POST', `/shipping/shipments/${T.y}/ship`, {})).shipment
+    expect(shipped).toMatchObject({ status: 'SHIPPED', ddtRequired: false })
+    expect(await liveDdts(T.y!)).toEqual([])
+    expect((await refused('warehouse', 'PUT', url, { required: true, reason: 'Too late now.' }, 409)).issues[0].path).toBe('refusal/LEFT')
+  })
+})
+// ---- end B-OS-014, B-OS-017

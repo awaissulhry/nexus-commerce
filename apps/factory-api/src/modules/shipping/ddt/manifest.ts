@@ -15,6 +15,8 @@ export const manifest = defineManifest({
   'POST /shipping/shipments/:shipmentId/ddt/preview/pdf': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
   'POST /shipping/shipments/:shipmentId/ddt': { audiences: ['office'], permission: 'shipping.ddt.issue', scope: 'record' },
   'POST /shipping/shipments/:shipmentId/ship': { audiences: ['office'], permission: 'shipping.manage', scope: 'record' },
+  // B-OS-017 (order shipments tab): travels without a DDT, or with one again (the handler also asks shipping.ddt.issue).
+  'PUT /shipping/shipments/:shipmentId/ddt-required': { audiences: ['office'], permission: 'shipping.manage', scope: 'record' },
   'GET /shipping/ddts': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
   'GET /shipping/ddts/:ddtId': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
   'GET /shipping/ddts/:ddtId/pdf': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },

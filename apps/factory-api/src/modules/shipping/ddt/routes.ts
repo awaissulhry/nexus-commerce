@@ -14,11 +14,13 @@ import {
   previewPdfContract,
   printPdfContract,
   shipContract,
+  ddtRequiredContract, // B-OS-017
   sourceIssueContract,
   sourcePreviewContract,
   sourcePreviewPdfContract,
 } from './contract'
 import { cancelDdt, downloadDdtPdf, getDdt, issueDdt, listDdts, previewDdt, previewDdtPdf, printDdt, shipShipment } from './ddt'
+import { setDdtRequired } from './ddt' // B-OS-017
 import { manifest } from './manifest'
 import { issueSourceDdt, previewSourceDdt, previewSourceDdtPdf } from './sources'
 
@@ -47,6 +49,9 @@ export default defineRoutes('shipping.ddt', manifest, async (app) => {
   )
 
   app.post('/shipping/shipments/:shipmentId/ship', { schema: shipContract }, async (request) => shipShipment(request, request.params.shipmentId, request.body, idempotencyKeyFrom(request)))
+
+  // B-OS-017: this shipment travels without a DDT (or with one again).
+  app.put('/shipping/shipments/:shipmentId/ddt-required', { schema: ddtRequiredContract }, async (request) => setDdtRequired(request, request.params.shipmentId, request.body, idempotencyKeyFrom(request)))
 
   app.get('/shipping/ddts', { schema: listDdtsContract }, async (request) => listDdts(request, request.query))
 

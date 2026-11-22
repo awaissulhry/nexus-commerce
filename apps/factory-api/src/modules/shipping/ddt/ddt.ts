@@ -5,6 +5,11 @@ import { scopeWhere, type Permission } from '@nexus/factory-domain/core/permissi
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
 import { composeDocument, documentProblems } from '@nexus/factory-domain/documents/compose'
 import { cancelDdtProblems, ddtDocument, draftDdt, draftInvoicesWarning, invoicesOfDdt, issueStateProblems, type DdtDraft, type DdtFacts, type DdtRequest, type InvoiceOfDdt } from '@nexus/factory-domain/shipping/ddt'
+// B-OS-014, B-OS-017 (order shipments tab): the goods handed over at a typed time; "this shipment travels without a DDT".
+import { ddtNotNeededWords, ddtRequiredRefusal } from '@nexus/factory-domain/shipping/ddt'
+import { handOverTimeProblems } from '@nexus/factory-domain/shipping/shipments'
+import { parseInstant } from '@nexus/factory-domain/core/time'
+import { packingChanged } from '../shipments/shipments'
 import { cancelSourceDdtProblems, DDT_SOURCE_TYPES, sourceDdtDocument, type DdtSourceType } from '@nexus/factory-domain/shipping/ddt/sources'
 import { SHIPPING_DDT_CANCEL, SHIPPING_DDT_ISSUE, SHIPPING_MANAGE, SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
 import { shipmentMachine, type ShipmentStatus } from '@nexus/factory-domain/shipping/shipments'
@@ -205,6 +210,9 @@ export async function issueDdt(files: FilesRuntime, caller: CommandCaller, shipm
       // B-OP-032 (N5): 409 in words before the database's Ddt_not_elsewhere refuses it.
       const elsewhere = await madeElsewhereWords(tools.tx, current.id)
       if (elsewhere) throw new DomainError('conflict', elsewhere, [{ path: elsewhereRefusalPath('NEXUS_DDT'), message: elsewhere }])
+      // B-OS-017 (L13): no DDT for a shipment set to travel without one (else it could be billed twice).
+      const notNeeded = ddtNotNeededWords(current.ddtRequired)
+      if (notNeeded) throw new DomainError('conflict', notNeeded, [{ path: 'refusal/DDT_NOT_NEEDED', message: notNeeded }])
       const facts = await readDdtFacts(tools.tx, current, company)
       const state = issueStateProblems(current.status, facts.liveDdtNumber, body.ship === true)
       if (state.length > 0) throw new InvalidStateError(state.join(' '))
@@ -458,7 +466,12 @@ export async function listDdts(caller: CommandCaller, query: ListDdtsQuery) {
  * shipping.manage: the goods were handed over (PACKED → SHIPPED, the packed serials SHIPPED): with a live DDT, unless
  * an immediate invoice travels with them (ddtRequired false). Office only; never the floor.
  */
-export async function shipShipment(caller: CommandCaller, shipmentId: string, body: { version?: number | undefined; periodLockOverride?: PeriodLockOverride | undefined }, idempotencyKey?: string) {
+export async function shipShipment(
+  caller: CommandCaller,
+  shipmentId: string,
+  body: { version?: number | undefined; periodLockOverride?: PeriodLockOverride | undefined; /* B-OS-014 */ shippedAt?: string | undefined; reason?: string | null | undefined },
+  idempotencyKey?: string,
+) {
   const shipment = await officeShipment(caller, shipmentId, SHIPPING_MANAGE)
   const { result } = await withCreditHolds(caller, idempotencyKey, () => withGateRecords(caller, idempotencyKey, () => command(caller, { name: 'shipping.ship', idempotencyKey, input: { shipmentId, ...body }, record: { type: 'Shipment', id: shipment.id, expectedVersion: body.version } }, async (tools) => {
     const current = await lockedStatus(tools, shipment.id, ['PACKED'], 'it leaves')
@@ -466,8 +479,26 @@ export async function shipShipment(caller: CommandCaller, shipmentId: string, bo
     assertTransition(shipmentMachine, current.status, 'SHIPPED', facts)
     await assertDocumentsTravel(tools, current.id)
     const live = await liveDdtOf(tools.tx, current.id)
-    const serials = await shipGoods(tools, current, { periodLockOverride: body.periodLockOverride })
-    tools.audit({ recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { status: 'PACKED' }, after: { status: 'SHIPPED', ddt: live?.number ?? null, serials } })
+    // ── B-OS-014: handed over at a time the office types (not ahead of now, not before packing nor the DDT; a reason when past) ──
+    const reason = body.reason?.trim() ? body.reason.trim() : null
+    const shippedAt = body.shippedAt !== undefined ? parseInstant(body.shippedAt) : null
+    if (body.shippedAt !== undefined) {
+      if (shippedAt === null) throw new ValidationError('Expected an ISO 8601 time with a zone.', [{ path: 'body/shippedAt', message: 'Expected an ISO 8601 time with a zone.' }])
+      const ddtIssuedAt = live ? ((await tools.tx.ddt.findUnique({ where: { id: live.id }, select: { issuedAt: true } }))?.issuedAt ?? null) : null
+      const problems = handOverTimeProblems(shippedAt, { now: tools.now, packedAt: current.packedAt, ddtIssuedAt, reason })
+      if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
+    }
+    // ── end B-OS-014 ──
+    const serials = await shipGoods(tools, current, { periodLockOverride: body.periodLockOverride, ...(shippedAt ? { shippedAt } : {}) /* B-OS-014 */ })
+    tools.audit({
+      recordType: 'Shipment',
+      recordId: current.id,
+      companyId: current.companyId,
+      siteId: current.siteId,
+      before: { status: 'PACKED' },
+      after: { status: 'SHIPPED', ddt: live?.number ?? null, serials, /* B-OS-014 */ ...(shippedAt ? { shippedAt: shippedAt.toISOString(), byHand: true } : {}) },
+      ...(reason ? { reason } : {}), // B-OS-014
+    })
     return { shipment: await shipmentDetail(tools.tx, (await readShipment(tools.tx, current.id))!) }
   })))
   return result
@@ -568,3 +599,31 @@ async function cancelSourceDdt(caller: CommandCaller, ddt: SourceDdtRow, body: {
   })
   return result
 }
+
+// ── B-OS-017 (order shipments tab; O7 B, L13, Owner D6): "This shipment travels without a DDT" (and back) ────────────────────
+/**
+ * PUT /shipping/shipments/:shipmentId/ddt-required (shipping.manage, and shipping.ddt.issue as for a shipment made elsewhere): a
+ * Nexus shipment that has not left travels without a DDT (`required` false: an immediate invoice travels instead, or the company
+ * issues none) or with one again (`required` true), with a reason. Refused while a DDT of it is live (cancel the DDT first), once
+ * it left, on one made elsewhere; the same choice again is refused (SAME). Then the goods leave by POST …/ship without a DDT (the
+ * database's deferred Shipment_shipped_has_ddt reads the same column) and no DDT is issued for it (DDT_NOT_NEEDED). Reads no country.
+ */
+export async function setDdtRequired(caller: CommandCaller, shipmentId: string, body: { version?: number | undefined; required: boolean; reason: string }, idempotencyKey?: string) {
+  const context = officeContextOf(caller)
+  const shipment = await officeShipment(caller, shipmentId, SHIPPING_MANAGE)
+  if (!mayOn(context, SHIPPING_DDT_ISSUE, shipment)) throw new ForbiddenError('Choosing whether a DDT travels needs the right to issue DDTs too.')
+  const reason = body.reason.trim()
+  const { result } = await command(caller, { name: 'shipping.ddtRequired', idempotencyKey, input: { shipmentId, ...body }, record: { type: 'Shipment', id: shipment.id, expectedVersion: body.version } }, async (tools) => {
+    const current = (await readShipment(tools.tx, shipment.id))!
+    const origin = (await tools.tx.shipment.findUnique({ where: { id: current.id }, select: { origin: true } }))?.origin ?? 'NEXUS'
+    const live = await liveDdtOf(tools.tx, current.id)
+    const refusal = ddtRequiredRefusal({ status: current.status, origin, ddtRequired: current.ddtRequired, liveDdtNumber: live?.number ?? null }, body.required)
+    if (refusal) throw new DomainError('conflict', refusal.message, [{ path: `refusal/${refusal.code}`, message: refusal.message }])
+    await tools.tx.shipment.update({ where: { id: current.id }, data: { ddtRequired: body.required }, select: { id: true } })
+    tools.audit({ action: 'shipping.ddtRequired', recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { ddtRequired: current.ddtRequired }, after: { ddtRequired: body.required }, reason })
+    packingChanged(tools, current, current.status, 'details')
+    return { shipment: await shipmentDetail(tools.tx, (await readShipment(tools.tx, current.id))!) }
+  })
+  return result
+}
+// ── end B-OS-017 ──
