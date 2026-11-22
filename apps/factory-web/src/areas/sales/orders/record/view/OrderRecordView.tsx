@@ -43,6 +43,7 @@ import { linesNotInProduction } from '../../model' // F-OP-102
 import { readOnlyOnPage } from '../../model' // F-OP-303 (walk #6)
 import { bandMenuFor, bandStepOf } from '../../model' // F-OP-311 (oo-walk #10): Read-only sees no move in the band
 import type { NextStep } from '../../model' // F-OS-101 (L10): the band's step on the Shipments tab
+import type { NoticeWords } from '../record-model' // F-OS-204
 import { planningHref } from '../../../../../lib/production/work-order-acts/model' // F-OP-102
 import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 import { tabHref } from '../../../../_shared/record-frame/address' // F-OP-210
@@ -177,6 +178,9 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields 
   const bandStep = bandStepOf(order, model.can, readOnly)
   const shipmentsTab = model.tab === 'shipments'
   const step: NextStep = shipmentsTab && bandStep.kind === 'createShipment' ? { kind: null, held: null } : bandStep
+  // F-OS-204: the one notice says words of the order page's catalogue or of the Shipments tab's own (`order-shipments`, L11).
+  const os = useT('order-shipments')
+  const noticeSay = (words: NoticeWords): string => (words.ns === 'order-shipments' ? os(words.key, words.params) : t(words.key, words.params))
   const createDoor = createShipmentDoor(order, model.can, model.prefix, !!actions?.onCreateShipment) // F-OP-121
   const stepHeld = step.held ? t(step.held.key, step.held.params?.date ? { ...step.held.params, date: formatDate(dayInstant(String(step.held.params.date)), { locale }) } : step.held.params) : model.busy ? t('held.busy') : null
   const gate = depositGate(order)
@@ -442,14 +446,14 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields 
           {model.notice && (
             <Banner
               tone={model.notice.tone}
-              title={t(model.notice.words.key, model.notice.words.params)}
+              title={noticeSay(model.notice.words)}
               action={
                 model.notice.door || actions?.onDismissNotice ? (
                   <>
                     {/* F-OP-121: the door a notice offers (Pack and ship it in Warehouse ›) */}
                     {model.notice.door && (
                       <Button size="sm" asChild>
-                        <Link href={model.notice.door.href}>{t(model.notice.door.words.key, model.notice.door.words.params)}</Link>
+                        <Link href={model.notice.door.href}>{noticeSay(model.notice.door.words)}</Link>
                       </Button>
                     )}
                     {actions?.onDismissNotice && (
@@ -460,7 +464,10 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields 
                   </>
                 ) : undefined
               }
-            />
+            >
+              {/* F-OS-204: where the customer sees it, what they were told (no e-mail by default). */}
+              {model.notice.told ? noticeSay(model.notice.told) : null}
+            </Banner>
           )}
           {/* B-TH-256: the result of an Accept / Decline of a re-promise. */}
           <LinksSaid model={model.links} actions={actions?.links} />
