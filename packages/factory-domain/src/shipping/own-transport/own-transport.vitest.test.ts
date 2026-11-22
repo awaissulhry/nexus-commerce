@@ -57,6 +57,14 @@ describe('how the goods travel (LOG-122)', () => {
     expect(trackingRefusal(facts({ status: 'CANCELLED' }))?.code).toBe('CANCELLED')
   })
 
+  // B-OS-006 (order shipments tab; X2-B6): a TEST label is never tracked, so it never stops a typed number; a carrier's label does.
+  it('B-OS-006: a TEST label does not stop a typed tracking number; a carrier label does (and both stop how the goods travel)', () => {
+    expect(trackingRefusal(facts({ parcels: [test] }))).toBeNull()
+    expect(trackingRefusal(facts({ status: 'SHIPPED', parcels: [test, { trackingNumber: null, providerId: null }] }))).toBeNull()
+    expect(trackingRefusal(facts({ parcels: [test, real] }))?.code).toBe('LABELLED')
+    expect(arrangeRefusal(facts({ parcels: [test] }))?.code).toBe('LABELLED')
+  })
+
   it('types a status once the goods left, never for a shipment its carrier tracks or the customer collects', () => {
     expect(eventRefusal(facts({ status: 'SHIPPED', transportBy: 'SENDER' }))).toBeNull()
     expect(eventRefusal(facts({ status: 'SHIPPED', parcels: [test] }))).toBeNull()

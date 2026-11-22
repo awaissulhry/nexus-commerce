@@ -7,6 +7,10 @@ import { releasedPiecesOf } from '@nexus/factory-domain/sales/orders/orders' // 
 import { StaleVersionError, type CommandTx } from '../../../core/command'
 // B-OP-043 (order page N6, lines-derived): a shipment's orders are its lines' orders (the first order first).
 import { orderRefsOfShipments, shipmentsOfOrderWhere } from '../../shipping/shipments/orders-of'
+// B-OS-001 (order shipments tab): each shipment's holds in force, by Warehouse's own reader.
+import { holdsInForceBy, type HoldRow } from '../../shipping/holds/store'
+// B-OS-002 (order shipments tab): planned and ready now by Warehouse's own backorder reader (one rule).
+import { readBackorders } from '../../shipping/shipments/backorder'
 
 /**
  * The sales orders' reads (factory-db sales.prisma SalesOrder, SalesOrderLine, SalesOrderLineSize, and what follows an
@@ -282,15 +286,110 @@ export async function hasOrderSeries(db: Reader, companyId: string): Promise<boo
 }
 
 // ── B-OP-023 (order page plan N5; review R-7): each shipment of the order as its Shipments tab reads it ───────────────────────────
-const SHIPMENT_DETAIL = { id: true, companyId: true, siteId: true, version: true, status: true, transportBy: true, carrierCode: true, carrierName: true, manualTrackingNumber: true, /* F-OP-135 */ manualTrackingUrl: true, expectedDeliveryAt: true } as const satisfies Prisma.ShipmentSelect
-const PARCEL_DETAIL = { shipmentId: true, seq: true, trackingNumber: true, trackingUrl: true, carrierParcelId: true } as const satisfies Prisma.ParcelSelect
+const SHIPMENT_DETAIL = {
+  id: true,
+  companyId: true,
+  siteId: true,
+  version: true,
+  status: true,
+  transportBy: true,
+  carrierCode: true,
+  carrierName: true,
+  manualTrackingNumber: true,
+  /* F-OP-135 */ manualTrackingUrl: true,
+  expectedDeliveryAt: true,
+  // ── B-OS-001 (order shipments tab; 13-backend §1): its customer (for the rights), why it was cancelled, the shipment it was split
+  // from, whether a DDT travels with it, when it was packed. No value, no freight (the price grain's columns are never read here).
+  partyId: true,
+  cancelReason: true,
+  cancelledAt: true,
+  splitFromId: true,
+  splitReason: true,
+  ddtRequired: true,
+  packedAt: true,
+  // ── end B-OS-001 ──
+} as const satisfies Prisma.ShipmentSelect
+const PARCEL_DETAIL = { shipmentId: true, seq: true, trackingNumber: true, trackingUrl: true, carrierParcelId: true, /* B-OS-001 */ id: true } as const satisfies Prisma.ParcelSelect
+/** B-OS-001: one shipment of the order as its detail is read. */
+export type ShipmentDetailRow = Prisma.ShipmentGetPayload<{ select: typeof SHIPMENT_DETAIL }>
 
 export interface ShipmentDetails {
   readonly shipments: ReadonlyMap<string, Prisma.ShipmentGetPayload<{ select: typeof SHIPMENT_DETAIL }>>
   readonly parcels: readonly Prisma.ParcelGetPayload<{ select: typeof PARCEL_DETAIL }>[]
   /** Each shipment's live DDT (the newest one not cancelled). */
   readonly ddts: ReadonlyMap<string, { readonly number: string; readonly date: BusinessDate }>
+  // ── B-OS-001 (order shipments tab; 13-backend §1) ──
+  /** Every line of the shipments (every order's: the view keeps this order's and counts the others'), by shipment, order line and size. */
+  readonly lineCounts: readonly PieceRow[]
+  /** What each parcel holds, by order line and size (carton contents; else a whole line packed in it). */
+  readonly parcelCounts: readonly ParcelPieceRow[]
+  /** The holds in force of each shipment, oldest first. */
+  readonly holds: ReadonlyMap<string, readonly HoldRow[]>
+  /** The shipments the split ones were split from: their numbers. */
+  readonly parents: ReadonlyMap<string, string>
+  /** A cancelled shipment merged into another: that one (the newest shipping.merge audit row naming it). */
+  readonly mergedInto: ReadonlyMap<string, { readonly id: string; readonly number: string }>
+  // ── end B-OS-001 ──
 }
+
+// ── B-OS-001 (order shipments tab; 13-backend §1) ──
+/** Pieces of one order line and size on one shipment. */
+export interface PieceRow {
+  readonly shipmentId: string
+  readonly lineId: string
+  readonly size: string
+  readonly pieces: number
+}
+
+/** Pieces of one order line and size in one parcel. */
+export interface ParcelPieceRow {
+  readonly parcelId: string
+  readonly lineId: string
+  readonly size: string
+  readonly pieces: number
+}
+
+/**
+ * The lines of the shipments and what each parcel holds, in two reads for all of them (never a query per row): the shipments'
+ * lines, then the carton contents of those lines. A line with carton contents lies in those cartons; one without, in the parcel
+ * it is packed in (if any).
+ */
+async function readShipmentPieces(db: Reader, shipmentIds: readonly string[]): Promise<{ lineCounts: PieceRow[]; parcelCounts: ParcelPieceRow[] }> {
+  const lines = await db.shipmentLine.findMany({ where: { shipmentId: { in: [...shipmentIds] } }, select: { id: true, shipmentId: true, parcelId: true, salesOrderLineId: true, size: true, quantity: true }, orderBy: [{ shipmentId: 'asc' }, { id: 'asc' }] })
+  const cartons = lines.length > 0 ? await db.parcelLine.findMany({ where: { shipmentLineId: { in: lines.map((line) => line.id) } }, select: { parcelId: true, shipmentLineId: true, quantity: true }, orderBy: [{ parcelId: 'asc' }, { id: 'asc' }] }) : []
+  const add = <T extends { pieces: number }>(map: Map<string, T>, key: string, row: T) => {
+    const found = map.get(key)
+    map.set(key, found ? { ...found, pieces: found.pieces + row.pieces } : row)
+  }
+  const byLine = new Map<string, PieceRow>()
+  for (const line of lines) add(byLine, `${line.shipmentId}|${line.salesOrderLineId}|${line.size}`, { shipmentId: line.shipmentId, lineId: line.salesOrderLineId, size: line.size, pieces: line.quantity })
+  const lineOf = new Map(lines.map((line) => [line.id, line]))
+  const inCartons = new Set(cartons.map((row) => row.shipmentLineId))
+  const byParcel = new Map<string, ParcelPieceRow>()
+  for (const row of cartons) {
+    const line = lineOf.get(row.shipmentLineId)
+    if (line) add(byParcel, `${row.parcelId}|${line.salesOrderLineId}|${line.size}`, { parcelId: row.parcelId, lineId: line.salesOrderLineId, size: line.size, pieces: row.quantity })
+  }
+  for (const line of lines) {
+    if (line.parcelId !== null && !inCartons.has(line.id)) add(byParcel, `${line.parcelId}|${line.salesOrderLineId}|${line.size}`, { parcelId: line.parcelId, lineId: line.salesOrderLineId, size: line.size, pieces: line.quantity })
+  }
+  return { lineCounts: [...byLine.values()], parcelCounts: [...byParcel.values()] }
+}
+
+/** The shipment each cancelled one was merged into (B-OS-012 writes `after.into { id, number }` on the shipping.merge audit row). */
+async function readMergedInto(db: Reader, cancelledIds: readonly string[]): Promise<Map<string, { id: string; number: string }>> {
+  const out = new Map<string, { id: string; number: string }>()
+  if (cancelledIds.length === 0) return out
+  const rows = await db.auditLog.findMany({ where: { recordType: 'Shipment', recordId: { in: [...cancelledIds] }, action: 'shipping.merge' }, select: { recordId: true, after: true }, orderBy: [{ at: 'desc' }, { id: 'desc' }] })
+  for (const row of rows) {
+    if (out.has(row.recordId)) continue
+    const into = row.after !== null && typeof row.after === 'object' && !Array.isArray(row.after) ? (row.after as Record<string, unknown>).into : null
+    const target = into !== null && typeof into === 'object' && !Array.isArray(into) ? (into as Record<string, unknown>) : null
+    if (target && typeof target.id === 'string' && typeof target.number === 'string' && target.id !== row.recordId) out.set(row.recordId, { id: target.id, number: target.number })
+  }
+  return out
+}
+// ── end B-OS-001 ──
 
 /**
  * The detail of the order's shipments (read by `Shipment.salesOrderId`, as the chain is today; set C reads the orders of its lines):
@@ -298,13 +397,60 @@ export interface ShipmentDetails {
  * DDT. The view decides what each reader may see of it.
  */
 export async function readShipmentDetails(db: Reader, shipmentIds: readonly string[]): Promise<ShipmentDetails> {
-  if (shipmentIds.length === 0) return { shipments: new Map(), parcels: [], ddts: new Map() }
+  if (shipmentIds.length === 0) return { shipments: new Map(), parcels: [], ddts: new Map(), /* B-OS-001 */ lineCounts: [], parcelCounts: [], holds: new Map(), parents: new Map(), mergedInto: new Map() }
   const rows = await db.shipment.findMany({ where: { id: { in: [...shipmentIds] } }, select: SHIPMENT_DETAIL })
   const parcels = await db.parcel.findMany({ where: { shipmentId: { in: [...shipmentIds] } }, select: PARCEL_DETAIL, orderBy: [{ shipmentId: 'asc' }, { seq: 'asc' }] })
   const ddts = await db.ddt.findMany({ where: { shipmentId: { in: [...shipmentIds] } }, select: { id: true, shipmentId: true, number: true, documentDate: true }, orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }] })
   const cancelled = new Set(ddts.length > 0 ? (await db.ddtCancellation.findMany({ where: { ddtId: { in: ddts.map((row) => row.id) } }, select: { ddtId: true } })).map((row) => row.ddtId) : [])
   const live = new Map<string, { number: string; date: BusinessDate }>()
   for (const ddt of ddts) if (ddt.shipmentId && !cancelled.has(ddt.id) && !live.has(ddt.shipmentId)) live.set(ddt.shipmentId, { number: ddt.number, date: dayOf(ddt.documentDate) })
-  return { shipments: new Map(rows.map((row) => [row.id, row])), parcels, ddts: live }
+  // ── B-OS-001: what each shipment and parcel carries, its holds in force, the split parent, the merge target (one read each) ──
+  const pieces = await readShipmentPieces(db, shipmentIds)
+  const holds = await holdsInForceBy(db, shipmentIds)
+  const parentIds = [...new Set(rows.flatMap((row) => (row.splitFromId ? [row.splitFromId] : [])))]
+  const parents = new Map((parentIds.length > 0 ? await db.shipment.findMany({ where: { id: { in: parentIds } }, select: { id: true, number: true } }) : []).map((row) => [row.id, row.number]))
+  const mergedInto = await readMergedInto(db, rows.filter((row) => row.status === 'CANCELLED').map((row) => row.id))
+  // ── end B-OS-001 ──
+  return { shipments: new Map(rows.map((row) => [row.id, row])), parcels, ddts: live, /* B-OS-001 */ ...pieces, holds, parents, mergedInto }
 }
 // ── end B-OP-023 ──
+
+// ── B-OS-002 (order shipments tab; H1, O8; 13-backend §1): the buckets that add up ────────────────────────────────────────────
+/** Of one size (or line, or the order): on shipments that have not left (DRAFT, PACKED), and released and on no shipment yet. */
+export interface ShipFigures {
+  readonly planned: number
+  readonly readyNow: number
+}
+
+export const NO_SHIP_FIGURES: ShipFigures = Object.freeze({ planned: 0, readyNow: 0 })
+
+export interface OrderShipFigures {
+  /** One size of a line; a line without a size grid: size null (its one row). */
+  readonly of: (lineId: string, size: string | null) => ShipFigures
+  readonly line: (lineId: string) => ShipFigures
+  /** The order's goods (a fee is never shipped: 0). */
+  readonly all: ShipFigures
+}
+
+/**
+ * The order's `planned` and `readyNow` per size, per line and for the order, by the SAME rule as Warehouse's backorder
+ * (modules/shipping/shipments/backorder readBackorders, factory-domain sizeBackorder): planned = `open` (on DRAFT and PACKED
+ * shipments), ready now = released less reversals less what every shipment that is not cancelled holds (a carrier return holds
+ * its garments until they are received back), never more than is still to ship. `toShip` and `shipped` stay the order machine's.
+ */
+export async function readShipFigures(db: Reader, orderId: string): Promise<OrderShipFigures> {
+  const lines = (await readBackorders(db, [orderId], null)).get(orderId) ?? []
+  const sum = (sizes: readonly { readonly open: number; readonly readyNow: number }[]): ShipFigures => ({ planned: sizes.reduce((count, size) => count + size.open, 0), readyNow: sizes.reduce((count, size) => count + size.readyNow, 0) })
+  const bySize = new Map<string, ShipFigures>()
+  const byLine = new Map<string, ShipFigures>()
+  for (const line of lines) {
+    for (const size of line.sizes) bySize.set(`${line.lineId}|${size.size}`, { planned: size.open, readyNow: size.readyNow })
+    byLine.set(line.lineId, sum(line.sizes))
+  }
+  return {
+    of: (lineId, size) => (size === null ? byLine.get(lineId) : bySize.get(`${lineId}|${size}`)) ?? NO_SHIP_FIGURES,
+    line: (lineId) => byLine.get(lineId) ?? NO_SHIP_FIGURES,
+    all: sum(lines.flatMap((line) => line.sizes)),
+  }
+}
+// ── end B-OS-002 ──

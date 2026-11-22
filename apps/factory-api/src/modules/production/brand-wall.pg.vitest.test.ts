@@ -201,6 +201,20 @@ describe('B-PR-10 the brand-wall sweep', () => {
       expect(swept.has(key), key).toBe(true)
       expect(EXEMPT[key], key).toBeUndefined()
     }
+    // B-OS (order shipments tab, 13-backend §4): every route the Shipments tab reads is met by the sweep by itself — swept, never
+    // EXEMPT (a customer-limited person gets the same not-found as an unknown id). PR S1: the order read's rows and buckets
+    // (B-OS-001, 002) and the backorder they share, the deliveries (B-OS-003), the links (B-OS-004), what may come back from one
+    // shipment (B-OS-005). PR S2 adds the commands; PR S3 the tracking per parcel.
+    for (const key of [
+      'GET /sales/orders/:orderId',
+      'GET /shipping/orders/:salesOrderId/backorder',
+      'GET /sales/orders/:orderId/deliveries',
+      'GET /sales/orders/:orderId/links',
+      'GET /sales/returns/returnable',
+    ]) {
+      expect(swept.has(key), key).toBe(true)
+      expect(EXEMPT[key], key).toBeUndefined()
+    }
     expect(swept.size).toBeGreaterThan(walked.length)
     // The golden production world's traces of A, here too: its portal people and their mails, stock moves of its work orders,
     // its files and threads (fix-pr-7 found the mail log and the stock card leaks only where they were).

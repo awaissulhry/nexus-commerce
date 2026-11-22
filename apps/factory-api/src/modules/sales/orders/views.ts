@@ -13,6 +13,14 @@ import { readCancelFacts } from './impact'
 import { dayOf, dayOrNull, moveFactsOf, readOrderFacts, type OrderFacts, type OrderRow, type Reader } from './store'
 // B-OP-023 (order page plan N5): each shipment's carrier, tracking, DDT and whether its number may be typed in place.
 import { readShipmentDetails, type ShipmentDetails, type ShipmentLink } from './store'
+// B-OS-001 (order shipments tab): each row's contents, holds, split and merge, parcels and what the reader may do there.
+import type { ShipmentDetailRow } from './store'
+// B-OS-002 (order shipments tab): planned and ready now per size, line and order (Warehouse's backorder rule).
+import { readShipFigures, type ShipFigures } from './store'
+import type { Permission } from '@nexus/factory-domain/core/permissions'
+import { SHIPPING_DDT_ISSUE, SHIPPING_PACK } from '@nexus/factory-domain/shipping/permissions'
+import { SHIPPING_HOLDS_MANAGE, SHIPPING_HOLDS_RELEASE } from '@nexus/factory-domain/shipping/holds/permissions'
+import type { ShipmentHoldReason } from '@nexus/factory-domain/shipping/holds/holds'
 import { carrierNameFor } from '@nexus/factory-domain/shipping/labels/labels'
 import { trackingPageOf } from '@nexus/factory-domain/shipping/labels/tracking'
 import { trackingRefusal, type OwnTransportRefusalCode } from '@nexus/factory-domain/shipping/own-transport/rules'
@@ -453,7 +461,7 @@ const NO_TRACKING_RIGHT: MayTrack = { allowed: false, code: 'NO_RIGHT', why: NO_
  * reader of the order; the carrier and its tracking only with shipping.view over its site (else withheld); and whether the reader
  * may type its tracking number here — the shipment's own refusal first (the warehouse's rule), then the right.
  */
-function shipmentRowOf(link: ShipmentLink, details: ShipmentDetails, viewer: Actor | null) {
+function shipmentRowOf(link: ShipmentLink, details: ShipmentDetails, viewer: Actor | null, own: OwnLines /* B-OS-001 */) {
   // Read in the same client as the order's chain: every shipment of the chain is there.
   const row = details.shipments.get(link.id)!
   const place = { companyId: row.companyId, siteId: row.siteId }
@@ -480,9 +488,66 @@ function shipmentRowOf(link: ShipmentLink, details: ShipmentDetails, viewer: Act
     ddt: details.ddts.get(link.id) ?? null,
     mayTypeTracking,
     withheld: sees ? [] : ['shipments.detail' as const],
+    ...shipmentRowAdditions(row, details, viewer, sees, parcels, own), // B-OS-001
   }
 }
 // ── end B-OP-023 ──
+
+// ── B-OS-001 (order shipments tab; 13-backend §1, wall §4) ──────────────────────────────────────────────────────────────────────
+/** The order's own lines, as the rows count a shipment's garments: their ids, and those without a size grid (one unit, size null). */
+interface OwnLines {
+  readonly ids: ReadonlySet<string>
+  readonly sizeless: ReadonlySet<string>
+}
+
+const ownLinesOf = (lines: readonly { readonly id: string; readonly sizes: readonly unknown[] }[]): OwnLines => ({ ids: new Set(lines.map((line) => line.id)), sizeless: new Set(lines.filter((line) => line.sizes.length === 0).map((line) => line.id)) })
+
+/**
+ * What a shipment row adds for the order's Shipments tab: what it carries of THIS order (line and size; a made-to-measure line's
+ * size is null) and how many pieces of the customer's other orders, its holds in force, why it was cancelled, the shipment it was
+ * split from and the one it was merged into, whether a DDT travels with it, when it was packed, its parcels (each with its number,
+ * where the number comes from and what it holds) and what this reader may do on it. Holds and parcels only with shipping.view over
+ * its site (as its carrier and tracking: `withheld` says so); never a value, a freight or a person (the holds name no one).
+ */
+function shipmentRowAdditions(
+  row: ShipmentDetailRow,
+  details: ShipmentDetails,
+  viewer: Actor | null,
+  sees: boolean,
+  parcels: ShipmentDetails['parcels'],
+  own: OwnLines,
+) {
+  const sizeOf = (lineId: string, size: string): string | null => (own.sizeless.has(lineId) ? null : size)
+  const split = <T extends { readonly lineId: string; readonly size: string; readonly pieces: number }>(rows: readonly T[]) => ({
+    contents: rows.filter((entry) => own.ids.has(entry.lineId)).map((entry) => ({ lineId: entry.lineId, size: sizeOf(entry.lineId, entry.size), pieces: entry.pieces })),
+    otherPieces: rows.filter((entry) => !own.ids.has(entry.lineId)).reduce((sum, entry) => sum + entry.pieces, 0),
+  })
+  const carried = split(details.lineCounts.filter((entry) => entry.shipmentId === row.id))
+  const place = { companyId: row.companyId, siteId: row.siteId, partyId: row.partyId }
+  const may = (permission: Permission) => viewer !== null && can(viewer, permission, place)
+  const parentNumber = row.splitFromId ? details.parents.get(row.splitFromId) : undefined
+  return {
+    contents: carried.contents,
+    otherPieces: carried.otherPieces,
+    holds: sees ? (details.holds.get(row.id) ?? []).map((hold) => ({ id: hold.id, reason: hold.reason as ShipmentHoldReason, words: hold.words, bySystem: hold.placedById === null, placedAt: toUtcIso(hold.placedAt) })) : [],
+    cancelReason: row.cancelReason,
+    cancelledAt: instantOrNull(row.cancelledAt),
+    splitFrom: row.splitFromId && parentNumber !== undefined && row.splitReason ? { id: row.splitFromId, number: parentNumber, reason: row.splitReason } : null,
+    mergedInto: details.mergedInto.get(row.id) ?? null,
+    ddtRequired: row.ddtRequired,
+    packedAt: instantOrNull(row.packedAt),
+    parcels: sees
+      ? parcels.map((parcel) => {
+          // A TEST label is not tracked: no number, no source (as `tracking` above).
+          const label = parcel.trackingNumber !== null && !isTestLabel(parcel.carrierParcelId)
+          const held = split(details.parcelCounts.filter((entry) => entry.parcelId === parcel.id))
+          return { id: parcel.id, seq: parcel.seq, number: label ? parcel.trackingNumber : null, url: label ? trackingPageOf(parcel.trackingUrl) : null, source: label ? ('LABEL' as const) : null, live: label, contents: held.contents, otherPieces: held.otherPieces }
+        })
+      : [],
+    may: { manage: may(SHIPPING_MANAGE), pack: may(SHIPPING_PACK), ddt: may(SHIPPING_DDT_ISSUE), holdsManage: may(SHIPPING_HOLDS_MANAGE), holdsRelease: may(SHIPPING_HOLDS_RELEASE) },
+  }
+}
+// ── end B-OS-001 ──
 
 export async function orderView(db: Reader, order: OrderRow, today: BusinessDate, settlement: SettlementAnswer, viewer: Actor | null = null /* B-SA-034 */, office: OfficeContext | null = null /* B-OP-020 */) {
   const facts = await readOrderFacts(db, order)
@@ -520,7 +585,9 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
   const people = peopleIds.length > 0 ? await db.user.findMany({ where: { id: { in: peopleIds } }, select: { id: true, displayName: true }, orderBy: { id: 'asc' } }) : []
 
   const progressOf = (lineId: string, size: string | null) => facts.progress.rows.find((row) => row.lineId === lineId && row.size === size)
-  const strip = (row: Progress) => ({ ordered: row.ordered, inWorkOrders: row.inWorkOrders, made: row.made, released: row.released, shipped: row.shipped, invoiced: row.invoiced, toShip: row.toShip, closedShort: row.closedShort })
+  // B-OS-002: + planned and ready now, by Warehouse's backorder rule (toShip and shipped stay the order machine's).
+  const shipFigures = await readShipFigures(db, order.id)
+  const strip = (row: Progress, figures: ShipFigures /* B-OS-002 */) => ({ ordered: row.ordered, inWorkOrders: row.inWorkOrders, made: row.made, released: row.released, shipped: row.shipped, invoiced: row.invoiced, toShip: row.toShip, closedShort: row.closedShort, /* B-OS-002 */ planned: figures.planned, readyNow: figures.readyNow })
   // B-W2a-30: the amendments so far (the Changes tab reads them whole: GET …/amendments) and the daily actions.
   const amendments = await db.salesOrderAmendment.findMany({ where: { orderId: order.id }, select: { revision: true, createdAt: true }, orderBy: { revision: 'desc' } })
   // The cancel action is held by what the impact check says stops it (a shipment being packed, an invoice).
@@ -529,6 +596,7 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
   const promiseDate = dayOrNull(order.promiseDate)
   const approvals = await openApprovalsOf(db, order.id, office) // B-OP-020
   const shipmentDetails = await readShipmentDetails(db, facts.shipments.map((row) => row.id)) // B-OP-023
+  const ownLines = ownLinesOf(facts.lines) // B-OS-001: this order's lines (a shared shipment counts the others' apart)
   const money = await orderMoneyRead(db, order, viewer) // B-OM-002
 
   return {
@@ -616,9 +684,9 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
         version: line.version,
         sizes:
           sizes.length > 0
-            ? sizes.map((size) => ({ size: size.size, quantity: size.quantity, unitPrice: asMoney('price', text(size.unitPrice)), progress: strip(progressOf(line.id, size.size)!) }))
-            : [{ size: null, quantity: line.quantity, unitPrice: asMoney('price', null), progress: strip(progressOf(line.id, null)!) }],
-        progress: strip(totals),
+            ? sizes.map((size) => ({ size: size.size, quantity: size.quantity, unitPrice: asMoney('price', text(size.unitPrice)), progress: strip(progressOf(line.id, size.size)!, shipFigures.of(line.id, size.size)) }))
+            : [{ size: null, quantity: line.quantity, unitPrice: asMoney('price', null), progress: strip(progressOf(line.id, null)!, shipFigures.of(line.id, null)) }],
+        progress: strip(totals, shipFigures.line(line.id)),
         // B-SA-035: the picture is put in after the read (withLinePictures); the artwork the reader may open, counted.
         picture: null as LinePicture | null,
         artworkCount: (artwork.get(line.id) ?? []).length,
@@ -627,7 +695,7 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
         rider: line.kind === 'MADE_TO_MEASURE' && line.measurementProfileId ? (riders.get(line.measurementProfileId) ?? null) : null,
       }
     }),
-    progress: strip(facts.progress.totals),
+    progress: strip(facts.progress.totals, shipFigures.all),
     chain: {
       quote: quote && version ? { id: quote.id, number: quote.number, versionId: version.id, revision: version.revision } : null,
       portalOrder, // B-OC-016
@@ -645,7 +713,7 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
         status: row.status,
         shippedAt: instantOrNull(row.shippedAt),
         deliveredAt: instantOrNull(row.deliveredAt),
-        ...shipmentRowOf(row, shipmentDetails, viewer),
+        ...shipmentRowOf(row, shipmentDetails, viewer, ownLines /* B-OS-001 */),
         // ── B-OP-043 (order page N6): every order it carries, how it was made, the paper DDT of one made elsewhere ──
         orders: [...row.orders], // op-fx1: the contract's array (the store's is readonly)
         origin: row.origin,
