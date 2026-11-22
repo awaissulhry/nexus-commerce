@@ -46,6 +46,8 @@ export function MoneyDialogs({ order, model, actions }: { order: Order; model: O
       {dialog?.kind === 'costLine' ? <CostLineDialog order={order} model={model} actions={actions} /> : null}
       {dialog?.kind === 'costLineRemove' ? <CostLineRemoveDialog key={dialog.lineId} order={order} lineId={dialog.lineId} model={model} actions={actions} /> : null}
       {dialog?.kind === 'marginTarget' ? <MarginTargetDialog order={order} model={model} actions={actions} /> : null}
+      {/* F-OM-202 (B-OM-022): a request's ⋯ Stop the page… */}
+      {dialog?.kind === 'stopPage' ? <StopPageDialog key={dialog.requestId} order={order} requestId={dialog.requestId} model={model} actions={actions} /> : null}
     </>
   )
 }
@@ -332,7 +334,7 @@ function PriceAcceptDialog({ order, undo, model, actions }: { order: Order; undo
         onReason={setReason}
         reasonError={reasonProblem ? say(reasonProblem) : null}
         code={false}
-        who={t('moneyTab.price.accept.who')}
+        who={t('moneyTab.hand.whoKept')}
       />
     </Frame>
   )
@@ -452,6 +454,33 @@ function MarginTargetDialog({ order, model, actions }: { order: Order; model: Or
         <Input value={typed} onChange={(event) => setTyped(event.target.value)} inputMode="decimal" autoComplete="off" />
       </Field>
       <HandParts happens={[t('moneyTab.margin.target.happens.marks'), t('moneyTab.margin.target.happens.flag')]} told={t('moneyTab.margin.told')} never={t('moneyTab.margin.target.never')} reason={reason} onReason={setReason} reasonError={reasonProblem ? say(reasonProblem) : null} code={false} who={t('moneyTab.margin.who')} />
+    </Frame>
+  )
+}
+
+/**
+ * F-OM-202 (B-OM-022, 10-design §10: the Owner only) — Stop the page sent to {to}?: the bank-details page stops working at once (the
+ * customer sees it is no longer valid); the payment request stays open (send a new page when it is needed). A reason, office only.
+ */
+function StopPageDialog({ order, requestId, model, actions }: { order: Order; requestId: string; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  const t = useT('orders')
+  const say = useSay(order.currency)
+  const link = order.chain.depositRequests.find((request) => request.id === requestId)?.link ?? null
+  const [reason, setReason] = useState('')
+  const reasonProblem = reasonProblemOf(reason)
+  const live = !!link?.id && link.state === 'LIVE'
+  const held = model.busy ? t('held.busy') : !live ? t('moneyTab.stop.gone') : reasonProblem ? say(reasonProblem) : null
+  return (
+    <Frame
+      title={link?.to ? t('moneyTab.stop.title', { to: link.to }) : t('moneyTab.stop.titleNoTo')}
+      held={held}
+      go={() => actions?.onStopPage?.(requestId, reason)}
+      goLabel={model.busy ? t('common.working') : t('moneyTab.stop.go')}
+      tone="danger"
+      onClose={() => actions?.onDialog?.(null)}
+      problem={<DialogProblem model={model} />}
+    >
+      <HandParts happens={[t('moneyTab.stop.happens.stops'), t('moneyTab.stop.happens.open')]} told={t('moneyTab.stop.told')} never={t('moneyTab.stop.never')} reason={reason} onReason={setReason} reasonError={reasonProblem ? say(reasonProblem) : null} code={false} who={t('moneyTab.hand.whoKept')} />
     </Frame>
   )
 }

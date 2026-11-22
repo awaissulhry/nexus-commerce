@@ -3418,7 +3418,8 @@
         "REMOVE_STEP": "Remove step…",
         "ASK_AGAIN": "Ask for the deposit again…",
         "CHANGE_TERMS": "Change payment terms…",
-        "ADD_STEP": "Add a step…"
+        "ADD_STEP": "Add a step…",
+        "stopPage": "Stop the page…"
       },
       "byHand": {
         "what": {
@@ -3704,7 +3705,8 @@
         "told": "not told; their portal shows the deposit as paid.",
         "never": "The payment stays as received; no write-off is made here; the deposit stays paid (this cannot be undone)."
       },
-      "reason": "Why"
+      "reason": "Why",
+      "whoKept": "Saved under your name with today's date; the history keeps it."
     },
     "refusal": {
       "OTHER": "The plan could not change this way: read the page again.",
@@ -3723,7 +3725,8 @@
       "costLineAdded": "The cost set by hand is counted in the margin.",
       "costLineRemoved": "The line set by hand is put back: the computed cost counts again.",
       "targetSet": "The target margin is set.",
-      "targetCleared": "The target margin is cleared: the floor applies again."
+      "targetCleared": "The target margin is cleared: the floor applies again.",
+      "pageStopped": "The bank-details page is stopped."
     },
     "undo": {
       "title": "Undo the payment of {date}?",
@@ -3809,7 +3812,6 @@
         },
         "told": "not told: their portal still compares against their own PO.",
         "never": "Our price and the customer's price are not edited; nothing is sent.",
-        "who": "Saved under your name with today's date; the history keeps it.",
         "gone": "The prices changed meanwhile: close the window and read the check again."
       },
       "unaccept": {
@@ -3959,6 +3961,18 @@
       },
       "told": "never sees margins or costs.",
       "who": "Saved under your name with today's date; the history keeps the old value."
+    },
+    "stop": {
+      "title": "Stop the page sent to {to}?",
+      "titleNoTo": "Stop the bank-details page?",
+      "go": "Stop the page",
+      "gone": "This page is not live any more: close the window and read the page again.",
+      "happens": {
+        "stops": "The bank-details page stops working at once: the customer sees that it is no longer valid.",
+        "open": "The payment request stays open: send a new page when it is needed."
+      },
+      "told": "not e-mailed; the page itself says it is no longer valid.",
+      "never": "The request, its amount and its payments do not change."
     }
   }
 }

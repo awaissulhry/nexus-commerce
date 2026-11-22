@@ -21,8 +21,8 @@ import { useSay, type Say } from './say'
 
 /**
  * F-OM-203 (order MONEY tab, 10-design §6) — section 3, Invoices & credit notes (#invoices), in the kit: every bill of this order —
- * goods invoices, deposit invoices (TD02), credit notes (TD04) — with ONE State column, its Payment in words and, with the price grain,
- * Total · This order · Open (money/invoices.ts). Each row's ⋯ opens FINANCE's own place (one path); its Discuss is an office note
+ * goods invoices, deposit invoices (TD02), credit notes (TD04) — with ONE State column, its Payment in words (for every reader, the
+ * settlement's word-code, B-OM-023) and, with the price grain, Total · This order · Open (money/invoices.ts). Each row's ⋯ opens FINANCE's own place (one path); its Discuss is an office note
  * (threads.post). The head: "Invoice shipped goods…" while shipped goods wait (Finance's From-DDTs window, this order's DDTs chosen).
  * Shown with invoices.view only (the tab's head says so once otherwise). Nothing invoiced: the head's one line.
  */
@@ -35,6 +35,8 @@ export function InvoicesSection({ order, model, actions }: { order: Order; model
   const view = invoicesOf({ order, settlement, sdi: model.sdi, can: model.can, invoiceHref, prefix: model.prefix })
   const title = t('moneyTab.invoices.title')
   const price = model.can.price
+  // F-OM-203 (B-OM-023): a reader without the price grain reads the Payment words once any row carries them.
+  const words = !price && view.rows.some((row) => row.payment !== null)
   const info = (
     <>
       <p>{t('moneyTab.invoices.info')}</p>
@@ -58,7 +60,8 @@ export function InvoicesSection({ order, model, actions }: { order: Order; model
   return (
     <Section id="invoices" title={title} answer={say(view.answer)} buttons={buttons} info={info}>
       {view.rows.length > 0 ? (
-        <div className={`fw-om-il${price ? '' : ' is-np'}`}>
+        // F-OM-203 (B-OM-023): without the price grain the Payment column still shows, in words, once the settlement names them.
+        <div className={`fw-om-il${price ? '' : ` is-np${words ? ' has-pay' : ''}`}`}>
           <div className="fw-om-ir is-hd" aria-hidden>
             <div>{t('money.col.number')}</div>
             <div className="fw-om-ir-kd">{t('money.col.kind')}</div>
@@ -70,11 +73,13 @@ export function InvoicesSection({ order, model, actions }: { order: Order; model
                 <div className="fw-om-ir-am fw-om-ir-share">{t('money.share')}</div>
                 <div className="fw-om-ir-am">{t('money.col.open')}</div>
               </>
+            ) : words ? (
+              <div>{t('moneyTab.invoices.col.payment')}</div>
             ) : null}
             <div />
           </div>
           {view.rows.map((row) => (
-            <InvoiceRowView key={row.id} row={row} order={order} model={model} actions={actions} say={say} />
+            <InvoiceRowView key={row.id} row={row} order={order} model={model} actions={actions} say={say} words={words} />
           ))}
         </div>
       ) : null}
@@ -84,7 +89,7 @@ export function InvoicesSection({ order, model, actions }: { order: Order; model
   )
 }
 
-function InvoiceRowView({ row, order, model, actions, say }: { row: InvoiceRow; order: Order; model: OrderRecordModel; actions?: OrderRecordActions; say: Say }) {
+function InvoiceRowView({ row, order, model, actions, say, words }: { row: InvoiceRow; order: Order; model: OrderRecordModel; actions?: OrderRecordActions; say: Say; words: boolean }) {
   const t = useT('orders')
   const f = useT('record-frame')
   const locale = useLocale()
@@ -158,6 +163,8 @@ function InvoiceRowView({ row, order, model, actions, say }: { row: InvoiceRow; 
           <div className="fw-om-ir-am fw-om-ir-share">{amount(row.share)}</div>
           <div className="fw-om-ir-am">{row.open !== null ? <b>{amount(row.open)}</b> : null}</div>
         </>
+      ) : words ? (
+        <div className="fw-om-ir-p">{row.payment ? <Tag tone={row.payment.tone}>{say(row.payment.word)}</Tag> : null}</div>
       ) : null}
       <div className="fw-om-ir-o">{items.length > 0 ? <LineMenuButton label={t('moneyTab.invoices.more', { number })} items={items} /> : null}</div>
     </div>

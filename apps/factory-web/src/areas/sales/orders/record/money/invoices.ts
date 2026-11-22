@@ -1,4 +1,4 @@
-import type { ChainInvoice, Order, SdiStatus, Settlement } from '../../api'
+import type { ChainInvoice, InvoicePaymentState, Order, SdiStatus, Settlement } from '../../api'
 import { SDI_TONE, type OrderAbilities, type Tone } from '../../model'
 import type { Part } from '../record-model'
 import { alsoBillsOf, freightOf } from '../money-share'
@@ -10,7 +10,8 @@ import { word, type MoneyWord } from './word'
  *
  *   State      ONE column: the invoice's own life (DRAFT → ISSUED → SENT → DELIVERED / NOT_DELIVERABLE / REJECTED / ERROR — the SDI
  *              state inside it, B-OM-003), the SDI read's own words where it was read; a failed SDI read: "Couldn't read · Retry"
- *   Payment    words (price grain: they rest on the amounts): Open · Part paid · Paid · Credited · Refund due
+ *   Payment    words: Open · Part paid · Paid · Credited · Refund due — the settlement's own word-code (B-OM-023, every invoices.view
+ *              reader: Sales reads the words, never an amount); without it (a deposit invoice, a credit note) from the amounts (price)
  *   amounts    Total · This order · Open (price grain) — the deposit invoices' (TD02) and credit notes' (TD04) too (B-OM-003)
  *   doors      each opens FINANCE's own place (O2, one path): Record payment… (?new=1&invoice=), Credit note… (?do=credit; on a credit
  *              note held: "A credit note is corrected by a debit note."), Send to SDI / Fix and resend (the record's SDI & documents),
@@ -18,6 +19,14 @@ import { word, type MoneyWord } from './word'
  */
 
 const GOODS = (docType: string) => docType !== 'TD02' && docType !== 'TD04'
+/** F-OM-203 (B-OM-023): the settlement's payment word-code, in this page's words and tone. */
+const PAYMENT_WORD: Readonly<Record<InvoicePaymentState, { readonly key: string; readonly tone: Tone }>> = {
+  OPEN: { key: 'moneyTab.invoices.pay.open', tone: 'neutral' },
+  PART_PAID: { key: 'moneyTab.invoices.pay.part', tone: 'warning' },
+  PAID: { key: 'moneyTab.invoices.pay.paid', tone: 'success' },
+  CREDITED: { key: 'moneyTab.invoices.pay.credited', tone: 'neutral' },
+  REFUND_DUE: { key: 'moneyTab.invoices.pay.refund', tone: 'warning' },
+}
 const INVOICE_TONE: Readonly<Record<string, Tone>> = { DRAFT: 'neutral', ISSUED: 'info', SENT: 'info', DELIVERED: 'success', NOT_DELIVERABLE: 'warning', REJECTED: 'danger', ERROR: 'danger' }
 
 export type InvoiceDoorId = 'record' | 'credit' | 'sdi' | 'payments' | 'pdf'
@@ -38,7 +47,7 @@ export interface InvoiceRow {
   readonly state: { readonly word: MoneyWord; readonly tone: Tone }
   /** The SDI read of an issued invoice: still reading, or failed (its own Retry); null: read, or none to read. */
   readonly sdi: 'reading' | 'failed' | null
-  /** Price grain only (null without it, or a draft). */
+  /** The settlement's word-code (every reader, B-OM-023), else from the amounts (price grain); null: a draft, or not known. */
   readonly payment: { readonly word: MoneyWord; readonly tone: Tone } | null
   readonly total: number | null
   readonly share: number | null
@@ -71,7 +80,9 @@ export function invoicesOf(input: { readonly order: Order; readonly settlement: 
     const share = !price ? null : goods ? (amounts?.share ?? amounts?.grossTotal ?? null) : total
     const open = !price || draft ? null : goods ? (amounts?.openAmount ?? null) : invoice.docType === 'TD02' && td02 ? 0 : null
     let payment: InvoiceRow['payment'] = null
-    if (price && !draft) {
+    const coded = !draft ? (amounts?.paymentState ?? null) : null
+    if (coded) payment = { word: word(PAYMENT_WORD[coded].key), tone: PAYMENT_WORD[coded].tone }
+    else if (price && !draft) {
       if (invoice.docType === 'TD04') payment = { word: word('moneyTab.invoices.pay.credited'), tone: 'neutral' }
       else if (invoice.docType === 'TD02') payment = td02 && (td02.credited ?? 0) >= (td02.gross ?? Number.POSITIVE_INFINITY) ? { word: word('moneyTab.invoices.pay.credited'), tone: 'neutral' } : { word: word('moneyTab.invoices.pay.paid'), tone: 'success' }
       else if (amounts) {
@@ -126,9 +137,9 @@ export function invoicesOf(input: { readonly order: Order; readonly settlement: 
 function answerOf(rows: readonly InvoiceRow[], price: boolean): MoneyWord {
   if (rows.length === 0) return word('moneyTab.invoices.empty')
   const count = { count: rows.length }
-  if (!price) return word('moneyTab.invoices.count', { params: count })
-  const open = rows.find((row) => GOODS(row.invoice.docType) && (row.open ?? 0) > 0) ?? null
+  const open = price ? (rows.find((row) => GOODS(row.invoice.docType) && (row.open ?? 0) > 0) ?? null) : null
   if (open && open.invoice.number) return word('moneyTab.invoices.countOpen', { params: { ...count, number: open.invoice.number }, money: { amount: open.open ?? 0 } })
+  // F-OM-203 (B-OM-023): "all paid" is said to a reader without the price grain too (the settlement's word-codes).
   const issued = rows.filter((row) => row.payment !== null)
   if (issued.length > 0 && issued.every((row) => row.payment!.word.key === 'moneyTab.invoices.pay.paid' || row.payment!.word.key === 'moneyTab.invoices.pay.credited')) return word('moneyTab.invoices.countPaid', { params: count })
   return word('moneyTab.invoices.count', { params: count })

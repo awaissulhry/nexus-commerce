@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { newIdempotencyKey } from '../../../../lib/api/client'
-import { applyMoneyPlan, fromDdtsCandidates, getSdi, previewMoneyPlan, recordDepositPayment, sendDepositLink, sendToSdi, undoDepositPayment, type DepositLinkAnswer, type DepositReceived, type MoneyPlanBody, type Order, type SdiStatus } from '../api'
+import { applyMoneyPlan, fromDdtsCandidates, getSdi, previewMoneyPlan, recordDepositPayment, sendDepositLink, sendToSdi, stopDepositPage, undoDepositPayment, type DepositLinkAnswer, type DepositReceived, type MoneyPlanBody, type Order, type SdiStatus } from '../api'
 import type { useStepUp } from '../hooks'
 import { readProblem } from '../model'
 // B-W2a-80: the schedule card's verbs (B-W2a-F2's note): open a before-shipping step, invoice a paid step.
@@ -21,7 +21,7 @@ import { PRICE_ACCEPT_REFUSALS, PRICE_ACCEPT_WORDS } from '@nexus/factory-domain
 import { HAND_MARGIN_REFUSALS, HAND_MARGIN_WORDS } from '@nexus/factory-domain/costing/margins/hand-lines' // F-OM-302: the refusals' words (S3)
 
 export type MoneyActsModel = Pick<OrderRecordModel, 'sentLink' | 'recorded' | 'scheduleSteps' | 'moneyPlan'>
-export type MoneyActsActions = Pick<OrderRecordActions, 'onSendLink' | 'onRecordPayment' | 'onSendSdi' | 'scheduleSteps' | 'onPlanPreview' | 'onPlanAct' | 'onUndoPayment' | 'onPriceAccept' | 'onPriceUnaccept' | 'onCostLineAdd' | 'onCostLineRemove' | 'onMarginTarget'>
+export type MoneyActsActions = Pick<OrderRecordActions, 'onSendLink' | 'onRecordPayment' | 'onSendSdi' | 'scheduleSteps' | 'onPlanPreview' | 'onPlanAct' | 'onUndoPayment' | 'onPriceAccept' | 'onPriceUnaccept' | 'onCostLineAdd' | 'onCostLineRemove' | 'onMarginTarget' | 'onStopPage'>
 
 /**
  * F-OP-134 (N-5): the Money tab's acts — the deposits and payments: the bank-details page, the payment (with the TD02: a fresh
@@ -202,6 +202,16 @@ export function useMoneyActs(
         }
         return null
       }, 'moneyTab.notice.undone')
+    },
+    // ---- F-OM-202 (B-OM-022): Stop the page — the request's live bank-details page stops working; the request stays open ----
+    onStopPage: (requestId, reason) => {
+      const linkId = current.current?.chain.depositRequests.find((request) => request.id === requestId)?.link?.id ?? null
+      if (!linkId) return
+      const key = newIdempotencyKey()
+      void write(async () => {
+        await stopDepositPage(api, linkId, { reason: reason.trim() }, key)
+        return null
+      }, 'moneyTab.notice.pageStopped')
     },
     // ---- F-OM-301 (B-OM-020): accept a price difference by hand, or undo the acceptance — then the price check is read again. A
     // refusal (409 priceAccept/<CODE>) stays in the window in the domain's words; a check that moved meanwhile (STALE) is read again.

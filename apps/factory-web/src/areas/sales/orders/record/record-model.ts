@@ -99,6 +99,8 @@ export type MoneyDialog =
   | { kind: 'costLine' }
   | { kind: 'costLineRemove'; lineId: string }
   | { kind: 'marginTarget' }
+  // F-OM-202 (B-OM-022): Stop the page sent for this request (links.manage).
+  | { kind: 'stopPage'; requestId: string }
 /** The container's own: Changes' Before → after (the amendments' snapshots are the Changes tab's read, kept in the container). */
 export type ChangesDialog = { kind: 'compare'; amendmentId: string }
 /**
@@ -503,6 +505,8 @@ export interface OrderRecordActions {
   onCostLineAdd?: (body: { readonly kind: CostLineKind; readonly amount: number; readonly reason: string }) => void
   onCostLineRemove?: (lineId: string, reason: string) => void
   onMarginTarget?: (body: { readonly targetPct: string | null; readonly reason: string }) => void
+  /** F-OM-202 (B-OM-022): stop the bank-details page sent for this request (its live link), with a reason. */
+  onStopPage?: (requestId: string, reason: string) => void
   onRecordPayment?: (requestId: string, input: PaymentInput) => void
   onSendSdi?: (invoiceId: string) => void
   onStepUpSubmit?: (code: string) => void

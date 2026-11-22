@@ -26,7 +26,8 @@ import { word, type MoneyWord } from './word'
 
 export type PlanRowKind = MilestoneKind | 'EXTRA'
 // F-OM-201: + the plan's hand acts (their ids are the server's acts, B-OM-011 … 016).
-export type PlanActId = 'record' | 'send' | 'open' | 'invoiceStep' | 'waive' | 'payInvoice' | Exclude<MoneyPlanAct, 'ADD_STEP' | 'CHANGE_TERMS'>
+// F-OM-202 (B-OM-022): + Stop the page (the bank-details page sent; links.manage: the Owner only).
+export type PlanActId = 'record' | 'send' | 'open' | 'invoiceStep' | 'waive' | 'payInvoice' | 'stopPage' | Exclude<MoneyPlanAct, 'ADD_STEP' | 'CHANGE_TERMS'>
 /** F-OM-201: a row act that opens a hand window (the server's act), not one of the page's own dialogs. */
 export const isHandAct = (id: PlanActId): id is Exclude<MoneyPlanAct, 'ADD_STEP' | 'CHANGE_TERMS'> => (MONEY_PLAN_ACTS as readonly string[]).includes(id)
 /** The plan head's own acts (its ⋯): the payment terms and a new step. */
@@ -214,6 +215,8 @@ export function planOf(input: {
         // F-OM-204: ONE word with Overview's deposit strip (the same dialog): deposit.record.
         if (can.recordPayment && price) acts.push({ id: 'record', label: word('deposit.record'), held: null })
         if (can.recordPayment) acts.push({ id: 'send', label: word(request.link ? 'moneyTab.plan.act.sendAgain' : 'moneyTab.plan.act.send'), held: null })
+        // F-OM-202 (B-OM-022): Stop the page — a live page with its id (S3), links.manage only (hidden for everyone else).
+        if (can.links && request.link?.state === 'LIVE' && request.link.id) acts.push({ id: 'stopPage', label: word('moneyTab.plan.act.stopPage'), held: null })
       }
       // F-OM-201 (B-OM-018, M4-B7): Open for payment is the money plan's right now (the Owner and Finance), no longer orders.manage.
       if (step && can.moneyPlan) {

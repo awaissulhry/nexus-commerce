@@ -174,7 +174,7 @@ describe('F-OM-301: every word it says, in both languages', () => {
         'moneyTab.price.title', 'moneyTab.price.info', 'moneyTab.price.keys', 'moneyTab.price.part', 'moneyTab.price.more', 'moneyTab.price.show', 'moneyTab.price.hide', 'moneyTab.price.onlyDiffering', 'moneyTab.price.exact',
         'moneyTab.price.tag.none', 'moneyTab.price.tag.equal', 'moneyTab.price.tag.notEqual', 'moneyTab.price.tag.partial', 'moneyTab.price.tag.accepted', 'moneyTab.price.check.EQUAL', 'moneyTab.price.check.NOT_EQUAL',
         'moneyTab.price.answer.none', 'moneyTab.price.from.CUSTOMER_PO', 'moneyTab.price.from.PORTAL', 'moneyTab.price.from.OFFICE', 'moneyTab.price.source.LIST', 'moneyTab.price.source.MANUAL', 'moneyTab.price.source.UNKNOWN',
-        'moneyTab.price.accept.door', 'moneyTab.price.accept.go', 'moneyTab.price.accept.told', 'moneyTab.price.accept.never', 'moneyTab.price.accept.who', 'moneyTab.price.accept.gone', 'moneyTab.price.accept.happens.stay', 'moneyTab.price.accept.happens.shows', 'moneyTab.price.accept.happens.reopens',
+        'moneyTab.price.accept.door', 'moneyTab.price.accept.go', 'moneyTab.price.accept.told', 'moneyTab.price.accept.never', 'moneyTab.hand.whoKept', 'moneyTab.price.accept.gone', 'moneyTab.price.accept.happens.stay', 'moneyTab.price.accept.happens.shows', 'moneyTab.price.accept.happens.reopens',
         'moneyTab.price.unaccept.door', 'moneyTab.price.unaccept.go', 'moneyTab.price.unaccept.told', 'moneyTab.price.unaccept.never', 'moneyTab.price.unaccept.happens.again', 'moneyTab.price.unaccept.happens.kept', 'moneyTab.notice.priceAccepted', 'moneyTab.notice.priceUnaccepted',
       ]
       for (const key of keys) expect(t(key), key).not.toBe(key)

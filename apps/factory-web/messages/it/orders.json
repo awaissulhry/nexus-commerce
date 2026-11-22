@@ -3418,7 +3418,8 @@
         "REMOVE_STEP": "Togli la rata…",
         "ASK_AGAIN": "Richiedi di nuovo l'acconto…",
         "CHANGE_TERMS": "Cambia termini di pagamento…",
-        "ADD_STEP": "Aggiungi una rata…"
+        "ADD_STEP": "Aggiungi una rata…",
+        "stopPage": "Ferma la pagina…"
       },
       "byHand": {
         "what": {
@@ -3704,7 +3705,8 @@
         "told": "non viene avvisato; il suo portale mostra l'acconto come pagato.",
         "never": "Il pagamento resta come è arrivato; qui non si fa nessun abbuono; l'acconto resta pagato (non si può annullare)."
       },
-      "reason": "Perché"
+      "reason": "Perché",
+      "whoKept": "Salvato a tuo nome con la data di oggi; la cronologia lo conserva."
     },
     "refusal": {
       "OTHER": "Il piano non può cambiare così: rileggi la pagina.",
@@ -3723,7 +3725,8 @@
       "costLineAdded": "Il costo impostato a mano è contato nel margine.",
       "costLineRemoved": "La riga impostata a mano è rimessa: conta di nuovo il costo calcolato.",
       "targetSet": "Il margine obiettivo è impostato.",
-      "targetCleared": "Il margine obiettivo è tolto: vale di nuovo il minimo."
+      "targetCleared": "Il margine obiettivo è tolto: vale di nuovo il minimo.",
+      "pageStopped": "La pagina con le coordinate bancarie è fermata."
     },
     "undo": {
       "title": "Annullare il pagamento del {date}?",
@@ -3809,7 +3812,6 @@
         },
         "told": "non viene avvisato: il suo portale confronta ancora con il suo ordine.",
         "never": "Il nostro prezzo e quello del cliente non vengono modificati; non si invia nulla.",
-        "who": "Salvato a tuo nome con la data di oggi; la cronologia lo conserva.",
         "gone": "I prezzi sono cambiati nel frattempo: chiudi la finestra e rileggi la verifica."
       },
       "unaccept": {
@@ -3959,6 +3961,18 @@
       },
       "told": "non vede mai margini né costi.",
       "who": "Salvato a tuo nome con la data di oggi; la cronologia conserva il valore precedente."
+    },
+    "stop": {
+      "title": "Fermare la pagina inviata a {to}?",
+      "titleNoTo": "Fermare la pagina con le coordinate bancarie?",
+      "go": "Ferma la pagina",
+      "gone": "Questa pagina non è più attiva: chiudi la finestra e rileggi la pagina.",
+      "happens": {
+        "stops": "La pagina con le coordinate bancarie smette subito di funzionare: il cliente vede che non è più valida.",
+        "open": "La richiesta di pagamento resta aperta: invia una nuova pagina quando serve."
+      },
+      "told": "non riceve e-mail; la pagina stessa dice che non è più valida.",
+      "never": "La richiesta, il suo importo e i suoi pagamenti non cambiano."
     }
   }
 }
