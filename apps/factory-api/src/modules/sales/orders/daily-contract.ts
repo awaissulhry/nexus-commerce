@@ -10,6 +10,8 @@ import { APPLY_ROUTES } from '@nexus/factory-domain/order-apply/plan'
 import { IMPACT_CODES } from '@nexus/factory-domain/sales/orders/daily'
 import { MAX_REASON, SALES_ORDER_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
 import { MILESTONE_KINDS, MILESTONE_STATUSES } from '@nexus/factory-domain/sales/orders/schedule'
+// B-OM-004 (order money tab): the plan read's hand acts and undo verdicts.
+import { MONEY_PLAN_ACTS, UNDO_HELD } from '@nexus/factory-domain/sales/orders/money-plan'
 import { DEPOSIT_KINDS, MAX_QUOTE_LINES, MAX_SIZE_QUANTITY, MAX_TEXT } from '@nexus/factory-domain/sales/quotes/quotes'
 import { orderView } from './contract'
 // B-OP-012: what the office change's work orders did in its command, and what waits.
@@ -388,6 +390,47 @@ export const cancelCheckContract = defineContract({
 
 // ---- the payment schedule ------------------------------------------------------------------------------------------------------
 
+// ── B-OM-004 (order money tab M4-B1, B12, M3 §2c; 13-backend §1): the plan read ──
+/** The newest hand change of a step or a request ("Set by hand"): the act, when, the office person, the reason (price grain). */
+const byHandView = output({ act: z.enum(MONEY_PLAN_ACTS), at: instant(), by: z.string().nullable(), reason: money.price(z.string().nullable()) })
+/** Whether a payment may be undone here (POST /payments/:paymentId/undo, PR S2); held in words (EN/IT) by the state; no door without the rights (why null). */
+const undoView = output({ may: z.boolean(), why: output({ en: z.string(), it: z.string() }).nullable(), code: z.enum(UNDO_HELD).nullable() })
+const planPaymentView = output({
+  paymentId: id(),
+  allocationId: id(),
+  receivedOn: businessDate(),
+  externalRef: z.string(),
+  method: z.string(),
+  amount: money.price(z.number().int()),
+  undo: undoView,
+})
+/** Every deposit request of the order, live and earlier: a step's, a priced change's extra deposit (`fromChange`), one replaced by hand. */
+const planRequestView = output({
+  id: id(),
+  /** The step naming it (a live one first); null: a request no step names (a priced change's extra deposit, an old order's deposit). */
+  milestoneId: id().nullable(),
+  kind: z.string(),
+  stepKind: z.enum(MILESTONE_KINDS).nullable(),
+  status: z.string(),
+  amount: money.price(z.number().int()),
+  /** What its payments placed on it (allocations less their reversals). */
+  paid: money.price(z.number().int()),
+  dueDate: businessDate().nullable(),
+  paidAt: instant().nullable(),
+  fiscalDocument: z.string(),
+  version: z.number().int(),
+  /** The priced change (amendment) that asked it, with its revision. */
+  fromChange: output({ amendmentId: id(), revision: z.number().int() }).nullable(),
+  /** The request made in its place by hand. */
+  replacedBy: id().nullable(),
+  /** PAID with less than asked (accepted short by hand): the short part (it stays owed on the goods' invoice), why and who. */
+  acceptedShort: output({ short: money.price(z.number().int()), reason: money.price(z.string().nullable()), why: z.string().nullable(), at: instant().nullable(), by: z.string().nullable() }).nullable(),
+  byHand: byHandView.nullable(),
+  /** Its payments (live allocations), with payments.view only (else empty). */
+  payments: z.array(planPaymentView),
+})
+// ── end B-OM-004 ──
+
 const milestoneView = output({
   id: id(),
   seq: z.number().int(),
@@ -401,6 +444,15 @@ const milestoneView = output({
   paidAt: instant().nullable(),
   statusNote: z.string().nullable(),
   version: z.number().int(),
+  // ── B-OM-004 ──
+  /** What payments placed on its request so far (null: it has no request). */
+  paidSoFar: money.price(z.number().int().nullable()),
+  /** PAYMENT: its request paid; INVOICES: an ON_DELIVERY / ON_INVOICE step the goods' invoices cover in full (derived); null: not yet. */
+  settledBy: z.enum(['PAYMENT', 'INVOICES']).nullable(),
+  /** ON_DELIVERY / ON_INVOICE: what the goods' invoices cover of it (their money given out in seq order); 0 for the others. */
+  coveredByInvoices: money.price(z.number().int()),
+  byHand: byHandView.nullable(),
+  // ── end B-OM-004 ──
 })
 
 const scheduleFields = {
@@ -413,6 +465,13 @@ const scheduleFields = {
   cancelled: z.array(milestoneView),
   openAmount: money.price(z.number().int()),
   paidAmount: money.price(z.number().int()),
+  // ── B-OM-004 ──
+  requests: z.array(planRequestView),
+  /** The order's still to pay, by the ONE rule (the order read's `money.stillToPay`). */
+  stillOpen: money.price(z.number().int()),
+  /** What of the OPEN steps is past due (the business day), less what is paid on them and what the invoices cover. */
+  overdue: money.price(z.number().int()),
+  // ── end B-OM-004 ──
 }
 
 export const scheduleContract = defineContract({

@@ -190,7 +190,8 @@ describe('orders below the margin floor (FIN-050; KA3:01 the Sales settings floo
     expect((await ok('finance', '/costing/margins?floor=below')).rows).toEqual([])
   })
 
-  it("holds an order to its seller's role floor: the owner's 29 % puts SO-0001 (28.45 %) and SO-0002 (27.22 %) under it", async () => {
+  // B-OM-007 (order money tab M6-B3): SO-0002's margin counts its shipment's freight (38.50, recorded above): 25.85 %.
+  it("holds an order to its seller's role floor: the owner's 29 % puts SO-0001 (28.45 %) and SO-0002 (25.85 %) under it", async () => {
     await setFloors({ owner: '29', sales: '25' })
     const answer = await ok('finance', '/costing/margins')
     expect(answer.tiles.belowFloor).toBe(2)

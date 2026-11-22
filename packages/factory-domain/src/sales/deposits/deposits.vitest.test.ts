@@ -54,6 +54,16 @@ describe('how to pay it (Q12: bank transfer)', () => {
     expect(instructions.text).toBe('We ask for a confirmatory deposit (caparra confirmatoria) of €2,283.84 by 5 Nov 2026, by bank transfer, reference "Deposit quotation Q-2026-0001 v2". Our bank details will follow separately.')
     expect(depositReference('Q-1 v1', 'en')).toBe('Deposit quotation Q-1 v1')
   })
+
+  // B-OM-009 (order money tab M3-B7): a request made on an order names the order, never a quotation.
+  it('a request made on an order: the reference names the order', () => {
+    expect(depositReference('SO-0012', 'it', 'ORDER')).toBe('Acconto ordine SO-0012')
+    expect(depositReference('SO-0012', 'en', 'ORDER')).toBe('Deposit order SO-0012')
+    expect(depositReference('Q-1 v1', 'it', 'QUOTE')).toBe('Acconto offerta Q-1 v1')
+    const instructions = paymentInstructions({ amount: 228384, currency: 'EUR', dueDate: '2026-11-05', kind: 'ACCONTO', documentNumber: 'SO-0012', documentKind: 'ORDER', bank: null, language: 'it' })
+    expect(instructions.reference).toBe('Acconto ordine SO-0012')
+    expect(instructions.text).toContain('causale «Acconto ordine SO-0012»')
+  })
 })
 
 describe("the company's bank account (Q12; stored with a step-up)", () => {

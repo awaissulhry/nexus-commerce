@@ -14,6 +14,15 @@ import { officeOrder } from './moves'
 import { asDay, dayOf, dayOrNull, lockOrder, type OrderRow, type Reader } from './store'
 // B-OP-043 (order page N6, lines-derived): an order's shipments through their lines.
 import { shipmentsOfOrderWhere } from '../../shipping/shipments/orders-of'
+// B-OM-004 (order money tab M4-B1, B12, M3 §2c): the plan read — paid per step, ON_* covered, hand tags, payments per request.
+import { can } from '@nexus/factory-domain/core/permissions'
+import { PAYMENTS_RECORD, PAYMENTS_VIEW, PAYMENTS_VOID } from '@nexus/factory-domain/payments/permissions'
+import { orderMoneyPartsOf } from '@nexus/factory-domain/sales/orders/later-columns'
+import { coverageOf, overdueOf, planByHandMarkOf, PLAN_BY_HAND_ACTION, settledByOf, undoVerdictOf, type PlanByHandMark, type PlanStep } from '@nexus/factory-domain/sales/orders/money-plan'
+import { actorOf } from '../../../core/context'
+import { serverClock } from '../../../core/time'
+import { officeContextOf } from './access'
+import { orderMoneyFactsOf } from './later-columns'
 
 /**
  * An order's payment schedule (B-W2a-30; SAL-216; the design's order.money.schedule card): its SalesOrderMilestone rows,
@@ -286,25 +295,180 @@ export function milestoneView(row: MilestoneRow) {
   }
 }
 
+// ── B-OM-004 (order money tab M4-B1, B12, M3 §2c; 13-backend §1): the plan read ──────────────────────────────────────────────
+/** A hand change of the plan as the read names it: the act, when, the office person (never a worker), the reason (price grain). */
+interface ByHandRow {
+  readonly at: Date
+  readonly audience: string
+  readonly actorId: string
+  readonly reason: string | null
+  readonly mark: PlanByHandMark
+}
+
+/** The order's hand changes of its plan, newest first (its `orders.planByHand` audit rows), with the office people's names. */
+async function handChangesOf(db: Reader, orderId: string) {
+  const rows = await db.auditLog.findMany({ where: { recordType: 'SalesOrder', recordId: orderId, action: PLAN_BY_HAND_ACTION }, orderBy: [{ at: 'desc' }, { id: 'desc' }], select: { at: true, audience: true, actorId: true, reason: true, after: true } })
+  const marked: ByHandRow[] = rows.flatMap((row) => {
+    const mark = planByHandMarkOf(row.after)
+    return mark ? [{ at: row.at, audience: row.audience, actorId: row.actorId, reason: row.reason, mark }] : []
+  })
+  const officeIds = [...new Set(marked.filter((row) => row.audience === 'OFFICE').map((row) => row.actorId))]
+  const names = new Map((officeIds.length > 0 ? await db.user.findMany({ where: { id: { in: officeIds } }, select: { id: true, displayName: true } }) : []).map((user) => [user.id, user.displayName]))
+  const view = (row: ByHandRow | undefined) => (row ? { act: row.mark.act, at: toUtcIso(row.at), by: row.audience === 'OFFICE' ? (names.get(row.actorId) ?? null) : null, reason: asMoney('price', row.reason) } : null)
+  return {
+    ofStep: (milestoneId: string) => view(marked.find((row) => row.mark.milestoneIds.includes(milestoneId))),
+    ofRequest: (requestId: string) => view(marked.find((row) => row.mark.depositRequestIds.includes(requestId))),
+    /** The request made in place of this one by hand (its newest replacement), or null. */
+    replacedBy: (requestId: string): string | null => marked.flatMap((row) => row.mark.replacements).find((pair) => pair.from === requestId)?.to ?? null,
+    /** The ACCEPT_SHORT row of a request (its reason, why, who and when), or null. */
+    acceptedShortOf: (requestId: string) => {
+      const row = marked.find((entry) => entry.mark.act === 'ACCEPT_SHORT' && entry.mark.depositRequestIds.includes(requestId))
+      return row ? { at: toUtcIso(row.at), by: row.audience === 'OFFICE' ? (names.get(row.actorId) ?? null) : null, reason: row.reason, why: row.mark.why } : null
+    },
+  }
+}
+
+const REQUEST_COLUMNS = { id: true, kind: true, status: true, amount: true, dueDate: true, fiscalDocument: true, paidAt: true, version: true } as const
+
+/**
+ * The plan's facts beside the steps: every deposit request of the order (on the order or its accepted quote version, live and
+ * earlier), what is paid on each and by which payments (live allocations), the change that asked it, its deposit invoices,
+ * write-offs and HARD month locks (the undo verdict), the order's money (B-OM-002's one rule: still to pay, goods' money for the
+ * ON_* steps) and the hand changes. One query per kind.
+ */
+async function planFactsOf(db: Reader, order: OrderRow, rows: readonly MilestoneRow[]) {
+  const requests = await db.depositRequest.findMany({ where: { OR: [{ orderId: order.id }, ...(order.quoteVersionId ? [{ quoteVersionId: order.quoteVersionId }] : [])] }, select: REQUEST_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
+  const ids = [...new Set([...requests.map((row) => row.id), ...rows.flatMap((row) => (row.depositRequestId ? [row.depositRequestId] : []))])]
+  const paid = await paidOnRequests(db, ids)
+  const changes = ids.length > 0 ? await db.salesOrderAmendment.findMany({ where: { orderId: order.id, depositRequestId: { in: ids } }, select: { id: true, revision: true, depositRequestId: true } }) : []
+  const td02s = ids.length > 0 ? await db.invoice.findMany({ where: { docType: 'TD02', depositRequestId: { in: ids } }, select: { id: true, status: true, grossTotal: true, depositRequestId: true } }) : []
+  const issued = td02s.filter((row) => row.status !== 'DRAFT')
+  const credits = issued.length > 0 ? await db.invoice.findMany({ where: { docType: 'TD04', status: { not: 'DRAFT' }, creditOfId: { in: issued.map((row) => row.id) } }, select: { creditOfId: true, grossTotal: true } }) : []
+  const allocations = ids.length > 0
+    ? await db.paymentAllocation.findMany({
+        where: { depositRequestId: { in: ids } },
+        select: { id: true, amount: true, reversalOfId: true, depositRequestId: true, payment: { select: { id: true, receivedOn: true, externalRef: true, method: true } } },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      })
+    : []
+  const reversed = new Set(allocations.flatMap((row) => (row.reversalOfId ? [row.reversalOfId] : [])))
+  const live = allocations.filter((row) => row.reversalOfId === null && !reversed.has(row.id))
+  const paymentIds = [...new Set(live.map((row) => row.payment.id))]
+  const writtenOff = new Set((paymentIds.length > 0 ? await db.paymentWriteOff.findMany({ where: { paymentId: { in: paymentIds }, reversalOfId: null, reversals: { none: {} } }, select: { paymentId: true } }) : []).map((row) => row.paymentId))
+  const hardLocks = paymentIds.length > 0 ? await db.periodLock.findMany({ where: { companyId: order.companyId, status: 'LOCKED', level: 'HARD' }, select: { periodStart: true, periodEnd: true } }) : []
+  const lines = await db.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true, orderId: true, kind: true, quantity: true, closedShortQuantity: true, feeCreditedAt: true, netAmount: true, vatAmount: true } })
+  const money = await orderMoneyFactsOf(db, [order.id], lines)
+  const parts = orderMoneyPartsOf(money.factsOf({ id: order.id, grossAmount: order.grossAmount, status: order.status }))
+  const hand = await handChangesOf(db, order.id)
+  return {
+    requests,
+    paid,
+    hand,
+    /** The order's still to pay (B-OM-002) and what its goods' invoices paid (less refunds, plus written off): the ON_* steps' money. */
+    stillOpen: parts.balance,
+    goodsMoney: parts.paid - money.depositsPaidOf(order.id) + parts.writtenOff,
+    fromChangeOf: (requestId: string) => {
+      const change = changes.find((row) => row.depositRequestId === requestId)
+      return change ? { amendmentId: change.id, revision: change.revision } : null
+    },
+    depositInvoiceIssued: (requestId: string) =>
+      issued.some((row) => row.depositRequestId === requestId && row.status !== 'REJECTED' && credits.filter((credit) => credit.creditOfId === row.id).reduce((sum, credit) => sum + credit.grossTotal, 0) < row.grossTotal),
+    depositInvoiceDraft: (requestId: string) => td02s.some((row) => row.depositRequestId === requestId && row.status === 'DRAFT'),
+    paymentsOf: (requestId: string) => live.filter((row) => row.depositRequestId === requestId),
+    writeOffStanding: (paymentId: string) => writtenOff.has(paymentId),
+    hardLocked: (day: Date) => hardLocks.some((lock) => lock.periodStart <= day && lock.periodEnd >= day),
+  }
+}
+// ── end B-OM-004 ──
+
 /**
  * orders.view: the order's payment schedule (the design's order.money.schedule card): its steps in order, the open total,
  * and `steps` empty for an order paid on invoice terms. Cancelled steps (remade or cancelled with the order) are listed
  * with their note, after the live ones.
+ *
+ * B-OM-004 (order money tab: ONE payment plan): + per step what is paid on its request so far, how it is settled (its payment;
+ * an ON_DELIVERY / ON_INVOICE step "Paid with the invoices" when the goods' invoices cover it, derived, factory-domain
+ * money-plan coverageOf) and its newest hand change ("Set by hand", from the audit); every deposit request of the order (live
+ * and earlier: a step's, a priced change's extra deposit with its change, one replaced by hand and the one in its place, one
+ * accepted short) with its payments (payments.view; each with whether it may be undone here, held in words); the order's
+ * still to pay (B-OM-002's one rule) and what is overdue (Europe/Rome day). Amounts and reasons with the price grain only.
  */
 export async function getSchedule(caller: CommandCaller, orderId: string) {
   const order = await officeOrder(caller, orderId)
+  const actor = actorOf(officeContextOf(caller)) // B-OM-004
+  const place = { companyId: order.companyId, partyId: order.partyId }
+  const seesPayments = can(actor, PAYMENTS_VIEW, place)
+  const mayUndo = can(actor, PAYMENTS_RECORD, place) && can(actor, PAYMENTS_VOID, place)
   return caller.withClient(async (client) => {
     const rows = await readMilestones(client, order.id)
     const live = rows.filter((row) => row.status !== 'CANCELLED')
+    // ── B-OM-004 ──
+    const facts = await planFactsOf(client, order, rows)
+    const planStep = (row: MilestoneRow): PlanStep => ({ id: row.id, seq: row.seq, kind: row.kind, status: row.status, amount: row.amount, dueDate: dayOrNull(row.dueDate), paidSoFar: row.depositRequestId === null ? null : (facts.paid.get(row.depositRequestId) ?? 0) })
+    const coverage = coverageOf(live.map(planStep), facts.goodsMoney)
+    const stepView = (row: MilestoneRow) => {
+      const step = planStep(row)
+      const covered = coverage.get(row.id) ?? 0
+      return { ...milestoneView(row), paidSoFar: asMoney('price', step.paidSoFar), settledBy: settledByOf(step, covered), coveredByInvoices: asMoney('price', covered), byHand: facts.hand.ofStep(row.id) }
+    }
+    const stepOf = (requestId: string) => live.find((row) => row.depositRequestId === requestId) ?? rows.find((row) => row.depositRequestId === requestId) ?? null
+    const requests = facts.requests.map((request) => {
+      const step = stepOf(request.id)
+      const paid = facts.paid.get(request.id) ?? 0
+      const short = facts.hand.acceptedShortOf(request.id)
+      return {
+        id: request.id,
+        milestoneId: step?.id ?? null,
+        kind: request.kind,
+        stepKind: step?.kind ?? null,
+        status: request.status,
+        amount: asMoney('price', request.amount),
+        paid: asMoney('price', paid),
+        dueDate: dayOrNull(request.dueDate),
+        paidAt: request.paidAt === null ? null : toUtcIso(request.paidAt),
+        fiscalDocument: request.fiscalDocument,
+        version: request.version,
+        fromChange: facts.fromChangeOf(request.id),
+        replacedBy: facts.hand.replacedBy(request.id),
+        // Accepted short by hand (PR S2's ACCEPT_SHORT): PAID with less than asked; the rest stays owed on the goods' invoice.
+        acceptedShort: request.status === 'PAID' && paid < request.amount ? { short: asMoney('price', request.amount - paid), reason: asMoney('price', short?.reason ?? null), why: short?.why ?? null, at: short?.at ?? (request.paidAt === null ? null : toUtcIso(request.paidAt)), by: short?.by ?? null } : null,
+        byHand: facts.hand.ofRequest(request.id),
+        payments: !seesPayments
+          ? []
+          : facts.paymentsOf(request.id).map((allocation) => ({
+              paymentId: allocation.payment.id,
+              allocationId: allocation.id,
+              receivedOn: dayOf(allocation.payment.receivedOn),
+              externalRef: allocation.payment.externalRef,
+              method: allocation.payment.method,
+              amount: asMoney('price', allocation.amount),
+              undo: undoVerdictOf({
+                mayAct: mayUndo,
+                request: { status: request.status, fiscalDocument: request.fiscalDocument },
+                depositInvoiceIssued: facts.depositInvoiceIssued(request.id),
+                depositInvoiceDraft: facts.depositInvoiceDraft(request.id),
+                writeOffStanding: facts.writeOffStanding(allocation.payment.id),
+                hardLocked: facts.hardLocked(allocation.payment.receivedOn),
+              }),
+            })),
+      }
+    })
+    const today = businessDate(serverClock.now())
+    // ── end B-OM-004 ──
     return {
       orderId: order.id,
       number: order.number,
       currency: order.currency,
       grossAmount: asMoney('price', order.grossAmount),
-      steps: live.map(milestoneView),
-      cancelled: rows.filter((row) => row.status === 'CANCELLED').map(milestoneView),
+      steps: live.map(stepView),
+      cancelled: rows.filter((row) => row.status === 'CANCELLED').map(stepView),
       openAmount: asMoney('price', live.filter((row) => row.status === 'OPEN').reduce((sum, row) => sum + row.amount, 0)),
       paidAmount: asMoney('price', live.filter((row) => row.status === 'PAID').reduce((sum, row) => sum + row.amount, 0)),
+      // ── B-OM-004 ──
+      requests,
+      stillOpen: asMoney('price', facts.stillOpen),
+      overdue: asMoney('price', overdueOf(live.map(planStep), coverage, today)),
+      // ── end B-OM-004 ──
     }
   })
 }

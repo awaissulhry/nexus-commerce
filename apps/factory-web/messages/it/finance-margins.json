@@ -173,7 +173,8 @@
       "LABOUR": "Manodopera",
       "SUBCONTRACT": "Lavorazione esterna",
       "OVERHEAD": "Costi generali",
-      "ADJUSTMENT": "Rettifica"
+      "ADJUSTMENT": "Rettifica",
+      "FREIGHT": "Trasporto"
     }
   },
   "lines": {

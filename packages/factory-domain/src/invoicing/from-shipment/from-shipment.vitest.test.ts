@@ -321,6 +321,15 @@ describe('the order settled: shipped, invoiced, delivered by SDI, paid (PLAN §4
     })
     expect(orderSettlement(none)).toMatchObject({ settled: true, money: { balanceDue: 0, depositsPaidWithoutInvoice: 30000 } })
   })
+
+  // B-OM-001 (order money tab M1-B1): a small difference written off on the invoice counts — the order settles.
+  it('an invoice paid € 15 short and the € 15 written off: open 0, settled; without the write-off the balance is due', () => {
+    const short = { id: 'inv-1', docType: 'TD24' as const, number: 'FT-2026-00005', status: 'DELIVERED', grossTotal: 72480, creditedGross: 0, paid: 72480 - 1500 }
+    expect(gaps(facts({ invoices: [short] }))).toEqual(['BALANCE_DUE'])
+    const writtenOff = orderSettlement(facts({ invoices: [{ ...short, writtenOff: 1500 }] }))
+    expect(writtenOff).toMatchObject({ settled: true, missing: [], money: { balanceDue: 0, refundDue: 0, writtenOff: 1500, paidOnInvoices: 72480 - 1500 } })
+    expect(writtenOff.invoices[0]).toMatchObject({ open: 0, refundDue: 0, paid: 72480 - 1500, writtenOff: 1500 })
+  })
 })
 
 // ---- B-W2b-GB02 (G148): goods that left without a DDT

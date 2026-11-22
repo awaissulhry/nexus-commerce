@@ -287,7 +287,7 @@ export async function depositLinkView(request: FastifyRequest) {
       const company = await tenant.company.findUnique({ where: { id: row.companyId }, select: { legalName: true, tradeName: true } })
       const language = (version?.language ?? order?.language) === 'it' ? 'it' : 'en'
       const document = version && quote ? quoteDocumentNumber(quote.number, version.revision) : order!.number
-      const instructions = await instructionsFor(tenant, row, document, language)
+      const instructions = await instructionsFor(tenant, row, document, language, version && quote ? 'QUOTE' : 'ORDER') // B-OM-009: an order's request names the order
       return {
         deposit: {
           kind: row.kind,

@@ -220,6 +220,21 @@ describe('a balance before shipping paid, its TD02, the order cancelled: credit 
     expect(after.gaps).not.toContain('REFUND_DUE')
     expect(after.gaps).toContain('ORDER_CANCELLED')
     expect((await invoice(td02.id)).refundDueAmount).toBe(0)
+
+    // ── B-OM-003 (order money tab M5-B3): the TD02 and the TD04 crediting it are rows of the settlement, with their amounts ──
+    expect((after.depositInvoices as Json[]).find((row) => row.id === td02.id)).toMatchObject({ gross: 50000, credited: 50000, depositRequestId: ids.balanceRequest, issueDate: expect.any(String), status: expect.any(String) })
+    expect((after.creditNotes as Json[]).find((row) => row.id === issued.id)).toMatchObject({ creditOfId: td02.id, gross: 50000, issueDate: expect.any(String) })
+    // Without the price grain (invoices.view only): the same rows, never an amount.
+    const blind = (await wall('viewer', 'GET', `/invoicing/orders/${seeded.money.sales.orderId}/settlement`)).settlement
+    const blindTd02 = (blind.depositInvoices as Json[]).find((row) => row.id === td02.id)!
+    expect(blindTd02).toMatchObject({ depositRequestId: ids.balanceRequest })
+    for (const key of ['gross', 'credited', 'deductedNet']) expect(blindTd02).not.toHaveProperty(key)
+    expect((blind.creditNotes as Json[]).find((row) => row.id === issued.id)).not.toHaveProperty('gross')
+    // ── B-OM-002 (M1-B9): the cancelled order owes nothing more — the settlement's share and the order read say the same 0 ──
+    expect(after.thisOrder.stillToPay).toBe(0)
+    expect((await wall('pricedReturns', 'GET', `/sales/orders/${seeded.money.sales.orderId}`)).order.money).toMatchObject({ stillToPay: 0 })
+    // Sales without the price grain reads no money at all.
+    expect((await wall('sales', 'GET', `/sales/orders/${seeded.money.sales.orderId}`)).order).not.toHaveProperty('money')
   })
 })
 

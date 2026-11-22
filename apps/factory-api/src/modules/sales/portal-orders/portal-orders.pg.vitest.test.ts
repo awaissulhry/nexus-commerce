@@ -219,6 +219,35 @@ describe('the order: status, promise, lines (SAL-075, SAL-081)', { timeout: SLOW
     expect((await browsers.designer.get(`/portal/sales-orders/${so2}`)).status).toBe(403)
   })
 
+  // ── B-OM-005 (order money tab M3-B6, M1-S4): a part payment shows to the customer, with what is still to pay ──
+  it('B-OM-005: a deposit paid in part shows what is paid and the order’s still to pay; a viewer reads neither; another customer gets 404', async () => {
+    const so1 = await orderId('SEED-SO-0001')
+    const request = await one<{ id: string; amount: number }>(`SELECT id, amount FROM "DepositRequest" WHERE "orderId" = $1 AND status = 'OPEN' ORDER BY "createdAt", id LIMIT 1`, [so1])
+    // Nothing else is paid, invoiced or closed short on the order in this world: what is still to pay is its gross less this payment.
+    expect(await admin(`SELECT 1 FROM "PaymentAllocation" a JOIN "DepositRequest" r ON r.id = a."depositRequestId" WHERE r."orderId" = $1`, [so1])).toEqual([])
+    expect(await admin(`SELECT 1 FROM "Invoice" WHERE "salesOrderId" = $1 AND status <> 'DRAFT'`, [so1])).toEqual([])
+    expect(await admin(`SELECT 1 FROM "SalesOrderLine" WHERE "orderId" = $1 AND "closedShortQuantity" IS NOT NULL`, [so1])).toEqual([])
+    const paymentId = newId()
+    // Written with the database's rules off: a part payment of 100.00 on the request (as the office's Record a payment does).
+    await h.db.admin.query('BEGIN')
+    try {
+      await h.db.admin.query("SET LOCAL session_replication_role = 'replica'")
+      await h.db.admin.query(`INSERT INTO "Payment" (id, "tenantId", "companyId", "partyId", amount, "receivedOn", "externalRef") VALUES ($1, $2, $3, $4, 10000, $5::date, 'OM-PORTAL-0001')`, [paymentId, T, companyA, P1, TODAY])
+      await h.db.admin.query(`INSERT INTO "PaymentAllocation" (id, "tenantId", "companyId", "partyId", "paymentId", "depositRequestId", amount) VALUES ($1, $2, $3, $4, $5, $6, 10000)`, [newId(), T, companyA, P1, paymentId, request.id])
+      await h.db.admin.query('COMMIT')
+    } catch (error) {
+      await h.db.admin.query('ROLLBACK')
+      throw error
+    }
+    const record = await ok(browsers.buyer, `/portal/sales-orders/${so1}`)
+    expect(record.deposits.find((row: Json) => row.id === request.id)).toMatchObject({ status: 'OPEN', amount: request.amount, paidAmount: 10000 })
+    expect(record.order.stillToPay).toBe(record.order.grossAmount - 10000)
+    const viewer = await ok(browsers.viewer, `/portal/sales-orders/${so1}`)
+    expect(viewer.deposits.find((row: Json) => row.id === request.id)).not.toHaveProperty('paidAmount')
+    expect(viewer.order).not.toHaveProperty('stillToPay')
+    expect((await browsers.other.get(`/portal/sales-orders/${so1}`)).status).toBe(404)
+  })
+
   // ── B-OO-009 (order overview N10): the office picks a curated reason; the customer reads its words, never the office's note ──
   it('B-OO-009: a promise moved with CAPACITY and a note shows CAPACITY in the customer words, and never the note', async () => {
     const so3 = await orderId('SEED-SO-0003')

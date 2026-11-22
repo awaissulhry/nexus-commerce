@@ -18,7 +18,8 @@ import { floorSchema, type FloorFilter } from './floor/model'
 export const SALES_ORDER_STATUSES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED', 'SHIPPED', 'CLOSED', 'CANCELLED', 'PENDING_APPROVAL', 'DELIVERED'] as const
 export type SalesOrderStatus = (typeof SALES_ORDER_STATUSES)[number]
 /** Quoted → now: the value's change and each cost part's (they add up to the margin change). */
-export const WATERFALL_REASONS = ['PRICE', 'MATERIAL', 'LABOUR', 'SUBCONTRACT', 'OVERHEAD', 'ADJUSTMENT'] as const
+// B-OM-007: the order margin counts its shipments' freight (a FREIGHT step, as factory-domain's list).
+export const WATERFALL_REASONS = ['PRICE', 'MATERIAL', 'LABOUR', 'SUBCONTRACT', 'OVERHEAD', 'ADJUSTMENT', 'FREIGHT'] as const
 export type WaterfallReason = (typeof WATERFALL_REASONS)[number]
 /** What a work order's estimate rests on. */
 export const SHARE_PLANS = ['STANDARD', 'ESTIMATE', 'QUOTED', 'ACTUAL'] as const

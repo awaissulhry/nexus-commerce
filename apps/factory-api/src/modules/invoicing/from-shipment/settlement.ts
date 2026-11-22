@@ -13,6 +13,8 @@ import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { Dec, HUNDRED } from '@nexus/factory-domain/tax/decimal'
 import { actorOf } from '../../../core/context'
 import { orderMoneyFactsOf } from '../../sales/orders/later-columns'
+// B-OM-001 (order money tab M1-B1): a small difference written off on an invoice counts.
+import { underpaymentsWrittenOff } from '../../payments/write-offs/sums'
 
 /**
  * The order's settlement (B-W1-51; PLAN §4.7 "Closing the order"): the port B-W1-25's close command asks ("is every line
@@ -32,12 +34,39 @@ import { orderMoneyFactsOf } from '../../sales/orders/later-columns'
 
 const SHIPPED = ['SHIPPED', 'DELIVERED'] as const
 
+// ── B-OM-003 (order money tab M5-B3): the order's deposit invoices (TD02) and credit notes (TD04) as rows ──
+/** An issued TD02 of the order's deposit requests: its SDI life is its status; amounts gross (credited: its TD04s' gross). */
+export interface SettlementDepositRow {
+  readonly id: string
+  readonly number: string | null
+  readonly status: string
+  readonly issueDate: string | null
+  readonly gross: number
+  readonly credited: number
+  /** What issued invoices deduct from it (net, positive). */
+  readonly deductedNet: number
+  readonly depositRequestId: string | null
+}
+/** An issued TD04 crediting one of the order's invoices or deposit invoices. */
+export interface SettlementCreditRow {
+  readonly id: string
+  readonly number: string | null
+  readonly status: string
+  readonly issueDate: string | null
+  readonly gross: number
+  readonly creditOfId: string
+}
+const dayOf = (value: Date | null): string | null => (value ? value.toISOString().slice(0, 10) : null)
+// ── end B-OM-003 ──
+
 export interface OrderSettlementOf {
   readonly orderId: string
   readonly number: string
   readonly companyId: string
   readonly partyId: string
   readonly settlement: OrderSettlement
+  /** B-OM-003: its TD02 and TD04 rows, as read. */
+  readonly documents: { readonly depositInvoices: readonly SettlementDepositRow[]; readonly creditNotes: readonly SettlementCreditRow[] }
 }
 
 /** The facts of an order's settlement, read now. Null: not found (or out of the reader's tenant). */
@@ -71,15 +100,16 @@ export async function settlementOf(db: Reader, orderId: string): Promise<OrderSe
   const requests = await db.depositRequest.findMany({ where: { orderId: order.id }, select: { id: true, status: true, fiscalDocument: true, amount: true } })
   const deposits = await db.invoice.findMany({
     where: { docType: 'TD02', status: { not: 'DRAFT' }, OR: [{ salesOrderId: order.id }, ...(requests.length > 0 ? [{ depositRequestId: { in: requests.map((request) => request.id) } }] : [])] },
-    select: { id: true, depositRequestId: true, number: true, status: true, netTotal: true, grossTotal: true },
+    select: { id: true, depositRequestId: true, number: true, status: true, netTotal: true, grossTotal: true, /* B-OM-003 */ issueDate: true },
     orderBy: { id: 'asc' },
   })
   const credited = [...invoices, ...deposits].map((invoice) => invoice.id)
-  const credits = credited.length > 0 ? await db.invoice.findMany({ where: { creditOfId: { in: credited }, docType: 'TD04', status: { not: 'DRAFT' } }, select: { id: true, number: true, status: true, creditOfId: true, netTotal: true, grossTotal: true } }) : []
+  const credits = credited.length > 0 ? await db.invoice.findMany({ where: { creditOfId: { in: credited }, docType: 'TD04', status: { not: 'DRAFT' } }, select: { id: true, number: true, status: true, creditOfId: true, netTotal: true, grossTotal: true, /* B-OM-003 */ issueDate: true }, orderBy: { id: 'asc' } }) : []
   const allocations = await db.paymentAllocation.findMany({
     where: { OR: [...(invoices.length > 0 ? [{ invoiceId: { in: invoices.map((invoice) => invoice.id) } }] : []), ...(requests.length > 0 ? [{ depositRequestId: { in: requests.map((request) => request.id) } }] : [])] },
     select: { invoiceId: true, depositRequestId: true, amount: true },
   })
+  const writtenOff = await underpaymentsWrittenOff(db, invoices.map((invoice) => invoice.id)) // B-OM-001
   const deductions = deposits.length > 0 ? await db.invoiceLine.findMany({ where: { depositInvoiceId: { in: deposits.map((deposit) => deposit.id) }, invoice: { status: { not: 'DRAFT' } } }, select: { depositInvoiceId: true, netAmount: true } }) : []
   // B-W2a-61: what PAID refunds of the credit notes gave back.
   const refunds = credits.length > 0 ? await db.refund.findMany({ where: { status: 'PAID', creditNoteId: { in: credits.map((credit) => credit.id) } }, select: { creditNoteId: true, amount: true } }) : []
@@ -107,6 +137,7 @@ export async function settlementOf(db: Reader, orderId: string): Promise<OrderSe
       creditedGross: sum(credits.filter((credit) => credit.creditOfId === invoice.id), (credit) => credit.grossTotal),
       paid: sum(allocations.filter((row) => row.invoiceId === invoice.id), (row) => row.amount),
       refunded: refundedOn(invoice.id),
+      writtenOff: writtenOff.get(invoice.id) ?? 0, // B-OM-001
     })),
     depositRequests: requests.map((request) => ({ id: request.id, status: request.status, fiscalDocument: request.fiscalDocument, amount: request.amount, paid: sum(allocations.filter((row) => row.depositRequestId === request.id), (row) => row.amount) })),
     depositInvoices: deposits.map((deposit) => ({
@@ -123,7 +154,21 @@ export async function settlementOf(db: Reader, orderId: string): Promise<OrderSe
     })),
     creditNotes: credits.map((credit) => ({ id: credit.id, number: credit.number, status: credit.status, creditOfId: credit.creditOfId! })),
   }
-  return { orderId: order.id, number: order.number, companyId: order.companyId, partyId: order.partyId, settlement: orderSettlement(facts) }
+  // B-OM-003: the TD02 and TD04 rows (the settlement's own reads, with their issue day).
+  const documents = {
+    depositInvoices: facts.depositInvoices.map((deposit) => ({
+      id: deposit.id,
+      number: deposit.number,
+      status: deposit.status,
+      issueDate: dayOf(deposits.find((row) => row.id === deposit.id)?.issueDate ?? null),
+      gross: deposit.grossTotal,
+      credited: deposit.creditedGross,
+      deductedNet: deposit.deductedNet,
+      depositRequestId: deposits.find((row) => row.id === deposit.id)?.depositRequestId ?? null,
+    })),
+    creditNotes: credits.map((credit) => ({ id: credit.id, number: credit.number, status: credit.status, issueDate: dayOf(credit.issueDate), gross: credit.grossTotal, creditOfId: credit.creditOfId! })),
+  }
+  return { orderId: order.id, number: order.number, companyId: order.companyId, partyId: order.partyId, settlement: orderSettlement(facts), documents }
 }
 
 /** The orders an invoice is about: its order, its lines' orders, a TD02's request's order, a TD04's credited invoice's. */
@@ -235,7 +280,7 @@ function freightGrossOf(line: { readonly netAmount: number; readonly grossAmount
  * reaches it with orders.view, the rest counted.
  */
 async function shareOfOrder(db: Reader, orderId: string, invoiceIds: readonly string[], actor: Actor) {
-  const order = await db.salesOrder.findUniqueOrThrow({ where: { id: orderId }, select: { id: true, grossAmount: true } })
+  const order = await db.salesOrder.findUniqueOrThrow({ where: { id: orderId }, select: { id: true, grossAmount: true, /* B-OM-002 */ status: true } })
   const lines = await db.salesOrderLine.findMany({ where: { orderId }, select: { id: true, orderId: true, kind: true, quantity: true, closedShortQuantity: true, feeCreditedAt: true, netAmount: true, vatAmount: true } })
   const money = await orderMoneyFactsOf(db, [orderId], lines)
   const answer = orderMoneyOf(money.factsOf(order))
@@ -261,14 +306,16 @@ async function shareOfOrder(db: Reader, orderId: string, invoiceIds: readonly st
     const head = heads.find((row) => row.id === invoiceId)
     const freight = freightOf(invoiceId)
     const goods = billing ? shareOf(billing.grossTotal - freight, billing.part, billing.whole) : 0
-    const settled = billing ? shareOf(billing.creditedGross, billing.part, billing.whole) + shareOf(billing.placed - billing.refunded, billing.part, billing.whole) : 0
+    // B-OM-001: + its share of the small differences written off on it.
+    const settled = billing ? shareOf(billing.creditedGross, billing.part, billing.whole) + shareOf(billing.placed - billing.refunded, billing.part, billing.whole) + shareOf(billing.writtenOff ?? 0, billing.part, billing.whole) : 0
     // Of the invoice's own buyer only (never another customer's order, not even counted); named only when the reader reaches it.
     const buyers = othersOf(invoiceId).flatMap((id) => (others.has(id) && others.get(id)!.partyId === head?.buyerPartyId ? [others.get(id)!] : []))
     const named = buyers.filter((row) => can(actor, ORDERS_VIEW, { companyId: row.companyId, partyId: row.partyId })).sort((a, b) => a.number.localeCompare(b.number))
     return { share: goods, openShare: Math.max(0, goods - settled), freight, otherOrders: named.map((row) => ({ id: row.id, number: row.number })), otherOrdersHidden: buyers.length - named.length }
   }
   const invoicedShare = shares.reduce((sum, invoice) => sum + shareOf(invoice.grossTotal - freightOf(invoice.id), invoice.part, invoice.whole) - shareOf(invoice.creditedGross, invoice.part, invoice.whole), 0)
-  return { thisOrder: { paid: answer.paid, stillToPay: answer.balance, invoicedShare, depositsPaid: money.depositsPaidOf(orderId) }, invoiceOf }
+  const writtenOffShare = shares.reduce((sum, invoice) => sum + shareOf(invoice.writtenOff ?? 0, invoice.part, invoice.whole), 0) // B-OM-001
+  return { thisOrder: { paid: answer.paid, stillToPay: answer.balance, invoicedShare, depositsPaid: money.depositsPaidOf(orderId), writtenOff: writtenOffShare }, invoiceOf }
 }
 // ── end B-OP-022 ──
 
@@ -277,7 +324,7 @@ export async function getSettlement(caller: CommandCaller, orderId: string) {
   const context = officeContextOf(caller)
   const found = await caller.withClient((client) => settlementOf(client, orderId))
   assertMay(context, INVOICES_VIEW, INVOICES_VIEW, found ? { companyId: found.companyId, partyId: found.partyId } : null, 'Order')
-  const { settlement } = found!
+  const { settlement, documents } = found! // B-OM-003: + the TD02 / TD04 rows
   // B-OP-022: this order's share (the list's rule), each invoice's share and the other orders it bills.
   const ours = await caller.withClient((client) => shareOfOrder(client, found!.orderId, settlement.invoices.map((invoice) => invoice.id), actorOf(context)))
   return {
@@ -304,6 +351,7 @@ export async function getSettlement(caller: CommandCaller, orderId: string) {
           paidAmount: asMoney('price', invoice.paid),
           openAmount: asMoney('price', invoice.open),
           refundDueAmount: asMoney('price', invoice.refundDue),
+          writtenOffAmount: asMoney('price', invoice.writtenOff ?? 0), // B-OM-001
           // ── B-OP-022: this order's share of it, the freight apart, the other orders it bills (its buyer's only) ──
           share: asMoney('price', mine.share),
           openShare: asMoney('price', mine.openShare),
@@ -312,18 +360,25 @@ export async function getSettlement(caller: CommandCaller, orderId: string) {
           otherOrdersHidden: mine.otherOrdersHidden,
         }
       }),
+      // ── B-OM-003 (order money tab M5-B3): the TD02s of its deposit requests and the TD04s crediting its documents; the status
+      // is the SDI life (no per-invoice SDI read); amounts with the price grain only ──
+      depositInvoices: documents.depositInvoices.map((row) => ({ id: row.id, number: row.number, status: row.status, issueDate: row.issueDate, gross: asMoney('price', row.gross), credited: asMoney('price', row.credited), deductedNet: asMoney('price', row.deductedNet), depositRequestId: row.depositRequestId })),
+      creditNotes: documents.creditNotes.map((row) => ({ id: row.id, number: row.number, status: row.status, issueDate: row.issueDate, gross: asMoney('price', row.gross), creditOfId: row.creditOfId })),
+      // ── end B-OM-003 ──
       invoicedAmount: asMoney('price', settlement.money.invoicedGross),
       creditedAmount: asMoney('price', settlement.money.creditedGross),
       paidAmount: asMoney('price', settlement.money.paidOnInvoices),
       depositsPaidWithoutInvoiceAmount: asMoney('price', settlement.money.depositsPaidWithoutInvoice),
       balanceDueAmount: asMoney('price', settlement.money.balanceDue),
       refundDueAmount: asMoney('price', settlement.money.refundDue),
+      writtenOffAmount: asMoney('price', settlement.money.writtenOff), // B-OM-001
       // B-OP-022: Money = this order's share (the list's paid and balance).
       thisOrder: {
         paid: asMoney('price', ours.thisOrder.paid),
         stillToPay: asMoney('price', ours.thisOrder.stillToPay),
         invoicedShare: asMoney('price', ours.thisOrder.invoicedShare),
         depositsPaid: asMoney('price', ours.thisOrder.depositsPaid),
+        writtenOff: asMoney('price', ours.thisOrder.writtenOff), // B-OM-001
       },
     },
   }

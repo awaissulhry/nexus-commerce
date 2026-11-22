@@ -874,6 +874,12 @@ describe('the W2b-6 golden flow: a cost sheet approved, an order packed by scan 
     await settle()
     const open = await ok(P.finance, 'GET', `/payments/open-items?companyId=${companyA()}&partyId=${P1()}`)
     expect((open.items as Json[]).find((item) => item.id === G.td24.id)).toBeUndefined()
+    // B-OM-001 (order money tab M1-B1): the order's settlement counts the forty cents written off — the TD24 is no longer open
+    // and nothing is still to pay on the order's invoices (before, it said "0.40 EUR is still to be paid" for ever).
+    const { settlement } = await ok(P.finance, 'GET', `/invoicing/orders/${G.order.id}/settlement`)
+    expect((settlement.invoices as Json[]).find((invoice) => invoice.id === G.td24.id)).toMatchObject({ openAmount: 0, writtenOffAmount: 40 })
+    expect(settlement.gaps).not.toContain('BALANCE_DUE')
+    expect(settlement.writtenOffAmount).toBe(40)
   })
 
   it('B02 the Owner switches Ri.Ba. on (a fresh code); finance presents the stamp-duty invoice’s instalment in a batch (its CBI file); the bank returns it unpaid with a fee: the invoice is open again, the unpaid tile counts it, and finance charges the fee with a debit note (TD05) issued and sent', async () => {

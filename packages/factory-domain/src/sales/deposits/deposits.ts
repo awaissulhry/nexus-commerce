@@ -87,8 +87,13 @@ export interface BankDetails {
   readonly bankName: string | null
 }
 
-/** The reference (causale) the customer writes on the transfer: the quote and version it pays for. */
-export function depositReference(documentNumber: string, language: DocumentLanguage): string {
+/** B-OM-009 (order money tab M3-B7): what the reference names — the quote and version, or the order (a request made on an order). */
+export type DepositDocumentKind = 'QUOTE' | 'ORDER'
+
+/** The reference (causale) the customer writes on the transfer: the quote and version it pays for, or (B-OM-009) the order. */
+export function depositReference(documentNumber: string, language: DocumentLanguage, kind: DepositDocumentKind = 'QUOTE'): string {
+  // B-OM-009: a request made on an order names the order ("Acconto ordine SO-…"), never a quotation it is not.
+  if (kind === 'ORDER') return language === 'it' ? `Acconto ordine ${documentNumber}` : `Deposit order ${documentNumber}`
   return language === 'it' ? `Acconto offerta ${documentNumber}` : `Deposit quotation ${documentNumber}`
 }
 
@@ -113,8 +118,10 @@ export function paymentInstructions(input: {
   readonly documentNumber: string
   readonly bank: BankDetails | null
   readonly language: DocumentLanguage
+  /** B-OM-009: what the document number is (absent: a quote). */
+  readonly documentKind?: DepositDocumentKind | undefined
 }): PaymentInstructions {
-  const reference = depositReference(input.documentNumber, input.language)
+  const reference = depositReference(input.documentNumber, input.language, input.documentKind ?? 'QUOTE')
   const amount = formatMoney(input.amount, input.currency, input.language)
   const due = formatDate(input.dueDate, input.language)
   const bank = input.bank

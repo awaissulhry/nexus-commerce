@@ -231,6 +231,23 @@ export const orderView = output({
   costAmount: money.cost(z.number().int().nullable()),
   /** The estimated margin % of the net from the accepted costs (null without a complete cost). */
   marginPct: money.margin(z.string().nullable()),
+  /**
+   * B-OM-002 (order money tab M1-B3): the order's money by the ONE rule the orders list and the settlement's `thisOrder` read
+   * (factory-domain sales/orders/later-columns orderMoneyPartsOf): still to pay (its gross less what will never be billed, its
+   * share of the credit notes, what is paid and its share of the small differences written off; never below 0; a cancelled order
+   * owes 0), paid (deposits and its share of its invoices' payments, less refunds), never billed, credited, written off, the
+   * deposits received. Price grain: absent (null) for a reader without it.
+   */
+  money: money.price(
+    output({
+      stillToPay: z.number().int(),
+      paid: z.number().int(),
+      neverBilled: z.number().int(),
+      credited: z.number().int(),
+      writtenOff: z.number().int(),
+      depositsPaid: z.number().int(),
+    }).nullable(),
+  ),
   reapprovalNeededAt: instant().nullable(),
   cancelReason: z.string().nullable(),
   closedAt: instant().nullable(),
@@ -344,6 +361,10 @@ export const orderView = output({
       approvalTaskIds: z.array(id()),
       /** B-OC-008: the product change requests this order's DESIGN requests raised (change_request.changed re-reads Still to do). */
       styleChangeIds: z.array(id()),
+      /** B-OM-008 (order money tab): the credit notes (TD04) of its invoices and deposit invoices, drafts included. */
+      creditNoteIds: z.array(id()),
+      /** B-OM-008: the refunds of those credit notes (refund.* re-reads Money). */
+      refundIds: z.array(id()),
     }),
   }),
   /** Per part, the newest change: an office person or the order's own customer by name, "the floor" or "Nexus"; null: none. */
