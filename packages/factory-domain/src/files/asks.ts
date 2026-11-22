@@ -1,4 +1,5 @@
 import type { BusinessDate } from '../core/time'
+import type { WorkOrderStatus } from '../production/work-orders/machine' // of-fx5s (W-04)
 
 /**
  * "Ask for a file" (order files tab B-OF-031 … B-OF-034; design order-files-2026-11-22 13-backend §2; Owner D2, D3): the pure rules
@@ -77,6 +78,7 @@ export const FILE_ASK_REFUSALS = [
   'FLOOR_NO_PRICES',
   'FLOOR_NO_BODY_DATA',
   'STEP_NEEDS_STEP',
+  'WORK_ORDER_NOT_ON_FLOOR', // of-fx5s (W-04)
 ] as const
 export type FileAskRefusal = (typeof FILE_ASK_REFUSALS)[number]
 
@@ -97,6 +99,11 @@ export const FILE_ASK_REFUSAL_WORDS: Readonly<Record<FileAskRefusal, AskWords>> 
   FLOOR_NO_PRICES: { it: 'Il reparto non vede mai i prezzi: chiedi a qualcuno in ufficio.', en: 'The floor never sees prices: ask someone in the office.' },
   FLOOR_NO_BODY_DATA: { it: 'Il reparto non riceve mai le misure: chiedi a qualcuno in ufficio.', en: 'The floor never gets measurements: ask someone in the office.' },
   STEP_NEEDS_STEP: { it: 'Scegli la fase di cui chiedi a chi la lavora.', en: 'Pick the step whose worker is asked.' },
+  // of-fx5s (W-04)
+  WORK_ORDER_NOT_ON_FLOOR: {
+    it: "Quest'ordine di lavoro non è in reparto: una richiesta al reparto vuole un ordine di lavoro rilasciato e ancora in corso.",
+    en: 'This work order is not on the floor: a floor ask needs a released work order that is still running.',
+  },
 })
 
 /** A refusal's words with its name or count filled in. */
@@ -116,6 +123,23 @@ export function askShapeProblem(input: { readonly target: FileAskTarget; readonl
   if (input.bodyData) return 'FLOOR_NO_BODY_DATA'
   return null
 }
+
+// ---- of-fx5s (W-04, the look-only walk): the floor is asked only on a work order that is on the floor --------------------------
+/** A work order on the floor: released and not finished (never DRAFT, COMPLETED, CLOSED or CANCELLED). */
+export const ON_FLOOR_WORK_ORDER_STATUSES = ['RELEASED', 'IN_PROGRESS'] as const satisfies readonly WorkOrderStatus[]
+
+/** Is the work order on the floor? ON_HOLD pauses it where it was: held from RELEASED or IN_PROGRESS it is, held from DRAFT it is not. */
+export function workOrderOnFloor(workOrder: { readonly status: WorkOrderStatus; readonly heldFromStatus: WorkOrderStatus | null }): boolean {
+  const at = workOrder.status === 'ON_HOLD' ? workOrder.heldFromStatus : workOrder.status
+  return at !== null && (ON_FLOOR_WORK_ORDER_STATUSES as readonly string[]).includes(at)
+}
+
+/** A floor ask (FLOOR_ROLE, FLOOR_TEAM, STEP) on a work order not on the floor: WORK_ORDER_NOT_ON_FLOOR; null: fine (an office ask, or no work order: askShapeProblem's). */
+export function floorAskProblem(addressee: FileAskAddressee, workOrder: { readonly status: WorkOrderStatus; readonly heldFromStatus: WorkOrderStatus | null } | null): FileAskRefusal | null {
+  if (!isFloorAddressee(addressee) || workOrder === null) return null
+  return workOrderOnFloor(workOrder) ? null : 'WORK_ORDER_NOT_ON_FLOOR'
+}
+// ---- end of-fx5s
 
 /** Why the words of an ask or a reason are not taken (null: they are); `min` 1 for what is needed, 3 for a reason. */
 export function askTextProblem(text: string, min: number, max: number = FILE_ASK_LIMITS.words): string | null {

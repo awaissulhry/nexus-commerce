@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { askDayWords, askLocaleOf, askShapeProblem, askTextProblem, chaseNoteText, checkTaskTitle, FILE_ASK_LIMITS, FILE_ASK_REFUSALS, FILE_ASK_REFUSAL_WORDS, isFloorAddressee, lateDaysOf, refusalWords, uploadTaskTitle } from './asks'
+import { askDayWords, askLocaleOf, askShapeProblem, askTextProblem, chaseNoteText, checkTaskTitle, FILE_ASK_LIMITS, FILE_ASK_REFUSALS, FILE_ASK_REFUSAL_WORDS, floorAskProblem, isFloorAddressee, lateDaysOf, refusalWords, uploadTaskTitle, workOrderOnFloor } from './asks'
 
 /** B-OF-031 (order files tab; 13-backend §2): the pure rules of an ask for a file. Not run in the build (checks at the end). */
 describe('an ask for a file: who, where, words (B-OF-031)', () => {
@@ -58,5 +58,22 @@ describe('an ask for a file: who, where, words (B-OF-031)', () => {
     expect(refusalWords('FILES_HELD', { n: 1 }).en).toBe('1 file is still being checked by the virus scan: accept once the check is done.')
     expect(refusalWords('FILES_HELD', { n: 2 }).en).toBe('2 files are still being checked by the virus scan: accept once the check is done.')
     expect(refusalWords('ORDER_CLOSED').it).toBe("Quest'ordine è chiuso: niente nuove richieste.")
+  })
+  // of-fx5s (W-04): the floor is asked only on a work order that is on the floor (released, not finished).
+  it('a floor ask needs a released work order that is still running; an office ask does not', () => {
+    const wo = (status: Parameters<typeof workOrderOnFloor>[0]['status'], heldFromStatus: Parameters<typeof workOrderOnFloor>[0]['heldFromStatus'] = null) => ({ status, heldFromStatus })
+    for (const status of ['RELEASED', 'IN_PROGRESS'] as const) expect(workOrderOnFloor(wo(status)), status).toBe(true)
+    for (const status of ['DRAFT', 'COMPLETED', 'CLOSED', 'CANCELLED'] as const) expect(workOrderOnFloor(wo(status)), status).toBe(false)
+    expect(workOrderOnFloor(wo('ON_HOLD', 'IN_PROGRESS'))).toBe(true)
+    expect(workOrderOnFloor(wo('ON_HOLD', 'DRAFT'))).toBe(false)
+    for (const addressee of ['FLOOR_ROLE', 'FLOOR_TEAM', 'STEP'] as const) {
+      expect(floorAskProblem(addressee, wo('DRAFT')), addressee).toBe('WORK_ORDER_NOT_ON_FLOOR')
+      expect(floorAskProblem(addressee, wo('COMPLETED')), addressee).toBe('WORK_ORDER_NOT_ON_FLOOR')
+      expect(floorAskProblem(addressee, wo('RELEASED')), addressee).toBeNull()
+    }
+    expect(floorAskProblem('PERSON', wo('COMPLETED'))).toBeNull()
+    expect(floorAskProblem('OFFICE_ROLE', wo('DRAFT'))).toBeNull()
+    expect(floorAskProblem('FLOOR_TEAM', null)).toBeNull()
+    expect(refusalWords('WORK_ORDER_NOT_ON_FLOOR').en).toBe('This work order is not on the floor: a floor ask needs a released work order that is still running.')
   })
 })

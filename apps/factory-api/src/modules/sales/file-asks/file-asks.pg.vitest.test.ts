@@ -362,7 +362,8 @@ describe('S2.1 the Restrict keys in words (lead): a line or a step a file ask na
   })
 
   it('a draft’s operations never lose a step a file ask names (409 in words)', async () => {
-    await made('owner', SO2, floorBody({ who: { kind: 'STEP' }, target: { type: 'WORK_ORDER', workOrderId: WO2, operationId: WO2_PACK } }))
+    // of-fx5s (W-04): the floor is never asked on a DRAFT work order; an ask to an office person names the draft's step here.
+    await made('owner', SO2, askBody({ kind: 'PERSON', userId: PEOPLE.planner }, { words: 'Made-up: photos of step 40', fileKind: 'PHOTO', target: { type: 'WORK_ORDER', workOrderId: WO2, operationId: WO2_PACK } }))
     const workOrder = await one<{ number: string; siteId: string; styleRevisionId: string }>(`SELECT number, "siteId", "styleRevisionId" FROM "WorkOrder" WHERE id = $1`, [WO2])
     const stored = await admin<Json>(`SELECT o.seq, o."routingSeq", o.code, o.name, o."standardMinutes"::text AS minutes, o."scanRequired", o."workCentreId", c.kind::text AS kind, c.code AS "centreCode" FROM "WorkOrderOperation" o JOIN "WorkCentre" c ON c.id = o."workCentreId" WHERE o."workOrderId" = $1 ORDER BY o.seq`, [WO2])
     // The routing without step 40 (the one the ask names): the sync would remove it.
@@ -480,6 +481,17 @@ describe('B-OF-035 the "Ask for a file…" window’s choices', { timeout: SLOW_
     const workOrder = (choices.workOrders as Json[]).find((row) => row.id === WO1)!
     expect(workOrder).toMatchObject({ siteId: sid('site:A1') })
     expect((workOrder.steps as Json[]).map((step) => step.id)).toContain(WO1_SEW)
+    // of-fx5s (W-04): each work order's status (a floor ask needs one on the floor); (W-08): each office role's reach, a number.
+    expect(workOrder.status).toBe('IN_PROGRESS')
+    expect((choices.workOrders as Json[]).find((row) => row.id === WO2)?.status).toBe('DRAFT')
+    const reachOf = (roles: Json[], roleId: string): unknown => roles.find((row) => row.id === roleId)?.reach
+    expect(reachOf(choices.officeRoles, ROLES.three)).toBe(4)
+    expect(reachOf(choices.officeRoles, ROLES.alpha)).toBe(1)
+    for (const role of choices.officeRoles as Json[]) expect(role.reach, role.name).toBeGreaterThan(0)
+    // On Beta's order the Alpha-limited holder falls out (3), and the Alpha-only role reaches nobody: not offered.
+    const onBeta = await ok('owner', 'GET', choicesOf(beta.salesOrderId))
+    expect(reachOf(onBeta.officeRoles, ROLES.three)).toBe(3)
+    expect(reachOf(onBeta.officeRoles, ROLES.alpha)).toBeUndefined()
     for (const role of choices.floorRoles as Json[]) expect(role.siteIds.length).toBeGreaterThan(0)
     expect(choices.truncated).toBe(false)
     // Never a floor worker's name, never a count per worker.
@@ -494,3 +506,41 @@ describe('B-OF-035 the "Ask for a file…" window’s choices', { timeout: SLOW_
     expect((await no('betaOwner', 'GET', choicesOf(SO2), undefined, 404)).message).toBe('Sales order not found.')
   })
 })
+
+// ---- of-fx5s (W-04, the look-only walk): the floor is asked only on a work order on the floor (released, not finished) ----------
+describe('of-fx5s W-04: a floor ask needs a released work order that is still running', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const NOT_ON_FLOOR = 'This work order is not on the floor: a floor ask needs a released work order that is still running.'
+  const statusOf = async (workOrderId: string): Promise<string> => (await one<{ status: string }>(`SELECT status::text AS status FROM "WorkOrder" WHERE id = $1`, [workOrderId])).status
+  const refusedOffFloor = async (method: Method, url: string, body: unknown, label: string) => {
+    const error = await no('owner', method, url, body, 409)
+    expect(paths(error), label).toEqual(['fileAsk/WORK_ORDER_NOT_ON_FLOOR'])
+    expect(error.message, label).toBe(NOT_ON_FLOOR)
+  }
+
+  it('on a DRAFT work order: a team, a step and a floor role are refused in words (409); an office person may still be asked there', async () => {
+    expect(await statusOf(WO2)).toBe('DRAFT')
+    const onDraft = { target: { type: 'WORK_ORDER', workOrderId: WO2, operationId: WO2_PACK } }
+    const floorRole = await one<{ id: string }>(`SELECT id FROM "Role" WHERE "tenantId" = $1 AND audience = 'FLOOR' AND "archivedAt" IS NULL ORDER BY key LIMIT 1`, [T])
+    expect(floorRole, 'a floor role of the seeds').toBeDefined()
+    for (const who of [{ kind: 'FLOOR_TEAM', teamId: TEAM_A1 }, { kind: 'STEP' }, { kind: 'FLOOR_ROLE', roleId: floorRole.id }]) await refusedOffFloor('POST', asks(SO2), floorBody({ who, ...onDraft }), who.kind)
+    expect((await made('owner', SO2, askBody({ kind: 'PERSON', userId: PEOPLE.planner }, { fileKind: 'PHOTO', ...onDraft }))).ask.status).toBe('OPEN')
+  })
+
+  it('on a running one it passes (WO-0001, IN_PROGRESS); once COMPLETED a floor ask is neither made, changed nor reassigned to the floor — to the office it may be', async () => {
+    expect(await statusOf(WO1)).toBe('IN_PROGRESS')
+    const ask = await made('owner', SO2, floorBody())
+    expect(ask).toMatchObject({ tasks: 0, ask: { status: 'OPEN' } })
+    await force(`UPDATE "WorkOrder" SET status = 'COMPLETED' WHERE id = $1`, [WO1])
+    try {
+      await refusedOffFloor('POST', asks(SO2), floorBody(), 'make')
+      await refusedOffFloor('PATCH', `${asks(SO2)}/${ask.ask.id}`, { version: 1, words: 'Made-up: other photos' }, 'change')
+      await refusedOffFloor('POST', `${asks(SO2)}/${ask.ask.id}/reassign`, { version: 1, who: { kind: 'STEP' } }, 'reassign')
+      expect((await askRow(ask.ask.id)).version).toBe(1)
+      // To an office person the work order's state does not matter.
+      expect(await ok('owner', 'POST', `${asks(SO2)}/${ask.ask.id}/reassign`, { version: 1, who: { kind: 'PERSON', userId: PEOPLE.planner } })).toMatchObject({ ask: { version: 2, status: 'OPEN' }, tasks: 1 })
+    } finally {
+      await force(`UPDATE "WorkOrder" SET status = 'IN_PROGRESS' WHERE id = $1`, [WO1])
+    }
+  })
+})
+// ---- end of-fx5s

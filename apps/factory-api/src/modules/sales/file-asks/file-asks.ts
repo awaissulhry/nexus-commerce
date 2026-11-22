@@ -4,7 +4,7 @@ import { ConflictError, ForbiddenError, NotFoundError } from '@nexus/factory-dom
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can, type Actor } from '@nexus/factory-domain/core/permissions'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
-import { askLocaleOf, askTextProblem, chaseNoteText, checkTaskTitle, FILE_ASK_LIMITS, isFloorAddressee, uploadTaskTitle, type FileAskStatus, type FileAskTarget } from '@nexus/factory-domain/files/asks'
+import { askLocaleOf, askTextProblem, chaseNoteText, checkTaskTitle, FILE_ASK_LIMITS, floorAskProblem, isFloorAddressee, uploadTaskTitle, type FileAskStatus, type FileAskTarget } from '@nexus/factory-domain/files/asks'
 import { seesPrices } from '@nexus/factory-domain/files/priced'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
@@ -23,7 +23,7 @@ import { officeContextOf } from '../orders/access'
 import { officeOrder } from '../orders/moves'
 import { readOrder, type OrderRow, type Reader } from '../orders/store'
 import type { AnswerAskBody, ChangeAskBody, MakeAskBody, ReasonBody, ReassignAskBody, VersionBody } from './contract'
-import { badField, refused, resolveWho, type AskOrder } from './people'
+import { badField, refused, resolveWho, type AskOrder, type WorkOrderState } from './people'
 import { followAskTasks, moveAskTasks, writeAskTask } from './tasks'
 
 /**
@@ -216,19 +216,20 @@ interface Landed {
   readonly workOrderId: string | null
   readonly siteId: string | null
   readonly operationId: string | null
+  readonly workOrder: WorkOrderState | null // of-fx5s (W-04)
 }
 async function landingOf(db: Reader, actor: Actor, order: OrderRow, target: MakeAskBody['target']): Promise<Landed> {
   const ids = { lineId: target.lineId, workOrderId: target.workOrderId, operationId: target.operationId }
   if (target.type === 'SALES_ORDER') {
     if (ids.lineId || ids.workOrderId || ids.operationId) throw badField('target', 'An ask on the order itself names no line, work order or step.')
-    return { target: 'SALES_ORDER' as FileAskTarget, salesOrderLineId: null, workOrderId: null, siteId: null, operationId: null }
+    return { target: 'SALES_ORDER' as FileAskTarget, salesOrderLineId: null, workOrderId: null, siteId: null, operationId: null, workOrder: null }
   }
   if (target.type === 'SALES_ORDER_LINE') {
     if (!ids.lineId) throw badField('target/lineId', 'Say which line the file lands on.')
     if (ids.workOrderId || ids.operationId) throw badField('target', 'An ask on a line names no work order or step.')
     const line = await db.salesOrderLine.findFirst({ where: { id: ids.lineId, orderId: order.id }, select: { id: true } })
     if (!line) throw badField('target/lineId', 'Not a line of this order.')
-    return { target: 'SALES_ORDER_LINE' as FileAskTarget, salesOrderLineId: line.id, workOrderId: null, siteId: null, operationId: null }
+    return { target: 'SALES_ORDER_LINE' as FileAskTarget, salesOrderLineId: line.id, workOrderId: null, siteId: null, operationId: null, workOrder: null }
   }
   if (!ids.workOrderId) throw badField('target/workOrderId', 'Say which work order the file lands on.')
   if (ids.lineId) throw badField('target/lineId', 'An ask on a work order names no line.')
@@ -237,7 +238,7 @@ async function landingOf(db: Reader, actor: Actor, order: OrderRow, target: Make
     ? null
     : await db.workOrder.findFirst({
         where: { id: ids.workOrderId, companyId: order.companyId, partyId: order.partyId, status: { not: 'CANCELLED' }, kind: { not: 'REPAIR' }, sizes: { some: { salesOrderLineId: { in: lineIds } } } },
-        select: { id: true, companyId: true, siteId: true, partyId: true },
+        select: { id: true, companyId: true, siteId: true, partyId: true, status: true, heldFromStatus: true /* of-fx5s (W-04) */ },
       })
   // One not of this order and one the reader does not reach read the same (never a word that it exists).
   if (!workOrder || !reachesWorkOrder(actor, WORKORDERS_VIEW, workOrder)) throw badField('target/workOrderId', 'Not a work order of this order.')
@@ -247,7 +248,13 @@ async function landingOf(db: Reader, actor: Actor, order: OrderRow, target: Make
     if (!step) throw badField('target/operationId', 'Not a step of this work order.')
     operationId = step.id
   }
-  return { target: 'WORK_ORDER' as FileAskTarget, salesOrderLineId: null, workOrderId: workOrder.id, siteId: workOrder.siteId, operationId }
+  return { target: 'WORK_ORDER' as FileAskTarget, salesOrderLineId: null, workOrderId: workOrder.id, siteId: workOrder.siteId, operationId, workOrder: { status: workOrder.status, heldFromStatus: workOrder.heldFromStatus } }
+}
+
+/** of-fx5s (W-04): an ask's work order's status, read in the command (null: the ask lands on no work order). */
+async function workOrderStateOf(db: Reader, workOrderId: string | null): Promise<WorkOrderState | null> {
+  if (!workOrderId) return null
+  return db.workOrder.findUnique({ where: { id: workOrderId }, select: { status: true, heldFromStatus: true } })
 }
 
 // ---- make ---------------------------------------------------------------------------------------------------------------------
@@ -266,7 +273,7 @@ export async function makeAsk(caller: CommandCaller, orderId: string, body: Make
     if (!fresh || CLOSED_ORDERS.has(fresh.status)) throw refused('ORDER_CLOSED')
     const land = await landingOf(tx, actor, fresh, body.target)
     const askOrder = askOrderOf(fresh)
-    const who = await resolveWho(tx, context.tenantId, askOrder, body.who, { target: land.target, siteId: land.siteId, operationId: land.operationId }, marks, now)
+    const who = await resolveWho(tx, context.tenantId, askOrder, body.who, { target: land.target, siteId: land.siteId, operationId: land.operationId, workOrder: land.workOrder }, marks, now)
     const id = newId()
     // The office addressees' Tasks first: the ask's statement names them (its guard reads Task).
     const taskIds: string[] = []
@@ -328,6 +335,9 @@ export async function changeAsk(caller: CommandCaller, orderId: string, askId: s
     const { tx, now } = tools
     const row = await lockAsk(tools, ask.id, body.version)
     if (row.status !== 'OPEN') throw refused('NOT_OPEN')
+    // of-fx5s (W-04): a floor ask is changed only while its work order is on the floor (else cancel it, or reassign it to the office).
+    const offFloor = floorAskProblem(row.addressee, await workOrderStateOf(tx, row.workOrderId))
+    if (offFloor) throw refused(offFloor)
     const next = { words: words ?? row.words, dueOn: due ?? dayOf(row.dueOn) }
     const changed = { words: next.words !== row.words, due: next.dueOn !== dayOf(row.dueOn) }
     if (!changed.words && !changed.due) throw badField('words', 'Nothing changes: the words and the due day are as they are.')
@@ -353,7 +363,8 @@ export async function reassignAsk(caller: CommandCaller, orderId: string, askId:
     if (row.status !== 'OPEN') throw refused('NOT_OPEN')
     const order = (await readOrder(tx, row.salesOrderId))!
     const askOrder = askOrderOf(order)
-    const who = await resolveWho(tx, context.tenantId, askOrder, body.who, { target: row.target, siteId: row.siteId, operationId: row.workOrderOperationId }, { priced: row.priced, bodyData: row.bodyData }, now)
+    const workOrder = await workOrderStateOf(tx, row.workOrderId) // of-fx5s (W-04)
+    const who = await resolveWho(tx, context.tenantId, askOrder, body.who, { target: row.target, siteId: row.siteId, operationId: row.workOrderOperationId, workOrder }, { priced: row.priced, bodyData: row.bodyData }, now)
     if (who.addressee === row.addressee && who.addresseeUserId === row.addresseeUserId && who.addresseeRoleId === row.addresseeRoleId && who.addresseeTeamId === row.addresseeTeamId) {
       throw badField('who', 'This ask is already to them.')
     }

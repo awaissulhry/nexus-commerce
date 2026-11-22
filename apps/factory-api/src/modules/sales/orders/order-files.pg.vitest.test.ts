@@ -710,6 +710,18 @@ describe('B-OF-001…003: versions, what keeps a file, papers Nexus made, the tr
     const list = await ok('office.all', 'GET', listOf(otherOrder.id))
     const ddtPaper = fileOfList(list, made.ddtPaper)!
     expect(ddtPaper.from).toMatchObject({ type: 'Ddt', id: made.ddt, state: 'ANNULLED', shipment: { id: made.shipment, label: expect.any(String) } })
+    // of-fx5s (W-12): the shipment's day shipped (Rome) and its LIVE DDT's own number — never the annulled one this paper is of.
+    const [facts] = await admin<{ shippedOn: string | null; live: string | null; annulled: string }>(
+      `SELECT to_char((s."shippedAt" AT TIME ZONE 'Europe/Rome')::date, 'YYYY-MM-DD') AS "shippedOn",
+              (SELECT d.number FROM "Ddt" d WHERE d."shipmentId" = s.id AND NOT EXISTS (SELECT 1 FROM "DdtCancellation" c WHERE c."ddtId" = d.id) ORDER BY d."documentDate" DESC, d.number DESC LIMIT 1) AS live,
+              (SELECT number FROM "Ddt" WHERE id = $2::uuid) AS annulled
+         FROM "Shipment" s WHERE s.id = $1::uuid`,
+      [made.shipment, made.ddt],
+    )
+    expect(facts!.shippedOn, 'SH-0001 left (the shipping seed)').not.toBeNull()
+    expect(facts!.live, 'DDT 144 replaced the annulled 143 (the shipping seed)').not.toBeNull()
+    expect(ddtPaper.from.shipment).toEqual({ id: made.shipment, label: expect.any(String), shippedOn: facts!.shippedOn, ddtNumber: facts!.live })
+    expect(ddtPaper.from.shipment.ddtNumber).not.toBe(facts!.annulled)
     expect(groupOf(list, 'SHIPMENTS').files.map((file: Json) => file.id)).toContain(made.creditPaper)
     expect(fileOfList(list, made.creditPaper)?.from).toMatchObject({ type: 'Invoice', state: null, shipment: null })
   })

@@ -1,10 +1,10 @@
 import { z } from 'zod'
 import type { FactoryClient } from '@nexus/factory-db'
 import { FILES_READ, THREADS_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
-import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
+import { businessDate as businessDay, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { notMoney } from '@nexus/factory-domain/money/marked'
 import { can, type Actor, type Permission } from '@nexus/factory-domain/core/permissions'
-import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import type { Words } from '@nexus/factory-domain/portal/tasks/kinds'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import { QUALITY_COMPLAINTS_VIEW } from '@nexus/factory-domain/quality/complaints/permissions'
@@ -152,10 +152,21 @@ export interface RecordRef {
 // ── B-OF-003 (order files tab, S3): the record a file hangs on, with its paper's state and a DDT's shipment ──
 /** ANNULLED: a file of an annulled DDT; REPLACED: a file of an invoice that is no longer its XML or PDF (the rejected pair). */
 export const FILE_STATES = ['ANNULLED', 'REPLACED'] as const
+/**
+ * A DDT's paper: the shipment it travels with (the web draws it inside that shipment's block). of-fx5s (W-12): + the day it was
+ * shipped (Europe/Rome; null: not shipped yet) and its DDT's own number (the shipment's live DDT, not an annulled one; null: none,
+ * or the reader does not see shipping), for "SEED-SH-0011 · Shipped 12 Nov · DDT 144/2026".
+ */
+export interface FromShipment {
+  readonly id: string
+  readonly label: string
+  readonly shippedOn: string | null
+  readonly ddtNumber: string | null
+}
 export interface FileFrom extends RecordRef {
   readonly state: (typeof FILE_STATES)[number] | null
-  /** A DDT's paper: the shipment it travels with (the web draws it inside that shipment's block); null: any other file. */
-  readonly shipment: { readonly id: string; readonly label: string } | null
+  /** A DDT's paper: its shipment (FromShipment); null: any other file. */
+  readonly shipment: FromShipment | null
 }
 /** B-OF-001: who can TRULY see a file: CUSTOMER only when shared with this order's customer and its whole content is that customer's. */
 export const TRUE_AUDIENCES = ['CUSTOMER', 'LINK', 'FLOOR'] as const
@@ -301,9 +312,9 @@ async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow
   const defects = workOrderIds.length === 0 ? [] : await db.inspectionDefect.findMany({ where: { workOrderId: { in: workOrderIds } }, select: { id: true, workOrderId: true, inspectionId: true } })
   const checks = inspections.length === 0 ? [] : await db.inspectionCheckResult.findMany({ where: { inspectionId: { in: inspections.map((row) => row.id) } }, select: { id: true, inspectionId: true } })
   // B-OP-043 (order page N6): a shared shipment's files show on every order it carries (made for it or carrying its garments).
-  const shipments = await db.shipment.findMany({ where: shipmentsOfOrderWhere(order.id), select: { id: true, number: true } })
+  const shipments = await db.shipment.findMany({ where: shipmentsOfOrderWhere(order.id), select: { id: true, number: true, shippedAt: true /* of-fx5s (W-12) */ } })
   // B-OF-003: + a DDT's shipment and whether it was annulled (a DdtCancellation row).
-  const ddts = shipments.length === 0 ? [] : await db.ddt.findMany({ where: { shipmentId: { in: shipments.map((row) => row.id) } }, select: { id: true, number: true, shipmentId: true, cancellations: { select: { id: true }, take: 1 } } })
+  const ddts = shipments.length === 0 ? [] : await db.ddt.findMany({ where: { shipmentId: { in: shipments.map((row) => row.id) } }, select: { id: true, number: true, shipmentId: true, documentDate: true /* of-fx5s (W-12) */, cancellations: { select: { id: true }, take: 1 } } })
   // B-OF-003: + each invoice's XML and PDF (a file of it that is neither was replaced), and the credit notes of its invoices.
   const ownInvoices = await db.invoice.findMany({ where: { salesOrderId: order.id }, select: { id: true, number: true, xmlFileId: true, pdfFileId: true } })
   const creditNotes = ownInvoices.length === 0 ? [] : await db.invoice.findMany({ where: { docType: 'TD04', creditOfId: { in: ownInvoices.map((row) => row.id) } }, select: { id: true, number: true, xmlFileId: true, pdfFileId: true } })
@@ -316,9 +327,9 @@ async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow
 
   // Each record: its group, its label, the work order it belongs to (the production and quality rights ask it), its line.
   // B-OF-003: + a paper's state (an annulled DDT) and a DDT's shipment.
-  type RecordEntry = { group: OrderFileGroup; label: string; workOrderId: string | null; lineId: string | null; right: Permission | null; state: 'ANNULLED' | null; shipment: { id: string; label: string } | null }
+  type RecordEntry = { group: OrderFileGroup; label: string; workOrderId: string | null; lineId: string | null; right: Permission | null; state: 'ANNULLED' | null; shipment: FromShipment | null }
   const records = new Map<string, RecordEntry>()
-  const put = (type: string, recordId: string, entry: { group: OrderFileGroup; label: string; workOrderId?: string | null; lineId?: string | null; right?: Permission | null; state?: 'ANNULLED' | null; shipment?: { id: string; label: string } | null }) =>
+  const put = (type: string, recordId: string, entry: { group: OrderFileGroup; label: string; workOrderId?: string | null; lineId?: string | null; right?: Permission | null; state?: 'ANNULLED' | null; shipment?: FromShipment | null }) =>
     records.set(keyOf(type, recordId), { workOrderId: null, lineId: null, right: null, state: null, shipment: null, ...entry })
   put('SalesOrder', order.id, { group: 'ORDER', label: order.number })
   for (const line of lines) put('SalesOrderLine', line.id, { group: 'LINES', label: `${order.number} · ${line.seq}`, lineId: line.id })
@@ -334,9 +345,24 @@ async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow
     if (inspection) put('InspectionCheckResult', check.id, { group: 'QUALITY', label: inspection.number ?? workOrderOf.get(inspection.workOrderId)?.number ?? '', workOrderId: inspection.workOrderId, right: QUALITY_INSPECTIONS_VIEW })
   }
   for (const shipment of shipments) put('Shipment', shipment.id, { group: 'SHIPMENTS', label: shipment.number, right: SHIPPING_VIEW })
-  const shipmentNumber = new Map(shipments.map((row) => [row.id, row.number]))
+  // ---- of-fx5s (W-12): each shipment's live DDT (not annulled; the latest by its date, then its number), from the DDTs read above.
+  const liveDdtOf = new Map<string, { number: string; documentDate: Date }>()
   for (const ddt of ddts) {
-    const shipment = ddt.shipmentId && shipmentNumber.has(ddt.shipmentId) ? { id: ddt.shipmentId, label: shipmentNumber.get(ddt.shipmentId)! } : null
+    if (!ddt.shipmentId || ddt.cancellations.length > 0) continue
+    const known = liveDdtOf.get(ddt.shipmentId)
+    const later = !known || ddt.documentDate.getTime() > known.documentDate.getTime() || (ddt.documentDate.getTime() === known.documentDate.getTime() && ddt.number > known.number)
+    if (later) liveDdtOf.set(ddt.shipmentId, { number: ddt.number, documentDate: ddt.documentDate })
+  }
+  const seesShipping = may(SHIPPING_VIEW)
+  const shipmentOf = new Map(shipments.map((row) => [row.id, row]))
+  const fromShipment = (shipmentId: string | null): FromShipment | null => {
+    const row = shipmentId ? shipmentOf.get(shipmentId) : undefined
+    if (!row) return null
+    return { id: row.id, label: row.number, shippedOn: row.shippedAt ? businessDate(row.shippedAt) : null, ddtNumber: seesShipping ? (liveDdtOf.get(row.id)?.number ?? null) : null }
+  }
+  // ---- end of-fx5s
+  for (const ddt of ddts) {
+    const shipment = fromShipment(ddt.shipmentId)
     put('Ddt', ddt.id, { group: 'SHIPMENTS', label: ddt.number, right: SHIPPING_VIEW, state: ddt.cancellations.length > 0 ? 'ANNULLED' : null, shipment }) // B-OF-003
   }
   for (const invoice of invoices) put('Invoice', invoice.id, { group: 'SHIPMENTS', label: invoice.number ?? '', right: INVOICES_VIEW })
@@ -691,7 +717,8 @@ async function foldCopies(
 const words = output({ it: z.string(), en: z.string() })
 const recordRef = output({ type: z.string(), id: id(), label: z.string() })
 // B-OF-003: the record a file hangs on, + its paper's state and a DDT's shipment.
-const fromRef = recordRef.extend({ state: z.enum(FILE_STATES).nullable(), shipment: output({ id: id(), label: z.string() }).nullable() })
+// of-fx5s (W-12): + the shipment's day shipped and its live DDT's number.
+const fromRef = recordRef.extend({ state: z.enum(FILE_STATES).nullable(), shipment: output({ id: id(), label: z.string(), shippedOn: businessDay().nullable(), ddtNumber: z.string().nullable() }).nullable() })
 
 export const orderFileView = output({
   id: id(),
