@@ -1,6 +1,6 @@
 'use client'
 
-import { createElement, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createElement, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Order } from '../api'
 // F-OS-101 (18-lead-settles L5): the deliveries READ stays (each Shipments row draws its delivery); its card "Delivered (from carrier)" went.
 import { podDownload, readDeliveries, type Deliveries } from './shipments/delivered/api'
@@ -26,6 +26,13 @@ import type { RowActId } from './shipments/doors'
 import type { NoticeWords } from './record-model'
 import type { Words } from '../../../warehouse/shipments/queue/shared/depth' // F-OS-301: what the tracking write said
 import { parcelWordsOf } from './shipments/rows' // F-OS-301: each parcel's contents of this order, in the Tracking numbers window
+// ---- F-OS-303: the after-sales doors — the Returns and Quality pages' OWN windows, and the claim link, mounted in place ----
+import type { AfterSalesKind } from './shipments/doors'
+import { NewReturnDoor } from '../../returns/NewReturnDoor'
+import { LogComplaintDoor } from '../../../quality/complaints/LogComplaintDoor'
+import { ClaimLink } from '../../returns/claim-link/ClaimLink'
+import { complaintHref, returnHref } from './links/model'
+// ---- end F-OS-303
 // ---- end F-OS-201
 // F-OP-121 (order page plan N6): Create shipment… in place — the Warehouse's ONE New shipment hook and its dialog.
 import type { ApiClient } from '../../../../lib/api/client'
@@ -71,6 +78,8 @@ export function useShipmentsActs(input: {
   readonly reload: () => void
   /* F-OP-121 */ readonly api: ApiClient
   /* F-OP-121 */ readonly setNotice: (notice: OrderRecordModel['notice']) => void
+  /** F-OS-303: a return or a complaint opened from the tab — the order's links (Complaints & returns) are read again. */
+  readonly onCaseOpened?: () => void
 }): {
   model: {
     /* F-OP-119 → F-OS-201: the one shipment window open (its container), whichever the row opened */ shipmentDoor: ReactNode | null
@@ -79,13 +88,14 @@ export function useShipmentsActs(input: {
     /* F-OP-123 */ elsewhere: { readonly held: Phrase | null; readonly dialog: ReactNode | null } | null
     /* F-OS-101 */ shipmentDeliveries: Part<Deliveries> | null
     /* F-OS-103 */ shipmentParcels: Readonly<Record<string, Part<Bench>>>
+    /* F-OS-303 */ afterSalesDoor: ReactNode | null
   }
   actions: {
     onShipmentTracking: (shipmentId: string) => void
     /* F-OP-121 */ onCreateShipment: () => void
     /* F-OP-122 */ onJoinShipment: (shipmentId: string) => void
     /* F-OP-123 */ onRecordElsewhere: () => void
-    /* F-OS-101 */ shipmentsTab: { readonly onRetryDeliveries: () => void; readonly onOpenParcels: (shipmentId: string) => void; readonly onDownloadProof: (shipmentId: string) => void; /* F-OS-202 */ readonly onAct: (shipmentId: string, act: RowActId, holdId?: string) => void }
+    /* F-OS-101 */ shipmentsTab: { readonly onRetryDeliveries: () => void; readonly onOpenParcels: (shipmentId: string) => void; readonly onDownloadProof: (shipmentId: string) => void; /* F-OS-202 */ readonly onAct: (shipmentId: string, act: RowActId, holdId?: string) => void; /* F-OS-303 */ readonly onAfterSales: (kind: AfterSalesKind, shipmentId?: string) => void }
   }
 } {
   const { order, prefix, permissions, reload, api, setNotice } = input
@@ -95,7 +105,13 @@ export function useShipmentsActs(input: {
   const can = useMemo(() => ({ ...depthAbilitiesOf(permissions), pack: false }), [permissions])
   const close = useCallback(() => setOpen(null), [])
   const onShipmentTracking = useCallback((shipmentId: string) => setOpen({ shipmentId, act: 'tracking' }), [])
-  const onAct = useCallback((shipmentId: string, act: RowActId, holdId?: string) => setOpen({ shipmentId, act, ...(holdId ? { holdId } : {}) }), [])
+  // ---- F-OS-303: Open a return… · Log a complaint… · Send a claim link… (the row's for its shipment, the head's for the order) ----
+  const [after, setAfter] = useState<{ readonly kind: AfterSalesKind; readonly shipmentId: string | null } | null>(null)
+  const onAfterSales = useCallback((kind: AfterSalesKind, shipmentId?: string) => setAfter({ kind, shipmentId: shipmentId ?? null }), [])
+  const onAct = useCallback(
+    (shipmentId: string, act: RowActId, holdId?: string) => (act === 'return' || act === 'complaint' || act === 'claim' ? setAfter({ kind: act, shipmentId }) : setOpen({ shipmentId, act, ...(holdId ? { holdId } : {}) })),
+    [],
+  )
   const row = open && order ? (order.chain.shipments.find((entry) => entry.id === open.shipmentId) ?? null) : null
   // F-OS-204: after each act the order reads itself again and says it ONCE, with the door to the shipment's home and, where the customer
   // sees it, what they were told (no e-mail by default).
@@ -109,6 +125,21 @@ export function useShipmentsActs(input: {
   )
   const shipmentDoor = row && open && order ? doorOf({ row: { id: row.id, number: row.number, version: row.version ?? 1 }, order: { id: order.id, companyId: order.companyId, partyId: order.partyId /* F-OS-302 */, shipComplete: order.shipComplete === true }, open, can, prefix, close, said, parcelWords: parcelWordsOf(row, order.lines) /* F-OS-301 */ }) : null
   // ---- end F-OP-119 → F-OS-201
+
+  const closeAfter = useCallback(() => setAfter(null), [])
+  const caseOpened = useRef(input.onCaseOpened)
+  caseOpened.current = input.onCaseOpened
+  // Opened: the list reads itself again and the order says it once, with the door to the case's own page.
+  const opened = useCallback(
+    (words: NoticeWords, href: string, tone: 'success' | 'warning' = 'success') => {
+      setAfter(null)
+      caseOpened.current?.()
+      setNotice({ tone, words, door: { href, words: os('after.done.open') } })
+    },
+    [setNotice],
+  )
+  const afterSalesDoor = after && order ? afterSalesDoorOf({ after, order, prefix, close: closeAfter, opened }) : null
+  // ---- end F-OS-303
 
   // ---- F-OP-121: Create shipment… in place ----
   const shipping = useMemo(() => abilitiesOf(permissions), [permissions])
@@ -234,8 +265,8 @@ export function useShipmentsActs(input: {
   const shipmentParcels = parcels.orderId === orderId ? parcels.parts : {}
   // ---- end F-OS-103
   return {
-    model: { shipmentDoor, newShipment, joinable: joinableShown, elsewhere /* F-OP-123 */, shipmentDeliveries /* F-OS-101 */, shipmentParcels /* F-OS-103 */ },
-    actions: { onShipmentTracking, onCreateShipment, onJoinShipment, onRecordElsewhere /* F-OP-123 */, shipmentsTab: { onRetryDeliveries, onOpenParcels, onDownloadProof, onAct /* F-OS-202 */ } /* F-OS-101 */ },
+    model: { shipmentDoor, newShipment, joinable: joinableShown, elsewhere /* F-OP-123 */, shipmentDeliveries /* F-OS-101 */, shipmentParcels /* F-OS-103 */, afterSalesDoor /* F-OS-303 */ },
+    actions: { onShipmentTracking, onCreateShipment, onJoinShipment, onRecordElsewhere /* F-OP-123 */, shipmentsTab: { onRetryDeliveries, onOpenParcels, onDownloadProof, onAct /* F-OS-202 */, onAfterSales /* F-OS-303 */ } /* F-OS-101 */ },
   }
 }
 
@@ -306,3 +337,30 @@ function doorOf(input: {
   }
 }
 // ── end F-OS-201 … F-OS-204 ──
+
+// ── F-OS-303 (order SHIPMENTS tab, 10-design §5 / §6; 18-lead-settles L8) ─────────────────────────────────────────────────────────────
+/** The after-sales window open: Returns' New return, Quality's Log complaint (this customer, order and shipment), or the claim link. */
+function afterSalesDoorOf(input: {
+  readonly after: { readonly kind: AfterSalesKind; readonly shipmentId: string | null }
+  readonly order: Order
+  readonly prefix: string
+  readonly close: () => void
+  readonly opened: (words: NoticeWords, href: string, tone?: 'success' | 'warning') => void
+}): ReactNode {
+  const { after, order, prefix, close, opened } = input
+  const key = `${after.kind}:${after.shipmentId ?? order.id}`
+  // The customer is the order's (the only choice in the window); the shipment chosen when it came from a row.
+  const party = { id: order.partyId, code: order.party?.code ?? '—', legalName: order.party?.legalName ?? '—', tradeName: null }
+  const seed = { party, salesOrderId: order.id, ...(after.shipmentId ? { shipmentId: after.shipmentId } : {}) }
+  switch (after.kind) {
+    case 'return':
+      return createElement(NewReturnDoor, { key, seed, companyId: order.companyId, onClose: close, onCreated: (made) => opened(os('after.done.return', { number: made.number }), returnHref(prefix, made.id)) })
+    case 'complaint':
+      return createElement(LogComplaintDoor, { key, seed, companyId: order.companyId, prefix, onClose: close, onLogged: (made, failed) => opened(failed > 0 ? os('after.done.complaintPhotos', { number: made.number, count: failed }) : os('after.done.complaint', { number: made.number }), complaintHref(prefix, made.id), failed > 0 ? 'warning' : 'success') })
+    case 'claim': {
+      const shipment = after.shipmentId ? order.chain.shipments.find((row) => row.id === after.shipmentId) : null
+      return createElement(ClaimLink, { key, partyId: order.partyId, record: shipment ? { type: 'Shipment' as const, id: shipment.id, number: shipment.number } : { type: 'SalesOrder' as const, id: order.id, number: order.number }, onClose: close })
+    }
+  }
+}
+// ── end F-OS-303 ──

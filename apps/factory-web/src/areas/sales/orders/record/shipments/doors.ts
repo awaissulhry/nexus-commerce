@@ -54,8 +54,8 @@ export function elsewhereDoorOf(elsewhere: { readonly held: Phrase | null } | nu
  * the hand-over stay in Warehouse ("Next ›"). Nobody sets a status by hand: Mark delivered / Mark returned type an event (a reason
  * over a carrier's labels, D5). Delivered, returned and cancelled stay final: no held item on a final row but its own last steps.
  */
-export type RowActId = 'split' | 'move' | 'merge' | 'takeOff' | 'unpack' | 'arrange' | 'placeHold' | 'releaseHold' | 'ddtOff' | 'ddtBack' | 'cancel' | 'eta' | 'delivered' | 'returned' | 'resolve' | 'proof' | 'receiveBack'
-export type RowActGroup = 'garments' | 'travel' | 'hold' | 'arrive' | 'danger'
+export type RowActId = 'split' | 'move' | 'merge' | 'takeOff' | 'unpack' | 'arrange' | 'placeHold' | 'releaseHold' | 'ddtOff' | 'ddtBack' | 'cancel' | 'eta' | 'delivered' | 'returned' | 'resolve' | 'proof' | 'receiveBack' | /* F-OS-303 */ AfterSalesKind
+export type RowActGroup = 'garments' | 'travel' | 'hold' | 'arrive' | /* F-OS-303 */ 'after' | 'danger'
 
 export interface RowAct {
   readonly id: RowActId
@@ -73,9 +73,10 @@ const SPLIT = wordOf('depth', 'split.menu')
 const act = (id: RowActId, group: RowActGroup, label: ShipWord, held: ShipWord | null = null, more: { readonly holdId?: string } = {}): RowAct => ({ id, group, label, held, ...more })
 const labelled = (row: ShipmentRow): boolean => (row.parcels ?? []).some((parcel) => parcel.source === 'LABEL')
 
-export function rowActsOf(row: ShipmentRow, orderId: string, delivery: Pick<DeliveryRow, 'openProblems' | 'pod' | 'returned'> | null): RowAct[] {
+export function rowActsOf(row: ShipmentRow, orderId: string, delivery: Pick<DeliveryRow, 'openProblems' | 'pod' | 'returned'> | null, can: Pick<OrderAbilities, 'returnsManage' | 'complaintsLog'> = {}): RowAct[] {
   const may = row.may
-  if (!may) return []
+  // F-OS-303: a shipped row's after-sales doors are the order's rights (Returns', Quality's), whatever the row's own `may` says.
+  if (!may) return afterSalesRowActs(row, can)
   const acts: RowAct[] = []
   const live = !!row.ddt
   const nexus = row.origin !== 'ELSEWHERE'
@@ -114,6 +115,46 @@ export function rowActsOf(row: ShipmentRow, orderId: string, delivery: Pick<Deli
     acts.push(act('proof', 'arrive', wordOf('depth', 'pod.record'), kept ? word('ships.act.held.proofKept') : null))
   }
   if (row.status === 'RETURNED' && may.manage) acts.push(act('receiveBack', 'arrive', word('ships.act.receiveBack'), delivery?.returned?.received === true ? word('ships.act.held.received') : null))
-  return acts
+  return [...acts, ...afterSalesRowActs(row, can)]
 }
 // ── end F-OS-202 ──
+
+// ── F-OS-303 (order SHIPMENTS tab, 10-design §5 "SHIPPED, DELIVERED" and §6 head; 18-lead-settles L8) ────────────────────────────────
+/**
+ * The after-sales doors, each the owning page's OWN window in place: Open a return… (Sales › Returns' New return; from a row, that
+ * shipment's lines — L8), Log a complaint… (Quality's Log complaint; from a row, about that shipment), Send a claim link… (a link for
+ * the customer). Hidden without the right (D2); held with words only when nothing has left yet (the head; a row has left).
+ */
+export type AfterSalesKind = 'return' | 'complaint' | 'claim'
+
+const LEFT_STATES = new Set(['SHIPPED', 'DELIVERED'])
+
+/** A shipped (or delivered) row's after-sales doors, by the reader's rights. */
+export function afterSalesRowActs(row: Pick<ShipmentRow, 'status'>, can: Pick<OrderAbilities, 'returnsManage' | 'complaintsLog'>): RowAct[] {
+  if (!LEFT_STATES.has(row.status)) return []
+  return [
+    ...(can.returnsManage ? [act('return', 'after', word('ships.act.return'))] : []),
+    ...(can.complaintsLog ? [act('complaint', 'after', word('ships.act.complaint'))] : []),
+    ...(can.returnsManage ? [act('claim', 'after', word('ships.act.claim'))] : []),
+  ]
+}
+
+export interface AfterSalesDoor {
+  readonly kind: AfterSalesKind
+  readonly label: ShipWord
+  readonly held: ShipWord | null
+}
+
+/** The section head's doors: Open a return… and Log a complaint… as buttons, Send a claim link… in its ⋯ (the order's link). */
+export function afterSalesDoorsOf(order: Pick<Order, 'chain'>, can: Pick<OrderAbilities, 'returnsManage' | 'complaintsLog'>): { readonly buttons: readonly AfterSalesDoor[]; readonly claim: AfterSalesDoor | null } {
+  // Something has left: a shipment shipped, delivered or brought back by the carrier.
+  const left = order.chain.shipments.some((row) => LEFT_STATES.has(row.status) || row.status === 'RETURNED')
+  return {
+    buttons: [
+      ...(can.returnsManage ? [{ kind: 'return' as const, label: word('after.act.return'), held: left ? null : word('after.held.return') }] : []),
+      ...(can.complaintsLog ? [{ kind: 'complaint' as const, label: word('after.act.complaint'), held: null }] : []),
+    ],
+    claim: can.returnsManage ? { kind: 'claim', label: word('after.act.claim'), held: left ? null : word('after.held.claim') } : null,
+  }
+}
+// ── end F-OS-303 ──

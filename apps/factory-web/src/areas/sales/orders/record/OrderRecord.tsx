@@ -373,7 +373,9 @@ function RecordContainer({ orderId }: { orderId: string }) {
     // F-PT-404 (B-PT-007): the mark reads the production read's headline (no second GET) and reads it again after a write.
     health: { view: ready && production.state?.status === 'ready' ? healthViewOf(ready, production.state.read.headline) : null, reread: () => production.again(['headline']) },
   })
-  const shipments = useShipmentsActs({ order: ready, prefix, permissions: session.permissions, reload: () => void load() /* F-OP-119 */, api /* F-OP-121 */, setNotice /* F-OP-121 */ })
+  // F-OS-303: a return or a complaint opened from the Shipments tab reads the order's links again (they are read below).
+  const linksAgain = useRef<() => void>(() => undefined)
+  const shipments = useShipmentsActs({ order: ready, prefix, permissions: session.permissions, reload: () => void load() /* F-OP-119 */, api /* F-OP-121 */, setNotice /* F-OP-121 */, onCaseOpened: () => linksAgain.current() /* F-OS-303 */ })
   // ---- F-CP-142 (customer page plan C3): Money's "Price check" — read while Money shows, by a price holder only (else hidden, F-OM-301:
   // no call); its save and take-over say so in the page's one notice.
   const priceCheck = usePriceCheckCard({ api, orderId, can, tab, version: order.status === 'ready' ? order.value.version : null, permissions: session.permissions, setNotice })
@@ -450,6 +452,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const reviewBanner = useReviewBanner(api, order.status === 'ready' ? order.value : null, session.permissions, prefix) // B-W2b-368
   // B-TH-256: read with the order and again whenever it is read again; an accepted or declined re-promise reads the order again.
   const links = useOrderLinks(api, order.status === 'ready' ? order.value : null, () => void load())
+  linksAgain.current = () => links.actions.onRetry?.() // F-OS-303
 
   // ---- B-TH-228: the request an order was made from straight (no quote between) — the band's "Made from INQ-… — Open". The source
   // read answers nothing to a person who may not read that request (office only: the portal never reads it).

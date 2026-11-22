@@ -250,7 +250,10 @@
         "proofKept": "Every part of the proof is kept: it never changes.",
         "received": "The garments were received back already."
       },
-      "tracking": "Tracking numbers…"
+      "tracking": "Tracking numbers…",
+      "return": "Open a return for this shipment…",
+      "complaint": "Log a complaint about this shipment…",
+      "claim": "Send a claim link…"
     },
     "done": {
       "split": "{number} was split.",
@@ -313,7 +316,23 @@
     "showClosed_one": "Show {count} closed",
     "showClosed_other": "Show {count} closed",
     "hideClosed": "Hide closed",
-    "truncated": "Showing the latest 50"
+    "truncated": "Showing the latest 50",
+    "act": {
+      "return": "Open a return…",
+      "complaint": "Log a complaint…",
+      "claim": "Send a claim link…"
+    },
+    "held": {
+      "return": "A return opens once something has shipped.",
+      "claim": "A claim link is sent for a shipment that left."
+    },
+    "done": {
+      "return": "Return {number} is open.",
+      "complaint": "Complaint {number} is logged.",
+      "complaintPhotos_one": "Complaint {number} is logged; {count} photo could not be added.",
+      "complaintPhotos_other": "Complaint {number} is logged; {count} photos could not be added.",
+      "open": "Open it ›"
+    }
   },
   "copied": "Link copied",
   "door": {
@@ -516,6 +535,36 @@
       "moved_one": "{count} garment moved to {number}.",
       "moved_other": "{count} garments moved to {number}.",
       "merged": "{number} is merged into {into}."
+    }
+  },
+  "claim": {
+    "title": "Send a claim link for {number}",
+    "what": "The customer gets a link to ask for a return or report a quality problem, with photos. The link is for them only.",
+    "to": "Send it to",
+    "pickTo": "Pick a contact",
+    "other": "Another address…",
+    "email": "E-mail address",
+    "reading": "Reading the customer's contacts…",
+    "noContact": "No contact of this customer has an e-mail address here: type one.",
+    "never": "Nothing else changes: no return or complaint opens until the customer sends one.",
+    "go": "Send the link",
+    "cancel": "Cancel",
+    "close": "Close",
+    "held": {
+      "pickTo": "Pick to whom it goes.",
+      "email": "Type an e-mail address."
+    },
+    "refusal": {
+      "SUPPRESSED": "This address bounced or complained: correct it first.",
+      "email": "That address cannot take the link: check it.",
+      "notFound": "A claim link names a shipment that left or an open order: this one is neither now.",
+      "other": "The link could not go: try again in a moment."
+    },
+    "sent": {
+      "sent": "The link went to {email}.",
+      "queued": "The link waits to go to {email}.",
+      "failed": "The link was made, but the e-mail to {email} failed: send a new one later.",
+      "until": "It works until {day}."
     }
   }
 }

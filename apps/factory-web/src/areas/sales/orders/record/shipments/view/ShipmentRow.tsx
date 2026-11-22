@@ -84,7 +84,7 @@ export function ShipmentRowView({ row, view, delivery, order, model, actions }: 
       <div className="fw-os-c-o" role="cell">
         {/* F-OS-202: the row's acts by state (each Warehouse's own window, in place; hidden without the right, held only by state),
             then its read doors. */}
-        <LineMenuButton label={t('ships.row.more', { number: view.number })} items={rowMenuOf(rowActsOf(row, order.id, delivery), say, (act) => actions?.shipmentsTab?.onAct?.(view.id, act.id, act.holdId), [
+        <LineMenuButton label={t('ships.row.more', { number: view.number })} items={rowMenuOf(rowActsOf(row, order.id, delivery, model.can /* F-OS-303: the after-sales doors */), say, (act) => actions?.shipmentsTab?.onAct?.(view.id, act.id, act.holdId), [
           { id: 'open', label: t('ships.carries.notRead'), href },
           { id: 'copy', label: t('ships.row.copyLink'), onSelect: () => copyLinkTo(view.anchor) },
         ])} />
@@ -423,7 +423,7 @@ function CopyNumber({ text }: { text: string }) {
 }
 
 // ── F-OS-202 (10-design §5 "Row ⋯"): the acts in their groups (a rule between groups), each held item with its words; the read doors last ──
-const GROUPS: readonly RowActGroup[] = ['garments', 'travel', 'hold', 'arrive', 'danger']
+const GROUPS: readonly RowActGroup[] = ['garments', 'travel', 'hold', 'arrive', /* F-OS-303 */ 'after', 'danger']
 
 function rowMenuOf(acts: readonly RowAct[], say: Say, run: (act: RowAct) => void, doors: readonly MenuItemDef[]): MenuItemDef[] {
   const items: MenuItemDef[] = []

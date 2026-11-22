@@ -250,7 +250,10 @@
         "proofKept": "Ogni parte della prova è conservata: non cambia mai.",
         "received": "I capi sono già stati ricevuti."
       },
-      "tracking": "Numeri di tracciamento…"
+      "tracking": "Numeri di tracciamento…",
+      "return": "Apri un reso per questa spedizione…",
+      "complaint": "Registra un reclamo su questa spedizione…",
+      "claim": "Invia un link di reclamo…"
     },
     "done": {
       "split": "{number} è stata divisa.",
@@ -313,7 +316,23 @@
     "showClosed_one": "Mostra {count} chiuso",
     "showClosed_other": "Mostra {count} chiusi",
     "hideClosed": "Nascondi i chiusi",
-    "truncated": "Mostrati gli ultimi 50"
+    "truncated": "Mostrati gli ultimi 50",
+    "act": {
+      "return": "Apri un reso…",
+      "complaint": "Registra un reclamo…",
+      "claim": "Invia un link di reclamo…"
+    },
+    "held": {
+      "return": "Un reso si apre quando qualcosa è stato spedito.",
+      "claim": "Il link si invia per una spedizione partita."
+    },
+    "done": {
+      "return": "Il reso {number} è aperto.",
+      "complaint": "Il reclamo {number} è registrato.",
+      "complaintPhotos_one": "Il reclamo {number} è registrato; {count} foto non è stata aggiunta.",
+      "complaintPhotos_other": "Il reclamo {number} è registrato; {count} foto non sono state aggiunte.",
+      "open": "Aprilo ›"
+    }
   },
   "copied": "Link copiato",
   "door": {
@@ -516,6 +535,36 @@
       "moved_one": "{count} capo spostato su {number}.",
       "moved_other": "{count} capi spostati su {number}.",
       "merged": "{number} è unita a {into}."
+    }
+  },
+  "claim": {
+    "title": "Invia un link di reclamo per {number}",
+    "what": "Il cliente riceve un link per chiedere un reso o segnalare un problema di qualità, con le foto. Il link è solo per lui.",
+    "to": "Invialo a",
+    "pickTo": "Scegli un contatto",
+    "other": "Un altro indirizzo…",
+    "email": "Indirizzo e-mail",
+    "reading": "Lettura dei contatti del cliente…",
+    "noContact": "Nessun contatto del cliente ha qui un indirizzo e-mail: scrivine uno.",
+    "never": "Non cambia nient'altro: nessun reso o reclamo si apre finché il cliente non ne invia uno.",
+    "go": "Invia il link",
+    "cancel": "Annulla",
+    "close": "Chiudi",
+    "held": {
+      "pickTo": "Scegli a chi va.",
+      "email": "Scrivi un indirizzo e-mail."
+    },
+    "refusal": {
+      "SUPPRESSED": "Questo indirizzo è rimbalzato o ha segnalato spam: prima correggilo.",
+      "email": "Quell'indirizzo non può ricevere il link: controllalo.",
+      "notFound": "Un link di reclamo indica una spedizione partita o un ordine aperto: questo ora non lo è.",
+      "other": "Il link non è partito: riprova tra un momento."
+    },
+    "sent": {
+      "sent": "Il link è stato inviato a {email}.",
+      "queued": "Il link è in coda per {email}.",
+      "failed": "Il link è stato creato, ma l'e-mail a {email} non è partita: inviane uno nuovo più tardi.",
+      "until": "Vale fino al {day}."
     }
   }
 }
