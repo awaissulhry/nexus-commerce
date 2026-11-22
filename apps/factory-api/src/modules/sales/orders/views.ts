@@ -170,6 +170,9 @@ const LIVE_RULES: readonly { readonly match: (type: string) => boolean; readonly
   { match: (type) => type.startsWith('refund.'), parts: ['money'] },
   // A cost posted or reversed on one of its work orders (`workOrderIds`): the Margin section's actual so far.
   { match: (type) => type === 'work_order_cost.posted' || type === 'work_order_cost.reversed', parts: ['money'] },
+  // B-OM-021: a hand cost line or the target margin changed (its live field: orderId): the Margin section. B-OM-020: the customer's
+  // prices changed or a difference was accepted by hand (orderId): the Price check card on Money (it re-read order, lines, changes).
+  { match: (type) => type === 'order_margin.changed' || type === 'sales_order.brand_price_changed', parts: ['money'] },
   // ── end B-OM-008 ──
 ]
 
