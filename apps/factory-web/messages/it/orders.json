@@ -3176,8 +3176,8 @@
       "extraOpenFrom": "acconto aggiuntivo di {amount} aperto (modifica rev {revision})",
       "extraOpenWords": "è aperto un acconto aggiuntivo",
       "extraOpenFromWords": "è aperto un acconto aggiuntivo (modifica rev {revision})",
-      "depositShort": "all'acconto mancano {amount}",
-      "depositPartPaid": "acconto pagato in parte",
+      "depositShort": "all'acconto mancano {amount} — probabilmente spese bancarie",
+      "depositPartPaid": "l'acconto è pagato in parte",
       "depositOpen": "acconto di {amount} aperto, scade il {date}",
       "depositOpenWords": "acconto aperto, scade il {date}",
       "depositOverdue": "acconto di {amount} scaduto dal {date}",
@@ -3276,7 +3276,8 @@
       "part": "il piano dei pagamenti",
       "earlier": "Rate precedenti ({count})",
       "earlierHint": "sostituite o tolte; conservate con chi, quando e perché",
-      "more": "Altro per il piano dei pagamenti"
+      "more": "Altro per il piano dei pagamenti",
+      "history": "Cronologia ›"
     },
     "plan": {
       "kind": {
@@ -3296,7 +3297,8 @@
         "PAID": "Pagata",
         "WAIVED": "Abbuonata",
         "OVERDUE": "Scaduta",
-        "NOT_ASKED": "Non richiesta"
+        "NOT_ASKED": "Non richiesta",
+        "CANCELLED": "Annullata"
       },
       "due": {
         "waived": "Abbuonata",
@@ -3308,13 +3310,16 @@
         "overdueSince": "Scaduta dal {date}",
         "on": "Scade il {date}",
         "beforeGoodsLeave": "Prima che la merce parta",
-        "withInvoice": "con {number}"
+        "withInvoice": "con {number}",
+        "notOwed": "Non dovuta: l'ordine è annullato"
       },
       "note": {
         "productionWaits": "La produzione aspetta questo acconto",
         "extraWaits": "I nuovi ordini di lavoro lo aspettano; quelli rilasciati continuano",
         "holdsShipment": "Blocca la spedizione finché non è pagata",
-        "paidWithInvoice": "Pagata quando è pagata la fattura della merce"
+        "paidWithInvoice": "Pagata quando è pagata la fattura della merce",
+        "owedOnInvoice": "{amount} resta dovuto e va sulla fattura finale",
+        "owedOnInvoiceWords": "La parte mancante resta dovuta e va sulla fattura finale"
       },
       "act": {
         "send": "Invia la pagina",
@@ -3361,7 +3366,9 @@
       "step": {
         "page": "Pagina inviata",
         "byChange": "{date} · dalla modifica a pagamento rev {revision}",
-        "issued": "Emessa"
+        "issued": "Emessa",
+        "paid": "Pagato",
+        "byHand": "{date} · richiesto a mano"
       },
       "payments": {
         "title": "I suoi pagamenti",
@@ -3389,19 +3396,22 @@
       "answer": {
         "none": "ancora niente di aperto: il cliente paga alla fattura",
         "allPaid": "è tutto pagato",
-        "final": "l'ordine è chiuso: il suo piano non cambia più",
         "stillOpen": "ancora aperto {amount}",
         "overdue": "scaduto {amount}",
         "nextDue": "prossimo: {what}, scade il {date}",
-        "next": "prossimo: {what}"
+        "next": "prossimo: {what}",
+        "short": "all'acconto mancano {amount}",
+        "partPaid": "l'acconto è pagato in parte",
+        "cancelled": "non è dovuto niente: l'ordine è annullato"
       },
       "held": {
         "moneyPlaced": "Ci sono già pagamenti: annulla prima il pagamento.",
-        "onlyStep": "L'unica rata prende tutto l'ordine: aggiungi prima una rata.",
         "dayFromInvoice": "La sua scadenza viene dalla fattura.",
         "final": "L'ordine è chiuso: il suo piano non cambia più.",
-        "nothingFree": "Ogni rata ha già dei pagamenti: non c'è una rata aperta da cui prendere."
-      }
+        "nothingFree": "Ogni rata ha già dei pagamenti: non c'è una rata aperta da cui prendere.",
+        "noRest": "Nessun'altra rata aperta prende il resto: aggiungi prima una rata."
+      },
+      "shortHint": "Mancano {amount}: spesso la banca trattiene una commissione sul bonifico. Accettalo come spese bancarie, o chiedi il resto al cliente."
     },
     "invoices": {
       "title": "Fatture e note di credito",
@@ -3428,7 +3438,13 @@
       },
       "sub": {
         "credits": "Storna {number}",
-        "deducted": "Detratta nella fattura della merce"
+        "deducted": "Detratta nella fattura della merce",
+        "deducts": "Storna la TD02 {number} ({amount})",
+        "deductsWords": "Storna la TD02 {number}",
+        "forShipment": "per la spedizione {numbers}",
+        "forShipments": "per le spedizioni {numbers}",
+        "deductedOn": "Detratta in {number}",
+        "forPayment": "Per il pagamento del {date}"
       },
       "door": {
         "record": "Registra pagamento…",
@@ -3443,7 +3459,12 @@
       },
       "sdiFailed": "Stato SDI non letto",
       "copyNumber": "Copia il numero",
-      "more": "Altro per {number}"
+      "more": "Altro per {number}",
+      "finance": "Apri in Finanza › Fatture ›",
+      "headMore": "Altro per Fatture e note di credito",
+      "state": {
+        "rejected": "Scartata — correggi e reinvia"
+      }
     },
     "menu": {
       "copyLinkTotals": "Copia il link a Totali",
@@ -3453,7 +3474,9 @@
       "undo": "Annulla questo pagamento…",
       "open": "Apri in Finanza › Pagamenti ›",
       "copyRef": "Copia il riferimento bancario",
-      "more": "Altro per il pagamento del {date}"
+      "more": "Altro per il pagamento del {date}",
+      "td02": "Per questo è stata emessa la TD02 {number}",
+      "td02Words": "Per questo è stata emessa una fattura di acconto"
     },
     "hand": {
       "thePlan": "il piano",
@@ -3615,10 +3638,20 @@
           "td02": "La sua fattura di acconto (TD02) resta com'è: l'importo pagato."
         },
         "told": "non viene avvisato; il suo portale mostra l'acconto come pagato.",
-        "never": "Il pagamento resta come è arrivato; qui non si fa nessun abbuono; l'acconto resta pagato (non si può annullare)."
+        "never": "Il pagamento resta come è arrivato; qui non si fa nessun abbuono; l'acconto resta pagato (non si può annullare).",
+        "within": "Mancano {amount}: entro la tolleranza di abbuono dell'azienda ({tolerance}).",
+        "over": "Mancano {amount}: oltre la tolleranza di abbuono dell'azienda ({tolerance}) — lo accetta solo il titolare, con un codice nuovo."
       },
       "reason": "Perché",
-      "whoKept": "Salvato a tuo nome con la data di oggi; la cronologia lo conserva."
+      "whoKept": "Salvato a tuo nome con la data di oggi; la cronologia lo conserva.",
+      "sub": {
+        "amount": "{amount}",
+        "openNothing": "aperto · niente pagato",
+        "openPart": "aperto · pagato in parte",
+        "pageSent": "pagina inviata il {date}"
+      },
+      "whoAs": "Salvato come {name} · oggi {time} · la riga è segnata “Impostata a mano” · la cronologia conserva il valore precedente.",
+      "whoAsCode": "Salvato come {name} · oggi {time} · la cronologia conserva il valore precedente · confermi con un codice nuovo dalla tua app di autenticazione."
     },
     "refusal": {
       "OTHER": "Il piano non può cambiare così: rileggi la pagina.",
@@ -3784,7 +3817,10 @@
         "targetBy": "Obiettivo {pct} · impostato a mano da {name}, {date}",
         "floorRole": "Minimo {pct} (ruolo {role})",
         "floorCompany": "Minimo {pct} (dell'azienda)",
-        "belowFloor": "segnalato: sotto il margine a cui è tenuto"
+        "belowFloor": "Sotto il minimo",
+        "aboveTarget": "Sopra l'obiettivo",
+        "belowTarget": "Sotto l'obiettivo",
+        "aboveFloor": "Sopra il minimo"
       },
       "kind": {
         "FREIGHT_ESTIMATE": "Trasporto (stima)",
@@ -3846,7 +3882,7 @@
         "go": "Imposta il costo",
         "sub": "Margine attuale {pct}",
         "kind": "Voce",
-        "kindHint": "Una riga AGGIUNTA al costo calcolato; sostituire una voce calcolata arriva dopo.",
+        "kindHint": "Una riga aggiunta al costo calcolato; sostituire una voce calcolata arriva dopo.",
         "amount": "Importo ({currency})",
         "problem": "Scrivi un importo sopra 0, per esempio 320,00.",
         "happens": {
@@ -3873,7 +3909,21 @@
         "never": "Il margine non si scrive mai: resta calcolato dal prezzo e dai costi."
       },
       "told": "non vede mai margini né costi.",
-      "who": "Salvato a tuo nome con la data di oggi; la cronologia conserva il valore precedente."
+      "who": "Salvato a tuo nome con la data di oggi; la cronologia conserva il valore precedente.",
+      "whereNone": "Niente è cambiato dal preventivo: ancora nessun ordine di lavoro.",
+      "whereRow": {
+        "QUOTED": "A preventivo",
+        "NOW": "Attuale",
+        "PRICE": "Prezzo",
+        "MATERIAL": "Materiali",
+        "LABOUR": "Confezione (CMT)",
+        "SUBCONTRACT": "Lavorazioni esterne",
+        "OVERHEAD": "Costi generali",
+        "ADJUSTMENT": "Rettifiche",
+        "FREIGHT": "Trasporto",
+        "BY_HAND": "Impostati a mano",
+        "points": "{points} punti"
+      }
     },
     "stop": {
       "title": "Fermare la pagina inviata a {to}?",

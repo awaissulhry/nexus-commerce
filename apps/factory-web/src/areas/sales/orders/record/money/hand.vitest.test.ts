@@ -138,6 +138,32 @@ describe('F-OM-201: the window — its five parts, the money wall', () => {
   })
 })
 
+// ---- F-OM-fx3 (W-11): the windows' small differences — the deposit as it is now, the tolerance on Accept short, the fresh code ----
+describe('F-OM-fx3: what a window says first', () => {
+  it('Change the deposit… says the deposit as it is now under its title (its amount with the price grain only)', () => {
+    const sent = planOf({ order: order('CONFIRMED', { chain: { ...value.chain, depositRequests: [deposit({ link: SENT_LINK })] } }), schedule: SCHEDULE_OPEN, settlement: null, can: { ...canOf('owner'), moneyPlan: true }, stepCan: null, today: TODAY, stillToPay: null }).rows[0]!
+    const window = handWindowOf('REPLACE_DEPOSIT', { order: value, row: sent, price: true })
+    expect(window.sub).toEqual([sent.title, { key: 'moneyTab.hand.sub.amount', money: { amount: 228384 } }, { key: 'moneyTab.hand.sub.openNothing' }, { key: 'moneyTab.hand.sub.pageSent', instants: { date: SENT_LINK.sentAt } }])
+    expect(handWindowOf('REPLACE_DEPOSIT', { order: value, row: sent, price: false }).sub.flatMap(amountsOf)).toEqual([])
+    // Every other act on a row: its due words; the plan's head: nothing.
+    expect(handWindowOf('MOVE_DUE', { order: value, row: balance, price: true }).sub).toEqual([balance.due])
+    expect(handWindowOf('ADD_STEP', { order: value, row: null, price: true }).sub).toEqual([])
+  })
+
+  it('Accept short says the tolerance first: within it (no code), over it (only the Owner, a fresh code follows)', () => {
+    const part = deposit({ link: SENT_LINK, paidAmount: 226884 })
+    const rowOf = (withinTolerance: boolean) => planOf({ order: order('CONFIRMED', { chain: { ...value.chain, depositRequests: [part] } }), schedule: { ...SCHEDULE_OPEN, requests: [{ id: part.id, milestoneId: SCHEDULE.steps[0]!.id, kind: 'ACCONTO', stepKind: 'DEPOSIT', status: 'OPEN', dueDate: '2026-11-04', fiscalDocument: 'TD02', short: { amount: 1500, withinTolerance } }], tolerance: 2500 }, settlement: null, can: { ...canOf('owner'), moneyPlan: true }, stepCan: null, today: TODAY, stillToPay: null }).rows[0]!
+    const within = handWindowOf('ACCEPT_SHORT', { order: value, row: rowOf(true), price: true, tolerance: 2500 })
+    expect(within.happens[0]).toEqual({ key: 'moneyTab.hand.ACCEPT_SHORT.within', money: { amount: 1500, tolerance: 2500 } })
+    expect(within.code).toBe(false)
+    const over = handWindowOf('ACCEPT_SHORT', { order: value, row: rowOf(false), price: true, tolerance: 2500 })
+    expect(over.happens[0]).toEqual({ key: 'moneyTab.hand.ACCEPT_SHORT.over', money: { amount: 1500, tolerance: 2500 } })
+    expect(over.code).toBe(true)
+    // Without the price grain no tolerance line (it is an amount).
+    expect(handWindowOf('ACCEPT_SHORT', { order: value, row: rowOf(true), price: false, tolerance: 2500 }).happens.flatMap(amountsOf)).toEqual([])
+  })
+})
+
 describe('F-OM-201: the windows on the page', () => {
   it('mounted once (MoneyDialogs), centred DS windows (Frame), never a drawer; each hand act opens its window from the row\'s ⋯', () => {
     const dialogs = readFileSync(new URL('./view/MoneyDialogs.tsx', import.meta.url), 'utf8')
@@ -163,10 +189,14 @@ describe('F-OM-201: the windows on the page', () => {
       'undo.title', 'undo.go', 'undo.happens.reversed', 'undo.happens.open', 'undo.happens.production', 'undo.told', 'undo.never',
       'lock.label', 'lock.hint', 'lock.problem', 'payment.undo', 'payment.open', 'payment.copyRef', 'payment.more', 'payments.more',
       'link.contact', 'link.contactHint', 'link.usual', 'link.option',
+      // F-OM-fx3 (W-11, W-14): the deposit as it is now, the tolerance, the who line, the TD02 under a payment.
+      'hand.sub.amount', 'hand.sub.openNothing', 'hand.sub.openPart', 'hand.sub.pageSent', 'hand.ACCEPT_SHORT.within', 'hand.ACCEPT_SHORT.over', 'hand.whoAs', 'hand.whoAsCode', 'payment.td02', 'payment.td02Words', 'payments.history',
     ]
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-      for (const key of keys) expect(t(`moneyTab.${key}`, { amount: 'A', number: 'N', row: 'R', date: 'D', who: 'W', name: 'X', email: 'E' }), `${locale} ${key}`).not.toMatch(/moneyTab\.|\{/)
+      for (const key of keys) expect(t(`moneyTab.${key}`, { amount: 'A', number: 'N', row: 'R', date: 'D', who: 'W', name: 'X', email: 'E', tolerance: 'T', time: 'H' }), `${locale} ${key}`).not.toMatch(/moneyTab\.|\{/)
+      // F-OM-fx3 (W-11): the English hint says an English number.
+      if (locale === 'en') expect(t('moneyTab.hand.field.shareHint')).toContain('3,050.00')
     }
   })
 })

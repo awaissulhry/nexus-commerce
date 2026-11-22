@@ -56,7 +56,23 @@
     "sheet": "This is a measurement sheet",
     "sheetHint": "a PDF or a photo; body data: only those with the measurements right open it, each opening recorded",
     "sheetFloor": "A measurement sheet never goes to the floor: choose another audience or untick it",
-    "sheetType": "a measurement sheet is a PDF or a photo of one"
+    "sheetType": "a measurement sheet is a PDF or a photo of one",
+    "titleAdd": "Add files",
+    "where": "Where it goes",
+    "place": {
+      "order": "The order",
+      "line": "Line {seq}",
+      "lineOf": "Line {seq} · {what}"
+    },
+    "noFiscal": "No “Fiscal copy” here: a fiscal paper is made at its home.",
+    "noneYet": "Drop or browse the files to add first.",
+    "heldTitle_one": "{count} file is held for the virus scan",
+    "heldTitle_other": "{count} files are held for the virus scan",
+    "refused": {
+      "forbidden": "Your role cannot add files here.",
+      "notFound": "This record is not found any more.",
+      "invalid": "The file was refused: {detail}"
+    }
   },
   "select": {
     "all": "Choose all {count}",
@@ -64,7 +80,6 @@
     "one": "Choose {name}"
   },
   "bulk": {
-    "noun": "files",
     "download": "Download {count}",
     "share": "Share with {party} ({count})",
     "officeOnly": "Make office only ({count})",
@@ -72,11 +87,14 @@
     "onHold_one": "One chosen file is under a legal hold: Delete leaves it.",
     "onHold_other": "{count} chosen files are under a legal hold: Delete leaves them.",
     "noneDownload": "None of the chosen files can be downloaded yet.",
-    "noShareRight": "Changing who sees a file needs the right to share files outside the office.",
     "allShared": "{party} already sees every chosen file.",
     "allOffice": "Every chosen file is office only already.",
-    "noDeleteRight": "Deleting files needs the right to delete a file.",
-    "allHeld": "A legal hold keeps every chosen file."
+    "allHeld": "A legal hold keeps every chosen file.",
+    "chosen_one": "file chosen",
+    "chosen_other": "files chosen",
+    "clear": "Clear",
+    "noun_one": "file",
+    "noun_other": "files"
   },
   "group": {
     "kind": {
@@ -96,7 +114,8 @@
       "ours": "Ours",
       "made": "Made by us",
       "floor": "Floor"
-    }
+    },
+    "checking": "{count} being checked"
   },
   "version": {
     "inForce": "v{n} in force",
@@ -124,29 +143,43 @@
       "order": "on the order",
       "from": "from {record}"
     },
-    "audience": {
-      "CUSTOMER_CAN_SEE": "Shared with the customer",
-      "OFFICE_ONLY": "Office only"
-    },
     "alsoOn": "also on {record}",
     "alsoOnOther_one": "also on {count} other record",
     "alsoOnOther_other": "also on {count} other records",
     "inThread": "Open in the conversation",
     "leftOut_one": "{count} file you cannot open",
     "leftOut_other": "{count} files you cannot open",
-    "leftOutHere_one": "+ {count} you cannot open",
-    "leftOutHere_other": "+ {count} you cannot open",
     "truncated": "The newest {count} files are listed.",
     "empty": {
       "title": "No files yet",
-      "body": "Files added in the conversation show here.",
-      "customer": "No documents yet."
+      "customer": "No documents yet.",
+      "add": "Add one with Add files…, or drop it here."
     },
     "shareOwn_one": "Share {count} own with {party}",
     "shareOwn_other": "Share {count} own with {party}",
     "noneOwn": "Only the order's own office-only files are shared from here.",
     "openFailed": "The file could not be opened: try again.",
-    "shareFailed": "Sharing did not go through: try again."
+    "shareFailed": "Sharing did not go through: try again.",
+    "group": {
+      "SHIPMENTS": "Shipments",
+      "INVOICES": "Invoices & credit notes"
+    },
+    "openOn": "Open on {record} ›",
+    "openOnChanges": "Open on the Changes tab ›",
+    "older": {
+      "show_one": "Show {count} older",
+      "show_other": "Show {count} older",
+      "hide_one": "Hide {count} older",
+      "hide_other": "Hide {count} older"
+    },
+    "state": {
+      "ANNULLED": "Annulled — kept by law",
+      "REPLACED": "Replaced — kept by law"
+    },
+    "techPack": {
+      "named": "Named on the request: v{n}",
+      "newer": "Newer than the request"
+    }
   },
   "card": {
     "bodyData": "Body data — opening is recorded",
@@ -155,6 +188,48 @@
     "download": "Download",
     "downloadOf": "Download {name}",
     "worksheet": "Worksheet · line {line} · v{version}",
-    "largePdf": "Large PDF: open it to see it"
+    "largePdf": "Large PDF: open it to see it",
+    "addedByYou": "added by you",
+    "checking": "Being checked"
+  },
+  "tab": {
+    "none": "No files yet.",
+    "noneOpen": "No file you can open on this order.",
+    "files_one": "{count} file on this order",
+    "files_other": "{count} files on this order",
+    "readOnly": "Read-only: your role sees files and asks but changes none."
+  },
+  "held": {
+    "checking_one": "{count} file is being checked for viruses",
+    "checking_other": "{count} files are being checked for viruses"
+  },
+  "answer": {
+    "count_one": "{count} file",
+    "count_other": "{count} files",
+    "shared_one": "{count} shared with {party}",
+    "shared_other": "{count} shared with {party}",
+    "noneShared": "none shared with {party}",
+    "newest": "newest {date}",
+    "noneOpen": "No file you can open.",
+    "emptyAdd": "No files yet: add one, or drop it here."
+  },
+  "counted": {
+    "priced": "{count} priced",
+    "sheets_one": "{count} measurement sheet",
+    "sheets_other": "{count} measurement sheets",
+    "role": "{count} outside your role"
+  },
+  "menu": {
+    "label": "More for Files",
+    "downloadAll": "Download all {count}",
+    "copyLink": "Copy link to Files"
+  },
+  "info": {
+    "files": "Every file of this order, by where it comes from. A file you cannot open is counted once, under the head, with the reason; it is never named.",
+    "doors": "A file made on another page (a work order, an inspection, a shipment, an invoice) is changed there: “Open on … ›”.",
+    "keys": "Keys: ← → ↑ ↓ move between the files · x chooses one · Enter opens it."
+  },
+  "files": {
+    "add": "Add files…"
   }
 }

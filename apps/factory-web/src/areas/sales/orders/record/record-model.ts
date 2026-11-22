@@ -467,6 +467,8 @@ export interface MoneyPlanState {
   readonly lockAsked: boolean
   /** "Invoice shipped goods…": Finance's From-DDTs window with this order's shipped DDTs chosen; null: nothing waits (or no right). */
   readonly invoiceShipped: { readonly href: string } | null
+  /** F-OM-fx3 (W-11): the signed-in person's name (the hand windows' "Saved as …"); absent or null: "under your name". */
+  readonly me?: string | null
 }
 // ---- end F-OM-201 / 202
 

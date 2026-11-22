@@ -62,8 +62,19 @@ export interface PlanRow {
   readonly due: MoneyWord
   readonly dueSub: MoneyWord | null
   readonly notes: readonly { readonly word: MoneyWord; readonly tone: 'warning' | 'neutral' }[]
-  /** "Set by hand": the newest hand change that names it (who, when; the reason with the price grain). */
+  /** "Set by hand": the newest hand change that names it (who, when; the reason with the price grain) — an accepted short too (W-03). */
   readonly byHand: { readonly word: MoneyWord; readonly reason: string | null } | null
+  /**
+   * F-OM-fx3 (B-OM-024, W-01 / W-02): a request part paid — its missing part (price grain) and whether the company's write-off tolerance
+   * covers it (the plan read's `short`; absent: not within, so a part payment is never called "short"); null: not part paid.
+   */
+  readonly short: { readonly amount: number | null; readonly within: boolean } | null
+  /** F-OM-fx3 (W-01): short within the tolerance, the hint in its box (price grain): "€ 15.00 short: banks often keep a fee …". */
+  readonly hint: MoneyWord | null
+  /** F-OM-fx3 (W-15): its request was made by a hand change (the deposit replaced, asked again, a step added or changed): "asked by hand". */
+  readonly askedByHand: boolean
+  /** F-OM-fx3 (W-08): the row's newest moment (a hand change, paid, the page sent, asked): "Show in the thread" opens the feed there. */
+  readonly showAt: string | null
   readonly fromChange: { readonly amendmentId: string; readonly revision: number } | null
   /** The ONE next act on the row; the others are in `more` (its ⋯). */
   readonly act: PlanAct | null
@@ -105,10 +116,20 @@ export interface PlanModel {
 
 
 const ADVANCE: readonly PlanRowKind[] = ['DEPOSIT', 'EXTRA', 'BEFORE_SHIPPING']
+/** F-OM-fx3 (W-15): the hand acts that make a new payment request. */
+const MADE_BY_HAND: readonly string[] = ['REPLACE_DEPOSIT', 'ASK_AGAIN', 'ADD_STEP', 'CHANGE_STEP']
 /** The states before the goods leave (schedule/model.ts' rule: an advance is asked, moved or opened only then). */
 const OPEN_STATES: readonly Order['status'][] = ['CONFIRMED', 'IN_PRODUCTION', 'READY']
 const ON_GOODS: readonly PlanRowKind[] = ['ON_INVOICE', 'ON_DELIVERY']
 const isGoods = (invoice: { readonly docType: string; readonly status: string }) => invoice.docType !== 'TD02' && invoice.docType !== 'TD04' && invoice.status !== 'DRAFT'
+
+/** F-OM-fx3 (B-OM-025, W-03): an accepted short as a hand change of its request (who, when; the reason with the price grain). */
+export function acceptedHandOf(accepted: PlanRequest['acceptedShort']): ByHand | null {
+  return accepted?.at ? { act: 'ACCEPT_SHORT', at: accepted.at, by: accepted.by ?? null, reason: accepted.reason ?? null } : null
+}
+
+/** F-OM-fx3 (W-03): the newest of the hand changes that name a row (by their instant); null: none. */
+export const newestHandOf = (hands: readonly (ByHand | null | undefined)[]): ByHand | null => hands.reduce<ByHand | null>((newest, hand) => (hand && (!newest || hand.at > newest.at) ? hand : newest), null)
 
 /** "Due day set by hand · Bea Esempio, 18 Nov" (+ the reason); null: nothing by hand. */
 export function byHandOf(hand: ByHand | null | undefined): PlanRow['byHand'] {
@@ -144,29 +165,40 @@ export function planOf(input: {
   const { order, schedule, settlement, can, stepCan, today } = input
   const price = can.price
   const final = isFinal(order)
+  // F-OM-fx3 (B-OM-029, W-05): a cancelled order owes nothing — its open steps read "Cancelled · not owed", even on an older answer.
+  const cancelledOrder = order.status === 'CANCELLED'
   const live = (id: string | null) => (id ? (order.chain.depositRequests.find((request) => request.id === id && request.status !== 'CANCELLED') ?? null) : null)
   const planRequest = (id: string): PlanRequest | null => schedule.requests?.find((entry) => entry.id === id) ?? null
   // The goods invoice an on-delivery / on-invoice step is paid with: the first one still open (price), else the first issued.
   const openGoods = price ? (settlement?.invoices.find((invoice) => isGoods(invoice) && !!invoice.number && (invoice.openShare ?? invoice.openAmount ?? 0) > 0) ?? null) : null
   const goods: Pick<ChainInvoice, 'id' | 'number'> | null = openGoods ? { id: openGoods.id, number: openGoods.number } : (order.chain.invoices.find((invoice) => isGoods(invoice) && !!invoice.number) ?? null)
 
-  // F-OM-201: how many steps are still open (the only one takes the whole order: it is neither re-shared nor removed).
-  const openSteps = schedule.steps.filter((step) => step.status === 'OPEN').length
   const rowOf = (kind: PlanRowKind, step: Milestone | null, request: DepositRequest | null): PlanRow => {
     const plan = request ? planRequest(request.id) : null
     const status = step?.status ?? request?.status ?? 'OPEN'
     const covered = step && ON_GOODS.includes(kind) ? (step.coveredByInvoices ?? 0) : 0
     const amount = price ? (step?.amount ?? request?.amount ?? null) : null
     const coveredFull = !!step && ON_GOODS.includes(kind) && (step.settledBy === 'INVOICES' || (amount !== null && amount > 0 && covered >= amount))
-    const open = status === 'OPEN' && !coveredFull
+    // F-OM-fx3 (W-05): a step the server cancelled, or an open one of a cancelled order: not owed (paid money stays as it was).
+    const voided = status === 'CANCELLED' || (cancelledOrder && status === 'OPEN')
+    const open = status === 'OPEN' && !coveredFull && !voided
     const placed = request ? (request.paidAmount ?? plan?.paid ?? 0) : (step?.paidSoFar ?? 0)
-    const part = open && (placed > 0 || covered > 0)
+    // F-OM-fx3 (B-OM-024): the plan read names an OPEN request with money on it and less than its amount (for every reader: a reader
+    // without the price grain learns "part paid", never the amount).
+    const shortRead = request && request.status === 'OPEN' ? (plan?.short ?? null) : null
+    const part = open && (placed > 0 || covered > 0 || !!shortRead)
     const day = step?.dueDate ?? request?.dueDate ?? null
     const overdue = open && ADVANCE.includes(kind) && !!day && day < today
     const left = !part ? null : request ? stillToPay(request) : amount !== null ? Math.max(0, amount - Math.max(placed, covered)) : null
+    // F-OM-fx3 (W-01 / W-02): short within the tolerance only when the plan read says so; otherwise a part payment is "part paid".
+    const short = part && request && request.status === 'OPEN' ? { amount: price ? (shortRead?.amount ?? left) : null, within: shortRead?.withinTolerance === true } : null
+    // F-OM-fx3 (B-OM-025, W-03): a deposit accepted short — PAID by hand; the missing part stays owed and goes on the final invoice.
+    const accepted = request && request.status === 'PAID' ? (plan?.acceptedShort ?? null) : null
     const done = !open
     const pill = status === 'WAIVED'
       ? { word: word('moneyTab.plan.pill.WAIVED'), tone: 'neutral' as const }
+      : voided // F-OM-fx3 (W-05)
+      ? { word: word('moneyTab.plan.pill.CANCELLED'), tone: 'neutral' as const }
       : !open
         ? { word: word('moneyTab.plan.pill.PAID'), tone: 'success' as const }
         : overdue
@@ -181,6 +213,8 @@ export function planOf(input: {
     const paidAt = step?.paidAt ?? request?.paidAt ?? null
     const due = status === 'WAIVED'
       ? word('moneyTab.plan.due.waived')
+      : voided // F-OM-fx3 (W-05)
+      ? word('moneyTab.plan.due.notOwed')
       : coveredFull
         ? word('moneyTab.plan.due.paidWithInvoices')
         : !open
@@ -207,6 +241,8 @@ export function planOf(input: {
       if (kind === 'BEFORE_SHIPPING') notes.push({ word: word('moneyTab.plan.note.holdsShipment'), tone: 'neutral' })
       if (ON_GOODS.includes(kind)) notes.push({ word: word('moneyTab.plan.note.paidWithInvoice'), tone: 'neutral' })
     }
+    // F-OM-fx3 (W-03): "€ 1.00 stays owed and goes on the final invoice" (the amount with the price grain; the words without it).
+    if (accepted && !final) notes.push({ word: price && typeof accepted.short === 'number' ? word('moneyTab.plan.note.owedOnInvoice', { money: { amount: accepted.short } }) : word('moneyTab.plan.note.owedOnInvoiceWords'), tone: 'neutral' })
 
     // ---- the acts: today's, hidden without their right, held only by state; none on a closed or cancelled order ----
     const acts: PlanAct[] = []
@@ -234,14 +270,15 @@ export function planOf(input: {
       if (can.moneyPlan) {
         const moneyPlaced = placed > 0 ? word('moneyTab.plan.held.moneyPlaced') : null
         const goodsLeft = !OPEN_STATES.includes(order.status) ? word('schedule.verbs.held.goodsLeft') : null
-        const onlyStep = openSteps <= 1 ? word('moneyTab.plan.held.onlyStep') : null
-        if (request && request.status === 'OPEN' && placed > 0 && price && left !== null && left > 0) acts.push({ id: 'ACCEPT_SHORT', label: word('moneyTab.plan.act.ACCEPT_SHORT'), held: null })
+        // F-OM-fx3 (B-OM-024, W-01 / W-02): within the company's tolerance for the plan right + price (the Owner and Finance); over it, or
+        // not known, only for a reader who may waive (orders.waive: the Owner, with a fresh code) — hidden for everyone else.
+        if (short && price && left !== null && left > 0 && (short.within || stepCan?.waive)) acts.push({ id: 'ACCEPT_SHORT', label: word('moneyTab.plan.act.ACCEPT_SHORT'), held: null })
         if (request && request.status === 'OPEN' && (kind === 'DEPOSIT' || kind === 'EXTRA') && price) acts.push({ id: 'REPLACE_DEPOSIT', label: word('moneyTab.plan.act.REPLACE_DEPOSIT'), held: moneyPlaced ?? goodsLeft })
         if (step && step.kind === 'BEFORE_SHIPPING' && request && request.status === 'OPEN') acts.push({ id: 'UNDO_OPEN', label: word('moneyTab.plan.act.UNDO_OPEN'), held: moneyPlaced })
         if (open && (ADVANCE.includes(kind) || ON_GOODS.includes(kind))) acts.push({ id: 'MOVE_DUE', label: word('moneyTab.plan.act.MOVE_DUE'), held: ON_GOODS.includes(kind) ? word('moneyTab.plan.held.dayFromInvoice') : null })
-        if (step && open && price) acts.push({ id: 'CHANGE_STEP', label: word('moneyTab.plan.act.CHANGE_STEP'), held: moneyPlaced ?? onlyStep })
+        if (step && open && price) acts.push({ id: 'CHANGE_STEP', label: word('moneyTab.plan.act.CHANGE_STEP'), held: moneyPlaced })
         if (step && open) acts.push({ id: 'RENAME_STEP', label: word('moneyTab.plan.act.RENAME_STEP'), held: null })
-        if (step && open) acts.push({ id: 'REMOVE_STEP', label: word('moneyTab.plan.act.REMOVE_STEP'), held: moneyPlaced ?? onlyStep })
+        if (step && open) acts.push({ id: 'REMOVE_STEP', label: word('moneyTab.plan.act.REMOVE_STEP'), held: moneyPlaced })
       }
       // ---- end F-OM-201
       // Waive… (the owner, a fresh code): shown ONCE per row (P0-B6); money placed on it holds it (M4-B5).
@@ -251,8 +288,11 @@ export function planOf(input: {
     }
     // The ONE next act, one rule for every request (the deposit and an extra one alike): Send the page while it was never sent and
     // nothing is paid on it, else Record a payment; a step without a request: Open for payment, or Record payment… on its invoice.
+    // F-OM-fx3 (W-01): short within the tolerance, Accept short (bank charges)… is the row's ONE act for a reader who may accept it;
+    // Record a payment moves to its ⋯.
     const sendFirst = !!request && request.status === 'OPEN' && !request.link && placed === 0
-    const firstOf: readonly PlanActId[] = sendFirst ? ['send', 'record'] : ['record', 'open', 'payInvoice', 'send']
+    const acceptFirst = !!short?.within && acts.some((entry) => entry.id === 'ACCEPT_SHORT')
+    const firstOf: readonly PlanActId[] = acceptFirst ? ['ACCEPT_SHORT'] : sendFirst ? ['send', 'record'] : ['record', 'open', 'payInvoice', 'send']
     const act = firstOf.map((id) => acts.find((entry) => entry.id === id)).find((entry) => !!entry) ?? null
     const fromChange = plan?.fromChange ?? null
     const renamed = step?.byHand?.act === 'RENAME_STEP' ? step.label : null
@@ -272,14 +312,19 @@ export function planOf(input: {
       due,
       dueSub,
       notes,
-      byHand: byHandOf(step?.byHand ?? plan?.byHand),
+      // F-OM-fx3 (W-03): the newest hand change that names it — an accepted short among them.
+      byHand: byHandOf(newestHandOf([step?.byHand, plan?.byHand, acceptedHandOf(accepted)])),
+      short,
+      hint: short?.within && price && short.amount !== null && !final ? word('moneyTab.plan.shortHint', { money: { amount: short.amount } }) : null,
+      askedByHand: !!request && (MADE_BY_HAND.includes(plan?.byHand?.act ?? '') || (!!step && step.depositRequestId === request.id && MADE_BY_HAND.includes(step.byHand?.act ?? ''))),
+      showAt: [step?.byHand?.at, plan?.byHand?.at, accepted?.at, paidAt, request?.link?.sentAt, request?.createdAt].reduce<string | null>((newest, at) => (at && (!newest || at > newest) ? at : newest), null),
       fromChange,
       act,
       more: acts.filter((entry) => entry !== act),
       restTo: [],
       invoice,
       unfolds: !!request,
-      openAtFirst: !!request && request.status === 'OPEN',
+      openAtFirst: !!request && request.status === 'OPEN' && !voided,
       done,
       moneyOn: placed > 0 || covered > 0,
       discuss: request ? { part: word('discuss.deposit'), target: { kind: 'DepositRequest', id: request.id } } : { part: word('discuss.step', { params: { seq: step!.seq } }), target: null },
@@ -294,7 +339,14 @@ export function planOf(input: {
   const afterDeposit = stepRows.reduce((at, row, index) => (row.kind === 'DEPOSIT' ? index + 1 : at), 0)
   // F-OM-201: where the rest may go (Change amount…, Remove step…) and where a new step comes from: an open step with no money on it.
   const free = stepRows.filter((row) => !!row.step && !row.done && !row.moneyOn).map((row) => ({ id: row.step!.id, title: row.title }))
-  const withRest = (row: PlanRow): PlanRow => (row.step && row.more.some((entry) => entry.id === 'CHANGE_STEP' || entry.id === 'REMOVE_STEP') ? { ...row, restTo: free.filter((entry) => entry.id !== row.step!.id) } : row)
+  // F-OM-fx3 (W-16): no other open step with no money on it may take the rest — Change amount… and Remove step… are held in words that
+  // fit the plan ("No other open step takes the rest: add a step first."), never "the only step" beside a paid one.
+  const moves = (id: PlanActId) => id === 'CHANGE_STEP' || id === 'REMOVE_STEP'
+  const withRest = (row: PlanRow): PlanRow => {
+    if (!row.step || !row.more.some((entry) => moves(entry.id))) return row
+    const restTo = free.filter((entry) => entry.id !== row.step!.id)
+    return { ...row, restTo, more: restTo.length > 0 ? row.more : row.more.map((entry) => (moves(entry.id) && !entry.held ? { ...entry, held: word('moneyTab.plan.held.noRest') } : entry)) }
+  }
   const rows = [...stepRows.slice(0, afterDeposit), ...requestRows, ...stepRows.slice(afterDeposit)].map(withRest)
 
   // ---- earlier: the replaced or removed steps, and the requests no step names that were cancelled (kept, never deleted) ----
@@ -310,28 +362,43 @@ export function planOf(input: {
 
   // F-OM-201: the head's ⋯ (the plan right and the price grain): Change payment terms… (held when the order is closed), Add a step….
   const head: PlanModel['head'] = !can.moneyPlan || !price ? [] : final ? [{ id: 'CHANGE_TERMS', label: word('moneyTab.plan.act.CHANGE_TERMS'), held: word('moneyTab.plan.held.final') }] : [{ id: 'CHANGE_TERMS', label: word('moneyTab.plan.act.CHANGE_TERMS'), held: null }, { id: 'ADD_STEP', label: word('moneyTab.plan.act.ADD_STEP'), held: free.length === 0 ? word('moneyTab.plan.held.nothingFree') : null }]
-  return { rows, earlier, answer: answerOf(rows, schedule, input.stillToPay, price, final), final, head, openSteps: free }
+  return { rows, earlier, answer: answerOf(rows, schedule, input.stillToPay, price, cancelledOrder), final, head, openSteps: free }
 }
 
 /** The head's answer: still open · overdue · next (price), else the next step in words; nothing open; everything paid (the view
  * says its first word with a capital). */
-function answerOf(rows: readonly PlanRow[], schedule: Schedule, stillToPay: number | null, price: boolean, final: boolean): MoneyWord[] {
-  const tail = final ? [word('moneyTab.plan.answer.final')] : []
-  if (rows.length === 0) return [word('moneyTab.plan.answer.none'), ...tail]
+function answerOf(rows: readonly PlanRow[], schedule: Schedule, stillToPay: number | null, price: boolean, cancelled: boolean): MoneyWord[] {
+  // F-OM-fx3 (W-05): a cancelled order owes nothing (M1-B9): no "still open", no "next … due", whatever an older answer says.
+  if (cancelled) return [word('moneyTab.plan.answer.cancelled')]
+  // F-OM-fx3 (W-20): a closed order's "its plan no longer changes" is said once, by the tab's head — not again here.
+  if (rows.length === 0) return [word('moneyTab.plan.answer.none')]
   const next = rows.find((row) => !row.done) ?? null
-  if (!next) return [word('moneyTab.plan.answer.allPaid'), ...tail]
+  if (!next) return [word('moneyTab.plan.answer.allPaid')]
   const what = word(`moneyTab.plan.next.${next.kind}`)
   const day = next.step?.dueDate ?? next.request?.dueDate ?? null
   const still = schedule.stillOpen ?? stillToPay
+  // F-OM-fx3 (W-01 / W-02): the deposit part paid says so in place of "next": "the deposit is € 15.00 short" only within the
+  // company's tolerance (price grain), else "the deposit is part paid" — never "short".
+  const said = next.kind === 'DEPOSIT' && next.short
+    ? price && next.short.within && next.short.amount !== null
+      ? word('moneyTab.plan.answer.short', { money: { amount: next.short.amount } })
+      : word('moneyTab.plan.answer.partPaid')
+    : day
+      ? word('moneyTab.plan.answer.nextDue', { words: { what }, days: { date: day } })
+      : word('moneyTab.plan.answer.next', { words: { what } })
   if (price && still !== null) {
     return [
       word('moneyTab.plan.answer.stillOpen', { money: { amount: still } }),
       ...(schedule.overdue !== undefined ? [word('moneyTab.plan.answer.overdue', { money: { amount: schedule.overdue } })] : []),
-      day ? word('moneyTab.plan.answer.nextDue', { words: { what }, days: { date: day } }) : word('moneyTab.plan.answer.next', { words: { what } }),
-      ...tail,
+      said,
     ]
   }
-  return [day ? word('moneyTab.plan.answer.nextDue', { words: { what }, days: { date: day } }) : word('moneyTab.plan.answer.next', { words: { what } }), ...tail]
+  return [said]
+}
+
+/** F-OM-fx3 (W-08): History › — the audit of this order's plan changed by hand (`orders.planByHand` on the SalesOrder; audit.read). */
+export function planHistoryHref(prefix: string, orderId: string): string {
+  return `${prefix}/admin/audit?${new URLSearchParams({ type: 'SalesOrder', record: orderId }).toString()}`
 }
 
 // ---- F-OM-201 / 202: a refused act in this page's words, and a SOFT-locked month ----

@@ -24,6 +24,7 @@ import { writeSearch } from '../../../_shared/record-frame/address' // F-OP-211:
 // ---- F-CP-111: the dock's files line on this page = the picked order's file set (the order lane's container, F-OP-215's host prop) ----
 import { useRouter } from 'next/navigation'
 import { useOrderFiles, type OrderFilesHost } from '../../../_shared/record-thread/use-order-files'
+import { orderFileHrefOf } from '../../../_shared/record-thread/order-file-href' // F-OF-101: a block's door "Open on … ›"
 // ---- end F-CP-111
 
 /**
@@ -621,6 +622,12 @@ export function useCustomerDock(partyId: string, tab: string) {
     canShare: session.permissions.includes('files.manage'),
     onProblem: (key) => setFilesProblem({ key, at: Date.now() }),
     keep: true, // one read per docked order (read again when another order docks, or on its files' news)
+    // F-OF-103 / F-OF-101 (order FILES tab): the docked order's window keeps its "Add files…" (the order; no line is known here) and its
+    // doors "Open on … ›" — the window draws no drop area of its own on an order any more.
+    companyId: order?.companyId ?? null,
+    canUpload: session.permissions.includes('files.upload'),
+    canDelete: session.permissions.includes('files.delete'),
+    ...(order ? { hrefOf: (record: { readonly type: string; readonly id: string; readonly label: string }) => orderFileHrefOf(record, { prefix, id: order.id, companyId: order.companyId }) } : {}),
   })
   // News of a file (the reader's own live stream: `file.available`, the file's record named) reads the docked order's set again, coalesced.
   const filesAgain = useCoalesced(() => orderFiles.reload(), 800)

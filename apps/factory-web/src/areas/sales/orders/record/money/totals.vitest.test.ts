@@ -47,6 +47,10 @@ describe('F-OM-102: what is left — every gap with its door', () => {
     expect(cancelled.answer).toEqual({ key: 'moneyTab.totals.cancelled' })
     expect(cancelled.gaps).toEqual([])
     expect(cancelled.close).toBeNull()
+    // F-OM-fx3 (W-05): an older answer that still names money due — Still to pay 0, no How it adds up (it would not add up).
+    const older = totals(order('CANCELLED', { money: { stillToPay: 532896, paid: 228384 } }), { settlement: SETTLEMENT_OPEN })
+    expect(older.tiles?.find((tile) => tile.id === 'still')).toMatchObject({ amount: 0, hint: { key: 'moneyTab.totals.hint.cancelled' } })
+    expect(older.adds).toBeNull()
   })
 })
 

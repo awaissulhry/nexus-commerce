@@ -802,6 +802,25 @@ export async function sendToSdi(api: ApiClient, invoiceId: string, version: numb
 export const INVOICE_PAYMENT_STATES = ['OPEN', 'PART_PAID', 'PAID', 'CREDITED', 'REFUND_DUE'] as const
 export type InvoicePaymentState = (typeof INVOICE_PAYMENT_STATES)[number]
 
+// ---- F-OM-fx3 (Money fix wave 3; the server's om-fx3s, B-OM-024 … 028): the new fields of the settlement and the plan read, each
+// OPTIONAL — an older answer hides what it lacks (never a made-up 0, never a bare "—"). Amounts are the price grain's (absent without
+// it); the words and states come to every reader of the part. Each schema is used once below, at its field (marked F-OM-fx3).
+/** B-OM-024: an OPEN request with money on it and less than its amount: the missing part (price) and whether the company's write-off tolerance covers it. */
+const fx3ShortSchema = z.object({ amount: z.number().optional(), withinTolerance: z.boolean() }).nullable().optional().catch(undefined)
+/** B-OM-026: a deposit invoice's (TD02) or credit note's (TD04) payment as a word-code, no amount — every invoices.view reader. */
+const fx3PaymentStateSchema = z.enum(INVOICE_PAYMENT_STATES).optional().catch(undefined)
+/** B-OM-027: the deposit invoice (TD02) issued for one payment. */
+const fx3Td02Schema = z.object({ id: z.string(), number: z.string().nullable() }).nullable().optional().catch(undefined)
+/** B-OM-028: the TD02s a goods invoice deducts (the amount with the price grain) and the shipments it bills. */
+const fx3DeductsSchema = z.array(z.object({ id: z.string(), number: z.string().nullable(), amount: z.number().optional() })).optional().catch(undefined)
+const fx3ForShipmentsSchema = z.array(z.object({ id: z.string(), number: z.string() })).optional().catch(undefined)
+/** B-OM-028: the goods' invoice that deducted a TD02, and the payment the TD02 was issued for. */
+const fx3DeductedOnSchema = z.object({ id: z.string(), number: z.string().nullable() }).nullable().optional().catch(undefined)
+const fx3ForPaymentSchema = z.object({ paymentId: z.string(), receivedOn: z.string() }).nullable().optional().catch(undefined)
+/** B-OM-024: the company's write-off tolerance on the plan read (price grain; null: none set). */
+const fx3ToleranceSchema = z.number().nullable().optional().catch(undefined)
+// ---- end F-OM-fx3 (the schemas)
+
 export const settlementSchema = z.object({
   settled: z.boolean(),
   gaps: z.array(z.string()),
@@ -828,6 +847,9 @@ export const settlementSchema = z.object({
       refundDueAmount: z.number().optional(),
       // F-OM-203 (B-OM-023, S3 #1857): where its payment stands, in a word-code with no amount — for every invoices.view reader.
       paymentState: z.enum(INVOICE_PAYMENT_STATES).optional().catch(undefined),
+      // F-OM-fx3 (B-OM-028): the TD02s it deducts and the shipments it bills.
+      deducts: fx3DeductsSchema,
+      forShipments: fx3ForShipmentsSchema,
     }),
   ),
   invoicedAmount: z.number().optional(),
@@ -841,8 +863,9 @@ export const settlementSchema = z.object({
   // deposit invoices (TD02) and credit notes (TD04) of the order with their amounts (price grain) — absent: not named here.
   fullyShipped: z.boolean().optional(),
   fullyInvoiced: z.boolean().optional(),
-  depositInvoices: z.array(z.object({ id: z.string(), number: z.string().nullable(), status: z.string(), issueDate: z.string().nullable(), gross: z.number().optional(), credited: z.number().optional(), deductedNet: z.number().optional(), depositRequestId: z.string().nullable() })).optional(),
-  creditNotes: z.array(z.object({ id: z.string(), number: z.string().nullable(), status: z.string(), issueDate: z.string().nullable(), gross: z.number().optional(), creditOfId: z.string().nullable() })).optional(),
+  // F-OM-fx3 (B-OM-026, B-OM-028): + each one's payment word-code; a TD02's goods invoice that deducted it and the payment it was issued for.
+  depositInvoices: z.array(z.object({ id: z.string(), number: z.string().nullable(), status: z.string(), issueDate: z.string().nullable(), gross: z.number().optional(), credited: z.number().optional(), deductedNet: z.number().optional(), depositRequestId: z.string().nullable(), paymentState: fx3PaymentStateSchema, deductedOn: fx3DeductedOnSchema, forPayment: fx3ForPaymentSchema })).optional(),
+  creditNotes: z.array(z.object({ id: z.string(), number: z.string().nullable(), status: z.string(), issueDate: z.string().nullable(), gross: z.number().optional(), creditOfId: z.string().nullable(), paymentState: fx3PaymentStateSchema })).optional(),
   writtenOffAmount: z.number().optional(),
   // ---- end F-OM-102
 })
@@ -1217,6 +1240,7 @@ const planPaymentSchema = z.object({
   method: z.string(),
   amount: z.number().optional(),
   undo: z.object({ may: z.boolean(), why: z.object({ en: z.string(), it: z.string() }).nullable(), code: z.string().nullable().optional() }).optional(),
+  td02: fx3Td02Schema, // F-OM-fx3 (B-OM-027): the deposit invoice issued for this payment
 })
 export type PlanPayment = z.infer<typeof planPaymentSchema>
 const planRequestSchema = z.object({
@@ -1236,6 +1260,7 @@ const planRequestSchema = z.object({
   acceptedShort: z.object({ short: z.number().optional(), reason: z.string().nullable().optional(), why: z.string().nullable().optional(), at: instant.nullable().optional(), by: z.string().nullable() }).nullable().optional(),
   byHand: byHandSchema.nullable().optional(),
   payments: z.array(planPaymentSchema).optional(),
+  short: fx3ShortSchema, // F-OM-fx3 (B-OM-024): short within the company's tolerance, or not
 })
 export type PlanRequest = z.infer<typeof planRequestSchema>
 // ---- end F-OM-103 (the schemas; the fields below)
@@ -1275,6 +1300,7 @@ export const scheduleSchema = z.object({
   requests: z.array(planRequestSchema).optional(),
   stillOpen: z.number().optional(),
   overdue: z.number().optional(),
+  tolerance: fx3ToleranceSchema, // F-OM-fx3 (B-OM-024): the company's write-off tolerance
 })
 export type Schedule = z.infer<typeof scheduleSchema>
 

@@ -67,16 +67,40 @@ describe('F-OM-302: the tiles', () => {
 })
 
 describe('F-OM-302: the meter — against the target set by hand, else the floor', () => {
-  it('the target (who and when), the floor of the Sales role, the flag', () => {
+  // F-OM-fx3 (W-09): ONE line, judged by the target when there is one (the meter gets no floor then), else by the floor.
+  it('the target (who and when), the floor of the Sales role, where it stands — against the target, never the floor beside it', () => {
     const meter = view(HAND).meter
-    expect(meter).toMatchObject({ now: 40.1667, floor: 42, target: 38 })
+    expect(meter).toMatchObject({ now: 40.1667, floor: null, target: 38 })
     expect(meter.words).toEqual([
       { key: 'moneyTab.margin.meter.targetBy', pcts: { pct: '38.0000' }, params: { name: 'Alex Demo' }, instants: { date: '2026-11-02T10:00:00.000Z' } },
       { key: 'moneyTab.margin.meter.floorRole', pcts: { pct: '42' }, params: { role: 'Sales' } },
-      { key: 'moneyTab.margin.meter.belowFloor' },
+      { key: 'moneyTab.margin.meter.aboveTarget' },
     ])
-    expect(view({ ...HAND, target: null }).meter.target).toBeNull()
+    // No target: the floor marks the meter and judges it.
+    const floorOnly = view({ ...HAND, target: null }).meter
+    expect(floorOnly).toMatchObject({ target: null, floor: 42 })
+    expect(floorOnly.words[floorOnly.words.length - 1]).toEqual({ key: 'moneyTab.margin.meter.belowFloor' })
+    const higher = view({ ...HAND, target: { ...HAND.target!, pct: '45.0000' } }).meter.words
+    expect(higher[higher.length - 1]).toEqual({ key: 'moneyTab.margin.meter.belowTarget' })
     expect(targetOf(null)).toBeNull()
+    // The view draws the DS meter as its bar and the one line (no second sentence).
+    expect(source('./view/MarginSection.tsx')).toContain('<MarginMeter size="mini"')
+  })
+
+  // F-OM-fx3 (W-10): Where it went in points, in the page's words; a price change takes the rest, so it adds up to Now.
+  it('Where it went: At quote → each part that moved, in points → Now; nothing yet before a work order; none without the cost grain', () => {
+    const rows = view(DETAIL_1043).where!
+    expect(rows.map((row) => [row.id, row.kind, row.pct ?? row.points])).toEqual([
+      ['QUOTED', 'start', '43'],
+      ['MATERIAL', 'step', -1.7],
+      ['SUBCONTRACT', 'step', -0.5],
+      ['OVERHEAD', 'step', -0.7],
+      ['NOW', 'end', '40.1667'],
+    ])
+    expect(rows[1]!.label).toEqual({ key: 'moneyTab.margin.whereRow.MATERIAL' })
+    expect(view({ ...DETAIL_1043, started: false }).where).toEqual([])
+    const sales = marginsCanOf(['costing.view', 'money.margin'])
+    expect(view(asSeenBy(DETAIL_1043, sales), { marginCan: sales }).where).toBeNull()
   })
 })
 
@@ -165,7 +189,7 @@ describe('F-OM-302: every word it says, in both languages', () => {
       const keys = [
         'moneyTab.margin.title', 'moneyTab.margin.info', 'moneyTab.margin.keys', 'moneyTab.margin.part', 'moneyTab.margin.more', 'moneyTab.margin.finance', 'moneyTab.margin.reading', 'moneyTab.margin.final', 'moneyTab.margin.held.final',
         'moneyTab.margin.basedOn.quote', 'moneyTab.margin.basedOn.none', 'moneyTab.margin.tile.quoted', 'moneyTab.margin.tile.now', 'moneyTab.margin.tile.actual', 'moneyTab.margin.tile.difference', 'moneyTab.margin.tile.asSold', 'moneyTab.margin.tile.noQuotedCost', 'moneyTab.margin.tile.noWorkOrder', 'moneyTab.margin.tile.sameAsQuote', 'moneyTab.margin.tile.actualFinal', 'moneyTab.margin.tile.actualOpen', 'moneyTab.margin.tile.actualNone', 'moneyTab.margin.tile.differenceHint',
-        'moneyTab.margin.value.unknown', 'moneyTab.margin.value.notYet', 'moneyTab.margin.meter.label', 'moneyTab.margin.meter.belowFloor', 'moneyTab.margin.hand.adds', 'moneyTab.margin.where', 'moneyTab.margin.fold.why', 'moneyTab.margin.told', 'moneyTab.margin.who',
+        'moneyTab.margin.value.unknown', 'moneyTab.margin.value.notYet', 'moneyTab.margin.meter.label', 'moneyTab.margin.meter.belowFloor', 'moneyTab.margin.meter.aboveFloor', 'moneyTab.margin.meter.belowTarget', 'moneyTab.margin.meter.aboveTarget', 'moneyTab.margin.whereNone' /* F-OM-fx3 */, 'moneyTab.margin.hand.adds', 'moneyTab.margin.where', 'moneyTab.margin.fold.why', 'moneyTab.margin.told', 'moneyTab.margin.who',
         'moneyTab.margin.bridge.title', 'moneyTab.margin.bridge.price', 'moneyTab.margin.bridge.FREIGHT', 'moneyTab.margin.bridge.fromShipments', 'moneyTab.margin.bridge.noFreight', 'moneyTab.margin.bridge.noFreightSet', 'moneyTab.margin.bridge.margin', 'moneyTab.margin.bridge.noCost',
         'moneyTab.margin.why.method', 'moneyTab.margin.why.provisional', 'moneyTab.margin.why.freightCounted', 'moneyTab.margin.why.freightNone', 'moneyTab.margin.why.hand', 'moneyTab.margin.why.bankCharges',
         'moneyTab.margin.setCost.door', 'moneyTab.margin.setCost.go', 'moneyTab.margin.setCost.kind', 'moneyTab.margin.setCost.kindHint', 'moneyTab.margin.setCost.problem', 'moneyTab.margin.setCost.happens.uses', 'moneyTab.margin.setCost.happens.beside', 'moneyTab.margin.setCost.never',
@@ -174,6 +198,7 @@ describe('F-OM-302: every word it says, in both languages', () => {
         'moneyTab.notice.costLineAdded', 'moneyTab.notice.costLineRemoved', 'moneyTab.notice.targetSet', 'moneyTab.notice.targetCleared',
         ...['MATERIAL', 'LABOUR', 'SUBCONTRACT', 'OVERHEAD', 'ADJUSTMENT'].map((part) => `moneyTab.margin.bridge.${part}`),
         ...COST_LINE_KINDS.map((kind) => `moneyTab.margin.kind.${kind}`),
+        ...['QUOTED', 'NOW', 'PRICE', 'MATERIAL', 'LABOUR', 'SUBCONTRACT', 'OVERHEAD', 'ADJUSTMENT', 'FREIGHT', 'BY_HAND'].map((row) => `moneyTab.margin.whereRow.${row}`), // F-OM-fx3 (W-10)
       ]
       for (const key of keys) expect(t(key), key).not.toBe(key)
       expect(t('moneyTab.margin.basedOn.both', { date: '12 Oct', revision: 2 })).toContain('12 Oct')

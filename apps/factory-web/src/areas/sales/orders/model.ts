@@ -93,6 +93,8 @@ export interface OrderAbilities {
   links?: boolean
   /** F-OM-302 (B-OM-021, L2 / L4): a cost line set by hand on the order's margin, and its target (costing.ledger.manage: the Owner and Finance). */
   costLedger?: boolean
+  /** F-OM-fx3 (W-08): read the audit (audit.read) — Money's Payments head offers History ›. */
+  auditRead?: boolean
   // ---- F-OS-303 (order SHIPMENTS tab): the after-sales doors — Open a return… and Send a claim link… (sales.returns.manage), Log a
   // complaint… (quality.complaints.log); absent: hidden (D2), never held for a right.
   returnsManage?: boolean
@@ -127,6 +129,7 @@ export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
     moneyPlan: held.has('orders.moneyPlan'), // F-OM-201 (B-OM-010)
     links: held.has('links.manage'), // F-OM-202 (B-OM-022): Stop the page
     costLedger: held.has('costing.ledger.manage'), // F-OM-302 (B-OM-021): Set a cost by hand…, Set target…
+    auditRead: held.has('audit.read'), // F-OM-fx3 (W-08): Payments' History ›
     returnsManage: held.has('sales.returns.manage'), // F-OS-303: Open a return…, Send a claim link…
     complaintsLog: held.has('quality.complaints.log'), // F-OS-303: Log a complaint…
   }

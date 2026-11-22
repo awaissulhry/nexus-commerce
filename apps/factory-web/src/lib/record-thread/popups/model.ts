@@ -33,6 +33,8 @@ export interface ViewerFile {
   readonly versionNo?: number | null
   /** F-OP-127: body data not opened yet — a lock card with "Open — this opening is recorded"; it never loads by itself. */
   readonly locked?: boolean
+  /** F-OF-104 (F7-B1): its open failed — "The file could not be opened · Try again"; never asked again by itself. */
+  readonly failed?: boolean
 }
 
 /** How the viewer shows a file: a photo (the DS Lightbox), PDF pages (the DS PdfViewer), a card with Download, or held. */

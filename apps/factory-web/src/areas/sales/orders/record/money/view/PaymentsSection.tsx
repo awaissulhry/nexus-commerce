@@ -10,7 +10,7 @@ import type { MenuItemDef } from '@nexus/ui/components'
 import { LineMenuButton } from '../../view/LineMenu'
 import { PartFailed, PartReading, Section } from '../../view/production/Kit' // F-OM-101 (L6): the Production kit, in place
 import { PAYMENTS_ALIASES } from '../layout'
-import { planOf, type EarlierRow } from '../plan'
+import { planHistoryHref, planOf, type EarlierRow } from '../plan'
 import { stillToPayOf } from '../totals'
 import { PlanRowView } from './PlanRow'
 import { lineOf, useSay, type Say } from './say'
@@ -45,6 +45,8 @@ export function PaymentsSection({ order, model, actions }: { order: Order; model
   const plan = planOf({ order, schedule: part.value, settlement, can: model.can, stepCan: model.scheduleSteps?.can ?? null, today: model.today, stillToPay: stillToPayOf(order, settlement) })
   // F-OM-201: the head's ⋯ — Change payment terms… · Add a step… (orders.moneyPlan + the price grain; held when the order is closed).
   const head: MenuItemDef[] = plan.head.map((entry) => ({ id: entry.id, label: say(entry.label), disabled: !!entry.held, description: entry.held ? say(entry.held) : undefined, onSelect: () => actions?.onDialog?.({ kind: 'moneyPlan', act: entry.id, stepId: null, requestId: null }) }))
+  // F-OM-fx3 (W-08): History › — the audit of the plan's hand changes (audit.read), for every reader who holds it.
+  if (model.can.auditRead) head.push({ id: 'history', label: t('moneyTab.payments.history'), href: planHistoryHref(model.prefix, order.id) })
   return (
     <Section id="payments" title={title} answer={lineOf(plan.answer.map(say))} info={info} more={head.length > 0 ? <LineMenuButton label={t('moneyTab.payments.more')} items={head} /> : undefined}>
       {aliases}

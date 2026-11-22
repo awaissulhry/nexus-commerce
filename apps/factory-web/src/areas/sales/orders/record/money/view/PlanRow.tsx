@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { Banknote, Factory, Hand, Receipt, Send, Truck } from 'lucide-react'
+import { Banknote, Factory, Hand, Info, Receipt, Send, Truck } from 'lucide-react'
 import type { MenuItemDef } from '@nexus/ui/components'
 import { Button, ExpandToggle, Pill, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../../lib/i18n/format'
@@ -76,7 +76,7 @@ export function PlanRowView({ row, order, model, actions, say, final }: { row: P
         </Link>
       </Button>
     ) : (
-      <Button size="sm" variant={act.id === 'record' || act.id === 'send' ? 'primary' : 'secondary'} heldReason={heldOf(act)} onClick={() => run(act)}>
+      <Button size="sm" variant={act.id === 'record' || act.id === 'send' || act.id === 'ACCEPT_SHORT' /* F-OM-fx3 (W-01) */ ? 'primary' : 'secondary'} heldReason={heldOf(act)} onClick={() => run(act)}>
         {act.id === 'send' ? <Send size={13} aria-hidden /> : act.id === 'record' ? <Banknote size={13} aria-hidden /> : null} {say(act.label)}
       </Button>
     )
@@ -96,6 +96,9 @@ export function PlanRowView({ row, order, model, actions, say, final }: { row: P
     const about = discussAboutOf(order, { yourOrder, firstLine: (words) => t('discuss.firstLine', { thing: words }) }, { part, target: row.discuss.target, officeOnly: true })
     items.push({ id: 'discuss', label: f('discuss.of', { thing: part }), onSelect: () => frame.discuss?.({ record: { type: 'SalesOrder', id: order.id }, about }) })
   }
+  // F-OM-fx3 (W-08): Show in the thread — a read door (Read-only keeps it): the feed at this row's newest moment.
+  const showAt = row.showAt
+  if (showAt && frame?.showInThread) items.push({ id: 'show', label: f('discuss.showInThread'), onSelect: () => frame.showInThread?.({ record: { type: 'SalesOrder', id: order.id }, at: showAt }) })
   items.push({
     id: 'link',
     label: t('moneyTab.menu.copyLinkRow'),
@@ -154,7 +157,7 @@ export function PlanRowView({ row, order, model, actions, say, final }: { row: P
           <LineMenuButton label={t('moneyTab.plan.more', { row: title })} items={items} />
         </div>
       </div>
-      {row.unfolds && open && request ? <RequestBox row={row} request={request} order={order} model={model} actions={actions} invoiceHref={invoiceHref} /> : null}
+      {row.unfolds && open && request ? <RequestBox row={row} request={request} order={order} model={model} actions={actions} invoiceHref={invoiceHref} say={say} /> : null}
     </div>
   )
 }
@@ -189,7 +192,7 @@ function StepDot({ state }: { state: DepositStepState }) {
  * that needs no TD02 says so on its last two). Without invoices.view the TD02 step says "Issued", never its number (P0-B3). Its
  * payments come with the plan read (payments.view; amounts with the price grain); before it, the request's paid sum.
  */
-function RequestBox({ row, request, order, model, actions, invoiceHref }: { row: PlanRow; request: DepositRequest; order: Order; model: OrderRecordModel; actions?: OrderRecordActions; invoiceHref: (id: string, number: string | null) => string }) {
+function RequestBox({ row, request, order, model, actions, invoiceHref, say }: { row: PlanRow; request: DepositRequest; order: Order; model: OrderRecordModel; actions?: OrderRecordActions; invoiceHref: (id: string, number: string | null) => string; say: Say }) {
   const t = useT('orders')
   const locale = useLocale()
   const day = (value: string) => formatDate(dayInstant(value), { locale })
@@ -203,9 +206,12 @@ function RequestBox({ row, request, order, model, actions, invoiceHref }: { row:
   const busy = model.busy ? t('held.busy') : null
   const sendWait = sdi ? sdiSendHeld(model.can, sdi.canSend && sdi.state.next.action === 'SEND') : null
   const linkWords = request.link ? t(`link.${request.link.state}`, { to: request.link.to ?? t('link.contact'), date: formatDate(request.link.sentAt, { locale }), until: formatDate(request.link.expiresAt, { locale }) }) : null
+  // F-OM-fx3 (W-15): a request made by a hand change says so ("asked by hand"), never "when the customer accepted the quote".
   const asked = row.fromChange
     ? t('moneyTab.plan.step.byChange', { date: formatDate(request.createdAt, { locale }), revision: row.fromChange.revision })
-    : t(request.quoteVersionId ? 'deposit.step.requestedWords' : 'deposit.step.requestedTyped', { date: formatDate(request.createdAt, { locale }) })
+    : row.askedByHand
+      ? t('moneyTab.plan.step.byHand', { date: formatDate(request.createdAt, { locale }) })
+      : t(request.quoteVersionId ? 'deposit.step.requestedWords' : 'deposit.step.requestedTyped', { date: formatDate(request.createdAt, { locale }) })
   const paidWords =
     request.status === 'PAID'
       ? request.paidAt
@@ -275,11 +281,38 @@ function RequestBox({ row, request, order, model, actions, invoiceHref }: { row:
   const tracker: { key: string; state: DepositStepState; label: string; words: ReactNode; door: ReactNode }[] = [
     { key: 'requested', state: steps.requested, label: t('deposit.step.requested'), words: asked, door: null },
     { key: 'page', state: steps.page, label: t('moneyTab.plan.step.page'), words: linkWords ?? (request.status === 'OPEN' ? t('deposit.step.pageNotSent') : t('deposit.step.pageNotNeeded')), door: null },
-    { key: 'paid', state: steps.paid, label: t('deposit.step.paid'), words: paidWords, door: null },
+    { key: 'paid', state: steps.paid, label: t('moneyTab.plan.step.paid') /* F-OM-fx3 (W-15): "Paid", the design's word */, words: paidWords, door: null },
     { key: 'invoice', state: steps.invoice, label: t('deposit.step.invoice'), words: invoiceWords, door: null },
     { key: 'sdi', state: steps.sdi, label: t('deposit.step.sdi'), words: sdiWords, door: sendSdi },
   ]
   const payments = row.payments
+  // F-OM-fx3 (W-17): "Its payments" is never a heading over nothing — "No payment yet." whenever the read says so.
+  const paymentLines = payments ? (
+    payments.length === 0 ? (
+      <p className="fw-pt-quiet">{t('moneyTab.plan.payments.none')}</p>
+    ) : (
+      payments.map((payment) => {
+        const method = t(`moneyTab.plan.method.${payment.method}`)
+        const how = method === `moneyTab.plan.method.${payment.method}` ? null : method
+        // F-OM-fx3 (B-OM-027, W-14): the deposit invoice issued for it — its number for a reader of invoices, else in words.
+        const td02 = payment.td02 ? (model.can.viewInvoices && payment.td02.number ? t('moneyTab.payment.td02', { number: payment.td02.number }) : t('moneyTab.payment.td02Words')) : null
+        return (
+          <div key={payment.allocationId} className="fw-om-py-r">
+            <span className="fw-om-py-w">{[day(payment.receivedOn), how, t('moneyTab.plan.payments.ref', { ref: payment.externalRef })].filter(Boolean).join(' · ')}</span>
+            <span className="fw-om-py-a">
+              {model.can.price && payment.amount !== undefined ? money(payment.amount, request.currency, locale) : null}
+              <PaymentMenu payment={payment} request={request} model={model} actions={actions} />
+            </span>
+            {td02 ? <span className="fw-om-py-x">{td02}</span> : null}
+          </div>
+        )
+      })
+    )
+  ) : model.can.price && (request.paidAmount ?? 0) > 0 ? (
+    <p className="fw-pt-quiet">{t('moneyTab.plan.payments.paidSoFar', { amount: money(request.paidAmount, request.currency, locale) })}</p>
+  ) : request.status === 'OPEN' && request.paidAmount === 0 /* known only with the price grain: never "none" when it is not known */ ? (
+    <p className="fw-pt-quiet">{t('moneyTab.plan.payments.none')}</p>
+  ) : null
   return (
     <div className="fw-om-rq">
       <ol className="fw-om-sx" aria-label={t('deposit.stepsLabel')}>
@@ -294,34 +327,17 @@ function RequestBox({ row, request, order, model, actions, invoiceHref }: { row:
           </li>
         ))}
       </ol>
-      {model.can.viewPayments ? (
+      {/* F-OM-fx3 (W-01): short within the company's tolerance — the hint (price grain), for a reader of its payments. */}
+      {row.hint && model.can.viewPayments ? (
+        <p className="fw-om-rq-hint">
+          <Info size={13} aria-hidden />
+          <span>{say(row.hint)}</span>
+        </p>
+      ) : null}
+      {model.can.viewPayments && paymentLines ? (
         <div className="fw-om-py">
           <span className="fw-om-py-h">{t('moneyTab.plan.payments.title')}</span>
-          {payments ? (
-            payments.length === 0 ? (
-              <p className="fw-pt-quiet">{t('moneyTab.plan.payments.none')}</p>
-            ) : (
-              payments.map((payment) => {
-                const method = t(`moneyTab.plan.method.${payment.method}`)
-                const how = method === `moneyTab.plan.method.${payment.method}` ? null : method
-                return (
-                  <div key={payment.allocationId} className="fw-om-py-r">
-                    <span className="fw-om-py-w">
-                      {[day(payment.receivedOn), how, t('moneyTab.plan.payments.ref', { ref: payment.externalRef })].filter(Boolean).join(' · ')}
-                    </span>
-                    <span className="fw-om-py-a">
-                      {model.can.price && payment.amount !== undefined ? money(payment.amount, request.currency, locale) : null}
-                      <PaymentMenu payment={payment} request={request} model={model} actions={actions} />
-                    </span>
-                  </div>
-                )
-              })
-            )
-          ) : model.can.price && (request.paidAmount ?? 0) > 0 ? (
-            <p className="fw-pt-quiet">{t('moneyTab.plan.payments.paidSoFar', { amount: money(request.paidAmount, request.currency, locale) })}</p>
-          ) : request.status === 'OPEN' && request.paidAmount === 0 /* known only with the price grain: never "none" when it is not known */ ? (
-            <p className="fw-pt-quiet">{t('moneyTab.plan.payments.none')}</p>
-          ) : null}
+          {paymentLines}
         </div>
       ) : null}
     </div>

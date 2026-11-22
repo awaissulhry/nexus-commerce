@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FILE_KINDS, type FileKind } from '../../../record-panels/model'
 import { viewerShow, type ViewerFile } from '../popups/model'
 import type { OrderFile } from './model'
@@ -27,11 +27,14 @@ export type OpenRoute = (fileId: string, mode: 'preview' | 'download') => Promis
 const KINDS: readonly string[] = FILE_KINDS
 const kindOf = (file: Pick<OrderFile, 'kind'>): FileKind => (KINDS.includes(file.kind) ? (file.kind as FileKind) : 'ATTACHMENT')
 
+const NONE_FAILED: ReadonlySet<string> = new Set()
+
 /**
  * The walk as the viewer reads it: every listed file in display order (worksheets open by their own route, never in the walk); its
- * source once fetched; body data locked until opened here.
+ * source once fetched; body data locked until opened here. F-OF-104: `failed` — the files whose open failed (the viewer says so with
+ * Try again; nothing is asked again by itself).
  */
-export function viewerFilesOf(files: readonly OrderFile[], sources: ReadonlyMap<string, string | Uint8Array>, opened: ReadonlySet<string>): ViewerFile[] {
+export function viewerFilesOf(files: readonly OrderFile[], sources: ReadonlyMap<string, string | Uint8Array>, opened: ReadonlySet<string>, failed: ReadonlySet<string> = NONE_FAILED): ViewerFile[] {
   return files.map((file) => ({
     id: file.id,
     name: file.name,
@@ -46,22 +49,26 @@ export function viewerFilesOf(files: readonly OrderFile[], sources: ReadonlyMap<
     messageId: file.inThread?.messageId ?? null,
     versionNo: file.versionNo,
     locked: file.bodyData && !opened.has(file.id),
+    ...(failed.has(file.id) ? { failed: true } : {}), // F-OF-104
   }))
 }
 
 /** Whether the viewer fetches a file when it is shown: a photo or a PDF it draws, not locked, not fetched yet. */
-export const fetchesOf = (file: ViewerFile, sources: ReadonlyMap<string, unknown>): boolean => !file.locked && !sources.has(file.id) && (viewerShow(file) === 'photo' || viewerShow(file) === 'pdf')
+export const fetchesOf = (file: ViewerFile, sources: ReadonlyMap<string, unknown>): boolean => !file.locked && /* F-OF-104 (F7-B1): never again by itself */ !file.failed && !sources.has(file.id) && (viewerShow(file) === 'photo' || viewerShow(file) === 'pdf')
 
 export function useOrderFileViewer(input: { readonly files: readonly OrderFile[] | null; readonly open: OpenRoute | null; readonly onProblem?: (key: string) => void }) {
   const { files, open } = input
   const [at, setAt] = useState<{ index: number; returnTo: HTMLElement | null } | null>(null)
   const [sources, setSources] = useState<ReadonlyMap<string, string | Uint8Array>>(new Map())
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set())
+  // F-OF-104 (F7-B1): a failed open is a state of its file ("The file could not be opened · Try again"), never a loop of asks.
+  const [failed, setFailed] = useState<ReadonlySet<string>>(new Set())
   const asking = useRef(new Set<string>())
   const blobs = useRef<string[]>([])
   const onProblem = useRef(input.onProblem)
   onProblem.current = input.onProblem
-  const list = viewerFilesOf(files ?? [], sources, opened)
+  // F-OF-104 (F7-B1): the walk is made again only when what it shows changes (a new list every render re-ran the fetch).
+  const list = useMemo(() => viewerFilesOf(files ?? [], sources, opened, failed), [files, sources, opened, failed])
   const current = at ? list[Math.max(0, Math.min(list.length - 1, at.index))] : undefined
 
   /** The file's bytes through the open route, once: a picture as a blob address, a PDF as its bytes. */
@@ -79,7 +86,8 @@ export function useOrderFileViewer(input: { readonly files: readonly OrderFile[]
         }
         setSources((known) => new Map(known).set(file.id, source))
       } catch {
-        onProblem.current?.('order.openFailed')
+        // F-OF-104 (F7-B1): the viewer says it on the file, with Try again (no notice that re-draws the page and asks again).
+        setFailed((known) => new Set(known).add(file.id))
       } finally {
         asking.current.delete(file.id)
       }
@@ -99,6 +107,7 @@ export function useOrderFileViewer(input: { readonly files: readonly OrderFile[]
     blobs.current = []
     setSources(new Map())
     setOpened(new Set())
+    setFailed(new Set()) // F-OF-104: opened again later, a file is asked again
   }, [])
   useEffect(() => close, [close])
 
@@ -111,6 +120,13 @@ export function useOrderFileViewer(input: { readonly files: readonly OrderFile[]
     },
     onIndex: (index: number) => setAt((known) => (known ? { ...known, index } : known)),
     onClose: close,
+    /** F-OF-104 (F7-B1): "Try again" on a file whose open failed — asked once more, by the person. */
+    onRetry: (fileId: string) =>
+      setFailed((known) => {
+        const left = new Set(known)
+        left.delete(fileId)
+        return left
+      }),
     /** Body data: the person asks it — the open route records the opening — then it is shown. */
     onOpenLocked: (fileId: string) => {
       const file = list.find((entry) => entry.id === fileId)
