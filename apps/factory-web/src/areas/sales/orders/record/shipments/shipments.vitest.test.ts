@@ -190,7 +190,7 @@ describe('F-OP-135: the typed link is the row’s Track › (https only)', () =>
 // ── end F-OP-135 ──
 
 // ---- F-OP-308 (order page walk #14, #16): the Shipments card head — its doors together at the end, Create shipment… held with words -----
-describe('F-OP-308: Create shipment… is held with words where it may not open, beside Record made elsewhere', () => {
+describe('F-OP-308 → F-OS-101: Create shipment… — the rule held with words (Overview), hidden without the right on the Shipments tab (D2)', () => {
   const ready = order('READY', { progress: { ...order('READY').progress, released: 6, shipped: 2 } })
 
   it('why it is held: no shipping right first, then a final order, then nothing released waiting; null exactly where the door opens', async () => {
@@ -207,15 +207,22 @@ describe('F-OP-308: Create shipment… is held with words where it may not open,
         expect(createShipmentHeld(state, canOf(role)) === null, `${role} ${state.status}`).toBe(createShipmentDoor(state, canOf(role), '/f', true) !== null)
   })
 
-  it('drawn on the tab: held "Create shipment…" with its words, in one group with the card\'s other door; both languages', async () => {
+  // F-OS-101 (order SHIPMENTS tab; plan D2 — reverses F-OP-308 on this tab): a door the reader may not use is HIDDEN; held with words
+  // only by the order's state. createShipmentHeld (above) stays the Overview's Linked records rule.
+  it('drawn on the tab: Sales sees no Create shipment… at all; the Owner on a shipped order sees it held with true words; both languages', async () => {
     const { renderView } = await import('../../../../../lib/record-thread/parts/testing')
     const { designScreen } = await import('../fixtures')
-    const item = designScreen.cases.find((entry) => entry.id === 'shipments')!.model
+    const view = designScreen.view as import('react').ComponentType<{ model: unknown }>
+    const section = (html: string) => html.slice(html.indexOf('id="shipments"'))
+    const sales = designScreen.cases.find((entry) => entry.id === 'shipments')!.model
+    const owner = designScreen.cases.find((entry) => entry.id === 'f-op-129-ship-tracking')!.model
     for (const locale of LOCALES) {
-      const html = renderView(designScreen.view as import('react').ComponentType<{ model: unknown }>, item, locale)
-      const head = html.slice(html.indexOf('<span class="fw-so-actions">'))
-      expect(head, locale).toContain(locale === 'en' ? 'Create shipment…' : 'Crea spedizione…')
-      expect(head, locale).toContain(locale === 'en' ? 'aria-description="Making a shipment needs the warehouse' : 'aria-description="Creare una spedizione richiede il diritto di spedizione del magazzino"')
+      const hidden = section(renderView(view, sales, locale))
+      expect(hidden, locale).not.toContain(locale === 'en' ? 'Create shipment…' : 'Crea spedizione…')
+      expect(hidden, locale).not.toContain('aria-description="Making a shipment needs')
+      const held = section(renderView(view, owner, locale))
+      expect(held, locale).toContain(locale === 'en' ? 'Create shipment…' : 'Crea spedizione…')
+      expect(held, locale).toContain(locale === 'en' ? 'aria-description="Everything is shipped."' : 'aria-description="Tutto spedito."')
     }
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)

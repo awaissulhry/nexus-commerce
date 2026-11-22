@@ -14,8 +14,11 @@ import type { ApiClient } from '../../../../../lib/api/client'
 const enc = encodeURIComponent
 const person = z.object({ id: z.string(), name: z.string() })
 
-const complaint = z.object({ id: z.string(), number: z.string(), status: z.string(), receivedAt: z.string(), category: z.string().nullable(), severity: z.string().nullable(), answerDueOn: z.string().nullable() })
-const returned = z.object({ id: z.string(), number: z.string(), status: z.string(), requestedAt: z.string(), closedAt: z.string().nullable(), outcomeWanted: z.string().nullable() })
+// F-OS-104 (B-OS-004, optional until the server's S1 lands): a complaint names the shipment it is about (null: the whole order); a
+// return says how many of THIS order's pieces it takes back and the replacement order made from it (a return line names no shipment).
+const ref = z.object({ id: z.string(), number: z.string() })
+const complaint = z.object({ id: z.string(), number: z.string(), status: z.string(), receivedAt: z.string(), category: z.string().nullable(), severity: z.string().nullable(), answerDueOn: z.string().nullable(), shipment: ref.nullable().optional() /* F-OS-104 */ })
+const returned = z.object({ id: z.string(), number: z.string(), status: z.string(), requestedAt: z.string(), closedAt: z.string().nullable(), outcomeWanted: z.string().nullable(), pieces: z.number().optional() /* F-OS-104 */, replacementOrder: ref.nullable().optional() /* F-OS-104 */ })
 const rePromise = z.object({
   id: z.string(),
   state: z.enum(PROPOSAL_STATES),
@@ -46,6 +49,8 @@ export const linksSchema = z.object({
   rePromises: z.array(rePromise),
   gates: z.array(gate),
   asOf: z.string(),
+  // F-OS-104 (B-OS-004, optional): a list cut at its limit says so ("Showing the latest 50"); absent: not said.
+  truncated: z.object({ complaints: z.boolean().optional(), returns: z.boolean().optional() }).optional(),
 })
 export type OrderLinks = z.infer<typeof linksSchema>
 export type OrderComplaint = z.infer<typeof complaint>

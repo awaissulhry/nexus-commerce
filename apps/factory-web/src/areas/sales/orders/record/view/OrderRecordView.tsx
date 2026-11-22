@@ -42,6 +42,7 @@ import { makeInMenu } from '../../model' // F-OP-102
 import { linesNotInProduction } from '../../model' // F-OP-102
 import { readOnlyOnPage } from '../../model' // F-OP-303 (walk #6)
 import { bandMenuFor, bandStepOf } from '../../model' // F-OP-311 (oo-walk #10): Read-only sees no move in the band
+import type { NextStep } from '../../model' // F-OS-101 (L10): the band's step on the Shipments tab
 import { planningHref } from '../../../../../lib/production/work-order-acts/model' // F-OP-102
 import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 import { tabHref } from '../../../../_shared/record-frame/address' // F-OP-210
@@ -97,19 +98,19 @@ export type { OrderRecordActions, OrderRecordModel } from '../record-model'
  * At risk (the Late banner went), the priority in words, Made to measure; ⋯ grouped (Next steps · Edit · People · Go to · Copy;
  * Cancel last) with Assign supervisor… and Ask the supervisor… (the production lane's dialogs); notices most serious first.
  */
-// B-W2b-398: `delivered` is the Shipments tab's card "Delivered (from carrier)". B-TH-214: `thread` the docked thread (the
-// office's OfficeRecordThread, or a design case's), `printThread` what the print view shows of it.
+// B-TH-214: `thread` the docked thread (the office's OfficeRecordThread, or a design case's), `printThread` what the print view shows
+// of it. F-OS-104 (18-lead-settles L5): the Shipments tab's card "Delivered (from carrier)" went — each shipment row draws its delivery.
 // F-OO-211 (11-design §8.1): `customFields` — the order's custom fields (the container's RecordCustomFields, built once), drawn by
 // Overview beside Order facts (the 7 + 8 pair); the order page no longer fills the frame's `fields` slot (every other record page does).
-export function OrderRecordView({ model, actions, thread, printThread, customFields, delivered }: { model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; /* F-OO-211 */ customFields?: ReactNode; delivered?: ReactNode }) {
+export function OrderRecordView({ model, actions, thread, printThread, customFields }: { model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; /* F-OO-211 */ customFields?: ReactNode }) {
   return (
     <WithMessages namespaces={['orders', 'sales', 'lists', 'records', DEPTH /* B-W2b-323 */, SUPERVISOR_NS, NOTES_NS /* F-SA-230 */, OWNER_WORDS_NS /* F-OO-111 */]}>
-      <OrderRecord model={model} actions={actions} thread={thread} printThread={printThread} customFields={customFields} delivered={delivered} />
+      <OrderRecord model={model} actions={actions} thread={thread} printThread={printThread} customFields={customFields} />
     </WithMessages>
   )
 }
 
-function OrderRecord({ model, actions, thread, printThread, customFields, delivered }: { model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; customFields?: ReactNode; delivered?: ReactNode }) {
+function OrderRecord({ model, actions, thread, printThread, customFields }: { model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; customFields?: ReactNode }) {
   const t = useT('orders')
   const listHref = `${model.prefix}/sales/orders`
   const loaded = model.order
@@ -157,10 +158,10 @@ function OrderRecord({ model, actions, thread, printThread, customFields, delive
       </RecordFrame>
     )
   }
-  return <ReadyRecord order={loaded.value} model={model} actions={actions} thread={thread} printThread={printThread} customFields={customFields} delivered={delivered} />
+  return <ReadyRecord order={loaded.value} model={model} actions={actions} thread={thread} printThread={printThread} customFields={customFields} />
 }
 
-function ReadyRecord({ order, model, actions, thread, printThread, customFields, delivered }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; customFields?: ReactNode; delivered?: ReactNode }) {
+function ReadyRecord({ order, model, actions, thread, printThread, customFields }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; customFields?: ReactNode }) {
   const t = useT('orders')
   const d = useT(DEPTH) // B-W2b-323
   const locale = useLocale()
@@ -171,7 +172,11 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
   // F-OP-311 (oo-walk #10): Read-only on the page (the cards' own rule) sees no next step and no move in the ⋯; everyone else keeps
   // every move, held with its words.
   const readOnly = readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold })
-  const step = bandStepOf(order, model.can, readOnly)
+  // F-OS-101 (18-lead-settles L10): on the Shipments tab Create shipment… is drawn ONCE, on the Shipments head — the band skips its own
+  // copy there (its primary and its ⋯ item); on every other tab it stays.
+  const bandStep = bandStepOf(order, model.can, readOnly)
+  const shipmentsTab = model.tab === 'shipments'
+  const step: NextStep = shipmentsTab && bandStep.kind === 'createShipment' ? { kind: null, held: null } : bandStep
   const createDoor = createShipmentDoor(order, model.can, model.prefix, !!actions?.onCreateShipment) // F-OP-121
   const stepHeld = step.held ? t(step.held.key, step.held.params?.date ? { ...step.held.params, date: formatDate(dayInstant(String(step.held.params.date)), { locale }) } : step.held.params) : model.busy ? t('held.busy') : null
   const gate = depositGate(order)
@@ -304,8 +309,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
         ...(order.status === 'IN_PRODUCTION' ? [{ id: 'ready', label: t('action.ready'), disabled: !!readyWait, description: held(readyWait), onSelect: () => actions?.onDialog?.({ kind: 'ready' }) }] : []),
         ...(makeInMenu(order, linesNotInProduction(order)) ? [{ id: 'make', label: t('bandMenu.makeWorkOrders'), disabled: !!makeWait, description: makeWait ? t(makeWait.key, makeWait.params?.date ? { date: formatDate(dayInstant(String(makeWait.params.date)), { locale }) } : makeWait.params) : undefined, onSelect: () => actions?.makeWorkOrders?.onOpen?.() }] : []),
         // F-OP-121: Create shipment… in place (as Change promise date…, not repeated here while it is the band's next step).
-        ...(createDoor?.kind === 'inPlace' && step.kind !== 'createShipment' ? [{ id: 'ship', label: t('step.createShipment'), onSelect: () => actions?.onCreateShipment?.() }] : []),
-        ...(createDoor?.kind === 'warehouse' ? [{ id: 'ship', label: t('action.createShipment'), href: createDoor.href }] : []),
+        ...(createDoor?.kind === 'inPlace' && step.kind !== 'createShipment' && !shipmentsTab /* F-OS-101 (L10) */ ? [{ id: 'ship', label: t('step.createShipment'), onSelect: () => actions?.onCreateShipment?.() }] : []),
+        ...(createDoor?.kind === 'warehouse' && !shipmentsTab /* F-OS-101 (L10) */ ? [{ id: 'ship', label: t('action.createShipment'), href: createDoor.href }] : []),
         // F-OP-123 (order page N5): Record a shipment made elsewhere… (held with its words: the order's state, the rights).
         ...(model.elsewhere ? [{ id: 'elsewhere', label: t('elsewhere.title'), disabled: !!model.elsewhere.held, description: held(model.elsewhere.held), onSelect: () => actions?.onRecordElsewhere?.() }] : []),
     ],
@@ -525,7 +530,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
           {/* F-OM-101: Money — the answer line, then Totals · Payments (the one plan) · Invoices & credit notes · Price check · Margin. */}
           {model.tab === 'money' && <MoneyTab order={order} model={model} actions={actions} />}
           {/* F-SA-230: Shipments — left to ship, shipments, deliveries, complaints & returns; the money is on Money. */}
-          {model.tab === 'shipments' && <ShipmentsTab order={order} model={model} actions={actions} delivered={delivered} />}
+          {model.tab === 'shipments' && <ShipmentsTab order={order} model={model} actions={actions} />}
           {/* F-SA-237: Files — every file of the order by where it comes from (the thread's Files window draws the same body). */}
           {model.tab === 'files' && <FilesTab order={order} model={model} actions={actions} />}
         </div>

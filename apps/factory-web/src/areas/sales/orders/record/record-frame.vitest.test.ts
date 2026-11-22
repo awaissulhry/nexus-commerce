@@ -218,21 +218,25 @@ describe('B-TH-256 — what points at the order', () => {
       const html = draw('th-256-links', locale)
       const text = textOf(html)
       expect(text).toContain(locale === 'en' ? 'Complaints and returns' : 'Reclami e resi')
-      for (const number of ['RCL-2026-0012', 'RCL-2026-0009', 'RMA-2026-0031']) expect(text).toContain(number)
+      // F-OS-104: one list, newest first, both kinds; the closed complaint folds behind "Show 1 closed".
+      for (const number of ['RCL-2026-0012', 'RMA-2026-0031']) expect(text).toContain(number)
+      expect(text).not.toContain('RCL-2026-0009')
+      expect(text).toContain(locale === 'en' ? 'Show 1 closed' : 'Mostra 1 chiuso')
       expect(html).toContain('/quality/complaints/0190f0e2-6501-7000-8000-000000000001')
       expect(html).toContain('/sales/returns/0190f0e2-6502-7000-8000-000000000001')
       expect(text).toContain(locale === 'en' ? 'Investigating' : 'In analisi')
       expect(text).toContain(locale === 'en' ? 'A replacement' : 'Una sostituzione')
     }
-    // F-SA-230: Complaints & returns are Shipments' last section (the money moved to Money).
+    // F-SA-230 → F-OS-104: Complaints & returns are the Shipments tab's last section, after Shipments (the money moved to Money).
     const source = readFileSync(new URL('./view/ShipmentsTab.tsx', import.meta.url), 'utf8')
-    expect(source).toMatch(/\{delivered\}\s*<PointsAtOrder model=\{model\.links\}/)
+    expect(source).toMatch(/<ShipmentsSection [^>]*\/>[\s\S]*<AfterSalesSection [^>]*\/>/)
+    expect(source).not.toContain('PointsAtOrder')
   })
 
   it('no complaints or returns: said in words, never an empty table; no right to either: nothing drawn (W27)', () => {
+    // F-OS-104: one quiet line for the one list (never an empty table).
     const none = textOf(draw('th-256-links-none'))
-    expect(none).toContain('No complaints about this order.')
-    expect(none).toContain('No returns of this order.')
+    expect(none).toContain('Nothing reported for this order.')
     const manager = textOf(draw('th-256-repromise-manager'))
     expect(manager).not.toContain('Complaints and returns')
     expect(manager).not.toContain('RCL-2026-0012')
@@ -295,6 +299,37 @@ describe('B-TH-256 — what points at the order', () => {
     expect(hook).toContain('declineRepromise(api, decline.proposalId, decline.reason, newIdempotencyKey())')
   })
 })
+
+// ---- F-OS-101 (order SHIPMENTS tab, 10-design §1; plan D1; 18-lead-settles L5, L10): the tab's one answer, then three sections ----
+describe('F-OS-101 — the Shipments tab: its answer, then #left · #shipments (the old #deliveries lands there) · #after-sales', () => {
+  it('in that order, in the Production kit\'s room container (the dock re-lays it live); the Money door stays at its foot', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const html = draw('th-256-links', locale)
+      for (const id of ['id="left"', 'id="shipments"', 'id="deliveries"', 'id="after-sales"']) expect(html, id).toContain(id)
+      expect(html.indexOf('id="left"')).toBeLessThan(html.indexOf('id="shipments"'))
+      expect(html.indexOf('id="shipments"')).toBeLessThan(html.indexOf('id="deliveries"'))
+      expect(html.indexOf('id="deliveries"')).toBeLessThan(html.indexOf('id="after-sales"'))
+      expect(html).toContain('class="fw-pt fw-os"')
+      expect(textOf(html)).toContain(locale === 'en' ? 'Where every garment is' : 'Dove si trova ogni capo')
+    }
+    const tab = readFileSync(new URL('./view/ShipmentsTab.tsx', import.meta.url), 'utf8')
+    // The layout only: the sections are their own files; the Money lane's foot door (F-OM-104) kept as it was.
+    for (const part of ['<ShipmentsHead ', '<WhereSection ', '<ShipmentsSection ', '<AfterSalesSection ', "{t('ship.moneyDoor')}"]) expect(tab, part).toContain(part)
+    expect(tab).not.toMatch(/SummaryTable|SizeGridView|useState/)
+  })
+
+  it('L10: Create shipment… once on this tab — the band skips its primary and its ⋯ item here, and keeps them on every other tab', () => {
+    const view_ = readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(view_).toContain("const step: NextStep = shipmentsTab && bandStep.kind === 'createShipment' ? { kind: null, held: null } : bandStep")
+    expect(view_.match(/!shipmentsTab \/\* F-OS-101 \(L10\) \*\//g)?.length).toBe(2)
+  })
+
+  it('L11: the tab\'s own words are a namespace of their own, loaded with the page', async () => {
+    const { RECORD_NAMESPACES } = await import('./OrderRecord')
+    expect(RECORD_NAMESPACES).toContain('order-shipments')
+  })
+})
+// ---- end F-OS-101
 
 // ── F-SA-243 (sales page plan P5, R1; 14-change-flow §3.1, §3.4; review R-5): the order page's doors to the ONE review window ──
 describe('F-SA-243: the order page opens the same review window as Home › Approvals, and keeps Still to do', () => {
@@ -540,7 +575,9 @@ describe('F-OP-134 — one acts hook per tab, mounted by the container, never by
     for (const hook of HOOKS) expect(container, hook).toContain(`from './${hook}'`)
     expect(container).toContain('const actsBase: RecordActsBase = { api, orderId, current, write, version, setNotice, load, loadParts }')
     for (const spread of ['...band.model', '...overview.model', '...lines.model', '...productionActs.model', '...money.model', '...band.actions', '...overview.actions', '...lines.actions', '...productionActs.actions', '...money.actions']) expect(container, spread).toContain(spread)
-    expect(container).toContain('delivered={shipments.delivered')
+    // F-OS-104 (L5): the Deliveries card went — no `delivered` view prop; the tab's reads come with `...shipments.model`.
+    expect(container).not.toContain('delivered={shipments.delivered')
+    for (const spread of ['...shipments.model', '...shipments.actions']) expect(container, spread).toContain(spread)
     // ONE dialog slot: as a dialog opens, each hook clears what its own last dialog showed (the cancel reads its impact check).
     expect(container).toMatch(/setDialog\(next\)\s+setDialogProblem\(null\)[\s\S]{0,200}band\.opened\(next\)\s+lines\.opened\(next\)\s+money\.opened\(next\)/)
     // The tabs' acts left the container: none of their writes or act hooks is called here any more.
@@ -561,7 +598,10 @@ describe('F-OP-134 — one acts hook per tab, mounted by the container, never by
     for (const call of ['sendDepositLink(', 'recordDepositPayment(', 'sendToSdi(', 'useScheduleSteps(']) expect(money, call).toContain(call)
     expect(source('./use-production-acts.ts')).toContain('useBrandHealth(')
     expect(source('./use-overview-acts.ts')).toContain('onOpenLine: setOverviewLine')
-    expect(source('./use-shipments-acts.ts')).toContain('createElement(Deliveries, { orderId: order.id, prefix })')
+    // F-OS-101 (L5): the deliveries READ (each row's Dates cell) and, on a Parcels (n) fold's opening, Warehouse's cartons read.
+    expect(source('./use-shipments-acts.ts')).toContain('readDeliveries(api, orderId, abort.signal)')
+    expect(source('./use-shipments-acts.ts')).toContain('readCartons(api, shipmentId)')
+    expect(source('./use-shipments-acts.ts')).not.toContain('createElement(Deliveries')
   })
 
   it('no view under record/ imports a tab acts hook (they fetch: view-boundaries rule 2)', () => {
@@ -790,8 +830,11 @@ describe('F-OP-129 — the order page at the end in the design screen: Review an
     expect(owner).toContain('0123456789')
     expect(owner).toContain('No live tracking')
     expect(owner).toContain('GLS-778899')
+    // F-OS-101 (D2): Sales reads the number and no door — Tracking number… is hidden, never held for a right.
     const sales = draw('f-op-129-ship-tracking-sales')
-    expect(sales).toContain('A warehouse person adds tracking.')
+    expect(textOf(sales)).toContain('0123456789')
+    expect(sales).not.toContain('A warehouse person adds tracking.')
+    expect(textOf(sales.slice(sales.indexOf('id="shipments"')))).not.toContain('Tracking number…')
   })
 
   it('a shared shipment names the other order it carries; one made elsewhere names its paper DDT (F-OP-122, F-OP-123)', () => {
@@ -867,13 +910,14 @@ describe('F-OO-111 — the yes and deposit banners step back on Overview (presen
   it('W07\'s follow-up: "Record a shipment made elsewhere…" is mounted ONCE, by the page — the band\'s ⋯ opens it on every tab', () => {
     const dialogOn = (file: string) => (readFileSync(new URL(file, import.meta.url), 'utf8').match(/model\.elsewhere\?\.dialog\b/g) ?? []).length
     expect(dialogOn('./view/OrderRecordView.tsx')).toBe(1)
-    for (const tab of ['./view/overview/WhereCard.tsx', './view/ShipmentsTab.tsx', './view/OverviewTab.tsx', './view/LinesTab.tsx', './view/ProductionTab.tsx', /* F-OM-101: Money's layout and its section files */ './money/view/MoneyTab.tsx', './money/view/TotalsSection.tsx', './money/view/PaymentsSection.tsx', './money/view/PlanRow.tsx', './money/view/InvoicesSection.tsx', './money/view/PriceCheckSection.tsx', './money/view/MarginSection.tsx' /* F-OM-303: the list final */, './view/FilesTab.tsx', './changes/view/ChangesTab.tsx', /* F-OC-101: its section files */ './changes/view/WaitingSection.tsx', './changes/view/FreezeSection.tsx', './changes/view/HistorySection.tsx', './changes/view/AgreementSection.tsx']) expect(dialogOn(tab), tab).toBe(0)
+    for (const tab of ['./view/overview/WhereCard.tsx', './view/ShipmentsTab.tsx', './view/OverviewTab.tsx', './view/LinesTab.tsx', './view/ProductionTab.tsx', /* F-OM-101: Money's layout and its section files */ './money/view/MoneyTab.tsx', './money/view/TotalsSection.tsx', './money/view/PaymentsSection.tsx', './money/view/PlanRow.tsx', './money/view/InvoicesSection.tsx', './money/view/PriceCheckSection.tsx', './money/view/MarginSection.tsx' /* F-OM-303: the list final */, './view/FilesTab.tsx', './changes/view/ChangesTab.tsx', /* F-OC-101: its section files */ './changes/view/WaitingSection.tsx', './changes/view/FreezeSection.tsx', './changes/view/HistorySection.tsx', './changes/view/AgreementSection.tsx', /* F-OS-101: the Shipments tab's section files */ './shipments/view/WhereSection.tsx', './shipments/view/ShipmentsSection.tsx', './shipments/view/ShipmentRow.tsx', './shipments/view/AfterSalesSection.tsx']) expect(dialogOn(tab), tab).toBe(0)
     // Outside the tabs' bodies: beside the page's other dialogs.
     const view_ = readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')
     expect(view_.indexOf('{model.elsewhere?.dialog}')).toBeGreaterThan(view_.indexOf('<OrderDialogs order={order} model={model} actions={actions} />'))
     // Its doors stay: the band's ⋯ item, Overview's More ▾ and the Shipments card head all call the same act.
     expect(view_).toContain("onSelect: () => actions?.onRecordElsewhere?.()")
-    expect(readFileSync(new URL('./view/ShipmentsTab.tsx', import.meta.url), 'utf8')).toContain('onClick={() => actions?.onRecordElsewhere?.()}')
+    // F-OS-101: the Shipments head's door is in its section file now.
+    expect(readFileSync(new URL('./shipments/view/ShipmentsSection.tsx', import.meta.url), 'utf8')).toContain('onClick={() => actions?.onRecordElsewhere?.()}')
   })
 
   it('BC-2: "Who answers the customer…" is held without threads.post, in the People card\'s own words for the same door (en + it)', () => {
