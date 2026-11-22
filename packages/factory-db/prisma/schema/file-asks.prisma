@@ -1,0 +1,130 @@
+// "Ask for a file" (order files tab, schema wave "order files 1/1", B-OF-030; design order-files-2026-11-22 13-backend §1; Owner
+// D2, D3): one file job on one sales order. The office asks a person in the office, an office role, a floor team, a floor role or
+// whoever works a step of a work order for a file, by a day; the file comes back "for this ask"; the asker accepts it or asks again
+// with a reason. Late is derived (the due day against the company's day), never stored.
+//
+//   FileAsk  of one sales order of one customer (the foreign key: the order's own company and customer), landing on the order,
+//            one of its lines or one of its work orders (maybe one step of it). Exactly one addressee: PERSON (an office
+//            person), OFFICE_ROLE / FLOOR_ROLE (a role of that audience), FLOOR_TEAM (a team of the work order's site) or STEP
+//            (whoever works the step it names). A floor addressee only on a work order, and never for a file with prices or
+//            body data (the money wall, the measurements rule). Never one named floor worker (worker privacy, Statuto art. 4):
+//            the floor answers as "the floor" (answeredById null). OPEN → ARRIVED (the files sent for this round) → ACCEPTED,
+//            or back to OPEN (asked again, with its reason); OPEN or ARRIVED → CANCELLED (with its reason). Never deleted.
+//            The office addressees' Tasks and the asker's "Check: …" Task are plain ids (collab.prisma untouched).
+//
+// Who writes what (ownership/file-asks.json; the …_order_files_guards trigger holds it for every login, the owner included): the
+// office (factory_runtime) writes every row through apps/factory-api's sales/orders/file-asks with command(); the floor's answer
+// (a photo for the ask) is written by the API in the tenant's system context. No floor, partner or link grant: the tablet reads
+// its asks through the API, the customer never sees an internal ask. Nothing old reads this table (no StoredFile, Task, WorkOrder
+// or floor trigger).
+
+/// An ask for a file on one sales order (B-OF-030): what is needed, where it lands, who is asked, by when; the files sent for
+/// it, the decision, the rounds. Office only; never deleted.
+model FileAsk {
+  id                   String           @id @db.Uuid
+  tenantId             String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's company and customer: the order's own (the foreign key; the brand wall's live partyId).
+  companyId            String           @db.Uuid
+  partyId              String           @db.Uuid
+  /// The work order's site: set exactly when the ask lands on a work order (null for the order and its lines).
+  siteId               String?          @db.Uuid
+  salesOrderId         String           @db.Uuid
+  /// Where the file lands: the order, one of its lines, or one of its work orders (fixed at the ask).
+  target               FileAskTarget
+  /// The line (target SALES_ORDER_LINE) or the work order (target WORK_ORDER) it lands on; null otherwise.
+  salesOrderLineId     String?          @db.Uuid
+  workOrderId          String?          @db.Uuid
+  /// The step of that work order ("photos of step 3"): only on a work order; required for a STEP addressee.
+  workOrderOperationId String?          @db.Uuid
+  /// What is needed, one line of 1 to 500 characters.
+  words                String
+  /// The kind of file asked for (the upload's kind): DOCUMENT, PHOTO or ATTACHMENT.
+  fileKind             FileKind
+  /// The file shows prices: its words are counted, never named, for a reader without the price grain (the API); never asked of
+  /// the floor.
+  /// @not-money a lock flag: the asked file shows prices
+  priced               Boolean          @default(false)
+  /// The file is body data (a measurement sheet): only between holders of the measurements right; never asked of the floor.
+  bodyData             Boolean          @default(false)
+  /// Who is asked: exactly one of the person, the role or the team below (STEP: none of them, the step above).
+  addressee            FileAskAddressee
+  addresseeUserId      String?          @db.Uuid
+  addresseeRoleId      String?          @db.Uuid
+  addresseeTeamId      String?          @db.Uuid
+  /// The day it is due (late is derived from it, never stored).
+  dueOn                DateTime         @db.Date
+  status               FileAskStatus    @default(OPEN)
+  /// The files sent for this round (StoredFile ids of the record it lands on; a file id is a version: Accept is per version):
+  /// none while OPEN, 1 to 10 from ARRIVED on.
+  fileIds              String[]         @default([]) @db.Uuid
+  /// When the files arrived and the office person who sent them (null: the floor; never a worker id).
+  answeredAt           DateTime?        @db.Timestamptz(3)
+  answeredById         String?          @db.Uuid
+  /// Accepted: when and by whom.
+  acceptedAt           DateTime?        @db.Timestamptz(3)
+  acceptedById         String?          @db.Uuid
+  /// How often it was asked again, and the newest reason (the rest is in the audit).
+  rounds               Int              @default(0)
+  lastReason           String?
+  /// Cancelled: when, by whom and why (all three).
+  cancelledAt          DateTime?        @db.Timestamptz(3)
+  cancelledById        String?          @db.Uuid
+  cancelReason         String?
+  /// The last "Ask for an update" (only moves later, only while OPEN).
+  lastChasedAt         DateTime?        @db.Timestamptz(3)
+  /// The office addressees' Tasks ("Upload: …") and the asker's "Check: …" Task once files arrived: plain ids of Tasks about
+  /// the order (collab.prisma untouched).
+  taskIds              String[]         @default([]) @db.Uuid
+  checkTaskId          String?          @db.Uuid
+  /// The office person who asked.
+  askedById            String           @db.Uuid
+  version              Int              @default(1)
+  createdAt            DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+
+  // The order of the same company and customer.
+  salesOrder    SalesOrder          @relation("FileAskOrder", fields: [tenantId, companyId, partyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId, partyId and siteId.
+  line          SalesOrderLine?     @relation("FileAskLine", fields: [tenantId, partyId, salesOrderLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // The work order and its step, on the ask's site.
+  workOrder     WorkOrder?          @relation("FileAskWorkOrder", fields: [tenantId, siteId, workOrderId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  step          WorkOrderOperation? @relation("FileAskStep", fields: [tenantId, siteId, workOrderId, workOrderOperationId], references: [tenantId, siteId, workOrderId, id], onDelete: Restrict, onUpdate: Restrict)
+  // The addressee: a team of the ask's site, a role, a person.
+  team          Team?               @relation("FileAskTeam", fields: [tenantId, siteId, addresseeTeamId], references: [tenantId, siteId, id], onDelete: Restrict, onUpdate: Restrict)
+  role          Role?               @relation("FileAskRole", fields: [tenantId, addresseeRoleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  addresseeUser User?               @relation("FileAskAddresseeUser", fields: [tenantId, addresseeUserId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  askedBy       User                @relation("FileAskAskedBy", fields: [tenantId, askedById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // An order's open asks ("Waiting for files", the order files read).
+  @@index([tenantId, salesOrderId, status])
+  // A work order's asks.
+  @@index([tenantId, workOrderId, status])
+  // The floor's asks of its site (the tablet's read).
+  @@index([tenantId, siteId, status])
+}
+
+/// Where an asked file lands (B-OF-030).
+enum FileAskTarget {
+  SALES_ORDER
+  SALES_ORDER_LINE
+  WORK_ORDER
+}
+
+/// Who is asked for a file (B-OF-030; Owner D2): an office person, an office role, a floor role, a floor team, or whoever works
+/// a step of a work order. Never one named floor worker.
+enum FileAskAddressee {
+  PERSON
+  OFFICE_ROLE
+  FLOOR_ROLE
+  FLOOR_TEAM
+  STEP
+}
+
+/// Where an ask stands (B-OF-030; Owner D3): OPEN → ARRIVED → ACCEPTED, ARRIVED → OPEN (asked again), OPEN | ARRIVED →
+/// CANCELLED. ACCEPTED and CANCELLED are final.
+enum FileAskStatus {
+  OPEN
+  ARRIVED
+  ACCEPTED
+  CANCELLED
+}
