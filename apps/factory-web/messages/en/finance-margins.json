@@ -174,7 +174,8 @@
       "SUBCONTRACT": "Subcontract",
       "OVERHEAD": "Overhead",
       "ADJUSTMENT": "Adjustment",
-      "FREIGHT": "Freight"
+      "FREIGHT": "Freight",
+      "BY_HAND": "Set by hand"
     }
   },
   "lines": {
