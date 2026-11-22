@@ -93,6 +93,7 @@ export function useShipmentsActs(input: {
     /* F-OS-101 */ shipmentDeliveries: Part<Deliveries> | null
     /* F-OS-103 */ shipmentParcels: Readonly<Record<string, Part<Bench>>>
     /* F-OS-303 */ afterSalesDoor: ReactNode | null
+    /* os-fx7 (W-06, W-07, W-12); os-fx8: declared */ shipmentFacts: Readonly<Record<string, ShipmentFacts>> | null
   }
   actions: {
     onShipmentTracking: (shipmentId: string) => void
