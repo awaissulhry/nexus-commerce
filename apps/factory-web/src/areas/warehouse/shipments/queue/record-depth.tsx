@@ -15,6 +15,10 @@ import { Papers } from '../papers/Papers'
 import { Delivery } from '../pod/Delivery'
 import { depthAbilitiesOf, DEPTH_NS } from './shared/depth'
 import { Split } from './split/Split'
+// F-OS-203 (order SHIPMENTS tab; L6): Move / Merge and the two new windows — ONE component each, mounted here and on the order's tab.
+import { Move } from './move/Move'
+import { ShipmentDoor, type ShipmentDoorKind } from '../record/ShipmentDoor'
+import { DOOR_NS } from './shared/door-words'
 // B-W2b-412
 import { ExportPapers } from '../export/ExportPapers'
 
@@ -55,6 +59,9 @@ export interface RecordDepthInput {
     readonly companyId: string
     readonly parcels: readonly { readonly id: string; readonly trackingNumber: string | null }[]
     readonly lines: readonly { readonly styleId: string; readonly styleCode: string; readonly styleName: string }[]
+    /** F-OS-203: whether it needs a DDT, and whether it was made in Nexus (travels without a DDT…). */
+    readonly ddtRequired?: boolean
+    readonly origin?: 'NEXUS' | 'ELSEWHERE'
   } | null
   readonly prefix: string
   readonly tab: string
@@ -81,6 +88,10 @@ export function useRecordDepth(input: RecordDepthInput): ShipmentDepthSlots {
   const holds = useShipmentHolds(id, version, can, input.onReload)
   const transport = useOwnTransport(id, version, can, input.onReload)
   const [splitOpen, setSplitOpen] = useState(false)
+  // F-OS-203: the shared window open from the ⋯ (Move / Merge, travels without a DDT, receive the garments back).
+  const own = useT(DOOR_NS)
+  const [door, setDoor] = useState<null | { readonly kind: 'move' | 'merge' } | { readonly kind: 'door'; readonly door: ShipmentDoorKind }>(null)
+  const mayDdt = session.permissions.includes('shipping.ddt.issue')
   const styles = useMemo(() => {
     const seen = new Map<string, { id: string; code: string; name: string }>()
     for (const line of shipment?.lines ?? []) if (!seen.has(line.styleId)) seen.set(line.styleId, { id: line.styleId, code: line.styleCode, name: line.styleName })
@@ -138,13 +149,48 @@ export function useRecordDepth(input: RecordDepthInput): ShipmentDepthSlots {
               description: can.manage ? undefined : t('split.held.noManage'),
               onSelect: () => setSplitOpen(true),
             },
+            // F-OS-203 (L6): the same Move garments to… / Merge into… windows as the order's Shipments tab.
+            ...(can.manage
+              ? [
+                  { id: 'move', label: own('ships.act.move'), onSelect: () => setDoor({ kind: 'move' }) },
+                  { id: 'merge', label: own('ships.act.merge'), onSelect: () => setDoor({ kind: 'merge' }) },
+                ]
+              : []),
           ]
         : []),
+      // F-OS-203 (D6 / O7 B): this shipment travels without a DDT… / Put back the DDT (a Nexus shipment before it leaves).
+      ...(open && shipment.origin !== 'ELSEWHERE' && can.manage && mayDdt ? [{ id: 'ddtRequired', label: shipment.ddtRequired === false ? own('ships.act.ddtBack') : own('ships.act.ddtOff'), onSelect: () => setDoor({ kind: 'door', door: { kind: 'ddtRequired' } }) }] : []),
+      // F-OS-203 (H3-B11): the garments the carrier brought back, received into finished goods.
+      ...(shipment.status === 'RETURNED' && can.manage ? [{ id: 'receiveBack', label: own('ships.act.receiveBack'), onSelect: () => setDoor({ kind: 'door', door: { kind: 'receiveBack' } }) }] : []),
     ],
     dialogs: (
       <>
         <HoldsDialogsView model={holds.model} actions={holds.actions} />
         {splitOpen && <Split shipmentId={shipment.id} prefix={input.prefix} onClose={() => setSplitOpen(false)} onDone={input.onReload} />}
+        {/* F-OS-203 (L6): the shared windows; done, the record reads itself again. */}
+        {door && door.kind !== 'door' && (
+          <Move
+            shipmentId={shipment.id}
+            number={shipment.number}
+            mode={door.kind}
+            onClose={() => setDoor(null)}
+            onDone={() => {
+              setDoor(null)
+              input.onReload()
+            }}
+          />
+        )}
+        {door?.kind === 'door' && (
+          <ShipmentDoor
+            shipmentId={shipment.id}
+            door={door.door}
+            onClose={() => setDoor(null)}
+            onDone={() => {
+              setDoor(null)
+              input.onReload()
+            }}
+          />
+        )}
       </>
     ),
   }

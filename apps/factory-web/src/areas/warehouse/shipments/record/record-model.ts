@@ -112,7 +112,8 @@ export interface ShipmentRecordActions {
   onPackingList?: () => void
   // F-OP-130 (N6): choose the order that joins (null: back to the list), take an order's garments off this DRAFT.
   onPickOrder?: (salesOrderId: string | null) => void
-  onTakeOff?: (salesOrderId: string) => void
+  // F-OS-203 (B-OS-013): ONE command, with the office's reason.
+  onTakeOff?: (salesOrderId: string, reason: string) => void
   // Documents
   onDdtForm?: (form: DdtForm) => void
   onPreview?: () => void
@@ -127,7 +128,8 @@ export interface ShipmentRecordActions {
   onDelivery?: (next: { transportBy: TransportBy; carrierCode: string; serviceCode: string }) => void
   onBuyLabels?: () => void
   onPrintLabels?: () => void
-  onHandOver?: () => void
+  /** F-OS-203 (B-OS-014): null — now; else the time the goods really left and why (when it is not now). */
+  onHandOver?: (at: { readonly shippedAt: string; readonly reason: string | null } | null) => void
   onCancel?: (reason: string) => void
   // B-W2a-71 (every day)
   onVoidLabels?: (reason: string) => void

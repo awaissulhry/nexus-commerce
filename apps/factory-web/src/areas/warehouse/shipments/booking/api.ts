@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { TRACKING_STATUSES } from '@nexus/factory-domain/shipping/labels/tracking'
 import { MANUAL_EVENT_STATUSES, OWN_TRANSPORT_MODES, OWN_TRANSPORT_REFUSALS, TRANSPORT_ARRANGEMENTS } from '@nexus/factory-domain/shipping/own-transport/rules'
+import { ETA_REFUSALS } from '@nexus/factory-domain/shipping/own-transport/rules' // F-OS-203 (B-OS-016)
 import { LABEL_JOB_KINDS, REPRINT_REFUSALS } from '@nexus/factory-domain/shipping/reprint/rules'
 import { SHIPMENT_STATUSES } from '@nexus/factory-domain/shipping/shipments'
 import { CHECK_CODES } from '@nexus/factory-domain/shipping/validate/rules'
@@ -33,11 +34,15 @@ export const transportSchema = z.object({
     shippedAt: z.string().nullable(),
     deliveredAt: z.string().nullable(),
     returnedAt: z.string().nullable(),
+    /** F-OS-203 (B-OS-016): the expected arrival (the carrier's, or typed by hand); absent in an older answer. */
+    expectedDeliveryAt: z.string().nullable().optional(),
   }),
   arrangement: z.enum(TRANSPORT_ARRANGEMENTS),
   ddt: z.object({ id: z.string(), number: z.string() }).nullable(),
   labels: z.object({ carrier: z.number(), test: z.number() }),
-  may: z.object({ arrange: allowance, track: allowance, status: allowance }),
+  // F-OS-203 (B-OS-015, B-OS-016): delivered or came back typed by hand (over a carrier's labels with a reason) and the expected arrival
+  // typed by hand; absent in an older answer: those doors are hidden.
+  may: z.object({ arrange: allowance, track: allowance, status: allowance, endByHand: allowance.optional(), eta: z.object({ allowed: z.boolean(), refusal: z.object({ code: z.enum(ETA_REFUSALS) }).nullable() }).optional() }),
   events: z.array(z.object({ id: z.string(), status: z.enum(TRACKING_STATUSES), description: z.string().nullable(), location: z.string().nullable(), occurredAt: z.string(), recordedAt: z.string() })),
 })
 export type Transport = z.infer<typeof transportSchema>
@@ -57,8 +62,14 @@ export function typeTrackingNumber(api: ApiClient, shipmentId: string, body: { v
   return api.request('PUT', `${base(shipmentId)}/own-transport/tracking`, { body, schema: transportSchema, idempotencyKey })
 }
 
-export function typeStatus(api: ApiClient, shipmentId: string, body: { version: number; status: ManualStatus; occurredAt?: string; description?: string | null; location?: string | null }, idempotencyKey: string): Promise<Transport> {
+// F-OS-203 (B-OS-015): + `reason` — required when DELIVERED or RETURNED is typed over a carrier's labels (kept as the event's words).
+export function typeStatus(api: ApiClient, shipmentId: string, body: { version: number; status: ManualStatus; occurredAt?: string; description?: string | null; location?: string | null; reason?: string | null }, idempotencyKey: string): Promise<Transport> {
   return api.post(`${base(shipmentId)}/own-transport/events`, { body, schema: transportSchema.extend({ recorded: z.object({ eventId: z.string(), moved: z.enum(['DELIVERED', 'RETURNED']).nullable() }) }), idempotencyKey })
+}
+
+// ---- F-OS-203 (B-OS-016): the expected arrival typed by hand where no carrier feed tracks it (null clears it) ----
+export function setExpectedArrival(api: ApiClient, shipmentId: string, body: { version: number; expectedDeliveryAt: string | null; reason?: string | null }, idempotencyKey: string): Promise<Transport> {
+  return api.request('PUT', `${base(shipmentId)}/eta`, { body, schema: transportSchema, idempotencyKey })
 }
 
 // ---- the check before printing (LOG-045) -----------------------------------------------------------------------------------------

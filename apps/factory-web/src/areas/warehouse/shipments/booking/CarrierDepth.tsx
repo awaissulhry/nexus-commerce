@@ -7,6 +7,8 @@ import { useLive } from '../hooks'
 import { failed, LOADING, ready, touchesShipment, writeWords, type DepthAbilities } from '../queue/shared/depth'
 import { arrangeTransport, checkLabels, readLabelJobs, readTransport, reprintLabels, typeStatus, typeTrackingNumber, type Transport } from './api'
 import { arrangeBody, arrangeProblem, OWN_TRANSPORT_REFUSALS, reasonProblem, REPRINT_REFUSALS, reprintHeld, statusProblem, trackingBody, trackingProblem, type ReprintActions, type ReprintModel, type TransportActions, type TransportModel } from './model'
+import { setExpectedArrival } from './api' // F-OS-203 (B-OS-016)
+import { ETA_REFUSALS, etaBody, etaProblem, statusBody } from './model' // F-OS-203 (B-OS-015, B-OS-016)
 import { ReprintView } from './view/ReprintView'
 
 /**
@@ -65,7 +67,7 @@ export function useOwnTransport(shipmentId: string, version: number, can: DepthA
   )
 
   const write = useCallback(
-    async (name: string, run: (key: string, transport: Transport) => Promise<Transport>, done: string) => {
+    async (name: string, run: (key: string, transport: Transport) => Promise<Transport>, done: string, refusals: readonly string[] = OWN_TRANSPORT_REFUSALS, prefix = 'transport.refusal') => {
       const state = latest.current
       if (state.busy || state.transport.state !== 'ready') return
       const transport = state.transport.value
@@ -77,7 +79,7 @@ export function useOwnTransport(shipmentId: string, version: number, can: DepthA
         setModel((current) => ({ ...current, busy: false, transport: ready(next), dialog: null, done: { key: done } }))
         changed.current()
       } catch (error) {
-        const problem = writeWords(error, 'transport.refusal', OWN_TRANSPORT_REFUSALS)
+        const problem = writeWords(error, prefix, refusals)
         setModel((current) => ({ ...current, busy: false, problem: { key: problem.key, params: problem.params } }))
         if (problem.reload) void load(true)
       }
@@ -109,23 +111,15 @@ export function useOwnTransport(shipmentId: string, version: number, can: DepthA
         const dialog = state.dialog
         if (dialog?.kind !== 'status' || !dialog.status || state.transport.state !== 'ready' || statusProblem(dialog, state.transport.value)) return
         const status = dialog.status
-        void write(
-          `status:${status}`,
-          (key, transport) =>
-            typeStatus(
-              api,
-              shipmentId,
-              {
-                version: transport.shipment.version,
-                status,
-                ...(dialog.occurredAt ? { occurredAt: new Date(dialog.occurredAt).toISOString() } : {}),
-                description: dialog.description.trim() || null,
-                location: dialog.location.trim() || null,
-              },
-              key,
-            ),
-          status === 'DELIVERED' ? 'transport.done.delivered' : status === 'RETURNED' ? 'transport.done.returned' : 'transport.done.status',
-        )
+        // F-OS-203 (B-OS-015): over a carrier's labels, delivered or came back goes with its reason (statusBody).
+        void write(`status:${status}`, (key, transport) => typeStatus(api, shipmentId, statusBody(dialog, transport, status), key), status === 'DELIVERED' ? 'transport.done.delivered' : status === 'RETURNED' ? 'transport.done.returned' : 'transport.done.status')
+      },
+      // F-OS-203 (B-OS-016): the expected arrival typed by hand (a carrier's feed refuses it: CARRIER_FED, in words).
+      onEta: () => {
+        const state = latest.current
+        const dialog = state.dialog
+        if (dialog?.kind !== 'eta' || state.transport.state !== 'ready' || etaProblem(dialog, state.transport.value)) return
+        void write('eta', (key, transport) => setExpectedArrival(api, shipmentId, etaBody(dialog, transport), key), 'door.eta.done', ETA_REFUSALS, 'door.eta.refusal')
       },
     }),
     [api, shipmentId, load, loadCheck, write],

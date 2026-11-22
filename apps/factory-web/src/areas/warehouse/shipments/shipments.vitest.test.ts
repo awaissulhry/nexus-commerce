@@ -463,13 +463,15 @@ describe('F-OP-130 — the shipment record names every order, groups its lines b
     for (const locale of LOCALES) for (const item of recordScreen.cases) expect(leftKeys(renderView(recordScreen.view as ComponentType<{ model: unknown }>, item.model, locale), ['shipOrders']), `${item.id} (${locale})`).toEqual([])
   })
 
-  it('the record reads what every order can still ship and each order’s lines; an order leaves line by line, each with the version the one before answered', () => {
+  // F-OS-203 (B-OS-013, X1-B2): an order leaves in ONE command, all or nothing, with the office's reason (no line-by-line loop).
+  it('the record reads what every order can still ship and each order’s lines; an order leaves in ONE command with its reason', () => {
     const source = readFileSync(new URL('./record/ShipmentRecord.tsx', import.meta.url), 'utf8')
     expect(source).toContain('Promise.all(shipmentOrders(value).map((order) => readyToShip(api, { salesOrderId: order.id })')
     expect(source).toContain('Promise.all(shipmentOrders(value).map((order) => orderBackorder(api, order.id, value.id)))')
-    expect(source).toContain('for (const lineId of ids) next = await removeLine(api, shipmentId, lineId, next?.version ?? version())')
+    expect(source).toContain('takeOffOrder(api, shipmentId, salesOrderId, version(), reason, key)')
+    expect(source).not.toContain('for (const lineId of ids) next = await removeLine(')
     // Never the first order: the shipment was made for it.
-    expect(source).toContain('salesOrderId === value?.salesOrderId) return')
+    expect(source).toContain('salesOrderId === value.salesOrderId) return')
     expect(source).toContain('orderCandidates(api, value.id)')
   })
 
