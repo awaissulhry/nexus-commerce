@@ -93,11 +93,25 @@ describe('the order on RecordFrame', () => {
     expect(() => readFileSync(new URL('./view/DatesTab.tsx', import.meta.url), 'utf8')).toThrow()
   })
 
-  it('F-SA-230: Money holds the deposit, the payment schedule, the invoices (#invoices) and the Margin section (#margin) only with the grain', () => {
+  // F-OM-101 (rewrites F-SA-230): Money is the answer line and five sections that stack — Totals, Payments (the ONE plan: #deposit and
+  // #schedule land on it), Invoices & credit notes (invoices.view), Price check (the price grain), Margin (the margin grain).
+  it('F-OM-101: Money — Totals, Payments (#deposit, #schedule), Invoices (#invoices) and Margin (#margin) only with the grain, in that order', () => {
     const finance = draw('w2a-margin')
-    for (const id of ['id="invoices"', 'id="margin"']) expect(finance).toContain(id)
-    expect(textOf(draw('money-new'))).toContain('Deposit')
+    for (const id of ['id="totals"', 'id="payments"', 'id="deposit"', 'id="schedule"', 'id="invoices"', 'id="margin"']) expect(finance, id).toContain(id)
+    expect(finance.indexOf('id="totals"')).toBeLessThan(finance.indexOf('id="payments"'))
+    expect(finance.indexOf('id="payments"')).toBeLessThan(finance.indexOf('id="invoices"'))
+    expect(finance.indexOf('id="invoices"')).toBeLessThan(finance.indexOf('id="margin"'))
+    expect(finance).toContain('class="fw-pt fw-om"')
+    // The deposit is the plan's first step: its row, its anchor (the dock's "Show on the page").
+    const fresh = draw('money-new')
+    expect(textOf(fresh)).toContain('Deposit')
+    expect(fresh).toContain('id="about-DepositRequest-')
     expect(draw('w2a-margin-no-grain')).not.toContain('id="margin"')
+    // Without invoices.view the section is not drawn: the head says it once.
+    const manager = draw('manager-money')
+    expect(manager).not.toContain('id="invoices"')
+    expect(textOf(manager)).toContain('Invoices are shown to people who see invoices.')
+    expect(textOf(manager)).toContain('Amounts are shown to people who see prices.')
     // The money left Shipments: its foot says where it is.
     const shipments = textOf(draw('shipments'))
     expect(shipments).toContain('Invoices and payments are on Money ›')
@@ -853,7 +867,7 @@ describe('F-OO-111 — the yes and deposit banners step back on Overview (presen
   it('W07\'s follow-up: "Record a shipment made elsewhere…" is mounted ONCE, by the page — the band\'s ⋯ opens it on every tab', () => {
     const dialogOn = (file: string) => (readFileSync(new URL(file, import.meta.url), 'utf8').match(/model\.elsewhere\?\.dialog\b/g) ?? []).length
     expect(dialogOn('./view/OrderRecordView.tsx')).toBe(1)
-    for (const tab of ['./view/overview/WhereCard.tsx', './view/ShipmentsTab.tsx', './view/OverviewTab.tsx', './view/LinesTab.tsx', './view/ProductionTab.tsx', './view/MoneyTab.tsx', './view/FilesTab.tsx', './changes/view/ChangesTab.tsx', /* F-OC-101: its section files */ './changes/view/WaitingSection.tsx', './changes/view/FreezeSection.tsx', './changes/view/HistorySection.tsx', './changes/view/AgreementSection.tsx']) expect(dialogOn(tab), tab).toBe(0)
+    for (const tab of ['./view/overview/WhereCard.tsx', './view/ShipmentsTab.tsx', './view/OverviewTab.tsx', './view/LinesTab.tsx', './view/ProductionTab.tsx', /* F-OM-101: Money's layout and its section files */ './money/view/MoneyTab.tsx', './money/view/TotalsSection.tsx', './money/view/PaymentsSection.tsx', './money/view/PlanRow.tsx', './money/view/InvoicesSection.tsx', './view/FilesTab.tsx', './changes/view/ChangesTab.tsx', /* F-OC-101: its section files */ './changes/view/WaitingSection.tsx', './changes/view/FreezeSection.tsx', './changes/view/HistorySection.tsx', './changes/view/AgreementSection.tsx']) expect(dialogOn(tab), tab).toBe(0)
     // Outside the tabs' bodies: beside the page's other dialogs.
     const view_ = readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')
     expect(view_.indexOf('{model.elsewhere?.dialog}')).toBeGreaterThan(view_.indexOf('<OrderDialogs order={order} model={model} actions={actions} />'))

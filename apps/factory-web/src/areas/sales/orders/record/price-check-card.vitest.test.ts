@@ -144,11 +144,14 @@ describe('F-CP-142: the design cases', () => {
     expect(draw(held.record)).toContain('Shown to people who see prices')
   })
 
-  it('MoneyTab mounts the card with ONE marked line, after the Totals card', () => {
-    const tab = readFileSync(new URL('./view/MoneyTab.tsx', import.meta.url), 'utf8')
+  // F-OM-101: the tab's layout moved (money/view/MoneyTab.tsx): Price check is its fourth section, after Totals, Payments and Invoices,
+  // and only with the price grain (the tab's head says the money wall once; W3 moves the card itself).
+  it('MoneyTab mounts the card with ONE marked line, after Totals, Payments and Invoices, with the price grain only', () => {
+    const tab = readFileSync(new URL('./money/view/MoneyTab.tsx', import.meta.url), 'utf8')
     const mounts = tab.split('\n').filter((line) => line.includes('<PriceCheckSection'))
     expect(mounts).toHaveLength(1)
     expect(mounts[0]).toContain('F-CP-142')
-    expect(tab.indexOf('<PriceCheckSection')).toBeGreaterThan(tab.indexOf('<MoneyTotals'))
+    expect(mounts[0]).toContain('model.can.price && <PriceCheckSection record={model} order={order} actions={actions} />')
+    for (const before of ['<TotalsSection', '<PaymentsSection', '<InvoicesSection']) expect(tab.indexOf('<PriceCheckSection'), before).toBeGreaterThan(tab.indexOf(before))
   })
 })

@@ -20,7 +20,8 @@ import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { OrderDialogs } from './Dialogs'
 import { LinesTab } from './LinesTab'
 import { LeaveConfirm } from './lines/SaveBar' // F-OL-07
-import { MoneyTab } from './MoneyTab'
+import { MoneyTab } from '../money/view/MoneyTab' // F-OM-101: the Money tab's layout (moved; one file per section)
+import { MoneyDialogs } from '../money/view/MoneyDialogs' // F-OM-101: the payment plan's windows, mounted once
 import { ProductionTab } from './ProductionTab'
 import { ShipmentsTab } from './ShipmentsTab'
 // ---- B-W2b-323 (orders in depth on screen) ----
@@ -208,7 +209,9 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
     return () => window.removeEventListener('keydown', onKey)
   })
 
-  const openDeposits = order.chain.depositRequests.filter((request) => request.status === 'OPEN').length
+  // F-OM-104 (M1-B13): Money's dot is the deposit gate only — a deposit production waits for (the release's own rule), never the balance
+  // before shipping's request.
+  const depositWaits = gate.state === 'WAITING'
   // F-SA-230: the tabs re-cut (Lines · Production · Changes · Money · Shipments), each counting what it lists; Money's dot: a deposit open.
   // F-SA-232: Overview carries a mark while the order is late or at risk (the band's same chip, the same read).
   const production = readOf(model.production)
@@ -236,7 +239,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
           {t(`tab.${tab}`)}
           <span className="fw-so-dot" aria-label={t('badge.yourTurn')} role="img" />
         </span>
-      ) : tab === 'money' && openDeposits > 0 ? (
+      ) : tab === 'money' && depositWaits ? (
         <span className="fw-so-tablabel">
           {t(`tab.${tab}`)}
           <span className="fw-so-dot" aria-label={t('tab.depositOpen')} role="img" />
@@ -519,7 +522,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
           {/* F-SA-230 / F-SA-236: Changes — one newest-first story: waiting on us / on the customer, the confirmation and the customer's
               yes (#confirmation), the history, what can still change. */}
           {model.tab === 'changes' && <ChangesTab order={order} model={model} actions={actions} />}
-          {/* F-SA-230: Money — totals, deposit, payment schedule, invoices & credit notes (#invoices), the margin (#margin, by its grain). */}
+          {/* F-OM-101: Money — the answer line, then Totals · Payments (the one plan) · Invoices & credit notes · Price check · Margin. */}
           {model.tab === 'money' && <MoneyTab order={order} model={model} actions={actions} />}
           {/* F-SA-230: Shipments — left to ship, shipments, deliveries, complaints & returns; the money is on Money. */}
           {model.tab === 'shipments' && <ShipmentsTab order={order} model={model} actions={actions} delivered={delivered} />}
@@ -529,6 +532,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
       </RecordFrame>
 
       <OrderDialogs order={order} model={model} actions={actions} />
+      {/* F-OM-101: the payment plan's windows (Waive…, Open for payment), mounted ONCE for the page — the GateDialogs pattern. */}
+      <MoneyDialogs model={model} actions={actions} />
       {/* F-OO-111 (W07's follow-up): Record a shipment made elsewhere… — its container's dialog while open, mounted ONCE for the page, so
           the band's ⋯ item opens it on every tab (Overview's More ▾ and the Shipments card head open the same one). */}
       {model.elsewhere?.dialog}

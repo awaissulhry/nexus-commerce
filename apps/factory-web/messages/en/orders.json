@@ -75,7 +75,8 @@
   },
   "depositKind": {
     "ACCONTO": "advance (acconto)",
-    "CAPARRA": "confirmatory deposit (caparra)"
+    "CAPARRA": "confirmatory deposit (caparra)",
+    "CAPARRA_PENITENZIALE": "penitential deposit (caparra penitenziale)"
   },
   "requestStatus": {
     "OPEN": "Open",
@@ -3246,6 +3247,243 @@
     "request": {
       "size": "{size}: {from} → {to}",
       "date": "Ready by {date}"
+    }
+  },
+  "moneyTab": {
+    "head": {
+      "wallPrice": "Amounts are shown to people who see prices.",
+      "closed": "The order is closed: its money plan no longer changes.",
+      "cancelled": "the order is cancelled: nothing more is owed",
+      "settledOn": "settled on {date}: everything is paid",
+      "settled": "settled: everything is paid",
+      "reading": "reading the money…",
+      "depositMissing": "a deposit is needed and was never asked",
+      "productionWaits": "production waits for it",
+      "depositPaid": "deposit paid",
+      "depositWaived": "deposit waived",
+      "extraOpen": "extra deposit {amount} open",
+      "extraOpenFrom": "extra deposit {amount} open (change rev {revision})",
+      "extraOpenWords": "an extra deposit is open",
+      "extraOpenFromWords": "an extra deposit is open (change rev {revision})",
+      "depositShort": "deposit {amount} short",
+      "depositPartPaid": "deposit part paid",
+      "depositOpen": "deposit {amount} open, due {date}",
+      "depositOpenWords": "deposit open, due {date}",
+      "depositOverdue": "deposit {amount} overdue since {date}",
+      "depositOverdueWords": "deposit overdue since {date}",
+      "pageSent": "page sent {date}",
+      "pageNotSent": "page not sent yet",
+      "beforeShipping": "{share} due before shipping ({date})",
+      "beforeShippingNoDay": "{share} due before shipping",
+      "balanceBeforeShipping": "the balance is due before shipping",
+      "invoicedAll": "invoiced in full",
+      "stillToPayOn": "{amount} still to pay on {number}",
+      "invoicesOpen": "the invoices are not paid in full",
+      "allPaid": "everything invoiced is paid",
+      "nothing": "nothing to collect yet. The customer pays on the invoice",
+      "nothingTerms": "nothing to collect yet. The customer pays on the invoice: {terms}",
+      "restOnInvoice": "the rest is paid on the invoice"
+    },
+    "totals": {
+      "title": "Totals",
+      "info": "What the order is worth, what came in, what is left, and what is still missing before it is settled. No total is ever typed: a person changes the cause (a line, a payment, a credit note, a write-off). “Invoiced” and “Paid” open their sections.",
+      "keys": "Keys: Tab moves from tile to tile · Enter opens one.",
+      "more": "More for Totals",
+      "part": "what was invoiced and paid",
+      "cancelled": "Cancelled · nothing more is owed",
+      "settledOn": "Settled on {date} · nothing left",
+      "settled": "Settled · nothing left",
+      "left_one": "Not settled yet · {count} thing left",
+      "left_other": "Not settled yet · {count} things left",
+      "settledRow": "Shipped, invoiced, every document delivered by SDI, and paid.",
+      "nothingLeft": "Nothing left",
+      "whatIsLeft": "What is left · {count}",
+      "openOn": "{number}: {amount} open",
+      "close": "Close unsettled…",
+      "closeHeld": {
+        "closed": "The order is closed already.",
+        "notShipped": "Opens once everything has shipped."
+      },
+      "door": {
+        "shipments": "Shipments ›",
+        "invoices": "Invoices ↓",
+        "payments": "Payments ↓"
+      },
+      "tile": {
+        "total": "Order total · VAT incl.",
+        "invoiced": "Invoiced",
+        "paid": "Paid",
+        "still": "Still to pay"
+      },
+      "hint": {
+        "netVat": "{net} + VAT {vat}",
+        "nothingYet": "nothing yet",
+        "goodsOnly": "goods only · deposit invoices {amount} more",
+        "afterCredit": "after a credit note of {amount}",
+        "nothingReceived": "nothing received yet",
+        "ofWhichDeposits": "of which deposits {amount}",
+        "cancelled": "the order is cancelled",
+        "writtenOff": "{amount} written off",
+        "next": "next: {what}, {date}",
+        "due": "due {date}"
+      },
+      "adds": {
+        "title": "How it adds up",
+        "hint": "Order total − credit notes − paid",
+        "total": "Order total",
+        "neverBilled": "Closed with fewer pieces (never billed)",
+        "credited": "Credit notes",
+        "paid": "Paid",
+        "writtenOff": "Written off",
+        "still": "Still to pay",
+        "freight": "Freight on the invoices, in no order"
+      },
+      "fact": {
+        "terms": "{terms}",
+        "noTerms": "No payment terms given",
+        "marginNow": "Margin now",
+        "marginValue": "{pct}",
+        "costNow": "Cost now",
+        "cost": "{amount}",
+        "door": "{value} ›",
+        "depositPaidOn": "{amount} paid {date}",
+        "depositPaid": "{amount} paid",
+        "paidExtra": "{paid} paid · extra {extra} open",
+        "paidExtraWords": "Paid · an extra deposit is open",
+        "partPaid": "{paid} of {amount} received",
+        "partPaidWords": "Part paid",
+        "depositDue": "{amount} due {date}",
+        "depositDueWords": "Open, due {date}"
+      }
+    },
+    "payments": {
+      "title": "Payments",
+      "info": "The plan of what the customer pays and when. The deposit is its first step; a step that asks money carries its request: its steps and its payments are inside the row. What was replaced or removed stays under Earlier steps.",
+      "keys": "Keys: Tab moves from row to row · Enter opens the row's act · Space unfolds a row.",
+      "reading": "Reading the payment plan…",
+      "part": "the payment plan",
+      "earlier": "Earlier steps ({count})",
+      "earlierHint": "replaced or removed; kept with who, when and why"
+    },
+    "plan": {
+      "kind": {
+        "DEPOSIT": "Deposit",
+        "EXTRA": "Extra deposit",
+        "BEFORE_SHIPPING": "Before shipping",
+        "ON_INVOICE": "On the invoice",
+        "ON_DELIVERY": "On delivery"
+      },
+      "label": "{label}",
+      "title": "{kind} · {share}",
+      "share": "{share}",
+      "shareOfChange": "{share} of the change",
+      "pill": {
+        "OPEN": "Open",
+        "PART": "Part paid",
+        "PAID": "Paid",
+        "WAIVED": "Waived",
+        "OVERDUE": "Overdue",
+        "NOT_ASKED": "Not asked"
+      },
+      "due": {
+        "waived": "Waived",
+        "paidWithInvoices": "Paid with the invoices",
+        "paidOn": "Paid {date}",
+        "paid": "Paid",
+        "asInvoice": "As the invoice says",
+        "onDelivery": "On delivery",
+        "overdueSince": "Overdue since {date}",
+        "on": "Due {date}",
+        "beforeGoodsLeave": "Before the goods leave",
+        "withInvoice": "with {number}"
+      },
+      "note": {
+        "productionWaits": "Production waits for this deposit",
+        "extraWaits": "New work orders wait for it; released ones keep running",
+        "holdsShipment": "Holds the shipment until it is paid",
+        "paidWithInvoice": "Paid when the goods' invoice is paid"
+      },
+      "act": {
+        "record": "Record a payment",
+        "send": "Send the page",
+        "sendAgain": "Send the page again",
+        "payInvoice": "Record payment…",
+        "waive": "Waive…"
+      },
+      "byHand": {
+        "what": {
+          "REPLACE_DEPOSIT": "Deposit changed by hand",
+          "MOVE_DUE": "Due day set by hand",
+          "ASK_AGAIN": "Asked again by hand",
+          "ADD_STEP": "Step added by hand",
+          "CHANGE_STEP": "Amount set by hand",
+          "REMOVE_STEP": "Removed by hand",
+          "RENAME_STEP": "Renamed by hand",
+          "UNDO_OPEN": "Opening undone by hand",
+          "CHANGE_TERMS": "Remade by new payment terms",
+          "ACCEPT_SHORT": "Accepted short by hand",
+          "OTHER": "Set by hand"
+        },
+        "who": "{what} · {by}, {date}",
+        "when": "{what} · {date}"
+      },
+      "setByHand": "Set by hand",
+      "fromChange": "from change rev {revision} ›",
+      "fold": "Hide its steps and payments",
+      "unfold": "Show its steps and payments",
+      "more": "More for {row}",
+      "menu": {
+        "openInvoice": "Open {number} ›"
+      },
+      "step": {
+        "page": "Page sent",
+        "byChange": "{date} · by the priced change rev {revision}",
+        "issued": "Issued"
+      },
+      "payments": {
+        "title": "Its payments",
+        "none": "No payment yet.",
+        "ref": "ref {ref}",
+        "paidSoFar": "Paid so far: {amount}"
+      },
+      "method": {
+        "BANK_TRANSFER": "Bank transfer",
+        "CARD": "Card",
+        "SEPA_DEBIT": "SEPA direct debit"
+      },
+      "earlier": {
+        "step": "replaced or removed",
+        "replaced": "replaced",
+        "cancelled": "cancelled"
+      },
+      "next": {
+        "DEPOSIT": "the deposit",
+        "EXTRA": "the extra deposit",
+        "BEFORE_SHIPPING": "before shipping",
+        "ON_INVOICE": "on the invoice",
+        "ON_DELIVERY": "on delivery"
+      },
+      "answer": {
+        "none": "nothing is open yet: the customer pays on the invoice",
+        "allPaid": "everything is paid",
+        "final": "the order is closed: its plan no longer changes",
+        "stillOpen": "still open {amount}",
+        "overdue": "overdue {amount}",
+        "nextDue": "next: {what}, due {date}",
+        "next": "next: {what}"
+      }
+    },
+    "invoices": {
+      "title": "Invoices & credit notes",
+      "empty": "Nothing invoiced yet: the deposit invoice and the invoices of shipped goods appear here.",
+      "count_one": "{count} document",
+      "count_other": "{count} documents",
+      "part": "the invoices' amounts",
+      "reading": "Reading what is open on the invoices…"
+    },
+    "menu": {
+      "copyLinkTotals": "Copy link to Totals",
+      "copyLinkRow": "Copy link to this row"
     }
   }
 }

@@ -75,7 +75,8 @@
   },
   "depositKind": {
     "ACCONTO": "acconto",
-    "CAPARRA": "caparra confirmatoria"
+    "CAPARRA": "caparra confirmatoria",
+    "CAPARRA_PENITENZIALE": "caparra penitenziale"
   },
   "requestStatus": {
     "OPEN": "Aperto",
@@ -3246,6 +3247,243 @@
     "request": {
       "size": "{size}: {from} → {to}",
       "date": "Pronto entro il {date}"
+    }
+  },
+  "moneyTab": {
+    "head": {
+      "wallPrice": "Gli importi sono visibili a chi vede i prezzi.",
+      "closed": "L'ordine è chiuso: il suo piano dei pagamenti non cambia più.",
+      "cancelled": "l'ordine è annullato: non è dovuto altro",
+      "settledOn": "saldato il {date}: è tutto pagato",
+      "settled": "saldato: è tutto pagato",
+      "reading": "lettura dei pagamenti…",
+      "depositMissing": "serve un acconto e non è mai stato richiesto",
+      "productionWaits": "la produzione lo aspetta",
+      "depositPaid": "acconto pagato",
+      "depositWaived": "acconto abbuonato",
+      "extraOpen": "acconto aggiuntivo di {amount} aperto",
+      "extraOpenFrom": "acconto aggiuntivo di {amount} aperto (modifica rev {revision})",
+      "extraOpenWords": "è aperto un acconto aggiuntivo",
+      "extraOpenFromWords": "è aperto un acconto aggiuntivo (modifica rev {revision})",
+      "depositShort": "all'acconto mancano {amount}",
+      "depositPartPaid": "acconto pagato in parte",
+      "depositOpen": "acconto di {amount} aperto, scade il {date}",
+      "depositOpenWords": "acconto aperto, scade il {date}",
+      "depositOverdue": "acconto di {amount} scaduto dal {date}",
+      "depositOverdueWords": "acconto scaduto dal {date}",
+      "pageSent": "pagina inviata il {date}",
+      "pageNotSent": "pagina non ancora inviata",
+      "beforeShipping": "{share} prima della spedizione ({date})",
+      "beforeShippingNoDay": "{share} prima della spedizione",
+      "balanceBeforeShipping": "il saldo è dovuto prima della spedizione",
+      "invoicedAll": "fatturato per intero",
+      "stillToPayOn": "{amount} ancora da pagare su {number}",
+      "invoicesOpen": "le fatture non sono pagate per intero",
+      "allPaid": "tutto il fatturato è pagato",
+      "nothing": "ancora niente da incassare. Il cliente paga alla fattura",
+      "nothingTerms": "ancora niente da incassare. Il cliente paga alla fattura: {terms}",
+      "restOnInvoice": "il resto si paga alla fattura"
+    },
+    "totals": {
+      "title": "Totali",
+      "info": "Quanto vale l'ordine, cosa è entrato, cosa resta e cosa manca per chiuderlo. Nessun totale si scrive a mano: si cambia la causa (una riga, un pagamento, una nota di credito, un abbuono). “Fatturato” e “Pagato” aprono le loro sezioni.",
+      "keys": "Tasti: Tab passa da un riquadro all'altro · Invio ne apre uno.",
+      "more": "Altro per Totali",
+      "part": "il fatturato e il pagato",
+      "cancelled": "Annullato · non è dovuto altro",
+      "settledOn": "Saldato il {date} · non manca niente",
+      "settled": "Saldato · non manca niente",
+      "left_one": "Non ancora saldato · manca {count} cosa",
+      "left_other": "Non ancora saldato · mancano {count} cose",
+      "settledRow": "Spedito, fatturato, ogni documento consegnato dallo SDI, e pagato.",
+      "nothingLeft": "Non manca niente",
+      "whatIsLeft": "Cosa manca · {count}",
+      "openOn": "{number}: {amount} da pagare",
+      "close": "Chiudi senza saldo…",
+      "closeHeld": {
+        "closed": "L'ordine è già chiuso.",
+        "notShipped": "Si apre quando è partito tutto."
+      },
+      "door": {
+        "shipments": "Spedizioni ›",
+        "invoices": "Fatture ↓",
+        "payments": "Pagamenti ↓"
+      },
+      "tile": {
+        "total": "Totale ordine · IVA inclusa",
+        "invoiced": "Fatturato",
+        "paid": "Pagato",
+        "still": "Ancora da pagare"
+      },
+      "hint": {
+        "netVat": "{net} + IVA {vat}",
+        "nothingYet": "ancora niente",
+        "goodsOnly": "solo merce · fatture di acconto {amount} in più",
+        "afterCredit": "dopo una nota di credito di {amount}",
+        "nothingReceived": "ancora nulla ricevuto",
+        "ofWhichDeposits": "di cui acconti {amount}",
+        "cancelled": "l'ordine è annullato",
+        "writtenOff": "{amount} abbuonati",
+        "next": "prossimo: {what}, {date}",
+        "due": "scade il {date}"
+      },
+      "adds": {
+        "title": "Come si arriva al totale",
+        "hint": "Totale ordine − note di credito − pagato",
+        "total": "Totale ordine",
+        "neverBilled": "Chiuso con meno pezzi (mai fatturato)",
+        "credited": "Note di credito",
+        "paid": "Pagato",
+        "writtenOff": "Abbuonato",
+        "still": "Ancora da pagare",
+        "freight": "Trasporto in fattura, in nessun ordine"
+      },
+      "fact": {
+        "terms": "{terms}",
+        "noTerms": "Nessun termine di pagamento indicato",
+        "marginNow": "Margine attuale",
+        "marginValue": "{pct}",
+        "costNow": "Costo attuale",
+        "cost": "{amount}",
+        "door": "{value} ›",
+        "depositPaidOn": "{amount} pagato il {date}",
+        "depositPaid": "{amount} pagato",
+        "paidExtra": "{paid} pagato · aggiuntivo {extra} aperto",
+        "paidExtraWords": "Pagato · è aperto un acconto aggiuntivo",
+        "partPaid": "{paid} di {amount} ricevuti",
+        "partPaidWords": "Pagato in parte",
+        "depositDue": "{amount} entro il {date}",
+        "depositDueWords": "Aperto, scade il {date}"
+      }
+    },
+    "payments": {
+      "title": "Pagamenti",
+      "info": "Il piano di cosa paga il cliente e quando. L'acconto è la sua prima rata; una rata che chiede soldi porta la sua richiesta: i suoi passi e i suoi pagamenti sono dentro la riga. Quello che è stato sostituito o tolto resta sotto Rate precedenti.",
+      "keys": "Tasti: Tab passa da una riga all'altra · Invio apre l'azione della riga · Spazio apre una riga.",
+      "reading": "Lettura del piano dei pagamenti…",
+      "part": "il piano dei pagamenti",
+      "earlier": "Rate precedenti ({count})",
+      "earlierHint": "sostituite o tolte; conservate con chi, quando e perché"
+    },
+    "plan": {
+      "kind": {
+        "DEPOSIT": "Acconto",
+        "EXTRA": "Acconto aggiuntivo",
+        "BEFORE_SHIPPING": "Prima della spedizione",
+        "ON_INVOICE": "Alla fattura",
+        "ON_DELIVERY": "Alla consegna"
+      },
+      "label": "{label}",
+      "title": "{kind} · {share}",
+      "share": "{share}",
+      "shareOfChange": "{share} della modifica",
+      "pill": {
+        "OPEN": "Aperta",
+        "PART": "Pagata in parte",
+        "PAID": "Pagata",
+        "WAIVED": "Abbuonata",
+        "OVERDUE": "Scaduta",
+        "NOT_ASKED": "Non richiesta"
+      },
+      "due": {
+        "waived": "Abbuonata",
+        "paidWithInvoices": "Pagata con le fatture",
+        "paidOn": "Pagata il {date}",
+        "paid": "Pagata",
+        "asInvoice": "Come dice la fattura",
+        "onDelivery": "Alla consegna",
+        "overdueSince": "Scaduta dal {date}",
+        "on": "Scade il {date}",
+        "beforeGoodsLeave": "Prima che la merce parta",
+        "withInvoice": "con {number}"
+      },
+      "note": {
+        "productionWaits": "La produzione aspetta questo acconto",
+        "extraWaits": "I nuovi ordini di lavoro lo aspettano; quelli rilasciati continuano",
+        "holdsShipment": "Blocca la spedizione finché non è pagata",
+        "paidWithInvoice": "Pagata quando è pagata la fattura della merce"
+      },
+      "act": {
+        "record": "Registra un pagamento",
+        "send": "Invia la pagina",
+        "sendAgain": "Invia di nuovo la pagina",
+        "payInvoice": "Registra pagamento…",
+        "waive": "Abbuona…"
+      },
+      "byHand": {
+        "what": {
+          "REPLACE_DEPOSIT": "Acconto cambiato a mano",
+          "MOVE_DUE": "Scadenza impostata a mano",
+          "ASK_AGAIN": "Richiesto di nuovo a mano",
+          "ADD_STEP": "Rata aggiunta a mano",
+          "CHANGE_STEP": "Importo impostato a mano",
+          "REMOVE_STEP": "Tolta a mano",
+          "RENAME_STEP": "Rinominata a mano",
+          "UNDO_OPEN": "Apertura annullata a mano",
+          "CHANGE_TERMS": "Rifatta dai nuovi termini di pagamento",
+          "ACCEPT_SHORT": "Accettato ridotto a mano",
+          "OTHER": "Impostata a mano"
+        },
+        "who": "{what} · {by}, {date}",
+        "when": "{what} · {date}"
+      },
+      "setByHand": "Impostata a mano",
+      "fromChange": "dalla modifica rev {revision} ›",
+      "fold": "Nascondi i suoi passi e pagamenti",
+      "unfold": "Mostra i suoi passi e pagamenti",
+      "more": "Altro per {row}",
+      "menu": {
+        "openInvoice": "Apri {number} ›"
+      },
+      "step": {
+        "page": "Pagina inviata",
+        "byChange": "{date} · dalla modifica a pagamento rev {revision}",
+        "issued": "Emessa"
+      },
+      "payments": {
+        "title": "I suoi pagamenti",
+        "none": "Ancora nessun pagamento.",
+        "ref": "rif. {ref}",
+        "paidSoFar": "Pagato finora: {amount}"
+      },
+      "method": {
+        "BANK_TRANSFER": "Bonifico",
+        "CARD": "Carta",
+        "SEPA_DEBIT": "Addebito SEPA"
+      },
+      "earlier": {
+        "step": "sostituita o tolta",
+        "replaced": "sostituita",
+        "cancelled": "annullata"
+      },
+      "next": {
+        "DEPOSIT": "l'acconto",
+        "EXTRA": "l'acconto aggiuntivo",
+        "BEFORE_SHIPPING": "prima della spedizione",
+        "ON_INVOICE": "alla fattura",
+        "ON_DELIVERY": "alla consegna"
+      },
+      "answer": {
+        "none": "ancora niente di aperto: il cliente paga alla fattura",
+        "allPaid": "è tutto pagato",
+        "final": "l'ordine è chiuso: il suo piano non cambia più",
+        "stillOpen": "ancora aperto {amount}",
+        "overdue": "scaduto {amount}",
+        "nextDue": "prossimo: {what}, scade il {date}",
+        "next": "prossimo: {what}"
+      }
+    },
+    "invoices": {
+      "title": "Fatture e note di credito",
+      "empty": "Ancora nulla di fatturato: qui compaiono la fattura di acconto e le fatture della merce spedita.",
+      "count_one": "{count} documento",
+      "count_other": "{count} documenti",
+      "part": "gli importi delle fatture",
+      "reading": "Lettura di cosa resta da pagare sulle fatture…"
+    },
+    "menu": {
+      "copyLinkTotals": "Copia il link a Totali",
+      "copyLinkRow": "Copia il link a questa riga"
     }
   }
 }

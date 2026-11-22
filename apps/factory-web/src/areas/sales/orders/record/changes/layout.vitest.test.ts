@@ -56,10 +56,11 @@ describe('F-OC-101: every time with a day', () => {
     expect(dayTimeOf('2026-11-21T23:30:00Z', '2026-11-22T08:00:00Z', 'en')).toMatchObject({ today: true, date: '22/11/2026', time: '00:30' })
   })
 
-  it('the tab\'s words are ONE group, changesTab, at the end of orders.json in both languages', () => {
+  // F-OM-101: the Money tab's ONE group, moneyTab, comes after it (the next lane's words go at the end).
+  it('the tab\'s words are ONE group, changesTab, at the end of orders.json in both languages (then moneyTab)', () => {
     for (const locale of ['en', 'it'] as const) {
       const words = JSON.parse(source(`../../../../../../messages/${locale}/orders.json`)) as Record<string, unknown>
-      expect(Object.keys(words).at(-1), locale).toBe('changesTab')
+      expect(Object.keys(words).slice(-2), locale).toEqual(['changesTab', 'moneyTab'])
     }
   })
 })
