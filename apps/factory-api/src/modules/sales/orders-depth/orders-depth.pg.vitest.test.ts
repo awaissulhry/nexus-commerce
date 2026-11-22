@@ -307,6 +307,20 @@ describe('the order confirmation (SAL-208)', () => {
     ])
     expect(Date.parse(read.sends[0].at)).toBeGreaterThanOrEqual(Date.parse(read.sends[1].at))
   })
+
+  // ── oc-fx5 (order changes walk problem 14): a send the order itself records, with no audit row for it ──
+  it('the order’s own last send counts when no audit row covers its version (SEED-SO-W39-02, sent by the seeds): no addresses, nobody named', async () => {
+    const seeded = await one<{ id: string; confirmationSentAt: Date; confirmationVersion: number }>(`SELECT id, "confirmationSentAt", "confirmationVersion" FROM "SalesOrder" WHERE "tenantId" = $1 AND number = 'SEED-SO-W39-02'`, [A.tenant])
+    expect(seeded.confirmationVersion).toBe(1)
+    expect(await admin(`SELECT 1 FROM "AuditLog" WHERE action = 'orders.sendConfirmation' AND "recordId" = $1`, [seeded.id])).toEqual([])
+    const read = (await ok('reader', 'GET', `/sales/orders/${seeded.id}/confirmation`)).confirmation
+    expect(read).toMatchObject({ sentVersion: 1, sentAt: seeded.confirmationSentAt.toISOString() })
+    expect(read.sends).toEqual([{ version: 1, at: seeded.confirmationSentAt.toISOString(), to: [], by: null }])
+    expect(read.versions.find((version: Json) => version.version === 1)).toMatchObject({ sent: true })
+    // An order whose sends all have their audit rows gets no second row for its last one (orderA above: v3 and v2, nothing more).
+    expect((await ok('reader', 'GET', `/sales/orders/${orderA.id}/confirmation`)).confirmation.sends.map((send: Json) => send.version)).toEqual([3, 2])
+  })
+  // ── end oc-fx5 ──
   // ── end B-OC-014 ──
 })
 

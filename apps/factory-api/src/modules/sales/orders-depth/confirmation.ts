@@ -227,6 +227,17 @@ export function sendsOf(rows: readonly { readonly at: Date; readonly actorId: st
     })
     .sort((a, b) => b.at.getTime() - a.at.getTime())
 }
+
+// ── oc-fx5 (order changes walk problem 14): the order's own last send counts too ──
+/**
+ * The sends, with the order's own last send (its `confirmationSentAt` and `confirmationVersion`) when no audit row covers that
+ * version — a send written before its audit row was kept, or by the seeds: then no addresses and nobody named. Newest first. Pure.
+ */
+export function withLastSend(sends: readonly ConfirmationSend[], last: { readonly at: Date | null; readonly version: number | null }): ConfirmationSend[] {
+  if (last.at === null || last.version === null || sends.some((send) => send.version === last.version)) return [...sends]
+  return [...sends, { version: last.version, at: last.at, to: [], byId: null }].sort((a, b) => b.at.getTime() - a.at.getTime())
+}
+// ── end oc-fx5 ──
 // ── end B-OC-014 ──
 
 async function readState(caller: CommandCaller, order: OrderRow) {
@@ -234,7 +245,8 @@ async function readState(caller: CommandCaller, order: OrderRow) {
     const rows = await db.generatedDocument.findMany({ where: { recordType: 'SalesOrder', recordId: order.id, kind: CONFIRMATION_KIND }, select: VERSION_COLUMNS, orderBy: { version: 'desc' } })
     const sent = await db.salesOrder.findUniqueOrThrow({ where: { id: order.id }, select: { confirmationSentAt: true, confirmationVersion: true, status: true, version: true } })
     // B-OC-014: every send (this order's own audit rows only), newest first.
-    const sends = sendsOf(await db.auditLog.findMany({ where: { recordType: 'SalesOrder', recordId: order.id, action: 'orders.sendConfirmation' }, orderBy: [{ at: 'desc' }, { id: 'desc' }], take: CONFIRMATION_SENDS_LIMIT, select: { at: true, actorId: true, audience: true, after: true } }))
+    // oc-fx5 (walk problem 14): + the order's own last send when no audit row covers its version (the agreement says it was sent).
+    const sends = withLastSend(sendsOf(await db.auditLog.findMany({ where: { recordType: 'SalesOrder', recordId: order.id, action: 'orders.sendConfirmation' }, orderBy: [{ at: 'desc' }, { id: 'desc' }], take: CONFIRMATION_SENDS_LIMIT, select: { at: true, actorId: true, audience: true, after: true } })), { at: sent.confirmationSentAt, version: sent.confirmationVersion })
     const sentVersions = new Set(sends.map((send) => send.version))
     const peopleIds = [...new Set([...rows.flatMap((row) => (row.createdById ? [row.createdById] : [])), ...sends.flatMap((send) => (send.byId ? [send.byId] : []))])]
     const names = new Map((await db.user.findMany({ where: { id: { in: peopleIds } }, select: { id: true, displayName: true } })).map((row) => [row.id, row.displayName]))
