@@ -8,6 +8,9 @@ import { asMoney, markMoney, type Money } from '@nexus/factory-domain/money/mark
 import { depositFiscalOf } from '@nexus/factory-domain/sales/deposits/deposits'
 import {
   amountOfPct,
+  // B-OM-024: a request short and the tolerance, the one rule the plan read says too.
+  beyondToleranceOf,
+  shortOf,
   MONEY_PLAN_REFUSAL_WORDS,
   planByHand,
   PLAN_BY_HAND_ACTION,
@@ -178,12 +181,12 @@ function actionOf(body: MoneyPlanBody, gross: number, extra: { readonly terms: T
   }
 }
 
-/** Whether ACCEPT_SHORT goes beyond the company's tolerance (or it has none): only then the Owner's fresh code. */
+/** Whether ACCEPT_SHORT goes beyond the company's tolerance (or it has none): only then the Owner's fresh code. B-OM-024: the one rule. */
 async function shortBeyondTolerance(db: Reader, order: OrderRow, read: PlanRead, requestId: string): Promise<boolean> {
   const request = read.facts.requests.find((row) => row.id === requestId)
-  if (!request || request.paid <= 0 || request.paid >= request.amount) return false
-  const tolerance = (await toleranceOf(db, order.companyId)).amount
-  return tolerance === null || request.amount - request.paid > tolerance
+  const short = request ? shortOf(request) : null
+  if (short === null) return false
+  return beyondToleranceOf(short, (await toleranceOf(db, order.companyId)).amount) !== null
 }
 
 /** The checks before the command: the right and the grain; the fresh code for the acts that ask it. */
