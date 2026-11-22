@@ -164,12 +164,29 @@ export function auditViewOf(row: Pick<AskRow, 'status' | 'target' | 'salesOrderL
 }
 
 /** The ids every file_ask.* event carries (no words, no file name, no person). */
-export const eventIdsOf = (row: Pick<AskRow, 'id' | 'salesOrderId' | 'workOrderId' | 'partyId'>, status: FileAskStatus) => ({ askId: row.id, salesOrderId: row.salesOrderId, workOrderId: row.workOrderId, status, partyId: row.partyId })
+// of-fx1s: every helper below has a written type (no inferred object type flows from here into the commands and routes).
+export interface AskEventIds {
+  readonly askId: string
+  readonly salesOrderId: string
+  readonly workOrderId: string | null
+  readonly status: FileAskStatus
+  readonly partyId: string
+}
+export interface AskEventPlace {
+  readonly subject: string
+  readonly companyId: string
+  readonly siteId: string | null
+}
+export const eventIdsOf = (row: Pick<AskRow, 'id' | 'salesOrderId' | 'workOrderId' | 'partyId'>, status: FileAskStatus): AskEventIds => ({ askId: row.id, salesOrderId: row.salesOrderId, workOrderId: row.workOrderId, status, partyId: row.partyId })
 /** Where every file_ask.* event sits: the order, its company, the work order's site. */
-export const eventPlaceOf = (row: Pick<AskRow, 'salesOrderId' | 'companyId' | 'siteId'>) => ({ subject: row.salesOrderId, companyId: row.companyId, siteId: row.siteId })
+export const eventPlaceOf = (row: Pick<AskRow, 'salesOrderId' | 'companyId' | 'siteId'>): AskEventPlace => ({ subject: row.salesOrderId, companyId: row.companyId, siteId: row.siteId })
 
 /** The answer of every command: the ask as it is now, and the Tasks it wrote. */
-export const answerOf = (id: string, version: number, status: FileAskStatus, tasks = 0) => ({ ask: { id, version, status }, tasks })
+export interface AskAnswer {
+  readonly ask: { readonly id: string; readonly version: number; readonly status: FileAskStatus }
+  readonly tasks: number
+}
+export const answerOf = (id: string, version: number, status: FileAskStatus, tasks = 0): AskAnswer => ({ ask: { id, version, status }, tasks })
 
 /** A reason in one line of 3 to 500 characters (400 by place). */
 export function reasonOf(text: string, path = 'reason'): string {
@@ -192,7 +209,15 @@ function wordsOf(text: string): string {
 }
 
 /** Where a new ask lands, checked on this order (a work order: one of its own, live, not a repair, that the reader reaches). */
-async function landingOf(db: Reader, actor: Actor, order: OrderRow, target: MakeAskBody['target']) {
+/** Where a new ask lands, as checked (of-fx1s: a written type). */
+interface Landed {
+  readonly target: FileAskTarget
+  readonly salesOrderLineId: string | null
+  readonly workOrderId: string | null
+  readonly siteId: string | null
+  readonly operationId: string | null
+}
+async function landingOf(db: Reader, actor: Actor, order: OrderRow, target: MakeAskBody['target']): Promise<Landed> {
   const ids = { lineId: target.lineId, workOrderId: target.workOrderId, operationId: target.operationId }
   if (target.type === 'SALES_ORDER') {
     if (ids.lineId || ids.workOrderId || ids.operationId) throw badField('target', 'An ask on the order itself names no line, work order or step.')
@@ -227,7 +252,7 @@ async function landingOf(db: Reader, actor: Actor, order: OrderRow, target: Make
 
 // ---- make ---------------------------------------------------------------------------------------------------------------------
 /** POST /sales/orders/:orderId/file-asks */
-export async function makeAsk(caller: CommandCaller, orderId: string, body: MakeAskBody, idempotencyKey?: string) {
+export async function makeAsk(caller: CommandCaller, orderId: string, body: MakeAskBody, idempotencyKey?: string): Promise<AskAnswer> {
   const { context, actor, order } = await reachOrder(caller, orderId)
   if (!mayKeepAsks(actor, order, true)) throw new ForbiddenError(NOT_YOURS)
   const marks = { priced: body.priced === true, bodyData: body.bodyData === true }
@@ -284,7 +309,7 @@ export async function makeAsk(caller: CommandCaller, orderId: string, body: Make
 
 // ---- change -------------------------------------------------------------------------------------------------------------------
 /** The ask of this order for a command: reached (the walls), its marks held, the right over the order (else 403). */
-export async function askForCommand(caller: CommandCaller, orderId: string, askId: string, post = false) {
+export async function askForCommand(caller: CommandCaller, orderId: string, askId: string, post = false): Promise<{ context: OfficeContext; actor: Actor; order: OrderRow; ask: AskRow }> {
   const reached = await reachOrder(caller, orderId)
   if (!mayKeepAsks(reached.actor, reached.order, post)) throw new ForbiddenError(NOT_YOURS)
   const ask = await caller.withClient((db) => readAsk(db, reached.actor, reached.order, askId))
@@ -293,7 +318,7 @@ export async function askForCommand(caller: CommandCaller, orderId: string, askI
 }
 
 /** PATCH /sales/orders/:orderId/file-asks/:askId */
-export async function changeAsk(caller: CommandCaller, orderId: string, askId: string, body: ChangeAskBody, idempotencyKey?: string) {
+export async function changeAsk(caller: CommandCaller, orderId: string, askId: string, body: ChangeAskBody, idempotencyKey?: string): Promise<AskAnswer> {
   if (body.words === undefined && body.dueOn === undefined) throw badField('words', 'Send the new words or the new due day.')
   const words = body.words === undefined ? undefined : wordsOf(body.words)
   const due = body.dueOn === undefined ? undefined : dueOf(body.dueOn)
@@ -318,7 +343,7 @@ export async function changeAsk(caller: CommandCaller, orderId: string, askId: s
 
 // ---- reassign -----------------------------------------------------------------------------------------------------------------
 /** POST /sales/orders/:orderId/file-asks/:askId/reassign */
-export async function reassignAsk(caller: CommandCaller, orderId: string, askId: string, body: ReassignAskBody, idempotencyKey?: string) {
+export async function reassignAsk(caller: CommandCaller, orderId: string, askId: string, body: ReassignAskBody, idempotencyKey?: string): Promise<AskAnswer> {
   const reason = body.reason === undefined || body.reason.trim() === '' ? null : reasonOf(body.reason)
   const { context, ask } = await askForCommand(caller, orderId, askId)
   if (ask.status !== 'OPEN') throw refused('NOT_OPEN')
@@ -352,7 +377,7 @@ export async function reassignAsk(caller: CommandCaller, orderId: string, askId:
 
 // ---- cancel -------------------------------------------------------------------------------------------------------------------
 /** POST /sales/orders/:orderId/file-asks/:askId/cancel — an ask is never deleted: it is cancelled with a reason. */
-export async function cancelAsk(caller: CommandCaller, orderId: string, askId: string, body: ReasonBody, idempotencyKey?: string) {
+export async function cancelAsk(caller: CommandCaller, orderId: string, askId: string, body: ReasonBody, idempotencyKey?: string): Promise<AskAnswer> {
   const reason = reasonOf(body.reason)
   const { context, ask } = await askForCommand(caller, orderId, askId)
   if (ask.status !== 'OPEN' && ask.status !== 'ARRIVED') throw refused('NOT_OPEN')
@@ -376,7 +401,7 @@ export const targetRecordOf = (row: Pick<AskRow, 'target' | 'salesOrderId' | 'sa
   row.target === 'SALES_ORDER' ? { recordType: 'SalesOrder', recordId: row.salesOrderId } : row.target === 'SALES_ORDER_LINE' ? { recordType: 'SalesOrderLine', recordId: row.salesOrderLineId! } : { recordType: 'WorkOrder', recordId: row.workOrderId! }
 
 /** POST /sales/orders/:orderId/file-asks/:askId/answer — the files sent for this ask; the addressee, or anyone who adds files there. */
-export async function answerAsk(caller: CommandCaller, orderId: string, askId: string, body: AnswerAskBody, idempotencyKey?: string) {
+export async function answerAsk(caller: CommandCaller, orderId: string, askId: string, body: AnswerAskBody, idempotencyKey?: string): Promise<AskAnswer> {
   const { context, actor, order } = await reachOrder(caller, orderId)
   const ask = await caller.withClient((db) => readAsk(db, actor, order, askId))
   assertMarks(actor, order, ask)
@@ -418,7 +443,7 @@ export async function writeCheckTask(tools: Pick<CommandTools, 'tx' | 'now' | 'a
 
 // ---- S2.2: accept, ask again ----------------------------------------------------------------------------------------------------
 /** POST /sales/orders/:orderId/file-asks/:askId/accept — never while a file sent is held by the virus scan, or found infected. */
-export async function acceptAsk(caller: CommandCaller, orderId: string, askId: string, body: VersionBody, idempotencyKey?: string) {
+export async function acceptAsk(caller: CommandCaller, orderId: string, askId: string, body: VersionBody, idempotencyKey?: string): Promise<AskAnswer> {
   const { context, ask } = await askForCommand(caller, orderId, askId)
   if (ask.status !== 'ARRIVED') throw refused('NOT_ARRIVED')
   const { result } = await command(caller, { name: 'files.fileAsk.accept', idempotencyKey, input: { orderId, askId, ...body } }, async (tools) => {
@@ -439,7 +464,7 @@ export async function acceptAsk(caller: CommandCaller, orderId: string, askId: s
 }
 
 /** POST /sales/orders/:orderId/file-asks/:askId/ask-again — with why; the files sent stay on the record. */
-export async function askAgain(caller: CommandCaller, orderId: string, askId: string, body: ReasonBody, idempotencyKey?: string) {
+export async function askAgain(caller: CommandCaller, orderId: string, askId: string, body: ReasonBody, idempotencyKey?: string): Promise<AskAnswer> {
   const reason = reasonOf(body.reason)
   const { context, ask } = await askForCommand(caller, orderId, askId)
   if (ask.status !== 'ARRIVED') throw refused('NOT_ARRIVED')
@@ -463,7 +488,7 @@ export async function askAgain(caller: CommandCaller, orderId: string, askId: st
 
 // ---- S2.2: chase --------------------------------------------------------------------------------------------------------------
 /** POST /sales/orders/:orderId/file-asks/:askId/chase — "Ask for an update". */
-export async function chaseAsk(caller: CommandCaller, orderId: string, askId: string, body: VersionBody, idempotencyKey?: string) {
+export async function chaseAsk(caller: CommandCaller, orderId: string, askId: string, body: VersionBody, idempotencyKey?: string): Promise<AskAnswer> {
   const { context, ask } = await askForCommand(caller, orderId, askId, true)
   if (ask.status !== 'OPEN') throw refused('NOT_OPEN')
   const { result } = await command(caller, { name: 'files.fileAsk.chase', idempotencyKey, input: { orderId, askId, ...body } }, async (tools) => {
