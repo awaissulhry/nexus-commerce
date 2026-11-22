@@ -106,7 +106,10 @@ export const typeTrackingNumberContract = defineContract({
       .array(input({ parcelId: id(), trackingNumber: text(OWN_TRANSPORT_LIMITS.trackingNumber * 2).nullable(), trackingUrl: text(OWN_TRANSPORT_LIMITS.trackingUrl * 2).nullish() }))
       .max(PARCEL_TRACKING_LIMITS.parcels)
       .optional(),
-    /** B-OS-022: why a parcel number the customer could read changes or is cleared after the goods left (3 to 500). */
+    /**
+     * B-OS-022: why a number the customer could read changes or is cleared after the goods left (3 to 500) — a parcel's, or
+     * (os-fx3) the shipment's own consignment number; else a 400 at body/reason.
+     */
     reason: text(PARCEL_TRACKING_LIMITS.reasonMax * 2).nullish(),
   }),
   response: { 200: transportView },

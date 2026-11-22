@@ -279,7 +279,7 @@ export const moveOfStatus = (status: ManualEventStatus): 'DELIVERED' | 'RETURNED
  * One parcel's tracking number typed by hand (an air waybill, a courier's number), in ONE command with the shipment's: only for a
  * carrier booked by hand (trackingRefusal: never on a shipment whose parcels carry a carrier label), from PACKED on (also after the
  * goods left), never on a parcel with a label (a TEST one too: the database keeps a label and a typed number apart). Once the goods
- * left, changing or clearing a number the customer could read says why (3 to 500).
+ * left, changing or clearing a number the customer could read says why (3 to 500) — a parcel's or the shipment's own (os-fx3).
  */
 export const PARCEL_TRACKING_REFUSALS = ['PARCEL_LABELLED', 'NOT_PACKED'] as const
 export type ParcelTrackingRefusalCode = (typeof PARCEL_TRACKING_REFUSALS)[number]
@@ -323,6 +323,18 @@ export function parcelTrackingRefusal(status: ShipmentStatus, parcel: OwnTranspo
 /** A number the customer could read (the goods left) changes or is cleared: the command says why. */
 export const parcelReasonNeeded = (status: ShipmentStatus, before: string | null, after: string | null): boolean =>
   (status === 'SHIPPED' || status === 'DELIVERED' || status === 'RETURNED') && before !== null && before !== after
+
+// B-OS-022 (os-fx3): "required when ANY number the customer could see changes or is cleared after the goods left" — the shipment's own
+// consignment number (Shipment.manualTrackingNumber: the portal and the tracking page show it) as well as a parcel's, by the same rule.
+/** A number before → after in one tracking command. */
+export interface SeenNumberChange {
+  readonly before: string | null
+  readonly after: string | null
+}
+
+/** Whether the tracking command says why: the consignment number or any parcel's number the customer could read changes or is cleared. */
+export const seenNumbersReasonNeeded = (status: ShipmentStatus, change: { readonly consignment?: SeenNumberChange | null | undefined; readonly parcels?: readonly SeenNumberChange[] | undefined }): boolean =>
+  (change.consignment ? parcelReasonNeeded(status, change.consignment.before, change.consignment.after) : false) || (change.parcels ?? []).some((parcel) => parcelReasonNeeded(status, parcel.before, parcel.after))
 
 /** The reason given for it: 3 to 500 characters (a 400 at body/reason). */
 export function parcelReasonProblems(reason: string | null | undefined): Issue[] {

@@ -14,6 +14,7 @@ import {
 } from './rules'
 import { etaProblems, etaRefusal, hasCarrierLabel, overrideReasonProblems } from './rules' // B-OS-015, B-OS-016
 import { PARCEL_TRACKING_WORDS, parcelReasonNeeded, parcelReasonProblems, parcelTrackingProblems, parcelTrackingRefusal } from './rules' // B-OS-022
+import { seenNumbersReasonNeeded } from './rules' // B-OS-022 (os-fx3)
 
 const facts = (over: Partial<OwnTransportFacts> = {}): OwnTransportFacts => ({ status: 'PACKED', transportBy: 'CARRIER', manualTrackingNumber: null, parcels: [{ trackingNumber: null, providerId: null }], liveDdts: 0, ...over })
 const real = { trackingNumber: 'FKABC', providerId: 'fk-1:1' }
@@ -175,6 +176,22 @@ describe('a parcel’s number typed by hand (B-OS-022)', () => {
     expect(parcelReasonProblems(' ok ').map((issue) => issue.path)).toEqual(['body/reason'])
     expect(parcelReasonProblems(undefined)).toHaveLength(1)
     expect(parcelReasonProblems('x'.repeat(501))).toHaveLength(1)
+  })
+
+  it('os-fx3: the shipment’s own consignment number the customer could read asks the same reason as a parcel’s', () => {
+    // After the goods left: the consignment number changed or cleared says why; typed for the first time, or the same again, does not.
+    expect(seenNumbersReasonNeeded('SHIPPED', { consignment: { before: 'AWB-1', after: 'AWB-2' } })).toBe(true)
+    expect(seenNumbersReasonNeeded('RETURNED', { consignment: { before: 'AWB-1', after: null } })).toBe(true)
+    expect(seenNumbersReasonNeeded('SHIPPED', { consignment: { before: null, after: 'AWB-1' } })).toBe(false)
+    expect(seenNumbersReasonNeeded('DELIVERED', { consignment: { before: 'AWB-1', after: 'AWB-1' } })).toBe(false)
+    // Before the goods left the customer read no number: nothing asks why.
+    expect(seenNumbersReasonNeeded('PACKED', { consignment: { before: 'AWB-1', after: 'AWB-2' }, parcels: [{ before: 'P-1', after: null }] })).toBe(false)
+    // Any one number asks it: a parcel's alone, with the consignment number unchanged.
+    expect(seenNumbersReasonNeeded('SHIPPED', { consignment: { before: 'AWB-1', after: 'AWB-1' }, parcels: [{ before: null, after: 'P-1' }, { before: 'P-2', after: 'P-3' }] })).toBe(true)
+    expect(seenNumbersReasonNeeded('SHIPPED', { parcels: [] })).toBe(false)
+    expect(seenNumbersReasonNeeded('SHIPPED', { consignment: null })).toBe(false)
+    // The same words and the same field as a parcel's (body/reason, 3 to 500).
+    expect(parcelReasonProblems('no').map((issue) => issue.path)).toEqual(['body/reason'])
   })
 })
 // ---- end B-OS-022
