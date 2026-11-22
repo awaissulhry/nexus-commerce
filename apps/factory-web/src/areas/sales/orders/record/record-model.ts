@@ -36,6 +36,7 @@ import type { PromiseInput } from '../model' // F-OO-142: the promise dialog's i
 import type { NewWorkOrderModel, WorkOrdersListActions } from '../../../production/work-orders/list-model'
 import type { ProductionCan } from '../../../production/_shared/model'
 import type { JoinableRow } from './shipments/model' // F-OP-122
+import type { RowActId } from './shipments/doors' // F-OS-202
 import type { Deliveries } from './shipments/delivered/api' // F-OS-101: the deliveries read, drawn in each Shipments row
 import type { Bench } from '../../../warehouse/shipments/cartons/api' // F-OS-103: Warehouse's cartons read, the Parcels (n) fold
 // F-OP-113: the work-order rows' acts in place (lib/production/work-order-acts, mounted by use-production-acts).
@@ -57,6 +58,9 @@ import type { OrderIssues } from './production/api' // F-PT-103: the order's ask
 import type { StyleView } from '../../../products/styles/api' // F-PT-401: the order's styles (What we make it to)
 import type { ReceiptActions, ReceiptModel } from './production/receipt' // F-PT-304
 import type { ShortageLine } from '../../../purchasing/requests/ask/model' // F-PT-304
+
+/** F-OS-204: a notice's words — the order page's catalogue, or the Shipments tab's own (`order-shipments`, L11). */
+export type NoticeWords = Phrase & { readonly ns?: 'order-shipments' }
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -297,7 +301,8 @@ export interface OrderRecordModel {
   /** Someone changed the order while a dialog holds typed work: "Changed at 10:42 · Reload". */
   /** F-SA-239: the parts that changed under typed work (their last change names who: the order read's `lastChange`). */
   changed: { at: string; parts?: readonly string[]; by?: string | null } | null
-  notice: { tone: 'success' | 'warning' | 'danger' | 'info'; words: Phrase; /* F-OP-121: a door the notice offers (Pack and ship it in Warehouse ›) */ door?: { href: string; words: Phrase } } | null
+  // F-OS-204: + the words of another catalogue (the Shipments tab's `order-shipments`) and, where the customer sees it, what they were told.
+  notice: { tone: 'success' | 'warning' | 'danger' | 'info'; words: NoticeWords; /* F-OP-121: a door the notice offers (Pack and ship it in Warehouse ›) */ door?: { href: string; words: NoticeWords }; /* F-OS-204 */ told?: NoticeWords } | null
   busy: boolean
   dialog: RecordDialog | null
   /** A refused write while its dialog is open: said inside the dialog (what was typed stays). */
@@ -370,8 +375,8 @@ export interface OrderRecordModel {
   askBuyers?: { readonly element: ReactNode; readonly asked: ReadonlyMap<string, string> } | null
   /** F-SA-237: the order's files (the Files tab; the same read as the thread's Files window); absent: not read here. */
   files?: OrderFilesModel | null
-  /** F-OP-119: the tracking dialog of the one shipment opened on Shipments (its container: use-shipments-acts); null: none open. */
-  shipmentTracking?: ReactNode | null
+  /** F-OP-119 → F-OS-201: the one shipment window opened on Shipments (its container: use-shipments-acts); null: none open. */
+  shipmentDoor?: ReactNode | null
   /** F-OP-121: Warehouse's New shipment, opened in place (its container). */
   newShipment?: ReactNode | null
   /** F-OP-122: the customer's DRAFT shipments (same site and address) this order may join; null: not read or not offered. */
@@ -483,7 +488,7 @@ export interface OrderRecordActions {
   /** F-OP-123: open "Record a shipment made elsewhere…" (⋯ Next steps, the Shipments card head). */
   onRecordElsewhere?: () => void
   /** F-OS-101: the Shipments tab's reads — the deliveries again; a row's Parcels (n) opened (its cartons read once); the proof's image. */
-  shipmentsTab?: { readonly onRetryDeliveries?: () => void; readonly onOpenParcels?: (shipmentId: string) => void; readonly onDownloadProof?: (shipmentId: string) => void }
+  shipmentsTab?: { readonly onRetryDeliveries?: () => void; readonly onOpenParcels?: (shipmentId: string) => void; readonly onDownloadProof?: (shipmentId: string) => void; /* F-OS-202: a row ⋯ item opens its Warehouse window */ readonly onAct?: (shipmentId: string, act: RowActId, holdId?: string) => void }
   /** F-OP-111: split the parts off into new orders (the dialog's parts as typed, the optional reason). */
   onSplit?: (input: { parts: readonly SplitPartDraft[]; reason: string }) => void
   /** B-W2b-180 (design sales.orders conn "Portal › Orders & tracking"): open the order in the customer's portal, read-only. */

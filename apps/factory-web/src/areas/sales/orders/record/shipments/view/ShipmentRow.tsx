@@ -16,6 +16,11 @@ import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { DiscussDoor } from '../../view/Discuss'
 import { LineMenuButton } from '../../view/LineMenu'
 import type { Chip, DateLine, RowModel } from '../rows'
+// F-OS-202: the row ⋯ by state.
+import type { MenuItemDef } from '@nexus/ui/components'
+import type { DeliveryRow } from '../delivered/api'
+import { rowActsOf, type RowAct, type RowActGroup } from '../doors'
+import type { Say } from './say'
 import type { ShipmentRow } from '../where'
 import { copyLinkTo, shipmentHref, shipmentTabHref } from './hrefs'
 import { ParcelsFold } from './ParcelsFold'
@@ -31,10 +36,11 @@ import { useShipSay } from './say'
  * Its anchor `about-Shipment-<id>` (the dock's "Show on the page"). Draws its model (shipments/rows.ts); reads nothing — the Parcels
  * (n) fold asks the container to read the cartons once it opens.
  */
-export function ShipmentRowView({ row, view, order, model, actions }: { row: ShipmentRow; view: RowModel; order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+export function ShipmentRowView({ row, view, delivery, order, model, actions }: { row: ShipmentRow; view: RowModel; /* F-OS-202 */ delivery: DeliveryRow | null; order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('order-shipments')
   const o = useT('orders')
   const depth = useT('warehouse-shipments-depth')
+  const say = useShipSay() // F-OS-202
   const [fold, setFold] = useState(false)
   const [bySize, setBySize] = useState(false)
   const href = shipmentHref(model.prefix, order.companyId, view)
@@ -76,14 +82,12 @@ export function ShipmentRowView({ row, view, order, model, actions }: { row: Shi
         ))}
       </div>
       <div className="fw-os-c-o" role="cell">
-        {/* W1: the row's read doors; W2 adds its acts by state (Warehouse's own dialogs, in place). */}
-        <LineMenuButton
-          label={t('ships.row.more', { number: view.number })}
-          items={[
-            { id: 'open', label: t('ships.carries.notRead'), href },
-            { id: 'copy', label: t('ships.row.copyLink'), onSelect: () => copyLinkTo(view.anchor) },
-          ]}
-        />
+        {/* F-OS-202: the row's acts by state (each Warehouse's own window, in place; hidden without the right, held only by state),
+            then its read doors. */}
+        <LineMenuButton label={t('ships.row.more', { number: view.number })} items={rowMenuOf(rowActsOf(row, order.id, delivery), say, (act) => actions?.shipmentsTab?.onAct?.(view.id, act.id, act.holdId), [
+          { id: 'open', label: t('ships.carries.notRead'), href },
+          { id: 'copy', label: t('ships.row.copyLink'), onSelect: () => copyLinkTo(view.anchor) },
+        ])} />
       </div>
       <div className="fw-os-c-f" role="cell">
         {fold && view.fold !== null ? <ParcelsFold row={row} order={order} part={model.shipmentParcels?.[view.id] ?? null} onRetry={() => actions?.shipmentsTab?.onOpenParcels?.(view.id)} /> : null}
@@ -416,3 +420,28 @@ function CopyNumber({ text }: { text: string }) {
     </Button>
   )
 }
+
+// ── F-OS-202 (10-design §5 "Row ⋯"): the acts in their groups (a rule between groups), each held item with its words; the read doors last ──
+const GROUPS: readonly RowActGroup[] = ['garments', 'travel', 'hold', 'arrive', 'danger']
+
+function rowMenuOf(acts: readonly RowAct[], say: Say, run: (act: RowAct) => void, doors: readonly MenuItemDef[]): MenuItemDef[] {
+  const items: MenuItemDef[] = []
+  for (const group of GROUPS) {
+    const own = acts.filter((entry) => entry.group === group)
+    if (own.length === 0) continue
+    if (items.length > 0) items.push({ id: `rule-${group}`, separator: true })
+    for (const entry of own) {
+      items.push({
+        id: entry.holdId ? `${entry.id}-${entry.holdId}` : entry.id,
+        label: say(entry.label),
+        ...(entry.group === 'danger' ? { tone: 'danger' as const } : {}),
+        disabled: !!entry.held,
+        description: entry.held ? say(entry.held) : undefined,
+        onSelect: entry.held ? undefined : () => run(entry),
+      })
+    }
+  }
+  if (items.length > 0) items.push({ id: 'rule-doors', separator: true })
+  return [...items, ...doors]
+}
+// ── end F-OS-202 ──

@@ -13,6 +13,7 @@ import { actsOnShipments, carrierWords, hasLeft, isFinal, isWideTab, nextStep, o
 // F-OP-130 (order page N6, R-5): every order the shipment carries.
 import { orderWords, shipmentOrders } from '../../model'
 import { DEPTH_NS } from '../../queue/shared/depth'
+import { DOOR_NS } from '../../queue/shared/door-words' // F-OS-203
 // ---- B-TH-264: the shipment on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
@@ -50,7 +51,7 @@ export type { ShipmentRecordActions, ShipmentRecordModel } from '../record-model
 // view shows of it.
 export function ShipmentRecordView({ model, actions, thread, printThread, trackingLink, depth }: { model: ShipmentRecordModel; actions?: ShipmentRecordActions; thread?: ReactNode; printThread?: ReactNode; trackingLink?: ReactNode; depth?: ShipmentDepthSlots }) {
   return (
-    <WithMessages namespaces={['shipments', 'lists', 'records', /* F-OP-130 */ DEPTH_NS]}>
+    <WithMessages namespaces={['shipments', 'lists', 'records', /* F-OP-130 */ DEPTH_NS, DOOR_NS /* F-OS-203 */]}>
       <ShipmentRecord model={model} actions={actions} thread={thread} printThread={printThread} trackingLink={trackingLink} depth={depth} />
     </WithMessages>
   )

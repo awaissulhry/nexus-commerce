@@ -527,8 +527,9 @@ export function issueDdt(api: ApiClient, shipmentId: string, body: DdtRequest, i
   return api.post(`/shipping/shipments/${enc(shipmentId)}/ddt`, { body, schema: issueAnswerSchema, idempotencyKey })
 }
 
-export function shipShipment(api: ApiClient, shipmentId: string, version: number): Promise<Shipment> {
-  return api.post(`/shipping/shipments/${enc(shipmentId)}/ship`, { body: { version }, schema: oneShipment }).then((answer) => answer.shipment)
+// F-OS-203 (B-OS-014): + the time the goods really left and why, when it is not now (record/hand-over.ts handOverBody).
+export function shipShipment(api: ApiClient, shipmentId: string, version: number, at: { readonly shippedAt?: string; readonly reason?: string } = {}): Promise<Shipment> {
+  return api.post(`/shipping/shipments/${enc(shipmentId)}/ship`, { body: { version, ...at }, schema: oneShipment }).then((answer) => answer.shipment)
 }
 
 const ddtRowSchema = z.object({ id: z.string(), number: z.string(), documentDate: z.string(), status: z.enum(['LIVE', 'CANCELLED']), issuedAt: instant, cancelledAt: instant.nullable(), fileId: z.string().nullable() })

@@ -93,7 +93,7 @@ export function ShipmentsSection({ order, model, actions, where }: { order: Orde
             </span>
           </div>
           {shown.rows.map((row) => (
-            <ShipmentRowView key={row.id} row={row} view={rowOf(row, order, byId.get(row.id) ?? null)} order={order} model={model} actions={actions} />
+            <ShipmentRowView key={row.id} row={row} view={rowOf(row, order, byId.get(row.id) ?? null)} delivery={byId.get(row.id) ?? null} order={order} model={model} actions={actions} />
           ))}
         </div>
       ) : (

@@ -492,6 +492,8 @@ export function writeProblem(error: unknown): WriteProblem {
   if (error.kind === 'conflict') {
     const moved = error.issues.some((issue) => issuePath(issue).split(/[./]/).includes('version'))
     if (moved) return { key: 'problem.write.moved', reload: true }
+    // F-OS-203 (B-OS-017, L13): no DDT is issued while the shipment travels without one.
+    if (error.issues.some((issue) => issuePath(issue) === 'refusal/DDT_NOT_NEEDED')) return { key: 'problem.write.ddtNotNeeded', reload: true }
     return { key: 'problem.write.state', reload: true, detail: error.message || first?.message || null }
   }
   if (error.kind === 'invalid') {

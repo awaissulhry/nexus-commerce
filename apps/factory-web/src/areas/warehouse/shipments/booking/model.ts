@@ -1,4 +1,5 @@
 import { MANUAL_EVENT_STATUSES, OWN_TRANSPORT_LIMITS, OWN_TRANSPORT_REFUSALS } from '@nexus/factory-domain/shipping/own-transport/rules'
+import { ETA_LIMITS, ETA_REFUSALS, OVERRIDE_REASON } from '@nexus/factory-domain/shipping/own-transport/rules' // F-OS-203 (B-OS-015, B-OS-016)
 // F-OP-135: the typed link's rule, the API's own.
 import { TRACKING_URL_PATTERN } from '@nexus/factory-domain/shipping/own-transport/rules'
 import { REPRINT_REASON_MAX, REPRINT_REASON_MIN, REPRINT_REFUSALS } from '@nexus/factory-domain/shipping/reprint/rules'
@@ -12,12 +13,15 @@ import type { CheckProblem, LabelCheck, LabelJob, LabelJobs, ManualStatus, Repri
  */
 
 export { MANUAL_EVENT_STATUSES, OWN_TRANSPORT_LIMITS, OWN_TRANSPORT_REFUSALS, REPRINT_REASON_MAX, REPRINT_REASON_MIN, REPRINT_REFUSALS }
+export { ETA_REFUSALS } // F-OS-203
 
 export type TransportDialog =
   | null
   | { readonly kind: 'arrange'; readonly mode: TransportMode; readonly carrierName: string; readonly trackingNumber: string }
   | { readonly kind: 'tracking'; readonly text: string; /* F-OP-135: the link typed beside it (optional, https) */ readonly link?: string }
-  | { readonly kind: 'status'; readonly status: ManualStatus | null; readonly occurredAt: string | null; readonly description: string; readonly location: string }
+  | { readonly kind: 'status'; readonly status: ManualStatus | null; readonly occurredAt: string | null; readonly description: string; readonly location: string; /* F-OS-203 (B-OS-015): why, over a carrier's labels */ readonly reason?: string }
+  // F-OS-203 (B-OS-016): the expected arrival typed by hand (a day; empty clears it) and why (optional).
+  | { readonly kind: 'eta'; readonly day: string; readonly reason: string }
 
 export interface TransportModel {
   readonly transport: Read<Transport>
@@ -37,6 +41,8 @@ export interface TransportActions {
   onArrange?: () => void
   onTracking?: () => void
   onStatus?: () => void
+  /** F-OS-203 (B-OS-016): save the expected arrival typed by hand. */
+  onEta?: () => void
 }
 
 /** A refusal the API sent with `may.*` (the reason a change is held), in this step's words. */
@@ -106,8 +112,60 @@ export function statusProblem(dialog: Extract<TransportDialog, { kind: 'status' 
   }
   if (dialog.description.trim().length > OWN_TRANSPORT_LIMITS.description) return words('transport.form.tooLong', { max: OWN_TRANSPORT_LIMITS.description })
   if (dialog.location.trim().length > OWN_TRANSPORT_LIMITS.location) return words('transport.form.tooLong', { max: OWN_TRANSPORT_LIMITS.location })
+  // F-OS-203 (B-OS-015, Owner D5): delivered or came back marked by hand over a carrier's labels says why (3 to 500 characters).
+  if (overridesLabels(dialog, transport)) {
+    const reason = (dialog.reason ?? '').trim()
+    if (reason.length < OVERRIDE_REASON.min) return words('door.status.why', { min: OVERRIDE_REASON.min })
+    if (reason.length > OVERRIDE_REASON.max) return words('transport.form.tooLong', { max: OVERRIDE_REASON.max })
+  }
   return null
 }
+
+// ---- F-OS-203 (order SHIPMENTS tab; B-OS-015, B-OS-016) --------------------------------------------------------------------------
+/** Delivered or came back typed over a carrier's labels: the carrier's tracking moves it, so a person says why they know better. */
+export const overridesLabels = (dialog: Pick<Extract<TransportDialog, { kind: 'status' }>, 'status'>, transport: Pick<Transport, 'labels'>): boolean => transport.labels.carrier > 0 && (dialog.status === 'DELIVERED' || dialog.status === 'RETURNED')
+
+/** The typed status's body: the reason only where the labels need it (kept as the event's words). */
+export function statusBody(dialog: Extract<TransportDialog, { kind: 'status' }>, transport: Transport, status: ManualStatus): { version: number; status: ManualStatus; occurredAt?: string; description: string | null; location: string | null; reason?: string } {
+  const reason = (dialog.reason ?? '').trim()
+  return {
+    version: transport.shipment.version,
+    status,
+    ...(dialog.occurredAt ? { occurredAt: new Date(dialog.occurredAt).toISOString() } : {}),
+    description: dialog.description.trim() || null,
+    location: dialog.location.trim() || null,
+    ...(overridesLabels(dialog, transport) && reason !== '' ? { reason } : {}),
+  }
+}
+
+/** What stops the expected arrival: a day (or empty: cleared), not before the goods left, at most a year ahead; why at most 500. */
+export function etaProblem(dialog: Extract<TransportDialog, { kind: 'eta' }>, transport: Pick<Transport, 'shipment'>, now: Date = new Date()): Words | null {
+  if (dialog.reason.trim().length > ETA_LIMITS.reasonMax) return words('transport.form.tooLong', { max: ETA_LIMITS.reasonMax })
+  if (dialog.day === '') return transport.shipment.expectedDeliveryAt ? null : words('door.eta.pickDay')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dialog.day)) return words('door.eta.notADay')
+  const at = Date.parse(`${dialog.day}T12:00:00Z`)
+  if (transport.shipment.shippedAt && at < Date.parse(transport.shipment.shippedAt) - 86_400_000) return words('door.eta.beforeLeft')
+  if (at > now.getTime() + ETA_LIMITS.aheadDays * 86_400_000) return words('door.eta.tooFar')
+  return null
+}
+
+/** The expected arrival's body: the day at noon Rome-safe (UTC noon keeps the day in every zone), or null to clear it. */
+export const etaBody = (dialog: Extract<TransportDialog, { kind: 'eta' }>, transport: Pick<Transport, 'shipment'>): { version: number; expectedDeliveryAt: string | null; reason?: string } => {
+  const reason = dialog.reason.trim()
+  return { version: transport.shipment.version, expectedDeliveryAt: dialog.day === '' ? null : `${dialog.day}T12:00:00.000Z`, ...(reason !== '' ? { reason } : {}) }
+}
+
+/** The expected arrival's dialog as it opens: the day the shipment has now. */
+export const etaDialogOf = (transport: Pick<Transport, 'shipment'>): Extract<TransportDialog, { kind: 'eta' }> => ({ kind: 'eta', day: transport.shipment.expectedDeliveryAt ? transport.shipment.expectedDeliveryAt.slice(0, 10) : '', reason: '' })
+
+/** An expected-arrival refusal (B-OS-016) in the lane's words. */
+export const etaHeld = (eta: Transport['may']['eta'], can: boolean): Words | null => {
+  if (!can) return words('transport.held.noManage')
+  if (!eta) return words('transport.held.notNow')
+  if (!eta.allowed) return eta.refusal ? words(`door.eta.refusal.${eta.refusal.code}`) : words('transport.held.notNow')
+  return null
+}
+// ---- end F-OS-203
 
 /** A check problem in words: its code, the parcel, the carrier's limit (the first missing field of an address by name). */
 export function checkProblemWords(problem: CheckProblem, carrier: string): Words {

@@ -35,7 +35,7 @@
     "PACKED": "Imballata",
     "SHIPPED": "Spedita",
     "DELIVERED": "Consegnata",
-    "RETURNED": "Resa",
+    "RETURNED": "Rientrata",
     "CANCELLED": "Annullata"
   },
   "risk": {
@@ -70,7 +70,7 @@
     "OUT_FOR_DELIVERY": "In consegna",
     "DELIVERED": "Consegnata",
     "EXCEPTION": "Un problema",
-    "RETURNED": "Resa"
+    "RETURNED": "Rientrata"
   },
   "printState": {
     "QUEUED": "In coda",
@@ -552,7 +552,7 @@
       "trackingCleared": "Il numero di tracciamento è cancellato.",
       "status": "Lo stato è salvato.",
       "delivered": "Segnata come consegnata.",
-      "returned": "Segnata come resa."
+      "returned": "Segnata come rientrata."
     },
     "held": {
       "noManage": "Serve il permesso di gestire le spedizioni.",
@@ -682,7 +682,7 @@
     },
     "refusal": {
       "NOT_A_LABEL": "Non è un'etichetta (una stampa PDF).",
-      "GOODS_GONE": "La merce è stata consegnata, resa o annullata.",
+      "GOODS_GONE": "La merce è stata consegnata, rientrata o annullata.",
       "LABEL_VOIDED": "L'etichetta è stata annullata o sostituita nel frattempo.",
       "MARKS_CHANGED": "Il collo è stato rinumerato nel frattempo: stampa di nuovo il segnacolli alla postazione di imballo.",
       "REASON": "Il motivo deve avere da 3 a 200 caratteri su una riga.",
@@ -821,7 +821,7 @@
     "shippedAt": "Partita",
     "expectedAt": "Prevista",
     "deliveredAt": "Consegnata",
-    "returnedAt": "Resa",
+    "returnedAt": "Rientrata",
     "signedBy": "Firmata da",
     "signedAt": "Firmata il",
     "image": "Immagine o scansione",

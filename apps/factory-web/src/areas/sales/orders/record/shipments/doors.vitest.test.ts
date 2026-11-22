@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { canOf, order } from '../../_demo/fixtures'
 import { bandStepOf, mayCreateShipment, readyToShipOf } from '../../model'
 import { createDoorOf, createHeldWords, elsewhereDoorOf } from './doors'
+import { rowActsOf } from './doors' // F-OS-202
 import { headOf } from './head'
-import { whereOf, type WhereModel } from './where'
+import { whereOf, type ShipmentRow, type WhereModel } from './where'
 
 /**
  * F-OS-101 / F-OS-102 (order SHIPMENTS tab; plan D2; 18-lead-settles L9, L10) — the tab's doors, pure: HIDDEN without the right
@@ -92,3 +93,70 @@ describe('the tab\'s one answer (10-design §3)', () => {
     expect(headOf(order('CONFIRMED'), where({}, { state: 'pending' }), null)).toEqual({ tone: 'neutral', parts: [{ key: 'where.state.pending' }] })
   })
 })
+
+// ---- F-OS-202 (10-design §5 "Row ⋯"; plan D2, D3, D5, D6): a row's acts by state — hidden without the right, held only by state ----
+describe('F-OS-202: the row ⋯ by the shipment\'s state', () => {
+  const ALL = { manage: true, pack: true, ddt: true, holdsManage: true, holdsRelease: true }
+  const ORDER_ID = 'so-2'
+  const row = (status: string, over: Partial<ShipmentRow> = {}): ShipmentRow => ({ id: 'sh-1', number: 'SEED-SH-0012', status, shippedAt: null, deliveredAt: null, transportBy: 'CARRIER', origin: 'NEXUS', ddt: null, ddtRequired: true, may: ALL, orders: [{ id: ORDER_ID, number: 'SEED-SO-0002', customerRef: null }], ...over })
+  const ids = (acts: ReturnType<typeof rowActsOf>) => acts.map((entry) => entry.id)
+
+  it('no `may` (an older answer) or no right: nothing is offered (never a held item for a right)', () => {
+    expect(rowActsOf(row('DRAFT', { may: undefined }), ORDER_ID, null)).toEqual([])
+    expect(rowActsOf(row('DRAFT', { may: { manage: false, pack: false, ddt: false, holdsManage: false, holdsRelease: false } }), ORDER_ID, null)).toEqual([])
+  })
+
+  it('DRAFT: split, move, merge; take this order off only on a shared draft not made for it; how it travels; holds; travels without a DDT; cancel', () => {
+    expect(ids(rowActsOf(row('DRAFT'), ORDER_ID, null))).toEqual(['split', 'move', 'merge', 'arrange', 'ddtOff', 'placeHold', 'cancel'])
+    const shared = row('DRAFT', { orders: [{ id: 'so-3', number: 'SEED-SO-0003', customerRef: null }, { id: ORDER_ID, number: 'SEED-SO-0002', customerRef: null }] })
+    expect(ids(rowActsOf(shared, ORDER_ID, null))).toContain('takeOff')
+    // The order it was made for never comes off it (Split… or Move…, then cancel).
+    expect(ids(rowActsOf(shared, 'so-3', null))).not.toContain('takeOff')
+  })
+
+  it('PACKED: split / move / merge held with words; unpack (shipping.pack) held by a live DDT; put back the DDT once it travels without', () => {
+    const acts = rowActsOf(row('PACKED', { ddt: { number: '151/2026', date: '2026-11-18' } }), ORDER_ID, null)
+    expect(acts.find((entry) => entry.id === 'split')?.held).toEqual({ key: 'ships.act.held.splitPacked' })
+    expect(acts.find((entry) => entry.id === 'merge')?.held).toEqual({ key: 'ships.act.held.movePacked' })
+    expect(acts.find((entry) => entry.id === 'unpack')?.held).toEqual({ key: 'ships.act.held.ddtLive' })
+    expect(acts.find((entry) => entry.id === 'ddtOff')?.held).toEqual({ key: 'ships.act.held.ddtLive' })
+    expect(acts.find((entry) => entry.id === 'cancel')?.held).toEqual({ key: 'ships.act.held.ddtLive' })
+    expect(ids(rowActsOf(row('PACKED', { ddtRequired: false }), ORDER_ID, null))).toContain('ddtBack')
+    // Made elsewhere: its own choice — no DDT door, no how it travels.
+    expect(ids(rowActsOf(row('PACKED', { origin: 'ELSEWHERE' }), ORDER_ID, null))).not.toContain('ddtOff')
+  })
+
+  it('a hold in force is released by whom may: a money or system hold by finance (holds.release), a person\'s by the warehouse', () => {
+    const held = row('PACKED', { holds: [{ id: 'h1', reason: 'BALANCE_UNPAID', words: null, bySystem: true, placedAt: '2026-11-19T08:00:00.000Z' }, { id: 'h2', reason: 'QUALITY', words: null, bySystem: false, placedAt: '2026-11-20T08:00:00.000Z' }] })
+    expect(rowActsOf(held, ORDER_ID, null).filter((entry) => entry.id === 'releaseHold').map((entry) => entry.holdId)).toEqual(['h1', 'h2'])
+    const warehouse = { ...ALL, holdsRelease: false }
+    expect(rowActsOf({ ...held, may: warehouse }, ORDER_ID, null).filter((entry) => entry.id === 'releaseHold').map((entry) => entry.holdId)).toEqual(['h2'])
+    expect(rowActsOf(held, ORDER_ID, null).find((entry) => entry.holdId === 'h1')?.label).toEqual({ key: 'ships.act.releaseHold', words: { reason: { ns: 'depth', key: 'holdReason.BALANCE_UNPAID' } } })
+  })
+
+  it('SHIPPED: Mark delivered / Mark returned (D5; L1), expected arrival held over a carrier\'s labels, Resolve with an open problem', () => {
+    expect(ids(rowActsOf(row('SHIPPED'), ORDER_ID, null))).toEqual(['delivered', 'returned', 'eta'])
+    const labelled = row('SHIPPED', { parcels: [{ id: 'p1', seq: 1, number: 'BRT-1', url: null, source: 'LABEL', live: true }] })
+    expect(rowActsOf(labelled, ORDER_ID, { openProblems: 1, pod: null, returned: null }).map((entry) => [entry.id, entry.held?.key ?? null])).toEqual([
+      ['delivered', null],
+      ['returned', null],
+      ['eta', 'ships.act.held.carrierFed'],
+      ['resolve', null],
+    ])
+  })
+
+  it('DELIVERED: record the proof (held once every part is kept); RETURNED: receive the garments back (held once received); CANCELLED: nothing', () => {
+    expect(ids(rowActsOf(row('DELIVERED'), ORDER_ID, null))).toEqual(['proof'])
+    expect(rowActsOf(row('DELIVERED'), ORDER_ID, { openProblems: 0, pod: { signedBy: 'M. Rossi', signedAt: '2026-11-14T09:30:00.000Z', image: true }, returned: null })[0]?.held).toEqual({ key: 'ships.act.held.proofKept' })
+    expect(rowActsOf(row('RETURNED'), ORDER_ID, { openProblems: 0, pod: null, returned: { at: null, received: true } })[0]).toMatchObject({ id: 'receiveBack', held: { key: 'ships.act.held.received' } })
+    expect(rowActsOf(row('CANCELLED'), ORDER_ID, null)).toEqual([])
+  })
+
+  it('the same words as Warehouse where the act is the same (never a second word for one thing)', () => {
+    const acts = rowActsOf(row('DRAFT'), ORDER_ID, null)
+    expect(acts.find((entry) => entry.id === 'split')?.label).toEqual({ ns: 'depth', key: 'split.menu' })
+    expect(acts.find((entry) => entry.id === 'placeHold')?.label).toEqual({ ns: 'depth', key: 'holds.placeMenu' })
+    expect(acts.find((entry) => entry.id === 'arrange')?.label).toEqual({ ns: 'depth', key: 'transport.change' })
+  })
+})
+// ---- end F-OS-202

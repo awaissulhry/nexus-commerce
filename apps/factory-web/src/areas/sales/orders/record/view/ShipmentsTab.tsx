@@ -41,7 +41,7 @@ export function ShipmentsTab({ order, model, actions }: { order: Order; model: O
         <ShipmentsHead order={order} model={model} where={where} />
         <WhereSection order={order} model={model} actions={actions} where={where} />
         <ShipmentsSection order={order} model={model} actions={actions} where={where} />
-        {model.shipmentTracking /* F-OP-119: the tracking dialog of the shipment opened (its container) */}
+        {model.shipmentDoor /* F-OP-119 → F-OS-201: the one shipment window opened from its row (its container) */}
         {model.newShipment /* F-OP-121: Warehouse's New shipment, opened in place (its container) */}
         {/* F-OP-123: Record a shipment made elsewhere… — its dialog is the page's, mounted once (OrderRecordView, F-OO-111). */}
         <AfterSalesSection order={order} model={model} actions={actions} />

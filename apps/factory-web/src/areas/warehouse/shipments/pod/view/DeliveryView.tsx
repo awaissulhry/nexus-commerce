@@ -41,6 +41,18 @@ function Delivery({ model, actions }: { model: DeliveryModel; actions?: Delivery
   )
 }
 
+// ---- F-OS-201 (order SHIPMENTS tab; 13-backend §7): the two windows alone, for a page that opens them for ONE shipment (its
+// container: useDelivery) — Record the proof… and Resolve the problem…, the same dialogs as the cards below. ----
+export function DeliveryDialogs({ model, actions }: { model: DeliveryModel; actions?: DeliveryActions }) {
+  return (
+    <WithMessages namespaces={DEPTH_NAMESPACES}>
+      {model.dialog?.kind === 'pod' && model.pod.state === 'ready' ? <PodDialog pod={model.pod.value} model={model} actions={actions} /> : null}
+      {model.dialog?.kind === 'resolve' && model.problems.state === 'ready' ? <ResolveDialog read={model.problems.value} model={model} actions={actions} /> : null}
+    </WithMessages>
+  )
+}
+// ---- end F-OS-201
+
 function PodCard({ model, actions }: { model: DeliveryModel; actions?: DeliveryActions }) {
   const { t, say } = useDepthWords()
   const locale = useLocale()
