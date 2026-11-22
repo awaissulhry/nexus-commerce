@@ -379,7 +379,9 @@ describe('F-OF-103: Add files… — the ONE upload, "Where it goes", no "Fiscal
     for (const gone of ['const sendUploads', 'setUploadFiles(', 'requestUpload(api']) expect(docked, gone).not.toContain(gone)
     const container = source('../../../areas/_shared/record-thread/use-order-files.ts')
     expect(container).toContain('const upload = useFileUpload(api, {')
-    expect(container).toContain('onDone: () => {\n      load()\n      input.onUploaded?.()')
+    // F-OF-203 (W2): the order's upload also answers an ask with its files first; the order is read again after it either way.
+    expect(container).toContain('onDone: (result) => {')
+    expect(container).toContain('      load()\n      input.onUploaded?.()\n    },')
     const hook = source('./use-file-upload.ts')
     expect(hook).toContain("if (done.file.status !== 'AVAILABLE') held.push(file.name)")
     expect(source('../../../areas/sales/orders/record/OrderRecord.tsx')).toContain("canUpload: session.permissions.includes('files.upload'),")

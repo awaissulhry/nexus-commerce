@@ -242,3 +242,38 @@ describe('F-OF-301 — one path per job: the dock and the order page act through
     expect(view).toContain('{!model.order && <FileActWindows state={model.acts} actions={actions}')
   })
 })
+
+// ---- T (lead 11-22: "one body, exactly the same in every place"): the customer page's docked order window ------------------------------
+describe('T — the customer page’s docked order: Versions… in the page’s ONE depth, Who can see… names the customer', () => {
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+  const work = read('../../../areas/sales/customers/record/use-customer-work.ts')
+  const page = read('../../../areas/sales/customers/record/CustomerRecord.tsx')
+
+  it('the depth is mounted ONCE in the customer page’s container and drawn once by the page (as on the order page); no handler copied', () => {
+    expect(work.match(/useFileDepth\(\{/g)?.length).toBe(1)
+    expect(work).toContain('onVersions: (fileId) => depthOpen.current(fileId),')
+    expect(work).toContain('depthOpen.current = depth.actions.onOpenVersions')
+    expect(work).toContain('reloadFiles: orderFiles.reload,')
+    expect(page.match(/<DepthDialogs /g)?.length).toBe(1)
+    expect(page).toContain('<DepthDialogs depth={customerDock.depth.model} actions={customerDock.depth.actions} />')
+    for (const copy of ['setFilePriced(', 'useFileActs(', 'restoreVersion(', 'readHistory(', 'shareWithParty(']) expect(work, copy).not.toContain(copy)
+  })
+
+  it('the customer’s name reaches the order container (Who can see… offers "Office and {customer}"; files.manage still decides)', () => {
+    expect(page).toContain('useCustomerDock(partyId, tab, record.party ? partyName(record.party) : null')
+    expect(work).toContain('partyName: customerName,')
+    expect(work).toContain("canShare: session.permissions.includes('files.manage'),")
+    const item: ActItem = { id: 'f1', name: 'Size spec.pdf', version: 4, visibility: ['OFFICE'], versions: 1, versionNo: 1 }
+    const draw = (party: string | null) => textOf(render(createElement(FileActWindows, { state: { window: { kind: 'whoCanSee', items: [item], to: 'OFFICE' }, busy: false, problem: null, notice: null, party } })))
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['record-thread-files-view'])['record-thread-files-view']!)
+      const shared = t('upload.audience.PARTNER', { party: 'Seed Customer One' })
+      expect(textOf(render(createElement(FileActWindows, { state: { window: { kind: 'whoCanSee', items: [item], to: 'OFFICE' }, busy: false, problem: null, notice: null, party: 'Seed Customer One' } }), locale))).toContain(shared)
+    }
+    expect(draw(null)).not.toContain('Seed Customer One')
+    // The body offers Versions… only where the page's depth is (the order page and now the customer page: `versionsHere`).
+    const one = file('spec')
+    expect(orderFileActsOf(one, { orderId: ORDER.id, may: OWNER, readOnly: false, now: NOW, versions: true }).some((act) => act.act === 'versions')).toBe(true)
+    expect(read('../../../areas/_shared/record-thread/use-order-files.ts')).toContain('versionsHere: !!input.onVersions,')
+  })
+})
