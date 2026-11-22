@@ -37,7 +37,13 @@ export function PlanRowView({ row, order, model, actions, say, final }: { row: P
   const locale = useLocale()
   const frame = useRecordFrame()
   const search = useSearchParams()?.toString() ?? ''
-  const [open, setOpen] = useState(row.openAtFirst)
+  // Open while it waits (plan.ts), and while its TD02 waits to be sent by a reader who sends it (the SDI read comes after the row:
+  // the reader's own toggle wins once made).
+  const td02 = row.request ? (depositInvoicesOf(row.request, order.chain.invoices).find((invoice) => invoice.status !== 'DRAFT') ?? null) : null
+  const sendNext = td02 ? model.sdi?.[td02.id]?.value?.state.next.action : undefined
+  const sdiWaits = model.can.issueInvoices && (sendNext === 'SEND' || sendNext === 'SEND_AGAIN')
+  const [toggled, setToggled] = useState<boolean | null>(null)
+  const open = toggled ?? (row.openAtFirst || sdiWaits)
   const busy = model.busy || model.scheduleSteps?.busy ? t('schedule.verbs.held.busy') : null
   const heldOf = (act: PlanAct): string | null => (act.held ? say(act.held) : busy)
   const title = say(row.title)
@@ -99,7 +105,7 @@ export function PlanRowView({ row, order, model, actions, say, final }: { row: P
       {row.alias ? <span id={row.alias} className="fw-om-alias" tabIndex={-1} /> : null}
       <div className="fw-om-pr-g">
         <div className="fw-om-pr-k">
-          {row.unfolds ? <ExpandToggle expanded={open} label={t(open ? 'moneyTab.plan.fold' : 'moneyTab.plan.unfold')} onClick={() => setOpen((now) => !now)} /> : <span className="fw-om-pr-sp" aria-hidden />}
+          {row.unfolds ? <ExpandToggle expanded={open} label={t(open ? 'moneyTab.plan.fold' : 'moneyTab.plan.unfold')} onClick={() => setToggled(!open)} /> : <span className="fw-om-pr-sp" aria-hidden />}
           <span className="fw-om-pr-kt">
             <b>{title}</b>
             <Pill tone={row.pill.tone}>{say(row.pill.word)}</Pill>

@@ -118,16 +118,20 @@ describe('F-OM-103: the row\'s state in words', () => {
 })
 
 describe('F-OM-103 / 104: the acts — hidden without the right, held only by state', () => {
-  it('the owner: Record a payment (its ONE act), Send the page and Waive… in its ⋯; Open for payment on the balance', () => {
+  it('the owner: Send the page while never sent (its ONE act), Record a payment and Waive… in its ⋯; Open for payment on the balance', () => {
     const model = plan(order('CONFIRMED'))
-    expect(acts(model.rows[0]!)).toEqual(['record', 'send', 'waive'])
+    expect(acts(model.rows[0]!)).toEqual(['send', 'record', 'waive'])
+    // Once the page went (or money came): Record a payment is the act, the page again in its ⋯.
+    const sent = plan(withRequests(order('CONFIRMED'), [deposit({ link: SENT_LINK })])).rows[0]!
+    expect(acts(sent)).toEqual(['record', 'send', 'waive'])
+    expect(sent.more.find((entry) => entry.id === 'send')!.label).toEqual({ key: 'moneyTab.plan.act.sendAgain' })
     expect(model.rows[0]!.more.find((entry) => entry.id === 'waive')!.label).toEqual({ key: 'moneyTab.plan.act.waive' })
     expect(acts(model.rows[1]!)).toEqual(['open', 'waive'])
     expect(model.rows[1]!.act).toMatchObject({ id: 'open', held: null, needsDay: false })
   })
 
   it('Finance records and sends but does not waive; Sales (no payments.record, no grain) and Read-only see no money act at all', () => {
-    expect(acts(plan(order('CONFIRMED'), { role: 'finance', stepCan: FINANCE_STEPS }).rows[0]!)).toEqual(['record', 'send'])
+    expect(acts(plan(order('CONFIRMED'), { role: 'finance', stepCan: FINANCE_STEPS }).rows[0]!)).toEqual(['send', 'record'])
     const sales = plan(order('CONFIRMED'), { role: 'sales', stepCan: stepAbilitiesOf(['orders.manage']) })
     expect(acts(sales.rows[0]!)).toEqual([null])
     // Held words for a right are gone (F-OM-104): nothing in any row is held for want of a right.

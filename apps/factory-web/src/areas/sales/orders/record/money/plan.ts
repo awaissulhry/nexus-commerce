@@ -209,7 +209,10 @@ export function planOf(input: {
       // Waive… (the owner, a fresh code): shown ONCE per row (P0-B6); money placed on it holds it (M4-B5).
       if (stepCan?.waive && open && ADVANCE.includes(kind)) acts.push({ id: 'waive', label: word('moneyTab.plan.act.waive'), held: placed > 0 ? word('schedule.verbs.held.partPaid') : null })
     }
-    const firstOf: readonly PlanActId[] = kind === 'EXTRA' && request && !request.link ? ['send', 'record'] : ['record', 'open', 'payInvoice', 'send']
+    // The ONE next act, one rule for every request (the deposit and an extra one alike): Send the page while it was never sent and
+    // nothing is paid on it, else Record a payment; a step without a request: Open for payment, or Record payment… on its invoice.
+    const sendFirst = !!request && request.status === 'OPEN' && !request.link && placed === 0
+    const firstOf: readonly PlanActId[] = sendFirst ? ['send', 'record'] : ['record', 'open', 'payInvoice', 'send']
     const act = firstOf.map((id) => acts.find((entry) => entry.id === id)).find((entry) => !!entry) ?? null
     const fromChange = plan?.fromChange ?? null
     const renamed = step?.byHand?.act === 'RENAME_STEP' ? step.label : null
