@@ -5,7 +5,7 @@ import { Banner } from '@nexus/ui/components'
 import type { Order } from '../../../api'
 import type { OrderRecordModel } from '../../record-model'
 import { moneyHeadOf } from '../head'
-import { sentenceOf, useSay } from './say'
+import { keepNumbers, sentenceOf, useSay } from './say'
 
 /**
  * F-OM-101 (order MONEY tab, 10-design §3) — the tab's one answer, above the five sections (no card, no h2): a DS Banner in the
@@ -19,7 +19,7 @@ export function MoneyHead({ order, model }: { order: Order; model: OrderRecordMo
   const icon = head.reading ? <RefreshCw size={18} aria-hidden /> : head.tone === 'success' ? <CheckCircle2 size={18} aria-hidden /> : head.tone === 'danger' ? <TriangleAlert size={18} aria-hidden /> : head.tone === 'warning' ? <Clock size={18} aria-hidden /> : <Info size={18} aria-hidden />
   const below = [...head.wall, ...(head.closed ? [head.closed] : [])].map(say)
   return (
-    <Banner className="fw-om-head" tone={head.tone} icon={icon} title={sentenceOf(head.parts.map(say))}>
+    <Banner className="fw-om-head" tone={head.tone} icon={icon} title={keepNumbers(sentenceOf(head.parts.map(say))) /* F-OM-fx6 (N11) */}>
       {below.length > 0 ? (
         <span className="fw-om-head-wall">
           <Lock size={13} aria-hidden /> {below.join(' ')}

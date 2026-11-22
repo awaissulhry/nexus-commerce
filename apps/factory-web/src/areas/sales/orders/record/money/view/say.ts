@@ -1,5 +1,6 @@
 'use client'
 
+import { createElement, type ReactNode } from 'react'
 import { formatDate, formatNumber } from '../../../../../../lib/i18n/format'
 import type { Locale } from '../../../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
@@ -14,6 +15,16 @@ import type { MoneyWord } from '../word'
 export function pctOf(value: string | number, locale: Locale): string {
   const number = typeof value === 'number' ? value : Number(value)
   return Number.isFinite(number) ? `${formatNumber(number, locale, { minimumFractionDigits: 0, maximumFractionDigits: 1 })}\u00a0%` : String(value)
+}
+
+/**
+ * F-OM-fx6 (N11): a document or record number ("FT-2026-00004", "SEED-SH-0102") never breaks at its hyphens on a narrow room: each
+ * number in a said line is drawn whole (`.fw-om-num`, nowrap); the rest of the line wraps as before.
+ */
+const NUMBER = /([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)/
+export function keepNumbers(text: string): ReactNode {
+  const parts = text.split(NUMBER)
+  return parts.length === 1 ? text : parts.map((part, at) => (at % 2 === 1 ? createElement('span', { key: at, className: 'fw-om-num' }, part) : part))
 }
 
 /** Says a model's word in the page's language: amounts in the order's currency, days and instants as days, percents, inner words. */

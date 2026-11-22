@@ -19,7 +19,7 @@ import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { LineMenuButton } from '../../view/LineMenu'
 import { PartFailed, Section } from '../../view/production/Kit' // F-OM-101 (L6): the Production kit, in place
 import { invoicesOf, type InvoiceRow } from '../invoices'
-import { useSay, type Say } from './say'
+import { keepNumbers, type Say, useSay } from './say'
 
 /**
  * F-OM-203 (order MONEY tab, 10-design §6) — section 3, Invoices & credit notes (#invoices), in the kit: every bill of this order —
@@ -137,7 +137,7 @@ function InvoiceRowView({ row, order, model, actions, say, words }: { row: Invoi
             {`${invoice.number ?? t('moneyTab.invoices.noNumber')} ›` /* F-OM-fx3 (W-13): the number is a door; F-OM-fx5w (N5) */}
           </Link>
         </span>
-        {sub ? <span className="fw-pt-sub">{sub}</span> : null}
+        {sub ? <span className="fw-pt-sub">{keepNumbers(sub) /* F-OM-fx6 (N11) */}</span> : null}
         {/* F-OP-118: a shared invoice names the other orders it bills (links; the same customer's only), counts the rest. F-OM-fx5w (N4):
             its own row class (the kit's .fw-pt-sub is a block: the words ran into the link). */}
         {row.also ? (

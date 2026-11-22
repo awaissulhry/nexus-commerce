@@ -229,6 +229,8 @@ describe('F-OM-fx5w: the walk\'s gaps in the views (N7, N8, N10)', () => {
     expect(source('./view/TotalsSection.tsx')).toContain("${doorless ? ' is-nd' /* F-OM-fx5w (N10) */ : ''}")
     const css = source('./view/money.css')
     expect(css).toContain('.fw-om-tt.is-np.is-nd:not(.is-nr) { grid-template-columns: minmax(0, 1fr); grid-template-areas: "t" "r" "f"; }')
-    expect(css).toContain('.fw-om-tt.is-nd > .fw-om-facts { display: flex; flex-wrap: wrap; justify-content: space-between; }')
+    // F-OM-fx6 (N12, the re-walk): the facts keep the base grid (equal columns over the whole width), never pushed to the two edges.
+    expect(css).not.toContain('.fw-om-tt.is-nd > .fw-om-facts {')
+    expect(css).toContain('.fw-om-facts { grid-area: f; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));')
   })
 })
