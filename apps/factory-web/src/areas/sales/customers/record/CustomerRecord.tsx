@@ -25,6 +25,7 @@ import { partyName } from '../../../parties/_shared/model'
 import { useCustomerWork, useReacceptOrders, type WorkCan } from './use-customer-work'
 import { CustomerDock, WorkTab, type DockPick } from './view/WorkTab'
 import { useCustomerDock } from './use-customer-work' // F-SA-279: the dock follows the row (`dock=`), All of <customer>
+import { DepthDialogs } from '../../../../record-panels/files/view/DepthParts' // F-OF-301 (T): the docked order's Versions…
 import { workAskAddress, type WorkAsk } from './use-customer-work' // F-CP-104: New order and Import orders in place
 import { priceDifferOf } from './use-customer-work' // F-CP-141: the Money tab's "Prices differ on {count} orders ›"
 import { useAllOfCustomer } from '../../../_shared/record-thread/all-of-customer/use-all-of-customer' // F-SA-279: All of <customer>, read by the page
@@ -89,7 +90,7 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   const tab = record.model.tab
   // ---- F-SA-279: the dock follows the row — a click at once, the keys after 300 ms of rest; `dock=` in the address (a replace: Back
   // leaves the page); the record any row (or a window's row, or a line of All of <customer>) picks, checked against this customer.
-  const customerDock = useCustomerDock(partyId, tab)
+  const customerDock = useCustomerDock(partyId, tab, record.party ? partyName(record.party) : null /* F-OF-303: Who can see… names the customer */)
   const api = useOfficeApi()
   const session = useOfficeSession()
   const onPick = customerDock.onRow
@@ -147,6 +148,8 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   return (
     <>
       {windows /* F-SA-278 */}
+      {/* F-OF-301 (T): the docked order's Versions… — the page's ONE depth window (as on the order page). */}
+      <DepthDialogs depth={customerDock.depth.model} actions={customerDock.depth.actions} />
       <CustomerRecordView model={record.model} actions={record.actions} thread={dock /* F-SA-276 */} threadButton={threadButton /* F-SA-279 */} work={workTab} workCount={work.attention} quotesIncoming={quotesTab /* F-SA-277 */} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} supervisor={record.party && record.model.tab === 'overview' ? <CustomerSupervisor partyId={partyId} name={partyName(record.party)} /> : null} portalPeople={portalPeople} portalEmails={portalEmails} {...doors /* F-CP-104 */} priceDiffer={priceDifferOf(work.prices) /* F-CP-141 */} />
     </>
   )

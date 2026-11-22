@@ -54,3 +54,23 @@ describe('F-OF-204: the floor\'s asks — order, holds, outcomes', () => {
     expect(note).toContain('...(TILE_LOOK[tile.code] ?? PLAIN_LOOK)')
   })
 })
+
+// ---- T.1 (order FILES tab): the tablet's "Files asked" gallery screen (SCR-089-asked) ----
+describe('T.1 — the tablet’s Files asked cases (made up)', () => {
+  it('every case draws in both languages: no key, no "seen", no worker’s name; each outcome said', async () => {
+    const { designScreen } = await import('./fixtures')
+    expect(designScreen.cases.map((item) => item.id)).toEqual(['asked', 'asked-offline', 'asked-sent', 'asked-closed', 'asked-failed'])
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['floor-mywork'])['floor-mywork']!)
+      for (const item of designScreen.cases) {
+        const text = textOf(render(createElement(FilesAskedView, { model: item.model }), locale))
+        expect(text, `${item.id} ${locale}`).not.toMatch(/\basked\.[a-zA-Z]/)
+        expect(text.toLowerCase(), item.id).not.toMatch(/\bseen\b|\bvisto\b/)
+      }
+      const of = (id: string) => textOf(render(createElement(FilesAskedView, { model: designScreen.cases.find((item) => item.id === id)!.model }), locale))
+      expect(of('asked')).toContain(t('asked.title', { count: 2 }))
+      expect(of('asked-offline')).toContain(t('asked.offline'))
+      for (const outcome of ['sent', 'closed', 'failed'] as const) expect(of(`asked-${outcome}`)).toContain(t(`asked.${outcome}`))
+    }
+  })
+})

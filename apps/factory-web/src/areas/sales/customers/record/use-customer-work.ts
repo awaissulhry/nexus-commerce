@@ -25,6 +25,12 @@ import { writeSearch } from '../../../_shared/record-frame/address' // F-OP-211:
 import { useRouter } from 'next/navigation'
 import { useOrderFiles, type OrderFilesHost } from '../../../_shared/record-thread/use-order-files'
 import { orderFileHrefOf } from '../../../_shared/record-thread/order-file-href' // F-OF-101: a block's door "Open on … ›"
+// ---- F-OF-301 (T; lead 11-22 "one body, exactly the same in every place"): the docked order's Versions… — the page's ONE depth
+import { useFileDepth } from '../../../../record-panels/files/use-file-depth'
+import { previewLink } from '../../../../record-panels/files/api'
+import { storeUrl } from '../../../../record-panels/store'
+import { orderFilesOf } from '../../../../lib/record-thread/files-view/model'
+// ---- end F-OF-301
 // ---- end F-CP-111
 
 /**
@@ -546,7 +552,7 @@ export function draftKeptOf(drafts: ReadonlyMap<string, string>, shown: string |
  * the follower, the summary check of an address's record, the drafts left on records, and the message a line of All of <customer>
  * opens its conversation at. Leaving Work or Quotes & incoming drops a record's dock.
  */
-export function useCustomerDock(partyId: string, tab: string) {
+export function useCustomerDock(partyId: string, tab: string, /* F-OF-303: Who can see… offers "Office and {customer}" */ customerName: string | null = null) {
   const api = useOfficeApi()
   const pathname = usePathname()
   const params = useSearchParams()
@@ -630,7 +636,31 @@ export function useCustomerDock(partyId: string, tab: string) {
     canAsk: session.permissions.includes('tasks.manage') && session.permissions.includes('threads.post'), // F-OF-201
     canAskCustomer: session.permissions.includes('partners.tasks.manage'), // F-OF-201
     ...(order ? { hrefOf: (record: { readonly type: string; readonly id: string; readonly label: string }) => orderFileHrefOf(record, { prefix, id: order.id, companyId: order.companyId }) } : {}),
+    // F-OF-301 / F-OF-303 (T): the docked order's card ⋯ opens Versions… in the page's ONE depth (below); Who can see… names this customer
+    onVersions: (fileId) => depthOpen.current(fileId),
+    partyName: customerName,
   })
+  // ---- F-OF-301 (T): the files in depth of the docked order — Versions… (Restore inside) of its own files and its lines', mounted ONCE
+  // on this page as on the order page (OrderRecord.tsx) and drawn once by CustomerRecord; no handler copied, no documents read.
+  const depthOpen = useRef<(fileId: string) => void>(() => undefined)
+  const orderRead = orderFiles.model.read
+  const depthFiles = useMemo(() => (orderRead ? orderFilesOf(orderRead).filter((file) => file.version !== undefined).map((file) => ({ id: file.id, originalName: file.name, contentType: file.contentType, version: file.version! })) : null), [orderRead])
+  const depth = useFileDepth({
+    api,
+    record: { type: 'SalesOrder', id: order?.id ?? '' },
+    files: depthFiles,
+    canUpload: orderFiles.model.may?.upload ?? false,
+    canRead: false,
+    prefix,
+    reloadFiles: orderFiles.reload,
+    // An earlier version (not in the read) opens in a new tab through its preview address; a refusal said once by the dock.
+    openPdf: (fileId) =>
+      void previewLink(api, fileId)
+        .then(({ preview }) => window.open(storeUrl(preview.url), '_blank', 'noopener'))
+        .catch(() => setFilesProblem({ key: 'order.openFailed', at: Date.now() })),
+  })
+  depthOpen.current = depth.actions.onOpenVersions
+  // ---- end F-OF-301
   // News of a file (the reader's own live stream: `file.available`, the file's record named) reads the docked order's set again, coalesced.
   const filesAgain = useCoalesced(() => orderFiles.reload(), 800)
   useLiveBus({ onChange: (change) => change.type === 'file.available' && filesAgain(), onReconnect: filesAgain }, !!order && readsFiles)
@@ -653,6 +683,8 @@ export function useCustomerDock(partyId: string, tab: string) {
     orderFiles: orderFilesHost,
     /** F-CP-111: a file of that set that could not be opened or shared (a `record-thread-files-view` key), said once by the dock. */
     filesProblem,
+    /** F-OF-301 (T): the docked order's Versions… — the page draws its window ONCE (`<DepthDialogs>` in CustomerRecord). */
+    depth,
     /** The record docked now (marked on its row); null: the general conversation or All of <customer>. */
     shown: scope === 'record' ? pick : null,
     /** "Draft kept on SO-…" under the pick. */

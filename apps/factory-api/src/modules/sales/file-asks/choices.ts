@@ -49,13 +49,24 @@ export const askChoicesContract = defineContract({
 
 const byName = <T extends { readonly name: string }>(a: T, b: T): number => a.name.localeCompare(b.name, 'it')
 
+/** The answer (of-fx1s: a written type, not one inferred from the queries). */
+export interface AskChoices {
+  readonly people: { id: string; name: string }[]
+  readonly officeRoles: { id: string; name: string }[]
+  readonly floorRoles: { id: string; name: string; siteIds: string[] }[]
+  readonly teams: { id: string; name: string; siteId: string }[]
+  readonly lines: { id: string; seq: number; label: string }[]
+  readonly workOrders: { id: string; number: string; siteId: string; steps: { id: string; seq: number; name: string }[] }[]
+  readonly truncated: boolean
+}
+
 /** GET /sales/orders/:orderId/file-asks/choices */
-export async function askChoices(caller: CommandCaller, orderId: string) {
+export async function askChoices(caller: CommandCaller, orderId: string): Promise<AskChoices> {
   const { context, actor, order } = await reachOrder(caller, orderId)
   if (!mayKeepAsks(actor, order, true)) throw new ForbiddenError(NOT_YOURS)
   const now = serverClock.now()
   const record = { type: 'SalesOrder', id: order.id, label: order.number, companyId: order.companyId, siteId: null, partyId: order.partyId }
-  return caller.withClient(async (db) => {
+  return caller.withClient(async (db): Promise<AskChoices> => {
     // ---- office people who may be given a task on the order, and the office roles that reach one of them --------------------------
     const assignments = await db.roleAssignment.findMany({
       where: { ...liveAssignment(now), role: { audience: 'OFFICE', archivedAt: null }, user: { status: 'ACTIVE', audience: 'OFFICE' } },
