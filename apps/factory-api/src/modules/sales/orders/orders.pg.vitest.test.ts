@@ -534,7 +534,8 @@ describe('production and shipping move the order (SAL-204: the system is their o
       ['RED', '52', 1, 1, 1, 1, 0],
       ['RED', '54', 1, 1, 0, 0, 1],
     ])
-    expect(record.progress).toEqual({ ordered: 7, inWorkOrders: 8, made: null, released: 3, shipped: 2, invoiced: '0', toShip: 5, closedShort: 0 })
+    // B-OS-002: + planned (nothing of it on a shipment that has not left) and ready now (BLK 52's one released garment, on no shipment).
+    expect(record.progress).toEqual({ ordered: 7, inWorkOrders: 8, made: null, released: 3, shipped: 2, invoiced: '0', toShip: 5, closedShort: 0, planned: 0, readyNow: 1 })
     expect(record.chain.workOrders.map((row: Json) => [row.number, row.status])).toEqual([['SEED-WO-0001', 'IN_PROGRESS'], ['SEED-WO-0002', 'DRAFT']])
     expect(record.chain.shipments.map((row: Json) => [row.number, row.status])).toEqual([['SEED-SH-0001', 'SHIPPED']])
     // Shipped in part: no ready by hand, no close, lines' promises are fixed; the order's own promise still moves.
