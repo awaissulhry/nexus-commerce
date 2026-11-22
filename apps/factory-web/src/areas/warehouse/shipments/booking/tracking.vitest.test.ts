@@ -15,7 +15,8 @@ const uid = (n: number) => `0190f0e2-7499-7000-8000-${String(n).padStart(12, '0'
 const may = { allowed: true, refusal: null }
 const parcel = (seq: number, over: Partial<TransportParcel> = {}): TransportParcel => ({ id: uid(10 + seq), seq, label: null, typed: null, may, ...over })
 
-const transport = (shipment: Partial<Transport['shipment']> = {}, parcels: TransportParcel[] | undefined = [parcel(1), parcel(2), parcel(3)]): Transport => ({
+// os-fx5: `null` is "an older answer without parcels" (an explicit `undefined` would take the default three).
+const transport = (shipment: Partial<Transport['shipment']> = {}, parcels: TransportParcel[] | null = [parcel(1), parcel(2), parcel(3)]): Transport => ({
   shipment: { id: uid(1), number: 'SEED-SH-0014', status: 'PACKED', version: 4, transportBy: 'CARRIER', carrierCode: null, carrierName: 'Seed Air Cargo', serviceCode: null, manualTrackingNumber: null, manualTrackingUrl: null, ddtRequired: false, shippedAt: null, deliveredAt: null, returnedAt: null, ...shipment },
   arrangement: 'MANUAL_CARRIER',
   ddt: null,
@@ -37,7 +38,7 @@ describe('Tracking numbers… opens on what the shipment has now', () => {
   })
 
   it('an older answer without parcels keeps the one number, as before (no parcel rows)', () => {
-    expect(trackingDialogOf(transport({}, undefined)).parcels).toBeUndefined()
+    expect(trackingDialogOf(transport({}, null)).parcels).toBeUndefined()
   })
 })
 
