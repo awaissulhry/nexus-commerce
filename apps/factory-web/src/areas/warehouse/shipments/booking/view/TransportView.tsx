@@ -4,15 +4,18 @@ import { useId } from 'react'
 import { CircleCheck, ClipboardCheck, MapPin, Route, TriangleAlert } from 'lucide-react'
 import { Banner, Card, Field, KeyValue } from '@nexus/ui/components'
 import { Button, Input, Pill, RadioCard } from '@nexus/ui/primitives'
-import { DateTimeField } from '../../../../../lib/i18n/ds-parts'
+import { DateField, DateTimeField, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatDateTime } from '../../../../../lib/i18n/format'
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
 import { useLocale } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
-import { DEPTH_NAMESPACES } from '../../queue/shared/depth'
-import { DepthDialog, PartRead, useDepthWords } from '../../queue/shared/DepthDialog'
+import { DepthDialog, PartRead } from '../../queue/shared/DepthDialog'
+// F-OS-203: Warehouse's words and the lane's (`order-shipments`: door.*) — the Mark delivered / returned reason, the expected arrival.
+import { DOOR_NAMESPACES as DEPTH_NAMESPACES, useDoorWords as useDepthWords } from '../../queue/shared/door-words'
 import type { LabelCheck, Transport } from '../api'
 import { allProblems, arrangeDialogOf, arrangeProblem, checkProblemWords, MANUAL_EVENT_STATUSES, mayHeld, OWN_TRANSPORT_LIMITS, statusProblem, trackingProblem, type TransportActions, type TransportModel } from '../model'
+import { etaDialogOf, etaHeld, etaProblem, overridesLabels } from '../model' // F-OS-203 (B-OS-015, B-OS-016)
+import { OVERRIDE_REASON } from '@nexus/factory-domain/shipping/own-transport/rules' // F-OS-203
 import '../../shipments.css'
 import '../../queue/shared/depth.css'
 
@@ -95,6 +98,23 @@ function TransportCard({ model, actions }: { model: TransportModel; actions?: Tr
             <MapPin size={14} aria-hidden /> {t('transport.typeStatus')}
           </Button>
         )}
+        {/* F-OS-203 (B-OS-015, Owner D5): a carrier's labels move it — a person who knows better marks it, saying why (L1: "Mark returned…"). */}
+        {!typedStatuses && shipment.status === 'SHIPPED' && transport.may.endByHand && (
+          <>
+            <Button size="sm" heldReason={busy ?? say(mayHeld(transport.may.endByHand, model.can.manage))} onClick={() => actions?.onDialog?.({ kind: 'status', status: 'DELIVERED', occurredAt: null, description: '', location: '', reason: '' })}>
+              {t('ships.act.delivered')}
+            </Button>
+            <Button size="sm" heldReason={busy ?? say(mayHeld(transport.may.endByHand, model.can.manage))} onClick={() => actions?.onDialog?.({ kind: 'status', status: 'RETURNED', occurredAt: null, description: '', location: '', reason: '' })}>
+              {t('ships.act.returned')}
+            </Button>
+          </>
+        )}
+        {/* F-OS-203 (B-OS-016): the expected arrival typed where no carrier feed tracks it. */}
+        {transport.may.eta && (shipment.status === 'PACKED' || shipment.status === 'SHIPPED') && (
+          <Button size="sm" heldReason={busy ?? say(etaHeld(transport.may.eta, model.can.manage))} onClick={() => actions?.onDialog?.(etaDialogOf(transport))}>
+            {t('ships.act.eta')}
+          </Button>
+        )}
       </span>
       {typedStatuses && (
         <section aria-labelledby="fw-shd-typed">
@@ -127,6 +147,7 @@ function TransportCard({ model, actions }: { model: TransportModel; actions?: Tr
       {model.dialog?.kind === 'arrange' && <ArrangeDialog transport={transport} model={model} actions={actions} />}
       {model.dialog?.kind === 'tracking' && <TrackingDialog transport={transport} model={model} actions={actions} />}
       {model.dialog?.kind === 'status' && <StatusDialog transport={transport} model={model} actions={actions} />}
+      {model.dialog?.kind === 'eta' && <EtaDialog transport={transport} model={model} actions={actions} />}
     </Card>
   )
 }
@@ -264,29 +285,88 @@ function StatusDialog({ transport, model, actions }: { transport: Transport; mod
           <Input size="sm" value={dialog.description} onChange={(event) => actions?.onDialog?.({ ...dialog, description: event.target.value })} />
         </Field>
       </div>
+      {/* F-OS-203 (B-OS-015, Owner D5): over a carrier's labels the person says why; it is tagged "Set by hand" and stays final. */}
+      {overridesLabels(dialog, transport) && (
+        <>
+          <p className="fw-sh-hint">{t('door.status.labelled')}</p>
+          <Field label={t('door.why')} required hint={t('door.officeOnly')}>
+            <Textarea rows={2} limit={OVERRIDE_REASON.max} value={dialog.reason ?? ''} onChange={(event) => actions?.onDialog?.({ ...dialog, reason: event.target.value })} />
+          </Field>
+        </>
+      )}
+      {(dialog.status === 'DELIVERED' || dialog.status === 'RETURNED') && (
+        <>
+          <p className="fw-sh-hint">{dialog.status === 'DELIVERED' ? t('door.status.deliveredFinal') : t('door.status.returnedThen')}</p>
+          <p className="fw-sh-hint">{t('door.status.told')}</p>
+        </>
+      )}
     </DepthDialog>
   )
 }
 
-// ── F-OP-119 (order page plan N5): the tracking number typed from a sales order's Shipments tab — this very dialog ──────────────
+// ── F-OS-203 (order SHIPMENTS tab; B-OS-016): Set expected arrival… — typed by hand where no carrier feed tracks it ──────────────
+function EtaDialog({ transport, model, actions }: { transport: Transport; model: TransportModel; actions?: TransportActions }) {
+  const { t, say } = useDepthWords()
+  const locale = useLocale()
+  const dayId = useId()
+  if (model.dialog?.kind !== 'eta') return null
+  const dialog = model.dialog
+  return (
+    <DepthDialog
+      title={t('door.eta.title', { number: transport.shipment.number })}
+      held={model.busy ? t('transport.held.busy') : say(etaProblem(dialog, transport))}
+      onGo={() => actions?.onEta?.()}
+      goLabel={dialog.day === '' ? t('door.eta.clear') : t('door.eta.go')}
+      onClose={() => actions?.onDialog?.(null)}
+      problem={say(model.problem)}
+      size="sm"
+    >
+      <p className="fw-sh-hint">{t('door.eta.what')}</p>
+      <Field label={t('door.eta.day')} htmlFor={dayId}>
+        <DateField id={dayId} value={dialog.day} onChange={(value) => actions?.onDialog?.({ ...dialog, day: value })} min={transport.shipment.shippedAt ? transport.shipment.shippedAt.slice(0, 10) : undefined} locale={INTL_LOCALE[locale]} clearable ariaLabel={t('door.eta.day')} />
+      </Field>
+      <Field label={t('door.wordsOptional')} hint={t('door.officeOnly')}>
+        <Textarea rows={2} limit={500} value={dialog.reason} onChange={(event) => actions?.onDialog?.({ ...dialog, reason: event.target.value })} />
+      </Field>
+      <p className="fw-sh-hint">{t('door.eta.told')}</p>
+    </DepthDialog>
+  )
+}
+// ── end F-OS-203 ──
+
+// ── F-OP-119 → F-OS-201 (order SHIPMENTS tab; 13-backend §7; L7): this card's windows opened from a sales order's Shipments tab ────────
 /**
- * The tracking dialog alone, for a page that opens it for ONE shipment (its container mounts useOwnTransport for it): the same
- * dialog, words and refusals as here; a failed read said in a dialog with Try again; nothing while it reads.
+ * One of this card's own dialogs alone, for a page that opens it for ONE shipment (its container mounts useOwnTransport for it and
+ * opens the dialog asked): Tracking number… · Mark delivered… / Mark returned… (the status dialog) · Change how it travels… (the
+ * arrange dialog, L7) · Set expected arrival…. The same dialogs, words and refusals as here; a failed read said in a dialog with Try
+ * again; nothing while it reads.
  */
-export function TrackingDoorDialog({ model, actions, onClose }: { model: TransportModel; actions?: TransportActions; onClose: () => void }) {
+export function TransportDoorDialog({ model, actions, onClose }: { model: TransportModel; actions?: TransportActions; onClose: () => void }) {
   return (
     <WithMessages namespaces={DEPTH_NAMESPACES}>
-      <TrackingDoor model={model} actions={actions} onClose={onClose} />
+      <TransportDoor model={model} actions={actions} onClose={onClose} />
     </WithMessages>
   )
 }
 
-function TrackingDoor({ model, actions, onClose }: { model: TransportModel; actions?: TransportActions; onClose: () => void }) {
+function TransportDoor({ model, actions, onClose }: { model: TransportModel; actions?: TransportActions; onClose: () => void }) {
   const { t } = useDepthWords()
   if (model.transport.state === 'error') {
     return <DepthDialog title={t('transport.title')} held={null} onGo={onClose} goLabel={t('common.done')} onClose={onClose} problem={null} size="sm" done={<PartRead problem={model.transport.problem} onRetry={actions?.onRetry} label={t('transport.title')} />} />
   }
   if (model.transport.state !== 'ready') return null
-  return <TrackingDialog transport={model.transport.value} model={model} actions={actions} />
+  const transport = model.transport.value
+  switch (model.dialog?.kind) {
+    case 'tracking':
+      return <TrackingDialog transport={transport} model={model} actions={actions} />
+    case 'status':
+      return <StatusDialog transport={transport} model={model} actions={actions} />
+    case 'arrange':
+      return <ArrangeDialog transport={transport} model={model} actions={actions} />
+    case 'eta':
+      return <EtaDialog transport={transport} model={model} actions={actions} />
+    default:
+      return null
+  }
 }
 // ── end F-OP-119 ──

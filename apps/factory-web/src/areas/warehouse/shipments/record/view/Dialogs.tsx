@@ -17,6 +17,13 @@ import { RadioCard } from '@nexus/ui/primitives'
 import type { ReadyCell, ReadyOrder } from '../../api'
 import { joinHeld, lineGroups, orderWords, takeOffHeld } from '../../model'
 import { DEPTH_NS } from '../../queue/shared/depth'
+// F-OS-201 / F-OS-203 (order SHIPMENTS tab): the dialogs the order's Shipments tab mounts too take a narrow model (ShipmentDoor.tsx);
+// take an order off says why (ONE command, B-OS-013); hand over at a time says why when it is not now (B-OS-014).
+import { DateTimeField } from '../../../../../lib/i18n/ds-parts'
+import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
+import { REASON_LIMITS, takeOffReasonProblem } from '../../queue/move/model'
+import { DOOR_NS } from '../../queue/shared/door-words'
+import { handOverTimeProblem, type HandOverAt } from '../hand-over'
 
 /**
  * A shipment's dialogs (design sh-issue-ddt, sh-buy, sh-handover, sh-annul; W1): Issue DDT (what the office says on it,
@@ -67,6 +74,17 @@ interface DialogProps {
   model: ShipmentRecordModel
   actions?: ShipmentRecordActions
 }
+
+// ---- F-OS-201 (13-backend §7): the narrow model and acts of the dialogs both pages mount (the record passes its whole model: a
+// structural subtype, no refactor) ----
+export type DoorModel = Pick<ShipmentRecordModel, 'busy' | 'dialogProblem' | 'ddt' | 'backorder'>
+export type DoorActions = Pick<ShipmentRecordActions, 'onDialog' | 'onUnpack' | 'onCancel' | 'onTakeOff' | 'onHandOver'>
+export interface DoorProps {
+  shipment: Shipment
+  model: DoorModel
+  actions?: DoorActions
+}
+// ---- end F-OS-201
 
 // ---- Issue DDT ---------------------------------------------------------------------------------------------------------
 
@@ -252,25 +270,38 @@ function BuyDialog({ shipment, model, actions }: DialogProps) {
 
 // ---- Mark handed over ---------------------------------------------------------------------------------------------------
 
-function HandOverDialog({ shipment, model, actions }: DialogProps) {
+export function HandOverDialog({ shipment, model, actions }: DoorProps) {
   const t = useT('shipments')
+  const own = useT(DOOR_NS)
   const locale = useLocale()
   const ddt = model.ddt?.value ?? null
+  // F-OS-203 (B-OS-014): handed over now, or at the time it really left (not before it was packed or its DDT issued, not in the
+  // future); more than a quarter of an hour ago says why (office words; the audit keeps it).
+  const [at, setAt] = useState<HandOverAt>({ when: null, reason: '' })
+  const problem = handOverTimeProblem(at, { packedAt: shipment.packedAt, ddtAt: ddt?.startAt ?? null })
   return (
-    <Frame title={t('handOver.title')} subtitle={shipment.number} held={model.busy ? t('held.busy') : null} go={() => actions?.onHandOver?.()} goLabel={t('step.handOver')} onClose={close(actions)} problem={model.dialogProblem}>
+    <Frame title={t('handOver.title')} subtitle={shipment.number} held={model.busy ? t('held.busy') : problem ? own(problem.key, problem.params) : null} go={() => actions?.onHandOver?.(at.when ? { shippedAt: new Date(at.when).toISOString(), reason: at.reason.trim() || null } : null)} goLabel={t('step.handOver')} onClose={close(actions)} problem={model.dialogProblem}>
       <ul className="fw-sh-list">
         <li>{t('handOver.stock', { count: shipment.garments })}</li>
         <li>{ddt ? t('handOver.ddt', { number: ddt.number, start: formatDateTime(ddt.startAt, { locale }) }) : t('handOver.noDdt')}</li>
         <li>{t('handOver.documents')}</li>
         <li>{t('handOver.final')}</li>
       </ul>
+      <Field label={own('door.handOver.when')} hint={own('door.handOver.whenHint')}>
+        <DateTimeField value={at.when ?? ''} onChange={(value) => setAt((current) => ({ ...current, when: value || null }))} min={shipment.packedAt ?? undefined} max={new Date().toISOString()} locale={INTL_LOCALE[locale]} ariaLabel={own('door.handOver.when')} />
+      </Field>
+      {at.when ? (
+        <Field label={own('door.why')} hint={own('door.officeOnly')}>
+          <Textarea rows={2} limit={REASON_LIMITS.max} value={at.reason} onChange={(event) => setAt((current) => ({ ...current, reason: event.target.value }))} />
+        </Field>
+      ) : null}
     </Frame>
   )
 }
 
 // ---- Cancel shipment ----------------------------------------------------------------------------------------------------
 
-function CancelDialog({ shipment, model, actions }: DialogProps) {
+export function CancelDialog({ shipment, model, actions }: DoorProps) {
   const t = useT('shipments')
   const [reason, setReason] = useState('')
   const held = model.busy ? t('held.busy') : reason.trim() === '' ? t('cancel.held') : null
@@ -464,18 +495,28 @@ function AddOrderDialog({ shipment, model, actions }: DialogProps) {
   )
 }
 
-/** Take its garments off (a DRAFT, an order other than the first): every line of that order goes, and the order with them. */
-function TakeOffDialog({ shipment, model, actions, salesOrderId }: DialogProps & { salesOrderId: string }) {
+/**
+ * Take its garments off (a DRAFT, an order other than the first): every line of that order goes, and the order with them — F-OS-203
+ * (B-OS-013): in ONE command, all or nothing, with the office's reason (the other orders on it keep everything).
+ */
+export function TakeOffDialog({ shipment, model, actions, salesOrderId }: DoorProps & { salesOrderId: string }) {
   const t = useT('shipments')
   const d = useT(DEPTH_NS)
+  const own = useT(DOOR_NS)
+  const [reason, setReason] = useState('')
   const group = lineGroups(shipment, model.backorder.value).find((entry) => entry.order?.id === salesOrderId) ?? null
   const order = group?.order?.number ?? ''
   const count = group?.lines.reduce((sum, line) => sum + line.quantity, 0) ?? 0
   const lineHeld = group ? takeOffHeld(group) : null
-  const held = model.busy ? t('held.busy') : !group ? d('shipOrders.gone') : lineHeld ? t(lineHeld.key, lineHeld.params) : null
+  const reasonHeld = takeOffReasonProblem(reason)
+  const held = model.busy ? t('held.busy') : !group ? d('shipOrders.gone') : lineHeld ? t(lineHeld.key, lineHeld.params) : reasonHeld ? own(reasonHeld.key, reasonHeld.params) : null
   return (
-    <Frame title={d('shipOrders.takeOffTitle', { order, number: shipment.number })} held={held} go={() => actions?.onTakeOff?.(salesOrderId)} goLabel={d('shipOrders.takeOffGo')} onClose={close(actions)} problem={model.dialogProblem} size="sm" tone="danger">
+    <Frame title={d('shipOrders.takeOffTitle', { order, number: shipment.number })} held={held} go={() => actions?.onTakeOff?.(salesOrderId, reason.trim())} goLabel={d('shipOrders.takeOffGo')} onClose={close(actions)} problem={model.dialogProblem} size="sm" tone="danger">
       <p>{group ? d('shipOrders.takeOffWhat', { count, order }) : d('shipOrders.gone')}</p>
+      <p className="fw-sh-hint">{own('door.takeOff.oneStep')}</p>
+      <Field label={own('door.why')} required hint={own('door.officeOnly')}>
+        <Textarea rows={2} limit={REASON_LIMITS.max} value={reason} onChange={(event) => setReason(event.target.value)} />
+      </Field>
     </Frame>
   )
 }
@@ -569,7 +610,7 @@ function SendLinkDialog({ shipment, model, actions }: DialogProps) {
 
 // ---- Unpack ---------------------------------------------------------------------------------------------------------------
 
-function UnpackDialog({ shipment, model, actions }: DialogProps) {
+export function UnpackDialog({ shipment, model, actions }: DoorProps) {
   const t = useT('shipments')
   return (
     <Frame title={t('unpack.title')} subtitle={shipment.number} held={model.busy ? t('held.busy') : null} go={() => actions?.onUnpack?.()} goLabel={t('action.unpack')} onClose={close(actions)} problem={model.dialogProblem} size="sm">
