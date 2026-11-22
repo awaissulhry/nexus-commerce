@@ -193,7 +193,8 @@ describe('F-OP-103: the ONE waiting list — every blocker and open yes is one r
     expect(counter.door).toMatchObject({ kind: 'open', requestId: 'r-open', request: { id: 'r-open' } })
     expect(waitingOf(headlineWith([blocker('APPROVAL', 'BRAND', null, { type: 'OrderChangeRequest', id: 'r-open' })]), { ...inputs, requests: null })[0]!.door).toEqual({ kind: 'open', requestId: 'r-open', request: null })
     expect(byKind(rows, 'DEPOSIT')[0]!.door).toEqual({ kind: 'payment', requestId: 'd-1' })
-    expect(byKind(waitingOf(all, { ...inputs, recordPayment: false }), 'DEPOSIT')[0]!.door).toEqual({ kind: 'tab', tab: 'money', anchor: null })
+    // F-OM-104 (P0-B11): without the payment right the door lands on Money › Payments (the deposit is the plan's first step).
+    expect(byKind(waitingOf(all, { ...inputs, recordPayment: false }), 'DEPOSIT')[0]!.door).toEqual({ kind: 'tab', tab: 'money', anchor: 'payments' })
     // F-OP-116: the customer's pause on a work order the reader reaches is lifted in place (F-OP-114's Lift); no ref: Production › holds.
     expect(byKind(rows, 'BRAND_PAUSE')[0]!.door).toEqual({ kind: 'lift', workOrderId: 'wo-1' })
     expect(byKind(waitingOf(headlineWith([blocker('BRAND_PAUSE', 'BRAND', null, null)]), inputs), 'BRAND_PAUSE')[0]!.door).toEqual({ kind: 'tab', tab: 'production', anchor: 'holds' })

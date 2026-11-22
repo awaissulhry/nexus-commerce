@@ -175,7 +175,8 @@ export function ShipmentsTab({ order, model, actions, delivered }: { order: Orde
       {delivered}
       <PointsAtOrder model={model.links} actions={actions?.links} prefix={model.prefix} />
       <p className="fw-so-hint">
-        <TabLink className="fw-so-link" href={tabHref(recordHref, 'money', search) /* F-OP-119: F-OP-210's tab link */}>
+        {/* F-OM-104 (P0-B11): the door lands on Money › Invoices & credit notes (invoices.view), else on Payments. */}
+        <TabLink className="fw-so-link" href={`${tabHref(recordHref, 'money', search) /* F-OP-119: F-OP-210's tab link */}#${model.can.viewInvoices ? 'invoices' : 'payments'}`}>
           {t('ship.moneyDoor')}
         </TabLink>
       </p>

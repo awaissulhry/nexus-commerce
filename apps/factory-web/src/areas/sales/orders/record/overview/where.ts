@@ -533,7 +533,7 @@ export function stripDoorsOf(strip: WhereStrip, input: StripDoorsInput): StripDo
       return [{ kind: 'review', href: profileHref(input.prefix, rider.profileId, 'measurements', 'review'), held: null }]
     }
     case 'deposit': {
-      const money: StripDoor = { kind: 'tab', tab: 'money', anchor: null }
+      const money: StripDoor = { kind: 'tab', tab: 'money', anchor: 'payments' } // F-OM-104 (P0-B11): the deposit is Payments' first step
       if (strip.state === 'MISSING' || !strip.requestId) return [money]
       if (!input.can.recordPayment) return [{ kind: 'payment', requestId: strip.requestId, held: phrase('held.noPayments') }, money]
       return [{ kind: 'payment', requestId: strip.requestId, held: busy }]

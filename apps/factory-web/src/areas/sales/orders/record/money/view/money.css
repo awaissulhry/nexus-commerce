@@ -1,0 +1,128 @@
+/*
+ * F-OM-101 … 103 (order MONEY tab, 10-design §1–§5; 18-lead-settles L6) — the tab's own stylesheet (orders.css is the Lines lane's,
+ * production.css the kit's, reused in place). The kit gives the room container (`pt`), each section's own (`sec`) and the heads; this
+ * file adds the tab's answer line, Totals' tiles | what is left | facts, and the payment plan's rows. Room, not screen: the plan's list
+ * is one more size container (`ompl`), each request box another (`omrq`), so rows follow the room they really have — stacked under
+ * 560 px (the act full width, 44 px to tap), 4 columns from 560, 5 from 1000, 6 from 1500 (money/layout.ts PLAN_COLUMNS_FROM) — and
+ * opening or closing the thread dock re-lays them at once. Sections STACK at every width (L6); the only pair is inside Totals (tiles |
+ * what is left, from 1200 px of the section). The act column has a fixed width, so the doors line up row to row. DS tokens only (no raw
+ * colour): light and dark come from the tokens.
+ */
+
+/* ── the shell (F-OM-101) ── */
+.fw-om #payments { position: relative; }
+/* The addresses of the two cards that went into Payments (#deposit, #schedule) and a step's own (about-Step-…): out of the flow. */
+.fw-om-alias { position: absolute; top: 0; left: 0; width: 1px; height: 1px; overflow: hidden; }
+.fw-om-head .fw-om-head-wall { display: inline-flex; align-items: flex-start; gap: var(--nds-space-6); color: var(--nds-text-2); }
+.fw-om-head .fw-om-head-wall svg { flex: none; margin-top: var(--nds-space-2); }
+.fw-om-fold { display: inline-flex; align-items: center; gap: var(--nds-space-6); align-self: flex-start; background: none; border: 0; padding: var(--nds-space-4) 0; cursor: pointer; font: inherit; font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); text-align: start; }
+.fw-om-fold span { font-weight: var(--nds-font-weight-normal); color: var(--nds-text-muted); }
+.fw-om-fold:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-xs); }
+@container pt (max-width: 719px) {
+  .fw-om-fold span { display: none; }
+}
+
+/* ── 1 · Totals (F-OM-102): tiles | what is left, the facts under them (stacked under 1200 px of the section) ── */
+.fw-om-tt { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "t" "r" "f"; gap: var(--nds-space-14) var(--nds-space-22); min-width: 0; }
+.fw-om-tt.is-np { grid-template-areas: "t" "r" "f"; }
+.fw-om-tt-t { grid-area: t; min-width: 0; }
+.fw-om-tt-t:empty { display: none; }
+.fw-om-tt-r { grid-area: r; min-width: 0; display: flex; flex-direction: column; gap: var(--nds-space-4); }
+.fw-om-tt-r > .fw-pt-h3 { padding-bottom: var(--nds-space-6); border-bottom: 1px solid var(--nds-border); }
+.fw-om-facts { grid-area: f; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: var(--nds-space-8) var(--nds-space-20); margin: 0; min-width: 0; }
+.fw-om-facts > div { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
+.fw-om-facts dt { font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-muted); }
+.fw-om-facts dd { margin: 0; font-size: var(--nds-font-size-sm); color: var(--nds-text); line-height: 1.45; overflow-wrap: anywhere; }
+@container sec (min-width: 1200px) {
+  .fw-om-tt { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); grid-template-areas: "t r" "f f"; }
+  .fw-om-tt.is-np { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "f r"; }
+  .fw-om-tt > .fw-om-tt-r { padding-left: var(--nds-space-22); border-left: 1px solid var(--nds-border-subtle); }
+  .fw-om-tt:not(.is-np) > .fw-om-facts { padding-top: var(--nds-space-12); border-top: 1px solid var(--nds-border-subtle); }
+}
+.fw-om-gap { margin: 0; display: flex; align-items: flex-start; gap: var(--nds-space-8) var(--nds-space-12); padding: var(--nds-space-6) var(--nds-space-2); border-bottom: 1px solid var(--nds-border-subtle); font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+.fw-om-gap:last-of-type { border-bottom: 0; }
+.fw-om-gap > svg { flex: none; margin-top: var(--nds-space-2); color: var(--nds-warning); }
+.fw-om-gap.is-ok > svg { color: var(--nds-primary); }
+.fw-om-gap > span { flex: 1 1 auto; min-width: 0; }
+.fw-om-gap > .fw-pt-link { flex: none; white-space: nowrap; }
+.fw-om-adds { width: 100%; border-collapse: collapse; font-size: var(--nds-font-size-sm); }
+.fw-om-adds td { padding: var(--nds-space-4) var(--nds-space-2); border-bottom: 1px solid var(--nds-border-subtle); font-variant-numeric: tabular-nums; }
+.fw-om-adds .fw-om-r { text-align: right; white-space: nowrap; }
+.fw-om-adds tr.is-sum td { font-weight: var(--nds-font-weight-bold); border-bottom: 0; border-top: 1px solid var(--nds-border); }
+.fw-om-adds tr.is-aside td { color: var(--nds-text-muted); border-bottom: 0; }
+
+/* ── 2 · Payments (F-OM-103): one row per step and per request no step names ── */
+.fw-om-pl { container: ompl / inline-size; display: flex; flex-direction: column; min-width: 0; }
+.fw-om-pr { position: relative; border-bottom: 1px solid var(--nds-border-subtle); padding: var(--nds-space-10) var(--nds-space-2); min-width: 0; scroll-margin-top: var(--nds-space-4); }
+.fw-om-pr:last-child { border-bottom: 0; }
+.fw-om-pr:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; border-radius: var(--nds-radius-xs); }
+/* S: title + pill + ⋯ on the first line; amount, due, notes under it; the act full width, 44 px to tap. */
+.fw-om-pr-g { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "k o" "m m" "d d" "n n" "a a"; gap: var(--nds-space-2) var(--nds-space-12); align-items: start; min-width: 0; }
+.fw-om-pr-g > div { min-width: 0; }
+.fw-om-pr-k { grid-area: k; display: flex; gap: var(--nds-space-8); align-items: flex-start; font-size: var(--nds-font-size-sm); }
+.fw-om-pr-kt { display: flex; gap: var(--nds-space-4) var(--nds-space-8); align-items: center; flex-wrap: wrap; min-width: 0; min-height: 22px; }
+.fw-om-pr-kt > b { font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); }
+.fw-om-pr-sp { flex: none; width: 22px; height: 22px; }
+.fw-om-pr-m { grid-area: m; display: flex; flex-direction: column; gap: var(--nds-space-2); font-variant-numeric: tabular-nums; }
+.fw-om-amt { font-weight: var(--nds-font-weight-bold); font-size: var(--nds-font-size-sm); }
+.fw-om-left { font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); color: var(--nds-warning-text); }
+.fw-om-pr-d { grid-area: d; display: flex; flex-direction: column; gap: var(--nds-space-2); font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+.fw-om-pr-n { grid-area: n; display: flex; flex-direction: column; gap: var(--nds-space-2); font-size: var(--nds-font-size-xs); color: var(--nds-text-2); }
+.fw-om-pr-n > span { display: flex; gap: var(--nds-space-6); align-items: flex-start; }
+.fw-om-pr-n > span > svg { flex: none; margin-top: var(--nds-space-2); color: var(--nds-text-muted); }
+.fw-om-pr-n > .is-warning { color: var(--nds-warning-text); }
+.fw-om-pr-n > .is-warning > svg { color: var(--nds-warning); }
+.fw-om-pr-n > .is-hand { color: var(--nds-text-muted); }
+.fw-om-pr-a { grid-area: a; display: flex; gap: var(--nds-space-6); align-items: center; flex-wrap: wrap; margin-top: var(--nds-space-6); }
+.fw-om-pr-a:empty { display: none; }
+.fw-om-pr-a .nds-btn { min-height: 44px; flex: 1 1 auto; justify-content: center; }
+.fw-om-pr-o { grid-area: o; display: flex; justify-content: flex-end; }
+.fw-om-pr-m, .fw-om-pr-d, .fw-om-pr-n { padding-left: 30px; }
+.fw-om-pr.is-done .fw-om-pr-kt > b, .fw-om-pr.is-done .fw-om-amt { color: var(--nds-text-2); }
+@container ompl (min-width: 560px) {
+  .fw-om-pr-g { grid-template-columns: minmax(0, 1fr) 150px 216px 32px; grid-template-areas: "k m a o" "d m a o" "n m a o"; gap: var(--nds-space-2) var(--nds-space-14); }
+  .fw-om-pr-m { align-items: flex-end; text-align: right; padding-left: 0; }
+  .fw-om-pr-a { justify-content: flex-end; flex-wrap: nowrap; margin-top: 0; }
+  .fw-om-pr-a:empty { display: flex; }
+  .fw-om-pr-a .nds-btn { min-height: var(--nds-control-h-sm); flex: none; }
+}
+@container ompl (min-width: 1000px) {
+  .fw-om-pr-g { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) 160px 216px 32px; grid-template-areas: "k d m a o" "n d m a o"; }
+  .fw-om-pr-d { padding-left: 0; }
+}
+@container ompl (min-width: 1500px) {
+  .fw-om-pr-g { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) 230px 170px 224px 32px; grid-template-areas: "k n d m a o"; }
+  .fw-om-pr-n { padding-left: 0; }
+}
+
+/* A row's request: its steps (a tracker from 620 px of the box, a list under it) and its payments. */
+.fw-om-rq { container: omrq / inline-size; margin: var(--nds-space-10) 0 var(--nds-space-2) 30px; padding: var(--nds-space-10) var(--nds-space-12); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg); background: var(--nds-surface-raised); display: flex; flex-direction: column; gap: var(--nds-space-10); min-width: 0; }
+.fw-om-sx { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-8); list-style: none; margin: 0; padding: 0; }
+.fw-om-sx > li { display: grid; align-content: start; grid-template-columns: 18px minmax(0, 1fr); gap: 0 var(--nds-space-8); font-size: var(--nds-font-size-xs); color: var(--nds-text-2); min-width: 0; }
+.fw-om-sx-b { display: flex; flex-direction: column; gap: var(--nds-space-2); align-items: flex-start; min-width: 0; }
+.fw-om-sx-b > b { font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); }
+.fw-om-sx-w { line-height: 1.4; overflow-wrap: anywhere; }
+.fw-om-sx-dot { width: 14px; height: 14px; margin-top: var(--nds-space-2); border-radius: 50%; border: 2px solid var(--nds-border-strong); background: var(--nds-surface); position: relative; z-index: 1; }
+.fw-om-sx-dot.is-done { background: var(--nds-primary); border-color: var(--nds-primary); }
+.fw-om-sx-dot.is-current { border-color: var(--nds-warning); }
+.fw-om-sx-dot.is-notNeeded { border-style: dashed; }
+@container omrq (min-width: 620px) {
+  .fw-om-sx { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0 var(--nds-space-10); }
+  .fw-om-sx > li { grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-4); position: relative; }
+  .fw-om-sx > li::before { content: ''; position: absolute; top: 8px; left: 18px; right: calc(-1 * var(--nds-space-10)); height: 2px; background: var(--nds-border-subtle); }
+  .fw-om-sx > li:last-child::before { display: none; }
+  .fw-om-sx > li.is-done::before { background: var(--nds-primary); }
+}
+.fw-om-py { display: flex; flex-direction: column; min-width: 0; }
+.fw-om-py-h { font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-muted); padding-bottom: var(--nds-space-4); border-bottom: 1px solid var(--nds-border); }
+.fw-om-py-r { display: flex; justify-content: space-between; gap: var(--nds-space-4) var(--nds-space-12); flex-wrap: wrap; padding: var(--nds-space-6) 0; border-bottom: 1px solid var(--nds-border-subtle); font-size: var(--nds-font-size-sm); }
+.fw-om-py-r:last-child { border-bottom: 0; }
+.fw-om-py-w { min-width: 0; overflow-wrap: anywhere; }
+.fw-om-py-a { font-variant-numeric: tabular-nums; font-weight: var(--nds-font-weight-semibold); white-space: nowrap; }
+.fw-om-py > .fw-pt-quiet { padding-top: var(--nds-space-6); }
+.fw-om-pl-foot { display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-4); padding-top: var(--nds-space-4); }
+.fw-om-er { margin: 0; display: flex; gap: var(--nds-space-8); font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); padding: var(--nds-space-2) 0 var(--nds-space-2) 30px; }
+.fw-om-er > svg { flex: none; margin-top: var(--nds-space-2); }
+
+/* A door at a row's end never widens the page: a tooltip the reader does not see is not in the layout (the kit's fx5 #1 rule). */
+.fw-om .nds-tooltip:not(:hover):not(:focus-within) > .tip { display: none; }
