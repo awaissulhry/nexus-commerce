@@ -123,15 +123,15 @@ const OPEN_STATES: readonly Order['status'][] = ['CONFIRMED', 'IN_PRODUCTION', '
 const ON_GOODS: readonly PlanRowKind[] = ['ON_INVOICE', 'ON_DELIVERY']
 const isGoods = (invoice: { readonly docType: string; readonly status: string }) => invoice.docType !== 'TD02' && invoice.docType !== 'TD04' && invoice.status !== 'DRAFT'
 
-/** "Due day set by hand · Bea Esempio, 18 Nov" (+ the reason); null: nothing by hand. */
 /** F-OM-fx3 (B-OM-025, W-03): an accepted short as a hand change of its request (who, when; the reason with the price grain). */
 export function acceptedHandOf(accepted: PlanRequest['acceptedShort']): ByHand | null {
   return accepted?.at ? { act: 'ACCEPT_SHORT', at: accepted.at, by: accepted.by ?? null, reason: accepted.reason ?? null } : null
 }
 
-/** The newest of the hand changes that name a row (by their instant); null: none. */
+/** F-OM-fx3 (W-03): the newest of the hand changes that name a row (by their instant); null: none. */
 export const newestHandOf = (hands: readonly (ByHand | null | undefined)[]): ByHand | null => hands.reduce<ByHand | null>((newest, hand) => (hand && (!newest || hand.at > newest.at) ? hand : newest), null)
 
+/** "Due day set by hand · Bea Esempio, 18 Nov" (+ the reason); null: nothing by hand. */
 export function byHandOf(hand: ByHand | null | undefined): PlanRow['byHand'] {
   if (!hand) return null
   // The domain's hand acts (B-OM-011 … 016); an act a newer server names is "Set by hand".
@@ -197,8 +197,8 @@ export function planOf(input: {
     const done = !open
     const pill = status === 'WAIVED'
       ? { word: word('moneyTab.plan.pill.WAIVED'), tone: 'neutral' as const }
-      : voided
-        ? { word: word('moneyTab.plan.pill.CANCELLED'), tone: 'neutral' as const }
+      : voided // F-OM-fx3 (W-05)
+      ? { word: word('moneyTab.plan.pill.CANCELLED'), tone: 'neutral' as const }
       : !open
         ? { word: word('moneyTab.plan.pill.PAID'), tone: 'success' as const }
         : overdue
@@ -213,8 +213,8 @@ export function planOf(input: {
     const paidAt = step?.paidAt ?? request?.paidAt ?? null
     const due = status === 'WAIVED'
       ? word('moneyTab.plan.due.waived')
-      : voided
-        ? word('moneyTab.plan.due.notOwed')
+      : voided // F-OM-fx3 (W-05)
+      ? word('moneyTab.plan.due.notOwed')
       : coveredFull
         ? word('moneyTab.plan.due.paidWithInvoices')
         : !open
