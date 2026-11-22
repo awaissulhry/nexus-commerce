@@ -76,6 +76,7 @@ import { ThreadCase } from '../../../../lib/record-thread/ThreadCase'
 // ---- B-TH-256: what points at the order (complaints, returns, planning's re-promise, a gate refusal) ----
 import { LINKS_FULL, LINKS_MANAGER, LINKS_NONE, linksModel } from './links/fixtures'
 import { shipmentsLaneCases } from './shipments/fixtures' // F-OS T.1 (design-only: a fixtures.ts of its own, no screen)
+import { filesLaneCases } from './files/fixtures' // F-OF T.1 (design-only: a fixtures.ts of its own, no screen)
 import { BRAND_ALPHA, type BrandFixture } from '../../../../lib/testing/two-brands'
 import { useRecordFrame } from '../../../_shared/record-frame/RecordFrame'
 // ---- F-OP-217: the dock's scopes in the design screen (the pick band in the one card, General, a work order's notes, All of)
@@ -1415,7 +1416,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     ...shipmentsLaneCases(base), // F-OS T.1: the Shipments tab's states the seed lacks (shipments/fixtures.ts)
     // ---- F-SA-237: Files, every file of the order by where it comes from (the same body as the thread's Files window) ----
     { id: 'files', label: 'F-SA-237 · Sales · Files: by source — the order and its conversation, the lines’ artwork (also on SO-2026-0151), production photos; shared or office only; 3 you cannot open', model: base('sales', production, { tab: 'files', files: { read: ORDER_FILES, problem: null, selected: [], canShare: true } }) },
-    { id: 'files-chosen', label: 'F-SA-237 · Sales · Files: two chosen — Download 2 · Share 1 own with the customer', model: base('sales', production, { tab: 'files', files: { read: ORDER_FILES, problem: null, selected: ['0190f0e2-8181-7000-8000-000000000001', '0190f0e2-8181-7000-8000-000000000002'], canShare: true } }) },
+    { id: 'files-chosen', label: 'F-SA-237 · Sales · Files: two chosen — Download 2 (F-OF-303: Who can see N… is files.manage\'s: of-chosen-owner)', model: base('sales', production, { tab: 'files', files: { read: ORDER_FILES, problem: null, selected: ['0190f0e2-8181-7000-8000-000000000001', '0190f0e2-8181-7000-8000-000000000002'], canShare: true } }) },
     { id: 'files-empty', label: 'F-SA-237 · Files: none yet', model: base('sales', production, { tab: 'files', files: { read: { ...ORDER_FILES, groups: ORDER_FILES.groups.map((group) => ({ ...group, files: [], leftOut: 0, measurementsLeftOut: 0 })), total: 0 }, problem: null, selected: [], canShare: true } }) },
     { id: 'files-failed', label: "F-SA-237 · Files couldn't be read (Try again)", model: base('sales', production, { tab: 'files', files: { read: null, problem: 'read', selected: [], canShare: true } }) },
     // ---- F-CP-148 (the money wall; B-CP-023): the order's files with two priced documents — named for a price holder, counted for anyone else
@@ -1426,6 +1427,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'of-201-asks', label: 'F-OF-201 · Owner · Files: Waiting for files — arrived from the Pattern maker, 2 days late to the Sewing team, one asked of you; a priced ask and one outside the role counted; a portal ask', model: base('owner', production, { tab: 'files', files: { read: withAsks(ORDER_FILES), problem: null, selected: [], canShare: true, may: OF_MAY, asks: asksState() } }) },
     { id: 'of-202-ask', label: 'F-OF-202 · Owner · Files: Ask for a file… — the office role "Pattern maker", Line 1, due 25 Nov', model: base('owner', production, { tab: 'files', files: { read: withAsks(ORDER_FILES), problem: null, selected: [], canShare: true, may: OF_MAY, asks: ASK_WINDOW_STATE } }) },
     // ---- end F-OF-201
+    ...filesLaneCases(base, production), // F-OF T.1: the Files tab's states the seed lacks (files/fixtures.ts)
     // ---- end F-CP-148
     // ---- F-SA-232: Overview, the first tab ("where is it now", progress by line — the order's own pieces) ----
     // F-OO-133 (W05 follow-up): with the people part read (PEOPLE) and Sales' People rights (Ask; no supervisor right) — the real card,

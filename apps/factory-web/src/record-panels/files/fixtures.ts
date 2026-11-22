@@ -97,6 +97,16 @@ const PATTERN_ROWS: VersionRow[] = [
   row(2, { versionNo: 2, current: true, addedAt: at(24, 9), addedBy: 'Carlo Prova', usedBy: [{ label: 'WO-000098', typeKey: 'WorkOrder', href: '/w/DEMO/records/WorkOrder/0190f0e2-5555-7000-8000-000000000098' }], restoreHeld: 'versions.held.current' }),
   row(1, { markups: 2, usedBy: [{ label: null, typeKey: 'Shipment', href: '/w/DEMO/records/Shipment/0190f0e2-5555-7000-8000-000000000041' }] }),
 ]
+// ---- F-OF T.1 (order FILES tab): a document with 5 versions as the order page's Versions… reads it — v5 in force (renamed in v4),
+// Restore inside on every earlier one; one added by the customer, one a copy Nexus made. Made up.
+const SIZE_SPEC_ROWS: VersionRow[] = [
+  row(55, { versionNo: 5, addedAt: at(28, 10), current: true, name: 'Size spec SEED-JKT-02 final.pdf', addedBy: 'Carlo Prova', restoreHeld: 'versions.held.current' }),
+  row(54, { versionNo: 4, addedAt: at(26, 10), name: 'Size spec SEED-JKT-02 final.pdf', addedBy: 'Carlo Prova' }),
+  row(53, { versionNo: 3, addedAt: at(22, 10), name: 'Size spec SEED-JKT-02.pdf', addedBy: 'Seed Customer One', fromPartner: true }),
+  row(52, { versionNo: 2, addedAt: at(18, 10), name: 'Size spec SEED-JKT-02.pdf', addedBy: null }),
+  row(51, { versionNo: 1, addedAt: at(14, 10), name: 'Size spec SEED-JKT-02.pdf', addedBy: 'Alex Demo' }),
+]
+// ---- end F-OF T.1
 const PHOTO_ROWS: VersionRow[] = [
   row(6, { versionNo: 2, current: true, name: 'sample front (marked).jpg', picture: true, madeByMarkup: { note: 'Loose thread at the pocket', marks: 1 }, restoreHeld: 'versions.held.current' }),
   row(5, { name: 'sample front.jpg', picture: true, markups: 1, addedBy: 'Tannery Example', fromPartner: true }),
@@ -152,6 +162,8 @@ export const designScreen = defineDesignScreen<FilesDepthCaseModel>({
         versions: { fileId: PHOTO_V2.id, name: PHOTO_V2.name, read: { status: 'ready', value: PHOTO_ROWS }, picked: [fid(5), fid(6)], compare: { status: 'ready', value: [{ versionNo: 1, src: picture('#4a5568', false) }, { versionNo: 2, src: picture('#4a5568', true) }] }, busy: false, problem: null },
       }),
     },
+    // F-OF T.1: the order page's Versions… of a document with 5 versions (its card ⋯; Restore lives only here).
+    { id: 'versions-five', label: 'Versions of Size spec SEED-JKT-02 final.pdf: 5 versions — v5 in force, Restore on every earlier one (the order page’s card ⋯)', model: base({ versions: { fileId: fid(55), name: 'Size spec SEED-JKT-02 final.pdf', read: { status: 'ready', value: SIZE_SPEC_ROWS }, picked: [], compare: null, busy: false, problem: null } }) },
     { id: 'versions-failed', label: 'Versions pop-up: could not be read', model: base({ versions: { fileId: PATTERN_V2.id, name: PATTERN_V2.name, read: { status: 'failed', problem: 'depth.problem.unavailable' }, picked: [], compare: null, busy: false, problem: null } }) },
     { id: 'tag', label: 'What it is and until when: a declaration valid until 12 Nov', model: base({ tag: { fileId: REACH.id, name: REACH.name, category: 'DECLARATION', expiresOn: '2026-11-12', busy: false, problem: null } }) },
     { id: 'tag-problem', label: 'What it is: a date the API would refuse', model: base({ tag: { fileId: TEST.id, name: TEST.name, category: 'TEST_REPORT', expiresOn: '2050-01-01', busy: false, problem: 'tag.problem.date' } }) },
