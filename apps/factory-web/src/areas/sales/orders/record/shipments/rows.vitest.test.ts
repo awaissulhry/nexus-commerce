@@ -8,6 +8,7 @@ import { carriesOf, chipsOf, datesOf, nextOf, rowOf, shipmentsAnswer, stateOf, t
 import { parcelWordsOf } from './rows' // F-OS-301
 import { orderStaysOf, showAtOf, trackingDoorDrawn } from './rows' // os-fx7
 import { ddtBlocksOf, factReadsOf, othersOf, problemsOf } from './facts' // os-fx7
+import { factPlanOf } from './facts' // os-fx9
 import type { ShipmentRow } from './where'
 
 /**
@@ -335,3 +336,40 @@ describe('os-fx7: the walk\'s gaps, in the rows model', () => {
   })
 })
 // ── end os-fx7 ──
+
+// ── os-fx9 (N-01): the rows' facts — only on the Shipments tab, each read once per load ──
+describe('os-fx9 (N-01): the facts reads are keyed by what decides them, and only the open Shipments tab sends them', () => {
+  const may = { manage: true, pack: true, ddt: true, holdsRelease: false }
+  const packed = row({ id: 'sh-p', may, version: 4 })
+  const shipped = row({ id: 'sh-s', status: 'SHIPPED', version: 2 })
+  const keys = (deliveries: DeliveryRow[] | null, rows: ShipmentRow[] = [packed, shipped]) => factPlanOf(rows, deliveries, ORDER.id).map((entry) => entry.key)
+
+  it('the deliveries read arriving adds only the reads it decides (the problems); the DDT read keeps its key — never sent twice', () => {
+    const before = keys(null)
+    expect(before).toEqual(['sh-p:ddt:PACKED:4'])
+    const after = keys([delivery({ id: 'sh-s', status: 'SHIPPED', openProblems: 1 })])
+    expect(after).toEqual(['sh-p:ddt:PACKED:4', 'sh-s:problems:SHIPPED:1'])
+    expect(after.filter((key) => !before.includes(key))).toEqual(['sh-s:problems:SHIPPED:1'])
+    // The same answer read again (a live event, a reload with nothing changed): the same keys, nothing new to send.
+    expect(keys([delivery({ id: 'sh-s', status: 'SHIPPED', openProblems: 1 })])).toEqual(after)
+  })
+
+  it('a change that decides a read gives it a new key (read again): a write on the row, one more open problem', () => {
+    expect(keys(null, [{ ...packed, version: 5 }, shipped])).toEqual(['sh-p:ddt:PACKED:5'])
+    expect(keys([delivery({ id: 'sh-s', status: 'SHIPPED', openProblems: 2 })])).toContain('sh-s:problems:SHIPPED:2')
+    expect(factPlanOf([row({ id: 'sh-x', status: 'DRAFT', otherPieces: 3, version: 1, orders: [{ id: ORDER.id, number: ORDER.number, customerRef: null }, { id: 'so-2', number: 'SEED-SO-0003', customerRef: null }] })], null, ORDER.id)).toEqual([{ key: 'sh-x:others:3:1', shipmentId: 'sh-x', read: 'others' }])
+  })
+
+  it('the container sends each key once, only while Shipments is the open tab, keeps the abort and says nothing on a failure', () => {
+    const hook = readFileSync(new URL('../use-shipments-acts.ts', import.meta.url), 'utf8')
+    expect(hook).toContain('order && shipmentsOpen ? factPlanOf(order.chain.shipments, deliveriesRead?.shipments ?? null, order.id) : []')
+    expect(hook).toContain('if (run.sent.has(entry.key)) continue')
+    expect(hook).toContain('}, [api, orderId, factPlanKey])')
+    expect(hook).not.toContain('}, [api, order, orderId, deliveriesRead])')
+    expect(hook).toContain('run.abort.abort()')
+    expect(hook).toContain('const quiet = () => run.sent.delete(entry.key)')
+    const record = readFileSync(new URL('../OrderRecord.tsx', import.meta.url), 'utf8')
+    expect(record).toContain("shipmentsOpen: tab === 'shipments'")
+  })
+})
+// ── end os-fx9 ──
