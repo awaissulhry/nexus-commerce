@@ -74,6 +74,8 @@ export async function readLabelFacts(db: CommandTx, shipment: ShipmentHeader & {
   // B-W2b-390: the site's test mode (LOG-035; no settings: test mode, the default) and a carrier booked by hand (LOG-122).
   const settings = await db.shippingSettings.findUnique({ where: { id: shipment.siteId }, select: { senderAddress: true, integrationAccountId: true, labelPrinterId: true, testMode: true } })
   const manual = await db.shipment.findUnique({ where: { id: shipment.id }, select: { manualTrackingNumber: true } })
+  // B-OS-022: the parcels with a number typed by hand (an office read: the floor never buys a label).
+  const typedParcels = await db.parcel.count({ where: { shipmentId: shipment.id, manualTrackingNumber: { not: null } } })
   const accountId = await carrierAccountIdOf(db, shipment, settings?.integrationAccountId ?? null)
   const account = accountId ? await db.integrationAccount.findUnique({ where: { id: accountId }, select: { id: true, provider: true, companyId: true, mode: true, status: true } }) : null
   const live = await liveDdtOf(db, shipment.id)
@@ -89,6 +91,7 @@ export async function readLabelFacts(db: CommandTx, shipment: ShipmentHeader & {
     environment,
     testMode: settings?.testMode ?? true,
     manualTrackingNumber: manual?.manualTrackingNumber ?? null,
+    typedParcels, // B-OS-022
   }
   return { facts, accountId: account?.id ?? null, labelPrinter: printer, parcels }
 }

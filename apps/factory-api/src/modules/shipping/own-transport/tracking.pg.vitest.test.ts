@@ -256,3 +256,132 @@ describe('B-OS-016, B-OS-015: the expected arrival by hand; delivered by hand ov
   })
 })
 // ---- end B-OS-015, B-OS-016
+
+// ---- B-OS-022 (order shipments 1/1; Owner D4; 13-backend §3): a tracking number typed by hand per parcel, in the one tracking
+// command on the shipment's version. SEED-SH-0002 (left, a carrier booked by hand, its own number cleared above) travels in three
+// parcels here: two are added past the guards (the command is what is tested). ----
+describe('B-OS-022: a tracking number typed by hand per parcel', () => {
+  const sh2 = () => seeded.draftShipmentId
+  const parcelIds: string[] = []
+  const LINK = 'https://track.example.com/AWB-OS022-0001'
+  const put = async (body: Json, session = 'desk') => call(session, 'PUT', tracking(sh2()), { version: await versionOf(sh2()), ...body })
+  const typedOf = () => admin<{ seq: number; number: string | null; url: string | null }>(`SELECT seq, "manualTrackingNumber" AS number, "manualTrackingUrl" AS url FROM "Parcel" WHERE "shipmentId" = $1 AND seq <= 3 ORDER BY seq`, [sh2()])
+  const parcelAudits = () => admin<{ before: Json; after: Json; reason: string | null }>(`SELECT before, after, reason FROM "AuditLog" WHERE action = 'shipping.typeParcelTracking' AND "recordId"::text = $1 ORDER BY at, id`, [sh2()])
+  const issuesOf = (answer: { json: () => unknown }) => (answer.json() as Json).error.issues as Json[]
+
+  beforeAll(async () => {
+    parcelIds.push(seeded.draftParcelId, newId(), newId())
+    await admin(
+      `BEGIN; SET LOCAL session_replication_role = replica;
+       INSERT INTO "Parcel" (id, "tenantId", "siteId", "partyId", "shipmentId", seq) SELECT p.id::uuid, s."tenantId", s."siteId", s."partyId", s.id, p.seq FROM "Shipment" s, (VALUES ('${parcelIds[1]}', 2), ('${parcelIds[2]}', 3)) AS p(id, seq) WHERE s.id = '${sh2()}';
+       COMMIT;`,
+    )
+  })
+
+  it('three parcels typed after the goods left: one command, one audit row with every parcel before → after, the event counts them', async () => {
+    const before = (await eventsOf(sh2())).length
+    const answer = await put({
+      parcels: [
+        { parcelId: parcelIds[0], trackingNumber: 'AWB-OS022-0001', trackingUrl: LINK },
+        { parcelId: parcelIds[1], trackingNumber: 'AWB-OS022-0002' },
+        { parcelId: parcelIds[2], trackingNumber: ' AWB-OS022-0003 ' },
+      ],
+    })
+    expect(answer.statusCode, answer.body).toBe(200)
+    const view = answer.json() as Json
+    // The shipment's own number is kept (none: cleared above); each parcel shows the number typed for it, none a label.
+    expect(view.shipment.manualTrackingNumber).toBeNull()
+    expect((view.parcels as Json[]).map((parcel) => [parcel.seq, parcel.label, parcel.typed, parcel.may.allowed])).toEqual([
+      [1, null, { number: 'AWB-OS022-0001', url: LINK }, true],
+      [2, null, { number: 'AWB-OS022-0002', url: null }, true],
+      [3, null, { number: 'AWB-OS022-0003', url: null }, true],
+    ])
+    expect(await typedOf()).toEqual([
+      { seq: 1, number: 'AWB-OS022-0001', url: LINK },
+      { seq: 2, number: 'AWB-OS022-0002', url: null },
+      { seq: 3, number: 'AWB-OS022-0003', url: null },
+    ])
+    const row = (seq: number, number: string | null, url: string | null) => ({ parcelId: parcelIds[seq - 1], seq, manualTrackingNumber: number, manualTrackingUrl: url })
+    expect(await parcelAudits()).toEqual([
+      {
+        before: { parcels: [row(1, null, null), row(2, null, null), row(3, null, null)] },
+        after: { parcels: [row(1, 'AWB-OS022-0001', LINK), row(2, 'AWB-OS022-0002', null), row(3, 'AWB-OS022-0003', null)] },
+        reason: null,
+      },
+    ])
+    const events = await eventsOf(sh2())
+    expect(events).toHaveLength(before + 1)
+    expect(events.at(-1)!.payload).toMatchObject({ status: 'SHIPPED', hasNumber: false, hasLink: false, parcels: 3 })
+    // The office line on the order's thread names the parcels' numbers (the customer is not mailed).
+    await notesOf(events.at(-1)!)
+    const line = (await linesOf(seeded.quality.serialSalesOrderId)).at(-1)!
+    expect(line.bodyText).toBe('Tracciamento di SEED-SH-0002 (Seed Express): collo 1: AWB-OS022-0001, collo 2: AWB-OS022-0002, collo 3: AWB-OS022-0003')
+    expect(line.audience).toBe('OFFICE')
+  })
+
+  it('the order read shows each parcel TYPED (never live); the same numbers again change nothing', async () => {
+    const { order } = (await call('deskOrders', 'GET', `/sales/orders/${seeded.quality.serialSalesOrderId}`)).json() as Json
+    const row = (order.chain.shipments as Json[]).find((entry) => entry.id === sh2())!
+    expect((row.parcels as Json[]).filter((parcel) => parcel.seq <= 3).map((parcel) => [parcel.seq, parcel.number, parcel.url, parcel.source, parcel.live])).toEqual([
+      [1, 'AWB-OS022-0001', LINK, 'TYPED', false],
+      [2, 'AWB-OS022-0002', null, 'TYPED', false],
+      [3, 'AWB-OS022-0003', null, 'TYPED', false],
+    ])
+    const events = (await eventsOf(sh2())).length
+    const same = await put({ parcels: [{ parcelId: parcelIds[1], trackingNumber: 'AWB-OS022-0002' }] })
+    expect(same.statusCode, same.body).toBe(200)
+    expect(await eventsOf(sh2())).toHaveLength(events)
+    expect(await parcelAudits()).toHaveLength(1)
+  })
+
+  it('a number the customer could read changes or is cleared only with a reason; then audited with it', async () => {
+    const changeOnly = await put({ parcels: [{ parcelId: parcelIds[1], trackingNumber: 'AWB-OS022-0020' }] })
+    expect(changeOnly.statusCode, changeOnly.body).toBe(400)
+    expect(issuesOf(changeOnly)[0]!.path).toBe('body/reason')
+    const clearOnly = await put({ parcels: [{ parcelId: parcelIds[2], trackingNumber: null }], reason: 'no' })
+    expect(clearOnly.statusCode, clearOnly.body).toBe(400)
+    expect(issuesOf(clearOnly)[0]!.path).toBe('body/reason')
+    expect((await typedOf()).map((parcel) => parcel.number)).toEqual(['AWB-OS022-0001', 'AWB-OS022-0002', 'AWB-OS022-0003'])
+    const reason = 'The courier gave a new air waybill for the second parcel.'
+    const changed = await put({ parcels: [{ parcelId: parcelIds[1], trackingNumber: 'AWB-OS022-0020' }, { parcelId: parcelIds[2], trackingNumber: null }], reason })
+    expect(changed.statusCode, changed.body).toBe(200)
+    expect((await typedOf()).map((parcel) => parcel.number)).toEqual(['AWB-OS022-0001', 'AWB-OS022-0020', null])
+    expect((await parcelAudits()).at(-1)).toEqual({
+      before: { parcels: [{ parcelId: parcelIds[1], seq: 2, manualTrackingNumber: 'AWB-OS022-0002', manualTrackingUrl: null }, { parcelId: parcelIds[2], seq: 3, manualTrackingNumber: 'AWB-OS022-0003', manualTrackingUrl: null }] },
+      after: { parcels: [{ parcelId: parcelIds[1], seq: 2, manualTrackingNumber: 'AWB-OS022-0020', manualTrackingUrl: null }, { parcelId: parcelIds[2], seq: 3, manualTrackingNumber: null, manualTrackingUrl: null }] },
+      reason,
+    })
+    expect((await eventsOf(sh2())).at(-1)!.payload).toMatchObject({ parcels: 2 })
+  })
+
+  it('refused in words: a parcel with a label (a TEST one too) PARCEL_LABELLED, a shipment with carrier labels LABELLED, another shipment’s parcel 404, a viewer 403', async () => {
+    const testParcel = newId()
+    await admin(
+      `BEGIN; SET LOCAL session_replication_role = replica;
+       INSERT INTO "Parcel" (id, "tenantId", "siteId", "partyId", "shipmentId", seq, "carrierParcelId", "trackingNumber") SELECT '${testParcel}'::uuid, "tenantId", "siteId", "partyId", id, 4, 'test:os022-4.v1', 'TEST-OS022-0004' FROM "Shipment" WHERE id = '${sh2()}';
+       COMMIT;`,
+    )
+    try {
+      const labelled = await put({ parcels: [{ parcelId: testParcel, trackingNumber: 'AWB-OS022-0004' }] })
+      expect(labelled.statusCode, labelled.body).toBe(409)
+      expect(issuesOf(labelled)).toEqual([{ path: 'refusal/PARCEL_LABELLED', message: 'Parcel 4: This parcel carries a label: its number comes from the label, never typed.' }])
+      // The view says so per parcel; the shipment's own number may still be typed (a TEST label is no carrier's).
+      const view = (await call('desk', 'GET', `/shipping/shipments/${sh2()}/own-transport`)).json() as Json
+      expect((view.parcels as Json[]).find((parcel) => parcel.seq === 4)).toMatchObject({ label: { number: 'TEST-OS022-0004', test: true, url: null }, typed: null, may: { allowed: false, refusal: { code: 'PARCEL_LABELLED' } } })
+      expect(view.may.track.allowed).toBe(true)
+    } finally {
+      await admin(`BEGIN; SET LOCAL session_replication_role = replica; DELETE FROM "Parcel" WHERE id = '${testParcel}'; COMMIT;`)
+    }
+    const sh1 = await call('desk', 'PUT', tracking(seeded.shipmentId), { version: await versionOf(seeded.shipmentId), parcels: [{ parcelId: seeded.parcelIds[0], trackingNumber: 'AWB-OS022-X' }] })
+    expect(sh1.statusCode, sh1.body).toBe(409)
+    expect(issuesOf(sh1)[0]!.path).toBe('refusal/LABELLED')
+    const elsewhere = await put({ parcels: [{ parcelId: seeded.parcelIds[0], trackingNumber: 'AWB-OS022-X' }] })
+    expect(elsewhere.statusCode, elsewhere.body).toBe(404)
+    expect((await put({ parcels: [{ parcelId: parcelIds[0], trackingNumber: null }], reason: 'Not this one after all.' }, 'viewer')).statusCode).toBe(403)
+    const twice = await put({ parcels: [{ parcelId: parcelIds[0], trackingNumber: 'A' }, { parcelId: parcelIds[0], trackingNumber: 'B' }] })
+    expect(twice.statusCode).toBe(400)
+    expect(issuesOf(twice)[0]!.path).toBe('body/parcels/1/parcelId')
+    expect((await typedOf()).map((parcel) => parcel.number)).toEqual(['AWB-OS022-0001', 'AWB-OS022-0020', null])
+  })
+})
+// ---- end B-OS-022

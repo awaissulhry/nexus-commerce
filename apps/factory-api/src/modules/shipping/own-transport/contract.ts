@@ -3,6 +3,7 @@ import { defineContract, id, input, instant, output } from '@nexus/factory-domai
 import { TRACKING_STATUSES } from '@nexus/factory-domain/shipping/labels/tracking'
 import { MANUAL_EVENT_STATUSES, OWN_TRANSPORT_LIMITS, OWN_TRANSPORT_MODES, OWN_TRANSPORT_REFUSALS, TRANSPORT_ARRANGEMENTS } from '@nexus/factory-domain/shipping/own-transport/rules'
 import { ETA_LIMITS, ETA_REFUSALS, OVERRIDE_REASON } from '@nexus/factory-domain/shipping/own-transport/rules' // B-OS-015, B-OS-016
+import { PARCEL_TRACKING_LIMITS, PARCEL_TRACKING_REFUSALS } from '@nexus/factory-domain/shipping/own-transport/rules' // B-OS-022
 import { statusSchema, transportBySchema } from '../views'
 
 /**
@@ -49,6 +50,19 @@ const transportView = output({
    * `eta` — the expected arrival typed by hand.
    */
   may: output({ arrange: allowance, track: allowance, status: allowance, endByHand: allowance, eta: etaAllowance }),
+  /**
+   * B-OS-022 (order shipments 1/1): each parcel — its label's number (read only; `test`: a TEST label of test mode), or the number
+   * typed for it by hand, and whether one may be typed now (the shipment's refusal first, then PARCEL_LABELLED or NOT_PACKED).
+   */
+  parcels: z.array(
+    output({
+      id: id(),
+      seq: z.number().int(),
+      label: output({ number: z.string().nullable(), test: z.boolean(), url: z.string().nullable() }).nullable(),
+      typed: output({ number: z.string(), url: z.string().nullable() }).nullable(),
+      may: output({ allowed: z.boolean(), refusal: output({ code: z.enum([...OWN_TRANSPORT_REFUSALS, ...PARCEL_TRACKING_REFUSALS]), message: z.string() }).nullable() }),
+    }),
+  ),
   /** The statuses typed so far (newest first). */
   events: z.array(
     output({
@@ -83,9 +97,17 @@ export const typeTrackingNumberContract = defineContract({
   params: shipmentParams,
   body: input({
     version,
-    trackingNumber: text(OWN_TRANSPORT_LIMITS.trackingNumber * 2).nullable(),
+    /** B-OS-022: left out (with `parcels` sent): the shipment's own number is kept. */
+    trackingNumber: text(OWN_TRANSPORT_LIMITS.trackingNumber * 2).nullish(),
     /** B-OP-034: the tracking link typed beside the number (https only); null clears it; left out: kept. */
     trackingUrl: text(OWN_TRANSPORT_LIMITS.trackingUrl * 2).nullish(),
+    /** B-OS-022: each parcel's number typed by hand (null clears it) and its link (left out: kept), in the same command. */
+    parcels: z
+      .array(input({ parcelId: id(), trackingNumber: text(OWN_TRANSPORT_LIMITS.trackingNumber * 2).nullable(), trackingUrl: text(OWN_TRANSPORT_LIMITS.trackingUrl * 2).nullish() }))
+      .max(PARCEL_TRACKING_LIMITS.parcels)
+      .optional(),
+    /** B-OS-022: why a parcel number the customer could read changes or is cleared after the goods left (3 to 500). */
+    reason: text(PARCEL_TRACKING_LIMITS.reasonMax * 2).nullish(),
   }),
   response: { 200: transportView },
 })

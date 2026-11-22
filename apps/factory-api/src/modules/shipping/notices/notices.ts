@@ -37,7 +37,8 @@ type Reader = CommandTx
 
 /** What the notice rule reads of a shipment (outside or inside a command). */
 async function noticeFactsOf(db: Reader, shipment: ShipmentHeader) {
-  const parcels = await db.parcel.findMany({ where: { shipmentId: shipment.id }, select: { id: true, seq: true, carrierParcelId: true, trackingNumber: true, trackingUrl: true }, orderBy: { seq: 'asc' } })
+  // B-OS-022: + each parcel's number (and link) typed by hand — named; an office or system read, never the floor's.
+  const parcels = await db.parcel.findMany({ where: { shipmentId: shipment.id }, select: { id: true, seq: true, carrierParcelId: true, trackingNumber: true, trackingUrl: true, manualTrackingNumber: true, manualTrackingUrl: true }, orderBy: { seq: 'asc' } })
   const extra = await db.shipment.findUnique({ where: { id: shipment.id }, select: { manualTrackingNumber: true } })
   const settings = await db.shippingSettings.findUnique({ where: { id: shipment.siteId }, select: { customerNoticeOn: true } })
   const sent = await db.emailOutbound.count({ where: { recordType: 'Shipment', recordId: shipment.id, templateKey: NOTICE_TEMPLATE } })
@@ -45,7 +46,7 @@ async function noticeFactsOf(db: Reader, shipment: ShipmentHeader) {
 }
 
 /** The parcels as the mail lists them: tracking number, carrier page and contents (style, colour, sizes). */
-async function noticeParcelsOf(db: Reader, shipmentId: string, parcels: readonly { id: string; seq: number; trackingNumber: string | null; trackingUrl: string | null }[]): Promise<NoticeParcel[]> {
+async function noticeParcelsOf(db: Reader, shipmentId: string, parcels: readonly { id: string; seq: number; trackingNumber: string | null; trackingUrl: string | null; carrierParcelId: string | null; manualTrackingNumber: string | null; manualTrackingUrl: string | null }[]): Promise<NoticeParcel[]> {
   const { lines } = await readContents(db, shipmentId)
   return parcels.map((parcel) => {
     const own = lines.filter((line) => line.parcelId === parcel.id || (line.parcelId === null && parcels.length === 1))
@@ -58,10 +59,12 @@ async function noticeParcelsOf(db: Reader, shipmentId: string, parcels: readonly
       group.sizes.set(line.size, (group.sizes.get(line.size) ?? 0) + line.quantity)
       groups.set(key, group)
     }
+    // B-OS-022: a parcel no label tracks lists the number (and link) typed for it.
+    const typed = parcel.trackingNumber === null && parcel.carrierParcelId === null && parcel.manualTrackingNumber !== null
     return {
       seq: parcel.seq,
-      trackingNumber: parcel.trackingNumber,
-      trackingUrl: parcel.trackingUrl,
+      trackingNumber: typed ? parcel.manualTrackingNumber : parcel.trackingNumber,
+      trackingUrl: typed ? parcel.manualTrackingUrl : parcel.trackingUrl,
       contents: [...groups.values()].map((group) => ({ style: group.style, colour: group.colour, sizes: [...group.sizes].map(([size, quantity]) => ({ size, quantity })) })),
     }
   })

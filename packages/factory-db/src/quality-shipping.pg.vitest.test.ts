@@ -351,7 +351,8 @@ describe('the walls', () => {
     const withCosts: Record<string, string[]> = { Shipment: ['freightCost', 'freightCostCurrency'], LabResult: ['costAmount', 'costCurrency'] }
     // B-OP-005 (order page, N5): where a shipment was made, the paper DDT of one made elsewhere and the typed tracking link
     // are the office's; the floor reads none of them (it packs only shipments made in Nexus).
-    const officeOnly: Record<string, string[]> = { Shipment: ['origin', 'externalDdtNumber', 'externalDdtDate', 'manualTrackingUrl'] }
+    // B-OS-020 (order shipments 1/1): a parcel's tracking number typed by hand and its link are the office's too.
+    const officeOnly: Record<string, string[]> = { Shipment: ['origin', 'externalDdtNumber', 'externalDdtDate', 'manualTrackingUrl'], Parcel: ['manualTrackingNumber', 'manualTrackingUrl'] }
     for (const { model, ownership } of models) {
       const grained = model.fields.filter((field) => field.tags.some((entry) => entry.startsWith('@grain')))
       expect(grained.map((field) => field.column), model.name).toEqual([...(prices[model.name] ?? []), ...(costs[model.name] ?? [])])

@@ -483,6 +483,13 @@ model Parcel {
   declaredValue   Int?
   /// @grain price
   insuredValue    Int?
+  /// B-OS-020 (order shipments 1/1, Owner D4): the tracking number typed by hand for a parcel no label tracks (an air waybill,
+  /// a courier's number): 1 to 100 characters on one line, never beside a carrier label, only while its carrier (CARRIER) is
+  /// booked by hand and from PACKED on — it still changes after the goods left. The office's: the floor neither reads nor
+  /// writes it.
+  manualTrackingNumber String?
+  /// B-OS-020: the tracking link typed beside it: https only, up to 500 characters on one line, only with the number.
+  manualTrackingUrl    String?
   version         Int       @default(1)
   createdAt       DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
