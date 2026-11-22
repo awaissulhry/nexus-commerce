@@ -30,7 +30,9 @@ export const manifest = defineManifest({
   'GET /sales/orders/:orderId/cancel-check': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'GET /sales/orders/:orderId/schedule': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   // B-W2a-F2: a before-shipping step's deposit request (an advance invoiced with a TD02 when paid before the goods leave).
-  'POST /sales/orders/:orderId/schedule/:milestoneId/request': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  // B-OM-018 (order money tab L9): "Open for payment" is the money plan's right (Owner, Finance), no longer orders.manage
+  // (Sales sees no amount: it would ask money it cannot see).
+  'POST /sales/orders/:orderId/schedule/:milestoneId/request': { audiences: ['office'], permission: 'orders.moneyPlan', scope: 'record' },
   // B-W2b-16: the owner waives a deposit or a step before shipping (a reason and a fresh step-up).
   'POST /sales/orders/:orderId/schedule/:milestoneId/waive': { audiences: ['office'], permission: 'orders.waive', scope: 'record' },
   'POST /sales/orders/:orderId/deposit-requests/:requestId/waive': { audiences: ['office'], permission: 'orders.waive', scope: 'record' },

@@ -3,7 +3,7 @@ import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
 import { decimalText } from '@nexus/factory-domain/product/units/units'
-import { ORDERS_MANAGE, ORDERS_WAIVE } from '@nexus/factory-domain/sales/orders/permissions'
+import { ORDERS_MONEY_PLAN, ORDERS_WAIVE } from '@nexus/factory-domain/sales/orders/permissions'
 import { MILESTONE_WORDS, paymentScheduleOf, remadeSchedule, stepRequestFor, type PlannedMilestone, type StoredMilestone } from '@nexus/factory-domain/sales/orders/schedule'
 import { instalmentsOf } from '@nexus/factory-domain/sales/terms/terms'
 import type { CustomerTaxProfile } from '@nexus/factory-domain/tax/vat-treatment'
@@ -486,7 +486,7 @@ export interface StepRequestBody {
 }
 
 /**
- * orders.manage: a BEFORE_SHIPPING step's deposit request made now (B-W2a-F2), for a step that has none — an order made
+ * orders.moneyPlan (B-OM-018; was orders.manage): a BEFORE_SHIPPING step's deposit request made now (B-W2a-F2), for a step that has none — an order made
  * before this step, or a step without its day when the order was made (no promise date): the customer can then pay it
  * as an advance before the goods leave, and the deposit flow issues its TD02 (DPR 633/1972 art. 6 c.4). ONE command: the
  * order's row, the step at its version (OPEN, BEFORE_SHIPPING, no request yet), the order still before shipping (no
@@ -496,7 +496,7 @@ export interface StepRequestBody {
  * the invoice fall due with the goods' invoice), a step settled or with its request already, goods that left, no day.
  */
 export async function requestStep(caller: CommandCaller, orderId: string, milestoneId: string, body: StepRequestBody, idempotencyKey?: string) {
-  const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
+  const order = await officeOrder(caller, orderId, ORDERS_MONEY_PLAN) // B-OM-018
   const { result } = await command(caller, { name: 'orders.requestStep', idempotencyKey, input: { orderId, milestoneId, ...body } }, async (tools) => {
     const { tx } = tools
     const locked = await lockOrder(tx, order.id)
