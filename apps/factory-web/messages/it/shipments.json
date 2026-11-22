@@ -15,7 +15,7 @@
     "PACKED": "Imballata",
     "SHIPPED": "Spedita",
     "DELIVERED": "Consegnata",
-    "RETURNED": "Resa",
+    "RETURNED": "Rientrata",
     "CANCELLED": "Annullata"
   },
   "rows": {
@@ -77,7 +77,7 @@
     "OUT_FOR_DELIVERY": "In consegna",
     "DELIVERED": "Consegnata",
     "EXCEPTION": "Anomalia",
-    "RETURNED": "Resa al mittente"
+    "RETURNED": "Rientrata al mittente"
   },
   "printState": {
     "QUEUED": "In coda",
@@ -270,7 +270,7 @@
     "documents_one": "{count} documento deve essere in archivio prima che la merce parta",
     "documents_other": "{count} documenti devono essere in archivio prima che la merce parta",
     "noAnnul": "Serve il permesso di annullare DDT",
-    "annulDelivered": "Consegnata o resa: il DDT resta come emesso",
+    "annulDelivered": "Consegnata o rientrata: il DDT resta come emesso",
     "cancelLabels": "Un collo ha un'etichetta del corriere: annullala prima",
     "cancelDdt": "Un DDT valido la cita: annulla prima il DDT",
     "deliveryDdt": "Il DDT riporta il vettore: annullalo per cambiare chi trasporta",
@@ -653,7 +653,7 @@
     "pod": "Prova di consegna",
     "shippedAt": "Partita",
     "deliveredAt": "Consegnata",
-    "returnedAt": "Resa",
+    "returnedAt": "Rientrata",
     "notYet": "Non ancora",
     "notDelivered": "Non ancora consegnata",
     "podLater": "La firma e la foto del corriere arrivano in un rilascio successivo.",
@@ -814,6 +814,7 @@
     "labelsPrinted": "Etichette inviate alla stampante.",
     "shipped": "Consegnata al vettore: la merce è partita.",
     "cancelled": "Spedizione annullata.",
+    "takenOff": "I capi dell'ordine sono fuori da questa spedizione.",
     "packingListVersion": "Packing list {number} creata (versione {version}): la stampa la postazione di imballo.",
     "packingListSame": "Nulla è cambiato dalla versione {version}: la packing list {number} è lo stesso file.",
     "freightRule": "Il trasporto torna alla regola del sito.",
@@ -834,6 +835,7 @@
       "internal": "Qualcosa non è andato da parte nostra."
     },
     "write": {
+      "ddtNotNeeded": "Questa spedizione viaggia senza DDT: prima rimetti il DDT (⋯ Rimetti il DDT).",
       "moved": "Qualcuno ha cambiato questa spedizione nel frattempo: è stata riletta, controlla e riprova.",
       "state": "Lo stato della spedizione ora non lo permette.",
       "invalid": "Qualcosa di ciò che è stato inviato non è valido.",

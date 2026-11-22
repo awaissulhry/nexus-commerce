@@ -225,6 +225,47 @@
       "others": "the other orders",
       "nothingIn": "Nothing is in this parcel yet.",
       "part": "the parcels"
+    },
+    "act": {
+      "move": "Move garments to…",
+      "merge": "Merge into…",
+      "takeOff": "Take this order off…",
+      "unpack": "Unpack…",
+      "releaseHold": "Release the hold: {reason}…",
+      "ddtOff": "This shipment travels without a DDT…",
+      "ddtBack": "Put back the DDT…",
+      "cancel": "Cancel shipment…",
+      "eta": "Set expected arrival…",
+      "delivered": "Mark delivered…",
+      "returned": "Mark returned…",
+      "resolve": "Resolve a tracking problem…",
+      "receiveBack": "Receive the garments back…",
+      "held": {
+        "splitPacked": "Only a draft can be split: unpack it first.",
+        "movePacked": "Only a draft gives or takes garments: unpack it first.",
+        "ddtLive": "A live DDT names it: annul the DDT first.",
+        "labelled": "A parcel has a carrier label: void the labels first.",
+        "ddtCarrier": "The DDT names the carrier: annul it to change who carries.",
+        "carrierFed": "The carrier's own tracking follows it: nothing to type.",
+        "proofKept": "Every part of the proof is kept: it never changes.",
+        "received": "The garments were received back already."
+      }
+    },
+    "done": {
+      "split": "{number} was split.",
+      "arrange": "How {number} travels is saved.",
+      "eta": "The expected arrival of {number} is saved.",
+      "delivered": "{number} is marked delivered.",
+      "returned": "{number} is marked returned.",
+      "placeHold": "{number} is on hold.",
+      "releaseHold": "A hold of {number} is released.",
+      "proof": "The proof of delivery of {number} is saved.",
+      "resolve": "The tracking problem of {number} is resolved."
+    },
+    "told": {
+      "draft": "The customer is not told: a draft is never shown.",
+      "portal": "The customer is not e-mailed; their portal shows it at once.",
+      "ddtOff": "The customer sees the shipment from Packed on, without a DDT."
     }
   },
   "after": {
@@ -269,5 +310,159 @@
     "hideClosed": "Hide closed",
     "truncated": "Showing the latest 50"
   },
-  "copied": "Link copied"
+  "copied": "Link copied",
+  "door": {
+    "wordsOptional": "Your words (optional)",
+    "officeOnly": "Office only: the customer never reads them.",
+    "customerNotTold": "The customer is not told: a draft is never shown.",
+    "why": "Why",
+    "audit": "Saved with your name and the time; the history keeps before and after.",
+    "held": {
+      "busy": "Wait: the last change is being saved.",
+      "reading": "Wait: reading the shipment."
+    },
+    "title": {
+      "unpack": "Unpack",
+      "cancel": "Cancel the shipment",
+      "takeOff": "Take this order off",
+      "ddtRequired": "Travels without a DDT",
+      "receiveBack": "Receive the garments back"
+    },
+    "takeOff": {
+      "oneStep": "In one step, all or nothing: they go back to what the order can still ship; the other orders on it keep everything."
+    },
+    "handOver": {
+      "when": "Handed over at (empty: now)",
+      "whenHint": "Only when the goods left before it was recorded: stock and the cost of sales still post now.",
+      "notATime": "The time is not a time.",
+      "future": "The time is in the future.",
+      "tooOld": "At most {days} days back.",
+      "beforePacked": "The time is before the goods were packed.",
+      "beforeDdt": "The time is before the DDT was issued.",
+      "why": "Say why the goods are recorded as handed over at another time (3 to 500 characters)."
+    },
+    "ddt": {
+      "title": "{number} travels without a DDT",
+      "backTitle": "Put back the DDT of {number}",
+      "go": "Travel without a DDT",
+      "backGo": "Put back the DDT",
+      "what": "No DDT number is taken (no gap). It is handed over with its parcels and their typed numbers; aggregator labels still need a DDT (book the carrier by hand). The invoice is made by hand in Finance.",
+      "tick": "No DDT travels with these goods.",
+      "hint": "For an Italian company this is allowed only when an immediate invoice travels with the goods (the same rule as “Record a shipment made elsewhere”).",
+      "told": "The customer sees the shipment from Packed on, without a DDT.",
+      "never": "A shipment with a live DDT never takes it; only released garments ship; it reads no country.",
+      "backWhat": "From now on it leaves only with a DDT again: issue it in Warehouse before the hand-over.",
+      "held": {
+        "elsewhere": "A shipment made elsewhere has its own choice.",
+        "left": "The goods have left or it is cancelled: this is decided before they leave.",
+        "tick": "Tick “No DDT travels with these goods.”"
+      },
+      "refusal": {
+        "ELSEWHERE": "A shipment made elsewhere has its own choice.",
+        "LEFT": "The goods have left: this is decided before they leave.",
+        "CANCELLED": "The shipment is cancelled.",
+        "DDT_LIVE": "A live DDT names it: annul the DDT first.",
+        "SAME": "Nothing to change: it is so already."
+      }
+    },
+    "receive": {
+      "title": "Receive the garments of {number} back",
+      "go_one": "Receive {count} garment back",
+      "go_other": "Receive {count} garments back",
+      "what_one": "The carrier brought {count} garment back: it goes into finished goods.",
+      "what_other": "The carrier brought {count} garments back: they go into finished goods.",
+      "place": "Into",
+      "pickPlace": "Pick the place",
+      "then": "They count in stock again and as still to ship; ship them again with a new shipment.",
+      "held": {
+        "received": "They were received already.",
+        "notReturned": "Only a shipment the carrier brought back is received.",
+        "nothing": "Nothing of it is left to receive.",
+        "noPlace": "This site has no finished-goods place: an administrator adds one first.",
+        "pickPlace": "Pick where they go."
+      }
+    },
+    "status": {
+      "why": "Say why you know better than the carrier (at least {min} characters).",
+      "labelled": "The carrier's tracking moves this shipment. Mark it only if you know better, and say why: it is tagged “Set by hand”.",
+      "deliveredFinal": "Delivered is final: it never goes back. Payment steps that start on delivery start from this day.",
+      "returnedThen": "The garments count as still to ship again; they wait to be received in Warehouse.",
+      "told": "The customer is not e-mailed; their portal shows it at once."
+    },
+    "eta": {
+      "title": "Expected arrival of {number}",
+      "what": "For a carrier booked by hand or our van: no carrier feed tracks it, so the office types the day.",
+      "day": "Expected on",
+      "go": "Save the day",
+      "clear": "Clear the day",
+      "told": "The customer sees the day in their portal.",
+      "pickDay": "Pick the day.",
+      "notADay": "The day is not a day.",
+      "beforeLeft": "The day is before the goods left.",
+      "tooFar": "At most a year ahead.",
+      "done": "The expected arrival is saved.",
+      "refusal": {
+        "CARRIER_FED": "The carrier's own tracking follows it: nothing to type.",
+        "NOT_LEFT_OR_PACKED": "An expected arrival is typed once the goods are packed.",
+        "CANCELLED": "The shipment is cancelled.",
+        "ARRIVED": "It is delivered or came back already: its arrival is known."
+      }
+    },
+    "done": {
+      "unpacked": "{number} is unpacked: it is a draft again.",
+      "cancelled": "{number} is cancelled.",
+      "takenOff": "This order's garments are off {number}.",
+      "ddtOff": "{number} travels without a DDT.",
+      "ddtBack": "{number} leaves with a DDT again.",
+      "received": "{count} garments of {number} are back in finished goods."
+    }
+  },
+  "move": {
+    "title": "Move garments of {number} to another draft",
+    "mergeTitle": "Merge {number} into another draft",
+    "goBare": "Move",
+    "mergeGoBare": "Merge",
+    "go_one": "Move {count} garment",
+    "go_other": "Move {count} garments",
+    "mergeGo": "Merge into {number}",
+    "what": "Only drafts of the same customer, company and site take them; both drafts are locked together; the target's holds are checked for every order.",
+    "mergeWhat_one": "All {count} garment of {number} moves; {number} is then cancelled “Merged into …”, never deleted; its holds come along. Undo: Split….",
+    "mergeWhat_other": "All {count} garments of {number} move; {number} is then cancelled “Merged into …”, never deleted; its holds come along. Undo: Split….",
+    "to": "Move to",
+    "into": "Merge into",
+    "target": "{number} · carries {orders}",
+    "targetGarments_one": "{count} garment on it",
+    "targetGarments_other": "{count} garments on it",
+    "part": "what can move",
+    "never": "Cartons and serials stay; released counts and the orders' lines never change; nothing is deleted.",
+    "mergeNever": "Released counts and the orders' lines never change; the emptied draft stays, cancelled, with its history.",
+    "held": {
+      "reading": "Wait: reading what can move.",
+      "notDraft": "Only a draft gives or takes garments: unpack it first.",
+      "busy": "Wait: the move is being made.",
+      "noTarget": "No other draft of this customer can take them: make one with Create shipment…",
+      "pickTarget": "Pick the draft that takes them.",
+      "wordsLong": "At most {max} characters.",
+      "useMerge": "Nothing stays: use Merge into… instead.",
+      "reasonShort": "Say why (at least {min} characters)."
+    },
+    "refusal": {
+      "NOT_DRAFT": "Only a draft gives or takes garments.",
+      "SAME": "It is the same shipment.",
+      "OTHER_SITE": "That draft waits at another site.",
+      "NOTHING_TO_MOVE": "Nothing can move: every garment is in a carton or has a serial.",
+      "NOTHING_STAYS": "Nothing stays: use Merge into… instead.",
+      "ON_HOLD_QUALITY": "A work order of these garments is on a quality hold.",
+      "MERGE_PACKED": "Some garments are in cartons or have serials: take them out of the cartons first.",
+      "MERGE_LABELLED": "A parcel has a carrier label: void the labels first.",
+      "NOT_ON_IT": "None of this order's garments is on it any more.",
+      "FIRST_ORDER": "This shipment was made for this order: move the other orders' garments with Split… or Move garments to…, then cancel it.",
+      "IN_CARTON": "A garment of this order is in a carton: take it out first."
+    },
+    "done": {
+      "moved_one": "{count} garment moved to {number}.",
+      "moved_other": "{count} garments moved to {number}.",
+      "merged": "{number} is merged into {into}."
+    }
+  }
 }

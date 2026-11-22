@@ -225,6 +225,47 @@
       "others": "altri ordini",
       "nothingIn": "In questo collo non c'è ancora nulla.",
       "part": "i colli"
+    },
+    "act": {
+      "move": "Sposta capi su…",
+      "merge": "Unisci a…",
+      "takeOff": "Togli questo ordine…",
+      "unpack": "Disfa l'imballo…",
+      "releaseHold": "Sblocca il blocco: {reason}…",
+      "ddtOff": "Questa spedizione viaggia senza DDT…",
+      "ddtBack": "Rimetti il DDT…",
+      "cancel": "Annulla spedizione…",
+      "eta": "Imposta l'arrivo previsto…",
+      "delivered": "Segna come consegnata…",
+      "returned": "Segna come rientrata…",
+      "resolve": "Risolvi un problema di tracciamento…",
+      "receiveBack": "Ricevi i capi indietro…",
+      "held": {
+        "splitPacked": "Si può dividere solo una bozza: prima disfa l'imballo.",
+        "movePacked": "Solo una bozza cede o prende capi: prima disfa l'imballo.",
+        "ddtLive": "Un DDT valido la nomina: prima annulla il DDT.",
+        "labelled": "Un collo ha un'etichetta del vettore: prima annulla le etichette.",
+        "ddtCarrier": "Il DDT nomina il vettore: annullalo per cambiare chi trasporta.",
+        "carrierFed": "La segue il tracciamento del vettore: niente da inserire.",
+        "proofKept": "Ogni parte della prova è conservata: non cambia mai.",
+        "received": "I capi sono già stati ricevuti."
+      }
+    },
+    "done": {
+      "split": "{number} è stata divisa.",
+      "arrange": "Come viaggia {number} è salvato.",
+      "eta": "L'arrivo previsto di {number} è salvato.",
+      "delivered": "{number} è segnata come consegnata.",
+      "returned": "{number} è segnata come rientrata.",
+      "placeHold": "{number} è bloccata.",
+      "releaseHold": "Un blocco di {number} è sbloccato.",
+      "proof": "La prova di consegna di {number} è salvata.",
+      "resolve": "Il problema di tracciamento di {number} è risolto."
+    },
+    "told": {
+      "draft": "Il cliente non viene avvisato: una bozza non si vede mai.",
+      "portal": "Il cliente non riceve e-mail; il suo portale lo mostra subito.",
+      "ddtOff": "Il cliente vede la spedizione da Imballata in poi, senza DDT."
     }
   },
   "after": {
@@ -269,5 +310,159 @@
     "hideClosed": "Nascondi i chiusi",
     "truncated": "Mostrati gli ultimi 50"
   },
-  "copied": "Link copiato"
+  "copied": "Link copiato",
+  "door": {
+    "wordsOptional": "Le tue parole (facoltativo)",
+    "officeOnly": "Solo ufficio: il cliente non le legge mai.",
+    "customerNotTold": "Il cliente non viene avvisato: una bozza non si vede mai.",
+    "why": "Perché",
+    "audit": "Salvato con il tuo nome e l'ora; la cronologia conserva prima e dopo.",
+    "held": {
+      "busy": "Attendi: si sta salvando l'ultima modifica.",
+      "reading": "Attendi: lettura della spedizione."
+    },
+    "title": {
+      "unpack": "Disfa l'imballo",
+      "cancel": "Annulla la spedizione",
+      "takeOff": "Togli questo ordine",
+      "ddtRequired": "Viaggia senza DDT",
+      "receiveBack": "Ricevi i capi indietro"
+    },
+    "takeOff": {
+      "oneStep": "In un solo passo, tutto o niente: tornano a ciò che l'ordine può ancora spedire; gli altri ordini sulla spedizione tengono tutto."
+    },
+    "handOver": {
+      "when": "Consegnata al vettore il (vuoto: adesso)",
+      "whenHint": "Solo se la merce è partita prima di registrarlo: magazzino e costo del venduto si registrano comunque adesso.",
+      "notATime": "L'ora non è valida.",
+      "future": "L'ora è nel futuro.",
+      "tooOld": "Al massimo {days} giorni fa.",
+      "beforePacked": "L'ora è prima dell'imballo.",
+      "beforeDdt": "L'ora è prima dell'emissione del DDT.",
+      "why": "Di' perché la consegna al vettore si registra a un'altra ora (da 3 a 500 caratteri)."
+    },
+    "ddt": {
+      "title": "{number} viaggia senza DDT",
+      "backTitle": "Rimetti il DDT di {number}",
+      "go": "Viaggia senza DDT",
+      "backGo": "Rimetti il DDT",
+      "what": "Non si prende un numero di DDT (nessun buco). Si consegna con i suoi colli e i numeri inseriti; le etichette dell'aggregatore richiedono comunque un DDT (prenota il vettore a mano). La fattura si fa a mano in Amministrazione.",
+      "tick": "Con questa merce non viaggia nessun DDT.",
+      "hint": "Per un'azienda italiana è ammesso solo se con la merce viaggia una fattura immediata (la stessa regola di “Registra una spedizione fatta altrove”).",
+      "told": "Il cliente vede la spedizione da Imballata in poi, senza DDT.",
+      "never": "Una spedizione con un DDT valido non lo prende mai; partono solo capi rilasciati; non legge alcun paese.",
+      "backWhat": "Da ora parte di nuovo solo con un DDT: emettilo in Magazzino prima della consegna al vettore.",
+      "held": {
+        "elsewhere": "Una spedizione fatta altrove ha la sua scelta.",
+        "left": "La merce è partita o è annullata: si decide prima della partenza.",
+        "tick": "Spunta «Con questa merce non viaggia nessun DDT.»"
+      },
+      "refusal": {
+        "ELSEWHERE": "Una spedizione fatta altrove ha la sua scelta.",
+        "LEFT": "La merce è partita: si decide prima della partenza.",
+        "CANCELLED": "La spedizione è annullata.",
+        "DDT_LIVE": "Un DDT valido la nomina: prima annulla il DDT.",
+        "SAME": "Niente da cambiare: è già così."
+      }
+    },
+    "receive": {
+      "title": "Ricevi indietro i capi di {number}",
+      "go_one": "Ricevi {count} capo",
+      "go_other": "Ricevi {count} capi",
+      "what_one": "Il vettore ha riportato {count} capo: torna nei prodotti finiti.",
+      "what_other": "Il vettore ha riportato {count} capi: tornano nei prodotti finiti.",
+      "place": "In",
+      "pickPlace": "Scegli il luogo",
+      "then": "Tornano in magazzino e da spedire; spediscili di nuovo con una nuova spedizione.",
+      "held": {
+        "received": "Sono già stati ricevuti.",
+        "notReturned": "Si riceve solo una spedizione riportata dal vettore.",
+        "nothing": "Non resta nulla da ricevere.",
+        "noPlace": "Questo sito non ha un luogo per i prodotti finiti: prima un amministratore ne aggiunge uno.",
+        "pickPlace": "Scegli dove vanno."
+      }
+    },
+    "status": {
+      "why": "Di' perché ne sai più del vettore (almeno {min} caratteri).",
+      "labelled": "Il tracciamento del vettore muove questa spedizione. Segnala solo se ne sai di più, e di' perché: viene indicata «Impostata a mano».",
+      "deliveredFinal": "La consegna è definitiva: non torna indietro. Le rate che partono dalla consegna partono da questo giorno.",
+      "returnedThen": "I capi tornano da spedire; attendono di essere ricevuti in Magazzino.",
+      "told": "Il cliente non riceve e-mail; il suo portale lo mostra subito."
+    },
+    "eta": {
+      "title": "Arrivo previsto di {number}",
+      "what": "Per un vettore prenotato a mano o il nostro furgone: nessun dato del vettore la segue, quindi l'ufficio inserisce il giorno.",
+      "day": "Prevista il",
+      "go": "Salva il giorno",
+      "clear": "Togli il giorno",
+      "told": "Il cliente vede il giorno nel suo portale.",
+      "pickDay": "Scegli il giorno.",
+      "notADay": "Il giorno non è valido.",
+      "beforeLeft": "Il giorno è prima della partenza.",
+      "tooFar": "Al massimo fra un anno.",
+      "done": "L'arrivo previsto è salvato.",
+      "refusal": {
+        "CARRIER_FED": "La segue il tracciamento del vettore: niente da inserire.",
+        "NOT_LEFT_OR_PACKED": "L'arrivo previsto si inserisce quando la merce è imballata.",
+        "CANCELLED": "La spedizione è annullata.",
+        "ARRIVED": "È già consegnata o rientrata: il suo arrivo è noto."
+      }
+    },
+    "done": {
+      "unpacked": "{number} è disfatta: è di nuovo una bozza.",
+      "cancelled": "{number} è annullata.",
+      "takenOff": "I capi di questo ordine sono fuori da {number}.",
+      "ddtOff": "{number} viaggia senza DDT.",
+      "ddtBack": "{number} parte di nuovo con un DDT.",
+      "received": "{count} capi di {number} sono di nuovo nei prodotti finiti."
+    }
+  },
+  "move": {
+    "title": "Sposta capi di {number} su un'altra bozza",
+    "mergeTitle": "Unisci {number} a un'altra bozza",
+    "goBare": "Sposta",
+    "mergeGoBare": "Unisci",
+    "go_one": "Sposta {count} capo",
+    "go_other": "Sposta {count} capi",
+    "mergeGo": "Unisci a {number}",
+    "what": "Le prendono solo bozze dello stesso cliente, azienda e sito; le due bozze si bloccano insieme; i blocchi della destinazione si verificano per ogni ordine.",
+    "mergeWhat_one": "Si sposta {count} capo di {number}; {number} viene poi annullata «Unita a …», mai cancellata; i suoi blocchi vengono con sé. Per tornare indietro: Dividi….",
+    "mergeWhat_other": "Si spostano tutti i {count} capi di {number}; {number} viene poi annullata «Unita a …», mai cancellata; i suoi blocchi vengono con sé. Per tornare indietro: Dividi….",
+    "to": "Sposta su",
+    "into": "Unisci a",
+    "target": "{number} · porta {orders}",
+    "targetGarments_one": "{count} capo sopra",
+    "targetGarments_other": "{count} capi sopra",
+    "part": "cosa si può spostare",
+    "never": "Cartoni e matricole restano; i rilasciati e le righe degli ordini non cambiano mai; nulla si cancella.",
+    "mergeNever": "I rilasciati e le righe degli ordini non cambiano mai; la bozza svuotata resta, annullata, con la sua storia.",
+    "held": {
+      "reading": "Attendi: lettura di cosa si può spostare.",
+      "notDraft": "Solo una bozza cede o prende capi: prima disfa l'imballo.",
+      "busy": "Attendi: lo spostamento è in corso.",
+      "noTarget": "Nessun'altra bozza di questo cliente può prenderli: creane una con Crea spedizione…",
+      "pickTarget": "Scegli la bozza che li prende.",
+      "wordsLong": "Al massimo {max} caratteri.",
+      "useMerge": "Non resta nulla: usa invece Unisci a….",
+      "reasonShort": "Di' perché (almeno {min} caratteri)."
+    },
+    "refusal": {
+      "NOT_DRAFT": "Solo una bozza cede o prende capi.",
+      "SAME": "È la stessa spedizione.",
+      "OTHER_SITE": "Quella bozza attende in un altro sito.",
+      "NOTHING_TO_MOVE": "Non si può spostare nulla: ogni capo è in un cartone o ha una matricola.",
+      "NOTHING_STAYS": "Non resta nulla: usa invece Unisci a….",
+      "ON_HOLD_QUALITY": "Un ordine di lavoro di questi capi è bloccato dalla qualità.",
+      "MERGE_PACKED": "Alcuni capi sono in cartoni o hanno matricole: prima toglili dai cartoni.",
+      "MERGE_LABELLED": "Un collo ha un'etichetta del vettore: prima annulla le etichette.",
+      "NOT_ON_IT": "Nessun capo di questo ordine è più sopra.",
+      "FIRST_ORDER": "Questa spedizione è nata per questo ordine: sposta i capi degli altri ordini con Dividi… o Sposta capi su…, poi annullala.",
+      "IN_CARTON": "Un capo di questo ordine è in un cartone: prima toglilo."
+    },
+    "done": {
+      "moved_one": "{count} capo spostato su {number}.",
+      "moved_other": "{count} capi spostati su {number}.",
+      "merged": "{number} è unita a {into}."
+    }
+  }
 }

@@ -17,6 +17,15 @@ import { DeliveryView } from './view/DeliveryView'
  * Download opens the proof's presigned GET; Resolve = `POST …/resolve` with the note.
  */
 export function Delivery({ shipment, version, can, facts }: { shipment: { id: string; companyId: string }; version: number; can: DepthAbilities; facts: DeliveryModel['facts'] }) {
+  const { model, actions } = useDelivery(shipment, version, can, facts)
+  return <DeliveryView model={model} actions={actions} />
+}
+
+/**
+ * F-OS-201 (order SHIPMENTS tab; 13-backend §7): the proof and the problems' reads and writes, the body of `Delivery` — also mounted
+ * by itself where a page opens one of its windows for ONE shipment (the order's Shipments row ⋯: Record the proof…, Resolve…).
+ */
+export function useDelivery(shipment: { id: string; companyId: string }, version: number, can: DepthAbilities, facts: DeliveryModel['facts']): { model: DeliveryModel; actions: DeliveryActions } {
   const api = useOfficeApi()
   const shipmentId = shipment.id
   const [model, setModel] = useState<DeliveryModel>({ pod: LOADING, problems: LOADING, can: { manage: can.manage, readFiles: can.readFiles, uploadFiles: can.uploadFiles }, facts, dialog: null, busy: false, problem: null, done: null })
@@ -119,5 +128,5 @@ export function Delivery({ shipment, version, can, facts }: { shipment: { id: st
     [api, shipmentId, shipment.companyId, load, fail],
   )
 
-  return <DeliveryView model={{ ...model, facts }} actions={actions} />
+  return { model: { ...model, facts }, actions }
 }

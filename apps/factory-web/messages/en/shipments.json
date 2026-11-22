@@ -814,6 +814,7 @@
     "labelsPrinted": "Labels sent to the printer.",
     "shipped": "Handed over: the goods left.",
     "cancelled": "Shipment cancelled.",
+    "takenOff": "The order's garments are off this shipment.",
     "packingListVersion": "Packing list {number} made (version {version}): the packing station prints it.",
     "packingListSame": "Nothing changed since version {version}: packing list {number} is the same file.",
     "freightRule": "The freight is back to the site's rule.",
@@ -834,6 +835,7 @@
       "internal": "Something went wrong on our side."
     },
     "write": {
+      "ddtNotNeeded": "This shipment travels without a DDT: put the DDT back first (⋯ Put back the DDT).",
       "moved": "Someone changed this shipment meanwhile: it was read again, check and try again.",
       "state": "The shipment's state does not allow it now.",
       "invalid": "Something in what was sent is not valid.",

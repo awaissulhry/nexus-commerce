@@ -71,7 +71,10 @@ import { openPresigned, presignedBytes } from '../files'
 import { useCoalesced, useLive } from '../hooks'
 import { olderRead } from '../../../../lib/records/older-read' // fx-11: a read older than the record held is dropped
 import { abilitiesOf, ddtFormFor, ddtRequestOf, hasLeft, knownIds, liveTouches, readProblem, tabOf, writeProblem, type DdtForm, type RecordTab } from '../model'
-import { lineGroups, shipmentOrders } from '../model' // F-OP-130 (order page N6)
+import { shipmentOrders } from '../model' // F-OP-130 (order page N6)
+// F-OS-203 (order SHIPMENTS tab): an order off a shared DRAFT in ONE command; hand over at a time.
+import { takeOffOrder } from '../queue/move/api'
+import { handOverBody } from './hand-over'
 import { PART_LOADING, type Loaded, type Part, type PdfPart, type RecordDialog, type ShipmentRecordModel } from './record-model'
 import { ShipmentRecordView } from './view/ShipmentRecordView'
 // B-W2b-170
@@ -79,6 +82,7 @@ import { TrackingLinkCard } from '../tracking-link/TrackingLinkCard'
 // B-W2b-410
 import { useRecordDepth } from '../queue/record-depth'
 import { DEPTH_NS } from '../queue/shared/depth'
+import { DOOR_NS } from '../queue/shared/door-words' // F-OS-203
 // ---- B-TH-264: the docked thread on the shipment (RecordFrame; Activity's tools in its "⋯") ----
 import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
 import { printHref } from '../../../../shell/print/print-model'
@@ -97,7 +101,7 @@ import { printHref } from '../../../../shell/print/print-model'
  */
 export function ShipmentRecord({ shipmentId }: { shipmentId: string }) {
   return (
-    <WithMessages namespaces={['shipments', 'lists', 'records', DEPTH_NS]}>
+    <WithMessages namespaces={['shipments', 'lists', 'records', DEPTH_NS, DOOR_NS /* F-OS-203: the dialogs it shares with the order's Shipments tab */]}>
       <RecordContainer shipmentId={shipmentId} />
     </WithMessages>
   )
@@ -542,25 +546,12 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
         // in words while several orders in one shipment are held off); then every carried order's parts are read again.
         onAddLines: (lines) => void write(() => addLines(api, shipmentId, version(), lines), 'notice.linesAdded'),
         onPickOrder: (salesOrderId) => pickOrder(salesOrderId),
-        // F-OP-130 (N6): an order other than the first leaves with its last line — each of its lines removed in turn, each with the
-        // version the one before answered (a refusal stops there and says so; what was removed stays removed).
-        onTakeOff: (salesOrderId) => {
-          const ids = value ? (lineGroups(value, backorder.value).find((group) => group.order?.id === salesOrderId)?.lines ?? []).map((line) => line.id) : []
-          if (ids.length === 0 || salesOrderId === value?.salesOrderId) return
-          void write(async () => {
-            let next = null as Shipment | null
-            try {
-              for (const lineId of ids) next = await removeLine(api, shipmentId, lineId, next?.version ?? version())
-            } catch (error) {
-              // What was removed stays removed: the page shows the shipment as the last removal answered, then the refusal.
-              if (next) {
-                setValue(next)
-                loadParts(next)
-              }
-              throw error
-            }
-            return next ?? undefined
-          }, null)
+        // F-OP-130 (N6) → F-OS-203 (B-OS-013, X1-B2): an order other than the first leaves in ONE command — every line of it, all or
+        // nothing, with the office's reason (no more line-by-line loop that could stop half way).
+        onTakeOff: (salesOrderId, reason) => {
+          if (!value || salesOrderId === value.salesOrderId) return
+          const key = keyOf(`takeOff:${salesOrderId}`)
+          void write(async () => void (await takeOffOrder(api, shipmentId, salesOrderId, version(), reason, key)), 'notice.takenOff', { key: `takeOff:${salesOrderId}` })
         },
         onPlaceLine: (lineId, parcelId) => void write(async () => void (await placeLine(api, shipmentId, lineId, version(), parcelId)), null),
         onSaveParcel: (parcelId, measures) => {
@@ -629,7 +620,7 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
           )
         },
         onPrintLabels: () => void write(async () => void (await printLabels(api, shipmentId)), 'notice.labelsPrinted'),
-        onHandOver: () => void write(() => shipShipment(api, shipmentId, version()), 'notice.shipped'),
+        onHandOver: (at) => void write(() => shipShipment(api, shipmentId, version(), handOverBody(at)), 'notice.shipped'), // F-OS-203 (B-OS-014)
         onCancel: (reason) => void write(() => cancelShipment(api, shipmentId, version(), reason), 'notice.cancelled'),
         // B-W2a-71 (every day)
         onVoidLabels: (reason) => {
