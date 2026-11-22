@@ -12,7 +12,9 @@ import type { Deliveries, DeliveryRow } from './delivered/api'
  * one · split over draft, packed and shipped · a carrier booked by hand with 3 parcels typed (air waybill) · delivered by the carrier
  * and by hand · came back (received or not) · cancelled and merged · made elsewhere · held · a return and a complaint · every part
  * failed · the roles · "Seed Karachi Mills" with a shipment that travels without a DDT (no country is read: the same tab). The rooms
- * (S / M / L) are the end walk's: the gallery has no room control. Made-up data only. Fixtures (fixtures.ts) spreads these cases.
+ * (S / M / L) are the end walk's: the gallery has no room control. Made-up data only. The order page's fixtures (../fixtures.ts) spread
+ * these cases; this file is design-only (a `fixtures.ts`, so only fixtures, tests and the design index import it) and exports no
+ * design screen of its own (the registry skips it).
  */
 
 type Base = (role: Role, value: Order, over?: Partial<OrderRecordModel>) => { role: Role; record: OrderRecordModel }
