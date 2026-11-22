@@ -49,6 +49,9 @@ const SESSIONS: Record<string, () => SessionContext> = {
   alphaOnly: () => office(['files.read'], [P1]),
   betaOnly: () => office(['files.read'], [second.partyId]),
   people: () => office(['files.read', 'users.view']),
+  // of-fx4s: B-OF-014 — an office upload reaches its record first; a person's record (a User) through its thread gate, users.view.
+  // everyBrand keeps no users.view: the last case proves it reads none of a person's files.
+  peopleUploader: () => office(['files.read', 'files.upload', 'files.manage', 'users.view']),
 }
 
 async function call(session: string, method: 'GET' | 'POST' | 'PUT', url: string, body?: unknown): Promise<{ status: number; body: Json }> {
@@ -56,12 +59,12 @@ async function call(session: string, method: 'GET' | 'POST' | 'PUT', url: string
   return { status: response.statusCode, body: response.json() as Json }
 }
 const pdf = (text: string): Buffer => Buffer.from(`%PDF-1.7 made-up file of the office scope test: ${text}`)
-async function uploaded(name: string, record: { recordType: string; recordId: string }): Promise<Json> {
+async function uploaded(name: string, record: { recordType: string; recordId: string }, session = 'everyBrand'): Promise<Json> {
   const body = pdf(name)
-  const announced = await call('everyBrand', 'POST', '/files', { companyId: companyA, kind: 'DOCUMENT', originalName: name, contentType: 'application/pdf', sizeBytes: body.length, sha256: createHash('sha256').update(body).digest('hex'), ...record })
+  const announced = await call(session, 'POST', '/files', { companyId: companyA, kind: 'DOCUMENT', originalName: name, contentType: 'application/pdf', sizeBytes: body.length, sha256: createHash('sha256').update(body).digest('hex'), ...record })
   expect(announced.status, JSON.stringify(announced.body)).toBe(201)
   expect((await app.inject({ method: 'PUT', url: announced.body.upload.url, headers: announced.body.upload.headers, payload: body })).statusCode).toBe(200)
-  const done = await call('everyBrand', 'POST', `/files/${announced.body.file.id}/complete`)
+  const done = await call(session, 'POST', `/files/${announced.body.file.id}/complete`)
   expect(done.status, JSON.stringify(done.body)).toBe(200)
   return done.body.file
 }
@@ -83,7 +86,7 @@ beforeAll(async () => {
   )
   alphaFile = await uploaded(BRAND_ALPHA.fileName, { recordType: 'SalesOrder', recordId: SO1 })
   betaFile = await uploaded(BRAND_BETA.fileName, { recordType: 'SalesOrder', recordId: second.salesOrderId })
-  personFile = await uploaded('Colleague training record.pdf', { recordType: 'User', recordId: colleague })
+  personFile = await uploaded('Colleague training record.pdf', { recordType: 'User', recordId: colleague }, 'peopleUploader') // of-fx4s (B-OF-014)
 }, 300_000)
 
 afterAll(async () => {
