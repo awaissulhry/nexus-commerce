@@ -154,7 +154,8 @@
     "happensOffice": "They get a task “Upload: …” in My tasks and Today; when the file comes, you get “Check: …”. Ticking the task by hand closes nothing: the file closes the ask.",
     "happensFloor": "The tablets of that team, role or step show it under Files asked; a photo needs the network.",
     "customerTold": "The customer: sees nothing — an ask is office only.",
-    "never": "What never changes. An ask is never deleted: it is accepted or cancelled; the audit keeps who asked, when, and where it lands."
+    "never": "What never changes. An ask is never deleted: it is accepted or cancelled; the audit keeps who asked, when, and where it lands.",
+    "truncated": "The list is cut short: not everyone who may be asked is shown."
   },
   "refusal": {
     "stale": "Someone changed this ask meanwhile: it was read again.",

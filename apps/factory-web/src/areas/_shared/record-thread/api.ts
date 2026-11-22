@@ -243,10 +243,8 @@ export async function officeOnly(api: ApiClient, file: { id: string; version: nu
   await api.request('PUT', `/files/${enc(file.id)}/visibility`, { body: { visibility: ['OFFICE'], partyId: null, version: file.version }, schema: fileAnswer, idempotencyKey: globalThis.crypto.randomUUID() })
 }
 
-/** DELETE /files/<id> ("Delete", files.delete): a legal hold refuses it in the API too. */
-export async function removeFile(api: ApiClient, file: { id: string; version: number }): Promise<void> {
-  await api.request('DELETE', `/files/${enc(file.id)}`, { query: { version: file.version }, schema: fileAnswer })
-}
+// F-OF-303 (D4, S3): "Delete" on every record's Files window deletes the WHOLE document with a reason (file-acts-api deleteDocument);
+// the old DELETE /files/<id> call went with the bulk bar's direct delete.
 
 // ---- B-TH-231: carry a file to another record (B-TH-024) and the records it may go to (same customer or none) ----
 const targetsAnswer = z.object({
@@ -394,7 +392,8 @@ const orderFileSchema = z.object({
   versionNo: z.number(),
   at: z.string(),
   // F-OF-101 (B-OF-003, S3): an annulled DDT's paper, an invoice's replaced file — optional until it lands.
-  from: orderFileRef.extend({ state: z.enum(['ANNULLED', 'REPLACED']).nullable().optional() }),
+  // F-OF-101 (B-OF-003, S3): + a DDT's paper names the shipment it travels with (drawn inside that shipment's block).
+  from: orderFileRef.extend({ state: z.enum(['ANNULLED', 'REPLACED']).nullable().optional(), shipment: z.object({ id: z.string(), label: z.string() }).nullable().optional() }),
   line: z.object({ id: z.string(), seq: z.number() }).nullable(),
   audience: z.enum(['CUSTOMER_CAN_SEE', 'OFFICE_ONLY']),
   bodyData: z.boolean(),

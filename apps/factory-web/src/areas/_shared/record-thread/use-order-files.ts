@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ApiClient } from '../../../lib/api/client'
 import { isApiError } from '../../../lib/api/errors'
 import type { FilesViewActions } from '../../../lib/record-thread/files-view/view/FilesView'
-import { isOwnFile, type OrderFilesModel, type OrderFilesRead } from '../../../lib/record-thread/files-view/model'
+import type { FileActsState, OrderFilesModel, OrderFilesRead } from '../../../lib/record-thread/files-view/model'
 // F-OP-126 (R-14): the cards' previews, only those in view, through the order's walled batch route.
 import { orderFilesOf } from '../../../lib/record-thread/files-view/model'
 import { orderPricedLeftOut } from '../../../lib/record-thread/files-view/model' // F-CP-144
@@ -16,9 +16,11 @@ import { useFileUpload } from '../../../lib/record-thread/files-view/use-file-up
 import type { OrderFilesMay, UploadPlace } from '../../../lib/record-thread/files-view/model'
 import { uploadChoices } from '../../../record-panels/model'
 import { useFileAsks } from './use-file-asks' // F-OF-201: "Waiting for files"
-import { listFiles } from '../../../record-panels/api'
 import { storeUrl } from '../../../record-panels/store'
-import { openOrderFile, readOrderFiles, shareWithParty } from './api'
+import { openOrderFile, readOrderFiles } from './api'
+// F-OF-301 … F-OF-303: the acts on the order's OWN files (the order's and its lines') through the ONE acts hook the dock uses too.
+import { cardKindOf, isOrderOwn, visibilityOf } from '../../../lib/record-thread/files-view/model'
+import { useFileActs } from './use-file-acts'
 import { readOrderFilePreviews } from './api' // F-OP-126
 import { openWorksheet } from '../../sales/mtm/api' // F-OP-125 (B5): a worksheet opens by the made-to-measure route (recorded there)
 import type { ThreadFile } from '../../../lib/record-thread/files/model' // F-OP-215: the dock's files line over the order's set
@@ -29,8 +31,10 @@ import { sharedWithCustomer } from '../../../lib/record-thread/files-view/model'
 /**
  * F-SA-237 (sales page plan N9, P14) — a sales order's files, the container part the order's Files tab AND the thread's Files window
  * on the order both use (one read, one way to open): reads `GET /sales/orders/:orderId/files` while shown; F-OP-127: opens a file in
- * the ONE viewer through the read's own route (body data only when asked, recorded there — never the generic preview); Download N; Share N OWN files (the order's own, still office only) with the order's customer — each file at its version
- * as `GET /files` reads it now (B-TH-003 refuses any other party). Refusals are words of `record-thread-files-view`.
+ * the ONE viewer through the read's own route (body data only when asked, recorded there — never the generic preview); Download N.
+ * F-OF-303 (L7): "Who can see N…" replaced "Share N own" — the order's own files and its lines', each at the version the read gives
+ * (B-OF-001), shared with THIS order's customer or taken back (B-TH-003 refuses any other party). Refusals are words of
+ * `record-thread-files-view`.
  *
  * F-OP-125 (order page N-1): THE order-files container — the order page mounts it ONCE (OrderRecord.tsx) and gives the same model to
  * the Files tab and, later, to the dock (F-OP-215): one read, one count. The read is made the first time it is wanted and kept while
@@ -67,13 +71,17 @@ export function useOrderFiles(
     readonly today?: string
     readonly focusAsk?: string | null
     // ---- end F-OF-201
+    // ---- F-OF-301: Versions… — the page's ONE depth (useFileDepth, mounted once by the order page); absent: no Versions… here
+    readonly onVersions?: (fileId: string) => void
+    /** The order's customer by name (Who can see's second choice). */
+    readonly partyName?: string | null
+    // ---- end F-OF-301
   },
 ) {
   const { orderId, enabled, partyId, canShare, keep = false } = input
   const [read, setRead] = useState<OrderFilesRead | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const [selected, setSelected] = useState<readonly string[]>([])
-  const [busy, setBusy] = useState(false)
   const turn = useRef(0)
   const onProblem = useRef(input.onProblem)
   onProblem.current = input.onProblem
@@ -184,6 +192,24 @@ export function useOrderFiles(
     openFile: (fileId) => viewer.openAt(fileId, null),
   })
   // ---- end F-OF-201
+  // ---- F-OF-301 … F-OF-303: the acts on the order's OWN files (the order's and its lines') — only a file the read gives at its version
+  // (B-OF-001, S3): New version…, Who can see… (it takes a file back too: L7), Mark as priced?, Rename…, Use on another record…, Delete… (the
+  // whole document, with a reason: D4). After each: the read again (the live channel re-reads it too), one notice.
+  // F-OF-304: what the last act did, said once on the body (a new act, or Dismiss, clears it).
+  const [actNotice, setActNotice] = useState<FileActsState['notice']>(null)
+  const ownFiles = useMemo(() => (read && orderId ? orderFilesOf(read).filter((file) => isOrderOwn(file, orderId) && file.version !== undefined) : []), [read, orderId])
+  const fileActs = useFileActs(api, {
+    record: { type: 'SalesOrder', id: orderId ?? '' },
+    files: ownFiles.map((file) => ({ id: file.id, name: file.name, version: file.version!, visibility: visibilityOf(file), versions: file.versions ?? 1, versionNo: file.versionNo })),
+    threadFiles: ownFiles.map((file) => ({ id: file.id, name: file.name, status: 'AVAILABLE' as const, locked: cardKindOf(file) === 'LOCKED' ? 'MEASUREMENTS' : undefined })),
+    partyId,
+    party: partyId && input.partyName ? { name: input.partyName } : null,
+    canShare: shareRight,
+    notify: setActNotice,
+    reload: load,
+    onCleared: () => setSelected([]),
+  })
+  // ---- end F-OF-301
 
   const actions: FilesViewActions = {
     onRetry: load,
@@ -204,28 +230,26 @@ export function useOrderFiles(
         .then((answer) => window.open(storeUrl(answer.download.url), '_blank', 'noopener'))
         .catch(() => onProblem.current?.('order.openFailed'))
     },
+    // F-OF-303 (L7): Download N; "Who can see N…" (it replaced "Share N own": shares or takes back, lines included); Delete N… (D4).
     onOrderBulk: (action, ids) => {
       if (action === 'download') {
         for (const fileId of ids) void download(fileId)
         return
       }
-      if (!orderId || !partyId || !shareRight || busy) return
-      const own = (read?.groups.flatMap((group) => group.files) ?? []).filter((file) => ids.includes(file.id) && isOwnFile(file, orderId))
-      setBusy(true)
-      listFiles(api, { type: 'SalesOrder', id: orderId })
-        .then(async ({ files }) => {
-          for (const file of own) {
-            const now = files.find((entry) => entry.id === file.id)
-            if (now) await shareWithParty(api, now, partyId)
-          }
-          setSelected([])
-        })
-        .catch(() => onProblem.current?.('order.shareFailed'))
-        .finally(() => {
-          setBusy(false)
-          load()
-        })
+      fileActs.openAct(action, ids)
     },
+    // ---- F-OF-302: the card's ⋯ — Versions… opens the page's ONE depth; Use on another record… its window; the rest their window ----
+    onOrderAct: (act, fileId) => {
+      setActNotice(null)
+      if (act === 'versions') return input.onVersions?.(fileId)
+      if (act === 'useOn') return fileActs.openUseOn([fileId])
+      if (act === 'markPriced' || act === 'unmarkPriced') return fileActs.openAct('priced', [fileId], act === 'markPriced')
+      if (act === 'newVersion' || act === 'whoCanSee' || act === 'rename' || act === 'delete') return fileActs.openAct(act, [fileId])
+    },
+    ...fileActs.actActions, // F-OF-303: the windows' fields and act
+    onActNoticeDismiss: () => setActNotice(null), // F-OF-304
+    orderUseOn: fileActs.useOn.actions, // B-TH-231: "Use on another record…" (the window the dock draws, here drawn by the body)
+    // ---- end F-OF-302
     // ---- F-OF-103: "Add files…" — the ONE upload window (the order or one of its lines) ----
     onOrderAdd: (files) => upload.open(files),
     onOrderUploadChange: upload.change,
@@ -236,7 +260,24 @@ export function useOrderFiles(
     ...asks.actions, // F-OF-201 … F-OF-203: the band's doors and windows
   }
 
-  const model: OrderFilesModel = { read, problem, selected, canShare: shareRight /* F-OF-103: the read's `may` when it says it */, busy: busy || upload.busy, previews: previews.previews /* F-OP-126 */, viewer: viewer.model /* F-OP-127 */, may, upload: upload.ask, uploadOutcome: upload.outcome /* F-OF-103 */, asks: asks.state /* F-OF-201 */ }
+  const model: OrderFilesModel = {
+    read,
+    problem,
+    selected,
+    canShare: shareRight /* F-OF-103: the read's `may` when it says it */,
+    busy: upload.busy || fileActs.busy,
+    previews: previews.previews /* F-OP-126 */,
+    viewer: viewer.model /* F-OP-127 */,
+    may,
+    upload: upload.ask,
+    uploadOutcome: upload.outcome /* F-OF-103 */,
+    asks: asks.state /* F-OF-201 */,
+    // ---- F-OF-302 / F-OF-303: Read-only acts nothing (L3); Versions… only where the page's depth is; the open window; Use on…
+    readOnly: input.readOnly ?? false,
+    versionsHere: !!input.onVersions,
+    acts: { ...fileActs.acts, notice: actNotice, party: partyId ? (input.partyName ?? null) : null },
+    useOn: fileActs.useOn.model,
+  }
   return { model, actions, reload: again }
 }
 

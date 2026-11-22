@@ -73,3 +73,13 @@
 .fw-of-forask { display: flex; flex-direction: column; gap: var(--nds-space-2); padding: var(--nds-space-8) var(--nds-space-10); border: 1px solid var(--nds-tonal-border); border-radius: var(--nds-radius-lg); background: var(--nds-tonal-bg); }
 .fw-of-forask p { margin: 0; }
 .fw-of-forask-words { font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); overflow-wrap: anywhere; }
+
+/* ── F-OF-302 / F-OF-303: the card's ⋯ acts and the file windows (Who can see…, Rename…, Delete…, New version…, Mark as priced?) ── */
+.fw-of-acts { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 220px; }
+.fw-of-acts-held { margin: 0; padding: 0 var(--nds-space-8) var(--nds-space-4); color: var(--nds-text-muted); font-size: var(--nds-font-size-xs); }
+.fw-of-act-form { display: flex; flex-direction: column; gap: var(--nds-space-12); }
+.fw-of-act-problem { margin: 0; color: var(--nds-danger-text); font-size: var(--nds-font-size-sm); }
+.fw-of-act-lines { display: flex; flex-direction: column; gap: var(--nds-space-4); padding-top: var(--nds-space-8); border-top: 1px solid var(--nds-border); font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+.fw-of-act-lines p { margin: 0; display: flex; align-items: baseline; gap: var(--nds-space-6); }
+.fw-of-act-lines p > svg { flex: none; transform: translateY(2px); }
+.fw-of-act-never { color: var(--nds-text-muted); }

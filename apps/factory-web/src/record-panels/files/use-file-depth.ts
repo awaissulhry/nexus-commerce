@@ -138,11 +138,14 @@ async function pageImage(bytes: Uint8Array, page: number): Promise<{ src: string
   }
 }
 
+/** F-OF-301: what the depth reads of a file — its name, type and version (the dock gives its record's files; the order page its own). */
+export type DepthFile = Pick<ApiFile, 'id' | 'originalName' | 'contentType' | 'version'>
+
 export interface FileDepthOptions {
   readonly api: ApiClient
   readonly record: RecordKey
   /** The record's files as last read (null while reading or not readable). */
-  readonly files: readonly ApiFile[] | null
+  readonly files: readonly DepthFile[] | null
   readonly canUpload: boolean
   readonly canRead: boolean
   /** `/w/<company>` for the links of "which records use it". */

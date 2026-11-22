@@ -182,6 +182,8 @@ function AskForAFile({ window, state, actions, customer, orderLabel }: { window:
           </div>
         </fieldset>
         {list && <Picker label={t(`ask.pick.${draft.who}`)} list={list} value={draft.pick} words={(item) => item.name} onPick={(pick) => set({ pick })} onRetry={actions?.onAskRetryPicks} />}
+        {/* S3 (B-OF-035): the choices read cut a list short — said, never hidden. */}
+        {list && choices.truncated && <p className="fw-rtv-muted">{t('ask.truncated')}</p>}
         <p className="fw-ask-hint">{toCustomer ? t('ask.customerNote', { customer: customer ?? '' }) : floor ? t('ask.floorNote') : t('ask.officeNote')}</p>
         {!toCustomer && (
           <fieldset className="fw-ask-fieldset">
