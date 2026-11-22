@@ -373,6 +373,9 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields 
   const depositOverdue = gate.state === 'WAITING' && !!depositRequest && depositRequest.dueDate < model.today
   // F-OO-111 (BC-1): the tab the yes and deposit banners show on — every tab but Overview (its strips say them, with the same doors).
   const notOverview = model.tab !== 'overview'
+  // F-OM-fx3 (W-04): on Money the tab's head is the one answer — the band's deposit, closed and cancelled notices step back there too
+  // (one place per fact); on every other tab they stay.
+  const notMoney = model.tab !== 'money'
   const toMoney = (
     <Button size="sm" variant="quiet" asChild>
       <TabLink href={tabHref(recordHref, 'money', search) /* F-OP-210 */}>{t('tab.money')}</TabLink>
@@ -472,11 +475,11 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields 
           {/* B-TH-256: the result of an Accept / Decline of a re-promise. */}
           <LinksSaid model={model.links} actions={actions?.links} />
           {model.depth && <DepthNotice model={model.depth} actions={actions?.depth} />}
-          {order.status === 'CANCELLED' && <Banner tone="danger" title={t('record.cancelled', { reason: order.cancelReason ?? '—' })} />}
+          {order.status === 'CANCELLED' && notMoney && <Banner tone="danger" title={t('record.cancelled', { reason: order.cancelReason ?? '—' })} />}
           {/* F-OO-111 (BC-1, Owner D5): on Overview the deposit and the yes banners step back — section 1's strips say the same with the
               same doors (one place per fact); on every other tab they stay. Every band tag stays. */}
-          {depositOverdue && depositRequest && notOverview && <Banner tone="danger" title={t('record.depositOpen', { date: formatDate(dayInstant(depositRequest.dueDate), { locale }) })} action={toMoney} />}
-          {gate.state === 'MISSING' && !isFinal(order) && notOverview && <Banner tone="danger" title={t('record.depositMissing')} action={toMoney} />}
+          {depositOverdue && depositRequest && notOverview && notMoney && <Banner tone="danger" title={t('record.depositOpen', { date: formatDate(dayInstant(depositRequest.dueDate), { locale }) })} action={toMoney} />}
+          {gate.state === 'MISSING' && !isFinal(order) && notOverview && notMoney && <Banner tone="danger" title={t('record.depositMissing')} action={toMoney} />}
           {/* B-TH-256: a compliance gate still blocks a work order or a shipment of this order (the gate's own words). */}
           <GateNotices model={model.links} prefix={model.prefix} />
           {/* B-W2b-323: the yes the order waits for. */}
@@ -504,7 +507,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields 
           {/* B-TH-256: planning proposes new dates: Accept / Decline (orders.manage, never the proposer), "Tell the customer" only ticked. */}
           {/* F-PT-201: on Production the proposals live in Dates & plan (Accept / Decline… there); on every other tab here. */}
           {model.tab !== 'production' && <RePromiseNotices model={model.links} actions={actions?.links} />}
-          {gate.state === 'WAITING' && !depositOverdue && depositRequest && notOverview /* F-OO-111 */ && <Banner tone="info" title={t('record.depositOpen', { date: formatDate(dayInstant(depositRequest.dueDate), { locale }) })} action={toMoney} />}
+          {gate.state === 'WAITING' && !depositOverdue && depositRequest && notOverview /* F-OO-111 */ && notMoney && <Banner tone="info" title={t('record.depositOpen', { date: formatDate(dayInstant(depositRequest.dueDate), { locale }) })} action={toMoney} />}
           {model.changed && (
             <Banner
               tone="info"
@@ -516,7 +519,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields 
               }
             />
           )}
-          {order.status === 'CLOSED' && <Banner tone="info" title={order.closedAt ? t('record.closed', { date: formatDate(order.closedAt, { locale }) }) : t('record.closedNoDate')} />}
+          {order.status === 'CLOSED' && notMoney && <Banner tone="info" title={order.closedAt ? t('record.closed', { date: formatDate(order.closedAt, { locale }) }) : t('record.closedNoDate')} />}
           {/* F-OP-303 (walk #6): only for a reader who can change nothing here (shipping, invoices, a quote copy … counted too). */}
           {readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold }) && !isFinal(order) && <Banner tone="info" title={t('record.readOnly')} />}
         </RecordNotices>
