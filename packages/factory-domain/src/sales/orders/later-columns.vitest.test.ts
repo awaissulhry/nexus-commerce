@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AT_RISK_STATUSES, atRiskOf, neverBilledOf, openUnitsOf, orderMoneyOf, riskDaysFor, shareOf, type OrderMoneyFacts } from './later-columns'
+import { AT_RISK_STATUSES, atRiskOf, neverBilledOf, openUnitsOf, orderMoneyOf, orderMoneyPartsOf, riskDaysFor, shareOf, type OrderMoneyFacts } from './later-columns'
 
 /**
  * The later columns' rules (B-TH-058 / B-TH-059; threads plan TH-4): open pieces, At risk from the ORDER_LATE_RISK rule's own
@@ -109,5 +109,18 @@ describe('paid and balance', () => {
     // A TD24 of two orders, 1 000 written off: a quarter of it is this order's.
     const td24 = { placed: 243_000, creditedGross: 0, refunded: 0, part: 100_000, whole: 400_000, writtenOff: 1_000 }
     expect(orderMoneyOf(order({ invoices: [td24] }))).toEqual({ paid: 60_750, balance: 61_000 })
+  })
+
+  // B-OM-002 (order money tab M1-B3, B9): one still-to-pay rule; a cancelled order owes nothing more.
+  it('a cancelled order owes 0 (what was paid stays paid; a refund is the settlement’s, never a negative balance)', () => {
+    expect(orderMoneyOf(order({ status: 'CANCELLED' }))).toEqual({ paid: 0, balance: 0 })
+    expect(orderMoneyOf(order({ status: 'CANCELLED', depositPlaced: 36_600 }))).toEqual({ paid: 36_600, balance: 0 })
+    expect(orderMoneyOf(order({ status: 'CONFIRMED', depositPlaced: 36_600 }))).toEqual({ paid: 36_600, balance: 85_400 })
+  })
+
+  it('the parts of still to pay: never billed, credited, written off, paid', () => {
+    const lines = [line(10, 100_000, 22_000, 4), line(1, 5_000, 1_100, null, true)]
+    const invoice = { placed: 50_000, creditedGross: 6_100, refunded: 0, part: 1, whole: 1, writtenOff: 400 }
+    expect(orderMoneyPartsOf(order({ grossAmount: 128_100, lines, depositPlaced: 10_000, invoices: [invoice] }))).toEqual({ paid: 60_000, balance: 128_100 - 54_900 - 6_100 - 60_000 - 400, neverBilled: 54_900, credited: 6_100, writtenOff: 400 })
   })
 })

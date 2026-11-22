@@ -243,9 +243,10 @@ export async function orderMoneyFactsOf(client: Reader, orderIds: readonly strin
     invoicesOf,
     /** The deposits received for an order: what is placed on its deposit requests less the PAID refunds of its deposit invoices' credit notes. */
     depositsPaidOf: (orderId: string): number => (depositPlaced.get(orderId) ?? 0) - (depositRefunded.get(orderId) ?? 0),
-    /** An order's money facts (orderMoneyOf's input): its gross, its lines, its deposits and its share of each invoice. */
-    factsOf(order: { readonly id: string; readonly grossAmount: number }): OrderMoneyFacts {
+    /** An order's money facts (orderMoneyOf's input): its gross, its lines, its deposits and its share of each invoice. B-OM-002: + its state. */
+    factsOf(order: { readonly id: string; readonly grossAmount: number; readonly status?: SalesOrderStatus }): OrderMoneyFacts {
       return {
+        ...(order.status !== undefined ? { status: order.status } : {}), // B-OM-002: a cancelled order owes 0
         grossAmount: order.grossAmount,
         lines: lines.filter((line) => line.orderId === order.id).map((line) => ({ quantity: line.quantity, closedShortQuantity: line.closedShortQuantity, netAmount: line.netAmount, vatAmount: line.vatAmount, feeCredited: line.kind === 'FEE' && line.feeCreditedAt !== null })),
         depositPlaced: depositPlaced.get(order.id) ?? 0,

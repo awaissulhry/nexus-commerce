@@ -41,6 +41,10 @@ import { approverRolesOf, customerWall, TASK_COLUMNS, visibleTasks, type TaskRow
 import { openTaskRows, type ViewContext } from '../../../platform/approvals/views'
 // B-PT-011 (order production tab R11): a first promise or a move, and each line's day before a lines' move — one rule.
 import { fromByLineOf, promiseMoveKindOf } from '@nexus/factory-domain/sales/orders/promise-moves'
+// B-OM-002 (order money tab M1-B3): the order's still to pay by the ONE rule the list and the settlement read.
+import { heldGrains } from '@nexus/factory-domain/auth/grains/grains'
+import { orderMoneyPartsOf } from '@nexus/factory-domain/sales/orders/later-columns'
+import { orderMoneyFactsOf } from './later-columns'
 
 /**
  * The order record as the office reads it (A2 SCR-039; the design's Order record): the header with its dates (the
@@ -399,6 +403,23 @@ async function listedRows(db: Reader, tasks: readonly TaskRow[], office: OfficeC
 }
 // ── end B-OP-020 ──
 
+// ── B-OM-002 (order money tab M1-B3, B9, S2, S5; 13-backend §1) ──────────────────────────────────────────────────────────────
+/**
+ * The order's money for a reader holding the price grain (else null — and the field is dropped for them anyway): still to pay,
+ * paid, what will never be billed, its share of the credit notes and of the small differences written off, the deposits
+ * received — by the same reading (later-columns orderMoneyFactsOf) and rule (factory-domain orderMoneyPartsOf) as the orders
+ * list's row and the settlement's `thisOrder`. So a price holder without invoices.view reads the server's figure, never the
+ * web's gross less deposits. A cancelled order owes 0.
+ */
+async function orderMoneyRead(db: Reader, order: OrderRow, viewer: Actor | null) {
+  if (!viewer || !heldGrains(viewer).has('price')) return null
+  const lines = await db.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true, orderId: true, kind: true, quantity: true, closedShortQuantity: true, feeCreditedAt: true, netAmount: true, vatAmount: true } })
+  const facts = await orderMoneyFactsOf(db, [order.id], lines)
+  const parts = orderMoneyPartsOf(facts.factsOf({ id: order.id, grossAmount: order.grossAmount, status: order.status }))
+  return { stillToPay: parts.balance, paid: parts.paid, neverBilled: parts.neverBilled, credited: parts.credited, writtenOff: parts.writtenOff, depositsPaid: facts.depositsPaidOf(order.id) }
+}
+// ── end B-OM-002 ──
+
 // ── B-OP-023 (order page plan N5; review R-7) ─────────────────────────────────────────────────────────────────────────────────
 /** Typing a shipment's tracking number needs the right to manage shipments over its site. */
 export const NO_TRACKING_RIGHT_WORDS = 'A warehouse person adds the tracking number: it needs the right to manage shipments.'
@@ -487,6 +508,7 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
   const promiseDate = dayOrNull(order.promiseDate)
   const approvals = await openApprovalsOf(db, order.id, office) // B-OP-020
   const shipmentDetails = await readShipmentDetails(db, facts.shipments.map((row) => row.id)) // B-OP-023
+  const money = await orderMoneyRead(db, order, viewer) // B-OM-002
 
   return {
     id: order.id,
@@ -522,6 +544,7 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
     grossAmount: asMoney('price', order.grossAmount),
     costAmount: asMoney('cost', order.costAmount),
     marginPct: asMoney('margin', marginPctOf(order.netAmount, order.costAmount)),
+    money: asMoney('price', money), // B-OM-002: the one still to pay (price grain; null without it)
     reapprovalNeededAt: instantOrNull(order.reapprovalNeededAt),
     cancelReason: order.cancelReason,
     closedAt: instantOrNull(order.closedAt),

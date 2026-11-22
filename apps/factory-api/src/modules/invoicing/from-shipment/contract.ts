@@ -277,6 +277,25 @@ export const settlementContract = defineContract({
             // ── end B-OP-022 ──
           }),
         ),
+        // ── B-OM-003 (order money tab M5-B3): the deposit invoices (TD02) of its requests and the credit notes (TD04) of its
+        // documents, issued (not DRAFT); `status` is the SDI life (ISSUED → SENT → DELIVERED / NOT_DELIVERABLE / REJECTED / ERROR) ──
+        depositInvoices: z.array(
+          output({
+            id: id(),
+            number: z.string().nullable(),
+            status: z.string(),
+            issueDate: businessDate().nullable(),
+            /** Its gross. */
+            gross: money.price(z.number().int()),
+            /** The gross of its issued credit notes. */
+            credited: money.price(z.number().int()),
+            /** What issued invoices deduct from it (net, positive). */
+            deductedNet: money.price(z.number().int()),
+            depositRequestId: id().nullable(),
+          }),
+        ),
+        creditNotes: z.array(output({ id: id(), number: z.string().nullable(), status: z.string(), issueDate: businessDate().nullable(), gross: money.price(z.number().int()), /** The invoice or deposit invoice it credits. */ creditOfId: id() })),
+        // ── end B-OM-003 ──
         invoicedAmount: money.price(z.number().int()),
         creditedAmount: money.price(z.number().int()),
         paidAmount: money.price(z.number().int()),

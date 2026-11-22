@@ -22,7 +22,8 @@ import { OPEN_STATUSES, type SalesOrderStatus } from './orders'
  *                closed short, a fee credited against the customer's bulk order), less its share of the credit notes of its
  *                invoices, less `paid`, less its share of the small differences written off on its invoices (B-OM-001);
  *                never below 0. A charge billed only on an invoice (freight) is not in the order, so its payment can bring
- *                the balance to 0 early, never below.
+ *                the balance to 0 early, never below. B-OM-002: a CANCELLED order owes nothing more (0; a refund of what
+ *                was paid is the settlement's REFUND_DUE, never a negative balance).
  *   shares       integer minor units, rounded half away from zero, exact (BigInt): no float ever touches an amount.
  */
 
@@ -104,6 +105,8 @@ export interface OrderMoneyInvoice {
 }
 
 export interface OrderMoneyFacts {
+  /** B-OM-002: the order's state (a CANCELLED order owes 0); absent: an open order. */
+  readonly status?: SalesOrderStatus
   /** The order's gross total, as amended. */
   readonly grossAmount: number
   readonly lines: readonly OrderMoneyLine[]
@@ -129,12 +132,33 @@ export function neverBilledOf(lines: readonly OrderMoneyLine[]): number {
   }, 0)
 }
 
-/** Paid and balance of an order (see the header). */
-export function orderMoneyOf(facts: OrderMoneyFacts): OrderMoney {
+// ── B-OM-002 (order money tab M1-B3, B9): ONE "still to pay" rule, and the parts it is made of ──
+/** The parts of an order's still to pay (the order read's `money`, the Totals' "How it adds up"). */
+export interface OrderMoneyParts extends OrderMoney {
+  /** Its gross that will never be billed (pieces closed short, credited fees). */
+  readonly neverBilled: number
+  /** Its share of the credit notes of its invoices. */
+  readonly credited: number
+  /** B-OM-001: its share of the small differences written off on its invoices. */
+  readonly writtenOff: number
+}
+
+/** Paid and balance of an order and their parts (see the header): the one rule the list, the summary and the order page read. */
+export function orderMoneyPartsOf(facts: OrderMoneyFacts): OrderMoneyParts {
   const paid = facts.depositPlaced - facts.depositRefunded + facts.invoices.reduce((sum, invoice) => sum + shareOf(invoice.placed - invoice.refunded, invoice.part, invoice.whole), 0)
   const credited = facts.invoices.reduce((sum, invoice) => sum + shareOf(invoice.creditedGross, invoice.part, invoice.whole), 0)
-  const due = facts.grossAmount - neverBilledOf(facts.lines) - credited
+  const neverBilled = neverBilledOf(facts.lines)
+  const due = facts.grossAmount - neverBilled - credited
   // B-OM-001: a small difference written off on an invoice is no longer owed (its share of it).
   const writtenOff = facts.invoices.reduce((sum, invoice) => sum + shareOf(invoice.writtenOff ?? 0, invoice.part, invoice.whole), 0)
-  return { paid, balance: Math.max(0, due - paid - writtenOff) }
+  // B-OM-002: a cancelled order owes nothing more.
+  const balance = facts.status === 'CANCELLED' ? 0 : Math.max(0, due - paid - writtenOff)
+  return { paid, balance, neverBilled, credited, writtenOff }
 }
+
+/** Paid and balance of an order (see the header). */
+export function orderMoneyOf(facts: OrderMoneyFacts): OrderMoney {
+  const { paid, balance } = orderMoneyPartsOf(facts)
+  return { paid, balance }
+}
+// ── end B-OM-002 ──
