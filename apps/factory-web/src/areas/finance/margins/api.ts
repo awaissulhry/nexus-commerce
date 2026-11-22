@@ -79,8 +79,32 @@ export type CustomerGroup = Margins['byCustomer'][number]
 export type StyleGroup = Margins['byStyle'][number]
 
 const partsSchema = z.object({ material: grain(z.number()), labour: grain(z.number()), subcontract: grain(z.number()), overhead: grain(z.number()), adjustment: grain(z.number()) })
-const stageSchema = z.object({ value: grain(z.number()), cost: grain(z.number().nullable()), parts: partsSchema.nullable().optional(), margin: grain(z.number().nullable()), marginPct: grain(z.string().nullable()) })
+const stageSchema = z.object({
+  value: grain(z.number()),
+  cost: grain(z.number().nullable()),
+  parts: partsSchema.nullable().optional(),
+  margin: grain(z.number().nullable()),
+  marginPct: grain(z.string().nullable()),
+  // F-OM-302 (B-OM-007, S1 #1853): now and so far, the freight counted in `cost` (the carriers' charges of the order's shipments);
+  // B-OM-021 (S3 #1857): the hand cost lines counted in `cost` (computed = cost − handCost).
+  freight: grain(z.number().nullable()),
+  handCost: grain(z.number().nullable()),
+})
 export type MarginStage = z.infer<typeof stageSchema>
+
+// ---- F-OM-302 (order MONEY tab; B-OM-007, the server's S1 #1853; B-OM-021, the server's S3 #1857): what the quoted cost was based on,
+// the cost lines set by hand and the order's target margin. Each by its grain (absent without it), and a shape this web does not know
+// is left out (hidden), never a failed read: the doors that write them show only once the read names them.
+/** A cost line a person ADDS by hand to the order's computed cost (L2: replacing a computed part is a later job); factory-domain's list. */
+export const COST_LINE_KINDS = ['FREIGHT_ESTIMATE', 'COMMISSION', 'BANK_CHARGES', 'OTHER'] as const
+export type CostLineKind = (typeof COST_LINE_KINDS)[number]
+/** A hand cost line still counted (the cost grain): who added it (an office person), when and why. */
+const handLineSchema = z.object({ id: z.string(), kind: z.enum(COST_LINE_KINDS).catch('OTHER'), amount: z.number(), currency: z.string(), reason: z.string(), by: z.string().nullable(), at: z.string() })
+export type MarginHandLine = z.infer<typeof handLineSchema>
+/** The order's target margin (the margin grain): its percent as the API writes it, who set it by hand, when and why; null: none (the floor). */
+const targetSchema = z.object({ pct: z.string(), by: z.string().nullable(), at: z.string().nullable(), reason: z.string().nullable().optional() })
+export type MarginTarget = z.infer<typeof targetSchema>
+// ---- end F-OM-302 (the fields are marked below)
 
 export const orderMarginSchema = orderMarginRowSchema.extend({
   quoted: stageSchema,
@@ -122,6 +146,12 @@ export const orderMarginSchema = orderMarginRowSchema.extend({
     }),
   ),
   words: z.string(),
+  // ---- F-OM-302: B-OM-007 (S1) the cost sheet revision and the day the quote was costed; B-OM-021 (S3) the hand lines (the cost
+  // grain), the target (the margin grain) ----
+  basedOn: z.object({ pricedOn: z.string().nullable(), revision: z.number().nullable() }).nullable().optional().catch(undefined),
+  handLines: z.array(handLineSchema).optional().catch(undefined),
+  target: targetSchema.nullable().optional().catch(undefined),
+  // ---- end F-OM-302
 })
 export type OrderMargin = z.infer<typeof orderMarginSchema>
 export type OrderMarginLine = OrderMargin['lines'][number]
@@ -155,3 +185,22 @@ export function getMargins(api: ApiClient, query: MarginsQuery, signal?: AbortSi
 export function getOrderMargin(api: ApiClient, orderId: string, signal?: AbortSignal): Promise<OrderMargin> {
   return api.get(`/costing/margins/orders/${encodeURIComponent(orderId)}`, { schema: orderMarginSchema, signal })
 }
+
+// ---- F-OM-302 (B-OM-021, S3): a cost line set by hand, its Put back, and the order's target margin — costing.ledger.manage + the cost
+// grain (the target also the margin grain): the Owner and Finance (L4). Each with its reason; the answer is not read (the margin is
+// read again). Never a margin typed: it stays worked out from the price and the costs.
+/** POST /costing/margins/orders/:orderId/cost-lines { kind, amount, reason } — a line ADDED to the computed cost (minor units, the order's currency). */
+export async function addOrderCostLine(api: ApiClient, orderId: string, body: { readonly kind: CostLineKind; readonly amount: number; readonly reason: string }, idempotencyKey: string): Promise<void> {
+  await api.post(`/costing/margins/orders/${encodeURIComponent(orderId)}/cost-lines`, { body, idempotencyKey })
+}
+
+/** POST /costing/margins/orders/:orderId/cost-lines/:lineId/remove { reason } — Put back: the computed cost alone again; the history keeps the line. */
+export async function removeOrderCostLine(api: ApiClient, orderId: string, lineId: string, body: { readonly reason: string }, idempotencyKey: string): Promise<void> {
+  await api.post(`/costing/margins/orders/${encodeURIComponent(orderId)}/cost-lines/${encodeURIComponent(lineId)}/remove`, { body, idempotencyKey })
+}
+
+/** PUT /costing/margins/orders/:orderId/target { targetPct | null, reason } — the meter marks it; below it, the order is flagged (null: the floor again). */
+export async function setOrderMarginTarget(api: ApiClient, orderId: string, body: { readonly targetPct: string | null; readonly reason: string }, idempotencyKey: string): Promise<void> {
+  await api.request('PUT', `/costing/margins/orders/${encodeURIComponent(orderId)}/target`, { body, idempotencyKey })
+}
+// ---- end F-OM-302

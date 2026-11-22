@@ -29,23 +29,15 @@
     "PAID": "Paid",
     "WAIVED": "Waived",
     "title": "Deposit · {kind}",
-    "overdue": "Overdue",
     "amount": "Amount",
     "due": "Due",
-    "paidSoFar": "Paid so far",
     "left": "{amount} still to pay",
-    "document": "After payment",
-    "documentTd02": "A deposit invoice (TD02)",
-    "documentNone": "No deposit invoice (its VAT rule)",
     "stepsLabel": "Steps of the deposit",
-    "send": "Send the bank-details page",
-    "sendAgain": "Send it again",
     "record": "Record a payment",
     "sendSdi": "Send to SDI",
     "step": {
       "requested": "Asked",
       "requestedWords": "Asked when the customer accepted the quote ({date})",
-      "page": "Bank-details page",
       "pageNotSent": "Not sent yet: the customer finds the IBAN, the amount and the reference on it",
       "pageNotNeeded": "Nothing left to pay",
       "paid": "Payment",
@@ -66,11 +58,6 @@
       "sdiNoRight": "The SDI state is shown to people who see invoices",
       "sdiReading": "Reading the SDI state…",
       "requestedTyped": "Asked when the office entered the order ({date})"
-    },
-    "none": {
-      "title": "No deposit asked",
-      "body": "This order needs no deposit: production may start when its work orders are released.",
-      "missing": "The order needs a deposit, but no request exists: it is asked when the quote is accepted."
     }
   },
   "depositKind": {
@@ -866,40 +853,21 @@
     "CANCELLED": "Cancelled"
   },
   "money": {
-    "balanceTitle": "Balance",
     "gross": "Order total",
-    "depositPaid": "Deposits received",
-    "invoicesTitle": "Invoices and credit notes",
-    "noInvoices": {
-      "title": "Nothing invoiced yet",
-      "body": "The deposit invoice and the invoices of shipped goods appear here."
-    },
     "draft": "Draft",
     "noInvoiceRight": "Invoices are shown to people who see invoices.",
     "col": {
       "number": "Number",
       "kind": "Kind",
       "status": "State",
-      "sdi": "SDI",
       "gross": "Total",
       "open": "Open"
     },
-    "section": {
-      "totals": "Totals",
-      "deposit": "Deposit",
-      "margin": "Margin"
-    },
-    "invoicedShare": "Invoiced for this order",
-    "paidHere": "Paid on this order",
-    "toPayHere": "Still to pay on this order",
     "share": "This order's share",
-    "invoiceWhole": "Invoice total",
     "alsoBills": "Also bills",
     "alsoBillsHidden_one": "and {count} more order you cannot open",
     "alsoBillsHidden_other": "and {count} more orders you cannot open",
     "freight": "Freight {amount} is on the invoice, in no order",
-    "settledWhen": "Settled when {invoice} is paid in full",
-    "settledWhenShared": "Settled when {invoice} is paid in full (it also bills {numbers})",
     "statement": "{customer}'s statement ›"
   },
   "docType": {
@@ -1402,7 +1370,6 @@
     "title": "Payment schedule",
     "label": "Payment steps",
     "empty": "Paid on invoice terms; no milestones.",
-    "open": "Still open: {amount}",
     "stepShare": "{kind} · {share}",
     "kind": {
       "DEPOSIT": "Deposit on the order",
@@ -1410,24 +1377,13 @@
       "ON_DELIVERY": "On delivery",
       "ON_INVOICE": "On the invoice"
     },
-    "status": {
-      "OPEN": "Open",
-      "PAID": "Paid",
-      "WAIVED": "Waived",
-      "CANCELLED": "Cancelled"
-    },
     "when": {
       "DEPOSIT": "Due as the deposit request says",
       "BEFORE_SHIPPING": "Due before the goods leave",
       "ON_DELIVERY": "Due on delivery",
       "ON_INVOICE": "Due as the invoice says"
     },
-    "overdue": "Overdue",
     "due": "Due {date}",
-    "dueDeposit": "Due {date} (the deposit request)",
-    "paidOn": "Paid on {date}",
-    "cancelled_one": "{count} earlier step was replaced when an amendment remade the schedule.",
-    "cancelled_other": "{count} earlier steps were replaced when an amendment remade the schedule.",
     "verbs": {
       "day": "Due on",
       "held": {
@@ -1454,7 +1410,6 @@
         "write": "It could not be done: try again.",
         "stepUp": "Confirm it’s you with a fresh code first."
       },
-      "waive": "Waive…",
       "waiveTitle": "Waive “{step}”",
       "waiveBody": {
         "DEPOSIT": "The customer need not pay the deposit before production: the work orders may be released without it. Nothing paid is on it.",
@@ -2425,31 +2380,23 @@
     "otherCurrency_one": "{count} customer's price in another currency is left out (never converted).",
     "otherCurrency_other": "{count} customer's prices in another currency are left out (never converted).",
     "card": {
-      "title": "Price check",
       "edit": "Customer's price…",
       "changeOurs": "Change our price ›",
       "history": "History ›",
-      "historyHeld": "The history needs the right to read the audit log.",
       "total": "Total",
       "tableLabel": "Price check of {number}",
       "col": {
-        "theirs": "Customer's unit price",
         "ourAmount": "Our amount",
         "theirAmount": "Customer's amount",
         "check": "Check",
         "diff": "Difference"
       },
-      "hint": "Difference = our price minus the customer's: + we ask more, − we ask less. Without VAT, exact to the cent.",
       "missing": "{missing} of {lines} lines without the customer's price",
       "notChecked": "Not checked: a line without pieces or without a price",
-      "emptyTitle": "No customer price yet",
-      "emptyBody": "The check says Equal only when the customer's price and ours are the same to the cent, without VAT.",
-      "sources": "Where the customer's price came from",
       "linesOf_one": "line {list}",
       "linesOf_other": "lines {list}",
       "typedBy": "typed by {name}, {date}",
       "note": "“{note}”",
-      "priced": "Priced document",
       "takeOverLabel": "The customer's request named its prices",
       "takeOver": "Request {number} named the customer's prices",
       "takeOverNoNumber": "The customer's request named its prices",
@@ -3282,7 +3229,8 @@
       "allPaid": "everything invoiced is paid",
       "nothing": "nothing to collect yet. The customer pays on the invoice",
       "nothingTerms": "nothing to collect yet. The customer pays on the invoice: {terms}",
-      "restOnInvoice": "the rest is paid on the invoice"
+      "restOnInvoice": "the rest is paid on the invoice",
+      "partFailed": "Part of the money could not be read: see the section below and try it again there."
     },
     "totals": {
       "title": "Totals",
@@ -3418,7 +3366,8 @@
         "REMOVE_STEP": "Remove step…",
         "ASK_AGAIN": "Ask for the deposit again…",
         "CHANGE_TERMS": "Change payment terms…",
-        "ADD_STEP": "Add a step…"
+        "ADD_STEP": "Add a step…",
+        "stopPage": "Stop the page…"
       },
       "byHand": {
         "what": {
@@ -3704,7 +3653,8 @@
         "told": "not told; their portal shows the deposit as paid.",
         "never": "The payment stays as received; no write-off is made here; the deposit stays paid (this cannot be undone)."
       },
-      "reason": "Why"
+      "reason": "Why",
+      "whoKept": "Saved under your name with today's date; the history keeps it."
     },
     "refusal": {
       "OTHER": "The plan could not change this way: read the page again.",
@@ -3717,7 +3667,14 @@
     },
     "notice": {
       "planChanged": "The plan was changed by hand; the history keeps the old value.",
-      "undone": "The payment was undone; it stays in Finance › Payments as voided."
+      "undone": "The payment was undone; it stays in Finance › Payments as voided.",
+      "priceAccepted": "The price difference is accepted by hand.",
+      "priceUnaccepted": "The acceptance is undone: the prices are compared again.",
+      "costLineAdded": "The cost set by hand is counted in the margin.",
+      "costLineRemoved": "The line set by hand is put back: the computed cost counts again.",
+      "targetSet": "The target margin is set.",
+      "targetCleared": "The target margin is cleared: the floor applies again.",
+      "pageStopped": "The bank-details page is stopped."
     },
     "undo": {
       "title": "Undo the payment of {date}?",
@@ -3743,6 +3700,227 @@
     },
     "facts": {
       "changeOnMoney": "Change on Money ›"
+    },
+    "price": {
+      "title": "Price check",
+      "info": "Our price beside the customer's own price (their PO, their portal, or typed by us), line by line, without VAT, to the cent. It is not a price-list check. A difference accepted by hand opens again by itself when either price changes.",
+      "keys": "Keys: Tab moves line to line · Enter uses the button.",
+      "part": "the price check",
+      "more": "More for Price check",
+      "show": "Show the lines",
+      "hide": "Hide the lines",
+      "showAll": "Show all {count} lines",
+      "onlyDiffering": "Show only the lines that differ",
+      "exact": "Without VAT, exact to the cent. Difference = our price minus the customer's.",
+      "tag": {
+        "none": "— No customer price yet",
+        "equal": "= Prices equal",
+        "notEqual": "≠ Not equal",
+        "partial": "— Not every line yet",
+        "accepted": "Accepted by hand"
+      },
+      "check": {
+        "EQUAL": "= Equal",
+        "NOT_EQUAL": "≠ Not equal"
+      },
+      "answer": {
+        "none": "type the prices from their PO, or they type them in their portal.",
+        "more": "+{amount} we ask more",
+        "less": "−{amount} we ask less",
+        "differ_one": "{count} line differs",
+        "differ_other": "{count} lines differ"
+      },
+      "from": {
+        "CUSTOMER_PO": "from the customer's PO",
+        "CUSTOMER_PO_FILE": "from the customer's PO {file}",
+        "PORTAL": "from the portal",
+        "OFFICE": "typed by us"
+      },
+      "source": {
+        "LIST": "From the price list",
+        "MANUAL": "Set by hand",
+        "UNKNOWN": "Changed since the quote"
+      },
+      "perPiece": "{price} /pc",
+      "pieces_one": "{count} pc",
+      "pieces_other": "{count} pcs",
+      "ours": "Ours {amount}",
+      "theirs": "Customer's {amount}",
+      "acceptedBy": "Accepted by {name}, {date}",
+      "acceptedOn": "Accepted on {date}",
+      "accept": {
+        "door": "Accept the difference…",
+        "title": "Accept the difference on {number}",
+        "go": "Accept the difference",
+        "sub": "{lines} · ours {ours} · the customer's {theirs}",
+        "happens": {
+          "stay": "Both prices stay as they are.",
+          "shows": "The check shows “≠ Not equal · Accepted by hand”, with your name, the day and your reason.",
+          "reopens": "It opens again by itself when either price changes."
+        },
+        "told": "not told: their portal still compares against their own PO.",
+        "never": "Our price and the customer's price are not edited; nothing is sent.",
+        "gone": "The prices changed meanwhile: close the window and read the check again."
+      },
+      "unaccept": {
+        "door": "Undo the acceptance…",
+        "title": "Undo the acceptance on {number}",
+        "go": "Undo the acceptance",
+        "happens": {
+          "again": "The check shows “≠ Not equal” again.",
+          "kept": "The history keeps the acceptance and its reason."
+        },
+        "told": "not told.",
+        "never": "Neither price changes."
+      }
+    },
+    "margin": {
+      "title": "Margin",
+      "info": "Does this order still make the money we planned, and if not, why? At quote = as sold · Now = the estimate · Actual so far = the costs posted. A margin is never typed: set a cost by hand, with a reason; Put back removes it.",
+      "keys": "Keys: Tab moves from part to part · Enter opens a fold.",
+      "part": "the margin",
+      "more": "More for Margin",
+      "finance": "Open in Finance › Margins ›",
+      "reading": "Reading the margin…",
+      "basedOn": {
+        "quote": "Based on: the cost at quote",
+        "none": "Based on: no cost sheet behind the quote",
+        "both": "Based on: cost at quote {date} · rev {revision}",
+        "date": "Based on: cost at quote {date}",
+        "rev": "Based on: cost sheet rev {revision}"
+      },
+      "final": "The order is closed: its margin is final.",
+      "held": {
+        "final": "The order is closed: its margin is final."
+      },
+      "tile": {
+        "quoted": "At quote",
+        "now": "Now",
+        "actual": "Actual so far",
+        "difference": "Difference",
+        "asSold": "as sold",
+        "noQuotedCost": "No cost at quote: a line had no cost sheet",
+        "noWorkOrder": "No work order yet: now = the cost at quote",
+        "sameAsQuote": "the same as at quote",
+        "points": "{points} pts since the quote",
+        "actualFinal": "Final: every work order is done",
+        "actualOpen": "Reads high while work is open",
+        "actualNone": "No cost posted yet",
+        "differenceHint": "now against at quote"
+      },
+      "value": {
+        "pct": "{pct}",
+        "unknown": "Not known yet",
+        "notYet": "Not yet",
+        "signed": "{sign}{amount}"
+      },
+      "meter": {
+        "label": "Margin now",
+        "target": "Target {pct}",
+        "targetBy": "Target {pct} · set by hand by {name}, {date}",
+        "floorRole": "Minimum {pct} ({role} role)",
+        "floorCompany": "Minimum {pct} (the company's)",
+        "belowFloor": "flagged: below the margin it is held to"
+      },
+      "kind": {
+        "FREIGHT_ESTIMATE": "Freight (estimate)",
+        "COMMISSION": "Commission",
+        "BANK_CHARGES": "Bank charges",
+        "OTHER": "Other cost"
+      },
+      "hand": {
+        "title_one": "Set by hand · {count}",
+        "title_other": "Set by hand · {count}",
+        "who": "{name} · {date}",
+        "when": "{date}",
+        "adds": "adds a line to the computed cost"
+      },
+      "putBack": {
+        "door": "Put back",
+        "title": "Put back · {what}",
+        "go": "Put back",
+        "gone": "This line is not counted any more: close the window and read the margin again.",
+        "happens": {
+          "removed": "Your line no longer counts in Now and Actual so far.",
+          "computed": "The computed cost alone counts again."
+        },
+        "never": "The history keeps your line, its amount and its reason."
+      },
+      "where": "Where it went",
+      "bridge": {
+        "title": "From the price to the margin",
+        "price": "Price",
+        "MATERIAL": "Fabric and materials",
+        "LABOUR": "Making (CMT)",
+        "SUBCONTRACT": "Outside work",
+        "OVERHEAD": "Overhead",
+        "ADJUSTMENT": "Adjustments",
+        "FREIGHT": "Freight",
+        "fromShipments": "From the shipments",
+        "noFreight": "Freight: none yet",
+        "noFreightSet": "Freight: none yet — set an estimate by hand",
+        "margin": "Margin",
+        "noCost": "Shown to people who see costs."
+      },
+      "fold": {
+        "lines": "By line ({count})",
+        "workOrders": "Work orders behind the cost ({count})",
+        "why": "Why these figures"
+      },
+      "why": {
+        "method": "Costs follow the company's costing method.",
+        "provisional": "Costs are provisional until the accountant chooses the costing method.",
+        "freightCounted": "Freight from the shipments is counted (in the order's currency only).",
+        "freightNone": "No freight cost is on the order's shipments yet: before a shipment, set an estimate by hand.",
+        "hand": "A cost set by hand is added to the computed cost; Put back removes it. A margin is never typed.",
+        "bankCharges": "Bank charges written off on payments are not in the margin yet (a later job)."
+      },
+      "setCost": {
+        "door": "Set a cost by hand…",
+        "title": "Set a cost by hand · {number}",
+        "go": "Set the cost",
+        "sub": "Margin now {pct}",
+        "kind": "Part",
+        "kindHint": "A line ADDED to the computed cost; replacing a computed part comes later.",
+        "amount": "Amount ({currency})",
+        "problem": "Type an amount above 0, for example 320.00.",
+        "happens": {
+          "uses": "Now and Actual so far use your figure; At quote stays as sold.",
+          "after": "Margin now {now} → {after}.",
+          "beside": "The computed cost stays beside it; Put back removes your line."
+        },
+        "never": "The quote's cost, the posted cost ledger and approved cost sheets never change here."
+      },
+      "target": {
+        "door": "Set target…",
+        "title": "Set the target margin of {number}",
+        "go": "Set the target",
+        "clear": "Clear the target",
+        "field": "Target margin (%)",
+        "hint": "Empty: no target of its own; the floor of the Sales settings applies.",
+        "hintFloor": "Empty: no target of its own; the floor applies ({pct}).",
+        "problem": "Type a percent above 0 and below 100, for example 38.5.",
+        "same": "This is the target already.",
+        "happens": {
+          "marks": "The meter marks it; the order is judged on it, not on the floor.",
+          "flag": "Below it, the order is flagged in Finance › Margins."
+        },
+        "never": "The margin itself is never typed: it stays worked out from the price and the costs."
+      },
+      "told": "never sees margins or costs.",
+      "who": "Saved under your name with today's date; the history keeps the old value."
+    },
+    "stop": {
+      "title": "Stop the page sent to {to}?",
+      "titleNoTo": "Stop the bank-details page?",
+      "go": "Stop the page",
+      "gone": "This page is not live any more: close the window and read the page again.",
+      "happens": {
+        "stops": "The bank-details page stops working at once: the customer sees that it is no longer valid.",
+        "open": "The payment request stays open: send a new page when it is needed."
+      },
+      "told": "not e-mailed; the page itself says it is no longer valid.",
+      "never": "The request, its amount and its payments do not change."
     }
   }
 }

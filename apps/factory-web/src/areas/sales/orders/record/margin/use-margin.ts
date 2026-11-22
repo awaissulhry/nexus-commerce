@@ -5,6 +5,10 @@ import type { ApiClient } from '../../../../../lib/api/client'
 import { getOrderMargin, type OrderMargin } from '../../../../finance/margins/api'
 import { marginsCanOf, readProblem, showsMargin } from '../../../../finance/margins/model'
 import type { MarginTabModel } from './model'
+import { useLive } from '../../hooks' // F-OM-302 (B-OM-021): the margin changed by hand elsewhere reads it again
+
+/** F-OM-302 (B-OM-021): the live event of an order's margin changed by hand (factory-domain costing/events.ts). */
+export const MARGIN_EVENT = 'order_margin.changed'
 
 /**
  * B-W2a-72 — the sales order's Margin tab reads the order's margin (`GET /costing/margins/orders/:id`, costing.view) when
@@ -26,5 +30,13 @@ export function useOrderMargin(api: ApiClient, orderId: string, open: boolean, p
   useEffect(() => {
     if (asks) read()
   }, [asks, read, version])
+  // F-OM-302 (B-OM-021, B-OM-008): a cost line set by hand or the target changed (here, in Finance, by another person): read again.
+  useLive(
+    (change) => {
+      if (change.type === MARGIN_EVENT && change.fields.orderId === orderId) read()
+    },
+    () => read(),
+    asks,
+  )
   return { model: { can, part: asks ? (part ?? { value: null, problem: null }) : null }, retry: read }
 }

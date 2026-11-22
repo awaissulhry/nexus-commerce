@@ -54,6 +54,7 @@ export function PlanRowView({ row, order, model, actions, say, final }: { row: P
     if (isHandAct(act.id)) return actions?.onDialog?.({ kind: 'moneyPlan', act: act.id, stepId: step?.id ?? null, requestId: request?.id ?? null })
     if (act.id === 'record' && request) return actions?.onDialog?.({ kind: 'depositPayment', requestId: request.id })
     if (act.id === 'send' && request) return actions?.onDialog?.({ kind: 'depositLink', requestId: request.id })
+    if (act.id === 'stopPage' && request) return actions?.onDialog?.({ kind: 'stopPage', requestId: request.id }) // F-OM-202 (B-OM-022)
     if (act.id === 'open' && step) return act.needsDay ? actions?.scheduleSteps?.onOpen?.(step) : actions?.scheduleSteps?.onConfirmOpen?.(step, null)
     if (act.id === 'invoiceStep' && step) return actions?.scheduleSteps?.onInvoice?.(step)
     if (act.id === 'waive') {

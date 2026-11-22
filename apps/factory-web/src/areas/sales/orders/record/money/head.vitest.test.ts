@@ -26,12 +26,15 @@ describe('F-OM-101: the shell — five sections that stack, in the kit, by the r
     expect(PAYMENTS_ALIASES).toEqual(['deposit', 'schedule'])
     const tab = source('./view/MoneyTab.tsx')
     expect(tab).toContain('<div className="fw-pt fw-om">')
-    const order_ = ['<MoneyHead', '<TotalsSection', '<PaymentsSection', '<InvoicesSection', '<PriceCheckSection', '<MarginTab']
+    const order_ = ['<MoneyHead', '<TotalsSection', '<PaymentsSection', '<InvoicesSection', '<PriceCheckSection', '<MarginSection' /* F-OM-302 */]
     for (let index = 1; index < order_.length; index += 1) expect(tab.indexOf(order_[index]!), order_[index]).toBeGreaterThan(tab.indexOf(order_[index - 1]!))
     // Each section is its own file, drawn with the Production kit's Section (reused IN PLACE: a type only was added to it).
     expect(source('./view/TotalsSection.tsx')).toContain('<Section id="totals"')
     expect(source('./view/PaymentsSection.tsx')).toContain('<Section id="payments"')
     expect(source('./view/InvoicesSection.tsx')).toContain('<Section id="invoices"')
+    // F-OM-301 / 302: Price check and Margin are the kit's sections too (the old card and the old Margin tab are gone).
+    expect(source('./view/PriceCheckSection.tsx')).toContain('<Section id="price-check"')
+    expect(source('./view/MarginSection.tsx')).toContain('<Section id="margin"')
     expect(source('../view/production/Kit.tsx')).toContain('id: SectionId | ChangesSectionId /* F-OC-101 */ | MoneySectionId /* F-OM-101 */')
     // #deposit and #schedule (the cards that went into Payments) land on it: elements at its top.
     expect(source('./view/PaymentsSection.tsx')).toContain('PAYMENTS_ALIASES.map((alias) => <span key={alias} id={alias} className="fw-om-alias" tabIndex={-1} />)')
@@ -120,6 +123,16 @@ describe('F-OM-101: the tab\'s one answer line', () => {
     expect(moneyHeadOf({ order: order('CONFIRMED'), schedule: part(null, 'problem.read.unavailable'), settlement: null, can: canOf('owner'), today: TODAY }).reading).toBe(false)
   })
 
+  // F-OM-303: a failed part never says "nothing" (or "all paid"): it says a part could not be read; its section has Try again.
+  it('a failed read never says "nothing to collect" or "everything is paid"', () => {
+    const none = order('CONFIRMED', { depositRequired: false, chain: { ...order('CONFIRMED').chain, depositRequests: [] } })
+    const failedPlan = moneyHeadOf({ order: none, schedule: part(null, 'problem.read.unavailable'), settlement: null, can: canOf('owner'), today: TODAY })
+    expect(failedPlan).toMatchObject({ tone: 'warning', parts: [{ key: 'moneyTab.head.partFailed' }] })
+    const failedMoney = moneyHeadOf({ order: none, schedule: part(SCHEDULE_NONE), settlement: null, settlementFailed: true, can: canOf('owner'), today: TODAY })
+    expect(failedMoney.parts).toEqual([{ key: 'moneyTab.head.partFailed' }])
+    expect(source('./view/MoneyHead.tsx')).toContain('settlementFailed: model.can.viewInvoices && !!model.settlement?.problem')
+  })
+
   it('the money wall: without the price grain the same line in words — no amount anywhere — and said ONCE for the tab', () => {
     for (const role of ['sales', 'manager'] as const) {
       const answer = head(order('CONFIRMED'), { role })
@@ -135,7 +148,7 @@ describe('F-OM-101: the tab\'s one answer line', () => {
   })
 
   it('every word of the head exists in both languages with the same placeholders', () => {
-    const heads = ['wallPrice', 'closed', 'cancelled', 'settledOn', 'settled', 'reading', 'depositMissing', 'productionWaits', 'depositPaid', 'depositWaived', 'extraOpen', 'extraOpenFrom', 'extraOpenWords', 'extraOpenFromWords', 'depositShort', 'depositPartPaid', 'depositOpen', 'depositOpenWords', 'depositOverdue', 'depositOverdueWords', 'pageSent', 'pageNotSent', 'beforeShipping', 'beforeShippingNoDay', 'balanceBeforeShipping', 'invoicedAll', 'stillToPayOn', 'invoicesOpen', 'allPaid', 'nothing', 'nothingTerms', 'restOnInvoice']
+    const heads = ['wallPrice', 'closed', 'cancelled', 'settledOn', 'settled', 'reading', 'depositMissing', 'productionWaits', 'depositPaid', 'depositWaived', 'extraOpen', 'extraOpenFrom', 'extraOpenWords', 'extraOpenFromWords', 'depositShort', 'depositPartPaid', 'depositOpen', 'depositOpenWords', 'depositOverdue', 'depositOverdueWords', 'pageSent', 'pageNotSent', 'beforeShipping', 'beforeShippingNoDay', 'balanceBeforeShipping', 'invoicedAll', 'stillToPayOn', 'invoicesOpen', 'allPaid', 'nothing', 'nothingTerms', 'restOnInvoice', 'partFailed' /* F-OM-303 */]
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
       for (const key of heads) expect(t(`moneyTab.head.${key}`, { amount: 'A', date: 'D', revision: 1, share: 'S', number: 'N', terms: 'T' }), `${locale} ${key}`).not.toMatch(/moneyTab\.|\{/)
