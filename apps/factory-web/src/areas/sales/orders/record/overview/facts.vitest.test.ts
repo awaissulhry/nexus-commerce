@@ -111,8 +111,10 @@ describe('F-OO-209: Order facts drawn', () => {
       expect(change, locale).toHaveLength(2)
       expect(set, locale).toHaveLength(2)
       for (const tag of [...change, ...set]) expect(tag, locale).not.toContain('aria-disabled')
-      // Fixed: payment · currency, language · tax mode, the Incoterm — quiet words, never a control.
-      expect(html.match(locale === 'en' ? />Fixed<\/span>/g : />Fisso<\/span>/g), locale).toHaveLength(3)
+      // Fixed: language · tax mode, the Incoterm — quiet words, never a control. F-OM-204 (L7): payment · currency is no longer
+      // "Fixed" (the terms change on Money): plain words without the plan right.
+      expect(html.match(locale === 'en' ? />Fixed<\/span>/g : />Fisso<\/span>/g), locale).toHaveLength(2)
+      expect(textOf(html), locale).not.toContain(locale === 'en' ? 'Change on Money ›' : 'Cambia in Importi ›')
       expect(buttons(html, locale === 'en' ? 'Fixed' : 'Fisso'), locale).toHaveLength(0)
       expect(html).toContain(locale === 'en' ? 'title="Set when the order was made; it does not change."' : 'title="Fissato quando l&#x27;ordine è stato creato; non cambia."')
       const text = textOf(html)
@@ -142,6 +144,14 @@ describe('F-OO-209: Order facts drawn', () => {
       expect(doors, status).toHaveLength(4)
       for (const tag of doors) expect(tag, status).toContain('aria-description="A closed or cancelled order never changes"')
     }
+  })
+
+  it('F-OM-204 (L7): with the money plan right the terms row says "Change on Money ›" — Money › Payments, the dock\'s scope kept', () => {
+    const value = withFacts('IN_PRODUCTION')
+    const base = modelOf('sales', value)
+    const html = draw(value, { ...base, can: { ...base.can, moneyPlan: true } } as typeof base, 'en')
+    expect(html).toMatch(/href="[^"]*\?tab=money#payments"[^>]*>Change on Money ›<\/a>/)
+    expect(html.match(/>Fixed<\/span>/g)).toHaveLength(2)
   })
 
   it('read-only: the facts and Fixed, no button at all', () => {

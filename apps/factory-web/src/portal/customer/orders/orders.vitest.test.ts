@@ -58,6 +58,7 @@ import {
   tabOf,
   totalsOf,
   transitSteps,
+  depositPaid, // F-OM-204
 } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
 // B-TH-223, B-TH-303: Orders & requests.
@@ -159,6 +160,19 @@ describe('where the order is', () => {
     expect(shipToLines(record.order.shipTo)).toEqual(['Brand Alpha S.r.l. — Magazzino', 'Via Esempio 10', '20100 Milano (MI)', 'IT', 'Ufficio ricevimento'])
     expect(totalsOf(record)).toEqual({ net: 752000, vat: 165440, gross: 917440, depositPaid: 275232, toPay: 917440 - 275232 })
     expect(totalsOf(withoutPrices(record))).toBeNull()
+  })
+
+  // F-OM-204 (B-OM-005, M3-B6): a part payment shows — the payments placed on each request count, not only a request paid in full; to
+  // pay is the office's own still to pay when the read sends it.
+  it('a deposit part paid counts what came in; to pay is the order\'s own figure when it comes', () => {
+    const open = { ...record.deposits[0]!, status: 'OPEN', amount: 275232, paidAmount: 270000 }
+    const partPaid = { ...record, deposits: [open] }
+    expect(depositPaid(partPaid.deposits)).toBe(270000)
+    expect(totalsOf(partPaid)).toMatchObject({ depositPaid: 270000, toPay: 917440 - 270000 })
+    expect(totalsOf({ ...partPaid, order: { ...partPaid.order, stillToPay: 600000 } })).toMatchObject({ toPay: 600000 })
+    // An older answer (no paidAmount on a request): the PAID requests' amounts, as before.
+    expect(depositPaid([{ ...open, paidAmount: undefined }])).toBe(0)
+    expect(depositPaid([{ ...open, status: 'CANCELLED', paidAmount: 270000 }, { ...open, id: 'x', paidAmount: 5000 }])).toBe(5000)
   })
 })
 

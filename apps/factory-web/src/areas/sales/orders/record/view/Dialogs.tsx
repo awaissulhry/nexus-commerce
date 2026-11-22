@@ -291,6 +291,11 @@ function LinkDialog({ order, requestId, model, actions }: { order: Order; reques
   const locale = useLocale()
   const request = order.chain.depositRequests.find((entry) => entry.id === requestId)
   const [message, setMessage] = useState(model.draft?.message ?? '')
+  // ---- F-OM-202 (M3-B10): the customer's contact the page goes to (active, with an e-mail; '' = the usual one) ----
+  const [contactId, setContactId] = useState('')
+  const contacts = model.moneyPlan?.contacts ?? null
+  const reachable = (contacts?.value ?? []).filter((contact) => contact.status === 'ACTIVE' && !!contact.email)
+  // ---- end F-OM-202
   const sent = model.sentLink
   const held = model.busy ? t('held.busy') : null
   if (!request) return null
@@ -304,7 +309,7 @@ function LinkDialog({ order, requestId, model, actions }: { order: Order; reques
     </div>
   ) : undefined
   return (
-    <Frame title={t('link.title')} held={held} go={() => actions?.onSendLink?.(requestId, message)} goLabel={model.busy ? t('common.working') : t('link.go')} onClose={() => actions?.onDialog?.(null)} problem={<DialogProblem model={model} />} done={done}>
+    <Frame title={t('link.title')} held={held} go={() => actions?.onSendLink?.(requestId, message, contactId || null)} goLabel={model.busy ? t('common.working') : t('link.go')} onClose={() => actions?.onDialog?.(null)} problem={<DialogProblem model={model} />} done={done}>
       <p className="fw-so-hint">{t('link.body')}</p>
       <KeyValue
         dense
@@ -316,6 +321,19 @@ function LinkDialog({ order, requestId, model, actions }: { order: Order; reques
           { label: t('link.valid'), value: t('link.validValue') },
         ]}
       />
+      {/* F-OM-202: pick who gets it (the customer's contacts, parties.view); without the list: the usual contact, as above. */}
+      {reachable.length > 0 ? (
+        <Field label={t('moneyTab.link.contact')} hint={t('moneyTab.link.contactHint')}>
+          <Select value={contactId} onChange={(event) => setContactId(event.target.value)}>
+            <option value="">{t('moneyTab.link.usual', { who: request.link?.to ?? t(request.quoteVersionId ? 'link.contact' : 'link.contactTyped') })}</option>
+            {reachable.map((contact) => (
+              <option key={contact.id} value={contact.id}>
+                {t('moneyTab.link.option', { name: contact.name, email: contact.email ?? '' })}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      ) : null}
       {request.link?.state === 'LIVE' && <Banner tone="info" title={t('link.replaces')} />}
       <Field label={t('link.message')} hint={t('link.messageHint')}>
         <Textarea value={message} onChange={(event) => setMessage(event.target.value)} rows={3} maxLength={2000} />
@@ -333,6 +351,10 @@ function PaymentDialog({ order, requestId, model, actions }: { order: Order; req
   const [receivedOn, setReceivedOn] = useState(model.draft?.receivedOn ?? model.today)
   const [reference, setReference] = useState(model.draft?.reference ?? '')
   const [note, setNote] = useState('')
+  // F-OM-202 (P1-B1): the month is SOFT-locked (the API said so): why the payment goes into it anyway (3–500).
+  const [lockReason, setLockReason] = useState('')
+  const lockAsked = model.moneyPlan?.lockAsked ?? false
+  const lockHeld = lockAsked && (lockReason.trim().length < 3 || lockReason.trim().length > 500)
   const asksInvoice = request?.fiscalDocument === 'TD02'
   const mayIssue = request ? mayIssueDepositInvoice(request, model.can) : false
   const [issue, setIssue] = useState(model.draft?.issue ?? mayIssue)
@@ -340,11 +362,11 @@ function PaymentDialog({ order, requestId, model, actions }: { order: Order; req
   if (!request) return null
   const problems = paymentProblems({ amount, receivedOn, reference, today: model.today, left })
   const firstProblem = problems.amount ?? problems.receivedOn ?? problems.reference ?? null
-  const held = model.busy ? t('held.busy') : firstProblem ? t(firstProblem) : null
+  const held = model.busy ? t('held.busy') : firstProblem ? t(firstProblem) : lockHeld ? t('moneyTab.lock.problem') : null
   const parsed = parseAmount(amount)
   const go = () => {
     if (parsed === null) return
-    actions?.onRecordPayment?.(requestId, { amount: parsed, receivedOn, reference: reference.trim(), note: note.trim(), issue: asksInvoice && mayIssue && issue })
+    actions?.onRecordPayment?.(requestId, { amount: parsed, receivedOn, reference: reference.trim(), note: note.trim(), issue: asksInvoice && mayIssue && issue, ...(lockAsked ? { lockReason } : {}) })
   }
   const done = recorded ? (
     <div className="fw-so-done" role="status">
@@ -387,6 +409,12 @@ function PaymentDialog({ order, requestId, model, actions }: { order: Order; req
       <Field label={t('payment.note')}>
         <Input value={note} onChange={(event) => setNote(event.target.value)} maxLength={2000} autoComplete="off" />
       </Field>
+      {/* F-OM-202 (P1-B1): asked once the API says the month is SOFT-locked; the payment then goes in with the reason. */}
+      {lockAsked ? (
+        <Field label={t('moneyTab.lock.label')} hint={t('moneyTab.lock.hint')} required>
+          <Textarea value={lockReason} onChange={(event) => setLockReason(event.target.value)} rows={2} maxLength={500} />
+        </Field>
+      ) : null}
       {asksInvoice ? (
         mayIssue ? (
           <div className="fw-so-stack-tight">

@@ -521,9 +521,10 @@ describe('F-OO-105: the strips drawn — the yes for its approver, asker and any
     // The deposit: Finance records it; the production manager reads it held beside Money ›.
     const finance = stripsOf(draw('f-oo-105-deposit'))
     expect(textOf(finance)).toContain('Deposit not paid yet · due 04/11/2026')
-    expect(finance).toMatch(/<button[^>]*>Record the payment<\/button>/)
+    // F-OM-204 (the lead's one word): the same dialog as Money's row — "Record a payment" on both.
+    expect(finance).toMatch(/<button[^>]*>Record a payment<\/button>/)
     const manager = stripsOf(draw('f-oo-105-deposit-manager'))
-    expect(manager).toMatch(/aria-description="Recording payments needs the finance right"[^>]*>Record the payment/)
+    expect(manager).toMatch(/aria-description="Recording payments needs the finance right"[^>]*>Record a payment/)
     expect(textOf(manager)).toContain('Money ›')
     // The credit hold's yes for its approver.
     const credit = textOf(stripsOf(draw('f-oo-105-credit')))

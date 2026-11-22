@@ -532,8 +532,9 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields,
       </RecordFrame>
 
       <OrderDialogs order={order} model={model} actions={actions} />
-      {/* F-OM-101: the payment plan's windows (Waive…, Open for payment), mounted ONCE for the page — the GateDialogs pattern. */}
-      <MoneyDialogs model={model} actions={actions} />
+      {/* F-OM-101 / 201: the payment plan's windows (Waive…, Open for payment, every hand act, Undo this payment…), mounted ONCE for the
+          page — the GateDialogs pattern. */}
+      <MoneyDialogs order={order} model={model} actions={actions} />
       {/* F-OO-111 (W07's follow-up): Record a shipment made elsewhere… — its container's dialog while open, mounted ONCE for the page, so
           the band's ⋯ item opens it on every tab (Overview's More ▾ and the Shipments card head open the same one). */}
       {model.elsewhere?.dialog}

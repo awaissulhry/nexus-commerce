@@ -6,6 +6,8 @@ import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { money } from '../../../../quotes/model'
 import type { Order } from '../../../api'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
+import type { MenuItemDef } from '@nexus/ui/components'
+import { LineMenuButton } from '../../view/LineMenu'
 import { PartFailed, PartReading, Section } from '../../view/production/Kit' // F-OM-101 (L6): the Production kit, in place
 import { PAYMENTS_ALIASES } from '../layout'
 import { planOf, type EarlierRow } from '../plan'
@@ -41,8 +43,10 @@ export function PaymentsSection({ order, model, actions }: { order: Order; model
   }
   const settlement = model.can.viewInvoices ? (model.settlement?.value ?? null) : null
   const plan = planOf({ order, schedule: part.value, settlement, can: model.can, stepCan: model.scheduleSteps?.can ?? null, today: model.today, stillToPay: stillToPayOf(order, settlement) })
+  // F-OM-201: the head's ⋯ — Change payment terms… · Add a step… (orders.moneyPlan + the price grain; held when the order is closed).
+  const head: MenuItemDef[] = plan.head.map((entry) => ({ id: entry.id, label: say(entry.label), disabled: !!entry.held, description: entry.held ? say(entry.held) : undefined, onSelect: () => actions?.onDialog?.({ kind: 'moneyPlan', act: entry.id, stepId: null, requestId: null }) }))
   return (
-    <Section id="payments" title={title} answer={lineOf(plan.answer.map(say))} info={info}>
+    <Section id="payments" title={title} answer={lineOf(plan.answer.map(say))} info={info} more={head.length > 0 ? <LineMenuButton label={t('moneyTab.payments.more')} items={head} /> : undefined}>
       {aliases}
       {plan.rows.length > 0 ? (
         <div className="fw-om-pl">

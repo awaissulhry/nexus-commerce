@@ -212,7 +212,8 @@ export type OrderLine = z.infer<typeof orderLineSchema>
 export const promiseMoveSchema = z.object({ on: z.string(), from: z.string().nullable(), to: z.string(), lines: z.array(z.number()), reason: z.object({ code: z.string(), words }).nullable() })
 export type PromiseMoveRead = z.infer<typeof promiseMoveSchema>
 
-export const depositSchema = z.object({ id: z.string(), kind: z.string(), status: z.string(), amount: price, currency: z.string(), dueDate: z.string(), paidAt: z.string().nullable() })
+// F-OM-204 (B-OM-005): + what the customer's payments placed on it so far (a part payment shows; the price grain).
+export const depositSchema = z.object({ id: z.string(), kind: z.string(), status: z.string(), amount: price, currency: z.string(), dueDate: z.string(), paidAt: z.string().nullable(), paidAmount: price })
 export type DepositRead = z.infer<typeof depositSchema>
 
 export const milestoneSchema = z.object({ key: z.enum(MILESTONES), words, state: z.enum(MILESTONE_STATES), date: z.string().nullable(), expected: z.string().nullable(), current: z.boolean() })
@@ -246,6 +247,8 @@ export const orderRecordSchema = z.object({
     reconfirmNeeded: z.boolean(),
     cancelledOn: z.string().nullable(),
     version: z.number(),
+    // F-OM-204 (B-OM-005): what is still to pay on the order, by the office's own rule (a cancelled order owes 0; the price grain).
+    stillToPay: price,
   }),
   milestones: z.array(milestoneSchema),
   promiseHistory: z.array(promiseMoveSchema),
