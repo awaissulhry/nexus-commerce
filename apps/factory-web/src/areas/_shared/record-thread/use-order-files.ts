@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ApiClient } from '../../../lib/api/client'
 import { isApiError } from '../../../lib/api/errors'
 import type { FilesViewActions } from '../../../lib/record-thread/files-view/view/FilesView'
@@ -10,6 +10,11 @@ import { orderFilesOf } from '../../../lib/record-thread/files-view/model'
 import { orderPricedLeftOut } from '../../../lib/record-thread/files-view/model' // F-CP-144
 import { useFilePreviews } from '../../../lib/record-thread/files-view/use-file-previews'
 import { useOrderFileViewer } from '../../../lib/record-thread/files-view/use-order-file-viewer' // F-OP-127
+import { orderSectionsOf, orderShownFilesOf, type OrderFileRef } from '../../../lib/record-thread/files-view/model' // F-OF-101: the walk in display order
+// F-OF-103: "Add files…" — the ONE upload of the Files window (moved out of the dock), with "Where it goes": the order or a line.
+import { useFileUpload } from '../../../lib/record-thread/files-view/use-file-upload'
+import type { OrderFilesMay, UploadPlace } from '../../../lib/record-thread/files-view/model'
+import { uploadChoices } from '../../../record-panels/model'
 import { listFiles } from '../../../record-panels/api'
 import { storeUrl } from '../../../record-panels/store'
 import { openOrderFile, readOrderFiles, shareWithParty } from './api'
@@ -17,6 +22,8 @@ import { readOrderFilePreviews } from './api' // F-OP-126
 import { openWorksheet } from '../../sales/mtm/api' // F-OP-125 (B5): a worksheet opens by the made-to-measure route (recorded there)
 import type { ThreadFile } from '../../../lib/record-thread/files/model' // F-OP-215: the dock's files line over the order's set
 import { FILE_KINDS, type FileKind } from '../../../record-panels/model' // F-OP-215
+import type { FileAudience } from '../../../record-panels/model' // F-OF-102
+import { sharedWithCustomer } from '../../../lib/record-thread/files-view/model' // F-OF-102
 
 /**
  * F-SA-237 (sales page plan N9, P14) — a sales order's files, the container part the order's Files tab AND the thread's Files window
@@ -39,6 +46,16 @@ export function useOrderFiles(
     readonly onProblem?: (key: string) => void
     /** F-OP-125: the page's own container keeps its read across tabs (true); a window that mounts its own reads again each time it opens. */
     readonly keep?: boolean
+    /** F-OF-101: a block's door "Open on … ›" — the source record's own page (order-file-href.ts); absent: no door. */
+    readonly hrefOf?: (record: OrderFileRef) => string | null
+    // ---- F-OF-103: "Add files…" — the order's company, its lines (where a file may go), the session's rights until the read's `may` lands
+    readonly companyId?: string | null
+    readonly lines?: readonly { readonly id: string; readonly seq: number; readonly what: string | null }[]
+    readonly canUpload?: boolean
+    readonly canDelete?: boolean
+    /** After an upload, what else reads again (the dock: its record's own files); the ORDER's read is read again here (F5-B8). */
+    readonly onUploaded?: () => void
+    // ---- end F-OF-103
   },
 ) {
   const { orderId, enabled, partyId, canShare, keep = false } = input
@@ -100,13 +117,40 @@ export function useOrderFiles(
   )
 
   // ---- F-OP-126: the previews of the cards in view (the body reports them) ----
-  const listed = read ? orderFilesOf(read) : null
+  // F-OF-101: every listed file in the order the tab draws them (Shipments, then Invoices & credit notes; one block per source), once per read.
+  const listed = useMemo(() => (read ? orderShownFilesOf(orderSectionsOf(read)) : null), [read])
   const previews = useFilePreviews({ files: listed, ask: orderId ? (fileIds) => readOrderFilePreviews(api, orderId, fileIds) : null })
   // ---- F-OP-127: the ONE viewer — ← / → over every file in display order, each fetched by the order's open route when shown ----
   const viewer = useOrderFileViewer({ files: listed, open: orderId ? (fileId, mode) => openOrderFile(api, orderId, fileId, mode) : null, onProblem: (key) => onProblem.current?.(key) })
+  // ---- F-OF-103: what the reader may do — the read's `may` over THIS order's scope when it says it (B-OF-001), else the session's rights
+  // (as before); "Add files…" through the ONE upload, its places the order and each line (a line's sharing with the customer waits for
+  // the server to take it, B-OF-014: office only until the read's `may` is there).
+  const may: OrderFilesMay = read?.may ?? { upload: input.canUpload ?? false, delete: input.canDelete ?? false, share: canShare, ask: false, askCustomer: false }
+  const shareRight = may.share
+  const choices = uploadChoices({ can: { share: shareRight }, party: partyId ? { id: partyId, name: '', emails: [] } : null, record: { type: 'SalesOrder', siteId: null, companyId: input.companyId ?? null } })
+  const places: UploadPlace[] | undefined = orderId
+    ? [
+        { key: 'order', record: { type: 'SalesOrder', id: orderId }, kind: 'order', audiences: choices.audiences },
+        ...(input.lines ?? []).map((line): UploadPlace => ({ key: `line:${line.id}`, record: { type: 'SalesOrderLine', id: line.id }, kind: 'line', seq: line.seq, what: line.what, audiences: read?.may ? choices.audiences : choices.audiences.filter((one) => one === 'OFFICE') })),
+      ]
+    : undefined
+  const upload = useFileUpload(api, {
+    companyId: input.companyId ?? null,
+    record: orderId ? { type: 'SalesOrder', id: orderId } : null,
+    siteId: null,
+    partyId,
+    choices,
+    ...(places ? { places } : {}),
+    onDone: () => {
+      load()
+      input.onUploaded?.()
+    },
+  })
+  // ---- end F-OF-103
 
   const actions: FilesViewActions = {
     onRetry: load,
+    ...(input.hrefOf ? { orderHrefOf: input.hrefOf } : {}), // F-OF-101
     onOrderVisible: previews.visible, // F-OP-126
     onOrderSelect: setSelected,
     // F-OP-127: Open shows the file in the viewer (the card gets the focus back); Download is asked at the click.
@@ -114,6 +158,8 @@ export function useOrderFiles(
     onViewerIndex: viewer.onIndex,
     onViewerClose: viewer.onClose,
     onViewerOpenLocked: viewer.onOpenLocked,
+    onViewerRetry: viewer.onRetry, // F-OF-104 (F7-B1)
+    onOrderPreviewFailed: previews.stale, // F-OF-104 (F7-B3)
     onViewerDownload: (fileId) => void download(fileId),
     // F-OP-125 (B5): a worksheet through the made-to-measure route (it records the opening on the profile), in a new tab.
     onOrderWorksheet: (sheet) => {
@@ -126,7 +172,7 @@ export function useOrderFiles(
         for (const fileId of ids) void download(fileId)
         return
       }
-      if (!orderId || !partyId || !canShare || busy) return
+      if (!orderId || !partyId || !shareRight || busy) return
       const own = (read?.groups.flatMap((group) => group.files) ?? []).filter((file) => ids.includes(file.id) && isOwnFile(file, orderId))
       setBusy(true)
       listFiles(api, { type: 'SalesOrder', id: orderId })
@@ -143,9 +189,16 @@ export function useOrderFiles(
           load()
         })
     },
+    // ---- F-OF-103: "Add files…" — the ONE upload window (the order or one of its lines) ----
+    onOrderAdd: (files) => upload.open(files),
+    onOrderUploadChange: upload.change,
+    onOrderUploadConfirm: upload.confirm,
+    onOrderUploadCancel: upload.cancel,
+    onOrderUploadDismiss: upload.dismiss,
+    // ---- end F-OF-103
   }
 
-  const model: OrderFilesModel = { read, problem, selected, canShare, busy, previews: previews.previews /* F-OP-126 */, viewer: viewer.model /* F-OP-127 */ }
+  const model: OrderFilesModel = { read, problem, selected, canShare: shareRight /* F-OF-103: the read's `may` when it says it */, busy: busy || upload.busy, previews: previews.previews /* F-OP-126 */, viewer: viewer.model /* F-OP-127 */, may, upload: upload.ask, uploadOutcome: upload.outcome /* F-OF-103 */ }
   return { model, actions, reload: again }
 }
 
@@ -182,8 +235,9 @@ export function stripFilesOf(read: OrderFilesRead, partyId: string | null): Thre
     sizeBytes: file.sizeBytes,
     status: 'AVAILABLE',
     quarantineReason: null,
-    visibility: file.audience === 'CUSTOMER_CAN_SEE' ? ['OFFICE', 'PARTNER'] : ['OFFICE'],
-    partyId: file.audience === 'CUSTOMER_CAN_SEE' ? partyId : null,
+    // F-OF-102 (F6-B2): the tile's marks follow the TRUE audiences when the read says them (a floor or link file is not "Office only").
+    visibility: file.audiences ? ['OFFICE', ...file.audiences.map((one): FileAudience => (one === 'CUSTOMER' ? 'PARTNER' : one))] : file.audience === 'CUSTOMER_CAN_SEE' ? ['OFFICE', 'PARTNER'] : ['OFFICE'],
+    partyId: sharedWithCustomer(file) ? partyId : null,
     createdAt: file.at,
     versionNo: file.versionNo,
     seriesId: file.id,

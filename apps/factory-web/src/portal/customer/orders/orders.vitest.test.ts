@@ -680,7 +680,10 @@ describe('F-SA-238 — the portal Documents tab: the customer’s own shared fil
     expect(read.groups.flatMap((group) => group.files).every((file) => file.audience === 'CUSTOMER_CAN_SEE' && file.alsoOn.length === 0 && file.alsoOnOther === 0)).toBe(true)
     for (const locale of ['en', 'it'] as const) {
       const html = draw(locale, { read, problem: null, selected: [], canShare: false, face: 'customer' })
-      for (const words of locale === 'en' ? ['Order &amp; thread', 'Shipments &amp; invoices', 'Order sheet.pdf', 'Delivery note'] : ['Ordine e conversazione', 'Spedizioni e fatture', 'Documento di trasporto']) expect(html, words).toContain(words)
+      // F-OF-101: the read's "Shipments & invoices" is split by the file's source — a shipment's papers under "Shipments".
+      for (const words of locale === 'en' ? ['Order &amp; thread', 'Order sheet.pdf', 'Delivery note'] : ['Ordine e conversazione', 'Documento di trasporto']) expect(html, words).toContain(words)
+      expect(html).toMatch(locale === 'en' ? />Shipments(<!-- -->)?\s/ : />Spedizioni(<!-- -->)?\s/)
+      expect(html).not.toContain(locale === 'en' ? 'Shipments &amp; invoices' : 'Spedizioni e fatture')
       for (const never of ['Office only', 'Solo ufficio', 'Shared with the customer', 'Condiviso con il cliente', 'you cannot open', 'non puoi aprire', 'also on', 'anche su', 'type="checkbox"']) expect(html, never).not.toContain(never)
       expect(html).not.toContain('Returns')
     }

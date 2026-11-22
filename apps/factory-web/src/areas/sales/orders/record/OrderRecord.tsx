@@ -78,6 +78,7 @@ import { listOrderRequests, type BrandRequest } from '../../../home/approvals/re
 import { readRecordRequests, type OfficeRequest } from '../../../../record-panels/approvals/api'
 import { useOrderFiles } from '../../../_shared/record-thread/use-order-files' // F-SA-237: the order's files (one read, two places)
 import type { OrderFilesHost } from '../../../_shared/record-thread/use-order-files' // F-OP-215
+import { orderFileHrefOf } from '../../../_shared/record-thread/order-file-href' // F-OF-101: a block's door "Open on … ›"
 import { OrderDock } from './dock/OrderDock' // F-SA-262: the dock's pick of ONE conversation
 import { aboutPlace } from './dock/discuss' // F-SA-266: "Show on the page" — a message about a part of the order jumps back to its row
 import { narrowNow, tabAddress } from '../../../_shared/record-frame/address' // F-OP-210: the in-page moves keep the dock's scope
@@ -563,6 +564,13 @@ function RecordContainer({ orderId }: { orderId: string }) {
     canShare: session.permissions.includes('files.manage'),
     onProblem: (key) => setNotice({ tone: 'danger', words: { key: key === 'order.shareFailed' ? 'files.shareFailed' : 'files.openFailed' } }),
     keep: true, // F-OP-125: the page's one read
+    // F-OF-101: a block's door "Open on … ›" — the source record's own page (a change request: this order's Changes tab)
+    hrefOf: (record) => (readyId ? orderFileHrefOf(record, { prefix, id: readyId, companyId: order.status === 'ready' ? order.value.companyId : null }) : null),
+    // F-OF-103: "Add files…" in place — the order or one of its lines ("Line 1 · SEED-JKT-02 Black"); the session's rights until the read's `may`
+    companyId: order.status === 'ready' ? order.value.companyId : null,
+    lines: order.status === 'ready' ? order.value.lines.map((line) => ({ id: line.id, seq: line.seq, what: [line.style?.code, line.colourway?.name].filter(Boolean).join(' ') || null })) : [],
+    canUpload: session.permissions.includes('files.upload'),
+    canDelete: session.permissions.includes('files.delete'),
   })
   // ---- end F-SA-237
   // ---- F-OP-215 (11-dock §6.2): the dock gets this container (no read of its own): "All files" opens the Files tab (the dock's scope

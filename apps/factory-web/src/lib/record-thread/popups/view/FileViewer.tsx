@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { ChevronLeft, ChevronRight, Download, FileText, Lock, MessageSquare } from 'lucide-react'
+import { AlertTriangle, ChevronLeft, ChevronRight, Download, FileText, Lock, MessageSquare } from 'lucide-react'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
 import { Button, Spinner } from '@nexus/ui/primitives'
 import { Lightbox, Modal } from '../../../i18n/ds-parts'
@@ -32,6 +32,8 @@ export interface FileViewerProps {
   onOpenLocked?: (fileId: string) => void
   /** Download asked at the click (the order's own route, mode download) instead of a link fetched before. */
   onDownload?: (fileId: string) => void
+  /** F-OF-104 (F7-B1): "Try again" on a file whose open failed (asked once more, by the person). */
+  onRetry?: (fileId: string) => void
 }
 
 /**
@@ -51,7 +53,7 @@ export function FileViewer(props: FileViewerProps) {
   )
 }
 
-function Viewer({ files, index, onIndex, onClose, onGoToMessage, returnFocusTo, walk: walkAll, onOpenLocked, onDownload }: FileViewerProps) {
+function Viewer({ files, index, onIndex, onClose, onGoToMessage, returnFocusTo, walk: walkAll, onOpenLocked, onDownload, onRetry }: FileViewerProps) {
   const t = useT(POPUPS_NS)
   const shellT = useT('shell')
   const locale = useLocale()
@@ -64,6 +66,7 @@ function Viewer({ files, index, onIndex, onClose, onGoToMessage, returnFocusTo, 
     latest.current = { at, count: items.length, onIndex }
   })
   const show = current ? viewerShow(current) : 'card'
+  const failed = !!current?.failed // F-OF-104
   const photoReady = show === 'photo' && typeof current?.src === 'string'
   // F-OP-127: in a walk of every file the photos stay in this Modal (the Lightbox walks photos only); body data waits for its Open.
   const inLightbox = photoReady && walkAll !== 'all' && !current?.locked
@@ -168,7 +171,20 @@ function Viewer({ files, index, onIndex, onClose, onGoToMessage, returnFocusTo, 
       }
     >
       <div ref={bodyRef} className="fw-rtp-viewer">
-        {locked ? (
+        {failed && !locked ? (
+          // F-OF-104 (F7-B1): a failed open says so, with Try again — never a spinner forever, never a loop of asks.
+          <div className="fw-rtp-card" role="alert">
+            <span className="fw-rtp-card-icon is-held" aria-hidden>
+              <AlertTriangle size={22} />
+            </span>
+            <p className="fw-rtp-card-title">{t('viewer.failed')}</p>
+            {onRetry && (
+              <Button size="sm" onClick={() => onRetry(current.id)}>
+                {t('viewer.retry')}
+              </Button>
+            )}
+          </div>
+        ) : locked ? (
           // F-OP-127: body data never loads by itself — the person asks it, and that opening is recorded.
           <div className="fw-rtp-card">
             <span className="fw-rtp-card-icon is-held" aria-hidden>

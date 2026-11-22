@@ -24,10 +24,12 @@ import { HEAD_NS, RecordThreadHead } from '../../../lib/record-thread/head/view/
 import { fileSeries, fromApiFile, recordFiles, toViewerFile, type FilesParty, type ThreadFile } from '../../../lib/record-thread/files/model'
 import { useStripOpen } from '../../../lib/record-thread/files/use-strip-open'
 import { FILES_NS, FileStrip } from '../../../lib/record-thread/files/view/FileStrip'
-import { START_AUDIENCE, type MissingDocument, type UploadAsk } from '../../../lib/record-thread/files-view/model'
+import type { MissingDocument } from '../../../lib/record-thread/files-view/model'
 import { FILES_VIEW_NS, FilesView, type BulkAction } from '../../../lib/record-thread/files-view/view/FilesView'
 import { useOrderFiles } from './use-order-files' // F-SA-237
+import { useFileUpload } from '../../../lib/record-thread/files-view/use-file-upload' // F-OF-103: the ONE upload of the Files window
 import { stripFilesOf, type OrderFilesHost } from './use-order-files' // F-OP-215: the order page's ONE order-files read
+import { orderFileHrefOf } from './order-file-href' // F-OF-101: a block's door "Open on … ›"
 import type { SavedRepliesModel, SavedReplyLine } from '../../../lib/record-thread/helpers/model'
 import { savedReplyLines } from '../../../lib/record-thread/helpers/model' // th-backend-g step 3
 import { replyAudienceOf, withSavedReply } from '../../../lib/record-thread/composer/model' // th-backend-g step 1
@@ -37,7 +39,7 @@ import type { CountPopoverModel, ViewerFile } from '../../../lib/record-thread/p
 import { CloseThreadConfirm } from '../../../lib/record-thread/popups/view/Confirms'
 import { FileViewer, POPUPS_NS } from '../../../lib/record-thread/popups/view/FileViewer'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
-import { downloadLink, requestUpload, completeUpload, setThreadStatus } from '../../../record-panels/api'
+import { downloadLink, setThreadStatus } from '../../../record-panels/api'
 import { setFilePriced } from '../../../record-panels/api' // F-CP-144: Mark as priced
 import { pricedRefusalKey } from '../../../lib/record-thread/files/model' // F-CP-144
 import { refusalCode } from './state' // F-CP-144
@@ -47,13 +49,11 @@ import { AskDialog } from '../../../record-panels/approvals/view/AskDialog'
 import { restoreVersion } from '../../../record-panels/files/api'
 import { WithMessages } from '../../../record-panels/i18n'
 import { useLiveChanges } from '../../../record-panels/live'
-import { uploadChoices, uploadProblem, type FileKind } from '../../../record-panels/model'
-import { contentTypeOf } from '../../../lib/record-thread/attachments/model'
-import { takesSheet } from '../../../lib/record-thread/attachments/model' // B-TH-283
+import { uploadChoices } from '../../../record-panels/model'
 import { SHARES_NS, takesShares } from '../../../record-panels/share/model'
 import { useShares } from '../../../record-panels/share/use-shares'
 import { InviteDialog } from '../../../record-panels/share/view/InviteDialog'
-import { putToStore, readFromStore, sha256Hex, storeUrl } from '../../../record-panels/store'
+import { readFromStore, storeUrl } from '../../../record-panels/store'
 import { addFollower, createTask, listAssignees, listTasks, readFollowers, setMyFollow, taskReadProblem, taskWriteProblem } from '../../../record-panels/tasks/api'
 import { addTaskHeld, createBody, followersChangeFor, followReasonKey, taskChangeFor, type Assignable, type Followers, type TaskDraft, type TaskItem } from '../../../record-panels/tasks/model'
 import type { PanelRead } from '../../../record-panels/model'
@@ -395,13 +395,16 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     partyId: partyId ?? null,
     canShare: can.share,
     onProblem: (problem) => base.notify({ ns: FILES_VIEW_NS, key: problem, tone: 'danger' }),
+    hrefOf: (record) => orderFileHrefOf(record, { prefix: companyPrefix(session.company?.code ?? ''), id: key.id, companyId: host.record.companyId }), // F-OF-101
+    // F-OF-103: "Add files…" in this window (the order; no line is known here), and this thread's files read again after it.
+    companyId: host.record.companyId,
+    canUpload: can.upload,
+    canDelete: held.has('files.delete'),
+    onUploaded: () => void base.loadFiles(),
   })
   const orderFiles = hostFiles ?? ownOrderFiles
   // ---- end F-SA-237
   const [selected, setSelected] = useState<readonly string[]>([])
-  const [upload, setUpload] = useState<UploadAsk | null>(null)
-  const [uploadFiles, setUploadFiles] = useState<File[]>([])
-  const [refused, setRefused] = useState<readonly { name: string; reason: string }[]>([])
   const [filesBusy, setFilesBusy] = useState(false)
   // ---- B-TH-280: the files in depth (B-W2b-177) in the Files view — read while it is open, with every files read: each document's type
   // and expiry, Versions, Mark up, What it is, and what the record's next moves still need (the view's "Missing before …" lines,
@@ -445,49 +448,11 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   // ---- end B-TH-280
   const choices = uploadChoices({ can: { share: can.share }, party: party ? { id: party.id, name: party.name, emails: [] } : null, record: { type: key.type, siteId: host.record.siteId ?? null, companyId: host.record.companyId } })
 
-  const sendUploads = async (ask: UploadAsk, dropped: readonly File[]) => {
-    setFilesBusy(true)
-    const failed: { name: string; reason: string }[] = []
-    for (const file of dropped) {
-      const contentType = contentTypeOf(file)
-      const problem = uploadProblem({ name: file.name, type: contentType, size: file.size }, ask.kind)
-      if (problem) {
-        failed.push({ name: file.name, reason: tr(problem.key, problem.params) })
-        continue
-      }
-      // B-TH-283 (B-TH-083): a measurement sheet is a PDF or a photo of one.
-      if (ask.sheet && !takesSheet(contentType)) {
-        failed.push({ name: file.name, reason: tv('upload.sheetType') })
-        continue
-      }
-      try {
-        const bytes = await file.arrayBuffer()
-        const announced = await requestUpload(api, {
-          companyId: host.record.companyId,
-          record: key,
-          kind: ask.kind,
-          name: file.name,
-          contentType,
-          sizeBytes: file.size,
-          sha256: await sha256Hex(bytes),
-          visibility: ask.audience === 'OFFICE' ? ['OFFICE'] : ['OFFICE', ask.audience],
-          floorSiteId: ask.audience === 'FLOOR' ? (host.record.siteId ?? null) : null,
-          partyId: ask.audience === 'PARTNER' ? partyId : null,
-          ...(ask.sheet ? { measurementSheet: true } : {}), // B-TH-283
-          ...(ask.priced ? { priced: true } : {}), // F-CP-144: "This file shows prices"
-        })
-        await putToStore(announced.upload, new Blob([bytes], { type: contentType }))
-        await completeUpload(api, announced.file.id)
-      } catch {
-        failed.push({ name: file.name, reason: tr('files.problem.failed') })
-      }
-    }
-    setRefused(failed)
-    setUpload(null)
-    setUploadFiles([])
-    setFilesBusy(false)
-    void base.loadFiles()
-  }
+  // ---- F-OF-103 (13-backend §7 row 1): the record's upload is the ONE upload of the Files window — its state and `sendUploads` MOVED to
+  // use-file-upload (unchanged; it now says a file the virus scan holds and a refusal's words). After it, this record's files are read
+  // again; on a SalesOrder the order's body adds through the order's container (the order or a line), which reads the ORDER again.
+  const fileUpload = useFileUpload(api, { companyId: host.record.companyId, record: key, siteId: host.record.siteId ?? null, partyId: partyId ?? null, choices, onDone: () => void base.loadFiles() })
+  // ---- end F-OF-103
 
   // ---- F-CP-144 (B-CP-014): Mark as priced / take the mark off, at the file's version; the list is read again (a reader without prices
   // who marks it sees it locked from now on); a refusal in words (only a price holder takes it off; changed meanwhile).
@@ -1109,10 +1074,11 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
             can: { upload: can.upload, share: can.share, delete: held.has('files.delete'), mark: can.readFiles /* F-CP-144 */ },
             uploadHeld: !can.upload ? tv('upload.noRight') : null,
             selected,
-            refused,
+            refused: fileUpload.outcome.refused, // F-OF-103
+            held: fileUpload.outcome.held, // F-OF-103 (F5-B6)
             missing,
-            upload,
-            busy: filesBusy,
+            upload: fileUpload.ask, // F-OF-103
+            busy: filesBusy || fileUpload.busy,
             now: Date.now(),
             // F-SA-237: a sales order's window draws the order's files (the same body as its Files tab).
             order: key.type === 'SalesOrder' ? orderFiles.model : null,
@@ -1127,17 +1093,12 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
                 .catch(() => base.notify({ ns: 'record-thread', key: 'notice.failed', tone: 'danger' }))
                 .finally(() => void base.loadFiles()),
             onBulk: (action, ids) => void bulk(action, ids),
-            onDrop: (dropped) => {
-              setUploadFiles(dropped)
-              setUpload({ files: dropped.map((file) => ({ name: file.name, sizeBytes: file.size })), kind: (choices.kinds.includes('ATTACHMENT') ? 'ATTACHMENT' : choices.kinds[0]) as FileKind, audience: START_AUDIENCE as UploadAsk['audience'], kinds: choices.kinds, audiences: choices.audiences })
-            },
-            onUploadChange: (change) => setUpload((ask) => (ask ? { ...ask, ...change } : ask)),
-            onUploadConfirm: () => upload && void sendUploads(upload, uploadFiles),
-            onUploadCancel: () => {
-              setUpload(null)
-              setUploadFiles([])
-            },
-            onDismissRefused: () => setRefused([]),
+            // F-OF-103: the ONE upload (use-file-upload) — dropped files, their kind and audience, Add, Cancel, the outcome dismissed.
+            onDrop: (dropped) => fileUpload.open(dropped),
+            onUploadChange: fileUpload.change,
+            onUploadConfirm: fileUpload.confirm,
+            onUploadCancel: fileUpload.cancel,
+            onDismissRefused: fileUpload.dismiss,
             // B-TH-231: one row's file, or the chosen ones.
             onUseOn: (ids) => openUseOn(ids),
             onPriced: (fileId, priced) => void markPriced(fileId, priced), // F-CP-144

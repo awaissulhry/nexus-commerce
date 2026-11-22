@@ -238,7 +238,9 @@ describe('F-SA-237 — the order files body: groups by source, who can see each 
     for (const locale of LOCALES) {
       const html = renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(OrderFilesBody, { model: { read: READ, problem: null, selected: [], canShare: true }, party: { name: 'Brand Alpha' }, actions: { onOrderMessage: () => undefined } })))
       const t = createTranslator(locale, messagesFor(locale, ['record-thread-files-view'])['record-thread-files-view']!)
-      for (const words of [t('order.audience.CUSTOMER_CAN_SEE'), t('order.audience.OFFICE_ONLY'), t('order.source.thread'), t('order.alsoOn', { record: 'SO-2026-0151' }), t('order.alsoOnOther', { count: 1 }), t('order.inThread'), t('order.leftOut', { count: 3 }), locale === 'en' ? 'Lines &amp; artwork' : 'Righe e grafiche']) expect(html, words).toContain(words)
+      // F-OF-102 (P0-B13): the chip speaks the dock's one word per meaning — Customer · Office only (record-thread-files `audience.*`).
+      const f = createTranslator(locale, messagesFor(locale, ['record-thread-files'])['record-thread-files']!)
+      for (const words of [f('audience.customer'), f('audience.office'), t('order.source.thread'), t('order.alsoOn', { record: 'SO-2026-0151' }), t('order.alsoOnOther', { count: 1 }), t('order.inThread'), t('order.leftOut', { count: 3 }), locale === 'en' ? 'Lines &amp; artwork' : 'Righe e grafiche']) expect(html, words).toContain(words)
       expect(html.match(/\border\.[a-zA-Z]+/)?.[0] ?? null, locale).toBeNull()
       expect(html).not.toContain('Returns')
     }
@@ -312,7 +314,7 @@ describe('F-OP-125: Gmail cards — kinds, the lock card, who added it (office o
       const html = draw(locale, { read: READ, problem: null, selected: [], canShare: true })
       const t = createTranslator(locale, messagesFor(locale, ['record-thread-files-view'])['record-thread-files-view']!)
       for (const words of [t('card.bodyData'), t('card.addedBy', { name: 'Demo Planner' }), t('card.addedByFloor'), t('card.addedBy', { name: BRAND_ALPHA.tradeName }), t('card.download'), t('card.worksheet', { line: 20, version: 2 }), t('order.leftOut', { count: 1 })]) expect(html, `${locale}: ${words}`).toContain(words)
-      expect(html).toContain('class="fw-rtv-cards"')
+      expect(html).toContain('class="fw-rtv-cards fw-of-cards"') // F-OF-101: the cards' grid inside a group's block
       expect(html.match(/\b(card|order)\.[a-zA-Z]+/)?.[0] ?? null, locale).toBeNull()
       // The body photo is a lock card: no <img> of it, ever (its previews come in F-OP-126, never for body data).
       expect(html).not.toMatch(/<img[^>]*Rider measures/)
@@ -382,19 +384,19 @@ describe('F-OP-126: lazy previews — visible-only asks, the cache by address ex
     expect([asksPreview(file('a', { contentType: 'image/heic' })), asksPreview(file('b', { contentType: 'application/pdf', sizeBytes: 100 })), asksPreview(file('c', { bodyData: true }))]).toEqual([true, true, false])
   })
 
-  it('a picture is kept until its address expires (less 5 s) and asked again then, while in view; one not made yet, a minute later', async () => {
-    const { EXPIRY_MARGIN_MS, freshOf, keptPicture, keyOf, NOT_MADE_AGAIN_MS, wantedOf } = await import('./use-file-previews')
+  // F-OF-104 (F7-B3, F7-B4): this test asserted the bug (a drawn picture asked again every ~55 s while in view) — flipped with the fix.
+  it('a picture once drawn is kept while the page stays (never asked again every minute); one not made yet, a minute later; one never made, never again', async () => {
+    const { freshOf, keptPicture, keyOf, NOT_MADE_AGAIN_MS, wantedOf } = await import('./use-file-previews')
     const kept = keptPicture({ small: { url: 'https://store.example.com/s1?sig=1', expiresAt: new Date(NOW + 60_000).toISOString() } }, NOW)
-    expect(kept).toEqual({ preview: { kind: 'picture', src: 'https://store.example.com/s1?sig=1' }, until: NOW + 60_000 - EXPIRY_MARGIN_MS })
-    expect(freshOf(kept, NOW + 54_000)).toBe(true)
-    expect(freshOf(kept, NOW + 56_000)).toBe(false)
+    expect(kept).toEqual({ preview: { kind: 'picture', src: 'https://store.example.com/s1?sig=1' }, until: Infinity })
+    expect(freshOf(kept, NOW + 3_600_000)).toBe(true)
     const files = new Map([['s1', file('s1')]])
     const cache = new Map([[keyOf(file('s1')), kept]])
-    expect(wantedOf(['s1'], files, cache, new Set(), NOW + 10_000)).toEqual([])
-    expect(wantedOf(['s1'], files, cache, new Set(), NOW + 56_000)).toEqual(['s1'])
+    expect(wantedOf(['s1'], files, cache, new Set(), NOW + 56_000)).toEqual([])
     // A new version is another key: asked again at once.
     expect(wantedOf(['s1'], new Map([['s1', file('s1', { versionNo: 2 })]]), cache, new Set(), NOW)).toEqual(['s1'])
     expect(keptPicture({ small: null }, NOW)).toEqual({ preview: { kind: 'icon' }, until: NOW + NOT_MADE_AGAIN_MS })
+    expect(keptPicture({ small: null, never: true }, NOW)).toEqual({ preview: { kind: 'icon' }, until: Infinity })
   })
 
   it('a PDF over 3 MiB says "Large PDF: open it to see it" without a call; pages are drawn 2 at a time and the session keeps 60', async () => {
@@ -613,9 +615,9 @@ describe('F-CP-144: the PRICED lock card, the upload tick, Mark as priced', () =
     const html = draw('en', 'upload-priced')
     expect(html).toContain('This file shows prices')
     expect(html).toContain('A priced document is never shared with a floor: the floor sees no prices.')
-    // The container sends the tick with the upload.
+    // The container sends the tick with the upload — F-OF-103: the ONE upload of the Files window (moved out of the dock).
     const docked = readFileSync(new URL('../../../areas/_shared/record-thread/DockedOfficeThread.tsx', import.meta.url), 'utf8')
-    expect(docked).toContain('...(ask.priced ? { priced: true } : {})')
+    expect(readFileSync(new URL('./use-file-upload.ts', import.meta.url), 'utf8')).toContain('...(ask.priced ? { priced: true } : {})')
     expect(docked).toContain('setFilePriced(api, fileId, { priced, version: file.version })')
   })
 
@@ -630,10 +632,11 @@ describe('F-CP-144: the PRICED lock card, the upload tick, Mark as priced', () =
       truncated: false,
     }
     expect(orderPricedLeftOut(read)).toBe(2)
-    expect(orderGroupsShown(read).map((group) => group.key)).toEqual(['ORDER'])
+    // F-OF-101 (P0-B1): a group whose only files are locked is not drawn ("Order & thread 0"); the counted line says them ONCE, with why.
+    expect(orderGroupsShown(read).map((group) => group.key)).toEqual([])
     for (const locale of LOCALES) {
       const html = renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(OrderFilesBody, { model: { read, problem: null, selected: [], canShare: false }, party: null })))
-      expect(html).toContain(locale === 'en' ? '2 priced documents — you cannot open them' : '2 documenti con prezzi — non puoi aprirli')
+      expect(html).toContain(locale === 'en' ? '2 files you cannot open:</b> 2 priced' : '2 file che non puoi aprire:</b> 2 con prezzi')
     }
   })
 })

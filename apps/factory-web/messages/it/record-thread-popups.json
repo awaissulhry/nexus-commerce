@@ -33,7 +33,9 @@
       "other": "Questo file non si può mostrare qui. Scaricalo per aprirlo."
     },
     "locked": "Dati corporei — si apre solo quando lo chiedi, e l’apertura è registrata.",
-    "openRecorded": "Apri — l’apertura è registrata"
+    "openRecorded": "Apri — l’apertura è registrata",
+    "failed": "Impossibile aprire il file.",
+    "retry": "Riprova"
   },
   "original": {
     "title": "E-mail originale",
