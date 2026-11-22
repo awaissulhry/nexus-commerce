@@ -59,7 +59,7 @@
    and the facts spread along their line, the last one at the right edge: never an empty right half. */
 .fw-om-tt.is-np.is-nd:not(.is-nr) { grid-template-columns: minmax(0, 1fr); grid-template-areas: "t" "r" "f"; }
 .fw-om-tt.is-nd > .fw-om-tt-r { padding-left: 0; border-left: 0; }
-.fw-om-tt.is-nd > .fw-om-facts { display: flex; flex-wrap: wrap; justify-content: space-between; }
+/* F-OM-fx6 (N12): the facts keep the base grid (equal columns over the whole width), never pushed to the two edges. */
 .fw-om-gap { margin: 0; display: flex; align-items: flex-start; gap: var(--nds-space-8) var(--nds-space-12); padding: var(--nds-space-6) var(--nds-space-2); border-bottom: 1px solid var(--nds-border-subtle); font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
 .fw-om-gap:last-of-type { border-bottom: 0; }
 .fw-om-gap > svg { flex: none; margin-top: var(--nds-space-2); color: var(--nds-warning); }
@@ -270,3 +270,6 @@
 
 /* A door at a row's end never widens the page: a tooltip the reader does not see is not in the layout (the kit's fx5 #1 rule). */
 .fw-om .nds-tooltip:not(:hover):not(:focus-within) > .tip { display: none; }
+
+/* F-OM-fx6 (N11): a document or record number stays whole on a narrow room (say.ts keepNumbers; the also-bills order links). */
+.fw-om-num, .fw-om-ir-also > a { white-space: nowrap; }

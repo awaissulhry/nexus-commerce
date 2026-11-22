@@ -14,6 +14,9 @@ import { useSearchParams } from 'next/navigation'
 import { TabLink } from '../../../../../../lib/tab-link/TabLink'
 import './linked.css' // F-OO-207: the card's own rows
 
+/** F-OM-fx6 (re-walk): a door's arrow never stands alone on a line — the space before "›" does not break. */
+const door = (words: string): string => words.replace(/ ›$/, '\u00a0›')
+
 /**
  * F-OO-100 (order overview lane: one file per card) — moved out of OverviewTab.tsx.
  *
@@ -87,7 +90,7 @@ function RowValue({ row }: { row: LinkedRow }) {
   const value = [...(row.count !== null ? [String(row.count)] : []), ...row.parts.map((part) => t(part.key, part.of ? { ...part.params, of: part.of.map((inner) => t(inner.key, inner.params)).join(', ') } : part.params))].join(' · ')
   return row.href ? (
     <TabLink className="fw-so-link" href={row.href}>
-      {t('linked.value', { value })}
+      {door(t('linked.value', { value }))}
     </TabLink>
   ) : (
     <span>{value}</span>
@@ -102,7 +105,7 @@ function QuietPart({ part }: { part: LinkedQuiet }) {
     const words = part.kind === 'quote' ? t('linked.labelled', { label: t('overview.linked.quote'), value: t('chain.quoteValue', { number: part.number, revision: part.revision }) }) : t(part.words.key, part.words.params)
     return part.href ? (
       <Link className="fw-so-link" href={part.href}>
-        {t('linked.value', { value: words })}
+        {door(t('linked.value', { value: words }))}
       </Link>
     ) : (
       <span>{words}</span>
@@ -113,13 +116,13 @@ function QuietPart({ part }: { part: LinkedQuiet }) {
     const state = part.extraDue ? t('moneyTab.totals.fact.notNeededExtraWords', { date: formatDate(dayInstant(part.extraDue), { locale }) }) : t(`gate.state.${part.state}`)
     return (
       <TabLink className="fw-so-link" href={part.href}>
-        {t('linked.value', { value: t('linked.labelled', { label: t('overview.linked.deposit'), value: state }) })}
+        {door(t('linked.value', { value: t('linked.labelled', { label: t('overview.linked.deposit'), value: state }) }))}
       </TabLink>
     )
   }
   return (
     <Link className="fw-so-link" href={part.href}>
-      {t('linked.value', { value: t('linked.labelled', { label: t('overview.linked.sameQuote'), value: part.number }) })}
+      {door(t('linked.value', { value: t('linked.labelled', { label: t('overview.linked.sameQuote'), value: part.number }) }))}
     </Link>
   )
 }
