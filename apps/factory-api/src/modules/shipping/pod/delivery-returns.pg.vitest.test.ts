@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { newId } from '@nexus/factory-domain/core/ids'
+import { COLLECTED_WORDS } from '@nexus/factory-domain/shipping/collection/rules' // B-OS-003
 import type { CarrierCall, CarrierLabel } from '@nexus/factory-domain/ports/carrier'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
@@ -331,6 +332,39 @@ describe('delivered (LOG-065, LOG-067)', () => {
     // Nothing more to follow.
     expect((await followOrder(system(), SO2, { what: 'again' })).moved).toEqual([])
   }, SLOW_TEST_TIMEOUT_MS)
+
+  // ---- B-OS-003 (order shipments tab; H3-B1, H3-B9): how each delivery came — from the carrier, or collected by the customer (its
+  // collection is its delivery, never "by hand") — read in one query per kind for every shipment of the order.
+  it('B-OS-003: the deliveries read says how each came — the carrier, or collected by the customer — and none of them by hand', async () => {
+    const before = (await viewer.get(`/sales/orders/${SO2}/deliveries`)).body.shipments as Json[]
+    expect(before.find((row) => row.id === SH1)).toMatchObject({ status: 'DELIVERED', deliveredVia: 'CARRIER', byHand: null, carrierLater: null, returned: null, etaByHand: false })
+    // A shipment of the order the customer's own carrier collected, made past the guards from SH-0001's row (the read is what is
+    // tested), with the MANUAL event the collection handler writes (collection/delivered.ts).
+    const collected = newId()
+    const at = new Date(h.clock.now().getTime() - 2 * DAY).toISOString()
+    await asReplica(async () => {
+      await admin(`
+        CREATE TEMP TABLE os_collected AS SELECT * FROM "Shipment" WHERE id = '${SH1}';
+        UPDATE os_collected SET id = '${collected}', number = 'SEED-SH-0399', "transportBy" = 'RECIPIENT', "carrierCode" = NULL, "carrierName" = NULL, "serviceCode" = NULL, "integrationAccountId" = NULL,
+          "carrierShipmentId" = NULL, "manifestId" = NULL, "podSignedBy" = NULL, "podAt" = NULL, "podFileId" = NULL, "expectedDeliveryAt" = NULL, "shippedAt" = '${at}', "deliveredAt" = '${at}', version = 1;
+        INSERT INTO "Shipment" SELECT * FROM os_collected;
+        DROP TABLE os_collected;`)
+      await admin(`INSERT INTO "TrackingEvent" (id, "tenantId", "siteId", "partyId", "shipmentId", status, description, "occurredAt", "recordedAt", source) SELECT $1, "tenantId", "siteId", "partyId", id, 'DELIVERED', $2, "shippedAt", now(), 'MANUAL' FROM "Shipment" WHERE id = $3`, [newId(), COLLECTED_WORDS, collected])
+    })
+    try {
+      const rows = (await viewer.get(`/sales/orders/${SO2}/deliveries`)).body.shipments as Json[]
+      expect(rows.find((row) => row.id === collected)).toMatchObject({ number: 'SEED-SH-0399', status: 'DELIVERED', deliveredVia: 'COLLECTED', byHand: null, carrierLater: null, returned: null, openProblems: 0 })
+      expect(rows.find((row) => row.id === SH1)).toMatchObject({ deliveredVia: 'CARRIER', byHand: null })
+      // No amount and no person of ours in it (the signer is the customer's).
+      expect(JSON.stringify(rows)).not.toMatch(/freight|declaredValue|insuredValue|createdById/)
+    } finally {
+      await asReplica(async () => {
+        await admin(`DELETE FROM "TrackingEvent" WHERE "shipmentId" = $1`, [collected])
+        await admin(`DELETE FROM "Shipment" WHERE id = $1`, [collected])
+      })
+    }
+  }, SLOW_TEST_TIMEOUT_MS)
+  // ---- end B-OS-003
 })
 
 describe('return labels (LOG-112, TK1:01)', () => {
