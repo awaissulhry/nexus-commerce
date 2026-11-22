@@ -71,13 +71,16 @@ const SESSIONS: Record<string, SessionContext> = {
   // fix-pg-2 (B-PR-10): the stock view of one customer only: the report adds up every customer's stock.
   stockOneParty: office([grain(['inventory.stock.view'], 'all', [newId()])]),
   otherTenant: { audience: 'office', tenantId: newId(), actorId: newId(), grants: [grain(['inventory.stock.view', 'costing.view', 'money.cost'])] },
+  // B-OM-021: a margin keeper of another customer only (the brand wall on the hand commands).
+  otherPartyKeeper: office([grain(['costing.view', 'costing.ledger.manage', 'money.cost', 'money.price', 'money.margin'], 'all', [newId()])]),
 }
 
 type Json = Record<string, any>
 const admin = async <T = Json>(sql: string, values: unknown[] = []): Promise<T[]> => (await db.admin.query(sql, values)).rows as T[]
-const call = (session: string, method: 'GET' | 'POST', url: string, payload?: unknown) =>
-  app.inject({ method, url, headers: { 'x-test-session': session, ...(method === 'POST' ? { 'idempotency-key': key() } : {}) }, ...(payload === undefined ? {} : { payload: payload as object }) })
-async function ok(session: string, method: 'GET' | 'POST', url: string, payload?: unknown, status = 200): Promise<Json> {
+// B-OM-021: + PUT (the target), with its idempotency key.
+const call = (session: string, method: 'GET' | 'POST' | 'PUT', url: string, payload?: unknown) =>
+  app.inject({ method, url, headers: { 'x-test-session': session, ...(method !== 'GET' ? { 'idempotency-key': key() } : {}) }, ...(payload === undefined ? {} : { payload: payload as object }) })
+async function ok(session: string, method: 'GET' | 'POST' | 'PUT', url: string, payload?: unknown, status = 200): Promise<Json> {
   const response = await call(session, method, url, payload)
   expect(response.statusCode, response.body).toBe(status)
   return response.json()
@@ -387,3 +390,98 @@ describe('order margin from estimate to actual (FIN-047)', () => {
     }
   })
 })
+
+// ── B-OM-021 (order money tab; lead L2, L4; 13-backend §5): hand cost lines (added only) and the order's target margin ──
+describe('B-OM-021: an order’s margin set by hand — a cost line added and removed, the target', () => {
+  const marginOf = async (session = 'finance') => ok(session, 'GET', `/costing/margins/orders/${await orderOf('SEED-SO-0002')}`)
+  const linesUrl = async () => `/costing/margins/orders/${await orderOf('SEED-SO-0002')}/cost-lines`
+  const changed = async () => admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE type = 'order_margin.changed' AND subject = $1 ORDER BY "occurredAt", id`, [await orderOf('SEED-SO-0002')])
+  let lineId: string
+
+  it('a commission added by hand lowers the margin now and so far, beside the computed cost; its own last waterfall step', async () => {
+    const before = await marginOf()
+    expect(before.handLines).toEqual([])
+    expect(before.estimate.handCost).toBe(0)
+    const events = (await changed()).length
+    const after = await ok('finance', 'POST', await linesUrl(), { kind: 'COMMISSION', amount: 30_000, reason: 'Agent commission, made-up 300.00.' })
+    expect(after.handLines).toEqual([{ id: expect.any(String), kind: 'COMMISSION', amount: 30_000, currency: 'EUR', reason: 'Agent commission, made-up 300.00.', by: null, at: expect.any(String) }])
+    lineId = after.handLines[0].id
+    expect(after.estimate).toMatchObject({ cost: before.estimate.cost + 30_000, handCost: 30_000, margin: before.estimate.margin - 30_000 })
+    expect(after.actual).toMatchObject({ cost: before.actual.cost + 30_000, handCost: 30_000 })
+    expect(after.estimateCost).toBe(before.estimateCost + 30_000)
+    expect(after.waterfall.at(-1)).toEqual({ reason: 'BY_HAND', amount: -30_000 })
+    expect(after.quoted.margin + after.waterfall.reduce((sum: number, step: Json) => sum + step.amount, 0)).toBe(after.estimate.margin)
+    // The list counts it too (one rule): the row, the tiles.
+    expect(await marginRow('SEED-SO-0002')).toMatchObject({ estimateCost: before.estimateCost + 30_000 })
+    expect(await admin(`SELECT kind::text, amount, currency, "removedAt" FROM "OrderCostLine" WHERE id = $1`, [lineId])).toEqual([{ kind: 'COMMISSION', amount: 30_000, currency: 'EUR', removedAt: null }])
+    expect(await admin(`SELECT action FROM "AuditLog" WHERE "recordType" = 'OrderCostLine' AND "recordId" = $1`, [lineId])).toEqual([{ action: 'costing.orderCostLine' }])
+    expect(await changed()).toHaveLength(events + 1)
+    expect((await changed()).at(-1)!.payload).toEqual({ orderId: await orderOf('SEED-SO-0002'), partyId: expect.any(String) })
+  })
+
+  it('removed with a reason: the margin is back to the computed one; removed once', async () => {
+    const after = await ok('finance', 'POST', `${await linesUrl()}/${lineId}/remove`, { reason: 'The agent waived it.' })
+    expect(after.handLines).toEqual([])
+    expect(after.estimate.handCost).toBe(0)
+    expect(after.waterfall.some((step: Json) => step.reason === 'BY_HAND')).toBe(false)
+    const again = await call('finance', 'POST', `${await linesUrl()}/${lineId}/remove`, { reason: 'Again.' })
+    expect(again.statusCode, again.body).toBe(409)
+    expect(again.json().error.issues).toEqual([{ path: 'handMargin/REMOVED_ALREADY', message: 'This cost line is removed already.' }])
+    expect(await admin(`SELECT "removeReason" FROM "OrderCostLine" WHERE id = $1`, [lineId])).toEqual([{ removeReason: 'The agent waived it.' }])
+  })
+
+  it('the target: the flag is judged on it, else the floor; cleared, the floor again; the same target twice writes nothing', async () => {
+    const before = await marginOf()
+    // Now 26.5614 % (the freight counted, B-OM-007): below a 30 % target, above a 20 % one.
+    expect(before).toMatchObject({ targetPct: null, target: null })
+    const url = `/costing/margins/orders/${await orderOf('SEED-SO-0002')}/target`
+    const above = await ok('finance', 'PUT', url, { targetPct: '30', reason: 'This customer is held to 30 %.' })
+    expect(above).toMatchObject({ targetPct: '30', belowFloor: true, target: { pct: '30', by: null, reason: 'This customer is held to 30 %.' } })
+    expect(above.target.at).toEqual(expect.any(String))
+    expect(await marginRow('SEED-SO-0002')).toMatchObject({ targetPct: '30', belowFloor: true })
+    const rows = (await admin(`SELECT count(*)::int AS n FROM "AuditLog" WHERE "recordType" = 'SalesOrder' AND action = 'orders.marginTarget'`))[0]!
+    await ok('finance', 'PUT', url, { targetPct: '30', reason: 'The same again.' })
+    expect((await admin(`SELECT count(*)::int AS n FROM "AuditLog" WHERE "recordType" = 'SalesOrder' AND action = 'orders.marginTarget'`))[0]).toEqual(rows)
+    expect(await ok('finance', 'PUT', url, { targetPct: '20', reason: 'A lower target agreed.' })).toMatchObject({ targetPct: '20', belowFloor: false })
+    const cleared = await ok('finance', 'PUT', url, { targetPct: null, reason: 'Back to the floor.' })
+    expect(cleared).toMatchObject({ targetPct: null, target: null, belowFloor: before.belowFloor })
+    const out = await call('finance', 'PUT', url, { targetPct: '100', reason: 'Out of range.' })
+    expect(out.statusCode, out.body).toBe(400)
+  })
+
+  it('the money wall: Sales never reads them; a role reading margins sees the target, never a hand cost; no writer without the right or the cost', async () => {
+    const url = `/costing/margins/orders/${await orderOf('SEED-SO-0002')}/target`
+    await ok('finance', 'PUT', url, { targetPct: '25', reason: 'For the walls.' })
+    await ok('finance', 'POST', await linesUrl(), { kind: 'BANK_CHARGES', amount: 1_500, reason: 'Made-up bank fee.' })
+    const blind = await marginOf('sales')
+    for (const name of ['handLines', 'target', 'targetPct']) expect(blind).not.toHaveProperty(name)
+    expect(blind.estimate ?? {}).not.toHaveProperty('handCost')
+    const priced = await marginOf('pricedSales')
+    expect(priced).toMatchObject({ targetPct: '25', target: { pct: '25' } })
+    expect(priced).not.toHaveProperty('handLines')
+    expect(priced.estimate).not.toHaveProperty('handCost')
+    for (const session of ['sales', 'pricedSales', 'production', 'warehouse']) {
+      const response = await call(session, 'POST', await linesUrl(), { kind: 'OTHER', amount: 100, reason: 'Not mine to add.' })
+      expect(response.statusCode, `${session} ${response.body}`).toBe(403)
+      expect((await call(session, 'PUT', url, { targetPct: '10', reason: 'Not mine to set.' })).statusCode, session).toBe(403)
+    }
+    expect((await marginOf()).handLines.map((line: Json) => line.kind)).toEqual(['BANK_CHARGES'])
+  })
+
+  it('the brand wall: a margin keeper of another customer gets the order as an unknown one, on every hand command', async () => {
+    const order = await orderOf('SEED-SO-0002')
+    const unknown = newId()
+    for (const [method, suffix, body] of [
+      ['POST', 'cost-lines', { kind: 'OTHER', amount: 100, reason: 'Not my customer.' }],
+      ['POST', `cost-lines/${newId()}/remove`, { reason: 'Not my customer.' }],
+      ['PUT', 'target', { targetPct: '10', reason: 'Not my customer.' }],
+    ] as const) {
+      const theirs = await call('otherPartyKeeper', method, `/costing/margins/orders/${order}/${suffix}`, body)
+      const none = await call('otherPartyKeeper', method, `/costing/margins/orders/${unknown}/${suffix}`, body)
+      expect(theirs.statusCode, theirs.body).toBe(404)
+      expect(none.statusCode, none.body).toBe(404)
+      expect(theirs.json().error.message).toBe(none.json().error.message)
+    }
+  })
+})
+// ── end B-OM-021 ──

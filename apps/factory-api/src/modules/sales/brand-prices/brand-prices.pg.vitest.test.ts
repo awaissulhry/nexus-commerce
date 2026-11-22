@@ -44,7 +44,7 @@ import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
  */
 
 type Json = Record<string, any>
-type Method = 'GET' | 'POST' | 'PUT' | 'PATCH'
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' // B-OM-020: + DELETE (the take-back)
 
 const SEED_DIR = fileURLToPath(new URL('../../../../../../packages/factory-db/seed', import.meta.url))
 const NS = 'cp017-brand-prices'
@@ -53,9 +53,10 @@ const T = sid('tenant')
 const companyA = sid('company:A')
 const AT = new Date('2026-11-19T08:00:00.000Z')
 
-const PEOPLE = { owner: newId(), sales: newId(), production: newId(), admin: newId(), betaOwner: newId() } as const
+// B-OM-020: + finance (it accepts a price difference: orders.moneyPlan + the price grain).
+const PEOPLE = { owner: newId(), sales: newId(), production: newId(), admin: newId(), betaOwner: newId(), finance: newId() } as const
 type Person = keyof typeof PEOPLE
-const ROLE_OF: Record<Person, string> = { owner: 'owner', sales: 'sales', production: 'production_manager', admin: 'admin', betaOwner: 'owner' }
+const ROLE_OF: Record<Person, string> = { owner: 'owner', sales: 'sales', production: 'production_manager', admin: 'admin', betaOwner: 'owner', finance: 'finance' }
 const SESSIONS: Record<string, SessionContext> = {}
 /** A person's actor, as the live wall reads it. */
 const actorOf = (person: Person): Actor => ({ audience: 'office', tenantId: T, grants: SESSIONS[person]!.grants })
@@ -443,3 +444,92 @@ describe('the price history: never on the order’s timeline, only for price hol
   })
 })
 // ── end B-CP-025 ──
+
+// ── B-OM-020 (order money tab; Owner D4, reversing customer-page D5): a price difference accepted by hand, and taken back ──
+describe('B-OM-020: a price difference accepted by hand and taken back (orders.moneyPlan + the price grain)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  let order: { id: string; lines: { id: string; seq: number }[] }
+  const url = () => `/sales/orders/${order.id}/price-check/accept`
+  const acceptances = (orderId: string) => admin<Json>(`SELECT "ourNet", "brandNet", reason, "withdrawnAt", "withdrawReason" FROM "OrderPriceAcceptance" WHERE "tenantId" = $1 AND "salesOrderId" = $2 ORDER BY "acceptedAt", id`, [T, orderId])
+
+  beforeAll(async () => {
+    order = await alphaOrder('PO-OM020-1')
+    // The customer says 800.00 for the whole order; ours is 820.00.
+    await ok('owner', 'PUT', `/sales/orders/${order.id}/brand-prices`, { rows: [{ lineId: null, netAmount: 80_000, source: 'CUSTOMER_PO' }] })
+    // A person who may change the money plan but sees no price (a custom role).
+    SESSIONS.planNoPrice = { audience: 'office', tenantId: T, actorId: PEOPLE.sales, grants: [{ permissions: ['orders.view', 'orders.moneyPlan'] as Permission[], companies: 'all', sites: 'all', parties: 'all' }] }
+  })
+
+  it('Finance accepts the difference with the nets as read: the check says who, when and why; the history and the event', async () => {
+    const before = await ok('finance', 'GET', `/sales/orders/${order.id}/price-check`)
+    expect(before.total).toMatchObject({ ourPrice: 82_000, brandPrice: 80_000, priceMatch: 'NOT_EQUAL', priceDiff: 2_000 })
+    expect(before.accepted).toBeNull()
+    const events = (await outbox(order.id)).length
+    const check = await ok('finance', 'POST', url(), { ourNet: 82_000, brandNet: 80_000, reason: 'Agreed with the customer by phone.' })
+    expect(check.accepted).toEqual({ by: 'Made-up finance', at: expect.any(String), reason: 'Agreed with the customer by phone.', ourNet: 82_000, brandNet: 80_000 })
+    // The check itself still reads the two prices as they are: the acceptance stands beside it.
+    expect(check.total).toMatchObject({ priceMatch: 'NOT_EQUAL', priceDiff: 2_000 })
+    const history = await audits(order.id)
+    expect(history.at(-1)).toMatchObject({ action: 'brandPrices.accept', recordType: 'OrderBrandPrice', recordId: order.id, after: { ourNet: { $money: 'price', value: 82_000 }, brandNet: { $money: 'price', value: 80_000 }, difference: { $money: 'price', value: 2_000 } } })
+    expect(await outbox(order.id)).toHaveLength(events + 1)
+    expect((await outbox(order.id)).at(-1)!.payload).toEqual({ orderId: order.id, partyId: alpha })
+  })
+
+  it('refused in words: accepted already; nets that are not the check now (stale)', async () => {
+    const twice = await no('finance', 'POST', url(), { ourNet: 82_000, brandNet: 80_000, reason: 'Again, by mistake.' }, 409)
+    expect(paths(twice)).toEqual(['priceAccept/ACCEPTED_ALREADY'])
+    const stale = await no('owner', 'POST', url(), { ourNet: 82_000, brandNet: 81_000, reason: 'Read an older check.' }, 409)
+    expect(paths(stale)).toEqual(['priceAccept/STALE'])
+    expect(stale.message).toBe('A price changed since you read the check: read it again, then accept.')
+  })
+
+  it('a price change reopens it by itself; accepting the new difference takes the old one back, in words', async () => {
+    const before = await ok('owner', 'GET', `/sales/orders/${order.id}/price-check`)
+    const changed = await ok('owner', 'PUT', `/sales/orders/${order.id}/brand-prices`, { rows: [{ lineId: null, netAmount: 79_000, source: 'CUSTOMER_PO', version: before.total.row.version }] })
+    expect(changed.accepted).toBeNull()
+    expect(paths(await no('finance', 'POST', url(), { ourNet: 82_000, brandNet: 80_000, reason: 'The old figures.' }, 409))).toEqual(['priceAccept/STALE'])
+    const again = await ok('finance', 'POST', url(), { ourNet: 82_000, brandNet: 79_000, reason: 'The customer pays 790.00: agreed.' })
+    expect(again.accepted).toMatchObject({ ourNet: 82_000, brandNet: 79_000, reason: 'The customer pays 790.00: agreed.' })
+    const rows = await acceptances(order.id)
+    expect(rows.map((row) => [row.brandNet, row.withdrawnAt !== null, row.withdrawReason])).toEqual([
+      [80_000, true, 'The prices changed since it was accepted; the new difference is accepted.'],
+      [79_000, false, null],
+    ])
+  })
+
+  it('taken back with a reason: the difference reads open again; once more is refused', async () => {
+    const check = await ok('finance', 'DELETE', url(), { reason: 'The customer did not confirm it in writing.' })
+    expect(check.accepted).toBeNull()
+    expect((await acceptances(order.id)).at(-1)).toMatchObject({ withdrawReason: 'The customer did not confirm it in writing.' })
+    expect((await audits(order.id)).at(-1)).toMatchObject({ action: 'brandPrices.unaccept' })
+    expect(paths(await no('finance', 'DELETE', url(), { reason: 'Again.' }, 409))).toEqual(['priceAccept/NOT_ACCEPTED'])
+  })
+
+  it('nothing to accept when the prices are equal; never on a closed order', async () => {
+    const equal = await alphaOrder('PO-OM020-EQUAL')
+    await ok('owner', 'PUT', `/sales/orders/${equal.id}/brand-prices`, { rows: [{ lineId: null, netAmount: 82_000, source: 'CUSTOMER_PO' }] })
+    expect(paths(await no('finance', 'POST', `/sales/orders/${equal.id}/price-check/accept`, { ourNet: 82_000, brandNet: 82_000, reason: 'Nothing differs.' }, 409))).toEqual(['priceAccept/NOTHING_TO_ACCEPT'])
+    const closed = await alphaOrder('PO-OM020-CLOSED')
+    await ok('owner', 'PUT', `/sales/orders/${closed.id}/brand-prices`, { rows: [{ lineId: null, netAmount: 80_000, source: 'CUSTOMER_PO' }] })
+    await force(`UPDATE "SalesOrder" SET status = 'CLOSED', "closedAt" = now() WHERE id = $1`, [closed.id])
+    expect(paths(await no('finance', 'POST', `/sales/orders/${closed.id}/price-check/accept`, { ourNet: 82_000, brandNet: 80_000, reason: 'Too late.' }, 409))).toEqual(['priceAccept/CLOSED'])
+    expect(await acceptances(closed.id)).toEqual([])
+  })
+
+  it('the money wall: Sales and a Production manager 403; a money-plan person without the price grain 403; nothing written', async () => {
+    for (const person of ['sales', 'production', 'planNoPrice'] as Person[]) {
+      await no(person, 'POST', url(), { ourNet: 82_000, brandNet: 79_000, reason: 'Not mine to accept.' }, 403)
+      await no(person, 'DELETE', url(), { reason: 'Not mine to take back.' }, 403)
+    }
+    expect((await acceptances(order.id)).filter((row) => row.withdrawnAt === null)).toEqual([])
+  })
+
+  it('the brand wall: an Owner limited to Brand Beta gets Brand Alpha’s order as an unknown one', async () => {
+    const unknown = newId()
+    for (const [method, body] of [['POST', { ourNet: 82_000, brandNet: 79_000, reason: 'Not my customer.' }], ['DELETE', { reason: 'Not my customer.' }]] as const) {
+      const theirs = await no('betaOwner', method, url(), body, 404)
+      const none = await no('betaOwner', method, `/sales/orders/${unknown}/price-check/accept`, body, 404)
+      expect({ code: theirs.code, message: theirs.message }).toEqual({ code: none.code, message: none.message })
+    }
+  })
+})
+// ── end B-OM-020 ──

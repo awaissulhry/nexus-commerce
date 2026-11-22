@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { amountMinor, businessDate, defineContract, id, input, output, quantity, unitPrice } from '@nexus/factory-domain/core/contracts'
 import { CREDIT_REASONS } from '@nexus/factory-domain/invoicing/credit-note/credit-note'
 import { INVOICE_DOC_TYPES, MAX_CAUSALE, MAX_DESCRIPTION, PRICE_BASES } from '@nexus/factory-domain/invoicing/invoices'
+import { INVOICE_PAYMENT_STATES } from '@nexus/factory-domain/invoicing/from-shipment/settlement' // B-OM-023
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
 import { INVOICE_TIMINGS } from '@nexus/factory-domain/sales/terms/terms'
 import { deadlineView, invoiceView, paymentInput } from '../contract'
@@ -263,6 +264,11 @@ export const settlementContract = defineContract({
             refundDueAmount: money.price(z.number().int()),
             /** B-OM-001 (order money tab M1-B1): the small differences written off on it (still standing); its open amount is less them. */
             writtenOffAmount: money.price(z.number().int()),
+            /**
+             * B-OM-023 (order money tab; Sales sees payment words, no amounts): where its payment stands, a word-code with no amount —
+             * sent to every invoices.view reader, the price grain or not: OPEN · PART_PAID · PAID · CREDITED · REFUND_DUE.
+             */
+            paymentState: z.enum(INVOICE_PAYMENT_STATES),
             // ── B-OP-022 (order page plan N3; 13-backend §3): this order's part of it (the invoice's whole is grossTotal, its open openAmount) ──
             /** This order's share of the invoice's goods: its gross less its freight, split by the net each order's lines carry on it. */
             share: money.price(z.number().int()),

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, livePartyId } from '../events/define' // B-OM-021: + livePartyId
 import { WORK_CENTRE_KINDS } from '../product/routing/operations'
 import { COST_ENTRY_KINDS, COSTING_METHODS } from './ledger/entries'
 import { LABOUR_RATE_STATUSES } from './rates'
@@ -122,4 +122,17 @@ export const events = [
     }),
     live: { permission: 'costing.view', fields: ['allocationId', 'supplierInvoiceLineId', 'status', 'change'] },
   }),
+  // ── B-OM-021 (order money tab; lead L2, L4): an order's margin changed by hand ──
+  // A hand cost line added or removed, or the order's target margin set or cleared (apps/factory-api costing/margins/hand.ts).
+  // Ids only (the money wall): never an amount, a kind, a percent or a reason. Live to an office viewer who holds costing.view
+  // over the order's company and customer (the order page's Money tab and Finance › Margins re-read with their own grains); the
+  // brand wall: `partyId` (livePartyId) is the order's customer, never a live field.
+  defineEvent({
+    type: 'order_margin.changed',
+    context: 'costing',
+    description: "An order's margin was changed by hand: a cost line added or removed, or its target margin set or cleared.",
+    payload: z.strictObject({ orderId: z.uuid(), partyId: livePartyId() }),
+    live: { permission: 'costing.view', fields: ['orderId'] },
+  }),
+  // ── end B-OM-021 ──
 ] as const

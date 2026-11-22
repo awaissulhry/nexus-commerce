@@ -236,3 +236,86 @@ describe('B-SC-005: a refusal that quotes its phrase key reads in plain words', 
   })
 })
 // ── end B-SC-005 ──
+
+// ── B-OS-004 (order shipments tab; H4-B1, H4-B2, H4-B3; wall W27): a complaint about one of its shipments only, a return of its lines
+// that names another order (shown on both, each with its own pieces) and its replacement order, and the lists' "there are more" ──
+describe('B-OS-004: shipment-level complaints, returns by the order’s lines, the replacement order, truncated lists', () => {
+  const replica = async (sql: string, values: unknown[] = []) => {
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin(sql, values)
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
+  }
+  const linksOf = (orderId: string) => ok('sales', 'GET', `/sales/orders/${orderId}/links`)
+  const sizeOf = async (lineId: string) => (await admin<{ size: string }>(`SELECT size FROM "SalesOrderLineSize" WHERE "lineId" = $1 ORDER BY size LIMIT 1`, [lineId]))[0]?.size ?? null
+
+  it('a complaint about one of its shipments shows with that shipment; another customer’s naming it never does', async () => {
+    const shipment = await one<{ id: string; number: string }>(`SELECT id, number FROM "Shipment" WHERE "salesOrderId" = $1 AND "partyId" = $2 ORDER BY number LIMIT 1`, [order.id, order.partyId])
+    await admin(
+      `INSERT INTO "Complaint" (id, "tenantId", "companyId", "partyId", number, channel, "receivedAt", description, "shipmentId", status) VALUES ($1, $2, $3, $4, 'SEED-CMP-9902', 'EMAIL', now(), 'Made-up words about one shipment.', $5, 'NEW')`,
+      [newId(), A.tenant, order.companyId, order.partyId, shipment.id],
+    )
+    // Another customer's complaint naming this order's shipment (if the database lets one name it at all) never shows.
+    await admin(
+      `INSERT INTO "Complaint" (id, "tenantId", "companyId", "partyId", number, channel, "receivedAt", description, "shipmentId", status) VALUES ($1, $2, $3, $4, 'SEED-CMP-9903', 'EMAIL', now(), 'Made-up words of another customer.', $5, 'NEW')`,
+      [newId(), A.tenant, order.companyId, other.partyId, shipment.id],
+    ).catch(() => null)
+    const answer = await linksOf(order.id)
+    expect((answer.complaints as Json[]).find((row) => row.number === 'SEED-CMP-9902')).toMatchObject({ status: 'NEW', shipment: { id: shipment.id, number: shipment.number } })
+    expect((answer.complaints as Json[]).map((row) => row.number)).not.toContain('SEED-CMP-9903')
+    // The order's own complaint names no shipment.
+    expect((answer.complaints as Json[]).find((row) => row.number === 'SEED-CMP-0001')).toMatchObject({ shipment: null })
+    expect(answer.truncated).toEqual({ complaints: false, returns: false })
+    // Another customer's rep still finds no order.
+    expect((await call('otherRep', 'GET', `/sales/orders/${order.id}/links`)).statusCode).toBe(404)
+  })
+
+  it('a return across two orders shows on both, each with its own pieces, and names its replacement order', async () => {
+    const second = await one<{ id: string; number: string }>(`SELECT id, number FROM "SalesOrder" WHERE "tenantId" = $1 AND "partyId" = $2 AND "companyId" = $3 AND id <> $4 ORDER BY number LIMIT 1`, [A.tenant, order.partyId, order.companyId, order.id])
+    const ownLine = await one<{ id: string }>(`SELECT id FROM "SalesOrderLine" WHERE "orderId" = $1 AND kind <> 'FEE' ORDER BY seq LIMIT 1`, [order.id])
+    const otherLine = await one<{ id: string }>(`SELECT id FROM "SalesOrderLine" WHERE "orderId" = $1 AND kind <> 'FEE' ORDER BY seq LIMIT 1`, [second.id])
+    const source = await one<{ id: string }>(`SELECT id FROM "ReturnAuthorisation" WHERE "salesOrderId" = $1 AND "partyId" = $2 ORDER BY number LIMIT 1`, [order.id, order.partyId])
+    const rma = newId()
+    // A copy of the order's return, past the guards (the read is what is tested): it names the SECOND order and makes it its
+    // replacement, with 2 pieces of this order's line and 1 of the second order's.
+    await replica(`
+      CREATE TEMP TABLE os_rma AS SELECT * FROM "ReturnAuthorisation" WHERE id = '${source.id}';
+      CREATE TEMP TABLE os_rma_line AS SELECT * FROM "ReturnLine" WHERE "returnId" = '${source.id}' ORDER BY seq LIMIT 1;
+      UPDATE os_rma SET id = '${rma}', number = 'SEED-RMA-9901', "salesOrderId" = '${second.id}', "replacementOrderId" = '${second.id}';
+      INSERT INTO "ReturnAuthorisation" SELECT * FROM os_rma;
+      DROP TABLE os_rma;`)
+    try {
+      await replica(`
+        UPDATE os_rma_line SET id = '${newId()}', "returnId" = '${rma}', seq = 10, "salesOrderLineId" = '${ownLine.id}', size = ${(await sizeOf(ownLine.id)) === null ? 'NULL' : `'${await sizeOf(ownLine.id)}'`}, "invoiceLineId" = NULL, quantity = 2, "receivedQuantity" = 0;
+        INSERT INTO "ReturnLine" SELECT * FROM os_rma_line;
+        UPDATE os_rma_line SET id = '${newId()}', seq = 20, "salesOrderLineId" = '${otherLine.id}', size = ${(await sizeOf(otherLine.id)) === null ? 'NULL' : `'${await sizeOf(otherLine.id)}'`}, quantity = 1;
+        INSERT INTO "ReturnLine" SELECT * FROM os_rma_line;
+        DROP TABLE os_rma_line;`)
+      const onThis = ((await linksOf(order.id)).returns as Json[]).find((row) => row.number === 'SEED-RMA-9901')
+      expect(onThis).toMatchObject({ pieces: 2, replacementOrder: { id: second.id, number: second.number } })
+      const onSecond = ((await linksOf(second.id)).returns as Json[]).find((row) => row.number === 'SEED-RMA-9901')
+      expect(onSecond).toMatchObject({ pieces: 1, replacementOrder: { id: second.id, number: second.number } })
+      // The order's own return keeps its own pieces (its lines of this order).
+      const own = await one<{ pieces: number }>(`SELECT COALESCE(SUM(quantity), 0)::int AS pieces FROM "ReturnLine" WHERE "returnId" = $1 AND "salesOrderLineId" IN (SELECT id FROM "SalesOrderLine" WHERE "orderId" = $2)`, [source.id, order.id])
+      const sourceNumber = (await one<{ number: string }>(`SELECT number FROM "ReturnAuthorisation" WHERE id = $1`, [source.id])).number
+      expect(((await linksOf(order.id)).returns as Json[]).find((row) => row.number === sourceNumber)).toMatchObject({ pieces: own.pieces })
+    } finally {
+      await replica(`DELETE FROM "ReturnLine" WHERE "returnId" = $1`, [rma])
+      await replica(`DELETE FROM "ReturnAuthorisation" WHERE id = $1`, [rma])
+    }
+  })
+
+  it('a list stops at 50 and says there are more', async () => {
+    await admin(
+      `INSERT INTO "Complaint" (id, "tenantId", "companyId", "partyId", number, channel, "receivedAt", description, "salesOrderId", status)
+       SELECT gen_random_uuid(), $1, $2, $3, 'SEED-CMP-95' || lpad(n::text, 2, '0'), 'EMAIL', now() - make_interval(mins => n), 'Made-up words.', $4, 'NEW' FROM generate_series(1, 51) AS n`,
+      [A.tenant, order.companyId, order.partyId, order.id],
+    )
+    const answer = await linksOf(order.id)
+    expect(answer.complaints).toHaveLength(50)
+    expect(answer.truncated).toEqual({ complaints: true, returns: false })
+  })
+})
+// ── end B-OS-004 ──

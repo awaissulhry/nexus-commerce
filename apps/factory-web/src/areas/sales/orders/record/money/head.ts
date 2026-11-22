@@ -42,7 +42,7 @@ export function isExtraDeposit(order: Pick<Order, 'chain'>, request: Pick<Deposi
   return liveDepositsOf(order).some((other) => other.id !== request.id && (other.status === 'PAID' || other.status === 'WAIVED'))
 }
 
-export function moneyHeadOf(input: { readonly order: Order; readonly schedule: Part<Schedule> | null; readonly settlement: Settlement | null; readonly can: Pick<OrderAbilities, 'price' | 'viewInvoices'>; readonly today: string }): MoneyHead {
+export function moneyHeadOf(input: { readonly order: Order; readonly schedule: Part<Schedule> | null; readonly settlement: Settlement | null; readonly can: Pick<OrderAbilities, 'price' | 'viewInvoices'>; readonly today: string; /** F-OM-303: the settlement read failed (its section says so with Try again). */ readonly settlementFailed?: boolean }): MoneyHead {
   const { order, settlement, can, today } = input
   const price = can.price
   const wall = [...(price ? [] : [word('moneyTab.head.wallPrice')]), ...(can.viewInvoices ? [] : [word('money.noInvoiceRight')])]
@@ -102,6 +102,8 @@ export function moneyHeadOf(input: { readonly order: Order; readonly schedule: P
   }
 
   if (parts.length === 0) {
+    // F-OM-303: a failed part never says "nothing" or "all paid": the head says a part could not be read (its section has Try again).
+    if (input.schedule?.problem || input.settlementFailed) return done('warning', [word('moneyTab.head.partFailed')])
     const invoiced = order.chain.invoices.some(isGoodsInvoice)
     if (invoiced) return done('info', [word('moneyTab.head.allPaid')])
     return done('neutral', [order.paymentTerms ? word('moneyTab.head.nothingTerms', { params: { terms: order.paymentTerms } }) : word('moneyTab.head.nothing')])

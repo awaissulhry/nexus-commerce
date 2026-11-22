@@ -493,3 +493,33 @@ describe('live: every return event names its RMA’s customer (B-SA-004b)', () =
   })
 })
 // ── end B-SA-004b ──
+
+// ---- B-OS-005 (order shipments tab; L8): what may come back from ONE shipment of SEED-SO-0002 (the return opened from its row, its
+// lines filled in). The world as the tests above leave it: SEED-SH-0001 (BLK 50, RED 52) and B-W2b-F1's SH-F1-52 (BLK 52). The sums
+// stay those of every shipment and invoice; an unknown shipment (and so another customer's) is not found.
+describe('B-OS-005: the returnable lines of one shipment', () => {
+  it('offers only the order lines and sizes the shipment carries, with the sums of all; an unknown shipment is not found', async () => {
+    const url = `/sales/returns/returnable?companyId=${companyA}&partyId=${P1}`
+    const key = (row: Json) => `${row.kind}|${row.invoiceLineId}|${row.salesOrderLineId}|${row.size}`
+    const all = new Map(((await ok('sales', 'GET', url)).lines as Json[]).map((row) => [key(row), row]))
+    const sh1 = seeded.money.shipping.shipmentId
+    const f1 = (await admin<{ id: string }>(`SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND number = 'SH-F1-52'`, [T]))[0]!.id
+    const cellsOf = (rows: readonly Json[]) => [...new Set(rows.map((row) => `${row.salesOrderLineId}|${row.size}`))].sort()
+
+    const first = (await ok('sales', 'GET', `${url}&shipmentId=${sh1}`)).lines as Json[]
+    expect(cellsOf(first)).toEqual([`${BLK_LINE}|50`, `${RED_LINE}|52`].sort())
+    const second = (await ok('sales', 'GET', `${url}&shipmentId=${f1}`)).lines as Json[]
+    expect(cellsOf(second)).toEqual([`${BLK_LINE}|52`])
+    // The same sums as the whole list: sold, taken and left are the customer's, whichever shipment the pieces left on.
+    for (const row of [...first, ...second]) {
+      const whole = all.get(key(row))
+      expect(whole, key(row)).toBeDefined()
+      expect(row).toMatchObject({ sold: whole!.sold, taken: whole!.taken, left: whole!.left })
+    }
+    // The sample jackets invoiced with no order line are no shipment's.
+    expect([...first, ...second].find((row) => row.invoiceLineId === SAMPLE_LINE)).toBeUndefined()
+    // An unknown shipment (another customer's is answered the same: not found).
+    expect((await refused('sales', 'GET', `${url}&shipmentId=${newId()}`, undefined, 404)).message).toBe('Shipment not found.')
+  })
+})
+// ---- end B-OS-005

@@ -29,7 +29,7 @@ export type MarginPart = (typeof MARGIN_PARTS)[number]
  * money tab M6-B3): + FREIGHT, what the carriers charged us for the order's shipments (the quote counted none); a step only
  * when there is freight.
  */
-export const WATERFALL_REASONS = ['PRICE', ...MARGIN_PARTS, 'FREIGHT'] as const
+export const WATERFALL_REASONS = ['PRICE', ...MARGIN_PARTS, 'FREIGHT', 'BY_HAND' /* B-OM-021: the hand cost lines */] as const
 export type WaterfallReason = (typeof WATERFALL_REASONS)[number]
 
 /** Cost parts, minor units. */
@@ -185,7 +185,7 @@ export interface WaterfallStep {
  * part's (a cost up is a margin down). The steps add up exactly to now − quoted. B-OM-007: `now.freight` (the order's freight
  * counted now; the quote had none) is its own last step, FREIGHT, only when there is some.
  */
-export function waterfallOf(quoted: { readonly value: number; readonly parts: Parts }, now: { readonly value: number; readonly parts: Parts; readonly freight?: number }): WaterfallStep[] {
+export function waterfallOf(quoted: { readonly value: number; readonly parts: Parts }, now: { readonly value: number; readonly parts: Parts; readonly freight?: number; readonly byHand?: number }): WaterfallStep[] {
   const steps: WaterfallStep[] = [
     { reason: 'PRICE', amount: now.value - quoted.value },
     { reason: 'MATERIAL', amount: quoted.parts.material - now.parts.material },
@@ -195,6 +195,8 @@ export function waterfallOf(quoted: { readonly value: number; readonly parts: Pa
     { reason: 'ADJUSTMENT', amount: quoted.parts.adjustment - now.parts.adjustment },
     // B-OM-007: the freight counted now (a cost up is a margin down).
     ...(now.freight !== undefined && now.freight !== 0 ? [{ reason: 'FREIGHT' as const, amount: -now.freight }] : []),
+    // B-OM-021: the hand cost lines counted now (a cost the ledger does not know), their own last step.
+    ...(now.byHand !== undefined && now.byHand !== 0 ? [{ reason: 'BY_HAND' as const, amount: -now.byHand }] : []),
   ]
   return steps.map((step) => ({ ...step, amount: step.amount === 0 ? 0 : step.amount }))
 }

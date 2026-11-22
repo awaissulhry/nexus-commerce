@@ -174,7 +174,8 @@
       "SUBCONTRACT": "Lavorazione esterna",
       "OVERHEAD": "Costi generali",
       "ADJUSTMENT": "Rettifica",
-      "FREIGHT": "Trasporto"
+      "FREIGHT": "Trasporto",
+      "BY_HAND": "Impostato a mano"
     }
   },
   "lines": {
@@ -207,20 +208,6 @@
     "ESTIMATE": "Stima al rilascio",
     "QUOTED": "Il costo del preventivo",
     "ACTUAL": "Il suo effettivo"
-  },
-  "marginTab": {
-    "title": "Margine",
-    "noView": {
-      "title": "Il margine richiede il permesso sui costi",
-      "body": "La scheda Margine richiede il permesso sui costi. Il resto dell'ordine resta com'è."
-    },
-    "noGrain": {
-      "title": "Il margine richiede la visibilità sui margini",
-      "body": "Il tuo ruolo non vede i margini: chiedi a chi gestisce i ruoli."
-    },
-    "loading": "Lettura del margine…",
-    "failed": "Impossibile caricare il margine",
-    "inFinance": "Vedi tutti gli ordini in Amministrazione › Margini"
   },
   "problem": {
     "signed_out": "Sei uscito. Accedi di nuovo.",

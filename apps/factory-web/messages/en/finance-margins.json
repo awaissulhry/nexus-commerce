@@ -174,7 +174,8 @@
       "SUBCONTRACT": "Subcontract",
       "OVERHEAD": "Overhead",
       "ADJUSTMENT": "Adjustment",
-      "FREIGHT": "Freight"
+      "FREIGHT": "Freight",
+      "BY_HAND": "Set by hand"
     }
   },
   "lines": {
@@ -207,20 +208,6 @@
     "ESTIMATE": "Estimate at release",
     "QUOTED": "The quote's cost",
     "ACTUAL": "Its actual"
-  },
-  "marginTab": {
-    "title": "Margin",
-    "noView": {
-      "title": "The margin needs the costing permission",
-      "body": "The Margin tab needs the costing permission. The rest of the order stays as it is."
-    },
-    "noGrain": {
-      "title": "The margin needs the margin grain",
-      "body": "Your role does not see margins: ask a person who manages roles."
-    },
-    "loading": "Reading the margin…",
-    "failed": "Couldn't load margin",
-    "inFinance": "See every order in Finance › Margins"
   },
   "problem": {
     "signed_out": "You are signed out. Sign in again.",

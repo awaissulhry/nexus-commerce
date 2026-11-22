@@ -29,23 +29,15 @@
     "PAID": "Pagato",
     "WAIVED": "Rinunciato",
     "title": "Richiesta di {kind}",
-    "overdue": "Scaduto",
     "amount": "Importo",
     "due": "Scadenza",
-    "paidSoFar": "Pagato finora",
     "left": "{amount} ancora da pagare",
-    "document": "Dopo il pagamento",
-    "documentTd02": "Una fattura di acconto (TD02)",
-    "documentNone": "Nessuna fattura di acconto (per la sua regola IVA)",
     "stepsLabel": "Passi dell'acconto",
-    "send": "Invia la pagina con i dati bancari",
-    "sendAgain": "Inviala di nuovo",
     "record": "Registra il pagamento",
     "sendSdi": "Invia allo SDI",
     "step": {
       "requested": "Richiesto",
       "requestedWords": "Richiesto quando il cliente ha accettato il preventivo ({date})",
-      "page": "Pagina con i dati bancari",
       "pageNotSent": "Non ancora inviata: il cliente vi trova l'IBAN, l'importo e la causale",
       "pageNotNeeded": "Non resta nulla da pagare",
       "paid": "Pagamento",
@@ -66,11 +58,6 @@
       "sdiNoRight": "Lo stato SDI è visibile a chi vede le fatture",
       "sdiReading": "Lettura dello stato SDI…",
       "requestedTyped": "Richiesto quando l’ufficio ha inserito l’ordine ({date})"
-    },
-    "none": {
-      "title": "Nessun acconto richiesto",
-      "body": "Questo ordine non richiede acconto: la produzione può partire quando i suoi ordini di lavoro sono rilasciati.",
-      "missing": "L'ordine richiede un acconto, ma non esiste alcuna richiesta: viene chiesta all'accettazione del preventivo."
     }
   },
   "depositKind": {
@@ -866,40 +853,21 @@
     "CANCELLED": "Annullata"
   },
   "money": {
-    "balanceTitle": "Saldo",
     "gross": "Totale ordine",
-    "depositPaid": "Acconti ricevuti",
-    "invoicesTitle": "Fatture e note di credito",
-    "noInvoices": {
-      "title": "Ancora nulla di fatturato",
-      "body": "Qui compaiono la fattura di acconto e le fatture della merce spedita."
-    },
     "draft": "Bozza",
     "noInvoiceRight": "Le fatture sono visibili a chi vede le fatture.",
     "col": {
       "number": "Numero",
       "kind": "Tipo",
       "status": "Stato",
-      "sdi": "SDI",
       "gross": "Totale",
       "open": "Aperto"
     },
-    "section": {
-      "totals": "Totali",
-      "deposit": "Acconto",
-      "margin": "Margine"
-    },
-    "invoicedShare": "Fatturato per questo ordine",
-    "paidHere": "Pagato su questo ordine",
-    "toPayHere": "Ancora da pagare su questo ordine",
     "share": "Quota di questo ordine",
-    "invoiceWhole": "Totale fattura",
     "alsoBills": "Fattura anche",
     "alsoBillsHidden_one": "e {count} altro ordine che non puoi aprire",
     "alsoBillsHidden_other": "e altri {count} ordini che non puoi aprire",
     "freight": "Il trasporto {amount} è in fattura, in nessun ordine",
-    "settledWhen": "Saldato quando {invoice} è pagata per intero",
-    "settledWhenShared": "Saldato quando {invoice} è pagata per intero (fattura anche {numbers})",
     "statement": "Estratto conto di {customer} ›"
   },
   "docType": {
@@ -1402,7 +1370,6 @@
     "title": "Piano di pagamento",
     "label": "Scadenze di pagamento",
     "empty": "Pagato secondo i termini della fattura; nessuna scadenza.",
-    "open": "Ancora aperto: {amount}",
     "stepShare": "{kind} · {share}",
     "kind": {
       "DEPOSIT": "Acconto all'ordine",
@@ -1410,24 +1377,13 @@
       "ON_DELIVERY": "Alla consegna",
       "ON_INVOICE": "Alla fattura"
     },
-    "status": {
-      "OPEN": "Aperta",
-      "PAID": "Pagata",
-      "WAIVED": "Rinunciata",
-      "CANCELLED": "Annullata"
-    },
     "when": {
       "DEPOSIT": "Scade come dice la richiesta d'acconto",
       "BEFORE_SHIPPING": "Scade prima che la merce parta",
       "ON_DELIVERY": "Scade alla consegna",
       "ON_INVOICE": "Scade come dice la fattura"
     },
-    "overdue": "Scaduta",
     "due": "Scade il {date}",
-    "dueDeposit": "Scade il {date} (la richiesta d'acconto)",
-    "paidOn": "Pagata il {date}",
-    "cancelled_one": "{count} scadenza precedente è stata sostituita quando una modifica ha rifatto il piano.",
-    "cancelled_other": "{count} scadenze precedenti sono state sostituite quando una modifica ha rifatto il piano.",
     "verbs": {
       "day": "Scade il",
       "held": {
@@ -1454,7 +1410,6 @@
         "write": "Non è stato possibile: riprova.",
         "stepUp": "Conferma prima che sei tu con un nuovo codice."
       },
-      "waive": "Rinuncia…",
       "waiveTitle": "Rinuncia a “{step}”",
       "waiveBody": {
         "DEPOSIT": "Il cliente non deve pagare l’acconto prima della produzione: gli ordini di lavoro possono essere rilasciati senza. Non ci sono pagamenti.",
@@ -2425,31 +2380,23 @@
     "otherCurrency_one": "{count} prezzo del cliente in un'altra valuta è escluso (mai convertito).",
     "otherCurrency_other": "{count} prezzi del cliente in un'altra valuta sono esclusi (mai convertiti).",
     "card": {
-      "title": "Verifica prezzi",
       "edit": "Prezzo del cliente…",
       "changeOurs": "Cambia il nostro prezzo ›",
       "history": "Storico ›",
-      "historyHeld": "Per lo storico serve il diritto di leggere il registro attività.",
       "total": "Totale",
       "tableLabel": "Verifica prezzi di {number}",
       "col": {
-        "theirs": "Prezzo unitario del cliente",
         "ourAmount": "Nostro importo",
         "theirAmount": "Importo del cliente",
         "check": "Verifica",
         "diff": "Differenza"
       },
-      "hint": "Differenza = il nostro prezzo meno quello del cliente: + chiediamo di più, − chiediamo di meno. IVA esclusa, al centesimo.",
       "missing": "{missing} righe su {lines} senza prezzo del cliente",
       "notChecked": "Non verificata: una riga senza pezzi o senza prezzo",
-      "emptyTitle": "Prezzo del cliente non ancora dato",
-      "emptyBody": "La verifica dice Uguale solo quando il prezzo del cliente e il nostro sono uguali al centesimo, IVA esclusa.",
-      "sources": "Da dove viene il prezzo del cliente",
       "linesOf_one": "riga {list}",
       "linesOf_other": "righe {list}",
       "typedBy": "inserito da {name}, {date}",
       "note": "«{note}»",
-      "priced": "Documento con prezzi",
       "takeOverLabel": "La richiesta del cliente indica i suoi prezzi",
       "takeOver": "La richiesta {number} indica i prezzi del cliente",
       "takeOverNoNumber": "La richiesta del cliente indica i suoi prezzi",
@@ -3282,7 +3229,8 @@
       "allPaid": "tutto il fatturato è pagato",
       "nothing": "ancora niente da incassare. Il cliente paga alla fattura",
       "nothingTerms": "ancora niente da incassare. Il cliente paga alla fattura: {terms}",
-      "restOnInvoice": "il resto si paga alla fattura"
+      "restOnInvoice": "il resto si paga alla fattura",
+      "partFailed": "Una parte dei pagamenti non si è potuta leggere: guarda la sezione qui sotto e riprova lì."
     },
     "totals": {
       "title": "Totali",
@@ -3418,7 +3366,8 @@
         "REMOVE_STEP": "Togli la rata…",
         "ASK_AGAIN": "Richiedi di nuovo l'acconto…",
         "CHANGE_TERMS": "Cambia termini di pagamento…",
-        "ADD_STEP": "Aggiungi una rata…"
+        "ADD_STEP": "Aggiungi una rata…",
+        "stopPage": "Ferma la pagina…"
       },
       "byHand": {
         "what": {
@@ -3704,7 +3653,8 @@
         "told": "non viene avvisato; il suo portale mostra l'acconto come pagato.",
         "never": "Il pagamento resta come è arrivato; qui non si fa nessun abbuono; l'acconto resta pagato (non si può annullare)."
       },
-      "reason": "Perché"
+      "reason": "Perché",
+      "whoKept": "Salvato a tuo nome con la data di oggi; la cronologia lo conserva."
     },
     "refusal": {
       "OTHER": "Il piano non può cambiare così: rileggi la pagina.",
@@ -3717,7 +3667,14 @@
     },
     "notice": {
       "planChanged": "Il piano è stato cambiato a mano; la cronologia conserva il valore precedente.",
-      "undone": "Il pagamento è stato annullato; resta in Finanza › Pagamenti come annullato."
+      "undone": "Il pagamento è stato annullato; resta in Finanza › Pagamenti come annullato.",
+      "priceAccepted": "La differenza di prezzo è accettata a mano.",
+      "priceUnaccepted": "L'accettazione è annullata: i prezzi si confrontano di nuovo.",
+      "costLineAdded": "Il costo impostato a mano è contato nel margine.",
+      "costLineRemoved": "La riga impostata a mano è rimessa: conta di nuovo il costo calcolato.",
+      "targetSet": "Il margine obiettivo è impostato.",
+      "targetCleared": "Il margine obiettivo è tolto: vale di nuovo il minimo.",
+      "pageStopped": "La pagina con le coordinate bancarie è fermata."
     },
     "undo": {
       "title": "Annullare il pagamento del {date}?",
@@ -3743,6 +3700,227 @@
     },
     "facts": {
       "changeOnMoney": "Cambia in Importi ›"
+    },
+    "price": {
+      "title": "Verifica prezzi",
+      "info": "Il nostro prezzo accanto a quello del cliente (il suo ordine, il suo portale, o inserito da noi), riga per riga, IVA esclusa, al centesimo. Non è una verifica del listino. Una differenza accettata a mano si riapre da sola quando cambia uno dei due prezzi.",
+      "keys": "Tasti: Tab passa da una riga all'altra · Invio usa il pulsante.",
+      "part": "la verifica prezzi",
+      "more": "Altro per la verifica prezzi",
+      "show": "Mostra le righe",
+      "hide": "Nascondi le righe",
+      "showAll": "Mostra tutte le {count} righe",
+      "onlyDiffering": "Mostra solo le righe diverse",
+      "exact": "IVA esclusa, al centesimo. Differenza = il nostro prezzo meno quello del cliente.",
+      "tag": {
+        "none": "— Prezzo del cliente non ancora dato",
+        "equal": "= Prezzi uguali",
+        "notEqual": "≠ Diversi",
+        "partial": "— Non ancora tutte le righe",
+        "accepted": "Accettata a mano"
+      },
+      "check": {
+        "EQUAL": "= Uguale",
+        "NOT_EQUAL": "≠ Diverso"
+      },
+      "answer": {
+        "none": "scrivi i prezzi del suo ordine, o li scrive lui nel portale.",
+        "more": "+{amount} chiediamo di più",
+        "less": "−{amount} chiediamo di meno",
+        "differ_one": "{count} riga diversa",
+        "differ_other": "{count} righe diverse"
+      },
+      "from": {
+        "CUSTOMER_PO": "dall'ordine del cliente",
+        "CUSTOMER_PO_FILE": "dall'ordine del cliente {file}",
+        "PORTAL": "dal portale",
+        "OFFICE": "inserito da noi"
+      },
+      "source": {
+        "LIST": "Dal listino",
+        "MANUAL": "Impostato a mano",
+        "UNKNOWN": "Cambiato dopo il preventivo"
+      },
+      "perPiece": "{price} /pz",
+      "pieces_one": "{count} pz",
+      "pieces_other": "{count} pz",
+      "ours": "Nostro {amount}",
+      "theirs": "Del cliente {amount}",
+      "acceptedBy": "Accettata da {name}, {date}",
+      "acceptedOn": "Accettata il {date}",
+      "accept": {
+        "door": "Accetta la differenza…",
+        "title": "Accetta la differenza su {number}",
+        "go": "Accetta la differenza",
+        "sub": "{lines} · nostro {ours} · del cliente {theirs}",
+        "happens": {
+          "stay": "Entrambi i prezzi restano come sono.",
+          "shows": "La verifica mostra «≠ Diversi · Accettata a mano», con il tuo nome, il giorno e il tuo perché.",
+          "reopens": "Si riapre da sola quando cambia uno dei due prezzi."
+        },
+        "told": "non viene avvisato: il suo portale confronta ancora con il suo ordine.",
+        "never": "Il nostro prezzo e quello del cliente non vengono modificati; non si invia nulla.",
+        "gone": "I prezzi sono cambiati nel frattempo: chiudi la finestra e rileggi la verifica."
+      },
+      "unaccept": {
+        "door": "Annulla l'accettazione…",
+        "title": "Annulla l'accettazione su {number}",
+        "go": "Annulla l'accettazione",
+        "happens": {
+          "again": "La verifica mostra di nuovo «≠ Diversi».",
+          "kept": "La cronologia conserva l'accettazione e il suo perché."
+        },
+        "told": "non viene avvisato.",
+        "never": "Nessuno dei due prezzi cambia."
+      }
+    },
+    "margin": {
+      "title": "Margine",
+      "info": "Questo ordine rende ancora quanto previsto, e se no, perché? A preventivo = come venduto · Attuale = la stima · Effettivo finora = i costi registrati. Un margine non si scrive mai: imposta un costo a mano, con un perché; Rimetti lo toglie.",
+      "keys": "Tasti: Tab passa da una parte all'altra · Invio apre una sezione.",
+      "part": "il margine",
+      "more": "Altro per il margine",
+      "finance": "Apri in Finanza › Margini ›",
+      "reading": "Lettura del margine…",
+      "basedOn": {
+        "quote": "Calcolato su: il costo a preventivo",
+        "none": "Calcolato su: nessuna scheda costo dietro il preventivo",
+        "both": "Calcolato su: costo a preventivo {date} · rev {revision}",
+        "date": "Calcolato su: costo a preventivo {date}",
+        "rev": "Calcolato su: scheda costo rev {revision}"
+      },
+      "final": "L'ordine è chiuso: il suo margine è definitivo.",
+      "held": {
+        "final": "L'ordine è chiuso: il suo margine è definitivo."
+      },
+      "tile": {
+        "quoted": "A preventivo",
+        "now": "Attuale",
+        "actual": "Effettivo finora",
+        "difference": "Differenza",
+        "asSold": "come venduto",
+        "noQuotedCost": "Nessun costo a preventivo: una riga non aveva una scheda costo",
+        "noWorkOrder": "Ancora nessun ordine di lavoro: attuale = costo a preventivo",
+        "sameAsQuote": "uguale al preventivo",
+        "points": "{points} punti dal preventivo",
+        "actualFinal": "Definitivo: ogni ordine di lavoro è finito",
+        "actualOpen": "Risulta alto finché il lavoro è aperto",
+        "actualNone": "Ancora nessun costo registrato",
+        "differenceHint": "attuale rispetto al preventivo"
+      },
+      "value": {
+        "pct": "{pct}",
+        "unknown": "Non ancora noto",
+        "notYet": "Non ancora",
+        "signed": "{sign}{amount}"
+      },
+      "meter": {
+        "label": "Margine attuale",
+        "target": "Obiettivo {pct}",
+        "targetBy": "Obiettivo {pct} · impostato a mano da {name}, {date}",
+        "floorRole": "Minimo {pct} (ruolo {role})",
+        "floorCompany": "Minimo {pct} (dell'azienda)",
+        "belowFloor": "segnalato: sotto il margine a cui è tenuto"
+      },
+      "kind": {
+        "FREIGHT_ESTIMATE": "Trasporto (stima)",
+        "COMMISSION": "Provvigione",
+        "BANK_CHARGES": "Spese bancarie",
+        "OTHER": "Altro costo"
+      },
+      "hand": {
+        "title_one": "Impostati a mano · {count}",
+        "title_other": "Impostati a mano · {count}",
+        "who": "{name} · {date}",
+        "when": "{date}",
+        "adds": "aggiunge una riga al costo calcolato"
+      },
+      "putBack": {
+        "door": "Rimetti",
+        "title": "Rimetti · {what}",
+        "go": "Rimetti",
+        "gone": "Questa riga non conta più: chiudi la finestra e rileggi il margine.",
+        "happens": {
+          "removed": "La tua riga non conta più in Attuale ed Effettivo finora.",
+          "computed": "Conta di nuovo solo il costo calcolato."
+        },
+        "never": "La cronologia conserva la tua riga, il suo importo e il suo perché."
+      },
+      "where": "Dove è andato",
+      "bridge": {
+        "title": "Dal prezzo al margine",
+        "price": "Prezzo",
+        "MATERIAL": "Tessuto e materiali",
+        "LABOUR": "Confezione (CMT)",
+        "SUBCONTRACT": "Lavorazioni esterne",
+        "OVERHEAD": "Costi generali",
+        "ADJUSTMENT": "Rettifiche",
+        "FREIGHT": "Trasporto",
+        "fromShipments": "Dalle spedizioni",
+        "noFreight": "Trasporto: ancora nessuno",
+        "noFreightSet": "Trasporto: ancora nessuno — imposta una stima a mano",
+        "margin": "Margine",
+        "noCost": "Visibili a chi vede i costi."
+      },
+      "fold": {
+        "lines": "Per riga ({count})",
+        "workOrders": "Ordini di lavoro dietro il costo ({count})",
+        "why": "Perché queste cifre"
+      },
+      "why": {
+        "method": "I costi seguono il metodo di costo dell'azienda.",
+        "provisional": "I costi sono provvisori finché il contabile non sceglie il metodo di costo.",
+        "freightCounted": "Il trasporto delle spedizioni è contato (solo nella valuta dell'ordine).",
+        "freightNone": "Sulle spedizioni dell'ordine non c'è ancora un costo di trasporto: prima di una spedizione, imposta una stima a mano.",
+        "hand": "Un costo impostato a mano si aggiunge al costo calcolato; Rimetti lo toglie. Un margine non si scrive mai.",
+        "bankCharges": "Le spese bancarie abbuonate sui pagamenti non sono ancora nel margine (un lavoro successivo)."
+      },
+      "setCost": {
+        "door": "Imposta un costo a mano…",
+        "title": "Imposta un costo a mano · {number}",
+        "go": "Imposta il costo",
+        "sub": "Margine attuale {pct}",
+        "kind": "Voce",
+        "kindHint": "Una riga AGGIUNTA al costo calcolato; sostituire una voce calcolata arriva dopo.",
+        "amount": "Importo ({currency})",
+        "problem": "Scrivi un importo sopra 0, per esempio 320,00.",
+        "happens": {
+          "uses": "Attuale ed Effettivo finora usano la tua cifra; A preventivo resta come venduto.",
+          "after": "Margine attuale {now} → {after}.",
+          "beside": "Il costo calcolato resta accanto; Rimetti toglie la tua riga."
+        },
+        "never": "Il costo a preventivo, il registro costi e le schede costo approvate non cambiano mai qui."
+      },
+      "target": {
+        "door": "Imposta obiettivo…",
+        "title": "Imposta il margine obiettivo di {number}",
+        "go": "Imposta l'obiettivo",
+        "clear": "Togli l'obiettivo",
+        "field": "Margine obiettivo (%)",
+        "hint": "Vuoto: nessun obiettivo suo; vale il minimo delle impostazioni Vendite.",
+        "hintFloor": "Vuoto: nessun obiettivo suo; vale il minimo ({pct}).",
+        "problem": "Scrivi una percentuale sopra 0 e sotto 100, per esempio 38,5.",
+        "same": "È già l'obiettivo.",
+        "happens": {
+          "marks": "L'indicatore lo segna; l'ordine si valuta su questo, non sul minimo.",
+          "flag": "Sotto, l'ordine viene segnalato in Finanza › Margini."
+        },
+        "never": "Il margine non si scrive mai: resta calcolato dal prezzo e dai costi."
+      },
+      "told": "non vede mai margini né costi.",
+      "who": "Salvato a tuo nome con la data di oggi; la cronologia conserva il valore precedente."
+    },
+    "stop": {
+      "title": "Fermare la pagina inviata a {to}?",
+      "titleNoTo": "Fermare la pagina con le coordinate bancarie?",
+      "go": "Ferma la pagina",
+      "gone": "Questa pagina non è più attiva: chiudi la finestra e rileggi la pagina.",
+      "happens": {
+        "stops": "La pagina con le coordinate bancarie smette subito di funzionare: il cliente vede che non è più valida.",
+        "open": "La richiesta di pagamento resta aperta: invia una nuova pagina quando serve."
+      },
+      "told": "non riceve e-mail; la pagina stessa dice che non è più valida.",
+      "never": "La richiesta, il suo importo e i suoi pagamenti non cambiano."
     }
   }
 }

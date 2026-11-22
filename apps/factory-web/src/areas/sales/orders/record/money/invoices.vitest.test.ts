@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { LOCALES } from '../../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
 import { canOf, order, PAID, sdi, SETTLEMENT_SHIPPED, TD02, TD02_ID } from '../../_demo/fixtures'
-import type { ChainInvoice, Order, Settlement } from '../../api'
+import { INVOICE_PAYMENT_STATES as DOMAIN_PAYMENT_STATES } from '@nexus/factory-domain/invoicing/from-shipment/settlement'
+import { INVOICE_PAYMENT_STATES, type ChainInvoice, type Order, type Settlement } from '../../api'
 import { invoicesOf } from './invoices'
 import { amountsOf } from './word'
 
@@ -54,7 +55,7 @@ describe('F-OM-203: one row per document — its state, its payment in words, it
     expect(rowOf(model('finance', shipped(), settlement(), { [TD02_ID]: { value: null, problem: null } }), TD02_ID).sdi).toBe('reading')
   })
 
-  it('paid in full, a refund due, all paid; without the price grain no amount and no payment word at all', () => {
+  it('paid in full, a refund due, all paid; without the price grain no amount (and, without the word-code, no payment word)', () => {
     const paid = settlement({ invoices: [{ id: GOODS_ID, docType: 'TD01', number: 'FA-2026-00052', status: 'DELIVERED', grossTotal: 532896, paidAmount: 532896, openAmount: 0 }] })
     expect(rowOf(model('finance', shipped(), paid), GOODS_ID).payment!.word.key).toBe('moneyTab.invoices.pay.paid')
     expect(model('finance', shipped(), paid).answer).toEqual({ key: 'moneyTab.invoices.countPaid', params: { count: 3 } })
@@ -66,6 +67,26 @@ describe('F-OM-203: one row per document — its state, its payment in words, it
       expect(row.subs.flatMap(amountsOf), row.id).toEqual([])
     }
     expect(sales.answer).toEqual({ key: 'moneyTab.invoices.count', params: { count: 3 } })
+  })
+
+  // F-OM-203 (B-OM-023, S3 #1857): the settlement names each goods invoice's payment in a word-code, for every invoices.view reader.
+  it('Sales reads the Payment words from the settlement\'s word-code — never an amount; "all paid" said in words too', () => {
+    expect(INVOICE_PAYMENT_STATES).toEqual(DOMAIN_PAYMENT_STATES)
+    const coded = (paymentState: (typeof INVOICE_PAYMENT_STATES)[number]) => settlement({ invoices: settlement().invoices.map((invoice) => ({ ...invoice, paymentState })) })
+    const sales = model('sales', shipped(), coded('PART_PAID'))
+    const goods = rowOf(sales, GOODS_ID)
+    expect(goods.payment).toEqual({ word: { key: 'moneyTab.invoices.pay.part' }, tone: 'warning' })
+    expect([goods.total, goods.share, goods.open]).toEqual([null, null, null])
+    // The deposit invoice and the credit note carry no word-code: their payment stays the price grain's.
+    expect(rowOf(sales, TD02_ID).payment).toBeNull()
+    for (const [state, key] of [['OPEN', 'open'], ['PAID', 'paid'], ['CREDITED', 'credited'], ['REFUND_DUE', 'refund']] as const) expect(rowOf(model('sales', shipped(), coded(state)), GOODS_ID).payment!.word.key).toBe(`moneyTab.invoices.pay.${key}`)
+    expect(model('sales', shipped(), coded('PAID')).answer).toEqual({ key: 'moneyTab.invoices.countPaid', params: { count: 3 } })
+    // The word-code wins over the amounts for a price holder too (one rule with the server).
+    expect(rowOf(model('finance', shipped(), coded('REFUND_DUE')), GOODS_ID).payment!.word.key).toBe('moneyTab.invoices.pay.refund')
+    // The view draws the Payment column for Sales once a row carries the words (has-pay), never an amount column.
+    const view = readFileSync(new URL('./view/InvoicesSection.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("const words = !price && view.rows.some((row) => row.payment !== null)")
+    expect(view).toContain("is-np${words ? ' has-pay' : ''}")
   })
 })
 

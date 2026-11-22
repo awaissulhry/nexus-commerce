@@ -512,7 +512,8 @@ export const depositRequestSchema = z.object({
   paidAt: instant.nullable(),
   createdAt: instant,
   paidAmount: z.number().optional(),
-  link: z.object({ sentAt: instant, to: z.string().nullable(), expiresAt: instant, state: z.enum(LINK_STATES) }).nullable().default(null),
+  // F-OM-202 (B-OM-022, S3 #1857): + the page's own id (Stop the page: POST /links/:linkId/revoke, links.manage); absent: no Stop door.
+  link: z.object({ id: z.string().optional(), sentAt: instant, to: z.string().nullable(), expiresAt: instant, state: z.enum(LINK_STATES) }).nullable().default(null),
   /** B-W2a-F2: the schedule step the request pays — DEPOSIT, or BEFORE_SHIPPING (the balance before shipping, not the deposit). */
   stepKind: z.enum(['DEPOSIT', 'BEFORE_SHIPPING']).nullable().default(null),
   /** B-W2b-16: the owner's waive of a request no schedule step names is sent at it. */
@@ -790,6 +791,10 @@ export async function sendToSdi(api: ApiClient, invoiceId: string, version: numb
   return (await api.post(`/invoicing/invoices/${encodeURIComponent(invoiceId)}/sdi/send`, { body: { version }, schema: z.object({ sdi: sdiSchema }), idempotencyKey })).sdi
 }
 
+/** F-OM-203 (B-OM-023): an invoice's payment in a word-code (factory-domain invoicing/from-shipment/settlement INVOICE_PAYMENT_STATES). */
+export const INVOICE_PAYMENT_STATES = ['OPEN', 'PART_PAID', 'PAID', 'CREDITED', 'REFUND_DUE'] as const
+export type InvoicePaymentState = (typeof INVOICE_PAYMENT_STATES)[number]
+
 export const settlementSchema = z.object({
   settled: z.boolean(),
   gaps: z.array(z.string()),
@@ -814,6 +819,8 @@ export const settlementSchema = z.object({
       writtenOffAmount: z.number().optional(),
       // F-OM-203: what its credit notes leave to give back to the customer (price grain; the settlement's own figure).
       refundDueAmount: z.number().optional(),
+      // F-OM-203 (B-OM-023, S3 #1857): where its payment stands, in a word-code with no amount — for every invoices.view reader.
+      paymentState: z.enum(INVOICE_PAYMENT_STATES).optional().catch(undefined),
     }),
   ),
   invoicedAmount: z.number().optional(),
@@ -1327,6 +1334,14 @@ export async function undoDepositPayment(api: ApiClient, paymentId: string, body
   await api.post(`/payments/${encodeURIComponent(paymentId)}/undo`, { body, schema: z.object({}).passthrough(), idempotencyKey })
 }
 // ---- end F-OM-201 / 202
+
+/**
+ * F-OM-202 (B-OM-022, S3 #1857): Stop the page — the bank-details page sent to the customer stops working at once (links.manage: the
+ * Owner only); the payment request stays open. The reason goes into the history.
+ */
+export async function stopDepositPage(api: ApiClient, linkId: string, body: { readonly reason: string }, idempotencyKey: string): Promise<void> {
+  await api.post(`/links/${encodeURIComponent(linkId)}/revoke`, { body, idempotencyKey })
+}
 
 /** The order's payment schedule (the deposit and the balance steps with their state). */
 export function getSchedule(api: ApiClient, orderId: string, signal?: AbortSignal): Promise<Schedule> {

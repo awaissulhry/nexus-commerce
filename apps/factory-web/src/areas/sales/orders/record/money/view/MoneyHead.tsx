@@ -15,7 +15,7 @@ import { sentenceOf, useSay } from './say'
  */
 export function MoneyHead({ order, model }: { order: Order; model: OrderRecordModel }) {
   const say = useSay(order.currency)
-  const head = moneyHeadOf({ order, schedule: model.schedule, settlement: model.settlement?.value ?? null, can: model.can, today: model.today })
+  const head = moneyHeadOf({ order, schedule: model.schedule, settlement: model.settlement?.value ?? null, can: model.can, today: model.today, settlementFailed: model.can.viewInvoices && !!model.settlement?.problem })
   const icon = head.reading ? <RefreshCw size={18} aria-hidden /> : head.tone === 'success' ? <CheckCircle2 size={18} aria-hidden /> : head.tone === 'danger' ? <TriangleAlert size={18} aria-hidden /> : head.tone === 'warning' ? <Clock size={18} aria-hidden /> : <Info size={18} aria-hidden />
   const below = [...head.wall, ...(head.closed ? [head.closed] : [])].map(say)
   return (

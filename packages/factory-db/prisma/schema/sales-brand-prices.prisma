@@ -81,3 +81,48 @@ enum OrderBrandPriceSource {
   /// Typed by us.
   OFFICE
 }
+
+// ── B-OM-019 (order money tab, schema wave "order money 1/1"; Owner D4: accept a price difference by hand) ──
+//   OrderPriceAcceptance  a price difference of an order accepted by hand (reverses the customer page's "no agreed-anyway
+//                         button"): our net and the customer's net as they were checked, the reason, who and when; in force
+//                         while both nets still equal the check now (apps/factory-api's sales/brand-prices: any price change
+//                         reopens it by itself), until taken back (the withdraw columns, set once, with their reason). At most
+//                         one in force per order (the partial unique index "OrderPriceAcceptance_one_in_force" of
+//                         …_order_money_guards). Never deleted; never written once the order is CLOSED or CANCELLED. Office
+//                         only: the customer reads none of it (no partner grant). The nets and both reasons are the price grain.
+
+/// A price difference of a sales order accepted by hand (Owner D4): the nets as checked, why, who and when; taken back once.
+model OrderPriceAcceptance {
+  id             String    @id @db.Uuid
+  tenantId       String    @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's company and customer: the order's own (the foreign key).
+  companyId      String    @db.Uuid
+  partyId        String    @db.Uuid
+  salesOrderId   String    @db.Uuid
+  /// Our net total of the order as checked (minor units, at least 0).
+  /// @grain price
+  ourNet         Int
+  /// The customer's net total as checked (minor units, at least 0).
+  /// @grain price
+  brandNet       Int
+  /// Why the difference is accepted, 3 to 500 trimmed characters (it may name a price).
+  /// @grain price
+  reason         String
+  /// The office person who accepted it.
+  acceptedById   String    @db.Uuid
+  acceptedAt     DateTime  @default(now()) @db.Timestamptz(3)
+  /// Taken back: when, by whom and why (all three, once; null while in force).
+  withdrawnAt    DateTime? @db.Timestamptz(3)
+  withdrawnById  String?   @db.Uuid
+  /// @grain price
+  withdrawReason String?
+
+  // The order's own company and customer.
+  order SalesOrder @relation("OrderPriceAcceptanceOrder", fields: [tenantId, companyId, partyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // An order's acceptances (the price check, the list's columns).
+  @@index([tenantId, salesOrderId])
+  // A customer's (its summary).
+  @@index([tenantId, partyId])
+}
+// ── end B-OM-019 ──

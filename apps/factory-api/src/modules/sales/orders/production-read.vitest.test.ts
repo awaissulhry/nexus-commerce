@@ -469,5 +469,11 @@ describe('B-OM-008: the order page re-reads Money on the order settled or not, a
     // payment.written_off was in the payment. prefix already.
     expect(partsOf('payment.written_off')).toEqual(expect.arrayContaining(['money', 'shipments']))
   })
+
+  // B-OM-020, B-OM-021 (S3): the margin changed by hand, and the customer's prices (or an accepted difference).
+  it('the margin changed by hand: money; the customer’s prices: money as well as order, lines and changes', () => {
+    expect(partsOf('order_margin.changed')).toEqual(['money'])
+    expect(partsOf('sales_order.brand_price_changed')).toEqual(expect.arrayContaining(['order', 'lines', 'changes', 'money']))
+  })
 })
 // ── end B-OM-008 ──

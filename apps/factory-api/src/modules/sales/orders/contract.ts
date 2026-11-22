@@ -25,6 +25,7 @@ import { APPROVAL_TASK_KINDS } from '@nexus/factory-domain/approvals/rules' // B
 // B-OP-023: how a shipment travels and why its tracking number may not be typed.
 import { OWN_TRANSPORT_REFUSALS } from '@nexus/factory-domain/shipping/own-transport/rules'
 import { TRANSPORT_BY } from '@nexus/factory-domain/shipping/shipments'
+import { SHIPMENT_HOLD_REASONS } from '@nexus/factory-domain/shipping/holds/holds' // B-OS-001
 import { PRICE_MATCHES } from '@nexus/factory-domain/sales/brand-prices/match' // B-CP-018
 import { PROMISE_REASON_CODES } from '@nexus/factory-domain/sales/portal-orders/promise' // B-OO-009
 import { PROMISE_MOVE_KINDS } from '@nexus/factory-domain/sales/orders/promise-moves' // B-PT-011
@@ -44,6 +45,10 @@ const status = z.enum(SALES_ORDER_STATUSES)
 const flag = z.enum(['true', 'false'])
 const orderParams = input({ orderId: id() })
 
+// ── B-OS-001 (order shipments tab): pieces of one order line and size on a shipment or in a parcel (no money) ──
+const shipmentPieces = output({ lineId: id(), size: z.string().nullable(), pieces: z.number().int() })
+// ── end B-OS-001 ──
+
 /** Ordered, in work orders, made (null until the floor's scans), released by quality, shipped, invoiced, still to ship. */
 const progressView = output({
   ordered: z.number().int(),
@@ -56,6 +61,12 @@ const progressView = output({
   toShip: z.number().int(),
   /** B-W2a-30: pieces closed short (will not be made or shipped). */
   closedShort: z.number().int(),
+  // ── B-OS-002 (order shipments tab; H1, O8): by Warehouse's backorder rule (factory-domain shipping/shipments sizeBackorder) ──
+  /** On shipments that have not left yet (DRAFT, PACKED). */
+  planned: z.number().int(),
+  /** Released by quality and on no shipment yet (a carrier return holds its garments until received back): could go today. */
+  readyNow: z.number().int(),
+  // ── end B-OS-002 ──
 })
 
 const lineView = output({
@@ -129,8 +140,11 @@ const depositView = output({
   createdAt: instant(),
   /** What payments placed on it so far (allocations less their reversals). */
   paidAmount: money.price(z.number().int()),
-  /** Its latest bank-details page sent to the customer (DEPOSIT_INFO link), or null when none was sent. */
-  link: output({ sentAt: instant(), to: z.string().nullable(), expiresAt: instant(), state: z.enum(LINK_STATES) }).nullable(),
+  /**
+   * Its latest bank-details page sent to the customer (DEPOSIT_INFO link), or null when none was sent. B-OM-022 (order money tab):
+   * + `id`, the page's own id (the web's "Stop the page": POST /links/:linkId/revoke, links.manage); this read is office only.
+   */
+  link: output({ id: id(), sentAt: instant(), to: z.string().nullable(), expiresAt: instant(), state: z.enum(LINK_STATES) }).nullable(),
   /**
    * B-W2a-F2: the payment-schedule step that names it — DEPOSIT (the deposit production waits for) or BEFORE_SHIPPING
    * (the balance paid before the goods leave, invoiced as an advance); null: no step names it (an order made before the
@@ -310,6 +324,42 @@ export const orderView = output({
         /** The paper DDT of a shipment made elsewhere (Nexus issued none); null otherwise. */
         externalDdt: output({ number: z.string(), date: z.iso.date() }).nullable(),
         // ── end B-OP-043 ──
+        // ── B-OS-001 (order shipments tab; 13-backend §1): what it carries, why it waits, where it came from, its parcels, the rights ──
+        /** What it carries of THIS order (every status), by line and size (a made-to-measure line: size null). */
+        contents: z.array(shipmentPieces),
+        /** The pieces it carries of the customer's other orders (a shared shipment; 0: none). */
+        otherPieces: z.number().int(),
+        /** With shipping.view over its site (else empty, `withheld` says so): its holds in force, oldest first; no person is named. */
+        holds: z.array(output({ id: id(), reason: z.enum(SHIPMENT_HOLD_REASONS), words: z.string().nullable(), bySystem: z.boolean(), placedAt: instant() })),
+        /** Why it was cancelled, and when (null: not cancelled). */
+        cancelReason: z.string().nullable(),
+        cancelledAt: instant().nullable(),
+        /** The shipment it was split from, and why (a split reason code); null: not split from one. */
+        splitFrom: output({ id: id(), number: z.string(), reason: z.string() }).nullable(),
+        /** A cancelled shipment merged into another: that one; null otherwise. */
+        mergedInto: output({ id: id(), number: z.string() }).nullable(),
+        /** False: it travels without a DDT (an immediate invoice, or set by hand). */
+        ddtRequired: z.boolean(),
+        packedAt: instant().nullable(),
+        /**
+         * With shipping.view over its site (else empty): its parcels in order — the label's number and the carrier's https page
+         * (`source` LABEL, `live`: a carrier tracks it); a TEST label or none: no number, `source` null — and what each holds.
+         */
+        parcels: z.array(
+          output({
+            id: id(),
+            seq: z.number().int(),
+            number: z.string().nullable(),
+            url: z.string().nullable(),
+            source: z.enum(['LABEL', 'TYPED']).nullable(),
+            live: z.boolean(),
+            contents: z.array(shipmentPieces),
+            otherPieces: z.number().int(),
+          }),
+        ),
+        /** What this reader may do on it, each by its right over its company, site and customer (the doors are hidden without). */
+        may: output({ manage: z.boolean(), pack: z.boolean(), ddt: z.boolean(), holdsManage: z.boolean(), holdsRelease: z.boolean() }),
+        // ── end B-OS-001 ──
       }),
     ),
     invoices: z.array(output({ id: id(), number: z.string().nullable(), docType: z.string(), status: z.string(), issueDate: z.string().nullable(), /** A TD02: the deposit request it bills. */ depositRequestId: id().nullable() })),
@@ -569,6 +619,8 @@ export const listOrdersContract = defineContract({
           priceDiff: money.price(z.number().int().nullable()),
           /** How many lines differ ("Not equal · 2 lines"). */
           priceNotEqualLines: money.price(z.number().int()),
+          /** B-OM-020 (order money tab; Owner D4): a "Not equal" accepted by hand (in force): the "Not equal" filter and counts leave it out. */
+          priceAccepted: money.price(z.boolean()),
           // ── end B-CP-018 ──
         }),
       ),

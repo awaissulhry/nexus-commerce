@@ -4,6 +4,8 @@ import { grantsFor, type Actor, type Permission } from '@nexus/factory-domain/co
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
 import { backorderTotals, backorderWords, orderCapProblems, sizeBackorder, type SizeBackorder } from '@nexus/factory-domain/shipping/shipments/backorder'
+import { holdsReleasedGarments } from '@nexus/factory-domain/shipping/shipments/backorder' // B-OS-002 (H1-B8)
+import type { FactoryClient } from '@nexus/factory-db'
 import type { CommandCaller, CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { mayOn, officeContextOf } from '../access'
@@ -31,7 +33,8 @@ const LEFT = ['SHIPPED', 'DELIVERED'] as const
 /** Shipments that have not left yet. */
 const OPEN = ['DRAFT', 'PACKED'] as const
 
-type Reader = CommandTx
+// B-OS-002 (order shipments tab): also a scoped client's reader (the order read takes the same figures).
+type Reader = FactoryClient | CommandTx
 
 const ORDER_SELECT = { id: true, number: true, status: true, companyId: true, partyId: true, customerRef: true, promiseDate: true, party: { select: { code: true, legalName: true } } } as const
 
@@ -41,8 +44,11 @@ function orderedSizes(line: { kind: string; quantity: number; baseSize: string |
   return [{ size: line.baseSize ?? '', quantity: line.quantity }]
 }
 
-/** Every line and size of these orders with its backorder figures (`shipmentId` apart, when named). */
-async function readBackorders(db: Reader, orderIds: readonly string[], shipmentId: string | null) {
+/**
+ * Every line and size of these orders with its backorder figures (`shipmentId` apart, when named). B-OS-002: exported, the order
+ * read's `planned` and `readyNow` are these figures (one rule).
+ */
+export async function readBackorders(db: Reader, orderIds: readonly string[], shipmentId: string | null) {
   if (orderIds.length === 0) return new Map<string, ReturnType<typeof lineView>[]>()
   // One query after another: a transaction's client has one connection.
   const lines = await db.salesOrderLine.findMany({
@@ -68,7 +74,10 @@ async function readBackorders(db: Reader, orderIds: readonly string[], shipmentI
     ? await db.shipmentLine.groupBy({ by: ['salesOrderLineId', 'size', 'shipmentId'], where: { salesOrderLineId: { in: lineIds }, shipment: { status: { notIn: ['CANCELLED'] } } }, _sum: { quantity: true } })
     : []
   const shipmentIds = [...new Set(shipped.map((row) => row.shipmentId))]
-  const statuses = new Map((shipmentIds.length > 0 ? await db.shipment.findMany({ where: { id: { in: shipmentIds } }, select: { id: true, status: true } }) : []).map((row) => [row.id, row.status]))
+  // B-OS-002 (H1-B8): with when a carrier return's garments were received back (they no longer hold the release).
+  const shipmentRows = shipmentIds.length > 0 ? await db.shipment.findMany({ where: { id: { in: shipmentIds } }, select: { id: true, status: true, carrierReturnReceivedAt: true } }) : []
+  const statuses = new Map(shipmentRows.map((row) => [row.id, row.status]))
+  const received = new Set(shipmentRows.filter((row) => !holdsReleasedGarments(row)).map((row) => row.id))
   const cells = lineIds.length > 0 ? await db.workOrderSize.findMany({ where: { salesOrderLineId: { in: lineIds }, workOrder: { kind: { not: 'REPAIR' } } }, select: { id: true, salesOrderLineId: true, size: true } }) : []
   const counts = await cellCounts(db, cells.map((cell) => cell.id))
 
@@ -82,7 +91,8 @@ async function readBackorders(db: Reader, orderIds: readonly string[], shipmentI
     const at = key(row.salesOrderLineId, row.size)
     const quantity = row._sum.quantity ?? 0
     const status = statuses.get(row.shipmentId)
-    add(holding, at, quantity)
+    // B-OS-002 (H1-B8): a RETURNED shipment whose garments came back into stock holds none of them (as cells.ts and the DB cap).
+    if (!received.has(row.shipmentId)) add(holding, at, quantity)
     if (row.shipmentId === shipmentId) add(mine, at, quantity)
     else if ((LEFT as readonly string[]).includes(status ?? '')) add(left, at, quantity)
     else if ((OPEN as readonly string[]).includes(status ?? '')) add(open, at, quantity)

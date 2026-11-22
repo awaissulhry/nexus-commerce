@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { businessDate, id, input, output } from '../../core/contracts'
+import { businessDate, id, input, instant, output } from '../../core/contracts' // B-OM-021: + instant
 import { money, notMoney } from '../../money/marked'
 import { WORK_ORDER_KINDS, WORK_ORDER_STATUSES } from '../../production/work-orders/machine'
 import { SALES_ORDER_STATUSES } from '../../sales/orders/orders'
@@ -7,6 +7,7 @@ import { COSTING_METHODS } from '../ledger/entries'
 import { WATERFALL_REASONS } from './rules'
 // B-W2b-416: the floor an order is held to and its flag (the margin grain).
 import { floorView } from '../profitability/contracts'
+import { ORDER_COST_LINE_KINDS } from './hand-lines' // B-OM-021
 
 /**
  * The contracts of order margin from estimate to actual (B-W2a-29; FIN-047; design finance.margins SCR-155 and its
@@ -84,6 +85,8 @@ export const orderMarginRowView = output({
   belowFloor: money.margin(z.boolean().nullable()),
   /** B-W2b-416: the floor (the Sales settings' floor of its seller's roles, else the company's); the margin grain. */
   floor: money.margin(floorView.nullable()),
+  /** B-OM-021 (order money tab; L4): the order's own target margin %, set by hand; when set the flag is judged on it, not the floor. */
+  targetPct: money.margin(z.string().nullable()),
   method: z.enum(COSTING_METHODS),
   provisional: z.boolean(),
 })
@@ -135,6 +138,19 @@ const stageView = output({
   ...figure,
   /** B-OM-007 (order money tab M6-B3): now and so far, the freight counted in `cost` (the carriers' charges of its shipments); absent at quote. */
   freight: money.cost(z.number().int().nullable()),
+  /** B-OM-021 (order money tab; L2): now and so far, the hand cost lines counted in `cost` (computed = cost − handCost); absent at quote. */
+  handCost: money.cost(z.number().int().nullable()),
+})
+
+/** B-OM-021: a hand cost line still counted — who added it (an office person), when and why. */
+const handLineView = output({
+  id: id(),
+  kind: z.enum(ORDER_COST_LINE_KINDS),
+  amount: money.cost(z.number().int()),
+  currency: z.string(),
+  reason: money.cost(z.string()),
+  by: z.string().nullable(),
+  at: instant(),
 })
 
 export const orderMarginView = orderMarginRowView.extend({
@@ -153,6 +169,10 @@ export const orderMarginView = orderMarginRowView.extend({
   freight: output({ cost: money.cost(z.number().int().nullable()), words: z.string() }),
   /** B-OM-007 (M6-B8): what the quoted cost was based on — the cost sheet revision and the day the quote line was costed; null: no cost sheet behind it. */
   basedOn: output({ pricedOn: notMoney(businessDate().nullable()), revision: z.number().int().nullable() }).nullable(),
+  /** B-OM-021 (order money tab; L2): the hand cost lines still counted, oldest first (added only; removed ones stay in the history). */
+  handLines: money.cost(z.array(handLineView)),
+  /** B-OM-021 (L4): the order's target margin and who set it by hand, when and why (the last `orders.marginTarget`); null: none (the floor). */
+  target: money.margin(output({ pct: money.margin(z.string()), by: z.string().nullable(), at: instant().nullable(), reason: money.margin(z.string().nullable()) }).nullable()),
   /**
    * B-SA-043 (sales page plan R1; review P6-4): the pieces cut beyond what the order now wants (a change lowered it after cutting):
    * how many per line and size, and their share of the actual cost (by garments) — named here, never hidden in the margin.
@@ -202,3 +222,19 @@ export const orderMarginView = orderMarginRowView.extend({
   words: z.string(),
 })
 export type OrderMarginView = z.infer<typeof orderMarginView>
+
+// ── B-OM-021 (order money tab; lead L2, L4): the bodies of the hand commands (costing.ledger.manage + the cost grain; the target + margin) ──
+const handReason = z.string().trim().min(3).max(500)
+export const addCostLineBody = input({
+  kind: z.enum(ORDER_COST_LINE_KINDS),
+  /** Minor units, in the order's currency (a line is always in it). */
+  amount: money.cost(z.number().int().min(1).max(2_147_483_647)),
+  reason: money.cost(handReason),
+})
+export const removeCostLineBody = input({ reason: money.cost(handReason) })
+export const setTargetBody = input({
+  /** Percent of the value ("38.5"); null: back to the floor of the Sales settings. */
+  targetPct: money.margin(z.string().trim().regex(/^\d{1,2}(\.\d{1,4})?$/).nullable()),
+  reason: money.margin(handReason),
+})
+// ── end B-OM-021 ──

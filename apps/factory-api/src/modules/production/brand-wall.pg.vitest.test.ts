@@ -180,7 +180,7 @@ describe('B-PR-10 the brand-wall sweep', () => {
     // (a customer-limited person gets the same not-found as an unknown id): the plan (B-OM-004), the settlement with its TD02 /
     // TD04 rows (B-OM-001, 003), the order's money (B-OM-002), the price check's source (B-OM-006), the margin's freight (B-OM-007).
     // PR S2: the hand commands, their preview, Open for payment (now the money plan's right) and the undo of a payment.
-    // PR S3 adds the price accept, the hand cost lines and the target.
+    // PR S3: the price accept, the hand cost lines and the target.
     for (const key of [
       'GET /sales/orders/:orderId/schedule',
       'POST /sales/orders/:orderId/money-plan',
@@ -191,6 +191,26 @@ describe('B-PR-10 the brand-wall sweep', () => {
       'GET /sales/orders/:orderId',
       'GET /sales/orders/:orderId/price-check',
       'GET /costing/margins/orders/:orderId',
+      // B-OM-020, B-OM-021 (PR S3): the price accept and its take-back, the hand cost lines and the target.
+      'POST /sales/orders/:orderId/price-check/accept',
+      'DELETE /sales/orders/:orderId/price-check/accept',
+      'POST /costing/margins/orders/:orderId/cost-lines',
+      'POST /costing/margins/orders/:orderId/cost-lines/:lineId/remove',
+      'PUT /costing/margins/orders/:orderId/target',
+    ]) {
+      expect(swept.has(key), key).toBe(true)
+      expect(EXEMPT[key], key).toBeUndefined()
+    }
+    // B-OS (order shipments tab, 13-backend §4): every route the Shipments tab reads is met by the sweep by itself — swept, never
+    // EXEMPT (a customer-limited person gets the same not-found as an unknown id). PR S1: the order read's rows and buckets
+    // (B-OS-001, 002) and the backorder they share, the deliveries (B-OS-003), the links (B-OS-004), what may come back from one
+    // shipment (B-OS-005). PR S2 adds the commands; PR S3 the tracking per parcel.
+    for (const key of [
+      'GET /sales/orders/:orderId',
+      'GET /shipping/orders/:salesOrderId/backorder',
+      'GET /sales/orders/:orderId/deliveries',
+      'GET /sales/orders/:orderId/links',
+      'GET /sales/returns/returnable',
     ]) {
       expect(swept.has(key), key).toBe(true)
       expect(EXEMPT[key], key).toBeUndefined()

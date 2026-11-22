@@ -17,6 +17,7 @@ import { dayOrNull, hasLeft, liveDdts, namesOf, readLines, readOrders, readPaper
 import { walledForOutside } from '../../../platform/files/content-wall' // fix-wall-1
 import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers' // fix-portal-numbers-1
 import { trackingPageOf } from '@nexus/factory-domain/shipping/labels/tracking' // B-OP-034: a typed link, https only
+import { isTestLabel } from '@nexus/factory-domain/shipping/test-mode/rules' // B-OS-006
 
 /**
  * Shipments and tracking for the customer (B-W2b-175; SAL-080, SAL-081; design portal.customer.orders › Shipments &
@@ -36,6 +37,11 @@ import { trackingPageOf } from '@nexus/factory-domain/shipping/labels/tracking' 
  */
 
 const LIVE = { events: ['partner_notification.created'] }
+
+// ── B-OS-006 (order shipments tab; X2-B1) ──
+/** A parcel's tracking number the customer may read: a carrier's label only — a TEST label (test mode) is never one. */
+const customerNumberOfParcel = (parcel: { readonly trackingNumber: string | null; readonly carrierParcelId: string | null }): string | null => (parcel.trackingNumber !== null && !isTestLabel(parcel.carrierParcelId) ? parcel.trackingNumber : null)
+// ── end B-OS-006 ──
 
 /** The customer's ETA (B-W2b-F14): while packed or on the way. */
 const etaOf = (shipment: PortalShipmentRow): string | null => {
@@ -143,10 +149,12 @@ export async function orderShipments(app: FastifyInstance, request: FastifyReque
         .map((parcel) => {
           // Its own events and those of the whole shipment (the carrier often reports the shipment), the newest one.
           const last = events.filter((event) => event.parcelId === parcel.id || event.parcelId === null).at(-1) ?? null
+          // B-OS-006: a TEST label's number and page never reach the customer (the parcel itself is listed, untracked).
+          const number = customerNumberOfParcel(parcel)
           return {
             seq: parcel.seq,
-            trackingNumber: parcel.trackingNumber,
-            trackingLink: trackingLinkOf(parcel.trackingUrl),
+            trackingNumber: number,
+            trackingLink: number === null ? null : trackingLinkOf(parcel.trackingUrl),
             status: last?.status ?? null,
             words: last ? TRACKING_WORDS[last.status] : null,
             lastEvent: last ? eventView(last, parcel.seq) : null,
@@ -217,10 +225,12 @@ export async function inTransit(app: FastifyInstance, request: FastifyRequest, n
         expectedDeliveryAt: etaOf(shipment),
         typedTrackingNumber: shipment.manualTrackingNumber, // B-OP-031
         typedTrackingUrl: trackingPageOf(shipment.manualTrackingUrl), // B-OP-034
-        trackingNumbers: read.parcels.filter((parcel) => parcel.shipmentId === shipment.id && parcel.trackingNumber !== null).map((parcel) => parcel.trackingNumber!),
+        // B-OS-006: carrier labels only (a TEST label's number never reaches the customer).
+        trackingNumbers: read.parcels.flatMap((parcel) => (parcel.shipmentId === shipment.id && customerNumberOfParcel(parcel) !== null ? [customerNumberOfParcel(parcel)!] : [])),
         trackingLinks: read.parcels.flatMap((parcel) => {
-          const link = parcel.shipmentId === shipment.id && parcel.trackingNumber !== null ? trackingLinkOf(parcel.trackingUrl) : null
-          return link ? [{ trackingNumber: parcel.trackingNumber!, ...link }] : []
+          const number = parcel.shipmentId === shipment.id ? customerNumberOfParcel(parcel) : null
+          const link = number !== null ? trackingLinkOf(parcel.trackingUrl) : null
+          return number !== null && link ? [{ trackingNumber: number, ...link }] : []
         }),
         lastEvent: last ? eventView(last, last.parcelId ? (parcelSeq.get(last.parcelId) ?? null) : null) : null,
       }

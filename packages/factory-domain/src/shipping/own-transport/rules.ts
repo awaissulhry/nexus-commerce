@@ -99,11 +99,14 @@ export function arrangeRefusal(facts: OwnTransportFacts): Refusal {
   return null
 }
 
-/** Why the manual carrier's tracking number cannot be typed now (null: it can). */
+/**
+ * Why the manual carrier's tracking number cannot be typed now (null: it can). B-OS-006 (order shipments tab; X2-B6): only a label
+ * bought from a carrier stops it — a TEST label (test mode) is never tracked, so the goods may still take a typed number.
+ */
 export function trackingRefusal(facts: OwnTransportFacts): Refusal {
   if (facts.status === 'CANCELLED') return refusal('CANCELLED')
   if (facts.transportBy !== 'CARRIER') return refusal('NOT_A_CARRIER')
-  if (facts.parcels.some(labelled)) return refusal('LABELLED')
+  if (facts.parcels.some(carrierLabelled)) return refusal('LABELLED') // B-OS-006: was `labelled` (TEST labels too)
   return null
 }
 

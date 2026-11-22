@@ -16,6 +16,14 @@
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] }
       }
+    },
+    "OrderCostLine": {
+      "about": "B-OM-019 (order money tab, schema wave \"order money 1/1\"; lead L2): a cost of a sales order typed by hand (freight estimate, commission, bank charges, other) that the margin counts beside the computed cost; removed once with a reason. The office (costing.ledger.manage with the cost grain) writes it through apps/factory-api's costing/margins with command(); never deleted (no delete grant), never changed but for its removal, never written once the order is CLOSED or CANCELLED (the …_order_money_guards trigger). No floor or partner grant: a cost.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
     }
   }
 }
