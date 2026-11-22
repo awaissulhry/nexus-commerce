@@ -32,7 +32,7 @@ export type TransportDialog =
       /** F-OS-301: "Send the shipping notice again" (off by default; only once the goods left). */
       readonly notify?: boolean
     }
-  | { readonly kind: 'status'; readonly status: ManualStatus | null; readonly occurredAt: string | null; readonly description: string; readonly location: string; /* F-OS-203 (B-OS-015): why, over a carrier's labels */ readonly reason?: string }
+  | { readonly kind: 'status'; readonly status: ManualStatus | null; readonly occurredAt: string | null; readonly description: string; readonly location: string; /* F-OS-203 (B-OS-015): why, over a carrier's labels */ readonly reason?: string; /* os-fx7 (W-05, 10-design D6): "Mark … delivered / returned" — the one act, not the five choices */ readonly mark?: boolean }
   // F-OS-203 (B-OS-016): the expected arrival typed by hand (a day; empty clears it) and why (optional).
   | { readonly kind: 'eta'; readonly day: string; readonly reason: string }
 
