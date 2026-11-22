@@ -431,7 +431,8 @@ describe('B-OS-001: the order read’s shipment rows — contents, other pieces,
     const words = 'Seed: the customer asked us to wait a week.'
     const placed = await ok('holdsDesk', 'POST', `/shipping/shipments/${ids.child}/holds`, { reason: 'CUSTOMER_REQUEST', words }, 201)
     const row = await rowOf('warehouse', so3(), ids.child!)
-    expect(row.holds).toEqual([{ id: placed.holdId, reason: 'CUSTOMER_REQUEST', words, bySystem: false, placedAt: expect.any(String) }])
+    // Its hold among any the system keeps (none in this world): each with its reason, words, who placed it (a person or the system).
+    expect(row.holds).toEqual(expect.arrayContaining([{ id: placed.holdId, reason: 'CUSTOMER_REQUEST', words, bySystem: false, placedAt: expect.any(String) }]))
     expect(JSON.stringify(row.holds)).not.toMatch(/placedBy|displayName/)
     expect((await rowOf('holdsDesk', so3(), ids.child!)).may).toMatchObject({ holdsManage: true, holdsRelease: false })
     // A reader of orders alone: what it carries, never its holds or parcels (withheld, as its carrier and tracking).
