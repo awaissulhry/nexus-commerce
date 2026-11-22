@@ -72,9 +72,13 @@ export function moneyHeadOf(input: { readonly order: Order; readonly schedule: P
       parts.push(word(key, { ...(amount !== null ? { money: { amount } } : {}), ...(revision !== null ? { params: { revision } } : {}) }))
       tone = 'warning'
     } else {
-      const part = (request.paidAmount ?? 0) > 0 && (left ?? 1) > 0
+      // F-OM-fx3 (B-OM-024, W-01 / W-02): "Deposit € 15.00 short — probably bank charges" only when the plan read says the company's
+      // write-off tolerance covers it (price grain); any other part payment is "the deposit is part paid" — never "short".
+      const short = schedule?.requests?.find((entry) => entry.id === request.id)?.short ?? null
+      const part = ((request.paidAmount ?? 0) > 0 && (left ?? 1) > 0) || !!short
       const overdue = request.dueDate < today
-      if (part) parts.push(price && left !== null ? word('moneyTab.head.depositShort', { money: { amount: left } }) : word('moneyTab.head.depositPartPaid'))
+      const missing = short?.amount ?? left
+      if (part) parts.push(price && short?.withinTolerance && missing !== null ? word('moneyTab.head.depositShort', { money: { amount: missing } }) : word('moneyTab.head.depositPartPaid'))
       else {
         const amount = price && request.amount !== undefined ? request.amount : null
         const key = `moneyTab.head.deposit${overdue ? 'Overdue' : 'Open'}${amount !== null ? '' : 'Words'}`

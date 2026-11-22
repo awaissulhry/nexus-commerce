@@ -5,7 +5,7 @@ import { Lock, Mail, UserRound } from 'lucide-react'
 import { Banner, Field } from '@nexus/ui/components'
 import { Input, RadioCard, Select, Spinner } from '@nexus/ui/primitives'
 import { DateField, Textarea } from '../../../../../../lib/i18n/ds-parts'
-import { formatDate } from '../../../../../../lib/i18n/format'
+import { formatDate, formatTime } from '../../../../../../lib/i18n/format'
 import { INTL_LOCALE } from '../../../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { money } from '../../../../quotes/model'
@@ -18,10 +18,9 @@ import { beforeAfterOf, HAND_LABEL_MAX, HAND_REASON, handBodyOf, handInputOf, ha
 import { planOf, type PlanRefusal } from '../plan'
 import { acceptBodyOf, diffWordOf } from '../price' // F-OM-301
 import { costAmountOf, HAND_COST_KINDS, marginAfterOf, targetOf, targetPctOf } from '../margin' // F-OM-302
-import { pctText } from '../../../../../finance/costing/model' // F-OM-302: a margin % in the page's language
 import type { CostLineKind } from '../../../../../finance/margins/api' // F-OM-302
 import { stillToPayOf } from '../totals'
-import { useSay } from './say'
+import { lineOf, pctOf, useSay } from './say' // F-OM-fx3 (W-19): pctOf, the page's one percent format; (W-11) lineOf, the sub-line
 
 /**
  * F-OM-101 / 201 / 202 (order MONEY tab, 10-design §9) — the payment plan's windows, mounted ONCE by the page (OrderRecordView, the
@@ -100,7 +99,7 @@ function PlanDialog({ order, act, stepId, requestId, model, actions }: { order: 
   const request = row?.request ?? (requestId ? (order.chain.depositRequests.find((entry) => entry.id === requestId) ?? null) : null)
   const [input, setInput] = useState<HandInput>(() => handInputOf(act, { row, order, openSteps: plan?.openSteps ?? [], today: model.today }))
   const set = (patch: Partial<HandInput>) => setInput((now) => ({ ...now, ...patch }))
-  const shape = handWindowOf(act, { order, row, price: model.can.price })
+  const shape = handWindowOf(act, { order, row, price: model.can.price, tolerance: schedule?.tolerance ?? null /* F-OM-fx3 (W-11) */ })
   const built = handBodyOf(act, input, { step, request, order, today: model.today, steps: schedule?.steps ?? [] })
   const state = model.moneyPlan
   // The preview is the act's own body (its reason too: the server's rule), read a moment after typing stops.
@@ -119,6 +118,11 @@ function PlanDialog({ order, act, stepId, requestId, model, actions }: { order: 
   const held = model.busy ? t('held.busy') : built.problem ? say(built.problem) : built.reasonProblem ? say(built.reasonProblem) : planned
   const refused = state?.refused ? <Banner tone="danger" title={words(state.refused)} /> : <DialogProblem model={model} />
   const rows = beforeAfterOf(answer)
+  // F-OM-fx3 (W-11): the who line as the design says it — "Saved as Alex Demo · today 10:44 · …" (the name from the session; without
+  // it, "under your name"); a fresh code said where the act needs one.
+  const code = shape.code || answer?.preview?.needsFreshCode === true
+  const me = model.moneyPlan?.me ?? null
+  const who = me ? t(code ? 'moneyTab.hand.whoAsCode' : 'moneyTab.hand.whoAs', { name: me, time: formatTime(new Date(), { locale }) }) : undefined
   const choices = (list: readonly { readonly id: string; readonly title: Parameters<typeof say>[0] }[]) => list.map((entry) => <option key={entry.id} value={entry.id}>{say(entry.title)}</option>)
   const fields: Record<string, ReactNode> = {
     share: (
@@ -209,7 +213,7 @@ function PlanDialog({ order, act, stepId, requestId, model, actions }: { order: 
       problem={refused}
       size={act === 'CHANGE_TERMS' ? 'lg' : 'md'}
     >
-      {shape.sub ? <p className="fw-so-hint">{say(shape.sub)}</p> : null}
+      {shape.sub.length > 0 ? <p className="fw-so-hint">{lineOf(shape.sub.map(say))}</p> : null}
       {shape.fields.length > 0 ? <div className="fw-om-dlg-grid">{shape.fields.map((field) => fields[field])}</div> : null}
       {/* The plan before → after, from the server's preview — read once the act and its reason are typed; its refusal said here. */}
       {planned ? (
@@ -243,7 +247,7 @@ function PlanDialog({ order, act, stepId, requestId, model, actions }: { order: 
           <Spinner size={12} /> {t('moneyTab.hand.ba.reading')}
         </p>
       ) : null}
-      <HandParts happens={shape.happens.map(say)} told={say(shape.told)} never={say(shape.never)} reason={input.reason} onReason={(reason) => set({ reason })} reasonError={built.reasonProblem ? say(built.reasonProblem) : null} code={shape.code || answer?.preview?.needsFreshCode === true} />
+      <HandParts happens={shape.happens.map(say)} told={say(shape.told)} never={say(shape.never)} reason={input.reason} onReason={(reason) => set({ reason })} reasonError={built.reasonProblem ? say(built.reasonProblem) : null} code={code} who={who} />
     </Frame>
   )
 }
@@ -368,7 +372,7 @@ function CostLineDialog({ order, model, actions }: { order: Order; model: OrderR
       onClose={() => actions?.onDialog?.(null)}
       problem={<Refusal model={model} currency={order.currency} />}
     >
-      {now !== null ? <p className="fw-so-hint">{t('moneyTab.margin.setCost.sub', { pct: pctText(now, locale) })}</p> : null}
+      {now !== null ? <p className="fw-so-hint">{t('moneyTab.margin.setCost.sub', { pct: pctOf(now, locale) })}</p> : null}
       <div className="fw-om-dlg-grid">
         <Field label={t('moneyTab.margin.setCost.kind')} hint={t('moneyTab.margin.setCost.kindHint')}>
           <Select value={kind} onChange={(event) => setKind(event.target.value as CostLineKind)}>
@@ -384,7 +388,7 @@ function CostLineDialog({ order, model, actions }: { order: Order; model: OrderR
         </Field>
       </div>
       <HandParts
-        happens={[t('moneyTab.margin.setCost.happens.uses'), ...(now !== null && after !== null ? [t('moneyTab.margin.setCost.happens.after', { now: pctText(now, locale), after: pctText(after, locale) })] : []), t('moneyTab.margin.setCost.happens.beside')]}
+        happens={[t('moneyTab.margin.setCost.happens.uses'), ...(now !== null && after !== null ? [t('moneyTab.margin.setCost.happens.after', { now: pctOf(now, locale), after: pctOf(after, locale) })] : []), t('moneyTab.margin.setCost.happens.beside')]}
         told={t('moneyTab.margin.told')}
         never={t('moneyTab.margin.setCost.never')}
         reason={reason}
@@ -432,7 +436,7 @@ function MarginTargetDialog({ order, model, actions }: { order: Order; model: Or
   const say = useSay(order.currency)
   const detail = model.margin?.part?.value ?? null
   const now = targetOf(detail?.target)
-  const [typed, setTyped] = useState(() => (now ? pctText(now.pct, locale).replace(/\s*%$/, '') : ''))
+  const [typed, setTyped] = useState(() => (now ? pctOf(now.pct, locale).replace(/\s*%$/, '') : ''))
   const [reason, setReason] = useState('')
   const target = targetPctOf(typed)
   const reasonProblem = reasonProblemOf(reason)
@@ -449,8 +453,8 @@ function MarginTargetDialog({ order, model, actions }: { order: Order; model: Or
       onClose={() => actions?.onDialog?.(null)}
       problem={<Refusal model={model} currency={order.currency} />}
     >
-      {detail?.estimateMarginPct ? <p className="fw-so-hint">{t('moneyTab.margin.setCost.sub', { pct: pctText(detail.estimateMarginPct, locale) })}</p> : null}
-      <Field label={t('moneyTab.margin.target.field')} hint={floor ? t('moneyTab.margin.target.hintFloor', { pct: pctText(floor.pct, locale) }) : t('moneyTab.margin.target.hint')} error={typed !== '' && target === null ? t('moneyTab.margin.target.problem') : undefined}>
+      {detail?.estimateMarginPct ? <p className="fw-so-hint">{t('moneyTab.margin.setCost.sub', { pct: pctOf(detail.estimateMarginPct, locale) })}</p> : null}
+      <Field label={t('moneyTab.margin.target.field')} hint={floor ? t('moneyTab.margin.target.hintFloor', { pct: pctOf(floor.pct, locale) }) : t('moneyTab.margin.target.hint')} error={typed !== '' && target === null ? t('moneyTab.margin.target.problem') : undefined}>
         <Input value={typed} onChange={(event) => setTyped(event.target.value)} inputMode="decimal" autoComplete="off" />
       </Field>
       <HandParts happens={[t('moneyTab.margin.target.happens.marks'), t('moneyTab.margin.target.happens.flag')]} told={t('moneyTab.margin.told')} never={t('moneyTab.margin.target.never')} reason={reason} onReason={setReason} reasonError={reasonProblem ? say(reasonProblem) : null} code={false} who={t('moneyTab.margin.who')} />

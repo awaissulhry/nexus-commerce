@@ -1,4 +1,4 @@
-import { createElement, Fragment } from 'react'
+import { createElement, Fragment, useState, type ReactNode } from 'react'
 import { CHANGE_WORDS } from '@nexus/factory-domain/order-apply/rules' // op-fx1: the preview's own words
 import { Building2, Eye, Lock, ShoppingBag } from 'lucide-react' // F-OP-217: the dock's segments
 import { defineDesignScreen, type DesignCase } from '../../../../lib/design/design-screen'
@@ -62,6 +62,7 @@ import type { OrderAbilities } from '../model'
 import type { PriceCheck } from '../price-check/api'
 import type { OrderMargin } from '../../../finance/margins/api'
 import { DETAIL_1043 } from '../../../finance/margins/demo/fixtures'
+import { TERMS } from '../../../finance/settings/terms/demo/fixtures' // F-OM-fx3 (W-27): Change payment terms… picks from the library
 // ---- end F-OM T.1
 // ---- F-OL-05 (Order LINES lane): the new Lines tab's cases — the draft of my changes, Review and save, two people, Add a style ----
 import { addLines, EMPTY_HISTORY, newLineKey, removeLine, setCell, setNewLine, type DraftHistory, type NewLine } from './lines-draft'
@@ -502,7 +503,16 @@ function OrderDesign({ model }: { model: RecordCase }) {
   const thread = model.dock ? createElement(DesignDock, { scope: model.dock, prefix: model.record.prefix }) : orderDesignThread()
   // F-OO-211: a case may give the order's custom fields (drawn by Overview beside Order facts, as the container's RecordCustomFields).
   const customFields = model.customFields ? createElement(CustomFieldsPanel, { model: model.customFields }) : undefined
-  return inShell(`/sales/orders/${model.record.order.status === 'ready' ? model.record.order.value.id : 'x'}`, createElement(OrderRecordView, { model: model.record, thread, customFields }), model.role)
+  const path = `/sales/orders/${model.record.order.status === 'ready' ? model.record.order.value.id : 'x'}`
+  // F-OM-fx3 (W-27): on Money the gallery keeps its own window state, so a ⋯ item opens its window and Escape closes a preset one.
+  if (model.record.tab === 'money') return inShell(path, createElement(MoneyDesign, { record: model.record, thread, customFields }), model.role)
+  return inShell(path, createElement(OrderRecordView, { model: model.record, thread, customFields }), model.role)
+}
+
+/** F-OM-fx3 (W-27): the Money tab in the gallery with its windows live (open from a ⋯, close with Escape or Cancel); nothing is saved. */
+function MoneyDesign({ record, thread, customFields }: { record: OrderRecordModel; thread: ReactNode; customFields?: ReactNode }) {
+  const [dialog, setDialog] = useState<OrderRecordModel['dialog']>(record.dialog)
+  return createElement(OrderRecordView, { model: { ...record, dialog }, thread, customFields, actions: { onDialog: setDialog } })
 }
 
 // ---- F-SA-243: Brand Alpha asks on this order (M 40 → 36); a change accepted yesterday still has a work-order change for planning
@@ -1022,28 +1032,42 @@ const OM_DEPOSIT_STEP = SCHEDULE.steps[0]!.id
 /** A role's rights as the S2 / S3 server knows them: the plan right and the cost ledger (the Owner, Finance), links.manage (the Owner). */
 const omCan = (role: Role): OrderAbilities => ({ ...canOf(role), moneyPlan: role === 'owner' || role === 'finance', costLedger: role === 'owner' || role === 'finance', links: role === 'owner' })
 const OM_PLAN_STATE: MoneyPlanState = { preview: null, refused: null, terms: null, contacts: null, lockAsked: false, invoiceShipped: null }
-const omPayment = (n: number, amount: number, over: Partial<PlanPayment> = {}): PlanPayment => ({ paymentId: omId(100 + n), allocationId: omId(200 + n), receivedOn: '2026-11-02', externalRef: `CRO-0000-ESEMPIO-9${n}`, method: 'BANK_TRANSFER', amount, undo: { may: true, why: null }, ...over })
+// F-OM-fx3 (W-24): every payment of the gallery's story came in on its today (29 Oct), after the page went out (28 Oct).
+const omPayment = (n: number, amount: number, over: Partial<PlanPayment> = {}): PlanPayment => ({ paymentId: omId(100 + n), allocationId: omId(200 + n), receivedOn: TODAY, externalRef: `CRO-0000-ESEMPIO-9${n}`, method: 'BANK_TRANSFER', amount, undo: { may: true, why: null }, ...over })
 const omRequest = (request: DepositRequest, over: Partial<PlanRequest> = {}): PlanRequest => ({ id: request.id, milestoneId: OM_DEPOSIT_STEP, kind: request.kind, stepKind: request.stepKind, status: request.status, amount: request.amount, paid: request.paidAmount, dueDate: request.dueDate, paidAt: request.paidAt, fiscalDocument: request.fiscalDocument, version: request.version, ...over })
-const OM_BY_HAND = (act: string, reason: string) => ({ act, at: at(18, 9, 30, 11), by: 'Bea Esempio', reason })
-const omCase = (role: Role, value: Order, over: Partial<OrderRecordModel> = {}) => base(role, value, { tab: 'money', can: omCan(role), moneyPlan: OM_PLAN_STATE, ...over })
+const OM_BY_HAND = (act: string, reason: string) => ({ act, at: at(29, 9, 30), by: 'Bea Esempio', reason }) // F-OM-fx3 (W-24): on the gallery's today
+// F-OM-fx3 (W-23): the schedule's verbs as each role holds them — the Owner waives (orders.waive), Finance invoices a step.
+const omSteps = (role: Role): OrderRecordModel['scheduleSteps'] => (role === 'owner' ? { can: { manageOrders: true, manageInvoices: true, waive: true }, opening: null, busy: false, problem: null } : role === 'finance' ? { can: { manageOrders: false, manageInvoices: true, waive: false }, opening: null, busy: false, problem: null } : undefined)
+// F-OM-fx3 (W-22): the order's money (B-OM-002) reaches a price holder only, as the API sends it.
+const omCase = (role: Role, value: Order, over: Partial<OrderRecordModel> = {}) => base(role, canOf(role).price ? value : { ...value, money: null }, { tab: 'money', can: omCan(role), moneyPlan: OM_PLAN_STATE, scheduleSteps: omSteps(role), ...over })
+/** F-OM-fx3 (W-22): this order's share by the server's one rule (Totals' Invoiced, Paid and Still to pay tiles; How it adds up). */
+const omShare = (invoicedShare: number, paid: number, stillToPay: number, depositsPaid: number, writtenOff = 0) => ({ invoicedShare, paid, stillToPay, depositsPaid, ...(writtenOff > 0 ? { writtenOff } : {}) })
+/** F-OM-fx3 (W-22): a settlement before any goods invoice — the deposit invoices named, this order's share. */
+const omOpenSettlement = (thisOrder: ReturnType<typeof omShare>, depositInvoices: NonNullable<Settlement['depositInvoices']> = []): Settlement => ({ ...SETTLEMENT_OPEN, invoices: [], depositInvoices, creditNotes: [], thisOrder })
+const omTd02 = (gross: number, payment: number, status = 'ISSUED') => ({ id: TD02_ID, number: TD02.number, status, issueDate: TODAY, gross, credited: 0, deductedNet: 0, depositRequestId: DEPOSIT_ID, paymentState: 'PAID' as const, deductedOn: null, forPayment: { paymentId: omId(100 + payment), receivedOn: TODAY } })
 const omPart = <T,>(value: T, role: Role) => ({ value: forRole(value, role), problem: null })
 
-// The deposit € 1.00 short (the bank kept its charges): Accept short… in its ⋯, Undo this payment… on its payment.
+// The deposit € 1.00 short (the bank kept its charges, within the € 25.00 tolerance): Accept short… is its ONE act (F-OM-fx3, W-01),
+// Undo this payment… on its payment.
 const OM_SHORT = deposit({ link: OM_LINK, paidAmount: 228284 })
-const omShort = order('CONFIRMED', { chain: { ...confirmed.chain, depositRequests: [OM_SHORT] } })
-const OM_SCHEDULE_SHORT: Schedule = { ...SCHEDULE_OPEN, requests: [omRequest(OM_SHORT, { payments: [omPayment(1, 228284)] })], stillOpen: 532996, overdue: 0 }
+const omShort = order('CONFIRMED', { chain: { ...confirmed.chain, depositRequests: [OM_SHORT] }, money: { stillToPay: 532996, paid: 228284, depositsPaid: 228284 } })
+const OM_SCHEDULE_SHORT: Schedule = { ...SCHEDULE_OPEN, requests: [omRequest(OM_SHORT, { payments: [omPayment(1, 228284)], short: { amount: 100, withinTolerance: true } })], stillOpen: 532996, overdue: 0, tolerance: 2500 }
+const OM_SETTLEMENT_SHORT = omOpenSettlement(omShare(0, 228284, 532996, 228284))
 // …accepted short: PAID by hand, the missing part stays owed (L1); its TD02 the amount paid.
-const OM_ACCEPTED = deposit({ link: OM_LINK, status: 'PAID', paidAt: at(3, 10, 5, 11), paidAmount: 228284 })
-const omAccepted = order('CONFIRMED', { chain: { ...confirmed.chain, depositRequests: [OM_ACCEPTED], invoices: [TD02] } })
+const OM_ACCEPTED = deposit({ link: OM_LINK, status: 'PAID', paidAt: at(29, 10, 5), paidAmount: 228284 })
+const omAccepted = order('CONFIRMED', { chain: { ...confirmed.chain, depositRequests: [OM_ACCEPTED], invoices: [TD02] }, money: { stillToPay: 532996, paid: 228284, depositsPaid: 228284 } })
 const OM_PAID_UNDO = { may: false, why: { en: 'The deposit is paid: a paid deposit is not undone here.', it: "L'acconto è pagato: un acconto pagato non si annulla qui." }, code: 'PAID' }
-const OM_SCHEDULE_ACCEPTED: Schedule = { ...SCHEDULE, requests: [omRequest(OM_ACCEPTED, { acceptedShort: { short: 100, why: 'BANK_CHARGES', reason: 'The bank kept its charges.', at: at(3, 10, 5, 11), by: 'Bea Esempio' }, payments: [omPayment(1, 228284, { undo: OM_PAID_UNDO })] })] }
+// F-OM-fx3 (W-26): the step paid when the request was accepted (one day on the row and in the facts).
+const OM_SCHEDULE_ACCEPTED: Schedule = { ...SCHEDULE, steps: SCHEDULE.steps.map((step) => (step.kind === 'DEPOSIT' ? { ...step, paidAt: OM_ACCEPTED.paidAt } : step)), requests: [omRequest(OM_ACCEPTED, { acceptedShort: { short: 100, why: 'BANK_CHARGES', reason: 'The bank kept its charges.', at: at(29, 10, 5), by: 'Bea Esempio' }, payments: [omPayment(1, 228284, { undo: OM_PAID_UNDO, td02: { id: TD02_ID, number: TD02.number } })] })], stillOpen: 532996, overdue: 0, tolerance: 2500 }
+const OM_SETTLEMENT_ACCEPTED = omOpenSettlement(omShare(0, 228284, 532996, 228284), [omTd02(228284, 1)])
 // Waived, then asked again (Ask for the deposit again… on the waived row).
 const OM_WAIVED = deposit({ status: 'WAIVED' })
-const omWaived = order('CONFIRMED', { chain: { ...confirmed.chain, depositRequests: [OM_WAIVED] } })
+const omWaived = order('CONFIRMED', { chain: { ...confirmed.chain, depositRequests: [OM_WAIVED] }, money: { stillToPay: 761280, paid: 0, depositsPaid: 0 } })
+const OM_SETTLEMENT_NOTHING = omOpenSettlement(omShare(0, 0, 761280, 0))
 const OM_SCHEDULE_WAIVED: Schedule = { ...SCHEDULE_OPEN, steps: SCHEDULE_OPEN.steps.map((step) => (step.kind === 'DEPOSIT' ? { ...step, status: 'WAIVED' as const } : step)), requests: [omRequest(OM_WAIVED)] }
 // Changed by hand: the deposit replaced (25 % for 30 %: Earlier steps (1)), the balance's due day moved ("Set by hand").
-const OM_NEW = deposit({ id: omId(2), depositPct: '25', amount: 190320, dueDate: '2026-11-12', link: OM_LINK, createdAt: at(18, 9, 30, 11) })
-const omReplaced = order('CONFIRMED', { chain: { ...confirmed.chain, depositRequests: [deposit({ status: 'CANCELLED' }), OM_NEW] } })
+const OM_NEW = deposit({ id: omId(2), depositPct: '25', amount: 190320, dueDate: '2026-11-12', link: OM_LINK, createdAt: at(29, 9, 30) })
+const omReplaced = order('CONFIRMED', { chain: { ...confirmed.chain, depositRequests: [deposit({ status: 'CANCELLED' }), OM_NEW] }, money: { stillToPay: 761280, paid: 0, depositsPaid: 0 } })
 const OM_SCHEDULE_REPLACED: Schedule = {
   ...SCHEDULE_OPEN,
   steps: SCHEDULE_OPEN.steps.map((step) =>
@@ -1051,40 +1075,60 @@ const OM_SCHEDULE_REPLACED: Schedule = {
       ? { ...step, sharePct: '25', amount: 190320, dueDate: '2026-11-12', depositRequestId: OM_NEW.id, byHand: OM_BY_HAND('REPLACE_DEPOSIT', 'The customer asked to pay 25 % first.') }
       : { ...step, sharePct: '75', amount: 570960, dueDate: '2026-12-18', byHand: OM_BY_HAND('MOVE_DUE', 'The customer pays after its own year-end close.') },
   ),
-  requests: [omRequest(deposit({ status: 'CANCELLED' }), { milestoneId: null, replacedBy: OM_NEW.id, byHand: OM_BY_HAND('REPLACE_DEPOSIT', 'The customer asked to pay 25 % first.') }), omRequest(OM_NEW)],
+  requests: [omRequest(deposit({ status: 'CANCELLED' }), { milestoneId: null, replacedBy: OM_NEW.id, byHand: OM_BY_HAND('REPLACE_DEPOSIT', 'The customer asked to pay 25 % first.') }), omRequest(OM_NEW, { payments: [] })],
 }
 // In production: the deposit paid, a priced change's EXTRA deposit open (L8: a row by request, no step), the balance overdue.
-const OM_EXTRA = deposit({ id: omId(3), depositPct: null, amount: 4392, dueDate: '2026-11-25', createdAt: at(20, 9, 0, 11), link: null })
-const omExtra = order('IN_PRODUCTION', { chain: { ...production.chain, depositRequests: [PAID, OM_EXTRA] } })
-const OM_SCHEDULE_EXTRA: Schedule = { ...SCHEDULE, steps: SCHEDULE.steps.map((step) => (step.kind === 'BEFORE_SHIPPING' ? { ...step, dueDate: '2026-11-10' } : step)), requests: [omRequest(PAID), omRequest(OM_EXTRA, { milestoneId: null, fromChange: { amendmentId: omId(4), revision: 1 } })], stillOpen: 537288, overdue: 532896 }
-// Shipped and invoiced: the balance ON_INVOICE paid with the invoices; the invoices: a goods invoice part paid, its credit note (TD04),
-// one REJECTED by SDI, the TD02 deducted.
+// F-OM-fx3 (W-15, W-22, W-24): 30 % of the change, asked on the gallery's today after the deposit came in, due 5 Nov; the balance due
+// 10 Dec (nothing overdue); the order total grew by the change (€ 146.40 gross), so How it adds up adds up.
+const OM_EXTRA = deposit({ id: omId(3), depositPct: '30', amount: 4392, dueDate: '2026-11-05', createdAt: at(29, 11, 0), link: null })
+const omExtra = order('IN_PRODUCTION', { chain: { ...production.chain, depositRequests: [PAID, OM_EXTRA] }, netAmount: 627600, vatAmount: 138072, grossAmount: 765672, money: { stillToPay: 537288, paid: 228384, depositsPaid: 228384 } })
+const OM_SCHEDULE_EXTRA: Schedule = { ...SCHEDULE, requests: [omRequest(PAID, { payments: [omPayment(3, 228384, { undo: OM_PAID_UNDO, td02: { id: TD02_ID, number: TD02.number } })] }), omRequest(OM_EXTRA, { milestoneId: null, fromChange: { amendmentId: omId(4), revision: 1 }, payments: [] })], stillOpen: 537288, overdue: 0 }
+const OM_SETTLEMENT_EXTRA = omOpenSettlement(omShare(0, 228384, 537288, 228384), [omTd02(228384, 3)])
+// Shipped and invoiced: the balance ON_INVOICE part paid with the goods' invoice (F-OM-fx3, W-25: € 2,208.96 still to pay — never
+// "everything is paid"); the invoices: a goods invoice part paid that deducts the TD02 and bills SH-2026-0041, its credit note (TD04),
+// one REJECTED by SDI (it counts for nothing), the TD02 deducted on FA-2026-00052.
 const OM_GOODS_ID = '0190f0e2-2121-7000-8000-000000000002'
 const OM_CREDIT = { id: omId(5), number: 'NC-2026-00004', docType: 'TD04', status: 'DELIVERED', issueDate: '2026-11-21', depositRequestId: null }
 const OM_REJECTED = { id: omId(6), number: 'FA-2026-00058', docType: 'TD01', status: 'REJECTED', issueDate: '2026-11-21', depositRequestId: null }
-const omShipped = order('SHIPPED', { chain: { ...order('SHIPPED').chain, depositRequests: [PAID], invoices: [{ ...TD02, status: 'DELIVERED' }, { id: OM_GOODS_ID, number: 'FA-2026-00052', docType: 'TD01', status: 'DELIVERED', issueDate: '2026-11-12', depositRequestId: null }, OM_CREDIT, OM_REJECTED] } })
+const omShipped = order('SHIPPED', { chain: { ...order('SHIPPED').chain, depositRequests: [PAID], invoices: [{ ...TD02, status: 'DELIVERED' }, { id: OM_GOODS_ID, number: 'FA-2026-00052', docType: 'TD01', status: 'DELIVERED', issueDate: '2026-11-12', depositRequestId: null }, OM_CREDIT, OM_REJECTED] }, money: { stillToPay: 220896, paid: 528384, depositsPaid: 228384, credited: 12000 } })
 const OM_SETTLEMENT_INVOICES: Settlement = {
   ...SETTLEMENT_SHIPPED,
   invoices: [
     { id: TD02_ID, docType: 'TD02', number: TD02.number, status: 'DELIVERED', grossTotal: 228384, paidAmount: 228384, openAmount: 0, paymentState: 'PAID' },
-    { id: OM_GOODS_ID, docType: 'TD01', number: 'FA-2026-00052', status: 'DELIVERED', grossTotal: 532896, paidAmount: 300000, openAmount: 220896, share: 532896, paymentState: 'PART_PAID' },
+    { id: OM_GOODS_ID, docType: 'TD01', number: 'FA-2026-00052', status: 'DELIVERED', grossTotal: 532896, paidAmount: 300000, openAmount: 220896, share: 532896, paymentState: 'PART_PAID', deducts: [{ id: TD02_ID, number: TD02.number, amount: 228384 }], forShipments: [{ id: omId(8), number: 'SH-2026-0041' }] },
     { id: OM_REJECTED.id, docType: 'TD01', number: OM_REJECTED.number, status: 'REJECTED', grossTotal: 12200, paidAmount: 0, openAmount: 12200, share: 12200, paymentState: 'OPEN' },
   ],
-  depositInvoices: [{ id: TD02_ID, number: TD02.number, status: 'DELIVERED', issueDate: '2026-10-29', gross: 228384, credited: 0, deductedNet: 187200, depositRequestId: DEPOSIT_ID }],
-  creditNotes: [{ id: OM_CREDIT.id, number: OM_CREDIT.number, status: 'DELIVERED', issueDate: OM_CREDIT.issueDate, gross: 12000, creditOfId: OM_GOODS_ID }],
+  depositInvoices: [{ id: TD02_ID, number: TD02.number, status: 'DELIVERED', issueDate: '2026-10-29', gross: 228384, credited: 0, deductedNet: 187200, depositRequestId: DEPOSIT_ID, paymentState: 'PAID', deductedOn: { id: OM_GOODS_ID, number: 'FA-2026-00052' }, forPayment: { paymentId: omId(103), receivedOn: TODAY } }],
+  creditNotes: [{ id: OM_CREDIT.id, number: OM_CREDIT.number, status: 'DELIVERED', issueDate: OM_CREDIT.issueDate, gross: 12000, creditOfId: OM_GOODS_ID, paymentState: 'CREDITED' }],
+  fullyShipped: true,
+  fullyInvoiced: true,
+  thisOrder: omShare(532896, 528384, 220896, 228384),
 }
-const OM_SCHEDULE_ON_INVOICE: Schedule = { ...SCHEDULE, steps: [SCHEDULE.steps[0]!, { ...SCHEDULE.steps[1]!, kind: 'ON_INVOICE', label: 'On the invoice', dueDate: null, settledBy: 'INVOICES', coveredByInvoices: 532896 }], requests: [omRequest(PAID)] }
+const OM_PAID_PAYMENTS = { payments: [omPayment(3, 228384, { undo: OM_PAID_UNDO, td02: { id: TD02_ID, number: TD02.number } })] }
+// F-OM-fx3 (W-25): the goods' invoice covered € 3,120.00 of the step (paid € 3,000.00 + credited € 120.00): part paid, € 2,208.96 left.
+const OM_SCHEDULE_ON_INVOICE: Schedule = { ...SCHEDULE, steps: [SCHEDULE.steps[0]!, { ...SCHEDULE.steps[1]!, kind: 'ON_INVOICE', label: 'On the invoice', dueDate: null, settledBy: null, coveredByInvoices: 312000 }], requests: [omRequest(PAID, OM_PAID_PAYMENTS)], stillOpen: 220896, overdue: 0 }
+const OM_SCHEDULE_SETTLED: Schedule = { ...SCHEDULE, steps: [SCHEDULE.steps[0]!, { ...SCHEDULE.steps[1]!, kind: 'ON_INVOICE', label: 'On the invoice', dueDate: null, status: 'PAID', settledBy: 'INVOICES', coveredByInvoices: 532896 }], requests: [omRequest(PAID, OM_PAID_PAYMENTS)], stillOpen: 0, overdue: 0 }
 // A part payment whose TD02 is issued: Undo held (a credit note first, in Finance — L5).
+// F-OM-fx3 (W-02, W-14): € 1,283.84 missing is over the € 25.00 tolerance — "part paid", never "short"; Accept short hidden for Finance;
+// under the payment "TD02 FA-2026-00031 was issued for it", and the Undo held in the server's words with that number.
 const OM_PART = deposit({ link: OM_LINK, paidAmount: 100000 })
-const omPartTd02 = order('CONFIRMED', { chain: { ...confirmed.chain, depositRequests: [OM_PART], invoices: [{ ...TD02, status: 'DELIVERED' }] } })
-const OM_TD02_UNDO = { may: false, why: { en: 'A deposit invoice (TD02) was issued for this payment: make a credit note in Finance first.', it: 'Per questo pagamento è stata emessa una fattura di acconto (TD02): prima fai una nota di credito in Finanza.' }, code: 'TD02_ISSUED' }
-const OM_SCHEDULE_PART: Schedule = { ...SCHEDULE_OPEN, requests: [omRequest(OM_PART, { payments: [omPayment(2, 100000, { undo: OM_TD02_UNDO })] })] }
+const omPartTd02 = order('CONFIRMED', { chain: { ...confirmed.chain, depositRequests: [OM_PART], invoices: [{ ...TD02, status: 'DELIVERED' }] }, money: { stillToPay: 661280, paid: 100000, depositsPaid: 100000 } })
+const OM_TD02_UNDO = { may: false, why: { en: `A deposit invoice (TD02 ${TD02.number}) was issued for this payment: a credit note first, in Finance.`, it: `Per questo pagamento è stata emessa una fattura di acconto (TD02 ${TD02.number}): prima una nota di credito, in Finanza.` }, code: 'DEPOSIT_INVOICE_ISSUED' }
+const OM_SCHEDULE_PART: Schedule = { ...SCHEDULE_OPEN, requests: [omRequest(OM_PART, { payments: [omPayment(2, 100000, { undo: OM_TD02_UNDO, td02: { id: TD02_ID, number: TD02.number } })], short: { amount: 128384, withinTolerance: false } })], stillOpen: 661280, overdue: 0, tolerance: 2500 }
+const OM_SETTLEMENT_PART = omOpenSettlement(omShare(0, 100000, 661280, 100000), [omTd02(100000, 2, 'DELIVERED')])
 // Settled and closed; cancelled (owes nothing more).
-const omSettled = order('CLOSED', { settled: true, chain: { ...order('CLOSED').chain, depositRequests: [PAID] } })
-const OM_SETTLEMENT_SETTLED: Settlement = { ...OM_SETTLEMENT_INVOICES, settled: true, gaps: [], invoices: OM_SETTLEMENT_INVOICES.invoices.slice(0, 2).map((invoice) => ({ ...invoice, paidAmount: invoice.grossTotal, openAmount: 0, paymentState: 'PAID' as const })), balanceDueAmount: 0, writtenOffAmount: 100 }
+const omSettled = order('CLOSED', { settled: true, chain: { ...order('CLOSED').chain, depositRequests: [PAID] }, money: { stillToPay: 0, paid: 749180, depositsPaid: 228384, credited: 12000, writtenOff: 100 } })
+const OM_SETTLEMENT_SETTLED: Settlement = { ...OM_SETTLEMENT_INVOICES, settled: true, gaps: [], invoices: OM_SETTLEMENT_INVOICES.invoices.slice(0, 2).map((invoice) => ({ ...invoice, paidAmount: invoice.grossTotal, openAmount: 0, paymentState: 'PAID' as const })), balanceDueAmount: 0, writtenOffAmount: 100, thisOrder: omShare(532896, 749180, 0, 228384, 100) }
+// F-OM-fx3 (W-05; B-OM-029 as the server does it): the cancel turned the open balance CANCELLED; nothing still open, nothing overdue.
+const omCancelled = order('CANCELLED', { money: { stillToPay: 0, paid: 228384, depositsPaid: 228384 } })
+const OM_SCHEDULE_CANCELLED: Schedule = { ...SCHEDULE, steps: SCHEDULE.steps.map((step) => (step.kind === 'BEFORE_SHIPPING' ? { ...step, status: 'CANCELLED' as const } : step)), requests: [omRequest(PAID, OM_PAID_PAYMENTS)], stillOpen: 0, overdue: 0 }
+// F-OM-fx3 (W-27): an open deposit with its page sent, for the hand windows the walk could not see.
+const OM_OPEN = deposit({ link: OM_LINK })
+const omOpen = order('CONFIRMED', { chain: { ...confirmed.chain, depositRequests: [OM_OPEN] }, money: { stillToPay: 761280, paid: 0, depositsPaid: 0 } })
+const OM_SCHEDULE_OPEN: Schedule = { ...SCHEDULE_OPEN, requests: [omRequest(OM_OPEN, { payments: [] })], stillOpen: 761280, overdue: 0 }
 // Price check: not equal (Accept the difference…), and accepted by hand.
 const OM_DIFF_CHECK: PriceCheck = { ...PRICE_CHECK, lines: PRICE_CHECK.lines.slice(0, 2).map((line) => ({ ...line, ourPriceSource: line.seq === 1 ? ('LIST' as const) : ('MANUAL' as const) })), total: { ...PRICE_CHECK.total, ourPrice: 2_064_000, brandPrice: 2_059_000, priceDiff: 5_000, priceMissingLines: 0 }, accepted: null }
-const OM_ACCEPTED_CHECK: PriceCheck = { ...OM_DIFF_CHECK, accepted: { by: 'Bea Esempio', at: at(19, 10, 0, 11), reason: 'The measuring visit was extra; agreed by phone.', ourNet: 2_064_000, brandNet: 2_059_000 } }
+const OM_ACCEPTED_CHECK: PriceCheck = { ...OM_DIFF_CHECK, accepted: { by: 'Bea Esempio', at: at(29, 10, 0) /* F-OM-fx3 (W-24) */, reason: 'The measuring visit was extra; agreed by phone.', ourNet: 2_064_000, brandNet: 2_059_000 } }
 // Margin: freight from the shipments, a commission set by hand, the order's own target (below it: flagged).
 const OM_MARGIN: OrderMargin = {
   ...DETAIL_1043,
@@ -1095,25 +1139,30 @@ const OM_MARGIN: OrderMargin = {
   marginChange: -88_000,
   waterfall: [...(DETAIL_1043.waterfall ?? []), { reason: 'FREIGHT', amount: -24_000 }, { reason: 'BY_HAND', amount: -30_000 }],
   basedOn: { pricedOn: '2026-10-12', revision: 2 },
-  handLines: [{ id: omId(7), kind: 'COMMISSION', amount: 30_000, currency: 'EUR', reason: 'Agent commission 2.5 % on this customer, agreed in October.', by: 'Bea Esempio', at: at(14, 9, 0, 11) }],
-  target: { pct: '38.0000', by: 'Alex Demo', at: at(2, 10, 0, 11), reason: 'A key customer: we hold 38 %.' },
+  handLines: [{ id: omId(7), kind: 'COMMISSION', amount: 30_000, currency: 'EUR', reason: 'Agent commission 2.5 % on this customer, agreed in October.', by: 'Bea Esempio', at: at(27, 9, 0) /* F-OM-fx3 (W-24) */ }],
+  target: { pct: '38.0000', by: 'Alex Demo', at: at(26, 10, 0), reason: 'A key customer: we hold 38 %.' },
   belowFloor: true,
 }
 const OM_FAILED = 'problem.read.unavailable'
 
 const MONEY_LANE_CASES: DesignCase<RecordCase>[] = [
-  { id: 'om-short', label: 'F-OM · Finance · Money: the deposit € 1.00 short (bank charges) — Accept short… in its ⋯, Undo this payment… on the payment', model: omCase('finance', omShort, { schedule: omPart(OM_SCHEDULE_SHORT, 'finance') }) },
-  { id: 'om-dlg-short', label: 'F-OM · Finance · Accept short (bank charges)…: the missing part stays owed and goes on the final invoice (L1)', model: omCase('finance', omShort, { schedule: omPart(OM_SCHEDULE_SHORT, 'finance'), dialog: { kind: 'moneyPlan', act: 'ACCEPT_SHORT', stepId: null, requestId: OM_SHORT.id } }) },
-  { id: 'om-dlg-undo', label: 'F-OM · Finance · Undo this payment… (reversed and voided in one step; never deleted)', model: omCase('finance', omShort, { schedule: omPart(OM_SCHEDULE_SHORT, 'finance'), dialog: { kind: 'undoPayment', requestId: OM_SHORT.id, paymentId: omId(101) } }) },
-  { id: 'om-accepted-short', label: 'F-OM · Owner · The deposit accepted € 1.00 short: paid, production may start; its payment cannot be undone here', model: omCase('owner', omAccepted, { schedule: omPart(OM_SCHEDULE_ACCEPTED, 'owner') }) },
-  { id: 'om-waived-again', label: 'F-OM · Owner · The deposit waived: Ask for the deposit again… in its ⋯ (a new request; the waived row stays)', model: omCase('owner', omWaived, { schedule: omPart(OM_SCHEDULE_WAIVED, 'owner') }) },
-  { id: 'om-replaced', label: 'F-OM · Finance · Changed by hand: the deposit replaced (Earlier steps (1)), the balance\'s day moved — both "Set by hand"', model: omCase('finance', omReplaced, { schedule: omPart(OM_SCHEDULE_REPLACED, 'finance') }) },
-  { id: 'om-extra', label: 'F-OM · Owner · In production: deposit paid, an extra deposit from change rev 1 open, the balance overdue', model: omCase('owner', omExtra, { schedule: omPart(OM_SCHEDULE_EXTRA, 'owner') }) },
-  { id: 'om-on-invoice', label: 'F-OM · Finance · Shipped: the balance on the invoice, "Paid with the invoices"; Invoices: part paid, a credit note (TD04), one rejected by SDI', model: omCase('finance', omShipped, { schedule: omPart(OM_SCHEDULE_ON_INVOICE, 'finance'), settlement: omPart(OM_SETTLEMENT_INVOICES, 'finance') }) },
-  { id: 'om-invoices-sales', label: 'F-OM · Sales · Invoices & credit notes: the Payment words (B-OM-023), never an amount', model: omCase('sales', omShipped, { schedule: omPart(OM_SCHEDULE_ON_INVOICE, 'sales'), settlement: omPart(OM_SETTLEMENT_INVOICES, 'sales') }) },
-  { id: 'om-undo-held', label: 'F-OM · Finance · A part payment with its TD02 issued: Undo held — a credit note first, in Finance (L5)', model: omCase('finance', omPartTd02, { schedule: omPart(OM_SCHEDULE_PART, 'finance') }) },
-  { id: 'om-settled', label: 'F-OM · Finance · Settled and closed: everything paid (€ 1.00 written off counted); no act', model: omCase('finance', omSettled, { schedule: omPart(OM_SCHEDULE_ON_INVOICE, 'finance'), settlement: omPart(OM_SETTLEMENT_SETTLED, 'finance') }) },
-  { id: 'om-cancelled', label: 'F-OM · Finance · A cancelled order: nothing more is owed', model: omCase('finance', order('CANCELLED')) },
+  { id: 'om-short', label: 'F-OM · Finance · Money: the deposit € 1.00 short, within the € 25.00 tolerance — Accept short (bank charges)… is its ONE act, Record a payment in its ⋯, the hint; Undo this payment… on the payment', model: omCase('finance', omShort, { schedule: omPart(OM_SCHEDULE_SHORT, 'finance'), settlement: omPart(OM_SETTLEMENT_SHORT, 'finance') }) },
+  { id: 'om-dlg-short', label: 'F-OM · Finance · Accept short (bank charges)…: within the tolerance (€ 25.00); the missing part stays owed and goes on the final invoice (L1)', model: omCase('finance', omShort, { schedule: omPart(OM_SCHEDULE_SHORT, 'finance'), settlement: omPart(OM_SETTLEMENT_SHORT, 'finance'), dialog: { kind: 'moneyPlan', act: 'ACCEPT_SHORT', stepId: null, requestId: OM_SHORT.id } }) },
+  { id: 'om-dlg-undo', label: 'F-OM · Finance · Undo this payment… (reversed and voided in one step; never deleted)', model: omCase('finance', omShort, { schedule: omPart(OM_SCHEDULE_SHORT, 'finance'), settlement: omPart(OM_SETTLEMENT_SHORT, 'finance'), dialog: { kind: 'undoPayment', requestId: OM_SHORT.id, paymentId: omId(101) } }) },
+  { id: 'om-accepted-short', label: 'F-OM · Owner · The deposit accepted € 1.00 short: paid, "Set by hand" (who, day, why), € 1.00 stays owed for the final invoice; its payment cannot be undone here', model: omCase('owner', omAccepted, { schedule: omPart(OM_SCHEDULE_ACCEPTED, 'owner'), settlement: omPart(OM_SETTLEMENT_ACCEPTED, 'owner') }) },
+  { id: 'om-waived-again', label: 'F-OM · Owner · The deposit waived: Ask for the deposit again… in its ⋯ (a new request; the waived row stays)', model: omCase('owner', omWaived, { schedule: omPart(OM_SCHEDULE_WAIVED, 'owner'), settlement: omPart(OM_SETTLEMENT_NOTHING, 'owner') }) },
+  { id: 'om-replaced', label: 'F-OM · Finance · Changed by hand: the deposit replaced (Earlier steps (1); asked by hand), the balance\'s day moved — both "Set by hand"', model: omCase('finance', omReplaced, { schedule: omPart(OM_SCHEDULE_REPLACED, 'finance'), settlement: omPart(OM_SETTLEMENT_NOTHING, 'finance') }) },
+  { id: 'om-extra', label: 'F-OM · Owner · In production: deposit paid, an extra deposit (30 % of change rev 1) open, due 5 Nov; the balance due 10 Dec; Waive… for the Owner', model: omCase('owner', omExtra, { schedule: omPart(OM_SCHEDULE_EXTRA, 'owner'), settlement: omPart(OM_SETTLEMENT_EXTRA, 'owner') }) },
+  { id: 'om-on-invoice', label: 'F-OM · Finance · Shipped: the balance on the invoice, part paid (€ 2,208.96 still to pay · Record payment…); Invoices: what FA-2026-00052 deducts and bills, a credit note (TD04), one rejected by SDI — fix and resend', model: omCase('finance', omShipped, { schedule: omPart(OM_SCHEDULE_ON_INVOICE, 'finance'), settlement: omPart(OM_SETTLEMENT_INVOICES, 'finance') }) },
+  { id: 'om-invoices-sales', label: 'F-OM · Sales · Invoices & credit notes: the Payment words (B-OM-023 / 026) on every row, the TD02 too, never an amount', model: omCase('sales', omShipped, { schedule: omPart(OM_SCHEDULE_ON_INVOICE, 'sales'), settlement: omPart(OM_SETTLEMENT_INVOICES, 'sales') }) },
+  { id: 'om-undo-held', label: 'F-OM · Finance · A part payment over the tolerance: "part paid", no Accept short; its TD02 issued: Undo held — a credit note first, in Finance (L5)', model: omCase('finance', omPartTd02, { schedule: omPart(OM_SCHEDULE_PART, 'finance'), settlement: omPart(OM_SETTLEMENT_PART, 'finance') }) },
+  { id: 'om-settled', label: 'F-OM · Finance · Settled and closed: everything paid (€ 1.00 written off counted); no act', model: omCase('finance', omSettled, { schedule: omPart(OM_SCHEDULE_SETTLED, 'finance'), settlement: omPart(OM_SETTLEMENT_SETTLED, 'finance') }) },
+  { id: 'om-cancelled', label: 'F-OM · Finance · A cancelled order: nothing more is owed — the balance "Cancelled · not owed", no money due anywhere', model: omCase('finance', omCancelled, { schedule: omPart(OM_SCHEDULE_CANCELLED, 'finance'), settlement: omPart(omOpenSettlement(omShare(0, 228384, 0, 228384), [omTd02(228384, 3)]), 'finance') }) },
+  // ---- F-OM-fx3 (W-27): the four hand windows the walk could not see (each opens from its ⋯ too; Escape closes it) ----
+  { id: 'om-dlg-deposit', label: 'F-OM · Finance · Change the deposit…: the deposit as it is now under the title; a new request, the old one kept as Replaced', model: omCase('finance', omOpen, { schedule: omPart(OM_SCHEDULE_OPEN, 'finance'), settlement: omPart(OM_SETTLEMENT_NOTHING, 'finance'), dialog: { kind: 'moneyPlan', act: 'REPLACE_DEPOSIT', stepId: OM_DEPOSIT_STEP, requestId: OM_OPEN.id } }) },
+  { id: 'om-dlg-move', label: 'F-OM · Finance · Move due day… on the balance before shipping (no page sent: the customer is not told)', model: omCase('finance', omOpen, { schedule: omPart(OM_SCHEDULE_OPEN, 'finance'), settlement: omPart(OM_SETTLEMENT_NOTHING, 'finance'), dialog: { kind: 'moneyPlan', act: 'MOVE_DUE', stepId: SCHEDULE.steps[1]!.id, requestId: null } }) },
+  { id: 'om-dlg-terms', label: 'F-OM · Owner · Change payment terms… (the library; a fresh code follows)', model: omCase('owner', omOpen, { schedule: omPart(OM_SCHEDULE_OPEN, 'owner'), settlement: omPart(OM_SETTLEMENT_NOTHING, 'owner'), moneyPlan: { ...OM_PLAN_STATE, terms: { value: TERMS, problem: null } }, dialog: { kind: 'moneyPlan', act: 'CHANGE_TERMS', stepId: null, requestId: null } }) },
+  { id: 'om-dlg-add', label: 'F-OM · Finance · Add a step… (kind, share or amount, taken from, due, one name — the server takes one)', model: omCase('finance', omOpen, { schedule: omPart(OM_SCHEDULE_OPEN, 'finance'), settlement: omPart(OM_SETTLEMENT_NOTHING, 'finance'), dialog: { kind: 'moneyPlan', act: 'ADD_STEP', stepId: null, requestId: null } }) },
   { id: 'om-stop-page', label: 'F-OM · Owner · Stop the page… (links.manage: the Owner only): the page stops, the request stays open', model: omCase('owner', order('CONFIRMED', { chain: { ...confirmed.chain, depositRequests: [deposit({ link: OM_LINK })] } }), { dialog: { kind: 'stopPage', requestId: DEPOSIT_ID } }) },
   { id: 'om-price-diff', label: 'F-OM · Owner · Price check not equal (+€ 50.00 we ask more): our price from the price list / set by hand; ⋯ Accept the difference…', model: omCase('owner', production, priceCard(priceReady(OM_DIFF_CHECK))) },
   { id: 'om-dlg-accept', label: 'F-OM · Finance · Accept the difference… (the plan right + price, L3): both prices stay, the customer is not told', model: omCase('finance', production, { ...priceCard(priceReady(OM_DIFF_CHECK)), dialog: { kind: 'priceAccept' } }) },
@@ -1123,11 +1172,12 @@ const MONEY_LANE_CASES: DesignCase<RecordCase>[] = [
   { id: 'om-dlg-target', label: 'F-OM · Finance · Set target… (L4): empty = the floor again', model: omCase('finance', production, { margin: marginAs('finance', { value: OM_MARGIN, problem: null }), dialog: { kind: 'marginTarget' } }) },
   { id: 'om-failed', label: 'F-OM · Finance · Every part failed: each its own line with Try again; the head never says "nothing" (F-OM-303)', model: omCase('finance', noDeposit, { settlement: { value: null, problem: OM_FAILED }, schedule: { value: null, problem: OM_FAILED }, ...priceCard({ state: 'failed', problem: OM_FAILED }), margin: marginAs('finance', { value: null, problem: 'problem.read.unavailable' }) }) },
   // The roles on ONE order (in production, an extra deposit open): what each reads and does.
-  { id: 'om-role-owner', label: 'F-OM · Roles · Owner: every amount and every door (Waive…, Stop the page… are the Owner\'s)', model: omCase('owner', omExtra, { schedule: omPart(OM_SCHEDULE_EXTRA, 'owner'), ...priceCard(priceReady(OM_DIFF_CHECK)), margin: marginAs('finance', { value: OM_MARGIN, problem: null }) }) },
-  { id: 'om-role-finance', label: 'F-OM · Roles · Finance: the amounts, the plan\'s hand acts, Accept the difference…; no Waive…, no Customer\'s price…', model: omCase('finance', omExtra, { schedule: omPart(OM_SCHEDULE_EXTRA, 'finance'), ...priceCard(priceReady(OM_DIFF_CHECK)), margin: marginAs('finance', { value: OM_MARGIN, problem: null }) }) },
-  { id: 'om-role-sales', label: 'F-OM · Roles · Sales: words, never an amount; no money door; no Price check, no Margin', model: omCase('sales', omExtra, { schedule: omPart(OM_SCHEDULE_EXTRA, 'sales'), ...priceCard({ state: 'held' }) }) },
+  { id: 'om-role-owner', label: 'F-OM · Roles · Owner: every amount (the four Totals tiles) and every door (Waive…, Stop the page… are the Owner\'s)', model: omCase('owner', omExtra, { schedule: omPart(OM_SCHEDULE_EXTRA, 'owner'), settlement: omPart(OM_SETTLEMENT_EXTRA, 'owner'), ...priceCard(priceReady(OM_DIFF_CHECK)), margin: marginAs('finance', { value: OM_MARGIN, problem: null }) }) },
+  { id: 'om-role-finance', label: 'F-OM · Roles · Finance: the amounts, the plan\'s hand acts, Accept the difference…; no Waive…, no Customer\'s price…', model: omCase('finance', omExtra, { schedule: omPart(OM_SCHEDULE_EXTRA, 'finance'), settlement: omPart(OM_SETTLEMENT_EXTRA, 'finance'), ...priceCard(priceReady(OM_DIFF_CHECK)), margin: marginAs('finance', { value: OM_MARGIN, problem: null }) }) },
+  { id: 'om-role-sales', label: 'F-OM · Roles · Sales: words, never an amount; no money door; no Price check, no Margin', model: omCase('sales', omExtra, { schedule: omPart(OM_SCHEDULE_EXTRA, 'sales'), settlement: omPart(OM_SETTLEMENT_EXTRA, 'sales'), ...priceCard({ state: 'held' }) }) },
   { id: 'om-role-manager', label: 'F-OM · Roles · Production manager: the plan in words, no invoices, no money door', model: omCase('manager', omExtra, { schedule: omPart(OM_SCHEDULE_EXTRA, 'manager'), ...priceCard({ state: 'held' }) }) },
-  { id: 'om-role-readonly', label: 'F-OM · Roles · Read-only: reads the plan and the invoices in words, no act at all', model: omCase('manager', omExtra, { can: abilitiesOf(rolePermissions('read_only')), schedule: omPart(OM_SCHEDULE_EXTRA, 'manager'), settlement: omPart(OM_SETTLEMENT_INVOICES, 'manager'), ...priceCard({ state: 'held' }) }) },
+  // F-OM-fx3 (W-26): Read-only reads the deposit invoice's SDI state as Sales does (Delivered), and its Payment word.
+  { id: 'om-role-readonly', label: 'F-OM · Roles · Read-only: reads the plan and the invoices in words, no act at all', model: omCase('manager', omExtra, { can: abilitiesOf(rolePermissions('read_only')), schedule: omPart(OM_SCHEDULE_EXTRA, 'manager'), settlement: omPart(OM_SETTLEMENT_EXTRA, 'manager'), sdi: CHAIN_SDI('DELIVERED', 'NONE'), ...priceCard({ state: 'held' }) }) },
 ]
 // ---- end F-OM T.1
 
@@ -1186,7 +1236,8 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'td02-draft', label: 'Sales · Paid; the TD02 is a draft finance issues', model: base('sales', paidDraft, { tab: 'money' }) },
     { id: 'part-paid', label: 'Finance · A part payment: what is left', model: base('finance', partPaid, { tab: 'money' }) },
     { id: 'deposit-no-td02', label: 'Finance · An EU business deposit: paid, no deposit invoice (its VAT rule)', model: base('finance', noTd02, { tab: 'money' }) },
-    { id: 'no-deposit', label: 'Sales · An order that needs no deposit', model: base('sales', noDeposit, { tab: 'money' }) },
+    // F-OM-fx3 (W-26): its plan has no deposit step (the customer pays on the invoice) — never "Not needed" over a "Deposit · 30 %" row.
+    { id: 'no-deposit', label: 'Sales · An order that needs no deposit', model: base('sales', noDeposit, { tab: 'money', schedule: { value: forRole(SCHEDULE_NONE, 'sales'), problem: null } }) },
     { id: 'manager-money', label: 'Production manager · Money without money or invoices', model: base('manager', paidNotSent, { tab: 'money' }) },
     { id: 'production-gate-paid', label: 'Production manager · Production: deposit paid, Make work orders opens New work order', model: base('manager', paidNotSent, { tab: 'production', production: ready(WORK_READ) }) },
     { id: 'production-held', label: 'Sales · Production: the gate waits for the deposit; Make work orders held', model: base('sales', confirmed, { tab: 'production', production: ready(WORK_READ) }) },

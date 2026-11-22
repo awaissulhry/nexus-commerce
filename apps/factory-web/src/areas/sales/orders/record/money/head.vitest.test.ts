@@ -55,6 +55,9 @@ describe('F-OM-101: the shell — five sections that stack, in the kit, by the r
     // Pairs only inside Totals (L6): its tiles | what is left from 1200 px of the section; the sections themselves always stack.
     expect(css).toContain('@container sec (min-width: 1200px)')
     expect(source('./view/MoneyTab.tsx')).not.toContain('fw-pt-pairs')
+    // F-OM-fx3 (W-18): at S the heads keep ⋯ ⓘ on the title line — scoped to this tab, the Production kit untouched.
+    expect(css).toContain('.fw-om .fw-pt-head-r { display: contents; }')
+    expect(source('../view/production/production.css')).not.toContain('fw-om')
   })
 
   it('views draw their models and fetch nothing (no API client, no acts hook)', () => {
@@ -78,14 +81,22 @@ describe('F-OM-101: the tab\'s one answer line', () => {
     expect(answer.closed).toBeNull()
   })
 
-  it('the page sent (an instant, said as its day); overdue (danger); part paid: what is short', () => {
+  it('the page sent (an instant, said as its day); overdue (danger); part paid: "part paid", short only within the tolerance', () => {
     const sent = order('CONFIRMED', { chain: { ...order('CONFIRMED').chain, depositRequests: [deposit({ link: SENT_LINK })] } })
     expect(head(sent).parts[1]).toEqual({ key: 'moneyTab.head.pageSent', instants: { date: SENT_LINK.sentAt } })
     const late = head(order('CONFIRMED'), { today: '2026-11-10' })
     expect(late.tone).toBe('danger')
     expect(late.parts[0]!.key).toBe('moneyTab.head.depositOverdue')
-    const short = order('CONFIRMED', { chain: { ...order('CONFIRMED').chain, depositRequests: [deposit({ link: SENT_LINK, paidAmount: 226884 })] } })
-    expect(head(short).parts.slice(0, 2)).toEqual([{ key: 'moneyTab.head.depositShort', money: { amount: 1500 } }, { key: 'moneyTab.head.productionWaits' }])
+    // F-OM-fx3 (W-02): a part payment the plan read does not call short within the tolerance is "the deposit is part paid".
+    const part = deposit({ link: SENT_LINK, paidAmount: 226884 })
+    const short = order('CONFIRMED', { chain: { ...order('CONFIRMED').chain, depositRequests: [part] } })
+    expect(head(short).parts.slice(0, 2)).toEqual([{ key: 'moneyTab.head.depositPartPaid' }, { key: 'moneyTab.head.productionWaits' }])
+    const planned = (withinTolerance: boolean): Schedule => ({ ...SCHEDULE_OPEN, requests: [{ id: part.id, milestoneId: SCHEDULE.steps[0]!.id, kind: 'ACCONTO', stepKind: 'DEPOSIT', status: 'OPEN', dueDate: '2026-11-04', fiscalDocument: 'TD02', short: { amount: 1500, withinTolerance } }], tolerance: 2500 })
+    expect(head(short, { schedule: planned(false) }).parts[0]).toEqual({ key: 'moneyTab.head.depositPartPaid' })
+    // F-OM-fx3 (W-01): within the tolerance — "Deposit € 15.00 short — probably bank charges · production waits for it."
+    expect(head(short, { schedule: planned(true) }).parts.slice(0, 2)).toEqual([{ key: 'moneyTab.head.depositShort', money: { amount: 1500 } }, { key: 'moneyTab.head.productionWaits' }])
+    // Without the price grain: never the amount, never "short".
+    expect(head(short, { schedule: planned(true), role: 'sales' }).parts[0]).toEqual({ key: 'moneyTab.head.depositPartPaid' })
   })
 
   it('a priced change\'s extra deposit beside the paid one (L8): "deposit paid · extra deposit open (change rev 1)"', () => {

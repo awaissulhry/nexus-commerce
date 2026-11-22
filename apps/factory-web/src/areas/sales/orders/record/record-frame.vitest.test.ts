@@ -886,7 +886,8 @@ describe('F-OO-111 — the yes and deposit banners step back on Overview (presen
     }
   })
 
-  it('the deposit banners (open, overdue, not asked): absent on Overview, present on Lines and Money', () => {
+  // F-OM-fx3 (W-04): absent on Money too — the tab's head is its one answer there.
+  it('the deposit banners (open, overdue, not asked): absent on Overview and Money, present on Lines', () => {
     const open = caseOf('f-oo-105-deposit')
     const record = open.record as unknown as { order: { value: ReturnType<typeof order> } }
     const value = record.order.value
@@ -895,7 +896,8 @@ describe('F-OO-111 — the yes and deposit banners step back on Overview (presen
     for (const locale of ['en', 'it'] as const) {
       for (const [model, words] of [[open, DEPOSIT_OPEN], [overdue, DEPOSIT_OPEN], [missing, DEPOSIT_MISSING]] as const) {
         expect(textOf(drawn(model, locale)), `${words.en} ${locale} overview`).not.toContain(words[locale])
-        for (const tab of ['lines', 'money']) expect(textOf(drawn(onTab(model as Case, tab), locale)), `${words.en} ${locale} ${tab}`).toContain(words[locale])
+        expect(textOf(drawn(onTab(model as Case, 'lines'), locale)), `${words.en} ${locale} lines`).toContain(words[locale])
+        expect(textOf(drawn(onTab(model as Case, 'money'), locale)), `${words.en} ${locale} money`).not.toContain(words[locale])
       }
     }
   })
@@ -905,6 +907,9 @@ describe('F-OO-111 — the yes and deposit banners step back on Overview (presen
     expect(view_).toContain("const notOverview = model.tab !== 'overview'")
     // Its declaration and exactly four banners that read it: the deposit open (overdue, waiting), the deposit not asked, the yes.
     expect(view_.match(/notOverview/g)?.length).toBe(5)
+    // F-OM-fx3 (W-04): the deposit (3), cancelled and closed notices step back on Money (its head says them): its declaration + 5.
+    expect(view_).toContain("const notMoney = model.tab !== 'money'")
+    expect(view_.match(/notMoney/g)?.length).toBe(6)
     for (const kept of ["{order.customerRef && <Tag tone=\"neutral\">{t('record.customerRef', { ref: order.customerRef })}</Tag>}", "{!order.chain.quote && !model.madeFrom && !model.madeFromReading && <Tag tone=\"neutral\">{t('record.typed')}</Tag>}", '{model.depth && <DepthPills model={model.depth} />}', '{model.reviewBanner}', '<RequestBandNotices order={order} model={model} />']) expect(view_, kept).toContain(kept)
     // The customer PO tag still drawn on Overview (the band serves every tab).
     expect(textOf(draw('overview'))).toContain('Customer PO PO-ESEMPIO-88')

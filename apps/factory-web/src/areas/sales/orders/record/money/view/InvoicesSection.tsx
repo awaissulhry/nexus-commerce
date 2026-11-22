@@ -52,13 +52,21 @@ export function InvoicesSection({ order, model, actions }: { order: Order; model
         </Button>,
       ]
     : []
+  const statementHref = `${model.prefix}/sales/customers/${encodeURIComponent(order.partyId)}?tab=money`
   const statement = order.party ? (
-    <Link className="fw-pt-link" href={`${model.prefix}/sales/customers/${encodeURIComponent(order.partyId)}?tab=money`}>
+    <Link className="fw-pt-link" href={statementHref}>
       {t('money.statement', { customer: order.party.legalName })}
     </Link>
   ) : null
+  // F-OM-fx3 (W-07, W-08): nothing invoiced is the head's one line, never a box — the statement then lives in the head's ⋯, beside
+  // Open in Finance › Invoices › (Finance's own list; it has no order filter yet).
+  const empty = view.rows.length === 0 && !model.settlement?.problem
+  const more: MenuItemDef[] = [
+    { id: 'finance', label: t('moneyTab.invoices.finance'), href: `${model.prefix}/finance/invoices` },
+    ...(empty && order.party ? [{ id: 'statement', label: t('money.statement', { customer: order.party.legalName }), href: statementHref }] : []),
+  ]
   return (
-    <Section id="invoices" title={title} answer={say(view.answer)} buttons={buttons} info={info}>
+    <Section id="invoices" title={title} answer={say(view.answer)} buttons={buttons} more={<LineMenuButton label={t('moneyTab.invoices.headMore')} items={more} />} info={info}>
       {view.rows.length > 0 ? (
         // F-OM-203 (B-OM-023): without the price grain the Payment column still shows, in words, once the settlement names them.
         <div className={`fw-om-il${price ? '' : ` is-np${words ? ' has-pay' : ''}`}`}>
@@ -84,7 +92,7 @@ export function InvoicesSection({ order, model, actions }: { order: Order; model
         </div>
       ) : null}
       {model.settlement?.problem ? <PartFailed part={t('moneyTab.invoices.part')} problem={model.settlement.problem} onRetry={() => actions?.onRetryPart?.('settlement')} /> : null}
-      {statement ? <p className="fw-om-il-foot">{statement}</p> : null}
+      {statement && !empty ? <p className="fw-om-il-foot">{statement}</p> : null}
     </Section>
   )
 }
@@ -115,7 +123,7 @@ function InvoiceRowView({ row, order, model, actions, say, words }: { row: Invoi
         <span className="fw-om-ir-nb">
           <FileText size={13} aria-hidden />
           <Link className="fw-pt-link" href={href}>
-            {number}
+            {`${number} ›` /* F-OM-fx3 (W-13): the number is a door */}
           </Link>
         </span>
         <span className="fw-pt-sub">

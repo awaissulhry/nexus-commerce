@@ -1,5 +1,5 @@
 import { targetPctOf as domainTargetPct } from '@nexus/factory-domain/costing/margins/hand-lines' // B-OM-021: one rule with the server
-import { COST_LINE_KINDS, type CostLineKind, type MarginTarget, type OrderMargin } from '../../../../finance/margins/api'
+import { COST_LINE_KINDS, WATERFALL_REASONS, type CostLineKind, type MarginTarget, type OrderMargin } from '../../../../finance/margins/api'
 import { bridgeOf as financeBridgeOf, orderProfitabilityHref, pointsBetween, type MarginsCan } from '../../../../finance/margins/model' // F-OM-306: the bridge's one rule
 import { isFinal, parseAmount, type OrderAbilities, type Tone } from '../../model'
 import type { Order } from '../../api'
@@ -52,10 +52,27 @@ export interface BridgeRow {
   readonly tag: MoneyWord | null
 }
 
+/** F-OM-fx3 (W-10): one row of Where it went — At quote → each part that moved, in points → Now. */
+export interface WhereRow {
+  readonly id: string
+  readonly kind: 'start' | 'step' | 'end'
+  readonly label: MoneyWord
+  /** start / end: the margin (a percent string). */
+  readonly pct?: string
+  /** a step: the points it moved the margin (the view writes them signed). */
+  readonly points?: number
+}
+
 export interface MarginView {
   readonly answer: readonly MoneyWord[]
   readonly tiles: readonly MarginTile[]
+  /**
+   * F-OM-fx3 (W-09): the margin now against the target set by hand, else the floor — `floor` is null when a target is set (the meter is
+   * judged by the target), and `words` is ONE line: the target (who set it), the minimum, and where the margin stands against them.
+   */
   readonly meter: { readonly now: number | null; readonly floor: number | null; readonly target: number | null; readonly words: readonly MoneyWord[] }
+  /** F-OM-fx3 (W-10): Where it went in points, in the page's words; [] nothing moved yet (no work order); null: without the cost grain. */
+  readonly where: readonly WhereRow[] | null
   /** The cost lines set by hand; null: the read does not name them yet (B-OM-021: no list, no door). */
   readonly hand: readonly MarginHandRow[] | null
   /** price − each part − freight − the hand lines = margin; null: without the cost grain ("Shown to people who see costs"). */
@@ -127,12 +144,16 @@ export function marginOf(input: { readonly detail: OrderMargin; readonly order: 
   }
 
   // ---- the meter: against the target set by hand, else the floor (its role's, else the company's) ----
+  // F-OM-fx3 (W-09): ONE line — "Target 38 % · set by hand by Alex Demo, 2 Nov · Minimum 25 % (Sales role) · Below the target" — judged
+  // against the target when there is one (never by the floor beside a target); the meter's bar shows the margin now.
   const target = targetOf(detail.target)
   const floor = detail.floor ?? null
+  const now = pctNumber(final && detail.final ? detail.actualMarginPct : detail.estimateMarginPct)
+  const against = target ? pctNumber(target.pct) : floor ? pctNumber(floor.pct) : null
   const meterWords: MoneyWord[] = []
   if (target) meterWords.push(target.by && target.at ? word('moneyTab.margin.meter.targetBy', { pcts: { pct: target.pct }, params: { name: target.by }, instants: { date: target.at } }) : word('moneyTab.margin.meter.target', { pcts: { pct: target.pct } }))
   if (floor) meterWords.push(floor.from === 'ROLE' && floor.role ? word('moneyTab.margin.meter.floorRole', { pcts: { pct: floor.pct }, params: { role: floor.role } }) : word('moneyTab.margin.meter.floorCompany', { pcts: { pct: floor.pct } }))
-  if (detail.belowFloor === true) meterWords.push(word('moneyTab.margin.meter.belowFloor'))
+  if (now !== null && against !== null) meterWords.push(word(`moneyTab.margin.meter.${now >= against ? 'above' : 'below'}${target ? 'Target' : 'Floor'}`))
 
   // ---- the cost lines set by hand (B-OM-021): ADD a line only (L2) ----
   const mayLedger = !!can.costLedger && marginCan.cost
@@ -154,7 +175,8 @@ export function marginOf(input: { readonly detail: OrderMargin; readonly order: 
   return {
     answer,
     tiles,
-    meter: { now: pctNumber(final && detail.final ? detail.actualMarginPct : detail.estimateMarginPct), floor: floor ? pctNumber(floor.pct) : null, target: target ? pctNumber(target.pct) : null, words: meterWords },
+    meter: { now, floor: floor && !target ? pctNumber(floor.pct) : null, target: target ? pctNumber(target.pct) : null, words: meterWords },
+    where: whereOf(detail, marginCan),
     hand,
     bridge: bridgeOf(detail, marginCan, hand, mayLedger && hand !== null),
     setCost: mayLedger && hand !== null ? { held: closed } : null,
@@ -168,6 +190,35 @@ export function marginOf(input: { readonly detail: OrderMargin; readonly order: 
       word('moneyTab.margin.why.bankCharges'),
     ],
   }
+}
+
+/**
+ * F-OM-fx3 (W-10): Where it went, in points and the page's words — At quote → Materials · Making (CMT) · Outside work · Overhead ·
+ * Freight · Set by hand → Now. Each part's points are its amount over the price now; a price change takes the rest, so the steps add up
+ * to Now exactly. [] before any work order (nothing moved since the quote); null without the cost and margin grains or a price.
+ */
+export function whereOf(detail: Pick<OrderMargin, 'waterfall' | 'quotedMarginPct' | 'estimateMarginPct' | 'started' | 'estimate'>, can: Pick<MarginsCan, 'cost' | 'margin'>): WhereRow[] | null {
+  if (!can.cost || !can.margin) return null
+  const quoted = pctNumber(detail.quotedMarginPct)
+  const now = pctNumber(detail.estimateMarginPct)
+  const value = detail.estimate.value
+  if (quoted === null || now === null || typeof value !== 'number' || value <= 0 || !detail.waterfall) return null
+  if (!detail.started) return []
+  const tenth = (n: number) => Math.round(n * 10) / 10
+  const parts = WATERFALL_REASONS.filter((reason) => reason !== 'PRICE').flatMap((reason) => {
+    const amount = detail.waterfall?.find((entry) => entry.reason === reason)?.amount
+    const points = typeof amount === 'number' ? tenth((amount / value) * 100) : 0
+    return points === 0 ? [] : [{ id: reason, kind: 'step' as const, label: word(`moneyTab.margin.whereRow.${reason}`), points }]
+  })
+  const priced = detail.waterfall.find((entry) => entry.reason === 'PRICE')?.amount
+  const rest = tenth(now - quoted - parts.reduce((sum, part) => sum + part.points, 0))
+  const price = typeof priced === 'number' && priced !== 0 && rest !== 0 ? [{ id: 'PRICE', kind: 'step' as const, label: word('moneyTab.margin.whereRow.PRICE'), points: rest }] : []
+  return [
+    { id: 'QUOTED', kind: 'start', label: word('moneyTab.margin.whereRow.QUOTED'), pct: String(quoted) },
+    ...price,
+    ...parts,
+    { id: 'NOW', kind: 'end', label: word('moneyTab.margin.whereRow.NOW'), pct: String(now) },
+  ]
 }
 
 /**
