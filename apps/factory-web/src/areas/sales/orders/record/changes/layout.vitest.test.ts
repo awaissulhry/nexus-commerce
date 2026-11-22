@@ -21,9 +21,10 @@ describe('F-OC-101: four sections, top to bottom, each its own file and address'
     expect([...order].sort((a, b) => a - b)).toEqual(order)
     for (const gone of ['<RequestsSection', '<StillToDo', '<DocumentsTab', '<ChangesDepth', 'function History(']) expect(tab, gone).not.toContain(gone)
     // Each section carries its own address.
-    expect(source('./view/FreezeSection.tsx')).toContain('<section id="freeze"')
-    expect(source('./view/HistorySection.tsx')).toContain('<section id="history"')
-    expect(source('./view/AgreementSection.tsx')).toContain('<section id="confirmation"')
+    // W2 / W3: every section is the Production kit's Section (L6), at its own address.
+    expect(source('./view/FreezeSection.tsx')).toContain('<Section id="freeze"')
+    expect(source('./view/HistorySection.tsx')).toContain('<Section id="history"')
+    expect(source('./view/AgreementSection.tsx')).toContain('<Section id="confirmation"')
     expect(source('./view/WaitingSection.tsx')).toContain('<Section id="waiting"')
   })
 

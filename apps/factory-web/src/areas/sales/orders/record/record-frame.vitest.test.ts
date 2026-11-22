@@ -114,7 +114,7 @@ describe('the order on RecordFrame', () => {
       expect(html.indexOf('id="history"')).toBeLessThan(html.indexOf('id="confirmation"'))
       const text = textOf(html)
       // F-OC-203: the last section is the Customer's agreement — their yes and our confirmation.
-      for (const words of locale === 'en' ? ['Waiting', 'Nothing waits.', "Customer's agreement", 'Their yes', 'Our confirmation', 'Order confirmation v2', 'History', 'Can it still change?'] : ['In attesa', 'Niente in attesa.', 'Accordo del cliente', 'Il loro sì', 'La nostra conferma', "Conferma d'ordine v2", 'Cronologia', 'Si può ancora cambiare?']) expect(text, words).toContain(words)
+      for (const words of locale === 'en' ? ['Waiting', 'Nothing waits.', "Customer's agreement", 'Their yes', 'Our confirmation', 'Order confirmation v2', 'What changed', 'Can it still change?'] : ['In attesa', 'Niente in attesa.', 'Accordo del cliente', 'Il loro sì', 'La nostra conferma', "Conferma d'ordine v2", 'Cosa è cambiato', 'Si può ancora cambiare?'] /* F-OC-301: History is What changed */) expect(text, words).toContain(words)
     }
     expect(draw('w2b-323-documents')).not.toMatch(/min\(70vh/)
     expect(landingOf('documents')).toMatchObject({ tab: 'changes', anchor: 'confirmation' })
@@ -538,7 +538,9 @@ describe('F-OP-134 — one acts hook per tab, mounted by the container, never by
     for (const call of ['applyAmendment(', 'closeLines(', 'reopenLines(', 'cancelOrder(', 'getCancelCheck(']) expect(lines, call).toContain(call)
     // F-OL-03: the Lines tab's draft — its preview, its save, the ask and the words to the customer — is use-lines-draft's.
     const draft = source('./use-lines-draft.ts')
-    for (const call of ['previewAmendment(', 'applyAmendment(', 'applyPricedChange(', 'askApproval(', 'postPortalReplyKeyed(', 'findStylesForOrder(']) expect(draft, call).toContain(call)
+    for (const call of ['previewAmendment(', 'applyAmendment(', 'applyPricedChange(', 'askRevisedOrder(', 'postPortalReplyKeyed(', 'findStylesForOrder(']) expect(draft, call).toContain(call)
+    // F-OC-201 (W2): the customer's new yes is asked by the ONE helper on the revision (never on the order).
+    expect(source('./revised-order-ask.ts')).toContain('askApproval(')
     const money = source('./use-money-acts.ts')
     for (const call of ['sendDepositLink(', 'recordDepositPayment(', 'sendToSdi(', 'useScheduleSteps(']) expect(money, call).toContain(call)
     expect(source('./use-production-acts.ts')).toContain('useBrandHealth(')
@@ -586,7 +588,8 @@ describe('F-OP-210 — the tabs and the in-page moves keep `thread=`', () => {
     expect(view).toContain('href: tabHref(recordHref, tab, search), // F-OP-210')
     expect(view).toContain('linkAs={TabLink}')
     expect(view).toContain("<TabLink href={tabHref(recordHref, 'money', search) /* F-OP-210 */}>")
-    expect(view).toContain("<TabLink href={tabHref(recordHref, 'changes', search) /* F-OP-210 */}>")
+    // F-OC-203 (W2): the band's "Revision N" lands on the Customer's agreement.
+    expect(view).toContain("<TabLink href={`${tabHref(recordHref, 'changes', search)}#confirmation` /* F-OP-210 · F-OC-203: the Customer's agreement */}>")
     expect(view).not.toMatch(/\$\{recordHref\}\?tab=/)
     const link = readFileSync(new URL('../../../../lib/tab-link/TabLink.tsx', import.meta.url), 'utf8')
     expect(link).toContain('<NextLink href={href} prefetch={false} {...rest}>')

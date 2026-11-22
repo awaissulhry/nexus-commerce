@@ -2988,7 +2988,7 @@
     "who": {
       "sales": "Sales answers it",
       "production": "The production manager or the planner answers it",
-      "problem": "Answered on Production › Problems & holds",
+      "problem": "Answered in Problems & holds, on the Production tab",
       "decides": "{who} decides",
       "youAsked": "You asked for this approval: {who} decides",
       "salesDecides": "Sales decides"
@@ -3229,7 +3229,8 @@
       "waitsEmail": "Saved · waiting for production: {waits} — decide on this page · asked {customer} by e-mail.",
       "waitsPortal": "Saved · waiting for production: {waits} — decide on this page · asked in {customer}'s portal: no e-mail address on file.",
       "bothEmail": "Saved · {changed} changed · waiting for production: {waits} — decide on this page · asked {customer} by e-mail.",
-      "bothPortal": "Saved · {changed} changed · waiting for production: {waits} — decide on this page · asked in {customer}'s portal: no e-mail address on file."
+      "bothPortal": "Saved · {changed} changed · waiting for production: {waits} — decide on this page · asked in {customer}'s portal: no e-mail address on file.",
+      "askedAlready": "{customer} is asked already: the ask waits under Waiting on {customer}."
     }
   }
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
 import { newIdempotencyKey } from '../../../../lib/api/client'
+import { isApiError } from '../../../../lib/api/errors' // F-OC fx4: an ask that still waits is no failure
 import { getStyle, type StyleDetail } from '../../quotes/api'
 import { applyAmendment, findStylesForOrder, NOTHING_FOLLOWED, previewAmendment, type AmendPreview, type Order, type OrderStyleRow } from '../api'
 import { applyPricedChange, type Freeze } from '../depth/api'
@@ -292,7 +293,7 @@ export function useLinesDraft(input: LinesDraftInput): { model: LinesTabModel; a
           // default in the order's language), never the office's. F-OC-304: the notice says where the ask went, once it went.
           const target = askTargetOf(done)
           const reach = ask && target ? await askCustomer(target, customerQuestionOf(value, question), value) : null
-          setNotice({ tone: 'success', words: savedNotice(done.workOrders, reach?.reach ?? null, value.party?.legalName ?? '') })
+          if (reach !== 'waits') setNotice({ tone: 'success', words: savedNotice(done.workOrders, reach?.reach ?? null, value.party?.legalName ?? '') })
           if (tell) void tellCustomer(tell, value)
           return done.order
         } catch (error) {
@@ -314,12 +315,20 @@ export function useLinesDraft(input: LinesDraftInput): { model: LinesTabModel; a
   }
 
   // F-OC-201: ONE helper asks (revised-order-ask.ts): on the revision, to the confirmation's own recipient (no e-mail: the portal only).
-  const askCustomer = async (amendmentId: string, question: string, value: Order): Promise<AskReach | null> => {
+  // F-OC fx4 (the lead's note on fx3): a network retry resends the SAME body with the SAME key (the API answers from its receipt);
+  // "Ask again" is a new ask (a new key) — and when the first one did go and still waits (one open ask per revision: 409
+  // `conflict`), that is said in words, never "could not be sent" with another "Ask again".
+  const askCustomer = async (amendmentId: string, question: string, value: Order): Promise<AskReach | 'waits' | null> => {
     try {
       const reach = await askRevisedOrder(api, value, amendmentId, question, { quotes: can.viewQuotes })
       setAskFailed(null)
       return reach
-    } catch {
+    } catch (error) {
+      if (isApiError(error) && error.code === 'conflict') {
+        setAskFailed(null)
+        setNotice({ tone: 'info', words: { key: 'changesTab.saved.askedAlready', params: { customer: value.party?.legalName ?? '' } } })
+        return 'waits'
+      }
       setAskFailed({ amendmentId, question })
       return null
     }
@@ -398,7 +407,7 @@ export function useLinesDraft(input: LinesDraftInput): { model: LinesTabModel; a
     onSave: ({ reason, question }) => save(reason, question),
     onAskAgain: () => {
       const value = order0()
-      if (value && askFailed !== null) void askCustomer(askFailed.amendmentId, askFailed.question, value).then((reach) => reach && setNotice({ tone: 'success', words: savedNotice(NOTHING_FOLLOWED, reach.reach, value.party?.legalName ?? '') }))
+      if (value && askFailed !== null) void askCustomer(askFailed.amendmentId, askFailed.question, value).then((reach) => reach && reach !== 'waits' && setNotice({ tone: 'success', words: savedNotice(NOTHING_FOLLOWED, reach.reach, value.party?.legalName ?? '') }))
     },
     onAskDismiss: () => setAskFailed(null),
     // ---- two people ----
