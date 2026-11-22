@@ -33,6 +33,9 @@ export const manifest = defineManifest({
   // B-OM-018 (order money tab L9): "Open for payment" is the money plan's right (Owner, Finance), no longer orders.manage
   // (Sales sees no amount: it would ask money it cannot see).
   'POST /sales/orders/:orderId/schedule/:milestoneId/request': { audiences: ['office'], permission: 'orders.moneyPlan', scope: 'record' },
+  // B-OM-011 … 016 (order money tab): the money plan changed by hand, and its preview (nothing written).
+  'POST /sales/orders/:orderId/money-plan': { audiences: ['office'], permission: 'orders.moneyPlan', scope: 'record' },
+  'POST /sales/orders/:orderId/money-plan/preview': { audiences: ['office'], permission: 'orders.moneyPlan', scope: 'record' },
   // B-W2b-16: the owner waives a deposit or a step before shipping (a reason and a fresh step-up).
   'POST /sales/orders/:orderId/schedule/:milestoneId/waive': { audiences: ['office'], permission: 'orders.waive', scope: 'record' },
   'POST /sales/orders/:orderId/deposit-requests/:requestId/waive': { audiences: ['office'], permission: 'orders.waive', scope: 'record' },

@@ -67,7 +67,7 @@ export async function readMilestones(db: Reader, orderId: string) {
   return db.salesOrderMilestone.findMany({ where: { orderId }, select: MILESTONE_COLUMNS, orderBy: { seq: 'asc' } })
 }
 
-const stored = (row: MilestoneRow, paid: ReadonlyMap<string, number>): StoredMilestone => ({
+const stored = (row: MilestoneRow, paid: ReadonlyMap<string, number>, hand: ReadonlySet<string> = new Set()): StoredMilestone => ({
   id: row.id,
   seq: row.seq,
   kind: row.kind,
@@ -76,7 +76,16 @@ const stored = (row: MilestoneRow, paid: ReadonlyMap<string, number>): StoredMil
   dueDate: dayOrNull(row.dueDate),
   depositRequestId: row.depositRequestId,
   requestPaid: row.depositRequestId === null ? 0 : (paid.get(row.depositRequestId) ?? 0),
+  byHand: hand.has(row.id), // B-OM-015
 })
+
+// ── B-OM-015 (order money tab R1): the steps set by hand stay when the schedule is made again ──
+/** The steps a hand change of the money plan named (its `orders.planByHand` audit rows): "Set by hand", no column. */
+export async function handStepIdsOf(db: Reader, orderId: string): Promise<Set<string>> {
+  const rows = await db.auditLog.findMany({ where: { recordType: 'SalesOrder', recordId: orderId, action: PLAN_BY_HAND_ACTION }, select: { after: true } })
+  return new Set(rows.flatMap((row) => planByHandMarkOf(row.after)?.milestoneIds ?? []))
+}
+// ── end B-OM-015 ──
 
 /** What the payments placed on each request so far (allocations less their reversals). */
 async function paidOnRequests(db: Reader, requestIds: readonly string[]): Promise<Map<string, number>> {
@@ -107,8 +116,8 @@ const actorIdOf = (tools: Pick<CommandTools, 'context'>): string | null => (tool
 
 type StepOrder = Pick<OrderRow, 'id' | 'number' | 'companyId' | 'partyId' | 'currency'>
 
-/** The customer's tax profile now (the fiscal decision of a step's request), read once per command. */
-async function profileNow(tx: CommandTx, partyId: string, now: Date): Promise<CustomerTaxProfile | null> {
+/** The customer's tax profile now (the fiscal decision of a step's request), read once per command. B-OM-011: + the money plan's. */
+export async function profileNow(tx: CommandTx, partyId: string, now: Date): Promise<CustomerTaxProfile | null> {
   return (await quotePartyOf(tx, partyId, businessDate(now), now))?.profile ?? null
 }
 
@@ -218,18 +227,26 @@ export async function makeScheduleInCommand(
  * and a new before-shipping step gets its own. Returns what changed (nothing for an order without a schedule or an
  * unchanged plan) and what the kept steps cover beyond the new gross.
  */
-export async function remakeScheduleInCommand(tools: CommandTools, order: Pick<OrderRow, 'id' | 'number' | 'companyId' | 'partyId' | 'currency' | 'promiseDate' | 'paymentTermsId'>, gross: number, revision: number) {
+export async function remakeScheduleInCommand(
+  tools: CommandTools,
+  order: Pick<OrderRow, 'id' | 'number' | 'companyId' | 'partyId' | 'currency' | 'promiseDate' | 'paymentTermsId'>,
+  gross: number,
+  revision: number | null,
+  // B-OM-011 / B-OM-015: a hand change of the plan remakes it too (the deposit replaced, the terms changed), with its own note.
+  options: { readonly note?: string } = {},
+) {
   const rows = await readMilestones(tools.tx, order.id)
   const requestIds = rows.flatMap((row) => (row.status === 'OPEN' && row.kind === 'BEFORE_SHIPPING' && row.depositRequestId ? [row.depositRequestId] : []))
   // Re-entrant: the amendment took these before the order's row; a request named since is locked here.
   await lockAll(tools.tx, tools.context, 'deposit', requestIds)
   const paid = await paidOnRequests(tools.tx, requestIds)
+  const hand = await handStepIdsOf(tools.tx, order.id) // B-OM-015: an amendment, or new terms, keep the steps set by hand
   const plan = remadeSchedule(
-    rows.map((row) => stored(row, paid)),
+    rows.map((row) => stored(row, paid, hand)),
     { gross, instalments: await instalmentsOfOrder(tools.tx, order.paymentTermsId), promiseDate: dayOrNull(order.promiseDate) },
   )
   if (plan.cancel.length === 0 && plan.insert.length === 0) return { cancelled: [] as string[], inserted: [] as string[], overpaid: plan.overpaid }
-  const note = `Amendment ${revision}: the schedule was made again for the new total.`
+  const note = options.note ?? `Amendment ${revision}: the schedule was made again for the new total.`
   const cancelledRequests: string[] = []
   for (const id of plan.cancel) {
     await tools.tx.salesOrderMilestone.updateMany({ where: { id, status: 'OPEN' }, data: { status: 'CANCELLED', statusNote: note, updatedAt: tools.now, version: { increment: 1 } } })

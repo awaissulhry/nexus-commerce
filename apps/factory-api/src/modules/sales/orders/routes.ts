@@ -23,6 +23,8 @@ import {
   stepRequestContract,
   waiveDepositRequestContract,
   waiveStepContract,
+  moneyPlanContract, // B-OM-011
+  moneyPlanPreviewContract, // B-OM-011
 } from './daily-contract'
 import { cancelCheck } from './impact'
 import { manifest } from './manifest'
@@ -30,6 +32,7 @@ import { createManualOrder, nextOrderNumber, previewManualOrder } from './manual
 import { cancelOrder, changePromise, closeOrder, markReady, officeOrder } from './moves'
 import { getOrder, listOrders, makeOrder, orderBoard } from './orders'
 import { getSchedule, requestStep, waiveDeposit } from './schedule'
+import { applyMoneyPlan, previewMoneyPlan } from './money-plan' // B-OM-011
 // B-W2b-398 (LOG-067): each shipment's arrival and proof, the order's delivery and the terms that run from it.
 import { deliveriesContract, getDeliveries } from './delivered'
 // B-TH-019: the Customer switcher's numbers.
@@ -133,6 +136,12 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
   app.post('/sales/orders/:orderId/deposit-requests/:requestId/waive', { schema: waiveDepositRequestContract }, async (request) =>
     waiveDeposit(request, request.params.orderId, { requestId: request.params.requestId }, request.body, () => requireStepUp(officeAuthOf(app), request), idempotencyKeyFrom(request)),
   )
+  // B-OM-011 … 016 (order money tab): one hand act on the money plan (a fresh code for new terms and a short deposit beyond the
+  // tolerance, asked by the handler), and its preview.
+  app.post('/sales/orders/:orderId/money-plan', { schema: moneyPlanContract }, async (request) =>
+    applyMoneyPlan(request, request.params.orderId, request.body, () => requireStepUp(officeAuthOf(app), request), idempotencyKeyFrom(request)),
+  )
+  app.post('/sales/orders/:orderId/money-plan/preview', { schema: moneyPlanPreviewContract }, async (request) => previewMoneyPlan(request, request.params.orderId, request.body))
 
   app.post('/sales/orders/:orderId/copy-as-quote', { schema: copyOrderAsQuoteContract }, async (request, reply) => {
     const order = await officeOrder(request, request.params.orderId)
