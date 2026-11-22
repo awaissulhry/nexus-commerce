@@ -272,7 +272,7 @@
     "part": "the complaints and returns",
     "info": "What the customer reported about what we shipped, and where each case stands. The tab only lists a case: each one lives on its own page.",
     "more": "More for complaints and returns",
-    "openReturns": "Open Sales › Returns ›",
+    "openReturns": "Open Sales › Returns & repairs ›",
     "openComplaints": "Open Quality › Complaints ›",
     "answer": {
       "open_one": "{count} open",

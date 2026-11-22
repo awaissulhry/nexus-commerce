@@ -272,7 +272,7 @@
     "part": "i reclami e i resi",
     "info": "Cosa ha segnalato il cliente sulla merce spedita, e a che punto è ogni caso. La scheda elenca soltanto un caso: ognuno vive nella sua pagina.",
     "more": "Altro per reclami e resi",
-    "openReturns": "Apri Vendite › Resi ›",
+    "openReturns": "Apri Vendite › Resi e riparazioni ›",
     "openComplaints": "Apri Qualità › Reclami ›",
     "answer": {
       "open_one": "{count} aperto",

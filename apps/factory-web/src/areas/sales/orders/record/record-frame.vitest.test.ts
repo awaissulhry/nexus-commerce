@@ -305,10 +305,12 @@ describe('F-OS-101 — the Shipments tab: its answer, then #left · #shipments (
   it('in that order, in the Production kit\'s room container (the dock re-lays it live); the Money door stays at its foot', () => {
     for (const locale of ['en', 'it'] as const) {
       const html = draw('th-256-links', locale)
-      for (const id of ['id="left"', 'id="shipments"', 'id="deliveries"', 'id="after-sales"']) expect(html, id).toContain(id)
-      expect(html.indexOf('id="left"')).toBeLessThan(html.indexOf('id="shipments"'))
-      expect(html.indexOf('id="shipments"')).toBeLessThan(html.indexOf('id="deliveries"'))
-      expect(html.indexOf('id="deliveries"')).toBeLessThan(html.indexOf('id="after-sales"'))
+      // F-OS-W3 step 0: an element's own id (a leading space) — the tab bar's `data-tab-id="shipments"` comes first on the page.
+      const at = (id: string) => html.indexOf(` id="${id}"`)
+      for (const id of ['left', 'shipments', 'deliveries', 'after-sales']) expect(at(id), id).toBeGreaterThan(-1)
+      expect(at('left')).toBeLessThan(at('shipments'))
+      expect(at('shipments')).toBeLessThan(at('deliveries'))
+      expect(at('deliveries')).toBeLessThan(at('after-sales'))
       expect(html).toContain('class="fw-pt fw-os"')
       expect(textOf(html)).toContain(locale === 'en' ? 'Where every garment is' : 'Dove si trova ogni capo')
     }
