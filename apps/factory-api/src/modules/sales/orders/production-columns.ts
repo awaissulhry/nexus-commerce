@@ -31,6 +31,9 @@ import { dayOf, type Reader } from './store'
  *                       order (13-review C-19: the work orders list's own rule), else null and named in `withheld`
  *   openRequests        the customer's requests still OPEN on the order (waiting on us)
  *   openIssues          the production issues still OPEN on the order (office only: workorders.view, else null + `withheld`)
+ *   openIssuesSince     B-CW-014: when the oldest of those open issues was raised ("Asked production · 2 d"); null: none open, or
+ *                       withheld with `openIssues` (the name `openIssues` in `withheld` covers both: no new name). A time only:
+ *                       never the issue's words, its task or who answers it.
  *
  * Queries per page: the stored rows, the held cells, the requests, and — only for a reader with workorders.view over some row — the
  * issues and the supervisor marks (two reads). Every row is an order the reader's orders.view already reaches (the list's scopeWhere):
@@ -56,6 +59,8 @@ export interface ProductionColumns {
   readonly supervisorMark: SupervisorMark | null
   readonly openRequests: number
   readonly openIssues: number | null
+  /** B-CW-014: when the oldest open production issue was raised (null: none open, or withheld as `openIssues` is). */
+  readonly openIssuesSince: string | null
   readonly withheld: ProductionWithheld[]
 }
 
@@ -172,8 +177,10 @@ export async function orderProductionColumns(client: Reader, actor: Actor, viewe
   // The office-only parts: only over the orders the reader's workorders.view reaches.
   const seen = orders.filter((order) => can(actor, WORKORDERS_VIEW, { companyId: order.companyId, partyId: order.partyId }))
   const seenIds = new Set(seen.map((order) => order.id))
-  const issues = seen.length > 0 ? await client.productionIssue.groupBy({ by: ['salesOrderId'], where: { salesOrderId: { in: [...seenIds] }, status: 'OPEN' }, _count: { _all: true } }) : []
+  // B-CW-014: + when the oldest open issue was raised (the same read).
+  const issues = seen.length > 0 ? await client.productionIssue.groupBy({ by: ['salesOrderId'], where: { salesOrderId: { in: [...seenIds] }, status: 'OPEN' }, _count: { _all: true }, _min: { raisedAt: true } }) : []
   const issuesOf = new Map(issues.flatMap((row) => (row.salesOrderId ? [[row.salesOrderId, row._count._all] as const] : [])))
+  const issuesSinceOf = new Map(issues.flatMap((row) => (row.salesOrderId && row._min.raisedAt ? [[row.salesOrderId, row._min.raisedAt] as const] : [])))
   const marks = seen.length > 0 ? await orderSupervisorMarksOf(client, seen, viewerId) : new Map<string, SupervisorMark>()
   for (const order of orders) {
     const row = rowOf.get(order.id)
@@ -189,6 +196,7 @@ export async function orderProductionColumns(client: Reader, actor: Actor, viewe
       supervisorMark: sees ? (marks.get(order.id) ?? 'NOT_SET') : null,
       openRequests: requestsOf.get(order.id) ?? 0,
       openIssues: sees ? (issuesOf.get(order.id) ?? 0) : null,
+      openIssuesSince: sees && issuesSinceOf.has(order.id) ? toUtcIso(issuesSinceOf.get(order.id)!) : null, // B-CW-014
       withheld: sees ? [] : [...PRODUCTION_WITHHELD],
     })
   }

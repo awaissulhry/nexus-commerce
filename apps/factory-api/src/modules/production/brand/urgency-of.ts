@@ -6,6 +6,7 @@ import { customerUrgencyChipWords } from '@nexus/factory-domain/production-brand
 import { customerUrgencyStateOf, type CustomerUrgencyState } from '@nexus/factory-domain/production-brand/urgency-state'
 import type { CommandTx } from '../../../core/command'
 import type { CustomerUrgencySource } from '../../sales/orders/customer-urgency'
+import type { OrderUrgencyState } from '../../sales/orders/customer-urgency' // B-CW-010 (a type only: no cycle)
 
 /**
  * B-PR-22b — the customer's urgency as the office's other reads see it (production plan §3 "Customer urgency", §5 "Customer
@@ -18,6 +19,8 @@ import type { CustomerUrgencySource } from '../../sales/orders/customer-urgency'
  *                              `useCustomerUrgency`, registered in modules/sales/orders/customer-urgency.ts) — `customerUrgencySource`
  *   workOrderCustomerUrgency   each work order's (its orders': Urgent with the best place in its customer's own list when one of
  *                              them is Urgent, else Regular): the Work orders list's column and the risk sort's tie, the board's chip
+ *   customerUrgencyStatesOf    B-CW-010: each order's state of four with its place, our lock and the open "Urgent – asked" (the
+ *                              Sales › Orders row's chip; the hook's optional `states`)
  *
  * This file imports nothing of the API but types (Sales › Orders registers it when that module loads, in every process); the
  * callers wall the rows they ask about (the list, the board, the order list read only what the reader reaches).
@@ -35,6 +38,8 @@ export interface CountedUrgency {
   readonly urgentRank: number | null
   /** F-PR-18: its Regular mark is ours (set back to Regular by us, or locked by us): "Set to regular by us". */
   readonly setByUs?: boolean
+  /** B-CW-010: we locked the order at Regular (BrandOrderProduction.urgencyLocked). */
+  readonly locked?: boolean
 }
 
 /** The counted urgency of these orders (an order absent: none counts). */
@@ -53,7 +58,7 @@ export async function countedUrgencyOf(db: Reader, orderIds: readonly string[]):
   for (const row of own) {
     if (!on.has(row.partyId)) continue
     const urgency = row.urgency as BrandUrgency
-    out.set(row.salesOrderId, { urgency, urgentRank: urgency === 'URGENT' ? row.urgentRank : null, /* F-PR-18 */ setByUs: row.urgencySetBy === 'FACTORY' || row.urgencyLocked })
+    out.set(row.salesOrderId, { urgency, urgentRank: urgency === 'URGENT' ? row.urgentRank : null, /* F-PR-18 */ setByUs: row.urgencySetBy === 'FACTORY' || row.urgencyLocked, /* B-CW-010 */ locked: row.urgencyLocked })
   }
   return out
 }
@@ -72,8 +77,31 @@ export function customerUrgencyWhereOf(urgency: BrandUrgency): Prisma.SalesOrder
   }
 }
 
+// ── B-CW-010 (customer Work tab plan §2): each ORDER's urgency with its place and state — the Sales › Orders row's chip ──
+/**
+ * Each order's customer urgency as the row says it (an order absent: none counts) — the Work orders column's ONE rule
+ * (customerUrgencyStateOf) over the order alone: URGENT with its place in its customer's own Urgent list, ASKED with the id of
+ * the open "Urgent – asked" that waits on it, SET_BACK (its Regular mark is ours), REGULAR; `locked`: we locked it. The two reads
+ * of `countedUrgencyOf` and ONE more: the open RUSH requests of the orders whose urgency counts (the oldest when there are two).
+ */
+export async function customerUrgencyStatesOf(db: Reader, orderIds: readonly string[]): Promise<Map<string, OrderUrgencyState>> {
+  const out = new Map<string, OrderUrgencyState>()
+  const counted = await countedUrgencyOf(db, orderIds)
+  if (counted.size === 0) return out
+  const asks = await db.orderChangeRequest.findMany({ where: { orderId: { in: [...counted.keys()] }, kind: 'RUSH', status: 'OPEN' }, select: { id: true, orderId: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
+  const askOf = new Map<string, string>()
+  for (const ask of asks) if (!askOf.has(ask.orderId)) askOf.set(ask.orderId, ask.id)
+  for (const [orderId, urgency] of counted) {
+    const state = customerUrgencyStateOf([{ urgency: urgency.urgency, urgentRank: urgency.urgentRank, asked: askOf.has(orderId), setByUs: urgency.setByUs === true }])
+    if (!state) continue
+    out.set(orderId, { state: state.state, urgentRank: state.urgentRank, locked: urgency.locked === true, requestId: state.state === 'ASKED' ? (askOf.get(orderId) ?? null) : null })
+  }
+  return out
+}
+// ── end B-CW-010 ──
+
 /** The production lane's reader for threads' hook (modules/sales/orders/customer-urgency.ts `useCustomerUrgency`). */
-export const customerUrgencySource: CustomerUrgencySource = { of: customerUrgencyOf, where: customerUrgencyWhereOf }
+export const customerUrgencySource: CustomerUrgencySource = { of: customerUrgencyOf, where: customerUrgencyWhereOf, /* B-CW-010 */ states: customerUrgencyStatesOf }
 
 /** A work order's customer urgency with the board's chip words ("Customer urgency: Urgent 2"; null for Regular). */
 export interface WorkOrderUrgency extends CountedUrgency {

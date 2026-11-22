@@ -8,6 +8,7 @@ import { PRIORITY_WORDS, type SalesOrderPriorityLevel } from '@nexus/factory-dom
 import { cutCountsOf } from '../../production/cutting/views'
 import { scanProgressOf } from '../../production/scans/progress'
 import { orderCustomerUrgency, type CustomerUrgency } from './customer-urgency'
+import { orderCustomerUrgencyStates, type OrderUrgencyState } from './customer-urgency' // B-CW-010
 // B-OM-001 (order money tab M1-B1): the small differences written off on the invoices count.
 import { underpaymentsWrittenOff } from '../../payments/write-offs/sums'
 import type { Reader } from './store'
@@ -35,6 +36,10 @@ import { riskRulesOf } from './view-facts'
  *   atRisk           the ORDER_LATE_RISK rule's own reading for the order's company (factory-domain atRiskOf, riskDaysFor):
  *                    days left and the rule's threshold; null: not at risk, or no enabled rule
  *   customerUrgency  the customer's own mark, read-only (./customer-urgency: the production lane's reader; null until then)
+ *   customerUrgencyState  B-CW-010: the same mark as the chip says it — the state of four, its place in the customer's own Urgent
+ *                    list, our lock, the open "Urgent – asked"; null: none counts (no kept order, the customer's switch off, or a
+ *                    reader without states). `customerUrgency` is derived from it (URGENT, else REGULAR), so the two never differ.
+ *   progress.ordered B-CW-015: the pieces ORDERED (the lines' quantities, fees left out) — the order page's "Sewn 152 of 244" base
  */
 
 export interface LaterOrder {
@@ -54,6 +59,8 @@ export interface RowProgress {
   readonly cut: number | null
   readonly sewn: number | null
   readonly finished: number | null
+  /** B-CW-015: the order's pieces ordered (every line but a fee): what the order page counts the steps of. */
+  readonly ordered: number
 }
 
 export interface LaterColumns {
@@ -66,6 +73,8 @@ export interface LaterColumns {
   readonly priority: { readonly level: SalesOrderPriorityLevel; readonly words: { readonly en: string; readonly it: string }; readonly number: number; readonly urgentReason: string | null }
   readonly atRisk: AtRisk | null
   readonly customerUrgency: CustomerUrgency | null
+  /** B-CW-010: the customer's urgency with its place and state (null: none counts). */
+  readonly customerUrgencyState: OrderUrgencyState | null
 }
 
 export interface LaterOptions {
@@ -125,7 +134,9 @@ export async function orderLaterColumns(client: Reader, actor: Actor, orders: re
 
   // ---- at risk, customer urgency ------------------------------------------------------------------------------------------
   const rules = await riskRulesOf(client)
-  const urgency = await orderCustomerUrgency(client, orderIds)
+  // B-CW-010: the states when the reader has them (the mark is then derived from the state: no second read); else the marks alone.
+  const urgencyStates = await orderCustomerUrgencyStates(client, orderIds)
+  const urgency = urgencyStates ? null : await orderCustomerUrgency(client, orderIds)
 
   for (const order of orders) {
     const own = lines.filter((line) => line.orderId === order.id)
@@ -133,6 +144,7 @@ export async function orderLaterColumns(client: Reader, actor: Actor, orders: re
     const ownCounting = counting.filter((cell) => cell.salesOrderLineId !== null && orderOfLine.get(cell.salesOrderLineId) === order.id)
     const ordered = sumOf(own, (line) => line.quantity)
     const closedShort = sumOf(own, (line) => line.closedShortQuantity ?? 0)
+    const goodsOrdered = sumOf(own.filter((line) => line.kind !== 'FEE'), (line) => line.quantity) // B-CW-015: a fee has no pieces
     const sites = unique([...own.flatMap((line) => (line.siteId ? [line.siteId] : [])), ...ownCells.map((cell) => cell.workOrder.siteId)])
       .flatMap((id) => (siteOf.has(id) ? [siteOf.get(id)!] : []))
       .sort((a, b) => a.code.localeCompare(b.code))
@@ -144,8 +156,10 @@ export async function orderLaterColumns(client: Reader, actor: Actor, orders: re
             cut: sumOrNull(ownCounting.map((cell) => progressOf.get(cell.id)?.cut ?? null)),
             sewn: sumOrNull(ownCounting.map((cell) => progressOf.get(cell.id)?.sewn ?? null)),
             finished: sumOrNull(ownCounting.map((cell) => progressOf.get(cell.id)?.finished ?? null)),
+            ordered: goodsOrdered, // B-CW-015
           }
     const answer = money ? orderMoneyOf(money.factsOf(order)) : { paid: 0, balance: 0 }
+    const urgencyState = urgencyStates?.get(order.id) ?? null // B-CW-010
     out.set(order.id, {
       openUnits: openUnitsOf(order.status, ordered, closedShort, shipped.get(order.id) ?? 0),
       ...(options.progress ? { progress } : {}),
@@ -155,7 +169,9 @@ export async function orderLaterColumns(client: Reader, actor: Actor, orders: re
       internalNote: order.internalNote,
       priority: { level: order.priorityLevel, words: PRIORITY_WORDS[order.priorityLevel], number: order.priority, urgentReason: order.urgentReason },
       atRisk: atRiskOf(order.status, order.promiseDate, options.today, riskDaysFor(rules, order.companyId)),
-      customerUrgency: urgency.get(order.id) ?? null,
+      // B-CW-010: one truth — the mark is the state's (URGENT, else REGULAR) when the reader gives states.
+      customerUrgency: urgencyStates ? (urgencyState ? (urgencyState.state === 'URGENT' ? 'URGENT' : 'REGULAR') : null) : (urgency?.get(order.id) ?? null),
+      customerUrgencyState: urgencyState,
     })
   }
   return out

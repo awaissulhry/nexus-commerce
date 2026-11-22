@@ -19,6 +19,7 @@ import { pictureIds, smallPicturesView } from '../../product/images/small-pictur
 import { BRAND_HEALTHS } from '@nexus/factory-domain/production-brand/health'
 import { BRAND_STAGES } from '@nexus/factory-domain/production-brand/stages'
 import { ORDER_PHASES } from '@nexus/factory-domain/production-brand/stages' // B-CW-002 / B-CW-003
+import { CUSTOMER_URGENCY_STATES } from '@nexus/factory-domain/production-brand/urgency-state' // B-CW-010
 import { SUPERVISOR_MARKS } from '@nexus/factory-domain/production-brand/supervisor'
 import { WAITING_ON } from '@nexus/factory-domain/production-brand/waiting'
 import { IDS_TERM_MAX, PRODUCTION_WITHHELD } from './production-columns'
@@ -537,8 +538,14 @@ export const listOrdersContract = defineContract({
           /** B-SA-070b: the customer's own number of the order (the Discuss chip, Reply to N's preview: "Your order 12"). */
           customerSeq: z.number().int().nullable(),
           status,
-          /** Not needed, missing (needed, no request), open (with its due date), paid or waived. */
-          deposit: output({ state: z.enum(['NOT_NEEDED', 'MISSING', 'OPEN', 'PAID', 'WAIVED']), dueDate: z.string().nullable() }),
+          /**
+           * Not needed, missing (needed, no request), open (with its due date), paid or waived. B-CW-012: `extraOpenDue` — the due
+           * day of an EXTRA deposit still open on an order that needs none (the state stays NOT_NEEDED: money to collect, never a
+           * production gate); null otherwise. A day, never an amount.
+           */
+          deposit: output({ state: z.enum(['NOT_NEEDED', 'MISSING', 'OPEN', 'PAID', 'WAIVED']), dueDate: z.string().nullable(), extraOpenDue: z.string().nullable() }),
+          /** B-CW-011: a change waits for the customer's new yes (reapprovalNeededAt set, the order not closed or cancelled): the `reaccept` term's rows. */
+          reaccept: z.boolean(),
           lineCount: z.number().int(),
           units: z.number().int(),
           shippedUnits: z.number().int(),
@@ -582,8 +589,10 @@ export const listOrdersContract = defineContract({
            * Only with `progress=true`: its lines' cells in work orders past DRAFT (not REPAIR, not cancelled), summed over every
            * work order and site — `inWork` their pieces, `cut` from the cutting log, `sewn` and `finished` from the floor's scans
            * (the work order record's counts; a step no cell counts: null). null: no work order past DRAFT yet. Totals only.
+           * B-CW-015: `ordered` — the order's pieces ordered (its lines' quantities, fees left out): the order page's base
+           * ("Sewn 152 of 244"), so the row and the page say the same.
            */
-          progress: output({ inWork: z.number().int(), cut: z.number().int().nullable(), sewn: z.number().int().nullable(), finished: z.number().int().nullable() }).nullable().optional(),
+          progress: output({ inWork: z.number().int(), cut: z.number().int().nullable(), sewn: z.number().int().nullable(), finished: z.number().int().nullable(), ordered: z.number().int() }).nullable().optional(),
           /** Received for the order: its deposit requests' payments and its share of its invoices' payments, less refunds (price grain). */
           paid: money.price(z.number().int()),
           /** Still to pay: its gross less what will never be billed, its credit notes and what is paid; never below 0 (price grain). */
@@ -598,6 +607,14 @@ export const listOrdersContract = defineContract({
           atRisk: output({ daysLeft: z.number().int(), daysBeforePromise: z.number().int() }).nullable(),
           /** The customer's own mark, read-only (Sales › Orders' Priority stays the office's); null: none known. */
           customerUrgency: z.enum(CUSTOMER_URGENCIES).nullable(),
+          /**
+           * B-CW-010 (customer Work tab plan §2): the same mark as the chip says it — URGENT with `urgentRank` (its place in the
+           * customer's OWN Urgent list at the order's company, 1 first; never a place in our plan), ASKED (an "Urgent – asked" waits:
+           * `requestId` is that open request, so the chip opens its review), REGULAR, SET_BACK (set to Regular by us); `locked`: we
+           * locked it at Regular. null: none counts (the order is not kept in production, or the customer's urgency switch is off).
+           * Office only: who set it is never sent.
+           */
+          customerUrgencyState: output({ state: z.enum(CUSTOMER_URGENCY_STATES), urgentRank: z.number().int().nullable(), locked: z.boolean(), requestId: id().nullable() }).nullable(),
           // ── end B-TH-059 ──────────────────────────────────────────────────────────────────────────────────────────────
           /** B-SA-012: why a PENDING_APPROVAL order waits (a yes asked, credit, the factory review, a yes nobody asked); null otherwise. */
           waits: z.array(z.enum(WAIT_REASONS)).nullable(),
@@ -625,6 +642,8 @@ export const listOrdersContract = defineContract({
             supervisorMark: z.enum(SUPERVISOR_MARKS).nullable(),
             openRequests: z.number().int(),
             openIssues: z.number().int().nullable(),
+            /** B-CW-014: when the oldest open production issue was raised; null: none open, or withheld with `openIssues` (that name in `withheld` covers both). */
+            openIssuesSince: instant().nullable(),
             withheld: z.array(z.enum(PRODUCTION_WITHHELD)),
           }).optional(),
           // ── B-CP-018 (customer page plan C2d): the price check, read only for a price holder (absent without the price grain) ──

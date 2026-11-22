@@ -336,7 +336,7 @@ export async function listOrders(caller: CommandCaller, query: ListQuery) {
     const viewed = await viewWhere(client, context, query, today) // B-TH-058 / B-TH-059: the view's one filter
     const scoped: Prisma.SalesOrderWhereInput = only ? { AND: [viewed, { id: { in: only } }] } : viewed // B-SA-070: the rows in view
     // B-TH-059: + the office's priority and the order note (the later columns).
-    const select = { id: true, number: true, companyId: true, partyId: true, customerRef: true, customerSeq: true /* B-SA-070b */, status: true, orderDate: true, requestedDate: true, promiseDate: true, currency: true, netAmount: true, grossAmount: true, depositRequired: true, quoteVersionId: true, version: true, updatedAt: true, priority: true, priorityLevel: true, urgentReason: true, internalNote: true } as const
+    const select = { id: true, number: true, companyId: true, partyId: true, customerRef: true, customerSeq: true /* B-SA-070b */, status: true, orderDate: true, requestedDate: true, promiseDate: true, currency: true, netAmount: true, grossAmount: true, depositRequired: true, quoteVersionId: true, version: true, updatedAt: true, priority: true, priorityLevel: true, urgentReason: true, internalNote: true, reapprovalNeededAt: true /* B-CW-011 */ } as const
     let page: Prisma.SalesOrderGetPayload<{ select: typeof select }>[]
     let nextCursor: string | null
     if (query.sort) {
@@ -408,7 +408,11 @@ export async function listOrders(caller: CommandCaller, query: ListQuery) {
           customerRef: row.customerRef,
           customerSeq: row.customerSeq ?? null, // B-SA-070b
           status: row.status,
-          deposit: { state, dueDate: open ? dayOf(open.dueDate) : null },
+          // B-CW-012: + an EXTRA deposit still open on an order that needs none (money to collect, never a production gate: the
+          // state stays NOT_NEEDED). A due day only, never an amount.
+          deposit: { state, dueDate: open ? dayOf(open.dueDate) : null, extraOpenDue: !row.depositRequired && open ? dayOf(open.dueDate) : null },
+          // B-CW-011: a change waits for the customer's new yes (the `reaccept` term's own rule, reacceptWhere).
+          reaccept: row.reapprovalNeededAt !== null && row.status !== 'CLOSED' && row.status !== 'CANCELLED',
           lineCount: count?._count._all ?? 0,
           units: count?._sum.quantity ?? 0,
           shippedUnits: shippedOf.get(row.id) ?? 0,
