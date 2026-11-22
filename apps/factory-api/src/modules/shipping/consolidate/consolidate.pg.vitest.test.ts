@@ -210,7 +210,10 @@ describe('B-OS-010: split into several shipments in ONE command', () => {
     const children = split.shipments as Json[]
     expect(children).toHaveLength(3)
     expect(split.shipment.id).toBe(children[0]!.id)
-    ;[ids.child1, ids.child2, ids.child3] = children.map((child) => child.id as string)
+    // os-fx4: one by one (a destructured list reads string | undefined under noUncheckedIndexedAccess; the length is checked above).
+    ids.child1 = children[0]!.id as string
+    ids.child2 = children[1]!.id as string
+    ids.child3 = children[2]!.id as string
     expect(children.map((child) => (child.lines as Json[]).map((line) => [line.workOrderSizeId, line.quantity]).sort())).toEqual([
       [[cell('BLK-52'), 1]],
       [[cell('RED-50'), 1], [cell('RED-54'), 1]].sort(),

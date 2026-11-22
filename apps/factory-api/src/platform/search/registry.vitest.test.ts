@@ -63,12 +63,14 @@ describe('the indexers folder is the registry (B-W2a-32)', () => {
     const first = '00000000-0000-4000-8000-000000000002'
     const second = '00000000-0000-4000-8000-000000000003'
     const tx = {
-      shipment: { findMany: async () => [{ id: shipmentId, companyId: 'c', siteId: 's', partyId: 'p', number: 'SH-1', status: 'SHIPPED', salesOrderId: first, salesOrder: { number: 'SO-1', customerRef: 'PO-1', party: { code: 'ALPHA', legalName: 'Brand Alpha Srl', tradeName: null } }, parcels: [{ trackingNumber: 'TRK-1' }] }] },
+      shipment: { findMany: async () => [{ id: shipmentId, companyId: 'c', siteId: 's', partyId: 'p', number: 'SH-1', status: 'SHIPPED', salesOrderId: first, salesOrder: { number: 'SO-1', customerRef: 'PO-1', party: { code: 'ALPHA', legalName: 'Brand Alpha Srl', tradeName: null } }, parcels: [{ trackingNumber: 'TRK-1', manualTrackingNumber: null }], manualTrackingNumber: 'MT-1' }] },
       $queryRaw: async () => [{ shipmentId, orderId: second, number: 'SO-2' }],
       salesOrder: { findMany: async () => [{ id: first, number: 'SO-1', customerRef: 'PO-1', customerSeq: 1, status: 'SHIPPED', language: 'it' }, { id: second, number: 'SO-2', customerRef: 'PO-2', customerSeq: 2, status: 'SHIPPED', language: 'it' }] },
     } as unknown as Parameters<SearchIndexer['read']>[0]
     const [row] = await shipments.read(tx, { ids: [shipmentId] }, 10)
-    expect(row).toMatchObject({ recordId: shipmentId, number: 'SH-1', subtitle: 'SO-1', words: ['ALPHA', 'PO-1', 'TRK-1', 'SO-2', 'PO-2'] })
+    // os-fx4: the row as the read now selects it (B-OS-023): the numbers typed by hand come last, the shipment's then its parcels'
+    // (a parcel without one gives null, which the search text drops).
+    expect(row).toMatchObject({ recordId: shipmentId, number: 'SH-1', subtitle: 'SO-1', words: ['ALPHA', 'PO-1', 'TRK-1', 'SO-2', 'PO-2', 'MT-1', null] })
   })
   // ---- end op-fx1
 })

@@ -386,9 +386,12 @@ describe('our own van and a manual carrier (LOG-122): the DDT and the status wit
     expect(delivered.shipment).toMatchObject({ status: 'DELIVERED', deliveredAt: at })
   })
 
-  it("never moves a shipment its carrier tracks by hand, never types a number beside a carrier's label", async () => {
+  it("never types the carrier's news over its labels (delivered by hand only with a reason), never types a number beside a carrier's label", async () => {
     expect((await ok('desk', 'POST', `/shipping/shipments/${sh2()}/ship`, {})).shipment.status).toBe('SHIPPED')
-    await refusedFor('desk', 'POST', `/shipping/shipments/${sh2()}/own-transport/events`, { status: 'DELIVERED' }, 'CARRIER_TRACKED')
+    // os-fx4 (B-OS-015, Owner D5): the carrier's news stays the carrier's; delivered or came back may be marked by hand over its labels,
+    // but only with a reason (3 to 500): without one it is a 400 at body/reason, before the state check.
+    await refusedFor('desk', 'POST', `/shipping/shipments/${sh2()}/own-transport/events`, { status: 'IN_TRANSIT' }, 'CARRIER_TRACKED')
+    expect((await refused('desk', 'POST', `/shipping/shipments/${sh2()}/own-transport/events`, { status: 'DELIVERED' }, 400)).issues[0].path).toBe('body/reason')
     await refusedFor('desk', 'PUT', `/shipping/shipments/${sh2()}/own-transport/tracking`, { trackingNumber: 'MT-9' }, 'LABELLED')
     expect((await refused('companyB', 'GET', `/shipping/shipments/${sh2()}/own-transport`, undefined, 404)).code).toBe('not_found')
   })

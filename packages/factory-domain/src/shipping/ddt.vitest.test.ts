@@ -270,7 +270,8 @@ describe('a DDT of two orders of one customer (B-OP-042)', () => {
 // ---- B-OS-014, B-OS-017 (order shipments tab): handed over at a typed time; "this shipment travels without a DDT" ----
 describe('the goods handed over at a typed time (B-OS-014)', () => {
   const now = new Date('2026-11-22T10:00:00.000Z')
-  const facts = { now, packedAt: new Date('2026-11-20T08:00:00.000Z'), ddtIssuedAt: new Date('2026-11-20T09:00:00.000Z'), reason: null as string | null }
+  // os-fx4: the facts take the function's own type (packedAt and ddtIssuedAt may be null: a shipment that travels without a DDT).
+  const facts: Parameters<typeof handOverTimeProblems>[1] = { now, packedAt: new Date('2026-11-20T08:00:00.000Z'), ddtIssuedAt: new Date('2026-11-20T09:00:00.000Z'), reason: null }
   const paths = (at: string, over: Partial<typeof facts> = {}) => handOverTimeProblems(new Date(at), { ...facts, ...over }).map((issue) => issue.path)
 
   it('now (or minutes ago) needs no reason; more than 15 minutes back it does', () => {
