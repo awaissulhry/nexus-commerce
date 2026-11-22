@@ -30,6 +30,7 @@ import { SAMPLE_KINDS } from '@nexus/factory-domain/sales/samples/rules' // B-PR
 import { APPROVAL_KINDS } from '@nexus/factory-domain/approvals-out/kinds' // B-PR-24
 import { DOCUMENT_TEMPLATE_KINDS } from '@nexus/factory-domain/templates/documents'
 import { EXTRA_OUTCOMES, WORK_ORDER_CHANGE_KINDS, WORK_ORDER_CHANGE_STATUSES } from '@nexus/factory-domain/order-apply/rules' // B-SA-041
+import { FILE_ASK_ADDRESSEES, FILE_ASK_STATUSES, FILE_ASK_TARGETS } from '@nexus/factory-domain/files/asks' // B-OF-030
 import {
   ApprovalKind, // B-PR-24
   ApprovalTaskKind,
@@ -48,6 +49,10 @@ import {
   IntegrationMode,
   IntegrationProvider,
   IssueSource,
+  // B-OF-030 (order files tab): an ask for a file's target, addressee and status.
+  FileAskAddressee,
+  FileAskStatus,
+  FileAskTarget,
   IssueStatus,
   ItemKind,
   ItemSourcing,
@@ -189,4 +194,8 @@ export const MIRRORS: readonly Mirror[] = Object.freeze([
   mirror('WorkOrderChangeKind', WorkOrderChangeKind, 'order-apply/rules WORK_ORDER_CHANGE_KINDS', WORK_ORDER_CHANGE_KINDS, true),
   mirror('WorkOrderChangeStatus', WorkOrderChangeStatus, 'order-apply/rules WORK_ORDER_CHANGE_STATUSES', WORK_ORDER_CHANGE_STATUSES, true),
   mirror('WorkOrderChangeExtraOutcome', WorkOrderChangeExtraOutcome, 'order-apply/rules EXTRA_OUTCOMES', EXTRA_OUTCOMES, true),
+  // B-OF-030 (order files tab; schema wave "order files 1/1"): an ask for a file — where it lands, who is asked, where it stands.
+  mirror('FileAskTarget', FileAskTarget, 'files/asks FILE_ASK_TARGETS', FILE_ASK_TARGETS, true),
+  mirror('FileAskAddressee', FileAskAddressee, 'files/asks FILE_ASK_ADDRESSEES', FILE_ASK_ADDRESSEES, true),
+  mirror('FileAskStatus', FileAskStatus, 'files/asks FILE_ASK_STATUSES', FILE_ASK_STATUSES, true),
 ])

@@ -40,6 +40,10 @@ import { techPackOf } from '../inquiries/views'
 // B-OF-033 (order files tab): the order's asks for files, sent with its files (modules/sales/file-asks/read.ts).
 import { serverClock } from '../../../core/time'
 import { askView, customerAskView, orderAsksOf } from '../file-asks/read'
+// B-OF-001 (order files tab, S3): each file's facts and what the reader may do over the order; the papers Nexus made.
+import { FILES_DELETE, FILES_MANAGE, FILES_UPLOAD } from '@nexus/factory-domain/auth/permissions/catalogue'
+import { MADE_PAPERS, madePapersOf } from '../../../platform/files/made'
+import { mayKeepAsks } from '../file-asks/file-asks'
 
 /**
  * B-SA-036 (Sales page plan N9, P14, R7; 13-backend B11; review BW-1): EVERY file of one sales order for the office, by where it
@@ -121,10 +125,15 @@ const FILE_SELECT = {
   sourceFileId: true,
   createdById: true, // B-OP-050
   priced: true, // B-CP-023
+  // B-OF-001: the lock every act sends, its series, what keeps it.
+  version: true,
+  seriesId: true,
+  legalHold: true,
+  retainUntil: true,
 } as const
 
 type Db = FactoryClient
-type FileRow = { readonly id: string; readonly companyId: string | null; readonly recordType: string; readonly recordId: string; readonly kind: string; readonly category: string | null; readonly originalName: string; readonly contentType: string; readonly sizeBytes: number; readonly versionNo: number; readonly availableAt: Date | null; readonly createdAt: Date; readonly visibility: readonly string[]; readonly partyId: string | null; readonly sourceFileId: string | null; /* B-OP-050 */ readonly createdById: string | null; /* B-CP-023 */ readonly priced: boolean }
+type FileRow = { readonly id: string; readonly companyId: string | null; readonly recordType: string; readonly recordId: string; readonly kind: string; readonly category: string | null; readonly originalName: string; readonly contentType: string; readonly sizeBytes: number; readonly versionNo: number; readonly availableAt: Date | null; readonly createdAt: Date; readonly visibility: readonly string[]; readonly partyId: string | null; readonly sourceFileId: string | null; /* B-OP-050 */ readonly createdById: string | null; /* B-CP-023 */ readonly priced: boolean; /* B-OF-001 */ readonly version: number; readonly seriesId: string | null; readonly legalHold: boolean; readonly retainUntil: Date | null }
 
 /** B-OP-050: who added a file, as the office's cards say it (never a worker: the floor is "the floor"). */
 export const ADDED_BY_KINDS = ['PERSON', 'FLOOR', 'CUSTOMER'] as const
@@ -140,6 +149,18 @@ export interface RecordRef {
   readonly label: string
 }
 
+// ── B-OF-003 (order files tab, S3): the record a file hangs on, with its paper's state and a DDT's shipment ──
+/** ANNULLED: a file of an annulled DDT; REPLACED: a file of an invoice that is no longer its XML or PDF (the rejected pair). */
+export const FILE_STATES = ['ANNULLED', 'REPLACED'] as const
+export interface FileFrom extends RecordRef {
+  readonly state: (typeof FILE_STATES)[number] | null
+  /** A DDT's paper: the shipment it travels with (the web draws it inside that shipment's block); null: any other file. */
+  readonly shipment: { readonly id: string; readonly label: string } | null
+}
+/** B-OF-001: who can TRULY see a file: CUSTOMER only when shared with this order's customer and its whole content is that customer's. */
+export const TRUE_AUDIENCES = ['CUSTOMER', 'LINK', 'FLOOR'] as const
+// ── end B-OF-003 ──
+
 export interface OrderFile {
   readonly id: string
   readonly group: OrderFileGroup
@@ -151,7 +172,7 @@ export interface OrderFile {
   readonly sizeBytes: number
   readonly versionNo: number
   readonly at: Date
-  readonly from: RecordRef
+  readonly from: FileFrom
   readonly line: { readonly id: string; readonly seq: number } | null
   readonly audience: FileAudience
   readonly bodyData: boolean
@@ -163,7 +184,27 @@ export interface OrderFile {
   readonly addedBy: AddedBy | null
   /** B-PT-013: a file of the customer's tech pack — the version the request named, shown at its version in force; null: any other file. */
   readonly techPack: TechPackMark | null
+  // ---- B-OF-001 (S3): its lock, its series, what keeps it, fiscal, priced, its true audiences ----
+  readonly version: number
+  readonly seriesId: string | null
+  readonly kept: { readonly legalHold: boolean; readonly retainUntil: Date | null }
+  readonly fiscal: boolean
+  readonly priced: boolean
+  readonly audiences: readonly (typeof TRUE_AUDIENCES)[number][]
 }
+
+// ── B-OF-002 (S3): an upload the virus scan holds (or one left pending), the reader's own: a card, never opened, never previewed ──
+export const HELD_REASONS = ['SCAN_PENDING', 'INFECTED', 'SCAN_FAILED', 'OTHER'] as const
+export interface HeldFile {
+  readonly id: string
+  readonly name: string
+  readonly group: OrderFileGroup
+  readonly at: Date
+  readonly reason: (typeof HELD_REASONS)[number]
+}
+/** An upload still PENDING_UPLOAD after this long is held too (it was never confirmed). */
+export const HELD_PENDING_MS = 15 * 60 * 1000
+// ── end B-OF-002 ──
 
 /** B-PT-013: a tech pack file — the version number the request named, at its version in force (`newer`: a later one than named). */
 export interface TechPackMark {
@@ -184,7 +225,9 @@ export interface OrderWorksheet {
 
 export interface OfficeOrderFiles {
   readonly order: Pick<OrderRow, 'id' | 'number' | 'companyId' | 'partyId'>
-  readonly groups: readonly { readonly key: OrderFileGroup; readonly files: OrderFile[]; readonly worksheets: OrderWorksheet[]; leftOut: number; measurementsLeftOut: number; /* B-CP-023 */ pricedLeftOut: number }[]
+  readonly groups: readonly { readonly key: OrderFileGroup; readonly files: OrderFile[]; readonly worksheets: OrderWorksheet[]; leftOut: number; measurementsLeftOut: number; /* B-CP-023 */ pricedLeftOut: number; /* B-OF-002 */ heldCount: number }[]
+  /** B-OF-002: the reader's own held uploads on the order or its lines. */
+  readonly held: readonly HeldFile[]
   /** Every file of the order this reader may open (a copy folded under another one too): the open route finds a file here. */
   readonly openable: ReadonlyMap<string, OrderFile>
   readonly truncated: boolean
@@ -229,10 +272,10 @@ export async function readOfficeOrderFiles(caller: CommandCaller, orderId: strin
   const context = officeContextOf(caller)
   const actor = actorOf(context)
   const order = await officeOrder(caller, orderId)
-  return caller.withClient((db) => readFiles(db, context.tenantId, actor, order))
+  return caller.withClient((db) => readFiles(db, context.tenantId, actor, order, context.actorId))
 }
 
-async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow): Promise<OfficeOrderFiles> {
+async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow, /* B-OF-002 */ actorId: string): Promise<OfficeOrderFiles> {
   const scope = { companyId: order.companyId, partyId: order.partyId }
   const may = (permission: Permission) => can(actor, permission, scope)
 
@@ -258,17 +301,24 @@ async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow
   const checks = inspections.length === 0 ? [] : await db.inspectionCheckResult.findMany({ where: { inspectionId: { in: inspections.map((row) => row.id) } }, select: { id: true, inspectionId: true } })
   // B-OP-043 (order page N6): a shared shipment's files show on every order it carries (made for it or carrying its garments).
   const shipments = await db.shipment.findMany({ where: shipmentsOfOrderWhere(order.id), select: { id: true, number: true } })
-  const ddts = shipments.length === 0 ? [] : await db.ddt.findMany({ where: { shipmentId: { in: shipments.map((row) => row.id) } }, select: { id: true, number: true } })
-  const invoices = await db.invoice.findMany({ where: { salesOrderId: order.id }, select: { id: true, number: true } })
+  // B-OF-003: + a DDT's shipment and whether it was annulled (a DdtCancellation row).
+  const ddts = shipments.length === 0 ? [] : await db.ddt.findMany({ where: { shipmentId: { in: shipments.map((row) => row.id) } }, select: { id: true, number: true, shipmentId: true, cancellations: { select: { id: true }, take: 1 } } })
+  // B-OF-003: + each invoice's XML and PDF (a file of it that is neither was replaced), and the credit notes of its invoices.
+  const ownInvoices = await db.invoice.findMany({ where: { salesOrderId: order.id }, select: { id: true, number: true, xmlFileId: true, pdfFileId: true } })
+  const creditNotes = ownInvoices.length === 0 ? [] : await db.invoice.findMany({ where: { docType: 'TD04', creditOfId: { in: ownInvoices.map((row) => row.id) } }, select: { id: true, number: true, xmlFileId: true, pdfFileId: true } })
+  const invoices = [...ownInvoices, ...creditNotes.filter((note) => !ownInvoices.some((row) => row.id === note.id))]
+  const invoiceFiles = new Map(invoices.map((row) => [row.id, new Set([row.xmlFileId, row.pdfFileId].filter((fileId): fileId is string => fileId !== null))]))
   const returns = await db.returnAuthorisation.findMany({ where: { salesOrderId: order.id }, select: { id: true, number: true } })
   const complaints = await db.complaint.findMany({ where: { salesOrderId: order.id }, select: { id: true, number: true } })
   // B-PT-013: the customer's tech pack (null: no inquiry, or one of another customer or company: no group).
   const pack = await techPackOfOrder(db, actor, order)
 
   // Each record: its group, its label, the work order it belongs to (the production and quality rights ask it), its line.
-  const records = new Map<string, { group: OrderFileGroup; label: string; workOrderId: string | null; lineId: string | null; right: Permission | null }>()
-  const put = (type: string, recordId: string, entry: { group: OrderFileGroup; label: string; workOrderId?: string | null; lineId?: string | null; right?: Permission | null }) =>
-    records.set(keyOf(type, recordId), { workOrderId: null, lineId: null, right: null, ...entry })
+  // B-OF-003: + a paper's state (an annulled DDT) and a DDT's shipment.
+  type RecordEntry = { group: OrderFileGroup; label: string; workOrderId: string | null; lineId: string | null; right: Permission | null; state: 'ANNULLED' | null; shipment: { id: string; label: string } | null }
+  const records = new Map<string, RecordEntry>()
+  const put = (type: string, recordId: string, entry: { group: OrderFileGroup; label: string; workOrderId?: string | null; lineId?: string | null; right?: Permission | null; state?: 'ANNULLED' | null; shipment?: { id: string; label: string } | null }) =>
+    records.set(keyOf(type, recordId), { workOrderId: null, lineId: null, right: null, state: null, shipment: null, ...entry })
   put('SalesOrder', order.id, { group: 'ORDER', label: order.number })
   for (const line of lines) put('SalesOrderLine', line.id, { group: 'LINES', label: `${order.number} · ${line.seq}`, lineId: line.id })
   for (const request of requests) put('OrderChangeRequest', request.id, { group: 'REQUESTS', label: `${order.number} · ${request.kind}` })
@@ -283,7 +333,11 @@ async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow
     if (inspection) put('InspectionCheckResult', check.id, { group: 'QUALITY', label: inspection.number ?? workOrderOf.get(inspection.workOrderId)?.number ?? '', workOrderId: inspection.workOrderId, right: QUALITY_INSPECTIONS_VIEW })
   }
   for (const shipment of shipments) put('Shipment', shipment.id, { group: 'SHIPMENTS', label: shipment.number, right: SHIPPING_VIEW })
-  for (const ddt of ddts) put('Ddt', ddt.id, { group: 'SHIPMENTS', label: ddt.number, right: SHIPPING_VIEW })
+  const shipmentNumber = new Map(shipments.map((row) => [row.id, row.number]))
+  for (const ddt of ddts) {
+    const shipment = ddt.shipmentId && shipmentNumber.has(ddt.shipmentId) ? { id: ddt.shipmentId, label: shipmentNumber.get(ddt.shipmentId)! } : null
+    put('Ddt', ddt.id, { group: 'SHIPMENTS', label: ddt.number, right: SHIPPING_VIEW, state: ddt.cancellations.length > 0 ? 'ANNULLED' : null, shipment }) // B-OF-003
+  }
   for (const invoice of invoices) put('Invoice', invoice.id, { group: 'SHIPMENTS', label: invoice.number ?? '', right: INVOICES_VIEW })
   for (const row of returns) put('ReturnAuthorisation', row.id, { group: 'RETURNS', label: row.number, right: SALES_RETURNS_VIEW })
   for (const row of complaints) put('Complaint', row.id, { group: 'RETURNS', label: row.number, right: QUALITY_COMPLAINTS_VIEW })
@@ -330,7 +384,17 @@ async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow
     for (const record of chain.slice(1)) if (!reachesFileRecord(actor, FILES_READ, await scopeOf(record.type, record.id), record.companyId)) return false
     return true
   }
-  const groups = new Map(ORDER_FILE_GROUPS.map((key) => [key, { key, files: [] as OrderFile[], worksheets: [] as OrderWorksheet[], leftOut: 0, measurementsLeftOut: 0, pricedLeftOut: 0 /* B-CP-023 */ }]))
+  // B-OF-001: the content of a file is this order's customer's (or no customer's): its own record and, for a copy, each source's.
+  const contentIsTheCustomers = async (file: FileRow): Promise<boolean> => {
+    const chain = file.sourceFileId ? contentRecordsOf(nodes, file.id) : [{ type: file.recordType, id: file.recordId, companyId: file.companyId }]
+    if (chain === null) return false
+    for (const record of chain) {
+      const party = fileRecordParty(await scopeOf(record.type, record.id))
+      if (party !== null && party !== order.partyId) return false
+    }
+    return true
+  }
+  const groups = new Map(ORDER_FILE_GROUPS.map((key) => [key, { key, files: [] as OrderFile[], worksheets: [] as OrderWorksheet[], leftOut: 0, measurementsLeftOut: 0, pricedLeftOut: 0 /* B-CP-023 */, heldCount: 0 /* B-OF-002 */ }]))
   // B-PT-013: without sales.inquiries.view the tech pack's files are counted, never named.
   if (pack && !pack.mayRead) groups.get('TECH_PACK')!.leftOut += pack.files.size
   // B-CP-023: a reader who does not see prices gets the order's priced files counted, never named (the Files tab, its open route,
@@ -342,9 +406,9 @@ async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow
     const packed = pack && pack.mayRead ? (pack.files.get(file.id) ?? null) : null
     const lineId = packed ? null : file.recordType === 'SalesOrderLine' ? file.recordId : (upstream.get(file.id) ?? null)
     const record = packed
-      ? { group: 'TECH_PACK' as const, label: pack!.label, workOrderId: null, lineId: null, right: null }
+      ? { group: 'TECH_PACK' as const, label: pack!.label, workOrderId: null, lineId: null, right: null, state: null, shipment: null /* B-OF-003 */ }
       : upstream.has(file.id)
-        ? { group: 'LINES' as const, label: `${order.number} · ${lineOf.get(lineId!)?.seq ?? ''}`, workOrderId: null, lineId, right: null }
+        ? { group: 'LINES' as const, label: `${order.number} · ${lineOf.get(lineId!)?.seq ?? ''}`, workOrderId: null, lineId, right: null, state: null, shipment: null /* B-OF-003 */ }
         : records.get(keyOf(file.recordType, file.recordId))
     if (!record) continue
     const group = groups.get(record.group)!
@@ -370,6 +434,17 @@ async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow
       continue
     }
     const line = lineId ? lineOf.get(lineId) : undefined
+    // ---- B-OF-001: the TRUE audiences — CUSTOMER only when shared with THIS order's customer and every record of its content (a copy's
+    // chain) is that customer's or no customer's; LINK the same party; FLOOR as shared.
+    const sharedHere = file.partyId === order.partyId && (await contentIsTheCustomers(file))
+    const audiences = [
+      ...(file.visibility.includes('PARTNER') && sharedHere ? (['CUSTOMER'] as const) : []),
+      ...(file.visibility.includes('LINK') && sharedHere ? (['LINK'] as const) : []),
+      ...(file.visibility.includes('FLOOR') ? (['FLOOR'] as const) : []),
+    ]
+    // ---- B-OF-003: an annulled DDT's paper; an invoice's file that is no longer its XML or PDF.
+    const ownFiles = file.recordType === 'Invoice' ? invoiceFiles.get(file.recordId) : undefined
+    const state = record.state ?? (ownFiles && ownFiles.size > 0 && !ownFiles.has(file.id) ? 'REPLACED' : null)
     shown.push({
       file,
       view: {
@@ -383,7 +458,7 @@ async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow
         sizeBytes: file.sizeBytes,
         versionNo: file.versionNo,
         at: file.availableAt ?? file.createdAt,
-        from: { type: !packed && upstream.has(file.id) ? 'SalesOrderLine' : file.recordType, id: !packed && upstream.has(file.id) ? lineId! : file.recordId, label: record.label },
+        from: { type: !packed && upstream.has(file.id) ? 'SalesOrderLine' : file.recordType, id: !packed && upstream.has(file.id) ? lineId! : file.recordId, label: record.label, state, shipment: record.shipment /* B-OF-003 */ },
         line: line ? { id: line.id, seq: line.seq } : null,
         audience: file.visibility.includes('PARTNER') && file.partyId === order.partyId ? 'CUSTOMER_CAN_SEE' : 'OFFICE_ONLY',
         bodyData,
@@ -392,9 +467,46 @@ async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow
         inThread: null,
         addedBy: null,
         techPack: packed, // B-PT-013
+        // B-OF-001
+        version: file.version,
+        seriesId: file.seriesId,
+        kept: { legalHold: file.legalHold, retainUntil: file.retainUntil },
+        fiscal: file.kind === 'FISCAL_ARCHIVE',
+        priced: file.priced,
+        audiences,
       },
     })
   }
+
+  // ---- B-OF-002: what the virus scan holds (or an upload left pending) on the same records — counted per group where the reader would
+  // read it; the reader's OWN uploads on the order or its lines also as cards (never opened, never previewed: the open route finds
+  // AVAILABLE files only). The scan's retry stays at the file's home.
+  const heldRows = byType.size === 0 ? [] : await db.storedFile.findMany({
+    where: {
+      supersededAt: null,
+      AND: [
+        { OR: [{ status: 'QUARANTINED' }, { status: 'PENDING_UPLOAD', createdAt: { lt: new Date(serverClock.now().getTime() - HELD_PENDING_MS) } }] },
+        { OR: [...byType].map(([recordType, ids]) => ({ recordType, recordId: { in: ids } })) },
+      ],
+    },
+    select: { id: true, companyId: true, recordType: true, recordId: true, originalName: true, createdAt: true, createdById: true, scanStatus: true, quarantineReason: true },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: ORDER_FILES_CAP,
+  })
+  const held: HeldFile[] = []
+  for (const row of heldRows) {
+    const record = records.get(keyOf(row.recordType, row.recordId))
+    if (!record) continue
+    const workOrder = record.workOrderId ? workOrderOf.get(record.workOrderId) : undefined
+    const rightHeld = record.right === null || (may(record.right) && (!workOrder || reachesWorkOrder(actor, record.right, workOrder)))
+    if (!rightHeld || !reachesFileRecord(actor, FILES_READ, await scopeOf(row.recordType, row.recordId), row.companyId)) continue
+    groups.get(record.group)!.heldCount += 1
+    if (row.createdById === actorId && (row.recordType === 'SalesOrder' || row.recordType === 'SalesOrderLine')) {
+      const reason = row.scanStatus === 'INFECTED' ? 'INFECTED' : row.scanStatus === 'FAILED' ? 'SCAN_FAILED' : row.scanStatus === 'PENDING' || row.quarantineReason === 'scan_pending' ? 'SCAN_PENDING' : 'OTHER'
+      held.push({ id: row.id, name: row.originalName, group: record.group, at: row.createdAt, reason })
+    }
+  }
+  // ---- end B-OF-002
 
   // ---- B-OP-050: who added each file shown (an office person, the floor, this order's customer) ---------------------------
   const adders = await addersOf(db, order, shown.map((entry) => entry.file))
@@ -444,6 +556,7 @@ async function readFiles(db: Db, tenantId: string, actor: Actor, order: OrderRow
     groups: ORDER_FILE_GROUPS.map((key) => groups.get(key)!),
     openable: new Map(shown.map((entry) => [entry.file.id, entry.view])),
     truncated,
+    held, // B-OF-002
   }
 }
 
@@ -576,6 +689,8 @@ async function foldCopies(
 
 const words = output({ it: z.string(), en: z.string() })
 const recordRef = output({ type: z.string(), id: id(), label: z.string() })
+// B-OF-003: the record a file hangs on, + its paper's state and a DDT's shipment.
+const fromRef = recordRef.extend({ state: z.enum(FILE_STATES).nullable(), shipment: output({ id: id(), label: z.string() }).nullable() })
 
 export const orderFileView = output({
   id: id(),
@@ -586,8 +701,8 @@ export const orderFileView = output({
   sizeBytes: z.number().int(),
   versionNo: z.number().int(),
   at: instant(),
-  /** The record it hangs on (an order line for a quote line's artwork: it travels with the line). */
-  from: recordRef,
+  /** The record it hangs on (an order line for a quote line's artwork: it travels with the line); B-OF-003: its state, a DDT's shipment. */
+  from: fromRef,
   line: output({ id: id(), seq: z.number().int() }).nullable(),
   /** "Shared with the customer" (this order's customer) or "Office only". */
   audience: z.enum(FILE_AUDIENCES),
@@ -611,6 +726,19 @@ export const orderFileView = output({
   techPack: output({ named: z.number().int(), inForce: z.literal(true), newer: z.boolean() }).nullable(),
   // B-OF-033: the ask this file was sent for (arrived or accepted; null: none).
   askId: id().nullable(),
+  // ---- B-OF-001 (S3): the version every act sends; the series and how many versions it keeps; what keeps it (a legal hold, a
+  // retention date); a fiscal paper (never a version, never deleted); a paper Nexus made (never deleted) and whether it shows our
+  // prices by its kind (its mark stays); priced; who TRULY sees it (CUSTOMER only for this order's customer and content).
+  version: z.number().int(),
+  seriesId: id().nullable(),
+  versions: z.number().int(),
+  kept: output({ legalHold: z.boolean(), retainUntil: instant().nullable() }),
+  fiscal: z.boolean(),
+  made: z.enum(MADE_PAPERS).nullable(),
+  bornPriced: notMoney(z.boolean()),
+  priced: notMoney(z.boolean()),
+  audiences: z.array(z.enum(TRUE_AUDIENCES)),
+  // ---- end B-OF-001
 })
 
 export const orderFilesContract = defineContract({
@@ -631,8 +759,14 @@ export const orderFilesContract = defineContract({
           measurementsLeftOut: z.number().int(),
           /** B-CP-023: documents that show prices, for a reader who does not see prices: counted, never named ("N priced documents"). */
           pricedLeftOut: notMoney(z.number().int()),
+          /** B-OF-002: files of this group the virus scan holds (or an upload left pending): counted. */
+          heldCount: z.number().int(),
         }),
       ),
+      /** B-OF-002: the reader's own held uploads on the order or its lines (a card each; never opened, never previewed). */
+      held: z.array(output({ id: id(), name: z.string(), group: z.enum(ORDER_FILE_GROUPS), at: instant(), reason: z.enum(HELD_REASONS) })),
+      /** B-OF-001: what the reader may do over THIS order's scope (its company and customer). */
+      may: output({ upload: z.boolean(), delete: z.boolean(), share: z.boolean(), ask: z.boolean(), askCustomer: z.boolean() }),
       /** How many files are listed (a count, not money). */
       total: notMoney(z.number().int()),
       /** More than `cap` files: the newest `cap` are read. */
@@ -655,14 +789,43 @@ export async function orderFiles(caller: CommandCaller, orderId: string) {
   const context = officeContextOf(caller)
   const asked = await caller.withClient((db) => orderAsksOf(db, actorOf(context), context.actorId, read.order, serverClock.now()))
   // ---- end B-OF-033
+  // ---- B-OF-001: per shown file, how many versions its series keeps and whether Nexus made it (one query each for the shown ids).
+  const shownFiles = read.groups.flatMap((group) => group.files)
+  const facts = await caller.withClient(async (db) => {
+    const roots = [...new Set(shownFiles.map((file) => file.seriesId ?? file.id))]
+    const kept = roots.length === 0 ? [] : await db.storedFile.findMany({ where: { status: { not: 'DELETED' }, OR: [{ id: { in: roots } }, { seriesId: { in: roots } }] }, select: { id: true, seriesId: true } })
+    const versions = new Map<string, number>()
+    for (const row of kept) versions.set(row.seriesId ?? row.id, (versions.get(row.seriesId ?? row.id) ?? 0) + 1)
+    return { versions, made: await madePapersOf(db, shownFiles.map((file) => file.id)) }
+  })
+  const actor = actorOf(context)
+  const orderScope = { companyId: read.order.companyId, partyId: read.order.partyId }
+  const may = {
+    upload: can(actor, FILES_UPLOAD, orderScope),
+    delete: can(actor, FILES_DELETE, orderScope),
+    share: can(actor, FILES_MANAGE, orderScope),
+    ask: mayKeepAsks(actor, read.order, true),
+    askCustomer: can(actor, 'partners.tasks.manage' as Permission, orderScope),
+  }
+  // ---- end B-OF-001
   const groups = read.groups.map((group) => ({
     key: group.key,
     words: ORDER_FILE_GROUP_WORDS[group.key],
-    files: group.files.map(({ companyId: _companyId, group: _group, at, ...file }) => ({ ...file, at: toUtcIso(at), askId: asked.askOfFile.get(file.id) ?? null /* B-OF-033 */ })),
+    files: group.files.map(({ companyId: _companyId, group: _group, at, kept, ...file }) => ({
+      ...file,
+      at: toUtcIso(at),
+      askId: asked.askOfFile.get(file.id) ?? null /* B-OF-033 */,
+      // B-OF-001
+      kept: { legalHold: kept.legalHold, retainUntil: kept.retainUntil ? toUtcIso(kept.retainUntil) : null },
+      versions: facts.versions.get(file.seriesId ?? file.id) ?? 1,
+      made: facts.made.get(file.id)?.made ?? null,
+      bornPriced: facts.made.get(file.id)?.bornPriced ?? false,
+    })),
     worksheets: group.worksheets.map(({ createdAt, ...sheet }) => ({ ...sheet, createdAt: toUtcIso(createdAt) })),
     leftOut: group.leftOut,
     measurementsLeftOut: group.measurementsLeftOut,
     pricedLeftOut: group.pricedLeftOut, // B-CP-023
+    heldCount: group.heldCount, // B-OF-002
   }))
   return {
     order: { id: read.order.id, number: read.order.number },
@@ -670,6 +833,8 @@ export async function orderFiles(caller: CommandCaller, orderId: string) {
     total: groups.reduce((sum, group) => sum + group.files.length, 0),
     truncated: read.truncated,
     cap: ORDER_FILES_CAP,
+    held: read.held.map((file) => ({ ...file, at: toUtcIso(file.at) })), // B-OF-002
+    may, // B-OF-001
     asks: asked.asks, // B-OF-033
     asksLeftOut: asked.asksLeftOut, // B-OF-033
     customerAsks: asked.customerAsks, // B-OF-033

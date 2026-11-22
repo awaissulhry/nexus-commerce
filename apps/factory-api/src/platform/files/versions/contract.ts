@@ -33,3 +33,17 @@ export const versionView = fileView.extend({ current: z.boolean() })
 export const listVersionsContract = defineContract({ params: fileParams, response: { 200: output({ versions: z.array(versionView) }) } })
 
 export const restoreVersionContract = defineContract({ params: fileParams, response: { 201: output({ file: fileView }) } })
+
+// ── B-OF-010 / B-OF-011 (order files tab): delete a whole document (every version, with a reason); rename (the current version copied
+// as the next one under the new name). Each sends the version of the file it names.
+export const deleteDocumentContract = defineContract({
+  params: fileParams,
+  body: input({ version: z.number().int().min(1), reason: z.string().trim().min(3).max(500) }),
+  response: { 200: output({ file: fileView, removed: z.number().int() }) },
+})
+export const renameFileContract = defineContract({
+  params: fileParams,
+  body: input({ version: z.number().int().min(1), name: z.string().trim().min(1).max(500) }),
+  response: { 201: output({ file: fileView }) },
+})
+// ── end B-OF-010 / B-OF-011

@@ -186,6 +186,10 @@ const LIVE_RULES: readonly { readonly match: (type: string) => boolean; readonly
   // prices changed or a difference was accepted by hand (orderId): the Price check card on Money (it re-read order, lines, changes).
   { match: (type) => type === 'order_margin.changed' || type === 'sales_order.brand_price_changed', parts: ['money'] },
   // ── end B-OM-008 ──
+  // ── B-OF-004 (order files tab; 13-backend §3): a file deleted (a whole document), shared or taken back, marked priced, and an ask for a
+  // file made, answered, decided or changed re-read the Files tab (the order's and its lines' files: their ids are watched below).
+  { match: (type) => type === 'file.removed' || type === 'file.visibility_changed' || type === 'file.priced_changed' || type.startsWith('file_ask.'), parts: ['files'] },
+  // ── end B-OF-004 ──
 ]
 
 /** Each declared event the order page re-reads on, with its parts (declared types only, sorted). */
@@ -239,6 +243,7 @@ async function liveOf(db: Reader, order: OrderRow, facts: OrderFacts, depositIds
     styleChangeIds, // B-OC-008
     creditNoteIds, // B-OM-008
     refundIds, // B-OM-008
+    lineIds: facts.lines.map((line) => line.id), // B-OF-004: a line's file re-reads Files (file.* names the line as its record)
   }
   const records: PartRecords = { order: [order.id], changes: requestIds, work: reachedWorkOrders, shipments: ids.shipmentIds, money: { invoices: ids.invoiceIds, deposits: ids.depositRequestIds } }
   return { live: { events: ORDER_LIVE_EVENTS.map((entry) => ({ type: entry.type, parts: [...entry.parts] })), ids }, lastChange: await lastChangeOf(db, order, records) }

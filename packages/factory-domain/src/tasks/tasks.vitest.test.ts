@@ -73,7 +73,8 @@ describe('tasks on any record (B-W2a-20: COL-037)', () => {
 
   it('declares tasks.manage (a write) for the office templates that write notes, never read-only or the floor; and its events', () => {
     expect(FACTORY_PERMISSIONS.get('tasks.manage')?.risk).toBe('write')
-    for (const key of ['owner', 'admin', 'finance', 'sales', 'planner', 'buyer', 'warehouse', 'production_manager', 'quality_inspector', 'floor_supervisor']) expect(templateOf(key)!.permissions, key).toContain('tasks.manage')
+    // B-OF-016 (order files tab; Owner D6): + designer.
+    for (const key of ['owner', 'admin', 'finance', 'sales', 'planner', 'buyer', 'warehouse', 'production_manager', 'quality_inspector', 'floor_supervisor', 'designer']) expect(templateOf(key)!.permissions, key).toContain('tasks.manage')
     for (const key of ['read_only', 'operator', 'team_leader']) expect(templateOf(key)!.permissions, key).not.toContain('tasks.manage')
     for (const type of ['task.created', 'task.assigned', 'task.completed', 'task.changed']) expect(EVENT_CATALOGUE.get(type, 1).live?.permission, type).toBe('home.view')
   })

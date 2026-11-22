@@ -24,8 +24,9 @@ import { abortLargeUploadContract, completeLargeUploadContract, getLargeUploadCo
 import { abortLargeUpload, completeLargeUpload, getLargeUpload, presignParts, startLargeUpload, startLargeVersion, syncLargeUpload } from './multipart/large'
 import { previewContract } from './preview/contract'
 import { previewFile } from './preview/preview'
-import { listVersionsContract, requestVersionContract, restoreVersionContract } from './versions/contract'
+import { deleteDocumentContract, listVersionsContract, renameFileContract, requestVersionContract, restoreVersionContract } from './versions/contract'
 import { listVersions, requestNewVersion, restoreVersion } from './versions/versions'
+import { deleteDocument, renameFile } from './versions/document' // B-OF-010 / B-OF-011
 // B-W2b-177: required documents, a document's type and expiry, markup, the Versions pop-up's history.
 import { changeRule, createRule, listRules } from './required/admin'
 import { changeRuleContract, createRuleContract, listRulesContract, recordDocumentsContract, setDocumentContract } from './required/contract'
@@ -116,6 +117,9 @@ export default defineRoutes('files', manifest, async (app) => {
   app.post('/files/:fileId/restore', { schema: restoreVersionContract }, async (request, reply) => {
     return reply.code(201).send({ file: await restoreVersion(processFiles(), request, request.params.fileId, idempotencyKeyFrom(request)) })
   })
+  // B-OF-010 / B-OF-011 (order files tab): delete a whole document with a reason; rename as a new version.
+  app.post('/files/:fileId/delete-document', { schema: deleteDocumentContract }, async (request) => deleteDocument(processFiles(), request, request.params.fileId, request.body, idempotencyKeyFrom(request)))
+  app.post('/files/:fileId/rename', { schema: renameFileContract }, async (request, reply) => reply.code(201).send({ file: await renameFile(processFiles(), request, request.params.fileId, request.body, idempotencyKeyFrom(request)) }))
 
   // B-W2b-160 (COL-047): open in the browser (a picture or a PDF), else a download; 60 seconds.
   app.get('/files/:fileId/preview', { schema: previewContract }, async (request) => ({

@@ -43,6 +43,10 @@ export const manifest = defineManifest({
   'GET /files/:fileId/use-on/targets': { audiences: ['office'], permission: 'files.upload', scope: 'record' },
   // B-CP-014: mark a file as showing prices (files.read over its record; taking the mark off: the price grain, checked in files.ts).
   'POST /files/:fileId/priced': { audiences: ['office'], permission: 'files.read', scope: 'record' },
+  // B-OF-010 / B-OF-011 (order files tab): delete a WHOLE document (every version, a reason; refused whole under a hold, for fiscal
+  // papers and papers Nexus made), and rename (the current version copied as the next one under the new name).
+  'POST /files/:fileId/delete-document': { audiences: ['office'], permission: 'files.delete', scope: 'record' },
+  'POST /files/:fileId/rename': { audiences: ['office'], permission: 'files.upload', scope: 'record' },
   'PUT /local-files': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
   'GET /local-files': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
 })

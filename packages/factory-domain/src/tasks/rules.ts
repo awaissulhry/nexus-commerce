@@ -9,8 +9,9 @@ import { defineMachine } from '../state/machine'
  * assignment all or none; a due time only with its day; closed exactly when it has a closing time; only an OPEN task
  * snoozed; never deleted).
  *
- * A task is on a record (its type, id and label, fixed) or of its own; it has at most one assignee (a person: there are
- * no teams before People, W2b), a due day with an optional time, a checklist and a description. OPEN → DONE (done) or
+ * A task is on a record (its type, id and label, fixed) or of its own; it has at most one assignee (a person: a task is never a
+ * team's or a role's — an office role asked for a file gets one task per holder, a floor team or role reads its ask on the tablet;
+ * B-OF-016), a due day with an optional time, a checklist and a description. OPEN → DONE (done) or
  * CANCELLED (given up); either back to OPEN (Undo, reopen). Snooze hides an OPEN task from Today until a time.
  */
 
