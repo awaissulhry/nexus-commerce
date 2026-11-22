@@ -35,6 +35,10 @@ import { pricedLockedIn, uploadPricedHeld } from '../model'
 import { previewOf, pricedMarkOf } from '../../files/model'
 import '../files-view.css'
 import './files-tab.css' // F-OF-101: the order files tab's groups, blocks and cards
+// F-OF-201 … F-OF-203: "Waiting for files" — the band (the order's window draws it above the groups; the tab in its own section) and its windows.
+import { ASKS_NS, AsksBody, AsksWindowHead, arrivedFileIds } from '../asks/view/AsksBody'
+import { AskWindows } from '../asks/view/AskWindows'
+import type { AskDoor, AskWindow } from '../asks/asks'
 
 export const FILES_VIEW_NS = 'record-thread-files-view'
 
@@ -116,6 +120,15 @@ export interface FilesViewActions {
   onViewerRetry?: (fileId: string) => void
   onOrderPreviewFailed?: (fileId: string) => void
   // ---- end F-OF-104
+  // ---- F-OF-201 … F-OF-203 ("Waiting for files"): the band's doors and windows (use-file-asks) ----
+  onAskNew?: () => void
+  onAskDoor?: (askId: string, door: AskDoor) => void
+  onAskWindow?: (next: AskWindow) => void
+  onAskSubmit?: () => void
+  onAskClose?: () => void
+  onAskRetryPicks?: () => void
+  onAskDismiss?: () => void
+  // ---- end F-OF-201
 }
 
 // ---- B-TH-280: the files in depth (B-W2b-177) in this window — the container (the docked thread) fills these slots with the depth
@@ -151,7 +164,7 @@ const KIND_ICON: Readonly<Record<FileKind, ReactNode>> = {
  */
 export function FilesView({ model, actions, slots }: { model: FilesViewModel; actions?: FilesViewActions; /* B-TH-280 */ slots?: FilesViewSlots }) {
   return (
-    <WithMessages namespaces={[FILES_VIEW_NS, 'record-thread-files', 'lists', /* B-TH-231 */ 'search', /* B-CP-014 */ 'record-files']}>
+    <WithMessages namespaces={[FILES_VIEW_NS, 'record-thread-files', 'lists', /* B-TH-231 */ 'search', /* B-CP-014 */ 'record-files', /* F-OF-201: the order's window draws the band */ ASKS_NS]}>
       <View model={model} actions={actions} slots={slots} />
     </WithMessages>
   )
@@ -474,7 +487,9 @@ export function UploadDialog({ ask, party, busy, onChange, onConfirm, onCancel, 
   const locale = useLocale()
   const audiences = ask.audiences.filter((audience) => audience !== 'PARTNER' || party !== null)
   const count = ask.files.length
-  const placeWords = (place: UploadPlace) => (place.kind === 'order' ? t('upload.place.order') : place.what ? t('upload.place.lineOf', { seq: place.seq ?? 0, what: place.what }) : t('upload.place.line', { seq: place.seq ?? 0 }))
+  const placeWords = (place: UploadPlace) => (place.kind === 'order' ? t('upload.place.order') : place.kind === 'workOrder' ? (place.what ?? '') /* F-OF-203 */ : place.what ? t('upload.place.lineOf', { seq: place.seq ?? 0, what: place.what }) : t('upload.place.line', { seq: place.seq ?? 0 }))
+  const askWords = useT('file-asks') // F-OF-203: an ask's upload says who asks what
+  const forAsk = ask.forAsk ?? null
   return (
     <Modal
       open
@@ -485,12 +500,19 @@ export function UploadDialog({ ask, party, busy, onChange, onConfirm, onCancel, 
         <>
           <Button onClick={() => onCancel?.()}>{t('upload.cancel')}</Button>
           <Button variant="primary" heldReason={busy ? t('upload.busy') : count === 0 ? t('upload.noneYet') /* F-OF-103 */ : uploadAskHeld(ask) ? t(uploadAskHeld(ask)!) : pricedHeld ? pricedWords(pricedHeld) /* F-CP-144 */ : null} onClick={() => onConfirm?.()}>
-            {count === 0 ? t('upload.titleAdd') : t('upload.confirm', { count })}
+            {forAsk ? askWords('upload.send') /* F-OF-203 */ : count === 0 ? t('upload.titleAdd') : t('upload.confirm', { count })}
           </Button>
         </>
       }
     >
       <div className="fw-rtv-upload">
+        {/* F-OF-203: "Upload for this ask" — the asker's words on top (a priced ask without the price grain: no words), when, where it lands. */}
+        {forAsk && (
+          <div className="fw-of-forask" role="note">
+            <p className="fw-of-forask-words">{forAsk.words !== null ? askWords('upload.asks', { name: forAsk.by, words: forAsk.words }) : askWords('upload.asksPriced', { name: forAsk.by })}</p>
+            <p className="fw-rtv-muted">{askWords('upload.due', { date: formatDate(forAsk.dueOn, { locale }), target: forAsk.target })}</p>
+          </div>
+        )}
         {/* F-OF-103: opened by "Add files…", the window takes the files itself (drop or browse); more join the ones chosen. */}
         {onAdd && <FileDropzone multiple onFiles={(files) => onAdd(files)} hint={t('upload.hint')} />}
         {count > 0 && (
@@ -503,7 +525,7 @@ export function UploadDialog({ ask, party, busy, onChange, onConfirm, onCancel, 
           </ul>
         )}
         {/* F-OF-103 (10-design §7): where it goes — the order or one of its lines. */}
-        {ask.places && ask.places.length > 0 && (
+        {ask.places && ask.places.length > 0 && !forAsk && (
           <Field label={t('upload.where')}>
             <Select value={ask.place ?? ask.places[0]!.key} onChange={(event) => onChange?.({ place: event.target.value })}>
               {ask.places.map((place) => (
@@ -523,7 +545,7 @@ export function UploadDialog({ ask, party, busy, onChange, onConfirm, onCancel, 
             ))}
           </Select>
         </Field>
-        {ask.places && <p className="fw-rtv-muted">{t('upload.noFiscal') /* F-OF-103 (F5-B1) */}</p>}
+        {ask.places && !forAsk && <p className="fw-rtv-muted">{t('upload.noFiscal') /* F-OF-103 (F5-B1) */}</p>}
         {/* B-TH-283 (B-TH-083): the measurement-sheet tick, at upload. */}
         <Checkbox
           label={
@@ -614,7 +636,7 @@ function dropOn(onFiles: ((files: File[]) => void) | null) {
 // ── F-SA-237 (sales page plan N9, picks P14, R7) ──────────────────────────────────────────────────────────────────────────────
 
 /** F-OF-101: the catalogues the order files body speaks (the tab's head, menu and ⓘ draw inside the same ones). */
-export const ORDER_FILES_NS: readonly string[] = [FILES_VIEW_NS, 'record-thread-files', 'lists', /* F-CP-144 */ 'record-files']
+export const ORDER_FILES_NS: readonly string[] = [FILES_VIEW_NS, 'record-thread-files', 'lists', /* F-CP-144 */ 'record-files', /* F-OF-201 */ ASKS_NS]
 
 /**
  * The order files body on its own (the order's Files tab mounts it; this window mounts it for a SalesOrder). F-OP-125: `place` — the
@@ -640,6 +662,7 @@ export function OrderFilesBody({ model, party, actions, place = 'tab' }: { model
  */
 function OrderFilesView({ model, party, actions, place = 'window' }: { model: OrderFilesModel; party: { readonly name: string } | null; actions?: FilesViewActions | undefined; place?: 'tab' | 'window' }) {
   const t = useT(FILES_VIEW_NS)
+  const askT = useT(ASKS_NS) // F-OF-201
   const fileWords = useT('record-thread-files')
   const locale = useLocale()
   const listRef = useRef<HTMLDivElement>(null)
@@ -709,10 +732,11 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
     }
   }
   const empty = sections.length === 0 && (!counted || (counted.locked === 0 && counted.checking === 0))
-  const words = { t, fileWords, locale }
+  const words = { t, fileWords, locale, askT }
   // F-OF-103: "Add files…" — hidden without the right (the read's `may`, else the session's); files dropped on Files go to it too.
   const mayUpload = !customer && !!model.may?.upload && !!actions?.onOrderAdd
   const outcome = customer ? null : (model.uploadOutcome ?? null)
+  const toCheck = customer ? new Set<string>() : arrivedFileIds(read.asks) // F-OF-201: files that came for an ask, still to check
   return (
     <div className={`fw-rtv-order${place === 'window' ? ' is-window' : ''} fw-of-body`} {...dropOn(mayUpload ? (files) => actions?.onOrderAdd?.(files) : null)}>
       {/* F-OF-103: the order's thread window has no head of its own — its one Add is here (the tab's sits in the Files head). */}
@@ -722,6 +746,13 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
             <Upload size={14} aria-hidden /> {t('files.add')}
           </Button>
         </div>
+      )}
+      {/* F-OF-201: the order's thread window draws "Waiting for files" above the files (the tab draws it in its own section). */}
+      {place === 'window' && !customer && model.asks && read.asks && (
+        <section className="fw-of-asks-w" aria-label={askT('band.title')}>
+          <AsksWindowHead read={read} state={model.asks} onAsk={actions?.onAskNew} />
+          <AsksBody read={read} state={model.asks} actions={actions} customer={party?.name ?? null} />
+        </section>
       )}
       {outcome && outcome.refused.length > 0 && <RefusedUploads refused={outcome.refused} onDismiss={actions?.onOrderUploadDismiss} />}
       {outcome && outcome.held.length > 0 && <HeldUploads names={outcome.held} onDismiss={actions?.onOrderUploadDismiss} />}
@@ -780,7 +811,7 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
                     )}
                   </div>
                   {section.blocks.map((block) => (
-                    <OrderBlock key={block.key} block={block} orderId={read.order.id} customer={customer} model={model} actions={actions} words={words} extras={block === last && extrasInLast ? extras : []} onChoose={choose} />
+                    <OrderBlock key={block.key} block={block} orderId={read.order.id} customer={customer} model={model} actions={actions} words={words} extras={block === last && extrasInLast ? extras : []} onChoose={choose} toCheck={toCheck} />
                   ))}
                   {!extrasInLast && extras.length > 0 && <ul className="fw-rtv-cards fw-of-cards">{extras}</ul>}
                 </section>
@@ -809,6 +840,8 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
       )}
       {/* F-OF-103: "Add files…" — the ONE upload window (the order or one of its lines; no "Fiscal copy" here). */}
       {model.upload && !customer && <UploadDialog ask={model.upload} party={party} busy={model.busy ?? false} onChange={actions?.onOrderUploadChange} onConfirm={actions?.onOrderUploadConfirm} onCancel={actions?.onOrderUploadCancel} onAdd={actions?.onOrderAdd} />}
+      {/* F-OF-202 / F-OF-203: the band's windows — drawn once by the body, the same for the tab and the order's thread window. */}
+      {model.asks && !customer && <AskWindows read={read} state={model.asks} actions={actions} customer={party?.name ?? null} orderLabel={read.order.number} />}
     </div>
   )
 }
@@ -823,7 +856,7 @@ function columnsOf(card: HTMLElement | null): number {
   return Math.max(1, tops.filter((top) => top === tops[0]).length)
 }
 
-type CardWords = { t: (key: string, params?: Record<string, string | number>) => string; fileWords: (key: string, params?: Record<string, string | number>) => string; locale: 'it' | 'en' }
+type CardWords = { t: (key: string, params?: Record<string, string | number>) => string; fileWords: (key: string, params?: Record<string, string | number>) => string; locale: 'it' | 'en'; /* F-OF-201 */ askT: (key: string, params?: Record<string, string | number>) => string }
 
 /**
  * F-OF-101 (P0-B1, P0-B2): the files the reader may not open, said ONCE under the Files head with the reasons — "3 files you cannot open:
@@ -845,12 +878,12 @@ function CountedLine({ counted }: { counted: OrderCounted }) {
 }
 
 /** F-OF-101: one source of a group — its head and door "Open on … ›" (the record's own page keeps its commands), its cards, its folded papers. */
-function OrderBlock({ block, orderId, customer, model, actions, words, extras, onChoose }: { block: OrderFilesBlock; orderId: string; customer: boolean; model: OrderFilesModel; actions?: FilesViewActions | undefined; words: CardWords; extras: readonly ReactNode[]; onChoose: (fileId: string, on: boolean) => void }) {
+function OrderBlock({ block, orderId, customer, model, actions, words, extras, onChoose, toCheck }: { block: OrderFilesBlock; orderId: string; customer: boolean; model: OrderFilesModel; actions?: FilesViewActions | undefined; words: CardWords; extras: readonly ReactNode[]; onChoose: (fileId: string, on: boolean) => void; /* F-OF-201 */ toCheck: ReadonlySet<string> }) {
   const { t } = words
   const [open, setOpen] = useState(false)
   const door = block.head?.door ?? null
   const href = door ? (actions?.orderHrefOf?.(door) ?? null) : null
-  const card = (file: OrderFile, older: boolean) => <OrderCard key={file.id} file={file} orderId={orderId} customer={customer} older={older} chosen={model.selected.includes(file.id)} onChoose={(on) => onChoose(file.id, on)} actions={actions} words={words} preview={model.previews?.[file.id]} />
+  const card = (file: OrderFile, older: boolean) => <OrderCard key={file.id} file={file} orderId={orderId} customer={customer} older={older} chosen={model.selected.includes(file.id)} onChoose={(on) => onChoose(file.id, on)} actions={actions} words={words} preview={model.previews?.[file.id]} toCheck={toCheck.has(file.id)} />
   return (
     <div className="fw-of-block">
       {block.head && (block.head.label || href) && (
@@ -889,7 +922,7 @@ const FILE_KINDS: readonly string[] = ['PHOTO', 'DOCUMENT', 'CERTIFICATE', 'FISC
  * text that opens the ONE viewer (P0-B12: not a navigation); from 300 px of its own room the card turns sideways (preview left, words
  * right); its versions, a fiscal copy kept until …, a legal hold, an annulled or replaced paper and the tech pack's mark are said.
  */
-function OrderCard({ file, orderId, customer, older, chosen, onChoose, actions, words, preview }: { file: OrderFile; orderId: string; customer: boolean; older: boolean; chosen: boolean; onChoose: (on: boolean) => void; actions?: FilesViewActions | undefined; words: CardWords; /* F-OP-126 */ preview?: CardPreview | undefined }) {
+function OrderCard({ file, orderId, customer, older, chosen, onChoose, actions, words, preview, toCheck = false }: { file: OrderFile; orderId: string; customer: boolean; older: boolean; chosen: boolean; onChoose: (on: boolean) => void; actions?: FilesViewActions | undefined; words: CardWords; /* F-OP-126 */ preview?: CardPreview | undefined; /* F-OF-201 */ toCheck?: boolean }) {
   const { t, fileWords, locale } = words
   const openRef = useRef<HTMLButtonElement>(null)
   const source = sourceOf(file, orderId)
@@ -899,7 +932,7 @@ function OrderCard({ file, orderId, customer, older, chosen, onChoose, actions, 
   const added = customer ? null : addedByOf(file)
   const earlier = (file.versions ?? 0) - 1 // F-OF-101 (B-OF-001): the versions kept besides the one in force
   return (
-    <li className={`fw-rtv-card fw-of-card${chosen ? ' is-chosen' : ''}${older ? ' is-older' : ''}`} data-card-id={file.id}>
+    <li className={`fw-rtv-card fw-of-card${chosen ? ' is-chosen' : ''}${older ? ' is-older' : ''}${toCheck ? ' is-asked' : ''}`} data-card-id={file.id}>
       {!customer && !older && (
         <span className="fw-rtv-card-check">
           <Checkbox label={<span className="nds-vh">{t('select.one', { name: file.name })}</span>} checked={chosen} onChange={(event) => onChoose(event.target.checked)} />
@@ -959,6 +992,8 @@ function OrderCard({ file, orderId, customer, older, chosen, onChoose, actions, 
                 <Tag tone="warning">{t('order.techPack.newer')}</Tag>
               </>
             )}
+            {/* F-OF-201: a file that came for an ask, still to check (the card is ringed). */}
+            {!customer && toCheck && <Tag tone="success">{words.askT('file.forAsk')}</Tag>}
             {file.alsoOn.map((other) => (
               <Tag key={`${other.type}:${other.id}`} tone="neutral">
                 {t('order.alsoOn', { record: other.label })}

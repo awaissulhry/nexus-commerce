@@ -32,7 +32,10 @@ export type NoteAction =
   | { type: 'noteClip'; clip: Blob; seconds: number }
   | { type: 'noteDrop'; id: string }
 
-const TILE_LOOK: Readonly<Record<FloorNoteTileCode, { icon: ReactNode; tone: 'danger' | 'warning' | 'info' | 'neutral' }>> = {
+// F-OF-204: keyed by the tile's code as a string, so the API's new tile "Photo for an ask" (ASKED_FILE, B-OF-034, S2) has its look the day the
+// rules list it; a tile this list does not know gets the plain look.
+const TILE_LOOK: Readonly<Record<string, { icon: ReactNode; tone: 'danger' | 'warning' | 'info' | 'neutral' }>> = {
+  ASKED_FILE: { icon: <Camera />, tone: 'info' },
   MATERIAL_DIFFERS: { icon: <Layers />, tone: 'info' },
   MEASURE_DIFFERS: { icon: <Ruler />, tone: 'info' },
   COLOUR_DIFFERS: { icon: <Palette />, tone: 'info' },
@@ -41,6 +44,8 @@ const TILE_LOOK: Readonly<Record<FloorNoteTileCode, { icon: ReactNode; tone: 'da
   PART_MISSING: { icon: <PackageX />, tone: 'warning' },
   OTHER: { icon: <MessageSquareText />, tone: 'neutral' },
 }
+
+const PLAIN_LOOK = { icon: <MessageSquareText />, tone: 'neutral' as const }
 
 /** The DS camera with its outline guide, "keep faces out" and the marks drawn into the picture (its words load with it). */
 function PhotoStep({ t, send }: { t: Translate; send: (action: NoteAction) => void }) {
@@ -72,7 +77,7 @@ export function NoteBody({ draft, subject, online, t, send }: { draft: NoteDraft
       </div>
     )
   }
-  const tiles: ReasonTile[] = FLOOR_NOTE_TILES.map((tile) => ({ id: tile.code, label: locale === 'it' ? tile.label.it : tile.label.en, ...TILE_LOOK[tile.code] }))
+  const tiles: ReasonTile[] = FLOOR_NOTE_TILES.map((tile) => ({ id: tile.code, label: locale === 'it' ? tile.label.it : tile.label.en, ...(TILE_LOOK[tile.code] ?? PLAIN_LOOK) }))
   const held = !online ? t('note.offline') : !moreFiles(draft) ? t('note.full', { count: FLOOR_NOTE_LIMITS.filesPerNote }) : draft.busy ? t('note.uploading') : null
   return (
     <div className="fw-task-split">

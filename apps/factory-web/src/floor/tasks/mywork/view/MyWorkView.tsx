@@ -181,6 +181,8 @@ export interface MyWorkViewProps {
   onAction?: (action: MyWorkAction) => void
   onFrame?: (action: FrameAction) => void
   camera?: CameraScanner
+  /** F-OF-204: "Files asked" — the asks for a file this tablet's team, floor role or steps hold (its own container), on the list. */
+  asked?: ReactNode
 }
 
 const STATE_ICON: Readonly<Record<DispatchEntry['state'], ReactNode>> = {
@@ -230,7 +232,7 @@ export function MyWorkView(props: MyWorkViewProps) {
   return <StationWorkView {...props} />
 }
 
-function StationWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps) {
+function StationWorkView({ model, onAction, onFrame, camera, asked }: MyWorkViewProps) {
   const t = useT('floor-mywork')
   const ti = useT('floor-myinspections')
   const shared = useT('floor-tasks')
@@ -603,7 +605,10 @@ function StationWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps) 
 
   return (
     <FloorFrameView frame={model.frame} onFrame={onFrame} actions={actions ? <FloorActionBar label={t('title')} actions={actions} /> : undefined}>
-      <div className="fw-floor-stack">{body}</div>
+      <div className="fw-floor-stack">
+        {step.kind === 'list' ? asked /* F-OF-204: "Files asked" first on the list */ : null}
+        {body}
+      </div>
       <Modal open={Boolean(model.cantFind)} onClose={() => send({ type: 'cantFind', slotId: null })} title={t('cantFind.title')} size="sm" className="fw-floor-dialog">
         {model.cantFind ? (
           <div className="fw-floor-dialog-body">

@@ -1,0 +1,224 @@
+{
+  "band": {
+    "title": "File in attesa",
+    "answer": {
+      "asked_one": "{count} richiesto",
+      "asked_other": "{count} richiesti",
+      "arrived_one": "{count} arrivato da controllare",
+      "arrived_other": "{count} arrivati da controllare",
+      "late_one": "{count} in ritardo",
+      "late_other": "{count} in ritardo",
+      "mine_one": "{count} è chiesto a te",
+      "mine_other": "{count} sono chiesti a te",
+      "portal_one": "{count} chiesto nel portale",
+      "portal_other": "{count} chiesti nel portale"
+    },
+    "empty": "Nessuna richiesta. Chiedi un file a chiunque: una persona, un ruolo, una squadra in reparto o il cliente.",
+    "emptyRead": "Nessuna richiesta.",
+    "counted": {
+      "priced_one": "{count} richiesta di un file con prezzi",
+      "priced_other": "{count} richieste di file con prezzi",
+      "outside_one": "{count} richiesta fuori dal tuo ruolo",
+      "outside_other": "{count} richieste fuori dal tuo ruolo",
+      "why": "il tuo ruolo non le legge."
+    },
+    "more_one": "Mostra ancora {count}",
+    "more_other": "Mostra ancora {count}",
+    "less": "Mostra meno",
+    "ask": "Chiedi un file…",
+    "closed": "Quest'ordine è chiuso: niente nuove richieste.",
+    "menu": {
+      "label": "Altro per File in attesa",
+      "copyLink": "Copia il link a File in attesa"
+    },
+    "info": {
+      "what": "Una riga per ogni richiesta aperta: prima quelle chieste a te, poi quelle arrivate, poi quelle in ritardo. Una richiesta si chiude solo con i file inviati per lei: poi Accetta, o Chiedi di nuovo.",
+      "who": "Una richiesta al reparto nomina una squadra, un ruolo di reparto o una fase — mai un operaio; niente dice chi l'ha letta."
+    },
+    "failed": "Impossibile leggere le richieste. Il resto della scheda è visibile."
+  },
+  "row": {
+    "lands": "va su {target}",
+    "landsStep": "va su {target} · fase {seq} · {name}",
+    "askedBy": "Chiesto da {name} · {date}",
+    "due": "entro il {date}",
+    "late_one": "in ritardo di {count} giorno",
+    "late_other": "in ritardo di {count} giorni",
+    "forYou": "Per te",
+    "who": {
+      "PERSON": "persona d'ufficio",
+      "OFFICE_ROLE": "ruolo d'ufficio",
+      "FLOOR_TEAM": "il reparto",
+      "FLOOR_ROLE": "ruolo di reparto",
+      "STEP": "il reparto · chi lavora la fase",
+      "CUSTOMER": "nel suo portale"
+    },
+    "priced": "un file con prezzi",
+    "customerDoc": "Un documento per quest'ordine"
+  },
+  "state": {
+    "OPEN": "Richiesto",
+    "ARRIVED": "Arrivato — da controllare",
+    "again": "Richiesto di nuovo",
+    "portal": "Chiesto nel portale",
+    "sent_one": "{count} file · inviato il {date} da {name}",
+    "sent_other": "{count} file · inviati il {date} da {name}",
+    "sentFloor_one": "{count} file · inviato il {date} dal reparto",
+    "sentFloor_other": "{count} file · inviati il {date} dal reparto",
+    "checking": "in verifica antivirus",
+    "chased": "Aggiornamento chiesto il {date}",
+    "againWhy": "Richiesto di nuovo: {reason}",
+    "portalCloses": "si chiude quando {customer} dice fatto"
+  },
+  "act": {
+    "accept": "Accetta…",
+    "again": "Chiedi di nuovo…",
+    "upload": "Carica per questa richiesta",
+    "chase": "Chiedi un aggiornamento",
+    "change": "Modifica…",
+    "reassign": "Riassegna…",
+    "cancel": "Annulla la richiesta…",
+    "uploadFor": "Carica per questa richiesta — per {who}…",
+    "check": "Apri ciò che è arrivato",
+    "openOn": "Apri su {target} ›",
+    "copyLink": "Copia il link a questa richiesta",
+    "menu": "Altro per la richiesta: {what}"
+  },
+  "held": {
+    "checking": "Aspetta — il file è in verifica."
+  },
+  "file": {
+    "forAsk": "Per una richiesta — da controllare"
+  },
+  "ask": {
+    "title": "Chiedi un file",
+    "what": "Di cosa hai bisogno?",
+    "whatHint": "Chi carica vede queste parole in cima alla sua finestra · da 3 a 500 caratteri.",
+    "who": "Chi lo carica",
+    "whoKind": {
+      "PERSON": "Una persona",
+      "OFFICE_ROLE": "Un ruolo d'ufficio",
+      "FLOOR_TEAM": "Una squadra in reparto",
+      "FLOOR_ROLE": "Un ruolo di reparto",
+      "STEP": "Chi lavora una fase",
+      "CUSTOMER": "Il cliente (portale)"
+    },
+    "whoHint": {
+      "PERSON": "una persona dell'ufficio, per nome",
+      "OFFICE_ROLE": "tutti quelli che lo hanno e vedono quest'ordine",
+      "FLOOR_TEAM": "i tablet di quella squadra",
+      "FLOOR_ROLE": "i tablet di quel ruolo nel sito",
+      "STEP": "i tablet che hanno quella fase",
+      "CUSTOMER": "un compito nel suo portale"
+    },
+    "pick": {
+      "PERSON": "La persona",
+      "OFFICE_ROLE": "Il ruolo d'ufficio",
+      "FLOOR_TEAM": "La squadra",
+      "FLOOR_ROLE": "Il ruolo di reparto"
+    },
+    "pickOne": "Scegline uno",
+    "pickNone": "Nessuno da scegliere qui.",
+    "pickReading": "Lettura di chi si può chiedere…",
+    "pickFailed": "Impossibile leggere chi si può chiedere: riprova.",
+    "officeNote": "Lo ricevono solo le persone che vedono quest'ordine e il suo cliente; se nessuno con il ruolo lo vede, la finestra lo dice prima dell'invio.",
+    "floorNote": "Solo squadre, ruoli di reparto e fasi: un operaio non viene mai nominato e i tablet non dicono mai chi l'ha letto.",
+    "customerNote": "{customer} riceve un compito nel portale: caricare un documento. Le tue parole restano in ufficio.",
+    "whereKind": {
+      "SALES_ORDER_LINE": "Una riga",
+      "WORK_ORDER": "Un ordine di lavoro e la sua fase"
+    },
+    "floorWhere": "Una richiesta al reparto va sempre su un ordine di lavoro: scegli l'ordine di lavoro e, se vuoi, la sua fase.",
+    "lineWhere": "Il PDF del cartamodello va sulla riga dell'ordine.",
+    "pickLine": "La riga",
+    "pickWorkOrder": "L'ordine di lavoro",
+    "pickStep": "La fase",
+    "anyStep": "Qualsiasi fase",
+    "stepWords": "fase {seq} · {name}",
+    "noWorkOrder": "Quest'ordine non ha ancora un ordine di lavoro: una richiesta al reparto ne aspetta uno.",
+    "due": "Entro il",
+    "pricedHint": "Allora sono interpellate solo le persone che vedono i prezzi, e solo loro leggono la richiesta.",
+    "pricedFloor": "Il reparto non riceve mai file con prezzi.",
+    "sheetHint": "Dati corporei: sono interpellate e lo aprono solo le persone con il diritto alle misure.",
+    "sheetFloor": "Una scheda misure non va mai in reparto.",
+    "send": "Invia la richiesta",
+    "held": {
+      "words": "Di' di cosa hai bisogno: da 3 a 500 caratteri.",
+      "pick": "Scegli chi lo carica.",
+      "where": "Scegli dove va.",
+      "step": "Chi lavora una fase: scegli la fase.",
+      "due": "Scegli il giorno.",
+      "busy": "La richiesta è in invio."
+    },
+    "happens": "Cosa succede",
+    "happensOffice": "Ricevono un compito «Carica: …» in I miei compiti e Oggi; quando arriva il file, tu ricevi «Controlla: …». Spuntare il compito a mano non chiude nulla: il file chiude la richiesta.",
+    "happensFloor": "I tablet di quella squadra, ruolo o fase la mostrano in File richiesti; una foto ha bisogno della rete.",
+    "customerTold": "Il cliente: non vede nulla — una richiesta è solo dell'ufficio.",
+    "never": "Cosa non cambia mai. Una richiesta non si elimina mai: si accetta o si annulla; la cronologia conserva chi l'ha chiesta, quando e dove va."
+  },
+  "refusal": {
+    "stale": "Qualcuno ha cambiato questa richiesta nel frattempo: è stata letta di nuovo.",
+    "forbidden": "Il tuo ruolo non può farlo su quest'ordine.",
+    "notFound": "Questa richiesta non si trova più.",
+    "words": "È stato rifiutato: {detail}",
+    "failed": "Non è andata a buon fine: riprova.",
+    "server": "{words}"
+  },
+  "accept": {
+    "title": "Accettare il file per questa richiesta?",
+    "sent_one": "{who} ha inviato {count} file il {date}:",
+    "sent_other": "{who} ha inviato {count} file il {date}:",
+    "theFloor": "Il reparto",
+    "open": "Apri {name}",
+    "notListed": "Un file che non puoi aprire qui",
+    "share": "Condividi con {customer}",
+    "shareHint": "Compare subito nei Documenti del suo portale.",
+    "version": "Accettare registra questi file: una versione più nuova in seguito non è accettata da sola.",
+    "go": "Accetta",
+    "shareFailed": "Accettato, ma la condivisione non è riuscita: condividilo dal file."
+  },
+  "again": {
+    "title": "Chiedi di nuovo a {who}",
+    "why": "Perché?",
+    "whyHint": "Solo ufficio · da 3 a 500 caratteri; chi carica lo legge.",
+    "what": "Viene chiesto di nuovo allo stesso destinatario; i file arrivati restano sul record.",
+    "go": "Chiedi di nuovo"
+  },
+  "chase": {
+    "title": "Chiedi un aggiornamento a {who}",
+    "office": "Una nota d'ufficio nella conversazione dell'ordine nomina le persone che hanno il suo compito.",
+    "floor": "La scheda dei tablet dice «L'ufficio ha chiesto un aggiornamento». Nessuno è nominato; niente dice chi l'ha letto.",
+    "go": "Chiedi un aggiornamento"
+  },
+  "reassign": {
+    "title": "Riassegna la richiesta",
+    "who": "Chi lo carica ora",
+    "why": "Perché · facoltativo",
+    "floorStays": "Una richiesta al reparto resta sul suo ordine di lavoro.",
+    "go": "Riassegna"
+  },
+  "change": {
+    "title": "Modifica la richiesta",
+    "go": "Salva"
+  },
+  "cancel": {
+    "title": "Annullare la richiesta?",
+    "what": "I suoi compiti si chiudono come annullati e i tablet smettono di mostrarla; un file già inviato resta.",
+    "keep": "Tieni la richiesta",
+    "go": "Annulla la richiesta"
+  },
+  "win": {
+    "never": "Cosa non cambia mai. Chi ha chiesto, quando e la cronologia restano; una richiesta non si elimina mai.",
+    "customer": "Il cliente: non vede nulla.",
+    "why": {
+      "held": "Di' perché: da 3 a 500 caratteri."
+    },
+    "close": "Chiudi"
+  },
+  "upload": {
+    "asks": "{name} chiede: «{words}»",
+    "asksPriced": "{name} chiede un file con prezzi.",
+    "due": "entro il {date} · va su {target}",
+    "send": "Invia per questa richiesta"
+  }
+}
