@@ -50,6 +50,8 @@ import { sharingNarrows, supersedeEarlierVersions } from './versions/supersede'
 // B-PR-44: a file's record read through its own resolver, its parent's, its work order's or its party (fail closed for limited people).
 import { fileRecordScope, reachesFileRecord } from './record-scope'
 import { fileLivePartyId } from './record-scope' // B-SA-002
+import { fileRecordParty } from './record-scope' // B-OF-014 (c): a line's file is shared through its order's customer
+import { EVERY_PARTY_MARKER } from '../../modules/quality/wall' // B-OF-014 (c)
 import { MADE_WORDS, madePapersOf } from './made' // B-OF-012 (order files tab): papers Nexus made are never deleted, born-priced stay priced
 // B-TH-083: measurement sheets are body data (the tick at upload, the permission that opens them, each opening recorded).
 import { isMeasurementSheet, MEASUREMENT_SHEET_CATEGORY, MEASUREMENT_SHEET_PERMISSION, measurementSheetProblem } from '@nexus/factory-domain/files/measurements'
@@ -449,7 +451,16 @@ export const RECORD_PARTY_WORDS = Object.freeze({
 export async function withRecordParty(caller: CommandCaller, record: { readonly recordType: string; readonly recordId: string }, sharing: Sharing, at = 'body'): Promise<Sharing> {
   if (!sharing.visibility.includes('PARTNER') && !sharing.visibility.includes('LINK')) return sharing
   const scope = await caller.withClient((client) => resolveRecord(client, record.recordType, record.recordId))
-  const own = scope?.partyId ?? null
+  // ---- B-OF-014 (c) (order files tab): a record the threads resolver does not know (an order LINE) is shared through the customer its
+  // files are read under (record-scope.ts: a line → its order's customer); before, "Who can see…" failed on every line file.
+  const fallback = scope
+    ? null
+    : await caller.withClient(async (client) => {
+        const party = fileRecordParty(await fileRecordScope(client, tenantOf(contextOf(caller)), record))
+        return party === EVERY_PARTY_MARKER ? null : party
+      })
+  // ---- end B-OF-014 (c)
+  const own = scope?.partyId ?? fallback ?? null
   const refused = (message: string) => new ValidationError(message, [{ path: `${at}/partyId`, message }])
   if (own === null) throw refused(RECORD_PARTY_WORDS.noParty)
   if (sharing.partyId !== null && sharing.partyId !== own) throw refused(RECORD_PARTY_WORDS.otherParty)
@@ -472,6 +483,16 @@ export async function requestUpload(runtime: FilesRuntime, caller: CommandCaller
     floorSiteId: input.floorSiteId ?? null,
     partyId: input.partyId ?? null,
   }
+  // ---- B-OF-014 (order files tab; F5-B15, F5-B1): through the generic route an office person adds a file only to a record they reach
+  // (the record's own scope: the same not-found as an unknown one), and never a fiscal paper to an order or a line (Finance and the
+  // warehouse make those, through their own modules).
+  if (path.generic && contextOf(caller).audience === 'office') {
+    if (!(await officeReachesRecord(caller, input))) throw new NotFoundError('Record not found.')
+    if (input.kind === 'FISCAL_ARCHIVE' && (input.recordType === 'SalesOrder' || input.recordType === 'SalesOrderLine')) {
+      throw new ValidationError('Fiscal papers are made by Finance and the warehouse, not added to an order.', [{ path: 'body/kind', message: 'Pick a document, an attachment or a photo.' }])
+    }
+  }
+  // ---- end B-OF-014
   // B-TH-003: through the generic route a portal or link share reaches the record's own party only.
   const sharing: Sharing = path.generic ? await withRecordParty(caller, input, asked) : asked
   const retention = retentionFor(input.kind, input.retainUntil ? new Date(input.retainUntil) : null, now)

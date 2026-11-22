@@ -12,6 +12,7 @@ import { seed as seedParties } from '../../../../../packages/factory-db/seed/par
 import { seed as seedProduct } from '../../../../../packages/factory-db/seed/product'
 import { seed as seedSales } from '../../../../../packages/factory-db/seed/sales'
 import { seedUuid } from '../../../../../packages/factory-db/src/seeding'
+import { seedSecondBrand, type SecondBrand } from '../../../../../packages/factory-db/src/testing/second-brand' // B-OF-014
 import { buildApp } from '../../core/app'
 import { testAuthenticator, type SessionContext } from '../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../env'
@@ -31,6 +32,8 @@ import { MADE_WORDS } from './made'
  *   - POST /files/:id/priced: taking the mark off a document born priced by its kind (a proforma) is refused; marking a file priced
  *     takes the floor off every copy it reaches (FLOOR and its site gone)
  *   - PUT /files/:id/visibility emits file.visibility_changed (no name)
+ *   - B-OF-014 (S3.4) POST /files: a person limited to Brand Alpha adds nothing to Brand Beta's order (the unknown record's 404); no
+ *     fiscal paper on an order line (400); a line's file shared with its order's customer passes, with another customer 400
  *
  * Every name and number is made up. Not run in the build (Owner rule: checks at the end). Run with
  * `node scripts/factory/run-pg-tests.mjs platform/files/documents`.
@@ -43,6 +46,8 @@ const T = seedUuid(NS, 'tenant')
 const companyA = seedUuid(NS, 'company:A')
 const siteA = seedUuid(NS, 'site:A1')
 const SO1 = seedUuid(NS, 'sales:SO1')
+const P1 = seedUuid(NS, 'party:P1')
+let second: SecondBrand
 type Json = Record<string, any>
 const admin = async <R = Json>(sql: string, values: unknown[] = []): Promise<R[]> => (await h.db.admin.query(sql, values)).rows as R[]
 let counter = 0
@@ -51,6 +56,8 @@ const office = (permissions: readonly Permission[], parties: Grant['parties'] = 
 const SESSIONS: Record<string, () => SessionContext> = {
   // The Owner: every file right and the price grain.
   owner: () => office([...FILES, 'money.price']),
+  // B-OF-014: every file right, only for Brand Alpha (RoleAssignment.partyIds).
+  alphaOnly: () => office([...FILES, 'money.price'], [P1]),
 }
 
 async function call(session: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', url: string, body?: unknown): Promise<{ status: number; body: Json; raw: string }> {
@@ -111,6 +118,7 @@ beforeAll(async () => {
   h = await startHarness('of010_documents')
   h.clock.set(new Date())
   for (const seed of [seedCore, seedNumbering, seedParties, seedFiles, seedProduct, seedSales]) await seed({ db: h.database, namespace: NS })
+  second = await seedSecondBrand({ db: h.database, namespace: NS })
   await admin(`UPDATE "IntegrationAccount" SET "rateLimitPerMinute" = 6000, "rateLimitBurst" = 1000 WHERE "tenantId" = $1 AND provider = 'R2'`, [T])
   app = await buildApp(
     { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
@@ -211,5 +219,40 @@ describe('B-OF-015 a share changed is told', () => {
     const [event] = await admin<Json>(`SELECT payload FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = 'file.visibility_changed' AND payload->>'fileId' = $2`, [T, file.id])
     expect(event!.payload).toMatchObject({ recordType: 'SalesOrder', recordId: SO1, audiences: ['OFFICE', 'PARTNER'] })
     expect(JSON.stringify(event!.payload)).not.toContain('artwork')
+  })
+})
+
+describe('B-OF-014 the upload: the record reached, no fiscal paper on an order, a line shared through its order’s customer', () => {
+  const announce = (session: string, input: Json) => {
+    const body = pdf(`upload ${newId()}`)
+    return call(session, 'POST', '/files', { companyId: companyA, kind: 'DOCUMENT', contentType: 'application/pdf', sizeBytes: body.length, sha256: sha(body), originalName: 'T-OF014 sheet.pdf', ...input })
+  }
+  const lineOf = async (orderId: string): Promise<string> => (await admin<{ id: string }>(`SELECT id FROM "SalesOrderLine" WHERE "orderId" = $1 ORDER BY seq LIMIT 1`, [orderId]))[0]!.id
+
+  it('a person limited to Brand Alpha adds nothing to Brand Beta’s order: the words of an unknown record', async () => {
+    const theirs = await announce('alphaOnly', { recordType: 'SalesOrder', recordId: second.salesOrderId })
+    const unknown = await announce('alphaOnly', { recordType: 'SalesOrder', recordId: newId() })
+    expect([theirs.status, theirs.body.error?.message]).toEqual([404, 'Record not found.'])
+    expect(theirs.body.error?.message).toBe(unknown.body.error?.message)
+    expect((await announce('alphaOnly', { recordType: 'SalesOrder', recordId: SO1 })).status).toBe(201)
+  })
+
+  it('never a fiscal paper on an order or a line (400)', async () => {
+    const line = await lineOf(SO1)
+    for (const record of [{ recordType: 'SalesOrder', recordId: SO1 }, { recordType: 'SalesOrderLine', recordId: line }]) {
+      const answer = await announce('owner', { ...record, kind: 'FISCAL_ARCHIVE' })
+      expect(answer.status, record.recordType).toBe(400)
+      expect((answer.body.error?.issues ?? []).map((issue: Json) => issue.path)).toContain('body/kind')
+    }
+  })
+
+  it('a line’s file is shared with its order’s customer; with another customer it is refused', async () => {
+    const line = await lineOf(SO1)
+    const shared = await announce('owner', { recordType: 'SalesOrderLine', recordId: line, visibility: ['PARTNER'] })
+    expect(shared.status, shared.raw).toBe(201)
+    expect(shared.body.file).toMatchObject({ partyId: P1, visibility: ['OFFICE', 'PARTNER'] })
+    const other = await announce('owner', { recordType: 'SalesOrderLine', recordId: line, visibility: ['PARTNER'], partyId: second.partyId })
+    expect(other.status, other.raw).toBe(400)
+    expect((other.body.error?.issues ?? []).map((issue: Json) => issue.path)).toContain('body/partyId')
   })
 })
