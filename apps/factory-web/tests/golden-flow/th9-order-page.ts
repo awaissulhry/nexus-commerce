@@ -1419,13 +1419,16 @@ export default defineStage({
         await flow.settle()
         await warehouse.go(`/sales/orders/${so0101.id}?tab=shipments`)
         await seen(shipmentRow(page, van.number as string).getByText(OS('ships.dates.setByHand')).first(), 60_000)
+        const before = await statusOf(flow, page, so0101.id)
         const delivered = await rowAct(so0101.id, van.number as string, OS('ships.act.delivered'))
         // Our van: why is not asked (no carrier's tracking to know better than).
         await expect(delivered.getByRole('textbox', { name: startsWith(OS('door.why')) })).toHaveCount(0)
         await answerOf(page, 'POST', /^\/shipping\/shipments\/[^/]+\/own-transport\/events$/, () => press(delivered.getByRole('button', { name: DEPTH('transport.statusGo', { status: DEPTH('trackingStatus.DELIVERED') }), exact: true })))
         await flow.settle()
-        // The order follows its shipments (the worker's sales.ordersFollowShipments): every garment delivered → Delivered.
-        await expect.poll(() => statusOf(flow, page, so0101.id), { timeout: 60_000 }).toBe('DELIVERED')
+        // The order follows its shipments (the worker's sales.ordersFollowShipments): every garment delivered → Delivered (os-fx5: from
+        // Shipped; an order already closed in this world stays as it is).
+        if (before === 'SHIPPED') await expect.poll(() => statusOf(flow, page, so0101.id), { timeout: 60_000 }).toBe('DELIVERED')
+        else notHere(`the order following its delivered shipment: SEED-SO-0101 is ${before} in this world, not Shipped`)
         await warehouse.go(`/sales/orders/${so0101.id}?tab=shipments`)
         await seen(shipmentRow(page, van.number as string).getByText(OD('shipStatus.DELIVERED')).first(), 60_000)
         await flow.shot(page, 'shipments-van-delivered')
@@ -1462,7 +1465,8 @@ export default defineStage({
       if (!typedOn) notHere('the typed parcel numbers in A’s portal: none was typed in this world')
       else {
         const alpha = await signInToPortal(flow, BRAND_ALPHA, alphaId)
-        await alpha.go(`/orders/${typedOn.orderId}`)
+        // os-fx5: a parcel's number is on the portal order's Shipments tab.
+        await alpha.go(`/orders/${typedOn.orderId}?tab=shipments`)
         await seen(alpha.page.getByText(SHIP_WORDS.parcel(typedOn.seqs[0]!)).first(), 60_000)
         await expectNothingOf(alpha.page, BRAND_BETA, world.betaNumbers, 'alpha portal: typed parcel numbers')
       }
