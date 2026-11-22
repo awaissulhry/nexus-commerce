@@ -190,7 +190,7 @@ const colourOf = (line: Line): string => line.colourway?.name ?? line.colourway?
 
 /** A bucket of a style's cells by colour line: "Black 52 ×4, 54 ×2" (made to measure: its units). */
 function colourCells(lines: readonly Line[], cells: readonly CellCount[], bucket: Bucket): ColourCells[] {
-  return lines.flatMap((line) => {
+  return lines.flatMap((line): ColourCells[] => { // os-fx1: one return type (end check 45005254988, TS2345)
     const own = cells.filter((cell) => cell.lineId === line.id && cell.buckets[bucket] > 0)
     if (own.length === 0) return []
     if (oneCell(line)) return [{ colour: colourOf(line), sizes: [], units: sumOf(own.map((cell) => cell.buckets[bucket])) }]
