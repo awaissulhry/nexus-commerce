@@ -1,0 +1,59 @@
+/*
+ * F-OF-101 (order FILES tab, 10-design §1–§5; 15-steps W1) — the order files body's own stylesheet (files-view.css keeps the cards of
+ * F-OP-125). Room, not screen: the groups' box is a size container (`fb`), each group another (`fg`), each card another (`fc`), so the
+ * thread dock opening or closing re-lays the tab at once. The groups flow side by side and each grows to fill its line (a one-file
+ * group never leaves a wide empty box); a card with 300 px of room turns sideways (preview left, words right). DS tokens only (no raw
+ * colour): light and dark come from the tokens.
+ */
+.fw-of-body { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; }
+.fw-of-body:empty { display: none; }
+
+/* ── the counted line (P0-B1/B2): once, under the Files head ── */
+.fw-of-counted { margin: 0; display: flex; gap: var(--nds-space-6); align-items: flex-start; font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); line-height: 1.45; }
+.fw-of-counted svg { flex: none; margin-top: var(--nds-space-2); }
+.fw-of-counted b { color: var(--nds-text-2); font-weight: var(--nds-font-weight-semibold); }
+
+/* ── the groups: blocks that flow side by side ── */
+.fw-of-groups { container: fb / inline-size; display: flex; flex-wrap: wrap; gap: var(--nds-space-12); align-items: stretch; min-width: 0; }
+.fw-of-group { container: fg / inline-size; flex: 1 1 calc(var(--fw-of-n, 1) * 176px + 26px); min-width: min(100%, 202px); display: flex; flex-direction: column; gap: var(--nds-space-8); padding: var(--nds-space-10) var(--nds-space-12) var(--nds-space-12); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-xl); background: var(--nds-surface-raised); scroll-margin-top: var(--nds-space-4); }
+.fw-of-group-h { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--nds-space-4) var(--nds-space-8); min-width: 0; }
+.fw-of-group-h h3 { margin: 0; display: inline-flex; align-items: baseline; gap: var(--nds-space-6); font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-bold); color: var(--nds-text-strong); }
+.fw-of-n { font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); font-variant-numeric: tabular-nums; }
+.fw-of-mu { display: inline-flex; align-items: center; gap: var(--nds-space-4); font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); }
+.fw-of-sp { flex: 1; }
+
+/* ── one block per source: its head and its door ── */
+.fw-of-block { display: flex; flex-direction: column; gap: var(--nds-space-6); min-width: 0; }
+.fw-of-block + .fw-of-block { padding-top: var(--nds-space-8); border-top: 1px dashed var(--nds-border-subtle); }
+.fw-of-block-h { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-2) var(--nds-space-8); min-width: 0; font-size: var(--nds-font-size-xs); color: var(--nds-text-2); }
+.fw-of-block-h b { color: var(--nds-text); font-weight: var(--nds-font-weight-semibold); overflow-wrap: anywhere; }
+.fw-of-door { color: var(--nds-text-link); font-weight: var(--nds-font-weight-semibold); text-decoration: none; white-space: nowrap; }
+.fw-of-door:hover { text-decoration: underline; }
+.fw-of-door:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-xs); }
+.fw-of-older { align-self: flex-start; }
+
+/* ── the cards: a grid that fills its block; 140 px each when the room is small ── */
+.fw-of-body .fw-rtv-cards.fw-of-cards { grid-template-columns: repeat(auto-fit, minmax(min(100%, 164px), 1fr)); gap: var(--nds-space-8); }
+@container fb (max-width: 420px) {
+  .fw-of-body .fw-rtv-cards.fw-of-cards { grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); }
+  .fw-of-group { padding: var(--nds-space-8); }
+}
+.fw-rtv-order.is-window .fw-rtv-cards.fw-of-cards { grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); }
+
+/* ── the card: preview on top; sideways from 300 px of its own room ── */
+.fw-rtv-card.fw-of-card { container: fc / inline-size; padding: 0; gap: 0; }
+.fw-of-card-in { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; height: 100%; }
+.fw-of-card .fw-rtv-card-preview { height: 92px; cursor: pointer; border-radius: var(--nds-radius-lg) var(--nds-radius-lg) 0 0; border-bottom: 1px solid var(--nds-border-subtle); }
+@container fc (min-width: 300px) {
+  .fw-of-card-in { grid-template-columns: 112px minmax(0, 1fr); }
+  .fw-of-card .fw-rtv-card-preview { height: 100%; min-height: 128px; border-bottom: 0; border-right: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg) 0 0 var(--nds-radius-lg); }
+}
+.fw-of-card-bd { display: flex; flex-direction: column; gap: var(--nds-space-2); padding: var(--nds-space-8); min-width: 0; }
+/* P0-B12: the name opens the viewer — plain text, not a link's blue. */
+.fw-of-body .fw-rtv-card-name { color: var(--nds-text); }
+.fw-of-card .fw-rtv-card-actions { margin-top: auto; padding-top: var(--nds-space-4); }
+.fw-rtv-card.fw-of-card.is-older { border-style: dashed; background: var(--nds-surface-sunken); }
+
+/* ── the tab's one answer (a DS Banner) and its Read-only line ── */
+.fw-of-head .fw-of-head-wall { display: inline-flex; align-items: flex-start; gap: var(--nds-space-6); color: var(--nds-text-2); }
+.fw-of-head .fw-of-head-wall svg { flex: none; margin-top: var(--nds-space-2); }

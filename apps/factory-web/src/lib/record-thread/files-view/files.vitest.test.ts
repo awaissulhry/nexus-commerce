@@ -312,7 +312,7 @@ describe('F-OP-125: Gmail cards — kinds, the lock card, who added it (office o
       const html = draw(locale, { read: READ, problem: null, selected: [], canShare: true })
       const t = createTranslator(locale, messagesFor(locale, ['record-thread-files-view'])['record-thread-files-view']!)
       for (const words of [t('card.bodyData'), t('card.addedBy', { name: 'Demo Planner' }), t('card.addedByFloor'), t('card.addedBy', { name: BRAND_ALPHA.tradeName }), t('card.download'), t('card.worksheet', { line: 20, version: 2 }), t('order.leftOut', { count: 1 })]) expect(html, `${locale}: ${words}`).toContain(words)
-      expect(html).toContain('class="fw-rtv-cards"')
+      expect(html).toContain('class="fw-rtv-cards fw-of-cards"') // F-OF-101: the cards' grid inside a group's block
       expect(html.match(/\b(card|order)\.[a-zA-Z]+/)?.[0] ?? null, locale).toBeNull()
       // The body photo is a lock card: no <img> of it, ever (its previews come in F-OP-126, never for body data).
       expect(html).not.toMatch(/<img[^>]*Rider measures/)
@@ -630,10 +630,11 @@ describe('F-CP-144: the PRICED lock card, the upload tick, Mark as priced', () =
       truncated: false,
     }
     expect(orderPricedLeftOut(read)).toBe(2)
-    expect(orderGroupsShown(read).map((group) => group.key)).toEqual(['ORDER'])
+    // F-OF-101 (P0-B1): a group whose only files are locked is not drawn ("Order & thread 0"); the counted line says them ONCE, with why.
+    expect(orderGroupsShown(read).map((group) => group.key)).toEqual([])
     for (const locale of LOCALES) {
       const html = renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(OrderFilesBody, { model: { read, problem: null, selected: [], canShare: false }, party: null })))
-      expect(html).toContain(locale === 'en' ? '2 priced documents — you cannot open them' : '2 documenti con prezzi — non puoi aprirli')
+      expect(html).toContain(locale === 'en' ? '2 files you cannot open:</b> 2 priced' : '2 file che non puoi aprire:</b> 2 con prezzi')
     }
   })
 })

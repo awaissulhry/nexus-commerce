@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { AudioLines, BadgeCheck, Copy, Download, FileText, FolderOpen, Image as ImageIcon, Lock, LockOpen, Paperclip, Receipt, RotateCcw, Share2, ShieldOff, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
+import Link from 'next/link' // F-OF-101: a block's door "Open on … ›" is a real link
+import { AudioLines, BadgeCheck, ChevronDown, ChevronUp, Copy, Download, FileText, FolderOpen, Image as ImageIcon, Lock, LockOpen, Paperclip, Receipt, RotateCcw, Share2, ShieldOff, Trash2 } from 'lucide-react'
 import { Banner, Disclosure, EmptyState, Field } from '@nexus/ui/components'
 import { BulkActionBar } from '@nexus/ui/patterns'
 import { Button, Checkbox, RadioCard, Select, Skeleton, Tag } from '@nexus/ui/primitives'
@@ -20,14 +21,17 @@ import { uploadAskHeld } from '../model'
 import { carriable, sourceLine } from '../../files/use-on'
 import { typeKey } from '../../../../areas/search/model'
 // F-SA-237: a sales order's files from its one walled read — the SAME body on the order's Files tab and in this window.
-import { orderBulkReach, orderFilesOf, orderGroupsShown, orderLeftOut, sourceOf, type OrderFile, type OrderFilesModel } from '../model'
+import { orderBulkReach, sourceOf, type OrderFile, type OrderFilesModel } from '../model'
+// F-OF-101 (order FILES tab): the groups as the tab draws them (Shipments and Invoices apart, one block per source), the counted line.
+import { orderChoosableOf, orderCountedOf, orderSectionsOf, type OrderCounted, type OrderFilesBlock } from '../model'
 // F-OP-125: the order's file cards (kind, type word, who added it, the MTM worksheets, the keys' grid step).
-import { addedByOf, cardKindOf, cardStep, orderWorksheetsOf, typeLabelOf, worksheetCardId, type OrderWorksheet } from '../model'
+import { addedByOf, cardKindOf, cardStep, typeLabelOf, worksheetCardId, type OrderWorksheet } from '../model'
 import type { CardPreview } from '../model' // F-OP-126
 // F-CP-144: the PRICED lock — one counted line, no name, no preview, no box; the upload's tick; Mark as priced.
-import { orderPricedLeftOut, pricedLockedIn, uploadPricedHeld } from '../model'
+import { pricedLockedIn, uploadPricedHeld } from '../model'
 import { previewOf, pricedMarkOf } from '../../files/model'
 import '../files-view.css'
+import './files-tab.css' // F-OF-101: the order files tab's groups, blocks and cards
 
 export const FILES_VIEW_NS = 'record-thread-files-view'
 
@@ -92,6 +96,9 @@ export interface FilesViewActions {
   onOrderMessage?: (messageId: string) => void
   onOrderSelect?: (fileIds: readonly string[]) => void
   onOrderBulk?: (action: 'download' | 'share', fileIds: readonly string[]) => void
+  // ---- F-OF-101 (order FILES tab): a block's door "Open on … ›" — the source record's own page (null: no door, e.g. the order's own files)
+  orderHrefOf?: (record: { readonly type: string; readonly id: string; readonly label: string }) => string | null
+  // ---- end F-OF-101
 }
 
 // ---- B-TH-280: the files in depth (B-W2b-177) in this window — the container (the docked thread) fills these slots with the depth
@@ -512,27 +519,30 @@ function UploadDialog({ ask, party, busy, actions }: { ask: UploadAsk; party: Fi
 
 // ── F-SA-237 (sales page plan N9, picks P14, R7) ──────────────────────────────────────────────────────────────────────────────
 
+/** F-OF-101: the catalogues the order files body speaks (the tab's head, menu and ⓘ draw inside the same ones). */
+export const ORDER_FILES_NS: readonly string[] = [FILES_VIEW_NS, 'record-thread-files', 'lists', /* F-CP-144 */ 'record-files']
+
 /**
  * The order files body on its own (the order's Files tab mounts it; this window mounts it for a SalesOrder). F-OP-125: `place` — the
- * tab (its keys in the footer's info icon) or the thread's Files window (narrower cards; its keys are the window's footer).
+ * tab (its keys in the Files section's ⓘ, F-OF-101) or the thread's Files window (narrower cards; its keys are the window's footer).
  */
 export function OrderFilesBody({ model, party, actions, place = 'tab' }: { model: OrderFilesModel; party: { readonly name: string } | null; actions?: FilesViewActions; place?: 'tab' | 'window' }) {
   return (
-    <WithMessages namespaces={[FILES_VIEW_NS, 'record-thread-files', 'lists', /* F-CP-144 */ 'record-files']}>
+    <WithMessages namespaces={ORDER_FILES_NS}>
       <OrderFilesView model={model} party={party} actions={actions} place={place} />
     </WithMessages>
   )
 }
 
 /**
- * A sales order's files by where they come from (Order & thread · Lines & artwork · Requests · Production · Quality · Shipments &
- * invoices · Returns & complaints — the read's own groups and words). F-OP-125 (order page N7 "files like Gmail"; 10-order-page §9.1):
- * each file is a CARD — a 132 px preview area (the kind's icon; a lock and "Body data — opening is recorded" for body data, never a
- * picture), the name on two lines (the whole name in `title`), "PDF · 1.2 MB · 12 Nov", "added by <name>" (office only; the floor
- * never by a worker), chips (where it sits, who can see it, opening recorded, also on …); a box to choose it (on hover, focus or
- * chosen; always on touch); Download and Open in the conversation (shown on hover or focus, always in the tab order); the counted bar
- * (Download N · Share N own); the made-to-measure worksheets in Lines (B5); "N files you cannot open", counted, never named. Keys:
- * ← / → / ↑ / ↓ between cards (↑ / ↓ by one grid row), x chooses, Enter opens.
+ * A sales order's files by where they come from (Order & thread · Lines & artwork · Customer's tech pack · Requests · Production ·
+ * Quality · Shipments · Invoices & credit notes · Returns & complaints). F-OP-125 (order page N7 "files like Gmail"): each file is a
+ * CARD — its preview, the name (it opens the ONE viewer), "PDF · 1.2 MB · 12 Nov", "added by <name>" (office only; the floor never by a
+ * worker), chips; a box to choose it; Download and Open in the conversation. F-OF-101 (order FILES tab, 10-design §5): the groups flow
+ * side by side (a one-file group never leaves a wide empty box), each group made on another page holds one block per source with its
+ * door "Open on … ›" (Production by work order, one block per shipment, invoice, case); an annulled or replaced paper folds under
+ * "Show N older" with its words; the files the reader may not open are counted ONCE, with the reasons, never named. Keys: ← / → / ↑ / ↓
+ * between cards (↑ / ↓ by one grid row), x chooses, Enter opens.
  */
 function OrderFilesView({ model, party, actions, place = 'window' }: { model: OrderFilesModel; party: { readonly name: string } | null; actions?: FilesViewActions | undefined; place?: 'tab' | 'window' }) {
   const t = useT(FILES_VIEW_NS)
@@ -576,15 +586,14 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
   }
   const read = model.read
   const customer = model.face === 'customer' // F-SA-238: the portal's face of the same body
-  const groups = orderGroupsShown(read)
-  const files = orderFilesOf(read)
-  const ids = new Set(files.map((file) => file.id))
-  const sheets = customer ? 0 : groups.reduce((sum, group) => sum + orderWorksheetsOf(group).length, 0)
-  const leftOut = customer ? 0 : orderLeftOut(read)
-  const pricedOut = customer ? 0 : orderPricedLeftOut(read) // F-CP-144: the order's priced documents this reader may not open
-  const chosen = files.filter((file) => model.selected.includes(file.id))
+  // F-OF-101: the tab's groups (Shipments and Invoices & credit notes apart, one block per source), the walk, the counted line.
+  const sections = orderSectionsOf(read, customer ? 'customer' : 'office')
+  const choosable = customer ? [] : orderChoosableOf(sections)
+  const ids = new Set(choosable.map((file) => file.id))
+  const counted = customer ? null : orderCountedOf(read, sections)
+  const chosen = choosable.filter((file) => model.selected.includes(file.id))
   const reach = orderBulkReach(chosen, read.order.id, model.canShare)
-  const allChosen = files.length > 0 && chosen.length === files.length
+  const allChosen = choosable.length > 0 && chosen.length === choosable.length
   const choose = (fileId: string, on: boolean) => actions?.onOrderSelect?.(on ? [...new Set([...model.selected, fileId])] : model.selected.filter((one) => one !== fileId))
   const keys = (event: KeyboardEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement
@@ -605,52 +614,59 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
       choose(fileId, !model.selected.includes(fileId))
     }
   }
-  if (files.length === 0 && sheets === 0 && leftOut === 0 && pricedOut === 0 /* F-CP-144 */) return <EmptyState icon={<FolderOpen size={22} aria-hidden />} title={t(customer ? 'order.empty.customer' : 'order.empty.title')} description={customer ? undefined : t('order.empty.body')} />
+  const empty = sections.length === 0 && (!counted || (counted.locked === 0 && counted.checking === 0))
   const words = { t, fileWords, locale }
   return (
-    <div className={`fw-rtv-order${place === 'window' ? ' is-window' : ''}`}>
-      {leftOut > 0 && <p className="fw-rtv-held">{t('order.leftOut', { count: leftOut })}</p>}
-      {pricedOut > 0 && <PricedLockLine count={pricedOut} /* F-CP-144 */ />}
+    <div className={`fw-rtv-order${place === 'window' ? ' is-window' : ''} fw-of-body`}>
+      {counted && <CountedLine counted={counted} />}
       {read.truncated && <p className="fw-rtv-muted">{t('order.truncated', { count: read.total })}</p>}
-      {files.length > 0 && !customer && (
-        <div className="fw-rtv-tools">
-          <Checkbox label={allChosen ? t('select.none', { count: files.length }) : t('select.all', { count: files.length })} checked={allChosen} onChange={(event) => actions?.onOrderSelect?.(event.target.checked ? files.map((file) => file.id) : [])} />
-        </div>
-      )}
-      {chosen.length > 0 && !customer && (
-        <BulkActionBar count={chosen.length} noun={t('bulk.noun')} onClear={() => actions?.onOrderSelect?.([])}>
-          <Button size="sm" onClick={() => actions?.onOrderBulk?.('download', reach.download)}>
-            <Download size={14} aria-hidden /> {t('bulk.download', { count: reach.download.length })}
-          </Button>
-          {party && (
-            <Button size="sm" heldReason={!model.canShare ? t('bulk.noShareRight') : reach.share.length === 0 ? t('order.noneOwn') : model.busy ? t('upload.busy') : null} onClick={() => actions?.onOrderBulk?.('share', reach.share)}>
-              <Share2 size={14} aria-hidden /> {t('order.shareOwn', { party: party.name, count: reach.share.length })}
-            </Button>
+      {empty ? (
+        // P0-B6: the tab's head already says "No files yet" (one line, no box); the window and the portal say it here.
+        place === 'tab' && !customer ? null : <EmptyState icon={<FolderOpen size={22} aria-hidden />} title={t(customer ? 'order.empty.customer' : 'order.empty.title')} />
+      ) : (
+        <>
+          {place === 'window' && choosable.length > 0 && !customer && (
+            <div className="fw-rtv-tools">
+              <Checkbox label={allChosen ? t('select.none', { count: choosable.length }) : t('select.all', { count: choosable.length })} checked={allChosen} onChange={(event) => actions?.onOrderSelect?.(event.target.checked ? choosable.map((file) => file.id) : [])} />
+            </div>
           )}
-        </BulkActionBar>
+          {chosen.length > 0 && !customer && (
+            <BulkActionBar count={chosen.length} noun={t('bulk.noun')} onClear={() => actions?.onOrderSelect?.([])}>
+              <Button size="sm" onClick={() => actions?.onOrderBulk?.('download', reach.download)}>
+                <Download size={14} aria-hidden /> {t('bulk.download', { count: reach.download.length })}
+              </Button>
+              {party && (
+                <Button size="sm" heldReason={!model.canShare ? t('bulk.noShareRight') : reach.share.length === 0 ? t('order.noneOwn') : model.busy ? t('upload.busy') : null} onClick={() => actions?.onOrderBulk?.('share', reach.share)}>
+                  <Share2 size={14} aria-hidden /> {t('order.shareOwn', { party: party.name, count: reach.share.length })}
+                </Button>
+              )}
+            </BulkActionBar>
+          )}
+          <div ref={listRef} className="fw-of-groups" onKeyDown={keys}>
+            {sections.map((section) => {
+              const title = section.words ? (locale === 'it' ? section.words.it : section.words.en) : t(`order.group.${section.key}`)
+              const widest = Math.max(1, ...section.blocks.map((block) => Math.min(4, block.files.length)), Math.min(4, section.worksheets.length))
+              const extras = section.worksheets.map((sheet) => <WorksheetCard key={sheet.documentId} sheet={sheet} actions={actions} words={words} />)
+              const last = section.blocks[section.blocks.length - 1]
+              const extrasInLast = !!last && last.head === null
+              return (
+                // F-OF-101: one anchor per group on the tab (#files-ORDER …); the window draws none (the tab may be open beside it).
+                <section key={section.key} id={place === 'tab' ? `files-${section.key}` : undefined} className="fw-of-group" style={{ ['--fw-of-n' as string]: String(widest) } as CSSProperties} aria-label={title}>
+                  <div className="fw-of-group-h">
+                    <h3>
+                      {title} <span className="fw-of-n">{section.count}</span>
+                    </h3>
+                  </div>
+                  {section.blocks.map((block) => (
+                    <OrderBlock key={block.key} block={block} orderId={read.order.id} customer={customer} model={model} actions={actions} words={words} extras={block === last && extrasInLast ? extras : []} onChoose={choose} />
+                  ))}
+                  {!extrasInLast && extras.length > 0 && <ul className="fw-rtv-cards fw-of-cards">{extras}</ul>}
+                </section>
+              )
+            })}
+          </div>
+        </>
       )}
-      <div ref={listRef} className="fw-rtv-groups" onKeyDown={keys}>
-        {groups.map((group) => {
-          const worksheets = customer ? [] : orderWorksheetsOf(group)
-          return (
-            <section key={group.key} className="fw-rtv-group" aria-label={locale === 'it' ? group.words.it : group.words.en}>
-              <h3 className="fw-rtv-group-title">
-                {locale === 'it' ? group.words.it : group.words.en} <span className="fw-rtv-muted">{group.files.length + worksheets.length}</span>
-              </h3>
-              <ul className="fw-rtv-cards">
-                {group.files.map((file) => (
-                  <OrderCard key={file.id} file={file} orderId={read.order.id} customer={customer} chosen={model.selected.includes(file.id)} onChoose={(on) => choose(file.id, on)} actions={actions} words={words} preview={model.previews?.[file.id]} />
-                ))}
-                {/* F-OP-125 (B5): the made-to-measure worksheets the read sends (the measurements right only; else counted below). */}
-                {worksheets.map((sheet) => (
-                  <WorksheetCard key={sheet.documentId} sheet={sheet} actions={actions} words={words} />
-                ))}
-              </ul>
-              {!customer && group.leftOut + group.measurementsLeftOut + (group.pricedLeftOut ?? 0) /* F-CP-144 */ > 0 && <p className="fw-rtv-muted">{t('order.leftOutHere', { count: group.leftOut + group.measurementsLeftOut + (group.pricedLeftOut ?? 0) })}</p>}
-            </section>
-          )
-        })}
-      </div>
       {/* F-OP-127: the ONE viewer of these files — ← / → over every file in display order; body data only when asked; Esc back to the card. */}
       {model.viewer && (
         <FileViewer
@@ -668,12 +684,6 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
           returnFocusTo={model.viewer.returnTo}
         />
       )}
-      {/* Owner rule 2026-10-29: the keys in ONE information icon at the foot (the thread's window has its own, in its footer). */}
-      {place === 'tab' && (
-        <div className="fw-rtv-foot">
-          <ListKeysInfo keys={[{ keys: ['←', '→', '↑', '↓'], does: t('keys.move') }, ...(customer ? [] : [{ keys: ['x'], does: t('keys.choose') }]), { keys: ['Enter'], does: t('keys.open') }]} />
-        </div>
-      )}
     </div>
   )
 }
@@ -690,25 +700,89 @@ function columnsOf(card: HTMLElement | null): number {
 
 type CardWords = { t: (key: string, params?: Record<string, string | number>) => string; fileWords: (key: string, params?: Record<string, string | number>) => string; locale: 'it' | 'en' }
 
+/**
+ * F-OF-101 (P0-B1, P0-B2): the files the reader may not open, said ONCE under the Files head with the reasons — "3 files you cannot open:
+ * 2 priced · 1 outside your role" — and the files the virus scan holds; never named, never "+ 1" under a group.
+ */
+function CountedLine({ counted }: { counted: OrderCounted }) {
+  const t = useT(FILES_VIEW_NS)
+  if (counted.locked === 0 && counted.checking === 0) return null
+  const reasons = [counted.priced > 0 ? t('counted.priced', { count: counted.priced }) : null, counted.sheets > 0 ? t('counted.sheets', { count: counted.sheets }) : null, counted.role > 0 ? t('counted.role', { count: counted.role }) : null].filter((part): part is string => part !== null)
+  return (
+    <p className="fw-of-counted" role="note">
+      <Lock size={12} aria-hidden />
+      <span>
+        {counted.locked > 0 && <b>{`${t('order.leftOut', { count: counted.locked })}:`}</b>}
+        {[counted.locked > 0 ? ` ${reasons.join(' · ')}` : '', counted.checking > 0 ? `${counted.locked > 0 ? ' · ' : ''}${t('held.checking', { count: counted.checking })}` : ''].join('')}
+      </span>
+    </p>
+  )
+}
+
+/** F-OF-101: one source of a group — its head and door "Open on … ›" (the record's own page keeps its commands), its cards, its folded papers. */
+function OrderBlock({ block, orderId, customer, model, actions, words, extras, onChoose }: { block: OrderFilesBlock; orderId: string; customer: boolean; model: OrderFilesModel; actions?: FilesViewActions | undefined; words: CardWords; extras: readonly ReactNode[]; onChoose: (fileId: string, on: boolean) => void }) {
+  const { t } = words
+  const [open, setOpen] = useState(false)
+  const door = block.head?.door ?? null
+  const href = door ? (actions?.orderHrefOf?.(door) ?? null) : null
+  const card = (file: OrderFile, older: boolean) => <OrderCard key={file.id} file={file} orderId={orderId} customer={customer} older={older} chosen={model.selected.includes(file.id)} onChoose={(on) => onChoose(file.id, on)} actions={actions} words={words} preview={model.previews?.[file.id]} />
+  return (
+    <div className="fw-of-block">
+      {block.head && (block.head.label || href) && (
+        <div className="fw-of-block-h">
+          {block.head.label && <b>{block.head.label}</b>}
+          <span className="fw-of-sp" />
+          {href && door && (
+            <Link className="fw-of-door" href={href} prefetch={false}>
+              {door.type.startsWith('OrderChangeRequest') ? t('order.openOnChanges') : t('order.openOn', { record: door.label })}
+            </Link>
+          )}
+        </div>
+      )}
+      {(block.files.length > 0 || extras.length > 0) && (
+        <ul className="fw-rtv-cards fw-of-cards">
+          {block.files.map((file) => card(file, false))}
+          {extras}
+        </ul>
+      )}
+      {block.older.length > 0 && (
+        <>
+          <Button size="sm" variant="link" className="fw-of-older" aria-expanded={open} onClick={() => setOpen((now) => !now)}>
+            {open ? <ChevronUp size={14} aria-hidden /> : <ChevronDown size={14} aria-hidden />} {t(open ? 'order.older.hide' : 'order.older.show', { count: block.older.length })}
+          </Button>
+          {open && <ul className="fw-rtv-cards fw-of-cards">{block.older.map((file) => card(file, true))}</ul>}
+        </>
+      )}
+    </div>
+  )
+}
+
 const FILE_KINDS: readonly string[] = ['PHOTO', 'DOCUMENT', 'CERTIFICATE', 'FISCAL_ARCHIVE', 'AUDIO', 'ATTACHMENT']
 
-/** One file's card (F-OP-125): the preview area, the name, its facts, its chips, its box and its actions. */
-function OrderCard({ file, orderId, customer, chosen, onChoose, actions, words, preview }: { file: OrderFile; orderId: string; customer: boolean; chosen: boolean; onChoose: (on: boolean) => void; actions?: FilesViewActions | undefined; words: CardWords; /* F-OP-126 */ preview?: CardPreview | undefined }) {
+/**
+ * One file's card (F-OP-125): the preview area, the name, its facts, its chips, its box and its actions. F-OF-101: the name is plain
+ * text that opens the ONE viewer (P0-B12: not a navigation); from 300 px of its own room the card turns sideways (preview left, words
+ * right); its versions, a fiscal copy kept until …, a legal hold, an annulled or replaced paper and the tech pack's mark are said.
+ */
+function OrderCard({ file, orderId, customer, older, chosen, onChoose, actions, words, preview }: { file: OrderFile; orderId: string; customer: boolean; older: boolean; chosen: boolean; onChoose: (on: boolean) => void; actions?: FilesViewActions | undefined; words: CardWords; /* F-OP-126 */ preview?: CardPreview | undefined }) {
   const { t, fileWords, locale } = words
+  const openRef = useRef<HTMLButtonElement>(null)
   const source = sourceOf(file, orderId)
   const kind = FILE_KINDS.includes(file.kind) ? (file.kind as FileKind) : 'ATTACHMENT'
   const card = cardKindOf(file)
   const type = file.documentWords ? (locale === 'it' ? file.documentWords.it : file.documentWords.en) : typeLabelOf(file) || fileWords(`kind.${kind}`)
   const added = customer ? null : addedByOf(file)
+  const earlier = (file.versions ?? 0) - 1 // F-OF-101 (B-OF-001): the versions kept besides the one in force
   return (
-    <li className={`fw-rtv-card${chosen ? ' is-chosen' : ''}`} data-card-id={file.id}>
-      {!customer && (
+    <li className={`fw-rtv-card fw-of-card${chosen ? ' is-chosen' : ''}${older ? ' is-older' : ''}`} data-card-id={file.id}>
+      {!customer && !older && (
         <span className="fw-rtv-card-check">
           <Checkbox label={<span className="nds-vh">{t('select.one', { name: file.name })}</span>} checked={chosen} onChange={(event) => onChoose(event.target.checked)} />
         </span>
       )}
-      <button type="button" className="fw-rtv-card-open" data-row={file.id} title={file.name} onClick={(event) => actions?.onOrderOpen?.(file.id, 'preview', event.currentTarget)}>
-        <span className={`fw-rtv-card-preview${card === 'LOCKED' ? ' is-locked' : preview?.kind === 'page' ? ' is-page' : ''}`} aria-hidden={card === 'LOCKED' ? undefined : true}>
+      <div className="fw-of-card-in">
+        {/* The preview opens the viewer through the card's one open button (the focus comes back to it). */}
+        <span className={`fw-rtv-card-preview${card === 'LOCKED' ? ' is-locked' : preview?.kind === 'page' ? ' is-page' : ''}`} aria-hidden={card === 'LOCKED' ? undefined : true} onClick={() => openRef.current?.click()}>
           {card === 'LOCKED' ? (
             <>
               <Lock size={20} aria-hidden />
@@ -726,39 +800,56 @@ function OrderCard({ file, orderId, customer, chosen, onChoose, actions, words, 
             KIND_ICON[kind]
           )}
         </span>
-        <span className="fw-rtv-card-name">{file.name}</span>
-      </button>
-      <span className="fw-rtv-card-meta">
-        {[type, sizeWords(file.sizeBytes, locale), formatDate(file.at, { locale })].filter(Boolean).join(' · ')}
-        {file.versionNo > 1 && <> · {t('version.inForce', { n: file.versionNo })}</>}
-      </span>
-      {added && <span className="fw-rtv-card-meta">{t(added.key, added.params)}</span>}
-      <span className="fw-rtv-marks">
-        {/* F-SA-238: the customer reads where it sits by its own numbers only (none: no chip), never who else can see it. */}
-        {customer ? file.from.label && source.key === 'order.source.from' && <Tag tone="neutral">{t(source.key, source.params)}</Tag> : <Tag tone="neutral">{t(source.key, source.params)}</Tag>}
-        {!customer && <Tag tone={file.audience === 'CUSTOMER_CAN_SEE' ? 'info' : 'neutral'}>{t(`order.audience.${file.audience}`)}</Tag>}
-        {file.bodyData && <Tag tone="warning">{fileWords('sheet.recorded')}</Tag>}
-        {file.alsoOn.map((other) => (
-          <Tag key={`${other.type}:${other.id}`} tone="neutral">
-            {t('order.alsoOn', { record: other.label })}
-          </Tag>
-        ))}
-        {file.alsoOnOther > 0 && <Tag tone="neutral">{t('order.alsoOnOther', { count: file.alsoOnOther })}</Tag>}
-      </span>
-      {(!customer || file.inThread) && (
-        <span className="fw-rtv-card-actions">
-          {!customer && (
-            <Button size="sm" variant="quiet" aria-label={t('card.downloadOf', { name: file.name })} onClick={() => actions?.onOrderOpen?.(file.id, 'download')}>
-              <Download size={14} aria-hidden /> {t('card.download')}
-            </Button>
+        <div className="fw-of-card-bd">
+          <button ref={openRef} type="button" className="fw-rtv-card-open" data-row={file.id} title={file.name} onClick={(event) => actions?.onOrderOpen?.(file.id, 'preview', event.currentTarget)}>
+            <span className="fw-rtv-card-name">{file.name}</span>
+          </button>
+          <span className="fw-rtv-card-meta">
+            {[type, sizeWords(file.sizeBytes, locale), formatDate(file.at, { locale })].filter(Boolean).join(' · ')}
+            {file.versionNo > 1 && <> · {t('version.inForce', { n: file.versionNo })}</>}
+            {!customer && earlier > 0 && <> · {t('version.earlier', { count: earlier })}</>}
+          </span>
+          {added && <span className="fw-rtv-card-meta">{t(added.key, added.params)}</span>}
+          <span className="fw-rtv-marks">
+            {/* F-SA-238: the customer reads where it sits by its own numbers only (none: no chip), never who else can see it. */}
+            {customer ? file.from.label && source.key === 'order.source.from' && <Tag tone="neutral">{t(source.key, source.params)}</Tag> : <Tag tone="neutral">{t(source.key, source.params)}</Tag>}
+            {!customer && <Tag tone={file.audience === 'CUSTOMER_CAN_SEE' ? 'info' : 'neutral'}>{t(`order.audience.${file.audience}`)}</Tag>}
+            {file.bodyData && <Tag tone="warning">{fileWords('sheet.recorded')}</Tag>}
+            {/* F-OF-101 (B-OF-001, B-OF-003): a fiscal copy and how long it is kept, a legal hold, a paper kept by law — said, never acted on here. */}
+            {!customer && file.fiscal && <Tag tone="neutral">{fileWords('kind.FISCAL_ARCHIVE')}</Tag>}
+            {!customer && file.kept?.retainUntil && <Tag tone="neutral">{t('keep.until', { date: formatDate(file.kept.retainUntil, { locale }) })}</Tag>}
+            {!customer && file.kept?.legalHold && <Tag tone="warning">{t('keep.legalHold')}</Tag>}
+            {!customer && file.from.state && <Tag tone="warning">{t(`order.state.${file.from.state}`)}</Tag>}
+            {/* F-OF-101 (F2-B1): the tech pack's version in force is newer than the one the request named. */}
+            {!customer && file.techPack?.newer && (
+              <>
+                <Tag tone="neutral">{t('order.techPack.named', { n: file.techPack.named })}</Tag>
+                <Tag tone="warning">{t('order.techPack.newer')}</Tag>
+              </>
+            )}
+            {file.alsoOn.map((other) => (
+              <Tag key={`${other.type}:${other.id}`} tone="neutral">
+                {t('order.alsoOn', { record: other.label })}
+              </Tag>
+            ))}
+            {file.alsoOnOther > 0 && <Tag tone="neutral">{t('order.alsoOnOther', { count: file.alsoOnOther })}</Tag>}
+          </span>
+          {(!customer || file.inThread) && (
+            <span className="fw-rtv-card-actions">
+              {!customer && (
+                <Button size="sm" variant="quiet" aria-label={t('card.downloadOf', { name: file.name })} onClick={() => actions?.onOrderOpen?.(file.id, 'download')}>
+                  <Download size={14} aria-hidden /> {t('card.download')}
+                </Button>
+              )}
+              {file.inThread && actions?.onOrderMessage && (
+                <Button size="sm" variant="quiet" onClick={() => actions.onOrderMessage?.(file.inThread!.messageId)}>
+                  {t('order.inThread')}
+                </Button>
+              )}
+            </span>
           )}
-          {file.inThread && actions?.onOrderMessage && (
-            <Button size="sm" variant="quiet" onClick={() => actions.onOrderMessage?.(file.inThread!.messageId)}>
-              {t('order.inThread')}
-            </Button>
-          )}
-        </span>
-      )}
+        </div>
+      </div>
     </li>
   )
 }
@@ -768,18 +859,22 @@ function WorksheetCard({ sheet, actions, words }: { sheet: OrderWorksheet; actio
   const { t, fileWords, locale } = words
   const name = t('card.worksheet', { line: sheet.line.seq, version: sheet.version })
   return (
-    <li className="fw-rtv-card">
-      <button type="button" className="fw-rtv-card-open" data-row={worksheetCardId(sheet)} title={name} onClick={() => actions?.onOrderWorksheet?.(sheet)}>
+    <li className="fw-rtv-card fw-of-card">
+      <div className="fw-of-card-in">
         <span className="fw-rtv-card-preview is-locked">
           <Lock size={20} aria-hidden />
           <span>{t('card.bodyData')}</span>
         </span>
-        <span className="fw-rtv-card-name">{name}</span>
-      </button>
-      <span className="fw-rtv-card-meta">{[sheet.number, sheet.language.toUpperCase(), formatDate(sheet.createdAt, { locale })].filter(Boolean).join(' · ')}</span>
-      <span className="fw-rtv-marks">
-        <Tag tone="warning">{fileWords('sheet.recorded')}</Tag>
-      </span>
+        <div className="fw-of-card-bd">
+          <button type="button" className="fw-rtv-card-open" data-row={worksheetCardId(sheet)} title={name} onClick={() => actions?.onOrderWorksheet?.(sheet)}>
+            <span className="fw-rtv-card-name">{name}</span>
+          </button>
+          <span className="fw-rtv-card-meta">{[sheet.number, sheet.language.toUpperCase(), formatDate(sheet.createdAt, { locale })].filter(Boolean).join(' · ')}</span>
+          <span className="fw-rtv-marks">
+            <Tag tone="warning">{fileWords('sheet.recorded')}</Tag>
+          </span>
+        </div>
+      </div>
     </li>
   )
 }

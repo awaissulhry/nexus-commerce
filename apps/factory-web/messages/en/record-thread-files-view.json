@@ -96,7 +96,8 @@
       "ours": "Ours",
       "made": "Made by us",
       "floor": "Floor"
-    }
+    },
+    "checking": "{count} being checked"
   },
   "version": {
     "inForce": "v{n} in force",
@@ -134,19 +135,37 @@
     "inThread": "Open in the conversation",
     "leftOut_one": "{count} file you cannot open",
     "leftOut_other": "{count} files you cannot open",
-    "leftOutHere_one": "+ {count} you cannot open",
-    "leftOutHere_other": "+ {count} you cannot open",
     "truncated": "The newest {count} files are listed.",
     "empty": {
       "title": "No files yet",
-      "body": "Files added in the conversation show here.",
-      "customer": "No documents yet."
+      "customer": "No documents yet.",
+      "add": "Add one with Add files…, or drop it here."
     },
     "shareOwn_one": "Share {count} own with {party}",
     "shareOwn_other": "Share {count} own with {party}",
     "noneOwn": "Only the order's own office-only files are shared from here.",
     "openFailed": "The file could not be opened: try again.",
-    "shareFailed": "Sharing did not go through: try again."
+    "shareFailed": "Sharing did not go through: try again.",
+    "group": {
+      "SHIPMENTS": "Shipments",
+      "INVOICES": "Invoices & credit notes"
+    },
+    "openOn": "Open on {record} ›",
+    "openOnChanges": "Open on the Changes tab ›",
+    "older": {
+      "show_one": "Show {count} older",
+      "show_other": "Show {count} older",
+      "hide_one": "Hide {count} older",
+      "hide_other": "Hide {count} older"
+    },
+    "state": {
+      "ANNULLED": "Annulled — kept by law",
+      "REPLACED": "Replaced — kept by law"
+    },
+    "techPack": {
+      "named": "Named on the request: v{n}",
+      "newer": "Newer than the request"
+    }
   },
   "card": {
     "bodyData": "Body data — opening is recorded",
@@ -156,5 +175,42 @@
     "downloadOf": "Download {name}",
     "worksheet": "Worksheet · line {line} · v{version}",
     "largePdf": "Large PDF: open it to see it"
+  },
+  "tab": {
+    "none": "No files yet.",
+    "noneOpen": "No file you can open on this order.",
+    "files_one": "{count} file on this order",
+    "files_other": "{count} files on this order",
+    "readOnly": "Read-only: your role sees files and asks but changes none."
+  },
+  "held": {
+    "checking_one": "{count} file is being checked for viruses",
+    "checking_other": "{count} files are being checked for viruses"
+  },
+  "answer": {
+    "count_one": "{count} file",
+    "count_other": "{count} files",
+    "shared_one": "{count} shared with {party}",
+    "shared_other": "{count} shared with {party}",
+    "noneShared": "none shared with {party}",
+    "newest": "newest {date}",
+    "noneOpen": "No file you can open.",
+    "emptyAdd": "No files yet: add one, or drop it here."
+  },
+  "counted": {
+    "priced": "{count} priced",
+    "sheets_one": "{count} measurement sheet",
+    "sheets_other": "{count} measurement sheets",
+    "role": "{count} outside your role"
+  },
+  "menu": {
+    "label": "More for Files",
+    "downloadAll": "Download all {count}",
+    "copyLink": "Copy link to Files"
+  },
+  "info": {
+    "files": "Every file of this order, by where it comes from. A file you cannot open is counted once, under the head, with the reason; it is never named.",
+    "doors": "A file made on another page (a work order, an inspection, a shipment, an invoice) is changed there: “Open on … ›”.",
+    "keys": "Keys: ← → ↑ ↓ move between the files · x chooses one · Enter opens it."
   }
 }

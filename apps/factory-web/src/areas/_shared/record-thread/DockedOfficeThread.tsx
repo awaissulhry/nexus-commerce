@@ -28,6 +28,7 @@ import { START_AUDIENCE, type MissingDocument, type UploadAsk } from '../../../l
 import { FILES_VIEW_NS, FilesView, type BulkAction } from '../../../lib/record-thread/files-view/view/FilesView'
 import { useOrderFiles } from './use-order-files' // F-SA-237
 import { stripFilesOf, type OrderFilesHost } from './use-order-files' // F-OP-215: the order page's ONE order-files read
+import { orderFileHrefOf } from './order-file-href' // F-OF-101: a block's door "Open on … ›"
 import type { SavedRepliesModel, SavedReplyLine } from '../../../lib/record-thread/helpers/model'
 import { savedReplyLines } from '../../../lib/record-thread/helpers/model' // th-backend-g step 3
 import { replyAudienceOf, withSavedReply } from '../../../lib/record-thread/composer/model' // th-backend-g step 1
@@ -395,6 +396,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     partyId: partyId ?? null,
     canShare: can.share,
     onProblem: (problem) => base.notify({ ns: FILES_VIEW_NS, key: problem, tone: 'danger' }),
+    hrefOf: (record) => orderFileHrefOf(record, { prefix: companyPrefix(session.company?.code ?? ''), id: key.id, companyId: host.record.companyId }), // F-OF-101
   })
   const orderFiles = hostFiles ?? ownOrderFiles
   // ---- end F-SA-237

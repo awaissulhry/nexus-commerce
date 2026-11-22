@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ApiClient } from '../../../lib/api/client'
 import { isApiError } from '../../../lib/api/errors'
 import type { FilesViewActions } from '../../../lib/record-thread/files-view/view/FilesView'
@@ -10,6 +10,7 @@ import { orderFilesOf } from '../../../lib/record-thread/files-view/model'
 import { orderPricedLeftOut } from '../../../lib/record-thread/files-view/model' // F-CP-144
 import { useFilePreviews } from '../../../lib/record-thread/files-view/use-file-previews'
 import { useOrderFileViewer } from '../../../lib/record-thread/files-view/use-order-file-viewer' // F-OP-127
+import { orderSectionsOf, orderShownFilesOf, type OrderFileRef } from '../../../lib/record-thread/files-view/model' // F-OF-101: the walk in display order
 import { listFiles } from '../../../record-panels/api'
 import { storeUrl } from '../../../record-panels/store'
 import { openOrderFile, readOrderFiles, shareWithParty } from './api'
@@ -39,6 +40,8 @@ export function useOrderFiles(
     readonly onProblem?: (key: string) => void
     /** F-OP-125: the page's own container keeps its read across tabs (true); a window that mounts its own reads again each time it opens. */
     readonly keep?: boolean
+    /** F-OF-101: a block's door "Open on … ›" — the source record's own page (order-file-href.ts); absent: no door. */
+    readonly hrefOf?: (record: OrderFileRef) => string | null
   },
 ) {
   const { orderId, enabled, partyId, canShare, keep = false } = input
@@ -100,13 +103,15 @@ export function useOrderFiles(
   )
 
   // ---- F-OP-126: the previews of the cards in view (the body reports them) ----
-  const listed = read ? orderFilesOf(read) : null
+  // F-OF-101: every listed file in the order the tab draws them (Shipments, then Invoices & credit notes; one block per source), once per read.
+  const listed = useMemo(() => (read ? orderShownFilesOf(orderSectionsOf(read)) : null), [read])
   const previews = useFilePreviews({ files: listed, ask: orderId ? (fileIds) => readOrderFilePreviews(api, orderId, fileIds) : null })
   // ---- F-OP-127: the ONE viewer — ← / → over every file in display order, each fetched by the order's open route when shown ----
   const viewer = useOrderFileViewer({ files: listed, open: orderId ? (fileId, mode) => openOrderFile(api, orderId, fileId, mode) : null, onProblem: (key) => onProblem.current?.(key) })
 
   const actions: FilesViewActions = {
     onRetry: load,
+    ...(input.hrefOf ? { orderHrefOf: input.hrefOf } : {}), // F-OF-101
     onOrderVisible: previews.visible, // F-OP-126
     onOrderSelect: setSelected,
     // F-OP-127: Open shows the file in the viewer (the card gets the focus back); Download is asked at the click.

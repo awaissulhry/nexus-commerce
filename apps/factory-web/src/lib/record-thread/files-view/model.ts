@@ -160,7 +160,8 @@ export interface OrderFile {
   readonly sizeBytes: number
   readonly versionNo: number
   readonly at: string
-  readonly from: OrderFileRef
+  /** F-OF-101 (B-OF-003, S3): `state` — an annulled DDT's paper, an invoice's replaced file (kept by law; absent: in force). */
+  readonly from: OrderFileRef & { readonly state?: OrderFileState | null }
   readonly line: { readonly id: string; readonly seq: number } | null
   readonly audience: OrderFileAudience
   readonly bodyData: boolean
@@ -171,6 +172,25 @@ export interface OrderFile {
   readonly documentWords?: { readonly it: string; readonly en: string } | null
   /** F-OP-125 (B-OP-050, office only): who added it — a person or the customer by name; the floor never by a worker's name. */
   readonly addedBy?: { readonly kind: 'PERSON' | 'FLOOR' | 'CUSTOMER'; readonly name: string | null } | null
+  // ---- F-OF-101 (order FILES tab, 15-steps W1): what the read says of each file — every one OPTIONAL until its server step lands
+  // (B-OF-001, S3); absent: the tab draws what it drew before (never a fake 0, never a held door for a missing fact).
+  /** F2-B1 (B-PT-013, sent today): a tech-pack file — the version the request named; `newer`: the one in force is newer. */
+  readonly techPack?: { readonly named: number; readonly newer: boolean } | null
+  /** The file's lock for every act (StoredFile.version). */
+  readonly version?: number
+  readonly seriesId?: string | null
+  /** The versions kept of its document (> 1: "Versions…"). */
+  readonly versions?: number
+  readonly kept?: { readonly legalHold: boolean; readonly retainUntil: string | null }
+  /** A fiscal copy (never a version, never deleted). */
+  readonly fiscal?: boolean
+  /** A paper Nexus made (never deleted). */
+  readonly made?: 'GENERATED' | 'INVOICE' | 'POD' | 'RETURN_LABEL' | null
+  readonly bornPriced?: boolean
+  readonly priced?: boolean
+  /** F-OF-102: the TRUE audiences beyond the office (empty: office only); absent: the two-state `audience`. */
+  readonly audiences?: readonly OrderFileReach[]
+  // ---- end F-OF-101
 }
 
 /** F-OP-125 (B5): a made-to-measure line's newest worksheet (body data; opened by the made-to-measure route, each opening recorded). */
@@ -195,6 +215,8 @@ export interface OrderFilesGroup {
   readonly measurementsLeftOut: number
   /** F-CP-144 (B-CP-023): the group's priced documents this reader may not open (counted, never named); absent: none. */
   readonly pricedLeftOut?: number
+  /** F-OF-102 (B-OF-002, S3): the group's files held by the virus scan (counted; the reader's own are cards too); absent: none said. */
+  readonly heldCount?: number
 }
 
 export interface OrderFilesRead {
@@ -202,6 +224,13 @@ export interface OrderFilesRead {
   readonly groups: readonly OrderFilesGroup[]
   readonly total: number
   readonly truncated: boolean
+  // ---- F-OF-101 / F-OF-102 (B-OF-001, B-OF-002, S3; optional until they land) ----
+  /** The reader's OWN office uploads still held by the virus scan (a card each; nobody else's is named). */
+  readonly held?: readonly OrderHeldFile[]
+  /** What the reader may do over THIS order's scope; absent: the session's rights decide, as before. */
+  readonly may?: OrderFilesMay
+  readonly cap?: number
+  // ---- end F-OF-101 / F-OF-102
 }
 
 /** The order's files on screen: the read (null while it is read), a failed read, and what this person may do. */
@@ -221,10 +250,22 @@ export interface OrderFilesModel {
    * theirs), no "also on", no left-out count (never "n hidden"), no choosing or sharing; default `office`.
    */
   readonly face?: 'office' | 'customer'
+  // ---- F-OF-101 / F-OF-103 (order FILES tab, W1) ----
+  /** What the reader may do here (the read's `may`, else the session's rights); absent: no act is offered. */
+  readonly may?: OrderFilesMay
+  /** "Add files…": the upload being asked (where it goes, what it is, who sees it), or null. */
+  readonly upload?: UploadAsk | null
+  /** The last upload's outcome: files refused (with why) and files the virus scan holds (said, never lost: F5-B6). */
+  readonly uploadOutcome?: { readonly refused: readonly { readonly name: string; readonly reason: string }[]; readonly held: readonly string[] }
+  // ---- end F-OF-101 / F-OF-103
 }
 
-/** The groups that list a file (or a worksheet, F-OP-125) or count one the reader may not open (an empty group says nothing). */
-export const orderGroupsShown = (read: OrderFilesRead): OrderFilesGroup[] => read.groups.filter((group) => group.files.length > 0 || (group.worksheets?.length ?? 0) > 0 || group.leftOut + group.measurementsLeftOut + (group.pricedLeftOut ?? 0) /* F-CP-144 */ > 0)
+/**
+ * The groups that list a file (or a worksheet, F-OP-125; F-OF-102: a file held by the virus scan). F-OF-101 (P0-B1): a group whose only
+ * files are ones the reader may not open is not drawn — those are counted ONCE, on the counted line under the Files head, never under
+ * a heading "Order & thread 0" nor as "+ 1" under a group.
+ */
+export const orderGroupsShown = (read: OrderFilesRead): OrderFilesGroup[] => read.groups.filter((group) => group.files.length > 0 || (group.worksheets?.length ?? 0) > 0 || (group.heldCount ?? 0) > 0 || (read.held ?? []).some((held) => held.group === group.key))
 
 /** F-CP-144: the order's priced documents this reader may not open, counted over every group ("2 priced documents — you cannot open them"). */
 export const orderPricedLeftOut = (read: OrderFilesRead): number => read.groups.reduce((sum, group) => sum + (group.pricedLeftOut ?? 0), 0)
@@ -324,3 +365,158 @@ export function cardStep(at: number, count: number, key: 'ArrowLeft' | 'ArrowRig
 /** picture: the small preview's address; page: PDF page 1 drawn here (a data URL); largePdf: "Large PDF: open it to see it"; icon: none. */
 export type CardPreview = { readonly kind: 'picture'; readonly src: string } | { readonly kind: 'page'; readonly src: string } | { readonly kind: 'largePdf' } | { readonly kind: 'icon' }
 // ── end F-OP-126
+
+// ── F-OF-101 (order FILES tab, 10-design §5; 13-backend B-OF-001…003; 15-steps W1): the tab's groups, their blocks, the counted line ──
+/** B-OF-003: a paper of its source that stands replaced, kept by law (folded under "Show N older", said on its card). */
+export type OrderFileState = 'ANNULLED' | 'REPLACED'
+/** B-OF-001: who beyond the office sees a file — the TRUE chip (F-OF-102). */
+export type OrderFileReach = 'CUSTOMER' | 'LINK' | 'FLOOR'
+/** B-OF-002: one of the reader's OWN uploads the virus scan still holds (never opened, never previewed). */
+export interface OrderHeldFile {
+  readonly id: string
+  readonly name: string
+  /** The read's group key it shows in (the order's or its lines'). */
+  readonly group: string
+  readonly at: string
+  readonly reason: 'SCAN_PENDING' | 'INFECTED' | 'SCAN_FAILED' | 'OTHER'
+}
+/** B-OF-001: what the reader may do over THIS order's scope (company + customer). */
+export interface OrderFilesMay {
+  readonly upload: boolean
+  readonly delete: boolean
+  readonly share: boolean
+  readonly ask: boolean
+  readonly askCustomer: boolean
+}
+
+/** The tab's own group for the invoices and credit notes: the read keeps them in SHIPMENTS ("Shipments & invoices"); the web splits them off. */
+export const INVOICES_GROUP = 'INVOICES'
+/** The groups the web names itself (the read's one SHIPMENTS group becomes "Shipments" and "Invoices & credit notes"): `order.group.<key>`. */
+export const OWN_WORDS_GROUPS: readonly string[] = ['SHIPMENTS', INVOICES_GROUP]
+/** The groups drawn as one block per source record, each with its door "Open on … ›" (the record's own page keeps its commands). */
+const BLOCK_GROUPS: readonly string[] = ['TECH_PACK', 'REQUESTS', 'PRODUCTION', 'QUALITY', 'SHIPMENTS', INVOICES_GROUP, 'RETURNS']
+/** Production and Quality: one block per work order / inspection number (a hold, a defect or a check sits under it). */
+const BY_LABEL: readonly string[] = ['PRODUCTION', 'QUALITY']
+/** The record a block's door opens first when several kinds share the block (a work order before its hold). */
+const HOME_FIRST: readonly string[] = ['WorkOrder', 'Inspection', 'Shipment', 'Invoice', 'Complaint', 'ReturnAuthorisation']
+
+/** A file of an invoice or a credit note (B-OF-003: credit notes join the invoices' records). */
+export const isInvoiceFile = (file: Pick<OrderFile, 'from'>): boolean => file.from.type === 'Invoice'
+/** An annulled DDT's paper or a replaced invoice file: folded, said on its card ("Annulled — kept by law"). */
+export const foldedOf = (file: Pick<OrderFile, 'from'>): boolean => file.from.state === 'ANNULLED' || file.from.state === 'REPLACED'
+
+/** One source inside a group (a shipment, a work order, an invoice …): its head and door, the files in force, the folded papers. */
+export interface OrderFilesBlock {
+  readonly key: string
+  /** null: no head (the order's own groups); `label` null: a door only ("Open on the Changes tab ›"). */
+  readonly head: { readonly label: string | null; readonly door: OrderFileRef | null } | null
+  readonly files: readonly OrderFile[]
+  readonly older: readonly OrderFile[]
+}
+
+/** One group of the tab as it is drawn. */
+export interface OrderFilesSection {
+  readonly key: string
+  /** The read's words; null: the web's own (`order.group.<key>`, OWN_WORDS_GROUPS). */
+  readonly words: { readonly it: string; readonly en: string } | null
+  readonly blocks: readonly OrderFilesBlock[]
+  readonly worksheets: readonly OrderWorksheet[]
+  /** F-OF-102: the reader's own uploads the scan holds (cards); `checking`: everyone else's, counted ("1 being checked"). */
+  readonly held: readonly OrderHeldFile[]
+  readonly checking: number
+  /** The cards it lists (files in force + worksheets; the folded papers not counted). */
+  readonly count: number
+}
+
+function blocksOf(key: string, files: readonly OrderFile[], face: 'office' | 'customer'): OrderFilesBlock[] {
+  if (files.length === 0) return []
+  const split = (list: readonly OrderFile[]) => ({ files: list.filter((file) => !foldedOf(file)), older: list.filter(foldedOf) })
+  // The customer's face: no doors, no office words — the group's cards only.
+  if (face === 'customer' || !BLOCK_GROUPS.includes(key)) return [{ key, head: null, ...split(files) }]
+  // Requests: their files open on this order's Changes tab (one door; the request's code is no head).
+  if (key === 'REQUESTS') return [{ key, head: { label: null, door: files[0]!.from }, ...split(files) }]
+  const order: string[] = []
+  const byKey = new Map<string, OrderFile[]>()
+  for (const file of files) {
+    const id = BY_LABEL.includes(key) ? `label:${file.from.label}` : `${file.from.type}:${file.from.id}`
+    const list = byKey.get(id)
+    if (list) list.push(file)
+    else {
+      byKey.set(id, [file])
+      order.push(id)
+    }
+  }
+  return order.map((id) => {
+    const list = byKey.get(id)!
+    const home = HOME_FIRST.map((type) => list.find((file) => file.from.type === type)).find((file) => file !== undefined) ?? list[0]!
+    return { key: `${key}:${id}`, head: { label: home.from.label || null, door: { type: home.from.type, id: home.from.id, label: home.from.label } }, ...split(list) }
+  })
+}
+
+/**
+ * The tab's groups in the read's order (10-design §5): SHIPMENTS split into Shipments and Invoices & credit notes by `from.type`; one
+ * block per source in the groups made on other pages (Production by work order, one block per shipment, invoice, case …); the
+ * folded papers under their block; the reader's held uploads and everyone else's counted. A group with nothing to draw is left out.
+ */
+export function orderSectionsOf(read: OrderFilesRead, face: 'office' | 'customer' = 'office'): OrderFilesSection[] {
+  const office = face === 'office'
+  const out: OrderFilesSection[] = []
+  for (const group of read.groups) {
+    const parts: (readonly [string, readonly OrderFile[]])[] =
+      group.key === 'SHIPMENTS' ? [['SHIPMENTS', group.files.filter((file) => !isInvoiceFile(file))], [INVOICES_GROUP, group.files.filter(isInvoiceFile)]] : [[group.key, group.files]]
+    for (const [key, files] of parts) {
+      const first = key === group.key
+      const worksheets = office && first ? orderWorksheetsOf(group) : []
+      const held = office && first ? (read.held ?? []).filter((one) => one.group === group.key) : []
+      const checking = office && first ? Math.max(0, (group.heldCount ?? 0) - held.length) : 0
+      if (files.length === 0 && worksheets.length === 0 && held.length === 0 && checking === 0) continue
+      out.push({ key, words: OWN_WORDS_GROUPS.includes(key) ? null : group.words, blocks: blocksOf(key, files, face), worksheets, held, checking, count: files.filter((file) => !foldedOf(file)).length + worksheets.length })
+    }
+  }
+  return out
+}
+
+/** Every listed file in display order (groups → blocks → the files in force, then the folded ones): the keys and the ONE viewer walk it. */
+export const orderShownFilesOf = (sections: readonly OrderFilesSection[]): OrderFile[] => sections.flatMap((section) => section.blocks.flatMap((block) => [...block.files, ...block.older]))
+
+/** The files a box may choose (the files in force; never a folded paper). */
+export const orderChoosableOf = (sections: readonly OrderFilesSection[]): OrderFile[] => sections.flatMap((section) => section.blocks.flatMap((block) => block.files))
+
+/** The counted line (P0-B1/B2): the files the reader may not open, said ONCE with the reasons, and the files the virus scan holds. */
+export interface OrderCounted {
+  readonly locked: number
+  readonly priced: number
+  readonly sheets: number
+  readonly role: number
+  readonly checking: number
+}
+
+export function orderCountedOf(read: OrderFilesRead, sections: readonly OrderFilesSection[]): OrderCounted {
+  const priced = orderPricedLeftOut(read)
+  const sheets = read.groups.reduce((sum, group) => sum + group.measurementsLeftOut, 0)
+  const role = read.groups.reduce((sum, group) => sum + group.leftOut, 0)
+  return { locked: priced + sheets + role, priced, sheets, role, checking: sections.reduce((sum, section) => sum + section.checking, 0) }
+}
+
+/** F-OF-102: shared with this order's customer — the true audiences when the read says them, else the two-state audience. */
+export const sharedWithCustomer = (file: Pick<OrderFile, 'audience' | 'audiences'>): boolean => (file.audiences ? file.audiences.includes('CUSTOMER') : file.audience === 'CUSTOMER_CAN_SEE')
+
+/** The Files section's answer — "23 files · 13 shared with <customer> · newest 21 Nov" — in the reader's own numbers. */
+export function filesAnswerOf(sections: readonly OrderFilesSection[]): { readonly count: number; readonly shared: number; readonly newest: string | null } {
+  const files = orderChoosableOf(sections)
+  return {
+    count: sections.reduce((sum, section) => sum + section.count, 0),
+    shared: files.filter(sharedWithCustomer).length,
+    newest: files.reduce<string | null>((best, file) => (best === null || file.at > best ? file.at : best), null),
+  }
+}
+
+/** The tab's one answer above its sections (keys of record-thread-files-view): how many files the order has, what the scan holds. */
+export function tabAnswerOf(read: OrderFilesRead, counted: Pick<OrderCounted, 'locked'>): { readonly parts: readonly { readonly key: string; readonly params?: Readonly<Record<string, number>> }[]; readonly tone: 'info' | 'warning' } {
+  const held = read.groups.reduce((sum, group) => sum + (group.heldCount ?? 0), 0)
+  if (read.total === 0 && held === 0) return { parts: [{ key: counted.locked > 0 ? 'tab.noneOpen' : 'tab.none' }], tone: 'info' }
+  const parts: { key: string; params?: Record<string, number> }[] = [{ key: 'tab.files', params: { count: read.total } }]
+  if (held > 0) parts.push({ key: 'held.checking', params: { count: held } })
+  return { parts, tone: held > 0 ? 'warning' : 'info' }
+}
+// ── end F-OF-101

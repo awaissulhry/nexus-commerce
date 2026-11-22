@@ -96,7 +96,8 @@
       "ours": "Nostri",
       "made": "Fatti da noi",
       "floor": "Reparto"
-    }
+    },
+    "checking": "{count} in verifica"
   },
   "version": {
     "inForce": "v{n} in vigore",
@@ -134,19 +135,37 @@
     "inThread": "Apri nella conversazione",
     "leftOut_one": "{count} file che non puoi aprire",
     "leftOut_other": "{count} file che non puoi aprire",
-    "leftOutHere_one": "+ {count} che non puoi aprire",
-    "leftOutHere_other": "+ {count} che non puoi aprire",
     "truncated": "Sono elencati i {count} file più recenti.",
     "empty": {
       "title": "Ancora nessun file",
-      "body": "I file aggiunti nella conversazione compaiono qui.",
-      "customer": "Ancora nessun documento."
+      "customer": "Ancora nessun documento.",
+      "add": "Aggiungine uno con Aggiungi file… o trascinalo qui."
     },
     "shareOwn_one": "Condividi {count} dell'ordine con {party}",
     "shareOwn_other": "Condividi {count} dell'ordine con {party}",
     "noneOwn": "Da qui si condividono solo i file dell'ordine che sono solo per l'ufficio.",
     "openFailed": "Impossibile aprire il file: riprova.",
-    "shareFailed": "La condivisione non è riuscita: riprova."
+    "shareFailed": "La condivisione non è riuscita: riprova.",
+    "group": {
+      "SHIPMENTS": "Spedizioni",
+      "INVOICES": "Fatture e note di credito"
+    },
+    "openOn": "Apri su {record} ›",
+    "openOnChanges": "Apri nella scheda Modifiche ›",
+    "older": {
+      "show_one": "Mostra {count} precedente",
+      "show_other": "Mostra {count} precedenti",
+      "hide_one": "Nascondi {count} precedente",
+      "hide_other": "Nascondi {count} precedenti"
+    },
+    "state": {
+      "ANNULLED": "Annullato — conservato per legge",
+      "REPLACED": "Sostituito — conservato per legge"
+    },
+    "techPack": {
+      "named": "Indicata nella richiesta: v{n}",
+      "newer": "Più recente della richiesta"
+    }
   },
   "card": {
     "bodyData": "Dati corporei — l’apertura è registrata",
@@ -156,5 +175,42 @@
     "downloadOf": "Scarica {name}",
     "worksheet": "Scheda di lavoro · riga {line} · v{version}",
     "largePdf": "PDF grande: aprilo per vederlo"
+  },
+  "tab": {
+    "none": "Ancora nessun file.",
+    "noneOpen": "Nessun file che puoi aprire su questo ordine.",
+    "files_one": "{count} file su questo ordine",
+    "files_other": "{count} file su questo ordine",
+    "readOnly": "Sola lettura: il tuo ruolo vede file e richieste ma non cambia nulla."
+  },
+  "held": {
+    "checking_one": "{count} file in verifica antivirus",
+    "checking_other": "{count} file in verifica antivirus"
+  },
+  "answer": {
+    "count_one": "{count} file",
+    "count_other": "{count} file",
+    "shared_one": "{count} condiviso con {party}",
+    "shared_other": "{count} condivisi con {party}",
+    "noneShared": "nessuno condiviso con {party}",
+    "newest": "il più recente {date}",
+    "noneOpen": "Nessun file che puoi aprire.",
+    "emptyAdd": "Ancora nessun file: aggiungine uno o trascinalo qui."
+  },
+  "counted": {
+    "priced": "{count} con prezzi",
+    "sheets_one": "{count} scheda misure",
+    "sheets_other": "{count} schede misure",
+    "role": "{count} fuori dal tuo ruolo"
+  },
+  "menu": {
+    "label": "Altro per File",
+    "downloadAll": "Scarica tutti i {count}",
+    "copyLink": "Copia il link a File"
+  },
+  "info": {
+    "files": "Tutti i file di questo ordine, per provenienza. Un file che non puoi aprire è contato una volta, sotto il titolo, con il motivo; non viene mai nominato.",
+    "doors": "Un file creato in un'altra pagina (un ordine di lavoro, un'ispezione, una spedizione, una fattura) si cambia lì: «Apri su … ›».",
+    "keys": "Tasti: ← → ↑ ↓ si spostano tra i file · x ne sceglie uno · Invio lo apre."
   }
 }
