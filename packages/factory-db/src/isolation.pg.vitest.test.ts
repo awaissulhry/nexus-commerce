@@ -116,6 +116,7 @@ import { migratedDatabase, type MigratedDatabase } from './testing/database'
 import { SECOND_BRAND_TABLES, seedSecondBrand, type SecondBrand } from './testing/second-brand' // B-TH-001
 import { seedHeldMail } from './testing/held-mail' // B-TH-038
 import { seedCustomerPage } from './testing/customer-page' // B-CP-005
+import { seedOrderMoney } from './testing/order-money' // B-OM-019
 import { loadOwnership, loadSchema } from './tools'
 
 /**
@@ -185,6 +186,19 @@ async function adjustCopy(model: string, copy: Record<string, unknown>): Promise
   // sales seed then moves to PARTLY_SHIPPED (its facts). A partly shipped order is asked no change any more, only a cancel (of
   // what has not left), a rush, a pause or a resume (the change-request trigger): so the copy asks the cancel, with a reason code.
   if (model === 'OrderChangeRequest' && copy.kind === 'CHANGE') return { ...copy, kind: 'CANCEL', reasonCode: 'LEAD_TIME' }
+  // B-OM-019: an order holds ONE accepted price difference in force (the guards' partial unique index): the copy of the first row
+  // (in force, on SEED-SO-0001) goes to another open order of the same company and customer with none in force.
+  if (model === 'OrderPriceAcceptance') {
+    const [open] = await admin(
+      `SELECT o.id::text AS id FROM "SalesOrder" o
+        WHERE o."tenantId" = $1::uuid AND o."companyId" = $2::uuid AND o."partyId" = $3::uuid AND o.status::text NOT IN ('CLOSED', 'CANCELLED')
+          AND NOT EXISTS (SELECT 1 FROM "OrderPriceAcceptance" a WHERE a."tenantId" = o."tenantId" AND a."salesOrderId" = o.id AND a."withdrawnAt" IS NULL)
+        ORDER BY o.id LIMIT 1`,
+      [copy.tenantId, copy.companyId, copy.partyId],
+    )
+    expect(open, 'another open order of the customer with no accepted difference in force (testing/order-money.ts)').toBeDefined()
+    return { ...copy, salesOrderId: open!.id, withdrawnAt: null, withdrawnById: null, withdrawReason: null }
+  }
   if (model !== 'OrderBrandPrice' || copy.salesOrderLineId === null || copy.salesOrderLineId === undefined) return copy
   const [free] = await admin(
     `SELECT l.id::text AS id FROM "SalesOrderLine" l
@@ -586,6 +600,12 @@ beforeAll(async () => {
   await seedCustomerPage({ db: factory, namespace: 'iso-a' })
   await seedCustomerPage({ db: factory, namespace: 'iso-b' })
   // ---- end B-CP-005
+  // ---- B-OM-019 (order money tab, schema wave "order money 1/1"; no CLI seed change): SEED-SO-0001's price difference accepted
+  // by hand (in force: the first row a copy may repeat) and its hand cost lines (a counted commission first, a removed freight
+  // estimate), in each tenant (testing/order-money.ts).
+  await seedOrderMoney({ db: factory, namespace: 'iso-a' })
+  await seedOrderMoney({ db: factory, namespace: 'iso-b' })
+  // ---- end B-OM-019
   // Every seed of both tenants: under a full parallel run this takes more than a minute (B-TH-038: and over two on a machine
   // short of memory, 2026-11-17).
 }, 300_000)
@@ -887,8 +907,10 @@ it('covers every classified table and every runtime role', () => {
     'OrderBrandPrice', // B-CP-005
     'OrderChangeRequest',
     'OrderChangeRequestLine',
+    'OrderCostLine', // B-OM-019
     'OrderFreezeRule',
     'OrderGate',
+    'OrderPriceAcceptance', // B-OM-019
     'OrgArea',
     'OutboxEvent',
     'OverheadRule',
