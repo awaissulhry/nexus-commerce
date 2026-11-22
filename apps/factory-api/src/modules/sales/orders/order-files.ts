@@ -37,6 +37,9 @@ import { seesPrices } from '@nexus/factory-domain/files/priced'
 import { SALES_INQUIRIES_VIEW } from '@nexus/factory-domain/sales/inquiries/permissions'
 import { inquiryOfOrder } from '../inquiries/quote'
 import { techPackOf } from '../inquiries/views'
+// B-OF-033 (order files tab): the order's asks for files, sent with its files (modules/sales/file-asks/read.ts).
+import { serverClock } from '../../../core/time'
+import { askView, customerAskView, orderAsksOf } from '../file-asks/read'
 
 /**
  * B-SA-036 (Sales page plan N9, P14, R7; 13-backend B11; review BW-1): EVERY file of one sales order for the office, by where it
@@ -606,6 +609,8 @@ export const orderFileView = output({
    * and whether that one is newer than the request ("Newer than the request"); null: any other file.
    */
   techPack: output({ named: z.number().int(), inForce: z.literal(true), newer: z.boolean() }).nullable(),
+  // B-OF-033: the ask this file was sent for (arrived or accepted; null: none).
+  askId: id().nullable(),
 })
 
 export const orderFilesContract = defineContract({
@@ -633,6 +638,12 @@ export const orderFilesContract = defineContract({
       /** More than `cap` files: the newest `cap` are read. */
       truncated: z.boolean(),
       cap: z.number().int(),
+      // ---- B-OF-033 (order files tab; 13-backend §2): the asks for files ("Waiting for files"), those the reader does not reach
+      // (counted), and the order's open requests to its customer for a document.
+      asks: z.array(askView),
+      asksLeftOut: z.number().int(),
+      customerAsks: z.array(customerAskView),
+      // ---- end B-OF-033
     }),
   },
 })
@@ -640,14 +651,27 @@ export const orderFilesContract = defineContract({
 /** GET /sales/orders/:orderId/files (no party id, no address: a file opens through its own route). */
 export async function orderFiles(caller: CommandCaller, orderId: string) {
   const read = await readOfficeOrderFiles(caller, orderId)
+  // ---- B-OF-033: the order's asks for this reader (one query per kind), and the ask each file was sent for.
+  const context = officeContextOf(caller)
+  const asked = await caller.withClient((db) => orderAsksOf(db, actorOf(context), context.actorId, read.order, serverClock.now()))
+  // ---- end B-OF-033
   const groups = read.groups.map((group) => ({
     key: group.key,
     words: ORDER_FILE_GROUP_WORDS[group.key],
-    files: group.files.map(({ companyId: _companyId, group: _group, at, ...file }) => ({ ...file, at: toUtcIso(at) })),
+    files: group.files.map(({ companyId: _companyId, group: _group, at, ...file }) => ({ ...file, at: toUtcIso(at), askId: asked.askOfFile.get(file.id) ?? null /* B-OF-033 */ })),
     worksheets: group.worksheets.map(({ createdAt, ...sheet }) => ({ ...sheet, createdAt: toUtcIso(createdAt) })),
     leftOut: group.leftOut,
     measurementsLeftOut: group.measurementsLeftOut,
     pricedLeftOut: group.pricedLeftOut, // B-CP-023
   }))
-  return { order: { id: read.order.id, number: read.order.number }, groups, total: groups.reduce((sum, group) => sum + group.files.length, 0), truncated: read.truncated, cap: ORDER_FILES_CAP }
+  return {
+    order: { id: read.order.id, number: read.order.number },
+    groups,
+    total: groups.reduce((sum, group) => sum + group.files.length, 0),
+    truncated: read.truncated,
+    cap: ORDER_FILES_CAP,
+    asks: asked.asks, // B-OF-033
+    asksLeftOut: asked.asksLeftOut, // B-OF-033
+    customerAsks: asked.customerAsks, // B-OF-033
+  }
 }
