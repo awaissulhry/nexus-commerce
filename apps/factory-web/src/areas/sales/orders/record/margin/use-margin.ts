@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ApiClient } from '../../../../../lib/api/client'
 import { getOrderMargin, type OrderMargin } from '../../../../finance/margins/api'
-import { marginsCanOf, readProblem, showsMargin } from '../../../../finance/margins/model'
+import { marginsCanOf, showsMargin } from '../../../../finance/margins/model'
+// om-fx1 #2 (F-OM-302): the read failed — in the order page's words (Money's Margin section says it with the kit's own PartFailed).
+import { readProblem } from '../../model'
 import type { MarginTabModel } from './model'
 import { useLive } from '../../hooks' // F-OM-302 (B-OM-021): the margin changed by hand elsewhere reads it again
 
