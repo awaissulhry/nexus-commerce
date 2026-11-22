@@ -9,6 +9,7 @@ import type { Part } from '../../record-model'
 import { PartFailed, PartReading } from '../../view/production/Kit'
 import { httpsOrNull } from '../model'
 import type { ShipmentRow } from '../where'
+import { parcelGroupsOf } from '../rows' // F-OS-301
 
 /**
  * F-OS-103 (order SHIPMENTS tab, 10-design §5 "Parcels (n) fold") — a row's parcels, opened under it (closed by default): its head
@@ -44,12 +45,9 @@ export function ParcelsFold({ row, order, part, onRetry }: { row: ShipmentRow; o
           group.sizes.push(size)
           groups.set(key, group)
         }
-        if (parcel.contents) {
-          for (const content of parcel.contents) {
-            const line = order.lines.find((entry) => entry.id === content.lineId)
-            add(content.lineId, line?.style?.code ?? '—', line?.colourway?.name ?? line?.colourway?.code ?? '—', content.size === null ? String(content.pieces) : `${content.size} ×${content.pieces}`)
-          }
-        } else for (const content of carton?.contents ?? []) add(`${content.styleCode}|${content.colourwayCode}`, content.styleCode, content.colourwayName, `${content.size} ×${content.quantity}`)
+        // F-OS-301: the order read's own contents grouped by the one rule the Tracking numbers window says them with (rows.ts).
+        if (parcel.contents) for (const group of parcelGroupsOf(parcel.contents, order.lines)) groups.set(group.key, { style: group.style, colour: group.colour, sizes: group.sizes })
+        else for (const content of carton?.contents ?? []) add(`${content.styleCode}|${content.colourwayCode}`, content.styleCode, content.colourwayName, `${content.size} ×${content.quantity}`)
         const other = parcel.otherPieces ?? 0
         const known = !!parcel.contents || !!carton
         const url = httpsOrNull(parcel.url)

@@ -832,11 +832,12 @@ describe('F-OP-129 — the order page at the end in the design screen: Review an
     expect(owner).toContain('0123456789')
     expect(owner).toContain('No live tracking')
     expect(owner).toContain('GLS-778899')
-    // F-OS-101 (D2): Sales reads the number and no door — Tracking number… is hidden, never held for a right.
+    // F-OS-101 (D2): Sales reads the number and no door — Tracking numbers… (F-OS-301) is hidden, never held for a right; the Owner's opens.
     const sales = draw('f-op-129-ship-tracking-sales')
     expect(textOf(sales)).toContain('0123456789')
     expect(sales).not.toContain('A warehouse person adds tracking.')
-    expect(textOf(sales.slice(sales.indexOf('id="shipments"')))).not.toContain('Tracking number…')
+    expect(textOf(sales.slice(sales.indexOf(' id="shipments"')))).not.toContain('Tracking numbers…')
+    expect(owner).toContain('Tracking numbers…')
   })
 
   it('a shared shipment names the other order it carries; one made elsewhere names its paper DDT (F-OP-122, F-OP-123)', () => {

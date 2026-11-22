@@ -293,3 +293,35 @@ export function shipmentsAnswer(rows: readonly ShipmentRow[]): ShipWord[] {
   if (cancelled > 0) parts.push(word('ships.answer.status.CANCELLED', { count: cancelled }))
   return parts
 }
+
+// ── F-OS-301 (order SHIPMENTS tab, 10-design §7 D5): what each parcel holds of THIS order ─────────────────────────────────────────────
+export interface ParcelGroup {
+  readonly key: string
+  readonly style: string
+  readonly colour: string
+  /** "46 ×4", or the units of a made-to-measure line ("4"). */
+  readonly sizes: string[]
+}
+
+/** A parcel's contents of this order, one group per order line (a style and colour), in the read's order. */
+export function parcelGroupsOf(contents: readonly { readonly lineId: string; readonly size: string | null; readonly pieces: number }[], lines: Order['lines']): ParcelGroup[] {
+  const groups = new Map<string, ParcelGroup>()
+  for (const content of contents) {
+    const line = lines.find((entry) => entry.id === content.lineId)
+    const group = groups.get(content.lineId) ?? { key: content.lineId, style: line?.style?.code ?? '—', colour: line ? colourOf(line) : '—', sizes: [] }
+    group.sizes.push(content.size === null ? String(content.pieces) : `${content.size} ×${content.pieces}`)
+    groups.set(content.lineId, group)
+  }
+  return [...groups.values()]
+}
+
+/** By parcel id: "SEED-JKT-02 Black · 52 ×10 · 54 ×6" (no words to translate: codes and numbers); a parcel with nothing of it: none. */
+export function parcelWordsOf(row: Pick<ShipmentRow, 'parcels'>, lines: Order['lines']): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const parcel of row.parcels ?? []) {
+    const groups = parcelGroupsOf(parcel.contents ?? [], lines)
+    if (groups.length > 0) out[parcel.id] = groups.map((group) => [`${group.style} ${group.colour}`, ...group.sizes].join(' · ')).join(' — ')
+  }
+  return out
+}
+// ── end F-OS-301 ──

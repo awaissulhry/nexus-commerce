@@ -24,6 +24,8 @@ import { DeliveryDoor } from '../../../warehouse/shipments/pod/DeliveryDoor'
 import { DOOR_NAMESPACES } from '../../../warehouse/shipments/queue/shared/door-words'
 import type { RowActId } from './shipments/doors'
 import type { NoticeWords } from './record-model'
+import type { Words } from '../../../warehouse/shipments/queue/shared/depth' // F-OS-301: what the tracking write said
+import { parcelWordsOf } from './shipments/rows' // F-OS-301: each parcel's contents of this order, in the Tracking numbers window
 // ---- end F-OS-201
 // F-OP-121 (order page plan N6): Create shipment… in place — the Warehouse's ONE New shipment hook and its dialog.
 import type { ApiClient } from '../../../../lib/api/client'
@@ -105,7 +107,7 @@ export function useShipmentsActs(input: {
     },
     [prefix, reload, setNotice],
   )
-  const shipmentDoor = row && open && order ? doorOf({ row: { id: row.id, number: row.number, version: row.version ?? 1 }, order: { id: order.id, companyId: order.companyId }, open, can, prefix, reload, close, said }) : null
+  const shipmentDoor = row && open && order ? doorOf({ row: { id: row.id, number: row.number, version: row.version ?? 1 }, order: { id: order.id, companyId: order.companyId }, open, can, prefix, close, said, parcelWords: parcelWordsOf(row, order.lines) /* F-OS-301 */ }) : null
   // ---- end F-OP-119 → F-OS-201
 
   // ---- F-OP-121: Create shipment… in place ----
@@ -253,6 +255,8 @@ const TOLD: Partial<Record<RowActId, string>> = {
 }
 const os = (key: string, params?: Record<string, string | number>): NoticeWords => ({ key, ns: 'order-shipments', ...(params ? { params } : {}) })
 const toldOf = (act: RowActId): NoticeWords | null => (TOLD[act] ? os(TOLD[act]!) : null)
+/** F-OS-301: after Tracking numbers…, what the customer was told — the portal at once; the notice again when ticked (sent, or held). */
+const trackingTold = (done: Words | undefined): NoticeWords => os(done?.key === 'door.tracking.doneNotice' ? 'ships.told.noticeSent' : done?.key === 'door.tracking.doneNoticeHeld' ? 'ships.told.noticeHeld' : 'ships.told.tracking')
 
 /** The SHIPMENT door kinds (Warehouse's record dialogs, ShipmentDoor.tsx) and the How it travels ones (useOwnTransport). */
 const SHIPMENT_DOORS: Partial<Record<RowActId, ShipmentDoorKind['kind']>> = { unpack: 'unpack', cancel: 'cancel', ddtOff: 'ddtRequired', ddtBack: 'ddtRequired', receiveBack: 'receiveBack' }
@@ -265,17 +269,18 @@ function doorOf(input: {
   readonly open: { readonly act: RowActId | 'tracking'; readonly holdId?: string }
   readonly can: ReturnType<typeof depthAbilitiesOf>
   readonly prefix: string
-  readonly reload: () => void
   readonly close: () => void
   readonly said: (shipment: { readonly id: string; readonly number: string }, words: NoticeWords, told: NoticeWords | null) => void
+  /** F-OS-301: each parcel's contents of this order, by parcel id (the Tracking numbers window's rows). */
+  readonly parcelWords: Readonly<Record<string, string>>
 }): ReactNode {
-  const { row, order, open, can, prefix, reload, close, said } = input
+  const { row, order, open, can, prefix, close, said } = input
   const key = `${row.id}:${open.act}`
   const act = open.act
   const transport = TRANSPORT_DOORS[act]
-  // Warehouse's How it travels windows: the hook writes and closes; the order reads itself again (the first one, Tracking number…,
-  // as F-OP-119 always did; the others also say it once).
-  if (transport) return createElement(ShipmentTransportDoor, { key, shipmentId: row.id, version: row.version, can, open: transport, onChanged: act === 'tracking' ? reload : () => said(row, os(`ships.done.${act}`, { number: row.number }), act === 'tracking' ? null : toldOf(act)), onClose: close })
+  // Warehouse's How it travels windows: the hook writes and closes; the order reads itself again and says it once. F-OS-301: Tracking
+  // numbers… says what the customer was told (the portal at once; the shipping notice again only when ticked, and whether it went).
+  if (transport) return createElement(ShipmentTransportDoor, { key, shipmentId: row.id, version: row.version, can, open: transport, onChanged: act === 'tracking' ? (done?: Words) => said(row, os('ships.done.tracking', { number: row.number }), trackingTold(done)) : () => said(row, os(`ships.done.${act}`, { number: row.number }), toldOf(act)), onClose: close, ...(act === 'tracking' ? { parcelWords: input.parcelWords } : {}) })
   if (act === 'tracking') return null
   const kind = SHIPMENT_DOORS[act]
   const done = (result: ShipmentDoorDone) => said(result.shipment, os(result.words.key, result.words.params), toldOf(act))

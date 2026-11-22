@@ -249,7 +249,8 @@
         "carrierFed": "The carrier's own tracking follows it: nothing to type.",
         "proofKept": "Every part of the proof is kept: it never changes.",
         "received": "The garments were received back already."
-      }
+      },
+      "tracking": "Tracking numbers…"
     },
     "done": {
       "split": "{number} was split.",
@@ -260,12 +261,16 @@
       "placeHold": "{number} is on hold.",
       "releaseHold": "A hold of {number} is released.",
       "proof": "The proof of delivery of {number} is saved.",
-      "resolve": "The tracking problem of {number} is resolved."
+      "resolve": "The tracking problem of {number} is resolved.",
+      "tracking": "The tracking numbers of {number} are saved."
     },
     "told": {
       "draft": "The customer is not told: a draft is never shown.",
       "portal": "The customer is not e-mailed; their portal shows it at once.",
-      "ddtOff": "The customer sees the shipment from Packed on, without a DDT."
+      "ddtOff": "The customer sees the shipment from Packed on, without a DDT.",
+      "tracking": "The customer sees the numbers in their portal at once; no e-mail.",
+      "noticeSent": "The shipping notice went to the customer again.",
+      "noticeHeld": "The shipping notice did not go; the shipment's Customer notice in Warehouse says why."
     }
   },
   "after": {
@@ -415,6 +420,36 @@
       "ddtOff": "{number} travels without a DDT.",
       "ddtBack": "{number} leaves with a DDT again.",
       "received": "{count} garments of {number} are back in finished goods."
+    },
+    "tracking": {
+      "title": "Tracking numbers of {number}",
+      "consignment": "Consignment number (tracking, AWB or B/L)",
+      "awbFits": "It looks like an air waybill number, and its last digit fits.",
+      "awbOff": "It looks like an air waybill number, but its last digit does not fit: check it.",
+      "parcels": "Parcels ({count}) · one number each",
+      "parcelOf": "Parcel {seq} of {count}",
+      "parcelNumber": "Parcel {seq}: number",
+      "parcelLinkLabel": "Parcel {seq}: its tracking page (https)",
+      "fromLabel": "From the label: its number comes from the carrier.",
+      "refusal": {
+        "PARCEL_LABELLED": "This parcel carries a label: its number comes from the label, never typed.",
+        "NOT_PACKED": "Parcels get their numbers once the shipment is packed."
+      },
+      "afterLeft": "A parcel's typed number may change after the goods left; the customer sees the new one at once.",
+      "fromPacked": "From Packed on. A number is typed only on a parcel without a carrier label.",
+      "seen": "The customer saw the old number: say why it changes.",
+      "why": "Say why the number changes (at least {min} characters).",
+      "parcelTooLong": "Parcel {seq}: the number is one line of at most {max} characters.",
+      "parcelLinkNeedsNumber": "Parcel {seq}: a link goes only with its number.",
+      "parcelLink": "Parcel {seq}: the link starts with https:// and has at most {max} characters.",
+      "go": "Save the numbers",
+      "notify": "Send the shipping notice again",
+      "notifyHint": "Off by default: the customer sees the new numbers in the portal and on the tracking page at once; an e-mail goes only when ticked.",
+      "toldPacked": "The customer sees the numbers in their portal; no e-mail from this window.",
+      "never": "A number from a carrier label is never typed over. The DDT is not touched. The history keeps every old number; the thread gets one office line.",
+      "done": "The tracking numbers are saved.",
+      "doneNotice": "The tracking numbers are saved and the shipping notice went again.",
+      "doneNoticeHeld": "The tracking numbers are saved; the shipping notice did not go."
     }
   },
   "move": {

@@ -87,6 +87,8 @@ const DEPTH = words('warehouse-shipments-depth')
 const POPUPS = words('record-thread-popups')
 const PO = words('portal-orders')
 const SHIP = words('shipments')
+// F-OS-301 (order SHIPMENTS tab): the tab's own words (Tracking numbers…, the consignment number, Save the numbers).
+const OS = words('order-shipments')
 // F-MS-106: the portal's production list and the order's History.
 const PPROD = words('portal-production')
 const FEED = words('record-thread-feed')
@@ -169,16 +171,20 @@ async function yesInPlace(flow: Flow, desks: readonly Desk[], orderId: string): 
   throw new Error(`the yes of ${orderId} is held for every desk asked (${desks.map((desk) => desk.person.key).join(', ')})`)
 }
 
-/** The tracking dialog of a Shipments row: the number and its typed link (F-OP-135), saved or cleared. */
+/**
+ * The tracking dialog of a Shipments row: the number and its typed link (F-OP-135), saved or cleared. F-OS-301: the row's button is
+ * "Tracking numbers…"; a shipment with parcels names its number "Consignment number (tracking, AWB or B/L)" and saves with "Save the
+ * numbers" (one without parcels keeps "Tracking number" and Save).
+ */
 async function typeTracking(page: Page, number: string, tracking: string | null, link: string | null): Promise<void> {
   const row = shipmentRow(page, number)
   await seen(row, 60_000)
-  await press(row.getByRole('button', { name: OD('ship.trackingOpen'), exact: true }))
+  await press(row.getByRole('button', { name: OS('ships.act.tracking'), exact: true }))
   const box = dialog(page)
   await seen(box)
-  await box.getByRole('textbox', { name: DEPTH('transport.trackingNumber') }).fill(tracking ?? '')
-  if (link !== null) await box.getByRole('textbox', { name: DEPTH('transport.trackingLink') }).fill(link)
-  await press(box.getByRole('button', { name: tracking === null ? DEPTH('transport.clearTracking') : DEPTH('transport.saveTracking'), exact: true }))
+  await box.getByRole('textbox', { name: OS('door.tracking.consignment'), exact: true }).or(box.getByRole('textbox', { name: DEPTH('transport.trackingNumber'), exact: true })).fill(tracking ?? '')
+  if (link !== null) await box.getByRole('textbox', { name: DEPTH('transport.trackingLink'), exact: true }).fill(link)
+  await press(tracking === null ? box.getByRole('button', { name: DEPTH('transport.clearTracking'), exact: true }) : box.getByRole('button', { name: OS('door.tracking.go'), exact: true }).or(box.getByRole('button', { name: DEPTH('transport.saveTracking'), exact: true })))
   await expect(box).toBeHidden({ timeout: 30_000 })
 }
 

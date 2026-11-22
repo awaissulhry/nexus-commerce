@@ -306,10 +306,11 @@ function TravelsCellView({ view, row, fold, onFold, onTracking }: { view: RowMod
       {travels.parcels ? <span className="fw-os-mu">{t('ships.travels.parcels', { parcels: t('ships.travels.parcelCount', { count: travels.parcels.count }), tracked: t('ships.travels.tracked', { count: travels.parcels.tracked }) })}</span> : null}
       {travels.trackingDoor || view.fold !== null ? (
         <span className="fw-os-acts">
-          {/* F-OP-119: drawn only where the number may be typed here (never held for a right, never on a final row: P0-B3, D2). */}
+          {/* F-OP-119: drawn only where the number may be typed here (never held for a right, never on a final row: P0-B3, D2).
+              F-OS-301: "Tracking numbers…" — the consignment number and one per parcel, in Warehouse's own window. */}
           {travels.trackingDoor && row.status !== 'CANCELLED' ? (
             <Button size="sm" onClick={onTracking}>
-              {o('ship.trackingOpen')}
+              {t('ships.act.tracking')}
             </Button>
           ) : null}
           {view.fold !== null ? (

@@ -249,7 +249,8 @@
         "carrierFed": "La segue il tracciamento del vettore: niente da inserire.",
         "proofKept": "Ogni parte della prova è conservata: non cambia mai.",
         "received": "I capi sono già stati ricevuti."
-      }
+      },
+      "tracking": "Numeri di tracciamento…"
     },
     "done": {
       "split": "{number} è stata divisa.",
@@ -260,12 +261,16 @@
       "placeHold": "{number} è bloccata.",
       "releaseHold": "Un blocco di {number} è sbloccato.",
       "proof": "La prova di consegna di {number} è salvata.",
-      "resolve": "Il problema di tracciamento di {number} è risolto."
+      "resolve": "Il problema di tracciamento di {number} è risolto.",
+      "tracking": "I numeri di tracciamento di {number} sono salvati."
     },
     "told": {
       "draft": "Il cliente non viene avvisato: una bozza non si vede mai.",
       "portal": "Il cliente non riceve e-mail; il suo portale lo mostra subito.",
-      "ddtOff": "Il cliente vede la spedizione da Imballata in poi, senza DDT."
+      "ddtOff": "Il cliente vede la spedizione da Imballata in poi, senza DDT.",
+      "tracking": "Il cliente vede subito i numeri nel suo portale; nessuna e-mail.",
+      "noticeSent": "L'avviso di spedizione è stato inviato di nuovo al cliente.",
+      "noticeHeld": "L'avviso di spedizione non è partito; l'avviso al cliente della spedizione in Magazzino dice perché."
     }
   },
   "after": {
@@ -415,6 +420,36 @@
       "ddtOff": "{number} viaggia senza DDT.",
       "ddtBack": "{number} parte di nuovo con un DDT.",
       "received": "{count} capi di {number} sono di nuovo nei prodotti finiti."
+    },
+    "tracking": {
+      "title": "Numeri di tracciamento di {number}",
+      "consignment": "Numero principale (tracking, AWB o B/L)",
+      "awbFits": "Sembra una lettera di vettura aerea, e l'ultima cifra corrisponde.",
+      "awbOff": "Sembra una lettera di vettura aerea, ma l'ultima cifra non corrisponde: controllala.",
+      "parcels": "Colli ({count}) · un numero ciascuno",
+      "parcelOf": "Collo {seq} di {count}",
+      "parcelNumber": "Collo {seq}: numero",
+      "parcelLinkLabel": "Collo {seq}: pagina di tracciamento (https)",
+      "fromLabel": "Dall'etichetta: il numero viene dal corriere.",
+      "refusal": {
+        "PARCEL_LABELLED": "Questo collo ha un'etichetta: il numero viene dall'etichetta, mai inserito a mano.",
+        "NOT_PACKED": "I colli ricevono i numeri quando la spedizione è imballata."
+      },
+      "afterLeft": "Il numero inserito di un collo può cambiare dopo la partenza; il cliente vede subito quello nuovo.",
+      "fromPacked": "Da Imballata in poi. Si inserisce un numero solo su un collo senza etichetta del corriere.",
+      "seen": "Il cliente ha visto il numero vecchio: di' perché cambia.",
+      "why": "Di' perché il numero cambia (almeno {min} caratteri).",
+      "parcelTooLong": "Collo {seq}: il numero è una riga di al massimo {max} caratteri.",
+      "parcelLinkNeedsNumber": "Collo {seq}: il link va solo con il suo numero.",
+      "parcelLink": "Collo {seq}: il link inizia con https:// e ha al massimo {max} caratteri.",
+      "go": "Salva i numeri",
+      "notify": "Invia di nuovo l'avviso di spedizione",
+      "notifyHint": "Spento di default: il cliente vede subito i numeri nuovi nel portale e nella pagina di tracciamento; l'e-mail parte solo se lo spunti.",
+      "toldPacked": "Il cliente vede i numeri nel suo portale; nessuna e-mail da questa finestra.",
+      "never": "Un numero da etichetta del corriere non si sovrascrive mai. Il DDT non si tocca. La cronologia conserva ogni numero vecchio; la conversazione riceve una riga dell'ufficio.",
+      "done": "I numeri di tracciamento sono salvati.",
+      "doneNotice": "I numeri di tracciamento sono salvati e l'avviso di spedizione è partito di nuovo.",
+      "doneNoticeHeld": "I numeri di tracciamento sono salvati; l'avviso di spedizione non è partito."
     }
   },
   "move": {
