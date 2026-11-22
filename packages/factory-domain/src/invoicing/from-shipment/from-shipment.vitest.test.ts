@@ -12,6 +12,7 @@ import { deductionProblems, planDeductions, type DepositInvoiceFacts } from './d
 import { orderSettlement, type SettlementFacts } from './settlement'
 import { invoicePaymentStateOf, INVOICE_PAYMENT_STATES } from './settlement' // B-OM-023
 import { creditNotePaymentStateOf, depositInvoicePaymentStatesOf } from './settlement' // B-OM-026
+import { depositInvoicePaymentsOf } from './settlement' // B-OM-027
 import { ddtInvoiceProblems, draftGoodsLines, notInvoiced, placeWithoutDdt, type InvoicedQuantity, type OrderLinePrice, type ShippedQuantity } from './shipped'
 
 // Every company, party, VAT number, order and amount here is made up (the FatturaPA samples' fake numbers: office 000).
@@ -433,5 +434,38 @@ describe('B-OM-026: a TD02’s and a TD04’s payment state, no amount', () => {
     expect(creditNotePaymentStateOf({ gross: 30_000, refunded: 30_000 }, 'REFUND_DUE')).toBe('CREDITED')
     expect(creditNotePaymentStateOf({ gross: 30_000, refunded: 0 }, 'CREDITED')).toBe('CREDITED')
     expect(creditNotePaymentStateOf({ gross: 30_000, refunded: 0 }, null)).toBe('CREDITED')
+  })
+})
+
+// ── B-OM-027 / B-OM-028 (order money tab W-14, W-13): which deposit invoice was issued for which payment ──
+describe('B-OM-027: the TD02 issued for each payment, by the issuing rule', () => {
+  const pay = (allocationId: string, amount: number, depositRequestId = 'r1') => ({ allocationId, depositRequestId, amount })
+  const td02 = (id: string, gross: number, credited = 0, depositRequestId = 'r1') => ({ id, depositRequestId, gross, credited })
+  const pairs = (payments: ReturnType<typeof pay>[], invoices: ReturnType<typeof td02>[]) => {
+    const found = depositInvoicePaymentsOf(payments, invoices)
+    return { invoiceOf: Object.fromEntries(found.invoiceOf), paymentOf: Object.fromEntries(found.paymentOf) }
+  }
+
+  it('one TD02 per payment, in order; a payment not invoiced yet has none', () => {
+    expect(pairs([pay('p1', 10_000), pay('p2', 5_000)], [td02('t1', 10_000), td02('t2', 5_000)])).toEqual({ invoiceOf: { p1: 't1', p2: 't2' }, paymentOf: { t1: 'p1', t2: 'p2' } })
+    expect(pairs([pay('p1', 10_000), pay('p2', 5_000)], [td02('t1', 10_000)])).toEqual({ invoiceOf: { p1: 't1' }, paymentOf: { t1: 'p1' } })
+  })
+
+  it('one TD02 drafted by hand for two payments: both name it; it names the newest (the one that brought it about)', () => {
+    expect(pairs([pay('p1', 6_000), pay('p2', 4_000)], [td02('t1', 10_000)])).toEqual({ invoiceOf: { p1: 't1', p2: 't1' }, paymentOf: { t1: 'p2' } })
+  })
+
+  it('a TD02 credited in full holds nothing: the one issued again for the same money is the payment’s', () => {
+    expect(pairs([pay('p1', 10_000)], [td02('t1', 10_000, 10_000), td02('t2', 10_000)])).toEqual({ invoiceOf: { p1: 't2' }, paymentOf: { t2: 'p1' } })
+    expect(pairs([pay('p1', 10_000)], [td02('t1', 10_000, 10_000)])).toEqual({ invoiceOf: {}, paymentOf: {} })
+  })
+
+  it('a TD02 kept after its payment was taken back bills the next payment; a payment past it names the newest TD02', () => {
+    // p0 was taken back (not live, not given): t1 now bills p2's first 10.00, t2 the 5.00 past it.
+    expect(pairs([pay('p2', 15_000)], [td02('t1', 10_000), td02('t2', 5_000)])).toEqual({ invoiceOf: { p2: 't2' }, paymentOf: { t1: 'p2', t2: 'p2' } })
+  })
+
+  it('each request apart', () => {
+    expect(pairs([pay('p1', 10_000, 'r1'), pay('p2', 10_000, 'r2')], [td02('t2', 10_000, 0, 'r2'), td02('t1', 10_000, 0, 'r1')])).toEqual({ invoiceOf: { p1: 't1', p2: 't2' }, paymentOf: { t1: 'p1', t2: 'p2' } })
   })
 })

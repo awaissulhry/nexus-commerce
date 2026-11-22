@@ -26,6 +26,9 @@ import { orderMoneyFactsOf } from './later-columns'
 // B-OM-024 (order money tab W-01, W-02): a request short, within the company's write-off tolerance (the rule ACCEPT_SHORT uses).
 import { beyondToleranceOf, shortOf } from '@nexus/factory-domain/sales/orders/money-plan'
 import { toleranceOf } from '../../payments/write-offs/sums'
+// B-OM-027 (order money tab W-14): the TD02 issued for each payment (the issuing rule), its number for invoices.view.
+import { depositInvoicePaymentsOf } from '@nexus/factory-domain/invoicing/from-shipment/settlement'
+import { INVOICES_VIEW } from '@nexus/factory-domain/invoicing/permissions'
 
 /**
  * An order's payment schedule (B-W2a-30; SAL-216; the design's order.money.schedule card): its SalesOrderMilestone rows,
@@ -361,7 +364,7 @@ async function planFactsOf(db: Reader, order: OrderRow, rows: readonly Milestone
   const ids = [...new Set([...requests.map((row) => row.id), ...rows.flatMap((row) => (row.depositRequestId ? [row.depositRequestId] : []))])]
   const paid = await paidOnRequests(db, ids)
   const changes = ids.length > 0 ? await db.salesOrderAmendment.findMany({ where: { orderId: order.id, depositRequestId: { in: ids } }, select: { id: true, revision: true, depositRequestId: true } }) : []
-  const td02s = ids.length > 0 ? await db.invoice.findMany({ where: { docType: 'TD02', depositRequestId: { in: ids } }, select: { id: true, status: true, grossTotal: true, depositRequestId: true } }) : []
+  const td02s = ids.length > 0 ? await db.invoice.findMany({ where: { docType: 'TD02', depositRequestId: { in: ids } }, select: { id: true, status: true, grossTotal: true, depositRequestId: true, /* B-OM-027 */ number: true }, orderBy: { id: 'asc' } }) : []
   const issued = td02s.filter((row) => row.status !== 'DRAFT')
   const credits = issued.length > 0 ? await db.invoice.findMany({ where: { docType: 'TD04', status: { not: 'DRAFT' }, creditOfId: { in: issued.map((row) => row.id) } }, select: { creditOfId: true, grossTotal: true } }) : []
   const allocations = ids.length > 0
@@ -381,6 +384,12 @@ async function planFactsOf(db: Reader, order: OrderRow, rows: readonly Milestone
   const parts = orderMoneyPartsOf(money.factsOf({ id: order.id, grossAmount: order.grossAmount, status: order.status }))
   const hand = await handChangesOf(db, order.id)
   const tolerance = (await toleranceOf(db, order.companyId)).amount // B-OM-024
+  // B-OM-027 (order money tab W-14): the TD02 issued for each payment, by the issuing rule (factory-domain depositInvoicePaymentsOf).
+  const creditedOf = (invoiceId: string) => credits.filter((credit) => credit.creditOfId === invoiceId).reduce((sum, credit) => sum + credit.grossTotal, 0)
+  const issuedFor = depositInvoicePaymentsOf(
+    live.map((row) => ({ allocationId: row.id, depositRequestId: row.depositRequestId ?? '', amount: row.amount })),
+    issued.map((row) => ({ id: row.id, depositRequestId: row.depositRequestId ?? '', gross: row.grossTotal, credited: creditedOf(row.id) })),
+  ).invoiceOf
   return {
     requests,
     paid,
@@ -400,6 +409,11 @@ async function planFactsOf(db: Reader, order: OrderRow, rows: readonly Milestone
     paymentsOf: (requestId: string) => live.filter((row) => row.depositRequestId === requestId),
     writeOffStanding: (paymentId: string) => writtenOff.has(paymentId),
     hardLocked: (day: Date) => hardLocks.some((lock) => lock.periodStart <= day && lock.periodEnd >= day),
+    /** B-OM-027: the TD02 issued for a payment (its allocation on the request), or null. */
+    td02Of: (allocationId: string) => {
+      const invoiceId = issuedFor.get(allocationId)
+      return invoiceId ? (issued.find((row) => row.id === invoiceId) ?? null) : null
+    },
   }
 }
 // ── end B-OM-004 ──
@@ -422,6 +436,7 @@ export async function getSchedule(caller: CommandCaller, orderId: string) {
   const place = { companyId: order.companyId, partyId: order.partyId }
   const seesPayments = can(actor, PAYMENTS_VIEW, place)
   const mayUndo = can(actor, PAYMENTS_RECORD, place) && can(actor, PAYMENTS_VOID, place)
+  const seesInvoices = can(actor, INVOICES_VIEW, place) // B-OM-027: a TD02's number only for invoices.view
   return caller.withClient(async (client) => {
     const rows = await readMilestones(client, order.id)
     const live = rows.filter((row) => row.status !== 'CANCELLED')
@@ -461,22 +476,30 @@ export async function getSchedule(caller: CommandCaller, orderId: string) {
         short: missing === null ? null : { amount: asMoney('price', missing), withinTolerance: beyondToleranceOf(missing, facts.tolerance) === null }, // B-OM-024
         payments: !seesPayments
           ? []
-          : facts.paymentsOf(request.id).map((allocation) => ({
-              paymentId: allocation.payment.id,
-              allocationId: allocation.id,
-              receivedOn: dayOf(allocation.payment.receivedOn),
-              externalRef: allocation.payment.externalRef,
-              method: allocation.payment.method,
-              amount: asMoney('price', allocation.amount),
-              undo: undoVerdictOf({
-                mayAct: mayUndo,
-                request: { status: request.status, fiscalDocument: request.fiscalDocument },
-                depositInvoiceIssued: facts.depositInvoiceIssued(request.id),
-                depositInvoiceDraft: facts.depositInvoiceDraft(request.id),
-                writeOffStanding: facts.writeOffStanding(allocation.payment.id),
-                hardLocked: facts.hardLocked(allocation.payment.receivedOn),
-              }),
-            })),
+          : facts.paymentsOf(request.id).map((allocation) => {
+              // B-OM-027 (W-14): the TD02 issued for this payment; its number with invoices.view only (as the TD02 step says it).
+              const td02 = facts.td02Of(allocation.id)
+              const td02Number = seesInvoices ? (td02?.number ?? null) : null
+              return {
+                paymentId: allocation.payment.id,
+                allocationId: allocation.id,
+                receivedOn: dayOf(allocation.payment.receivedOn),
+                externalRef: allocation.payment.externalRef,
+                method: allocation.payment.method,
+                amount: asMoney('price', allocation.amount),
+                td02: td02 ? { id: td02.id, number: td02Number } : null,
+                undo: undoVerdictOf({
+                  mayAct: mayUndo,
+                  request: { status: request.status, fiscalDocument: request.fiscalDocument },
+                  depositInvoiceIssued: facts.depositInvoiceIssued(request.id),
+                  depositInvoiceDraft: facts.depositInvoiceDraft(request.id),
+                  writeOffStanding: facts.writeOffStanding(allocation.payment.id),
+                  hardLocked: facts.hardLocked(allocation.payment.receivedOn),
+                  // B-OM-027: held by that very TD02 (issued, not rejected): the words name its number.
+                  depositInvoiceNumber: td02 && td02.status !== 'REJECTED' ? td02Number : null,
+                }),
+              }
+            }),
       }
     })
     const today = businessDate(serverClock.now())

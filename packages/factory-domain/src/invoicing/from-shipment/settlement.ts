@@ -305,3 +305,54 @@ export function creditNotePaymentStateOf(note: { readonly gross: MinorUnits; rea
   return credited === 'REFUND_DUE' && note.refunded < note.gross ? 'REFUND_DUE' : 'CREDITED'
 }
 // ── end B-OM-026 ──
+
+// ── B-OM-027 / B-OM-028 (order money tab W-14, W-13): which deposit invoice was issued for which payment ──
+/** A payment's money placed on a deposit request: one live allocation (reversals left out), in the order it was placed. */
+export interface DepositPaymentPart {
+  readonly allocationId: string
+  readonly depositRequestId: string
+  readonly amount: MinorUnits
+}
+/** An issued deposit invoice (not a draft) of a request, in the order it was made: its gross and what its credit notes took back. */
+export interface DepositInvoicePart {
+  readonly id: string
+  readonly depositRequestId: string
+  readonly gross: MinorUnits
+  readonly credited: MinorUnits
+}
+
+/**
+ * Which TD02 was issued for which payment, by the issuing rule itself (payments deposit-invoice.ts: a payment's TD02 bills what
+ * it placed on the request beyond what the request's TD02s, less their credit notes, invoice already — so a TD02 kept after its
+ * payment was taken back bills the next payment's money). Per request, the payments' money (in the order given) is laid against
+ * its TD02s' (each its gross less its credit notes, in the order given; one credited in full holds nothing): a payment's TD02 is
+ * the newest whose money overlaps its own; a TD02's payment is the newest whose money overlaps it (the one that brought it about).
+ * Absent from a map: none (nothing invoiced for that money yet, or credited in full).
+ */
+export function depositInvoicePaymentsOf(payments: readonly DepositPaymentPart[], invoices: readonly DepositInvoicePart[]): { readonly invoiceOf: ReadonlyMap<string, string>; readonly paymentOf: ReadonlyMap<string, string> } {
+  const invoiceOf = new Map<string, string>()
+  const paymentOf = new Map<string, string>()
+  for (const requestId of new Set(payments.map((payment) => payment.depositRequestId))) {
+    const spans: { readonly id: string; readonly from: number; readonly to: number }[] = []
+    let end = 0
+    for (const invoice of invoices) {
+      if (invoice.depositRequestId !== requestId) continue
+      const size = Math.max(0, invoice.gross - invoice.credited)
+      if (size > 0) spans.push({ id: invoice.id, from: end, to: end + size })
+      end += size
+    }
+    let from = 0
+    for (const payment of payments) {
+      if (payment.depositRequestId !== requestId || payment.amount <= 0) continue
+      const to = from + payment.amount
+      for (const span of spans) {
+        if (span.from >= to || span.to <= from) continue
+        invoiceOf.set(payment.allocationId, span.id)
+        paymentOf.set(span.id, payment.allocationId)
+      }
+      from = to
+    }
+  }
+  return { invoiceOf, paymentOf }
+}
+// ── end B-OM-027 / B-OM-028 ──

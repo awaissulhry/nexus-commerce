@@ -6,7 +6,7 @@ import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate } from '@nexus/factory-domain/core/time'
-import { UNDO_HELD_WORDS } from '@nexus/factory-domain/sales/orders/money-plan'
+import { heldByDepositInvoiceWords, UNDO_HELD_WORDS } from '@nexus/factory-domain/sales/orders/money-plan'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedMoney, type MoneySeed } from '../../../../../../packages/factory-db/seed/money'
@@ -73,6 +73,8 @@ function templateGrant(role: string): Grant {
 }
 const SESSIONS: Record<string, () => SessionContext> = {
   finance: () => ({ audience: 'office', tenantId: T, actorId: FINANCE_USER, grants: [grant(['orders.view', 'payments.view', 'payments.record', 'payments.void', 'money.price'])] }),
+  // B-OM-027: the same with invoices.view — the TD02's number is named.
+  financeInvoices: () => ({ audience: 'office', tenantId: T, actorId: FINANCE_USER, grants: [grant(['orders.view', 'payments.view', 'payments.record', 'payments.void', 'invoices.view', 'money.price'])] }),
   viewer: () => ({ audience: 'office', tenantId: T, actorId: newId(), grants: [grant(['orders.view', 'payments.view', 'money.price'])] }),
   sales: () => ({ audience: 'office', tenantId: T, actorId: newId(), grants: [templateGrant('sales')] }),
   otherCustomer: () => ({ audience: 'office', tenantId: T, actorId: newId(), grants: [grant(['orders.view', 'payments.view', 'money.price'], [newId()])] }),
@@ -171,14 +173,27 @@ describe('B-OM-004 the plan read: paid per step, ON_* covered, set by hand, ever
     const requestOf = (id: string) => (answer.requests as Json[]).find((row) => row.id === id)!
     expect(requestOf(ids.r1)).toMatchObject({ milestoneId: ids.depositStep, stepKind: 'DEPOSIT', status: 'OPEN', amount: 30000, paid: 10000, fromChange: null, replacedBy: null, acceptedShort: null, byHand: null })
     // The deposit invoice of R1 is issued: the undo is held, a credit note first (an Italian company's usual answer).
+    // B-OM-027: the TD02 issued for this payment is named by id; its number only for invoices.view (this reader has none).
     expect(requestOf(ids.r1).payments).toEqual([
-      { paymentId: ids.pay1, allocationId: ids.alloc1, receivedOn: dayPlus(-3), externalRef: 'OM-PLAN-0001', method: 'BANK_TRANSFER', amount: 10000, undo: { may: false, why: UNDO_HELD_WORDS.DEPOSIT_INVOICE_ISSUED, code: 'DEPOSIT_INVOICE_ISSUED' } },
+      { paymentId: ids.pay1, allocationId: ids.alloc1, receivedOn: dayPlus(-3), externalRef: 'OM-PLAN-0001', method: 'BANK_TRANSFER', amount: 10000, td02: { id: ids.td02, number: null }, undo: { may: false, why: UNDO_HELD_WORDS.DEPOSIT_INVOICE_ISSUED, code: 'DEPOSIT_INVOICE_ISSUED' } },
     ])
     // R2 has no deposit invoice yet: its part payment may be undone here.
     expect(requestOf(ids.r2)).toMatchObject({ milestoneId: ids.balanceStep, stepKind: 'BEFORE_SHIPPING', paid: 5000, byHand: { act: 'MOVE_DUE' } })
-    expect(requestOf(ids.r2).payments).toEqual([expect.objectContaining({ paymentId: ids.pay2, amount: 5000, undo: { may: true, why: null, code: null } })])
+    expect(requestOf(ids.r2).payments).toEqual([expect.objectContaining({ paymentId: ids.pay2, amount: 5000, td02: null, undo: { may: true, why: null, code: null } })])
     // The extra deposit of the priced change: a row by request, no step, with its change.
     expect(requestOf(ids.r3)).toMatchObject({ milestoneId: null, stepKind: null, amount: 5000, paid: 0, fromChange: { amendmentId: ids.amendment, revision: 1 }, payments: [] })
+  })
+
+  // ── B-OM-027 (order money tab W-14): the TD02 issued for a payment, and the undo held by it naming its number ──
+  it('B-OM-027: with invoices.view the payment names its TD02’s number, and the held words name it too (EN / IT)', async () => {
+    const answer = await plan('financeInvoices')
+    const r1 = (answer.requests as Json[]).find((row) => row.id === ids.r1)!
+    const number = `FT-OM-${ids.td02.slice(-6)}`
+    expect(r1.payments).toEqual([expect.objectContaining({ paymentId: ids.pay1, td02: { id: ids.td02, number }, undo: { may: false, why: heldByDepositInvoiceWords(number), code: 'DEPOSIT_INVOICE_ISSUED' } })])
+    expect(r1.payments[0].undo.why.en).toBe(`A deposit invoice (TD02 ${number}) was issued for this payment: a credit note first, in Finance.`)
+    // The balance's part payment has no TD02: none named, the undo free.
+    const r2 = (answer.requests as Json[]).find((row) => row.id === ids.r2)!
+    expect(r2.payments).toEqual([expect.objectContaining({ paymentId: ids.pay2, td02: null, undo: { may: true, why: null, code: null } })])
   })
 
   // ── B-OM-024 (order money tab W-01, W-02): short, and within the company's write-off tolerance or not ──

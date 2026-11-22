@@ -4,6 +4,7 @@ import { coverageOf, overdueOf, planByHandMarkOf, settledByOf, UNDO_HELD, UNDO_H
 import { amountOfPct, BY_HAND_NOTES, MONEY_PLAN_REFUSALS, MONEY_PLAN_REFUSAL_WORDS, planByHand, sharePctOf, type MoneyPlanAction, type MoneyPlanOutcome, type PlannerFacts, type PlannerRequest, type PlannerStep } from './money-plan'
 // B-OM-024: a request short, within the tolerance — one rule for the plan read and ACCEPT_SHORT.
 import { beyondToleranceOf, shortOf } from './money-plan'
+import { heldByDepositInvoiceWords } from './money-plan' // B-OM-027
 
 /** B-OM-004 (order money tab M4-B1, B12): the plan read's pure rules. Every amount is made up. */
 
@@ -87,6 +88,20 @@ describe('undo a payment on a deposit: the verdict, held in words', () => {
     }
     expect(UNDO_HELD_WORDS.DEPOSIT_INVOICE_ISSUED.en).toContain('a credit note first, in Finance')
     expect(UNDO_HELD_WORDS.DEPOSIT_INVOICE_ISSUED.it).toContain('prima una nota di credito')
+  })
+
+  // B-OM-027 (order money tab W-14): held by the TD02 issued for this very payment, the words name its number.
+  it('held by the TD02 of this payment: the words name it (EN / IT); without its number, the plain words', () => {
+    const named = undoVerdictOf(facts({ depositInvoiceIssued: true, depositInvoiceNumber: 'FT-2026-00007' }))
+    expect(named).toEqual({ may: false, why: heldByDepositInvoiceWords('FT-2026-00007'), code: 'DEPOSIT_INVOICE_ISSUED' })
+    expect(named.why).toEqual({
+      en: 'A deposit invoice (TD02 FT-2026-00007) was issued for this payment: a credit note first, in Finance.',
+      it: 'Per questo pagamento è stata emessa una fattura di acconto (TD02 FT-2026-00007): prima una nota di credito, in Finanza.',
+    })
+    expect(undoVerdictOf(facts({ depositInvoiceIssued: true, depositInvoiceNumber: null })).why).toEqual(UNDO_HELD_WORDS.DEPOSIT_INVOICE_ISSUED)
+    // The number alone holds nothing: an earlier reason still comes first, and no TD02 issued means no hold.
+    expect(undoVerdictOf(facts({ request: { status: 'PAID', fiscalDocument: 'TD02' }, depositInvoiceIssued: true, depositInvoiceNumber: 'FT-2026-00007' })).code).toBe('PAID')
+    expect(undoVerdictOf(facts({ depositInvoiceNumber: 'FT-2026-00007' }))).toEqual({ may: true, why: null, code: null })
   })
 })
 

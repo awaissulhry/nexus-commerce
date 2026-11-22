@@ -402,6 +402,11 @@ const planPaymentView = output({
   externalRef: z.string(),
   method: z.string(),
   amount: money.price(z.number().int()),
+  /**
+   * B-OM-027 (order money tab W-14): the deposit invoice (TD02) issued for this payment (the issuing rule: its money laid against
+   * the request's TD02s), or null; its number only for invoices.view (null otherwise).
+   */
+  td02: output({ id: id(), number: z.string().nullable() }).nullable(),
   undo: undoView,
 })
 /** Every deposit request of the order, live and earlier: a step's, a priced change's extra deposit (`fromChange`), one replaced by hand. */

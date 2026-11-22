@@ -156,6 +156,19 @@ export interface UndoFacts {
   readonly writeOffStanding: boolean
   /** The payment's day is inside a HARD period lock. */
   readonly hardLocked: boolean
+  /**
+   * B-OM-027 (order money tab W-14): the number of the TD02 issued for THIS payment (issued, not rejected, not credited in full),
+   * when the reader may read it (invoices.view): the held words then name it. Absent or null: the plain words.
+   */
+  readonly depositInvoiceNumber?: string | null | undefined
+}
+
+/** B-OM-027: the held words when the TD02 issued for this very payment is known (10-design §5). */
+export function heldByDepositInvoiceWords(number: string): Words {
+  return {
+    en: `A deposit invoice (TD02 ${number}) was issued for this payment: a credit note first, in Finance.`,
+    it: `Per questo pagamento è stata emessa una fattura di acconto (TD02 ${number}): prima una nota di credito, in Finanza.`,
+  }
 }
 
 export interface UndoVerdict {
@@ -171,7 +184,7 @@ export function undoVerdictOf(facts: UndoFacts): UndoVerdict {
   const held = (code: UndoHeld): UndoVerdict => ({ may: false, why: UNDO_HELD_WORDS[code], code })
   if (facts.request.status === 'PAID' && facts.request.fiscalDocument === 'NONE') return held('CARRIED')
   if (facts.request.status === 'PAID') return held('PAID')
-  if (facts.depositInvoiceIssued) return held('DEPOSIT_INVOICE_ISSUED')
+  if (facts.depositInvoiceIssued) return facts.depositInvoiceNumber ? { may: false, why: heldByDepositInvoiceWords(facts.depositInvoiceNumber), code: 'DEPOSIT_INVOICE_ISSUED' } : held('DEPOSIT_INVOICE_ISSUED') // B-OM-027
   if (facts.depositInvoiceDraft) return held('DEPOSIT_INVOICE_DRAFT')
   if (facts.writeOffStanding) return held('WRITE_OFF')
   if (facts.hardLocked) return held('HARD_LOCKED')
