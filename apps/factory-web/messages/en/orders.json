@@ -1947,8 +1947,7 @@
   },
   "files": {
     "title": "Files",
-    "openFailed": "The file could not be opened: try again.",
-    "shareFailed": "Sharing did not go through: try again."
+    "openFailed": "The file could not be opened: try again."
   },
   "band": {
     "asks": "{customer} asks: {what}",

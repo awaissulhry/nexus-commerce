@@ -123,8 +123,7 @@
     "earlier_other": "{count} versioni precedenti",
     "line": "v{n} · {date}",
     "replaced": "sostituita il {date}",
-    "open": "Apri",
-    "restore": "Ripristina"
+    "open": "Apri"
   },
   "keep": {
     "scanPending": "Trattenuto per l'antivirus: si apre quando la scansione dice che è pulito.",
@@ -155,11 +154,7 @@
       "customer": "Ancora nessun documento.",
       "add": "Aggiungine uno con Aggiungi file… o trascinalo qui."
     },
-    "shareOwn_one": "Condividi {count} dell'ordine con {party}",
-    "shareOwn_other": "Condividi {count} dell'ordine con {party}",
-    "noneOwn": "Da qui si condividono solo i file dell'ordine che sono solo per l'ufficio.",
     "openFailed": "Impossibile aprire il file: riprova.",
-    "shareFailed": "La condivisione non è riuscita: riprova.",
     "group": {
       "SHIPMENTS": "Spedizioni",
       "INVOICES": "Fatture e note di credito"
@@ -231,5 +226,106 @@
   },
   "files": {
     "add": "Aggiungi file…"
+  },
+  "acts": {
+    "happens": "Cosa succede",
+    "menu": {
+      "label": "Azioni per {name}",
+      "newVersion": "Nuova versione…",
+      "versions": "Versioni…",
+      "whoCanSee": "Chi può vederlo…",
+      "rename": "Rinomina…",
+      "delete": "Elimina…"
+    },
+    "bulk": {
+      "who_one": "Chi può vederlo ({count})…",
+      "who_other": "Chi può vederli ({count})…",
+      "more": "Altre azioni per i file scelti",
+      "delete_one": "Elimina {count}…",
+      "delete_other": "Elimina {count}…"
+    },
+    "held": {
+      "fiscal": "Una copia fiscale resta com'è: non si modifica e non si elimina mai.",
+      "fiscalName": "Una copia fiscale tiene il suo nome.",
+      "madeVersion": "Questo documento lo crea Nexus: una nuova versione si crea nella scheda Modifiche («Accordo con il cliente»).",
+      "madeName": "Questo documento lo crea Nexus: tiene il suo nome.",
+      "madeDelete": "Un documento creato da Nexus si sostituisce con una nuova versione, non si elimina mai.",
+      "bornPriced": "Un documento creato da Nexus con prezzi tiene il suo segno.",
+      "kept": "Conservato fino al {date}: prima non si può eliminare.",
+      "noneOwn": "Qui si cambia chi può vedere solo i file dell'ordine e delle sue righe.",
+      "noneDelete": "Nessuno dei file scelti si può eliminare: un blocco legale, una copia fiscale o un documento creato da Nexus li tiene.",
+      "busy": "Salvataggio…",
+      "why": "Scrivi il perché: almeno 3 caratteri.",
+      "sameName": "Scrivi un nuovo nome.",
+      "oneFile": "Prima trascina o scegli il nuovo file.",
+      "noChange": "Non cambia nulla: scegli chi può vederlo."
+    },
+    "who": {
+      "title": "Chi può vedere {name}",
+      "titleBulk_one": "Chi può vedere {count} file",
+      "titleBulk_other": "Chi può vedere {count} file",
+      "save": "Salva chi può vederlo",
+      "floor": "Il reparto lo vede: si imposta sull'ordine di lavoro.",
+      "link": "Il link delle misure lo vede: si imposta con un invito in testa alla conversazione.",
+      "happens": "Solo ufficio, oppure ufficio e {party}: vale subito.",
+      "customerShown": "{party} lo vede subito nei Documenti del suo portale. Nessuna e-mail viene inviata.",
+      "customerGone": "Da ora {party} non lo vede più nel suo portale. Nessuna e-mail viene inviata.",
+      "never": "Chi l'ha aggiunto e le sue versioni restano. Un altro cliente non lo vede mai."
+    },
+    "rename": {
+      "title": "Rinomina {name}",
+      "field": "Nuovo nome",
+      "go": "Rinomina",
+      "happens": "Rinominare crea una nuova versione con il nuovo nome: la v{n} tiene «{old}».",
+      "customer": "Se è condiviso, il cliente vede il nuovo nome nel suo portale.",
+      "never": "Il vecchio nome resta nella vecchia versione."
+    },
+    "delete": {
+      "title": "Eliminare «{name}»?",
+      "titleVersions_one": "Eliminare «{name}» e la sua {count} versione?",
+      "titleVersions_other": "Eliminare «{name}» e le sue {count} versioni?",
+      "titleBulk_one": "Eliminare {count} file e le sue versioni?",
+      "titleBulk_other": "Eliminare {count} file e le loro versioni?",
+      "go_one": "Elimina {count} versione",
+      "go_other": "Elimina {count} versioni",
+      "warn": "Non si può annullare. Il registro tiene chi, quando e perché.",
+      "why": "Perché",
+      "whyHint": "Obbligatorio: il registro lo conserva.",
+      "happens": "Tutte le versioni del documento vanno via, insieme; un blocco legale o una conservazione rifiuta tutto.",
+      "customer": "Se è condiviso, esce dal portale del cliente.",
+      "never": "La traccia nel registro resta. I documenti fiscali e quelli creati da Nexus non si eliminano mai."
+    },
+    "version": {
+      "title": "Nuova versione di {name}",
+      "go": "Aggiungi come v{n}",
+      "hint": "Trascina qui un file, oppure sfoglia.",
+      "keepName": "Tieni il nome «{name}»",
+      "happens": "Il nuovo file diventa la versione in vigore; la v{n} e le precedenti restano, in sola lettura. Chi può vederlo e il segno dei prezzi restano.",
+      "customer": "Se è condiviso, il cliente vede subito la nuova versione nel suo portale.",
+      "never": "Le versioni precedenti tengono i loro byte, chi le ha aggiunte e quando."
+    },
+    "priced": {
+      "title": "Segnare {name} come documento con prezzi?",
+      "titleOff": "Togliere il segno dei prezzi da {name}?",
+      "happens": "Da ora lo apre solo chi vede i prezzi. Non va più al reparto: il reparto non vede i prezzi.",
+      "happensOff": "Chiunque raggiunga l'ordine lo apre di nuovo.",
+      "customer": "Le persone del cliente senza prezzi non lo vedono più.",
+      "customerOff": "Se è condiviso, le persone del cliente senza prezzi lo vedono di nuovo.",
+      "never": "Solo chi vede i prezzi toglie il segno."
+    },
+    "problem": {
+      "failed": "Non è andato a buon fine: riprova.",
+      "forbidden": "Non hai il permesso di farlo.",
+      "notFound": "Questo file non c'è più: l'elenco viene riletto.",
+      "stale": "Qualcuno ha cambiato questo file nel frattempo: l'elenco viene riletto. Riprova.",
+      "words": "{detail}"
+    },
+    "done": {
+      "saved": "Chi può vederlo è salvato.",
+      "renamed": "Rinominato: il nuovo nome è una nuova versione.",
+      "deleted_one": "Eliminato, con tutte le versioni.",
+      "deleted_other": "{count} file eliminati, con tutte le versioni.",
+      "version": "La nuova versione è in vigore."
+    }
   }
 }

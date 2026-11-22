@@ -1947,8 +1947,7 @@
   },
   "files": {
     "title": "File",
-    "openFailed": "Impossibile aprire il file: riprova.",
-    "shareFailed": "La condivisione non è riuscita: riprova."
+    "openFailed": "Impossibile aprire il file: riprova."
   },
   "band": {
     "asks": "{customer} chiede: {what}",

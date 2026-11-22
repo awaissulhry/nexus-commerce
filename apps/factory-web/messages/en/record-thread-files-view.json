@@ -123,8 +123,7 @@
     "earlier_other": "{count} earlier versions",
     "line": "v{n} · {date}",
     "replaced": "replaced {date}",
-    "open": "Open",
-    "restore": "Restore"
+    "open": "Open"
   },
   "keep": {
     "scanPending": "Held for the virus scan: it opens once the scan says it is clean.",
@@ -155,11 +154,7 @@
       "customer": "No documents yet.",
       "add": "Add one with Add files…, or drop it here."
     },
-    "shareOwn_one": "Share {count} own with {party}",
-    "shareOwn_other": "Share {count} own with {party}",
-    "noneOwn": "Only the order's own office-only files are shared from here.",
     "openFailed": "The file could not be opened: try again.",
-    "shareFailed": "Sharing did not go through: try again.",
     "group": {
       "SHIPMENTS": "Shipments",
       "INVOICES": "Invoices & credit notes"
@@ -231,5 +226,106 @@
   },
   "files": {
     "add": "Add files…"
+  },
+  "acts": {
+    "happens": "What happens",
+    "menu": {
+      "label": "Actions for {name}",
+      "newVersion": "New version…",
+      "versions": "Versions…",
+      "whoCanSee": "Who can see…",
+      "rename": "Rename…",
+      "delete": "Delete…"
+    },
+    "bulk": {
+      "who_one": "Who can see {count}…",
+      "who_other": "Who can see {count}…",
+      "more": "More actions for the chosen files",
+      "delete_one": "Delete {count}…",
+      "delete_other": "Delete {count}…"
+    },
+    "held": {
+      "fiscal": "A fiscal copy is kept as it is: it is never changed or deleted.",
+      "fiscalName": "A fiscal copy keeps its name.",
+      "madeVersion": "Nexus makes this paper: a new version is made on the Changes tab (“Customer's agreement”).",
+      "madeName": "Nexus makes this paper: it keeps its name.",
+      "madeDelete": "A paper Nexus made is replaced by a new version, never removed.",
+      "bornPriced": "A paper Nexus made with prices keeps its mark.",
+      "kept": "Kept until {date}: it cannot be deleted before.",
+      "noneOwn": "Only the order's own files and its lines' change who can see them here.",
+      "noneDelete": "None of the chosen files can be deleted: a legal hold, a fiscal copy or a paper Nexus made keeps them.",
+      "busy": "Saving…",
+      "why": "Say why: at least 3 characters.",
+      "sameName": "Write a new name.",
+      "oneFile": "Drop or choose the new file first.",
+      "noChange": "Nothing changes: choose who can see it."
+    },
+    "who": {
+      "title": "Who can see {name}",
+      "titleBulk_one": "Who can see {count} file",
+      "titleBulk_other": "Who can see {count} files",
+      "save": "Save who can see",
+      "floor": "The floor sees it: that is set on the work order.",
+      "link": "The measurement link sees it: that is set by an invite at the thread's head.",
+      "happens": "Office only, or Office and {party}: it applies at once.",
+      "customerShown": "{party} sees it in their portal's Documents at once. No e-mail is sent.",
+      "customerGone": "{party} does not see it in their portal from now on. No e-mail is sent.",
+      "never": "Who added it and its versions stay. Another customer never sees it."
+    },
+    "rename": {
+      "title": "Rename {name}",
+      "field": "New name",
+      "go": "Rename",
+      "happens": "Rename makes a new version with the new name: v{n} keeps “{old}”.",
+      "customer": "If it is shared, the customer sees the new name in their portal.",
+      "never": "The old name stays in the old version."
+    },
+    "delete": {
+      "title": "Delete “{name}”?",
+      "titleVersions_one": "Delete “{name}” and its {count} version?",
+      "titleVersions_other": "Delete “{name}” and its {count} versions?",
+      "titleBulk_one": "Delete {count} file and its versions?",
+      "titleBulk_other": "Delete {count} files and their versions?",
+      "go_one": "Delete {count} version",
+      "go_other": "Delete {count} versions",
+      "warn": "This cannot be undone. The audit keeps who, when and why.",
+      "why": "Why",
+      "whyHint": "Required: the audit keeps it.",
+      "happens": "Every version of the document goes, all at once; a legal hold or a retention refuses the whole.",
+      "customer": "If it is shared, it leaves the customer's portal.",
+      "never": "The audit trace stays. Fiscal papers and papers Nexus made are never deleted."
+    },
+    "version": {
+      "title": "New version of {name}",
+      "go": "Add as v{n}",
+      "hint": "Drop one file here, or browse.",
+      "keepName": "Keep the name “{name}”",
+      "happens": "The new file becomes the version in force; v{n} and the earlier ones stay, read-only. Who can see it and the price mark carry over.",
+      "customer": "If it is shared, the customer sees the new version in their portal at once.",
+      "never": "The earlier versions keep their bytes, who added them and when."
+    },
+    "priced": {
+      "title": "Mark {name} as priced?",
+      "titleOff": "Take the price mark off {name}?",
+      "happens": "From now on only people who see prices open it. It stops going to the floor: the floor sees no prices.",
+      "happensOff": "Everyone who reaches the order opens it again.",
+      "customer": "Customer people without prices stop seeing it.",
+      "customerOff": "If it is shared, the customer's people without prices see it again.",
+      "never": "Only people who see prices take the mark off."
+    },
+    "problem": {
+      "failed": "That did not go through: try again.",
+      "forbidden": "You do not have the right to do this.",
+      "notFound": "This file is no longer there: the list is read again.",
+      "stale": "Someone changed this file meanwhile: the list is read again. Try again.",
+      "words": "{detail}"
+    },
+    "done": {
+      "saved": "Who can see it is saved.",
+      "renamed": "Renamed: the new name is a new version.",
+      "deleted_one": "Deleted, with every version.",
+      "deleted_other": "{count} files deleted, with every version.",
+      "version": "The new version is in force."
+    }
   }
 }
