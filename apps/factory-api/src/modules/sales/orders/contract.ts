@@ -342,6 +342,11 @@ export const orderView = output({
         ddtRequired: z.boolean(),
         packedAt: instant().nullable(),
         /**
+         * B-OS-001 (os-fx3): the customer's delivery address it goes to (a PartyAddress id, as Warehouse's record reads it: the Split's
+         * "Another delivery address" leaves it out); null: the order's own address as sent, or no shipping.view over its site.
+         */
+        shipToAddressId: id().nullable(),
+        /**
          * With shipping.view over its site (else empty): its parcels in order — the label's number and the carrier's https page
          * (`source` LABEL, `live`: a carrier tracks it); a TEST label or none: no number, `source` null — and what each holds.
          */

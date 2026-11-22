@@ -536,6 +536,8 @@ function shipmentRowAdditions(
     mergedInto: details.mergedInto.get(row.id) ?? null,
     ddtRequired: row.ddtRequired,
     packedAt: instantOrNull(row.packedAt),
+    // B-OS-001 (os-fx3): the customer's delivery address it goes to (Warehouse's `shipToAddressId`), with shipping.view (else null).
+    shipToAddressId: sees ? row.shipToAddressId : null,
     parcels: sees
       ? parcels.map((parcel) => {
           // A TEST label is not tracked: no number, no source (as `tracking` above). B-OS-022: a number typed by hand for a parcel

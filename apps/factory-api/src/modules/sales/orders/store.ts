@@ -307,6 +307,8 @@ const SHIPMENT_DETAIL = {
   splitReason: true,
   ddtRequired: true,
   packedAt: true,
+  // B-OS-001 (os-fx3): the delivery address it goes to (Warehouse's record reads the same column): the tab's Split leaves it out.
+  shipToAddressId: true,
   // ── end B-OS-001 ──
 } as const satisfies Prisma.ShipmentSelect
 // B-OS-022: + the number (and link) typed by hand for a parcel no label tracks — named, an office read (the floor reads none of it).

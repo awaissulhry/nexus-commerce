@@ -481,6 +481,23 @@ describe('B-OS-001: the order read’s shipment rows — contents, other pieces,
     expect([unknown.statusCode, walled.statusCode]).toEqual([404, 404])
     expect(walled.json().error.message).toBe(unknown.json().error.message)
   })
+
+  // os-fx3 (B-OS-001): the row names the delivery address it goes to (Warehouse's `shipToAddressId`), so the tab's Split leaves it out.
+  it('os-fx3: the row names its own delivery address as Warehouse’s record does; a reader without shipping.view reads none', async () => {
+    const address = (await admin<{ id: string }>(`SELECT id FROM "PartyAddress" WHERE "partyId" = $1 AND 'SHIP_TO' = ANY(kinds) AND status = 'ACTIVE' ORDER BY id LIMIT 1`, [A.alpha]))[0]!.id
+    expect((await rowOf('warehouse', so3(), seedA.draftShipmentId)).shipToAddressId).toBeNull()
+    await force(`UPDATE "Shipment" SET "shipToAddressId" = $2 WHERE id = $1`, [seedA.draftShipmentId, address])
+    try {
+      const row = await rowOf('warehouse', so3(), seedA.draftShipmentId)
+      expect(row.shipToAddressId).toBe(address)
+      // The same id as Warehouse's own record of the shipment.
+      expect((await ok('warehouse', 'GET', `/shipping/shipments/${seedA.draftShipmentId}`)).shipment.shipToAddressId).toBe(address)
+      // A reader of orders alone: withheld, as its carrier and parcels.
+      expect(await rowOf('ordersOnly', so3(), seedA.draftShipmentId)).toMatchObject({ shipToAddressId: null, withheld: ['shipments.detail'] })
+    } finally {
+      await force(`UPDATE "Shipment" SET "shipToAddressId" = NULL WHERE id = $1`, [seedA.draftShipmentId])
+    }
+  })
 })
 // ---- end B-OS-001
 
