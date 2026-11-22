@@ -509,14 +509,18 @@ export function askDefaultOf(preview: { readonly amountChanges?: boolean; readon
 
 /**
  * The words after Save changes: the work orders that followed in the same command and those that wait (B-OP-012's answer), and
- * whether the customer is asked to accept the new order (the tick). Never an amendment number, never an amount.
+ * F-OC-304 (lead W3 answer 1) where the customer's ask really went, once it went — by e-mail, or in its portal only (no e-mail
+ * address on file); not asked, or the ask could not be sent (its own banner says so): the save alone. Never an amendment number,
+ * never an amount.
  */
-export function savedNotice(followed: Followed, asked: boolean): Phrase {
+export function savedNotice(followed: Followed, asked: 'email' | 'portal' | null, customer = ''): Phrase {
   const numbers = (entries: readonly { readonly number: string | null }[]) => entries.map((entry) => entry.number ?? 'WO-…').join(', ')
   const changed = numbers(followed.applied)
   const waits = numbers(followed.waiting)
   const which = changed && waits ? 'both' : changed ? 'changed' : waits ? 'waits' : 'plain'
-  return phrase(`save.done.${which}${asked ? 'Asked' : ''}`, { ...(changed ? { changed } : {}), ...(waits ? { waits } : {}) })
+  const params = { ...(changed ? { changed } : {}), ...(waits ? { waits } : {}) }
+  if (asked === null) return phrase(`save.done.${which}`, params)
+  return phrase(`changesTab.saved.${which}${asked === 'email' ? 'Email' : 'Portal'}`, { ...params, customer })
 }
 
 /** A change fee as typed (price readers, a priced change): empty, or 0 and more with at most 2 decimals (0 allowed: B-OL-016). */

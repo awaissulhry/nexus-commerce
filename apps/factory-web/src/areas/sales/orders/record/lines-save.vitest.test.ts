@@ -33,13 +33,18 @@ const review = (over: Partial<ReviewState> = {}): ReviewState => ({ phase: 'read
 
 describe('F-OL-03: the notice after a save and the fee of a priced change', () => {
   it('"Saved · WO changed · waiting for production" and "the customer is asked" — never an amendment number or an amount', () => {
-    expect(savedNotice({ applied: [], waiting: [] }, false)).toEqual({ key: 'save.done.plain', params: {} })
-    expect(savedNotice({ applied: [{ changeId: 'c', workOrderId: 'w', number: 'WO-00021', route: 'APPLY_TO_DRAFT' as never, reprint: false }], waiting: [] }, true)).toEqual({ key: 'save.done.changedAsked', params: { changed: 'WO-00021' } })
-    const both = savedNotice({ applied: [{ changeId: 'c', workOrderId: 'w', number: null, route: 'APPLY_TO_DRAFT' as never, reprint: false }], waiting: [{ changeId: 'd', workOrderId: 'v', number: 'WO-00022', words: { it: 'x', en: 'x' } }] }, false)
+    expect(savedNotice({ applied: [], waiting: [] }, null)).toEqual({ key: 'save.done.plain', params: {} })
+    // F-OC-304: where the ask really went — by e-mail, or in the portal only — said once it went.
+    expect(savedNotice({ applied: [{ changeId: 'c', workOrderId: 'w', number: 'WO-00021', route: 'APPLY_TO_DRAFT' as never, reprint: false }], waiting: [] }, 'email', 'Brand Alpha')).toEqual({ key: 'changesTab.saved.changedEmail', params: { changed: 'WO-00021', customer: 'Brand Alpha' } })
+    expect(savedNotice({ applied: [], waiting: [] }, 'portal', 'Brand Alpha')).toEqual({ key: 'changesTab.saved.plainPortal', params: { customer: 'Brand Alpha' } })
+    const both = savedNotice({ applied: [{ changeId: 'c', workOrderId: 'w', number: null, route: 'APPLY_TO_DRAFT' as never, reprint: false }], waiting: [{ changeId: 'd', workOrderId: 'v', number: 'WO-00022', words: { it: 'x', en: 'x' } }] }, null)
     expect(both).toEqual({ key: 'save.done.both', params: { changed: 'WO-…', waits: 'WO-00022' } })
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-      for (const which of ['plain', 'changed', 'waits', 'both']) for (const asked of ['', 'Asked']) expect(t(`save.done.${which}${asked}`, { changed: 'WO-1', waits: 'WO-2' }), `${locale} ${which}${asked}`).not.toMatch(/save\.done|\{/)
+      for (const which of ['plain', 'changed', 'waits', 'both']) {
+        expect(t(`save.done.${which}`, { changed: 'WO-1', waits: 'WO-2' }), `${locale} ${which}`).not.toMatch(/save\.done|\{/)
+        for (const reach of ['Email', 'Portal']) expect(t(`changesTab.saved.${which}${reach}`, { changed: 'WO-1', waits: 'WO-2', customer: 'Brand Alpha' }), `${locale} ${which}${reach}`).not.toMatch(/changesTab|\{/)
+      }
     }
   })
 
@@ -121,8 +126,10 @@ describe('F-OL-03: the container — only my changes sent, the ask after a ticke
     // change with the tick and a priced change always.
     expect(hook).not.toContain("recordType: 'SalesOrder'")
     expect(hook).toContain('const target = askTargetOf(done)')
-    expect(hook).toContain('if (ask && target) void askCustomer(target, customerQuestionOf(value, question), value)')
-    expect(hook).toContain('await askRevisedOrder(api, value, amendmentId, question, { quotes: can.viewQuotes })')
+    // F-OC-304: the ask is awaited (it never throws: a failure is its own banner) so the notice says where it went.
+    expect(hook).toContain('const reach = ask && target ? await askCustomer(target, customerQuestionOf(value, question), value) : null')
+    expect(hook).toContain("savedNotice(done.workOrders, reach?.reach ?? null, value.party?.legalName ?? '')")
+    expect(hook).toContain('const reach = await askRevisedOrder(api, value, amendmentId, question, { quotes: can.viewQuotes })')
     expect(read('./revised-order-ask.ts')).toContain("recordType: 'SalesOrderAmendment'")
     expect(hook).toContain("if (words.key === 'problem.write.moved')")
     expect(hook).toContain('const rebased = rebaseDraft(base, order, historyRef.current.draft)')

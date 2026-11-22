@@ -59,7 +59,8 @@ import { ROLES, type Role } from './_demo/fixtures' // F-OP-303
 import { BAND_LOOK_ITEMS, bandMenuFor, bandStepOf } from './model' // F-OP-311 (oo-walk #10)
 import { rolePermissions } from '../../../shell/design-data' // F-OP-311
 import { bandHealthOf, healthInputOf } from './record/overview/model' // F-SA-232: the band's chip
-import { HISTORY_CHIPS, historyFor, historyOf, waitingOnUsOf } from './record/changes/model' // F-SA-236 (F-OP-301: the customer's side is the ONE waiting list's)
+import { waitingOnUsOf } from './record/changes/model' // F-SA-236 (F-OP-301: the customer's side is the ONE waiting list's)
+import { changeRowsOf, HISTORY_CHIPS, rowsForChip } from './record/changes/history' // F-OC-301 / 302: one row per change
 import { designScreen as listScreen } from './list/fixtures'
 // B-TH-201
 import { getBoard, listOrders } from './api'
@@ -831,24 +832,26 @@ describe('F-SA-236: Changes — waiting on us, waiting on the customer, the hist
     expect(waitingOnUsOf(requests).map((entry) => entry.id)).toEqual(['a', 'b'])
   })
 
-  it('the history: requests asked and answered, amendments (the changes read; priced with Put back), confirmations — newest first; chips filter', () => {
-    const entries = historyOf({
+  // F-OC-302: rewritten — ONE row per change (a request is one row, asked and answered), newest first; chips are filters.
+  it('What changed: one row per change — revisions (the changes read), the request, every confirmation made and sent — newest first; chips filter', () => {
+    const rows = changeRowsOf({
       requests: [request('c', 'ACCEPTED', '2026-11-10T09:00:00Z', { answeredAt: '2026-11-11T09:00:00Z' })],
       changes: [change('ch1', 1, '2026-11-12T16:48:00Z'), change('ch2', 2, '2026-11-14T10:00:00Z', true)],
       amendments: null,
       confirmation: { versions: [{ id: 'v1', version: 1, createdAt: '2026-11-03T11:20:00Z', createdBy: null }], sentAt: '2026-11-03T11:30:00Z', sentVersion: 1 } as never,
+      workOrderChanges: null,
+      told: [],
     })
-    expect(entries.map((entry) => entry.kind)).toEqual(['amendment', 'amendment', 'requestAnswered', 'requestAsked', 'confirmationSent', 'confirmationMade'])
-    const priced = entries[0]!
-    expect(priced.kind === 'amendment' && priced.putBack).toBe(true)
-    expect(HISTORY_CHIPS).toEqual(['all', 'requests', 'amendments', 'workOrders', 'confirmations']) // F-OP-117: + Work orders
-    expect(historyFor(entries, 'requests').map((entry) => entry.kind)).toEqual(['requestAnswered', 'requestAsked'])
-    expect(historyFor(entries, 'amendments')).toHaveLength(2)
-    expect(historyFor(entries, 'confirmations')).toHaveLength(2)
-    expect(historyFor(entries, 'all')).toHaveLength(entries.length)
+    expect(rows.map((row) => row.kind)).toEqual(['revision', 'revision', 'request', 'confirmationSent', 'confirmationMade'])
+    expect(rows[0]).toMatchObject({ kind: 'revision', latest: true })
+    expect(HISTORY_CHIPS).toEqual(['all', 'requests', 'revisions', 'workOrders', 'confirmations'])
+    expect(rowsForChip(rows, 'requests').map((row) => row.kind)).toEqual(['request'])
+    expect(rowsForChip(rows, 'revisions')).toHaveLength(2)
+    expect(rowsForChip(rows, 'confirmations')).toHaveLength(2)
+    expect(rowsForChip(rows, 'all')).toHaveLength(rows.length)
     // No changes read here (a design case): the amendments read stands in; never both.
-    const fallback = historyOf({ requests: [], changes: null, amendments: AMENDMENTS.amendments, confirmation: null })
-    expect(fallback.filter((entry) => entry.kind === 'amendment')).toHaveLength(AMENDMENTS.amendments.length)
+    const fallback = changeRowsOf({ requests: [], changes: null, amendments: AMENDMENTS.amendments, confirmation: null, workOrderChanges: null, told: [] })
+    expect(fallback.filter((row) => row.kind === 'revision')).toHaveLength(AMENDMENTS.amendments.length)
   })
 
   it('one changes read: the page reads the amendments only when Before → after opens; the confirmation is a row, never the 70vh PDF', () => {
@@ -862,7 +865,9 @@ describe('F-SA-236: Changes — waiting on us, waiting on the customer, the hist
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
       // F-OO-204: the counter-offer row says the card's own words ("Our counter-offer: …", waiting.counterOpen): `changes.onUs.countered` went.
-      for (const key of ['changes.onUs.title', 'changes.onUs.nothing', 'changes.onCustomer.title', 'changes.onCustomer.reaccept', /* F-OC-203: changes.confirmation.* went with the old card */ 'changes.history.title', 'changes.history.priced', ...HISTORY_CHIPS.map((chip) => `changes.history.chips.${chip}`)]) expect(t(key), `${locale}: ${key}`).not.toBe(key)
+      // F-OC-304: the Changes tab's words are ONE group, changesTab (the old cards' changes.onUs / onCustomer / history keys went).
+      for (const key of ['changesTab.waiting.title', 'changesTab.waiting.noneUs', 'changesTab.history.title', 'changesTab.history.tag.priced', ...HISTORY_CHIPS.map((chip) => `changesTab.history.chips.${chip}`)]) expect(t(key), `${locale}: ${key}`).not.toBe(key)
+      for (const gone of ['changes.onUs.title', 'changes.onCustomer.title', 'changes.history.title', 'changes.history.chips.amendments']) expect(t(gone), `${locale}: ${gone}`).toBe(gone)
       expect(t('changes.onUs.countered'), `${locale}: changes.onUs.countered`).toBe('changes.onUs.countered')
     }
   })
@@ -979,15 +984,18 @@ describe('F-SA-266: what a row discusses — the chip per audience, the office-o
     expect(shipments).toContain("target={{ kind: 'Shipment', id: row.id }} />")
     // F-OC-102: a request waiting on us is a row of Changes › Waiting — its Discuss by the request's reference.
     const requests = read('./record/changes/view/WaitingSection.tsx')
-    expect(requests).toContain("target={{ kind: 'OrderChangeRequest', id: request.id }} align=\"end\" />")
+    // F-OC-302: its Discuss is an item of the ONE row ⋯ (RowMenu), by the request's reference.
+    expect(requests).toContain("target: { kind: 'OrderChangeRequest', id: request.id } } : null} />")
     // F-OO-100: Overview's cards are one file each (view/overview/): Next dates and People hold these doors.
     // F-OO-145: a gate's Discuss is an item of its More ▾ now — still by the gate's reference.
     expect(read('./record/view/overview/DatesCard.tsx')).toContain("target: row.gateId ? { kind: 'OrderGate', id: row.gateId } : null")
     expect(read('./record/view/overview/PeopleCard.tsx')).toContain('<FollowersDoor />')
     // F-OC-101: What changed is its own section file (the tab is its layout only).
+    // F-OC-302: each What changed row is `#change-<id>`; Show in the thread is an item of its ONE row ⋯.
     const changes = read('./record/changes/view/HistorySection.tsx')
-    expect(changes).toContain('<ShowInThreadDoor order={order} at={entry.at} />')
-    expect(changes).toContain('id={`change-${entry.id}`}')
+    expect(changes).toContain('id={`change-${row.id}`}')
+    expect(changes).toContain('<RowMenu order={order} prefix={model.prefix} label={t(\'changesTab.menu.label\')} anchor={`change-${row.id}`} discuss={discuss} at={row.at}')
+    expect(read('./record/changes/view/RowMenu.tsx')).toContain('frame.showInThread?.({ record: { type: \'SalesOrder\', id: order.id }, at })')
     // A thread card jumps back to its row: a replace (no history entry), then the row in view with the focus.
     const page = read('./record/OrderRecord.tsx')
     // op-fx1: F-OP-210 moved it through tabAddress (the dock's scope kept, the narrow view given way to the row).
@@ -1222,8 +1230,10 @@ describe('F-OP-106 → F-OL-05: Review and save\'s production part — the work 
     expect(appliedNotice(3, { applied: [], waiting: [] }, null)).toEqual({ key: 'edit.done.plain', params: { revision: 3 } })
     expect(appliedNotice(3, { applied, waiting }, null)).toEqual({ key: 'edit.done.both', params: { revision: 3, changed: 'WO-0311', waits: 'WO-0312, WO-…' } })
     const { savedNotice } = await import('./record/lines-draft')
-    expect(savedNotice({ applied, waiting: [] }, true).key).toBe('save.done.changedAsked')
-    for (const key of ['save.done.plain', 'save.done.plainAsked', 'save.done.changed', 'save.done.waits', 'save.done.both', 'save.done.bothAsked']) expect(en(key, { revision: 3, changed: 'WO-1', waits: 'WO-2', customer: 'x' }), key).not.toBe(key)
+    // F-OC-304: the notice says where the ask went (by e-mail, or the portal only) — never "is asked" before it was.
+    expect(savedNotice({ applied, waiting: [] }, 'email', 'Seed Customer One')).toEqual({ key: 'changesTab.saved.changedEmail', params: { changed: 'WO-0311', customer: 'Seed Customer One' } })
+    expect(savedNotice({ applied, waiting: [] }, null).key).toBe('save.done.changed')
+    for (const key of ['save.done.plain', 'changesTab.saved.plainEmail', 'changesTab.saved.plainPortal', 'save.done.changed', 'save.done.waits', 'save.done.both', 'changesTab.saved.bothPortal']) expect(en(key, { revision: 3, changed: 'WO-1', waits: 'WO-2', customer: 'x' }), key).not.toBe(key)
   })
 
   it('the page: the preview of THIS draft while Review is open (a stale answer read again), ONE save — the amendment, or the priced change when locked', () => {
@@ -1532,16 +1542,17 @@ describe('F-OP-117: the Changes tab — work-order changes of this order, the Hi
     const history = readFileSync(new URL('./record/changes/view/HistorySection.tsx', import.meta.url), 'utf8')
     const waiting = readFileSync(new URL('./record/changes/view/WaitingSection.tsx', import.meta.url), 'utf8')
     for (const source of [history, waiting]) expect(source).not.toContain("t('told.floorAt'")
-    // History's Told line is the told read's own (toldOfHistory → Who was told…).
-    expect(history).toContain('const change = toldOfHistory(')
+    // F-OC-302: What changed's Told line is the told read's own — by the speaker's ids (history.ts), opening Who was told….
+    expect(history).toContain('actions?.onWhoWasTold?.(change.messageId)')
+    expect(readFileSync(new URL('./record/changes/history.ts', import.meta.url), 'utf8')).toContain("speaker.kind === 'WORK_ORDER_CHANGE' && speaker.workOrderChangeId === change.id")
   })
 
-  it('History: a decided work-order change is an entry at its decision under the chip Work orders; a waiting one is not history yet', () => {
-    const entries = historyOf({ requests: [], changes: [], amendments: null, confirmation: null, workOrderChanges: [change(), change({ id: 'done', status: 'APPLIED', decidedAt: '2026-11-18T10:00:00Z' })] })
-    expect(entries.map((entry) => entry.kind)).toEqual(['workOrderChange'])
-    expect(entries[0]).toMatchObject({ id: 'woc-done', at: '2026-11-18T10:00:00Z' })
-    expect(historyFor(entries, 'workOrders')).toHaveLength(1)
-    expect(historyFor(entries, 'amendments')).toHaveLength(0)
+  it('What changed: a decided work-order change is a row at its decision under the chip Work orders; a waiting one is not history yet', () => {
+    const rows = changeRowsOf({ requests: [], changes: [], amendments: null, confirmation: null, workOrderChanges: [change(), change({ id: 'done', status: 'APPLIED', decidedAt: '2026-11-18T10:00:00Z' })], told: [] })
+    expect(rows.map((row) => row.kind)).toEqual(['workOrderChange'])
+    expect(rows[0]).toMatchObject({ id: 'woc-done', at: '2026-11-18T10:00:00Z' })
+    expect(rowsForChip(rows, 'workOrders')).toHaveLength(1)
+    expect(rowsForChip(rows, 'revisions')).toHaveLength(0)
   })
 
   it('the Changes dot: a Still to do row that is this reader\'s, or a yes they decide, waits on them', async () => {
@@ -1566,7 +1577,8 @@ describe('F-OP-117: the Changes tab — work-order changes of this order, the Hi
     expect(readFileSync(new URL('./record/changes/view/HistorySection.tsx', import.meta.url), 'utf8')).toContain('workOrderChanges: model.orderChanges?.list?.value ?? null')
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-      for (const key of ['wocs.title', 'wocs.none', 'wocs.newDraft', 'badge.yourTurn', 'changes.history.chips.workOrders']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      // F-OC-304: the work-order changes card's words went with it (wocs.newDraft names a change for a work order still to be made).
+      for (const key of ['wocs.newDraft', 'badge.yourTurn', 'changesTab.history.chips.workOrders']) expect(t(key), `${locale} ${key}`).not.toBe(key)
     }
   })
 })

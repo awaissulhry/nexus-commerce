@@ -23,7 +23,6 @@ import { designScreen as pdfScreen } from '../confirmation/fixtures'
 import { designScreen as listScreen } from '../list/fixtures'
 import { designScreen as recordScreen } from '../record/fixtures'
 import { isoWeek, mondayOf, pictureOf /* F-SA-215 */, siteOf, weekColumns, weekOrderIds /* F-SA-215 */ } from '../week/model'
-import { pricedProblemWords } from './view/DepthDialogs'
 import {
   CHANGE_YES_STATES,
   CUSTOMER_DECISIONS,
@@ -49,7 +48,6 @@ import {
   CONFIRMATION_OUTDATED,
   CONFIRMATION_SENT,
   CONFIRMATION_WAITING,
-  DEPOSIT_KINDS_OFF,
   depthCan,
   FREEZE_CUT,
   FREEZE_FINISHED,
@@ -64,7 +62,6 @@ import {
   confirmationHeld,
   confirmationRecipient,
   confirmationState,
-  depositKindChoices,
   depthCanOf,
   depthEditHeld,
   frozenCells,
@@ -76,7 +73,6 @@ import {
   PRICED_EMPTY,
   pricedBodyOf,
   pricedChanges,
-  pricedProblems,
   printHeld,
   priorityBody,
   putBackOffered,
@@ -186,14 +182,6 @@ describe('what is frozen (SAL-218)', () => {
 describe('the priced change (SAL-219)', () => {
   const amendment = { lines: [{ id: LINE_BLK, sizes: [{ size: '50', quantity: 3 }] }] }
 
-  it('the draft is checked before the preview; the reason before Apply', () => {
-    expect(pricedProblems({ ...PRICED_EMPTY, fee: '0' }, TODAY)).toEqual({ fee: 'priced.problem.fee' })
-    expect(pricedProblems({ ...PRICED_EMPTY, deposit: 'pct', pct: '120' }, TODAY)).toEqual({ pct: 'priced.problem.pct' })
-    expect(pricedProblems({ ...PRICED_EMPTY, dueDate: '2026-10-01' }, TODAY)).toEqual({ dueDate: 'priced.problem.dueDate' })
-    expect(pricedProblems(PRICED_EMPTY, TODAY, { price: true, final: true })).toEqual({ reason: 'priced.problem.reason' })
-    expect(pricedProblems({ ...PRICED_EMPTY, fee: '25,50' }, TODAY)).toEqual({})
-  })
-
   it('the body: the office’s words, the fee with a dot, the deposit as chosen (left out = the order’s own percent)', () => {
     expect(pricedBodyOf({ ...PRICED_EMPTY, fee: '25,50', labels: { [LINE_BLK]: ' Una giacca in più ', [LINE_RED]: '' } }, amendment, true)).toEqual({ lines: amendment.lines, labels: { [LINE_BLK]: 'Una giacca in più' }, fee: '25.50' })
     expect(pricedBodyOf({ ...PRICED_EMPTY, deposit: 'none' }, amendment, true).deposit).toBeNull()
@@ -204,13 +192,8 @@ describe('the priced change (SAL-219)', () => {
     expect(pricedBodyOf({ ...PRICED_EMPTY, fee: '25', deposit: 'pct', pct: '30' }, amendment, false)).toEqual({ lines: amendment.lines })
   })
 
-  it('the caparra penitenziale is shown and held while it is off', () => {
-    expect(depositKindChoices(DEPOSIT_KINDS_OFF)).toEqual([
-      { kind: 'ACCONTO', available: true },
-      { kind: 'CAPARRA', available: true },
-      { kind: 'CAPARRA_PENITENZIALE', available: false },
-    ])
-    expect(depositKindChoices(null).find((entry) => entry.kind === 'CAPARRA_PENITENZIALE')?.available).toBe(false)
+  // F-OC-304: the priced change's own window went (nothing opened it): its draft checks, deposit-kind choices and refusal words with it.
+  it('the extra deposit kinds the body carries', () => {
     expect([...EXTRA_DEPOSIT_KINDS]).toEqual(['ACCONTO', 'CAPARRA', 'CAPARRA_PENITENZIALE'])
   })
 
@@ -222,11 +205,6 @@ describe('the priced change (SAL-219)', () => {
     expect(putBackOffered(list[0]!)).toBe(false)
   })
 
-  it('its refusals in this app’s words, from their place', () => {
-    const t = createTranslator('en', messagesFor('en', [NAMESPACE])[NAMESPACE]!)
-    const words = pricedProblemWords([{ path: 'body/lines/10/SIZE_QUANTITY' }, { path: 'body/deposit/amount' }], order('IN_PRODUCTION'), t)
-    expect(words).toEqual(['DEMO-JKT-01 · BLK: Sizes and quantities cannot change any more', 'The extra deposit is refused as it is (its kind may be off, or it is more than the growth).'])
-  })
 })
 
 describe('materials, the confirmation, the tech pack, the forecast', () => {
@@ -367,14 +345,11 @@ describe('the words exist in both languages', () => {
       for (const kind of MILESTONE_KINDS) has(`milestone.kind.${kind}`)
       for (const gate of DOMAIN_GATES) has(`gate.${gate}`)
       for (const state of ['none', 'upToDate', 'outdated', 'notYet']) has(`confirmation.stateValue.${state}`)
-      for (const mode of ['default', 'none', 'pct', 'amount']) has(`priced.depositMode.${mode}`)
-      for (const kind of ['ADDED', 'REMOVED', 'CHANGED']) has(`priced.lineKind.${kind}`)
-      for (const kind of ['changed', 'added', 'removed']) has(`pricedList.count.${kind}`)
       for (const key of ['held.noManage', 'held.final', 'held.noneSelected', 'held.tooMany', 'held.notWaiting', 'held.askStanding', 'held.withdrawNotYours', 'held.putBackNot', 'held.confirmationWaiting', 'held.confirmationCancelled', 'held.confirmationNot', 'import.held.manage', 'import.held.run'])
         has(key)
       for (const kind of ['signed_out', 'forbidden', 'not_found', 'unavailable', 'rate_limited', 'internal']) has(`problem.read.${kind}`)
       for (const kind of ['signed_out', 'forbidden', 'not_found', 'unavailable', 'rate_limited', 'step_up', 'internal', 'invalid', 'moved', 'state', 'season', 'noRecipient', 'letterhead']) has(`problem.write.${kind}`)
-      for (const key of ['notice.priority', 'notice.season', 'notice.seasonCleared', 'notice.asked', 'notice.withdrawn', 'notice.confirmationSame', 'notice.planned', 'notice.putBack', 'notice.putBackDeposit', 'notice.priced', /* B-OP-010 */ 'priced.yes.APPLIES_AT_ONCE']) has(key)
+      for (const key of ['notice.priority', 'notice.season', 'notice.seasonCleared', 'notice.asked', 'notice.withdrawn', 'notice.confirmationSame', 'notice.planned', 'notice.putBack', 'notice.putBackDeposit']) has(key)
       void DOMAIN_MILESTONE_STATES
     }
   })

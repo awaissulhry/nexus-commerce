@@ -30,6 +30,7 @@ import type { OrderRecordActions, OrderRecordModel } from '../record-model'
 import { dialogLinesOf } from '../record-model' // F-OO-124: one line's row ⋯ opens with only that line ticked
 import { cancelTakesBackYes } from '../record-model' // F-OO-110: a waiting order's cancel takes back the yes asked on it
 import { DialogProblem, Frame } from './Dialogs'
+import { autoReasonOf } from '../lines-draft' // F-OC-303: the server's automatic reasons in words
 import type { CommandDialogActions, CommandDialogModel } from './Dialogs' // F-CP-108: type only (the Cancel the Orders sheet's row mounts)
 // ---- F-OP-107 (B2): Close remaining lines and Cancel say what happens to each work order, and pick the extra pieces' outcome ----
 import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
@@ -360,12 +361,26 @@ export function CopyQuoteDialog({ order, model, actions }: { order: Order; model
 export function CompareDialog({ order, amendmentId, model, actions }: { order: Order; amendmentId: string; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
   const locale = useLocale()
-  const amendment = model.amendments?.value?.amendments.find((entry) => entry.id === amendmentId) ?? null
-  if (!amendment) return null
+  const part = model.amendments ?? null
+  const amendment = part?.value?.amendments.find((entry) => entry.id === amendmentId) ?? null
+  // F-OC-303 (C5-B9): the change as the ONE changes read tells it (the customer's answer, the reason's own words), when the page has it.
+  const change = model.depth?.changes?.value?.changes.find((entry) => entry.id === amendmentId) ?? null
+  const revision = amendment?.revision ?? change?.revision ?? null
+  const title = revision !== null ? t('compare.title', { revision, number: order.number }) : t('changesTab.compare.titleAny', { number: order.number })
+  if (!amendment) {
+    // F-OC-303: never an empty window — the snapshots are read when it opens; reading, or why they could not be read with Try again.
+    return (
+      <Frame title={title} held={null} go={close(actions)} goLabel={t('common.done')} onClose={close(actions)} problem={null} size="md" done={part?.problem ? <Banner tone="danger" title={t('changesTab.compare.failed')} action={<Button size="sm" onClick={() => actions?.onRetryPart?.('amendments')}>{t('common.retry')}</Button>}>{t(part.problem)}</Banner> : part?.value ? <p className="fw-so-hint">{t('changesTab.compare.gone')}</p> : <p className="fw-so-hint" role="status"><Spinner size={14} /> {t('changesTab.compare.reading')}</p>}>
+        {null}
+      </Frame>
+    )
+  }
   const rows: CompareRow[] =
     amendment.before && amendment.after
       ? compareRows(amendment.before, amendment.after)
       : amendment.diff.lines.map((line) => ({ lineId: line.lineId, seq: line.seq, styleId: line.styleId, colourwayId: line.colourwayId, change: line.change, sizes: line.sizes, piecesBefore: line.piecesBefore, piecesAfter: line.piecesAfter, priceBefore: null, priceAfter: null, netBefore: null, netAfter: null }))
+  // F-OC-303: a line closed with fewer pieces says so (it stays on the order).
+  const closedShort = new Set(amendment.diff.lines.filter((line) => line.closedShort).map((line) => line.lineId))
   const withMoney = model.can.price && !!amendment.before
   const columns = [t('changes.col.line'), t('changes.col.change'), t('changes.col.before'), t('changes.col.after'), ...(withMoney ? [t('changes.col.price'), t('changes.col.net')] : [])]
   const table = rows.map((row) => {
@@ -376,7 +391,11 @@ export function CompareDialog({ order, amendmentId, model, actions }: { order: O
       id: row.lineId,
       cells: [
         name.what ? t('changes.lineWhat', { line: name.line, what: name.what }) : t('changes.line', { line: name.line }),
-        row.change ? (
+        closedShort.has(row.lineId) ? (
+          <Tag key="c" tone="neutral">
+            {t('changesTab.history.tag.linesClosed')}
+          </Tag>
+        ) : row.change ? (
           <Tag key="c" tone={row.change === 'REMOVED' ? 'danger' : row.change === 'ADDED' ? 'info' : 'warning'}>
             {t(`changes.kind.${row.change}`)}
           </Tag>
@@ -385,8 +404,8 @@ export function CompareDialog({ order, amendmentId, model, actions }: { order: O
             {t('changes.kind.same')}
           </span>
         ),
-        before || '—',
-        after || '—',
+        before || t('changesTab.compare.none'),
+        after || t('changesTab.compare.none'),
         ...(withMoney
           ? [
               row.priceBefore === row.priceAfter ? unitPrice(row.priceAfter, order.currency, locale) : `${unitPrice(row.priceBefore, order.currency, locale)} → ${unitPrice(row.priceAfter, order.currency, locale)}`,
@@ -396,10 +415,16 @@ export function CompareDialog({ order, amendmentId, model, actions }: { order: O
       ],
     }
   })
-  const change = moneyChange(amendment.diff)
+  // F-OC-303 (C5-B9): the order's own fields that changed (the customer PO, the requested date) — a header-only change was an empty table.
+  const dayOf = (value: string | null) => (value === null ? t('changesTab.compare.none') : /^\d{4}-\d{2}-\d{2}$/.test(value) ? formatDate(`${value}T12:00:00Z`, { locale }) : value)
+  const header = amendment.diff.header.map((entry) => ({ id: entry.field, cells: [t(`amend.field.${entry.field}`), entry.field === 'requestedDate' ? dayOf(entry.before) : (entry.before ?? t('changesTab.compare.none')), entry.field === 'requestedDate' ? dayOf(entry.after) : (entry.after ?? t('changesTab.compare.none'))] }))
+  const reason = autoReasonOf(amendment.reason)
+  const moved = moneyChange(amendment.diff)
+  // The customer's answer as the changes read has it (the real decision), else what the change asked of them.
+  const answer = change ? [t(`changesTab.history.tag.${change.customer.decision}`), change.customer.answeredAt ? formatDate(change.customer.answeredAt, { locale }) : null, change.customer.by ?? null].filter(Boolean).join(' · ') : t(`changes.reaccept.${amendment.reacceptance}`)
   return (
     <Frame
-      title={t('compare.title', { revision: amendment.revision, number: order.number })}
+      title={title}
       held={null}
       go={close(actions)}
       goLabel={t('common.done')}
@@ -413,12 +438,16 @@ export function CompareDialog({ order, amendmentId, model, actions }: { order: O
             labelCase="sentence"
             items={[
               { label: t('changes.madeBy'), value: t('changes.byAt', { name: amendment.createdBy ?? t('changes.someone'), date: formatDate(amendment.createdAt, { locale }) }) },
-              { label: t('changes.reason'), value: amendment.reason },
-              ...(change ? [{ label: t('changes.money'), value: `${money(change.before, order.currency, locale)} → ${money(change.after, order.currency, locale)}` }] : []),
-              { label: t('changes.reacceptance'), value: t(`changes.reaccept.${amendment.reacceptance}`) },
+              { label: t('changes.reason'), value: reason ? t(reason.key) : amendment.reason.trim() || t('changesTab.history.noWhy') },
+              ...(model.can.price && moved ? [{ label: t('changes.money'), value: `${money(moved.before, order.currency, locale)} → ${money(moved.after, order.currency, locale)}` }] : []),
+              { label: t('changesTab.compare.answer'), value: answer },
             ]}
           />
-          <SummaryTable label={t('compare.tableLabel')} columns={columns} rows={table} density="roomy" stackOnPhone />
+          {header.length > 0 && <SummaryTable label={t('changesTab.compare.headerLabel')} columns={[t('changesTab.compare.col.field'), t('changes.col.before'), t('changes.col.after')]} rows={header} density="roomy" stackOnPhone />}
+          {table.length > 0 && <SummaryTable label={t('compare.tableLabel')} columns={columns} rows={table} density="roomy" stackOnPhone />}
+          {table.length === 0 && header.length === 0 && <p className="fw-so-hint">{t('changes.headerOnly')}</p>}
+          {/* The money wall: no amounts without the price grain — said, never an empty column. */}
+          {!model.can.price && <p className="fw-so-hint">{t('changesTab.compare.noPrice')}</p>}
           {!withMoney && model.can.price && <p className="fw-so-hint">{t('compare.noSnapshot')}</p>}
         </div>
       }

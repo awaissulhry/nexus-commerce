@@ -63,3 +63,19 @@
 @container pt (max-width: 719px) {
   .fw-oc-ag-doors > .nds-btn, .fw-oc-ag-row > .nds-btn { min-height: 44px; }
 }
+
+/* ── What changed (F-OC-302): one row per change — what + outcome | who, when, told, doors; by the section's room ── */
+.fw-oc-hl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; min-width: 0; }
+.fw-oc-hrow { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-6) var(--nds-space-16); padding: var(--nds-space-10) var(--nds-space-4); border-bottom: 1px solid var(--nds-border-subtle); min-width: 0; scroll-margin-top: var(--nds-space-4); }
+.fw-oc-hrow:last-child { border-bottom: 0; }
+.fw-oc-hrow:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; border-radius: var(--nds-radius-xs); }
+.fw-oc-hrow-a, .fw-oc-hrow-b { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; font-size: var(--nds-font-size-sm); overflow-wrap: anywhere; }
+.fw-oc-hrow-a .fw-oc-q { color: var(--nds-text-2); }
+.fw-oc-hrow-doors { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); margin-top: var(--nds-space-4); }
+@container pt (max-width: 719px) {
+  .fw-oc-hrow-doors > .nds-btn { min-height: 44px; }
+}
+@container sec (min-width: 1000px) {
+  .fw-oc-hrow { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+  .fw-oc-hrow-doors { justify-content: flex-end; }
+}

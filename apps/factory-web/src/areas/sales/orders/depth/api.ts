@@ -36,7 +36,6 @@ export type CustomerDecision = (typeof CUSTOMER_DECISIONS)[number]
 export const EXTRA_DEPOSIT_KINDS = ['ACCONTO', 'CAPARRA', 'CAPARRA_PENITENZIALE'] as const
 export type ExtraDepositKind = (typeof EXTRA_DEPOSIT_KINDS)[number]
 /** B-OP-010 (order page plan N2, decision D2): an office change asks no yes any more — it applies at once. */
-export const YES_PREVIEWS = ['APPLIES_AT_ONCE'] as const
 export const FINISH_SOURCES = ['STOCK', 'BOARD', 'WORK_ORDER_DUE', 'PLANNED_ORDER', 'CAPABLE', 'NONE'] as const
 export type FinishSource = (typeof FINISH_SOURCES)[number]
 export const RISK_STATES = ['LATE', 'AT_RISK', 'NOT_PROMISED', 'ON_TIME'] as const
@@ -231,9 +230,20 @@ export const changeSchema = z.object({
   feeAmount: z.number().nullable().optional(),
   changeAmount: z.number().optional(),
   deposit: z.object({ id: z.string(), kind: z.string(), amount: z.number().optional(), pct: z.string().nullable(), status: z.string(), dueDate: day }).nullable(),
-  yes: z.object({ state: z.enum(CHANGE_YES_STATES), taskId: z.string().nullable(), reason: z.string().nullable() }),
-  customer: z.object({ decision: z.enum(CUSTOMER_DECISIONS), requestId: z.string().nullable(), answeredAt: instant.nullable() }),
-  putBack: z.object({ may: z.boolean() }),
+  yes: z.object({ state: z.enum(CHANGE_YES_STATES), taskId: z.string().nullable(), reason: z.string().nullable(), decidedAt: instant.nullable().optional() /* F-OC-302 (B-OC-010) */, decidedBy: z.string().nullable().optional() }),
+  // F-OC-302 (B-OC-011): how the customer answered the newest ask — its typed name, by its link or in its portal, its own words
+  // (only with partners.approvals.view).
+  customer: z.object({ decision: z.enum(CUSTOMER_DECISIONS), requestId: z.string().nullable(), answeredAt: instant.nullable(), by: z.string().nullable().optional(), via: z.enum(['LINK', 'PORTAL']).nullable().optional(), answer: z.string().nullable().optional() }),
+  // F-OC-303 (B-OC-010, B-OC-013): Restore as before… offered by the server (the latest change, a refused yes, a customer's no or an
+  // expired yes; orders.manage), and why it may not in words.
+  putBack: z.object({ may: z.boolean(), offered: z.boolean().optional(), why: z.object({ en: z.string(), it: z.string() }).nullable().optional() }),
+  // ---- F-OC-302 (B-OC-010, B-OC-012): certain links — the request it carried out, the revision it restored or that restored it — and
+  // which server words its reason is; absent in an older answer (two rows, never grouped on a guess).
+  reasonCode: z.enum(['AUTOMATIC', 'REQUEST', 'PUT_BACK']).nullable().optional(),
+  changeRequestId: z.string().nullable().optional(),
+  restores: z.number().nullable().optional(),
+  restoredBy: z.number().nullable().optional(),
+  // ---- end F-OC-302
 })
 export type Change = z.infer<typeof changeSchema>
 
@@ -272,27 +282,7 @@ export interface PricedBody {
   askCustomer?: boolean
 }
 
-export const pricedPreviewSchema = z.object({
-  ok: z.boolean(),
-  problems: z.array(z.object({ path: z.string() })),
-  revision: z.number(),
-  version: z.number(),
-  diff: diffSchema.nullable(),
-  parts: z.array(partSchema).optional(),
-  feeAmount: z.number().nullable().optional(),
-  changeAmount: z.number().nullable().optional(),
-  deposit: z.object({ amount: z.number().optional(), pct: z.string(), kind: z.string(), growthAmount: z.number().optional() }).nullable().optional(),
-  yes: z.enum(YES_PREVIEWS).nullable(),
-  stage: z.object({ stage: z.enum(FREEZE_STAGES) }).nullable(),
-  // F-OL-01 (ol-s1, B-OL-005): the amount changes (every reader) and it goes up (the price grain only).
-  amountChanges: z.boolean().optional(),
-  totalUp: z.boolean().optional(),
-})
-export type PricedPreview = z.infer<typeof pricedPreviewSchema>
-
-export function previewPricedChange(api: ApiClient, orderId: string, body: PricedBody, signal?: AbortSignal): Promise<PricedPreview> {
-  return api.post(`${orderPath(orderId)}/priced-changes/preview`, { body, schema: pricedPreviewSchema, signal })
-}
+// F-OC-304: the priced change's own preview read went with its window (the Lines tab's Review and save previews the amendment).
 
 /** A priced change applies at once (B-OP-010); F-OP-108: it answers the work orders that followed in its command and those that wait. */
 // F-OL-01: `reason` optional (ol-s1, B-OL-004).
@@ -300,16 +290,6 @@ export function applyPricedChange(api: ApiClient, orderId: string, body: PricedB
   return api.post(`${orderPath(orderId)}/priced-changes`, { body, schema: z.object({ order: orderSchema, change: changeSchema, /* F-OP-108 */ workOrders: followedSchema.default(NOTHING_FOLLOWED) }), idempotencyKey })
 }
 
-export const depositKindsSchema = z.object({
-  companyId: z.string(),
-  kinds: z.array(z.object({ kind: z.enum(EXTRA_DEPOSIT_KINDS), available: z.boolean() })),
-  caparraPenitenziale: z.object({ on: z.boolean(), source: z.enum(['COMPANY', 'TENANT', 'NONE']) }),
-})
-export type DepositKinds = z.infer<typeof depositKindsSchema>
-
-export function getDepositKinds(api: ApiClient, companyId: string, signal?: AbortSignal): Promise<DepositKinds> {
-  return api.get('/sales/deposit-kinds', { query: { companyId }, schema: depositKindsSchema, signal })
-}
 
 const named = z.object({ id: z.string(), code: z.string(), name: z.string() })
 const colourRef = z.object({ id: z.string(), code: z.string(), name: z.string().nullable() }).nullable()

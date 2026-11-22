@@ -662,17 +662,13 @@
     },
     "done": {
       "plain": "Salvato.",
-      "plainAsked": "Salvato · al cliente si chiede di accettare il nuovo ordine.",
       "changed": "Salvato · ordini di lavoro cambiati: {changed}.",
-      "changedAsked": "Salvato · ordini di lavoro cambiati: {changed} · al cliente si chiede di accettare il nuovo ordine.",
       "waits": "Salvato · in attesa della produzione: {waits} — decidi in questa pagina.",
-      "waitsAsked": "Salvato · in attesa della produzione: {waits} — decidi in questa pagina · al cliente si chiede di accettare il nuovo ordine.",
-      "both": "Salvato · ordini di lavoro cambiati: {changed} · in attesa della produzione: {waits} — decidi in questa pagina.",
-      "bothAsked": "Salvato · ordini di lavoro cambiati: {changed} · in attesa della produzione: {waits} — decidi in questa pagina · al cliente si chiede di accettare il nuovo ordine."
+      "both": "Salvato · ordini di lavoro cambiati: {changed} · in attesa della produzione: {waits} — decidi in questa pagina."
     },
     "notTold": "Salvato; le parole non sono arrivate nella conversazione dell'ordine: scrivile lì.",
     "notReached": "Salvato; non c'è modo di raggiungere {customer}: aggiungi un contatto.",
-    "askFailed": "Non è stato possibile chiedere a {customer} di accettare il nuovo ordine. La modifica è salvata.",
+    "askFailed": "Salvato, ma la richiesta a {customer} non è stata inviata.",
     "askAgain": "Chiedi di nuovo",
     "moved": "{name} ha salvato una modifica alle {time}: cambiano {lines}. Le tue modifiche restano.",
     "movedNone": "{name} ha salvato una modifica alle {time}. Le tue modifiche restano.",
@@ -1472,11 +1468,6 @@
     }
   },
   "changes": {
-    "empty": {
-      "title": "Nessuna modifica dalla conferma",
-      "body": "Una modifica compare qui appena applicata (Righe › Modifica ordine).",
-      "final": "L'ordine non è mai cambiato dopo la conferma."
-    },
     "col": {
       "line": "Riga",
       "change": "Cambiamento",
@@ -1485,8 +1476,6 @@
       "after": "Dopo",
       "net": "Imponibile"
     },
-    "revision": "Rev. {revision}",
-    "when": "{date} alle {time}",
     "someone": "Qualcuno",
     "headerOnly": "Solo i dati dell'ordine",
     "count": {
@@ -1503,7 +1492,6 @@
       "NOT_NEEDED": "Non serve"
     },
     "open": "Prima → dopo",
-    "openOf": "Prima → dopo della revisione {revision}",
     "line": "Riga {line}",
     "lineWhat": "Riga {line} · {what}",
     "kind": {
@@ -1516,46 +1504,14 @@
     "byAt": "{name}, {date}",
     "reason": "Motivo",
     "money": "Imponibile",
-    "reacceptance": "Nuova accettazione del cliente",
-    "onUs": {
-      "title": "Tocca a noi",
-      "nothing": "Nessuna richiesta aspetta noi",
-      "count_one": "{count} in attesa",
-      "count_other": "{count} in attesa"
-    },
     "onCustomer": {
-      "title": "Tocca al cliente",
-      "nothing": "Nessuna richiesta aspetta il cliente",
-      "reaccept": "L'ordine modificato aspetta il nuovo sì del cliente",
-      "since": "dal {date}",
       "due": "entro il {date}"
     },
-    "history": {
-      "title": "Cronologia",
-      "chipsLabel": "Mostra nella cronologia",
-      "chips": {
-        "all": "Tutto",
-        "requests": "Richieste",
-        "amendments": "Modifiche",
-        "confirmations": "Conferme",
-        "workOrders": "Ordini di lavoro"
-      },
-      "asked": "Richiesta · {kind}",
-      "by": "di {name}",
-      "priced": "Modifica a pagamento",
-      "made": "Conferma v{version} fatta",
-      "sent": "Conferma v{version} inviata",
-      "noneHere": "Ancora niente di questo tipo"
-    },
     "still": {
-      "title": "Ancora da fare",
       "since": "dal {when}",
-      "open": "Apri",
       "none": "Per le modifiche accettate non resta nulla da fare.",
       "changeOf": "{kind} accettata · {when}",
       "office": "Modifica dell'ufficio · {when}",
-      "madeExtra": "Fatti in più",
-      "extraLine": "Riga {line} · {words}",
       "leftOut_one": "{count} ordine di lavoro non mostrato: è fuori da ciò che puoi aprire.",
       "leftOut_other": "{count} ordini di lavoro non mostrati: sono fuori da ciò che puoi aprire."
     }
@@ -2252,11 +2208,6 @@
       "issued": "Prelevato per l’ordine (resta su di esso finché non viene reso a mano): {items}",
       "atWorkshop": "Presso un laboratorio: {numbers}"
     },
-    "changeWaits": "Modifica in attesa: {before} → {after}",
-    "changeApply": "Applica…",
-    "changeLeave": "Lascia com'è…",
-    "waitsPlanner": "Attende un pianificatore · avvisato alle {time}",
-    "waitsPlannerShort": "Attende un pianificatore: decide un pianificatore o il responsabile di produzione",
     "changeApplied": "La modifica di {number} è applicata: il reparto è stato avvisato",
     "changeDeclined": "La modifica di {number} resta com'è",
     "done": "Fatto",
@@ -2336,8 +2287,6 @@
     "backupElsewhere": "Apri il cliente ›"
   },
   "wocs": {
-    "title": "Modifiche agli ordini di lavoro di questo ordine",
-    "none": "Ancora nessuna modifica agli ordini di lavoro per questo ordine.",
     "newDraft": "Un nuovo ordine di lavoro (bozza)"
   },
   "badge": {
@@ -2521,7 +2470,6 @@
     }
   },
   "requests": {
-    "changesNote": "I blocchi sono in Panoramica · le date in Prossime date",
     "changesCount": "Modifiche ({count}) ›",
     "more_one": "{count} altro in Modifiche ›",
     "more_other": "Altri {count} in Modifiche ›",
@@ -3171,6 +3119,117 @@
       "go": "Chiedi a {customer}",
       "doneEmail": "Chiesto a {customer}: è partita un'e-mail a {email}, e il compito è nel suo portale.",
       "donePortal": "Chiesto nel portale di {customer}: nessun indirizzo e-mail in archivio."
+    },
+    "menu": {
+      "label": "Altro per questa riga",
+      "told": "Chi è stato avvisato…",
+      "copyLink": "Copia il link a questa riga"
+    },
+    "history": {
+      "title": "Cosa è cambiato",
+      "info": "Ogni modifica dalla conferma dell'ordine, una riga ciascuna: cosa è cambiato e perché, la risposta del cliente, cosa ha fatto in reparto, chi e quando. I filtri restringono l'elenco (una riga può stare in due); Prima → dopo mostra la modifica riga per riga.",
+      "reading": "Lettura di cosa è cambiato…",
+      "count_one": "{count} modifica",
+      "count_other": "{count} modifiche",
+      "empty": "Nessuna modifica dalla conferma dell'ordine.",
+      "emptyFinal": "Nessuna modifica prima della chiusura dell'ordine.",
+      "revisionsPart": "le revisioni dell'ordine",
+      "chipsLabel": "Mostra in Cosa è cambiato",
+      "chips": {
+        "all": "Tutto",
+        "requests": "Richieste del cliente",
+        "revisions": "Revisioni",
+        "workOrders": "Ordini di lavoro",
+        "confirmations": "Conferme"
+      },
+      "emptyChip": {
+        "all": "Nessuna modifica dalla conferma dell'ordine.",
+        "requests": "Nessuna richiesta del cliente in questo ordine.",
+        "revisions": "Nessuna revisione in questo ordine.",
+        "workOrders": "Nessuna modifica agli ordini di lavoro in questo ordine.",
+        "confirmations": "Nessuna conferma ancora creata."
+      },
+      "earlier_one": "Mostra {count} modifica precedente",
+      "earlier_other": "Mostra {count} modifiche precedenti",
+      "dates_one": "Cambi di data: {count}",
+      "dates_other": "Cambi di data: {count}",
+      "request": "Il cliente ha chiesto: {what}",
+      "doneAs": "Fatta come revisione {revision}",
+      "ourAnswer": "Il cliente legge la nostra risposta: “{answer}”",
+      "revision": "Abbiamo modificato l'ordine · Revisione {revision}",
+      "restoreRow": "Ripristinato com'era prima della revisione {restores} · Revisione {revision}",
+      "restoredBy": "Ripristinata com'era nella revisione {revision}",
+      "why": "Perché: {reason}",
+      "noWhy": "Nessun motivo indicato",
+      "whyRequest": "Fatta per la richiesta del cliente",
+      "whyPutBack": "Ripristina com'era la revisione {revision}",
+      "whyPutBackAny": "Ripristina com'era una revisione precedente",
+      "saidYes": "Il cliente ha detto sì · {when}",
+      "saidNo": "Il cliente ha detto no · {when}",
+      "via": {
+        "LINK": "dal link del cliente",
+        "PORTAL": "nel portale"
+      },
+      "money": "Importi: {words}",
+      "made": "Conferma v{version} creata",
+      "sent": "Conferma v{version} inviata al cliente",
+      "sentTo": "A {to}",
+      "woDraft": "Il reparto non è stato avvisato: {number} è una bozza",
+      "woMade": "Nuovo ordine di lavoro (bozza): {number}",
+      "aWorkOrder": "un ordine di lavoro",
+      "cancelled": "Ordine annullato",
+      "linesClosed": "Righe chiuse con meno pezzi",
+      "linesReopened": "Righe riaperte",
+      "paused": "Ordine di lavoro in pausa: {what}",
+      "pauseLifted": "Pausa tolta: {what}",
+      "styleReleased": "Modifica dello stile rilasciata ({number})",
+      "styleReleasedAny": "Modifica dello stile rilasciata",
+      "compare": "Prima → dopo",
+      "compareOf": "Prima → dopo della revisione {revision}",
+      "restore": "Ripristina com'era…",
+      "restoreOf": "Ripristina com'era la revisione {revision}…",
+      "tag": {
+        "yesWaiting": "Attende l'approvazione",
+        "yesRefused": "Approvazione respinta",
+        "NOT_NEEDED": "Nessun sì necessario",
+        "NOT_ASKED": "Non ancora chiesto",
+        "WAITING": "In attesa del loro sì",
+        "ACCEPTED": "Il cliente ha detto sì",
+        "REFUSED": "Il cliente ha detto no",
+        "EXPIRED": "Nessuna risposta in tempo",
+        "WITHDRAWN": "Richiesta ritirata",
+        "priced": "Modifica a pagamento",
+        "sent": "Inviata",
+        "cancelled": "Annullato",
+        "linesClosed": "Chiusa con meno pezzi",
+        "linesReopened": "Riaperte",
+        "paused": "In pausa",
+        "pauseLifted": "Pausa tolta",
+        "styleReleased": "Rilasciata"
+      }
+    },
+    "compare": {
+      "titleAny": "Prima → dopo · {number}",
+      "reading": "Lettura della modifica…",
+      "failed": "Impossibile leggere la modifica",
+      "gone": "Questa modifica non è più nell'elenco dell'ordine.",
+      "none": "nessuno",
+      "answer": "La risposta del cliente",
+      "headerLabel": "I dati dell'ordine prima e dopo",
+      "col": {
+        "field": "Campo"
+      },
+      "noPrice": "Non visibile per te: gli importi (li vede chi vede i prezzi)."
+    },
+    "saved": {
+      "plainEmail": "Salvato · chiesto a {customer} per e-mail.",
+      "plainPortal": "Salvato · chiesto nel portale di {customer}: nessun indirizzo e-mail in archivio.",
+      "changedEmail": "Salvato · ordini di lavoro cambiati: {changed} · chiesto a {customer} per e-mail.",
+      "changedPortal": "Salvato · ordini di lavoro cambiati: {changed} · chiesto nel portale di {customer}: nessun indirizzo e-mail in archivio.",
+      "waitsEmail": "Salvato · in attesa della produzione: {waits} — decidi in questa pagina · chiesto a {customer} per e-mail.",
+      "waitsPortal": "Salvato · in attesa della produzione: {waits} — decidi in questa pagina · chiesto nel portale di {customer}: nessun indirizzo e-mail in archivio.",
+      "bothEmail": "Salvato · ordini di lavoro cambiati: {changed} · in attesa della produzione: {waits} — decidi in questa pagina · chiesto a {customer} per e-mail.",
+      "bothPortal": "Salvato · ordini di lavoro cambiati: {changed} · in attesa della produzione: {waits} — decidi in questa pagina · chiesto nel portale di {customer}: nessun indirizzo e-mail in archivio."
     }
   }
 }

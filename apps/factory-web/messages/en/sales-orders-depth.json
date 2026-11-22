@@ -22,7 +22,7 @@
     "notWaiting": "The order does not wait for a yes",
     "askStanding": "A request is open already, or the customer’s credit holds the order",
     "withdrawNotYours": "Only the person who asked can take the request back",
-    "putBackNot": "This change can no longer be put back",
+    "putBackNot": "This change can no longer be restored as before",
     "confirmationWaiting": "The order waits for a yes: the confirmation comes after it",
     "confirmationCancelled": "The order was cancelled: no confirmation",
     "confirmationNot": "A confirmation cannot be made for this order now"
@@ -116,8 +116,7 @@
     "confirmationSame": "Nothing changed since version {version}: it is still the confirmation.",
     "planned": "Planned from the BOM: {made} new, {changed} changed, {removed} removed.",
     "putBack": "The order is back as it was.",
-    "putBackDeposit": "Revision {revision} put back; its open extra deposit was cancelled.",
-    "priced": "Priced change {revision} recorded: the customer accepts it on the link we send."
+    "putBackDeposit": "Revision {revision} restored as before; its open extra deposit was cancelled."
   },
   "problem": {
     "read": {
@@ -171,69 +170,9 @@
     "label": "Sizes locked by the production stage"
   },
   "priced": {
-    "title": "Priced change {revision} of {number}",
-    "how": "The change is written now; the customer then accepts its price on the link we send.",
-    "stage": "The order reached “{stage}”.",
-    "reading": "Pricing the change…",
-    "problems": "The change is refused as it is ({count})",
-    "tableLabel": "What changes and its price",
-    "col": {
-      "line": "Line",
-      "words": "Words for the customer",
-      "price": "Price change"
-    },
-    "labelOf": "Words for the customer: {line}",
-    "labelPlaceholder": "e.g. One more jacket in 52, cut on its own",
-    "lineKind": {
-      "ADDED": "Line added",
-      "REMOVED": "Line removed",
-      "CHANGED": "New price"
-    },
-    "fee": "Change fee (net)",
-    "feeHint": "Optional, in {currency}.",
-    "change": "Change in value (net)",
-    "feeValue": "Fee",
-    "noPrice": "Prices are not shown to you: the change is priced by the office.",
-    "deposit": "Extra deposit",
-    "depositMode": {
-      "default": "The order’s own percent",
-      "none": "None",
-      "pct": "A percent",
-      "amount": "An amount"
-    },
-    "pct": "Percent of the growth",
-    "amount": "Amount ({currency})",
-    "kind": "Kind",
-    "kindHint": "How the deposit counts if the order is cancelled.",
-    "dueDate": "Due",
-    "dueHint": "Optional: else the order’s terms.",
-    "depositValue": "Extra deposit {amount} ({pct} % of the growth).",
-    "depositNone": "No extra deposit: the order does not grow.",
-    "yes": {
-      "APPLIES_AT_ONCE": "Applies at once — no approval"
-    },
-    "customer": "The customer accepts or refuses it afterwards; a refusal is put back by a person.",
-    "reason": "Why (kept with the change)",
-    "reasonHint": "The customer’s words or the office’s, one or two lines.",
-    "go": "Record the priced change",
-    "held": {
-      "reading": "Wait: the change is being priced",
-      "failed": "The change could not be priced: try again",
-      "problems": "The change is refused as it is"
-    },
     "problem": {
       "fee": "A fee above 0, with at most 2 decimals.",
-      "pct": "A percent above 0 and at most 100.",
-      "amount": "An amount above 0, with at most 2 decimals; at most what the order grew by.",
-      "dueDate": "A due day today or later.",
-      "label": "The words for the customer are one line of at most 200 characters.",
-      "reason": "Say why (kept with the change).",
-      "reasonLong": "The reason is too long (500 characters at most).",
-      "deposit": "The extra deposit is refused as it is (its kind may be off, or it is more than the growth).",
-      "frozenLine": "{line}: {field} cannot change any more",
-      "frozenOrder": "The order’s {field} cannot change any more",
-      "lines": "A line is refused as it is: check the amendment",
-      "other": "The change is refused as it is"
+      "deposit": "The extra deposit is refused as it is (its kind may be off, or it is more than the growth)."
     }
   },
   "depositKind": {
@@ -250,14 +189,6 @@
     "CANCELLED": "cancelled"
   },
   "pricedList": {
-    "count": {
-      "changed_one": "{count} line changed",
-      "changed_other": "{count} lines changed",
-      "added_one": "{count} line added",
-      "added_other": "{count} lines added",
-      "removed_one": "{count} line removed",
-      "removed_other": "{count} lines removed"
-    },
     "fee": "fee {amount}",
     "deposit": "extra deposit {amount} ({kind}, {status})"
   },
@@ -285,13 +216,12 @@
     "waitingBody": "No other change of the order is taken until it is decided."
   },
   "putBack": {
-    "title": "Put back revision {revision} of {number}?",
-    "body": "The order goes back to how it was before revision {revision}, as a new revision; nothing is deleted.",
+    "title": "Restore {number} as before revision {revision}?",
+    "body": "The order goes back to how it was before revision {revision}, as a new revision. Nothing is deleted.",
     "deposit": "Its extra deposit still open is cancelled with it.",
     "reason": "Why",
     "reasonHint": "Optional.",
-    "go": "Put back",
-    "of": "Put back revision {revision}"
+    "go": "Restore as before"
   },
   "materials": {
     "title": "Customer-supplied materials",

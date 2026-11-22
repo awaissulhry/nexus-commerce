@@ -6,8 +6,8 @@ import { at, COMPANY, LINE_BLK, LINE_RED, LIST_ROWS, ORDER_ID, ROLES, TODAY, typ
 import type { ListDepthModel } from '../../list-depth/use-list-depth'
 import { weekColumns } from '../../week/model'
 import type { WeekModel } from '../../week/use-promise-week'
-import type { Approval, Changes, Confirmation, DepositKinds, Freeze, Materials, OrderDepth, OrderMilestone, PricedPreview, PromiseLine, RowDepth, TechPack } from '../api'
-import { depthCanOf, PRICED_EMPTY, type DepthCan } from '../model'
+import type { Approval, Changes, Confirmation, Freeze, Materials, OrderDepth, OrderMilestone, PromiseLine, RowDepth, TechPack } from '../api'
+import { depthCanOf, type DepthCan } from '../model'
 import type { OrderDepthModel } from '../use-order-depth'
 
 /**
@@ -189,31 +189,6 @@ export const APPROVAL_PENDING: Approval = { orderId: ORDER_ID, number: 'SO-2026-
 export const APPROVAL_NOBODY: Approval = { ...APPROVAL_PENDING, reasons: [{ reason: 'NO_REQUEST' }], requests: [], may: { ask: true, withdraw: false } }
 export const APPROVAL_CREDIT: Approval = { ...APPROVAL_PENDING, reasons: [{ reason: 'REQUEST_PENDING' }, { reason: 'CREDIT_HOLD' }], creditHold: { checkId: uid('9797', 1), requestTaskId: uid('9696', 2) }, requests: [request({ mine: false, requestedBy: 'Luca Prova' })], may: { ask: false, withdraw: false } }
 
-export const DEPOSIT_KINDS_OFF: DepositKinds = {
-  companyId: COMPANY,
-  kinds: [
-    { kind: 'ACCONTO', available: true },
-    { kind: 'CAPARRA', available: true },
-    { kind: 'CAPARRA_PENITENZIALE', available: false },
-  ],
-  caparraPenitenziale: { on: false, source: 'NONE' },
-}
-
-export const PRICED_PREVIEW: PricedPreview = {
-  ok: true,
-  problems: [],
-  revision: 4,
-  version: 7,
-  diff: DIFF_ONE_MORE,
-  parts: [{ label: 'x', orderLineId: LINE_BLK, amount: 45000 }],
-  feeAmount: 2500,
-  changeAmount: 47500,
-  deposit: { amount: 14250, pct: '30.0000', kind: 'ACCONTO', growthAmount: 47500 },
-  yes: 'APPLIES_AT_ONCE', // B-OP-010
-  stage: { stage: 'CUT' },
-}
-export const PRICED_BLOCKED: PricedPreview = { ...PRICED_PREVIEW, ok: false, problems: [{ path: 'body/lines/10/SIZE_QUANTITY' }], parts: [], feeAmount: null, changeAmount: null, deposit: null, yes: null }
-
 /** The order studio's depth with every part read (override one part for a case). */
 export function depthModel(role: Role, over: Partial<OrderDepthModel> = {}): OrderDepthModel {
   const can = depthCan(role)
@@ -229,20 +204,13 @@ export function depthModel(role: Role, over: Partial<OrderDepthModel> = {}): Ord
     confirmationPdf: { value: demoPdfUrl(), problem: null },
     techPack: can.inquiries ? { value: TECH_PACK, problem: null } : null,
     seasons: null,
-    depositKinds: DEPOSIT_KINDS_OFF,
     dialog: null,
     busy: false,
     problem: null,
     notice: null,
-    priced: null,
     send: null,
     ...over,
   }
-}
-
-/** A priced change open on the black line's one more jacket in 50. */
-export function pricedOpen(preview: PricedPreview = PRICED_PREVIEW): NonNullable<OrderDepthModel['priced']> {
-  return { amendment: { lines: [{ id: LINE_BLK, sizes: [{ size: '50', quantity: 3 }] }] }, draft: { ...PRICED_EMPTY, labels: { [LINE_BLK]: 'Una giacca in più in 50, tagliata a parte' }, fee: '25,00', reason: 'Il cliente chiede una giacca nera in più.' }, preview: { phase: 'ready', value: preview, problem: null } }
 }
 
 function stripMoney(changes: Changes): Changes {

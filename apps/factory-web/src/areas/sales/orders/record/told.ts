@@ -37,6 +37,24 @@ export const toldChangeSchema = z.object({
   people: z.number(),
   floor: z.object({ at: z.string().nullable(), workOrders: z.array(workOrderRef), leftOut: z.number() }),
   workshop: z.object({ at: z.string().nullable(), told: z.number(), waiting: z.number() }),
+  // ---- F-OC-302 (B-OC-009): what spoke for the change — its own ids, never a person; a hold's work order named only when this
+  // reader reaches it (else counted: `leftOut`); null or absent: a line written before the speaker was kept ----
+  speaker: z
+    .object({
+      kind: z.enum(['REQUEST', 'AMENDED', 'LINES', 'CANCELLED', 'PROMISE', 'WORK_ORDER_CHANGE', 'HOLD', 'ECO']),
+      requestId: z.string().optional(),
+      amendmentId: z.string().optional(),
+      change: z.enum(['CLOSED', 'REOPENED']).optional(),
+      lineIds: z.array(z.string()).optional(),
+      workOrderChangeId: z.string().optional(),
+      from: z.string().nullable().optional(),
+      to: z.string().optional(),
+      hold: z.object({ placed: z.boolean(), workOrder: workOrderRef.nullable(), leftOut: z.number() }).optional(),
+      changeOrder: z.object({ number: z.string() }).nullable().optional(),
+    })
+    .nullable()
+    .optional(),
+  // ---- end F-OC-302
 })
 export type ToldChange = z.infer<typeof toldChangeSchema>
 

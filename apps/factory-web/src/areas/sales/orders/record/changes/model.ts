@@ -1,17 +1,11 @@
 import type { BrandRequest } from '../../../../home/approvals/requests/api'
-import type { WorkOrderChange } from '../../../../home/approvals/work-order-changes/api' // F-OP-116
 import { tabHref } from '../../../../_shared/record-frame/address' // F-OP-116
-import type { Amendment } from '../../api'
-import { moneyChange } from '../../daily-model'
-import type { Change, Confirmation } from '../../depth/api'
-import { putBackOffered } from '../../depth/model'
 import { ageOf, type Phrase as PartsPhrase } from '../../../../../lib/production/model' // F-OO-204: the parts' own age words
 
 /**
  * F-SA-236 (sales page plan N2, N3, P5; 10-order-page §2.4) — Changes as ONE newest-first story, without a screen: what waits on us
  * (the customer's open requests, oldest first), what waits on the customer (the changed order's new yes, our counter-offers, the
- * approvals we asked), and the history — requests asked and answered, amendments (the one `…/changes` read: priced or not, Put back),
- * confirmations made and sent — filtered by its chips. Only this order's records; money only by grain (the reads drop it).
+ * approvals we asked) and Still to do. F-OC-304: What changed is its own model (history.ts). Only this order's records.
  */
 
 /** The requests that wait on us (open) or on the customer (our counter-offer), oldest first. */
@@ -22,105 +16,7 @@ export function waitingOnUsOf(requests: readonly BrandRequest[]): BrandRequest[]
 // F-OP-301 (walk #1): what waits on the customer is the ONE waiting list's (overview/model `orderWaitingOf`); its own copy here,
 // which disagreed with Overview and the badge, is gone.
 
-// ---- the history ----------------------------------------------------------------------------------------------------------------
-
-// F-OP-117: + Work orders (the work-order changes decided: applied, left as is).
-export const HISTORY_CHIPS = ['all', 'requests', 'amendments', 'workOrders', 'confirmations'] as const
-export type HistoryChip = (typeof HISTORY_CHIPS)[number]
-
-export type HistoryEntry =
-  | { readonly kind: 'requestAsked'; readonly id: string; readonly at: string; readonly request: BrandRequest }
-  | { readonly kind: 'requestAnswered'; readonly id: string; readonly at: string; readonly request: BrandRequest }
-  | {
-      readonly kind: 'amendment'
-      readonly id: string
-      readonly at: string
-      readonly revision: number
-      readonly by: string | null
-      readonly reason: string
-      readonly counts: { readonly changed: number; readonly added: number; readonly removed: number; readonly before: number; readonly after: number }
-      /** The net's change (price grain; null without it). */
-      readonly money: { readonly delta: number } | null
-      readonly priced: boolean
-      /** The customer must accept again / accepted / refused (codes of the read). */
-      readonly customer: string | null
-      /** Put back is offered (the depth's rule: turned down, refused or expired, and the API may); the button holds the right. */
-      readonly putBack: boolean
-      /** The change as the changes read gave it (a priced change: its fee, extra deposit, the yes it waits for, the customer's answer). */
-      readonly change: Change | null
-    }
-  | { readonly kind: 'confirmationMade'; readonly id: string; readonly at: string; readonly version: number; readonly by: string | null }
-  | { readonly kind: 'confirmationSent'; readonly id: string; readonly at: string; readonly version: number }
-  /** F-OP-117: a work-order change decided — carried out on its work order, left as is, or put back (stale). */
-  | { readonly kind: 'workOrderChange'; readonly id: string; readonly at: string; readonly change: WorkOrderChange }
-
-const chipOf = (entry: HistoryEntry): Exclude<HistoryChip, 'all'> => (entry.kind === 'requestAsked' || entry.kind === 'requestAnswered' ? 'requests' : entry.kind === 'amendment' ? 'amendments' : entry.kind === 'workOrderChange' ? 'workOrders' : 'confirmations')
-
-/** The lines an amendment moved, and the pieces before → after (an amendment's diff or a change's: only what it counts). */
-function countsOf(diff: { readonly lines: readonly Pick<Amendment['diff']['lines'][number], 'change' | 'piecesBefore' | 'piecesAfter'>[] }) {
-  const counts = { changed: 0, added: 0, removed: 0, before: 0, after: 0 }
-  for (const line of diff.lines) {
-    if (line.change === 'CHANGED') counts.changed++
-    else if (line.change === 'ADDED') counts.added++
-    else counts.removed++
-    counts.before += line.piecesBefore
-    counts.after += line.piecesAfter
-  }
-  return counts
-}
-
-interface HistoryInput {
-  readonly requests: readonly BrandRequest[]
-  /** The order's changes (the ONE read of `…/changes`: amendments with their priced part); null: not read here. */
-  readonly changes: readonly Change[] | null
-  /** The amendments read (only where the changes read is not there: a design case, an older page). */
-  readonly amendments: readonly Amendment[] | null
-  readonly confirmation: Confirmation | null
-  /** F-OP-117: the order's work-order changes (the decided ones become history); absent or null: not read here. */
-  readonly workOrderChanges?: readonly WorkOrderChange[] | null
-}
-
-/** Every event of the order's changes, newest first. */
-export function historyOf(input: HistoryInput): HistoryEntry[] {
-  const out: HistoryEntry[] = []
-  for (const request of input.requests) {
-    out.push({ kind: 'requestAsked', id: `asked-${request.id}`, at: request.askedAt, request })
-    const answeredAt = request.answeredAt ?? request.withdrawnAt
-    if (answeredAt && request.status !== 'OPEN') out.push({ kind: 'requestAnswered', id: `answered-${request.id}`, at: answeredAt, request })
-  }
-  if (input.changes) {
-    for (const change of input.changes) {
-      const delta = change.changeAmount
-      out.push({
-        kind: 'amendment',
-        id: change.id,
-        at: change.createdAt,
-        revision: change.revision,
-        by: change.createdBy,
-        reason: change.reason,
-        counts: countsOf(change.diff),
-        money: delta === undefined ? null : { delta },
-        priced: change.priced,
-        customer: change.customer.decision,
-        putBack: putBackOffered(change),
-        change,
-      })
-    }
-  } else if (input.amendments) {
-    for (const amendment of input.amendments) {
-      const change = moneyChange(amendment.diff)
-      out.push({ kind: 'amendment', id: amendment.id, at: amendment.createdAt, revision: amendment.revision, by: amendment.createdBy, reason: amendment.reason, counts: countsOf(amendment.diff), money: change ? { delta: change.delta } : null, priced: false, customer: amendment.reacceptance, putBack: false, change: null })
-    }
-  }
-  for (const version of input.confirmation?.versions ?? []) out.push({ kind: 'confirmationMade', id: `made-${version.id}`, at: version.createdAt, version: version.version, by: version.createdBy })
-  if (input.confirmation?.sentAt && input.confirmation.sentVersion !== null) out.push({ kind: 'confirmationSent', id: `sent-${input.confirmation.sentVersion}`, at: input.confirmation.sentAt, version: input.confirmation.sentVersion })
-  // F-OP-117: a decided work-order change, at its decision (a PROPOSED one waits: it is the section's row, not history yet).
-  for (const change of input.workOrderChanges ?? []) if (change.status !== 'PROPOSED') out.push({ kind: 'workOrderChange', id: `woc-${change.id}`, at: change.decidedAt ?? change.proposedAt, change })
-  return out.sort((a, b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id))
-}
-
-/** The entries a chip shows (All: every entry). */
-export const historyFor = (entries: readonly HistoryEntry[], chip: HistoryChip): HistoryEntry[] => (chip === 'all' ? [...entries] : entries.filter((entry) => chipOf(entry) === chip))
+// F-OC-304: the history (HISTORY_CHIPS, historyOf, historyFor) moved into ONE row per change: record/changes/history.ts.
 
 // ---- F-SA-243 (sales page plan P5, R1; 14-change-flow §3.1, §3.4; review R-5): the order page's doors to the ONE review window ----
 /**

@@ -17,12 +17,12 @@ import { YesDoorView } from '../../../depth/view/DepthBand'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { orderWaitingOf, readOf, rowWordsOf } from '../../overview/model'
 import { decisionSentenceOf } from '../../production/work' // F-OC-104: the ONE sentence of a work-order change (Production's strip's)
-import { DiscussDoor } from '../../view/Discuss'
 import { PartFailed, PartReading, Section } from '../../view/production/Kit' // F-OC-101 (L6): the Production kit, in place
 import { AnswerDoor, RowAge, StillDoorView, WaitingDoorView } from '../../view/RequestsSection' // the rows' doors, shared with Overview
 import { dayTimeOf, WAITING_ALIASES } from '../layout'
 import { askWordsOf, stillGroupsOf, type StillGroup } from '../model'
 import { countsOf, holdsPointerOf, lastRevisionOf, lateDaysOf, mineCountOf, stillItemsOf, waitingAnswerOf, waitingItemOf, type StillItem, type WaitingAnswer, type WaitingItem } from '../waiting'
+import { RowMenu } from './RowMenu' // F-OC-302: the ONE row ⋯
 import './changes.css'
 
 /** The catalogues Waiting's rows say their words in (Your turn, an approval's state, the old change's approval body). */
@@ -260,7 +260,6 @@ function WaitingItemRow({ item, order, model, actions, asOf, when }: { item: Wai
           <>
             {/* Answer… opens the ONE review window on this page — only for the team that answers the kind (the others read who does). */}
             {item.mine && request && <AnswerDoor request={request} model={model} />}
-            {request && <DiscussDoor order={order} part={t('discuss.request', { kind: w.t(`parts.request.kind.${request.kind}`) })} target={{ kind: 'OrderChangeRequest', id: request.id }} align="end" />}
           </>
         ) : item.face === 'problem' ? (
           // L2: a pointer — the problem is answered on Production › Problems & holds (its Reply lives there).
@@ -273,6 +272,8 @@ function WaitingItemRow({ item, order, model, actions, asOf, when }: { item: Wai
         ) : (
           <WaitingDoorView door={door} order={order} model={model} actions={actions} here="changes" />
         )}
+        {/* F-OC-302: the ONE row ⋯ — Discuss a request (by its reference: the customer reads its own words) · Copy link to this row. */}
+        <RowMenu order={order} prefix={model.prefix} label={t('changesTab.menu.label')} anchor={item.anchor} discuss={request ? { part: t('discuss.request', { kind: w.t(`parts.request.kind.${request.kind}`) }), target: { kind: 'OrderChangeRequest', id: request.id } } : null} />
       </div>
     </div>
   )
@@ -348,6 +349,7 @@ function StillItemRow({ item, order, model, actions, asOf }: { item: StillItem; 
         ) : (
           <StillDoorView row={row} order={order} model={model} actions={actions} />
         )}
+        <RowMenu order={order} prefix={model.prefix} label={t('changesTab.menu.label')} anchor={anchor ?? null} />
       </div>
     </div>
   )
