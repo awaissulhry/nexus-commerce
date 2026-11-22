@@ -963,3 +963,38 @@ describe('Z02 cleanups — the waiting call reads the open yeses only; no date r
   })
 })
 // ---- end Z02 cleanups
+
+// ---- F-OS T.1 (order SHIPMENTS tab; 15-steps T.1): the gallery's Shipments cases draw what each state says, in both languages ----
+describe('F-OS T.1 — the Shipments tab\'s design cases (the states the seed lacks)', () => {
+  const shipmentsOf = (id: string, locale: 'en' | 'it' = 'en') => {
+    const html = draw(id, locale)
+    return textOf(html.slice(html.indexOf(' id="left"')))
+  }
+  it('split: the DDT chip, the tracking problem, "Split from", the packed one\'s next step into Warehouse', () => {
+    const text = shipmentsOf('os-split')
+    for (const words of ['DDT 144/2026', '1 tracking problem', 'Split from SH-2026-0072', 'Next: buy the labels ›', 'Tracking numbers…']) expect(text, words).toContain(words)
+  })
+
+  it('delivered: from the carrier with its proof; set by hand with its reason', () => {
+    const text = shipmentsOf('os-delivered')
+    for (const words of ['signed by M. Rossi', 'Set by hand', 'the carrier never scanned it']) expect(text, words).toContain(words)
+  })
+
+  it('Seed Karachi Mills: one travelled without a DDT (Set by hand); the packed one says the DDT choice — no country read', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const text = shipmentsOf('os-pakistan', locale)
+      expect(text).toContain(locale === 'en' ? 'Travels without a DDT · Set by hand' : 'Viaggia senza DDT · Impostata a mano')
+      expect(text).toContain(locale === 'en' ? 'A Nexus shipment leaves with a DDT.' : 'Una spedizione Nexus parte con un DDT.')
+    }
+  })
+
+  it('the after-sales doors on the head; Read-only reads every cell and finds no act; a failed part says so', () => {
+    const after = shipmentsOf('os-after')
+    for (const words of ['Open a return…', 'Log a complaint…']) expect(after, words).toContain(words)
+    const reader = shipmentsOf('os-role-readonly')
+    for (const words of ['Tracking numbers…', 'Create shipment…', 'Open a return…']) expect(reader, words).not.toContain(words)
+    expect(reader).toContain('SH-2026-0071')
+    expect(shipmentsOf('os-failed')).toContain('the deliveries')
+  })
+})
+// ---- end F-OS T.1

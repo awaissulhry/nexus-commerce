@@ -2,6 +2,7 @@ import { createElement, Fragment } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import type { LabelCheck, LabelJobs, Transport } from './api'
 import type { ReprintModel, TransportModel } from './model'
+import { trackingDialogOf } from './model' // T.1 (F-OS-301): the dialog as it opens
 import { ReprintView } from './view/ReprintView'
 import { TransportView } from './view/TransportView'
 
@@ -93,6 +94,34 @@ const ownVanLeft = transport(
   { status: 'SHIPPED', transportBy: 'SENDER', carrierCode: null, carrierName: null, serviceCode: null, shippedAt: '2026-11-15T07:20:00.000Z' },
 )
 
+// ---- T.1 (F-OS-301; B-OS-022; 18-lead-settles L2, L4): Tracking numbers… — a number per parcel, a label's read only, a seen number's reason ----
+const typedParcel = (seq: number, number: string | null, url: string | null = null) => ({ id: uid(60 + seq), seq, label: null, typed: number ? { number, url } : null, may })
+const airCargo = transport(
+  {
+    arrangement: 'MANUAL_CARRIER',
+    may: { arrange: no('LEFT'), track: may, status: may },
+    parcels: [typedParcel(1, 'HAWB-0001'), typedParcel(2, 'HAWB-0002'), typedParcel(3, null)],
+  },
+  { status: 'SHIPPED', carrierName: 'Seed Air Cargo', carrierCode: null, serviceCode: null, manualTrackingNumber: '157-12345675', manualTrackingUrl: 'https://track.seed-air-cargo.example.com/157-12345675', ddtRequired: false, shippedAt: '2026-11-18T09:00:00.000Z' },
+)
+const packedTyped = transport(
+  {
+    arrangement: 'MANUAL_CARRIER',
+    // A TEST label (test mode) is never tracked: it stays read only, "From the label"; the other parcels take a typed number.
+    labels: { carrier: 1, test: 1 },
+    parcels: [{ id: uid(61), seq: 1, label: { number: 'TEST-0001', test: true, url: null }, typed: null, may: { allowed: false, refusal: { code: 'PARCEL_LABELLED' as const } } }, typedParcel(2, null), typedParcel(3, null)],
+  },
+  { carrierName: 'Trasporti Demo', carrierCode: null, serviceCode: null, manualTrackingNumber: null },
+)
+const TRACKING_CASES = [
+  { id: 'tracking-awb', label: 'F-OS-301 · Tracking numbers of a hand-booked air cargo shipment: the consignment number (AWB, its last digit fits) and one per parcel', model: { transport: tm({ dialog: trackingDialogOf(airCargo) }, airCargo, null) } },
+  { id: 'tracking-awb-off', label: 'F-OS-301 · An air waybill whose last digit does not fit: said in words, never a refusal (L4)', model: { transport: tm({ dialog: { ...trackingDialogOf(airCargo), text: '157-12345676' } }, airCargo, null) } },
+  { id: 'tracking-seen', label: 'F-OS-301 · After the goods left, parcel 2\'s number the customer saw changes: why, required; "Send the shipping notice again" ticked', model: { transport: tm({ dialog: { ...trackingDialogOf(airCargo), parcels: [{ id: uid(61), seq: 1, text: 'HAWB-0001', link: '' }, { id: uid(62), seq: 2, text: 'HAWB-0099', link: '' }, { id: uid(63), seq: 3, text: 'HAWB-0003', link: '' }], reason: 'The forwarder sent the right number for parcel 2.', notify: true } }, airCargo, null) } },
+  { id: 'tracking-label', label: 'F-OS-301 · A packed shipment: a parcel with a (TEST) label is read only "From the label"; the others take a number', model: { transport: tm({ dialog: trackingDialogOf(packedTyped) }, packedTyped, null) } },
+  { id: 'tracking-saved-notice-held', label: 'F-OS-301 · Saved; the shipping notice did not go (why, in Warehouse\'s words)', model: { transport: tm({ done: { key: 'door.tracking.doneNoticeHeld' }, problem: { key: 'notice.why.NO_RECIPIENT' } }, airCargo, null) } },
+]
+// ---- end T.1
+
 export const designScreen = defineDesignScreen<CarrierCase>({
   screen: 'SCR-595',
   title: 'Shipment › Carrier & label: own van, a carrier by hand, the customer collects; check before printing; reprint with a reason',
@@ -105,6 +134,7 @@ export const designScreen = defineDesignScreen<CarrierCase>({
     { id: 'arrange', label: 'Our van or a carrier by hand: the dialog (carrier booked by hand)', model: { transport: tm({ dialog: { kind: 'arrange', mode: 'MANUAL_CARRIER', carrierName: 'Trasporti Demo', trackingNumber: '' } }) } },
     { id: 'manual', label: 'A carrier booked by hand with its tracking number; statuses wait until it leaves', model: { transport: tm({}, manual, null) } },
     { id: 'tracking', label: 'Change the typed tracking number', model: { transport: tm({ dialog: { kind: 'tracking', text: 'TD-5501-22' } }, manual, null) } },
+    ...TRACKING_CASES, // T.1 (F-OS-301)
     { id: 'own-van', label: 'Our own van, left: the statuses typed as the driver reports them', model: { transport: tm({}, ownVanLeft, null) } },
     { id: 'status', label: 'Type a status: delivered moves the shipment', model: { transport: tm({ dialog: { kind: 'status', status: 'DELIVERED', occurredAt: null, description: '', location: 'Treviso' } }, ownVanLeft, null) } },
     { id: 'collects', label: 'The customer collects (ex works): nothing to arrange or type', model: { transport: tm({}, transport({ arrangement: 'CUSTOMER_COLLECTS', may: { arrange: no('CUSTOMER_COLLECTS'), track: no('NOT_A_CARRIER'), status: no('CUSTOMER_COLLECTS') } }, { transportBy: 'RECIPIENT', carrierCode: null, carrierName: null, serviceCode: null }), null) } },

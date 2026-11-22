@@ -25,6 +25,7 @@ import { designScreen as queueScreen } from './fixtures'
 import { gridOf, isDepthView, queueCsv, searchStatusOf, todayRows } from './model'
 import { refusalOf, writeWords } from './shared/depth'
 import { designScreen as splitScreen } from './split/fixtures'
+import { designScreen as moveScreen } from './move/fixtures' // T.1 (F-OS-203): Move / Merge, one window on both pages
 import { handBody, handTotals, splitHeld } from './split/model'
 
 /** B-W2b-410 — shipments in depth on screen: the parts' rules, the fixtures as API answers, every case in it and en. */
@@ -226,7 +227,7 @@ const LEFT_KEY = new RegExp(`(?:^|[\\s>"(])(?:${TOP.join('|')})\\.[a-zA-Z]+(?:\\
 const NAMESPACES = ['shipments', 'lists', 'records', 'shell', 'ds-words']
 
 describe('SCR-590 … SCR-598 draw every case in both languages', () => {
-  const parts = [holdsScreen, splitScreen, cartonsScreen, carrierScreen, papersScreen, podScreen, noticeScreen] as const
+  const parts = [holdsScreen, splitScreen, cartonsScreen, carrierScreen, papersScreen, podScreen, noticeScreen, moveScreen /* T.1 */] as const
   for (const locale of LOCALES) {
     it(`every case in ${locale}: no key left`, () => {
       const draw = (element: ReturnType<typeof createElement>) => renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, NAMESPACES) }, element))
