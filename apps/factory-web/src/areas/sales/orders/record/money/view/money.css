@@ -1,5 +1,5 @@
 /*
- * F-OM-101 … 103 (order MONEY tab, 10-design §1–§5; 18-lead-settles L6) — the tab's own stylesheet (orders.css is the Lines lane's,
+ * F-OM-101 … 302 (order MONEY tab, 10-design §1–§8; 18-lead-settles L6) — the tab's own stylesheet (orders.css is the Lines lane's,
  * production.css the kit's, reused in place). The kit gives the room container (`pt`), each section's own (`sec`) and the heads; this
  * file adds the tab's answer line, Totals' tiles | what is left | facts, and the payment plan's rows. Room, not screen: the plan's list
  * is one more size container (`ompl`), each request box another (`omrq`), so rows follow the room they really have — stacked under
@@ -165,6 +165,41 @@
   .fw-om-il.is-np .fw-om-ir-kd { display: block; }
 }
 .fw-om-il-foot { margin: 0; padding-top: var(--nds-space-6); font-size: var(--nds-font-size-sm); }
+
+/* ── 4 · Price check (F-OM-301): one row per line, by the list's own room — blocks under 600 px (line + check on the first line, the
+   amounts, the difference); Line · Pieces · Our amount · Customer's amount · Check · Difference from 600 ── */
+.fw-om-pc-a { flex-wrap: wrap; gap: var(--nds-space-4) var(--nds-space-6); }
+.fw-om-pc-take { display: flex; align-items: center; justify-content: space-between; gap: var(--nds-space-8) var(--nds-space-12); flex-wrap: wrap; padding: var(--nds-space-8) var(--nds-space-10); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg); background: var(--nds-surface-raised); font-size: var(--nds-font-size-sm); }
+.fw-om-pc-acc { margin: 0; display: flex; gap: var(--nds-space-8); align-items: flex-start; font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+.fw-om-pc-acc > svg { flex: none; margin-top: var(--nds-space-2); color: var(--nds-text-muted); }
+.fw-om-pcl { container: ompcl / inline-size; display: flex; flex-direction: column; min-width: 0; }
+.fw-om-pcr { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "l c" "o o" "f f"; gap: var(--nds-space-2) var(--nds-space-12); padding: var(--nds-space-8) var(--nds-space-2); border-bottom: 1px solid var(--nds-border-subtle); font-size: var(--nds-font-size-sm); align-items: start; min-width: 0; }
+.fw-om-pcr > div { min-width: 0; }
+.fw-om-pcr .fw-pt-sub { display: block; }
+.fw-om-pc-l { grid-area: l; overflow-wrap: anywhere; }
+.fw-om-pc-l > b { font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); }
+.fw-om-pc-c { grid-area: c; display: flex; flex-direction: column; align-items: flex-end; gap: var(--nds-space-2); }
+.fw-om-pc-o { grid-area: o; display: flex; flex-wrap: wrap; gap: var(--nds-space-2) var(--nds-space-14); color: var(--nds-text-2); font-variant-numeric: tabular-nums; }
+.fw-om-pc-o > .fw-pt-sub { flex-basis: 100%; }
+.fw-om-pc-f { grid-area: f; font-variant-numeric: tabular-nums; }
+.fw-om-pc-d { display: inline-flex; gap: var(--nds-space-6); align-items: baseline; flex-wrap: wrap; }
+.fw-om-pc-w { display: none; }
+.fw-om-pcr.is-hd { display: none; font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-muted); padding: 0 var(--nds-space-2) var(--nds-space-6); border-bottom: 1px solid var(--nds-border); }
+.fw-om-pcr.is-tot { font-weight: var(--nds-font-weight-bold); border-bottom: 0; border-top: 1px solid var(--nds-border); }
+@container ompcl (min-width: 600px) {
+  .fw-om-pcr, .fw-om-pcr.is-hd { grid-template-columns: minmax(0, 1.5fr) 64px 140px 140px minmax(0, 1fr) 150px; grid-template-areas: none; }
+  .fw-om-pcr.is-hd { display: grid; }
+  .fw-om-pcr > div { grid-area: auto; }
+  .fw-om-pc-o { display: none; }
+  .fw-om-pc-w { display: block; }
+  .fw-om-pc-n { text-align: right; font-variant-numeric: tabular-nums; }
+  .fw-om-pc-c { align-items: flex-start; }
+  .fw-om-pc-f { text-align: right; }
+  .fw-om-pc-d { justify-content: flex-end; flex-direction: column; align-items: flex-end; gap: 0; }
+}
+.fw-om-pc-src { display: flex; flex-direction: column; gap: var(--nds-space-2); padding-top: var(--nds-space-6); }
+.fw-om-pc-src-l { margin: 0; display: flex; gap: var(--nds-space-6); align-items: flex-start; font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); overflow-wrap: anywhere; }
+.fw-om-pc-src-l > svg { flex: none; margin-top: var(--nds-space-2); }
 
 /* ── the plan's windows (F-OM-201 / 202): the fields, the plan before → after, the five parts ── */
 .fw-om-dlg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: var(--nds-space-10) var(--nds-space-14); }

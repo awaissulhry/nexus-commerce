@@ -114,8 +114,9 @@ describe('F-OL-04: the line ⋯ opens TODAY\'s windows; the band and Money land 
     expect(acts).toContain('...(reason.trim() ? { reason: reason.trim() } : {})')
     expect(read('./view/DailyDialogs.tsx')).not.toContain("t('reopen.held.reason')")
     expect(read('./view/OrderRecordView.tsx')).toContain("label: t('lineMenu.changeLines')")
-    const money = read('./view/PriceCheckSection.tsx')
-    expect(money).toContain("onChangeOurs={() => actions?.linesTab?.onLand?.({ lineId: null, box: 'price' })}")
-    expect(money).toContain('changeHeld={amendHeld(order, record.can)}')
+    // F-OM-301: Money's Price check (its own section file, in the kit) lands at the FIRST line that differs, held by the amendment's rule.
+    const money = read('./money/view/PriceCheckSection.tsx')
+    expect(money).toContain("onClick={() => actions?.linesTab?.onLand?.({ lineId: view.change?.lineId ?? null, box: 'price' })}")
+    expect(read('./money/price.ts')).toContain('const changeHeld = amendHeld(order, can)')
   })
 })

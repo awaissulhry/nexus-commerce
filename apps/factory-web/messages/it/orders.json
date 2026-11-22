@@ -3717,7 +3717,9 @@
     },
     "notice": {
       "planChanged": "Il piano è stato cambiato a mano; la cronologia conserva il valore precedente.",
-      "undone": "Il pagamento è stato annullato; resta in Finanza › Pagamenti come annullato."
+      "undone": "Il pagamento è stato annullato; resta in Finanza › Pagamenti come annullato.",
+      "priceAccepted": "La differenza di prezzo è accettata a mano.",
+      "priceUnaccepted": "L'accettazione è annullata: i prezzi si confrontano di nuovo."
     },
     "undo": {
       "title": "Annullare il pagamento del {date}?",
@@ -3743,6 +3745,80 @@
     },
     "facts": {
       "changeOnMoney": "Cambia in Importi ›"
+    },
+    "price": {
+      "title": "Verifica prezzi",
+      "info": "Il nostro prezzo accanto a quello del cliente (il suo ordine, il suo portale, o inserito da noi), riga per riga, IVA esclusa, al centesimo. Non è una verifica del listino. Una differenza accettata a mano si riapre da sola quando cambia uno dei due prezzi.",
+      "keys": "Tasti: Tab passa da una riga all'altra · Invio usa il pulsante.",
+      "part": "la verifica prezzi",
+      "more": "Altro per la verifica prezzi",
+      "show": "Mostra le righe",
+      "hide": "Nascondi le righe",
+      "showAll": "Mostra tutte le {count} righe",
+      "onlyDiffering": "Mostra solo le righe diverse",
+      "exact": "IVA esclusa, al centesimo. Differenza = il nostro prezzo meno quello del cliente.",
+      "tag": {
+        "none": "— Prezzo del cliente non ancora dato",
+        "equal": "= Prezzi uguali",
+        "notEqual": "≠ Diversi",
+        "partial": "— Non ancora tutte le righe",
+        "accepted": "Accettata a mano"
+      },
+      "check": {
+        "EQUAL": "= Uguale",
+        "NOT_EQUAL": "≠ Diverso"
+      },
+      "answer": {
+        "none": "scrivi i prezzi del suo ordine, o li scrive lui nel portale.",
+        "more": "+{amount} chiediamo di più",
+        "less": "−{amount} chiediamo di meno",
+        "differ_one": "{count} riga diversa",
+        "differ_other": "{count} righe diverse"
+      },
+      "from": {
+        "CUSTOMER_PO": "dall'ordine del cliente",
+        "CUSTOMER_PO_FILE": "dall'ordine del cliente {file}",
+        "PORTAL": "dal portale",
+        "OFFICE": "inserito da noi"
+      },
+      "source": {
+        "LIST": "Dal listino",
+        "MANUAL": "Impostato a mano",
+        "UNKNOWN": "Cambiato dopo il preventivo"
+      },
+      "perPiece": "{price} /pz",
+      "pieces_one": "{count} pz",
+      "pieces_other": "{count} pz",
+      "ours": "Nostro {amount}",
+      "theirs": "Del cliente {amount}",
+      "acceptedBy": "Accettata da {name}, {date}",
+      "acceptedOn": "Accettata il {date}",
+      "accept": {
+        "door": "Accetta la differenza…",
+        "title": "Accetta la differenza su {number}",
+        "go": "Accetta la differenza",
+        "sub": "{lines} · nostro {ours} · del cliente {theirs}",
+        "happens": {
+          "stay": "Entrambi i prezzi restano come sono.",
+          "shows": "La verifica mostra «≠ Diversi · Accettata a mano», con il tuo nome, il giorno e il tuo perché.",
+          "reopens": "Si riapre da sola quando cambia uno dei due prezzi."
+        },
+        "told": "non viene avvisato: il suo portale confronta ancora con il suo ordine.",
+        "never": "Il nostro prezzo e quello del cliente non vengono modificati; non si invia nulla.",
+        "who": "Salvato a tuo nome con la data di oggi; la cronologia lo conserva.",
+        "gone": "I prezzi sono cambiati nel frattempo: chiudi la finestra e rileggi la verifica."
+      },
+      "unaccept": {
+        "door": "Annulla l'accettazione…",
+        "title": "Annulla l'accettazione su {number}",
+        "go": "Annulla l'accettazione",
+        "happens": {
+          "again": "La verifica mostra di nuovo «≠ Diversi».",
+          "kept": "La cronologia conserva l'accettazione e il suo perché."
+        },
+        "told": "non viene avvisato.",
+        "never": "Nessuno dei due prezzi cambia."
+      }
     }
   }
 }

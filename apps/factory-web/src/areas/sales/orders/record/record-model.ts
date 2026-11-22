@@ -91,6 +91,9 @@ export type MoneyDialog =
   | { kind: 'sdiSend'; invoiceId: string }
   | { kind: 'moneyPlan'; act: MoneyPlanAct; stepId: string | null; requestId: string | null }
   | { kind: 'undoPayment'; requestId: string; paymentId: string }
+  // F-OM-301 (B-OM-020): Price check's ⋯ — Accept the difference…, Undo the acceptance… (the check as read is the price check's).
+  | { kind: 'priceAccept' }
+  | { kind: 'priceUnaccept' }
 /** The container's own: Changes' Before → after (the amendments' snapshots are the Changes tab's read, kept in the container). */
 export type ChangesDialog = { kind: 'compare'; amendmentId: string }
 /**
@@ -488,6 +491,9 @@ export interface OrderRecordActions {
   onPlanAct?: (body: MoneyPlanBody) => void
   /** F-OM-202 (B-OM-017): undo one payment on a deposit request, with its reason (and a SOFT-locked month's). */
   onUndoPayment?: (input: { readonly paymentId: string; readonly requestId: string; readonly reason: string; readonly lockReason?: string }) => void
+  /** F-OM-301 (B-OM-020): accept the price difference by hand (the nets as read, a reason); undo the acceptance (a reason). */
+  onPriceAccept?: (body: { readonly ourNet: number; readonly brandNet: number; readonly reason: string }) => void
+  onPriceUnaccept?: (reason: string) => void
   onRecordPayment?: (requestId: string, input: PaymentInput) => void
   onSendSdi?: (invoiceId: string) => void
   onStepUpSubmit?: (code: string) => void

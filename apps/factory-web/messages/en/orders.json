@@ -3717,7 +3717,9 @@
     },
     "notice": {
       "planChanged": "The plan was changed by hand; the history keeps the old value.",
-      "undone": "The payment was undone; it stays in Finance › Payments as voided."
+      "undone": "The payment was undone; it stays in Finance › Payments as voided.",
+      "priceAccepted": "The price difference is accepted by hand.",
+      "priceUnaccepted": "The acceptance is undone: the prices are compared again."
     },
     "undo": {
       "title": "Undo the payment of {date}?",
@@ -3743,6 +3745,80 @@
     },
     "facts": {
       "changeOnMoney": "Change on Money ›"
+    },
+    "price": {
+      "title": "Price check",
+      "info": "Our price beside the customer's own price (their PO, their portal, or typed by us), line by line, without VAT, to the cent. It is not a price-list check. A difference accepted by hand opens again by itself when either price changes.",
+      "keys": "Keys: Tab moves line to line · Enter uses the button.",
+      "part": "the price check",
+      "more": "More for Price check",
+      "show": "Show the lines",
+      "hide": "Hide the lines",
+      "showAll": "Show all {count} lines",
+      "onlyDiffering": "Show only the lines that differ",
+      "exact": "Without VAT, exact to the cent. Difference = our price minus the customer's.",
+      "tag": {
+        "none": "— No customer price yet",
+        "equal": "= Prices equal",
+        "notEqual": "≠ Not equal",
+        "partial": "— Not every line yet",
+        "accepted": "Accepted by hand"
+      },
+      "check": {
+        "EQUAL": "= Equal",
+        "NOT_EQUAL": "≠ Not equal"
+      },
+      "answer": {
+        "none": "type the prices from their PO, or they type them in their portal.",
+        "more": "+{amount} we ask more",
+        "less": "−{amount} we ask less",
+        "differ_one": "{count} line differs",
+        "differ_other": "{count} lines differ"
+      },
+      "from": {
+        "CUSTOMER_PO": "from the customer's PO",
+        "CUSTOMER_PO_FILE": "from the customer's PO {file}",
+        "PORTAL": "from the portal",
+        "OFFICE": "typed by us"
+      },
+      "source": {
+        "LIST": "From the price list",
+        "MANUAL": "Set by hand",
+        "UNKNOWN": "Changed since the quote"
+      },
+      "perPiece": "{price} /pc",
+      "pieces_one": "{count} pc",
+      "pieces_other": "{count} pcs",
+      "ours": "Ours {amount}",
+      "theirs": "Customer's {amount}",
+      "acceptedBy": "Accepted by {name}, {date}",
+      "acceptedOn": "Accepted on {date}",
+      "accept": {
+        "door": "Accept the difference…",
+        "title": "Accept the difference on {number}",
+        "go": "Accept the difference",
+        "sub": "{lines} · ours {ours} · the customer's {theirs}",
+        "happens": {
+          "stay": "Both prices stay as they are.",
+          "shows": "The check shows “≠ Not equal · Accepted by hand”, with your name, the day and your reason.",
+          "reopens": "It opens again by itself when either price changes."
+        },
+        "told": "not told: their portal still compares against their own PO.",
+        "never": "Our price and the customer's price are not edited; nothing is sent.",
+        "who": "Saved under your name with today's date; the history keeps it.",
+        "gone": "The prices changed meanwhile: close the window and read the check again."
+      },
+      "unaccept": {
+        "door": "Undo the acceptance…",
+        "title": "Undo the acceptance on {number}",
+        "go": "Undo the acceptance",
+        "happens": {
+          "again": "The check shows “≠ Not equal” again.",
+          "kept": "The history keeps the acceptance and its reason."
+        },
+        "told": "not told.",
+        "never": "Neither price changes."
+      }
     }
   }
 }

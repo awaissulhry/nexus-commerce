@@ -374,6 +374,14 @@ function RecordContainer({ orderId }: { orderId: string }) {
     health: { view: ready && production.state?.status === 'ready' ? healthViewOf(ready, production.state.read.headline) : null, reread: () => production.again(['headline']) },
   })
   const shipments = useShipmentsActs({ order: ready, prefix, permissions: session.permissions, reload: () => void load() /* F-OP-119 */, api /* F-OP-121 */, setNotice /* F-OP-121 */ })
+  // ---- F-CP-142 (customer page plan C3): Money's "Price check" — read while Money shows, by a price holder only (else hidden, F-OM-301:
+  // no call); its save and take-over say so in the page's one notice.
+  const priceCheck = usePriceCheckCard({ api, orderId, can, tab, version: order.status === 'ready' ? order.value.version : null, permissions: session.permissions, setNotice })
+  // ---- end F-CP-142
+  // F-OM-301 / 302: read before Money's acts — an accept, a cost line or a target reads them again (the acts' rereads).
+  // B-W2a-72: the Margin tab reads the order's margin while it is open.
+  // F-SA-230: Margin is Money's last section (#margin), read while Money shows, with the margin grain.
+  const margin = useOrderMargin(api, orderId, tab === 'money' && can.margin, session.permissions, order.status === 'ready' ? order.value.version : null)
   const money = useMoneyActs({
     ...actsBase,
     permissions: session.permissions,
@@ -384,16 +392,10 @@ function RecordContainer({ orderId }: { orderId: string }) {
     // F-OM-203: the order as read and the page's address (Money's "Invoice shipped goods…" door into Finance).
     order: ready,
     prefix,
+    rereads: { priceCheck: priceCheck.actions.onRetry, margin: margin.retry }, // F-OM-301 / 302
   })
   // ---- end F-OP-134
 
-  // ---- F-CP-142 (customer page plan C3): Money's "Price check" — read while Money shows, by a price holder only (else one line of
-  // words, no call); its save and take-over say so in the page's one notice.
-  const priceCheck = usePriceCheckCard({ api, orderId, can, tab, version: order.status === 'ready' ? order.value.version : null, permissions: session.permissions, setNotice })
-  // ---- end F-CP-142
-  // B-W2a-72: the Margin tab reads the order's margin while it is open.
-  // F-SA-230: Margin is Money's last section (#margin), read while Money shows, with the margin grain.
-  const margin = useOrderMargin(api, orderId, tab === 'money' && can.margin, session.permissions, order.status === 'ready' ? order.value.version : null)
   // B-W2b-380 (XF6:02): the lines' cost sheets (once per revision) while the Lines tab shows them, with the cost grain.
   const costChanges = useCostChanged({ api, companyId: order.status === 'ready' ? order.value.companyId : null, lines: order.status === 'ready' ? order.value.lines : NO_LINES, enabled: order.status === 'ready' && can.cost && tab === 'lines' })
   // B-W2b-323: the orders in depth (reads by tab, writes with the order's version; an answered order replaces the page's).

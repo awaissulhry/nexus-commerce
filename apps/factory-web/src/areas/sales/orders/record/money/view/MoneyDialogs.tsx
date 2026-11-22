@@ -16,6 +16,7 @@ import { OpenStepDialog, WaiveDialog } from '../../schedule/view/StepVerbs'
 import { DialogProblem, Frame } from '../../view/Dialogs'
 import { beforeAfterOf, HAND_LABEL_MAX, HAND_REASON, handBodyOf, handInputOf, handWindowOf, reasonProblemOf, type HandInput } from '../hand'
 import { planOf, type PlanRefusal } from '../plan'
+import { acceptBodyOf, diffWordOf } from '../price' // F-OM-301
 import { stillToPayOf } from '../totals'
 import { useSay } from './say'
 
@@ -36,12 +37,14 @@ export function MoneyDialogs({ order, model, actions }: { order: Order; model: O
       {steps?.opening ? <OpenStepDialog step={steps.opening} model={steps} today={model.today} actions={actions?.scheduleSteps} /> : null}
       {dialog?.kind === 'moneyPlan' ? <PlanDialog key={`${dialog.act}:${dialog.stepId ?? ''}:${dialog.requestId ?? ''}`} order={order} act={dialog.act} stepId={dialog.stepId} requestId={dialog.requestId} model={model} actions={actions} /> : null}
       {dialog?.kind === 'undoPayment' ? <UndoPaymentDialog key={dialog.paymentId} order={order} requestId={dialog.requestId} paymentId={dialog.paymentId} model={model} actions={actions} /> : null}
+      {/* F-OM-301 (B-OM-020): Price check's ⋯ */}
+      {dialog?.kind === 'priceAccept' || dialog?.kind === 'priceUnaccept' ? <PriceAcceptDialog key={dialog.kind} order={order} undo={dialog.kind === 'priceUnaccept'} model={model} actions={actions} /> : null}
     </>
   )
 }
 
 /** The five parts every hand window says (10-design §9): what happens, the customer, what never changes; the reason; who and when. */
-function HandParts({ happens, told, never, reason, onReason, reasonError, code }: { happens: readonly string[]; told: string; never: string; reason: string; onReason: (value: string) => void; reasonError: string | null; code: boolean }) {
+function HandParts({ happens, told, never, reason, onReason, reasonError, code, who }: { happens: readonly string[]; told: string; never: string; reason: string; onReason: (value: string) => void; reasonError: string | null; code: boolean; /** F-OM-301 / 302: the window's own who-and-when line (else the plan's). */ who?: string }) {
   const t = useT('orders')
   return (
     <>
@@ -70,7 +73,7 @@ function HandParts({ happens, told, never, reason, onReason, reasonError, code }
       </Field>
       <p className="fw-om-dlg-line is-quiet">
         <UserRound size={14} aria-hidden />
-        <span>{t(code ? 'moneyTab.hand.whoCode' : 'moneyTab.hand.who')}</span>
+        <span>{who ?? t(code ? 'moneyTab.hand.whoCode' : 'moneyTab.hand.who')}</span>
       </p>
     </>
   )
@@ -268,6 +271,53 @@ function UndoPaymentDialog({ order, requestId, paymentId, model, actions }: { or
         </Field>
       ) : null}
       <HandParts happens={[t('moneyTab.undo.happens.reversed'), t('moneyTab.undo.happens.open'), t('moneyTab.undo.happens.production')]} told={t('moneyTab.undo.told')} never={t('moneyTab.undo.never')} reason={reason} onReason={setReason} reasonError={reasonProblem ? t(reasonProblem.key) : null} code={false} />
+    </Frame>
+  )
+}
+
+/**
+ * F-OM-301 (B-OM-020, 10-design D8; L3) — Accept the difference on {number}: both prices stay as they are; the check says "≠ Not equal ·
+ * Accepted by hand" with the name, the day and the reason, and opens again by itself when either price changes; the customer is not
+ * told. Undo the acceptance…: the check says "Not equal" again; the history keeps the acceptance. Each with its reason (office only).
+ */
+function PriceAcceptDialog({ order, undo, model, actions }: { order: Order; undo: boolean; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  const t = useT('orders')
+  const locale = useLocale()
+  const say = useSay(order.currency)
+  const read = model.priceCheck?.read
+  const check = read?.state === 'ready' ? read.check : null
+  const [reason, setReason] = useState('')
+  const reasonProblem = reasonProblemOf(reason)
+  const body = check && !undo ? acceptBodyOf(check, reason) : null
+  const held = model.busy ? t('held.busy') : !check || (!undo && !body) ? t('moneyTab.price.accept.gone') : reasonProblem ? say(reasonProblem) : null
+  const diff = check ? diffWordOf(check.total.priceDiff) : null
+  const ns = undo ? 'moneyTab.price.unaccept' : 'moneyTab.price.accept'
+  return (
+    <Frame
+      title={t(`${ns}.title`, { number: order.number })}
+      held={held}
+      go={() => (undo ? actions?.onPriceUnaccept?.(reason) : body && actions?.onPriceAccept?.(body))}
+      goLabel={model.busy ? t('common.working') : t(`${ns}.go`)}
+      tone={undo ? 'danger' : 'primary'}
+      onClose={() => actions?.onDialog?.(null)}
+      problem={<DialogProblem model={model} />}
+    >
+      {check && check.total.brandPrice !== null ? (
+        <p className="fw-so-hint">
+          {t('moneyTab.price.accept.sub', { lines: t('priceCheck.lines', { count: check.total.priceNotEqualLines }), ours: money(check.total.ourPrice, check.currency, locale), theirs: money(check.total.brandPrice, check.currency, locale) })}
+          {diff ? ` · ${say(diff)}` : ''}
+        </p>
+      ) : null}
+      <HandParts
+        happens={undo ? [t('moneyTab.price.unaccept.happens.again'), t('moneyTab.price.unaccept.happens.kept')] : [t('moneyTab.price.accept.happens.stay'), t('moneyTab.price.accept.happens.shows'), t('moneyTab.price.accept.happens.reopens')]}
+        told={t(`${ns}.told`)}
+        never={t(`${ns}.never`)}
+        reason={reason}
+        onReason={setReason}
+        reasonError={reasonProblem ? say(reasonProblem) : null}
+        code={false}
+        who={t('moneyTab.price.accept.who')}
+      />
     </Frame>
   )
 }

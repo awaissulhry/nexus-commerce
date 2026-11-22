@@ -14,9 +14,11 @@ import { getParty, type PartyContact } from '../../quotes/api'
 import { fromDdtsHref } from '../list/sheet/overall'
 import { planRefusalOf, softLockedOf, type PlanRefusal } from './money/plan'
 // ---- end F-OM-201 / 202
+import { isApiError } from '../../../../lib/api/errors' // F-OM-301: a check that moved meanwhile is read again
+import { acceptPriceDifference, undoPriceAcceptance } from '../price-check/api' // F-OM-301 (B-OM-020)
 
 export type MoneyActsModel = Pick<OrderRecordModel, 'sentLink' | 'recorded' | 'scheduleSteps' | 'moneyPlan'>
-export type MoneyActsActions = Pick<OrderRecordActions, 'onSendLink' | 'onRecordPayment' | 'onSendSdi' | 'scheduleSteps' | 'onPlanPreview' | 'onPlanAct' | 'onUndoPayment'>
+export type MoneyActsActions = Pick<OrderRecordActions, 'onSendLink' | 'onRecordPayment' | 'onSendSdi' | 'scheduleSteps' | 'onPlanPreview' | 'onPlanAct' | 'onUndoPayment' | 'onPriceAccept' | 'onPriceUnaccept'>
 
 /**
  * F-OP-134 (N-5): the Money tab's acts — the deposits and payments: the bank-details page, the payment (with the TD02: a fresh
@@ -42,9 +44,11 @@ export function useMoneyActs(
     /** F-OM-203: the order as read (its shipped DDTs not yet invoiced are looked up for "Invoice shipped goods…"); null: not read. */
     readonly order: Order | null
     readonly prefix: string
+    /** F-OM-301 / 302: Money's own reads that a write here changes (the price check, the margin): read again after it. */
+    readonly rereads?: { readonly priceCheck?: () => void; readonly margin?: () => void }
   },
 ): { model: MoneyActsModel; actions: MoneyActsActions; opened: (next: RecordDialog | null) => void } {
-  const { api, orderId, current, write, setNotice, loadParts, permissions, sdi, setSdi, stepUp, onInvoiced, order, prefix } = input
+  const { api, orderId, current, write, setNotice, loadParts, permissions, sdi, setSdi, stepUp, onInvoiced, order, prefix, rereads } = input
   const { ensureFresh, guard } = stepUp
   const [sentLink, setSentLink] = useState<DepositLinkAnswer | null>(null)
   const [recorded, setRecorded] = useState<DepositReceived | null>(null)
@@ -180,6 +184,29 @@ export function useMoneyActs(
         }
         return null
       }, 'moneyTab.notice.undone')
+    },
+    // ---- F-OM-301 (B-OM-020): accept a price difference by hand, or undo the acceptance — then the price check is read again (a
+    // check that moved meanwhile is refused: it is read again too, and the window says why).
+    onPriceAccept: (body) => {
+      const key = newIdempotencyKey()
+      void write(async () => {
+        try {
+          await acceptPriceDifference(api, orderId, body, key)
+        } catch (error) {
+          if (isApiError(error) && error.kind === 'conflict') rereads?.priceCheck?.()
+          throw error
+        }
+        rereads?.priceCheck?.()
+        return null
+      }, 'moneyTab.notice.priceAccepted')
+    },
+    onPriceUnaccept: (reason) => {
+      const key = newIdempotencyKey()
+      void write(async () => {
+        await undoPriceAcceptance(api, orderId, { reason: reason.trim() }, key)
+        rereads?.priceCheck?.()
+        return null
+      }, 'moneyTab.notice.priceUnaccepted')
     },
   }
 
