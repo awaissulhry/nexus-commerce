@@ -1440,14 +1440,15 @@ describe('B-OP-071 golden flow order page: the order page’s acts on Alpha’s 
     const token = tokenOf(made.url as string)
     expect((await trackingPage(token)).shipment).toMatchObject({ number: P.elsewhere.number, typedTrackingNumber: TRACKING[0], typedTrackingUrl: LINKS[0] })
 
-    // Corrected: the new number and link everywhere, one more office line.
-    await put({ trackingNumber: TRACKING[1], trackingUrl: LINKS[1] })
+    // Corrected: the new number and link everywhere, one more office line. B-OS-022 (os-fx3): the goods left, so a number the
+    // customer could read changes (or is cleared) only with a reason.
+    await put({ trackingNumber: TRACKING[1], trackingUrl: LINKS[1], reason: 'Made-up: the carrier re-issued the consignment number.' })
     await settle()
     expect(await systemLinesOn(P.so2, TRACKING[1])).toHaveLength(1)
     expect(await portalRow()).toMatchObject({ typedTrackingNumber: TRACKING[1], typedTrackingUrl: LINKS[1] })
     expect((await trackingPage(token)).shipment).toMatchObject({ typedTrackingNumber: TRACKING[1], typedTrackingUrl: LINKS[1] })
     // Cleared: the number and its link go together.
-    await put({ trackingNumber: null })
+    await put({ trackingNumber: null, reason: 'Made-up: the booking was cancelled.' })
     await settle()
     expect(await portalRow()).toMatchObject({ typedTrackingNumber: null, typedTrackingUrl: null })
     expect((await trackingPage(token)).shipment).toMatchObject({ typedTrackingNumber: null, typedTrackingUrl: null })

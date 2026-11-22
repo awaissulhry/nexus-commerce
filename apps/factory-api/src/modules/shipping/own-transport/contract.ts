@@ -37,6 +37,8 @@ const transportView = output({
     returnedAt: instant().nullable(),
     /** B-OS-016: the expected arrival (the carrier's, or typed by hand where no carrier feed tracks it); null: not known. */
     expectedDeliveryAt: instant().nullable(),
+    /** B-OS-022 (os-fx3): when the shipping notice last went to the customer ("Customer told {day}"); null: never. */
+    noticeSentAt: instant().nullable(),
   }),
   /** CARRIER (labels through Sendcloud, or booked by hand without a number yet), MANUAL_CARRIER, OWN_VAN, CUSTOMER_COLLECTS. */
   arrangement: z.enum(TRANSPORT_ARRANGEMENTS),
@@ -60,6 +62,8 @@ const transportView = output({
       seq: z.number().int(),
       label: output({ number: z.string().nullable(), test: z.boolean(), url: z.string().nullable() }).nullable(),
       typed: output({ number: z.string(), url: z.string().nullable() }).nullable(),
+      /** os-fx3: its weight in kilograms (four places, as Warehouse's parcels); null: not weighed yet. */
+      grossWeightKg: z.string().nullable(),
       may: output({ allowed: z.boolean(), refusal: output({ code: z.enum([...OWN_TRANSPORT_REFUSALS, ...PARCEL_TRACKING_REFUSALS]), message: z.string() }).nullable() }),
     }),
   ),
@@ -106,7 +110,10 @@ export const typeTrackingNumberContract = defineContract({
       .array(input({ parcelId: id(), trackingNumber: text(OWN_TRANSPORT_LIMITS.trackingNumber * 2).nullable(), trackingUrl: text(OWN_TRANSPORT_LIMITS.trackingUrl * 2).nullish() }))
       .max(PARCEL_TRACKING_LIMITS.parcels)
       .optional(),
-    /** B-OS-022: why a parcel number the customer could read changes or is cleared after the goods left (3 to 500). */
+    /**
+     * B-OS-022: why a number the customer could read changes or is cleared after the goods left (3 to 500) — a parcel's, or
+     * (os-fx3) the shipment's own consignment number; else a 400 at body/reason.
+     */
     reason: text(PARCEL_TRACKING_LIMITS.reasonMax * 2).nullish(),
   }),
   response: { 200: transportView },

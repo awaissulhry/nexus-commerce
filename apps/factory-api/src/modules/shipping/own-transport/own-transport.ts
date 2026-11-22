@@ -22,7 +22,9 @@ import {
 // B-OS-015, B-OS-016 (order shipments tab): ended by hand over a carrier's labels (a reason); the expected arrival typed by hand.
 import { etaProblems, etaRefusal, hasCarrierLabel, overrideReasonProblems } from '@nexus/factory-domain/shipping/own-transport/rules'
 // B-OS-022 (order shipments 1/1): a tracking number typed by hand per parcel.
-import { PARCEL_TRACKING_WORDS, parcelReasonNeeded, parcelReasonProblems, parcelTrackingProblems, parcelTrackingRefusal, type ParcelTrackingAsk } from '@nexus/factory-domain/shipping/own-transport/rules'
+import { PARCEL_TRACKING_WORDS, parcelReasonProblems, parcelTrackingProblems, parcelTrackingRefusal, type ParcelTrackingAsk } from '@nexus/factory-domain/shipping/own-transport/rules'
+// B-OS-022 (os-fx3): the shipment's own consignment number the customer could read asks the same reason as a parcel's.
+import { seenNumbersReasonNeeded } from '@nexus/factory-domain/shipping/own-transport/rules'
 import { trackingPageOf } from '@nexus/factory-domain/shipping/labels/tracking'
 import { SHIPPING_MANAGE } from '@nexus/factory-domain/shipping/permissions'
 import { isTestLabel } from '@nexus/factory-domain/shipping/test-mode/rules'
@@ -30,6 +32,8 @@ import { command, type CommandCaller, type CommandTools, type CommandTx } from '
 import { liveDdtOf } from '../ddt/store'
 import { officeShipment } from '../shipments/shipments'
 import { readShipment, type ShipmentHeader } from '../store'
+// B-OS-022 (os-fx3): when the shipping notice last went to the customer, for the tracking window's "Customer told {day}".
+import { noticeSentAtOf } from '../store'
 // B-OP-034: the orders a shipment carries (its lines' orders).
 import { ordersOfShipment } from '../shipments/orders-of'
 
@@ -80,7 +84,9 @@ async function transportView(db: CommandTx, shipmentId: string) {
   const shipment = (await readShipment(db, shipmentId))!
   const facts = await factsOf(db, shipment)
   // B-OS-022: each parcel with its label's number (read only) or the number typed for it, and whether one may be typed now.
-  const parcelRows = await db.parcel.findMany({ where: { shipmentId: shipment.id }, select: { id: true, seq: true, trackingNumber: true, carrierParcelId: true, trackingUrl: true, manualTrackingNumber: true, manualTrackingUrl: true }, orderBy: { seq: 'asc' } })
+  // os-fx3: + its weight ("Parcel 2 of 3 · 27.5 kg"), and when the shipping notice last went to the customer.
+  const parcelRows = await db.parcel.findMany({ where: { shipmentId: shipment.id }, select: { id: true, seq: true, trackingNumber: true, carrierParcelId: true, trackingUrl: true, manualTrackingNumber: true, manualTrackingUrl: true, /* os-fx3 */ grossWeightKg: true }, orderBy: { seq: 'asc' } })
+  const noticeSentAt = (await noticeSentAtOf(db, [shipment.id])).get(shipment.id) ?? null
   const events = await db.trackingEvent.findMany({
     where: { shipmentId: shipment.id, source: 'MANUAL' },
     select: { id: true, status: true, description: true, location: true, occurredAt: true, recordedAt: true, createdById: true },
@@ -105,6 +111,8 @@ async function transportView(db: CommandTx, shipmentId: string) {
       returnedAt: shipment.returnedAt ? toUtcIso(shipment.returnedAt) : null,
       /** B-OS-016: the expected arrival (the carrier's, or typed by hand where no carrier feed tracks it). */
       expectedDeliveryAt: shipment.expectedDeliveryAt ? toUtcIso(shipment.expectedDeliveryAt) : null,
+      /** B-OS-022 (os-fx3): when the shipping notice last went to the customer ("Customer told {day}"); null: never. */
+      noticeSentAt: noticeSentAt ? toUtcIso(noticeSentAt) : null,
     },
     arrangement: arrangementOf(facts),
     ddt: facts.ddt,
@@ -129,6 +137,8 @@ async function transportView(db: CommandTx, shipmentId: string) {
         seq: parcel.seq,
         label: parcel.trackingNumber !== null || parcel.carrierParcelId !== null ? { number: parcel.trackingNumber, test: isTestLabel(parcel.carrierParcelId), url: trackingPageOf(parcel.trackingUrl) } : null,
         typed: parcel.manualTrackingNumber !== null ? { number: parcel.manualTrackingNumber, url: parcel.manualTrackingUrl } : null,
+        // os-fx3: its weight, as Warehouse's parcels read it (kilograms, four places; null: not weighed yet).
+        grossWeightKg: parcel.grossWeightKg === null ? null : parcel.grossWeightKg.toFixed(4),
         may: { allowed: trackingRefusal(facts) === null && own === null, refusal: trackingRefusal(facts) ?? (own ? { code: own, message: PARCEL_TRACKING_WORDS[own] } : null) },
       }
     }),
@@ -213,8 +223,8 @@ export async function arrangeTransport(caller: CommandCaller, shipmentId: string
  * (`trackingUrl`: https only, only with a number; null clears it; left out: kept — but clearing the number clears it too). Also
  * after the goods left. B-OS-022 (order shipments 1/1, Owner D4): and/or its parcels' numbers (`parcels`), in the same ONE
  * command on the shipment's version — each parcel no label tracks, from PACKED on; once the goods left, a parcel number the
- * customer could read changes or is cleared only with a `reason`. The customer is not mailed (the web sends the notice again
- * when the person ticks it).
+ * customer could read changes or is cleared only with a `reason` — os-fx3: and so does the shipment's own (consignment) number.
+ * The customer is not mailed (the web sends the notice again when the person ticks it).
  */
 export async function typeTrackingNumber(
   caller: CommandCaller,
@@ -247,7 +257,10 @@ export async function typeTrackingNumber(
       // B-OS-022: what changes on each parcel named (refused per parcel in words), and the reason a seen number needs.
       const parcelChanges = body.parcels ? await parcelChangesOf(tools.tx, current, body.parcels) : []
       const reason = blankToNull(body.reason)
-      if (parcelChanges.some((change) => parcelReasonNeeded(current.status, change.before.number, change.after.number))) {
+      // B-OS-022 (os-fx3): any number the customer could read — the consignment number as well as a parcel's — changed or cleared
+      // after the goods left asks why.
+      const consignment = { before: facts.manualTrackingNumber, after: number }
+      if (seenNumbersReasonNeeded(current.status, { consignment, parcels: parcelChanges.map((change) => ({ before: change.before.number, after: change.after.number })) })) {
         const missing = parcelReasonProblems(body.reason)
         if (missing.length > 0) throw new ValidationError(missing[0]!.message, missing)
       }
@@ -267,6 +280,8 @@ export async function typeTrackingNumber(
           siteId: current.siteId,
           before: { manualTrackingNumber: facts.manualTrackingNumber, /* B-OP-034 */ manualTrackingUrl: facts.manualTrackingUrl },
           after: { manualTrackingNumber: number, /* B-OP-034 */ manualTrackingUrl: trackingUrl },
+          // B-OS-022 (os-fx3): the command's reason (required for a seen consignment number) is kept on its row, as on the parcels'.
+          ...(reason ? { reason } : {}),
         })
       }
       // ── B-OS-022: each parcel's number and link, one audit row with every parcel before → after (the old value never lost) ──

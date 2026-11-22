@@ -536,6 +536,10 @@ function shipmentRowAdditions(
     mergedInto: details.mergedInto.get(row.id) ?? null,
     ddtRequired: row.ddtRequired,
     packedAt: instantOrNull(row.packedAt),
+    // B-OS-001 (os-fx3): the customer's delivery address it goes to (Warehouse's `shipToAddressId`), with shipping.view (else null).
+    shipToAddressId: sees ? row.shipToAddressId : null,
+    // B-OS-022 (os-fx3): when the shipping notice last went to the customer ("Customer told {day}"), with shipping.view (else null).
+    noticeSentAt: sees ? instantOrNull(details.noticeSentAt.get(row.id) ?? null) : null,
     parcels: sees
       ? parcels.map((parcel) => {
           // A TEST label is not tracked: no number, no source (as `tracking` above). B-OS-022: a number typed by hand for a parcel
@@ -546,7 +550,9 @@ function shipmentRowAdditions(
           const number = label ? parcel.trackingNumber : typedNumber
           const url = label ? trackingPageOf(parcel.trackingUrl) : typedNumber !== null ? trackingPageOf(parcel.manualTrackingUrl) : null
           const source = label ? ('LABEL' as const) : typedNumber !== null ? ('TYPED' as const) : null
-          return { id: parcel.id, seq: parcel.seq, number, url, source, live: label, contents: held.contents, otherPieces: held.otherPieces }
+          // os-fx3 (B-OS-022): its weight, as Warehouse's parcels read it (kilograms, four places; null: not weighed yet).
+          const grossWeightKg = parcel.grossWeightKg === null ? null : parcel.grossWeightKg.toFixed(4)
+          return { id: parcel.id, seq: parcel.seq, number, url, source, live: label, contents: held.contents, otherPieces: held.otherPieces, grossWeightKg }
         })
       : [],
     may: { manage: may(SHIPPING_MANAGE), pack: may(SHIPPING_PACK), ddt: may(SHIPPING_DDT_ISSUE), holdsManage: may(SHIPPING_HOLDS_MANAGE), holdsRelease: may(SHIPPING_HOLDS_RELEASE) },

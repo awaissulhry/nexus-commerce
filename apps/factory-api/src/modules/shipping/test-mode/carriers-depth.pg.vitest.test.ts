@@ -372,7 +372,8 @@ describe('our own van and a manual carrier (LOG-122): the DDT and the status wit
     expect((await ok('desk', 'POST', `/shipping/shipments/${sm.id}/ship`, {})).shipment.status).toBe('SHIPPED')
 
     await refusedFor('desk', 'PUT', `/shipping/shipments/${sm.id}/own-transport`, { mode: 'OWN_VAN' }, 'LEFT')
-    expect((await ok('desk', 'PUT', `/shipping/shipments/${sm.id}/own-transport/tracking`, { trackingNumber: ' MT-0002 ' })).shipment.manualTrackingNumber).toBe('MT-0002')
+    // B-OS-022 (os-fx3): the goods left, so changing the number the customer could read says why.
+    expect((await ok('desk', 'PUT', `/shipping/shipments/${sm.id}/own-transport/tracking`, { trackingNumber: ' MT-0002 ', reason: 'The carrier re-booked the consignment.' })).shipment.manualTrackingNumber).toBe('MT-0002')
     expect((await refused('desk', 'PUT', `/shipping/shipments/${sm.id}/own-transport/tracking`, { trackingNumber: 'a\nb' }, 400)).issues[0].path).toBe('body/trackingNumber')
     // The search finds it by the typed number (B-W2b-386).
     expect(((await ok('desk', 'GET', '/shipping/queue/search?q=MT-0002')).shipments as Json[]).map((row) => row.id)).toContain(sm.id)

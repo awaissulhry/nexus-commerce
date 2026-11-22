@@ -1224,7 +1224,9 @@ export default defineStage({
       await press(paymentMore)
       await press(page.getByRole('menuitem', { name: OD('moneyTab.payment.undo'), exact: true }))
       const undoBox = dialog(page)
-      await seen(undoBox.getByText(OD('moneyTab.undo.never'), { exact: true }), 60_000)
+      // om-fx2: a "What happens" line is an element of its own (an <li>); "What never changes." shares its line with its bold label.
+      await seen(undoBox.getByText(OD('moneyTab.undo.happens.reversed'), { exact: true }), 60_000)
+      await expect(undoBox).toContainText(OD('moneyTab.undo.never'))
       await undoBox.getByRole('textbox', { name: startsWith(OD('moneyTab.hand.reason')) }).fill(MONEY_WORDS.undo)
       await answerOf(page, 'POST', /^\/payments\/[^/]+\/undo$/, async () => {
         await press(undoBox.getByRole('button', { name: OD('moneyTab.undo.go'), exact: true }))
