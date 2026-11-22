@@ -450,6 +450,24 @@
       "done": "I numeri di tracciamento sono salvati.",
       "doneNotice": "I numeri di tracciamento sono salvati e l'avviso di spedizione è partito di nuovo.",
       "doneNoticeHeld": "I numeri di tracciamento sono salvati; l'avviso di spedizione non è partito."
+    },
+    "split": {
+      "into": "In quante spedizioni",
+      "intoHint": "Questa e fino a {max} nuove, in un solo passo (tutto o niente).",
+      "col": {
+        "new": "Nuova spedizione {n}"
+      },
+      "movesTo": "Capi di {line} {size} per la nuova spedizione {n}",
+      "goInto": "Dividi in {count} spedizioni",
+      "shipComplete": "Il cliente vuole tutto in una sola consegna (spedizione completa): dividi solo se è d'accordo.",
+      "eachTakes": "Ogni nuova spedizione prende almeno un capo: danne alla nuova spedizione {n}, o dividi in meno spedizioni.",
+      "reasonShipTo": "Un altro indirizzo di consegna",
+      "address": "Indirizzo di consegna delle nuove spedizioni",
+      "pickAddress": "Scegli l'indirizzo di consegna.",
+      "pickAddressOption": "Scegli un indirizzo",
+      "addressesReading": "Lettura degli indirizzi di consegna del cliente…",
+      "noAddress": "Questo cliente non ha un altro indirizzo di consegna approvato: prima aggiungine uno sul cliente.",
+      "onlyOwn": "Ogni nuova spedizione compare solo sugli ordini di cui porta i capi; i blocchi in vigore vanno con lei."
     }
   },
   "move": {

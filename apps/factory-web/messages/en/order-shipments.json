@@ -450,6 +450,24 @@
       "done": "The tracking numbers are saved.",
       "doneNotice": "The tracking numbers are saved and the shipping notice went again.",
       "doneNoticeHeld": "The tracking numbers are saved; the shipping notice did not go."
+    },
+    "split": {
+      "into": "Into how many shipments",
+      "intoHint": "This one and up to {max} new ones, in one step (all or nothing).",
+      "col": {
+        "new": "New shipment {n}"
+      },
+      "movesTo": "Garments of {line} {size} for new shipment {n}",
+      "goInto": "Split into {count} shipments",
+      "shipComplete": "The customer wants it all in one delivery (ship complete): split only if they agreed.",
+      "eachTakes": "Each new shipment takes at least one garment: give new shipment {n} some, or split into fewer.",
+      "reasonShipTo": "Another delivery address",
+      "address": "Delivery address of the new shipments",
+      "pickAddress": "Pick the delivery address.",
+      "pickAddressOption": "Pick an address",
+      "addressesReading": "Reading the customer's delivery addresses…",
+      "noAddress": "This customer has no other approved delivery address: add one on the customer first.",
+      "onlyOwn": "Each new shipment shows only on the orders whose garments it carries; the holds in force go with it."
     }
   },
   "move": {

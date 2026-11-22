@@ -107,7 +107,7 @@ export function useShipmentsActs(input: {
     },
     [prefix, reload, setNotice],
   )
-  const shipmentDoor = row && open && order ? doorOf({ row: { id: row.id, number: row.number, version: row.version ?? 1 }, order: { id: order.id, companyId: order.companyId }, open, can, prefix, close, said, parcelWords: parcelWordsOf(row, order.lines) /* F-OS-301 */ }) : null
+  const shipmentDoor = row && open && order ? doorOf({ row: { id: row.id, number: row.number, version: row.version ?? 1 }, order: { id: order.id, companyId: order.companyId, partyId: order.partyId /* F-OS-302 */, shipComplete: order.shipComplete === true }, open, can, prefix, close, said, parcelWords: parcelWordsOf(row, order.lines) /* F-OS-301 */ }) : null
   // ---- end F-OP-119 → F-OS-201
 
   // ---- F-OP-121: Create shipment… in place ----
@@ -265,7 +265,7 @@ const TRANSPORT_DOORS: Partial<Record<RowActId | 'tracking', TransportDoorOpen>>
 /** The element of the one window open: each Warehouse's own container, mounted lazily (only while open), keyed by its shipment. */
 function doorOf(input: {
   readonly row: { readonly id: string; readonly number: string; readonly version: number }
-  readonly order: { readonly id: string; readonly companyId: string }
+  readonly order: { readonly id: string; readonly companyId: string; /* F-OS-302: the customer (Split's delivery addresses) and its ship complete */ readonly partyId: string; readonly shipComplete: boolean }
   readonly open: { readonly act: RowActId | 'tracking'; readonly holdId?: string }
   readonly can: ReturnType<typeof depthAbilitiesOf>
   readonly prefix: string
@@ -290,7 +290,8 @@ function doorOf(input: {
     case 'takeOff':
       return shipmentDoor({ kind: 'takeOff', salesOrderId: order.id })
     case 'split':
-      return createElement(WithMessages, { key, namespaces: DOOR_NAMESPACES }, createElement(Split, { shipmentId: row.id, prefix, onClose: close, onDone: () => said(row, os('ships.done.split', { number: row.number }), toldOf('split')) }))
+      // F-OS-302: into several, another delivery address of this customer, the customer's "all in one delivery" said.
+      return createElement(WithMessages, { key, namespaces: DOOR_NAMESPACES }, createElement(Split, { shipmentId: row.id, prefix, onClose: close, onDone: () => said(row, os('ships.done.split', { number: row.number }), toldOf('split')), partyId: order.partyId, shipComplete: order.shipComplete }))
     case 'move':
     case 'merge':
       return createElement(Move, { key, shipmentId: row.id, number: row.number, mode: act, onClose: close, onDone: (result) => said(result.target, os(result.words.key, result.words.params), toldOf(act)) })
