@@ -19,7 +19,7 @@ export const SALES_ORDER_STATUSES = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PAR
 export type SalesOrderStatus = (typeof SALES_ORDER_STATUSES)[number]
 /** Quoted → now: the value's change and each cost part's (they add up to the margin change). */
 // B-OM-007: the order margin counts its shipments' freight (a FREIGHT step, as factory-domain's list).
-export const WATERFALL_REASONS = ['PRICE', 'MATERIAL', 'LABOUR', 'SUBCONTRACT', 'OVERHEAD', 'ADJUSTMENT', 'FREIGHT'] as const
+export const WATERFALL_REASONS = ['PRICE', 'MATERIAL', 'LABOUR', 'SUBCONTRACT', 'OVERHEAD', 'ADJUSTMENT', 'FREIGHT', 'BY_HAND' /* B-OM-021: the hand cost lines */] as const
 export type WaterfallReason = (typeof WATERFALL_REASONS)[number]
 /** What a work order's estimate rests on. */
 export const SHARE_PLANS = ['STANDARD', 'ESTIMATE', 'QUOTED', 'ACTUAL'] as const

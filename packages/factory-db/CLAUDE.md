@@ -657,7 +657,10 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    `…_brand_production_stage_any_guards` (stage control B, T-SC-001, schema wave 'stage control 1/1'; no schema folder of its
    own, a policy folder after it: it redefines …_brand_production_stage_set_guards' `factory_brand_order_production_guard` from
    that newest body, word for word, but the hand stage may be any of the five stages, PREPARING and READY too; `stage` still
-   equal to it while it stands):
+   equal to it while it stands),
+   `…_order_money_guards` (order money B-OM-019, schema wave 'order money 1/1': the NEW `OrderPriceAcceptance` (no row on a
+   CLOSED or CANCELLED order, insert-only except its withdraw fields once, never deleted) and `OrderCostLine` (append-only except
+   its remove fields once, never deleted), and `SalesOrder.targetMarginPct` allowed on an open order):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

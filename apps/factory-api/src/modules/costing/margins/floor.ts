@@ -29,6 +29,8 @@ export interface OrderFloor {
   readonly role: string | null
   /** The accepted version was priced under its floor (a yes let it through). */
   readonly quotedBelow: boolean
+  /** B-OM-021 (order money tab; L4): the order's own target margin %, set by hand (null: none); the flag is judged on it first. */
+  readonly targetPct: string | null
 }
 
 const FLOOR_ORDER = {
@@ -37,6 +39,7 @@ const FLOOR_ORDER = {
   partyId: true,
   createdById: true,
   quoteVersion: { select: { createdById: true, marginFloorBreached: true, quote: { select: { createdById: true } } } },
+  targetMarginPct: true, // B-OM-021
 } as const
 
 /** The floor each order is held to now (every order has one: a company always has a floor). */
@@ -67,18 +70,28 @@ export async function orderFloors(db: Reader, orderIds: readonly string[], now: 
   const roleKeys = [...new Set(floors.map((row) => row.floor.roleKey).filter((key): key is string => key !== null))]
   const names = new Map(roleKeys.length === 0 ? [] : (await db.role.findMany({ where: { key: { in: roleKeys }, audience: 'OFFICE' }, select: { key: true, name: true } })).map((row) => [row.key, row.name]))
   for (const { order, floor } of floors) {
-    out.set(order.id, { pct: floor.marginFloorPct, from: floor.source, roleKey: floor.roleKey, role: floor.roleKey === null ? null : (names.get(floor.roleKey) ?? floor.roleKey), quotedBelow: order.quoteVersion?.marginFloorBreached ?? false })
+    out.set(order.id, {
+      pct: floor.marginFloorPct,
+      from: floor.source,
+      roleKey: floor.roleKey,
+      role: floor.roleKey === null ? null : (names.get(floor.roleKey) ?? floor.roleKey),
+      quotedBelow: order.quoteVersion?.marginFloorBreached ?? false,
+      targetPct: order.targetMarginPct === null ? null : order.targetMarginPct.toString(), // B-OM-021
+    })
   }
   return out
 }
 
-/** An order's flag against its floor. */
-export const flagOf = (figures: FloorFigures, floor: OrderFloor | undefined): FloorFlag => floorFlagOf(figures, floor?.pct ?? null)
+/**
+ * An order's flag against its floor. B-OM-021 (L4; 13-backend §5): against the order's own target when one is set by hand, else the
+ * floor — one rule for the Money tab, the orders list's column, Finance › Margins and the low-margin alert.
+ */
+export const flagOf = (figures: FloorFigures, floor: OrderFloor | undefined): FloorFlag => floorFlagOf(figures, floor?.targetPct ?? floor?.pct ?? null)
 
 /** The row's floor fields (the margin grain: the API drops them for a caller without it). */
 export function floorFields(flag: FloorFlag, floor: OrderFloor | undefined) {
   const view: FloorView | null = floor ? { pct: floor.pct, from: floor.from, role: floor.role, basis: flag.basis, quotedBelow: floor.quotedBelow } : null
-  return { belowFloor: asMoney('margin', flag.below), floor: asMoney('margin', view) }
+  return { belowFloor: asMoney('margin', flag.below), floor: asMoney('margin', view), targetPct: asMoney('margin', floor?.targetPct ?? null) /* B-OM-021 */ }
 }
 
 /** The margins' figures of some orders, as the margins read computes them (margins.ts floorFiguresOf). */

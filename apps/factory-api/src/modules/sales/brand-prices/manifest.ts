@@ -16,4 +16,8 @@ export const manifest = defineManifest({
   'POST /sales/orders/:orderId/brand-prices/from-request': manage,
   // B-CP-018: one customer's counts (orders.view over that customer, and the price grain: the handler).
   'GET /sales/brand-prices/summary': view,
+  // B-OM-020 (order money tab; Owner D4, lead L3): a price difference accepted by hand and taken back — the money plan's right
+  // (Owner, Finance) and the price grain (the handler).
+  'POST /sales/orders/:orderId/price-check/accept': { audiences: ['office'], permission: 'orders.moneyPlan', scope: 'record' },
+  'DELETE /sales/orders/:orderId/price-check/accept': { audiences: ['office'], permission: 'orders.moneyPlan', scope: 'record' },
 })

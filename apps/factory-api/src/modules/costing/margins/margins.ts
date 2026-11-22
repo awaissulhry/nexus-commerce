@@ -40,6 +40,9 @@ import { flagOf, floorFields, orderFloors, type OrderFloor } from './floor'
 import { madeExtraOf, type MadeExtra } from '../../sales/orders/made-extra'
 // B-OM-007 (order money tab M6-B3): the freight of the orders' shipments counts in the margin now and so far.
 import { shipmentsOfOrdersWhere } from '../../shipping/shipments/orders-of'
+// B-OM-021 (order money tab; lead L2, L4): the hand cost lines count in the margin now and so far; the order's own target.
+import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { MARGIN_TARGET_ACTION } from '@nexus/factory-domain/costing/margins/hand-lines'
 
 /**
  * Order margin from estimate to actual (B-W2a-29; FIN-047; design finance.margins SCR-155 "Order margin, quote to
@@ -119,7 +122,34 @@ interface OrderComputed {
   readonly final: boolean
   /** B-OM-007: the freight counted (in the order's currency) and what is left out. */
   readonly freight: OrderFreight
+  /** B-OM-021: the hand cost lines still counted (in the order's currency: the DB guard). */
+  readonly hand: OrderHand
 }
+
+// ── B-OM-021 (order money tab; lead L2; 13-backend §5) ──────────────────────────────────────────────────────────────────────
+const HAND_LINE_COLUMNS = { id: true, salesOrderId: true, kind: true, amount: true, currency: true, reason: true, createdById: true, createdAt: true } as const satisfies Prisma.OrderCostLineSelect
+type HandLineRow = Prisma.OrderCostLineGetPayload<{ select: typeof HAND_LINE_COLUMNS }>
+/** An order's hand cost lines still counted (added only; a removed one stays in the history) and their sum. */
+interface OrderHand {
+  readonly cost: number
+  readonly lines: readonly HandLineRow[]
+}
+const NO_HAND: OrderHand = Object.freeze({ cost: 0, lines: Object.freeze([]) as readonly HandLineRow[] })
+
+/** The hand cost lines of some orders not removed, oldest first, in each order's currency. */
+async function handOf(db: Reader, orders: readonly OrderRow[]): Promise<Map<string, OrderHand>> {
+  const out = new Map<string, OrderHand>()
+  if (orders.length === 0) return out
+  const currencyOf = new Map(orders.map((row) => [row.id, row.currency]))
+  const rows = await db.orderCostLine.findMany({ where: { salesOrderId: { in: orders.map((row) => row.id) }, removedAt: null }, select: HAND_LINE_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
+  for (const row of rows) {
+    if (row.currency !== currencyOf.get(row.salesOrderId)) continue // never converted (the guard keeps a line in its order's currency)
+    const hand = out.get(row.salesOrderId) ?? { cost: 0, lines: [] }
+    out.set(row.salesOrderId, { cost: hand.cost + row.amount, lines: [...hand.lines, row] })
+  }
+  return out
+}
+// ── end B-OM-021 ──
 
 // ── B-OM-007 (order money tab M6-B3, B4, B8; 13-backend §1) ──────────────────────────────────────────────────────────────────
 /** An order's freight: what the carriers charged us for its shipments, in its currency; `leftOut` the other currencies. */
@@ -187,12 +217,12 @@ function basedOnOf(lines: readonly LineComputed[], snapshots: ReadonlyMap<string
   return null
 }
 
-/** The cost now (the estimate) and so far (the actual), freight counted. */
+/** The cost now (the estimate) and so far (the actual), freight counted. B-OM-021: and the hand cost lines. */
 const estimateCostOf = (computed: OrderComputed): number | null => {
   const cost = costOf(computed.estimateParts)
-  return cost === null ? null : cost + computed.freight.cost
+  return cost === null ? null : cost + computed.freight.cost + computed.hand.cost
 }
-const actualCostOf = (computed: OrderComputed): number => totalOf(computed.actualParts) + computed.freight.cost
+const actualCostOf = (computed: OrderComputed): number => totalOf(computed.actualParts) + computed.freight.cost + computed.hand.cost
 // ── end B-OM-007 ──
 
 const partsOfActual = (actual: ReturnType<typeof actualOf>): Parts => ({ material: actual.material, labour: actual.labour, subcontract: actual.subcontract, overhead: actual.overhead, adjustment: actual.adjustment })
@@ -263,6 +293,7 @@ async function computeOrdersWithSnapshots(db: Reader, orders: readonly OrderRow[
   for (const companyId of unique(orders.map((row) => row.companyId))) methods.set(companyId, await methodInForce(db, companyId))
   const figures = await workOrderFigures(db, lines.map((line) => line.id), now)
   const freights = await freightOf(db, orders) // B-OM-007
+  const hands = await handOf(db, orders) // B-OM-021
 
   const computed = orders.map((order): OrderComputed => {
     const mineLines = lines.filter((line) => line.orderId === order.id)
@@ -315,6 +346,7 @@ async function computeOrdersWithSnapshots(db: Reader, orders: readonly OrderRow[
       started,
       final: mineFigures.length > 0 && mineFigures.every((row) => row.done) && computedLines.every((line) => line.uncovered === 0),
       freight: freights.get(order.id) ?? NO_FREIGHT, // B-OM-007
+      hand: hands.get(order.id) ?? NO_HAND, // B-OM-021
     }
   })
   return { computed, snapshots }
@@ -494,15 +526,34 @@ const stageOf = (value: number, parts: Parts | null, known = true) => {
   }
 }
 
-/** B-OM-007: a stage now or so far with the order's freight in its cost (the parts stay the work's; `freight` says the rest). */
-const stageWithFreight = (value: number, parts: Parts | null, freight: number, known = true) => {
-  const cost = known && parts !== null ? totalOf(parts) + freight : null
+/**
+ * B-OM-007: a stage now or so far with the order's freight in its cost (the parts stay the work's; `freight` says the rest).
+ * B-OM-021: and the hand cost lines (`handCost`; the computed cost is cost − handCost).
+ */
+const stageWithFreight = (value: number, parts: Parts | null, freight: number, known = true, hand = 0) => {
+  const cost = known && parts !== null ? totalOf(parts) + freight + hand : null
   return {
     ...stageOf(value, parts, known),
     cost: asMoney('cost', cost),
     margin: asMoney('margin', marginOf(value, cost)),
     marginPct: asMoney('margin', cost === null ? null : marginPctOf(value, cost)),
     freight: asMoney('cost', known && parts !== null ? freight : null),
+    handCost: asMoney('cost', known && parts !== null ? hand : null), // B-OM-021
+  }
+}
+
+/** B-OM-021: the hand lines and the target as the profitability shows them (the office people named, never a floor worker). */
+async function handViewsOf(db: Reader, orderId: string, hand: OrderHand, floor: OrderFloor | undefined) {
+  const set = floor?.targetPct ? await db.auditLog.findFirst({ where: { recordType: 'SalesOrder', recordId: orderId, action: MARGIN_TARGET_ACTION }, orderBy: [{ at: 'desc' }, { id: 'desc' }], select: { at: true, audience: true, actorId: true, reason: true } }) : null
+  const setBy = set && set.audience === 'office' ? set.actorId : null
+  const peopleIds = [...new Set([...hand.lines.flatMap((line) => (line.createdById ? [line.createdById] : [])), ...(setBy ? [setBy] : [])])]
+  const people = new Map(peopleIds.length === 0 ? [] : (await db.user.findMany({ where: { id: { in: peopleIds } }, select: { id: true, displayName: true } })).map((row) => [row.id, row.displayName]))
+  return {
+    handLines: asMoney(
+      'cost',
+      hand.lines.map((line) => ({ id: line.id, kind: line.kind, amount: asMoney('cost', line.amount), currency: line.currency, reason: asMoney('cost', line.reason), by: line.createdById ? (people.get(line.createdById) ?? null) : null, at: toUtcIso(line.createdAt) })),
+    ),
+    target: asMoney('margin', floor?.targetPct ? { pct: asMoney('margin', floor.targetPct), by: setBy ? (people.get(setBy) ?? null) : null, at: set ? toUtcIso(set.at) : null, reason: asMoney('margin', set?.reason ?? null) } : null),
   }
 }
 
@@ -538,7 +589,8 @@ export async function orderMargin(caller: CommandCaller, orderId: string): Promi
     if (!order || !can(actor, COSTING_VIEW, { companyId: order.companyId, partyId: order.partyId })) throw new NotFoundError('Sales order not found.')
     const { computed: [computed], snapshots } = await computeOrdersWithSnapshots(db, [order], now) // B-OM-007: + the snapshots (basedOn)
     const extra = await madeExtraOf(db, (contextOf(caller) as { readonly tenantId: string }).tenantId, order) // B-SA-043: office only (costing.view)
-    const row = rowOf(computed!, (await orderFloors(db, [order.id], now)).get(order.id))
+    const floor = (await orderFloors(db, [order.id], now)).get(order.id) // B-OM-021: + its target (handViewsOf)
+    const row = rowOf(computed!, floor)
     const { lines, figures } = computed!
     const actualKnown = computed!.started && !computed!.currencyMismatch
     const shared = figures.some((entry) => entry.weights.size > 1)
@@ -564,16 +616,19 @@ export async function orderMargin(caller: CommandCaller, orderId: string): Promi
       ...row,
       quoted: stageOf(computed!.quotedValue, computed!.quotedParts),
       // B-OM-007: now and so far count the order's freight.
-      estimate: stageWithFreight(computed!.value, computed!.estimateParts, computed!.freight.cost),
-      actual: stageWithFreight(computed!.value, computed!.actualParts, computed!.freight.cost, actualKnown),
+      // B-OM-021: and the hand cost lines.
+      estimate: stageWithFreight(computed!.value, computed!.estimateParts, computed!.freight.cost, true, computed!.hand.cost),
+      actual: stageWithFreight(computed!.value, computed!.actualParts, computed!.freight.cost, actualKnown, computed!.hand.cost),
       waterfall:
         computed!.quotedParts && computed!.estimateParts
-          ? waterfallOf({ value: computed!.quotedValue, parts: computed!.quotedParts }, { value: computed!.value, parts: computed!.estimateParts, freight: computed!.freight.cost /* B-OM-007 */ }).map((step) => ({ reason: step.reason, amount: asMoney('margin', step.amount) }))
+          ? waterfallOf({ value: computed!.quotedValue, parts: computed!.quotedParts }, { value: computed!.value, parts: computed!.estimateParts, freight: computed!.freight.cost /* B-OM-007 */, byHand: computed!.hand.cost /* B-OM-021 */ }).map((step) => ({ reason: step.reason, amount: asMoney('margin', step.amount) }))
           : null,
       leather: { quoted: asMoney('cost', allKnown(quotedLeathers) && !computed!.currencyMismatch ? quotedLeathers.reduce((sum, value) => sum + value, 0) : null), actual: asMoney('cost', lines.reduce((sum, line) => sum + line.actualLeather, 0)) },
       // B-OM-007 (M6-B3): the freight counted, in words; and what the quoted cost was based on (M6-B8).
       freight: { cost: asMoney('cost', computed!.freight.counted > 0 ? computed!.freight.cost : null), words: freightWords(computed!.freight, order.currency) },
       basedOn: basedOnOf(lines, snapshots),
+      // B-OM-021 (L2, L4): the hand cost lines still counted and the order's target, with who set them.
+      ...(await handViewsOf(db, order.id, computed!.hand, floor)),
       // B-SA-043 (R1, review P6-4): the extra pieces' cost line — their share by garments of each line's actual cost.
       extraPieces: extraPiecesOf(lines, extra),
       lines: lines.map((line) => {

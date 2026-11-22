@@ -12,4 +12,9 @@ const view = { audiences: ['office'], permission: 'costing.view', scope: 'record
 export const manifest = defineManifest({
   'GET /costing/margins': view,
   'GET /costing/margins/orders/:orderId': view,
+  // B-OM-021 (order money tab; lead L2, L4): an order's margin set by hand — the Owner and Finance (costing.ledger.manage over the
+  // order's company and customer, and the cost grain; the target also the margin grain: the handler, ./hand.ts).
+  'POST /costing/margins/orders/:orderId/cost-lines': { audiences: ['office'], permission: 'costing.ledger.manage', scope: 'record' },
+  'POST /costing/margins/orders/:orderId/cost-lines/:lineId/remove': { audiences: ['office'], permission: 'costing.ledger.manage', scope: 'record' },
+  'PUT /costing/margins/orders/:orderId/target': { audiences: ['office'], permission: 'costing.ledger.manage', scope: 'record' },
 })

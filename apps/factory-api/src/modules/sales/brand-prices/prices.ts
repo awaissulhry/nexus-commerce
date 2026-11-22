@@ -19,6 +19,9 @@ import { announceBrandPrices, auditBrandPrice, brandPriceAuditView, brandPriceRo
 // B-CP-076 (lead): the take-over by the accept's line map (its audit row), and the customer's amount of a line total.
 import { brandAmountOf } from '@nexus/factory-domain/sales/brand-prices/match'
 import { readAcceptedLineMap } from '../portal-ordering/store'
+// B-OM-020 (order money tab; Owner D4): a price difference accepted by hand, in force while the check reads as it was accepted.
+import { acceptanceInForce } from '@nexus/factory-domain/sales/brand-prices/accept'
+import { acceptancesOf } from './store'
 
 /**
  * The customer's price of an order and the price check (customer page plan C2d, C3, B-CP-017; design customer-page 11 §1.2, §2;
@@ -90,7 +93,7 @@ export class StaleBrandPricesError extends ConflictError {
 class NothingToSave extends Error {}
 
 /** The order the caller reaches (orders.view, else not found; `permission` over it, else forbidden) and holds the price grain over. */
-async function pricedOrder(caller: CommandCaller, orderId: string, permission: Permission = ORDERS_VIEW): Promise<{ context: OfficeContext; order: OrderRow }> {
+export async function pricedOrder(caller: CommandCaller, orderId: string, permission: Permission = ORDERS_VIEW): Promise<{ context: OfficeContext; order: OrderRow }> {
   const context = officeContextOf(caller)
   const order = await officeOrder(caller, orderId, permission)
   if (!mayOn(context, PRICE_PERMISSION, order)) throw new ForbiddenError(BRAND_PRICE_WORDS.notAPriceHolder)
@@ -175,7 +178,7 @@ async function takeOverOf(db: Reader, order: OrderRow, lines: readonly TakeLine[
 }
 
 /** The price check of one order as the answer carries it (every key money-marked in ./contract). */
-async function priceCheckView(db: Reader, context: OfficeContext, order: OrderRow) {
+export async function priceCheckView(db: Reader, context: OfficeContext, order: OrderRow) {
   const lines = await db.salesOrderLine.findMany({ where: { orderId: order.id }, select: LINE_COLUMNS, orderBy: { seq: 'asc' } })
   const rows = await brandPriceRowsOf(db, [order.id])
   const styleIds = [...new Set(lines.map((line) => line.styleId))]
@@ -188,6 +191,11 @@ async function priceCheckView(db: Reader, context: OfficeContext, order: OrderRo
   const files = new Map(fileIds.length > 0 ? (await db.storedFile.findMany({ where: { id: { in: fileIds }, status: { not: 'DELETED' } }, select: { id: true, originalName: true } })).map((row) => [row.id, row.originalName]) : [])
   const check = checkOfOrder(order, lines, rows)
   const take = await takeOverOf(db, order, lines, rows)
+  // ── B-OM-020: the difference accepted by hand, while it holds (any price change reopens it by itself) ──
+  const acceptance = (await acceptancesOf(db, [order.id])).get(order.id) ?? null
+  const acceptor = acceptance && acceptanceInForce(check.total, acceptance) ? await db.user.findUnique({ where: { id: acceptance.acceptedById }, select: { displayName: true } }) : null
+  const accepted = acceptance && acceptanceInForce(check.total, acceptance) ? { by: acceptor?.displayName ?? null, at: toUtcIso(acceptance.acceptedAt), reason: acceptance.reason, ourNet: acceptance.ourNet, brandNet: acceptance.brandNet } : null
+  // ── end B-OM-020 ──
   const rowView = (row: BrandPriceRecord | undefined) =>
     row
       ? {
@@ -235,6 +243,7 @@ async function priceCheckView(db: Reader, context: OfficeContext, order: OrderRo
     total: { ...check.total, row: rowView(totalRow) },
     fromRequest: take ? { requestId: take.requestId, number: take.number, lines: take.takes.length } : null,
     mayWrite: { allowed: why === null, why },
+    accepted, // B-OM-020
   })
 }
 
