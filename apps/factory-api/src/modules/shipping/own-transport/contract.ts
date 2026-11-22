@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { TRACKING_STATUSES } from '@nexus/factory-domain/shipping/labels/tracking'
 import { MANUAL_EVENT_STATUSES, OWN_TRANSPORT_LIMITS, OWN_TRANSPORT_MODES, OWN_TRANSPORT_REFUSALS, TRANSPORT_ARRANGEMENTS } from '@nexus/factory-domain/shipping/own-transport/rules'
+import { ETA_LIMITS, ETA_REFUSALS, OVERRIDE_REASON } from '@nexus/factory-domain/shipping/own-transport/rules' // B-OS-015, B-OS-016
 import { statusSchema, transportBySchema } from '../views'
 
 /**
@@ -12,6 +13,8 @@ import { statusSchema, transportBySchema } from '../views'
 const version = z.number().int().min(1).optional()
 const shipmentParams = input({ shipmentId: id() })
 const allowance = output({ allowed: z.boolean(), refusal: output({ code: z.enum(OWN_TRANSPORT_REFUSALS), message: z.string() }).nullable() })
+/** B-OS-016: whether the expected arrival may be typed (refused CARRIER_FED, NOT_LEFT_OR_PACKED, ARRIVED, CANCELLED). */
+const etaAllowance = output({ allowed: z.boolean(), refusal: output({ code: z.enum(ETA_REFUSALS), message: z.string() }).nullable() })
 
 const transportView = output({
   shipment: output({
@@ -31,6 +34,8 @@ const transportView = output({
     shippedAt: instant().nullable(),
     deliveredAt: instant().nullable(),
     returnedAt: instant().nullable(),
+    /** B-OS-016: the expected arrival (the carrier's, or typed by hand where no carrier feed tracks it); null: not known. */
+    expectedDeliveryAt: instant().nullable(),
   }),
   /** CARRIER (labels through Sendcloud, or booked by hand without a number yet), MANUAL_CARRIER, OWN_VAN, CUSTOMER_COLLECTS. */
   arrangement: z.enum(TRANSPORT_ARRANGEMENTS),
@@ -39,7 +44,11 @@ const transportView = output({
   /** Parcels with a carrier label, and with a TEST label (test mode). */
   labels: output({ carrier: z.number().int(), test: z.number().int() }),
   /** What may change now; each refusal in words. */
-  may: output({ arrange: allowance, track: allowance, status: allowance }),
+  /**
+   * B-OS-015: `endByHand` — delivered or came back typed by a person, also over a carrier's labels (then with a reason); B-OS-016:
+   * `eta` — the expected arrival typed by hand.
+   */
+  may: output({ arrange: allowance, track: allowance, status: allowance, endByHand: allowance, eta: etaAllowance }),
   /** The statuses typed so far (newest first). */
   events: z.array(
     output({
@@ -90,6 +99,16 @@ export const typeStatusContract = defineContract({
     occurredAt: instant().optional(),
     description: text(OWN_TRANSPORT_LIMITS.description).nullish(),
     location: text(OWN_TRANSPORT_LIMITS.location).nullish(),
+    /** B-OS-015: required (3 to 500) when DELIVERED or RETURNED is typed over a carrier's labels; kept as the event's words. */
+    reason: text(OVERRIDE_REASON.max * 2).nullish(),
   }),
   response: { 201: output({ ...transportView.shape, recorded: output({ eventId: id(), moved: z.enum(['DELIVERED', 'RETURNED']).nullable() }) }) },
 })
+
+// ── B-OS-016 (order shipments tab): the expected arrival typed by hand (null clears it) ──
+export const etaContract = defineContract({
+  params: shipmentParams,
+  body: input({ version, expectedDeliveryAt: instant().nullable(), reason: text(ETA_LIMITS.reasonMax * 2).nullish() }),
+  response: { 200: transportView },
+})
+// ── end B-OS-016 ──

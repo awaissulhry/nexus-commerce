@@ -9,4 +9,6 @@ export const manifest = defineManifest({
   'PUT /shipping/shipments/:shipmentId/own-transport': { audiences: ['office'], permission: 'shipping.manage', scope: 'record' },
   'PUT /shipping/shipments/:shipmentId/own-transport/tracking': { audiences: ['office'], permission: 'shipping.manage', scope: 'record' },
   'POST /shipping/shipments/:shipmentId/own-transport/events': { audiences: ['office'], permission: 'shipping.manage', scope: 'record' },
+  // B-OS-016 (order shipments tab): the expected arrival typed by hand where no carrier feed tracks it.
+  'PUT /shipping/shipments/:shipmentId/eta': { audiences: ['office'], permission: 'shipping.manage', scope: 'record' },
 })

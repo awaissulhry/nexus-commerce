@@ -12,6 +12,7 @@ import {
   trackingRefusal,
   type OwnTransportFacts,
 } from './rules'
+import { etaProblems, etaRefusal, hasCarrierLabel, overrideReasonProblems } from './rules' // B-OS-015, B-OS-016
 
 const facts = (over: Partial<OwnTransportFacts> = {}): OwnTransportFacts => ({ status: 'PACKED', transportBy: 'CARRIER', manualTrackingNumber: null, parcels: [{ trackingNumber: null, providerId: null }], liveDdts: 0, ...over })
 const real = { trackingNumber: 'FKABC', providerId: 'fk-1:1' }
@@ -84,3 +85,53 @@ describe('how the goods travel (LOG-122)', () => {
     expect([moveOfStatus('DELIVERED'), moveOfStatus('RETURNED'), moveOfStatus('IN_TRANSIT'), moveOfStatus('EXCEPTION')]).toEqual(['DELIVERED', 'RETURNED', null, null])
   })
 })
+
+// ---- B-OS-015, B-OS-016 (order shipments tab; Owner D5): ended by hand over a carrier's labels; the expected arrival by hand ----
+describe('delivered or came back by hand over the carrier’s labels (B-OS-015)', () => {
+  it('only DELIVERED or RETURNED, only with the override; any other status stays the carrier’s; delivered and returned stay final', () => {
+    const shipped = facts({ status: 'SHIPPED', parcels: [real] })
+    expect(eventRefusal(shipped)?.code).toBe('CARRIER_TRACKED')
+    expect(eventRefusal(shipped, { status: 'DELIVERED', override: true })).toBeNull()
+    expect(eventRefusal(shipped, { status: 'RETURNED', override: true })).toBeNull()
+    expect(eventRefusal(shipped, { status: 'DELIVERED', override: false })?.code).toBe('CARRIER_TRACKED')
+    expect(eventRefusal(shipped, { status: 'IN_TRANSIT', override: true })?.code).toBe('CARRIER_TRACKED')
+    expect(eventRefusal(facts({ status: 'DELIVERED', parcels: [real] }), { status: 'RETURNED', override: true })?.code).toBe('ARRIVED')
+    expect(eventRefusal(facts({ status: 'SHIPPED', transportBy: 'RECIPIENT' }), { status: 'DELIVERED', override: true })?.code).toBe('CUSTOMER_COLLECTS')
+  })
+
+  it('a carrier label (never a TEST one) asks a reason of 3 to 500 characters', () => {
+    expect(hasCarrierLabel(facts({ parcels: [real] }))).toBe(true)
+    expect(hasCarrierLabel(facts({ parcels: [test] }))).toBe(false)
+    expect(overrideReasonProblems('The customer signed our own delivery note.')).toEqual([])
+    expect(overrideReasonProblems('  ok ').map((issue) => issue.path)).toEqual(['body/reason'])
+    expect(overrideReasonProblems(null)).toHaveLength(1)
+    expect(overrideReasonProblems('x'.repeat(501))).toHaveLength(1)
+  })
+})
+
+describe('the expected arrival typed by hand (B-OS-016)', () => {
+  it('while packed or on the way, when no carrier label tracks it', () => {
+    expect(etaRefusal(facts({ status: 'PACKED' }))).toBeNull()
+    expect(etaRefusal(facts({ status: 'SHIPPED', parcels: [test] }))).toBeNull()
+    expect(etaRefusal(facts({ status: 'SHIPPED', parcels: [real] }))?.code).toBe('CARRIER_FED')
+    expect(etaRefusal(facts({ status: 'DRAFT' }))?.code).toBe('NOT_LEFT_OR_PACKED')
+    expect(etaRefusal(facts({ status: 'DELIVERED' }))?.code).toBe('ARRIVED')
+    expect(etaRefusal(facts({ status: 'CANCELLED' }))?.code).toBe('CANCELLED')
+  })
+
+  it('never before the goods left, at most a year ahead; a reason when it changes one the customer reads', () => {
+    const now = new Date('2026-11-22T10:00:00.000Z')
+    const since = new Date('2026-11-21T08:00:00.000Z')
+    const at = new Date('2026-11-25T12:00:00.000Z')
+    const paths = (when: Date | null, before: Date | null, reason: string | null = null) => etaProblems(when, { now, since, before, reason }).map((issue) => issue.path)
+    expect(paths(at, null)).toEqual([])
+    expect(paths(new Date('2026-11-20T08:00:00.000Z'), null)).toEqual(['body/expectedDeliveryAt'])
+    expect(paths(new Date('2028-01-01T00:00:00.000Z'), null)).toEqual(['body/expectedDeliveryAt'])
+    // The customer reads the one typed before: changing or clearing it says why; the same day again needs nothing.
+    expect(paths(new Date('2026-11-26T12:00:00.000Z'), at)).toEqual(['body/reason'])
+    expect(paths(new Date('2026-11-26T12:00:00.000Z'), at, 'The truck was held at the border.')).toEqual([])
+    expect(paths(null, at)).toEqual(['body/reason'])
+    expect(paths(at, at)).toEqual([])
+  })
+})
+// ---- end B-OS-015, B-OS-016

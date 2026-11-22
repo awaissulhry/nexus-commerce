@@ -178,3 +178,81 @@ describe('B-OP-034: the typed tracking link', () => {
   })
 })
 // ── end B-OP-034 ──
+
+// ---- B-OS-015, B-OS-016 (order shipments tab; Owner D5; 13-backend §2): the expected arrival typed by hand where no carrier feed
+// tracks it; delivered by hand over a carrier's labels, with a reason (DELIVERED stays final; a later carrier event never moves it) ----
+describe('B-OS-016, B-OS-015: the expected arrival by hand; delivered by hand over the carrier’s labels', () => {
+  const send = (session: string, method: 'GET' | 'PUT' | 'POST', url: string, payload?: unknown) =>
+    app.inject({ method, url, headers: { 'x-test-session': session, ...(method === 'GET' ? {} : { 'idempotency-key': `os-s2-${++keys}-${newId()}` }) }, ...(payload === undefined ? {} : { payload: payload as object }) })
+  const eta = (shipmentId: string) => `/shipping/shipments/${shipmentId}/eta`
+  const events = (shipmentId: string) => `/shipping/shipments/${shipmentId}/own-transport/events`
+  const deliveriesOf = async (orderId: string) => ((await send('deskOrders', 'GET', `/sales/orders/${orderId}/deliveries`)).json() as Json).shipments as Json[]
+
+  beforeAll(() => {
+    SESSIONS.deskOrders = { audience: 'office', tenantId: T, actorId: newId(), grants: [grant(['shipping.view', 'shipping.manage', 'orders.view'])] }
+  })
+
+  it('B-OS-016: typed on SEED-SH-0002 (a carrier booked by hand), changed with a reason, Set by hand on the order; never where labels feed it', async () => {
+    const sh2 = seeded.draftShipmentId
+    const first = new Date(Date.now() + 3 * 86_400_000).toISOString()
+    const typed = await send('desk', 'PUT', eta(sh2), { version: await versionOf(sh2), expectedDeliveryAt: first })
+    expect(typed.statusCode, typed.body).toBe(200)
+    expect((typed.json() as Json).shipment.expectedDeliveryAt).toBe(first)
+    // The customer reads it now: a change says why.
+    const later = new Date(Date.now() + 5 * 86_400_000).toISOString()
+    const noReason = await send('desk', 'PUT', eta(sh2), { expectedDeliveryAt: later })
+    expect(noReason.statusCode).toBe(400)
+    expect((noReason.json() as Json).error.issues[0].path).toBe('body/reason')
+    const changed = await send('desk', 'PUT', eta(sh2), { expectedDeliveryAt: later, reason: 'The truck was held at the border.' })
+    expect(changed.statusCode, changed.body).toBe(200)
+    expect(await admin(`SELECT before->>'expectedDeliveryAt' AS before, after->>'expectedDeliveryAt' AS after, reason FROM "AuditLog" WHERE "recordId" = $1 AND action = 'shipping.etaTyped' ORDER BY at, id`, [sh2])).toEqual([
+      { before: null, after: first, reason: null },
+      { before: first, after: later, reason: 'The truck was held at the border.' },
+    ])
+    // The order's deliveries read says it was set by hand.
+    expect((await deliveriesOf(seeded.quality.serialSalesOrderId)).find((row) => row.id === sh2)).toMatchObject({ expectedDeliveryAt: later, etaByHand: true })
+    // SEED-SH-0001's carrier labels feed its arrival: nothing to type; a viewer is refused.
+    const fed = await send('desk', 'PUT', eta(seeded.shipmentId), { expectedDeliveryAt: later })
+    expect(fed.statusCode).toBe(409)
+    expect((fed.json() as Json).error.issues[0].path).toBe('refusal/CARRIER_FED')
+    expect((await send('viewer', 'PUT', eta(sh2), { expectedDeliveryAt: null, reason: 'Not known any more.' })).statusCode).toBe(403)
+  })
+
+  it('B-OS-015: SEED-SH-0001 (carrier labels) delivered by hand with its reason; without one 400; other statuses stay the carrier’s', async () => {
+    const sh1 = seeded.shipmentId
+    const reason = 'The customer signed our own delivery note.'
+    // The seed dates its journey ahead of the calendar: it left yesterday here (a typed delivery is never before the goods left).
+    await admin(`BEGIN; SET LOCAL session_replication_role = replica; UPDATE "Shipment" SET "shippedAt" = now() - interval '1 day', "packedAt" = now() - interval '2 days' WHERE id = '${sh1}'; COMMIT;`)
+    const noReason = await send('desk', 'POST', events(sh1), { status: 'DELIVERED' })
+    expect(noReason.statusCode).toBe(400)
+    expect((noReason.json() as Json).error.issues[0].path).toBe('body/reason')
+    const news = await send('desk', 'POST', events(sh1), { status: 'IN_TRANSIT', reason })
+    expect(news.statusCode).toBe(409)
+    expect((news.json() as Json).error.issues[0].path).toBe('refusal/CARRIER_TRACKED')
+    expect((await send('viewer', 'POST', events(sh1), { status: 'DELIVERED', reason })).statusCode).toBe(403)
+    // The shipment's view says the hand move is open (with a reason) while the carrier's news stays closed.
+    const view = (await send('desk', 'GET', `/shipping/shipments/${sh1}/own-transport`)).json() as Json
+    expect(view.may).toMatchObject({ status: { allowed: false, refusal: { code: 'CARRIER_TRACKED' } }, endByHand: { allowed: true }, eta: { allowed: false, refusal: { code: 'CARRIER_FED' } } })
+
+    const delivered = await send('desk', 'POST', events(sh1), { version: await versionOf(sh1), status: 'DELIVERED', reason })
+    expect(delivered.statusCode, delivered.body).toBe(201)
+    expect((delivered.json() as Json).recorded.moved).toBe('DELIVERED')
+    expect((delivered.json() as Json).shipment.status).toBe('DELIVERED')
+    expect(await admin(`SELECT after->>'overrode' AS overrode, reason FROM "AuditLog" WHERE "recordId" = $1 AND action = 'shipping.trackingMove'`, [sh1])).toEqual([{ overrode: 'true', reason }])
+    expect(await admin(`SELECT description FROM "TrackingEvent" WHERE "shipmentId" = $1 AND source = 'MANUAL' AND status = 'DELIVERED'`, [sh1])).toEqual([{ description: reason }])
+    const row = () => deliveriesOf(seeded.quality.production.salesOrderId).then((rows) => rows.find((entry) => entry.id === sh1))
+    expect(await row()).toMatchObject({ status: 'DELIVERED', deliveredVia: 'TYPED', byHand: { reason, overrode: true }, carrierLater: null })
+
+    // The carrier reports later: appended, never a move (DELIVERED stays final); the read says what it said.
+    await admin(
+      `INSERT INTO "TrackingEvent" (id, "tenantId", "siteId", "partyId", "shipmentId", status, description, "occurredAt", "recordedAt", source, "externalEventId") SELECT $1, "tenantId", "siteId", "partyId", id, 'RETURNED', 'Made-up carrier words: back to sender.', now(), now() + interval '1 second', 'WEBHOOK', 'os-s2-later' FROM "Shipment" WHERE id = $2`,
+      [newId(), sh1],
+    )
+    expect(await admin(`SELECT status::text AS status FROM "Shipment" WHERE id = $1`, [sh1])).toEqual([{ status: 'DELIVERED' }])
+    expect(await row()).toMatchObject({ deliveredVia: 'TYPED', carrierLater: 'RETURNED' })
+    const again = await send('desk', 'POST', events(sh1), { status: 'RETURNED', reason })
+    expect(again.statusCode).toBe(409)
+    expect((again.json() as Json).error.issues[0].path).toBe('refusal/ARRIVED')
+  })
+})
+// ---- end B-OS-015, B-OS-016
