@@ -129,8 +129,11 @@ const depositView = output({
   createdAt: instant(),
   /** What payments placed on it so far (allocations less their reversals). */
   paidAmount: money.price(z.number().int()),
-  /** Its latest bank-details page sent to the customer (DEPOSIT_INFO link), or null when none was sent. */
-  link: output({ sentAt: instant(), to: z.string().nullable(), expiresAt: instant(), state: z.enum(LINK_STATES) }).nullable(),
+  /**
+   * Its latest bank-details page sent to the customer (DEPOSIT_INFO link), or null when none was sent. B-OM-022 (order money tab):
+   * + `id`, the page's own id (the web's "Stop the page": POST /links/:linkId/revoke, links.manage); this read is office only.
+   */
+  link: output({ id: id(), sentAt: instant(), to: z.string().nullable(), expiresAt: instant(), state: z.enum(LINK_STATES) }).nullable(),
   /**
    * B-W2a-F2: the payment-schedule step that names it — DEPOSIT (the deposit production waits for) or BEFORE_SHIPPING
    * (the balance paid before the goods leave, invoiced as an advance); null: no step names it (an order made before the
