@@ -36,6 +36,10 @@ import { syncDraftOperations } from '../../production/work-orders/store'
  *         are cancelled with a reassign or a cancel; audit rows and file_ask.* events with ids only
  *         and the Restrict keys in words (lead, S2): a line a file ask lands on is never removed by an amendment, a step it names
  *         never leaves a draft's operations
+ *   S2.2  answer / accept / ask again / chase: files of the record the ask lands on only (409 FILE_NOT_OF_TARGET, FILE_INFECTED); a
+ *         held file arrives but the accept is refused (409 FILES_HELD) until the scan cleared it; the addressees' Tasks done and the
+ *         asker's "Check: …" written, then done; asked again: OPEN, rounds 1, the Tasks open again; "Ask for an update" writes an
+ *         office note mentioning the open Tasks' people — never a priced ask's words; a floor ask only moves its chase time
  *
  * Every name and number is made up. Not run in the build (Owner rule: checks at the end). Run with
  * `node scripts/factory/run-pg-tests.mjs sales/file-asks/file-asks`.
@@ -361,5 +365,93 @@ describe('S2.1 the Restrict keys in words (lead): a line or a step a file ask na
       /Changing the revision would take away an operation of work order .* that a file ask names: Op 40 .*A file ask keeps the step it names, so that operation stays/,
     )
     expect((await one<{ n: number }>(`SELECT count(*)::int AS n FROM "WorkOrderOperation" WHERE id = $1`, [WO2_PACK])).n).toBe(1)
+  })
+})
+
+// =================================================================================================================================
+describe('S2.2 answer, accept, ask again, chase', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const url = (askId: string, tail: string) => `${asks(SO2)}/${askId}/${tail}`
+  const held = async (recordType: string, recordId: string): Promise<string> => {
+    const id = await fileOf(recordType, recordId)
+    await force(`UPDATE "StoredFile" SET status = 'QUARANTINED', "quarantineReason" = 'scan_pending', "scanStatus" = 'PENDING', "availableAt" = NULL WHERE id = $1`, [id])
+    return id
+  }
+
+  it('answer: only files of the record the ask lands on; a file the scan found something in is refused', async () => {
+    const ask = await made('owner', SO2, askBody({ kind: 'PERSON', userId: PEOPLE.planner }))
+    const lineFile = await fileOf('SalesOrderLine', SO2_LINES[0])
+    expect(paths(await no('owner', 'POST', url(ask.ask.id, 'answer'), { version: 1, fileIds: [lineFile] }, 409))).toEqual(['fileAsk/FILE_NOT_OF_TARGET'])
+    expect(paths(await no('owner', 'POST', url(ask.ask.id, 'answer'), { version: 1, fileIds: [beta.fileId] }, 409))).toEqual(['fileAsk/FILE_NOT_OF_TARGET'])
+    const infected = await fileOf('SalesOrder', SO2)
+    await force(`UPDATE "StoredFile" SET status = 'QUARANTINED', "quarantineReason" = 'scan_pending', "scanStatus" = 'INFECTED', "scannedAt" = now(), "scanEngine" = 'Made-up scanner', "scanFinding" = 'Made-up.Signature' WHERE id = $1`, [infected])
+    expect(paths(await no('owner', 'POST', url(ask.ask.id, 'answer'), { version: 1, fileIds: [infected] }, 409))).toEqual(['fileAsk/FILE_INFECTED'])
+    // Beta's Owner never reaches it.
+    expect((await no('betaOwner', 'POST', url(ask.ask.id, 'answer'), { version: 1, fileIds: [lineFile] }, 404)).message).toBe('Sales order not found.')
+  })
+
+  it('answer with a held file → ARRIVED (Tasks done, the asker’s Check task); accept 409 FILES_HELD until the scan cleared it', async () => {
+    const ask = await made('owner', SO2, askBody({ kind: 'PERSON', userId: PEOPLE.planner }))
+    const uploadTasks = (await askRow(ask.ask.id)).taskIds
+    const clean = await fileOf('SalesOrder', SO2)
+    const waiting = await held('SalesOrder', SO2)
+    expect(await ok('planner', 'POST', url(ask.ask.id, 'answer'), { version: 1, fileIds: [clean, waiting] })).toMatchObject({ ask: { version: 2, status: 'ARRIVED' } })
+    const row = await askRow(ask.ask.id)
+    expect(row.fileIds.sort()).toEqual([clean, waiting].sort())
+    expect((await tasksOf(uploadTasks)).map((task) => task.status)).toEqual(['DONE'])
+    const [check] = await tasksOf([row.checkTaskId])
+    expect(check).toMatchObject({ assigneeId: PEOPLE.owner, status: 'OPEN', title: 'Controlla: Made-up: the signed order confirmation', recordId: SO2 })
+    const refusal = await no('owner', 'POST', url(ask.ask.id, 'accept'), { version: 2 }, 409)
+    expect(paths(refusal)).toEqual(['fileAsk/FILES_HELD'])
+    expect(refusal.message).toBe('1 file is still being checked by the virus scan: accept once the check is done.')
+    await force(`UPDATE "StoredFile" SET status = 'AVAILABLE', "scanStatus" = 'CLEAN', "quarantineReason" = NULL, "availableAt" = now(), "scannedAt" = now() WHERE id = $1`, [waiting])
+    expect(await ok('owner', 'POST', url(ask.ask.id, 'accept'), { version: 2 })).toMatchObject({ ask: { version: 3, status: 'ACCEPTED' } })
+    expect((await tasksOf([row.checkTaskId])).map((task) => task.status)).toEqual(['DONE'])
+    expect((await outbox(ask.ask.id)).map((event) => [event.type, event.payload.decision ?? null])).toEqual([['file_ask.asked', null], ['file_ask.arrived', null], ['file_ask.decided', 'ACCEPTED']])
+    // Final: nothing more.
+    expect(paths(await no('owner', 'POST', url(ask.ask.id, 'ask-again'), { version: 3, reason: 'Made-up: late.' }, 409))).toEqual(['fileAsk/NOT_ARRIVED'])
+  })
+
+  it('ask again: OPEN with its reason, rounds 1, the addressees’ Tasks open again, the check task done, the files stay on the order', async () => {
+    const ask = await made('owner', SO2, askBody({ kind: 'OFFICE_ROLE', roleId: ROLES.three }))
+    const file = await fileOf('SalesOrder', SO2)
+    await ok('p1', 'POST', url(ask.ask.id, 'answer'), { version: 1, fileIds: [file] })
+    expect(paths(await no('owner', 'POST', url(ask.ask.id, 'ask-again'), { version: 2, reason: 'no' }, 400))).toEqual(['body/reason'])
+    expect(await ok('owner', 'POST', url(ask.ask.id, 'ask-again'), { version: 2, reason: 'Made-up: the wrong size, we need 50.' })).toMatchObject({ ask: { version: 3, status: 'OPEN' } })
+    const row = await askRow(ask.ask.id)
+    expect(row).toMatchObject({ status: 'OPEN', fileIds: [], rounds: 1, lastReason: 'Made-up: the wrong size, we need 50.' })
+    expect((await tasksOf(row.taskIds)).every((task) => task.status === 'OPEN')).toBe(true)
+    expect((await tasksOf([row.checkTaskId])).map((task) => task.status)).toEqual(['DONE'])
+    expect((await one<Json>(`SELECT status::text AS status, "recordId" FROM "StoredFile" WHERE id = $1`, [file]))).toEqual({ status: 'AVAILABLE', recordId: SO2 })
+    // The second round arrives again.
+    await ok('p2', 'POST', url(ask.ask.id, 'answer'), { version: 3, fileIds: [await fileOf('SalesOrder', SO2)] }, 200)
+    expect((await askRow(ask.ask.id)).status).toBe('ARRIVED')
+  })
+
+  it('a priced ask: Sales can neither accept nor answer it (403); its chase note never carries its words', async () => {
+    const ask = await made('owner', SO2, askBody({ kind: 'PERSON', userId: PEOPLE.owner }, { priced: true, words: 'Made-up: the proforma at 41.50 a jacket' }))
+    expect((await no('sales', 'POST', url(ask.ask.id, 'chase'), { version: 1 }, 403)).message).toBe('Shown to people who see prices.')
+    expect(await ok('owner', 'POST', url(ask.ask.id, 'chase'), { version: 1 })).toMatchObject({ ask: { version: 2, status: 'OPEN' } })
+    const note = await one<Json>(
+      `SELECT m."bodyText", m."mentionedUserIds"::text[] AS mentions FROM "Message" m JOIN "Thread" t ON t.id = m."threadId" WHERE t."recordType" = 'SalesOrder' AND t."recordId" = $1 ORDER BY m."createdAt" DESC, m.id DESC LIMIT 1`,
+      [SO2],
+    )
+    expect(note.bodyText).toMatch(/^Chiedi un aggiornamento: un file con prezzi, entro il /)
+    expect(note.bodyText).not.toContain('41.50')
+    expect(note.mentions).toEqual([PEOPLE.owner])
+    expect((await askRow(ask.ask.id)).lastChasedAt).not.toBeNull()
+    await ok('owner', 'POST', url(ask.ask.id, 'answer'), { version: 2, fileIds: [await fileOf('SalesOrder', SO2)] })
+    expect((await no('sales', 'POST', url(ask.ask.id, 'accept'), { version: 3 }, 403)).message).toBe('Shown to people who see prices.')
+  })
+
+  it('chase a floor ask: its chase time only — no note, nobody named', async () => {
+    const ask = await made('owner', SO2, floorBody())
+    const notes = async () => (await one<{ n: number }>(`SELECT count(*)::int AS n FROM "Message" m JOIN "Thread" t ON t.id = m."threadId" WHERE t."recordType" = 'SalesOrder' AND t."recordId" = $1`, [SO2])).n
+    const before = await notes()
+    await ok('owner', 'POST', url(ask.ask.id, 'chase'), { version: 1 })
+    expect(await notes()).toBe(before)
+    expect((await askRow(ask.ask.id)).lastChasedAt).not.toBeNull()
+    expect((await outbox(ask.ask.id)).at(-1)).toMatchObject({ type: 'file_ask.changed', payload: { change: 'CHASED', workOrderId: WO1 } })
+    // The office answers a floor ask with a file of the work order, as anyone who adds files there may.
+    expect(await ok('owner', 'POST', url(ask.ask.id, 'answer'), { version: 2, fileIds: [await fileOf('WorkOrder', WO1)] })).toMatchObject({ ask: { status: 'ARRIVED' } })
   })
 })

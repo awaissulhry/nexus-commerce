@@ -1,24 +1,28 @@
 import type { Prisma } from '@nexus/factory-db'
-import { THREADS_POST } from '@nexus/factory-domain/auth/permissions/catalogue'
-import { ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
+import { FILES_UPLOAD, THREADS_POST } from '@nexus/factory-domain/auth/permissions/catalogue'
+import { ConflictError, ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can, type Actor } from '@nexus/factory-domain/core/permissions'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
-import { askLocaleOf, askTextProblem, FILE_ASK_LIMITS, uploadTaskTitle, type FileAskStatus, type FileAskTarget } from '@nexus/factory-domain/files/asks'
+import { askLocaleOf, askTextProblem, chaseNoteText, checkTaskTitle, FILE_ASK_LIMITS, isFloorAddressee, uploadTaskTitle, type FileAskStatus, type FileAskTarget } from '@nexus/factory-domain/files/asks'
 import { seesPrices } from '@nexus/factory-domain/files/priced'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import { SALES_MEASUREMENTS_VIEW } from '@nexus/factory-domain/sales/measure-link/permissions'
 import { TASKS_MANAGE } from '@nexus/factory-domain/tasks/permissions'
+import { cleanBody } from '@nexus/factory-domain/threads/rules'
 import { command, StaleVersionError, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
+import { readOfficeReached } from '../../../platform/files/files'
+import { fileRecordScope, reachesFileRecord } from '../../../platform/files/record-scope'
 import { mayOnThread } from '../../../platform/threads/records'
+import { ensureThread, mentionProblems, writeMessage } from '../../../platform/threads/threads'
 import { reachesWorkOrder } from '../../production/work-orders/scope'
 import { officeContextOf } from '../orders/access'
 import { officeOrder } from '../orders/moves'
 import { readOrder, type OrderRow, type Reader } from '../orders/store'
-import type { ChangeAskBody, MakeAskBody, ReasonBody, ReassignAskBody } from './contract'
+import type { AnswerAskBody, ChangeAskBody, MakeAskBody, ReasonBody, ReassignAskBody, VersionBody } from './contract'
 import { badField, refused, resolveWho, type AskOrder } from './people'
 import { followAskTasks, moveAskTasks, writeAskTask } from './tasks'
 
@@ -30,7 +34,16 @@ import { followAskTasks, moveAskTasks, writeAskTask } from './tasks'
  *   PATCH /sales/orders/:orderId/file-asks/:askId           change the words or the due day (OPEN): the open Tasks follow
  *   POST  …/:askId/reassign                                 another addressee (OPEN): the open Tasks cancelled, new ones written
  *   POST  …/:askId/cancel                                   with a reason (OPEN or ARRIVED): the open Tasks cancelled
- *   (S2.2) answer · accept · ask again · chase
+ *   POST  …/:askId/answer                                   the files sent for this ask (OPEN → ARRIVED): files of the record it lands
+ *                                                           on (files.upload there), the addressees' Tasks done, the asker's "Check: …"
+ *   POST  …/:askId/accept                                   ARRIVED → ACCEPTED, refused while a file is held by the virus scan
+ *                                                           (FILES_HELD) or found infected (FILE_INFECTED); the check Task done
+ *   POST  …/:askId/ask-again                                ARRIVED → OPEN with a reason: rounds + 1, the addressees' Tasks open again,
+ *                                                           the files stay on the record, the check Task done
+ *   POST  …/:askId/chase                                    "Ask for an update" (OPEN): an office addressee gets an office note in the
+ *                                                           order's thread that mentions the open Tasks' people (never a priced ask's
+ *                                                           words); the floor only `lastChasedAt` (the tablet says "The office asked
+ *                                                           for an update"; nobody named)
  *
  * THE WALLS: every route reaches the order first (`officeOrder`: orders.view over its company and customer, else "Sales order not
  * found.", the words of an unknown id), then the ask by (order, id) — another order's ask, an ask on a work order the reader does not
@@ -353,6 +366,133 @@ export async function cancelAsk(caller: CommandCaller, orderId: string, askId: s
     tools.audit({ action: 'files.fileAsk.cancel', recordType: 'FileAsk', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: auditViewOf(row), after: auditViewOf(after), reason })
     tools.emit({ type: 'file_ask.changed', ...eventPlaceOf(row), payload: { ...eventIdsOf(row, 'CANCELLED'), change: 'CANCELLED' } })
     return answerOf(row.id, after.version, 'CANCELLED')
+  })
+  return result
+}
+
+// ---- S2.2: answer ----------------------------------------------------------------------------------------------------------------
+/** The record an ask's files belong to: the order, its line, or its work order. */
+export const targetRecordOf = (row: Pick<AskRow, 'target' | 'salesOrderId' | 'salesOrderLineId' | 'workOrderId'>): { readonly recordType: string; readonly recordId: string } =>
+  row.target === 'SALES_ORDER' ? { recordType: 'SalesOrder', recordId: row.salesOrderId } : row.target === 'SALES_ORDER_LINE' ? { recordType: 'SalesOrderLine', recordId: row.salesOrderLineId! } : { recordType: 'WorkOrder', recordId: row.workOrderId! }
+
+/** POST /sales/orders/:orderId/file-asks/:askId/answer — the files sent for this ask; the addressee, or anyone who adds files there. */
+export async function answerAsk(caller: CommandCaller, orderId: string, askId: string, body: AnswerAskBody, idempotencyKey?: string) {
+  const { context, actor, order } = await reachOrder(caller, orderId)
+  const ask = await caller.withClient((db) => readAsk(db, actor, order, askId))
+  assertMarks(actor, order, ask)
+  if (ask.status !== 'OPEN') throw refused('NOT_OPEN')
+  // files.upload over the record the file lands on (its own scope: a work order's company, site and customer).
+  const target = targetRecordOf(ask)
+  const found = await caller.withClient((db) => fileRecordScope(db, context.tenantId, target))
+  if (!reachesFileRecord(actor, FILES_UPLOAD, found, order.companyId)) throw new ForbiddenError('You may not add files where this ask lands.')
+  const fileIds = [...new Set(body.fileIds)]
+  for (const fileId of fileIds) {
+    // A file out of the person's reach (or priced, for someone who sees no prices) is as unknown as a wrong id.
+    const file = await readOfficeReached(caller, fileId)
+    if (file.recordType !== target.recordType || file.recordId !== target.recordId || file.status === 'DELETED') throw refused('FILE_NOT_OF_TARGET')
+    if (file.scanStatus === 'INFECTED') throw refused('FILE_INFECTED')
+  }
+  const { result } = await command(caller, { name: 'files.fileAsk.answer', idempotencyKey, input: { orderId, askId, ...body } }, async (tools) => {
+    const { tx, now } = tools
+    const row = await lockAsk(tools, ask.id, body.version)
+    if (row.status !== 'OPEN') throw refused('NOT_OPEN')
+    await moveAskTasks(tools, row.taskIds, 'DONE', context.actorId)
+    const checkTaskId = await writeCheckTask(tools, row, context.actorId)
+    const after = await tx.fileAsk.update({ where: { id: row.id }, data: { status: 'ARRIVED', fileIds, answeredAt: now, answeredById: context.actorId, checkTaskId, version: row.version + 1, updatedAt: now }, select: ASK_COLUMNS })
+    tools.audit({ action: 'files.fileAsk.answer', recordType: 'FileAsk', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: auditViewOf(row), after: { ...auditViewOf(after), by: 'OFFICE', checkTaskId } })
+    tools.emit({ type: 'file_ask.arrived', ...eventPlaceOf(row), payload: eventIdsOf(row, 'ARRIVED') })
+    return answerOf(row.id, after.version, 'ARRIVED', 1)
+  })
+  return result
+}
+
+/**
+ * The asker's "Check: {words}" Task once files arrived (in their language; a priced ask never its words), due today (the company's
+ * day); written before the ask's statement that names it. `by`: the office person who sent the files, null for the floor (the system).
+ */
+export async function writeCheckTask(tools: Pick<CommandTools, 'tx' | 'now' | 'audit' | 'emit'>, row: AskRow, by: string | null): Promise<string> {
+  const order = await tools.tx.salesOrder.findUniqueOrThrow({ where: { id: row.salesOrderId }, select: { id: true, number: true, companyId: true, partyId: true } })
+  const asker = await tools.tx.user.findUnique({ where: { id: row.askedById }, select: { locale: true } })
+  return writeAskTask(tools, { order: askOrderOf(order), title: checkTaskTitle(row.words, row.priced, askLocaleOf(asker?.locale)), description: row.priced ? null : row.words, assigneeId: row.askedById, by, dueOn: businessDate(tools.now), askId: row.id })
+}
+
+// ---- S2.2: accept, ask again ----------------------------------------------------------------------------------------------------
+/** POST /sales/orders/:orderId/file-asks/:askId/accept — never while a file sent is held by the virus scan, or found infected. */
+export async function acceptAsk(caller: CommandCaller, orderId: string, askId: string, body: VersionBody, idempotencyKey?: string) {
+  const { context, ask } = await askForCommand(caller, orderId, askId)
+  if (ask.status !== 'ARRIVED') throw refused('NOT_ARRIVED')
+  const { result } = await command(caller, { name: 'files.fileAsk.accept', idempotencyKey, input: { orderId, askId, ...body } }, async (tools) => {
+    const { tx, now } = tools
+    const row = await lockAsk(tools, ask.id, body.version)
+    if (row.status !== 'ARRIVED') throw refused('NOT_ARRIVED')
+    const files = await tx.storedFile.findMany({ where: { id: { in: [...row.fileIds] } }, select: { id: true, status: true, scanStatus: true } })
+    if (files.some((file) => file.scanStatus === 'INFECTED')) throw refused('FILE_INFECTED')
+    const held = row.fileIds.filter((fileId) => files.find((file) => file.id === fileId)?.status !== 'AVAILABLE').length
+    if (held > 0) throw refused('FILES_HELD', { n: held })
+    if (row.checkTaskId) await moveAskTasks(tools, [row.checkTaskId], 'DONE', context.actorId)
+    const after = await tx.fileAsk.update({ where: { id: row.id }, data: { status: 'ACCEPTED', acceptedAt: now, acceptedById: context.actorId, version: row.version + 1, updatedAt: now }, select: ASK_COLUMNS })
+    tools.audit({ action: 'files.fileAsk.accept', recordType: 'FileAsk', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: auditViewOf(row), after: auditViewOf(after) })
+    tools.emit({ type: 'file_ask.decided', ...eventPlaceOf(row), payload: { ...eventIdsOf(row, 'ACCEPTED'), decision: 'ACCEPTED' } })
+    return answerOf(row.id, after.version, 'ACCEPTED')
+  })
+  return result
+}
+
+/** POST /sales/orders/:orderId/file-asks/:askId/ask-again — with why; the files sent stay on the record. */
+export async function askAgain(caller: CommandCaller, orderId: string, askId: string, body: ReasonBody, idempotencyKey?: string) {
+  const reason = reasonOf(body.reason)
+  const { context, ask } = await askForCommand(caller, orderId, askId)
+  if (ask.status !== 'ARRIVED') throw refused('NOT_ARRIVED')
+  const { result } = await command(caller, { name: 'files.fileAsk.askAgain', idempotencyKey, input: { orderId, askId, ...body } }, async (tools) => {
+    const { tx, now } = tools
+    const row = await lockAsk(tools, ask.id, body.version)
+    if (row.status !== 'ARRIVED') throw refused('NOT_ARRIVED')
+    await moveAskTasks(tools, row.taskIds, 'OPEN', context.actorId)
+    if (row.checkTaskId) await moveAskTasks(tools, [row.checkTaskId], 'DONE', context.actorId)
+    const after = await tx.fileAsk.update({
+      where: { id: row.id },
+      data: { status: 'OPEN', fileIds: [], answeredAt: null, answeredById: null, rounds: row.rounds + 1, lastReason: reason, version: row.version + 1, updatedAt: now },
+      select: ASK_COLUMNS,
+    })
+    tools.audit({ action: 'files.fileAsk.askAgain', recordType: 'FileAsk', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: auditViewOf(row), after: auditViewOf(after), reason })
+    tools.emit({ type: 'file_ask.decided', ...eventPlaceOf(row), payload: { ...eventIdsOf(row, 'OPEN'), decision: 'ASKED_AGAIN' } })
+    return answerOf(row.id, after.version, 'OPEN')
+  })
+  return result
+}
+
+// ---- S2.2: chase --------------------------------------------------------------------------------------------------------------
+/** POST /sales/orders/:orderId/file-asks/:askId/chase — "Ask for an update". */
+export async function chaseAsk(caller: CommandCaller, orderId: string, askId: string, body: VersionBody, idempotencyKey?: string) {
+  const { context, ask } = await askForCommand(caller, orderId, askId, true)
+  if (ask.status !== 'OPEN') throw refused('NOT_OPEN')
+  const { result } = await command(caller, { name: 'files.fileAsk.chase', idempotencyKey, input: { orderId, askId, ...body } }, async (tools) => {
+    const { tx, now } = tools
+    const row = await lockAsk(tools, ask.id, body.version)
+    if (row.status !== 'OPEN') throw refused('NOT_OPEN')
+    let messageId: string | null = null
+    if (!isFloorAddressee(row.addressee)) {
+      // The open Tasks' people, mentioned in an office note on the order's thread (threads' own check of who may be mentioned).
+      const open = await tx.task.findMany({ where: { id: { in: [...row.taskIds] }, status: 'OPEN', assigneeId: { not: null } }, select: { assigneeId: true } })
+      const people = [...new Set(open.map((task) => task.assigneeId!))]
+      const { thread } = await ensureThread(tools, { type: 'SalesOrder', id: row.salesOrderId }, context.actorId)
+      if (thread.status !== 'OPEN') throw new ConflictError("This order's conversation is closed: the note asking for an update cannot be posted.")
+      const problems = await mentionProblems(tx, tools.context, thread, people, now)
+      const refusedIds = new Set(problems.map((problem) => people[Number(problem.path.split('/').pop())]).filter((userId): userId is string => userId !== undefined))
+      const author = await tx.user.findUnique({ where: { id: context.actorId }, select: { displayName: true, locale: true } })
+      const message = await writeMessage(tools, thread, {
+        direction: 'INTERNAL_NOTE',
+        channel: 'APP',
+        author: { kind: 'USER', id: context.actorId, name: author?.displayName ?? null },
+        bodyText: cleanBody(chaseNoteText(row.words, row.priced, dayOf(row.dueOn), askLocaleOf(author?.locale))),
+        mentions: people.filter((userId) => !refusedIds.has(userId)),
+      })
+      messageId = message.id
+    }
+    const after = await tx.fileAsk.update({ where: { id: row.id }, data: { lastChasedAt: now, version: row.version + 1, updatedAt: now }, select: ASK_COLUMNS })
+    tools.audit({ action: 'files.fileAsk.chase', recordType: 'FileAsk', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: { lastChasedAt: row.lastChasedAt?.toISOString() ?? null }, after: { lastChasedAt: now.toISOString(), messageId } })
+    tools.emit({ type: 'file_ask.changed', ...eventPlaceOf(row), payload: { ...eventIdsOf(row, 'OPEN'), change: 'CHASED' } })
+    return answerOf(row.id, after.version, 'OPEN')
   })
   return result
 }
