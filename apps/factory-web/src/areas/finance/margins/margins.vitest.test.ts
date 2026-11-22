@@ -203,26 +203,29 @@ describe('every design case draws in both languages with no key or placeholder l
 
   // B-CP-011 (customer page, Owner O1; #1766 made the w2a-margin-sales case the real Sales role): Sales reads no price and no margin, so
   // its Money tab draws no Margin section. The "% and net, never a cost" rule (Owner answer S2) stays for a person the Owner gives the
-  // price and the margin grain without the cost grain: drawn here on the Finance case's order with that person's grains.
+  // price and the margin grain without the cost grain: drawn here on the Finance case's order with that person's grains. F-OM-302: the
+  // section is Money's Margin in the kit (`id="margin"`, money/view/MarginSection.tsx); the net lives in its By line fold.
   it('sales: no Margin section (B-CP-011); price + margin without the cost grain shows the margin % and the net, never a cost amount or the difference €', () => {
     const screen = orderRecordCases as unknown as DesignScreen<unknown>
     const caseOf = (id: string) => screen.cases.find((entry) => entry.id === id)!
     const sales = render(screen, caseOf('w2a-margin-sales').model, 'en')
-    expect(sales).not.toContain('fw-fmg-detail')
+    expect(sales).not.toContain('id="margin"')
     for (const figure of ['40.2 %', '43.0 %', '€9,600.00', '€5,744.00', '−€340.00']) expect(sales, figure).not.toContain(figure)
     const can = marginsCanOf(['costing.view', 'orders.view', 'money.price', 'money.margin'])
     const financeCase = caseOf('w2a-margin').model as { role: string; record: object }
     const priced = { ...financeCase, record: { ...financeCase.record, margin: { can, part: { value: asSeenBy(DETAIL_1043, can), problem: null } } } }
     const html = render(screen, priced, 'en')
-    expect(html.indexOf('fw-fmg-detail')).toBeGreaterThan(-1)
-    const tab = html.slice(html.indexOf('fw-fmg-detail'))
+    expect(html.indexOf('id="margin"')).toBeGreaterThan(-1)
+    const tab = html.slice(html.indexOf('id="margin"'))
     expect(tab).toContain('40.2 %')
-    expect(tab).toContain('€9,600.00')
-    for (const cost of ['Cost estimate', 'Cost actual', 'Difference', '€5,744.00', '−€340.00']) expect(tab, cost).not.toContain(cost)
+    // No cost anywhere: no Difference tile, no part of the bridge, no margin amount; the waterfall and the bridge say why in words.
+    for (const cost of ['Difference', '€4,100.00', '€4,820.00', '−€340.00']) expect(tab, cost).not.toContain(cost)
     expect(tab).toContain('needs the margin and the cost grain')
+    expect(tab).toContain('Shown to people who see costs.')
     const finance = render(screen, screen.cases.find((entry) => entry.id === 'w2a-margin')!.model, 'en')
-    const full = finance.slice(finance.indexOf('fw-fmg-detail'))
-    for (const cost of ['Cost estimate', '€5,744.00', '−€340.00']) expect(full, cost).toContain(cost)
+    const full = finance.slice(finance.indexOf('id="margin"'))
+    // With the cost grain: the Difference tile and the bridge (fabric and materials €4,100.00, the margin now €4,820.00).
+    for (const cost of ['Difference', '€4,100.00', '€4,820.00', '−€340.00']) expect(full, cost).toContain(cost)
     expect(full).toMatch(EURO)
   })
 
