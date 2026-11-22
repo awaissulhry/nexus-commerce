@@ -54,7 +54,8 @@ export const DEPOSIT_STATES = ['NOT_NEEDED', 'MISSING', 'OPEN', 'PAID', 'WAIVED'
 export type DepositState = (typeof DEPOSIT_STATES)[number]
 export const DEPOSIT_REQUEST_STATUSES = ['OPEN', 'PAID', 'WAIVED', 'CANCELLED'] as const
 export type DepositRequestStatus = (typeof DEPOSIT_REQUEST_STATUSES)[number]
-export const DEPOSIT_KINDS = ['ACCONTO', 'CAPARRA'] as const
+// F-OM-103 (M3-B9): + CAPARRA_PENITENZIALE, the kind the DB stores (db/sales.prisma DepositKind): an order that carries one parses.
+export const DEPOSIT_KINDS = ['ACCONTO', 'CAPARRA', 'CAPARRA_PENITENZIALE'] as const
 export const LINK_STATES = ['LIVE', 'REVOKED', 'USED_UP', 'EXPIRED'] as const
 export const ORDER_ACTIONS = ['changePromise', 'markReady', 'cancel', 'close'] as const
 export type OrderAction = (typeof ORDER_ACTIONS)[number]
@@ -535,6 +536,21 @@ export type OpenApproval = z.infer<typeof openApprovalSchema>
 // F-SA-239: who changed a part last — an office person or the order's own customer by name, "the floor", "Nexus" (it + en).
 const lastChangeSchema = z.object({ by: z.object({ kind: z.enum(['OFFICE', 'CUSTOMER', 'FLOOR', 'SYSTEM']), name: z.string().nullable(), words: z.object({ it: z.string(), en: z.string() }) }), at: instant })
 
+// ---- F-OM-102 (B-OM-002, optional until the server's S1 lands): the order's money by the ONE still-to-pay rule (the price grain;
+// null without it) — the same figures the settlement's `thisOrder` reads, so a price holder without invoices.view reads the server's
+// figure, never gross − deposits. Absent in an older answer: the tab shows what the settlement says, else the order total only.
+const orderMoneySchema = z.object({
+  stillToPay: z.number().optional(),
+  paid: z.number().optional(),
+  neverBilled: z.number().optional(),
+  credited: z.number().optional(),
+  /** This order's share of the small differences written off on its invoices (no longer owed). */
+  writtenOff: z.number().optional(),
+  depositsPaid: z.number().optional(),
+})
+export type OrderMoney = z.infer<typeof orderMoneySchema>
+// ---- end F-OM-102
+
 export const orderSchema = z.object({
   id: z.string(),
   number: z.string(),
@@ -658,6 +674,8 @@ export const orderSchema = z.object({
   incotermPlace: z.string().nullable().optional(),
   shipComplete: z.boolean().optional(),
   // ---- end F-OO-208
+  // F-OM-102 (B-OM-002): the order's money (price grain; null without it); absent in an older answer.
+  money: orderMoneySchema.nullable().optional(),
 })
 export type Order = z.infer<typeof orderSchema>
 export type ChainInvoice = Order['chain']['invoices'][number]
@@ -765,6 +783,8 @@ export const settlementSchema = z.object({
       otherOrders: z.array(z.object({ id: z.string(), number: z.string() })).optional(),
       otherOrdersHidden: z.number().optional(),
       // ---- end F-OP-118
+      // F-OM-102 (B-OM-001): the small differences written off on it that still stand (price grain); its open amount is less them.
+      writtenOffAmount: z.number().optional(),
     }),
   ),
   invoicedAmount: z.number().optional(),
@@ -772,7 +792,16 @@ export const settlementSchema = z.object({
   paidAmount: z.number().optional(),
   balanceDueAmount: z.number().optional(),
   // F-OP-118 (B-OP-022): Money = this order's share, by the orders list's own rule (each figure with the price grain only).
-  thisOrder: z.object({ paid: z.number().optional(), stillToPay: z.number().optional(), invoicedShare: z.number().optional(), depositsPaid: z.number().optional() }).optional(),
+  // F-OM-102 (B-OM-001): + this order's share of the small differences written off on its invoices.
+  thisOrder: z.object({ paid: z.number().optional(), stillToPay: z.number().optional(), invoicedShare: z.number().optional(), depositsPaid: z.number().optional(), writtenOff: z.number().optional() }).optional(),
+  // ---- F-OM-102 (optional, the server's S1): everything shipped / invoiced (the settlement's own facts), and B-OM-003 the
+  // deposit invoices (TD02) and credit notes (TD04) of the order with their amounts (price grain) — absent: not named here.
+  fullyShipped: z.boolean().optional(),
+  fullyInvoiced: z.boolean().optional(),
+  depositInvoices: z.array(z.object({ id: z.string(), number: z.string().nullable(), status: z.string(), issueDate: z.string().nullable(), gross: z.number().optional(), credited: z.number().optional(), deductedNet: z.number().optional(), depositRequestId: z.string().nullable() })).optional(),
+  creditNotes: z.array(z.object({ id: z.string(), number: z.string().nullable(), status: z.string(), issueDate: z.string().nullable(), gross: z.number().optional(), creditOfId: z.string().nullable() })).optional(),
+  writtenOffAmount: z.number().optional(),
+  // ---- end F-OM-102
 })
 export type Settlement = z.infer<typeof settlementSchema>
 
@@ -1129,6 +1158,45 @@ export function cancelOrder(api: ApiClient, id: string, body: { version: number;
   return api.post(`${orderPath(id)}/cancel`, { body, schema: z.object({ order: orderSchema, paidDepositRequestIds: z.array(z.string()), impact: impactSchema.nullable().default(null), /* F-OP-107 */ workOrders: followedSchema.default(NOTHING_FOLLOWED) }), idempotencyKey: newIdempotencyKey() })
 }
 
+// ---- F-OM-103 (B-OM-004, the server's S1 #1853; every field optional: an older answer hides what is not there, 15-steps "The web
+// never waits"): the plan read — per step what was paid on its request so far, what settled it, what the goods' invoices covered of an
+// on-delivery / on-invoice step, and the newest hand change that names it (the audit: who and when; the reason with the price grain);
+// every request of the order (live and earlier) with its payments (payments.view; amounts with the price grain), the priced change it
+// came from, the request that replaced it, an accepted short, and whether each payment may be undone (the server's words); the plan's
+// still open and overdue (price grain). Amounts are minor units; `at` an instant, `dueDate` / `receivedOn` a day.
+const byHandSchema = z.object({ act: z.string(), at: instant, by: z.string().nullable(), reason: z.string().nullable().optional() })
+export type ByHand = z.infer<typeof byHandSchema>
+const planPaymentSchema = z.object({
+  paymentId: z.string(),
+  allocationId: z.string(),
+  receivedOn: z.string(),
+  externalRef: z.string(),
+  method: z.string(),
+  amount: z.number().optional(),
+  undo: z.object({ may: z.boolean(), why: z.object({ en: z.string(), it: z.string() }).nullable(), code: z.string().nullable().optional() }).optional(),
+})
+export type PlanPayment = z.infer<typeof planPaymentSchema>
+const planRequestSchema = z.object({
+  id: z.string(),
+  milestoneId: z.string().nullable(),
+  kind: z.string(),
+  stepKind: z.string().nullable(),
+  status: z.string(),
+  amount: z.number().optional(),
+  paid: z.number().optional(),
+  dueDate: z.string().nullable(),
+  paidAt: instant.nullable().optional(),
+  fiscalDocument: z.string(),
+  version: z.number().optional(),
+  fromChange: z.object({ amendmentId: z.string(), revision: z.number() }).nullable().optional(),
+  replacedBy: z.string().nullable().optional(),
+  acceptedShort: z.object({ short: z.number().optional(), reason: z.string().nullable().optional(), why: z.string().nullable().optional(), at: instant.nullable().optional(), by: z.string().nullable() }).nullable().optional(),
+  byHand: byHandSchema.nullable().optional(),
+  payments: z.array(planPaymentSchema).optional(),
+})
+export type PlanRequest = z.infer<typeof planRequestSchema>
+// ---- end F-OM-103 (the schemas; the fields below)
+
 export const milestoneSchema = z.object({
   id: z.string(),
   seq: z.number(),
@@ -1142,6 +1210,11 @@ export const milestoneSchema = z.object({
   paidAt: instant.nullable(),
   statusNote: z.string().nullable(),
   version: z.number(),
+  // F-OM-103 (B-OM-004, optional): paid on its request so far · what settled it · what the goods' invoices covered · the hand change.
+  paidSoFar: z.number().nullable().optional(),
+  settledBy: z.enum(['PAYMENT', 'INVOICES']).nullable().optional(),
+  coveredByInvoices: z.number().optional(),
+  byHand: byHandSchema.nullable().optional(),
 })
 export type Milestone = z.infer<typeof milestoneSchema>
 
@@ -1155,6 +1228,10 @@ export const scheduleSchema = z.object({
   cancelled: z.array(milestoneSchema),
   openAmount: z.number().optional(),
   paidAmount: z.number().optional(),
+  // F-OM-103 (B-OM-004, optional): every request of the order, the plan's still open and overdue (price grain).
+  requests: z.array(planRequestSchema).optional(),
+  stillOpen: z.number().optional(),
+  overdue: z.number().optional(),
 })
 export type Schedule = z.infer<typeof scheduleSchema>
 
