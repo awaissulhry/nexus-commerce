@@ -88,7 +88,7 @@ function row(n: number, status: string, over: Partial<ShipmentRow> = {}): Shipme
 }
 
 const label = (n: number, seq: number, number: string | null, contents: ReturnType<typeof piece>[]) => ({ id: uid(n * 10 + seq), seq, number, url: number ? `https://brt.example.com/track/${number}` : null, source: number ? 'LABEL' : null, live: !!number, contents })
-const typed = (n: number, seq: number, number: string, contents: ReturnType<typeof piece>[]) => ({ id: uid(n * 10 + seq), seq, number, url: null, source: 'TYPED', live: false, contents })
+const typed = (n: number, seq: number, number: string, contents: ReturnType<typeof piece>[]) => ({ id: uid(n * 10 + seq), seq, number, url: null, source: 'TYPED', live: false, contents, grossWeightKg: '27.5000' /* F-OS-305 */ })
 
 /** A delivery row of the deliveries read (B-OS-003) for a shipment that left. */
 function delivery(shipment: ShipmentRow, over: Partial<DeliveryRow> = {}): DeliveryRow {
@@ -121,6 +121,8 @@ const AWB_ROW = row(74, 'SHIPPED', {
   mayTypeTracking: { allowed: true, code: null, why: null },
   ddt: { number: '160/2026', date: '2026-11-18' },
   expectedDeliveryAt: at(20, 12, 0, 11),
+  noticeSentAt: at(18, 10, 5, 11), // F-OS-305: "customer told 18 Nov"
+  shipToAddressId: uid(950),
   contents: [piece(LINE_BLK, '48'), piece(LINE_BLK, '50'), piece(LINE_BLK, '52'), piece(LINE_BLK, '54')],
   parcels: [typed(74, 1, 'HAWB-0001', [piece(LINE_BLK, '48'), piece(LINE_BLK, '50')]), typed(74, 2, 'HAWB-0002', [piece(LINE_BLK, '52')]), typed(74, 3, 'HAWB-0003', [piece(LINE_BLK, '54')])],
 })

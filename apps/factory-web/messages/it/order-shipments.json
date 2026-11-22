@@ -198,7 +198,8 @@
       "parcelCount_other": "{count} colli",
       "tracked_one": "{count} tracciato",
       "tracked_other": "{count} tracciati",
-      "fold": "Colli ({count})"
+      "fold": "Colli ({count})",
+      "told": "cliente avvisato il {day}"
     },
     "dates": {
       "notPacked": "Non ancora imballata",
@@ -467,7 +468,9 @@
       "never": "Un numero da etichetta del corriere non si sovrascrive mai. Il DDT non si tocca. La cronologia conserva ogni numero vecchio; la conversazione riceve una riga dell'ufficio.",
       "done": "I numeri di tracciamento sono salvati.",
       "doneNotice": "I numeri di tracciamento sono salvati e l'avviso di spedizione è partito di nuovo.",
-      "doneNoticeHeld": "I numeri di tracciamento sono salvati; l'avviso di spedizione non è partito."
+      "doneNoticeHeld": "I numeri di tracciamento sono salvati; l'avviso di spedizione non è partito.",
+      "kg": "{kg} kg",
+      "told": "Cliente avvisato il {day}."
     },
     "split": {
       "into": "In quante spedizioni",

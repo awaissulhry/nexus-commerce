@@ -37,7 +37,8 @@ export function ParcelsFold({ row, order, part, onRetry }: { row: ShipmentRow; o
       {!bench && !part?.problem ? <PartReading rows={Math.min(3, Math.max(1, parcels.length))} height={20} /> : null}
       {parcels.map((parcel) => {
         const carton = bench?.cartons.find((entry) => entry.id === parcel.id) ?? bench?.cartons.find((entry) => entry.seq === parcel.seq) ?? null
-        const weight = carton?.grossWeightKg ? Number(carton.grossWeightKg) : null
+        // F-OS-305 (os-fx3): the order read's own weight when it sends one; else Warehouse's cartons read (loaded on open).
+        const weight = parcel.grossWeightKg ? Number(parcel.grossWeightKg) : carton?.grossWeightKg ? Number(carton.grossWeightKg) : null
         // What it holds, one group per style and colour: "SEED-JKT-02 Black · 46 ×4 · 48 ×8" (this order's lines; the carton's otherwise).
         const groups = new Map<string, { style: string; colour: string; sizes: string[] }>()
         const add = (key: string, style: string, colour: string, size: string) => {

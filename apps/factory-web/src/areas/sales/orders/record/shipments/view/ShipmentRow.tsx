@@ -269,6 +269,7 @@ function TravelsCellView({ view, row, fold, onFold, onTracking }: { view: RowMod
   const t = useT('order-shipments')
   const o = useT('orders')
   const say = useShipSay()
+  const locale = useLocale() // F-OS-305
   const travels = view.travels
   return (
     <>
@@ -310,7 +311,15 @@ function TravelsCellView({ view, row, fold, onFold, onTracking }: { view: RowMod
           ) : null}
         </span>
       ) : null}
-      {travels.parcels ? <span className="fw-os-mu">{t('ships.travels.parcels', { parcels: t('ships.travels.parcelCount', { count: travels.parcels.count }), tracked: t('ships.travels.tracked', { count: travels.parcels.tracked }) })}</span> : null}
+      {travels.parcels || travels.toldAt ? (
+        <span className="fw-os-mu">
+          {[
+            ...(travels.parcels ? [t('ships.travels.parcels', { parcels: t('ships.travels.parcelCount', { count: travels.parcels.count }), tracked: t('ships.travels.tracked', { count: travels.parcels.tracked }) })] : []),
+            // F-OS-305 (os-fx3): "customer told 12 Nov" — when the shipping notice last went; never told: nothing said.
+            ...(travels.toldAt ? [t('ships.travels.told', { day: formatDate(travels.toldAt, { locale }) })] : []),
+          ].join(' · ')}
+        </span>
+      ) : null}
       {travels.trackingDoor || view.fold !== null ? (
         <span className="fw-os-acts">
           {/* F-OP-119: drawn only where the number may be typed here (never held for a right, never on a final row: P0-B3, D2).

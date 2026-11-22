@@ -101,6 +101,9 @@ describe('the request: ONE command (B-OS-010)', () => {
     const tab = readFileSync(new URL('../../../../sales/orders/record/use-shipments-acts.ts', import.meta.url), 'utf8')
     expect(tab).toContain('createElement(Split, {')
     expect(tab).toContain('partyId: order.partyId, shipComplete: order.shipComplete')
+    // F-OS-305 (os-fx3): the tab knows the shipment's own address now (the order read's row) and leaves it out too.
+    expect(tab).toContain('shipToAddressId: row.shipToAddressId ?? null')
+    expect(tab).toContain('shipToAddressId: row.shipToAddressId /* F-OS-305')
     const api = readFileSync(new URL('./api.ts', import.meta.url), 'utf8')
     expect(api).toContain('answer.shipments ?? [answer.shipment]')
   })

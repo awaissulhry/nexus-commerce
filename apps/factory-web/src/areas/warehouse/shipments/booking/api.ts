@@ -37,6 +37,8 @@ export const transportSchema = z.object({
     returnedAt: z.string().nullable(),
     /** F-OS-203 (B-OS-016): the expected arrival (the carrier's, or typed by hand); absent in an older answer. */
     expectedDeliveryAt: z.string().nullable().optional(),
+    /** F-OS-305 (os-fx3, B-OS-022): when the shipping notice last went to the customer; null: never; absent: an older answer. */
+    noticeSentAt: z.string().nullable().optional(),
   }),
   arrangement: z.enum(TRANSPORT_ARRANGEMENTS),
   ddt: z.object({ id: z.string(), number: z.string() }).nullable(),
@@ -56,6 +58,8 @@ export const transportSchema = z.object({
         label: z.object({ number: z.string().nullable(), test: z.boolean(), url: z.string().nullable() }).nullable(),
         typed: z.object({ number: z.string(), url: z.string().nullable() }).nullable(),
         may: z.object({ allowed: z.boolean(), refusal: z.object({ code: z.enum([...OWN_TRANSPORT_REFUSALS, ...PARCEL_TRACKING_REFUSALS]) }).nullable() }),
+        /** F-OS-305 (os-fx3): its gross weight ("27.5000", four places); absent or null: not weighed / an older answer. */
+        grossWeightKg: z.string().nullable().optional(),
       }),
     )
     .optional(),
