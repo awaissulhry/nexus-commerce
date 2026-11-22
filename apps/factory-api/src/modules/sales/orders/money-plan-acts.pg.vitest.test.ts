@@ -411,11 +411,17 @@ describe('the walls: the right, the money wall, the brand wall', () => {
     const move = { act: 'MOVE_DUE', milestoneId: balance.id, version: balance.version, dueDate: addDays(PROMISE, -2), reason: 'Made-up: a day.' }
     await refused('sales', 'POST', planUrl(order.id), move, 403)
     await refused('sales', 'POST', `${planUrl(order.id)}/preview`, move, 403)
-    // The amount is the price grain's: the contract refuses it for a writer without it (400), and the handler says why (403).
+    // The amount is the price grain's: the grain filter answers first (before the handler), key by key (end check 1, om-fx1s:
+    // the filter's refusal is the right one).
     const replace = { act: 'REPLACE_DEPOSIT', requestId: deposit.id, version: deposit.version, pct: '20', reason: 'Made-up: less.' }
     const noPrice = await call('planNoPrice', 'POST', planUrl(order.id), replace)
-    expect([400, 403]).toContain(noPrice.status)
-    if (noPrice.status === 403) expect(noPrice.body.error.message).toBe(NO_PRICE_WORDS)
+    expect(noPrice.status, JSON.stringify(noPrice.body)).toBe(403)
+    expect(noPrice.body.error).toMatchObject({ message: 'This request sends money fields you may not see.', issues: [{ path: 'pct', message: 'Needs the price grain.' }] })
+    // The same act with no money key passes the filter: the handler says why, in words.
+    const bare = { act: replace.act, requestId: replace.requestId, version: replace.version, reason: replace.reason }
+    expect((await refused('planNoPrice', 'POST', planUrl(order.id), bare, 403)).message).toBe(NO_PRICE_WORDS)
+    // Nothing moved: the deposit is still the one asked.
+    expect(requestOf(await planOf(order.id), deposit.id)).toMatchObject({ status: 'OPEN', replacedBy: null })
     const moved = await ok('planNoPrice', 'POST', planUrl(order.id), move)
     expect(moved).not.toHaveProperty('stillOpen')
     expect(stepOf(moved, 'BEFORE_SHIPPING')).not.toHaveProperty('amount')
