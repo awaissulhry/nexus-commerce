@@ -32,6 +32,9 @@ import { readShipment } from '../store'
 // B-OP-043: the office's ship-to check (SHIPMENT_PREPARED through the lines).
 import { shipToProblem } from '../../sales/change-requests/office'
 import { orderLinkCountsOf } from '@nexus/factory-domain/sales/orders/linked-counts' // F-OO-206: the one count rule
+// B-OS-001 (order shipments tab): the real Sales template's grants.
+import { grainPermission } from '@nexus/factory-domain/auth/grains/grains'
+import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 
 /**
  * B-OP-040 / B-OP-070 (order page N6, lines-derived; R-6): several orders of ONE customer on one shipment, held off by
@@ -386,3 +389,68 @@ describe('B-OP-040: ordersOfShipment — the orders of its lines, the first orde
     await force(`DELETE FROM "ShipmentLine" WHERE id = $1`, [lineId])
   })
 })
+
+// ---- B-OS-001 (order shipments tab; 13-backend §1, wall §4): each shipment row of the order read — what it carries of THIS order and
+// of the customer's other orders, its holds in force, the shipment it was split from, its parcels and what the reader may do there.
+// The world as the tests above leave it: the split's child (made for SEED-SO-0002) carries SEED-SO-0003's jacket only; its parent
+// SEED-SO-0002's BLK 52; SEED-SH-0002 SEED-SO-0003's other jacket, packed in its one parcel.
+describe('B-OS-001: the order read’s shipment rows — contents, other pieces, holds, split from, parcels, the rights', () => {
+  const rowOf = async (session: string, orderId: string, shipmentId: string): Promise<Json> => {
+    const { order } = await ok(session, 'GET', `/sales/orders/${orderId}`)
+    const row = (order.chain.shipments as Json[]).find((entry) => entry.id === shipmentId)
+    expect(row, `${orderId} ${shipmentId}`).toBeDefined()
+    return row!
+  }
+  const jacketLine = () => seedA.quality.serialSalesOrderLineId
+
+  beforeAll(() => {
+    SESSIONS.holdsDesk = office([grant([...ALL, 'orders.view', 'shipping.holds.manage'])])
+    SESSIONS.ordersOnly = office([grant(['orders.view'])])
+    const sales = templateOf('sales')!
+    SESSIONS.salesTemplate = office([grant([...sales.permissions, ...sales.grains.map((grain) => grainPermission(grain) as Permission)])])
+  })
+
+  it('a shared DRAFT lists only this order’s pieces and the other orders’ as otherPieces; a split child names its parent', async () => {
+    const onSo3 = await rowOf('warehouse', so3(), ids.child!)
+    expect(onSo3).toMatchObject({ status: 'DRAFT', contents: [{ lineId: jacketLine(), size: '52', pieces: 1 }], otherPieces: 0, ddtRequired: true, packedAt: null, cancelReason: null, cancelledAt: null, mergedInto: null })
+    const parentNumber = (await admin<{ number: string }>(`SELECT number FROM "Shipment" WHERE id = $1`, [ids.shared]))[0]!.number
+    expect(onSo3.splitFrom).toEqual({ id: ids.shared, number: parentNumber, reason: 'CUSTOMER_REQUEST' })
+    // On its first order it carries nothing of that order: the jacket counts as another order's pieces.
+    expect(await rowOf('warehouse', so2(), ids.child!)).toMatchObject({ contents: [], otherPieces: 1 })
+    // The parent keeps SEED-SO-0002's BLK 52 and was split from none.
+    const blkLine = (await admin<{ salesOrderLineId: string }>(`SELECT "salesOrderLineId" FROM "WorkOrderSize" WHERE id = $1`, [cells().blk52]))[0]!.salesOrderLineId
+    expect(await rowOf('warehouse', so2(), ids.shared!)).toMatchObject({ contents: [{ lineId: blkLine, size: '52', pieces: 1 }], otherPieces: 0, splitFrom: null })
+    // SEED-SH-0002's jacket lies in its one parcel, which has no label yet: no number, no source, not tracked.
+    const sh2 = await rowOf('warehouse', so3(), seedA.draftShipmentId)
+    expect(sh2.parcels).toEqual([{ id: seedA.draftParcelId, seq: 1, number: null, url: null, source: null, live: false, contents: [{ lineId: jacketLine(), size: '52', pieces: 1 }], otherPieces: 0 }])
+    // What the warehouse may do here, by its grant (no DDT and no holds rights).
+    expect(onSo3.may).toEqual({ manage: true, pack: true, ddt: false, holdsManage: false, holdsRelease: false })
+  })
+
+  it('a held DRAFT carries its hold in force (no person named); a reader without shipping.view reads neither holds nor parcels', async () => {
+    const words = 'Seed: the customer asked us to wait a week.'
+    const placed = await ok('holdsDesk', 'POST', `/shipping/shipments/${ids.child}/holds`, { reason: 'CUSTOMER_REQUEST', words }, 201)
+    const row = await rowOf('warehouse', so3(), ids.child!)
+    expect(row.holds).toEqual([{ id: placed.holdId, reason: 'CUSTOMER_REQUEST', words, bySystem: false, placedAt: expect.any(String) }])
+    expect(JSON.stringify(row.holds)).not.toMatch(/placedBy|displayName/)
+    expect((await rowOf('holdsDesk', so3(), ids.child!)).may).toMatchObject({ holdsManage: true, holdsRelease: false })
+    // A reader of orders alone: what it carries, never its holds or parcels (withheld, as its carrier and tracking).
+    const blind = await rowOf('ordersOnly', so3(), ids.child!)
+    expect(blind).toMatchObject({ contents: [{ lineId: jacketLine(), size: '52', pieces: 1 }], holds: [], parcels: [], withheld: ['shipments.detail'], may: { manage: false, pack: false, ddt: false, holdsManage: false, holdsRelease: false } })
+    expect(JSON.stringify(blind)).not.toContain(words)
+  })
+
+  it('the real Sales template reads every row with no value key and may not manage; a person of another customer finds no order', async () => {
+    const row = await rowOf('salesTemplate', so3(), ids.child!)
+    expect(row.may).toEqual({ manage: false, pack: false, ddt: false, holdsManage: false, holdsRelease: false })
+    expect(row.contents).toEqual([{ lineId: jacketLine(), size: '52', pieces: 1 }])
+    const { order } = await ok('salesTemplate', 'GET', `/sales/orders/${so3()}`)
+    expect(JSON.stringify(order.chain.shipments)).not.toMatch(/declaredValue|insuredValue|freightCharge|freightCost/)
+    // The brand wall: Brand Beta's person gets the same not-found as for an unknown order.
+    const unknown = await call('betaOnly', 'GET', `/sales/orders/${newId()}`)
+    const walled = await call('betaOnly', 'GET', `/sales/orders/${so3()}`)
+    expect([unknown.statusCode, walled.statusCode]).toEqual([404, 404])
+    expect(walled.json().error.message).toBe(unknown.json().error.message)
+  })
+})
+// ---- end B-OS-001

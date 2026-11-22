@@ -25,6 +25,7 @@ import { APPROVAL_TASK_KINDS } from '@nexus/factory-domain/approvals/rules' // B
 // B-OP-023: how a shipment travels and why its tracking number may not be typed.
 import { OWN_TRANSPORT_REFUSALS } from '@nexus/factory-domain/shipping/own-transport/rules'
 import { TRANSPORT_BY } from '@nexus/factory-domain/shipping/shipments'
+import { SHIPMENT_HOLD_REASONS } from '@nexus/factory-domain/shipping/holds/holds' // B-OS-001
 import { PRICE_MATCHES } from '@nexus/factory-domain/sales/brand-prices/match' // B-CP-018
 import { PROMISE_REASON_CODES } from '@nexus/factory-domain/sales/portal-orders/promise' // B-OO-009
 import { PROMISE_MOVE_KINDS } from '@nexus/factory-domain/sales/orders/promise-moves' // B-PT-011
@@ -43,6 +44,10 @@ const json = z.record(z.string(), z.unknown())
 const status = z.enum(SALES_ORDER_STATUSES)
 const flag = z.enum(['true', 'false'])
 const orderParams = input({ orderId: id() })
+
+// ── B-OS-001 (order shipments tab): pieces of one order line and size on a shipment or in a parcel (no money) ──
+const shipmentPieces = output({ lineId: id(), size: z.string().nullable(), pieces: z.number().int() })
+// ── end B-OS-001 ──
 
 /** Ordered, in work orders, made (null until the floor's scans), released by quality, shipped, invoiced, still to ship. */
 const progressView = output({
@@ -310,6 +315,42 @@ export const orderView = output({
         /** The paper DDT of a shipment made elsewhere (Nexus issued none); null otherwise. */
         externalDdt: output({ number: z.string(), date: z.iso.date() }).nullable(),
         // ── end B-OP-043 ──
+        // ── B-OS-001 (order shipments tab; 13-backend §1): what it carries, why it waits, where it came from, its parcels, the rights ──
+        /** What it carries of THIS order (every status), by line and size (a made-to-measure line: size null). */
+        contents: z.array(shipmentPieces),
+        /** The pieces it carries of the customer's other orders (a shared shipment; 0: none). */
+        otherPieces: z.number().int(),
+        /** With shipping.view over its site (else empty, `withheld` says so): its holds in force, oldest first; no person is named. */
+        holds: z.array(output({ id: id(), reason: z.enum(SHIPMENT_HOLD_REASONS), words: z.string().nullable(), bySystem: z.boolean(), placedAt: instant() })),
+        /** Why it was cancelled, and when (null: not cancelled). */
+        cancelReason: z.string().nullable(),
+        cancelledAt: instant().nullable(),
+        /** The shipment it was split from, and why (a split reason code); null: not split from one. */
+        splitFrom: output({ id: id(), number: z.string(), reason: z.string() }).nullable(),
+        /** A cancelled shipment merged into another: that one; null otherwise. */
+        mergedInto: output({ id: id(), number: z.string() }).nullable(),
+        /** False: it travels without a DDT (an immediate invoice, or set by hand). */
+        ddtRequired: z.boolean(),
+        packedAt: instant().nullable(),
+        /**
+         * With shipping.view over its site (else empty): its parcels in order — the label's number and the carrier's https page
+         * (`source` LABEL, `live`: a carrier tracks it); a TEST label or none: no number, `source` null — and what each holds.
+         */
+        parcels: z.array(
+          output({
+            id: id(),
+            seq: z.number().int(),
+            number: z.string().nullable(),
+            url: z.string().nullable(),
+            source: z.enum(['LABEL', 'TYPED']).nullable(),
+            live: z.boolean(),
+            contents: z.array(shipmentPieces),
+            otherPieces: z.number().int(),
+          }),
+        ),
+        /** What this reader may do on it, each by its right over its company, site and customer (the doors are hidden without). */
+        may: output({ manage: z.boolean(), pack: z.boolean(), ddt: z.boolean(), holdsManage: z.boolean(), holdsRelease: z.boolean() }),
+        // ── end B-OS-001 ──
       }),
     ),
     invoices: z.array(output({ id: id(), number: z.string().nullable(), docType: z.string(), status: z.string(), issueDate: z.string().nullable(), /** A TD02: the deposit request it bills. */ depositRequestId: id().nullable() })),
