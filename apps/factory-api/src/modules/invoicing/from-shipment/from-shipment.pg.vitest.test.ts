@@ -204,6 +204,7 @@ describe('stage 15-invoice: deposit TD02 → 2 parcels shipped with a DDT → TD
     const answer = await as('POST', '/payments/deposit-received', { depositRequestId: ids.depositSo3, amount: 30000, receivedOn: TODAY(), externalRef: 'TRN-W151-0001' }, 201)
     expect(answer.depositInvoice.invoice).toMatchObject({ docType: 'TD02', status: 'ISSUED', netTotal: 24590, vatTotal: 5410, grossTotal: 30000 })
     S.td02 = answer.depositInvoice.invoice
+    S.depositPayment = answer.payment // B-OM-028: the payment the TD02 was issued for
   })
 
   it('SH-0002 is packed into two parcels on the floor and leaves with its DDT', async () => {
@@ -315,6 +316,16 @@ describe('stage 15-invoice: deposit TD02 → 2 parcels shipped with a DDT → TD
     expect((settlement.invoices as Json[]).find((row) => row.id === S.td24.id)).toMatchObject({ paymentState: 'OPEN' })
     // B-OM-026 (W-12): the deposit invoice bills the money received: Paid.
     expect((settlement.depositInvoices as Json[]).find((row) => row.id === S.td02.id)).toMatchObject({ paymentState: 'PAID' })
+    // B-OM-028 (W-13): the TD24 deducts the TD02 (its gross taken off) and bills SH-0002; the TD02 says where it was deducted and
+    // which payment it was issued for.
+    expect((settlement.invoices as Json[]).find((row) => row.id === S.td24.id)).toMatchObject({
+      deducts: [{ id: S.td02.id, number: S.td02.number, amount: 30000 }],
+      forShipments: [{ id: moneyA.shipping.draftShipmentId, number: expect.any(String) }],
+    })
+    expect((settlement.depositInvoices as Json[]).find((row) => row.id === S.td02.id)).toMatchObject({
+      deductedOn: { id: S.td24.id, number: S.td24.number },
+      forPayment: { paymentId: S.depositPayment.id, receivedOn: TODAY() },
+    })
     expect(await events('order.fully_settled', moneyA.shipping.quality.serialSalesOrderId)).toEqual([])
   })
 
@@ -529,6 +540,11 @@ describe('the walls: office only, the price grain, tenants and companies', () =>
     expect((body.settlement.creditNotes as Json[]).map((entry) => entry.paymentState)).toEqual((priced.creditNotes as Json[]).map((entry) => entry.paymentState))
     for (const entry of body.settlement.depositInvoices as Json[]) expect(entry).not.toHaveProperty('gross')
     for (const entry of body.settlement.creditNotes as Json[]) expect(entry).not.toHaveProperty('gross')
+    // B-OM-028 (W-13): which TD02 it deducts and where a TD02 was deducted are said without prices; the amount taken off is not.
+    const blindTd24 = (body.settlement.invoices as Json[]).find((entry) => entry.id === S.td24.id)!
+    expect(blindTd24.deducts).toEqual([{ id: S.td02.id, number: S.td02.number }])
+    expect(blindTd24.forShipments).toEqual((priced.invoices as Json[]).find((entry) => entry.id === S.td24.id)!.forShipments)
+    expect((body.settlement.depositInvoices as Json[]).find((entry) => entry.id === S.td02.id)).toMatchObject({ deductedOn: { id: S.td24.id, number: S.td24.number } })
     const row = (await wall('noPrice', 'GET', '/invoicing/invoices', undefined, 200)).body.invoices.find((entry: Json) => entry.id === S.td24.id)
     for (const field of ['grossTotal', 'paidAmount', 'creditedAmount', 'openAmount']) expect(row).not.toHaveProperty(field)
     expect(row).toHaveProperty('dueDate')
