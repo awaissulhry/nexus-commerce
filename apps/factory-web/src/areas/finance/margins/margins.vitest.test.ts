@@ -210,17 +210,19 @@ describe('every design case draws in both languages with no key or placeholder l
     const caseOf = (id: string) => screen.cases.find((entry) => entry.id === id)!
     const sales = render(screen, caseOf('w2a-margin-sales').model, 'en')
     expect(sales).not.toContain('id="margin"')
-    for (const figure of ['40.2 %', '43.0 %', '€9,600.00', '€5,744.00', '−€340.00']) expect(sales, figure).not.toContain(figure)
+    // F-OM-fx3 (W-19): the Money tab writes a percent with a no-break space and at most one decimal ("40.2\u00a0%", "43\u00a0%").
+    for (const figure of ['40.2 %', '40.2\u00a0%', '43.0 %', '43\u00a0%', '€9,600.00', '€5,744.00', '−€340.00']) expect(sales, figure).not.toContain(figure)
     const can = marginsCanOf(['costing.view', 'orders.view', 'money.price', 'money.margin'])
     const financeCase = caseOf('w2a-margin').model as { role: string; record: object }
     const priced = { ...financeCase, record: { ...financeCase.record, margin: { can, part: { value: asSeenBy(DETAIL_1043, can), problem: null } } } }
     const html = render(screen, priced, 'en')
     expect(html.indexOf('id="margin"')).toBeGreaterThan(-1)
     const tab = html.slice(html.indexOf('id="margin"'))
-    expect(tab).toContain('40.2 %')
-    // No cost anywhere: no Difference tile, no part of the bridge, no margin amount; the waterfall and the bridge say why in words.
+    expect(tab).toContain('40.2\u00a0%')
+    // No cost anywhere: no Difference tile, no part of the bridge, no margin amount. F-OM-fx3 (W-10): Where it went is Money's own (in
+    // points, not Finance's € waterfall); without the cost grain it and the bridge say why in words.
     for (const cost of ['Difference', '€4,100.00', '€4,820.00', '−€340.00']) expect(tab, cost).not.toContain(cost)
-    expect(tab).toContain('needs the margin and the cost grain')
+    expect(tab).not.toContain('needs the margin and the cost grain')
     expect(tab).toContain('Shown to people who see costs.')
     const finance = render(screen, screen.cases.find((entry) => entry.id === 'w2a-margin')!.model, 'en')
     const full = finance.slice(finance.indexOf('id="margin"'))
