@@ -280,6 +280,13 @@ describe('the deposit (Q12: an acconto by bank transfer)', () => {
     expect(depositGate({ depositRequired: true, chain: { ...order().chain, depositRequests: [deposit({ status: 'WAIVED' })] } }).state).toBe('WAIVED')
     expect(depositGate({ depositRequired: true, chain: { ...order().chain, depositRequests: [deposit({ status: 'CANCELLED' })] } }).state).toBe('MISSING')
     expect(depositGate({ depositRequired: false, chain: { ...order().chain, depositRequests: [] } }).state).toBe('NOT_NEEDED')
+    // F-OM-103 (M3-B3, P0-B1): the server's order — ANY open request blocks, a priced change's extra deposit beside a paid one too
+    // (the web said "PAID" while the release refused it), the earliest due first; paid beside a waived one is paid.
+    const extra = deposit({ id: 'extra', status: 'OPEN', dueDate: '2026-11-25', amount: 4392, paidAmount: 0 })
+    expect(depositGate({ depositRequired: true, chain: { ...order().chain, depositRequests: [PAID, extra] } })).toEqual({ state: 'WAITING', request: extra })
+    const later = deposit({ id: 'later', status: 'OPEN', dueDate: '2026-12-01' })
+    expect(depositGate({ depositRequired: true, chain: { ...order().chain, depositRequests: [later, extra] } }).request?.id).toBe('extra')
+    expect(depositGate({ depositRequired: true, chain: { ...order().chain, depositRequests: [deposit({ id: 'w', status: 'WAIVED' }), PAID] } }).state).toBe('PAID')
   })
   it('five steps: asked → page → payment → TD02 → SDI, each in its state', () => {
     expect(depositSteps(deposit(), [], null)).toEqual({ requested: 'done', page: 'current', paid: 'waiting', invoice: 'waiting', sdi: 'waiting' })
@@ -351,7 +358,7 @@ describe('where an order opens (one detail rule)', () => {
 })
 
 const LEFT_KEY =
-  /\b(?:common|live|status|deposit|depositKind|requestStatus|rows|tile|layout|list|col|bulk|csv|board|tab|step|action|record|held|summary|chain|gate|lines|layer|dates|production|woStatus|ship|shipStatus|money|docType|invoiceStatus|sdi|link|payment|sdiSend|promise|ready|close|settlement|docs|part|notice|stepUp|problem|keys|amend|editor|issue|impact|save|review|lineMenu|orderFacts|cancel|closeLines|reopen|copy|schedule|changes|compare|newOrder|grid)\.[a-zA-Z]+(?:\.[a-zA-Z_]+)*\b/
+  /\b(?:common|live|status|deposit|depositKind|requestStatus|rows|tile|layout|list|col|bulk|csv|board|tab|step|action|record|held|summary|chain|gate|lines|layer|dates|production|woStatus|ship|shipStatus|money|docType|invoiceStatus|sdi|link|payment|sdiSend|promise|ready|close|settlement|docs|part|notice|stepUp|problem|keys|amend|editor|issue|impact|save|review|lineMenu|orderFacts|cancel|closeLines|reopen|copy|schedule|changes|compare|newOrder|grid|moneyTab)\.[a-zA-Z]+(?:\.[a-zA-Z_]+)*\b/
 // Permission and grain names are never on screen either; a file name or an e-mail address is not a key.
 const NOT_KEYS = /\b[\w.-]+@[\w.-]+\.\w+\b|\b[\w-]+\.(?:pdf|csv)\b/g
 
@@ -977,8 +984,14 @@ describe('F-SA-266: what a row discusses — the chip per audience, the office-o
     expect(workOrders).toContain("id={rowAnchor('WorkOrder', row.id)}")
     expect(workOrders).toContain("label={t('productionTab.wo.ask', { number: row.number })} onClick={() => ask(row)}")
     expect(workOrders).toContain('actions?.people?.onAsk?.(askPresetOf(t, askStarterOf(')
-    const money = read('./record/view/MoneyTab.tsx')
-    for (const door of ["target={{ kind: 'DepositRequest', id: request.id }} officeOnly", "target={{ kind: 'Invoice', id: invoice.id }} officeOnly", 'target={null} officeOnly']) expect(money).toContain(door)
+    // F-OM-103 / 104: a plan row's Discuss is an item of its ONE ⋯ (an office note, threads.post): the request's reference, else the
+    // step's words; an invoice keeps its door (Invoices & credit notes).
+    const plan = read('./record/money/plan.ts')
+    expect(plan).toContain("discuss: request ? { part: word('discuss.deposit'), target: { kind: 'DepositRequest', id: request.id } } : { part: word('discuss.step', { params: { seq: step!.seq } }), target: null }")
+    const row = read('./record/money/view/PlanRow.tsx')
+    expect(row).toContain('{ part, target: row.discuss.target, officeOnly: true }')
+    expect(row).toContain('if (model.can.threadsPost && frame?.discuss) {')
+    expect(read('./record/money/view/InvoicesSection.tsx')).toContain("target={{ kind: 'Invoice', id: invoice.id }} officeOnly")
     const shipments = read('./record/view/ShipmentsTab.tsx')
     expect(shipments).toContain("target={{ kind: 'Shipment', id: row.id }} />")
     // F-OC-102: a request waiting on us is a row of Changes › Waiting — its Discuss by the request's reference.
