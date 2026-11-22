@@ -10,6 +10,7 @@ import { computeInvoiceTotals, storedVatOf } from '../invoices'
 import { addDays, chooseInvoiceType, daysBetween, deferredDeadline, immediateDeadline, withoutDdtDeadline } from './deadlines'
 import { deductionProblems, planDeductions, type DepositInvoiceFacts } from './deductions'
 import { orderSettlement, type SettlementFacts } from './settlement'
+import { invoicePaymentStateOf, INVOICE_PAYMENT_STATES } from './settlement' // B-OM-023
 import { ddtInvoiceProblems, draftGoodsLines, notInvoiced, placeWithoutDdt, type InvoicedQuantity, type OrderLinePrice, type ShippedQuantity } from './shipped'
 
 // Every company, party, VAT number, order and amount here is made up (the FatturaPA samples' fake numbers: office 000).
@@ -364,3 +365,25 @@ describe('goods shipped without a DDT', () => {
   })
 })
 // ---- end B-W2b-GB02
+
+// ── B-OM-023 (order money tab): an invoice's payment state in a word-code, no amount ──
+describe('B-OM-023: an invoice’s payment state, for a reader who sees no amount', () => {
+  const invoice = (paid: number, extra: { creditedGross?: number; refunded?: number; writtenOff?: number } = {}) => {
+    const row = { id: 'inv-1', docType: 'TD24' as const, number: 'FT-1', status: 'DELIVERED', grossTotal: 100_000, creditedGross: extra.creditedGross ?? 0, paid, refunded: extra.refunded ?? 0, writtenOff: extra.writtenOff ?? 0 }
+    const open = row.grossTotal - row.creditedGross - (row.paid - row.refunded) - row.writtenOff
+    return { ...row, open: Math.max(0, open), refundDue: Math.max(0, -open) }
+  }
+
+  it('open, part paid, paid (a small difference written off counts), credited in full, a refund due', () => {
+    expect(invoicePaymentStateOf(invoice(0))).toBe('OPEN')
+    expect(invoicePaymentStateOf(invoice(40_000))).toBe('PART_PAID')
+    expect(invoicePaymentStateOf(invoice(100_000))).toBe('PAID')
+    expect(invoicePaymentStateOf(invoice(99_950, { writtenOff: 50 }))).toBe('PAID')
+    expect(invoicePaymentStateOf(invoice(0, { creditedGross: 100_000 }))).toBe('CREDITED')
+    expect(invoicePaymentStateOf(invoice(100_000, { creditedGross: 100_000 }))).toBe('REFUND_DUE')
+    // The money given back with a refund: nothing is due any more, nothing kept — credited.
+    expect(invoicePaymentStateOf(invoice(100_000, { creditedGross: 100_000, refunded: 100_000 }))).toBe('CREDITED')
+    expect(invoicePaymentStateOf(invoice(60_000, { creditedGross: 40_000 }))).toBe('PAID')
+    expect(INVOICE_PAYMENT_STATES).toEqual(['OPEN', 'PART_PAID', 'PAID', 'CREDITED', 'REFUND_DUE'])
+  })
+})

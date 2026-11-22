@@ -11,6 +11,7 @@ import { grainOfSchema } from '@nexus/factory-domain/money/marked'
 import { listOrdersContract } from '../orders/contract' // B-CP-018
 import { priceCheckContract, priceCheckView, saveBrandPricesContract, summaryContract, takeOverContract } from './contract'
 import { portalPriceCheckContract, portalPriceCheckView, portalSaveBrandPricesContract } from './contract' // B-CP-019
+import { acceptPriceDifferenceContract, takeBackPriceDifferenceContract } from './contract' // B-OM-020
 
 /**
  * The customer's price contracts (customer page lane B-CP-017; review B4: every key money-marked, the note included) and the
@@ -194,3 +195,18 @@ describe('B-CP-019 every key of the portal price check is the price grain; no of
   })
 })
 // ── end B-CP-019 ──
+
+// ── B-OM-020 (order money tab; Owner D4): the accepted difference is the price grain, key by key ──
+describe('B-OM-020: a price difference accepted by hand is the price grain', () => {
+  it('the check\'s `accepted`, the accept and take-back bodies and the list\'s priceAccepted: every key money.price', () => {
+    expect(unmarkedKeys(priceCheckView).filter((path) => path.startsWith('/accepted'))).toEqual([])
+    expect(unmarkedKeys(acceptPriceDifferenceContract.body as z.ZodType)).toEqual([])
+    expect(unmarkedKeys(takeBackPriceDifferenceContract.body as z.ZodType)).toEqual([])
+    const rows = (listOrdersContract.response[200] as unknown as z.ZodObject).shape.orders as unknown as z.ZodArray<z.ZodObject>
+    expect(grainOfSchema(rows.element.shape.priceAccepted as z.ZodType)).toBe('price')
+    // A reader without the price grain is sent nothing of an acceptance.
+    const accepted = { ...answer, accepted: { by: 'Made-up Finance', at: '2026-11-22T09:00:00.000Z', reason: 'Made-up: agreed by phone.', ourNet: 66_000, brandNet: 60_000 } }
+    expect(filterForGrains(priceCheckView, accepted, new Set<Grain>())).toEqual({})
+    expect(filterForGrains(priceCheckView, accepted, new Set<Grain>(['price']))).toEqual(accepted)
+  })
+})

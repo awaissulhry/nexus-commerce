@@ -1,5 +1,6 @@
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { orderSettlement, type OrderSettlement, type SettlementFacts } from '@nexus/factory-domain/invoicing/from-shipment/settlement'
+import { invoicePaymentStateOf } from '@nexus/factory-domain/invoicing/from-shipment/settlement' // B-OM-023
 import { INVOICES_VIEW } from '@nexus/factory-domain/invoicing/permissions'
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
 import type { CommandCaller, CommandTools } from '../../../core/command'
@@ -352,6 +353,7 @@ export async function getSettlement(caller: CommandCaller, orderId: string) {
           openAmount: asMoney('price', invoice.open),
           refundDueAmount: asMoney('price', invoice.refundDue),
           writtenOffAmount: asMoney('price', invoice.writtenOff ?? 0), // B-OM-001
+          paymentState: invoicePaymentStateOf(invoice), // B-OM-023: a word-code, no amount (every invoices.view reader)
           // ── B-OP-022: this order's share of it, the freight apart, the other orders it bills (its buyer's only) ──
           share: asMoney('price', mine.share),
           openShare: asMoney('price', mine.openShare),

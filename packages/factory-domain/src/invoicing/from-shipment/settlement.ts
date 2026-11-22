@@ -244,3 +244,23 @@ export function orderSettlement(facts: SettlementFacts): OrderSettlement {
     },
   }
 }
+
+// ── B-OM-023 (order money tab; the plan: Sales sees payment words, no amounts) ──────────────────────────────────────────────
+/**
+ * An invoice's payment state in a word-code, no amount — so a reader without the price grain (invoices.view) is told where it
+ * stands: REFUND_DUE (more came in than it asks now: a credit note on what was paid), CREDITED (credited in full, nothing paid),
+ * PAID (nothing open: paid, less what was given back, and small differences written off), PART_PAID (something placed on it,
+ * some still open), OPEN (nothing placed on it yet). Derived from the settlement's own `open` and `refundDue`.
+ */
+export const INVOICE_PAYMENT_STATES = ['OPEN', 'PART_PAID', 'PAID', 'CREDITED', 'REFUND_DUE'] as const
+export type InvoicePaymentState = (typeof INVOICE_PAYMENT_STATES)[number]
+
+export function invoicePaymentStateOf(invoice: SettlementInvoice & { readonly open: MinorUnits; readonly refundDue: MinorUnits }): InvoicePaymentState {
+  if (invoice.refundDue > 0) return 'REFUND_DUE'
+  const placed = invoice.paid - (invoice.refunded ?? 0) + (invoice.writtenOff ?? 0)
+  // Credited in full with nothing kept (money kept on it would be a refund due, above).
+  if (invoice.grossTotal - invoice.creditedGross <= 0) return 'CREDITED'
+  if (invoice.open === 0) return 'PAID'
+  return placed > 0 ? 'PART_PAID' : 'OPEN'
+}
+// ── end B-OM-023 ──

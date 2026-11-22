@@ -100,19 +100,23 @@ function marginPctOf(net: MinorUnits, cost: MinorUnits | null): string | null {
   return pct.abs().gte(100_000) ? null : decimalText(pct)
 }
 
-/** Each request's payments placed on it (allocations less their reversals) and its latest DEPOSIT_INFO page. */
+/**
+ * Each request's payments placed on it (allocations less their reversals) and its latest DEPOSIT_INFO page. B-OM-022 (order money
+ * tab): + the page's own id (office only: the web's "Stop the page", POST /links/:linkId/revoke).
+ */
+type DepositLinkFacts = { id: string; sentAt: string; to: string | null; expiresAt: string; state: ReturnType<typeof linkState> }
 async function depositFacts(db: Reader, requestIds: readonly string[], now: Date) {
-  if (requestIds.length === 0) return { paid: new Map<string, number>(), links: new Map<string, { sentAt: string; to: string | null; expiresAt: string; state: ReturnType<typeof linkState> }>() }
+  if (requestIds.length === 0) return { paid: new Map<string, number>(), links: new Map<string, DepositLinkFacts>() }
   const placed = await db.paymentAllocation.groupBy({ by: ['depositRequestId'], where: { depositRequestId: { in: [...requestIds] } }, _sum: { amount: true } })
   const links = await db.oneOffLink.findMany({
     where: { purpose: 'DEPOSIT_INFO', recordType: 'DepositRequest', recordId: { in: [...requestIds] } },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-    select: { recordId: true, email: true, createdAt: true, expiresAt: true, revokedAt: true, uses: true, maxUses: true },
+    select: { id: true /* B-OM-022 */, recordId: true, email: true, createdAt: true, expiresAt: true, revokedAt: true, uses: true, maxUses: true },
   })
-  const latest = new Map<string, { sentAt: string; to: string | null; expiresAt: string; state: ReturnType<typeof linkState> }>()
+  const latest = new Map<string, DepositLinkFacts>()
   for (const link of links) {
     if (latest.has(link.recordId)) continue
-    latest.set(link.recordId, { sentAt: toUtcIso(link.createdAt), to: link.email, expiresAt: toUtcIso(link.expiresAt), state: linkState(link, now) })
+    latest.set(link.recordId, { id: link.id /* B-OM-022 */, sentAt: toUtcIso(link.createdAt), to: link.email, expiresAt: toUtcIso(link.expiresAt), state: linkState(link, now) })
   }
   return { paid: new Map(placed.flatMap((row) => (row.depositRequestId ? [[row.depositRequestId, row._sum.amount ?? 0] as const] : []))), links: latest }
 }
@@ -170,6 +174,9 @@ const LIVE_RULES: readonly { readonly match: (type: string) => boolean; readonly
   { match: (type) => type.startsWith('refund.'), parts: ['money'] },
   // A cost posted or reversed on one of its work orders (`workOrderIds`): the Margin section's actual so far.
   { match: (type) => type === 'work_order_cost.posted' || type === 'work_order_cost.reversed', parts: ['money'] },
+  // B-OM-021: a hand cost line or the target margin changed (its live field: orderId): the Margin section. B-OM-020: the customer's
+  // prices changed or a difference was accepted by hand (orderId): the Price check card on Money (it re-read order, lines, changes).
+  { match: (type) => type === 'order_margin.changed' || type === 'sales_order.brand_price_changed', parts: ['money'] },
   // ── end B-OM-008 ──
 ]
 

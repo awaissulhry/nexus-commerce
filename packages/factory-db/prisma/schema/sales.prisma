@@ -645,6 +645,11 @@ model SalesOrder {
   noWithdrawal        Boolean          @default(false)
   /// Production waits for a PAID or WAIVED deposit request of the order (the deposit gate).
   depositRequired     Boolean          @default(false)
+  /// B-OM-019 (order money tab, schema wave "order money 1/1"; lead L4): the margin % the office aims at for this order (the
+  /// margin's flag reads it, else the floor); null: none set. Changes while the order is open (the order's guard freezes a
+  /// CLOSED or CANCELLED one). Office only: the partner role has no grant on it.
+  /// @grain margin
+  targetMarginPct     Decimal?         @db.Decimal(7, 4)
   /// W2b-5 (schema wave 39/44, B-W2b-281; SAL-208): the order confirmation last sent to the customer: when, and the version
   /// of its ORDER_CONFIRMATION document (gendocs.prisma GeneratedDocument of this order) it was; both or neither, never
   /// while the order waits for a yes (PENDING_APPROVAL), the version never going back.
@@ -723,6 +728,12 @@ model SalesOrder {
   // it (per line, or one total for the whole order).
   /// @not-money the relation to the customer's price rows (the rows carry the grain)
   brandPrices         OrderBrandPrice[]    @relation("OrderBrandPriceOrder")
+  // B-OM-019 (order money tab, schema wave "order money 1/1"): a price difference accepted by hand (sales-brand-prices.prisma)
+  // and the costs typed by hand (costing.prisma).
+  /// @not-money the relation to the accepted price differences (the rows carry the grain)
+  priceAcceptances    OrderPriceAcceptance[] @relation("OrderPriceAcceptanceOrder")
+  /// @not-money the relation to the hand cost lines (the rows carry the grain)
+  costLines           OrderCostLine[]      @relation("OrderCostLineOrder")
 
   @@unique([tenantId, companyId, number])
   // TH-1b (B-TH-104): each customer's own running number, once per company and customer.

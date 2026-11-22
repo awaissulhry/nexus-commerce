@@ -86,3 +86,57 @@ model CostingSettings {
 
   @@index([tenantId, companyId])
 }
+
+// ── B-OM-019 (order money tab, schema wave "order money 1/1"; lead L2: ADD lines only) ──
+//   OrderCostLine  a cost of a sales order typed by hand, one the cost ledger does not know (a freight estimate before the
+//                  carrier's charge, a sales commission, bank charges, another): the margin's "now" and "so far" count it
+//                  beside the computed cost (apps/factory-api's costing/margins). Append-only but for its removal (the remove
+//                  columns, set once, with their reason): never deleted, never changed; never written once the order is
+//                  CLOSED or CANCELLED; in the order's currency (…_order_money_guards). Office only (no partner or floor
+//                  grant): a cost. The amount and both reasons are the cost grain.
+
+/// A cost of a sales order typed by hand (lead L2: added, never replacing a computed part): kind, amount, why, who; removed once.
+model OrderCostLine {
+  id           String            @id @db.Uuid
+  tenantId     String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's company and customer: the order's own (the foreign key).
+  companyId    String            @db.Uuid
+  partyId      String            @db.Uuid
+  salesOrderId String            @db.Uuid
+  kind         OrderCostLineKind
+  /// Minor units of `currency`, above 0.
+  /// @grain cost
+  amount       Int
+  /// ISO 4217: the order's currency (the guard).
+  currency     String
+  /// Why, 3 to 500 trimmed characters (it may name a cost).
+  /// @grain cost
+  reason       String
+  /// The office person who typed it.
+  createdById  String            @db.Uuid
+  createdAt    DateTime          @default(now()) @db.Timestamptz(3)
+  /// Removed: when, by whom and why (all three, once; null while it counts).
+  removedAt    DateTime?         @db.Timestamptz(3)
+  removedById  String?           @db.Uuid
+  /// @grain cost
+  removeReason String?
+
+  // The order's own company and customer.
+  order SalesOrder @relation("OrderCostLineOrder", fields: [tenantId, companyId, partyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // An order's lines (its margin).
+  @@index([tenantId, salesOrderId])
+}
+
+/// What a hand cost line is (shown in words: "Freight estimate", "Commission", "Bank charges", "Other").
+enum OrderCostLineKind {
+  /// Freight we expect to pay before the carrier's charge is on a shipment.
+  FREIGHT_ESTIMATE
+  /// A sales agent's or a partner's commission on the order.
+  COMMISSION
+  /// Bank charges on the order's payments.
+  BANK_CHARGES
+  /// Another cost of the order, said in its reason.
+  OTHER
+}
+// ── end B-OM-019 ──

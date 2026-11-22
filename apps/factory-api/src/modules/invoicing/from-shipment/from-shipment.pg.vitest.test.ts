@@ -311,6 +311,8 @@ describe('stage 15-invoice: deposit TD02 → 2 parcels shipped with a DDT → TD
     const { settlement } = await as('GET', `/invoicing/orders/${moneyA.shipping.quality.serialSalesOrderId}/settlement`)
     expect(settlement).toMatchObject({ settled: false, gaps: ['BALANCE_DUE'], fullyShipped: true, fullyInvoiced: true, documentsFinal: true, balanceDueAmount: 72480 })
     expect(settlement.missing).toEqual([{ code: 'BALANCE_DUE', message: "724.80 EUR is still to be paid on the order's invoices." }])
+    // B-OM-023: the balance invoice reads OPEN (nothing placed on it yet).
+    expect((settlement.invoices as Json[]).find((row) => row.id === S.td24.id)).toMatchObject({ paymentState: 'OPEN' })
     expect(await events('order.fully_settled', moneyA.shipping.quality.serialSalesOrderId)).toEqual([])
   })
 
@@ -360,6 +362,7 @@ describe('stage 15-invoice: deposit TD02 → 2 parcels shipped with a DDT → TD
     expect((await as('GET', `/invoicing/invoices/${S.td24.id}`)).invoice).toMatchObject({ paidAmount: 72480, openAmount: 0, creditedAmount: 0, refundDueAmount: 0 })
     const { settlement } = await as('GET', `/invoicing/orders/${order}/settlement`)
     expect(settlement).toMatchObject({ settled: true, gaps: [], balanceDueAmount: 0, refundDueAmount: 0, invoices: [{ id: S.td24.id, openAmount: 0 }] })
+    expect(settlement.invoices[0].paymentState).toBe('PAID') // B-OM-023
     expect(await events('order.fully_settled', order)).toEqual([{ payload: { orderId: order, partyId: A.brand } }])
     const [audit] = await admin<{ action: string }>(`SELECT action FROM "AuditLog" WHERE "recordType" = 'SalesOrder' AND "recordId" = $1`, [order])
     expect(audit).toEqual({ action: 'invoices.orderSettled' })
@@ -515,6 +518,10 @@ describe('the walls: office only, the price grain, tenants and companies', () =>
     expect(body.settlement).not.toHaveProperty('missing')
     expect(body.settlement).not.toHaveProperty('balanceDueAmount')
     expect(body.settlement.invoices[0]).not.toHaveProperty('openAmount')
+    // B-OM-023: the payment state in a word-code, the same as a price holder reads, with no amount beside it.
+    const priced = (await as('GET', `/invoicing/orders/${order()}/settlement`)).settlement
+    expect((body.settlement.invoices as Json[]).map((row) => row.paymentState)).toEqual((priced.invoices as Json[]).map((row) => row.paymentState))
+    expect(['OPEN', 'PART_PAID', 'PAID', 'CREDITED', 'REFUND_DUE']).toContain(body.settlement.invoices[0].paymentState)
     const row = (await wall('noPrice', 'GET', '/invoicing/invoices', undefined, 200)).body.invoices.find((entry: Json) => entry.id === S.td24.id)
     for (const field of ['grossTotal', 'paidAmount', 'creditedAmount', 'openAmount']) expect(row).not.toHaveProperty(field)
     expect(row).toHaveProperty('dueDate')
