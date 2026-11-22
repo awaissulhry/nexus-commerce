@@ -151,7 +151,7 @@ describe('a parcel’s number typed by hand (B-OS-022)', () => {
     expect(PARCEL_TRACKING_WORDS.PARCEL_LABELLED).toBe('This parcel carries a label: its number comes from the label, never typed.')
     // The shipment's own refusals stay first: cancelled, not a carrier, a carrier's labels.
     expect(trackingRefusal(facts({ status: 'CANCELLED' }))?.code).toBe('CANCELLED')
-    expect(trackingRefusal(facts({ transportBy: 'OWN_VAN' }))?.code).toBe('NOT_A_CARRIER')
+    expect(trackingRefusal(facts({ transportBy: 'SENDER' }))?.code).toBe('NOT_A_CARRIER') // os-fx4: our own van is transportBy SENDER (OWN_VAN is the arrangement, not a transportBy)
     expect(trackingRefusal(facts({ parcels: [real, { trackingNumber: null, providerId: null }] }))?.code).toBe('LABELLED')
   })
 
