@@ -1,0 +1,273 @@
+{
+  "head": {
+    "none": "Nothing has left yet",
+    "partly": "Partly shipped · {shipped} of {ordered} garments have left",
+    "inFull": "Shipped in full",
+    "delivered": "Delivered on {day}: every garment has shipped and every shipment has arrived",
+    "ready_one": "{count} garment is ready now",
+    "ready_other": "{count} garments are ready now",
+    "making_one": "{count} is still to be made or released",
+    "making_other": "{count} are still to be made or released",
+    "closed_one": "{count} was closed short",
+    "closed_other": "{count} were closed short",
+    "onItsWay": "{number} is on its way",
+    "expected": "{number} is on its way, expected {day}",
+    "held": "{number} is on hold",
+    "problem_one": "{number} has {count} tracking problem",
+    "problem_other": "{number} has {count} tracking problems",
+    "back": "{number} came back with the carrier: receive the garments in Warehouse, then ship them again",
+    "backOn": "{number} came back with the carrier on {day}: receive the garments in Warehouse, then ship them again"
+  },
+  "where": {
+    "title": "Where every garment is",
+    "part": "the counts",
+    "info": "Every garment of this order is in one bucket, and the buckets add up to what was ordered. Nothing here is typed: it is counted, and a number changes only through its cause (a shipment, a release, a line closed).",
+    "more": "More for Where every garment is",
+    "openLines": "Open on Lines ›",
+    "copyLink": "Copy link to this part",
+    "answer": {
+      "toShip": "{count} still to ship",
+      "ready_one": "{count} can go today",
+      "ready_other": "{count} can go today",
+      "nothingReady": "nothing can go today",
+      "back": "{count} came back and wait to be received",
+      "onShip": "{count} on shipments not left"
+    },
+    "allOut": "Everything shipped: {garments} on {shipments}",
+    "garments_one": "{count} garment",
+    "garments_other": "{count} garments",
+    "shipments_one": "{count} shipment",
+    "shipments_other": "{count} shipments",
+    "units_one": "{count} unit",
+    "units_other": "{count} units",
+    "closedPart": "{count} closed short",
+    "showBySize": "Show by size",
+    "fold": "Fold it",
+    "summary": {
+      "ordered": "ordered",
+      "toShip": "{count} still to ship",
+      "bar": "Where the {count} garments are"
+    },
+    "eq": "{sum} = {ordered} ordered",
+    "bucket": {
+      "shipped": "Shipped",
+      "packed": "On a packed shipment",
+      "draft": "On a draft shipment",
+      "planned": "On shipments not left",
+      "back": "Came back, not yet received",
+      "ready": "Ready now",
+      "making": "Still to be made or released",
+      "closed": "Closed short"
+    },
+    "door": {
+      "none": "nothing has left yet",
+      "ship": "{number} · {count} ›",
+      "shipBare": "{number} ›",
+      "receive": "Receive the garments in Warehouse ›",
+      "create": "Create shipment… ↓",
+      "warehouseShips": "the warehouse ships them",
+      "production": "Production ›",
+      "lines": "Lines ›"
+    },
+    "card": {
+      "lines_one": "Line {seqs}",
+      "lines_other": "Lines {seqs}",
+      "closedTag": "Closed short {count}",
+      "gridCaption": "{style}: still to ship by colour and size",
+      "nothingLeft": "Nothing of this style is left to ship.",
+      "nothingOn": "Nothing of this style is on a shipment yet.",
+      "mtm": "Made to measure: each unit is one person's garment, so it is counted in units, not by size.",
+      "mtmCount": "{units} ordered · {toShip} still to ship.",
+      "more": "More for {style}"
+    },
+    "fact": {
+      "ready": "Ready now:",
+      "making": "Still to be made or released:",
+      "closed": "Closed short:",
+      "notReceived": "not yet received",
+      "received": "received back",
+      "on": {
+        "DRAFT": "On {number} (draft)",
+        "PACKED": "On {number} (packed)",
+        "SHIPPED": "Shipped on {number}",
+        "DELIVERED": "Delivered with {number}",
+        "RETURNED": "Came back on {number}"
+      }
+    },
+    "state": {
+      "pending": "Waits for a yes: nothing ships yet.",
+      "cancelled": "Cancelled: nothing ships.",
+      "feesOnly": "Fees only: nothing to ship."
+    }
+  },
+  "ships": {
+    "deliveriesPart": "the deliveries",
+    "tableOf": "Shipments of {number}",
+    "row": {
+      "more": "More for {number}",
+      "copyLink": "Copy link to this row"
+    },
+    "info": "Every shipment of this order: what it carries, where it is, how it travels and what comes next. Each step stays in Warehouse, the shipment's home: Next › opens it there. Keys: Tab moves through the rows' links and buttons; Enter opens.",
+    "more": "More for Shipments",
+    "openWarehouse": "Open Warehouse › Shipments ›",
+    "copyLink": "Copy link to Shipments",
+    "answer": {
+      "count_one": "{count} shipment",
+      "count_other": "{count} shipments",
+      "expected": "{number} expected {day}",
+      "status": {
+        "DELIVERED_one": "{count} delivered",
+        "DELIVERED_other": "{count} delivered",
+        "SHIPPED_one": "{count} shipped",
+        "SHIPPED_other": "{count} shipped",
+        "RETURNED_one": "{count} returned",
+        "RETURNED_other": "{count} returned",
+        "PACKED_one": "{count} packed",
+        "PACKED_other": "{count} packed",
+        "DRAFT_one": "{count} draft",
+        "DRAFT_other": "{count} drafts",
+        "CANCELLED_one": "{count} cancelled",
+        "CANCELLED_other": "{count} cancelled"
+      }
+    },
+    "empty": {
+      "ready_one": "No shipment yet: {count} garment is ready now.",
+      "ready_other": "No shipment yet: {count} garments are ready now.",
+      "nothing": "No shipment yet: nothing is ready now.",
+      "plain": "No shipment yet.",
+      "warehouse": "No shipment yet. The warehouse makes shipments."
+    },
+    "create": {
+      "hint": "Create shipment… opens when a released garment waits on no shipment.",
+      "held": {
+        "shipped": "Everything is shipped.",
+        "making_one": "Nothing is ready now: {count} garment is still to be made or released.",
+        "making_other": "Nothing is ready now: {count} garments are still to be made or released.",
+        "back": "Nothing is ready now: the garments that came back are not received yet.",
+        "planned": "Nothing is ready now: every released garment is on a shipment already."
+      }
+    },
+    "col": {
+      "carries": "What it carries",
+      "dates": "Dates",
+      "more": "More"
+    },
+    "chip": {
+      "splitFrom": "Split from {number}",
+      "mergedInto": "Merged into {number}",
+      "noDdt": "Travels without a DDT · Set by hand"
+    },
+    "carries": {
+      "pieces_one": "{count} pc",
+      "pieces_other": "{count} pcs",
+      "styles_one": "{count} style",
+      "styles_other": "{count} styles",
+      "other_one": "+ {count} pc of {orders}",
+      "other_other": "+ {count} pcs of {orders}",
+      "bySize": "By size ›",
+      "bySizeOf": "What {number} carries, by size",
+      "notRead": "Open in Warehouse ›",
+      "title": "What {number} carries",
+      "close": "Close"
+    },
+    "state": {
+      "bySystem": "Placed by the system",
+      "byPerson": "Placed by a person",
+      "since": "since {day}",
+      "finance": "finance releases it",
+      "problems_one": "{count} tracking problem",
+      "problems_other": "{count} tracking problems",
+      "notReceived": "Came back · not yet received",
+      "received": "Came back · received",
+      "cancelled": "Cancelled: {reason}"
+    },
+    "next": {
+      "pack": "Next: pack it ›",
+      "ddt": "Next: issue the DDT ›",
+      "labels": "Next: buy the labels ›",
+      "hand": "Next: hand it over ›"
+    },
+    "travels": {
+      "withheld": "Not shown to your role",
+      "elsewhere": "Made elsewhere: no parcels in Nexus",
+      "ownVan": "Our van: no tracking number; its status is typed in Warehouse.",
+      "draft": "Parcels get numbers once the shipment is packed.",
+      "more": "+{count} more",
+      "parcels": "{parcels} · {tracked}",
+      "parcelCount_one": "{count} parcel",
+      "parcelCount_other": "{count} parcels",
+      "tracked_one": "{count} tracked",
+      "tracked_other": "{count} tracked",
+      "fold": "Parcels ({count})"
+    },
+    "dates": {
+      "notPacked": "Not packed yet",
+      "packed": "Packed",
+      "expected": "Expected",
+      "fromCarrier": "from the carrier",
+      "setByHand": "Set by hand",
+      "collected": "Collected by the customer",
+      "carrierLater": "The carrier later said: {status}",
+      "proof": "Proof ›",
+      "proofOf": "The proof of delivery of {number}",
+      "signedBy": "signed by {name}",
+      "cameBack": "Came back",
+      "noStatus": "No status typed yet"
+    },
+    "parcels": {
+      "label": "Parcels of {number}",
+      "tracked": "{tracked} of {count} parcels tracked",
+      "row": "Parcel {seq} of {count}",
+      "kg": "{kg} kg",
+      "fromLabel": "From the label",
+      "typed": "Typed by hand",
+      "notTracked": "— Not tracked",
+      "others": "the other orders",
+      "nothingIn": "Nothing is in this parcel yet.",
+      "part": "the parcels"
+    }
+  },
+  "after": {
+    "part": "the complaints and returns",
+    "info": "What the customer reported about what we shipped, and where each case stands. The tab only lists a case: each one lives on its own page.",
+    "more": "More for complaints and returns",
+    "openReturns": "Open Sales › Returns ›",
+    "openComplaints": "Open Quality › Complaints ›",
+    "answer": {
+      "open_one": "{count} open",
+      "open_other": "{count} open",
+      "waiting_one": "{count} waiting for your yes",
+      "waiting_other": "{count} waiting for your yes",
+      "closed_one": "{count} closed",
+      "closed_other": "{count} closed",
+      "nothingOpen": "Nothing open",
+      "empty": "Nothing reported for this order."
+    },
+    "col": {
+      "case": "Case",
+      "about": "About",
+      "what": "What",
+      "status": "Status",
+      "next": "Next"
+    },
+    "kind": {
+      "return": "Return",
+      "complaint": "Complaint"
+    },
+    "about": {
+      "order": "Whole order",
+      "returnLines": "This order's garments"
+    },
+    "waiting": "Waiting for your yes",
+    "next": {
+      "wants": "Customer wants: {outcome}",
+      "answerDue": "Answer due {day}",
+      "replacement": "Replacement {number} ›"
+    },
+    "showClosed_one": "Show {count} closed",
+    "showClosed_other": "Show {count} closed",
+    "hideClosed": "Hide closed",
+    "truncated": "Showing the latest 50"
+  },
+  "copied": "Link copied"
+}

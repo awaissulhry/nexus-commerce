@@ -1729,7 +1729,8 @@ describe('F-OP-311: Read-only sees no next step and no move in the band; everyon
       expect(primaryOf(render(recordScreen as unknown as DesignScreen<unknown>, caseOf('f-oo-105-holds-sales'), locale)), locale).toContain('<button')
     }
     const view = readFileSync(new URL('./record/view/OrderRecordView.tsx', import.meta.url), 'utf8')
-    expect(view).toContain('const step = bandStepOf(order, model.can, readOnly)')
+    // F-OS-101 (L10): the band's step, then (on the Shipments tab only) without its Create shipment… copy.
+    expect(view).toContain('const bandStep = bandStepOf(order, model.can, readOnly)')
     expect(view).toContain('bandMenuFor(readOnly, groups, cancelItem)')
   })
 })

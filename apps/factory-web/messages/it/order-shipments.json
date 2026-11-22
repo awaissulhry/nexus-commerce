@@ -1,0 +1,273 @@
+{
+  "head": {
+    "none": "Non è ancora partito nulla",
+    "partly": "Spedito in parte · {shipped} capi su {ordered} sono partiti",
+    "inFull": "Spedito per intero",
+    "delivered": "Consegnato il {day}: ogni capo è partito e ogni spedizione è arrivata",
+    "ready_one": "{count} capo è pronto ora",
+    "ready_other": "{count} capi sono pronti ora",
+    "making_one": "{count} è ancora da produrre o rilasciare",
+    "making_other": "{count} sono ancora da produrre o rilasciare",
+    "closed_one": "{count} è stato chiuso in difetto",
+    "closed_other": "{count} sono stati chiusi in difetto",
+    "onItsWay": "{number} è in viaggio",
+    "expected": "{number} è in viaggio, prevista il {day}",
+    "held": "{number} è bloccata",
+    "problem_one": "{number} ha {count} problema di tracciamento",
+    "problem_other": "{number} ha {count} problemi di tracciamento",
+    "back": "{number} è rientrata con il vettore: ricevi i capi in Magazzino, poi spediscili di nuovo",
+    "backOn": "{number} è rientrata con il vettore il {day}: ricevi i capi in Magazzino, poi spediscili di nuovo"
+  },
+  "where": {
+    "title": "Dove si trova ogni capo",
+    "part": "i conteggi",
+    "info": "Ogni capo dell'ordine è in un solo gruppo, e i gruppi danno il totale ordinato. Qui non si inserisce nulla: si conta, e un numero cambia solo per la sua causa (una spedizione, un rilascio, una riga chiusa).",
+    "more": "Altro per Dove si trova ogni capo",
+    "openLines": "Apri in Righe ›",
+    "copyLink": "Copia il link a questa parte",
+    "answer": {
+      "toShip": "{count} ancora da spedire",
+      "ready_one": "{count} può partire oggi",
+      "ready_other": "{count} possono partire oggi",
+      "nothingReady": "oggi non può partire nulla",
+      "back": "{count} rientrati, in attesa di essere ricevuti",
+      "onShip": "{count} su spedizioni non partite"
+    },
+    "allOut": "Tutto spedito: {garments} su {shipments}",
+    "garments_one": "{count} capo",
+    "garments_other": "{count} capi",
+    "shipments_one": "{count} spedizione",
+    "shipments_other": "{count} spedizioni",
+    "units_one": "{count} unità",
+    "units_other": "{count} unità",
+    "closedPart": "{count} chiusi in difetto",
+    "showBySize": "Mostra per taglia",
+    "fold": "Richiudi",
+    "summary": {
+      "ordered": "ordinati",
+      "toShip": "{count} ancora da spedire",
+      "bar": "Dove si trovano i {count} capi"
+    },
+    "eq": "{sum} = {ordered} ordinati",
+    "bucket": {
+      "shipped": "Spediti",
+      "packed": "Su una spedizione imballata",
+      "draft": "Su una spedizione in bozza",
+      "planned": "Su spedizioni non partite",
+      "back": "Rientrati, non ancora ricevuti",
+      "ready": "Pronti ora",
+      "making": "Ancora da produrre o rilasciare",
+      "closed": "Chiusi in difetto"
+    },
+    "door": {
+      "none": "non è ancora partito nulla",
+      "ship": "{number} · {count} ›",
+      "shipBare": "{number} ›",
+      "receive": "Ricevi i capi in Magazzino ›",
+      "create": "Crea spedizione… ↓",
+      "warehouseShips": "li spedisce il magazzino",
+      "production": "Produzione ›",
+      "lines": "Righe ›"
+    },
+    "card": {
+      "lines_one": "Riga {seqs}",
+      "lines_other": "Righe {seqs}",
+      "closedTag": "Chiusi in difetto {count}",
+      "gridCaption": "{style}: ancora da spedire per colore e taglia",
+      "nothingLeft": "Di questo modello non resta nulla da spedire.",
+      "nothingOn": "Di questo modello non c'è ancora nulla su una spedizione.",
+      "mtm": "Su misura: ogni unità è il capo di una persona, quindi si conta in unità, non per taglia.",
+      "mtmCount": "{units} ordinate · {toShip} ancora da spedire.",
+      "more": "Altro per {style}"
+    },
+    "fact": {
+      "ready": "Pronti ora:",
+      "making": "Ancora da produrre o rilasciare:",
+      "closed": "Chiusi in difetto:",
+      "notReceived": "non ancora ricevuti",
+      "received": "ricevuti",
+      "on": {
+        "DRAFT": "Su {number} (bozza)",
+        "PACKED": "Su {number} (imballata)",
+        "SHIPPED": "Spediti con {number}",
+        "DELIVERED": "Consegnati con {number}",
+        "RETURNED": "Rientrati con {number}"
+      }
+    },
+    "state": {
+      "pending": "In attesa di approvazione: non parte ancora nulla.",
+      "cancelled": "Annullato: non parte nulla.",
+      "feesOnly": "Solo addebiti: nulla da spedire."
+    }
+  },
+  "ships": {
+    "deliveriesPart": "le consegne",
+    "tableOf": "Spedizioni di {number}",
+    "row": {
+      "more": "Altro per {number}",
+      "copyLink": "Copia il link a questa riga"
+    },
+    "info": "Ogni spedizione dell'ordine: cosa porta, dov'è, come viaggia e cosa viene dopo. Ogni passo resta in Magazzino, la casa della spedizione: Prossimo › lo apre lì. Tasti: Tab passa per i link e i pulsanti delle righe; Invio apre.",
+    "more": "Altro per Spedizioni",
+    "openWarehouse": "Apri Magazzino › Spedizioni ›",
+    "copyLink": "Copia il link a Spedizioni",
+    "answer": {
+      "count_one": "{count} spedizione",
+      "count_other": "{count} spedizioni",
+      "expected": "{number} prevista il {day}",
+      "status": {
+        "DELIVERED_one": "{count} consegnata",
+        "DELIVERED_other": "{count} consegnate",
+        "SHIPPED_one": "{count} spedita",
+        "SHIPPED_other": "{count} spedite",
+        "RETURNED_one": "{count} rientrata",
+        "RETURNED_other": "{count} rientrate",
+        "PACKED_one": "{count} imballata",
+        "PACKED_other": "{count} imballate",
+        "DRAFT_one": "{count} in bozza",
+        "DRAFT_other": "{count} in bozza",
+        "CANCELLED_one": "{count} annullata",
+        "CANCELLED_other": "{count} annullate"
+      }
+    },
+    "empty": {
+      "ready_one": "Ancora nessuna spedizione: {count} capo è pronto ora.",
+      "ready_other": "Ancora nessuna spedizione: {count} capi sono pronti ora.",
+      "nothing": "Ancora nessuna spedizione: niente è pronto ora.",
+      "plain": "Ancora nessuna spedizione.",
+      "warehouse": "Ancora nessuna spedizione. Le spedizioni le fa il magazzino."
+    },
+    "create": {
+      "hint": "Crea spedizione… si apre quando un capo rilasciato non è su nessuna spedizione.",
+      "held": {
+        "shipped": "Tutto spedito.",
+        "making_one": "Niente è pronto ora: {count} capo è ancora da produrre o rilasciare.",
+        "making_other": "Niente è pronto ora: {count} capi sono ancora da produrre o rilasciare.",
+        "back": "Niente è pronto ora: i capi rientrati non sono ancora ricevuti.",
+        "planned": "Niente è pronto ora: ogni capo rilasciato è già su una spedizione."
+      }
+    },
+    "col": {
+      "carries": "Cosa porta",
+      "dates": "Date",
+      "more": "Altro"
+    },
+    "chip": {
+      "splitFrom": "Divisa da {number}",
+      "mergedInto": "Unita a {number}",
+      "noDdt": "Viaggia senza DDT · Impostata a mano"
+    },
+    "carries": {
+      "pieces_one": "{count} capo",
+      "pieces_other": "{count} capi",
+      "styles_one": "{count} modello",
+      "styles_other": "{count} modelli",
+      "other_one": "+ {count} capo di {orders}",
+      "other_other": "+ {count} capi di {orders}",
+      "bySize": "Per taglia ›",
+      "bySizeOf": "Cosa porta {number}, per taglia",
+      "notRead": "Apri in Magazzino ›",
+      "title": "Cosa porta {number}",
+      "close": "Chiudi"
+    },
+    "state": {
+      "bySystem": "Messo dal sistema",
+      "byPerson": "Messo da una persona",
+      "since": "dal {day}",
+      "finance": "lo sblocca l'amministrazione",
+      "problems_one": "{count} problema di tracciamento",
+      "problems_other": "{count} problemi di tracciamento",
+      "notReceived": "Rientrata · non ancora ricevuta",
+      "received": "Rientrata · ricevuta",
+      "cancelled": "Annullata: {reason}"
+    },
+    "next": {
+      "pack": "Prossimo: imballala ›",
+      "ddt": "Prossimo: emetti il DDT ›",
+      "labels": "Prossimo: compra le etichette ›",
+      "hand": "Prossimo: consegnala al vettore ›"
+    },
+    "travels": {
+      "withheld": "Non visibile al tuo ruolo",
+      "elsewhere": "Fatta altrove: nessun collo in Nexus",
+      "ownVan": "Nostro furgone: nessun numero di tracciamento; lo stato si inserisce in Magazzino.",
+      "draft": "I colli ricevono i numeri quando la spedizione è imballata.",
+      "more": "+{count} altri",
+      "parcels": "{parcels} · {tracked}",
+      "parcelCount_one": "{count} collo",
+      "parcelCount_other": "{count} colli",
+      "tracked_one": "{count} tracciato",
+      "tracked_other": "{count} tracciati",
+      "fold": "Colli ({count})"
+    },
+    "dates": {
+      "notPacked": "Non ancora imballata",
+      "packed": "Imballata",
+      "expected": "Prevista",
+      "fromCarrier": "dal vettore",
+      "setByHand": "Impostata a mano",
+      "collected": "Ritirata dal cliente",
+      "carrierLater": "Il vettore ha poi detto: {status}",
+      "proof": "Prova ›",
+      "proofOf": "La prova di consegna di {number}",
+      "signedBy": "firmata da {name}",
+      "cameBack": "Rientrata",
+      "noStatus": "Nessuno stato inserito"
+    },
+    "parcels": {
+      "label": "Colli di {number}",
+      "tracked": "{tracked} di {count} colli tracciati",
+      "row": "Collo {seq} di {count}",
+      "kg": "{kg} kg",
+      "fromLabel": "Dall'etichetta",
+      "typed": "Inserito a mano",
+      "notTracked": "— Non tracciato",
+      "others": "altri ordini",
+      "nothingIn": "In questo collo non c'è ancora nulla.",
+      "part": "i colli"
+    }
+  },
+  "after": {
+    "part": "i reclami e i resi",
+    "info": "Cosa ha segnalato il cliente sulla merce spedita, e a che punto è ogni caso. La scheda elenca soltanto un caso: ognuno vive nella sua pagina.",
+    "more": "Altro per reclami e resi",
+    "openReturns": "Apri Vendite › Resi ›",
+    "openComplaints": "Apri Qualità › Reclami ›",
+    "answer": {
+      "open_one": "{count} aperto",
+      "open_other": "{count} aperti",
+      "waiting_one": "{count} in attesa del tuo sì",
+      "waiting_other": "{count} in attesa del tuo sì",
+      "closed_one": "{count} chiuso",
+      "closed_other": "{count} chiusi",
+      "nothingOpen": "Nulla di aperto",
+      "empty": "Nessuna segnalazione per questo ordine."
+    },
+    "col": {
+      "case": "Caso",
+      "about": "Riguarda",
+      "what": "Cosa",
+      "status": "Stato",
+      "next": "Prossimo"
+    },
+    "kind": {
+      "return": "Reso",
+      "complaint": "Reclamo"
+    },
+    "about": {
+      "order": "Tutto l'ordine",
+      "returnLines": "Capi di questo ordine"
+    },
+    "waiting": "In attesa del tuo sì",
+    "next": {
+      "wants": "Il cliente vuole: {outcome}",
+      "answerDue": "Risposta entro il {day}",
+      "replacement": "Sostituzione {number} ›"
+    },
+    "showClosed_one": "Mostra {count} chiuso",
+    "showClosed_other": "Mostra {count} chiusi",
+    "hideClosed": "Nascondi i chiusi",
+    "truncated": "Mostrati gli ultimi 50"
+  },
+  "copied": "Link copiato"
+}
