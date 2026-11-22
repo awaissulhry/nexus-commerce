@@ -3193,7 +3193,8 @@
       "nothing": "nothing to collect yet. The customer pays on the invoice",
       "nothingTerms": "nothing to collect yet. The customer pays on the invoice: {terms}",
       "restOnInvoice": "the rest is paid on the invoice",
-      "partFailed": "Part of the money could not be read: see the section below and try it again there."
+      "partFailed": "Part of the money could not be read: see the section below and try it again there.",
+      "stillToPayOnWords": "still to pay on {number}"
     },
     "totals": {
       "title": "Totals",
@@ -3264,7 +3265,9 @@
         "partPaid": "{paid} of {amount} received",
         "partPaidWords": "Part paid",
         "depositDue": "{amount} due {date}",
-        "depositDueWords": "Open, due {date}"
+        "depositDueWords": "Open, due {date}",
+        "notNeededExtra": "Not needed · extra {amount} open, due {date}",
+        "notNeededExtraWords": "Not needed · an extra deposit is open, due {date}"
       }
     },
     "payments": {
@@ -3401,7 +3404,10 @@
         "next": "next: {what}",
         "short": "the deposit is {amount} short",
         "partPaid": "the deposit is part paid",
-        "cancelled": "nothing is owed: the order is cancelled"
+        "cancelled": "nothing is owed: the order is cancelled",
+        "restOn": "the rest is open on {number}",
+        "restOnPart": "the rest is open on {number}: part paid",
+        "invoicesOpen": "the invoices are not paid in full"
       },
       "held": {
         "moneyPlaced": "Money is placed on it: undo the payment first.",
@@ -3463,7 +3469,11 @@
       "headMore": "More for Invoices & credit notes",
       "state": {
         "rejected": "Rejected — fix and resend"
-      }
+      },
+      "countPart_one": "{count} document · {number} is part paid",
+      "countPart_other": "{count} documents · {number} is part paid",
+      "countUnpaid_one": "{count} document · {number} is not paid yet",
+      "countUnpaid_other": "{count} documents · {number} is not paid yet"
     },
     "menu": {
       "copyLinkTotals": "Copy link to Totals",

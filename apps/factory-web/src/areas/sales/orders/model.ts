@@ -647,6 +647,17 @@ export function depositGate(order: Pick<Order, 'depositRequired' | 'chain'>): { 
 }
 // ---- end F-OM-103
 
+// ---- F-OM-fx5w (N1, walk 31-A): an order that needs no deposit with a deposit asked all the same — a priced change's EXTRA deposit (the
+// order's terms ask none, so any deposit asked is extra to them). It is money to collect, never a production gate: the release passes an
+// order with no deposit required whatever its requests say (factory-domain release.ts depositGate). Money's head, Totals' Deposit fact
+// and Overview's Linked records name it; "New work orders wait for it" is said only where the gate waits. The earliest due first.
+export function askedOutsideGate(order: Pick<Order, 'depositRequired' | 'chain'>): DepositRequest | null {
+  if (order.depositRequired) return null
+  const open = order.chain.depositRequests.filter((request) => request.status === 'OPEN' && request.stepKind !== 'BEFORE_SHIPPING')
+  return open.sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0] ?? null
+}
+// ---- end F-OM-fx5w
+
 // F-OP-102: + PENDING_APPROVAL — the approver's Confirm the order (its task), anyone else's Ask for a yes / Take the request back.
 export type StepKind = 'makeWorkOrders' | 'changePromise' | 'close' | /* F-OP-121 */ 'createShipment' | 'confirmYes' | 'askYes'
 

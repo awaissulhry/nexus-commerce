@@ -119,7 +119,23 @@ describe('F-OM-102: the facts and Close unsettled…', () => {
     const part = order('CONFIRMED', { chain: { ...order('CONFIRMED').chain, depositRequests: [deposit({ paidAmount: 100000 })] } })
     expect(depositWordsOf(part, true)).toEqual({ key: 'moneyTab.totals.fact.partPaid', money: { paid: 100000, amount: 228384 } })
     expect(depositWordsOf(order('CONFIRMED'), false)).toEqual({ key: 'moneyTab.totals.fact.depositDueWords', days: { date: '2026-11-04' } })
-    expect(depositWordsOf(order('CONFIRMED', { depositRequired: false }), true)).toEqual({ key: 'summary.depositNotNeeded' })
+    // F-OM-fx5w (N1): "Not needed" alone only while no deposit is asked (an open one is said: see below).
+    expect(depositWordsOf(order('CONFIRMED', { depositRequired: false, chain: { ...order('CONFIRMED').chain, depositRequests: [] } }), true)).toEqual({ key: 'summary.depositNotNeeded' })
+  })
+
+  // F-OM-fx5w (N1, walk 31-A): an order that needs no deposit with a priced change's extra deposit open — the head names it, so the
+  // Deposit fact never says "Not needed" alone; Still to pay's next is that extra deposit. Production does not wait for it.
+  it('F-OM-fx5w (N1): not needed, an extra deposit open — "Not needed · extra € … open, due …"; the next money asked is that deposit', () => {
+    const extra = deposit({ id: 'extra-1', amount: 4392, paidAmount: 0, dueDate: '2026-11-23' })
+    const value = order('IN_PRODUCTION', { depositRequired: false, chain: { ...order('IN_PRODUCTION').chain, depositRequests: [extra] } })
+    expect(depositWordsOf(value, true)).toEqual({ key: 'moneyTab.totals.fact.notNeededExtra', money: { amount: 4392 }, days: { date: '2026-11-23' } })
+    expect(depositWordsOf(value, false)).toEqual({ key: 'moneyTab.totals.fact.notNeededExtraWords', days: { date: '2026-11-23' } })
+    const model = totals(value, { settlement: { ...SETTLEMENT_OPEN, thisOrder: { paid: 0, stillToPay: 761280, invoicedShare: 0, depositsPaid: 0 } } })
+    expect(model.facts[0]).toEqual({ label: { key: 'summary.deposit' }, value: { key: 'moneyTab.totals.fact.notNeededExtra', money: { amount: 4392 }, days: { date: '2026-11-23' } }, door: null })
+    expect(tile(model, 'still')!.hint).toEqual({ key: 'moneyTab.totals.hint.next', words: { what: { key: 'moneyTab.plan.next.EXTRA' } }, days: { date: '2026-11-23' } })
+    // Once paid, the order still needs no deposit: "Not needed".
+    const paid = order('IN_PRODUCTION', { depositRequired: false, chain: { ...value.chain, depositRequests: [{ ...extra, status: 'PAID', paidAmount: 4392 }] } })
+    expect(depositWordsOf(paid, true)).toEqual({ key: 'summary.depositNotNeeded' })
   })
 
   it('Margin now › (#margin) with the margin grain — the margin read\'s now, else the order\'s; Cost now with the cost grain', () => {
@@ -141,7 +157,7 @@ describe('F-OM-102: the facts and Close unsettled…', () => {
   it('the words exist in both languages', () => {
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-      for (const key of ['title', 'info', 'keys', 'more', 'part', 'cancelled', 'settled', 'settledRow', 'nothingLeft', 'close', 'closeHeld.closed', 'closeHeld.notShipped', 'door.shipments', 'door.invoices', 'door.payments', 'tile.total', 'tile.invoiced', 'tile.paid', 'tile.still', 'adds.title', 'adds.hint', 'fact.noTerms', 'fact.marginNow', 'fact.costNow'])
+      for (const key of ['title', 'info', 'keys', 'more', 'part', 'cancelled', 'settled', 'settledRow', 'nothingLeft', 'close', 'closeHeld.closed', 'closeHeld.notShipped', 'door.shipments', 'door.invoices', 'door.payments', 'tile.total', 'tile.invoiced', 'tile.paid', 'tile.still', 'adds.title', 'adds.hint', 'fact.noTerms', 'fact.marginNow', 'fact.costNow', /* F-OM-fx5w (N1) */ 'fact.notNeededExtra', 'fact.notNeededExtraWords'])
         expect(t(`moneyTab.totals.${key}`), `${locale} ${key}`).not.toBe(`moneyTab.totals.${key}`)
       for (const count of [1, 2]) expect(t('moneyTab.totals.left', { count }), `${locale} left ${count}`).toContain(String(count))
     }

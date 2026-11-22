@@ -149,12 +149,20 @@ export function invoicesOf(input: { readonly order: Order; readonly settlement: 
   return { rows, answer: answerOf(rows, price) }
 }
 
-/** "3 documents · € 2,418.00 open on FT-2026-00012" (price) · "3 documents · all paid" · "3 documents" (words); nothing invoiced yet. */
+/**
+ * "3 documents · € 2,418.00 open on FT-2026-00012" (price) · "3 documents · FT-2026-00012 is part paid" (words, F-OM-fx5w N9) ·
+ * "3 documents · all paid" · "3 documents"; nothing invoiced yet.
+ */
 function answerOf(rows: readonly InvoiceRow[], price: boolean): MoneyWord {
   if (rows.length === 0) return word('moneyTab.invoices.empty')
   const count = { count: rows.length }
   const open = price ? (rows.find((row) => GOODS(row.invoice.docType) && (row.open ?? 0) > 0) ?? null) : null
   if (open && open.invoice.number) return word('moneyTab.invoices.countOpen', { params: { ...count, number: open.invoice.number }, money: { amount: open.open ?? 0 } })
+  // F-OM-fx5w (N9, 10-design §6): without the price grain, the first goods invoice still open named by its Payment word (the settlement's
+  // word-code, B-OM-023) — never only "1 document". A rejected one counts for nothing.
+  const said = (row: InvoiceRow) => row.payment?.word.key ?? null
+  const named = !price ? (rows.find((row) => GOODS(row.invoice.docType) && !!row.invoice.number && row.state.word.key !== 'moneyTab.invoices.state.rejected' && (said(row) === PAYMENT_WORD.PART_PAID.key || said(row) === PAYMENT_WORD.OPEN.key)) ?? null) : null
+  if (named) return word(said(named) === PAYMENT_WORD.PART_PAID.key ? 'moneyTab.invoices.countPart' : 'moneyTab.invoices.countUnpaid', { params: { ...count, number: named.invoice.number! } })
   // F-OM-203 (B-OM-023): "all paid" is said to a reader without the price grain too (the settlement's word-codes).
   const issued = rows.filter((row) => row.payment !== null)
   if (issued.length > 0 && issued.every((row) => row.payment!.word.key === 'moneyTab.invoices.pay.paid' || row.payment!.word.key === 'moneyTab.invoices.pay.credited')) return word('moneyTab.invoices.countPaid', { params: count })

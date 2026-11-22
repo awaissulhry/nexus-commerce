@@ -97,6 +97,7 @@ function RowValue({ row }: { row: LinkedRow }) {
 /** A part of the quiet line, a link where it opens something. */
 function QuietPart({ part }: { part: LinkedQuiet }) {
   const t = useT('orders')
+  const locale = useLocale() // F-OM-fx5w (N1): the extra deposit's due day
   if (part.kind === 'quote' || part.kind === 'origin') {
     const words = part.kind === 'quote' ? t('linked.labelled', { label: t('overview.linked.quote'), value: t('chain.quoteValue', { number: part.number, revision: part.revision }) }) : t(part.words.key, part.words.params)
     return part.href ? (
@@ -108,9 +109,11 @@ function QuietPart({ part }: { part: LinkedQuiet }) {
     )
   }
   if (part.kind === 'deposit') {
+    // F-OM-fx5w (N1): not needed, an extra deposit open — Money's Totals' own words ("Not needed · an extra deposit is open, due …").
+    const state = part.extraDue ? t('moneyTab.totals.fact.notNeededExtraWords', { date: formatDate(dayInstant(part.extraDue), { locale }) }) : t(`gate.state.${part.state}`)
     return (
       <TabLink className="fw-so-link" href={part.href}>
-        {t('linked.value', { value: t('linked.labelled', { label: t('overview.linked.deposit'), value: t(`gate.state.${part.state}`) }) })}
+        {t('linked.value', { value: t('linked.labelled', { label: t('overview.linked.deposit'), value: state }) })}
       </TabLink>
     )
   }

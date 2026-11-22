@@ -1,5 +1,6 @@
 import type { Order } from '../../api'
 import { depositGate, linesNotInProduction, type OrderAbilities, type Phrase } from '../../model'
+import { askedOutsideGate } from '../../model' // F-OM-fx5w (N1): an extra deposit open on an order that needs none
 import { readyToShipOf } from '../../model' // F-OS-102 (L9): Create shipment… is due when something is ready now
 import { tabHref } from '../../../../_shared/record-frame/address' // F-OP-104: the tab links keep the dock's scope (F-OP-210)
 // ---- F-OO-207 (order overview §6; review F5, F8; Owner D3, D8): one count rule, the doors that make the next record ----
@@ -72,7 +73,8 @@ export type LinkedQuiet =
   | { readonly kind: 'quote'; readonly number: string; readonly revision: number; readonly href: string | null }
   /** No quote: the request it was made from ("Made from request INQ-… ›"), or "Typed by the office". */
   | { readonly kind: 'origin'; readonly words: Phrase; readonly href: string | null }
-  | { readonly kind: 'deposit'; readonly state: 'NOT_NEEDED' | 'PAID' | 'WAIVED'; readonly href: string }
+  /** F-OM-fx5w (N1): `extraDue` — not needed, but an extra deposit is open (its due day): never "Not needed" alone (Money's Totals' words). */
+  | { readonly kind: 'deposit'; readonly state: 'NOT_NEEDED' | 'PAID' | 'WAIVED'; readonly href: string; readonly extraDue?: string }
   | { readonly kind: 'sameQuote'; readonly number: string; readonly href: string }
 
 export interface LinkedView {
@@ -152,6 +154,7 @@ export function linkedRowsOf(input: LinkedInput): LinkedView {
 
   const quote = order.chain.quote
   const gate = depositGate(order)
+  const extra = gate.state === 'NOT_NEEDED' ? askedOutsideGate(order) : null // F-OM-fx5w (N1)
   const quiet: LinkedQuiet[] = [
     ...(quote
       ? [{ kind: 'quote' as const, number: quote.number, revision: quote.revision, href: can.viewQuotes ? `${prefix}/sales/quotes/${quote.id}` : null }]
@@ -162,7 +165,7 @@ export function linkedRowsOf(input: LinkedInput): LinkedView {
           : []),
     // The deposit only when it waits for nothing: a deposit that waits (or was never asked) is Where it is now's strip.
     // F-OM-104 (P0-B11): the deposit's door lands on Money › Payments.
-    ...(DEPOSIT_SAID.has(gate.state) ? [{ kind: 'deposit' as const, state: gate.state as 'NOT_NEEDED' | 'PAID' | 'WAIVED', href: tab('money', 'payments') }] : []),
+    ...(DEPOSIT_SAID.has(gate.state) ? [{ kind: 'deposit' as const, state: gate.state as 'NOT_NEEDED' | 'PAID' | 'WAIVED', href: tab('money', 'payments'), ...(extra ? { extraDue: extra.dueDate } : {}) }] : []),
     ...input.sameQuote.map((other) => ({ kind: 'sameQuote' as const, number: other.number, href: `${prefix}/sales/orders/${other.id}` })),
   ]
   return { rows, none, quiet }

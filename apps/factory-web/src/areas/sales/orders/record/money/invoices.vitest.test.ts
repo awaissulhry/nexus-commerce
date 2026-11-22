@@ -171,6 +171,22 @@ describe('F-OM-fx3: the rows say more — payment words for every reader, what i
   })
 })
 
+// ---- F-OM-fx5w (fix wave 4, the look-only walk 31-A on real data): N9 in Invoices & credit notes. Every name and number is
+// made up. ----
+describe('F-OM-fx5w: the walk\'s gaps in Invoices & credit notes', () => {
+  it('N9: without the price grain the answer names the invoice still open by its Payment word — "3 documents · FA-… is part paid"', () => {
+    const coded = (paymentState: 'OPEN' | 'PART_PAID') => settlement({ invoices: settlement().invoices.map((invoice) => ({ ...invoice, paymentState })) })
+    expect(model('sales', shipped(), coded('PART_PAID')).answer).toEqual({ key: 'moneyTab.invoices.countPart', params: { count: 3, number: 'FA-2026-00052' } })
+    expect(model('sales', shipped(), coded('OPEN')).answer).toEqual({ key: 'moneyTab.invoices.countUnpaid', params: { count: 3, number: 'FA-2026-00052' } })
+    expect(amountsOf(model('sales', shipped(), coded('PART_PAID')).answer)).toEqual([])
+    // The price grain keeps the amount open on it; a rejected invoice is never the one named.
+    expect(model('finance', shipped(), coded('PART_PAID')).answer.key).toBe('moneyTab.invoices.countOpen')
+    const value = shipped()
+    const rejected = { ...value, chain: { ...value.chain, invoices: value.chain.invoices.map((invoice) => (invoice.id === GOODS_ID ? { ...invoice, status: 'REJECTED' } : invoice)) } }
+    expect(model('sales', rejected, coded('OPEN')).answer.key).not.toBe('moneyTab.invoices.countUnpaid')
+  })
+})
+
 describe('F-OM-203: the words', () => {
   it('exist in both languages', () => {
     const keys = ['info', 'keys', 'shipped', 'col.payment', 'pay.open', 'pay.part', 'pay.paid', 'pay.credited', 'pay.refund', 'sub.credits', 'sub.deducted', 'door.record', 'door.credit', 'door.sendSdi', 'door.fixSdi', 'door.payments', 'door.pdf', 'held.creditNote', 'sdiFailed', 'copyNumber', 'more',
@@ -178,7 +194,7 @@ describe('F-OM-203: the words', () => {
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
       for (const key of keys) expect(t(`moneyTab.invoices.${key}`, { number: 'N', amount: 'A', numbers: 'S', date: 'D' }), `${locale} ${key}`).not.toMatch(/moneyTab\.|\{/)
-      for (const count of [1, 3]) for (const key of ['count', 'countOpen', 'countPaid']) expect(t(`moneyTab.invoices.${key}`, { count, number: 'N', amount: 'A' }), `${locale} ${key} ${count}`).toContain(String(count))
+      for (const count of [1, 3]) for (const key of ['count', 'countOpen', 'countPaid', /* F-OM-fx5w (N9) */ 'countPart', 'countUnpaid']) expect(t(`moneyTab.invoices.${key}`, { count, number: 'N', amount: 'A' }), `${locale} ${key} ${count}`).toContain(String(count))
     }
   })
 })

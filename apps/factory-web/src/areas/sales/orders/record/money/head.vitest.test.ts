@@ -2,8 +2,8 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { LOCALES } from '../../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
-import { canOf, deposit, order, PAID, SCHEDULE, SCHEDULE_NONE, SCHEDULE_OPEN, SENT_LINK, SETTLEMENT_SHIPPED, TODAY } from '../../_demo/fixtures'
-import type { Order, Schedule } from '../../api'
+import { canOf, deposit, forRole, order, PAID, SCHEDULE, SCHEDULE_NONE, SCHEDULE_OPEN, SENT_LINK, SETTLEMENT_SHIPPED, TODAY } from '../../_demo/fixtures' // F-OM-fx5w: + forRole
+import type { Order, Schedule, Settlement } from '../../api' // F-OM-fx5w: + Settlement
 import { moneyHeadOf } from './head'
 import { MONEY_SECTIONS, PAYMENTS_ALIASES, PLAN_COLUMNS_FROM } from './layout'
 import { amountsOf, type MoneyWord } from './word'
@@ -159,10 +159,55 @@ describe('F-OM-101: the tab\'s one answer line', () => {
   })
 
   it('every word of the head exists in both languages with the same placeholders', () => {
-    const heads = ['wallPrice', 'closed', 'cancelled', 'settledOn', 'settled', 'reading', 'depositMissing', 'productionWaits', 'depositPaid', 'depositWaived', 'extraOpen', 'extraOpenFrom', 'extraOpenWords', 'extraOpenFromWords', 'depositShort', 'depositPartPaid', 'depositOpen', 'depositOpenWords', 'depositOverdue', 'depositOverdueWords', 'pageSent', 'pageNotSent', 'beforeShipping', 'beforeShippingNoDay', 'balanceBeforeShipping', 'invoicedAll', 'stillToPayOn', 'invoicesOpen', 'allPaid', 'nothing', 'nothingTerms', 'restOnInvoice', 'partFailed' /* F-OM-303 */]
+    const heads = ['wallPrice', 'closed', 'cancelled', 'settledOn', 'settled', 'reading', 'depositMissing', 'productionWaits', 'depositPaid', 'depositWaived', 'extraOpen', 'extraOpenFrom', 'extraOpenWords', 'extraOpenFromWords', 'depositShort', 'depositPartPaid', 'depositOpen', 'depositOpenWords', 'depositOverdue', 'depositOverdueWords', 'pageSent', 'pageNotSent', 'beforeShipping', 'beforeShippingNoDay', 'balanceBeforeShipping', 'invoicedAll', 'stillToPayOn', 'stillToPayOnWords' /* F-OM-fx5w (N9) */, 'invoicesOpen', 'allPaid', 'nothing', 'nothingTerms', 'restOnInvoice', 'partFailed' /* F-OM-303 */]
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
       for (const key of heads) expect(t(`moneyTab.head.${key}`, { amount: 'A', date: 'D', revision: 1, share: 'S', number: 'N', terms: 'T' }), `${locale} ${key}`).not.toMatch(/moneyTab\.|\{/)
     }
+  })
+})
+
+// ---- F-OM-fx5w (fix wave 4, the look-only walk 31-A on real data): N1 · N2 · N9 in the head; N7 · N8 · N10 in the views. Every name and
+// number is made up. ----
+describe('F-OM-fx5w: the walk\'s gaps in the head', () => {
+  const EXTRA = deposit({ id: 'extra-1', amount: 4392, paidAmount: 0, dueDate: '2026-11-23' })
+  const noDepositWithExtra = order('IN_PRODUCTION', { depositRequired: false, chain: { ...order('IN_PRODUCTION').chain, depositRequests: [EXTRA], invoices: [] } })
+  const fromChange: Schedule = { ...SCHEDULE_NONE, requests: [{ id: 'extra-1', milestoneId: null, kind: 'ACCONTO', stepKind: 'DEPOSIT', status: 'OPEN', dueDate: '2026-11-23', fiscalDocument: 'TD02', fromChange: { amendmentId: 'a1', revision: 1 } }] }
+
+  it('N1: no deposit needed, an extra deposit open — the head names it (money to collect), never "nothing to collect" nor "production waits"', () => {
+    const answer = head(noDepositWithExtra, { schedule: fromChange })
+    expect(answer.tone).toBe('warning')
+    expect(answer.parts).toEqual([{ key: 'moneyTab.head.extraOpenFrom', money: { amount: 4392 }, params: { revision: 1 } }])
+    // Without the price grain: the same words, no amount; without the plan read's change: still the extra deposit.
+    expect(head(noDepositWithExtra, { schedule: fromChange, role: 'manager' }).parts).toEqual([{ key: 'moneyTab.head.extraOpenFromWords', params: { revision: 1 } }])
+    expect(head(noDepositWithExtra, { schedule: SCHEDULE_NONE }).parts).toEqual([{ key: 'moneyTab.head.extraOpen', money: { amount: 4392 } }])
+    for (const role of ['owner', 'sales', 'manager'] as const) {
+      const said = keys(head(noDepositWithExtra, { schedule: fromChange, role }).parts)
+      expect(said, role).not.toContain('moneyTab.head.productionWaits')
+      expect(said, role).not.toContain('moneyTab.head.nothingTerms')
+    }
+    // Paid (or none asked): the order needs no deposit — nothing named.
+    const paid = order('IN_PRODUCTION', { depositRequired: false, chain: { ...noDepositWithExtra.chain, depositRequests: [{ ...EXTRA, status: 'PAID', paidAmount: 4392 }] } })
+    expect(keys(head(paid, { schedule: SCHEDULE_NONE }).parts)).toEqual(['moneyTab.head.nothingTerms'])
+  })
+
+  it('N2: a reader without invoices.view on an order invoiced and not paid in full — the order read\'s own gaps (Totals\' source), never "everything invoiced is paid"', () => {
+    const shipped = order('SHIPPED', { depositRequired: false, chain: { ...order('SHIPPED').chain, depositRequests: [] } })
+    const answer = head(shipped, { schedule: SCHEDULE_NONE, role: 'manager' })
+    expect(answer.parts).toEqual([{ key: 'moneyTab.head.invoicesOpen' }])
+    expect(answer.tone).toBe('warning')
+    // Its gaps say nothing is due any more: "everything invoiced is paid" (the order read is the source).
+    const paid: Order = { ...shipped, settlement: { ...shipped.settlement, missing: [{ code: 'AT_SDI', message: '' }] } }
+    expect(head(paid, { schedule: SCHEDULE_NONE, role: 'manager' }).parts).toEqual([{ key: 'moneyTab.head.allPaid' }])
+  })
+
+  it('N9: a reader without prices is told which invoice is still to pay (the settlement\'s word-code), never an amount', () => {
+    const shipped = order('SHIPPED', { depositRequired: false, chain: { ...order('SHIPPED').chain, depositRequests: [] } })
+    const coded: Settlement = { ...SETTLEMENT_SHIPPED, fullyInvoiced: true, invoices: SETTLEMENT_SHIPPED.invoices.map((invoice) => ({ ...invoice, paymentState: invoice.docType === 'TD02' ? ('PAID' as const) : ('PART_PAID' as const) })) }
+    const words = head(shipped, { schedule: SCHEDULE_NONE, role: 'sales', settlement: forRole(coded, 'sales') })
+    expect(words.parts).toEqual([{ key: 'moneyTab.head.invoicedAll' }, { key: 'moneyTab.head.stillToPayOnWords', params: { number: 'FA-2026-00052' } }])
+    expect(words.parts.flatMap(amountsOf)).toEqual([])
+    // The price grain: the amount open on it, by this order's share.
+    expect(head(shipped, { schedule: SCHEDULE_NONE, role: 'finance', settlement: coded }).parts[1]).toEqual({ key: 'moneyTab.head.stillToPayOn', money: { amount: 532896 }, params: { number: 'FA-2026-00052' } })
   })
 })

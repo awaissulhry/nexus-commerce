@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { depositGate as domainGate } from '@nexus/factory-domain/production/work-orders/release'
 import { LOCALES } from '../../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
-import { canOf, deposit, order, PAID, SCHEDULE, SCHEDULE_NONE, SCHEDULE_OPEN, SENT_LINK, TD02, TODAY } from '../../_demo/fixtures'
-import type { DepositRequest, Milestone, Order, Schedule } from '../../api'
+import { canOf, deposit, order, PAID, SCHEDULE, SCHEDULE_NONE, SCHEDULE_OPEN, SENT_LINK, SETTLEMENT_SHIPPED, TD02, TODAY } from '../../_demo/fixtures' // F-OM-fx5w: + SETTLEMENT_SHIPPED
+import type { DepositRequest, Milestone, Order, Schedule, Settlement } from '../../api' // F-OM-fx5w: + Settlement
 import { depositGate } from '../../model'
 import { stepAbilitiesOf, type StepAbilities } from '../schedule/model'
 import { MONEY_PLAN_ACTS, MONEY_PLAN_REFUSAL_WORDS } from '@nexus/factory-domain/sales/orders/money-plan'
@@ -420,6 +420,7 @@ describe('F-OM-103: the words', () => {
       ...[...MONEY_PLAN_ACTS, 'OTHER'].map((act) => `byHand.what.${act}`),
       ...['none', 'allPaid', 'stillOpen', 'overdue', 'nextDue', 'next', 'short', 'partPaid', 'cancelled' /* F-OM-fx3 */].map((answer) => `answer.${answer}`),
       'shortHint', // F-OM-fx3 (W-01)
+      ...['restOn', 'restOnPart', 'invoicesOpen'].map((answer) => `answer.${answer}`), // F-OM-fx5w (N3)
       ...['earlier.step', 'earlier.replaced', 'earlier.cancelled', 'setByHand', 'fromChange', 'fold', 'unfold', 'more', 'menu.openInvoice', 'step.page', 'step.byChange', 'step.issued', 'step.paid', 'step.byHand' /* F-OM-fx3 (W-15) */, 'payments.title', 'payments.none', 'payments.ref', 'payments.paidSoFar'],
     ]
     for (const locale of LOCALES) {
@@ -427,5 +428,43 @@ describe('F-OM-103: the words', () => {
       for (const key of keys) expect(t(`moneyTab.plan.${key}`, { date: 'D', number: 'N', revision: 1, row: 'R', ref: 'F', amount: 'A', what: 'W' }), `${locale} ${key}`).not.toMatch(/moneyTab\.|\{/)
       expect(t('depositKind.CAPARRA_PENITENZIALE'), locale).not.toBe('depositKind.CAPARRA_PENITENZIALE')
     }
+  })
+})
+
+// ---- F-OM-fx5w (fix wave 4, the look-only walk 31-A on real data): N1 · N3 in the plan. Every name and number is made up. ----
+describe('F-OM-fx5w: the walk\'s gaps in Payments', () => {
+  const EXTRA = deposit({ id: 'extra-1', amount: 4392, paidAmount: 0, dueDate: '2026-11-23' })
+  const fromChange: Schedule['requests'] = [{ id: 'extra-1', milestoneId: null, kind: 'ACCONTO', stepKind: 'DEPOSIT', status: 'OPEN', dueDate: '2026-11-23', fiscalDocument: 'TD02', fromChange: { amendmentId: 'a1', revision: 1 } }]
+
+  it('N1: no deposit needed — its extra deposit is an "Extra deposit" row WITHOUT "New work orders wait for it" (the release does not wait)', () => {
+    const value = withRequests(order('IN_PRODUCTION', { depositRequired: false }), [EXTRA])
+    const model = plan(value, { schedule: { ...SCHEDULE_NONE, requests: fromChange } })
+    expect(kinds(model.rows)).toEqual(['EXTRA'])
+    expect(model.rows[0]!.notes).toEqual([])
+    expect(model.answer).toEqual([{ key: 'moneyTab.plan.answer.nextDue', words: { what: { key: 'moneyTab.plan.next.EXTRA' } }, days: { date: '2026-11-23' } }])
+    // Without the plan read's change: still the extra deposit (the order's terms ask none).
+    expect(kinds(plan(value, { schedule: SCHEDULE_NONE }).rows)).toEqual(['EXTRA'])
+    // The release's own gate passes it (no deposit required), and the web gate says the same.
+    expect(domainGate({ orderId: 'o', orderNumber: 'SO-1', depositRequired: false, requests: [{ status: 'OPEN', dueDate: '2026-11-23' as never }] }).passed).toBe(true)
+    expect(depositGate(value).state).toBe('NOT_NEEDED')
+    // With a deposit required the same extra deposit holds new work orders: the note stays.
+    const required = plan(withRequests(order('IN_PRODUCTION'), [PAID, EXTRA]), { schedule: { ...SCHEDULE, requests: fromChange } })
+    expect(required.rows.find((row) => row.kind === 'EXTRA')!.notes.map((note) => note.word.key)).toEqual(['moneyTab.plan.note.extraWaits'])
+  })
+
+  it('N3: no step, invoiced and part paid — the answer names the open invoice (never "nothing is open yet"); amounts with the price grain only', () => {
+    const shipped = withRequests(order('SHIPPED', { depositRequired: false }), [])
+    const noStep = (role: Parameters<typeof canOf>[0], settlement: Settlement | null, stillToPay: number | null = null) => planOf({ order: shipped, schedule: SCHEDULE_NONE, settlement, can: canOf(role), stepCan: null, today: TODAY, stillToPay })
+    const coded = (paymentState: 'OPEN' | 'PART_PAID'): Settlement => ({ ...SETTLEMENT_SHIPPED, invoices: SETTLEMENT_SHIPPED.invoices.map((invoice) => (invoice.docType === 'TD02' ? invoice : { ...invoice, paidAmount: paymentState === 'PART_PAID' ? 300000 : 0, openAmount: paymentState === 'PART_PAID' ? 232896 : 532896, paymentState })) })
+    // Finance (the price grain): still open € … (the server's one rule) · the rest is open on FA-2026-00052: part paid.
+    expect(noStep('finance', coded('PART_PAID'), 232896).answer).toEqual([{ key: 'moneyTab.plan.answer.stillOpen', money: { amount: 232896 } }, { key: 'moneyTab.plan.answer.restOnPart', params: { number: 'FA-2026-00052' } }])
+    // Sales (invoices.view, no price): the settlement's word-code, in words.
+    expect(noStep('sales', coded('PART_PAID')).answer).toEqual([{ key: 'moneyTab.plan.answer.restOnPart', params: { number: 'FA-2026-00052' } }])
+    expect(noStep('sales', coded('OPEN')).answer).toEqual([{ key: 'moneyTab.plan.answer.restOn', params: { number: 'FA-2026-00052' } }])
+    // The production manager (no invoices.view: no settlement read): the order read's own gap, never "nothing is open yet".
+    expect(noStep('manager', null).answer).toEqual([{ key: 'moneyTab.plan.answer.invoicesOpen' }])
+    for (const model of [noStep('sales', coded('PART_PAID')), noStep('manager', null)]) expect(model.answer.flatMap(amountsOf)).toEqual([])
+    // Nothing invoiced yet: "nothing is open yet" stays.
+    expect(plan(withRequests(order('CONFIRMED', { depositRequired: false }), []), { schedule: SCHEDULE_NONE }).answer).toEqual([{ key: 'moneyTab.plan.answer.none' }])
   })
 })

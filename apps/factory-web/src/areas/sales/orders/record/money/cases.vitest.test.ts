@@ -20,7 +20,7 @@ const AMOUNT = /€|EUR|\d[.,]\d{2}\b/
 
 describe('F-OM T.1: the Money lane\'s gallery cases', () => {
   it('the states the seed lacks are all there (15-steps T.1; not the Simple company)', () => {
-    for (const id of ['om-short', 'om-dlg-short', 'om-dlg-undo', 'om-accepted-short', 'om-waived-again', 'om-replaced', 'om-extra', 'om-on-invoice', 'om-invoices-sales', 'om-undo-held', 'om-settled', 'om-cancelled', 'om-stop-page', 'om-price-diff', 'om-dlg-accept', 'om-price-accepted', 'om-margin', 'om-dlg-cost', 'om-dlg-target', 'om-failed', 'om-role-owner', 'om-role-finance', 'om-role-sales', 'om-role-manager', 'om-role-readonly', /* F-OM-fx3 (W-27) */ 'om-dlg-deposit', 'om-dlg-move', 'om-dlg-terms', 'om-dlg-add']) expect(OM_CASES, id).toContain(id)
+    for (const id of ['om-short', 'om-dlg-short', 'om-dlg-undo', 'om-accepted-short', 'om-waived-again', 'om-replaced', 'om-extra', 'om-on-invoice', 'om-invoices-sales', 'om-undo-held', 'om-settled', 'om-cancelled', 'om-stop-page', 'om-price-diff', 'om-dlg-accept', 'om-price-accepted', 'om-margin', 'om-dlg-cost', 'om-dlg-target', 'om-failed', 'om-role-owner', 'om-role-finance', 'om-role-sales', 'om-role-manager', 'om-role-readonly', /* F-OM-fx3 (W-27) */ 'om-dlg-deposit', 'om-dlg-move', 'om-dlg-terms', 'om-dlg-add', /* F-OM-fx5w (N1) */ 'om-extra-no-deposit']) expect(OM_CASES, id).toContain(id)
   })
 
   for (const locale of LOCALES) {
@@ -102,5 +102,16 @@ describe('F-OM T.1: the Money lane\'s gallery cases', () => {
     const gallery = readFileSync(new URL('../fixtures.ts', import.meta.url), 'utf8')
     expect(gallery).toContain("if (model.record.tab === 'money') return inShell(path, createElement(MoneyDesign, { record: model.record, thread, customFields }), model.role)")
     expect(gallery).toContain('actions: { onDialog: setDialog }')
+  })
+
+  // ---- F-OM-fx5w (fix wave 4, the walk 31-A's N1): no deposit needed, a priced change's extra deposit open ----
+  it('N1: the head, Totals and Payments agree — the extra deposit is money to collect, production does not wait for it', () => {
+    const text = textOf(draw('om-extra-no-deposit'))
+    expect(text).toContain('open (change rev 1)')
+    expect(text).toContain('Not needed · extra')
+    expect(text).toContain('next: the extra deposit')
+    expect(text).not.toContain('Nothing to collect yet')
+    expect(text).not.toContain('New work orders wait for it')
+    expect(text).not.toContain('production waits for it')
   })
 })

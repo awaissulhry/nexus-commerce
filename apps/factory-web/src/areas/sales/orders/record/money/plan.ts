@@ -4,7 +4,7 @@ import { DEPOSIT_KINDS, type ByHand, type ChainInvoice, type DepositRequest, typ
 import { depositInvoicesOf, isFinal, stillToPay, type OrderAbilities, type Tone } from '../../model'
 import { rowAnchor } from '../dock/discuss'
 import { stepVerbs, type StepAbilities } from '../schedule/model'
-import { isExtraDeposit } from './head'
+import { balanceDueOf, isExtraDeposit, openGoodsOf } from './head' // F-OM-fx5w (N3): + balanceDueOf, openGoodsOf
 import { word, type MoneyWord } from './word'
 
 /**
@@ -237,7 +237,9 @@ export function planOf(input: {
     const notes: { word: MoneyWord; tone: 'warning' | 'neutral' }[] = []
     if (open && !final) {
       if (kind === 'DEPOSIT' && order.depositRequired) notes.push({ word: word(request ? 'moneyTab.plan.note.productionWaits' : 'held.depositMissing'), tone: 'warning' })
-      if (kind === 'EXTRA') notes.push({ word: word('moneyTab.plan.note.extraWaits'), tone: 'warning' })
+      // F-OM-fx5w (N1): only where the release's gate waits — an order that needs no deposit is never held by its extra deposit
+      // (factory-domain release.ts depositGate: no deposit required → passed).
+      if (kind === 'EXTRA' && order.depositRequired) notes.push({ word: word('moneyTab.plan.note.extraWaits'), tone: 'warning' })
       if (kind === 'BEFORE_SHIPPING') notes.push({ word: word('moneyTab.plan.note.holdsShipment'), tone: 'neutral' })
       if (ON_GOODS.includes(kind)) notes.push({ word: word('moneyTab.plan.note.paidWithInvoice'), tone: 'neutral' })
     }
@@ -362,16 +364,16 @@ export function planOf(input: {
 
   // F-OM-201: the head's ⋯ (the plan right and the price grain): Change payment terms… (held when the order is closed), Add a step….
   const head: PlanModel['head'] = !can.moneyPlan || !price ? [] : final ? [{ id: 'CHANGE_TERMS', label: word('moneyTab.plan.act.CHANGE_TERMS'), held: word('moneyTab.plan.held.final') }] : [{ id: 'CHANGE_TERMS', label: word('moneyTab.plan.act.CHANGE_TERMS'), held: null }, { id: 'ADD_STEP', label: word('moneyTab.plan.act.ADD_STEP'), held: free.length === 0 ? word('moneyTab.plan.held.nothingFree') : null }]
-  return { rows, earlier, answer: answerOf(rows, schedule, input.stillToPay, price, cancelledOrder), final, head, openSteps: free }
+  return { rows, earlier, answer: answerOf(rows, schedule, input.stillToPay, price, cancelledOrder, { order, settlement }), final, head, openSteps: free }
 }
 
 /** The head's answer: still open · overdue · next (price), else the next step in words; nothing open; everything paid (the view
  * says its first word with a capital). */
-function answerOf(rows: readonly PlanRow[], schedule: Schedule, stillToPay: number | null, price: boolean, cancelled: boolean): MoneyWord[] {
+function answerOf(rows: readonly PlanRow[], schedule: Schedule, stillToPay: number | null, price: boolean, cancelled: boolean, read: { readonly order: Order; readonly settlement: Settlement | null }): MoneyWord[] {
   // F-OM-fx3 (W-05): a cancelled order owes nothing (M1-B9): no "still open", no "next … due", whatever an older answer says.
   if (cancelled) return [word('moneyTab.plan.answer.cancelled')]
   // F-OM-fx3 (W-20): a closed order's "its plan no longer changes" is said once, by the tab's head — not again here.
-  if (rows.length === 0) return [word('moneyTab.plan.answer.none')]
+  if (rows.length === 0) return noStepAnswerOf(schedule, stillToPay, price, read)
   const next = rows.find((row) => !row.done) ?? null
   if (!next) return [word('moneyTab.plan.answer.allPaid')]
   const what = word(`moneyTab.plan.next.${next.kind}`)
@@ -394,6 +396,23 @@ function answerOf(rows: readonly PlanRow[], schedule: Schedule, stillToPay: numb
     ]
   }
   return [said]
+}
+
+/**
+ * F-OM-fx5w (N3, walk 31-A): a plan with no step — the customer pays on the invoice. Before an invoice, "nothing is open yet"; once a
+ * goods invoice is open, it is the answer: "the rest is open on FT-2026-00004: part paid" (invoices.view: its number; the price grain:
+ * "still open € …" first, the server's one rule), and without the settlement read the order read's own gaps in words ("the invoices are
+ * not paid in full") — never "nothing is open" beside the head's and Totals' open balance.
+ */
+function noStepAnswerOf(schedule: Schedule, stillToPay: number | null, price: boolean, read: { readonly order: Order; readonly settlement: Settlement | null }): MoneyWord[] {
+  const open = openGoodsOf(read.settlement, price)
+  if (open) {
+    const said = word(open.part ? 'moneyTab.plan.answer.restOnPart' : 'moneyTab.plan.answer.restOn', { params: { number: open.number } })
+    const still = schedule.stillOpen ?? stillToPay ?? open.amount
+    return price && still !== null ? [word('moneyTab.plan.answer.stillOpen', { money: { amount: still } }), said] : [said]
+  }
+  if (balanceDueOf(read.order) || !!read.settlement?.gaps.includes('BALANCE_DUE')) return [word('moneyTab.plan.answer.invoicesOpen')]
+  return [word('moneyTab.plan.answer.none')]
 }
 
 /** F-OM-fx3 (W-08): History › — the audit of this order's plan changed by hand (`orders.planByHand` on the SalesOrder; audit.read). */

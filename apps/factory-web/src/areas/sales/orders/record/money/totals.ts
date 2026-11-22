@@ -1,6 +1,6 @@
 import { SETTLEMENT_GAPS, type Order, type Settlement } from '../../api'
-import { depositGate, isShippedInFull, type OrderAbilities } from '../../model'
-import { isExtraDeposit, liveDepositsOf } from './head'
+import { askedOutsideGate, depositGate, isShippedInFull, stillToPay, type OrderAbilities } from '../../model' // F-OM-fx5w (N1): + askedOutsideGate, stillToPay
+import { isExtraDeposit, liveDepositsOf, openGoodsOf } from './head' // F-OM-fx5w (N9): + openGoodsOf (one open invoice with the head)
 import { word, type MoneyWord } from './word'
 
 /**
@@ -88,8 +88,6 @@ export function gapDoorOf(code: string, can: Pick<OrderAbilities, 'viewInvoices'
   return null
 }
 
-const isGoods = (invoice: { readonly docType: string; readonly status: string }) => invoice.docType !== 'TD02' && invoice.docType !== 'TD04' && invoice.status !== 'DRAFT'
-
 /**
  * The order's still to pay by the server's ONE rule (the order's money, else the settlement's thisOrder); null: not known here. Never
  * the settlement's invoice-wide balance (0 before the first invoice: a made-up figure for this order) and never gross − deposits.
@@ -104,13 +102,14 @@ export function totalsOf(input: { readonly order: Order; readonly settlement: Se
   const cancelled = order.status === 'CANCELLED'
   const settled = order.settlement.settled
   const codes = gapCodesOf(order)
-  const firstOpen = price ? (settlement?.invoices.find((invoice) => isGoods(invoice) && !!invoice.number && (invoice.openShare ?? invoice.openAmount ?? 0) > 0) ?? null) : null
+  // F-OM-fx5w: the head's own open invoice (openGoodsOf), so the head and What is left name the same one.
+  const firstOpen = price ? openGoodsOf(settlement, true) : null
   const gaps: TotalsGap[] = cancelled || settled
     ? []
     : codes.map((code) => ({
         code,
         words: word(`settlement.${code}`),
-        extra: code === 'BALANCE_DUE' && firstOpen ? word('moneyTab.totals.openOn', { params: { number: firstOpen.number! }, money: { amount: firstOpen.openShare ?? firstOpen.openAmount ?? 0 } }) : null,
+        extra: code === 'BALANCE_DUE' && firstOpen && firstOpen.amount !== null ? word('moneyTab.totals.openOn', { params: { number: firstOpen.number }, money: { amount: firstOpen.amount } }) : null,
         door: gapDoorOf(code, can),
       }))
   const answer = cancelled
@@ -199,16 +198,28 @@ export function totalsOf(input: { readonly order: Order; readonly settlement: Se
 function nextDueOf(order: Order): { readonly what: MoneyWord | null; readonly day: string } | null {
   const gate = depositGate(order)
   if (gate.state === 'WAITING' && gate.request) return { what: word(isExtraDeposit(order, gate.request, null) ? 'moneyTab.plan.next.EXTRA' : 'moneyTab.plan.next.DEPOSIT'), day: gate.request.dueDate }
+  // F-OM-fx5w (N1): no deposit needed, an extra deposit asked all the same: the next money asked.
+  const asked = gate.state === 'NOT_NEEDED' ? askedOutsideGate(order) : null
+  if (asked) return { what: word('moneyTab.plan.next.EXTRA'), day: asked.dueDate }
   const balance = order.chain.depositRequests.find((request) => request.status === 'OPEN' && request.stepKind === 'BEFORE_SHIPPING') ?? null
   if (balance) return { what: word('moneyTab.plan.next.BEFORE_SHIPPING'), day: balance.dueDate }
   return null
 }
 
-/** The deposit in words (M1-B11: a paid deposit says the amount PAID): "€ 3,660.00 paid 29 Oct · extra € 43.92 open"; no price: words. */
+/**
+ * The deposit in words (M1-B11: a paid deposit says the amount PAID): "€ 3,660.00 paid 29 Oct · extra € 43.92 open"; no price: words.
+ * F-OM-fx5w (N1): an order that needs no deposit with an extra one open: "Not needed · extra € 43.92 open, due 23 Nov".
+ */
 export function depositWordsOf(order: Order, price: boolean): MoneyWord {
   const gate = depositGate(order)
   const request = gate.request
-  if (gate.state === 'NOT_NEEDED') return word('summary.depositNotNeeded')
+  if (gate.state === 'NOT_NEEDED') {
+    // F-OM-fx5w (N1): never "Not needed" alone while an extra deposit is open (the head names it; production does not wait for it).
+    const asked = askedOutsideGate(order)
+    if (!asked) return word('summary.depositNotNeeded')
+    const left = stillToPay(asked)
+    return price && asked.amount !== undefined ? word('moneyTab.totals.fact.notNeededExtra', { money: { amount: left ?? asked.amount }, days: { date: asked.dueDate } }) : word('moneyTab.totals.fact.notNeededExtraWords', { days: { date: asked.dueDate } })
+  }
   if (gate.state === 'MISSING' || !request) return word('summary.depositMissing')
   if (gate.state === 'WAIVED') return word('summary.depositWaived')
   const paidOne = liveDepositsOf(order).find((entry) => entry.status === 'PAID') ?? null
