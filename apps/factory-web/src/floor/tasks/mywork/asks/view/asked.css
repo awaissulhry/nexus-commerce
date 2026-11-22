@@ -1,0 +1,6 @@
+/* F-OF-204 (order FILES tab W2): "Files asked" on My work — one card per ask, the big photo button. DS tokens only. */
+.fw-mywork-asked-list { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--nds-space-10); grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
+.fw-mywork-asked-card { display: flex; flex-direction: column; gap: var(--nds-space-6); padding: var(--nds-space-12); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-xl); background: var(--nds-surface); min-width: 0; }
+.fw-mywork-asked-card p { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6); }
+.fw-mywork-asked-what { font-size: var(--nds-font-size-lg); font-weight: var(--nds-font-weight-bold); color: var(--nds-text-strong); }
+.fw-mywork-asked-words { color: var(--nds-text); overflow-wrap: anywhere; }
