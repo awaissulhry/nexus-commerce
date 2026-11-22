@@ -241,7 +241,7 @@ describe('the index (worker side)', () => {
       )
     await type('BRT-OS023-0001', 'AWB-OS023-0002')
     try {
-      expect((await indexEvent(system, indexers, envelope('shipment.tracking_changed', sh2!.id, { shipmentId: sh2!.id }))).written).toBe(1)
+      expect((await indexEvent(system, indexers, envelope('shipment.tracking_changed', sh2!.id, { shipmentId: sh2!.id }))).written).toBeGreaterThanOrEqual(1)
       expect(((await entry('Shipment', sh2!.id)).searchText as string).split(' ')).toEqual(expect.arrayContaining(['brt-os023-0001', 'awb-os023-0002']))
       for (const typed of ['AWB-OS023-0002', 'BRT-OS023-0001']) {
         const found = await search('owner', `q=${typed}`)

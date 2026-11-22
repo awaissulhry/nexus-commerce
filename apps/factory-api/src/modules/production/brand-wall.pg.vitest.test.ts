@@ -206,7 +206,8 @@ describe('B-PR-10 the brand-wall sweep', () => {
     // (B-OS-001, 002) and the backorder they share, the deliveries (B-OS-003), the links (B-OS-004), what may come back from one
     // shipment (B-OS-005). PR S2: the commands — split into several (B-OS-010), the move targets, move, merge, take-off (B-OS-011 …
     // 013), hand over at a time (B-OS-014), delivered by hand (B-OS-015), the expected arrival (B-OS-016), travels without a DDT
-    // (B-OS-017). PR S3 the tracking per parcel.
+    // (B-OS-017). PR S3: the tracking per parcel in the one tracking command (B-OS-022) and the transport view that lists the parcels;
+    // the list and its search find the numbers typed by hand (B-OS-023).
     for (const key of [
       'GET /sales/orders/:orderId',
       'GET /shipping/orders/:salesOrderId/backorder',
@@ -223,6 +224,10 @@ describe('B-PR-10 the brand-wall sweep', () => {
       'POST /shipping/shipments/:shipmentId/own-transport/events',
       'PUT /shipping/shipments/:shipmentId/eta',
       'PUT /shipping/shipments/:shipmentId/ddt-required',
+      // ── PR S3 ──
+      'PUT /shipping/shipments/:shipmentId/own-transport/tracking',
+      'GET /shipping/shipments/:shipmentId/own-transport',
+      'GET /shipping/shipments',
     ]) {
       expect(swept.has(key), key).toBe(true)
       expect(EXEMPT[key], key).toBeUndefined()
