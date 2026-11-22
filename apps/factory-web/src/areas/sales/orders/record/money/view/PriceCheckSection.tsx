@@ -68,7 +68,8 @@ function Filled({ order, model, actions, check, stale, taking, problem, title, i
   const locale = useLocale()
   const say = useSay(check.currency)
   const view = priceCheckOf({ check, order, can: model.can, prefix: model.prefix, canHistory: model.priceCheck?.canHistory ?? false, taking })
-  const [shown, setShown] = useState(!view.folded)
+  // Equal prices are folded (Show the lines); any other state shows its lines, whatever was toggled before a re-read.
+  const [opened, setOpened] = useState(false)
   const [all, setAll] = useState(false)
   const amount = (value: number | null) => (value === null ? '' : money(value, check.currency, locale))
 
@@ -85,8 +86,8 @@ function Filled({ order, model, actions, check, stale, taking, problem, title, i
   )
   const buttons = [
     view.folded ? (
-      <Button key="show" size="sm" variant="quiet" aria-expanded={shown} onClick={() => setShown((now) => !now)}>
-        {shown ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />} {t(shown ? 'moneyTab.price.hide' : 'moneyTab.price.show')}
+      <Button key="show" size="sm" variant="quiet" aria-expanded={opened} onClick={() => setOpened((now) => !now)}>
+        {opened ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />} {t(opened ? 'moneyTab.price.hide' : 'moneyTab.price.show')}
       </Button>
     ) : null,
     view.edit ? (
@@ -108,7 +109,7 @@ function Filled({ order, model, actions, check, stale, taking, problem, title, i
   const more = items.length > 0 ? <LineMenuButton label={t('moneyTab.price.more')} items={items} /> : undefined
 
   const rows = all ? view.rows : view.first
-  const body = shown && view.state !== 'none'
+  const body = (!view.folded || opened) && view.state !== 'none'
   return (
     <Section id="price-check" title={title} answer={answer} buttons={buttons} more={more} info={info}>
       {/* ONE line of the section's own state: a refusal of the take-over, or "Here they are now" after one. */}

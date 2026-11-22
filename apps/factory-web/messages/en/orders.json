@@ -29,23 +29,15 @@
     "PAID": "Paid",
     "WAIVED": "Waived",
     "title": "Deposit · {kind}",
-    "overdue": "Overdue",
     "amount": "Amount",
     "due": "Due",
-    "paidSoFar": "Paid so far",
     "left": "{amount} still to pay",
-    "document": "After payment",
-    "documentTd02": "A deposit invoice (TD02)",
-    "documentNone": "No deposit invoice (its VAT rule)",
     "stepsLabel": "Steps of the deposit",
-    "send": "Send the bank-details page",
-    "sendAgain": "Send it again",
     "record": "Record a payment",
     "sendSdi": "Send to SDI",
     "step": {
       "requested": "Asked",
       "requestedWords": "Asked when the customer accepted the quote ({date})",
-      "page": "Bank-details page",
       "pageNotSent": "Not sent yet: the customer finds the IBAN, the amount and the reference on it",
       "pageNotNeeded": "Nothing left to pay",
       "paid": "Payment",
@@ -66,11 +58,6 @@
       "sdiNoRight": "The SDI state is shown to people who see invoices",
       "sdiReading": "Reading the SDI state…",
       "requestedTyped": "Asked when the office entered the order ({date})"
-    },
-    "none": {
-      "title": "No deposit asked",
-      "body": "This order needs no deposit: production may start when its work orders are released.",
-      "missing": "The order needs a deposit, but no request exists: it is asked when the quote is accepted."
     }
   },
   "depositKind": {
@@ -866,40 +853,21 @@
     "CANCELLED": "Cancelled"
   },
   "money": {
-    "balanceTitle": "Balance",
     "gross": "Order total",
-    "depositPaid": "Deposits received",
-    "invoicesTitle": "Invoices and credit notes",
-    "noInvoices": {
-      "title": "Nothing invoiced yet",
-      "body": "The deposit invoice and the invoices of shipped goods appear here."
-    },
     "draft": "Draft",
     "noInvoiceRight": "Invoices are shown to people who see invoices.",
     "col": {
       "number": "Number",
       "kind": "Kind",
       "status": "State",
-      "sdi": "SDI",
       "gross": "Total",
       "open": "Open"
     },
-    "section": {
-      "totals": "Totals",
-      "deposit": "Deposit",
-      "margin": "Margin"
-    },
-    "invoicedShare": "Invoiced for this order",
-    "paidHere": "Paid on this order",
-    "toPayHere": "Still to pay on this order",
     "share": "This order's share",
-    "invoiceWhole": "Invoice total",
     "alsoBills": "Also bills",
     "alsoBillsHidden_one": "and {count} more order you cannot open",
     "alsoBillsHidden_other": "and {count} more orders you cannot open",
     "freight": "Freight {amount} is on the invoice, in no order",
-    "settledWhen": "Settled when {invoice} is paid in full",
-    "settledWhenShared": "Settled when {invoice} is paid in full (it also bills {numbers})",
     "statement": "{customer}'s statement ›"
   },
   "docType": {
@@ -1402,7 +1370,6 @@
     "title": "Payment schedule",
     "label": "Payment steps",
     "empty": "Paid on invoice terms; no milestones.",
-    "open": "Still open: {amount}",
     "stepShare": "{kind} · {share}",
     "kind": {
       "DEPOSIT": "Deposit on the order",
@@ -1410,24 +1377,13 @@
       "ON_DELIVERY": "On delivery",
       "ON_INVOICE": "On the invoice"
     },
-    "status": {
-      "OPEN": "Open",
-      "PAID": "Paid",
-      "WAIVED": "Waived",
-      "CANCELLED": "Cancelled"
-    },
     "when": {
       "DEPOSIT": "Due as the deposit request says",
       "BEFORE_SHIPPING": "Due before the goods leave",
       "ON_DELIVERY": "Due on delivery",
       "ON_INVOICE": "Due as the invoice says"
     },
-    "overdue": "Overdue",
     "due": "Due {date}",
-    "dueDeposit": "Due {date} (the deposit request)",
-    "paidOn": "Paid on {date}",
-    "cancelled_one": "{count} earlier step was replaced when an amendment remade the schedule.",
-    "cancelled_other": "{count} earlier steps were replaced when an amendment remade the schedule.",
     "verbs": {
       "day": "Due on",
       "held": {
@@ -1454,7 +1410,6 @@
         "write": "It could not be done: try again.",
         "stepUp": "Confirm it’s you with a fresh code first."
       },
-      "waive": "Waive…",
       "waiveTitle": "Waive “{step}”",
       "waiveBody": {
         "DEPOSIT": "The customer need not pay the deposit before production: the work orders may be released without it. Nothing paid is on it.",
@@ -2425,31 +2380,23 @@
     "otherCurrency_one": "{count} customer's price in another currency is left out (never converted).",
     "otherCurrency_other": "{count} customer's prices in another currency are left out (never converted).",
     "card": {
-      "title": "Price check",
       "edit": "Customer's price…",
       "changeOurs": "Change our price ›",
       "history": "History ›",
-      "historyHeld": "The history needs the right to read the audit log.",
       "total": "Total",
       "tableLabel": "Price check of {number}",
       "col": {
-        "theirs": "Customer's unit price",
         "ourAmount": "Our amount",
         "theirAmount": "Customer's amount",
         "check": "Check",
         "diff": "Difference"
       },
-      "hint": "Difference = our price minus the customer's: + we ask more, − we ask less. Without VAT, exact to the cent.",
       "missing": "{missing} of {lines} lines without the customer's price",
       "notChecked": "Not checked: a line without pieces or without a price",
-      "emptyTitle": "No customer price yet",
-      "emptyBody": "The check says Equal only when the customer's price and ours are the same to the cent, without VAT.",
-      "sources": "Where the customer's price came from",
       "linesOf_one": "line {list}",
       "linesOf_other": "lines {list}",
       "typedBy": "typed by {name}, {date}",
       "note": "“{note}”",
-      "priced": "Priced document",
       "takeOverLabel": "The customer's request named its prices",
       "takeOver": "Request {number} named the customer's prices",
       "takeOverNoNumber": "The customer's request named its prices",
@@ -3282,7 +3229,8 @@
       "allPaid": "everything invoiced is paid",
       "nothing": "nothing to collect yet. The customer pays on the invoice",
       "nothingTerms": "nothing to collect yet. The customer pays on the invoice: {terms}",
-      "restOnInvoice": "the rest is paid on the invoice"
+      "restOnInvoice": "the rest is paid on the invoice",
+      "partFailed": "Part of the money could not be read: see the section below and try it again there."
     },
     "totals": {
       "title": "Totals",

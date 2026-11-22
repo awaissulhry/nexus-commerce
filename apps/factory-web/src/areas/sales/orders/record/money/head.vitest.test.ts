@@ -123,6 +123,16 @@ describe('F-OM-101: the tab\'s one answer line', () => {
     expect(moneyHeadOf({ order: order('CONFIRMED'), schedule: part(null, 'problem.read.unavailable'), settlement: null, can: canOf('owner'), today: TODAY }).reading).toBe(false)
   })
 
+  // F-OM-303: a failed part never says "nothing" (or "all paid"): it says a part could not be read; its section has Try again.
+  it('a failed read never says "nothing to collect" or "everything is paid"', () => {
+    const none = order('CONFIRMED', { depositRequired: false, chain: { ...order('CONFIRMED').chain, depositRequests: [] } })
+    const failedPlan = moneyHeadOf({ order: none, schedule: part(null, 'problem.read.unavailable'), settlement: null, can: canOf('owner'), today: TODAY })
+    expect(failedPlan).toMatchObject({ tone: 'warning', parts: [{ key: 'moneyTab.head.partFailed' }] })
+    const failedMoney = moneyHeadOf({ order: none, schedule: part(SCHEDULE_NONE), settlement: null, settlementFailed: true, can: canOf('owner'), today: TODAY })
+    expect(failedMoney.parts).toEqual([{ key: 'moneyTab.head.partFailed' }])
+    expect(source('./view/MoneyHead.tsx')).toContain('settlementFailed: model.can.viewInvoices && !!model.settlement?.problem')
+  })
+
   it('the money wall: without the price grain the same line in words — no amount anywhere — and said ONCE for the tab', () => {
     for (const role of ['sales', 'manager'] as const) {
       const answer = head(order('CONFIRMED'), { role })
@@ -138,7 +148,7 @@ describe('F-OM-101: the tab\'s one answer line', () => {
   })
 
   it('every word of the head exists in both languages with the same placeholders', () => {
-    const heads = ['wallPrice', 'closed', 'cancelled', 'settledOn', 'settled', 'reading', 'depositMissing', 'productionWaits', 'depositPaid', 'depositWaived', 'extraOpen', 'extraOpenFrom', 'extraOpenWords', 'extraOpenFromWords', 'depositShort', 'depositPartPaid', 'depositOpen', 'depositOpenWords', 'depositOverdue', 'depositOverdueWords', 'pageSent', 'pageNotSent', 'beforeShipping', 'beforeShippingNoDay', 'balanceBeforeShipping', 'invoicedAll', 'stillToPayOn', 'invoicesOpen', 'allPaid', 'nothing', 'nothingTerms', 'restOnInvoice']
+    const heads = ['wallPrice', 'closed', 'cancelled', 'settledOn', 'settled', 'reading', 'depositMissing', 'productionWaits', 'depositPaid', 'depositWaived', 'extraOpen', 'extraOpenFrom', 'extraOpenWords', 'extraOpenFromWords', 'depositShort', 'depositPartPaid', 'depositOpen', 'depositOpenWords', 'depositOverdue', 'depositOverdueWords', 'pageSent', 'pageNotSent', 'beforeShipping', 'beforeShippingNoDay', 'balanceBeforeShipping', 'invoicedAll', 'stillToPayOn', 'invoicesOpen', 'allPaid', 'nothing', 'nothingTerms', 'restOnInvoice', 'partFailed' /* F-OM-303 */]
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
       for (const key of heads) expect(t(`moneyTab.head.${key}`, { amount: 'A', date: 'D', revision: 1, share: 'S', number: 'N', terms: 'T' }), `${locale} ${key}`).not.toMatch(/moneyTab\.|\{/)
