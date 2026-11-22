@@ -87,13 +87,14 @@ export interface MyMessagesQuery {
 }
 
 /** The work orders whose notes a tablet reads (id → number), and its station's code (its own comments stay out). */
-interface Reach {
+export interface Reach {
   readonly numbers: ReadonlyMap<string, string>
   readonly station: string | null
 }
 
 /** My work orders: what the tablet's station queue holds and what the day names the signed-in person for. */
-async function myWorkOrders(caller: CommandCaller, context: FloorContext, now: Date): Promise<Reach> {
+// B-OF-034 (order files tab): exported — the floor's asks for files read the same work orders (floornotes/asks.ts).
+export async function myWorkOrders(caller: CommandCaller, context: FloorContext, now: Date): Promise<Reach> {
   const queue = await stationDispatch(caller, { material: false })
   const person = await caller.withClient(async (db: Reader) => {
     const site = await siteRowOf(db, context.siteId)

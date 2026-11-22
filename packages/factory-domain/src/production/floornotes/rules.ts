@@ -11,7 +11,8 @@
  * face is deleted by the office (files.delete).
  */
 
-export const FLOOR_NOTE_TILE_CODES = ['MATERIAL_DIFFERS', 'MEASURE_DIFFERS', 'COLOUR_DIFFERS', 'STITCHING_DIFFERS', 'DAMAGED', 'PART_MISSING', 'OTHER'] as const
+// B-OF-034 (order files tab): + ASKED_FILE, the photo an office ask for a file asked for ("Photo for an ask"; the note names the ask).
+export const FLOOR_NOTE_TILE_CODES = ['MATERIAL_DIFFERS', 'MEASURE_DIFFERS', 'COLOUR_DIFFERS', 'STITCHING_DIFFERS', 'DAMAGED', 'PART_MISSING', 'OTHER', 'ASKED_FILE'] as const
 export type FloorNoteTileCode = (typeof FLOOR_NOTE_TILE_CODES)[number]
 
 export interface FloorNoteTile {
@@ -30,6 +31,8 @@ export const FLOOR_NOTE_TILES: readonly FloorNoteTile[] = Object.freeze([
   { code: 'DAMAGED', label: { it: 'Danneggiato', en: 'Damaged' }, needsDetail: false },
   { code: 'PART_MISSING', label: { it: 'Manca un pezzo', en: 'A part is missing' }, needsDetail: false },
   { code: 'OTHER', label: { it: 'Altro', en: 'Other' }, needsDetail: true },
+  // B-OF-034: no detail — the ask says what; the photo is required (noteProblem).
+  { code: 'ASKED_FILE', label: { it: 'Foto per una richiesta', en: 'Photo for an ask' }, needsDetail: false },
 ])
 
 /** The reminder at the moment of the picture (design: "Keep faces out of the picture"; PLAN: photos never show faces). */
@@ -50,5 +53,7 @@ export function noteText(input: { readonly tileCode: FloorNoteTileCode; readonly
 /** Why the note cannot be posted as it is, in words (null: it can). */
 export function noteProblem(input: { readonly tileCode: FloorNoteTileCode; readonly note: string | null; readonly files: number }): string | null {
   const tile = FLOOR_NOTE_TILES.find((entry) => entry.code === input.tileCode)!
+  // B-OF-034: a photo for an ask is the photo.
+  if (input.tileCode === 'ASKED_FILE' && input.files === 0) return 'A photo for an ask needs the photo.'
   return tile.needsDetail && !input.note && input.files === 0 ? 'With "Other" say what differs in a few words, or add a photo.' : null
 }

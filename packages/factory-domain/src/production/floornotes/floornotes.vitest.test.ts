@@ -15,6 +15,13 @@ describe('a comment or a photo from the floor (MES-101, COL-017)', () => {
     expect(noteProblem({ tileCode: 'DAMAGED', note: null, files: 0 })).toBeNull()
   })
 
+  // B-OF-034 (order files tab): the photo an office ask for a file asked for.
+  it('"Photo for an ask" needs its photo, says no more', () => {
+    expect(noteProblem({ tileCode: 'ASKED_FILE', note: null, files: 0 })).toBe('A photo for an ask needs the photo.')
+    expect(noteProblem({ tileCode: 'ASKED_FILE', note: null, files: 1 })).toBeNull()
+    expect(noteText({ tileCode: 'ASKED_FILE', note: null, bundleCode: null, operation: { seq: 20, name: 'Sew' } })).toBe('Photo for an ask (Op 20 Sew)')
+  })
+
   it('the photo step reminds: no faces, in the words of the floor', () => {
     expect(NO_FACES_REMINDER).toMatchObject({ code: 'NO_FACES', en: 'Keep faces out of the picture.' })
     expect(NO_FACES_REMINDER.it).toMatch(/volti/)

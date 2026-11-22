@@ -9,6 +9,7 @@ import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
+import { grainPermission } from '@nexus/factory-domain/auth/grains/grains' // B-OF-033
 // The factory-db seeds and fixtures are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedAuth } from '../../../../../../packages/factory-db/seed/auth'
@@ -58,6 +59,8 @@ const SESSIONS: Record<string, SessionContext> = {
   ...twoBrandSessions(ids.tenantId, ids.a, ids.b, PERMISSIONS),
   // Alpha's person with the order and the files only: no work orders, no measurements.
   'office.p1.thin': session(grant(['orders.view', 'files.read'], [ids.a])),
+  // B-OF-033: Alpha's person who sees prices too.
+  'office.p1.prices': session(grant([...PERMISSIONS, grainPermission('price') as Permission], [ids.a])),
 }
 const B_SESSIONS = new Set(['office.p2'])
 
@@ -561,3 +564,57 @@ describe('B-PT-013: the customer’s tech pack in the order’s files, at its ve
   })
 })
 // ── end B-PT-013 ──
+
+// ---- B-OF-033 (order files tab, PR S2.3; 13-backend §2): the asks for files ride on the order's files read ----------------------
+describe('B-OF-033: the order’s asks for files in its files read — counted, never named, where the reader may not read them', { timeout: 60_000 }, () => {
+  const ask = { priced: '', floor: '' }
+  const owner = () => seedUuid(ns, 'actor')
+  const office = () => ({ audience: 'office' as const, tenantId: ids.tenantId, actorId: owner() })
+
+  beforeAll(async () => {
+    const [floorRole] = await admin<{ id: string; name: string }>(`SELECT id, name FROM "Role" WHERE "tenantId" = $1 AND audience = 'FLOOR' AND "archivedAt" IS NULL ORDER BY key LIMIT 1`, [ids.tenantId])
+    ask.priced = newId()
+    ask.floor = newId()
+    // Written as the asks' commands write them (modules/sales/file-asks), in the office scope: the guard is real.
+    await database.withScope(office(), (client) =>
+      client.fileAsk.createMany({
+        data: [
+          { id: ask.priced, companyId: companyA, partyId: ids.a, salesOrderId: w.a.salesOrderId, target: 'SALES_ORDER', words: 'T-OF033 the proforma at 41.50 a jacket', fileKind: 'DOCUMENT', priced: true, addressee: 'PERSON', addresseeUserId: owner(), dueOn: new Date('2026-11-20T00:00:00.000Z'), askedById: owner() },
+          { id: ask.floor, companyId: companyA, partyId: ids.a, siteId: w.siteId, salesOrderId: w.a.salesOrderId, target: 'WORK_ORDER', workOrderId: w.a.workOrderId, words: 'T-OF033 photos of the cut panels', fileKind: 'PHOTO', addressee: 'FLOOR_ROLE', addresseeRoleId: floorRole!.id, dueOn: new Date('2026-12-20T00:00:00.000Z'), askedById: owner() },
+        ],
+      }),
+    )
+    // The floor's photo answers the floor ask (as B-OF-034 writes it: no one named).
+    await database.withScope(office(), (client) => client.fileAsk.update({ where: { id: ask.floor }, data: { status: 'ARRIVED', fileIds: [files.onWorkOrder], answeredAt: new Date(), answeredById: null, version: 2 }, select: { id: true } }))
+  })
+
+  it('a reader without prices reads a priced ask counted, its words null; one who sees prices reads them', async () => {
+    const thin = (await ok('office.p1', 'GET', listOf(w.a.salesOrderId))).asks as Json[]
+    const priced = thin.find((row) => row.id === ask.priced)!
+    expect(priced).toMatchObject({ status: 'OPEN', words: null, priced: true, lastReason: null, lands: { type: 'SalesOrder', id: w.a.salesOrderId }, who: { kind: 'PERSON' }, forMe: false })
+    expect(priced.lateDays).toBeGreaterThan(0)
+    expect(priced.may).toEqual({ answer: false, decide: false, change: false })
+    expect(JSON.stringify(thin)).not.toContain('41.50')
+    const seen = (await ok('office.p1.prices', 'GET', listOf(w.a.salesOrderId))).asks as Json[]
+    expect(seen.find((row) => row.id === ask.priced)?.words).toBe('T-OF033 the proforma at 41.50 a jacket')
+  })
+
+  it('a floor answer reads "by the floor" (never a worker), arrived first; the file says which ask it answered', async () => {
+    const list = await ok('office.p1', 'GET', listOf(w.a.salesOrderId))
+    const asks = list.asks as Json[]
+    expect(asks[0]!.id).toBe(ask.floor)
+    expect(asks[0]).toMatchObject({ status: 'ARRIVED', lateDays: 0, lands: { type: 'WorkOrder', id: w.a.workOrderId, label: w.a.workOrderNumber, step: null }, who: { kind: 'FLOOR_ROLE' }, answered: { by: { kind: 'FLOOR' }, fileIds: [files.onWorkOrder], held: 0 } })
+    expect(asks[0]!.answered.by).toEqual({ kind: 'FLOOR' })
+    expect(fileOfList(list, files.onWorkOrder)?.askId).toBe(ask.floor)
+    expect(fileOfList(list, files.office)?.askId).toBeNull()
+    expect(list.asksLeftOut).toBe(0)
+    expect(list.customerAsks).toEqual([])
+  })
+
+  it('an ask on a work order the reader does not reach is counted, never listed', async () => {
+    const list = await ok('office.p1.thin', 'GET', listOf(w.a.salesOrderId))
+    expect((list.asks as Json[]).map((row) => row.id)).not.toContain(ask.floor)
+    expect(list.asksLeftOut).toBe(1)
+  })
+})
+// ---- end B-OF-033

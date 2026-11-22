@@ -10,4 +10,7 @@ export const manifest = defineManifest({
   'POST /production/floor-notes/work-orders/:workOrderId': { audiences: ['floor'], permission: 'production.scan', scope: 'record' },
   'POST /production/floor-notes/work-orders/:workOrderId/files': { audiences: ['floor'], permission: 'production.scan', scope: 'record' },
   'POST /production/floor-notes/work-orders/:workOrderId/files/:fileId/complete': { audiences: ['floor'], permission: 'production.scan', scope: 'record' },
+  // B-OF-034 (order files tab): the office's open asks for files this tablet answers (its site, its worker's team or floor role, a
+  // step of its work); read through the system after these checks, never a worker named.
+  'GET /production/floor-notes/asks': { audiences: ['floor'], permission: 'production.scan', scope: 'record' },
 })
