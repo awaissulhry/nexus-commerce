@@ -52,19 +52,30 @@ export const splitPreviewContract = defineContract({
   },
 })
 
+// ── B-OS-010 (order shipments tab; X1 S1): one new shipment's garments and delivery (default: the one it is split from) ──
+const asks = z.array(input({ lineId: id(), quantity: z.number().int().min(1).max(100_000) })).min(1).max(SPLIT_LIMITS.lines)
+const delivery = {
+  /** The new shipment's delivery; default the one it is split from (a new carrier drops the service). */
+  transportBy: transportBySchema.optional(),
+  carrierCode: z.string().trim().max(40).nullish(),
+  serviceCode: z.string().trim().max(100).nullish(),
+  shipToAddressId: id().optional(),
+}
+// ── end B-OS-010 ──
+
 export const splitContract = defineContract({
   params: shipmentParams,
   body: input({
     version,
-    reason: z.enum(SPLIT_REASONS),
-    lines: z.array(input({ lineId: id(), quantity: z.number().int().min(1).max(100_000) })).min(1).max(SPLIT_LIMITS.lines),
-    /** The new shipment's delivery; default the one it is split from (a new carrier drops the service). */
-    transportBy: transportBySchema.optional(),
-    carrierCode: z.string().trim().max(40).nullish(),
-    serviceCode: z.string().trim().max(100).nullish(),
-    shipToAddressId: id().optional(),
+    // B-OS-010: `reason` + `lines` (one new shipment, as before) — or `groups`, several new shipments in one go (never both).
+    reason: z.enum(SPLIT_REASONS).optional(),
+    lines: asks.optional(),
+    ...delivery,
+    /** B-OS-010: 1 to 20 new shipments, each with its reason, garments and delivery; a line may give to several (never more than can move). */
+    groups: z.array(input({ reason: z.enum(SPLIT_REASONS), lines: asks, ...delivery })).min(1).max(SPLIT_LIMITS.shipments).optional(),
   }),
-  response: { 201: output({ shipment: shipmentSchema, from: shipmentSchema }) },
+  // B-OS-010: + `shipments`, every new shipment (`shipment` stays the first one).
+  response: { 201: output({ shipment: shipmentSchema, from: shipmentSchema, shipments: z.array(shipmentSchema) }) },
 })
 
 export const splitByRuleContract = defineContract({

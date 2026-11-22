@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { garmentsLeft, groupsByPromise, movableOf, moveProblems, reasonProblems, type DeliveryChoice } from './split'
+import { groupMoveProblems, mergedAsks } from './split' // B-OS-010
 
 // Made-up lines and days.
 const line = (id: string, quantity: number, packed = 0, serials = 0) => ({ id, quantity, packed, serials })
@@ -46,3 +47,29 @@ describe('split one order into several shipments (LOG-005)', () => {
     expect(groupsByPromise([{ ...line('a', 1), shipBy: '2026-11-20' }]).groups).toEqual([])
   })
 })
+
+// ---- B-OS-010 (order shipments tab; X1 S1): split into several shipments in one go ----
+describe('split into several shipments at once (B-OS-010)', () => {
+  const lines = [line('a', 4, 1), line('b', 2), line('c', 1, 0, 1)]
+
+  it('each new shipment names its garments, each line once in it; a line may give to several, never more than may move in all', () => {
+    expect(groupMoveProblems(lines, [{ moves: [{ lineId: 'a', quantity: 2 }] }, { moves: [{ lineId: 'a', quantity: 1 }, { lineId: 'b', quantity: 2 }] }])).toEqual([])
+    // a: 3 may move (1 in a carton); 2 + 2 asked over two shipments.
+    const over = groupMoveProblems(lines, [{ moves: [{ lineId: 'a', quantity: 2 }] }, { moves: [{ lineId: 'a', quantity: 2 }] }])
+    expect(over.map((issue) => issue.path)).toEqual(['groups/0/lines/0/quantity', 'groups/1/lines/0/quantity'])
+    expect(over[0]!.message).toBe('From 1 to 3 garment(s) of this line can move, over every new shipment.')
+    expect(groupMoveProblems(lines, [{ moves: [{ lineId: 'b', quantity: 1 }, { lineId: 'b', quantity: 1 }] }])[0]!.path).toBe('groups/0/lines/1/lineId')
+    expect(groupMoveProblems(lines, [{ moves: [{ lineId: 'c', quantity: 1 }] }])[0]!.message).toMatch(/^None of this line can move/)
+    expect(groupMoveProblems(lines, [{ moves: [] }])[0]!.path).toBe('groups/0/lines')
+    expect(groupMoveProblems(lines, [{ moves: [{ lineId: 'x', quantity: 1 }] }])[0]!.path).toBe('groups/0/lines/0/lineId')
+  })
+
+  it('1 to 20 new shipments; the asks of one line add up (what the split re-checks under its lock), and something stays', () => {
+    expect(groupMoveProblems(lines, [])[0]!.path).toBe('groups')
+    expect(groupMoveProblems(lines, Array.from({ length: 21 }, () => ({ moves: [{ lineId: 'b', quantity: 1 }] })))[0]!.message).toBe('At most 20 new shipments at a time.')
+    const groups = [{ moves: [{ lineId: 'a', quantity: 2 }] }, { moves: [{ lineId: 'a', quantity: 1 }, { lineId: 'b', quantity: 2 }] }]
+    expect(mergedAsks(groups)).toEqual([{ lineId: 'a', quantity: 3 }, { lineId: 'b', quantity: 2 }])
+    expect(garmentsLeft(lines, mergedAsks(groups))).toBe(2)
+  })
+})
+// ---- end B-OS-010
