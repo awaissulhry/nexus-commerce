@@ -20,8 +20,8 @@ const preview = (over: Partial<SplitPreview> = {}): SplitPreview => ({
   splittable: true,
   held: false,
   lines: [
-    { id: 'l1', label: 'SEED-JKT-02 Black', size: '50', quantity: 10, packed: 0, serials: 0, movable: 10 },
-    { id: 'l2', label: 'SEED-JKT-02 Red', size: '52', quantity: 6, packed: 2, serials: 0, movable: 4 },
+    { id: 'l1', label: 'SEED-JKT-02 Black', size: '50', quantity: 10, packed: 0, serials: 0, movable: 10, shipBy: '2026-12-18' },
+    { id: 'l2', label: 'SEED-JKT-02 Red', size: '52', quantity: 6, packed: 2, serials: 0, movable: 4, shipBy: null },
   ],
   reasons: ['PART_READY', 'CUSTOMER_REQUEST', 'CARRIER', 'SERVICE', 'PROMISE_DATE', 'OTHER'],
   rules: [],
