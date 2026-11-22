@@ -12,7 +12,7 @@ import { defineExportSource } from '../source'
  * customer `RECIPIENT`, `none` without one). Read through the module's listShipments (shipping.view, its companies,
  * sites and customers), a page at a time. Freight charged is the price grain: absent without it. "When" writes the day
  * a shipment left or was cancelled; today's cut-off countdown of an open shipment is the screen's only. Tracking lists
- * the first parcels' numbers (the list reads at most three per shipment).
+ * the first parcels' numbers (the list reads at most three per shipment); B-OS-023: then the numbers typed by hand.
  */
 
 type Row = Awaited<ReturnType<typeof listShipments>>['shipments'][number]
@@ -52,7 +52,8 @@ export const shipments = defineExportSource<Query, Row>({
     parcels: { value: (row) => row.parcels },
     weight: { value: (row) => (row.grossWeightKg === null ? null : { decimal: row.grossWeightKg }) },
     ddt: { value: (row, words) => (row.ddt ? row.ddt.number : row.status === 'CANCELLED' ? null : words('noDdt')) },
-    tracking: { value: (row) => row.trackingNumbers.join(', ') || null },
+    // B-OS-023 (order shipments 1/1): the numbers typed by hand beside the labels' numbers.
+    tracking: { value: (row) => [...row.trackingNumbers, ...row.typedTrackingNumbers].join(', ') || null },
     when: { value: (row) => (row.shippedAt ? { day: businessDate(new Date(row.shippedAt)) } : row.cancelledAt ? { day: businessDate(new Date(row.cancelledAt)) } : null) },
     freight: { grain: 'price', value: (row) => (row.freightCharge === null || row.freightCharge === undefined ? null : { minor: Number(row.freightCharge), currency: row.currency }) },
   },

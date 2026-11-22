@@ -84,7 +84,9 @@ const SHIPMENT_SELECT = {
   shipTo: true,
   shippedAt: true,
   manifestId: true,
-  parcels: { select: { grossWeightKg: true, trackingNumber: true }, orderBy: { seq: 'asc' } },
+  // B-OS-023 (order shipments 1/1): the numbers typed by hand (the shipment's, its parcels'), named; office only.
+  manualTrackingNumber: true,
+  parcels: { select: { grossWeightKg: true, trackingNumber: true, manualTrackingNumber: true }, orderBy: { seq: 'asc' } },
   ddts: { where: { cancellations: { none: {} } }, select: { number: true }, take: 1 },
 } as const satisfies Prisma.ShipmentSelect
 
@@ -107,7 +109,12 @@ function shipmentOf(row: ShipmentRow, partyNames: ReadonlyMap<string, string>): 
     country: typeof shipTo.country === 'string' ? shipTo.country : '',
     parcels: row.parcels.length,
     weightKg: kilograms.toFixed(3),
-    trackingNumbers: row.parcels.flatMap((parcel) => (parcel.trackingNumber ? [parcel.trackingNumber] : [])),
+    // B-OS-023: the labels' numbers, then those typed by hand beside them (a parcel holds one or the other, never both).
+    trackingNumbers: [
+      ...row.parcels.flatMap((parcel) => (parcel.trackingNumber ? [parcel.trackingNumber] : [])),
+      ...(row.manualTrackingNumber ? [row.manualTrackingNumber] : []),
+      ...row.parcels.flatMap((parcel) => (parcel.manualTrackingNumber ? [parcel.manualTrackingNumber] : [])),
+    ],
     ddtNumber: row.ddts[0]?.number ?? null,
     shippedAt: row.shippedAt,
   }

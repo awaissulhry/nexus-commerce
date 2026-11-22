@@ -228,6 +228,33 @@ describe('the index (worker side)', () => {
     expect(rows[0]!.title).toEqual(expect.any(String))
   })
 
+  // B-OS-023 (order shipments 1/1, X2-B4): a number typed by hand — the shipment's (a carrier booked by hand) or a parcel's (an air
+  // waybill) — finds its shipment; shipment.tracking_changed indexes it again. Typed past the guards: the index is what is tested.
+  it('B-OS-023: a tracking number typed by hand (the shipment’s, a parcel’s) finds its shipment', async () => {
+    const [sh2] = await admin<{ id: string }>(`SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND number = 'SEED-SH-0002'`, [tenantId])
+    const type = (shipment: string | null, parcel: string | null) =>
+      admin(
+        `BEGIN; SET LOCAL session_replication_role = replica;
+         UPDATE "Shipment" SET "manualTrackingNumber" = ${shipment === null ? 'NULL' : `'${shipment}'`} WHERE id = '${sh2!.id}';
+         UPDATE "Parcel" SET "manualTrackingNumber" = ${parcel === null ? 'NULL' : `'${parcel}'`} WHERE "shipmentId" = '${sh2!.id}' AND seq = 1;
+         COMMIT;`,
+      )
+    await type('BRT-OS023-0001', 'AWB-OS023-0002')
+    try {
+      expect((await indexEvent(system, indexers, envelope('shipment.tracking_changed', sh2!.id, { shipmentId: sh2!.id }))).written).toBe(1)
+      expect(((await entry('Shipment', sh2!.id)).searchText as string).split(' ')).toEqual(expect.arrayContaining(['brt-os023-0001', 'awb-os023-0002']))
+      for (const typed of ['AWB-OS023-0002', 'BRT-OS023-0001']) {
+        const found = await search('owner', `q=${typed}`)
+        expect(found.results.map((row: Json) => [row.recordType, row.recordId]), typed).toContainEqual(['Shipment', sh2!.id])
+      }
+      // A reader without shipping.view finds none of it.
+      expect((await search('salesB', 'q=AWB-OS023-0002')).results.map((row: Json) => row.recordId)).not.toContain(sh2!.id)
+    } finally {
+      await type(null, null)
+      await indexEvent(system, indexers, envelope('shipment.tracking_changed', sh2!.id, { shipmentId: sh2!.id }))
+    }
+  })
+
   it('an event naming a record that is gone removes its entry', async () => {
     const ghost = newId()
     await admin(`INSERT INTO "SearchEntry" (id, "tenantId", "recordType", "recordId", number, title, area, "viewPermission", "searchText", "indexedAt") VALUES ($1, $2, 'Invoice', $3, NULL, 'Draft', 'finance', 'invoices.view', 'draft', now())`, [newId(), tenantId, ghost])
