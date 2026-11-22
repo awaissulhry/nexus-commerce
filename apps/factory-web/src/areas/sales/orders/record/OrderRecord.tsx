@@ -571,6 +571,14 @@ function RecordContainer({ orderId }: { orderId: string }) {
     lines: order.status === 'ready' ? order.value.lines.map((line) => ({ id: line.id, seq: line.seq, what: [line.style?.code, line.colourway?.name].filter(Boolean).join(' ') || null })) : [],
     canUpload: session.permissions.includes('files.upload'),
     canDelete: session.permissions.includes('files.delete'),
+    // F-OF-201: "Waiting for files" — a floor ask lands on one of the order's live work orders; a closed or cancelled order holds a new ask
+    // (L1); the session's rights until the read's `may` lands; Read-only acts nothing (L3); the company's day
+    workOrders: order.status === 'ready' ? order.value.chain.workOrders.filter((row) => row.status !== 'CANCELLED').map((row) => ({ id: row.id, number: row.number, siteId: row.siteId })) : [],
+    closed: order.status === 'ready' && (order.value.status === 'CLOSED' || order.value.status === 'CANCELLED'),
+    canAsk: session.permissions.includes('tasks.manage') && session.permissions.includes('threads.post'),
+    canAskCustomer: session.permissions.includes('partners.tasks.manage'),
+    readOnly: readOnlyOnPage(can),
+    today: romeToday(),
   })
   // ---- end F-SA-237
   // ---- F-OP-215 (11-dock §6.2): the dock gets this container (no read of its own): "All files" opens the Files tab (the dock's scope

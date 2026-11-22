@@ -401,6 +401,9 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     canUpload: can.upload,
     canDelete: held.has('files.delete'),
     onUploaded: () => void base.loadFiles(),
+    // F-OF-201: "Waiting for files" in this window (the session's rights until the read's `may` lands).
+    canAsk: held.has('tasks.manage') && held.has('threads.post'),
+    canAskCustomer: held.has('partners.tasks.manage'),
   })
   const orderFiles = hostFiles ?? ownOrderFiles
   // ---- end F-SA-237

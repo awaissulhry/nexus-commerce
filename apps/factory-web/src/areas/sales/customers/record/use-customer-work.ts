@@ -627,6 +627,8 @@ export function useCustomerDock(partyId: string, tab: string) {
     companyId: order?.companyId ?? null,
     canUpload: session.permissions.includes('files.upload'),
     canDelete: session.permissions.includes('files.delete'),
+    canAsk: session.permissions.includes('tasks.manage') && session.permissions.includes('threads.post'), // F-OF-201
+    canAskCustomer: session.permissions.includes('partners.tasks.manage'), // F-OF-201
     ...(order ? { hrefOf: (record: { readonly type: string; readonly id: string; readonly label: string }) => orderFileHrefOf(record, { prefix, id: order.id, companyId: order.companyId }) } : {}),
   })
   // News of a file (the reader's own live stream: `file.available`, the file's record named) reads the docked order's set again, coalesced.

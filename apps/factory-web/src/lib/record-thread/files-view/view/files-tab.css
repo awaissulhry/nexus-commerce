@@ -65,3 +65,6 @@
 
 /* ── F-OF-103: the order's thread window keeps its one "Add files…" above the groups ── */
 .fw-of-wbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); }
+
+/* ── F-OF-201: a file that came for an ask, still to check (its chip says it; the ring marks the card) ── */
+.fw-rtv-card.fw-of-card.is-asked { border-color: var(--nds-primary); outline: 1px solid var(--nds-primary); }
