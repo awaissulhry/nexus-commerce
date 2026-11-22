@@ -348,3 +348,42 @@ describe('B-OS-012: merge a DRAFT into another', () => {
   })
 })
 // ---- end B-OS-012
+
+// ---- S2.5 walls (13-backend §4): the real Sales template is refused every act (no shipping.manage) and reads no amount; a person
+// limited to Brand Beta gets, on every act of S2 over Alpha's shipments, the same not-found as for an unknown id ------------------
+describe('S2 walls: the real Sales template, and a person limited to another customer', () => {
+  const acts = (shipmentId: string, other: string) => [
+    { method: 'POST' as const, url: `/shipping/shipments/${shipmentId}/split`, body: { reason: 'OTHER', lines: [{ lineId: newId(), quantity: 1 }] } },
+    { method: 'POST' as const, url: `/shipping/shipments/${shipmentId}/move`, body: { toShipmentId: other, lines: [{ lineId: newId(), quantity: 1 }], reason: 'OTHER' } },
+    { method: 'POST' as const, url: `/shipping/shipments/${shipmentId}/merge`, body: { intoShipmentId: other } },
+    { method: 'POST' as const, url: `/shipping/shipments/${shipmentId}/orders/${so3()}/take-off`, body: { reason: 'Seed: not now.' } },
+    { method: 'POST' as const, url: `/shipping/shipments/${shipmentId}/ship`, body: { shippedAt: new Date().toISOString() } },
+    { method: 'PUT' as const, url: `/shipping/shipments/${shipmentId}/ddt-required`, body: { required: false, reason: 'Seed: an immediate invoice travels.' } },
+    { method: 'PUT' as const, url: `/shipping/shipments/${shipmentId}/eta`, body: { expectedDeliveryAt: new Date(Date.now() + 86_400_000).toISOString() } },
+    { method: 'POST' as const, url: `/shipping/shipments/${shipmentId}/own-transport/events`, body: { status: 'DELIVERED', reason: 'Seed: signed by hand.' } },
+  ]
+
+  it('the real Sales template: every S2 act 403 (it reads the targets, with no amount); nothing changed', async () => {
+    const before = await shipmentOf(ids.child1!)
+    for (const act of acts(ids.child1!, ids.shared!)) expect((await call('sales', act.method, act.url, act.body)).statusCode, `${act.method} ${act.url}`).toBe(403)
+    const targets = await ok('sales', 'GET', `/shipping/shipments/${ids.child2}/move-targets`)
+    expect(JSON.stringify(targets)).not.toMatch(/freight|declaredValue|insuredValue|price|amount/i)
+    expect((await shipmentOf(ids.child1!)).version).toBe(before.version)
+  })
+
+  it('a person limited to Brand Beta: the targets and every act on Alpha’s shipments answer as an unknown shipment', async () => {
+    const unknownId = newId()
+    const unknown = (await call('betaOnly', 'GET', `/shipping/shipments/${unknownId}/move-targets`)).json().error
+    expect((await call('betaOnly', 'GET', `/shipping/shipments/${ids.child2}/move-targets`)).json().error).toMatchObject({ code: 'not_found', message: unknown.message })
+    for (const act of acts(ids.child1!, ids.shared!)) {
+      const response = await call('betaOnly', act.method, act.url, act.body)
+      expect(response.statusCode, `${act.method} ${act.url}`).toBe(404)
+      expect(response.json().error.message, `${act.method} ${act.url}`).toBe(unknown.message)
+    }
+    // From Brand Beta's own draft, Alpha's shipment is no target either (its id answers as unknown).
+    const betaDraft = await ok('warehouse', 'GET', `/shipping/shipments/${ids.betaDraft}`)
+    expect((await refused('betaOnly', 'POST', `/shipping/shipments/${ids.betaDraft}/merge`, { version: betaDraft.shipment.version, intoShipmentId: ids.child1 }, 404)).message).toBe(unknown.message)
+    expect(JSON.stringify(await ok('betaOnly', 'GET', `/shipping/shipments/${ids.betaDraft}/move-targets`))).not.toContain(ids.child1)
+  })
+})
+// ---- end S2.5 walls
