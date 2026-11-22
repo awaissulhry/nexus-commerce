@@ -569,6 +569,8 @@ export const listOrdersContract = defineContract({
           priceDiff: money.price(z.number().int().nullable()),
           /** How many lines differ ("Not equal · 2 lines"). */
           priceNotEqualLines: money.price(z.number().int()),
+          /** B-OM-020 (order money tab; Owner D4): a "Not equal" accepted by hand (in force): the "Not equal" filter and counts leave it out. */
+          priceAccepted: money.price(z.boolean()),
           // ── end B-CP-018 ──
         }),
       ),

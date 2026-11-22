@@ -85,9 +85,34 @@ export const priceCheckView = output({
   fromRequest: money.price(output({ requestId: money.price(id()), number: money.price(z.string().nullable()), lines: money.price(z.number().int()) }).nullable()),
   /** May this reader change the customer's price now; `why` in words when not (a closed order, no orders.manage). */
   mayWrite: money.price(output({ allowed: money.price(z.boolean()), why: money.price(z.string().nullable()) })),
+  /**
+   * B-OM-020 (order money tab; Owner D4): the difference accepted by hand, while it holds — not taken back, and both nets still
+   * equal the check now (any price change reopens it by itself); null: none in force. Who (an office person), when, why, the nets.
+   */
+  accepted: money.price(
+    output({ by: money.price(z.string().nullable()), at: money.price(instant()), reason: money.price(z.string()), ourNet: money.price(z.number().int()), brandNet: money.price(z.number().int()) }).nullable(),
+  ),
 })
 
 const orderParams = input({ orderId: id() })
+
+// ── B-OM-020 (order money tab; Owner D4): accept a price difference by hand, and take it back (orders.moneyPlan + the price grain) ──
+export const acceptPriceDifferenceContract = defineContract({
+  params: orderParams,
+  body: input({
+    /** Our net total and the customer's as the check was read (a check that moved on is refused). */
+    ourNet: money.price(z.number().int().min(0).max(2_147_483_647)),
+    brandNet: money.price(z.number().int().min(0).max(2_147_483_647)),
+    reason: money.price(z.string().trim().min(3).max(500)),
+  }),
+  response: { 200: priceCheckView },
+})
+export const takeBackPriceDifferenceContract = defineContract({
+  params: orderParams,
+  body: input({ reason: money.price(z.string().trim().min(3).max(500)) }),
+  response: { 200: priceCheckView },
+})
+// ── end B-OM-020 ──
 
 export const priceCheckContract = defineContract({
   params: orderParams,

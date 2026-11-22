@@ -22,7 +22,7 @@ const live = { permission: 'money.price', fields: ['orderId'] } as const
 export const brandPriceChanged = defineEvent({
   type: 'sales_order.brand_price_changed',
   context: 'brand-prices',
-  description: "The customer's own prices of a sales order changed (typed, removed, taken over from its request, or carried by a split).",
+  description: "The customer's own prices of a sales order changed (typed, removed, taken over from its request, or carried by a split), or a difference was accepted by hand or taken back (B-OM-020).",
   payload: z.strictObject({ orderId: z.uuid(), partyId: livePartyId() }),
   live,
 })
