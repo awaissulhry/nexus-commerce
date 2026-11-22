@@ -1297,7 +1297,7 @@ export default defineStage({
         for (const [index, line] of [units[0]!, units[1]!].entries()) {
           await box.getByRole('spinbutton', { name: OS('door.split.movesTo', { line: line.label as string, size: line.size as string, n: index + 1 }), exact: true }).fill('1')
         }
-        await box.getByRole('radio', { name: startsWith(DEPTH('splitReason.PART_READY')) }).check()
+        await box.getByRole('radio', { name: startsWith(DEPTH('splitReason.PART_READY')) }).click()
         await flow.shot(page, 'shipments-split-into-3')
         const split = await answerOf(page, 'POST', /^\/shipping\/shipments\/[^/]+\/split$/, () => press(box.getByRole('button', { name: OS('door.split.goInto', { count: 3 }), exact: true })), /^201$/)
         children = ((split.shipments ?? []) as Json[]).map((made) => made.id as string)
@@ -1325,7 +1325,7 @@ export default defineStage({
         const box = await rowAct(world.so3.id, shared.number as string, OS('ships.act.move'))
         await box.getByRole('radio', { name: startsWith(`${firstRow.number as string} · `) }).check()
         await box.getByRole('spinbutton', { name: DEPTH('split.movesOf', { line: stillMovable.label as string, size: stillMovable.size as string }), exact: true }).fill('1')
-        await box.getByRole('radio', { name: startsWith(DEPTH('splitReason.CUSTOMER_REQUEST')) }).check()
+        await box.getByRole('radio', { name: startsWith(DEPTH('splitReason.CUSTOMER_REQUEST')) }).click()
         await box.getByRole('textbox', { name: startsWith(OS('door.wordsOptional')) }).fill(SHIP_WORDS.move)
         const moved = await answerOf(page, 'POST', /^\/shipping\/shipments\/[^/]+\/move$/, () => press(box.getByRole('button', { name: startsWith(lead(OS('move.go_one'))) }).first()))
         expect(moved.moved, 'one garment moved').toMatchObject({ garments: 1, merged: false })
