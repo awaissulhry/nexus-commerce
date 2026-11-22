@@ -105,7 +105,7 @@ export async function orderShipments(app: FastifyInstance, request: FastifyReque
       parcels: await readParcels(client, ids),
       tracking: await readTracking(client, ids),
       ddts: await liveDdts(client, ids),
-      papers: await readPapers(client, ids),
+      papers: await readPapers(client, ids, reader.seesPrices), // of-fx6s (B-OF-005)
     }
   })
   // fix-wall-1: a paper whose content is another customer's (an old copy of a mixed lot's photo on the shipment) is not listed.
