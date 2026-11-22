@@ -81,7 +81,7 @@ describe('files in depth (SCR-006-files)', () => {
     // F-OF-301: the order page mounts the depth ONCE for the order's own files (Versions…, Restore inside); the dock keeps its own.
     const page = readFileSync(new URL('../../areas/sales/orders/record/OrderRecord.tsx', import.meta.url), 'utf8')
     expect(page.match(/useFileDepth\(\{/g)?.length).toBe(1)
-    expect(page).toContain('<DepthDialogs depth={depth.model} actions={depth.actions} />')
+    expect(page).toContain('<DepthDialogs depth={fileDepth.model} actions={fileDepth.actions} />')
     const view = readFileSync(new URL('../../lib/record-thread/files-view/view/FilesView.tsx', import.meta.url), 'utf8')
     expect(view).toContain('export interface FilesViewSlots')
     expect(view).toContain('slots?.tags?.(file.id)')

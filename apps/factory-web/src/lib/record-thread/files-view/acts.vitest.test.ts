@@ -252,10 +252,10 @@ describe('T — the customer page’s docked order: Versions… in the page’s 
   it('the depth is mounted ONCE in the customer page’s container and drawn once by the page (as on the order page); no handler copied', () => {
     expect(work.match(/useFileDepth\(\{/g)?.length).toBe(1)
     expect(work).toContain('onVersions: (fileId) => depthOpen.current(fileId),')
-    expect(work).toContain('depthOpen.current = depth.actions.onOpenVersions')
+    expect(work).toContain('depthOpen.current = (fileId) => fileDepth.actions.onOpenVersions?.(fileId)')
     expect(work).toContain('reloadFiles: orderFiles.reload,')
     expect(page.match(/<DepthDialogs /g)?.length).toBe(1)
-    expect(page).toContain('<DepthDialogs depth={customerDock.depth.model} actions={customerDock.depth.actions} />')
+    expect(page).toContain('<DepthDialogs depth={customerDock.fileDepth.model} actions={customerDock.fileDepth.actions} />')
     for (const copy of ['setFilePriced(', 'useFileActs(', 'restoreVersion(', 'readHistory(', 'shareWithParty(']) expect(work, copy).not.toContain(copy)
   })
 
