@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { formatDate } from '../../i18n/format'
+import { dayWords } from './day' // fx5w (W-11)
 import { LOCALES } from '../../i18n/locales'
 import { createTranslator, messagesFor } from '../../i18n/messages'
 import { render, textOf } from '../parts/testing'
@@ -140,6 +140,32 @@ describe('F-OF-101: the counted line and the answers', () => {
     expect(tabAnswerOf(none, { locked: 0 }).parts).toEqual([{ key: 'tab.none' }])
     expect(tabAnswerOf(none, { locked: 2 }).parts).toEqual([{ key: 'tab.noneOpen' }])
   })
+
+  // ---- fx5w (walk W-01, W-02): the tab head counts the asks (10-design §3) and ends its sentence once ----
+  it('the tab head says what is asked: nothing (one sentence with no files), how many, arrived, late, asked of you; then the files', () => {
+    const ask = (id: string, over: Partial<NonNullable<OrderFilesRead['asks']>[number]> = {}): NonNullable<OrderFilesRead['asks']>[number] => ({ id, version: 1, status: 'OPEN', words: 'Pattern PDF', priced: false, bodyData: false, fileKind: 'DOCUMENT', lands: { type: 'SalesOrder', id: ORDER.id, label: ORDER.number, step: null }, who: { kind: 'PERSON', label: 'Carlo Prova' }, forMe: false, dueOn: '2026-11-28', lateDays: 0, askedBy: { name: 'Alex Demo' }, askedAt: '2026-11-20T10:00:00Z', rounds: 0, lastReason: null, chasedAt: null, answered: null, may: { answer: false, decide: true, change: true }, ...over })
+    const none: OrderFilesRead = { ...READ, groups: [], total: 0, asks: [] }
+    expect(tabAnswerOf(none, { locked: 0 })).toEqual({ parts: [{ key: 'tab.noneNoAsks' }], tone: 'info' })
+    expect(tabAnswerOf(none, { locked: 1 }).parts).toEqual([{ key: 'tab.noneOpenNoAsks' }])
+    expect(tabAnswerOf({ ...READ, asks: [] }, { locked: 0 }).parts).toEqual([{ key: 'tab.nothingAsked' }, { key: 'tab.files', params: { count: 10 } }])
+    const working: OrderFilesRead = { ...READ, asks: [ask('a', { status: 'ARRIVED' }), ask('b', { lateDays: 2 }), ask('c', { forMe: true })] }
+    expect(tabAnswerOf(working, { locked: 0 })).toEqual({
+      parts: [{ key: 'tab.asked', params: { count: 3 } }, { key: 'tab.arrived', params: { count: 1 } }, { key: 'tab.lateOne', params: { count: 2 } }, { key: 'tab.mine', params: { date: '2026-11-28' } }, { key: 'tab.files', params: { count: 10 } }],
+      tone: 'warning',
+    })
+    expect(tabAnswerOf({ ...none, asks: [ask('a')] }, { locked: 0 }).parts).toEqual([{ key: 'tab.asked', params: { count: 1 } }, { key: 'tab.noneLater' }])
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['record-thread-files-view'])['record-thread-files-view']!)
+      expect(t('tab.noneNoAsks')).toBe(locale === 'en' ? 'No files yet, and nothing is asked' : 'Ancora nessun file, e nessuna richiesta')
+      for (const key of ['tab.none', 'tab.noneOpen', 'tab.noneNoAsks', 'tab.noneOpenNoAsks', 'tab.nothingAsked', 'tab.noneLater']) expect(t(key).endsWith('.'), `${locale} ${key}`).toBe(false)
+      expect(t('tab.mine', { date: '28 Nov' })).toContain('28 Nov')
+    }
+    // W-01: the head ends the sentence ONCE; W-06: Read-only is the page's banner only (the head draws no line of its own).
+    const tab = readFileSync(new URL('../../../areas/sales/orders/record/view/FilesTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain('title={`${words}.`}')
+    expect(tab).not.toContain('tab.readOnly')
+    for (const locale of LOCALES) expect(messagesFor(locale, ['record-thread-files-view'])['record-thread-files-view']!['tab.readOnly'], locale).toBeUndefined()
+  })
 })
 
 describe('F-OF-101: the body drawn — groups that flow, blocks with doors, folds, the counted line, the tech pack\'s mark', () => {
@@ -150,7 +176,7 @@ describe('F-OF-101: the body drawn — groups that flow, blocks with doors, fold
     for (const locale of LOCALES) {
       const html = draw(locale)
       const t = createTranslator(locale, messagesFor(locale, ['record-thread-files-view'])['record-thread-files-view']!)
-      for (const words of [t('order.group.SHIPMENTS'), t('order.group.INVOICES'), t('order.openOn', { record: 'WO-0041' }), t('order.openOn', { record: 'SEED-SH-0011' }), t('order.openOnChanges'), t('order.older.show', { count: 1 }), t('order.techPack.named', { n: 2 }), t('order.techPack.newer'), t('counted.priced', { count: 2 }), t('counted.sheets', { count: 1 }), t('counted.role', { count: 1 }), t('order.leftOut', { count: 4 }), t('keep.until', { date: formatDate('2036-12-31T00:00:00Z', { locale }) }), t('version.earlier', { count: 2 })]) {
+      for (const words of [t('order.group.SHIPMENTS'), t('order.group.INVOICES'), t('order.openOn', { record: 'WO-0041' }), t('order.openOn', { record: 'SEED-SH-0011' }), t('order.openOnChanges'), t('order.older.show', { count: 1 }), t('order.techPack.named', { n: 2 }), t('order.techPack.newer'), t('counted.priced', { count: 2 }), t('counted.sheets', { count: 1 }), t('counted.role', { count: 1 }), t('order.leftOut', { count: 4 }), t('keep.until', { date: dayWords('2036-12-31T00:00:00Z', locale) /* fx5w (W-11) */ }), t('version.earlier', { count: 2 })]) {
         expect(textOf(html), `${locale}: ${words}`).toContain(words)
       }
       expect(textOf(html)).not.toMatch(/\b(order|counted|answer|tab|held|group)\.[a-zA-Z]/)
@@ -256,7 +282,8 @@ describe('F-OF-102: files held by the virus scan — the reader\'s own as a card
       ['PRODUCTION', [], 1],
     ])
     expect(orderCountedOf(held, sections).checking).toBe(2)
-    expect(tabAnswerOf(held, { locked: 0 })).toEqual({ parts: [{ key: 'tab.files', params: { count: 1 } }, { key: 'held.checking', params: { count: 3 } }], tone: 'warning' })
+    // fx5w (W-02; 10-design §3 "Held"): what the scan holds, then the files on the order.
+    expect(tabAnswerOf(held, { locked: 0 })).toEqual({ parts: [{ key: 'held.checking', params: { count: 3 } }, { key: 'tab.files', params: { count: 1 } }], tone: 'warning' })
     expect([heldReasonKey({ reason: 'SCAN_PENDING' }), heldReasonKey({ reason: 'INFECTED' }), heldReasonKey({ reason: 'SCAN_FAILED' })]).toEqual(['keep.scanPending', 'keep.infected', 'keep.held'])
   })
 
@@ -324,6 +351,40 @@ describe('F-OF-103: Add files… — the ONE upload, "Where it goes", no "Fiscal
     { key: 'line:l1', record: { type: 'SalesOrderLine', id: 'l1' }, kind: 'line', seq: 1, what: 'SEED-JKT-02 Black', audiences: ['OFFICE'] },
   ]
   const ask = (over: Partial<UploadAsk> = {}): UploadAsk => ({ files: [], kind: 'ATTACHMENT', audience: 'OFFICE', kinds: kinds.kinds, audiences: kinds.audiences, places, place: 'order', ...over })
+
+  // fx5w (W-05; 10-design §7 Add files): the subtitle, the sizes and the virus check, and What happens · The customer · What never changes.
+  it('Add files… on an order says where (its subtitle), the sizes it takes and the virus check, and the three lines', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['record-thread-files-view'])['record-thread-files-view']!)
+      const text = textOf(render(createElement(UploadDialog, { ask: ask(), party: { name: 'Seed Customer One' }, busy: false, onAdd: () => undefined, subtitle: t('upload.subtitle', { record: 'SEED-SO-0002' }) }), locale))
+      for (const words of [t('upload.subtitle', { record: 'SEED-SO-0002' }), t('upload.hintOrder'), t('acts.happens'), t('upload.happens'), t('upload.customer'), t('upload.never')]) expect(text, `${locale}: ${words}`).toContain(words)
+    }
+    // Another record's upload (no places): as before, no order words.
+    const other = textOf(render(createElement(UploadDialog, { ask: ask({ places: undefined, place: undefined }), party: null, busy: false })))
+    expect(other).not.toContain('Each file is checked for viruses first')
+    const view = readFileSync(new URL('./view/FilesView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("subtitle={t('upload.subtitle', { record: read.order.number })}")
+  })
+
+  // fx5w (W-12, fx5s): a shipment's block head says when it left and its DDT; W-13: Download is an icon at S, its name kept for readers.
+  it('a shipment block head: "SEED-SH-0011 · Shipped 12 Nov · DDT 144/2026" (each part only when given); Download\'s word hides at S', () => {
+    const ship = { type: 'Shipment', id: 'sh-11', label: 'SEED-SH-0011' }
+    const ddtPaper = file('ddt-paper', { from: { type: 'Ddt', id: 'ddt-144', label: 'DDT 144/2026', shipment: { id: 'sh-11', label: 'SEED-SH-0011', shippedOn: '2026-11-12', ddtNumber: '144/2026' } } })
+    const read: OrderFilesRead = { ...READ, groups: [{ key: 'SHIPMENTS', words: { en: 'Shipments & invoices', it: 'Spedizioni e fatture' }, files: [file('pod', { from: ship }), ddtPaper], leftOut: 0, measurementsLeftOut: 0 }], total: 2 }
+    const block = orderSectionsOf(read).find((section) => section.key === 'SHIPMENTS')!.blocks[0]!
+    expect(block.head).toEqual({ label: 'SEED-SH-0011', door: ship, shipment: { shippedOn: '2026-11-12', ddtNumber: '144/2026' } })
+    const bare = orderSectionsOf({ ...read, groups: [{ ...read.groups[0]!, files: [file('pod', { from: ship })] }] }).find((section) => section.key === 'SHIPMENTS')!.blocks[0]!
+    expect(bare.head).toEqual({ label: 'SEED-SH-0011', door: ship })
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['record-thread-files-view'])['record-thread-files-view']!)
+      const text = textOf(render(createElement(OrderFilesBody, { model: { read, problem: null, selected: [], canShare: false }, party: null }), locale))
+      expect(text).toContain(t('order.block.shipped', { date: dayWords('2026-11-12', locale) }))
+      expect(text).toContain(t('order.block.ddt', { number: '144/2026' }))
+    }
+    const css = readFileSync(new URL('./view/files-tab.css', import.meta.url), 'utf8')
+    expect(css).toContain('.fw-of-dl-word { display: none; }')
+    expect(readFileSync(new URL('./view/FilesView.tsx', import.meta.url), 'utf8')).toContain("aria-label={t('card.downloadOf', { name: file.name })}")
+  })
 
   it('the window asks where it goes (the order · Line 1 · …), what it is without "Fiscal copy", and takes the files itself', () => {
     for (const locale of LOCALES) {

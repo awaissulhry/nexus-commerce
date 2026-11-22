@@ -30,8 +30,7 @@
   .fw-ask-due { align-items: flex-start; }
   .fw-ask-act { justify-content: flex-end; flex-wrap: nowrap; }
 }
-.fw-ask-counted, .fw-ask-quiet { margin: 0; font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); line-height: 1.45; }
-.fw-ask-quiet { font-size: var(--nds-font-size-sm); }
+.fw-ask-counted { margin: 0; font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); line-height: 1.45; }
 .fw-ask-notice { margin: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--nds-space-6); padding: var(--nds-space-6) var(--nds-space-10); border: 1px solid var(--nds-warning-border); border-radius: var(--nds-radius-lg); background: var(--nds-warning-soft); color: var(--nds-warning-text); font-size: var(--nds-font-size-sm); }
 .fw-ask-more { align-self: flex-start; }
 
@@ -48,6 +47,14 @@
 .fw-ask-legend { margin-bottom: var(--nds-space-6); font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); }
 .fw-ask-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: var(--nds-space-6); }
 .fw-ask-cards.is-three { grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr)); }
+/* fx5w (W-07): "Ask for a file…" as the picture — 760 px from a tablet up (a sheet below 720 px: the DS), the "who" cards in 3 columns
+   (2 on a phone, so the choices start on the first screen); W-16: a held card looks held (the DS held tick's colour), its words stay. */
+.fw-ask-cards.is-who { grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); }
+@media (min-width: 720px) {
+  .nds-modal.md.fw-ask-modal { width: min(760px, calc(100vw - 2 * var(--nds-space-24))); }
+  .fw-ask-cards.is-who { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.nds-radiocard.is-held, .nds-radiocard.is-held .rc-title, .nds-radiocard.is-held .rc-desc { color: var(--nds-text-disabled); cursor: default; }
 .fw-ask-hint { font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); line-height: 1.45; }
 .fw-ask-problem { padding: var(--nds-space-6) var(--nds-space-10); border-radius: var(--nds-radius-lg); background: var(--nds-danger-soft); color: var(--nds-danger-text); font-size: var(--nds-font-size-sm); }
 .fw-ask-files { margin: 0; padding-left: var(--nds-space-16); display: flex; flex-direction: column; gap: var(--nds-space-4); }

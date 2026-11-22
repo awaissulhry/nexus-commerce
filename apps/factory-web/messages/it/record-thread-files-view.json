@@ -72,7 +72,12 @@
       "forbidden": "Il tuo ruolo non può aggiungere file qui.",
       "notFound": "Questo record non si trova più.",
       "invalid": "Il file è stato rifiutato: {detail}"
-    }
+    },
+    "subtitle": "{record} · File",
+    "hintOrder": "Fino a 25 MB un documento, 15 MB una foto. Ogni file viene prima controllato contro i virus.",
+    "happens": "I file vengono prima controllati contro i virus: fino ad allora i tuoi risultano trattenuti e gli altri li vedono contati. Compaiono dove vanno: Ordine e conversazione, oppure Righe e grafiche.",
+    "customer": "Il cliente non vede nulla finché un file non è condiviso con lui.",
+    "never": "Ogni file tiene chi l'ha aggiunto e quando. Un file non cambia mai sul posto: una modifica è una nuova versione."
   },
   "select": {
     "all": "Scegli tutti i {count}",
@@ -174,6 +179,10 @@
     "techPack": {
       "named": "Indicata nella richiesta: v{n}",
       "newer": "Più recente della richiesta"
+    },
+    "block": {
+      "shipped": "Spedita il {date}",
+      "ddt": "DDT {number}"
     }
   },
   "card": {
@@ -188,11 +197,26 @@
     "checking": "In verifica"
   },
   "tab": {
-    "none": "Ancora nessun file.",
-    "noneOpen": "Nessun file che puoi aprire su questo ordine.",
+    "none": "Ancora nessun file",
+    "noneOpen": "Nessun file che puoi aprire su questo ordine",
+    "noneNoAsks": "Ancora nessun file, e nessuna richiesta",
+    "noneOpenNoAsks": "Nessun file che puoi aprire su questo ordine, e nessuna richiesta",
+    "noneLater": "ancora nessun file su questo ordine",
+    "noneOpenLater": "nessun file che puoi aprire su questo ordine",
+    "nothingAsked": "Nessuna richiesta",
+    "asked_one": "1 file richiesto",
+    "asked_other": "{count} file richiesti",
+    "arrived_one": "{count} arrivato — da controllare",
+    "arrived_other": "{count} arrivati — da controllare",
+    "lateOne_one": "1 in ritardo di {count} giorno",
+    "lateOne_other": "1 in ritardo di {count} giorni",
+    "late_one": "{count} in ritardo",
+    "late_other": "{count} in ritardo",
+    "mine": "1 è chiesto a te, entro il {date}",
+    "mineMany_one": "{count} è chiesto a te",
+    "mineMany_other": "{count} sono chiesti a te",
     "files_one": "{count} file su questo ordine",
-    "files_other": "{count} file su questo ordine",
-    "readOnly": "Sola lettura: il tuo ruolo vede file e richieste ma non cambia nulla."
+    "files_other": "{count} file su questo ordine"
   },
   "held": {
     "checking_one": "{count} file in verifica antivirus",

@@ -24,7 +24,9 @@ import {
   windowBody,
   windowHeld,
   withWho,
+  workOrdersFor,
 } from './asks'
+import { useAsksAnswer } from './view/AsksBody' // fx5w (W-03)
 import { ASK_WINDOW_STATE, asksState, withAsks } from './fixtures'
 import { AsksBody } from './view/AsksBody'
 import { AskWindows } from './view/AskWindows'
@@ -247,5 +249,64 @@ describe('F-OF-201 … F-OF-203 drawn: the band, the windows, the upload for an 
     const css = readFileSync(new URL('./view/asks.css', import.meta.url), 'utf8')
     expect(css).toContain('@container pt (min-width: 1200px)')
     expect(css).not.toMatch(/#[0-9a-fA-F]{3,6}\b/)
+  })
+})
+
+
+// ---- fx5w (the look-only walk): W-03 "Nothing is asked" once · W-04 work orders by status · W-08 a role's reach · W-09 prices · W-16 held ----
+describe('fx5w — the walk\'s gaps in "Waiting for files" and "Ask for a file…"', () => {
+  const EMPTY: OrderFilesRead = { order: { id: 'so-2', number: 'SEED-SO-0002' }, groups: [], total: 0, truncated: false, asks: [], customerAsks: [] }
+
+  it('W-03: nothing asked is said once — the section\'s one line (with the way to ask for a reader who may), no body', () => {
+    function Answer({ state }: { state: ReturnType<typeof asksState> }) {
+      return createElement('p', null, useAsksAnswer(EMPTY, state))
+    }
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['file-asks'])['file-asks']!)
+      expect(textOf(render(createElement(Answer, { state: asksState() }), locale))).toBe(t('band.empty'))
+      expect(textOf(render(createElement(Answer, { state: asksState({ can: { ask: false, askCustomer: false, share: false, closed: false, readOnly: true } }) }), locale))).toBe(t('band.emptyRead'))
+      expect(render(createElement(AsksBody, { read: EMPTY, state: asksState(), customer: null }), locale)).toBe('')
+    }
+  })
+
+  it('W-04: a floor "who" lands only on a released, unfinished work order; an office "who" on any but cancelled or closed; no status: all', () => {
+    const orders = [{ id: 'wo-draft', number: 'WO-1', siteId: 's', status: 'DRAFT' }, { id: 'wo-live', number: 'WO-2', siteId: 's', status: 'IN_PROGRESS' }, { id: 'wo-done', number: 'WO-3', siteId: 's', status: 'COMPLETED' }, { id: 'wo-closed', number: 'WO-4', siteId: 's', status: 'CLOSED' }, { id: 'wo-old', number: 'WO-5', siteId: 's' }]
+    expect(workOrdersFor(orders, true).map((one) => one.id)).toEqual(['wo-live', 'wo-old'])
+    expect(workOrdersFor(orders, false).map((one) => one.id)).toEqual(['wo-draft', 'wo-live', 'wo-done', 'wo-old'])
+    const choices = { ...asksState().choices, workOrders: orders }
+    expect(withWho({ ...newAskDraft('2026-11-25'), workOrderId: 'wo-draft' }, 'FLOOR_TEAM', choices).workOrderId).toBe('wo-live')
+    expect(whoHeld('FLOOR_TEAM', { workOrders: [orders[0]!, orders[2]!] })).toBe('ask.noWorkOrder')
+    const floor = asksState({ choices, window: { kind: 'ask', draft: { ...newAskDraft('2026-11-25'), words: 'Photos of the collar seam', who: 'FLOOR_TEAM', pick: 'team-sewing', where: 'WORK_ORDER', workOrderId: 'wo-live' } } })
+    const html = render(createElement(AskWindows, { read: READ, state: floor, customer: null, orderLabel: 'SEED-SO-0002' }))
+    expect(html).toContain('>WO-2<')
+    for (const gone of ['>WO-1<', '>WO-3<', '>WO-4<']) expect(html, gone).not.toContain(gone)
+  })
+
+  it('W-08: an office role says how many people it reaches on the order (plural words); without the number, its name only', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['file-asks'])['file-asks']!)
+      const state = asksState({ choices: { ...asksState().choices, officeRoles: { state: 'ready', items: [{ id: 'role-pattern', name: 'Pattern maker', reach: 1 }, { id: 'role-plan', name: 'Planner', reach: 3 }, { id: 'role-x', name: 'Buyer' }] } }, window: { kind: 'ask', draft: { ...newAskDraft('2026-11-25'), who: 'OFFICE_ROLE' } } })
+      const text = textOf(render(createElement(AskWindows, { read: READ, state, customer: null, orderLabel: 'SEED-SO-0002' }), locale))
+      expect(text).toContain(t('ask.reach', { name: 'Pattern maker', count: 1 }))
+      expect(text).toContain(t('ask.reach', { name: 'Planner', count: 3 }))
+      expect(text).toContain('Buyer')
+      expect(t('ask.reach', { name: 'X', count: 1 })).not.toBe(t('ask.reach', { name: 'X', count: 2 }).replace('2', '1'))
+    }
+  })
+
+  it('W-09: "This file shows prices" is not offered to a reader without the price grain; W-16: a held choice looks held; W-07: the window\'s class', () => {
+    const p = createTranslator('en', messagesFor('en', ['record-files'])['record-files']!)
+    const ask = (prices: boolean | undefined) => render(createElement(AskWindows, { read: READ, state: { ...ASK_WINDOW_STATE, can: { ...ASK_WINDOW_STATE.can, ...(prices === undefined ? {} : { prices }) } }, customer: null, orderLabel: 'SEED-SO-0002' }))
+    expect(textOf(ask(false))).not.toContain(p('priced.tick'))
+    expect(textOf(ask(true))).toContain(p('priced.tick'))
+    expect(textOf(ask(undefined))).toContain(p('priced.tick'))
+    const floor = render(createElement(AskWindows, { read: READ, state: asksState({ window: { kind: 'ask', draft: { ...newAskDraft('2026-11-25'), who: 'FLOOR_TEAM', where: 'WORK_ORDER', workOrderId: 'wo-41' } } }), customer: null, orderLabel: 'SEED-SO-0002' }))
+    expect(floor).toMatch(/class="nds-radiocard row is-held"/)
+    const view = readFileSync(new URL('./view/AskWindows.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('className="fw-ask-modal"')
+    expect(view).toContain('rows={2} honourRows')
+    const css = readFileSync(new URL('./view/asks.css', import.meta.url), 'utf8')
+    expect(css).toContain('.nds-modal.md.fw-ask-modal { width: min(760px')
+    expect(css).toContain('.fw-ask-cards.is-who { grid-template-columns: repeat(3, minmax(0, 1fr)); }')
   })
 })

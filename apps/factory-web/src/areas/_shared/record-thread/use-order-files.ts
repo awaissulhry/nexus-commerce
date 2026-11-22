@@ -75,6 +75,8 @@ export function useOrderFiles(
     readonly onVersions?: (fileId: string) => void
     /** The order's customer by name (Who can see's second choice). */
     readonly partyName?: string | null
+    /** fx5w (W-09): the reader sees prices (the price grain); false: "Ask for a file…" offers no "This file shows prices". */
+    readonly canSeePrices?: boolean
     // ---- end F-OF-301
   },
 ) {
@@ -176,6 +178,7 @@ export function useOrderFiles(
     share: shareRight,
     closed: input.closed ?? false,
     readOnly: input.readOnly ?? false,
+    ...(input.canSeePrices !== undefined ? { prices: input.canSeePrices } : {}), // fx5w (W-09)
   }
   const asks = useFileAsks(api, {
     orderId,

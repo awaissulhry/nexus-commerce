@@ -589,6 +589,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     // F-OF-301 / F-OF-303: a card's Versions… opens the page's ONE depth (below); Who can see… names the order's customer
     onVersions: (fileId) => depthOpen.current(fileId),
     partyName: order.status === 'ready' ? (order.value.party?.legalName ?? null) : null,
+    canSeePrices: can.price, // fx5w (W-09): "This file shows prices" only for a reader with the price grain
   })
   // ---- end F-SA-237
   // ---- F-OF-301 (13-backend §7 rows 2-3): the files in depth on the order page — Versions… (Restore inside, two pictures side by side)

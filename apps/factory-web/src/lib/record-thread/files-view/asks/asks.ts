@@ -30,6 +30,8 @@ export interface AskAbilities {
   readonly closed: boolean
   /** The reader changes nothing on the page: no act at all (L3). */
   readonly readOnly: boolean
+  /** fx5w (W-09): the reader sees prices — without the price grain "This file shows prices" is not offered (a priced ask needs it). */
+  readonly prices?: boolean
 }
 
 export type AskRow = { readonly kind: 'ask'; readonly ask: FileAsk } | { readonly kind: 'customer'; readonly ask: CustomerAsk }
@@ -143,12 +145,14 @@ export interface AskList<T> {
 /** What the dialog picks from: the people and roles who may be asked, the teams of the work order's site, its steps, the lines, the work orders. */
 export interface AskChoices {
   readonly people: AskList<{ readonly id: string; readonly name: string }>
-  readonly officeRoles: AskList<{ readonly id: string; readonly name: string }>
+  /** fx5w (W-08, fx5s): `reach` — how many office people with the role reach this order (absent: not said). */
+  readonly officeRoles: AskList<{ readonly id: string; readonly name: string; readonly reach?: number }>
   readonly floorRoles: AskList<{ readonly id: string; readonly name: string }>
   readonly teams: AskList<{ readonly id: string; readonly name: string }>
   readonly steps: AskList<{ readonly id: string; readonly seq: number; readonly name: string }>
   readonly lines: readonly { readonly id: string; readonly seq: number; readonly what: string | null }[]
-  readonly workOrders: readonly { readonly id: string; readonly number: string; readonly siteId: string | null }[]
+  /** fx5w (W-04, fx5s): `status` — the work order's (absent: every one offered, as before). */
+  readonly workOrders: readonly { readonly id: string; readonly number: string; readonly siteId: string | null; readonly status?: string | null }[]
   /** S3 (B-OF-035): a list of the choices read was cut short (said in words under the picker). */
   readonly truncated?: boolean
 }
@@ -172,20 +176,32 @@ export function whoKindsOf(choices: Pick<AskChoices, 'people' | 'officeRoles' | 
 }
 
 /** Why a kind of "Who" is held by the order's state (a key of `file-asks`), or null: a floor ask needs a work order. */
-export const whoHeld = (who: AskWhoKind, choices: Pick<AskChoices, 'workOrders'>): string | null => (floorWho(who) && choices.workOrders.length === 0 ? 'ask.noWorkOrder' : null)
+export const whoHeld = (who: AskWhoKind, choices: Pick<AskChoices, 'workOrders'>): string | null => (floorWho(who) && workOrdersFor(choices.workOrders, true).length === 0 ? 'ask.noWorkOrder' : null)
 
 /** "Where it goes" for this "Who": a floor ask holds the order and a line with words (it always lands on a work order); the customer's is the order. */
 export function wheresOf(who: AskWhoKind, choices: Pick<AskChoices, 'lines' | 'workOrders'>): readonly { readonly where: AskWhere; readonly held: string | null }[] {
   if (who === 'CUSTOMER') return [{ where: 'SALES_ORDER', held: null }]
-  return ASK_WHERE.filter((where) => (where === 'SALES_ORDER_LINE' ? choices.lines.length > 0 : where === 'WORK_ORDER' ? choices.workOrders.length > 0 : true)).map((where) => ({ where, held: floorWho(who) && where !== 'WORK_ORDER' ? 'ask.floorWhere' : null }))
+  return ASK_WHERE.filter((where) => (where === 'SALES_ORDER_LINE' ? choices.lines.length > 0 : where === 'WORK_ORDER' ? workOrdersFor(choices.workOrders, floorWho(who)).length > 0 : true)).map((where) => ({ where, held: floorWho(who) && where !== 'WORK_ORDER' ? 'ask.floorWhere' : null }))
 }
 
 /** A new "Who": a floor ask moves to a work order (the first, when none is picked), with no prices and no body data; the pick starts again. */
 export function withWho(draft: AskDraft, who: AskWhoKind, choices: Pick<AskChoices, 'workOrders'>): AskDraft {
   const next: AskDraft = { ...draft, who, pick: null }
   if (who === 'CUSTOMER') return { ...next, where: 'SALES_ORDER', lineId: null, workOrderId: null, stepId: null, priced: false, bodyData: false }
-  if (!floorWho(who)) return next
-  return { ...next, where: 'WORK_ORDER', workOrderId: draft.workOrderId ?? choices.workOrders[0]?.id ?? null, priced: false, bodyData: false }
+  // fx5w (W-04): the work order kept only when the new "who" may land on it (a floor ask: released and not finished).
+  const kept = draft.workOrderId && workOrdersFor(choices.workOrders, floorWho(who)).some((one) => one.id === draft.workOrderId) ? draft.workOrderId : null
+  if (!floorWho(who)) return draft.where === 'WORK_ORDER' && !kept ? { ...next, workOrderId: workOrdersFor(choices.workOrders, false)[0]?.id ?? null, stepId: null } : next
+  return { ...next, where: 'WORK_ORDER', workOrderId: kept ?? workOrdersFor(choices.workOrders, true)[0]?.id ?? null, stepId: kept ? draft.stepId : null, priced: false, bodyData: false }
+}
+
+/** fx5w (W-04): a floor ask lands only on a work order the floor works now — released, in progress or on hold (never a draft, done or closed). */
+export const FLOOR_WORK_ORDER_STATUSES: readonly string[] = ['RELEASED', 'IN_PROGRESS', 'ON_HOLD']
+/**
+ * The work orders an ask may land on (fx5w W-04, the choices' `status`, fx5s): a floor "who" — released and not finished; an office "who"
+ * — every one but a cancelled or closed one. Without the status (before the server sends it) every one is offered, as before.
+ */
+export function workOrdersFor<T extends { readonly status?: string | null }>(list: readonly T[], floor: boolean): T[] {
+  return list.filter((one) => !one.status || (floor ? FLOOR_WORK_ORDER_STATUSES.includes(one.status) : one.status !== 'CANCELLED' && one.status !== 'CLOSED'))
 }
 
 /** Why the ask cannot be sent yet (a key of `file-asks`), or null. */

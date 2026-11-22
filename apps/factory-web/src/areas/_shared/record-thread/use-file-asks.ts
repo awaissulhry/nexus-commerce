@@ -87,12 +87,15 @@ export function useFileAsks(
   const workOrderId = window?.kind === 'ask' ? window.draft.workOrderId : reassigned?.lands.type === 'WorkOrder' ? reassigned.lands.id : null
   const read = picked?.state === 'ready' ? picked.read : null
   // The work orders the reader reaches (the choices' own, with their steps), else the order's live ones until the read is there.
-  const workOrders = read ? read.workOrders.map((one) => ({ id: one.id, number: one.number, siteId: one.siteId })) : input.workOrders
+  // fx5w (W-04): with each one's status when the read gives it — the window offers a floor ask only the ones the floor works now (asks.ts).
+  const workOrders = read ? read.workOrders.map((one) => ({ id: one.id, number: one.number, siteId: one.siteId, ...(one.status ? { status: one.status } : {}) })) : input.workOrders
+  const choiceWorkOrders = useRef(workOrders)
+  choiceWorkOrders.current = workOrders
   const siteId = workOrderId ? (workOrders.find((one) => one.id === workOrderId)?.siteId ?? null) : null
   const list = <T,>(items: (choices: AskChoicesRead) => readonly T[]): AskList<T> => (read ? { state: 'ready', items: items(read) } : picked?.state === 'hidden' ? HIDDEN : picked?.state === 'failed' ? { state: 'failed', items: [] } : READING)
   const choices: AskChoices = {
     people: list((one) => one.people.map((person): Named => ({ id: person.id, name: person.name }))),
-    officeRoles: list((one) => one.officeRoles.map((role): Named => ({ id: role.id, name: role.name }))),
+    officeRoles: list((one) => one.officeRoles.map((role) => ({ id: role.id, name: role.name, ...(role.reach !== undefined ? { reach: role.reach } : {}) }))), // fx5w (W-08): its reach
     // A floor role or team: of the plant of the work order picked (a floor ask lands on one); before a pick, every plant's.
     floorRoles: list((one) => one.floorRoles.filter((role) => !siteId || role.siteIds.includes(siteId)).map((role): Named => ({ id: role.id, name: role.name }))),
     teams: siteId ? list((one) => one.teams.filter((team) => team.siteId === siteId).map((team): Named => ({ id: team.id, name: team.name }))) : { state: 'ready', items: [] },
@@ -229,7 +232,7 @@ export function useFileAsks(
       /** The window's fields; a new "Who" moves a floor ask to a work order (asks.ts withWho). */
       onAskWindow: (next: AskWindow) => {
         setProblem(null)
-        setWindow((now) => (now?.kind === 'ask' && next.kind === 'ask' && now.draft.who !== next.draft.who ? { kind: 'ask', draft: withWho(next.draft, next.draft.who, { workOrders: latest.current.workOrders }) } : next))
+        setWindow((now) => (now?.kind === 'ask' && next.kind === 'ask' && now.draft.who !== next.draft.who ? { kind: 'ask', draft: withWho(next.draft, next.draft.who, { workOrders: choiceWorkOrders.current }) } : next))
       },
       onAskSubmit: () => void submit(),
       onAskClose: () => open(null),

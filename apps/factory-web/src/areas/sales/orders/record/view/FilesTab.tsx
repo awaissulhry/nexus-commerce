@@ -1,11 +1,11 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Eye, FileText, ShieldAlert, Upload } from 'lucide-react'
+import { FileText, ShieldAlert, Upload } from 'lucide-react'
 import type { MenuItemDef } from '@nexus/ui/components'
 import { Banner } from '@nexus/ui/components'
 import { Button } from '@nexus/ui/primitives'
-import { formatDate } from '../../../../../lib/i18n/format'
+import { dayWords } from '../../../../../lib/record-thread/files-view/day' // fx5w (W-11): the app's day words
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { FILES_VIEW_NS, OrderFilesBody, ORDER_FILES_NS, type FilesViewActions } from '../../../../../lib/record-thread/files-view/view/FilesView'
@@ -14,7 +14,6 @@ import type { OrderFilesModel } from '../../../../../lib/record-thread/files-vie
 import { filesAnswerOf, orderChoosableOf, orderCountedOf, orderSectionsOf, tabAnswerOf, type OrderFilesRead } from '../../../../../lib/record-thread/files-view/model'
 import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import type { Order } from '../../api'
-import { readOnlyOnPage } from '../../model'
 import type { SectionId } from '../production/layout'
 import type { OrderRecordModel } from '../record-model'
 import { copyLinkTo } from '../shipments/view/hrefs'
@@ -52,7 +51,6 @@ export function FilesTab({ order, model, actions }: { order: Order; model: Order
       target?.focus()
     }, 120)
   }
-  const readOnly = readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold })
   const party = order.party ? { name: order.party.legalName } : null
   // F-OF-201: the band only once the read sends `asks` (S2); `?tab=files&ask=<id>` marks its row.
   const askParam = useSearchParams()?.get('ask') ?? null
@@ -60,7 +58,7 @@ export function FilesTab({ order, model, actions }: { order: Order; model: Order
   return (
     <WithMessages namespaces={ORDER_FILES_NS}>
       <div className="fw-pt fw-of">
-        {files.read && !files.problem && <FilesHead read={files.read} readOnly={readOnly} />}
+        {files.read && !files.problem && <FilesHead read={files.read} />}
         <div className={`fw-of-z${asks ? ' has-asks' : ''}`}>
           {asks && <AsksSection read={asks.read} state={asks.state} actions={actions?.files} customer={party?.name ?? null} />}
           <FilesSection files={files} party={party} actions={actions?.files}>
@@ -77,7 +75,7 @@ const asksKitId = (id: 'asks'): SectionId => id as string as SectionId
 
 function AsksSection({ read, state, actions, customer }: { read: OrderFilesRead; state: AsksState; actions?: FilesViewActions | undefined; customer: string | null }) {
   const t = useT(ASKS_NS)
-  const answer = useAsksAnswer(read)
+  const answer = useAsksAnswer(read, state) // fx5w (W-03): the one line
   const items: MenuItemDef[] = [{ id: 'copy-link', label: t('band.menu.copyLink'), onSelect: () => copyLinkTo('asks') }]
   const info = (
     <>
@@ -96,22 +94,17 @@ function AsksSection({ read, state, actions, customer }: { read: OrderFilesRead;
 const filesKitId = (id: 'files'): SectionId => id as string as SectionId
 
 /**
- * F-OF-101 (10-design §3): the tab's one answer above its sections — "23 files on this order · 1 file is being checked for viruses." —
- * in the case's tone; and once for the whole tab, for a reader who changes nothing on the page, "Read-only: …".
+ * F-OF-101 (10-design §3): the tab's one answer above its sections — "3 files are asked for · 1 arrived — check it · 23 files on this
+ * order." — in the case's tone, ONE full stop (fx5w W-01). fx5w (W-06): Read-only is said once, by the page's own banner (as the
+ * Shipments tab), not again here.
  */
-function FilesHead({ read, readOnly }: { read: OrderFilesRead; readOnly: boolean }) {
+function FilesHead({ read }: { read: OrderFilesRead }) {
   const t = useT(FILES_VIEW_NS)
+  const locale = useLocale()
   const answer = tabAnswerOf(read, orderCountedOf(read, orderSectionsOf(read)))
   const icon = answer.tone === 'warning' ? <ShieldAlert size={18} aria-hidden /> : <FileText size={18} aria-hidden />
-  return (
-    <Banner className="fw-of-head" tone={answer.tone} icon={icon} title={`${answer.parts.map((part) => t(part.key, part.params)).join(' · ')}.`}>
-      {readOnly ? (
-        <span className="fw-of-head-wall">
-          <Eye size={13} aria-hidden /> {t('tab.readOnly')}
-        </span>
-      ) : null}
-    </Banner>
-  )
+  const words = answer.parts.map((part) => t(part.key, part.params?.date ? { ...part.params, date: dayWords(String(part.params.date), locale) } : part.params)).join(' · ')
+  return <Banner className="fw-of-head" tone={answer.tone} icon={icon} title={`${words}.`} />
 }
 
 /**
@@ -131,7 +124,7 @@ function FilesSection({ files, party, actions, children }: { files: OrderFilesMo
   if (answer && answer.count > 0) {
     words.push(t('answer.count', { count: answer.count }))
     if (party) words.push(answer.shared > 0 ? t('answer.shared', { count: answer.shared, party: party.name }) : t('answer.noneShared', { party: party.name }))
-    if (answer.newest) words.push(t('answer.newest', { date: formatDate(answer.newest, { locale }) }))
+    if (answer.newest) words.push(t('answer.newest', { date: dayWords(answer.newest, locale) /* fx5w (W-11) */ }))
   } else if (answer) words.push(counted && counted.locked > 0 ? t('answer.noneOpen') : files.may?.upload ? t('answer.emptyAdd') : t('order.empty.title'))
   const items: MenuItemDef[] = []
   if (choosable.length > 0) items.push({ id: 'choose-all', label: t('select.all', { count: choosable.length }), onSelect: () => actions?.onOrderSelect?.(choosable) })

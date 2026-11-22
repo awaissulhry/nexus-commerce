@@ -72,7 +72,12 @@
       "forbidden": "Your role cannot add files here.",
       "notFound": "This record is not found any more.",
       "invalid": "The file was refused: {detail}"
-    }
+    },
+    "subtitle": "{record} · Files",
+    "hintOrder": "Up to 25 MB a document, 15 MB a photo. Each file is checked for viruses first.",
+    "happens": "The files are checked for viruses first: until then yours show as held, and others see them counted. They show where they go: Order & thread, or Lines & artwork.",
+    "customer": "The customer sees nothing until a file is shared with it.",
+    "never": "Each file keeps who added it and when. A file never changes in place: a change is a new version."
   },
   "select": {
     "all": "Choose all {count}",
@@ -174,6 +179,10 @@
     "techPack": {
       "named": "Named on the request: v{n}",
       "newer": "Newer than the request"
+    },
+    "block": {
+      "shipped": "Shipped {date}",
+      "ddt": "DDT {number}"
     }
   },
   "card": {
@@ -188,11 +197,26 @@
     "checking": "Being checked"
   },
   "tab": {
-    "none": "No files yet.",
-    "noneOpen": "No file you can open on this order.",
+    "none": "No files yet",
+    "noneOpen": "No file you can open on this order",
+    "noneNoAsks": "No files yet, and nothing is asked",
+    "noneOpenNoAsks": "No file you can open on this order, and nothing is asked",
+    "noneLater": "no files on this order yet",
+    "noneOpenLater": "no file you can open on this order",
+    "nothingAsked": "Nothing is asked",
+    "asked_one": "1 file is asked for",
+    "asked_other": "{count} files are asked for",
+    "arrived_one": "{count} arrived — check it",
+    "arrived_other": "{count} arrived — check it",
+    "lateOne_one": "1 is {count} day late",
+    "lateOne_other": "1 is {count} days late",
+    "late_one": "{count} are late",
+    "late_other": "{count} are late",
+    "mine": "1 is asked of you, due {date}",
+    "mineMany_one": "{count} is asked of you",
+    "mineMany_other": "{count} are asked of you",
     "files_one": "{count} file on this order",
-    "files_other": "{count} files on this order",
-    "readOnly": "Read-only: your role sees files and asks but changes none."
+    "files_other": "{count} files on this order"
   },
   "held": {
     "checking_one": "{count} file is being checked for viruses",

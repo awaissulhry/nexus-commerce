@@ -155,7 +155,9 @@
     "happensFloor": "I tablet di quella squadra, ruolo o fase la mostrano in File richiesti; una foto ha bisogno della rete.",
     "customerTold": "Il cliente: non vede nulla — una richiesta è solo dell'ufficio.",
     "never": "Cosa non cambia mai. Una richiesta non si elimina mai: si accetta o si annulla; la cronologia conserva chi l'ha chiesta, quando e dove va.",
-    "truncated": "L'elenco è accorciato: non tutti quelli a cui si può chiedere sono mostrati."
+    "truncated": "L'elenco è accorciato: non tutti quelli a cui si può chiedere sono mostrati.",
+    "reach_one": "{name} · {count} persona raggiunge questo ordine",
+    "reach_other": "{name} · {count} persone raggiungono questo ordine"
   },
   "refusal": {
     "stale": "Qualcuno ha cambiato questa richiesta nel frattempo: è stata letta di nuovo.",
