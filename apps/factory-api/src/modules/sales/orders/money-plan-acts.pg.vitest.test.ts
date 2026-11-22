@@ -346,7 +346,7 @@ describe('B-OM-016 accept a deposit short (lead L1: PAID by hand, the short part
     expect(blind).not.toHaveProperty('tolerance')
     expect(requestOf(blind, request.id).short).toEqual({ withinTolerance: true })
     const answer = await ok('finance', 'POST', planUrl(order.id), { act: 'ACCEPT_SHORT', requestId: request.id, version: now.version, why: 'BANK_CHARGES', reason: 'Made-up: the bank kept 20.00.' })
-    expect(requestOf(answer, request.id)).toMatchObject({ status: 'PAID', paid: request.amount - 2_000, acceptedShort: { short: 2_000, why: 'BANK_CHARGES', reason: 'Made-up: the bank kept 20.00.' } })
+    expect(requestOf(answer, request.id)).toMatchObject({ status: 'PAID', paid: request.amount - 2_000, acceptedShort: { short: 2_000, why: 'BANK_CHARGES', reason: 'Made-up: the bank kept 20.00.', /* B-OM-025 */ at: expect.any(String) } })
     // B-OM-024: PAID now — nothing is short any more (the accepted short part is `acceptedShort`).
     expect(requestOf(answer, request.id).short).toBeNull()
     expect(stepOf(answer, 'DEPOSIT').status).toBe('PAID')
@@ -375,6 +375,13 @@ describe('B-OM-016 accept a deposit short (lead L1: PAID by hand, the short part
     await stepUp(h, owner.browser, owner.secret)
     const answer = await as('POST', planUrl(order.id), body)
     expect(requestOf(answer, request.id)).toMatchObject({ status: 'PAID', acceptedShort: { short: 5_000 } })
+    // B-OM-025 (W-03): the accepted short says who (the office person's name), when, how much and why — read back from the audit.
+    const accepted = requestOf(answer, request.id).acceptedShort
+    expect(accepted).toEqual({ short: 5_000, why: 'OTHER', reason: 'Made-up: agreed with the customer.', by: 'owner om-s2', at: expect.any(String) })
+    expect(Number.isNaN(Date.parse(accepted.at))).toBe(false)
+    // Without the price grain the reason and the amount stay out; who, when and why stay.
+    const blind = requestOf(await ok('planNoPrice', 'GET', `${orderUrl(order.id)}/schedule`), request.id).acceptedShort
+    expect(blind).toEqual({ why: 'OTHER', by: 'owner om-s2', at: accepted.at })
   })
 })
 
