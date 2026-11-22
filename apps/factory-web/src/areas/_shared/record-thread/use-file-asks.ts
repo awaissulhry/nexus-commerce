@@ -21,7 +21,7 @@ import {
   type AsksState,
   type AskWindow,
 } from '../../../lib/record-thread/files-view/asks/asks'
-import { askCustomerForFile, askError, changeFileAsk, fileAskAct, makeFileAsk, notForThisReader, readAskPeople, readAskRoles, readAskSteps, readAskTeams } from './file-asks-api'
+import { askCustomerForFile, askError, changeFileAsk, fileAskAct, makeFileAsk, notForThisReader, readAskChoices, type AskChoicesRead } from './file-asks-api'
 import { shareWithParty } from './api'
 
 /**
@@ -62,10 +62,8 @@ export function useFileAsks(
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<AsksState['problem']>(null)
   const [notice, setNotice] = useState<AsksState['notice']>(null)
-  const [people, setPeople] = useState<AskList<Named> | null>(null)
-  const [roles, setRoles] = useState<{ readonly office: AskList<Named>; readonly floor: AskList<Named> } | null>(null)
-  const [teams, setTeams] = useState<Readonly<Record<string, AskList<Named>>>>({})
-  const [steps, setSteps] = useState<Readonly<Record<string, AskList<Step>>>>({})
+  // S3 (#1884, B-OF-035): the pickers come from ONE walled read of the order's choices (people, roles, teams, work orders and their steps).
+  const [picked, setPicked] = useState<{ readonly state: 'reading' | 'failed' | 'hidden' } | { readonly state: 'ready'; readonly read: AskChoicesRead } | null>(null)
   const latest = useRef(input)
   latest.current = input
   const askOf = (askId: string): FileAsk | null => latest.current.read?.asks?.find((one) => one.id === askId) ?? null
@@ -75,46 +73,33 @@ export function useFileAsks(
   const orderId = input.orderId
   const loadPicks = useCallback(() => {
     if (!orderId) return
-    setPeople(READING)
-    setRoles({ office: READING, floor: READING })
-    readAskPeople(api, orderId)
-      .then((items) => setPeople({ state: 'ready', items }))
-      .catch((error: unknown) => setPeople(notForThisReader(error) ? HIDDEN : { state: 'failed', items: [] }))
-    readAskRoles(api)
-      .then((found) => setRoles({ office: { state: 'ready', items: found.office }, floor: { state: 'ready', items: found.floor } }))
-      .catch((error: unknown) => setRoles(notForThisReader(error) ? { office: HIDDEN, floor: HIDDEN } : { office: { state: 'failed', items: [] }, floor: { state: 'failed', items: [] } }))
+    setPicked({ state: 'reading' })
+    readAskChoices(api, orderId)
+      .then((read) => setPicked({ state: 'ready', read }))
+      .catch((error: unknown) => setPicked({ state: notForThisReader(error) ? 'hidden' : 'failed' }))
   }, [api, orderId])
   useEffect(() => {
-    if (picks && people === null) loadPicks()
-  }, [picks, people, loadPicks])
+    if (picks && picked === null) loadPicks()
+  }, [picks, picked, loadPicks])
 
   // The work order picked (the ask's draft, or the floor ask being reassigned): its steps and its site's teams.
   const reassigned = window?.kind === 'reassign' ? askOf(window.askId) : null
   const workOrderId = window?.kind === 'ask' ? window.draft.workOrderId : reassigned?.lands.type === 'WorkOrder' ? reassigned.lands.id : null
-  const siteId = workOrderId ? (input.workOrders.find((one) => one.id === workOrderId)?.siteId ?? null) : null
-  useEffect(() => {
-    if (!picks || !workOrderId || steps[workOrderId]) return
-    setSteps((known) => ({ ...known, [workOrderId]: READING }))
-    readAskSteps(api, workOrderId)
-      .then((items) => setSteps((known) => ({ ...known, [workOrderId]: { state: 'ready', items } })))
-      .catch((error: unknown) => setSteps((known) => ({ ...known, [workOrderId]: notForThisReader(error) ? HIDDEN : { state: 'failed', items: [] } })))
-  }, [api, picks, workOrderId, steps])
-  useEffect(() => {
-    if (!picks || !siteId || teams[siteId]) return
-    setTeams((known) => ({ ...known, [siteId]: READING }))
-    readAskTeams(api, siteId)
-      .then((items) => setTeams((known) => ({ ...known, [siteId]: { state: 'ready', items } })))
-      .catch((error: unknown) => setTeams((known) => ({ ...known, [siteId]: notForThisReader(error) ? HIDDEN : { state: 'failed', items: [] } })))
-  }, [api, picks, siteId, teams])
-
+  const read = picked?.state === 'ready' ? picked.read : null
+  // The work orders the reader reaches (the choices' own, with their steps), else the order's live ones until the read is there.
+  const workOrders = read ? read.workOrders.map((one) => ({ id: one.id, number: one.number, siteId: one.siteId })) : input.workOrders
+  const siteId = workOrderId ? (workOrders.find((one) => one.id === workOrderId)?.siteId ?? null) : null
+  const list = <T,>(items: (choices: AskChoicesRead) => readonly T[]): AskList<T> => (read ? { state: 'ready', items: items(read) } : picked?.state === 'hidden' ? HIDDEN : picked?.state === 'failed' ? { state: 'failed', items: [] } : READING)
   const choices: AskChoices = {
-    people: people ?? READING,
-    officeRoles: roles?.office ?? READING,
-    floorRoles: roles?.floor ?? READING,
-    teams: siteId ? (teams[siteId] ?? READING) : { state: 'ready', items: [] },
-    steps: workOrderId ? (steps[workOrderId] ?? READING) : { state: 'ready', items: [] },
+    people: list((one) => one.people.map((person): Named => ({ id: person.id, name: person.name }))),
+    officeRoles: list((one) => one.officeRoles.map((role): Named => ({ id: role.id, name: role.name }))),
+    // A floor role or team: of the plant of the work order picked (a floor ask lands on one); before a pick, every plant's.
+    floorRoles: list((one) => one.floorRoles.filter((role) => !siteId || role.siteIds.includes(siteId)).map((role): Named => ({ id: role.id, name: role.name }))),
+    teams: siteId ? list((one) => one.teams.filter((team) => team.siteId === siteId).map((team): Named => ({ id: team.id, name: team.name }))) : { state: 'ready', items: [] },
+    steps: workOrderId ? list((one) => (one.workOrders.find((order) => order.id === workOrderId)?.steps ?? []).map((step): Step => ({ id: step.id, seq: step.seq, name: step.name }))) : { state: 'ready', items: [] },
     lines: input.lines,
-    workOrders: input.workOrders,
+    workOrders,
+    truncated: read?.truncated ?? false,
   }
 
   const open = (next: AskWindow | null) => {

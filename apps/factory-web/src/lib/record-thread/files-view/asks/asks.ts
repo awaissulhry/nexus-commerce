@@ -149,6 +149,8 @@ export interface AskChoices {
   readonly steps: AskList<{ readonly id: string; readonly seq: number; readonly name: string }>
   readonly lines: readonly { readonly id: string; readonly seq: number; readonly what: string | null }[]
   readonly workOrders: readonly { readonly id: string; readonly number: string; readonly siteId: string | null }[]
+  /** S3 (B-OF-035): a list of the choices read was cut short (said in words under the picker). */
+  readonly truncated?: boolean
 }
 
 /** A new ask: a document, asked of a person, landing on the order, due in three days. */

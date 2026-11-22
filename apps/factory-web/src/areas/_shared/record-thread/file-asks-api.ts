@@ -8,9 +8,8 @@ import { refusalCode } from './state'
  * F-OF-202 / F-OF-203 (order FILES tab W2) — the ask commands of 13-backend.md §2 (B-OF-031; S2 #1881, apps/factory-api modules/sales/
  * file-asks), through the ONE client; every write at the ask's version with the caller's Idempotency-Key (a Retry after a lost answer
  * never asks twice). Each answers `{ ask: { id, version, status }, tasks }`; the band reads the order's files read again after it. "The customer (portal)" is the existing PartnerTask command
- * (POST /partners/:partyId/tasks, UPLOAD_DOCUMENT) — no ask command on it. The pickers read what exists today: the people a task may go
- * to on the order (GET /tasks/assignees), the roles (GET /auth/roles), a site's teams (GET /people/teams) and a work order's steps
- * (GET /production/work-orders/:id); a list the reader may not read hides its kind.
+ * (POST /partners/:partyId/tasks, UPLOAD_DOCUMENT) — no ask command on it. The pickers read ONE walled read of S3 (B-OF-035: the
+ * choices over the order); a read the reader may not make hides the kinds it fills.
  */
 
 const enc = encodeURIComponent
@@ -41,29 +40,26 @@ export function askError(error: unknown): { readonly kind: string; readonly code
   return { kind: error.kind, code: issue ? issuePath(issue).slice('fileAsk/'.length) : (refusalCode(error) ?? null), detail: issue?.message ?? error.issues.find((one) => one.message)?.message ?? (error.message || null) }
 }
 
-// ---- the pickers --------------------------------------------------------------------------------------------------------------------
+// ---- the pickers: ONE walled read (B-OF-035, S3 #1884) ----------------------------------------------------------------------------
 const named = z.object({ id: z.string(), name: z.string() })
+const choicesSchema = z.object({
+  people: z.array(named),
+  officeRoles: z.array(named),
+  floorRoles: z.array(named.extend({ siteIds: z.array(z.string()) })),
+  teams: z.array(named.extend({ siteId: z.string() })),
+  lines: z.array(z.object({ id: z.string(), seq: z.number(), label: z.string() })),
+  workOrders: z.array(z.object({ id: z.string(), number: z.string(), siteId: z.string().nullable(), steps: z.array(z.object({ id: z.string(), seq: z.number(), name: z.string() })) })),
+  truncated: z.boolean(),
+})
+export type AskChoicesRead = z.infer<typeof choicesSchema>
 
-/** GET /tasks/assignees?recordType=SalesOrder&recordId — the office people a task may go to on this order (ACTIVE, reach it, tasks.manage). */
-export const readAskPeople = async (api: ApiClient, orderId: string, signal?: AbortSignal) =>
-  (await api.get('/tasks/assignees', { query: { recordType: 'SalesOrder', recordId: orderId }, schema: z.object({ people: z.array(named.passthrough()) }), signal })).people.map((person) => ({ id: person.id, name: person.name }))
-
-const roleSchema = z.object({ id: z.string(), name: z.string(), audience: z.string(), archivedAt: z.string().nullable() })
-/** GET /auth/roles (roles.view) — the office and the floor roles, not archived. */
-export async function readAskRoles(api: ApiClient, signal?: AbortSignal): Promise<{ readonly office: readonly { id: string; name: string }[]; readonly floor: readonly { id: string; name: string }[] }> {
-  const roles = (await api.get('/auth/roles', { schema: z.object({ roles: z.array(roleSchema.passthrough()) }), signal })).roles.filter((role) => role.archivedAt === null)
-  const of = (audience: string) => roles.filter((role) => role.audience.toLowerCase() === audience).map((role) => ({ id: role.id, name: role.name }))
-  return { office: of('office'), floor: of('floor') }
-}
-
-/** GET /people/teams?siteId (people.view) — the site's active teams. */
-export const readAskTeams = async (api: ApiClient, siteId: string, signal?: AbortSignal) =>
-  (await api.get('/people/teams', { query: { siteId }, schema: z.object({ teams: z.array(z.object({ id: z.string(), name: z.string(), status: z.string() }).passthrough()) }), signal })).teams.filter((team) => team.status === 'ACTIVE').map((team) => ({ id: team.id, name: team.name }))
-
-const stepsSchema = z.object({ workOrder: z.object({ spec: z.object({ operations: z.array(z.object({ id: z.string().nullable(), seq: z.number(), name: z.string() }).passthrough()) }).passthrough() }).passthrough() })
-/** GET /production/work-orders/:id (workorders.view) — its steps (a step not yet made a row of the work order cannot be asked). */
-export const readAskSteps = async (api: ApiClient, workOrderId: string, signal?: AbortSignal) =>
-  (await api.get(`/production/work-orders/${enc(workOrderId)}`, { schema: stepsSchema, signal })).workOrder.spec.operations.flatMap((step) => (step.id ? [{ id: step.id, seq: step.seq, name: step.name }] : []))
+/**
+ * GET /sales/orders/:orderId/file-asks/choices (tasks.manage + threads.post over the order) — who may be asked and where it may land:
+ * the office people a task may go to on the order, the office roles with such a person, the floor roles and the teams of the plants of
+ * its work orders (never a floor worker's name, never a count), the lines, the work orders the reader reaches with their steps; `truncated`
+ * when a list was cut short. No "sees prices" flag: a priced ask to someone without prices is refused when it is made (the server's words).
+ */
+export const readAskChoices = (api: ApiClient, orderId: string, signal?: AbortSignal): Promise<AskChoicesRead> => api.get(`${asksPath(orderId)}/choices`, { schema: choicesSchema, signal })
 
 /** A picker's read refused for this reader's rights: its kind is hidden (never a held door for a right). */
 export const notForThisReader = (error: unknown): boolean => isApiError(error) && (error.kind === 'forbidden' || error.kind === 'step_up')
