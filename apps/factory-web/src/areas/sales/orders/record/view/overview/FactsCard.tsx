@@ -6,6 +6,9 @@ import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../../record-panels/i18n'
+import { useSearchParams } from 'next/navigation' // F-OM-204
+import { TabLink } from '../../../../../../lib/tab-link/TabLink' // F-OM-204
+import { tabHref } from '../../../../../_shared/record-frame/address' // F-OM-204
 import type { Order } from '../../../api'
 import { dayInstant, readOnlyOnPage, type Phrase } from '../../../model'
 import { NAMESPACE as DEPTH } from '../../../depth/model'
@@ -57,6 +60,7 @@ function Facts({ order, model, actions }: { order: Order; model: OrderRecordMode
     return words === `incoterm.${code}` ? code : words
   }
   const fixed = <span className="fw-so-hint fw-so-fact-fixed" title={t('facts.fixedTitle')}>{t('facts.fixed')}</span>
+  const search = useSearchParams()?.toString() ?? '' // F-OM-204: the terms row's door keeps the dock's scope
   return (
     <Card padded>
       <h2 className="fw-so-h2">{t('overview.facts.title')}</h2>
@@ -81,7 +85,21 @@ function Facts({ order, model, actions }: { order: Order; model: OrderRecordMode
           value={depthValue((value) => (value.season ? `${value.season.code} · ${value.season.name}` : d('season.noSeason')))}
           door={doors && read ? (describedBy) => <Door label={t('facts.set')} held={say(doors.season)} describedBy={describedBy} onClick={() => actions?.depth?.onDialog?.({ kind: 'season', seasonId: read.season?.id ?? '' })} /> : null}
         />
-        <Fact label={t('facts.payment')} value={`${order.paymentTerms?.trim() || '—'} · ${order.currency}`} door={() => fixed} />
+        {/* F-OM-204 (L7, a reversal of F-OO-209's "Fixed"): the terms change on Money now (Change payment terms…, orders.moneyPlan) —
+            "Change on Money ›" for the plan right, plain words for everyone else; never "Fixed" (it would lie). */}
+        <Fact
+          label={t('facts.payment')}
+          value={`${order.paymentTerms?.trim() || '—'} · ${order.currency}`}
+          door={
+            model.can.moneyPlan && !readOnly
+              ? () => (
+                  <TabLink className="fw-so-link" href={`${tabHref(`${model.prefix}/sales/orders/${order.id}`, 'money', search)}#payments`}>
+                    {t('moneyTab.facts.changeOnMoney')}
+                  </TabLink>
+                )
+              : null
+          }
+        />
         <Fact label={t('facts.languageTax')} value={`${languageOf(order, locale)} · ${t(`newOrder.taxModes.${order.taxMode}`)}`} door={() => fixed} />
         {terms && (
           <Fact

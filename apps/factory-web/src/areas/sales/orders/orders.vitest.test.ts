@@ -991,7 +991,8 @@ describe('F-SA-266: what a row discusses — the chip per audience, the office-o
     const row = read('./record/money/view/PlanRow.tsx')
     expect(row).toContain('{ part, target: row.discuss.target, officeOnly: true }')
     expect(row).toContain('if (model.can.threadsPost && frame?.discuss) {')
-    expect(read('./record/money/view/InvoicesSection.tsx')).toContain("target={{ kind: 'Invoice', id: invoice.id }} officeOnly")
+    // F-OM-203: an invoice's Discuss is an item of its ONE ⋯ (an office note, threads.post), by the invoice's reference.
+    expect(read('./record/money/view/InvoicesSection.tsx')).toContain("{ part, target: { kind: 'Invoice', id: invoice.id }, officeOnly: true }")
     const shipments = read('./record/view/ShipmentsTab.tsx')
     expect(shipments).toContain("target={{ kind: 'Shipment', id: row.id }} />")
     // F-OC-102: a request waiting on us is a row of Changes › Waiting — its Discuss by the request's reference.

@@ -6,8 +6,9 @@ import { canOf, deposit, order, PAID, SCHEDULE, SCHEDULE_NONE, SCHEDULE_OPEN, SE
 import type { DepositRequest, Milestone, Order, Schedule } from '../../api'
 import { depositGate } from '../../model'
 import { stepAbilitiesOf, type StepAbilities } from '../schedule/model'
-import { MONEY_PLAN_ACTS } from '@nexus/factory-domain/sales/orders/money-plan'
-import { planOf, type PlanRow } from './plan'
+import { MONEY_PLAN_ACTS, MONEY_PLAN_REFUSAL_WORDS } from '@nexus/factory-domain/sales/orders/money-plan'
+import { planOf, planRefusalOf, softLockedOf, type PlanRow } from './plan'
+import { ApiError } from '../../../../../lib/api/errors'
 import { amountsOf } from './word'
 
 /**
@@ -19,8 +20,9 @@ import { amountsOf } from './word'
 
 const OWNER_STEPS: StepAbilities = { manageOrders: true, manageInvoices: true, waive: true }
 const FINANCE_STEPS: StepAbilities = { manageOrders: false, manageInvoices: true, waive: false }
-const plan = (value: Order, over: { schedule?: Schedule; role?: Parameters<typeof canOf>[0]; stepCan?: StepAbilities | null; today?: string; stillToPay?: number | null } = {}) =>
-  planOf({ order: value, schedule: over.schedule ?? SCHEDULE_OPEN, settlement: null, can: canOf(over.role ?? 'owner'), stepCan: over.stepCan === undefined ? OWNER_STEPS : over.stepCan, today: over.today ?? TODAY, stillToPay: over.stillToPay ?? null })
+// F-OM-201: `moneyPlan` — the plan right (orders.moneyPlan, B-OM-010: the Owner and Finance once the server knows it; off by default).
+const plan = (value: Order, over: { schedule?: Schedule; role?: Parameters<typeof canOf>[0]; stepCan?: StepAbilities | null; today?: string; stillToPay?: number | null; moneyPlan?: boolean } = {}) =>
+  planOf({ order: value, schedule: over.schedule ?? SCHEDULE_OPEN, settlement: null, can: { ...canOf(over.role ?? 'owner'), moneyPlan: over.moneyPlan ?? false }, stepCan: over.stepCan === undefined ? OWNER_STEPS : over.stepCan, today: over.today ?? TODAY, stillToPay: over.stillToPay ?? null })
 const kinds = (rows: readonly PlanRow[]) => rows.map((row) => row.kind)
 const acts = (row: PlanRow) => [row.act?.id ?? null, ...row.more.map((entry) => entry.id)]
 const withRequests = (value: Order, requests: DepositRequest[]): Order => ({ ...value, chain: { ...value.chain, depositRequests: requests } })
@@ -126,14 +128,17 @@ describe('F-OM-103 / 104: the acts — hidden without the right, held only by st
     expect(acts(sent)).toEqual(['record', 'send', 'waive'])
     expect(sent.more.find((entry) => entry.id === 'send')!.label).toEqual({ key: 'moneyTab.plan.act.sendAgain' })
     expect(model.rows[0]!.more.find((entry) => entry.id === 'waive')!.label).toEqual({ key: 'moneyTab.plan.act.waive' })
-    expect(acts(model.rows[1]!)).toEqual(['open', 'waive'])
-    expect(model.rows[1]!.act).toMatchObject({ id: 'open', held: null, needsDay: false })
+    // F-OM-201 (B-OM-018): Open for payment is the plan right's now — without it no Open for payment (never held).
+    expect(acts(model.rows[1]!)).toEqual([null, 'waive'])
+    expect(plan(order('CONFIRMED'), { moneyPlan: true }).rows[1]!.act).toMatchObject({ id: 'open', held: null, needsDay: false })
   })
 
   it('Finance records and sends but does not waive; Sales (no payments.record, no grain) and Read-only see no money act at all', () => {
     expect(acts(plan(order('CONFIRMED'), { role: 'finance', stepCan: FINANCE_STEPS }).rows[0]!)).toEqual(['send', 'record'])
     const sales = plan(order('CONFIRMED'), { role: 'sales', stepCan: stepAbilitiesOf(['orders.manage']) })
     expect(acts(sales.rows[0]!)).toEqual([null])
+    // B-OM-018: Sales (orders.manage, no price) no longer opens a payment request for money it cannot see.
+    expect(acts(sales.rows[1]!)).toEqual([null])
     // Held words for a right are gone (F-OM-104): nothing in any row is held for want of a right.
     for (const row of sales.rows) for (const entry of [row.act, ...row.more]) if (entry?.held) expect(entry.held.key).not.toMatch(/noManage|noInvoice|noWaive|noPayments|noPrice/)
     const reader = plan(order('CONFIRMED'), { role: 'manager', stepCan: stepAbilitiesOf([]) })
@@ -143,7 +148,7 @@ describe('F-OM-103 / 104: the acts — hidden without the right, held only by st
   it('held by state, in words: money placed on it is not waived; goods have left: the balance is not opened', () => {
     const part = plan(withRequests(order('CONFIRMED'), [deposit({ link: SENT_LINK, paidAmount: 100000 })])).rows[0]!
     expect(part.more.find((entry) => entry.id === 'waive')!.held).toEqual({ key: 'schedule.verbs.held.partPaid' })
-    const shipped = plan(order('PARTLY_SHIPPED'), { schedule: SCHEDULE }).rows[1]!
+    const shipped = plan(order('PARTLY_SHIPPED'), { schedule: SCHEDULE, moneyPlan: true }).rows[1]!
     expect(shipped.act).toMatchObject({ id: 'open', held: { key: 'schedule.verbs.held.goodsLeft' } })
   })
 
@@ -155,6 +160,73 @@ describe('F-OM-103 / 104: the acts — hidden without the right, held only by st
     const closed = plan(order('CLOSED'), { schedule: SCHEDULE })
     expect(closed.final).toBe(true)
     for (const row of closed.rows) expect(acts(row)).toEqual([null])
+  })
+})
+
+describe('F-OM-201: the plan\'s hand acts — orders.moneyPlan (amount acts: + the price grain), hidden without it, held only by state', () => {
+  const ids = (row: PlanRow) => row.more.map((entry) => entry.id)
+  const heldOf = (row: PlanRow, id: string) => row.more.find((entry) => entry.id === id)?.held ?? null
+
+  it('an open deposit: Change the deposit… · Move due day… · Change amount… · Rename… · Remove step… (the only open step but one)', () => {
+    const row = plan(order('CONFIRMED'), { moneyPlan: true }).rows[0]!
+    expect(ids(row)).toEqual(['record', 'REPLACE_DEPOSIT', 'MOVE_DUE', 'CHANGE_STEP', 'RENAME_STEP', 'REMOVE_STEP', 'waive'])
+    for (const id of ['REPLACE_DEPOSIT', 'MOVE_DUE', 'CHANGE_STEP', 'RENAME_STEP', 'REMOVE_STEP']) expect(heldOf(row, id), id).toBeNull()
+    // Where the rest may go: the other open step with no money on it.
+    expect(row.restTo.map((entry) => entry.id)).toEqual([SCHEDULE.steps[1]!.id])
+  })
+
+  it('money placed on it: Change the deposit… and the amount acts held in words; Accept short… offered (L1)', () => {
+    const row = plan(withRequests(order('CONFIRMED'), [deposit({ link: SENT_LINK, paidAmount: 226884 })]), { moneyPlan: true }).rows[0]!
+    expect(ids(row)).toContain('ACCEPT_SHORT')
+    for (const id of ['REPLACE_DEPOSIT', 'CHANGE_STEP', 'REMOVE_STEP']) expect(heldOf(row, id), id).toEqual({ key: 'moneyTab.plan.held.moneyPlaced' })
+    expect(heldOf(row, 'MOVE_DUE')).toBeNull()
+    // A step with money on it is never where the rest goes.
+    expect(plan(withRequests(order('CONFIRMED'), [deposit({ link: SENT_LINK, paidAmount: 100000 })]), { moneyPlan: true }).rows[1]!.restTo).toEqual([])
+  })
+
+  it('the only open step takes the whole order: Change amount… and Remove step… held; an on-invoice step\'s day comes from the invoice', () => {
+    const onlyBalance = plan(order('IN_PRODUCTION'), { schedule: SCHEDULE, moneyPlan: true }).rows[1]!
+    expect(heldOf(onlyBalance, 'CHANGE_STEP')).toEqual({ key: 'moneyTab.plan.held.onlyStep' })
+    expect(heldOf(onlyBalance, 'REMOVE_STEP')).toEqual({ key: 'moneyTab.plan.held.onlyStep' })
+    const onInvoice = { ...SCHEDULE, steps: [SCHEDULE.steps[0]!, step({ id: 'oi', kind: 'ON_INVOICE', depositRequestId: null })] }
+    expect(heldOf(plan(order('SHIPPED'), { schedule: onInvoice, moneyPlan: true }).rows[1]!, 'MOVE_DUE')).toEqual({ key: 'moneyTab.plan.held.dayFromInvoice' })
+  })
+
+  it('a balance opened for payment: Undo opening (nothing paid); after a waive: Ask for the deposit again…', () => {
+    const opened = { ...SCHEDULE, steps: SCHEDULE.steps.map((entry) => (entry.kind === 'BEFORE_SHIPPING' ? { ...entry, depositRequestId: 'bal' } : entry)) }
+    const balance = deposit({ id: 'bal', stepKind: 'BEFORE_SHIPPING', amount: 532896 })
+    const row = plan(withRequests(order('IN_PRODUCTION'), [PAID, balance]), { schedule: opened, moneyPlan: true }).rows[1]!
+    expect(ids(row)).toContain('UNDO_OPEN')
+    expect(ids(row)).not.toContain('REPLACE_DEPOSIT')
+    const waivedPlan = { ...SCHEDULE_OPEN, steps: SCHEDULE_OPEN.steps.map((entry) => (entry.kind === 'DEPOSIT' ? { ...entry, status: 'WAIVED' as const } : entry)) }
+    const waived = plan(withRequests(order('CONFIRMED'), [deposit({ status: 'WAIVED' })]), { schedule: waivedPlan, moneyPlan: true }).rows[0]!
+    expect(ids(waived)).toEqual(['ASK_AGAIN'])
+  })
+
+  it('the head: Change payment terms… · Add a step… (held on a closed order); none without the right or the price grain', () => {
+    expect(plan(order('CONFIRMED'), { moneyPlan: true }).head.map((entry) => [entry.id, entry.held])).toEqual([['CHANGE_TERMS', null], ['ADD_STEP', null]])
+    expect(plan(order('CLOSED'), { schedule: SCHEDULE, moneyPlan: true }).head).toEqual([{ id: 'CHANGE_TERMS', label: { key: 'moneyTab.plan.act.CHANGE_TERMS' }, held: { key: 'moneyTab.plan.held.final' } }])
+    expect(plan(order('CONFIRMED')).head).toEqual([])
+    expect(plan(order('CONFIRMED'), { role: 'sales', moneyPlan: true }).head).toEqual([])
+    // No price grain: no amount act on any row (the money wall), the words-only acts stay.
+    const words = plan(order('CONFIRMED'), { role: 'manager', moneyPlan: true, stepCan: null }).rows[0]!
+    expect(ids(words)).toEqual(['MOVE_DUE', 'RENAME_STEP', 'REMOVE_STEP'])
+  })
+
+  it('without the right: no hand act anywhere (hidden, never held)', () => {
+    for (const row of plan(order('CONFIRMED')).rows) for (const id of MONEY_PLAN_ACTS) expect(ids(row), id).not.toContain(id)
+  })
+
+  it('a refusal in this page\'s words (409 moneyPlan/<CODE>); the version moved; a SOFT-locked month', () => {
+    const refused = (issues: string[], kind: 'conflict' | 'forbidden' = 'conflict', status = 409) => new ApiError(kind, status, 'refused', 'x', null, issues.map((path) => ({ path })))
+    // S2: the planner's own refusals in the domain's words, both languages (one wording with the server).
+    expect(planRefusalOf(refused(['moneyPlan/MONEY_PLACED']))).toEqual(MONEY_PLAN_REFUSAL_WORDS.MONEY_PLACED)
+    expect(planRefusalOf(refused(['moneyPlan/SOMETHING_NEW']))).toEqual({ key: 'moneyTab.refusal.OTHER' })
+    expect(planRefusalOf(refused(['body/version']))).toEqual({ key: 'moneyTab.refusal.MOVED' })
+    expect(planRefusalOf(refused([], 'forbidden', 403))).toEqual({ key: 'moneyTab.refusal.FORBIDDEN' })
+    expect(planRefusalOf(new Error('boom'))).toBeNull()
+    expect(softLockedOf(refused(['period/SOFT_LOCKED']))).toBe(true)
+    expect(softLockedOf(refused(['period/HARD_LOCKED']))).toBe(false)
   })
 })
 
@@ -208,7 +280,8 @@ describe('F-OM-103: the words', () => {
       ...['OPEN', 'PART', 'PAID', 'WAIVED', 'OVERDUE', 'NOT_ASKED'].map((pill) => `pill.${pill}`),
       ...['waived', 'paidWithInvoices', 'paidOn', 'paid', 'asInvoice', 'onDelivery', 'overdueSince', 'on', 'beforeGoodsLeave', 'withInvoice'].map((due) => `due.${due}`),
       ...['productionWaits', 'extraWaits', 'holdsShipment', 'paidWithInvoice'].map((note) => `note.${note}`),
-      ...['record', 'send', 'sendAgain', 'payInvoice', 'waive'].map((act) => `act.${act}`),
+      ...['send', 'sendAgain', 'payInvoice', 'waive', ...MONEY_PLAN_ACTS].map((act) => `act.${act}`),
+      ...['moneyPlaced', 'onlyStep', 'dayFromInvoice', 'final', 'nothingFree'].map((held) => `held.${held}`),
       ...[...MONEY_PLAN_ACTS, 'OTHER'].map((act) => `byHand.what.${act}`),
       ...['none', 'allPaid', 'final', 'stillOpen', 'overdue', 'nextDue', 'next'].map((answer) => `answer.${answer}`),
       ...['earlier.step', 'earlier.replaced', 'earlier.cancelled', 'setByHand', 'fromChange', 'fold', 'unfold', 'more', 'menu.openInvoice', 'step.page', 'step.byChange', 'step.issued', 'payments.title', 'payments.none', 'payments.ref', 'payments.paidSoFar'],

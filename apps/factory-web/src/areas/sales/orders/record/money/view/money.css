@@ -124,5 +124,59 @@
 .fw-om-er { margin: 0; display: flex; gap: var(--nds-space-8); font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); padding: var(--nds-space-2) 0 var(--nds-space-2) 30px; }
 .fw-om-er > svg { flex: none; margin-top: var(--nds-space-2); }
 
+/* ── 3 · Invoices & credit notes (F-OM-203): one row per document, by the list's own room — stacked under 600 px; Number · State ·
+   Payment · Total · Open · ⋯ from 600; + Kind and This order from 1000 (the act column fixed, so the ⋯ line up) ── */
+.fw-om-il { container: ominv / inline-size; display: flex; flex-direction: column; min-width: 0; }
+.fw-om-ir { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "n o" "s s" "p p" "t t"; gap: var(--nds-space-2) var(--nds-space-12); padding: var(--nds-space-8) var(--nds-space-2); border-bottom: 1px solid var(--nds-border-subtle); font-size: var(--nds-font-size-sm); align-items: start; min-width: 0; scroll-margin-top: var(--nds-space-4); }
+.fw-om-ir:last-child { border-bottom: 0; }
+.fw-om-ir:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; border-radius: var(--nds-radius-xs); }
+.fw-om-ir > div { min-width: 0; }
+.fw-om-ir-n { grid-area: n; display: flex; flex-direction: column; gap: var(--nds-space-2); }
+.fw-om-ir-nb { display: inline-flex; gap: var(--nds-space-6); align-items: center; }
+.fw-om-ir-nb > svg { flex: none; color: var(--nds-text-muted); }
+.fw-om-ir-kd { display: none; color: var(--nds-text-2); }
+.fw-om-ir-kn { font-size: var(--nds-font-size-xs); color: var(--nds-text-2); }
+.fw-om-ir-s { grid-area: s; display: flex; gap: var(--nds-space-6); flex-wrap: wrap; align-items: center; }
+.fw-om-ir-p { grid-area: p; display: flex; gap: var(--nds-space-6); align-items: center; }
+.fw-om-ir-t { grid-area: t; display: flex; gap: var(--nds-space-4) var(--nds-space-14); flex-wrap: wrap; font-variant-numeric: tabular-nums; color: var(--nds-text-2); }
+.fw-om-ir-t span::before { content: attr(data-l) ' '; color: var(--nds-text-muted); font-size: var(--nds-font-size-xs); }
+.fw-om-ir-o { grid-area: o; display: flex; justify-content: flex-end; }
+.fw-om-ir-am { display: none; text-align: right; font-variant-numeric: tabular-nums; }
+.fw-om-ir.is-hd { display: none; font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-muted); padding: 0 var(--nds-space-2) var(--nds-space-6); border-bottom: 1px solid var(--nds-border); }
+@container ominv (min-width: 600px) {
+  .fw-om-ir, .fw-om-ir.is-hd { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 0.9fr) 112px 112px 32px; grid-template-areas: none; align-items: center; }
+  .fw-om-ir.is-hd { display: grid; }
+  .fw-om-ir > div { grid-area: auto; }
+  .fw-om-ir-t { display: none; }
+  .fw-om-ir-am { display: block; }
+  .fw-om-ir-share { display: none; }
+  .fw-om-il.is-np .fw-om-ir, .fw-om-il.is-np .fw-om-ir.is-hd { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) 32px; }
+}
+@container ominv (min-width: 1000px) {
+  .fw-om-ir, .fw-om-ir.is-hd { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 0.8fr) 120px 120px 120px 32px; }
+  .fw-om-ir-kd { display: block; }
+  .fw-om-ir-kn { display: none; }
+  .fw-om-ir-share { display: block; }
+  .fw-om-il.is-np .fw-om-ir, .fw-om-il.is-np .fw-om-ir.is-hd { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 32px; }
+}
+/* Without the price grain the head row has no Payment / amount cells: its Kind column shows from 600 already (the room is there). */
+@container ominv (min-width: 600px) {
+  .fw-om-il.is-np .fw-om-ir-kn { display: none; }
+  .fw-om-il.is-np .fw-om-ir-kd { display: block; }
+}
+.fw-om-il-foot { margin: 0; padding-top: var(--nds-space-6); font-size: var(--nds-font-size-sm); }
+
+/* ── the plan's windows (F-OM-201 / 202): the fields, the plan before → after, the five parts ── */
+.fw-om-dlg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: var(--nds-space-10) var(--nds-space-14); }
+.fw-om-dlg-part { display: flex; flex-direction: column; gap: var(--nds-space-4); }
+.fw-om-dlg-h { font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-muted); }
+.fw-om-dlg-list { margin: 0; padding-left: var(--nds-space-16); display: flex; flex-direction: column; gap: var(--nds-space-2); font-size: var(--nds-font-size-sm); color: var(--nds-text); }
+.fw-om-dlg-line { margin: 0; display: flex; gap: var(--nds-space-8); align-items: flex-start; font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+.fw-om-dlg-line > svg { flex: none; margin-top: var(--nds-space-2); color: var(--nds-text-muted); }
+.fw-om-dlg-line.is-quiet { font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); }
+.fw-om-ba { width: 100%; border-collapse: collapse; font-size: var(--nds-font-size-sm); }
+.fw-om-ba th { text-align: left; font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-muted); padding: 0 var(--nds-space-6) var(--nds-space-4); border-bottom: 1px solid var(--nds-border); }
+.fw-om-ba td { padding: var(--nds-space-4) var(--nds-space-6); border-bottom: 1px solid var(--nds-border-subtle); vertical-align: top; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
 /* A door at a row's end never widens the page: a tooltip the reader does not see is not in the layout (the kit's fx5 #1 rule). */
 .fw-om .nds-tooltip:not(:hover):not(:focus-within) > .tip { display: none; }

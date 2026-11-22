@@ -40,7 +40,7 @@
     "stepsLabel": "Steps of the deposit",
     "send": "Send the bank-details page",
     "sendAgain": "Send it again",
-    "record": "Record the payment",
+    "record": "Record a payment",
     "sendSdi": "Send to SDI",
     "step": {
       "requested": "Asked",
@@ -3363,7 +3363,8 @@
       "reading": "Reading the payment plan…",
       "part": "the payment plan",
       "earlier": "Earlier steps ({count})",
-      "earlierHint": "replaced or removed; kept with who, when and why"
+      "earlierHint": "replaced or removed; kept with who, when and why",
+      "more": "More for the payment plan"
     },
     "plan": {
       "kind": {
@@ -3404,11 +3405,20 @@
         "paidWithInvoice": "Paid when the goods' invoice is paid"
       },
       "act": {
-        "record": "Record a payment",
         "send": "Send the page",
         "sendAgain": "Send the page again",
         "payInvoice": "Record payment…",
-        "waive": "Waive…"
+        "waive": "Waive…",
+        "ACCEPT_SHORT": "Accept short (bank charges)…",
+        "REPLACE_DEPOSIT": "Change the deposit…",
+        "UNDO_OPEN": "Undo opening…",
+        "MOVE_DUE": "Move due day…",
+        "CHANGE_STEP": "Change amount…",
+        "RENAME_STEP": "Rename…",
+        "REMOVE_STEP": "Remove step…",
+        "ASK_AGAIN": "Ask for the deposit again…",
+        "CHANGE_TERMS": "Change payment terms…",
+        "ADD_STEP": "Add a step…"
       },
       "byHand": {
         "what": {
@@ -3471,6 +3481,13 @@
         "overdue": "overdue {amount}",
         "nextDue": "next: {what}, due {date}",
         "next": "next: {what}"
+      },
+      "held": {
+        "moneyPlaced": "Money is placed on it: undo the payment first.",
+        "onlyStep": "The only step takes the whole order: add a step first.",
+        "dayFromInvoice": "Its day comes from the invoice.",
+        "final": "The order is closed: its plan no longer changes.",
+        "nothingFree": "Every step has money on it already: there is no open step to take it from."
       }
     },
     "invoices": {
@@ -3479,11 +3496,253 @@
       "count_one": "{count} document",
       "count_other": "{count} documents",
       "part": "the invoices' amounts",
-      "reading": "Reading what is open on the invoices…"
+      "info": "Every bill of this order — goods invoices, deposit invoices and credit notes — where it stands and what is still to pay. Each ⋯ opens Finance's own window. An issued invoice never changes: a credit note corrects it.",
+      "keys": "Keys: Tab moves from row to row · Enter opens the number.",
+      "shipped": "Invoice shipped goods…",
+      "col": {
+        "payment": "Payment"
+      },
+      "countOpen_one": "{count} document · {amount} open on {number}",
+      "countOpen_other": "{count} documents · {amount} open on {number}",
+      "countPaid_one": "{count} document · all paid",
+      "countPaid_other": "{count} documents · all paid",
+      "pay": {
+        "open": "Open",
+        "part": "Part paid",
+        "paid": "Paid",
+        "credited": "Credited",
+        "refund": "Refund due"
+      },
+      "sub": {
+        "credits": "Credits {number}",
+        "deducted": "Deducted on the goods' invoice"
+      },
+      "door": {
+        "record": "Record payment…",
+        "credit": "Credit note…",
+        "sendSdi": "Send to SDI ›",
+        "fixSdi": "Fix and resend ›",
+        "payments": "Payments and write-off ›",
+        "pdf": "Documents and PDF ›"
+      },
+      "held": {
+        "creditNote": "A credit note is corrected by a debit note."
+      },
+      "sdiFailed": "Couldn't read the SDI state",
+      "copyNumber": "Copy number",
+      "more": "More for {number}"
     },
     "menu": {
       "copyLinkTotals": "Copy link to Totals",
       "copyLinkRow": "Copy link to this row"
+    },
+    "payment": {
+      "undo": "Undo this payment…",
+      "open": "Open in Finance › Payments ›",
+      "copyRef": "Copy the bank reference",
+      "more": "More for the payment of {date}"
+    },
+    "hand": {
+      "thePlan": "the plan",
+      "whatHappens": "What happens",
+      "customer": "The customer:",
+      "neverLabel": "What never changes.",
+      "why": {
+        "BANK_CHARGES": "Bank charges",
+        "ROUNDING": "Rounding",
+        "OTHER": "Other"
+      },
+      "whyHint": "Required · office only · kept in the history with who and when.",
+      "who": "Saved under your name with today's date; the row is tagged “Set by hand”; the history keeps the old value.",
+      "whoCode": "Saved under your name with today's date; the history keeps the old value. You confirm with a fresh code from your authenticator app.",
+      "ba": {
+        "title": "Before → after",
+        "now": "Now",
+        "after": "After",
+        "none": "Not there yet",
+        "new": "New step",
+        "removed": "Removed (kept under Earlier steps)",
+        "reading": "Reading the plan as it would be…",
+        "failed": "The plan as it would be could not be read: the act still goes, and the server checks it.",
+        "waits": "The plan as it would be shows here once the act and its reason are typed."
+      },
+      "problem": {
+        "reasonShort": "Say why in at least 3 characters.",
+        "reasonLong": "At most 500 characters.",
+        "share": "Type a share of the order total (25 %) or an amount (3.050,00).",
+        "day": "Pick a day.",
+        "past": "Pick today or a later day.",
+        "gone": "This step or request is not on the plan any more: close the window and read the page again.",
+        "from": "Pick the step it is taken from.",
+        "restTo": "Pick the step that takes the rest.",
+        "label": "Type a name.",
+        "labelLong": "At most 120 characters.",
+        "terms": "Pick the new terms.",
+        "termsSame": "The order has these payment terms already."
+      },
+      "field": {
+        "share": "Share or amount",
+        "shareHint": "A share of the order total (25 %) or an amount (3.050,00).",
+        "day": "Due day",
+        "dayHint": "Today or later.",
+        "dayOptional": "Optional · a deposit or a step before shipping asks it when it is opened.",
+        "kind": "Kind",
+        "label": "Name",
+        "labelHint": "Optional · printed on its request page.",
+        "restTo": "The rest goes to",
+        "from": "Taken from",
+        "pick": "Pick…",
+        "terms": "New terms",
+        "termsHint": "From the company's payment-terms library.",
+        "termsReading": "Reading the payment terms…",
+        "termsFailed": "The payment terms could not be read: close the window and try again.",
+        "shortWhy": "Why it came in short"
+      },
+      "REPLACE_DEPOSIT": {
+        "title": "Change the deposit of {number}",
+        "go": "Change the deposit",
+        "happens": {
+          "replaced": "The deposit asked now is kept as Replaced, under Earlier steps.",
+          "asked": "A new deposit is asked for the share or amount you type; the open steps take the rest, so the plan still adds up.",
+          "waits": "Production still waits for the deposit."
+        },
+        "told": "A bank-details page sent before stops working: send the new page to the customer.",
+        "never": "A deposit's amount is never edited: the old request stays as it was, with its own history. The deposit invoice (TD02) is made only when money arrives."
+      },
+      "MOVE_DUE": {
+        "title": "Move the due day · {row}",
+        "go": "Move the due day",
+        "happens": {
+          "together": "The step and its payment request move together.",
+          "overdue": "Overdue is worked out again from the new day."
+        },
+        "toldLive": "the live bank-details page shows the new day by itself; no e-mail is sent.",
+        "toldNone": "no page was sent for it, so the customer is not told.",
+        "never": "A paid step's day never moves. The amount does not change here."
+      },
+      "ASK_AGAIN": {
+        "title": "Ask again · {row}",
+        "go": "Ask again",
+        "happens": {
+          "asked": "A new payment request of the same amount is asked; the waived one stays as it was.",
+          "waits": "Production waits for the deposit again; released work orders keep running."
+        },
+        "holds": "It holds the shipment again until it is paid.",
+        "told": "the customer sees it when its bank-details page is sent.",
+        "never": "The waived step and its reason stay in the history."
+      },
+      "ADD_STEP": {
+        "title": "Add a step to the plan of {number}",
+        "go": "Add the step",
+        "happens": {
+          "taken": "The amount comes out of the step you pick: the plan still adds up to the order total.",
+          "request": "A deposit or a step before shipping gets its own payment request: it may hold production or the shipment."
+        },
+        "told": "the customer sees the step when its bank-details page is sent.",
+        "never": "Paid steps keep their amount; the order total does not change."
+      },
+      "CHANGE_STEP": {
+        "title": "Change the amount · {row}",
+        "go": "Change the amount",
+        "happens": {
+          "rest": "The difference goes to the step you pick, so the plan still adds up.",
+          "request": "A step whose payment request is not paid yet gets a new request (an amount is never edited)."
+        },
+        "told": "a live page of the old request stops working: send the new one.",
+        "never": "Paid steps and the order total do not change."
+      },
+      "REMOVE_STEP": {
+        "title": "Remove the step · {row}",
+        "go": "Remove the step",
+        "happens": {
+          "earlier": "The step goes under Earlier steps, with who, when and why.",
+          "rest": "Its amount goes to the step you pick; an unpaid request of it is cancelled.",
+          "noDeposit": "It is the order's deposit: production no longer waits for a deposit."
+        },
+        "told": "a live page of it stops working.",
+        "never": "A step with money on it is never removed."
+      },
+      "RENAME_STEP": {
+        "title": "Rename · {row}",
+        "go": "Rename",
+        "happens": {
+          "printed": "The new name is printed on its request page and its documents."
+        },
+        "told": "the customer reads the new name on its page.",
+        "never": "Its amount and its day do not change."
+      },
+      "UNDO_OPEN": {
+        "title": "Undo the opening · {row}",
+        "go": "Undo the opening",
+        "happens": {
+          "cancelled": "Its payment request (nothing paid on it) is cancelled; the step stays, with no request.",
+          "shipment": "It no longer holds the shipment until it is opened again."
+        },
+        "told": "a live page of it stops working.",
+        "never": "The step itself and its amount stay."
+      },
+      "CHANGE_TERMS": {
+        "title": "Change the payment terms of {number}",
+        "go": "Change the terms",
+        "happens": {
+          "remade": "Only open steps are remade; paid, part-paid and deposit steps, and the steps set by hand, stay.",
+          "total": "The order's total does not change."
+        },
+        "told": "sees the new plan in their portal at once; send a new confirmation version from Changes › Customer's agreement. No new yes is asked.",
+        "never": "Paid steps, an issued deposit invoice and the order total never change."
+      },
+      "ACCEPT_SHORT": {
+        "title": "Accept the deposit {amount} short?",
+        "titleWords": "Accept the deposit short?",
+        "go": "Accept {amount} short",
+        "goWords": "Accept it short",
+        "happens": {
+          "paid": "The deposit counts as paid: production may start.",
+          "owed": "The missing part stays owed and goes on the final invoice, where Finance may write it off.",
+          "td02": "Its deposit invoice (TD02) stays as it is: the amount paid."
+        },
+        "told": "not told; their portal shows the deposit as paid.",
+        "never": "The payment stays as received; no write-off is made here; the deposit stays paid (this cannot be undone)."
+      },
+      "reason": "Why"
+    },
+    "refusal": {
+      "OTHER": "The plan could not change this way: read the page again.",
+      "MOVED": "The plan changed meanwhile: it was read again.",
+      "FORBIDDEN": "Changing the money plan needs its right: your role changed meanwhile."
+    },
+    "stepUp": {
+      "plan": "Changing the money plan this way asks a fresh code from your authenticator app.",
+      "terms": "Changing the payment terms asks a fresh code from your authenticator app."
+    },
+    "notice": {
+      "planChanged": "The plan was changed by hand; the history keeps the old value.",
+      "undone": "The payment was undone; it stays in Finance › Payments as voided."
+    },
+    "undo": {
+      "title": "Undo the payment of {date}?",
+      "go": "Undo this payment",
+      "happens": {
+        "reversed": "The payment is taken off this request and, when it then pays nothing else, voided — in one step.",
+        "open": "The deposit goes back to Open.",
+        "production": "Production keeps waiting for the deposit; released work orders keep running."
+      },
+      "told": "not e-mailed; their portal shows the deposit open again.",
+      "never": "The payment is never deleted: it stays in Finance › Payments, voided, with your reason."
+    },
+    "lock": {
+      "label": "Why it goes into a closed month",
+      "hint": "This month is closed softly in the books: say why it goes in anyway (3 to 500 characters).",
+      "problem": "Say why it goes into the closed month (3 to 500 characters)."
+    },
+    "link": {
+      "contact": "Send it to",
+      "contactHint": "The customer's active contacts with an e-mail address.",
+      "usual": "The usual contact ({who})",
+      "option": "{name} · {email}"
+    },
+    "facts": {
+      "changeOnMoney": "Change on Money ›"
     }
   }
 }

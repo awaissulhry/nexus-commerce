@@ -243,7 +243,8 @@ describe('F-OP-104: Overview doors — linked records keep the dock\'s scope', (
     expect(rowOf(view, 'workOrders')!.href).toBe(`${PREFIX}/sales/orders/${MIXED.id}?tab=production&thread=all`)
     expect(rowOf(view, 'complaints')!.href).toBe(`${PREFIX}/sales/orders/${MIXED.id}?tab=shipments&thread=all`)
     expect(rowOf(view, 'invoices')!.href).toBe(`${PREFIX}/sales/orders/${MIXED.id}?tab=money&thread=all#invoices`)
-    expect(view.quiet.find((part) => part.kind === 'deposit')!.href).toBe(`${PREFIX}/sales/orders/${MIXED.id}?tab=money&thread=all`)
+    // F-OM-104 (P0-B11): the deposit's door lands on Money › Payments, the dock's scope kept.
+    expect(view.quiet.find((part) => part.kind === 'deposit')!.href).toBe(`${PREFIX}/sales/orders/${MIXED.id}?tab=money&thread=all#payments`)
   })
 })
 // ---- end F-OP-104

@@ -3,6 +3,10 @@ import type { StyleDetail, StyleRow, VersionsAnswer } from '../../quotes/api'
 import type { AmendmentsAnswer, CancelCheck, CancelReason, CloseLinesAnswer, CopyAnswer, DepositLinkAnswer, DepositReceived, Order, OrderWorkOrder, Schedule, SdiStatus, Settlement } from '../api'
 import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules' // F-OP-107 (B2)
 import type { ClosePreview } from '../api' // F-OP-107
+import type { MoneyPlanAct, MoneyPlanBody, MoneyPlanPreview } from '../api' // F-OM-201
+import type { PaymentTerms } from '../../../finance/settings/terms/api' // F-OM-201: Change payment terms… picks from the library
+import type { PartyContact } from '../../quotes/api' // F-OM-202: Send the page… picks the customer's contact
+import type { PlanRefusal } from './money/plan' // F-OM-201: a refusal in the domain's words (or this page's)
 import type { MarginTabModel } from './margin/model'
 import type { StepUpState } from '../hooks'
 import type { OrderAbilities, Phrase, RecordTab } from '../model'
@@ -80,7 +84,13 @@ export type BandDialog = { kind: 'promise'; followUp?: { readonly requestId: str
 // F-OL-04: `customerRef` / `shipTo` — Overview › Order facts' small windows (the amendment with no lines, ol-s1 B-OL-020).
 export type LinesDialog = { kind: 'closeLines'; lineIds?: readonly string[] } | { kind: 'reopenLines'; lineIds?: readonly string[] } | { kind: 'cancel' } | { kind: 'split'; lineId?: string } | { kind: 'requested' } | { kind: 'customerRef' } | { kind: 'shipTo' }
 /** use-money-acts: the deposits and payments (the bank-details page, the payment, the TD02's send to SDI). */
-export type MoneyDialog = { kind: 'depositLink'; requestId: string } | { kind: 'depositPayment'; requestId: string } | { kind: 'sdiSend'; invoiceId: string }
+// F-OM-201 / 202: + the plan's hand windows (one act of the money plan on a row, or the head's) and Undo this payment….
+export type MoneyDialog =
+  | { kind: 'depositLink'; requestId: string }
+  | { kind: 'depositPayment'; requestId: string }
+  | { kind: 'sdiSend'; invoiceId: string }
+  | { kind: 'moneyPlan'; act: MoneyPlanAct; stepId: string | null; requestId: string | null }
+  | { kind: 'undoPayment'; requestId: string; paymentId: string }
 /** The container's own: Changes' Before → after (the amendments' snapshots are the Changes tab's read, kept in the container). */
 export type ChangesDialog = { kind: 'compare'; amendmentId: string }
 /**
@@ -284,6 +294,14 @@ export interface OrderRecordModel {
   sentLink: DepositLinkAnswer | null
   /** The payment just recorded (the dialog shows what followed: PAID, the TD02). */
   recorded: DepositReceived | null
+  /**
+   * F-OM-201 / 202 (use-money-acts): the plan's hand window — the plan before → after (its preview read) and a refusal in this page's
+   * words; the payment terms library (Change payment terms…); the customer's contacts (Send the page…); a SOFT-locked month asked
+   * (Record a payment…, Undo this payment…: its reason); "Invoice shipped goods…" (Finance's From-DDTs window, this order's DDTs).
+   * Absent: none here (a design case).
+   */
+  moneyPlan?: MoneyPlanState
+
   stepUp: StepUpState
   // ---- B-W2a-50 ----------------------------------------------------------------------------------------------------------
   /** The payment schedule (Invoices & payments): null until read. */
@@ -406,7 +424,26 @@ export interface PaymentInput {
   reference: string
   note: string
   issue: boolean
+  /** F-OM-202 (P1-B1): why it goes into a SOFT-locked month (asked once the API says the month is locked); absent: not asked. */
+  lockReason?: string
 }
+
+// ---- F-OM-201 / 202: the plan's hand windows' state (use-money-acts) ----
+export interface MoneyPlanState {
+  /** The preview of the act as typed (null: not read; a problem: said in the window, the act still goes). */
+  readonly preview: Part<MoneyPlanPreview> | null
+  /** The server's refusal of the last act: the domain's own words (EN / IT), else this page's. */
+  readonly refused: PlanRefusal | null
+  /** The payment terms library (Change payment terms…); null: not read. */
+  readonly terms: Part<PaymentTerms[]> | null
+  /** The customer's contacts (Send the page…); null: not read (no right: the default contact). */
+  readonly contacts: Part<PartyContact[]> | null
+  /** The month of a payment (or its undo) is SOFT-locked: the window asks why it goes in anyway. */
+  readonly lockAsked: boolean
+  /** "Invoice shipped goods…": Finance's From-DDTs window with this order's shipped DDTs chosen; null: nothing waits (or no right). */
+  readonly invoiceShipped: { readonly href: string } | null
+}
+// ---- end F-OM-201 / 202
 
 export interface OrderRecordActions {
   /** F-OP-116: open / decide a work-order change in place (Apply, Leave as is). */
@@ -444,7 +481,13 @@ export interface OrderRecordActions {
   onPromise?: (input: PromiseInput) => void
   onReady?: (reason: string) => void
   onClose?: (reason: string | null) => void
-  onSendLink?: (requestId: string, message: string) => void
+  /** F-OM-202: `contactId` — the customer's contact picked (null: the default one). */
+  onSendLink?: (requestId: string, message: string, contactId?: string | null) => void
+  /** F-OM-201: the act as typed so far (the window's before → after); the act itself (a refusal stays in the window). */
+  onPlanPreview?: (body: MoneyPlanBody) => void
+  onPlanAct?: (body: MoneyPlanBody) => void
+  /** F-OM-202 (B-OM-017): undo one payment on a deposit request, with its reason (and a SOFT-locked month's). */
+  onUndoPayment?: (input: { readonly paymentId: string; readonly requestId: string; readonly reason: string; readonly lockReason?: string }) => void
   onRecordPayment?: (requestId: string, input: PaymentInput) => void
   onSendSdi?: (invoiceId: string) => void
   onStepUpSubmit?: (code: string) => void

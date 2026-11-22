@@ -43,8 +43,9 @@ describe('F-OP-118: Money = this order\'s share', () => {
 
   // F-OM-101 / 102: the pins moved with the code — the invoices are Invoices & credit notes' own file, the totals Totals' own.
   it('the tab: invoice total beside this order\'s share, the also-bills links, one statement link — no customer-wide figure', () => {
+    // F-OM-203: the section draws its model (money/invoices.ts): Total · This order · Open, the statement one link.
     const invoices = readFileSync(new URL('./money/view/InvoicesSection.tsx', import.meta.url), 'utf8')
-    expect(invoices).toContain("t('money.invoiceWhole'), t('money.share'), t('money.col.open')")
+    expect(invoices).toContain("<div className=\"fw-om-ir-am fw-om-ir-share\">{t('money.share')}</div>")
     expect(invoices).toContain("t('money.statement', { customer: order.party.legalName })")
     const totals = readFileSync(new URL('./money/view/TotalsSection.tsx', import.meta.url), 'utf8')
     expect(totals).toContain('const totals = totalsOf({ order, settlement: settlementPart?.value ?? null, can: model.can,')
@@ -54,9 +55,11 @@ describe('F-OP-118: Money = this order\'s share', () => {
   // Lane agreement (the Owner: "Sales = no price"): a reader without the money.price grain reads no figure, no empty zero; the invoices
   // keep their numbers and states, their amounts, share and freight stay away. F-OM-101: the money wall is said ONCE, in the tab's head.
   it('without the price grain: no tile, no amount column, no freight — the money wall said once in the head', () => {
-    const invoices = readFileSync(new URL('./money/view/InvoicesSection.tsx', import.meta.url), 'utf8')
-    expect(invoices).toContain('const showMoney = model.can.price && !!settlement')
-    expect(invoices).toContain('const freight = amounts && model.can.price ? freightOf(amounts) : null')
+    // F-OM-203: the amounts and the freight by the price grain (money/invoices.ts); without it no amount column at all.
+    const invoices = readFileSync(new URL('./money/invoices.ts', import.meta.url), 'utf8')
+    expect(invoices).toContain('const freight = amounts && price ? freightOf(amounts) : null')
+    expect(invoices).toContain("const total = !price ? null :")
+    expect(readFileSync(new URL('./money/view/InvoicesSection.tsx', import.meta.url), 'utf8')).toContain("<div className={`fw-om-il${price ? '' : ' is-np'}`}>")
     expect(totalsOf({ order: value, settlement: settlement() as never, can: canOf('sales'), today: '2026-11-20' }).tiles).toBeNull()
     expect(readFileSync(new URL('./money/head.ts', import.meta.url), 'utf8')).toContain("...(price ? [] : [word('moneyTab.head.wallPrice')])")
     for (const locale of LOCALES) {
