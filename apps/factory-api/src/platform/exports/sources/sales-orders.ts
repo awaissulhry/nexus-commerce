@@ -25,6 +25,8 @@ import { HEALTH_WORDS, OFFICE_WAITING_WORDS, STAGE_WORDS } from '@nexus/factory-
 import { STAGE_BY_HAND_WORDS } from '@nexus/factory-domain/production-brand/stage-set' // B-MS-006
 import { BRAND_HEALTHS } from '@nexus/factory-domain/production-brand/health'
 import { BRAND_STAGES } from '@nexus/factory-domain/production-brand/stages'
+import { ORDER_PHASES, type OrderPhase } from '@nexus/factory-domain/production-brand/stages' // B-CW-002
+import { CUSTOMER_URGENCY_STATES, customerUrgencyStateWords } from '@nexus/factory-domain/production-brand/urgency-state' // B-CW-022
 import { WAITING_ON } from '@nexus/factory-domain/production-brand/waiting'
 // B-CP-018: the price check's term and columns (the price grain only).
 import { heldGrains } from '@nexus/factory-domain/auth/grains/grains'
@@ -80,6 +82,17 @@ import { NOT_A_PRICE_HOLDER } from '../../../modules/sales/brand-prices/store'
  * B-CP-018 (customer page plan C2d; screen = file): `?priceMatch=NOT_EQUAL|NO_BRAND_PRICE|EQUAL` narrows the file as it narrows the
  * screen (another value: refused in words; a person without the price grain is refused the file in the list's own words), and the
  * file writes `ourPrice`, `brandPrice`, `priceMatch` and `priceDiff` (modules/sales/brand-prices columns.ts), each of the price grain.
+ *
+ * B-CW-002 (customer Work tab plan §1; screen = file = count): `?phase=NOT_SENT|NOT_STARTED|IN_PRODUCTION|READY|SHIPPED|DONE|CANCELLED`
+ * (a door of the customer's big picture; the screen writes it with `rows=all`) narrows the file as it narrows the screen; another
+ * value is refused in words.
+ *
+ * B-CW-022 (customer Work tab plan §2.8: the file says what the row says): `customerUrgency` writes the row's state of four with
+ * its place, in the Work orders file's own words ("Urgent (customer) 2", "Urgent – asked", "Regular", "Set to Regular by us");
+ * `deposit` writes the order page's words for an extra deposit still open on an order that needs none ("Not needed · an extra
+ * deposit is open, due 2026-12-02": a day, never an amount); `whereItIs`, `waitingOn` and `held` are empty for an order whose stage
+ * is not current (B-CW-020: the list's own rule; the Status column says where it is). No `phase` column: Status and Where it is
+ * say it.
  */
 
 // B-TH-018: a list row with what the sheet reads beside it (priority and season, the company's name).
@@ -230,6 +243,36 @@ function priceMatchTerm(address: URLSearchParams): Pick<ListFilters, 'priceMatch
 }
 // ── end B-CP-018 ──
 
+// ── B-CW-002 (customer Work tab plan §1; screen = file) ──
+/** The `phase` term of the address, or nothing; another value is refused (the file would not follow the screen), never dropped. */
+function phaseTerm(address: URLSearchParams): Pick<ListFilters, 'phase'> {
+  const value = oneOf<OrderPhase>(address, 'phase', ORDER_PHASES)
+  return value ? { phase: value } : {}
+}
+// ── end B-CW-002 ──
+
+// ── B-CW-022 (customer Work tab plan §2.8): the file says what the row says ──
+/**
+ * The Customer urgency cell: the row's state with its place in the customer's own Urgent list ("Urgent (customer) 2"), as the Work
+ * orders file writes it; a row with a mark and no state (a reader without states) writes the mark's word; none: empty. Exported
+ * for its unit test.
+ */
+export function urgencyText(row: Pick<Row, 'customerUrgency' | 'customerUrgencyState'>, words: (code: string) => string): string | null {
+  const state = row.customerUrgencyState
+  if (state) return `${words(`urgency.${state.state}`)}${state.state === 'URGENT' && state.urgentRank !== null ? ` ${state.urgentRank}` : ''}`
+  return row.customerUrgency ? words(`urgency.${row.customerUrgency}`) : null
+}
+
+/** The Deposit cell: the state's word, or the order page's words for an extra deposit still open with its due day. Exported for its unit test. */
+export function depositText(row: Pick<Row, 'deposit'>, words: (code: string) => string): string {
+  return row.deposit.extraOpenDue ? words('deposit.extraOpen').replace('{date}', row.deposit.extraOpenDue) : words(`deposit.${row.deposit.state}`)
+}
+
+/** Each Customer urgency state's words of the file's locale (factory-domain urgency-state: the Work orders file's own). */
+export const urgencyWords = (locale: ExportLocale): Record<string, string> =>
+  Object.fromEntries(CUSTOMER_URGENCY_STATES.map((state) => [`urgency.${state}`, customerUrgencyStateWords({ state, urgentRank: null })[locale]]))
+// ── end B-CW-022 ──
+
 /**
  * The Where it is cell: the plain stage and the shown health ("Sewing · At risk"); nothing kept yet: empty. B-MS-006 (R17): a stage
  * set by hand reads "Sewing (by hand) · At risk" (the office's file only; exported for its unit test).
@@ -266,7 +309,7 @@ export const salesOrders = defineExportSource<Query, Row>({
     const q = address.get('q')?.trim().slice(0, 100) || undefined
     const status = address.get('status')
     const profile = idTerm(address, ['profile', 'profileId'], 'rider') // B-SA-021
-    const kept = { ...narrowing(address) /* B-TH-008 */, ...orderTerms(address) /* B-TH-057 */, ...doorTerms(address) /* B-TH-058 / B-TH-059 */, ...kindTerm(address) /* B-SA-020 */, ...(profile ? { profile } : {}) /* B-SA-021 */, ...waitingTerm(address) /* B-SA-070 */, ...priceMatchTerm(address) /* B-CP-018 */ }
+    const kept = { ...narrowing(address) /* B-TH-008 */, ...orderTerms(address) /* B-TH-057 */, ...doorTerms(address) /* B-TH-058 / B-TH-059 */, ...kindTerm(address) /* B-SA-020 */, ...(profile ? { profile } : {}) /* B-SA-021 */, ...waitingTerm(address) /* B-SA-070 */, ...priceMatchTerm(address) /* B-CP-018 */, ...phaseTerm(address) /* B-CW-002 */ }
     if (address.get('late') === 'true') return { ...kept, late: 'true', q }
     if (address.get('deposit') === 'OPEN') return { ...kept, deposit: 'OPEN', q }
     if (address.get('reaccept') === 'true') return { ...kept, reaccept: 'true', q } // B-TH-008: Waiting for the customer
@@ -300,7 +343,7 @@ export const salesOrders = defineExportSource<Query, Row>({
     number: { value: (row) => row.number },
     customer: { value: (row) => row.partyName },
     status: { value: (row, words) => words(`status.${row.status}`) },
-    deposit: { value: (row, words) => words(`deposit.${row.deposit.state}`) },
+    deposit: { value: (row, words) => depositText(row, words) }, // B-CW-022: + an extra deposit still open
     units: { value: (row) => row.units },
     orderDate: { value: (row) => ({ day: row.orderDate }) },
     promised: { value: (row) => (row.promiseDate ? { day: row.promiseDate } : null) },
@@ -328,7 +371,7 @@ export const salesOrders = defineExportSource<Query, Row>({
     site: { value: (row) => (row.sites.length > 0 ? row.sites.map((site) => site.name).join(', ') : null) },
     note: { value: (row) => row.internalNote },
     atRisk: { value: (row, words) => (row.atRisk ? words('atRisk.text').replace('{days}', String(row.atRisk.daysLeft)) : null) },
-    customerUrgency: { value: (row, words) => (row.customerUrgency ? words(`urgency.${row.customerUrgency}`) : null) },
+    customerUrgency: { value: (row, words) => urgencyText(row, words) }, // B-CW-022: the state of four with its place
     // ── end B-TH-059 ──
     // ── B-SA-020: the made-to-measure units (0 is an answer) and the riders (only with sales.measurements.view: else no column) ──
     madeToMeasure: { value: (row) => row.madeToMeasure?.units ?? 0 },
@@ -360,6 +403,7 @@ export const salesOrders = defineExportSource<Query, Row>({
       'deposit.OPEN': 'Aperto',
       'deposit.PAID': 'Pagato',
       'deposit.WAIVED': 'Rinunciato',
+      'deposit.extraOpen': 'Non serve · è aperto un acconto aggiuntivo, scade il {date}', // B-CW-022: orders.json notNeededExtraWords
       // ── B-TH-018 ──
       'invoiced.NONE': 'Nessuno',
       'invoiced.PART': 'In parte',
@@ -370,8 +414,7 @@ export const salesOrders = defineExportSource<Query, Row>({
       // ── B-TH-059 ──
       'progress.text': 'Tagliati {cut} · Cuciti {sewn} · Finiti {finished} su {inWork}',
       'atRisk.text': 'Vicino alla data promessa (mancano {days} giorni)', // F-SA-216: the list rule reads "Close to promise" (P15)
-      'urgency.URGENT': 'Urgente',
-      'urgency.REGULAR': 'Regolare',
+      ...urgencyWords('it'), // B-CW-022: Urgente (cliente) · Urgente – richiesto · Normale · Riportato a normale da noi
       // ── B-SA-070 ──
       ...productionWords('it'),
       'held.yes': 'In sospeso', // production-work-orders.json status.ON_HOLD
@@ -395,6 +438,7 @@ export const salesOrders = defineExportSource<Query, Row>({
       'deposit.OPEN': 'Open',
       'deposit.PAID': 'Paid',
       'deposit.WAIVED': 'Waived',
+      'deposit.extraOpen': 'Not needed · an extra deposit is open, due {date}', // B-CW-022: orders.json notNeededExtraWords
       // ── B-TH-018 ──
       'invoiced.NONE': 'None',
       'invoiced.PART': 'Part',
@@ -405,8 +449,7 @@ export const salesOrders = defineExportSource<Query, Row>({
       // ── B-TH-059 ──
       'progress.text': 'Cut {cut} · Sewn {sewn} · Finished {finished} of {inWork}',
       'atRisk.text': 'Close to promise ({days} days left)', // F-SA-216: "At risk / Late" is order health only (P15)
-      'urgency.URGENT': 'Urgent',
-      'urgency.REGULAR': 'Regular',
+      ...urgencyWords('en'), // B-CW-022: Urgent (customer) · Urgent – asked · Regular · Set to Regular by us
       // ── B-SA-070 ──
       ...productionWords('en'),
       'held.yes': 'On hold',

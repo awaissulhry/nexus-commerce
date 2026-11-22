@@ -22,6 +22,8 @@ import { startHarness, type Harness } from '../../../platform/auth/sessions/test
 import { systemContext } from '../../../platform/outbox/system'
 import { runExport } from '../../../platform/exports/worker'
 import { useCustomerUrgency } from './customer-urgency'
+// B-CW-010: the production lane's real reader (the first urgency case below takes the registered one away).
+import { customerUrgencySource } from '../../production/brand/urgency-of'
 
 /**
  * The later orders columns (B-TH-059; threads plan TH-4; N23, ORD-G08; features O-SAL-ORD-LIST.grid-F16/F17/F18,
@@ -50,7 +52,8 @@ const T = seedUuid(NS, 'tenant')
 const companyA = seedUuid(NS, 'company:A')
 
 // B-SA-070: + noWork, a Sales reader without workorders.view (the session alone: no assignment needed for a read).
-const PEOPLE = { owner: newId(), planner: newId(), limited: newId(), noWork: newId() } as const
+// B-CW-022: + sales, the real Sales template over every customer (the session alone: the money wall of the new fields).
+const PEOPLE = { owner: newId(), planner: newId(), limited: newId(), noWork: newId(), sales: newId() } as const
 type Person = keyof typeof PEOPLE
 const SESSIONS: Partial<Record<Person, SessionContext>> = {}
 function grantOf(role: string, parties: 'all' | string[]): Grant {
@@ -185,11 +188,15 @@ describe('B-TH-059 progress (N23, grid-F16)', { timeout: SLOW_TEST_TIMEOUT_MS },
     for (const workOrder of workOrders) cells.push(...((await ok('owner', 'GET', `/production/work-orders/${workOrder.id}`)).workOrder.cells as Json[]).filter((cell) => cell.salesOrderId === order2))
     const sumOrNull = (values: (number | null)[]) => values.reduce<number | null>((total, value) => (value === null ? total : (total ?? 0) + value), null)
     const row = await rowOf('owner', 'SEED-SO-0002', 'progress=true')
+    // B-CW-015: + the pieces ORDERED (its lines' quantities, a fee left out), counted here in SQL — the order page's base.
+    const ordered = Number((await one<{ pieces: string }>(`SELECT coalesce(sum(quantity), 0) AS pieces FROM "SalesOrderLine" WHERE "orderId" = $1 AND kind <> 'FEE'`, [order2])).pieces)
+    expect(ordered).toBeGreaterThan(0)
     expect(row.progress).toEqual({
       inWork: cells.reduce((total, cell) => total + cell.quantity, 0),
       cut: sumOrNull(cells.map((cell) => cell.progress.cut)),
       sewn: sumOrNull(cells.map((cell) => cell.progress.sewn)),
       finished: sumOrNull(cells.map((cell) => cell.progress.finished)),
+      ordered,
     })
     // An order without a work order past DRAFT: null; not asked: no progress at all.
     expect((await rowOf('owner', 'T059-B-01', 'progress=true')).progress).toBeNull()
@@ -415,7 +422,8 @@ describe('B-SA-070 the production columns (production=true)', { timeout: SLOW_TE
 
   it('the supervisor mark and the open issues only with workorders.view: else null, named in withheld', async () => {
     const row = await rowOf('noWork', 'SEED-SO-0002', 'production=true')
-    expect(row.production).toMatchObject({ stage: 'SEWING', health: 'AT_RISK', supervisorMark: null, openIssues: null, withheld: ['supervisorMark', 'openIssues'] })
+    // B-CW-014: + when the oldest open issue was raised, withheld with the count (the name `openIssues` covers both).
+    expect(row.production).toMatchObject({ stage: 'SEWING', health: 'AT_RISK', supervisorMark: null, openIssues: null, openIssuesSince: null, withheld: ['supervisorMark', 'openIssues'] })
   })
 
   it('held: a live work order that makes a line of the order is on hold', async () => {
@@ -462,6 +470,343 @@ describe('B-SA-070 the production columns (production=true)', { timeout: SLOW_TE
   })
 })
 // ── end B-SA-070 ──
+
+// ── B-CW-010 / B-CW-011 / B-CW-012 / B-CW-014 / B-CW-015 (customer Work tab plan §2): the row's new facts ──
+/**
+ * Stands on made-up copies of the seeds' SEED-SO-0001 for customer A (SEED-C1; CONFIRMED, a deposit needed: the copies keep that)
+ * and on T059-B-01 of customer B (SEED-R1), each given its facts past the order's own rules (the guards off: only the read is
+ * under test). Customer A's urgency switch is ON, customer B's is OFF.
+ *
+ *   T-CW-A-U2    kept Urgent, place 2 (its own mark) · T-CW-A-ASK kept Regular, an "Urgent – asked" (RUSH request) OPEN on it, two
+ *   production issues OPEN on it (the older raised two days ago) and one ANSWERED older still · T-CW-A-BACK kept Regular, set by us ·
+ *   T-CW-A-LOCK kept Regular, locked by us · T-CW-A-REG kept Regular, its own · T-CW-A-XDEP needs NO deposit, an extra deposit
+ *   request OPEN (due in 9 days), no kept row · T-CW-A-DEP its deposit request OPEN (due in 4 days) · T-CW-A-YES a change waits for
+ *   the customer's new yes · T-CW-A-GONE the same mark on a CANCELLED order · T059-B-01 kept Urgent, place 1 (the switch is off).
+ */
+describe('B-CW-010…015 the row: the urgency state, a new yes, an extra deposit, asked production since', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const rulesOff = (statements: string) => admin(`BEGIN; SET LOCAL session_replication_role = replica; ${statements} COMMIT;`)
+  const made = { u2: '', ask: '', back: '', lock: '', reg: '', xdep: '', dep: '', yes: '', gone: '' }
+  const ask = newId()
+  const older = new Date(Date.now() - 2 * 86_400_000)
+  const newer = new Date(Date.now() - 3_600_000)
+  const numbersOf = (list: Json[]): string[] => list.map((row) => row.number as string).sort()
+
+  /** The customer's urgency switch (one PortalSettings row per party, its id the party's). */
+  const urgencySwitch = (partyId: string, on: boolean) =>
+    rulesOff(`INSERT INTO "PortalSettings" (id, "tenantId", "partyId", "portalOn", "productionUrgencyOn", "createdAt", "updatedAt") VALUES ('${partyId}', '${T}', '${partyId}', false, ${on}, now(), now())
+      ON CONFLICT (id) DO UPDATE SET "productionUrgencyOn" = EXCLUDED."productionUrgencyOn", version = "PortalSettings".version + 1, "updatedAt" = now();`)
+  /** The urgency columns of an order's kept production row (the row made at PREPARING, or only these columns moved). */
+  const mark = (orderId: string, urgency: { urgency: 'URGENT' | 'REGULAR'; rank?: number; setBy?: 'BRAND' | 'FACTORY'; locked?: boolean }) =>
+    rulesOff(`INSERT INTO "BrandOrderProduction" (id, "tenantId", "companyId", "partyId", "salesOrderId", key, stage, "stageAt", urgency, "urgentRank", "urgencySetAt", "urgencySetBy", "urgencyLocked", "urgencyLockReason", "urgencyLockedAt")
+      SELECT '${newId()}', o."tenantId", o."companyId", o."partyId", o.id, 'brand-production:' || o.id, 'PREPARING', now(), '${urgency.urgency}', ${urgency.rank ?? 'NULL'}, ${urgency.setBy ? 'now()' : 'NULL'}, ${urgency.setBy ? `'${urgency.setBy}'` : 'NULL'},
+             ${urgency.locked === true}, ${urgency.locked ? "'Made-up: the leather is late.'" : 'NULL'}, ${urgency.locked ? 'now()' : 'NULL'}
+        FROM "SalesOrder" o WHERE o.id = '${orderId}'
+      ON CONFLICT ("tenantId", key) DO UPDATE SET urgency = EXCLUDED.urgency, "urgentRank" = EXCLUDED."urgentRank", "urgencySetAt" = EXCLUDED."urgencySetAt", "urgencySetBy" = EXCLUDED."urgencySetBy",
+        "urgencyLocked" = EXCLUDED."urgencyLocked", "urgencyLockReason" = EXCLUDED."urgencyLockReason", "urgencyLockedAt" = EXCLUDED."urgencyLockedAt";`)
+  /** A deposit request of the order (no schedule step: a deposit, not a balance before shipping), OPEN, due that day. */
+  const askDeposit = (orderId: string, due: string) =>
+    rulesOff(`INSERT INTO "DepositRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, currency, amount, "dueDate", "fiscalDocument", "fiscalRule")
+      SELECT '${newId()}', o."tenantId", o."companyId", o."partyId", o.id, 'ACCONTO', 'EUR', 30000, '${due}'::date, 'NONE', 'test.deposit.EU_B2B_VIES' FROM "SalesOrder" o WHERE o.id = '${orderId}';`)
+  /** A production issue of the order (a made-up task and message: only the row's count and time are read here). */
+  const issue = (orderId: string, status: 'OPEN' | 'ANSWERED', raisedAt: Date) =>
+    rulesOff(`INSERT INTO "ProductionIssue" (id, "tenantId", "companyId", "partyId", "recordType", "recordId", "salesOrderId", "taskId", "messageId", source, status, "raisedAt", "dueDate", "answeredAt", version, "createdAt", "updatedAt")
+      SELECT '${newId()}', o."tenantId", o."companyId", o."partyId", 'SalesOrder', o.id, o.id, '${newId()}', '${newId()}', 'OFFICE', '${status}', '${raisedAt.toISOString()}'::timestamptz, (now() + interval '2 days')::date, ${status === 'ANSWERED' ? 'now()' : 'NULL'}, 1, now(), now()
+        FROM "SalesOrder" o WHERE o.id = '${orderId}';`)
+  const urgencyOf = async (number: string): Promise<{ state: Json | null; mark: string | null }> => {
+    const row = await rowOf('owner', number)
+    return { state: row.customerUrgencyState, mark: row.customerUrgency }
+  }
+
+  beforeAll(async () => {
+    // A Sales reader without workorders.view (the session alone is enough for a read; the block above makes the same one).
+    const sales = grantOf('sales', 'all')
+    SESSIONS.noWork ??= { audience: 'office', tenantId: T, actorId: PEOPLE.noWork, companyId: companyA, grants: [{ ...sales, permissions: sales.permissions.filter((permission) => permission !== 'workorders.view') }] }
+    made.u2 = await copyOrder('T-CW-A-U2', partyA, dayPlus(30))
+    made.ask = await copyOrder('T-CW-A-ASK', partyA, dayPlus(31))
+    made.back = await copyOrder('T-CW-A-BACK', partyA, dayPlus(32))
+    made.lock = await copyOrder('T-CW-A-LOCK', partyA, dayPlus(33))
+    made.reg = await copyOrder('T-CW-A-REG', partyA, dayPlus(34))
+    made.xdep = await copyOrder('T-CW-A-XDEP', partyA, dayPlus(35))
+    made.dep = await copyOrder('T-CW-A-DEP', partyA, dayPlus(36))
+    made.yes = await copyOrder('T-CW-A-YES', partyA, dayPlus(37))
+    made.gone = await copyOrder('T-CW-A-GONE', partyA, dayPlus(38))
+    await urgencySwitch(partyA, true)
+    await urgencySwitch(partyB, false)
+    await mark(made.u2, { urgency: 'URGENT', rank: 2, setBy: 'BRAND' })
+    await mark(made.ask, { urgency: 'REGULAR' })
+    await mark(made.back, { urgency: 'REGULAR', setBy: 'FACTORY' })
+    await mark(made.lock, { urgency: 'REGULAR', setBy: 'FACTORY', locked: true })
+    await mark(made.reg, { urgency: 'REGULAR', setBy: 'BRAND' })
+    await mark(orderB, { urgency: 'URGENT', rank: 1, setBy: 'BRAND' })
+    // The "Urgent – asked" of T-CW-A-ASK: an OPEN RUSH request (as the block above asks one of T059-B-01).
+    await admin(`INSERT INTO "OrderChangeRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, status) SELECT $1, o."tenantId", o."companyId", o."partyId", o.id, 'RUSH', 'OPEN' FROM "SalesOrder" o WHERE o.id = $2`, [ask, made.ask])
+    await issue(made.ask, 'OPEN', older)
+    await issue(made.ask, 'OPEN', newer)
+    await issue(made.ask, 'ANSWERED', new Date(older.getTime() - 5 * 86_400_000))
+    await rulesOff(`UPDATE "SalesOrder" SET "depositRequired" = false WHERE id = '${made.xdep}';`)
+    await askDeposit(made.xdep, dayPlus(9))
+    await askDeposit(made.dep, dayPlus(4))
+    await rulesOff(`UPDATE "SalesOrder" SET "reapprovalNeededAt" = now() WHERE id IN ('${made.yes}', '${made.gone}');`)
+    await rulesOff(`UPDATE "SalesOrder" SET status = 'CANCELLED', "cancelReason" = 'Made-up: the customer withdrew it.', "closedAt" = now() WHERE id = '${made.gone}';`)
+    useCustomerUrgency(customerUrgencySource)
+  }, 120_000)
+
+  afterAll(() => {
+    // As the cases after this block found it (the first urgency case took the reader away).
+    useCustomerUrgency(undefined)
+  })
+
+  it('B-CW-010 the state of four with its place, our lock and the open "Urgent – asked"; the mark is the state\'s', async () => {
+    expect(await urgencyOf('T-CW-A-U2')).toEqual({ state: { state: 'URGENT', urgentRank: 2, locked: false, requestId: null }, mark: 'URGENT' })
+    expect(await urgencyOf('T-CW-A-ASK')).toEqual({ state: { state: 'ASKED', urgentRank: null, locked: false, requestId: ask }, mark: 'REGULAR' })
+    expect(await urgencyOf('T-CW-A-BACK')).toEqual({ state: { state: 'SET_BACK', urgentRank: null, locked: false, requestId: null }, mark: 'REGULAR' })
+    expect(await urgencyOf('T-CW-A-LOCK')).toEqual({ state: { state: 'SET_BACK', urgentRank: null, locked: true, requestId: null }, mark: 'REGULAR' })
+    expect(await urgencyOf('T-CW-A-REG')).toEqual({ state: { state: 'REGULAR', urgentRank: null, locked: false, requestId: null }, mark: 'REGULAR' })
+    // No kept row yet: none, never a made-up Regular.
+    expect(await urgencyOf('T-CW-A-XDEP')).toEqual({ state: null, mark: null })
+    // A cancelled order is no longer kept: none, though its row is still there.
+    await mark(made.gone, { urgency: 'URGENT', rank: 3, setBy: 'BRAND' })
+    expect(await urgencyOf('T-CW-A-GONE')).toEqual({ state: null, mark: null })
+    // The filter keeps exactly the rows the column says (the mark is derived from the state: they never differ).
+    const urgent = await rows('owner', 'customerUrgency=URGENT')
+    expect(numbersOf(urgent)).toContain('T-CW-A-U2')
+    for (const row of urgent) expect(row.customerUrgencyState?.state, row.number).toBe('URGENT')
+    const regular = await rows('owner', 'customerUrgency=REGULAR')
+    expect(numbersOf(regular)).toEqual(expect.arrayContaining(['T-CW-A-ASK', 'T-CW-A-BACK', 'T-CW-A-LOCK', 'T-CW-A-REG']))
+    for (const row of regular) expect(['ASKED', 'REGULAR', 'SET_BACK'], row.number).toContain(row.customerUrgencyState?.state)
+    // Who set or locked it is never sent (worker privacy): the state holds these four fields only.
+    expect(Object.keys((await rowOf('owner', 'T-CW-A-LOCK')).customerUrgencyState).sort()).toEqual(['locked', 'requestId', 'state', 'urgentRank'])
+  })
+
+  it('B-CW-010 the customer\'s switch off: no state and no mark, though the kept row says Urgent; a reader without states keeps the old mark', async () => {
+    // Customer B's switch is off: its order's Urgent 1 counts for nothing.
+    expect(await urgencyOf('T059-B-01')).toEqual({ state: null, mark: null })
+    await urgencySwitch(partyA, false)
+    try {
+      for (const number of ['T-CW-A-U2', 'T-CW-A-ASK', 'T-CW-A-LOCK']) expect(await urgencyOf(number), number).toEqual({ state: null, mark: null })
+    } finally {
+      await urgencySwitch(partyA, true)
+    }
+    expect((await urgencyOf('T-CW-A-U2')).state).toMatchObject({ state: 'URGENT', urgentRank: 2 })
+    // The hook's old shape (no `states`): the row falls back to `of` — the mark as before, no state.
+    useCustomerUrgency({
+      of: async (_db, ids) => new Map(ids.filter((id) => id === made.u2).map((id) => [id, 'URGENT' as const])),
+      where: () => ({ id: { in: [] } }),
+    })
+    try {
+      expect(await urgencyOf('T-CW-A-U2')).toEqual({ state: null, mark: 'URGENT' })
+      expect(await urgencyOf('T-CW-A-REG')).toEqual({ state: null, mark: null })
+    } finally {
+      useCustomerUrgency(customerUrgencySource)
+    }
+  })
+
+  it('B-CW-011 reaccept: a change waits for the customer\'s new yes — the rows the reaccept term keeps; never a cancelled order', async () => {
+    expect((await rowOf('owner', 'T-CW-A-YES')).reaccept).toBe(true)
+    expect((await rowOf('owner', 'T-CW-A-U2')).reaccept).toBe(false)
+    expect((await rowOf('owner', 'T-CW-A-GONE')).reaccept).toBe(false)
+    const every = await rows('owner', 'rows=all')
+    const waiting = every.filter((row) => row.reaccept === true)
+    expect(numbersOf(waiting)).toContain('T-CW-A-YES')
+    expect(numbersOf(await rows('owner', 'reaccept=true'))).toEqual(numbersOf(waiting))
+  })
+
+  it('B-CW-012 an extra deposit still open on an order that needs none: its due day, the state stays Not needed; a day, never an amount', async () => {
+    const extra = (await rowOf('owner', 'T-CW-A-XDEP')).deposit
+    expect(extra).toEqual({ state: 'NOT_NEEDED', dueDate: dayPlus(9), extraOpenDue: dayPlus(9) })
+    // The order's own deposit, its request open: the deposit itself, no extra.
+    expect((await rowOf('owner', 'T-CW-A-DEP')).deposit).toEqual({ state: 'OPEN', dueDate: dayPlus(4), extraOpenDue: null })
+    // Needed and not asked yet: nothing open, no extra.
+    expect((await rowOf('owner', 'T-CW-A-U2')).deposit).toEqual({ state: 'MISSING', dueDate: null, extraOpenDue: null })
+    // A reader without the price grain reads the same words and day (nothing of it is an amount).
+    expect((await rowOf('planner', 'T-CW-A-XDEP')).deposit).toEqual(extra)
+    expect(JSON.stringify(extra)).not.toContain('30000')
+  })
+
+  it('B-CW-014 asked production since: when the oldest OPEN issue was raised; withheld with the count without workorders.view', async () => {
+    const row = await rowOf('owner', 'T-CW-A-ASK', 'production=true')
+    expect(row.production).toMatchObject({ openIssues: 2, openIssuesSince: older.toISOString(), withheld: [] })
+    // No open issue: 0 and no time.
+    expect((await rowOf('owner', 'T-CW-A-REG', 'production=true')).production).toMatchObject({ openIssues: 0, openIssuesSince: null })
+    const blind = await rowOf('noWork', 'T-CW-A-ASK', 'production=true')
+    expect(blind.production).toMatchObject({ supervisorMark: null, openIssues: null, openIssuesSince: null, withheld: ['supervisorMark', 'openIssues'] })
+    expect(JSON.stringify(blind)).not.toContain(older.toISOString())
+    // The open customer request is counted for everyone (it waits on us): not an office-only fact.
+    expect(blind.production.openRequests).toBe(1)
+  })
+
+  it('B-CW-015 the pieces ordered are the lines\' own (a fee left out), whatever the work orders hold; no work order past DRAFT: no progress at all', async () => {
+    // T-CW-A-U2 has no work order: the row's progress stays null (the pieces line needs the floor's counts).
+    expect((await rowOf('owner', 'T-CW-A-U2', 'progress=true')).progress).toBeNull()
+    const row = await rowOf('owner', 'SEED-SO-0002', 'progress=true')
+    const goods = Number((await one<{ pieces: string }>(`SELECT coalesce(sum(quantity), 0) AS pieces FROM "SalesOrderLine" WHERE "orderId" = $1 AND kind <> 'FEE'`, [order2])).pieces)
+    expect(row.progress.ordered).toBe(goods)
+    // The order read (the order page's source) says the same pieces ordered.
+    expect((await ok('owner', 'GET', `/sales/orders/${order2}`)).order.progress.ordered).toBe(goods)
+  })
+
+  // ── B-CW-022 (customer Work tab plan §2.8): the file says what the row says ──
+  it('B-CW-022 the file writes the urgency state with its place and the extra deposit with its due day', async () => {
+    const file = await filed('owner', 'rows=all', [
+      { key: 'number', label: 'Number' },
+      { key: 'customerUrgency', label: 'Customer urgency' },
+      { key: 'deposit', label: 'Deposit' },
+    ])
+    const cell = (number: string, label: string): string => file.rows.find((row) => row.Number === number)![label]!
+    expect(cell('T-CW-A-U2', 'Customer urgency')).toBe('Urgent (customer) 2')
+    expect(cell('T-CW-A-ASK', 'Customer urgency')).toBe('Urgent – asked')
+    expect(cell('T-CW-A-BACK', 'Customer urgency')).toBe('Set to Regular by us')
+    expect(cell('T-CW-A-LOCK', 'Customer urgency')).toBe('Set to Regular by us')
+    expect(cell('T-CW-A-REG', 'Customer urgency')).toBe('Regular')
+    // None counts: no kept row, or the customer's switch off — an empty cell, never a made-up Regular.
+    expect(cell('T-CW-A-XDEP', 'Customer urgency')).toBe('')
+    expect(cell('T059-B-01', 'Customer urgency')).toBe('')
+    expect(cell('T-CW-A-XDEP', 'Deposit')).toBe(`Not needed · an extra deposit is open, due ${dayPlus(9)}`)
+    expect(cell('T-CW-A-DEP', 'Deposit')).toBe('Open')
+    expect(cell('T-CW-A-U2', 'Deposit')).toBe('Not asked')
+  })
+
+  // ── the walls of the new fields (13-backend §7) ──
+  it("brand wall: a person limited to customer B reads none of customer A's urgency state, ready now or asked-since; its own state is its own", async () => {
+    const mine = await rows('limited', 'rows=all&production=true&progress=true')
+    expect(mine.map((row) => row.partyId)).toEqual(mine.map(() => partyB))
+    expect(mine.map((row) => row.number)).toContain('T059-B-01')
+    const text = JSON.stringify(mine)
+    for (const hidden of [made.u2, made.ask, made.lock, made.xdep, ask, older.toISOString(), 'T-CW-A-']) expect(text, hidden).not.toContain(hidden)
+    // Naming customer A, its orders by id, or its marks: no row and no count.
+    expect(await rows('limited', `rows=all&production=true&partyId=${partyA}`)).toEqual([])
+    expect(await rows('limited', `rows=all&production=true&ids=${made.u2},${made.ask}`)).toEqual([])
+    expect(await rows('limited', `customerUrgency=URGENT&partyId=${partyA}`)).toEqual([])
+    expect(await rows('limited', `phase=NOT_SENT&partyId=${partyA}`)).toEqual([])
+    const board = await ok('limited', 'GET', `/sales/orders/board?partyId=${partyA}`)
+    expect((board.byPhase as Json[]).map((entry) => entry.count)).toEqual((board.byPhase as Json[]).map(() => 0))
+    expect(board.notSent).toEqual({ waitsForYes: 0, waitsForDeposit: 0 })
+    // Its own order: the customer's switch is off, so no state; nothing released, so nothing ready.
+    const own = mine.find((row) => row.number === 'T059-B-01')!
+    expect(own.customerUrgencyState).toBeNull()
+    expect(own.production.readyNow).toBe(0)
+    expect(own.production.openIssuesSince).toBeNull()
+    // With customer B's switch on, its person reads B's own place: customer A's Urgent orders never count into it.
+    await urgencySwitch(partyB, true)
+    try {
+      expect((await rowOf('limited', 'T059-B-01')).customerUrgencyState).toEqual({ state: 'URGENT', urgentRank: 1, locked: false, requestId: null })
+    } finally {
+      await urgencySwitch(partyB, false)
+    }
+  })
+
+  it('money wall: the real Sales template reads every new field, and none of them is an amount', async () => {
+    SESSIONS.sales ??= { audience: 'office', tenantId: T, actorId: PEOPLE.sales, companyId: companyA, grants: [grantOf('sales', 'all')] }
+    const mine = await rows('sales', 'rows=all&production=true&progress=true')
+    const row = (number: string): Json => mine.find((entry) => entry.number === number)!
+    expect(row('T-CW-A-U2').customerUrgencyState).toEqual({ state: 'URGENT', urgentRank: 2, locked: false, requestId: null })
+    expect(row('T-CW-A-ASK').customerUrgencyState).toMatchObject({ state: 'ASKED', requestId: ask })
+    expect(row('T-CW-A-ASK').production).toMatchObject({ openIssues: 2, openIssuesSince: older.toISOString(), readyNow: 0 })
+    expect(row('T-CW-A-YES').reaccept).toBe(true)
+    expect(row('T-CW-A-XDEP').deposit).toEqual({ state: 'NOT_NEEDED', dueDate: dayPlus(9), extraOpenDue: dayPlus(9) })
+    expect(row('SEED-SO-0002').progress.ordered).toEqual(expect.any(Number))
+    expect(row('SEED-SO-0002').production.readyNow).toEqual(expect.any(Number))
+    // Sales holds no price grain: the money of a row is absent, and the new fields carry words, days, counts and ids only.
+    for (const entry of mine) for (const money of ['netAmount', 'grossAmount', 'paid', 'balance']) expect(entry, `${entry.number} ${money}`).not.toHaveProperty(money)
+    for (const entry of mine) {
+      expect(Object.keys(entry.deposit).sort(), entry.number).toEqual(['dueDate', 'extraOpenDue', 'state'])
+      if (entry.customerUrgencyState !== null) expect(Object.keys(entry.customerUrgencyState).sort(), entry.number).toEqual(['locked', 'requestId', 'state', 'urgentRank'])
+      if (entry.progress) expect(Object.keys(entry.progress).sort(), entry.number).toEqual(['cut', 'finished', 'inWork', 'ordered', 'sewn'])
+    }
+    // The big picture is counts only: never a value per phase.
+    const board = await ok('sales', 'GET', '/sales/orders/board')
+    for (const entry of board.byPhase as Json[]) expect(Object.keys(entry).sort()).toEqual(['count', 'phase'])
+    expect(Object.keys(board.notSent).sort()).toEqual(['waitsForDeposit', 'waitsForYes'])
+  })
+})
+// ── end B-CW-010 / B-CW-011 / B-CW-012 / B-CW-014 / B-CW-015 ──
+
+// ── B-CW-013 / B-CW-020 (customer Work tab plan §2, §2.8): ready now; nothing is "now" unless the order's stage is current ──
+/**
+ * Stands on T-CW-A-NOW, a made-up copy of the seeds' SEED-SO-0001 for customer A (CONFIRMED) whose kept row says Ready to ship,
+ * Late, waiting on us, with one customer request OPEN on it; and on the seeds' SEED-SO-0002 (its work order SEED-WO-0001 in
+ * progress, one released garment on no shipment). States are set past the order's own rules (the guards off: only the read is
+ * under test) and put back.
+ */
+describe('B-CW-013 / B-CW-020 ready now; nothing is "now" for an order waiting for a yes, shipped, delivered, closed or cancelled', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const rulesOff = (statements: string) => admin(`BEGIN; SET LOCAL session_replication_role = replica; ${statements} COMMIT;`)
+  const today = () => businessDate(new Date())
+  const setStatus = (orderId: string, status: string) =>
+    rulesOff(`UPDATE "SalesOrder" SET status = '${status}', "closedAt" = ${status === 'CLOSED' || status === 'CANCELLED' ? 'now()' : 'NULL'}, "cancelReason" = ${status === 'CANCELLED' ? "'Made-up: the customer withdrew it.'" : 'NULL'} WHERE id = '${orderId}';`)
+  const COLUMNS = [
+    { key: 'number', label: 'Number' },
+    { key: 'whereItIs', label: 'Where it is' },
+    { key: 'waitingOn', label: 'Waiting on' },
+    { key: 'held', label: 'On hold' },
+  ]
+  let nowOrder: string
+
+  beforeAll(async () => {
+    const sales = grantOf('sales', 'all')
+    SESSIONS.noWork ??= { audience: 'office', tenantId: T, actorId: PEOPLE.noWork, companyId: companyA, grants: [{ ...sales, permissions: sales.permissions.filter((permission) => permission !== 'workorders.view') }] }
+    nowOrder = await copyOrder('T-CW-A-NOW', partyA, dayPlus(40))
+    await rulesOff(`INSERT INTO "BrandOrderProduction" (id, "tenantId", "companyId", "partyId", "salesOrderId", key, stage, "stageAt", health, "healthAt", "waitingOn", "waitingSince")
+      SELECT '${newId()}', o."tenantId", o."companyId", o."partyId", o.id, 'brand-production:' || o.id, 'READY', now(), 'LATE', now(), 'US', now() FROM "SalesOrder" o WHERE o.id = '${nowOrder}';`)
+    await admin(`INSERT INTO "OrderChangeRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, status) SELECT $1, o."tenantId", o."companyId", o."partyId", o.id, 'RUSH', 'OPEN' FROM "SalesOrder" o WHERE o.id = $2`, [newId(), nowOrder])
+  }, 120_000)
+
+  it('B-CW-020 current: the kept stage, health and wait; any other state: all null, not held, 0 ready — the open request and the mark stay; the file\'s cells are empty', async () => {
+    const current = (await rowOf('owner', 'T-CW-A-NOW', 'production=true')).production
+    expect(current).toMatchObject({ stage: 'READY', stageSince: today(), stageByHand: null, health: 'LATE', waitingOn: 'US', held: false, openRequests: 1, openIssues: 0, readyNow: 0, withheld: [] })
+    expect(current.since).toEqual(expect.any(String))
+    const before = (await filed('owner', 'rows=all', COLUMNS)).rows.find((row) => row.Number === 'T-CW-A-NOW')!
+    expect(before['Where it is']).toBe('Ready to ship · Late')
+    expect(before['Waiting on']).toBe('Waiting on us')
+    try {
+      for (const status of ['PENDING_APPROVAL', 'SHIPPED', 'DELIVERED', 'CLOSED', 'CANCELLED']) {
+        await setStatus(nowOrder, status)
+        const row = await rowOf('owner', 'T-CW-A-NOW', 'production=true')
+        expect(row.status, status).toBe(status)
+        expect(row.production, status).toMatchObject({ stage: null, stageSince: null, stageByHand: null, health: null, waitingOn: null, since: null, held: false, readyNow: 0 })
+        // A request still waits, and the office-only parts stay as they were.
+        expect(row.production, status).toMatchObject({ openRequests: 1, openIssues: 0, supervisorMark: current.supervisorMark, withheld: [] })
+      }
+      // Cancelled: the file writes nothing for "now" (its Status column says where the order is).
+      const after = (await filed('owner', 'rows=all', COLUMNS)).rows.find((row) => row.Number === 'T-CW-A-NOW')!
+      expect({ where: after['Where it is'], waiting: after['Waiting on'], held: after['On hold'] }).toEqual({ where: '', waiting: '', held: '' })
+    } finally {
+      await setStatus(nowOrder, 'CONFIRMED')
+    }
+    // Back to confirmed: the kept row was never touched (the read alone changed).
+    expect((await rowOf('owner', 'T-CW-A-NOW', 'production=true')).production).toMatchObject({ stage: 'READY', health: 'LATE', waitingOn: 'US' })
+  })
+
+  it("B-CW-013 ready now is the order read's own number for every reader of the order; with a work order on hold the row is held — both only while current", async () => {
+    for (const [number, orderId] of [['SEED-SO-0002', order2], ['SEED-SO-0001', order1], ['T-CW-A-NOW', nowOrder]] as const) {
+      const row = await rowOf('owner', number, 'production=true')
+      expect(row.production.readyNow, number).toBe((await ok('owner', 'GET', `/sales/orders/${orderId}`)).order.progress.readyNow)
+    }
+    const second = (await rowOf('owner', 'SEED-SO-0002', 'production=true')).production
+    expect(second.readyNow).toBeGreaterThan(0) // the seeds: one released garment of SEED-SO-0002 is on no shipment
+    // No shipping right and no workorders.view needed: the order read gives the number to every reader of the order.
+    expect((await rowOf('noWork', 'SEED-SO-0002', 'production=true')).production.readyNow).toBe(second.readyNow)
+    expect((await rowOf('planner', 'SEED-SO-0002', 'production=true')).production.readyNow).toBe(second.readyNow)
+    // One live work order of it put on hold, then the order shipped: held and ready only while current.
+    const [workOrder] = await admin<{ id: string; status: string }>(
+      `SELECT DISTINCT wo.id, wo.status::text AS status FROM "WorkOrder" wo JOIN "WorkOrderSize" c ON c."workOrderId" = wo.id JOIN "SalesOrderLine" l ON l.id = c."salesOrderLineId"
+        WHERE l."orderId" = $1 AND wo.kind <> 'REPAIR' AND wo.status NOT IN ('DRAFT', 'CANCELLED', 'ON_HOLD') ORDER BY wo.id LIMIT 1`,
+      [order2],
+    )
+    expect(workOrder).toBeDefined()
+    const order = await one<{ status: string }>('SELECT status::text AS status FROM "SalesOrder" WHERE id = $1', [order2])
+    await rulesOff(`UPDATE "WorkOrder" SET "heldFromStatus" = status, status = 'ON_HOLD' WHERE id = '${workOrder!.id}';`)
+    try {
+      expect((await rowOf('owner', 'SEED-SO-0002', 'production=true')).production).toMatchObject({ held: true, readyNow: second.readyNow })
+      await rulesOff(`UPDATE "SalesOrder" SET status = 'SHIPPED' WHERE id = '${order2}';`)
+      expect((await rowOf('owner', 'SEED-SO-0002', 'production=true')).production).toMatchObject({ stage: null, health: null, waitingOn: null, since: null, held: false, readyNow: 0 })
+    } finally {
+      await rulesOff(`UPDATE "SalesOrder" SET status = '${order.status}' WHERE id = '${order2}'; UPDATE "WorkOrder" SET status = '${workOrder!.status}', "heldFromStatus" = NULL WHERE id = '${workOrder!.id}';`)
+    }
+    // Put back: as it read before the hold.
+    expect((await rowOf('owner', 'SEED-SO-0002', 'production=true')).production).toMatchObject({ held: second.held, readyNow: second.readyNow })
+  })
+})
+// ── end B-CW-013 / B-CW-020 ──
 
 // ── B-OM-002 (order money tab M1-B3, B9): ONE still-to-pay rule — the row, the order read's `money`; a cancelled order owes 0 ──
 // (last in the file: its cancelled copy of an order is no row of the cases above)

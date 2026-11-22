@@ -219,7 +219,7 @@ describe('manual order entry (SAL-202): an order without a quote, for repeat bus
       expect.objectContaining({ orderId: manual.id, quoteVersionId: null, status: 'OPEN', kind: 'ACCONTO', amount: 245_952, depositPct: '70', dueDate: PROMISE, fiscalDocument: 'TD02', stepKind: 'BEFORE_SHIPPING' }),
     ])
     // The orders list and the release gate read the deposit only: the balance's request is not "the deposit".
-    expect((await ok('sales', 'GET', `/sales/orders?q=${manual.number}`)).orders[0].deposit).toEqual({ state: 'OPEN', dueDate: manual.chain.depositRequests[0].dueDate })
+    expect((await ok('sales', 'GET', `/sales/orders?q=${manual.number}`)).orders[0].deposit).toEqual({ state: 'OPEN', dueDate: manual.chain.depositRequests[0].dueDate, extraOpenDue: null /* B-CW-012: the order's own deposit is no extra */ })
     expect(manual.dailyActions.map((action: Json) => [action.action, action.allowed])).toEqual([['amend', true], ['closeLines', true], ['reopenLines', false], ['copyAsQuote', true]])
     const audit = await one(`SELECT after FROM "AuditLog" WHERE action = 'orders.makeManual' AND "recordId" = $1`, [manual.id])
     expect(audit.after).toMatchObject({ number: manual.number, quoteVersionId: null, depositRequired: true, lines: 2, pieces: 7 })

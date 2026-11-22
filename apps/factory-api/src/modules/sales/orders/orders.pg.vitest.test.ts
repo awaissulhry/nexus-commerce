@@ -814,7 +814,7 @@ describe('the list, the board and the tiles (SAL-214: counts that match the list
     expect(waitingDeposit).toContain(order.number)
     expect(waitingDeposit).not.toContain(`SO-${YEAR}-0001`) // cancelled with its deposit
     const row = (await ok('a.sales', 'GET', `/sales/orders?q=${order.number}`)).orders
-    expect(row).toEqual([expect.objectContaining({ number: order.number, partyId: P1, status: 'CONFIRMED', units: 14, shippedUnits: 0, lineCount: 2, netAmount: 624000, deposit: { state: 'OPEN', dueDate: expect.any(String) }, quote: expect.objectContaining({ id: accepted.quoteId }) })])
+    expect(row).toEqual([expect.objectContaining({ number: order.number, partyId: P1, status: 'CONFIRMED', units: 14, shippedUnits: 0, lineCount: 2, netAmount: 624000, deposit: { state: 'OPEN', dueDate: expect.any(String), extraOpenDue: null /* B-CW-012: the order's own deposit is no extra */ }, quote: expect.objectContaining({ id: accepted.quoteId }) })])
     const shippedRow = (await ok('a.sales', 'GET', '/sales/orders?status=PARTLY_SHIPPED')).orders[0]
     expect(shippedRow).toMatchObject({ number: 'SEED-SO-0002', units: 7, shippedUnits: 2 })
   })

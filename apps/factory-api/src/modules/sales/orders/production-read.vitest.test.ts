@@ -13,6 +13,8 @@ import type { Blocker } from '@nexus/factory-domain/production-brand/waiting'
 // B-MS-006: the headline's stage block with a stage set by hand, and the export's words for it.
 import { headlineStageOf, type HeadlineStageRow } from './production-read'
 import { productionWords, whereText } from '../../../platform/exports/sources/sales-orders'
+// B-CW-022: the export's Customer urgency and Deposit cells, and its words.
+import { depositText, salesOrders, urgencyText, urgencyWords } from '../../../platform/exports/sources/sales-orders'
 // B-PT-001 / B-PT-003: a work order's workshops with their days; a made-to-measure row's units.
 import { MTM_UNITS_LIMIT, mtmUnitsOf, workshopsOf } from './production-read'
 import { workOrderSpecOf, type SpecRevision } from './production-read' // B-PT-004
@@ -286,6 +288,46 @@ describe('B-MS-006: the headline reads the stage set by hand (who and the note b
   })
 })
 // ── end B-MS-006 ──
+
+// ── B-CW-022 (customer Work tab plan §2.8): the Orders file says what the row says ──
+describe('B-CW-022: the export writes the urgency state with its place and an extra deposit with its due day (en + it)', () => {
+  const state = (value: 'URGENT' | 'ASKED' | 'REGULAR' | 'SET_BACK', urgentRank: number | null = null) => ({
+    customerUrgency: value === 'URGENT' ? ('URGENT' as const) : ('REGULAR' as const),
+    customerUrgencyState: { state: value, urgentRank, locked: false, requestId: null },
+  })
+  const en = (code: string) => urgencyWords('en')[code] ?? code
+  const italian = (code: string) => urgencyWords('it')[code] ?? code
+  const fileWords = (locale: 'en' | 'it') => (code: string) => salesOrders.words?.[locale][code] ?? code
+
+  it('Customer urgency: the four states in the Work orders file\'s words; an Urgent row adds its place; "Urgente" alone is never written', () => {
+    expect(urgencyText(state('URGENT', 2), en)).toBe('Urgent (customer) 2')
+    expect(urgencyText(state('URGENT', 2), italian)).toBe('Urgente (cliente) 2')
+    expect(urgencyText(state('URGENT'), en)).toBe('Urgent (customer)')
+    expect(urgencyText(state('ASKED'), en)).toBe('Urgent – asked')
+    expect(urgencyText(state('ASKED'), italian)).toBe('Urgente – richiesto')
+    expect(urgencyText(state('SET_BACK'), en)).toBe('Set to Regular by us')
+    expect(urgencyText(state('SET_BACK'), italian)).toBe('Riportato a normale da noi')
+    expect(urgencyText(state('REGULAR'), en)).toBe('Regular')
+    expect(urgencyText(state('REGULAR'), italian)).toBe('Normale')
+    // A place is written only for Urgent.
+    expect(urgencyText(state('REGULAR', 3), en)).toBe('Regular')
+    // A mark and no state (a reader without states): the mark's word; none: an empty cell.
+    expect(urgencyText({ customerUrgency: 'URGENT', customerUrgencyState: null }, italian)).toBe('Urgente (cliente)')
+    expect(urgencyText({ customerUrgency: null, customerUrgencyState: null }, en)).toBeNull()
+    // The file's own catalogue holds these words in both languages.
+    expect(urgencyText(state('URGENT', 1), fileWords('it'))).toBe('Urgente (cliente) 1')
+    expect(urgencyText(state('SET_BACK'), fileWords('en'))).toBe('Set to Regular by us')
+  })
+
+  it('Deposit: an extra deposit still open on an order that needs none reads the order page\'s words with its due day; else the state\'s word', () => {
+    const extra = { deposit: { state: 'NOT_NEEDED' as const, dueDate: '2026-12-02', extraOpenDue: '2026-12-02' } }
+    expect(depositText(extra, fileWords('en'))).toBe('Not needed · an extra deposit is open, due 2026-12-02')
+    expect(depositText(extra, fileWords('it'))).toBe('Non serve · è aperto un acconto aggiuntivo, scade il 2026-12-02')
+    expect(depositText({ deposit: { state: 'NOT_NEEDED' as const, dueDate: null, extraOpenDue: null } }, fileWords('en'))).toBe('Not needed')
+    expect(depositText({ deposit: { state: 'OPEN' as const, dueDate: '2026-12-02', extraOpenDue: null } }, fileWords('it'))).toBe('Aperto')
+  })
+})
+// ── end B-CW-022 ──
 
 // ── B-PT-001 / B-PT-003 (order production tab R1, R3) ──
 describe('B-PT-001: the outside workshops of a work order, with the day it went and the day it comes back', () => {

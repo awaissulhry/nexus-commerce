@@ -52,6 +52,9 @@ import { SALES_ORDER_STATUSES } from '../sales/orders/orders'
 import { isAfterProduction, OFFICE_STRIP_STATES, officeStripStateOf } from './stages'
 // B-MS-001
 import { reachedStageOf } from './stages'
+// B-CW-001
+import { isOrderPhase, ORDER_PHASES, orderPhaseOf, PHASE_STATUSES, phaseCountsOf, type OrderPhase } from './stages'
+import type { SalesOrderStatus } from '../sales/orders/orders'
 
 const line = (facts: Partial<LineStageFacts> = {}): LineStageFacts => ({ reached: null, allReleased: false, done: false, sewingCounted: true, ...facts })
 
@@ -776,6 +779,74 @@ describe('B-OO-007 the office strip state: waiting, current, all done, stopped',
   })
 })
 // ── end B-OO-007 ──
+
+// ── B-CW-001 (customer Work tab plan §1; lead settle S17): the ONE phase of an order, and the phases' counts ──
+describe('B-CW-001 the order phase: every order is in exactly one of the seven', () => {
+  const STAGES = [null, ...BRAND_STAGES] as const
+
+  it('every status with every stage (or none) reads exactly one phase; the status decides, the stage splits only IN_PRODUCTION', () => {
+    for (const status of SALES_ORDER_STATUSES) {
+      for (const stage of STAGES) {
+        const phase = orderPhaseOf(status, stage)
+        expect(ORDER_PHASES, `${status} / ${stage}`).toContain(phase)
+        // Exactly one: no other phase's rule would also name it.
+        if (status !== 'IN_PRODUCTION') expect(ORDER_PHASES.filter((other) => PHASE_STATUSES[other].includes(status)), `${status} / ${stage}`).toEqual([phase])
+        // The stage changes nothing outside the status IN_PRODUCTION.
+        if (status !== 'IN_PRODUCTION') expect(phase, `${status} / ${stage}`).toBe(orderPhaseOf(status, null))
+      }
+    }
+    expect(Object.fromEntries(SALES_ORDER_STATUSES.map((status) => [status, orderPhaseOf(status, 'QUALITY')]))).toEqual({
+      PENDING_APPROVAL: 'NOT_SENT',
+      CONFIRMED: 'NOT_SENT', // a confirmed order whose kept row says "Quality check" is still not sent
+      IN_PRODUCTION: 'IN_PRODUCTION',
+      READY: 'READY',
+      PARTLY_SHIPPED: 'SHIPPED',
+      SHIPPED: 'SHIPPED',
+      DELIVERED: 'DONE',
+      CLOSED: 'DONE',
+      CANCELLED: 'CANCELLED',
+    })
+  })
+
+  it('in production: no stage kept yet or PREPARING is not started; any later stage is in production', () => {
+    expect(STAGES.map((stage) => orderPhaseOf('IN_PRODUCTION', stage))).toEqual(['NOT_STARTED', 'NOT_STARTED', 'IN_PRODUCTION', 'IN_PRODUCTION', 'IN_PRODUCTION', 'IN_PRODUCTION'])
+  })
+
+  it('the 9 statuses cover the 7 phases, and PHASE_STATUSES says the same as the function', () => {
+    const reached = new Set(SALES_ORDER_STATUSES.flatMap((status) => STAGES.map((stage) => orderPhaseOf(status, stage))))
+    expect([...reached].sort()).toEqual([...ORDER_PHASES].sort())
+    for (const phase of ORDER_PHASES) {
+      const statuses = SALES_ORDER_STATUSES.filter((status) => STAGES.some((stage) => orderPhaseOf(status, stage) === phase))
+      expect([...PHASE_STATUSES[phase]].sort(), phase).toEqual([...statuses].sort())
+    }
+    // Every status is in a phase; only IN_PRODUCTION is in two (the stage splits it).
+    for (const status of SALES_ORDER_STATUSES) expect(ORDER_PHASES.filter((phase) => PHASE_STATUSES[phase].includes(status)).length, status).toBe(status === 'IN_PRODUCTION' ? 2 : 1)
+    expect(ORDER_PHASES.every(isOrderPhase)).toBe(true)
+    expect(isOrderPhase('NOPE')).toBe(false)
+    expect(isOrderPhase(null)).toBe(false)
+  })
+
+  it('phaseCountsOf: every phase is there (0 as 0) and the seven add up to the sum of the status counts', () => {
+    const sumOf = (counts: Readonly<Record<string, number>>): number => Object.values(counts).reduce((sum, count) => sum + count, 0)
+    const none = phaseCountsOf({}, 0)
+    expect(Object.keys(none).sort()).toEqual([...ORDER_PHASES].sort())
+    expect(none).toEqual({ NOT_SENT: 0, NOT_STARTED: 0, IN_PRODUCTION: 0, READY: 0, SHIPPED: 0, DONE: 0, CANCELLED: 0 })
+    const byStatus: Record<SalesOrderStatus, number> = { PENDING_APPROVAL: 1, CONFIRMED: 2, IN_PRODUCTION: 7, READY: 1, PARTLY_SHIPPED: 3, SHIPPED: 1, DELIVERED: 30, CLOSED: 7, CANCELLED: 2 }
+    const counts: Record<OrderPhase, number> = phaseCountsOf(byStatus, 5)
+    expect(counts).toEqual({ NOT_SENT: 3, NOT_STARTED: 2, IN_PRODUCTION: 5, READY: 1, SHIPPED: 4, DONE: 37, CANCELLED: 2 })
+    expect(sumOf(counts)).toBe(sumOf(byStatus))
+    // A status with no order is left out of the counts by status: its phase still reads 0.
+    expect(phaseCountsOf({ IN_PRODUCTION: 4 }, 4)).toEqual({ NOT_SENT: 0, NOT_STARTED: 0, IN_PRODUCTION: 4, READY: 0, SHIPPED: 0, DONE: 0, CANCELLED: 0 })
+    // `started` read a moment apart never takes the sum off, and Not started is never below 0.
+    for (const started of [-1, 0, 3, 7, 9]) {
+      const held = phaseCountsOf(byStatus, started)
+      expect(sumOf(held), String(started)).toBe(sumOf(byStatus))
+      expect(held.NOT_STARTED, String(started)).toBeGreaterThanOrEqual(0)
+      expect(held.IN_PRODUCTION + held.NOT_STARTED, String(started)).toBe(7)
+    }
+  })
+})
+// ── end B-CW-001 ──
 
 // ── B-MS-001 (set the stage by hand; R2): where the work had reached when the order left production ──
 describe('B-MS-001 reachedStageOf: the floor’s stage with done lines read where they reached', () => {
