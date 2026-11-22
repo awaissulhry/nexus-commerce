@@ -232,6 +232,25 @@ describe('B-PR-10 the brand-wall sweep', () => {
       expect(swept.has(key), key).toBe(true)
       expect(EXEMPT[key], key).toBeUndefined()
     }
+    // B-OF (order files tab, 13-backend §4): every route the Files tab reads or acts on is met by the sweep by itself — swept, never
+    // EXEMPT (a customer-limited person gets the same not-found as an unknown id; another order's ask: "File ask not found."). PR S2:
+    // the order's files read that now carries its asks (B-OF-033) and the ask commands — make, change, reassign, cancel, answer,
+    // accept, ask again, ask for an update (B-OF-031). The tablet's asks (GET /production/floor-notes/asks) are a floor route.
+    for (const key of [
+      'GET /sales/orders/:orderId/files',
+      'POST /sales/orders/:orderId/file-asks',
+      'PATCH /sales/orders/:orderId/file-asks/:askId',
+      'POST /sales/orders/:orderId/file-asks/:askId/reassign',
+      'POST /sales/orders/:orderId/file-asks/:askId/cancel',
+      'POST /sales/orders/:orderId/file-asks/:askId/answer',
+      'POST /sales/orders/:orderId/file-asks/:askId/accept',
+      'POST /sales/orders/:orderId/file-asks/:askId/ask-again',
+      'POST /sales/orders/:orderId/file-asks/:askId/chase',
+    ]) {
+      expect(swept.has(key), key).toBe(true)
+      expect(EXEMPT[key], key).toBeUndefined()
+    }
+    expect(sweeper.routes.get('GET /production/floor-notes/asks')?.manifest.audiences).toEqual(['floor'])
     expect(swept.size).toBeGreaterThan(walked.length)
     // The golden production world's traces of A, here too: its portal people and their mails, stock moves of its work orders,
     // its files and threads (fix-pr-7 found the mail log and the stock card leaks only where they were).
