@@ -460,16 +460,26 @@ export default defineStage({
       await flow.shot(planner.page, 'change-decided')
     })
 
-    await flow.step('4 · tracking typed, corrected and cleared on SEED-SO-0003’s shipment (a carrier booked by hand): "No live tracking"', async () => {
+    await flow.step('4 · tracking typed, corrected and cleared on a packed shipment of SEED-SO-0003 or SEED-SO-0002 (a carrier booked by hand): "No live tracking"', async () => {
       const warehouse = await flow.desk('warehouse')
       const { page } = warehouse
-      const shipments = ((await flow.read(page, `/sales/orders/${world.so3.id}`)).order.chain.shipments ?? []) as Json[]
-      const typed = shipments.find((row) => row.mayTypeTracking?.allowed === true)
+      // os-fx7 (W-01): Tracking numbers… is drawn only on a CARRIER shipment PACKED or SHIPPED with a parcel no label tracks — never
+      // on a draft. A PACKED one here: a number the customer has not seen yet changes without a reason (after the goods left it asks why).
+      const drawn = (row: Json): boolean => row.mayTypeTracking?.allowed === true && row.transportBy === 'CARRIER' && row.status === 'PACKED' && (((row.parcels ?? []) as Json[]).length === 0 || ((row.parcels ?? []) as Json[]).some((parcel) => parcel.source !== 'LABEL'))
+      let typed: Json | null = null
+      let typedOrder = world.so3.id
+      for (const orderId of [world.so3.id, world.so2.id]) {
+        const found = (((await flow.read(page, `/sales/orders/${orderId}`)).order.chain.shipments ?? []) as Json[]).find(drawn)
+        if (found && !typed) {
+          typed = found
+          typedOrder = orderId
+        }
+      }
       if (!typed) {
-        notHere('a shipment of SEED-SO-0003 whose number may be typed here (its carrier booked by hand): none in this world')
+        notHere('a packed shipment of SEED-SO-0003 or SEED-SO-0002 whose number may be typed here (its carrier booked by hand): none in this world')
         return
       }
-      await warehouse.go(`/sales/orders/${world.so3.id}?tab=shipments`)
+      await warehouse.go(`/sales/orders/${typedOrder}?tab=shipments`)
       await typeTracking(page, typed.number, TRACKING[0], null)
       await seen(shipmentRow(page, typed.number).getByText(TRACKING[0]), 60_000)
       await seen(shipmentRow(page, typed.number).getByText(OD('ship.noLive')))
@@ -1434,9 +1444,12 @@ export default defineStage({
       else if (van) {
         const before = await statusOf(flow, page, so0101.id)
         const delivered = await rowAct(so0101.id, van.number as string, OS('ships.act.delivered'))
-        // Our van: why is not asked (no carrier's tracking to know better than).
+        // Our van: why is not asked (no carrier's tracking to know better than). os-fx7 (W-05): the D6 window — one act, no five
+        // typed statuses to choose from; Delivered stays final (its payment steps start that day).
         await expect(delivered.getByRole('textbox', { name: startsWith(OS('door.why')) })).toHaveCount(0)
-        await answerOf(page, 'POST', /^\/shipping\/shipments\/[^/]+\/own-transport\/events$/, () => press(delivered.getByRole('button', { name: DEPTH('transport.statusGo', { status: DEPTH('trackingStatus.DELIVERED') }), exact: true })))
+        await expect(delivered.getByRole('radio')).toHaveCount(0)
+        await seen(delivered.getByText(OS('door.status.deliveredFinal')), 60_000)
+        await answerOf(page, 'POST', /^\/shipping\/shipments\/[^/]+\/own-transport\/events$/, () => press(delivered.getByRole('button', { name: OS('door.mark.go.DELIVERED'), exact: true })))
         await flow.settle()
         // The order follows its shipments (the worker's sales.ordersFollowShipments): every garment delivered → Delivered (os-fx5: from
         // Shipped; an order already closed in this world stays as it is).
@@ -1456,7 +1469,8 @@ export default defineStage({
         const box = await rowAct(world.so2.id, labelled.number as string, OS('ships.act.delivered'))
         await seen(box.getByText(OS('door.status.labelled')), 60_000)
         await box.getByRole('textbox', { name: startsWith(OS('door.why')) }).fill(SHIP_WORDS.labelled)
-        await answerOf(page, 'POST', /^\/shipping\/shipments\/[^/]+\/own-transport\/events$/, () => press(box.getByRole('button', { name: DEPTH('transport.statusGo', { status: DEPTH('trackingStatus.DELIVERED') }), exact: true })))
+        await expect(box.getByRole('radio')).toHaveCount(0) // os-fx7 (W-05): Mark delivered only — never a hand "In transit" over labels
+        await answerOf(page, 'POST', /^\/shipping\/shipments\/[^/]+\/own-transport\/events$/, () => press(box.getByRole('button', { name: OS('door.mark.go.DELIVERED'), exact: true })))
         await flow.settle()
         await expect.poll(async () => (await rowsOf(world.so2.id)).find((row) => row.id === labelled.id)?.status, { timeout: 60_000 }).toBe('DELIVERED')
         await warehouse.go(`/sales/orders/${world.so2.id}?tab=shipments`)

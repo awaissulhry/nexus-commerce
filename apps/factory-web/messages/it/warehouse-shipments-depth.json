@@ -328,7 +328,8 @@
       "placed_other": "{count} spedizioni ora sono bloccate.",
       "skipped_one": "{count} è rimasta com'era:",
       "skipped_other": "{count} sono rimaste com'erano:"
-    }
+    },
+    "placeGoBare": "Metti il blocco"
   },
   "split": {
     "menu": "Dividi…",
@@ -338,8 +339,6 @@
     "byHand": "A mano",
     "byRule": "Per data promessa",
     "go": "Dividi",
-    "goHand_one": "Sposta {count} capo",
-    "goHand_other": "Sposta {count} capi",
     "goRule_one": "Crea {count} spedizione",
     "goRule_other": "Crea {count} spedizioni",
     "heldCarried": "I blocchi attivi passano alle nuove spedizioni.",

@@ -123,7 +123,8 @@ export function NewShipmentDialog({ model, can, actions }: { model: NewShipmentM
         ) : order ? (
           <QuantitiesStep orders={carried} model={model} actions={actions} />
         ) : null}
-        <p className="fw-sh-hint">{t('new.number')}</p>
+        {/* os-fx7 (W-04, P0-B2): only a new shipment takes the next number; garments added to one that exists take none. */}
+        {!model.join && <p className="fw-sh-hint">{t('new.number')}</p>}
       </form>
     </Modal>
   )

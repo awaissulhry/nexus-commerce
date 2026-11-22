@@ -52,6 +52,8 @@
 @container os-wcl (min-width: 1300px) {
   .fw-os-wcs { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .fw-os-wcs > .fw-os-wc.is-mtm { grid-column: 1 / -1; }
+  /* os-fx7 (W-02): a lone card, or the odd last one, spans both columns — never half the room empty beside it. */
+  .fw-os-wcs > .fw-os-wc:last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
 .fw-os-wc { container: os-wc / inline-size; border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-xl); padding: var(--nds-space-10); display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
 .fw-os-wc-h { display: flex; align-items: center; gap: var(--nds-space-6) var(--nds-space-10); flex-wrap: wrap; min-width: 0; }
@@ -157,3 +159,13 @@
   .fw-os-ar-x { text-align: end; align-items: flex-end; }
 }
 .fw-os-al-foot { padding-top: var(--nds-space-8); display: flex; gap: var(--nds-space-8) var(--nds-space-16); flex-wrap: wrap; align-items: center; font-size: var(--nds-font-size-sm); }
+
+/* os-fx7 (W-09): "What … carries" — each style named above its grid, its facts beside it (below it in a narrow window). */
+.fw-os-cg { display: flex; flex-direction: column; gap: var(--nds-space-6); min-width: 0; }
+.fw-os-cg-h { margin: 0; font-size: var(--nds-font-size-md); font-weight: 600; }
+.fw-os-cg-b { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--nds-space-14); min-width: 0; }
+.fw-os-cg-b > :first-child { flex: 1 1 320px; min-width: 0; }
+.fw-os-cg-f { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--nds-space-4); flex: 0 1 220px; min-width: 0; }
+
+/* os-fx7 (W-08): the style card's grid caption, shown above the grid. */
+.fw-os-gcap { margin: 0 0 var(--nds-space-4); color: var(--nds-text-2); font-size: var(--nds-font-size-sm); font-weight: 600; }

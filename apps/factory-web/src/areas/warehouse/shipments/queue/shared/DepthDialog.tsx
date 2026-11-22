@@ -6,6 +6,7 @@ import { Button } from '@nexus/ui/primitives'
 import { Modal } from '../../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../../lib/i18n/provider'
 import { DEPTH_NS, type Words } from './depth'
+import { noBreak } from './no-break' // os-fx7 (W-18): a number never breaks inside the title
 
 /** This step's words: `say` takes a Words (key + values) of the catalogue. */
 export function useDepthWords() {
@@ -54,8 +55,8 @@ export function DepthDialog({
     <Modal
       open
       onClose={onClose}
-      title={title}
-      subtitle={subtitle}
+      title={noBreak(title)}
+      subtitle={subtitle === undefined ? undefined : noBreak(subtitle)}
       size={size}
       footer={
         done ? (

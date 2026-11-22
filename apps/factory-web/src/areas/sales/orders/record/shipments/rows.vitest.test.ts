@@ -6,6 +6,8 @@ import { CATALOGUE } from '../../../../../lib/i18n/messages'
 import type { DeliveryRow } from './delivered/api'
 import { carriesOf, chipsOf, datesOf, nextOf, rowOf, shipmentsAnswer, stateOf, travelsOf } from './rows'
 import { parcelWordsOf } from './rows' // F-OS-301
+import { orderStaysOf, showAtOf, trackingDoorDrawn } from './rows' // os-fx7
+import { ddtBlocksOf, factReadsOf, othersOf, problemsOf } from './facts' // os-fx7
 import type { ShipmentRow } from './where'
 
 /**
@@ -115,6 +117,11 @@ describe('How it travels', () => {
     expect(labels.trackingDoor).toBe(false) // held for a label: not drawn at all (P0-B3; D2)
     expect(travelsOf(row({ status: 'DRAFT' })).hints).toEqual([{ key: 'ships.travels.draft' }])
     expect(travelsOf(row({ status: 'SHIPPED', transportBy: 'SENDER', carrier: null })).hints).toEqual([{ key: 'ships.travels.ownVan' }])
+    // os-fx7 (W-11): our van says so even with its parcels counted — "1 parcel", never "· 0 tracked"; a van draft gets no parcel-number hint.
+    const van = travelsOf(row({ status: 'SHIPPED', transportBy: 'SENDER', carrier: null, parcels: [{ id: 'p1', seq: 1, number: null, url: null, source: null, live: false }] }))
+    expect(van.hints).toEqual([{ key: 'ships.travels.ownVan' }])
+    expect(van.parcels).toEqual({ count: 1, tracked: null })
+    expect(travelsOf(row({ status: 'DRAFT', transportBy: 'SENDER', carrier: null })).hints).toEqual([{ key: 'ships.travels.ownVan' }])
     expect(travelsOf(row({ status: 'SHIPPED', origin: 'ELSEWHERE' })).hints).toEqual([{ key: 'ships.travels.elsewhere' }])
   })
 })
@@ -211,16 +218,30 @@ describe('W3: what each parcel holds of this order, and the DDT choice on a pack
     expect(words.p1!.split(' — ')).toHaveLength(2)
   })
 
-  it('plan D6: a PACKED Nexus shipment waiting for its DDT says the choice — only to a reader who may make it; no country is read', () => {
+  it('plan D6 → os-fx7 (W-07): the "travels without a DDT" line ONLY where the DDT cannot be issued — from the DDT refusal; no country read', () => {
     const may = { manage: true, pack: true, ddt: true, holdsRelease: false }
-    expect(stateOf(row({ may }), null)).toMatchObject({ next: { kind: 'step', step: 'ddt' }, ddtChoice: true })
-    expect(stateOf(row({ may: { ...may, ddt: false } }), null).ddtChoice).toBe(false)
-    expect(stateOf(row(), null).ddtChoice).toBe(false)
-    expect(stateOf(row({ may, ddtRequired: false }), null).ddtChoice).toBe(false)
-    expect(stateOf(row({ may, ddt: { number: '151/2026', date: '2026-11-18' } }), null).ddtChoice).toBe(false)
-    expect(stateOf(row({ may, origin: 'ELSEWHERE' }), null).ddtChoice).toBe(false)
-    for (const locale of LOCALES) expect(CATALOGUE[locale]['order-shipments']?.['ships.next.ddtChoice'], locale).toBeTruthy()
-    expect(readFileSync(new URL('./view/ShipmentRow.tsx', import.meta.url), 'utf8')).toContain("{t('ships.next.ddtChoice')}")
+    const blocked = { ddtBlocks: ['vatNumber', 'rea'] }
+    expect(stateOf(row({ may }), null, blocked)).toMatchObject({ next: { kind: 'step', step: 'ddt' }, ddtBlocked: ['vatNumber', 'rea'] })
+    // An Italian company whose DDT can be issued (no refusal, or not read): no line at all.
+    expect(stateOf(row({ may }), null, { ddtBlocks: [] }).ddtBlocked).toBeNull()
+    expect(stateOf(row({ may }), null).ddtBlocked).toBeNull()
+    expect(stateOf(row({ may: { ...may, ddt: false } }), null, blocked).ddtBlocked).toBeNull()
+    expect(stateOf(row(), null, blocked).ddtBlocked).toBeNull()
+    expect(stateOf(row({ may, ddtRequired: false }), null, blocked).ddtBlocked).toBeNull()
+    expect(stateOf(row({ may, ddt: { number: '151/2026', date: '2026-11-18' } }), null, blocked).ddtBlocked).toBeNull()
+    expect(stateOf(row({ may, origin: 'ELSEWHERE' }), null, blocked).ddtBlocked).toBeNull()
+    for (const locale of LOCALES) {
+      expect(CATALOGUE[locale]['order-shipments']?.['ships.next.ddtBlocked'], locale).toBeTruthy()
+      for (const field of ['legalName', 'address', 'vatNumber', 'fiscalCode', 'rea', 'shareCapital', 'currency']) expect(CATALOGUE[locale]['order-shipments']?.[`ships.next.ddtMissing.${field}`], `${locale} ${field}`).toBeTruthy()
+      expect(CATALOGUE[locale]['order-shipments']?.['ships.next.ddtChoice'], locale).toBeUndefined()
+    }
+    expect(readFileSync(new URL('./view/ShipmentRow.tsx', import.meta.url), 'utf8')).toContain("t('ships.next.ddtBlocked'")
+  })
+
+  it('os-fx7 (W-07): the DDT refusals that block it are the company\'s own details; the form\'s are not', () => {
+    expect(ddtBlocksOf([{ path: 'company/vatNumber' }, { path: 'body/appearance' }, { path: 'company/rea' }, { path: 'company/vatNumber' }, { path: 'shipment/parcels' }])).toEqual(['vatNumber', 'rea'])
+    expect(ddtBlocksOf([{ path: 'body/carrier/name' }])).toEqual([])
+    expect(ddtBlocksOf([{ path: 'company/somethingElse' }])).toEqual([])
   })
 
   it('F-OS-305 (os-fx3): "customer told {day}" on the row when the notice went; never told or not read: nothing', () => {
@@ -231,3 +252,86 @@ describe('W3: what each parcel holds of this order, and the DDT choice on a pack
   })
 })
 // ---- end W3
+
+// ── os-fx7 (order SHIPMENTS tab; 30-walk W-01, W-05, W-06, W-09, W-10, W-12) ──
+describe('os-fx7: the walk\'s gaps, in the rows model', () => {
+  const may = { allowed: true, code: null, why: null }
+  const parcel = (seq: number, source: string | null, number: string | null = null) => ({ id: `p${seq}`, seq, number, url: null, source, live: source === 'LABEL' })
+
+  it('W-01: Tracking numbers… only on a CARRIER shipment PACKED or SHIPPED with a parcel no label tracks — never on a draft', () => {
+    expect(trackingDoorDrawn(row({ status: 'DRAFT', mayTypeTracking: may }))).toBe(false)
+    expect(travelsOf(row({ status: 'DRAFT', mayTypeTracking: may })).trackingDoor).toBe(false)
+    expect(trackingDoorDrawn(row({ status: 'PACKED', mayTypeTracking: may, parcels: [parcel(1, null)] }))).toBe(true)
+    expect(trackingDoorDrawn(row({ status: 'SHIPPED', mayTypeTracking: may, parcels: [parcel(1, 'LABEL', 'BRT-1'), parcel(2, 'TYPED', 'T-2')] }))).toBe(true)
+    expect(trackingDoorDrawn(row({ status: 'SHIPPED', mayTypeTracking: may, parcels: [parcel(1, 'LABEL', 'BRT-1'), parcel(2, 'LABEL', 'BRT-2')] }))).toBe(false)
+    expect(trackingDoorDrawn(row({ status: 'SHIPPED', mayTypeTracking: may }))).toBe(true) // an older answer: the consignment number alone
+    expect(trackingDoorDrawn(row({ status: 'SHIPPED', mayTypeTracking: may, transportBy: 'SENDER' }))).toBe(false)
+    expect(trackingDoorDrawn(row({ status: 'DELIVERED', mayTypeTracking: may }))).toBe(false)
+    expect(trackingDoorDrawn(row({ status: 'PACKED' }))).toBe(false) // the read says it may not be typed here
+  })
+
+  it('W-06: the chip names what — the open problems\' kinds (once each), read for a live row with open problems only', () => {
+    const shipped = row({ status: 'SHIPPED' })
+    expect(problemsOf({ noScanDays: 3, problems: [{ kind: 'NO_SCAN', resolvedAt: null }, { kind: 'DELAYED', resolvedAt: '2026-11-15T10:00:00.000Z' }, { kind: 'NO_SCAN', resolvedAt: null }] })).toEqual({ kinds: ['NO_SCAN'], noScanDays: 3 })
+    expect(problemsOf({ noScanDays: 3, problems: [{ kind: 'DELAYED', resolvedAt: '2026-11-15T10:00:00.000Z' }] })).toBeNull()
+    expect(stateOf(shipped, delivery({ status: 'SHIPPED', openProblems: 1 }), { problems: { kinds: ['NO_SCAN'], noScanDays: 3 } }).problemKinds).toEqual({ kinds: ['NO_SCAN'], noScanDays: 3 })
+    expect(stateOf(shipped, delivery({ status: 'SHIPPED', openProblems: 0 }), { problems: { kinds: ['NO_SCAN'], noScanDays: 3 } }).problemKinds).toBeNull()
+    expect(stateOf(shipped, delivery({ status: 'SHIPPED', openProblems: 1 })).problemKinds).toBeNull()
+    expect(factReadsOf(shipped, delivery({ status: 'SHIPPED', openProblems: 1 }), ORDER.id)).toEqual(['problems'])
+    expect(factReadsOf(row({ status: 'DELIVERED' }), delivery({ openProblems: 1 }), ORDER.id)).toEqual([])
+    for (const locale of LOCALES) expect(CATALOGUE[locale]['order-shipments']?.['ships.state.problemsWhat_one'], locale).toContain('{what}')
+  })
+
+  it('W-07 / W-12: which rows read the DDT refusal or the shared goods — few, never guessed', () => {
+    const mayAll = { manage: true, pack: true, ddt: true, holdsRelease: false }
+    expect(factReadsOf(row({ may: mayAll }), null, ORDER.id)).toEqual(['ddt'])
+    expect(factReadsOf(row({ may: { ...mayAll, manage: false } }), null, ORDER.id)).toEqual([])
+    const shared = row({ status: 'DRAFT', otherPieces: 3, orders: [{ id: ORDER.id, number: ORDER.number, customerRef: null }, { id: 'so-2', number: 'SEED-SO-0003', customerRef: null }] })
+    expect(factReadsOf(shared, null, ORDER.id)).toEqual(['others'])
+    expect(factReadsOf(row({ status: 'DRAFT', otherPieces: 0 }), null, ORDER.id)).toEqual([])
+  })
+
+  it('W-12: "+ 18 pcs of SEED-SO-0003 (SEED-JKT-02 Black 18)" — the other orders\' lines by order, style and colour', () => {
+    const shared = row({ status: 'DRAFT', otherPieces: 20, contents: [], orders: [{ id: ORDER.id, number: ORDER.number, customerRef: null }, { id: 'so-2', number: 'SEED-SO-0003', customerRef: null }] })
+    const lines = [
+      { salesOrderId: 'so-2', styleCode: 'SEED-JKT-02', colourwayName: 'Black', quantity: 10 },
+      { salesOrderId: 'so-2', styleCode: 'SEED-JKT-02', colourwayName: 'Black', quantity: 8 },
+      { salesOrderId: 'so-2', styleCode: 'SEED-PNT-01', colourwayName: 'Navy', quantity: 2 },
+      { salesOrderId: ORDER.id, styleCode: 'SEED-JKT-02', colourwayName: 'Red', quantity: 4 },
+      { styleCode: 'SEED-JKT-02', colourwayName: 'Black', quantity: 99 },
+    ]
+    const others = othersOf(lines, shared, ORDER.id)
+    expect(others).toEqual([{ number: 'SEED-SO-0003', pieces: 20, what: 'SEED-JKT-02 Black 18, SEED-PNT-01 Navy 2' }])
+    expect(carriesOf(shared, ORDER, { others })?.others).toEqual(others)
+    expect(carriesOf(shared, ORDER)?.others).toBeNull()
+    for (const locale of LOCALES) expect(CATALOGUE[locale]['order-shipments']?.['ships.carries.otherWhat_other'], locale).toContain('({what})')
+  })
+
+  it('W-09: each grid carries its facts — the style\'s pieces and each colour\'s', () => {
+    const carries = carriesOf(row({ contents: [{ lineId: BLK!.id, size: BLK!.sizes[0]!.size, pieces: 2 }, { lineId: BLK!.id, size: BLK!.sizes[1]!.size, pieces: 3 }] }), ORDER)
+    const grid = carries?.grids[0]
+    expect(grid?.pieces).toBe(5)
+    expect(grid?.byColour[BLK!.id]).toBe(5)
+  })
+
+  it('W-10: Show in the thread opens at the row\'s newest moment; a fresh draft has none', () => {
+    expect(showAtOf(row({ status: 'DRAFT' }), null)).toBeNull()
+    expect(showAtOf(row({ packedAt: '2026-11-18T10:00:00.000Z', shippedAt: '2026-11-19T08:00:00.000Z' }), null)).toBe('2026-11-19T08:00:00.000Z')
+    expect(showAtOf(row({ status: 'RETURNED', shippedAt: '2026-11-15T08:00:00.000Z' }), delivery({ returned: { at: '2026-11-19T10:00:00.000Z', received: false } }))).toBe('2026-11-19T10:00:00.000Z')
+    expect(rowOf(row({ shippedAt: '2026-11-19T08:00:00.000Z' }), ORDER, null).showAt).toBe('2026-11-19T08:00:00.000Z')
+    const view = readFileSync(new URL('./view/ShipmentRow.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("view.showAt && frame?.showInThread ? [{ id: 'show', label: f('discuss.showInThread')")
+  })
+
+  it('W-05: "The order stays Partly shipped: n garments are not delivered yet" — counted from the rows; unread contents: nothing', () => {
+    const left = { id: 'sh-a', status: 'DELIVERED', contents: [{ lineId: BLK!.id, size: '48', pieces: 4 }] }
+    const now = { id: 'sh-b', status: 'SHIPPED', contents: [{ lineId: BLK!.id, size: '50', pieces: 2 }] }
+    const value = (rows: object[], status = 'PARTLY_SHIPPED') => ({ status, progress: { ...ORDER.progress, ordered: 10, closedShort: 1 }, chain: { ...ORDER.chain, shipments: rows.map((entry) => row(entry as Partial<ShipmentRow>)) } }) as unknown as Parameters<typeof orderStaysOf>[0]
+    expect(orderStaysOf(value([left, now]), 'sh-b')).toEqual({ key: 'door.mark.orderStays.PARTLY_SHIPPED', params: { count: 3 } })
+    expect(orderStaysOf(value([left, now], 'SHIPPED'), 'sh-b')).toEqual({ key: 'door.mark.orderStays.SHIPPED', params: { count: 3 } })
+    expect(orderStaysOf(value([left, { ...now, contents: [{ lineId: BLK!.id, size: '50', pieces: 5 }] }]), 'sh-b')).toBeNull()
+    expect(orderStaysOf(value([left, { id: 'sh-b', status: 'SHIPPED' }]), 'sh-b')).toBeNull()
+    for (const locale of LOCALES) for (const status of ['PARTLY_SHIPPED', 'SHIPPED', 'other']) expect(CATALOGUE[locale]['order-shipments']?.[`door.mark.orderStays.${status}_other`], `${locale} ${status}`).toBeTruthy()
+  })
+})
+// ── end os-fx7 ──

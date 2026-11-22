@@ -6,6 +6,7 @@ import { Button } from '@nexus/ui/primitives'
 import { Modal } from '../../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../../lib/i18n/provider'
 import type { ShipmentRecordActions, ShipmentRecordModel } from '../record-model'
+import { noBreak } from '../../queue/shared/no-break' // os-fx7 (W-18): a number never breaks inside the title
 
 /** The frame of every dialog of a shipment (DS Modal): Cancel + the confirm (held with its reason), ⌘↵, the refusal inside. */
 const confirmKeys = (held: string | null, go: () => void) => (event: KeyboardEvent) => {
@@ -21,8 +22,8 @@ export function Frame({ title, subtitle, held, go, goLabel, onClose, children, p
     <Modal
       open
       onClose={onClose}
-      title={title}
-      subtitle={subtitle}
+      title={noBreak(title)}
+      subtitle={subtitle === undefined ? undefined : noBreak(subtitle)}
       size={size}
       footer={
         done ? (

@@ -118,7 +118,7 @@ function CaseRowView({ row, prefix }: { row: CaseRow; prefix: string }) {
             about.number
           )
         ) : (
-          t(about.kind === 'order' ? 'after.about.order' : 'after.about.returnLines')
+          t('after.about.order')
         )}
       </div>
       <div className="fw-os-ar-w" role="cell">

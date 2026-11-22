@@ -13,6 +13,9 @@ export { SPLIT_REFUSALS }
 /** The reasons offered by hand. F-OS-302 (X1-B4): + another delivery address, where the opener knows the customer (its addresses are read). */
 export const HAND_REASONS: readonly SplitReason[] = ['PART_READY', 'CUSTOMER_REQUEST', 'CARRIER', 'SERVICE', 'SHIP_TO', 'PROMISE_DATE', 'OTHER']
 
+/** os-fx7 (W-03): a split reason's word — Warehouse's own, and the lane's "Another delivery address" (Warehouse has none for it). */
+export const splitReasonKey = (reason: SplitReason): string => (reason === 'SHIP_TO' ? 'door.split.reasonShipTo' : `splitReason.${reason}`)
+
 /** F-OS-302: one of the customer's approved delivery addresses, in words. */
 export interface ShipToChoice {
   readonly id: string

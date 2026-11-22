@@ -982,7 +982,18 @@ describe('F-OS T.1 — the Shipments tab\'s design cases (the states the seed la
   }
   it('split: the DDT chip, the tracking problem, "Split from", the packed one\'s next step into Warehouse', () => {
     const text = shipmentsOf('os-split')
-    for (const words of ['DDT 144/2026', '1 tracking problem', 'Split from SH-2026-0072', 'Next: buy the labels ›', 'Tracking numbers…']) expect(text, words).toContain(words)
+    for (const words of ['DDT 144/2026', '1 tracking problem: No news for 3 days', 'Split from SH-2026-0072', 'Next: buy the labels ›']) expect(text, words).toContain(words)
+    // os-fx7 (W-01): no Tracking numbers… on the draft (nor where every parcel is a label, nor where the read refuses it).
+    expect(text).not.toContain('Tracking numbers…')
+  })
+
+  it('os-fx7 (W-01): Tracking numbers… on the air waybill (a carrier booked by hand, shipped, its parcels typed)', () => {
+    expect(shipmentsOf('os-awb')).toContain('Tracking numbers…')
+  })
+
+  it('os-fx7 (W-12, W-08): the shared draft says what the other order\'s garments are; the style card shows its grid caption', () => {
+    expect(shipmentsOf('os-shared')).toContain('+ 3 pcs of SO-2026-0151 (DEMO-JKT-01 Nero 3)')
+    expect(draw('os-shared')).toContain('class="fw-os-gcap" aria-hidden="true"')
   })
 
   it('delivered: from the carrier with its proof; set by hand with its reason', () => {
@@ -990,12 +1001,15 @@ describe('F-OS T.1 — the Shipments tab\'s design cases (the states the seed la
     for (const words of ['signed by M. Rossi', 'Set by hand', 'the carrier never scanned it']) expect(text, words).toContain(words)
   })
 
-  it('Seed Karachi Mills: one travelled without a DDT (Set by hand); the packed one says the DDT choice — no country read', () => {
+  it('Seed Karachi Mills: one travelled without a DDT (Set by hand); the packed one says why its DDT cannot be issued — no country read', () => {
     for (const locale of ['en', 'it'] as const) {
       const text = shipmentsOf('os-pakistan', locale)
       expect(text).toContain(locale === 'en' ? 'Travels without a DDT · Set by hand' : 'Viaggia senza DDT · Impostata a mano')
-      expect(text).toContain(locale === 'en' ? 'A Nexus shipment leaves with a DDT.' : 'Una spedizione Nexus parte con un DDT.')
+      // os-fx7 (W-07): worded from the DDT preview's refusals (the company's missing details).
+      expect(text).toContain(locale === 'en' ? 'The DDT cannot be issued: the company has no Italian VAT number (partita IVA), codice fiscale, REA number yet.' : "Il DDT non si può emettere: l'azienda non ha ancora la partita IVA, il codice fiscale, il numero REA.")
     }
+    // An Italian packed shipment whose DDT can be issued says no such line (the split case's packed one has its DDT; none reads a refusal).
+    expect(shipmentsOf('os-split')).not.toContain('cannot be issued')
   })
 
   it('the after-sales doors on the head; Read-only reads every cell and finds no act; a failed part says so', () => {

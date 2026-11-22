@@ -25,6 +25,7 @@ import type { ShipmentRow } from '../where'
 import { copyLinkTo, shipmentHref, shipmentTabHref } from './hrefs'
 import { ParcelsFold } from './ParcelsFold'
 import { useShipSay } from './say'
+import { noBreak } from '../../../../../warehouse/shipments/queue/shared/no-break' // os-fx7 (W-18): numbers whole in titles
 
 /**
  * F-OS-103 (order SHIPMENTS tab, 10-design §5) — one shipment's row: Shipment (its number opens it in Warehouse, its home; Discuss;
@@ -41,6 +42,8 @@ export function ShipmentRowView({ row, view, delivery, order, model, actions }: 
   const o = useT('orders')
   const depth = useT('warehouse-shipments-depth')
   const say = useShipSay() // F-OS-202
+  const frame = useRecordFrame() // os-fx7 (W-10): Show in the thread
+  const f = useT('record-frame')
   const [fold, setFold] = useState(false)
   const [bySize, setBySize] = useState(false)
   const href = shipmentHref(model.prefix, order.companyId, view)
@@ -86,13 +89,15 @@ export function ShipmentRowView({ row, view, delivery, order, model, actions }: 
             then its read doors. */}
         <LineMenuButton label={t('ships.row.more', { number: view.number })} items={rowMenuOf(rowActsOf(row, order.id, delivery, model.can /* F-OS-303: the after-sales doors */), say, (act) => actions?.shipmentsTab?.onAct?.(view.id, act.id, act.holdId), [
           { id: 'open', label: t('ships.carries.notRead'), href },
+          // os-fx7 (W-10): Show in the thread — a read door, where the page has the conversation (hidden without it), at the row's newest moment.
+          ...(view.showAt && frame?.showInThread ? [{ id: 'show', label: f('discuss.showInThread'), onSelect: () => frame.showInThread?.({ record: { type: 'SalesOrder', id: order.id }, at: view.showAt ?? '' }) }] : []),
           { id: 'copy', label: t('ships.row.copyLink'), onSelect: () => copyLinkTo(view.anchor) },
         ])} />
       </div>
       <div className="fw-os-c-f" role="cell">
         {fold && view.fold !== null ? <ParcelsFold row={row} order={order} part={model.shipmentParcels?.[view.id] ?? null} onRetry={() => actions?.shipmentsTab?.onOpenParcels?.(view.id)} /> : null}
       </div>
-      {bySize && view.carries ? <CarriesWindow view={view} onClose={() => setBySize(false)} /> : null}
+      {bySize && view.carries ? <CarriesWindow view={view} order={order} onClose={() => setBySize(false)} /> : null}
     </div>
   )
 }
@@ -152,7 +157,14 @@ function CarriesCell({ view, href, onBySize }: { view: RowModel; href: string; o
           {line.style} {line.colour} {line.mtm ? t('where.units', { count: line.pieces }) : line.pieces}
         </span>
       ))}
-      {carries.other ? <span className="fw-os-mu">{t('ships.carries.other', { count: carries.other.pieces, orders: carries.other.orders.join(', ') })}</span> : null}
+      {/* os-fx7 (W-12): "+ 18 pcs of SEED-SO-0003 (SEED-JKT-02 Black 18)" once Warehouse's read says what; else the count and numbers. */}
+      {carries.others
+        ? carries.others.map((other) => (
+            <span key={other.number} className="fw-os-mu">
+              {t('ships.carries.otherWhat', { count: other.pieces, order: other.number, what: other.what })}
+            </span>
+          ))
+        : carries.other ? <span className="fw-os-mu">{t('ships.carries.other', { count: carries.other.pieces, orders: carries.other.orders.join(', ') })}</span> : null}
       {carries.grids.length > 0 ? (
         <button type="button" className="fw-pt-link" onClick={onBySize} aria-label={t('ships.carries.bySizeOf', { number: view.number })}>
           {t('ships.carries.bySize')}
@@ -162,17 +174,23 @@ function CarriesCell({ view, href, onBySize }: { view: RowModel; href: string; o
   )
 }
 
-/** "What SEED-SH-0012 carries": a read-only centred window, one DS size grid per style (never a drawer). */
-function CarriesWindow({ view, onClose }: { view: RowModel; onClose: () => void }) {
+/**
+ * "What SEED-SH-0012 carries": a read-only centred window (never a drawer) — os-fx7 (W-09): its subtitle "SEED-SO-0002 · 12 pcs ·
+ * Draft"; each style NAMED above its DS size grid, and its facts beside the grid (the style's pieces, one line per colour).
+ */
+function CarriesWindow({ view, order, onClose }: { view: RowModel; order: Order; onClose: () => void }) {
   const t = useT('order-shipments')
+  const o = useT('orders')
   const sales = useT('sales')
   const locale = useLocale()
+  const carries = view.carries
   return (
     <Modal
       open
       onClose={onClose}
       size="lg"
-      title={t('ships.carries.title', { number: view.number })}
+      title={noBreak(t('ships.carries.title', { number: view.number }))}
+      subtitle={noBreak(t('ships.carries.subtitle', { order: order.number, pieces: t('ships.carries.pieces', { count: carries?.pieces ?? 0 }), status: o(`shipStatus.${view.state.status}`) }))}
       footer={
         <Button size="sm" onClick={onClose}>
           {t('ships.carries.close')}
@@ -180,9 +198,27 @@ function CarriesWindow({ view, onClose }: { view: RowModel; onClose: () => void 
       }
     >
       <div className="fw-os-grids">
-        {(view.carries?.grids ?? []).map((grid) => (
-          <SizeGridView key={grid.styleId} colours={grid.colours} sizes={grid.sizes} value={grid.value} caption={`${grid.code}${grid.name ? ` · ${grid.name}` : ''}`} locale={INTL_LOCALE[locale]} copy={sizeGridWords(sales)} />
-        ))}
+        {(carries?.grids ?? []).map((grid) => {
+          const name = `${grid.code}${grid.name ? ` · ${grid.name}` : ''}`
+          return (
+            <section key={grid.styleId} className="fw-os-cg" aria-label={name}>
+              <h3 className="fw-os-cg-h">{name}</h3>
+              <div className="fw-os-cg-b">
+                <SizeGridView colours={grid.colours} sizes={grid.sizes} value={grid.value} caption={name} locale={INTL_LOCALE[locale]} copy={sizeGridWords(sales)} />
+                <ul className="fw-os-cg-f">
+                  <li>
+                    <b>{t('ships.carries.pieces', { count: grid.pieces })}</b>
+                  </li>
+                  {grid.colours.map((colour) => (
+                    <li key={colour.key}>
+                      {colour.label} · {grid.byColour[colour.key] ?? 0}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          )
+        })}
       </div>
     </Modal>
   )
@@ -214,7 +250,10 @@ function StateCellView({ view, order, model }: { view: RowModel; order: Order; m
   if (state.problems > 0)
     out.push(
       <Tag key="problems" tone="danger">
-        {t('ships.state.problems', { count: state.problems })}
+        {/* os-fx7 (W-06): the chip names what — Warehouse's own kind words ("1 tracking problem: Delayed"); not read: the count alone. */}
+        {state.problemKinds
+          ? t('ships.state.problemsWhat', { count: state.problems, what: state.problemKinds.kinds.map((kind) => depth(`problemKind.${kind}`, { days: state.problemKinds?.noScanDays ?? 0 })).join(', ') })
+          : t('ships.state.problems', { count: state.problems })}
       </Tag>,
     )
   if (state.cameBack) {
@@ -254,11 +293,11 @@ function StateCellView({ view, order, model }: { view: RowModel; order: Order; m
         </span>
       ),
     )
-    // W3 (plan D6): where the DDT cannot be issued (Warehouse's checks say why), the shipment may travel without one — said, not assumed.
-    if (state.ddtChoice)
+    // W3 → os-fx7 (W-07, plan D6): ONLY where the DDT cannot be issued — worded from the DDT's refusal (the company's missing details).
+    if (state.ddtBlocked)
       out.push(
         <span key="ddt-choice" className="fw-os-hw">
-          {t('ships.next.ddtChoice')}
+          {t('ships.next.ddtBlocked', { missing: state.ddtBlocked.map((field) => t(`ships.next.ddtMissing.${field}`)).join(', ') })}
         </span>,
       )
   }
@@ -314,7 +353,8 @@ function TravelsCellView({ view, row, fold, onFold, onTracking }: { view: RowMod
       {travels.parcels || travels.toldAt ? (
         <span className="fw-os-mu">
           {[
-            ...(travels.parcels ? [t('ships.travels.parcels', { parcels: t('ships.travels.parcelCount', { count: travels.parcels.count }), tracked: t('ships.travels.tracked', { count: travels.parcels.tracked }) })] : []),
+            // os-fx7 (W-11): "1 parcel" alone where nothing tracks a parcel (our van) — never "· 0 tracked".
+            ...(travels.parcels ? [travels.parcels.tracked === null ? t('ships.travels.parcelCount', { count: travels.parcels.count }) : t('ships.travels.parcels', { parcels: t('ships.travels.parcelCount', { count: travels.parcels.count }), tracked: t('ships.travels.tracked', { count: travels.parcels.tracked }) })] : []),
             // F-OS-305 (os-fx3): "customer told 12 Nov" — when the shipping notice last went; never told: nothing said.
             ...(travels.toldAt ? [t('ships.travels.told', { day: formatDate(travels.toldAt, { locale }) })] : []),
           ].join(' · ')}

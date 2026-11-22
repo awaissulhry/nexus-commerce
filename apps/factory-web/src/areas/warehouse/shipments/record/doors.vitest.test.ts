@@ -169,3 +169,50 @@ describe('every word the shared windows name exists in it and en (the lane\'s na
     }
   })
 })
+
+// ── os-fx7 (30-walk W-05, W-15, W-18) ──
+describe('os-fx7 (W-05): Mark delivered… / Mark returned… open the D6 window — one component on both pages (L6)', () => {
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+  it('the tab and Warehouse\'s own buttons open it ("Mark SEED-SH-… delivered", one act); Add a status keeps its five choices', () => {
+    expect(source('../../../sales/orders/record/shipments/ShipmentTransportDoor.tsx')).toContain("reason: '', mark: true")
+    const view = source('../booking/view/TransportView.tsx')
+    expect(view).toContain("if (dialog.mark && (dialog.status === 'DELIVERED' || dialog.status === 'RETURNED')) return <MarkDialog")
+    expect(view.match(/mark: true \/\* os-fx7 \(W-05\) \*\//g)).toHaveLength(2)
+    expect(view).toContain("actions?.onDialog?.({ kind: 'status', status: null, occurredAt: null, description: '', location: '' })")
+    for (const words of ['title={t(`door.mark.title.${status}`, { number: transport.shipment.number })}', 'goLabel={t(`door.mark.go.${status}`)}', '<Field label={t(`door.mark.on.${status}`)}', "<Field label={t('door.why')} required", "t('door.status.deliveredFinal') : t('door.status.returnedThen')", "say(markWords.orderStays)", "t('door.audit')"]) expect(view, words).toContain(words)
+    expect(source('../../../sales/orders/record/use-shipments-acts.ts')).toContain("orderStays: open.act === 'delivered' ? orderStaysOf(order, row.id) : null")
+  })
+  it('its words, in it and en', async () => {
+    const { CATALOGUE } = await import('../../../../lib/i18n/messages')
+    const { LOCALES } = await import('../../../../lib/i18n/locales')
+    for (const locale of LOCALES) {
+      const words = CATALOGUE[locale]['order-shipments'] ?? {}
+      for (const status of ['DELIVERED', 'RETURNED']) for (const part of ['title', 'go', 'on']) expect(words[`door.mark.${part}.${status}`], `${locale} ${part} ${status}`).toBeTruthy()
+      expect(words['door.mark.title.DELIVERED'], locale).toContain('{number}')
+    }
+    expect(CATALOGUE.en['order-shipments']?.['door.mark.go.DELIVERED']).toBe('Mark delivered')
+    expect(CATALOGUE.en['order-shipments']?.['door.mark.orderStays.PARTLY_SHIPPED_other']).toBe('The order stays Partly shipped: {count} garments are not delivered yet.')
+  })
+})
+
+describe('os-fx7 (W-15): the expected arrival\'s act with no day set', () => {
+  it('"Clear the day" only where a day is set and emptied; else "Save the day"', () => {
+    const view = readFileSync(new URL('../booking/view/TransportView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("dialog.day === '' && transport.shipment.expectedDeliveryAt ? t('door.eta.clear') : t('door.eta.go')")
+  })
+})
+
+describe('os-fx7 (W-18): a record number never breaks inside a dialog title (P0-B6)', () => {
+  it('each number in its own unbroken span; the words unchanged', async () => {
+    const { noBreak } = await import('../queue/shared/no-break')
+    const { renderToStaticMarkup } = await import('react-dom/server')
+    const { createElement, Fragment } = await import('react')
+    const html = renderToStaticMarkup(createElement(Fragment, null, noBreak('Take SEED-SO-0002 off SEED-SH-0004')))
+    expect(html).toBe('Take <span class="fw-nb">SEED-SO-0002</span> off <span class="fw-nb">SEED-SH-0004</span>')
+    expect(noBreak('Mark delivered')).toBe('Mark delivered')
+    expect(renderToStaticMarkup(createElement(Fragment, null, noBreak('Split SH-2026-0072')))).toContain('<span class="fw-nb">SH-2026-0072</span>')
+    for (const file of ['../queue/shared/DepthDialog.tsx', './view/DialogFrame.tsx']) expect(readFileSync(new URL(file, import.meta.url), 'utf8'), file).toContain('title={noBreak(title)}')
+    expect(readFileSync(new URL('../queue/shared/no-break.css', import.meta.url), 'utf8')).toContain('white-space: nowrap')
+  })
+})
+// ── end os-fx7 ──
