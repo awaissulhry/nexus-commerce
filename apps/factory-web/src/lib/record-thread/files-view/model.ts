@@ -682,6 +682,14 @@ export interface CustomerAsk {
 /** An act of a card's ⋯ on the order's own files (any other file's ⋯: Open in the conversation, Open on its home ›). */
 export type OrderFileAct = 'newVersion' | 'versions' | 'whoCanSee' | 'markPriced' | 'unmarkPriced' | 'rename' | 'useOn' | 'delete'
 
+/**
+ * fx7w (end check 2): Read-only on the order's FILES (L3) is a reader who holds no right that acts on files or asks — not the page's
+ * "changes no order" (a Factory designer or a pattern maker changes no order, yet uploads the file asked of them). The read's `may`
+ * still decides each act.
+ */
+export const FILES_ACT_RIGHTS: readonly string[] = ['files.upload', 'files.manage', 'files.delete', 'tasks.manage']
+export const filesReadOnly = (permissions: readonly string[]): boolean => !FILES_ACT_RIGHTS.some((right) => permissions.includes(right))
+
 /** A file of the order itself or of one of its lines: its acts live on its card (production, quality, shipment, invoice files: their home's). */
 export const isOrderOwn = (file: Pick<OrderFile, 'from'>, orderId: string): boolean => (file.from.type === 'SalesOrder' && file.from.id === orderId) || file.from.type === 'SalesOrderLine'
 
