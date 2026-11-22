@@ -430,7 +430,8 @@
         "NOT_LEFT_OR_PACKED": "An expected arrival is typed once the goods are packed.",
         "CANCELLED": "The shipment is cancelled.",
         "ARRIVED": "It is delivered or came back already: its arrival is known."
-      }
+      },
+      "why": "The customer reads the expected arrival: say why it changes (at least {min} characters)."
     },
     "done": {
       "unpacked": "{number} is unpacked: it is a draft again.",

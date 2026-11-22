@@ -251,16 +251,40 @@ export function statusBody(dialog: Extract<TransportDialog, { kind: 'status' }>,
   }
 }
 
-/** What stops the expected arrival: a day (or empty: cleared), not before the goods left, at most a year ahead; why at most 500. */
+/**
+ * What stops the expected arrival: a day (or empty: cleared), not before the goods left, at most a year ahead; why at most 500.
+ * F-OS-306 (os-fx6) — the server's own rule (etaProblems): the day's noon (what is sent) not before the goods left (no day's grace);
+ * and changing or clearing an expected arrival the customer already reads says why (3 to 500).
+ */
 export function etaProblem(dialog: Extract<TransportDialog, { kind: 'eta' }>, transport: Pick<Transport, 'shipment'>, now: Date = new Date()): Words | null {
   if (dialog.reason.trim().length > ETA_LIMITS.reasonMax) return words('transport.form.tooLong', { max: ETA_LIMITS.reasonMax })
-  if (dialog.day === '') return transport.shipment.expectedDeliveryAt ? null : words('door.eta.pickDay')
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dialog.day)) return words('door.eta.notADay')
-  const at = Date.parse(`${dialog.day}T12:00:00Z`)
-  if (transport.shipment.shippedAt && at < Date.parse(transport.shipment.shippedAt) - 86_400_000) return words('door.eta.beforeLeft')
-  if (at > now.getTime() + ETA_LIMITS.aheadDays * 86_400_000) return words('door.eta.tooFar')
+  if (dialog.day === '' && !transport.shipment.expectedDeliveryAt) return words('door.eta.pickDay')
+  if (dialog.day !== '') {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dialog.day)) return words('door.eta.notADay')
+    const at = Date.parse(`${dialog.day}T12:00:00Z`)
+    if (transport.shipment.shippedAt && at < Date.parse(transport.shipment.shippedAt)) return words('door.eta.beforeLeft')
+    if (at > now.getTime() + ETA_LIMITS.aheadDays * 86_400_000) return words('door.eta.tooFar')
+  }
+  if (etaReasonNeeded(dialog, transport) && dialog.reason.trim().length < ETA_LIMITS.reasonMin) return words('door.eta.why', { min: ETA_LIMITS.reasonMin })
   return null
 }
+
+// ── F-OS-306 (os-fx6): the dialog keeps the server's ETA rule ──
+/** The first day the picker offers: the first whose noon (what is sent) is not before the goods left; none before they left. */
+export function etaMinDayOf(shippedAt: string | null | undefined): string | undefined {
+  const left = shippedAt ? Date.parse(shippedAt) : Number.NaN
+  if (!Number.isFinite(left)) return undefined
+  const day = new Date(left).toISOString().slice(0, 10)
+  return Date.parse(`${day}T12:00:00.000Z`) >= left ? day : new Date(left + 86_400_000).toISOString().slice(0, 10)
+}
+
+/** Changing or clearing an expected arrival the customer already reads (the portal shows it) says why — as the server asks. */
+export function etaReasonNeeded(dialog: Pick<Extract<TransportDialog, { kind: 'eta' }>, 'day'>, transport: Pick<Transport, 'shipment'>): boolean {
+  const before = transport.shipment.expectedDeliveryAt ? Date.parse(transport.shipment.expectedDeliveryAt) : null
+  if (before === null) return false
+  return dialog.day === '' || Date.parse(`${dialog.day}T12:00:00.000Z`) !== before
+}
+// ── end F-OS-306 ──
 
 /** The expected arrival's body: the day at noon Rome-safe (UTC noon keeps the day in every zone), or null to clear it. */
 export const etaBody = (dialog: Extract<TransportDialog, { kind: 'eta' }>, transport: Pick<Transport, 'shipment'>): { version: number; expectedDeliveryAt: string | null; reason?: string } => {
