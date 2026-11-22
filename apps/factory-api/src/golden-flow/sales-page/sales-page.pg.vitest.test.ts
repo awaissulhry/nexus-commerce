@@ -1340,8 +1340,8 @@ describe('B-OP-071 golden flow order page: the order page’s acts on Alpha’s 
       const { thisOrder } = await settlementOf(orderId)
       expect([thisOrder.paid, thisOrder.stillToPay], orderId).toEqual([row.paid, row.balance])
     }
-    expect((await settlementOf(fx.o1)).thisOrder).toEqual({ paid: 7500, stillToPay: 16900, invoicedShare: 24400, depositsPaid: 0 })
-    expect((await settlementOf(fx.o2)).thisOrder).toEqual({ paid: 22500, stillToPay: 50700, invoicedShare: 73200, depositsPaid: 0 })
+    expect((await settlementOf(fx.o1)).thisOrder).toEqual({ paid: 7500, stillToPay: 16900, invoicedShare: 24400, depositsPaid: 0, writtenOff: 0 })
+    expect((await settlementOf(fx.o2)).thisOrder).toEqual({ paid: 22500, stillToPay: 50700, invoicedShare: 73200, depositsPaid: 0, writtenOff: 0 })
     // The shared invoice beside it: its whole, this order's share and what of it is open, the freight apart, the other order it bills.
     const first = ((await settlementOf(fx.o1)).invoices as Json[]).find((invoice) => invoice.id === fx.invoice)!
     expect(first).toMatchObject({ docType: 'TD24', grossTotal: 98820, paidAmount: 30000, share: 24400, openShare: 16900, freight: 1220, otherOrders: [{ id: fx.o2, number: 'T-OP71-SO-2' }], otherOrdersHidden: 0 })

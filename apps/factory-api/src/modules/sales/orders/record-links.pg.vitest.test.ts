@@ -262,11 +262,19 @@ describe('B-OS-004: shipment-level complaints, returns by the order’s lines, t
       `INSERT INTO "Complaint" (id, "tenantId", "companyId", "partyId", number, channel, "receivedAt", description, "shipmentId", status) VALUES ($1, $2, $3, $4, 'SEED-CMP-9903', 'EMAIL', now(), 'Made-up words of another customer.', $5, 'NEW')`,
       [newId(), A.tenant, order.companyId, other.partyId, shipment.id],
     ).catch(() => null)
+    // os-fx2: a complaint that names the order only (no shipment).
+    await admin(
+      `INSERT INTO "Complaint" (id, "tenantId", "companyId", "partyId", number, channel, "receivedAt", description, "salesOrderId", status) VALUES ($1, $2, $3, $4, 'SEED-CMP-9904', 'EMAIL', now(), 'Made-up words about the order only.', $5, 'NEW')`,
+      [newId(), A.tenant, order.companyId, order.partyId, order.id],
+    )
     const answer = await linksOf(order.id)
     expect((answer.complaints as Json[]).find((row) => row.number === 'SEED-CMP-9902')).toMatchObject({ status: 'NEW', shipment: { id: shipment.id, number: shipment.number } })
     expect((answer.complaints as Json[]).map((row) => row.number)).not.toContain('SEED-CMP-9903')
-    // The order's own complaint names no shipment.
-    expect((answer.complaints as Json[]).find((row) => row.number === 'SEED-CMP-0001')).toMatchObject({ shipment: null })
+    // os-fx2: the order's own seeded complaint names the order AND a shipment (seed/returns.ts: the jacket that left with
+    // SEED-SH-0001): it shows with that shipment. A complaint that names the order only reads no shipment.
+    const named = await one<{ id: string; number: string }>(`SELECT s.id, s.number FROM "Complaint" c JOIN "Shipment" s ON s.id = c."shipmentId" WHERE c."tenantId" = $1 AND c.number = 'SEED-CMP-0001'`, [A.tenant])
+    expect((answer.complaints as Json[]).find((row) => row.number === 'SEED-CMP-0001')).toMatchObject({ shipment: { id: named.id, number: named.number } })
+    expect((answer.complaints as Json[]).find((row) => row.number === 'SEED-CMP-9904')).toMatchObject({ status: 'NEW', shipment: null })
     expect(answer.truncated).toEqual({ complaints: false, returns: false })
     // Another customer's rep still finds no order.
     expect((await call('otherRep', 'GET', `/sales/orders/${order.id}/links`)).statusCode).toBe(404)
@@ -279,11 +287,12 @@ describe('B-OS-004: shipment-level complaints, returns by the order’s lines, t
     const source = await one<{ id: string }>(`SELECT id FROM "ReturnAuthorisation" WHERE "salesOrderId" = $1 AND "partyId" = $2 ORDER BY number LIMIT 1`, [order.id, order.partyId])
     const rma = newId()
     // A copy of the order's return, past the guards (the read is what is tested): it names the SECOND order and makes it its
-    // replacement, with 2 pieces of this order's line and 1 of the second order's.
+    // replacement, with 2 pieces of this order's line and 1 of the second order's. os-fx2: no scan code of its own (the source's
+    // is unique in the tenant — seed/service.ts gives SEED-RMA-0002 one; a null is not compared).
     await replica(`
       CREATE TEMP TABLE os_rma AS SELECT * FROM "ReturnAuthorisation" WHERE id = '${source.id}';
       CREATE TEMP TABLE os_rma_line AS SELECT * FROM "ReturnLine" WHERE "returnId" = '${source.id}' ORDER BY seq LIMIT 1;
-      UPDATE os_rma SET id = '${rma}', number = 'SEED-RMA-9901', "salesOrderId" = '${second.id}', "replacementOrderId" = '${second.id}';
+      UPDATE os_rma SET id = '${rma}', number = 'SEED-RMA-9901', "salesOrderId" = '${second.id}', "replacementOrderId" = '${second.id}', "scanCode" = NULL;
       INSERT INTO "ReturnAuthorisation" SELECT * FROM os_rma;
       DROP TABLE os_rma;`)
     try {

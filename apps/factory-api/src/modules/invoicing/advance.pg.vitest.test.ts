@@ -80,6 +80,8 @@ const SESSIONS: Record<string, () => SessionContext> = {
   warehouse: () => office(A.tenant, [grant(SHIPPING)]),
   quality: () => office(A.tenant, [grant(TRAVEL_DOCUMENT_PERMISSIONS)]),
   otherTenant: () => office(B.tenant, [grant(SALES)]),
+  // om-fx1s (end check 1): another tenant's money-plan holder — it passes the route's right, so the order answers as unknown (404).
+  otherTenantMoneyPlan: () => office(B.tenant, [grant(['orders.view', 'orders.moneyPlan'])]),
   floor: () => ({ audience: 'floor', tenantId: A.tenant, actorId: newId(), siteId: A.siteA1, deviceId: newId(), grants: [grant(SALES)] }),
   partner: () => ({ audience: 'partner', tenantId: A.tenant, actorId: newId(), partyId: A.brand, grants: [grant(SALES)] }),
 }
@@ -213,7 +215,10 @@ describe('the office opens the balance before shipping: a deposit request of its
     expect((await wall('sales', 'POST', url(ids.balanceStep), { version: balance.version, dueDate: addDays(TODAY(), 10) })).status).toBe(403)
     expect((await wall('floor', 'POST', url(ids.balanceStep), { version: balance.version, dueDate: addDays(TODAY(), 10) })).status).toBe(403)
     expect((await wall('partner', 'POST', url(ids.balanceStep), { version: balance.version, dueDate: addDays(TODAY(), 10) })).status).toBe(403)
-    expect((await wall('otherTenant', 'POST', url(ids.balanceStep), { version: balance.version, dueDate: addDays(TODAY(), 10) })).status).toBe(404)
+    // B-OM-018: the right is orders.moneyPlan now — another tenant's person who holds it reads A's order as unknown (404); one
+    // without it is refused by the route's right first (403).
+    expect((await wall('otherTenantMoneyPlan', 'POST', url(ids.balanceStep), { version: balance.version, dueDate: addDays(TODAY(), 10) })).status).toBe(404)
+    expect((await wall('otherTenant', 'POST', url(ids.balanceStep), { version: balance.version, dueDate: addDays(TODAY(), 10) })).status).toBe(403)
     // Nothing was made.
     expect(await admin('SELECT count(*)::int AS n FROM "DepositRequest" WHERE "orderId" = $1', [moneyA.shipping.quality.serialSalesOrderId])).toEqual([{ n: 1 }])
     // The invoice of the step waits for its request, and says which route opens it.
