@@ -30,7 +30,7 @@ describe('one list, newest first, both kinds', () => {
     expect(after.open.map((row) => row.number)).toEqual(['RMA-0007', 'CMP-0012'])
     expect(after.closed.map((row) => row.number)).toEqual(['CMP-0009'])
     const [rma, cmp] = after.open
-    expect(rma).toMatchObject({ kind: 'return', about: { kind: 'returnLines' }, waiting: true, replacement: { id: 'so-31', number: 'SEED-SO-0031' }, what: [{ key: 'ships.carries.pieces', params: { count: 4 } }] })
+    expect(rma).toMatchObject({ kind: 'return', about: { kind: 'order' } /* os-fx7 (W-13): "Whole order" */, waiting: true, replacement: { id: 'so-31', number: 'SEED-SO-0031' }, what: [{ key: 'ships.carries.pieces', params: { count: 4 } }] })
     expect(rma!.next).toEqual([{ key: 'after.next.wants', words: { outcome: { ns: 'orders', key: 'links.wanted.REPLACE' } } }])
     expect(cmp).toMatchObject({ kind: 'complaint', about: { kind: 'shipment', id: 'sh-11', number: 'SEED-SH-0011', onThisOrder: true }, waiting: false, what: [{ ns: 'complaints', key: 'category.FIT' }, { ns: 'orders', key: 'links.severity.MAJOR' }] })
     expect(cmp!.next).toEqual([{ key: 'after.next.answerDue', days: { day: '2026-11-28' } }])

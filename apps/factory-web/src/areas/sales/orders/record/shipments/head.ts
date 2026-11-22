@@ -49,6 +49,9 @@ export function headOf(order: Pick<Order, 'status' | 'progress' | 'chain'>, wher
     } else if (row.status === 'SHIPPED' && delivery && delivery.openProblems > 0) {
       facts.push(word('head.problem', { number: row.number, count: delivery.openProblems }))
       tone = 'warning'
+    } else if (row.status === 'SHIPPED' && row.transportBy === 'SENDER' && !row.expectedDeliveryAt) {
+      // os-fx7 (W-11): our van reports its own delivery (a status typed in Warehouse): not "on its way" with nothing to follow.
+      facts.push(word('head.vanNotReported', { number: row.number }))
     } else if (row.status === 'SHIPPED') facts.push(row.expectedDeliveryAt ? word('head.expected', { number: row.number }, { instants: { day: row.expectedDeliveryAt } }) : word('head.onItsWay', { number: row.number }))
   }
   parts.push(...facts.slice(0, MAX_FACTS))
