@@ -346,6 +346,8 @@ export const orderView = output({
          * "Another delivery address" leaves it out); null: the order's own address as sent, or no shipping.view over its site.
          */
         shipToAddressId: id().nullable(),
+        /** B-OS-022 (os-fx3): when the shipping notice last went to the customer ("Customer told {day}"); null: never, or no shipping.view. */
+        noticeSentAt: instant().nullable(),
         /**
          * With shipping.view over its site (else empty): its parcels in order — the label's number and the carrier's https page
          * (`source` LABEL, `live`: a carrier tracks it); a TEST label or none: no number, `source` null — and what each holds.
@@ -360,6 +362,8 @@ export const orderView = output({
             live: z.boolean(),
             contents: z.array(shipmentPieces),
             otherPieces: z.number().int(),
+            /** B-OS-022 (os-fx3): its weight in kilograms (four places, as Warehouse's parcels); null: not weighed yet. */
+            grossWeightKg: z.string().nullable(),
           }),
         ),
         /** What this reader may do on it, each by its right over its company, site and customer (the doors are hidden without). */

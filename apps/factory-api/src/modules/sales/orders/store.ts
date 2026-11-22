@@ -11,6 +11,8 @@ import { orderRefsOfShipments, shipmentsOfOrderWhere } from '../../shipping/ship
 import { holdsInForceBy, type HoldRow } from '../../shipping/holds/store'
 // B-OS-002 (order shipments tab): planned and ready now by Warehouse's own backorder reader (one rule).
 import { readBackorders } from '../../shipping/shipments/backorder'
+// B-OS-022 (os-fx3): when the shipping notice last went to the customer ("Customer told {day}"), by the shipping module's reader.
+import { noticeSentAtOf } from '../../shipping/store'
 
 /**
  * The sales orders' reads (factory-db sales.prisma SalesOrder, SalesOrderLine, SalesOrderLineSize, and what follows an
@@ -312,7 +314,8 @@ const SHIPMENT_DETAIL = {
   // ── end B-OS-001 ──
 } as const satisfies Prisma.ShipmentSelect
 // B-OS-022: + the number (and link) typed by hand for a parcel no label tracks — named, an office read (the floor reads none of it).
-const PARCEL_DETAIL = { shipmentId: true, seq: true, trackingNumber: true, trackingUrl: true, carrierParcelId: true, /* B-OS-001 */ id: true, /* B-OS-022 */ manualTrackingNumber: true, manualTrackingUrl: true } as const satisfies Prisma.ParcelSelect
+// B-OS-022 (os-fx3): + its weight (Parcel.grossWeightKg, the tracking window's "Parcel 2 of 3 · 27.5 kg").
+const PARCEL_DETAIL = { shipmentId: true, seq: true, trackingNumber: true, trackingUrl: true, carrierParcelId: true, /* B-OS-001 */ id: true, /* B-OS-022 */ manualTrackingNumber: true, manualTrackingUrl: true, /* os-fx3 */ grossWeightKg: true } as const satisfies Prisma.ParcelSelect
 /** B-OS-001: one shipment of the order as its detail is read. */
 export type ShipmentDetailRow = Prisma.ShipmentGetPayload<{ select: typeof SHIPMENT_DETAIL }>
 
@@ -333,6 +336,8 @@ export interface ShipmentDetails {
   /** A cancelled shipment merged into another: that one (the newest shipping.merge audit row naming it). */
   readonly mergedInto: ReadonlyMap<string, { readonly id: string; readonly number: string }>
   // ── end B-OS-001 ──
+  /** B-OS-022 (os-fx3): when each shipment's shipping notice last went to the customer (absent: never). */
+  readonly noticeSentAt: ReadonlyMap<string, Date>
 }
 
 // ── B-OS-001 (order shipments tab; 13-backend §1) ──
@@ -400,7 +405,7 @@ async function readMergedInto(db: Reader, cancelledIds: readonly string[]): Prom
  * DDT. The view decides what each reader may see of it.
  */
 export async function readShipmentDetails(db: Reader, shipmentIds: readonly string[]): Promise<ShipmentDetails> {
-  if (shipmentIds.length === 0) return { shipments: new Map(), parcels: [], ddts: new Map(), /* B-OS-001 */ lineCounts: [], parcelCounts: [], holds: new Map(), parents: new Map(), mergedInto: new Map() }
+  if (shipmentIds.length === 0) return { shipments: new Map(), parcels: [], ddts: new Map(), /* B-OS-001 */ lineCounts: [], parcelCounts: [], holds: new Map(), parents: new Map(), mergedInto: new Map(), /* os-fx3 */ noticeSentAt: new Map() }
   const rows = await db.shipment.findMany({ where: { id: { in: [...shipmentIds] } }, select: SHIPMENT_DETAIL })
   const parcels = await db.parcel.findMany({ where: { shipmentId: { in: [...shipmentIds] } }, select: PARCEL_DETAIL, orderBy: [{ shipmentId: 'asc' }, { seq: 'asc' }] })
   const ddts = await db.ddt.findMany({ where: { shipmentId: { in: [...shipmentIds] } }, select: { id: true, shipmentId: true, number: true, documentDate: true }, orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }] })
@@ -414,7 +419,8 @@ export async function readShipmentDetails(db: Reader, shipmentIds: readonly stri
   const parents = new Map((parentIds.length > 0 ? await db.shipment.findMany({ where: { id: { in: parentIds } }, select: { id: true, number: true } }) : []).map((row) => [row.id, row.number]))
   const mergedInto = await readMergedInto(db, rows.filter((row) => row.status === 'CANCELLED').map((row) => row.id))
   // ── end B-OS-001 ──
-  return { shipments: new Map(rows.map((row) => [row.id, row])), parcels, ddts: live, /* B-OS-001 */ ...pieces, holds, parents, mergedInto }
+  const noticeSentAt = await noticeSentAtOf(db, shipmentIds) // B-OS-022 (os-fx3): one read for all the order's shipments
+  return { shipments: new Map(rows.map((row) => [row.id, row])), parcels, ddts: live, /* B-OS-001 */ ...pieces, holds, parents, mergedInto, /* os-fx3 */ noticeSentAt }
 }
 // ── end B-OP-023 ──
 

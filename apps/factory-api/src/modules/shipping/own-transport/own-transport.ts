@@ -32,6 +32,8 @@ import { command, type CommandCaller, type CommandTools, type CommandTx } from '
 import { liveDdtOf } from '../ddt/store'
 import { officeShipment } from '../shipments/shipments'
 import { readShipment, type ShipmentHeader } from '../store'
+// B-OS-022 (os-fx3): when the shipping notice last went to the customer, for the tracking window's "Customer told {day}".
+import { noticeSentAtOf } from '../store'
 // B-OP-034: the orders a shipment carries (its lines' orders).
 import { ordersOfShipment } from '../shipments/orders-of'
 
@@ -82,7 +84,9 @@ async function transportView(db: CommandTx, shipmentId: string) {
   const shipment = (await readShipment(db, shipmentId))!
   const facts = await factsOf(db, shipment)
   // B-OS-022: each parcel with its label's number (read only) or the number typed for it, and whether one may be typed now.
-  const parcelRows = await db.parcel.findMany({ where: { shipmentId: shipment.id }, select: { id: true, seq: true, trackingNumber: true, carrierParcelId: true, trackingUrl: true, manualTrackingNumber: true, manualTrackingUrl: true }, orderBy: { seq: 'asc' } })
+  // os-fx3: + its weight ("Parcel 2 of 3 · 27.5 kg"), and when the shipping notice last went to the customer.
+  const parcelRows = await db.parcel.findMany({ where: { shipmentId: shipment.id }, select: { id: true, seq: true, trackingNumber: true, carrierParcelId: true, trackingUrl: true, manualTrackingNumber: true, manualTrackingUrl: true, /* os-fx3 */ grossWeightKg: true }, orderBy: { seq: 'asc' } })
+  const noticeSentAt = (await noticeSentAtOf(db, [shipment.id])).get(shipment.id) ?? null
   const events = await db.trackingEvent.findMany({
     where: { shipmentId: shipment.id, source: 'MANUAL' },
     select: { id: true, status: true, description: true, location: true, occurredAt: true, recordedAt: true, createdById: true },
@@ -107,6 +111,8 @@ async function transportView(db: CommandTx, shipmentId: string) {
       returnedAt: shipment.returnedAt ? toUtcIso(shipment.returnedAt) : null,
       /** B-OS-016: the expected arrival (the carrier's, or typed by hand where no carrier feed tracks it). */
       expectedDeliveryAt: shipment.expectedDeliveryAt ? toUtcIso(shipment.expectedDeliveryAt) : null,
+      /** B-OS-022 (os-fx3): when the shipping notice last went to the customer ("Customer told {day}"); null: never. */
+      noticeSentAt: noticeSentAt ? toUtcIso(noticeSentAt) : null,
     },
     arrangement: arrangementOf(facts),
     ddt: facts.ddt,
@@ -131,6 +137,8 @@ async function transportView(db: CommandTx, shipmentId: string) {
         seq: parcel.seq,
         label: parcel.trackingNumber !== null || parcel.carrierParcelId !== null ? { number: parcel.trackingNumber, test: isTestLabel(parcel.carrierParcelId), url: trackingPageOf(parcel.trackingUrl) } : null,
         typed: parcel.manualTrackingNumber !== null ? { number: parcel.manualTrackingNumber, url: parcel.manualTrackingUrl } : null,
+        // os-fx3: its weight, as Warehouse's parcels read it (kilograms, four places; null: not weighed yet).
+        grossWeightKg: parcel.grossWeightKg === null ? null : parcel.grossWeightKg.toFixed(4),
         may: { allowed: trackingRefusal(facts) === null && own === null, refusal: trackingRefusal(facts) ?? (own ? { code: own, message: PARCEL_TRACKING_WORDS[own] } : null) },
       }
     }),

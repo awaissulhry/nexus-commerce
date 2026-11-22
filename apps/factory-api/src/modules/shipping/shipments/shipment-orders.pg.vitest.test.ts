@@ -450,7 +450,7 @@ describe('B-OS-001: the order read’s shipment rows — contents, other pieces,
     expect(await rowOf('warehouse', so2(), ids.shared!)).toMatchObject({ contents: [{ lineId: blkLine, size: '52', pieces: 1 }], otherPieces: 0, splitFrom: null })
     // SEED-SH-0002's jacket lies in its one parcel, which has no label yet: no number, no source, not tracked.
     const sh2 = await rowOf('warehouse', so3(), seedA.draftShipmentId)
-    expect(sh2.parcels).toEqual([{ id: seedA.draftParcelId, seq: 1, number: null, url: null, source: null, live: false, contents: [{ lineId: jacketLine(), size: '52', pieces: 1 }], otherPieces: 0 }])
+    expect(sh2.parcels).toEqual([{ id: seedA.draftParcelId, seq: 1, number: null, url: null, source: null, live: false, contents: [{ lineId: jacketLine(), size: '52', pieces: 1 }], otherPieces: 0, /* os-fx3: not weighed yet */ grossWeightKg: null }])
     // What the warehouse may do here, by its grant (no DDT and no holds rights).
     expect(onSo3.may).toEqual({ manage: true, pack: true, ddt: false, holdsManage: false, holdsRelease: false })
   })
@@ -496,6 +496,27 @@ describe('B-OS-001: the order read’s shipment rows — contents, other pieces,
       expect(await rowOf('ordersOnly', so3(), seedA.draftShipmentId)).toMatchObject({ shipToAddressId: null, withheld: ['shipments.detail'] })
     } finally {
       await force(`UPDATE "Shipment" SET "shipToAddressId" = NULL WHERE id = $1`, [seedA.draftShipmentId])
+    }
+  })
+
+  // os-fx3 (B-OS-022; 10-design D5): the tracking window's facts — each parcel's weight and when the customer was last told.
+  it('os-fx3: each parcel’s weight and “Customer told” on the row and on the tracking window’s read; none to a reader without shipping.view', async () => {
+    const transport = async () => ok('warehouse', 'GET', `/shipping/shipments/${seedA.draftShipmentId}/own-transport`)
+    // No shipping notice went for SEED-SH-0002: told never.
+    expect((await rowOf('warehouse', so3(), seedA.draftShipmentId)).noticeSentAt).toBeNull()
+    expect((await transport()).shipment.noticeSentAt).toBeNull()
+    await force(`UPDATE "Parcel" SET "grossWeightKg" = 27.5 WHERE id = $1`, [seedA.draftParcelId])
+    try {
+      const row = await rowOf('warehouse', so3(), seedA.draftShipmentId)
+      expect((row.parcels as Json[]).map((parcel) => [parcel.seq, parcel.grossWeightKg])).toEqual([[1, '27.5000']])
+      // The same figure as Warehouse's own parcels (its record's contents) and the tracking window's read.
+      const record = await ok('warehouse', 'GET', `/shipping/shipments/${seedA.draftShipmentId}`)
+      expect((record.shipment.parcels as Json[]).find((parcel) => parcel.id === seedA.draftParcelId)?.grossWeightKg).toBe('27.5000')
+      expect(((await transport()).parcels as Json[]).map((parcel) => [parcel.seq, parcel.grossWeightKg])).toEqual([[1, '27.5000']])
+      // A reader of orders alone: no parcels, no told day (withheld).
+      expect(await rowOf('ordersOnly', so3(), seedA.draftShipmentId)).toMatchObject({ parcels: [], noticeSentAt: null, withheld: ['shipments.detail'] })
+    } finally {
+      await force(`UPDATE "Parcel" SET "grossWeightKg" = NULL WHERE id = $1`, [seedA.draftParcelId])
     }
   })
 })
