@@ -182,10 +182,13 @@ export async function companyBankDetails(client: FactoryClient | CommandTx, comp
 /** The company's bank account a deposit is paid to, or null when none is on record. Read in the office or system scope. */
 export const depositBankDetailsFor = companyBankDetails
 
-/** The instructions of a request: amount, due date, reference, the company's account (read in the office or system scope). */
-export async function instructionsFor(client: FactoryClient | CommandTx, request: Pick<DepositRow, 'companyId' | 'amount' | 'currency' | 'dueDate' | 'kind'>, documentNumber: string, language: DocumentLanguage): Promise<PaymentInstructions> {
+/**
+ * The instructions of a request: amount, due date, reference, the company's account (read in the office or system scope).
+ * B-OM-009: `documentKind` ORDER when the document is the order's number (a request made on an order): the reference names it.
+ */
+export async function instructionsFor(client: FactoryClient | CommandTx, request: Pick<DepositRow, 'companyId' | 'amount' | 'currency' | 'dueDate' | 'kind'>, documentNumber: string, language: DocumentLanguage, documentKind: 'QUOTE' | 'ORDER' = 'QUOTE'): Promise<PaymentInstructions> {
   const bank = await depositBankDetailsFor(client, request.companyId)
-  return paymentInstructions({ amount: request.amount, currency: request.currency, dueDate: day(request.dueDate), kind: request.kind as DepositKind, documentNumber, bank, language })
+  return paymentInstructions({ amount: request.amount, currency: request.currency, dueDate: day(request.dueDate), kind: request.kind as DepositKind, documentNumber, bank, language, documentKind })
 }
 
 // B-W2b-309 (SAL-248): the non-refundable deposit (caparra penitenziale, c.c. art. 1386), the new kind only ---------------

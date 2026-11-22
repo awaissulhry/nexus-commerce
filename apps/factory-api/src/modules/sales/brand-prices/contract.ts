@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ORDER_PRICE_SOURCES } from '@nexus/factory-domain/sales/price-waterfall/rules' // B-OM-006
 import { defineContract, id, input, instant, output, unitPrice } from '@nexus/factory-domain/core/contracts'
 import { money } from '@nexus/factory-domain/money/marked'
 import { PRICE_MATCHES } from '@nexus/factory-domain/sales/brand-prices/match'
@@ -61,6 +62,8 @@ export const priceCheckView = output({
         /** Ours − the customer's (+ we ask more); null: the customer's is not known. */
         priceDiff: money.price(z.number().int().nullable()),
         row: money.price(rowView.nullable()),
+        /** B-OM-006 (order money tab M2-S2): our price came from the price list (LIST), was set by hand (MANUAL), or changed since the quote (UNKNOWN: no waterfall kept). */
+        ourPriceSource: money.price(z.enum(ORDER_PRICE_SOURCES)),
       }),
     ),
   ),

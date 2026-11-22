@@ -278,6 +278,25 @@ describe('as Owner: the customer’s price per line and for the order, and the p
     expect((await ok('owner', 'GET', `/sales/orders/${closed.id}/price-check`)).mayWrite).toEqual({ allowed: false, why: 'A closed or cancelled order keeps its prices.' })
   })
 
+  // ── B-OM-006 (order money tab M2-S2): where our price came from, per line, from the waterfall the order keeps ──
+  it('B-OM-006: each line says where our price came from — the price list, set by hand, or changed since the quote', async () => {
+    const priced = await alphaOrder('PO-OM006-1')
+    const [first, second] = priced.lines
+    // The waterfalls as an order made from a quote keeps them (copied from its quote lines), written with the rules off.
+    const list = [{ kind: 'LIST', unitPrice: '100', source: { type: 'PriceListEntry', id: randomUUID() }, label: 'List price' }, { kind: 'NET', unitPrice: '100' }]
+    const typed = [{ kind: 'MANUAL', unitPrice: '110', reasonCode: 'NEGOTIATED' }, { kind: 'NET', unitPrice: '110' }]
+    await force(`UPDATE "SalesOrderLine" SET "priceSteps" = $2::jsonb WHERE id = $1`, [first!.id, JSON.stringify(list)])
+    await force(`UPDATE "SalesOrderLine" SET "priceSteps" = $2::jsonb WHERE id = $1`, [second!.id, JSON.stringify(typed)])
+    const check = await ok('owner', 'GET', `/sales/orders/${priced.id}/price-check`)
+    expect(check.lines.map((line: Json) => [line.seq, line.ourPriceSource])).toEqual([
+      [10, 'LIST'],
+      [20, 'MANUAL'],
+    ])
+    // An amendment that changes the price drops the line's steps (the database's rule): "Changed since the quote".
+    await force(`UPDATE "SalesOrderLine" SET "priceSteps" = NULL WHERE id = $1`, [first!.id])
+    expect((await ok('owner', 'GET', `/sales/orders/${priced.id}/price-check`)).lines[0]).toMatchObject({ seq: 10, ourPriceSource: 'UNKNOWN' })
+  })
+
   it('the history: audit rows under OrderBrandPrice with the order as the record id, money-marked; none under the order', async () => {
     const rows = await audits(order.id)
     expect(rows.map((row) => row.action).sort()).toEqual(['brandPrices.change', 'brandPrices.remove', 'brandPrices.set', 'brandPrices.set', 'brandPrices.set'])

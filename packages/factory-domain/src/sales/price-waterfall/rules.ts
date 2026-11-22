@@ -492,3 +492,19 @@ export const FEE_CREDIT_AGAINST_BULK = {
   gate: 'GATE-ACCOUNTANT',
   words: "A fee is credited against the customer's bulk order by a credit note of the invoice that billed it (a fee never invoiced is credited and not invoiced); your accountant confirms the document (UNVERIFIED).",
 } as const
+
+// ── B-OM-006 (order money tab M2-S2): where an order line's price came from, read from the waterfall it keeps ──
+/** LIST: worked out (from the price list, or suggested from the cost); MANUAL: typed or changed by hand; UNKNOWN: no waterfall kept. */
+export const ORDER_PRICE_SOURCES = ['LIST', 'MANUAL', 'UNKNOWN'] as const
+export type OrderPriceSource = (typeof ORDER_PRICE_SOURCES)[number]
+
+/**
+ * An order line's price source from its stored steps (SalesOrderLine.priceSteps, copied from the accepted quote line): a MANUAL
+ * step anywhere (a typed start or a change by hand) → MANUAL; steps without one → LIST; none → UNKNOWN (an amendment that changed
+ * the price drops the steps — "Changed since the quote" — or the line was typed without a waterfall).
+ */
+export function orderPriceSourceOf(steps: readonly { readonly kind: string }[] | null): OrderPriceSource {
+  if (steps === null || steps.length === 0) return 'UNKNOWN'
+  return steps.some((step) => step.kind === 'MANUAL') ? 'MANUAL' : 'LIST'
+}
+// ── end B-OM-006 ──
