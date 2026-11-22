@@ -272,7 +272,6 @@
       "notYet": "Not possible yet"
     },
     "notSent": "Not sent yet",
-    "rowTitle": "Order confirmation v{version}",
     "rowMade": "made {date}",
     "rowSent": "sent {date} (v{version})",
     "open": "Open",

@@ -62,9 +62,10 @@ describe('F-OC-102: Waiting on us — one row each, its door only for who acts (
   })
 
   it('our approval of an old change: the approver\'s turn; the one who asked reads "You asked for this approval: {who} decides"', () => {
-    expect(waitingItemOf(row({ kind: 'YES', door: { kind: 'yes', task: task() } }), { manage: true })).toMatchObject({ face: 'approval', mine: true, who: { key: 'changesTab.who.decides', params: { who: 'Owner' } }, anchor: 'about-Approval-t1' })
+    expect(waitingItemOf(row({ kind: 'YES', door: { kind: 'yes', task: task() } }), { manage: true })).toMatchObject({ face: 'approval', mine: true, who: { key: 'changesTab.who.roleDecides', params: { who: 'Owner' } }, anchor: 'about-Approval-t1' }) // fx8: "The Owner decides"
+    expect(waitingItemOf(row({ kind: 'YES', door: { kind: 'yes', task: task({ approver: { kind: 'PERSON', name: 'Marco Demo', me: false } }) } }), { manage: true }).who).toEqual({ key: 'changesTab.who.decides', params: { who: 'Marco Demo' } })
     expect(waitingItemOf(row({ kind: 'YES', door: { kind: 'yes', task: task({ requester: { name: 'Alex Demo', me: true } }) } }), { manage: true })).toMatchObject({ mine: false, who: { key: 'changesTab.who.youAsked' } })
-    expect(waitingItemOf(row({ kind: 'YES', door: { kind: 'yes', task: task({ approve: { allowed: false, why: null }, reject: { allowed: false, why: null } }) } }), { manage: true })).toMatchObject({ mine: false, who: { key: 'changesTab.who.decides' } })
+    expect(waitingItemOf(row({ kind: 'YES', door: { kind: 'yes', task: task({ approve: { allowed: false, why: null }, reject: { allowed: false, why: null } }) } }), { manage: true })).toMatchObject({ mine: false, who: { key: 'changesTab.who.roleDecides' } })
   })
 
   it('L11: a revision the customer said no to — Sales\' turn ("Sales decides"), its row opens the revision in What changed', () => {

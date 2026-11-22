@@ -102,8 +102,8 @@ function Confirmation({ order, model, actions, prefix }: { order: Order; model: 
       <div className="fw-oc-ag-row">
         <div className="fw-oc-ag-txt">
           <span className="fw-pt-inline">
-            {/* fx6 (walk 12): ONE heading ("Our confirmation"); the version names itself only once one is made. */}
-            {newest ? <strong>{d('confirmation.rowTitle', { version: newest.version })}</strong> : null}
+            {/* fx6 / fx8 (walk 12): ONE heading ("Our confirmation"); the version is said once, in the state line ("v1 · Out of date"). */}
+            {newest ? <strong>{t('changesTab.agreement.version', { version: newest.version })}</strong> : null}
             <Tag tone={STATE_TONE[state]}>{t(`changesTab.agreement.state.${state}`)}</Tag>
           </span>
           {newest || sent ? <span className="fw-pt-sub">{[newest ? d('confirmation.rowMade', { date: formatDate(newest.createdAt, { locale }) }) : null, sent].filter(Boolean).join(' · ')}</span> : null}

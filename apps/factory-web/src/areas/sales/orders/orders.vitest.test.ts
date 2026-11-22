@@ -984,7 +984,7 @@ describe('F-SA-266: what a row discusses — the chip per audience, the office-o
     // F-OC-102: a request waiting on us is a row of Changes › Waiting — its Discuss by the request's reference.
     const requests = read('./record/changes/view/WaitingSection.tsx')
     // F-OC-302: its Discuss is an item of the ONE row ⋯ (RowMenu), by the request's reference.
-    expect(requests).toContain("target: { kind: 'OrderChangeRequest', id: request.id } } : null} />")
+    expect(requests).toContain("target: { kind: 'OrderChangeRequest', id: request.id } } : null} discussLabel={request ? t('changesTab.menu.discussRequest',") // fx8: its own words
     // F-OO-100: Overview's cards are one file each (view/overview/): Next dates and People hold these doors.
     // F-OO-145: a gate's Discuss is an item of its More ▾ now — still by the gate's reference.
     expect(read('./record/view/overview/DatesCard.tsx')).toContain("target: row.gateId ? { kind: 'OrderGate', id: row.gateId } : null")

@@ -74,3 +74,14 @@ describe('F-OC-203: the walls and the language — the sources say it', () => {
     expect(source('../../depth/use-order-depth.ts')).toContain('await askRevisedOrder(api, order, now.amendmentId, customerQuestionOf(order, \'\'), { quotes: readsQuotes }, recipient)')
   })
 })
+
+// fx8 (re-walk N1, L10; 12): a reader without prices is never told to make or send the confirmation; the version is said once.
+describe('fx8: the agreement\'s honest words', () => {
+  it('no price grain: "someone who sees prices makes and sends it"; one heading, the version in the state line', () => {
+    const view = source('./view/AgreementSection.tsx')
+    expect(view).toContain("return t(model.can.price ? 'changesTab.agreement.answer.notSent' : 'changesTab.agreement.answer.notSentNoPrice')")
+    const card = source('../../confirmation/view/ConfirmationCard.tsx')
+    expect(card).not.toContain("d('confirmation.rowTitle'")
+    expect(card).toContain("t('changesTab.agreement.version', { version: newest.version })")
+  })
+})
