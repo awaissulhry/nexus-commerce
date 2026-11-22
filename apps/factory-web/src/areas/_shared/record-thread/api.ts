@@ -243,10 +243,8 @@ export async function officeOnly(api: ApiClient, file: { id: string; version: nu
   await api.request('PUT', `/files/${enc(file.id)}/visibility`, { body: { visibility: ['OFFICE'], partyId: null, version: file.version }, schema: fileAnswer, idempotencyKey: globalThis.crypto.randomUUID() })
 }
 
-/** DELETE /files/<id> ("Delete", files.delete): a legal hold refuses it in the API too. */
-export async function removeFile(api: ApiClient, file: { id: string; version: number }): Promise<void> {
-  await api.request('DELETE', `/files/${enc(file.id)}`, { query: { version: file.version }, schema: fileAnswer })
-}
+// F-OF-303 (D4, S3): "Delete" on every record's Files window deletes the WHOLE document with a reason (file-acts-api deleteDocument);
+// the old DELETE /files/<id> call went with the bulk bar's direct delete.
 
 // ---- B-TH-231: carry a file to another record (B-TH-024) and the records it may go to (same customer or none) ----
 const targetsAnswer = z.object({

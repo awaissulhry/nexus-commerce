@@ -1077,7 +1077,7 @@ function CardMenu({ file, orderId, acts, actions, words }: { file: OrderFile; or
   const href = !isOrderOwn(file, orderId) ? (actions?.orderHrefOf?.(home) ?? null) : null
   if (href) items.push({ id: 'open-on', label: home.type.startsWith('OrderChangeRequest') ? t('order.openOnChanges') : t('order.openOn', { record: home.label }), href })
   if (items.length === 0) return null
-  return <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('acts.menu.label', { name: file.name }), className: 'nds-btn sm icon' }} items={items} />
+  return <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('acts.menu.label', { name: file.name }), className: 'nds-btn quiet sm icon' }} items={items} />
 }
 
 /** F-OF-304: what the last act did — ONE notice on the body (its own words; Dismiss clears it, the next act replaces it). */

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { ApiClient } from '../../../lib/api/client'
-import { isApiError } from '../../../lib/api/errors'
+import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { FileAudience } from '../../../record-panels/model'
 import { downloadLink, setFilePriced } from '../../../record-panels/api'
 import { storeUrl } from '../../../record-panels/store'
@@ -41,14 +41,19 @@ export type CarryFile = Pick<ThreadFile, 'id' | 'name' | 'status'> & { readonly 
 export type ActNotice = { readonly ns: string; readonly key: string; readonly params?: Readonly<Record<string, string | number>>; readonly tone: 'success' | 'danger' | 'warning' }
 export type BulkKind = 'download' | 'share' | 'officeOnly' | 'remove'
 
-/** A refusal of a window's act in words (keys of record-thread-files-view `acts.problem.*`, the API's words when it gives them). */
+/**
+ * A refusal of a window's act in words (keys of record-thread-files-view `acts.problem.*`): changed meanwhile (the version), no right,
+ * gone; else the API's own sentence (a legal hold, a fiscal copy, a paper Nexus made, the same name, why too short — S3's words).
+ */
 export function actProblemOf(error: unknown): { readonly key: string; readonly params?: Readonly<Record<string, string>> } {
   if (!isApiError(error)) return { key: 'acts.problem.failed' }
-  const detail = error.issues.find((issue) => issue.message)?.message ?? (error.message || null)
-  if (error.kind === 'forbidden') return detail ? { key: 'acts.problem.words', params: { detail } } : { key: 'acts.problem.forbidden' }
+  if (error.issues.some((issue) => issuePath(issue) === 'version')) return { key: 'acts.problem.stale' }
+  if (error.kind === 'forbidden') return { key: 'acts.problem.forbidden' }
   if (error.kind === 'not_found') return { key: 'acts.problem.notFound' }
-  if ((error.kind === 'conflict' || error.kind === 'invalid') && detail) return { key: 'acts.problem.words', params: { detail } }
-  if (error.kind === 'conflict') return { key: 'acts.problem.stale' }
+  if (error.kind === 'conflict' || error.kind === 'invalid') {
+    const detail = error.message || error.issues.find((issue) => issue.message)?.message || null
+    return detail ? { key: 'acts.problem.words', params: { detail } } : { key: 'acts.problem.stale' }
+  }
   return { key: 'acts.problem.failed' }
 }
 
@@ -214,7 +219,8 @@ export function useFileActs(
     if (!first) return
     setProblem(null)
     versionFile.current = null
-    if (kind === 'whoCanSee') return setWindow({ kind, items, to: items.every((item) => item.visibility.includes('PARTNER')) ? 'OFFICE' : 'CUSTOMER' })
+    // Who can see: starts on the change the choice makes (all shared: take back; else share) — sharing only with a customer named here.
+    if (kind === 'whoCanSee') return setWindow({ kind, items, to: items.every((item) => item.visibility.includes('PARTNER')) || !latest.current.party || !latest.current.partyId ? 'OFFICE' : 'CUSTOMER' })
     if (kind === 'delete') return setWindow({ kind, items, reason: '' })
     if (kind === 'rename') return setWindow({ kind, items: [first], name: first.name })
     if (kind === 'newVersion') return setWindow({ kind, items: [first], file: null, keepName: true })

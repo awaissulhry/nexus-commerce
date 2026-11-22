@@ -399,6 +399,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     // F-OF-201: "Waiting for files" in this window (the session's rights until the read's `may` lands).
     canAsk: held.has('tasks.manage') && held.has('threads.post'),
     canAskCustomer: held.has('partners.tasks.manage'),
+    partyName: party?.name ?? null, // F-OF-303: Who can see… names this order's customer
   })
   const orderFiles = hostFiles ?? ownOrderFiles
   // ---- end F-SA-237
