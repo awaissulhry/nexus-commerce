@@ -68,3 +68,8 @@
 
 /* ── F-OF-201: a file that came for an ask, still to check (its chip says it; the ring marks the card) ── */
 .fw-rtv-card.fw-of-card.is-asked { border-color: var(--nds-primary); outline: 1px solid var(--nds-primary); }
+
+/* ── F-OF-203: "Upload for this ask" — the asker's words on top of the upload window ── */
+.fw-of-forask { display: flex; flex-direction: column; gap: var(--nds-space-2); padding: var(--nds-space-8) var(--nds-space-10); border: 1px solid var(--nds-tonal-border); border-radius: var(--nds-radius-lg); background: var(--nds-tonal-bg); }
+.fw-of-forask p { margin: 0; }
+.fw-of-forask-words { font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); overflow-wrap: anywhere; }
