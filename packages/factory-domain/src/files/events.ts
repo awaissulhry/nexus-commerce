@@ -112,4 +112,22 @@ export const events = [
     live: { permission: 'orders.view', fields: ['salesOrderId'] },
   }),
   // ---- end B-OF-032
+  // ---- B-OF-015 (order files tab; 13-backend §3): a whole document deleted (every version, with a reason: `fileIds`) and a file's sharing
+  // changed (shared with a customer, a link, a floor, or taken back). Every office screen that reads the record's files re-reads
+  // them. No name, no amount; the record's customer as file.available carries it.
+  defineEvent({
+    type: 'file.removed',
+    context: 'files',
+    description: 'A file was deleted: the whole document, every version of it, with the reason in the audit.',
+    payload: z.strictObject({ fileId: z.uuid(), recordType: z.string(), recordId: z.uuid(), fileIds: z.array(z.uuid()).max(500), partyId: livePartyId() }),
+    live: { permission: 'files.read', fields: ['recordType', 'recordId'] },
+  }),
+  defineEvent({
+    type: 'file.visibility_changed',
+    context: 'files',
+    description: 'Who sees a file changed: shared with a customer, a link or a floor, or taken back to the office.',
+    payload: z.strictObject({ fileId: z.uuid(), recordType: z.string(), recordId: z.uuid(), audiences: z.array(z.enum(['OFFICE', 'FLOOR', 'PARTNER', 'LINK'])), partyId: livePartyId() }),
+    live: { permission: 'files.read', fields: ['recordType', 'recordId'] },
+  }),
+  // ---- end B-OF-015
 ] as const

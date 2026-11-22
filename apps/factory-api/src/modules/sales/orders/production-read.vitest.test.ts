@@ -477,3 +477,12 @@ describe('B-OM-008: the order page re-reads Money on the order settled or not, a
   })
 })
 // ── end B-OM-008 ──
+
+// ---- B-OF-004 (order files tab, PR S3.2): what re-reads the Files tab ---------------------------------------------------------------
+describe('B-OF-004: a document deleted, a share changed, a price mark and every ask event re-read Files', () => {
+  const filesOf = (type: string) => ORDER_LIVE_EVENTS.find((entry) => entry.type === type)?.parts ?? []
+  it('lists each with the files part', () => {
+    for (const type of ['file.available', 'file.removed', 'file.visibility_changed', 'file.priced_changed', 'file_ask.asked', 'file_ask.arrived', 'file_ask.decided', 'file_ask.changed']) expect(filesOf(type), type).toContain('files')
+  })
+})
+// ---- end B-OF-004

@@ -20,4 +20,6 @@ export const manifest = defineManifest({
   'POST /sales/orders/:orderId/file-asks/:askId/accept': manage,
   'POST /sales/orders/:orderId/file-asks/:askId/ask-again': manage,
   'POST /sales/orders/:orderId/file-asks/:askId/chase': manage,
+  // B-OF-035 (S3): what the "Ask for a file…" window may pick — the same right as making an ask, one walled read.
+  'GET /sales/orders/:orderId/file-asks/choices': manage,
 })

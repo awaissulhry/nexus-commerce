@@ -235,7 +235,8 @@ describe('B-PR-10 the brand-wall sweep', () => {
     // B-OF (order files tab, 13-backend §4): every route the Files tab reads or acts on is met by the sweep by itself — swept, never
     // EXEMPT (a customer-limited person gets the same not-found as an unknown id; another order's ask: "File ask not found."). PR S2:
     // the order's files read that now carries its asks (B-OF-033) and the ask commands — make, change, reassign, cancel, answer,
-    // accept, ask again, ask for an update (B-OF-031). The tablet's asks (GET /production/floor-notes/asks) are a floor route.
+    // accept, ask again, ask for an update (B-OF-031). The tablet's asks (GET /production/floor-notes/asks) are a floor route. PR S3:
+    // below.
     for (const key of [
       'GET /sales/orders/:orderId/files',
       'POST /sales/orders/:orderId/file-asks',
@@ -246,6 +247,14 @@ describe('B-PR-10 the brand-wall sweep', () => {
       'POST /sales/orders/:orderId/file-asks/:askId/accept',
       'POST /sales/orders/:orderId/file-asks/:askId/ask-again',
       'POST /sales/orders/:orderId/file-asks/:askId/chase',
+      // ── PR S3: the window's choices (B-OF-035); a whole document deleted, a rename (B-OF-010, 011); the changed upload (B-OF-014), price
+      // mark (B-OF-012, 013) and sharing (B-OF-014 c, 015).
+      'GET /sales/orders/:orderId/file-asks/choices',
+      'POST /files/:fileId/delete-document',
+      'POST /files/:fileId/rename',
+      'POST /files',
+      'POST /files/:fileId/priced',
+      'PUT /files/:fileId/visibility',
     ]) {
       expect(swept.has(key), key).toBe(true)
       expect(EXEMPT[key], key).toBeUndefined()

@@ -89,6 +89,9 @@ export async function portalOrderFiles(app: FastifyInstance, request: FastifyReq
         status: 'AVAILABLE',
         supersededAt: null,
         visibility: { has: 'PARTNER' },
+        // B-OF-005 (order files tab; P2-B1): a customer person who does not see prices is not told a priced file exists (left out,
+        // uncounted: the Documents tab's prices note says it once) — opening it was refused already.
+        ...(reader.seesPrices ? {} : { priced: false }),
         OR: [
           { recordType: 'SalesOrder', recordId: order.id },
           ...(lines.length > 0 ? [{ recordType: 'SalesOrderLine', recordId: { in: lines.map((line) => line.id) } }] : []),

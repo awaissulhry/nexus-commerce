@@ -289,7 +289,8 @@ describe('B-CP-016: the office role "Factory designer" sees no money', () => {
   })
 
   it('works on artwork and samples with customers: exactly the permissions of the design, all declared', () => {
-    expect([...designer.permissions].sort()).toEqual(['files.read', 'files.upload', 'home.view', 'orders.view', 'parties.view', 'product.bom.view', 'product.styles.view', 'sales.inquiries.view', 'sales.samples.view', 'threads.post', 'threads.read', 'views.save'])
+    // B-OF-016 (order files tab; Owner D6): + tasks.manage — the designer may be given tasks and asked for files.
+    expect([...designer.permissions].sort()).toEqual(['files.read', 'files.upload', 'home.view', 'orders.view', 'parties.view', 'product.bom.view', 'product.styles.view', 'sales.inquiries.view', 'sales.samples.view', 'tasks.manage', 'threads.post', 'threads.read', 'views.save'])
     for (const name of designer.permissions) expect(FACTORY_PERMISSIONS.isDeclared(name), name).toBe(true)
     // cp-fx6: templateProblems checks a whole set, which always holds the owner (as above: [owner, …]); the designer adds no problem.
     expect(templateProblems([templateOf('owner')!, designer])).toEqual([])

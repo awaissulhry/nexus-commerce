@@ -622,3 +622,25 @@ describe('B-OS-022: a parcel number typed by hand in the portal', { timeout: SLO
   })
 })
 // ---- end B-OS-022
+
+// ---- B-OF-005 (order files tab, PR S3.2; P2-B1): a priced file is not named to a customer person who does not see prices ----------
+describe('B-OF-005: the order’s files in the portal leave a priced file out for a person without prices', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('the viewer does not get the priced proforma’s name (left out, uncounted); the buyer does', async () => {
+    const so2 = await orderId('SEED-SO-0002')
+    const [source] = await admin<{ id: string }>(`SELECT id FROM "StoredFile" WHERE "tenantId" = $1 AND status = 'AVAILABLE' AND "supersededAt" IS NULL ORDER BY id LIMIT 1`, [T])
+    const id = newId()
+    const changes = { id, recordType: 'SalesOrder', recordId: so2, kind: 'DOCUMENT', contentType: 'application/pdf', originalName: 'T-OF005 proforma with prices.pdf', visibility: ['OFFICE', 'PARTNER'], partyId: P1, floorSiteId: null, priced: true, seriesId: null, versionNo: 1, sourceFileId: null, thumbnailKey: null, exifStrippedAt: null, category: null, storageKey: `t/${T}/c/${companyA}/2026/${newId()}` }
+    await admin('BEGIN')
+    try {
+      await admin("SET LOCAL session_replication_role = 'replica'")
+      await admin(`INSERT INTO "StoredFile" SELECT * FROM jsonb_populate_record(NULL::"StoredFile", (SELECT to_jsonb(f) || $1::jsonb FROM "StoredFile" f WHERE f.id = $2::uuid))`, [JSON.stringify(changes), source!.id])
+      await admin('COMMIT')
+    } catch (error) {
+      await admin('ROLLBACK')
+      throw error
+    }
+    expect(JSON.stringify(await ok(browsers.viewer, `/portal/sales-orders/${so2}/files`))).not.toContain('T-OF005 proforma with prices.pdf')
+    expect(JSON.stringify(await ok(browsers.buyer, `/portal/sales-orders/${so2}/files`))).toContain('T-OF005 proforma with prices.pdf')
+  })
+})
+// ---- end B-OF-005
