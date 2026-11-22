@@ -1168,13 +1168,13 @@ export default defineStage({
       const finance = await flow.desk('finance')
       const { page } = finance
 
-      // L1 (B-OM-016): Accept short (bank charges)… from the deposit row's ⋯ — the missing part stays owed (the final invoice).
+      // L1 (B-OM-016): Accept short (bank charges)… — the missing part stays owed (the final invoice). F-OM-fx3 (W-01): short within the
+      // company's tolerance, it is the deposit row's ONE act (Record a payment moved to its ⋯).
       await finance.go(`/sales/orders/${money.money.id}?tab=money`)
       const deposit = page.locator(`#about-DepositRequest-${money.money.depositRequestId}`)
       await seen(deposit, 60_000)
       await seen(deposit.getByText(OD('moneyTab.plan.pill.PART'), { exact: true }).first())
-      await press(deposit.locator('.fw-om-pr-o').getByRole('button').first())
-      await press(page.getByRole('menuitem', { name: OD('moneyTab.plan.act.ACCEPT_SHORT'), exact: true }))
+      await press(deposit.locator('.fw-om-pr-a').getByRole('button', { name: OD('moneyTab.plan.act.ACCEPT_SHORT'), exact: true }))
       const shortBox = dialog(page)
       await seen(shortBox.getByText(OD('moneyTab.hand.ACCEPT_SHORT.happens.owed'), { exact: true }), 60_000)
       await shortBox.getByRole('textbox', { name: startsWith(OD('moneyTab.hand.reason')) }).fill(MONEY_WORDS.acceptShort)

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import type { ComponentType } from 'react'
 import { describe, expect, it } from 'vitest'
 import { LOCALES } from '../../../../../lib/i18n/locales'
@@ -19,7 +20,7 @@ const AMOUNT = /€|EUR|\d[.,]\d{2}\b/
 
 describe('F-OM T.1: the Money lane\'s gallery cases', () => {
   it('the states the seed lacks are all there (15-steps T.1; not the Simple company)', () => {
-    for (const id of ['om-short', 'om-dlg-short', 'om-dlg-undo', 'om-accepted-short', 'om-waived-again', 'om-replaced', 'om-extra', 'om-on-invoice', 'om-invoices-sales', 'om-undo-held', 'om-settled', 'om-cancelled', 'om-stop-page', 'om-price-diff', 'om-dlg-accept', 'om-price-accepted', 'om-margin', 'om-dlg-cost', 'om-dlg-target', 'om-failed', 'om-role-owner', 'om-role-finance', 'om-role-sales', 'om-role-manager', 'om-role-readonly']) expect(OM_CASES, id).toContain(id)
+    for (const id of ['om-short', 'om-dlg-short', 'om-dlg-undo', 'om-accepted-short', 'om-waived-again', 'om-replaced', 'om-extra', 'om-on-invoice', 'om-invoices-sales', 'om-undo-held', 'om-settled', 'om-cancelled', 'om-stop-page', 'om-price-diff', 'om-dlg-accept', 'om-price-accepted', 'om-margin', 'om-dlg-cost', 'om-dlg-target', 'om-failed', 'om-role-owner', 'om-role-finance', 'om-role-sales', 'om-role-manager', 'om-role-readonly', /* F-OM-fx3 (W-27) */ 'om-dlg-deposit', 'om-dlg-move', 'om-dlg-terms', 'om-dlg-add']) expect(OM_CASES, id).toContain(id)
   })
 
   for (const locale of LOCALES) {
@@ -62,5 +63,44 @@ describe('F-OM T.1: the Money lane\'s gallery cases', () => {
     expect(failed).toContain('Part of the money could not be read')
     expect(failed).not.toContain('Nothing to collect')
     expect(failed).toContain('Try again')
+  })
+
+  // ---- F-OM-fx3 (fix wave 3): the walk's gaps, seen in the gallery ----
+  it('W-01 / W-02: short within the tolerance is "short — probably bank charges" with its hint; over it, "part paid", never short', () => {
+    const short = textOf(draw('om-short'))
+    expect(short).toContain('short — probably bank charges')
+    expect(short).toContain('banks often keep a fee on a transfer')
+    expect(short).toContain('Accept short (bank charges)…')
+    const part = textOf(draw('om-undo-held'))
+    expect(part).toContain('The deposit is part paid')
+    expect(part).not.toContain('short — probably')
+    expect(part).not.toContain('Accept short')
+    expect(part).toContain('TD02 FA-2026-00031 was issued for it')
+  })
+
+  it('W-03 / W-05 / W-25: an accepted short leaves its trace; a cancelled order owes nothing; the shipped case is not "everything is paid"', () => {
+    const accepted = textOf(draw('om-accepted-short'))
+    for (const words of ['Set by hand', 'Bea Esempio', 'stays owed and goes on the final invoice']) expect(accepted, words).toContain(words)
+    const cancelled = textOf(draw('om-cancelled'))
+    expect(cancelled).toContain('Not owed: the order is cancelled')
+    expect(cancelled).toContain('Nothing is owed: the order is cancelled')
+    const shipped = textOf(draw('om-on-invoice'))
+    expect(shipped).not.toContain('Everything is paid')
+    expect(shipped).toContain('Part paid')
+    expect(shipped).toContain('Rejected — fix and resend')
+  })
+
+  it('W-04: no band notice over the Money tab\'s answer (the cancelled reason, a deposit open)', () => {
+    expect(textOf(draw('om-cancelled'))).not.toContain('Il cliente ha ritirato')
+    expect(textOf(draw('om-role-owner'))).not.toContain('Deposit open — due')
+  })
+
+  it('W-22: the Owner reads Totals\' four tiles and How it adds up; W-23: Waive… is the Owner\'s; W-27: the four hand windows draw', () => {
+    const owner = draw('om-role-owner')
+    for (const tile of ['Order total · VAT incl.', 'Invoiced', 'Paid', 'Still to pay', 'How it adds up']) expect(textOf(owner), tile).toContain(tile)
+    // A DS window never draws on the server: the gallery keeps its own window state on Money (a ⋯ item opens, Escape closes).
+    const gallery = readFileSync(new URL('../fixtures.ts', import.meta.url), 'utf8')
+    expect(gallery).toContain("if (model.record.tab === 'money') return inShell(path, createElement(MoneyDesign, { record: model.record, thread, customFields }), model.role)")
+    expect(gallery).toContain('actions: { onDialog: setDialog }')
   })
 })
