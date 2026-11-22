@@ -645,7 +645,7 @@ export function useCustomerDock(partyId: string, tab: string, /* F-OF-303: Who c
   const depthOpen = useRef<(fileId: string) => void>(() => undefined)
   const orderRead = orderFiles.model.read
   const depthFiles = useMemo(() => (orderRead ? orderFilesOf(orderRead).filter((file) => file.version !== undefined).map((file) => ({ id: file.id, originalName: file.name, contentType: file.contentType, version: file.version! })) : null), [orderRead])
-  const depth = useFileDepth({
+  const fileDepth = useFileDepth({
     api,
     record: { type: 'SalesOrder', id: order?.id ?? '' },
     files: depthFiles,
@@ -659,7 +659,7 @@ export function useCustomerDock(partyId: string, tab: string, /* F-OF-303: Who c
         .then(({ preview }) => window.open(storeUrl(preview.url), '_blank', 'noopener'))
         .catch(() => setFilesProblem({ key: 'order.openFailed', at: Date.now() })),
   })
-  depthOpen.current = depth.actions.onOpenVersions
+  depthOpen.current = (fileId) => fileDepth.actions.onOpenVersions?.(fileId)
   // ---- end F-OF-301
   // News of a file (the reader's own live stream: `file.available`, the file's record named) reads the docked order's set again, coalesced.
   const filesAgain = useCoalesced(() => orderFiles.reload(), 800)
@@ -684,7 +684,7 @@ export function useCustomerDock(partyId: string, tab: string, /* F-OF-303: Who c
     /** F-CP-111: a file of that set that could not be opened or shared (a `record-thread-files-view` key), said once by the dock. */
     filesProblem,
     /** F-OF-301 (T): the docked order's Versions… — the page draws its window ONCE (`<DepthDialogs>` in CustomerRecord). */
-    depth,
+    fileDepth,
     /** The record docked now (marked on its row); null: the general conversation or All of <customer>. */
     shown: scope === 'record' ? pick : null,
     /** "Draft kept on SO-…" under the pick. */

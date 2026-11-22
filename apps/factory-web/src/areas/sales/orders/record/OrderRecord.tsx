@@ -597,7 +597,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const depthOpen = useRef<(fileId: string) => void>(() => undefined)
   const orderRead = orderFiles.model.read
   const depthFiles = useMemo(() => (orderRead ? orderFilesOf(orderRead).filter((file) => file.version !== undefined).map((file) => ({ id: file.id, originalName: file.name, contentType: file.contentType, version: file.version! })) : null), [orderRead])
-  const depth = useFileDepth({
+  // fx3w: `fileDepth` (the page's `depth` is the orders in depth, B-W2b-323).
+  const fileDepth = useFileDepth({
     api,
     record: { type: 'SalesOrder', id: readyId ?? '' },
     files: depthFiles,
@@ -611,7 +612,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
         .then(({ preview }) => window.open(storeUrl(preview.url), '_blank', 'noopener'))
         .catch(() => setNotice({ tone: 'danger', words: { key: 'files.openFailed' } })),
   })
-  depthOpen.current = depth.actions.onOpenVersions
+  depthOpen.current = (fileId) => fileDepth.actions.onOpenVersions?.(fileId)
   // ---- end F-OF-301
   // ---- F-OP-215 (11-dock §6.2): the dock gets this container (no read of its own): "All files" opens the Files tab (the dock's scope
   // kept; below 1280 px the full-width thread gives way), a tile opens the file in the ONE viewer there.
@@ -899,7 +900,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     {/* F-SA-244: Who was told of one change (its line's card, History's Told line) — never who read it. */}
     {toldOpen && readyId && <WhoWasToldDialog orderId={readyId} messageId={toldOpen} onClose={() => setToldOpen(null)} />}
     {/* F-OF-301: Versions… of the order's own files — the page's ONE depth window. */}
-    <DepthDialogs depth={depth.model} actions={depth.actions} />
+    <DepthDialogs depth={fileDepth.model} actions={fileDepth.actions} />
     </CustomerOverrideProvider>
   )
 }
