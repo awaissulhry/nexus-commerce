@@ -1972,7 +1972,6 @@
     "hold": "sospensione su {number}",
     "quality": "qualità su {number}",
     "revision": "revisione {revision}",
-    "step": "rata {seq}",
     "yourOrderSeq": "il vostro ordine {seq}"
   },
   "people": {
@@ -3370,7 +3369,8 @@
         "byChange": "{date} · dalla modifica a pagamento rev {revision}",
         "issued": "Emessa",
         "paid": "Pagato",
-        "byHand": "{date} · richiesto a mano"
+        "byHand": "{date} · richiesto a mano",
+        "pageSkipped": "Pagato senza la pagina"
       },
       "payments": {
         "title": "I suoi pagamenti",
@@ -3473,7 +3473,8 @@
       "countPart_one": "{count} documento · {number} è pagata in parte",
       "countPart_other": "{count} documenti · {number} è pagata in parte",
       "countUnpaid_one": "{count} documento · {number} non è ancora pagata",
-      "countUnpaid_other": "{count} documenti · {number} non è ancora pagata"
+      "countUnpaid_other": "{count} documenti · {number} non è ancora pagata",
+      "noNumber": "Ancora senza numero"
     },
     "menu": {
       "copyLinkTotals": "Copia il link a Totali",

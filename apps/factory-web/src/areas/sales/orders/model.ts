@@ -928,7 +928,8 @@ export function depositSteps(request: DepositRequest, invoices: readonly ChainIn
   const sent = request.link !== null
   return {
     requested: 'done',
-    page: sent ? 'done' : open ? 'current' : 'notNeeded',
+    // F-OM-fx5w (N7, P0-B5): a deposit paid without its page ever sent — the step is done (Money says it in its own words), never a pale circle.
+    page: sent ? 'done' : open ? 'current' : paid ? 'done' : 'notNeeded',
     paid: paid ? 'done' : open ? (sent ? 'current' : 'waiting') : 'notNeeded',
     invoice: !needsInvoice ? 'notNeeded' : td02 ? 'done' : paid || (request.paidAmount ?? 0) > 0 ? 'current' : 'waiting',
     sdi: !needsInvoice ? 'notNeeded' : !td02 ? 'waiting' : sdi === 'DELIVERED' ? 'done' : sdi === null ? 'waiting' : 'current',

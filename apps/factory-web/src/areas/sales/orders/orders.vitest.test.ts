@@ -299,6 +299,9 @@ describe('the deposit (Q12: an acconto by bank transfer)', () => {
     expect(depositSteps(deposit({ fiscalDocument: 'NONE', status: 'PAID' }), [], null)).toMatchObject({ invoice: 'notNeeded', sdi: 'notNeeded' })
     // A TD02 of another request is not this one's.
     expect(depositSteps(PAID, [{ ...TD02, depositRequestId: 'another' }], 'DELIVERED')).toMatchObject({ invoice: 'current' })
+    // F-OM-fx5w (N7, P0-B5): paid without the page ever sent — the page's step is done (never a pale circle); waived: not needed.
+    expect(depositSteps(deposit({ status: 'PAID', paidAt: '2026-10-29T09:12:00.000Z', paidAmount: 228384, link: null }), [], null)).toMatchObject({ page: 'done', paid: 'done' })
+    expect(depositSteps(deposit({ status: 'WAIVED' }), [], null).page).toBe('notNeeded')
   })
   it('what is left to pay, and who may send the page and record the payment', () => {
     expect(stillToPay(deposit({ paidAmount: 100000 }))).toBe(128384)
@@ -987,7 +990,8 @@ describe('F-SA-266: what a row discusses — the chip per audience, the office-o
     // F-OM-103 / 104: a plan row's Discuss is an item of its ONE ⋯ (an office note, threads.post): the request's reference, else the
     // step's words; an invoice keeps its door (Invoices & credit notes).
     const plan = read('./record/money/plan.ts')
-    expect(plan).toContain("discuss: request ? { part: word('discuss.deposit'), target: { kind: 'DepositRequest', id: request.id } } : { part: word('discuss.step', { params: { seq: step!.seq } }), target: null }")
+    // F-OM-fx5w (N6): a step by its own name (its title), never its internal number.
+    expect(plan).toContain("discuss: request ? { part: word('discuss.deposit'), target: { kind: 'DepositRequest', id: request.id } } : { part: title, target: null }")
     const row = read('./record/money/view/PlanRow.tsx')
     expect(row).toContain('{ part, target: row.discuss.target, officeOnly: true }')
     expect(row).toContain('if (model.can.threadsPost && frame?.discuss) {')
@@ -1027,7 +1031,7 @@ describe('F-SA-266: what a row discusses — the chip per audience, the office-o
     expect(it).toMatch(/aria-label="Azioni per la riga \d+ · [^"]*"/)
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-      for (const key of ['yourOrder', 'firstLine', 'line', 'shipment', 'invoice', 'deposit', 'request', 'hold', 'quality', 'revision', 'step']) expect(t(`discuss.${key}`, { thing: 'x', seq: 1, name: 'n', number: 'N', kind: 'k', revision: 2 }), `${locale} ${key}`).not.toBe(`discuss.${key}`)
+      for (const key of ['yourOrder', 'firstLine', 'line', 'shipment', 'invoice', 'deposit', 'request', 'hold', 'quality', 'revision' /* F-OM-fx5w (N6): 'step' left — a step is discussed by its own name */]) expect(t(`discuss.${key}`, { thing: 'x', seq: 1, name: 'n', number: 'N', kind: 'k', revision: 2 }), `${locale} ${key}`).not.toBe(`discuss.${key}`)
     }
   })
 })

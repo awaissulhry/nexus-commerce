@@ -211,3 +211,9 @@ describe('F-OM-fx5w: the walk\'s gaps in the head', () => {
     expect(head(shipped, { schedule: SCHEDULE_NONE, role: 'finance', settlement: coded }).parts[1]).toEqual({ key: 'moneyTab.head.stillToPayOn', money: { amount: 532896 }, params: { number: 'FA-2026-00052' } })
   })
 })
+
+describe('F-OM-fx5w: the walk\'s gaps in the views (N7, N8, N10)', () => {
+  it('N7: a paid deposit whose page was never sent — the page\'s step says so in its own words (model.ts depositSteps marks it done)', () => {
+    expect(source('./view/PlanRow.tsx')).toContain("request.status === 'PAID' ? t('moneyTab.plan.step.pageSkipped')")
+  })
+})

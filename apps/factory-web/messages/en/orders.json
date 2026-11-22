@@ -1972,7 +1972,6 @@
     "hold": "hold on {number}",
     "quality": "quality on {number}",
     "revision": "revision {revision}",
-    "step": "payment step {seq}",
     "yourOrderSeq": "your order {seq}"
   },
   "people": {
@@ -3370,7 +3369,8 @@
         "byChange": "{date} · by the priced change rev {revision}",
         "issued": "Issued",
         "paid": "Paid",
-        "byHand": "{date} · asked by hand"
+        "byHand": "{date} · asked by hand",
+        "pageSkipped": "Paid without the page"
       },
       "payments": {
         "title": "Its payments",
@@ -3473,7 +3473,8 @@
       "countPart_one": "{count} document · {number} is part paid",
       "countPart_other": "{count} documents · {number} is part paid",
       "countUnpaid_one": "{count} document · {number} is not paid yet",
-      "countUnpaid_other": "{count} documents · {number} is not paid yet"
+      "countUnpaid_other": "{count} documents · {number} is not paid yet",
+      "noNumber": "No number yet"
     },
     "menu": {
       "copyLinkTotals": "Copy link to Totals",

@@ -345,8 +345,8 @@ describe('F-OM-fx3: the read doors', () => {
     const hand = { act: 'MOVE_DUE', at: '2026-11-18T10:44:00.000Z', by: 'Bea Esempio', reason: 'The customer pays before the fair.' }
     const moved = plan(order('CONFIRMED'), { schedule: { ...SCHEDULE_OPEN, steps: SCHEDULE_OPEN.steps.map((entry) => (entry.kind === 'BEFORE_SHIPPING' ? { ...entry, byHand: hand } : entry)) } }).rows[1]!
     expect(moved.showAt).toBe(hand.at)
-    // A step with nothing behind it yet: no moment, no door.
-    expect(plan(order('CONFIRMED')).rows[1]!.showAt).toBeNull()
+    // F-OM-fx5w (N6): a step with nothing behind it yet was made with the plan — with the order: Show in the thread opens there.
+    expect(plan(order('CONFIRMED')).rows[1]!.showAt).toBe(order('CONFIRMED').createdAt)
     expect(planHistoryHref('/w/DEMO', 'o-1')).toBe('/w/DEMO/admin/audit?type=SalesOrder&record=o-1')
   })
 })
@@ -421,6 +421,7 @@ describe('F-OM-103: the words', () => {
       ...['none', 'allPaid', 'stillOpen', 'overdue', 'nextDue', 'next', 'short', 'partPaid', 'cancelled' /* F-OM-fx3 */].map((answer) => `answer.${answer}`),
       'shortHint', // F-OM-fx3 (W-01)
       ...['restOn', 'restOnPart', 'invoicesOpen'].map((answer) => `answer.${answer}`), // F-OM-fx5w (N3)
+      'step.pageSkipped', // F-OM-fx5w (N7)
       ...['earlier.step', 'earlier.replaced', 'earlier.cancelled', 'setByHand', 'fromChange', 'fold', 'unfold', 'more', 'menu.openInvoice', 'step.page', 'step.byChange', 'step.issued', 'step.paid', 'step.byHand' /* F-OM-fx3 (W-15) */, 'payments.title', 'payments.none', 'payments.ref', 'payments.paidSoFar'],
     ]
     for (const locale of LOCALES) {
@@ -431,7 +432,7 @@ describe('F-OM-103: the words', () => {
   })
 })
 
-// ---- F-OM-fx5w (fix wave 4, the look-only walk 31-A on real data): N1 · N3 in the plan. Every name and number is made up. ----
+// ---- F-OM-fx5w (fix wave 4, the look-only walk 31-A on real data): N1 · N3 · N6 in the plan. Every name and number is made up. ----
 describe('F-OM-fx5w: the walk\'s gaps in Payments', () => {
   const EXTRA = deposit({ id: 'extra-1', amount: 4392, paidAmount: 0, dueDate: '2026-11-23' })
   const fromChange: Schedule['requests'] = [{ id: 'extra-1', milestoneId: null, kind: 'ACCONTO', stepKind: 'DEPOSIT', status: 'OPEN', dueDate: '2026-11-23', fiscalDocument: 'TD02', fromChange: { amendmentId: 'a1', revision: 1 } }]
@@ -466,5 +467,17 @@ describe('F-OM-fx5w: the walk\'s gaps in Payments', () => {
     for (const model of [noStep('sales', coded('PART_PAID')), noStep('manager', null)]) expect(model.answer.flatMap(amountsOf)).toEqual([])
     // Nothing invoiced yet: "nothing is open yet" stays.
     expect(plan(withRequests(order('CONFIRMED', { depositRequired: false }), []), { schedule: SCHEDULE_NONE }).answer).toEqual([{ key: 'moneyTab.plan.answer.none' }])
+  })
+
+  it('N6: a step is discussed by its own name — never its internal number — and opens in the thread like a request', () => {
+    const balance = plan(order('CONFIRMED')).rows[1]!
+    expect(balance.discuss).toEqual({ part: balance.title, target: null })
+    expect(balance.discuss.part).toEqual({ key: 'moneyTab.plan.title', words: { kind: { key: 'moneyTab.plan.kind.BEFORE_SHIPPING' }, share: { key: 'moneyTab.plan.share', pcts: { share: '70' } } } })
+    expect(JSON.stringify(balance.discuss)).not.toContain('discuss.step')
+    expect(balance.showAt).not.toBeNull()
+    // A renamed step is discussed by the name it was given.
+    const renamed = plan(order('CONFIRMED'), { schedule: { ...SCHEDULE_OPEN, steps: SCHEDULE_OPEN.steps.map((entry) => (entry.kind === 'BEFORE_SHIPPING' ? { ...entry, label: 'Saldo fiera', byHand: { act: 'RENAME_STEP', at: '2026-11-18T10:44:00.000Z', by: 'Bea Esempio', reason: 'The customer calls it so.' } } : entry)) } }).rows[1]!
+    expect(renamed.discuss.part).toEqual(renamed.title)
+    expect(renamed.discuss.part.words?.kind).toEqual({ key: 'moneyTab.plan.label', params: { label: 'Saldo fiera' } })
   })
 })

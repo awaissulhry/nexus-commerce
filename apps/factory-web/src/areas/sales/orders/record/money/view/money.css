@@ -155,6 +155,8 @@
 .fw-om-ir-nb > svg { flex: none; color: var(--nds-text-muted); }
 .fw-om-ir-kd { display: none; color: var(--nds-text-2); }
 .fw-om-ir-kn { font-size: var(--nds-font-size-xs); color: var(--nds-text-2); }
+/* F-OM-fx5w (N4): "Also bills SEED-SO-0102 · …" — its words and links on one wrapping line with a gap (the kit's .fw-pt-sub is a block). */
+.fw-om-ir-n > .fw-om-ir-also { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--nds-space-2) var(--nds-space-4); }
 .fw-om-ir-s { grid-area: s; display: flex; gap: var(--nds-space-6); flex-wrap: wrap; align-items: center; }
 .fw-om-ir-p { grid-area: p; display: flex; gap: var(--nds-space-6); align-items: center; }
 .fw-om-ir-t { grid-area: t; display: flex; gap: var(--nds-space-4) var(--nds-space-14); flex-wrap: wrap; font-variant-numeric: tabular-nums; color: var(--nds-text-2); }

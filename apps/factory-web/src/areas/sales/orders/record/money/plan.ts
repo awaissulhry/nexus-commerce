@@ -299,11 +299,14 @@ export function planOf(input: {
     const fromChange = plan?.fromChange ?? null
     const renamed = step?.byHand?.act === 'RENAME_STEP' ? step.label : null
     const share = step?.sharePct ?? (kind === 'EXTRA' || !step ? (request?.depositPct ?? null) : null)
+    const title = titleOf(kind, share, { ofChange: kind === 'EXTRA' && !!fromChange, label: renamed })
+    // F-OM-fx3 (W-08) · F-OM-fx5w (N6): the row's newest moment; a step with nothing behind it yet was made with the plan — with the order.
+    const showAt = [step?.byHand?.at, plan?.byHand?.at, accepted?.at, paidAt, request?.link?.sentAt, request?.createdAt].reduce<string | null>((newest, at) => (at && (!newest || at > newest) ? at : newest), null) ?? (step ? order.createdAt : null)
     return {
       anchor: request ? rowAnchor('DepositRequest', request.id) : rowAnchor('Step', step!.id),
       alias: request && step ? rowAnchor('Step', step.id) : null,
       kind,
-      title: titleOf(kind, share, { ofChange: kind === 'EXTRA' && !!fromChange, label: renamed }),
+      title,
       sub: request && request.kind !== 'ACCONTO' && (DEPOSIT_KINDS as readonly string[]).includes(request.kind) ? word(`depositKind.${request.kind}`) : null,
       step,
       request,
@@ -319,7 +322,7 @@ export function planOf(input: {
       short,
       hint: short?.within && price && short.amount !== null && !final ? word('moneyTab.plan.shortHint', { money: { amount: short.amount } }) : null,
       askedByHand: !!request && (MADE_BY_HAND.includes(plan?.byHand?.act ?? '') || (!!step && step.depositRequestId === request.id && MADE_BY_HAND.includes(step.byHand?.act ?? ''))),
-      showAt: [step?.byHand?.at, plan?.byHand?.at, accepted?.at, paidAt, request?.link?.sentAt, request?.createdAt].reduce<string | null>((newest, at) => (at && (!newest || at > newest) ? at : newest), null),
+      showAt,
       fromChange,
       act,
       more: acts.filter((entry) => entry !== act),
@@ -329,7 +332,8 @@ export function planOf(input: {
       openAtFirst: !!request && request.status === 'OPEN' && !voided,
       done,
       moneyOn: placed > 0 || covered > 0,
-      discuss: request ? { part: word('discuss.deposit'), target: { kind: 'DepositRequest', id: request.id } } : { part: word('discuss.step', { params: { seq: step!.seq } }), target: null },
+      // F-OM-fx5w (N6): a step is discussed by its own name ("Before shipping · 70 %"), never by its internal number.
+      discuss: request ? { part: word('discuss.deposit'), target: { kind: 'DepositRequest', id: request.id } } : { part: title, target: null },
     }
   }
 

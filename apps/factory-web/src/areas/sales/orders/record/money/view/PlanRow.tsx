@@ -280,7 +280,8 @@ function RequestBox({ row, request, order, model, actions, invoiceHref, say }: {
   ) : null
   const tracker: { key: string; state: DepositStepState; label: string; words: ReactNode; door: ReactNode }[] = [
     { key: 'requested', state: steps.requested, label: t('deposit.step.requested'), words: asked, door: null },
-    { key: 'page', state: steps.page, label: t('moneyTab.plan.step.page'), words: linkWords ?? (request.status === 'OPEN' ? t('deposit.step.pageNotSent') : t('deposit.step.pageNotNeeded')), door: null },
+    // F-OM-fx5w (N7, P0-B5): paid without the page ever sent — the step is done (model.ts depositSteps) and says so in its own words.
+    { key: 'page', state: steps.page, label: t('moneyTab.plan.step.page'), words: linkWords ?? (request.status === 'OPEN' ? t('deposit.step.pageNotSent') : request.status === 'PAID' ? t('moneyTab.plan.step.pageSkipped') : t('deposit.step.pageNotNeeded')), door: null },
     { key: 'paid', state: steps.paid, label: t('moneyTab.plan.step.paid') /* F-OM-fx3 (W-15): "Paid", the design's word */, words: paidWords, door: null },
     { key: 'invoice', state: steps.invoice, label: t('deposit.step.invoice'), words: invoiceWords, door: null },
     { key: 'sdi', state: steps.sdi, label: t('deposit.step.sdi'), words: sdiWords, door: sendSdi },
