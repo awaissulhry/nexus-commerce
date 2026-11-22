@@ -67,7 +67,8 @@ describe('F-OF-302 — the card’s ⋯: which act per file and right, held with
     expect(named(actsOf(file('spec'), OWNER, true))).toEqual(['versions'])
     expect(named(actsOf(file('spec', { versions: 1 })))).not.toContain('versions')
     expect(named(actsOf(file('spec'), OWNER, false, false))).not.toContain('versions')
-    expect(actsOf(file('spec'), undefined)).toEqual([{ act: 'versions', held: null }])
+    // No `may` in the read and none from the session: Versions… only. (fx4w: called directly — `actsOf(…, undefined)` took its default, the Owner.)
+    expect(orderFileActsOf(file('spec'), { orderId: ORDER.id, may: undefined, readOnly: false, now: NOW, versions: true })).toEqual([{ act: 'versions', held: null }])
   })
 
   it('before the read gives a version (S3), no act that writes is offered — never a held door for a missing fact', () => {
