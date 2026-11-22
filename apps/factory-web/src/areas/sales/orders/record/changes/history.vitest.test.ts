@@ -128,4 +128,15 @@ describe('F-OC T.1: the Changes tab cases the seed lacks', () => {
     }
     expect(['oc-freeze-cancelled', 'oc-freeze-partly-shipped', 'oc-freeze-first-yes', 'oc-freeze-old-approval', 'oc-waiting-sales', 'oc-freeze-all-open'].map(verdict)).toEqual(['cancelled', 'goodsLeft', 'firstYes', 'blocked', 'locked', 'allOpen'])
   })
+
+  it('T.2: th9 walks the tab at the end (step 13) and its stack runs the brand keeper as the real worker does', () => {
+    const flow = readFileSync(new URL('../../../../../../tests/golden-flow/th9-order-page.ts', import.meta.url), 'utf8')
+    expect(flow).toContain("await flow.step('13 · the Changes tab")
+    expect(flow).toContain('expect(mailed.templateKey).toBe(APPROVAL_MAIL_TEMPLATES.request)')
+    expect(flow).toContain("OD('changesTab.history.tag.ACCEPTED')")
+    expect(flow).toContain("expect(tabGroups.reduce((sum, count) => sum + count, 0), `the Changes tab's Waiting adds up to Changes (${changes})`).toBe(changes)")
+    const stack = readFileSync(new URL('../../../../../../tests/golden-flow/_harness/stack.ts', import.meta.url), 'utf8')
+    expect(stack).toContain('const CHANGES_TAB_HANDLERS = [brandKeeperHandler()]')
+    expect(stack).toContain('/* F-OC T.2 */ ...CHANGES_TAB_HANDLERS')
+  })
 })

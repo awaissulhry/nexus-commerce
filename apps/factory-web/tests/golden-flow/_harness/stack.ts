@@ -181,7 +181,15 @@ const THREADS_HANDLERS = [resumeOnReplyHandler()]
 const { issueAnsweredHandler } = await imp<typeof import('../../../../factory-api/src/modules/production/issues/answered')>('modules/production/issues/answered.ts')
 const PRODUCTION_TAB_HANDLERS = [issueAnsweredHandler()]
 // ── end PT fx3 ──
-const workers = startEventWorkers({ kit, handlers: [...handlers(), ...THREADS_HANDLERS, /* PT fx3 */ ...PRODUCTION_TAB_HANDLERS], database, live: queueRedis, log: workerLog, handlerBackoffMs: 300 })
+// ── F-OC T.2 (order changes tab; 15-steps T.2, the last lane's lesson): background.ts's brand keeper (W2B_PR17_HANDLERS), as the
+// real worker runs it and the API's daily golden flow does (golden-flow/daily/testing/day.ts): it keeps each order's "who acts next"
+// in step with its facts — B-OC-002: a revised order asked on a revision maps to its order (`ordersOfEvent`) — so the order page
+// reads the kept turn, never one the stack alone never moved. th9-order-page's step 13 walks it (the customer's yes asked and
+// answered). The approval mail needs no handler: the ask sends it after its command, through this process's FAKE mailbox. ──
+const { brandKeeperHandler } = await imp<typeof import('../../../../factory-api/src/modules/production/brand/keeper')>('modules/production/brand/keeper.ts')
+const CHANGES_TAB_HANDLERS = [brandKeeperHandler()]
+// ── end F-OC T.2 ──
+const workers = startEventWorkers({ kit, handlers: [...handlers(), ...THREADS_HANDLERS, /* PT fx3 */ ...PRODUCTION_TAB_HANDLERS, /* F-OC T.2 */ ...CHANGES_TAB_HANDLERS], database, live: queueRedis, log: workerLog, handlerBackoffMs: 300 })
 
 // ---- control ---------------------------------------------------------------------------------------------------------------
 interface Person {

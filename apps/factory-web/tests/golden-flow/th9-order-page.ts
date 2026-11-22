@@ -13,6 +13,8 @@ import { READY_UNRELEASED_WORDS } from '@nexus/factory-domain/production-brand/s
 import { STAGE_WORDS } from '@nexus/factory-domain/production-brand/words'
 // F-PT T.2 (order PRODUCTION tab): step 12's world, made through the real API (th9-production-world.ts, no stage of its own).
 import { askState, productionWorld, WORLD_WORDS } from './th9-production-world'
+// F-OC T.2 (order CHANGES tab): the request mail the customer's ask sends (the FAKE mailbox holds it).
+import { APPROVAL_MAIL_TEMPLATES } from '@nexus/factory-domain/approvals-out/mail'
 
 /**
  * F-OP-129 — UI golden flow TH-9: THE ORDER PAGE AT THE END (order page plan N1–N6; 10-order-page §2, §5, §7, §8, §13; review R-4,
@@ -57,6 +59,13 @@ import { askState, productionWorld, WORLD_WORDS } from './th9-production-world'
  *      Ask for an update opens the ready ask; the reply answered it (C1) — Production now's "Latest update" quotes it; Dates & plan's
  *      promise history shows the moves and its We promised door opens the ONE promise dialog with its honest hint; the planner lifts
  *      the hold from Problems & holds (the strip's own Lift…, the ONE lift dialog); a Read-only person reads the tab with no act.
+ *  13  F-OC (order CHANGES tab, T.2; L5, R1, B-OC-001, B-OC-002): the tab at the end, on the same order — Sales lowers a size on
+ *      Lines and saves with the tick on: the customer is asked on the revision (POST /approvals-out, one ask), by e-mail to its orders
+ *      contact (the FAKE mailbox holds the request mail and its link) and the notice says so; Waiting on Brand Alpha draws the revised
+ *      order asked (never an amount); the brand's buyer, who may approve, confirms the new version in its portal with a typed name;
+ *      the row is gone and What changed says "Customer said yes" on that revision; the planner decides the work-order change the
+ *      save left waiting from Waiting › Still to do (Decide…, the ONE review window); a Read-only person reads the tab with no act.
+ *      Step 9 also follows "Changes (N) ›" to the tab: its Waiting groups add up to the same N (ONE list).
  * Not here, said in the report: cut pieces (the floor's flow: the extra-pieces outcome is held by the design case
  * lines-review-outcome, B-OP-071 O1 and the unit tests of F-OP-107), the record of a shipment made elsewhere whose garments the seeds
  * date in the story's days ahead (B-OP-071 O4 records one), and the invoices of a shared shipment that left (B-OP-045).
@@ -93,6 +102,7 @@ const AMEND_REASON = 'Made-up: Brand Alpha wants two more 50 and one fewer 52.'
 const DSW = words('ds-words') // F-OL-06: the DS bar's own words (its region)
 const REFUSE_WORDS = 'Made-up: asked about an older version of the order; ask it again on this one.'
 const LIFT_REASON = 'Made-up: the lining roll came in (TH9).' // F-PT T.2
+const CHANGE_REASON = 'Made-up: Brand Alpha wants one fewer 52 (TH9 step 13).' // F-OC T.2
 // ---- F-OO-215 (order overview lane): SEED-SO-0002's Overview ----
 /**
  * SEED-SO-0002's headline as the seed gives it: its status words (its stage follows them, "Partly shipped · …"). B-OO-016 (Owner D9,
@@ -192,6 +202,18 @@ async function openAndClose(page: Page, door: Locator, what: string): Promise<vo
 }
 // ---- end F-OO-215
 
+// ---- F-OC T.2: the brand's buyer may answer a yes ("Can approve"), as a customer that re-confirms its revised orders ----
+async function buyerMayApprove(flow: Flow, office: Desk, partyId: string): Promise<void> {
+  const access = await flow.read(office.page, `/partners/${partyId}`)
+  const person = ((access.people ?? []) as Json[]).find((entry) => String(entry.email).toLowerCase() === BRAND_ALPHA.portalPerson.email.toLowerCase())
+  expect(person, `${BRAND_ALPHA.tradeName}'s buyer is invited`).toBeTruthy()
+  if ((person!.capabilities as string[]).includes('approve')) return
+  byApi('the buyer’s "Can approve" (the customer page’s people window gives it; its own flow walks it)')
+  await flow.write(office.page, 'POST', '/auth/office/step-up', { code: await flow.code(office.person) })
+  await flow.write(office.page, 'PATCH', `/partners/${partyId}/people/${person!.id}`, { capabilities: [...new Set([...(person!.capabilities as string[]), 'approve'])], version: person!.version })
+}
+// ---- end F-OC T.2
+
 /** Opens an address of A's record in B's portal and waits for its neutral words; the page holds nothing of A. */
 async function refusedToBeta(beta: PortalDesk, path: string, ofAlpha: readonly string[], where: string): Promise<void> {
   await beta.go(path)
@@ -201,7 +223,7 @@ async function refusedToBeta(beta: PortalDesk, path: string, ofAlpha: readonly s
 
 export default defineStage({
   proves:
-    'the order page at the end: the yes in place (a waiting order confirmed, a stale change refused with its reason; a yes the Owner asked is held for her); a work order made in place; edit mode’s strip says which work order follows now and which waits, Apply, the planner decides the waiting one on the order page; tracking typed, corrected and cleared ("No live tracking"); the made-elsewhere dialog with its paper DDT and its live rules; a combined shipment of two orders made in place (B-OP-047); the files viewer walk by keys; customer B never offered or shown A’s orders, A’s ids answer B’s neutral refusal; SEED-SO-0002’s Overview sections 1–8 (F-OO-215): the headline, strips and moves, a line’s ⋯, People, Next dates, Requests & changes = the Changes badge, Linked records = the tab badges, a custom value saved beside Order facts at the order’s version (the sheet’s edit at the old version stale), the office note saved after it; the Production tab at the end (F-PT T.2): the ready ask, the supervisor’s reply answering it (“Latest update”), the promise history and its door, a hold lifted from Problems & holds, Read-only with no act',
+    'the order page at the end: the yes in place (a waiting order confirmed, a stale change refused with its reason; a yes the Owner asked is held for her); a work order made in place; edit mode’s strip says which work order follows now and which waits, Apply, the planner decides the waiting one on the order page; tracking typed, corrected and cleared ("No live tracking"); the made-elsewhere dialog with its paper DDT and its live rules; a combined shipment of two orders made in place (B-OP-047); the files viewer walk by keys; customer B never offered or shown A’s orders, A’s ids answer B’s neutral refusal; SEED-SO-0002’s Overview sections 1–8 (F-OO-215): the headline, strips and moves, a line’s ⋯, People, Next dates, Requests & changes = the Changes badge, Linked records = the tab badges, a custom value saved beside Order facts at the order’s version (the sheet’s edit at the old version stale), the office note saved after it; the Production tab at the end (F-PT T.2): the ready ask, the supervisor’s reply answering it (“Latest update”), the promise history and its door, a hold lifted from Problems & holds, Read-only with no act; the Changes tab at the end (F-OC T.2): a save with the tick asks the customer by e-mail (the FAKE mailbox), Waiting on the customer draws the revised order, the customer’s yes in its portal empties it and What changed says “Customer said yes”, the planner decides the waiting work-order change from Waiting, Read-only with no act',
   async run(flow: Flow) {
     const sales = await flow.desk('sales')
     const alphaId = await flow.seedId('party:P1')
@@ -646,6 +668,16 @@ export default defineStage({
       }
       await expectNothingOf(page, BRAND_BETA, world.betaNumbers, 'SEED-SO-0002 overview')
       await flow.shot(page, 'overview-so2')
+      // F-OC T.2: "Changes (N) ›" opens the Changes tab, whose Waiting groups (on us · on the customer · still to do) add up to the
+      // same N — the card, the badge and the tab are ONE list.
+      await press(changesLink)
+      const waiting = page.locator('#waiting')
+      await seen(waiting, 60_000)
+      await expect(page).toHaveURL(/[?&]tab=changes/)
+      const tabHeads = await waiting.locator('.fw-oc-grp-h > h3').allInnerTexts()
+      const tabGroups = tabHeads.map((head) => Number(/·\s*(\d+)\s*$/.exec(head)?.[1] ?? NaN))
+      expect(tabGroups.every((count) => Number.isInteger(count)), `each Waiting group says its count: ${tabHeads.join(' | ')}`).toBe(true)
+      expect(tabGroups.reduce((sum, count) => sum + count, 0), `the Changes tab's Waiting adds up to Changes (${changes})`).toBe(changes)
     })
 
     await flow.step('10 · SEED-SO-0002’s Overview, sections 8 and 7: a custom value saved beside Order facts at the order’s version (the sheet at the old version is stale), then the office note saved at the new one', async () => {
@@ -982,5 +1014,118 @@ export default defineStage({
       await flow.shot(reader.page, 'production-read-only')
     })
     // ---- end F-PT T.2
+
+    // ---- F-OC T.2 (order CHANGES tab, 15-steps T.2; L5, R1, B-OC-001, B-OC-002, B-OC-011): the Changes tab at the end -------------
+    await flow.step('13 · the Changes tab: a Lines save with the tick asks Brand Alpha by e-mail (the FAKE mailbox) → Waiting on Brand Alpha draws the revised order; its buyer says yes in the portal → the row is gone and What changed says "Customer said yes"; the planner decides the waiting work-order change from Waiting; Read-only sees no act', async () => {
+      const { page } = sales
+      // Who the ask goes to: the confirmation's own rule — the quote's contact, else the first active orders contact with an e-mail
+      // (this order was typed: no quote).
+      const contacts = ((await flow.read(page, `/parties/${alphaId}`)).party.contacts ?? []) as Json[]
+      const to = contacts.find((contact) => contact.status === 'ACTIVE' && !!contact.email && ((contact.roles ?? []) as string[]).includes('ORDERS'))?.email as string | undefined
+      expect(to, `${BRAND_ALPHA.tradeName} has an orders contact with an e-mail`).toBeTruthy()
+      const mailsBefore = await flow.mailsTo(to!)
+
+      // Sales lowers 52 by one on Lines (the released work order waits for production again) and saves with the tick on.
+      await sales.go(`/sales/orders/${world.order.id}?tab=lines`)
+      const table = page.locator('.fw-lt')
+      const size52 = table.getByRole('textbox', { name: /, size 52$/ }).first()
+      await seen(size52, 60_000)
+      const before52 = Number(await size52.inputValue())
+      expect(before52, 'the 52s step 3 left').toBeGreaterThan(0)
+      await size52.fill(String(before52 - 1))
+      const bar = page.getByRole('region', { name: DSW('editModeBar.region'), exact: true })
+      await press(bar.getByRole('button', { name: OD('save.review'), exact: true }))
+      const reviewWindow = dialog(page)
+      await seen(reviewWindow, 60_000)
+      const why = reviewWindow.getByRole('textbox', { name: startsWith(OD('review.whyWords')) })
+      if ((await why.count()) > 0) await why.first().fill(CHANGE_REASON)
+      // The tick stays on (the amount changes, as Sales reads it): the customer is asked to accept the new order.
+      await expect(reviewWindow.getByRole('checkbox', { name: startsWith(lead(OD('review.ask'))) })).toBeChecked()
+      await expect(reviewWindow).not.toContainText('€')
+      const askAnswer = page.waitForResponse((entry) => entry.request().method() === 'POST' && new URL(entry.url()).pathname.replace(/^\/api/, '') === '/approvals-out', { timeout: 60_000 })
+      const applied = await answerOf(page, 'POST', /^\/sales\/orders\/[^/]+\/amendments$/, () => press(reviewWindow.getByRole('button', { name: OD('review.save'), exact: true })))
+      expect(applied.amendment, 'the save asks the customer').toMatchObject({ reacceptance: 'NEEDED' })
+      expect(((applied.workOrders.waiting ?? []) as Json[]).map((entry) => entry.workOrderId), 'the released work order waits for production').toContain(workOrder.id)
+      // R1 (L5): ONE ask on the REVISION the save made, by e-mail — never on the order.
+      const askResponse = await askAnswer
+      const asked = (await askResponse.json().catch(() => ({}))) as Json
+      expect(askResponse.status(), `POST /approvals-out: ${JSON.stringify(asked).slice(0, 400)}`).toBe(201)
+      expect(asked).toMatchObject({ delivery: 'SENT', request: { kind: 'REVISED_ORDER', status: 'OPEN', record: { type: 'SalesOrderAmendment', id: applied.amendment.id } } })
+      // The FAKE mailbox holds the request mail with its one-use link, to that contact.
+      const mailed = await flow.linkSentTo(to!, mailsBefore)
+      expect(mailed.templateKey).toBe(APPROVAL_MAIL_TEMPLATES.request)
+      // The notice says where the ask went, once it went (F-OC-304): by e-mail.
+      const numbers = (entries: Json[]) => entries.map((entry) => (entry.number as string | null) ?? 'WO-…').join(', ')
+      const changed = numbers((applied.workOrders.applied ?? []) as Json[])
+      const waits = numbers((applied.workOrders.waiting ?? []) as Json[])
+      const which = changed && waits ? 'both' : changed ? 'changed' : waits ? 'waits' : 'plain'
+      await seen(page.getByText(OD(`changesTab.saved.${which}Email`, { changed, waits, customer: BRAND_ALPHA.legalName }), { exact: true }).first(), 60_000)
+      await flow.settle()
+
+      // Waiting on Brand Alpha: the revised order asked (B-OC-002), in the customer's group, never an amount; What changed: the
+      // revision waits for their yes.
+      await sales.go(`/sales/orders/${world.order.id}?tab=changes`)
+      const theirs = page.locator('#waiting [aria-labelledby="fw-oc-g-customer"]')
+      const askedRow = theirs.locator(`#about-ApprovalRequest-${asked.request.id}`)
+      await seen(askedRow, 60_000)
+      await expect(askedRow).toContainText(/revised order/i)
+      await expect(askedRow).not.toContainText('€')
+      const revisionRow = page.locator(`#history #change-${applied.amendment.id}`)
+      await seen(revisionRow, 60_000)
+      await expect(revisionRow).toContainText(OD('changesTab.history.tag.WAITING'))
+      await expectNothingOf(page, BRAND_BETA, world.betaNumbers, "A's Changes tab")
+      await flow.shot(page, 'changes-waiting-on-customer')
+
+      // The customer answers in its portal: its order's "Review and confirm", Confirm version N, signed with the typed name.
+      await buyerMayApprove(flow, await flow.desk('owner'), alphaId)
+      const alpha = await signInToPortal(flow, BRAND_ALPHA, alphaId)
+      await alpha.go(`/orders/${world.order.id}`)
+      const reviewDoor = alpha.page.getByRole('button', { name: PO('reconfirm.review'), exact: true })
+      await seen(reviewDoor, 60_000)
+      await press(reviewDoor)
+      const reconfirm = dialog(alpha.page)
+      await seen(reconfirm.getByText(PO('reconfirm.title', { version: applied.amendment.revision })).first(), 60_000)
+      await reconfirm.getByRole('radio', { name: startsWith(lead(PO('reconfirm.approve'))) }).check()
+      await reconfirm.getByRole('textbox', { name: startsWith(PO('reconfirm.name')) }).fill(BRAND_ALPHA.portalPerson.name)
+      await answerOf(alpha.page, 'POST', /^\/portal\/approvals\/[^/]+\/answer$/, () => press(reconfirm.getByRole('button', { name: startsWith(lead(PO('reconfirm.go.APPROVED'))) })))
+      await seen(reconfirm.getByText(PO('reconfirm.done.APPROVED', { version: applied.amendment.revision })).first(), 60_000)
+      await flow.shot(alpha.page, 'portal-revision-confirmed')
+      await flow.settle()
+
+      // The office: the row is gone from Waiting on Brand Alpha; What changed says "Customer said yes" on that revision (B-OC-011).
+      await sales.go(`/sales/orders/${world.order.id}?tab=changes`)
+      await seen(page.locator('#history'), 60_000)
+      await expect(page.locator(`#about-ApprovalRequest-${asked.request.id}`)).toHaveCount(0, { timeout: 60_000 })
+      await expect(page.locator(`#history #change-${applied.amendment.id}`)).toContainText(OD('changesTab.history.tag.ACCEPTED'), { timeout: 60_000 })
+      await flow.shot(page, 'changes-customer-said-yes')
+
+      // The planner decides the work-order change the save left waiting — from Waiting › Still to do (Decide…, the ONE review window).
+      const planner = await flow.desk('planner')
+      await planner.go(`/sales/orders/${world.order.id}?tab=changes`)
+      const decide = planner.page.locator('#waiting #still-to-do').getByRole('button', { name: OD('productionTab.wo.decide'), exact: true }).first()
+      await seen(decide, 60_000)
+      await press(decide)
+      const decideWindow = dialog(planner.page)
+      await seen(decideWindow, 60_000)
+      await answerOf(planner.page, 'POST', /^\/production\/work-order-changes\/[^/]+\/apply$/, async () => {
+        await press(decideWindow.getByRole('button', { name: APPROVALS('workOrderChange.apply.LOWER_TO_ORDER'), exact: true }))
+        await flow.stepUp(planner.page, planner.person)
+      })
+      await flow.settle()
+      await expect(planner.page.locator('#waiting').getByRole('button', { name: OD('productionTab.wo.decide'), exact: true })).toHaveCount(0, { timeout: 60_000 })
+      await flow.shot(planner.page, 'changes-change-decided')
+
+      // Read-only reads the whole tab and finds no act: no Decide…, Answer…, Confirm / Refuse…, Ask…, Restore…, Send…, Change the lines ›.
+      const reader = await flow.desk('reader')
+      await reader.go(`/sales/orders/${world.order.id}?tab=changes`)
+      const tab = reader.page.locator('.fw-oc')
+      await seen(tab.locator('#waiting'), 60_000)
+      await seen(tab.locator('#history'))
+      for (const name of [OD('productionTab.wo.decide'), OD('band.answer'), OD('approval.refuse'), OD('changesTab.waiting.manage')]) await expect(tab.getByRole('button', { name, exact: true }), name).toHaveCount(0)
+      await expect(tab.getByRole('button', { name: YES }), 'no yes').toHaveCount(0)
+      for (const name of [lead(OD('changesTab.agreement.ask')), lead(OD('changesTab.history.restoreOf')), lead(OD('changesTab.agreement.send')), OD('changesTab.freeze.lines')]) await expect(tab.getByRole('button', { name: startsWith(name) }).or(tab.getByRole('link', { name: startsWith(name) })), name).toHaveCount(0)
+      await flow.shot(reader.page, 'changes-read-only')
+    })
+    // ---- end F-OC T.2
   },
 })
