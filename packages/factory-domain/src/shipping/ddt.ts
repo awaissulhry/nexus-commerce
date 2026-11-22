@@ -206,6 +206,32 @@ export interface DdtRequest {
  * Why no DDT can be issued for the shipment now (empty: it can). A PACKED shipment takes its DDT before the goods leave;
  * a SHIPPED one only a replacement for a cancelled DDT (and never "ships" again); one live DDT per shipment.
  */
+// ── B-OS-017 (order shipments tab; O7 B, L13, Owner D6): "This shipment travels without a DDT" (and back) ──
+/**
+ * A Nexus shipment that has not left may travel without a DDT, set by hand with a reason (an immediate invoice travels instead,
+ * DPR 633/1972 art. 21 c.4, or the company issues no DDT): only while DRAFT or PACKED, never while a DDT of it is live (cancel the
+ * DDT first), never on one made elsewhere (its own choice). While it travels without one, no DDT is issued for it (DDT_NOT_NEEDED:
+ * else the goods could be billed from the DDT and from the list of shipments without a DDT). Reads no country.
+ */
+export const DDT_REQUIRED_REFUSALS = ['ELSEWHERE', 'LEFT', 'CANCELLED', 'DDT_LIVE', 'SAME'] as const
+export type DdtRequiredRefusalCode = (typeof DDT_REQUIRED_REFUSALS)[number]
+
+export const DDT_REQUIRED_REASON = Object.freeze({ min: 3, max: 500 })
+
+export function ddtRequiredRefusal(facts: { readonly status: ShipmentStatus; readonly origin: string; readonly ddtRequired: boolean; readonly liveDdtNumber: string | null }, required: boolean): { readonly code: DdtRequiredRefusalCode; readonly message: string } | null {
+  if (facts.origin !== 'NEXUS') return { code: 'ELSEWHERE', message: 'A shipment made elsewhere says whether its DDT travelled when it is recorded.' }
+  if (facts.status === 'CANCELLED') return { code: 'CANCELLED', message: 'The shipment is cancelled.' }
+  if (facts.status !== 'DRAFT' && facts.status !== 'PACKED') return { code: 'LEFT', message: 'The goods left: whether a DDT travelled with them no longer changes.' }
+  if (facts.ddtRequired === required) return { code: 'SAME', message: required ? 'A DDT travels with this shipment already.' : 'This shipment travels without a DDT already.' }
+  if (!required && facts.liveDdtNumber !== null) return { code: 'DDT_LIVE', message: `DDT ${facts.liveDdtNumber} is live for this shipment: cancel the DDT first.` }
+  return null
+}
+
+/** Issuing a DDT for a shipment set to travel without one (null: it may be issued; byte-identical while a DDT is required). */
+export const ddtNotNeededWords = (ddtRequired: boolean): string | null =>
+  ddtRequired ? null : 'This shipment travels without a DDT: put the DDT back on it first (Put back the DDT), then issue it.'
+// ── end B-OS-017 ──
+
 export function issueStateProblems(status: ShipmentStatus, liveDdtNumber: string | null, ship: boolean): string[] {
   if (status === 'DRAFT') return ['The shipment is a DRAFT: pack it first (a DDT is issued for packed goods).']
   if (status !== 'PACKED' && status !== 'SHIPPED') return [`The shipment is ${status}: no DDT is issued for it.`]

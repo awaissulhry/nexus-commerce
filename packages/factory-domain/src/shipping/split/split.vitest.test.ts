@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { garmentsLeft, groupsByPromise, movableOf, moveProblems, reasonProblems, type DeliveryChoice } from './split'
+import { groupMoveProblems, mergedAsks } from './split' // B-OS-010
+import { MOVE_REFUSALS, TAKE_OFF_REFUSALS, mergeProblems, mergedReason, moveRefusalPath, moveRefusalWords, takeOffRefusalWords } from './split' // B-OS-011 … 013
 
 // Made-up lines and days.
 const line = (id: string, quantity: number, packed = 0, serials = 0) => ({ id, quantity, packed, serials })
@@ -46,3 +48,54 @@ describe('split one order into several shipments (LOG-005)', () => {
     expect(groupsByPromise([{ ...line('a', 1), shipBy: '2026-11-20' }]).groups).toEqual([])
   })
 })
+
+// ---- B-OS-010 (order shipments tab; X1 S1): split into several shipments in one go ----
+describe('split into several shipments at once (B-OS-010)', () => {
+  const lines = [line('a', 4, 1), line('b', 2), line('c', 1, 0, 1)]
+
+  it('each new shipment names its garments, each line once in it; a line may give to several, never more than may move in all', () => {
+    expect(groupMoveProblems(lines, [{ moves: [{ lineId: 'a', quantity: 2 }] }, { moves: [{ lineId: 'a', quantity: 1 }, { lineId: 'b', quantity: 2 }] }])).toEqual([])
+    // a: 3 may move (1 in a carton); 2 + 2 asked over two shipments.
+    const over = groupMoveProblems(lines, [{ moves: [{ lineId: 'a', quantity: 2 }] }, { moves: [{ lineId: 'a', quantity: 2 }] }])
+    expect(over.map((issue) => issue.path)).toEqual(['groups/0/lines/0/quantity', 'groups/1/lines/0/quantity'])
+    expect(over[0]!.message).toBe('From 1 to 3 garment(s) of this line can move, over every new shipment.')
+    expect(groupMoveProblems(lines, [{ moves: [{ lineId: 'b', quantity: 1 }, { lineId: 'b', quantity: 1 }] }])[0]!.path).toBe('groups/0/lines/1/lineId')
+    expect(groupMoveProblems(lines, [{ moves: [{ lineId: 'c', quantity: 1 }] }])[0]!.message).toMatch(/^None of this line can move/)
+    expect(groupMoveProblems(lines, [{ moves: [] }])[0]!.path).toBe('groups/0/lines')
+    expect(groupMoveProblems(lines, [{ moves: [{ lineId: 'x', quantity: 1 }] }])[0]!.path).toBe('groups/0/lines/0/lineId')
+  })
+
+  it('1 to 20 new shipments; the asks of one line add up (what the split re-checks under its lock), and something stays', () => {
+    expect(groupMoveProblems(lines, [])[0]!.path).toBe('groups')
+    expect(groupMoveProblems(lines, Array.from({ length: 21 }, () => ({ moves: [{ lineId: 'b', quantity: 1 }] })))[0]!.message).toBe('At most 20 new shipments at a time.')
+    const groups = [{ moves: [{ lineId: 'a', quantity: 2 }] }, { moves: [{ lineId: 'a', quantity: 1 }, { lineId: 'b', quantity: 2 }] }]
+    expect(mergedAsks(groups)).toEqual([{ lineId: 'a', quantity: 3 }, { lineId: 'b', quantity: 2 }])
+    expect(garmentsLeft(lines, mergedAsks(groups))).toBe(2)
+  })
+})
+// ---- end B-OS-010
+
+// ---- B-OS-011, B-OS-012, B-OS-013 (order shipments tab; X1 S2–S4): move, merge, take an order off ----
+describe('move, merge and take an order off (B-OS-011 … B-OS-013)', () => {
+  it('a merge moves every line whole: never one with garments in a carton or carrying serials, never an empty draft', () => {
+    expect(mergeProblems([line('a', 2), line('b', 1)])).toBeNull()
+    expect(mergeProblems([line('a', 2, 1)])).toBe('MERGE_PACKED')
+    expect(mergeProblems([line('a', 2, 0, 1)])).toBe('MERGE_PACKED')
+    expect(mergeProblems([])).toBe('NOTHING_TO_MOVE')
+  })
+
+  it('the emptied draft is cancelled "Merged into …", with the office’s words when given (never blank)', () => {
+    expect(mergedReason('SH-00012')).toBe('Merged into SH-00012')
+    expect(mergedReason('SH-00012', '  one truck  ')).toBe('Merged into SH-00012: one truck')
+    expect(mergedReason('SH-00012', '   ')).toBe('Merged into SH-00012')
+  })
+
+  it('every refusal has its words and its path; a target’s join reason is refusal/JOIN_<CODE>', () => {
+    for (const code of MOVE_REFUSALS) expect(moveRefusalWords(code, { number: 'SH-00012', target: 'SH-00015', status: 'PACKED' }).length, code).toBeGreaterThan(10)
+    for (const code of TAKE_OFF_REFUSALS) expect(takeOffRefusalWords(code, { number: 'SH-00012', order: 'SO-00003', status: 'PACKED' }).length, code).toBeGreaterThan(10)
+    expect(moveRefusalWords('NOTHING_STAYS', { number: 'SH-00012', target: 'SH-00015' })).toBe('Everything of SH-00012 would move: merge it into SH-00015 instead.')
+    expect(takeOffRefusalWords('FIRST_ORDER', { number: 'SH-00012', order: 'SO-00002' })).toBe("Shipment SH-00012 was made for SO-00002: move the other orders' garments with Split… or Move garments to…, then cancel it.")
+    expect(moveRefusalPath('JOIN_SHIP_TO')).toBe('refusal/JOIN_SHIP_TO')
+  })
+})
+// ---- end B-OS-011, B-OS-012, B-OS-013

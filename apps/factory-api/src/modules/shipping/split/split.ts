@@ -7,7 +7,9 @@ import { SHIPPING_MANAGE, SHIPPING_VIEW } from '@nexus/factory-domain/shipping/p
 import { earliestDay } from '@nexus/factory-domain/shipping/queue/risk'
 import {
   garmentsLeft,
+  groupMoveProblems, // B-OS-010
   groupsByPromise,
+  mergedAsks, // B-OS-010
   movableOf,
   moveProblems,
   reasonProblems,
@@ -121,9 +123,31 @@ export interface DeliveryInput {
 
 export interface SplitBody extends DeliveryInput {
   readonly version?: number | undefined
+  // B-OS-010: `reason` + `lines` (one new shipment, as before) or `groups` (several new shipments in one go).
+  readonly reason?: SplitReason | undefined
+  readonly lines?: readonly MoveAsk[] | undefined
+  readonly groups?: readonly SplitGroupBody[] | undefined
+}
+
+// ── B-OS-010 (order shipments tab; X1 S1, D1): split into several shipments in ONE command ──
+/** One new shipment of a split into several: why, its garments and its own delivery (else the parent's). */
+export interface SplitGroupBody extends DeliveryInput {
   readonly reason: SplitReason
   readonly lines: readonly MoveAsk[]
 }
+
+/** The new shipments asked: today's one (`reason` + `lines`), or `groups`; never both (400 in words). */
+function groupsOf(body: SplitBody): { readonly groups: readonly SplitGroupBody[]; readonly at: (index: number) => string } {
+  if (body.groups !== undefined) {
+    if (body.reason !== undefined || body.lines !== undefined || body.transportBy !== undefined || body.carrierCode !== undefined || body.serviceCode !== undefined || body.shipToAddressId !== undefined) {
+      throw new ValidationError('Send either the lines and their reason, or the new shipments (groups), not both.', [{ path: 'body/groups', message: 'Send either lines and reason, or groups.' }])
+    }
+    return { groups: body.groups, at: (index) => `body/groups/${index}/` }
+  }
+  if (body.reason === undefined || body.lines === undefined) throw new ValidationError('Name the garments that move and why.', [{ path: body.reason === undefined ? 'body/reason' : 'body/lines', message: 'Required (or send groups).' }])
+  return { groups: [{ reason: body.reason, lines: body.lines, transportBy: body.transportBy, carrierCode: body.carrierCode, serviceCode: body.serviceCode, shipToAddressId: body.shipToAddressId }], at: () => 'body/' }
+}
+// ── end B-OS-010 ──
 
 const blankToNull = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
 
@@ -153,9 +177,10 @@ async function splitInCommand(tools: CommandTools, parent: ShipmentHeader, group
   const { tx } = tools
   const lines = await readLines(tx, parent.id)
   const byId = new Map(lines.map((line) => [line.id, line]))
-  const asks = groups.flatMap((group) => group.moves)
+  // B-OS-010: several new shipments may take garments of one line (never more than may move of it in all): one ask per line.
+  const asks = groups.length > 1 ? mergedAsks(groups) : groups.flatMap((group) => group.moves)
   // Checked again under the lock: what was read before may have moved.
-  const problems = moveProblems(lines, asks)
+  const problems = groups.length > 1 ? groupMoveProblems(lines, groups) : moveProblems(lines, asks)
   if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems.map((issue) => ({ path: `body/${issue.path}`, message: issue.message })))
   if (garmentsLeft(lines, asks) < 1) refused('NOTHING_STAYS', `Something stays on shipment ${parent.number}: to send all of it another way, change its carrier or delivery address instead.`)
   await lockCells(tx, tenantOf(tools.context), asks.map((ask) => byId.get(ask.lineId)!.workOrderSizeId))
@@ -166,13 +191,18 @@ async function splitInCommand(tools: CommandTools, parent: ShipmentHeader, group
   // (salesOrderId: the database's split rule) and carries the orders of its own lines, a subset of the parent's.
   const parentOrdersBefore = await ordersOfShipment(tx, parent)
   const made: string[] = []
+  // B-OS-010: what each old line still holds as the new shipments take from it (a line may give to several).
+  const left = new Map(lines.map((line) => [line.id, line.quantity]))
   for (const group of groups) {
     // Garments come off the old lines first: a cell's lines over every shipment never pass its releases (the triggers).
     for (const move of group.moves) {
       const line = byId.get(move.lineId)!
-      if (move.quantity === line.quantity) await tx.shipmentLine.delete({ where: { id: line.id }, select: { id: true } })
-      else await tx.shipmentLine.update({ where: { id: line.id }, data: { quantity: line.quantity - move.quantity, version: { increment: 1 } }, select: { id: true } })
-      tools.audit({ action: 'shipping.splitLine', recordType: 'ShipmentLine', recordId: line.id, companyId: parent.companyId, siteId: parent.siteId, before: { quantity: line.quantity }, after: { quantity: line.quantity - move.quantity } })
+      const before = left.get(line.id)!
+      const after = before - move.quantity
+      if (after === 0) await tx.shipmentLine.delete({ where: { id: line.id }, select: { id: true } })
+      else await tx.shipmentLine.update({ where: { id: line.id }, data: { quantity: after, version: { increment: 1 } }, select: { id: true } })
+      left.set(line.id, after)
+      tools.audit({ action: 'shipping.splitLine', recordType: 'ShipmentLine', recordId: line.id, companyId: parent.companyId, siteId: parent.siteId, before: { quantity: before }, after: { quantity: after } })
     }
     const id = newId()
     const number = await allocateNumber(tools, { companyId: parent.companyId, kind: 'SHIPMENT' }, { type: 'Shipment', id })
@@ -257,18 +287,29 @@ function deliveryOf(parent: ShipmentHeader, body: DeliveryInput): DeliveryChoice
 
 const fromOf = (parent: ShipmentHeader): DeliveryChoice => ({ transportBy: parent.transportBy, carrierCode: parent.carrierCode, serviceCode: parent.serviceCode, shipToAddressId: parent.shipToAddressId })
 
-/** POST /shipping/shipments/:shipmentId/split (shipping.manage): garments named by hand onto a new shipment. */
+/**
+ * POST /shipping/shipments/:shipmentId/split (shipping.manage): garments named by hand onto a new shipment — B-OS-010: or onto
+ * several (`groups`, 1 to 20, each with its reason and delivery) in ONE command, one idempotency key, all or nothing.
+ */
 export async function splitShipment(caller: CommandCaller, shipmentId: string, body: SplitBody, idempotencyKey?: string) {
   const parent = await splittable(caller, shipmentId)
-  const delivery = deliveryOf(parent, body)
-  const reasonIssues: Issue[] = reasonProblems(body.reason, fromOf(parent), delivery)
-  if (reasonIssues.length > 0) throw new ValidationError(reasonIssues[0]!.message, reasonIssues.map((issue) => ({ path: `body/${issue.path}`, message: issue.message })))
-  const shipTo = body.shipToAddressId ? ((await caller.withClient((client) => shipToOf(client, parent.partyId, body.shipToAddressId!))) as Prisma.InputJsonValue) : null
+  const asked = groupsOf(body) // B-OS-010
+  const groups: Group[] = []
+  for (const [index, group] of asked.groups.entries()) {
+    const delivery = deliveryOf(parent, group)
+    const reasonIssues: Issue[] = reasonProblems(group.reason, fromOf(parent), delivery)
+    if (reasonIssues.length > 0) throw new ValidationError(reasonIssues[0]!.message, reasonIssues.map((issue) => ({ path: `${asked.at(index)}${issue.path}`, message: issue.message })))
+    const shipTo = group.shipToAddressId ? ((await caller.withClient((client) => shipToOf(client, parent.partyId, group.shipToAddressId!))) as Prisma.InputJsonValue) : null
+    groups.push({ reason: group.reason, moves: group.lines, delivery, shipTo })
+  }
   const { result } = await command(caller, { name: 'shipping.split', idempotencyKey, input: { shipmentId, ...body }, record: { type: 'Shipment', id: parent.id, expectedVersion: body.version } }, async (tools) => {
     const current = (await readShipment(tools.tx, parent.id))!
     if (current.status !== 'DRAFT') refused('NOT_DRAFT', `Shipment ${current.number} is ${current.status}: only a DRAFT shipment's garments move onto another (unpack it first).`)
-    const [id] = await splitInCommand(tools, current, [{ reason: body.reason, moves: body.lines, delivery, shipTo }], false)
-    return { shipment: await shipmentDetail(tools.tx, (await readShipment(tools.tx, id!))!), from: await shipmentDetail(tools.tx, (await readShipment(tools.tx, current.id))!) }
+    const ids = await splitInCommand(tools, current, groups, false)
+    // B-OS-010: every new shipment (the first one stays `shipment`, as before).
+    const shipments = []
+    for (const id of ids) shipments.push(await shipmentDetail(tools.tx, (await readShipment(tools.tx, id))!))
+    return { shipment: shipments[0]!, from: await shipmentDetail(tools.tx, (await readShipment(tools.tx, current.id))!), shipments }
   })
   return result
 }
@@ -302,3 +343,8 @@ export async function splitByRule(caller: CommandCaller, shipmentId: string, bod
   })
   return result
 }
+
+// ── B-OS-011, B-OS-012 (order shipments tab): the move and the merge read a DRAFT's lines as the split does (carton, serials) ──
+export { readLines as readSplitLines }
+export type { LineFacts as SplitLineFacts }
+// ── end B-OS-011, B-OS-012 ──

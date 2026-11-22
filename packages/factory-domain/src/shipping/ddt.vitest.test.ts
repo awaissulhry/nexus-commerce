@@ -3,6 +3,8 @@ import { composeDocument } from '../documents/compose'
 import type { CompanyLegal } from '../documents/model'
 import { canTransition } from '../state/machine'
 import { cancelDdtProblems, ddtDocument, draftDdt, draftInvoicesWarning, goodsDescription, invoicesOfDdt, issueStateProblems, SHIPMENT_DDT_REASONS, type DdtFacts, type DdtGoods, type DdtRequest } from './ddt'
+import { ddtNotNeededWords, ddtRequiredRefusal } from './ddt' // B-OS-017
+import { handOverTimeProblems } from './shipments' // B-OS-014
 import { events } from './events'
 import { SHIPPING_DDT_CANCEL, SHIPPING_DDT_ISSUE, SHIPPING_FLOOR_PERMISSIONS, SHIPPING_PERMISSIONS } from './permissions'
 import { shipmentMachine, shipProblems, type ShipmentFacts } from './shipments'
@@ -264,3 +266,50 @@ describe('a DDT of two orders of one customer (B-OP-042)', () => {
     expect(problemsOf({}, other)).toContain('shipment/recipient: SO-2026-0003 bills another VAT number than SO-2026-0002: one DDT names one recipient.')
   })
 })
+
+// ---- B-OS-014, B-OS-017 (order shipments tab): handed over at a typed time; "this shipment travels without a DDT" ----
+describe('the goods handed over at a typed time (B-OS-014)', () => {
+  const now = new Date('2026-11-22T10:00:00.000Z')
+  const facts = { now, packedAt: new Date('2026-11-20T08:00:00.000Z'), ddtIssuedAt: new Date('2026-11-20T09:00:00.000Z'), reason: null as string | null }
+  const paths = (at: string, over: Partial<typeof facts> = {}) => handOverTimeProblems(new Date(at), { ...facts, ...over }).map((issue) => issue.path)
+
+  it('now (or minutes ago) needs no reason; more than 15 minutes back it does', () => {
+    expect(paths('2026-11-22T10:00:00.000Z')).toEqual([])
+    expect(paths('2026-11-22T09:50:00.000Z')).toEqual([])
+    expect(paths('2026-11-21T15:30:00.000Z')).toEqual(['body/reason'])
+    expect(paths('2026-11-21T15:30:00.000Z', { reason: '  ok  ' })).toEqual(['body/reason'])
+    expect(paths('2026-11-21T15:30:00.000Z', { reason: 'The driver left before it was recorded.' })).toEqual([])
+    expect(paths('2026-11-21T15:30:00.000Z', { reason: 'x'.repeat(501) })).toEqual(['body/reason'])
+  })
+
+  it('never ahead of now (5 minutes of clock), never more than 60 days back, never before packing nor before the DDT', () => {
+    expect(paths('2026-11-22T10:04:00.000Z')).toEqual([])
+    expect(handOverTimeProblems(new Date('2026-11-22T11:00:00.000Z'), facts)[0]!.message).toBe('The time is in the future.')
+    expect(handOverTimeProblems(new Date('2026-09-01T10:00:00.000Z'), { ...facts, packedAt: null, ddtIssuedAt: null, reason: 'Recorded late.' })[0]!.message).toBe('At most 60 days back.')
+    expect(handOverTimeProblems(new Date('2026-11-20T07:00:00.000Z'), { ...facts, reason: 'Recorded late.' })[0]!.message).toBe('The time is before the goods were packed.')
+    expect(handOverTimeProblems(new Date('2026-11-20T08:30:00.000Z'), { ...facts, reason: 'Recorded late.' })[0]!.message).toBe('The time is before the DDT was issued.')
+    // Without a DDT (it travels without one) only the packing bounds it.
+    expect(paths('2026-11-20T08:30:00.000Z', { ddtIssuedAt: null, reason: 'Recorded late.' })).toEqual([])
+  })
+})
+
+describe('this shipment travels without a DDT (B-OS-017, L13)', () => {
+  const facts = { status: 'PACKED' as const, origin: 'NEXUS', ddtRequired: true, liveDdtNumber: null as string | null }
+
+  it('a Nexus shipment that has not left, while no DDT of it is live; the same choice twice is refused', () => {
+    expect(ddtRequiredRefusal(facts, false)).toBeNull()
+    expect(ddtRequiredRefusal({ ...facts, status: 'DRAFT' }, false)).toBeNull()
+    expect(ddtRequiredRefusal({ ...facts, ddtRequired: false }, true)).toBeNull()
+    expect(ddtRequiredRefusal(facts, true)?.code).toBe('SAME')
+    expect(ddtRequiredRefusal({ ...facts, liveDdtNumber: '145/2026' }, false)).toEqual({ code: 'DDT_LIVE', message: 'DDT 145/2026 is live for this shipment: cancel the DDT first.' })
+    expect(ddtRequiredRefusal({ ...facts, status: 'SHIPPED' }, false)?.code).toBe('LEFT')
+    expect(ddtRequiredRefusal({ ...facts, status: 'CANCELLED' }, false)?.code).toBe('CANCELLED')
+    expect(ddtRequiredRefusal({ ...facts, origin: 'ELSEWHERE' }, false)?.code).toBe('ELSEWHERE')
+  })
+
+  it('no DDT is issued while it travels without one; with one required nothing changes', () => {
+    expect(ddtNotNeededWords(true)).toBeNull()
+    expect(ddtNotNeededWords(false)).toMatch(/^This shipment travels without a DDT/)
+  })
+})
+// ---- end B-OS-014, B-OS-017

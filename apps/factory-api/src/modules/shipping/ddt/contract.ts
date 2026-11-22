@@ -166,9 +166,19 @@ export const issueContract = defineContract({
 export const shipContract = defineContract({
   params: shipmentParams,
   // B-W2a-F8 with B-W2b-19: the garments' moves out of finished goods honour the month locks.
-  body: input({ version, periodLockOverride: periodLockOverride.optional() }),
+  // B-OS-014: + when the goods were handed over (default now: not ahead of now, not before packing nor the DDT, at most 60 days
+  // back) and why, when more than 15 minutes back (3 to 500 characters).
+  body: input({ version, periodLockOverride: periodLockOverride.optional(), shippedAt: instant().optional(), reason: z.string().trim().max(500).nullish() }),
   response: { 200: oneShipment },
 })
+
+// ── B-OS-017 (order shipments tab; O7 B): this shipment travels without a DDT (required false) or with one again (true) ──
+export const ddtRequiredContract = defineContract({
+  params: shipmentParams,
+  body: input({ version, required: z.boolean(), reason: z.string().trim().min(3).max(500) }),
+  response: { 200: oneShipment },
+})
+// ── end B-OS-017 ──
 
 export const listDdtsContract = defineContract({
   querystring: input({

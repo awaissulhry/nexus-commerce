@@ -478,7 +478,7 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
     view: SHIPPING_VIEW,
     act: [SHIPPING_MANAGE],
     decide: 'OPEN',
-    live: ['shipment.created', 'shipment.status_changed', 'shipment.packing_changed', 'shipment.hold_placed', 'shipment.hold_released', 'shipment.split', 'sales_order.promise_changed'],
+    live: ['shipment.created', 'shipment.status_changed', 'shipment.packing_changed', 'shipment.hold_placed', 'shipment.hold_released', 'shipment.split', /* B-OS-011 */ 'shipment.garments_moved', 'sales_order.promise_changed'],
   }),
   // B-W2b-388: my reminders that came back (platform/tasks/reminders): Done or Put off from Today, opened on their record.
   REMINDER: rule({

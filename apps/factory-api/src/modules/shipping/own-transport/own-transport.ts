@@ -19,6 +19,8 @@ import {
   type OwnTransportFacts,
   type OwnTransportRefusalCode,
 } from '@nexus/factory-domain/shipping/own-transport/rules'
+// B-OS-015, B-OS-016 (order shipments tab): ended by hand over a carrier's labels (a reason); the expected arrival typed by hand.
+import { etaProblems, etaRefusal, hasCarrierLabel, overrideReasonProblems } from '@nexus/factory-domain/shipping/own-transport/rules'
 import { SHIPPING_MANAGE } from '@nexus/factory-domain/shipping/permissions'
 import { isTestLabel } from '@nexus/factory-domain/shipping/test-mode/rules'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
@@ -96,6 +98,8 @@ async function transportView(db: CommandTx, shipmentId: string) {
       shippedAt: shipment.shippedAt ? toUtcIso(shipment.shippedAt) : null,
       deliveredAt: shipment.deliveredAt ? toUtcIso(shipment.deliveredAt) : null,
       returnedAt: shipment.returnedAt ? toUtcIso(shipment.returnedAt) : null,
+      /** B-OS-016: the expected arrival (the carrier's, or typed by hand where no carrier feed tracks it). */
+      expectedDeliveryAt: shipment.expectedDeliveryAt ? toUtcIso(shipment.expectedDeliveryAt) : null,
     },
     arrangement: arrangementOf(facts),
     ddt: facts.ddt,
@@ -103,7 +107,14 @@ async function transportView(db: CommandTx, shipmentId: string) {
       carrier: facts.parcels.filter((parcel) => (parcel.trackingNumber !== null || parcel.providerId !== null) && !isTestLabel(parcel.providerId)).length,
       test: facts.parcels.filter((parcel) => isTestLabel(parcel.providerId)).length,
     },
-    may: { arrange: allowance(arrangeRefusal(facts)), track: allowance(trackingRefusal(facts)), status: allowance(eventRefusal(facts)) },
+    may: {
+      arrange: allowance(arrangeRefusal(facts)),
+      track: allowance(trackingRefusal(facts)),
+      status: allowance(eventRefusal(facts)),
+      // B-OS-015: delivered or came back typed by a person over a carrier's labels (with a reason); B-OS-016: the expected arrival.
+      endByHand: allowance(eventRefusal(facts, { status: 'DELIVERED', override: true })),
+      eta: { allowed: etaRefusal(facts) === null, refusal: etaRefusal(facts) },
+    },
     events: events.map((event) => ({
       id: event.id,
       status: event.status,
@@ -230,6 +241,8 @@ export interface StatusBody {
   readonly occurredAt?: string | undefined
   readonly description?: string | null | undefined
   readonly location?: string | null | undefined
+  /** B-OS-015: why a shipment its carrier's labels track is marked delivered or came back by hand (3 to 500; required then). */
+  readonly reason?: string | null | undefined
 }
 
 const blankToNull = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
@@ -237,13 +250,26 @@ const blankToNull = (value: string | null | undefined): string | null => (value 
 /** shipping.manage: a status typed for goods no carrier tracks (see the file's comment). */
 export async function typeStatus(caller: CommandCaller, shipmentId: string, body: StatusBody, idempotencyKey?: string) {
   const shipment = await officeShipment(caller, shipmentId, SHIPPING_MANAGE)
-  refuseIf(eventRefusal(await caller.withClient((client) => factsOf(client, shipment))))
+  // ── B-OS-015: DELIVERED or RETURNED over a carrier's labels, by a person, with a reason (required: a 400 before the state check) ──
+  const reason = blankToNull(body.reason)
+  const overrides = (facts: OwnTransportFacts) => moveOfStatus(body.status) !== null && hasCarrierLabel(facts)
+  const checked = (facts: OwnTransportFacts) => {
+    const override = overrides(facts)
+    if (override) {
+      const problems = overrideReasonProblems(body.reason)
+      if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
+    }
+    refuseIf(eventRefusal(facts, { status: body.status, override }))
+    return override
+  }
+  checked(await caller.withClient((client) => factsOf(client, shipment)))
+  // ── end B-OS-015 ──
   const { result } = await command(
     caller,
     { name: 'shipping.typeTransportStatus', idempotencyKey, input: { shipmentId, ...body }, record: { type: 'Shipment', id: shipment.id, expectedVersion: body.version } },
     async (tools) => {
       const current = (await readShipment(tools.tx, shipment.id))!
-      refuseIf(eventRefusal(await factsOf(tools.tx, current)))
+      const overrode = checked(await factsOf(tools.tx, current)) // B-OS-015
       const occurredAt = body.occurredAt ? (parseInstant(body.occurredAt) ?? tools.now) : tools.now
       const times = eventTimeProblems(occurredAt, current.shippedAt, tools.now)
       if (times.length > 0) throw new ValidationError(times[0]!.message, times)
@@ -256,7 +282,8 @@ export async function typeStatus(caller: CommandCaller, shipmentId: string, body
           shipmentId: current.id,
           parcelId: null,
           status: body.status,
-          description: blankToNull(body.description),
+          // B-OS-015: a move by hand over the carrier's labels keeps its reason as the event's words (the deliveries read says it).
+          description: overrode ? reason : (blankToNull(body.description) ?? reason),
           location: blankToNull(body.location),
           occurredAt,
           recordedAt: tools.now,
@@ -266,13 +293,13 @@ export async function typeStatus(caller: CommandCaller, shipmentId: string, body
         },
         select: { id: true },
       })
-      tools.audit({ action: 'shipping.typeTransportStatus', recordType: 'TrackingEvent', recordId: id, companyId: current.companyId, siteId: current.siteId, after: { shipmentId: current.id, status: body.status, source: 'MANUAL', occurredAt: toUtcIso(occurredAt) } })
+      tools.audit({ action: 'shipping.typeTransportStatus', recordType: 'TrackingEvent', recordId: id, companyId: current.companyId, siteId: current.siteId, after: { shipmentId: current.id, status: body.status, source: 'MANUAL', occurredAt: toUtcIso(occurredAt), /* B-OS-015 */ overrode }, ...(reason ? { reason } : {}) })
       tools.emit({ type: 'shipment.tracking_recorded', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, events: 1, status: body.status, source: 'MANUAL', partyId: current.partyId /* B-SA-004 */ } })
       const move = moveOfStatus(body.status)
       if (move !== null) {
         if (current.status !== 'SHIPPED') throw new InvalidStateError(`The shipment is ${current.status}; it moves to ${move} only once it left.`)
         await tools.tx.shipment.update({ where: { id: current.id }, data: { status: move, ...(move === 'DELIVERED' ? { deliveredAt: occurredAt } : { returnedAt: occurredAt }) }, select: { id: true } })
-        tools.audit({ action: 'shipping.trackingMove', recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { status: current.status }, after: { status: move, at: toUtcIso(occurredAt), source: 'MANUAL' } })
+        tools.audit({ action: 'shipping.trackingMove', recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { status: current.status }, after: { status: move, at: toUtcIso(occurredAt), source: 'MANUAL', /* B-OS-015 */ overrode, ...(reason ? { reason } : {}) }, ...(reason ? { reason } : {}) })
         tools.emit({ type: 'shipment.status_changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { shipmentId: current.id, number: current.number, from: current.status, to: move, partyId: current.partyId /* B-SA-004 */ } })
       }
       return { eventId: id, moved: move }
@@ -280,3 +307,45 @@ export async function typeStatus(caller: CommandCaller, shipmentId: string, body
   )
   return { ...(await caller.withClient((client) => transportView(client, shipment.id))), recorded: { eventId: result.eventId, moved: result.moved } }
 }
+
+// ── B-OS-016 (order shipments tab; 13-backend §2): the expected arrival typed by hand where no carrier feed tracks it ───────────
+export interface EtaBody {
+  readonly version?: number | undefined
+  /** An ISO instant; null clears it. */
+  readonly expectedDeliveryAt: string | null
+  /** Why it changes (required when the customer already reads one: 3 to 500). */
+  readonly reason?: string | null | undefined
+}
+
+/**
+ * PUT /shipping/shipments/:shipmentId/eta (shipping.manage): while PACKED or SHIPPED and no carrier label tracks it (our own van, a
+ * carrier booked by hand; a TEST label is never tracked) — the carrier's poll never touches it (it polls labelled parcels only).
+ * Refused CARRIER_FED, NOT_LEFT_OR_PACKED, ARRIVED, CANCELLED. Audit `shipping.etaTyped` before → after (what the order's deliveries
+ * read calls "Set by hand"); shipment.packing_changed (details). The customer is not mailed.
+ */
+export async function setExpectedArrival(caller: CommandCaller, shipmentId: string, body: EtaBody, idempotencyKey?: string) {
+  const shipment = await officeShipment(caller, shipmentId, SHIPPING_MANAGE)
+  const at = body.expectedDeliveryAt === null ? null : parseInstant(body.expectedDeliveryAt)
+  if (body.expectedDeliveryAt !== null && at === null) throw new ValidationError('Expected an ISO 8601 time with a zone.', [{ path: 'body/expectedDeliveryAt', message: 'Expected an ISO 8601 time with a zone.' }])
+  const reason = blankToNull(body.reason)
+  await command(
+    caller,
+    { name: 'shipping.typeEta', idempotencyKey, input: { shipmentId, ...body }, record: { type: 'Shipment', id: shipment.id, expectedVersion: body.version } },
+    async (tools) => {
+      const current = (await readShipment(tools.tx, shipment.id))!
+      const refusal = etaRefusal(await factsOf(tools.tx, current))
+      if (refusal) throw new DomainError('conflict', refusal.message, [{ path: `refusal/${refusal.code}`, message: refusal.message }])
+      const problems = etaProblems(at, { now: tools.now, since: current.shippedAt ?? current.packedAt, before: current.expectedDeliveryAt, reason })
+      if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
+      const before = current.expectedDeliveryAt ? current.expectedDeliveryAt.toISOString() : null
+      const after = at ? at.toISOString() : null
+      if (before === after) return { changed: false }
+      await tools.tx.shipment.update({ where: { id: current.id }, data: { expectedDeliveryAt: at }, select: { id: true } })
+      tools.audit({ action: 'shipping.etaTyped', recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { expectedDeliveryAt: before }, after: { expectedDeliveryAt: after }, ...(reason ? { reason } : {}) })
+      changed(tools, current)
+      return { changed: true }
+    },
+  )
+  return caller.withClient((client) => transportView(client, shipment.id))
+}
+// ── end B-OS-016 ──

@@ -110,15 +110,79 @@ export function trackingRefusal(facts: OwnTransportFacts): Refusal {
   return null
 }
 
-/** Why a status cannot be typed now (null: it can). */
-export function eventRefusal(facts: OwnTransportFacts): Refusal {
+/**
+ * Why a status cannot be typed now (null: it can). B-OS-015 (order shipments tab; Owner D5): `typed` — DELIVERED or RETURNED typed
+ * by a person over a carrier's labels with a reason (`override`) passes; any other status on a labelled shipment stays the
+ * carrier's. DELIVERED and RETURNED stay final either way.
+ */
+export function eventRefusal(facts: OwnTransportFacts, typed?: { readonly status: ManualEventStatus; readonly override: boolean }): Refusal {
   if (facts.status === 'CANCELLED') return refusal('CANCELLED')
   if (facts.status === 'DELIVERED' || facts.status === 'RETURNED') return refusal('ARRIVED')
   if (facts.status !== 'SHIPPED') return refusal('NOT_LEFT')
   if (facts.transportBy === 'RECIPIENT') return refusal('CUSTOMER_COLLECTS')
-  if (facts.parcels.some(carrierLabelled)) return refusal('CARRIER_TRACKED')
+  if (facts.parcels.some(carrierLabelled) && !(typed?.override === true && (typed.status === 'DELIVERED' || typed.status === 'RETURNED'))) return refusal('CARRIER_TRACKED')
   return null
 }
+
+// ── B-OS-015 (order shipments tab; Owner D5; 13-backend §2): delivered or came back, typed over a carrier's labels ──
+/** The parcels carry a label bought from a carrier (a TEST label is not one): its tracking follows the shipment. */
+export const hasCarrierLabel = (facts: Pick<OwnTransportFacts, 'parcels'>): boolean => facts.parcels.some(carrierLabelled)
+
+export const OVERRIDE_REASON = Object.freeze({ min: 3, max: 500 })
+
+/** The reason a person gives to end a labelled shipment's journey by hand: required, 3 to 500 characters (a 400 at body/reason). */
+export function overrideReasonProblems(reason: string | null | undefined): Issue[] {
+  const text = (reason ?? '').trim()
+  if (text.length < OVERRIDE_REASON.min || text.length > OVERRIDE_REASON.max) {
+    return [{ path: 'body/reason', message: `The carrier's labels track these goods: say why they are marked by hand (${OVERRIDE_REASON.min} to ${OVERRIDE_REASON.max} characters).` }]
+  }
+  return []
+}
+// ── end B-OS-015 ──
+
+// ── B-OS-016 (order shipments tab; 13-backend §2): the expected arrival typed by hand where no carrier feed tracks it ──
+export const ETA_REFUSALS = ['CARRIER_FED', 'NOT_LEFT_OR_PACKED', 'CANCELLED', 'ARRIVED'] as const
+export type EtaRefusalCode = (typeof ETA_REFUSALS)[number]
+
+export const ETA_WORDS: Readonly<Record<EtaRefusalCode, string>> = Object.freeze({
+  CARRIER_FED: "The carrier's own tracking follows it: nothing to type.",
+  NOT_LEFT_OR_PACKED: 'An expected arrival is typed once the goods are packed.',
+  CANCELLED: 'The shipment is cancelled.',
+  ARRIVED: 'The shipment is delivered or came back already: its arrival is known.',
+})
+
+export const ETA_LIMITS = Object.freeze({ aheadDays: 366, reasonMin: 3, reasonMax: 500 })
+
+/** Why the expected arrival cannot be typed now (null: it can): a PACKED or SHIPPED shipment no carrier label tracks (own van, a carrier booked by hand). */
+export function etaRefusal(facts: Pick<OwnTransportFacts, 'status' | 'parcels'>): { readonly code: EtaRefusalCode; readonly message: string } | null {
+  const code: EtaRefusalCode | null =
+    facts.status === 'CANCELLED'
+      ? 'CANCELLED'
+      : facts.status === 'DELIVERED' || facts.status === 'RETURNED'
+        ? 'ARRIVED'
+        : facts.status !== 'PACKED' && facts.status !== 'SHIPPED'
+          ? 'NOT_LEFT_OR_PACKED'
+          : facts.parcels.some(carrierLabelled)
+            ? 'CARRIER_FED'
+            : null
+  return code ? { code, message: ETA_WORDS[code] } : null
+}
+
+/**
+ * The typed expected arrival (null clears it): not before the goods left (or were packed), at most a year ahead; a reason (3 to 500)
+ * when it changes or clears one the customer already reads (the portal shows it while packed or on the way).
+ */
+export function etaProblems(at: Date | null, facts: { readonly now: Date; readonly since: Date | null; readonly before: Date | null; readonly reason: string | null | undefined }): Issue[] {
+  const problems: Issue[] = []
+  if (at !== null && facts.since !== null && at.getTime() < facts.since.getTime()) problems.push({ path: 'body/expectedDeliveryAt', message: 'The expected arrival is before the goods left.' })
+  else if (at !== null && at.getTime() > facts.now.getTime() + ETA_LIMITS.aheadDays * 86_400_000) problems.push({ path: 'body/expectedDeliveryAt', message: 'At most a year ahead.' })
+  const reason = (facts.reason ?? '').trim()
+  const changesSeen = facts.before !== null && (at === null || at.getTime() !== facts.before.getTime())
+  if (reason.length > ETA_LIMITS.reasonMax) problems.push({ path: 'body/reason', message: `A reason is at most ${ETA_LIMITS.reasonMax} characters.` })
+  else if (changesSeen && reason.length < ETA_LIMITS.reasonMin) problems.push({ path: 'body/reason', message: 'The customer reads the expected arrival: say why it changes (3 to 500 characters).' })
+  return problems
+}
+// ── end B-OS-016 ──
 
 /** The arrangement as sent. */
 export interface ArrangementInput {

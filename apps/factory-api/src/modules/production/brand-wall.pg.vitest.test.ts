@@ -204,13 +204,25 @@ describe('B-PR-10 the brand-wall sweep', () => {
     // B-OS (order shipments tab, 13-backend §4): every route the Shipments tab reads is met by the sweep by itself — swept, never
     // EXEMPT (a customer-limited person gets the same not-found as an unknown id). PR S1: the order read's rows and buckets
     // (B-OS-001, 002) and the backorder they share, the deliveries (B-OS-003), the links (B-OS-004), what may come back from one
-    // shipment (B-OS-005). PR S2 adds the commands; PR S3 the tracking per parcel.
+    // shipment (B-OS-005). PR S2: the commands — split into several (B-OS-010), the move targets, move, merge, take-off (B-OS-011 …
+    // 013), hand over at a time (B-OS-014), delivered by hand (B-OS-015), the expected arrival (B-OS-016), travels without a DDT
+    // (B-OS-017). PR S3 the tracking per parcel.
     for (const key of [
       'GET /sales/orders/:orderId',
       'GET /shipping/orders/:salesOrderId/backorder',
       'GET /sales/orders/:orderId/deliveries',
       'GET /sales/orders/:orderId/links',
       'GET /sales/returns/returnable',
+      // ── PR S2 ──
+      'POST /shipping/shipments/:shipmentId/split',
+      'GET /shipping/shipments/:shipmentId/move-targets',
+      'POST /shipping/shipments/:shipmentId/move',
+      'POST /shipping/shipments/:shipmentId/merge',
+      'POST /shipping/shipments/:shipmentId/orders/:salesOrderId/take-off',
+      'POST /shipping/shipments/:shipmentId/ship',
+      'POST /shipping/shipments/:shipmentId/own-transport/events',
+      'PUT /shipping/shipments/:shipmentId/eta',
+      'PUT /shipping/shipments/:shipmentId/ddt-required',
     ]) {
       expect(swept.has(key), key).toBe(true)
       expect(EXEMPT[key], key).toBeUndefined()

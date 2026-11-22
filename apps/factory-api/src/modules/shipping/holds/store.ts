@@ -190,3 +190,27 @@ export async function carryHoldsInCommand(tools: CommandTools, from: LockedShipm
   }
   return live.length
 }
+
+// ── B-OS-011, B-OS-012 (order shipments tab; 13-backend §2): garments moved onto another DRAFT carry the holds they were under ──
+/**
+ * Garments moved (or merged) from one DRAFT onto another carry the holds in force of the shipment they came from — a move never
+ * frees goods from a hold: each reason in force on `from` and not on `to` is placed again on `to` by the same placer (the system
+ * or the person), with its words. The target's own holds stay as they are (one hold in force per reason), and no released history
+ * moves: the target's causes are its own. Inside the move's command, both shipments locked.
+ */
+export async function carryHoldsOntoInCommand(tools: CommandTools, from: LockedShipment, to: LockedShipment): Promise<number> {
+  const rows = await readHolds(tools.tx, [from.id, to.id])
+  const onTarget = new Set(rows.filter((row) => row.shipmentId === to.id && row.releasedAt === null).map((row) => row.reason))
+  const live = rows.filter((row) => row.shipmentId === from.id && row.releasedAt === null && !onTarget.has(row.reason))
+  if (live.length === 0) return 0
+  const placedAt = await holdTimeOf(tools)
+  for (const row of live) {
+    const id = newId()
+    const words = storedWords(row.words)
+    await tools.tx.shipmentHold.create({ data: { id, siteId: to.siteId, partyId: to.partyId, shipmentId: to.id, reason: row.reason, words, placedAt, placedById: row.placedById, createdById: actorIdOf(tools) }, select: { id: true } })
+    tools.audit({ action: 'shipping.holdPlaced', recordType: 'Shipment', recordId: to.id, companyId: to.companyId, siteId: to.siteId, after: { holdId: id, reason: row.reason, words, bySystem: row.placedById === null, carriedFrom: { shipmentId: from.id, holdId: row.id } } })
+    tools.emit({ type: 'shipment.hold_placed', subject: to.id, companyId: to.companyId, siteId: to.siteId, payload: { shipmentId: to.id, number: to.number, holdId: id, reason: row.reason as ShipmentHoldReason, bySystem: row.placedById === null, partyId: to.partyId /* B-SA-004 */ } })
+  }
+  return live.length
+}
+// ── end B-OS-011, B-OS-012 ──

@@ -1,8 +1,10 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
 import { arrangeTransportContract, getOwnTransportContract, typeStatusContract, typeTrackingNumberContract } from './contract'
+import { etaContract } from './contract' // B-OS-016
 import { manifest } from './manifest'
 import { arrangeTransport, getOwnTransport, typeStatus, typeTrackingNumber } from './own-transport'
+import { setExpectedArrival } from './own-transport' // B-OS-016
 
 /**
  * A manual carrier or our own van (B-W2b-390; LOG-122): how the goods travel, the manual carrier's tracking number, and the
@@ -23,4 +25,6 @@ export default defineRoutes('shipping.own-transport', manifest, async (app) => {
   app.post('/shipping/shipments/:shipmentId/own-transport/events', { schema: typeStatusContract }, async (request, reply) =>
     reply.code(201).send(await typeStatus(request, request.params.shipmentId, request.body, idempotencyKeyFrom(request))),
   )
+  // B-OS-016: the expected arrival typed by hand.
+  app.put('/shipping/shipments/:shipmentId/eta', { schema: etaContract }, async (request) => setExpectedArrival(request, request.params.shipmentId, request.body, idempotencyKeyFrom(request)))
 })
