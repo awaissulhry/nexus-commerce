@@ -1,0 +1,224 @@
+{
+  "band": {
+    "title": "Waiting for files",
+    "answer": {
+      "asked_one": "{count} asked",
+      "asked_other": "{count} asked",
+      "arrived_one": "{count} arrived to check",
+      "arrived_other": "{count} arrived to check",
+      "late_one": "{count} is late",
+      "late_other": "{count} are late",
+      "mine_one": "{count} is asked of you",
+      "mine_other": "{count} are asked of you",
+      "portal_one": "{count} asked in the portal",
+      "portal_other": "{count} asked in the portal"
+    },
+    "empty": "Nothing is asked. Ask anyone for a file: a person, a role, a team on the floor or the customer.",
+    "emptyRead": "Nothing is asked.",
+    "counted": {
+      "priced_one": "{count} ask for a file with prices",
+      "priced_other": "{count} asks for files with prices",
+      "outside_one": "{count} ask outside your role",
+      "outside_other": "{count} asks outside your role",
+      "why": "your role does not read them."
+    },
+    "more_one": "Show {count} more",
+    "more_other": "Show {count} more",
+    "less": "Show fewer",
+    "ask": "Ask for a file…",
+    "closed": "This order is closed: no new asks.",
+    "menu": {
+      "label": "More for Waiting for files",
+      "copyLink": "Copy link to Waiting for files"
+    },
+    "info": {
+      "what": "One row per open ask: the ones asked of you first, then what arrived, then what is late. An ask closes only with files sent for it: then Accept, or Ask again.",
+      "who": "A floor ask names a team, a floor role or a step — never a worker; nothing says who read it."
+    },
+    "failed": "Couldn't read the asks. The rest of the tab is shown."
+  },
+  "row": {
+    "lands": "lands on {target}",
+    "landsStep": "lands on {target} · step {seq} · {name}",
+    "askedBy": "Asked by {name} · {date}",
+    "due": "due {date}",
+    "late_one": "{count} day late",
+    "late_other": "{count} days late",
+    "forYou": "For you",
+    "who": {
+      "PERSON": "office person",
+      "OFFICE_ROLE": "office role",
+      "FLOOR_TEAM": "the floor",
+      "FLOOR_ROLE": "floor role",
+      "STEP": "the floor · whoever works the step",
+      "CUSTOMER": "in its portal"
+    },
+    "priced": "a file with prices",
+    "customerDoc": "A document for this order"
+  },
+  "state": {
+    "OPEN": "Asked",
+    "ARRIVED": "Arrived — check it",
+    "again": "Asked again",
+    "portal": "Asked in the portal",
+    "sent_one": "{count} file · sent {date} by {name}",
+    "sent_other": "{count} files · sent {date} by {name}",
+    "sentFloor_one": "{count} file · sent {date} by the floor",
+    "sentFloor_other": "{count} files · sent {date} by the floor",
+    "checking": "being checked for viruses",
+    "chased": "Asked for an update {date}",
+    "againWhy": "Asked again: {reason}",
+    "portalCloses": "closes when {customer} says done"
+  },
+  "act": {
+    "accept": "Accept…",
+    "again": "Ask again…",
+    "upload": "Upload for this ask",
+    "chase": "Ask for an update",
+    "change": "Change…",
+    "reassign": "Reassign…",
+    "cancel": "Cancel the ask…",
+    "uploadFor": "Upload for this ask — for {who}…",
+    "check": "Open what arrived",
+    "openOn": "Open on {target} ›",
+    "copyLink": "Copy link to this ask",
+    "menu": "More for the ask: {what}"
+  },
+  "held": {
+    "checking": "Wait — the file is being checked."
+  },
+  "file": {
+    "forAsk": "For an ask — check it"
+  },
+  "ask": {
+    "title": "Ask for a file",
+    "what": "What do you need?",
+    "whatHint": "The uploader sees these words on top of their upload window · 3–500 characters.",
+    "who": "Who uploads it",
+    "whoKind": {
+      "PERSON": "A person",
+      "OFFICE_ROLE": "An office role",
+      "FLOOR_TEAM": "A team on the floor",
+      "FLOOR_ROLE": "A floor role",
+      "STEP": "Whoever works a step",
+      "CUSTOMER": "The customer (portal)"
+    },
+    "whoHint": {
+      "PERSON": "an office person, by name",
+      "OFFICE_ROLE": "everyone with it who reaches this order",
+      "FLOOR_TEAM": "the tablets of that team",
+      "FLOOR_ROLE": "the tablets of that role at the site",
+      "STEP": "the tablets holding that step",
+      "CUSTOMER": "a task in its portal"
+    },
+    "pick": {
+      "PERSON": "The person",
+      "OFFICE_ROLE": "The office role",
+      "FLOOR_TEAM": "The team",
+      "FLOOR_ROLE": "The floor role"
+    },
+    "pickOne": "Pick one",
+    "pickNone": "Nobody to pick here.",
+    "pickReading": "Reading who can be asked…",
+    "pickFailed": "Couldn't read who can be asked: try again.",
+    "officeNote": "Only people who reach this order and its customer get it; nobody with the role reaching it: the window says so before you send.",
+    "floorNote": "Teams, floor roles and steps only: a floor worker is never named, and the tablets never say who read it.",
+    "customerNote": "{customer} gets a task in its portal: upload a document. Your words stay in the office.",
+    "whereKind": {
+      "SALES_ORDER_LINE": "A line",
+      "WORK_ORDER": "A work order and its step"
+    },
+    "floorWhere": "A floor ask always lands on a work order: pick the work order and, if you like, its step.",
+    "lineWhere": "A pattern PDF lands on the order line.",
+    "pickLine": "The line",
+    "pickWorkOrder": "The work order",
+    "pickStep": "The step",
+    "anyStep": "Any step",
+    "stepWords": "step {seq} · {name}",
+    "noWorkOrder": "This order has no work order yet: a floor ask waits for one.",
+    "due": "Due",
+    "pricedHint": "Then only people who see prices are asked, and only they read the ask.",
+    "pricedFloor": "The floor never gets files with prices.",
+    "sheetHint": "Body data: only people with the measurements right are asked and open it.",
+    "sheetFloor": "A measurement sheet never goes to the floor.",
+    "send": "Send the ask",
+    "held": {
+      "words": "Say what you need: 3 to 500 characters.",
+      "pick": "Pick who uploads it.",
+      "where": "Pick where it goes.",
+      "step": "Whoever works a step: pick the step.",
+      "due": "Pick the due day.",
+      "busy": "The ask is being sent."
+    },
+    "happens": "What happens",
+    "happensOffice": "They get a task “Upload: …” in My tasks and Today; when the file comes, you get “Check: …”. Ticking the task by hand closes nothing: the file closes the ask.",
+    "happensFloor": "The tablets of that team, role or step show it under Files asked; a photo needs the network.",
+    "customerTold": "The customer: sees nothing — an ask is office only.",
+    "never": "What never changes. An ask is never deleted: it is accepted or cancelled; the audit keeps who asked, when, and where it lands."
+  },
+  "refusal": {
+    "stale": "Someone changed this ask meanwhile: it was read again.",
+    "forbidden": "Your role cannot do this on this order.",
+    "notFound": "This ask is not found any more.",
+    "words": "It was refused: {detail}",
+    "failed": "It did not go through: try again.",
+    "server": "{words}"
+  },
+  "accept": {
+    "title": "Accept the file for this ask?",
+    "sent_one": "{who} sent {count} file on {date}:",
+    "sent_other": "{who} sent {count} files on {date}:",
+    "theFloor": "The floor",
+    "open": "Open {name}",
+    "notListed": "A file you cannot open here",
+    "share": "Share with {customer}",
+    "shareHint": "It shows in its portal's Documents at once.",
+    "version": "Accept records these files: a newer version later is not accepted by itself.",
+    "go": "Accept",
+    "shareFailed": "Accepted, but sharing did not go through: share it from the file."
+  },
+  "again": {
+    "title": "Ask {who} again",
+    "why": "Why?",
+    "whyHint": "Office only · 3–500 characters; the uploader reads it.",
+    "what": "The same addressee is asked again; the files that came stay on the record.",
+    "go": "Ask again"
+  },
+  "chase": {
+    "title": "Ask {who} for an update",
+    "office": "An office note in the order's conversation names the people who hold its task.",
+    "floor": "The tablets' card says “The office asked for an update”. Nobody is named; nothing says who read it.",
+    "go": "Ask for an update"
+  },
+  "reassign": {
+    "title": "Reassign the ask",
+    "who": "Who uploads it now",
+    "why": "Why · optional",
+    "floorStays": "A floor ask stays on its work order.",
+    "go": "Reassign"
+  },
+  "change": {
+    "title": "Change the ask",
+    "go": "Save"
+  },
+  "cancel": {
+    "title": "Cancel the ask?",
+    "what": "Its tasks close as cancelled and the tablets stop showing it; a file already sent stays.",
+    "keep": "Keep the ask",
+    "go": "Cancel the ask"
+  },
+  "win": {
+    "never": "What never changes. Who asked, when and the history stay; an ask is never deleted.",
+    "customer": "The customer: sees nothing.",
+    "why": {
+      "held": "Say why: 3 to 500 characters."
+    },
+    "close": "Close"
+  },
+  "upload": {
+    "asks": "{name} asks: “{words}”",
+    "asksPriced": "{name} asks for a file with prices.",
+    "due": "due {date} · lands on {target}",
+    "send": "Send for this ask"
+  }
+}

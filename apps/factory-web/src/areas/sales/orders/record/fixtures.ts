@@ -124,6 +124,8 @@ import { designScreen as fieldsScreen } from '../../../../record-panels/custom-f
 // ---- end F-OO-211
 import { brandRequest } from '../../../home/approvals/requests/fixtures'
 import { ORDER_ID } from '../_demo/fixtures'
+// F-OF-201 (order FILES tab W2): made-up asks for "Waiting for files" (the gallery case before S2 lands).
+import { ASK_WINDOW_STATE, asksState, withAsks } from '../../../../lib/record-thread/files-view/asks/fixtures'
 // F-CP-142: Money's Price check card — the ONE window's made-up check and its states (so/price-check, F-CP-114).
 import { PRICE_CHECK, priceWindowOf } from '../price-check/fixtures'
 import type { PriceCheckCardModel, PriceCheckRead } from './price-check-card'
@@ -273,6 +275,8 @@ const everyReleased: Order = {
 // ---- end F-OO-112
 // ---- F-CP-148: the order's files with two priced documents (made up): named for a price holder, counted (pricedLeftOut) for anyone else.
 const PRICED_NAMES = ['Conferma d’ordine SO-2026-0088 v1.pdf', 'Ordine del cliente PO-ESEMPIO-88.pdf'] as const
+// F-OF-201: what the Owner may do on the order's files (the read's `may`, S3) in the asks' gallery cases.
+const OF_MAY = { upload: true, delete: true, share: true, ask: true, askCustomer: true } as const
 const PRICED_FILES: typeof ORDER_FILES = {
   ...ORDER_FILES,
   groups: ORDER_FILES.groups.map((group, index) => (index === 0 ? { ...group, files: [...group.files, ...PRICED_NAMES.map((name, n) => ({ ...group.files[0]!, id: `0190f0e2-8181-7000-8000-00000000009${n}`, name, audience: 'OFFICE_ONLY' as const, inThread: null }))], pricedLeftOut: 0 } : group)),
@@ -1418,6 +1422,10 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'cp-148-files-owner', label: 'F-CP-148 · Seen as Owner · Files: the order confirmation and the customer\'s PO named and opened (a price holder)', model: base('owner', production, { tab: 'files', files: { read: PRICED_FILES, problem: null, selected: [], canShare: true } }) },
     { id: 'cp-148-files-sales', label: 'F-CP-148 · Seen as Sales worker · Files: "2 priced documents — you cannot open them" counted, never named, no tile, no preview', model: noPrice(base('sales', forRole(production, 'manager'), { tab: 'files', files: { read: PRICED_LOCKED, problem: null, selected: [], canShare: true } })) },
     { id: 'cp-148-files-manager', label: 'F-CP-148 · Seen as Production manager · Files: the same counted lock line; the artwork and the photos open', model: base('manager', production, { tab: 'files', files: { read: PRICED_LOCKED, problem: null, selected: [], canShare: false } }) },
+    // ---- F-OF-201 / F-OF-202 (order FILES tab W2): "Waiting for files" on 13-backend §2's contract before S2 lands (made-up asks) ----
+    { id: 'of-201-asks', label: 'F-OF-201 · Owner · Files: Waiting for files — arrived from the Pattern maker, 2 days late to the Sewing team, one asked of you; a priced ask and one outside the role counted; a portal ask', model: base('owner', production, { tab: 'files', files: { read: withAsks(ORDER_FILES), problem: null, selected: [], canShare: true, may: OF_MAY, asks: asksState() } }) },
+    { id: 'of-202-ask', label: 'F-OF-202 · Owner · Files: Ask for a file… — the office role "Pattern maker", Line 1, due 25 Nov', model: base('owner', production, { tab: 'files', files: { read: withAsks(ORDER_FILES), problem: null, selected: [], canShare: true, may: OF_MAY, asks: ASK_WINDOW_STATE } }) },
+    // ---- end F-OF-201
     // ---- end F-CP-148
     // ---- F-SA-232: Overview, the first tab ("where is it now", progress by line — the order's own pieces) ----
     // F-OO-133 (W05 follow-up): with the people part read (PEOPLE) and Sales' People rights (Ask; no supervisor right) — the real card,

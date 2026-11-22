@@ -284,5 +284,24 @@
     "back": "Elimina",
     "empty": "Scrivi un numero",
     "range": "Da {min} a {max}"
+  },
+  "asked": {
+    "title_one": "File richiesti ({count})",
+    "title_other": "File richiesti ({count})",
+    "forStep": "Foto per la fase {seq} · {name}",
+    "forOrder": "Foto per quest'ordine di lavoro",
+    "customer": "cliente {code}",
+    "due": "entro il {date}",
+    "late_one": "in ritardo di {count} giorno",
+    "late_other": "in ritardo di {count} giorni",
+    "office": "L'ufficio chiede: «{words}»",
+    "again": "Richiesto di nuovo: {reason}",
+    "chased": "L'ufficio ha chiesto un aggiornamento, {date}",
+    "photo": "Foto per questa richiesta",
+    "offline": "Le foto hanno bisogno della rete — la fotocamera aspetta se sei offline.",
+    "sending": "La foto è in invio.",
+    "sent": "Inviato all'ufficio.",
+    "closed": "Questa richiesta è chiusa: la foto va sull'ordine di lavoro come nota.",
+    "failed": "La foto non è partita: riprova."
   }
 }

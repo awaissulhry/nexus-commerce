@@ -16,6 +16,7 @@ import { TASK_ROUTES, taskForScan } from '../routes'
 import { fetchMyMessages, fetchStationHelp, fetchWorkList, keptMyMessages, keptStationHelp, keptWorkList } from './api'
 import { arranged, changedRows, helpHeld, helpPayload, listChanged, materialTile, PUT_LAST_KEY, putLastIn, readPutLast, readSeen, SEEN_KEY, withPutLast, withSeen, type DispatchList, type MyMessages, type PutLast, type StationHelp } from './model'
 import { MyWorkView, type MyWorkAction, type MyWorkCall, type MyWorkStep } from './view/MyWorkView'
+import { FilesAsked } from './asks/FilesAsked' // F-OF-204
 // B-W2b-232 (FI9:02): "New instructions N".
 import { useMine } from '../instructions/mine'
 import { dueCount } from '../instructions/model'
@@ -592,6 +593,7 @@ export function FloorMyWork() {
 
   return (
     <MyWorkView
+      asked={<FilesAsked /> /* F-OF-204: the tablet's asks for a file (its own container) */}
       model={{
         frame,
         step,
