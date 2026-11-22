@@ -1,8 +1,9 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
-import { announceContract, completeContract, noteContract, tilesContract } from './contract'
+import { announceContract, completeContract, floorAsksContract, noteContract, tilesContract } from './contract'
 import { manifest } from './manifest'
 import { announceFile, completeFile, noteTiles, postFloorNote } from './notes'
+import { floorAsks } from './asks' // B-OF-034
 
 /**
  * A comment or a photo from the floor (B-W2b-47; MES-101, COL-017): the tiles and the reminder, a file announced and
@@ -11,6 +12,9 @@ import { announceFile, completeFile, noteTiles, postFloorNote } from './notes'
  */
 export default defineRoutes('production.floornotes', manifest, async (app) => {
   app.get('/production/floor-notes/tiles', { schema: tilesContract }, async () => noteTiles())
+
+  // B-OF-034: the office's open asks for files this tablet answers (a photo with `askId` answers one).
+  app.get('/production/floor-notes/asks', { schema: floorAsksContract }, async (request) => floorAsks(request))
 
   app.post('/production/floor-notes/work-orders/:workOrderId/files', { schema: announceContract }, async (request, reply) => reply.code(201).send(await announceFile(request, request.params.workOrderId, request.body, idempotencyKeyFrom(request))))
 

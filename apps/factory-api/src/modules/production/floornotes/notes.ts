@@ -17,6 +17,11 @@ import { asTenantSystem } from '../bundles/codes'
 import { floorOf, refuse, scanWorkOrder } from '../scans/access'
 import { deviceStationOf, readOperations, readStations, workerNames, type ScanHeader } from '../scans/store'
 import { hasAcknowledgedNotice, scanSubjectFor } from '../settings/subject'
+// B-OF-034 (order files tab): a photo that answers an office ask for a file.
+import { serverClock } from '../../../core/time'
+import { isFloorAddressee } from '@nexus/factory-domain/files/asks'
+import { ASK_COLUMNS, auditViewOf, eventIdsOf, eventPlaceOf, writeCheckTask } from '../../sales/file-asks/file-asks'
+import { answerableAsk } from './asks'
 
 /**
  * A comment or a photo from the floor (B-W2b-47; MES-101 "Comment and photo", COL-017 "Photo and short video from the
@@ -32,6 +37,13 @@ import { hasAcknowledgedNotice, scanSubjectFor } from '../settings/subject'
  * tenant's system caller, keyed `<device>.<clientEventId>`. The author is the worker where the site names workers (once they
  * acknowledged the notice, as any floor record), else the station: a site that records stations names no person here either.
  * A comment written on the floor is for the floor (`forFloor`, B-W2b-F5): the other stations read it on My work.
+ *
+ * B-OF-034 (order files tab; 13-backend §2): a note may name the office's ask for a file it answers (`askId`, tile ASKED_FILE "Photo for an
+ * ask"). When the ask is one this tablet answers (./asks.ts `answerableAsk`: OPEN, a floor ask of this site and work order, to the
+ * worker's team, floor role, or this work order's step) the note's photos go to it in the SAME system command: OPEN → ARRIVED with the
+ * note's files, answered by "the floor" (answeredById null: never the worker), the asker's "Check: …" Task, audit
+ * files.fileAsk.answer (the note's own audit keeps its worker or station as before), event file_ask.arrived. An ask closed meanwhile
+ * (or not this tablet's) is left as it is and the note posts as any note; the answer says so (`ask.answered` false).
  */
 
 const keyOf = (deviceId: string, clientEventId: string) => `${deviceId}.${clientEventId}`
@@ -91,6 +103,8 @@ export interface NoteInput {
   readonly bundleId?: string | undefined
   readonly workOrderOperationId?: string | undefined
   readonly occurredAt?: string | undefined
+  /** B-OF-034: the office's ask for a file this photo answers. */
+  readonly askId?: string | undefined
 }
 
 /** POST /production/floor-notes/work-orders/:workOrderId, or the offline queue: the note on the work order's thread. */
@@ -101,6 +115,11 @@ export async function postFloorNote(caller: CommandCaller, workOrderId: string, 
   const fileIds = [...new Set(input.fileIds ?? [])]
   const problem = noteProblem({ tileCode: input.tileCode, note, files: fileIds.length })
   if (problem) throw new ValidationError(problem, [{ path: 'body/note', message: problem }])
+  // ---- B-OF-034: an ask is answered with the note's photos (at least one); whether this tablet answers it is read here.
+  const askId = input.askId ?? null
+  if (askId && fileIds.length === 0) throw new ValidationError('A photo for an ask needs the photo.', [{ path: 'body/fileIds', message: 'A photo for an ask needs the photo.' }])
+  const answerable = askId ? await answerableAsk(caller, context, askId, workOrder.id, input.workOrderOperationId ?? null, serverClock.now()) : null
+  // ---- end B-OF-034
   const place = await caller.withClient(async (db) => {
     const scanSubject = await scanSubjectFor(db, workOrder.siteId)
     const stationId = await deviceStationOf(db, context.deviceId)
@@ -132,9 +151,24 @@ export async function postFloorNote(caller: CommandCaller, workOrderId: string, 
       const issues = await attachmentProblems(tools.tx, tools.context, thread, fileIds, 'OFFICE')
       if (issues.length > 0) throw new ValidationError('The note is not valid.', issues)
       const message = await writeMessage(tools, thread, { direction: 'INTERNAL_NOTE', channel: 'APP', author, bodyText, attachments: fileIds, forFloor: true })
-      tools.audit({ action: 'production.postFloorNote', recordType: 'WorkOrder', recordId: workOrder.id, companyId: workOrder.companyId, siteId: workOrder.siteId, after: { messageId: message.id, tileCode: input.tileCode, bundleId: place.bundle?.id ?? null, operationId: place.operation?.id ?? null, files: fileIds.length, deviceId: context.deviceId, stationId: place.stationId, workerId: place.scanSubject === 'WORKER' ? context.actorId : null } })
-      return { messageId: message.id, threadId: thread.id, files: fileIds.length }
+      tools.audit({ action: 'production.postFloorNote', recordType: 'WorkOrder', recordId: workOrder.id, companyId: workOrder.companyId, siteId: workOrder.siteId, after: { messageId: message.id, tileCode: input.tileCode, bundleId: place.bundle?.id ?? null, operationId: place.operation?.id ?? null, files: fileIds.length, deviceId: context.deviceId, stationId: place.stationId, workerId: place.scanSubject === 'WORKER' ? context.actorId : null, /* B-OF-034 */ askId } })
+      // ---- B-OF-034: the photos answer the ask (OPEN → ARRIVED, by the floor), unless it closed meanwhile.
+      let ask: { id: string; answered: boolean } | null = askId ? { id: askId, answered: false } : null
+      if (askId && answerable) {
+        await tools.tx.$queryRaw`SELECT id FROM "FileAsk" WHERE id = ${askId}::uuid FOR UPDATE`
+        const row = await tools.tx.fileAsk.findUnique({ where: { id: askId }, select: ASK_COLUMNS })
+        if (row && row.status === 'OPEN' && isFloorAddressee(row.addressee) && row.workOrderId === workOrder.id) {
+          const checkTaskId = await writeCheckTask(tools, row, null)
+          const after = await tools.tx.fileAsk.update({ where: { id: row.id }, data: { status: 'ARRIVED', fileIds, answeredAt: tools.now, answeredById: null, checkTaskId, version: row.version + 1, updatedAt: tools.now }, select: ASK_COLUMNS })
+          tools.audit({ action: 'files.fileAsk.answer', recordType: 'FileAsk', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: auditViewOf(row), after: { ...auditViewOf(after), by: 'FLOOR', messageId: message.id, checkTaskId } })
+          tools.emit({ type: 'file_ask.arrived', ...eventPlaceOf(row), payload: eventIdsOf(row, 'ARRIVED') })
+          ask = { id: row.id, answered: true }
+        }
+      }
+      // ---- end B-OF-034
+      return { messageId: message.id, threadId: thread.id, files: fileIds.length, ask }
     },
   )
-  return { ...result, replayed }
+  // B-OF-034: a note resent from before asks existed answers no ask.
+  return { ...result, ask: result.ask ?? null, replayed }
 }
