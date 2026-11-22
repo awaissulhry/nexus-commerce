@@ -6,6 +6,7 @@ import { AUTOMATIC_REASONS } from '@nexus/factory-domain/sales/amendments/reason
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedShipping } from '../../../../../../packages/factory-db/seed/shipping'
+import { seed as seedFiles } from '../../../../../../packages/factory-db/seed/files' // of-fx4s (B-OF-005): the file store and its portal file of P1
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { callerFor } from '../../../core/command'
 import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
@@ -627,9 +628,13 @@ describe('B-OS-022: a parcel number typed by hand in the portal', { timeout: SLO
 describe('B-OF-005: the order’s files in the portal leave a priced file out for a person without prices', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('the viewer does not get the priced proforma’s name (left out, uncounted); the buyer does', async () => {
     const so2 = await orderId('SEED-SO-0002')
-    const [source] = await admin<{ id: string }>(`SELECT id FROM "StoredFile" WHERE "tenantId" = $1 AND status = 'AVAILABLE' AND "supersededAt" IS NULL ORDER BY id LIMIT 1`, [T])
+    // of-fx4s: this world (the seeds up to shipping) holds no stored file and no file store; the files seed adds both (on company,
+    // plant and tenant records: SO-0002 gains none). The planted proforma is a copy of its file of P1 (company A, AVAILABLE).
+    await seedFiles({ db: h.database, namespace: NS })
+    const source = await one<{ id: string }>(`SELECT id FROM "StoredFile" WHERE id = $1 AND status = 'AVAILABLE' AND "partyId" = $2`, [seedUuid(NS, 'files:partner:P1'), P1])
+    expect(source, 'the files seed’s portal file of P1').toBeDefined()
     const id = newId()
-    const changes = { id, recordType: 'SalesOrder', recordId: so2, kind: 'DOCUMENT', contentType: 'application/pdf', originalName: 'T-OF005 proforma with prices.pdf', visibility: ['OFFICE', 'PARTNER'], partyId: P1, floorSiteId: null, priced: true, seriesId: null, versionNo: 1, sourceFileId: null, thumbnailKey: null, exifStrippedAt: null, category: null, storageKey: `t/${T}/c/${companyA}/2026/${newId()}` }
+    const changes = { id, companyId: companyA, recordType: 'SalesOrder', recordId: so2, kind: 'DOCUMENT', contentType: 'application/pdf', originalName: 'T-OF005 proforma with prices.pdf', visibility: ['OFFICE', 'PARTNER'], partyId: P1, floorSiteId: null, priced: true, seriesId: null, versionNo: 1, sourceFileId: null, thumbnailKey: null, exifStrippedAt: null, category: null, storageKey: `t/${T}/c/${companyA}/2026/${newId()}` }
     await admin('BEGIN')
     try {
       await admin("SET LOCAL session_replication_role = 'replica'")
