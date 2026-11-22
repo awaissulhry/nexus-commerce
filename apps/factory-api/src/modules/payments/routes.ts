@@ -26,6 +26,7 @@ import {
   reverseContract,
   sendDepositLinkContract,
   voidContract,
+  undoPaymentContract, // B-OM-017
   voidRefundContract,
 } from './contract'
 import { creditBalance, releaseOverpayment } from './credit-balance'
@@ -35,6 +36,7 @@ import { depositReceived } from './deposits'
 import { manifest } from './manifest'
 import { openItems } from './open-items'
 import { allocatePayment, getPayment, listPayments, recordPayment, reverseAllocation, voidPayment } from './payments'
+import { undoDepositPayment } from './undo' // B-OM-017
 import { cancelRefund, changeRefund, getRefund, listRefunds, openRefunds, payRefund, recordRefund, voidRefund } from './refunds'
 // B-W2b-185: paying online (card and SEPA through the payment provider; ./online).
 import { fakeConfirmContract, linkIntentContract, linkPayPageContract, linkStartContract, officeIntentsContract, portalIntentContract, portalOpenItemsContract, portalStartContract, portalStatementContract, portalStatementPdfContract, sendPayLinkContract } from './online/contract'
@@ -111,6 +113,8 @@ export default defineRoutes('payments', manifest, async (app) => {
   )
 
   app.post('/payments/:paymentId/void', { schema: voidContract }, async (request) => voidPayment(request, request.params.paymentId, request.body, idempotencyKeyFrom(request)))
+  // B-OM-017 (order money tab): undo a payment on a deposit request.
+  app.post('/payments/:paymentId/undo', { schema: undoPaymentContract }, async (request) => undoDepositPayment(request, request.params.paymentId, request.body, idempotencyKeyFrom(request)))
 
   // ---- B-W2b-185: paying online (./online; FIN-118, FIN-123) ----------------------------------------------------------
   // The office: the page to pay an invoice, sent by link; the online payments of a record.
