@@ -74,7 +74,7 @@ import { dockedThread } from '../../../../lib/record-thread/fixtures'
 import { ThreadCase } from '../../../../lib/record-thread/ThreadCase'
 // ---- B-TH-256: what points at the order (complaints, returns, planning's re-promise, a gate refusal) ----
 import { LINKS_FULL, LINKS_MANAGER, LINKS_NONE, linksModel } from './links/fixtures'
-import { shipmentsLaneCases } from './shipments/design-cases' // F-OS T.1
+import { shipmentsLaneCases } from './shipments/fixtures' // F-OS T.1 (design-only: a fixtures.ts of its own, no screen)
 import { BRAND_ALPHA, type BrandFixture } from '../../../../lib/testing/two-brands'
 import { useRecordFrame } from '../../../_shared/record-frame/RecordFrame'
 // ---- F-OP-217: the dock's scopes in the design screen (the pick band in the one card, General, a work order's notes, All of)
@@ -1357,7 +1357,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'w2a-margin-loading', label: 'W2a · Margin reading', model: base('finance', production, { tab: 'money', margin: marginAs('finance', { value: null, problem: null }) }) },
     { id: 'w2a-margin-error', label: "W2a · Margin couldn't load: Try again (the rest of the order stays usable)", model: base('finance', production, { tab: 'money', margin: marginAs('finance', { value: null, problem: 'problem.read.unavailable' }) }) },
     ...MONEY_LANE_CASES, // F-OM T.1
-    ...shipmentsLaneCases(base), // F-OS T.1: the Shipments tab's states the seed lacks (shipments/design-cases.ts)
+    ...shipmentsLaneCases(base), // F-OS T.1: the Shipments tab's states the seed lacks (shipments/fixtures.ts)
     // ---- F-SA-237: Files, every file of the order by where it comes from (the same body as the thread's Files window) ----
     { id: 'files', label: 'F-SA-237 · Sales · Files: by source — the order and its conversation, the lines’ artwork (also on SO-2026-0151), production photos; shared or office only; 3 you cannot open', model: base('sales', production, { tab: 'files', files: { read: ORDER_FILES, problem: null, selected: [], canShare: true } }) },
     { id: 'files-chosen', label: 'F-SA-237 · Sales · Files: two chosen — Download 2 · Share 1 own with the customer', model: base('sales', production, { tab: 'files', files: { read: ORDER_FILES, problem: null, selected: ['0190f0e2-8181-7000-8000-000000000001', '0190f0e2-8181-7000-8000-000000000002'], canShare: true } }) },

@@ -29,12 +29,17 @@ export async function pickDate(scope: Page | Locator, label: string | RegExp | L
       ? scope.getByRole('button', { name: typeof label === 'string' ? new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) : label }).first()
       : label
   await trigger.click()
-  await chooseDate(page, iso)
+  // os-fx5: a DateField given an aria label names its calendar by it (DS DateField: `aria-label={ariaLabel ?? words.pickDate}`).
+  await chooseDate(page, iso, typeof label === 'string' ? label : undefined)
 }
 
-/** Picks `iso` in the open calendar ("Pick a date"): to its month, then its day. */
-export async function chooseDate(page: Page, iso: string): Promise<void> {
-  const pop = page.getByRole('dialog', { name: /Pick a date|date/i }).last()
+/**
+ * Picks `iso` in the open calendar ("Pick a date", or — os-fx5 — the field's own aria label `named` when it has one): to its month,
+ * then its day.
+ */
+export async function chooseDate(page: Page, iso: string, named?: string): Promise<void> {
+  const generic = page.getByRole('dialog', { name: /Pick a date|date/i })
+  const pop = (named ? page.getByRole('dialog', { name: named, exact: true }).or(generic) : generic).last()
   await pop.waitFor({ state: 'visible' })
   const [year, month, date] = iso.split('-').map(Number)
   const name = await page.evaluate(([y, m, d]) => new Date(y!, m! - 1, d!).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }), [year, month, date])
