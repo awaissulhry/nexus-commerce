@@ -786,6 +786,11 @@ describe('F-OP-215 — the files line counts the order\'s file set (the Files ta
     expect(page).toContain("enabled: tab === 'files' || session.permissions.includes('files.read'),")
     expect(page).toContain("router.replace(tabAddress(pathname, window.location.search, 'files', { narrow: narrowNow() }), { scroll: false })")
     expect(page.match(/orderFiles=\{orderFilesHost \/\* F-OP-215 \*\/\}/g)).toHaveLength(2)
+    // ---- F-OF-304: an act on a file (and Versions…' Restore) reads the page's ONE container again — the tab, the window and the dock's
+    // line keep one count (no read of their own).
+    expect(page).toContain('reloadFiles: orderFiles.reload,')
+    expect(read('../../../_shared/record-thread/use-order-files.ts')).toContain('    reload: load,\n    onCleared: () => setSelected([]),')
+    // ---- end F-OF-304
     const dock = read('./dock/OrderDock.tsx')
     expect(dock).toContain('{...(orderFiles ? { orderFiles } : {}) /* F-OP-215 */}')
     // Only This order's thread gets it (General, a project, a work order keep their own files).

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../../lib/api/errors'
 import type { ApiClient } from '../../../lib/api/client'
 import type { ApiMessage } from '../../../record-panels/api'
-import { checkReply, officeOnly, postNoteKeyed, readContacts, removeFile, sendReplyKeyed, shareWithParty } from './api'
+import { checkReply, officeOnly, postNoteKeyed, readContacts, sendReplyKeyed, shareWithParty } from './api'
 import { afterRead, applyNewest, applyOlder, checkProblemOf, EMPTY_SERVER, readStatusOf, replyRefusal, sendReason, uploadReason, type Work } from './state'
 // B-TH-229
 import { markThreadRead, setThreadOwner } from './api'
@@ -229,13 +229,11 @@ describe('B-TH-300 — the docked thread’s container', () => {
     return { api, calls }
   }
 
-  it('the Files view’s bulk work: office only takes every outside audience off; Delete sends the version as read', async () => {
+  // F-OF-303 (D4): Delete is the Delete window's (the whole document, with a reason: acts.vitest.test.ts) — no direct DELETE any more.
+  it('the Files view’s bulk work: office only takes every outside audience off', async () => {
     const office = recording({ file: { id: 'f 1', version: 5, visibility: ['OFFICE'] } })
     await officeOnly(office.api, { id: 'f 1', version: 4 })
     expect(office.calls[0]).toMatchObject({ method: 'PUT', path: '/files/f%201/visibility', body: { visibility: ['OFFICE'], partyId: null, version: 4 } })
-    const removed = recording({ file: { id: 'f', version: 2, visibility: ['OFFICE'] } })
-    await removeFile(removed.api, { id: 'f', version: 1 })
-    expect(removed.calls[0]).toMatchObject({ method: 'DELETE', path: '/files/f', query: { version: 1 } })
   })
 
   it('one container: the docked bands read the same reads (no second thread, files or people read for the page)', () => {
@@ -258,7 +256,9 @@ describe('B-TH-300 — the docked thread’s container', () => {
   it('the brand wall: Share and Ask reach this record’s party only; the files are this record’s; no portal code', () => {
     const docked = readFileSync(new URL('./DockedOfficeThread.tsx', import.meta.url), 'utf8')
     expect(docked).toContain('recordFiles(base.files.map((file) => fromApiFile(file)), key)')
-    expect(docked).toContain("shareWithParty(api, file, partyId)")
+    // F-OF-301: the bulk bar's Share moved into the ONE acts hook, as it was (still THIS record's party only).
+    expect(readFileSync(new URL('./use-file-acts.ts', import.meta.url), 'utf8')).toContain('shareWithParty(api, file, partyId)')
+    expect(docked).toContain('partyId: partyId ?? null,')
     expect(docked).not.toMatch(/from '[^']*\/portal\//)
   })
 })
@@ -341,6 +341,8 @@ describe('B-TH-280 — the docked thread holds what the old record panels held',
     expect(docked).toContain("import { useFileDepth } from '../../../record-panels/files/use-file-depth'")
     expect(docked).toContain("import { DepthActions, DepthDialogs, DepthTags, DepthTop } from '../../../record-panels/files/view/DepthParts'")
     expect(docked).toMatch(/useFileDepth\(\{[\s\S]*?files: filesOpen && can\.readFiles && base\.filesRead \? base\.files : null/)
+    // F-OF-301: the record's file acts come from the ONE acts hook (the order page's container calls it too).
+    expect(docked).toContain("import { useFileActs } from './use-file-acts'")
     expect(docked).toContain('slots={depthSlots')
     // The view's "Missing before …" lines come from the depth's own read (GET /files/documents once, not twice).
     expect(docked).toContain('missingOf(depth.model.documents)')

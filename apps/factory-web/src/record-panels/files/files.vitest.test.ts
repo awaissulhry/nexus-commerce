@@ -78,6 +78,10 @@ describe('files in depth (SCR-006-files)', () => {
     // One GET /files/documents: the view's "Missing before …" lines come from the depth's own read.
     expect(docked).not.toContain('readDocuments(')
     expect(docked).toContain('missingOf(depth.model.documents)')
+    // F-OF-301: the order page mounts the depth ONCE for the order's own files (Versions…, Restore inside); the dock keeps its own.
+    const page = readFileSync(new URL('../../areas/sales/orders/record/OrderRecord.tsx', import.meta.url), 'utf8')
+    expect(page.match(/useFileDepth\(\{/g)?.length).toBe(1)
+    expect(page).toContain('<DepthDialogs depth={depth.model} actions={depth.actions} />')
     const view = readFileSync(new URL('../../lib/record-thread/files-view/view/FilesView.tsx', import.meta.url), 'utf8')
     expect(view).toContain('export interface FilesViewSlots')
     expect(view).toContain('slots?.tags?.(file.id)')

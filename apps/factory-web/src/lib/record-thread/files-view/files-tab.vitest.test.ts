@@ -288,11 +288,20 @@ describe('F-OF-102: the small bugs — "1 file", one Clear, Share hidden without
     }
   })
 
-  it('F6-B5 / P0-B3: "Share N own" is hidden without the right; with it, held with words when nothing chosen is the order\'s own office-only file', () => {
-    expect(chosenOwn(false)).not.toContain('own with Seed Customer One')
-    expect(chosenOwn(true)).toContain('Share 0 own with Seed Customer One')
-    const office = { ...READ, groups: [{ ...READ.groups[0]!, files: [file('carton')] }] }
-    expect(render(createElement(OrderFilesBody, { model: { read: office, problem: null, selected: ['carton'], canShare: true }, party: { name: 'Seed Customer One' } }))).toContain('Share 1 own with Seed Customer One')
+  // F-OF-303 (L7): "Who can see N…" replaced "Share N own" — hidden without files.manage (or Read-only); held with words when nothing chosen
+  // is the order's own (or a line's) file the read gives at a version (B-OF-001).
+  it('F6-B5 / P0-B3 / L7: "Who can see N…" is hidden without the right; with it, held with words until a chosen own file has its version', () => {
+    const may = { upload: true, delete: true, share: true, ask: false, askCustomer: false }
+    const bar = (model: Partial<Parameters<typeof OrderFilesBody>[0]['model']>, read: OrderFilesRead = READ) => render(createElement(OrderFilesBody, { model: { read, problem: null, selected: ['carton'], canShare: true, ...model }, party: { name: 'Seed Customer One' } }))
+    expect(bar({ may: { ...may, share: false } })).not.toContain('Who can see')
+    expect(bar({ may, readOnly: true })).not.toContain('Who can see')
+    expect(chosenOwn(true)).not.toContain('own with Seed Customer One')
+    expect(bar({ may })).toContain('Who can see 0…')
+    const versioned = { ...READ, groups: [{ ...READ.groups[0]!, files: [file('carton', { version: 3, versions: 2 })] }] }
+    expect(bar({ may }, versioned)).toContain('Who can see 1…')
+    // Delete N… sits in the bar's ⋯ (files.delete; the whole documents, with a reason): its door is there, named in words.
+    expect(bar({ may }, versioned)).toContain('aria-label="More actions for the chosen files"')
+    expect(bar({ may: { ...may, delete: false } }, versioned)).not.toContain('More actions for the chosen files')
   })
 
   it('the Files window on any record: "1 file"; Share, Make office only and Delete hidden without their right (F6-B5)', () => {

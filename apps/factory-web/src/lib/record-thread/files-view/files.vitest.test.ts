@@ -11,7 +11,7 @@ import type { ThreadFile } from '../files/model'
 import { designScreen } from './fixtures'
 import { bulkReach, filesGroups, keepLines, rangeOf, START_AUDIENCE } from './model'
 import { uploadAskHeld } from './model' // B-TH-283
-import { isOwnFile, orderBulkReach, orderFilesOf, orderGroupsShown, orderLeftOut, sourceOf, type OrderFile, type OrderFilesRead } from './model' // F-SA-237
+import { isOrderOwn, orderBulkReach, orderFilesOf, orderGroupsShown, orderLeftOut, sourceOf, type OrderFile, type OrderFilesRead } from './model' // F-SA-237; F-OF-303
 import { OrderFilesBody } from './view/FilesView' // F-SA-237
 import { orderPricedLeftOut, pricedLockedIn, uploadPricedHeld } from './model' // F-CP-144
 
@@ -224,14 +224,24 @@ describe('F-SA-237 — the order files body: groups by source, who can see each 
     expect(orderFilesOf(READ).map((entry) => entry.id)).toEqual(['sheet', 'notes', 'logo', 'photo'])
   })
 
-  it('where a file sits, and the bulk bar: Download every chosen file; Share only the order’s own office-only files, with the right', () => {
+  it('where a file sits, and the bulk bar: Download every chosen file; Who can see N… and Delete N… on the order’s own files at a version (F-OF-303)', () => {
     expect(sourceOf(orderFile('a', { inThread: { messageId: 'm' } }), ORDER.id)).toEqual({ key: 'order.source.thread' })
     expect(sourceOf(orderFile('a'), ORDER.id)).toEqual({ key: 'order.source.order' })
     expect(sourceOf(orderFile('a', { from: { type: 'WorkOrder', id: 'w1', label: 'WO-2026-0311' } }), ORDER.id)).toEqual({ key: 'order.source.from', params: { record: 'WO-2026-0311' } })
     const chosen = orderFilesOf(READ)
-    expect(orderBulkReach(chosen, ORDER.id, true)).toEqual({ download: ['sheet', 'notes', 'logo', 'photo'], share: ['notes'] })
-    expect(orderBulkReach(chosen, ORDER.id, false).share).toEqual([])
-    expect(isOwnFile(orderFile('x', { from: { type: 'SalesOrderLine', id: 'l1', label: 'line' } }), ORDER.id)).toBe(false)
+    const may = { upload: true, delete: true, share: true, ask: false, askCustomer: false }
+    // No version in the read yet (before S3): no act that writes is offered — the doors are there, held with words by the view.
+    expect(orderBulkReach(chosen, ORDER.id, { may, readOnly: false, now: 0 })).toEqual({ download: ['sheet', 'notes', 'logo', 'photo'], who: [], remove: [], canWho: true, canDelete: true })
+    const versioned = chosen.map((one) => ({ ...one, version: 1 }))
+    // The order's own files AND its lines' (L7); a work order's photo acts on its own page.
+    expect(orderBulkReach(versioned, ORDER.id, { may, readOnly: false, now: 0 })).toMatchObject({ who: ['sheet', 'notes', 'logo'], remove: ['sheet', 'notes', 'logo'] })
+    expect(orderBulkReach(versioned, ORDER.id, { may, readOnly: true, now: 0 })).toMatchObject({ who: [], remove: [], canWho: false, canDelete: false })
+    expect(orderBulkReach(versioned, ORDER.id, { may: { ...may, share: false, delete: false }, readOnly: false, now: 0 })).toMatchObject({ canWho: false, canDelete: false })
+    // A legal hold, a fiscal copy, a paper Nexus made: not deleted (the choice still says Who can see).
+    const held = [{ ...versioned[1]!, kept: { legalHold: true, retainUntil: null } }, { ...versioned[0]!, fiscal: true }, { ...versioned[2]!, made: 'GENERATED' as const }]
+    expect(orderBulkReach(held, ORDER.id, { may, readOnly: false, now: 0 })).toMatchObject({ who: ['notes', 'sheet', 'logo'], remove: [] })
+    expect(isOrderOwn(orderFile('x', { from: { type: 'SalesOrderLine', id: 'l1', label: 'line' } }), ORDER.id)).toBe(true)
+    expect(isOrderOwn(orderFile('x', { from: { type: 'WorkOrder', id: 'w1', label: 'WO-2026-0311' } }), ORDER.id)).toBe(false)
   })
 
   it('the body in both languages: the audience on every file, the source chip, also on as the read names it, Open in the conversation', () => {
@@ -240,7 +250,7 @@ describe('F-SA-237 — the order files body: groups by source, who can see each 
       const t = createTranslator(locale, messagesFor(locale, ['record-thread-files-view'])['record-thread-files-view']!)
       // F-OF-102 (P0-B13): the chip speaks the dock's one word per meaning — Customer · Office only (record-thread-files `audience.*`).
       const f = createTranslator(locale, messagesFor(locale, ['record-thread-files'])['record-thread-files']!)
-      for (const words of [f('audience.customer'), f('audience.office'), t('order.source.thread'), t('order.alsoOn', { record: 'SO-2026-0151' }), t('order.alsoOnOther', { count: 1 }), t('order.inThread'), t('order.leftOut', { count: 3 }), locale === 'en' ? 'Lines &amp; artwork' : 'Righe e grafiche']) expect(html, words).toContain(words)
+      for (const words of [f('audience.customer'), f('audience.office'), t('order.source.thread'), t('order.alsoOn', { record: 'SO-2026-0151' }), t('order.alsoOnOther', { count: 1 }), /* F-OF-302: Open in the conversation moved into the card's ⋯ */ t('acts.menu.label', { name: 'sheet.pdf' }), t('order.leftOut', { count: 3 }), locale === 'en' ? 'Lines &amp; artwork' : 'Righe e grafiche']) expect(html, words).toContain(words)
       expect(html.match(/\border\.[a-zA-Z]+/)?.[0] ?? null, locale).toBeNull()
       expect(html).not.toContain('Returns')
     }
@@ -616,9 +626,10 @@ describe('F-CP-144: the PRICED lock card, the upload tick, Mark as priced', () =
     expect(html).toContain('This file shows prices')
     expect(html).toContain('A priced document is never shared with a floor: the floor sees no prices.')
     // The container sends the tick with the upload — F-OF-103: the ONE upload of the Files window (moved out of the dock).
-    const docked = readFileSync(new URL('../../../areas/_shared/record-thread/DockedOfficeThread.tsx', import.meta.url), 'utf8')
+    // F-OF-301: Mark as priced moved out of the dock as it was, into the ONE acts hook (the dock and the order's files container call it).
+    const acts = readFileSync(new URL('../../../areas/_shared/record-thread/use-file-acts.ts', import.meta.url), 'utf8')
     expect(readFileSync(new URL('./use-file-upload.ts', import.meta.url), 'utf8')).toContain('...(ask.priced ? { priced: true } : {})')
-    expect(docked).toContain('setFilePriced(api, fileId, { priced, version: file.version })')
+    expect(acts).toContain('setFilePriced(api, fileId, { priced, version: file.version })')
   })
 
   it('the order\'s files: the priced documents left out are counted on one line and in their group, never named', () => {
