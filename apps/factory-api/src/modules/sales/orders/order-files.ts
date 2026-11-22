@@ -190,7 +190,8 @@ export interface OrderFile {
   readonly kept: { readonly legalHold: boolean; readonly retainUntil: Date | null }
   readonly fiscal: boolean
   readonly priced: boolean
-  readonly audiences: readonly (typeof TRUE_AUDIENCES)[number][]
+  // of-fx3s: a plain array (the answer's schema is a mutable array; the view builds a fresh one per file).
+  readonly audiences: (typeof TRUE_AUDIENCES)[number][]
 }
 
 // ── B-OF-002 (S3): an upload the virus scan holds (or one left pending), the reader's own: a card, never opened, never previewed ──
