@@ -1540,9 +1540,12 @@ export default defineStage({
       await press(files.getByRole('button', { name: FV('files.add'), exact: true }))
       const add = dialog(page)
       await add.locator('input[type="file"]').setInputFiles([FILES.spec, FILES.wrong])
-      await seen(add.getByText(FILES.spec.name, { exact: true }), 30_000)
+      // fx6w (end check 1): the window lists each file as "name · size" in ONE item (the name is not an element of its own).
+      for (const file of [FILES.spec, FILES.wrong]) await seen(add.getByRole('listitem').filter({ hasText: file.name }), 30_000)
       await add.getByRole('combobox', { name: FV('upload.where'), exact: true }).selectOption({ index: 1 }) // the order's first line
       await answerOf(page, 'POST', /^\/files\/[^/]+\/complete$/, () => press(add.getByRole('button', { name: FV('upload.confirm', { count: 2 }), exact: true })))
+      // The files go one after the other: the window closes once both are sent (leaving earlier would stop the second).
+      await expect(page.getByRole('dialog').filter({ hasText: FILES.wrong.name })).toHaveCount(0, { timeout: 120_000 })
       await flow.settle()
       await openFiles(owner)
       await seen(card(page, FILES.spec.name), 60_000)

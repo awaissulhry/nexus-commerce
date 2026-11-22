@@ -154,6 +154,8 @@ describe('F-OF-101: the counted line and the answers', () => {
       tone: 'warning',
     })
     expect(tabAnswerOf({ ...none, asks: [ask('a')] }, { locked: 0 }).parts).toEqual([{ key: 'tab.asked', params: { count: 1 } }, { key: 'tab.noneLater' }])
+    // fx6w: a priced ask a reader without prices may not read (its words withheld) is counted on the band's line, never in the head.
+    expect(tabAnswerOf({ ...READ, asks: [ask('p', { priced: true, words: null })] }, { locked: 0 }).parts).toEqual([{ key: 'tab.nothingAsked' }, { key: 'tab.files', params: { count: 10 } }])
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['record-thread-files-view'])['record-thread-files-view']!)
       expect(t('tab.noneNoAsks')).toBe(locale === 'en' ? 'No files yet, and nothing is asked' : 'Ancora nessun file, e nessuna richiesta')

@@ -591,7 +591,8 @@ export interface TabAnswerPart {
 export function tabAnswerOf(read: OrderFilesRead, counted: Pick<OrderCounted, 'locked'>): { readonly parts: readonly TabAnswerPart[]; readonly tone: 'info' | 'warning' } {
   const held = read.groups.reduce((sum, group) => sum + (group.heldCount ?? 0), 0)
   const asks = read.asks
-  const open = (asks ?? []).filter((ask) => ask.status === 'OPEN' || ask.status === 'ARRIVED')
+  // The READER's asks (10-design §3): a priced ask a reader without prices may not read (its words withheld) is counted on the band's line only.
+  const open = (asks ?? []).filter((ask) => (ask.status === 'OPEN' || ask.status === 'ARRIVED') && ask.words !== null)
   const late = open.filter((ask) => ask.status === 'OPEN' && ask.lateDays > 0)
   const mine = open.filter((ask) => ask.status === 'OPEN' && ask.forMe)
   const noFiles = read.total === 0 && held === 0
