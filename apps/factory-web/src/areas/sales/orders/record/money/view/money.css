@@ -13,6 +13,8 @@
 .fw-om #payments { position: relative; }
 /* The addresses of the two cards that went into Payments (#deposit, #schedule) and a step's own (about-Step-…): out of the flow. */
 .fw-om-alias { position: absolute; top: 0; left: 0; width: 1px; height: 1px; overflow: hidden; }
+/* F-OM-fx5w (N8): landing on an alias focuses a 1-px element — no focus dot beside the card (the section itself is what comes into view). */
+.fw-om .fw-om-alias, .fw-om .fw-om-alias:focus, .fw-om .fw-om-alias:focus-visible { outline: none; }
 .fw-om-head .fw-om-head-wall { display: inline-flex; align-items: flex-start; gap: var(--nds-space-6); color: var(--nds-text-2); }
 .fw-om-head .fw-om-head-wall svg { flex: none; margin-top: var(--nds-space-2); }
 .fw-om-fold { display: inline-flex; align-items: center; gap: var(--nds-space-6); align-self: flex-start; background: none; border: 0; padding: var(--nds-space-4) 0; cursor: pointer; font: inherit; font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); text-align: start; }
@@ -53,6 +55,11 @@
   .fw-om-tt > .fw-om-tt-r { padding-left: var(--nds-space-22); border-left: 1px solid var(--nds-border-subtle); }
   .fw-om-tt:not(.is-np) > .fw-om-facts { padding-top: var(--nds-space-12); border-top: 1px solid var(--nds-border-subtle); }
 }
+/* F-OM-fx5w (N10): no tile and no gap with a door (a reader without invoices.view) — What is left takes the whole width at every room
+   and the facts spread along their line, the last one at the right edge: never an empty right half. */
+.fw-om-tt.is-np.is-nd:not(.is-nr) { grid-template-columns: minmax(0, 1fr); grid-template-areas: "t" "r" "f"; }
+.fw-om-tt.is-nd > .fw-om-tt-r { padding-left: 0; border-left: 0; }
+.fw-om-tt.is-nd > .fw-om-facts { display: flex; flex-wrap: wrap; justify-content: space-between; }
 .fw-om-gap { margin: 0; display: flex; align-items: flex-start; gap: var(--nds-space-8) var(--nds-space-12); padding: var(--nds-space-6) var(--nds-space-2); border-bottom: 1px solid var(--nds-border-subtle); font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
 .fw-om-gap:last-of-type { border-bottom: 0; }
 .fw-om-gap > svg { flex: none; margin-top: var(--nds-space-2); color: var(--nds-warning); }
@@ -155,6 +162,8 @@
 .fw-om-ir-nb > svg { flex: none; color: var(--nds-text-muted); }
 .fw-om-ir-kd { display: none; color: var(--nds-text-2); }
 .fw-om-ir-kn { font-size: var(--nds-font-size-xs); color: var(--nds-text-2); }
+/* F-OM-fx5w (N4): "Also bills SEED-SO-0102 · …" — its words and links on one wrapping line with a gap (the kit's .fw-pt-sub is a block). */
+.fw-om-ir-n > .fw-om-ir-also { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--nds-space-2) var(--nds-space-4); }
 .fw-om-ir-s { grid-area: s; display: flex; gap: var(--nds-space-6); flex-wrap: wrap; align-items: center; }
 .fw-om-ir-p { grid-area: p; display: flex; gap: var(--nds-space-6); align-items: center; }
 .fw-om-ir-t { grid-area: t; display: flex; gap: var(--nds-space-4) var(--nds-space-14); flex-wrap: wrap; font-variant-numeric: tabular-nums; color: var(--nds-text-2); }

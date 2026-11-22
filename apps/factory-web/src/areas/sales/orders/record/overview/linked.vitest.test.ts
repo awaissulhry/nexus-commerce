@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { orderLinkCountsOf } from '@nexus/factory-domain/sales/orders/linked-counts'
 import { render, textOf } from '../../../../../lib/record-thread/parts/testing'
 import { rolePermissions } from '../../../../../shell/design-data'
-import { canOf, order, type Role } from '../../_demo/fixtures'
+import { canOf, deposit, order, type Role } from '../../_demo/fixtures' // F-OM-fx5w: + deposit
 import { abilitiesOf, createShipmentHref } from '../../model'
 import type { Order } from '../../api'
 import { base } from '../fixtures'
@@ -214,11 +214,22 @@ describe('F-OO-207: the quiet line — where the order came from, the deposit on
     expect(linkedRowsOf(input(order('CONFIRMED'))).quiet.some((part) => part.kind === 'deposit')).toBe(false)
     const missing = order('CONFIRMED', { chain: { ...order('CONFIRMED').chain, depositRequests: [] } })
     expect(linkedRowsOf(input(missing)).quiet.some((part) => part.kind === 'deposit')).toBe(false)
-    const notNeeded = order('CONFIRMED', { depositRequired: false })
-    expect(linkedRowsOf(input(notNeeded)).quiet.find((part) => part.kind === 'deposit')).toMatchObject({ state: 'NOT_NEEDED' })
+    // F-OM-fx5w (N1): "Not needed" alone only while no deposit is asked (an extra one open is said: see below).
+    const notNeeded = order('CONFIRMED', { depositRequired: false, chain: { ...order('CONFIRMED').chain, depositRequests: [] } })
+    expect(linkedRowsOf(input(notNeeded)).quiet.find((part) => part.kind === 'deposit')).toEqual({ kind: 'deposit', state: 'NOT_NEEDED', href: `${PREFIX}/sales/orders/${notNeeded.id}?tab=money#payments` })
     expect(textOf(card(order('IN_PRODUCTION'), 'owner'))).toContain('Deposit: Paid ›')
     expect(textOf(card(order('IN_PRODUCTION'), 'owner', 'it'))).toContain('Acconto: Pagato ›')
     expect(textOf(card(order('CONFIRMED'), 'owner'))).not.toMatch(/Deposit: |Waiting for payment/)
+  })
+
+  // F-OM-fx5w (N1, walk 31-A): an order that needs no deposit with a priced change's extra deposit open — Money's Totals' own words.
+  it('F-OM-fx5w (N1): not needed with an extra deposit open — "Deposit: Not needed · an extra deposit is open, due …", never "Not needed" alone', () => {
+    const extra = order('IN_PRODUCTION', { depositRequired: false, chain: { ...order('IN_PRODUCTION').chain, depositRequests: [deposit({ id: 'extra-1', dueDate: '2026-11-23' })] } })
+    expect(linkedRowsOf(input(extra)).quiet.find((part) => part.kind === 'deposit')).toMatchObject({ state: 'NOT_NEEDED', extraDue: '2026-11-23' })
+    const text = textOf(card(extra, 'owner'))
+    expect(text).toContain('Deposit: Not needed · an extra deposit is open, due')
+    expect(text).not.toContain('Deposit: Not needed ›')
+    expect(textOf(card(extra, 'owner', 'it'))).toContain('Acconto: Non serve · è aperto un acconto aggiuntivo, scade il')
   })
 
   it('the quote (a link with quotes.view), the request it was made from, "Typed by the office"; nothing while the source is read; the same quote', () => {

@@ -1972,7 +1972,6 @@
     "hold": "sospensione su {number}",
     "quality": "qualità su {number}",
     "revision": "revisione {revision}",
-    "step": "rata {seq}",
     "yourOrderSeq": "il vostro ordine {seq}"
   },
   "people": {
@@ -3193,7 +3192,8 @@
       "nothing": "ancora niente da incassare. Il cliente paga alla fattura",
       "nothingTerms": "ancora niente da incassare. Il cliente paga alla fattura: {terms}",
       "restOnInvoice": "il resto si paga alla fattura",
-      "partFailed": "Una parte dei pagamenti non si è potuta leggere: guarda la sezione qui sotto e riprova lì."
+      "partFailed": "Una parte dei pagamenti non si è potuta leggere: guarda la sezione qui sotto e riprova lì.",
+      "stillToPayOnWords": "ancora da pagare su {number}"
     },
     "totals": {
       "title": "Totali",
@@ -3264,7 +3264,9 @@
         "partPaid": "{paid} di {amount} ricevuti",
         "partPaidWords": "Pagato in parte",
         "depositDue": "{amount} entro il {date}",
-        "depositDueWords": "Aperto, scade il {date}"
+        "depositDueWords": "Aperto, scade il {date}",
+        "notNeededExtra": "Non serve · aggiuntivo {amount} aperto, scade il {date}",
+        "notNeededExtraWords": "Non serve · è aperto un acconto aggiuntivo, scade il {date}"
       }
     },
     "payments": {
@@ -3367,7 +3369,8 @@
         "byChange": "{date} · dalla modifica a pagamento rev {revision}",
         "issued": "Emessa",
         "paid": "Pagato",
-        "byHand": "{date} · richiesto a mano"
+        "byHand": "{date} · richiesto a mano",
+        "pageSkipped": "Pagato senza la pagina"
       },
       "payments": {
         "title": "I suoi pagamenti",
@@ -3401,7 +3404,10 @@
         "next": "prossimo: {what}",
         "short": "all'acconto mancano {amount}",
         "partPaid": "l'acconto è pagato in parte",
-        "cancelled": "non è dovuto niente: l'ordine è annullato"
+        "cancelled": "non è dovuto niente: l'ordine è annullato",
+        "restOn": "il resto è aperto su {number}",
+        "restOnPart": "il resto è aperto su {number}: pagata in parte",
+        "invoicesOpen": "le fatture non sono pagate per intero"
       },
       "held": {
         "moneyPlaced": "Ci sono già pagamenti: annulla prima il pagamento.",
@@ -3463,7 +3469,12 @@
       "headMore": "Altro per Fatture e note di credito",
       "state": {
         "rejected": "Scartata — correggi e reinvia"
-      }
+      },
+      "countPart_one": "{count} documento · {number} è pagata in parte",
+      "countPart_other": "{count} documenti · {number} è pagata in parte",
+      "countUnpaid_one": "{count} documento · {number} non è ancora pagata",
+      "countUnpaid_other": "{count} documenti · {number} non è ancora pagata",
+      "noNumber": "Ancora senza numero"
     },
     "menu": {
       "copyLinkTotals": "Copia il link a Totali",

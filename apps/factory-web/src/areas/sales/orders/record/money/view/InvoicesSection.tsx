@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation' // F-OM-fx5w (N5): Copy link to this row keeps the page's address terms
 import { FileText } from 'lucide-react'
 import type { MenuItemDef } from '@nexus/ui/components'
 import { Button, Pill, Spinner, Tag } from '@nexus/ui/primitives'
@@ -9,6 +10,7 @@ import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { recordAddress } from '../../../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../../../shell/nav/office-nav'
 import { useRecordFrame } from '../../../../../_shared/record-frame/RecordFrame'
+import { tabHref } from '../../../../../_shared/record-frame/address' // F-OM-fx5w (N5)
 import { money } from '../../../../quotes/model'
 import type { ChainInvoice, Order } from '../../../api'
 import { dayInstant } from '../../../model'
@@ -102,9 +104,12 @@ function InvoiceRowView({ row, order, model, actions, say, words }: { row: Invoi
   const f = useT('record-frame')
   const locale = useLocale()
   const frame = useRecordFrame()
+  const search = useSearchParams()?.toString() ?? ''
   const price = model.can.price
   const invoice = row.invoice
   const number = invoice.number ?? t('money.draft')
+  // F-OM-fx5w (N5): a draft says "Draft" once — in its State; its door names what it lacks ("No number yet ›"), its sub-line no "Draft".
+  const sub = [...(invoice.issueDate ? [formatDate(dayInstant(invoice.issueDate), { locale })] : []), ...row.subs.map(say)].join(' · ')
   const href = `${model.prefix}${recordAddress({ type: 'Invoice', id: invoice.id, label: invoice.number ?? undefined, companyId: order.companyId }, OFFICE_PAGES)}`
   const items: MenuItemDef[] = row.doors.map((door) => (door.href ? { id: door.id, label: say(door.label), href: door.href } : { id: door.id, label: say(door.label), disabled: true, description: door.held ? say(door.held) : undefined }))
   if (model.can.threadsPost && frame?.discuss) {
@@ -115,6 +120,12 @@ function InvoiceRowView({ row, order, model, actions, say, words }: { row: Invoi
     items.push({ id: 'discuss', label: f('discuss.of', { thing: part }), onSelect: () => frame.discuss?.({ record: { type: 'SalesOrder', id: order.id }, about }) })
   }
   if (invoice.number) items.push({ id: 'copy', label: t('moneyTab.invoices.copyNumber'), onSelect: () => void navigator.clipboard?.writeText(invoice.number ?? '') })
+  // F-OM-fx5w (N5): every row's ⋯ copies a link to it (the plan's rows do too) — a draft's row ends with its ⋯ like every other.
+  items.push({
+    id: 'link',
+    label: t('moneyTab.menu.copyLinkRow'),
+    onSelect: () => void navigator.clipboard?.writeText(new URL(`${tabHref(`${model.prefix}/sales/orders/${order.id}`, 'money', search)}#${row.anchor}`, window.location.href).toString()),
+  })
   const orderHref = (id: string) => `${model.prefix}/sales/orders/${encodeURIComponent(id)}`
   const amount = (value: number | null) => (value === null ? null : money(value, order.currency, locale))
   return (
@@ -123,15 +134,14 @@ function InvoiceRowView({ row, order, model, actions, say, words }: { row: Invoi
         <span className="fw-om-ir-nb">
           <FileText size={13} aria-hidden />
           <Link className="fw-pt-link" href={href}>
-            {`${number} ›` /* F-OM-fx3 (W-13): the number is a door */}
+            {`${invoice.number ?? t('moneyTab.invoices.noNumber')} ›` /* F-OM-fx3 (W-13): the number is a door; F-OM-fx5w (N5) */}
           </Link>
         </span>
-        <span className="fw-pt-sub">
-          {[invoice.issueDate ? formatDate(dayInstant(invoice.issueDate), { locale }) : t('money.draft'), ...row.subs.map(say)].join(' · ')}
-        </span>
-        {/* F-OP-118: a shared invoice names the other orders it bills (links; the same customer's only), counts the rest. */}
+        {sub ? <span className="fw-pt-sub">{sub}</span> : null}
+        {/* F-OP-118: a shared invoice names the other orders it bills (links; the same customer's only), counts the rest. F-OM-fx5w (N4):
+            its own row class (the kit's .fw-pt-sub is a block: the words ran into the link). */}
         {row.also ? (
-          <span className="fw-pt-sub fw-pt-inline">
+          <span className="fw-pt-sub fw-om-ir-also">
             {row.also.orders.length > 0 ? <span>{t('money.alsoBills')}</span> : null}
             {row.also.orders.map((other) => (
               <Link key={other.id} className="fw-pt-link" href={orderHref(other.id)}>
@@ -174,7 +184,9 @@ function InvoiceRowView({ row, order, model, actions, say, words }: { row: Invoi
       ) : words ? (
         <div className="fw-om-ir-p">{row.payment ? <Tag tone={row.payment.tone}>{say(row.payment.word)}</Tag> : null}</div>
       ) : null}
-      <div className="fw-om-ir-o">{items.length > 0 ? <LineMenuButton label={t('moneyTab.invoices.more', { number })} items={items} /> : null}</div>
+      <div className="fw-om-ir-o">
+        <LineMenuButton label={t('moneyTab.invoices.more', { number })} items={items} />
+      </div>
     </div>
   )
 }
