@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { ForbiddenError } from '@nexus/factory-domain/core/errors'
 import { defineContract, id, input, output } from '@nexus/factory-domain/core/contracts'
+import { WORK_ORDER_STATUSES, type WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine' // of-fx5s (W-04)
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
@@ -18,11 +19,13 @@ import { mayKeepAsks, NOT_YOURS, reachOrder } from './file-asks'
  * order not found."), so everyone who may ask can pick an office role or a team without roles.view or people.view. What comes back:
  *   people        the ACTIVE office people who may be given a task on the order (as ./people.ts picks them: they read its thread and
  *                 keep tasks there; a person limited to other customers falls out), by name
- *   officeRoles   the live office roles with at least one such person among their holders (an ask to one reaches somebody)
+ *   officeRoles   the live office roles with at least one such person among their holders (an ask to one reaches somebody);
+ *                 of-fx5s (W-08): `reach`, how many of those people hold it (office people only, a number, never a name)
  *   floorRoles    the live floor roles with a live holder at a plant of the order's work orders, with those plants
  *   teams         the ACTIVE teams of those plants
  *   lines         the order's lines
- *   workOrders    the order's work orders the reader reaches (live, not a repair, making one of its lines), each with its steps
+ *   workOrders    the order's work orders the reader reaches (not cancelled, not a repair, making one of its lines), each with its
+ *                 steps; of-fx5s (W-04): + its `status` (a floor ask needs one on the floor: RELEASED / IN_PROGRESS, held from one)
  * Names of office people only: NEVER a floor worker's name, never a count of members (worker privacy), no price. A read: nothing written.
  */
 
@@ -36,11 +39,11 @@ export const askChoicesContract = defineContract({
   response: {
     200: output({
       people: z.array(named),
-      officeRoles: z.array(named),
+      officeRoles: z.array(named.extend({ reach: z.number().int() /* of-fx5s (W-08) */ })),
       floorRoles: z.array(named.extend({ siteIds: z.array(id()) })),
       teams: z.array(named.extend({ siteId: id() })),
       lines: z.array(output({ id: id(), seq: z.number().int(), label: z.string() })),
-      workOrders: z.array(output({ id: id(), number: z.string(), siteId: id(), steps: z.array(output({ id: id(), seq: z.number().int(), name: z.string() })) })),
+      workOrders: z.array(output({ id: id(), number: z.string(), siteId: id(), status: z.enum(WORK_ORDER_STATUSES) /* of-fx5s (W-04) */, steps: z.array(output({ id: id(), seq: z.number().int(), name: z.string() })) })),
       /** More office people than the read weighs: pick by role or ask again later. */
       truncated: z.boolean(),
     }),
@@ -52,11 +55,11 @@ const byName = <T extends { readonly name: string }>(a: T, b: T): number => a.na
 /** The answer (of-fx1s: a written type, not one inferred from the queries). */
 export interface AskChoices {
   readonly people: { id: string; name: string }[]
-  readonly officeRoles: { id: string; name: string }[]
+  readonly officeRoles: { id: string; name: string; reach: number }[] // of-fx5s (W-08)
   readonly floorRoles: { id: string; name: string; siteIds: string[] }[]
   readonly teams: { id: string; name: string; siteId: string }[]
   readonly lines: { id: string; seq: number; label: string }[]
-  readonly workOrders: { id: string; number: string; siteId: string; steps: { id: string; seq: number; name: string }[] }[]
+  readonly workOrders: { id: string; number: string; siteId: string; status: WorkOrderStatus /* of-fx5s (W-04) */; steps: { id: string; seq: number; name: string }[] }[]
   readonly truncated: boolean
 }
 
@@ -82,13 +85,14 @@ export async function askChoices(caller: CommandCaller, orderId: string): Promis
     }
     const weighed = [...candidates].slice(0, CHOICES_PEOPLE_MAX)
     const people: { id: string; name: string }[] = []
-    const reachingRoles = new Set<string>()
+    // of-fx5s (W-08): each role, how many of the people who may be given the task hold it (as ./people.ts counts an OFFICE_ROLE ask).
+    const reachOf = new Map<string, number>()
     for (const [userId, entry] of weighed) {
       if (!(await takesIssueTask(db, context.tenantId, userId, record, now))) continue
       people.push({ id: userId, name: entry.name })
-      for (const roleId of entry.roleIds) reachingRoles.add(roleId)
+      for (const roleId of entry.roleIds) reachOf.set(roleId, (reachOf.get(roleId) ?? 0) + 1)
     }
-    const officeRoles = reachingRoles.size === 0 ? [] : (await db.role.findMany({ where: { id: { in: [...reachingRoles] }, audience: 'OFFICE', archivedAt: null }, select: { id: true, name: true } })).map((row) => ({ id: row.id, name: row.name }))
+    const officeRoles = reachOf.size === 0 ? [] : (await db.role.findMany({ where: { id: { in: [...reachOf.keys()] }, audience: 'OFFICE', archivedAt: null }, select: { id: true, name: true } })).map((row) => ({ id: row.id, name: row.name, reach: reachOf.get(row.id) ?? 0 }))
 
     // ---- the order's lines, its work orders the reader reaches and their steps --------------------------------------------------
     const lines = await db.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true, seq: true }, orderBy: { seq: 'asc' } })
@@ -97,7 +101,7 @@ export async function askChoices(caller: CommandCaller, orderId: string): Promis
       ? []
       : (await db.workOrder.findMany({
           where: { companyId: order.companyId, partyId: order.partyId, status: { not: 'CANCELLED' }, kind: { not: 'REPAIR' }, sizes: { some: { salesOrderLineId: { in: lineIds } } } },
-          select: { id: true, number: true, companyId: true, siteId: true, partyId: true },
+          select: { id: true, number: true, companyId: true, siteId: true, partyId: true, status: true /* of-fx5s (W-04) */ },
           orderBy: { number: 'asc' },
         })).filter((row) => reachesWorkOrder(actor, WORKORDERS_VIEW, row))
     const workOrderIds = workOrders.map((row) => row.id)
@@ -117,7 +121,7 @@ export async function askChoices(caller: CommandCaller, orderId: string): Promis
       floorRoles: floorRoles.sort(byName),
       teams: teams.map((row) => ({ id: row.id, name: row.name, siteId: row.siteId })).sort(byName),
       lines: lines.map((line) => ({ id: line.id, seq: line.seq, label: `${order.number} · ${line.seq}` })),
-      workOrders: workOrders.map((row) => ({ id: row.id, number: row.number, siteId: row.siteId, steps: steps.filter((step) => step.workOrderId === row.id).map((step) => ({ id: step.id, seq: step.seq, name: step.name })) })),
+      workOrders: workOrders.map((row) => ({ id: row.id, number: row.number, siteId: row.siteId, status: row.status, steps: steps.filter((step) => step.workOrderId === row.id).map((step) => ({ id: step.id, seq: step.seq, name: step.name })) })),
       truncated: candidates.size > CHOICES_PEOPLE_MAX,
     }
   })

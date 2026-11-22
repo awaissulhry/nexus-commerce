@@ -1,7 +1,8 @@
 import { sessionGrants } from '@nexus/factory-domain/auth/roles/roles'
 import { DomainError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { can, type Actor } from '@nexus/factory-domain/core/permissions'
-import { askLocaleOf, askShapeProblem, FILE_ASK_LIMITS, refusalWords, type AskLocale, type FileAskAddressee, type FileAskRefusal, type FileAskTarget } from '@nexus/factory-domain/files/asks'
+import { askLocaleOf, askShapeProblem, FILE_ASK_LIMITS, floorAskProblem, refusalWords, type AskLocale, type FileAskAddressee, type FileAskRefusal, type FileAskTarget } from '@nexus/factory-domain/files/asks'
+import type { WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine' // of-fx5s (W-04)
 import { seesPrices } from '@nexus/factory-domain/files/priced'
 import { SALES_MEASUREMENTS_VIEW } from '@nexus/factory-domain/sales/measure-link/permissions'
 import { heldRoles, liveAssignment } from '../../../platform/auth/roles/access'
@@ -43,6 +44,14 @@ export interface Landing {
   readonly target: FileAskTarget
   readonly siteId: string | null
   readonly operationId: string | null
+  /** of-fx5s (W-04): the work order's status (a floor ask needs it on the floor); null: the ask lands on no work order. */
+  readonly workOrder: WorkOrderState | null
+}
+
+/** of-fx5s (W-04): what floorAskProblem reads of a work order. */
+export interface WorkOrderState {
+  readonly status: WorkOrderStatus
+  readonly heldFromStatus: WorkOrderStatus | null
 }
 
 /** The addressee as stored, and the office people who get a Task (none for the floor). */
@@ -91,6 +100,9 @@ async function personProblem(db: Reader, tenantId: string, order: AskOrder, user
 export async function resolveWho(db: Reader, tenantId: string, order: AskOrder, who: Who, landing: Landing, ask: { readonly priced: boolean; readonly bodyData: boolean }, now: Date): Promise<Resolved> {
   const shape = askShapeProblem({ target: landing.target, addressee: who.kind, priced: ask.priced, bodyData: ask.bodyData, hasStep: landing.operationId !== null })
   if (shape) throw badShape(shape)
+  // of-fx5s (W-04): the floor only on a work order on the floor (released, not finished): 409 in words.
+  const offFloor = floorAskProblem(who.kind, landing.workOrder)
+  if (offFloor) throw refused(offFloor)
   const only = (field: 'userId' | 'roleId' | 'teamId' | null) => {
     for (const name of ['userId', 'roleId', 'teamId'] as const) {
       if (name !== field && who[name] !== undefined) throw badField(`who/${name}`, `An ask to ${who.kind === 'PERSON' ? 'a person' : who.kind === 'FLOOR_TEAM' ? 'a team' : who.kind === 'STEP' ? 'whoever works a step' : 'a role'} names no ${name === 'userId' ? 'person' : name === 'roleId' ? 'role' : 'team'}.`)
