@@ -152,7 +152,14 @@
     "price": "Price (net)",
     "freight": "Freight",
     "noFreight": "Not recorded yet: left out",
-    "margin": "Margin now"
+    "margin": "Margin now",
+    "hand": {
+      "FREIGHT_ESTIMATE": "Freight estimate (set by hand)",
+      "COMMISSION": "Commission (set by hand)",
+      "BANK_CHARGES": "Bank charges (set by hand)",
+      "OTHER": "Other cost (set by hand)"
+    },
+    "byHand": "Costs set by hand"
   },
   "part": {
     "MATERIAL": "Material",

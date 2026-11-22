@@ -1,6 +1,6 @@
 import { targetPctOf as domainTargetPct } from '@nexus/factory-domain/costing/margins/hand-lines' // B-OM-021: one rule with the server
 import { COST_LINE_KINDS, type CostLineKind, type MarginTarget, type OrderMargin } from '../../../../finance/margins/api'
-import { orderProfitabilityHref, pointsBetween, type MarginsCan } from '../../../../finance/margins/model'
+import { bridgeOf as financeBridgeOf, orderProfitabilityHref, pointsBetween, type MarginsCan } from '../../../../finance/margins/model' // F-OM-306: the bridge's one rule
 import { isFinal, parseAmount, type OrderAbilities, type Tone } from '../../model'
 import type { Order } from '../../api'
 import { word, type MoneyWord } from './word'
@@ -173,25 +173,23 @@ export function marginOf(input: { readonly detail: OrderMargin; readonly order: 
 /**
  * From the price to the margin, as estimated now: the price − each cost part − freight (the shipments', B-OM-007; none yet: said in
  * words) − each cost line set by hand = the margin. Null without the cost grain or the price (a margin amount gives the cost away).
+ * F-OM-306: the figures are Finance › Margins' ONE rule (finance/margins/model.ts bridgeOf: one number per order); this says them in
+ * the Money section's words (a hand freight estimate stands for the freight not recorded yet).
  */
 function bridgeOf(detail: OrderMargin, can: Pick<MarginsCan, 'cost' | 'price'>, hand: readonly MarginHandRow[] | null, maySet: boolean): BridgeRow[] | null {
-  const stage = detail.estimate
-  if (!can.cost || !can.price || !stage.parts || typeof stage.value !== 'number') return null
-  const parts = stage.parts
-  const amount = (value: number | undefined) => (typeof value === 'number' ? value : null)
-  const rows: BridgeRow[] = [
-    { id: 'price', kind: 'value', label: word('moneyTab.margin.bridge.price'), amount: stage.value, tag: null },
-    { id: 'MATERIAL', kind: 'cost', label: word('moneyTab.margin.bridge.MATERIAL'), amount: amount(parts.material), tag: null },
-    { id: 'LABOUR', kind: 'cost', label: word('moneyTab.margin.bridge.LABOUR'), amount: amount(parts.labour), tag: null },
-    { id: 'SUBCONTRACT', kind: 'cost', label: word('moneyTab.margin.bridge.SUBCONTRACT'), amount: amount(parts.subcontract), tag: null },
-    { id: 'OVERHEAD', kind: 'cost', label: word('moneyTab.margin.bridge.OVERHEAD'), amount: amount(parts.overhead), tag: null },
-  ]
-  if (typeof parts.adjustment === 'number' && parts.adjustment !== 0) rows.push({ id: 'ADJUSTMENT', kind: 'cost', label: word('moneyTab.margin.bridge.ADJUSTMENT'), amount: parts.adjustment, tag: null })
-  if (typeof stage.freight === 'number') rows.push({ id: 'freight', kind: 'freight', label: word('moneyTab.margin.bridge.FREIGHT'), amount: stage.freight, tag: word('moneyTab.margin.bridge.fromShipments') })
-  else if (!hand?.some((line) => line.kind === 'FREIGHT_ESTIMATE')) rows.push({ id: 'freight', kind: 'note', label: word(maySet ? 'moneyTab.margin.bridge.noFreightSet' : 'moneyTab.margin.bridge.noFreight'), amount: null, tag: null })
-  for (const line of hand ?? []) rows.push({ id: `hand-${line.id}`, kind: 'hand', label: line.label, amount: line.amount, tag: word('moneyTab.plan.setByHand') })
-  rows.push({ id: 'margin', kind: 'margin', label: word('moneyTab.margin.bridge.margin'), amount: typeof stage.margin === 'number' ? stage.margin : null, tag: null })
-  return rows
+  const rows = financeBridgeOf(detail, can)
+  if (!rows) return null
+  const estimate = hand?.some((line) => line.kind === 'FREIGHT_ESTIMATE') ?? false
+  return rows.flatMap((row): BridgeRow[] => {
+    if (row.kind === 'value') return [{ id: row.id, kind: 'value', label: word('moneyTab.margin.bridge.price'), amount: row.amount, tag: null }]
+    if (row.kind === 'cost') return [{ id: row.id, kind: 'cost', label: word(`moneyTab.margin.bridge.${row.id}`), amount: row.amount, tag: null }]
+    if (row.kind === 'freight') {
+      if (row.amount !== null) return [{ id: row.id, kind: 'freight', label: word('moneyTab.margin.bridge.FREIGHT'), amount: row.amount, tag: word('moneyTab.margin.bridge.fromShipments') }]
+      return estimate ? [] : [{ id: row.id, kind: 'note', label: word(maySet ? 'moneyTab.margin.bridge.noFreightSet' : 'moneyTab.margin.bridge.noFreight'), amount: null, tag: null }]
+    }
+    if (row.kind === 'hand') return [{ id: row.id, kind: 'hand', label: word(row.handKind ? `moneyTab.margin.kind.${row.handKind}` : 'moneyTab.margin.bridge.byHand'), amount: row.amount, tag: word('moneyTab.plan.setByHand') }]
+    return [{ id: row.id, kind: 'margin', label: word('moneyTab.margin.bridge.margin'), amount: row.amount, tag: null }]
+  })
 }
 
 // ---- the hand windows (D7 Set a cost by hand…, Put back, Set target…): what they send ----

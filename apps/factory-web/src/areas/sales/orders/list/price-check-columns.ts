@@ -78,14 +78,19 @@ export type PriceMatchCellModel =
   | { readonly state: 'NOT_EQUAL'; readonly tone: 'danger'; readonly words: Phrase; readonly lines: Phrase | null }
   /** Review G1: the DS Tag has no plain tone, so "— No customer price yet" is plain text in the cell, never a Tag, never "Equal". */
   | { readonly state: 'NO_BRAND_PRICE'; readonly words: Phrase }
+  /** F-OM-305 (B-OM-020): a "Not equal" accepted by hand — an info Tag "Not equal" and "Accepted by hand" under it (the server's filter leaves it out). */
+  | { readonly state: 'ACCEPTED'; readonly tone: 'info'; readonly words: Phrase; readonly accepted: Phrase; readonly lines: Phrase | null }
 
 /** The Price check cell of a row; null: the row carries no check (a reader without the price grain, an older answer). */
-export function priceMatchCellOf(row: Pick<OrderRow, 'priceMatch' | 'priceNotEqualLines'>): PriceMatchCellModel | null {
+export function priceMatchCellOf(row: Pick<OrderRow, 'priceMatch' | 'priceNotEqualLines' | 'priceAccepted'>): PriceMatchCellModel | null {
   const match: PriceMatch | undefined = row.priceMatch
   if (match === 'EQUAL') return { state: 'EQUAL', tone: 'neutral', words: { key: 'priceCheck.EQUAL' } }
   if (match === 'NOT_EQUAL') {
     const count = row.priceNotEqualLines ?? 0
-    return { state: 'NOT_EQUAL', tone: 'danger', words: { key: 'priceCheck.NOT_EQUAL' }, lines: count > 0 ? { key: 'priceCheck.lines', params: { count } } : null }
+    const lines = count > 0 ? { key: 'priceCheck.lines', params: { count } } : null
+    // F-OM-305: one rule with the server (factory-domain sales/brand-prices/accept acceptanceInForce): accepted is not an alarm.
+    if (row.priceAccepted === true) return { state: 'ACCEPTED', tone: 'info', words: { key: 'priceCheck.NOT_EQUAL' }, accepted: { key: 'moneyTab.price.tag.accepted' }, lines }
+    return { state: 'NOT_EQUAL', tone: 'danger', words: { key: 'priceCheck.NOT_EQUAL' }, lines }
   }
   if (match === 'NO_BRAND_PRICE') return { state: 'NO_BRAND_PRICE', words: { key: 'priceCheck.NO_BRAND_PRICE' } }
   return null
@@ -119,5 +124,7 @@ export function priceCheckText(id: PriceCheckId, row: OrderRow, t: Translate, lo
   const cell = priceMatchCellOf(row)
   if (!cell) return ''
   const words = t(cell.words.key, cell.words.params)
+  // F-OM-305: "Not equal · Accepted by hand · 1 line".
+  if (cell.state === 'ACCEPTED') return [words, t(cell.accepted.key), ...(cell.lines ? [t(cell.lines.key, cell.lines.params)] : [])].join(' · ')
   return cell.state === 'NOT_EQUAL' && cell.lines ? `${words} · ${t(cell.lines.key, cell.lines.params)}` : words
 }

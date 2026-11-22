@@ -57,6 +57,8 @@ export function forRole<T>(value: T, role: Role): T {
     ...(can.price ? [] : ['unitPrice', 'netAmount', 'vatAmount', 'grossAmount', 'amount', 'paidAmount', 'grossTotal', 'openAmount', 'invoicedAmount', 'creditedAmount', 'balanceDueAmount']),
     // F-CP-140: the price check of a list row (the API's B-CP-018: the price grain only — absent, never zero, never "Equal").
     ...(can.price ? [] : ['brandPrice', 'priceMatch', 'priceDiff', 'priceNotEqualLines']),
+    // F-OM T.1: the Money lane's price-grain fields (B-OM-001 … 020), dropped as the API drops them.
+    ...(can.price ? [] : ['priceAccepted', 'paid', 'paidSoFar', 'coveredByInvoices', 'stillOpen', 'refundDueAmount', 'writtenOffAmount', 'share', 'openShare', 'gross', 'credited', 'deductedNet', 'short']),
     ...(can.cost ? [] : ['unitCost', 'costAmount']),
     ...(can.margin ? [] : ['marginPct']),
   ])

@@ -3860,7 +3860,8 @@
         "noFreight": "Freight: none yet",
         "noFreightSet": "Freight: none yet — set an estimate by hand",
         "margin": "Margin",
-        "noCost": "Shown to people who see costs."
+        "noCost": "Shown to people who see costs.",
+        "byHand": "Costs set by hand"
       },
       "fold": {
         "lines": "By line ({count})",
