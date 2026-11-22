@@ -440,6 +440,12 @@ const progressSchema = z.object({
   toShip: z.number(),
   /** B-W2a-30: pieces closed short (they will not be made or shipped). */
   closedShort: z.number().default(0),
+  // ---- F-OS-102 (B-OS-002, optional until the server's S1 lands): of the pieces still to ship, those on a shipment that has not left
+  // (DRAFT, PACKED) and those released and on no shipment (they could go today) — the SAME rule as Warehouse's backorder. Absent in an
+  // older answer: the Shipments tab shows today's figure line and Create shipment… opens by today's rule (never a made-up 0).
+  planned: z.number().optional(),
+  readyNow: z.number().optional(),
+  // ---- end F-OS-102
 })
 export type Progress = z.infer<typeof progressSchema>
 
@@ -629,6 +635,23 @@ export const orderSchema = z.object({
         origin: z.enum(['NEXUS', 'ELSEWHERE']).optional(),
         externalDdt: z.object({ number: z.string(), date: z.string() }).nullable().optional(),
         // ---- end F-OP-123
+        // ---- F-OS-103 (B-OS-001, optional until the server's S1 lands; codes are plain strings so a new code never breaks the read):
+        // what it carries of THIS order (line × size, every state), the pieces of the other orders it carries, its holds in force, why
+        // it was cancelled, the shipment it was split from / merged into, whether it needs a DDT, when it was packed, its parcels (with
+        // shipping.view; a TEST label has no number), and what this reader may do on it. Absent: the tab hides what it would show.
+        contents: z.array(z.object({ lineId: z.string(), size: z.string().nullable(), pieces: z.number() })).optional(),
+        otherPieces: z.number().optional(),
+        holds: z.array(z.object({ id: z.string().optional(), reason: z.string(), words: z.string().nullable(), bySystem: z.boolean(), placedAt: instant })).optional(),
+        cancelReason: z.string().nullable().optional(),
+        cancelledAt: instant.nullable().optional(),
+        splitFrom: z.object({ id: z.string(), number: z.string(), reason: z.string().nullable() }).nullable().optional(),
+        mergedInto: z.object({ id: z.string(), number: z.string() }).nullable().optional(),
+        ddtRequired: z.boolean().optional(),
+        packedAt: instant.nullable().optional(),
+        // Each parcel: its number (a label's, or typed by hand after S3), and what it holds of THIS order (+ the other orders' pieces).
+        parcels: z.array(z.object({ id: z.string(), seq: z.number(), number: z.string().nullable(), url: z.string().nullable(), source: z.string().nullable(), live: z.boolean(), contents: z.array(z.object({ lineId: z.string(), size: z.string().nullable(), pieces: z.number() })).optional(), otherPieces: z.number().optional() })).optional(),
+        may: z.object({ manage: z.boolean(), pack: z.boolean(), ddt: z.boolean(), holdsManage: z.boolean().optional(), holdsRelease: z.boolean() }).optional(),
+        // ---- end F-OS-103
       }),
     ),
     invoices: z.array(z.object({ id: z.string(), number: z.string().nullable(), docType: z.string(), status: z.string(), issueDate: z.string().nullable(), depositRequestId: z.string().nullable().default(null) })),

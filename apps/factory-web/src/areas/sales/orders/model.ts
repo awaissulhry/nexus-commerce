@@ -1056,8 +1056,14 @@ export function romeToday(now: Date = new Date()): string {
 }
 
 /** Released garments not shipped yet: Create shipment opens Warehouse's New shipment with this order (the dialog says how many each cell can still take). */
+// F-OS-102 (18-lead-settles L9, H1-B6): once the server counts what is ready now (B-OS-002: released and on NO shipment yet), Create
+// shipment… opens only then — every released garment already on a draft offers nothing to create (the band's next step on every tab
+// reads this too). Until the server sends it: today's rule (released more than shipped).
 export const mayCreateShipment = (order: Pick<Order, 'status' | 'progress'>, can: Pick<OrderAbilities, 'createShipment'>): boolean =>
-  can.createShipment && order.status !== 'CANCELLED' && order.status !== 'CLOSED' && order.progress.released > order.progress.shipped
+  can.createShipment && order.status !== 'CANCELLED' && order.status !== 'CLOSED' && readyToShipOf(order.progress) > 0
+
+/** F-OS-102 (L9): the garments that could go on a new shipment now — the server's `readyNow` (B-OS-002), else today's released − shipped. */
+export const readyToShipOf = (progress: Pick<Order['progress'], 'readyNow' | 'released' | 'shipped'>): number => (progress.readyNow !== undefined ? progress.readyNow : progress.released - progress.shipped)
 
 /** The address of Warehouse's New shipment with the order chosen. */
 export const createShipmentHref = (prefix: string, orderId: string): string => `${prefix}/warehouse/shipments?new=1&order=${encodeURIComponent(orderId)}`

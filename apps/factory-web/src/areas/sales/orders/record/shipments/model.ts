@@ -1,7 +1,7 @@
 import type { Order } from '../../api'
 import type { Phrase } from '../../model'
 // F-OP-121: where Create shipment… leads.
-import { createShipmentHref, mayCreateShipment, type OrderAbilities } from '../../model'
+import { createShipmentHref, mayCreateShipment, readyToShipOf, type OrderAbilities } from '../../model'
 // F-OP-122: the joinable read and its reasons in the Warehouse's words.
 import type { JoinableShipments } from '../../../../warehouse/shipments/api'
 import { joinHeld } from '../../../../warehouse/shipments/model'
@@ -90,7 +90,7 @@ export function createShipmentDoor(order: Pick<Order, 'id' | 'status' | 'progres
 export function createShipmentHeld(order: Pick<Order, 'status' | 'progress'>, can: Pick<OrderAbilities, 'createShipment'>): Phrase | null {
   if (!can.createShipment) return phrase('ship.create.held.noRight')
   if (order.status === 'CANCELLED' || order.status === 'CLOSED') return phrase('held.final')
-  if (order.progress.released <= order.progress.shipped) return phrase('ship.create.held.nothing')
+  if (readyToShipOf(order.progress) <= 0) return phrase('ship.create.held.nothing') // F-OS-102 (L9): ready now, when the server counts it
   return null
 }
 // ── end F-OP-121 ──
