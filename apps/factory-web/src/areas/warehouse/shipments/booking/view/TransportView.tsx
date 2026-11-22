@@ -5,7 +5,7 @@ import { CircleCheck, ClipboardCheck, MapPin, Route, TriangleAlert } from 'lucid
 import { Banner, Card, Field, KeyValue } from '@nexus/ui/components'
 import { Button, Checkbox, Input, Pill, RadioCard } from '@nexus/ui/primitives'
 import { DateField, DateTimeField, Textarea } from '../../../../../lib/i18n/ds-parts'
-import { formatDateTime } from '../../../../../lib/i18n/format'
+import { formatDate, formatDateTime } from '../../../../../lib/i18n/format' // F-OS-305: formatDate (Customer told {day})
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
 import { useLocale } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
@@ -239,6 +239,7 @@ function ArrangeDialog({ transport, model, actions }: { transport: Transport; mo
  */
 function TrackingDialog({ transport, model, actions, parcelWords }: { transport: Transport; model: TransportModel; actions?: TransportActions; parcelWords?: Readonly<Record<string, string>> }) {
   const { t, say } = useDepthWords()
+  const locale = useLocale() // F-OS-305: a parcel's weight and the day the customer was told, in the reader's language
   if (model.dialog?.kind !== 'tracking') return null
   const dialog = model.dialog
   // F-OS-301: the parcels as the read sends them (absent in an older answer: the one consignment number, as before).
@@ -249,6 +250,10 @@ function TrackingDialog({ transport, model, actions, parcelWords }: { transport:
   const clearing = dialog.text.trim() === '' && !!transport.shipment.manualTrackingNumber && changes.length === 0
   const setParcel = (id: string, patch: { text?: string; link?: string }) => actions?.onDialog?.({ ...dialog, parcels: (dialog.parcels ?? []).map((draft) => (draft.id === id ? { ...draft, ...patch } : draft)) })
   const left = noticeOffered(transport)
+  // F-OS-305 (os-fx3; absent or null: not said): each parcel's weight ("27.5 kg") and when the shipping notice last went.
+  const kg = new Intl.NumberFormat(INTL_LOCALE[locale], { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+  const weightOf = (value: string | null | undefined): string | null => (value && Number.isFinite(Number(value)) && Number(value) > 0 ? t('door.tracking.kg', { kg: kg.format(Number(value)) }) : null)
+  const told = transport.shipment.noticeSentAt ? t('door.tracking.told', { day: formatDate(transport.shipment.noticeSentAt, { locale }) }) : null
   return (
     <DepthDialog
       title={perParcel ? t('door.tracking.title', { number: transport.shipment.number }) : t('transport.trackingTitle', { carrier: transport.shipment.carrierName ?? '—' })}
@@ -272,7 +277,7 @@ function TrackingDialog({ transport, model, actions, parcelWords }: { transport:
         <fieldset className="fw-shd-choices">
           <legend className="fw-sh-h3">{t('door.tracking.parcels', { count: parcels.length })}</legend>
           {parcels.map((parcel) => {
-            const head = [t('door.tracking.parcelOf', { seq: parcel.seq, count: parcels.length }), parcelWords?.[parcel.id]].filter(Boolean).join(' · ')
+            const head = [t('door.tracking.parcelOf', { seq: parcel.seq, count: parcels.length }), weightOf(parcel.grossWeightKg), parcelWords?.[parcel.id]].filter(Boolean).join(' · ')
             if (parcelLabelled(parcel))
               return (
                 <div key={parcel.id} className="fw-shd-stack">
@@ -317,6 +322,7 @@ function TrackingDialog({ transport, model, actions, parcelWords }: { transport:
         </>
       )}
       {perParcel && left && <Checkbox label={t('door.tracking.notify')} checked={dialog.notify === true} onChange={(event) => actions?.onDialog?.({ ...dialog, notify: event.target.checked })} />}
+      {told && <p className="fw-sh-hint">{told}</p>}
       {perParcel && (
         <>
           <p className="fw-sh-hint">{left ? t('door.tracking.notifyHint') : t('door.tracking.toldPacked')}</p>

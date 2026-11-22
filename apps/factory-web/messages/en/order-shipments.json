@@ -198,7 +198,8 @@
       "parcelCount_other": "{count} parcels",
       "tracked_one": "{count} tracked",
       "tracked_other": "{count} tracked",
-      "fold": "Parcels ({count})"
+      "fold": "Parcels ({count})",
+      "told": "customer told {day}"
     },
     "dates": {
       "notPacked": "Not packed yet",
@@ -467,7 +468,9 @@
       "never": "A number from a carrier label is never typed over. The DDT is not touched. The history keeps every old number; the thread gets one office line.",
       "done": "The tracking numbers are saved.",
       "doneNotice": "The tracking numbers are saved and the shipping notice went again.",
-      "doneNoticeHeld": "The tracking numbers are saved; the shipping notice did not go."
+      "doneNoticeHeld": "The tracking numbers are saved; the shipping notice did not go.",
+      "kg": "{kg} kg",
+      "told": "Customer told {day}."
     },
     "split": {
       "into": "Into how many shipments",

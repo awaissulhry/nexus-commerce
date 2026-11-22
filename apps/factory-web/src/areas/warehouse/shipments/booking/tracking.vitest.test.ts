@@ -128,3 +128,31 @@ describe('one dialog for both pages (13-backend §7: extended once, never copied
     expect(hook).toContain('await sendNotice(api, shipmentId, null,')
   })
 })
+
+// ---- F-OS-305 (os-fx3; B-OS-022): the consignment number the customer saw asks why too; each parcel's weight; "Customer told" ----
+describe('F-OS-305: a seen consignment number, the parcel\'s weight and the day the customer was told', () => {
+  const left = transport({ status: 'SHIPPED', shippedAt: '2026-11-18T09:00:00.000Z', manualTrackingNumber: '157-12345675' }, [parcel(1), parcel(2)])
+  it('after the goods left, changing or clearing the consignment number asks why and sends it — parcels unchanged; before, never', () => {
+    const changed = { ...trackingDialogOf(left), text: '157-12345686' }
+    expect(trackingReasonNeeded(changed, left)).toBe(true)
+    expect(trackingProblem(changed, '157-12345675', left)).toEqual({ key: 'door.tracking.why', params: { min: PARCEL_TRACKING_LIMITS.reasonMin } })
+    expect(trackingBody({ ...changed, reason: 'The forwarder corrected the air waybill.' }, 4, left)).toEqual({ version: 4, trackingNumber: '157-12345686', trackingUrl: null, reason: 'The forwarder corrected the air waybill.' })
+    // Cleared after leaving: why too (the op-fx4 clear never skips it).
+    expect(trackingProblem({ ...trackingDialogOf(left), text: '' }, '157-12345675', left)).toEqual({ key: 'door.tracking.why', params: { min: PARCEL_TRACKING_LIMITS.reasonMin } })
+    // The same number, or a first number typed after leaving: nothing to say.
+    expect(trackingReasonNeeded(trackingDialogOf(left), left)).toBe(false)
+    const fresh = transport({ status: 'SHIPPED', shippedAt: '2026-11-18T09:00:00.000Z' }, [])
+    expect(trackingReasonNeeded({ ...trackingDialogOf(fresh), text: '157-12345675' }, fresh)).toBe(false)
+    // Before the goods left (th9 step 4's draft): never asked.
+    const draft = transport({ status: 'DRAFT', manualTrackingNumber: 'T-TH9-TRK-0001' }, [])
+    expect(trackingReasonNeeded({ ...trackingDialogOf(draft), text: 'T-TH9-TRK-0002' }, draft)).toBe(false)
+  })
+
+  it('the window says each parcel\'s weight and "Customer told {day}" when the reads send them; absent: nothing', () => {
+    const view = readFileSync(new URL('./view/TransportView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("weightOf(parcel.grossWeightKg)")
+    expect(view).toContain("const told = transport.shipment.noticeSentAt ? t('door.tracking.told',")
+    expect(view).toContain('{told && <p className="fw-sh-hint">{told}</p>}')
+  })
+})
+// ---- end F-OS-305

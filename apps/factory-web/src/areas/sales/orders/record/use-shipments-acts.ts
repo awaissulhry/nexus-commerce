@@ -119,11 +119,14 @@ export function useShipmentsActs(input: {
     (shipment: { readonly id: string; readonly number: string }, words: NoticeWords, told: NoticeWords | null) => {
       setOpen(null)
       reload()
+      // T.2: the deliveries read again too — an act that keeps the status (the expected arrival by hand) changes what the row says.
+      setDeliveriesAttempt((count) => count + 1)
       setNotice({ tone: 'success', words, door: { href: `${prefix}/warehouse/shipments/${shipment.id}`, words: { key: 'ships.carries.notRead', ns: 'order-shipments' } }, ...(told ? { told } : {}) })
     },
+    // (setDeliveriesAttempt is a state setter, stable: declared below with the deliveries read.)
     [prefix, reload, setNotice],
   )
-  const shipmentDoor = row && open && order ? doorOf({ row: { id: row.id, number: row.number, version: row.version ?? 1 }, order: { id: order.id, companyId: order.companyId, partyId: order.partyId /* F-OS-302 */, shipComplete: order.shipComplete === true }, open, can, prefix, close, said, parcelWords: parcelWordsOf(row, order.lines) /* F-OS-301 */ }) : null
+  const shipmentDoor = row && open && order ? doorOf({ row: { id: row.id, number: row.number, version: row.version ?? 1, shipToAddressId: row.shipToAddressId ?? null /* F-OS-305 */ }, order: { id: order.id, companyId: order.companyId, partyId: order.partyId /* F-OS-302 */, shipComplete: order.shipComplete === true }, open, can, prefix, close, said, parcelWords: parcelWordsOf(row, order.lines) /* F-OS-301 */ }) : null
   // ---- end F-OP-119 → F-OS-201
 
   const closeAfter = useCallback(() => setAfter(null), [])
@@ -295,7 +298,7 @@ const TRANSPORT_DOORS: Partial<Record<RowActId | 'tracking', TransportDoorOpen>>
 
 /** The element of the one window open: each Warehouse's own container, mounted lazily (only while open), keyed by its shipment. */
 function doorOf(input: {
-  readonly row: { readonly id: string; readonly number: string; readonly version: number }
+  readonly row: { readonly id: string; readonly number: string; readonly version: number; /* F-OS-305 (os-fx3): its own delivery address (null: not read) */ readonly shipToAddressId: string | null }
   readonly order: { readonly id: string; readonly companyId: string; /* F-OS-302: the customer (Split's delivery addresses) and its ship complete */ readonly partyId: string; readonly shipComplete: boolean }
   readonly open: { readonly act: RowActId | 'tracking'; readonly holdId?: string }
   readonly can: ReturnType<typeof depthAbilitiesOf>
@@ -322,7 +325,7 @@ function doorOf(input: {
       return shipmentDoor({ kind: 'takeOff', salesOrderId: order.id })
     case 'split':
       // F-OS-302: into several, another delivery address of this customer, the customer's "all in one delivery" said.
-      return createElement(WithMessages, { key, namespaces: DOOR_NAMESPACES }, createElement(Split, { shipmentId: row.id, prefix, onClose: close, onDone: () => said(row, os('ships.done.split', { number: row.number }), toldOf('split')), partyId: order.partyId, shipComplete: order.shipComplete }))
+      return createElement(WithMessages, { key, namespaces: DOOR_NAMESPACES }, createElement(Split, { shipmentId: row.id, prefix, onClose: close, onDone: () => said(row, os('ships.done.split', { number: row.number }), toldOf('split')), partyId: order.partyId, shipComplete: order.shipComplete, shipToAddressId: row.shipToAddressId /* F-OS-305: left out of "another delivery address" */ }))
     case 'move':
     case 'merge':
       return createElement(Move, { key, shipmentId: row.id, number: row.number, mode: act, onClose: close, onDone: (result) => said(result.target, os(result.words.key, result.words.params), toldOf(act)) })

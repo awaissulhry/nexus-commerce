@@ -652,9 +652,14 @@ export const orderSchema = z.object({
         ddtRequired: z.boolean().optional(),
         packedAt: instant.nullable().optional(),
         // Each parcel: its number (a label's, or typed by hand after S3), and what it holds of THIS order (+ the other orders' pieces).
-        parcels: z.array(z.object({ id: z.string(), seq: z.number(), number: z.string().nullable(), url: z.string().nullable(), source: z.string().nullable(), live: z.boolean(), contents: z.array(z.object({ lineId: z.string(), size: z.string().nullable(), pieces: z.number() })).optional(), otherPieces: z.number().optional() })).optional(),
+        parcels: z.array(z.object({ id: z.string(), seq: z.number(), number: z.string().nullable(), url: z.string().nullable(), source: z.string().nullable(), live: z.boolean(), contents: z.array(z.object({ lineId: z.string(), size: z.string().nullable(), pieces: z.number() })).optional(), otherPieces: z.number().optional(), /* F-OS-305 (os-fx3): "27.5000"; absent: not read */ grossWeightKg: z.string().nullable().optional() })).optional(),
         may: z.object({ manage: z.boolean(), pack: z.boolean(), ddt: z.boolean(), holdsManage: z.boolean().optional(), holdsRelease: z.boolean() }).optional(),
         // ---- end F-OS-103
+        // ---- F-OS-305 (os-fx3, B-OS-001 / B-OS-022; optional — absent or null: hidden): the shipment's own delivery address (with
+        // shipping.view; Split leaves it out of "another delivery address") and when the shipping notice last went to the customer.
+        shipToAddressId: z.string().nullable().optional(),
+        noticeSentAt: instant.nullable().optional(),
+        // ---- end F-OS-305
       }),
     ),
     invoices: z.array(z.object({ id: z.string(), number: z.string().nullable(), docType: z.string(), status: z.string(), issueDate: z.string().nullable(), depositRequestId: z.string().nullable().default(null) })),

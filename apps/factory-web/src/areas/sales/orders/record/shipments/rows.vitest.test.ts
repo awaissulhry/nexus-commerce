@@ -222,5 +222,12 @@ describe('W3: what each parcel holds of this order, and the DDT choice on a pack
     for (const locale of LOCALES) expect(CATALOGUE[locale]['order-shipments']?.['ships.next.ddtChoice'], locale).toBeTruthy()
     expect(readFileSync(new URL('./view/ShipmentRow.tsx', import.meta.url), 'utf8')).toContain("{t('ships.next.ddtChoice')}")
   })
+
+  it('F-OS-305 (os-fx3): "customer told {day}" on the row when the notice went; never told or not read: nothing', () => {
+    expect(travelsOf(row({ noticeSentAt: '2026-11-12T10:00:00.000Z' })).toldAt).toBe('2026-11-12T10:00:00.000Z')
+    expect(travelsOf(row({ noticeSentAt: null })).toldAt).toBeNull()
+    expect(travelsOf(row()).toldAt).toBeNull()
+    for (const locale of LOCALES) expect(CATALOGUE[locale]['order-shipments']?.['ships.travels.told'], locale).toBeTruthy()
+  })
 })
 // ---- end W3

@@ -3,7 +3,8 @@ import { ETA_LIMITS, ETA_REFUSALS, OVERRIDE_REASON } from '@nexus/factory-domain
 // F-OP-135: the typed link's rule, the API's own.
 import { TRACKING_URL_PATTERN } from '@nexus/factory-domain/shipping/own-transport/rules'
 import { REPRINT_REASON_MAX, REPRINT_REASON_MIN, REPRINT_REFUSALS } from '@nexus/factory-domain/shipping/reprint/rules'
-import { PARCEL_TRACKING_LIMITS, parcelReasonNeeded } from '@nexus/factory-domain/shipping/own-transport/rules' // F-OS-301 (B-OS-022)
+import { PARCEL_TRACKING_LIMITS } from '@nexus/factory-domain/shipping/own-transport/rules' // F-OS-301 (B-OS-022)
+import { seenNumbersReasonNeeded } from '@nexus/factory-domain/shipping/own-transport/rules' // F-OS-305 (os-fx3): the consignment number too
 import { words, type DepthAbilities, type Read, type Words } from '../queue/shared/depth'
 import type { CheckProblem, LabelCheck, LabelJob, LabelJobs, ManualStatus, Reprinted, Transport, TransportMode } from './api'
 import type { TrackingBody, TransportParcel } from './api' // F-OS-301
@@ -127,7 +128,8 @@ export function trackingBody(dialog: Extract<TransportDialog, { kind: 'tracking'
   if (!transport) return body
   const parcels = parcelChangesOf(dialog, transport)
   const reason = (dialog.reason ?? '').trim()
-  return { ...body, ...(parcels.length > 0 ? { parcels } : {}), ...(parcels.length > 0 && trackingReasonNeeded(dialog, transport) && reason !== '' ? { reason } : {}) }
+  // F-OS-305 (os-fx3): the reason goes whenever a number the customer saw changes — the consignment number's or a parcel's.
+  return { ...body, ...(parcels.length > 0 ? { parcels } : {}), ...(trackingReasonNeeded(dialog, transport) && reason !== '' ? { reason } : {}) }
 }
 
 // ── F-OS-301 (order SHIPMENTS tab; Owner D4; 10-design §7 D5; 18-lead-settles L2, L4; B-OS-022): a number per parcel ──────────────
@@ -168,12 +170,14 @@ export function parcelChangesOf(dialog: Extract<TransportDialog, { kind: 'tracki
   })
 }
 
-/** After the goods left, a parcel number the customer could read changes or is cleared: the person says why (B-OS-022's rule). */
+/**
+ * After the goods left, a number the customer could read changes or is cleared: the person says why (B-OS-022's rule). F-OS-305
+ * (os-fx3): the shipment's own consignment number as well as a parcel's — the domain's one rule (`seenNumbersReasonNeeded`).
+ */
 export function trackingReasonNeeded(dialog: Extract<TransportDialog, { kind: 'tracking' }>, transport: Pick<Transport, 'shipment' | 'parcels'>): boolean {
-  return parcelChangesOf(dialog, transport).some((change) => {
-    const before = (transport.parcels ?? []).find((parcel) => parcel.id === change.parcelId)?.typed?.number ?? null
-    return parcelReasonNeeded(transport.shipment.status, before, change.trackingNumber)
-  })
+  const text = dialog.text.trim()
+  const parcels = parcelChangesOf(dialog, transport).map((change) => ({ before: (transport.parcels ?? []).find((parcel) => parcel.id === change.parcelId)?.typed?.number ?? null, after: change.trackingNumber }))
+  return seenNumbersReasonNeeded(transport.shipment.status, { consignment: { before: transport.shipment.manualTrackingNumber ?? null, after: text === '' ? null : text }, parcels })
 }
 
 /** "Send the shipping notice again" is offered once the goods left (before, the notice goes when they leave). */

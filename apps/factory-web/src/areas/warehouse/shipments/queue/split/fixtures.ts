@@ -47,6 +47,13 @@ export const designScreen = defineDesignScreen<SplitModel>({
     { id: 'done', label: 'Split: the new shipment with its link', model: model({ made: [{ id: uid(2), number: 'SH-26-0111' }] }) },
     { id: 'refused', label: 'A refused split, in words', model: model({ quantities: { [uid(12)]: 3 }, reason: 'PART_READY', problem: { key: 'problem.write.moved' } }) },
     { id: 'no-right', label: 'A reader without shipping.manage: Split held with why', model: model({}, preview({ mayManage: false })) },
+    // ---- T.1 (F-OS-302; B-OS-010; X1-B3, X1-B4): Split into several, another delivery address, ship complete ----
+    { id: 'into-3', label: 'F-OS-302 · Into 3 shipments: one column per new shipment, part ready (ONE command, groups[])', model: model({ into: 3, quantities: { [uid(11)]: 3 }, extra: [{ [uid(13)]: 2 }], reason: 'PART_READY', shipToOffered: true }) },
+    { id: 'into-3-empty', label: 'F-OS-302 · Into 3, new shipment 2 takes nothing: held — each new shipment takes at least one garment', model: model({ into: 3, quantities: { [uid(11)]: 3 }, extra: [{}], reason: 'PART_READY', shipToOffered: true }) },
+    { id: 'ship-to', label: 'F-OS-302 (X1-B4) · Another delivery address: the customer\'s approved addresses (this shipment\'s own left out)', model: model({ quantities: { [uid(12)]: 3 }, reason: 'SHIP_TO', shipToOffered: true, addresses: { state: 'ready', value: [{ id: uid(91), label: 'Seed Customer One — Magazzino Nord, Via Esempio 12, 20100 Milano, IT' }, { id: uid(92), label: 'Seed Customer One — Negozio, Corso Demo 4, 10121 Torino, IT' }] }, shipToAddressId: uid(91) }) },
+    { id: 'ship-to-none', label: 'F-OS-302 (X1-B4) · Another delivery address: this customer has no other approved one (held)', model: model({ quantities: { [uid(12)]: 3 }, reason: 'SHIP_TO', shipToOffered: true, addresses: { state: 'ready', value: [] } }) },
+    { id: 'ship-complete', label: 'F-OS-302 (X1-B3) · The customer wants it all in one delivery: said, never a block', model: model({ quantities: { [uid(12)]: 3 }, reason: 'CUSTOMER_REQUEST', shipComplete: true, shipToOffered: true }) },
+    // ---- end T.1
     { id: 'loading', label: 'Loading', model: { ...model(), preview: { state: 'loading' } } },
     { id: 'error', label: 'Could not be read: Try again', model: { ...model(), preview: { state: 'error', problem: { key: 'problem.read.internal' } } } },
   ],

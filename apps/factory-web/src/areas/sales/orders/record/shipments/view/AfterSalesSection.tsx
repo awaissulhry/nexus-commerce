@@ -49,16 +49,15 @@ export function AfterSalesSection({ order, model, actions }: { order: Order; mod
   // F-OS-303: Open a return… · Log a complaint… (their pages' own windows, in place; hidden without the right, held only while nothing
   // has left), and Send a claim link… in the ⋯ (the order's link).
   const doors = afterSalesDoorsOf(order, model.can)
+  // (Drawn by the right and the state alone — the container's act opens the window; the design gallery has none.)
   const onAfter = actions?.shipmentsTab?.onAfterSales
-  const buttons = onAfter
-    ? doors.buttons.map((door) => (
-        <Button key={door.kind} size="sm" heldReason={door.held ? say(door.held) : null} onClick={() => onAfter(door.kind)}>
-          {say(door.label)}
-        </Button>
-      ))
-    : []
+  const buttons = doors.buttons.map((door) => (
+    <Button key={door.kind} size="sm" heldReason={door.held ? say(door.held) : null} onClick={() => onAfter?.(door.kind)}>
+      {say(door.label)}
+    </Button>
+  ))
   const items: MenuItemDef[] = [
-    ...(doors.claim && onAfter ? [{ id: 'claim', label: say(doors.claim.label), disabled: !!doors.claim.held, description: doors.claim.held ? say(doors.claim.held) : undefined, onSelect: doors.claim.held ? undefined : () => onAfter('claim') }] : []),
+    ...(doors.claim ? [{ id: 'claim', label: say(doors.claim.label), disabled: !!doors.claim.held, description: doors.claim.held ? say(doors.claim.held) : undefined, onSelect: doors.claim.held ? undefined : () => onAfter?.('claim') }] : []),
     ...(links?.returns !== null ? [{ id: 'returns', label: t('after.openReturns'), href: `${model.prefix}/sales/returns` }] : []),
     ...(links?.complaints !== null ? [{ id: 'complaints', label: t('after.openComplaints'), href: `${model.prefix}/quality/complaints` }] : []),
     { id: 'copy', label: t('where.copyLink'), onSelect: () => copyLinkTo('after-sales') },

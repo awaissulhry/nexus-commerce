@@ -110,6 +110,8 @@ export interface TravelsCell {
   readonly parcels: { readonly count: number; readonly tracked: number } | null
   /** Tracking number… is drawn: the read lets this reader type it here (never held: hidden without the right, P0-B3). */
   readonly trackingDoor: boolean
+  /** F-OS-305 (os-fx3): when the shipping notice last went to the customer ("customer told 12 Nov"); null: never, or not read. */
+  readonly toldAt: string | null
 }
 
 export type ProofFile = { readonly id: string; readonly name: string; readonly contentType: string; readonly sizeBytes: number }
@@ -239,6 +241,7 @@ export function travelsOf(row: ShipmentRow): TravelsCell {
     hints,
     parcels: parcels && parcels.length > 0 ? { count: parcels.length, tracked: parcels.filter((parcel) => parcel.number !== null).length } : null,
     trackingDoor: mayTypeTrackingHere(row), // F-OS-304
+    toldAt: row.noticeSentAt ?? null, // F-OS-305
   }
 }
 
