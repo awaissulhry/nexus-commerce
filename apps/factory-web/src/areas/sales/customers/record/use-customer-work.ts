@@ -639,6 +639,7 @@ export function useCustomerDock(partyId: string, tab: string, /* F-OF-303: Who c
     // F-OF-301 / F-OF-303 (T): the docked order's card ⋯ opens Versions… in the page's ONE depth (below); Who can see… names this customer
     onVersions: (fileId) => depthOpen.current(fileId),
     partyName: customerName,
+    canSeePrices: session.permissions.includes('money.price'), // fx5w (W-09)
   })
   // ---- F-OF-301 (T): the files in depth of the docked order — Versions… (Restore inside) of its own files and its lines', mounted ONCE
   // on this page as on the order page (OrderRecord.tsx) and drawn once by CustomerRecord; no handler copied, no documents read.

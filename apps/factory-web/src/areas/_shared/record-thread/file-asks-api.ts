@@ -44,11 +44,11 @@ export function askError(error: unknown): { readonly kind: string; readonly code
 const named = z.object({ id: z.string(), name: z.string() })
 const choicesSchema = z.object({
   people: z.array(named),
-  officeRoles: z.array(named),
+  officeRoles: z.array(named.extend({ /* fx5w (W-08, fx5s) */ reach: z.number().int().optional() })),
   floorRoles: z.array(named.extend({ siteIds: z.array(z.string()) })),
   teams: z.array(named.extend({ siteId: z.string() })),
   lines: z.array(z.object({ id: z.string(), seq: z.number(), label: z.string() })),
-  workOrders: z.array(z.object({ id: z.string(), number: z.string(), siteId: z.string().nullable(), steps: z.array(z.object({ id: z.string(), seq: z.number(), name: z.string() })) })),
+  workOrders: z.array(z.object({ id: z.string(), number: z.string(), siteId: z.string().nullable(), /* fx5w (W-04, fx5s) */ status: z.string().optional(), steps: z.array(z.object({ id: z.string(), seq: z.number(), name: z.string() })) })),
   truncated: z.boolean(),
 })
 export type AskChoicesRead = z.infer<typeof choicesSchema>

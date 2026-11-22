@@ -5,7 +5,7 @@ import { BellRing, Check, Lock, Mail, RotateCcw, Send, UserRoundCog } from 'luci
 import { Field } from '@nexus/ui/components'
 import { Button, Checkbox, RadioCard, Select } from '@nexus/ui/primitives'
 import { DateField, Modal, Textarea } from '../../../../i18n/ds-parts'
-import { formatDate } from '../../../../i18n/format'
+import { dayWords } from '../../day' // fx5w (W-11): the app's day words
 import { INTL_LOCALE } from '../../../../i18n/locales'
 import { useLocale, useT } from '../../../../i18n/provider'
 import type { FileAsk, OrderFile, OrderFilesRead } from '../../model'
@@ -18,6 +18,7 @@ import {
   whoHeld,
   whoKindsOf,
   windowHeld,
+  workOrdersFor,
   type AskChoices,
   type AskDraft,
   type AskList,
@@ -124,8 +125,12 @@ function Picker<T extends { readonly id: string }>({ label, list, value, words, 
   )
 }
 
+/** fx5w (W-08, fx5s): a pick's words — an office role says how many people it reaches on this order ("Pattern maker · 1 person reaches this order"). */
+const pickWords = (t: (key: string, params?: Record<string, string | number>) => string) => (item: { readonly name: string; readonly reach?: number }): string =>
+  item.reach !== undefined ? t('ask.reach', { name: item.name, count: item.reach }) : item.name
+
 /** The list a "Who" picks from (a step and the customer pick nothing). */
-const listOf = (who: AskWhoKind, choices: AskChoices): AskList<{ readonly id: string; readonly name: string }> | null =>
+const listOf = (who: AskWhoKind, choices: AskChoices): AskList<{ readonly id: string; readonly name: string; readonly reach?: number }> | null =>
   who === 'PERSON' ? choices.people : who === 'OFFICE_ROLE' ? choices.officeRoles : who === 'FLOOR_ROLE' ? choices.floorRoles : who === 'FLOOR_TEAM' ? choices.teams : null
 
 // ---- F-OF-202: Ask for a file ------------------------------------------------------------------------------------------------------
@@ -142,6 +147,8 @@ function AskForAFile({ window, state, actions, customer, orderLabel }: { window:
   const floor = floorWho(draft.who)
   const list = listOf(draft.who, choices)
   const wheres = wheresOf(draft.who, choices)
+  // fx5w (W-04): the work orders this "who" may land on (a floor ask: released and not finished; an office one: not cancelled or closed).
+  const landsOn = workOrdersFor(choices.workOrders, floor)
   const toCustomer = draft.who === 'CUSTOMER'
   const held = windowHeld(window, null)
   return (
@@ -151,6 +158,7 @@ function AskForAFile({ window, state, actions, customer, orderLabel }: { window:
       size="md"
       title={t('ask.title')}
       subtitle={[orderLabel, customer].filter(Boolean).join(' · ')}
+      className="fw-ask-modal" /* fx5w (W-07): 760 px, the "who" cards in 3 columns; a sheet at 375 */
       footer={<Foot held={held ? t(held) : null} busy={state.busy} label={t('ask.send')} icon={<Send size={14} aria-hidden />} cancel={v('upload.cancel')} onCancel={() => actions?.onAskClose?.()} onGo={() => actions?.onAskSubmit?.()} />}
     >
       <div className="fw-ask-form">
@@ -158,7 +166,7 @@ function AskForAFile({ window, state, actions, customer, orderLabel }: { window:
         {!toCustomer && (
           <>
             <Field label={t('ask.what')} hint={t('ask.whatHint')}>
-              <Textarea value={draft.words} rows={2} limit={ASK_WORDS.max} maxLength={ASK_WORDS.max} onChange={(event) => set({ words: event.target.value })} />
+              <Textarea value={draft.words} rows={2} honourRows limit={ASK_WORDS.max} maxLength={ASK_WORDS.max} onChange={(event) => set({ words: event.target.value })} />
             </Field>
             <fieldset className="fw-ask-fieldset">
               <legend className="fw-ask-legend">{v('upload.kind')}</legend>
@@ -172,16 +180,16 @@ function AskForAFile({ window, state, actions, customer, orderLabel }: { window:
         )}
         <fieldset className="fw-ask-fieldset">
           <legend className="fw-ask-legend">{t('ask.who')}</legend>
-          <div className="fw-ask-cards">
+          <div className="fw-ask-cards is-who">
             {kinds.map((kind) => {
               const stop = whoHeld(kind, choices)
               return (
-                <RadioCard key={kind} name="fw-ask-who" value={kind} checked={draft.who === kind} selected={draft.who === kind} disabled={!!stop} onChange={() => set({ who: kind })} title={t(`ask.whoKind.${kind}`)} description={stop ? t(stop) : t(`ask.whoHint.${kind}`)} />
+                <RadioCard key={kind} name="fw-ask-who" value={kind} checked={draft.who === kind} selected={draft.who === kind} disabled={!!stop} className={stop ? 'is-held' : undefined /* fx5w (W-16): looks held */} onChange={() => set({ who: kind })} title={t(`ask.whoKind.${kind}`)} description={stop ? t(stop) : t(`ask.whoHint.${kind}`)} />
               )
             })}
           </div>
         </fieldset>
-        {list && <Picker label={t(`ask.pick.${draft.who}`)} list={list} value={draft.pick} words={(item) => item.name} onPick={(pick) => set({ pick })} onRetry={actions?.onAskRetryPicks} />}
+        {list && <Picker label={t(`ask.pick.${draft.who}`)} list={list} value={draft.pick} words={pickWords(t)} onPick={(pick) => set({ pick })} onRetry={actions?.onAskRetryPicks} />}
         {/* S3 (B-OF-035): the choices read cut a list short — said, never hidden. */}
         {list && choices.truncated && <p className="fw-rtv-muted">{t('ask.truncated')}</p>}
         <p className="fw-ask-hint">{toCustomer ? t('ask.customerNote', { customer: customer ?? '' }) : floor ? t('ask.floorNote') : t('ask.officeNote')}</p>
@@ -190,7 +198,7 @@ function AskForAFile({ window, state, actions, customer, orderLabel }: { window:
             <legend className="fw-ask-legend">{v('upload.where')}</legend>
             <div className="fw-ask-cards is-three">
               {wheres.map(({ where, held: stop }) => (
-                <RadioCard key={where} name="fw-ask-where" value={where} checked={draft.where === where} selected={draft.where === where} disabled={!!stop} onChange={() => set({ where, lineId: where === 'SALES_ORDER_LINE' ? (draft.lineId ?? choices.lines[0]?.id ?? null) : null, workOrderId: where === 'WORK_ORDER' ? (draft.workOrderId ?? choices.workOrders[0]?.id ?? null) : null, stepId: null })} title={where === 'SALES_ORDER' ? v('upload.place.order') : t(`ask.whereKind.${where}`)} variant="row" />
+                <RadioCard key={where} name="fw-ask-where" value={where} checked={draft.where === where} selected={draft.where === where} disabled={!!stop} className={stop ? 'is-held' : undefined /* fx5w (W-16) */} onChange={() => set({ where, lineId: where === 'SALES_ORDER_LINE' ? (draft.lineId ?? choices.lines[0]?.id ?? null) : null, workOrderId: where === 'WORK_ORDER' ? (draft.workOrderId ?? landsOn[0]?.id ?? null) : null, stepId: null })} title={where === 'SALES_ORDER' ? v('upload.place.order') : t(`ask.whereKind.${where}`)} variant="row" />
               ))}
             </div>
             {draft.where === 'SALES_ORDER_LINE' && (
@@ -208,7 +216,7 @@ function AskForAFile({ window, state, actions, customer, orderLabel }: { window:
               <>
                 <Field label={t('ask.pickWorkOrder')}>
                   <Select value={draft.workOrderId ?? ''} onChange={(event) => set({ workOrderId: event.target.value || null, stepId: null, ...(draft.who === 'FLOOR_TEAM' ? { pick: null } : {}) })}>
-                    {choices.workOrders.map((order) => (
+                    {landsOn.map((order) => (
                       <option key={order.id} value={order.id}>
                         {order.number}
                       </option>
@@ -240,7 +248,9 @@ function AskForAFile({ window, state, actions, customer, orderLabel }: { window:
         </Field>
         {!toCustomer && (
           <>
-            {/* F-OF-202: both held for a floor "who", with words (the floor never gets prices; a measurement sheet never goes there). */}
+            {/* F-OF-202: both held for a floor "who", with words (the floor never gets prices; a measurement sheet never goes there).
+                fx5w (W-09): "This file shows prices" is not offered to a reader without the price grain (a priced ask needs it). */}
+            {state.can.prices !== false && (
             <Checkbox
               label={
                 <span>
@@ -251,6 +261,7 @@ function AskForAFile({ window, state, actions, customer, orderLabel }: { window:
               disabled={floor}
               onChange={(event) => set({ priced: event.target.checked })}
             />
+            )}
             <Checkbox
               label={
                 <span>
@@ -274,7 +285,7 @@ function AskActWindow({ window, ask, read, state, actions, customer }: { window:
   const t = useT(ASKS_NS)
   const v = useT('record-thread-files-view')
   const locale = useLocale()
-  const date = (day: string) => formatDate(day, { locale })
+  const date = (day: string) => dayWords(day, locale)
   const held = windowHeld(window, ask)
   const close = () => actions?.onAskClose?.()
   const go = () => actions?.onAskSubmit?.()
@@ -372,7 +383,7 @@ function AskActWindow({ window, ask, read, state, actions, customer }: { window:
               ))}
             </div>
           </fieldset>
-          {list && <Picker label={t(`ask.pick.${window.who}`)} list={list} value={window.pick} words={(item) => item.name} onPick={(pick) => set({ ...window, pick })} onRetry={actions?.onAskRetryPicks} />}
+          {list && <Picker label={t(`ask.pick.${window.who}`)} list={list} value={window.pick} words={pickWords(t)} onPick={(pick) => set({ ...window, pick })} onRetry={actions?.onAskRetryPicks} />}
           {floor && <p className="fw-ask-hint">{t('reassign.floorStays')}</p>}
           <Field label={t('reassign.why')}>
             <Textarea value={window.reason} rows={2} limit={ASK_WORDS.max} maxLength={ASK_WORDS.max} onChange={(event) => set({ ...window, reason: event.target.value })} />

@@ -400,6 +400,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     canAsk: held.has('tasks.manage') && held.has('threads.post'),
     canAskCustomer: held.has('partners.tasks.manage'),
     partyName: party?.name ?? null, // F-OF-303: Who can see… names this order's customer
+    canSeePrices: held.has('money.price'), // fx5w (W-09)
   })
   const orderFiles = hostFiles ?? ownOrderFiles
   // ---- end F-SA-237

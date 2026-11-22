@@ -183,7 +183,11 @@ export interface OrderFile {
   readonly versionNo: number
   readonly at: string
   /** F-OF-101 (B-OF-003, S3): `state` — an annulled DDT's paper, an invoice's replaced file (kept by law; absent: in force). */
-  readonly from: OrderFileRef & { readonly state?: OrderFileState | null; /* B-OF-003 (S3): a DDT's paper — the shipment it travels with */ readonly shipment?: { readonly id: string; readonly label: string } | null }
+  readonly from: OrderFileRef & {
+    readonly state?: OrderFileState | null
+    /** B-OF-003 (S3): a DDT's paper — the shipment it travels with; fx5w (W-12, fx5s): when it left and its DDT's number (each optional). */
+    readonly shipment?: { readonly id: string; readonly label: string; readonly shippedOn?: string | null; readonly ddtNumber?: string | null } | null
+  }
   readonly line: { readonly id: string; readonly seq: number } | null
   readonly audience: OrderFileAudience
   readonly bodyData: boolean
@@ -460,8 +464,9 @@ export const foldedOf = (file: Pick<OrderFile, 'from'>): boolean => file.from.st
 /** One source inside a group (a shipment, a work order, an invoice …): its head and door, the files in force, the folded papers. */
 export interface OrderFilesBlock {
   readonly key: string
-  /** null: no head (the order's own groups); `label` null: a door only ("Open on the Changes tab ›"). */
-  readonly head: { readonly label: string | null; readonly door: OrderFileRef | null } | null
+  /** null: no head (the order's own groups); `label` null: a door only ("Open on the Changes tab ›"). fx5w (W-12): a shipment's block says
+   *  when it left and its DDT ("SEED-SH-0011 · Shipped 12 Nov · DDT 144/2026"), each part only when the read gives it. */
+  readonly head: { readonly label: string | null; readonly door: OrderFileRef | null; readonly shipment?: { readonly shippedOn: string | null; readonly ddtNumber: string | null } } | null
   readonly files: readonly OrderFile[]
   readonly older: readonly OrderFile[]
 }
@@ -503,7 +508,10 @@ function blocksOf(key: string, files: readonly OrderFile[], face: 'office' | 'cu
     const list = byKey.get(id)!
     const home = HOME_FIRST.map((type) => list.find((file) => file.from.type === type)).find((file) => file !== undefined) ?? list[0]!
     const door = BY_LABEL.includes(key) ? home.from : blockRefOf(home)
-    return { key: `${key}:${id}`, head: { label: door.label || null, door: { type: door.type, id: door.id, label: door.label } }, ...split(list) }
+    // fx5w (W-12, fx5s): the shipment's facts from a DDT paper of the block (the paper in force first; the read may give none).
+    const facts = [...list.filter((file) => !foldedOf(file)), ...list.filter(foldedOf)].map((file) => file.from.shipment).find((ship) => !!ship && (!!ship.shippedOn || !!ship.ddtNumber))
+    const shipment = door.type === 'Shipment' && facts ? { shipment: { shippedOn: facts.shippedOn ?? null, ddtNumber: facts.ddtNumber ?? null } } : {}
+    return { key: `${key}:${id}`, head: { label: door.label || null, door: { type: door.type, id: door.id, label: door.label }, ...shipment }, ...split(list) }
   })
 }
 
@@ -568,13 +576,44 @@ export function filesAnswerOf(sections: readonly OrderFilesSection[]): { readonl
   }
 }
 
-/** The tab's one answer above its sections (keys of record-thread-files-view): how many files the order has, what the scan holds. */
-export function tabAnswerOf(read: OrderFilesRead, counted: Pick<OrderCounted, 'locked'>): { readonly parts: readonly { readonly key: string; readonly params?: Readonly<Record<string, number>> }[]; readonly tone: 'info' | 'warning' } {
+/** One part of the tab's answer: a key of record-thread-files-view and its words (`date`: a day the view writes as "28 Nov"). */
+export interface TabAnswerPart {
+  readonly key: string
+  readonly params?: Readonly<Record<string, number | string>>
+}
+
+/**
+ * The tab's one answer above its sections (10-design §3; fx5w W-02): what is asked (when the read sends its asks: "Nothing is asked" or
+ * "3 files are asked for · 1 arrived — check it · 1 is 2 days late · 1 is asked of you, due 28 Nov"), what the virus scan holds, and how
+ * many files the order has — "No files yet, and nothing is asked" when there is neither. The reader's own numbers; no full stop (the view
+ * ends the sentence once: W-01).
+ */
+export function tabAnswerOf(read: OrderFilesRead, counted: Pick<OrderCounted, 'locked'>): { readonly parts: readonly TabAnswerPart[]; readonly tone: 'info' | 'warning' } {
   const held = read.groups.reduce((sum, group) => sum + (group.heldCount ?? 0), 0)
-  if (read.total === 0 && held === 0) return { parts: [{ key: counted.locked > 0 ? 'tab.noneOpen' : 'tab.none' }], tone: 'info' }
-  const parts: { key: string; params?: Record<string, number> }[] = [{ key: 'tab.files', params: { count: read.total } }]
+  const asks = read.asks
+  const open = (asks ?? []).filter((ask) => ask.status === 'OPEN' || ask.status === 'ARRIVED')
+  const late = open.filter((ask) => ask.status === 'OPEN' && ask.lateDays > 0)
+  const mine = open.filter((ask) => ask.status === 'OPEN' && ask.forMe)
+  const noFiles = read.total === 0 && held === 0
+  // No file and nothing asked: one sentence.
+  if (noFiles && asks !== undefined && open.length === 0) return { parts: [{ key: counted.locked > 0 ? 'tab.noneOpenNoAsks' : 'tab.noneNoAsks' }], tone: 'info' }
+  const parts: TabAnswerPart[] = []
+  if (asks !== undefined) {
+    if (open.length === 0) parts.push({ key: 'tab.nothingAsked' })
+    else {
+      parts.push({ key: 'tab.asked', params: { count: open.length } })
+      const arrived = open.filter((ask) => ask.status === 'ARRIVED').length
+      if (arrived > 0) parts.push({ key: 'tab.arrived', params: { count: arrived } })
+      if (late.length === 1) parts.push({ key: 'tab.lateOne', params: { count: late[0]!.lateDays } })
+      else if (late.length > 1) parts.push({ key: 'tab.late', params: { count: late.length } })
+      if (mine.length === 1 && mine[0]!.dueOn) parts.push({ key: 'tab.mine', params: { date: mine[0]!.dueOn } })
+      else if (mine.length > 0) parts.push({ key: 'tab.mineMany', params: { count: mine.length } })
+    }
+  }
   if (held > 0) parts.push({ key: 'held.checking', params: { count: held } })
-  return { parts, tone: held > 0 ? 'warning' : 'info' }
+  if (noFiles) parts.push({ key: parts.length > 0 ? (counted.locked > 0 ? 'tab.noneOpenLater' : 'tab.noneLater') : counted.locked > 0 ? 'tab.noneOpen' : 'tab.none' })
+  else if (read.total > 0 || held === 0) parts.push({ key: 'tab.files', params: { count: read.total } })
+  return { parts, tone: held > 0 || late.length > 0 ? 'warning' : 'info' }
 }
 // ── end F-OF-101
 

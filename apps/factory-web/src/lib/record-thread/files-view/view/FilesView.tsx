@@ -42,7 +42,8 @@ import { AskWindows } from '../asks/view/AskWindows'
 import { Menu, type MenuItemDef } from '@nexus/ui/components'
 import { blockRefOf, isOrderOwn, orderFileActsOf, type FileActsState, type OrderFileAct } from '../model'
 import { FileActWindows } from './FileActWindows'
-import type { FileActActions } from './FileActParts'
+import { ActLines, type FileActActions } from './FileActParts'
+import { dayWords } from '../day' // fx5w (W-11): "29 Oct", the app's day words
 import { UseOnDialog, type UseOnActions } from '../../files/view/UseOnDialog'
 // ---- end F-OF-302
 import type { AskDoor, AskWindow } from '../asks/asks'
@@ -490,7 +491,7 @@ const AUDIENCE_WORD: Readonly<Record<FileAudience, string>> = { OFFICE: 'upload.
  * exported, the ONE upload window): on an order it asks "Where it goes" (the order · Line {seq} · …) and offers no "Fiscal copy" (a fiscal
  * paper is made at its home); opened by "Add files…" it has its own drop area (`onAdd`), and waits for a file before Add.
  */
-export function UploadDialog({ ask, party, busy, onChange, onConfirm, onCancel, onAdd }: { ask: UploadAsk; party: { readonly name: string } | null; busy: boolean; onChange?: ((change: Partial<Pick<UploadAsk, 'kind' | 'audience' | 'sheet' | 'priced' | 'place'>>) => void) | undefined; onConfirm?: (() => void) | undefined; onCancel?: (() => void) | undefined; onAdd?: ((files: File[]) => void) | undefined }) {
+export function UploadDialog({ ask, party, busy, onChange, onConfirm, onCancel, onAdd, subtitle }: { ask: UploadAsk; party: { readonly name: string } | null; busy: boolean; onChange?: ((change: Partial<Pick<UploadAsk, 'kind' | 'audience' | 'sheet' | 'priced' | 'place'>>) => void) | undefined; onConfirm?: (() => void) | undefined; onCancel?: (() => void) | undefined; onAdd?: ((files: File[]) => void) | undefined; /* fx5w (W-05): "SEED-SO-0002 · Files" */ subtitle?: string | undefined }) {
   const t = useT(FILES_VIEW_NS)
   const fileWords = useT('record-thread-files')
   const pricedWords = useT('record-files') // F-CP-144
@@ -507,6 +508,7 @@ export function UploadDialog({ ask, party, busy, onChange, onConfirm, onCancel, 
       onClose={() => onCancel?.()}
       size="md"
       title={count === 0 ? t('upload.titleAdd') : t('upload.title', { count })}
+      {...(subtitle ? { subtitle } : {})}
       footer={
         <>
           <Button onClick={() => onCancel?.()}>{t('upload.cancel')}</Button>
@@ -521,11 +523,12 @@ export function UploadDialog({ ask, party, busy, onChange, onConfirm, onCancel, 
         {forAsk && (
           <div className="fw-of-forask" role="note">
             <p className="fw-of-forask-words">{forAsk.words !== null ? askWords('upload.asks', { name: forAsk.by, words: forAsk.words }) : askWords('upload.asksPriced', { name: forAsk.by })}</p>
-            <p className="fw-rtv-muted">{askWords('upload.due', { date: formatDate(forAsk.dueOn, { locale }), target: forAsk.target })}</p>
+            <p className="fw-rtv-muted">{askWords('upload.due', { date: dayWords(forAsk.dueOn, locale) /* fx5w (W-11) */, target: forAsk.target })}</p>
           </div>
         )}
         {/* F-OF-103: opened by "Add files…", the window takes the files itself (drop or browse); more join the ones chosen. */}
-        {onAdd && <FileDropzone multiple onFiles={(files) => onAdd(files)} hint={t('upload.hint')} />}
+        {/* fx5w (W-05): on an order the sizes it takes and the virus check, said before a file is chosen. */}
+        {onAdd && <FileDropzone multiple onFiles={(files) => onAdd(files)} hint={ask.places ? t('upload.hintOrder') : t('upload.hint')} />}
         {count > 0 && (
           <ul className="fw-rtv-upload-files">
             {ask.files.map((file, index) => (
@@ -592,6 +595,8 @@ export function UploadDialog({ ask, party, busy, onChange, onConfirm, onCancel, 
             />
           ))}
         </fieldset>
+        {/* fx5w (W-05; 10-design §7 Add files): What happens · The customer · What never changes — as every file window says them. */}
+        {ask.places && !forAsk && <ActLines problem={null} happens={t('upload.happens')} customer={t('upload.customer')} never={t('upload.never')} />}
       </div>
     </Modal>
   )
@@ -860,7 +865,7 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
         />
       )}
       {/* F-OF-103: "Add files…" — the ONE upload window (the order or one of its lines; no "Fiscal copy" here). */}
-      {model.upload && !customer && <UploadDialog ask={model.upload} party={party} busy={model.busy ?? false} onChange={actions?.onOrderUploadChange} onConfirm={actions?.onOrderUploadConfirm} onCancel={actions?.onOrderUploadCancel} onAdd={actions?.onOrderAdd} />}
+      {model.upload && !customer && <UploadDialog ask={model.upload} party={party} busy={model.busy ?? false} onChange={actions?.onOrderUploadChange} onConfirm={actions?.onOrderUploadConfirm} onCancel={actions?.onOrderUploadCancel} onAdd={actions?.onOrderAdd} subtitle={t('upload.subtitle', { record: read.order.number })} />}
       {/* F-OF-202 / F-OF-203: the band's windows — drawn once by the body, the same for the tab and the order's thread window. */}
       {model.asks && !customer && <AskWindows read={read} state={model.asks} actions={actions} customer={party?.name ?? null} orderLabel={read.order.number} />}
       {/* F-OF-303: the file windows (Who can see…, Rename…, Delete…, New version…, Mark as priced?) and "Use on another record…" — drawn once. */}
@@ -915,6 +920,9 @@ function OrderBlock({ block, orderId, customer, model, actions, words, extras, o
       {block.head && (block.head.label || href) && (
         <div className="fw-of-block-h">
           {block.head.label && <b>{block.head.label}</b>}
+          {/* fx5w (W-12, fx5s): a shipment's block — "Shipped 12 Nov · DDT 144/2026", each part only when the read gives it. */}
+          {block.head.shipment?.shippedOn && <span className="fw-rtv-muted">· {t('order.block.shipped', { date: dayWords(block.head.shipment.shippedOn, words.locale) })}</span>}
+          {block.head.shipment?.ddtNumber && <span className="fw-rtv-muted">· {t('order.block.ddt', { number: block.head.shipment.ddtNumber })}</span>}
           <span className="fw-of-sp" />
           {href && door && (
             <Link className="fw-of-door" href={href} prefetch={false}>
@@ -990,7 +998,7 @@ function OrderCard({ file, orderId, customer, older, chosen, onChoose, actions, 
             <span className="fw-rtv-card-name">{file.name}</span>
           </button>
           <span className="fw-rtv-card-meta">
-            {[type, sizeWords(file.sizeBytes, locale), formatDate(file.at, { locale })].filter(Boolean).join(' · ')}
+            {[type, sizeWords(file.sizeBytes, locale), dayWords(file.at, locale) /* fx5w (W-11) */].filter(Boolean).join(' · ')}
             {file.versionNo > 1 && <> · {t('version.inForce', { n: file.versionNo })}</>}
             {!customer && earlier > 0 && <> · {t('version.earlier', { count: earlier })}</>}
           </span>
@@ -1008,7 +1016,7 @@ function OrderCard({ file, orderId, customer, older, chosen, onChoose, actions, 
             {file.bodyData && <Tag tone="warning">{fileWords('sheet.recorded')}</Tag>}
             {/* F-OF-101 (B-OF-001, B-OF-003): a fiscal copy and how long it is kept, a legal hold, a paper kept by law — said, never acted on here. */}
             {!customer && file.fiscal && <Tag tone="neutral">{fileWords('kind.FISCAL_ARCHIVE')}</Tag>}
-            {!customer && file.kept?.retainUntil && <Tag tone="neutral">{t('keep.until', { date: formatDate(file.kept.retainUntil, { locale }) })}</Tag>}
+            {!customer && file.kept?.retainUntil && <Tag tone="neutral">{t('keep.until', { date: dayWords(file.kept.retainUntil, locale) })}</Tag>}
             {!customer && file.kept?.legalHold && <Tag tone="warning">{t('keep.legalHold')}</Tag>}
             {!customer && file.from.state && <Tag tone="warning">{t(`order.state.${file.from.state}`)}</Tag>}
             {/* F-OF-101 (F2-B1): the tech pack's version in force is newer than the one the request named. */}
@@ -1031,7 +1039,7 @@ function OrderCard({ file, orderId, customer, older, chosen, onChoose, actions, 
             <span className="fw-rtv-card-actions">
               {!customer && (
                 <Button size="sm" variant="quiet" aria-label={t('card.downloadOf', { name: file.name })} onClick={() => actions?.onOrderOpen?.(file.id, 'download')}>
-                  <Download size={14} aria-hidden /> {t('card.download')}
+                  <Download size={14} aria-hidden /> <span className="fw-of-dl-word">{t('card.download') /* fx5w (W-13): an icon at S; the name stays for screen readers */}</span>
                 </Button>
               )}
               {/* F-OF-302 (10-design §5): the office's card is [Download] [⋯] — Open in the conversation moved into the ⋯; the customer keeps it. */}
@@ -1069,7 +1077,7 @@ function CardMenu({ file, orderId, acts, actions, words }: { file: OrderFile; or
   const items: MenuItemDef[] = acts.map(({ act, held, params }) => {
     const label = ACT_LABEL[act]
     const text = label.ns === 'priced' ? priced(label.key) : label.ns === 'useOn' ? fileWords(label.key) : t(label.key)
-    const heldWords = held ? t(held, params?.date ? { date: formatDate(params.date, { locale }) } : params) : null
+    const heldWords = held ? t(held, params?.date ? { date: dayWords(params.date, locale) } : params) : null
     return { id: act, label: text, ...(act === 'delete' ? { tone: 'danger' as const } : {}), disabled: heldWords !== null, description: heldWords ?? undefined, onSelect: heldWords ? undefined : () => actions?.onOrderAct?.(act, file.id) }
   })
   if (file.inThread && actions?.onOrderMessage) items.push({ id: 'in-thread', label: t('order.inThread'), onSelect: () => actions.onOrderMessage?.(file.inThread!.messageId) })
@@ -1103,7 +1111,7 @@ function HeldCard({ held, words }: { held: OrderHeldFile; words: CardWords }) {
         </span>
         <div className="fw-of-card-bd">
           <span className="fw-of-card-title">{held.name}</span>
-          <span className="fw-rtv-card-meta">{[typeLabelOf({ name: held.name, contentType: '' }), formatDate(held.at, { locale }), t('card.addedByYou')].filter(Boolean).join(' · ')}</span>
+          <span className="fw-rtv-card-meta">{[typeLabelOf({ name: held.name, contentType: '' }), dayWords(held.at, locale), t('card.addedByYou')].filter(Boolean).join(' · ')}</span>
           <span className="fw-rtv-card-meta">{t(heldReasonKey(held))}</span>
         </div>
       </div>
@@ -1126,7 +1134,7 @@ function WorksheetCard({ sheet, actions, words }: { sheet: OrderWorksheet; actio
           <button type="button" className="fw-rtv-card-open" data-row={worksheetCardId(sheet)} title={name} onClick={() => actions?.onOrderWorksheet?.(sheet)}>
             <span className="fw-rtv-card-name">{name}</span>
           </button>
-          <span className="fw-rtv-card-meta">{[sheet.number, sheet.language.toUpperCase(), formatDate(sheet.createdAt, { locale })].filter(Boolean).join(' · ')}</span>
+          <span className="fw-rtv-card-meta">{[sheet.number, sheet.language.toUpperCase(), dayWords(sheet.createdAt, locale)].filter(Boolean).join(' · ')}</span>
           <span className="fw-rtv-marks">
             <Tag tone="warning">{fileWords('sheet.recorded')}</Tag>
           </span>

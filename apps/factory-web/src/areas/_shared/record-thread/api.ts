@@ -393,7 +393,7 @@ const orderFileSchema = z.object({
   at: z.string(),
   // F-OF-101 (B-OF-003, S3): an annulled DDT's paper, an invoice's replaced file — optional until it lands.
   // F-OF-101 (B-OF-003, S3): + a DDT's paper names the shipment it travels with (drawn inside that shipment's block).
-  from: orderFileRef.extend({ state: z.enum(['ANNULLED', 'REPLACED']).nullable().optional(), shipment: z.object({ id: z.string(), label: z.string() }).nullable().optional() }),
+  from: orderFileRef.extend({ state: z.enum(['ANNULLED', 'REPLACED']).nullable().optional(), shipment: z.object({ id: z.string(), label: z.string(), /* fx5w (W-12, fx5s) */ shippedOn: z.string().nullable().optional(), ddtNumber: z.string().nullable().optional() }).nullable().optional() }),
   line: z.object({ id: z.string(), seq: z.number() }).nullable(),
   audience: z.enum(['CUSTOMER_CAN_SEE', 'OFFICE_ONLY']),
   bodyData: z.boolean(),

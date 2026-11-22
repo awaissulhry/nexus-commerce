@@ -155,7 +155,9 @@
     "happensFloor": "The tablets of that team, role or step show it under Files asked; a photo needs the network.",
     "customerTold": "The customer: sees nothing — an ask is office only.",
     "never": "What never changes. An ask is never deleted: it is accepted or cancelled; the audit keeps who asked, when, and where it lands.",
-    "truncated": "The list is cut short: not everyone who may be asked is shown."
+    "truncated": "The list is cut short: not everyone who may be asked is shown.",
+    "reach_one": "{name} · {count} person reaches this order",
+    "reach_other": "{name} · {count} people reach this order"
   },
   "refusal": {
     "stale": "Someone changed this ask meanwhile: it was read again.",

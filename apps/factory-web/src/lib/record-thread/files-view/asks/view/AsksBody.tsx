@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type Ref } from 'react'
 import { ArrowUpRight, BellRing, Check, Clock, Factory, FileQuestion, Globe, Inbox, MoreHorizontal, RotateCcw, Upload, User, Users } from 'lucide-react'
 import { Menu, type MenuItemDef } from '@nexus/ui/components'
 import { Button, Tag } from '@nexus/ui/primitives'
-import { formatDate } from '../../../../i18n/format'
+import { dayWords } from '../../day' // fx5w (W-11): the app's day words
 import { useLocale, useT } from '../../../../i18n/provider'
 import type { FileAsk, FileAskWho, OrderFilesRead } from '../../model'
 import { askDoorsOf, asksBandOf, shownRows, type AskDoor, type AskRow, type AsksState } from '../asks'
@@ -51,6 +51,8 @@ export function AsksBody({ read, state, actions, customer }: { read: OrderFilesR
   if (!band) return null
   const { shown, more } = shownRows(band.rows, wide)
   const counted = band.counted
+  // fx5w (W-03): nothing to draw below the section's one line (no row, nothing counted, no notice): no body at all.
+  if (band.rows.length === 0 && counted.priced === 0 && counted.outside === 0 && !state.notice) return null
   return (
     <div className="fw-ask-list">
       {state.notice && (
@@ -66,9 +68,8 @@ export function AsksBody({ read, state, actions, customer }: { read: OrderFilesR
           {[counted.priced > 0 ? t('band.counted.priced', { count: counted.priced }) : null, counted.outside > 0 ? t('band.counted.outside', { count: counted.outside }) : null].filter(Boolean).join(' · ')} — {t('band.counted.why')}
         </p>
       )}
-      {band.rows.length === 0 ? (
-        <p className="fw-ask-quiet">{t(state.can.ask && !state.can.closed ? 'band.empty' : 'band.emptyRead')}</p>
-      ) : (
+      {/* fx5w (W-03): "Nothing is asked" is said ONCE — the section's one line under its title (useAsksAnswer); no body line. */}
+      {band.rows.length === 0 ? null : (
         <div className="fw-ask-rows" role="list">
           {shown.map((row) => (
             <AskRowView key={`${row.kind}:${row.ask.id}`} row={row} state={state} actions={actions} customer={customer} marked={row.ask.id === focus} rowRef={row.ask.id === focus ? focusRef : undefined} />
@@ -87,7 +88,7 @@ export function AsksBody({ read, state, actions, customer }: { read: OrderFilesR
 function AskRowView({ row, state, actions, customer, marked, rowRef }: { row: AskRow; state: AsksState; actions?: AsksActions | undefined; customer: string | null; marked: boolean; rowRef?: Ref<HTMLDivElement> | undefined }) {
   const t = useT(ASKS_NS)
   const locale = useLocale()
-  const date = (day: string) => formatDate(day, { locale })
+  const date = (day: string) => dayWords(day, locale) // fx5w (W-11): "28 Nov"
   if (row.kind === 'customer') {
     const ask = row.ask
     const Icon = WHO_ICON.CUSTOMER
@@ -200,12 +201,17 @@ function AskMenu({ what, items }: { what: string; items: MenuItemDef[] }) {
   return <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('act.menu', { what }), className: 'nds-btn icon' }} items={items} />
 }
 
-/** The band's answer — "3 asked · 1 arrived to check · 1 is late" — for a section's head (the tab) or the window's. */
-export function useAsksAnswer(read: OrderFilesRead | null): string | null {
+/**
+ * The band's answer — "3 asked · 1 arrived to check · 1 is late" — for a section's head (the tab) or the window's. fx5w (W-03): nothing
+ * asked is said here once — with the way to ask for a reader who may ("Nothing is asked. Ask anyone for a file: …"), else "Nothing is
+ * asked." — and the body draws no second line.
+ */
+export function useAsksAnswer(read: OrderFilesRead | null, state?: AsksState): string | null {
   const t = useT(ASKS_NS)
   const band = read ? asksBandOf(read) : null
   if (!band) return null
-  return band.answer.length > 0 ? band.answer.map((part) => t(part.key, part.params)).join(' · ') : t('band.emptyRead')
+  if (band.answer.length > 0) return band.answer.map((part) => t(part.key, part.params)).join(' · ')
+  return t(state && state.can.ask && !state.can.closed && !state.can.readOnly ? 'band.empty' : 'band.emptyRead')
 }
 
 /** "Ask for a file…" — hidden without the right (and for Read-only); held with words on a closed order (L1). */
@@ -222,7 +228,7 @@ export function AskButton({ state, onAsk }: { state: AsksState; onAsk?: (() => v
 /** The window's own head over the rows (the tab draws the kit's section head instead). */
 export function AsksWindowHead({ read, state, onAsk }: { read: OrderFilesRead; state: AsksState; onAsk?: (() => void) | undefined }) {
   const t = useT(ASKS_NS)
-  const answer = useAsksAnswer(read)
+  const answer = useAsksAnswer(read, state)
   return (
     <div className="fw-ask-whead">
       <div className="fw-ask-whead-t">
