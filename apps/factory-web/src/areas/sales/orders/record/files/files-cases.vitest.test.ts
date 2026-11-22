@@ -106,3 +106,20 @@ describe('F-OF T.1 — the Files tab’s gallery cases', () => {
     expect(textOf(draw('of-designer'))).toContain(words('en', 'file-asks')('band.title'))
   })
 })
+
+// ---- T.2 (order FILES tab): th9's step 16 walks the tab at the end, after the Shipments tab's 15; step 7 (the viewer walk) unchanged ----
+describe('F-OF T.2 — th9 walks the Files tab at the end (step 16)', () => {
+  it('step 16 follows step 15 and walks Add files…, the ask (upload, ask again, accept and share), Rename…, Versions… (Restore v1), Delete…, Sales and Read-only', async () => {
+    const { readFileSync } = await import('node:fs')
+    const flow = readFileSync(new URL('../../../../../../tests/golden-flow/th9-order-page.ts', import.meta.url), 'utf8')
+    const at = (text: string) => flow.indexOf(text)
+    expect(at("await flow.step('16 · the Files tab")).toBeGreaterThan(at("await flow.step('15 · the Shipments tab"))
+    expect(flow).toContain("await flow.step('7 · the files viewer walk by keys")
+    for (const path of ['/^\\/files\\/[^/]+\\/complete$/', '/^\\/sales\\/orders\\/[^/]+\\/file-asks$/', '/answer$/', '/ask-again$/', '/accept$/', '/^\\/files\\/[^/]+\\/rename$/', '/^\\/files\\/[^/]+\\/restore$/', '/^\\/files\\/[^/]+\\/delete-document$/']) expect(flow, path).toContain(path)
+    expect(flow).toContain("alpha.go(`/orders/${world.so2.id}?tab=documents`)")
+    expect(flow).toContain("FA('band.counted.priced', { count: 1 })")
+    expect(flow).toContain("roles.some((role) => role.key === 'designer' && !role.archivedAt)")
+    const harness = readFileSync(new URL('../../../../../../tests/golden-flow/_harness/flow.ts', import.meta.url), 'utf8')
+    expect(harness).toContain("export const MORE_ROLES = { owner: 'owner', reader: 'read_only', designer: 'designer' } as const")
+  })
+})
