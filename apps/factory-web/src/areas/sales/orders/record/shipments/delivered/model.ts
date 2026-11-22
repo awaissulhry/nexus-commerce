@@ -1,50 +1,14 @@
-import type { Deliveries, DeliveryRow } from './api'
+import type { DeliveryRow } from './api'
 
 /**
- * The order's "Delivered (from carrier)" card (B-W2b-398; LOG-065, LOG-067), pure: its state, the words of each shipment's
- * arrival (catalogue `shipping-delivery`, keys `dv.*`), why a proof's download is held.
+ * The order's deliveries (B-W2b-398; LOG-065, LOG-067), pure. F-OS-104 (order SHIPMENTS tab; 18-lead-settles L5): the card
+ * "Delivered (from carrier)" went — each Shipments row draws its delivery in its Dates cell (shipments/rows.ts `datesOf`: delivered
+ * and how we know, the carrier's later word, Proof ›, came back). What stays here is the proof's own file.
  */
 
-export interface DeliveriesModel {
-  readonly state: 'loading' | 'ready' | 'error'
-  readonly read: Deliveries | null
-  readonly prefix: string
-  /** The shipment whose proof is being fetched. */
-  readonly downloading: string | null
-  readonly problem: string | null
-  readonly offline: boolean
-}
-
-export interface DeliveriesActions {
-  readonly onRetry?: () => void
-  readonly onDownload?: (shipmentId: string) => void
-  readonly onDismiss?: () => void
-  /** B-SA-0xxb / F-SA-266b: the proof opens in the thread's ONE viewer (the page has a conversation and the reader its file). */
-  readonly onView?: (shipmentId: string) => void
-}
-
-export const initialDeliveries = (prefix: string): DeliveriesModel => ({ state: 'loading', read: null, prefix, downloading: null, problem: null, offline: false })
-
-/** How the shipment came to be delivered, as a key: from the carrier, typed by a person, on its way, came back. */
-export function arrivalKey(row: DeliveryRow): string {
-  if (row.status === 'RETURNED') return 'dv.arrival.returned'
-  if (row.status !== 'DELIVERED') return 'dv.arrival.travelling'
-  return row.deliveredVia === 'TYPED' ? 'dv.arrival.typed' : 'dv.arrival.carrier'
-}
-
-/** Why the proof's download is held, or null. */
-export function downloadHeldKey(model: Pick<DeliveriesModel, 'downloading' | 'offline'>, row: DeliveryRow): string | null {
-  if (!row.pod?.image) return 'dv.held.noImage'
-  if (!row.mayOpen) return 'dv.held.right'
-  if (model.offline) return 'dv.held.offline'
-  if (model.downloading !== null) return 'dv.held.busy'
-  return null
-}
-
 // ---- B-SA-0xxb / F-SA-266b (10-order-page §6.4 "Viewer: … POD … the thread's ONE viewer"): the proof as the viewer lists it, or null
-// — no file for this reader (no files.read on the shipment, none kept yet): the card keeps Download, with its held words.
-export function proofFileOf(row: DeliveryRow): { readonly id: string; readonly name: string; readonly contentType: string; readonly sizeBytes: number } | null {
+// — no file for this reader (no files.read on the shipment, none kept yet): the row offers its image (shipping.view), else no door.
+export function proofFileOf(row: Pick<DeliveryRow, 'pod'>): { readonly id: string; readonly name: string; readonly contentType: string; readonly sizeBytes: number } | null {
   return row.pod?.file ?? null
 }
 // ---- end B-SA-0xxb
-

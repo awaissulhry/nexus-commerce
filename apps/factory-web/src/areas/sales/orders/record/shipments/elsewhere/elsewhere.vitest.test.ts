@@ -157,24 +157,30 @@ describe('the "Made elsewhere" chip and the doors on the order page', () => {
     expect(madeElsewhereChip({})).toBeNull()
   })
 
-  it('Shipments: the card head’s door and the row’s chip, in both languages', () => {
+  // F-OS-101 (plan D2): on the Shipments tab the door is hidden without its rights, held with words only by the order's state.
+  it('Shipments: the head’s door (hidden without the rights, held by the order’s state) and the row’s chip, in both languages', () => {
     const item = recordScreen.cases.find((entry) => entry.id === 'shipments')!.model
     const record = item.record! // op-fx1: the Shipments case is a record case (a design case is a record or a new order's draft)
     const value = record.order.status === 'ready' ? record.order.value : null
     expect(value).not.toBeNull()
     const order = { ...value!, chain: { ...value!.chain, shipments: value!.chain.shipments.map((row, index) => (index === 0 ? { ...row, origin: 'ELSEWHERE' as const, externalDdt: { number: '123/2026', date: '2026-11-18' } } : row)) } }
-    const model = { ...item, record: { ...record, order: { status: 'ready' as const, value: order }, elsewhere: { held: { key: 'elsewhere.held.noRight' }, dialog: null } } }
+    // A warehouse person (shipping.manage) sees the door held by the order's state; Sales (the case's role) never sees it here.
+    const withDoor = (held: { key: string }, ship = false) => ({ ...item, record: { ...record, can: { ...record.can, createShipment: ship }, order: { status: 'ready' as const, value: order }, elsewhere: { held, dialog: null } } })
+    const section = (html: string) => textOf(html.slice(html.indexOf('id="shipments"')))
     for (const locale of LOCALES) {
-      const text = textOf(renderView(recordScreen.view as ComponentType<{ model: unknown }>, model, locale))
-      expect(text).toContain(locale === 'en' ? 'Made elsewhere · DDT 123/2026' : 'Fatta altrove · DDT 123/2026')
-      expect(text).toContain(locale === 'en' ? 'Record a shipment made elsewhere…' : 'Registra una spedizione fatta altrove…')
+      const noRight = section(renderView(recordScreen.view as ComponentType<{ model: unknown }>, withDoor({ key: 'elsewhere.held.noRight' }), locale))
+      expect(noRight).toContain(locale === 'en' ? 'Made elsewhere · DDT 123/2026' : 'Fatta altrove · DDT 123/2026')
+      expect(noRight).not.toContain(locale === 'en' ? 'Record a shipment made elsewhere…' : 'Registra una spedizione fatta altrove…')
+      const byState = section(renderView(recordScreen.view as ComponentType<{ model: unknown }>, withDoor({ key: 'elsewhere.held.state' }, true), locale))
+      expect(byState).toContain(locale === 'en' ? 'Record a shipment made elsewhere…' : 'Registra una spedizione fatta altrove…')
     }
   })
 
   it('the ⋯ Next steps and the card head open the same dialog; the view fetches nothing (its container reads)', () => {
     const view = readFileSync(new URL('../../view/OrderRecordView.tsx', import.meta.url), 'utf8')
     expect(view).toContain("{ id: 'elsewhere', label: t('elsewhere.title')")
-    const tab = readFileSync(new URL('../../view/ShipmentsTab.tsx', import.meta.url), 'utf8')
+    // F-OS-101: the Shipments head's door is its section file's (the tab's layout holds no door).
+    const tab = readFileSync(new URL('../view/ShipmentsSection.tsx', import.meta.url), 'utf8')
     expect(tab).toContain('onClick={() => actions?.onRecordElsewhere?.()}')
     const dialog = readFileSync(new URL('./view/ElsewhereDialog.tsx', import.meta.url), 'utf8')
     expect(dialog).not.toMatch(/useOfficeApi|previewElsewhere\(|recordElsewhere\(|readyToShip\(/)
@@ -202,7 +208,7 @@ describe('Warehouse shows a shipment made elsewhere as it is (no "issue the repl
 
 describe('every word it draws, in both languages', () => {
   it('each elsewhere.* key the dialog, the model and the order page use exists in it and en (a plural by its forms)', () => {
-    const sources = ['./view/ElsewhereDialog.tsx', './model.ts', '../../view/ShipmentsTab.tsx', '../../view/OrderRecordView.tsx'].map((file) => readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n')
+    const sources = ['./view/ElsewhereDialog.tsx', './model.ts', '../view/ShipmentsSection.tsx' /* F-OS-101 */, '../../view/OrderRecordView.tsx'].map((file) => readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n')
     const keys = [...new Set([...sources.matchAll(/'(elsewhere\.[a-zA-Z.]+)'/g)].map((match) => match[1]!))]
     expect(keys.length).toBeGreaterThan(30)
     for (const locale of LOCALES) {

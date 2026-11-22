@@ -109,7 +109,7 @@ import { WhoWasToldDialog } from './WhoWasTold'
 const NO_LINES: readonly never[] = []
 
 /** The catalogues the order's page loads (W1 browser repair: its tests draw the record with these, as the page does). */
-export const RECORD_NAMESPACES = ['orders', 'sales', 'lists', 'records', DEPTH /* B-W2b-323 */, SUPERVISOR_NS, NOTES_NS /* F-SA-230 */] as const
+export const RECORD_NAMESPACES = ['orders', 'sales', 'lists', 'records', DEPTH /* B-W2b-323 */, SUPERVISOR_NS, NOTES_NS /* F-SA-230 */, 'order-shipments' /* F-OS-101 (L11) */] as const
 
 export function OrderRecord({ orderId }: { orderId: string }) {
   return (
@@ -762,7 +762,6 @@ function RecordContainer({ orderId }: { orderId: string }) {
     >
     <OrderRecordView
       model={model}
-      delivered={shipments.delivered /* B-W2b-398, F-OP-134 */}
       // B-TH-214: the docked thread (Head with Activity's doors, files line, Files view, feed, box); the print view prints the thread with ThreadPrint (B-TH-280).
       // F-SA-262: the dock's pick — This order · <Customer> (general) · Projects ▾ · Work orders ▾ (office only) · All of <Customer>.
       thread={

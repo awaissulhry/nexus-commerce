@@ -62,9 +62,6 @@ export function decideHeld(proposal: Pick<OrderRePromise, 'may'>, busy: boolean)
 /** The decline's reason is required (the planner reads it): the held words, or null. */
 export const declineHeld = (decline: LinksDecline, busy: boolean): string | null => (busy ? 'links.held.busy' : decline.reason.trim() === '' ? 'links.decline.reasonNeeded' : null)
 
-/** Complaints and returns are drawn only for a reader who holds at least one of the two rights (null both: no card at all). */
-export const showsPointers = (links: Pick<OrderLinks, 'complaints' | 'returns'>): boolean => links.complaints !== null || links.returns !== null
-
 /** The pill tone of a complaint's and a return's status (open work warm, done neutral). */
 export const COMPLAINT_TONE: Readonly<Record<string, 'info' | 'warning' | 'danger' | 'success' | 'neutral'>> = { NEW: 'warning', TRIAGED: 'warning', INVESTIGATING: 'info', ANSWERED: 'success', CLOSED: 'neutral' }
 export const RETURN_TONE: Readonly<Record<string, 'info' | 'warning' | 'danger' | 'success' | 'neutral'>> = { REQUESTED: 'warning', AUTHORISED: 'info', RECEIVED: 'info', INSPECTED: 'info', CLOSED: 'neutral', REJECTED: 'danger', CANCELLED: 'neutral' }

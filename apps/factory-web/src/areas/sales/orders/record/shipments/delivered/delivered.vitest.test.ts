@@ -1,73 +1,45 @@
-import { createElement } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
+import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { messagesFor } from '../../../../../../lib/i18n/messages'
-import { I18nProvider } from '../../../../../../lib/i18n/provider'
-import { deliveriesSchema } from './api'
-import { designScreen } from './fixtures'
-import { arrivalKey, downloadHeldKey } from './model'
-import { readFileSync } from 'node:fs' // B-SA-0xxb
-import { proofFileOf } from './model' // B-SA-0xxb
-import { DeliveriesView } from './view/DeliveriesView' // B-SA-0xxb
+import { deliveriesSchema, type Deliveries } from './api'
+import { proofFileOf } from './model'
 
-const model = (id: string) => designScreen.cases.find((entry) => entry.id === id)!.model
-const KEY = /\b(?:dv|rl)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
+/**
+ * B-W2b-398 → F-OS-104 (order SHIPMENTS tab; 18-lead-settles L5) — the order's deliveries READ stays; its card "Delivered (from carrier)"
+ * went: each Shipments row draws its delivery in its Dates cell (shipments/rows.ts `datesOf`, tested in rows.vitest.test.ts). Made-up data.
+ */
 
-describe('SCR-039-delivered — the order\'s Delivered (from carrier) card (B-W2b-398)', () => {
-  it('every fixture is an answer the API may give', () => {
-    for (const entry of designScreen.cases) if (entry.model.read) expect(() => deliveriesSchema.parse(entry.model.read), entry.id).not.toThrow()
-  })
+const answer = (over: Partial<Deliveries['shipments'][number]> = {}): unknown => ({
+  order: { id: 'so-1', number: 'SEED-SO-0031', status: 'DELIVERED', deliveredAt: '2026-11-13T10:42:00.000Z' },
+  shipments: [{ id: 'sh-1', number: 'SEED-SH-0040', status: 'DELIVERED', carrierName: 'Seed Carrier', shippedAt: '2026-11-10T15:05:00.000Z', deliveredAt: '2026-11-12T09:31:00.000Z', deliveredVia: 'CARRIER', pod: { signedBy: 'FAKE RECIPIENT', signedAt: '2026-11-12T09:31:00.000Z', image: true }, openProblems: 0, mayOpen: true, ...over }],
+  steps: [{ id: 'st-1', seq: 20, status: 'OPEN', dueDate: '2026-12-13' }],
+})
 
-  it('says how each shipment arrived and holds the proof download with why', () => {
-    const [carrier, typed] = model('delivered').read!.shipments
-    expect(arrivalKey(carrier!)).toBe('dv.arrival.carrier')
-    expect(arrivalKey(typed!)).toBe('dv.arrival.typed')
-    expect(arrivalKey(model('travelling').read!.shipments[1]!)).toBe('dv.arrival.travelling')
-    expect(downloadHeldKey(model('delivered'), carrier!)).toBeNull()
-    expect(downloadHeldKey(model('delivered'), typed!)).toBe('dv.held.noImage')
-    expect(downloadHeldKey(model('no-right'), model('no-right').read!.shipments[0]!)).toBe('dv.held.right')
-    expect(downloadHeldKey(model('offline'), carrier!)).toBe('dv.held.offline')
-  })
-
-  it('every case draws in Italian and English with no raw key', () => {
-    for (const locale of ['it', 'en'] as const) {
-      for (const entry of designScreen.cases) {
-        const html = renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'ds-words']) }, createElement(designScreen.view, { model: entry.model })))
-        expect(html.match(KEY)?.[0] ?? null, `${entry.id} (${locale})`).toBeNull()
-      }
-    }
+describe('the deliveries read (kept: L5)', () => {
+  it('an older answer and the new one (B-OS-003) both parse: by hand, the carrier\'s later word, came back, the typed arrival', () => {
+    expect(() => deliveriesSchema.parse(answer())).not.toThrow()
+    const read = deliveriesSchema.parse(answer({ deliveredVia: 'COLLECTED', byHand: { reason: 'The customer confirmed by phone.', overrode: true }, carrierLater: 'RETURNED', returned: null, expectedDeliveryAt: '2026-11-12T00:00:00.000Z', etaByHand: true }))
+    expect(read.shipments[0]).toMatchObject({ deliveredVia: 'COLLECTED', byHand: { reason: 'The customer confirmed by phone.', overrode: true }, carrierLater: 'RETURNED', etaByHand: true })
+    // A way of delivery the server adds later never breaks the read (a plain string).
+    expect(() => deliveriesSchema.parse(answer({ deliveredVia: 'SOMETHING_NEW' }))).not.toThrow()
   })
 })
 
 // ---- B-SA-0xxb / F-SA-266b (10-order-page §6.4 "Viewer: … POD"): the proof opens in the thread's ONE viewer, not a download
 describe('B-SA-0xxb: the proof of delivery opens in the thread\'s ONE viewer when the reader has its file', () => {
   const file = { id: '00000000-0000-4000-8000-0000000000f1', name: 'proof-of-delivery-SH-26-0040.pdf', contentType: 'application/pdf', sizeBytes: 48211 }
-  const withFile = () => {
-    const base = model('delivered')
-    return { ...base, read: { ...base.read!, shipments: base.read!.shipments.map((row, index) => (index === 0 ? { ...row, pod: { ...row.pod!, file } } : row)) } }
-  }
-  const draw = (m: ReturnType<typeof model>, actions: Record<string, () => void>, locale: 'en' | 'it' = 'en') => renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'ds-words', 'shipping-delivery']) }, createElement(DeliveriesView, { model: m, actions })))
 
-  it('the API\'s file (files.read on the shipment) is the viewer\'s; none: the card keeps Download with its held words', () => {
-    expect(deliveriesSchema.parse(withFile().read).shipments[0]!.pod!.file).toEqual(file)
-    expect(proofFileOf(withFile().read!.shipments[0]!)).toEqual(file)
-    expect(proofFileOf(model('delivered').read!.shipments[0]!)).toBeNull()
-    expect(proofFileOf(model('delivered').read!.shipments[1]!)).toBeNull()
+  it('the API\'s file (files.read on the shipment) is the viewer\'s; none: no file', () => {
+    const read = deliveriesSchema.parse(answer({ pod: { signedBy: 'FAKE RECIPIENT', signedAt: null, image: true, file } }))
+    expect(proofFileOf(read.shipments[0]!)).toEqual(file)
+    expect(proofFileOf(deliveriesSchema.parse(answer()).shipments[0]!)).toBeNull()
+    expect(proofFileOf({ pod: null })).toBeNull()
   })
 
-  it('Open proof where the page has the viewer and the reader the file; Download otherwise', () => {
-    const opened = draw(withFile(), { onView: () => undefined, onDownload: () => undefined })
-    expect(opened).toContain('Open proof')
-    const noViewer = draw(withFile(), { onDownload: () => undefined })
-    expect(noViewer).not.toContain('Open proof')
-    expect(noViewer).toContain('Download proof')
-    expect(draw(model('delivered'), { onView: () => undefined, onDownload: () => undefined })).not.toContain('Open proof')
-    expect(draw(withFile(), { onView: () => undefined }, 'it')).toContain('Apri la prova')
-  })
-
-  it('the card hands the proof to the frame\'s viewer (openFiles), as the order\'s other files', () => {
-    const source = readFileSync(new URL('./Deliveries.tsx', import.meta.url), 'utf8')
-    expect(source).toContain('openFiles({ files: [proof], fileId: proof.id, returnTo: document.activeElement as HTMLElement | null })')
+  it('the row\'s Proof › hands the proof to the frame\'s viewer (openFiles), as the order\'s other files; the card is gone', () => {
+    const row = readFileSync(new URL('../view/ShipmentRow.tsx', import.meta.url), 'utf8')
+    expect(row).toContain('openFiles({ files: [proof], fileId: proof.id, returnTo: document.activeElement as HTMLElement | null })')
+    expect(existsSync(new URL('./Deliveries.tsx', import.meta.url))).toBe(false)
+    expect(existsSync(new URL('./view/DeliveriesView.tsx', import.meta.url))).toBe(false)
   })
 })
 // ---- end B-SA-0xxb
