@@ -224,3 +224,15 @@ export async function carryBrandPricesOnSplit(tools: CommandTools, from: PricedO
   for (const orderId of touched) announceBrandPrices(tools, { id: orderId, companyId: from.companyId, partyId: from.partyId })
 }
 // ── end B-CP-024 ──
+
+// ── B-OM-020 (order money tab; Owner D4): a price difference accepted by hand ──
+export const PRICE_ACCEPTANCE_COLUMNS = { id: true, salesOrderId: true, ourNet: true, brandNet: true, reason: true, acceptedById: true, acceptedAt: true, withdrawnAt: true } as const satisfies Prisma.OrderPriceAcceptanceSelect
+export type PriceAcceptanceRecord = Prisma.OrderPriceAcceptanceGetPayload<{ select: typeof PRICE_ACCEPTANCE_COLUMNS }>
+
+/** The acceptance not taken back of each order (at most one: the guards' partial unique index), by order id. */
+export async function acceptancesOf(db: Reader, orderIds: readonly string[]): Promise<Map<string, PriceAcceptanceRecord>> {
+  if (orderIds.length === 0) return new Map()
+  const rows = await db.orderPriceAcceptance.findMany({ where: { salesOrderId: { in: [...orderIds] }, withdrawnAt: null }, select: PRICE_ACCEPTANCE_COLUMNS })
+  return new Map(rows.map((row) => [row.salesOrderId, row]))
+}
+// ── end B-OM-020 ──

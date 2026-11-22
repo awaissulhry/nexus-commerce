@@ -34,7 +34,7 @@ import { PRICE_CHECK_CAP } from './columns'
  */
 
 type Json = Record<string, any>
-type Method = 'GET' | 'POST' | 'PUT'
+type Method = 'GET' | 'POST' | 'PUT' | 'DELETE' // B-OM-020: + DELETE (the take-back)
 
 const SEED_DIR = fileURLToPath(new URL('../../../../../../packages/factory-db/seed', import.meta.url))
 const NS = 'cp018-price-columns'
@@ -205,3 +205,31 @@ describe('the money wall and the brand wall (B-CP-018)', { timeout: SLOW_TEST_TI
     for (const id of [equal, differs, none]) expect(ids).not.toContain(id)
   })
 })
+
+// ── B-OM-020 (order money tab; Owner D4): a difference accepted by hand leaves "Not equal" — the list, its totals, the summary ──
+describe('B-OM-020: an accepted difference is no longer counted as Not equal (one rule for the list and the summary)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const notEqualCount = async () => (await ok('owner', 'GET', `/sales/brand-prices/summary?partyId=${alpha}`)).priceNotEqualCount as number
+
+  it('accepted: the row says so and still reads Not equal; the Not equal term, its totals and the summary leave it out', async () => {
+    expect(await notEqualCount()).toBe(1)
+    await ok('owner', 'POST', `/sales/orders/${differs}/price-check/accept`, { ourNet: 82_000, brandNet: 81_000, reason: 'Agreed with the customer: 810.00.' })
+    const rows = (await ok('owner', 'GET', `/sales/orders?partyId=${alpha}&limit=200`)).orders as Json[]
+    expect(rows.find((entry) => entry.id === differs)).toMatchObject({ priceMatch: 'NOT_EQUAL', priceDiff: 1_000, priceAccepted: true })
+    expect(rows.find((entry) => entry.id === equal)).toMatchObject({ priceAccepted: false })
+    expect(await idsOf('owner', `partyId=${alpha}&priceMatch=NOT_EQUAL`)).toEqual([])
+    expect((await ok('owner', 'GET', `/sales/orders/summary?partyId=${alpha}&priceMatch=NOT_EQUAL`)).all.orders.count).toBe(0)
+    expect(await notEqualCount()).toBe(0)
+  })
+
+  it('taken back: counted as Not equal again', async () => {
+    await ok('owner', 'DELETE', `/sales/orders/${differs}/price-check/accept`, { reason: 'Not confirmed in writing.' })
+    expect(await idsOf('owner', `partyId=${alpha}&priceMatch=NOT_EQUAL`)).toEqual([differs])
+    expect(await notEqualCount()).toBe(1)
+  })
+
+  it('a Sales worker never reads priceAccepted on a row', async () => {
+    const response = await call('sales', 'GET', `/sales/orders?partyId=${alpha}&limit=200`)
+    if (response.statusCode === 200) expect(keysOf((response.json() as Json).orders)).not.toContain('priceAccepted')
+  })
+})
+// ── end B-OM-020 ──

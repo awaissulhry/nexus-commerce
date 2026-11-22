@@ -1,4 +1,6 @@
 import type { Prisma } from '@nexus/factory-db'
+// B-OM-020 (order money tab; Owner D4): a difference accepted by hand leaves "Not equal".
+import { acceptanceInForce } from '@nexus/factory-domain/sales/brand-prices/accept'
 import { heldGrains } from '@nexus/factory-domain/auth/grains/grains'
 import { ForbiddenError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { can, scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
@@ -11,7 +13,7 @@ import { actorOf } from '../../../core/context'
 import type { ExportColumn } from '../../../platform/exports/source'
 import { officeContextOf } from '../orders/access'
 import type { Reader } from '../orders/store'
-import { brandPriceRowsOf, checkOfOrder, NOT_A_PRICE_HOLDER, PRICE_PERMISSION } from './store'
+import { acceptancesOf, brandPriceRowsOf, checkOfOrder, NOT_A_PRICE_HOLDER, PRICE_PERMISSION } from './store' // B-OM-020: + acceptancesOf
 
 /**
  * The price check in the Orders list (customer page plan C2d, B-CP-018; design customer-page 11 §1.2, §3.1, §3.5; review B4, B5):
@@ -45,9 +47,12 @@ export const PRICE_CHECK_WORDS = Object.freeze({
   customerNotFound: 'Customer not found.',
 })
 
-/** The checks of some orders, by order id: one reading of their lines and their customer's prices, in chunks. */
-export async function priceChecksOf(db: Reader, orderIds: readonly string[]): Promise<Map<string, PriceCheckTotal>> {
-  const out = new Map<string, PriceCheckTotal>()
+/**
+ * The checks of some orders, by order id: one reading of their lines and their customer's prices, in chunks. B-OM-020: + whether a
+ * difference accepted by hand holds (factory-domain sales/brand-prices/accept acceptanceInForce: the one rule).
+ */
+export async function priceChecksOf(db: Reader, orderIds: readonly string[]): Promise<Map<string, PriceCheckTotal & { readonly accepted: boolean }>> {
+  const out = new Map<string, PriceCheckTotal & { readonly accepted: boolean }>()
   for (let start = 0; start < orderIds.length; start += CHUNK) {
     const ids = orderIds.slice(start, start + CHUNK)
     const orders = await db.salesOrder.findMany({ where: { id: { in: ids } }, select: { id: true, currency: true, netAmount: true } })
@@ -57,7 +62,11 @@ export async function priceChecksOf(db: Reader, orderIds: readonly string[]): Pr
     for (const line of lines) linesOf.set(line.orderId, [...(linesOf.get(line.orderId) ?? []), line])
     const rowsOf = new Map<string, typeof rows>()
     for (const row of rows) rowsOf.set(row.salesOrderId, [...(rowsOf.get(row.salesOrderId) ?? []), row])
-    for (const order of orders) out.set(order.id, checkOfOrder(order, linesOf.get(order.id) ?? [], rowsOf.get(order.id) ?? []).total)
+    const acceptances = await acceptancesOf(db, ids) // B-OM-020
+    for (const order of orders) {
+      const total = checkOfOrder(order, linesOf.get(order.id) ?? [], rowsOf.get(order.id) ?? []).total
+      out.set(order.id, { ...total, accepted: acceptanceInForce(total, acceptances.get(order.id)) })
+    }
   }
   return out
 }
@@ -68,6 +77,8 @@ export interface OrderPriceColumns {
   readonly priceMatch: Money<'price', PriceMatch>
   readonly priceDiff: Money<'price', number | null>
   readonly priceNotEqualLines: Money<'price', number>
+  /** B-OM-020: a NOT_EQUAL accepted by hand (in force): the "Not equal" filter and counts leave it out. */
+  readonly priceAccepted: Money<'price', boolean>
 }
 
 /** The price check of each order of a page, by order id — only for a reader holding the price grain (null for anyone else). */
@@ -76,7 +87,7 @@ export async function orderPriceColumns(db: Reader, actor: Actor, orderIds: read
   const checks = await priceChecksOf(db, orderIds)
   const out = new Map<string, OrderPriceColumns>()
   for (const [orderId, check] of checks) {
-    out.set(orderId, { brandPrice: asMoney('price', check.brandPrice), priceMatch: asMoney('price', check.priceMatch), priceDiff: asMoney('price', check.priceDiff), priceNotEqualLines: asMoney('price', check.priceNotEqualLines) })
+    out.set(orderId, { brandPrice: asMoney('price', check.brandPrice), priceMatch: asMoney('price', check.priceMatch), priceDiff: asMoney('price', check.priceDiff), priceNotEqualLines: asMoney('price', check.priceNotEqualLines), priceAccepted: asMoney('price', check.accepted) /* B-OM-020 */ })
   }
   return out
 }
@@ -87,7 +98,8 @@ export async function priceMatchWhere(db: Reader, actor: Actor, base: Prisma.Sal
   const priced = (await db.salesOrder.findMany({ where: { AND: [base, { brandPrices: { some: {} } }] }, select: { id: true }, orderBy: { id: 'asc' }, take: PRICE_CHECK_CAP + 1 })).map((row) => row.id)
   if (priced.length > PRICE_CHECK_CAP) throw new ValidationError(PRICE_CHECK_WORDS.tooMany, [{ path: 'query/priceMatch', message: PRICE_CHECK_WORDS.tooMany }])
   const checks = await priceChecksOf(db, priced)
-  const kept = priced.filter((id) => checks.get(id)?.priceMatch === match)
+  // B-OM-020: a difference accepted by hand is no longer "Not equal".
+  const kept = priced.filter((id) => checks.get(id)?.priceMatch === match && !(match === 'NOT_EQUAL' && checks.get(id)?.accepted === true))
   if (match === 'NO_BRAND_PRICE') return { AND: [base, { OR: [{ brandPrices: { none: {} } }, { id: { in: kept } }] }] }
   return { AND: [base, { id: { in: kept } }] }
 }
@@ -111,7 +123,7 @@ export async function brandPriceSummary(caller: CommandCaller, query: { readonly
     let priceMissingCount = unpriced
     for (const id of priced) {
       const match = checks.get(id)?.priceMatch
-      if (match === 'NOT_EQUAL') priceNotEqualCount++
+      if (match === 'NOT_EQUAL' && checks.get(id)?.accepted !== true) priceNotEqualCount++ // B-OM-020: an accepted difference is not counted
       else if (match === 'NO_BRAND_PRICE') priceMissingCount++
     }
     return asMoneyKeys('price', { partyId: query.partyId, priceNotEqualCount, priceMissingCount }) // B-CP-018: every key is the price grain

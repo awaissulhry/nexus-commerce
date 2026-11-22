@@ -885,11 +885,15 @@ describe('what the order screens read (SCR-039): the deposit as paid and sent, t
 
     const after = (await as(finance, 'GET', orderUrl(order.id))).order
     expect(after.chain.depositRequests[0]).toMatchObject({ id: deposit.id, status: 'OPEN', paidAmount: 100000, link: { to: second.link.to, expiresAt: second.link.expiresAt, state: 'LIVE' } })
+    // B-OM-022 (order money tab): the live page's own id — the second one (the first was revoked) — for "Stop the page".
+    expect(after.chain.depositRequests[0].link.id).toBe(second.link.id)
     expect(after.chain.invoices).toEqual([expect.objectContaining({ id: draft.id, docType: 'TD02', status: 'DRAFT', depositRequestId: deposit.id })])
     // No price grain: neither the amount nor what was paid; the page's state is no money.
     const viewer = (await ok('a.viewer', 'GET', orderUrl(order.id))).order
     expect(viewer.chain.depositRequests[0]).not.toHaveProperty('paidAmount')
     expect(viewer.chain.depositRequests[0].link).toMatchObject({ state: 'LIVE' })
+    // B-OM-022: "Stop the page" itself is links.manage (the Owner): a person without it is refused (the id alone opens nothing).
+    expect((await call('a.viewer', 'POST', `/links/${second.link.id}/revoke`, {})).status).toBe(403)
   })
 
   it('the margin % follows the margin grain; the people the record names come with their names', async () => {

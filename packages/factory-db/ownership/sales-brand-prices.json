@@ -13,6 +13,14 @@
           "hiddenColumns": ["enteredById"]
         }
       }
+    },
+    "OrderPriceAcceptance": {
+      "about": "B-OM-019 (order money tab, schema wave \"order money 1/1\"; Owner D4): a price difference of an order accepted by hand, taken back once. The office (Owner and Finance: orders.moneyPlan with the price grain) writes it through apps/factory-api's sales/brand-prices with command(); never deleted (no delete grant); never written once the order is CLOSED or CANCELLED (the …_order_money_guards trigger). The customer reads none of it: no partner grant.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
     }
   }
 }
