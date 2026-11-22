@@ -50,6 +50,7 @@ import { sharingNarrows, supersedeEarlierVersions } from './versions/supersede'
 // B-PR-44: a file's record read through its own resolver, its parent's, its work order's or its party (fail closed for limited people).
 import { fileRecordScope, reachesFileRecord } from './record-scope'
 import { fileLivePartyId } from './record-scope' // B-SA-002
+import { MADE_WORDS, madePapersOf } from './made' // B-OF-012 (order files tab): papers Nexus made are never deleted, born-priced stay priced
 // B-TH-083: measurement sheets are body data (the tick at upload, the permission that opens them, each opening recorded).
 import { isMeasurementSheet, MEASUREMENT_SHEET_CATEGORY, MEASUREMENT_SHEET_PERMISSION, measurementSheetProblem } from '@nexus/factory-domain/files/measurements'
 // fix-wall-1: a portal or link reader is never shown a file whose content is another customer's (an old copy of a mixed lot's photo).
@@ -947,14 +948,18 @@ export async function deleteFile(runtime: FilesRuntime, caller: CommandCaller, f
   const before = await readOfficeReached(caller, fileId) // B-PR-44
   mayWrite(caller, FILES_DELETE, { companyId: before.companyId, floorSiteId: null, partyId: null })
   assertTransition(fileMachine, before.status, 'DELETED', { legalHold: before.legalHold, retainUntil: before.retainUntil, now: runtime.clock.now() })
+  // B-OF-012: a paper Nexus made (a generated document, an invoice's file, a proof of delivery, a return label) is never removed.
+  if ((await caller.withClient((client) => madePapersOf(client, [fileId]))).size > 0) throw new ConflictError(MADE_WORDS.delete)
   const { result } = await command(
     caller,
     { name: 'files.delete', idempotencyKey, input: { fileId, ...input }, record: { type: 'StoredFile', id: fileId, expectedVersion: input.version } },
-    async ({ tx, audit, now }) => {
+    async ({ tx, audit, emit, now, context }) => {
       const current = await tx.storedFile.findUniqueOrThrow({ where: { id: fileId }, select: SELECT_FOR.office })
       assertTransition(fileMachine, current.status, 'DELETED', { legalHold: current.legalHold, retainUntil: current.retainUntil, now })
       const row = await tx.storedFile.update({ where: { id: fileId }, data: { status: 'DELETED', deletedAt: now }, select: SELECT_FOR.office })
       audit({ recordType: 'StoredFile', recordId: fileId, companyId: row.companyId, before: { status: current.status }, after: { status: 'DELETED' }, ...(input.reason ? { reason: input.reason } : {}) })
+      // B-OF-015: every screen that reads the record's files re-reads them.
+      emit({ type: 'file.removed', subject: fileId, companyId: row.companyId, payload: { fileId, recordType: row.recordType, recordId: row.recordId, fileIds: [fileId], partyId: await fileLivePartyId(tx, tenantOf(context), row) } })
       return viewOf(row)
     },
   )
@@ -1023,7 +1028,7 @@ export async function setVisibility(
   const { result } = await command(
     caller,
     { name: 'files.setVisibility', idempotencyKey, input: { fileId, ...input }, record: { type: 'StoredFile', id: fileId, expectedVersion: input.version } },
-    async ({ tx, audit }) => {
+    async ({ tx, audit, emit, context }) => {
       await checkSite(tx, sharing)
       const row = await tx.storedFile.update({
         where: { id: fileId },
@@ -1037,6 +1042,8 @@ export async function setVisibility(
         before: { visibility: before.visibility, floorSiteId: before.floorSiteId, partyId: before.partyId },
         after: { visibility: row.visibility, floorSiteId: row.floorSiteId, partyId: row.partyId },
       })
+      // B-OF-015: shared or taken back — every screen that reads the record's files re-reads them (no name).
+      emit({ type: 'file.visibility_changed', subject: fileId, companyId: row.companyId, payload: { fileId, recordType: row.recordType, recordId: row.recordId, audiences: [...row.visibility], partyId: await fileLivePartyId(tx, tenantOf(context), row) } })
       return viewOf(row)
     },
   )
@@ -1090,7 +1097,7 @@ export async function setRetention(
 /** The most files one mark reaches (a series and its copies; far more than any document has). */
 export const PRICED_REACH_MAX = 500
 
-const REACH = { id: true, companyId: true, priced: true, seriesId: true } as const satisfies Prisma.StoredFileSelect
+const REACH = { id: true, companyId: true, priced: true, seriesId: true, /* B-OF-013 */ visibility: true, floorSiteId: true } as const satisfies Prisma.StoredFileSelect
 type Reached = Prisma.StoredFileGetPayload<{ select: typeof REACH }>
 
 /**
@@ -1135,20 +1142,33 @@ export async function setPriced(caller: CommandCaller, fileId: string, input: { 
   const shown = async (view: FileView): Promise<FileView> =>
     !mayOpenPriced(view, sees) ? lockedView(view, PRICED_LOCK) : isMeasurementSheet(view) && !(await opensMeasurementSheets(caller, view)) ? lockedView(view) : view
   if (before.priced === input.priced) return shown(viewOf(before))
+  // ---- B-OF-012: a document that shows our prices by its kind (a priced generated document, an invoice's file) never loses the mark.
+  if (!input.priced) {
+    const root = before.seriesId ?? before.id
+    const born = await caller.withClient(async (client) => madePapersOf(client, (await client.storedFile.findMany({ where: { OR: [{ id: root }, { seriesId: root }] }, select: { id: true } })).map((row) => row.id)))
+    if ([...born.values()].some((fact) => fact.bornPriced)) throw new ConflictError(MADE_WORDS.unmark)
+  }
+  // ---- end B-OF-012
   const { result } = await command(
     caller,
     { name: 'files.setPriced', idempotencyKey, input: { fileId, ...input }, record: { type: 'StoredFile', id: fileId, expectedVersion: input.version } },
     async ({ tx, audit, emit, context: inside }) => {
       const reached = await pricedReachOf(tx, before.seriesId ?? before.id, input.priced)
       const changed: string[] = []
+      // ---- B-OF-013: marking priced takes the floor off every file it reaches (a priced file never goes to a floor), in this command.
+      const offTheFloor = (row: { readonly visibility: readonly string[] }) => (input.priced && row.visibility.includes('FLOOR') ? { visibility: row.visibility.filter((audience) => audience !== 'FLOOR') as FileAudience[], floorSiteId: null } : null)
       for (const other of reached) {
-        if (other.id === fileId || other.priced === input.priced) continue
-        await tx.storedFile.update({ where: { id: other.id }, data: { priced: input.priced, version: { increment: 1 } }, select: { id: true } })
-        audit({ action: 'files.setPriced', recordType: 'StoredFile', recordId: other.id, companyId: other.companyId, before: { priced: markMoney('price', other.priced) }, after: { priced: markMoney('price', input.priced), byFileId: fileId } })
+        const floorless = other.id === fileId ? null : offTheFloor(other)
+        if (other.id === fileId || (other.priced === input.priced && floorless === null)) continue
+        await tx.storedFile.update({ where: { id: other.id }, data: { priced: input.priced, ...(floorless ?? {}), version: { increment: 1 } }, select: { id: true } })
+        audit({ action: 'files.setPriced', recordType: 'StoredFile', recordId: other.id, companyId: other.companyId, before: { priced: markMoney('price', other.priced), ...(floorless ? { visibility: other.visibility, floorSiteId: other.floorSiteId } : {}) }, after: { priced: markMoney('price', input.priced), byFileId: fileId, ...(floorless ? { visibility: floorless.visibility, floorSiteId: null } : {}) } })
         changed.push(other.id)
       }
-      const row = await tx.storedFile.update({ where: { id: fileId }, data: { priced: input.priced }, select: SELECT_FOR.office })
-      audit({ recordType: 'StoredFile', recordId: fileId, companyId: row.companyId, before: { priced: markMoney('price', before.priced) }, after: { priced: markMoney('price', row.priced), alsoFileIds: changed } })
+      const own = reached.find((other) => other.id === fileId)
+      const ownFloorless = own ? offTheFloor(own) : null
+      const row = await tx.storedFile.update({ where: { id: fileId }, data: { priced: input.priced, ...(ownFloorless ?? {}) }, select: SELECT_FOR.office })
+      // ---- end B-OF-013
+      audit({ recordType: 'StoredFile', recordId: fileId, companyId: row.companyId, before: { priced: markMoney('price', before.priced), ...(ownFloorless ? { visibility: before.visibility, floorSiteId: before.floorSiteId } : {}) }, after: { priced: markMoney('price', row.priced), alsoFileIds: changed, ...(ownFloorless ? { visibility: row.visibility, floorSiteId: null } : {}) } })
       emit({
         type: 'file.priced_changed',
         subject: fileId,
