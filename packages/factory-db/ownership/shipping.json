@@ -31,12 +31,12 @@
       }
     },
     "Parcel": {
-      "about": "The office and the site's floor (packing) add and remove the parcels of a DRAFT shipment and weigh, measure and label them until they leave. A portal or link session reads its own party's parcels and their tracking numbers.",
+      "about": "The office and the site's floor (packing) add and remove the parcels of a DRAFT shipment and weigh, measure and label them until they leave. A portal or link session reads its own party's parcels and their tracking numbers. B-OS-020 (order shipments 1/1): the tracking number typed by hand for a parcel no label tracks, and its link, are the office's: the floor neither reads nor writes them; a portal or link session reads its own party's.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] },
-        "factory_floor_runtime": { "privileges": ["select", "insert", "update", "delete"], "scopedBy": ["site"], "hiddenColumns": ["declaredValue", "insuredValue"] },
+        "factory_floor_runtime": { "privileges": ["select", "insert", "update", "delete"], "scopedBy": ["site"], "hiddenColumns": ["declaredValue", "insuredValue", "manualTrackingNumber", "manualTrackingUrl"] },
         "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["createdById"] }
       }
     },
