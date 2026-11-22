@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
 import Link from 'next/link' // F-OF-101: a block's door "Open on … ›" is a real link
-import { AudioLines, BadgeCheck, ChevronDown, ChevronUp, Copy, Download, FileText, FolderOpen, Image as ImageIcon, Lock, LockOpen, Paperclip, Receipt, RotateCcw, Share2, ShieldAlert, ShieldOff, Trash2, Upload } from 'lucide-react'
+import { AudioLines, BadgeCheck, ChevronDown, ChevronUp, Copy, Download, FileText, FolderOpen, Image as ImageIcon, Lock, LockOpen, Paperclip, MoreHorizontal, Receipt, Share2, ShieldAlert, ShieldOff, Trash2, Upload, Users } from 'lucide-react'
 import { Banner, Disclosure, EmptyState, Field } from '@nexus/ui/components'
 import { BulkActionBar } from '@nexus/ui/patterns'
 import { Button, Checkbox, RadioCard, Select, Skeleton, Tag } from '@nexus/ui/primitives'
@@ -38,6 +38,13 @@ import './files-tab.css' // F-OF-101: the order files tab's groups, blocks and c
 // F-OF-201 … F-OF-203: "Waiting for files" — the band (the order's window draws it above the groups; the tab in its own section) and its windows.
 import { ASKS_NS, AsksBody, AsksWindowHead, arrivedFileIds } from '../asks/view/AsksBody'
 import { AskWindows } from '../asks/view/AskWindows'
+// ---- F-OF-302 / F-OF-303 (order FILES tab W3): the card's ⋯ and the file windows
+import { Menu, type MenuItemDef } from '@nexus/ui/components'
+import { isOrderOwn, orderFileActsOf, type FileActsState, type OrderFileAct } from '../model'
+import { FileActWindows } from './FileActWindows'
+import type { FileActActions } from './FileActParts'
+import { UseOnDialog, type UseOnActions } from '../../files/view/UseOnDialog'
+// ---- end F-OF-302
 import type { AskDoor, AskWindow } from '../asks/asks'
 
 export const FILES_VIEW_NS = 'record-thread-files-view'
@@ -67,18 +74,19 @@ export interface FilesViewModel {
   order?: OrderFilesModel | null
   /** F-OF-103 (F5-B6): the last upload's files the virus scan holds (said; they open once it says clean). */
   held?: readonly string[]
+  /** F-OF-303 (D4): the file window open on this record's files (the bulk "Delete N" opens Delete…, the whole document, with a reason). */
+  acts?: FileActsState
 }
 
 export type BulkAction = 'download' | 'share' | 'officeOnly' | 'remove'
 
-export interface FilesViewActions {
+export interface FilesViewActions extends /* F-OF-303: the file windows (use-file-acts) */ FileActActions {
   onClose?: () => void
   onRetry?: () => void
   /** The chosen documents now (the whole choice: the view works out ranges and "all"). */
   onSelect?: (fileIds: readonly string[]) => void
   /** Opens the thread's one file viewer at this file. */
   onOpen?: (fileId: string, opener: HTMLElement | null) => void
-  onRestore?: (fileId: string) => void
   onBulk?: (action: BulkAction, fileIds: readonly string[]) => void
   /** Files dropped or browsed: the container asks their kind and audience (`upload`). */
   onDrop?: (files: File[]) => void
@@ -104,7 +112,8 @@ export interface FilesViewActions {
   onViewerDownload?: (fileId: string) => void
   onOrderMessage?: (messageId: string) => void
   onOrderSelect?: (fileIds: readonly string[]) => void
-  onOrderBulk?: (action: 'download' | 'share', fileIds: readonly string[]) => void
+  /** F-OF-303 (L7): Download N · "Who can see N…" (it replaced "Share N own") · Delete N… (D4). */
+  onOrderBulk?: (action: 'download' | 'whoCanSee' | 'delete', fileIds: readonly string[]) => void
   // ---- F-OF-101 (order FILES tab): a block's door "Open on … ›" — the source record's own page (null: no door, e.g. the order's own files)
   orderHrefOf?: (record: { readonly type: string; readonly id: string; readonly label: string }) => string | null
   // ---- end F-OF-101
@@ -129,6 +138,11 @@ export interface FilesViewActions {
   onAskRetryPicks?: () => void
   onAskDismiss?: () => void
   // ---- end F-OF-201
+  // ---- F-OF-302 / F-OF-304 (W3): a card's ⋯ act on one of the order's own files; "Use on another record…" on them; the act's notice
+  onOrderAct?: (act: OrderFileAct, fileId: string) => void
+  orderUseOn?: UseOnActions
+  onActNoticeDismiss?: () => void
+  // ---- end F-OF-302
 }
 
 // ---- B-TH-280: the files in depth (B-W2b-177) in this window — the container (the docked thread) fills these slots with the depth
@@ -340,6 +354,7 @@ function View({ model, actions, slots }: { model: FilesViewModel; actions?: File
         </div>
       </Modal>
       {model.upload && <UploadDialog ask={model.upload} party={model.party} busy={model.busy ?? false} onChange={actions?.onUploadChange} onConfirm={actions?.onUploadConfirm} onCancel={actions?.onUploadCancel} />}
+      {!model.order && <FileActWindows state={model.acts} actions={actions} /* F-OF-303: the order's body draws its own */ />}
       {slots?.overlays /* B-TH-280 */}
     </>
   )
@@ -456,11 +471,7 @@ function Row({ series, model, actions, slots, place, chosen, onChoose }: { serie
                     <Button size="sm" variant="quiet" onClick={(event) => actions?.onOpen?.(earlier.id, event.currentTarget)}>
                       {t('version.open')}
                     </Button>
-                    {model.can.upload && (
-                      <Button size="sm" variant="quiet" heldReason={model.uploadHeld} onClick={() => actions?.onRestore?.(earlier.id)}>
-                        <RotateCcw size={14} aria-hidden /> {t('version.restore')}
-                      </Button>
-                    )}
+                    {/* F-OF-301 (F5-B11): Restore lives only inside Versions… (one path per job: it asks to confirm and says what it makes). */}
                   </span>
                 </li>
               ))}
@@ -636,7 +647,7 @@ function dropOn(onFiles: ((files: File[]) => void) | null) {
 // ── F-SA-237 (sales page plan N9, picks P14, R7) ──────────────────────────────────────────────────────────────────────────────
 
 /** F-OF-101: the catalogues the order files body speaks (the tab's head, menu and ⓘ draw inside the same ones). */
-export const ORDER_FILES_NS: readonly string[] = [FILES_VIEW_NS, 'record-thread-files', 'lists', /* F-CP-144 */ 'record-files', /* F-OF-201 */ ASKS_NS]
+export const ORDER_FILES_NS: readonly string[] = [FILES_VIEW_NS, 'record-thread-files', 'lists', /* F-CP-144 */ 'record-files', /* F-OF-201 */ ASKS_NS, /* F-OF-302: Use on…, an act's notice */ 'search', 'record-thread']
 
 /**
  * The order files body on its own (the order's Files tab mounts it; this window mounts it for a SalesOrder). F-OP-125: `place` — the
@@ -709,7 +720,7 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
   const ids = new Set(choosable.map((file) => file.id))
   const counted = customer ? null : orderCountedOf(read, sections)
   const chosen = choosable.filter((file) => model.selected.includes(file.id))
-  const reach = orderBulkReach(chosen, read.order.id, model.canShare)
+  const reach = orderBulkReach(chosen, read.order.id, { may: model.may, readOnly: !!model.readOnly, now: Date.now() }) // F-OF-303
   const allChosen = choosable.length > 0 && chosen.length === choosable.length
   const choose = (fileId: string, on: boolean) => actions?.onOrderSelect?.(on ? [...new Set([...model.selected, fileId])] : model.selected.filter((one) => one !== fileId))
   const keys = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -756,6 +767,7 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
       )}
       {outcome && outcome.refused.length > 0 && <RefusedUploads refused={outcome.refused} onDismiss={actions?.onOrderUploadDismiss} />}
       {outcome && outcome.held.length > 0 && <HeldUploads names={outcome.held} onDismiss={actions?.onOrderUploadDismiss} />}
+      {!customer && model.acts?.notice && <ActNoticeLine notice={model.acts.notice} onDismiss={actions?.onActNoticeDismiss} /* F-OF-304: one notice */ />}
       {counted && <CountedLine counted={counted} />}
       {read.truncated && <p className="fw-rtv-muted">{t('order.truncated', { count: read.total })}</p>}
       {empty ? (
@@ -775,11 +787,20 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
               <Button size="sm" onClick={() => actions?.onOrderBulk?.('download', reach.download)}>
                 <Download size={14} aria-hidden /> {t('bulk.download', { count: reach.download.length })}
               </Button>
-              {/* F-OF-102 (F6-B5, P0-B3): hidden without the right to share; held with words only by what is chosen. */}
-              {party && model.canShare && (
-                <Button size="sm" heldReason={reach.share.length === 0 ? t('order.noneOwn') : model.busy ? t('upload.busy') : null} onClick={() => actions?.onOrderBulk?.('share', reach.share)}>
-                  <Share2 size={14} aria-hidden /> {t('order.shareOwn', { party: party.name, count: reach.share.length })}
+              {/* F-OF-303 (L7): "Who can see N…" — the order's own files and its lines' (it shares or takes back); hidden without the right,
+                  held with words only by what is chosen. Delete N… (D4) in the bar's ⋯: the whole documents, with a reason. */}
+              {reach.canWho && (
+                <Button size="sm" heldReason={reach.who.length === 0 ? t('acts.held.noneOwn') : model.busy ? t('upload.busy') : null} onClick={() => actions?.onOrderBulk?.('whoCanSee', reach.who)}>
+                  <Users size={14} aria-hidden /> {t('acts.bulk.who', { count: reach.who.length })}
                 </Button>
+              )}
+              {reach.canDelete && (
+                <Menu
+                  align="right"
+                  label={<MoreHorizontal size={16} aria-hidden />}
+                  triggerProps={{ 'aria-label': t('acts.bulk.more'), className: 'nds-btn sm icon' }}
+                  items={[{ id: 'delete', label: t('acts.bulk.delete', { count: reach.remove.length }), tone: 'danger', disabled: reach.remove.length === 0, description: reach.remove.length === 0 ? t('acts.held.noneDelete') : undefined, onSelect: reach.remove.length === 0 ? undefined : () => actions?.onOrderBulk?.('delete', reach.remove) }]}
+                />
               )}
               <Button size="sm" variant="quiet" onClick={() => actions?.onOrderSelect?.([])}>
                 {t('bulk.clear')}
@@ -842,6 +863,9 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
       {model.upload && !customer && <UploadDialog ask={model.upload} party={party} busy={model.busy ?? false} onChange={actions?.onOrderUploadChange} onConfirm={actions?.onOrderUploadConfirm} onCancel={actions?.onOrderUploadCancel} onAdd={actions?.onOrderAdd} />}
       {/* F-OF-202 / F-OF-203: the band's windows — drawn once by the body, the same for the tab and the order's thread window. */}
       {model.asks && !customer && <AskWindows read={read} state={model.asks} actions={actions} customer={party?.name ?? null} orderLabel={read.order.number} />}
+      {/* F-OF-303: the file windows (Who can see…, Rename…, Delete…, New version…, Mark as priced?) and "Use on another record…" — drawn once. */}
+      {!customer && <FileActWindows state={model.acts} actions={actions} />}
+      {!customer && model.useOn && actions?.orderUseOn && <UseOnDialog model={model.useOn} actions={actions.orderUseOn} />}
     </div>
   )
 }
@@ -883,7 +907,9 @@ function OrderBlock({ block, orderId, customer, model, actions, words, extras, o
   const [open, setOpen] = useState(false)
   const door = block.head?.door ?? null
   const href = door ? (actions?.orderHrefOf?.(door) ?? null) : null
-  const card = (file: OrderFile, older: boolean) => <OrderCard key={file.id} file={file} orderId={orderId} customer={customer} older={older} chosen={model.selected.includes(file.id)} onChoose={(on) => onChoose(file.id, on)} actions={actions} words={words} preview={model.previews?.[file.id]} toCheck={toCheck.has(file.id)} />
+  // F-OF-302: each card's ⋯ acts for this reader (the order's own files; none for the customer's face).
+  const actsOf = (file: OrderFile) => (customer ? [] : orderFileActsOf(file, { orderId, may: model.may, readOnly: !!model.readOnly, now: Date.now(), versions: !!model.versionsHere }))
+  const card = (file: OrderFile, older: boolean) => <OrderCard key={file.id} file={file} orderId={orderId} customer={customer} older={older} chosen={model.selected.includes(file.id)} onChoose={(on) => onChoose(file.id, on)} actions={actions} words={words} preview={model.previews?.[file.id]} toCheck={toCheck.has(file.id)} acts={actsOf(file)} />
   return (
     <div className="fw-of-block">
       {block.head && (block.head.label || href) && (
@@ -922,7 +948,7 @@ const FILE_KINDS: readonly string[] = ['PHOTO', 'DOCUMENT', 'CERTIFICATE', 'FISC
  * text that opens the ONE viewer (P0-B12: not a navigation); from 300 px of its own room the card turns sideways (preview left, words
  * right); its versions, a fiscal copy kept until …, a legal hold, an annulled or replaced paper and the tech pack's mark are said.
  */
-function OrderCard({ file, orderId, customer, older, chosen, onChoose, actions, words, preview, toCheck = false }: { file: OrderFile; orderId: string; customer: boolean; older: boolean; chosen: boolean; onChoose: (on: boolean) => void; actions?: FilesViewActions | undefined; words: CardWords; /* F-OP-126 */ preview?: CardPreview | undefined; /* F-OF-201 */ toCheck?: boolean }) {
+function OrderCard({ file, orderId, customer, older, chosen, onChoose, actions, words, preview, toCheck = false, acts = [] }: { file: OrderFile; orderId: string; customer: boolean; older: boolean; chosen: boolean; onChoose: (on: boolean) => void; actions?: FilesViewActions | undefined; words: CardWords; /* F-OP-126 */ preview?: CardPreview | undefined; /* F-OF-201 */ toCheck?: boolean; /* F-OF-302 */ acts?: ReturnType<typeof orderFileActsOf> }) {
   const { t, fileWords, locale } = words
   const openRef = useRef<HTMLButtonElement>(null)
   const source = sourceOf(file, orderId)
@@ -1008,11 +1034,13 @@ function OrderCard({ file, orderId, customer, older, chosen, onChoose, actions, 
                   <Download size={14} aria-hidden /> {t('card.download')}
                 </Button>
               )}
-              {file.inThread && actions?.onOrderMessage && (
+              {/* F-OF-302 (10-design §5): the office's card is [Download] [⋯] — Open in the conversation moved into the ⋯; the customer keeps it. */}
+              {customer && file.inThread && actions?.onOrderMessage && (
                 <Button size="sm" variant="quiet" onClick={() => actions.onOrderMessage?.(file.inThread!.messageId)}>
                   {t('order.inThread')}
                 </Button>
               )}
+              {!customer && <CardMenu file={file} orderId={orderId} acts={acts} actions={actions} words={words} />}
             </span>
           )}
         </div>
@@ -1020,6 +1048,44 @@ function OrderCard({ file, orderId, customer, older, chosen, onChoose, actions, 
     </li>
   )
 }
+
+// ---- F-OF-302 (10-design §5 "Card ⋯"): the card's ⋯ — on the order's own files their acts (a right missing hides one; a state holds it
+// with words, keyboard reachable, never run), then Open in the conversation; on any other file Open in the conversation and Open on its
+// home ›. Nothing to offer: no ⋯ (never an empty menu).
+const ACT_LABEL: Readonly<Record<OrderFileAct, { readonly ns: 'view' | 'priced' | 'useOn'; readonly key: string }>> = Object.freeze({
+  newVersion: { ns: 'view', key: 'acts.menu.newVersion' },
+  versions: { ns: 'view', key: 'acts.menu.versions' },
+  whoCanSee: { ns: 'view', key: 'acts.menu.whoCanSee' },
+  markPriced: { ns: 'priced', key: 'priced.mark' },
+  unmarkPriced: { ns: 'priced', key: 'priced.unmark' },
+  rename: { ns: 'view', key: 'acts.menu.rename' },
+  useOn: { ns: 'useOn', key: 'useOn.action' },
+  delete: { ns: 'view', key: 'acts.menu.delete' },
+})
+
+function CardMenu({ file, orderId, acts, actions, words }: { file: OrderFile; orderId: string; acts: ReturnType<typeof orderFileActsOf>; actions?: FilesViewActions | undefined; words: CardWords }) {
+  const { t, fileWords, locale } = words
+  const priced = useT('record-files')
+  const items: MenuItemDef[] = acts.map(({ act, held, params }) => {
+    const label = ACT_LABEL[act]
+    const text = label.ns === 'priced' ? priced(label.key) : label.ns === 'useOn' ? fileWords(label.key) : t(label.key)
+    const heldWords = held ? t(held, params?.date ? { date: formatDate(params.date, { locale }) } : params) : null
+    return { id: act, label: text, ...(act === 'delete' ? { tone: 'danger' as const } : {}), disabled: heldWords !== null, description: heldWords ?? undefined, onSelect: heldWords ? undefined : () => actions?.onOrderAct?.(act, file.id) }
+  })
+  if (file.inThread && actions?.onOrderMessage) items.push({ id: 'in-thread', label: t('order.inThread'), onSelect: () => actions.onOrderMessage?.(file.inThread!.messageId) })
+  const href = !isOrderOwn(file, orderId) ? (actions?.orderHrefOf?.(file.from) ?? null) : null
+  if (href) items.push({ id: 'open-on', label: file.from.type.startsWith('OrderChangeRequest') ? t('order.openOnChanges') : t('order.openOn', { record: file.from.label }), href })
+  if (items.length === 0) return null
+  return <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('acts.menu.label', { name: file.name }), className: 'nds-btn sm icon' }} items={items} />
+}
+
+/** F-OF-304: what the last act did — ONE notice on the body (its own words; Dismiss clears it, the next act replaces it). */
+function ActNoticeLine({ notice, onDismiss }: { notice: NonNullable<FileActsState['notice']>; onDismiss?: (() => void) | undefined }) {
+  const t = useT(notice.ns)
+  const view = useT(FILES_VIEW_NS)
+  return <Banner tone={notice.tone} title={t(notice.key, notice.params)} action={onDismiss ? <Button size="sm" variant="quiet" onClick={onDismiss}>{view('refused.dismiss')}</Button> : undefined} />
+}
+// ---- end F-OF-302
 
 /**
  * F-OF-102 (B-OF-002; F7-B10, F5-B6): one of the reader's OWN uploads the virus scan still holds — its name, when, "added by you" and why

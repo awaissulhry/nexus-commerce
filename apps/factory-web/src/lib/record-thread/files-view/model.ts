@@ -1,4 +1,5 @@
 import type { FileAudience, FileKind } from '../../../record-panels/model'
+import type { UseOnModel } from '../files/view/UseOnDialog' // F-OF-302: "Use on another record…" on the order's own files
 import { fileSeries, recordFiles, type FileOrigin, type FileSeries, type FilesParty, type ThreadFile } from '../files/model'
 import { namedSeries, pricedLockedOf } from '../files/model' // F-CP-144
 import { isPicture } from '@nexus/factory-domain/files/thumbs/strip' // F-OP-125: the previews route's own picture rule
@@ -290,6 +291,16 @@ export interface OrderFilesModel {
   // ---- end F-OF-101 / F-OF-103
   /** F-OF-201: "Waiting for files" — what the reader may do, the open window, its picks, a refusal (use-file-asks); absent: no band. */
   readonly asks?: AsksState
+  // ---- F-OF-302 / F-OF-303 (W3): the card's ⋯ and the file windows ----
+  /** Read-only acts nothing (L3): the ⋯ keeps Versions… and Copy link. */
+  readonly readOnly?: boolean
+  /** The page's ONE depth is mounted (Versions… opens there); false: no Versions… in this place. */
+  readonly versionsHere?: boolean
+  /** The file window open (Who can see…, Rename…, Delete…, New version…, Mark as priced?), its refusal, the last act's notice. */
+  readonly acts?: FileActsState
+  /** B-TH-231: "Use on another record…" open on one of the order's own files (the dock's window, drawn by the body). */
+  readonly useOn?: UseOnModel | null
+  // ---- end F-OF-302
 }
 
 /**
@@ -308,15 +319,25 @@ export const orderLeftOut = (read: OrderFilesRead): number => read.groups.reduce
 /** Every listed file once, in the groups' order (the keys walk it; the bulk bar counts it). */
 export const orderFilesOf = (read: OrderFilesRead): OrderFile[] => read.groups.flatMap((group) => group.files)
 
-/** A file of the order itself (not of a line, a work order, a shipment …): only these are shared from here (Share N own). */
-export const isOwnFile = (file: Pick<OrderFile, 'from'>, orderId: string): boolean => file.from.type === 'SalesOrder' && file.from.id === orderId
-
-/** What the bulk bar reaches: Download every chosen file; Share the chosen OWN files still office only (with the right). */
-export function orderBulkReach(chosen: readonly OrderFile[], orderId: string, canShare: boolean): { readonly download: readonly string[]; readonly share: readonly string[] } {
+/**
+ * The bulk bar over the chosen cards: Download N (every chosen file); F-OF-303 (L7, D4): "Who can see N…" — the order's OWN files and its
+ * lines' the read gives at a version (it replaced "Share N own": it shares or takes back) — and Delete N… — those of them no state holds
+ * (a legal hold, a fiscal copy, a paper Nexus made, kept until …). `canWho` / `canDelete`: the door is there at all (the right; not
+ * Read-only: L3); an empty list holds it with words.
+ */
+export function orderBulkReach(chosen: readonly OrderFile[], orderId: string, input: { readonly may: OrderFilesMay | undefined; readonly readOnly: boolean; readonly now: number }): { readonly download: readonly string[]; readonly who: readonly string[]; readonly remove: readonly string[]; readonly canWho: boolean; readonly canDelete: boolean } {
+  const acts = (file: OrderFile) => orderFileActsOf(file, { orderId, may: input.may, readOnly: input.readOnly, now: input.now, versions: false })
+  const open = (file: OrderFile, act: OrderFileAct) => acts(file).some((one) => one.act === act && one.held === null)
+  const canWho = !input.readOnly && !!input.may?.share
+  const canDelete = !input.readOnly && !!input.may?.delete
   return {
     download: chosen.map((file) => file.id),
-    share: canShare ? chosen.filter((file) => isOwnFile(file, orderId) && file.audience === 'OFFICE_ONLY').map((file) => file.id) : [],
+    who: canWho ? chosen.filter((file) => open(file, 'whoCanSee')).map((file) => file.id) : [],
+    remove: canDelete ? chosen.filter((file) => open(file, 'delete')).map((file) => file.id) : [],
+    canWho,
+    canDelete,
   }
+}
 }
 
 /**
@@ -612,3 +633,96 @@ export interface CustomerAsk {
   readonly status: string
 }
 // ── end F-OF-201
+
+// ── F-OF-302 / F-OF-303 (order FILES tab W3; 10-design §5 "Card ⋯", §7): every act on a file — which, for whom, held by what ──
+/** An act of a card's ⋯ on the order's own files (any other file's ⋯: Open in the conversation, Open on its home ›). */
+export type OrderFileAct = 'newVersion' | 'versions' | 'whoCanSee' | 'markPriced' | 'unmarkPriced' | 'rename' | 'useOn' | 'delete'
+
+/** A file of the order itself or of one of its lines: its acts live on its card (production, quality, shipment, invoice files: their home's). */
+export const isOrderOwn = (file: Pick<OrderFile, 'from'>, orderId: string): boolean => (file.from.type === 'SalesOrder' && file.from.id === orderId) || file.from.type === 'SalesOrderLine'
+
+/**
+ * The card's ⋯ acts for this reader (F-OF-302): on the order's own files (the order's and its lines') — New version… · Versions… · Who
+ * can see… · Mark as priced / Take the price mark off · Rename… · Use on another record… · Delete…; none on any other file (its ⋯ opens
+ * the conversation or its home). A right missing hides an act; the file's state holds it with words (a fiscal copy, a paper Nexus made,
+ * a legal hold, kept until …; a paper born priced keeps its mark). Read-only: Versions… only (L3). Until the read says the file's version
+ * (B-OF-001, S3) no act that writes is offered (never a held door for a missing fact).
+ */
+export function orderFileActsOf(file: OrderFile, input: { readonly orderId: string; readonly may: OrderFilesMay | undefined; readonly readOnly: boolean; readonly now: number; /** Versions… opens here (the page's depth). */ readonly versions: boolean }): readonly { readonly act: OrderFileAct; readonly held: string | null; readonly params?: Readonly<Record<string, string>> }[] {
+  const out: { act: OrderFileAct; held: string | null; params?: Record<string, string> }[] = []
+  const own = isOrderOwn(file, input.orderId)
+  const facts = file.version !== undefined
+  if (own && input.versions && (file.versions ?? 0) > 1) out.push({ act: 'versions', held: null })
+  if (own && facts && !input.readOnly && input.may) {
+    const made = !!file.made
+    const fiscal = !!file.fiscal
+    if (input.may.upload) out.unshift({ act: 'newVersion', held: fiscal ? 'acts.held.fiscal' : made ? 'acts.held.madeVersion' : null })
+    if (input.may.share) out.push({ act: 'whoCanSee', held: null })
+    if (!file.priced) out.push({ act: 'markPriced', held: null })
+    else out.push({ act: 'unmarkPriced', held: file.bornPriced ? 'acts.held.bornPriced' : null })
+    if (input.may.upload) out.push({ act: 'rename', held: fiscal ? 'acts.held.fiscalName' : made ? 'acts.held.madeName' : null })
+    // B-TH-231: a copy never carries body data (a measurement sheet opens recorded, on its own record).
+    if (input.may.upload && !file.bodyData) out.push({ act: 'useOn', held: null })
+    if (input.may.delete) {
+      const until = file.kept?.retainUntil ?? null
+      const kept = until !== null && Date.parse(until) > input.now
+      const held = file.kept?.legalHold ? 'keep.legalHold' : fiscal ? 'acts.held.fiscal' : made ? 'acts.held.madeDelete' : kept ? 'acts.held.kept' : null
+      out.push({ act: 'delete', held, ...(held === 'acts.held.kept' && until ? { params: { date: until } } : {}) })
+    }
+  }
+  return out
+}
+
+/** The file's audiences as the visibility command takes them (B-OF-001's `audiences`; else the two-state audience). */
+export function visibilityOf(file: Pick<OrderFile, 'audience' | 'audiences'>): readonly FileAudience[] {
+  const reach = file.audiences ?? (file.audience === 'CUSTOMER_CAN_SEE' ? ['CUSTOMER' as const] : [])
+  return ['OFFICE', ...reach.map((one): FileAudience => (one === 'CUSTOMER' ? 'PARTNER' : one))]
+}
+
+/** One file a window acts on, said by name (and how many versions a delete removes). */
+export interface ActItem {
+  readonly id: string
+  readonly name: string
+  readonly version: number
+  readonly visibility: readonly FileAudience[]
+  /** The versions kept of its document (a delete removes them all: D4). */
+  readonly versions: number
+  /** Its version number (a new version is the next). */
+  readonly versionNo: number
+}
+
+/** The window open on a file or on the chosen files (F-OF-303), with what it holds; the container keeps it, the body draws it. */
+export type FileActWindow =
+  | { readonly kind: 'whoCanSee'; readonly items: readonly ActItem[]; readonly to: 'OFFICE' | 'CUSTOMER' }
+  | { readonly kind: 'rename'; readonly items: readonly [ActItem]; readonly name: string }
+  | { readonly kind: 'delete'; readonly items: readonly ActItem[]; readonly reason: string }
+  | { readonly kind: 'newVersion'; readonly items: readonly [ActItem]; readonly file: { readonly name: string; readonly sizeBytes: number } | null; readonly keepName: boolean }
+  | { readonly kind: 'priced'; readonly items: readonly [ActItem]; readonly priced: boolean }
+
+export interface FileActsState {
+  readonly window: FileActWindow | null
+  readonly busy: boolean
+  /** A refusal in the window (a key of record-thread-files-view, with the API's words when it gives them). */
+  readonly problem: { readonly key: string; readonly params?: Readonly<Record<string, string>> } | null
+  /** What the last act did (one notice: its words' namespace and key), or why it did not. */
+  readonly notice: { readonly ns: string; readonly key: string; readonly params?: Readonly<Record<string, string | number>>; readonly tone: 'success' | 'danger' | 'warning' } | null
+  /** The order's customer by name (Who can see's second choice); null: none. */
+  readonly party: string | null
+}
+
+export const ACT_REASON = Object.freeze({ min: 3, max: 500 })
+/** Why a window's act is held (a key of record-thread-files-view), or null. */
+export function actHeld(window: FileActWindow): string | null {
+  if (window.kind === 'delete') return window.reason.trim().length < ACT_REASON.min || window.reason.trim().length > ACT_REASON.max ? 'acts.held.why' : null
+  if (window.kind === 'rename') return !window.name.trim() || window.name.trim() === window.items[0].name ? 'acts.held.sameName' : null
+  if (window.kind === 'newVersion') return window.file ? null : 'acts.held.oneFile'
+  if (window.kind === 'whoCanSee') return window.items.every((item) => (window.to === 'CUSTOMER') === item.visibility.includes('PARTNER')) ? 'acts.held.noChange' : null
+  return null
+}
+
+/** Who can see: the visibility a file takes — shared with the customer (the floor or link it has stays), or taken back (the rest stays). */
+export function visibilityTo(current: readonly FileAudience[], to: 'OFFICE' | 'CUSTOMER'): readonly FileAudience[] {
+  const others = current.filter((one) => one !== 'OFFICE' && one !== 'PARTNER')
+  return to === 'CUSTOMER' ? ['OFFICE', ...others, 'PARTNER'] : ['OFFICE', ...others]
+}
+// ── end F-OF-302 / F-OF-303
