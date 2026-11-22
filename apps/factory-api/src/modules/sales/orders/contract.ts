@@ -61,6 +61,12 @@ const progressView = output({
   toShip: z.number().int(),
   /** B-W2a-30: pieces closed short (will not be made or shipped). */
   closedShort: z.number().int(),
+  // ── B-OS-002 (order shipments tab; H1, O8): by Warehouse's backorder rule (factory-domain shipping/shipments sizeBackorder) ──
+  /** On shipments that have not left yet (DRAFT, PACKED). */
+  planned: z.number().int(),
+  /** Released by quality and on no shipment yet (a carrier return holds its garments until received back): could go today. */
+  readyNow: z.number().int(),
+  // ── end B-OS-002 ──
 })
 
 const lineView = output({

@@ -9,6 +9,8 @@ import { StaleVersionError, type CommandTx } from '../../../core/command'
 import { orderRefsOfShipments, shipmentsOfOrderWhere } from '../../shipping/shipments/orders-of'
 // B-OS-001 (order shipments tab): each shipment's holds in force, by Warehouse's own reader.
 import { holdsInForceBy, type HoldRow } from '../../shipping/holds/store'
+// B-OS-002 (order shipments tab): planned and ready now by Warehouse's own backorder reader (one rule).
+import { readBackorders } from '../../shipping/shipments/backorder'
 
 /**
  * The sales orders' reads (factory-db sales.prisma SalesOrder, SalesOrderLine, SalesOrderLineSize, and what follows an
@@ -412,3 +414,43 @@ export async function readShipmentDetails(db: Reader, shipmentIds: readonly stri
   return { shipments: new Map(rows.map((row) => [row.id, row])), parcels, ddts: live, /* B-OS-001 */ ...pieces, holds, parents, mergedInto }
 }
 // ── end B-OP-023 ──
+
+// ── B-OS-002 (order shipments tab; H1, O8; 13-backend §1): the buckets that add up ────────────────────────────────────────────
+/** Of one size (or line, or the order): on shipments that have not left (DRAFT, PACKED), and released and on no shipment yet. */
+export interface ShipFigures {
+  readonly planned: number
+  readonly readyNow: number
+}
+
+export const NO_SHIP_FIGURES: ShipFigures = Object.freeze({ planned: 0, readyNow: 0 })
+
+export interface OrderShipFigures {
+  /** One size of a line; a line without a size grid: size null (its one row). */
+  readonly of: (lineId: string, size: string | null) => ShipFigures
+  readonly line: (lineId: string) => ShipFigures
+  /** The order's goods (a fee is never shipped: 0). */
+  readonly all: ShipFigures
+}
+
+/**
+ * The order's `planned` and `readyNow` per size, per line and for the order, by the SAME rule as Warehouse's backorder
+ * (modules/shipping/shipments/backorder readBackorders, factory-domain sizeBackorder): planned = `open` (on DRAFT and PACKED
+ * shipments), ready now = released less reversals less what every shipment that is not cancelled holds (a carrier return holds
+ * its garments until they are received back), never more than is still to ship. `toShip` and `shipped` stay the order machine's.
+ */
+export async function readShipFigures(db: Reader, orderId: string): Promise<OrderShipFigures> {
+  const lines = (await readBackorders(db, [orderId], null)).get(orderId) ?? []
+  const sum = (sizes: readonly { readonly open: number; readonly readyNow: number }[]): ShipFigures => ({ planned: sizes.reduce((count, size) => count + size.open, 0), readyNow: sizes.reduce((count, size) => count + size.readyNow, 0) })
+  const bySize = new Map<string, ShipFigures>()
+  const byLine = new Map<string, ShipFigures>()
+  for (const line of lines) {
+    for (const size of line.sizes) bySize.set(`${line.lineId}|${size.size}`, { planned: size.open, readyNow: size.readyNow })
+    byLine.set(line.lineId, sum(line.sizes))
+  }
+  return {
+    of: (lineId, size) => (size === null ? byLine.get(lineId) : bySize.get(`${lineId}|${size}`)) ?? NO_SHIP_FIGURES,
+    line: (lineId) => byLine.get(lineId) ?? NO_SHIP_FIGURES,
+    all: sum(lines.flatMap((line) => line.sizes)),
+  }
+}
+// ── end B-OS-002 ──

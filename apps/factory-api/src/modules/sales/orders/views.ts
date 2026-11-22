@@ -15,6 +15,8 @@ import { dayOf, dayOrNull, moveFactsOf, readOrderFacts, type OrderFacts, type Or
 import { readShipmentDetails, type ShipmentDetails, type ShipmentLink } from './store'
 // B-OS-001 (order shipments tab): each row's contents, holds, split and merge, parcels and what the reader may do there.
 import type { ShipmentDetailRow } from './store'
+// B-OS-002 (order shipments tab): planned and ready now per size, line and order (Warehouse's backorder rule).
+import { readShipFigures, type ShipFigures } from './store'
 import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { SHIPPING_DDT_ISSUE, SHIPPING_PACK } from '@nexus/factory-domain/shipping/permissions'
 import { SHIPPING_HOLDS_MANAGE, SHIPPING_HOLDS_RELEASE } from '@nexus/factory-domain/shipping/holds/permissions'
@@ -576,7 +578,9 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
   const people = peopleIds.length > 0 ? await db.user.findMany({ where: { id: { in: peopleIds } }, select: { id: true, displayName: true }, orderBy: { id: 'asc' } }) : []
 
   const progressOf = (lineId: string, size: string | null) => facts.progress.rows.find((row) => row.lineId === lineId && row.size === size)
-  const strip = (row: Progress) => ({ ordered: row.ordered, inWorkOrders: row.inWorkOrders, made: row.made, released: row.released, shipped: row.shipped, invoiced: row.invoiced, toShip: row.toShip, closedShort: row.closedShort })
+  // B-OS-002: + planned and ready now, by Warehouse's backorder rule (toShip and shipped stay the order machine's).
+  const shipFigures = await readShipFigures(db, order.id)
+  const strip = (row: Progress, figures: ShipFigures /* B-OS-002 */) => ({ ordered: row.ordered, inWorkOrders: row.inWorkOrders, made: row.made, released: row.released, shipped: row.shipped, invoiced: row.invoiced, toShip: row.toShip, closedShort: row.closedShort, /* B-OS-002 */ planned: figures.planned, readyNow: figures.readyNow })
   // B-W2a-30: the amendments so far (the Changes tab reads them whole: GET …/amendments) and the daily actions.
   const amendments = await db.salesOrderAmendment.findMany({ where: { orderId: order.id }, select: { revision: true, createdAt: true }, orderBy: { revision: 'desc' } })
   // The cancel action is held by what the impact check says stops it (a shipment being packed, an invoice).
@@ -673,9 +677,9 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
         version: line.version,
         sizes:
           sizes.length > 0
-            ? sizes.map((size) => ({ size: size.size, quantity: size.quantity, unitPrice: asMoney('price', text(size.unitPrice)), progress: strip(progressOf(line.id, size.size)!) }))
-            : [{ size: null, quantity: line.quantity, unitPrice: asMoney('price', null), progress: strip(progressOf(line.id, null)!) }],
-        progress: strip(totals),
+            ? sizes.map((size) => ({ size: size.size, quantity: size.quantity, unitPrice: asMoney('price', text(size.unitPrice)), progress: strip(progressOf(line.id, size.size)!, shipFigures.of(line.id, size.size)) }))
+            : [{ size: null, quantity: line.quantity, unitPrice: asMoney('price', null), progress: strip(progressOf(line.id, null)!, shipFigures.of(line.id, null)) }],
+        progress: strip(totals, shipFigures.line(line.id)),
         // B-SA-035: the picture is put in after the read (withLinePictures); the artwork the reader may open, counted.
         picture: null as LinePicture | null,
         artworkCount: (artwork.get(line.id) ?? []).length,
@@ -684,7 +688,7 @@ export async function orderView(db: Reader, order: OrderRow, today: BusinessDate
         rider: line.kind === 'MADE_TO_MEASURE' && line.measurementProfileId ? (riders.get(line.measurementProfileId) ?? null) : null,
       }
     }),
-    progress: strip(facts.progress.totals),
+    progress: strip(facts.progress.totals, shipFigures.all),
     chain: {
       quote: quote && version ? { id: quote.id, number: quote.number, versionId: version.id, revision: version.revision } : null,
       portalOrder, // B-OC-016

@@ -454,3 +454,37 @@ describe('B-OS-001: the order read’s shipment rows — contents, other pieces,
   })
 })
 // ---- end B-OS-001
+
+// ---- B-OS-002 (order shipments tab; H1, O8): the order read's planned and ready now, by Warehouse's backorder rule; toShip unchanged.
+// SEED-SO-0003 (4 × BLK 52, 2 released): SEED-SH-0002 and the split's child hold one each. SEED-SO-0002's BLK 52 (2 ordered, 1 released
+// net of the reversal): the split's parent holds it; taken off, it is ready now.
+describe('B-OS-002: planned and ready now on the order read, from the same rule as the backorder', () => {
+  const sizeOf = (order: Json, lineId: string, size: string) => ((order.lines as Json[]).find((line) => line.id === lineId)!.sizes as Json[]).find((entry) => entry.size === size)!.progress as Json
+
+  it('the garments on shipments not left are planned, the released ones on none are ready now; the order machine’s toShip never moves', async () => {
+    const jacketLine = seedA.quality.serialSalesOrderLineId
+    const so3Order = (await ok('warehouse', 'GET', `/sales/orders/${so3()}`)).order
+    expect(sizeOf(so3Order, jacketLine, '52')).toMatchObject({ ordered: 4, released: 2, shipped: 0, toShip: 4, planned: 2, readyNow: 0 })
+    expect(so3Order.progress).toMatchObject({ toShip: 4, planned: 2, readyNow: 0 })
+    // The backorder read says the same (one rule).
+    const backorder = await ok('warehouse', 'GET', `/shipping/orders/${so3()}/backorder`)
+    expect(backorder.totals).toMatchObject({ open: 2, readyNow: 0 })
+
+    const blkLine = (await admin<{ salesOrderLineId: string }>(`SELECT "salesOrderLineId" FROM "WorkOrderSize" WHERE id = $1`, [cells().blk52]))[0]!.salesOrderLineId
+    const before = (await ok('warehouse', 'GET', `/sales/orders/${so2()}`)).order
+    expect(sizeOf(before, blkLine, '52')).toMatchObject({ ordered: 2, toShip: 2, planned: 1, readyNow: 0 })
+    // Taken off the split's parent: no longer planned, ready now; still to ship as before.
+    const parent = (await ok('warehouse', 'GET', `/shipping/shipments/${ids.shared}`)).shipment
+    const line = (parent.lines as Json[]).find((entry) => entry.workOrderSizeId === cells().blk52)!
+    await ok('warehouse', 'DELETE', `/shipping/shipments/${ids.shared}/lines/${line.id}?version=${parent.version}`)
+    const after = (await ok('warehouse', 'GET', `/sales/orders/${so2()}`)).order
+    expect(sizeOf(after, blkLine, '52')).toMatchObject({ ordered: 2, toShip: 2, planned: 0, readyNow: 1 })
+    expect(after.progress.toShip).toBe(before.progress.toShip)
+    expect(after.progress).toMatchObject({ planned: before.progress.planned - 1, readyNow: before.progress.readyNow + 1 })
+    // A line's own figures add up its sizes'.
+    const blk = (after.lines as Json[]).find((entry) => entry.id === blkLine)!
+    expect(blk.progress.planned).toBe((blk.sizes as Json[]).reduce((sum, entry) => sum + entry.progress.planned, 0))
+    expect(blk.progress.readyNow).toBe((blk.sizes as Json[]).reduce((sum, entry) => sum + entry.progress.readyNow, 0))
+  })
+})
+// ---- end B-OS-002
