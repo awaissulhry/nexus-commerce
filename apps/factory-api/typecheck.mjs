@@ -14,9 +14,15 @@
 import { fileURLToPath } from 'node:url'
 import { typecheckInBatches } from '../../scripts/factory/typecheck-in-batches.mjs'
 
+// of-fx1s (11-22): src/modules/sales is the one module over twice a batch (5.4 M characters of source and 3.0 M of tests), so it was
+// ONE folder and one checker that no batch size could cut; every sales lane grew it, and after the order Files tab's S2 its batch ran
+// out of the 7 GB heap. Its parts (src/modules/sales/<part>) are folders of their own now: the engine packs them into batches like
+// any other folder. The same program, the same files, the same diagnostics; only the cut between checkers changes.
+const SALES_PART = /^src\/modules\/sales\/[^/]+/
+
 typecheckInBatches({
   workspace: fileURLToPath(new URL('.', import.meta.url)),
-  folderOf: (path) => (path.match(/^src\/(modules|platform)\/[^/]+/) ?? path.match(/^\.\.\/\.\.\/packages\/[^/]+\/src\/[^/]+/))?.[0] ?? null,
+  folderOf: (path) => (path.match(SALES_PART) ?? path.match(/^src\/(modules|platform)\/[^/]+/) ?? path.match(/^\.\.\/\.\.\/packages\/[^/]+\/src\/[^/]+/))?.[0] ?? null,
   // Measured 11-15 (16 batches, the heap capped at 7 GB in package.json): about 110 s and 7.7 GB of memory, against 148 s
   // and 15 GB for one tsc program.
   batchCharacters: 4_000_000,

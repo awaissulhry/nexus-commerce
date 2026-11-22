@@ -64,12 +64,30 @@ async function siteDay(db: Reader, siteId: string, now: Date): Promise<BusinessD
   return site ? businessDate(now, site.timezone) : businessDate(now)
 }
 
+/** One ask as the tablet reads it, and the answer (of-fx1s: written types, not ones inferred from the queries). */
+export interface FloorAskView {
+  readonly askId: string
+  readonly words: string
+  readonly fileKind: 'DOCUMENT' | 'PHOTO' | 'ATTACHMENT'
+  readonly dueOn: BusinessDate
+  readonly lateDays: number
+  readonly workOrder: { readonly id: string; readonly number: string }
+  readonly step: { readonly id: string; readonly seq: number; readonly name: string } | null
+  readonly customer: string | null
+  readonly askedAgain: string | null
+  readonly chasedAt: string | null
+}
+export interface FloorAsksAnswer {
+  readonly asOf: string
+  readonly asks: FloorAskView[]
+}
+
 /** GET /production/floor-notes/asks */
-export async function floorAsks(caller: CommandCaller) {
+export async function floorAsks(caller: CommandCaller): Promise<FloorAsksAnswer> {
   const context = floorOf(caller)
   const now = serverClock.now()
   const { numbers } = await myWorkOrders(caller, context, now)
-  return systemView(caller).withClient(async (db: Reader) => {
+  return systemView(caller).withClient(async (db: Reader): Promise<FloorAsksAnswer> => {
     const today = await siteDay(db, context.siteId, now)
     const { teamIds, roleIds } = await whoTheWorkerIs(db, context, today)
     const rows = await db.fileAsk.findMany({
@@ -91,7 +109,7 @@ export async function floorAsks(caller: CommandCaller) {
     const orders = new Map((workOrderIds.length > 0 ? await db.workOrder.findMany({ where: { id: { in: workOrderIds }, siteId: context.siteId }, select: { id: true, number: true } }) : []).map((row) => [row.id, row.number]))
     const steps = new Map((stepIds.length > 0 ? await db.workOrderOperation.findMany({ where: { id: { in: stepIds } }, select: { id: true, seq: true, name: true } }) : []).map((row) => [row.id, row]))
     const customers = await customerCodesOf(db, workOrderIds)
-    const asks = rows.flatMap((row: FloorAskRow) => {
+    const asks = rows.flatMap((row: FloorAskRow): FloorAskView[] => {
       const number = row.workOrderId ? orders.get(row.workOrderId) : undefined
       if (!row.workOrderId || number === undefined) return []
       const step = row.workOrderOperationId ? steps.get(row.workOrderOperationId) : undefined
