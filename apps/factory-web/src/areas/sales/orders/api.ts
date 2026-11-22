@@ -220,6 +220,8 @@ export const orderRowSchema = z.object({
   priceDiff: z.number().nullable().optional(),
   /** How many lines differ ("Not equal · 2 lines"). */
   priceNotEqualLines: z.number().optional(),
+  // F-OM-305 (B-OM-020, S3 #1857): a "Not equal" accepted by hand (in force) — the server's "Not equal" filter and counts leave it out.
+  priceAccepted: z.boolean().optional(),
   // ── end F-CP-140 ──
 })
 export type OrderRow = z.infer<typeof orderRowSchema>

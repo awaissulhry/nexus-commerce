@@ -272,6 +272,24 @@ describe('F-CP-140: the Price check cell and the Difference', () => {
     expect(textOfHtml(draw(createElement(PriceMatchCell, { row: { priceMatch: 'NOT_EQUAL', priceNotEqualLines: 1 }, t: en })))).toBe('Not equal 1 line')
   })
 
+  // F-OM-305 (B-OM-020, S3 #1857): a difference accepted by hand — one rule with the server (its "Not equal" filter leaves it out).
+  it('accepted by hand: an info "Not equal" Tag with "Accepted by hand" under it, no funnel; its words for the copy and the file', async () => {
+    const { priceMatchCellOf, priceCheckText } = await import('./price-check-columns')
+    const { PriceMatchCell } = await import('./view/PriceMatchCell')
+    expect(priceMatchCellOf({ priceMatch: 'NOT_EQUAL', priceNotEqualLines: 1, priceAccepted: true })).toEqual({ state: 'ACCEPTED', tone: 'info', words: { key: 'priceCheck.NOT_EQUAL' }, accepted: { key: 'moneyTab.price.tag.accepted' }, lines: { key: 'priceCheck.lines', params: { count: 1 } } })
+    expect(priceMatchCellOf({ priceMatch: 'NOT_EQUAL', priceNotEqualLines: 1, priceAccepted: false })!.state).toBe('NOT_EQUAL')
+    // Only a "Not equal" can be accepted: an equal row stays Equal whatever the flag says.
+    expect(priceMatchCellOf({ priceMatch: 'EQUAL', priceAccepted: true })!.state).toBe('EQUAL')
+    const html = draw(createElement(PriceMatchCell, { row: { priceMatch: 'NOT_EQUAL', priceNotEqualLines: 1, priceAccepted: true }, t: en, onNarrow: () => undefined }))
+    expect(html).toContain('nds-tag info')
+    expect(html).not.toContain('fw-sheet-funnel')
+    expect(textOfHtml(html)).toBe('Not equal Accepted by hand · 1 line')
+    for (const locale of LOCALES) expect(words(locale)('moneyTab.price.tag.accepted'), locale).not.toBe('moneyTab.price.tag.accepted')
+    expect(textOfHtml(draw(createElement(PriceMatchCell, { row: { priceMatch: 'NOT_EQUAL', priceNotEqualLines: 1, priceAccepted: true }, t: words('it') })))).toBe('Diverso Accettata a mano · 1 riga')
+    const row = { priceMatch: 'NOT_EQUAL', priceNotEqualLines: 1, priceAccepted: true } as Parameters<typeof priceCheckText>[1]
+    expect(priceCheckText('priceMatch', row, en, 'en')).toBe('Not equal · Accepted by hand · 1 line')
+  })
+
   it('"— No customer price yet" is plain text (the DS Tag has no plain tone: review G1), never a Tag, never "Equal"', async () => {
     const { PriceMatchCell } = await import('./view/PriceMatchCell')
     const none = draw(createElement(PriceMatchCell, { row: { priceMatch: 'NO_BRAND_PRICE' }, t: en }))
