@@ -538,10 +538,15 @@ function shipmentRowAdditions(
     packedAt: instantOrNull(row.packedAt),
     parcels: sees
       ? parcels.map((parcel) => {
-          // A TEST label is not tracked: no number, no source (as `tracking` above).
+          // A TEST label is not tracked: no number, no source (as `tracking` above). B-OS-022: a number typed by hand for a parcel
+          // no label tracks is TYPED (never live: no carrier feeds it); the database keeps a label and a typed number apart.
           const label = parcel.trackingNumber !== null && !isTestLabel(parcel.carrierParcelId)
+          const typedNumber = label ? null : parcel.manualTrackingNumber
           const held = split(details.parcelCounts.filter((entry) => entry.parcelId === parcel.id))
-          return { id: parcel.id, seq: parcel.seq, number: label ? parcel.trackingNumber : null, url: label ? trackingPageOf(parcel.trackingUrl) : null, source: label ? ('LABEL' as const) : null, live: label, contents: held.contents, otherPieces: held.otherPieces }
+          const number = label ? parcel.trackingNumber : typedNumber
+          const url = label ? trackingPageOf(parcel.trackingUrl) : typedNumber !== null ? trackingPageOf(parcel.manualTrackingUrl) : null
+          const source = label ? ('LABEL' as const) : typedNumber !== null ? ('TYPED' as const) : null
+          return { id: parcel.id, seq: parcel.seq, number, url, source, live: label, contents: held.contents, otherPieces: held.otherPieces }
         })
       : [],
     may: { manage: may(SHIPPING_MANAGE), pack: may(SHIPPING_PACK), ddt: may(SHIPPING_DDT_ISSUE), holdsManage: may(SHIPPING_HOLDS_MANAGE), holdsRelease: may(SHIPPING_HOLDS_RELEASE) },

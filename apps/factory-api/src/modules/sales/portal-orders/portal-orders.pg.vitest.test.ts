@@ -585,3 +585,40 @@ describe('B-OS-006: a TEST label is never shown to the customer', { timeout: SLO
   })
 })
 // ---- end B-OS-006
+
+// ---- B-OS-022 (order shipments 1/1; Owner D4): a parcel's number typed by hand reaches its own customer's portal (the order's
+// shipments and On the way), never another customer's. SEED-SH-0002 (left with a carrier booked by hand, B-OP-031 above) gets its
+// parcel's number typed past the guards: the read is what is tested.
+describe('B-OS-022: a parcel number typed by hand in the portal', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it("A's buyer reads it with its typed link on the parcel and On the way; B's buyer never", async () => {
+    const so3 = await orderId('SEED-SO-0003')
+    const sh2 = await one<{ id: string }>('SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND number = $2', [T, 'SEED-SH-0002'])
+    const type = async (number: string | null, url: string | null) => {
+      await admin('SET session_replication_role = replica')
+      try {
+        await admin('UPDATE "Parcel" SET "manualTrackingNumber" = $2, "manualTrackingUrl" = $3 WHERE "shipmentId" = $1 AND seq = 1', [sh2.id, number, url])
+      } finally {
+        await admin('SET session_replication_role = DEFAULT')
+      }
+    }
+    await type('AWB-OS022-P001', 'https://track.example.com/AWB-OS022-P001')
+    try {
+      const own = await ok(browsers.buyer, `/portal/sales-orders/${so3}/shipments`)
+      const row = (own.shipments as Json[]).find((entry) => entry.number === 'SEED-SH-0002')!
+      expect((row.parcels as Json[]).find((parcel) => parcel.seq === 1)).toMatchObject({ trackingNumber: 'AWB-OS022-P001', trackingLink: { url: 'https://track.example.com/AWB-OS022-P001' } })
+      const transit = await ok(browsers.buyer, '/portal/sales-orders/in-transit')
+      const item = (transit.items as Json[]).find((entry) => entry.number === 'SEED-SH-0002')!
+      expect(item.trackingNumbers).toContain('AWB-OS022-P001')
+      expect((item.trackingLinks as Json[]).map((link) => link.trackingNumber)).toContain('AWB-OS022-P001')
+      // The wall: another customer finds neither the order nor the number.
+      expect((await browsers.other.get(`/portal/sales-orders/${so3}/shipments`)).status).toBe(404)
+      expect(JSON.stringify(await ok(browsers.other, '/portal/sales-orders/in-transit'))).not.toContain('AWB-OS022')
+      // Another customer's scope reads no row of these parcels at all (row-level security), so none of their typed numbers.
+      const read = (partyId: string) => h.database.withScope({ audience: 'partner', tenantId: T, actorId: newId(), partyId }, (client) => client.parcel.findMany({ where: { shipmentId: sh2.id }, select: { manualTrackingNumber: true } }))
+      expect(await read(newId())).toEqual([])
+    } finally {
+      await type(null, null)
+    }
+  })
+})
+// ---- end B-OS-022

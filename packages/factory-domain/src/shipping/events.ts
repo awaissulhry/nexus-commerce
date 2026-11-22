@@ -207,8 +207,8 @@ export const events = [
   defineEvent({
     type: 'shipment.tracking_changed',
     context: 'shipping',
-    description: "The tracking number of a shipment's carrier booked by hand was typed, corrected or cleared, before or after the goods left.",
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), status, hasNumber: z.boolean(), /* B-OP-034: a typed tracking link beside it */ hasLink: z.boolean(), salesOrderIds: z.array(z.uuid()).min(1), partyId: livePartyId() }),
+    description: "The tracking number of a shipment's carrier booked by hand (or of its parcels, B-OS-022) was typed, corrected or cleared, before or after the goods left.",
+    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), status, hasNumber: z.boolean(), /* B-OP-034: a typed tracking link beside it */ hasLink: z.boolean(), salesOrderIds: z.array(z.uuid()).min(1), partyId: livePartyId(), /* B-OS-022: the parcels whose typed number changed */ parcels: z.number().int().min(0).optional() }),
     live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'status', 'salesOrderIds'] },
   }),
   // ── end B-OP-030 ──

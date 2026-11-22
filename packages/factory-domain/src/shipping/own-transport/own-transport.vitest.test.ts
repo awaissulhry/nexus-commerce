@@ -13,6 +13,7 @@ import {
   type OwnTransportFacts,
 } from './rules'
 import { etaProblems, etaRefusal, hasCarrierLabel, overrideReasonProblems } from './rules' // B-OS-015, B-OS-016
+import { PARCEL_TRACKING_WORDS, parcelReasonNeeded, parcelReasonProblems, parcelTrackingProblems, parcelTrackingRefusal } from './rules' // B-OS-022
 
 const facts = (over: Partial<OwnTransportFacts> = {}): OwnTransportFacts => ({ status: 'PACKED', transportBy: 'CARRIER', manualTrackingNumber: null, parcels: [{ trackingNumber: null, providerId: null }], liveDdts: 0, ...over })
 const real = { trackingNumber: 'FKABC', providerId: 'fk-1:1' }
@@ -135,3 +136,45 @@ describe('the expected arrival typed by hand (B-OS-016)', () => {
   })
 })
 // ---- end B-OS-015, B-OS-016
+
+// ---- B-OS-022 (order shipments 1/1; Owner D4): a tracking number typed by hand per parcel ----
+describe('a parcel’s number typed by hand (B-OS-022)', () => {
+  it('from PACKED on (also after the goods left), never on a parcel with a label (a TEST one too)', () => {
+    const none = { trackingNumber: null, providerId: null }
+    expect(parcelTrackingRefusal('PACKED', none)).toBeNull()
+    expect(parcelTrackingRefusal('SHIPPED', none)).toBeNull()
+    expect(parcelTrackingRefusal('DELIVERED', none)).toBeNull()
+    expect(parcelTrackingRefusal('DRAFT', none)).toBe('NOT_PACKED')
+    expect(parcelTrackingRefusal('SHIPPED', real)).toBe('PARCEL_LABELLED')
+    expect(parcelTrackingRefusal('PACKED', test)).toBe('PARCEL_LABELLED')
+    expect(PARCEL_TRACKING_WORDS.PARCEL_LABELLED).toBe('This parcel carries a label: its number comes from the label, never typed.')
+    // The shipment's own refusals stay first: cancelled, not a carrier, a carrier's labels.
+    expect(trackingRefusal(facts({ status: 'CANCELLED' }))?.code).toBe('CANCELLED')
+    expect(trackingRefusal(facts({ transportBy: 'OWN_VAN' }))?.code).toBe('NOT_A_CARRIER')
+    expect(trackingRefusal(facts({ parcels: [real, { trackingNumber: null, providerId: null }] }))?.code).toBe('LABELLED')
+  })
+
+  it('each parcel once, each number and link as the shipment’s own (paths per parcel)', () => {
+    const a = 'a0000000-0000-4000-8000-000000000001'
+    const b = 'a0000000-0000-4000-8000-000000000002'
+    expect(parcelTrackingProblems([{ parcelId: a, trackingNumber: 'AWB 020-1234 5675' }, { parcelId: b, trackingNumber: null }])).toEqual([])
+    expect(parcelTrackingProblems([{ parcelId: a, trackingNumber: 'X1' }, { parcelId: a, trackingNumber: 'X2' }]).map((issue) => issue.path)).toEqual(['body/parcels/1/parcelId'])
+    expect(parcelTrackingProblems([{ parcelId: a, trackingNumber: 'line\nbreak' }]).map((issue) => issue.path)).toEqual(['body/parcels/0/trackingNumber'])
+    expect(parcelTrackingProblems([{ parcelId: a, trackingNumber: null, trackingUrl: 'https://track.example.com/1' }]).map((issue) => issue.path)).toEqual(['body/parcels/0/trackingUrl'])
+    expect(parcelTrackingProblems([{ parcelId: a, trackingNumber: 'X1', trackingUrl: 'http://track.example.com/1' }]).map((issue) => issue.path)).toEqual(['body/parcels/0/trackingUrl'])
+    expect(parcelTrackingProblems(Array.from({ length: 201 }, (_, index) => ({ parcelId: `a0000000-0000-4000-8000-${String(index).padStart(12, '0')}`, trackingNumber: 'X' }))).map((issue) => issue.path)).toEqual(['body/parcels'])
+  })
+
+  it('a number the customer could read (the goods left) changes or is cleared only with a reason of 3 to 500', () => {
+    expect(parcelReasonNeeded('SHIPPED', 'AWB-1', 'AWB-2')).toBe(true)
+    expect(parcelReasonNeeded('DELIVERED', 'AWB-1', null)).toBe(true)
+    expect(parcelReasonNeeded('SHIPPED', null, 'AWB-1')).toBe(false)
+    expect(parcelReasonNeeded('SHIPPED', 'AWB-1', 'AWB-1')).toBe(false)
+    expect(parcelReasonNeeded('PACKED', 'AWB-1', 'AWB-2')).toBe(false)
+    expect(parcelReasonProblems('The courier gave a new air waybill.')).toEqual([])
+    expect(parcelReasonProblems(' ok ').map((issue) => issue.path)).toEqual(['body/reason'])
+    expect(parcelReasonProblems(undefined)).toHaveLength(1)
+    expect(parcelReasonProblems('x'.repeat(501))).toHaveLength(1)
+  })
+})
+// ---- end B-OS-022

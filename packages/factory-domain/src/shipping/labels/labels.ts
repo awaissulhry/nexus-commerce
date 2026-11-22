@@ -73,6 +73,8 @@ export interface LabelFacts {
   readonly testMode?: boolean
   /** B-W2b-390 (LOG-122): the tracking number typed for a carrier booked by hand (no label is bought for it); null: none. */
   readonly manualTrackingNumber?: string | null
+  /** B-OS-022 (order shipments 1/1): the parcels with a tracking number typed by hand (no label is bought beside one); absent: none. */
+  readonly typedParcels?: number
 }
 
 const filled = (value: unknown): value is string => typeof value === 'string' && value.trim() !== ''
@@ -156,6 +158,8 @@ export function buyStateProblems(facts: LabelFacts): Issue[] {
   if (facts.liveDdtNumber === null) problems.push({ path: 'state', message: 'The shipment has no live DDT: issue the DDT first (a label is bought only for goods the DDT declares).' })
   // B-W2b-390 (LOG-122): a carrier booked by hand takes no label (a Sendcloud label and a typed tracking number never both).
   if (facts.manualTrackingNumber) problems.push({ path: 'state', message: 'The carrier of this shipment is booked by hand (its tracking number typed): no label is bought here. Clear the typed tracking number first.' })
+  // B-OS-022: nor beside a parcel's number typed by hand (one shipment, one carrier; the database keeps them apart per parcel).
+  if ((facts.typedParcels ?? 0) > 0) problems.push({ path: 'state', message: 'A parcel of this shipment has a tracking number typed by hand: no label is bought beside it. Clear it first.' })
   // B-W2b-390 (LOG-035): in test mode the TEST carrier makes the labels: no Sendcloud connection is used or needed.
   if (!facts.testMode) problems.push(...accountProblems(facts.account, facts.shipment.companyId, facts.environment))
   return problems

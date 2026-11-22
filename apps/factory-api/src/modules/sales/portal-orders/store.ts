@@ -155,7 +155,7 @@ export const readShipmentLines = (db: Reader, shipmentIds: readonly string[]) =>
 
 // B-OS-006 (order shipments tab; X2-B1): + the label's provider id, so a TEST label's number never reaches the customer.
 export const readParcels = (db: Reader, shipmentIds: readonly string[]) =>
-  shipmentIds.length === 0 ? Promise.resolve([]) : db.parcel.findMany({ where: { shipmentId: { in: [...shipmentIds] } }, select: { id: true, shipmentId: true, seq: true, trackingNumber: true, trackingUrl: true, /* B-OS-006 */ carrierParcelId: true }, orderBy: [{ shipmentId: 'asc' }, { seq: 'asc' }] })
+  shipmentIds.length === 0 ? Promise.resolve([]) : db.parcel.findMany({ where: { shipmentId: { in: [...shipmentIds] } }, select: { id: true, shipmentId: true, seq: true, trackingNumber: true, trackingUrl: true, /* B-OS-006 */ carrierParcelId: true, /* B-OS-022: named; the customer's own shipments only */ manualTrackingNumber: true, manualTrackingUrl: true }, orderBy: [{ shipmentId: 'asc' }, { seq: 'asc' }] })
 
 export const TRACKING_SELECT = { id: true, shipmentId: true, parcelId: true, status: true, description: true, location: true, occurredAt: true, recordedAt: true } as const satisfies Prisma.TrackingEventSelect
 export type PortalTrackingRow = Prisma.TrackingEventGetPayload<{ select: typeof TRACKING_SELECT }>

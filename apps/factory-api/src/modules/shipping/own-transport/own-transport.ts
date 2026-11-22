@@ -1,4 +1,4 @@
-import { DomainError, InvalidStateError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { DomainError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { parseInstant, toUtcIso } from '@nexus/factory-domain/core/time'
 import { carrierNameFor } from '@nexus/factory-domain/shipping/labels/labels'
@@ -21,6 +21,9 @@ import {
 } from '@nexus/factory-domain/shipping/own-transport/rules'
 // B-OS-015, B-OS-016 (order shipments tab): ended by hand over a carrier's labels (a reason); the expected arrival typed by hand.
 import { etaProblems, etaRefusal, hasCarrierLabel, overrideReasonProblems } from '@nexus/factory-domain/shipping/own-transport/rules'
+// B-OS-022 (order shipments 1/1): a tracking number typed by hand per parcel.
+import { PARCEL_TRACKING_WORDS, parcelReasonNeeded, parcelReasonProblems, parcelTrackingProblems, parcelTrackingRefusal, type ParcelTrackingAsk } from '@nexus/factory-domain/shipping/own-transport/rules'
+import { trackingPageOf } from '@nexus/factory-domain/shipping/labels/tracking'
 import { SHIPPING_MANAGE } from '@nexus/factory-domain/shipping/permissions'
 import { isTestLabel } from '@nexus/factory-domain/shipping/test-mode/rules'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
@@ -76,6 +79,8 @@ const allowance = (refusal: { code: OwnTransportRefusalCode; message: string } |
 async function transportView(db: CommandTx, shipmentId: string) {
   const shipment = (await readShipment(db, shipmentId))!
   const facts = await factsOf(db, shipment)
+  // B-OS-022: each parcel with its label's number (read only) or the number typed for it, and whether one may be typed now.
+  const parcelRows = await db.parcel.findMany({ where: { shipmentId: shipment.id }, select: { id: true, seq: true, trackingNumber: true, carrierParcelId: true, trackingUrl: true, manualTrackingNumber: true, manualTrackingUrl: true }, orderBy: { seq: 'asc' } })
   const events = await db.trackingEvent.findMany({
     where: { shipmentId: shipment.id, source: 'MANUAL' },
     select: { id: true, status: true, description: true, location: true, occurredAt: true, recordedAt: true, createdById: true },
@@ -115,6 +120,19 @@ async function transportView(db: CommandTx, shipmentId: string) {
       endByHand: allowance(eventRefusal(facts, { status: 'DELIVERED', override: true })),
       eta: { allowed: etaRefusal(facts) === null, refusal: etaRefusal(facts) },
     },
+    // ── B-OS-022 ──
+    // The whole shipment's refusal first (cancelled, not a carrier, a carrier's labels), then the parcel's own.
+    parcels: parcelRows.map((parcel) => {
+      const own = parcelTrackingRefusal(shipment.status, { trackingNumber: parcel.trackingNumber, providerId: parcel.carrierParcelId })
+      return {
+        id: parcel.id,
+        seq: parcel.seq,
+        label: parcel.trackingNumber !== null || parcel.carrierParcelId !== null ? { number: parcel.trackingNumber, test: isTestLabel(parcel.carrierParcelId), url: trackingPageOf(parcel.trackingUrl) } : null,
+        typed: parcel.manualTrackingNumber !== null ? { number: parcel.manualTrackingNumber, url: parcel.manualTrackingUrl } : null,
+        may: { allowed: trackingRefusal(facts) === null && own === null, refusal: trackingRefusal(facts) ?? (own ? { code: own, message: PARCEL_TRACKING_WORDS[own] } : null) },
+      }
+    }),
+    // ── end B-OS-022 ──
     events: events.map((event) => ({
       id: event.id,
       status: event.status,
@@ -141,13 +159,13 @@ const changed = (tools: CommandTools, shipment: ShipmentHeader) =>
  * The tracking number of a carrier booked by hand typed, corrected or cleared: every order the shipment carries (B-OP-034: its
  * lines' orders, ordersOfShipment — several since B-OP-047), and whether a tracking link is typed beside it.
  */
-const trackingChanged = async (tools: CommandTools, shipment: ShipmentHeader, hasNumber: boolean, /* B-OP-034 */ hasLink: boolean) =>
+const trackingChanged = async (tools: CommandTools, shipment: ShipmentHeader, hasNumber: boolean, /* B-OP-034 */ hasLink: boolean, /* B-OS-022 */ parcels = 0) =>
   tools.emit({
     type: 'shipment.tracking_changed',
     subject: shipment.id,
     companyId: shipment.companyId,
     siteId: shipment.siteId,
-    payload: { shipmentId: shipment.id, number: shipment.number, status: shipment.status, hasNumber, hasLink, salesOrderIds: await ordersOfShipment(tools.tx, shipment), partyId: shipment.partyId },
+    payload: { shipmentId: shipment.id, number: shipment.number, status: shipment.status, hasNumber, hasLink, salesOrderIds: await ordersOfShipment(tools.tx, shipment), partyId: shipment.partyId, /* B-OS-022: the parcels whose typed number changed */ ...(parcels > 0 ? { parcels } : {}) },
   })
 // ── end B-OP-030 ──
 
@@ -193,12 +211,26 @@ export async function arrangeTransport(caller: CommandCaller, shipmentId: string
 /**
  * shipping.manage: the manual carrier's tracking number typed, corrected or cleared (null); B-OP-034: with its tracking link
  * (`trackingUrl`: https only, only with a number; null clears it; left out: kept — but clearing the number clears it too). Also
- * after the goods left.
+ * after the goods left. B-OS-022 (order shipments 1/1, Owner D4): and/or its parcels' numbers (`parcels`), in the same ONE
+ * command on the shipment's version — each parcel no label tracks, from PACKED on; once the goods left, a parcel number the
+ * customer could read changes or is cleared only with a `reason`. The customer is not mailed (the web sends the notice again
+ * when the person ticks it).
  */
-export async function typeTrackingNumber(caller: CommandCaller, shipmentId: string, body: { version?: number | undefined; trackingNumber: string | null; /* B-OP-034 */ trackingUrl?: string | null | undefined }, idempotencyKey?: string) {
+export async function typeTrackingNumber(
+  caller: CommandCaller,
+  shipmentId: string,
+  body: { version?: number | undefined; trackingNumber?: string | null | undefined; /* B-OP-034 */ trackingUrl?: string | null | undefined; /* B-OS-022 */ parcels?: readonly ParcelTrackingAsk[] | undefined; reason?: string | null | undefined },
+  idempotencyKey?: string,
+) {
   const shipment = await officeShipment(caller, shipmentId, SHIPPING_MANAGE)
-  const trackingNumber = body.trackingNumber?.trim() || null
-  const problems = [...trackingNumberProblems(body.trackingNumber), ...trackingUrlProblems(body.trackingUrl, trackingNumber !== null)] // B-OP-034
+  // B-OS-022: the shipment's own number when it is sent (left out: kept), the parcels' when they are.
+  const typesShipment = body.trackingNumber !== undefined
+  if (!typesShipment && body.parcels === undefined) throw new ValidationError('Type the tracking number, or the numbers of the parcels.', [{ path: 'body/trackingNumber', message: 'Required (or send parcels).' }])
+  const trackingNumber = typesShipment ? body.trackingNumber?.trim() || null : null
+  const problems = [
+    ...(typesShipment ? [...trackingNumberProblems(body.trackingNumber), ...trackingUrlProblems(body.trackingUrl, trackingNumber !== null)] : []), // B-OP-034
+    ...parcelTrackingProblems(body.parcels ?? []), // B-OS-022
+  ]
   if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
   refuseIf(trackingRefusal(await caller.withClient((client) => factsOf(client, shipment))))
   await command(
@@ -209,30 +241,95 @@ export async function typeTrackingNumber(caller: CommandCaller, shipmentId: stri
       const facts = await factsOf(tools.tx, current)
       refuseIf(trackingRefusal(facts))
       // B-OP-034: the link as asked (left out: kept), never without its number.
-      const trackingUrl = trackingNumber === null ? null : body.trackingUrl === undefined ? facts.manualTrackingUrl : body.trackingUrl?.trim() || null
+      const number = typesShipment ? trackingNumber : facts.manualTrackingNumber
+      const trackingUrl = !typesShipment ? facts.manualTrackingUrl : trackingNumber === null ? null : body.trackingUrl === undefined ? facts.manualTrackingUrl : body.trackingUrl?.trim() || null
+      const shipmentChanged = facts.manualTrackingNumber !== number || facts.manualTrackingUrl !== trackingUrl
+      // B-OS-022: what changes on each parcel named (refused per parcel in words), and the reason a seen number needs.
+      const parcelChanges = body.parcels ? await parcelChangesOf(tools.tx, current, body.parcels) : []
+      const reason = blankToNull(body.reason)
+      if (parcelChanges.some((change) => parcelReasonNeeded(current.status, change.before.number, change.after.number))) {
+        const missing = parcelReasonProblems(body.reason)
+        if (missing.length > 0) throw new ValidationError(missing[0]!.message, missing)
+      }
       // op-fx2 (end check): the same number (and link) again changes nothing and emits nothing, but the command still wrote
       // (the record's version): its audit row says so, as every unchanged write of the app does.
-      if (facts.manualTrackingNumber === trackingNumber && facts.manualTrackingUrl === trackingUrl) {
-        tools.audit({ action: 'shipping.typeTrackingNumber', recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, after: { manualTrackingNumber: trackingNumber, manualTrackingUrl: trackingUrl, unchanged: true } })
+      if (!shipmentChanged && parcelChanges.length === 0) {
+        tools.audit({ action: 'shipping.typeTrackingNumber', recordType: 'Shipment', recordId: current.id, companyId: current.companyId, siteId: current.siteId, after: { manualTrackingNumber: number, manualTrackingUrl: trackingUrl, unchanged: true } })
         return { changed: false }
       }
-      await tools.tx.shipment.update({ where: { id: current.id }, data: { manualTrackingNumber: trackingNumber, manualTrackingUrl: trackingUrl }, select: { id: true } })
-      tools.audit({
-        action: 'shipping.typeTrackingNumber',
-        recordType: 'Shipment',
-        recordId: current.id,
-        companyId: current.companyId,
-        siteId: current.siteId,
-        before: { manualTrackingNumber: facts.manualTrackingNumber, /* B-OP-034 */ manualTrackingUrl: facts.manualTrackingUrl },
-        after: { manualTrackingNumber: trackingNumber, /* B-OP-034 */ manualTrackingUrl: trackingUrl },
-      })
+      if (shipmentChanged) {
+        await tools.tx.shipment.update({ where: { id: current.id }, data: { manualTrackingNumber: number, manualTrackingUrl: trackingUrl }, select: { id: true } })
+        tools.audit({
+          action: 'shipping.typeTrackingNumber',
+          recordType: 'Shipment',
+          recordId: current.id,
+          companyId: current.companyId,
+          siteId: current.siteId,
+          before: { manualTrackingNumber: facts.manualTrackingNumber, /* B-OP-034 */ manualTrackingUrl: facts.manualTrackingUrl },
+          after: { manualTrackingNumber: number, /* B-OP-034 */ manualTrackingUrl: trackingUrl },
+        })
+      }
+      // ── B-OS-022: each parcel's number and link, one audit row with every parcel before → after (the old value never lost) ──
+      for (const change of parcelChanges) {
+        await tools.tx.parcel.update({ where: { id: change.parcelId }, data: { manualTrackingNumber: change.after.number, manualTrackingUrl: change.after.url, version: { increment: 1 } }, select: { id: true } })
+      }
+      if (parcelChanges.length > 0) {
+        tools.audit({
+          action: 'shipping.typeParcelTracking',
+          recordType: 'Shipment',
+          recordId: current.id,
+          companyId: current.companyId,
+          siteId: current.siteId,
+          before: { parcels: parcelChanges.map((change) => ({ parcelId: change.parcelId, seq: change.seq, manualTrackingNumber: change.before.number, manualTrackingUrl: change.before.url })) },
+          after: { parcels: parcelChanges.map((change) => ({ parcelId: change.parcelId, seq: change.seq, manualTrackingNumber: change.after.number, manualTrackingUrl: change.after.url })) },
+          ...(reason ? { reason } : {}),
+        })
+      }
+      // ── end B-OS-022 ──
       changed(tools, current)
-      await trackingChanged(tools, current, trackingNumber !== null, trackingUrl !== null) // B-OP-030, B-OP-034
+      await trackingChanged(tools, current, number !== null, trackingUrl !== null, parcelChanges.length) // B-OP-030, B-OP-034, B-OS-022
       return { changed: true }
     },
   )
   return caller.withClient((client) => transportView(client, shipment.id))
 }
+
+// ── B-OS-022 (order shipments 1/1): the parcels' typed numbers ─────────────────────────────────────────────────────────────────
+interface ParcelChange {
+  readonly parcelId: string
+  readonly seq: number
+  readonly before: { readonly number: string | null; readonly url: string | null }
+  readonly after: { readonly number: string | null; readonly url: string | null }
+}
+
+/**
+ * Inside the command (the shipment's row locked by its version): each parcel named, of this shipment (else not found), that may take
+ * a typed number now (PARCEL_LABELLED, NOT_PACKED: 409 in words naming the parcel), and what changes on it (an unchanged one: none).
+ */
+async function parcelChangesOf(tx: CommandTx, shipment: ShipmentHeader, asks: readonly ParcelTrackingAsk[]): Promise<ParcelChange[]> {
+  const rows = await tx.parcel.findMany({
+    where: { shipmentId: shipment.id, id: { in: asks.map((ask) => ask.parcelId) } },
+    select: { id: true, seq: true, trackingNumber: true, carrierParcelId: true, manualTrackingNumber: true, manualTrackingUrl: true },
+  })
+  const byId = new Map(rows.map((row) => [row.id, row]))
+  const changes: ParcelChange[] = []
+  for (const ask of asks) {
+    const row = byId.get(ask.parcelId)
+    if (!row) throw new NotFoundError('Parcel not found in this shipment.')
+    const refusal = parcelTrackingRefusal(shipment.status, { trackingNumber: row.trackingNumber, providerId: row.carrierParcelId })
+    if (refusal) {
+      const message = `Parcel ${row.seq}: ${PARCEL_TRACKING_WORDS[refusal]}`
+      throw new DomainError('conflict', message, [{ path: `refusal/${refusal}`, message }])
+    }
+    const number = blankToNull(ask.trackingNumber)
+    // The link as asked (left out: kept), never without its number.
+    const url = number === null ? null : ask.trackingUrl === undefined ? row.manualTrackingUrl : blankToNull(ask.trackingUrl)
+    if (number === row.manualTrackingNumber && url === row.manualTrackingUrl) continue
+    changes.push({ parcelId: row.id, seq: row.seq, before: { number: row.manualTrackingNumber, url: row.manualTrackingUrl }, after: { number, url } })
+  }
+  return changes.sort((a, b) => a.seq - b.seq)
+}
+// ── end B-OS-022 ──
 
 export interface StatusBody {
   readonly version?: number | undefined
