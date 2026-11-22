@@ -52,7 +52,8 @@ export function useFileUpload(
     readonly choices: { readonly kinds: readonly FileKind[]; readonly audiences: readonly FileAudience[] }
     /** "Where it goes" (the order and its lines); absent: the record above. */
     readonly places?: readonly UploadPlace[]
-    readonly onDone?: () => void
+    /** F-OF-203: what was added (the files' ids, held ones too) and the upload that was asked (an ask's upload answers the ask). */
+    readonly onDone?: (result: { readonly fileIds: readonly string[]; readonly ask: UploadAsk }) => void
   },
 ) {
   const locale = useLocale()
@@ -88,6 +89,27 @@ export function useFileUpload(
     })
   }
 
+  /**
+   * F-OF-203: "Upload for this ask" — the same window, prefilled from the ask (where it lands, what it is, a measurement sheet, priced) with
+   * the asker's words on top; once the files are in, `onDone` answers the ask with them. The place is the ask's own (one only).
+   */
+  const openForAsk = (input: { readonly place: UploadPlace; readonly kind: FileKind; readonly sheet: boolean; readonly priced: boolean; readonly forAsk: NonNullable<UploadAsk['forAsk']> }) => {
+    const { choices } = latest.current
+    setUploadFiles([])
+    setUpload({
+      files: [],
+      kind: choices.kinds.includes(input.kind) ? input.kind : ((choices.kinds.includes('ATTACHMENT') ? 'ATTACHMENT' : choices.kinds[0]) as FileKind),
+      audience: START_AUDIENCE as UploadAsk['audience'],
+      kinds: choices.kinds,
+      audiences: input.place.audiences,
+      places: [input.place],
+      place: input.place.key,
+      ...(input.sheet ? { sheet: true } : {}),
+      ...(input.priced ? { priced: true } : {}),
+      forAsk: input.forAsk,
+    })
+  }
+
   /** The window's choices; another place offers its own audiences (a line's sharing waits for the read's `may`, B-OF-014). */
   const change = (next: Partial<Pick<UploadAsk, 'kind' | 'audience' | 'sheet' | 'priced' | 'place'>>) =>
     setUpload((now) => {
@@ -111,6 +133,7 @@ export function useFileUpload(
     setBusy(true)
     const failed: { name: string; reason: string }[] = []
     const held: string[] = []
+    const added: string[] = [] // F-OF-203: the ids an ask's upload answers it with
     for (const file of dropped) {
       const contentType = contentTypeOf(file)
       const problem = uploadProblem({ name: file.name, type: contentType, size: file.size }, ask.kind)
@@ -143,6 +166,7 @@ export function useFileUpload(
         const done = await completeUpload(api, announced.file.id)
         // F-OF-103 (F5-B6): a file the store holds (the virus scan) is said, never silently gone.
         if (done.file.status !== 'AVAILABLE') held.push(file.name)
+        added.push(done.file.id)
       } catch (error) {
         // F-OF-103 (F5-B7): why, in words — never only "did not finish".
         const refusal = uploadRefusalOf(error)
@@ -153,7 +177,7 @@ export function useFileUpload(
     setUpload(null)
     setUploadFiles([])
     setBusy(false)
-    latest.current.onDone?.()
+    latest.current.onDone?.({ fileIds: added, ask })
   }
   // ---- end moved
 
@@ -163,6 +187,7 @@ export function useFileUpload(
     outcome,
     busy,
     open,
+    openForAsk, // F-OF-203
     change,
     confirm: () => {
       if (upload && !busy) void sendUploads(upload, uploadFiles)
