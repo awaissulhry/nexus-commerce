@@ -1,5 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { readOf } from '../overview/model'
+import type { OrderRecordModel } from '../record-model'
+import { designScreen } from './fixtures' // F-OC T.1: the gallery's Changes tab cases
+import { freezeVerdictOf } from './freeze'
 import { changeRowsOf, chipCountsOf, historyChipOf, HISTORY_OPEN, restoreOf, rowsForChip } from './history'
 
 // F-OC-301 … 303 (order CHANGES tab, W3; 10-design §5; 13-backend B-OC-009 … 014; L12): What changed — one row per change, grouped on
@@ -86,5 +90,42 @@ describe('F-OC-301 / 303: chips in the address, the fold, Restore as before…',
     // A part that could not be read says so; the rest is shown — never "No changes".
     expect(view).toContain("{failed && <PartFailed part={t('changesTab.history.revisionsPart')}")
     expect(view).toContain(': failed ? null :')
+  })
+})
+
+// F-OC T.1 / T.2 (15-steps §T): the gallery holds the states the seed lacks (P0 §1, P0-B12), and the browser flow walks the tab.
+describe('F-OC T.1: the Changes tab cases the seed lacks', () => {
+  const record = (id: string): OrderRecordModel => {
+    const found = designScreen.cases.find((item) => item.id === id)
+    expect(found, id).toBeDefined()
+    return (found!.model as { record: OrderRecordModel }).record
+  }
+  it('every work-order change status (P0-B12), every answer of a revision, the told read\'s kinds, the roles', () => {
+    const owner = record('oc-history-owner')
+    expect(new Set((owner.orderChanges?.list?.value ?? []).map((change) => change.status))).toEqual(new Set(['PROPOSED', 'APPLIED', 'DECLINED', 'STALE']))
+    expect((owner.orderChanges?.list?.value ?? []).some((change) => change.status === 'APPLIED' && change.workOrder?.status === 'DRAFT'), 'applied on a draft: the floor not told').toBe(true)
+    expect((owner.orderChanges?.list?.value ?? []).some((change) => change.madeWorkOrder !== null), 'a new draft made').toBe(true)
+    expect(new Set((owner.told?.value?.changes ?? []).map((line) => line.speaker?.kind))).toEqual(new Set(['AMENDED', 'REQUEST', 'WORK_ORDER_CHANGE', 'LINES', 'HOLD', 'ECO']))
+    const latest = (id: string) => record(id).depth?.changes?.value?.changes[0]?.customer.decision
+    expect(['oc-yes-not-asked', 'oc-waiting-sales', 'oc-yes-accepted', 'oc-waiting-refused', 'oc-yes-expired'].map(latest)).toEqual(['NOT_ASKED', 'WAITING', 'ACCEPTED', 'REFUSED', 'EXPIRED'])
+    // The priced change's money only for a price reader (the money wall).
+    expect(owner.depth?.changes?.value?.changes.find((change) => change.revision === 2)?.feeAmount).toBe(2500)
+    expect(record('oc-history-sales').depth?.changes?.value?.changes.find((change) => change.revision === 2)).not.toHaveProperty('feeAmount')
+    expect(record('oc-history-sales').can.price).toBe(false)
+    // 3 confirmations made, 2 sends (B-OC-014).
+    expect([owner.depth?.confirmation?.value?.versions.length, owner.depth?.confirmation?.value?.sends?.length]).toEqual([3, 2])
+    // The roles: the Planner decides (the work-order change is their turn), Read-only acts nowhere.
+    const decides = (id: string) => readOf(record(id).production)?.changes?.stillToDo?.rows.find((row) => row.kind === 'WORK_ORDER_CHANGE')?.mayAct
+    expect([decides('oc-waiting-planner'), decides('oc-waiting-sales')]).toEqual([true, false])
+    expect(record('oc-read-only').can.manage).toBe(false)
+  })
+
+  it('Can it still change? per state: cancelled, goods left, the first yes, our old approval, locked parts, every part open', () => {
+    const verdict = (id: string) => {
+      const model = record(id)
+      const order = model.order as { value: { status: Parameters<typeof freezeVerdictOf>[0]['status'] } }
+      return freezeVerdictOf({ status: order.value.status, changes: model.depth?.changes?.value ?? null, freeze: model.depth?.freeze ?? null }).kind
+    }
+    expect(['oc-freeze-cancelled', 'oc-freeze-partly-shipped', 'oc-freeze-first-yes', 'oc-freeze-old-approval', 'oc-waiting-sales', 'oc-freeze-all-open'].map(verdict)).toEqual(['cancelled', 'goodsLeft', 'firstYes', 'blocked', 'locked', 'allOpen'])
   })
 })
