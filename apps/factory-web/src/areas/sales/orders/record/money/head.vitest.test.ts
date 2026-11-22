@@ -26,12 +26,15 @@ describe('F-OM-101: the shell — five sections that stack, in the kit, by the r
     expect(PAYMENTS_ALIASES).toEqual(['deposit', 'schedule'])
     const tab = source('./view/MoneyTab.tsx')
     expect(tab).toContain('<div className="fw-pt fw-om">')
-    const order_ = ['<MoneyHead', '<TotalsSection', '<PaymentsSection', '<InvoicesSection', '<PriceCheckSection', '<MarginTab']
+    const order_ = ['<MoneyHead', '<TotalsSection', '<PaymentsSection', '<InvoicesSection', '<PriceCheckSection', '<MarginSection' /* F-OM-302 */]
     for (let index = 1; index < order_.length; index += 1) expect(tab.indexOf(order_[index]!), order_[index]).toBeGreaterThan(tab.indexOf(order_[index - 1]!))
     // Each section is its own file, drawn with the Production kit's Section (reused IN PLACE: a type only was added to it).
     expect(source('./view/TotalsSection.tsx')).toContain('<Section id="totals"')
     expect(source('./view/PaymentsSection.tsx')).toContain('<Section id="payments"')
     expect(source('./view/InvoicesSection.tsx')).toContain('<Section id="invoices"')
+    // F-OM-301 / 302: Price check and Margin are the kit's sections too (the old card and the old Margin tab are gone).
+    expect(source('./view/PriceCheckSection.tsx')).toContain('<Section id="price-check"')
+    expect(source('./view/MarginSection.tsx')).toContain('<Section id="margin"')
     expect(source('../view/production/Kit.tsx')).toContain('id: SectionId | ChangesSectionId /* F-OC-101 */ | MoneySectionId /* F-OM-101 */')
     // #deposit and #schedule (the cards that went into Payments) land on it: elements at its top.
     expect(source('./view/PaymentsSection.tsx')).toContain('PAYMENTS_ALIASES.map((alias) => <span key={alias} id={alias} className="fw-om-alias" tabIndex={-1} />)')

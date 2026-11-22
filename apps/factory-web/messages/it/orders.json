@@ -3719,7 +3719,11 @@
       "planChanged": "Il piano è stato cambiato a mano; la cronologia conserva il valore precedente.",
       "undone": "Il pagamento è stato annullato; resta in Finanza › Pagamenti come annullato.",
       "priceAccepted": "La differenza di prezzo è accettata a mano.",
-      "priceUnaccepted": "L'accettazione è annullata: i prezzi si confrontano di nuovo."
+      "priceUnaccepted": "L'accettazione è annullata: i prezzi si confrontano di nuovo.",
+      "costLineAdded": "Il costo impostato a mano è contato nel margine.",
+      "costLineRemoved": "La riga impostata a mano è rimessa: conta di nuovo il costo calcolato.",
+      "targetSet": "Il margine obiettivo è impostato.",
+      "targetCleared": "Il margine obiettivo è tolto: vale di nuovo il minimo."
     },
     "undo": {
       "title": "Annullare il pagamento del {date}?",
@@ -3819,6 +3823,142 @@
         "told": "non viene avvisato.",
         "never": "Nessuno dei due prezzi cambia."
       }
+    },
+    "margin": {
+      "title": "Margine",
+      "info": "Questo ordine rende ancora quanto previsto, e se no, perché? A preventivo = come venduto · Attuale = la stima · Effettivo finora = i costi registrati. Un margine non si scrive mai: imposta un costo a mano, con un perché; Rimetti lo toglie.",
+      "keys": "Tasti: Tab passa da una parte all'altra · Invio apre una sezione.",
+      "part": "il margine",
+      "more": "Altro per il margine",
+      "finance": "Apri in Finanza › Margini ›",
+      "reading": "Lettura del margine…",
+      "basedOn": {
+        "quote": "Calcolato su: il costo a preventivo",
+        "none": "Calcolato su: nessuna scheda costo dietro il preventivo",
+        "both": "Calcolato su: costo a preventivo {date} · rev {revision}",
+        "date": "Calcolato su: costo a preventivo {date}",
+        "rev": "Calcolato su: scheda costo rev {revision}"
+      },
+      "final": "L'ordine è chiuso: il suo margine è definitivo.",
+      "held": {
+        "final": "L'ordine è chiuso: il suo margine è definitivo."
+      },
+      "tile": {
+        "quoted": "A preventivo",
+        "now": "Attuale",
+        "actual": "Effettivo finora",
+        "difference": "Differenza",
+        "asSold": "come venduto",
+        "noQuotedCost": "Nessun costo a preventivo: una riga non aveva una scheda costo",
+        "noWorkOrder": "Ancora nessun ordine di lavoro: attuale = costo a preventivo",
+        "sameAsQuote": "uguale al preventivo",
+        "points": "{points} punti dal preventivo",
+        "actualFinal": "Definitivo: ogni ordine di lavoro è finito",
+        "actualOpen": "Risulta alto finché il lavoro è aperto",
+        "actualNone": "Ancora nessun costo registrato",
+        "differenceHint": "attuale rispetto al preventivo"
+      },
+      "value": {
+        "pct": "{pct}",
+        "unknown": "Non ancora noto",
+        "notYet": "Non ancora",
+        "signed": "{sign}{amount}"
+      },
+      "meter": {
+        "label": "Margine attuale",
+        "target": "Obiettivo {pct}",
+        "targetBy": "Obiettivo {pct} · impostato a mano da {name}, {date}",
+        "floorRole": "Minimo {pct} (ruolo {role})",
+        "floorCompany": "Minimo {pct} (dell'azienda)",
+        "belowFloor": "segnalato: sotto il margine a cui è tenuto"
+      },
+      "kind": {
+        "FREIGHT_ESTIMATE": "Trasporto (stima)",
+        "COMMISSION": "Provvigione",
+        "BANK_CHARGES": "Spese bancarie",
+        "OTHER": "Altro costo"
+      },
+      "hand": {
+        "title_one": "Impostati a mano · {count}",
+        "title_other": "Impostati a mano · {count}",
+        "who": "{name} · {date}",
+        "when": "{date}",
+        "adds": "aggiunge una riga al costo calcolato"
+      },
+      "putBack": {
+        "door": "Rimetti",
+        "title": "Rimetti · {what}",
+        "go": "Rimetti",
+        "gone": "Questa riga non conta più: chiudi la finestra e rileggi il margine.",
+        "happens": {
+          "removed": "La tua riga non conta più in Attuale ed Effettivo finora.",
+          "computed": "Conta di nuovo solo il costo calcolato."
+        },
+        "never": "La cronologia conserva la tua riga, il suo importo e il suo perché."
+      },
+      "where": "Dove è andato",
+      "bridge": {
+        "title": "Dal prezzo al margine",
+        "price": "Prezzo",
+        "MATERIAL": "Tessuto e materiali",
+        "LABOUR": "Confezione (CMT)",
+        "SUBCONTRACT": "Lavorazioni esterne",
+        "OVERHEAD": "Costi generali",
+        "ADJUSTMENT": "Rettifiche",
+        "FREIGHT": "Trasporto",
+        "fromShipments": "Dalle spedizioni",
+        "noFreight": "Trasporto: ancora nessuno",
+        "noFreightSet": "Trasporto: ancora nessuno — imposta una stima a mano",
+        "margin": "Margine",
+        "noCost": "Visibili a chi vede i costi."
+      },
+      "fold": {
+        "lines": "Per riga ({count})",
+        "workOrders": "Ordini di lavoro dietro il costo ({count})",
+        "why": "Perché queste cifre"
+      },
+      "why": {
+        "method": "I costi seguono il metodo di costo dell'azienda.",
+        "provisional": "I costi sono provvisori finché il contabile non sceglie il metodo di costo.",
+        "freightCounted": "Il trasporto delle spedizioni è contato (solo nella valuta dell'ordine).",
+        "freightNone": "Sulle spedizioni dell'ordine non c'è ancora un costo di trasporto: prima di una spedizione, imposta una stima a mano.",
+        "hand": "Un costo impostato a mano si aggiunge al costo calcolato; Rimetti lo toglie. Un margine non si scrive mai.",
+        "bankCharges": "Le spese bancarie abbuonate sui pagamenti non sono ancora nel margine (un lavoro successivo)."
+      },
+      "setCost": {
+        "door": "Imposta un costo a mano…",
+        "title": "Imposta un costo a mano · {number}",
+        "go": "Imposta il costo",
+        "sub": "Margine attuale {pct}",
+        "kind": "Voce",
+        "kindHint": "Una riga AGGIUNTA al costo calcolato; sostituire una voce calcolata arriva dopo.",
+        "amount": "Importo ({currency})",
+        "problem": "Scrivi un importo sopra 0, per esempio 320,00.",
+        "happens": {
+          "uses": "Attuale ed Effettivo finora usano la tua cifra; A preventivo resta come venduto.",
+          "after": "Margine attuale {now} → {after}.",
+          "beside": "Il costo calcolato resta accanto; Rimetti toglie la tua riga."
+        },
+        "never": "Il costo a preventivo, il registro costi e le schede costo approvate non cambiano mai qui."
+      },
+      "target": {
+        "door": "Imposta obiettivo…",
+        "title": "Imposta il margine obiettivo di {number}",
+        "go": "Imposta l'obiettivo",
+        "clear": "Togli l'obiettivo",
+        "field": "Margine obiettivo (%)",
+        "hint": "Vuoto: nessun obiettivo suo; vale il minimo delle impostazioni Vendite.",
+        "hintFloor": "Vuoto: nessun obiettivo suo; vale il minimo ({pct}).",
+        "problem": "Scrivi una percentuale sopra 0 e sotto 100, per esempio 38,5.",
+        "same": "È già l'obiettivo.",
+        "happens": {
+          "marks": "L'indicatore lo segna; l'ordine si valuta su questo, non sul minimo.",
+          "flag": "Sotto, l'ordine viene segnalato in Finanza › Margini."
+        },
+        "never": "Il margine non si scrive mai: resta calcolato dal prezzo e dai costi."
+      },
+      "told": "non vede mai margini né costi.",
+      "who": "Salvato a tuo nome con la data di oggi; la cronologia conserva il valore precedente."
     }
   }
 }

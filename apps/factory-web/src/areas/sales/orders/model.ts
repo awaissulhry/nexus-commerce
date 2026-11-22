@@ -89,6 +89,10 @@ export interface OrderAbilities {
    * (and, B-OM-018, Open for payment); absent before the server knows the right: every such door hidden, never held.
    */
   moneyPlan?: boolean
+  /** F-OM-202 (B-OM-022): stop a bank-details page sent to the customer (links.manage: the Owner only — it is in no office template). */
+  links?: boolean
+  /** F-OM-302 (B-OM-021, L2 / L4): a cost line set by hand on the order's margin, and its target (costing.ledger.manage: the Owner and Finance). */
+  costLedger?: boolean
 }
 
 export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
@@ -116,6 +120,8 @@ export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
     askCustomer: held.has('partners.approvals.ask'), // F-OC-103
     threadsPost: held.has('threads.post'), // F-OM-101
     moneyPlan: held.has('orders.moneyPlan'), // F-OM-201 (B-OM-010)
+    links: held.has('links.manage'), // F-OM-202 (B-OM-022): Stop the page
+    costLedger: held.has('costing.ledger.manage'), // F-OM-302 (B-OM-021): Set a cost by hand…, Set target…
   }
 }
 

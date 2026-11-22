@@ -340,6 +340,23 @@ export const softLockedOf = (error: unknown): boolean => isApiError(error) && er
 export type PlanRefusal = Words | MoneyWord
 
 /**
+ * F-OM-301 / 302: a refusal of Money's other hand commands in the domain's own words, both languages — 409 `priceAccept/<CODE>` (the
+ * price difference, B-OM-020) and `handMargin/<CODE>` (the margin's cost lines and target, B-OM-021); an unknown code in this page's
+ * words; null: not one of these (the page's write words say it).
+ */
+export function codedRefusalOf<C extends string>(error: unknown, prefix: 'priceAccept' | 'handMargin', codes: readonly C[], words: Readonly<Record<C, Words>>): PlanRefusal | null {
+  if (!isApiError(error)) return null
+  for (const issue of error.issues) {
+    const path = issuePath(issue)
+    if (path.startsWith(`${prefix}/`)) {
+      const code = path.slice(prefix.length + 1)
+      return (codes as readonly string[]).includes(code) ? words[code as C] : word('moneyTab.refusal.OTHER')
+    }
+  }
+  return null
+}
+
+/**
  * The planner's refusal (409 `moneyPlan/<CODE>`) in the domain's own words, both languages; an unknown code in this page's; the version
  * moved meanwhile; no right (the door is hidden, so a role changed meanwhile); null: not the plan's own (the page's write words say it).
  */

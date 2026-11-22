@@ -3719,7 +3719,11 @@
       "planChanged": "The plan was changed by hand; the history keeps the old value.",
       "undone": "The payment was undone; it stays in Finance › Payments as voided.",
       "priceAccepted": "The price difference is accepted by hand.",
-      "priceUnaccepted": "The acceptance is undone: the prices are compared again."
+      "priceUnaccepted": "The acceptance is undone: the prices are compared again.",
+      "costLineAdded": "The cost set by hand is counted in the margin.",
+      "costLineRemoved": "The line set by hand is put back: the computed cost counts again.",
+      "targetSet": "The target margin is set.",
+      "targetCleared": "The target margin is cleared: the floor applies again."
     },
     "undo": {
       "title": "Undo the payment of {date}?",
@@ -3819,6 +3823,142 @@
         "told": "not told.",
         "never": "Neither price changes."
       }
+    },
+    "margin": {
+      "title": "Margin",
+      "info": "Does this order still make the money we planned, and if not, why? At quote = as sold · Now = the estimate · Actual so far = the costs posted. A margin is never typed: set a cost by hand, with a reason; Put back removes it.",
+      "keys": "Keys: Tab moves from part to part · Enter opens a fold.",
+      "part": "the margin",
+      "more": "More for Margin",
+      "finance": "Open in Finance › Margins ›",
+      "reading": "Reading the margin…",
+      "basedOn": {
+        "quote": "Based on: the cost at quote",
+        "none": "Based on: no cost sheet behind the quote",
+        "both": "Based on: cost at quote {date} · rev {revision}",
+        "date": "Based on: cost at quote {date}",
+        "rev": "Based on: cost sheet rev {revision}"
+      },
+      "final": "The order is closed: its margin is final.",
+      "held": {
+        "final": "The order is closed: its margin is final."
+      },
+      "tile": {
+        "quoted": "At quote",
+        "now": "Now",
+        "actual": "Actual so far",
+        "difference": "Difference",
+        "asSold": "as sold",
+        "noQuotedCost": "No cost at quote: a line had no cost sheet",
+        "noWorkOrder": "No work order yet: now = the cost at quote",
+        "sameAsQuote": "the same as at quote",
+        "points": "{points} pts since the quote",
+        "actualFinal": "Final: every work order is done",
+        "actualOpen": "Reads high while work is open",
+        "actualNone": "No cost posted yet",
+        "differenceHint": "now against at quote"
+      },
+      "value": {
+        "pct": "{pct}",
+        "unknown": "Not known yet",
+        "notYet": "Not yet",
+        "signed": "{sign}{amount}"
+      },
+      "meter": {
+        "label": "Margin now",
+        "target": "Target {pct}",
+        "targetBy": "Target {pct} · set by hand by {name}, {date}",
+        "floorRole": "Minimum {pct} ({role} role)",
+        "floorCompany": "Minimum {pct} (the company's)",
+        "belowFloor": "flagged: below the margin it is held to"
+      },
+      "kind": {
+        "FREIGHT_ESTIMATE": "Freight (estimate)",
+        "COMMISSION": "Commission",
+        "BANK_CHARGES": "Bank charges",
+        "OTHER": "Other cost"
+      },
+      "hand": {
+        "title_one": "Set by hand · {count}",
+        "title_other": "Set by hand · {count}",
+        "who": "{name} · {date}",
+        "when": "{date}",
+        "adds": "adds a line to the computed cost"
+      },
+      "putBack": {
+        "door": "Put back",
+        "title": "Put back · {what}",
+        "go": "Put back",
+        "gone": "This line is not counted any more: close the window and read the margin again.",
+        "happens": {
+          "removed": "Your line no longer counts in Now and Actual so far.",
+          "computed": "The computed cost alone counts again."
+        },
+        "never": "The history keeps your line, its amount and its reason."
+      },
+      "where": "Where it went",
+      "bridge": {
+        "title": "From the price to the margin",
+        "price": "Price",
+        "MATERIAL": "Fabric and materials",
+        "LABOUR": "Making (CMT)",
+        "SUBCONTRACT": "Outside work",
+        "OVERHEAD": "Overhead",
+        "ADJUSTMENT": "Adjustments",
+        "FREIGHT": "Freight",
+        "fromShipments": "From the shipments",
+        "noFreight": "Freight: none yet",
+        "noFreightSet": "Freight: none yet — set an estimate by hand",
+        "margin": "Margin",
+        "noCost": "Shown to people who see costs."
+      },
+      "fold": {
+        "lines": "By line ({count})",
+        "workOrders": "Work orders behind the cost ({count})",
+        "why": "Why these figures"
+      },
+      "why": {
+        "method": "Costs follow the company's costing method.",
+        "provisional": "Costs are provisional until the accountant chooses the costing method.",
+        "freightCounted": "Freight from the shipments is counted (in the order's currency only).",
+        "freightNone": "No freight cost is on the order's shipments yet: before a shipment, set an estimate by hand.",
+        "hand": "A cost set by hand is added to the computed cost; Put back removes it. A margin is never typed.",
+        "bankCharges": "Bank charges written off on payments are not in the margin yet (a later job)."
+      },
+      "setCost": {
+        "door": "Set a cost by hand…",
+        "title": "Set a cost by hand · {number}",
+        "go": "Set the cost",
+        "sub": "Margin now {pct}",
+        "kind": "Part",
+        "kindHint": "A line ADDED to the computed cost; replacing a computed part comes later.",
+        "amount": "Amount ({currency})",
+        "problem": "Type an amount above 0, for example 320.00.",
+        "happens": {
+          "uses": "Now and Actual so far use your figure; At quote stays as sold.",
+          "after": "Margin now {now} → {after}.",
+          "beside": "The computed cost stays beside it; Put back removes your line."
+        },
+        "never": "The quote's cost, the posted cost ledger and approved cost sheets never change here."
+      },
+      "target": {
+        "door": "Set target…",
+        "title": "Set the target margin of {number}",
+        "go": "Set the target",
+        "clear": "Clear the target",
+        "field": "Target margin (%)",
+        "hint": "Empty: no target of its own; the floor of the Sales settings applies.",
+        "hintFloor": "Empty: no target of its own; the floor applies ({pct}).",
+        "problem": "Type a percent above 0 and below 100, for example 38.5.",
+        "same": "This is the target already.",
+        "happens": {
+          "marks": "The meter marks it; the order is judged on it, not on the floor.",
+          "flag": "Below it, the order is flagged in Finance › Margins."
+        },
+        "never": "The margin itself is never typed: it stays worked out from the price and the costs."
+      },
+      "told": "never sees margins or costs.",
+      "who": "Saved under your name with today's date; the history keeps the old value."
     }
   }
 }

@@ -12,13 +12,16 @@ import type { MoneyPlanState, OrderRecordActions, OrderRecordModel, Part, Record
 import { listTerms, type PaymentTerms } from '../../../finance/settings/terms/api'
 import { getParty, type PartyContact } from '../../quotes/api'
 import { fromDdtsHref } from '../list/sheet/overall'
-import { planRefusalOf, softLockedOf, type PlanRefusal } from './money/plan'
+import { codedRefusalOf, planRefusalOf, softLockedOf, type PlanRefusal } from './money/plan'
 // ---- end F-OM-201 / 202
 import { isApiError } from '../../../../lib/api/errors' // F-OM-301: a check that moved meanwhile is read again
 import { acceptPriceDifference, undoPriceAcceptance } from '../price-check/api' // F-OM-301 (B-OM-020)
+import { addOrderCostLine, removeOrderCostLine, setOrderMarginTarget } from '../../../finance/margins/api' // F-OM-302 (B-OM-021)
+import { PRICE_ACCEPT_REFUSALS, PRICE_ACCEPT_WORDS } from '@nexus/factory-domain/sales/brand-prices/accept' // F-OM-301: the refusals' words (S3)
+import { HAND_MARGIN_REFUSALS, HAND_MARGIN_WORDS } from '@nexus/factory-domain/costing/margins/hand-lines' // F-OM-302: the refusals' words (S3)
 
 export type MoneyActsModel = Pick<OrderRecordModel, 'sentLink' | 'recorded' | 'scheduleSteps' | 'moneyPlan'>
-export type MoneyActsActions = Pick<OrderRecordActions, 'onSendLink' | 'onRecordPayment' | 'onSendSdi' | 'scheduleSteps' | 'onPlanPreview' | 'onPlanAct' | 'onUndoPayment' | 'onPriceAccept' | 'onPriceUnaccept'>
+export type MoneyActsActions = Pick<OrderRecordActions, 'onSendLink' | 'onRecordPayment' | 'onSendSdi' | 'scheduleSteps' | 'onPlanPreview' | 'onPlanAct' | 'onUndoPayment' | 'onPriceAccept' | 'onPriceUnaccept' | 'onCostLineAdd' | 'onCostLineRemove' | 'onMarginTarget'>
 
 /**
  * F-OP-134 (N-5): the Money tab's acts — the deposits and payments: the bank-details page, the payment (with the TD02: a fresh
@@ -96,6 +99,21 @@ export function useMoneyActs(
     // B-W2b-16: the owner's waive asks a fresh code (the record's step-up).
     stepUp: { ensureFresh, guard },
   })
+
+  // F-OM-302: one write for Margin's hand commands (one Idempotency-Key per try; the margin read again after it).
+  const handMargin = (run: () => Promise<void>, notice: string) => {
+    setRefused(null)
+    void write(async () => {
+      try {
+        await run()
+      } catch (error) {
+        setRefused(codedRefusalOf(error, 'handMargin', HAND_MARGIN_REFUSALS, HAND_MARGIN_WORDS))
+        throw error
+      }
+      rereads?.margin?.()
+      return null
+    }, notice)
+  }
 
   const actions: MoneyActsActions = {
     scheduleSteps: scheduleSteps.actions,
@@ -185,14 +203,16 @@ export function useMoneyActs(
         return null
       }, 'moneyTab.notice.undone')
     },
-    // ---- F-OM-301 (B-OM-020): accept a price difference by hand, or undo the acceptance — then the price check is read again (a
-    // check that moved meanwhile is refused: it is read again too, and the window says why).
+    // ---- F-OM-301 (B-OM-020): accept a price difference by hand, or undo the acceptance — then the price check is read again. A
+    // refusal (409 priceAccept/<CODE>) stays in the window in the domain's words; a check that moved meanwhile (STALE) is read again.
     onPriceAccept: (body) => {
       const key = newIdempotencyKey()
+      setRefused(null)
       void write(async () => {
         try {
           await acceptPriceDifference(api, orderId, body, key)
         } catch (error) {
+          setRefused(codedRefusalOf(error, 'priceAccept', PRICE_ACCEPT_REFUSALS, PRICE_ACCEPT_WORDS))
           if (isApiError(error) && error.kind === 'conflict') rereads?.priceCheck?.()
           throw error
         }
@@ -202,12 +222,24 @@ export function useMoneyActs(
     },
     onPriceUnaccept: (reason) => {
       const key = newIdempotencyKey()
+      setRefused(null)
       void write(async () => {
-        await undoPriceAcceptance(api, orderId, { reason: reason.trim() }, key)
+        try {
+          await undoPriceAcceptance(api, orderId, { reason: reason.trim() }, key)
+        } catch (error) {
+          setRefused(codedRefusalOf(error, 'priceAccept', PRICE_ACCEPT_REFUSALS, PRICE_ACCEPT_WORDS))
+          if (isApiError(error) && error.kind === 'conflict') rereads?.priceCheck?.()
+          throw error
+        }
         rereads?.priceCheck?.()
         return null
       }, 'moneyTab.notice.priceUnaccepted')
     },
+    // ---- F-OM-302 (B-OM-021): Margin's hand controls — a cost line added, put back, the target — then the margin is read again; a
+    // refusal (409 handMargin/<CODE>) stays in the window in the domain's words.
+    onCostLineAdd: (body) => handMargin(() => addOrderCostLine(api, orderId, { ...body, reason: body.reason.trim() }, newIdempotencyKey()), 'moneyTab.notice.costLineAdded'),
+    onCostLineRemove: (lineId, reason) => handMargin(() => removeOrderCostLine(api, orderId, lineId, { reason: reason.trim() }, newIdempotencyKey()), 'moneyTab.notice.costLineRemoved'),
+    onMarginTarget: (body) => handMargin(() => setOrderMarginTarget(api, orderId, { ...body, reason: body.reason.trim() }, newIdempotencyKey()), body.targetPct === null ? 'moneyTab.notice.targetCleared' : 'moneyTab.notice.targetSet'),
   }
 
   return {

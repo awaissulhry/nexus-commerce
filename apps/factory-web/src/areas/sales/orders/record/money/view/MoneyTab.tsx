@@ -1,10 +1,9 @@
 'use client'
 
-import { useT } from '../../../../../../lib/i18n/provider'
 import type { Order } from '../../../api'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
-import { MarginTab } from '../../margin/view/MarginTab' // F-SA-230: Margin is Money's last section (W3: the kit's Margin section)
 import { InvoicesSection } from './InvoicesSection'
+import { MarginSection } from './MarginSection' // F-SA-230 → F-OM-302: Margin is Money's last section, in the kit
 import { MoneyHead } from './MoneyHead'
 import { PaymentsSection } from './PaymentsSection'
 import { PriceCheckSection } from './PriceCheckSection' // F-CP-142 → F-OM-301: moved here, in the kit
@@ -21,7 +20,6 @@ import './money.css'
  * once by the page (MoneyDialogs, OrderRecordView).
  */
 export function MoneyTab({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
-  const t = useT('orders')
   return (
     <div className="fw-pt fw-om">
       <MoneyHead order={order} model={model} />
@@ -29,11 +27,7 @@ export function MoneyTab({ order, model, actions }: { order: Order; model: Order
       <PaymentsSection order={order} model={model} actions={actions} />
       <InvoicesSection order={order} model={model} actions={actions} />
       {/* F-CP-142 → F-OM-301: hidden without the price grain — the tab's head says the money wall once: */ model.can.price && <PriceCheckSection order={order} model={model} actions={actions} />}
-      {model.can.margin && (
-        <section id="margin" className="fw-so-anchor" aria-label={t('money.section.margin')}>
-          <MarginTab margin={model.margin} prefix={model.prefix} orderId={order.id} onRetry={actions?.onRetryMargin} />
-        </section>
-      )}
+      {/* F-SA-230 → F-OM-302: hidden without the margin grain: */ model.can.margin && <MarginSection order={order} model={model} actions={actions} />}
     </div>
   )
 }

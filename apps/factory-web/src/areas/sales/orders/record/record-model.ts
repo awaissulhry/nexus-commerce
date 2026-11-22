@@ -8,6 +8,7 @@ import type { PaymentTerms } from '../../../finance/settings/terms/api' // F-OM-
 import type { PartyContact } from '../../quotes/api' // F-OM-202: Send the page… picks the customer's contact
 import type { PlanRefusal } from './money/plan' // F-OM-201: a refusal in the domain's words (or this page's)
 import type { MarginTabModel } from './margin/model'
+import type { CostLineKind } from '../../../finance/margins/api' // F-OM-302
 import type { StepUpState } from '../hooks'
 import type { OrderAbilities, Phrase, RecordTab } from '../model'
 import type { ScheduleStepsActions, ScheduleStepsModel } from './schedule/view/StepVerbs'
@@ -94,6 +95,10 @@ export type MoneyDialog =
   // F-OM-301 (B-OM-020): Price check's ⋯ — Accept the difference…, Undo the acceptance… (the check as read is the price check's).
   | { kind: 'priceAccept' }
   | { kind: 'priceUnaccept' }
+  // F-OM-302 (B-OM-021): Margin's Set a cost by hand…, a hand line's Put back, Set target….
+  | { kind: 'costLine' }
+  | { kind: 'costLineRemove'; lineId: string }
+  | { kind: 'marginTarget' }
 /** The container's own: Changes' Before → after (the amendments' snapshots are the Changes tab's read, kept in the container). */
 export type ChangesDialog = { kind: 'compare'; amendmentId: string }
 /**
@@ -494,6 +499,10 @@ export interface OrderRecordActions {
   /** F-OM-301 (B-OM-020): accept the price difference by hand (the nets as read, a reason); undo the acceptance (a reason). */
   onPriceAccept?: (body: { readonly ourNet: number; readonly brandNet: number; readonly reason: string }) => void
   onPriceUnaccept?: (reason: string) => void
+  /** F-OM-302 (B-OM-021): a cost line added by hand, its Put back, the order's target margin (null: the floor again) — each with a reason. */
+  onCostLineAdd?: (body: { readonly kind: CostLineKind; readonly amount: number; readonly reason: string }) => void
+  onCostLineRemove?: (lineId: string, reason: string) => void
+  onMarginTarget?: (body: { readonly targetPct: string | null; readonly reason: string }) => void
   onRecordPayment?: (requestId: string, input: PaymentInput) => void
   onSendSdi?: (invoiceId: string) => void
   onStepUpSubmit?: (code: string) => void
