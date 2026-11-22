@@ -13,12 +13,12 @@ import { OFFICE_PAGES } from '../../../../../../shell/nav/office-nav'
 import { useRecordFrame } from '../../../../../_shared/record-frame/RecordFrame'
 import { tabHref } from '../../../../../_shared/record-frame/address'
 import { money } from '../../../../quotes/model'
-import type { DepositRequest, Order } from '../../../api'
+import type { DepositRequest, Order, PlanPayment } from '../../../api'
 import { dayInstant, depositInvoicesOf, depositSteps, SDI_TONE, sdiSendHeld, type DepositStepState } from '../../../model'
 import { discussAboutOf } from '../../dock/discuss'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { LineMenuButton } from '../../view/LineMenu'
-import type { PlanAct, PlanRow } from '../plan'
+import { isHandAct, type PlanAct, type PlanRow } from '../plan'
 import type { Say } from './say'
 
 const financePayHref = (prefix: string, invoiceId: string) => `${prefix}/finance/payments?new=1&invoice=${encodeURIComponent(invoiceId)}`
@@ -50,6 +50,8 @@ export function PlanRowView({ row, order, model, actions, say, final }: { row: P
   const step = row.step
   const request = row.request
   const run = (act: PlanAct) => {
+    // F-OM-201: a hand act opens its window (mounted once by the page: MoneyDialogs).
+    if (isHandAct(act.id)) return actions?.onDialog?.({ kind: 'moneyPlan', act: act.id, stepId: step?.id ?? null, requestId: request?.id ?? null })
     if (act.id === 'record' && request) return actions?.onDialog?.({ kind: 'depositPayment', requestId: request.id })
     if (act.id === 'send' && request) return actions?.onDialog?.({ kind: 'depositLink', requestId: request.id })
     if (act.id === 'open' && step) return act.needsDay ? actions?.scheduleSteps?.onOpen?.(step) : actions?.scheduleSteps?.onConfirmOpen?.(step, null)
@@ -154,6 +156,27 @@ export function PlanRowView({ row, order, model, actions, say, final }: { row: P
       {row.unfolds && open && request ? <RequestBox row={row} request={request} order={order} model={model} actions={actions} invoiceHref={invoiceHref} /> : null}
     </div>
   )
+}
+
+/**
+ * F-OM-202 (B-OM-017): one payment's ⋯ — Undo this payment… (the server's verdict: a door when it may; held in its words when the
+ * state holds it — a TD02 issued for it: a credit note first, in Finance; hidden without the rights), Open in Finance › Payments ›
+ * (payments.view), Copy the bank reference. A closed order: no undo.
+ */
+function PaymentMenu({ payment, request, model, actions }: { payment: PlanPayment; request: DepositRequest; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  const t = useT('orders')
+  const locale = useLocale()
+  const order = model.order.status === 'ready' ? model.order.value : null
+  const final = !order || order.status === 'CLOSED' || order.status === 'CANCELLED'
+  const items: MenuItemDef[] = []
+  const undo = payment.undo
+  if (!final && undo && (undo.may || undo.why)) {
+    const why = undo.why ? undo.why[locale === 'it' ? 'it' : 'en'] : null
+    items.push(undo.may ? { id: 'undo', label: t('moneyTab.payment.undo'), onSelect: () => actions?.onDialog?.({ kind: 'undoPayment', requestId: request.id, paymentId: payment.paymentId }) } : { id: 'undo', label: t('moneyTab.payment.undo'), disabled: true, description: why ?? undefined })
+  }
+  if (model.can.viewPayments) items.push({ id: 'open', label: t('moneyTab.payment.open'), href: `${model.prefix}${recordAddress({ type: 'Payment', id: payment.paymentId, label: payment.externalRef, companyId: order?.companyId }, OFFICE_PAGES)}` })
+  items.push({ id: 'ref', label: t('moneyTab.payment.copyRef'), onSelect: () => void navigator.clipboard?.writeText(payment.externalRef) })
+  return <LineMenuButton label={t('moneyTab.payment.more', { date: formatDate(dayInstant(payment.receivedOn), { locale }) })} items={items} />
 }
 
 function StepDot({ state }: { state: DepositStepState }) {
@@ -285,7 +308,10 @@ function RequestBox({ row, request, order, model, actions, invoiceHref }: { row:
                     <span className="fw-om-py-w">
                       {[day(payment.receivedOn), how, t('moneyTab.plan.payments.ref', { ref: payment.externalRef })].filter(Boolean).join(' · ')}
                     </span>
-                    {model.can.price && payment.amount !== undefined ? <span className="fw-om-py-a">{money(payment.amount, request.currency, locale)}</span> : null}
+                    <span className="fw-om-py-a">
+                      {model.can.price && payment.amount !== undefined ? money(payment.amount, request.currency, locale) : null}
+                      <PaymentMenu payment={payment} request={request} model={model} actions={actions} />
+                    </span>
                   </div>
                 )
               })
