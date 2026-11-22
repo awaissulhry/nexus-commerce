@@ -141,7 +141,7 @@ function PlaceDialog({ holds, model, actions }: { holds: Holds; model: HoldsPane
       title={t('holds.placeTitle', { number: holds.number })}
       held={model.busy ? t('holds.held.busy') : say(problem)}
       onGo={() => actions?.onPlace?.()}
-      goLabel={dialog.reason ? t('holds.placeGo', { reason: t(`holdReason.${dialog.reason}`) }) : t('holds.place')}
+      goLabel={dialog.reason ? t('holds.placeGo', { reason: t(`holdReason.${dialog.reason}`) }) : t('holds.placeGoBare') /* os-fx7 (W-16): an act has no ellipsis */}
       onClose={() => actions?.onDialog?.(null)}
       problem={say(model.problem)}
     >

@@ -16,7 +16,8 @@
     "problem_one": "{number} has {count} tracking problem",
     "problem_other": "{number} has {count} tracking problems",
     "back": "{number} came back with the carrier: receive the garments in Warehouse, then ship them again",
-    "backOn": "{number} came back with the carrier on {day}: receive the garments in Warehouse, then ship them again"
+    "backOn": "{number} came back with the carrier on {day}: receive the garments in Warehouse, then ship them again",
+    "vanNotReported": "{number}: our van has not reported the delivery yet"
   },
   "where": {
     "title": "Where every garment is",
@@ -167,7 +168,10 @@
       "bySizeOf": "What {number} carries, by size",
       "notRead": "Open in Warehouse ›",
       "title": "What {number} carries",
-      "close": "Close"
+      "close": "Close",
+      "otherWhat_one": "+ {count} pc of {order} ({what})",
+      "otherWhat_other": "+ {count} pcs of {order} ({what})",
+      "subtitle": "{order} · {pieces} · {status}"
     },
     "state": {
       "bySystem": "Placed by the system",
@@ -178,14 +182,25 @@
       "problems_other": "{count} tracking problems",
       "notReceived": "Came back · not yet received",
       "received": "Came back · received",
-      "cancelled": "Cancelled: {reason}"
+      "cancelled": "Cancelled: {reason}",
+      "problemsWhat_one": "{count} tracking problem: {what}",
+      "problemsWhat_other": "{count} tracking problems: {what}"
     },
     "next": {
       "pack": "Next: pack it ›",
       "ddt": "Next: issue the DDT ›",
       "labels": "Next: buy the labels ›",
       "hand": "Next: hand it over ›",
-      "ddtChoice": "A Nexus shipment leaves with a DDT. If the DDT cannot be issued (Warehouse lists its open checks), choose “This shipment travels without a DDT…” in ⋯, then hand it over."
+      "ddtBlocked": "The DDT cannot be issued: the company has no {missing} yet. Choose “This shipment travels without a DDT…” in ⋯, then hand it over.",
+      "ddtMissing": {
+        "legalName": "legal name",
+        "address": "registered office",
+        "vatNumber": "Italian VAT number (partita IVA)",
+        "fiscalCode": "codice fiscale",
+        "rea": "REA number",
+        "shareCapital": "share capital",
+        "currency": "currency"
+      }
     },
     "travels": {
       "withheld": "Not shown to your role",
@@ -305,8 +320,7 @@
       "complaint": "Complaint"
     },
     "about": {
-      "order": "Whole order",
-      "returnLines": "This order's garments"
+      "order": "Whole order"
     },
     "waiting": "Waiting for your yes",
     "next": {
@@ -490,6 +504,28 @@
       "addressesReading": "Reading the customer's delivery addresses…",
       "noAddress": "This customer has no other approved delivery address: add one on the customer first.",
       "onlyOwn": "Each new shipment shows only on the orders whose garments it carries; the holds in force go with it."
+    },
+    "mark": {
+      "title": {
+        "DELIVERED": "Mark {number} delivered",
+        "RETURNED": "Mark {number} returned"
+      },
+      "go": {
+        "DELIVERED": "Mark delivered",
+        "RETURNED": "Mark returned"
+      },
+      "on": {
+        "DELIVERED": "Delivered on",
+        "RETURNED": "Came back on"
+      },
+      "orderStays": {
+        "PARTLY_SHIPPED_one": "The order stays Partly shipped: {count} garment is not delivered yet.",
+        "PARTLY_SHIPPED_other": "The order stays Partly shipped: {count} garments are not delivered yet.",
+        "SHIPPED_one": "The order stays Shipped: {count} garment is not delivered yet.",
+        "SHIPPED_other": "The order stays Shipped: {count} garments are not delivered yet.",
+        "other_one": "The order is not delivered yet: {count} garment is still to arrive.",
+        "other_other": "The order is not delivered yet: {count} garments are still to arrive."
+      }
     }
   },
   "move": {
@@ -501,8 +537,8 @@
     "go_other": "Move {count} garments",
     "mergeGo": "Merge into {number}",
     "what": "Only drafts of the same customer, company and site take them; both drafts are locked together; the target's holds are checked for every order.",
-    "mergeWhat_one": "All {count} garment of {number} moves; {number} is then cancelled “Merged into …”, never deleted; its holds come along. Undo: Split….",
-    "mergeWhat_other": "All {count} garments of {number} move; {number} is then cancelled “Merged into …”, never deleted; its holds come along. Undo: Split….",
+    "mergeWhat_one": "All {count} garment of {number} moves; {number} is then cancelled “Merged into …”, never deleted; its holds come along. Undo: Split…",
+    "mergeWhat_other": "All {count} garments of {number} move; {number} is then cancelled “Merged into …”, never deleted; its holds come along. Undo: Split…",
     "to": "Move to",
     "into": "Merge into",
     "target": "{number} · carries {orders}",

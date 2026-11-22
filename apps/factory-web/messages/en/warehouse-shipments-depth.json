@@ -328,7 +328,8 @@
       "placed_other": "{count} shipments are now on hold.",
       "skipped_one": "{count} was left as it was:",
       "skipped_other": "{count} were left as they were:"
-    }
+    },
+    "placeGoBare": "Place the hold"
   },
   "split": {
     "menu": "Split…",
@@ -338,8 +339,6 @@
     "byHand": "By hand",
     "byRule": "By promise date",
     "go": "Split",
-    "goHand_one": "Move {count} garment",
-    "goHand_other": "Move {count} garments",
     "goRule_one": "Make {count} shipment",
     "goRule_other": "Make {count} shipments",
     "heldCarried": "The holds in force go with the new shipments.",

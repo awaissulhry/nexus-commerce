@@ -16,7 +16,8 @@
     "problem_one": "{number} ha {count} problema di tracciamento",
     "problem_other": "{number} ha {count} problemi di tracciamento",
     "back": "{number} è rientrata con il vettore: ricevi i capi in Magazzino, poi spediscili di nuovo",
-    "backOn": "{number} è rientrata con il vettore il {day}: ricevi i capi in Magazzino, poi spediscili di nuovo"
+    "backOn": "{number} è rientrata con il vettore il {day}: ricevi i capi in Magazzino, poi spediscili di nuovo",
+    "vanNotReported": "{number}: il nostro furgone non ha ancora segnalato la consegna"
   },
   "where": {
     "title": "Dove si trova ogni capo",
@@ -167,7 +168,10 @@
       "bySizeOf": "Cosa porta {number}, per taglia",
       "notRead": "Apri in Magazzino ›",
       "title": "Cosa porta {number}",
-      "close": "Chiudi"
+      "close": "Chiudi",
+      "otherWhat_one": "+ {count} capo di {order} ({what})",
+      "otherWhat_other": "+ {count} capi di {order} ({what})",
+      "subtitle": "{order} · {pieces} · {status}"
     },
     "state": {
       "bySystem": "Messo dal sistema",
@@ -178,14 +182,25 @@
       "problems_other": "{count} problemi di tracciamento",
       "notReceived": "Rientrata · non ancora ricevuta",
       "received": "Rientrata · ricevuta",
-      "cancelled": "Annullata: {reason}"
+      "cancelled": "Annullata: {reason}",
+      "problemsWhat_one": "{count} problema di tracciamento: {what}",
+      "problemsWhat_other": "{count} problemi di tracciamento: {what}"
     },
     "next": {
       "pack": "Prossimo: imballala ›",
       "ddt": "Prossimo: emetti il DDT ›",
       "labels": "Prossimo: compra le etichette ›",
       "hand": "Prossimo: consegnala al vettore ›",
-      "ddtChoice": "Una spedizione Nexus parte con un DDT. Se il DDT non si può emettere (il Magazzino elenca i controlli aperti), scegli «Questa spedizione viaggia senza DDT…» in ⋯, poi consegnala al vettore."
+      "ddtBlocked": "Il DDT non si può emettere: l'azienda non ha ancora {missing}. Scegli «Questa spedizione viaggia senza DDT…» in ⋯, poi consegnala al vettore.",
+      "ddtMissing": {
+        "legalName": "la ragione sociale",
+        "address": "la sede legale",
+        "vatNumber": "la partita IVA",
+        "fiscalCode": "il codice fiscale",
+        "rea": "il numero REA",
+        "shareCapital": "il capitale sociale",
+        "currency": "la valuta"
+      }
     },
     "travels": {
       "withheld": "Non visibile al tuo ruolo",
@@ -305,8 +320,7 @@
       "complaint": "Reclamo"
     },
     "about": {
-      "order": "Tutto l'ordine",
-      "returnLines": "Capi di questo ordine"
+      "order": "Tutto l'ordine"
     },
     "waiting": "In attesa del tuo sì",
     "next": {
@@ -490,6 +504,28 @@
       "addressesReading": "Lettura degli indirizzi di consegna del cliente…",
       "noAddress": "Questo cliente non ha un altro indirizzo di consegna approvato: prima aggiungine uno sul cliente.",
       "onlyOwn": "Ogni nuova spedizione compare solo sugli ordini di cui porta i capi; i blocchi in vigore vanno con lei."
+    },
+    "mark": {
+      "title": {
+        "DELIVERED": "Segna {number} come consegnata",
+        "RETURNED": "Segna {number} come rientrata"
+      },
+      "go": {
+        "DELIVERED": "Segna come consegnata",
+        "RETURNED": "Segna come rientrata"
+      },
+      "on": {
+        "DELIVERED": "Consegnata il",
+        "RETURNED": "Rientrata il"
+      },
+      "orderStays": {
+        "PARTLY_SHIPPED_one": "L'ordine resta Spedito in parte: {count} capo non è ancora consegnato.",
+        "PARTLY_SHIPPED_other": "L'ordine resta Spedito in parte: {count} capi non sono ancora consegnati.",
+        "SHIPPED_one": "L'ordine resta Spedito: {count} capo non è ancora consegnato.",
+        "SHIPPED_other": "L'ordine resta Spedito: {count} capi non sono ancora consegnati.",
+        "other_one": "L'ordine non è ancora consegnato: {count} capo deve ancora arrivare.",
+        "other_other": "L'ordine non è ancora consegnato: {count} capi devono ancora arrivare."
+      }
     }
   },
   "move": {
@@ -501,8 +537,8 @@
     "go_other": "Sposta {count} capi",
     "mergeGo": "Unisci a {number}",
     "what": "Le prendono solo bozze dello stesso cliente, azienda e sito; le due bozze si bloccano insieme; i blocchi della destinazione si verificano per ogni ordine.",
-    "mergeWhat_one": "Si sposta {count} capo di {number}; {number} viene poi annullata «Unita a …», mai cancellata; i suoi blocchi vengono con sé. Per tornare indietro: Dividi….",
-    "mergeWhat_other": "Si spostano tutti i {count} capi di {number}; {number} viene poi annullata «Unita a …», mai cancellata; i suoi blocchi vengono con sé. Per tornare indietro: Dividi….",
+    "mergeWhat_one": "Si sposta {count} capo di {number}; {number} viene poi annullata «Unita a …», mai cancellata; i suoi blocchi vengono con sé. Per tornare indietro: Dividi…",
+    "mergeWhat_other": "Si spostano tutti i {count} capi di {number}; {number} viene poi annullata «Unita a …», mai cancellata; i suoi blocchi vengono con sé. Per tornare indietro: Dividi…",
     "to": "Sposta su",
     "into": "Unisci a",
     "target": "{number} · porta {orders}",
@@ -518,7 +554,7 @@
       "noTarget": "Nessun'altra bozza di questo cliente può prenderli: creane una con Crea spedizione…",
       "pickTarget": "Scegli la bozza che li prende.",
       "wordsLong": "Al massimo {max} caratteri.",
-      "useMerge": "Non resta nulla: usa invece Unisci a….",
+      "useMerge": "Non resta nulla: usa invece Unisci a…",
       "reasonShort": "Di' perché (almeno {min} caratteri)."
     },
     "refusal": {
@@ -526,7 +562,7 @@
       "SAME": "È la stessa spedizione.",
       "OTHER_SITE": "Quella bozza attende in un altro sito.",
       "NOTHING_TO_MOVE": "Non si può spostare nulla: ogni capo è in un cartone o ha una matricola.",
-      "NOTHING_STAYS": "Non resta nulla: usa invece Unisci a….",
+      "NOTHING_STAYS": "Non resta nulla: usa invece Unisci a…",
       "ON_HOLD_QUALITY": "Un ordine di lavoro di questi capi è bloccato dalla qualità.",
       "MERGE_PACKED": "Alcuni capi sono in cartoni o hanno matricole: prima toglili dai cartoni.",
       "MERGE_LABELLED": "Un collo ha un'etichetta del vettore: prima annulla le etichette.",

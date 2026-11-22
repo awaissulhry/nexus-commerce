@@ -13,6 +13,7 @@ import { DOOR_NAMESPACES, useDoorWords as useDepthWords } from '../../shared/doo
 import type { SplitPreview } from '../api'
 import { HAND_REASONS, handTotals, splitHeld, type SplitActions, type SplitModel } from '../model'
 import { cappedGroups, groupsOf, INTO_MAX, roomOf } from '../model' // F-OS-302
+import { splitReasonKey } from '../model' // os-fx7 (W-03): one word per reason, on Split and Move
 import '../../../shipments.css'
 import '../../shared/depth.css'
 
@@ -69,7 +70,7 @@ function Split({ model, actions }: { model: SplitModel; actions?: SplitActions }
       title={t('split.titleOf', { number: preview.number })}
       held={say(splitHeld(model, preview))}
       onGo={() => actions?.onSplit?.()}
-      goLabel={model.mode === 'rule' ? t('split.goRule', { count: rule?.shipments.length ?? 0 }) : several ? t('door.split.goInto', { count: groups.length + 1 }) : t('split.goHand', { count: totals.moving })}
+      goLabel={model.mode === 'rule' ? t('split.goRule', { count: rule?.shipments.length ?? 0 }) : t('door.split.goInto', { count: groups.length + 1 }) /* os-fx7 (W-16): "Split into 2 shipments", never "Move 0 garments" */}
       onClose={close}
       problem={say(model.problem)}
       done={done}
@@ -118,7 +119,7 @@ function Split({ model, actions }: { model: SplitModel; actions?: SplitActions }
                   <span>
                     {line.label} · {line.size}
                   </span>
-                  <span className="fw-sh-cell-sub">{t('split.lineFacts', { quantity: line.quantity, packed: line.packed, serials: line.serials })}</span>
+                  <span className="fw-sh-cell-sub fw-shd-wrap" /* os-fx7 (W-17): said whole, never cut */>{t('split.lineFacts', { quantity: line.quantity, packed: line.packed, serials: line.serials })}</span>
                 </span>,
                 <span key="d">{day(line.shipBy)}</span>,
                 <span key="s">{line.quantity - capped.reduce((sum, group) => sum + (group[line.id] ?? 0), 0)}</span>,
@@ -151,7 +152,7 @@ function Split({ model, actions }: { model: SplitModel; actions?: SplitActions }
           <fieldset className="fw-shd-choices fw-shd-choices--grid">
             <legend className="fw-sh-h3">{t('split.reason')}</legend>
             {HAND_REASONS.filter((reason) => preview.reasons.includes(reason) && (reason !== 'SHIP_TO' || model.shipToOffered)).map((reason) => (
-              <RadioCard key={reason} name="split-reason" value={reason} checked={model.reason === reason} selected={model.reason === reason} onChange={() => actions?.onReason?.(reason)} title={reason === 'SHIP_TO' ? t('door.split.reasonShipTo') : t(`splitReason.${reason}`)} />
+              <RadioCard key={reason} name="split-reason" value={reason} checked={model.reason === reason} selected={model.reason === reason} onChange={() => actions?.onReason?.(reason)} title={t(splitReasonKey(reason))} />
             ))}
           </fieldset>
           {/* F-OS-302 (X1-B4): another delivery address — one of the customer's approved ones (this shipment's own left out). */}

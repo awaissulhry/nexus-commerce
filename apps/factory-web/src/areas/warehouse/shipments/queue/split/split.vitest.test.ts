@@ -119,3 +119,29 @@ describe('every word the Split window names in the lane\'s namespace exists in i
     for (const locale of LOCALES) for (const key of keys) expect(CATALOGUE[locale]['order-shipments']?.[key], `${locale} ${key}`).toBeTruthy()
   })
 })
+
+// ── os-fx7 (30-walk W-16, W-17) ──
+describe('os-fx7: the split dialog\'s words and its line facts', () => {
+  const view = readFileSync(new URL('./view/SplitDialog.tsx', import.meta.url), 'utf8')
+  it('W-16: by hand the act says "Split into n shipments" (never "Move 0 garments"); the stray stops and the act\'s ellipsis are gone', async () => {
+    const { CATALOGUE } = await import('../../../../../lib/i18n/messages')
+    const { LOCALES } = await import('../../../../../lib/i18n/locales')
+    expect(view).toContain("t('door.split.goInto', { count: groups.length + 1 })")
+    for (const locale of LOCALES) {
+      const words = CATALOGUE[locale]['order-shipments'] ?? {}
+      expect(words['door.split.goInto'], locale).toContain('{count}')
+      for (const [key, value] of Object.entries(words)) expect(value, `${locale} ${key}`).not.toMatch(/…\.$|\.\.$/)
+      const depth = CATALOGUE[locale]['warehouse-shipments-depth'] ?? {}
+      expect(depth['holds.placeGoBare'], locale).toBeTruthy()
+      expect(depth['holds.placeGoBare'], locale).not.toContain('…')
+      expect(depth['split.goHand_one'], locale).toBeUndefined()
+    }
+    expect(readFileSync(new URL('../../holds/view/HoldsPanelView.tsx', import.meta.url), 'utf8')).toContain("t('holds.placeGoBare')")
+  })
+  it('W-17: a line\'s facts wrap in the dialog (never cut with an ellipsis); the list\'s one-line cells keep theirs', () => {
+    expect(view).toContain('className="fw-sh-cell-sub fw-shd-wrap"')
+    const css = readFileSync(new URL('../shared/depth.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-sh-cell-sub\.fw-shd-wrap \{\s*white-space: normal;/)
+  })
+})
+// ── end os-fx7 ──
