@@ -1,0 +1,13 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/file-asks.prisma (rules: src/ownership.ts; roles: src/roles.ts). B-OF-030 (order files tab, schema wave 'order files 1/1'; design order-files-2026-11-22 13-backend §1; Owner D2, D3): the office (and the API in the tenant's system context: the floor's photo that answers an ask) writes the asks for files of a sales order through apps/factory-api's sales/orders/file-asks, always with command(). The API keeps staff to the companies and customers their grants reach (the brand wall is in the API: the office role is walled by tenant only); the row carries the order's customer (partyId) and, on a work order, its site (siteId). Office only: the floor reads its team's, role's or step's open asks through the API (a system read, never a worker's name), the customer never sees an internal ask, a link reads nothing. Never deleted (the …_order_files_guards trigger, for every login). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "FileAsk": {
+      "about": "The office asks a person, an office role, a floor team, a floor role or whoever works a step for a file on one of its orders (B-OF-031), records the files sent for it, accepts it, asks again, changes, reassigns, chases or cancels it, and reads every ask of the tenant (the API scopes it by company and customer). The floor's answer is written by the API as the system. Office only: no floor, portal or link grant.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

@@ -11,6 +11,8 @@ import { addDays, chooseInvoiceType, daysBetween, deferredDeadline, immediateDea
 import { deductionProblems, planDeductions, type DepositInvoiceFacts } from './deductions'
 import { orderSettlement, type SettlementFacts } from './settlement'
 import { invoicePaymentStateOf, INVOICE_PAYMENT_STATES } from './settlement' // B-OM-023
+import { creditNotePaymentStateOf, depositInvoicePaymentStatesOf } from './settlement' // B-OM-026
+import { depositInvoicePaymentsOf } from './settlement' // B-OM-027
 import { ddtInvoiceProblems, draftGoodsLines, notInvoiced, placeWithoutDdt, type InvoicedQuantity, type OrderLinePrice, type ShippedQuantity } from './shipped'
 
 // Every company, party, VAT number, order and amount here is made up (the FatturaPA samples' fake numbers: office 000).
@@ -385,5 +387,85 @@ describe('B-OM-023: an invoice’s payment state, for a reader who sees no amoun
     expect(invoicePaymentStateOf(invoice(100_000, { creditedGross: 100_000, refunded: 100_000 }))).toBe('CREDITED')
     expect(invoicePaymentStateOf(invoice(60_000, { creditedGross: 40_000 }))).toBe('PAID')
     expect(INVOICE_PAYMENT_STATES).toEqual(['OPEN', 'PART_PAID', 'PAID', 'CREDITED', 'REFUND_DUE'])
+  })
+})
+
+// ── B-OM-026 (order money tab W-12): the deposit invoices' and credit notes' payment words, by B-OM-023's rule ──
+describe('B-OM-026: a TD02’s and a TD04’s payment state, no amount', () => {
+  const td02 = (id: string, grossTotal: number, extra: { creditedGross?: number; refunded?: number; depositRequestId?: string } = {}) => ({
+    id,
+    depositRequestId: extra.depositRequestId ?? 'r1',
+    number: `FT-${id}`,
+    status: 'DELIVERED',
+    netTotal: grossTotal,
+    grossTotal,
+    creditedNet: extra.creditedGross ?? 0,
+    creditedGross: extra.creditedGross ?? 0,
+    deductedNet: 0,
+    refunded: extra.refunded ?? 0,
+  })
+  const states = (paid: number, invoices: ReturnType<typeof td02>[]) => Object.fromEntries(depositInvoicePaymentStatesOf({ depositRequests: [{ id: 'r1', status: 'OPEN', fiscalDocument: 'TD02', amount: 50_000, paid }], depositInvoices: invoices }))
+
+  it('a TD02 of money received is paid; credited and given back: credited; credited and kept: a refund due', () => {
+    expect(states(30_000, [td02('a', 30_000)])).toEqual({ a: 'PAID' })
+    expect(states(30_000, [td02('a', 30_000, { creditedGross: 30_000, refunded: 30_000 })])).toEqual({ a: 'CREDITED' })
+    expect(states(30_000, [td02('a', 30_000, { creditedGross: 30_000 })])).toEqual({ a: 'REFUND_DUE' })
+    // Credited in part and the rest kept: what the note took back is due to the customer.
+    expect(states(30_000, [td02('a', 30_000, { creditedGross: 10_000 })])).toEqual({ a: 'REFUND_DUE' })
+    expect(states(30_000, [td02('a', 30_000, { creditedGross: 10_000, refunded: 10_000 })])).toEqual({ a: 'PAID' })
+  })
+
+  it('the request’s money goes to each TD02 in the order made: one per payment; a credited TD02 and its new one; a payment taken back', () => {
+    expect(states(50_000, [td02('a', 30_000), td02('b', 20_000)])).toEqual({ a: 'PAID', b: 'PAID' })
+    // The first credited in full, the same money invoiced again: the new one is paid, the old one credited (nothing kept on it).
+    expect(states(30_000, [td02('a', 30_000, { creditedGross: 30_000 }), td02('b', 30_000)])).toEqual({ a: 'CREDITED', b: 'PAID' })
+    // The payment it billed was taken back (the TD02 stays issued): nothing paid on it now.
+    expect(states(0, [td02('a', 30_000)])).toEqual({ a: 'OPEN' })
+    // Credited and the payment taken back: credited.
+    expect(states(0, [td02('a', 30_000, { creditedGross: 30_000 })])).toEqual({ a: 'CREDITED' })
+  })
+
+  it('a TD02 of no request read here bills the money it was issued for', () => {
+    expect(states(0, [td02('x', 30_000, { depositRequestId: 'other' })])).toEqual({ x: 'PAID' })
+  })
+
+  it('a credit note: a refund due while what it credits has one and its refunds gave back less; else credited', () => {
+    expect(creditNotePaymentStateOf({ gross: 30_000, refunded: 0 }, 'REFUND_DUE')).toBe('REFUND_DUE')
+    expect(creditNotePaymentStateOf({ gross: 30_000, refunded: 30_000 }, 'REFUND_DUE')).toBe('CREDITED')
+    expect(creditNotePaymentStateOf({ gross: 30_000, refunded: 0 }, 'CREDITED')).toBe('CREDITED')
+    expect(creditNotePaymentStateOf({ gross: 30_000, refunded: 0 }, null)).toBe('CREDITED')
+  })
+})
+
+// ── B-OM-027 / B-OM-028 (order money tab W-14, W-13): which deposit invoice was issued for which payment ──
+describe('B-OM-027: the TD02 issued for each payment, by the issuing rule', () => {
+  const pay = (allocationId: string, amount: number, depositRequestId = 'r1') => ({ allocationId, depositRequestId, amount })
+  const td02 = (id: string, gross: number, credited = 0, depositRequestId = 'r1') => ({ id, depositRequestId, gross, credited })
+  const pairs = (payments: ReturnType<typeof pay>[], invoices: ReturnType<typeof td02>[]) => {
+    const found = depositInvoicePaymentsOf(payments, invoices)
+    return { invoiceOf: Object.fromEntries(found.invoiceOf), paymentOf: Object.fromEntries(found.paymentOf) }
+  }
+
+  it('one TD02 per payment, in order; a payment not invoiced yet has none', () => {
+    expect(pairs([pay('p1', 10_000), pay('p2', 5_000)], [td02('t1', 10_000), td02('t2', 5_000)])).toEqual({ invoiceOf: { p1: 't1', p2: 't2' }, paymentOf: { t1: 'p1', t2: 'p2' } })
+    expect(pairs([pay('p1', 10_000), pay('p2', 5_000)], [td02('t1', 10_000)])).toEqual({ invoiceOf: { p1: 't1' }, paymentOf: { t1: 'p1' } })
+  })
+
+  it('one TD02 drafted by hand for two payments: both name it; it names the newest (the one that brought it about)', () => {
+    expect(pairs([pay('p1', 6_000), pay('p2', 4_000)], [td02('t1', 10_000)])).toEqual({ invoiceOf: { p1: 't1', p2: 't1' }, paymentOf: { t1: 'p2' } })
+  })
+
+  it('a TD02 credited in full holds nothing: the one issued again for the same money is the payment’s', () => {
+    expect(pairs([pay('p1', 10_000)], [td02('t1', 10_000, 10_000), td02('t2', 10_000)])).toEqual({ invoiceOf: { p1: 't2' }, paymentOf: { t2: 'p1' } })
+    expect(pairs([pay('p1', 10_000)], [td02('t1', 10_000, 10_000)])).toEqual({ invoiceOf: {}, paymentOf: {} })
+  })
+
+  it('a TD02 kept after its payment was taken back bills the next payment; a payment past it names the newest TD02', () => {
+    // p0 was taken back (not live, not given): t1 now bills p2's first 10.00, t2 the 5.00 past it.
+    expect(pairs([pay('p2', 15_000)], [td02('t1', 10_000), td02('t2', 5_000)])).toEqual({ invoiceOf: { p2: 't2' }, paymentOf: { t1: 'p2', t2: 'p2' } })
+  })
+
+  it('each request apart', () => {
+    expect(pairs([pay('p1', 10_000, 'r1'), pay('p2', 10_000, 'r2')], [td02('t2', 10_000, 0, 'r2'), td02('t1', 10_000, 0, 'r1')])).toEqual({ invoiceOf: { p1: 't1', p2: 't2' }, paymentOf: { t1: 'p1', t2: 'p2' } })
   })
 })

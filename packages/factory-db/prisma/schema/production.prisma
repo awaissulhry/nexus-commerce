@@ -287,6 +287,8 @@ model WorkOrder {
   // B-SA-005 (sales page plan, schema wave "sales page 1/1"): order-apply.prisma, the changes an accepted change of its
   // orders proposes for it (lower it to the order, make more).
   orderChanges        WorkOrderChange[]    @relation("WorkOrderChangeWorkOrder")
+  // B-OF-030 (order files tab, schema wave "order files 1/1"): file-asks.prisma, the files asked to land on it.
+  fileAsks            FileAsk[]            @relation("FileAskWorkOrder")
 
   @@unique([tenantId, companyId, number])
   @@unique([tenantId, batchNumber])
@@ -540,6 +542,8 @@ model WorkOrderOperation {
   reworkFound   ReworkOrder[]  @relation("ReworkFoundAt")
   reworkDone    ReworkOrder[]  @relation("ReworkDoneAt")
   scheduleSlots ScheduleSlot[]
+  // B-OF-030 (order files tab, schema wave "order files 1/1"): file-asks.prisma, the files asked of whoever works it.
+  fileAsks      FileAsk[]      @relation("FileAskStep")
 
   @@unique([tenantId, workOrderId, seq])
   // The target of the scans' reference: an operation of the scan's site and work order.

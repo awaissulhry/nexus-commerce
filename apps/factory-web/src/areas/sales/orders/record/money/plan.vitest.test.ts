@@ -7,7 +7,7 @@ import type { DepositRequest, Milestone, Order, Schedule } from '../../api'
 import { depositGate } from '../../model'
 import { stepAbilitiesOf, type StepAbilities } from '../schedule/model'
 import { MONEY_PLAN_ACTS, MONEY_PLAN_REFUSAL_WORDS } from '@nexus/factory-domain/sales/orders/money-plan'
-import { planOf, planRefusalOf, softLockedOf, type PlanRow } from './plan'
+import { planHistoryHref, planOf, planRefusalOf, softLockedOf, type PlanRow } from './plan'
 import { ApiError } from '../../../../../lib/api/errors'
 import { amountsOf } from './word'
 
@@ -200,8 +200,10 @@ describe('F-OM-201: the plan\'s hand acts — orders.moneyPlan (amount acts: + t
 
   it('the only open step takes the whole order: Change amount… and Remove step… held; an on-invoice step\'s day comes from the invoice', () => {
     const onlyBalance = plan(order('IN_PRODUCTION'), { schedule: SCHEDULE, moneyPlan: true }).rows[1]!
-    expect(heldOf(onlyBalance, 'CHANGE_STEP')).toEqual({ key: 'moneyTab.plan.held.onlyStep' })
-    expect(heldOf(onlyBalance, 'REMOVE_STEP')).toEqual({ key: 'moneyTab.plan.held.onlyStep' })
+    // F-OM-fx3 (W-16): the words fit the plan — the deposit is paid, so no OTHER open step takes the rest.
+    expect(heldOf(onlyBalance, 'CHANGE_STEP')).toEqual({ key: 'moneyTab.plan.held.noRest' })
+    expect(heldOf(onlyBalance, 'REMOVE_STEP')).toEqual({ key: 'moneyTab.plan.held.noRest' })
+    expect(onlyBalance.restTo).toEqual([])
     const onInvoice = { ...SCHEDULE, steps: [SCHEDULE.steps[0]!, step({ id: 'oi', kind: 'ON_INVOICE', depositRequestId: null })] }
     expect(heldOf(plan(order('SHIPPED'), { schedule: onInvoice, moneyPlan: true }).rows[1]!, 'MOVE_DUE')).toEqual({ key: 'moneyTab.plan.held.dayFromInvoice' })
   })
@@ -244,6 +246,124 @@ describe('F-OM-201: the plan\'s hand acts — orders.moneyPlan (amount acts: + t
   })
 })
 
+// ---- F-OM-fx3 (fix wave 3, the walk's W-01 / W-02 / W-03; B-OM-024, B-OM-025): a short deposit within the company's tolerance, a part
+// payment over it (never "short"), and an accepted short that leaves its trace. Every name and number is made up.
+describe('F-OM-fx3: short within the tolerance, part paid over it, accepted short', () => {
+  const PART = deposit({ link: SENT_LINK, paidAmount: 226884 })
+  const value = withRequests(order('CONFIRMED'), [PART])
+  const planned = (short: { amount?: number; withinTolerance: boolean } | null | undefined): Schedule => ({
+    ...SCHEDULE_OPEN,
+    requests: [{ id: PART.id, milestoneId: SCHEDULE.steps[0]!.id, kind: 'ACCONTO', stepKind: 'DEPOSIT', status: 'OPEN', dueDate: '2026-11-04', fiscalDocument: 'TD02', ...(short === undefined ? {} : { short }) }],
+    tolerance: 2500,
+  })
+
+  it('W-01: within the tolerance, Accept short (bank charges)… is the row\'s ONE act (Record a payment in its ⋯), with the hint and the answer', () => {
+    for (const [role, stepCan] of [['owner', OWNER_STEPS], ['finance', FINANCE_STEPS]] as const) {
+      const model = plan(value, { schedule: planned({ amount: 1500, withinTolerance: true }), role, stepCan, moneyPlan: true, stillToPay: 534396 })
+      const row = model.rows[0]!
+      expect(row.act?.id, role).toBe('ACCEPT_SHORT')
+      expect(row.more.map((entry) => entry.id), role).toContain('record')
+      expect(row.short, role).toEqual({ amount: 1500, within: true })
+      expect(row.hint, role).toEqual({ key: 'moneyTab.plan.shortHint', money: { amount: 1500 } })
+      expect(model.answer.map((entry) => entry.key), role).toContain('moneyTab.plan.answer.short')
+      expect(model.answer.find((entry) => entry.key === 'moneyTab.plan.answer.short'), role).toEqual({ key: 'moneyTab.plan.answer.short', money: { amount: 1500 } })
+    }
+    // A reader who may not accept it (no plan right): Record a payment stays the act, no Accept short anywhere.
+    const plain = plan(value, { schedule: planned({ amount: 1500, withinTolerance: true }), role: 'finance', stepCan: FINANCE_STEPS })
+    expect(acts(plain.rows[0]!)[0]).toBe('record')
+    expect(acts(plain.rows[0]!)).not.toContain('ACCEPT_SHORT')
+  })
+
+  it('W-02: over the tolerance (or not said), a part payment is "part paid", never short; Accept short only for orders.waive (the Owner)', () => {
+    for (const short of [{ amount: 1500, withinTolerance: false }, undefined, null]) {
+      const finance = plan(value, { schedule: planned(short), role: 'finance', stepCan: FINANCE_STEPS, moneyPlan: true, stillToPay: 534396 })
+      const row = finance.rows[0]!
+      expect(row.short?.within, JSON.stringify(short)).toBe(false)
+      expect(row.hint, JSON.stringify(short)).toBeNull()
+      expect(acts(row), JSON.stringify(short)).not.toContain('ACCEPT_SHORT')
+      expect(row.act?.id, JSON.stringify(short)).toBe('record')
+      expect(finance.answer.map((entry) => entry.key), JSON.stringify(short)).toContain('moneyTab.plan.answer.partPaid')
+      expect(finance.answer.map((entry) => entry.key), JSON.stringify(short)).not.toContain('moneyTab.plan.answer.short')
+      // The Owner (orders.waive) may accept it — never as the row's ONE act (a fresh code follows).
+      const owner = plan(value, { schedule: planned(short), role: 'owner', stepCan: OWNER_STEPS, moneyPlan: true }).rows[0]!
+      expect(owner.act?.id, JSON.stringify(short)).toBe('record')
+      expect(owner.more.map((entry) => entry.id), JSON.stringify(short)).toContain('ACCEPT_SHORT')
+    }
+  })
+
+  it('W-02: a reader without the price grain learns "part paid" from the plan read (no amount), never "short"', () => {
+    const words = plan(value, { schedule: planned({ withinTolerance: true }), role: 'sales', stepCan: null })
+    const row = words.rows[0]!
+    expect(row.pill.word.key).toBe('moneyTab.plan.pill.PART')
+    expect(row.short).toEqual({ amount: null, within: true })
+    expect(row.hint).toBeNull()
+    expect(words.answer).toEqual([{ key: 'moneyTab.plan.answer.partPaid' }])
+    expect(words.answer.flatMap(amountsOf)).toEqual([])
+  })
+
+  it('W-03: an accepted short tags the row "Set by hand" with who, day and reason, and says the missing part stays owed', () => {
+    const at = '2026-11-03T10:05:00.000Z'
+    const accepted = deposit({ link: SENT_LINK, status: 'PAID', paidAt: at, paidAmount: 228284 })
+    const schedule: Schedule = { ...SCHEDULE, requests: [{ id: accepted.id, milestoneId: SCHEDULE.steps[0]!.id, kind: 'ACCONTO', stepKind: 'DEPOSIT', status: 'PAID', dueDate: '2026-11-04', fiscalDocument: 'TD02', acceptedShort: { short: 100, why: 'BANK_CHARGES', reason: 'The bank kept its charges.', at, by: 'Bea Esempio' } }] }
+    const row = plan(withRequests(order('CONFIRMED'), [accepted]), { schedule }).rows[0]!
+    expect(row.byHand).toEqual({ word: { key: 'moneyTab.plan.byHand.who', words: { what: { key: 'moneyTab.plan.byHand.what.ACCEPT_SHORT' } }, params: { by: 'Bea Esempio' }, instants: { date: at } }, reason: 'The bank kept its charges.' })
+    expect(row.notes.map((note) => note.word)).toContainEqual({ key: 'moneyTab.plan.note.owedOnInvoice', money: { amount: 100 } })
+    expect(row.pill.word.key).toBe('moneyTab.plan.pill.PAID')
+    // Without the price grain: the words without the amount.
+    const words = plan(withRequests(order('CONFIRMED'), [accepted]), { schedule: { ...schedule, requests: schedule.requests!.map((request) => ({ ...request, acceptedShort: { ...request.acceptedShort!, short: undefined } })) }, role: 'sales', stepCan: null }).rows[0]!
+    expect(words.notes.map((note) => note.word)).toContainEqual({ key: 'moneyTab.plan.note.owedOnInvoiceWords' })
+    expect(words.notes.flatMap((note) => amountsOf(note.word))).toEqual([])
+  })
+})
+
+// ---- F-OM-fx3 (W-05; B-OM-029): a cancelled order owes nothing — even on an older answer that still names an open step. ----
+describe('F-OM-fx3: a cancelled order shows no money due', () => {
+  it('its open steps read "Cancelled · not owed" (no act, nothing left, never overdue); the answer says nothing is owed; paid stays paid', () => {
+    const older: Schedule = { ...SCHEDULE, stillOpen: 532896, overdue: 532896 }
+    const model = plan(order('CANCELLED'), { schedule: older, today: '2026-12-20', moneyPlan: true })
+    const [deposit_, balance] = model.rows as [PlanRow, PlanRow]
+    expect(deposit_.pill.word.key).toBe('moneyTab.plan.pill.PAID')
+    expect(balance.pill).toEqual({ word: { key: 'moneyTab.plan.pill.CANCELLED' }, tone: 'neutral' })
+    expect(balance.due).toEqual({ key: 'moneyTab.plan.due.notOwed' })
+    expect(balance.left).toBeNull()
+    expect(balance.notes).toEqual([])
+    expect(acts(balance)).toEqual([null])
+    expect(balance.done).toBe(true)
+    expect(model.answer).toEqual([{ key: 'moneyTab.plan.answer.cancelled' }])
+    expect(model.answer.flatMap(amountsOf)).toEqual([])
+    // The server's own mark (a step it cancelled) reads the same.
+    const marked: Schedule = { ...SCHEDULE, steps: SCHEDULE.steps.map((entry) => (entry.kind === 'BEFORE_SHIPPING' ? { ...entry, status: 'CANCELLED' as const } : entry)), stillOpen: 0, overdue: 0 }
+    expect(plan(order('CANCELLED'), { schedule: marked }).rows[1]!.pill.word.key).toBe('moneyTab.plan.pill.CANCELLED')
+  })
+})
+
+// ---- F-OM-fx3 (W-08): the read doors — Show in the thread (the row's newest moment), History › (the audit of the plan's hand changes) ----
+describe('F-OM-fx3: the read doors', () => {
+  it('a row knows its newest moment (a hand change, paid, the page sent, asked); History › is the audit of the order', () => {
+    const sent = plan(withRequests(order('CONFIRMED'), [deposit({ link: SENT_LINK })])).rows[0]!
+    expect(sent.showAt).toBe(SENT_LINK.sentAt)
+    const hand = { act: 'MOVE_DUE', at: '2026-11-18T10:44:00.000Z', by: 'Bea Esempio', reason: 'The customer pays before the fair.' }
+    const moved = plan(order('CONFIRMED'), { schedule: { ...SCHEDULE_OPEN, steps: SCHEDULE_OPEN.steps.map((entry) => (entry.kind === 'BEFORE_SHIPPING' ? { ...entry, byHand: hand } : entry)) } }).rows[1]!
+    expect(moved.showAt).toBe(hand.at)
+    // A step with nothing behind it yet: no moment, no door.
+    expect(plan(order('CONFIRMED')).rows[1]!.showAt).toBeNull()
+    expect(planHistoryHref('/w/DEMO', 'o-1')).toBe('/w/DEMO/admin/audit?type=SalesOrder&record=o-1')
+  })
+})
+
+// ---- F-OM-fx3 (W-15): a deposit replaced by hand was asked by hand, never "when the customer accepted the quote" ----
+describe('F-OM-fx3: asked by hand', () => {
+  it('a request made by a hand change (the step\'s or the request\'s own audit) says so; a quote\'s deposit does not', () => {
+    const replaced = deposit({ id: 'new-1', depositPct: '25', amount: 190320 })
+    const hand = { act: 'REPLACE_DEPOSIT', at: '2026-11-18T09:30:00.000Z', by: 'Bea Esempio', reason: 'The customer asked to pay 25 % first.' }
+    const schedule: Schedule = { ...SCHEDULE_OPEN, steps: SCHEDULE_OPEN.steps.map((entry) => (entry.kind === 'DEPOSIT' ? { ...entry, depositRequestId: 'new-1', byHand: hand } : entry)) }
+    expect(plan(withRequests(order('CONFIRMED'), [replaced]), { schedule }).rows[0]!.askedByHand).toBe(true)
+    expect(plan(order('CONFIRMED')).rows[0]!.askedByHand).toBe(false)
+    const asked: Schedule = { ...SCHEDULE_OPEN, requests: [{ id: deposit().id, milestoneId: SCHEDULE.steps[0]!.id, kind: 'ACCONTO', stepKind: 'DEPOSIT', status: 'OPEN', dueDate: '2026-11-04', fiscalDocument: 'TD02', byHand: { ...hand, act: 'ASK_AGAIN' } }] }
+    expect(plan(order('CONFIRMED'), { schedule: asked }).rows[0]!.askedByHand).toBe(true)
+  })
+})
+
 describe('F-OM-103: the head\'s answer', () => {
   it('still open · overdue · next (price); the plan read\'s figures first, else Totals\' one rule', () => {
     const answer = plan(order('CONFIRMED'), { stillToPay: 761280 }).answer
@@ -263,7 +383,8 @@ describe('F-OM-103: the head\'s answer', () => {
     expect(plan(withRequests(order('CONFIRMED', { depositRequired: false }), []), { schedule: SCHEDULE_NONE }).answer).toEqual([{ key: 'moneyTab.plan.answer.none' }])
     const allPaid = { ...SCHEDULE, steps: SCHEDULE.steps.map((entry) => ({ ...entry, status: 'PAID' as const })) }
     expect(plan(order('SHIPPED'), { schedule: allPaid }).answer).toEqual([{ key: 'moneyTab.plan.answer.allPaid' }])
-    expect(plan(order('CLOSED'), { schedule: allPaid }).answer).toEqual([{ key: 'moneyTab.plan.answer.allPaid' }, { key: 'moneyTab.plan.answer.final' }])
+    // F-OM-fx3 (W-20): a closed order's "its plan no longer changes" is the tab head's, said once — not again in the answer.
+    expect(plan(order('CLOSED'), { schedule: allPaid }).answer).toEqual([{ key: 'moneyTab.plan.answer.allPaid' }])
   })
 })
 
@@ -291,14 +412,15 @@ describe('F-OM-103: the words', () => {
   it('exist in both languages (every kind, pill, due, note, act, hand act, next and answer)', () => {
     const keys = [
       ...['DEPOSIT', 'EXTRA', 'BEFORE_SHIPPING', 'ON_INVOICE', 'ON_DELIVERY'].flatMap((kind) => [`kind.${kind}`, `next.${kind}`]),
-      ...['OPEN', 'PART', 'PAID', 'WAIVED', 'OVERDUE', 'NOT_ASKED'].map((pill) => `pill.${pill}`),
-      ...['waived', 'paidWithInvoices', 'paidOn', 'paid', 'asInvoice', 'onDelivery', 'overdueSince', 'on', 'beforeGoodsLeave', 'withInvoice'].map((due) => `due.${due}`),
-      ...['productionWaits', 'extraWaits', 'holdsShipment', 'paidWithInvoice'].map((note) => `note.${note}`),
+      ...['OPEN', 'PART', 'PAID', 'WAIVED', 'OVERDUE', 'NOT_ASKED', 'CANCELLED' /* F-OM-fx3 */].map((pill) => `pill.${pill}`),
+      ...['waived', 'paidWithInvoices', 'paidOn', 'paid', 'asInvoice', 'onDelivery', 'overdueSince', 'on', 'beforeGoodsLeave', 'withInvoice', 'notOwed' /* F-OM-fx3 */].map((due) => `due.${due}`),
+      ...['productionWaits', 'extraWaits', 'holdsShipment', 'paidWithInvoice', 'owedOnInvoice', 'owedOnInvoiceWords' /* F-OM-fx3 */].map((note) => `note.${note}`),
       ...['send', 'sendAgain', 'payInvoice', 'waive', ...MONEY_PLAN_ACTS].map((act) => `act.${act}`),
-      ...['moneyPlaced', 'onlyStep', 'dayFromInvoice', 'final', 'nothingFree'].map((held) => `held.${held}`),
+      ...['moneyPlaced', 'noRest' /* F-OM-fx3 (W-16) */, 'dayFromInvoice', 'final', 'nothingFree'].map((held) => `held.${held}`),
       ...[...MONEY_PLAN_ACTS, 'OTHER'].map((act) => `byHand.what.${act}`),
-      ...['none', 'allPaid', 'final', 'stillOpen', 'overdue', 'nextDue', 'next'].map((answer) => `answer.${answer}`),
-      ...['earlier.step', 'earlier.replaced', 'earlier.cancelled', 'setByHand', 'fromChange', 'fold', 'unfold', 'more', 'menu.openInvoice', 'step.page', 'step.byChange', 'step.issued', 'payments.title', 'payments.none', 'payments.ref', 'payments.paidSoFar'],
+      ...['none', 'allPaid', 'stillOpen', 'overdue', 'nextDue', 'next', 'short', 'partPaid', 'cancelled' /* F-OM-fx3 */].map((answer) => `answer.${answer}`),
+      'shortHint', // F-OM-fx3 (W-01)
+      ...['earlier.step', 'earlier.replaced', 'earlier.cancelled', 'setByHand', 'fromChange', 'fold', 'unfold', 'more', 'menu.openInvoice', 'step.page', 'step.byChange', 'step.issued', 'step.paid', 'step.byHand' /* F-OM-fx3 (W-15) */, 'payments.title', 'payments.none', 'payments.ref', 'payments.paidSoFar'],
     ]
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)

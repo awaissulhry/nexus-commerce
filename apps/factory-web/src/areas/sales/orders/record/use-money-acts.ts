@@ -49,9 +49,11 @@ export function useMoneyActs(
     readonly prefix: string
     /** F-OM-301 / 302: Money's own reads that a write here changes (the price check, the margin): read again after it. */
     readonly rereads?: { readonly priceCheck?: () => void; readonly margin?: () => void }
+    /** F-OM-fx3 (W-11): the signed-in person's name, for the hand windows' who line ("Saved as …"). */
+    readonly me?: string | null
   },
 ): { model: MoneyActsModel; actions: MoneyActsActions; opened: (next: RecordDialog | null) => void } {
-  const { api, orderId, current, write, setNotice, loadParts, permissions, sdi, setSdi, stepUp, onInvoiced, order, prefix, rereads } = input
+  const { api, orderId, current, write, setNotice, loadParts, permissions, sdi, setSdi, stepUp, onInvoiced, order, prefix, rereads, me } = input
   const { ensureFresh, guard } = stepUp
   const [sentLink, setSentLink] = useState<DepositLinkAnswer | null>(null)
   const [recorded, setRecorded] = useState<DepositReceived | null>(null)
@@ -253,7 +255,7 @@ export function useMoneyActs(
   }
 
   return {
-    model: { sentLink, recorded, scheduleSteps: scheduleSteps.model, moneyPlan: { preview, refused, terms, contacts, lockAsked, invoiceShipped } },
+    model: { sentLink, recorded, scheduleSteps: scheduleSteps.model, moneyPlan: { preview, refused, terms, contacts, lockAsked, invoiceShipped, me: me ?? null /* F-OM-fx3 (W-11) */ } },
     actions,
     // A dialog opens or closes: the page sent and the payment recorded by the last one are not said again.
     // F-OM-201 / 202: nor its preview, refusal or locked month; the window that needs a list reads it as it opens.

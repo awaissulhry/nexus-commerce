@@ -9,17 +9,16 @@ import { useDsWords } from '../../../../../../lib/i18n/ds-parts'
 import { formatNumber } from '../../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../../record-panels/i18n'
-import { pctText } from '../../../../../finance/costing/model'
 import type { OrderMargin } from '../../../../../finance/margins/api'
 import { MARGINS_NAMESPACE, orderProfitabilityHref } from '../../../../../finance/margins/model'
-import { MarginLines, Waterfall, WorkOrderShares } from '../../../../../finance/margins/view/parts'
+import { MarginLines, WorkOrderShares } from '../../../../../finance/margins/view/parts'
 import { money } from '../../../../quotes/model'
 import type { Order } from '../../../api'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { LineMenuButton } from '../../view/LineMenu'
 import { PartFailed, PartReading, Section } from '../../view/production/Kit' // F-OM-101 (L6): the Production kit, in place
 import { marginOf, type MarginView } from '../margin'
-import { lineOf, useSay, type Say } from './say'
+import { lineOf, pctOf, useSay, type Say } from './say'
 
 type Fold = 'lines' | 'workOrders' | 'why'
 
@@ -29,7 +28,8 @@ type Fold = 'lines' | 'workOrders' | 'why'
  * else the floor; the cost lines set by hand (+ Put back); the pair Where it went | From the price to the margin (freight counted);
  * the folds By line · Work orders behind the cost · Why these figures; the doors Set a cost by hand… · Set target… · ⋯ Open in Finance ›
  * Margins ›. HIDDEN without the margin grain (or costing.view); amounts and the bridge also need the cost grain. Finance's own parts
- * (the waterfall, by line, the work orders) are drawn in place, in Finance's words. Draws its model; the container (use-margin) reads.
+ * (by line, the work orders) are drawn in place, in Finance's words; F-OM-fx3 (W-10): Where it went is the page's own, in points. Draws
+ * its model; the container (use-margin) reads.
  */
 export function MarginSection({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
@@ -85,14 +85,15 @@ function Filled({ order, model, actions, detail, title, info }: { order: Order; 
     ) : null,
   ].filter((button) => button !== null)
   const items: MenuItemDef[] = [{ id: 'finance', label: t('moneyTab.margin.finance'), href: view.finance }]
-  const pct = (value: number) => pctText(String(value), locale)
+  const pct = (value: number) => pctOf(value, locale) // F-OM-fx3 (W-19): the page's one percent format
 
   return (
     <Section id="margin" title={title} answer={lineOf(view.answer.map(say))} buttons={buttons} more={<LineMenuButton label={t('moneyTab.margin.more')} items={items} />} info={info}>
       <div className="fw-om-mg">
         <MetricStrip minTileWidth={150} metrics={view.tiles.map((tile) => ({ label: say(tile.label), value: <span className={tile.tone ? `fw-om-mg-v is-${tile.tone}` : undefined}>{say(tile.value)}</span>, hint: tile.points !== undefined ? t('moneyTab.margin.tile.points', { points: signedPoints(tile.points, locale) }) : tile.hint ? say(tile.hint) : undefined }))} />
         <div className="fw-om-mg-m">
-          <MarginMeter value={view.meter.now} floor={view.meter.floor} target={view.meter.target} allowed={marginCan.margin} format={pct} labels={ds.marginMeter} label={t('moneyTab.margin.meter.label')} />
+          {/* F-OM-fx3 (W-09): the bar and the margin now (its sentence is its name); the ONE line under it says the rest, once. */}
+          <MarginMeter size="mini" value={view.meter.now} floor={view.meter.floor} target={view.meter.target} allowed={marginCan.margin} format={pct} labels={ds.marginMeter} label={t('moneyTab.margin.meter.label')} />
           {view.meter.words.length > 0 ? <p className="fw-om-mg-ml">{lineOf(view.meter.words.map(say))}</p> : null}
         </div>
         {view.hand && view.hand.length > 0 ? <HandList view={view} currency={detail.currency} say={say} actions={actions} /> : null}
@@ -101,9 +102,8 @@ function Filled({ order, model, actions, detail, title, info }: { order: Order; 
             <h3 className="fw-pt-h3">
               <TrendingDown size={14} aria-hidden /> {t('moneyTab.margin.where')}
             </h3>
-            <WithMessages namespaces={[MARGINS_NAMESPACE]}>
-              <Waterfall detail={detail} can={marginCan} prefix={model.prefix} />
-            </WithMessages>
+            {/* F-OM-fx3 (W-10): in points and the page's words (At quote → Materials · Making (CMT) · … → Now). */}
+            {view.where ? view.where.length > 0 ? <Where rows={view.where} say={say} /> : <p className="fw-pt-quiet">{t('moneyTab.margin.whereNone')}</p> : <p className="fw-pt-quiet">{t('moneyTab.margin.bridge.noCost')}</p>}
           </div>
           <div className="fw-om-mg-h">
             <h3 className="fw-pt-h3">
@@ -178,6 +178,24 @@ function HandList({ view, currency, say, actions }: { view: MarginView; currency
   )
 }
 
+/** F-OM-fx3 (W-10): Where it went — At quote, each part that moved in points (signed), Now. */
+function Where({ rows, say }: { rows: NonNullable<MarginView['where']>; say: Say }) {
+  const t = useT('orders')
+  const locale = useLocale()
+  return (
+    <table className="fw-om-adds fw-om-mg-br">
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.id} className={row.kind === 'end' ? 'is-sum' : undefined}>
+            <td>{say(row.label)}</td>
+            <td className="fw-om-r">{row.pct !== undefined ? pctOf(row.pct, locale) : row.points !== undefined ? t('moneyTab.margin.whereRow.points', { points: signedPoints(row.points, locale) }) : ''}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
 /** From the price to the margin: price − each part − freight − the lines set by hand = margin (each amount the cost grain). */
 function Bridge({ rows, detail, say }: { rows: NonNullable<MarginView['bridge']>; detail: OrderMargin; say: Say }) {
   const locale = useLocale()
@@ -198,7 +216,7 @@ function Bridge({ rows, detail, say }: { rows: NonNullable<MarginView['bridge']>
               ) : null}
             </td>
             <td className="fw-om-r">
-              {row.kind === 'margin' && detail.estimateMarginPct ? `${amount(row.amount)} · ${pctText(detail.estimateMarginPct, locale)}` : amount(row.amount)}
+              {row.kind === 'margin' && detail.estimateMarginPct ? `${amount(row.amount)} · ${pctOf(detail.estimateMarginPct, locale)}` : amount(row.amount)}
             </td>
           </tr>
         ))}

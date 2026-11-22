@@ -396,6 +396,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     order: ready,
     prefix,
     rereads: { priceCheck: priceCheck.actions.onRetry, margin: margin.retry }, // F-OM-301 / 302
+    me: session.user.displayName, // F-OM-fx3 (W-11): the hand windows' who line
   })
   // ---- end F-OP-134
 
