@@ -208,6 +208,8 @@ model Team {
   // to it.
   requestRoutingRules  RequestRoutingRule[] @relation("RequestRoutingRuleTeam")
   maintenanceRequests  MaintenanceRequest[] @relation("MaintenanceRequestRoutedTeam")
+  // B-OF-030 (order files tab, schema wave "order files 1/1"): file-asks.prisma, the files asked of it (a floor team).
+  fileAsks             FileAsk[]            @relation("FileAskTeam")
 
   @@unique([tenantId, siteId, code])
   // The target of the members' and loans' tenant- and site-safe references.

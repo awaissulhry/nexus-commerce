@@ -63,6 +63,8 @@ model Role {
   approvalTasks ApprovalTask[] @relation("ApprovalTaskApproverRole")
   // W2b quality.prisma (wave 11/16): the quality alert rules that tell them.
   qualityAlertRules QualityAlertRule[]
+  // B-OF-030 (order files tab, schema wave "order files 1/1"): file-asks.prisma, the files asked of its holders.
+  fileAsks          FileAsk[]          @relation("FileAskRole")
 
   @@unique([tenantId, key])
   // The target of the tenant-safe references from the assignments.

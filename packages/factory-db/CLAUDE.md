@@ -660,7 +660,12 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    equal to it while it stands),
    `…_order_money_guards` (order money B-OM-019, schema wave 'order money 1/1': the NEW `OrderPriceAcceptance` (no row on a
    CLOSED or CANCELLED order, insert-only except its withdraw fields once, never deleted) and `OrderCostLine` (append-only except
-   its remove fields once, never deleted), and `SalesOrder.targetMarginPct` allowed on an open order):
+   its remove fields once, never deleted), and `SalesOrder.targetMarginPct` allowed on an open order),
+   `…_order_files_guards` (order files B-OF-030, schema wave 'order files 1/1': the NEW `FileAsk`, an ask for a file on one sales
+   order (`factory_file_ask_guard`: never deleted; born OPEN; the order's company and customer, none on a CLOSED or CANCELLED order;
+   the order, a line of it or a work order of it (and a step); exactly one addressee of its kind; the floor only on a work order,
+   never priced or body data; OPEN → ARRIVED → ACCEPTED, ARRIVED → OPEN asked again, → CANCELLED; the files of the record it lands
+   on, accepted only AVAILABLE; no earlier function redefined, nothing old reads it)):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

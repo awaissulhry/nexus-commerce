@@ -171,6 +171,10 @@ model User {
   counteredChangeRequests  OrderChangeRequest[] @relation("OrderChangeRequestCounteredBy")
   approvalsDecidedForParty ApprovalRequest[]    @relation("ApprovalRequestDecidedForParty")
   approvalsReversed        ApprovalRequest[]    @relation("ApprovalRequestReversedBy")
+  // B-OF-030 file-asks.prisma (order files tab, schema wave "order files 1/1"): the files asked of them and the asks they made
+  // (an office person).
+  fileAsksAddressed        FileAsk[]            @relation("FileAskAddresseeUser")
+  fileAsksAsked            FileAsk[]            @relation("FileAskAskedBy")
 
   @@unique([tenantId, email])
   // The target of the tenant-safe references from the auth rows.
