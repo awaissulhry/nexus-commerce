@@ -462,3 +462,27 @@ describe('B-SA-070 the production columns (production=true)', { timeout: SLOW_TE
   })
 })
 // ── end B-SA-070 ──
+
+// ── B-OM-002 (order money tab M1-B3, B9): ONE still-to-pay rule — the row, the order read's `money`; a cancelled order owes 0 ──
+// (last in the file: its cancelled copy of an order is no row of the cases above)
+describe('B-OM-002 the order read says the row\'s still to pay; a cancelled order owes nothing', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('the Owner reads the same paid and still to pay on the order as on its row; the real Sales and Planner templates read no money', async () => {
+    const row = await rowOf('owner', 'SEED-SO-0001')
+    const read = (await ok('owner', 'GET', `/sales/orders/${order1}`)).order
+    expect(read.money).toMatchObject({ stillToPay: row.balance, paid: row.paid })
+    expect(read.money.depositsPaid).toBeGreaterThan(0)
+    expect((await ok('limited', 'GET', `/sales/orders/${orderB}`)).order).not.toHaveProperty('money')
+    expect((await ok('planner', 'GET', `/sales/orders/${order1}`)).order).not.toHaveProperty('money')
+  })
+
+  it('a cancelled order: still to pay 0 on its row and in its read (before: its whole gross for ever)', async () => {
+    const cancelled = await copyOrder('T059-A-CX', partyA, dayPlus(20))
+    const before = await rowOf('owner', 'T059-A-CX')
+    expect(before.balance).toBeGreaterThan(0)
+    const order = (await ok('owner', 'GET', `/sales/orders/${cancelled}`)).order
+    await ok('owner', 'POST', `/sales/orders/${cancelled}/cancel`, { version: order.version, reason: 'Made-up: the customer stopped the line.' })
+    expect((await rowOf('owner', 'T059-A-CX')).balance).toBe(0)
+    expect((await ok('owner', 'GET', `/sales/orders/${cancelled}`)).order.money).toMatchObject({ stillToPay: 0, paid: 0 })
+  })
+})
+// ── end B-OM-002 ──

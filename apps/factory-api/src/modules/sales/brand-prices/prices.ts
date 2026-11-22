@@ -1,4 +1,7 @@
 import { ConflictError, ForbiddenError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+// B-OM-006 (order money tab M2-S2): each line's price source, from the waterfall the order keeps.
+import { orderPriceSourceOf } from '@nexus/factory-domain/sales/price-waterfall/rules'
+import { storedSteps } from '../price-waterfall/quote-price'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
@@ -96,7 +99,7 @@ async function pricedOrder(caller: CommandCaller, orderId: string, permission: P
 
 // ---- the read -----------------------------------------------------------------------------------------------------------------
 
-const LINE_COLUMNS = { id: true, seq: true, styleId: true, colourwayId: true, description: true, quantity: true, unitPrice: true, netAmount: true, quoteLineId: true /* B-CP-076 */ } as const
+const LINE_COLUMNS = { id: true, seq: true, styleId: true, colourwayId: true, description: true, quantity: true, unitPrice: true, netAmount: true, quoteLineId: true /* B-CP-076 */, priceSteps: true /* B-OM-006 */ } as const
 
 // ---- B-CP-076 (lead, 11-19; review E3): the take-over pairs a request line with an order line ONLY through the accept's line map ---
 /**
@@ -225,6 +228,8 @@ async function priceCheckView(db: Reader, context: OfficeContext, order: OrderRo
         priceMatch: result.priceMatch,
         priceDiff: result.priceDiff,
         row: rowView(byLine.get(line.id)),
+        // B-OM-006 (order money tab M2-S2): from the price list, set by hand, or changed since the quote (no waterfall kept).
+        ourPriceSource: orderPriceSourceOf(storedSteps(line.priceSteps)),
       }
     }),
     total: { ...check.total, row: rowView(totalRow) },

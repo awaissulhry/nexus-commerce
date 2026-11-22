@@ -15,6 +15,8 @@ import { lockMoney } from '../locks'
 import { refundedOf } from '../refunds'
 import { allocatedOf, officeContextOf, officePayment, readPayment, type Reader } from '../store'
 import { overpaymentWrittenOff, toleranceOf, underpaymentWrittenOff } from './sums'
+// B-OM-001 (order money tab M1-B1): a write-off on an invoice and its reversal settle (or unsettle) its orders.
+import { ordersOfInvoices, settleOrders } from '../../invoicing/from-shipment/settlement'
 
 /**
  * Small differences written off (B-W2b-393; FIN-119; design finance.payments rec allocation "small difference → write-off
@@ -36,6 +38,8 @@ import { overpaymentWrittenOff, toleranceOf, underpaymentWrittenOff } from './su
  *
  * Under the money locks (payment, then the invoice), every sum read under them; refusals 409 `writeOff/<CODE>` in words
  * (factory-domain write-offs). Accepting a bank line writes off at matching through writeOffInCommand (matching/accept.ts).
+ * B-OM-001: an UNDERPAYMENT write-off (or its reversal) ends with `settleOrders` of the invoice's orders (their 'order' locks,
+ * taken last): the order's settlement counts what is written off, so a € 15 short invoice settles its order.
  */
 
 const refused = (code: WriteOffRefusal): DomainError => new DomainError('conflict', WRITE_OFF_REFUSAL_WORDS[code], [{ path: `writeOff/${code}`, message: WRITE_OFF_REFUSAL_WORDS[code] }])
@@ -162,6 +166,7 @@ export async function writeOffPayment(caller: CommandCaller, paymentId: string, 
     const problem = writeOffProblem({ amount, tolerance, reason: body.reason, note })
     if (problem) throw refused(problem)
     const id = await writeOffInCommand(tools, { companyId: current.companyId, partyId: current.partyId, paymentId: current.id, kind: body.kind, allocationId: body.allocationId ?? null, invoiceId, amount, reason: body.reason, note, tolerance: tolerance! })
+    if (invoiceId) await settleOrders(tools, await ordersOfInvoices(tx, [invoiceId])) // B-OM-001
     return { writeOffId: id, paymentId: current.id, kind: body.kind, amount: asMoney('price', amount) }
   })
   return result
@@ -178,6 +183,7 @@ export async function reverseWriteOff(caller: CommandCaller, paymentId: string, 
     if (!original) throw new NotFoundError('Write-off not found.')
     if (original.allocation?.invoiceId) await lockMoney(tools.tx, tools.context, 'invoice', original.allocation.invoiceId)
     const id = await reverseWriteOffInCommand(tools, original.id, note)
+    if (original.allocation?.invoiceId) await settleOrders(tools, await ordersOfInvoices(tools.tx, [original.allocation.invoiceId])) // B-OM-001
     return { writeOffId: id, reversalOfId: original.id, paymentId: payment.id }
   })
   return result

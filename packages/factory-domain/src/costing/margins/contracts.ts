@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { businessDate, id, input, output } from '../../core/contracts'
-import { money } from '../../money/marked'
+import { money, notMoney } from '../../money/marked'
 import { WORK_ORDER_KINDS, WORK_ORDER_STATUSES } from '../../production/work-orders/machine'
 import { SALES_ORDER_STATUSES } from '../../sales/orders/orders'
 import { COSTING_METHODS } from '../ledger/entries'
@@ -127,12 +127,14 @@ const partsView = output({
   adjustment: money.cost(z.number().int()),
 })
 
-/** price − material − labour − subcontract − overhead − adjustment = margin, at one stage. */
+/** price − material − labour − subcontract − overhead − adjustment (− freight, B-OM-007) = margin, at one stage. */
 const stageView = output({
   value: money.price(z.number().int()),
   cost: money.cost(z.number().int().nullable()),
   parts: partsView.nullable(),
   ...figure,
+  /** B-OM-007 (order money tab M6-B3): now and so far, the freight counted in `cost` (the carriers' charges of its shipments); absent at quote. */
+  freight: money.cost(z.number().int().nullable()),
 })
 
 export const orderMarginView = orderMarginRowView.extend({
@@ -143,8 +145,14 @@ export const orderMarginView = orderMarginRowView.extend({
   waterfall: z.array(output({ reason: z.enum(WATERFALL_REASONS), amount: money.margin(z.number().int()) })).nullable(),
   /** The leather in the cost: at quote (the cost sheet's) and issued so far (the ledger's). */
   leather: output({ quoted: money.cost(z.number().int().nullable()), actual: money.cost(z.number().int()) }),
-  /** No freight cost is recorded on an order yet: the margin leaves it out. */
+  /**
+   * B-OM-007 (order money tab M6-B3): the freight counted now and so far — what the carriers charged us for the order's shipments
+   * (not cancelled; a shipment of several orders shared by the pieces each carries), in the order's currency (one in another
+   * currency is left out, said in the words); null: none recorded yet.
+   */
   freight: output({ cost: money.cost(z.number().int().nullable()), words: z.string() }),
+  /** B-OM-007 (M6-B8): what the quoted cost was based on — the cost sheet revision and the day the quote line was costed; null: no cost sheet behind it. */
+  basedOn: output({ pricedOn: notMoney(businessDate().nullable()), revision: z.number().int().nullable() }).nullable(),
   /**
    * B-SA-043 (sales page plan R1; review P6-4): the pieces cut beyond what the order now wants (a change lowered it after cutting):
    * how many per line and size, and their share of the actual cost (by garments) — named here, never hidden in the margin.

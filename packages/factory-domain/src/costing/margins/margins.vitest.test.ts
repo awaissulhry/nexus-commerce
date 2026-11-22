@@ -95,4 +95,15 @@ describe('the margin', () => {
     const nowMargin = now.value - totalOf(now.parts)
     expect(quotedMargin + steps.reduce((sum, step) => sum + step.amount, 0)).toBe(nowMargin)
   })
+
+  // B-OM-007 (order money tab M6-B3): the freight counted now is its own last step; none, no step.
+  it('the freight counted now is the last step, and the steps still add up', () => {
+    const quoted = { value: 504_000, parts: parts(277_800, 82_800) }
+    const now = { value: 504_000, parts: parts(277_800, 82_800), freight: 1_850 }
+    const steps = waterfallOf(quoted, now)
+    expect(steps.at(-1)).toEqual({ reason: 'FREIGHT', amount: -1_850 })
+    expect(steps).toHaveLength(7)
+    expect(quoted.value - totalOf(quoted.parts) + steps.reduce((sum, step) => sum + step.amount, 0)).toBe(now.value - totalOf(now.parts) - now.freight)
+    expect(waterfallOf(quoted, { ...now, freight: 0 })).toHaveLength(6)
+  })
 })

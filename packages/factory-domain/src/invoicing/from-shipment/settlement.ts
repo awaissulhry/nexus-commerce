@@ -15,8 +15,9 @@ import { amountText, DOC_TYPE_WORDS, type InvoiceDocType } from '../invoices'
  *                is a valid invoice in the customer's tax drawer; B-W1-50) — never on ISSUED alone;
  *   deposits     every issued TD02 deducted in full on the order's invoices (less its credit notes), and no deposit
  *                paid without its deposit invoice when its request asks for one;
- *   money        the balance (the invoices' gross less their credit notes less what is paid on them, less the deposits
- *                paid on requests that issue no TD02) is 0, and no refund is due (a credit note on a paid invoice
+ *   money        the balance (the invoices' gross less their credit notes less what is paid on them, less the small
+ *                differences written off on them — B-OM-001 — less the deposits paid on requests that issue no TD02) is 0,
+ *                and no refund is due (a credit note on a paid invoice
  *                leaves a refund due until it is refunded — B-W2a-61: a PAID refund of its credit notes gives the money
  *                back — or the excess is carried to the customer's credit balance).
  * A CANCELLED order is never settled. Each missing piece is said in words (`missing`), with a code.
@@ -46,6 +47,9 @@ export interface SettlementInvoice {
   readonly paid: MinorUnits
   /** B-W2a-61: what PAID refunds of its credit notes gave back (0 when absent). */
   readonly refunded?: MinorUnits
+  // B-OM-001 (order money tab M1-B1): a small difference written off counts — the invoice is no longer open for it.
+  /** The UNDERPAYMENT write-offs still standing on its allocations (payments write-offs; 0 when absent). `paid` stays money received. */
+  readonly writtenOff?: MinorUnits
 }
 
 export interface SettlementDepositInvoice {
@@ -113,6 +117,8 @@ export interface OrderSettlement {
     readonly depositsPaidWithoutInvoice: MinorUnits
     readonly balanceDue: MinorUnits
     readonly refundDue: MinorUnits
+    /** B-OM-001: the small differences written off on the invoices (still standing). */
+    readonly writtenOff: MinorUnits
   }
 }
 
@@ -208,7 +214,8 @@ export function orderSettlement(facts: SettlementFacts): OrderSettlement {
 
   // The balance.
   const invoices = facts.invoices.map((invoice) => {
-    const open = invoice.grossTotal - invoice.creditedGross - (invoice.paid - (invoice.refunded ?? 0))
+    // B-OM-001: less the small differences written off on it.
+    const open = invoice.grossTotal - invoice.creditedGross - (invoice.paid - (invoice.refunded ?? 0)) - (invoice.writtenOff ?? 0)
     return { ...invoice, open: Math.max(0, open), refundDue: Math.max(0, -open) }
   })
   const openSum = invoices.reduce((sum, invoice) => sum + invoice.open, 0)
@@ -233,6 +240,7 @@ export function orderSettlement(facts: SettlementFacts): OrderSettlement {
       depositsPaidWithoutInvoice,
       balanceDue,
       refundDue,
+      writtenOff: facts.invoices.reduce((sum, invoice) => sum + (invoice.writtenOff ?? 0), 0), // B-OM-001
     },
   }
 }

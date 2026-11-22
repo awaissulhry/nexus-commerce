@@ -8,6 +8,8 @@ import { PRIORITY_WORDS, type SalesOrderPriorityLevel } from '@nexus/factory-dom
 import { cutCountsOf } from '../../production/cutting/views'
 import { scanProgressOf } from '../../production/scans/progress'
 import { orderCustomerUrgency, type CustomerUrgency } from './customer-urgency'
+// B-OM-001 (order money tab M1-B1): the small differences written off on the invoices count.
+import { underpaymentsWrittenOff } from '../../payments/write-offs/sums'
 import type { Reader } from './store'
 import { riskRulesOf } from './view-facts'
 
@@ -184,6 +186,7 @@ export interface OrderInvoiceShare extends OrderMoneyInvoice {
  * order line each bills (the share of each order) and its credit notes' gross; the PAID refunds of those credit notes and of the
  * deposit invoices' credit notes. `lines`: every line of these orders. The list's later columns and the order page's settlement
  * (invoicing/from-shipment settlement.ts) ask this one reading, so a row and its page say the same paid and balance.
+ * B-OM-001: + per invoice the UNDERPAYMENT write-offs still standing on its allocations (payments write-offs sums, one query).
  */
 export async function orderMoneyFactsOf(client: Reader, orderIds: readonly string[], lines: readonly MoneyLine[]) {
   const orderOfLine = new Map(lines.map((line) => [line.id, line.orderId]))
@@ -199,6 +202,7 @@ export async function orderMoneyFactsOf(client: Reader, orderIds: readonly strin
   const invoiceIds = invoices.map((invoice) => invoice.id)
   const billing = invoiceIds.length > 0 ? await client.invoiceLine.findMany({ where: { invoiceId: { in: invoiceIds }, salesOrderLineId: { not: null } }, select: { invoiceId: true, salesOrderLineId: true, netAmount: true } }) : []
   const onInvoices = invoiceIds.length > 0 ? await client.paymentAllocation.groupBy({ by: ['invoiceId'], where: { invoiceId: { in: invoiceIds } }, _sum: { amount: true } }) : []
+  const writtenOffOn = await underpaymentsWrittenOff(client, invoiceIds) // B-OM-001
   const depositInvoices = requestIds.length > 0 ? await client.invoice.findMany({ where: { docType: 'TD02', status: { not: 'DRAFT' }, depositRequestId: { in: requestIds } }, select: { id: true, depositRequestId: true } }) : []
   const credited = [...invoiceIds, ...depositInvoices.map((invoice) => invoice.id)]
   const credits = credited.length > 0 ? await client.invoice.findMany({ where: { docType: 'TD04', status: { not: 'DRAFT' }, creditOfId: { in: credited } }, select: { id: true, creditOfId: true, grossTotal: true } }) : []
@@ -227,21 +231,22 @@ export async function orderMoneyFactsOf(client: Reader, orderIds: readonly strin
       if (orderId) partOf.set(orderId, (partOf.get(orderId) ?? 0) + line.netAmount)
     }
     const theirs = creditsOf(invoice.id)
-    return { id: invoice.id, salesOrderId: invoice.salesOrderId, grossTotal: invoice.grossTotal, whole, partOf, placed: placedOn.get(invoice.id) ?? 0, creditedGross: sumOf(theirs, (credit) => credit.grossTotal), refunded: sumOf(theirs, (credit) => refundOf.get(credit.id) ?? 0) }
+    return { id: invoice.id, salesOrderId: invoice.salesOrderId, grossTotal: invoice.grossTotal, whole, partOf, placed: placedOn.get(invoice.id) ?? 0, creditedGross: sumOf(theirs, (credit) => credit.grossTotal), refunded: sumOf(theirs, (credit) => refundOf.get(credit.id) ?? 0), writtenOff: writtenOffOn.get(invoice.id) ?? 0 /* B-OM-001 */ }
   })
   /** The invoices that bill an order, with its share: its lines' net over every order line's (none names a line: its own order's whole). */
   const invoicesOf = (orderId: string): OrderInvoiceShare[] =>
     perInvoice.flatMap((invoice) => {
       const share = invoice.whole !== 0 ? { part: invoice.partOf.get(orderId) ?? 0, whole: invoice.whole } : { part: invoice.salesOrderId === orderId ? 1 : 0, whole: 1 }
-      return share.part === 0 ? [] : [{ id: invoice.id, grossTotal: invoice.grossTotal, placed: invoice.placed, creditedGross: invoice.creditedGross, refunded: invoice.refunded, ...share }]
+      return share.part === 0 ? [] : [{ id: invoice.id, grossTotal: invoice.grossTotal, placed: invoice.placed, creditedGross: invoice.creditedGross, refunded: invoice.refunded, writtenOff: invoice.writtenOff /* B-OM-001 */, ...share }]
     })
   return {
     invoicesOf,
     /** The deposits received for an order: what is placed on its deposit requests less the PAID refunds of its deposit invoices' credit notes. */
     depositsPaidOf: (orderId: string): number => (depositPlaced.get(orderId) ?? 0) - (depositRefunded.get(orderId) ?? 0),
-    /** An order's money facts (orderMoneyOf's input): its gross, its lines, its deposits and its share of each invoice. */
-    factsOf(order: { readonly id: string; readonly grossAmount: number }): OrderMoneyFacts {
+    /** An order's money facts (orderMoneyOf's input): its gross, its lines, its deposits and its share of each invoice. B-OM-002: + its state. */
+    factsOf(order: { readonly id: string; readonly grossAmount: number; readonly status?: SalesOrderStatus }): OrderMoneyFacts {
       return {
+        ...(order.status !== undefined ? { status: order.status } : {}), // B-OM-002: a cancelled order owes 0
         grossAmount: order.grossAmount,
         lines: lines.filter((line) => line.orderId === order.id).map((line) => ({ quantity: line.quantity, closedShortQuantity: line.closedShortQuantity, netAmount: line.netAmount, vatAmount: line.vatAmount, feeCredited: line.kind === 'FEE' && line.feeCreditedAt !== null })),
         depositPlaced: depositPlaced.get(order.id) ?? 0,

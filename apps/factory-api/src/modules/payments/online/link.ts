@@ -44,7 +44,8 @@ const localeOf = (language: string | null | undefined): OnlineLocale => (languag
 export async function bankTransferOf(db: Reader, facts: TargetFacts, locale: OnlineLocale) {
   if (facts.deposit) {
     const document = facts.orderNumber ?? facts.quoteDocument ?? ''
-    const instructions = await instructionsFor(db, { companyId: facts.companyId, amount: facts.open > 0 ? facts.open : facts.total, currency: facts.currency, dueDate: facts.deposit.dueDate, kind: facts.deposit.kind as Parameters<typeof instructionsFor>[1]['kind'] }, document, locale)
+    // B-OM-009 (order money tab M3-B7): the reference names the order when the document is its number.
+    const instructions = await instructionsFor(db, { companyId: facts.companyId, amount: facts.open > 0 ? facts.open : facts.total, currency: facts.currency, dueDate: facts.deposit.dueDate, kind: facts.deposit.kind as Parameters<typeof instructionsFor>[1]['kind'] }, document, locale, facts.orderNumber ? 'ORDER' : 'QUOTE')
     return { method: 'BANK_TRANSFER' as const, amount: asMoney('price', instructions.amount), currency: instructions.currency, dueDate: instructions.dueDate, reference: instructions.reference, bank: instructions.bank, text: instructions.text }
   }
   const company = await companyBankDetails(db, facts.companyId)

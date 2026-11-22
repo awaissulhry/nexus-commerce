@@ -176,6 +176,20 @@ describe('B-PR-10 the brand-wall sweep', () => {
       expect(swept.has(key), key).toBe(true)
       expect(EXEMPT[key], key).toBeUndefined()
     }
+    // B-OM (order money tab, 13-backend §4): every route the Money tab reads is met by the sweep by itself — swept, never EXEMPT
+    // (a customer-limited person gets the same not-found as an unknown id): the plan (B-OM-004), the settlement with its TD02 /
+    // TD04 rows (B-OM-001, 003), the order's money (B-OM-002), the price check's source (B-OM-006), the margin's freight (B-OM-007).
+    // PR S2 adds the hand commands and the undo, PR S3 the price accept, the hand cost lines and the target.
+    for (const key of [
+      'GET /sales/orders/:orderId/schedule',
+      'GET /invoicing/orders/:orderId/settlement',
+      'GET /sales/orders/:orderId',
+      'GET /sales/orders/:orderId/price-check',
+      'GET /costing/margins/orders/:orderId',
+    ]) {
+      expect(swept.has(key), key).toBe(true)
+      expect(EXEMPT[key], key).toBeUndefined()
+    }
     expect(swept.size).toBeGreaterThan(walked.length)
     // The golden production world's traces of A, here too: its portal people and their mails, stock moves of its work orders,
     // its files and threads (fix-pr-7 found the mail log and the stock card leaks only where they were).

@@ -11,6 +11,9 @@ import { chipCounts, CUSTOMER_STATUS_WORDS, customerStatusOf, DATE_MOVED_DAYS, i
 import { priceText } from '@nexus/factory-domain/sales/quotes/quotes'
 import type { TrackingStatus } from '@nexus/factory-domain/shipping/labels/tracking'
 import { partnerOrder, portalReader } from './access'
+// B-OM-005 (order money tab M3-B6, M1-S4): a part payment shows to the customer; its still to pay by the office's one rule.
+import { orderMoneyPartsOf } from '@nexus/factory-domain/sales/orders/later-columns'
+import { orderMoneyFactsOf } from '../orders/later-columns'
 import { progressFor } from './progress'
 import {
   dayOf,
@@ -241,6 +244,22 @@ export function progressOfLines(lines: readonly PortalLine[], shipped: readonly 
   })
 }
 
+// ── B-OM-005 (order money tab M3-B6, M1-S4) ──────────────────────────────────────────────────────────────────────────────────
+/**
+ * The money of the customer's own order: what its payments placed on each of its deposit requests (allocations less their
+ * reversals: a part payment shows), and its still to pay by the office's one rule (sales/orders later-columns orderMoneyFactsOf,
+ * factory-domain orderMoneyPartsOf: the order's gross less what is never billed, its credit notes' share and what is paid; a
+ * cancelled order owes 0). Read in the tenant's scope for this one order only: never another customer's figure.
+ */
+async function portalMoneyOf(client: Parameters<typeof orderMoneyFactsOf>[0], order: { readonly id: string; readonly grossAmount: number; readonly status: string }, requestIds: readonly string[]) {
+  const placed = requestIds.length > 0 ? await client.paymentAllocation.groupBy({ by: ['depositRequestId'], where: { depositRequestId: { in: [...requestIds] } }, _sum: { amount: true } }) : []
+  const lines = await client.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true, orderId: true, kind: true, quantity: true, closedShortQuantity: true, feeCreditedAt: true, netAmount: true, vatAmount: true } })
+  const facts = await orderMoneyFactsOf(client, [order.id], lines)
+  const parts = orderMoneyPartsOf({ ...facts.factsOf({ id: order.id, grossAmount: order.grossAmount }), ...(order.status === 'CANCELLED' ? { status: 'CANCELLED' as const } : {}) })
+  return { paidOn: new Map(placed.flatMap((row) => (row.depositRequestId ? [[row.depositRequestId, row._sum.amount ?? 0] as const] : []))), stillToPay: parts.balance }
+}
+// ── end B-OM-005 ──
+
 export async function orderRecord(app: FastifyInstance, request: FastifyRequest, orderId: string, now: Date) {
   const reader = portalReader(app, request)
   const order = await partnerOrder(request, reader, orderId)
@@ -260,6 +279,9 @@ export async function orderRecord(app: FastifyInstance, request: FastifyRequest,
     released: await firstRelease(client, read.lines.map((line) => line.id)),
     // B-PR-40: the customer's share level, in the answer (the old progress switch dropped).
     level: await shareLevelOf(client, reader.session.partyId),
+    // ── B-OM-005: what is paid on each of its deposit requests, and the order's still to pay — the customer's own order (the
+    // partner read found it), read in the tenant's scope, with the price grain only ──
+    money: reader.seesPrices ? await portalMoneyOf(client, order, read.deposits.map((row) => row.id)) : null,
   }))
   const status = statusOfOrder(order, read.shipments)
   const left = read.shipments.filter((row) => hasLeft(row.status))
@@ -344,10 +366,11 @@ export async function orderRecord(app: FastifyInstance, request: FastifyRequest,
       reconfirmNeeded: order.reapprovalNeededAt !== null,
       cancelledOn: order.status === 'CANCELLED' && order.closedAt ? businessDate(order.closedAt) : null,
       version: order.version,
+      stillToPay: asMoney('price', tenant.money?.stillToPay ?? null), // B-OM-005
     },
     milestones,
     promiseHistory: customerPromiseHistory(tenant.history.moves, (lineId) => seqOf.get(lineId)).map((move) => ({ ...move, lines: [...move.lines] })),
-    deposits: read.deposits.map((row) => ({ id: row.id, kind: row.kind, status: row.status, amount: asMoney('price', row.amount), currency: row.currency, dueDate: dayOf(row.dueDate), paidAt: row.paidAt ? toUtcIso(row.paidAt) : null })),
+    deposits: read.deposits.map((row) => ({ id: row.id, kind: row.kind, status: row.status, amount: asMoney('price', row.amount), currency: row.currency, dueDate: dayOf(row.dueDate), paidAt: row.paidAt ? toUtcIso(row.paidAt) : null, /* B-OM-005 */ paidAmount: asMoney('price', tenant.money?.paidOn.get(row.id) ?? 0) })),
     lines,
     pieces: { ordered: progress.totals.ordered, shipped: progress.totals.shipped, open: progress.totals.toShip, closedShort: progress.totals.closedShort },
     productionLevel: tenant.level,

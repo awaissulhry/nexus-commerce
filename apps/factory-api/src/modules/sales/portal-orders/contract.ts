@@ -153,13 +153,27 @@ export const recordContract = defineContract({
         reconfirmNeeded: z.boolean(),
         cancelledOn: day.nullable(),
         version: z.number().int(),
+        /** B-OM-005 (order money tab M1-S4): what is still to pay on the order, by the office's own rule (a cancelled order owes 0). */
+        stillToPay: money.price(z.number().int().nullable()),
       }),
       milestones: z.array(milestone),
       promiseHistory: z.array(
         // B-OL-004 (18 F23): `reason` null — the office gave none (the customer reads no reason, never "Our planning changed").
         output({ on: day, from: day.nullable(), to: day, lines: z.array(z.number().int()), reason: output({ code: z.enum(PROMISE_REASON_CODES), words }).nullable() }),
       ),
-      deposits: z.array(output({ id: id(), kind: z.enum(STORED_DEPOSIT_KINDS), status: z.string(), amount: money.price(z.number().int()), currency: z.string(), dueDate: day, paidAt: instant().nullable() })),
+      deposits: z.array(
+        output({
+          id: id(),
+          kind: z.enum(STORED_DEPOSIT_KINDS),
+          status: z.string(),
+          amount: money.price(z.number().int()),
+          currency: z.string(),
+          dueDate: day,
+          paidAt: instant().nullable(),
+          /** B-OM-005 (order money tab M3-B6): what the customer's payments placed on it so far (a part payment shows). */
+          paidAmount: money.price(z.number().int()),
+        }),
+      ),
       lines: z.array(line),
       pieces: pieces.extend({ closedShort: z.number().int() }),
       /**

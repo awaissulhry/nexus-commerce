@@ -173,7 +173,8 @@
       "LABOUR": "Labour",
       "SUBCONTRACT": "Subcontract",
       "OVERHEAD": "Overhead",
-      "ADJUSTMENT": "Adjustment"
+      "ADJUSTMENT": "Adjustment",
+      "FREIGHT": "Freight"
     }
   },
   "lines": {

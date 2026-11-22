@@ -140,6 +140,8 @@ async function recordForLine(tools: CommandTools, line: LineRow, partyId: string
   if (writeOff && difference.kind !== null) {
     const allocationId = difference.kind === 'UNDERPAYMENT' ? (written.find((entry) => entry.targetId === difference.invoiceId)?.allocationId ?? null) : null
     await writeOffInCommand(tools, { companyId: line.companyId, partyId, paymentId: payment.id, kind: difference.kind, allocationId, invoiceId: difference.invoiceId, amount: difference.amount, reason: writeOff.reason, note: noteOf(writeOff.note), tolerance: tolerance! })
+    // B-OM-001 (order money tab M1-B1): the write-off counts on the order (allocateInCommand settled before it was written).
+    if (difference.invoiceId) await settleOrders(tools, await ordersOfInvoices(tx, [difference.invoiceId]))
   }
   return payment.id
 }

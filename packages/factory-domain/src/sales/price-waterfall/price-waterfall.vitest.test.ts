@@ -10,6 +10,7 @@ import {
   floorsProblems,
   feeProblems,
   lowersAFloor,
+  orderPriceSourceOf, // B-OM-006
   stepsProblem,
   suggestedPriceOf,
   type BuiltWaterfall,
@@ -208,5 +209,17 @@ describe('fees (SAL-181)', () => {
     expect(progress.released).toBe(true)
     expect(progress.totals.ordered).toBe(2)
     expect(progress.rows.find((row) => row.lineId === 'fee')).toMatchObject({ ordered: 1, toShip: 0, shipped: 0 })
+  })
+})
+
+// ── B-OM-006 (order money tab M2-S2): where an order line's price came from ──
+describe('an order line’s price source, from the waterfall it keeps', () => {
+  it('a list or suggested start without a hand change: LIST; a MANUAL step anywhere: MANUAL; no steps (an amendment dropped them): UNKNOWN', () => {
+    expect(orderPriceSourceOf([{ kind: 'LIST' }, { kind: 'DISCOUNT' }, { kind: 'NET' }])).toBe('LIST')
+    expect(orderPriceSourceOf([{ kind: 'SUGGESTED' }, { kind: 'NET' }])).toBe('LIST')
+    expect(orderPriceSourceOf([{ kind: 'MANUAL' }, { kind: 'NET' }])).toBe('MANUAL')
+    expect(orderPriceSourceOf([{ kind: 'LIST' }, { kind: 'MANUAL' }, { kind: 'NET' }])).toBe('MANUAL')
+    expect(orderPriceSourceOf(null)).toBe('UNKNOWN')
+    expect(orderPriceSourceOf([])).toBe('UNKNOWN')
   })
 })
