@@ -87,6 +87,8 @@ describe('F-OP-209 — a tab\'s link and an in-page move keep the scope (RC4)', 
     expect(tabAddress(BASE, '?thread=open&tab=overview&message=m1', 'changes', { anchor: 'still-to-do' })).toBe(`${BASE}?tab=changes#still-to-do`)
     expect(tabAddress(BASE, 'thread=new', 'lines')).toBe(`${BASE}?tab=lines`)
     expect(tabAddress(BASE, '', 'money', { anchor: 'margin' })).toBe(`${BASE}?tab=money#margin`)
+    // F-OM-104: Overview's and Shipments' doors land on Money's payment plan.
+    expect(tabAddress(BASE, '', 'money', { anchor: 'payments' })).toBe(`${BASE}?tab=money#payments`)
   })
   it('below 1280 px an in-page move drops the term: the page gives way to the tab (the frame keeps the scope)', () => {
     expect(tabAddress(BASE, '?tab=overview&thread=general', 'lines', { narrow: true })).toBe(`${BASE}?tab=lines`)

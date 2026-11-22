@@ -209,7 +209,8 @@ describe('F-OO-207: the doors that make the next record — only when due (F8), 
 describe('F-OO-207: the quiet line — where the order came from, the deposit only when it waits for nothing, the same quote', () => {
   it('a paid, waived or not needed deposit is said ("Deposit: Paid ›"); one that waits (or was never asked) is not — Where it is now\'s strip', () => {
     const paid = linkedRowsOf(input(order('IN_PRODUCTION'))).quiet
-    expect(paid.find((part) => part.kind === 'deposit')).toEqual({ kind: 'deposit', state: 'PAID', href: `${PREFIX}/sales/orders/${order('IN_PRODUCTION').id}?tab=money` })
+    // F-OM-104 (P0-B11): the deposit's door lands on Money › Payments.
+    expect(paid.find((part) => part.kind === 'deposit')).toEqual({ kind: 'deposit', state: 'PAID', href: `${PREFIX}/sales/orders/${order('IN_PRODUCTION').id}?tab=money#payments` })
     expect(linkedRowsOf(input(order('CONFIRMED'))).quiet.some((part) => part.kind === 'deposit')).toBe(false)
     const missing = order('CONFIRMED', { chain: { ...order('CONFIRMED').chain, depositRequests: [] } })
     expect(linkedRowsOf(input(missing)).quiet.some((part) => part.kind === 'deposit')).toBe(false)

@@ -2,16 +2,15 @@
 
 import { useState } from 'react'
 import { Field } from '@nexus/ui/components'
-import { Button } from '@nexus/ui/primitives'
 import { DateField, Textarea } from '../../../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../../../lib/i18n/format'
 import { INTL_LOCALE } from '../../../../../../lib/i18n/locales'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
-import type { Milestone, Order } from '../../../api'
+import type { Milestone } from '../../../api'
 import { dayInstant, type Phrase } from '../../../model'
 import { Frame } from '../../view/Dialogs'
 import type { WaiveTarget } from '../api'
-import { dayProblem, stepVerbs, waiveReasonProblem, waiveVerbOf, type StepAbilities } from '../model'
+import { dayProblem, waiveReasonProblem, type StepAbilities } from '../model'
 
 /** B-W2b-16: what "Waive…" is about to waive: a step (and its request), or a request no step names. */
 export interface Waiving {
@@ -21,7 +20,7 @@ export interface Waiving {
   stepKind: 'DEPOSIT' | 'BEFORE_SHIPPING'
 }
 
-/** The schedule card's verbs' view model (OrderRecord holds it; the card draws it and fetches nothing). */
+/** The schedule's verbs' view model (OrderRecord holds it; F-OM-103: Money's plan rows draw the verbs, MoneyDialogs the windows). */
 export interface ScheduleStepsModel {
   can: StepAbilities
   /** "Open for payment" of a step without a day: the dialog asks one. */
@@ -38,41 +37,6 @@ export interface ScheduleStepsActions {
   onInvoice?: (step: Milestone) => void
   onWaive?: (waiving: Waiving | null) => void
   onConfirmWaive?: (waiving: Waiving, reason: string) => void
-}
-
-/**
- * A schedule step's verbs (B-W2a-80, B-W2a-F2's note): "Open for payment" on a before-shipping step without its request
- * (its request is then paid like the deposit, its TD02 at payment), "Invoice this step" on a deposit or before-shipping
- * step with its request (the TD02 draft of what is paid and not invoiced; the API says in words when nothing waits).
- */
-export function StepVerbs({ step, order, model, actions }: { step: Milestone; order: Order; model: ScheduleStepsModel; actions?: ScheduleStepsActions }) {
-  const t = useT('orders')
-  const waive = waiveVerbOf(step, order, model.can)
-  const verbs = [...stepVerbs(step, order, model.can), ...(waive ? [waive] : [])]
-  if (verbs.length === 0) return null
-  return (
-    <span className="fw-so-inline">
-      {verbs.map((verb) => (
-        <Button
-          key={verb.kind}
-          size="sm"
-          variant="link"
-          heldReason={verb.held ? t(verb.held.key, verb.held.params) : model.busy ? t('schedule.verbs.held.busy') : null}
-          onClick={() =>
-            verb.kind === 'open'
-              ? verb.needsDay
-                ? actions?.onOpen?.(step)
-                : actions?.onConfirmOpen?.(step, null)
-              : verb.kind === 'waive'
-                ? actions?.onWaive?.({ target: { kind: 'step', id: step.id, version: step.version }, label: t(`schedule.kind.${step.kind}`), stepKind: step.kind === 'DEPOSIT' ? 'DEPOSIT' : 'BEFORE_SHIPPING' })
-                : actions?.onInvoice?.(step)
-          }
-        >
-          {t(`schedule.verbs.${verb.kind}`)}
-        </Button>
-      ))}
-    </span>
-  )
 }
 
 /** "Open for payment" of a step that has no day: the day its request falls due (today or later). */

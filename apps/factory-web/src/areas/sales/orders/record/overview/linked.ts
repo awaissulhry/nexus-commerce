@@ -160,7 +160,8 @@ export function linkedRowsOf(input: LinkedInput): LinkedView {
           ? [{ kind: 'origin' as const, words: phrase('chain.noQuote'), href: null }]
           : []),
     // The deposit only when it waits for nothing: a deposit that waits (or was never asked) is Where it is now's strip.
-    ...(DEPOSIT_SAID.has(gate.state) ? [{ kind: 'deposit' as const, state: gate.state as 'NOT_NEEDED' | 'PAID' | 'WAIVED', href: tab('money') }] : []),
+    // F-OM-104 (P0-B11): the deposit's door lands on Money › Payments.
+    ...(DEPOSIT_SAID.has(gate.state) ? [{ kind: 'deposit' as const, state: gate.state as 'NOT_NEEDED' | 'PAID' | 'WAIVED', href: tab('money', 'payments') }] : []),
     ...input.sameQuote.map((other) => ({ kind: 'sameQuote' as const, number: other.number, href: `${prefix}/sales/orders/${other.id}` })),
   ]
   return { rows, none, quiet }

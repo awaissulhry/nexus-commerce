@@ -386,9 +386,10 @@ describe('F-OO-105: the strips\' doors — the band\'s yes, the payment, the row
   it('the deposit: Record the payment (held without the finance right, beside Money ›); none asked: Money ›', () => {
     const waiting: WhereStrip = { key: 'deposit', kind: 'deposit', state: 'WAITING', requestId: 'd-1', due: '2026-11-04', since: null }
     expect(doorsOf(waiting)).toEqual([{ kind: 'payment', requestId: 'd-1', held: null }])
-    expect(doorsOf(waiting, { can: abilitiesOf(rolePermissions('sales')) })).toEqual([{ kind: 'payment', requestId: 'd-1', held: { key: 'held.noPayments' } }, { kind: 'tab', tab: 'money', anchor: null }])
+    // F-OM-104 (P0-B11): Money › lands on Payments (#payments).
+    expect(doorsOf(waiting, { can: abilitiesOf(rolePermissions('sales')) })).toEqual([{ kind: 'payment', requestId: 'd-1', held: { key: 'held.noPayments' } }, { kind: 'tab', tab: 'money', anchor: 'payments' }])
     expect(doorsOf(waiting, { busy: true })).toEqual([{ kind: 'payment', requestId: 'd-1', held: { key: 'held.busy' } }])
-    expect(doorsOf({ ...waiting, state: 'MISSING', requestId: null, due: null })).toEqual([{ kind: 'tab', tab: 'money', anchor: null }])
+    expect(doorsOf({ ...waiting, state: 'MISSING', requestId: null, due: null })).toEqual([{ kind: 'tab', tab: 'money', anchor: 'payments' }])
   })
 
   it('quality: Release on Quality › — Quality\'s holds of the work order (its work-order filter); none reached: words only', () => {
