@@ -7,7 +7,11 @@ import { createTranslator, messagesFor } from '../../i18n/messages'
 import { render, textOf } from '../parts/testing'
 import { filesAnswerOf, orderChoosableOf, orderCountedOf, orderGroupsShown, orderSectionsOf, orderShownFilesOf, tabAnswerOf, type OrderFile, type OrderFilesRead } from './model'
 import { chipMarksOf, heldReasonKey } from './model' // F-OF-102
-import { FilesView, OrderFilesBody } from './view/FilesView'
+import { FilesView, OrderFilesBody, UploadDialog } from './view/FilesView'
+import { uploadRefusalOf } from './use-file-upload' // F-OF-103
+import { ApiError } from '../../api/errors'
+import { uploadChoices } from '../../../record-panels/model'
+import type { UploadAsk, UploadPlace } from './model'
 import type { ThreadFile } from '../files/model'
 import { orderFileHrefOf } from '../../../areas/_shared/record-thread/order-file-href'
 
@@ -300,5 +304,76 @@ describe('F-OF-102: the small bugs — "1 file", one Clear, Share hidden without
     for (const hidden of ['Share with Seed Customer One', 'Make office only', 'Delete 1']) expect(none, hidden).not.toContain(hidden)
     const all = draw({ upload: true, share: true, delete: true })
     for (const shown of ['Share with Seed Customer One (1)', 'Delete 1']) expect(all, shown).toContain(shown)
+  })
+})
+
+// ---- F-OF-103 (order FILES tab, W1; 13-backend §7 row 1): "Add files…" = the extraction of the dock's upload ---------------------------
+describe('F-OF-103: Add files… — the ONE upload, "Where it goes", no "Fiscal copy" on an order', () => {
+  const kinds = uploadChoices({ can: { share: true }, party: { id: 'party-1', name: 'Seed Customer One', emails: [] }, record: { type: 'SalesOrder', siteId: null, companyId: 'company-a' } })
+  const places: UploadPlace[] = [
+    { key: 'order', record: { type: 'SalesOrder', id: ORDER.id }, kind: 'order', audiences: kinds.audiences },
+    { key: 'line:l1', record: { type: 'SalesOrderLine', id: 'l1' }, kind: 'line', seq: 1, what: 'SEED-JKT-02 Black', audiences: ['OFFICE'] },
+  ]
+  const ask = (over: Partial<UploadAsk> = {}): UploadAsk => ({ files: [], kind: 'ATTACHMENT', audience: 'OFFICE', kinds: kinds.kinds, audiences: kinds.audiences, places, place: 'order', ...over })
+
+  it('the window asks where it goes (the order · Line 1 · …), what it is without "Fiscal copy", and takes the files itself', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['record-thread-files-view'])['record-thread-files-view']!)
+      const f = createTranslator(locale, messagesFor(locale, ['record-thread-files'])['record-thread-files']!)
+      const html = render(createElement(UploadDialog, { ask: ask(), party: { name: 'Seed Customer One' }, busy: false, onAdd: () => undefined }), locale)
+      for (const words of [t('upload.titleAdd'), t('upload.where'), t('upload.place.order'), t('upload.place.lineOf', { seq: 1, what: 'SEED-JKT-02 Black' }), t('upload.noFiscal'), t('upload.noneYet')]) expect(textOf(html) + html, `${locale}: ${words}`).toContain(words)
+      expect(html).not.toContain(`>${f('kind.FISCAL_ARCHIVE')}<`)
+      expect(html).toContain('type="file"')
+    }
+    // Two files dropped: "Add 2 files", their names; the window opened by a drop has no drop area of its own unless asked.
+    const two = render(createElement(UploadDialog, { ask: ask({ files: [{ name: 'Carton marks v2.pdf', sizeBytes: 368_640 }, { name: 'Hangtag proof.jpg', sizeBytes: 1_153_434 }] }), party: null, busy: false }))
+    expect(textOf(two)).toContain('Add 2 files')
+    expect(textOf(two)).toContain('Hangtag proof.jpg')
+    expect(two).not.toContain('type="file"')
+  })
+
+  it('F5-B7: a refusal says why — the kind in words, the API\'s words when it gives them', () => {
+    expect(uploadRefusalOf(new Error('boom'))).toEqual({ ns: 'records', key: 'files.problem.failed' })
+    expect(uploadRefusalOf(new ApiError('forbidden', 403, 'forbidden', 'Forbidden'))).toEqual({ ns: 'view', key: 'upload.refused.forbidden' })
+    expect(uploadRefusalOf(new ApiError('not_found', 404, 'not_found', 'Sales order not found.'))).toEqual({ ns: 'view', key: 'upload.refused.notFound' })
+    expect(uploadRefusalOf(new ApiError('invalid', 400, 'invalid', 'Invalid', null, [{ path: 'body/kind', message: 'Fiscal papers are made by Finance and Warehouse' }]))).toEqual({ ns: 'view', key: 'upload.refused.invalid', params: { detail: 'Fiscal papers are made by Finance and Warehouse' } })
+    expect(uploadRefusalOf(new ApiError('internal', 500, 'internal', ''))).toEqual({ ns: 'records', key: 'files.problem.failed' })
+  })
+
+  it('the body: Add files… in the order\'s thread window (the tab\'s is in its head), hidden without the right and on the customer\'s face; the outcome said', () => {
+    const t = createTranslator('en', messagesFor('en', ['record-thread-files-view'])['record-thread-files-view']!)
+    const may = { upload: true, delete: false, share: false, ask: false, askCustomer: false }
+    const draw = (model: Partial<Parameters<typeof OrderFilesBody>[0]['model']>, place: 'tab' | 'window' = 'window') => render(createElement(OrderFilesBody, { model: { read: READ, problem: null, selected: [], canShare: false, ...model }, party: { name: 'Seed Customer One' }, place, actions: { onOrderAdd: () => undefined } }))
+    expect(textOf(draw({ may }))).toContain(t('files.add'))
+    expect(textOf(draw({ may }, 'tab'))).not.toContain(t('files.add'))
+    expect(textOf(draw({ may: { ...may, upload: false } }))).not.toContain(t('files.add'))
+    expect(textOf(draw({ may, face: 'customer' }))).not.toContain(t('files.add'))
+    // The window's upload is drawn by the body (tab AND window); the outcome: refused with why, held by the scan with its names (F5-B6).
+    expect(textOf(draw({ may, upload: ask() }))).toContain(t('upload.where'))
+    const said = textOf(draw({ may, uploadOutcome: { refused: [{ name: 'macro.exe', reason: 'This kind of file does not take this type.' }], held: ['Size spec v3.pdf'] } }))
+    for (const words of ['macro.exe', 'This kind of file does not take this type.', t('upload.heldTitle', { count: 1 }), 'Size spec v3.pdf', t('keep.scanPending')]) expect(said, words).toContain(words)
+  })
+
+  it('a SalesOrder\'s Files window draws no drop area of its own (one Add per window); every other record keeps its own', () => {
+    const t = createTranslator('en', messagesFor('en', ['record-thread-files-view'])['record-thread-files-view']!)
+    const base = { party: null, problem: null, can: { upload: true, share: false, delete: false }, uploadHeld: null, selected: [], refused: [], missing: [], upload: null, now: Date.parse('2026-11-22T10:00:00Z') }
+    const order = textOf(render(createElement(FilesView, { model: { ...base, record: { type: 'SalesOrder', id: ORDER.id, label: ORDER.number }, files: [], order: { read: READ, problem: null, selected: [], canShare: false } } })))
+    expect(order).not.toContain(t('upload.hint'))
+    const quote = textOf(render(createElement(FilesView, { model: { ...base, record: { type: 'Quote', id: 'q1', label: 'SEED-QT-0007' }, files: [] } })))
+    expect(quote).toContain(t('upload.hint'))
+  })
+
+  it('the code: the dock and the order\'s container call the ONE upload; the dock keeps no upload of its own; the order reads again after it', () => {
+    const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+    const docked = source('../../../areas/_shared/record-thread/DockedOfficeThread.tsx')
+    expect(docked).toContain('const fileUpload = useFileUpload(api, {')
+    for (const gone of ['const sendUploads', 'setUploadFiles(', 'requestUpload(api']) expect(docked, gone).not.toContain(gone)
+    const container = source('../../../areas/_shared/record-thread/use-order-files.ts')
+    expect(container).toContain('const upload = useFileUpload(api, {')
+    expect(container).toContain('onDone: () => {\n      load()\n      input.onUploaded?.()')
+    const hook = source('./use-file-upload.ts')
+    expect(hook).toContain("if (done.file.status !== 'AVAILABLE') held.push(file.name)")
+    expect(source('../../../areas/sales/orders/record/OrderRecord.tsx')).toContain("canUpload: session.permissions.includes('files.upload'),")
+    expect(source('../../../areas/sales/orders/record/view/FilesTab.tsx')).toContain("const buttons = files.may?.upload && actions?.onOrderAdd && !files.problem")
   })
 })

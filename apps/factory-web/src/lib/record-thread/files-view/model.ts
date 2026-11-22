@@ -123,6 +123,23 @@ export interface UploadAsk {
   readonly sheet?: boolean
   /** F-CP-144 (B-CP-014): "This file shows prices" — then only people who see prices open it. */
   readonly priced?: boolean
+  // ---- F-OF-103 (order FILES tab): "Where it goes" — the order or one of its lines (absent: the record the window is on) ----
+  readonly places?: readonly UploadPlace[]
+  /** The chosen place's key. */
+  readonly place?: string
+  // ---- end F-OF-103
+}
+
+/** F-OF-103: a place a file can go to from the order's Files ("Where it goes"): the order itself, or one of its lines. */
+export interface UploadPlace {
+  readonly key: string
+  readonly record: { readonly type: 'SalesOrder' | 'SalesOrderLine'; readonly id: string }
+  /** The words: "The order", or "Line {seq} · {what}" (the line's style and colour). */
+  readonly kind: 'order' | 'line'
+  readonly seq?: number
+  readonly what?: string | null
+  /** Who may be asked to see a file there (a line's sharing waits for the read's `may`: B-OF-014). */
+  readonly audiences: readonly FileAudience[]
 }
 
 /** B-TH-283: why the upload waits (a key of record-thread-files-view), or null: a measurement sheet never goes to the floor. */

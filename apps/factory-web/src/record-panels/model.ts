@@ -178,8 +178,14 @@ export function uploadChoices(input: { can: { readonly share: boolean /* files.m
   }
   const owned = ownedKinds(input.record.type)
   const audio = AUDIO_RECORD_TYPES.includes(input.record.type)
-  return { kinds: FILE_KINDS.filter((kind) => !owned.includes(kind) && (kind !== 'AUDIO' || audio)), owned, audiences }
+  // F-OF-103 (F5-B1/B5; B-OF-014): no "Fiscal copy" on an order or its line — one wrong pick kept a file 10 years, never removable; a
+  // fiscal paper is made at its home (Finance, Warehouse).
+  const fiscal = !NO_FISCAL_RECORDS.includes(input.record.type)
+  return { kinds: FILE_KINDS.filter((kind) => !owned.includes(kind) && (kind !== 'AUDIO' || audio) && (kind !== 'FISCAL_ARCHIVE' || fiscal)), owned, audiences }
 }
+
+/** F-OF-103: the records whose generic upload offers no "Fiscal copy" (the API refuses it there too, B-OF-014). */
+export const NO_FISCAL_RECORDS: readonly string[] = ['SalesOrder', 'SalesOrderLine']
 
 /** The problem with a picked file before it is announced (a message key and parameters), or null. */
 export function uploadProblem(file: { name: string; type: string; size: number }, kind: FileKind): { key: string; params?: Record<string, string | number> } | null {

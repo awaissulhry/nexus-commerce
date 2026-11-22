@@ -1,9 +1,10 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Eye, FileText, ShieldAlert } from 'lucide-react'
+import { Eye, FileText, ShieldAlert, Upload } from 'lucide-react'
 import type { MenuItemDef } from '@nexus/ui/components'
 import { Banner } from '@nexus/ui/components'
+import { Button } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
@@ -31,8 +32,9 @@ import { InfoTip, Section } from './production/Kit' // F-OF-101: the Production 
  * F-OF-101 (order FILES tab, 10-design §1–§5; plan D1): the tab's LAYOUT — its root is the Production kit's size container (`fw-pt`, the
  * sections choose by the room the tab has, never the screen: the thread dock opening or closing re-lays it at once). Under the tab's one
  * answer (a DS Banner, no card), the Files section (#files): h2 · its answer ("23 files · 13 shared with <customer> · newest 21 Nov") ·
- * ⋯ (Choose all · Download all · Copy link to Files) · ONE ⓘ (what it means and its keys, nowhere else); the counted line and the groups
- * are the body's (the same in the order's thread window). Draws its model; reads nothing.
+ * [Add files…] (F-OF-103; hidden without the right) · ⋯ (Choose all · Download all · Copy link to Files) · ONE ⓘ (what it means and its
+ * keys, nowhere else); the counted line, the groups and the upload window are the body's (the same in the order's thread window).
+ * Draws its model; reads nothing.
  */
 export function FilesTab({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: { readonly files?: FilesViewActions } }) {
   const frame = useRecordFrame()
@@ -105,6 +107,14 @@ function FilesSection({ files, party, actions, children }: { files: OrderFilesMo
   if (choosable.length > 0) items.push({ id: 'choose-all', label: t('select.all', { count: choosable.length }), onSelect: () => actions?.onOrderSelect?.(choosable) })
   if (choosable.length > 1) items.push({ id: 'download-all', label: t('menu.downloadAll', { count: choosable.length }), onSelect: () => actions?.onOrderBulk?.('download', choosable) })
   items.push({ id: 'copy-link', label: t('menu.copyLink'), onSelect: () => copyLinkTo('files') })
+  // F-OF-103: "Add files…" — hidden without the right (the read's `may`, else the session's); allowed on a closed order (L2: a late paper lands).
+  const buttons = files.may?.upload && actions?.onOrderAdd && !files.problem
+    ? [
+        <Button key="add" size="sm" onClick={() => actions.onOrderAdd?.([])}>
+          <Upload size={14} aria-hidden /> {t('files.add')}
+        </Button>,
+      ]
+    : []
   const info = (
     <>
       <p>{t('info.files')}</p>
@@ -113,7 +123,7 @@ function FilesSection({ files, party, actions, children }: { files: OrderFilesMo
     </>
   )
   return (
-    <Section id={filesKitId('files')} title={o('files.title')} answer={words.length > 0 ? words.join(' · ') : null} more={<LineMenuButton label={t('menu.label')} items={items} />} info={info}>
+    <Section id={filesKitId('files')} title={o('files.title')} answer={words.length > 0 ? words.join(' · ') : null} buttons={buttons} more={<LineMenuButton label={t('menu.label')} items={items} />} info={info}>
       {children}
     </Section>
   )

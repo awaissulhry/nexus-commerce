@@ -56,7 +56,23 @@
     "sheet": "This is a measurement sheet",
     "sheetHint": "a PDF or a photo; body data: only those with the measurements right open it, each opening recorded",
     "sheetFloor": "A measurement sheet never goes to the floor: choose another audience or untick it",
-    "sheetType": "a measurement sheet is a PDF or a photo of one"
+    "sheetType": "a measurement sheet is a PDF or a photo of one",
+    "titleAdd": "Add files",
+    "where": "Where it goes",
+    "place": {
+      "order": "The order",
+      "line": "Line {seq}",
+      "lineOf": "Line {seq} · {what}"
+    },
+    "noFiscal": "No “Fiscal copy” here: a fiscal paper is made at its home.",
+    "noneYet": "Drop or browse the files to add first.",
+    "heldTitle_one": "{count} file is held for the virus scan",
+    "heldTitle_other": "{count} files are held for the virus scan",
+    "refused": {
+      "forbidden": "Your role cannot add files here.",
+      "notFound": "This record is not found any more.",
+      "invalid": "The file was refused: {detail}"
+    }
   },
   "select": {
     "all": "Choose all {count}",
@@ -212,5 +228,8 @@
     "files": "Every file of this order, by where it comes from. A file you cannot open is counted once, under the head, with the reason; it is never named.",
     "doors": "A file made on another page (a work order, an inspection, a shipment, an invoice) is changed there: “Open on … ›”.",
     "keys": "Keys: ← → ↑ ↓ move between the files · x chooses one · Enter opens it."
+  },
+  "files": {
+    "add": "Add files…"
   }
 }

@@ -16,6 +16,17 @@ describe('files: what an upload may be and who may see it (COL-045, COL-050)', (
     expect(uploadChoices({ ...base, record: { type: 'Quote', siteId: null, companyId: 'c' } }).owned).toEqual([])
   })
 
+  // F-OF-103 (F5-B1/B5; B-OF-014): an order or its line offers no "Fiscal copy" (one wrong pick kept a file 10 years, never removable).
+  it('offers no "Fiscal copy" on an order or an order line; other records keep it', () => {
+    const base = { can: { share: true }, party: PARTY }
+    for (const type of ['SalesOrder', 'SalesOrderLine']) {
+      const kinds = uploadChoices({ ...base, record: { type, siteId: null, companyId: 'c' } }).kinds
+      expect(kinds, type).not.toContain('FISCAL_ARCHIVE')
+      expect(kinds, type).toEqual(['ATTACHMENT', 'DOCUMENT', 'PHOTO', 'CERTIFICATE'])
+    }
+    expect(uploadChoices({ ...base, record: { type: 'Quote', siteId: null, companyId: 'c' } }).kinds).toContain('FISCAL_ARCHIVE')
+  })
+
   it('offers sharing beyond the office only to files.manage, and only where there is a site or a party', () => {
     const record = { type: 'Quote', siteId: 'site-1', companyId: 'company-1' }
     expect(uploadChoices({ can: { share: true }, party: PARTY, record }).audiences).toEqual(['OFFICE', 'FLOOR', 'PARTNER', 'LINK'])

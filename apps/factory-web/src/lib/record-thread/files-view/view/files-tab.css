@@ -62,3 +62,6 @@
 .fw-rtv-card.fw-of-card.is-held { border-style: dashed; border-color: var(--nds-border-strong); }
 .fw-of-card .fw-of-checking { cursor: default; padding: var(--nds-space-6); color: var(--nds-text-2); font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); text-align: center; }
 .fw-of-card-title { font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); overflow-wrap: anywhere; }
+
+/* ── F-OF-103: the order's thread window keeps its one "Add files…" above the groups ── */
+.fw-of-wbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); }

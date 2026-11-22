@@ -56,7 +56,23 @@
     "sheet": "Questa è una scheda misure",
     "sheetHint": "un PDF o una foto; dati del corpo: la apre solo chi ha il permesso sulle misure, ogni apertura registrata",
     "sheetFloor": "Una scheda misure non va mai in reparto: scegli un altro pubblico o togli la spunta",
-    "sheetType": "una scheda misure è un PDF o una sua foto"
+    "sheetType": "una scheda misure è un PDF o una sua foto",
+    "titleAdd": "Aggiungi file",
+    "where": "Dove va",
+    "place": {
+      "order": "L'ordine",
+      "line": "Riga {seq}",
+      "lineOf": "Riga {seq} · {what}"
+    },
+    "noFiscal": "Niente «Copia fiscale» qui: un documento fiscale si crea nella sua pagina.",
+    "noneYet": "Prima trascina o scegli i file da aggiungere.",
+    "heldTitle_one": "{count} file è trattenuto per l'antivirus",
+    "heldTitle_other": "{count} file sono trattenuti per l'antivirus",
+    "refused": {
+      "forbidden": "Il tuo ruolo non può aggiungere file qui.",
+      "notFound": "Questo record non si trova più.",
+      "invalid": "Il file è stato rifiutato: {detail}"
+    }
   },
   "select": {
     "all": "Scegli tutti i {count}",
@@ -212,5 +228,8 @@
     "files": "Tutti i file di questo ordine, per provenienza. Un file che non puoi aprire è contato una volta, sotto il titolo, con il motivo; non viene mai nominato.",
     "doors": "Un file creato in un'altra pagina (un ordine di lavoro, un'ispezione, una spedizione, una fattura) si cambia lì: «Apri su … ›».",
     "keys": "Tasti: ← → ↑ ↓ si spostano tra i file · x ne sceglie uno · Invio lo apre."
+  },
+  "files": {
+    "add": "Aggiungi file…"
   }
 }

@@ -615,9 +615,9 @@ describe('F-CP-144: the PRICED lock card, the upload tick, Mark as priced', () =
     const html = draw('en', 'upload-priced')
     expect(html).toContain('This file shows prices')
     expect(html).toContain('A priced document is never shared with a floor: the floor sees no prices.')
-    // The container sends the tick with the upload.
+    // The container sends the tick with the upload — F-OF-103: the ONE upload of the Files window (moved out of the dock).
     const docked = readFileSync(new URL('../../../areas/_shared/record-thread/DockedOfficeThread.tsx', import.meta.url), 'utf8')
-    expect(docked).toContain('...(ask.priced ? { priced: true } : {})')
+    expect(readFileSync(new URL('./use-file-upload.ts', import.meta.url), 'utf8')).toContain('...(ask.priced ? { priced: true } : {})')
     expect(docked).toContain('setFilePriced(api, fileId, { priced, version: file.version })')
   })
 

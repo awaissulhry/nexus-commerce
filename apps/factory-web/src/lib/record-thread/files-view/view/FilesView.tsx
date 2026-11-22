@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
 import Link from 'next/link' // F-OF-101: a block's door "Open on … ›" is a real link
-import { AudioLines, BadgeCheck, ChevronDown, ChevronUp, Copy, Download, FileText, FolderOpen, Image as ImageIcon, Lock, LockOpen, Paperclip, Receipt, RotateCcw, Share2, ShieldAlert, ShieldOff, Trash2 } from 'lucide-react'
+import { AudioLines, BadgeCheck, ChevronDown, ChevronUp, Copy, Download, FileText, FolderOpen, Image as ImageIcon, Lock, LockOpen, Paperclip, Receipt, RotateCcw, Share2, ShieldAlert, ShieldOff, Trash2, Upload } from 'lucide-react'
 import { Banner, Disclosure, EmptyState, Field } from '@nexus/ui/components'
 import { BulkActionBar } from '@nexus/ui/patterns'
 import { Button, Checkbox, RadioCard, Select, Skeleton, Tag } from '@nexus/ui/primitives'
@@ -15,6 +15,7 @@ import type { FileAudience, FileKind } from '../../../../record-panels/model'
 import { FileViewer, sizeWords } from '../../popups/view/FileViewer' // F-OP-127: the ONE viewer
 import { audienceMarks, versionMark, type FileSeries, type FilesParty, type ThreadFile } from '../../files/model'
 import { bulkReach, filesGroups, keepLines, rangeOf, type FilesAbilities, type MissingDocument, type UploadAsk } from '../model'
+import type { UploadPlace } from '../model' // F-OF-103: "Where it goes"
 // B-TH-283: the measurement-sheet tick holds an upload meant for the floor.
 import { uploadAskHeld } from '../model'
 // B-TH-231: "Use on another record…" and the copy's source line.
@@ -60,6 +61,8 @@ export interface FilesViewModel {
   timeZone?: string
   /** F-SA-237: a SalesOrder — its files from the order files read (the body below draws them instead of the record's own list). */
   order?: OrderFilesModel | null
+  /** F-OF-103 (F5-B6): the last upload's files the virus scan holds (said; they open once it says clean). */
+  held?: readonly string[]
 }
 
 export type BulkAction = 'download' | 'share' | 'officeOnly' | 'remove'
@@ -75,7 +78,7 @@ export interface FilesViewActions {
   onBulk?: (action: BulkAction, fileIds: readonly string[]) => void
   /** Files dropped or browsed: the container asks their kind and audience (`upload`). */
   onDrop?: (files: File[]) => void
-  onUploadChange?: (change: Partial<Pick<UploadAsk, 'kind' | 'audience' | 'sheet' | /* F-CP-144 */ 'priced'>>) => void
+  onUploadChange?: (change: Partial<Pick<UploadAsk, 'kind' | 'audience' | 'sheet' | /* F-CP-144 */ 'priced' | /* F-OF-103 */ 'place'>>) => void
   onUploadConfirm?: () => void
   onUploadCancel?: () => void
   onDismissRefused?: () => void
@@ -101,6 +104,14 @@ export interface FilesViewActions {
   // ---- F-OF-101 (order FILES tab): a block's door "Open on … ›" — the source record's own page (null: no door, e.g. the order's own files)
   orderHrefOf?: (record: { readonly type: string; readonly id: string; readonly label: string }) => string | null
   // ---- end F-OF-101
+  // ---- F-OF-103 (order FILES tab): "Add files…" on the order's body — the tab and the order's thread window (one Add per window) ----
+  /** Files dropped on Files or browsed (none: the window opens to drop them there). */
+  onOrderAdd?: (files: File[]) => void
+  onOrderUploadChange?: (change: Partial<Pick<UploadAsk, 'kind' | 'audience' | 'sheet' | 'priced' | 'place'>>) => void
+  onOrderUploadConfirm?: () => void
+  onOrderUploadCancel?: () => void
+  onOrderUploadDismiss?: () => void
+  // ---- end F-OF-103
 }
 
 // ---- B-TH-280: the files in depth (B-W2b-177) in this window — the container (the docked thread) fills these slots with the depth
@@ -221,6 +232,7 @@ function View({ model, actions, slots }: { model: FilesViewModel; actions?: File
               </ul>
             </Banner>
           )}
+          {(model.held?.length ?? 0) > 0 && <HeldUploads names={model.held ?? []} onDismiss={actions?.onDismissRefused} /* F-OF-103 (F5-B6) */ />}
           {slots?.top /* B-TH-280 */}
 
           {model.problem === 'forbidden' ? (
@@ -229,7 +241,8 @@ function View({ model, actions, slots }: { model: FilesViewModel; actions?: File
             <Banner tone="danger" title={t('problem.read')} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('problem.retry')}</Button>} />
           ) : (
             <>
-              {model.can.upload && !model.uploadHeld ? (
+              {/* F-OF-103: a SalesOrder's window draws no own drop area — the order's body has its one "Add files…" (one Add per window). */}
+              {model.order ? null : model.can.upload && !model.uploadHeld ? (
                 <FileDropzone multiple onFiles={(files) => actions?.onDrop?.(files)} hint={t('upload.hint')} />
               ) : (
                 <p className="fw-rtv-held">
@@ -309,7 +322,7 @@ function View({ model, actions, slots }: { model: FilesViewModel; actions?: File
           )}
         </div>
       </Modal>
-      {model.upload && <UploadDialog ask={model.upload} party={model.party} busy={model.busy ?? false} actions={actions} />}
+      {model.upload && <UploadDialog ask={model.upload} party={model.party} busy={model.busy ?? false} onChange={actions?.onUploadChange} onConfirm={actions?.onUploadConfirm} onCancel={actions?.onUploadCancel} />}
       {slots?.overlays /* B-TH-280 */}
     </>
   )
@@ -444,39 +457,61 @@ function Row({ series, model, actions, slots, place, chosen, onChoose }: { serie
 
 const AUDIENCE_WORD: Readonly<Record<FileAudience, string>> = { OFFICE: 'upload.audience.OFFICE', FLOOR: 'upload.audience.FLOOR', PARTNER: 'upload.audience.PARTNER', LINK: 'upload.audience.LINK' }
 
-/** "Add 2 files": the kind and the audience asked once, in the system's words; the audience starts on Office. */
-function UploadDialog({ ask, party, busy, actions }: { ask: UploadAsk; party: FilesViewModel['party']; busy: boolean; actions?: FilesViewActions | undefined }) {
+/**
+ * "Add 2 files": the kind and the audience asked once, in the system's words; the audience starts on Office. F-OF-103 (13-backend §7 row 1:
+ * exported, the ONE upload window): on an order it asks "Where it goes" (the order · Line {seq} · …) and offers no "Fiscal copy" (a fiscal
+ * paper is made at its home); opened by "Add files…" it has its own drop area (`onAdd`), and waits for a file before Add.
+ */
+export function UploadDialog({ ask, party, busy, onChange, onConfirm, onCancel, onAdd }: { ask: UploadAsk; party: { readonly name: string } | null; busy: boolean; onChange?: ((change: Partial<Pick<UploadAsk, 'kind' | 'audience' | 'sheet' | 'priced' | 'place'>>) => void) | undefined; onConfirm?: (() => void) | undefined; onCancel?: (() => void) | undefined; onAdd?: ((files: File[]) => void) | undefined }) {
   const t = useT(FILES_VIEW_NS)
   const fileWords = useT('record-thread-files')
   const pricedWords = useT('record-files') // F-CP-144
   const pricedHeld = uploadPricedHeld(ask) // F-CP-144
   const locale = useLocale()
   const audiences = ask.audiences.filter((audience) => audience !== 'PARTNER' || party !== null)
+  const count = ask.files.length
+  const placeWords = (place: UploadPlace) => (place.kind === 'order' ? t('upload.place.order') : place.what ? t('upload.place.lineOf', { seq: place.seq ?? 0, what: place.what }) : t('upload.place.line', { seq: place.seq ?? 0 }))
   return (
     <Modal
       open
-      onClose={() => actions?.onUploadCancel?.()}
+      onClose={() => onCancel?.()}
       size="md"
-      title={t('upload.title', { count: ask.files.length })}
+      title={count === 0 ? t('upload.titleAdd') : t('upload.title', { count })}
       footer={
         <>
-          <Button onClick={() => actions?.onUploadCancel?.()}>{t('upload.cancel')}</Button>
-          <Button variant="primary" heldReason={busy ? t('upload.busy') : uploadAskHeld(ask) ? t(uploadAskHeld(ask)!) : pricedHeld ? pricedWords(pricedHeld) /* F-CP-144 */ : null} onClick={() => actions?.onUploadConfirm?.()}>
-            {t('upload.confirm', { count: ask.files.length })}
+          <Button onClick={() => onCancel?.()}>{t('upload.cancel')}</Button>
+          <Button variant="primary" heldReason={busy ? t('upload.busy') : count === 0 ? t('upload.noneYet') /* F-OF-103 */ : uploadAskHeld(ask) ? t(uploadAskHeld(ask)!) : pricedHeld ? pricedWords(pricedHeld) /* F-CP-144 */ : null} onClick={() => onConfirm?.()}>
+            {count === 0 ? t('upload.titleAdd') : t('upload.confirm', { count })}
           </Button>
         </>
       }
     >
       <div className="fw-rtv-upload">
-        <ul className="fw-rtv-upload-files">
-          {ask.files.map((file) => (
-            <li key={file.name}>
-              {file.name} <span className="fw-rtv-muted">{sizeWords(file.sizeBytes, locale)}</span>
-            </li>
-          ))}
-        </ul>
+        {/* F-OF-103: opened by "Add files…", the window takes the files itself (drop or browse); more join the ones chosen. */}
+        {onAdd && <FileDropzone multiple onFiles={(files) => onAdd(files)} hint={t('upload.hint')} />}
+        {count > 0 && (
+          <ul className="fw-rtv-upload-files">
+            {ask.files.map((file, index) => (
+              <li key={`${index}:${file.name}`}>
+                {file.name} <span className="fw-rtv-muted">{sizeWords(file.sizeBytes, locale)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {/* F-OF-103 (10-design §7): where it goes — the order or one of its lines. */}
+        {ask.places && ask.places.length > 0 && (
+          <Field label={t('upload.where')}>
+            <Select value={ask.place ?? ask.places[0]!.key} onChange={(event) => onChange?.({ place: event.target.value })}>
+              {ask.places.map((place) => (
+                <option key={place.key} value={place.key}>
+                  {placeWords(place)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
         <Field label={t('upload.kind')}>
-          <Select value={ask.kind} onChange={(event) => actions?.onUploadChange?.({ kind: event.target.value as FileKind })}>
+          <Select value={ask.kind} onChange={(event) => onChange?.({ kind: event.target.value as FileKind })}>
             {ask.kinds.map((kind) => (
               <option key={kind} value={kind}>
                 {fileWords(`kind.${kind}`)}
@@ -484,6 +519,7 @@ function UploadDialog({ ask, party, busy, actions }: { ask: UploadAsk; party: Fi
             ))}
           </Select>
         </Field>
+        {ask.places && <p className="fw-rtv-muted">{t('upload.noFiscal') /* F-OF-103 (F5-B1) */}</p>}
         {/* B-TH-283 (B-TH-083): the measurement-sheet tick, at upload. */}
         <Checkbox
           label={
@@ -492,7 +528,7 @@ function UploadDialog({ ask, party, busy, actions }: { ask: UploadAsk; party: Fi
             </span>
           }
           checked={ask.sheet ?? false}
-          onChange={(event) => actions?.onUploadChange?.({ sheet: event.target.checked })}
+          onChange={(event) => onChange?.({ sheet: event.target.checked })}
         />
         {/* F-CP-144 (B-CP-014): "This file shows prices" — a customer's PO, a price list: then only people who see prices open it. */}
         <Checkbox
@@ -502,7 +538,7 @@ function UploadDialog({ ask, party, busy, actions }: { ask: UploadAsk; party: Fi
             </span>
           }
           checked={ask.priced ?? false}
-          onChange={(event) => actions?.onUploadChange?.({ priced: event.target.checked })}
+          onChange={(event) => onChange?.({ priced: event.target.checked })}
         />
         {pricedHeld && <p className="fw-rtv-held">{pricedWords(pricedHeld)}</p>}
         <fieldset className="fw-rtv-fieldset">
@@ -513,7 +549,7 @@ function UploadDialog({ ask, party, busy, actions }: { ask: UploadAsk; party: Fi
               name="fw-rtv-audience"
               checked={ask.audience === audience}
               selected={ask.audience === audience}
-              onChange={() => actions?.onUploadChange?.({ audience })}
+              onChange={() => onChange?.({ audience })}
               title={t(AUDIENCE_WORD[audience], { party: party?.name ?? '' })}
               description={t(`${AUDIENCE_WORD[audience]}Body`, { party: party?.name ?? '' })}
             />
@@ -522,6 +558,53 @@ function UploadDialog({ ask, party, busy, actions }: { ask: UploadAsk; party: Fi
       </div>
     </Modal>
   )
+}
+
+/** F-OF-103 (F5-B6): the files the virus scan holds after an upload — said once, with why; they open once the scan says clean. */
+function HeldUploads({ names, onDismiss }: { names: readonly string[]; onDismiss?: (() => void) | undefined }) {
+  const t = useT(FILES_VIEW_NS)
+  return (
+    <Banner tone="warning" title={t('upload.heldTitle', { count: names.length })} action={onDismiss ? <Button size="sm" variant="quiet" onClick={onDismiss}>{t('refused.dismiss')}</Button> : undefined}>
+      <p className="fw-rtv-muted">{t('keep.scanPending')}</p>
+      <ul className="fw-rtv-refused">
+        {names.map((name, index) => (
+          <li key={`${index}:${name}`}>{name}</li>
+        ))}
+      </ul>
+    </Banner>
+  )
+}
+
+/** F-OF-103: the refused files of the last upload, with why (F5-B7: the API's words) — the order's body says them as the window does. */
+function RefusedUploads({ refused, onDismiss }: { refused: readonly { readonly name: string; readonly reason: string }[]; onDismiss?: (() => void) | undefined }) {
+  const t = useT(FILES_VIEW_NS)
+  return (
+    <Banner tone="danger" title={t('refused.title', { count: refused.length })} action={onDismiss ? <Button size="sm" variant="quiet" onClick={onDismiss}>{t('refused.dismiss')}</Button> : undefined}>
+      <ul className="fw-rtv-refused">
+        {refused.map((one, index) => (
+          <li key={`${index}:${one.name}`}>
+            <strong>{one.name}</strong>: {one.reason}
+          </li>
+        ))}
+      </ul>
+    </Banner>
+  )
+}
+
+/** F-OF-103: files dropped anywhere on Files go to "Add files…" (the window asks where they go and what they are). */
+function dropOn(onFiles: ((files: File[]) => void) | null) {
+  if (!onFiles) return {}
+  return {
+    onDragOver: (event: DragEvent<HTMLElement>) => {
+      if (event.dataTransfer?.types?.includes('Files')) event.preventDefault()
+    },
+    onDrop: (event: DragEvent<HTMLElement>) => {
+      const files = [...(event.dataTransfer?.files ?? [])]
+      if (files.length === 0) return
+      event.preventDefault()
+      onFiles(files)
+    },
+  }
 }
 
 // ── F-SA-237 (sales page plan N9, picks P14, R7) ──────────────────────────────────────────────────────────────────────────────
@@ -623,8 +706,21 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
   }
   const empty = sections.length === 0 && (!counted || (counted.locked === 0 && counted.checking === 0))
   const words = { t, fileWords, locale }
+  // F-OF-103: "Add files…" — hidden without the right (the read's `may`, else the session's); files dropped on Files go to it too.
+  const mayUpload = !customer && !!model.may?.upload && !!actions?.onOrderAdd
+  const outcome = customer ? null : (model.uploadOutcome ?? null)
   return (
-    <div className={`fw-rtv-order${place === 'window' ? ' is-window' : ''} fw-of-body`}>
+    <div className={`fw-rtv-order${place === 'window' ? ' is-window' : ''} fw-of-body`} {...dropOn(mayUpload ? (files) => actions?.onOrderAdd?.(files) : null)}>
+      {/* F-OF-103: the order's thread window has no head of its own — its one Add is here (the tab's sits in the Files head). */}
+      {place === 'window' && mayUpload && (
+        <div className="fw-of-wbar">
+          <Button size="sm" onClick={() => actions?.onOrderAdd?.([])}>
+            <Upload size={14} aria-hidden /> {t('files.add')}
+          </Button>
+        </div>
+      )}
+      {outcome && outcome.refused.length > 0 && <RefusedUploads refused={outcome.refused} onDismiss={actions?.onOrderUploadDismiss} />}
+      {outcome && outcome.held.length > 0 && <HeldUploads names={outcome.held} onDismiss={actions?.onOrderUploadDismiss} />}
       {counted && <CountedLine counted={counted} />}
       {read.truncated && <p className="fw-rtv-muted">{t('order.truncated', { count: read.total })}</p>}
       {empty ? (
@@ -706,6 +802,8 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
           returnFocusTo={model.viewer.returnTo}
         />
       )}
+      {/* F-OF-103: "Add files…" — the ONE upload window (the order or one of its lines; no "Fiscal copy" here). */}
+      {model.upload && !customer && <UploadDialog ask={model.upload} party={party} busy={model.busy ?? false} onChange={actions?.onOrderUploadChange} onConfirm={actions?.onOrderUploadConfirm} onCancel={actions?.onOrderUploadCancel} onAdd={actions?.onOrderAdd} />}
     </div>
   )
 }
