@@ -119,8 +119,11 @@ export function useShipmentsActs(input: {
     (shipment: { readonly id: string; readonly number: string }, words: NoticeWords, told: NoticeWords | null) => {
       setOpen(null)
       reload()
+      // T.2: the deliveries read again too — an act that keeps the status (the expected arrival by hand) changes what the row says.
+      setDeliveriesAttempt((count) => count + 1)
       setNotice({ tone: 'success', words, door: { href: `${prefix}/warehouse/shipments/${shipment.id}`, words: { key: 'ships.carries.notRead', ns: 'order-shipments' } }, ...(told ? { told } : {}) })
     },
+    // (setDeliveriesAttempt is a state setter, stable: declared below with the deliveries read.)
     [prefix, reload, setNotice],
   )
   const shipmentDoor = row && open && order ? doorOf({ row: { id: row.id, number: row.number, version: row.version ?? 1 }, order: { id: order.id, companyId: order.companyId, partyId: order.partyId /* F-OS-302 */, shipComplete: order.shipComplete === true }, open, can, prefix, close, said, parcelWords: parcelWordsOf(row, order.lines) /* F-OS-301 */ }) : null

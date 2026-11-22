@@ -4,7 +4,7 @@ import { expectNothingOf } from './_harness/brand-scan'
 import { seen, type Desk, type Flow } from './_harness/flow'
 import { defineStage } from './_harness/stages'
 import { ensureBrand, signInToPortal, type PortalDesk } from './_harness/two-brands'
-import { answerOf, byApi, day, dialog, press, routerActivity } from './_harness/ui'
+import { answerOf, byApi, day, dialog, pickDate, press, routerActivity } from './_harness/ui'
 import { startsWith, words } from './_harness/words'
 // F-MS-106 (set the stage by hand): the customer's own stage and count words, and the domain's held words (no catalogue key has them).
 import { COUNT_TO_FOLLOW_WORDS } from '@nexus/factory-domain/production-brand/portal-read'
@@ -74,6 +74,14 @@ import { MONEY_WORDS, moneyWorld, scheduleOf } from './th9-money-world'
  *      and the target; Accept the difference… from Price check's ⋯ → "Accepted by hand"; Undo this payment… on the other order's
  *      part payment; Sales reads words, never an amount, no money door, no Price check, no Margin; Read-only finds no act. B's buyer
  *      and A's Money: step 8 (?tab=money answers the neutral refusal).
+ *  15  F-OS (order SHIPMENTS tab, T.2; plan D3–D6; 18-lead-settles L1, L8): the tab at the end, on the seeds' orders of P1 — on
+ *      SEED-SO-0003, step 6's shared draft split into 3 in place (Warehouse's own Split, groups[]), a garment moved from it onto a
+ *      new one, one new one merged into the other ("Merged into …"); SEED-SO-0002 taken off it in one go; a draft that travels
+ *      without a DDT (a reason, "Set by hand") and its DDT put back; Tracking numbers… per parcel where a parcel may take one; on
+ *      SEED-SO-0101's own-van shipment the expected arrival set by hand and Mark delivered… (no reason: our van) — the order follows;
+ *      on SEED-SH-0001's carrier labels Mark delivered… with a reason ("Set by hand"); Sales and Read-only read every cell with no
+ *      door; A's buyer reads the typed parcel numbers in the portal (B's portal refuses A's orders: step 8). Each part the world
+ *      cannot give (no PACKED hand-booked shipment, no parcel without a label) is said in the report.
  * Not here, said in the report: cut pieces (the floor's flow: the extra-pieces outcome is held by the design case
  * lines-review-outcome, B-OP-071 O1 and the unit tests of F-OP-107), the record of a shipment made elsewhere whose garments the seeds
  * date in the story's days ahead (B-OP-071 O4 records one), and the invoices of a shared shipment that left (B-OP-045).
@@ -113,6 +121,15 @@ const DSW = words('ds-words') // F-OL-06: the DS bar's own words (its region)
 const REFUSE_WORDS = 'Made-up: asked about an older version of the order; ask it again on this one.'
 const LIFT_REASON = 'Made-up: the lining roll came in (TH9).' // F-PT T.2
 const CHANGE_REASON = 'Made-up: Brand Alpha wants one fewer 52 (TH9 step 13).' // F-OC T.2
+// ---- F-OS T.2 (order SHIPMENTS tab): step 15's made-up words (office only; nobody of the floor named) ----
+const SHIP_WORDS = Object.freeze({
+  move: 'Made-up: one garment goes with the other draft (TH9 step 15).',
+  takeOff: 'Made-up: SEED-SO-0002 leaves on its own date (TH9 step 15).',
+  noDdt: 'Made-up: an immediate invoice travels with these goods (TH9 step 15).',
+  ddtBack: 'Made-up: the DDT is issued after all (TH9 step 15).',
+  labelled: 'Made-up: the customer confirmed the delivery by phone; the carrier never scanned it (TH9 step 15).',
+  parcel: (seq: number) => `T-TH9-PCL-000${seq}`,
+})
 // ---- F-OO-215 (order overview lane): SEED-SO-0002's Overview ----
 /**
  * SEED-SO-0002's headline as the seed gives it: its status words (its stage follows them, "Partly shipped · …"). B-OO-016 (Owner D9,
@@ -237,7 +254,7 @@ async function refusedToBeta(beta: PortalDesk, path: string, ofAlpha: readonly s
 
 export default defineStage({
   proves:
-    'the order page at the end: the yes in place (a waiting order confirmed, a stale change refused with its reason; a yes the Owner asked is held for her); a work order made in place; edit mode’s strip says which work order follows now and which waits, Apply, the planner decides the waiting one on the order page; tracking typed, corrected and cleared ("No live tracking"); the made-elsewhere dialog with its paper DDT and its live rules; a combined shipment of two orders made in place (B-OP-047); the files viewer walk by keys; customer B never offered or shown A’s orders, A’s ids answer B’s neutral refusal; SEED-SO-0002’s Overview sections 1–8 (F-OO-215): the headline, strips and moves, a line’s ⋯, People, Next dates, Requests & changes = the Changes badge, Linked records = the tab badges, a custom value saved beside Order facts at the order’s version (the sheet’s edit at the old version stale), the office note saved after it; the Production tab at the end (F-PT T.2): the ready ask, the supervisor’s reply answering it (“Latest update”), the promise history and its door, a hold lifted from Problems & holds, Read-only with no act; the Changes tab at the end (F-OC T.2): a save with the tick asks the customer by e-mail (the FAKE mailbox), Waiting on the customer draws the revised order, the customer’s yes in its portal empties it and What changed says “Customer said yes”, the planner decides the waiting work-order change from Waiting, Read-only with no act; the Money tab at the end (F-OM T.2): a deposit accepted short (bank charges) counts as paid and the band offers Make work orders, the balance "Set by hand", the margin’s hand cost and target, a price difference accepted by hand, a part payment undone, Sales with words and no amount, Read-only with no act',
+    'the order page at the end: the yes in place (a waiting order confirmed, a stale change refused with its reason; a yes the Owner asked is held for her); a work order made in place; edit mode’s strip says which work order follows now and which waits, Apply, the planner decides the waiting one on the order page; tracking typed, corrected and cleared ("No live tracking"); the made-elsewhere dialog with its paper DDT and its live rules; a combined shipment of two orders made in place (B-OP-047); the files viewer walk by keys; customer B never offered or shown A’s orders, A’s ids answer B’s neutral refusal; SEED-SO-0002’s Overview sections 1–8 (F-OO-215): the headline, strips and moves, a line’s ⋯, People, Next dates, Requests & changes = the Changes badge, Linked records = the tab badges, a custom value saved beside Order facts at the order’s version (the sheet’s edit at the old version stale), the office note saved after it; the Production tab at the end (F-PT T.2): the ready ask, the supervisor’s reply answering it (“Latest update”), the promise history and its door, a hold lifted from Problems & holds, Read-only with no act; the Changes tab at the end (F-OC T.2): a save with the tick asks the customer by e-mail (the FAKE mailbox), Waiting on the customer draws the revised order, the customer’s yes in its portal empties it and What changed says “Customer said yes”, the planner decides the waiting work-order change from Waiting, Read-only with no act; the Money tab at the end (F-OM T.2): a deposit accepted short (bank charges) counts as paid and the band offers Make work orders, the balance "Set by hand", the margin’s hand cost and target, a price difference accepted by hand, a part payment undone, Sales with words and no amount, Read-only with no act; the Shipments tab at the end (F-OS T.2): split into several, a garment moved and a draft merged ("Merged into …"), an order taken off a shared draft in one go, a draft that travels without a DDT and its DDT put back, tracking numbers per parcel, the expected arrival set by hand and Mark delivered on our van (the order follows), Mark delivered over carrier labels with a reason ("Set by hand"), Sales and Read-only with no door',
   async run(flow: Flow) {
     const sales = await flow.desk('sales')
     const alphaId = await flow.seedId('party:P1')
@@ -1241,5 +1258,213 @@ export default defineStage({
       // B's buyer and A's Money: step 8 already opens A's order (with ?tab=money) in B's portal — the neutral refusal.
     })
     // ---- end F-OM T.2
+
+    // ---- F-OS T.2 (order SHIPMENTS tab; 15-steps T.2): the tab at the end, on the seeds' orders of P1 ----
+    await flow.step('15 · the Shipments tab: step 6’s shared draft split into 3 in place, a garment moved, a draft merged ("Merged into …"); SEED-SO-0002 taken off in one go; travels without a DDT and back; tracking numbers per parcel; the expected arrival and Mark delivered on our van (the order follows); Mark delivered over carrier labels with a reason; Sales and Read-only with no door', async () => {
+      const warehouse = await flow.desk('warehouse')
+      const { page } = warehouse
+      const rowsOf = async (orderId: string): Promise<Json[]> => ((await flow.read(page, `/sales/orders/${orderId}`)).order.chain.shipments ?? []) as Json[]
+      const ownersOf = async (shipmentId: string): Promise<string | null> => {
+        for (const order of [world.so3, world.so2]) if ((await rowsOf(order.id)).some((row) => row.id === shipmentId)) return order.id
+        return null
+      }
+      /** A row's ⋯ on the order's Shipments tab, then one of its items (Warehouse's own window opens in place). */
+      const rowAct = async (orderId: string, number: string, item: string) => {
+        await warehouse.go(`/sales/orders/${orderId}?tab=shipments`)
+        const target = shipmentRow(page, number)
+        await seen(target, 60_000)
+        await press(target.getByRole('button', { name: OS('ships.row.more', { number }), exact: true }))
+        await press(page.getByRole('menuitem', { name: item, exact: true }))
+        const box = dialog(page)
+        await seen(box, 60_000)
+        return box
+      }
+
+      // ── D3: split into several, move, merge — on step 6's draft (SEED-SO-0003 first, SEED-SO-0002 beside it) ──
+      const shared = (await rowsOf(world.so3.id)).find((row) => row.status === 'DRAFT' && ((row.orders ?? []) as Json[]).length > 1 && row.orders[0]?.id === world.so3.id)
+      const preview = shared ? await flow.read(page, `/shipping/shipments/${shared.id}/split`) : null
+      const movable = ((preview?.lines ?? []) as Json[]).filter((line) => (line.movable as number) > 0)
+      const units = movable.flatMap((line) => Array.from({ length: line.movable as number }, () => line))
+      const total = ((preview?.lines ?? []) as Json[]).reduce((sum, line) => sum + (line.quantity as number), 0)
+      let children: string[] = []
+      if (!shared || units.length < 2 || total < 3) notHere('split into several: step 6’s shared draft carries fewer than three garments that may move (cartons and serials stay)')
+      else {
+        const box = await rowAct(world.so3.id, shared.number as string, DEPTH('split.menu'))
+        await box.getByRole('spinbutton', { name: OS('door.split.into'), exact: true }).fill('3')
+        // New shipment 1 and 2 take one garment each (the same line when it gives two); the rest stays on the draft.
+        for (const [index, line] of [units[0]!, units[1]!].entries()) {
+          await box.getByRole('spinbutton', { name: OS('door.split.movesTo', { line: line.label as string, size: line.size as string, n: index + 1 }), exact: true }).fill('1')
+        }
+        await box.getByRole('radio', { name: startsWith(DEPTH('splitReason.PART_READY')) }).check()
+        await flow.shot(page, 'shipments-split-into-3')
+        const split = await answerOf(page, 'POST', /^\/shipping\/shipments\/[^/]+\/split$/, () => press(box.getByRole('button', { name: OS('door.split.goInto', { count: 3 }), exact: true })), /^201$/)
+        children = ((split.shipments ?? []) as Json[]).map((made) => made.id as string)
+        expect(children, 'two new shipments in ONE command (groups[])').toHaveLength(2)
+        await flow.settle()
+        // Each new shipment says where it came from, on the order whose garments it carries (S3: its own first order).
+        for (const id of children) {
+          const owner = await ownersOf(id)
+          expect(owner, `the new shipment ${id} shows on an order of A`).not.toBeNull()
+          const made = (await rowsOf(owner!)).find((row) => row.id === id)!
+          expect(made.splitFrom, 'split from the shared draft').toMatchObject({ id: shared.id })
+          await warehouse.go(`/sales/orders/${owner}?tab=shipments`)
+          await seen(shipmentRow(page, made.number as string).getByText(OS('ships.chip.splitFrom', { number: shared.number as string })), 60_000)
+        }
+      }
+
+      // Move: one more garment of the draft onto the first new shipment (both drafts of the same customer, locked together).
+      const [first, second] = children
+      const left = shared ? await flow.read(page, `/shipping/shipments/${shared.id}/split`) : null
+      const stillMovable = ((left?.lines ?? []) as Json[]).find((line) => (line.movable as number) > 0)
+      const stillTotal = ((left?.lines ?? []) as Json[]).reduce((sum, line) => sum + (line.quantity as number), 0)
+      const firstRow = first ? ((await rowsOf((await ownersOf(first)) ?? world.so3.id)).find((row) => row.id === first) ?? null) : null
+      if (!shared || !firstRow || !stillMovable || stillTotal < 2) notHere('move garments to…: nothing more may move off the draft while something stays')
+      else {
+        const box = await rowAct(world.so3.id, shared.number as string, OS('ships.act.move'))
+        await box.getByRole('radio', { name: startsWith(`${firstRow.number as string} · `) }).check()
+        await box.getByRole('spinbutton', { name: DEPTH('split.movesOf', { line: stillMovable.label as string, size: stillMovable.size as string }), exact: true }).fill('1')
+        await box.getByRole('radio', { name: startsWith(DEPTH('splitReason.CUSTOMER_REQUEST')) }).check()
+        await box.getByRole('textbox', { name: startsWith(OS('door.wordsOptional')) }).fill(SHIP_WORDS.move)
+        const moved = await answerOf(page, 'POST', /^\/shipping\/shipments\/[^/]+\/move$/, () => press(box.getByRole('button', { name: startsWith(lead(OS('move.go_one'))) }).first()))
+        expect(moved.moved, 'one garment moved').toMatchObject({ garments: 1, merged: false })
+        await flow.settle()
+      }
+
+      // Merge: the second new shipment into the first — it is cancelled "Merged into …", never deleted.
+      const secondOwner = second ? await ownersOf(second) : null
+      const secondRow = secondOwner ? ((await rowsOf(secondOwner)).find((row) => row.id === second) ?? null) : null
+      if (!secondRow || !firstRow || !secondOwner) notHere('merge into…: the split made no two drafts to merge')
+      else {
+        const box = await rowAct(secondOwner, secondRow.number as string, OS('ships.act.merge'))
+        await box.getByRole('radio', { name: startsWith(`${firstRow.number as string} · `) }).check()
+        await answerOf(page, 'POST', /^\/shipping\/shipments\/[^/]+\/merge$/, () => press(box.getByRole('button', { name: OS('move.mergeGo', { number: firstRow.number as string }), exact: true })))
+        await flow.settle()
+        const emptied = (await flow.read(page, `/shipping/shipments/${second}`)).shipment as Json
+        expect(emptied, 'the emptied draft stays, cancelled').toMatchObject({ status: 'CANCELLED' })
+        expect(String(emptied.cancelReason)).toMatch(/^Merged into /)
+        // Where the order still lists it (its first order): "Show N cancelled", then "Merged into …" on its row.
+        if ((await rowsOf(secondOwner)).some((row) => row.id === second)) {
+          await warehouse.go(`/sales/orders/${secondOwner}?tab=shipments`)
+          await press(page.locator('#shipments').getByRole('button', { name: startsWith(lead(OD('ship.showCancelled', { count: 2 }))) }).first())
+          await seen(shipmentRow(page, secondRow.number as string).getByText(OS('ships.chip.mergedInto', { number: firstRow.number as string })), 60_000)
+        }
+        await flow.shot(page, 'shipments-merged')
+      }
+
+      // ── X1-B2: SEED-SO-0002 taken off the shared draft in ONE step (all or nothing; the draft keeps SEED-SO-0003's garments) ──
+      const onSo2 = shared ? (await rowsOf(world.so2.id)).find((row) => row.id === shared.id) : undefined
+      if (!shared || !onSo2) notHere('take this order off…: SEED-SO-0002 has no garment left on step 6’s draft')
+      else {
+        const box = await rowAct(world.so2.id, shared.number as string, OS('ships.act.takeOff'))
+        await box.getByRole('textbox', { name: startsWith(OS('door.why')) }).fill(SHIP_WORDS.takeOff)
+        await answerOf(page, 'POST', /^\/shipping\/shipments\/[^/]+\/orders\/[^/]+\/take-off$/, () => press(box.getByRole('button', { name: DEPTH('shipOrders.takeOffGo'), exact: true })))
+        await flow.settle()
+        await expect.poll(async () => (await rowsOf(world.so2.id)).some((row) => row.id === shared.id), { timeout: 60_000 }).toBe(false)
+        expect((await rowsOf(world.so3.id)).some((row) => row.id === shared.id), 'the draft stays on SEED-SO-0003').toBe(true)
+      }
+
+      // ── D6 (O7 B): a draft that travels without a DDT (a reason; "Set by hand"), then its DDT put back (the world as it was) ──
+      const draft = (await rowsOf(world.so3.id)).find((row) => row.status === 'DRAFT' && row.origin !== 'ELSEWHERE' && row.ddtRequired === true && !row.ddt)
+      if (!draft) notHere('travels without a DDT: no draft of SEED-SO-0003 that needs a DDT in this world')
+      else {
+        const box = await rowAct(world.so3.id, draft.number as string, OS('ships.act.ddtOff'))
+        await box.getByRole('checkbox', { name: OS('door.ddt.tick'), exact: true }).check()
+        await box.getByRole('textbox', { name: startsWith(OS('door.why')) }).fill(SHIP_WORDS.noDdt)
+        await answerOf(page, 'PUT', /^\/shipping\/shipments\/[^/]+\/ddt-required$/, () => press(box.getByRole('button', { name: OS('door.ddt.go'), exact: true })))
+        await flow.settle()
+        await seen(shipmentRow(page, draft.number as string).getByText(OS('ships.chip.noDdt')), 60_000)
+        await flow.shot(page, 'shipments-without-ddt')
+        const back = await rowAct(world.so3.id, draft.number as string, OS('ships.act.ddtBack'))
+        await back.getByRole('textbox', { name: startsWith(OS('door.why')) }).fill(SHIP_WORDS.ddtBack)
+        await answerOf(page, 'PUT', /^\/shipping\/shipments\/[^/]+\/ddt-required$/, () => press(back.getByRole('button', { name: OS('door.ddt.backGo'), exact: true })))
+        await flow.settle()
+        await expect(shipmentRow(page, draft.number as string).getByText(OS('ships.chip.noDdt'))).toHaveCount(0, { timeout: 60_000 })
+      }
+
+      // ── D4 (B-OS-022): Tracking numbers… per parcel, where a parcel without a label may take one (PACKED or left) ──
+      const so0101 = await orderOf(flow, page, 'SEED-SO-0101')
+      const candidates = [world.so3.id, world.so2.id, so0101.id]
+      let typedOn: { orderId: string; number: string; seqs: number[] } | null = null
+      for (const orderId of candidates) {
+        for (const row of await rowsOf(orderId)) {
+          const free = ((row.parcels ?? []) as Json[]).filter((parcel) => parcel.source === null && parcel.number === null)
+          if (typedOn || row.mayTypeTracking?.allowed !== true || !['PACKED', 'SHIPPED'].includes(row.status as string) || free.length === 0) continue
+          typedOn = { orderId, number: row.number as string, seqs: free.map((parcel) => parcel.seq as number) }
+        }
+      }
+      if (!typedOn) notHere('tracking numbers per parcel: no packed or left shipment of A carried by a carrier booked by hand with a parcel no label tracks')
+      else {
+        await warehouse.go(`/sales/orders/${typedOn.orderId}?tab=shipments`)
+        await press(shipmentRow(page, typedOn.number).getByRole('button', { name: OS('ships.act.tracking'), exact: true }))
+        const box = dialog(page)
+        await seen(box.getByText(startsWith(lead(OS('door.tracking.parcels')))).first(), 60_000)
+        for (const seq of typedOn.seqs) await box.getByRole('textbox', { name: OS('door.tracking.parcelNumber', { seq }), exact: true }).fill(SHIP_WORDS.parcel(seq))
+        // After the goods left a number the customer saw that changes asks why (none was typed before: no reason here).
+        await answerOf(page, 'PUT', /^\/shipping\/shipments\/[^/]+\/own-transport\/tracking$/, () => press(box.getByRole('button', { name: OS('door.tracking.go'), exact: true })))
+        await flow.settle()
+        const typedRow = (await rowsOf(typedOn.orderId)).find((row) => row.number === typedOn!.number)
+        expect(((typedRow?.parcels ?? []) as Json[]).filter((parcel) => parcel.source === 'TYPED').map((parcel) => parcel.number)).toEqual(expect.arrayContaining(typedOn.seqs.map((seq) => SHIP_WORDS.parcel(seq))))
+        await flow.shot(page, 'shipments-parcel-numbers')
+      }
+
+      // ── B-OS-016, D5: SEED-SO-0101's own-van shipment — the expected arrival set by hand, then Mark delivered… (our van: no reason) ──
+      const van = (await rowsOf(so0101.id)).find((row) => row.status === 'SHIPPED' && row.transportBy === 'SENDER')
+      if (!van) notHere('our van: SEED-SO-0101 has no shipment on its way with our van in this world')
+      else {
+        const eta = await rowAct(so0101.id, van.number as string, OS('ships.act.eta'))
+        await pickDate(eta, OS('door.eta.day'), day(3))
+        await answerOf(page, 'PUT', /^\/shipping\/shipments\/[^/]+\/eta$/, () => press(eta.getByRole('button', { name: OS('door.eta.go'), exact: true })))
+        await flow.settle()
+        await warehouse.go(`/sales/orders/${so0101.id}?tab=shipments`)
+        await seen(shipmentRow(page, van.number as string).getByText(OS('ships.dates.setByHand')).first(), 60_000)
+        const delivered = await rowAct(so0101.id, van.number as string, OS('ships.act.delivered'))
+        // Our van: why is not asked (no carrier's tracking to know better than).
+        await expect(delivered.getByRole('textbox', { name: startsWith(OS('door.why')) })).toHaveCount(0)
+        await answerOf(page, 'POST', /^\/shipping\/shipments\/[^/]+\/own-transport\/events$/, () => press(delivered.getByRole('button', { name: DEPTH('transport.statusGo', { status: DEPTH('trackingStatus.DELIVERED') }), exact: true })))
+        await flow.settle()
+        // The order follows its shipments (the worker's sales.ordersFollowShipments): every garment delivered → Delivered.
+        await expect.poll(() => statusOf(flow, page, so0101.id), { timeout: 60_000 }).toBe('DELIVERED')
+        await warehouse.go(`/sales/orders/${so0101.id}?tab=shipments`)
+        await seen(shipmentRow(page, van.number as string).getByText(OD('shipStatus.DELIVERED')).first(), 60_000)
+        await flow.shot(page, 'shipments-van-delivered')
+      }
+
+      // ── D5 (B-OS-015): Mark delivered… over carrier labels — the person says why; tagged "Set by hand" (L1: Mark returned… beside it) ──
+      const labelled = (await rowsOf(world.so2.id)).find((row) => row.status === 'SHIPPED' && row.transportBy === 'CARRIER' && (((row.parcels ?? []) as Json[]).some((parcel) => parcel.source === 'LABEL') || row.mayTypeTracking?.code === 'LABELLED'))
+      if (!labelled) notHere('over carrier labels: no shipment of SEED-SO-0002 on its way with a carrier label in this world')
+      else {
+        const box = await rowAct(world.so2.id, labelled.number as string, OS('ships.act.delivered'))
+        await seen(box.getByText(OS('door.status.labelled')), 60_000)
+        await box.getByRole('textbox', { name: startsWith(OS('door.why')) }).fill(SHIP_WORDS.labelled)
+        await answerOf(page, 'POST', /^\/shipping\/shipments\/[^/]+\/own-transport\/events$/, () => press(box.getByRole('button', { name: DEPTH('transport.statusGo', { status: DEPTH('trackingStatus.DELIVERED') }), exact: true })))
+        await flow.settle()
+        await expect.poll(async () => (await rowsOf(world.so2.id)).find((row) => row.id === labelled.id)?.status, { timeout: 60_000 }).toBe('DELIVERED')
+        await warehouse.go(`/sales/orders/${world.so2.id}?tab=shipments`)
+        // "Set by hand" over a carrier's own labels (a TEST label is never tracked: then it reads as typed by the office).
+        if (((labelled.parcels ?? []) as Json[]).some((parcel) => parcel.source === 'LABEL')) await seen(shipmentRow(page, labelled.number as string).getByText(OS('ships.dates.setByHand')).first(), 60_000)
+        await flow.shot(page, 'shipments-labelled-by-hand')
+      }
+
+      // ── D2: Sales reads every cell with no shipment door; Read-only reads with no act at all ──
+      for (const key of ['sales', 'reader'] as const) {
+        const desk = key === 'sales' ? sales : await flow.desk('reader')
+        await desk.go(`/sales/orders/${world.so3.id}?tab=shipments`)
+        const tab = desk.page.locator('#shipments')
+        await seen(tab, 60_000)
+        for (const name of [OS('ships.act.tracking'), OD('step.createShipment'), OD('elsewhere.title')]) await expect(tab.getByRole('button', { name, exact: true }), `${key}: ${name}`).toHaveCount(0)
+        await expectNothingOf(desk.page, BRAND_BETA, world.betaNumbers, `A's Shipments tab (${key})`)
+        await flow.shot(desk.page, `shipments-${key}`)
+      }
+
+      // ── A's buyer reads the parcel numbers typed for its shipment in the portal (B's portal refuses A's orders: step 8) ──
+      if (!typedOn) notHere('the typed parcel numbers in A’s portal: none was typed in this world')
+      else {
+        const alpha = await signInToPortal(flow, BRAND_ALPHA, alphaId)
+        await alpha.go(`/orders/${typedOn.orderId}`)
+        await seen(alpha.page.getByText(SHIP_WORDS.parcel(typedOn.seqs[0]!)).first(), 60_000)
+        await expectNothingOf(alpha.page, BRAND_BETA, world.betaNumbers, 'alpha portal: typed parcel numbers')
+      }
+    })
+    // ---- end F-OS T.2
   },
 })
