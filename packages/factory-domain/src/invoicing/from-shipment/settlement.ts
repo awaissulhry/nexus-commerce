@@ -264,3 +264,44 @@ export function invoicePaymentStateOf(invoice: SettlementInvoice & { readonly op
   return placed > 0 ? 'PART_PAID' : 'OPEN'
 }
 // ── end B-OM-023 ──
+
+// ── B-OM-026 (order money tab W-12): the payment words of the deposit invoices (TD02) and the credit notes (TD04), no amount ──
+/**
+ * Each deposit invoice's payment state by B-OM-023's rule (`invoicePaymentStateOf`). A TD02 bills money received (DPR 633/1972
+ * art. 6 c.4), so what is paid on it is its request's money — its payments, less what refunds of its credit notes gave back —
+ * laid against the request's TD02s in the order given (the order they were made): first their live part (gross less credit
+ * notes), then what their credit notes took back and no refund gave back yet (a refund due, as the settlement counts it). A
+ * TD02 of no request read here bills the money it was issued for (paid = its gross).
+ */
+export function depositInvoicePaymentStatesOf(facts: Pick<SettlementFacts, 'depositRequests' | 'depositInvoices'>): Map<string, InvoicePaymentState> {
+  const paidOf = new Map<string, MinorUnits>()
+  for (const request of facts.depositRequests) {
+    const own = facts.depositInvoices.filter((invoice) => invoice.depositRequestId === request.id)
+    let money = Math.max(0, request.paid - own.reduce((sum, invoice) => sum + (invoice.refunded ?? 0), 0))
+    const take = (room: MinorUnits): MinorUnits => {
+      const taken = Math.min(money, Math.max(0, room))
+      money -= taken
+      return taken
+    }
+    const live = own.map((invoice) => take(invoice.grossTotal - invoice.creditedGross))
+    const back = own.map((invoice) => take(invoice.creditedGross - (invoice.refunded ?? 0)))
+    own.forEach((invoice, index) => paidOf.set(invoice.id, (live[index] ?? 0) + (back[index] ?? 0) + (invoice.refunded ?? 0)))
+  }
+  const states = new Map<string, InvoicePaymentState>()
+  for (const invoice of facts.depositInvoices) {
+    const refunded = invoice.refunded ?? 0
+    const paid = paidOf.get(invoice.id) ?? invoice.grossTotal
+    const open = invoice.grossTotal - invoice.creditedGross - (paid - refunded)
+    states.set(invoice.id, invoicePaymentStateOf({ id: invoice.id, docType: 'TD02', number: invoice.number, status: invoice.status, grossTotal: invoice.grossTotal, creditedGross: invoice.creditedGross, paid, refunded, open: Math.max(0, open), refundDue: Math.max(0, -open) }))
+  }
+  return states
+}
+
+/**
+ * A credit note's payment state: REFUND_DUE while the document it credits has a refund due and the note's own refunds gave back
+ * less than it credits (the money is still the customer's to get back); else CREDITED.
+ */
+export function creditNotePaymentStateOf(note: { readonly gross: MinorUnits; readonly refunded: MinorUnits }, credited: InvoicePaymentState | null): InvoicePaymentState {
+  return credited === 'REFUND_DUE' && note.refunded < note.gross ? 'REFUND_DUE' : 'CREDITED'
+}
+// ── end B-OM-026 ──

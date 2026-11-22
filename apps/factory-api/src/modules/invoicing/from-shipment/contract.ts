@@ -298,9 +298,27 @@ export const settlementContract = defineContract({
             /** What issued invoices deduct from it (net, positive). */
             deductedNet: money.price(z.number().int()),
             depositRequestId: id().nullable(),
+            /**
+             * B-OM-026 (order money tab W-12): where its payment stands, a word-code with no amount, for every invoices.view reader —
+             * its request's money laid against its TD02s (B-OM-023's rule): PAID · CREDITED · REFUND_DUE (· OPEN when the money it
+             * billed was taken back).
+             */
+            paymentState: z.enum(INVOICE_PAYMENT_STATES),
           }),
         ),
-        creditNotes: z.array(output({ id: id(), number: z.string().nullable(), status: z.string(), issueDate: businessDate().nullable(), gross: money.price(z.number().int()), /** The invoice or deposit invoice it credits. */ creditOfId: id() })),
+        creditNotes: z.array(
+          output({
+            id: id(),
+            number: z.string().nullable(),
+            status: z.string(),
+            issueDate: businessDate().nullable(),
+            gross: money.price(z.number().int()),
+            /** The invoice or deposit invoice it credits. */
+            creditOfId: id(),
+            /** B-OM-026: CREDITED, or REFUND_DUE while what it credits has a refund due its refunds did not give back (no amount). */
+            paymentState: z.enum(INVOICE_PAYMENT_STATES),
+          }),
+        ),
         // ── end B-OM-003 ──
         invoicedAmount: money.price(z.number().int()),
         creditedAmount: money.price(z.number().int()),

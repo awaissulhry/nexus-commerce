@@ -313,6 +313,8 @@ describe('stage 15-invoice: deposit TD02 → 2 parcels shipped with a DDT → TD
     expect(settlement.missing).toEqual([{ code: 'BALANCE_DUE', message: "724.80 EUR is still to be paid on the order's invoices." }])
     // B-OM-023: the balance invoice reads OPEN (nothing placed on it yet).
     expect((settlement.invoices as Json[]).find((row) => row.id === S.td24.id)).toMatchObject({ paymentState: 'OPEN' })
+    // B-OM-026 (W-12): the deposit invoice bills the money received: Paid.
+    expect((settlement.depositInvoices as Json[]).find((row) => row.id === S.td02.id)).toMatchObject({ paymentState: 'PAID' })
     expect(await events('order.fully_settled', moneyA.shipping.quality.serialSalesOrderId)).toEqual([])
   })
 
@@ -522,6 +524,11 @@ describe('the walls: office only, the price grain, tenants and companies', () =>
     const priced = (await as('GET', `/invoicing/orders/${order()}/settlement`)).settlement
     expect((body.settlement.invoices as Json[]).map((row) => row.paymentState)).toEqual((priced.invoices as Json[]).map((row) => row.paymentState))
     expect(['OPEN', 'PART_PAID', 'PAID', 'CREDITED', 'REFUND_DUE']).toContain(body.settlement.invoices[0].paymentState)
+    // B-OM-026 (W-12): the deposit invoices and credit notes carry the same words for this reader, never their amounts.
+    expect((body.settlement.depositInvoices as Json[]).map((entry) => entry.paymentState)).toEqual((priced.depositInvoices as Json[]).map((entry) => entry.paymentState))
+    expect((body.settlement.creditNotes as Json[]).map((entry) => entry.paymentState)).toEqual((priced.creditNotes as Json[]).map((entry) => entry.paymentState))
+    for (const entry of body.settlement.depositInvoices as Json[]) expect(entry).not.toHaveProperty('gross')
+    for (const entry of body.settlement.creditNotes as Json[]) expect(entry).not.toHaveProperty('gross')
     const row = (await wall('noPrice', 'GET', '/invoicing/invoices', undefined, 200)).body.invoices.find((entry: Json) => entry.id === S.td24.id)
     for (const field of ['grossTotal', 'paidAmount', 'creditedAmount', 'openAmount']) expect(row).not.toHaveProperty(field)
     expect(row).toHaveProperty('dueDate')
