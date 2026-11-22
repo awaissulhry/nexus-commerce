@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { businessDate, defineContract, id, input, instant, output, unitPrice } from '@nexus/factory-domain/core/contracts'
+import { amountMinor, businessDate, defineContract, id, input, instant, output, unitPrice } from '@nexus/factory-domain/core/contracts'
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
 import { PARTY_TAX_MODES } from '@nexus/factory-domain/parties/tax'
 import { LINE_CHANGES } from '@nexus/factory-domain/sales/amendments/amendments'
@@ -11,7 +11,7 @@ import { IMPACT_CODES } from '@nexus/factory-domain/sales/orders/daily'
 import { MAX_REASON, SALES_ORDER_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
 import { MILESTONE_KINDS, MILESTONE_STATUSES } from '@nexus/factory-domain/sales/orders/schedule'
 // B-OM-004 (order money tab): the plan read's hand acts and undo verdicts.
-import { MONEY_PLAN_ACTS, UNDO_HELD } from '@nexus/factory-domain/sales/orders/money-plan'
+import { ACCEPT_SHORT_WHYS, MONEY_PLAN_ACTS, MONEY_PLAN_REFUSALS, UNDO_HELD } from '@nexus/factory-domain/sales/orders/money-plan'
 import { DEPOSIT_KINDS, MAX_QUOTE_LINES, MAX_SIZE_QUANTITY, MAX_TEXT } from '@nexus/factory-domain/sales/quotes/quotes'
 import { orderView } from './contract'
 // B-OP-012: what the office change's work orders did in its command, and what waits.
@@ -506,3 +506,53 @@ const waiveAnswer = output({ ...scheduleFields, waived: output({ milestoneIds: z
 
 export const waiveStepContract = defineContract({ params: input({ orderId: id(), milestoneId: id() }), body: waiveBody, response: { 200: waiveAnswer } })
 export const waiveDepositRequestContract = defineContract({ params: input({ orderId: id(), requestId: id() }), body: waiveBody, response: { 200: waiveAnswer } })
+
+// ── B-OM-011 … 016 (order money tab; 13-backend §3): the money plan changed by hand — one body, the act its discriminator ──
+const planReason = z.string().trim().min(3).max(500)
+const planLabel = z.string().trim().min(1).max(120)
+/** An amount act's amount: minor units, or the share of the order's gross ("30" %), one of them. Price grain (a no-price writer is refused). */
+const planAmount = { amount: money.price(amountMinor()), pct: money.price(z.string().trim().max(12)) }
+const moneyPlanBody = z.discriminatedUnion('act', [
+  // The version is the target's: the request's (REPLACE_DEPOSIT, ACCEPT_SHORT, a request's day or ask), the step's, the order's (CHANGE_TERMS).
+  input({ act: z.literal('REPLACE_DEPOSIT'), version, reason: planReason, requestId: id(), ...planAmount }),
+  input({ act: z.literal('MOVE_DUE'), version, reason: planReason, milestoneId: id().optional(), requestId: id().optional(), dueDate: businessDate() }),
+  input({ act: z.literal('ASK_AGAIN'), version, reason: planReason, milestoneId: id().optional(), requestId: id().optional(), dueDate: businessDate() }),
+  input({ act: z.literal('ADD_STEP'), version, reason: planReason, kind: z.enum(MILESTONE_KINDS), ...planAmount, dueDate: businessDate().nullish(), label: planLabel.nullish(), from: id() }),
+  input({ act: z.literal('CHANGE_STEP'), version, reason: planReason, milestoneId: id(), ...planAmount, restTo: id().optional() }),
+  input({ act: z.literal('REMOVE_STEP'), version, reason: planReason, milestoneId: id(), restTo: id().optional() }),
+  input({ act: z.literal('RENAME_STEP'), version, reason: planReason, milestoneId: id(), label: planLabel.nullable() }),
+  input({ act: z.literal('UNDO_OPEN'), version, reason: planReason, milestoneId: id() }),
+  input({ act: z.literal('CHANGE_TERMS'), version, reason: planReason, paymentTermsId: id() }),
+  input({ act: z.literal('ACCEPT_SHORT'), version, reason: planReason, requestId: id(), why: z.enum(ACCEPT_SHORT_WHYS) }),
+])
+
+/** Answers the plan read (GET …/schedule) and what the act changed. */
+export const moneyPlanContract = defineContract({
+  params: orderParams,
+  body: moneyPlanBody,
+  response: { 200: output({ ...scheduleFields, changed: output({ act: z.enum(MONEY_PLAN_ACTS), milestoneIds: z.array(id()), depositRequestIds: z.array(id()) }) }) },
+})
+
+const planFigures = output({ amount: money.price(z.number().int()), dueDate: businessDate().nullable(), status: z.string(), label: z.string().nullable() })
+/** The act planned on the plan as it is now, nothing written: before → after, or the refusal in words (EN / IT). */
+export const moneyPlanPreviewContract = defineContract({
+  params: orderParams,
+  body: moneyPlanBody,
+  response: {
+    200: output({
+      act: z.enum(MONEY_PLAN_ACTS),
+      refusal: output({ code: z.enum(MONEY_PLAN_REFUSALS), words: output({ en: z.string(), it: z.string() }) }).nullable(),
+      preview: output({
+        steps: z.array(output({ id: id().nullable(), kind: z.enum(MILESTONE_KINDS), words: z.string(), before: planFigures.nullable(), after: planFigures })),
+        requests: z.array(output({ id: id().nullable(), before: planFigures.nullable(), after: planFigures })),
+        /** REPLACE_DEPOSIT, CHANGE_TERMS: the other open steps cancelled and the steps the remake adds (hand steps kept). */
+        remade: output({ cancelled: z.array(id()), added: z.array(output({ kind: z.enum(MILESTONE_KINDS), amount: money.price(z.number().int()), dueDate: businessDate().nullable() })) }),
+        /** ACCEPT_SHORT: the short part (it stays owed on the goods' invoice). */
+        short: money.price(z.number().int().nullable()),
+        /** The act asks a fresh code (new terms; a short deposit beyond the tolerance, the Owner's). */
+        needsFreshCode: z.boolean(),
+      }).nullable(),
+    }),
+  },
+})
+// ── end B-OM-011 … 016 ──

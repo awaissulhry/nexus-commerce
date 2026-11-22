@@ -179,9 +179,14 @@ describe('B-PR-10 the brand-wall sweep', () => {
     // B-OM (order money tab, 13-backend §4): every route the Money tab reads is met by the sweep by itself — swept, never EXEMPT
     // (a customer-limited person gets the same not-found as an unknown id): the plan (B-OM-004), the settlement with its TD02 /
     // TD04 rows (B-OM-001, 003), the order's money (B-OM-002), the price check's source (B-OM-006), the margin's freight (B-OM-007).
-    // PR S2 adds the hand commands and the undo, PR S3 the price accept, the hand cost lines and the target.
+    // PR S2: the hand commands, their preview, Open for payment (now the money plan's right) and the undo of a payment.
+    // PR S3 adds the price accept, the hand cost lines and the target.
     for (const key of [
       'GET /sales/orders/:orderId/schedule',
+      'POST /sales/orders/:orderId/money-plan',
+      'POST /sales/orders/:orderId/money-plan/preview',
+      'POST /sales/orders/:orderId/schedule/:milestoneId/request',
+      'POST /payments/:paymentId/undo',
       'GET /invoicing/orders/:orderId/settlement',
       'GET /sales/orders/:orderId',
       'GET /sales/orders/:orderId/price-check',

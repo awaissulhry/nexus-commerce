@@ -3,7 +3,7 @@ import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
 import { decimalText } from '@nexus/factory-domain/product/units/units'
-import { ORDERS_MANAGE, ORDERS_WAIVE } from '@nexus/factory-domain/sales/orders/permissions'
+import { ORDERS_MONEY_PLAN, ORDERS_WAIVE } from '@nexus/factory-domain/sales/orders/permissions'
 import { MILESTONE_WORDS, paymentScheduleOf, remadeSchedule, stepRequestFor, type PlannedMilestone, type StoredMilestone } from '@nexus/factory-domain/sales/orders/schedule'
 import { instalmentsOf } from '@nexus/factory-domain/sales/terms/terms'
 import type { CustomerTaxProfile } from '@nexus/factory-domain/tax/vat-treatment'
@@ -67,7 +67,7 @@ export async function readMilestones(db: Reader, orderId: string) {
   return db.salesOrderMilestone.findMany({ where: { orderId }, select: MILESTONE_COLUMNS, orderBy: { seq: 'asc' } })
 }
 
-const stored = (row: MilestoneRow, paid: ReadonlyMap<string, number>): StoredMilestone => ({
+const stored = (row: MilestoneRow, paid: ReadonlyMap<string, number>, hand: ReadonlySet<string> = new Set()): StoredMilestone => ({
   id: row.id,
   seq: row.seq,
   kind: row.kind,
@@ -76,7 +76,16 @@ const stored = (row: MilestoneRow, paid: ReadonlyMap<string, number>): StoredMil
   dueDate: dayOrNull(row.dueDate),
   depositRequestId: row.depositRequestId,
   requestPaid: row.depositRequestId === null ? 0 : (paid.get(row.depositRequestId) ?? 0),
+  byHand: hand.has(row.id), // B-OM-015
 })
+
+// ── B-OM-015 (order money tab R1): the steps set by hand stay when the schedule is made again ──
+/** The steps a hand change of the money plan named (its `orders.planByHand` audit rows): "Set by hand", no column. */
+export async function handStepIdsOf(db: Reader, orderId: string): Promise<Set<string>> {
+  const rows = await db.auditLog.findMany({ where: { recordType: 'SalesOrder', recordId: orderId, action: PLAN_BY_HAND_ACTION }, select: { after: true } })
+  return new Set(rows.flatMap((row) => planByHandMarkOf(row.after)?.milestoneIds ?? []))
+}
+// ── end B-OM-015 ──
 
 /** What the payments placed on each request so far (allocations less their reversals). */
 async function paidOnRequests(db: Reader, requestIds: readonly string[]): Promise<Map<string, number>> {
@@ -107,8 +116,8 @@ const actorIdOf = (tools: Pick<CommandTools, 'context'>): string | null => (tool
 
 type StepOrder = Pick<OrderRow, 'id' | 'number' | 'companyId' | 'partyId' | 'currency'>
 
-/** The customer's tax profile now (the fiscal decision of a step's request), read once per command. */
-async function profileNow(tx: CommandTx, partyId: string, now: Date): Promise<CustomerTaxProfile | null> {
+/** The customer's tax profile now (the fiscal decision of a step's request), read once per command. B-OM-011: + the money plan's. */
+export async function profileNow(tx: CommandTx, partyId: string, now: Date): Promise<CustomerTaxProfile | null> {
   return (await quotePartyOf(tx, partyId, businessDate(now), now))?.profile ?? null
 }
 
@@ -218,18 +227,26 @@ export async function makeScheduleInCommand(
  * and a new before-shipping step gets its own. Returns what changed (nothing for an order without a schedule or an
  * unchanged plan) and what the kept steps cover beyond the new gross.
  */
-export async function remakeScheduleInCommand(tools: CommandTools, order: Pick<OrderRow, 'id' | 'number' | 'companyId' | 'partyId' | 'currency' | 'promiseDate' | 'paymentTermsId'>, gross: number, revision: number) {
+export async function remakeScheduleInCommand(
+  tools: CommandTools,
+  order: Pick<OrderRow, 'id' | 'number' | 'companyId' | 'partyId' | 'currency' | 'promiseDate' | 'paymentTermsId'>,
+  gross: number,
+  revision: number | null,
+  // B-OM-011 / B-OM-015: a hand change of the plan remakes it too (the deposit replaced, the terms changed), with its own note.
+  options: { readonly note?: string } = {},
+) {
   const rows = await readMilestones(tools.tx, order.id)
   const requestIds = rows.flatMap((row) => (row.status === 'OPEN' && row.kind === 'BEFORE_SHIPPING' && row.depositRequestId ? [row.depositRequestId] : []))
   // Re-entrant: the amendment took these before the order's row; a request named since is locked here.
   await lockAll(tools.tx, tools.context, 'deposit', requestIds)
   const paid = await paidOnRequests(tools.tx, requestIds)
+  const hand = await handStepIdsOf(tools.tx, order.id) // B-OM-015: an amendment, or new terms, keep the steps set by hand
   const plan = remadeSchedule(
-    rows.map((row) => stored(row, paid)),
+    rows.map((row) => stored(row, paid, hand)),
     { gross, instalments: await instalmentsOfOrder(tools.tx, order.paymentTermsId), promiseDate: dayOrNull(order.promiseDate) },
   )
   if (plan.cancel.length === 0 && plan.insert.length === 0) return { cancelled: [] as string[], inserted: [] as string[], overpaid: plan.overpaid }
-  const note = `Amendment ${revision}: the schedule was made again for the new total.`
+  const note = options.note ?? `Amendment ${revision}: the schedule was made again for the new total.`
   const cancelledRequests: string[] = []
   for (const id of plan.cancel) {
     await tools.tx.salesOrderMilestone.updateMany({ where: { id, status: 'OPEN' }, data: { status: 'CANCELLED', statusNote: note, updatedAt: tools.now, version: { increment: 1 } } })
@@ -486,7 +503,7 @@ export interface StepRequestBody {
 }
 
 /**
- * orders.manage: a BEFORE_SHIPPING step's deposit request made now (B-W2a-F2), for a step that has none — an order made
+ * orders.moneyPlan (B-OM-018; was orders.manage): a BEFORE_SHIPPING step's deposit request made now (B-W2a-F2), for a step that has none — an order made
  * before this step, or a step without its day when the order was made (no promise date): the customer can then pay it
  * as an advance before the goods leave, and the deposit flow issues its TD02 (DPR 633/1972 art. 6 c.4). ONE command: the
  * order's row, the step at its version (OPEN, BEFORE_SHIPPING, no request yet), the order still before shipping (no
@@ -496,7 +513,7 @@ export interface StepRequestBody {
  * the invoice fall due with the goods' invoice), a step settled or with its request already, goods that left, no day.
  */
 export async function requestStep(caller: CommandCaller, orderId: string, milestoneId: string, body: StepRequestBody, idempotencyKey?: string) {
-  const order = await officeOrder(caller, orderId, ORDERS_MANAGE)
+  const order = await officeOrder(caller, orderId, ORDERS_MONEY_PLAN) // B-OM-018
   const { result } = await command(caller, { name: 'orders.requestStep', idempotencyKey, input: { orderId, milestoneId, ...body } }, async (tools) => {
     const { tx } = tools
     const locked = await lockOrder(tx, order.id)

@@ -6,6 +6,7 @@ import { mtmLineBody, mtmLineEditBody } from '@nexus/factory-domain/sales/mtm/co
 import { acceptContract } from '../portal-ordering/contract'
 import { addLineContract, editLineContract } from '../quotes/contract'
 import { createManualContract, previewManualContract } from './daily-contract'
+import { moneyPlanContract, moneyPlanPreviewContract } from './daily-contract' // B-OM-011
 
 /**
  * Sales keeps no blind price writes (customer page lane B-CP-012; D1-c, review A8), pure: every price input of an order, a
@@ -59,3 +60,19 @@ describe('every percent of a price is a price (money.price)', () => {
     expect(paths(acceptContract.body, { version: 1, as: 'QUOTE' }, NONE)).toEqual([])
   })
 })
+
+// ── B-OM-011 … 016 (order money tab): the money plan's amount and share are prices (money.price) ──
+describe('the money plan by hand: an amount or a share of the total is a price', () => {
+  it('refused without the price grain (a custom role with the money plan and no prices); a day or a name passes', () => {
+    for (const schema of [moneyPlanContract.body, moneyPlanPreviewContract.body]) {
+      const replace = { act: 'REPLACE_DEPOSIT', requestId: id, version: 1, reason: 'Made-up reason.' }
+      expect(paths(schema, { ...replace, amount: 40_000 }, NONE)).toEqual(['amount'])
+      expect(paths(schema, { ...replace, pct: '40' }, NONE)).toEqual(['pct'])
+      expect(paths(schema, { act: 'CHANGE_STEP', milestoneId: id, version: 1, reason: 'Made-up reason.', amount: 1_000, restTo: id }, NONE)).toEqual(['amount'])
+      expect(paths(schema, { act: 'MOVE_DUE', milestoneId: id, version: 1, reason: 'Made-up reason.', dueDate: '2026-12-01' }, NONE)).toEqual([])
+      expect(paths(schema, { act: 'RENAME_STEP', milestoneId: id, version: 1, reason: 'Made-up reason.', label: 'Saldo' }, NONE)).toEqual([])
+      expect(paths(schema, { ...replace, amount: 40_000 }, PRICE)).toEqual([])
+    }
+  })
+})
+// ── end B-OM-011 … 016 ──

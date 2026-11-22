@@ -141,6 +141,19 @@ export const allocateContract = defineContract({ params: paymentParams, body: in
 
 export const reverseContract = defineContract({ params: input({ paymentId: id(), allocationId: id() }), body: input({ note: z.string().trim().min(1).max(500) }), response: { 200: one } })
 
+// B-OM-017 (order money tab, lead L5): undo a payment on a deposit request (reversed, and voided when it then pays nothing).
+export const undoPaymentContract = defineContract({
+  params: paymentParams,
+  body: input({
+    depositRequestId: id(),
+    reason: z.string().trim().min(3).max(500),
+    /** The payment's version as read. */
+    version,
+    periodLockOverride: periodLockOverride.optional(),
+  }),
+  response: { 200: output({ payment: paymentView, undone: output({ depositRequestId: id(), reversed: z.array(id()), voided: z.boolean() }) }) },
+})
+
 export const voidContract = defineContract({
   params: paymentParams,
   body: input({

@@ -16,6 +16,8 @@ export const manifest = defineManifest({
   'POST /payments/:paymentId/allocations': { audiences: ['office'], permission: 'payments.record', scope: 'record' },
   'POST /payments/:paymentId/allocations/:allocationId/reverse': { audiences: ['office'], permission: 'payments.record', scope: 'record' },
   'POST /payments/:paymentId/void': { audiences: ['office'], permission: 'payments.void', scope: 'record' },
+  // B-OM-017 (order money tab): undo a payment on a deposit request (payments.void too when it then pays nothing: the handler's).
+  'POST /payments/:paymentId/undo': { audiences: ['office'], permission: 'payments.record', scope: 'record' },
   'POST /payments/deposit-requests/:depositRequestId/link': { audiences: ['office'], permission: 'payments.record', scope: 'record' },
   'GET /payments/link/deposit': { audiences: ['link'], permission: 'links.open', scope: 'record' },
   // B-W2a-61 (FIN-127, FIN-122; refunds.ts, credit-balance.ts): refunds to customers (money out: payments.refund; a refund

@@ -159,10 +159,15 @@ export async function requestDepositInCommand(tools: CommandTools, version: Acce
  * lock (payments/locks.ts); the request's own version moves (an open edit of it sees the change). The …_sales_guards
  * trigger allows OPEN → PAID with its paidAt.
  */
-export async function markDepositPaid(tools: CommandTools, request: { id: string; companyId: string; partyId: string; orderId: string | null }): Promise<void> {
+export async function markDepositPaid(
+  tools: CommandTools,
+  request: { id: string; companyId: string; partyId: string; orderId: string | null },
+  // B-OM-016 (order money tab, lead L1): PAID by hand with less than asked (accept short): the short part, why, in the audit.
+  byHand: { readonly acceptedShort: Record<string, unknown> } | null = null,
+): Promise<void> {
   const { count } = await tools.tx.depositRequest.updateMany({ where: { id: request.id, status: 'OPEN' }, data: { status: 'PAID', paidAt: tools.now, version: { increment: 1 } } })
   if (count !== 1) return
-  tools.audit({ action: 'payments.depositPaid', recordType: 'DepositRequest', recordId: request.id, companyId: request.companyId, before: { status: 'OPEN' }, after: { status: 'PAID', paidAt: toUtcIso(tools.now) } })
+  tools.audit({ action: 'payments.depositPaid', recordType: 'DepositRequest', recordId: request.id, companyId: request.companyId, before: { status: 'OPEN' }, after: { status: 'PAID', paidAt: toUtcIso(tools.now), ...(byHand ? { acceptedShort: byHand.acceptedShort } : {}) } })
   tools.emit({ type: 'payment.deposit_paid', subject: request.id, companyId: request.companyId, payload: { depositRequestId: request.id, partyId: request.partyId, orderId: request.orderId } })
 }
 

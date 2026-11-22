@@ -149,6 +149,8 @@ export interface StoredMilestone {
   readonly depositRequestId: string | null
   /** B-W2a-F2: what the payments placed on its deposit request so far (allocations less reversals); 0 or absent: none. */
   readonly requestPaid?: MinorUnits | undefined
+  /** B-OM-015 (order money tab R1): set by hand (a money plan act named it; read from the audit): an OPEN one stays when remade. */
+  readonly byHand?: boolean | undefined
 }
 
 // ---- a before-shipping step's deposit request (B-W2a-F2) ------------------------------------------------------------
@@ -170,11 +172,12 @@ export function stepRequestFor(step: Pick<PlannedMilestone, 'kind' | 'amount' | 
 
 /**
  * Whether an OPEN step stays as it is when the schedule is made again: the deposit step (its request is what the
- * customer accepted), and a before-shipping step whose request has money on it already (part paid: its TD02s name it;
- * B-W2a-F2). Any other OPEN step is cancelled and shared again (its unpaid request is cancelled with it).
+ * customer accepted), a before-shipping step whose request has money on it already (part paid: its TD02s name it;
+ * B-W2a-F2), and (B-OM-015) a step set by hand (its amount or day is what the office agreed: an amendment or new terms
+ * never undo it). Any other OPEN step is cancelled and shared again (its unpaid request is cancelled with it).
  */
-export const stepStays = (step: Pick<StoredMilestone, 'kind' | 'status' | 'depositRequestId' | 'requestPaid'>): boolean =>
-  step.status !== 'OPEN' || step.kind === 'DEPOSIT' || (step.kind === 'BEFORE_SHIPPING' && step.depositRequestId !== null && (step.requestPaid ?? 0) > 0)
+export const stepStays = (step: Pick<StoredMilestone, 'kind' | 'status' | 'depositRequestId' | 'requestPaid' | 'byHand'>): boolean =>
+  step.status !== 'OPEN' || step.kind === 'DEPOSIT' || step.byHand === true || (step.kind === 'BEFORE_SHIPPING' && step.depositRequestId !== null && (step.requestPaid ?? 0) > 0)
 
 export interface RemadeSchedule {
   /** The OPEN steps cancelled (never deleted: their statusNote says why). */

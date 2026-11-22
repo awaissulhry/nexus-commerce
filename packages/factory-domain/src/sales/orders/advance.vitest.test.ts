@@ -65,3 +65,18 @@ describe("a before-shipping step's deposit request (B-W2a-F2)", () => {
     expect(remadeSchedule([deposit, unpaid], { gross: 100_000, instalments: DEP30, promiseDate: '2026-12-20' })).toEqual({ cancel: [], insert: [], overpaid: 0 })
   })
 })
+
+// ── B-OM-015 (order money tab R1): a step set by hand stays when the schedule is made again ──
+describe('B-OM-015: the remake keeps a step set by hand', () => {
+  it('an open balance moved by hand stays as agreed after an amendment; the rest of the new gross falls due on the invoice', () => {
+    const deposit: StoredMilestone = { id: 'm1', seq: 10, kind: 'DEPOSIT', status: 'PAID', amount: 30_000, dueDate: '2026-11-01', depositRequestId: 'd1' }
+    const handMoved: StoredMilestone = { id: 'm2', seq: 20, kind: 'BEFORE_SHIPPING', status: 'OPEN', amount: 70_000, dueDate: '2026-12-01', depositRequestId: 'd2', requestPaid: 0, byHand: true }
+    expect(stepStays(handMoved)).toBe(true)
+    expect(stepStays({ ...handMoved, byHand: false })).toBe(false)
+    expect(remadeSchedule([deposit, handMoved], { gross: 120_000, instalments: DEP30, promiseDate: '2026-12-20' })).toEqual({
+      cancel: [],
+      insert: [{ seq: 30, kind: 'ON_INVOICE', sharePct: '16.6667', amount: 20_000, dueDate: null, depositRequestId: null }],
+      overpaid: 0,
+    })
+  })
+})

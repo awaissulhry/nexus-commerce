@@ -33,7 +33,7 @@ export async function createFromMilestone(caller: CommandCaller, body: { milesto
   if (!step!.depositRequestId) {
     throw new InvalidStateError(
       step!.kind === 'BEFORE_SHIPPING'
-        ? `A step paid before the goods leave is invoiced as an advance (a deposit invoice, TD02: DPR 633/1972 art. 6 c.4), through the deposit request it is paid on: this step of order ${order} has none yet. Sales opens it first (POST /sales/orders/${step!.orderId}/schedule/${step!.id}/request), the customer pays it, and its TD02 follows.`
+        ? `A step paid before the goods leave is invoiced as an advance (a deposit invoice, TD02: DPR 633/1972 art. 6 c.4), through the deposit request it is paid on: this step of order ${order} has none yet. Finance opens it for payment first (B-OM-018; POST /sales/orders/${step!.orderId}/schedule/${step!.id}/request), the customer pays it, and its TD02 follows.`
         : `A deposit invoice (TD02) names the deposit request it invoices: the deposit step of order ${order} has none.`,
     )
   }
