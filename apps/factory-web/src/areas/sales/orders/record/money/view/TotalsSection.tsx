@@ -65,11 +65,13 @@ export function TotalsSection({ order, model, actions }: { order: Order; model: 
       <p>{t('moneyTab.totals.keys')}</p>
     </>
   )
+  // F-OM-fx3 (W-05): What is left only when it holds something (a gap, the settled row, How it adds up).
+  const left = !!totals.settledRow || totals.gaps.length > 0 || !!totals.adds
   // A settlement read that failed (invoices.view): one line with its own Try again, where the tiles would be.
   const failed = settlementPart?.problem ? <PartFailed part={t('moneyTab.totals.part')} problem={settlementPart.problem} onRetry={() => actions?.onRetryPart?.('settlement')} /> : null
   return (
     <Section id="totals" title={title} answer={say(totals.answer)} more={<LineMenuButton label={t('moneyTab.totals.more')} items={items} />} info={info}>
-      <div className={`fw-om-tt${totals.tiles ? '' : ' is-np'}`}>
+      <div className={`fw-om-tt${totals.tiles ? '' : ' is-np'}${left ? '' : ' is-nr' /* F-OM-fx3 (W-05) */}`}>
         {failed ? <div className="fw-om-tt-t">{failed}</div> : null}
         {totals.tiles && !failed ? (
           <div className="fw-om-tt-t">
@@ -80,8 +82,10 @@ export function TotalsSection({ order, model, actions }: { order: Order; model: 
             />
           </div>
         ) : null}
+        {/* F-OM-fx3 (W-05): an empty part is one line (the head's answer), never a heading over nothing. */}
+        {left ? (
         <div className="fw-om-tt-r">
-          <h3 className="fw-pt-h3">{totals.settled ? t('moneyTab.totals.nothingLeft') : t('moneyTab.totals.whatIsLeft', { count: totals.gaps.length })}</h3>
+          {totals.settledRow || totals.gaps.length > 0 ? <h3 className="fw-pt-h3">{totals.settled ? t('moneyTab.totals.nothingLeft') : t('moneyTab.totals.whatIsLeft', { count: totals.gaps.length })}</h3> : null}
           {totals.settledRow ? (
             <p className="fw-om-gap is-ok">
               <CheckCircle2 size={14} aria-hidden />
@@ -123,6 +127,7 @@ export function TotalsSection({ order, model, actions }: { order: Order; model: 
             </>
           ) : null}
         </div>
+        ) : null}
         <dl className="fw-om-facts">
           {totals.facts.map((fact) => (
             <div key={fact.label.key}>

@@ -3296,7 +3296,8 @@
         "PAID": "Pagata",
         "WAIVED": "Abbuonata",
         "OVERDUE": "Scaduta",
-        "NOT_ASKED": "Non richiesta"
+        "NOT_ASKED": "Non richiesta",
+        "CANCELLED": "Annullata"
       },
       "due": {
         "waived": "Abbuonata",
@@ -3308,7 +3309,8 @@
         "overdueSince": "Scaduta dal {date}",
         "on": "Scade il {date}",
         "beforeGoodsLeave": "Prima che la merce parta",
-        "withInvoice": "con {number}"
+        "withInvoice": "con {number}",
+        "notOwed": "Non dovuta: l'ordine è annullato"
       },
       "note": {
         "productionWaits": "La produzione aspetta questo acconto",
@@ -3397,7 +3399,8 @@
         "nextDue": "prossimo: {what}, scade il {date}",
         "next": "prossimo: {what}",
         "short": "all'acconto mancano {amount}",
-        "partPaid": "l'acconto è pagato in parte"
+        "partPaid": "l'acconto è pagato in parte",
+        "cancelled": "non è dovuto niente: l'ordine è annullato"
       },
       "held": {
         "moneyPlaced": "Ci sono già pagamenti: annulla prima il pagamento.",

@@ -3296,7 +3296,8 @@
         "PAID": "Paid",
         "WAIVED": "Waived",
         "OVERDUE": "Overdue",
-        "NOT_ASKED": "Not asked"
+        "NOT_ASKED": "Not asked",
+        "CANCELLED": "Cancelled"
       },
       "due": {
         "waived": "Waived",
@@ -3308,7 +3309,8 @@
         "overdueSince": "Overdue since {date}",
         "on": "Due {date}",
         "beforeGoodsLeave": "Before the goods leave",
-        "withInvoice": "with {number}"
+        "withInvoice": "with {number}",
+        "notOwed": "Not owed: the order is cancelled"
       },
       "note": {
         "productionWaits": "Production waits for this deposit",
@@ -3397,7 +3399,8 @@
         "nextDue": "next: {what}, due {date}",
         "next": "next: {what}",
         "short": "the deposit is {amount} short",
-        "partPaid": "the deposit is part paid"
+        "partPaid": "the deposit is part paid",
+        "cancelled": "nothing is owed: the order is cancelled"
       },
       "held": {
         "moneyPlaced": "Money is placed on it: undo the payment first.",

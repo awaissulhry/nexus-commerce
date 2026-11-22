@@ -123,7 +123,9 @@ export function totalsOf(input: { readonly order: Order; readonly settlement: Se
   const settledRow = settled && !cancelled ? word('moneyTab.totals.settledRow') : null
 
   // ---- the tiles (price grain): the server's figures only ----
-  const still = stillToPayOf(order, settlement)
+  // F-OM-fx3 (B-OM-029, W-05): a cancelled order owes 0 (M1-B9), even on an older answer that still says otherwise.
+  const owed = stillToPayOf(order, settlement)
+  const still = cancelled && owed !== null ? 0 : owed
   const mine = settlement?.thisOrder
   // This order's share only (F-OP-118): the settlement's invoice-wide figures are never this order's.
   const paid = order.money?.paid ?? mine?.paid ?? null
@@ -158,9 +160,9 @@ export function totalsOf(input: { readonly order: Order; readonly settlement: Se
     }
   }
 
-  // ---- How it adds up (price grain, still to pay known): rows only when not zero ----
+  // ---- How it adds up (price grain, still to pay known): rows only when not zero; F-OM-fx3 (W-05): none for a cancelled order ----
   let adds: TotalsAdd[] | null = null
-  if (price && still !== null && order.grossAmount !== undefined) {
+  if (price && still !== null && order.grossAmount !== undefined && !cancelled) {
     const neverBilled = order.money?.neverBilled ?? 0
     const freight = (settlement?.invoices ?? []).reduce((sum, invoice) => sum + (invoice.freight ?? 0), 0)
     adds = [

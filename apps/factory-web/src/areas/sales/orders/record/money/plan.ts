@@ -159,6 +159,8 @@ export function planOf(input: {
   const { order, schedule, settlement, can, stepCan, today } = input
   const price = can.price
   const final = isFinal(order)
+  // F-OM-fx3 (B-OM-029, W-05): a cancelled order owes nothing — its open steps read "Cancelled · not owed", even on an older answer.
+  const cancelledOrder = order.status === 'CANCELLED'
   const live = (id: string | null) => (id ? (order.chain.depositRequests.find((request) => request.id === id && request.status !== 'CANCELLED') ?? null) : null)
   const planRequest = (id: string): PlanRequest | null => schedule.requests?.find((entry) => entry.id === id) ?? null
   // The goods invoice an on-delivery / on-invoice step is paid with: the first one still open (price), else the first issued.
@@ -173,7 +175,9 @@ export function planOf(input: {
     const covered = step && ON_GOODS.includes(kind) ? (step.coveredByInvoices ?? 0) : 0
     const amount = price ? (step?.amount ?? request?.amount ?? null) : null
     const coveredFull = !!step && ON_GOODS.includes(kind) && (step.settledBy === 'INVOICES' || (amount !== null && amount > 0 && covered >= amount))
-    const open = status === 'OPEN' && !coveredFull
+    // F-OM-fx3 (W-05): a step the server cancelled, or an open one of a cancelled order: not owed (paid money stays as it was).
+    const voided = status === 'CANCELLED' || (cancelledOrder && status === 'OPEN')
+    const open = status === 'OPEN' && !coveredFull && !voided
     const placed = request ? (request.paidAmount ?? plan?.paid ?? 0) : (step?.paidSoFar ?? 0)
     // F-OM-fx3 (B-OM-024): the plan read names an OPEN request with money on it and less than its amount (for every reader: a reader
     // without the price grain learns "part paid", never the amount).
@@ -189,6 +193,8 @@ export function planOf(input: {
     const done = !open
     const pill = status === 'WAIVED'
       ? { word: word('moneyTab.plan.pill.WAIVED'), tone: 'neutral' as const }
+      : voided
+        ? { word: word('moneyTab.plan.pill.CANCELLED'), tone: 'neutral' as const }
       : !open
         ? { word: word('moneyTab.plan.pill.PAID'), tone: 'success' as const }
         : overdue
@@ -203,6 +209,8 @@ export function planOf(input: {
     const paidAt = step?.paidAt ?? request?.paidAt ?? null
     const due = status === 'WAIVED'
       ? word('moneyTab.plan.due.waived')
+      : voided
+        ? word('moneyTab.plan.due.notOwed')
       : coveredFull
         ? word('moneyTab.plan.due.paidWithInvoices')
         : !open
@@ -311,7 +319,7 @@ export function planOf(input: {
       restTo: [],
       invoice,
       unfolds: !!request,
-      openAtFirst: !!request && request.status === 'OPEN',
+      openAtFirst: !!request && request.status === 'OPEN' && !voided,
       done,
       moneyOn: placed > 0 || covered > 0,
       discuss: request ? { part: word('discuss.deposit'), target: { kind: 'DepositRequest', id: request.id } } : { part: word('discuss.step', { params: { seq: step!.seq } }), target: null },
@@ -342,12 +350,14 @@ export function planOf(input: {
 
   // F-OM-201: the head's ⋯ (the plan right and the price grain): Change payment terms… (held when the order is closed), Add a step….
   const head: PlanModel['head'] = !can.moneyPlan || !price ? [] : final ? [{ id: 'CHANGE_TERMS', label: word('moneyTab.plan.act.CHANGE_TERMS'), held: word('moneyTab.plan.held.final') }] : [{ id: 'CHANGE_TERMS', label: word('moneyTab.plan.act.CHANGE_TERMS'), held: null }, { id: 'ADD_STEP', label: word('moneyTab.plan.act.ADD_STEP'), held: free.length === 0 ? word('moneyTab.plan.held.nothingFree') : null }]
-  return { rows, earlier, answer: answerOf(rows, schedule, input.stillToPay, price, final), final, head, openSteps: free }
+  return { rows, earlier, answer: answerOf(rows, schedule, input.stillToPay, price, final, cancelledOrder), final, head, openSteps: free }
 }
 
 /** The head's answer: still open · overdue · next (price), else the next step in words; nothing open; everything paid (the view
  * says its first word with a capital). */
-function answerOf(rows: readonly PlanRow[], schedule: Schedule, stillToPay: number | null, price: boolean, final: boolean): MoneyWord[] {
+function answerOf(rows: readonly PlanRow[], schedule: Schedule, stillToPay: number | null, price: boolean, final: boolean, cancelled: boolean): MoneyWord[] {
+  // F-OM-fx3 (W-05): a cancelled order owes nothing (M1-B9): no "still open", no "next … due", whatever an older answer says.
+  if (cancelled) return [word('moneyTab.plan.answer.cancelled')]
   const tail = final ? [word('moneyTab.plan.answer.final')] : []
   if (rows.length === 0) return [word('moneyTab.plan.answer.none'), ...tail]
   const next = rows.find((row) => !row.done) ?? null

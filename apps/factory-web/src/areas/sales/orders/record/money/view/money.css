@@ -25,6 +25,9 @@
 /* ── 1 · Totals (F-OM-102): tiles | what is left, the facts under them (stacked under 1200 px of the section) ── */
 .fw-om-tt { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "t" "r" "f"; gap: var(--nds-space-14) var(--nds-space-22); min-width: 0; }
 .fw-om-tt.is-np { grid-template-areas: "t" "r" "f"; }
+/* F-OM-fx3 (W-05): nothing left to say (a cancelled order): no What is left area, the tiles and the facts take the width at every room. */
+.fw-om-tt.is-nr { grid-template-columns: minmax(0, 1fr); grid-template-areas: "t" "f"; }
+.fw-om-tt.is-np.is-nr { grid-template-columns: minmax(0, 1fr); grid-template-areas: "f"; }
 .fw-om-tt-t { grid-area: t; min-width: 0; }
 .fw-om-tt-t:empty { display: none; }
 .fw-om-tt-r { grid-area: r; min-width: 0; display: flex; flex-direction: column; gap: var(--nds-space-4); }

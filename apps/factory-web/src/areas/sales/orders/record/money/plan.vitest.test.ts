@@ -314,6 +314,27 @@ describe('F-OM-fx3: short within the tolerance, part paid over it, accepted shor
   })
 })
 
+// ---- F-OM-fx3 (W-05; B-OM-029): a cancelled order owes nothing — even on an older answer that still names an open step. ----
+describe('F-OM-fx3: a cancelled order shows no money due', () => {
+  it('its open steps read "Cancelled · not owed" (no act, nothing left, never overdue); the answer says nothing is owed; paid stays paid', () => {
+    const older: Schedule = { ...SCHEDULE, stillOpen: 532896, overdue: 532896 }
+    const model = plan(order('CANCELLED'), { schedule: older, today: '2026-12-20', moneyPlan: true })
+    const [deposit_, balance] = model.rows as [PlanRow, PlanRow]
+    expect(deposit_.pill.word.key).toBe('moneyTab.plan.pill.PAID')
+    expect(balance.pill).toEqual({ word: { key: 'moneyTab.plan.pill.CANCELLED' }, tone: 'neutral' })
+    expect(balance.due).toEqual({ key: 'moneyTab.plan.due.notOwed' })
+    expect(balance.left).toBeNull()
+    expect(balance.notes).toEqual([])
+    expect(acts(balance)).toEqual([null])
+    expect(balance.done).toBe(true)
+    expect(model.answer).toEqual([{ key: 'moneyTab.plan.answer.cancelled' }])
+    expect(model.answer.flatMap(amountsOf)).toEqual([])
+    // The server's own mark (a step it cancelled) reads the same.
+    const marked: Schedule = { ...SCHEDULE, steps: SCHEDULE.steps.map((entry) => (entry.kind === 'BEFORE_SHIPPING' ? { ...entry, status: 'CANCELLED' as const } : entry)), stillOpen: 0, overdue: 0 }
+    expect(plan(order('CANCELLED'), { schedule: marked }).rows[1]!.pill.word.key).toBe('moneyTab.plan.pill.CANCELLED')
+  })
+})
+
 describe('F-OM-103: the head\'s answer', () => {
   it('still open · overdue · next (price); the plan read\'s figures first, else Totals\' one rule', () => {
     const answer = plan(order('CONFIRMED'), { stillToPay: 761280 }).answer
@@ -361,13 +382,14 @@ describe('F-OM-103: the words', () => {
   it('exist in both languages (every kind, pill, due, note, act, hand act, next and answer)', () => {
     const keys = [
       ...['DEPOSIT', 'EXTRA', 'BEFORE_SHIPPING', 'ON_INVOICE', 'ON_DELIVERY'].flatMap((kind) => [`kind.${kind}`, `next.${kind}`]),
-      ...['OPEN', 'PART', 'PAID', 'WAIVED', 'OVERDUE', 'NOT_ASKED'].map((pill) => `pill.${pill}`),
-      ...['waived', 'paidWithInvoices', 'paidOn', 'paid', 'asInvoice', 'onDelivery', 'overdueSince', 'on', 'beforeGoodsLeave', 'withInvoice'].map((due) => `due.${due}`),
-      ...['productionWaits', 'extraWaits', 'holdsShipment', 'paidWithInvoice'].map((note) => `note.${note}`),
+      ...['OPEN', 'PART', 'PAID', 'WAIVED', 'OVERDUE', 'NOT_ASKED', 'CANCELLED' /* F-OM-fx3 */].map((pill) => `pill.${pill}`),
+      ...['waived', 'paidWithInvoices', 'paidOn', 'paid', 'asInvoice', 'onDelivery', 'overdueSince', 'on', 'beforeGoodsLeave', 'withInvoice', 'notOwed' /* F-OM-fx3 */].map((due) => `due.${due}`),
+      ...['productionWaits', 'extraWaits', 'holdsShipment', 'paidWithInvoice', 'owedOnInvoice', 'owedOnInvoiceWords' /* F-OM-fx3 */].map((note) => `note.${note}`),
       ...['send', 'sendAgain', 'payInvoice', 'waive', ...MONEY_PLAN_ACTS].map((act) => `act.${act}`),
       ...['moneyPlaced', 'onlyStep', 'dayFromInvoice', 'final', 'nothingFree'].map((held) => `held.${held}`),
       ...[...MONEY_PLAN_ACTS, 'OTHER'].map((act) => `byHand.what.${act}`),
-      ...['none', 'allPaid', 'final', 'stillOpen', 'overdue', 'nextDue', 'next'].map((answer) => `answer.${answer}`),
+      ...['none', 'allPaid', 'final', 'stillOpen', 'overdue', 'nextDue', 'next', 'short', 'partPaid', 'cancelled' /* F-OM-fx3 */].map((answer) => `answer.${answer}`),
+      'shortHint', // F-OM-fx3 (W-01)
       ...['earlier.step', 'earlier.replaced', 'earlier.cancelled', 'setByHand', 'fromChange', 'fold', 'unfold', 'more', 'menu.openInvoice', 'step.page', 'step.byChange', 'step.issued', 'payments.title', 'payments.none', 'payments.ref', 'payments.paidSoFar'],
     ]
     for (const locale of LOCALES) {
