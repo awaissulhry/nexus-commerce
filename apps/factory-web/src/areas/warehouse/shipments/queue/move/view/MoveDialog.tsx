@@ -9,6 +9,7 @@ import { DOOR_NAMESPACES, useDoorWords } from '../../shared/door-words'
 import type { MoveTargets } from '../api'
 import { MOVE_REASONS, moveHeld, moveTotals, REASON_LIMITS, targetHeld, type MoveActions, type MoveModel } from '../model'
 import type { SplitPreview } from '../../split/api'
+import { splitReasonKey } from '../../split/model' // os-fx7 (W-03)
 import '../../../shipments.css'
 import '../../shared/depth.css'
 
@@ -86,7 +87,7 @@ function Body({ number, model, actions }: { number: string; model: MoveModel; ac
           <fieldset className="fw-shd-choices fw-shd-choices--grid">
             <legend className="fw-sh-h3">{t('split.reason')}</legend>
             {MOVE_REASONS.filter((reason) => preview.reasons.includes(reason)).map((reason) => (
-              <RadioCard key={reason} name="move-reason" value={reason} checked={model.reason === reason} selected={model.reason === reason} onChange={() => actions?.onReason?.(reason)} title={t(`splitReason.${reason}`)} />
+              <RadioCard key={reason} name="move-reason" value={reason} checked={model.reason === reason} selected={model.reason === reason} onChange={() => actions?.onReason?.(reason)} title={t(splitReasonKey(reason)) /* os-fx7 (W-03) */} />
             ))}
           </fieldset>
         </div>

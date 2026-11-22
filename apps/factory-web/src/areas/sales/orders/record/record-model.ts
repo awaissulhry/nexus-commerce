@@ -39,6 +39,7 @@ import type { JoinableRow } from './shipments/model' // F-OP-122
 import type { AfterSalesKind, RowActId } from './shipments/doors' // F-OS-202, F-OS-303
 import type { Deliveries } from './shipments/delivered/api' // F-OS-101: the deliveries read, drawn in each Shipments row
 import type { Bench } from '../../../warehouse/shipments/cartons/api' // F-OS-103: Warehouse's cartons read, the Parcels (n) fold
+import type { ShipmentFacts } from './shipments/rows' // os-fx7: a row's facts beyond the order read
 // F-OP-113: the work-order rows' acts in place (lib/production/work-order-acts, mounted by use-production-acts).
 import type { WorkOrderActsActions, WorkOrderActsModel } from '../../../../lib/production/work-order-acts/use-work-order-acts'
 import type { RejectReason } from '../../../home/approvals/api' // F-OP-101
@@ -395,6 +396,8 @@ export interface OrderRecordModel {
   shipmentParcels?: Readonly<Record<string, Part<Bench>>> | null
   /** F-OS-303: the after-sales window open (Returns' New return, Quality's Log complaint, the claim link; its container); null: none. */
   afterSalesDoor?: ReactNode | null
+  /** os-fx7 (W-06, W-07, W-12): what a row says beyond the order read, by shipment id (shipments/facts.ts); absent: not said. */
+  shipmentFacts?: Readonly<Record<string, ShipmentFacts>> | null
   // ---- end F-OS-101
   /** F-SA-236: the order's customer requests, every state (Changes: waiting on us, history); null: not read here. */
   requests?: Part<BrandRequest[]> | null

@@ -16,7 +16,8 @@ import { word, wordOf, type ShipWord } from './word'
 
 export type CaseTone = 'info' | 'warning' | 'danger' | 'success' | 'neutral'
 
-export type CaseAbout = { readonly kind: 'shipment'; readonly id: string; readonly number: string; readonly onThisOrder: boolean } | { readonly kind: 'order' } | { readonly kind: 'returnLines' }
+// os-fx7 (W-13): a return names no shipment (its lines are the order's) — it is about the "Whole order", as 10-design §6 says.
+export type CaseAbout = { readonly kind: 'shipment'; readonly id: string; readonly number: string; readonly onThisOrder: boolean } | { readonly kind: 'order' }
 
 export interface CaseRow {
   readonly kind: 'return' | 'complaint'
@@ -83,7 +84,7 @@ export function returnRow(row: OrderReturn): CaseRow {
     kind: 'return',
     id: row.id,
     number: row.number,
-    about: { kind: 'returnLines' },
+    about: { kind: 'order' },
     what: row.pieces !== undefined ? [word('ships.carries.pieces', { count: row.pieces })] : [],
     status: wordOf('orders', `links.returnStatus.${row.status}`),
     tone: RETURN_TONE[row.status] ?? 'neutral',

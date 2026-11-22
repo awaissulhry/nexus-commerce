@@ -47,8 +47,11 @@ export interface MoveActions {
 
 export const initialMove = (mode: MoveMode): MoveModel => ({ mode, preview: { state: 'loading' }, targets: { state: 'loading' }, targetId: null, quantities: {}, reason: null, words: '', busy: false, problem: null })
 
-/** The reasons a move offers (the split's own by hand: a new delivery address is planned from the order). */
-export const MOVE_REASONS: readonly SplitReason[] = HAND_REASONS
+/**
+ * The reasons a move offers: the split's own by hand — but never "another delivery address" (os-fx7, W-03): a move only goes to a
+ * draft of the SAME delivery address (the join rules), so that reason cannot be true of it.
+ */
+export const MOVE_REASONS: readonly SplitReason[] = HAND_REASONS.filter((reason) => reason !== 'SHIP_TO')
 
 /** A target's verdict for this shipment's orders: every order may join, or the first reason why not (Warehouse's join words). */
 export function targetHeld(target: Pick<MoveTarget, 'verdicts'>): Words | null {

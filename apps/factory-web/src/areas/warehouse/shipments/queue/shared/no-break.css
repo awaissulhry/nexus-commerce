@@ -1,0 +1,4 @@
+/* os-fx7 (W-18, P0-B6): a record number in a title never breaks inside. */
+.fw-nb {
+  white-space: nowrap;
+}

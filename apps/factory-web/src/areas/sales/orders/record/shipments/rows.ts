@@ -29,6 +29,19 @@ import { word, wordOf, type ShipWord } from './word'
 
 export type Tone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
 
+/**
+ * os-fx7 — what the tab reads of one shipment beyond the order read, by its container (each optional; absent: not said):
+ *   problems   W-06: its open tracking problems' kinds (Warehouse's tracking-problems read; a row with open problems only)
+ *   ddtBlocks  W-07: why its DDT cannot be issued — the company's missing legal details (the DDT preview's `company/…` refusals;
+ *              a PACKED Nexus row that waits for its DDT and whose reader may choose "travels without a DDT")
+ *   others     W-12: the other orders' garments on a shared shipment, by order (Warehouse's shipment read; same customer only)
+ */
+export interface ShipmentFacts {
+  readonly problems?: { readonly kinds: readonly string[]; readonly noScanDays: number }
+  readonly ddtBlocks?: readonly string[]
+  readonly others?: readonly { readonly number: string; readonly pieces: number; readonly what: string }[]
+}
+
 /** Warehouse's tones for a shipment's state (10-design §2: shipped and travelling warm, delivered DS blue, came back danger). */
 export const STATE_TONE: Readonly<Record<string, Tone>> = Object.freeze({ DRAFT: 'neutral', PACKED: 'info', SHIPPED: 'warning', DELIVERED: 'success', RETURNED: 'danger', CANCELLED: 'neutral' })
 
@@ -55,6 +68,9 @@ export interface CarriesGrid {
   readonly sizes: { key: string; label: string }[]
   readonly colours: { key: string; label: string; offered: string[] }[]
   readonly value: Record<string, Record<string, number>>
+  /** os-fx7 (W-09): the style's pieces on it and each colour line's (by the grid's colour key), beside the grid. */
+  readonly pieces: number
+  readonly byColour: Readonly<Record<string, number>>
 }
 
 export interface Carries {
@@ -63,6 +79,8 @@ export interface Carries {
   readonly lines: readonly CarriesLine[]
   /** The pieces of the other orders it carries (all of this customer's), with their numbers. */
   readonly other: { readonly pieces: number; readonly orders: readonly string[] } | null
+  /** os-fx7 (W-12): the same, by order with what it is ("+ 18 pcs of SEED-SO-0003 (SEED-JKT-02 Black 18)"); null: not read. */
+  readonly others: ShipmentFacts['others'] | null
   /** By size: one grid per style with sizes (made to measure is counted in units in `lines`). */
   readonly grids: readonly CarriesGrid[]
 }
@@ -85,16 +103,19 @@ export interface StateCell {
   readonly holds: readonly HoldView[]
   /** Open tracking problems (the deliveries read; 0: none, or not read). */
   readonly problems: number
+  /** os-fx7 (W-06): what they are (Warehouse's problem kinds) and the no-news days its words name; null: not read. */
+  readonly problemKinds: { readonly kinds: readonly string[]; readonly noScanDays: number } | null
   /** A shipment that came back: received back or not (null: not said yet). */
   readonly cameBack: { readonly received: boolean | null } | null
   /** Cancelled, with its reason when the read sends it. */
   readonly cancelled: { readonly reason: string | null } | null
   readonly next: NextStep | null
   /**
-   * W3 (10-design §5 "Pakistan held line", plan D6; worded from the DDT rule — no read says a company cannot issue a DDT, and no country
-   * is read): a PACKED Nexus shipment waits for its DDT and the reader may choose "This shipment travels without a DDT…" in ⋯.
+   * W3 → os-fx7 (W-07; 10-design §5 "Pakistan held line", plan D6): a PACKED Nexus shipment waits for its DDT, the DDT CANNOT be
+   * issued (the DDT preview refuses it for the company's missing legal details — these, worded), and the reader may choose "This
+   * shipment travels without a DDT…" in ⋯. No country is read; an Italian company whose DDT can be issued gets no line. Null: none.
    */
-  readonly ddtChoice: boolean
+  readonly ddtBlocked: readonly string[] | null
 }
 
 export interface TravelsCell {
@@ -106,8 +127,8 @@ export interface TravelsCell {
   /** Its labels' parcel numbers: the first, its carrier page, how many more. */
   readonly labels: { readonly first: string; readonly url: string | null; readonly more: number } | null
   readonly hints: readonly ShipWord[]
-  /** "3 parcels · 3 tracked" (B-OS-001; with shipping.view). */
-  readonly parcels: { readonly count: number; readonly tracked: number } | null
+  /** "3 parcels · 3 tracked" (B-OS-001; with shipping.view). os-fx7 (W-11): `tracked` null where nothing tracks a parcel (our van). */
+  readonly parcels: { readonly count: number; readonly tracked: number | null } | null
   /** Tracking number… is drawn: the read lets this reader type it here (never held: hidden without the right, P0-B3). */
   readonly trackingDoor: boolean
   /** F-OS-305 (os-fx3): when the shipping notice last went to the customer ("customer told 12 Nov"); null: never, or not read. */
@@ -140,6 +161,8 @@ export interface RowModel {
   readonly dates: readonly DateLine[]
   /** The Parcels (n) fold may open (its parcels are known, and Warehouse's cartons read is this reader's). */
   readonly fold: number | null
+  /** os-fx7 (W-10): "Show in the thread" — the thread at this row's newest moment; null: the row has none yet (a fresh draft). */
+  readonly showAt: string | null
 }
 
 const MONEY = new Set<string>(MONEY_HOLD_REASONS)
@@ -159,7 +182,7 @@ export function chipsOf(row: ShipmentRow, orderId: string): Chip[] {
 }
 
 /** What it carries of this order: pieces, styles, one line per colour line, the other orders' pieces, a grid per style. */
-export function carriesOf(row: ShipmentRow, order: Pick<Order, 'id' | 'lines'>): Carries | null {
+export function carriesOf(row: ShipmentRow, order: Pick<Order, 'id' | 'lines'>, facts: ShipmentFacts | null = null): Carries | null {
   if (!row.contents) return null
   const contents = row.contents
   const lines: CarriesLine[] = order.lines.flatMap((line) => {
@@ -178,7 +201,9 @@ export function carriesOf(row: ShipmentRow, order: Pick<Order, 'id' | 'lines'>):
     const value: Record<string, Record<string, number>> = {}
     for (const line of own) value[line.id] = Object.fromEntries(range.map((size) => [size, sumOf(contents.filter((entry) => entry.lineId === line.id && entry.size === size).map((entry) => entry.pieces))]))
     const first = own[0]!
-    return [{ styleId, code: first.style?.code ?? '—', name: first.style?.name ?? '', sizes: range.map((size) => ({ key: size, label: size })), colours: own.map((line) => ({ key: line.id, label: line.colourway ? `${line.colourway.code} · ${line.colourway.name}` : '—', offered: range })), value }]
+    // os-fx7 (W-09): the facts beside the grid — the style's pieces and each colour's.
+    const byColour = Object.fromEntries(own.map((line) => [line.id, sumOf(Object.values(value[line.id] ?? {}))]))
+    return [{ styleId, code: first.style?.code ?? '—', name: first.style?.name ?? '', sizes: range.map((size) => ({ key: size, label: size })), colours: own.map((line) => ({ key: line.id, label: line.colourway ? `${line.colourway.code} · ${line.colourway.name}` : '—', offered: range })), value, pieces: sumOf(Object.values(byColour)), byColour }]
   })
   const others = alsoCarries(row, order.id)
   const otherPieces = row.otherPieces ?? 0
@@ -187,6 +212,7 @@ export function carriesOf(row: ShipmentRow, order: Pick<Order, 'id' | 'lines'>):
     styles: styleIds.length,
     lines,
     other: otherPieces > 0 ? { pieces: otherPieces, orders: others.map((entry) => entry.number) } : null,
+    others: otherPieces > 0 && facts?.others && facts.others.length > 0 ? facts.others : null,
     grids,
   }
 }
@@ -206,7 +232,7 @@ export function nextOf(row: ShipmentRow): NextStep | null {
 }
 
 /** The State cell: pill and tone, holds, tracking problems, came back, cancelled, next. */
-export function stateOf(row: ShipmentRow, delivery: DeliveryRow | null): StateCell {
+export function stateOf(row: ShipmentRow, delivery: DeliveryRow | null, facts: ShipmentFacts | null = null): StateCell {
   const holds = (row.holds ?? []).map((hold): HoldView => ({ reason: hold.reason, words: hold.words, bySystem: hold.bySystem, placedAt: hold.placedAt, finance: hold.bySystem || MONEY.has(hold.reason) }))
   const final = row.status === 'CANCELLED' || row.status === 'DELIVERED' || row.status === 'RETURNED'
   const next = nextOf(row)
@@ -215,10 +241,11 @@ export function stateOf(row: ShipmentRow, delivery: DeliveryRow | null): StateCe
     tone: STATE_TONE[row.status] ?? 'neutral',
     holds: row.status === 'DRAFT' || row.status === 'PACKED' ? holds : [],
     problems: delivery && !final ? delivery.openProblems : 0,
+    problemKinds: delivery && !final && delivery.openProblems > 0 && facts?.problems && facts.problems.kinds.length > 0 ? facts.problems : null,
     cameBack: row.status === 'RETURNED' ? { received: delivery?.returned ? delivery.returned.received : null } : null,
     cancelled: row.status === 'CANCELLED' ? { reason: row.cancelReason ?? null } : null,
     next,
-    ddtChoice: next?.kind === 'step' && next.step === 'ddt' && row.may?.ddt === true && row.may.manage,
+    ddtBlocked: next?.kind === 'step' && next.step === 'ddt' && row.may?.ddt === true && row.may.manage && facts?.ddtBlocks && facts.ddtBlocks.length > 0 ? facts.ddtBlocks : null,
   }
 }
 
@@ -231,18 +258,31 @@ export function travelsOf(row: ShipmentRow): TravelsCell {
   const parcels = row.parcels ?? null
   const hints: ShipWord[] = []
   if (row.origin === 'ELSEWHERE') hints.push(word('ships.travels.elsewhere'))
-  else if (row.transportBy === 'SENDER' && !tracking && (parcels === null || parcels.length === 0)) hints.push(word('ships.travels.ownVan'))
-  if (row.status === 'DRAFT' && row.origin !== 'ELSEWHERE') hints.push(word('ships.travels.draft'))
+  // os-fx7 (W-11): our van always says so — no tracking number; its status is typed in Warehouse (its parcels still counted).
+  else if (row.transportBy === 'SENDER') hints.push(word('ships.travels.ownVan'))
+  // os-fx7 (W-11): parcels get (tracking) numbers only where a carrier carries them — never said for our van.
+  if (row.status === 'DRAFT' && row.origin !== 'ELSEWHERE' && row.transportBy !== 'SENDER') hints.push(word('ships.travels.draft'))
   return {
     carrier: carrier ? wordOf('orders', carrier.key, carrier.params) : null,
     withheld: carrier === null && withheld,
     typed: tracking?.typed ? { number: tracking.typed, url: typedLinkOf(row) } : null,
     labels,
     hints,
-    parcels: parcels && parcels.length > 0 ? { count: parcels.length, tracked: parcels.filter((parcel) => parcel.number !== null).length } : null,
-    trackingDoor: mayTypeTrackingHere(row), // F-OS-304
+    parcels: parcels && parcels.length > 0 ? { count: parcels.length, tracked: row.transportBy === 'CARRIER' ? parcels.filter((parcel) => parcel.number !== null).length : null } : null,
+    trackingDoor: trackingDoorDrawn(row), // F-OS-304 → os-fx7 (W-01)
     toldAt: row.noticeSentAt ?? null, // F-OS-305
   }
+}
+
+/**
+ * os-fx7 (W-01; 10-design §5, §12 pick 8): Tracking numbers… is drawn only where something can be typed — a CARRIER shipment, PACKED
+ * or SHIPPED, with a parcel no label tracks (an older answer without parcels: the consignment number alone) — and the read lets this
+ * reader type it; never on a draft ("Parcels get numbers once the shipment is packed").
+ */
+export function trackingDoorDrawn(row: Pick<ShipmentRow, 'mayTypeTracking' | 'transportBy' | 'status' | 'parcels'>): boolean {
+  if (!mayTypeTrackingHere(row) || row.transportBy !== 'CARRIER' || (row.status !== 'PACKED' && row.status !== 'SHIPPED')) return false
+  const parcels = row.parcels ?? []
+  return parcels.length === 0 || parcels.some((parcel) => parcel.source !== 'LABEL')
 }
 
 /** How a delivery is known: from the carrier, typed by the office, collected by the customer, or set by hand over the carrier. */
@@ -271,19 +311,26 @@ export function datesOf(row: ShipmentRow, delivery: DeliveryRow | null): DateLin
 }
 
 /** One row of the section. `delivery`: the deliveries read's row for it (null: not read, or it has not left). */
-export function rowOf(row: ShipmentRow, order: Pick<Order, 'id' | 'lines'>, delivery: DeliveryRow | null): RowModel {
+export function rowOf(row: ShipmentRow, order: Pick<Order, 'id' | 'lines'>, delivery: DeliveryRow | null, /* os-fx7 */ facts: ShipmentFacts | null = null): RowModel {
   return {
     id: row.id,
     number: row.number,
     status: row.status,
     anchor: rowAnchor('Shipment', row.id),
     chips: chipsOf(row, order.id),
-    carries: carriesOf(row, order),
-    state: stateOf(row, delivery),
+    carries: carriesOf(row, order, facts),
+    state: stateOf(row, delivery, facts),
     travels: travelsOf(row),
     dates: datesOf(row, delivery),
     fold: row.parcels && row.parcels.length > 0 && (row.withheld ?? []).length === 0 ? row.parcels.length : null,
+    showAt: showAtOf(row, delivery),
   }
+}
+
+/** os-fx7 (W-10): the row's newest moment (packed, left, held, delivered, came back, cancelled) — where the thread opens. */
+export function showAtOf(row: ShipmentRow, delivery: DeliveryRow | null): string | null {
+  const moments = [row.packedAt, row.shippedAt, row.deliveredAt, row.cancelledAt, delivery?.returned?.at, ...(row.holds ?? []).map((hold) => hold.placedAt)].filter((at): at is string => typeof at === 'string' && at !== '')
+  return moments.reduce<string | null>((newest, at) => (newest === null || Date.parse(at) > Date.parse(newest) ? at : newest), null)
 }
 
 /** The order of the answer's states (most advanced first). */
@@ -335,3 +382,19 @@ export function parcelWordsOf(row: Pick<ShipmentRow, 'parcels'>, lines: Order['l
   return out
 }
 // ── end F-OS-301 ──
+
+// ── os-fx7 (W-05; 10-design D6): what the order does once this shipment is marked delivered ──
+/**
+ * "The order stays Partly shipped: 70 garments are not delivered yet." — counted from the rows' own contents (every live row read;
+ * else nothing is said), the order's status word in the key (Partly shipped / Shipped; any other: a plain line). Null: nothing stays.
+ */
+export function orderStaysOf(order: Pick<Order, 'status' | 'progress' | 'chain'>, shipmentId: string): { key: string; params: { count: number } } | null {
+  const rows = order.chain.shipments.filter((row) => row.status !== 'CANCELLED')
+  if (rows.some((row) => !row.contents)) return null
+  const delivered = rows.filter((row) => row.status === 'DELIVERED' || row.id === shipmentId).reduce((sum, row) => sum + (piecesOf(row) ?? 0), 0)
+  const left = order.progress.ordered - order.progress.closedShort - delivered
+  if (left <= 0) return null
+  const status = order.status === 'PARTLY_SHIPPED' || order.status === 'SHIPPED' ? order.status : 'other'
+  return { key: `door.mark.orderStays.${status}`, params: { count: left } }
+}
+// ── end os-fx7 ──

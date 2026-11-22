@@ -26,6 +26,10 @@ import type { RowActId } from './shipments/doors'
 import type { NoticeWords } from './record-model'
 import type { Words } from '../../../warehouse/shipments/queue/shared/depth' // F-OS-301: what the tracking write said
 import { parcelWordsOf } from './shipments/rows' // F-OS-301: each parcel's contents of this order, in the Tracking numbers window
+import { orderStaysOf, type ShipmentFacts } from './shipments/rows' // os-fx7 (W-05): what the order does after "Mark delivered"
+import { ddtBlocksOf, factReadsOf, othersOf, problemsOf } from './shipments/facts' // os-fx7 (W-06, W-07, W-12)
+import { readProblems } from '../../../warehouse/shipments/pod/api' // os-fx7 (W-06): what a tracking problem is
+import { getShipment, previewDdt } from '../../../warehouse/shipments/api' // os-fx7 (W-07, W-12): the DDT refusal, the shared goods
 // ---- F-OS-303: the after-sales doors — the Returns and Quality pages' OWN windows, and the claim link, mounted in place ----
 import type { AfterSalesKind } from './shipments/doors'
 import { NewReturnDoor } from '../../returns/NewReturnDoor'
@@ -126,7 +130,7 @@ export function useShipmentsActs(input: {
     // (setDeliveriesAttempt is a state setter, stable: declared below with the deliveries read.)
     [prefix, reload, setNotice],
   )
-  const shipmentDoor = row && open && order ? doorOf({ row: { id: row.id, number: row.number, version: row.version ?? 1, shipToAddressId: row.shipToAddressId ?? null /* F-OS-305 */ }, order: { id: order.id, companyId: order.companyId, partyId: order.partyId /* F-OS-302 */, shipComplete: order.shipComplete === true }, open, can, prefix, close, said, parcelWords: parcelWordsOf(row, order.lines) /* F-OS-301 */ }) : null
+  const shipmentDoor = row && open && order ? doorOf({ row: { id: row.id, number: row.number, version: row.version ?? 1, shipToAddressId: row.shipToAddressId ?? null /* F-OS-305 */ }, order: { id: order.id, companyId: order.companyId, partyId: order.partyId /* F-OS-302 */, shipComplete: order.shipComplete === true }, open, can, prefix, close, said, parcelWords: parcelWordsOf(row, order.lines) /* F-OS-301 */, orderStays: open.act === 'delivered' ? orderStaysOf(order, row.id) : null /* os-fx7 (W-05) */ }) : null
   // ---- end F-OP-119 → F-OS-201
 
   const closeAfter = useCallback(() => setAfter(null), [])
@@ -254,6 +258,34 @@ export function useShipmentsActs(input: {
   )
   // ---- end F-OS-101
 
+  // ---- os-fx7 (W-06, W-07, W-12): what a row says beyond the order read — read only for the rows that need it (shipments/facts.ts);
+  // a read that fails says nothing (the row keeps its plainer words). Read again with the order and its deliveries.
+  const [facts, setFacts] = useState<{ readonly orderId: string; readonly byId: Readonly<Record<string, ShipmentFacts>> } | null>(null)
+  const deliveriesRead = shipmentDeliveries?.value ?? null
+  useEffect(() => {
+    if (!order || !orderId) return
+    const abort = new AbortController()
+    const byDelivery = new Map((deliveriesRead?.shipments ?? []).map((row) => [row.id, row]))
+    const put = (shipmentId: string, part: ShipmentFacts) => {
+      if (abort.signal.aborted) return
+      setFacts((current) => {
+        const byId = current?.orderId === orderId ? current.byId : {}
+        return { orderId, byId: { ...byId, [shipmentId]: { ...byId[shipmentId], ...part } } }
+      })
+    }
+    const quiet = () => undefined
+    for (const row of order.chain.shipments) {
+      for (const read of factReadsOf(row, byDelivery.get(row.id) ?? null, order.id)) {
+        if (read === 'problems') readProblems(api, row.id).then((answer) => put(row.id, { problems: problemsOf(answer) ?? { kinds: [], noScanDays: answer.noScanDays } })).catch(quiet)
+        else if (read === 'ddt') previewDdt(api, row.id, {}, abort.signal).then((answer) => put(row.id, { ddtBlocks: ddtBlocksOf(answer.problems) })).catch(quiet)
+        else getShipment(api, row.id, abort.signal).then((shipment) => put(row.id, { others: othersOf(shipment.lines, row, order.id) })).catch(quiet)
+      }
+    }
+    return () => abort.abort()
+  }, [api, order, orderId, deliveriesRead])
+  const shipmentFacts = facts && facts.orderId === orderId ? facts.byId : null
+  // ---- end os-fx7
+
   // ---- F-OS-103: each row's Parcels (n) fold — Warehouse's cartons of that shipment, read when it opens (again on Try again) ----
   const [parcels, setParcels] = useState<{ readonly orderId: string | null; readonly parts: Readonly<Record<string, Part<Bench>>> }>({ orderId: null, parts: {} })
   const onOpenParcels = useCallback(
@@ -268,7 +300,7 @@ export function useShipmentsActs(input: {
   const shipmentParcels = parcels.orderId === orderId ? parcels.parts : {}
   // ---- end F-OS-103
   return {
-    model: { shipmentDoor, newShipment, joinable: joinableShown, elsewhere /* F-OP-123 */, shipmentDeliveries /* F-OS-101 */, shipmentParcels /* F-OS-103 */, afterSalesDoor /* F-OS-303 */ },
+    model: { shipmentDoor, newShipment, joinable: joinableShown, elsewhere /* F-OP-123 */, shipmentDeliveries /* F-OS-101 */, shipmentParcels /* F-OS-103 */, afterSalesDoor /* F-OS-303 */, shipmentFacts /* os-fx7 */ },
     actions: { onShipmentTracking, onCreateShipment, onJoinShipment, onRecordElsewhere /* F-OP-123 */, shipmentsTab: { onRetryDeliveries, onOpenParcels, onDownloadProof, onAct /* F-OS-202 */, onAfterSales /* F-OS-303 */ } /* F-OS-101 */ },
   }
 }
@@ -307,6 +339,8 @@ function doorOf(input: {
   readonly said: (shipment: { readonly id: string; readonly number: string }, words: NoticeWords, told: NoticeWords | null) => void
   /** F-OS-301: each parcel's contents of this order, by parcel id (the Tracking numbers window's rows). */
   readonly parcelWords: Readonly<Record<string, string>>
+  /** os-fx7 (W-05): "The order stays Partly shipped: …" for Mark delivered (null: nothing to say). */
+  readonly orderStays: Words | null
 }): ReactNode {
   const { row, order, open, can, prefix, close, said } = input
   const key = `${row.id}:${open.act}`
@@ -314,7 +348,7 @@ function doorOf(input: {
   const transport = TRANSPORT_DOORS[act]
   // Warehouse's How it travels windows: the hook writes and closes; the order reads itself again and says it once. F-OS-301: Tracking
   // numbers… says what the customer was told (the portal at once; the shipping notice again only when ticked, and whether it went).
-  if (transport) return createElement(ShipmentTransportDoor, { key, shipmentId: row.id, version: row.version, can, open: transport, onChanged: act === 'tracking' ? (done?: Words) => said(row, os('ships.done.tracking', { number: row.number }), trackingTold(done)) : () => said(row, os(`ships.done.${act}`, { number: row.number }), toldOf(act)), onClose: close, ...(act === 'tracking' ? { parcelWords: input.parcelWords } : {}) })
+  if (transport) return createElement(ShipmentTransportDoor, { key, shipmentId: row.id, version: row.version, can, open: transport, onChanged: act === 'tracking' ? (done?: Words) => said(row, os('ships.done.tracking', { number: row.number }), trackingTold(done)) : () => said(row, os(`ships.done.${act}`, { number: row.number }), toldOf(act)), onClose: close, ...(act === 'tracking' ? { parcelWords: input.parcelWords } : {}), ...(act === 'delivered' ? { markWords: { orderStays: input.orderStays } } : {}) })
   if (act === 'tracking') return null
   const kind = SHIPMENT_DOORS[act]
   const done = (result: ShipmentDoorDone) => said(result.shipment, os(result.words.key, result.words.params), toldOf(act))

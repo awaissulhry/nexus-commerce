@@ -204,3 +204,31 @@ describe('F-OS-303: the after-sales doors — Open a return…, Log a complaint�
   })
 })
 // ---- end F-OS-303
+
+// ── os-fx7 (30-walk W-02, W-04, W-11, W-13) ──
+describe('os-fx7: the walk\'s gaps on the head, the cards and the dialogs', () => {
+  it('W-11: our van on its way says it has not reported the delivery yet (never "on its way" with nothing to follow); a set day still says it', () => {
+    const value = order('PARTLY_SHIPPED')
+    const van = { id: 'v', number: 'SEED-SH-0101', status: 'SHIPPED', shippedAt: '2026-11-18T08:00:00.000Z', deliveredAt: null, transportBy: 'SENDER' as const }
+    const parts = (rows: ShipmentRow[]) => headOf({ ...value, chain: { ...value.chain, shipments: rows } }, where(), null).parts
+    expect(parts([van])).toContainEqual({ key: 'head.vanNotReported', params: { number: 'SEED-SH-0101' } })
+    expect(parts([{ ...van, expectedDeliveryAt: '2026-11-21T11:00:00.000Z' }])).toContainEqual({ key: 'head.expected', params: { number: 'SEED-SH-0101' }, instants: { day: '2026-11-21T11:00:00.000Z' } })
+    expect(parts([{ ...van, transportBy: 'CARRIER' }])).toContainEqual({ key: 'head.onItsWay', params: { number: 'SEED-SH-0101' } })
+  })
+
+  it('W-02: a lone or odd last style card spans both columns of the two-per-row grid (no dead half at 1920)', async () => {
+    const { readFileSync } = await import('node:fs')
+    const css = readFileSync(new URL('./view/shipments.css', import.meta.url), 'utf8')
+    expect(css).toContain('.fw-os-wcs > .fw-os-wc:last-child:nth-child(odd) { grid-column: 1 / -1; }')
+  })
+
+  it('W-04: joining an existing shipment never says it takes the next number; W-13: "Whole order" / "Tutto l\'ordine"', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { CATALOGUE } = await import('../../../../../lib/i18n/messages')
+    expect(readFileSync(new URL('../../../../warehouse/shipments/list/view/NewShipmentDialog.tsx', import.meta.url), 'utf8')).toContain("{!model.join && <p className=\"fw-sh-hint\">{t('new.number')}</p>}")
+    expect(CATALOGUE.en['order-shipments']?.['after.about.order']).toBe('Whole order')
+    expect(CATALOGUE.it['order-shipments']?.['after.about.order']).toBe("Tutto l'ordine")
+    expect(readFileSync(new URL('./view/AfterSalesSection.tsx', import.meta.url), 'utf8')).toContain("t('after.about.order')")
+  })
+})
+// ── end os-fx7 ──

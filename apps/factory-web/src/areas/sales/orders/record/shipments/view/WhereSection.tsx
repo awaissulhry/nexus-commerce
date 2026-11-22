@@ -251,6 +251,11 @@ function StyleCardView({ card, order, model, actions, counted }: { card: StyleCa
       <div className={`fw-os-wc-b${card.grid ? '' : ' is-done'}`}>
         {card.grid ? (
           <div className="fw-so-gridbox">
+            {/* os-fx7 (W-08): the grid's caption SHOWN above it ("SEED-JKT-02: still to ship by colour and size"); the grid keeps its own
+                caption for a screen reader, so this line is not read twice. */}
+            <p className="fw-os-gcap" aria-hidden="true">
+              {counted ? t('where.card.gridCaption', { style: card.code }) : o('ship.gridCaption', { style: card.code })}
+            </p>
             <SizeGridView colours={card.grid.colours} sizes={card.grid.sizes} value={card.grid.value} caption={counted ? t('where.card.gridCaption', { style: card.code }) : o('ship.gridCaption', { style: card.code })} locale={INTL_LOCALE[locale]} copy={sizeGridWords(sales)} />
           </div>
         ) : (

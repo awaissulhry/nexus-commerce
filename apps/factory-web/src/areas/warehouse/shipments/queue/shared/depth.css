@@ -212,3 +212,10 @@
     flex-wrap: wrap;
   }
 }
+
+/* os-fx7 (W-17): a dialog line's facts wrap (the list's one-line cells keep their ellipsis). */
+.fw-sh-cell-sub.fw-shd-wrap {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}

@@ -102,3 +102,17 @@ describe('ONE component on both pages (L6)', () => {
     expect(tab).toContain("import { Move } from '../../../warehouse/shipments/queue/move/Move'")
   })
 })
+
+// ── os-fx7 (30-walk W-03) ──
+describe('os-fx7 (W-03): the move\'s Why never shows a raw key', () => {
+  it('never "another delivery address" (a move goes to a draft of the same address); every choice worded through the split\'s key', async () => {
+    const { MOVE_REASONS } = await import('./model')
+    const { splitReasonKey } = await import('../split/model')
+    expect(MOVE_REASONS).not.toContain('SHIP_TO')
+    expect(splitReasonKey('SHIP_TO')).toBe('door.split.reasonShipTo')
+    expect(splitReasonKey('PART_READY')).toBe('splitReason.PART_READY')
+    expect(readFileSync(new URL('./view/MoveDialog.tsx', import.meta.url), 'utf8')).toContain('title={t(splitReasonKey(reason))')
+    expect(readFileSync(new URL('../split/view/SplitDialog.tsx', import.meta.url), 'utf8')).not.toContain('t(`splitReason.${reason}`)')
+  })
+})
+// ── end os-fx7 ──

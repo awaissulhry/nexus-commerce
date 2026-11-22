@@ -6,7 +6,7 @@ import { arrangeDialogOf, etaDialogOf, type TransportActions, type TransportDial
 import { trackingDialogOf } from '../../../../warehouse/shipments/booking/model' // F-OS-301: the consignment number and each parcel's
 import type { Words } from '../../../../warehouse/shipments/queue/shared/depth'
 import type { Transport } from '../../../../warehouse/shipments/booking/api'
-import { TransportDoorDialog } from '../../../../warehouse/shipments/booking/view/TransportView'
+import { TransportDoorDialog, type MarkWords } from '../../../../warehouse/shipments/booking/view/TransportView'
 import type { DepthAbilities } from '../../../../warehouse/shipments/queue/shared/depth'
 
 /**
@@ -26,7 +26,7 @@ export function transportDialogOf(open: TransportDoorOpen, transport: Transport)
       return trackingDialogOf(transport) // F-OP-135 → F-OS-301 (B-OS-022): the link, and a row per parcel no label tracks
     case 'delivered':
     case 'returned':
-      return { kind: 'status', status: open === 'delivered' ? 'DELIVERED' : 'RETURNED', occurredAt: null, description: '', location: '', reason: '' }
+      return { kind: 'status', status: open === 'delivered' ? 'DELIVERED' : 'RETURNED', occurredAt: null, description: '', location: '', reason: '', mark: true /* os-fx7 (W-05): the D6 window */ }
     case 'arrange':
       return arrangeDialogOf(transport)
     case 'eta':
@@ -34,7 +34,7 @@ export function transportDialogOf(open: TransportDoorOpen, transport: Transport)
   }
 }
 
-export function ShipmentTransportDoor({ shipmentId, version, can, open, onChanged, onClose, parcelWords }: { shipmentId: string; version: number; can: DepthAbilities; open: TransportDoorOpen; onChanged: (/* F-OS-301 */ done?: Words) => void; onClose: () => void; /* F-OS-301: each parcel's weight and contents of this order */ parcelWords?: Readonly<Record<string, string>> }) {
+export function ShipmentTransportDoor({ shipmentId, version, can, open, onChanged, onClose, parcelWords, markWords }: { shipmentId: string; version: number; can: DepthAbilities; open: TransportDoorOpen; onChanged: (/* F-OS-301 */ done?: Words) => void; onClose: () => void; /* F-OS-301: each parcel's weight and contents of this order */ parcelWords?: Readonly<Record<string, string>>; /* os-fx7 (W-05) */ markWords?: MarkWords }) {
   const { model, actions } = useOwnTransport(shipmentId, version, can, onChanged)
   const opened = useRef(false)
   const ready = model.transport.state === 'ready' ? model.transport.value : null
@@ -49,5 +49,5 @@ export function ShipmentTransportDoor({ shipmentId, version, can, open, onChange
     if (model.dialog === null) onClose()
   }, [ready, model.dialog, actions, open, onClose])
   const door = useMemo<TransportActions>(() => ({ ...actions, onDialog: (dialog) => (dialog === null ? onClose() : actions.onDialog?.(dialog)) }), [actions, onClose])
-  return <TransportDoorDialog model={model} actions={door} onClose={onClose} parcelWords={parcelWords} />
+  return <TransportDoorDialog model={model} actions={door} onClose={onClose} parcelWords={parcelWords} markWords={markWords} />
 }
