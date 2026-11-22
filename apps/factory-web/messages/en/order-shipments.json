@@ -185,7 +185,8 @@
       "pack": "Next: pack it ›",
       "ddt": "Next: issue the DDT ›",
       "labels": "Next: buy the labels ›",
-      "hand": "Next: hand it over ›"
+      "hand": "Next: hand it over ›",
+      "ddtChoice": "A Nexus shipment leaves with a DDT. If the DDT cannot be issued (Warehouse lists its open checks), choose “This shipment travels without a DDT…” in ⋯, then hand it over."
     },
     "travels": {
       "withheld": "Not shown to your role",

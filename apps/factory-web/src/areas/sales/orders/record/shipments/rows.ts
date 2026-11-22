@@ -90,6 +90,11 @@ export interface StateCell {
   /** Cancelled, with its reason when the read sends it. */
   readonly cancelled: { readonly reason: string | null } | null
   readonly next: NextStep | null
+  /**
+   * W3 (10-design §5 "Pakistan held line", plan D6; worded from the DDT rule — no read says a company cannot issue a DDT, and no country
+   * is read): a PACKED Nexus shipment waits for its DDT and the reader may choose "This shipment travels without a DDT…" in ⋯.
+   */
+  readonly ddtChoice: boolean
 }
 
 export interface TravelsCell {
@@ -202,6 +207,7 @@ export function nextOf(row: ShipmentRow): NextStep | null {
 export function stateOf(row: ShipmentRow, delivery: DeliveryRow | null): StateCell {
   const holds = (row.holds ?? []).map((hold): HoldView => ({ reason: hold.reason, words: hold.words, bySystem: hold.bySystem, placedAt: hold.placedAt, finance: hold.bySystem || MONEY.has(hold.reason) }))
   const final = row.status === 'CANCELLED' || row.status === 'DELIVERED' || row.status === 'RETURNED'
+  const next = nextOf(row)
   return {
     status: row.status,
     tone: STATE_TONE[row.status] ?? 'neutral',
@@ -209,7 +215,8 @@ export function stateOf(row: ShipmentRow, delivery: DeliveryRow | null): StateCe
     problems: delivery && !final ? delivery.openProblems : 0,
     cameBack: row.status === 'RETURNED' ? { received: delivery?.returned ? delivery.returned.received : null } : null,
     cancelled: row.status === 'CANCELLED' ? { reason: row.cancelReason ?? null } : null,
-    next: nextOf(row),
+    next,
+    ddtChoice: next?.kind === 'step' && next.step === 'ddt' && row.may?.ddt === true && row.may.manage,
   }
 }
 

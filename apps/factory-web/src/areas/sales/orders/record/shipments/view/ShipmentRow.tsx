@@ -254,6 +254,13 @@ function StateCellView({ view, order, model }: { view: RowModel; order: Order; m
         </span>
       ),
     )
+    // W3 (plan D6): where the DDT cannot be issued (Warehouse's checks say why), the shipment may travel without one — said, not assumed.
+    if (state.ddtChoice)
+      out.push(
+        <span key="ddt-choice" className="fw-os-hw">
+          {t('ships.next.ddtChoice')}
+        </span>,
+      )
   }
   return <>{out}</>
 }

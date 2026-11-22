@@ -185,7 +185,8 @@
       "pack": "Prossimo: imballala ›",
       "ddt": "Prossimo: emetti il DDT ›",
       "labels": "Prossimo: compra le etichette ›",
-      "hand": "Prossimo: consegnala al vettore ›"
+      "hand": "Prossimo: consegnala al vettore ›",
+      "ddtChoice": "Una spedizione Nexus parte con un DDT. Se il DDT non si può emettere (il Magazzino elenca i controlli aperti), scegli «Questa spedizione viaggia senza DDT…» in ⋯, poi consegnala al vettore."
     },
     "travels": {
       "withheld": "Non visibile al tuo ruolo",
