@@ -4,6 +4,10 @@ import { BRAND_ALPHA } from '../../testing/two-brands'
 import type { ThreadFile } from '../files/model'
 import { offeredTargets } from '../files/use-on' // B-TH-231
 import type { FilesViewModel } from './view/FilesView'
+// ---- F-OF T.1 (order FILES tab): the window's Delete (D4) and the order's window — the same body as its Files tab
+import type { OrderFile, OrderFilesRead } from './model'
+import { asksState, withAsks } from './asks/fixtures'
+// ---- end F-OF T.1
 import { FilesViewCase, type FilesViewCaseModel } from './view/FilesViewCase'
 
 /**
@@ -107,12 +111,27 @@ const PO_PRICED = file(18, { name: 'Brand Alpha PO 4471.pdf', priced: true, vers
 const ALL_MARK = { upload: true, share: true, delete: true, mark: true }
 // ---- end F-CP-144
 
+// ---- F-OF T.1: the order's window (a SalesOrder's Files window draws the order's body: its card ⋯, Who can see…, the asks band) ----
+const orderFile = (n: number, over: Partial<OrderFile>): OrderFile => ({ id: id(400 + n), name: `file-${n}.pdf`, kind: 'DOCUMENT', category: null, contentType: 'application/pdf', sizeBytes: 182_000, versionNo: 1, at: '2026-11-18T10:00:00Z', from: { type: 'SalesOrder', id: ORDER, label: 'SO-2026-0142' }, line: null, audience: 'OFFICE_ONLY', bodyData: false, alsoOn: [], alsoOnOther: 0, inThread: null, version: 1, versions: 1, ...over })
+const ORDER_READ: OrderFilesRead = withAsks({
+  order: { id: ORDER, number: 'SO-2026-0142' },
+  groups: [
+    { key: 'ORDER', words: { en: 'Order & thread', it: 'Ordine e conversazione' }, files: [orderFile(1, { name: 'Size spec AX-100.pdf', versionNo: 5, version: 9, versions: 5, audiences: ['CUSTOMER'], audience: 'CUSTOMER_CAN_SEE' }), orderFile(2, { name: 'Office notes.pdf' })], leftOut: 0, measurementsLeftOut: 0 },
+    { key: 'LINES', words: { en: 'Lines & artwork', it: 'Righe e grafiche' }, files: [orderFile(3, { name: 'Logo embroidery.pdf', from: { type: 'SalesOrderLine', id: id(450), label: 'SO-2026-0142 · 1' }, line: { id: id(450), seq: 1 } })], leftOut: 0, measurementsLeftOut: 0 },
+  ],
+  total: 3,
+  truncated: false,
+})
+const OWNER_MAY = { upload: true, delete: true, share: true, ask: true, askCustomer: true }
+const ORDER_WINDOW = { read: ORDER_READ, problem: null, selected: [], canShare: true, may: OWNER_MAY, versionsHere: true, readOnly: false, asks: asksState() }
+// ---- end F-OF T.1
+
 export const designScreen = defineDesignScreen<FilesViewCaseModel>({
   screen: 'SCR-006-filesview',
   title: 'Files view of one record (B-TH-299)',
   view: FilesViewCase,
   cases: [
-    { id: 'files', label: 'All files of the order, by kind', model: c({ missing: [{ id: 'm1', document: 'Declaration of conformity (signed)', before: 'Shipped', level: 'WARN' }] }), note: 'Grouped by the system’s kinds until the API says each file’s origin (WALL-G13). The sample photo shows v3 in force with two earlier versions (Open, Restore); the held photo, the legal hold and the retention lines are read only. The work order’s own file is not listed (R-1 to R-4). ↑ / ↓ move, x chooses, Enter opens the viewer.' },
+    { id: 'files', label: 'All files of the order, by kind', model: c({ missing: [{ id: 'm1', document: 'Declaration of conformity (signed)', before: 'Shipped', level: 'WARN' }] }), note: 'Grouped by the system’s kinds until the API says each file’s origin (WALL-G13). The sample photo shows v3 in force with two earlier versions (Open; F-OF-301: Restore lives inside Versions…); the held photo, the legal hold and the retention lines are read only. The work order’s own file is not listed (R-1 to R-4). ↑ / ↓ move, x chooses, Enter opens the viewer.' },
     { id: 'chosen', label: 'Three chosen: the counted bulk bar', model: c({ selected: [id(12), id(7), id(9)] }), note: 'Download 3 · Share with Brand Alpha (1: the others are shared already) · Make office only (2) · Delete 2 — the declaration is under a legal hold, said in words.' },
     { id: 'by-origin', label: 'By origin (once WALL-G13 lands)', model: c({ files: FILES }), note: 'From the customer · Ours · Made by us · Floor — drawn when every file says where it came from.' },
     { id: 'upload-ask', label: 'Add 2 files: kind and audience', model: c({ upload: { files: [{ name: 'Fit photo 1.jpg', sizeBytes: 2_400_000 }, { name: 'Fit photo 2.jpg', sizeBytes: 2_100_000 }], kind: 'PHOTO', audience: 'OFFICE', kinds: ['ATTACHMENT', 'DOCUMENT', 'PHOTO', 'CERTIFICATE'], audiences: ['OFFICE', 'FLOOR', 'PARTNER', 'LINK'] } }), note: 'Asked once in the system’s words; the audience starts on Office; "Office and Brand Alpha" reaches only this record’s customer.' },
@@ -137,6 +156,15 @@ export const designScreen = defineDesignScreen<FilesViewCaseModel>({
     { id: 'upload-priced', label: 'Add a file that shows prices: never to the floor', model: c({ upload: { files: [{ name: 'Brand Alpha PO 4471.pdf', sizeBytes: 220_000 }], kind: 'DOCUMENT', audience: 'FLOOR', kinds: ['ATTACHMENT', 'DOCUMENT', 'PHOTO'], audiences: ['OFFICE', 'FLOOR', 'PARTNER'], priced: true } }), note: '"This file shows prices" — then only people who see prices open it; Add held while the floor is chosen.' },
     { id: 'priced-only', label: 'As Sales worker: every file of the record is priced (the counted line, no empty state)', model: c({ files: PRICED_LOCKED, can: ALL_MARK }) },
     // ---- end F-CP-144
+    // ---- F-OF T.1 (D4; F-OF-303): the window's bulk Delete N opens Delete… — the whole documents, with a reason; the order's window
+    {
+      id: 'delete-window',
+      label: 'F-OF-303 · Delete 2 chosen files and their versions? — why (required), cannot be undone (the bulk Delete on every record)',
+      model: c({ selected: [id(12), id(9)], acts: { window: { kind: 'delete', items: [{ id: id(12), name: 'AX-100 sample front.jpg', version: 3, visibility: ['OFFICE', 'PARTNER'], versions: 3, versionNo: 3 }, { id: id(9), name: 'Size chart AX-100.xlsx', version: 1, visibility: ['OFFICE'], versions: 1, versionNo: 1 }], reason: '' }, busy: false, problem: null, notice: null, party: PARTY.name } }),
+      note: 'One window for one file or the chosen ones; Delete is held until a reason of 3 to 500 characters; a legal hold refuses the whole (the API’s words).',
+    },
+    { id: 'order-window', label: 'F-OF T.1 · A sales order’s window: the order’s body — Waiting for files, the cards with their ⋯ (Versions…, Who can see…, Rename…, Delete…), one Add files…', model: c({ order: ORDER_WINDOW }), note: 'The same body as the order’s Files tab (the tab draws the asks in their own section).' },
+    // ---- end F-OF T.1
     { id: 'no-upload', label: 'No right to upload', model: c({ can: { upload: false, share: false, delete: false }, uploadHeld: null }), note: 'The upload is held with the reason; the bulk actions say the right they need.' },
     { id: 'block', label: 'A required document refuses the move', model: c({ missing: [{ id: 'm2', document: 'Test report EN 17092-3', before: 'Shipped', level: 'BLOCK' }] }) },
     { id: 'empty', label: 'No files yet', model: c({ files: [] }), note: 'An empty view never looks like an error: the drop area says what to do.' },
