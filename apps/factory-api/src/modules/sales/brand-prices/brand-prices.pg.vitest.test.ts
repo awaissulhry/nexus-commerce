@@ -480,6 +480,9 @@ describe('B-OM-020: a price difference accepted by hand and taken back (orders.m
     const stale = await no('owner', 'POST', url(), { ourNet: 82_000, brandNet: 81_000, reason: 'Read an older check.' }, 409)
     expect(paths(stale)).toEqual(['priceAccept/STALE'])
     expect(stale.message).toBe('A price changed since you read the check: read it again, then accept.')
+    // om-fx1s: every key of the body is money-marked (so optional to the contract): a body without the nets is refused by place.
+    expect(paths(await no('finance', 'POST', url(), { reason: 'No nets sent.' }, 400))).toEqual(['body/ourNet'])
+    expect(paths(await no('finance', 'DELETE', url(), {}, 400))).toEqual(['body/reason'])
   })
 
   it('a price change reopens it by itself; accepting the new difference takes the old one back, in words', async () => {

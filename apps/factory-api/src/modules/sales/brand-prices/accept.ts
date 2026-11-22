@@ -1,4 +1,4 @@
-import { DomainError } from '@nexus/factory-domain/core/errors'
+import { DomainError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { acceptanceInForce, PRICE_ACCEPT_WORDS, REACCEPTED_WORDS, type PriceAcceptRefusal } from '@nexus/factory-domain/sales/brand-prices/accept'
@@ -41,15 +41,21 @@ async function withdrawInCommand(tools: CommandTools, order: OrderRow, acceptanc
   auditBrandPrice(tools, order, { action: 'brandPrices.unaccept', before: { acceptanceId: acceptance.id, ourNet: markMoney('price', acceptance.ourNet), brandNet: markMoney('price', acceptance.brandNet) }, after: { acceptanceId: acceptance.id, withdrawn: true }, reason })
 }
 
+/** The body as the route gives it: every key money-marked (the price grain), so each may be absent — checked here (400). */
 export interface AcceptBody {
-  readonly ourNet: number
-  readonly brandNet: number
-  readonly reason: string
+  readonly ourNet?: number | undefined
+  readonly brandNet?: number | undefined
+  readonly reason?: string | undefined
 }
+const missing = (path: string, message: string): ValidationError => new ValidationError(message, [{ path: `body/${path}`, message }])
+const REASON_WORDS = 'Say why (3 to 500 characters): it is kept in the price history.'
 
 /** POST /sales/orders/:orderId/price-check/accept. */
 export async function acceptPriceDifference(caller: CommandCaller, orderId: string, body: AcceptBody, idempotencyKey?: string) {
   const { context, order } = await pricedOrder(caller, orderId, ORDERS_MONEY_PLAN)
+  if (body.ourNet === undefined || body.brandNet === undefined) throw missing(body.ourNet === undefined ? 'ourNet' : 'brandNet', 'Send both nets as you read them on the price check.')
+  if (body.reason === undefined) throw missing('reason', REASON_WORDS)
+  const nets = { ourNet: body.ourNet, brandNet: body.brandNet }
   if (isFinal(order.status)) throw refused('CLOSED')
   const reason = body.reason.trim()
   await command(caller, { name: 'brandPrices.accept', idempotencyKey, input: { orderId, ...body } }, async (tools) => {
@@ -59,17 +65,17 @@ export async function acceptPriceDifference(caller: CommandCaller, orderId: stri
     if (isFinal(fresh.status)) throw refused('CLOSED')
     const total = await totalNow(tx, fresh)
     if (total.priceMatch !== 'NOT_EQUAL') throw refused('NOTHING_TO_ACCEPT')
-    if (body.ourNet !== total.ourPrice || body.brandNet !== total.brandPrice) throw refused('STALE')
+    if (nets.ourNet !== total.ourPrice || nets.brandNet !== total.brandPrice) throw refused('STALE')
     const standing = (await acceptancesOf(tx, [fresh.id])).get(fresh.id)
     if (standing && acceptanceInForce(total, standing)) throw refused('ACCEPTED_ALREADY')
     // An acceptance the prices left behind (still not taken back): taken back first, in words.
     if (standing) await withdrawInCommand(tools, fresh, standing, REACCEPTED_WORDS)
     const id = newId()
     await tx.orderPriceAcceptance.create({
-      data: { id, companyId: fresh.companyId, partyId: fresh.partyId, salesOrderId: fresh.id, ourNet: body.ourNet, brandNet: body.brandNet, reason, acceptedById: actorIdOf(tools), acceptedAt: now },
+      data: { id, companyId: fresh.companyId, partyId: fresh.partyId, salesOrderId: fresh.id, ourNet: nets.ourNet, brandNet: nets.brandNet, reason, acceptedById: actorIdOf(tools), acceptedAt: now },
       select: { id: true },
     })
-    auditBrandPrice(tools, fresh, { action: 'brandPrices.accept', after: { acceptanceId: id, ourNet: markMoney('price', body.ourNet), brandNet: markMoney('price', body.brandNet), difference: markMoney('price', body.ourNet - body.brandNet) }, reason })
+    auditBrandPrice(tools, fresh, { action: 'brandPrices.accept', after: { acceptanceId: id, ourNet: markMoney('price', nets.ourNet), brandNet: markMoney('price', nets.brandNet), difference: markMoney('price', nets.ourNet - nets.brandNet) }, reason })
     announceBrandPrices(tools, fresh)
     return { acceptanceId: id }
   })
@@ -77,8 +83,9 @@ export async function acceptPriceDifference(caller: CommandCaller, orderId: stri
 }
 
 /** DELETE /sales/orders/:orderId/price-check/accept. */
-export async function takeBackPriceDifference(caller: CommandCaller, orderId: string, body: { readonly reason: string }, idempotencyKey?: string) {
+export async function takeBackPriceDifference(caller: CommandCaller, orderId: string, body: { readonly reason?: string | undefined }, idempotencyKey?: string) {
   const { context, order } = await pricedOrder(caller, orderId, ORDERS_MONEY_PLAN)
+  if (body.reason === undefined) throw missing('reason', REASON_WORDS)
   if (isFinal(order.status)) throw refused('CLOSED')
   const reason = body.reason.trim()
   await command(caller, { name: 'brandPrices.unaccept', idempotencyKey, input: { orderId, ...body } }, async (tools) => {
