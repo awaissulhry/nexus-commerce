@@ -100,4 +100,14 @@ describe('paid and balance', () => {
   it('a refund of a deposit invoice credit note gives the deposit back', () => {
     expect(orderMoneyOf(order({ depositPlaced: 36_600, depositRefunded: 36_600 }))).toEqual({ paid: 0, balance: 122_000 })
   })
+
+  // B-OM-001 (order money tab M1-B1): a small difference written off on an invoice is no longer owed; `paid` stays money received.
+  it('a write-off on the final invoice brings the balance to 0; on a shared invoice, its share', () => {
+    const short = { placed: 85_400 - 1_500, creditedGross: 0, refunded: 0, part: 1, whole: 1 }
+    expect(orderMoneyOf(order({ depositPlaced: 36_600, invoices: [short] }))).toEqual({ paid: 120_500, balance: 1_500 })
+    expect(orderMoneyOf(order({ depositPlaced: 36_600, invoices: [{ ...short, writtenOff: 1_500 }] }))).toEqual({ paid: 120_500, balance: 0 })
+    // A TD24 of two orders, 1 000 written off: a quarter of it is this order's.
+    const td24 = { placed: 243_000, creditedGross: 0, refunded: 0, part: 100_000, whole: 400_000, writtenOff: 1_000 }
+    expect(orderMoneyOf(order({ invoices: [td24] }))).toEqual({ paid: 60_750, balance: 61_000 })
+  })
 })

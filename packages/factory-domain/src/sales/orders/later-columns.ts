@@ -20,8 +20,9 @@ import { OPEN_STATUSES, type SalesOrderStatus } from './orders'
  *                allocations, so they count.
  *   balance      what is still to pay: the order's gross (VAT included, as amended) less what will never be billed (pieces
  *                closed short, a fee credited against the customer's bulk order), less its share of the credit notes of its
- *                invoices, less `paid`; never below 0. A charge billed only on an invoice (freight) is not in the order, so
- *                its payment can bring the balance to 0 early, never below.
+ *                invoices, less `paid`, less its share of the small differences written off on its invoices (B-OM-001);
+ *                never below 0. A charge billed only on an invoice (freight) is not in the order, so its payment can bring
+ *                the balance to 0 early, never below.
  *   shares       integer minor units, rounded half away from zero, exact (BigInt): no float ever touches an amount.
  */
 
@@ -98,6 +99,8 @@ export interface OrderMoneyInvoice {
   /** This order's share of it: the net of this order's lines on it over the net of every order line it bills. */
   readonly part: number
   readonly whole: number
+  /** B-OM-001: the UNDERPAYMENT write-offs still standing on its allocations (0 when absent): no longer owed. */
+  readonly writtenOff?: number
 }
 
 export interface OrderMoneyFacts {
@@ -131,5 +134,7 @@ export function orderMoneyOf(facts: OrderMoneyFacts): OrderMoney {
   const paid = facts.depositPlaced - facts.depositRefunded + facts.invoices.reduce((sum, invoice) => sum + shareOf(invoice.placed - invoice.refunded, invoice.part, invoice.whole), 0)
   const credited = facts.invoices.reduce((sum, invoice) => sum + shareOf(invoice.creditedGross, invoice.part, invoice.whole), 0)
   const due = facts.grossAmount - neverBilledOf(facts.lines) - credited
-  return { paid, balance: Math.max(0, due - paid) }
+  // B-OM-001: a small difference written off on an invoice is no longer owed (its share of it).
+  const writtenOff = facts.invoices.reduce((sum, invoice) => sum + shareOf(invoice.writtenOff ?? 0, invoice.part, invoice.whole), 0)
+  return { paid, balance: Math.max(0, due - paid - writtenOff) }
 }

@@ -13,6 +13,8 @@ import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { Dec, HUNDRED } from '@nexus/factory-domain/tax/decimal'
 import { actorOf } from '../../../core/context'
 import { orderMoneyFactsOf } from '../../sales/orders/later-columns'
+// B-OM-001 (order money tab M1-B1): a small difference written off on an invoice counts.
+import { underpaymentsWrittenOff } from '../../payments/write-offs/sums'
 
 /**
  * The order's settlement (B-W1-51; PLAN §4.7 "Closing the order"): the port B-W1-25's close command asks ("is every line
@@ -80,6 +82,7 @@ export async function settlementOf(db: Reader, orderId: string): Promise<OrderSe
     where: { OR: [...(invoices.length > 0 ? [{ invoiceId: { in: invoices.map((invoice) => invoice.id) } }] : []), ...(requests.length > 0 ? [{ depositRequestId: { in: requests.map((request) => request.id) } }] : [])] },
     select: { invoiceId: true, depositRequestId: true, amount: true },
   })
+  const writtenOff = await underpaymentsWrittenOff(db, invoices.map((invoice) => invoice.id)) // B-OM-001
   const deductions = deposits.length > 0 ? await db.invoiceLine.findMany({ where: { depositInvoiceId: { in: deposits.map((deposit) => deposit.id) }, invoice: { status: { not: 'DRAFT' } } }, select: { depositInvoiceId: true, netAmount: true } }) : []
   // B-W2a-61: what PAID refunds of the credit notes gave back.
   const refunds = credits.length > 0 ? await db.refund.findMany({ where: { status: 'PAID', creditNoteId: { in: credits.map((credit) => credit.id) } }, select: { creditNoteId: true, amount: true } }) : []
@@ -107,6 +110,7 @@ export async function settlementOf(db: Reader, orderId: string): Promise<OrderSe
       creditedGross: sum(credits.filter((credit) => credit.creditOfId === invoice.id), (credit) => credit.grossTotal),
       paid: sum(allocations.filter((row) => row.invoiceId === invoice.id), (row) => row.amount),
       refunded: refundedOn(invoice.id),
+      writtenOff: writtenOff.get(invoice.id) ?? 0, // B-OM-001
     })),
     depositRequests: requests.map((request) => ({ id: request.id, status: request.status, fiscalDocument: request.fiscalDocument, amount: request.amount, paid: sum(allocations.filter((row) => row.depositRequestId === request.id), (row) => row.amount) })),
     depositInvoices: deposits.map((deposit) => ({
@@ -261,14 +265,16 @@ async function shareOfOrder(db: Reader, orderId: string, invoiceIds: readonly st
     const head = heads.find((row) => row.id === invoiceId)
     const freight = freightOf(invoiceId)
     const goods = billing ? shareOf(billing.grossTotal - freight, billing.part, billing.whole) : 0
-    const settled = billing ? shareOf(billing.creditedGross, billing.part, billing.whole) + shareOf(billing.placed - billing.refunded, billing.part, billing.whole) : 0
+    // B-OM-001: + its share of the small differences written off on it.
+    const settled = billing ? shareOf(billing.creditedGross, billing.part, billing.whole) + shareOf(billing.placed - billing.refunded, billing.part, billing.whole) + shareOf(billing.writtenOff ?? 0, billing.part, billing.whole) : 0
     // Of the invoice's own buyer only (never another customer's order, not even counted); named only when the reader reaches it.
     const buyers = othersOf(invoiceId).flatMap((id) => (others.has(id) && others.get(id)!.partyId === head?.buyerPartyId ? [others.get(id)!] : []))
     const named = buyers.filter((row) => can(actor, ORDERS_VIEW, { companyId: row.companyId, partyId: row.partyId })).sort((a, b) => a.number.localeCompare(b.number))
     return { share: goods, openShare: Math.max(0, goods - settled), freight, otherOrders: named.map((row) => ({ id: row.id, number: row.number })), otherOrdersHidden: buyers.length - named.length }
   }
   const invoicedShare = shares.reduce((sum, invoice) => sum + shareOf(invoice.grossTotal - freightOf(invoice.id), invoice.part, invoice.whole) - shareOf(invoice.creditedGross, invoice.part, invoice.whole), 0)
-  return { thisOrder: { paid: answer.paid, stillToPay: answer.balance, invoicedShare, depositsPaid: money.depositsPaidOf(orderId) }, invoiceOf }
+  const writtenOffShare = shares.reduce((sum, invoice) => sum + shareOf(invoice.writtenOff ?? 0, invoice.part, invoice.whole), 0) // B-OM-001
+  return { thisOrder: { paid: answer.paid, stillToPay: answer.balance, invoicedShare, depositsPaid: money.depositsPaidOf(orderId), writtenOff: writtenOffShare }, invoiceOf }
 }
 // ── end B-OP-022 ──
 
@@ -304,6 +310,7 @@ export async function getSettlement(caller: CommandCaller, orderId: string) {
           paidAmount: asMoney('price', invoice.paid),
           openAmount: asMoney('price', invoice.open),
           refundDueAmount: asMoney('price', invoice.refundDue),
+          writtenOffAmount: asMoney('price', invoice.writtenOff ?? 0), // B-OM-001
           // ── B-OP-022: this order's share of it, the freight apart, the other orders it bills (its buyer's only) ──
           share: asMoney('price', mine.share),
           openShare: asMoney('price', mine.openShare),
@@ -318,12 +325,14 @@ export async function getSettlement(caller: CommandCaller, orderId: string) {
       depositsPaidWithoutInvoiceAmount: asMoney('price', settlement.money.depositsPaidWithoutInvoice),
       balanceDueAmount: asMoney('price', settlement.money.balanceDue),
       refundDueAmount: asMoney('price', settlement.money.refundDue),
+      writtenOffAmount: asMoney('price', settlement.money.writtenOff), // B-OM-001
       // B-OP-022: Money = this order's share (the list's paid and balance).
       thisOrder: {
         paid: asMoney('price', ours.thisOrder.paid),
         stillToPay: asMoney('price', ours.thisOrder.stillToPay),
         invoicedShare: asMoney('price', ours.thisOrder.invoicedShare),
         depositsPaid: asMoney('price', ours.thisOrder.depositsPaid),
+        writtenOff: asMoney('price', ours.thisOrder.writtenOff), // B-OM-001
       },
     },
   }

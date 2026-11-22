@@ -261,6 +261,8 @@ export const settlementContract = defineContract({
             paidAmount: money.price(z.number().int()),
             openAmount: money.price(z.number().int()),
             refundDueAmount: money.price(z.number().int()),
+            /** B-OM-001 (order money tab M1-B1): the small differences written off on it (still standing); its open amount is less them. */
+            writtenOffAmount: money.price(z.number().int()),
             // ── B-OP-022 (order page plan N3; 13-backend §3): this order's part of it (the invoice's whole is grossTotal, its open openAmount) ──
             /** This order's share of the invoice's goods: its gross less its freight, split by the net each order's lines carry on it. */
             share: money.price(z.number().int()),
@@ -281,6 +283,8 @@ export const settlementContract = defineContract({
         depositsPaidWithoutInvoiceAmount: money.price(z.number().int()),
         balanceDueAmount: money.price(z.number().int()),
         refundDueAmount: money.price(z.number().int()),
+        /** B-OM-001: the small differences written off on the order's invoices (still standing). */
+        writtenOffAmount: money.price(z.number().int()),
         /**
          * B-OP-022 (order page plan N3): Money = this order's share, by the rule the orders list reads (its row's paid and balance):
          * paid (its deposit requests' payments and its share of its invoices' payments, less refunds), still to pay (its gross less
@@ -292,6 +296,8 @@ export const settlementContract = defineContract({
           stillToPay: money.price(z.number().int()),
           invoicedShare: money.price(z.number().int()),
           depositsPaid: money.price(z.number().int()),
+          /** B-OM-001: this order's share of the small differences written off on its invoices (no longer owed). */
+          writtenOff: money.price(z.number().int()),
         }),
       }),
     }),
