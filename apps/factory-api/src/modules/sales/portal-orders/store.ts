@@ -173,12 +173,12 @@ export async function liveDdts(db: Reader, shipmentIds: readonly string[]): Prom
   return live
 }
 
-/** The shipments' papers the office shared with the party's portal (available, the newest version of each). */
-export const readPapers = (db: Reader, shipmentIds: readonly string[]) =>
+/** The shipments' papers the office shared with the party's portal (available, the newest version of each); of-fx6s (B-OF-005): a priced one only for a person who sees prices. */
+export const readPapers = (db: Reader, shipmentIds: readonly string[], seesPrices: boolean) =>
   shipmentIds.length === 0
     ? Promise.resolve([])
     : db.storedFile.findMany({
-        where: { recordType: 'Shipment', recordId: { in: [...shipmentIds] }, status: 'AVAILABLE', supersededAt: null, visibility: { has: 'PARTNER' } },
+        where: { recordType: 'Shipment', recordId: { in: [...shipmentIds] }, status: 'AVAILABLE', supersededAt: null, visibility: { has: 'PARTNER' }, ...(seesPrices ? {} : { priced: false }) },
         select: { id: true, recordId: true, originalName: true, contentType: true, sizeBytes: true, versionNo: true },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       })

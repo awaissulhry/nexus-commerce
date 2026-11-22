@@ -181,7 +181,7 @@ export async function readLibrary(app: FastifyInstance, request: FastifyRequest,
 
   // 1. The partner's own.
   const own = await request.withClient(async (client) => {
-    const files = await readSharedFiles(client, companyId)
+    const files = await readSharedFiles(client, companyId, access.price) // of-fx6s (B-OF-005): no priced file without prices
     const invoices = await readInvoices(client, companyId)
     const shipments = await readShipments(client, uniq(files.filter((file) => file.recordType === 'Shipment').map((file) => file.recordId)))
     const quotes = await readQuotes(client, uniq(files.filter((file) => file.recordType === 'Quote').map((file) => file.recordId)))

@@ -646,6 +646,10 @@ describe('B-OF-005: the order’s files in the portal leave a priced file out fo
     }
     expect(JSON.stringify(await ok(browsers.viewer, `/portal/sales-orders/${so2}/files`))).not.toContain('T-OF005 proforma with prices.pdf')
     expect(JSON.stringify(await ok(browsers.buyer, `/portal/sales-orders/${so2}/files`))).toContain('T-OF005 proforma with prices.pdf')
+    // of-fx6s: the name reached the viewer through the customer-documents library (a plain document is of the group OTHER, which
+    // has no price rule), which the order's Files read too — the Documents page itself leaves it out for the viewer, lists it for the buyer.
+    expect(JSON.stringify(await ok(browsers.viewer, '/portal/customer-documents?versions=all'))).not.toContain('T-OF005 proforma with prices.pdf')
+    expect(JSON.stringify(await ok(browsers.buyer, '/portal/customer-documents?versions=all'))).toContain('T-OF005 proforma with prices.pdf')
   })
 })
 // ---- end B-OF-005

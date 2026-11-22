@@ -47,10 +47,15 @@ export const SHARED_FILE_SELECT = {
 } as const satisfies Prisma.StoredFileSelect
 export type SharedFileRow = Prisma.StoredFileGetPayload<{ select: typeof SHARED_FILE_SELECT }>
 
-/** The files shared with the party's portal, of the portal's company or tenant-wide (row-level security: the party's own). */
-export const readSharedFiles = (db: Reader, companyId: string): Promise<SharedFileRow[]> =>
+/**
+ * The files shared with the party's portal, of the portal's company or tenant-wide (row-level security: the party's own).
+ * of-fx6s (B-OF-005, B-CP-014 the money wall): a person who does not see prices reads no priced file (StoredFile.priced) — left out,
+ * uncounted, in every group: the groups' own price rule covers only ORDERS and FINANCE, and a priced file of another group (a
+ * proforma filed as a plain document) named itself in the Documents page, the order's Files and the zip.
+ */
+export const readSharedFiles = (db: Reader, companyId: string, seesPrices: boolean): Promise<SharedFileRow[]> =>
   db.storedFile.findMany({
-    where: { status: 'AVAILABLE', visibility: { has: 'PARTNER' }, kind: { notIn: ['PHOTO', 'AUDIO'] }, OR: [{ companyId }, { companyId: null }] },
+    where: { status: 'AVAILABLE', visibility: { has: 'PARTNER' }, kind: { notIn: ['PHOTO', 'AUDIO'] }, ...(seesPrices ? {} : { priced: false }), OR: [{ companyId }, { companyId: null }] },
     select: SHARED_FILE_SELECT,
     orderBy: [{ availableAt: 'desc' }, { id: 'desc' }],
     take: FILES_MAX,
