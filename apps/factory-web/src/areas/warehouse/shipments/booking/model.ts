@@ -3,8 +3,10 @@ import { ETA_LIMITS, ETA_REFUSALS, OVERRIDE_REASON } from '@nexus/factory-domain
 // F-OP-135: the typed link's rule, the API's own.
 import { TRACKING_URL_PATTERN } from '@nexus/factory-domain/shipping/own-transport/rules'
 import { REPRINT_REASON_MAX, REPRINT_REASON_MIN, REPRINT_REFUSALS } from '@nexus/factory-domain/shipping/reprint/rules'
+import { PARCEL_TRACKING_LIMITS, parcelReasonNeeded } from '@nexus/factory-domain/shipping/own-transport/rules' // F-OS-301 (B-OS-022)
 import { words, type DepthAbilities, type Read, type Words } from '../queue/shared/depth'
 import type { CheckProblem, LabelCheck, LabelJob, LabelJobs, ManualStatus, Reprinted, Transport, TransportMode } from './api'
+import type { TrackingBody, TransportParcel } from './api' // F-OS-301
 
 /**
  * Carrier & label in depth, pure (SCR-595; design sh-booking "carrier (…; W2b own van or manual; customer collects ex
@@ -18,7 +20,17 @@ export { ETA_REFUSALS } // F-OS-203
 export type TransportDialog =
   | null
   | { readonly kind: 'arrange'; readonly mode: TransportMode; readonly carrierName: string; readonly trackingNumber: string }
-  | { readonly kind: 'tracking'; readonly text: string; /* F-OP-135: the link typed beside it (optional, https) */ readonly link?: string }
+  | {
+      readonly kind: 'tracking'
+      readonly text: string
+      /* F-OP-135: the link typed beside it (optional, https) */ readonly link?: string
+      /** F-OS-301 (B-OS-022): each parcel no label tracks, its number and link as typed (a labelled parcel is read only, not here). */
+      readonly parcels?: readonly TrackingParcelDraft[]
+      /** F-OS-301: why a number the customer saw changes after the goods left (office only). */
+      readonly reason?: string
+      /** F-OS-301: "Send the shipping notice again" (off by default; only once the goods left). */
+      readonly notify?: boolean
+    }
   | { readonly kind: 'status'; readonly status: ManualStatus | null; readonly occurredAt: string | null; readonly description: string; readonly location: string; /* F-OS-203 (B-OS-015): why, over a carrier's labels */ readonly reason?: string }
   // F-OS-203 (B-OS-016): the expected arrival typed by hand (a day; empty clears it) and why (optional).
   | { readonly kind: 'eta'; readonly day: string; readonly reason: string }
@@ -81,8 +93,17 @@ export function arrangeBody(dialog: Extract<TransportDialog, { kind: 'arrange' }
   return { version, mode: 'MANUAL_CARRIER', carrierName: dialog.carrierName.trim(), trackingNumber: tracking === '' ? null : tracking }
 }
 
-export function trackingProblem(dialog: Extract<TransportDialog, { kind: 'tracking' }>, current: string | null = null): Words | null {
+export function trackingProblem(dialog: Extract<TransportDialog, { kind: 'tracking' }>, current: string | null = null, transport?: Pick<Transport, 'shipment' | 'parcels'>): Words | null {
   if (dialog.text.trim().length > OWN_TRANSPORT_LIMITS.trackingNumber || !oneLine(dialog.text)) return words('transport.form.trackingTooLong', { max: OWN_TRANSPORT_LIMITS.trackingNumber })
+  // F-OS-301 (B-OS-022): with the read, each parcel's number and link, and the reason a seen number needs.
+  if (transport) {
+    for (const draft of dialog.parcels ?? []) {
+      const problem = parcelProblem(draft)
+      if (problem) return problem
+    }
+    const reason = trackingReasonProblem(dialog, transport)
+    if (reason) return reason
+  }
   // F-OP-135 (B-OP-034): a link only with its number; https, 1–500 characters, one line, no name or password in it.
   // op-fx4 (B-OP-034: "clearing the number clears it"): the number emptied while the shipment has one (`current`) is Clear it — its
   // link goes with it (trackingBody sends none), so a link left in the box never holds the clear; a link alone, with no number at
@@ -94,12 +115,100 @@ export function trackingProblem(dialog: Extract<TransportDialog, { kind: 'tracki
   return null
 }
 
-/** F-OP-135: the tracking write's body — the link sent with the number (blank: cleared; no number: none). */
-export function trackingBody(dialog: Extract<TransportDialog, { kind: 'tracking' }>, version: number): { version: number; trackingNumber: string | null; trackingUrl: string | null } {
+/**
+ * F-OP-135: the tracking write's body — the link sent with the number (blank: cleared; no number: none). F-OS-301 (B-OS-022): with the
+ * read (`transport`), the parcels whose typed number or link changed (each once; a blank number clears it, its link with it), and the
+ * reason when a number the customer saw changes after the goods left.
+ */
+export function trackingBody(dialog: Extract<TransportDialog, { kind: 'tracking' }>, version: number, transport?: Pick<Transport, 'shipment' | 'parcels'>): TrackingBody & { trackingNumber: string | null; trackingUrl: string | null } {
   const text = dialog.text.trim()
   const link = dialog.link?.trim() ?? ''
-  return { version, trackingNumber: text === '' ? null : text, trackingUrl: text === '' || link === '' ? null : link }
+  const body = { version, trackingNumber: text === '' ? null : text, trackingUrl: text === '' || link === '' ? null : link }
+  if (!transport) return body
+  const parcels = parcelChangesOf(dialog, transport)
+  const reason = (dialog.reason ?? '').trim()
+  return { ...body, ...(parcels.length > 0 ? { parcels } : {}), ...(parcels.length > 0 && trackingReasonNeeded(dialog, transport) && reason !== '' ? { reason } : {}) }
 }
+
+// ── F-OS-301 (order SHIPMENTS tab; Owner D4; 10-design §7 D5; 18-lead-settles L2, L4; B-OS-022): a number per parcel ──────────────
+/** One parcel's typed number in the dialog (a parcel no label tracks). */
+export interface TrackingParcelDraft {
+  readonly id: string
+  readonly seq: number
+  readonly text: string
+  readonly link: string
+}
+
+/** A label's number (read only, "From the label") — a TEST label counts as a label: its number is never typed over. */
+export const parcelLabelled = (parcel: Pick<TransportParcel, 'label'>): boolean => parcel.label !== null
+
+/** The tracking dialog as it opens: the shipment's number and link, and every parcel no label tracks with its typed number. */
+export function trackingDialogOf(transport: Pick<Transport, 'shipment' | 'parcels'>): Extract<TransportDialog, { kind: 'tracking' }> {
+  const parcels = [...(transport.parcels ?? [])].filter((parcel) => !parcelLabelled(parcel)).sort((a, b) => a.seq - b.seq)
+  return {
+    kind: 'tracking',
+    text: transport.shipment.manualTrackingNumber ?? '',
+    link: transport.shipment.manualTrackingUrl ?? '',
+    ...(transport.parcels && transport.parcels.length > 0 ? { parcels: parcels.map((parcel) => ({ id: parcel.id, seq: parcel.seq, text: parcel.typed?.number ?? '', link: parcel.typed?.url ?? '' })) } : {}),
+    reason: '',
+    notify: false,
+  }
+}
+
+/** What changes on each parcel (only the typed ones that differ from the read), in the command's shape. */
+export function parcelChangesOf(dialog: Extract<TransportDialog, { kind: 'tracking' }>, transport: Pick<Transport, 'parcels'>): { parcelId: string; trackingNumber: string | null; trackingUrl: string | null }[] {
+  return (dialog.parcels ?? []).flatMap((draft) => {
+    const read = (transport.parcels ?? []).find((parcel) => parcel.id === draft.id)
+    if (!read || parcelLabelled(read)) return []
+    const number = draft.text.trim() === '' ? null : draft.text.trim()
+    const link = number === null || draft.link.trim() === '' ? null : draft.link.trim()
+    const before = read.typed
+    if ((before?.number ?? null) === number && (before?.url ?? null) === link) return []
+    return [{ parcelId: draft.id, trackingNumber: number, trackingUrl: link }]
+  })
+}
+
+/** After the goods left, a parcel number the customer could read changes or is cleared: the person says why (B-OS-022's rule). */
+export function trackingReasonNeeded(dialog: Extract<TransportDialog, { kind: 'tracking' }>, transport: Pick<Transport, 'shipment' | 'parcels'>): boolean {
+  return parcelChangesOf(dialog, transport).some((change) => {
+    const before = (transport.parcels ?? []).find((parcel) => parcel.id === change.parcelId)?.typed?.number ?? null
+    return parcelReasonNeeded(transport.shipment.status, before, change.trackingNumber)
+  })
+}
+
+/** "Send the shipping notice again" is offered once the goods left (before, the notice goes when they leave). */
+export const noticeOffered = (transport: Pick<Transport, 'shipment'>): boolean => transport.shipment.status === 'SHIPPED' || transport.shipment.status === 'DELIVERED' || transport.shipment.status === 'RETURNED'
+
+/**
+ * A soft check of an air waybill (IATA: 3 digits of the airline, 8 of the serial; the last digit is the first seven modulo 7) —
+ * words only, never a refusal (L4): null when the number does not look like one.
+ */
+export function awbCheck(text: string): 'fits' | 'off' | null {
+  const digits = /^\s*(\d{3})[\s-]?(\d{8})\s*$/.exec(text)
+  if (!digits) return null
+  const serial = digits[2]!
+  return Number(serial.slice(0, 7)) % 7 === Number(serial[7]) ? 'fits' : 'off'
+}
+
+/** What stops one parcel's typed number: the same rules as the shipment's own number and link (one line, the lengths, https only). */
+export function parcelProblem(draft: TrackingParcelDraft): Words | null {
+  if (draft.text.trim().length > OWN_TRANSPORT_LIMITS.trackingNumber || !oneLine(draft.text)) return words('door.tracking.parcelTooLong', { seq: draft.seq, max: OWN_TRANSPORT_LIMITS.trackingNumber })
+  const link = draft.link.trim()
+  if (link !== '' && draft.text.trim() === '') return words('door.tracking.parcelLinkNeedsNumber', { seq: draft.seq })
+  if (link !== '' && (link.length > OWN_TRANSPORT_LIMITS.trackingUrl || !TRACKING_URL_PATTERN.test(link))) return words('door.tracking.parcelLink', { seq: draft.seq, max: OWN_TRANSPORT_LIMITS.trackingUrl })
+  return null
+}
+
+/** What stops the reason a seen number needs: 3 to 500 characters. */
+export function trackingReasonProblem(dialog: Extract<TransportDialog, { kind: 'tracking' }>, transport: Pick<Transport, 'shipment' | 'parcels'>): Words | null {
+  if (!trackingReasonNeeded(dialog, transport)) return null
+  const reason = (dialog.reason ?? '').trim()
+  if (reason.length < PARCEL_TRACKING_LIMITS.reasonMin) return words('door.tracking.why', { min: PARCEL_TRACKING_LIMITS.reasonMin })
+  if (reason.length > PARCEL_TRACKING_LIMITS.reasonMax) return words('transport.form.tooLong', { max: PARCEL_TRACKING_LIMITS.reasonMax })
+  return null
+}
+
+// ── end F-OS-301 ──
 
 /** What stops the typed status: a status, a time not in the future and not before the goods left, the lengths. */
 export function statusProblem(dialog: Extract<TransportDialog, { kind: 'status' }>, transport: Transport, now: Date = new Date()): Words | null {

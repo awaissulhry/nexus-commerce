@@ -3,7 +3,7 @@
 import { useId } from 'react'
 import { CircleCheck, ClipboardCheck, MapPin, Route, TriangleAlert } from 'lucide-react'
 import { Banner, Card, Field, KeyValue } from '@nexus/ui/components'
-import { Button, Input, Pill, RadioCard } from '@nexus/ui/primitives'
+import { Button, Checkbox, Input, Pill, RadioCard } from '@nexus/ui/primitives'
 import { DateField, DateTimeField, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatDateTime } from '../../../../../lib/i18n/format'
 import { INTL_LOCALE } from '../../../../../lib/i18n/locales'
@@ -15,6 +15,8 @@ import { DOOR_NAMESPACES as DEPTH_NAMESPACES, useDoorWords as useDepthWords } fr
 import type { LabelCheck, Transport } from '../api'
 import { allProblems, arrangeDialogOf, arrangeProblem, checkProblemWords, MANUAL_EVENT_STATUSES, mayHeld, OWN_TRANSPORT_LIMITS, statusProblem, trackingProblem, type TransportActions, type TransportModel } from '../model'
 import { etaDialogOf, etaHeld, etaProblem, overridesLabels } from '../model' // F-OS-203 (B-OS-015, B-OS-016)
+import { awbCheck, noticeOffered, parcelChangesOf, parcelLabelled, trackingDialogOf, trackingReasonNeeded } from '../model' // F-OS-301 (B-OS-022)
+import { PARCEL_TRACKING_LIMITS } from '@nexus/factory-domain/shipping/own-transport/rules' // F-OS-301
 import { OVERRIDE_REASON } from '@nexus/factory-domain/shipping/own-transport/rules' // F-OS-203
 import '../../shipments.css'
 import '../../queue/shared/depth.css'
@@ -89,7 +91,7 @@ function TransportCard({ model, actions }: { model: TransportModel; actions?: Tr
           </Button>
         )}
         {arrangement === 'MANUAL_CARRIER' && (
-          <Button size="sm" heldReason={trackBlocked} onClick={() => actions?.onDialog?.({ kind: 'tracking', text: shipment.manualTrackingNumber ?? '', link: shipment.manualTrackingUrl ?? '' /* F-OP-135 */ })}>
+          <Button size="sm" heldReason={trackBlocked} onClick={() => actions?.onDialog?.(trackingDialogOf(transport) /* F-OP-135 → F-OS-301: its parcels too */)}>
             {shipment.manualTrackingNumber ? t('transport.changeTracking') : t('transport.typeTracking')}
           </Button>
         )}
@@ -227,28 +229,101 @@ function ArrangeDialog({ transport, model, actions }: { transport: Transport; mo
   )
 }
 
-function TrackingDialog({ transport, model, actions }: { transport: Transport; model: TransportModel; actions?: TransportActions }) {
+/**
+ * Tracking number… → F-OS-301 (order SHIPMENTS tab; Owner D4; 10-design §7 D5; 18-lead-settles L2, L4; B-OS-022) "Tracking numbers of
+ * SEED-SH-0014", extended ONCE for Warehouse and the order's Shipments tab: the consignment number (tracking, AWB or B/L — no kind is
+ * stored, L4) with a soft air-waybill check in words (never a refusal) and its link; one row per parcel — "Parcel 2 of 3" and, where
+ * the opener knows it (`parcelWords`: the tab's own contents of this order), its weight and what it holds — its typed number and link;
+ * a labelled parcel read only "From the label"; after the goods left, a number the customer saw that changes asks why (office only);
+ * "Send the shipping notice again" off by default (only once the goods left).
+ */
+function TrackingDialog({ transport, model, actions, parcelWords }: { transport: Transport; model: TransportModel; actions?: TransportActions; parcelWords?: Readonly<Record<string, string>> }) {
   const { t, say } = useDepthWords()
   if (model.dialog?.kind !== 'tracking') return null
   const dialog = model.dialog
+  // F-OS-301: the parcels as the read sends them (absent in an older answer: the one consignment number, as before).
+  const parcels = [...(transport.parcels ?? [])].sort((a, b) => a.seq - b.seq)
+  const perParcel = parcels.length > 0
+  const awb = awbCheck(dialog.text)
+  const changes = parcelChangesOf(dialog, transport)
+  const clearing = dialog.text.trim() === '' && !!transport.shipment.manualTrackingNumber && changes.length === 0
+  const setParcel = (id: string, patch: { text?: string; link?: string }) => actions?.onDialog?.({ ...dialog, parcels: (dialog.parcels ?? []).map((draft) => (draft.id === id ? { ...draft, ...patch } : draft)) })
+  const left = noticeOffered(transport)
   return (
     <DepthDialog
-      title={t('transport.trackingTitle', { carrier: transport.shipment.carrierName ?? '—' })}
-      subtitle={transport.shipment.number}
-      held={model.busy ? t('transport.held.busy') : say(trackingProblem(dialog, transport.shipment.manualTrackingNumber))}
+      title={perParcel ? t('door.tracking.title', { number: transport.shipment.number }) : t('transport.trackingTitle', { carrier: transport.shipment.carrierName ?? '—' })}
+      subtitle={perParcel ? (transport.shipment.carrierName ?? undefined) : transport.shipment.number}
+      held={model.busy ? t('transport.held.busy') : say(trackingProblem(dialog, transport.shipment.manualTrackingNumber, transport))}
       onGo={() => actions?.onTracking?.()}
-      goLabel={dialog.text.trim() === '' && transport.shipment.manualTrackingNumber ? t('transport.clearTracking') : t('transport.saveTracking')}
+      goLabel={clearing ? t('transport.clearTracking') : perParcel ? t('door.tracking.go') : t('transport.saveTracking')}
       onClose={() => actions?.onDialog?.(null)}
       problem={say(model.problem)}
-      size="sm"
+      size={perParcel ? 'lg' : 'sm'}
     >
-      <Field label={t('transport.trackingNumber')} hint={t('transport.trackingClearHint')}>
+      {/* L2: "Consignment number (tracking, AWB or B/L)" — the shipment's own number; L4: an air waybill's last digit checked in words. */}
+      <Field label={perParcel ? t('door.tracking.consignment') : t('transport.trackingNumber')} hint={awb === 'fits' ? t('door.tracking.awbFits') : awb === 'off' ? t('door.tracking.awbOff') : t('transport.trackingClearHint')}>
         <Input size="sm" value={dialog.text} onChange={(event) => actions?.onDialog?.({ ...dialog, text: event.target.value })} />
       </Field>
       {/* F-OP-135 (B-OP-034): the carrier's tracking page typed beside the number — the customer's Track ›. */}
       <Field label={t('transport.trackingLink')} hint={t('transport.trackingLinkHint')}>
         <Input size="sm" type="url" inputMode="url" value={dialog.link ?? ''} onChange={(event) => actions?.onDialog?.({ ...dialog, link: event.target.value })} />
       </Field>
+      {perParcel && (
+        <fieldset className="fw-shd-choices">
+          <legend className="fw-sh-h3">{t('door.tracking.parcels', { count: parcels.length })}</legend>
+          {parcels.map((parcel) => {
+            const head = [t('door.tracking.parcelOf', { seq: parcel.seq, count: parcels.length }), parcelWords?.[parcel.id]].filter(Boolean).join(' · ')
+            if (parcelLabelled(parcel))
+              return (
+                <div key={parcel.id} className="fw-shd-stack">
+                  <span className="fw-sh-cell-sub">{head}</span>
+                  <span>
+                    <code>{parcel.label?.number ?? '—'}</code> <span className="fw-sh-hint">{t('door.tracking.fromLabel')}</span>
+                  </span>
+                </div>
+              )
+            const draft = (dialog.parcels ?? []).find((entry) => entry.id === parcel.id)
+            if (!draft || !parcel.may.allowed)
+              return (
+                <div key={parcel.id} className="fw-shd-stack">
+                  <span className="fw-sh-cell-sub">{head}</span>
+                  <span className="fw-sh-hint">{parcel.may.refusal ? t(parcel.may.refusal.code === 'PARCEL_LABELLED' || parcel.may.refusal.code === 'NOT_PACKED' ? `door.tracking.refusal.${parcel.may.refusal.code}` : `transport.refusal.${parcel.may.refusal.code}`) : t('transport.held.notNow')}</span>
+                </div>
+              )
+            return (
+              <div key={parcel.id} className="fw-shd-stack">
+                <span className="fw-sh-cell-sub">{head}</span>
+                <div className="fw-shd-fields">
+                  <Field label={t('door.tracking.parcelNumber', { seq: parcel.seq })}>
+                    <Input size="sm" value={draft.text} onChange={(event) => setParcel(parcel.id, { text: event.target.value })} />
+                  </Field>
+                  <Field label={t('door.tracking.parcelLinkLabel', { seq: parcel.seq })}>
+                    <Input size="sm" type="url" inputMode="url" value={draft.link} onChange={(event) => setParcel(parcel.id, { link: event.target.value })} />
+                  </Field>
+                </div>
+              </div>
+            )
+          })}
+          <p className="fw-sh-hint">{left ? t('door.tracking.afterLeft') : t('door.tracking.fromPacked')}</p>
+        </fieldset>
+      )}
+      {/* B-OS-022: after the goods left, a number the customer could read changes or is cleared — the person says why (the audit keeps both). */}
+      {trackingReasonNeeded(dialog, transport) && (
+        <>
+          <Banner tone="warning" title={t('door.tracking.seen')} />
+          <Field label={t('door.why')} required hint={t('door.officeOnly')}>
+            <Textarea rows={2} limit={PARCEL_TRACKING_LIMITS.reasonMax} value={dialog.reason ?? ''} onChange={(event) => actions?.onDialog?.({ ...dialog, reason: event.target.value })} />
+          </Field>
+        </>
+      )}
+      {perParcel && left && <Checkbox label={t('door.tracking.notify')} checked={dialog.notify === true} onChange={(event) => actions?.onDialog?.({ ...dialog, notify: event.target.checked })} />}
+      {perParcel && (
+        <>
+          <p className="fw-sh-hint">{left ? t('door.tracking.notifyHint') : t('door.tracking.toldPacked')}</p>
+          <p className="fw-sh-hint">{t('door.tracking.never')}</p>
+          <p className="fw-sh-hint">{t('door.audit')}</p>
+        </>
+      )}
     </DepthDialog>
   )
 }
@@ -341,15 +416,15 @@ function EtaDialog({ transport, model, actions }: { transport: Transport; model:
  * arrange dialog, L7) · Set expected arrival…. The same dialogs, words and refusals as here; a failed read said in a dialog with Try
  * again; nothing while it reads.
  */
-export function TransportDoorDialog({ model, actions, onClose }: { model: TransportModel; actions?: TransportActions; onClose: () => void }) {
+export function TransportDoorDialog({ model, actions, onClose, parcelWords }: { model: TransportModel; actions?: TransportActions; onClose: () => void; /* F-OS-301: each parcel's weight and contents, as the opener knows them */ parcelWords?: Readonly<Record<string, string>> }) {
   return (
     <WithMessages namespaces={DEPTH_NAMESPACES}>
-      <TransportDoor model={model} actions={actions} onClose={onClose} />
+      <TransportDoor model={model} actions={actions} onClose={onClose} parcelWords={parcelWords} />
     </WithMessages>
   )
 }
 
-function TransportDoor({ model, actions, onClose }: { model: TransportModel; actions?: TransportActions; onClose: () => void }) {
+function TransportDoor({ model, actions, onClose, parcelWords }: { model: TransportModel; actions?: TransportActions; onClose: () => void; parcelWords?: Readonly<Record<string, string>> }) {
   const { t } = useDepthWords()
   if (model.transport.state === 'error') {
     return <DepthDialog title={t('transport.title')} held={null} onGo={onClose} goLabel={t('common.done')} onClose={onClose} problem={null} size="sm" done={<PartRead problem={model.transport.problem} onRetry={actions?.onRetry} label={t('transport.title')} />} />
@@ -358,7 +433,7 @@ function TransportDoor({ model, actions, onClose }: { model: TransportModel; act
   const transport = model.transport.value
   switch (model.dialog?.kind) {
     case 'tracking':
-      return <TrackingDialog transport={transport} model={model} actions={actions} />
+      return <TrackingDialog transport={transport} model={model} actions={actions} parcelWords={parcelWords} />
     case 'status':
       return <StatusDialog transport={transport} model={model} actions={actions} />
     case 'arrange':

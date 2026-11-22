@@ -5,7 +5,7 @@ import { rowAnchor } from '../dock/discuss'
 import type { DeliveryRow } from './delivered/api'
 import { proofFileOf } from './delivered/model'
 import { madeElsewhereChip } from './elsewhere/model'
-import { alsoCarries, carrierOf, trackingDoorOf, trackingOf, typedLinkOf } from './model'
+import { alsoCarries, carrierOf, mayTypeTrackingHere, trackingOf, typedLinkOf } from './model'
 import { piecesOf, type ShipmentRow } from './where'
 import { word, wordOf, type ShipWord } from './word'
 
@@ -90,6 +90,11 @@ export interface StateCell {
   /** Cancelled, with its reason when the read sends it. */
   readonly cancelled: { readonly reason: string | null } | null
   readonly next: NextStep | null
+  /**
+   * W3 (10-design §5 "Pakistan held line", plan D6; worded from the DDT rule — no read says a company cannot issue a DDT, and no country
+   * is read): a PACKED Nexus shipment waits for its DDT and the reader may choose "This shipment travels without a DDT…" in ⋯.
+   */
+  readonly ddtChoice: boolean
 }
 
 export interface TravelsCell {
@@ -202,6 +207,7 @@ export function nextOf(row: ShipmentRow): NextStep | null {
 export function stateOf(row: ShipmentRow, delivery: DeliveryRow | null): StateCell {
   const holds = (row.holds ?? []).map((hold): HoldView => ({ reason: hold.reason, words: hold.words, bySystem: hold.bySystem, placedAt: hold.placedAt, finance: hold.bySystem || MONEY.has(hold.reason) }))
   const final = row.status === 'CANCELLED' || row.status === 'DELIVERED' || row.status === 'RETURNED'
+  const next = nextOf(row)
   return {
     status: row.status,
     tone: STATE_TONE[row.status] ?? 'neutral',
@@ -209,7 +215,8 @@ export function stateOf(row: ShipmentRow, delivery: DeliveryRow | null): StateCe
     problems: delivery && !final ? delivery.openProblems : 0,
     cameBack: row.status === 'RETURNED' ? { received: delivery?.returned ? delivery.returned.received : null } : null,
     cancelled: row.status === 'CANCELLED' ? { reason: row.cancelReason ?? null } : null,
-    next: nextOf(row),
+    next,
+    ddtChoice: next?.kind === 'step' && next.step === 'ddt' && row.may?.ddt === true && row.may.manage,
   }
 }
 
@@ -231,7 +238,7 @@ export function travelsOf(row: ShipmentRow): TravelsCell {
     labels,
     hints,
     parcels: parcels && parcels.length > 0 ? { count: parcels.length, tracked: parcels.filter((parcel) => parcel.number !== null).length } : null,
-    trackingDoor: trackingDoorOf(row).kind === 'open',
+    trackingDoor: mayTypeTrackingHere(row), // F-OS-304
   }
 }
 
@@ -293,3 +300,35 @@ export function shipmentsAnswer(rows: readonly ShipmentRow[]): ShipWord[] {
   if (cancelled > 0) parts.push(word('ships.answer.status.CANCELLED', { count: cancelled }))
   return parts
 }
+
+// ── F-OS-301 (order SHIPMENTS tab, 10-design §7 D5): what each parcel holds of THIS order ─────────────────────────────────────────────
+export interface ParcelGroup {
+  readonly key: string
+  readonly style: string
+  readonly colour: string
+  /** "46 ×4", or the units of a made-to-measure line ("4"). */
+  readonly sizes: string[]
+}
+
+/** A parcel's contents of this order, one group per order line (a style and colour), in the read's order. */
+export function parcelGroupsOf(contents: readonly { readonly lineId: string; readonly size: string | null; readonly pieces: number }[], lines: Order['lines']): ParcelGroup[] {
+  const groups = new Map<string, ParcelGroup>()
+  for (const content of contents) {
+    const line = lines.find((entry) => entry.id === content.lineId)
+    const group = groups.get(content.lineId) ?? { key: content.lineId, style: line?.style?.code ?? '—', colour: line ? colourOf(line) : '—', sizes: [] }
+    group.sizes.push(content.size === null ? String(content.pieces) : `${content.size} ×${content.pieces}`)
+    groups.set(content.lineId, group)
+  }
+  return [...groups.values()]
+}
+
+/** By parcel id: "SEED-JKT-02 Black · 52 ×10 · 54 ×6" (no words to translate: codes and numbers); a parcel with nothing of it: none. */
+export function parcelWordsOf(row: Pick<ShipmentRow, 'parcels'>, lines: Order['lines']): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const parcel of row.parcels ?? []) {
+    const groups = parcelGroupsOf(parcel.contents ?? [], lines)
+    if (groups.length > 0) out[parcel.id] = groups.map((group) => [`${group.style} ${group.colour}`, ...group.sizes].join(' · ')).join(' — ')
+  }
+  return out
+}
+// ── end F-OS-301 ──

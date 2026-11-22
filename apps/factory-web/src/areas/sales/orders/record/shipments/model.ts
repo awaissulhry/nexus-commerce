@@ -38,31 +38,11 @@ export function trackingOf(row: ShipmentRow): { readonly typed: string | null; r
 /** A carrier's page opens only on https (the API keeps no other; checked again here). */
 export const httpsOrNull = (url: string | null | undefined): string | null => (typeof url === 'string' && /^https:\/\/\S+$/i.test(url.trim()) ? url.trim() : null)
 
-/** The door to the tracking number: open it here, or held — with the words and the door that fixes it, if any. */
-export type TrackingDoor =
-  | { readonly kind: 'open' }
-  | { readonly kind: 'held'; readonly words: Phrase; readonly door: 'shipment' | 'arrange' | null }
-
-/** Before the goods leave, how they travel may still change on the shipment's page. */
-const BEFORE_LEAVING = new Set(['DRAFT', 'PACKED'])
-
-export function trackingDoorOf(row: ShipmentRow): TrackingDoor {
-  const may = row.mayTypeTracking
-  if (!may) return { kind: 'held', words: phrase('ship.tracking.held.NO_RIGHT'), door: null }
-  if (may.allowed) return { kind: 'open' }
-  switch (may.code) {
-    case 'LABELLED':
-      return { kind: 'held', words: phrase('ship.tracking.held.LABELLED'), door: 'shipment' }
-    case 'NOT_A_CARRIER':
-      return { kind: 'held', words: phrase(BEFORE_LEAVING.has(row.status) ? 'ship.tracking.held.NOT_A_CARRIER' : 'ship.tracking.held.NOT_A_CARRIER_LEFT'), door: BEFORE_LEAVING.has(row.status) ? 'arrange' : null }
-    case 'CARRIER_TRACKED':
-    case 'CANCELLED':
-    case 'NO_RIGHT':
-      return { kind: 'held', words: phrase(`ship.tracking.held.${may.code}`), door: null }
-    default:
-      return { kind: 'held', words: phrase('ship.tracking.held.other'), door: null }
-  }
-}
+/**
+ * F-OP-119 → F-OS-304: Tracking numbers… is drawn only where the read lets this reader type the numbers here — never held: hidden
+ * without the right (D2) and on a row the read refuses (a carrier label, not a carrier, cancelled: P0-B3); the held words went.
+ */
+export const mayTypeTrackingHere = (row: Pick<ShipmentRow, 'mayTypeTracking'>): boolean => row.mayTypeTracking?.allowed === true
 
 /** The rows shown: the cancelled ones only once asked ("Show N cancelled"), in the read's order. */
 export function shownShipments(rows: readonly ShipmentRow[], showCancelled: boolean): { readonly rows: readonly ShipmentRow[]; readonly cancelled: number } {

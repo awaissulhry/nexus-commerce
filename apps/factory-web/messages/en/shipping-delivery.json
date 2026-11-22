@@ -124,46 +124,9 @@
     }
   },
   "dv": {
-    "title": "Delivered (from carrier)",
-    "what": "When each shipment arrived, how we know, and its proof of delivery for a dispute. Once every shipment arrived the order is delivered and the payment steps that run from delivery fall due.",
-    "loading": "Reading the deliveries…",
-    "failed": "The deliveries could not be read.",
-    "waiting": "The order is delivered once every shipment that left arrived.",
-    "orderDelivered": "Delivered on {day}",
-    "stepsDue": "Payment steps that run from delivery: {steps}.",
-    "step": "step {seq} due {day}",
-    "stepsSettled": "The payment steps that run from delivery are settled.",
-    "noSteps": "No payment step runs from delivery.",
-    "empty": {
-      "title": "Nothing shipped yet",
-      "body": "Each shipment shows here once it leaves."
-    },
-    "col": {
-      "shipment": "Shipment",
-      "arrival": "How we know",
-      "when": "Delivered",
-      "signed": "Signed by",
-      "proof": "Proof"
-    },
     "arrival": {
-      "carrier": "From the carrier",
-      "typed": "Typed by a person",
-      "travelling": "On its way",
       "returned": "Came back"
-    },
-    "signedAt": "{name} · {at}",
-    "noSigner": "Not given",
-    "problems_one": "{count} tracking problem",
-    "problems_other": "{count} tracking problems",
-    "download": "Download proof",
-    "downloadFailed": "The proof could not be downloaded: try again.",
-    "held": {
-      "noImage": "The carrier gave no image of the proof yet.",
-      "right": "Downloading the proof needs the right to see shipments.",
-      "offline": "No connection: try again when the network is back.",
-      "busy": "One moment: a download is on its way."
-    },
-    "view": "Open proof"
+    }
   },
   "link": {
     "title": "Your return {number}",

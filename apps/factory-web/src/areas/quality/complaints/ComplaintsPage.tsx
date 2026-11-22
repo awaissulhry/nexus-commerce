@@ -14,18 +14,10 @@ import {
   complaintPeople,
   getComplaint,
   listComplaints,
-  listContacts,
-  listCustomers,
-  listOrders,
   listPhotos,
-  listReturns,
-  listShipments,
   listStyles,
-  logComplaint,
   photoAddress,
-  previewComplaint,
   triageComplaint,
-  uploadPhoto,
   type ComplaintCounts,
   type ComplaintPeople,
   type ComplaintRow,
@@ -35,12 +27,9 @@ import {
 import {
   addressOf,
   addressText,
-  blankLogDraft,
   complaintsCan,
   complaintsCsv,
   isStale,
-  logBody,
-  logProblems,
   nextInQueue,
   PAGE,
   QUEUE,
@@ -51,10 +40,10 @@ import {
   romeToday,
   triageDraftOf,
   triageProblems,
-  withPreview,
   type ComplaintsAddress,
 } from './model'
-import type { ComplaintsRows, LogModel, Notice, TriageModel } from './view-model'
+import type { ComplaintsRows, Notice, TriageModel } from './view-model'
+import { useLogComplaint } from './use-log-complaint' // F-OS-303
 import { ComplaintsMessages, useWords } from './view/parts'
 import { ComplaintsView } from './view/ComplaintsView'
 
@@ -373,109 +362,14 @@ function ComplaintsContainer() {
   )
 
   // ---- log ------------------------------------------------------------------------------------------------------------------------
-  const [log, setLog] = useState<LogModel | null>(null)
-  const logKey = useRef<string | null>(null)
-  const previewRead = useRef(0)
-  useEffect(() => {
-    if (!address.log || !can.log) {
-      setLog(null)
-      return
-    }
-    logKey.current = null
-    setLog({
-      draft: blankLogDraft(today),
-      customers: { items: null, problem: can.partiesView ? null : 'log.customerNoRight' },
-      contacts: null,
-      orders: null,
-      shipments: null,
-      returns: null,
-      styles: null,
-      preview: null,
-      previewing: false,
-      showProblems: false,
-      busy: false,
-      problem: null,
-      today,
-      canPhotos: can.filesUpload,
-    })
-    if (can.partiesView) {
-      listCustomers(api)
-        .then((items) => setLog((current) => (current ? { ...current, customers: { items, problem: null } } : current)))
-        .catch((error) => setLog((current) => (current ? { ...current, customers: { items: null, problem: refusalKey(error) } } : current)))
-    }
-    if (can.stylesView) {
-      listStyles(api)
-        .then((items) => setLog((current) => (current ? { ...current, styles: items } : current)))
-        .catch(() => undefined)
-    }
-    // Opened once per ?new=1: the person's rights and the day do not change while it is open.
-  }, [address.log, api])
-
-  // The customer's contacts, orders, shipments and returns when the customer changes (each with its own right).
-  const logParty = log?.draft.partyId ?? ''
-  useEffect(() => {
-    if (!logParty) {
-      setLog((current) => (current ? { ...current, contacts: null, orders: null, shipments: null, returns: null } : current))
-      return
-    }
-    const controller = new AbortController()
-    const fill = <K extends 'contacts' | 'orders' | 'shipments' | 'returns'>(key: K, allowed: boolean, read: () => Promise<NonNullable<LogModel[K]>>) => {
-      if (!allowed) return
-      read()
-        .then((items) => setLog((current) => (current && current.draft.partyId === logParty ? { ...current, [key]: items } : current)))
-        .catch(() => setLog((current) => (current && current.draft.partyId === logParty ? { ...current, [key]: null } : current)))
-    }
-    fill('contacts', can.partiesView, () => listContacts(api, logParty, controller.signal))
-    fill('orders', can.ordersView, () => listOrders(api, logParty, controller.signal))
-    fill('shipments', can.shippingView, () => listShipments(api, logParty, controller.signal))
-    fill('returns', can.returnsView, () => listReturns(api, logParty, controller.signal))
-    return () => controller.abort()
-  }, [api, logParty, can.partiesView, can.ordersView, can.shippingView, can.returnsView])
-
-  const lookUp = useCallback(async () => {
-    if (!log) return
-    const read = ++previewRead.current
-    setLog({ ...log, previewing: true })
-    try {
-      const body = logBody({ ...log.draft, description: log.draft.description || ' ' }, companyId, today)
-      const preview = await previewComplaint(api, {
-        companyId,
-        ...(body.partyId ? { partyId: body.partyId } : {}),
-        ...(body.serial ? { serial: body.serial } : {}),
-        ...(body.salesOrderId ? { salesOrderId: body.salesOrderId } : {}),
-        ...(body.shipmentId ? { shipmentId: body.shipmentId } : {}),
-        ...(body.styleId ? { styleId: body.styleId } : {}),
-        ...(body.batchNumber ? { batchNumber: body.batchNumber } : {}),
-      })
-      if (read !== previewRead.current) return
-      setLog((current) => (current ? { ...current, preview, previewing: false, draft: withPreview(current.draft, preview) } : current))
-    } catch (error) {
-      if (read !== previewRead.current) return
-      setLog((current) => (current ? { ...current, previewing: false, problem: refusalKey(error) } : current))
-    }
-  }, [api, companyId, log, today])
-
-  const submitLog = useCallback(async () => {
-    if (!log || log.busy) return
-    if (logProblems(log.draft, today).length > 0) {
-      setLog({ ...log, showProblems: true })
-      return
-    }
-    setLog({ ...log, busy: true, problem: null })
-    logKey.current ??= newIdempotencyKey()
-    try {
-      const answer = await logComplaint(api, logBody(log.draft, companyId, today), logKey.current)
-      const complaint = answer.complaint
-      let failed = 0
-      for (const photo of log.draft.photos) {
-        try {
-          await uploadPhoto(api, complaint, photo)
-        } catch {
-          failed += 1
-        }
-      }
-      logKey.current = null
-      setLog(null)
+  // F-OS-303: its state is the extracted hook (the order's Shipments tab opens the same window). Logged: the notice, the list read
+  // again, then the triage of the new complaint (or its record for a person who does not triage).
+  const { model: log, open: openLog, close: closeLog, actions: logActions } = useLogComplaint({
+    api,
+    companyId,
+    today,
+    can,
+    onLogged: (complaint, failed) => {
       setNotice({ tone: failed > 0 ? 'warning' : 'success', words: { key: 'done.logged', params: { number: complaint.number } }, detail: failed > 0 ? { key: 'done.photosFailed', params: { count: failed } } : null })
       void load()
       void loadCounts()
@@ -483,11 +377,16 @@ function ComplaintsContainer() {
         setQueue([complaint.id])
         go({ log: false, open: complaint.id })
       } else router.push(recordHref(prefix, complaint.id))
-    } catch (error) {
-      logKey.current = null
-      setLog((current) => (current ? { ...current, busy: false, problem: refusalKey(error) } : current))
+    },
+  })
+  useEffect(() => {
+    if (!address.log || !can.log) {
+      closeLog()
+      return
     }
-  }, [api, can.manage, companyId, go, load, loadCounts, log, prefix, router, today])
+    openLog()
+    // Opened once per ?new=1: the person's rights and the day do not change while it is open.
+  }, [address.log, api])
 
   // ---- acknowledge -----------------------------------------------------------------------------------------------------------
   const [acknowledge, setAcknowledge] = useState<{ alert: SafetyAlert; busy: boolean; problem: string | null } | null>(null)
@@ -581,12 +480,7 @@ function ComplaintsContainer() {
         onTriageSave: () => void saveTriage(false),
         onTriageConfirmSafety: () => void saveTriage(true),
         onTriageCancelSafety: () => setTriage((current) => (current ? { ...current, confirmSafety: false } : current)),
-        onLogDraft: (patch) => {
-          logKey.current = null
-          setLog((current) => (current ? { ...current, draft: { ...current.draft, ...patch }, ...(patch.serial !== undefined || patch.partyId !== undefined ? { preview: patch.partyId !== undefined ? null : current.preview } : {}) } : current))
-        },
-        onLogLookUp: () => void lookUp(),
-        onLogSubmit: () => void submitLog(),
+        ...logActions, // F-OS-303: the draft, the look-up, log — the extracted hook's
         onLogClose: () => go({ log: false }),
       }}
     />

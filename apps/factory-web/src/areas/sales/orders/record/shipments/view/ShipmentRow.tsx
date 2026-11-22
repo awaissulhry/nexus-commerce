@@ -84,7 +84,7 @@ export function ShipmentRowView({ row, view, delivery, order, model, actions }: 
       <div className="fw-os-c-o" role="cell">
         {/* F-OS-202: the row's acts by state (each Warehouse's own window, in place; hidden without the right, held only by state),
             then its read doors. */}
-        <LineMenuButton label={t('ships.row.more', { number: view.number })} items={rowMenuOf(rowActsOf(row, order.id, delivery), say, (act) => actions?.shipmentsTab?.onAct?.(view.id, act.id, act.holdId), [
+        <LineMenuButton label={t('ships.row.more', { number: view.number })} items={rowMenuOf(rowActsOf(row, order.id, delivery, model.can /* F-OS-303: the after-sales doors */), say, (act) => actions?.shipmentsTab?.onAct?.(view.id, act.id, act.holdId), [
           { id: 'open', label: t('ships.carries.notRead'), href },
           { id: 'copy', label: t('ships.row.copyLink'), onSelect: () => copyLinkTo(view.anchor) },
         ])} />
@@ -254,6 +254,13 @@ function StateCellView({ view, order, model }: { view: RowModel; order: Order; m
         </span>
       ),
     )
+    // W3 (plan D6): where the DDT cannot be issued (Warehouse's checks say why), the shipment may travel without one — said, not assumed.
+    if (state.ddtChoice)
+      out.push(
+        <span key="ddt-choice" className="fw-os-hw">
+          {t('ships.next.ddtChoice')}
+        </span>,
+      )
   }
   return <>{out}</>
 }
@@ -306,10 +313,11 @@ function TravelsCellView({ view, row, fold, onFold, onTracking }: { view: RowMod
       {travels.parcels ? <span className="fw-os-mu">{t('ships.travels.parcels', { parcels: t('ships.travels.parcelCount', { count: travels.parcels.count }), tracked: t('ships.travels.tracked', { count: travels.parcels.tracked }) })}</span> : null}
       {travels.trackingDoor || view.fold !== null ? (
         <span className="fw-os-acts">
-          {/* F-OP-119: drawn only where the number may be typed here (never held for a right, never on a final row: P0-B3, D2). */}
+          {/* F-OP-119: drawn only where the number may be typed here (never held for a right, never on a final row: P0-B3, D2).
+              F-OS-301: "Tracking numbers…" — the consignment number and one per parcel, in Warehouse's own window. */}
           {travels.trackingDoor && row.status !== 'CANCELLED' ? (
             <Button size="sm" onClick={onTracking}>
-              {o('ship.trackingOpen')}
+              {t('ships.act.tracking')}
             </Button>
           ) : null}
           {view.fold !== null ? (
@@ -422,7 +430,7 @@ function CopyNumber({ text }: { text: string }) {
 }
 
 // ── F-OS-202 (10-design §5 "Row ⋯"): the acts in their groups (a rule between groups), each held item with its words; the read doors last ──
-const GROUPS: readonly RowActGroup[] = ['garments', 'travel', 'hold', 'arrive', 'danger']
+const GROUPS: readonly RowActGroup[] = ['garments', 'travel', 'hold', 'arrive', /* F-OS-303 */ 'after', 'danger']
 
 function rowMenuOf(acts: readonly RowAct[], say: Say, run: (act: RowAct) => void, doors: readonly MenuItemDef[]): MenuItemDef[] {
   const items: MenuItemDef[] = []

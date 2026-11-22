@@ -782,19 +782,13 @@
     "CANCELLED": "Annullato"
   },
   "ship": {
-    "leftTitle": "Da spedire",
     "figures": "{ordered} ordinati · {released} rilasciati · {shipped} spediti · {toShip} da spedire",
     "gridCaption": "{style}: capi da spedire per colore e taglia",
     "listTitle": "Spedizioni",
-    "empty": {
-      "title": "Ancora nulla di spedito",
-      "body": "Qui compaiono le spedizioni fatte in magazzino per questo ordine."
-    },
     "col": {
       "number": "Spedizione",
       "status": "Stato",
       "shipped": "Partita",
-      "delivered": "Consegnata",
       "carrier": "Vettore",
       "tracking": "Tracciamento"
     },
@@ -808,24 +802,8 @@
     "noLive": "Nessun tracciamento in tempo reale",
     "copy": "Copia",
     "copied": "Copiato",
-    "trackingOpen": "Numero di tracciamento…",
     "showCancelled": "Mostra {count} annullate",
     "hideCancelled": "Nascondi le annullate",
-    "tracking": {
-      "held": {
-        "LABELLED": "È stata acquistata un'etichetta: prima annulla le etichette.",
-        "NOT_A_CARRIER": "Solo una spedizione con vettore accetta un numero di tracciamento inserito.",
-        "NOT_A_CARRIER_LEFT": "Solo una spedizione con vettore accetta un numero di tracciamento inserito. La merce è partita.",
-        "CANCELLED": "La spedizione è annullata.",
-        "CARRIER_TRACKED": "La segue il tracciamento del vettore: niente da inserire.",
-        "NO_RIGHT": "Il tracciamento lo aggiunge una persona del magazzino.",
-        "other": "Non possibile ora."
-      },
-      "door": {
-        "shipment": "Apri la spedizione ›",
-        "arrange": "Cambia come viaggia…"
-      }
-    },
     "created": "{number} creata (bozza)",
     "createdDoor": "Imballala e spediscila in Magazzino ›",
     "create": {
@@ -1571,26 +1549,12 @@
   },
   "links": {
     "title": "Reclami e resi",
-    "hint": "Solo quelli di questo ordine; ognuno apre la sua scheda.",
     "loading": "Lettura dei reclami e dei resi dell'ordine…",
-    "failed": "Non è stato possibile leggere i reclami e i resi dell'ordine",
     "complaints": {
-      "title": "Reclami",
-      "none": "Nessun reclamo su questo ordine."
+      "title": "Reclami"
     },
     "returns": {
-      "title": "Resi",
-      "none": "Nessun reso di questo ordine."
-    },
-    "col": {
-      "number": "Numero",
-      "status": "Stato",
-      "severity": "Gravità",
-      "received": "Ricevuto",
-      "answerDue": "Risposta entro",
-      "wanted": "Il cliente vuole",
-      "requested": "Richiesto",
-      "closed": "Chiuso"
+      "title": "Resi"
     },
     "complaintStatus": {
       "NEW": "Nuovo",

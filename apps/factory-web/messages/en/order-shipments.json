@@ -20,7 +20,6 @@
   },
   "where": {
     "title": "Where every garment is",
-    "part": "the counts",
     "info": "Every garment of this order is in one bucket, and the buckets add up to what was ordered. Nothing here is typed: it is counted, and a number changes only through its cause (a shipment, a release, a line closed).",
     "more": "More for Where every garment is",
     "openLines": "Open on Lines ›",
@@ -185,7 +184,8 @@
       "pack": "Next: pack it ›",
       "ddt": "Next: issue the DDT ›",
       "labels": "Next: buy the labels ›",
-      "hand": "Next: hand it over ›"
+      "hand": "Next: hand it over ›",
+      "ddtChoice": "A Nexus shipment leaves with a DDT. If the DDT cannot be issued (Warehouse lists its open checks), choose “This shipment travels without a DDT…” in ⋯, then hand it over."
     },
     "travels": {
       "withheld": "Not shown to your role",
@@ -249,7 +249,11 @@
         "carrierFed": "The carrier's own tracking follows it: nothing to type.",
         "proofKept": "Every part of the proof is kept: it never changes.",
         "received": "The garments were received back already."
-      }
+      },
+      "tracking": "Tracking numbers…",
+      "return": "Open a return for this shipment…",
+      "complaint": "Log a complaint about this shipment…",
+      "claim": "Send a claim link…"
     },
     "done": {
       "split": "{number} was split.",
@@ -260,19 +264,23 @@
       "placeHold": "{number} is on hold.",
       "releaseHold": "A hold of {number} is released.",
       "proof": "The proof of delivery of {number} is saved.",
-      "resolve": "The tracking problem of {number} is resolved."
+      "resolve": "The tracking problem of {number} is resolved.",
+      "tracking": "The tracking numbers of {number} are saved."
     },
     "told": {
       "draft": "The customer is not told: a draft is never shown.",
       "portal": "The customer is not e-mailed; their portal shows it at once.",
-      "ddtOff": "The customer sees the shipment from Packed on, without a DDT."
+      "ddtOff": "The customer sees the shipment from Packed on, without a DDT.",
+      "tracking": "The customer sees the numbers in their portal at once; no e-mail.",
+      "noticeSent": "The shipping notice went to the customer again.",
+      "noticeHeld": "The shipping notice did not go; the shipment's Customer notice in Warehouse says why."
     }
   },
   "after": {
     "part": "the complaints and returns",
     "info": "What the customer reported about what we shipped, and where each case stands. The tab only lists a case: each one lives on its own page.",
     "more": "More for complaints and returns",
-    "openReturns": "Open Sales › Returns ›",
+    "openReturns": "Open Sales › Returns & repairs ›",
     "openComplaints": "Open Quality › Complaints ›",
     "answer": {
       "open_one": "{count} open",
@@ -308,9 +316,24 @@
     "showClosed_one": "Show {count} closed",
     "showClosed_other": "Show {count} closed",
     "hideClosed": "Hide closed",
-    "truncated": "Showing the latest 50"
+    "truncated": "Showing the latest 50",
+    "act": {
+      "return": "Open a return…",
+      "complaint": "Log a complaint…",
+      "claim": "Send a claim link…"
+    },
+    "held": {
+      "return": "A return opens once something has shipped.",
+      "claim": "A claim link is sent for a shipment that left."
+    },
+    "done": {
+      "return": "Return {number} is open.",
+      "complaint": "Complaint {number} is logged.",
+      "complaintPhotos_one": "Complaint {number} is logged; {count} photo could not be added.",
+      "complaintPhotos_other": "Complaint {number} is logged; {count} photos could not be added.",
+      "open": "Open it ›"
+    }
   },
-  "copied": "Link copied",
   "door": {
     "wordsOptional": "Your words (optional)",
     "officeOnly": "Office only: the customer never reads them.",
@@ -415,6 +438,54 @@
       "ddtOff": "{number} travels without a DDT.",
       "ddtBack": "{number} leaves with a DDT again.",
       "received": "{count} garments of {number} are back in finished goods."
+    },
+    "tracking": {
+      "title": "Tracking numbers of {number}",
+      "consignment": "Consignment number (tracking, AWB or B/L)",
+      "awbFits": "It looks like an air waybill number, and its last digit fits.",
+      "awbOff": "It looks like an air waybill number, but its last digit does not fit: check it.",
+      "parcels": "Parcels ({count}) · one number each",
+      "parcelOf": "Parcel {seq} of {count}",
+      "parcelNumber": "Parcel {seq}: number",
+      "parcelLinkLabel": "Parcel {seq}: its tracking page (https)",
+      "fromLabel": "From the label: its number comes from the carrier.",
+      "refusal": {
+        "PARCEL_LABELLED": "This parcel carries a label: its number comes from the label, never typed.",
+        "NOT_PACKED": "Parcels get their numbers once the shipment is packed."
+      },
+      "afterLeft": "A parcel's typed number may change after the goods left; the customer sees the new one at once.",
+      "fromPacked": "From Packed on. A number is typed only on a parcel without a carrier label.",
+      "seen": "The customer saw the old number: say why it changes.",
+      "why": "Say why the number changes (at least {min} characters).",
+      "parcelTooLong": "Parcel {seq}: the number is one line of at most {max} characters.",
+      "parcelLinkNeedsNumber": "Parcel {seq}: a link goes only with its number.",
+      "parcelLink": "Parcel {seq}: the link starts with https:// and has at most {max} characters.",
+      "go": "Save the numbers",
+      "notify": "Send the shipping notice again",
+      "notifyHint": "Off by default: the customer sees the new numbers in the portal and on the tracking page at once; an e-mail goes only when ticked.",
+      "toldPacked": "The customer sees the numbers in their portal; no e-mail from this window.",
+      "never": "A number from a carrier label is never typed over. The DDT is not touched. The history keeps every old number; the thread gets one office line.",
+      "done": "The tracking numbers are saved.",
+      "doneNotice": "The tracking numbers are saved and the shipping notice went again.",
+      "doneNoticeHeld": "The tracking numbers are saved; the shipping notice did not go."
+    },
+    "split": {
+      "into": "Into how many shipments",
+      "intoHint": "This one and up to {max} new ones, in one step (all or nothing).",
+      "col": {
+        "new": "New shipment {n}"
+      },
+      "movesTo": "Garments of {line} {size} for new shipment {n}",
+      "goInto": "Split into {count} shipments",
+      "shipComplete": "The customer wants it all in one delivery (ship complete): split only if they agreed.",
+      "eachTakes": "Each new shipment takes at least one garment: give new shipment {n} some, or split into fewer.",
+      "reasonShipTo": "Another delivery address",
+      "address": "Delivery address of the new shipments",
+      "pickAddress": "Pick the delivery address.",
+      "pickAddressOption": "Pick an address",
+      "addressesReading": "Reading the customer's delivery addresses…",
+      "noAddress": "This customer has no other approved delivery address: add one on the customer first.",
+      "onlyOwn": "Each new shipment shows only on the orders whose garments it carries; the holds in force go with it."
     }
   },
   "move": {
@@ -463,6 +534,36 @@
       "moved_one": "{count} garment moved to {number}.",
       "moved_other": "{count} garments moved to {number}.",
       "merged": "{number} is merged into {into}."
+    }
+  },
+  "claim": {
+    "title": "Send a claim link for {number}",
+    "what": "The customer gets a link to ask for a return or report a quality problem, with photos. The link is for them only.",
+    "to": "Send it to",
+    "pickTo": "Pick a contact",
+    "other": "Another address…",
+    "email": "E-mail address",
+    "reading": "Reading the customer's contacts…",
+    "noContact": "No contact of this customer has an e-mail address here: type one.",
+    "never": "Nothing else changes: no return or complaint opens until the customer sends one.",
+    "go": "Send the link",
+    "cancel": "Cancel",
+    "close": "Close",
+    "held": {
+      "pickTo": "Pick to whom it goes.",
+      "email": "Type an e-mail address."
+    },
+    "refusal": {
+      "SUPPRESSED": "This address bounced or complained: correct it first.",
+      "email": "That address cannot take the link: check it.",
+      "notFound": "A claim link names a shipment that left or an open order: this one is neither now.",
+      "other": "The link could not go: try again in a moment."
+    },
+    "sent": {
+      "sent": "The link went to {email}.",
+      "queued": "The link waits to go to {email}.",
+      "failed": "The link was made, but the e-mail to {email} failed: send a new one later.",
+      "until": "It works until {day}."
     }
   }
 }

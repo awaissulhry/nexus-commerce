@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { TRACKING_STATUSES } from '@nexus/factory-domain/shipping/labels/tracking'
 import { MANUAL_EVENT_STATUSES, OWN_TRANSPORT_MODES, OWN_TRANSPORT_REFUSALS, TRANSPORT_ARRANGEMENTS } from '@nexus/factory-domain/shipping/own-transport/rules'
 import { ETA_REFUSALS } from '@nexus/factory-domain/shipping/own-transport/rules' // F-OS-203 (B-OS-016)
+import { PARCEL_TRACKING_REFUSALS } from '@nexus/factory-domain/shipping/own-transport/rules' // F-OS-301 (B-OS-022)
 import { LABEL_JOB_KINDS, REPRINT_REFUSALS } from '@nexus/factory-domain/shipping/reprint/rules'
 import { SHIPMENT_STATUSES } from '@nexus/factory-domain/shipping/shipments'
 import { CHECK_CODES } from '@nexus/factory-domain/shipping/validate/rules'
@@ -44,8 +45,25 @@ export const transportSchema = z.object({
   // typed by hand; absent in an older answer: those doors are hidden.
   may: z.object({ arrange: allowance, track: allowance, status: allowance, endByHand: allowance.optional(), eta: z.object({ allowed: z.boolean(), refusal: z.object({ code: z.enum(ETA_REFUSALS) }).nullable() }).optional() }),
   events: z.array(z.object({ id: z.string(), status: z.enum(TRACKING_STATUSES), description: z.string().nullable(), location: z.string().nullable(), occurredAt: z.string(), recordedAt: z.string() })),
+  // ---- F-OS-301 (B-OS-022, order shipments 1/1): each parcel — its label's number (read only; `test`: a TEST label), or the number
+  // typed for it by hand, and whether one may be typed now (the shipment's refusal first, then PARCEL_LABELLED / NOT_PACKED). Absent in
+  // an older answer: the dialog keeps the one consignment number.
+  parcels: z
+    .array(
+      z.object({
+        id: z.string(),
+        seq: z.number(),
+        label: z.object({ number: z.string().nullable(), test: z.boolean(), url: z.string().nullable() }).nullable(),
+        typed: z.object({ number: z.string(), url: z.string().nullable() }).nullable(),
+        may: z.object({ allowed: z.boolean(), refusal: z.object({ code: z.enum([...OWN_TRANSPORT_REFUSALS, ...PARCEL_TRACKING_REFUSALS]) }).nullable() }),
+      }),
+    )
+    .optional(),
+  // ---- end F-OS-301
 })
 export type Transport = z.infer<typeof transportSchema>
+/** F-OS-301: one parcel of the How it travels read (B-OS-022). */
+export type TransportParcel = NonNullable<Transport['parcels']>[number]
 export type Arrangement = Transport['arrangement']
 export type TransportMode = (typeof OWN_TRANSPORT_MODES)[number]
 export type ManualStatus = (typeof MANUAL_EVENT_STATUSES)[number]
@@ -58,7 +76,18 @@ export function arrangeTransport(api: ApiClient, shipmentId: string, body: { ver
   return api.request('PUT', `${base(shipmentId)}/own-transport`, { body, schema: transportSchema, idempotencyKey })
 }
 
-export function typeTrackingNumber(api: ApiClient, shipmentId: string, body: { version: number; trackingNumber: string | null; /* F-OP-135: null clears; left out keeps */ trackingUrl?: string | null }, idempotencyKey: string): Promise<Transport> {
+/** F-OS-301 (B-OS-022): + each parcel's number typed by hand (null clears it) and its link, and why a number the customer saw changes. */
+export interface TrackingBody {
+  version: number
+  /** null clears it; left out (with `parcels`): kept. */
+  trackingNumber?: string | null
+  /** F-OP-135: null clears; left out keeps. */
+  trackingUrl?: string | null
+  parcels?: { parcelId: string; trackingNumber: string | null; trackingUrl?: string | null }[]
+  reason?: string
+}
+
+export function typeTrackingNumber(api: ApiClient, shipmentId: string, body: TrackingBody, idempotencyKey: string): Promise<Transport> {
   return api.request('PUT', `${base(shipmentId)}/own-transport/tracking`, { body, schema: transportSchema, idempotencyKey })
 }
 
