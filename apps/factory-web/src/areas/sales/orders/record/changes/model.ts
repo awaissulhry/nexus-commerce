@@ -36,14 +36,25 @@ export function askingOf(requests: readonly BrandRequest[]): { readonly first: B
 type Say = (key: string, params?: Record<string, string | number>) => string
 
 /**
- * What a request asks, in words for the band notice: its kind, then each size asked old → new ("line 2 · M 40 → 36"), at most three,
- * "…" after; a whole-order cancel, a date. Never a price, never another order.
+ * What a request asks, in words (the band notice, Waiting, Overview's card, What changed): its kind, then each line ONCE with its
+ * style and colour and its sizes old → new ("Change · line 10 · SEED-JKT-02 · Red · 52: 2 → 3 · 54: 1 → 0"), at most three lines,
+ * "…" after; a whole-order cancel; a date alone is the date asked ("Ready by 22/12/2026", fx6: never "Change · 22/12/2026"). Never a
+ * price, never another order.
  */
 export function askWordsOf(request: Pick<BrandRequest, 'kind' | 'cells' | 'wholeOrder' | 'requestedDate'>, words: { readonly kind: string; readonly say: Say; readonly day: (value: string) => string }): string {
-  const cells = request.cells.map((cell) => (cell.size === null ? words.say('band.askLine', { line: cell.seq }) : words.say('band.askCell', { line: cell.seq, size: cell.size, from: cell.before, to: cell.askedColourway ? `${cell.asked} ${cell.askedColourway.name}` : cell.asked })))
-  const parts = [words.kind, ...cells.slice(0, 3), ...(cells.length > 3 ? ['…'] : [])]
+  const lines: { seq: number; parts: string[] }[] = []
+  for (const cell of request.cells) {
+    let line = lines.find((entry) => entry.seq === cell.seq)
+    if (!line) {
+      line = { seq: cell.seq, parts: [words.say('band.askLine', { line: cell.seq }), ...(cell.style?.code ? [cell.style.code] : []), ...(cell.colourway?.name ? [cell.colourway.name] : [])] }
+      lines.push(line)
+    }
+    if (cell.size !== null) line.parts.push(words.say('changesTab.request.size', { size: cell.size, from: cell.before, to: cell.askedColourway ? `${cell.asked} ${cell.askedColourway.name}` : cell.asked }))
+  }
+  if (lines.length === 0 && !request.wholeOrder && request.requestedDate) return words.say('changesTab.request.date', { date: words.day(request.requestedDate) })
+  const parts = [words.kind, ...lines.slice(0, 3).flatMap((line) => line.parts), ...(lines.length > 3 ? ['…'] : [])]
   if (request.wholeOrder) parts.push(words.say('band.askWhole'))
-  if (request.requestedDate && cells.length === 0) parts.push(words.day(request.requestedDate))
+  if (request.requestedDate && lines.length === 0 && request.wholeOrder) parts.push(words.day(request.requestedDate))
   return parts.join(' · ')
 }
 

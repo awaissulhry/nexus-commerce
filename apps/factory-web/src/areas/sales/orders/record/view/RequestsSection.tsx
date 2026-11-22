@@ -123,7 +123,7 @@ function BandNotices({ order, model }: { order: Order; model: OrderRecordModel }
  * Production's strip — and words for everyone else ("Waits for a planner · told 20/11/2026, 10:40"), no button, no Details door; a
  * production task's Done is hidden without its right (the row's own team words say who does it).
  */
-export function StillDoorView({ row, order, model, actions }: { row: StillRowOf; order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+export function StillDoorView({ row, order, model, actions, heldWords = true }: { row: StillRowOf; order: Order; model: OrderRecordModel; actions?: OrderRecordActions; /** fx6 (walk 4): Changes says who decides in its who column. */ heldWords?: boolean }) {
   const t = useT('orders')
   const locale = useLocale() // F-OC-104: the planner's words say the day
   const search = useSearchParams()?.toString() ?? '' // F-OP-116: the order's own tabs keep the dock's scope
@@ -134,7 +134,7 @@ export function StillDoorView({ row, order, model, actions }: { row: StillRowOf;
       {/* F-OP-116: the door in place. F-OC-104 (L1): ONE Decide… for who may decide; words for everyone else. */}
       {door.kind === 'change' &&
         (door.held ? (
-          <span className="fw-so-hint">{t('productionTab.wo.waitsPlanner', { time: formatDateTime(row.since, { locale }) })}</span>
+          heldWords ? <span className="fw-so-hint">{t('changesTab.still.waitsPlanner', { when: formatDateTime(row.since, { locale }) }) /* fx6 (walk 4): since, never "told" */}</span> : null
         ) : (
           <Button size="sm" heldReason={busy} onClick={() => actions?.orderChanges?.onOpen?.(door.changeId)}>
             {t('productionTab.wo.decide')}
@@ -153,7 +153,7 @@ export function StillDoorView({ row, order, model, actions }: { row: StillRowOf;
       {/* F-OC-104: the task's Done only for who may tick it (its assignee or a work-order manager, B-OC-005); hidden otherwise. */}
       {door.kind === 'task' && !door.held && (
         <Button size="sm" heldReason={door.version === null ? t('held.busy') : busy} onClick={() => door.version !== null && actions?.onTaskDone?.(door.taskId, door.version)}>
-          {t('wo.done')}
+          {t('changesTab.still.markDone') /* fx6 (walk 13) */}
         </Button>
       )}
       {door.kind === 'link' && (
@@ -241,6 +241,8 @@ export function WaitingDoorView({ door, order, model, actions, here, readOnly = 
     case 'answer':
       // The request as this page read it opens the ONE review window; not read (yet): Changes, where it is listed.
       // F-OP-301: on Changes itself no link back to it.
+      // fx6 (walk 2, as Changes does): no button this reader may not use — who answers it, in words.
+      if (door.request && !waitsForMe(door.request)) return <span className="fw-so-hint">{t(door.request.answeredIn === 'SALES' ? 'changesTab.who.sales' : 'changesTab.who.production')}</span>
       return door.request ? <AnswerDoor request={door.request} model={model} /> : here === 'changes' ? null : tabLink('changes', null)
     case 'reply':
       // This order's conversation at the message the problem was raised with, the box on Reply (the customer reads it).

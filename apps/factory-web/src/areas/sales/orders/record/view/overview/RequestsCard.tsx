@@ -11,6 +11,7 @@ import { PartState } from '../OrderRecordView'
 import { RowAge, StillDoorView, WaitingRowItem } from '../RequestsSection'
 import { changesBadgeOf, readOf, type WaitingState } from '../../overview/model' // F-OP-301 (walk #1–#3): the ONE call of the waiting list (made by OverviewTab)
 import type { StillRowOf } from '../../changes/model'
+import { stillWordsOf } from '../../changes/waiting' // fx6 (walk 7)
 import { said } from '../../../../../home/approvals/requests/model'
 import { TEAM_WORDS, type ApplyTeam } from '@nexus/factory-domain/sales/change-requests/apply-plan'
 import { useSearchParams } from 'next/navigation'
@@ -116,13 +117,14 @@ function Group({ title, more = null, children }: { title: string; more?: ReactNo
  * state pill is Changes' own: the held words already say whose turn it is.
  */
 function StillItem({ row, order, model, actions, asOf, readOnly }: { row: StillRowOf; order: Order; model: OrderRecordModel; actions?: OrderRecordActions; asOf: string | null; readOnly: boolean }) {
+  const t = useT('orders')
   const locale = useLocale()
   const team = TEAM_WORDS[row.waitingOn as ApplyTeam]
   return (
     <li className="fw-so-ov-row fw-so-rq-row">
       <span>
-        {said(row.words, locale)}
-        {team ? <span className="fw-so-hint">{` · ${said(team, locale)}`}</span> : null}
+        {stillWordsOf(row, model.orderChanges?.list?.value, order.lines, t, locale) /* fx6 (walk 7): the ONE sentence, as Changes */}
+        {team && row.kind !== 'WORK_ORDER_CHANGE' ? <span className="fw-so-hint">{` · ${said(team, locale)}`}</span> : null}
       </span>
       <RowAge since={row.since} asOf={asOf} />
       <span className="fw-so-ov-doors">{readOnly ? null : <StillDoorView row={row} order={order} model={model} actions={actions} />}</span>

@@ -149,12 +149,15 @@ describe('F-OC-104: Still to do', () => {
 
   it('the rows\' doors: ONE Decide… for who may decide (else the planner\'s words), the new date on Production, the charged pieces\' yes', () => {
     const view = readFileSync(new URL('./view/WaitingSection.tsx', import.meta.url), 'utf8')
-    expect(view).toContain('decisionSentenceOf(change, order.lines)')
+    // fx6 (walk 7): the ONE sentence is waiting.ts's (Overview's card says the same).
+    expect(view).toContain('const words = stillWordsOf(row, model.orderChanges?.list?.value, order.lines, t, locale)')
+    expect(readFileSync(new URL('./waiting.ts', import.meta.url), 'utf8')).toContain('decisionSentenceOf(change, lines)')
     expect(view).toContain("<TabLink href={`${tabHref(recordHref, 'production', search)}#dates`}>{t('changesTab.still.newDates')}</TabLink>")
     expect(view).toContain('<a href="#confirmation">{t(\'changesTab.still.seeYes\')}</a>')
     expect(view).toContain('id="still-to-do" tabIndex={-1}')
     const door = readFileSync(new URL('../view/RequestsSection.tsx', import.meta.url), 'utf8')
-    expect(door).toContain("t('productionTab.wo.waitsPlanner', { time: formatDateTime(row.since, { locale }) })")
+    // fx6 (walk 4): since, never "told"; on Changes it is the who column's (heldWords={false}).
+    expect(door).toContain("t('changesTab.still.waitsPlanner', { when: formatDateTime(row.since, { locale }) })")
     expect(door).toContain("{door.kind === 'task' && !door.held && (")
   })
 })

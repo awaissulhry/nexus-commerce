@@ -118,6 +118,8 @@ function TheirYes({ order, model, actions }: { order: Order; model: OrderRecordM
           <Tag tone={SIGNED_TONE[check]}>{t(`changesTab.agreement.signed.${check}`)}</Tag>
         </span>
         {acceptance.noWithdrawalAccepted && <span className="fw-pt-sub">{t('changesTab.agreement.noWithdrawal')}</span>}
+        {/* fx6 (walk 12, L10): the signed PDF shows prices — said to a reader without them. */}
+        {!model.can.price && <span className="fw-pt-sub">{t('changesTab.agreement.signedPriced')}</span>}
       </div>
     )
   }

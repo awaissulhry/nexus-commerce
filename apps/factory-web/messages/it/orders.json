@@ -1478,14 +1478,6 @@
     },
     "someone": "Qualcuno",
     "headerOnly": "Solo i dati dell'ordine",
-    "count": {
-      "CHANGED_one": "{count} riga cambiata",
-      "CHANGED_other": "{count} righe cambiate",
-      "ADDED_one": "{count} riga aggiunta",
-      "ADDED_other": "{count} righe aggiunte",
-      "REMOVED_one": "{count} riga tolta",
-      "REMOVED_other": "{count} righe tolte"
-    },
     "piecesMoved": "Pezzi {before} → {after}",
     "reaccept": {
       "NEEDED": "Deve accettare di nuovo",
@@ -1509,7 +1501,7 @@
     },
     "still": {
       "since": "dal {when}",
-      "none": "Per le modifiche accettate non resta nulla da fare.",
+      "none": "Per le modifiche accettate non resta più nulla da fare.",
       "changeOf": "{kind} accettata · {when}",
       "office": "Modifica dell'ufficio · {when}",
       "leftOut_one": "{count} ordine di lavoro non mostrato: è fuori da ciò che puoi aprire.",
@@ -2042,7 +2034,6 @@
     "asks": "{customer} chiede: {what}",
     "answer": "Rispondi…",
     "answerNone": "Si risponde dalla pagina dell'ordine.",
-    "askCell": "riga {line} · {size} {from} → {to}",
     "askLine": "riga {line}",
     "askWhole": "tutto l'ordine",
     "moreRequests_one": "{count} altra richiesta",
@@ -2210,7 +2201,6 @@
     },
     "changeApplied": "La modifica di {number} è applicata: il reparto è stato avvisato",
     "changeDeclined": "La modifica di {number} resta com'è",
-    "done": "Fatto",
     "taskDone": "Fatto: il compito è chiuso",
     "repromiseHeld": "Risponde la vendita, mai il pianificatore che l'ha proposta",
     "liftPause": "Togli la pausa del cliente…",
@@ -2996,7 +2986,9 @@
     "still": {
       "revision": "Revisione {revision} · {when}",
       "newDates": "Vedi le nuove date ›",
-      "seeYes": "Vedi il sì ›"
+      "seeYes": "Vedi il sì ›",
+      "waitsPlanner": "Aspetta un pianificatore · dal {when}",
+      "markDone": "Segna come fatto"
     },
     "freeze": {
       "title": "Si può ancora cambiare?",
@@ -3041,7 +3033,11 @@
       },
       "customerRule": "Regola di {customer}",
       "shipToChecked": "Controllato quando chiede il cliente",
-      "next": "Da {stage}: {word}"
+      "next": "Da {stage}: {word}",
+      "partsAll": "Parte per parte · tutte e {count} si possono cambiare",
+      "partsShow": "Mostra ogni parte",
+      "partsHide": "Nascondi le parti",
+      "shipped": "Spedito: {shipments}"
     },
     "agreement": {
       "title": "Accordo del cliente",
@@ -3064,8 +3060,8 @@
         "waiting": "La revisione {revision} attende il loro sì dal {date}: è elencata in Tocca a {customer}.",
         "notAsked": "La revisione {revision} richiede il loro sì, ma non è mai stato chiesto: chiedilo a {customer} ora.",
         "expired": "La revisione {revision} richiede il loro sì, e la richiesta è scaduta: chiedilo di nuovo a {customer}.",
-        "sendNew": "Invia una nuova conferma: l'ordine è cambiato dopo l'invio della v{version}.",
-        "notSent": "La conferma non è ancora inviata.",
+        "sendNew": "L'ordine è cambiato dopo l'invio della v{version}.",
+        "notSent": "Creala e inviala qui sotto, in La nostra conferma.",
         "agreed": "Accordato e confermato: v{version} inviata il {date}."
       },
       "toWaiting": "In attesa ↑",
@@ -3106,7 +3102,10 @@
       "more": "Altro per la conferma",
       "makeOnly": "Crea soltanto (da stampare)",
       "openToPrint": "Apri per stampare",
-      "noPrice": "La conferma mostra i prezzi: la invia chi vede i prezzi."
+      "noPrice": "La conferma mostra i prezzi: la invia chi vede i prezzi.",
+      "changedAfter": "l'ordine è cambiato dopo",
+      "sendsListed": "Ogni invio è elencato in Cosa è cambiato › Conferme.",
+      "signedPriced": "Il PDF firmato mostra i prezzi: lo apre chi vede i prezzi."
     },
     "ask": {
       "title": "Chiedere a {customer} di riconfermare la revisione {revision}?",
@@ -3206,7 +3205,14 @@
         "paused": "In pausa",
         "pauseLifted": "Pausa tolta",
         "styleReleased": "Rilasciata"
-      }
+      },
+      "lineOf": "Riga {line}",
+      "lineAdded": "Riga {line} aggiunta",
+      "lineRemoved": "Riga {line} tolta",
+      "moreLines_one": "+{count} altra riga",
+      "moreLines_other": "+{count} altre righe",
+      "headerMove": "{field}: {from} → {to}",
+      "answeredBy": "Risposta di {name} · {when}"
     },
     "compare": {
       "titleAny": "Prima → dopo · {number}",
@@ -3231,6 +3237,10 @@
       "bothEmail": "Salvato · ordini di lavoro cambiati: {changed} · in attesa della produzione: {waits} — decidi in questa pagina · chiesto a {customer} per e-mail.",
       "bothPortal": "Salvato · ordini di lavoro cambiati: {changed} · in attesa della produzione: {waits} — decidi in questa pagina · chiesto nel portale di {customer}: nessun indirizzo e-mail in archivio.",
       "askedAlready": "{customer} è già stato interpellato: la richiesta aspetta in Tocca a {customer}."
+    },
+    "request": {
+      "size": "{size}: {from} → {to}",
+      "date": "Pronto entro il {date}"
     }
   }
 }

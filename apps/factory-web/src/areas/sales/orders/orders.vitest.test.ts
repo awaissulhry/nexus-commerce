@@ -400,7 +400,6 @@ describe('every design case draws in both languages with no key left on screen',
       for (const kind of MILESTONE_KINDS) for (const part of ['kind', 'when']) has(`schedule.${part}.${kind}`)
       for (const status of MILESTONE_STATUSES) has(`schedule.status.${status}`)
       for (const change of LINE_CHANGES) has(`changes.kind.${change}`)
-      for (const change of LINE_CHANGES) expect(t(`changes.count.${change}`, { count: 2 }), `${locale}: changes.count.${change}`).not.toBe(`changes.count.${change}`)
       for (const need of ['NEEDED', 'NOT_NEEDED']) has(`changes.reaccept.${need}`)
       for (const change of ['added', 'removed', 'changed', 'none', 'empty']) has(`editor.change.${change}`)
       has('editor.empty.new') // F-OL-05: the old edit mode's empty words went with it
@@ -994,7 +993,7 @@ describe('F-SA-266: what a row discusses — the chip per audience, the office-o
     // F-OC-302: each What changed row is `#change-<id>`; Show in the thread is an item of its ONE row ⋯.
     const changes = read('./record/changes/view/HistorySection.tsx')
     expect(changes).toContain('id={`change-${row.id}`}')
-    expect(changes).toContain('<RowMenu order={order} prefix={model.prefix} label={t(\'changesTab.menu.label\')} anchor={`change-${row.id}`} discuss={discuss} at={row.at}')
+    expect(changes).toContain('<RowMenu order={order} prefix={model.prefix} label={t(\'changesTab.menu.label\')} anchor={`change-${row.id}`} discuss={model.people?.mayNote !== false ? discuss : null')
     expect(read('./record/changes/view/RowMenu.tsx')).toContain('frame.showInThread?.({ record: { type: \'SalesOrder\', id: order.id }, at })')
     // A thread card jumps back to its row: a replace (no history entry), then the row in view with the focus.
     const page = read('./record/OrderRecord.tsx')

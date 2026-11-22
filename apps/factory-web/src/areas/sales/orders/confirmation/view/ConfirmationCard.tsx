@@ -75,11 +75,17 @@ function Confirmation({ order, model, actions, prefix }: { order: Order; model: 
   const busy = model.busy ? d('held.busy') : null
   const lastSend = value.sends?.[0] ?? null
   // When and to whom it was sent: every send once the read lists them (B-OC-014), else the last one the order knows.
-  const sent = lastSend
-    ? t('changesTab.agreement.sentTo', { version: lastSend.version, date: formatDate(lastSend.at, { locale }), to: lastSend.to.join(', ') })
+  // fx6 (walk 12; #1849): a send the read names without its addressee says when only; nothing made yet says it once (the tag).
+  const sentWords = lastSend
+    ? lastSend.to.length > 0
+      ? t('changesTab.agreement.sentTo', { version: lastSend.version, date: formatDate(lastSend.at, { locale }), to: lastSend.to.join(', ') })
+      : d('confirmation.rowSent', { date: formatDate(lastSend.at, { locale }), version: lastSend.version })
     : value.sentAt && value.sentVersion !== null
       ? d('confirmation.rowSent', { date: formatDate(value.sentAt, { locale }), version: value.sentVersion })
-      : d('confirmation.notSent')
+      : newest
+        ? d('confirmation.notSent')
+        : null
+  const sent = sentWords && state === 'outdated' && (lastSend || value.sentAt) ? `${sentWords} · ${t('changesTab.agreement.changedAfter')}` : sentWords
   const priced = model.can.price
   const open = (event: { currentTarget: HTMLElement }) =>
     frame?.openFiles && newest
@@ -96,10 +102,11 @@ function Confirmation({ order, model, actions, prefix }: { order: Order; model: 
       <div className="fw-oc-ag-row">
         <div className="fw-oc-ag-txt">
           <span className="fw-pt-inline">
-            <strong>{newest ? d('confirmation.rowTitle', { version: newest.version }) : d('confirmation.title')}</strong>
+            {/* fx6 (walk 12): ONE heading ("Our confirmation"); the version names itself only once one is made. */}
+            {newest ? <strong>{d('confirmation.rowTitle', { version: newest.version })}</strong> : null}
             <Tag tone={STATE_TONE[state]}>{t(`changesTab.agreement.state.${state}`)}</Tag>
           </span>
-          <span className="fw-pt-sub">{[newest ? d('confirmation.rowMade', { date: formatDate(newest.createdAt, { locale }) }) : null, sent].filter(Boolean).join(' · ')}</span>
+          {newest || sent ? <span className="fw-pt-sub">{[newest ? d('confirmation.rowMade', { date: formatDate(newest.createdAt, { locale }) }) : null, sent].filter(Boolean).join(' · ')}</span> : null}
           {/* L9: the PDF is made in the order's language (the customer reads it), never the office person's. */}
           <span className="fw-pt-sub">{t('changesTab.agreement.language', { language: t(`changesTab.agreement.lang.${order.language === 'en' ? 'en' : 'it'}`) })}</span>
         </div>
@@ -122,6 +129,8 @@ function Confirmation({ order, model, actions, prefix }: { order: Order; model: 
       {/* L10: no price grain — no Open, no Make, no Send; one line says who does it. */}
       {!priced && <p className="fw-pt-quiet">{t('changesTab.agreement.noPrice')}</p>}
       {priced && !model.can.files && newest && <p className="fw-pt-quiet">{d('confirmation.noFiles')}</p>}
+      {/* fx6 (walk 12): every send is a row of What changed (B-OC-014). */}
+      {lastSend || value.sentAt ? <p className="fw-pt-quiet">{t('changesTab.agreement.sendsListed')}</p> : null}
       {value.versions.length > 1 && (
         <Disclosure summary={d('confirmation.versionsCount', { count: value.versions.length })}>
           <KeyValue
