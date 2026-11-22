@@ -126,6 +126,31 @@ async function mtmCopy(number: string, partyId: string, profileId: string): Prom
     DROP TABLE o, l, s, u;`)
 }
 
+// ── B-CW-002 / B-CW-021 (customer Work tab): made-up orders in a state, for the blocks at the end of the file ──
+/** A made-up fact written past the order's own rules (the guards off: only the reads are under test). */
+const rulesOff = (statements: string) => admin(`BEGIN; SET LOCAL session_replication_role = replica; ${statements} COMMIT;`)
+
+/** SEED-SO-0001 copied for `partyId` as `number`, CONFIRMED with its lines and sizes (the copies above, without a change of line). */
+async function plainCopy(number: string, partyId: string): Promise<void> {
+  const salt = number.toLowerCase()
+  await admin(`
+    CREATE TEMP TABLE o AS SELECT * FROM "SalesOrder" WHERE "tenantId" = '${tenant}' AND number = 'SEED-SO-0001';
+    CREATE TEMP TABLE l AS SELECT * FROM "SalesOrderLine" WHERE "orderId" = (SELECT id FROM o);
+    CREATE TEMP TABLE s AS SELECT * FROM "SalesOrderLineSize" WHERE "lineId" IN (SELECT id FROM l);
+    UPDATE s SET id = ${v4('id', salt)}, "lineId" = ${v4('"lineId"', salt)}, "partyId" = '${partyId}';
+    UPDATE l SET id = ${v4('id', salt)}, "orderId" = ${v4('"orderId"', salt)}, "partyId" = '${partyId}', "quoteLineId" = NULL, "styleRevisionId" = NULL;
+    UPDATE o SET id = ${v4('id', salt)}, "partyId" = '${partyId}', number = '${number}', "quoteVersionId" = NULL, "customerRef" = NULL, "customerSeq" = NULL,
+      status = 'CONFIRMED', "cancelReason" = NULL, "closedAt" = NULL;
+    INSERT INTO "SalesOrder" SELECT * FROM o;
+    INSERT INTO "SalesOrderLine" SELECT * FROM l;
+    INSERT INTO "SalesOrderLineSize" SELECT * FROM s;
+    DROP TABLE o, l, s;`)
+}
+/** The order's status set by hand (closed and cancelled with their own columns). */
+const setStatus = (number: string, status: string) =>
+  rulesOff(`UPDATE "SalesOrder" SET status = '${status}', "closedAt" = ${status === 'CLOSED' || status === 'CANCELLED' ? 'now()' : 'NULL'}, "cancelReason" = ${status === 'CANCELLED' ? "'Made-up: the customer withdrew it.'" : 'NULL'} WHERE "tenantId" = '${tenant}' AND number = '${number}';`)
+// ── end B-CW-002 / B-CW-021 ──
+
 beforeAll(async () => {
   db = await migratedDatabase('orders_sheet_terms')
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 6 } })
@@ -338,11 +363,15 @@ describe('waiting=us narrows the list, the board, the totals and the file alike,
     await admin(`INSERT INTO "OrderChangeRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, status) SELECT $1, o."tenantId", o."companyId", o."partyId", o.id, 'RUSH', 'OPEN' FROM "SalesOrder" o WHERE o."tenantId" = $2 AND o.number = 'SEED-SO-0001'`, [newId(), tenant])
   })
 
-  /** The orders waiting on us, counted here in SQL: the keeper's waiting on us, or a customer request still OPEN. */
+  /**
+   * The orders waiting on us, counted here in SQL: the keeper's waiting on us, or a customer request still OPEN.
+   * B-CW-021: the keeper's word counts only while it still keeps the order (not shipped, delivered, closed or cancelled, nor
+   * waiting for a yes); an OPEN request waits on us in any state.
+   */
   async function waitingOnUs(partyId?: string): Promise<string[]> {
     const rows = await admin<{ number: string }>(
       `SELECT o.number FROM "SalesOrder" o WHERE o."tenantId" = $1 AND ($2::uuid IS NULL OR o."partyId" = $2::uuid)
-        AND (EXISTS (SELECT 1 FROM "BrandOrderProduction" p WHERE p."salesOrderId" = o.id AND p."waitingOn" = 'US')
+        AND ((o.status IN ('CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED') AND EXISTS (SELECT 1 FROM "BrandOrderProduction" p WHERE p."salesOrderId" = o.id AND p."waitingOn" = 'US'))
              OR EXISTS (SELECT 1 FROM "OrderChangeRequest" r WHERE r."orderId" = o.id AND r.status = 'OPEN')) ORDER BY 1`,
       [tenant, partyId ?? null],
     )
@@ -375,6 +404,43 @@ describe('waiting=us narrows the list, the board, the totals and the file alike,
     expect((await app.inject({ method: 'GET', url: '/sales/orders?waiting=them', headers: { 'x-test-session': 'all' } })).statusCode).toBe(400)
     expect(() => exportSourceOf('sales.orders')!.query(new URLSearchParams('waiting=customer'))).toThrow('Not a waiting term: the file would hold more than the screen.')
   })
+
+  // ── B-CW-021 (customer Work tab plan §2.8, A2-B2): the keeper's "us" counts only while it still keeps the order ──
+  // (last in this block, and both copies are SEED-C1's: the cases above count SEED-R1's rows exactly)
+  it('a shipped order whose kept row still says us is out of the list, the board, the totals and the file; a shipped order with an OPEN request still waits on us (B-CW-021)', async () => {
+    // T-CW-C1-GONE: the keeper says it waits on us. T-CW-C1-ASKS: a customer request still OPEN on it. Both made CONFIRMED, as the rows above.
+    await plainCopy('T-CW-C1-GONE', C1)
+    await plainCopy('T-CW-C1-ASKS', C1)
+    await admin(
+      `INSERT INTO "BrandOrderProduction" (id, "tenantId", "companyId", "partyId", "salesOrderId", key, stage, "stageAt", "waitingOn", "waitingSince")
+       SELECT $1, o."tenantId", o."companyId", o."partyId", o.id, 'brand-production:' || o.id, 'PREPARING', now(), 'US'::"WaitingOn", now() FROM "SalesOrder" o WHERE o."tenantId" = $2 AND o.number = 'T-CW-C1-GONE'
+       ON CONFLICT ("tenantId", key) DO UPDATE SET "waitingOn" = 'US'::"WaitingOn", "waitingSince" = now()`,
+      [newId(), tenant],
+    )
+    await admin(`INSERT INTO "OrderChangeRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, status) SELECT $1, o."tenantId", o."companyId", o."partyId", o.id, 'RUSH', 'OPEN' FROM "SalesOrder" o WHERE o."tenantId" = $2 AND o.number = 'T-CW-C1-ASKS'`, [newId(), tenant])
+    // While the keeper keeps them (CONFIRMED) both wait on us.
+    expect(await numbers('all', 'waiting=us')).toEqual(expect.arrayContaining(['T-CW-C1-ASKS', 'T-CW-C1-GONE']))
+    expect(await waitingOnUs()).toEqual(expect.arrayContaining(['T-CW-C1-ASKS', 'T-CW-C1-GONE']))
+    // Both shipped: the keeper leaves its last row alone ("us" for ever) — only the OPEN request still waits on us.
+    await setStatus('T-CW-C1-GONE', 'SHIPPED')
+    await setStatus('T-CW-C1-ASKS', 'SHIPPED')
+    expect((await admin(`SELECT 1 FROM "BrandOrderProduction" p JOIN "SalesOrder" o ON o.id = p."salesOrderId" WHERE o."tenantId" = $1 AND o.number = 'T-CW-C1-GONE' AND p."waitingOn" = 'US'`, [tenant])).length).toBe(1)
+    const expected = await waitingOnUs()
+    expect(expected).toContain('T-CW-C1-ASKS')
+    expect(expected).not.toContain('T-CW-C1-GONE')
+    expect(await numbers('all', 'waiting=us')).toEqual(expected)
+    expect(await boardTotal('all', 'waiting=us')).toBe(expected.length)
+    expect((await ok('all', '/sales/orders/summary?waiting=us')).all.orders.count).toBe(expected.length)
+    expect(await fileNumbers('all', 'waiting=us&rows=all')).toEqual(expected)
+    // The same for a closed and a cancelled order.
+    for (const status of ['CLOSED', 'CANCELLED']) {
+      await setStatus('T-CW-C1-GONE', status)
+      expect(await numbers('all', 'waiting=us'), status).not.toContain('T-CW-C1-GONE')
+      expect(await fileNumbers('all', 'waiting=us&rows=all'), status).not.toContain('T-CW-C1-GONE')
+    }
+    await setStatus('T-CW-C1-GONE', 'SHIPPED')
+  })
+  // ── end B-CW-021 ──
 })
 // ── end B-SA-070 ──
 
@@ -390,27 +456,8 @@ describe('waiting=us narrows the list, the board, the totals and the file alike,
  *   SEED-R1   T-CW-R1-YES waiting for a yes · T-CW-R1-SEW in production, kept at SEWING
  */
 describe('phase: the list, the totals and the file hold the same rows, and the board counts every phase (B-CW-002, B-CW-003)', () => {
-  const rulesOff = (statements: string) => admin(`BEGIN; SET LOCAL session_replication_role = replica; ${statements} COMMIT;`)
   const sumOf = (counts: readonly number[]): number => counts.reduce((sum, count) => sum + count, 0)
 
-  /** SEED-SO-0001 copied for `partyId` as `number`, CONFIRMED with its lines and sizes (the copies above, without a change of line). */
-  async function plainCopy(number: string, partyId: string): Promise<void> {
-    const salt = number.toLowerCase()
-    await admin(`
-      CREATE TEMP TABLE o AS SELECT * FROM "SalesOrder" WHERE "tenantId" = '${tenant}' AND number = 'SEED-SO-0001';
-      CREATE TEMP TABLE l AS SELECT * FROM "SalesOrderLine" WHERE "orderId" = (SELECT id FROM o);
-      CREATE TEMP TABLE s AS SELECT * FROM "SalesOrderLineSize" WHERE "lineId" IN (SELECT id FROM l);
-      UPDATE s SET id = ${v4('id', salt)}, "lineId" = ${v4('"lineId"', salt)}, "partyId" = '${partyId}';
-      UPDATE l SET id = ${v4('id', salt)}, "orderId" = ${v4('"orderId"', salt)}, "partyId" = '${partyId}', "quoteLineId" = NULL, "styleRevisionId" = NULL;
-      UPDATE o SET id = ${v4('id', salt)}, "partyId" = '${partyId}', number = '${number}', "quoteVersionId" = NULL, "customerRef" = NULL, "customerSeq" = NULL,
-        status = 'CONFIRMED', "cancelReason" = NULL, "closedAt" = NULL;
-      INSERT INTO "SalesOrder" SELECT * FROM o;
-      INSERT INTO "SalesOrderLine" SELECT * FROM l;
-      INSERT INTO "SalesOrderLineSize" SELECT * FROM s;
-      DROP TABLE o, l, s;`)
-  }
-  const setStatus = (number: string, status: string) =>
-    rulesOff(`UPDATE "SalesOrder" SET status = '${status}', "closedAt" = ${status === 'CLOSED' || status === 'CANCELLED' ? 'now()' : 'NULL'}, "cancelReason" = ${status === 'CANCELLED' ? "'Made-up: the customer withdrew it.'" : 'NULL'} WHERE "tenantId" = '${tenant}' AND number = '${number}';`)
   /** The order's kept production row at a stage (made, or moved to it). */
   const keep = (number: string, stage: string) =>
     rulesOff(`INSERT INTO "BrandOrderProduction" (id, "tenantId", "companyId", "partyId", "salesOrderId", key, stage, "stageAt")

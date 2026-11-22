@@ -646,6 +646,93 @@ describe('B-CW-010…015 the row: the urgency state, a new yes, an extra deposit
 })
 // ── end B-CW-010 / B-CW-011 / B-CW-012 / B-CW-014 / B-CW-015 ──
 
+// ── B-CW-013 / B-CW-020 (customer Work tab plan §2, §2.8): ready now; nothing is "now" unless the order's stage is current ──
+/**
+ * Stands on T-CW-A-NOW, a made-up copy of the seeds' SEED-SO-0001 for customer A (CONFIRMED) whose kept row says Ready to ship,
+ * Late, waiting on us, with one customer request OPEN on it; and on the seeds' SEED-SO-0002 (its work order SEED-WO-0001 in
+ * progress, one released garment on no shipment). States are set past the order's own rules (the guards off: only the read is
+ * under test) and put back.
+ */
+describe('B-CW-013 / B-CW-020 ready now; nothing is "now" for an order waiting for a yes, shipped, delivered, closed or cancelled', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const rulesOff = (statements: string) => admin(`BEGIN; SET LOCAL session_replication_role = replica; ${statements} COMMIT;`)
+  const today = () => businessDate(new Date())
+  const setStatus = (orderId: string, status: string) =>
+    rulesOff(`UPDATE "SalesOrder" SET status = '${status}', "closedAt" = ${status === 'CLOSED' || status === 'CANCELLED' ? 'now()' : 'NULL'}, "cancelReason" = ${status === 'CANCELLED' ? "'Made-up: the customer withdrew it.'" : 'NULL'} WHERE id = '${orderId}';`)
+  const COLUMNS = [
+    { key: 'number', label: 'Number' },
+    { key: 'whereItIs', label: 'Where it is' },
+    { key: 'waitingOn', label: 'Waiting on' },
+    { key: 'held', label: 'On hold' },
+  ]
+  let nowOrder: string
+
+  beforeAll(async () => {
+    const sales = grantOf('sales', 'all')
+    SESSIONS.noWork ??= { audience: 'office', tenantId: T, actorId: PEOPLE.noWork, companyId: companyA, grants: [{ ...sales, permissions: sales.permissions.filter((permission) => permission !== 'workorders.view') }] }
+    nowOrder = await copyOrder('T-CW-A-NOW', partyA, dayPlus(40))
+    await rulesOff(`INSERT INTO "BrandOrderProduction" (id, "tenantId", "companyId", "partyId", "salesOrderId", key, stage, "stageAt", health, "healthAt", "waitingOn", "waitingSince")
+      SELECT '${newId()}', o."tenantId", o."companyId", o."partyId", o.id, 'brand-production:' || o.id, 'READY', now(), 'LATE', now(), 'US', now() FROM "SalesOrder" o WHERE o.id = '${nowOrder}';`)
+    await admin(`INSERT INTO "OrderChangeRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, status) SELECT $1, o."tenantId", o."companyId", o."partyId", o.id, 'RUSH', 'OPEN' FROM "SalesOrder" o WHERE o.id = $2`, [newId(), nowOrder])
+  }, 120_000)
+
+  it('B-CW-020 current: the kept stage, health and wait; any other state: all null, not held, 0 ready — the open request and the mark stay; the file\'s cells are empty', async () => {
+    const current = (await rowOf('owner', 'T-CW-A-NOW', 'production=true')).production
+    expect(current).toMatchObject({ stage: 'READY', stageSince: today(), stageByHand: null, health: 'LATE', waitingOn: 'US', held: false, openRequests: 1, openIssues: 0, readyNow: 0, withheld: [] })
+    expect(current.since).toEqual(expect.any(String))
+    const before = (await filed('owner', 'rows=all', COLUMNS)).rows.find((row) => row.Number === 'T-CW-A-NOW')!
+    expect(before['Where it is']).toBe('Ready to ship · Late')
+    expect(before['Waiting on']).toBe('Waiting on us')
+    try {
+      for (const status of ['PENDING_APPROVAL', 'SHIPPED', 'DELIVERED', 'CLOSED', 'CANCELLED']) {
+        await setStatus(nowOrder, status)
+        const row = await rowOf('owner', 'T-CW-A-NOW', 'production=true')
+        expect(row.status, status).toBe(status)
+        expect(row.production, status).toMatchObject({ stage: null, stageSince: null, stageByHand: null, health: null, waitingOn: null, since: null, held: false, readyNow: 0 })
+        // A request still waits, and the office-only parts stay as they were.
+        expect(row.production, status).toMatchObject({ openRequests: 1, openIssues: 0, supervisorMark: current.supervisorMark, withheld: [] })
+      }
+      // Cancelled: the file writes nothing for "now" (its Status column says where the order is).
+      const after = (await filed('owner', 'rows=all', COLUMNS)).rows.find((row) => row.Number === 'T-CW-A-NOW')!
+      expect({ where: after['Where it is'], waiting: after['Waiting on'], held: after['On hold'] }).toEqual({ where: '', waiting: '', held: '' })
+    } finally {
+      await setStatus(nowOrder, 'CONFIRMED')
+    }
+    // Back to confirmed: the kept row was never touched (the read alone changed).
+    expect((await rowOf('owner', 'T-CW-A-NOW', 'production=true')).production).toMatchObject({ stage: 'READY', health: 'LATE', waitingOn: 'US' })
+  })
+
+  it("B-CW-013 ready now is the order read's own number for every reader of the order; with a work order on hold the row is held — both only while current", async () => {
+    for (const [number, orderId] of [['SEED-SO-0002', order2], ['SEED-SO-0001', order1], ['T-CW-A-NOW', nowOrder]] as const) {
+      const row = await rowOf('owner', number, 'production=true')
+      expect(row.production.readyNow, number).toBe((await ok('owner', 'GET', `/sales/orders/${orderId}`)).order.progress.readyNow)
+    }
+    const second = (await rowOf('owner', 'SEED-SO-0002', 'production=true')).production
+    expect(second.readyNow).toBeGreaterThan(0) // the seeds: one released garment of SEED-SO-0002 is on no shipment
+    // No shipping right and no workorders.view needed: the order read gives the number to every reader of the order.
+    expect((await rowOf('noWork', 'SEED-SO-0002', 'production=true')).production.readyNow).toBe(second.readyNow)
+    expect((await rowOf('planner', 'SEED-SO-0002', 'production=true')).production.readyNow).toBe(second.readyNow)
+    // One live work order of it put on hold, then the order shipped: held and ready only while current.
+    const [workOrder] = await admin<{ id: string; status: string }>(
+      `SELECT DISTINCT wo.id, wo.status::text AS status FROM "WorkOrder" wo JOIN "WorkOrderSize" c ON c."workOrderId" = wo.id JOIN "SalesOrderLine" l ON l.id = c."salesOrderLineId"
+        WHERE l."orderId" = $1 AND wo.kind <> 'REPAIR' AND wo.status NOT IN ('DRAFT', 'CANCELLED', 'ON_HOLD') ORDER BY wo.id LIMIT 1`,
+      [order2],
+    )
+    expect(workOrder).toBeDefined()
+    const order = await one<{ status: string }>('SELECT status::text AS status FROM "SalesOrder" WHERE id = $1', [order2])
+    await rulesOff(`UPDATE "WorkOrder" SET "heldFromStatus" = status, status = 'ON_HOLD' WHERE id = '${workOrder!.id}';`)
+    try {
+      expect((await rowOf('owner', 'SEED-SO-0002', 'production=true')).production).toMatchObject({ held: true, readyNow: second.readyNow })
+      await rulesOff(`UPDATE "SalesOrder" SET status = 'SHIPPED' WHERE id = '${order2}';`)
+      expect((await rowOf('owner', 'SEED-SO-0002', 'production=true')).production).toMatchObject({ stage: null, health: null, waitingOn: null, since: null, held: false, readyNow: 0 })
+    } finally {
+      await rulesOff(`UPDATE "SalesOrder" SET status = '${order.status}' WHERE id = '${order2}'; UPDATE "WorkOrder" SET status = '${workOrder!.status}', "heldFromStatus" = NULL WHERE id = '${workOrder!.id}';`)
+    }
+    // Put back: as it read before the hold.
+    expect((await rowOf('owner', 'SEED-SO-0002', 'production=true')).production).toMatchObject({ held: second.held, readyNow: second.readyNow })
+  })
+})
+// ── end B-CW-013 / B-CW-020 ──
+
 // ── B-OM-002 (order money tab M1-B3, B9): ONE still-to-pay rule — the row, the order read's `money`; a cancelled order owes 0 ──
 // (last in the file: its cancelled copy of an order is no row of the cases above)
 describe('B-OM-002 the order read says the row\'s still to pay; a cancelled order owes nothing', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {

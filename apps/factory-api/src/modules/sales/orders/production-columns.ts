@@ -4,14 +4,17 @@ import { can, type Actor } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { effectiveHealth, type BrandHealth, type HealthRaise, type HealthReasonCode } from '@nexus/factory-domain/production-brand/health'
 import type { BrandStage } from '@nexus/factory-domain/production-brand/stages'
+import { officeStripStateOf } from '@nexus/factory-domain/production-brand/stages' // B-CW-020
 // B-CW-002 / B-CW-003: the phase rule (its statuses, its counts).
 import { PHASE_STATUSES, phaseCountsOf, type OrderPhase } from '@nexus/factory-domain/production-brand/stages'
 import type { SalesOrderStatus } from '@nexus/factory-domain/sales/orders/orders'
+import { OPEN_STATUSES } from '@nexus/factory-domain/sales/orders/orders' // B-CW-021
 import type { SupervisorMark } from '@nexus/factory-domain/production-brand/supervisor'
 import type { WaitingOn } from '@nexus/factory-domain/production-brand/waiting'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import { ValidationError } from '@nexus/factory-domain/core/errors'
 import { brandProductionKey, orderSupervisorMarksOf } from '../../production/supervisor/resolver'
+import { readBackorders } from '../../shipping/shipments/backorder' // B-CW-013
 import { dayOf, type Reader } from './store'
 
 /**
@@ -35,12 +38,22 @@ import { dayOf, type Reader } from './store'
  *                       withheld with `openIssues` (the name `openIssues` in `withheld` covers both: no new name). A time only:
  *                       never the issue's words, its task or who answers it.
  *
- * Queries per page: the stored rows, the held cells, the requests, and — only for a reader with workorders.view over some row — the
- * issues and the supervisor marks (two reads). Every row is an order the reader's orders.view already reaches (the list's scopeWhere):
- * nothing of another customer is read into it. Pieces stay `progress=true` (./later-columns).
+ *   readyNow            B-CW-013: the garments ready to ship now — released by quality and on no shipment yet — by Warehouse's
+ *                       backorder rule, the order read's own number (./store readShipFigures: the same for every orders.view reader)
  *
- * The term `waiting=us` (`waitingUsWhere`) keeps the orders the keeper says wait on us, or with a customer request still OPEN: the
- * customer's Work tab's view "Waiting on us". The term `ids=` (≤ 50, comma separated) re-reads only the rows in view (a live re-read).
+ * B-CW-020 (customer Work tab plan §2.8; the order page's rule, ./production-read): nothing is "now" unless the order's stage is
+ * current (CONFIRMED, IN_PRODUCTION, READY, PARTLY_SHIPPED: factory-domain officeStripStateOf CURRENT). Waiting for a yes, shipped,
+ * delivered, closed or cancelled: `stage`, `stageSince`, `stageByHand`, `health`, `waitingOn` and `since` are null, `held` is false and
+ * `readyNow` is 0 — the keeper leaves such an order's last row alone, so it would say "Ready to ship · Late" for ever. The open
+ * requests, the open issues and the supervisor mark stay (a request still waits).
+ *
+ * Queries per page: the stored rows, the held cells, the requests, the backorder figures of the orders whose stage is current (about
+ * six reads), and — only for a reader with workorders.view over some row — the issues and the supervisor marks (two reads). Every row
+ * is an order the reader's orders.view already reaches (the list's scopeWhere): nothing of another customer is read into it. Pieces
+ * stay `progress=true` (./later-columns).
+ *
+ * The term `waiting=us` (`waitingUsWhere`) keeps the orders the keeper says wait on us (B-CW-021: only while it still keeps them), or
+ * with a customer request still OPEN: the customer's Work tab's view "Waiting on us". The term `ids=` (≤ 50, comma separated) re-reads only the rows in view (a live re-read).
  */
 
 /** The parts of the production columns a reader without workorders.view over the order does not get (null, named here). */
@@ -61,6 +74,8 @@ export interface ProductionColumns {
   readonly openIssues: number | null
   /** B-CW-014: when the oldest open production issue was raised (null: none open, or withheld as `openIssues` is). */
   readonly openIssuesSince: string | null
+  /** B-CW-013: the garments released and on no shipment yet (0 unless the order's stage is current). */
+  readonly readyNow: number
   readonly withheld: ProductionWithheld[]
 }
 
@@ -68,6 +83,8 @@ export interface ProductionOrder {
   readonly id: string
   readonly companyId: string
   readonly partyId: string
+  /** B-CW-020: the order's status — nothing is "now" unless its stage is current. */
+  readonly status: SalesOrderStatus
 }
 
 /** The stored health columns of an order's production row. */
@@ -92,8 +109,15 @@ export function shownHealthOf(row: StoredHealth, today: BusinessDate): BrandHeal
   return effectiveHealth(row.health as BrandHealth | null, standingRaiseOf(row, today)).health
 }
 
-/** `waiting=us`: the keeper says the order waits on us, or a customer request on it is still OPEN. */
-export const waitingUsWhere: Prisma.SalesOrderWhereInput = { OR: [{ brandProductions: { some: { waitingOn: 'US' } } }, { changeRequests: { some: { status: 'OPEN' } } }] }
+/**
+ * `waiting=us`: the keeper says the order waits on us, or a customer request on it is still OPEN.
+ * B-CW-021 (A2-B2): the keeper's word counts only while it still keeps the order (CONFIRMED, IN_PRODUCTION, READY, PARTLY_SHIPPED).
+ * With no blocker it writes "us" and then leaves the row alone, so a shipped, closed or cancelled order's last row said "us" for
+ * ever. An OPEN request waits on us in any state.
+ */
+export const waitingUsWhere: Prisma.SalesOrderWhereInput = {
+  OR: [{ status: { in: [...OPEN_STATUSES] }, brandProductions: { some: { waitingOn: 'US' } } }, { changeRequests: { some: { status: 'OPEN' } } }],
+}
 
 // ── B-CW-002 / B-CW-003 (customer Work tab plan §1; lead settle S17): the `phase` term and the phases' counts — ONE rule ──
 /**
@@ -182,8 +206,14 @@ export async function orderProductionColumns(client: Reader, actor: Actor, viewe
   const issuesOf = new Map(issues.flatMap((row) => (row.salesOrderId ? [[row.salesOrderId, row._count._all] as const] : [])))
   const issuesSinceOf = new Map(issues.flatMap((row) => (row.salesOrderId && row._min.raisedAt ? [[row.salesOrderId, row._min.raisedAt] as const] : [])))
   const marks = seen.length > 0 ? await orderSupervisorMarksOf(client, seen, viewerId) : new Map<string, SupervisorMark>()
+  // B-CW-020: the orders whose stage is current — only they have a "now". B-CW-013: their garments ready to ship now (one read of
+  // the page's backorder figures; an order with nothing released reads 0).
+  const current = new Set(orders.filter((order) => officeStripStateOf(order.status) === 'CURRENT').map((order) => order.id))
+  const backorders = current.size > 0 ? await readBackorders(client, [...current], null) : null
+  const readyNowOf = (orderId: string): number => (backorders?.get(orderId) ?? []).reduce((sum, line) => sum + line.sizes.reduce((count, size) => count + size.readyNow, 0), 0)
   for (const order of orders) {
-    const row = rowOf.get(order.id)
+    const now = current.has(order.id) // B-CW-020
+    const row = now ? rowOf.get(order.id) : undefined
     const sees = seenIds.has(order.id)
     out.set(order.id, {
       stage: row ? (row.stage as BrandStage) : null,
@@ -192,11 +222,12 @@ export async function orderProductionColumns(client: Reader, actor: Actor, viewe
       health: row ? shownHealthOf(row, today) : null,
       waitingOn: (row?.waitingOn as WaitingOn | null | undefined) ?? null,
       since: row?.waitingSince ? toUtcIso(row.waitingSince) : null,
-      held: held.has(order.id),
+      held: now && held.has(order.id), // B-CW-020
       supervisorMark: sees ? (marks.get(order.id) ?? 'NOT_SET') : null,
       openRequests: requestsOf.get(order.id) ?? 0,
       openIssues: sees ? (issuesOf.get(order.id) ?? 0) : null,
       openIssuesSince: sees && issuesSinceOf.has(order.id) ? toUtcIso(issuesSinceOf.get(order.id)!) : null, // B-CW-014
+      readyNow: now ? readyNowOf(order.id) : 0, // B-CW-013 (B-CW-020: 0 unless current)
       withheld: sees ? [] : [...PRODUCTION_WITHHELD],
     })
   }

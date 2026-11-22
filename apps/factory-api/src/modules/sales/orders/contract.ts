@@ -644,6 +644,13 @@ export const listOrdersContract = defineContract({
             openIssues: z.number().int().nullable(),
             /** B-CW-014: when the oldest open production issue was raised; null: none open, or withheld with `openIssues` (that name in `withheld` covers both). */
             openIssuesSince: instant().nullable(),
+            /**
+             * B-CW-013: the garments ready to ship now (released by quality, on no shipment yet): the order read's own number, for
+             * every reader of the order. B-CW-020: 0 unless the order's stage is current — and then `stage`, `stageSince`,
+             * `stageByHand`, `health`, `waitingOn` and `since` are null and `held` is false (nothing is "now" for an order waiting for
+             * a yes, shipped, delivered, closed or cancelled).
+             */
+            readyNow: z.number().int(),
             withheld: z.array(z.enum(PRODUCTION_WITHHELD)),
           }).optional(),
           // ── B-CP-018 (customer page plan C2d): the price check, read only for a price holder (absent without the price grain) ──
