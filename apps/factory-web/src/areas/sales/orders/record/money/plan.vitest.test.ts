@@ -244,6 +244,76 @@ describe('F-OM-201: the plan\'s hand acts — orders.moneyPlan (amount acts: + t
   })
 })
 
+// ---- F-OM-fx3 (fix wave 3, the walk's W-01 / W-02 / W-03; B-OM-024, B-OM-025): a short deposit within the company's tolerance, a part
+// payment over it (never "short"), and an accepted short that leaves its trace. Every name and number is made up.
+describe('F-OM-fx3: short within the tolerance, part paid over it, accepted short', () => {
+  const PART = deposit({ link: SENT_LINK, paidAmount: 226884 })
+  const value = withRequests(order('CONFIRMED'), [PART])
+  const planned = (short: { amount?: number; withinTolerance: boolean } | null | undefined): Schedule => ({
+    ...SCHEDULE_OPEN,
+    requests: [{ id: PART.id, milestoneId: SCHEDULE.steps[0]!.id, kind: 'ACCONTO', stepKind: 'DEPOSIT', status: 'OPEN', dueDate: '2026-11-04', fiscalDocument: 'TD02', ...(short === undefined ? {} : { short }) }],
+    tolerance: 2500,
+  })
+
+  it('W-01: within the tolerance, Accept short (bank charges)… is the row\'s ONE act (Record a payment in its ⋯), with the hint and the answer', () => {
+    for (const [role, stepCan] of [['owner', OWNER_STEPS], ['finance', FINANCE_STEPS]] as const) {
+      const model = plan(value, { schedule: planned({ amount: 1500, withinTolerance: true }), role, stepCan, moneyPlan: true, stillToPay: 534396 })
+      const row = model.rows[0]!
+      expect(row.act?.id, role).toBe('ACCEPT_SHORT')
+      expect(row.more.map((entry) => entry.id), role).toContain('record')
+      expect(row.short, role).toEqual({ amount: 1500, within: true })
+      expect(row.hint, role).toEqual({ key: 'moneyTab.plan.shortHint', money: { amount: 1500 } })
+      expect(model.answer.map((entry) => entry.key), role).toContain('moneyTab.plan.answer.short')
+      expect(model.answer.find((entry) => entry.key === 'moneyTab.plan.answer.short'), role).toEqual({ key: 'moneyTab.plan.answer.short', money: { amount: 1500 } })
+    }
+    // A reader who may not accept it (no plan right): Record a payment stays the act, no Accept short anywhere.
+    const plain = plan(value, { schedule: planned({ amount: 1500, withinTolerance: true }), role: 'finance', stepCan: FINANCE_STEPS })
+    expect(acts(plain.rows[0]!)[0]).toBe('record')
+    expect(acts(plain.rows[0]!)).not.toContain('ACCEPT_SHORT')
+  })
+
+  it('W-02: over the tolerance (or not said), a part payment is "part paid", never short; Accept short only for orders.waive (the Owner)', () => {
+    for (const short of [{ amount: 1500, withinTolerance: false }, undefined, null]) {
+      const finance = plan(value, { schedule: planned(short), role: 'finance', stepCan: FINANCE_STEPS, moneyPlan: true, stillToPay: 534396 })
+      const row = finance.rows[0]!
+      expect(row.short?.within, JSON.stringify(short)).toBe(false)
+      expect(row.hint, JSON.stringify(short)).toBeNull()
+      expect(acts(row), JSON.stringify(short)).not.toContain('ACCEPT_SHORT')
+      expect(row.act?.id, JSON.stringify(short)).toBe('record')
+      expect(finance.answer.map((entry) => entry.key), JSON.stringify(short)).toContain('moneyTab.plan.answer.partPaid')
+      expect(finance.answer.map((entry) => entry.key), JSON.stringify(short)).not.toContain('moneyTab.plan.answer.short')
+      // The Owner (orders.waive) may accept it — never as the row's ONE act (a fresh code follows).
+      const owner = plan(value, { schedule: planned(short), role: 'owner', stepCan: OWNER_STEPS, moneyPlan: true }).rows[0]!
+      expect(owner.act?.id, JSON.stringify(short)).toBe('record')
+      expect(owner.more.map((entry) => entry.id), JSON.stringify(short)).toContain('ACCEPT_SHORT')
+    }
+  })
+
+  it('W-02: a reader without the price grain learns "part paid" from the plan read (no amount), never "short"', () => {
+    const words = plan(value, { schedule: planned({ withinTolerance: true }), role: 'sales', stepCan: null })
+    const row = words.rows[0]!
+    expect(row.pill.word.key).toBe('moneyTab.plan.pill.PART')
+    expect(row.short).toEqual({ amount: null, within: true })
+    expect(row.hint).toBeNull()
+    expect(words.answer).toEqual([{ key: 'moneyTab.plan.answer.partPaid' }])
+    expect(words.answer.flatMap(amountsOf)).toEqual([])
+  })
+
+  it('W-03: an accepted short tags the row "Set by hand" with who, day and reason, and says the missing part stays owed', () => {
+    const at = '2026-11-03T10:05:00.000Z'
+    const accepted = deposit({ link: SENT_LINK, status: 'PAID', paidAt: at, paidAmount: 228284 })
+    const schedule: Schedule = { ...SCHEDULE, requests: [{ id: accepted.id, milestoneId: SCHEDULE.steps[0]!.id, kind: 'ACCONTO', stepKind: 'DEPOSIT', status: 'PAID', dueDate: '2026-11-04', fiscalDocument: 'TD02', acceptedShort: { short: 100, why: 'BANK_CHARGES', reason: 'The bank kept its charges.', at, by: 'Bea Esempio' } }] }
+    const row = plan(withRequests(order('CONFIRMED'), [accepted]), { schedule }).rows[0]!
+    expect(row.byHand).toEqual({ word: { key: 'moneyTab.plan.byHand.who', words: { what: { key: 'moneyTab.plan.byHand.what.ACCEPT_SHORT' } }, params: { by: 'Bea Esempio' }, instants: { date: at } }, reason: 'The bank kept its charges.' })
+    expect(row.notes.map((note) => note.word)).toContainEqual({ key: 'moneyTab.plan.note.owedOnInvoice', money: { amount: 100 } })
+    expect(row.pill.word.key).toBe('moneyTab.plan.pill.PAID')
+    // Without the price grain: the words without the amount.
+    const words = plan(withRequests(order('CONFIRMED'), [accepted]), { schedule: { ...schedule, requests: schedule.requests!.map((request) => ({ ...request, acceptedShort: { ...request.acceptedShort!, short: undefined } })) }, role: 'sales', stepCan: null }).rows[0]!
+    expect(words.notes.map((note) => note.word)).toContainEqual({ key: 'moneyTab.plan.note.owedOnInvoiceWords' })
+    expect(words.notes.flatMap((note) => amountsOf(note.word))).toEqual([])
+  })
+})
+
 describe('F-OM-103: the head\'s answer', () => {
   it('still open · overdue · next (price); the plan read\'s figures first, else Totals\' one rule', () => {
     const answer = plan(order('CONFIRMED'), { stillToPay: 761280 }).answer

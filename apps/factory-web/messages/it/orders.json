@@ -3176,8 +3176,8 @@
       "extraOpenFrom": "acconto aggiuntivo di {amount} aperto (modifica rev {revision})",
       "extraOpenWords": "è aperto un acconto aggiuntivo",
       "extraOpenFromWords": "è aperto un acconto aggiuntivo (modifica rev {revision})",
-      "depositShort": "all'acconto mancano {amount}",
-      "depositPartPaid": "acconto pagato in parte",
+      "depositShort": "all'acconto mancano {amount} — probabilmente spese bancarie",
+      "depositPartPaid": "l'acconto è pagato in parte",
       "depositOpen": "acconto di {amount} aperto, scade il {date}",
       "depositOpenWords": "acconto aperto, scade il {date}",
       "depositOverdue": "acconto di {amount} scaduto dal {date}",
@@ -3314,7 +3314,9 @@
         "productionWaits": "La produzione aspetta questo acconto",
         "extraWaits": "I nuovi ordini di lavoro lo aspettano; quelli rilasciati continuano",
         "holdsShipment": "Blocca la spedizione finché non è pagata",
-        "paidWithInvoice": "Pagata quando è pagata la fattura della merce"
+        "paidWithInvoice": "Pagata quando è pagata la fattura della merce",
+        "owedOnInvoice": "{amount} resta dovuto e va sulla fattura finale",
+        "owedOnInvoiceWords": "La parte mancante resta dovuta e va sulla fattura finale"
       },
       "act": {
         "send": "Invia la pagina",
@@ -3393,7 +3395,9 @@
         "stillOpen": "ancora aperto {amount}",
         "overdue": "scaduto {amount}",
         "nextDue": "prossimo: {what}, scade il {date}",
-        "next": "prossimo: {what}"
+        "next": "prossimo: {what}",
+        "short": "all'acconto mancano {amount}",
+        "partPaid": "l'acconto è pagato in parte"
       },
       "held": {
         "moneyPlaced": "Ci sono già pagamenti: annulla prima il pagamento.",
@@ -3401,7 +3405,8 @@
         "dayFromInvoice": "La sua scadenza viene dalla fattura.",
         "final": "L'ordine è chiuso: il suo piano non cambia più.",
         "nothingFree": "Ogni rata ha già dei pagamenti: non c'è una rata aperta da cui prendere."
-      }
+      },
+      "shortHint": "Mancano {amount}: spesso la banca trattiene una commissione sul bonifico. Accettalo come spese bancarie, o chiedi il resto al cliente."
     },
     "invoices": {
       "title": "Fatture e note di credito",

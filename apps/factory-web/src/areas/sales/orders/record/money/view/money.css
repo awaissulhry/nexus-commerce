@@ -113,6 +113,9 @@
   .fw-om-sx > li:last-child::before { display: none; }
   .fw-om-sx > li.is-done::before { background: var(--nds-primary); }
 }
+/* F-OM-fx3 (W-01): short within the company's tolerance — the hint inside the request box. */
+.fw-om-rq-hint { margin: 0; display: flex; gap: var(--nds-space-6); align-items: flex-start; font-size: var(--nds-font-size-xs); color: var(--nds-text-2); line-height: 1.45; }
+.fw-om-rq-hint > svg { flex: none; margin-top: var(--nds-space-2); color: var(--nds-text-muted); }
 .fw-om-py { display: flex; flex-direction: column; min-width: 0; }
 .fw-om-py-h { font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-muted); padding-bottom: var(--nds-space-4); border-bottom: 1px solid var(--nds-border); }
 .fw-om-py-r { display: flex; justify-content: space-between; gap: var(--nds-space-4) var(--nds-space-12); flex-wrap: wrap; padding: var(--nds-space-6) 0; border-bottom: 1px solid var(--nds-border-subtle); font-size: var(--nds-font-size-sm); }

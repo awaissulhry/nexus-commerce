@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { Banknote, Factory, Hand, Receipt, Send, Truck } from 'lucide-react'
+import { Banknote, Factory, Hand, Info, Receipt, Send, Truck } from 'lucide-react'
 import type { MenuItemDef } from '@nexus/ui/components'
 import { Button, ExpandToggle, Pill, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../../lib/i18n/format'
@@ -76,7 +76,7 @@ export function PlanRowView({ row, order, model, actions, say, final }: { row: P
         </Link>
       </Button>
     ) : (
-      <Button size="sm" variant={act.id === 'record' || act.id === 'send' ? 'primary' : 'secondary'} heldReason={heldOf(act)} onClick={() => run(act)}>
+      <Button size="sm" variant={act.id === 'record' || act.id === 'send' || act.id === 'ACCEPT_SHORT' /* F-OM-fx3 (W-01) */ ? 'primary' : 'secondary'} heldReason={heldOf(act)} onClick={() => run(act)}>
         {act.id === 'send' ? <Send size={13} aria-hidden /> : act.id === 'record' ? <Banknote size={13} aria-hidden /> : null} {say(act.label)}
       </Button>
     )
@@ -154,7 +154,7 @@ export function PlanRowView({ row, order, model, actions, say, final }: { row: P
           <LineMenuButton label={t('moneyTab.plan.more', { row: title })} items={items} />
         </div>
       </div>
-      {row.unfolds && open && request ? <RequestBox row={row} request={request} order={order} model={model} actions={actions} invoiceHref={invoiceHref} /> : null}
+      {row.unfolds && open && request ? <RequestBox row={row} request={request} order={order} model={model} actions={actions} invoiceHref={invoiceHref} say={say} /> : null}
     </div>
   )
 }
@@ -189,7 +189,7 @@ function StepDot({ state }: { state: DepositStepState }) {
  * that needs no TD02 says so on its last two). Without invoices.view the TD02 step says "Issued", never its number (P0-B3). Its
  * payments come with the plan read (payments.view; amounts with the price grain); before it, the request's paid sum.
  */
-function RequestBox({ row, request, order, model, actions, invoiceHref }: { row: PlanRow; request: DepositRequest; order: Order; model: OrderRecordModel; actions?: OrderRecordActions; invoiceHref: (id: string, number: string | null) => string }) {
+function RequestBox({ row, request, order, model, actions, invoiceHref, say }: { row: PlanRow; request: DepositRequest; order: Order; model: OrderRecordModel; actions?: OrderRecordActions; invoiceHref: (id: string, number: string | null) => string; say: Say }) {
   const t = useT('orders')
   const locale = useLocale()
   const day = (value: string) => formatDate(dayInstant(value), { locale })
@@ -294,6 +294,13 @@ function RequestBox({ row, request, order, model, actions, invoiceHref }: { row:
           </li>
         ))}
       </ol>
+      {/* F-OM-fx3 (W-01): short within the company's tolerance — the hint (price grain), for a reader of its payments. */}
+      {row.hint && model.can.viewPayments ? (
+        <p className="fw-om-rq-hint">
+          <Info size={13} aria-hidden />
+          <span>{say(row.hint)}</span>
+        </p>
+      ) : null}
       {model.can.viewPayments ? (
         <div className="fw-om-py">
           <span className="fw-om-py-h">{t('moneyTab.plan.payments.title')}</span>

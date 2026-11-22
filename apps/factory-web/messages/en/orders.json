@@ -3176,8 +3176,8 @@
       "extraOpenFrom": "extra deposit {amount} open (change rev {revision})",
       "extraOpenWords": "an extra deposit is open",
       "extraOpenFromWords": "an extra deposit is open (change rev {revision})",
-      "depositShort": "deposit {amount} short",
-      "depositPartPaid": "deposit part paid",
+      "depositShort": "deposit {amount} short — probably bank charges",
+      "depositPartPaid": "the deposit is part paid",
       "depositOpen": "deposit {amount} open, due {date}",
       "depositOpenWords": "deposit open, due {date}",
       "depositOverdue": "deposit {amount} overdue since {date}",
@@ -3314,7 +3314,9 @@
         "productionWaits": "Production waits for this deposit",
         "extraWaits": "New work orders wait for it; released ones keep running",
         "holdsShipment": "Holds the shipment until it is paid",
-        "paidWithInvoice": "Paid when the goods' invoice is paid"
+        "paidWithInvoice": "Paid when the goods' invoice is paid",
+        "owedOnInvoice": "{amount} stays owed and goes on the final invoice",
+        "owedOnInvoiceWords": "The missing part stays owed and goes on the final invoice"
       },
       "act": {
         "send": "Send the page",
@@ -3393,7 +3395,9 @@
         "stillOpen": "still open {amount}",
         "overdue": "overdue {amount}",
         "nextDue": "next: {what}, due {date}",
-        "next": "next: {what}"
+        "next": "next: {what}",
+        "short": "the deposit is {amount} short",
+        "partPaid": "the deposit is part paid"
       },
       "held": {
         "moneyPlaced": "Money is placed on it: undo the payment first.",
@@ -3401,7 +3405,8 @@
         "dayFromInvoice": "Its day comes from the invoice.",
         "final": "The order is closed: its plan no longer changes.",
         "nothingFree": "Every step has money on it already: there is no open step to take it from."
-      }
+      },
+      "shortHint": "{amount} short: banks often keep a fee on a transfer. Accept it as bank charges, or ask the customer for the rest."
     },
     "invoices": {
       "title": "Invoices & credit notes",
