@@ -16,6 +16,8 @@ import { SPLIT_REASONS } from '../shipping/split/split'
  *   shipment.hold_released   a hold was released with words (by a person, or by the system when its cause is gone);
  *                            `stillHeld` when another hold is in force
  *   shipment.split           garments of a shipment moved onto a new shipment of the same order (by hand or by rule)
+ *   shipment.garments_moved  B-OS-011/012: garments of a DRAFT moved onto another DRAFT of the customer (merged: the emptied one
+ *                            cancelled)
  *   shipping.cut_offs_saved  a site's carrier cut-offs were saved
  */
 const reason = z.enum(SHIPMENT_HOLD_REASONS)
@@ -52,6 +54,24 @@ export const events = [
     }),
     live: { permission: 'shipping.view', floor: 'shipping.pack', fields: ['shipmentId', 'number', 'splitFromId', 'fromNumber', 'reason'] },
   }),
+  // ── B-OS-011, B-OS-012 (order shipments tab; 13-backend §5): garments of a DRAFT moved onto another DRAFT (or merged into it) ──
+  defineEvent({
+    type: 'shipment.garments_moved',
+    context: 'shipping-queue',
+    description: "Garments of a DRAFT shipment moved onto another DRAFT shipment of the same customer and site; merged: every garment moved and the emptied DRAFT was cancelled.",
+    payload: z.strictObject({
+      shipmentId: z.uuid(),
+      number: z.string(),
+      toShipmentId: z.uuid(),
+      toNumber: z.string(),
+      merged: z.boolean(),
+      lines: z.number().int().min(1),
+      garments: z.number().int().min(1),
+      partyId: livePartyId(), // B-SA-004: the shipments' customer (Shipment.partyId, read on the server)
+    }),
+    live: { permission: 'shipping.view', floor: 'shipping.pack', fields: ['shipmentId', 'number', 'toShipmentId', 'toNumber', 'merged'] },
+  }),
+  // ── end B-OS-011, B-OS-012 ──
   defineEvent({
     type: 'shipping.cut_offs_saved',
     context: 'shipping-queue',

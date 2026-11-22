@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { garmentsLeft, groupsByPromise, movableOf, moveProblems, reasonProblems, type DeliveryChoice } from './split'
 import { groupMoveProblems, mergedAsks } from './split' // B-OS-010
+import { MOVE_REFUSALS, TAKE_OFF_REFUSALS, mergeProblems, mergedReason, moveRefusalPath, moveRefusalWords, takeOffRefusalWords } from './split' // B-OS-011 … 013
 
 // Made-up lines and days.
 const line = (id: string, quantity: number, packed = 0, serials = 0) => ({ id, quantity, packed, serials })
@@ -73,3 +74,28 @@ describe('split into several shipments at once (B-OS-010)', () => {
   })
 })
 // ---- end B-OS-010
+
+// ---- B-OS-011, B-OS-012, B-OS-013 (order shipments tab; X1 S2–S4): move, merge, take an order off ----
+describe('move, merge and take an order off (B-OS-011 … B-OS-013)', () => {
+  it('a merge moves every line whole: never one with garments in a carton or carrying serials, never an empty draft', () => {
+    expect(mergeProblems([line('a', 2), line('b', 1)])).toBeNull()
+    expect(mergeProblems([line('a', 2, 1)])).toBe('MERGE_PACKED')
+    expect(mergeProblems([line('a', 2, 0, 1)])).toBe('MERGE_PACKED')
+    expect(mergeProblems([])).toBe('NOTHING_TO_MOVE')
+  })
+
+  it('the emptied draft is cancelled "Merged into …", with the office’s words when given (never blank)', () => {
+    expect(mergedReason('SH-00012')).toBe('Merged into SH-00012')
+    expect(mergedReason('SH-00012', '  one truck  ')).toBe('Merged into SH-00012: one truck')
+    expect(mergedReason('SH-00012', '   ')).toBe('Merged into SH-00012')
+  })
+
+  it('every refusal has its words and its path; a target’s join reason is refusal/JOIN_<CODE>', () => {
+    for (const code of MOVE_REFUSALS) expect(moveRefusalWords(code, { number: 'SH-00012', target: 'SH-00015', status: 'PACKED' }).length, code).toBeGreaterThan(10)
+    for (const code of TAKE_OFF_REFUSALS) expect(takeOffRefusalWords(code, { number: 'SH-00012', order: 'SO-00003', status: 'PACKED' }).length, code).toBeGreaterThan(10)
+    expect(moveRefusalWords('NOTHING_STAYS', { number: 'SH-00012', target: 'SH-00015' })).toBe('Everything of SH-00012 would move: merge it into SH-00015 instead.')
+    expect(takeOffRefusalWords('FIRST_ORDER', { number: 'SH-00012', order: 'SO-00002' })).toBe("Shipment SH-00012 was made for SO-00002: move the other orders' garments with Split… or Move garments to…, then cancel it.")
+    expect(moveRefusalPath('JOIN_SHIP_TO')).toBe('refusal/JOIN_SHIP_TO')
+  })
+})
+// ---- end B-OS-011, B-OS-012, B-OS-013

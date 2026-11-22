@@ -229,3 +229,122 @@ describe('B-OS-010: split into several shipments in ONE command', () => {
   })
 })
 // ---- end B-OS-010
+
+// ---- B-OS-013 (X1 S4): take SEED-SO-0003 off a shared DRAFT in one command ------------------------------------------------
+describe('B-OS-013: take an order off a shared DRAFT in ONE command', () => {
+  it('never its first order, never garments in a carton; then every line of the order comes off at once (orders_changed REMOVED)', async () => {
+    const shared = (await ok('warehouse', 'POST', '/shipping/shipments', { salesOrderId: so2(), siteId: A.siteA1 }, 201)).shipment
+    ids.shared = shared.id
+    // SEED-SO-0003's free jacket joins it (the customer's other order, the same address and terms).
+    const joined = (await ok('warehouse', 'POST', `/shipping/shipments/${shared.id}/lines`, { version: shared.version, lines: [{ workOrderSizeId: seedA.quality.serialCellId, quantity: 1 }] })).shipment
+    const jacketLine = lineOf(joined, seedA.quality.serialCellId)
+    const takeOff = (orderId: string) => `/shipping/shipments/${shared.id}/orders/${orderId}/take-off`
+    const reason = 'Seed: the customer wants SEED-SO-0003 later.'
+
+    await refusedFor('warehouse', 'POST', takeOff(so2()), { version: joined.version, reason }, 'FIRST_ORDER')
+    // An unknown order and another customer's: the same not-found (the brand wall).
+    const unknown = await refused('warehouse', 'POST', takeOff(newId()), { version: joined.version, reason }, 404)
+    expect((await refused('warehouse', 'POST', takeOff(ids.beta1!), { version: joined.version, reason }, 404)).message).toBe(unknown.message)
+    // The jacket in a carton (made up past the guards): it comes out of the carton first.
+    const parcelId = (await ok('warehouse', 'POST', `/shipping/packing/${shared.id}/parcels`, {}, 201)).parcelId as string
+    const contents = newId()
+    await force(`INSERT INTO "ParcelLine" (id, "tenantId", "siteId", "partyId", "shipmentId", "parcelId", "shipmentLineId", size, quantity) SELECT $1, "tenantId", "siteId", "partyId", "shipmentId", $2, id, size, 1 FROM "ShipmentLine" WHERE id = $3`, [contents, parcelId, jacketLine.id])
+    await refusedFor('warehouse', 'POST', takeOff(so3()), { version: (await shipmentOf(shared.id)).version, reason }, 'IN_CARTON')
+    await force(`DELETE FROM "ParcelLine" WHERE id = $1`, [contents])
+
+    const off = await ok('warehouse', 'POST', takeOff(so3()), { version: (await shipmentOf(shared.id)).version, reason })
+    expect(off.takenOff).toEqual({ salesOrderId: so3(), lines: 1, garments: 1 })
+    expect(off.shipment.lines).toEqual([])
+    expect(off.shipment.salesOrders.map((order: Json) => order.id)).toEqual([so2()])
+    expect(await admin(`SELECT reason, after->>'garments' AS garments FROM "AuditLog" WHERE "recordType" = 'Shipment' AND "recordId" = $1 AND action = 'shipping.takeOff'`, [shared.id])).toEqual([{ reason, garments: '1' }])
+    const changes = await admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE type = 'shipment.orders_changed' AND subject = $1 ORDER BY "occurredAt", id`, [shared.id])
+    expect(changes.map((row) => row.payload.change)).toEqual(['ADDED', 'REMOVED'])
+    // Nothing of it is left on it.
+    await refusedFor('warehouse', 'POST', takeOff(so3()), { version: off.shipment.version, reason }, 'NOT_ON_IT')
+  })
+})
+// ---- end B-OS-013
+
+// ---- B-OS-011 (X1 S2): garments onto another DRAFT of the same customer ----------------------------------------------------
+describe('B-OS-011: move garments to another DRAFT, by the join rules of the target', () => {
+  it('the targets: the other DRAFTs of the customer and site, each with its verdict for every order; never another customer’s', async () => {
+    ids.elsewhere = (await ok('warehouse', 'POST', '/shipping/shipments', { salesOrderId: ids.alpha2, siteId: A.siteA1 }, 201)).shipment.id
+    ids.betaDraft = (await ok('warehouse', 'POST', '/shipping/shipments', { salesOrderId: ids.beta1, siteId: A.siteA1 }, 201)).shipment.id
+    const read = await ok('warehouse', 'GET', `/shipping/shipments/${ids.child2}/move-targets`)
+    const target = (id: string) => (read.targets as Json[]).find((row) => row.id === id)
+    expect(target(ids.shared!)).toMatchObject({ orders: [{ id: so2() }], garments: 0, verdicts: [{ orderId: so2(), allowed: true, code: null, why: null }] })
+    expect(target(ids.child1!)).toMatchObject({ garments: 1, verdicts: [{ orderId: so2(), allowed: true }] })
+    // SO-ALPHA-2's draft goes to another address: SEED-SO-0002's garments may not join it.
+    expect(target(ids.elsewhere!)).toMatchObject({ orders: [{ id: ids.alpha2 }], verdicts: [{ orderId: so2(), allowed: false, code: 'SHIP_TO' }] })
+    expect(target(ids.child2!)).toBeUndefined()
+    expect(JSON.stringify(read)).not.toContain(ids.betaDraft)
+    expect(JSON.stringify(read)).not.toContain('SO-BETA-1')
+  })
+
+  it('refused in words: another address (JOIN_SHIP_TO), everything (use Merge), itself, a stale target, another customer’s target', async () => {
+    const source = await shipmentOf(ids.child2!)
+    const [red50, red54] = [lineOf(source, cell('RED-50')).id, lineOf(source, cell('RED-54')).id]
+    const url = `/shipping/shipments/${ids.child2}/move`
+    const shared = await shipmentOf(ids.shared!)
+    const elsewhere = await shipmentOf(ids.elsewhere!)
+    await refusedFor('warehouse', 'POST', url, { version: source.version, toShipmentId: ids.elsewhere, toVersion: elsewhere.version, lines: [{ lineId: red50, quantity: 1 }], reason: 'SHIP_TO' }, 'JOIN_SHIP_TO')
+    await refusedFor('warehouse', 'POST', url, { version: source.version, toShipmentId: ids.shared, toVersion: shared.version, lines: [{ lineId: red50, quantity: 1 }, { lineId: red54, quantity: 1 }], reason: 'OTHER' }, 'NOTHING_STAYS')
+    await refusedFor('warehouse', 'POST', url, { version: source.version, toShipmentId: ids.child2, lines: [{ lineId: red50, quantity: 1 }], reason: 'OTHER' }, 'SAME')
+    expect((await refused('warehouse', 'POST', url, { version: source.version, toShipmentId: ids.shared, toVersion: shared.version + 5, lines: [{ lineId: red50, quantity: 1 }], reason: 'OTHER' }, 409)).code).toBe('conflict')
+    const unknown = await refused('warehouse', 'POST', url, { version: source.version, toShipmentId: newId(), lines: [{ lineId: red50, quantity: 1 }], reason: 'OTHER' }, 404)
+    expect((await refused('warehouse', 'POST', url, { version: source.version, toShipmentId: ids.betaDraft, lines: [{ lineId: red50, quantity: 1 }], reason: 'OTHER' }, 404)).message).toBe(unknown.message)
+    // Nothing moved.
+    expect(((await shipmentOf(ids.child2!)).lines as Json[]).map((line) => line.quantity)).toEqual([1, 1])
+  })
+
+  it('RED 50 moves onto the shared draft in one command: both versions move, the hold comes along, garments_moved once', async () => {
+    const source = await shipmentOf(ids.child2!)
+    const target = await shipmentOf(ids.shared!)
+    const moved = await ok('warehouse', 'POST', `/shipping/shipments/${ids.child2}/move`, {
+      version: source.version,
+      toShipmentId: ids.shared,
+      toVersion: target.version,
+      lines: [{ lineId: lineOf(source, cell('RED-50')).id, quantity: 1 }],
+      reason: 'CUSTOMER_REQUEST',
+      words: 'Seed: the red ones travel together.',
+    })
+    expect(moved.moved).toEqual({ lines: 1, garments: 1, merged: false })
+    expect((moved.shipment.lines as Json[]).map((line) => [line.workOrderSizeId, line.quantity])).toEqual([[cell('RED-50'), 1]])
+    expect((moved.from.lines as Json[]).map((line) => [line.workOrderSizeId, line.quantity])).toEqual([[cell('RED-54'), 1]])
+    expect(moved.shipment.version).toBeGreaterThan(target.version)
+    expect(moved.from.version).toBeGreaterThan(source.version)
+    // The source's hold in force is carried (the shared draft had none).
+    expect(await holdsOf(ids.shared!)).toEqual(['CUSTOMER_REQUEST'])
+    const events = await admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE type = 'shipment.garments_moved' AND subject = $1`, [ids.child2])
+    expect(events.map((row) => row.payload)).toEqual([{ shipmentId: ids.child2, number: source.number, toShipmentId: ids.shared, toNumber: target.number, merged: false, lines: 1, garments: 1, partyId: A.alpha }])
+    expect(await admin(`SELECT "recordId"::text AS id, reason FROM "AuditLog" WHERE action = 'shipping.moveLines' AND "recordId"::text = ANY($1::text[]) ORDER BY "recordId"::text`, [[ids.child2, ids.shared]])).toEqual(
+      [ids.child2, ids.shared].sort().map((id) => ({ id, reason: 'Seed: the red ones travel together.' })),
+    )
+  })
+})
+// ---- end B-OS-011
+
+// ---- B-OS-012 (X1 S3): merge a DRAFT into another ---------------------------------------------------------------------------
+describe('B-OS-012: merge a DRAFT into another', () => {
+  it('every garment moves (a line of the same cell grows); the emptied DRAFT is CANCELLED "Merged into …", never deleted; the order read says so', async () => {
+    const source = await shipmentOf(ids.child3!)
+    const target = await shipmentOf(ids.child1!)
+    const merged = await ok('warehouse', 'POST', `/shipping/shipments/${ids.child3}/merge`, { version: source.version, intoShipmentId: ids.child1, intoVersion: target.version })
+    expect(merged.moved).toEqual({ lines: 1, garments: 1, merged: true })
+    expect((merged.shipment.lines as Json[]).map((line) => [line.workOrderSizeId, line.quantity])).toEqual([[cell('BLK-52'), 2]])
+    expect(merged.from).toMatchObject({ id: ids.child3, status: 'CANCELLED', cancelReason: `Merged into ${target.number}` })
+    expect(merged.from.lines).toEqual([])
+    expect(await admin(`SELECT status::text AS status FROM "Shipment" WHERE id = $1`, [ids.child3])).toEqual([{ status: 'CANCELLED' }])
+    // Its hold was carried (the target held it already: one in force) and released on the cancelled one.
+    expect(await holdsOf(ids.child3!)).toEqual([])
+    expect(await holdsOf(ids.child1!)).toEqual(['CUSTOMER_REQUEST'])
+    expect((await admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE type = 'shipment.garments_moved' AND subject = $1`, [ids.child3])).map((row) => row.payload.merged)).toEqual([true])
+    expect((await admin<{ payload: Json }>(`SELECT payload FROM "OutboxEvent" WHERE type = 'shipment.status_changed' AND subject = $1`, [ids.child3])).map((row) => row.payload.to)).toEqual(['CANCELLED'])
+    // B-OS-001: the order read's row names the shipment it was merged into.
+    const { order } = await ok('warehouse', 'GET', `/sales/orders/${so2()}`)
+    expect((order.chain.shipments as Json[]).find((row) => row.id === ids.child3)).toMatchObject({ status: 'CANCELLED', cancelReason: `Merged into ${target.number}`, mergedInto: { id: ids.child1, number: target.number } })
+    // A cancelled draft gives nothing more.
+    await refusedFor('warehouse', 'POST', `/shipping/shipments/${ids.child3}/merge`, { intoShipmentId: ids.child1 }, 'NOT_DRAFT')
+  })
+})
+// ---- end B-OS-012

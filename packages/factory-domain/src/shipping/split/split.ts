@@ -225,7 +225,7 @@ export function takeOffRefusalWords(code: TakeOffRefusalCode, facts: { readonly 
     case 'FIRST_ORDER':
       return `Shipment ${facts.number} was made for ${facts.order}: move the other orders' garments with Split… or Move garments to…, then cancel it.`
     case 'IN_CARTON':
-      return `Garments of ${facts.order} on ${facts.number} are in a carton or carry serials: take them out of the cartons first.`
+      return `Garments of ${facts.order} on ${facts.number} are in a carton: take them out of the cartons first (their serials come off with them).`
   }
 }
 
