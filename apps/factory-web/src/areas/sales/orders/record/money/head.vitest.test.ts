@@ -39,7 +39,7 @@ describe('F-OM-101: the shell — five sections that stack, in the kit, by the r
     expect(() => source('../view/MoneyTab.tsx')).toThrow()
     const page = source('../view/OrderRecordView.tsx')
     expect(page).toContain("import { MoneyTab } from '../money/view/MoneyTab'")
-    expect(page.match(/<MoneyDialogs model=\{model\} actions=\{actions\} \/>/g)?.length).toBe(1)
+    expect(page.match(/<MoneyDialogs order=\{order\} model=\{model\} actions=\{actions\} \/>/g)?.length).toBe(1) // F-OM-201: + the order
   })
 
   it('the stylesheet: the room, never the viewport (no @media); the list and each request box are their own size containers; tokens only', () => {

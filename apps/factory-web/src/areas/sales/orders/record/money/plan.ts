@@ -1,5 +1,6 @@
-import { MONEY_PLAN_ACTS } from '@nexus/factory-domain/sales/orders/money-plan' // the hand acts (B-OM-004)
-import { DEPOSIT_KINDS, type ByHand, type ChainInvoice, type DepositRequest, type Milestone, type MilestoneKind, type Order, type PlanPayment, type PlanRequest, type Schedule, type Settlement } from '../../api'
+import { MONEY_PLAN_ACTS, MONEY_PLAN_REFUSAL_WORDS, MONEY_PLAN_REFUSALS, type Words } from '@nexus/factory-domain/sales/orders/money-plan' // the hand acts (B-OM-004), the refusals' words (S2)
+import { isApiError, issuePath } from '../../../../../lib/api/errors' // F-OM-201: a refusal's code
+import { DEPOSIT_KINDS, type ByHand, type ChainInvoice, type DepositRequest, type Milestone, type MilestoneKind, type MoneyPlanAct, type Order, type PlanPayment, type PlanRequest, type Schedule, type Settlement } from '../../api'
 import { depositInvoicesOf, isFinal, stillToPay, type OrderAbilities, type Tone } from '../../model'
 import { rowAnchor } from '../dock/discuss'
 import { stepVerbs, type StepAbilities } from '../schedule/model'
@@ -24,7 +25,12 @@ import { word, type MoneyWord } from './word'
  */
 
 export type PlanRowKind = MilestoneKind | 'EXTRA'
-export type PlanActId = 'record' | 'send' | 'open' | 'invoiceStep' | 'waive' | 'payInvoice'
+// F-OM-201: + the plan's hand acts (their ids are the server's acts, B-OM-011 … 016).
+export type PlanActId = 'record' | 'send' | 'open' | 'invoiceStep' | 'waive' | 'payInvoice' | Exclude<MoneyPlanAct, 'ADD_STEP' | 'CHANGE_TERMS'>
+/** F-OM-201: a row act that opens a hand window (the server's act), not one of the page's own dialogs. */
+export const isHandAct = (id: PlanActId): id is Exclude<MoneyPlanAct, 'ADD_STEP' | 'CHANGE_TERMS'> => (MONEY_PLAN_ACTS as readonly string[]).includes(id)
+/** The plan head's own acts (its ⋯): the payment terms and a new step. */
+export type PlanHeadActId = Extract<MoneyPlanAct, 'ADD_STEP' | 'CHANGE_TERMS'>
 
 export interface PlanAct {
   readonly id: PlanActId
@@ -61,12 +67,16 @@ export interface PlanRow {
   /** The ONE next act on the row; the others are in `more` (its ⋯). */
   readonly act: PlanAct | null
   readonly more: readonly PlanAct[]
+  /** F-OM-201: the open steps the rest may go to (Change amount…, Remove step…): never this row, never one with money on it. */
+  readonly restTo: readonly { readonly id: string; readonly title: MoneyWord }[]
   /** An on-delivery / on-invoice step's goods invoice (its number opens it; Record payment… in Finance picks it). */
   readonly invoice: { readonly id: string; readonly number: string } | null
   readonly unfolds: boolean
   /** Open while it waits; folded when paid. */
   readonly openAtFirst: boolean
   readonly done: boolean
+  /** F-OM-201: money is placed on it (its request's payments, or the invoices' cover of an on-invoice step). */
+  readonly moneyOn: boolean
   /** Discuss (an office note: money is never discussed in a reply, F-SA-266). */
   readonly discuss: { readonly part: MoneyWord; readonly target: { readonly kind: 'DepositRequest'; readonly id: string } | null }
 }
@@ -86,10 +96,16 @@ export interface PlanModel {
   readonly answer: readonly MoneyWord[]
   /** A closed or cancelled order: no act on any row. */
   readonly final: boolean
+  /** F-OM-201: the head's ⋯ — Change payment terms…, Add a step… (orders.moneyPlan + the price grain); held when the order is closed. */
+  readonly head: readonly { readonly id: PlanHeadActId; readonly label: MoneyWord; readonly held: MoneyWord | null }[]
+  /** F-OM-201: the open steps a new step may be taken from (Add a step…). */
+  readonly openSteps: readonly { readonly id: string; readonly title: MoneyWord }[]
 }
 
 
 const ADVANCE: readonly PlanRowKind[] = ['DEPOSIT', 'EXTRA', 'BEFORE_SHIPPING']
+/** The states before the goods leave (schedule/model.ts' rule: an advance is asked, moved or opened only then). */
+const OPEN_STATES: readonly Order['status'][] = ['CONFIRMED', 'IN_PRODUCTION', 'READY']
 const ON_GOODS: readonly PlanRowKind[] = ['ON_INVOICE', 'ON_DELIVERY']
 const isGoods = (invoice: { readonly docType: string; readonly status: string }) => invoice.docType !== 'TD02' && invoice.docType !== 'TD04' && invoice.status !== 'DRAFT'
 
@@ -133,6 +149,8 @@ export function planOf(input: {
   const openGoods = price ? (settlement?.invoices.find((invoice) => isGoods(invoice) && !!invoice.number && (invoice.openShare ?? invoice.openAmount ?? 0) > 0) ?? null) : null
   const goods: Pick<ChainInvoice, 'id' | 'number'> | null = openGoods ? { id: openGoods.id, number: openGoods.number } : (order.chain.invoices.find((invoice) => isGoods(invoice) && !!invoice.number) ?? null)
 
+  // F-OM-201: how many steps are still open (the only one takes the whole order: it is neither re-shared nor removed).
+  const openSteps = schedule.steps.filter((step) => step.status === 'OPEN').length
   const rowOf = (kind: PlanRowKind, step: Milestone | null, request: DepositRequest | null): PlanRow => {
     const plan = request ? planRequest(request.id) : null
     const status = step?.status ?? request?.status ?? 'OPEN'
@@ -193,11 +211,13 @@ export function planOf(input: {
     const acts: PlanAct[] = []
     if (!final) {
       if (request && request.status === 'OPEN') {
-        if (can.recordPayment && price) acts.push({ id: 'record', label: word('moneyTab.plan.act.record'), held: null })
+        // F-OM-204: ONE word with Overview's deposit strip (the same dialog): deposit.record.
+        if (can.recordPayment && price) acts.push({ id: 'record', label: word('deposit.record'), held: null })
         if (can.recordPayment) acts.push({ id: 'send', label: word(request.link ? 'moneyTab.plan.act.sendAgain' : 'moneyTab.plan.act.send'), held: null })
       }
-      if (step && stepCan?.manageOrders) {
-        const opening = stepVerbs(step, order, stepCan).find((verb) => verb.kind === 'open')
+      // F-OM-201 (B-OM-018, M4-B7): Open for payment is the money plan's right now (the Owner and Finance), no longer orders.manage.
+      if (step && can.moneyPlan) {
+        const opening = stepVerbs(step, order, { manageOrders: true, manageInvoices: false, waive: false }).find((verb) => verb.kind === 'open')
         if (opening && opening.kind === 'open') acts.push({ id: 'open', label: word('schedule.verbs.open'), held: opening.held ? word(opening.held.key, { params: opening.held.params }) : null, needsDay: opening.needsDay })
       }
       // P0-B4 (M4-B4): "Invoice this step" only while a paid part waits for its deposit invoice (TD02 rule) and none was made yet.
@@ -206,8 +226,25 @@ export function planOf(input: {
         acts.push({ id: 'invoiceStep', label: word('schedule.verbs.invoice'), held: null })
       }
       if (open && invoice && openGoods && can.recordPayment) acts.push({ id: 'payInvoice', label: word('moneyTab.plan.act.payInvoice'), held: null })
+      // ---- F-OM-201: the plan's hand acts (orders.moneyPlan; an amount act also the price grain) — hidden without them, held only by
+      // the row's state in words; the server refuses the rest in its own words (the dialog says them).
+      if (can.moneyPlan) {
+        const moneyPlaced = placed > 0 ? word('moneyTab.plan.held.moneyPlaced') : null
+        const goodsLeft = !OPEN_STATES.includes(order.status) ? word('schedule.verbs.held.goodsLeft') : null
+        const onlyStep = openSteps <= 1 ? word('moneyTab.plan.held.onlyStep') : null
+        if (request && request.status === 'OPEN' && placed > 0 && price && left !== null && left > 0) acts.push({ id: 'ACCEPT_SHORT', label: word('moneyTab.plan.act.ACCEPT_SHORT'), held: null })
+        if (request && request.status === 'OPEN' && (kind === 'DEPOSIT' || kind === 'EXTRA') && price) acts.push({ id: 'REPLACE_DEPOSIT', label: word('moneyTab.plan.act.REPLACE_DEPOSIT'), held: moneyPlaced ?? goodsLeft })
+        if (step && step.kind === 'BEFORE_SHIPPING' && request && request.status === 'OPEN') acts.push({ id: 'UNDO_OPEN', label: word('moneyTab.plan.act.UNDO_OPEN'), held: moneyPlaced })
+        if (open && (ADVANCE.includes(kind) || ON_GOODS.includes(kind))) acts.push({ id: 'MOVE_DUE', label: word('moneyTab.plan.act.MOVE_DUE'), held: ON_GOODS.includes(kind) ? word('moneyTab.plan.held.dayFromInvoice') : null })
+        if (step && open && price) acts.push({ id: 'CHANGE_STEP', label: word('moneyTab.plan.act.CHANGE_STEP'), held: moneyPlaced ?? onlyStep })
+        if (step && open) acts.push({ id: 'RENAME_STEP', label: word('moneyTab.plan.act.RENAME_STEP'), held: null })
+        if (step && open) acts.push({ id: 'REMOVE_STEP', label: word('moneyTab.plan.act.REMOVE_STEP'), held: moneyPlaced ?? onlyStep })
+      }
+      // ---- end F-OM-201
       // Waive… (the owner, a fresh code): shown ONCE per row (P0-B6); money placed on it holds it (M4-B5).
       if (stepCan?.waive && open && ADVANCE.includes(kind)) acts.push({ id: 'waive', label: word('moneyTab.plan.act.waive'), held: placed > 0 ? word('schedule.verbs.held.partPaid') : null })
+      // F-OM-201 (B-OM-013): after a waive, Ask for the deposit again… (a new request; the waived row stays).
+      if (can.moneyPlan && price && status === 'WAIVED' && ADVANCE.includes(kind)) acts.push({ id: 'ASK_AGAIN', label: word('moneyTab.plan.act.ASK_AGAIN'), held: kind === 'BEFORE_SHIPPING' && !OPEN_STATES.includes(order.status) ? word('schedule.verbs.held.goodsLeft') : null })
     }
     // The ONE next act, one rule for every request (the deposit and an extra one alike): Send the page while it was never sent and
     // nothing is paid on it, else Record a payment; a step without a request: Open for payment, or Record payment… on its invoice.
@@ -236,10 +273,12 @@ export function planOf(input: {
       fromChange,
       act,
       more: acts.filter((entry) => entry !== act),
+      restTo: [],
       invoice,
       unfolds: !!request,
       openAtFirst: !!request && request.status === 'OPEN',
       done,
+      moneyOn: placed > 0 || covered > 0,
       discuss: request ? { part: word('discuss.deposit'), target: { kind: 'DepositRequest', id: request.id } } : { part: word('discuss.step', { params: { seq: step!.seq } }), target: null },
     }
   }
@@ -250,7 +289,10 @@ export function planOf(input: {
   const stepRows = steps.map((step) => rowOf(step.kind, step, live(step.depositRequestId)))
   const requestRows = order.chain.depositRequests.filter((request) => request.status !== 'CANCELLED' && !named.has(request.id)).map((request) => rowOf(requestKindOf(order, request, schedule), null, request))
   const afterDeposit = stepRows.reduce((at, row, index) => (row.kind === 'DEPOSIT' ? index + 1 : at), 0)
-  const rows = [...stepRows.slice(0, afterDeposit), ...requestRows, ...stepRows.slice(afterDeposit)]
+  // F-OM-201: where the rest may go (Change amount…, Remove step…) and where a new step comes from: an open step with no money on it.
+  const free = stepRows.filter((row) => !!row.step && !row.done && !row.moneyOn).map((row) => ({ id: row.step!.id, title: row.title }))
+  const withRest = (row: PlanRow): PlanRow => (row.step && row.more.some((entry) => entry.id === 'CHANGE_STEP' || entry.id === 'REMOVE_STEP') ? { ...row, restTo: free.filter((entry) => entry.id !== row.step!.id) } : row)
+  const rows = [...stepRows.slice(0, afterDeposit), ...requestRows, ...stepRows.slice(afterDeposit)].map(withRest)
 
   // ---- earlier: the replaced or removed steps, and the requests no step names that were cancelled (kept, never deleted) ----
   const earlier: EarlierRow[] = [
@@ -263,7 +305,9 @@ export function planOf(input: {
       }),
   ]
 
-  return { rows, earlier, answer: answerOf(rows, schedule, input.stillToPay, price, final), final }
+  // F-OM-201: the head's ⋯ (the plan right and the price grain): Change payment terms… (held when the order is closed), Add a step….
+  const head: PlanModel['head'] = !can.moneyPlan || !price ? [] : final ? [{ id: 'CHANGE_TERMS', label: word('moneyTab.plan.act.CHANGE_TERMS'), held: word('moneyTab.plan.held.final') }] : [{ id: 'CHANGE_TERMS', label: word('moneyTab.plan.act.CHANGE_TERMS'), held: null }, { id: 'ADD_STEP', label: word('moneyTab.plan.act.ADD_STEP'), held: free.length === 0 ? word('moneyTab.plan.held.nothingFree') : null }]
+  return { rows, earlier, answer: answerOf(rows, schedule, input.stillToPay, price, final), final, head, openSteps: free }
 }
 
 /** The head's answer: still open · overdue · next (price), else the next step in words; nothing open; everything paid (the view
@@ -285,4 +329,30 @@ function answerOf(rows: readonly PlanRow[], schedule: Schedule, stillToPay: numb
     ]
   }
   return [day ? word('moneyTab.plan.answer.nextDue', { words: { what }, days: { date: day } }) : word('moneyTab.plan.answer.next', { words: { what } }), ...tail]
+}
+
+// ---- F-OM-201 / 202: a refused act in this page's words, and a SOFT-locked month ----
+
+/** The month of the write is SOFT-locked in the books (the API's `period/SOFT_LOCKED`): the window asks why it goes in anyway. */
+export const softLockedOf = (error: unknown): boolean => isApiError(error) && error.issues.some((issue) => issuePath(issue) === 'period/SOFT_LOCKED')
+
+/** A refusal: the domain's own words (EN / IT, MONEY_PLAN_REFUSAL_WORDS: one wording with the server), or this page's. */
+export type PlanRefusal = Words | MoneyWord
+
+/**
+ * The planner's refusal (409 `moneyPlan/<CODE>`) in the domain's own words, both languages; an unknown code in this page's; the version
+ * moved meanwhile; no right (the door is hidden, so a role changed meanwhile); null: not the plan's own (the page's write words say it).
+ */
+export function planRefusalOf(error: unknown): PlanRefusal | null {
+  if (!isApiError(error)) return null
+  for (const issue of error.issues) {
+    const path = issuePath(issue)
+    if (path.startsWith('moneyPlan/')) {
+      const code = path.slice('moneyPlan/'.length)
+      return (MONEY_PLAN_REFUSALS as readonly string[]).includes(code) ? MONEY_PLAN_REFUSAL_WORDS[code as keyof typeof MONEY_PLAN_REFUSAL_WORDS] : word('moneyTab.refusal.OTHER')
+    }
+  }
+  if (error.kind === 'conflict' && error.issues.map(issuePath).some((path) => path.includes('version'))) return word('moneyTab.refusal.MOVED')
+  if (error.kind === 'forbidden') return word('moneyTab.refusal.FORBIDDEN')
+  return null
 }

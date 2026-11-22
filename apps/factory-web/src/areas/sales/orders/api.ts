@@ -11,6 +11,7 @@ import { APPLY_ROUTES } from '@nexus/factory-domain/order-apply/plan'
 import { WORK_ORDER_CHANGE_KINDS, type ApplyRoute } from '@nexus/factory-domain/order-apply/rules'
 import type { PromiseReasonCode } from '@nexus/factory-domain/sales/portal-orders/promise' // F-OO-142
 import { styleRowSchema } from '../quotes/api' // F-OL-01: the style search of one order (Add a style)
+import type { AcceptShortWhy } from '@nexus/factory-domain/sales/orders/money-plan' // F-OM-201 (S2 #1855)
 
 /**
  * Every call of the sales order screens (SCR-038 list and board, SCR-039 the order studio), with the answer's shape
@@ -714,8 +715,10 @@ const linkAnswerSchema = z.object({
 export type DepositLinkAnswer = z.infer<typeof linkAnswerSchema>
 
 /** Mails the bank-details page (DEPOSIT_INFO link) to the quote's contact; older live pages of the address are revoked. */
-export function sendDepositLink(api: ApiClient, depositRequestId: string, message: string | null): Promise<DepositLinkAnswer> {
-  return api.post(`/payments/deposit-requests/${encodeURIComponent(depositRequestId)}/link`, { body: message?.trim() ? { message: message.trim() } : {}, schema: linkAnswerSchema, idempotencyKey: newIdempotencyKey() })
+// F-OM-202 (M3-B10): `contactId` — the customer's contact the page goes to (absent: the quote's contact, a typed order's invoices
+// contact, as before).
+export function sendDepositLink(api: ApiClient, depositRequestId: string, message: string | null, contactId?: string | null): Promise<DepositLinkAnswer> {
+  return api.post(`/payments/deposit-requests/${encodeURIComponent(depositRequestId)}/link`, { body: { ...(message?.trim() ? { message: message.trim() } : {}), ...(contactId ? { contactId } : {}) }, schema: linkAnswerSchema, idempotencyKey: newIdempotencyKey() })
 }
 
 const invoiceRefSchema = z.object({ id: z.string(), number: z.string().nullable(), docType: z.string(), status: z.string(), issueDate: z.string().nullable() })
@@ -734,7 +737,8 @@ export type DepositReceived = z.infer<typeof depositReceivedSchema>
  */
 export function recordDepositPayment(
   api: ApiClient,
-  body: { depositRequestId: string; amount: number; receivedOn: string; externalRef: string; internalNote?: string | null; issueDepositInvoice: boolean },
+  // F-OM-202 (P1-B1): + the reason the payment goes into a SOFT-locked month (asked when the API answers period/SOFT_LOCKED).
+  body: { depositRequestId: string; amount: number; receivedOn: string; externalRef: string; internalNote?: string | null; issueDepositInvoice: boolean; periodLockOverride?: { reason: string } },
   idempotencyKey: string,
 ): Promise<DepositReceived> {
   return api.post('/payments/deposit-received', { body, schema: depositReceivedSchema, idempotencyKey })
@@ -785,6 +789,8 @@ export const settlementSchema = z.object({
       // ---- end F-OP-118
       // F-OM-102 (B-OM-001): the small differences written off on it that still stand (price grain); its open amount is less them.
       writtenOffAmount: z.number().optional(),
+      // F-OM-203: what its credit notes leave to give back to the customer (price grain; the settlement's own figure).
+      refundDueAmount: z.number().optional(),
     }),
   ),
   invoicedAmount: z.number().optional(),
@@ -1234,6 +1240,70 @@ export const scheduleSchema = z.object({
   overdue: z.number().optional(),
 })
 export type Schedule = z.infer<typeof scheduleSchema>
+
+// ---- F-OM-201 / 202 (B-OM-010 … 017, the server's S2; 13-backend §3): the plan's hand commands, ONE route and its preview, and the undo
+// of a payment. Every answer is read leniently (an older server: the dialog says its words without the before → after).
+//   POST /sales/orders/:orderId/money-plan            { act, reason, … }   (orders.moneyPlan; amount acts: + the price grain)
+//   POST /sales/orders/:orderId/money-plan/preview    the same body, nothing written: the plan before → after
+//   POST /payments/:paymentId/undo                    { depositRequestId, reason, periodLockOverride? }   (payments.record + void)
+/** Why a deposit came in short (ACCEPT_SHORT): the domain's list (S2 #1855), bank charges first in the window. */
+export const SHORT_WHYS = ['BANK_CHARGES', 'ROUNDING', 'OTHER'] as const satisfies readonly AcceptShortWhy[]
+export type ShortWhy = AcceptShortWhy
+/** A share (a percent string, "25") or an amount (minor units) — never both. */
+export type ShareOrAmount = { readonly pct: string; readonly amount?: undefined } | { readonly amount: number; readonly pct?: undefined }
+export type MoneyPlanBody = { readonly reason: string } & (
+  | ({ readonly act: 'REPLACE_DEPOSIT'; readonly requestId: string; readonly version: number } & ShareOrAmount)
+  | { readonly act: 'MOVE_DUE'; readonly milestoneId?: string; readonly requestId?: string; readonly version: number; readonly dueDate: string }
+  // The version is the target's: the step's or the request's (ASK_AGAIN), the step it takes from (ADD_STEP), the order's (CHANGE_TERMS).
+  | { readonly act: 'ASK_AGAIN'; readonly milestoneId?: string; readonly requestId?: string; readonly version: number; readonly dueDate: string }
+  | ({ readonly act: 'ADD_STEP'; readonly kind: MilestoneKind; readonly from: string; readonly version: number; readonly dueDate?: string; readonly label?: string } & ShareOrAmount)
+  | ({ readonly act: 'CHANGE_STEP'; readonly milestoneId: string; readonly version: number; readonly restTo: string } & ShareOrAmount)
+  | { readonly act: 'REMOVE_STEP'; readonly milestoneId: string; readonly version: number; readonly restTo: string }
+  | { readonly act: 'RENAME_STEP'; readonly milestoneId: string; readonly version: number; readonly label: string }
+  | { readonly act: 'UNDO_OPEN'; readonly milestoneId: string; readonly version: number }
+  | { readonly act: 'CHANGE_TERMS'; readonly paymentTermsId: string; readonly version: number }
+  | { readonly act: 'ACCEPT_SHORT'; readonly requestId: string; readonly version: number; readonly why: ShortWhy }
+)
+export type MoneyPlanAct = MoneyPlanBody['act']
+/** A step's or request's figures before or after the act (the amount with the price grain). */
+const planFiguresSchema = z.object({ amount: z.number().optional(), dueDate: z.string().nullable(), status: z.string(), label: z.string().nullable() })
+export type PlanFigures = z.infer<typeof planFiguresSchema>
+const previewStepSchema = z.object({ id: z.string().nullable(), kind: z.enum(MILESTONE_KINDS), words: z.string(), before: planFiguresSchema.nullable(), after: planFiguresSchema })
+/**
+ * The act planned on the plan as it is now, nothing written: its refusal in words (EN / IT: the window says why before the click), or
+ * the steps and requests before → after, what a remake cancels and adds, the short part (ACCEPT_SHORT), whether a fresh code follows.
+ */
+export const moneyPlanPreviewSchema = z.object({
+  act: z.string(),
+  refusal: z.object({ code: z.string(), words: z.object({ en: z.string(), it: z.string() }) }).nullable(),
+  preview: z
+    .object({
+      steps: z.array(previewStepSchema),
+      requests: z.array(z.object({ id: z.string().nullable(), before: planFiguresSchema.nullable(), after: planFiguresSchema })),
+      remade: z.object({ cancelled: z.array(z.string()), added: z.array(z.object({ kind: z.enum(MILESTONE_KINDS), amount: z.number().optional(), dueDate: z.string().nullable() })) }),
+      short: z.number().nullable().optional(),
+      needsFreshCode: z.boolean(),
+    })
+    .nullable(),
+})
+export type MoneyPlanPreview = z.infer<typeof moneyPlanPreviewSchema>
+
+/** The preview: the same body as the act (its reason too: the server's rule, 3–500), nothing written. */
+export function previewMoneyPlan(api: ApiClient, orderId: string, body: MoneyPlanBody, signal?: AbortSignal): Promise<MoneyPlanPreview> {
+  return api.post(`${orderPath(orderId)}/money-plan/preview`, { body, schema: moneyPlanPreviewSchema, signal })
+}
+
+/** The act, written once (its Idempotency-Key); it answers the plan read: the page reads the order and its parts again (null). */
+export async function applyMoneyPlan(api: ApiClient, orderId: string, body: MoneyPlanBody, idempotencyKey: string): Promise<Order | null> {
+  await api.post(`${orderPath(orderId)}/money-plan`, { body, schema: z.object({ changed: z.object({ act: z.string() }).passthrough().optional() }).passthrough(), idempotencyKey })
+  return null
+}
+
+/** Undo one payment on a deposit request: its allocation reversed, the payment voided when it then pays nothing (B-OM-017). */
+export async function undoDepositPayment(api: ApiClient, paymentId: string, body: { depositRequestId: string; reason: string; periodLockOverride?: { reason: string } }, idempotencyKey: string): Promise<void> {
+  await api.post(`/payments/${encodeURIComponent(paymentId)}/undo`, { body, schema: z.object({}).passthrough(), idempotencyKey })
+}
+// ---- end F-OM-201 / 202
 
 /** The order's payment schedule (the deposit and the balance steps with their state). */
 export function getSchedule(api: ApiClient, orderId: string, signal?: AbortSignal): Promise<Schedule> {

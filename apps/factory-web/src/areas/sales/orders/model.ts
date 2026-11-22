@@ -84,6 +84,11 @@ export interface OrderAbilities {
   askCustomer?: boolean
   /** F-OM-101 (P0-B9): write in the order's conversation (threads.post): Money's rows offer Discuss only with it. */
   threadsPost?: boolean
+  /**
+   * F-OM-201 (B-OM-010, O4): change an order's money plan by hand (orders.moneyPlan: the Owner and Finance) — every plan door of Money
+   * (and, B-OM-018, Open for payment); absent before the server knows the right: every such door hidden, never held.
+   */
+  moneyPlan?: boolean
 }
 
 export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
@@ -110,6 +115,7 @@ export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
     decideForCustomer: held.has('production.brand.override'), // W3 extra: Decide for {customer}…
     askCustomer: held.has('partners.approvals.ask'), // F-OC-103
     threadsPost: held.has('threads.post'), // F-OM-101
+    moneyPlan: held.has('orders.moneyPlan'), // F-OM-201 (B-OM-010)
   }
 }
 

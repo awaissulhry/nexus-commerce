@@ -3363,7 +3363,8 @@
       "reading": "Lettura del piano dei pagamenti…",
       "part": "il piano dei pagamenti",
       "earlier": "Rate precedenti ({count})",
-      "earlierHint": "sostituite o tolte; conservate con chi, quando e perché"
+      "earlierHint": "sostituite o tolte; conservate con chi, quando e perché",
+      "more": "Altro per il piano dei pagamenti"
     },
     "plan": {
       "kind": {
@@ -3404,11 +3405,20 @@
         "paidWithInvoice": "Pagata quando è pagata la fattura della merce"
       },
       "act": {
-        "record": "Registra un pagamento",
         "send": "Invia la pagina",
         "sendAgain": "Invia di nuovo la pagina",
         "payInvoice": "Registra pagamento…",
-        "waive": "Abbuona…"
+        "waive": "Abbuona…",
+        "ACCEPT_SHORT": "Accetta pagamento ridotto (spese bancarie)…",
+        "REPLACE_DEPOSIT": "Cambia l'acconto…",
+        "UNDO_OPEN": "Annulla l'apertura…",
+        "MOVE_DUE": "Sposta la scadenza…",
+        "CHANGE_STEP": "Cambia importo…",
+        "RENAME_STEP": "Rinomina…",
+        "REMOVE_STEP": "Togli la rata…",
+        "ASK_AGAIN": "Richiedi di nuovo l'acconto…",
+        "CHANGE_TERMS": "Cambia termini di pagamento…",
+        "ADD_STEP": "Aggiungi una rata…"
       },
       "byHand": {
         "what": {
@@ -3471,6 +3481,13 @@
         "overdue": "scaduto {amount}",
         "nextDue": "prossimo: {what}, scade il {date}",
         "next": "prossimo: {what}"
+      },
+      "held": {
+        "moneyPlaced": "Ci sono già pagamenti: annulla prima il pagamento.",
+        "onlyStep": "L'unica rata prende tutto l'ordine: aggiungi prima una rata.",
+        "dayFromInvoice": "La sua scadenza viene dalla fattura.",
+        "final": "L'ordine è chiuso: il suo piano non cambia più.",
+        "nothingFree": "Ogni rata ha già dei pagamenti: non c'è una rata aperta da cui prendere."
       }
     },
     "invoices": {
@@ -3479,11 +3496,253 @@
       "count_one": "{count} documento",
       "count_other": "{count} documenti",
       "part": "gli importi delle fatture",
-      "reading": "Lettura di cosa resta da pagare sulle fatture…"
+      "info": "Ogni fattura di questo ordine — fatture della merce, fatture di acconto e note di credito — a che punto è e quanto resta da pagare. Ogni ⋯ apre la finestra di Finanza. Una fattura emessa non cambia mai: la corregge una nota di credito.",
+      "keys": "Tasti: Tab passa da una riga all'altra · Invio apre il numero.",
+      "shipped": "Fattura la merce spedita…",
+      "col": {
+        "payment": "Pagamento"
+      },
+      "countOpen_one": "{count} documento · {amount} da pagare su {number}",
+      "countOpen_other": "{count} documenti · {amount} da pagare su {number}",
+      "countPaid_one": "{count} documento · tutto pagato",
+      "countPaid_other": "{count} documenti · tutto pagato",
+      "pay": {
+        "open": "Da pagare",
+        "part": "Pagata in parte",
+        "paid": "Pagata",
+        "credited": "Stornata",
+        "refund": "Rimborso dovuto"
+      },
+      "sub": {
+        "credits": "Storna {number}",
+        "deducted": "Detratta nella fattura della merce"
+      },
+      "door": {
+        "record": "Registra pagamento…",
+        "credit": "Nota di credito…",
+        "sendSdi": "Invia allo SDI ›",
+        "fixSdi": "Correggi e reinvia ›",
+        "payments": "Pagamenti e abbuono ›",
+        "pdf": "Documenti e PDF ›"
+      },
+      "held": {
+        "creditNote": "Una nota di credito si corregge con una nota di debito."
+      },
+      "sdiFailed": "Stato SDI non letto",
+      "copyNumber": "Copia il numero",
+      "more": "Altro per {number}"
     },
     "menu": {
       "copyLinkTotals": "Copia il link a Totali",
       "copyLinkRow": "Copia il link a questa riga"
+    },
+    "payment": {
+      "undo": "Annulla questo pagamento…",
+      "open": "Apri in Finanza › Pagamenti ›",
+      "copyRef": "Copia il riferimento bancario",
+      "more": "Altro per il pagamento del {date}"
+    },
+    "hand": {
+      "thePlan": "il piano",
+      "whatHappens": "Cosa succede",
+      "customer": "Il cliente:",
+      "neverLabel": "Cosa non cambia mai.",
+      "why": {
+        "BANK_CHARGES": "Spese bancarie",
+        "ROUNDING": "Arrotondamento",
+        "OTHER": "Altro"
+      },
+      "whyHint": "Obbligatorio · solo ufficio · resta nella cronologia con chi e quando.",
+      "who": "Salvato a tuo nome con la data di oggi; la riga è segnata “Impostata a mano”; la cronologia conserva il valore precedente.",
+      "whoCode": "Salvato a tuo nome con la data di oggi; la cronologia conserva il valore precedente. Confermi con un codice nuovo dalla tua app di autenticazione.",
+      "ba": {
+        "title": "Prima → dopo",
+        "now": "Ora",
+        "after": "Dopo",
+        "none": "Non c'è ancora",
+        "new": "Rata nuova",
+        "removed": "Tolta (resta in Rate precedenti)",
+        "reading": "Lettura del piano come sarebbe…",
+        "failed": "Il piano come sarebbe non si è potuto leggere: l'azione va comunque, e il server la controlla.",
+        "waits": "Il piano come sarebbe compare qui quando hai scritto l'azione e il suo perché."
+      },
+      "problem": {
+        "reasonShort": "Scrivi il perché in almeno 3 caratteri.",
+        "reasonLong": "Al massimo 500 caratteri.",
+        "share": "Scrivi una quota del totale dell'ordine (25 %) o un importo (3.050,00).",
+        "day": "Scegli un giorno.",
+        "past": "Scegli oggi o un giorno successivo.",
+        "gone": "Questa rata o richiesta non è più nel piano: chiudi la finestra e rileggi la pagina.",
+        "from": "Scegli la rata da cui si prende.",
+        "restTo": "Scegli la rata che prende il resto.",
+        "label": "Scrivi un nome.",
+        "labelLong": "Al massimo 120 caratteri.",
+        "terms": "Scegli i nuovi termini.",
+        "termsSame": "L'ordine ha già questi termini di pagamento."
+      },
+      "field": {
+        "share": "Quota o importo",
+        "shareHint": "Una quota del totale dell'ordine (25 %) o un importo (3.050,00).",
+        "day": "Scadenza",
+        "dayHint": "Oggi o dopo.",
+        "dayOptional": "Facoltativa · un acconto o una rata prima della spedizione la chiede quando si apre.",
+        "kind": "Tipo",
+        "label": "Nome",
+        "labelHint": "Facoltativo · stampato sulla sua pagina di pagamento.",
+        "restTo": "Il resto va su",
+        "from": "Presa da",
+        "pick": "Scegli…",
+        "terms": "Nuovi termini",
+        "termsHint": "Dalla libreria dei termini di pagamento dell'azienda.",
+        "termsReading": "Lettura dei termini di pagamento…",
+        "termsFailed": "I termini di pagamento non si sono potuti leggere: chiudi la finestra e riprova.",
+        "shortWhy": "Perché è arrivato meno"
+      },
+      "REPLACE_DEPOSIT": {
+        "title": "Cambia l'acconto di {number}",
+        "go": "Cambia l'acconto",
+        "happens": {
+          "replaced": "L'acconto richiesto ora resta come Sostituito, in Rate precedenti.",
+          "asked": "Si richiede un acconto nuovo per la quota o l'importo che scrivi; le rate aperte prendono il resto, così il piano torna.",
+          "waits": "La produzione aspetta ancora l'acconto."
+        },
+        "told": "una pagina con i dati bancari inviata prima smette di funzionare: invia al cliente la pagina nuova.",
+        "never": "L'importo di un acconto non si modifica mai: la richiesta vecchia resta com'era, con la sua cronologia. La fattura di acconto (TD02) si fa solo quando arrivano i soldi."
+      },
+      "MOVE_DUE": {
+        "title": "Sposta la scadenza · {row}",
+        "go": "Sposta la scadenza",
+        "happens": {
+          "together": "La rata e la sua richiesta di pagamento si spostano insieme.",
+          "overdue": "Lo scaduto si ricalcola dalla nuova data."
+        },
+        "toldLive": "la pagina con i dati bancari ancora attiva mostra da sola la nuova data; nessuna e-mail.",
+        "toldNone": "non è stata inviata nessuna pagina, quindi il cliente non viene avvisato.",
+        "never": "La scadenza di una rata pagata non si sposta mai. L'importo qui non cambia."
+      },
+      "ASK_AGAIN": {
+        "title": "Richiedi di nuovo · {row}",
+        "go": "Richiedi di nuovo",
+        "happens": {
+          "asked": "Si richiede un pagamento nuovo dello stesso importo; quello abbuonato resta com'era.",
+          "waits": "La produzione aspetta di nuovo l'acconto; gli ordini di lavoro rilasciati continuano."
+        },
+        "holds": "Blocca di nuovo la spedizione finché non è pagata.",
+        "told": "il cliente lo vede quando gli viene inviata la sua pagina con i dati bancari.",
+        "never": "La rata abbuonata e il suo motivo restano nella cronologia."
+      },
+      "ADD_STEP": {
+        "title": "Aggiungi una rata al piano di {number}",
+        "go": "Aggiungi la rata",
+        "happens": {
+          "taken": "L'importo esce dalla rata che scegli: il piano dà ancora il totale dell'ordine.",
+          "request": "Un acconto o una rata prima della spedizione ha la sua richiesta di pagamento: può fermare la produzione o la spedizione."
+        },
+        "told": "il cliente vede la rata quando gli viene inviata la sua pagina con i dati bancari.",
+        "never": "Le rate pagate tengono il loro importo; il totale dell'ordine non cambia."
+      },
+      "CHANGE_STEP": {
+        "title": "Cambia l'importo · {row}",
+        "go": "Cambia l'importo",
+        "happens": {
+          "rest": "La differenza va sulla rata che scegli, così il piano torna.",
+          "request": "Una rata con una richiesta non ancora pagata riceve una richiesta nuova (un importo non si modifica mai)."
+        },
+        "told": "una pagina ancora attiva della richiesta vecchia smette di funzionare: invia quella nuova.",
+        "never": "Le rate pagate e il totale dell'ordine non cambiano."
+      },
+      "REMOVE_STEP": {
+        "title": "Togli la rata · {row}",
+        "go": "Togli la rata",
+        "happens": {
+          "earlier": "La rata va in Rate precedenti, con chi, quando e perché.",
+          "rest": "Il suo importo va sulla rata che scegli; una sua richiesta non pagata viene annullata.",
+          "noDeposit": "È l'acconto dell'ordine: la produzione non aspetta più un acconto."
+        },
+        "told": "una sua pagina ancora attiva smette di funzionare.",
+        "never": "Una rata con dei pagamenti non si toglie mai."
+      },
+      "RENAME_STEP": {
+        "title": "Rinomina · {row}",
+        "go": "Rinomina",
+        "happens": {
+          "printed": "Il nome nuovo è stampato sulla sua pagina di pagamento e sui suoi documenti."
+        },
+        "told": "il cliente legge il nome nuovo sulla sua pagina.",
+        "never": "Il suo importo e la sua scadenza non cambiano."
+      },
+      "UNDO_OPEN": {
+        "title": "Annulla l'apertura · {row}",
+        "go": "Annulla l'apertura",
+        "happens": {
+          "cancelled": "La sua richiesta di pagamento (senza pagamenti) viene annullata; la rata resta, senza richiesta.",
+          "shipment": "Non blocca più la spedizione finché non viene riaperta."
+        },
+        "told": "una sua pagina ancora attiva smette di funzionare.",
+        "never": "La rata e il suo importo restano."
+      },
+      "CHANGE_TERMS": {
+        "title": "Cambia i termini di pagamento di {number}",
+        "go": "Cambia i termini",
+        "happens": {
+          "remade": "Si rifanno solo le rate aperte; restano le rate pagate, pagate in parte, l'acconto e le rate impostate a mano.",
+          "total": "Il totale dell'ordine non cambia."
+        },
+        "told": "vede subito il piano nuovo nel suo portale; invia una nuova versione della conferma da Modifiche › Accordo del cliente. Non si chiede un nuovo sì.",
+        "never": "Le rate pagate, una fattura di acconto emessa e il totale dell'ordine non cambiano mai."
+      },
+      "ACCEPT_SHORT": {
+        "title": "Accettare l'acconto con {amount} in meno?",
+        "titleWords": "Accettare l'acconto con meno?",
+        "go": "Accetta {amount} in meno",
+        "goWords": "Accetta con meno",
+        "happens": {
+          "paid": "L'acconto conta come pagato: la produzione può partire.",
+          "owed": "La parte mancante resta dovuta e va sulla fattura finale, dove Finanza può abbuonarla.",
+          "td02": "La sua fattura di acconto (TD02) resta com'è: l'importo pagato."
+        },
+        "told": "non viene avvisato; il suo portale mostra l'acconto come pagato.",
+        "never": "Il pagamento resta come è arrivato; qui non si fa nessun abbuono; l'acconto resta pagato (non si può annullare)."
+      },
+      "reason": "Perché"
+    },
+    "refusal": {
+      "OTHER": "Il piano non può cambiare così: rileggi la pagina.",
+      "MOVED": "Il piano è cambiato nel frattempo: è stato riletto.",
+      "FORBIDDEN": "Cambiare il piano dei pagamenti richiede il suo diritto: il tuo ruolo è cambiato nel frattempo."
+    },
+    "stepUp": {
+      "plan": "Cambiare così il piano dei pagamenti chiede un codice nuovo dalla tua app di autenticazione.",
+      "terms": "Cambiare i termini di pagamento chiede un codice nuovo dalla tua app di autenticazione."
+    },
+    "notice": {
+      "planChanged": "Il piano è stato cambiato a mano; la cronologia conserva il valore precedente.",
+      "undone": "Il pagamento è stato annullato; resta in Finanza › Pagamenti come annullato."
+    },
+    "undo": {
+      "title": "Annullare il pagamento del {date}?",
+      "go": "Annulla questo pagamento",
+      "happens": {
+        "reversed": "Il pagamento viene tolto da questa richiesta e, se poi non paga altro, annullato — in un solo passo.",
+        "open": "L'acconto torna Aperto.",
+        "production": "La produzione continua ad aspettare l'acconto; gli ordini di lavoro rilasciati continuano."
+      },
+      "told": "nessuna e-mail; il suo portale mostra di nuovo l'acconto aperto.",
+      "never": "Il pagamento non si cancella mai: resta in Finanza › Pagamenti, annullato, con il tuo motivo."
+    },
+    "lock": {
+      "label": "Perché va in un mese chiuso",
+      "hint": "Questo mese è chiuso in modo leggero nei conti: scrivi perché ci va comunque (da 3 a 500 caratteri).",
+      "problem": "Scrivi perché va nel mese chiuso (da 3 a 500 caratteri)."
+    },
+    "link": {
+      "contact": "Invia a",
+      "contactHint": "I contatti attivi del cliente con un indirizzo e-mail.",
+      "usual": "Il contatto di sempre ({who})",
+      "option": "{name} · {email}"
+    },
+    "facts": {
+      "changeOnMoney": "Cambia in Importi ›"
     }
   }
 }

@@ -381,6 +381,9 @@ function RecordContainer({ orderId }: { orderId: string }) {
     setSdi,
     stepUp: { ensureFresh, guard },
     onInvoiced: (invoiceId) => router.push(`${prefix}/finance/invoices/${invoiceId}?tab=lines`),
+    // F-OM-203: the order as read and the page's address (Money's "Invoice shipped goods…" door into Finance).
+    order: ready,
+    prefix,
   })
   // ---- end F-OP-134
 
