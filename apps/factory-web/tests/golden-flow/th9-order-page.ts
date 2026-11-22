@@ -129,6 +129,7 @@ const SHIP_WORDS = Object.freeze({
   ddtBack: 'Made-up: the DDT is issued after all (TH9 step 15).',
   labelled: 'Made-up: the customer confirmed the delivery by phone; the carrier never scanned it (TH9 step 15).',
   parcel: (seq: number) => `T-TH9-PCL-000${seq}`,
+  eta: 'Made-up: the driver gave the day of the round (TH9 step 15).', // os-fx6
 })
 // ---- F-OO-215 (order overview lane): SEED-SO-0002's Overview ----
 /**
@@ -1413,12 +1414,24 @@ export default defineStage({
       const van = (await rowsOf(so0101.id)).find((row) => row.status === 'SHIPPED' && row.transportBy === 'SENDER')
       if (!van) notHere('our van: SEED-SO-0101 has no shipment on its way with our van in this world')
       else {
+        // os-fx6: the day inside the window the server allows (not before the goods left, at most a year ahead) — two days after the
+        // later of today and its departure (the seeds date this departure in the story's days ahead), never a fixed calendar day.
+        const leftAt = Date.parse(String(van.shippedAt ?? ''))
+        const etaDay = new Date(Math.max(Date.now(), Number.isFinite(leftAt) ? leftAt : 0) + 2 * 86_400_000).toISOString().slice(0, 10)
         const eta = await rowAct(so0101.id, van.number as string, OS('ships.act.eta'))
-        await pickDate(eta, OS('door.eta.day'), day(3))
+        await pickDate(eta, OS('door.eta.day'), etaDay)
+        // Why: required when it moves a day the customer already reads (F-OS-306), optional else — always said here.
+        await eta.getByRole('textbox').last().fill(SHIP_WORDS.eta)
         await answerOf(page, 'PUT', /^\/shipping\/shipments\/[^/]+\/eta$/, () => press(eta.getByRole('button', { name: OS('door.eta.go'), exact: true })))
         await flow.settle()
         await warehouse.go(`/sales/orders/${so0101.id}?tab=shipments`)
         await seen(shipmentRow(page, van.number as string).getByText(OS('ships.dates.setByHand')).first(), 60_000)
+        await flow.shot(page, 'shipments-van-expected')
+      }
+      // A delivery is typed at a time not before the goods left and not in the future: a departure dated ahead takes none yet.
+      const vanLeft = van ? Date.parse(String(van.shippedAt ?? '')) : Number.NaN
+      if (van && !(Number.isFinite(vanLeft) && vanLeft <= Date.now())) notHere('Mark delivered… on our van: the seeds date SEED-SO-0101’s departure in the story’s days ahead (a delivery is never before it left)')
+      else if (van) {
         const before = await statusOf(flow, page, so0101.id)
         const delivered = await rowAct(so0101.id, van.number as string, OS('ships.act.delivered'))
         // Our van: why is not asked (no carrier's tracking to know better than).
@@ -1436,7 +1449,9 @@ export default defineStage({
 
       // ── D5 (B-OS-015): Mark delivered… over carrier labels — the person says why; tagged "Set by hand" (L1: Mark returned… beside it) ──
       const labelled = (await rowsOf(world.so2.id)).find((row) => row.status === 'SHIPPED' && row.transportBy === 'CARRIER' && (((row.parcels ?? []) as Json[]).some((parcel) => parcel.source === 'LABEL') || row.mayTypeTracking?.code === 'LABELLED'))
+      const labelledLeft = labelled ? Date.parse(String(labelled.shippedAt ?? '')) : Number.NaN
       if (!labelled) notHere('over carrier labels: no shipment of SEED-SO-0002 on its way with a carrier label in this world')
+      else if (!(Number.isFinite(labelledLeft) && labelledLeft <= Date.now())) notHere(`Mark delivered… over carrier labels: the seeds date ${labelled.number as string}’s departure in the story’s days ahead (a delivery is never before it left)`)
       else {
         const box = await rowAct(world.so2.id, labelled.number as string, OS('ships.act.delivered'))
         await seen(box.getByText(OS('door.status.labelled')), 60_000)
