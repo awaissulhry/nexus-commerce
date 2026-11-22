@@ -183,7 +183,7 @@ export interface OrderFile {
   readonly versionNo: number
   readonly at: string
   /** F-OF-101 (B-OF-003, S3): `state` — an annulled DDT's paper, an invoice's replaced file (kept by law; absent: in force). */
-  readonly from: OrderFileRef & { readonly state?: OrderFileState | null }
+  readonly from: OrderFileRef & { readonly state?: OrderFileState | null; /* B-OF-003 (S3): a DDT's paper — the shipment it travels with */ readonly shipment?: { readonly id: string; readonly label: string } | null }
   readonly line: { readonly id: string; readonly seq: number } | null
   readonly audience: OrderFileAudience
   readonly bodyData: boolean
@@ -491,7 +491,8 @@ function blocksOf(key: string, files: readonly OrderFile[], face: 'office' | 'cu
   const order: string[] = []
   const byKey = new Map<string, OrderFile[]>()
   for (const file of files) {
-    const id = BY_LABEL.includes(key) ? `label:${file.from.label}` : `${file.from.type}:${file.from.id}`
+    const ref = blockRefOf(file)
+    const id = BY_LABEL.includes(key) ? `label:${file.from.label}` : `${ref.type}:${ref.id}`
     const list = byKey.get(id)
     if (list) list.push(file)
     else {
@@ -502,9 +503,13 @@ function blocksOf(key: string, files: readonly OrderFile[], face: 'office' | 'cu
   return order.map((id) => {
     const list = byKey.get(id)!
     const home = HOME_FIRST.map((type) => list.find((file) => file.from.type === type)).find((file) => file !== undefined) ?? list[0]!
-    return { key: `${key}:${id}`, head: { label: home.from.label || null, door: { type: home.from.type, id: home.from.id, label: home.from.label } }, ...split(list) }
+    const door = BY_LABEL.includes(key) ? home.from : blockRefOf(home)
+    return { key: `${key}:${id}`, head: { label: door.label || null, door: { type: door.type, id: door.id, label: door.label } }, ...split(list) }
   })
 }
+
+/** F-OF-101 (B-OF-003, S3): the record a file's block hangs on — a DDT's paper inside the shipment it travels with; else its own record. */
+export const blockRefOf = (file: Pick<OrderFile, 'from'>): OrderFileRef => (file.from.shipment ? { type: 'Shipment', id: file.from.shipment.id, label: file.from.shipment.label } : file.from)
 
 /**
  * The tab's groups in the read's order (10-design §5): SHIPMENTS split into Shipments and Invoices & credit notes by `from.type`; one

@@ -40,7 +40,7 @@ import { ASKS_NS, AsksBody, AsksWindowHead, arrivedFileIds } from '../asks/view/
 import { AskWindows } from '../asks/view/AskWindows'
 // ---- F-OF-302 / F-OF-303 (order FILES tab W3): the card's ⋯ and the file windows
 import { Menu, type MenuItemDef } from '@nexus/ui/components'
-import { isOrderOwn, orderFileActsOf, type FileActsState, type OrderFileAct } from '../model'
+import { blockRefOf, isOrderOwn, orderFileActsOf, type FileActsState, type OrderFileAct } from '../model'
 import { FileActWindows } from './FileActWindows'
 import type { FileActActions } from './FileActParts'
 import { UseOnDialog, type UseOnActions } from '../../files/view/UseOnDialog'
@@ -1073,8 +1073,9 @@ function CardMenu({ file, orderId, acts, actions, words }: { file: OrderFile; or
     return { id: act, label: text, ...(act === 'delete' ? { tone: 'danger' as const } : {}), disabled: heldWords !== null, description: heldWords ?? undefined, onSelect: heldWords ? undefined : () => actions?.onOrderAct?.(act, file.id) }
   })
   if (file.inThread && actions?.onOrderMessage) items.push({ id: 'in-thread', label: t('order.inThread'), onSelect: () => actions.onOrderMessage?.(file.inThread!.messageId) })
-  const href = !isOrderOwn(file, orderId) ? (actions?.orderHrefOf?.(file.from) ?? null) : null
-  if (href) items.push({ id: 'open-on', label: file.from.type.startsWith('OrderChangeRequest') ? t('order.openOnChanges') : t('order.openOn', { record: file.from.label }), href })
+  const home = blockRefOf(file) // B-OF-003: a DDT's paper opens on the shipment it travels with
+  const href = !isOrderOwn(file, orderId) ? (actions?.orderHrefOf?.(home) ?? null) : null
+  if (href) items.push({ id: 'open-on', label: home.type.startsWith('OrderChangeRequest') ? t('order.openOnChanges') : t('order.openOn', { record: home.label }), href })
   if (items.length === 0) return null
   return <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('acts.menu.label', { name: file.name }), className: 'nds-btn sm icon' }} items={items} />
 }
