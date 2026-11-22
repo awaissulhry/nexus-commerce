@@ -729,7 +729,7 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
       {read.truncated && <p className="fw-rtv-muted">{t('order.truncated', { count: read.total })}</p>}
       {empty ? (
         // P0-B6: the tab's head already says "No files yet" (one line, no box); the window and the portal say it here.
-        place === 'tab' && !customer ? null : <EmptyState icon={<FolderOpen size={22} aria-hidden />} title={t(customer ? 'order.empty.customer' : 'order.empty.title')} />
+        place === 'tab' && !customer ? null : <EmptyState icon={<FolderOpen size={22} aria-hidden />} title={t(customer ? 'order.empty.customer' : 'order.empty.title')} description={mayUpload ? t('order.empty.add') : undefined} />
       ) : (
         <>
           {place === 'window' && choosable.length > 0 && !customer && (

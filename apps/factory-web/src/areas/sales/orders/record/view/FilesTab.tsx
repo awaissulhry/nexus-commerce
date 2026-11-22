@@ -19,7 +19,7 @@ import type { SectionId } from '../production/layout'
 import type { OrderRecordModel } from '../record-model'
 import { copyLinkTo } from '../shipments/view/hrefs'
 import { LineMenuButton } from './LineMenu'
-import { InfoTip, Section } from './production/Kit' // F-OF-101: the Production kit, in place (Kit.tsx untouched)
+import { Section } from './production/Kit' // F-OF-101: the Production kit, in place (Kit.tsx untouched; its Section draws the ONE ⓘ)
 
 /**
  * F-SA-237 (sales page plan N9, picks P14, R7; 10-order-page §2.7) — Files: every file of the order by where it comes from, the SAME
@@ -110,7 +110,7 @@ function FilesSection({ files, party, actions, children }: { files: OrderFilesMo
   // F-OF-103: "Add files…" — hidden without the right (the read's `may`, else the session's); allowed on a closed order (L2: a late paper lands).
   const buttons = files.may?.upload && actions?.onOrderAdd && !files.problem
     ? [
-        <Button key="add" size="sm" onClick={() => actions.onOrderAdd?.([])}>
+        <Button key="add" size="sm" onClick={() => actions?.onOrderAdd?.([])}>
           <Upload size={14} aria-hidden /> {t('files.add')}
         </Button>,
       ]

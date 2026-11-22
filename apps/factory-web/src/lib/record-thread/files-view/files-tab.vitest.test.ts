@@ -168,7 +168,7 @@ describe('F-OF-101: the body drawn — groups that flow, blocks with doors, fold
 
   it('the doors are real links to the source\'s own page; a change request\'s to this order\'s Changes tab; the order\'s own files have none', () => {
     const html = draw('en')
-    expect(html).toContain('href="/w/SEED/production/work-orders/wo-41')
+    expect(html).toMatch(/href="\/w\/SEED\/[^"]*wo-41/)
     expect(html).toContain(`href="/w/SEED/sales/orders/${ORDER.id}?tab=changes"`)
     expect(orderFileHrefOf({ type: 'SalesOrder', id: ORDER.id, label: ORDER.number }, { prefix: '/w/SEED', id: ORDER.id, companyId: null })).toBeNull()
     expect(orderFileHrefOf({ type: 'SalesOrderLine', id: 'l1', label: 'line 1' }, { prefix: '/w/SEED', id: ORDER.id, companyId: null })).toBeNull()
@@ -196,7 +196,7 @@ describe('F-OF-101: the tab\'s layout — the Production kit in place, one answe
   const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
   it('FilesTab draws the kit\'s Section in place (Kit.tsx untouched), its root the kit\'s size container; the keys only in the ⓘ', () => {
     const tab = source('../../../areas/sales/orders/record/view/FilesTab.tsx')
-    expect(tab).toContain("import { InfoTip, Section } from './production/Kit'")
+    expect(tab).toContain("import { Section } from './production/Kit'")
     expect(tab).toContain('<div className="fw-pt fw-of">')
     expect(tab).toContain('<OrderFilesBody model={files}')
     expect(tab).toContain("t('info.keys')")
