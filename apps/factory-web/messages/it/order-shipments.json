@@ -430,7 +430,8 @@
         "NOT_LEFT_OR_PACKED": "L'arrivo previsto si inserisce quando la merce è imballata.",
         "CANCELLED": "La spedizione è annullata.",
         "ARRIVED": "È già consegnata o rientrata: il suo arrivo è noto."
-      }
+      },
+      "why": "Il cliente legge l'arrivo previsto: di' perché cambia (almeno {min} caratteri)."
     },
     "done": {
       "unpacked": "{number} è disfatta: è di nuovo una bozza.",

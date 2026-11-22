@@ -4,6 +4,7 @@ import { DDT_REQUIRED_REFUSALS } from '@nexus/factory-domain/shipping/ddt'
 import { HAND_OVER_LIMITS as DOMAIN_HAND_OVER } from '@nexus/factory-domain/shipping/shipments'
 import type { Transport } from '../booking/api'
 import { etaBody, etaDialogOf, etaHeld, etaProblem, overridesLabels, statusBody, statusProblem } from '../booking/model'
+import { etaMinDayOf, etaReasonNeeded } from '../booking/model' // F-OS-306
 import { DDT_REQUIRED_REFUSAL_CODES, ddtRequiredBody, ddtRequiredHeld, defaultPlaceOf, receiveHeld } from './doors'
 import { HAND_OVER_LIMITS, handOverBody, handOverTimeProblem } from './hand-over'
 
@@ -88,7 +89,9 @@ describe('Set expected arrival… (B-OS-016)', () => {
     expect(etaDialogOf(transport({ expected: '2026-11-20T12:00:00.000Z' }))).toEqual({ kind: 'eta', day: '2026-11-20', reason: '' })
     expect(etaProblem({ kind: 'eta', day: '2026-11-25', reason: '' }, transport(), now)).toBeNull()
     expect(etaProblem({ kind: 'eta', day: '', reason: '' }, transport(), now)).toEqual({ key: 'door.eta.pickDay' })
-    expect(etaProblem({ kind: 'eta', day: '', reason: '' }, transport({ expected: '2026-11-20T12:00:00.000Z' }), now)).toBeNull()
+    // F-OS-306 (os-fx6): clearing a day the customer already reads says why (the server's rule), then it clears.
+    expect(etaProblem({ kind: 'eta', day: '', reason: '' }, transport({ expected: '2026-11-20T12:00:00.000Z' }), now)).toEqual({ key: 'door.eta.why', params: { min: 3 } })
+    expect(etaProblem({ kind: 'eta', day: '', reason: 'The carrier lost the date.' }, transport({ expected: '2026-11-20T12:00:00.000Z' }), now)).toBeNull()
     expect(etaProblem({ kind: 'eta', day: '2026-11-01', reason: '' }, transport(), now)).toEqual({ key: 'door.eta.beforeLeft' })
     expect(etaProblem({ kind: 'eta', day: '2028-01-01', reason: '' }, transport(), now)).toEqual({ key: 'door.eta.tooFar' })
     expect(etaBody({ kind: 'eta', day: '2026-11-25', reason: ' Phoned the carrier. ' }, transport())).toEqual({ version: 3, expectedDeliveryAt: '2026-11-25T12:00:00.000Z', reason: 'Phoned the carrier.' })
@@ -96,6 +99,29 @@ describe('Set expected arrival… (B-OS-016)', () => {
     expect(etaHeld({ allowed: false, refusal: { code: 'CARRIER_FED' } }, true)).toEqual({ key: 'door.eta.refusal.CARRIER_FED' })
     expect(etaHeld({ allowed: true, refusal: null }, false)).toEqual({ key: 'transport.held.noManage' })
     expect(etaHeld(undefined, true)).toEqual({ key: 'transport.held.notNow' })
+  })
+
+  it('F-OS-306 (os-fx6): the server\'s rule — the sent noon not before the goods left (no day\'s grace), a seen day changed says why', () => {
+    const now = new Date('2026-11-22T10:00:00.000Z')
+    // Left 12 Nov 08:00: its own day's noon is after it (offered); left 12 Nov 15:00: the 12th's noon is before it (from the 13th).
+    expect(etaMinDayOf('2026-11-12T08:00:00.000Z')).toBe('2026-11-12')
+    expect(etaMinDayOf('2026-11-12T15:00:00.000Z')).toBe('2026-11-13')
+    expect(etaMinDayOf(null)).toBeUndefined()
+    expect(etaProblem({ kind: 'eta', day: '2026-11-11', reason: '' }, transport(), now)).toEqual({ key: 'door.eta.beforeLeft' })
+    expect(etaProblem({ kind: 'eta', day: '2026-11-12', reason: '' }, transport({ shippedAt: '2026-11-12T15:00:00.000Z' }), now)).toEqual({ key: 'door.eta.beforeLeft' })
+    // The goods "left" in days to come (a seeded world): the window starts there, never at today.
+    expect(etaProblem({ kind: 'eta', day: '2026-11-25', reason: '' }, transport({ shippedAt: '2026-11-26T11:05:00.000Z' }), now)).toEqual({ key: 'door.eta.beforeLeft' })
+    expect(etaProblem({ kind: 'eta', day: '2026-11-28', reason: '' }, transport({ shippedAt: '2026-11-26T11:05:00.000Z' }), now)).toBeNull()
+    // A day the customer already reads, moved: why (3 to 500); the same day again: nothing to say.
+    const seen = transport({ expected: '2026-11-20T12:00:00.000Z' })
+    expect(etaReasonNeeded({ day: '2026-11-21' }, seen)).toBe(true)
+    expect(etaReasonNeeded({ day: '2026-11-20' }, seen)).toBe(false)
+    expect(etaReasonNeeded({ day: '2026-11-21' }, transport())).toBe(false)
+    expect(etaProblem({ kind: 'eta', day: '2026-11-21', reason: '' }, seen, now)).toEqual({ key: 'door.eta.why', params: { min: 3 } })
+    expect(etaProblem({ kind: 'eta', day: '2026-11-21', reason: 'The forwarder moved it.' }, seen, now)).toBeNull()
+    const view = readFileSync(new URL('../booking/view/TransportView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('min={etaMinDayOf(transport.shipment.shippedAt) /* F-OS-306 */}')
+    expect(view).toContain("required={etaReasonNeeded(dialog, transport)}")
   })
 })
 

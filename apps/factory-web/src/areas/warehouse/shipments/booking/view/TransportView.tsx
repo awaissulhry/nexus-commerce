@@ -15,6 +15,7 @@ import { DOOR_NAMESPACES as DEPTH_NAMESPACES, useDoorWords as useDepthWords } fr
 import type { LabelCheck, Transport } from '../api'
 import { allProblems, arrangeDialogOf, arrangeProblem, checkProblemWords, MANUAL_EVENT_STATUSES, mayHeld, OWN_TRANSPORT_LIMITS, statusProblem, trackingProblem, type TransportActions, type TransportModel } from '../model'
 import { etaDialogOf, etaHeld, etaProblem, overridesLabels } from '../model' // F-OS-203 (B-OS-015, B-OS-016)
+import { etaMinDayOf, etaReasonNeeded } from '../model' // F-OS-306 (os-fx6): the server's ETA rule in the dialog
 import { awbCheck, noticeOffered, parcelChangesOf, parcelLabelled, trackingDialogOf, trackingReasonNeeded } from '../model' // F-OS-301 (B-OS-022)
 import { PARCEL_TRACKING_LIMITS } from '@nexus/factory-domain/shipping/own-transport/rules' // F-OS-301
 import { OVERRIDE_REASON } from '@nexus/factory-domain/shipping/own-transport/rules' // F-OS-203
@@ -404,9 +405,10 @@ function EtaDialog({ transport, model, actions }: { transport: Transport; model:
     >
       <p className="fw-sh-hint">{t('door.eta.what')}</p>
       <Field label={t('door.eta.day')} htmlFor={dayId}>
-        <DateField id={dayId} value={dialog.day} onChange={(value) => actions?.onDialog?.({ ...dialog, day: value })} min={transport.shipment.shippedAt ? transport.shipment.shippedAt.slice(0, 10) : undefined} locale={INTL_LOCALE[locale]} clearable ariaLabel={t('door.eta.day')} />
+        <DateField id={dayId} value={dialog.day} onChange={(value) => actions?.onDialog?.({ ...dialog, day: value })} min={etaMinDayOf(transport.shipment.shippedAt) /* F-OS-306 */} locale={INTL_LOCALE[locale]} clearable ariaLabel={t('door.eta.day')} />
       </Field>
-      <Field label={t('door.wordsOptional')} hint={t('door.officeOnly')}>
+      {/* F-OS-306 (os-fx6): a day the customer already reads changes or is cleared — why is required (the server asks it), else optional. */}
+      <Field label={etaReasonNeeded(dialog, transport) ? t('door.why') : t('door.wordsOptional')} required={etaReasonNeeded(dialog, transport)} hint={t('door.officeOnly')}>
         <Textarea rows={2} limit={500} value={dialog.reason} onChange={(event) => actions?.onDialog?.({ ...dialog, reason: event.target.value })} />
       </Field>
       <p className="fw-sh-hint">{t('door.eta.told')}</p>
