@@ -3366,7 +3366,9 @@
       "step": {
         "page": "Page sent",
         "byChange": "{date} · by the priced change rev {revision}",
-        "issued": "Issued"
+        "issued": "Issued",
+        "paid": "Paid",
+        "byHand": "{date} · asked by hand"
       },
       "payments": {
         "title": "Its payments",
@@ -3394,7 +3396,6 @@
       "answer": {
         "none": "nothing is open yet: the customer pays on the invoice",
         "allPaid": "everything is paid",
-        "final": "the order is closed: its plan no longer changes",
         "stillOpen": "still open {amount}",
         "overdue": "overdue {amount}",
         "nextDue": "next: {what}, due {date}",
@@ -3405,10 +3406,10 @@
       },
       "held": {
         "moneyPlaced": "Money is placed on it: undo the payment first.",
-        "onlyStep": "The only step takes the whole order: add a step first.",
         "dayFromInvoice": "Its day comes from the invoice.",
         "final": "The order is closed: its plan no longer changes.",
-        "nothingFree": "Every step has money on it already: there is no open step to take it from."
+        "nothingFree": "Every step has money on it already: there is no open step to take it from.",
+        "noRest": "No other open step takes the rest: add a step first."
       },
       "shortHint": "{amount} short: banks often keep a fee on a transfer. Accept it as bank charges, or ask the customer for the rest."
     },

@@ -200,8 +200,10 @@ describe('F-OM-201: the plan\'s hand acts — orders.moneyPlan (amount acts: + t
 
   it('the only open step takes the whole order: Change amount… and Remove step… held; an on-invoice step\'s day comes from the invoice', () => {
     const onlyBalance = plan(order('IN_PRODUCTION'), { schedule: SCHEDULE, moneyPlan: true }).rows[1]!
-    expect(heldOf(onlyBalance, 'CHANGE_STEP')).toEqual({ key: 'moneyTab.plan.held.onlyStep' })
-    expect(heldOf(onlyBalance, 'REMOVE_STEP')).toEqual({ key: 'moneyTab.plan.held.onlyStep' })
+    // F-OM-fx3 (W-16): the words fit the plan — the deposit is paid, so no OTHER open step takes the rest.
+    expect(heldOf(onlyBalance, 'CHANGE_STEP')).toEqual({ key: 'moneyTab.plan.held.noRest' })
+    expect(heldOf(onlyBalance, 'REMOVE_STEP')).toEqual({ key: 'moneyTab.plan.held.noRest' })
+    expect(onlyBalance.restTo).toEqual([])
     const onInvoice = { ...SCHEDULE, steps: [SCHEDULE.steps[0]!, step({ id: 'oi', kind: 'ON_INVOICE', depositRequestId: null })] }
     expect(heldOf(plan(order('SHIPPED'), { schedule: onInvoice, moneyPlan: true }).rows[1]!, 'MOVE_DUE')).toEqual({ key: 'moneyTab.plan.held.dayFromInvoice' })
   })
@@ -349,6 +351,19 @@ describe('F-OM-fx3: the read doors', () => {
   })
 })
 
+// ---- F-OM-fx3 (W-15): a deposit replaced by hand was asked by hand, never "when the customer accepted the quote" ----
+describe('F-OM-fx3: asked by hand', () => {
+  it('a request made by a hand change (the step\'s or the request\'s own audit) says so; a quote\'s deposit does not', () => {
+    const replaced = deposit({ id: 'new-1', depositPct: '25', amount: 190320 })
+    const hand = { act: 'REPLACE_DEPOSIT', at: '2026-11-18T09:30:00.000Z', by: 'Bea Esempio', reason: 'The customer asked to pay 25 % first.' }
+    const schedule: Schedule = { ...SCHEDULE_OPEN, steps: SCHEDULE_OPEN.steps.map((entry) => (entry.kind === 'DEPOSIT' ? { ...entry, depositRequestId: 'new-1', byHand: hand } : entry)) }
+    expect(plan(withRequests(order('CONFIRMED'), [replaced]), { schedule }).rows[0]!.askedByHand).toBe(true)
+    expect(plan(order('CONFIRMED')).rows[0]!.askedByHand).toBe(false)
+    const asked: Schedule = { ...SCHEDULE_OPEN, requests: [{ id: deposit().id, milestoneId: SCHEDULE.steps[0]!.id, kind: 'ACCONTO', stepKind: 'DEPOSIT', status: 'OPEN', dueDate: '2026-11-04', fiscalDocument: 'TD02', byHand: { ...hand, act: 'ASK_AGAIN' } }] }
+    expect(plan(order('CONFIRMED'), { schedule: asked }).rows[0]!.askedByHand).toBe(true)
+  })
+})
+
 describe('F-OM-103: the head\'s answer', () => {
   it('still open · overdue · next (price); the plan read\'s figures first, else Totals\' one rule', () => {
     const answer = plan(order('CONFIRMED'), { stillToPay: 761280 }).answer
@@ -368,7 +383,8 @@ describe('F-OM-103: the head\'s answer', () => {
     expect(plan(withRequests(order('CONFIRMED', { depositRequired: false }), []), { schedule: SCHEDULE_NONE }).answer).toEqual([{ key: 'moneyTab.plan.answer.none' }])
     const allPaid = { ...SCHEDULE, steps: SCHEDULE.steps.map((entry) => ({ ...entry, status: 'PAID' as const })) }
     expect(plan(order('SHIPPED'), { schedule: allPaid }).answer).toEqual([{ key: 'moneyTab.plan.answer.allPaid' }])
-    expect(plan(order('CLOSED'), { schedule: allPaid }).answer).toEqual([{ key: 'moneyTab.plan.answer.allPaid' }, { key: 'moneyTab.plan.answer.final' }])
+    // F-OM-fx3 (W-20): a closed order's "its plan no longer changes" is the tab head's, said once — not again in the answer.
+    expect(plan(order('CLOSED'), { schedule: allPaid }).answer).toEqual([{ key: 'moneyTab.plan.answer.allPaid' }])
   })
 })
 
@@ -400,11 +416,11 @@ describe('F-OM-103: the words', () => {
       ...['waived', 'paidWithInvoices', 'paidOn', 'paid', 'asInvoice', 'onDelivery', 'overdueSince', 'on', 'beforeGoodsLeave', 'withInvoice', 'notOwed' /* F-OM-fx3 */].map((due) => `due.${due}`),
       ...['productionWaits', 'extraWaits', 'holdsShipment', 'paidWithInvoice', 'owedOnInvoice', 'owedOnInvoiceWords' /* F-OM-fx3 */].map((note) => `note.${note}`),
       ...['send', 'sendAgain', 'payInvoice', 'waive', ...MONEY_PLAN_ACTS].map((act) => `act.${act}`),
-      ...['moneyPlaced', 'onlyStep', 'dayFromInvoice', 'final', 'nothingFree'].map((held) => `held.${held}`),
+      ...['moneyPlaced', 'noRest' /* F-OM-fx3 (W-16) */, 'dayFromInvoice', 'final', 'nothingFree'].map((held) => `held.${held}`),
       ...[...MONEY_PLAN_ACTS, 'OTHER'].map((act) => `byHand.what.${act}`),
-      ...['none', 'allPaid', 'final', 'stillOpen', 'overdue', 'nextDue', 'next', 'short', 'partPaid', 'cancelled' /* F-OM-fx3 */].map((answer) => `answer.${answer}`),
+      ...['none', 'allPaid', 'stillOpen', 'overdue', 'nextDue', 'next', 'short', 'partPaid', 'cancelled' /* F-OM-fx3 */].map((answer) => `answer.${answer}`),
       'shortHint', // F-OM-fx3 (W-01)
-      ...['earlier.step', 'earlier.replaced', 'earlier.cancelled', 'setByHand', 'fromChange', 'fold', 'unfold', 'more', 'menu.openInvoice', 'step.page', 'step.byChange', 'step.issued', 'payments.title', 'payments.none', 'payments.ref', 'payments.paidSoFar'],
+      ...['earlier.step', 'earlier.replaced', 'earlier.cancelled', 'setByHand', 'fromChange', 'fold', 'unfold', 'more', 'menu.openInvoice', 'step.page', 'step.byChange', 'step.issued', 'step.paid', 'step.byHand' /* F-OM-fx3 (W-15) */, 'payments.title', 'payments.none', 'payments.ref', 'payments.paidSoFar'],
     ]
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)

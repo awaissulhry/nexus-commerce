@@ -206,9 +206,12 @@ function RequestBox({ row, request, order, model, actions, invoiceHref, say }: {
   const busy = model.busy ? t('held.busy') : null
   const sendWait = sdi ? sdiSendHeld(model.can, sdi.canSend && sdi.state.next.action === 'SEND') : null
   const linkWords = request.link ? t(`link.${request.link.state}`, { to: request.link.to ?? t('link.contact'), date: formatDate(request.link.sentAt, { locale }), until: formatDate(request.link.expiresAt, { locale }) }) : null
+  // F-OM-fx3 (W-15): a request made by a hand change says so ("asked by hand"), never "when the customer accepted the quote".
   const asked = row.fromChange
     ? t('moneyTab.plan.step.byChange', { date: formatDate(request.createdAt, { locale }), revision: row.fromChange.revision })
-    : t(request.quoteVersionId ? 'deposit.step.requestedWords' : 'deposit.step.requestedTyped', { date: formatDate(request.createdAt, { locale }) })
+    : row.askedByHand
+      ? t('moneyTab.plan.step.byHand', { date: formatDate(request.createdAt, { locale }) })
+      : t(request.quoteVersionId ? 'deposit.step.requestedWords' : 'deposit.step.requestedTyped', { date: formatDate(request.createdAt, { locale }) })
   const paidWords =
     request.status === 'PAID'
       ? request.paidAt
@@ -278,7 +281,7 @@ function RequestBox({ row, request, order, model, actions, invoiceHref, say }: {
   const tracker: { key: string; state: DepositStepState; label: string; words: ReactNode; door: ReactNode }[] = [
     { key: 'requested', state: steps.requested, label: t('deposit.step.requested'), words: asked, door: null },
     { key: 'page', state: steps.page, label: t('moneyTab.plan.step.page'), words: linkWords ?? (request.status === 'OPEN' ? t('deposit.step.pageNotSent') : t('deposit.step.pageNotNeeded')), door: null },
-    { key: 'paid', state: steps.paid, label: t('deposit.step.paid'), words: paidWords, door: null },
+    { key: 'paid', state: steps.paid, label: t('moneyTab.plan.step.paid') /* F-OM-fx3 (W-15): "Paid", the design's word */, words: paidWords, door: null },
     { key: 'invoice', state: steps.invoice, label: t('deposit.step.invoice'), words: invoiceWords, door: null },
     { key: 'sdi', state: steps.sdi, label: t('deposit.step.sdi'), words: sdiWords, door: sendSdi },
   ]

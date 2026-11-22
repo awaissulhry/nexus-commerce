@@ -3366,7 +3366,9 @@
       "step": {
         "page": "Pagina inviata",
         "byChange": "{date} · dalla modifica a pagamento rev {revision}",
-        "issued": "Emessa"
+        "issued": "Emessa",
+        "paid": "Pagato",
+        "byHand": "{date} · richiesto a mano"
       },
       "payments": {
         "title": "I suoi pagamenti",
@@ -3394,7 +3396,6 @@
       "answer": {
         "none": "ancora niente di aperto: il cliente paga alla fattura",
         "allPaid": "è tutto pagato",
-        "final": "l'ordine è chiuso: il suo piano non cambia più",
         "stillOpen": "ancora aperto {amount}",
         "overdue": "scaduto {amount}",
         "nextDue": "prossimo: {what}, scade il {date}",
@@ -3405,10 +3406,10 @@
       },
       "held": {
         "moneyPlaced": "Ci sono già pagamenti: annulla prima il pagamento.",
-        "onlyStep": "L'unica rata prende tutto l'ordine: aggiungi prima una rata.",
         "dayFromInvoice": "La sua scadenza viene dalla fattura.",
         "final": "L'ordine è chiuso: il suo piano non cambia più.",
-        "nothingFree": "Ogni rata ha già dei pagamenti: non c'è una rata aperta da cui prendere."
+        "nothingFree": "Ogni rata ha già dei pagamenti: non c'è una rata aperta da cui prendere.",
+        "noRest": "Nessun'altra rata aperta prende il resto: aggiungi prima una rata."
       },
       "shortHint": "Mancano {amount}: spesso la banca trattiene una commissione sul bonifico. Accettalo come spese bancarie, o chiedi il resto al cliente."
     },
