@@ -424,6 +424,8 @@ export const orderView = output({
       creditNoteIds: z.array(id()),
       /** B-OM-008: the refunds of those credit notes (refund.* re-reads Money). */
       refundIds: z.array(id()),
+      /** B-OF-004 (order files tab): the order's lines (a file event that names a line re-reads Files). */
+      lineIds: z.array(id()),
     }),
   }),
   /** Per part, the newest change: an office person or the order's own customer by name, "the floor" or "Nexus"; null: none. */

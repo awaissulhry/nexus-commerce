@@ -426,6 +426,17 @@ describe('B-OP-050: POST …/files/previews — small pictures and PDF links in 
     const thin = await ok('office.p1.thin', 'POST', previewsOf(w.a.salesOrderId), { fileIds: [files.measure, files.onMixed, files.onWorkOrder, files.shared] })
     expect(thin.previews.map((row: Json) => row.fileId)).toEqual([files.shared])
   })
+
+  // B-OF-006 (order files tab, PR S3.2; F7-B4): a picture whose type never gets a small preview says so: the card stops asking.
+  it('B-OF-006: a HEIC picture reads never: true; a JPEG whose small preview is not made yet never: false', async () => {
+    const heic = await cardFile('T-OF006 sleeve.heic', { kind: 'PHOTO', contentType: 'image/jpeg' })
+    await admin(`BEGIN; SET LOCAL session_replication_role = replica; UPDATE "StoredFile" SET "contentType" = 'image/heic' WHERE id = ${lit(heic.id)}; COMMIT;`)
+    const answer = await ok('office.all', 'POST', previewsOf(w.a.salesOrderId), { fileIds: [heic.id, cards.notYet.id] })
+    expect(answer.previews.map((row: Json) => [row.fileId, row.kind, row.small, row.later, row.never])).toEqual([
+      [heic.id, 'PICTURE', null, false, true],
+      [cards.notYet.id, 'PICTURE', null, false, false],
+    ])
+  })
 })
 // ── end B-OP-050 ──
 
