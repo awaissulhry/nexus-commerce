@@ -216,4 +216,19 @@ describe('F-OM-fx5w: the walk\'s gaps in the views (N7, N8, N10)', () => {
   it('N7: a paid deposit whose page was never sent — the page\'s step says so in its own words (model.ts depositSteps marks it done)', () => {
     expect(source('./view/PlanRow.tsx')).toContain("request.status === 'PAID' ? t('moneyTab.plan.step.pageSkipped')")
   })
+
+  it('N8: a cold #deposit / #schedule comes into view again once the parts above it are read; no focus dot on the alias', () => {
+    const page = source('../view/OrderRecordView.tsx')
+    expect(page).toContain("const moneyParts = model.tab === 'money' ? [model.schedule, model.settlement, model.margin?.part]")
+    expect(page).toContain('}, [model.tab, moneyParts])')
+    expect(source('./view/money.css')).toContain('.fw-om .fw-om-alias, .fw-om .fw-om-alias:focus, .fw-om .fw-om-alias:focus-visible { outline: none; }')
+  })
+
+  it('N10: Totals with no tile and no door (no invoices.view) — What is left takes the whole width, the facts spread to the right edge', () => {
+    expect(source('./view/TotalsSection.tsx')).toContain("const doorless = !totals.tiles && !totals.gaps.some((gap) => !!gap.door)")
+    expect(source('./view/TotalsSection.tsx')).toContain("${doorless ? ' is-nd' /* F-OM-fx5w (N10) */ : ''}")
+    const css = source('./view/money.css')
+    expect(css).toContain('.fw-om-tt.is-np.is-nd:not(.is-nr) { grid-template-columns: minmax(0, 1fr); grid-template-areas: "t" "r" "f"; }')
+    expect(css).toContain('.fw-om-tt.is-nd > .fw-om-facts { display: flex; flex-wrap: wrap; justify-content: space-between; }')
+  })
 })

@@ -259,10 +259,13 @@ function ReadyRecord({ order, model, actions, thread, printThread, customFields 
     count: tab === 'files' ? (model.files?.read?.total ?? null) : tabCountOf(tab, order, { changes: changesCount /* F-OP-117 */, viewInvoices: model.can.viewInvoices /* F-OP-306 */ }), // F-SA-237: the files the reader may open
   }))
   // F-SA-230: a section an old address named (`?tab=margin` → Money #margin) comes into view once its tab is drawn.
+  // F-OM-fx5w (N8): on Money the sections above it draw after their reads (the plan, the settlement, the margin, the price check), so a
+  // cold `#deposit` / `#schedule` landed short — it comes into view again once each of those reads is in (a key of their states).
+  const moneyParts = model.tab === 'money' ? [model.schedule, model.settlement, model.margin?.part].map((part) => (!part ? '-' : part.value ? 'v' : part.problem ? 'p' : 'r')).join('') + (model.priceCheck?.read.state ?? '-') : ''
   useEffect(() => {
     const id = typeof window === 'undefined' ? '' : decodeURIComponent(window.location.hash.slice(1))
     if (id) document.getElementById(id)?.scrollIntoView({ block: 'start' })
-  }, [model.tab])
+  }, [model.tab, moneyParts])
 
   // F-OP-102: one primary by state, every one in place (no page change).
   const primary =

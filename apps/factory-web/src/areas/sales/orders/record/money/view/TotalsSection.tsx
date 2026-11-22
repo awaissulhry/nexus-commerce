@@ -67,11 +67,14 @@ export function TotalsSection({ order, model, actions }: { order: Order; model: 
   )
   // F-OM-fx3 (W-05): What is left only when it holds something (a gap, the settled row, How it adds up).
   const left = !!totals.settledRow || totals.gaps.length > 0 || !!totals.adds
+  // F-OM-fx5w (N10): no tile and no gap with a door (a reader without invoices.view): nothing reaches the right edge of a half — What is
+  // left takes the whole width and the facts spread along it (money.css `is-nd`), never an empty right half.
+  const doorless = !totals.tiles && !totals.gaps.some((gap) => !!gap.door)
   // A settlement read that failed (invoices.view): one line with its own Try again, where the tiles would be.
   const failed = settlementPart?.problem ? <PartFailed part={t('moneyTab.totals.part')} problem={settlementPart.problem} onRetry={() => actions?.onRetryPart?.('settlement')} /> : null
   return (
     <Section id="totals" title={title} answer={say(totals.answer)} more={<LineMenuButton label={t('moneyTab.totals.more')} items={items} />} info={info}>
-      <div className={`fw-om-tt${totals.tiles ? '' : ' is-np'}${left ? '' : ' is-nr' /* F-OM-fx3 (W-05) */}`}>
+      <div className={`fw-om-tt${totals.tiles ? '' : ' is-np'}${left ? '' : ' is-nr' /* F-OM-fx3 (W-05) */}${doorless ? ' is-nd' /* F-OM-fx5w (N10) */ : ''}`}>
         {failed ? <div className="fw-om-tt-t">{failed}</div> : null}
         {totals.tiles && !failed ? (
           <div className="fw-om-tt-t">
