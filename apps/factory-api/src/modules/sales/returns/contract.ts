@@ -257,7 +257,7 @@ export const savePolicyContract = defineContract({
 // ---- what may come back -------------------------------------------------------------------------------------------
 
 export const returnableContract = defineContract({
-  querystring: input({ companyId: id(), partyId: id(), salesOrderId: id().optional(), invoiceId: id().optional() }),
+  querystring: input({ companyId: id(), partyId: id(), salesOrderId: id().optional(), invoiceId: id().optional(), /* B-OS-005: one shipment's lines */ shipmentId: id().optional() }),
   response: {
     200: output({
       lines: z.array(
