@@ -21,15 +21,12 @@ import { byApi, day } from './_harness/ui'
  *   scheduleOf           the order's money plan as Finance reads it (GET /sales/orders/:id/schedule)
  *   writeOffTolerance    the company's write-off tolerance in force (the Owner reads it; null: none)
  *   payDepositShort      a payment of the deposit less `short`, placed on its request (POST /payments), by Finance
- *   acceptShort          Accept short… by the API (ACCEPT_SHORT, bank charges), for a step that only reads the result
  *   openBalance          the balance step's request (Open for payment, POST …/schedule/:milestoneId/request) when it has none
  *   moveBalanceDue       the balance's due day moved by hand (MOVE_DUE) by Finance
  *   payPartOfBalance     a part payment on the balance's request (POST /payments) by Finance: the payment to undo
- *   undoPartPayment      the undo by the API (POST /payments/:paymentId/undo), for a step that only reads the result
  *   addHandCost          a hand cost line on the order's margin (POST /costing/margins/orders/:id/cost-lines) by Finance
  *   setMarginTarget      the order's target margin (PUT /costing/margins/orders/:id/target) by Finance
  *   typeCustomerPrice    the customer's price of the whole order typed `less` under ours by the Owner (PUT …/brand-prices)
- *   acceptDifference     "Accept the difference…" by the API (POST …/price-check/accept) by Finance, for a step that only reads it
  *   moneyWorld           all of the world above, in that order, once, with the worker settled at the end
  *
  * Every word and number is made up (TH9 money …); no customer's name is in them; nobody of the floor is named.
@@ -155,14 +152,6 @@ export async function payDepositShort(flow: Flow, order: MoneyOrder, short: numb
   return { paymentId: answer.payment.id as string, depositRequestId: order.depositRequestId, short }
 }
 
-/** Accept short… by the API: the deposit PAID by hand with bank charges (its steps follow at once). */
-export async function acceptShort(flow: Flow, order: MoneyOrder): Promise<Json> {
-  byApi(`Accept short… on ${order.number}'s deposit (bank charges)`)
-  const finance = await flow.desk('finance')
-  const request = requestOf(await scheduleOf(flow, order.id), order.depositRequestId)!
-  return flow.write(finance.page, 'POST', `/sales/orders/${order.id}/money-plan`, { act: 'ACCEPT_SHORT', requestId: order.depositRequestId, version: request.version, why: 'BANK_CHARGES', reason: MONEY_WORDS.acceptShort })
-}
-
 /** The balance step's request: Open for payment by Finance (orders.moneyPlan) when the step has none yet. */
 export async function openBalance(flow: Flow, order: MoneyOrder): Promise<{ stepId: string; requestId: string }> {
   const plan = await scheduleOf(flow, order.id)
@@ -198,13 +187,6 @@ export async function payPartOfBalance(flow: Flow, order: MoneyOrder, amount: nu
   return { paymentId: answer.payment.id as string, version: answer.payment.version as number, depositRequestId: requestId, amount }
 }
 
-/** The undo by the API (Finance): the allocation reversed, the payment voided when it pays nothing else. */
-export async function undoPartPayment(flow: Flow, part: PartPayment): Promise<Json> {
-  byApi('the undo of the part payment (POST /payments/:paymentId/undo)')
-  const finance = await flow.desk('finance')
-  return flow.write(finance.page, 'POST', `/payments/${part.paymentId}/undo`, { depositRequestId: part.depositRequestId, version: part.version, reason: MONEY_WORDS.undo })
-}
-
 /** A hand cost line on the order's margin, by Finance (costing.ledger.manage + the cost grain): its id. */
 export async function addHandCost(flow: Flow, orderId: string, amount: number = MONEY_FIGURES.commission, kind: 'FREIGHT_ESTIMATE' | 'COMMISSION' | 'BANK_CHARGES' | 'OTHER' = 'COMMISSION'): Promise<string> {
   byApi(`a hand cost line (${kind}, ${amount}) on the order's margin`)
@@ -237,18 +219,11 @@ export async function typeCustomerPrice(flow: Flow, orderId: string, less: numbe
   return { ourNet, brandNet: ourNet - less }
 }
 
-/** "Accept the difference…" by the API (Finance: orders.moneyPlan + price), with the nets as read. */
-export async function acceptDifference(flow: Flow, orderId: string, nets: { readonly ourNet: number; readonly brandNet: number }): Promise<Json> {
-  byApi('Accept the difference… (POST /sales/orders/:id/price-check/accept)')
-  const finance = await flow.desk('finance')
-  return flow.write(finance.page, 'POST', `/sales/orders/${orderId}/price-check/accept`, { ...nets, reason: MONEY_WORDS.accept })
-}
-
 /**
  * The whole world of step 14, in order: the money order (its deposit paid short within the tolerance, its balance's due day moved by
  * hand, a hand cost line and a target on its margin, the customer's price under ours) and the undo order (a part payment of its
  * balance); the worker settled at the end. The acts step 14 does on the screen — Accept short…, the undo, Accept the difference… —
- * are left to it (their API forms above are for a step that only reads). Call it once, inside a `flow.step` of the stage.
+ * are left to it (F-OM T.2: their API forms went, unused). Call it once, inside a `flow.step` of the stage.
  */
 export async function moneyWorld(flow: Flow): Promise<MoneyWorld> {
   const tolerance = await writeOffTolerance(flow)
