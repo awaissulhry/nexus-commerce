@@ -83,7 +83,7 @@ import {
   withdrawHeld,
   writeProblemOf,
 } from './model'
-import { LINE_BLK, LINE_RED, order, TODAY } from '../_demo/fixtures'
+import { LINE_BLK, LINE_RED, TODAY } from '../_demo/fixtures'
 
 describe('B-W2b-323 — the lists this app mirrors are the domain’s', () => {
   it('priority, season, freeze, the changes, the forecast and the milestones', () => {

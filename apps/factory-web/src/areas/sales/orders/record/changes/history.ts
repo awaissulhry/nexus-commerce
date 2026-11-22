@@ -74,12 +74,14 @@ function toldBy(told: readonly ToldChange[], match: (speaker: NonNullable<ToldCh
   return legacy ? toldOfHistory(legacy, told.filter((change) => !change.speaker)) : null
 }
 
-const SPEAKER_KINDS: Readonly<Record<string, (speaker: NonNullable<ToldChange['speaker']>) => Extract<ChangeRow, { told: ToldChange }>['kind'] | null>> = Object.freeze({
+// F-OC-302 (lead fix 2): a plain typed object — Object.freeze's Function overload took the record and lost the parameter types.
+type SpeakerKindOf = (speaker: NonNullable<ToldChange['speaker']>) => Extract<ChangeRow, { told: ToldChange }>['kind'] | null
+const SPEAKER_KINDS: Readonly<Record<string, SpeakerKindOf>> = {
   CANCELLED: () => 'cancelled',
   LINES: (speaker) => (speaker.change === 'REOPENED' ? 'linesReopened' : 'linesClosed'),
   HOLD: (speaker) => (speaker.hold?.placed === false ? 'pauseLifted' : 'paused'),
   ECO: () => 'styleReleased',
-})
+}
 
 export function changeRowsOf(input: HistoryInput): ChangeRow[] {
   const revisions: RevisionFacts[] = input.changes ? input.changes.map(factsOfChange) : (input.amendments ?? []).map(factsOfAmendment)
