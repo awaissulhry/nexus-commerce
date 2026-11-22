@@ -1,8 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { Banner, Card, EmptyState, Field, SummaryTable } from '@nexus/ui/components'
-import { Button, Checkbox, Pill, Spinner } from '@nexus/ui/primitives'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Checkbox, Spinner } from '@nexus/ui/primitives'
 import { ShieldAlert } from 'lucide-react' // F-SC-W4: the gate row's mark (Problems & holds)
 import { Textarea } from '../../../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../../../lib/i18n/format'
@@ -12,7 +12,7 @@ import { dayInstant } from '../../../model'
 import { Frame } from '../../view/Dialogs'
 import type { OrderGate, OrderRePromise } from '../api'
 import '../links.css'
-import { COMPLAINT_TONE, complaintHref, declineHeld, decideHeld, gateHref, RETURN_TONE, returnHref, showsPointers, type LinksActions, type LinksModel } from '../model'
+import { declineHeld, decideHeld, gateHref, type LinksActions, type LinksModel } from '../model'
 import { gateAnchorsOf, gatesOf } from '../model' // F-SC-W4 (+ W7: each row's anchor its gate's own id)
 
 /**
@@ -22,8 +22,8 @@ import { gateAnchorsOf, gatesOf } from '../model' // F-SC-W4 (+ W7: each row's a
  *   each re-promise planning sends ("Planning proposes new dates for line 2 · AX-100": the sizes from → to, who proposed it, the
  *   planner's note, Accept / Decline, the "Tell the customer" tick — held with why for a person who may not decide, the planner who
  *   proposed it included), and the last write's result. They go INSIDE the order's RecordNotices (one notice, the rest behind "N more").
- * - `PointsAtOrder`: the order's complaints and returns in "Shipments & invoices" — each list only with its right, each row a real link
- *   to its record; no right to either: nothing drawn.
+ * - F-OS-104 (order SHIPMENTS tab): the order's complaints and returns are the tab's section 3 now (shipments/view/AfterSalesSection.tsx,
+ *   one list by what the reader may see); the card that listed them here went.
  * - `DeclineDialog`: "Decline the new dates?" with the reason the planner reads.
  * - F-SC-W4 `GateRows`: the same refusals as rows of Production › Problems & holds ("What stops it") — the SAME title, style code,
  *   sentence and door; the page notice stays on top of every tab while it blocks (OrderRecordView draws GateNotices for every tab).
@@ -213,104 +213,5 @@ export function DeclineDialog({ model, actions }: { model: LinksModel | null | u
         <Textarea value={decline.reason} onChange={(event) => actions?.onDeclineReason?.(event.target.value)} rows={3} maxLength={1000} />
       </Field>
     </Frame>
-  )
-}
-
-/** The order's complaints and returns, in "Shipments & invoices" (each list by its own right; neither right: nothing). */
-export function PointsAtOrder({ model, actions, prefix }: { model: LinksModel | null | undefined; actions?: LinksActions; prefix: string }) {
-  const t = useT('orders')
-  const locale = useLocale()
-  if (!model) return null
-  if (model.state === 'loading')
-    return (
-      <Card padded aria-busy="true">
-        <p className="fw-so-hint" role="status">
-          <Spinner size={14} /> {t('links.loading')}
-        </p>
-      </Card>
-    )
-  if (model.state === 'error')
-    return (
-      <Card padded>
-        <EmptyState
-          title={t('links.failed')}
-          description={t(model.problem)}
-          action={
-            actions?.onRetry ? (
-              <Button size="sm" onClick={actions.onRetry}>
-                {t('common.retry')}
-              </Button>
-            ) : undefined
-          }
-        />
-      </Card>
-    )
-  const { links } = model
-  if (!showsPointers(links)) return null
-  const complaints = links.complaints
-  const returns = links.returns
-  return (
-    <Card padded>
-      <div className="fw-so-card-head">
-        <h2 className="fw-so-h2">{t('links.title')}</h2>
-        <span className="fw-so-hint">{t('links.hint')}</span>
-      </div>
-      {complaints !== null && (
-        <section className="fw-so-links-section" aria-label={t('links.complaints.title')}>
-          <h3 className="fw-so-h3">{t('links.complaints.title')}</h3>
-          {complaints.length === 0 ? (
-            <p className="fw-so-hint">{t('links.complaints.none')}</p>
-          ) : (
-            <SummaryTable
-              label={t('links.complaints.title')}
-              columns={[t('links.col.number'), t('links.col.status'), t('links.col.severity'), t('links.col.received'), t('links.col.answerDue')]}
-              rows={complaints.map((row) => ({
-                id: row.id,
-                cells: [
-                  <Link key="n" className="fw-so-link" href={complaintHref(prefix, row.id)}>
-                    {row.number}
-                  </Link>,
-                  <Pill key="s" tone={COMPLAINT_TONE[row.status] ?? 'neutral'}>{t(`links.complaintStatus.${row.status}`)}</Pill>,
-                  row.severity ? t(`links.severity.${row.severity}`) : '—',
-                  formatDate(row.receivedAt, { locale }),
-                  day(row.answerDueOn, locale),
-                ],
-              }))}
-              density="roomy"
-              stackOnPhone
-              align={['left', 'left', 'left', 'right', 'right']}
-            />
-          )}
-        </section>
-      )}
-      {returns !== null && (
-        <section className="fw-so-links-section" aria-label={t('links.returns.title')}>
-          <h3 className="fw-so-h3">{t('links.returns.title')}</h3>
-          {returns.length === 0 ? (
-            <p className="fw-so-hint">{t('links.returns.none')}</p>
-          ) : (
-            <SummaryTable
-              label={t('links.returns.title')}
-              columns={[t('links.col.number'), t('links.col.status'), t('links.col.wanted'), t('links.col.requested'), t('links.col.closed')]}
-              rows={returns.map((row) => ({
-                id: row.id,
-                cells: [
-                  <Link key="n" className="fw-so-link" href={returnHref(prefix, row.id)}>
-                    {row.number}
-                  </Link>,
-                  <Pill key="s" tone={RETURN_TONE[row.status] ?? 'neutral'}>{t(`links.returnStatus.${row.status}`)}</Pill>,
-                  row.outcomeWanted ? t(`links.wanted.${row.outcomeWanted}`) : '—',
-                  formatDate(row.requestedAt, { locale }),
-                  row.closedAt ? formatDate(row.closedAt, { locale }) : '—',
-                ],
-              }))}
-              density="roomy"
-              stackOnPhone
-              align={['left', 'left', 'left', 'right', 'right']}
-            />
-          )}
-        </section>
-      )}
-    </Card>
   )
 }
