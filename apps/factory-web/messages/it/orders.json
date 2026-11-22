@@ -3807,7 +3807,10 @@
         "targetBy": "Obiettivo {pct} · impostato a mano da {name}, {date}",
         "floorRole": "Minimo {pct} (ruolo {role})",
         "floorCompany": "Minimo {pct} (dell'azienda)",
-        "belowFloor": "segnalato: sotto il margine a cui è tenuto"
+        "belowFloor": "Sotto il minimo",
+        "aboveTarget": "Sopra l'obiettivo",
+        "belowTarget": "Sotto l'obiettivo",
+        "aboveFloor": "Sopra il minimo"
       },
       "kind": {
         "FREIGHT_ESTIMATE": "Trasporto (stima)",
@@ -3896,7 +3899,21 @@
         "never": "Il margine non si scrive mai: resta calcolato dal prezzo e dai costi."
       },
       "told": "non vede mai margini né costi.",
-      "who": "Salvato a tuo nome con la data di oggi; la cronologia conserva il valore precedente."
+      "who": "Salvato a tuo nome con la data di oggi; la cronologia conserva il valore precedente.",
+      "whereNone": "Niente è cambiato dal preventivo: ancora nessun ordine di lavoro.",
+      "whereRow": {
+        "QUOTED": "A preventivo",
+        "NOW": "Attuale",
+        "PRICE": "Prezzo",
+        "MATERIAL": "Materiali",
+        "LABOUR": "Confezione (CMT)",
+        "SUBCONTRACT": "Lavorazioni esterne",
+        "OVERHEAD": "Costi generali",
+        "ADJUSTMENT": "Rettifiche",
+        "FREIGHT": "Trasporto",
+        "BY_HAND": "Impostati a mano",
+        "points": "{points} punti"
+      }
     },
     "stop": {
       "title": "Fermare la pagina inviata a {to}?",

@@ -3807,7 +3807,10 @@
         "targetBy": "Target {pct} · set by hand by {name}, {date}",
         "floorRole": "Minimum {pct} ({role} role)",
         "floorCompany": "Minimum {pct} (the company's)",
-        "belowFloor": "flagged: below the margin it is held to"
+        "belowFloor": "Below the minimum",
+        "aboveTarget": "Above the target",
+        "belowTarget": "Below the target",
+        "aboveFloor": "Above the minimum"
       },
       "kind": {
         "FREIGHT_ESTIMATE": "Freight (estimate)",
@@ -3896,7 +3899,21 @@
         "never": "The margin itself is never typed: it stays worked out from the price and the costs."
       },
       "told": "never sees margins or costs.",
-      "who": "Saved under your name with today's date; the history keeps the old value."
+      "who": "Saved under your name with today's date; the history keeps the old value.",
+      "whereNone": "Nothing moved since the quote: no work order yet.",
+      "whereRow": {
+        "QUOTED": "At quote",
+        "NOW": "Now",
+        "PRICE": "Price",
+        "MATERIAL": "Materials",
+        "LABOUR": "Making (CMT)",
+        "SUBCONTRACT": "Outside work",
+        "OVERHEAD": "Overhead",
+        "ADJUSTMENT": "Adjustments",
+        "FREIGHT": "Freight",
+        "BY_HAND": "Set by hand",
+        "points": "{points} pts"
+      }
     },
     "stop": {
       "title": "Stop the page sent to {to}?",
