@@ -25,9 +25,10 @@ import { fileSeries, fromApiFile, recordFiles, toViewerFile, type FilesParty, ty
 import { useStripOpen } from '../../../lib/record-thread/files/use-strip-open'
 import { FILES_NS, FileStrip } from '../../../lib/record-thread/files/view/FileStrip'
 import type { MissingDocument } from '../../../lib/record-thread/files-view/model'
-import { FILES_VIEW_NS, FilesView, type BulkAction } from '../../../lib/record-thread/files-view/view/FilesView'
+import { FILES_VIEW_NS, FilesView } from '../../../lib/record-thread/files-view/view/FilesView'
 import { useOrderFiles } from './use-order-files' // F-SA-237
 import { useFileUpload } from '../../../lib/record-thread/files-view/use-file-upload' // F-OF-103: the ONE upload of the Files window
+import { useFileActs } from './use-file-acts' // F-OF-301: the acts on a record's files (moved out of the dock)
 import { stripFilesOf, type OrderFilesHost } from './use-order-files' // F-OP-215: the order page's ONE order-files read
 import { orderFileHrefOf } from './order-file-href' // F-OF-101: a block's door "Open on … ›"
 import type { SavedRepliesModel, SavedReplyLine } from '../../../lib/record-thread/helpers/model'
@@ -40,13 +41,9 @@ import { CloseThreadConfirm } from '../../../lib/record-thread/popups/view/Confi
 import { FileViewer, POPUPS_NS } from '../../../lib/record-thread/popups/view/FileViewer'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { downloadLink, setThreadStatus } from '../../../record-panels/api'
-import { setFilePriced } from '../../../record-panels/api' // F-CP-144: Mark as priced
-import { pricedRefusalKey } from '../../../lib/record-thread/files/model' // F-CP-144
-import { refusalCode } from './state' // F-CP-144
 import { useApprovals } from '../../../record-panels/approvals/use-approvals'
 import { takesApprovals } from '../../../record-panels/approvals/model'
 import { AskDialog } from '../../../record-panels/approvals/view/AskDialog'
-import { restoreVersion } from '../../../record-panels/files/api'
 import { WithMessages } from '../../../record-panels/i18n'
 import { useLiveChanges } from '../../../record-panels/live'
 import { uploadChoices } from '../../../record-panels/model'
@@ -70,11 +67,9 @@ import { takesAsk } from '../record-frame/model' // F-OP-212: an ask is taken on
 import { withChangeSide, type CardAsk, type CardChange } from '../../../lib/record-thread/card/model'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
 import { recordAddress } from '../../../lib/records/record-links'
-import { officeOnly, removeFile, shareWithParty } from './api'
 // B-TH-231: carry a file to another record (same customer or none); a refused file read in words.
-import { readUseOnTargets, useFileOn } from './api'
-import { carriable, offeredTargets, openRefusal, queryReady, targetLabel, useOnRefusal } from '../../../lib/record-thread/files/use-on'
-import { UseOnDialog, type UseOnModel } from '../../../lib/record-thread/files/view/UseOnDialog'
+import { openRefusal } from '../../../lib/record-thread/files/use-on'
+import { UseOnDialog } from '../../../lib/record-thread/files/view/UseOnDialog'
 import type { RecordThreadBase, RecordThreadHost } from './use-record-thread'
 import { useDockTop } from './ThreadPick' // F-OP-202: the dock's pick band, the card's first band
 // B-TH-251 (PROJ.linked-F05): "In project …" on the head of a record a project may link.
@@ -408,7 +403,6 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const orderFiles = hostFiles ?? ownOrderFiles
   // ---- end F-SA-237
   const [selected, setSelected] = useState<readonly string[]>([])
-  const [filesBusy, setFilesBusy] = useState(false)
   // ---- B-TH-280: the files in depth (B-W2b-177) in the Files view — read while it is open, with every files read: each document's type
   // and expiry, Versions, Mark up, What it is, and what the record's next moves still need (the view's "Missing before …" lines,
   // T9-F10, from the same documents read: one GET /files/documents, as the old Files tab did). A PDF version opens in the ONE viewer.
@@ -457,128 +451,21 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const fileUpload = useFileUpload(api, { companyId: host.record.companyId, record: key, siteId: host.record.siteId ?? null, partyId: partyId ?? null, choices, onDone: () => void base.loadFiles() })
   // ---- end F-OF-103
 
-  // ---- F-CP-144 (B-CP-014): Mark as priced / take the mark off, at the file's version; the list is read again (a reader without prices
-  // who marks it sees it locked from now on); a refusal in words (only a price holder takes it off; changed meanwhile).
-  const markPriced = async (fileId: string, priced: boolean) => {
-    const file = base.files.find((one) => one.id === fileId)
-    if (!file) return
-    setFilesBusy(true)
-    try {
-      await setFilePriced(api, fileId, { priced, version: file.version })
-      base.notify({ ns: 'record-files', key: priced ? 'priced.marked' : 'priced.unmarked', tone: 'success' })
-    } catch (error) {
-      base.notify({ ns: 'record-files', key: pricedRefusalKey(isApiError(error) ? error.kind : null, refusalCode(error)), tone: 'danger' })
-    } finally {
-      setFilesBusy(false)
-      void base.loadFiles()
-    }
-  }
-  // ---- end F-CP-144
-
-  const bulk = async (action: BulkAction, ids: readonly string[]) => {
-    const chosen = threadFiles.filter((file) => ids.includes(file.id))
-    const raw = base.files.filter((file) => ids.includes(file.id))
-    if (action === 'download') {
-      for (const file of chosen) {
-        try {
-          const { download } = await downloadLink(api, file.id)
-          const anchor = document.createElement('a')
-          anchor.href = storeUrl(download.url)
-          anchor.rel = 'noopener'
-          anchor.download = file.name
-          document.body.appendChild(anchor)
-          anchor.click()
-          anchor.remove()
-        } catch (error) {
-          base.notify({ ns: 'record-thread', key: openRefusal(error), tone: 'danger' })
-        }
-      }
-      return
-    }
-    setFilesBusy(true)
-    try {
-      for (const file of raw) {
-        if (action === 'share' && partyId) await shareWithParty(api, file, partyId)
-        else if (action === 'officeOnly') await officeOnly(api, file)
-        else if (action === 'remove') await removeFile(api, file)
-      }
-      setSelected([])
-    } catch {
-      base.notify({ ns: 'record-thread', key: 'notice.failed', tone: 'danger' })
-    } finally {
-      setFilesBusy(false)
-      void base.loadFiles()
-    }
-  }
-
-  // ── B-TH-231: "Use on another record…" (a message's files, a Files view row, the chosen files) ───────────────────────────
-  const emptyUseOn = (files: readonly ThreadFile[]): UseOnModel => ({ files: files.map((file) => ({ id: file.id, name: file.name })), party: party ? { name: party.name } : null, query: '', targets: null, searching: false, chosen: null, share: false, canShare: can.share, busy: false, problem: null, failed: [], copied: 0 })
-  const [useOn, setUseOn] = useState<UseOnModel | null>(null)
-  const useOnKeys = useRef(new Map<string, string>())
-  const useOnSeq = useRef(0)
-  const openUseOn = (ids: readonly string[]) => {
-    const files = carriable(threadFiles.filter((file) => ids.includes(file.id)))
-    if (files.length === 0) return
-    useOnKeys.current = new Map()
-    setUseOn(emptyUseOn(files))
-  }
-  const useOnQuery = useOn?.query ?? ''
-  const useOnFirst = useOn?.files[0]?.id ?? null
-  useEffect(() => {
-    if (!useOnFirst) return
-    const mine = ++useOnSeq.current
-    if (!queryReady(useOnQuery)) {
-      setUseOn((now) => (now ? { ...now, targets: null, searching: false } : now))
-      return
-    }
-    const controller = new AbortController()
-    const timer = setTimeout(() => {
-      setUseOn((now) => (now ? { ...now, searching: true } : now))
-      readUseOnTargets(api, useOnFirst, useOnQuery, controller.signal)
-        .then((answer) => {
-          if (mine !== useOnSeq.current) return
-          const targets = answer.tooShort ? null : offeredTargets(answer.targets, { recordType: key.type, recordId: key.id, partyId })
-          setUseOn((now) => (now ? { ...now, targets, searching: false, chosen: targets?.some((target) => target.key === now.chosen) ? now.chosen : null } : now))
-        })
-        .catch((error: unknown) => {
-          if (controller.signal.aborted || mine !== useOnSeq.current) return
-          setUseOn((now) => (now ? { ...now, searching: false, targets: [], problem: useOnRefusal(error) } : now))
-        })
-    }, 300)
-    return () => {
-      clearTimeout(timer)
-      controller.abort()
-    }
-  }, [api, key.type, key.id, partyId, useOnFirst, useOnQuery])
-  const confirmUseOn = async () => {
-    const asked = useOn
-    const target = asked?.targets?.find((one) => one.key === asked.chosen)
-    if (!asked || !target || asked.busy) return
-    setUseOn({ ...asked, busy: true, problem: null })
-    const failed: { name: string; reason: string }[] = []
-    const left: { id: string; name: string }[] = []
-    let copied = asked.copied
-    for (const file of asked.files) {
-      // One key per file and target: "Copy" again after a lost answer never copies twice.
-      const keyOf = `${file.id}:${target.key}:${asked.share ? 'shared' : 'office'}`
-      const idempotencyKey = useOnKeys.current.get(keyOf) ?? globalThis.crypto.randomUUID()
-      useOnKeys.current.set(keyOf, idempotencyKey)
-      try {
-        await useFileOn(api, file.id, { recordType: target.recordType, recordId: target.recordId, share: asked.share && target.partyId !== null }, idempotencyKey)
-        copied += 1
-      } catch (error) {
-        failed.push({ name: file.name, reason: useOnRefusal(error) })
-        left.push(file)
-      }
-    }
-    if (failed.length === 0) {
-      setUseOn(null)
-      base.notify({ ns: 'record-thread', key: 'notice.copied', params: { target: targetLabel(target) }, tone: 'success' })
-      return
-    }
-    setUseOn((now) => (now ? { ...now, busy: false, files: left, failed, copied, problem: failed.length === asked.files.length && failed.every((one) => one.reason === failed[0]!.reason) ? failed[0]!.reason : null } : now))
-  }
-  // ── end B-TH-231
+  // ---- F-OF-301 (13-backend §7 rows 2-3): the acts on this record's files — Mark as priced, the bulk bar, "Use on another record…" — MOVED to
+  // use-file-acts as they were (one path per job: the order's Files tab acts through the same hook); F-OF-303 (D4): the window's bulk
+  // "Delete N" opens the Delete window (the whole document, with a reason), the same on every record.
+  const acts = useFileActs(api, {
+    record: key,
+    files: base.files.map((file) => ({ id: file.id, name: file.originalName, version: file.version, visibility: file.visibility, versions: base.files.filter((one) => (one.seriesId ?? one.id) === (file.seriesId ?? file.id)).length, versionNo: file.versionNo ?? 1 })),
+    threadFiles,
+    partyId: partyId ?? null,
+    party: party ? { name: party.name } : null,
+    canShare: can.share,
+    notify: (notice) => base.notify(notice),
+    reload: () => void base.loadFiles(),
+    onCleared: () => setSelected([]),
+  })
+  // ---- end F-OF-301
 
   // ── saved replies beside the box (B-TH-208; GET /templates/replies, POST …/fill from THIS record) ──────────────────────
   const mayReply = can.email && isReplyRecordType(key.type)
@@ -916,7 +803,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     // B-TH-288: "/" opens the search over the Head row.
     ...(searchOffered ? { onSlash: () => openSearch(true) } : {}),
     // B-TH-231: the message's files the reader opens, carried to another record.
-    onUseOn: (messageId) => openUseOn(model.feed.messages.find((item) => item.id === messageId)?.files.map((file) => file.id) ?? []),
+    onUseOn: (messageId) => acts.openUseOn(model.feed.messages.find((item) => item.id === messageId)?.files.map((file) => file.id) ?? []),
     // ---- F-SA-244: Answer… on the customer's ask opens the page's ONE review window (the frame's answer door: the dock asks the
     // frame); Who was told… and "Still to do: N" on a change's line are the page's own doors.
     ...(frame?.answer ? { onAnswer: frame.answer.open, answerHref: frame.answer.href } : {}),
@@ -1081,7 +968,8 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
             held: fileUpload.outcome.held, // F-OF-103 (F5-B6)
             missing,
             upload: fileUpload.ask, // F-OF-103
-            busy: filesBusy || fileUpload.busy,
+            busy: acts.busy || fileUpload.busy,
+            acts: { ...acts.acts, notice: null, party: party?.name ?? null }, // F-OF-303: the Delete window (D4)
             now: Date.now(),
             // F-SA-237: a sales order's window draws the order's files (the same body as its Files tab).
             order: key.type === 'SalesOrder' ? orderFiles.model : null,
@@ -1091,11 +979,9 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
             onRetry: () => void base.loadFiles(),
             onSelect: setSelected,
             onOpen: (fileId, opener) => openViewer(latestOf(threadFiles), fileId, opener),
-            onRestore: (fileId) =>
-              void restoreVersion(api, fileId)
-                .catch(() => base.notify({ ns: 'record-thread', key: 'notice.failed', tone: 'danger' }))
-                .finally(() => void base.loadFiles()),
-            onBulk: (action, ids) => void bulk(action, ids),
+            // F-OF-301: Restore lives only inside Versions… (the depth's window); the row's own Restore went (F5-B11).
+            onBulk: (action, ids) => void acts.bulk(action, ids),
+            ...acts.actActions, // F-OF-303: the Delete window's fields and act
             // F-OF-103: the ONE upload (use-file-upload) — dropped files, their kind and audience, Add, Cancel, the outcome dismissed.
             onDrop: (dropped) => fileUpload.open(dropped),
             onUploadChange: fileUpload.change,
@@ -1103,8 +989,8 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
             onUploadCancel: fileUpload.cancel,
             onDismissRefused: fileUpload.dismiss,
             // B-TH-231: one row's file, or the chosen ones.
-            onUseOn: (ids) => openUseOn(ids),
-            onPriced: (fileId, priced) => void markPriced(fileId, priced), // F-CP-144
+            onUseOn: (ids) => acts.openUseOn(ids),
+            onPriced: (fileId, priced) => void acts.markPriced(fileId, priced), // F-CP-144
             // ---- F-SA-237: the order's files: its own open route, the bulk bar, its message in this thread ----
             ...(key.type === 'SalesOrder'
               ? {
@@ -1123,18 +1009,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
           slots={depthSlots /* B-TH-280 */}
         />
       )}
-      {useOn && (
-        <UseOnDialog
-          model={useOn}
-          actions={{
-            onQuery: (query) => setUseOn((now) => (now ? { ...now, query, problem: null } : now)),
-            onChoose: (choice) => setUseOn((now) => (now ? { ...now, chosen: choice, problem: null } : now)),
-            onShare: (share) => setUseOn((now) => (now ? { ...now, share } : now)),
-            onConfirm: () => void confirmUseOn(),
-            onClose: () => setUseOn(null),
-          }}
-        />
-      )}
+      {acts.useOn.model && <UseOnDialog model={acts.useOn.model} actions={acts.useOn.actions} /* F-OF-301: use-file-acts */ />}
       {taskDialog && (
         <TaskNewDialog
           recordLabel={host.recordLabel}

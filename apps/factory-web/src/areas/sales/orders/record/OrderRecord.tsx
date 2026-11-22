@@ -78,6 +78,13 @@ import { listOrderRequests, type BrandRequest } from '../../../home/approvals/re
 import { readRecordRequests, type OfficeRequest } from '../../../../record-panels/approvals/api'
 import { useOrderFiles } from '../../../_shared/record-thread/use-order-files' // F-SA-237: the order's files (one read, two places)
 import type { OrderFilesHost } from '../../../_shared/record-thread/use-order-files' // F-OP-215
+// ---- F-OF-301: the files in depth on the order page — Versions… of the order's own files, mounted ONCE here
+import { useFileDepth } from '../../../../record-panels/files/use-file-depth'
+import { DepthDialogs } from '../../../../record-panels/files/view/DepthParts'
+import { previewLink } from '../../../../record-panels/files/api'
+import { storeUrl } from '../../../../record-panels/store'
+import { orderFilesOf } from '../../../../lib/record-thread/files-view/model'
+// ---- end F-OF-301
 import { orderFileHrefOf } from '../../../_shared/record-thread/order-file-href' // F-OF-101: a block's door "Open on … ›"
 import { OrderDock } from './dock/OrderDock' // F-SA-262: the dock's pick of ONE conversation
 import { aboutPlace } from './dock/discuss' // F-SA-266: "Show on the page" — a message about a part of the order jumps back to its row
@@ -562,7 +569,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     enabled: tab === 'files' || session.permissions.includes('files.read'),
     partyId: order.status === 'ready' ? order.value.partyId : null,
     canShare: session.permissions.includes('files.manage'),
-    onProblem: (key) => setNotice({ tone: 'danger', words: { key: key === 'order.shareFailed' ? 'files.shareFailed' : 'files.openFailed' } }),
+    onProblem: () => setNotice({ tone: 'danger', words: { key: 'files.openFailed' } }), // F-OF-304: an act's notice is the body's own
     keep: true, // F-OP-125: the page's one read
     // F-OF-101: a block's door "Open on … ›" — the source record's own page (a change request: this order's Changes tab)
     hrefOf: (record) => (readyId ? orderFileHrefOf(record, { prefix, id: readyId, companyId: order.status === 'ready' ? order.value.companyId : null }) : null),
@@ -579,8 +586,33 @@ function RecordContainer({ orderId }: { orderId: string }) {
     canAskCustomer: session.permissions.includes('partners.tasks.manage'),
     readOnly: readOnlyOnPage(can),
     today: romeToday(),
+    // F-OF-301 / F-OF-303: a card's Versions… opens the page's ONE depth (below); Who can see… names the order's customer
+    onVersions: (fileId) => depthOpen.current(fileId),
+    partyName: order.status === 'ready' ? (order.value.party?.legalName ?? null) : null,
   })
   // ---- end F-SA-237
+  // ---- F-OF-301 (13-backend §7 rows 2-3): the files in depth on the order page — Versions… (Restore inside, two pictures side by side)
+  // of the order's own files and its lines', mounted ONCE here and drawn once below (the tab and the order's window open it through the
+  // container's card ⋯; the dock keeps its own for its record). No document tags here (the documents read stays the dock's).
+  const depthOpen = useRef<(fileId: string) => void>(() => undefined)
+  const orderRead = orderFiles.model.read
+  const depthFiles = useMemo(() => (orderRead ? orderFilesOf(orderRead).filter((file) => file.version !== undefined).map((file) => ({ id: file.id, originalName: file.name, contentType: file.contentType, version: file.version! })) : null), [orderRead])
+  const depth = useFileDepth({
+    api,
+    record: { type: 'SalesOrder', id: readyId ?? '' },
+    files: depthFiles,
+    canUpload: !readOnlyOnPage(can) && (orderFiles.model.may?.upload ?? false),
+    canRead: false,
+    prefix,
+    reloadFiles: orderFiles.reload,
+    // An earlier version (not in the read) opens in a new tab through its preview address; a refusal in the page's notice.
+    openPdf: (fileId) =>
+      void previewLink(api, fileId)
+        .then(({ preview }) => window.open(storeUrl(preview.url), '_blank', 'noopener'))
+        .catch(() => setNotice({ tone: 'danger', words: { key: 'files.openFailed' } })),
+  })
+  depthOpen.current = depth.actions.onOpenVersions
+  // ---- end F-OF-301
   // ---- F-OP-215 (11-dock §6.2): the dock gets this container (no read of its own): "All files" opens the Files tab (the dock's scope
   // kept; below 1280 px the full-width thread gives way), a tile opens the file in the ONE viewer there.
   const toFiles = () => router.replace(tabAddress(pathname, window.location.search, 'files', { narrow: narrowNow() }), { scroll: false })
@@ -866,6 +898,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
     />
     {/* F-SA-244: Who was told of one change (its line's card, History's Told line) — never who read it. */}
     {toldOpen && readyId && <WhoWasToldDialog orderId={readyId} messageId={toldOpen} onClose={() => setToldOpen(null)} />}
+    {/* F-OF-301: Versions… of the order's own files — the page's ONE depth window. */}
+    <DepthDialogs depth={depth.model} actions={depth.actions} />
     </CustomerOverrideProvider>
   )
 }
