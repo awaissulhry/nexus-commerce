@@ -8,8 +8,8 @@ import { byApi, day } from './_harness/ui'
  * as the person whose act it is (never SQL), each part said in the report as done by the API (`byApi`). Not a stage of its own (no
  * default export; the stage list reads only stage files): th9-order-page imports it. No screen file is touched here.
  *
- * Two orders of Brand Alpha (P1, its terms DEP30: 30 % on the order, the balance before shipping), typed by the Owner (their lines
- * carry prices):
+ * Two orders of Brand Alpha (P1: 30 % on the order; the balance before shipping — added by hand when the stack's terms leave the rest
+ * on the invoice, om-fx1s), typed by the Owner (their lines carry prices):
  *   the money order  its deposit paid SHORT by Finance within the company's write-off tolerance (bank charges) — still OPEN, ready
  *                    for step 14's "Accept short…"; its balance step opened if it had no request, and its due day moved by hand
  *                    (MOVE_DUE: the plan reads "Set by hand"); a hand cost line (a commission) and a target margin on its Margin; the
@@ -20,6 +20,7 @@ import { byApi, day } from './_harness/ui'
  *   typeMoneyOrder       an order of Brand Alpha typed by the Owner, CONFIRMED, with its deposit and balance steps (asserted)
  *   scheduleOf           the order's money plan as Finance reads it (GET /sales/orders/:id/schedule)
  *   writeOffTolerance    the company's write-off tolerance in force (the Owner reads it; null: none)
+ *   addBalanceStep       a balance before shipping added by hand (ADD_STEP) when the terms leave the rest on the invoice
  *   payDepositShort      a payment of the deposit less `short`, placed on its request (POST /payments), by Finance
  *   openBalance          the balance step's request (Open for payment, POST …/schedule/:milestoneId/request) when it has none
  *   moveBalanceDue       the balance's due day moved by hand (MOVE_DUE) by Finance
@@ -39,6 +40,7 @@ export const MONEY_WORDS = Object.freeze({
   moneyRef: 'T-TH9-MONEY-0001',
   undoRef: 'T-TH9-MONEY-0002',
   moveDue: 'Made-up: the customer pays the balance a week later, agreed by mail (TH9 money).',
+  addBalance: 'Made-up: part of the balance is paid before the goods leave, agreed with the customer (TH9 money).',
   acceptShort: 'Made-up: the bank kept its charges on the transfer (TH9 money).',
   undo: 'Made-up: the payment was typed on the wrong order (TH9 money).',
   costLine: 'Made-up: the agent’s commission on this order (TH9 money).',
@@ -125,10 +127,28 @@ export async function typeMoneyOrder(flow: Flow, customerRef: string): Promise<M
   expect(order.status, `${customerRef} is confirmed (no rule asks a yes of it)`).toBe('CONFIRMED')
   const plan = await scheduleOf(flow, order.id as string)
   const deposit = stepOf(plan, 'DEPOSIT')
-  const balance = stepOf(plan, 'BEFORE_SHIPPING')
   expect(deposit?.depositRequestId, `${customerRef}'s deposit step and its request (P1's terms ask 30 % on the order)`).toBeTruthy()
-  expect(balance, `${customerRef}'s balance before shipping`).toBeDefined()
-  return { id: order.id as string, number: order.number as string, grossAmount: plan.grossAmount as number, depositStepId: deposit!.id as string, depositRequestId: deposit!.depositRequestId as string, balanceStepId: balance!.id as string }
+  // End check 1 (om-fx1s): P1's terms on this stack leave the rest on the invoice — no step before shipping. Then Finance adds one
+  // by hand (ADD_STEP, the money plan's right), taken from the open rest, so the balance step 14 moves and pays exists either way.
+  const balance = stepOf(plan, 'BEFORE_SHIPPING') ?? (await addBalanceStep(flow, order.id as string, customerRef, plan))
+  return { id: order.id as string, number: order.number as string, grossAmount: plan.grossAmount as number, depositStepId: deposit!.id as string, depositRequestId: deposit!.depositRequestId as string, balanceStepId: balance.id as string }
+}
+
+/**
+ * A balance before shipping added by hand by Finance (ADD_STEP): half of the order's open rest (an open step other than the deposit,
+ * nothing paid on it), due before the promise — it is made with its request (a step before shipping with a day). The step, as the
+ * plan reads it after.
+ */
+export async function addBalanceStep(flow: Flow, orderId: string, label: string, plan: Json, dueDate: string = day(45)): Promise<Json> {
+  byApi(`a balance before shipping added by hand (ADD_STEP) on ${label}: P1's terms leave the rest on the invoice here`)
+  const rest = steps(plan).find((step) => step.kind !== 'DEPOSIT' && step.status === 'OPEN' && (step.paidSoFar ?? 0) === 0 && (step.amount as number) > 1)
+  expect(rest, `${label}: an open rest to take the balance before shipping from`).toBeDefined()
+  const finance = await flow.desk('finance')
+  const amount = Math.floor((rest!.amount as number) / 2)
+  const answer = await flow.write(finance.page, 'POST', `/sales/orders/${orderId}/money-plan`, { act: 'ADD_STEP', from: rest!.id, version: rest!.version, kind: 'BEFORE_SHIPPING', amount, dueDate, reason: MONEY_WORDS.addBalance })
+  const added = stepOf(answer, 'BEFORE_SHIPPING')
+  expect(added?.depositRequestId, `${label}: the balance before shipping added by hand, with its request`).toBeTruthy()
+  return added!
 }
 
 /** The company's write-off tolerance in force (minor units; null: none), as the Owner reads it. */

@@ -545,7 +545,7 @@ const stageWithFreight = (value: number, parts: Parts | null, freight: number, k
 /** B-OM-021: the hand lines and the target as the profitability shows them (the office people named, never a floor worker). */
 async function handViewsOf(db: Reader, orderId: string, hand: OrderHand, floor: OrderFloor | undefined) {
   const set = floor?.targetPct ? await db.auditLog.findFirst({ where: { recordType: 'SalesOrder', recordId: orderId, action: MARGIN_TARGET_ACTION }, orderBy: [{ at: 'desc' }, { id: 'desc' }], select: { at: true, audience: true, actorId: true, reason: true } }) : null
-  const setBy = set && set.audience === 'office' ? set.actorId : null
+  const setBy = set && set.audience === 'OFFICE' ? set.actorId : null // AuditAudience is upper case (OFFICE, FLOOR, …)
   const peopleIds = [...new Set([...hand.lines.flatMap((line) => (line.createdById ? [line.createdById] : [])), ...(setBy ? [setBy] : [])])]
   const people = new Map(peopleIds.length === 0 ? [] : (await db.user.findMany({ where: { id: { in: peopleIds } }, select: { id: true, displayName: true } })).map((row) => [row.id, row.displayName]))
   return {

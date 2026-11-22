@@ -606,8 +606,8 @@ describe('B-OP-022: Money = this order’s share — two orders on one TD24, par
       const { thisOrder } = await settlementOf('shareReader', orderId)
       expect([thisOrder.paid, thisOrder.stillToPay], orderId).toEqual([row.paid, row.balance])
     }
-    expect((await settlementOf('shareReader', fx.o1)).thisOrder).toEqual({ paid: 7500, stillToPay: 16900, invoicedShare: 24400, depositsPaid: 0 })
-    expect((await settlementOf('shareReader', fx.o2)).thisOrder).toEqual({ paid: 22500, stillToPay: 50700, invoicedShare: 73200, depositsPaid: 0 })
+    expect((await settlementOf('shareReader', fx.o1)).thisOrder).toEqual({ paid: 7500, stillToPay: 16900, invoicedShare: 24400, depositsPaid: 0, writtenOff: 0 })
+    expect((await settlementOf('shareReader', fx.o2)).thisOrder).toEqual({ paid: 22500, stillToPay: 50700, invoicedShare: 73200, depositsPaid: 0, writtenOff: 0 })
   })
 
   it('the shared invoice: its whole, this order’s share and what of it is open, the freight apart, the other order it bills', async () => {
@@ -723,12 +723,12 @@ describe('B-OP-046 (P16): the seeded monthly invoice — each of its two orders 
     expect(one.invoices).toEqual([
       expect.objectContaining({ id: monthly.invoiceId, docType: 'TD24', number: 'FT-2026-00004', status: 'ISSUED', grossTotal: 146400, paidAmount: 60000, share: 48800, openShare: 28800, freight: 0, otherOrders: [{ id: o2, number: 'SEED-SO-0102' }], otherOrdersHidden: 0 }),
     ])
-    expect(one.thisOrder).toEqual({ paid: 20000, stillToPay: 28800, invoicedShare: 48800, depositsPaid: 0 })
+    expect(one.thisOrder).toEqual({ paid: 20000, stillToPay: 28800, invoicedShare: 48800, depositsPaid: 0, writtenOff: 0 })
     const two = await settlementOf(o2)
     expect(two.invoices).toEqual([
       expect.objectContaining({ id: monthly.invoiceId, grossTotal: 146400, paidAmount: 60000, share: 97600, openShare: 57600, freight: 0, otherOrders: [{ id: o1, number: 'SEED-SO-0101' }], otherOrdersHidden: 0 }),
     ])
-    expect(two.thisOrder).toEqual({ paid: 40000, stillToPay: 57600, invoicedShare: 97600, depositsPaid: 0 })
+    expect(two.thisOrder).toEqual({ paid: 40000, stillToPay: 57600, invoicedShare: 97600, depositsPaid: 0, writtenOff: 0 })
     // The two shares make the whole (no freight on it); both orders shipped and invoiced, not settled (partly paid, not delivered to SDI).
     expect(one.invoices[0].share + two.invoices[0].share).toBe(146400)
     for (const settlement of [one, two]) expect(settlement).toMatchObject({ settled: false, fullyShipped: true, fullyInvoiced: true })

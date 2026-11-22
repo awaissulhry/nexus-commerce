@@ -307,8 +307,10 @@ describe('model ownership', () => {
       'OrderBrandPrice', // B-CP-005
       'OrderChangeRequest',
       'OrderChangeRequestLine',
+      'OrderCostLine', // B-OM-019 (order money schema wave): a hand cost line of an order's margin (costing.json)
       'OrderFreezeRule',
       'OrderGate',
+      'OrderPriceAcceptance', // B-OM-019: a price difference accepted by hand (sales-brand-prices.json)
       'OrgArea',
       'OutboxEvent',
       'OverheadRule',
