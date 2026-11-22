@@ -5,6 +5,7 @@ import { seen, type Desk, type Flow } from './_harness/flow'
 import { defineStage } from './_harness/stages'
 import { ensureBrand, signInToPortal, type PortalDesk } from './_harness/two-brands'
 import { answerOf, byApi, day, dialog, pickDate, press, routerActivity } from './_harness/ui'
+import { chooseFromMenu, pdf } from './_harness/ui' // F-OF T.2: a card's ⋯, the made-up files of step 16
 import { startsWith, words } from './_harness/words'
 // F-MS-106 (set the stage by hand): the customer's own stage and count words, and the domain's held words (no catalogue key has them).
 import { COUNT_TO_FOLLOW_WORDS } from '@nexus/factory-domain/production-brand/portal-read'
@@ -82,6 +83,12 @@ import { MONEY_WORDS, moneyWorld, scheduleOf } from './th9-money-world'
  *      on SEED-SH-0001's carrier labels Mark delivered… with a reason ("Set by hand"); Sales and Read-only read every cell with no
  *      door; A's buyer reads the typed parcel numbers in the portal (B's portal refuses A's orders: step 8). Each part the world
  *      cannot give (no PACKED hand-booked shipment, no parcel without a label) is said in the report.
+ *  16  F-OF (order FILES tab, T.2; 18-lead-settles L1–L9): the tab at the end, on SEED-SO-0002 — the Owner adds two files to Line 1 with
+ *      Add files…; asks a person for a file (the Factory designer when the stack holds the role, else the Planner; said); as that
+ *      person: Upload for this ask; back: "arrived to check" → Ask again… (why) → uploaded again → Accept… with "Share with {customer}"
+ *      → A's buyer reads it in the portal's Documents; Rename… a file (a new version) → Versions… → Restore v1; Delete… the wrong file
+ *      (why; the whole document); Sales reads the rows with the priced ask counted, never named; Read-only finds no Add, no Ask, and a
+ *      card's ⋯ without Rename…. Step 7 (the viewer walk) is unchanged.
  * Not here, said in the report: cut pieces (the floor's flow: the extra-pieces outcome is held by the design case
  * lines-review-outcome, B-OP-071 O1 and the unit tests of F-OP-107), the record of a shipment made elsewhere whose garments the seeds
  * date in the story's days ahead (B-OP-071 O4 records one), and the invoices of a shared shipment that left (B-OP-045).
@@ -120,6 +127,19 @@ const AMEND_REASON = 'Made-up: Brand Alpha wants two more 50 and one fewer 52.'
 const DSW = words('ds-words') // F-OL-06: the DS bar's own words (its region)
 const REFUSE_WORDS = 'Made-up: asked about an older version of the order; ask it again on this one.'
 const LIFT_REASON = 'Made-up: the lining roll came in (TH9).' // F-PT T.2
+// ---- F-OF T.2 (order FILES tab): step 16's words and files (made up; nobody of the floor named) ----
+const FV = words('record-thread-files-view')
+const FA = words('file-asks')
+const RF = words('record-files')
+const FILES_WORDS = {
+  ask: 'Made-up: the pattern PDF for size 52, with seam allowances (TH9 step 16).',
+  again: 'Made-up: the seam allowance is missing on the back panel (TH9 step 16).',
+  priced: 'Made-up: the costed tech pack for the customer (TH9 step 16).',
+  wrong: 'Made-up: uploaded to the wrong order (TH9 step 16).',
+} as const
+const FILES = { spec: pdf('T-TH9 size spec SEED-JKT-02'), wrong: pdf('T-TH9 wrong file'), first: pdf('T-TH9 pattern size 52 first'), second: pdf('T-TH9 pattern size 52 second') } as const
+const SPEC_RENAMED = 't-th9-size-spec-seed-jkt-02-final.pdf'
+// ---- end F-OF T.2
 const CHANGE_REASON = 'Made-up: Brand Alpha wants one fewer 52 (TH9 step 13).' // F-OC T.2
 // ---- F-OS T.2 (order SHIPMENTS tab): step 15's made-up words (office only; nobody of the floor named) ----
 const SHIP_WORDS = Object.freeze({
@@ -255,7 +275,7 @@ async function refusedToBeta(beta: PortalDesk, path: string, ofAlpha: readonly s
 
 export default defineStage({
   proves:
-    'the order page at the end: the yes in place (a waiting order confirmed, a stale change refused with its reason; a yes the Owner asked is held for her); a work order made in place; edit mode’s strip says which work order follows now and which waits, Apply, the planner decides the waiting one on the order page; tracking typed, corrected and cleared ("No live tracking"); the made-elsewhere dialog with its paper DDT and its live rules; a combined shipment of two orders made in place (B-OP-047); the files viewer walk by keys; customer B never offered or shown A’s orders, A’s ids answer B’s neutral refusal; SEED-SO-0002’s Overview sections 1–8 (F-OO-215): the headline, strips and moves, a line’s ⋯, People, Next dates, Requests & changes = the Changes badge, Linked records = the tab badges, a custom value saved beside Order facts at the order’s version (the sheet’s edit at the old version stale), the office note saved after it; the Production tab at the end (F-PT T.2): the ready ask, the supervisor’s reply answering it (“Latest update”), the promise history and its door, a hold lifted from Problems & holds, Read-only with no act; the Changes tab at the end (F-OC T.2): a save with the tick asks the customer by e-mail (the FAKE mailbox), Waiting on the customer draws the revised order, the customer’s yes in its portal empties it and What changed says “Customer said yes”, the planner decides the waiting work-order change from Waiting, Read-only with no act; the Money tab at the end (F-OM T.2): a deposit accepted short (bank charges) counts as paid and the band offers Make work orders, the balance "Set by hand", the margin’s hand cost and target, a price difference accepted by hand, a part payment undone, Sales with words and no amount, Read-only with no act; the Shipments tab at the end (F-OS T.2): split into several, a garment moved and a draft merged ("Merged into …"), an order taken off a shared draft in one go, a draft that travels without a DDT and its DDT put back, tracking numbers per parcel, the expected arrival set by hand and Mark delivered on our van (the order follows), Mark delivered over carrier labels with a reason ("Set by hand"), Sales and Read-only with no door',
+    'the order page at the end: the Files tab at the end (F-OF T.2): Add files… to a line, an ask for a file uploaded, asked again, accepted and shared (the portal shows it), a file renamed and its v1 restored from Versions…, a wrong file deleted with a reason, Sales with the priced ask counted, Read-only with no act; the yes in place (a waiting order confirmed, a stale change refused with its reason; a yes the Owner asked is held for her); a work order made in place; edit mode’s strip says which work order follows now and which waits, Apply, the planner decides the waiting one on the order page; tracking typed, corrected and cleared ("No live tracking"); the made-elsewhere dialog with its paper DDT and its live rules; a combined shipment of two orders made in place (B-OP-047); the files viewer walk by keys; customer B never offered or shown A’s orders, A’s ids answer B’s neutral refusal; SEED-SO-0002’s Overview sections 1–8 (F-OO-215): the headline, strips and moves, a line’s ⋯, People, Next dates, Requests & changes = the Changes badge, Linked records = the tab badges, a custom value saved beside Order facts at the order’s version (the sheet’s edit at the old version stale), the office note saved after it; the Production tab at the end (F-PT T.2): the ready ask, the supervisor’s reply answering it (“Latest update”), the promise history and its door, a hold lifted from Problems & holds, Read-only with no act; the Changes tab at the end (F-OC T.2): a save with the tick asks the customer by e-mail (the FAKE mailbox), Waiting on the customer draws the revised order, the customer’s yes in its portal empties it and What changed says “Customer said yes”, the planner decides the waiting work-order change from Waiting, Read-only with no act; the Money tab at the end (F-OM T.2): a deposit accepted short (bank charges) counts as paid and the band offers Make work orders, the balance "Set by hand", the margin’s hand cost and target, a price difference accepted by hand, a part payment undone, Sales with words and no amount, Read-only with no act; the Shipments tab at the end (F-OS T.2): split into several, a garment moved and a draft merged ("Merged into …"), an order taken off a shared draft in one go, a draft that travels without a DDT and its DDT put back, tracking numbers per parcel, the expected arrival set by hand and Mark delivered on our van (the order follows), Mark delivered over carrier labels with a reason ("Set by hand"), Sales and Read-only with no door',
   async run(flow: Flow) {
     const sales = await flow.desk('sales')
     const alphaId = await flow.seedId('party:P1')
@@ -1501,5 +1521,160 @@ export default defineStage({
       }
     })
     // ---- end F-OS T.2
+
+    // ---- F-OF T.2 (order FILES tab): the tab at the end, on SEED-SO-0002 ----
+    await flow.step('16 · the Files tab: Add files… to Line 1; Ask for a file… of a person → Upload for this ask → Ask again… → uploaded again → Accept… and share (the portal shows it); Rename… → Versions… → Restore v1; Delete… the wrong file (why); Sales reads the priced ask counted; Read-only finds no act', async () => {
+      const owner = await flow.desk('owner')
+      const { page } = owner
+      const files = page.locator('#files')
+      const asks = page.locator('#asks')
+      const card = (scope: Page, name: string) => scope.locator('.fw-rtv-card').filter({ has: scope.locator('.fw-rtv-card-open', { hasText: name }) })
+      const openFiles = async (desk: Desk) => {
+        await desk.go(`/sales/orders/${world.so2.id}?tab=files`)
+        await seen(desk.page.locator('#files'), 60_000)
+      }
+      const row = (scope: Page, text: string) => scope.locator('.fw-ask-row').filter({ hasText: text })
+
+      // ── Add files… to Line 1: two files at once (the ONE upload window: where it goes, what it is, who sees it) ──
+      await openFiles(owner)
+      await press(files.getByRole('button', { name: FV('files.add'), exact: true }))
+      const add = dialog(page)
+      await add.locator('input[type="file"]').setInputFiles([FILES.spec, FILES.wrong])
+      await seen(add.getByText(FILES.spec.name, { exact: true }), 30_000)
+      await add.getByRole('combobox', { name: FV('upload.where'), exact: true }).selectOption({ index: 1 }) // the order's first line
+      await answerOf(page, 'POST', /^\/files\/[^/]+\/complete$/, () => press(add.getByRole('button', { name: FV('upload.confirm', { count: 2 }), exact: true })))
+      await flow.settle()
+      await openFiles(owner)
+      await seen(card(page, FILES.spec.name), 60_000)
+      await seen(card(page, FILES.wrong.name), 60_000)
+      await flow.shot(page, 'files-added-to-line')
+
+      // ── Ask for a file… of a person: the Factory designer when the stack holds the role (S3: tasks.manage), else the Planner ──
+      const roles = ((await flow.read(page, '/auth/roles')).roles ?? []) as Json[]
+      const askedKey = roles.some((role) => role.key === 'designer' && !role.archivedAt) ? ('designer' as const) : ('planner' as const)
+      if (askedKey === 'planner') notHere('the Factory designer asked: the stack holds no `designer` role; the Planner is asked instead')
+      const askedName = askedKey === 'designer' ? 'Dina Designer' : 'Paola Planner'
+      const asked = await flow.desk(askedKey)
+      await press(asks.getByRole('button', { name: FA('band.ask'), exact: true }), 60_000)
+      const askBox = dialog(page)
+      await askBox.getByRole('textbox', { name: startsWith(FA('ask.what')) }).fill(FILES_WORDS.ask)
+      const pick = askBox.getByRole('combobox', { name: FA('ask.pick.PERSON'), exact: true })
+      await expect(pick.locator('option', { hasText: askedName }), `${askedName} may be asked (the choices read)`).toHaveCount(1, { timeout: 60_000 })
+      await pick.selectOption({ label: askedName })
+      await answerOf(page, 'POST', /^\/sales\/orders\/[^/]+\/file-asks$/, () => press(askBox.getByRole('button', { name: FA('ask.send'), exact: true })))
+      await flow.settle()
+      await seen(row(page, FILES_WORDS.ask), 60_000)
+
+      // ── As that person: Upload for this ask (the asker's words on top of the ONE upload window) ──
+      const uploadFor = async (file: { name: string; mimeType: string; buffer: Buffer }) => {
+        await openFiles(asked)
+        const mine = row(asked.page, FILES_WORDS.ask)
+        await seen(mine, 60_000)
+        await press(mine.getByRole('button', { name: FA('act.upload'), exact: true }))
+        const box = dialog(asked.page)
+        await seen(box.getByText(FILES_WORDS.ask).first(), 30_000) // the asker's words on top
+        await box.locator('input[type="file"]').setInputFiles(file)
+        await answerOf(asked.page, 'POST', /^\/sales\/orders\/[^/]+\/file-asks\/[^/]+\/answer$/, () => press(box.getByRole('button', { name: FA('upload.send'), exact: true })))
+        await flow.settle()
+      }
+      await uploadFor(FILES.first)
+
+      // ── Back: "arrived to check" → Ask again… (why) → uploaded again ──
+      await openFiles(owner)
+      await expect(asks).toContainText(FA('band.answer.arrived', { count: 1 }), { timeout: 60_000 })
+      await press(row(page, FILES_WORDS.ask).getByRole('button', { name: FA('act.again'), exact: true }))
+      const againBox = dialog(page)
+      await againBox.getByRole('textbox', { name: startsWith(FA('again.why')) }).fill(FILES_WORDS.again)
+      await answerOf(page, 'POST', /^\/sales\/orders\/[^/]+\/file-asks\/[^/]+\/ask-again$/, () => press(againBox.getByRole('button', { name: FA('again.go'), exact: true })))
+      await flow.settle()
+      await uploadFor(FILES.second)
+
+      // ── Accept… with "Share with {customer}": the file shows in A's portal Documents ──
+      await openFiles(owner)
+      await press(row(page, FILES_WORDS.ask).getByRole('button', { name: FA('act.accept'), exact: true }), 60_000)
+      const acceptBox = dialog(page)
+      await acceptBox.getByRole('checkbox', { name: startsWith(lead(FA('accept.share'))) }).check()
+      await answerOf(page, 'POST', /^\/sales\/orders\/[^/]+\/file-asks\/[^/]+\/accept$/, () => press(acceptBox.getByRole('button', { name: FA('accept.go'), exact: true })))
+      await flow.settle()
+      await openFiles(owner)
+      await expect(row(page, FILES_WORDS.ask)).toHaveCount(0, { timeout: 60_000 })
+      await flow.shot(page, 'files-ask-accepted')
+      const alpha = await signInToPortal(flow, BRAND_ALPHA, alphaId)
+      await alpha.go(`/orders/${world.so2.id}?tab=documents`)
+      await seen(alpha.page.getByText(FILES.second.name).first(), 60_000)
+      await expectNothingOf(alpha.page, BRAND_BETA, world.betaNumbers, 'alpha portal: the accepted file')
+
+      // ── Rename… (a new version with the new name) → Versions… → Restore v1 (the old name back as the next version) ──
+      const act = async (name: string, item: string) => {
+        const target = card(page, name)
+        await seen(target, 60_000)
+        await chooseFromMenu(target.getByRole('button', { name: FV('acts.menu.label', { name }), exact: true }), page.getByRole('menuitem', { name: startsWith(item) }))
+        return dialog(page)
+      }
+      const rename = await act(FILES.spec.name, FV('acts.menu.rename'))
+      await rename.getByRole('textbox', { name: FV('acts.rename.field'), exact: true }).fill(SPEC_RENAMED)
+      await answerOf(page, 'POST', /^\/files\/[^/]+\/rename$/, async () => {
+        await press(rename.getByRole('button', { name: FV('acts.rename.go'), exact: true }))
+        await flow.stepUp(page, owner.person)
+      })
+      await flow.settle()
+      await openFiles(owner)
+      await seen(card(page, SPEC_RENAMED), 60_000)
+      const versions = await act(SPEC_RENAMED, FV('acts.menu.versions'))
+      await seen(versions.getByText(RF('versions.title', { name: SPEC_RENAMED })).first(), 60_000)
+      const firstVersion = versions.getByRole('row').filter({ has: page.getByText(RF('versions.number', { n: 1 }), { exact: true }) })
+      await answerOf(page, 'POST', /^\/files\/[^/]+\/restore$/, async () => {
+        await press(firstVersion.getByRole('button', { name: RF('versions.restore'), exact: true }), 60_000)
+        await flow.stepUp(page, owner.person)
+      })
+      await flow.settle()
+      await press(versions.getByRole('button', { name: RF('versions.close'), exact: true }).last()) // the footer's Close (the head's ✕ shares the name)
+      await openFiles(owner)
+      await seen(card(page, FILES.spec.name), 60_000) // v1's name is in force again (a new version)
+      await flow.shot(page, 'files-renamed-restored')
+
+      // ── Delete… the wrong file: the whole document, with a reason (cannot be undone) ──
+      const remove = await act(FILES.wrong.name, FV('acts.menu.delete'))
+      await seen(remove.getByText(FV('acts.delete.warn')).first(), 30_000)
+      await remove.getByRole('textbox', { name: startsWith(FV('acts.delete.why')) }).fill(FILES_WORDS.wrong)
+      await answerOf(page, 'POST', /^\/files\/[^/]+\/delete-document$/, async () => {
+        await press(remove.getByRole('button', { name: FV('acts.delete.go', { count: 1 }), exact: true }))
+        await flow.stepUp(page, owner.person)
+      })
+      await flow.settle()
+      await openFiles(owner)
+      await expect(card(page, FILES.wrong.name)).toHaveCount(0, { timeout: 60_000 })
+
+      // ── Sales reads the rows; a priced ask (made by the API, asked of Finance, who sees prices) is counted, never named ──
+      byApi('the priced ask of step 16 (asked of Finance, who sees prices): its words never reach Sales')
+      const finance = await flow.person('finance')
+      await flow.write(page, 'POST', `/sales/orders/${world.so2.id}/file-asks`, { words: FILES_WORDS.priced, fileKind: 'DOCUMENT', target: { type: 'SALES_ORDER' }, who: { kind: 'PERSON', userId: finance.id }, dueOn: day(5), priced: true }, 201)
+      await flow.settle()
+      await openFiles(sales)
+      const salesAsks = sales.page.locator('#asks')
+      await seen(salesAsks, 60_000)
+      await expect(salesAsks).toContainText(FA('band.counted.priced', { count: 1 }), { timeout: 60_000 })
+      await expect(sales.page.getByText(FILES_WORDS.priced)).toHaveCount(0)
+      await expectNothingOf(sales.page, BRAND_BETA, world.betaNumbers, "A's Files tab (sales)")
+      await flow.shot(sales.page, 'files-sales')
+
+      // ── Read-only reads: no Add files…, no Ask for a file…, a card's ⋯ without Rename… (Versions… only) ──
+      const reader = await flow.desk('reader')
+      await openFiles(reader)
+      await expect(reader.page.getByRole('button', { name: FV('files.add'), exact: true })).toHaveCount(0)
+      await expect(reader.page.getByRole('button', { name: FA('band.ask'), exact: true })).toHaveCount(0)
+      const readCard = card(reader.page, FILES.spec.name)
+      await seen(readCard, 60_000)
+      const more = readCard.getByRole('button', { name: FV('acts.menu.label', { name: FILES.spec.name }), exact: true })
+      if ((await more.count()) === 0) notHere('Read-only: the spec card has no ⋯ (nothing it may open from there)')
+      else {
+        await more.click()
+        await seen(reader.page.getByRole('menuitem', { name: startsWith(FV('acts.menu.versions')) }), 30_000)
+        await expect(reader.page.getByRole('menuitem', { name: startsWith(FV('acts.menu.rename')) })).toHaveCount(0)
+        await reader.page.keyboard.press('Escape')
+      }
+      await flow.shot(reader.page, 'files-reader')
+    })
+    // ---- end F-OF T.2
   },
 })

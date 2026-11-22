@@ -32,7 +32,9 @@ export const ROLES = {
  * asks of the Owner's role.
  */
 // F-PT T.2: a Read-only person (the role template read_only) for th9's step 12 — not in ROLES (no stage makes every role).
-export const MORE_ROLES = { owner: 'owner', reader: 'read_only' } as const
+// F-OF T.2 (order FILES tab): the Factory designer (template `designer`, tasks.manage since S3) — asked for a file in th9's step 16 when the
+// stack holds the role (else the step asks the Planner and says so).
+export const MORE_ROLES = { owner: 'owner', reader: 'read_only', designer: 'designer' } as const
 export type PersonKey = keyof typeof ROLES | keyof typeof MORE_ROLES
 const ROLE_OF: Record<PersonKey, string> = { ...ROLES, ...MORE_ROLES }
 const NAMES: Record<PersonKey, string> = {
@@ -47,6 +49,7 @@ const NAMES: Record<PersonKey, string> = {
   admin: 'Ada Admin',
   owner: 'Olga Owner', // F-OP-129
   reader: 'Rita Reader', // F-PT T.2
+  designer: 'Dina Designer', // F-OF T.2
 }
 
 export const TENANT = 'golden'
