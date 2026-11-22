@@ -71,7 +71,7 @@ describe('F-OP-118: Money = this order\'s share', () => {
   it('the words exist in both languages', () => {
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-      for (const key of ['money.share', 'money.invoiceWhole', 'money.alsoBills']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      for (const key of ['money.share', 'money.alsoBills']) expect(t(key), `${locale} ${key}`).not.toBe(key) // F-OM-303: money.invoiceWhole left (no screen read it)
       for (const [key, params] of [['money.freight', { amount: '€ 40' }], ['money.statement', { customer: 'Brand Alpha' }], ['money.alsoBillsHidden', { count: 2 }]] as const) expect(t(key, params), `${locale} ${key}`).not.toBe(key)
     }
   })

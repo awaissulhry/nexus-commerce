@@ -1,13 +1,12 @@
 import { z } from 'zod'
-import { DELIVERED_VIAS } from '@nexus/factory-domain/shipping/pod/rules'
 import type { ApiClient } from '../../../../../../lib/api/client'
 
 /**
- * An order's deliveries (B-W2b-398; apps/factory-api modules/sales/orders/delivered.ts; design sales.orders record ›
- * Shipments "Delivered (W2b, from carrier)"): each shipment that left — when it arrived, how we know (the carrier's
- * tracking or a status typed by a person), its proof of delivery (who signed, when, whether an image is kept), its open
- * tracking problems — the order's delivery time, and the payment steps that run from delivery. The proof's image is
+ * An order's deliveries (B-W2b-398; apps/factory-api modules/sales/orders/delivered.ts): each shipment that left — when it arrived,
+ * how we know (the carrier's tracking or a status typed by a person), its proof of delivery (who signed, when, whether an image is
+ * kept), its open tracking problems — the order's delivery time, and the payment steps that run from delivery. The proof's image is
  * downloaded from the shipment (`GET /shipping/shipments/:id/pod/file`, shipping.view): a presigned address of 60 seconds.
+ * F-OS-104 (18-lead-settles L5): the read stays; its card went — each Shipments row draws its delivery in its Dates cell.
  */
 
 export const deliveriesSchema = z.object({
@@ -20,11 +19,21 @@ export const deliveriesSchema = z.object({
       carrierName: z.string().nullable(),
       shippedAt: z.string().nullable(),
       deliveredAt: z.string().nullable(),
-      deliveredVia: z.enum(DELIVERED_VIAS).nullable(),
+      // F-OS-103 (B-OS-003): CARRIER · TYPED · COLLECTED (the customer collected it) — a plain string, so a new way never breaks the read.
+      deliveredVia: z.string().nullable(),
       // B-SA-0xxb / F-SA-266b: the proof's own file (files.read on the shipment): it opens in the thread's ONE viewer.
       pod: z.object({ signedBy: z.string().nullable(), signedAt: z.string().nullable(), image: z.boolean(), file: z.object({ id: z.string(), name: z.string(), contentType: z.string(), sizeBytes: z.number() }).nullable().optional() }).nullable(),
       openProblems: z.number(),
       mayOpen: z.boolean(),
+      // ---- F-OS-103 (B-OS-003, optional until the server's S1 lands): a status set by hand (its reason, office only; whether it
+      // overrode the carrier), what the carrier said later (DELIVERED | RETURNED), a shipment that came back and whether its garments
+      // were received back, the expected arrival and whether a person typed it. Absent: the row says what it says today.
+      byHand: z.object({ reason: z.string().nullable(), overrode: z.boolean() }).nullable().optional(),
+      carrierLater: z.string().nullable().optional(),
+      returned: z.object({ at: z.string().nullable(), received: z.boolean() }).nullable().optional(),
+      expectedDeliveryAt: z.string().nullable().optional(),
+      etaByHand: z.boolean().optional(),
+      // ---- end F-OS-103
     }),
   ),
   steps: z.array(z.object({ id: z.string(), seq: z.number(), status: z.string(), dueDate: z.string().nullable() })),

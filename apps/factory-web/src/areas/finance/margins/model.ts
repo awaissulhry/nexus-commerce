@@ -1,7 +1,7 @@
 import { isApiError } from '../../../lib/api/errors'
 import type { Locale } from '../../../lib/i18n/locales'
 import { moneyText, pctText } from '../costing/model'
-import { SALES_ORDER_STATUSES, WATERFALL_REASONS, type CustomerGroup, type MarginsQuery, type OrderMargin, type OrderMarginRow, type StyleGroup, type WaterfallReason } from './api'
+import { SALES_ORDER_STATUSES, WATERFALL_REASONS, type CostLineKind, type CustomerGroup, type MarginsQuery, type OrderMargin, type OrderMarginRow, type StyleGroup, type WaterfallReason } from './api' // F-OM-306: + CostLineKind
 // B-W2b-416: the address's floor filter (the tile "Orders below the floor").
 import { floorFilterOf, type FloorFilter } from './floor/model'
 
@@ -114,22 +114,34 @@ export function pointsBetween(from: string | null | undefined, to: string | null
 
 export interface BridgeRow {
   readonly id: string
-  readonly kind: 'value' | 'cost' | 'freight' | 'margin'
-  /** A message key (`bridge.price`, `part.MATERIAL`, `bridge.freight`, `bridge.margin`). */
+  // F-OM-306: + 'hand', a cost line set by hand (B-OM-021).
+  readonly kind: 'value' | 'cost' | 'freight' | 'hand' | 'margin'
+  /** A message key (`bridge.price`, `part.MATERIAL`, `bridge.freight`, `bridge.hand.COMMISSION`, `bridge.margin`). */
   readonly label: string
   readonly amount: number | null
+  /** F-OM-306: a hand line's kind (the Money section says it in its own words). */
+  readonly handKind?: CostLineKind
 }
 
 /**
  * The order's profitability as a bridge (design pop:order "price − material − labour − subcontract − freight = margin"):
- * the value now, each cost part as estimated now, freight (none recorded yet: left out, said in words), the margin.
+ * the value now, each cost part as estimated now, freight (none recorded yet: its amount null, said in words), the margin.
  * Null without the cost grain (a margin amount gives the cost away).
+ *
+ * F-OM-306 (order MONEY tab; B-OM-007, B-OM-021): THE one rule of the figures, for Finance › Margins and the order's Money › Margin
+ * alike (one number per order): the freight the read counts (the shipments' carriers, in the order's currency) and each cost line
+ * set by hand (else their sum, `handCost`) are rows of their own — price − parts − freight − the hand lines = the margin now.
  */
-export function bridgeOf(detail: Pick<OrderMargin, 'estimate'>, can: Pick<MarginsCan, 'cost' | 'price'>): BridgeRow[] | null {
+export function bridgeOf(detail: Pick<OrderMargin, 'estimate' | 'handLines'>, can: Pick<MarginsCan, 'cost' | 'price'>): BridgeRow[] | null {
   const stage = detail.estimate
   if (!can.cost || !can.price || !stage.parts) return null
   const parts = stage.parts
-  const amount = (value: number | undefined) => (typeof value === 'number' ? value : null)
+  const amount = (value: number | null | undefined) => (typeof value === 'number' ? value : null)
+  const hand: BridgeRow[] = detail.handLines?.length
+    ? detail.handLines.map((line) => ({ id: `hand-${line.id}`, kind: 'hand' as const, label: `bridge.hand.${line.kind}`, amount: line.amount, handKind: line.kind }))
+    : typeof stage.handCost === 'number' && stage.handCost > 0
+      ? [{ id: 'BY_HAND', kind: 'hand' as const, label: 'bridge.byHand', amount: stage.handCost }]
+      : []
   return [
     { id: 'price', kind: 'value', label: 'bridge.price', amount: amount(stage.value) },
     { id: 'MATERIAL', kind: 'cost', label: 'part.MATERIAL', amount: amount(parts.material) },
@@ -137,7 +149,9 @@ export function bridgeOf(detail: Pick<OrderMargin, 'estimate'>, can: Pick<Margin
     { id: 'SUBCONTRACT', kind: 'cost', label: 'part.SUBCONTRACT', amount: amount(parts.subcontract) },
     { id: 'OVERHEAD', kind: 'cost', label: 'part.OVERHEAD', amount: amount(parts.overhead) },
     ...(typeof parts.adjustment === 'number' && parts.adjustment !== 0 ? [{ id: 'ADJUSTMENT', kind: 'cost' as const, label: 'part.ADJUSTMENT', amount: parts.adjustment }] : []),
-    { id: 'freight', kind: 'freight', label: 'bridge.freight', amount: null },
+    // F-OM-306 (B-OM-007): the freight the read counts; null: none recorded yet (said in words, never a 0).
+    { id: 'freight', kind: 'freight', label: 'bridge.freight', amount: amount(stage.freight) },
+    ...hand,
     { id: 'margin', kind: 'margin', label: 'bridge.margin', amount: typeof stage.margin === 'number' ? stage.margin : null },
   ]
 }

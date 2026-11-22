@@ -26,7 +26,8 @@ import { word, type MoneyWord } from './word'
 
 export type PlanRowKind = MilestoneKind | 'EXTRA'
 // F-OM-201: + the plan's hand acts (their ids are the server's acts, B-OM-011 … 016).
-export type PlanActId = 'record' | 'send' | 'open' | 'invoiceStep' | 'waive' | 'payInvoice' | Exclude<MoneyPlanAct, 'ADD_STEP' | 'CHANGE_TERMS'>
+// F-OM-202 (B-OM-022): + Stop the page (the bank-details page sent; links.manage: the Owner only).
+export type PlanActId = 'record' | 'send' | 'open' | 'invoiceStep' | 'waive' | 'payInvoice' | 'stopPage' | Exclude<MoneyPlanAct, 'ADD_STEP' | 'CHANGE_TERMS'>
 /** F-OM-201: a row act that opens a hand window (the server's act), not one of the page's own dialogs. */
 export const isHandAct = (id: PlanActId): id is Exclude<MoneyPlanAct, 'ADD_STEP' | 'CHANGE_TERMS'> => (MONEY_PLAN_ACTS as readonly string[]).includes(id)
 /** The plan head's own acts (its ⋯): the payment terms and a new step. */
@@ -214,6 +215,8 @@ export function planOf(input: {
         // F-OM-204: ONE word with Overview's deposit strip (the same dialog): deposit.record.
         if (can.recordPayment && price) acts.push({ id: 'record', label: word('deposit.record'), held: null })
         if (can.recordPayment) acts.push({ id: 'send', label: word(request.link ? 'moneyTab.plan.act.sendAgain' : 'moneyTab.plan.act.send'), held: null })
+        // F-OM-202 (B-OM-022): Stop the page — a live page with its id (S3), links.manage only (hidden for everyone else).
+        if (can.links && request.link?.state === 'LIVE' && request.link.id) acts.push({ id: 'stopPage', label: word('moneyTab.plan.act.stopPage'), held: null })
       }
       // F-OM-201 (B-OM-018, M4-B7): Open for payment is the money plan's right now (the Owner and Finance), no longer orders.manage.
       if (step && can.moneyPlan) {
@@ -338,6 +341,23 @@ export const softLockedOf = (error: unknown): boolean => isApiError(error) && er
 
 /** A refusal: the domain's own words (EN / IT, MONEY_PLAN_REFUSAL_WORDS: one wording with the server), or this page's. */
 export type PlanRefusal = Words | MoneyWord
+
+/**
+ * F-OM-301 / 302: a refusal of Money's other hand commands in the domain's own words, both languages — 409 `priceAccept/<CODE>` (the
+ * price difference, B-OM-020) and `handMargin/<CODE>` (the margin's cost lines and target, B-OM-021); an unknown code in this page's
+ * words; null: not one of these (the page's write words say it).
+ */
+export function codedRefusalOf<C extends string>(error: unknown, prefix: 'priceAccept' | 'handMargin', codes: readonly C[], words: Readonly<Record<C, Words>>): PlanRefusal | null {
+  if (!isApiError(error)) return null
+  for (const issue of error.issues) {
+    const path = issuePath(issue)
+    if (path.startsWith(`${prefix}/`)) {
+      const code = path.slice(prefix.length + 1)
+      return (codes as readonly string[]).includes(code) ? words[code as C] : word('moneyTab.refusal.OTHER')
+    }
+  }
+  return null
+}
 
 /**
  * The planner's refusal (409 `moneyPlan/<CODE>`) in the domain's own words, both languages; an unknown code in this page's; the version

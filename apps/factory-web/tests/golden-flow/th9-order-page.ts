@@ -15,6 +15,8 @@ import { STAGE_WORDS } from '@nexus/factory-domain/production-brand/words'
 import { askState, productionWorld, WORLD_WORDS } from './th9-production-world'
 // F-OC T.2 (order CHANGES tab): the request mail the customer's ask sends (the FAKE mailbox holds it).
 import { APPROVAL_MAIL_TEMPLATES } from '@nexus/factory-domain/approvals-out/mail'
+// F-OM T.2 (order MONEY tab): step 14's world, made through the real API (th9-money-world.ts, no stage of its own).
+import { MONEY_WORDS, moneyWorld, scheduleOf } from './th9-money-world'
 
 /**
  * F-OP-129 — UI golden flow TH-9: THE ORDER PAGE AT THE END (order page plan N1–N6; 10-order-page §2, §5, §7, §8, §13; review R-4,
@@ -66,6 +68,12 @@ import { APPROVAL_MAIL_TEMPLATES } from '@nexus/factory-domain/approvals-out/mai
  *      the row is gone and What changed says "Customer said yes" on that revision; the planner decides the work-order change the
  *      save left waiting from Waiting › Still to do (Decide…, the ONE review window); a Read-only person reads the tab with no act.
  *      Step 9 also follows "Changes (N) ›" to the tab: its Waiting groups add up to the same N (ONE list).
+ *  14  F-OM (order MONEY tab, T.2; L1, L3, B-OM-016, B-OM-017, B-OM-020): the tab at the end, on two orders of Brand Alpha made by the
+ *      API (th9-money-world.ts) — Finance accepts the deposit short (bank charges) from its row's ⋯: it counts as paid and the band
+ *      offers the planner Make work orders; the balance moved by hand says "Set by hand"; the margin shows the commission set by hand
+ *      and the target; Accept the difference… from Price check's ⋯ → "Accepted by hand"; Undo this payment… on the other order's
+ *      part payment; Sales reads words, never an amount, no money door, no Price check, no Margin; Read-only finds no act. B's buyer
+ *      and A's Money: step 8 (?tab=money answers the neutral refusal).
  * Not here, said in the report: cut pieces (the floor's flow: the extra-pieces outcome is held by the design case
  * lines-review-outcome, B-OP-071 O1 and the unit tests of F-OP-107), the record of a shipment made elsewhere whose garments the seeds
  * date in the story's days ahead (B-OP-071 O4 records one), and the invoices of a shared shipment that left (B-OP-045).
@@ -223,7 +231,7 @@ async function refusedToBeta(beta: PortalDesk, path: string, ofAlpha: readonly s
 
 export default defineStage({
   proves:
-    'the order page at the end: the yes in place (a waiting order confirmed, a stale change refused with its reason; a yes the Owner asked is held for her); a work order made in place; edit mode’s strip says which work order follows now and which waits, Apply, the planner decides the waiting one on the order page; tracking typed, corrected and cleared ("No live tracking"); the made-elsewhere dialog with its paper DDT and its live rules; a combined shipment of two orders made in place (B-OP-047); the files viewer walk by keys; customer B never offered or shown A’s orders, A’s ids answer B’s neutral refusal; SEED-SO-0002’s Overview sections 1–8 (F-OO-215): the headline, strips and moves, a line’s ⋯, People, Next dates, Requests & changes = the Changes badge, Linked records = the tab badges, a custom value saved beside Order facts at the order’s version (the sheet’s edit at the old version stale), the office note saved after it; the Production tab at the end (F-PT T.2): the ready ask, the supervisor’s reply answering it (“Latest update”), the promise history and its door, a hold lifted from Problems & holds, Read-only with no act; the Changes tab at the end (F-OC T.2): a save with the tick asks the customer by e-mail (the FAKE mailbox), Waiting on the customer draws the revised order, the customer’s yes in its portal empties it and What changed says “Customer said yes”, the planner decides the waiting work-order change from Waiting, Read-only with no act',
+    'the order page at the end: the yes in place (a waiting order confirmed, a stale change refused with its reason; a yes the Owner asked is held for her); a work order made in place; edit mode’s strip says which work order follows now and which waits, Apply, the planner decides the waiting one on the order page; tracking typed, corrected and cleared ("No live tracking"); the made-elsewhere dialog with its paper DDT and its live rules; a combined shipment of two orders made in place (B-OP-047); the files viewer walk by keys; customer B never offered or shown A’s orders, A’s ids answer B’s neutral refusal; SEED-SO-0002’s Overview sections 1–8 (F-OO-215): the headline, strips and moves, a line’s ⋯, People, Next dates, Requests & changes = the Changes badge, Linked records = the tab badges, a custom value saved beside Order facts at the order’s version (the sheet’s edit at the old version stale), the office note saved after it; the Production tab at the end (F-PT T.2): the ready ask, the supervisor’s reply answering it (“Latest update”), the promise history and its door, a hold lifted from Problems & holds, Read-only with no act; the Changes tab at the end (F-OC T.2): a save with the tick asks the customer by e-mail (the FAKE mailbox), Waiting on the customer draws the revised order, the customer’s yes in its portal empties it and What changed says “Customer said yes”, the planner decides the waiting work-order change from Waiting, Read-only with no act; the Money tab at the end (F-OM T.2): a deposit accepted short (bank charges) counts as paid and the band offers Make work orders, the balance "Set by hand", the margin’s hand cost and target, a price difference accepted by hand, a part payment undone, Sales with words and no amount, Read-only with no act',
   async run(flow: Flow) {
     const sales = await flow.desk('sales')
     const alphaId = await flow.seedId('party:P1')
@@ -1127,5 +1135,105 @@ export default defineStage({
       await flow.shot(reader.page, 'changes-read-only')
     })
     // ---- end F-OC T.2
+
+    // ---- F-OM T.2 (order MONEY tab, 15-steps T.2; L1, L3, B-OM-016, B-OM-017, B-OM-020): the Money tab at the end ---------------------
+    await flow.step('14 · the Money tab: Finance accepts the deposit short (bank charges) → paid, the band offers Make work orders; the balance "Set by hand"; the margin\'s hand cost and target; Accept the difference… → "Accepted by hand"; Undo this payment… on another order; Sales reads words, no amount, no money door; Read-only sees no act', async () => {
+      // The world by the API (th9-money-world.ts): T-TH9-MONEY-0001 (the deposit paid short within the tolerance, the balance's day
+      // moved by hand, a commission set by hand and a target, the customer's price under ours) and T-TH9-MONEY-0002 (a part payment).
+      const money = await moneyWorld(flow)
+      const finance = await flow.desk('finance')
+      const { page } = finance
+
+      // L1 (B-OM-016): Accept short (bank charges)… from the deposit row's ⋯ — the missing part stays owed (the final invoice).
+      await finance.go(`/sales/orders/${money.money.id}?tab=money`)
+      const deposit = page.locator(`#about-DepositRequest-${money.money.depositRequestId}`)
+      await seen(deposit, 60_000)
+      await seen(deposit.getByText(OD('moneyTab.plan.pill.PART'), { exact: true }).first())
+      await press(deposit.locator('.fw-om-pr-o').getByRole('button').first())
+      await press(page.getByRole('menuitem', { name: OD('moneyTab.plan.act.ACCEPT_SHORT'), exact: true }))
+      const shortBox = dialog(page)
+      await seen(shortBox.getByText(OD('moneyTab.hand.ACCEPT_SHORT.happens.owed'), { exact: true }), 60_000)
+      await shortBox.getByRole('textbox', { name: startsWith(OD('moneyTab.hand.reason')) }).fill(MONEY_WORDS.acceptShort)
+      await answerOf(page, 'POST', /^\/sales\/orders\/[^/]+\/money-plan$/, async () => {
+        await press(shortBox.getByRole('button', { name: startsWith(lead(OD('moneyTab.hand.ACCEPT_SHORT.go'))) }))
+        await flow.stepUp(page, finance.person)
+      })
+      await flow.settle()
+      await seen(deposit.getByText(OD('moneyTab.plan.pill.PAID'), { exact: true }).first(), 60_000)
+      const accepted = ((await scheduleOf(flow, money.money.id)).requests as Json[]).find((request) => request.id === money.money.depositRequestId)
+      expect(accepted, 'the deposit PAID by hand, accepted short').toMatchObject({ status: 'PAID' })
+      // The balance's due day moved by hand (the world's MOVE_DUE): its row says "Set by hand".
+      await seen(page.locator(`#about-DepositRequest-${money.balance.requestId}`).getByText(OD('moneyTab.plan.setByHand'), { exact: true }).first(), 60_000)
+      // The margin: the commission set by hand (Put back beside it), the target in the meter's words, freight said honestly.
+      const margin = page.locator('#margin')
+      await seen(margin.getByText(OD('moneyTab.margin.kind.COMMISSION'), { exact: true }).first(), 60_000)
+      await seen(margin.getByRole('button', { name: OD('moneyTab.margin.putBack.door'), exact: true }).first())
+      await expect(margin).toContainText(lead(OD('moneyTab.margin.meter.targetBy')))
+      await flow.shot(page, 'money-accepted-short')
+
+      // L3 (B-OM-020): Accept the difference… from Price check's ⋯ (Finance: the plan right + price) — both prices stay.
+      const price = page.locator('#price-check')
+      await seen(price.getByText(OD('moneyTab.price.tag.notEqual'), { exact: true }).first(), 60_000)
+      await press(price.getByRole('button', { name: OD('moneyTab.price.more'), exact: true }))
+      await press(page.getByRole('menuitem', { name: OD('moneyTab.price.accept.door'), exact: true }))
+      const acceptBox = dialog(page)
+      await seen(acceptBox.getByText(OD('moneyTab.price.accept.happens.stay'), { exact: true }), 60_000)
+      await acceptBox.getByRole('textbox', { name: startsWith(OD('moneyTab.hand.reason')) }).fill(MONEY_WORDS.accept)
+      const acceptance = await answerOf(page, 'POST', /^\/sales\/orders\/[^/]+\/price-check\/accept$/, () => press(acceptBox.getByRole('button', { name: OD('moneyTab.price.accept.go'), exact: true })))
+      expect(acceptance.accepted, 'the difference accepted by hand, the nets as read').toMatchObject({ ourNet: money.prices.ourNet, brandNet: money.prices.brandNet })
+      await seen(price.getByText(OD('moneyTab.price.tag.accepted'), { exact: true }).first(), 60_000)
+      await flow.shot(page, 'money-difference-accepted')
+
+      // The planner: the band offers Make work orders now that the deposit counts as paid (production may start, L1).
+      const planner = await flow.desk('planner')
+      await planner.go(`/sales/orders/${money.money.id}?tab=money`)
+      const make = planner.page.getByRole('button', { name: OD('step.makeWorkOrders'), exact: true }).first()
+      await seen(make, 60_000)
+      await expect(make).not.toHaveAttribute('aria-disabled', 'true')
+      await flow.shot(planner.page, 'money-make-work-orders')
+
+      // B-OM-017: Undo this payment… on the other order — the part payment's ⋯ in its row; reversed and voided in one step.
+      await finance.go(`/sales/orders/${money.undo.id}?tab=money`)
+      const balance = page.locator(`#about-DepositRequest-${money.partPayment.depositRequestId}`)
+      await seen(balance, 60_000)
+      const paymentMore = balance.getByRole('button', { name: startsWith(lead(OD('moneyTab.payment.more'))) }).first()
+      await seen(paymentMore, 60_000)
+      await press(paymentMore)
+      await press(page.getByRole('menuitem', { name: OD('moneyTab.payment.undo'), exact: true }))
+      const undoBox = dialog(page)
+      await seen(undoBox.getByText(OD('moneyTab.undo.never'), { exact: true }), 60_000)
+      await undoBox.getByRole('textbox', { name: startsWith(OD('moneyTab.hand.reason')) }).fill(MONEY_WORDS.undo)
+      await answerOf(page, 'POST', /^\/payments\/[^/]+\/undo$/, async () => {
+        await press(undoBox.getByRole('button', { name: OD('moneyTab.undo.go'), exact: true }))
+        await flow.stepUp(page, finance.person)
+      })
+      await flow.settle()
+      const undone = ((await scheduleOf(flow, money.undo.id)).requests as Json[]).find((request) => request.id === money.partPayment.depositRequestId)
+      expect(((undone?.payments ?? []) as Json[]).map((entry) => entry.paymentId), 'the payment is off the request (reversed, voided)').not.toContain(money.partPayment.paymentId)
+      await expect(balance.getByText(OD('moneyTab.plan.pill.PART'), { exact: true }), 'the balance is open again').toHaveCount(0, { timeout: 60_000 })
+      await flow.shot(page, 'money-payment-undone')
+
+      // The money wall: Sales reads the plan in words — never an amount, no money door, no Price check, no Margin.
+      await sales.go(`/sales/orders/${money.money.id}?tab=money`)
+      const salesTab = sales.page.locator('.fw-om')
+      await seen(salesTab.locator('#payments'), 60_000)
+      await expect(salesTab).not.toContainText('€')
+      for (const name of [OD('deposit.record'), OD('moneyTab.plan.act.send'), OD('moneyTab.plan.act.sendAgain'), OD('moneyTab.margin.setCost.door'), OD('priceCheck.card.edit')]) await expect(salesTab.getByRole('button', { name, exact: true }), name).toHaveCount(0)
+      await expect(salesTab.locator('#price-check')).toHaveCount(0)
+      await expect(salesTab.locator('#margin')).toHaveCount(0)
+      await expectNothingOf(sales.page, BRAND_BETA, world.betaNumbers, "A's Money tab")
+      await flow.shot(sales.page, 'money-sales-words')
+
+      // Read-only reads the whole tab and finds no act (no Record, no Send, no Open for payment, no Waive…, no Set a cost, no target).
+      const reader = await flow.desk('reader')
+      await reader.go(`/sales/orders/${money.money.id}?tab=money`)
+      const readTab = reader.page.locator('.fw-om')
+      await seen(readTab.locator('#payments'), 60_000)
+      for (const name of [OD('deposit.record'), OD('moneyTab.plan.act.send'), OD('moneyTab.plan.act.sendAgain'), OD('schedule.verbs.open'), OD('moneyTab.plan.act.waive'), OD('moneyTab.margin.setCost.door'), OD('moneyTab.margin.target.door'), OD('priceCheck.card.edit')]) await expect(readTab.getByRole('button', { name, exact: true }), name).toHaveCount(0)
+      await expect(readTab).not.toContainText('€')
+      await flow.shot(reader.page, 'money-read-only')
+      // B's buyer and A's Money: step 8 already opens A's order (with ?tab=money) in B's portal — the neutral refusal.
+    })
+    // ---- end F-OM T.2
   },
 })

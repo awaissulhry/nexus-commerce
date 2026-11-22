@@ -152,7 +152,14 @@
     "price": "Prezzo (netto)",
     "freight": "Trasporto",
     "noFreight": "Non ancora registrato: escluso",
-    "margin": "Margine attuale"
+    "margin": "Margine attuale",
+    "hand": {
+      "FREIGHT_ESTIMATE": "Stima del trasporto (impostata a mano)",
+      "COMMISSION": "Provvigione (impostata a mano)",
+      "BANK_CHARGES": "Spese bancarie (impostate a mano)",
+      "OTHER": "Altro costo (impostato a mano)"
+    },
+    "byHand": "Costi impostati a mano"
   },
   "part": {
     "MATERIAL": "Materiale",
@@ -208,20 +215,6 @@
     "ESTIMATE": "Stima al rilascio",
     "QUOTED": "Il costo del preventivo",
     "ACTUAL": "Il suo effettivo"
-  },
-  "marginTab": {
-    "title": "Margine",
-    "noView": {
-      "title": "Il margine richiede il permesso sui costi",
-      "body": "La scheda Margine richiede il permesso sui costi. Il resto dell'ordine resta com'è."
-    },
-    "noGrain": {
-      "title": "Il margine richiede la visibilità sui margini",
-      "body": "Il tuo ruolo non vede i margini: chiedi a chi gestisce i ruoli."
-    },
-    "loading": "Lettura del margine…",
-    "failed": "Impossibile caricare il margine",
-    "inFinance": "Vedi tutti gli ordini in Amministrazione › Margini"
   },
   "problem": {
     "signed_out": "Sei uscito. Accedi di nuovo.",

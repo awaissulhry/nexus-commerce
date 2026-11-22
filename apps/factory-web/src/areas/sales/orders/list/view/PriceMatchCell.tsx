@@ -14,12 +14,23 @@ type Translate = (key: string, params?: Record<string, string | number>) => stri
  * mark, never colour alone — neutral "= Equal" (lucide Equal), danger "≠ Not equal" with "{count} lines" under it (lucide EqualNot) —
  * and "— No customer price yet" as plain text (the DS Tag has no plain tone; never "Equal"). A host that narrows by the check
  * (`onNarrow`) makes it a funnel, as Close to promise; without one the words stand alone. A row without the check (no price grain,
- * an older answer) draws nothing.
+ * an older answer) draws nothing. F-OM-305: a difference accepted by hand is an info "≠ Not equal" with "Accepted by hand" under it.
  */
-export function PriceMatchCell({ row, t, onNarrow }: { row: Pick<OrderRow, 'priceMatch' | 'priceNotEqualLines'>; t: Translate; onNarrow?: (() => void) | undefined }) {
+export function PriceMatchCell({ row, t, onNarrow }: { row: Pick<OrderRow, 'priceMatch' | 'priceNotEqualLines' | 'priceAccepted'>; t: Translate; onNarrow?: (() => void) | undefined }) {
   const cell = priceMatchCellOf(row)
   if (!cell) return null
   const words = t(cell.words.key, cell.words.params)
+  // F-OM-305 (B-OM-020): accepted by hand — an info Tag and "Accepted by hand" under it; no funnel (the "Not equal" filter leaves it out).
+  if (cell.state === 'ACCEPTED') {
+    return (
+      <span className="fw-sheet-cell">
+        <Tag tone={cell.tone}>
+          <EqualNot size={12} aria-hidden /> {words}
+        </Tag>
+        <span className="fw-sheet-sub">{[t(cell.accepted.key), ...(cell.lines ? [t(cell.lines.key, cell.lines.params)] : [])].join(' · ')}</span>
+      </span>
+    )
+  }
   if (cell.state === 'NO_BRAND_PRICE') {
     const plain = <span className="fw-sheet-plain">{words}</span>
     return onNarrow ? (

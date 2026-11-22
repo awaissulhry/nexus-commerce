@@ -89,6 +89,10 @@ export interface OrderAbilities {
    * (and, B-OM-018, Open for payment); absent before the server knows the right: every such door hidden, never held.
    */
   moneyPlan?: boolean
+  /** F-OM-202 (B-OM-022): stop a bank-details page sent to the customer (links.manage: the Owner only — it is in no office template). */
+  links?: boolean
+  /** F-OM-302 (B-OM-021, L2 / L4): a cost line set by hand on the order's margin, and its target (costing.ledger.manage: the Owner and Finance). */
+  costLedger?: boolean
 }
 
 export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
@@ -116,6 +120,8 @@ export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
     askCustomer: held.has('partners.approvals.ask'), // F-OC-103
     threadsPost: held.has('threads.post'), // F-OM-101
     moneyPlan: held.has('orders.moneyPlan'), // F-OM-201 (B-OM-010)
+    links: held.has('links.manage'), // F-OM-202 (B-OM-022): Stop the page
+    costLedger: held.has('costing.ledger.manage'), // F-OM-302 (B-OM-021): Set a cost by hand…, Set target…
   }
 }
 
@@ -1056,8 +1062,14 @@ export function romeToday(now: Date = new Date()): string {
 }
 
 /** Released garments not shipped yet: Create shipment opens Warehouse's New shipment with this order (the dialog says how many each cell can still take). */
+// F-OS-102 (18-lead-settles L9, H1-B6): once the server counts what is ready now (B-OS-002: released and on NO shipment yet), Create
+// shipment… opens only then — every released garment already on a draft offers nothing to create (the band's next step on every tab
+// reads this too). Until the server sends it: today's rule (released more than shipped).
 export const mayCreateShipment = (order: Pick<Order, 'status' | 'progress'>, can: Pick<OrderAbilities, 'createShipment'>): boolean =>
-  can.createShipment && order.status !== 'CANCELLED' && order.status !== 'CLOSED' && order.progress.released > order.progress.shipped
+  can.createShipment && order.status !== 'CANCELLED' && order.status !== 'CLOSED' && readyToShipOf(order.progress) > 0
+
+/** F-OS-102 (L9): the garments that could go on a new shipment now — the server's `readyNow` (B-OS-002), else today's released − shipped. */
+export const readyToShipOf = (progress: Pick<Order['progress'], 'readyNow' | 'released' | 'shipped'>): number => (progress.readyNow !== undefined ? progress.readyNow : progress.released - progress.shipped)
 
 /** The address of Warehouse's New shipment with the order chosen. */
 export const createShipmentHref = (prefix: string, orderId: string): string => `${prefix}/warehouse/shipments?new=1&order=${encodeURIComponent(orderId)}`

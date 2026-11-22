@@ -220,6 +220,8 @@ export const orderRowSchema = z.object({
   priceDiff: z.number().nullable().optional(),
   /** How many lines differ ("Not equal · 2 lines"). */
   priceNotEqualLines: z.number().optional(),
+  // F-OM-305 (B-OM-020, S3 #1857): a "Not equal" accepted by hand (in force) — the server's "Not equal" filter and counts leave it out.
+  priceAccepted: z.boolean().optional(),
   // ── end F-CP-140 ──
 })
 export type OrderRow = z.infer<typeof orderRowSchema>
@@ -440,6 +442,12 @@ const progressSchema = z.object({
   toShip: z.number(),
   /** B-W2a-30: pieces closed short (they will not be made or shipped). */
   closedShort: z.number().default(0),
+  // ---- F-OS-102 (B-OS-002, optional until the server's S1 lands): of the pieces still to ship, those on a shipment that has not left
+  // (DRAFT, PACKED) and those released and on no shipment (they could go today) — the SAME rule as Warehouse's backorder. Absent in an
+  // older answer: the Shipments tab shows today's figure line and Create shipment… opens by today's rule (never a made-up 0).
+  planned: z.number().optional(),
+  readyNow: z.number().optional(),
+  // ---- end F-OS-102
 })
 export type Progress = z.infer<typeof progressSchema>
 
@@ -506,7 +514,8 @@ export const depositRequestSchema = z.object({
   paidAt: instant.nullable(),
   createdAt: instant,
   paidAmount: z.number().optional(),
-  link: z.object({ sentAt: instant, to: z.string().nullable(), expiresAt: instant, state: z.enum(LINK_STATES) }).nullable().default(null),
+  // F-OM-202 (B-OM-022, S3 #1857): + the page's own id (Stop the page: POST /links/:linkId/revoke, links.manage); absent: no Stop door.
+  link: z.object({ id: z.string().optional(), sentAt: instant, to: z.string().nullable(), expiresAt: instant, state: z.enum(LINK_STATES) }).nullable().default(null),
   /** B-W2a-F2: the schedule step the request pays — DEPOSIT, or BEFORE_SHIPPING (the balance before shipping, not the deposit). */
   stepKind: z.enum(['DEPOSIT', 'BEFORE_SHIPPING']).nullable().default(null),
   /** B-W2b-16: the owner's waive of a request no schedule step names is sent at it. */
@@ -629,6 +638,23 @@ export const orderSchema = z.object({
         origin: z.enum(['NEXUS', 'ELSEWHERE']).optional(),
         externalDdt: z.object({ number: z.string(), date: z.string() }).nullable().optional(),
         // ---- end F-OP-123
+        // ---- F-OS-103 (B-OS-001, optional until the server's S1 lands; codes are plain strings so a new code never breaks the read):
+        // what it carries of THIS order (line × size, every state), the pieces of the other orders it carries, its holds in force, why
+        // it was cancelled, the shipment it was split from / merged into, whether it needs a DDT, when it was packed, its parcels (with
+        // shipping.view; a TEST label has no number), and what this reader may do on it. Absent: the tab hides what it would show.
+        contents: z.array(z.object({ lineId: z.string(), size: z.string().nullable(), pieces: z.number() })).optional(),
+        otherPieces: z.number().optional(),
+        holds: z.array(z.object({ id: z.string().optional(), reason: z.string(), words: z.string().nullable(), bySystem: z.boolean(), placedAt: instant })).optional(),
+        cancelReason: z.string().nullable().optional(),
+        cancelledAt: instant.nullable().optional(),
+        splitFrom: z.object({ id: z.string(), number: z.string(), reason: z.string().nullable() }).nullable().optional(),
+        mergedInto: z.object({ id: z.string(), number: z.string() }).nullable().optional(),
+        ddtRequired: z.boolean().optional(),
+        packedAt: instant.nullable().optional(),
+        // Each parcel: its number (a label's, or typed by hand after S3), and what it holds of THIS order (+ the other orders' pieces).
+        parcels: z.array(z.object({ id: z.string(), seq: z.number(), number: z.string().nullable(), url: z.string().nullable(), source: z.string().nullable(), live: z.boolean(), contents: z.array(z.object({ lineId: z.string(), size: z.string().nullable(), pieces: z.number() })).optional(), otherPieces: z.number().optional() })).optional(),
+        may: z.object({ manage: z.boolean(), pack: z.boolean(), ddt: z.boolean(), holdsManage: z.boolean().optional(), holdsRelease: z.boolean() }).optional(),
+        // ---- end F-OS-103
       }),
     ),
     invoices: z.array(z.object({ id: z.string(), number: z.string().nullable(), docType: z.string(), status: z.string(), issueDate: z.string().nullable(), depositRequestId: z.string().nullable().default(null) })),
@@ -767,6 +793,10 @@ export async function sendToSdi(api: ApiClient, invoiceId: string, version: numb
   return (await api.post(`/invoicing/invoices/${encodeURIComponent(invoiceId)}/sdi/send`, { body: { version }, schema: z.object({ sdi: sdiSchema }), idempotencyKey })).sdi
 }
 
+/** F-OM-203 (B-OM-023): an invoice's payment in a word-code (factory-domain invoicing/from-shipment/settlement INVOICE_PAYMENT_STATES). */
+export const INVOICE_PAYMENT_STATES = ['OPEN', 'PART_PAID', 'PAID', 'CREDITED', 'REFUND_DUE'] as const
+export type InvoicePaymentState = (typeof INVOICE_PAYMENT_STATES)[number]
+
 export const settlementSchema = z.object({
   settled: z.boolean(),
   gaps: z.array(z.string()),
@@ -791,6 +821,8 @@ export const settlementSchema = z.object({
       writtenOffAmount: z.number().optional(),
       // F-OM-203: what its credit notes leave to give back to the customer (price grain; the settlement's own figure).
       refundDueAmount: z.number().optional(),
+      // F-OM-203 (B-OM-023, S3 #1857): where its payment stands, in a word-code with no amount — for every invoices.view reader.
+      paymentState: z.enum(INVOICE_PAYMENT_STATES).optional().catch(undefined),
     }),
   ),
   invoicedAmount: z.number().optional(),
@@ -1304,6 +1336,14 @@ export async function undoDepositPayment(api: ApiClient, paymentId: string, body
   await api.post(`/payments/${encodeURIComponent(paymentId)}/undo`, { body, schema: z.object({}).passthrough(), idempotencyKey })
 }
 // ---- end F-OM-201 / 202
+
+/**
+ * F-OM-202 (B-OM-022, S3 #1857): Stop the page — the bank-details page sent to the customer stops working at once (links.manage: the
+ * Owner only); the payment request stays open. The reason goes into the history.
+ */
+export async function stopDepositPage(api: ApiClient, linkId: string, body: { readonly reason: string }, idempotencyKey: string): Promise<void> {
+  await api.post(`/links/${encodeURIComponent(linkId)}/revoke`, { body, idempotencyKey })
+}
 
 /** The order's payment schedule (the deposit and the balance steps with their state). */
 export function getSchedule(api: ApiClient, orderId: string, signal?: AbortSignal): Promise<Schedule> {

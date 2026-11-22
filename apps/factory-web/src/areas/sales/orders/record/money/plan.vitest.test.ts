@@ -21,8 +21,9 @@ import { amountsOf } from './word'
 const OWNER_STEPS: StepAbilities = { manageOrders: true, manageInvoices: true, waive: true }
 const FINANCE_STEPS: StepAbilities = { manageOrders: false, manageInvoices: true, waive: false }
 // F-OM-201: `moneyPlan` — the plan right (orders.moneyPlan, B-OM-010: the Owner and Finance once the server knows it; off by default).
-const plan = (value: Order, over: { schedule?: Schedule; role?: Parameters<typeof canOf>[0]; stepCan?: StepAbilities | null; today?: string; stillToPay?: number | null; moneyPlan?: boolean } = {}) =>
-  planOf({ order: value, schedule: over.schedule ?? SCHEDULE_OPEN, settlement: null, can: { ...canOf(over.role ?? 'owner'), moneyPlan: over.moneyPlan ?? false }, stepCan: over.stepCan === undefined ? OWNER_STEPS : over.stepCan, today: over.today ?? TODAY, stillToPay: over.stillToPay ?? null })
+// F-OM-202 (B-OM-022): `links` — Stop the page (links.manage: the Owner only; off by default).
+const plan = (value: Order, over: { schedule?: Schedule; role?: Parameters<typeof canOf>[0]; stepCan?: StepAbilities | null; today?: string; stillToPay?: number | null; moneyPlan?: boolean; links?: boolean } = {}) =>
+  planOf({ order: value, schedule: over.schedule ?? SCHEDULE_OPEN, settlement: null, can: { ...canOf(over.role ?? 'owner'), moneyPlan: over.moneyPlan ?? false, links: over.links ?? false }, stepCan: over.stepCan === undefined ? OWNER_STEPS : over.stepCan, today: over.today ?? TODAY, stillToPay: over.stillToPay ?? null })
 const kinds = (rows: readonly PlanRow[]) => rows.map((row) => row.kind)
 const acts = (row: PlanRow) => [row.act?.id ?? null, ...row.more.map((entry) => entry.id)]
 const withRequests = (value: Order, requests: DepositRequest[]): Order => ({ ...value, chain: { ...value.chain, depositRequests: requests } })
@@ -131,6 +132,19 @@ describe('F-OM-103 / 104: the acts — hidden without the right, held only by st
     // F-OM-201 (B-OM-018): Open for payment is the plan right's now — without it no Open for payment (never held).
     expect(acts(model.rows[1]!)).toEqual([null, 'waive'])
     expect(plan(order('CONFIRMED'), { moneyPlan: true }).rows[1]!.act).toMatchObject({ id: 'open', held: null, needsDay: false })
+  })
+
+  // F-OM-202 (B-OM-022, S3 #1857): the page's own id comes with the order read; Stop the page is the Owner's only (links.manage).
+  it('Stop the page… — a live page with its id, links.manage only; never the row\'s ONE act; hidden for everyone else', () => {
+    const live = withRequests(order('CONFIRMED'), [deposit({ link: { ...SENT_LINK, id: '0190f0e2-1616-7000-8000-000000000009' } })])
+    expect(acts(plan(live, { links: true }).rows[0]!)).toEqual(['record', 'send', 'stopPage', 'waive'])
+    expect(plan(live, { links: true }).rows[0]!.more.find((entry) => entry.id === 'stopPage')).toEqual({ id: 'stopPage', label: { key: 'moneyTab.plan.act.stopPage' }, held: null })
+    // Finance (no links.manage), an older read without the id, a page no longer live: no door at all.
+    expect(acts(plan(live).rows[0]!)).not.toContain('stopPage')
+    expect(acts(plan(withRequests(order('CONFIRMED'), [deposit({ link: SENT_LINK })]), { links: true }).rows[0]!)).not.toContain('stopPage')
+    expect(acts(plan(withRequests(order('CONFIRMED'), [deposit({ link: { ...SENT_LINK, id: 'l-1', state: 'REVOKED' } })]), { links: true }).rows[0]!)).not.toContain('stopPage')
+    // A closed order: no act on any row.
+    expect(acts(plan(withRequests(order('CLOSED'), [deposit({ link: { ...SENT_LINK, id: 'l-1' } })]), { links: true }).rows[0]!)).not.toContain('stopPage')
   })
 
   it('Finance records and sends but does not waive; Sales (no payments.record, no grain) and Read-only see no money act at all', () => {

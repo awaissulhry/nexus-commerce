@@ -405,7 +405,7 @@ describe('every design case draws in both languages with no key left on screen',
       // B-W2a-50
       has('tab.changes')
       for (const kind of MILESTONE_KINDS) for (const part of ['kind', 'when']) has(`schedule.${part}.${kind}`)
-      for (const status of MILESTONE_STATUSES) has(`schedule.status.${status}`)
+      // F-OM-303: the schedule's status words left with the old card (the plan's pills are moneyTab.plan.pill.*).
       for (const change of LINE_CHANGES) has(`changes.kind.${change}`)
       for (const need of ['NEEDED', 'NOT_NEEDED']) has(`changes.reaccept.${need}`)
       for (const change of ['added', 'removed', 'changed', 'none', 'empty']) has(`editor.change.${change}`)
@@ -821,7 +821,7 @@ describe('F-SA-230: the tab counts, the band’s health chip, Made to measure', 
     expect(isMadeToMeasure({ lines: [{ ...order().lines[0]!, kind: 'MADE_TO_MEASURE' }] })).toBe(true)
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-      for (const key of ['record.madeToMeasure', 'menu.assignSupervisor', 'productionTab.ask.menu' /* F-PT-103: was menu.askSupervisor */, 'ship.moneyDoor', 'money.section.totals', 'money.section.deposit', 'money.section.margin', ...MENU_GROUPS.map((group) => `menu.group.${group}`), ...RECORD_TABS.map((tab) => `tab.${tab}`)]) expect(t(key), `${locale}: ${key}`).not.toBe(key)
+      for (const key of ['record.madeToMeasure', 'menu.assignSupervisor', 'productionTab.ask.menu' /* F-PT-103: was menu.askSupervisor */, 'ship.moneyDoor' /* F-OM-303: money.section.* left with the old cards */, ...MENU_GROUPS.map((group) => `menu.group.${group}`), ...RECORD_TABS.map((tab) => `tab.${tab}`)]) expect(t(key), `${locale}: ${key}`).not.toBe(key)
     }
     expect(createTranslator('it', messagesFor('it', ['orders']).orders!)('tab.money')).toBe('Importi')
   })
@@ -1729,7 +1729,8 @@ describe('F-OP-311: Read-only sees no next step and no move in the band; everyon
       expect(primaryOf(render(recordScreen as unknown as DesignScreen<unknown>, caseOf('f-oo-105-holds-sales'), locale)), locale).toContain('<button')
     }
     const view = readFileSync(new URL('./record/view/OrderRecordView.tsx', import.meta.url), 'utf8')
-    expect(view).toContain('const step = bandStepOf(order, model.can, readOnly)')
+    // F-OS-101 (L10): the band's step, then (on the Shipments tab only) without its Create shipment… copy.
+    expect(view).toContain('const bandStep = bandStepOf(order, model.can, readOnly)')
     expect(view).toContain('bandMenuFor(readOnly, groups, cancelItem)')
   })
 })

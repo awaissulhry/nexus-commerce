@@ -31,6 +31,20 @@ const rowSchema = z.object({
 })
 export type BrandPriceRow = z.infer<typeof rowSchema>
 
+// ---- F-OM-301 (order MONEY tab; B-OM-006, the server's S1 #1853; B-OM-020, the server's S3): where OUR price came from, and a
+// difference accepted by hand. Both optional, and a shape this web does not know yet is left out (hidden), never a failed read.
+/** Mirrors factory-domain sales/price-waterfall/rules ORDER_PRICE_SOURCES (money/price.vitest.test.ts holds them equal). */
+export const OUR_PRICE_SOURCES = ['LIST', 'MANUAL', 'UNKNOWN'] as const
+export type OurPriceSource = (typeof OUR_PRICE_SOURCES)[number]
+/** Who did it: a name (or the answer's `{ name }`); null: not named. */
+const whoSchema = z.union([z.string(), z.object({ name: z.string() })]).nullable().optional()
+/** The difference accepted by hand, in force while both nets still equal the stored ones (any price change reopens it by itself). */
+const acceptedSchema = z.object({ by: whoSchema, at: z.string(), reason: z.string().nullable().optional(), ourNet: z.number(), brandNet: z.number() })
+export type PriceAccepted = z.infer<typeof acceptedSchema>
+/** A name from the answer's `by`, whichever way it is written. */
+export const whoName = (by: z.infer<typeof whoSchema>): string | null => (typeof by === 'string' ? by : (by?.name ?? null))
+// ---- end F-OM-301 (the two fields are marked below)
+
 export const priceCheckSchema = z.object({
   orderId: z.string(),
   number: z.string(),
@@ -48,6 +62,8 @@ export const priceCheckSchema = z.object({
       priceMatch: z.enum(PRICE_MATCHES).nullable(),
       priceDiff: z.number().nullable(),
       row: rowSchema.nullable(),
+      // F-OM-301 (B-OM-006): our price from the price list, set by hand, or changed since the quote (no waterfall kept).
+      ourPriceSource: z.enum(OUR_PRICE_SOURCES).optional().catch(undefined),
     }),
   ),
   total: z.object({
@@ -63,6 +79,8 @@ export const priceCheckSchema = z.object({
   fromRequest: z.object({ requestId: z.string(), number: z.string().nullable(), lines: z.number() }).nullable(),
   /** The API's `why` is English (for logs): the dialog says its own words from the order's status. */
   mayWrite: z.object({ allowed: z.boolean(), why: z.string().nullable() }),
+  // F-OM-301 (B-OM-020, S3): the difference accepted by hand (null: none in force); absent: the server does not know acceptance yet.
+  accepted: acceptedSchema.nullable().optional().catch(undefined),
 })
 export type PriceCheck = z.infer<typeof priceCheckSchema>
 export type PriceCheckLine = PriceCheck['lines'][number]
@@ -95,6 +113,20 @@ export function readPriceCheck(api: ApiClient, orderId: string, signal?: AbortSi
 export function saveBrandPrices(api: ApiClient, orderId: string, body: SaveBrandPricesBody, idempotencyKey: string): Promise<PriceCheck> {
   return api.request('PUT', `/sales/orders/${encodeURIComponent(orderId)}/brand-prices`, { body, schema: priceCheckSchema, idempotencyKey })
 }
+
+// ---- F-OM-301 (B-OM-020, S3): accept the difference by hand, or undo the acceptance (orders.moneyPlan + the price grain: the Owner and
+// Finance, L3). The nets sent are the check as read: a check that moved meanwhile is refused (409) and read again. The answer is not
+// read: the card reads the check again (and `sales_order.brand_price_changed` does too).
+/** POST /sales/orders/:orderId/price-check/accept { ourNet, brandNet, reason } — both prices stay; the check says "Accepted by hand". */
+export async function acceptPriceDifference(api: ApiClient, orderId: string, body: { readonly ourNet: number; readonly brandNet: number; readonly reason: string }, idempotencyKey: string): Promise<void> {
+  await api.post(`/sales/orders/${encodeURIComponent(orderId)}/price-check/accept`, { body, idempotencyKey })
+}
+
+/** DELETE /sales/orders/:orderId/price-check/accept { reason } — the check says "Not equal" again; the history keeps the acceptance. */
+export async function undoPriceAcceptance(api: ApiClient, orderId: string, body: { readonly reason: string }, idempotencyKey: string): Promise<void> {
+  await api.request('DELETE', `/sales/orders/${encodeURIComponent(orderId)}/price-check/accept`, { body, idempotencyKey })
+}
+// ---- end F-OM-301
 
 /** This order's files, for "PO file" (the record's own list: a price holder reads every file of it, priced ones too). */
 export async function readOrderFiles(api: ApiClient, orderId: string, signal?: AbortSignal): Promise<readonly { readonly id: string; readonly name: string }[]> {

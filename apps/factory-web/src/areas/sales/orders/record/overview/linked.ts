@@ -1,5 +1,6 @@
 import type { Order } from '../../api'
 import { depositGate, linesNotInProduction, type OrderAbilities, type Phrase } from '../../model'
+import { readyToShipOf } from '../../model' // F-OS-102 (L9): Create shipment… is due when something is ready now
 import { tabHref } from '../../../../_shared/record-frame/address' // F-OP-104: the tab links keep the dock's scope (F-OP-210)
 // ---- F-OO-207 (order overview §6; review F5, F8; Owner D3, D8): one count rule, the doors that make the next record ----
 import { orderLinkCountsOf } from '@nexus/factory-domain/sales/orders/linked-counts'
@@ -115,7 +116,7 @@ export function linkedRowsOf(input: LinkedInput): LinkedView {
 
   // F8: the two doors only when due — and Read-only gets none.
   const makeDue = !input.readOnly && (order.status === 'CONFIRMED' || order.status === 'IN_PRODUCTION') && linesNotInProduction(order) > 0
-  const shipDue = !input.readOnly && !FINAL.includes(order.status) && order.progress.released > order.progress.shipped
+  const shipDue = !input.readOnly && !FINAL.includes(order.status) && readyToShipOf(order.progress) > 0 // F-OS-102 (L9): ready now
   const shipTo = shipDue ? createShipmentDoor(order, can, prefix, input.shipInPlace) : null
   const make: LinkedDoor | null = makeDue ? { kind: 'make', held: makeHeldOf(order, can) } : null
   const ship: LinkedDoor | null = shipDue ? { kind: 'ship', to: shipTo, held: shipTo ? null : createShipmentHeld(order, can) } : null

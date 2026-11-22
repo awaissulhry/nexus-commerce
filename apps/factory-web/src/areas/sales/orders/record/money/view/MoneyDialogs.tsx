@@ -16,6 +16,10 @@ import { OpenStepDialog, WaiveDialog } from '../../schedule/view/StepVerbs'
 import { DialogProblem, Frame } from '../../view/Dialogs'
 import { beforeAfterOf, HAND_LABEL_MAX, HAND_REASON, handBodyOf, handInputOf, handWindowOf, reasonProblemOf, type HandInput } from '../hand'
 import { planOf, type PlanRefusal } from '../plan'
+import { acceptBodyOf, diffWordOf } from '../price' // F-OM-301
+import { costAmountOf, HAND_COST_KINDS, marginAfterOf, targetOf, targetPctOf } from '../margin' // F-OM-302
+import { pctText } from '../../../../../finance/costing/model' // F-OM-302: a margin % in the page's language
+import type { CostLineKind } from '../../../../../finance/margins/api' // F-OM-302
 import { stillToPayOf } from '../totals'
 import { useSay } from './say'
 
@@ -36,12 +40,20 @@ export function MoneyDialogs({ order, model, actions }: { order: Order; model: O
       {steps?.opening ? <OpenStepDialog step={steps.opening} model={steps} today={model.today} actions={actions?.scheduleSteps} /> : null}
       {dialog?.kind === 'moneyPlan' ? <PlanDialog key={`${dialog.act}:${dialog.stepId ?? ''}:${dialog.requestId ?? ''}`} order={order} act={dialog.act} stepId={dialog.stepId} requestId={dialog.requestId} model={model} actions={actions} /> : null}
       {dialog?.kind === 'undoPayment' ? <UndoPaymentDialog key={dialog.paymentId} order={order} requestId={dialog.requestId} paymentId={dialog.paymentId} model={model} actions={actions} /> : null}
+      {/* F-OM-301 (B-OM-020): Price check's ⋯ */}
+      {dialog?.kind === 'priceAccept' || dialog?.kind === 'priceUnaccept' ? <PriceAcceptDialog key={dialog.kind} order={order} undo={dialog.kind === 'priceUnaccept'} model={model} actions={actions} /> : null}
+      {/* F-OM-302 (B-OM-021): Margin's hand controls */}
+      {dialog?.kind === 'costLine' ? <CostLineDialog order={order} model={model} actions={actions} /> : null}
+      {dialog?.kind === 'costLineRemove' ? <CostLineRemoveDialog key={dialog.lineId} order={order} lineId={dialog.lineId} model={model} actions={actions} /> : null}
+      {dialog?.kind === 'marginTarget' ? <MarginTargetDialog order={order} model={model} actions={actions} /> : null}
+      {/* F-OM-202 (B-OM-022): a request's ⋯ Stop the page… */}
+      {dialog?.kind === 'stopPage' ? <StopPageDialog key={dialog.requestId} order={order} requestId={dialog.requestId} model={model} actions={actions} /> : null}
     </>
   )
 }
 
 /** The five parts every hand window says (10-design §9): what happens, the customer, what never changes; the reason; who and when. */
-function HandParts({ happens, told, never, reason, onReason, reasonError, code }: { happens: readonly string[]; told: string; never: string; reason: string; onReason: (value: string) => void; reasonError: string | null; code: boolean }) {
+function HandParts({ happens, told, never, reason, onReason, reasonError, code, who }: { happens: readonly string[]; told: string; never: string; reason: string; onReason: (value: string) => void; reasonError: string | null; code: boolean; /** F-OM-301 / 302: the window's own who-and-when line (else the plan's). */ who?: string }) {
   const t = useT('orders')
   return (
     <>
@@ -70,7 +82,7 @@ function HandParts({ happens, told, never, reason, onReason, reasonError, code }
       </Field>
       <p className="fw-om-dlg-line is-quiet">
         <UserRound size={14} aria-hidden />
-        <span>{t(code ? 'moneyTab.hand.whoCode' : 'moneyTab.hand.who')}</span>
+        <span>{who ?? t(code ? 'moneyTab.hand.whoCode' : 'moneyTab.hand.who')}</span>
       </p>
     </>
   )
@@ -268,6 +280,207 @@ function UndoPaymentDialog({ order, requestId, paymentId, model, actions }: { or
         </Field>
       ) : null}
       <HandParts happens={[t('moneyTab.undo.happens.reversed'), t('moneyTab.undo.happens.open'), t('moneyTab.undo.happens.production')]} told={t('moneyTab.undo.told')} never={t('moneyTab.undo.never')} reason={reason} onReason={setReason} reasonError={reasonProblem ? t(reasonProblem.key) : null} code={false} />
+    </Frame>
+  )
+}
+
+/** F-OM-301 / 302: the server's refusal of the last act in the domain's own words (EN / IT), else the page's write words. */
+function Refusal({ model, currency }: { model: OrderRecordModel; currency: string }) {
+  const locale = useLocale()
+  const say = useSay(currency)
+  const refused = model.moneyPlan?.refused ?? null
+  if (!refused) return <DialogProblem model={model} />
+  return <Banner tone="danger" title={'key' in refused ? say(refused) : refused[locale === 'it' ? 'it' : 'en']} />
+}
+
+/**
+ * F-OM-301 (B-OM-020, 10-design D8; L3) — Accept the difference on {number}: both prices stay as they are; the check says "≠ Not equal ·
+ * Accepted by hand" with the name, the day and the reason, and opens again by itself when either price changes; the customer is not
+ * told. Undo the acceptance…: the check says "Not equal" again; the history keeps the acceptance. Each with its reason (office only).
+ */
+function PriceAcceptDialog({ order, undo, model, actions }: { order: Order; undo: boolean; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  const t = useT('orders')
+  const locale = useLocale()
+  const say = useSay(order.currency)
+  const read = model.priceCheck?.read
+  const check = read?.state === 'ready' ? read.check : null
+  const [reason, setReason] = useState('')
+  const reasonProblem = reasonProblemOf(reason)
+  const body = check && !undo ? acceptBodyOf(check, reason) : null
+  const held = model.busy ? t('held.busy') : !check || (!undo && !body) ? t('moneyTab.price.accept.gone') : reasonProblem ? say(reasonProblem) : null
+  const diff = check ? diffWordOf(check.total.priceDiff) : null
+  const ns = undo ? 'moneyTab.price.unaccept' : 'moneyTab.price.accept'
+  return (
+    <Frame
+      title={t(`${ns}.title`, { number: order.number })}
+      held={held}
+      go={() => (undo ? actions?.onPriceUnaccept?.(reason) : body && actions?.onPriceAccept?.(body))}
+      goLabel={model.busy ? t('common.working') : t(`${ns}.go`)}
+      tone={undo ? 'danger' : 'primary'}
+      onClose={() => actions?.onDialog?.(null)}
+      problem={<Refusal model={model} currency={order.currency} />}
+    >
+      {check && check.total.brandPrice !== null ? (
+        <p className="fw-so-hint">
+          {t('moneyTab.price.accept.sub', { lines: t('priceCheck.lines', { count: check.total.priceNotEqualLines }), ours: money(check.total.ourPrice, check.currency, locale), theirs: money(check.total.brandPrice, check.currency, locale) })}
+          {diff ? ` · ${say(diff)}` : ''}
+        </p>
+      ) : null}
+      <HandParts
+        happens={undo ? [t('moneyTab.price.unaccept.happens.again'), t('moneyTab.price.unaccept.happens.kept')] : [t('moneyTab.price.accept.happens.stay'), t('moneyTab.price.accept.happens.shows'), t('moneyTab.price.accept.happens.reopens')]}
+        told={t(`${ns}.told`)}
+        never={t(`${ns}.never`)}
+        reason={reason}
+        onReason={setReason}
+        reasonError={reasonProblem ? say(reasonProblem) : null}
+        code={false}
+        who={t('moneyTab.hand.whoKept')}
+      />
+    </Frame>
+  )
+}
+
+/**
+ * F-OM-302 (B-OM-021, 10-design D7; L2) — Set a cost by hand · {number}: a line ADDED to the computed cost (Freight (estimate) ·
+ * Commission · Bank charges · Other cost; replacing a computed part is a later job), in the order's currency. Now and Actual use it; At
+ * quote stays as sold; Put back removes it. The customer never sees margins or costs. costing.ledger.manage + the cost grain.
+ */
+function CostLineDialog({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  const t = useT('orders')
+  const locale = useLocale()
+  const say = useSay(order.currency)
+  const detail = model.margin?.part?.value ?? null
+  const [kind, setKind] = useState<CostLineKind>('FREIGHT_ESTIMATE')
+  const [amount, setAmount] = useState('')
+  const [reason, setReason] = useState('')
+  const minor = costAmountOf(amount)
+  const reasonProblem = reasonProblemOf(reason)
+  const held = model.busy ? t('held.busy') : minor === null ? t('moneyTab.margin.setCost.problem') : reasonProblem ? say(reasonProblem) : null
+  const after = detail ? marginAfterOf(detail, minor) : null
+  const now = detail?.estimateMarginPct ?? null
+  return (
+    <Frame
+      title={t('moneyTab.margin.setCost.title', { number: order.number })}
+      held={held}
+      go={() => minor !== null && actions?.onCostLineAdd?.({ kind, amount: minor, reason })}
+      goLabel={model.busy ? t('common.working') : t('moneyTab.margin.setCost.go')}
+      tone="primary"
+      onClose={() => actions?.onDialog?.(null)}
+      problem={<Refusal model={model} currency={order.currency} />}
+    >
+      {now !== null ? <p className="fw-so-hint">{t('moneyTab.margin.setCost.sub', { pct: pctText(now, locale) })}</p> : null}
+      <div className="fw-om-dlg-grid">
+        <Field label={t('moneyTab.margin.setCost.kind')} hint={t('moneyTab.margin.setCost.kindHint')}>
+          <Select value={kind} onChange={(event) => setKind(event.target.value as CostLineKind)}>
+            {HAND_COST_KINDS.map((entry) => (
+              <option key={entry} value={entry}>
+                {t(`moneyTab.margin.kind.${entry}`)}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label={t('moneyTab.margin.setCost.amount', { currency: order.currency })} error={amount !== '' && minor === null ? t('moneyTab.margin.setCost.problem') : undefined} required>
+          <Input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" autoComplete="off" />
+        </Field>
+      </div>
+      <HandParts
+        happens={[t('moneyTab.margin.setCost.happens.uses'), ...(now !== null && after !== null ? [t('moneyTab.margin.setCost.happens.after', { now: pctText(now, locale), after: pctText(after, locale) })] : []), t('moneyTab.margin.setCost.happens.beside')]}
+        told={t('moneyTab.margin.told')}
+        never={t('moneyTab.margin.setCost.never')}
+        reason={reason}
+        onReason={setReason}
+        reasonError={reasonProblem ? say(reasonProblem) : null}
+        code={false}
+        who={t('moneyTab.margin.who')}
+      />
+    </Frame>
+  )
+}
+
+/** F-OM-302: Put back — the line set by hand is removed (its reason kept in the history); Now and Actual go back to the computed cost. */
+function CostLineRemoveDialog({ order, lineId, model, actions }: { order: Order; lineId: string; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  const t = useT('orders')
+  const locale = useLocale()
+  const say = useSay(order.currency)
+  const line = model.margin?.part?.value?.handLines?.find((entry) => entry.id === lineId) ?? null
+  const [reason, setReason] = useState('')
+  const reasonProblem = reasonProblemOf(reason)
+  const held = model.busy ? t('held.busy') : !line ? t('moneyTab.margin.putBack.gone') : reasonProblem ? say(reasonProblem) : null
+  return (
+    <Frame
+      title={t('moneyTab.margin.putBack.title', { what: line ? t(`moneyTab.margin.kind.${line.kind}`) : '' })}
+      held={held}
+      go={() => actions?.onCostLineRemove?.(lineId, reason)}
+      goLabel={model.busy ? t('common.working') : t('moneyTab.margin.putBack.go')}
+      tone="danger"
+      onClose={() => actions?.onDialog?.(null)}
+      problem={<Refusal model={model} currency={order.currency} />}
+    >
+      {line && model.can.cost && typeof line.amount === 'number' ? <p className="fw-so-hint">{money(line.amount, order.currency, locale)}</p> : null}
+      <HandParts happens={[t('moneyTab.margin.putBack.happens.removed'), t('moneyTab.margin.putBack.happens.computed')]} told={t('moneyTab.margin.told')} never={t('moneyTab.margin.putBack.never')} reason={reason} onReason={setReason} reasonError={reasonProblem ? say(reasonProblem) : null} code={false} who={t('moneyTab.margin.who')} />
+    </Frame>
+  )
+}
+
+/**
+ * F-OM-302 (B-OM-021; L4) — Set target… · {number}: the order's target margin (a percent; empty: none, the floor applies again). The
+ * meter marks it; below it, the order is flagged. costing.ledger.manage + the cost and the margin grains (the Owner and Finance).
+ */
+function MarginTargetDialog({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  const t = useT('orders')
+  const locale = useLocale()
+  const say = useSay(order.currency)
+  const detail = model.margin?.part?.value ?? null
+  const now = targetOf(detail?.target)
+  const [typed, setTyped] = useState(() => (now ? pctText(now.pct, locale).replace(/\s*%$/, '') : ''))
+  const [reason, setReason] = useState('')
+  const target = targetPctOf(typed)
+  const reasonProblem = reasonProblemOf(reason)
+  const same = target !== null && (target.pct === null ? now === null : now !== null && Number(target.pct) === Number(now.pct))
+  const held = model.busy ? t('held.busy') : target === null ? t('moneyTab.margin.target.problem') : same ? t('moneyTab.margin.target.same') : reasonProblem ? say(reasonProblem) : null
+  const floor = detail?.floor ?? null
+  return (
+    <Frame
+      title={t('moneyTab.margin.target.title', { number: order.number })}
+      held={held}
+      go={() => target && actions?.onMarginTarget?.({ targetPct: target.pct, reason })}
+      goLabel={model.busy ? t('common.working') : t(target?.pct === null ? 'moneyTab.margin.target.clear' : 'moneyTab.margin.target.go')}
+      tone="primary"
+      onClose={() => actions?.onDialog?.(null)}
+      problem={<Refusal model={model} currency={order.currency} />}
+    >
+      {detail?.estimateMarginPct ? <p className="fw-so-hint">{t('moneyTab.margin.setCost.sub', { pct: pctText(detail.estimateMarginPct, locale) })}</p> : null}
+      <Field label={t('moneyTab.margin.target.field')} hint={floor ? t('moneyTab.margin.target.hintFloor', { pct: pctText(floor.pct, locale) }) : t('moneyTab.margin.target.hint')} error={typed !== '' && target === null ? t('moneyTab.margin.target.problem') : undefined}>
+        <Input value={typed} onChange={(event) => setTyped(event.target.value)} inputMode="decimal" autoComplete="off" />
+      </Field>
+      <HandParts happens={[t('moneyTab.margin.target.happens.marks'), t('moneyTab.margin.target.happens.flag')]} told={t('moneyTab.margin.told')} never={t('moneyTab.margin.target.never')} reason={reason} onReason={setReason} reasonError={reasonProblem ? say(reasonProblem) : null} code={false} who={t('moneyTab.margin.who')} />
+    </Frame>
+  )
+}
+
+/**
+ * F-OM-202 (B-OM-022, 10-design §10: the Owner only) — Stop the page sent to {to}?: the bank-details page stops working at once (the
+ * customer sees it is no longer valid); the payment request stays open (send a new page when it is needed). A reason, office only.
+ */
+function StopPageDialog({ order, requestId, model, actions }: { order: Order; requestId: string; model: OrderRecordModel; actions?: OrderRecordActions }) {
+  const t = useT('orders')
+  const say = useSay(order.currency)
+  const link = order.chain.depositRequests.find((request) => request.id === requestId)?.link ?? null
+  const [reason, setReason] = useState('')
+  const reasonProblem = reasonProblemOf(reason)
+  const live = !!link?.id && link.state === 'LIVE'
+  const held = model.busy ? t('held.busy') : !live ? t('moneyTab.stop.gone') : reasonProblem ? say(reasonProblem) : null
+  return (
+    <Frame
+      title={link?.to ? t('moneyTab.stop.title', { to: link.to }) : t('moneyTab.stop.titleNoTo')}
+      held={held}
+      go={() => actions?.onStopPage?.(requestId, reason)}
+      goLabel={model.busy ? t('common.working') : t('moneyTab.stop.go')}
+      tone="danger"
+      onClose={() => actions?.onDialog?.(null)}
+      problem={<DialogProblem model={model} />}
+    >
+      <HandParts happens={[t('moneyTab.stop.happens.stops'), t('moneyTab.stop.happens.open')]} told={t('moneyTab.stop.told')} never={t('moneyTab.stop.never')} reason={reason} onReason={setReason} reasonError={reasonProblem ? say(reasonProblem) : null} code={false} who={t('moneyTab.hand.whoKept')} />
     </Frame>
   )
 }

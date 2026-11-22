@@ -1,23 +1,22 @@
 import { isApiError, issuePath } from '../../../../lib/api/errors'
 import type { BrandPriceRow, PriceCheck, PriceCheckLine } from '../price-check/api'
-import { isClosedOrder } from '../price-check/model'
 import { writeProblem, type OrderAbilities, type Phrase } from '../model'
 
 /**
- * F-CP-142 (customer page plan C2d, C3; design 11-money §3.3, picture 21; review A3) — the order page's Money › "Price check" card,
- * pure: what it shows for whom and when it reads. The card sits after the Totals card; it compares, line by line and for the order,
- * our price with the customer's (without VAT, the order's currency, exact to the cent: the API's check, B-CP-017), says where the
- * customer's price came from, and opens the ONE customer's-price window (so/price-check, F-CP-114 — the Work tab's door is the other).
+ * F-CP-142 (customer page plan C2d, C3; design 11-money §3.3, picture 21; review A3) — the order page's Money › "Price check", pure:
+ * when it reads, and the parts its section draws (F-OM-301: the section is money/view/PriceCheckSection.tsx, its model money/price.ts).
+ * It compares, line by line and for the order, our price with the customer's (without VAT, the order's currency, exact to the cent:
+ * the API's check, B-CP-017), says where the customer's price came from, and opens the ONE customer's-price window (so/price-check,
+ * F-CP-114 — the Work tab's door is the other).
  *
- *   the money wall   without the price grain the card is ONE line of words ("Shown to people who see prices"), no table and no call
- *                    (the API would answer 403); as Sales worker / as Production manager the same
+ *   the money wall   without the price grain the section is HIDDEN (the tab's head says the wall once) and nothing is asked (the
+ *                    API would answer 403); as Sales worker / as Production manager the same
  *   the brand wall   the order's own customer only: the API reads the order's party (a person limited to some customers reads only
  *                    theirs; 404 like a wrong id otherwise)
  *
- * States: loading (skeleton rows) · empty ("No customer price yet" + Customer's price… as the primary) · filled (the table, the
- * sources) · the take-over row when a request of this order named the customer's prices · closed or cancelled (the button held in
- * words) · error (Try again) · stale (a take-over found the prices changed: read again, "Here they are now"). Live:
- * `sales_order.brand_price_changed` of this order reads the card again; its rows keep their place (the API's line order).
+ * States: loading (skeleton rows) · empty · filled · the take-over row when a request of this order named the customer's prices ·
+ * error (Try again) · stale (a take-over found the prices changed: read again, "Here they are now"). Live:
+ * `sales_order.brand_price_changed` of this order reads it again; its rows keep their place (the API's line order).
  */
 
 /** The audit's record type of the customer's prices (B-CP-025: one history per order, read through the order). */
@@ -25,7 +24,7 @@ export const HISTORY_TYPE = 'OrderBrandPrice'
 /** The live event that reads the card again (B-CP-017, `money.price`, office only). */
 export const BRAND_PRICE_EVENT = 'sales_order.brand_price_changed'
 
-/** The card is read only by a price holder, while Money shows (else held in words: no call). */
+/** The check is read only by a price holder, while Money shows (else no call: the section is hidden). */
 export const asksPriceCheck = (can: Pick<OrderAbilities, 'price'>, tab: string): boolean => can.price && tab === 'money'
 
 /** The card's read: held (no price grain), reading, failed, or the check (with "Here they are now" after a refused take-over). */
@@ -37,7 +36,7 @@ export type PriceCheckRead =
 
 export interface PriceCheckCardModel {
   readonly read: PriceCheckRead
-  /** audit.read: History › opens the audit filtered to this order's customer prices (else held in words). */
+  /** audit.read: History › opens the audit filtered to this order's customer prices (else no History door). */
   readonly canHistory: boolean
 }
 
@@ -51,13 +50,6 @@ export interface PriceCheckCardActions {
 
 /** Nothing of the customer's yet: no line and no order total has a stored row (the take-over row may still offer some). */
 export const isEmptyCheck = (check: Pick<PriceCheck, 'lines' | 'total'>): boolean => check.total.row === null && check.lines.every((line) => line.row === null)
-
-/** Why Customer's price… waits, in words (null: it opens): a closed or cancelled order keeps its prices; no right to change orders. */
-export function editHeldOf(check: Pick<PriceCheck, 'status' | 'mayWrite'>): Phrase | null {
-  if (isClosedOrder(check.status)) return { key: 'priceCheck.closed' }
-  if (!check.mayWrite.allowed) return { key: 'held.noManage' }
-  return null
-}
 
 /** The order's pieces (the Total row): the lines' own. */
 export const totalPiecesOf = (check: Pick<PriceCheck, 'lines'>): number => check.lines.reduce((sum, line) => sum + line.pieces, 0)

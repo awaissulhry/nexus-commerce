@@ -17,7 +17,8 @@ import '../margins.css'
  * The margin parts the Margins page (SCR-155: its profitability DetailModal, By customer and style) and the sales order's
  * Margin tab share: MarginStrip (quoted → now → so far, the difference in tone; DS MetricStrip), MarginMeter, Waterfall
  * and BarList — the DS charts (B-W2b-18; composed here until B-W2b-09 built them) in this page's words — and
- * ProfitBridge (price − each cost − freight = margin, composed: the design's "NEW Bridge").
+ * ProfitBridge (price − each cost − freight − the costs set by hand = margin, composed: the design's "NEW Bridge"; F-OM-306: the
+ * same figures as the order's Money › Margin, from the same read).
  * Each figure only with its grain; a margin amount only with the margin AND the cost grain (Owner answer S2).
  */
 
@@ -136,9 +137,10 @@ export function ProfitBridge({ detail, can }: { detail: OrderMargin; can: Pick<M
         <div key={row.id} className={`fw-fmg-bridge-row is-${row.kind}`}>
           <dt>{t(row.label)}</dt>
           <dd>
-            {row.kind === 'freight' ? (
+            {/* F-OM-306: freight and the costs set by hand as the read counts them (one number per order); no freight yet: said so. */}
+            {row.kind === 'freight' && row.amount === null ? (
               <span className="fw-fmg-muted">{t('bridge.noFreight')}</span>
-            ) : row.kind === 'cost' ? (
+            ) : row.kind === 'cost' || row.kind === 'freight' || row.kind === 'hand' ? (
               `− ${moneyText(row.amount, detail.currency, locale)}`
             ) : row.kind === 'margin' ? (
               <span className="fw-fmg-inline">

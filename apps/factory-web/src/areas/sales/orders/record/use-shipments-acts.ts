@@ -2,8 +2,13 @@
 
 import { createElement, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Order } from '../api'
-// B-W2b-398: the Shipments tab's card "Delivered (from carrier)".
-import { Deliveries } from './shipments/delivered/Deliveries'
+// F-OS-101 (18-lead-settles L5): the deliveries READ stays (each Shipments row draws its delivery); its card "Delivered (from carrier)" went.
+import { podDownload, readDeliveries, type Deliveries } from './shipments/delivered/api'
+import { readCartons, type Bench } from '../../../warehouse/shipments/cartons/api' // F-OS-103: the Parcels (n) fold, read on open
+import { storeUrl } from '../../../../record-panels/store'
+import { useLiveBus } from '../../../../shell/live/use-live'
+import { readProblem } from '../model'
+import type { Part } from './record-model'
 // F-OP-119: the tracking number of one shipment typed in place (the Warehouse's own hook and dialog).
 import { depthAbilitiesOf } from '../../../warehouse/shipments/queue/shared/depth'
 // F-OP-121: the order page loads its own catalogues only; New shipment brings the Warehouse's (shipments, its depth words).
@@ -28,9 +33,13 @@ import { elsewhereDoor } from './shipments/elsewhere/model'
 import type { Phrase } from '../model'
 
 /**
- * F-OP-134 (N-5): the Shipments tab's container side — B-W2b-398: the card "Delivered (from carrier)" (its own container: it reads
- * the carrier's deliveries of the order). Mounted by the container (OrderRecord.tsx), which hands it to the view as a plain prop; a
- * view never imports it. The hooks a shipment's acts need (the hand-booked carrier's tracking, a new shipment) are mounted here.
+ * F-OP-134 (N-5): the Shipments tab's container side, mounted by the container (OrderRecord.tsx), which hands the view what it returns as
+ * plain props; a view never imports it. The hooks a shipment's acts need (the hand-booked carrier's tracking, a new shipment) are here.
+ *
+ * F-OS-101 (order SHIPMENTS tab; 18-lead-settles L5): the tab's own reads — the order's deliveries (`GET /sales/orders/:id/deliveries`:
+ * how each shipment arrived, its proof, its tracking problems, came back), read with the order and again on a live change of ONE OF
+ * THIS ORDER'S shipments (H3-B8: never another order's) or of the order, and on reconnect; each row's Parcels (n) fold reads
+ * Warehouse's cartons of that shipment when it opens; the proof's image opens in a new tab (a presigned address of 60 seconds).
  *
  * F-OP-119 (order page plan N5): "Tracking number…" on a shipment row opens the Warehouse's tracking dialog for that ONE shipment
  * (useOwnTransport mounted lazily, only while it is open: `model.shipmentTracking`); a save reads the order again.
@@ -51,9 +60,21 @@ export function useShipmentsActs(input: {
   /* F-OP-121 */ readonly api: ApiClient
   /* F-OP-121 */ readonly setNotice: (notice: OrderRecordModel['notice']) => void
 }): {
-  delivered: ReactNode
-  model: { shipmentTracking: ReactNode | null; /* F-OP-121 */ newShipment: ReactNode | null; /* F-OP-122 */ joinable: JoinableRow[] | null; /* F-OP-123 */ elsewhere: { readonly held: Phrase | null; readonly dialog: ReactNode | null } | null }
-  actions: { onShipmentTracking: (shipmentId: string) => void; /* F-OP-121 */ onCreateShipment: () => void; /* F-OP-122 */ onJoinShipment: (shipmentId: string) => void; /* F-OP-123 */ onRecordElsewhere: () => void }
+  model: {
+    shipmentTracking: ReactNode | null
+    /* F-OP-121 */ newShipment: ReactNode | null
+    /* F-OP-122 */ joinable: JoinableRow[] | null
+    /* F-OP-123 */ elsewhere: { readonly held: Phrase | null; readonly dialog: ReactNode | null } | null
+    /* F-OS-101 */ shipmentDeliveries: Part<Deliveries> | null
+    /* F-OS-103 */ shipmentParcels: Readonly<Record<string, Part<Bench>>>
+  }
+  actions: {
+    onShipmentTracking: (shipmentId: string) => void
+    /* F-OP-121 */ onCreateShipment: () => void
+    /* F-OP-122 */ onJoinShipment: (shipmentId: string) => void
+    /* F-OP-123 */ onRecordElsewhere: () => void
+    /* F-OS-101 */ shipmentsTab: { readonly onRetryDeliveries: () => void; readonly onOpenParcels: (shipmentId: string) => void; readonly onDownloadProof: (shipmentId: string) => void }
+  }
 } {
   const { order, prefix, permissions, reload, api, setNotice } = input
   // ---- F-OP-119 ----
@@ -125,9 +146,75 @@ export function useShipmentsActs(input: {
     : null
   const onRecordElsewhere = useCallback(() => setElsewhereOpen(true), [])
   // ---- end F-OP-123
+
+  // ---- F-OS-101 (L5): the order's deliveries, drawn in each Shipments row (no card of its own any more) ----
+  const [deliveries, setDeliveries] = useState<{ readonly orderId: string; readonly part: Part<Deliveries> } | null>(null)
+  const [deliveriesAttempt, setDeliveriesAttempt] = useState(0)
+  useEffect(() => {
+    if (!orderId) return
+    const abort = new AbortController()
+    readDeliveries(api, orderId, abort.signal)
+      .then((read) => setDeliveries({ orderId, part: { value: read, problem: null } }))
+      .catch((error: unknown) => {
+        if (abort.signal.aborted) return
+        // A read again that fails keeps what is on screen; a first read that fails says so (never an empty "nothing delivered").
+        setDeliveries((current) => (current?.orderId === orderId && current.part.value ? current : { orderId, part: { value: null, problem: readProblem(error) } }))
+      })
+    return () => abort.abort()
+  }, [api, orderId, shipmentsKey, deliveriesAttempt])
+  // H3-B8: only a change of THIS order's shipments (or of the order) reads them again — a proof, a tracking problem, a status.
+  const shipmentIds = useMemo(() => new Set(order ? order.chain.shipments.map((row) => row.id) : []), [order])
+  useLiveBus({
+    onChange: (change) => {
+      if (!orderId) return
+      if (change.type === 'sales_order.status_changed') {
+        if (change.fields.orderId === orderId) setDeliveriesAttempt((count) => count + 1)
+        return
+      }
+      if (!DELIVERIES_LIVE.has(change.type)) return
+      if (Object.values(change.fields).some((value) => typeof value === 'string' && shipmentIds.has(value))) setDeliveriesAttempt((count) => count + 1)
+    },
+    onReconnect: () => setDeliveriesAttempt((count) => count + 1),
+  })
+  const onRetryDeliveries = useCallback(() => setDeliveriesAttempt((count) => count + 1), [])
+  const shipmentDeliveries = deliveries && deliveries.orderId === orderId ? deliveries.part : orderId ? { value: null, problem: null } : null
+  // The proof's image: the tab opens at the click (a browser opens no window after an await), then goes to the address.
+  const onDownloadProof = useCallback(
+    (shipmentId: string) => {
+      const tab = window.open('', '_blank')
+      if (tab) tab.opener = null
+      podDownload(api, shipmentId)
+        .then((url) => {
+          if (tab) tab.location.href = storeUrl(url)
+          else window.location.assign(storeUrl(url))
+        })
+        .catch((error: unknown) => {
+          tab?.close()
+          setNotice({ tone: 'danger', words: { key: readProblem(error) } })
+        })
+    },
+    [api, setNotice],
+  )
+  // ---- end F-OS-101
+
+  // ---- F-OS-103: each row's Parcels (n) fold — Warehouse's cartons of that shipment, read when it opens (again on Try again) ----
+  const [parcels, setParcels] = useState<{ readonly orderId: string | null; readonly parts: Readonly<Record<string, Part<Bench>>> }>({ orderId: null, parts: {} })
+  const onOpenParcels = useCallback(
+    (shipmentId: string) => {
+      setParcels((current) => ({ orderId, parts: { ...(current.orderId === orderId ? current.parts : {}), [shipmentId]: { value: current.orderId === orderId ? (current.parts[shipmentId]?.value ?? null) : null, problem: null } } }))
+      readCartons(api, shipmentId)
+        .then((bench) => setParcels((current) => (current.orderId === orderId ? { orderId, parts: { ...current.parts, [shipmentId]: { value: bench, problem: null } } } : current)))
+        .catch((error: unknown) => setParcels((current) => (current.orderId === orderId ? { orderId, parts: { ...current.parts, [shipmentId]: { value: null, problem: readProblem(error) } } } : current)))
+    },
+    [api, orderId],
+  )
+  const shipmentParcels = parcels.orderId === orderId ? parcels.parts : {}
+  // ---- end F-OS-103
   return {
-    delivered: order ? createElement(Deliveries, { orderId: order.id, prefix }) : null,
-    model: { shipmentTracking, newShipment, joinable: joinableShown, elsewhere /* F-OP-123 */ },
-    actions: { onShipmentTracking, onCreateShipment, onJoinShipment, onRecordElsewhere /* F-OP-123 */ },
+    model: { shipmentTracking, newShipment, joinable: joinableShown, elsewhere /* F-OP-123 */, shipmentDeliveries /* F-OS-101 */, shipmentParcels /* F-OS-103 */ },
+    actions: { onShipmentTracking, onCreateShipment, onJoinShipment, onRecordElsewhere /* F-OP-123 */, shipmentsTab: { onRetryDeliveries, onOpenParcels, onDownloadProof } /* F-OS-101 */ },
   }
 }
+
+/** F-OS-101: the live events after which the deliveries are read again — when they name one of this order's shipments (H3-B8). */
+const DELIVERIES_LIVE = new Set(['shipment.status_changed', 'shipment.pod_recorded', 'shipment.tracking_problem_raised', 'shipment.tracking_problem_resolved', 'shipment.tracking_recorded'])
