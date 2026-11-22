@@ -83,7 +83,7 @@ import { useFileDepth } from '../../../../record-panels/files/use-file-depth'
 import { DepthDialogs } from '../../../../record-panels/files/view/DepthParts'
 import { previewLink } from '../../../../record-panels/files/api'
 import { storeUrl } from '../../../../record-panels/store'
-import { orderFilesOf } from '../../../../lib/record-thread/files-view/model'
+import { filesReadOnly, orderFilesOf } from '../../../../lib/record-thread/files-view/model'
 // ---- end F-OF-301
 import { orderFileHrefOf } from '../../../_shared/record-thread/order-file-href' // F-OF-101: a block's door "Open on … ›"
 import { OrderDock } from './dock/OrderDock' // F-SA-262: the dock's pick of ONE conversation
@@ -584,7 +584,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     closed: order.status === 'ready' && (order.value.status === 'CLOSED' || order.value.status === 'CANCELLED'),
     canAsk: session.permissions.includes('tasks.manage') && session.permissions.includes('threads.post'),
     canAskCustomer: session.permissions.includes('partners.tasks.manage'),
-    readOnly: readOnlyOnPage(can),
+    readOnly: filesReadOnly(session.permissions), // fx7w: Read-only on the files = no right that acts on files or asks (the asked designer uploads)
     today: romeToday(),
     // F-OF-301 / F-OF-303: a card's Versions… opens the page's ONE depth (below); Who can see… names the order's customer
     onVersions: (fileId) => depthOpen.current(fileId),
@@ -603,7 +603,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     api,
     record: { type: 'SalesOrder', id: readyId ?? '' },
     files: depthFiles,
-    canUpload: !readOnlyOnPage(can) && (orderFiles.model.may?.upload ?? false),
+    canUpload: !filesReadOnly(session.permissions) && (orderFiles.model.may?.upload ?? false),
     canRead: false,
     prefix,
     reloadFiles: orderFiles.reload,

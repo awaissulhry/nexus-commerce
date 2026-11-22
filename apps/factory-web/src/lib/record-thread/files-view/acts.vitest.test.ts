@@ -278,3 +278,26 @@ describe('T — the customer page’s docked order: Versions… in the page’s 
     expect(read('../../../areas/_shared/record-thread/use-order-files.ts')).toContain('versionsHere: !!input.onVersions,')
   })
 })
+
+// ---- fx7w (end check 2): Read-only on the order's files follows the file and ask rights, not "changes no order" ----
+describe('fx7w — the asked designer is not Read-only on the files: Upload for this ask shows for them', () => {
+  it('Read-only = no right that acts on files or asks; the designer (files.upload, tasks.manage) and Sales act; the Read-only role does not', async () => {
+    const { filesReadOnly } = await import('./model')
+    const { rolePermissions } = await import('../../../shell/design-data')
+    const { templateOf } = await import('@nexus/factory-domain/auth/roles/templates')
+    expect(filesReadOnly(rolePermissions('read_only'))).toBe(true)
+    expect(filesReadOnly([...(templateOf('designer')?.permissions ?? [])])).toBe(false)
+    expect(filesReadOnly(rolePermissions('sales'))).toBe(false)
+    expect(filesReadOnly(['orders.view', 'files.read'])).toBe(true)
+    const page = readFileSync(new URL('../../../areas/sales/orders/record/OrderRecord.tsx', import.meta.url), 'utf8')
+    expect(page).toContain('readOnly: filesReadOnly(session.permissions),')
+    expect(page).not.toContain('readOnly: readOnlyOnPage(can),')
+  })
+
+  it('an open ask asked of the reader offers "Upload for this ask" unless the reader is Read-only on the files', async () => {
+    const { askDoorsOf } = await import('./asks/asks')
+    const ask = { status: 'OPEN' as const, forMe: true, answered: null, may: { answer: true, decide: false, change: false } }
+    expect(askDoorsOf(ask, { readOnly: false }).buttons.map((one) => one.door)).toEqual(['upload'])
+    expect(askDoorsOf(ask, { readOnly: true }).buttons).toEqual([])
+  })
+})
