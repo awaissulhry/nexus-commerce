@@ -22,6 +22,17 @@
   .fw-om-fold span { display: none; }
 }
 
+/* F-OM-fx3 (W-18): at S (the tab's room under 720 px) a section head keeps ⋯ ⓘ on its title line and puts its text buttons on the line
+   under it — the kit's own S rule gives every head control a line of its own; this is the Money tab's alone (the kit is untouched). */
+@container pt (max-width: 719px) {
+  .fw-om .fw-pt-head { column-gap: var(--nds-space-8); }
+  .fw-om .fw-pt-head-t { flex: 1 1 0; }
+  .fw-om .fw-pt-head-r { display: contents; }
+  .fw-om .fw-pt-head-r > .nds-menu-wrap, .fw-om .fw-pt-head-r > .nds-detailpop-trigger { flex: none; }
+  .fw-om .fw-pt-head-r > .nds-btn:not(.icon), .fw-om .fw-pt-head-r > .nds-tooltip { order: 10; }
+  .fw-om .fw-pt-head:has(> .fw-pt-head-r > .nds-btn:not(.icon), > .fw-pt-head-r > .nds-tooltip)::after { content: ''; order: 9; flex-basis: 100%; height: 0; }
+}
+
 /* ── 1 · Totals (F-OM-102): tiles | what is left, the facts under them (stacked under 1200 px of the section) ── */
 .fw-om-tt { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "t" "r" "f"; gap: var(--nds-space-14) var(--nds-space-22); min-width: 0; }
 .fw-om-tt.is-np { grid-template-areas: "t" "r" "f"; }

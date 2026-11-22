@@ -55,6 +55,9 @@ describe('F-OM-101: the shell — five sections that stack, in the kit, by the r
     // Pairs only inside Totals (L6): its tiles | what is left from 1200 px of the section; the sections themselves always stack.
     expect(css).toContain('@container sec (min-width: 1200px)')
     expect(source('./view/MoneyTab.tsx')).not.toContain('fw-pt-pairs')
+    // F-OM-fx3 (W-18): at S the heads keep ⋯ ⓘ on the title line — scoped to this tab, the Production kit untouched.
+    expect(css).toContain('.fw-om .fw-pt-head-r { display: contents; }')
+    expect(source('../view/production/production.css')).not.toContain('fw-om')
   })
 
   it('views draw their models and fetch nothing (no API client, no acts hook)', () => {
