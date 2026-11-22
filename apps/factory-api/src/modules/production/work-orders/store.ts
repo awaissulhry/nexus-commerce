@@ -326,6 +326,32 @@ async function refuseBooked(tx: CommandTx, workOrder: Pick<Header, 'number' | 's
   )
 }
 
+// ── B-OF-031 (order files tab): a step a file ask names never goes away ──
+/**
+ * An ask for a file may name a step of a work order ("photos of step 20"; factory-db FileAsk.workOrderOperationId, its key Restrict),
+ * and an ask is never deleted (cancelled, it still names the step). So an operation that would go away while an ask names it is
+ * refused here (409), in words that name each step and say it stays — as a published plan's slot does (`refusal.published`). Issues
+ * `fileAsks/<ask id>`, one per ask.
+ */
+async function refuseAsked(tx: CommandTx, workOrder: Pick<Header, 'number'>, operations: readonly { id: string; seq: number; name: string }[], refusal: BookedRefusal): Promise<void> {
+  if (operations.length === 0) return
+  const asks = await tx.fileAsk.findMany({ where: { workOrderOperationId: { in: operations.map((op) => op.id) } }, select: { id: true, workOrderOperationId: true }, orderBy: { id: 'asc' } })
+  if (asks.length === 0) return
+  const operationOf = new Map(operations.map((op) => [op.id, op]))
+  const words = asks.map((ask) => {
+    const op = operationOf.get(ask.workOrderOperationId!)!
+    return `Op ${op.seq} ${op.name}`
+  })
+  const steps = [...new Set(words)]
+  const what = steps.length === 1 ? 'an operation' : `${steps.length} operations`
+  throw new DomainError(
+    'conflict',
+    `${refusal.doing} would take away ${what} of work order ${workOrder.number} that a file ask names: ${steps.join('; ')}. A file ask keeps the step it names, so ${steps.length === 1 ? 'that operation stays' : 'those operations stay'}: ${refusal.published}.`,
+    asks.map((ask, index) => ({ path: `fileAsks/${ask.id}`, message: words[index]! })),
+  )
+}
+// ── end B-OF-031 ──
+
 /**
  * A DRAFT's stored operations brought to `planned` (one per routing step it takes; seq = the step's place): the row of
  * every operation whose routing step stays is KEPT and updated in place — its id, so the planning board's slots that
@@ -351,6 +377,7 @@ export async function syncDraftOperations(
     else pairs.push({ row: left.splice(at, 1)[0]!, op })
   }
   await refuseBooked(tx, workOrder, left, refusal)
+  await refuseAsked(tx, workOrder, left, refusal) // B-OF-031
   if (left.length > 0) await tx.workOrderOperation.deleteMany({ where: { id: { in: left.map((row) => row.id) } } })
 
   const ownCentres = [...new Set(pairs.filter(({ row, op }) => row.workCentreId !== op.workCentreId).map(({ row }) => row.workCentreId))]
@@ -402,6 +429,7 @@ export async function removeDraftOperations(tx: CommandTx, workOrder: Pick<Heade
   const stored = await tx.workOrderOperation.findMany({ where: { workOrderId: workOrder.id }, select: { id: true, seq: true, name: true }, orderBy: { seq: 'asc' } })
   if (stored.length === 0) return 0
   await refuseBooked(tx, workOrder, stored, refusal)
+  await refuseAsked(tx, workOrder, stored, refusal) // B-OF-031
   return (await tx.workOrderOperation.deleteMany({ where: { workOrderId: workOrder.id } })).count
 }
 

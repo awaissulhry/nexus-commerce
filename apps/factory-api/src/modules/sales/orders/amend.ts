@@ -174,6 +174,9 @@ const lineSnapshot = (line: LineRecord): SnapshotLine => ({
 /** The words of a line the customer's price still holds (a price given between the plan and the delete). */
 export const LINE_HAS_BRAND_PRICE = (seq: number | null): string => `${seq === null ? 'This line' : `Line ${seq}`} has the customer's price: it was given while the line was being removed. Read the order again, then remove the line.`
 
+// B-OF-031 (order files tab): the words of a line a file ask lands on (an ask is never deleted, so the line stays).
+export const LINE_HAS_FILE_ASK = (seq: number | null): string => `${seq === null ? 'This line' : `Line ${seq}`} has a file ask: it stays. Close it short instead, or lower its sizes.`
+
 /** A line deleted; the customer's price that still holds it (the foreign key is Restrict) is a 409 in words, never a 500. */
 async function deleteLine(tx: CommandTools['tx'], lineId: string, seq: number | null): Promise<void> {
   try {
@@ -181,6 +184,9 @@ async function deleteLine(tx: CommandTools['tx'], lineId: string, seq: number | 
   } catch (error) {
     const found = error as { code?: unknown; message?: unknown; meta?: unknown } | null
     if (found?.code === 'P2003' && `${String(found.message)} ${JSON.stringify(found.meta ?? {})}`.includes('OrderBrandPrice')) throw new ConflictError(LINE_HAS_BRAND_PRICE(seq))
+    // B-OF-031 (order files tab): a file ask that lands on the line holds it too (FileAsk's key is Restrict): a backstop of the plan's
+    // own refusal (referencesOf below), for an ask made between the plan and the delete.
+    if (found?.code === 'P2003' && `${String(found.message)} ${JSON.stringify(found.meta ?? {})}`.includes('FileAsk')) throw new ConflictError(LINE_HAS_FILE_ASK(seq))
     throw error
   }
 }
@@ -207,6 +213,8 @@ async function referencesOf(db: Reader, lineIds: readonly string[]): Promise<Map
   for (const row of await db.orderChangeRequestLine.findMany({ where: { orderLineId: { in: [...lineIds] } }, select: { orderLineId: true } })) note(row.orderLineId, "a customer's change request")
   // B-W2b-317 (PLN-173): a line promised is kept with its promise history (append-only PromiseRecord rows refer to it).
   for (const row of await db.promiseRecord.findMany({ where, select: { salesOrderLineId: true }, distinct: ['salesOrderLineId'] })) note(row.salesOrderLineId, 'its promise history')
+  // B-OF-031 (order files tab): a file ask that lands on the line (any state: an ask is never deleted, FileAsk's key is Restrict).
+  for (const row of await db.fileAsk.findMany({ where, select: { salesOrderLineId: true }, distinct: ['salesOrderLineId'] })) note(row.salesOrderLineId, 'a file ask')
   return found
 }
 

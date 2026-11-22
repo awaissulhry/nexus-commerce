@@ -1,0 +1,365 @@
+import { randomBytes, randomUUID } from 'node:crypto'
+import { readdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import type { FastifyInstance } from 'fastify'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import type { FactoryDatabase } from '@nexus/factory-db'
+import { grainPermission } from '@nexus/factory-domain/auth/grains/grains'
+import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
+import { newId } from '@nexus/factory-domain/core/ids'
+import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
+import { seedFile } from '../../../../../../packages/factory-db/src/seed-files'
+import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
+import { seedSecondBrand, type SecondBrand } from '../../../../../../packages/factory-db/src/testing/second-brand'
+import { buildApp } from '../../../core/app'
+import { callerFor, command } from '../../../core/command'
+import { testAuthenticator, type SessionContext } from '../../../core/context'
+import { LOCAL_COOKIE_SECRET } from '../../../env'
+import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
+import { startHarness, type Harness } from '../../../platform/auth/sessions/testing/harness'
+import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
+import { syncDraftOperations } from '../../production/work-orders/store'
+
+/**
+ * B-OF-031 … B-OF-032 (order files tab, PR S2; design order-files-2026-11-22 13-backend §2, §4; Owner D2, D3) — "Ask for a file" on a
+ * sales order, on the local stack with the app's real routes: a throwaway PostgreSQL 17 database from the migrations (the runtime
+ * login: row-level security and …_order_files_guards are real), every seed (Brand Alpha = the seeds' customer SEED-C1: SEED-SO-0002
+ * with SEED-WO-0001 at plant A1 and the draft SEED-WO-0002; A1's team L1-A) and the second brand (Brand Beta, its order and a file).
+ * Test sessions hold the role templates' grants (Sales holds no price grain).
+ *
+ *   S2.1  make / change / reassign / cancel and §2.1's people: a role of 3 holders → 3 Tasks, an Alpha-limited holder skipped on
+ *         Beta's order (and alone: 409 NOBODY_WITH_ROLE); a Planner can be asked (the designer once S3.4 gives it tasks.manage); a
+ *         person who cannot see the order, or does not see prices for a priced ask: 409 in words that name them; the floor only on a
+ *         work order, never priced or body data (400); no new ask on a closed order (409); the brand wall (Beta's Owner: Alpha's order
+ *         as an unknown one; Alpha's ask through Beta's order: "File ask not found."); the version (409); the Tasks follow a change,
+ *         are cancelled with a reassign or a cancel; audit rows and file_ask.* events with ids only
+ *         and the Restrict keys in words (lead, S2): a line a file ask lands on is never removed by an amendment, a step it names
+ *         never leaves a draft's operations
+ *
+ * Every name and number is made up. Not run in the build (Owner rule: checks at the end). Run with
+ * `node scripts/factory/run-pg-tests.mjs sales/file-asks/file-asks`.
+ */
+
+type Json = Record<string, any>
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+
+const SEED_DIR = fileURLToPath(new URL('../../../../../../packages/factory-db/seed', import.meta.url))
+const NS = 'of031-file-asks'
+const sid = (key: string) => seedUuid(NS, key)
+const firstSid = (key: string) => `00000000${sid(key).slice(8)}`
+const T = sid('tenant')
+const companyA = sid('company:A')
+const SO2 = sid('production:sales-order:SO-0002')
+const SO2_LINES = [sid('production:sales-order:SO-0002:10'), sid('production:sales-order:SO-0002:20')] as const
+const WO1 = sid('production:work-order:WO-0001')
+const WO1_SEW = sid('production:WO-0001:operation:20')
+const WO2 = firstSid('production:work-order:WO-0002')
+const WO2_PACK = firstSid('production:WO-0002:operation:40')
+const TEAM_A1 = sid('people:team:A1:L1-A')
+const AT = new Date('2026-11-22T08:00:00.000Z')
+
+/** The people: role templates, all customers unless said (planners in three custom roles below). */
+const PEOPLE = { owner: newId(), sales: newId(), planner: newId(), betaOwner: newId(), p1: newId(), p2: newId(), p3: newId(), alphaOnly: newId() } as const
+type Person = keyof typeof PEOPLE
+const SESSIONS: Record<string, SessionContext> = {}
+function grantsOf(role: string, parties: Grant['parties'] = 'all'): Grant[] {
+  const template = templateOf(role)!
+  return [{ permissions: [...template.permissions, ...template.grains.map((grain) => grainPermission(grain) as Permission)], companies: 'all', sites: 'all', parties }]
+}
+/** Two custom office roles with the Planner's rights: THREE — p1, p2, p3 (every customer) and alphaOnly (Brand Alpha only); ALPHA — alphaOnly alone. */
+const ROLES = { three: newId(), alpha: newId() } as const
+
+let h: Harness
+let app: FastifyInstance
+let beta: SecondBrand
+let alpha: string
+const admin = async <R = Json>(sql: string, values: unknown[] = []): Promise<R[]> => (await h.db.admin.query(sql, values)).rows as R[]
+const one = async <R = Json>(sql: string, values: unknown[] = []): Promise<R> => (await admin<R>(sql, values))[0]!
+async function force(sql: string, values: unknown[] = []): Promise<void> {
+  await admin('SET session_replication_role = replica')
+  try {
+    await admin(sql, values)
+  } finally {
+    await admin('SET session_replication_role = DEFAULT')
+  }
+}
+const run = randomBytes(4).toString('hex')
+let keys = 0
+const call = (session: Person, method: Method, url: string, payload?: unknown) =>
+  app.inject({ method, url, headers: { 'x-test-session': session, ...(method !== 'GET' ? { 'idempotency-key': `of031-${run}-${++keys}` } : {}) }, ...(payload === undefined ? {} : { payload: payload as object }) })
+async function ok(session: Person, method: Method, url: string, payload?: unknown, status = 200): Promise<Json> {
+  const response = await call(session, method, url, payload)
+  expect(response.statusCode, response.body).toBe(status)
+  return response.json() as Json
+}
+async function no(session: Person, method: Method, url: string, payload: unknown, status: number): Promise<Json> {
+  const response = await call(session, method, url, payload)
+  expect(response.statusCode, response.body).toBe(status)
+  return (response.json() as Json).error
+}
+const paths = (error: Json): string[] => (error.issues ?? []).map((issue: Json) => String(issue.path))
+/** A week from now (a due day after today in Rome, whatever the hour). */
+const NEXT_WEEK = () => new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10)
+const asks = (orderId: string) => `/sales/orders/${orderId}/file-asks`
+const askRow = (id: string) => one<Json>(`SELECT status::text AS status, version, addressee::text AS addressee, "addresseeUserId", "addresseeRoleId", "taskIds"::text[] AS "taskIds", words, "dueOn"::text AS "dueOn", "fileIds"::text[] AS "fileIds", rounds, "lastReason", "checkTaskId", "lastChasedAt" FROM "FileAsk" WHERE id = $1`, [id])
+const tasksOf = (ids: readonly string[]) => admin<Json>(`SELECT id, status::text AS status, "assigneeId", title, "recordType", "recordId", "dueDate"::text AS "dueDate", "createdById" FROM "Task" WHERE id = ANY($1::uuid[]) ORDER BY "assigneeId"`, [ids])
+const outbox = (askId: string) => admin<Json>(`SELECT type, payload FROM "OutboxEvent" WHERE "tenantId" = $1 AND type LIKE 'file_ask.%' AND payload->>'askId' = $2 ORDER BY "occurredAt", id`, [T, askId])
+const audits = (askId: string) => admin<Json>(`SELECT action, before, after, reason FROM "AuditLog" WHERE "tenantId" = $1 AND "recordType" = 'FileAsk' AND "recordId" = $2 ORDER BY at, id`, [T, askId])
+
+/** An ask on SEED-SO-0002 itself to `who`, with `extra`. */
+const askBody = (who: Json, extra: Json = {}): Json => ({ words: 'Made-up: the signed order confirmation', fileKind: 'DOCUMENT', target: { type: 'SALES_ORDER' }, who, dueOn: NEXT_WEEK(), ...extra })
+/** An ask on SEED-WO-0001 (plant A1) to A1's team L1-A for photos of step 20, with `extra`. */
+const floorBody = (extra: Json = {}): Json => askBody({ kind: 'FLOOR_TEAM', teamId: TEAM_A1 }, { words: 'Made-up: photos of step 20', fileKind: 'PHOTO', target: { type: 'WORK_ORDER', workOrderId: WO1, operationId: WO1_SEW }, ...extra })
+async function made(session: Person, orderId: string, body: Json): Promise<Json> {
+  return ok(session, 'POST', asks(orderId), body, 201)
+}
+
+/** A file of `recordType` / `recordId` (an office upload, AVAILABLE unless `changes` say otherwise). */
+async function fileOf(recordType: string, recordId: string, changes: Json = {}): Promise<string> {
+  const id = randomUUID()
+  await h.database.withScope({ audience: 'office', tenantId: T, actorId: PEOPLE.owner }, (client) =>
+    client.storedFile.createMany({
+      data: [
+        seedFile(T, {
+          id,
+          companyId: companyA,
+          recordType,
+          recordId,
+          kind: 'DOCUMENT',
+          originalName: `Made-up ${id.slice(0, 8)}.pdf`,
+          contentType: 'application/pdf',
+          sizeBytes: 2048,
+          storageKey: `t/${T}/c/${companyA}/2026/${randomUUID()}`,
+          visibility: ['OFFICE'],
+          partyId: null,
+          status: 'AVAILABLE',
+          availableAt: AT,
+          storeAccountId: sid('files:account:r2'),
+          createdAt: AT,
+          updatedAt: AT,
+          createdById: PEOPLE.owner,
+          ...changes,
+        }),
+      ],
+    }),
+  )
+  return id
+}
+
+/** A manual order of Brand Alpha typed by the Owner (two lines, nothing made yet): its id and lines. */
+async function alphaOrder(ref: string): Promise<{ id: string; version: number; lines: { id: string; seq: number }[] }> {
+  const lines = await admin<{ styleId: string; colourwayId: string; sizes: string[] }>(
+    `SELECT l."styleId", l."colourwayId", (SELECT array_agg(s.size ORDER BY s.size) FROM "SalesOrderLineSize" s WHERE s."lineId" = l.id) AS sizes
+       FROM "SalesOrderLine" l JOIN "SalesOrder" o ON o.id = l."orderId" WHERE o."tenantId" = $1 AND o.number = 'SEED-SO-0001' ORDER BY l.seq`,
+    [T],
+  )
+  const body = { companyId: companyA, partyId: alpha, customerRef: ref, lines: lines.slice(0, 2).map((line) => ({ styleId: line.styleId, colourwayId: line.colourwayId, unitPrice: '100', sizes: line.sizes.slice(0, 1).map((size) => ({ size, quantity: 2 })) })) }
+  const order = (await ok('owner', 'POST', '/sales/orders/manual', body, 201)).order
+  return { id: order.id, version: order.version, lines: await admin<{ id: string; seq: number }>(`SELECT id, seq FROM "SalesOrderLine" WHERE "orderId" = $1 ORDER BY seq`, [order.id]) }
+}
+
+/** A copy of Beta's order in `status`, planted (the owner, triggers off): its id. */
+async function betaOrderIn(status: string): Promise<string> {
+  const id = randomUUID()
+  await force(
+    `INSERT INTO "SalesOrder" SELECT * FROM jsonb_populate_record(NULL::"SalesOrder", (SELECT to_jsonb(o) || $1::jsonb FROM "SalesOrder" o WHERE o.id = $2))`,
+    [JSON.stringify({ id, number: `T-OF031-${id.slice(0, 8)}`, customerSeq: null, status, closedAt: status === 'CLOSED' || status === 'CANCELLED' ? AT.toISOString() : null, cancelReason: status === 'CANCELLED' ? 'Made-up: withdrawn.' : null }), beta.salesOrderId],
+  )
+  return id
+}
+
+beforeAll(async () => {
+  h = await startHarness('of031_file_asks')
+  for (const file of readdirSync(SEED_DIR).filter((name) => name.endsWith('.ts')).sort()) {
+    const module = (await import(pathToFileURL(join(SEED_DIR, file)).href)) as { seed: (context: { db: FactoryDatabase; namespace: string }) => Promise<unknown> }
+    await module.seed({ db: h.database, namespace: NS })
+  }
+  beta = await seedSecondBrand({ db: h.database, namespace: NS })
+  await h.database.withScope({ audience: 'office', tenantId: T, actorId: newId() }, async (client) => applySystemRoleChanges(client, await systemRoleChanges(client), { now: h.clock.now(), actorId: newId() }))
+  alpha = (await one<{ id: string }>(`SELECT id FROM "Party" WHERE "tenantId" = $1 AND code = 'SEED-C1'`, [T])).id
+  const roleIds = new Map((await admin<{ id: string; key: string }>(`SELECT id, key FROM "Role" WHERE "tenantId" = $1`, [T])).map((row) => [row.key, row.id]))
+  const planner = templateOf('planner')!
+  await admin(`INSERT INTO "Role" (id, "tenantId", key, name, permissions, grains) VALUES ($1, $2, 'custom.of031_three', 'Made-up three planners', $3::text[], ARRAY[]::text[])`, [ROLES.three, T, [...planner.permissions]])
+  await admin(`INSERT INTO "Role" (id, "tenantId", key, name, permissions, grains) VALUES ($1, $2, 'custom.of031_alpha', 'Made-up Alpha planner', $3::text[], ARRAY[]::text[])`, [ROLES.alpha, T, [...planner.permissions]])
+  const assign = (person: Person, roleId: string, parties: readonly string[] = []) =>
+    admin(`INSERT INTO "RoleAssignment" (id, "tenantId", "userId", "roleId", "allCompanies", "companyIds", "partyIds", "validFrom") VALUES ($1, $2, $3, $4, true, '{}'::uuid[], $5::uuid[], now() - interval '30 days')`, [newId(), T, PEOPLE[person], roleId, [...parties]])
+  const ROLE_OF: Partial<Record<Person, string>> = { owner: 'owner', sales: 'sales', planner: 'planner', betaOwner: 'owner' }
+  for (const person of Object.keys(PEOPLE) as Person[]) {
+    await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, $3, $4, 'ACTIVE')`, [PEOPLE[person], T, `of031-${person}-${run}@example.com`, `Made-up ${person}`])
+    const role = ROLE_OF[person]
+    if (role) await assign(person, roleIds.get(role)!, person === 'betaOwner' ? [beta.partyId] : [])
+    SESSIONS[person] = { audience: 'office', tenantId: T, actorId: PEOPLE[person], grants: role ? grantsOf(role, person === 'betaOwner' ? [beta.partyId] : 'all') : grantsOf('planner', person === 'alphaOnly' ? [alpha] : 'all') }
+  }
+  for (const person of ['p1', 'p2', 'p3'] as const) await assign(person, ROLES.three)
+  await assign('alphaOnly', ROLES.three, [alpha])
+  await assign('alphaOnly', ROLES.alpha, [alpha])
+  app = await buildApp(
+    { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
+    { database: h.database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
+  )
+}, 900_000)
+
+afterAll(async () => {
+  await app?.close()
+  await h?.close()
+}, 60_000)
+
+// =================================================================================================================================
+describe('S2.1 make: who becomes people (§2.1), the walls, the shape', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('a role of 3 holders → 3 Tasks; its Alpha-limited holder is skipped on Beta’s order and counted on Alpha’s', async () => {
+    const onBeta = await made('owner', beta.salesOrderId, askBody({ kind: 'OFFICE_ROLE', roleId: ROLES.three }))
+    expect(onBeta).toMatchObject({ ask: { version: 1, status: 'OPEN' }, tasks: 3 })
+    const row = await askRow(onBeta.ask.id)
+    expect(row).toMatchObject({ status: 'OPEN', addressee: 'OFFICE_ROLE', addresseeRoleId: ROLES.three, addresseeUserId: null })
+    const tasks = await tasksOf(row.taskIds)
+    expect(tasks.map((task) => task.assigneeId).sort()).toEqual([PEOPLE.p1, PEOPLE.p2, PEOPLE.p3].sort())
+    for (const task of tasks) expect(task).toMatchObject({ status: 'OPEN', recordType: 'SalesOrder', recordId: beta.salesOrderId, title: 'Carica: Made-up: the signed order confirmation', createdById: PEOPLE.owner })
+    const onAlpha = await made('owner', SO2, askBody({ kind: 'OFFICE_ROLE', roleId: ROLES.three }))
+    expect(onAlpha.tasks).toBe(4)
+    // The event: ids only, the order's customer as the live party.
+    expect(await outbox(onBeta.ask.id)).toEqual([{ type: 'file_ask.asked', payload: { askId: onBeta.ask.id, salesOrderId: beta.salesOrderId, workOrderId: null, status: 'OPEN', partyId: beta.partyId } }])
+    expect((await audits(onBeta.ask.id)).map((entry) => entry.action)).toEqual(['files.fileAsk.make'])
+  })
+
+  it('nobody with the role reaches the order → 409 NOBODY_WITH_ROLE; more than 20 would be TOO_MANY_PEOPLE', async () => {
+    const error = await no('owner', 'POST', asks(beta.salesOrderId), askBody({ kind: 'OFFICE_ROLE', roleId: ROLES.alpha }), 409)
+    expect(paths(error)).toEqual(['fileAsk/NOBODY_WITH_ROLE'])
+    expect(error.message).toBe('Nobody with this role can see this order.')
+    // On Alpha's order the same role reaches its one holder.
+    expect((await made('owner', SO2, askBody({ kind: 'OFFICE_ROLE', roleId: ROLES.alpha }))).tasks).toBe(1)
+  })
+
+  it('a person: a Planner can be asked (one Task); someone who cannot see the order, or no prices for a priced ask, is refused by name', async () => {
+    const asked = await made('owner', SO2, askBody({ kind: 'PERSON', userId: PEOPLE.planner }))
+    expect(asked.tasks).toBe(1)
+    const row = await askRow(asked.ask.id)
+    expect(await tasksOf(row.taskIds)).toEqual([expect.objectContaining({ assigneeId: PEOPLE.planner, status: 'OPEN', recordId: SO2 })])
+    const blind = await no('owner', 'POST', asks(SO2), askBody({ kind: 'PERSON', userId: PEOPLE.betaOwner }), 409)
+    expect(paths(blind)).toEqual(['fileAsk/PERSON_CANNOT_SEE'])
+    expect(blind.message).toBe('Made-up betaOwner cannot see this order.')
+    const noPrices = await no('owner', 'POST', asks(SO2), askBody({ kind: 'PERSON', userId: PEOPLE.sales }, { priced: true }), 409)
+    expect(paths(noPrices)).toEqual(['fileAsk/PERSON_NO_PRICES'])
+    // A priced ask's Task never carries its words.
+    const priced = await made('owner', SO2, askBody({ kind: 'PERSON', userId: PEOPLE.owner }, { priced: true, words: 'Made-up: the proforma with unit prices' }))
+    const [task] = await tasksOf((await askRow(priced.ask.id)).taskIds)
+    expect(task!.title).toBe('Carica: un file con prezzi')
+  })
+
+  it('Sales may ask, but never for a file with prices (403); body data only with the measurements right', async () => {
+    expect((await made('sales', SO2, askBody({ kind: 'PERSON', userId: PEOPLE.planner }))).tasks).toBe(1)
+    const error = await no('sales', 'POST', asks(SO2), askBody({ kind: 'PERSON', userId: PEOPLE.owner }, { priced: true }), 403)
+    expect(error.message).toBe('Shown to people who see prices.')
+  })
+
+  it('the floor: only on a work order, never prices or body data (400); a team of the work order’s plant gets no Task', async () => {
+    expect(paths(await no('owner', 'POST', asks(SO2), askBody({ kind: 'FLOOR_TEAM', teamId: TEAM_A1 }), 400))).toEqual(['fileAsk/FLOOR_NEEDS_WORK_ORDER'])
+    expect(paths(await no('owner', 'POST', asks(SO2), floorBody({ priced: true }), 400))).toEqual(['fileAsk/FLOOR_NO_PRICES'])
+    expect(paths(await no('owner', 'POST', asks(SO2), floorBody({ who: { kind: 'STEP' }, bodyData: true }), 400))).toEqual(['fileAsk/FLOOR_NO_BODY_DATA'])
+    expect(paths(await no('owner', 'POST', asks(SO2), floorBody({ who: { kind: 'STEP' }, target: { type: 'WORK_ORDER', workOrderId: WO1 } }), 400))).toEqual(['fileAsk/STEP_NEEDS_STEP'])
+    const team = await made('owner', SO2, floorBody())
+    expect(team).toMatchObject({ tasks: 0, ask: { status: 'OPEN' } })
+    expect(await askRow(team.ask.id)).toMatchObject({ addressee: 'FLOOR_TEAM', taskIds: [] })
+    expect((await made('owner', SO2, floorBody({ who: { kind: 'STEP' } }))).tasks).toBe(0)
+    // Where it lands, by place: a line of another order, a work order not of this order, a step of another work order.
+    expect(paths(await no('owner', 'POST', asks(beta.salesOrderId), askBody({ kind: 'PERSON', userId: PEOPLE.owner }, { target: { type: 'SALES_ORDER_LINE', lineId: SO2_LINES[0] } }), 400))).toEqual(['body/target/lineId'])
+    expect(paths(await no('owner', 'POST', asks(beta.salesOrderId), floorBody(), 400))).toEqual(['body/target/workOrderId'])
+    expect(paths(await no('owner', 'POST', asks(SO2), floorBody({ target: { type: 'WORK_ORDER', workOrderId: WO1, operationId: WO2_PACK } }), 400))).toEqual(['body/target/operationId'])
+    // A line of this order takes the ask.
+    expect((await made('owner', SO2, askBody({ kind: 'PERSON', userId: PEOPLE.planner }, { target: { type: 'SALES_ORDER_LINE', lineId: SO2_LINES[1] } }))).ask.status).toBe('OPEN')
+  })
+
+  it('no new ask on a closed or cancelled order (409, L1); a due day before today and blank words are refused by place', async () => {
+    for (const status of ['CLOSED', 'CANCELLED']) {
+      const error = await no('owner', 'POST', asks(await betaOrderIn(status)), askBody({ kind: 'PERSON', userId: PEOPLE.owner }), 409)
+      expect(paths(error), status).toEqual(['fileAsk/ORDER_CLOSED'])
+      expect(error.message).toBe('This order is closed: no new asks.')
+    }
+    expect(paths(await no('owner', 'POST', asks(SO2), askBody({ kind: 'PERSON', userId: PEOPLE.owner }, { dueOn: '2026-01-02' }), 400))).toEqual(['body/dueOn'])
+    expect(paths(await no('owner', 'POST', asks(SO2), askBody({ kind: 'PERSON', userId: PEOPLE.owner }, { words: '   ' }), 400))).toEqual(['body/words'])
+  })
+
+  it('the brand wall: Beta’s Owner gets Alpha’s order as an unknown one; Alpha’s ask through Beta’s order is not found', async () => {
+    const unknown = await no('betaOwner', 'POST', asks(randomUUID()), askBody({ kind: 'PERSON', userId: PEOPLE.betaOwner }), 404)
+    const alphas = await no('betaOwner', 'POST', asks(SO2), askBody({ kind: 'PERSON', userId: PEOPLE.betaOwner }), 404)
+    expect(alphas.message).toBe(unknown.message)
+    expect(alphas.message).toBe('Sales order not found.')
+    const ask = await made('owner', SO2, askBody({ kind: 'PERSON', userId: PEOPLE.planner }))
+    for (const [method, tail, body] of [
+      ['PATCH', '', { version: 1, words: 'Made-up: other words' }],
+      ['POST', '/reassign', { version: 1, who: { kind: 'PERSON', userId: PEOPLE.owner } }],
+      ['POST', '/cancel', { version: 1, reason: 'Made-up: not needed.' }],
+    ] as const) {
+      expect((await no('betaOwner', method, `${asks(SO2)}/${ask.ask.id}${tail}`, body, 404)).message, tail).toBe('Sales order not found.')
+      expect((await no('owner', method, `${asks(beta.salesOrderId)}/${ask.ask.id}${tail}`, body, 404)).message, tail).toBe('File ask not found.')
+    }
+  })
+})
+
+// =================================================================================================================================
+describe('S2.1 change, reassign, cancel', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('change: the words and the due day while OPEN; the open Tasks follow; a stale version is refused', async () => {
+    const ask = await made('owner', SO2, askBody({ kind: 'OFFICE_ROLE', roleId: ROLES.three }))
+    const due = new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10)
+    const changed = await ok('owner', 'PATCH', `${asks(SO2)}/${ask.ask.id}`, { version: 1, words: 'Made-up: the countersigned confirmation', dueOn: due })
+    expect(changed).toMatchObject({ ask: { version: 2, status: 'OPEN' } })
+    const row = await askRow(ask.ask.id)
+    expect(row).toMatchObject({ words: 'Made-up: the countersigned confirmation', dueOn: due })
+    for (const task of await tasksOf(row.taskIds)) expect(task).toMatchObject({ title: 'Carica: Made-up: the countersigned confirmation', dueDate: due })
+    expect((await outbox(ask.ask.id)).map((event) => event.payload.change ?? event.type)).toEqual(['file_ask.asked', 'WORDS', 'DUE'])
+    await no('owner', 'PATCH', `${asks(SO2)}/${ask.ask.id}`, { version: 1, words: 'Made-up: stale' }, 409)
+    expect(paths(await no('owner', 'PATCH', `${asks(SO2)}/${ask.ask.id}`, { version: 2 }, 400))).toEqual(['body/words'])
+  })
+
+  it('reassign: the open Tasks cancelled, new ones written for the new people; the same addressee is refused', async () => {
+    const ask = await made('owner', SO2, askBody({ kind: 'PERSON', userId: PEOPLE.planner }))
+    const before = (await askRow(ask.ask.id)).taskIds
+    const moved = await ok('owner', 'POST', `${asks(SO2)}/${ask.ask.id}/reassign`, { version: 1, who: { kind: 'OFFICE_ROLE', roleId: ROLES.three }, reason: 'Made-up: the planner is away' })
+    expect(moved).toMatchObject({ ask: { version: 2, status: 'OPEN' }, tasks: 4 })
+    expect((await tasksOf(before)).map((task) => task.status)).toEqual(['CANCELLED'])
+    const after = await askRow(ask.ask.id)
+    expect(after).toMatchObject({ addressee: 'OFFICE_ROLE', addresseeRoleId: ROLES.three, addresseeUserId: null })
+    expect((await tasksOf(after.taskIds)).every((task) => task.status === 'OPEN')).toBe(true)
+    expect(paths(await no('owner', 'POST', `${asks(SO2)}/${ask.ask.id}/reassign`, { version: 2, who: { kind: 'OFFICE_ROLE', roleId: ROLES.three } }, 400))).toEqual(['body/who'])
+    // To the floor on an ask that lands on the order itself: refused (400).
+    expect(paths(await no('owner', 'POST', `${asks(SO2)}/${ask.ask.id}/reassign`, { version: 2, who: { kind: 'FLOOR_TEAM', teamId: TEAM_A1 } }, 400))).toEqual(['fileAsk/FLOOR_NEEDS_WORK_ORDER'])
+    expect((await audits(ask.ask.id)).map((entry) => [entry.action, entry.reason])).toEqual([['files.fileAsk.make', null], ['files.fileAsk.reassign', 'Made-up: the planner is away']])
+  })
+
+  it('cancel: with a reason of 3 to 500; the open Tasks cancelled; then final (NOT_OPEN) — an ask is never deleted', async () => {
+    const ask = await made('owner', SO2, askBody({ kind: 'PERSON', userId: PEOPLE.planner }))
+    expect(paths(await no('owner', 'POST', `${asks(SO2)}/${ask.ask.id}/cancel`, { version: 1, reason: 'ab' }, 400))).toEqual(['body/reason'])
+    expect(await ok('owner', 'POST', `${asks(SO2)}/${ask.ask.id}/cancel`, { version: 1, reason: 'Made-up: we found it ourselves.' })).toMatchObject({ ask: { version: 2, status: 'CANCELLED' } })
+    const row = await askRow(ask.ask.id)
+    expect(row.status).toBe('CANCELLED')
+    expect((await tasksOf(row.taskIds)).map((task) => task.status)).toEqual(['CANCELLED'])
+    expect((await outbox(ask.ask.id)).at(-1)).toMatchObject({ type: 'file_ask.changed', payload: { change: 'CANCELLED', status: 'CANCELLED' } })
+    expect(paths(await no('owner', 'POST', `${asks(SO2)}/${ask.ask.id}/cancel`, { version: 2, reason: 'Made-up: again.' }, 409))).toEqual(['fileAsk/NOT_OPEN'])
+    expect(paths(await no('owner', 'PATCH', `${asks(SO2)}/${ask.ask.id}`, { version: 2, words: 'Made-up: late words' }, 409))).toEqual(['fileAsk/NOT_OPEN'])
+  })
+})
+
+// =================================================================================================================================
+describe('S2.1 the Restrict keys in words (lead): a line or a step a file ask names stays', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('an amendment that leaves out a line a file ask lands on is refused in words, before any write', async () => {
+    const order = await alphaOrder(`PO-OF031-${run}`)
+    await made('owner', order.id, askBody({ kind: 'PERSON', userId: PEOPLE.planner }, { target: { type: 'SALES_ORDER_LINE', lineId: order.lines[1]!.id } }))
+    const review = await ok('owner', 'POST', `/sales/orders/${order.id}/amendments/preview`, { version: order.version, reason: 'Made-up: the customer dropped the second colour.', lines: [{ id: order.lines[0]!.id }] })
+    expect(review.ok).toBe(false)
+    expect(JSON.stringify(review.problems)).toContain(`Line ${order.lines[1]!.seq} is referred to by a file ask`)
+  })
+
+  it('a draft’s operations never lose a step a file ask names (409 in words)', async () => {
+    await made('owner', SO2, floorBody({ who: { kind: 'STEP' }, target: { type: 'WORK_ORDER', workOrderId: WO2, operationId: WO2_PACK } }))
+    const workOrder = await one<{ number: string; siteId: string; styleRevisionId: string }>(`SELECT number, "siteId", "styleRevisionId" FROM "WorkOrder" WHERE id = $1`, [WO2])
+    const stored = await admin<Json>(`SELECT o.seq, o."routingSeq", o.code, o.name, o."standardMinutes"::text AS minutes, o."scanRequired", o."workCentreId", c.kind::text AS kind, c.code AS "centreCode" FROM "WorkOrderOperation" o JOIN "WorkCentre" c ON c.id = o."workCentreId" WHERE o."workOrderId" = $1 ORDER BY o.seq`, [WO2])
+    // The routing without step 40 (the one the ask names): the sync would remove it.
+    const planned = stored.filter((op) => op.seq !== 40).map((op) => ({ seq: op.seq, routingSeq: op.routingSeq, stepId: randomUUID(), code: op.code, name: op.name, standardMinutes: op.minutes, scanRequired: op.scanRequired, workCentreKind: op.kind, workCentreId: op.workCentreId, workCentreCode: op.centreCode }))
+    const caller = callerFor(h.database, { audience: 'office', tenantId: T, actorId: PEOPLE.owner, requestId: `of031-${run}`, grants: grantsOf('owner') })
+    const refusal = { doing: 'Changing the revision', then: 'change the revision', published: 'keep this revision, or cancel the work order and make a new one on the other revision' }
+    await expect(command(caller, { name: 'production.testSync', input: {} }, async (tools) => syncDraftOperations(tools.tx, { id: WO2, number: workOrder.number, siteId: workOrder.siteId }, workOrder.styleRevisionId, planned, PEOPLE.owner, refusal))).rejects.toThrow(
+      /Changing the revision would take away an operation of work order .* that a file ask names: Op 40 .*A file ask keeps the step it names, so that operation stays/,
+    )
+    expect((await one<{ n: number }>(`SELECT count(*)::int AS n FROM "WorkOrderOperation" WHERE id = $1`, [WO2_PACK])).n).toBe(1)
+  })
+})

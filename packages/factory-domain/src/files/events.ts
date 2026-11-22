@@ -79,4 +79,37 @@ export const events = [
     live: { permission: 'files.read', fields: ['recordType', 'recordId'] },
   }),
   // ---- end B-CP-014
+  // ---- B-OF-032 (order files tab; 13-backend §2): an ask for a file on a sales order (FileAsk, modules/sales/file-asks) was made,
+  // files arrived for it, it was decided (accepted, or asked again) or changed (its words, due day, addressee, a chase, a cancel).
+  // The order's Files tab and its thread's Files window re-read their asks. Ids and states only: no words, no file name, no person,
+  // never a worker; the order's customer as the office's live wall judges it (the order's own partyId). No floor or partner entry.
+  defineEvent({
+    type: 'file_ask.asked',
+    context: 'files',
+    description: 'Someone in the office asked a person, a role, a team or whoever works a step for a file on a sales order.',
+    payload: z.strictObject({ askId: z.uuid(), salesOrderId: z.uuid(), workOrderId: z.uuid().nullable(), status: z.enum(['OPEN', 'ARRIVED', 'ACCEPTED', 'CANCELLED']), partyId: livePartyId() }),
+    live: { permission: 'orders.view', fields: ['salesOrderId'] },
+  }),
+  defineEvent({
+    type: 'file_ask.arrived',
+    context: 'files',
+    description: 'Files were sent for an ask for a file: the asker checks them.',
+    payload: z.strictObject({ askId: z.uuid(), salesOrderId: z.uuid(), workOrderId: z.uuid().nullable(), status: z.enum(['OPEN', 'ARRIVED', 'ACCEPTED', 'CANCELLED']), partyId: livePartyId() }),
+    live: { permission: 'orders.view', fields: ['salesOrderId'] },
+  }),
+  defineEvent({
+    type: 'file_ask.decided',
+    context: 'files',
+    description: 'The files sent for an ask for a file were accepted, or the file was asked for again with a reason.',
+    payload: z.strictObject({ askId: z.uuid(), salesOrderId: z.uuid(), workOrderId: z.uuid().nullable(), status: z.enum(['OPEN', 'ARRIVED', 'ACCEPTED', 'CANCELLED']), decision: z.enum(['ACCEPTED', 'ASKED_AGAIN']), partyId: livePartyId() }),
+    live: { permission: 'orders.view', fields: ['salesOrderId'] },
+  }),
+  defineEvent({
+    type: 'file_ask.changed',
+    context: 'files',
+    description: 'An ask for a file changed: its words, its due day, who is asked, an ask for an update, or it was cancelled.',
+    payload: z.strictObject({ askId: z.uuid(), salesOrderId: z.uuid(), workOrderId: z.uuid().nullable(), status: z.enum(['OPEN', 'ARRIVED', 'ACCEPTED', 'CANCELLED']), change: z.enum(['WORDS', 'DUE', 'ADDRESSEE', 'CHASED', 'CANCELLED']), partyId: livePartyId() }),
+    live: { permission: 'orders.view', fields: ['salesOrderId'] },
+  }),
+  // ---- end B-OF-032
 ] as const
