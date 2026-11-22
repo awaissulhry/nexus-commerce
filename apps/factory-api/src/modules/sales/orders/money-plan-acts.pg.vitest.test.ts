@@ -21,6 +21,10 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { addUser, Browser, enrolTotp, startHarness, stepUp, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 import { NO_PRICE_WORDS } from './money-plan'
+// B-OM-029: the worker's deposit follower, run by the test (no worker on this stack).
+import { callerFor } from '../../../core/command'
+import { systemContext } from '../../../platform/outbox/system'
+import { orderHandlers } from './handlers'
 
 /**
  * B-OM-010 … 018 — an order's money plan changed BY HAND (order money tab, PR S2; 13-backend §3), on the local stack: a throwaway
@@ -39,6 +43,8 @@ import { NO_PRICE_WORDS } from './money-plan'
  *         this part), a PAID deposit held in words
  *   S2.5  the walls: Sales (the real template) may not act; a money-plan holder without prices may not move an amount; a person
  *         limited to another customer gets the same words as an unknown order, on the act, the preview and the undo
+ *   fix wave 3 (om-fx3s): B-OM-024 a deposit short within / over the tolerance (and its word without prices); B-OM-025 the accepted
+ *         short read back with who, when, how much and why; B-OM-029 a cancelled order owes nothing in its plan
  * Every name, price and number is made up. Run with `node scripts/factory/run-pg-tests.mjs sales/orders/money-plan-acts`.
  */
 
@@ -336,9 +342,19 @@ describe('B-OM-016 accept a deposit short (lead L1: PAID by hand, the short part
     const plan = await planOf(order.id)
     const request = requestOf(plan, stepOf(plan, 'DEPOSIT').depositRequestId)
     await paid([{ depositRequestId: request.id, amount: request.amount - 2_000 }], 'OM-S2-0009')
-    const now = requestOf(await planOf(order.id), request.id)
+    const before = await planOf(order.id)
+    const now = requestOf(before, request.id)
+    // B-OM-024: 20.00 short, within the tenant-wide tolerance of 25.00 (the plan read says it, by ACCEPT_SHORT's own rule).
+    expect(before.tolerance).toBe(2_500)
+    expect(now.short).toEqual({ amount: 2_000, withinTolerance: true })
+    // Without the price grain: the word stays, never the amount nor the tolerance.
+    const blind = await ok('planNoPrice', 'GET', `${orderUrl(order.id)}/schedule`)
+    expect(blind).not.toHaveProperty('tolerance')
+    expect(requestOf(blind, request.id).short).toEqual({ withinTolerance: true })
     const answer = await ok('finance', 'POST', planUrl(order.id), { act: 'ACCEPT_SHORT', requestId: request.id, version: now.version, why: 'BANK_CHARGES', reason: 'Made-up: the bank kept 20.00.' })
-    expect(requestOf(answer, request.id)).toMatchObject({ status: 'PAID', paid: request.amount - 2_000, acceptedShort: { short: 2_000, why: 'BANK_CHARGES', reason: 'Made-up: the bank kept 20.00.' } })
+    expect(requestOf(answer, request.id)).toMatchObject({ status: 'PAID', paid: request.amount - 2_000, acceptedShort: { short: 2_000, why: 'BANK_CHARGES', reason: 'Made-up: the bank kept 20.00.', /* B-OM-025 */ at: expect.any(String) } })
+    // B-OM-024: PAID now — nothing is short any more (the accepted short part is `acceptedShort`).
+    expect(requestOf(answer, request.id).short).toBeNull()
     expect(stepOf(answer, 'DEPOSIT').status).toBe('PAID')
     const [audit] = await admin(`SELECT after FROM "AuditLog" WHERE action = 'payments.depositPaid' AND "recordId" = $1`, [request.id])
     expect(audit!.after).toMatchObject({ status: 'PAID', acceptedShort: { why: 'BANK_CHARGES', overridden: false } })
@@ -356,6 +372,8 @@ describe('B-OM-016 accept a deposit short (lead L1: PAID by hand, the short part
     const request = requestOf(plan, stepOf(plan, 'DEPOSIT').depositRequestId)
     await paid([{ depositRequestId: request.id, amount: request.amount - 5_000 }], 'OM-S2-0010')
     const now = requestOf(await planOf(order.id), request.id)
+    // B-OM-024: 50.00 short is over the tolerance of 25.00: a part payment, not bank charges (Accept short is the Owner's here).
+    expect(now.short).toEqual({ amount: 5_000, withinTolerance: false })
     const body = { act: 'ACCEPT_SHORT', requestId: request.id, version: now.version, why: 'OTHER', reason: 'Made-up: agreed with the customer.' }
     expect(await refused('finance', 'POST', planUrl(order.id), body, 409)).toMatchObject({ issues: [{ path: 'moneyPlan/OVER_TOLERANCE', message: MONEY_PLAN_REFUSAL_WORDS.OVER_TOLERANCE.en }] })
     // The Owner (orders.waive) may: the preview says a fresh code is asked, and how short it is.
@@ -363,6 +381,13 @@ describe('B-OM-016 accept a deposit short (lead L1: PAID by hand, the short part
     await stepUp(h, owner.browser, owner.secret)
     const answer = await as('POST', planUrl(order.id), body)
     expect(requestOf(answer, request.id)).toMatchObject({ status: 'PAID', acceptedShort: { short: 5_000 } })
+    // B-OM-025 (W-03): the accepted short says who (the office person's name), when, how much and why — read back from the audit.
+    const accepted = requestOf(answer, request.id).acceptedShort
+    expect(accepted).toEqual({ short: 5_000, why: 'OTHER', reason: 'Made-up: agreed with the customer.', by: 'owner om-s2', at: expect.any(String) })
+    expect(Number.isNaN(Date.parse(accepted.at))).toBe(false)
+    // Without the price grain the reason and the amount stay out; who, when and why stay.
+    const blind = requestOf(await ok('planNoPrice', 'GET', `${orderUrl(order.id)}/schedule`), request.id).acceptedShort
+    expect(blind).toEqual({ why: 'OTHER', by: 'owner om-s2', at: accepted.at })
   })
 })
 
@@ -398,6 +423,45 @@ describe('B-OM-017 undo a payment on a deposit request', () => {
     expect(requestOf(after, deposit.id).payments[0].undo).toEqual({ may: false, why: UNDO_HELD_WORDS.PAID, code: 'PAID' })
     const held = await refused('finance', 'POST', `/payments/${payment.id}/undo`, { depositRequestId: deposit.id, version: answer.payment.version, reason: 'Made-up: all of it.' }, 409)
     expect(held).toMatchObject({ message: UNDO_HELD_WORDS.PAID.en, issues: [{ path: 'undo/PAID', message: UNDO_HELD_WORDS.PAID.en }] })
+  })
+})
+
+// ════ B-OM-029 (order money tab W-05): a cancelled order owes nothing in its plan ════
+/** The worker's `sales.ordersFollowDeposits` on payment.deposit_paid, run here: the steps of a PAID request become PAID. */
+async function followDeposit(depositRequestId: string, orderId: string): Promise<void> {
+  const handler = orderHandlers().find((entry) => entry.name === 'sales.ordersFollowDeposits')!
+  const envelope = { eventId: newId(), type: 'payment.deposit_paid', version: 1, tenantId: T, payload: { depositRequestId, partyId: P1, orderId } } as never
+  await handler.handle(envelope, { caller: callerFor(h.database, systemContext(T, newId())), attempt: 1 } as never)
+}
+
+describe('B-OM-029 a cancelled order owes nothing in its plan (B-OM-002, M1-B9)', () => {
+  it('after the cancel: no open step or request, still open 0, overdue 0, nothing short; the paid deposit stays shown', async () => {
+    const order = await typedOrder('PO-OM-S2-15')
+    const plan = await planOf(order.id)
+    const deposit = requestOf(plan, stepOf(plan, 'DEPOSIT').depositRequestId)
+    const balance = stepOf(plan, 'BEFORE_SHIPPING')
+    // The deposit paid in full (PAID) and its step following it (the worker's handler, run here); the balance still open.
+    await paid([{ depositRequestId: deposit.id, amount: deposit.amount }], 'OM-S2-0015')
+    await followDeposit(deposit.id, order.id)
+    const before = await planOf(order.id)
+    expect(stepOf(before, 'DEPOSIT')).toMatchObject({ status: 'PAID' })
+    expect(requestOf(before, balance.depositRequestId)).toMatchObject({ status: 'OPEN' })
+    const record = (await as('GET', orderUrl(order.id))).order
+    await as('POST', `${orderUrl(order.id)}/cancel`, { version: record.version, reason: 'Made-up: the customer stopped the line.' })
+    const after = await planOf(order.id)
+    // Nothing more is owed, nothing is overdue (the one rule of B-OM-002 and the plan's own sum).
+    expect(after.stillOpen).toBe(0)
+    expect(after.overdue).toBe(0)
+    // No step is open any more: the balance reads CANCELLED among the cancelled steps — there is no "next" step to pay.
+    expect((after.steps as Json[]).filter((step) => step.status === 'OPEN')).toEqual([])
+    expect((after.cancelled as Json[]).find((step) => step.id === balance.id)).toMatchObject({ status: 'CANCELLED' })
+    // Its request went with it; no request is open, none is short (B-OM-024).
+    expect(requestOf(after, balance.depositRequestId)).toMatchObject({ status: 'CANCELLED', short: null })
+    expect((after.requests as Json[]).filter((row) => row.status === 'OPEN')).toEqual([])
+    // The money paid stays shown: the deposit step PAID, its request with its payment (its refund is the money module's: untouched).
+    expect(stepOf(after, 'DEPOSIT')).toMatchObject({ status: 'PAID' })
+    expect(requestOf(after, deposit.id)).toMatchObject({ status: 'PAID', paid: deposit.amount, short: null, acceptedShort: null })
+    expect(requestOf(after, deposit.id).payments).toEqual([expect.objectContaining({ externalRef: 'OM-S2-0015', amount: deposit.amount })])
   })
 })
 

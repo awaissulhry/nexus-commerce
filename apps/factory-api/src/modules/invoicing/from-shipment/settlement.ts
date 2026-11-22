@@ -16,6 +16,10 @@ import { actorOf } from '../../../core/context'
 import { orderMoneyFactsOf } from '../../sales/orders/later-columns'
 // B-OM-001 (order money tab M1-B1): a small difference written off on an invoice counts.
 import { underpaymentsWrittenOff } from '../../payments/write-offs/sums'
+// B-OM-026 (order money tab W-12): the TD02s' and TD04s' payment words, by B-OM-023's rule.
+import { creditNotePaymentStateOf, depositInvoicePaymentStatesOf, type InvoicePaymentState } from '@nexus/factory-domain/invoicing/from-shipment/settlement'
+// B-OM-028 (order money tab W-13): the payment each TD02 was issued for (the issuing rule, as the plan read's payments say it).
+import { depositInvoicePaymentsOf } from '@nexus/factory-domain/invoicing/from-shipment/settlement'
 
 /**
  * The order's settlement (B-W1-51; PLAN §4.7 "Closing the order"): the port B-W1-25's close command asks ("is every line
@@ -47,6 +51,8 @@ export interface SettlementDepositRow {
   /** What issued invoices deduct from it (net, positive). */
   readonly deductedNet: number
   readonly depositRequestId: string | null
+  /** B-OM-026: where its payment stands, a word-code with no amount (its request's money laid against its TD02s). */
+  readonly paymentState: InvoicePaymentState
 }
 /** An issued TD04 crediting one of the order's invoices or deposit invoices. */
 export interface SettlementCreditRow {
@@ -56,6 +62,8 @@ export interface SettlementCreditRow {
   readonly issueDate: string | null
   readonly gross: number
   readonly creditOfId: string
+  /** B-OM-026: CREDITED, or REFUND_DUE while what it credits has a refund due that its refunds did not give back. */
+  readonly paymentState: InvoicePaymentState
 }
 const dayOf = (value: Date | null): string | null => (value ? value.toISOString().slice(0, 10) : null)
 // ── end B-OM-003 ──
@@ -155,6 +163,11 @@ export async function settlementOf(db: Reader, orderId: string): Promise<OrderSe
     })),
     creditNotes: credits.map((credit) => ({ id: credit.id, number: credit.number, status: credit.status, creditOfId: credit.creditOfId! })),
   }
+  const settlement = orderSettlement(facts)
+  // B-OM-026: their payment words (no amount): a TD02 by its request's money, a TD04 by the document it credits (B-OM-023's rule).
+  const depositStates = depositInvoicePaymentStatesOf(facts)
+  const stateOf = new Map<string, InvoicePaymentState>([...settlement.invoices.map((invoice) => [invoice.id, invoicePaymentStateOf(invoice)] as const), ...depositStates])
+  const refundedBy = (creditNoteId: string) => sum(refunds.filter((refund) => refund.creditNoteId === creditNoteId), (refund) => refund.amount)
   // B-OM-003: the TD02 and TD04 rows (the settlement's own reads, with their issue day).
   const documents = {
     depositInvoices: facts.depositInvoices.map((deposit) => ({
@@ -166,10 +179,19 @@ export async function settlementOf(db: Reader, orderId: string): Promise<OrderSe
       credited: deposit.creditedGross,
       deductedNet: deposit.deductedNet,
       depositRequestId: deposits.find((row) => row.id === deposit.id)?.depositRequestId ?? null,
+      paymentState: depositStates.get(deposit.id)!, // B-OM-026
     })),
-    creditNotes: credits.map((credit) => ({ id: credit.id, number: credit.number, status: credit.status, issueDate: dayOf(credit.issueDate), gross: credit.grossTotal, creditOfId: credit.creditOfId! })),
+    creditNotes: credits.map((credit) => ({
+      id: credit.id,
+      number: credit.number,
+      status: credit.status,
+      issueDate: dayOf(credit.issueDate),
+      gross: credit.grossTotal,
+      creditOfId: credit.creditOfId!,
+      paymentState: creditNotePaymentStateOf({ gross: credit.grossTotal, refunded: refundedBy(credit.id) }, stateOf.get(credit.creditOfId!) ?? null), // B-OM-026
+    })),
   }
-  return { orderId: order.id, number: order.number, companyId: order.companyId, partyId: order.partyId, settlement: orderSettlement(facts), documents }
+  return { orderId: order.id, number: order.number, companyId: order.companyId, partyId: order.partyId, settlement, documents }
 }
 
 /** The orders an invoice is about: its order, its lines' orders, a TD02's request's order, a TD04's credited invoice's. */
@@ -320,6 +342,72 @@ async function shareOfOrder(db: Reader, orderId: string, invoiceIds: readonly st
 }
 // ── end B-OP-022 ──
 
+// ── B-OM-028 (order money tab W-13): what a goods invoice deducts and bills; where a TD02 was deducted and the payment it bills ──
+/**
+ * The links under each row of the Invoices section, read from what already links them (no new table, four queries): a goods
+ * invoice's DEPOSIT_DEDUCTION lines (the TD02s it deducts, each with the gross it takes off: the line's gross, else its net with
+ * its VAT, the freight's rule) and its goods lines' DDTs (the shipments it bills; an invoice of goods shipped without a DDT names
+ * none); a TD02's deduction lines on issued invoices (the newest names it), and the payment it was issued for (factory-domain
+ * depositInvoicePaymentsOf: the issuing rule, the same the plan read's `payments[].td02` follows). One customer's documents only:
+ * a deduction line and a DDT carry the invoice's buyer (their foreign keys).
+ */
+async function documentLinksOf(db: Reader, invoiceIds: readonly string[], deposits: readonly SettlementDepositRow[]) {
+  const goods = [...invoiceIds]
+  const depositIds = deposits.map((row) => row.id)
+  const requestIds = [...new Set(deposits.flatMap((row) => (row.depositRequestId ? [row.depositRequestId] : [])))]
+  const deductions = goods.length > 0
+    ? await db.invoiceLine.findMany({ where: { invoiceId: { in: goods }, depositInvoiceId: { not: null } }, select: { invoiceId: true, depositInvoiceId: true, netAmount: true, grossAmount: true, vatRatePct: true, depositInvoice: { select: { number: true } } }, orderBy: [{ invoiceId: 'asc' }, { seq: 'asc' }] })
+    : []
+  const carried = goods.length > 0 ? await db.invoiceLine.findMany({ where: { invoiceId: { in: goods }, ddtId: { not: null } }, select: { invoiceId: true, ddt: { select: { shipment: { select: { id: true, number: true } } } } } }) : []
+  const deductedOn = depositIds.length > 0
+    ? await db.invoiceLine.findMany({ where: { depositInvoiceId: { in: depositIds }, invoice: { status: { not: 'DRAFT' } } }, select: { depositInvoiceId: true, invoice: { select: { id: true, number: true } } }, orderBy: [{ invoiceId: 'asc' }, { seq: 'asc' }] })
+    : []
+  const allocations = requestIds.length > 0
+    ? await db.paymentAllocation.findMany({ where: { depositRequestId: { in: requestIds } }, select: { id: true, amount: true, reversalOfId: true, depositRequestId: true, payment: { select: { id: true, receivedOn: true } } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
+    : []
+  const reversed = new Set(allocations.flatMap((row) => (row.reversalOfId ? [row.reversalOfId] : [])))
+  const live = allocations.filter((row) => row.reversalOfId === null && !reversed.has(row.id))
+  const paymentOf = depositInvoicePaymentsOf(
+    live.map((row) => ({ allocationId: row.id, depositRequestId: row.depositRequestId ?? '', amount: row.amount })),
+    deposits.map((row) => ({ id: row.id, depositRequestId: row.depositRequestId ?? '', gross: row.gross, credited: row.credited })),
+  ).paymentOf
+  return {
+    /** The TD02s a goods invoice deducts, in line order, each with the gross it takes off (positive). */
+    deductsOf: (invoiceId: string): { id: string; number: string | null; amount: number }[] => {
+      const out: { id: string; number: string | null; amount: number }[] = []
+      for (const line of deductions) {
+        if (line.invoiceId !== invoiceId || line.depositInvoiceId === null) continue
+        const taken = -freightGrossOf(line)
+        const known = out.find((entry) => entry.id === line.depositInvoiceId)
+        if (known) known.amount += taken
+        else out.push({ id: line.depositInvoiceId, number: line.depositInvoice?.number ?? null, amount: taken })
+      }
+      return out
+    },
+    /** The shipments a goods invoice bills (its goods lines' DDTs), by number. */
+    shipmentsOf: (invoiceId: string): { id: string; number: string }[] => {
+      const found = new Map<string, { id: string; number: string }>()
+      for (const line of carried) {
+        const shipment = line.invoiceId === invoiceId ? (line.ddt?.shipment ?? null) : null
+        if (shipment && !found.has(shipment.id)) found.set(shipment.id, { id: shipment.id, number: shipment.number })
+      }
+      return [...found.values()].sort((a, b) => a.number.localeCompare(b.number))
+    },
+    /** The issued invoice that deducted a TD02 (the newest), or null. */
+    deductedOnOf: (depositId: string): { id: string; number: string | null } | null => {
+      const line = deductedOn.filter((entry) => entry.depositInvoiceId === depositId).at(-1)
+      return line ? { id: line.invoice.id, number: line.invoice.number } : null
+    },
+    /** The payment a TD02 was issued for, with the day it was received, or null. */
+    forPaymentOf: (depositId: string): { paymentId: string; receivedOn: string } | null => {
+      const allocationId = paymentOf.get(depositId)
+      const row = allocationId ? live.find((entry) => entry.id === allocationId) : undefined
+      return row ? { paymentId: row.payment.id, receivedOn: row.payment.receivedOn.toISOString().slice(0, 10) } : null
+    },
+  }
+}
+// ── end B-OM-028 ──
+
 /** invoices.view (A2 SCR-081 "Deposits & payments", SCR-082): the order's settlement, money with the price grain. */
 export async function getSettlement(caller: CommandCaller, orderId: string) {
   const context = officeContextOf(caller)
@@ -328,6 +416,8 @@ export async function getSettlement(caller: CommandCaller, orderId: string) {
   const { settlement, documents } = found! // B-OM-003: + the TD02 / TD04 rows
   // B-OP-022: this order's share (the list's rule), each invoice's share and the other orders it bills.
   const ours = await caller.withClient((client) => shareOfOrder(client, found!.orderId, settlement.invoices.map((invoice) => invoice.id), actorOf(context)))
+  // B-OM-028: what each goods invoice deducts and bills; where each TD02 was deducted and the payment it bills.
+  const links = await caller.withClient((client) => documentLinksOf(client, settlement.invoices.map((invoice) => invoice.id), documents.depositInvoices))
   return {
     settlement: {
       orderId: found!.orderId,
@@ -360,12 +450,28 @@ export async function getSettlement(caller: CommandCaller, orderId: string) {
           freight: asMoney('price', mine.freight),
           otherOrders: mine.otherOrders,
           otherOrdersHidden: mine.otherOrdersHidden,
+          // ── B-OM-028: the TD02s it deducts (each with the gross it takes off, price grain) and the shipments it bills ──
+          deducts: links.deductsOf(invoice.id).map((row) => ({ id: row.id, number: row.number, amount: asMoney('price', row.amount) })),
+          forShipments: links.shipmentsOf(invoice.id),
         }
       }),
       // ── B-OM-003 (order money tab M5-B3): the TD02s of its deposit requests and the TD04s crediting its documents; the status
       // is the SDI life (no per-invoice SDI read); amounts with the price grain only ──
-      depositInvoices: documents.depositInvoices.map((row) => ({ id: row.id, number: row.number, status: row.status, issueDate: row.issueDate, gross: asMoney('price', row.gross), credited: asMoney('price', row.credited), deductedNet: asMoney('price', row.deductedNet), depositRequestId: row.depositRequestId })),
-      creditNotes: documents.creditNotes.map((row) => ({ id: row.id, number: row.number, status: row.status, issueDate: row.issueDate, gross: asMoney('price', row.gross), creditOfId: row.creditOfId })),
+      depositInvoices: documents.depositInvoices.map((row) => ({
+        id: row.id,
+        number: row.number,
+        status: row.status,
+        issueDate: row.issueDate,
+        gross: asMoney('price', row.gross),
+        credited: asMoney('price', row.credited),
+        deductedNet: asMoney('price', row.deductedNet),
+        depositRequestId: row.depositRequestId,
+        paymentState: row.paymentState, // B-OM-026: a word-code, no amount (every invoices.view reader)
+        // ── B-OM-028: the goods' invoice that deducted it, and the payment it was issued for ──
+        deductedOn: links.deductedOnOf(row.id),
+        forPayment: links.forPaymentOf(row.id),
+      })),
+      creditNotes: documents.creditNotes.map((row) => ({ id: row.id, number: row.number, status: row.status, issueDate: row.issueDate, gross: asMoney('price', row.gross), creditOfId: row.creditOfId, /* B-OM-026 */ paymentState: row.paymentState })),
       // ── end B-OM-003 ──
       invoicedAmount: asMoney('price', settlement.money.invoicedGross),
       creditedAmount: asMoney('price', settlement.money.creditedGross),
