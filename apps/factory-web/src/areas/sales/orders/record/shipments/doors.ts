@@ -1,6 +1,7 @@
 import type { Order } from '../../api'
 import { createShipmentHref, isFinal, mayCreateShipment, type OrderAbilities, type Phrase } from '../../model'
-import type { WhereModel } from './where'
+import type { DeliveryRow } from './delivered/api'
+import type { ShipmentRow, WhereModel } from './where'
 import { word, wordOf, type ShipWord } from './word'
 
 /**
@@ -45,3 +46,74 @@ export function elsewhereDoorOf(elsewhere: { readonly held: Phrase | null } | nu
   if (elsewhere.held?.key === 'elsewhere.held.noRight') return null
   return { held: elsewhere.held }
 }
+
+// ── F-OS-202 (order SHIPMENTS tab, 10-design §5 "Row ⋯"; plan D2, D3, D5, D6) ─────────────────────────────────────────────────────────
+/**
+ * A shipment row's ⋯, by its state: every item opens Warehouse's OWN window in place (one path); HIDDEN without the row's right
+ * (`may.*`, B-OS-001: absent — nothing is offered), held with words ONLY by the shipment's state. Pack, the DDT, labels, pickup and
+ * the hand-over stay in Warehouse ("Next ›"). Nobody sets a status by hand: Mark delivered / Mark returned type an event (a reason
+ * over a carrier's labels, D5). Delivered, returned and cancelled stay final: no held item on a final row but its own last steps.
+ */
+export type RowActId = 'split' | 'move' | 'merge' | 'takeOff' | 'unpack' | 'arrange' | 'placeHold' | 'releaseHold' | 'ddtOff' | 'ddtBack' | 'cancel' | 'eta' | 'delivered' | 'returned' | 'resolve' | 'proof' | 'receiveBack'
+export type RowActGroup = 'garments' | 'travel' | 'hold' | 'arrive' | 'danger'
+
+export interface RowAct {
+  readonly id: RowActId
+  readonly group: RowActGroup
+  readonly label: ShipWord
+  /** Held by the shipment's state, in words (null: it opens). */
+  readonly held: ShipWord | null
+  /** Release: the hold it releases (B-OS-001 `holds[].id`). */
+  readonly holdId?: string
+}
+
+const OPEN = new Set(['DRAFT', 'PACKED'])
+/** Warehouse's own words where the same act has them (never a second word for one thing). */
+const SPLIT = wordOf('depth', 'split.menu')
+const act = (id: RowActId, group: RowActGroup, label: ShipWord, held: ShipWord | null = null, more: { readonly holdId?: string } = {}): RowAct => ({ id, group, label, held, ...more })
+const labelled = (row: ShipmentRow): boolean => (row.parcels ?? []).some((parcel) => parcel.source === 'LABEL')
+
+export function rowActsOf(row: ShipmentRow, orderId: string, delivery: Pick<DeliveryRow, 'openProblems' | 'pod' | 'returned'> | null): RowAct[] {
+  const may = row.may
+  if (!may) return []
+  const acts: RowAct[] = []
+  const live = !!row.ddt
+  const nexus = row.origin !== 'ELSEWHERE'
+  if (row.status === 'DRAFT' && may.manage) {
+    acts.push(act('split', 'garments', SPLIT), act('move', 'garments', word('ships.act.move')), act('merge', 'garments', word('ships.act.merge')))
+    // Take this order off: a shared draft, never the order it was made for (salesOrderId never changes: Split… or Move… then cancel).
+    const orders = row.orders ?? []
+    if (orders.length > 1 && orders[0]?.id !== orderId && orders.some((order) => order.id === orderId)) acts.push(act('takeOff', 'garments', word('ships.act.takeOff')))
+  }
+  if (row.status === 'PACKED') {
+    if (may.manage) acts.push(act('split', 'garments', SPLIT, word('ships.act.held.splitPacked')), act('move', 'garments', word('ships.act.move'), word('ships.act.held.movePacked')), act('merge', 'garments', word('ships.act.merge'), word('ships.act.held.movePacked')))
+    if (may.pack) acts.push(act('unpack', 'garments', word('ships.act.unpack'), live ? word('ships.act.held.ddtLive') : labelled(row) ? word('ships.act.held.labelled') : null))
+  }
+  if (OPEN.has(row.status)) {
+    if (may.manage && nexus && row.transportBy !== 'RECIPIENT') acts.push(act('arrange', 'travel', wordOf('depth', 'transport.change'), live ? word('ships.act.held.ddtCarrier') : labelled(row) ? word('ships.act.held.labelled') : null))
+    if (may.ddt && may.manage && nexus) {
+      if (row.ddtRequired === false) acts.push(act('ddtBack', 'travel', word('ships.act.ddtBack')))
+      else if (row.ddtRequired === true) acts.push(act('ddtOff', 'travel', word('ships.act.ddtOff'), live ? word('ships.act.held.ddtLive') : null))
+    }
+    if (may.holdsManage ?? may.manage) acts.push(act('placeHold', 'hold', wordOf('depth', 'holds.placeMenu')))
+    for (const hold of row.holds ?? []) {
+      // A money hold or one the system placed is finance's (holds.release); a person's is the warehouse's.
+      const finance = hold.bySystem || hold.reason === 'CREDIT' || hold.reason === 'DEPOSIT' || hold.reason === 'BALANCE_UNPAID'
+      if (hold.id && (finance ? may.holdsRelease : (may.holdsManage ?? may.manage))) acts.push(act('releaseHold', 'hold', word('ships.act.releaseHold', undefined, { words: { reason: wordOf('depth', `holdReason.${hold.reason}`) } }), null, { holdId: hold.id }))
+    }
+    if (may.manage) acts.push(act('cancel', 'danger', word('ships.act.cancel'), labelled(row) ? word('ships.act.held.labelled') : live ? word('ships.act.held.ddtLive') : null))
+  }
+  if (row.status === 'SHIPPED' && may.manage) {
+    acts.push(act('delivered', 'arrive', word('ships.act.delivered')), act('returned', 'arrive', word('ships.act.returned')))
+    acts.push(act('eta', 'arrive', word('ships.act.eta'), labelled(row) ? word('ships.act.held.carrierFed') : null))
+    if (delivery && delivery.openProblems > 0) acts.push(act('resolve', 'arrive', word('ships.act.resolve')))
+  }
+  if (row.status === 'DELIVERED' && may.manage) {
+    const pod = delivery?.pod ?? null
+    const kept = !!pod && !!pod.signedBy && !!pod.signedAt && pod.image
+    acts.push(act('proof', 'arrive', wordOf('depth', 'pod.record'), kept ? word('ships.act.held.proofKept') : null))
+  }
+  if (row.status === 'RETURNED' && may.manage) acts.push(act('receiveBack', 'arrive', word('ships.act.receiveBack'), delivery?.returned?.received === true ? word('ships.act.held.received') : null))
+  return acts
+}
+// ── end F-OS-202 ──
