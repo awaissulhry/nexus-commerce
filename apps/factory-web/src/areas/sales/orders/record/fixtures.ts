@@ -117,7 +117,7 @@ import { ORDER_ID } from '../_demo/fixtures'
 import { PRICE_CHECK, priceWindowOf } from '../price-check/fixtures'
 import type { PriceCheckCardModel, PriceCheckRead } from './price-check-card'
 // ---- B-W2b-323 (orders in depth on screen) ----
-import { APPROVAL_CREDIT, APPROVAL_NOBODY, APPROVAL_PENDING, CHANGES, CHANGES_NONE, CHANGES_WAITING_YES, CONFIRMATION_NONE, CONFIRMATION_OUTDATED, CONFIRMATION_WAITING, depthModel, FREEZE_FINISHED, FREEZE_NONE, MATERIALS_EMPTY, MATERIALS_NOT_PLANNED, orderDepth, PRICED_BLOCKED, pricedOpen } from '../depth/demo/fixtures'
+import { APPROVAL_CREDIT, APPROVAL_NOBODY, APPROVAL_PENDING, CHANGES, CHANGES_NONE, CHANGES_WAITING_YES, CONFIRMATION_NONE, CONFIRMATION_OUTDATED, CONFIRMATION_WAITING, depthModel, FREEZE_FINISHED, FREEZE_NONE, MATERIALS_EMPTY, MATERIALS_NOT_PLANNED, orderDepth } from '../depth/demo/fixtures'
 
 /**
  * SCR-039 — the order studio (design sales.orders "Record: Sales order") with made-up data only: every tab, the states
@@ -455,9 +455,6 @@ const W2B_323 = [
   { id: 'lines-review-locked-sales', label: 'Lines · Sales · Review and save, locked: no money anywhere — no fee, the customer is asked (no charge)', model: noPrice(d323('sales', asSales(production), { linesTab: tabWith(oneMore50(asSales(production)), { review: reviewOf(frozenPreview as unknown as AmendPreview) }) })) },
   { id: 'lines-changing', label: 'Lines · Owner · Three changes in place: "was 2" on black 50 and 52, red struck with Put back, brown New — the bar "3 changes not saved"', model: d323('owner', confirmed, { linesTab: tabWith(threeChanges(confirmed)) }) },
   { id: 'lines-review-blocked', label: 'Lines · Sales · Review and save: locked for good (finished pieces) — Save changes held', model: d323('sales', asSales(production), { linesTab: tabWith(oneMore50(asSales(production)), { review: reviewOf(frozenPreview as unknown as AmendPreview) }) }, { freeze: { value: FREEZE_FINISHED, problem: null } }) },
-  { id: 'w2b-323-priced', label: 'W2b · Owner · Priced change: one more in 50 priced, the fee, the extra deposit (30 % of the growth), it waits for a yes', model: d323('owner', production, {}, { dialog: { kind: 'priced' }, priced: pricedOpen() }), note: 'The kind lists the caparra penitenziale held: off until the accountant confirms it.' }, // B-CP-011
-  { id: 'w2b-323-priced-blocked', label: 'W2b · Owner · Priced change refused: the size cannot change any more', model: d323('owner', production, {}, { dialog: { kind: 'priced' }, priced: pricedOpen(PRICED_BLOCKED) }) }, // B-CP-011
-  { id: 'w2b-323-priced-reading', label: 'W2b · Owner · Priced change: pricing', model: d323('owner', production, {}, { dialog: { kind: 'priced' }, priced: { ...pricedOpen(), preview: { phase: 'reading', value: null, problem: null } } }) }, // B-CP-011
   { id: 'w2b-323-changes', label: 'W2b · Sales · Changes: What is frozen beside Priced change requests (waiting for the customer; turned down: Put back)', model: d323('sales', amended(production), { tab: 'changes' }) },
   { id: 'w2b-323-changes-yes', label: 'W2b · Sales · Changes: a change waits for a yes (nothing else is taken meanwhile)', model: d323('sales', amended(production), { tab: 'changes' }, { changes: { value: CHANGES_WAITING_YES, problem: null } }) },
   { id: 'w2b-323-changes-no-rules', label: 'W2b · Sales · Changes: the company keeps no freeze rule; no priced change yet', model: d323('sales', production, { tab: 'changes' }, { freeze: { value: FREEZE_NONE, problem: null }, changes: { value: CHANGES_NONE, problem: null } }) },
@@ -487,7 +484,6 @@ const W2B_323 = [
   { id: 'f-op-101-refuse', label: 'F-OP-101 · Owner · Refuse… the yes: a reason from the list and words (required)', model: d323('owner', { ...waitingOrder, openApprovals: [YES_TASK] }, { tab: 'overview', dialog: { kind: 'refuseYes', taskId: YES_TASK.taskId }, refuseReasons: { value: REFUSE_REASONS, problem: null }, draft: { reasonCode: 'PRICE', reason: 'Il prezzo è sotto il listino concordato.' } }, { approval: { value: APPROVAL_ASKED_BY_OTHER, problem: null } }) },
   // ---- end F-OP-101
   // B-OP-010: a priced change applies at once (no yes is asked any more).
-  { id: 'w2b-323-notice', label: 'W2b · Owner · After the priced change: recorded, applied at once', model: d323('owner', amended(production), { tab: 'changes' }, { notice: { tone: 'success', words: { key: 'notice.priced', params: { revision: 3 } } } }) }, // B-CP-011
 ]
 
 function OrderDesign({ model }: { model: RecordCase }) {

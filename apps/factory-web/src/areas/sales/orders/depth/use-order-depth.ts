@@ -7,14 +7,12 @@ import { storeUrl } from '../../../../record-panels/store'
 import type { OfficeSession } from '../../../../lib/session/session'
 import { getParty, getQuote } from '../../quotes/api'
 import type { Order } from '../api'
-import { romeToday, type RecordTab } from '../model'
+import type { RecordTab } from '../model'
 import {
-  applyPricedChange,
   askApproval,
   getApproval,
   getChanges,
   getConfirmation,
-  getDepositKinds,
   getFreeze,
   getMaterials,
   getOrderDepth,
@@ -22,7 +20,6 @@ import {
   listSeasons,
   makeConfirmation,
   planMaterials,
-  previewPricedChange,
   putBack,
   sendConfirmation,
   setOrderSeason,
@@ -31,18 +28,15 @@ import {
   type Approval,
   type Changes,
   type Confirmation,
-  type DepositKinds,
   type Freeze,
   type Materials,
   type OrderDepth,
-  type PricedBody,
-  type PricedPreview,
   type PriorityLevel,
   type Season,
   type TechPack,
 } from './api'
 import { outsideRefusalOf } from '../../../_shared/document-send/model'
-import { confirmationRecipient, confirmationSendBody, depthCanOf, PRICED_EMPTY, pricedBodyOf, pricedProblems, priorityBody, readProblemOf, writeProblemOf, type DepthCan, type PricedDraft } from './model'
+import { confirmationRecipient, confirmationSendBody, depthCanOf, priorityBody, readProblemOf, writeProblemOf, type DepthCan } from './model'
 import type { Phrase } from '../model'
 // ---- F-OC-201 / 203 (L5, L9): the confirmation in the order's language; "Ask {customer}…" on a revision never asked ----
 import { customerLocaleOf, customerQuestionOf } from '../record/lines-draft'
@@ -61,18 +55,10 @@ export type DepthDialog =
   | { kind: 'ask'; note: string }
   | { kind: 'withdraw' }
   | { kind: 'send'; cc: string; subject: string; message: string }
-  | { kind: 'priced' }
   | { kind: 'putBack'; changeId: string; reason: string }
   | { kind: 'plan' }
   /** F-OC-203 (L5): "Ask {customer}…" — the customer re-confirms this revision (its ask was never sent, or expired). */
   | { kind: 'askRevision'; amendmentId: string; revision: number }
-
-/** The priced change's dialog: the amendment it prices, the draft, the preview as last read. */
-export interface PricedState {
-  amendment: Pick<PricedBody, 'lines' | 'customerRef' | 'requestedDate'>
-  draft: PricedDraft
-  preview: { phase: 'reading' | 'ready' | 'failed'; value: PricedPreview | null; problem: string | null }
-}
 
 export interface SendState {
   recipient: { name: string; email: string } | null | undefined
@@ -103,12 +89,10 @@ export interface OrderDepthModel {
   techPack: DepthPart<TechPack> | null
   // F-SA-234b: the finish forecast per line comes with the order's own production read (`dates.forecast`), not from here.
   seasons: Season[] | null
-  depositKinds: DepositKinds | null
   dialog: DepthDialog | null
   busy: boolean
   problem: Phrase | null
   notice: { tone: 'success' | 'warning' | 'danger' | 'info'; words: Phrase } | null
-  priced: PricedState | null
   send: SendState | null
   /** F-OC-203: the "Ask {customer}…" window's state; absent: not open. */
   askRevision?: AskRevisionState | null
@@ -126,9 +110,6 @@ export interface OrderDepthActions {
   onSendOutside?: (checked: boolean) => void
   onPlan?: () => void
   onPutBack?: () => void
-  onPricedStart?: (amendment: PricedState['amendment']) => void
-  onPricedDraft?: (next: Partial<PricedDraft>) => void
-  onPricedApply?: () => void
   /** F-OC-203 (L5): send the revision's ask (the ONE helper, revised-order-ask.ts). */
   onAskRevision?: () => void
   onRetry?: (part: 'depth' | 'approval' | 'freeze' | 'changes' | 'materials' | 'confirmation' | 'techPack') => void
@@ -198,14 +179,10 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
   const [problem, setProblem] = useState<Phrase | null>(null)
   const [notice, setNotice] = useState<OrderDepthModel['notice']>(null)
   const [seasons, setSeasons] = useState<Season[] | null>(null)
-  const [depositKinds, setDepositKinds] = useState<DepositKinds | null>(null)
-  const [priced, setPriced] = useState<PricedState | null>(null)
   const [send, setSend] = useState<SendState | null>(null)
   const keyRef = useRef<string | null>(null)
   const orderRef = useRef(order)
   orderRef.current = order
-  const pricedRef = useRef(priced)
-  pricedRef.current = priced
   const dialogRef = useRef(dialog)
   dialogRef.current = dialog
 
@@ -214,7 +191,6 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
     keyRef.current = next ? newIdempotencyKey() : null
     setDialog(next)
     if (!next || next.kind !== 'send') setSend(null)
-    if (!next || next.kind !== 'priced') setPriced((known) => (next ? known : null))
   }, [])
 
   // The season picker reads the company's open seasons when it opens.
@@ -286,34 +262,10 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
     [busy, input],
   )
 
-  // The priced change's preview: read again a moment after the draft changes (nothing is written).
-  const pricedKey = priced ? JSON.stringify([priced.amendment, priced.draft.fee, priced.draft.deposit, priced.draft.pct, priced.draft.amount, priced.draft.kind, priced.draft.dueDate, priced.draft.labels]) : null
-  useEffect(() => {
-    const now = pricedRef.current
-    const value = orderRef.current
-    if (!now || !value) return
-    const local = pricedProblems(now.draft, romeToday(), { price: can.price })
-    if (Object.keys(local).length > 0) return
-    const abort = new AbortController()
-    const timer = setTimeout(() => {
-      setPriced((known) => (known ? { ...known, preview: { ...known.preview, phase: 'reading', problem: null } } : known))
-      previewPricedChange(api, value.id, { ...pricedBodyOf(now.draft, now.amendment, can.price), version: value.version }, abort.signal)
-        .then((answer) => !abort.signal.aborted && setPriced((known) => (known ? { ...known, preview: { phase: 'ready', value: answer, problem: null } } : known)))
-        .catch((error: unknown) => !abort.signal.aborted && setPriced((known) => (known ? { ...known, preview: { phase: 'failed', value: null, problem: writeProblemOf(error).key } } : known)))
-    }, 350)
-    return () => {
-      clearTimeout(timer)
-      abort.abort()
-    }
-  }, [pricedKey, api, can.price])
-
   const version = () => orderRef.current?.version ?? 1
 
   const actions: OrderDepthActions = {
-    onDialog: (next) => {
-      if (next?.kind === 'priced' && order) getDepositKinds(api, order.companyId).then(setDepositKinds).catch(() => setDepositKinds(null))
-      open(next)
-    },
+    onDialog: (next) => open(next),
     onDismissNotice: () => setNotice(null),
     onRetry: (part) => ({ depth: againDepth, approval: againApproval, freeze: againFreeze, changes: againChanges, materials: againMaterials, confirmation: againConfirmation, techPack: againTechPack })[part](),
     onPriority: () => {
@@ -398,30 +350,6 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
         if (answer.depositCancelled) setNotice({ tone: 'success', words: { key: 'notice.putBackDeposit', params: { revision: answer.change.revision } } })
       }, { key: 'notice.putBack' })
     },
-    onPricedStart: (amendment) => {
-      if (!order) return
-      setPriced({ amendment, draft: { ...PRICED_EMPTY, labels: {} }, preview: { phase: 'reading', value: null, problem: null } })
-      getDepositKinds(api, order.companyId).then(setDepositKinds).catch(() => setDepositKinds(null))
-      open({ kind: 'priced' })
-    },
-    onPricedDraft: (next) => setPriced((known) => (known ? { ...known, draft: { ...known.draft, ...next } } : known)),
-    onPricedApply: () => {
-      const now = pricedRef.current
-      if (!now || !order) return
-      const local = pricedProblems(now.draft, romeToday(), { price: can.price, final: true })
-      if (Object.keys(local).length > 0) {
-        setProblem({ key: Object.values(local)[0]! })
-        return
-      }
-      void write(async (key) => {
-        const answer = await applyPricedChange(api, order.id, { ...pricedBodyOf(now.draft, now.amendment, can.price), version: version(), reason: now.draft.reason.trim() }, key)
-        setPriced(null)
-        input.onAmendDone()
-        input.onOrder(answer.order)
-        // B-OP-010: a priced change applies at once (no yes is asked any more).
-        setNotice({ tone: 'success', words: { key: 'notice.priced', params: { revision: answer.change.revision } } })
-      }, null)
-    },
     // F-OC-203 (L5): the customer re-confirms the revision — asked on it, to the recipient read when the window opened; the window
     // stays open with where it went, and the changes are read again (Waiting on {customer} lists the ask).
     onAskRevision: () => {
@@ -444,7 +372,6 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
   // A dialog left open over another order (a reload to a new id) closes.
   useEffect(() => {
     setDialog(null)
-    setPriced(null)
     setSend(null)
     setAskRevision(null) // F-OC-203
   }, [id])
@@ -461,12 +388,10 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
       confirmationPdf,
       techPack,
       seasons,
-      depositKinds,
       dialog,
       busy,
       problem,
       notice,
-      priced,
       send: send ? { ...send, pdf: send.pdf ?? confirmationPdf?.value ?? null } : null,
       askRevision: dialog?.kind === 'askRevision' ? askRevision : null, // F-OC-203
     },

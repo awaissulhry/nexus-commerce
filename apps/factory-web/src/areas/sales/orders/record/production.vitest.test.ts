@@ -592,8 +592,9 @@ describe('F-OP-116: decide in place — a change waiting under its row, Still to
   it('the words exist in both languages (office "tu")', () => {
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-      for (const key of ['wo.changeApply', 'wo.changeLeave', 'wo.waitsPlannerShort', 'wo.done', 'wo.taskDone', 'wo.repromiseHeld', 'wo.liftPause', 'wo.go.scrap', 'wo.go.products', 'wo.go.subcontracting', 'wo.go.open', 'links.rePromise.accept', 'links.rePromise.decline']) expect(t(key), `${locale} ${key}`).not.toBe(key)
-      for (const [key, params] of [['wo.changeWaits', { before: 40, after: 28 }], ['wo.waitsPlanner', { time: '10:42' }], ['wo.changeApplied', { number: 'WO-1' }], ['wo.changeDeclined', { number: 'WO-1' }]] as const) expect(t(key, params), `${locale} ${key}`).not.toBe(key)
+      // F-OC-304: Apply… / Leave as is… and the old card's hold words went — a work-order change is ONE Decide… (productionTab.wo.*).
+      for (const key of ['productionTab.wo.decide', 'wo.done', 'wo.taskDone', 'wo.repromiseHeld', 'wo.liftPause', 'wo.go.scrap', 'wo.go.products', 'wo.go.subcontracting', 'wo.go.open', 'links.rePromise.accept', 'links.rePromise.decline']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      for (const [key, params] of [['productionTab.wo.waitsPlanner', { time: '10:42' }], ['wo.changeApplied', { number: 'WO-1' }], ['wo.changeDeclined', { number: 'WO-1' }]] as const) expect(t(key, params), `${locale} ${key}`).not.toBe(key)
     }
   })
 })

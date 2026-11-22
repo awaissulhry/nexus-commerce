@@ -116,8 +116,7 @@
     "confirmationSame": "Nulla è cambiato dalla versione {version}: la conferma resta quella.",
     "planned": "Pianificato dalla distinta: {made} nuovi, {changed} cambiati, {removed} tolti.",
     "putBack": "L’ordine è tornato com’era.",
-    "putBackDeposit": "Revisione {revision} ripristinata com'era; l'acconto aggiuntivo ancora aperto è stato annullato.",
-    "priced": "Modifica con prezzo {revision} registrata: il cliente la accetta dal link che inviamo."
+    "putBackDeposit": "Revisione {revision} ripristinata com'era; l'acconto aggiuntivo ancora aperto è stato annullato."
   },
   "problem": {
     "read": {
@@ -171,69 +170,9 @@
     "label": "Taglie bloccate dalla fase di produzione"
   },
   "priced": {
-    "title": "Modifica con prezzo {revision} di {number}",
-    "how": "La modifica viene registrata ora; poi il cliente ne accetta il prezzo dal link che inviamo.",
-    "stage": "L’ordine è arrivato a «{stage}».",
-    "reading": "Calcolo del prezzo della modifica…",
-    "problems": "La modifica è rifiutata così com’è ({count})",
-    "tableLabel": "Cosa cambia e il suo prezzo",
-    "col": {
-      "line": "Riga",
-      "words": "Parole per il cliente",
-      "price": "Variazione di prezzo"
-    },
-    "labelOf": "Parole per il cliente: {line}",
-    "labelPlaceholder": "es. Una giacca in più in 52, tagliata a parte",
-    "lineKind": {
-      "ADDED": "Riga aggiunta",
-      "REMOVED": "Riga tolta",
-      "CHANGED": "Nuovo prezzo"
-    },
-    "fee": "Costo della modifica (netto)",
-    "feeHint": "Facoltativo, in {currency}.",
-    "change": "Variazione di valore (netto)",
-    "feeValue": "Costo",
-    "noPrice": "I prezzi non ti sono visibili: il prezzo della modifica lo fa l’ufficio.",
-    "deposit": "Acconto aggiuntivo",
-    "depositMode": {
-      "default": "La percentuale dell’ordine",
-      "none": "Nessuno",
-      "pct": "Una percentuale",
-      "amount": "Un importo"
-    },
-    "pct": "Percentuale dell’aumento",
-    "amount": "Importo ({currency})",
-    "kind": "Tipo",
-    "kindHint": "Come conta l’acconto se l’ordine viene annullato.",
-    "dueDate": "Scadenza",
-    "dueHint": "Facoltativa: altrimenti i termini dell’ordine.",
-    "depositValue": "Acconto aggiuntivo {amount} ({pct} % dell’aumento).",
-    "depositNone": "Nessun acconto aggiuntivo: l’ordine non aumenta.",
-    "yes": {
-      "APPLIES_AT_ONCE": "Si applica subito — senza approvazione"
-    },
-    "customer": "Il cliente la accetta o la rifiuta dopo; un rifiuto lo annulla una persona.",
-    "reason": "Perché (resta con la modifica)",
-    "reasonHint": "Le parole del cliente o dell’ufficio, una o due righe.",
-    "go": "Registra la modifica con prezzo",
-    "held": {
-      "reading": "Attendere: si sta calcolando il prezzo",
-      "failed": "Impossibile calcolare il prezzo: riprova",
-      "problems": "La modifica è rifiutata così com’è"
-    },
     "problem": {
       "fee": "Un costo sopra 0, con al massimo 2 decimali.",
-      "pct": "Una percentuale sopra 0 e al massimo 100.",
-      "amount": "Un importo sopra 0, con al massimo 2 decimali; al massimo l’aumento dell’ordine.",
-      "dueDate": "Una scadenza da oggi in poi.",
-      "label": "Le parole per il cliente sono una riga di al massimo 200 caratteri.",
-      "reason": "Scrivi il perché (resta con la modifica).",
-      "reasonLong": "Il motivo è troppo lungo (al massimo 500 caratteri).",
-      "deposit": "L’acconto aggiuntivo è rifiutato così com’è (il tipo potrebbe essere disattivato, o supera l’aumento).",
-      "frozenLine": "{line}: {field} non si può più cambiare",
-      "frozenOrder": "{field} dell’ordine non si può più cambiare",
-      "lines": "Una riga è rifiutata così com’è: controlla la modifica",
-      "other": "La modifica è rifiutata così com’è"
+      "deposit": "L’acconto aggiuntivo è rifiutato così com’è (il tipo potrebbe essere disattivato, o supera l’aumento)."
     }
   },
   "depositKind": {
@@ -250,14 +189,6 @@
     "CANCELLED": "annullato"
   },
   "pricedList": {
-    "count": {
-      "changed_one": "{count} riga cambiata",
-      "changed_other": "{count} righe cambiate",
-      "added_one": "{count} riga aggiunta",
-      "added_other": "{count} righe aggiunte",
-      "removed_one": "{count} riga tolta",
-      "removed_other": "{count} righe tolte"
-    },
     "fee": "costo {amount}",
     "deposit": "acconto aggiuntivo {amount} ({kind}, {status})"
   },

@@ -7,7 +7,6 @@ import type {
   Confirmation,
   CustomerDecision,
   ChangeYesState,
-  DepositKinds,
   ExtraDepositKind,
   Freeze,
   FreezeField,
@@ -20,7 +19,7 @@ import type {
   TechPack,
   WaitReason,
 } from './api'
-import { EXTRA_DEPOSIT_KINDS, FREEZE_FIELDS, PRIORITY_LEVELS } from './api'
+import { FREEZE_FIELDS, PRIORITY_LEVELS } from './api'
 
 /**
  * B-W2b-323 — the orders in depth, pure (no fetching, no React; the tests hold them): who may do what, priority and season and
@@ -218,27 +217,8 @@ export interface PricedDraft {
 }
 
 export const PRICED_EMPTY: PricedDraft = Object.freeze({ labels: {}, fee: '', deposit: 'default', pct: '', amount: '', dueDate: '', kind: 'ACCONTO', reason: '' }) as PricedDraft
-export const PRICED_LIMITS = Object.freeze({ label: 200, reason: 500 })
 
-const DECIMAL = /^\d{1,12}([.,]\d{1,2})?$/
-const PCT = /^\d{1,3}([.,]\d{1,4})?$/
 const dot = (text: string) => text.trim().replace(',', '.')
-
-/** The draft's problems by field (keys), before the preview is asked. */
-export function pricedProblems(draft: PricedDraft, today: string, opts: { price: boolean; final?: boolean } = { price: true }): Partial<Record<'fee' | 'pct' | 'amount' | 'dueDate' | 'reason' | 'labels', string>> {
-  const out: Partial<Record<'fee' | 'pct' | 'amount' | 'dueDate' | 'reason' | 'labels', string>> = {}
-  if (opts.price && draft.fee.trim() !== '' && (!DECIMAL.test(draft.fee.trim()) || Number(dot(draft.fee)) <= 0)) out.fee = 'priced.problem.fee'
-  if (opts.price && draft.deposit === 'pct' && (!PCT.test(draft.pct.trim()) || Number(dot(draft.pct)) <= 0 || Number(dot(draft.pct)) > 100)) out.pct = 'priced.problem.pct'
-  if (opts.price && draft.deposit === 'amount' && (!DECIMAL.test(draft.amount.trim()) || Number(dot(draft.amount)) <= 0)) out.amount = 'priced.problem.amount'
-  if (draft.deposit !== 'none' && draft.dueDate !== '' && (!/^\d{4}-\d{2}-\d{2}$/.test(draft.dueDate) || draft.dueDate < today)) out.dueDate = 'priced.problem.dueDate'
-  if (Object.values(draft.labels).some((text) => text.trim().length > PRICED_LIMITS.label || /[\r\n]/.test(text))) out.labels = 'priced.problem.label'
-  if (opts.final) {
-    const reason = draft.reason.trim()
-    if (reason === '') out.reason = 'priced.problem.reason'
-    else if (reason.length > PRICED_LIMITS.reason) out.reason = 'priced.problem.reasonLong'
-  }
-  return out
-}
 
 /** The priced change's body from the amendment's lines and header and the draft (money only with the price grain). */
 export function pricedBodyOf(draft: PricedDraft, amendment: Pick<PricedBody, 'lines' | 'customerRef' | 'requestedDate'>, price: boolean): PricedBody {
@@ -254,10 +234,6 @@ export function pricedBodyOf(draft: PricedDraft, amendment: Pick<PricedBody, 'li
   return body
 }
 
-/** The deposit kinds offered: each with whether it may be chosen (the caparra penitenziale is off until the accountant's word). */
-export function depositKindChoices(kinds: DepositKinds | null): Array<{ kind: ExtraDepositKind; available: boolean }> {
-  return EXTRA_DEPOSIT_KINDS.map((kind) => ({ kind, available: kinds ? (kinds.kinds.find((entry) => entry.kind === kind)?.available ?? false) : kind !== 'CAPARRA_PENITENZIALE' }))
-}
 
 // ---- the changes (Changes tab) -------------------------------------------------------------------------------------------
 
@@ -280,10 +256,6 @@ export function changeCounts(change: Pick<Change, 'diff'>): { changed: number; a
   return counts
 }
 
-/** The sizes a change moved on one line ("52 +1 · 54 −2"). */
-export function sizeMoves(line: Change['diff']['lines'][number]): Array<{ size: string; delta: number }> {
-  return line.sizes.filter((size) => size.after !== size.before).map((size) => ({ size: size.size, delta: size.after - size.before }))
-}
 
 /** The put-back is offered for a change turned down (its yes), refused or expired (the customer) — until the server says `offered`. */
 export const putBackOffered = (change: Pick<Change, 'yes' | 'customer' | 'putBack'>): boolean => change.putBack.may && (change.yes.state === 'TURNED_DOWN' || change.customer.decision === 'REFUSED' || change.customer.decision === 'EXPIRED')

@@ -1116,7 +1116,8 @@ describe('F-OO-204: request rows — the age, the words of §5.2, Open… on our
     expect(read('./model.ts')).not.toContain("tab: 'changes'")
     for (const locale of LOCALES) {
       const words = messagesFor(locale, ['orders']).orders!
-      for (const key of ['waiting.counterOpen', 'waiting.open', 'waiting.theirTurn', 'requests.changesNote', 'waiting.counterAgreed', 'waiting.counterLapsed', 'waiting.onUs_one', 'waiting.onCustomer_other']) expect(words[key]?.trim(), `${locale} ${key}`).toBeTruthy()
+      for (const key of ['waiting.counterOpen', 'waiting.open', 'waiting.theirTurn', 'waiting.counterAgreed', 'waiting.counterLapsed', 'waiting.onUs_one', 'waiting.onCustomer_other']) expect(words[key]?.trim(), `${locale} ${key}`).toBeTruthy()
+      expect(words['requests.changesNote'], locale).toBeUndefined() // F-OC-304: "Holds are on Overview" went (L4: Production's pointer)
       expect(words['changes.onUs.countered'], locale).toBeUndefined()
     }
     const en = messagesFor('en', ['orders']).orders!

@@ -865,7 +865,9 @@ describe('F-SA-236: Changes — waiting on us, waiting on the customer, the hist
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
       // F-OO-204: the counter-offer row says the card's own words ("Our counter-offer: …", waiting.counterOpen): `changes.onUs.countered` went.
-      for (const key of ['changes.onUs.title', 'changes.onUs.nothing', 'changes.onCustomer.title', 'changes.onCustomer.reaccept', /* F-OC-203: changes.confirmation.* went with the old card */ 'changes.history.title', 'changes.history.priced', ...HISTORY_CHIPS.map((chip) => `changes.history.chips.${chip}`)]) expect(t(key), `${locale}: ${key}`).not.toBe(key)
+      // F-OC-304: the Changes tab's words are ONE group, changesTab (the old cards' changes.onUs / onCustomer / history keys went).
+      for (const key of ['changesTab.waiting.title', 'changesTab.waiting.noneUs', 'changesTab.history.title', 'changesTab.history.tag.priced', ...HISTORY_CHIPS.map((chip) => `changesTab.history.chips.${chip}`)]) expect(t(key), `${locale}: ${key}`).not.toBe(key)
+      for (const gone of ['changes.onUs.title', 'changes.onCustomer.title', 'changes.history.title', 'changes.history.chips.amendments']) expect(t(gone), `${locale}: ${gone}`).toBe(gone)
       expect(t('changes.onUs.countered'), `${locale}: changes.onUs.countered`).toBe('changes.onUs.countered')
     }
   })
@@ -1228,8 +1230,10 @@ describe('F-OP-106 → F-OL-05: Review and save\'s production part — the work 
     expect(appliedNotice(3, { applied: [], waiting: [] }, null)).toEqual({ key: 'edit.done.plain', params: { revision: 3 } })
     expect(appliedNotice(3, { applied, waiting }, null)).toEqual({ key: 'edit.done.both', params: { revision: 3, changed: 'WO-0311', waits: 'WO-0312, WO-…' } })
     const { savedNotice } = await import('./record/lines-draft')
-    expect(savedNotice({ applied, waiting: [] }, true).key).toBe('save.done.changedAsked')
-    for (const key of ['save.done.plain', 'save.done.plainAsked', 'save.done.changed', 'save.done.waits', 'save.done.both', 'save.done.bothAsked']) expect(en(key, { revision: 3, changed: 'WO-1', waits: 'WO-2', customer: 'x' }), key).not.toBe(key)
+    // F-OC-304: the notice says where the ask went (by e-mail, or the portal only) — never "is asked" before it was.
+    expect(savedNotice({ applied, waiting: [] }, 'email', 'Seed Customer One')).toEqual({ key: 'changesTab.saved.changedEmail', params: { changed: 'WO-0311', customer: 'Seed Customer One' } })
+    expect(savedNotice({ applied, waiting: [] }, null).key).toBe('save.done.changed')
+    for (const key of ['save.done.plain', 'changesTab.saved.plainEmail', 'changesTab.saved.plainPortal', 'save.done.changed', 'save.done.waits', 'save.done.both', 'changesTab.saved.bothPortal']) expect(en(key, { revision: 3, changed: 'WO-1', waits: 'WO-2', customer: 'x' }), key).not.toBe(key)
   })
 
   it('the page: the preview of THIS draft while Review is open (a stale answer read again), ONE save — the amendment, or the priced change when locked', () => {
@@ -1573,7 +1577,8 @@ describe('F-OP-117: the Changes tab — work-order changes of this order, the Hi
     expect(readFileSync(new URL('./record/changes/view/HistorySection.tsx', import.meta.url), 'utf8')).toContain('workOrderChanges: model.orderChanges?.list?.value ?? null')
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-      for (const key of ['wocs.title', 'wocs.none', 'wocs.newDraft', 'badge.yourTurn', 'changes.history.chips.workOrders']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      // F-OC-304: the work-order changes card's words went with it (wocs.newDraft names a change for a work order still to be made).
+      for (const key of ['wocs.newDraft', 'badge.yourTurn', 'changesTab.history.chips.workOrders']) expect(t(key), `${locale} ${key}`).not.toBe(key)
     }
   })
 })

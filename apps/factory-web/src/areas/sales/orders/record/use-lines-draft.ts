@@ -4,11 +4,11 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { ExtraOutcome } from '@nexus/factory-domain/order-apply/rules'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { getStyle, type StyleDetail } from '../../quotes/api'
-import { applyAmendment, findStylesForOrder, previewAmendment, type AmendPreview, type Order, type OrderStyleRow } from '../api'
+import { applyAmendment, findStylesForOrder, NOTHING_FOLLOWED, previewAmendment, type AmendPreview, type Order, type OrderStyleRow } from '../api'
 import { applyPricedChange, type Freeze } from '../depth/api'
 import { frozenOffer, frozenProblemsOf, PRICED_EMPTY, pricedBodyOf } from '../depth/model'
 import { readProblem, writeProblem, type OrderAbilities } from '../model'
-import { askRevisedOrder, askTargetOf } from './revised-order-ask' // F-OC-201: the customer's new yes, asked on the revision
+import { askRevisedOrder, askTargetOf, type AskReach } from './revised-order-ask' // F-OC-201: the customer's new yes, asked on the revision
 import { postPortalReplyKeyed } from '../../../_shared/record-thread/api'
 import { portalRefusal } from '../../../_shared/record-thread/state'
 import { tellHeld, tickOn } from '../../../home/approvals/requests/model'
@@ -287,12 +287,12 @@ export function useLinesDraft(input: LinesDraftInput): { model: LinesTabModel; a
           setClashes([])
           setMoved(null)
           setReview(null)
-          setNotice({ tone: 'success', words: savedNotice(done.workOrders, ask) })
           // F-OC-201 (L5, R1): the ask on the REVISION the save made — a plain change with the tick, a priced change always (nobody else
           // asks it); its failure never undoes the save. F-OL-08: the question in the customer's language (the words typed, else the
-          // default in the order's language), never the office's.
+          // default in the order's language), never the office's. F-OC-304: the notice says where the ask went, once it went.
           const target = askTargetOf(done)
-          if (ask && target) void askCustomer(target, customerQuestionOf(value, question), value)
+          const reach = ask && target ? await askCustomer(target, customerQuestionOf(value, question), value) : null
+          setNotice({ tone: 'success', words: savedNotice(done.workOrders, reach?.reach ?? null, value.party?.legalName ?? '') })
           if (tell) void tellCustomer(tell, value)
           return done.order
         } catch (error) {
@@ -314,12 +314,14 @@ export function useLinesDraft(input: LinesDraftInput): { model: LinesTabModel; a
   }
 
   // F-OC-201: ONE helper asks (revised-order-ask.ts): on the revision, to the confirmation's own recipient (no e-mail: the portal only).
-  const askCustomer = async (amendmentId: string, question: string, value: Order) => {
+  const askCustomer = async (amendmentId: string, question: string, value: Order): Promise<AskReach | null> => {
     try {
-      await askRevisedOrder(api, value, amendmentId, question, { quotes: can.viewQuotes })
+      const reach = await askRevisedOrder(api, value, amendmentId, question, { quotes: can.viewQuotes })
       setAskFailed(null)
+      return reach
     } catch {
       setAskFailed({ amendmentId, question })
+      return null
     }
   }
 
@@ -396,7 +398,7 @@ export function useLinesDraft(input: LinesDraftInput): { model: LinesTabModel; a
     onSave: ({ reason, question }) => save(reason, question),
     onAskAgain: () => {
       const value = order0()
-      if (value && askFailed !== null) void askCustomer(askFailed.amendmentId, askFailed.question, value)
+      if (value && askFailed !== null) void askCustomer(askFailed.amendmentId, askFailed.question, value).then((reach) => reach && setNotice({ tone: 'success', words: savedNotice(NOTHING_FOLLOWED, reach.reach, value.party?.legalName ?? '') }))
     },
     onAskDismiss: () => setAskFailed(null),
     // ---- two people ----

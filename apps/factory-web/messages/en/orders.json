@@ -662,17 +662,13 @@
     },
     "done": {
       "plain": "Saved.",
-      "plainAsked": "Saved · the customer is asked to accept the new order.",
       "changed": "Saved · {changed} changed.",
-      "changedAsked": "Saved · {changed} changed · the customer is asked to accept the new order.",
       "waits": "Saved · waiting for production: {waits} — decide on this page.",
-      "waitsAsked": "Saved · waiting for production: {waits} — decide on this page · the customer is asked to accept the new order.",
-      "both": "Saved · {changed} changed · waiting for production: {waits} — decide on this page.",
-      "bothAsked": "Saved · {changed} changed · waiting for production: {waits} — decide on this page · the customer is asked to accept the new order."
+      "both": "Saved · {changed} changed · waiting for production: {waits} — decide on this page."
     },
     "notTold": "Saved; the words did not reach the order's conversation: write them there.",
     "notReached": "Saved; there is no way to reach {customer}: add a contact.",
-    "askFailed": "{customer} could not be asked to accept the new order. The change is saved.",
+    "askFailed": "Saved, but the ask could not be sent to {customer}.",
     "askAgain": "Ask again",
     "moved": "{name} saved a change at {time}: {lines} moved. Your changes are kept.",
     "movedNone": "{name} saved a change at {time}. Your changes are kept.",
@@ -1472,11 +1468,6 @@
     }
   },
   "changes": {
-    "empty": {
-      "title": "No changes since confirmation",
-      "body": "An amendment appears here once it is applied (Lines › Amend order).",
-      "final": "The order never changed after its confirmation."
-    },
     "col": {
       "line": "Line",
       "change": "Change",
@@ -1485,8 +1476,6 @@
       "after": "After",
       "net": "Net"
     },
-    "revision": "Rev {revision}",
-    "when": "{date} at {time}",
     "someone": "Someone",
     "headerOnly": "Order details only",
     "count": {
@@ -1503,7 +1492,6 @@
       "NOT_NEEDED": "Not needed"
     },
     "open": "Before → after",
-    "openOf": "Before → after of revision {revision}",
     "line": "Line {line}",
     "lineWhat": "Line {line} · {what}",
     "kind": {
@@ -1516,46 +1504,14 @@
     "byAt": "{name}, {date}",
     "reason": "Reason",
     "money": "Net",
-    "reacceptance": "Customer re-acceptance",
-    "onUs": {
-      "title": "Waiting on us",
-      "nothing": "No request waits on us",
-      "count_one": "{count} waiting",
-      "count_other": "{count} waiting"
-    },
     "onCustomer": {
-      "title": "Waiting on the customer",
-      "nothing": "No request waits on the customer",
-      "reaccept": "The changed order waits for the customer's new yes",
-      "since": "since {date}",
       "due": "due {date}"
     },
-    "history": {
-      "title": "History",
-      "chipsLabel": "Show in the history",
-      "chips": {
-        "all": "All",
-        "requests": "Requests",
-        "amendments": "Amendments",
-        "confirmations": "Confirmations",
-        "workOrders": "Work orders"
-      },
-      "asked": "Request asked · {kind}",
-      "by": "by {name}",
-      "priced": "Priced change",
-      "made": "Confirmation v{version} made",
-      "sent": "Confirmation v{version} sent",
-      "noneHere": "Nothing of this kind yet"
-    },
     "still": {
-      "title": "Still to do",
       "since": "since {when}",
-      "open": "Open",
       "none": "Nothing left to do for the accepted changes.",
       "changeOf": "{kind} accepted · {when}",
       "office": "Office change · {when}",
-      "madeExtra": "Made extra",
-      "extraLine": "Line {line} · {words}",
       "leftOut_one": "{count} work order not shown: it is outside what you can open.",
       "leftOut_other": "{count} work orders not shown: they are outside what you can open."
     }
@@ -2252,11 +2208,6 @@
       "issued": "Issued to it (it stays on it until returned by hand): {items}",
       "atWorkshop": "At a workshop: {numbers}"
     },
-    "changeWaits": "Change waits: {before} → {after}",
-    "changeApply": "Apply…",
-    "changeLeave": "Leave as is…",
-    "waitsPlanner": "Waits for a planner · told {time}",
-    "waitsPlannerShort": "Waits for a planner: a planner or the production manager decides it",
     "changeApplied": "The change of {number} is applied: the floor was told",
     "changeDeclined": "The change of {number} is left as is",
     "done": "Done",
@@ -2336,8 +2287,6 @@
     "backupElsewhere": "Open the customer ›"
   },
   "wocs": {
-    "title": "Work-order changes of this order",
-    "none": "No work-order change for this order yet.",
     "newDraft": "A new work order (draft)"
   },
   "badge": {
@@ -2521,7 +2470,6 @@
     }
   },
   "requests": {
-    "changesNote": "Holds are on Overview · dates are in Next dates",
     "changesCount": "Changes ({count}) ›",
     "more_one": "{count} more on Changes ›",
     "more_other": "{count} more on Changes ›",
@@ -3272,6 +3220,16 @@
         "field": "Field"
       },
       "noPrice": "Not shown to you: the amounts (people who see prices see them)."
+    },
+    "saved": {
+      "plainEmail": "Saved · asked {customer} by e-mail.",
+      "plainPortal": "Saved · asked in {customer}'s portal: no e-mail address on file.",
+      "changedEmail": "Saved · {changed} changed · asked {customer} by e-mail.",
+      "changedPortal": "Saved · {changed} changed · asked in {customer}'s portal: no e-mail address on file.",
+      "waitsEmail": "Saved · waiting for production: {waits} — decide on this page · asked {customer} by e-mail.",
+      "waitsPortal": "Saved · waiting for production: {waits} — decide on this page · asked in {customer}'s portal: no e-mail address on file.",
+      "bothEmail": "Saved · {changed} changed · waiting for production: {waits} — decide on this page · asked {customer} by e-mail.",
+      "bothPortal": "Saved · {changed} changed · waiting for production: {waits} — decide on this page · asked in {customer}'s portal: no e-mail address on file."
     }
   }
 }
