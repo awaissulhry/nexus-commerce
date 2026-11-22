@@ -3860,7 +3860,8 @@
         "noFreight": "Trasporto: ancora nessuno",
         "noFreightSet": "Trasporto: ancora nessuno — imposta una stima a mano",
         "margin": "Margine",
-        "noCost": "Visibili a chi vede i costi."
+        "noCost": "Visibili a chi vede i costi.",
+        "byHand": "Costi impostati a mano"
       },
       "fold": {
         "lines": "Per riga ({count})",

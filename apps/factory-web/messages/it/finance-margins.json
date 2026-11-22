@@ -152,7 +152,14 @@
     "price": "Prezzo (netto)",
     "freight": "Trasporto",
     "noFreight": "Non ancora registrato: escluso",
-    "margin": "Margine attuale"
+    "margin": "Margine attuale",
+    "hand": {
+      "FREIGHT_ESTIMATE": "Stima del trasporto (impostata a mano)",
+      "COMMISSION": "Provvigione (impostata a mano)",
+      "BANK_CHARGES": "Spese bancarie (impostate a mano)",
+      "OTHER": "Altro costo (impostato a mano)"
+    },
+    "byHand": "Costi impostati a mano"
   },
   "part": {
     "MATERIAL": "Materiale",

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs' // F-OM-306
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -15,7 +16,7 @@ import { RECORD_TABS as WORK_ORDER_TABS } from '../../production/_shared/model'
 import { getMargins, getOrderMargin, SALES_ORDER_STATUSES, WATERFALL_REASONS } from './api'
 import { asSeenBy, DETAIL_1043, MARGINS, ROWS } from './demo/fixtures'
 import { designScreen as marginsScreen } from './fixtures'
-import { addressOf, barsOf, bridgeOf, changeTone, marginsCanOf, marginsCsv, marginsHref, marginsQueryOf, pointsBetween, showsMargin, waterfallOf } from './model'
+import { addressOf, barsOf, bridgeOf, changeTone, MARGINS_NAMESPACE, marginsCanOf, marginsCsv, marginsHref, marginsQueryOf, pointsBetween, showsMargin, waterfallOf } from './model'
 
 /**
  * Finance › Costing › Margins (SCR-155), the sales order's Margin tab (SCR-039 w2a-margin cases) and the orders list's
@@ -69,6 +70,36 @@ describe('the figures', () => {
     const costs = rows.filter((row) => row.kind === 'cost').reduce((sum, row) => sum + (row.amount ?? 0), 0)
     expect(rows[0]!.amount! - costs).toBe(rows.at(-1)!.amount)
     expect(rows.find((row) => row.id === 'freight')!.amount).toBeNull()
+  })
+
+  // F-OM-306 (order MONEY tab; B-OM-007, B-OM-021): freight and the costs set by hand are rows of their own, from the same read as
+  // the order's Money › Margin (one rule, one number per order) — never "Not recorded yet" when the read counts freight.
+  it('the freight the read counts and each cost set by hand are rows: price − parts − freight − hand lines = the margin now', () => {
+    const estimate = { ...DETAIL_1043.estimate, cost: 718_000 + 24_000 + 30_000, freight: 24_000, handCost: 30_000, margin: 482_000 - 24_000 - 30_000 }
+    const detail = { ...DETAIL_1043, estimate, handLines: [{ id: 'hl-1', kind: 'COMMISSION' as const, amount: 30_000, currency: 'EUR', reason: 'Agent 3 %', by: 'Bea Esempio', at: '2026-11-14T09:00:00.000Z' }] }
+    const rows = bridgeOf(detail, { cost: true, price: true })!
+    expect(rows.map((row) => [row.id, row.kind, row.amount])).toEqual([
+      ['price', 'value', 1_200_000],
+      ['MATERIAL', 'cost', 410_000],
+      ['LABOUR', 'cost', 230_000],
+      ['SUBCONTRACT', 'cost', 60_000],
+      ['OVERHEAD', 'cost', 18_000],
+      ['freight', 'freight', 24_000],
+      ['hand-hl-1', 'hand', 30_000],
+      ['margin', 'margin', 428_000],
+    ])
+    expect(rows.find((row) => row.kind === 'hand')).toMatchObject({ label: 'bridge.hand.COMMISSION', handKind: 'COMMISSION' })
+    const costs = rows.filter((row) => row.kind === 'cost' || row.kind === 'freight' || row.kind === 'hand').reduce((sum, row) => sum + (row.amount ?? 0), 0)
+    expect(rows[0]!.amount! - costs).toBe(rows.at(-1)!.amount)
+    // The lines not named (an older read): their sum, one row.
+    expect(bridgeOf({ ...detail, handLines: undefined }, { cost: true, price: true })!.filter((row) => row.kind === 'hand')).toEqual([{ id: 'BY_HAND', kind: 'hand', label: 'bridge.byHand', amount: 30_000 }])
+    // The view says "Not recorded yet" only while the freight is null.
+    const view = readFileSync(new URL('./view/parts.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("row.kind === 'freight' && row.amount === null ? (")
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, [MARGINS_NAMESPACE])[MARGINS_NAMESPACE]!)
+      for (const key of ['bridge.byHand', 'bridge.hand.FREIGHT_ESTIMATE', 'bridge.hand.COMMISSION', 'bridge.hand.BANK_CHARGES', 'bridge.hand.OTHER']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+    }
   })
 
   it('where the margin went: quoted + each change = now', () => {

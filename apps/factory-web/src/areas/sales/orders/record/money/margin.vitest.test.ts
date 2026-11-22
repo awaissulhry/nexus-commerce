@@ -1,10 +1,11 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { ORDER_COST_LINE_KINDS } from '@nexus/factory-domain/costing/margins/hand-lines'
 import { LOCALES } from '../../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
 import { asSeenBy, DETAIL_1043 } from '../../../../finance/margins/demo/fixtures'
 import { COST_LINE_KINDS, orderMarginSchema, type OrderMargin } from '../../../../finance/margins/api'
-import { marginsCanOf, type MarginsCan } from '../../../../finance/margins/model'
+import { bridgeOf as financeBridgeOf, marginsCanOf, type MarginsCan } from '../../../../finance/margins/model'
 import { canOf, order } from '../../_demo/fixtures'
 import type { OrderAbilities } from '../../model'
 import { costAmountOf, marginAfterOf, marginOf, targetOf, targetPctOf } from './margin'
@@ -17,6 +18,7 @@ import { amountsOf } from './word'
  * + cost; the target also the margin grain, L4) held only by a closed order, and what the windows send. Every figure is made up.
  */
 
+const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
 const FULL: MarginsCan = { view: true, price: true, cost: true, margin: true, orders: true, costing: true }
 const FINANCE: OrderAbilities = { ...canOf('finance'), costLedger: true }
 const IN_PRODUCTION = order('IN_PRODUCTION')
@@ -106,6 +108,14 @@ describe('F-OM-302: the cost lines set by hand (L2: added only) and the bridge',
     const shipped = view({ ...HAND, handLines: [], estimate: { ...HAND.estimate, freight: 24_000 } }).bridge!
     expect(shipped.find((row) => row.id === 'freight')).toMatchObject({ kind: 'freight', amount: 24_000, tag: { key: 'moneyTab.margin.bridge.fromShipments' } })
     expect(view({ ...HAND, handLines: [] }).bridge!.find((row) => row.id === 'freight')!.label.key).toBe('moneyTab.margin.bridge.noFreightSet')
+  })
+
+  // F-OM-306: one rule, one number per order — the Money bridge says Finance › Margins' own figures (finance/margins/model.ts bridgeOf).
+  it('the bridge\'s amounts are Finance\'s bridge, row by row (the hand freight estimate stands for the freight not recorded yet)', () => {
+    const shipped: OrderMargin = { ...HAND, estimate: { ...HAND.estimate, freight: 24_000 } }
+    const finance = financeBridgeOf(shipped, FULL)!
+    expect(view(shipped).bridge!.map((row) => [row.id, row.amount])).toEqual(finance.map((row) => [row.id, row.amount]))
+    expect(source('./margin.ts')).toContain('const rows = financeBridgeOf(detail, can)')
   })
 })
 
