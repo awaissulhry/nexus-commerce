@@ -25,6 +25,28 @@ export function factReadsOf(row: ShipmentRow, delivery: DeliveryRow | null, orde
   return reads
 }
 
+/**
+ * os-fx9 (N-01): the reads of a load, each keyed by what decides it — the shipment, the read, and the facts that read depends on (its
+ * state and version; the open problems' count for the problems read). The container sends a key once per load: the deliveries read
+ * arriving adds the problems reads only (it decides no other read), and a write that changes a row (its version) reads it again.
+ */
+export interface FactPlanEntry {
+  readonly key: string
+  readonly shipmentId: string
+  readonly read: FactRead
+}
+
+export function factPlanOf(rows: readonly ShipmentRow[], deliveries: readonly DeliveryRow[] | null, orderId: string): FactPlanEntry[] {
+  const byId = new Map((deliveries ?? []).map((delivery) => [delivery.id, delivery]))
+  return rows.flatMap((row) => {
+    const delivery = byId.get(row.id) ?? null
+    return factReadsOf(row, delivery, orderId).map((read): FactPlanEntry => {
+      const decides = read === 'problems' ? `${row.status}:${delivery?.openProblems ?? 0}` : read === 'ddt' ? `${row.status}:${row.version ?? ''}` : `${row.otherPieces ?? 0}:${row.version ?? ''}`
+      return { key: `${row.id}:${read}:${decides}`, shipmentId: row.id, read }
+    })
+  })
+}
+
 /** The open problems' kinds, once each, in the order raised; none open: null. */
 export function problemsOf(read: { readonly noScanDays: number; readonly problems: readonly { readonly kind: string; readonly resolvedAt: string | null }[] }): ShipmentFacts['problems'] | null {
   const kinds = [...new Set(read.problems.filter((problem) => problem.resolvedAt === null).map((problem) => problem.kind))]

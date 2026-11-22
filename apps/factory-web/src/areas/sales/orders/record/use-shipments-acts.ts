@@ -27,7 +27,7 @@ import type { NoticeWords } from './record-model'
 import type { Words } from '../../../warehouse/shipments/queue/shared/depth' // F-OS-301: what the tracking write said
 import { parcelWordsOf } from './shipments/rows' // F-OS-301: each parcel's contents of this order, in the Tracking numbers window
 import { orderStaysOf, type ShipmentFacts } from './shipments/rows' // os-fx7 (W-05): what the order does after "Mark delivered"
-import { ddtBlocksOf, factReadsOf, othersOf, problemsOf } from './shipments/facts' // os-fx7 (W-06, W-07, W-12)
+import { ddtBlocksOf, factPlanOf, othersOf, problemsOf } from './shipments/facts' // os-fx7 (W-06, W-07, W-12); os-fx9: the keyed plan
 import { readProblems } from '../../../warehouse/shipments/pod/api' // os-fx7 (W-06): what a tracking problem is
 import { getShipment, previewDdt } from '../../../warehouse/shipments/api' // os-fx7 (W-07, W-12): the DDT refusal, the shared goods
 // ---- F-OS-303: the after-sales doors — the Returns and Quality pages' OWN windows, and the claim link, mounted in place ----
@@ -84,6 +84,8 @@ export function useShipmentsActs(input: {
   /* F-OP-121 */ readonly setNotice: (notice: OrderRecordModel['notice']) => void
   /** F-OS-303: a return or a complaint opened from the tab — the order's links (Complaints & returns) are read again. */
   readonly onCaseOpened?: () => void
+  /** os-fx9 (N-01): the Shipments tab is the open tab — the rows' own facts (shipments/facts.ts) are read only then. */
+  readonly shipmentsOpen: boolean
 }): {
   model: {
     /* F-OP-119 → F-OS-201: the one shipment window open (its container), whichever the row opened */ shipmentDoor: ReactNode | null
@@ -103,7 +105,7 @@ export function useShipmentsActs(input: {
     /* F-OS-101 */ shipmentsTab: { readonly onRetryDeliveries: () => void; readonly onOpenParcels: (shipmentId: string) => void; readonly onDownloadProof: (shipmentId: string) => void; /* F-OS-202 */ readonly onAct: (shipmentId: string, act: RowActId, holdId?: string) => void; /* F-OS-303 */ readonly onAfterSales: (kind: AfterSalesKind, shipmentId?: string) => void }
   }
 } {
-  const { order, prefix, permissions, reload, api, setNotice } = input
+  const { order, prefix, permissions, reload, api, setNotice, shipmentsOpen } = input
   // ---- F-OP-119 → F-OS-201 … F-OS-204: ONE shipment window open at a time, opened from its row (Tracking number… and the row ⋯) ----
   const [open, setOpen] = useState<{ readonly shipmentId: string; readonly act: RowActId | 'tracking'; readonly holdId?: string } | null>(null)
   // The shipment's own rights as Warehouse reads them (no label check from here: `pack` off).
@@ -259,31 +261,47 @@ export function useShipmentsActs(input: {
   )
   // ---- end F-OS-101
 
-  // ---- os-fx7 (W-06, W-07, W-12): what a row says beyond the order read — read only for the rows that need it (shipments/facts.ts);
-  // a read that fails says nothing (the row keeps its plainer words). Read again with the order and its deliveries.
+  // ---- os-fx7 (W-06, W-07, W-12) → os-fx9 (N-01): what a row says beyond the order read — read only while the Shipments tab is open,
+  // only for the rows that need it (shipments/facts.ts), and each read ONCE per load: keyed by what decides it, so the deliveries read
+  // arriving sends only the reads it adds, and a tab opened again sends none. A read that fails says nothing (the row keeps its plainer
+  // words; a later change of that row asks again). All under shipping.view. The reads stop when the order changes or the page goes.
   const [facts, setFacts] = useState<{ readonly orderId: string; readonly byId: Readonly<Record<string, ShipmentFacts>> } | null>(null)
   const deliveriesRead = shipmentDeliveries?.value ?? null
+  const factPlan = useMemo(() => (order && shipmentsOpen ? factPlanOf(order.chain.shipments, deliveriesRead?.shipments ?? null, order.id) : []), [order, shipmentsOpen, deliveriesRead])
+  const factPlanKey = factPlan.map((entry) => entry.key).join('|')
+  const factsRun = useRef<{ readonly orderId: string; readonly abort: AbortController; readonly sent: Set<string> } | null>(null)
   useEffect(() => {
-    if (!order || !orderId) return
-    const abort = new AbortController()
-    const byDelivery = new Map((deliveriesRead?.shipments ?? []).map((row) => [row.id, row]))
+    if (!orderId) return
+    const run = { orderId, abort: new AbortController(), sent: new Set<string>() }
+    factsRun.current = run
+    return () => {
+      run.abort.abort()
+      if (factsRun.current === run) factsRun.current = null
+    }
+  }, [api, orderId])
+  useEffect(() => {
+    const run = factsRun.current
+    if (!order || !run || run.orderId !== order.id) return
     const put = (shipmentId: string, part: ShipmentFacts) => {
-      if (abort.signal.aborted) return
+      if (run.abort.signal.aborted) return
       setFacts((current) => {
-        const byId = current?.orderId === orderId ? current.byId : {}
-        return { orderId, byId: { ...byId, [shipmentId]: { ...byId[shipmentId], ...part } } }
+        const byId = current?.orderId === run.orderId ? current.byId : {}
+        return { orderId: run.orderId, byId: { ...byId, [shipmentId]: { ...byId[shipmentId], ...part } } }
       })
     }
-    const quiet = () => undefined
-    for (const row of order.chain.shipments) {
-      for (const read of factReadsOf(row, byDelivery.get(row.id) ?? null, order.id)) {
-        if (read === 'problems') readProblems(api, row.id).then((answer) => put(row.id, { problems: problemsOf(answer) ?? { kinds: [], noScanDays: answer.noScanDays } })).catch(quiet)
-        else if (read === 'ddt') previewDdt(api, row.id, {}, abort.signal).then((answer) => put(row.id, { ddtBlocks: ddtBlocksOf(answer.problems) })).catch(quiet)
-        else getShipment(api, row.id, abort.signal).then((shipment) => put(row.id, { others: othersOf(shipment.lines, row, order.id) })).catch(quiet)
-      }
+    for (const entry of factPlan) {
+      if (run.sent.has(entry.key)) continue
+      run.sent.add(entry.key)
+      const row = order.chain.shipments.find((candidate) => candidate.id === entry.shipmentId)
+      if (!row) continue
+      const quiet = () => run.sent.delete(entry.key) // failed: nothing said; the same read may go again with the next change
+      if (entry.read === 'problems') readProblems(api, row.id).then((answer) => put(row.id, { problems: problemsOf(answer) ?? { kinds: [], noScanDays: answer.noScanDays } })).catch(quiet)
+      else if (entry.read === 'ddt') previewDdt(api, row.id, {}, run.abort.signal).then((answer) => put(row.id, { ddtBlocks: ddtBlocksOf(answer.problems) })).catch(quiet)
+      else getShipment(api, row.id, run.abort.signal).then((shipment) => put(row.id, { others: othersOf(shipment.lines, row, order.id) })).catch(quiet)
     }
-    return () => abort.abort()
-  }, [api, order, orderId, deliveriesRead])
+    // Keyed on the plan's keys (what decides the reads), never on the whole order or deliveries objects (os-fx9, N-01).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api, orderId, factPlanKey])
   const shipmentFacts = facts && facts.orderId === orderId ? facts.byId : null
   // ---- end os-fx7
 

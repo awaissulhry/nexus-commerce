@@ -383,7 +383,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
   })
   // F-OS-303: a return or a complaint opened from the Shipments tab reads the order's links again (they are read below).
   const linksAgain = useRef<() => void>(() => undefined)
-  const shipments = useShipmentsActs({ order: ready, prefix, permissions: session.permissions, reload: () => void load() /* F-OP-119 */, api /* F-OP-121 */, setNotice /* F-OP-121 */, onCaseOpened: () => linksAgain.current() /* F-OS-303 */ })
+  const shipments = useShipmentsActs({ order: ready, prefix, permissions: session.permissions, reload: () => void load() /* F-OP-119 */, api /* F-OP-121 */, setNotice /* F-OP-121 */, onCaseOpened: () => linksAgain.current() /* F-OS-303 */, shipmentsOpen: tab === 'shipments' /* os-fx9 (N-01): the rows' facts only on Shipments */ })
   // ---- F-CP-142 (customer page plan C3): Money's "Price check" — read while Money shows, by a price holder only (else hidden, F-OM-301:
   // no call); its save and take-over say so in the page's one notice.
   const priceCheck = usePriceCheckCard({ api, orderId, can, tab, version: order.status === 'ready' ? order.value.version : null, permissions: session.permissions, setNotice })
