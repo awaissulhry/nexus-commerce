@@ -252,7 +252,10 @@ export async function askApproval(request: FastifyRequest, body: AskBody, idempo
 
   const { result, replayed } = await command(
     request,
-    { name: 'partners.approvals.ask', idempotencyKey, input: { ...body, requestId } },
+    // oc-fx3 (order changes end check 1): the input is what makes a repeat "the same request" — the body as sent, never the ids
+    // minted above for this call (a fresh request id each time made every retry with the same Idempotency-Key a 409); a repeat
+    // answers from its receipt, with the first ask's request id (`result.requestId`) and no link.
+    { name: 'partners.approvals.ask', idempotencyKey, input: { ...body } },
     async (tools) => {
       const { tx, now: at } = tools
       const again = await adapter.read(tx, body.recordId, body.kind, { partyId, now: at })
