@@ -734,6 +734,8 @@ model SalesOrder {
   priceAcceptances    OrderPriceAcceptance[] @relation("OrderPriceAcceptanceOrder")
   /// @not-money the relation to the hand cost lines (the rows carry the grain)
   costLines           OrderCostLine[]      @relation("OrderCostLineOrder")
+  // B-OF-030 (order files tab, schema wave "order files 1/1"): file-asks.prisma, the files asked for it.
+  fileAsks            FileAsk[]            @relation("FileAskOrder")
 
   @@unique([tenantId, companyId, number])
   // TH-1b (B-TH-104): each customer's own running number, once per company and customer.
@@ -890,6 +892,8 @@ model SalesOrderLine {
   // it (one row at most; it holds the line: Restrict, so a split or a removal carries or removes the row first).
   /// @not-money the relation to the customer's price row (the row carries the grain)
   brandPrices        OrderBrandPrice[]        @relation("OrderBrandPriceLine")
+  // B-OF-030 (order files tab, schema wave "order files 1/1"): file-asks.prisma, the files asked to land on it.
+  fileAsks           FileAsk[]                @relation("FileAskLine")
 
   @@unique([tenantId, orderId, seq])
   // The target of the references from the line's size rows (and the work orders of W1-23).

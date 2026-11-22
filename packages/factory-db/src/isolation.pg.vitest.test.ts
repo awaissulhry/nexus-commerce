@@ -117,6 +117,7 @@ import { SECOND_BRAND_TABLES, seedSecondBrand, type SecondBrand } from './testin
 import { seedHeldMail } from './testing/held-mail' // B-TH-038
 import { seedCustomerPage } from './testing/customer-page' // B-CP-005
 import { seedOrderMoney } from './testing/order-money' // B-OM-019
+import { seedOrderFiles } from './testing/order-files' // B-OF-030
 import { loadOwnership, loadSchema } from './tools'
 
 /**
@@ -606,6 +607,12 @@ beforeAll(async () => {
   await seedOrderMoney({ db: factory, namespace: 'iso-a' })
   await seedOrderMoney({ db: factory, namespace: 'iso-b' })
   // ---- end B-OM-019
+  // ---- B-OF-030 (order files tab, schema wave "order files 1/1"; no CLI seed change): an OPEN ask on SEED-SO-0002 to the seed's
+  // office member (the first row a copy may repeat) and an OPEN floor ask to A1's team L1-A for photos of a step of SEED-WO-0001,
+  // in each tenant (testing/order-files.ts).
+  await seedOrderFiles({ db: factory, namespace: 'iso-a' })
+  await seedOrderFiles({ db: factory, namespace: 'iso-b' })
+  // ---- end B-OF-030
   // Every seed of both tenants: under a full parallel run this takes more than a minute (B-TH-038: and over two on a machine
   // short of memory, 2026-11-17).
 }, 300_000)
@@ -748,6 +755,7 @@ it('covers every classified table and every runtime role', () => {
     'FabricRoll',
     'FactDaily',
     'FactHourly',
+    'FileAsk', // B-OF-030
     'FileMarkup',
     'FileUploadSession',
     'FirstLoadStep',

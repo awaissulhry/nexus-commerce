@@ -148,6 +148,7 @@ describe('model ownership', () => {
       'FabricRoll',
       'FactDaily',
       'FactHourly',
+      'FileAsk', // B-OF-030 (order files schema wave): an ask for a file on a sales order (file-asks.json)
       'FileMarkup',
       'FileUploadSession',
       'FirstLoadStep',
