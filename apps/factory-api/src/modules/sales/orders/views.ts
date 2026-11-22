@@ -163,6 +163,14 @@ const LIVE_RULES: readonly { readonly match: (type: string) => boolean; readonly
   // A style change one of its DESIGN requests raised moved on (`styleChangeIds`): Still to do.
   { match: (type) => type === 'change_request.changed', parts: ['changes'] },
   // ── end B-OC-008 ──
+  // ── B-OM-008 (order money tab P1-B3, M6-B6; 13-backend §1): what moves the Money tab beyond payment., invoice. and deposit_request. ──
+  // The order settled or not any more (its live field: orderId, the order itself): Totals' state line.
+  { match: (type) => type === 'order.fully_settled' || type === 'order.unsettled', parts: ['money'] },
+  // A refund of one of its credit notes changed, was paid, cancelled or voided (matched by `refundIds`): the refund due.
+  { match: (type) => type.startsWith('refund.'), parts: ['money'] },
+  // A cost posted or reversed on one of its work orders (`workOrderIds`): the Margin section's actual so far.
+  { match: (type) => type === 'work_order_cost.posted' || type === 'work_order_cost.reversed', parts: ['money'] },
+  // ── end B-OM-008 ──
 ]
 
 /** Each declared event the order page re-reads on, with its parts (declared types only, sorted). */
@@ -201,6 +209,10 @@ async function liveOf(db: Reader, order: OrderRow, facts: OrderFacts, depositIds
   // B-OC-008: the product change requests this order's DESIGN requests raised (their change_request.changed moves Still to do).
   const designIds = requests.filter((row) => row.kind === 'DESIGN').map((row) => row.id)
   const styleChangeIds = designIds.length > 0 ? (await db.changeRequest.findMany({ where: { orderChangeRequestId: { in: designIds } }, select: { id: true }, orderBy: { id: 'asc' } })).map((row) => row.id) : []
+  // B-OM-008: the credit notes of its invoices and deposit invoices, and the refunds of them (their events re-read Money).
+  const invoiceIds = facts.invoices.map((row) => row.id)
+  const creditNoteIds = invoiceIds.length > 0 ? (await db.invoice.findMany({ where: { docType: 'TD04', creditOfId: { in: invoiceIds } }, select: { id: true }, orderBy: { id: 'asc' } })).map((row) => row.id) : []
+  const refundIds = creditNoteIds.length > 0 ? (await db.refund.findMany({ where: { creditNoteId: { in: creditNoteIds } }, select: { id: true }, orderBy: { id: 'asc' } })).map((row) => row.id) : []
   const ids = {
     workOrderIds: reachedWorkOrders,
     shipmentIds: facts.shipments.map((row) => row.id),
@@ -210,6 +222,8 @@ async function liveOf(db: Reader, order: OrderRow, facts: OrderFacts, depositIds
     changeIds,
     approvalTaskIds: [...approvalTaskIds], // B-OP-020
     styleChangeIds, // B-OC-008
+    creditNoteIds, // B-OM-008
+    refundIds, // B-OM-008
   }
   const records: PartRecords = { order: [order.id], changes: requestIds, work: reachedWorkOrders, shipments: ids.shipmentIds, money: { invoices: ids.invoiceIds, deposits: ids.depositRequestIds } }
   return { live: { events: ORDER_LIVE_EVENTS.map((entry) => ({ type: entry.type, parts: [...entry.parts] })), ids }, lastChange: await lastChangeOf(db, order, records) }

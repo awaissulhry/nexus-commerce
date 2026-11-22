@@ -361,6 +361,10 @@ export const orderView = output({
       approvalTaskIds: z.array(id()),
       /** B-OC-008: the product change requests this order's DESIGN requests raised (change_request.changed re-reads Still to do). */
       styleChangeIds: z.array(id()),
+      /** B-OM-008 (order money tab): the credit notes (TD04) of its invoices and deposit invoices, drafts included. */
+      creditNoteIds: z.array(id()),
+      /** B-OM-008: the refunds of those credit notes (refund.* re-reads Money). */
+      refundIds: z.array(id()),
     }),
   }),
   /** Per part, the newest change: an office person or the order's own customer by name, "the floor" or "Nexus"; null: none. */

@@ -38,6 +38,8 @@ import { belowCount, type FloorFigures } from '@nexus/factory-domain/costing/pro
 import { flagOf, floorFields, orderFloors, type OrderFloor } from './floor'
 // B-SA-043: the order's extra pieces (cut beyond what it now wants).
 import { madeExtraOf, type MadeExtra } from '../../sales/orders/made-extra'
+// B-OM-007 (order money tab M6-B3): the freight of the orders' shipments counts in the margin now and so far.
+import { shipmentsOfOrdersWhere } from '../../shipping/shipments/orders-of'
 
 /**
  * Order margin from estimate to actual (B-W2a-29; FIN-047; design finance.margins SCR-155 "Order margin, quote to
@@ -115,7 +117,83 @@ interface OrderComputed {
   readonly actualParts: Parts
   readonly started: boolean
   readonly final: boolean
+  /** B-OM-007: the freight counted (in the order's currency) and what is left out. */
+  readonly freight: OrderFreight
 }
+
+// ── B-OM-007 (order money tab M6-B3, B4, B8; 13-backend §1) ──────────────────────────────────────────────────────────────────
+/** An order's freight: what the carriers charged us for its shipments, in its currency; `leftOut` the other currencies. */
+interface OrderFreight {
+  readonly cost: number
+  /** The shipments counted (a cost recorded in the order's currency). */
+  readonly counted: number
+  readonly leftOut: readonly string[]
+}
+const NO_FREIGHT: OrderFreight = Object.freeze({ cost: 0, counted: 0, leftOut: Object.freeze([]) as readonly string[] })
+
+/**
+ * The freight of some orders, one query per kind: each shipment of theirs that is not cancelled and has the carrier's cost
+ * (Shipment.freightCost, office only), shared by the pieces each order carries on it (a shipment of several orders of the same
+ * customer; none yet: its first order's), counted in the order's currency; one in another currency is left out, never converted.
+ */
+async function freightOf(db: Reader, orders: readonly OrderRow[]): Promise<Map<string, OrderFreight>> {
+  const out = new Map<string, OrderFreight>()
+  if (orders.length === 0) return out
+  const shipments = await db.shipment.findMany({ where: { AND: [shipmentsOfOrdersWhere(orders.map((row) => row.id)), { status: { not: 'CANCELLED' } }, { freightCost: { not: null } }] }, select: { id: true, salesOrderId: true, freightCost: true, freightCostCurrency: true }, orderBy: { id: 'asc' } })
+  if (shipments.length === 0) return out
+  const carried = await db.shipmentLine.findMany({ where: { shipmentId: { in: shipments.map((row) => row.id) } }, select: { shipmentId: true, quantity: true, salesOrderLine: { select: { orderId: true } } } })
+  const currencyOf = new Map(orders.map((row) => [row.id, row.currency]))
+  const sums = new Map<string, { cost: number; counted: number; leftOut: Set<string> }>()
+  for (const shipment of shipments) {
+    const pieces = new Map<string, number>()
+    for (const line of carried) if (line.shipmentId === shipment.id) pieces.set(line.salesOrderLine.orderId, (pieces.get(line.salesOrderLine.orderId) ?? 0) + line.quantity)
+    if (pieces.size === 0) pieces.set(shipment.salesOrderId, 1)
+    const keys = [...pieces.keys()].sort()
+    const shares = shareOf(shipment.freightCost!, keys.map((key) => pieces.get(key)!))
+    keys.forEach((orderId, index) => {
+      const currency = currencyOf.get(orderId)
+      if (currency === undefined) return // another order of the customer, not asked here
+      const sum = sums.get(orderId) ?? { cost: 0, counted: 0, leftOut: new Set<string>() }
+      if (shipment.freightCostCurrency === currency) {
+        sum.cost += shares[index]!
+        sum.counted += 1
+      } else sum.leftOut.add(shipment.freightCostCurrency ?? '—')
+      sums.set(orderId, sum)
+    })
+  }
+  for (const [orderId, sum] of sums) out.set(orderId, { cost: sum.cost, counted: sum.counted, leftOut: [...sum.leftOut].sort() })
+  return out
+}
+
+/** The freight's words on the order's profitability. */
+function freightWords(freight: OrderFreight, currency: string): string {
+  const counted =
+    freight.counted > 0
+      ? `Freight counted now and so far: what the carriers charged us for ${freight.counted} shipment(s) of the order (a shipment of several orders shared by the pieces each carries).`
+      : "No freight cost is recorded on the order's shipments yet: it is counted once the carrier's charge is on a shipment."
+  const leftOut = freight.leftOut.length > 0 ? ` Freight in ${freight.leftOut.join(', ')} is left out: the order is in ${currency} and costs are not converted.` : ''
+  return `${counted}${leftOut}`
+}
+
+/** B-OM-007 (M6-B8): what the quoted cost was based on: the cost sheet revision and the day of the first costed line's snapshot. */
+function basedOnOf(lines: readonly LineComputed[], snapshots: ReadonlyMap<string, unknown>) {
+  for (const line of lines) {
+    const snapshot = line.line.quoteLineId ? snapshots.get(line.line.quoteLineId) : null
+    if (snapshot === null || snapshot === undefined || typeof snapshot !== 'object' || Array.isArray(snapshot)) continue
+    const fields = snapshot as { readonly revision?: unknown; readonly computedAt?: unknown }
+    const at = typeof fields.computedAt === 'string' ? new Date(fields.computedAt) : null
+    return { pricedOn: at && !Number.isNaN(at.getTime()) ? businessDate(at) : null, revision: typeof fields.revision === 'number' ? fields.revision : null }
+  }
+  return null
+}
+
+/** The cost now (the estimate) and so far (the actual), freight counted. */
+const estimateCostOf = (computed: OrderComputed): number | null => {
+  const cost = costOf(computed.estimateParts)
+  return cost === null ? null : cost + computed.freight.cost
+}
+const actualCostOf = (computed: OrderComputed): number => totalOf(computed.actualParts) + computed.freight.cost
+// ── end B-OM-007 ──
 
 const partsOfActual = (actual: ReturnType<typeof actualOf>): Parts => ({ material: actual.material, labour: actual.labour, subcontract: actual.subcontract, overhead: actual.overhead, adjustment: actual.adjustment })
 const partsOfMinor = (minor: { material: number; labour: number; subcontract: number; overhead: number }): Parts => ({ material: minor.material, labour: minor.labour, subcontract: minor.subcontract, overhead: minor.overhead, adjustment: 0 })
@@ -169,7 +247,12 @@ function shareFor(figures: WorkOrderFigures, line: LineRow, mix: ReturnType<type
 
 /** The margins of some orders, computed. */
 async function computeOrders(db: Reader, orders: readonly OrderRow[], now: Date): Promise<OrderComputed[]> {
-  if (orders.length === 0) return []
+  return (await computeOrdersWithSnapshots(db, orders, now)).computed
+}
+
+/** computeOrders, and the quote lines' cost snapshots it read (B-OM-007: the profitability's `basedOn`). */
+async function computeOrdersWithSnapshots(db: Reader, orders: readonly OrderRow[], now: Date): Promise<{ computed: OrderComputed[]; snapshots: ReadonlyMap<string, unknown> }> {
+  if (orders.length === 0) return { computed: [], snapshots: new Map() }
   const lines = await db.salesOrderLine.findMany({ where: { orderId: { in: orders.map((row) => row.id) } }, select: LINE_COLUMNS, orderBy: [{ orderId: 'asc' }, { seq: 'asc' }] })
   const snapshots = new Map((await db.quoteLine.findMany({ where: { id: { in: unique(lines.map((line) => line.quoteLineId)) } }, select: { id: true, costSnapshot: true } })).map((row) => [row.id, row.costSnapshot]))
   const styles = new Map((await db.style.findMany({ where: { id: { in: unique(lines.map((line) => line.styleId)) } }, select: { id: true, code: true, name: true } })).map((row) => [row.id, row]))
@@ -179,8 +262,9 @@ async function computeOrders(db: Reader, orders: readonly OrderRow[], now: Date)
   const methods = new Map<string, Awaited<ReturnType<typeof methodInForce>>>()
   for (const companyId of unique(orders.map((row) => row.companyId))) methods.set(companyId, await methodInForce(db, companyId))
   const figures = await workOrderFigures(db, lines.map((line) => line.id), now)
+  const freights = await freightOf(db, orders) // B-OM-007
 
-  return orders.map((order) => {
+  const computed = orders.map((order): OrderComputed => {
     const mineLines = lines.filter((line) => line.orderId === order.id)
     const mineFigures = figures.filter((row) => mineLines.some((line) => row.weights.has(line.id)))
     const costCurrency = companies.get(order.companyId) ?? costingCurrency(null)
@@ -230,8 +314,10 @@ async function computeOrders(db: Reader, orders: readonly OrderRow[], now: Date)
       actualParts: sumParts(computedLines.map((line) => line.actualParts)),
       started,
       final: mineFigures.length > 0 && mineFigures.every((row) => row.done) && computedLines.every((line) => line.uncovered === 0),
+      freight: freights.get(order.id) ?? NO_FREIGHT, // B-OM-007
     }
   })
+  return { computed, snapshots }
 }
 
 const costOf = (parts: Parts | null): number | null => (parts === null ? null : totalOf(parts))
@@ -241,8 +327,9 @@ const marginOf = (value: number, cost: number | null): number | null => (cost ==
 const floorFiguresOfComputed = (computed: OrderComputed): FloorFigures => ({
   final: computed.final,
   value: computed.value,
-  estimateMargin: marginOf(computed.value, costOf(computed.estimateParts)),
-  actualMargin: computed.started && !computed.currencyMismatch ? computed.value - totalOf(computed.actualParts) : null,
+  // B-OM-007: freight counted (one rule for the tab, the list column, Finance › Margins and the low-margin alert).
+  estimateMargin: marginOf(computed.value, estimateCostOf(computed)),
+  actualMargin: computed.started && !computed.currencyMismatch ? computed.value - actualCostOf(computed) : null,
 })
 
 /** B-W2b-416: the floor flag's figures of some orders, computed as this read does (the low-margin alert's finder reads them). */
@@ -258,8 +345,8 @@ export async function floorFiguresOf(db: Reader, orderIds: readonly string[], no
 function rowOf(computed: OrderComputed, floor?: OrderFloor): OrderMarginRowView {
   const { order } = computed
   const quotedCost = costOf(computed.quotedParts)
-  const estimateCost = costOf(computed.estimateParts)
-  const actualCost = totalOf(computed.actualParts)
+  const estimateCost = estimateCostOf(computed) // B-OM-007: freight counted
+  const actualCost = actualCostOf(computed) // B-OM-007
   const actualKnown = computed.started && !computed.currencyMismatch
   const quotedMargin = marginOf(computed.quotedValue, quotedCost)
   const estimateMargin = marginOf(computed.value, estimateCost)
@@ -357,9 +444,10 @@ export async function orderMargins(caller: CommandCaller, query: MarginsQuery) {
 
     const currencies = unique(computed.map((row) => row.order.currency))
     const oneCurrency = currencies.length <= 1
-    const estimates = computed.map((row) => ({ value: row.value, cost: row.currencyMismatch ? null : costOf(row.estimateParts) }))
+    // B-OM-007: the estimate now counts the order's freight.
+    const estimates = computed.map((row) => ({ value: row.value, cost: row.currencyMismatch ? null : estimateCostOf(row) }))
     const both = computed.filter((row) => row.quotedParts !== null && row.estimateParts !== null && !row.currencyMismatch)
-    const lost = both.reduce((sum, row) => sum + (row.quotedValue - totalOf(row.quotedParts!)) - (row.value - totalOf(row.estimateParts!)), 0)
+    const lost = both.reduce((sum, row) => sum + (row.quotedValue - totalOf(row.quotedParts!)) - (row.value - estimateCostOf(row)!), 0)
 
     const byParty = new Map<string, Group & { name: string }>()
     const byStyle = new Map<string, Group & { style: { id: string; code: string; name: string } }>()
@@ -368,7 +456,7 @@ export async function orderMargins(caller: CommandCaller, query: MarginsQuery) {
       map.set(key, { ...group, orders: group.orders + (order ? 1 : 0), value: group.value + value, cost: group.cost === null || cost === null ? null : group.cost + cost, rows: [...group.rows, { value, cost }] })
     }
     for (const row of computed) {
-      const cost = row.currencyMismatch ? null : costOf(row.estimateParts)
+      const cost = row.currencyMismatch ? null : estimateCostOf(row) // B-OM-007 (by customer; by style stays per line, no freight)
       add(byParty, row.order.partyId, () => ({ name: row.partyName, orders: 0, value: 0, cost: 0, rows: [] }), row.value, cost, true)
       const counted = new Set<string>()
       for (const line of row.lines) {
@@ -406,6 +494,18 @@ const stageOf = (value: number, parts: Parts | null, known = true) => {
   }
 }
 
+/** B-OM-007: a stage now or so far with the order's freight in its cost (the parts stay the work's; `freight` says the rest). */
+const stageWithFreight = (value: number, parts: Parts | null, freight: number, known = true) => {
+  const cost = known && parts !== null ? totalOf(parts) + freight : null
+  return {
+    ...stageOf(value, parts, known),
+    cost: asMoney('cost', cost),
+    margin: asMoney('margin', marginOf(value, cost)),
+    marginPct: asMoney('margin', cost === null ? null : marginPctOf(value, cost)),
+    freight: asMoney('cost', known && parts !== null ? freight : null),
+  }
+}
+
 // ── B-SA-043 ──
 /** The order's extra pieces and their share of the actual cost (by garments, as a shared work order's cost is shared). */
 function extraPiecesOf(lines: readonly LineComputed[], extra: readonly MadeExtra[]) {
@@ -436,7 +536,7 @@ export async function orderMargin(caller: CommandCaller, orderId: string): Promi
   const view = await caller.withClient(async (db) => {
     const order = isUuid(orderId) ? await db.salesOrder.findUnique({ where: { id: orderId }, select: ORDER_COLUMNS }) : null
     if (!order || !can(actor, COSTING_VIEW, { companyId: order.companyId, partyId: order.partyId })) throw new NotFoundError('Sales order not found.')
-    const [computed] = await computeOrders(db, [order], now)
+    const { computed: [computed], snapshots } = await computeOrdersWithSnapshots(db, [order], now) // B-OM-007: + the snapshots (basedOn)
     const extra = await madeExtraOf(db, (contextOf(caller) as { readonly tenantId: string }).tenantId, order) // B-SA-043: office only (costing.view)
     const row = rowOf(computed!, (await orderFloors(db, [order.id], now)).get(order.id))
     const { lines, figures } = computed!
@@ -447,7 +547,8 @@ export async function orderMargin(caller: CommandCaller, orderId: string): Promi
     const quotedLeathers = lines.map((line) => line.quotedLeather)
     const words = [
       methodWords(computed!.method, computed!.methodLockedAt ? businessDate(computed!.methodLockedAt) : null),
-      computed!.currencyMismatch ? `The order is in ${order.currency} and its costs in ${computed!.currencyMismatch}: no margin until exchange rates come (W2b).` : null,
+      // B-OM-007 (M6-B4): the honest words (exchange rates exist; the margin does not convert the costs).
+      computed!.currencyMismatch ? `The order is in ${order.currency} and its costs in ${computed!.currencyMismatch}: no margin is worked out, as the costs are not converted into the order's currency.` : null,
       computed!.final
         ? 'Every work order of the order is done: the actual is its final cost.'
         : figures.length === 0
@@ -462,14 +563,17 @@ export async function orderMargin(caller: CommandCaller, orderId: string): Promi
     return {
       ...row,
       quoted: stageOf(computed!.quotedValue, computed!.quotedParts),
-      estimate: stageOf(computed!.value, computed!.estimateParts),
-      actual: stageOf(computed!.value, computed!.actualParts, actualKnown),
+      // B-OM-007: now and so far count the order's freight.
+      estimate: stageWithFreight(computed!.value, computed!.estimateParts, computed!.freight.cost),
+      actual: stageWithFreight(computed!.value, computed!.actualParts, computed!.freight.cost, actualKnown),
       waterfall:
         computed!.quotedParts && computed!.estimateParts
-          ? waterfallOf({ value: computed!.quotedValue, parts: computed!.quotedParts }, { value: computed!.value, parts: computed!.estimateParts }).map((step) => ({ reason: step.reason, amount: asMoney('margin', step.amount) }))
+          ? waterfallOf({ value: computed!.quotedValue, parts: computed!.quotedParts }, { value: computed!.value, parts: computed!.estimateParts, freight: computed!.freight.cost /* B-OM-007 */ }).map((step) => ({ reason: step.reason, amount: asMoney('margin', step.amount) }))
           : null,
       leather: { quoted: asMoney('cost', allKnown(quotedLeathers) && !computed!.currencyMismatch ? quotedLeathers.reduce((sum, value) => sum + value, 0) : null), actual: asMoney('cost', lines.reduce((sum, line) => sum + line.actualLeather, 0)) },
-      freight: { cost: asMoney('cost', null), words: "No freight cost is recorded on an order yet (the carrier's invoices come with supplier invoices): the margin leaves freight out." },
+      // B-OM-007 (M6-B3): the freight counted, in words; and what the quoted cost was based on (M6-B8).
+      freight: { cost: asMoney('cost', computed!.freight.counted > 0 ? computed!.freight.cost : null), words: freightWords(computed!.freight, order.currency) },
+      basedOn: basedOnOf(lines, snapshots),
       // B-SA-043 (R1, review P6-4): the extra pieces' cost line — their share by garments of each line's actual cost.
       extraPieces: extraPiecesOf(lines, extra),
       lines: lines.map((line) => {

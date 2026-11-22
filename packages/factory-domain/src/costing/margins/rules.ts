@@ -24,8 +24,12 @@ import { decimalText } from '../../product/units/units'
 export const MARGIN_PARTS = ['MATERIAL', 'LABOUR', 'SUBCONTRACT', 'OVERHEAD', 'ADJUSTMENT'] as const
 export type MarginPart = (typeof MARGIN_PARTS)[number]
 
-/** Where the margin went, quoted → now: the value's change, then each cost part's (a cost up is a margin down). */
-export const WATERFALL_REASONS = ['PRICE', ...MARGIN_PARTS] as const
+/**
+ * Where the margin went, quoted → now: the value's change, then each cost part's (a cost up is a margin down). B-OM-007 (order
+ * money tab M6-B3): + FREIGHT, what the carriers charged us for the order's shipments (the quote counted none); a step only
+ * when there is freight.
+ */
+export const WATERFALL_REASONS = ['PRICE', ...MARGIN_PARTS, 'FREIGHT'] as const
 export type WaterfallReason = (typeof WATERFALL_REASONS)[number]
 
 /** Cost parts, minor units. */
@@ -178,9 +182,10 @@ export interface WaterfallStep {
 
 /**
  * Where the margin went, from the quoted margin to the one estimated now: the value's change (PRICE), then each cost
- * part's (a cost up is a margin down). The steps add up exactly to now − quoted.
+ * part's (a cost up is a margin down). The steps add up exactly to now − quoted. B-OM-007: `now.freight` (the order's freight
+ * counted now; the quote had none) is its own last step, FREIGHT, only when there is some.
  */
-export function waterfallOf(quoted: { readonly value: number; readonly parts: Parts }, now: { readonly value: number; readonly parts: Parts }): WaterfallStep[] {
+export function waterfallOf(quoted: { readonly value: number; readonly parts: Parts }, now: { readonly value: number; readonly parts: Parts; readonly freight?: number }): WaterfallStep[] {
   const steps: WaterfallStep[] = [
     { reason: 'PRICE', amount: now.value - quoted.value },
     { reason: 'MATERIAL', amount: quoted.parts.material - now.parts.material },
@@ -188,6 +193,8 @@ export function waterfallOf(quoted: { readonly value: number; readonly parts: Pa
     { reason: 'SUBCONTRACT', amount: quoted.parts.subcontract - now.parts.subcontract },
     { reason: 'OVERHEAD', amount: quoted.parts.overhead - now.parts.overhead },
     { reason: 'ADJUSTMENT', amount: quoted.parts.adjustment - now.parts.adjustment },
+    // B-OM-007: the freight counted now (a cost up is a margin down).
+    ...(now.freight !== undefined && now.freight !== 0 ? [{ reason: 'FREIGHT' as const, amount: -now.freight }] : []),
   ]
   return steps.map((step) => ({ ...step, amount: step.amount === 0 ? 0 : step.amount }))
 }

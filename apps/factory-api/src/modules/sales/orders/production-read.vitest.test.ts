@@ -454,3 +454,20 @@ describe('B-OC-002 / B-OC-004: a refused revision by its number; when an approva
   })
 })
 // ── end B-OC-002 / B-OC-004 ──
+
+// ── B-OM-008 (order money tab P1-B3, M6-B6; 13-backend §1) ──
+describe('B-OM-008: the order page re-reads Money on the order settled or not, a refund of its credit notes, a cost on its work orders', () => {
+  const partsOf = (type: string) => ORDER_LIVE_EVENTS.find((entry) => entry.type === type)?.parts ?? []
+
+  it('the order settled, or not any more: money', () => {
+    for (const type of ['order.fully_settled', 'order.unsettled']) expect(partsOf(type), type).toEqual(['money'])
+  })
+
+  it('every refund event and a cost posted or reversed on a work order: money (a cost also moves the work, as before)', () => {
+    for (const type of ['refund.recorded', 'refund.changed', 'refund.paid', 'refund.cancelled', 'refund.voided']) expect(partsOf(type), type).toEqual(['money'])
+    for (const type of ['work_order_cost.posted', 'work_order_cost.reversed']) expect(partsOf(type), type).toContain('money')
+    // payment.written_off was in the payment. prefix already.
+    expect(partsOf('payment.written_off')).toEqual(expect.arrayContaining(['money', 'shipments']))
+  })
+})
+// ── end B-OM-008 ──

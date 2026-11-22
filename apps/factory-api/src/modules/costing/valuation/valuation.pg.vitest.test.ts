@@ -235,12 +235,13 @@ describe('order margin from estimate to actual (FIN-047)', () => {
     // SO-0001: no work order: the estimate is the quoted cost; nothing spent yet, so no actual margin.
     expect(so1).toMatchObject({ quotedValue: 504_000, value: 504_000, quotedCost: 360_600, quotedMargin: 143_400, quotedMarginPct: '28.4524', estimateCost: 360_600, estimateMargin: 143_400, marginChange: 0, actualCost: 0, actualMargin: null, actualMarginPct: null, workOrders: 0, started: false, final: false, belowFloor: false, method: 'UNDECIDED', provisional: true })
     // SO-0002: no cost at quote; SEED-WO-0001 makes all 7 at its estimate at release 2,037.78; 319.94 spent so far.
-    expect(so2).toMatchObject({ quotedCost: null, quotedMargin: null, estimateCost: 203_778, estimateMargin: 76_222, estimateMarginPct: '27.2221', actualCost: 31_994, actualMargin: 248_006, actualMarginPct: '88.5736', marginChange: null, workOrders: 1, started: true, final: false })
+    // B-OM-007 (order money tab M6-B3): its shipment SH-0001's freight, 18.50, counts now and so far (before: left out).
+    expect(so2).toMatchObject({ quotedCost: null, quotedMargin: null, estimateCost: 205_628, estimateMargin: 74_372, estimateMarginPct: '26.5614', actualCost: 33_844, actualMargin: 246_156, actualMarginPct: '87.9129', marginChange: null, workOrders: 1, started: true, final: false })
     expect(so3).toMatchObject({ quotedCost: null, estimateCost: null, workOrders: 1, started: false })
-    // (5,040.00 − 3,606.00 + 2,800.00 − 2,037.78) ÷ 7,840.00.
-    // B-W2b-416: no order is below its floor (SO-0001 28.5 %, SO-0002 27.2 %; SO-0003's margin is not known).
-    expect(answer.tiles).toEqual({ averageMarginPct: '28.013', belowFloor: 0, marginLostSinceQuote: 0, orders: 3, unknown: 1, currency: 'EUR', words: null })
-    expect(answer.byCustomer).toEqual([expect.objectContaining({ orders: 3, value: 952_000, estimateCost: null, marginPct: '28.013' })])
+    // (5,040.00 − 3,606.00 + 2,800.00 − 2,037.78 − 18.50 of freight, B-OM-007) ÷ 7,840.00.
+    // B-W2b-416: no order is below its floor (SO-0001 28.5 %, SO-0002 26.6 %; SO-0003's margin is not known).
+    expect(answer.tiles).toEqual({ averageMarginPct: '27.777', belowFloor: 0, marginLostSinceQuote: 0, orders: 3, unknown: 1, currency: 'EUR', words: null })
+    expect(answer.byCustomer).toEqual([expect.objectContaining({ orders: 3, value: 952_000, estimateCost: null, marginPct: '27.777' })])
     expect(answer.byStyle.map((row: Json) => [row.style.code, row.value, row.estimateCost, row.marginPct])).toEqual([
       ['SEED-JKT-01', 504_000, 360_600, '28.4524'],
       ['SEED-JKT-02', 280_000, 203_778, '27.2221'],
@@ -269,11 +270,11 @@ describe('order margin from estimate to actual (FIN-047)', () => {
     const so1 = answer.rows.find((row: Json) => row.order.number === 'SEED-SO-0001')
     expect(so1).toMatchObject({ quotedValue: 504_000, quotedMarginPct: '28.4524', estimateMarginPct: '28.4524' })
     expect(keysOf(answer).filter((name) => COST.test(name) || AMOUNT.test(name))).toEqual([])
-    expect(answer.tiles.averageMarginPct).toBe('28.013')
+    expect(answer.tiles.averageMarginPct).toBe('27.777') // B-OM-007: SO-0002's freight counted
     const detail = await ok('pricedSales', 'GET', `/costing/margins/orders/${await orderOf('SEED-SO-0002')}`)
     expect(detail.waterfall).toBeNull()
     expect(keysOf(detail).filter((name) => COST.test(name) || AMOUNT.test(name))).toEqual([])
-    expect(detail.estimate.marginPct).toBe('27.2221')
+    expect(detail.estimate.marginPct).toBe('26.5614')
     // B-CP-011 (the money wall): Sales holds no grain: the same rows without the value, the margin % or a cost.
     const blind = await ok('sales', 'GET', '/costing/margins')
     const blindSo1 = (blind.rows as Json[]).find((row) => row.order.number === 'SEED-SO-0001')!
@@ -324,8 +325,9 @@ describe('order margin from estimate to actual (FIN-047)', () => {
     expect(so1.words).toMatch(/1 piece\(s\) were closed short/)
 
     const so2 = await ok('finance', 'GET', `/costing/margins/orders/${await orderOf('SEED-SO-0002')}`)
-    // Quoted 2,800.00 − 1,960.00 = 840.00 (30 %); now 762.22: the material came in 341.52 under, the labour 419.30 over it.
-    expect(so2).toMatchObject({ quotedCost: 196_000, quotedMargin: 84_000, quotedMarginPct: '30', marginChange: -7_778 })
+    // Quoted 2,800.00 − 1,960.00 = 840.00 (30 %); now 743.72: the material came in 341.52 under, the labour 419.30 over it, and
+    // B-OM-007 (order money tab M6-B3): the 18.50 of freight of its shipment counted (the quote had none) — its own last step.
+    expect(so2).toMatchObject({ quotedCost: 196_000, quotedMargin: 84_000, quotedMarginPct: '30', marginChange: -9_628 })
     expect(so2.waterfall).toEqual([
       { reason: 'PRICE', amount: 0 },
       { reason: 'MATERIAL', amount: 34_152 },
@@ -333,8 +335,12 @@ describe('order margin from estimate to actual (FIN-047)', () => {
       { reason: 'SUBCONTRACT', amount: 0 },
       { reason: 'OVERHEAD', amount: 0 },
       { reason: 'ADJUSTMENT', amount: 0 },
+      { reason: 'FREIGHT', amount: -1_850 },
     ])
-    expect((await ok('finance', 'GET', '/costing/margins')).tiles).toMatchObject({ averageMarginPct: '27.9881', marginLostSinceQuote: 19_728, unknown: 1 })
+    expect(so2.quoted.margin + so2.waterfall.reduce((sum: number, step: Json) => sum + step.amount, 0)).toBe(so2.estimate.margin)
+    expect(so2.estimate).toMatchObject({ cost: 205_628, freight: 1_850 })
+    expect(so2.freight).toMatchObject({ cost: 1_850, words: expect.stringMatching(/Freight counted now and so far/) })
+    expect((await ok('finance', 'GET', '/costing/margins')).tiles).toMatchObject({ averageMarginPct: '27.7388', marginLostSinceQuote: 21_578, unknown: 1 })
 
     // The six jackets' standards frozen from the cost sheet: the work order is now planned on them (2,037.78 again).
     const skus = await admin<{ id: string }>(`SELECT v.id FROM "Variant" v JOIN "Style" s ON s.id = v."styleId" WHERE s.code = 'SEED-JKT-02' ORDER BY v.sku`)
@@ -356,6 +362,28 @@ describe('order margin from estimate to actual (FIN-047)', () => {
     expect(21_756 + 36_580).toBe(await ledgerValue())
     expect(32_614).toBe(await wipValue())
     // The order's actual follows (the estimate does not: 229.64 of material is still under the plan's 1,618.48).
-    expect(await marginRow('SEED-SO-0002')).toMatchObject({ actualCost: 32_614, actualMarginPct: '88.3521', estimateCost: 203_778 })
+    // B-OM-007: the order's actual and estimate count its 18.50 of freight.
+    expect(await marginRow('SEED-SO-0002')).toMatchObject({ actualCost: 34_464, actualMarginPct: '87.6914', estimateCost: 205_628 })
+  })
+
+  // ── B-OM-007 (order money tab M6-B3, B4, B8): freight in another currency is left out, in words; what the quoted cost was based on ──
+  it('B-OM-007: a freight cost in another currency is left out and said; freight is a cost only for the cost grain', async () => {
+    const order = await orderOf('SEED-SO-0002')
+    await admin(`UPDATE "Shipment" SET "freightCostCurrency" = 'USD' WHERE "salesOrderId" = $1 AND "freightCost" IS NOT NULL`, [order])
+    try {
+      const so2 = await ok('finance', 'GET', `/costing/margins/orders/${order}`)
+      expect(so2.freight).toEqual({ cost: null, words: expect.stringMatching(/No freight cost is recorded.*Freight in USD is left out: the order is in EUR/) })
+      // The estimate is the work's cost again (as before freight counted).
+      expect(so2.estimate).toMatchObject({ cost: 203_778, freight: 0 })
+      expect(so2.waterfall.some((step: Json) => step.reason === 'FREIGHT')).toBe(false)
+      // A role that reads margin % but no cost: no freight figure.
+      const priced = await ok('pricedSales', 'GET', `/costing/margins/orders/${order}`)
+      expect(priced.freight).not.toHaveProperty('cost')
+      expect(priced.estimate).not.toHaveProperty('freight')
+      // The quote of SO-0002 was costed by no cost sheet: nothing to base it on.
+      expect(so2).toHaveProperty('basedOn')
+    } finally {
+      await admin(`UPDATE "Shipment" SET "freightCostCurrency" = 'EUR' WHERE "salesOrderId" = $1 AND "freightCost" IS NOT NULL`, [order])
+    }
   })
 })
