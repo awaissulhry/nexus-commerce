@@ -238,7 +238,9 @@ describe('F-SA-237 — the order files body: groups by source, who can see each 
     for (const locale of LOCALES) {
       const html = renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(OrderFilesBody, { model: { read: READ, problem: null, selected: [], canShare: true }, party: { name: 'Brand Alpha' }, actions: { onOrderMessage: () => undefined } })))
       const t = createTranslator(locale, messagesFor(locale, ['record-thread-files-view'])['record-thread-files-view']!)
-      for (const words of [t('order.audience.CUSTOMER_CAN_SEE'), t('order.audience.OFFICE_ONLY'), t('order.source.thread'), t('order.alsoOn', { record: 'SO-2026-0151' }), t('order.alsoOnOther', { count: 1 }), t('order.inThread'), t('order.leftOut', { count: 3 }), locale === 'en' ? 'Lines &amp; artwork' : 'Righe e grafiche']) expect(html, words).toContain(words)
+      // F-OF-102 (P0-B13): the chip speaks the dock's one word per meaning — Customer · Office only (record-thread-files `audience.*`).
+      const f = createTranslator(locale, messagesFor(locale, ['record-thread-files'])['record-thread-files']!)
+      for (const words of [f('audience.customer'), f('audience.office'), t('order.source.thread'), t('order.alsoOn', { record: 'SO-2026-0151' }), t('order.alsoOnOther', { count: 1 }), t('order.inThread'), t('order.leftOut', { count: 3 }), locale === 'en' ? 'Lines &amp; artwork' : 'Righe e grafiche']) expect(html, words).toContain(words)
       expect(html.match(/\border\.[a-zA-Z]+/)?.[0] ?? null, locale).toBeNull()
       expect(html).not.toContain('Returns')
     }

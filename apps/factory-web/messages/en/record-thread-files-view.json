@@ -64,7 +64,6 @@
     "one": "Choose {name}"
   },
   "bulk": {
-    "noun": "files",
     "download": "Download {count}",
     "share": "Share with {party} ({count})",
     "officeOnly": "Make office only ({count})",
@@ -72,11 +71,14 @@
     "onHold_one": "One chosen file is under a legal hold: Delete leaves it.",
     "onHold_other": "{count} chosen files are under a legal hold: Delete leaves them.",
     "noneDownload": "None of the chosen files can be downloaded yet.",
-    "noShareRight": "Changing who sees a file needs the right to share files outside the office.",
     "allShared": "{party} already sees every chosen file.",
     "allOffice": "Every chosen file is office only already.",
-    "noDeleteRight": "Deleting files needs the right to delete a file.",
-    "allHeld": "A legal hold keeps every chosen file."
+    "allHeld": "A legal hold keeps every chosen file.",
+    "chosen_one": "file chosen",
+    "chosen_other": "files chosen",
+    "clear": "Clear",
+    "noun_one": "file",
+    "noun_other": "files"
   },
   "group": {
     "kind": {
@@ -125,10 +127,6 @@
       "order": "on the order",
       "from": "from {record}"
     },
-    "audience": {
-      "CUSTOMER_CAN_SEE": "Shared with the customer",
-      "OFFICE_ONLY": "Office only"
-    },
     "alsoOn": "also on {record}",
     "alsoOnOther_one": "also on {count} other record",
     "alsoOnOther_other": "also on {count} other records",
@@ -174,7 +172,9 @@
     "download": "Download",
     "downloadOf": "Download {name}",
     "worksheet": "Worksheet · line {line} · v{version}",
-    "largePdf": "Large PDF: open it to see it"
+    "largePdf": "Large PDF: open it to see it",
+    "addedByYou": "added by you",
+    "checking": "Being checked"
   },
   "tab": {
     "none": "No files yet.",

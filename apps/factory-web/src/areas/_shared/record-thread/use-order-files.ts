@@ -18,6 +18,8 @@ import { readOrderFilePreviews } from './api' // F-OP-126
 import { openWorksheet } from '../../sales/mtm/api' // F-OP-125 (B5): a worksheet opens by the made-to-measure route (recorded there)
 import type { ThreadFile } from '../../../lib/record-thread/files/model' // F-OP-215: the dock's files line over the order's set
 import { FILE_KINDS, type FileKind } from '../../../record-panels/model' // F-OP-215
+import type { FileAudience } from '../../../record-panels/model' // F-OF-102
+import { sharedWithCustomer } from '../../../lib/record-thread/files-view/model' // F-OF-102
 
 /**
  * F-SA-237 (sales page plan N9, P14) — a sales order's files, the container part the order's Files tab AND the thread's Files window
@@ -187,8 +189,9 @@ export function stripFilesOf(read: OrderFilesRead, partyId: string | null): Thre
     sizeBytes: file.sizeBytes,
     status: 'AVAILABLE',
     quarantineReason: null,
-    visibility: file.audience === 'CUSTOMER_CAN_SEE' ? ['OFFICE', 'PARTNER'] : ['OFFICE'],
-    partyId: file.audience === 'CUSTOMER_CAN_SEE' ? partyId : null,
+    // F-OF-102 (F6-B2): the tile's marks follow the TRUE audiences when the read says them (a floor or link file is not "Office only").
+    visibility: file.audiences ? ['OFFICE', ...file.audiences.map((one): FileAudience => (one === 'CUSTOMER' ? 'PARTNER' : one))] : file.audience === 'CUSTOMER_CAN_SEE' ? ['OFFICE', 'PARTNER'] : ['OFFICE'],
+    partyId: sharedWithCustomer(file) ? partyId : null,
     createdAt: file.at,
     versionNo: file.versionNo,
     seriesId: file.id,

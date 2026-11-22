@@ -520,3 +520,24 @@ export function tabAnswerOf(read: OrderFilesRead, counted: Pick<OrderCounted, 'l
   return { parts, tone: held > 0 ? 'warning' : 'info' }
 }
 // ── end F-OF-101
+
+// ── F-OF-102 (order FILES tab, 10-design §2, §5; F6-B2, P0-B13, F4-B4): the TRUE chip and the held files ──
+/** A card's audience chip in the dock's words (record-thread-files `audience.*`): Office only · Customer · Floor · Link. */
+export type OrderChipMark = 'office' | 'customer' | 'floor' | 'link'
+
+/**
+ * Who sees a file, truly: the read's `audiences` when it says them (a floor or link file is no longer "Office only"; an invoice the
+ * customer reads says Customer), else the two-state audience it has today — one word per meaning either way (P0-B13).
+ */
+export function chipMarksOf(file: Pick<OrderFile, 'audience' | 'audiences'>): OrderChipMark[] {
+  if (!file.audiences) return [file.audience === 'CUSTOMER_CAN_SEE' ? 'customer' : 'office']
+  const marks: OrderChipMark[] = []
+  if (file.audiences.includes('CUSTOMER')) marks.push('customer')
+  if (file.audiences.includes('FLOOR')) marks.push('floor')
+  if (file.audiences.includes('LINK')) marks.push('link')
+  return marks.length > 0 ? marks : ['office']
+}
+
+/** Why the reader's own upload is held, in the body's words (record-thread-files-view `keep.*`). */
+export const heldReasonKey = (held: Pick<OrderHeldFile, 'reason'>): string => (held.reason === 'SCAN_PENDING' ? 'keep.scanPending' : held.reason === 'INFECTED' ? 'keep.infected' : 'keep.held')
+// ── end F-OF-102

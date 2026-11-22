@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
 import Link from 'next/link' // F-OF-101: a block's door "Open on … ›" is a real link
-import { AudioLines, BadgeCheck, ChevronDown, ChevronUp, Copy, Download, FileText, FolderOpen, Image as ImageIcon, Lock, LockOpen, Paperclip, Receipt, RotateCcw, Share2, ShieldOff, Trash2 } from 'lucide-react'
+import { AudioLines, BadgeCheck, ChevronDown, ChevronUp, Copy, Download, FileText, FolderOpen, Image as ImageIcon, Lock, LockOpen, Paperclip, Receipt, RotateCcw, Share2, ShieldAlert, ShieldOff, Trash2 } from 'lucide-react'
 import { Banner, Disclosure, EmptyState, Field } from '@nexus/ui/components'
 import { BulkActionBar } from '@nexus/ui/patterns'
 import { Button, Checkbox, RadioCard, Select, Skeleton, Tag } from '@nexus/ui/primitives'
@@ -24,6 +24,8 @@ import { typeKey } from '../../../../areas/search/model'
 import { orderBulkReach, sourceOf, type OrderFile, type OrderFilesModel } from '../model'
 // F-OF-101 (order FILES tab): the groups as the tab draws them (Shipments and Invoices apart, one block per source), the counted line.
 import { orderChoosableOf, orderCountedOf, orderSectionsOf, type OrderCounted, type OrderFilesBlock } from '../model'
+// F-OF-102: the TRUE chip (Office only · Customer · Floor · Link) and the reader's own held uploads.
+import { chipMarksOf, heldReasonKey, type OrderHeldFile } from '../model'
 // F-OP-125: the order's file cards (kind, type word, who added it, the MTM worksheets, the keys' grid step).
 import { addedByOf, cardKindOf, cardStep, typeLabelOf, worksheetCardId, type OrderWorksheet } from '../model'
 import type { CardPreview } from '../model' // F-OP-126
@@ -257,21 +259,26 @@ function View({ model, actions, slots }: { model: FilesViewModel; actions?: File
                     />
                   </div>
                   {chosen.length > 0 && (
-                    <BulkActionBar count={chosen.length} noun={t('bulk.noun')} onClear={() => actions?.onSelect?.([])}>
+                    <BulkActionBar count={chosen.length} noun={t('bulk.noun', { count: chosen.length }) /* F-OF-102 (P0-B4): "1 file" */} onClear={() => actions?.onSelect?.([])}>
                       <Button size="sm" heldReason={reach.download.length === 0 ? t('bulk.noneDownload') : null} onClick={() => actions?.onBulk?.('download', reach.download)}>
                         <Download size={14} aria-hidden /> {t('bulk.download', { count: reach.download.length })}
                       </Button>
-                      {model.party && (
-                        <Button size="sm" heldReason={!model.can.share ? t('bulk.noShareRight') : reach.share.length === 0 ? t('bulk.allShared', { party: model.party.name }) : null} onClick={() => actions?.onBulk?.('share', reach.share)}>
+                      {/* F-OF-102 (F6-B5): a door the reader has no right to is hidden; held with words only by what is chosen. */}
+                      {model.party && model.can.share && (
+                        <Button size="sm" heldReason={reach.share.length === 0 ? t('bulk.allShared', { party: model.party.name }) : null} onClick={() => actions?.onBulk?.('share', reach.share)}>
                           <Share2 size={14} aria-hidden /> {t('bulk.share', { party: model.party.name, count: reach.share.length })}
                         </Button>
                       )}
-                      <Button size="sm" heldReason={!model.can.share ? t('bulk.noShareRight') : reach.officeOnly.length === 0 ? t('bulk.allOffice') : null} onClick={() => actions?.onBulk?.('officeOnly', reach.officeOnly)}>
-                        <ShieldOff size={14} aria-hidden /> {t('bulk.officeOnly', { count: reach.officeOnly.length })}
-                      </Button>
-                      <Button size="sm" variant="danger" heldReason={!model.can.delete ? t('bulk.noDeleteRight') : reach.remove.length === 0 ? t('bulk.allHeld') : null} onClick={() => actions?.onBulk?.('remove', reach.remove)}>
-                        <Trash2 size={14} aria-hidden /> {t('bulk.remove', { count: reach.remove.length })}
-                      </Button>
+                      {model.can.share && (
+                        <Button size="sm" heldReason={reach.officeOnly.length === 0 ? t('bulk.allOffice') : null} onClick={() => actions?.onBulk?.('officeOnly', reach.officeOnly)}>
+                          <ShieldOff size={14} aria-hidden /> {t('bulk.officeOnly', { count: reach.officeOnly.length })}
+                        </Button>
+                      )}
+                      {model.can.delete && (
+                        <Button size="sm" variant="danger" heldReason={reach.remove.length === 0 ? t('bulk.allHeld') : null} onClick={() => actions?.onBulk?.('remove', reach.remove)}>
+                          <Trash2 size={14} aria-hidden /> {t('bulk.remove', { count: reach.remove.length })}
+                        </Button>
+                      )}
                       {model.can.upload && actions?.onUseOn && (
                         <Button size="sm" heldReason={carry.length === 0 ? t('bulk.noneDownload') : null} onClick={() => actions.onUseOn?.(carry)}>
                           <Copy size={14} aria-hidden /> {useOnWords('useOn.bulk', { count: carry.length })}
@@ -627,26 +634,35 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
         <>
           {place === 'window' && choosable.length > 0 && !customer && (
             <div className="fw-rtv-tools">
-              <Checkbox label={allChosen ? t('select.none', { count: choosable.length }) : t('select.all', { count: choosable.length })} checked={allChosen} onChange={(event) => actions?.onOrderSelect?.(event.target.checked ? choosable.map((file) => file.id) : [])} />
+              {/* F-OF-102 (P0-B5): one Clear only — the bar's; the box says "Choose all" (unticking it clears too). */}
+              <Checkbox label={t('select.all', { count: choosable.length })} checked={allChosen} onChange={(event) => actions?.onOrderSelect?.(event.target.checked ? choosable.map((file) => file.id) : [])} />
             </div>
           )}
           {chosen.length > 0 && !customer && (
-            <BulkActionBar count={chosen.length} noun={t('bulk.noun')} onClear={() => actions?.onOrderSelect?.([])}>
+            // F-OF-102 (P0-B4): "1 file chosen" / "3 files chosen"; one Clear, in the reader's language.
+            <BulkActionBar count={chosen.length} noun={t('bulk.chosen', { count: chosen.length })}>
               <Button size="sm" onClick={() => actions?.onOrderBulk?.('download', reach.download)}>
                 <Download size={14} aria-hidden /> {t('bulk.download', { count: reach.download.length })}
               </Button>
-              {party && (
-                <Button size="sm" heldReason={!model.canShare ? t('bulk.noShareRight') : reach.share.length === 0 ? t('order.noneOwn') : model.busy ? t('upload.busy') : null} onClick={() => actions?.onOrderBulk?.('share', reach.share)}>
+              {/* F-OF-102 (F6-B5, P0-B3): hidden without the right to share; held with words only by what is chosen. */}
+              {party && model.canShare && (
+                <Button size="sm" heldReason={reach.share.length === 0 ? t('order.noneOwn') : model.busy ? t('upload.busy') : null} onClick={() => actions?.onOrderBulk?.('share', reach.share)}>
                   <Share2 size={14} aria-hidden /> {t('order.shareOwn', { party: party.name, count: reach.share.length })}
                 </Button>
               )}
+              <Button size="sm" variant="quiet" onClick={() => actions?.onOrderSelect?.([])}>
+                {t('bulk.clear')}
+              </Button>
             </BulkActionBar>
           )}
           <div ref={listRef} className="fw-of-groups" onKeyDown={keys}>
             {sections.map((section) => {
               const title = section.words ? (locale === 'it' ? section.words.it : section.words.en) : t(`order.group.${section.key}`)
               const widest = Math.max(1, ...section.blocks.map((block) => Math.min(4, block.files.length)), Math.min(4, section.worksheets.length))
-              const extras = section.worksheets.map((sheet) => <WorksheetCard key={sheet.documentId} sheet={sheet} actions={actions} words={words} />)
+              const extras = [
+                ...section.worksheets.map((sheet) => <WorksheetCard key={sheet.documentId} sheet={sheet} actions={actions} words={words} />),
+                ...section.held.map((held) => <HeldCard key={held.id} held={held} words={words} />), // F-OF-102: the reader's own, held by the scan
+              ]
               const last = section.blocks[section.blocks.length - 1]
               const extrasInLast = !!last && last.head === null
               return (
@@ -656,6 +672,12 @@ function OrderFilesView({ model, party, actions, place = 'window' }: { model: Or
                     <h3>
                       {title} <span className="fw-of-n">{section.count}</span>
                     </h3>
+                    {/* F-OF-102 (F7-B10): everyone else's files the virus scan holds, counted — never named, never opened. */}
+                    {section.checking > 0 && (
+                      <span className="fw-of-mu">
+                        <ShieldAlert size={12} aria-hidden /> {t('group.checking', { count: section.checking })}
+                      </span>
+                    )}
                   </div>
                   {section.blocks.map((block) => (
                     <OrderBlock key={block.key} block={block} orderId={read.order.id} customer={customer} model={model} actions={actions} words={words} extras={block === last && extrasInLast ? extras : []} onChoose={choose} />
@@ -813,7 +835,13 @@ function OrderCard({ file, orderId, customer, older, chosen, onChoose, actions, 
           <span className="fw-rtv-marks">
             {/* F-SA-238: the customer reads where it sits by its own numbers only (none: no chip), never who else can see it. */}
             {customer ? file.from.label && source.key === 'order.source.from' && <Tag tone="neutral">{t(source.key, source.params)}</Tag> : <Tag tone="neutral">{t(source.key, source.params)}</Tag>}
-            {!customer && <Tag tone={file.audience === 'CUSTOMER_CAN_SEE' ? 'info' : 'neutral'}>{t(`order.audience.${file.audience}`)}</Tag>}
+            {/* F-OF-102 (F6-B2, P0-B13): the TRUE chip in the dock's words — a floor or link file is no longer "Office only". */}
+            {!customer &&
+              chipMarksOf(file).map((mark) => (
+                <Tag key={mark} tone={mark === 'customer' ? 'info' : 'neutral'}>
+                  {fileWords(`audience.${mark}`)}
+                </Tag>
+              ))}
             {file.bodyData && <Tag tone="warning">{fileWords('sheet.recorded')}</Tag>}
             {/* F-OF-101 (B-OF-001, B-OF-003): a fiscal copy and how long it is kept, a legal hold, a paper kept by law — said, never acted on here. */}
             {!customer && file.fiscal && <Tag tone="neutral">{fileWords('kind.FISCAL_ARCHIVE')}</Tag>}
@@ -848,6 +876,29 @@ function OrderCard({ file, orderId, customer, older, chosen, onChoose, actions, 
               )}
             </span>
           )}
+        </div>
+      </div>
+    </li>
+  )
+}
+
+/**
+ * F-OF-102 (B-OF-002; F7-B10, F5-B6): one of the reader's OWN uploads the virus scan still holds — its name, when, "added by you" and why
+ * in words; never opened, never downloaded, never chosen (a floor photo being checked is only counted in its group's head).
+ */
+function HeldCard({ held, words }: { held: OrderHeldFile; words: CardWords }) {
+  const { t, locale } = words
+  return (
+    <li className="fw-rtv-card fw-of-card is-held" data-held-id={held.id}>
+      <div className="fw-of-card-in">
+        <span className="fw-rtv-card-preview fw-of-checking" aria-hidden>
+          <ShieldAlert size={20} aria-hidden />
+          <span>{t('card.checking')}</span>
+        </span>
+        <div className="fw-of-card-bd">
+          <span className="fw-of-card-title">{held.name}</span>
+          <span className="fw-rtv-card-meta">{[typeLabelOf({ name: held.name, contentType: '' }), formatDate(held.at, { locale }), t('card.addedByYou')].filter(Boolean).join(' · ')}</span>
+          <span className="fw-rtv-card-meta">{t(heldReasonKey(held))}</span>
         </div>
       </div>
     </li>

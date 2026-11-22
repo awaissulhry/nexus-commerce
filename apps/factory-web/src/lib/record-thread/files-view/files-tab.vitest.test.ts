@@ -1,13 +1,23 @@
 import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { formatDate } from '../../i18n/format'
 import { LOCALES } from '../../i18n/locales'
 import { createTranslator, messagesFor } from '../../i18n/messages'
 import { render, textOf } from '../parts/testing'
 import { filesAnswerOf, orderChoosableOf, orderCountedOf, orderGroupsShown, orderSectionsOf, orderShownFilesOf, tabAnswerOf, type OrderFile, type OrderFilesRead } from './model'
-import { OrderFilesBody } from './view/FilesView'
+import { chipMarksOf, heldReasonKey } from './model' // F-OF-102
+import { FilesView, OrderFilesBody } from './view/FilesView'
+import type { ThreadFile } from '../files/model'
 import { orderFileHrefOf } from '../../../areas/_shared/record-thread/order-file-href'
+
+// The DS Modal opens only in a browser (after hydration, in a portal): here it draws in place, so a window's words are read.
+vi.mock('@nexus/ui/components', async (original) => {
+  const actual = await original<typeof import('@nexus/ui/components')>()
+  const Modal = ({ open, title, subtitle, children, footer }: { open: boolean; title?: unknown; subtitle?: unknown; children?: unknown; footer?: unknown }) =>
+    open ? createElement('section', { role: 'dialog' }, createElement('h2', null, title as never), createElement('p', null, subtitle as never), children as never, footer as never) : null
+  return { ...actual, Modal }
+})
 
 /**
  * F-OF-101 (order FILES tab, 10-design §1–§5; 15-steps W1) — the shell: the groups as the tab draws them (Shipments and Invoices & credit
@@ -120,7 +130,7 @@ describe('F-OF-101: the counted line and the answers', () => {
   })
 
   it('the section\'s answer in the reader\'s numbers; the tab\'s answer from the read\'s total', () => {
-    expect(filesAnswerOf(orderSectionsOf(READ))).toEqual({ count: 8, shared: 1, newest: '2026-11-14T10:00:00Z' })
+    expect(filesAnswerOf(orderSectionsOf(READ))).toEqual({ count: 9, shared: 1, newest: '2026-11-14T10:00:00Z' })
     expect(tabAnswerOf(READ, { locked: 4 })).toEqual({ parts: [{ key: 'tab.files', params: { count: 10 } }], tone: 'info' })
     const none: OrderFilesRead = { ...READ, groups: [], total: 0 }
     expect(tabAnswerOf(none, { locked: 0 }).parts).toEqual([{ key: 'tab.none' }])
@@ -196,5 +206,99 @@ describe('F-OF-101: the tab\'s layout — the Production kit in place, one answe
     const container = source('../../../areas/_shared/record-thread/use-order-files.ts')
     expect(container).toContain('const listed = useMemo(() => (read ? orderShownFilesOf(orderSectionsOf(read)) : null), [read])')
     expect(container).toContain('...(input.hrefOf ? { orderHrefOf: input.hrefOf } : {}), // F-OF-101')
+  })
+})
+
+// ---- F-OF-102 (order FILES tab, W1): the TRUE chip, the held files, the small bugs (P0-B3/B4/B5, F6-B5) -------------------------
+describe('F-OF-102: the true chip — Office only · Customer · Floor · Link, one word per meaning', () => {
+  it('the read\'s audiences when it says them; else the two-state audience of today', () => {
+    expect(chipMarksOf({ audience: 'OFFICE_ONLY' })).toEqual(['office'])
+    expect(chipMarksOf({ audience: 'CUSTOMER_CAN_SEE' })).toEqual(['customer'])
+    // F6-B2: a floor or link file is no longer "Office only"; F4-B4: an invoice the customer reads says Customer.
+    expect(chipMarksOf({ audience: 'OFFICE_ONLY', audiences: ['FLOOR'] })).toEqual(['floor'])
+    expect(chipMarksOf({ audience: 'OFFICE_ONLY', audiences: ['LINK', 'CUSTOMER'] })).toEqual(['customer', 'link'])
+    expect(chipMarksOf({ audience: 'CUSTOMER_CAN_SEE', audiences: [] })).toEqual(['office'])
+  })
+
+  it('drawn in the dock\'s words, in both languages', () => {
+    const read: OrderFilesRead = { ...READ, groups: [{ key: 'ORDER', words: { en: 'Order & thread', it: 'Ordine e conversazione' }, files: [file('floor', { audiences: ['FLOOR'] }), file('link', { audiences: ['LINK'] })], leftOut: 0, measurementsLeftOut: 0 }], total: 2 }
+    for (const locale of LOCALES) {
+      const f = createTranslator(locale, messagesFor(locale, ['record-thread-files'])['record-thread-files']!)
+      const text = textOf(render(createElement(OrderFilesBody, { model: { read, problem: null, selected: [], canShare: true }, party: null }), locale))
+      expect(text).toContain(f('audience.floor'))
+      expect(text).toContain(f('audience.link'))
+      expect(text).not.toContain(f('audience.office'))
+    }
+  })
+})
+
+describe('F-OF-102: files held by the virus scan — the reader\'s own as a card, everyone else\'s counted', () => {
+  const held: OrderFilesRead = {
+    ...READ,
+    groups: [
+      { key: 'ORDER', words: { en: 'Order & thread', it: 'Ordine e conversazione' }, files: [file('carton')], leftOut: 0, measurementsLeftOut: 0 },
+      { key: 'LINES', words: { en: 'Lines & artwork', it: 'Righe e grafiche' }, files: [], leftOut: 0, measurementsLeftOut: 0, heldCount: 2 },
+      { key: 'PRODUCTION', words: { en: 'Production', it: 'Produzione' }, files: [], leftOut: 0, measurementsLeftOut: 0, heldCount: 1 },
+    ],
+    held: [{ id: 'h1', name: 'SEED-JKT-02 pattern size 52.pdf', group: 'LINES', at: '2026-11-22T09:31:00Z', reason: 'SCAN_PENDING' }],
+    total: 1,
+  }
+
+  it('a group with only held files is drawn; the reader\'s own is a card, the others are counted in its head and on the counted line', () => {
+    const sections = orderSectionsOf(held)
+    expect(sections.map((section) => [section.key, section.held.map((one) => one.id), section.checking])).toEqual([
+      ['ORDER', [], 0],
+      ['LINES', ['h1'], 1],
+      ['PRODUCTION', [], 1],
+    ])
+    expect(orderCountedOf(held, sections).checking).toBe(2)
+    expect(tabAnswerOf(held, { locked: 0 })).toEqual({ parts: [{ key: 'tab.files', params: { count: 1 } }, { key: 'held.checking', params: { count: 3 } }], tone: 'warning' })
+    expect([heldReasonKey({ reason: 'SCAN_PENDING' }), heldReasonKey({ reason: 'INFECTED' }), heldReasonKey({ reason: 'SCAN_FAILED' })]).toEqual(['keep.scanPending', 'keep.infected', 'keep.held'])
+  })
+
+  it('the held card: its name, "added by you" and why — no open, no download, no box, never previewed', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['record-thread-files-view'])['record-thread-files-view']!)
+      const html = render(createElement(OrderFilesBody, { model: { read: held, problem: null, selected: [], canShare: true }, party: null }), locale)
+      const card = html.slice(html.indexOf('data-held-id="h1"'), html.indexOf('</li>', html.indexOf('data-held-id="h1"')))
+      for (const words of ['SEED-JKT-02 pattern size 52.pdf', t('card.addedByYou'), t('keep.scanPending'), t('card.checking')]) expect(textOf(card), `${locale}: ${words}`).toContain(words)
+      for (const never of ['data-row', 'type="checkbox"', 'data-card-id', t('card.download')]) expect(card, never).not.toContain(never)
+      expect(textOf(html)).toContain(t('group.checking', { count: 1 }))
+      expect(textOf(html)).toContain(t('held.checking', { count: 2 }))
+    }
+  })
+})
+
+describe('F-OF-102: the small bugs — "1 file", one Clear, Share hidden without the right', () => {
+  const chosenOwn = (canShare: boolean, locale: 'it' | 'en' = 'en', place: 'tab' | 'window' = 'tab') => render(createElement(OrderFilesBody, { model: { read: READ, problem: null, selected: ['carton'], canShare }, party: { name: 'Seed Customer One' }, place }), locale)
+
+  it('P0-B4: "1 file chosen" (the bar\'s noun follows the count); P0-B5: ONE Clear, in the reader\'s words', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['record-thread-files-view'])['record-thread-files-view']!)
+      const html = chosenOwn(true, locale, 'window')
+      expect(textOf(html)).toContain(`1 ${t('bulk.chosen', { count: 1 })}`)
+      expect(html.split(`>${t('bulk.clear')}<`).length - 1).toBe(1)
+      // The DS bar's own English "Clear" is not drawn (the body gives none to it); the window's box says "Choose all", never "… chosen: clear".
+      if (locale === 'it') expect(html).not.toContain('>Clear<')
+      expect(textOf(html)).toContain(t('select.all', { count: 9 }))
+    }
+  })
+
+  it('F6-B5 / P0-B3: "Share N own" is hidden without the right; with it, held with words when nothing chosen is the order\'s own office-only file', () => {
+    expect(chosenOwn(false)).not.toContain('own with Seed Customer One')
+    expect(chosenOwn(true)).toContain('Share 0 own with Seed Customer One')
+    const office = { ...READ, groups: [{ ...READ.groups[0]!, files: [file('carton')] }] }
+    expect(render(createElement(OrderFilesBody, { model: { read: office, problem: null, selected: ['carton'], canShare: true }, party: { name: 'Seed Customer One' } }))).toContain('Share 1 own with Seed Customer One')
+  })
+
+  it('the Files window on any record: "1 file"; Share, Make office only and Delete hidden without their right (F6-B5)', () => {
+    const one: ThreadFile = { id: 'f1', recordType: 'Quote', recordId: 'q1', name: 'Spec.pdf', contentType: 'application/pdf', kind: 'DOCUMENT', sizeBytes: 10, status: 'AVAILABLE', quarantineReason: null, visibility: ['OFFICE'], partyId: null, createdAt: '2026-11-10T09:00:00.000Z', previewUrl: null }
+    const draw = (can: { upload: boolean; share: boolean; delete: boolean }) =>
+      textOf(render(createElement(FilesView, { model: { record: { type: 'Quote', id: 'q1', label: 'SEED-QT-0007' }, party: { id: 'party-1', role: 'customer', name: 'Seed Customer One' }, files: [one], problem: null, can, uploadHeld: null, selected: ['f1'], refused: [], missing: [], upload: null, now: Date.parse('2026-11-22T10:00:00Z') } })))
+    const none = draw({ upload: false, share: false, delete: false })
+    expect(none).toContain('1 file')
+    for (const hidden of ['Share with Seed Customer One', 'Make office only', 'Delete 1']) expect(none, hidden).not.toContain(hidden)
+    const all = draw({ upload: true, share: true, delete: true })
+    for (const shown of ['Share with Seed Customer One (1)', 'Delete 1']) expect(all, shown).toContain(shown)
   })
 })

@@ -57,3 +57,8 @@
 /* ── the tab's one answer (a DS Banner) and its Read-only line ── */
 .fw-of-head .fw-of-head-wall { display: inline-flex; align-items: flex-start; gap: var(--nds-space-6); color: var(--nds-text-2); }
 .fw-of-head .fw-of-head-wall svg { flex: none; margin-top: var(--nds-space-2); }
+
+/* ── F-OF-102: the reader's own upload held by the virus scan (no open, no download) ── */
+.fw-rtv-card.fw-of-card.is-held { border-style: dashed; border-color: var(--nds-border-strong); }
+.fw-of-card .fw-of-checking { cursor: default; padding: var(--nds-space-6); color: var(--nds-text-2); font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); text-align: center; }
+.fw-of-card-title { font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); overflow-wrap: anywhere; }

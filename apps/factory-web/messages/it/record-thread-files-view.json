@@ -64,7 +64,6 @@
     "one": "Scegli {name}"
   },
   "bulk": {
-    "noun": "file",
     "download": "Scarica {count}",
     "share": "Condividi con {party} ({count})",
     "officeOnly": "Rendi solo ufficio ({count})",
@@ -72,11 +71,14 @@
     "onHold_one": "Un file scelto è sotto blocco legale: Elimina lo lascia.",
     "onHold_other": "{count} file scelti sono sotto blocco legale: Elimina li lascia.",
     "noneDownload": "Nessuno dei file scelti si può ancora scaricare.",
-    "noShareRight": "Cambiare chi vede un file richiede il diritto di condividere file fuori dall'ufficio.",
     "allShared": "{party} vede già tutti i file scelti.",
     "allOffice": "Tutti i file scelti sono già solo ufficio.",
-    "noDeleteRight": "Eliminare file richiede il diritto di cancellare un file.",
-    "allHeld": "Un blocco legale tiene tutti i file scelti."
+    "allHeld": "Un blocco legale tiene tutti i file scelti.",
+    "chosen_one": "file scelto",
+    "chosen_other": "file scelti",
+    "clear": "Togli",
+    "noun_one": "file",
+    "noun_other": "file"
   },
   "group": {
     "kind": {
@@ -125,10 +127,6 @@
       "order": "sull'ordine",
       "from": "da {record}"
     },
-    "audience": {
-      "CUSTOMER_CAN_SEE": "Condiviso con il cliente",
-      "OFFICE_ONLY": "Solo ufficio"
-    },
     "alsoOn": "anche su {record}",
     "alsoOnOther_one": "anche su {count} altro record",
     "alsoOnOther_other": "anche su altri {count} record",
@@ -174,7 +172,9 @@
     "download": "Scarica",
     "downloadOf": "Scarica {name}",
     "worksheet": "Scheda di lavoro · riga {line} · v{version}",
-    "largePdf": "PDF grande: aprilo per vederlo"
+    "largePdf": "PDF grande: aprilo per vederlo",
+    "addedByYou": "aggiunto da te",
+    "checking": "In verifica"
   },
   "tab": {
     "none": "Ancora nessun file.",
