@@ -338,7 +338,6 @@ export function orderBulkReach(chosen: readonly OrderFile[], orderId: string, in
     canDelete,
   }
 }
-}
 
 /**
  * F-SA-238: the portal read (GET /portal/sales-orders/:orderId/files, B-SA-037) as the body reads it — the customer's groups, every file
