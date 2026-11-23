@@ -230,3 +230,31 @@ describe('F-CQ-201 … 203: the words in both languages (no key left, every plac
     }
   })
 })
+
+// ---- cq fx5 W3-2 (walk: Reply was drawn for a customer with no portal and opened a window with nothing to write): when the host knows the
+// customer reads no portal, Reply / Ask are held before the click, in the window's own words for the records.
+describe('cq fx5 W3-2: Reply held by the customer\'s portal', () => {
+  const OWNER: QuoteBarRights = { can: { manage: true, send: true }, grains: { price: true }, tasks: true, orders: true, threads: true, customerTasks: true }
+  const draft = QUOTE_ROWS.find((row) => row.status === 'DRAFT')!
+  const request = incomingRowOf(REQUEST_ROWS[0]!)
+  it('no portal: held in words (quotes / requests); a portal or an unknown one: not held', () => {
+    expect(quoteBarOf(OWNER, [draft], 'Seed Customer Three GmbH', 'off').promoted[0]!.held).toEqual({ ns: 'orders-sheet', key: 'reply.byType.quote.portalOff', params: { customer: 'Seed Customer Three GmbH' } })
+    for (const portal of ['on', 'unknown', null, undefined] as const) expect(quoteBarOf(OWNER, [draft], 'Seed Customer Three GmbH', portal).promoted[0]!.held, String(portal)).toBeNull()
+    const production = incomingBarOf({ manage: false, tasks: true, threads: true }, [request], 'Seed Customer Three GmbH', 'off')
+    expect(production.promoted.find((act) => act.id === 'reply')!.held).toEqual({ ns: 'orders-sheet', key: 'reply.byType.request.portalOff', params: { customer: 'Seed Customer Three GmbH' } })
+    expect(incomingBarOf({ manage: false, tasks: true, threads: true }, [request], 'Seed Customer Three GmbH', 'on').promoted.find((act) => act.id === 'reply')!.held).toBeNull()
+    // The rows' own holds come first (one customer, at most 50); a page that names no customer holds nothing by the portal.
+    expect(incomingBarOf({ manage: false, tasks: true, threads: true }, [request], null, 'off').promoted.find((act) => act.id === 'reply')!.held).toBeNull()
+  })
+  it('the words exist in both languages and name the customer', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders-sheet'])['orders-sheet']!)
+      for (const key of ['reply.byType.quote.portalOff', 'reply.byType.request.portalOff']) expect(t(key, { customer: 'Seed Customer Three GmbH' }), `${locale} ${key}`).toContain('Seed Customer Three GmbH')
+    }
+  })
+  it('the row ⋯ Reply… is held the same way, its reason as the item\'s second line (the DS menu\'s place)', () => {
+    const view = readFileSync(new URL('./view/ManyActDialog.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('return held ? { id, label, disabled: true, description: <ManySaid words={{ ns: \'orders-sheet\', key: held.key,')
+  })
+})
+// ---- end cq fx5 W3-2

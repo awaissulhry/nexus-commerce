@@ -265,6 +265,15 @@
   width: 100%;
 }
 
+/* cq fx5 W-04: Ready's "5 of 6" and its "1 problem" tag wrap onto two lines in the column's least width (the row grows; nothing cut). */
+.fw-cwd-inline.is-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-2) var(--nds-space-6);
+  padding-block: var(--nds-space-4);
+  line-height: 1.3;
+}
+
 /* cq fx2 W-04: the drafts' two-fact cells wrap (the rows grow) instead of cutting "Started … by Seed P…". */
 .fw-cwd-cell.is-wrap .fw-cwd-title,
 .fw-cwd-cell.is-wrap .fw-cwd-sub {

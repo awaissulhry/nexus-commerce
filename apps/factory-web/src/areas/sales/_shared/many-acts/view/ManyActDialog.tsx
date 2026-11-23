@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { ChevronDown } from 'lucide-react'
-import { Field, Menu } from '@nexus/ui/components'
+import { Field, Menu, type MenuItemDef } from '@nexus/ui/components'
 import { SelectionLabel } from '@nexus/ui/grid'
 import { Button, Input } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
@@ -149,6 +149,24 @@ function Window({ model, actions }: { model: ManyActModel; actions?: ManyActActi
  * More ▾; an act without its right is not here at all; one blocked by the state is held with words; a line under it when one is due
  * (a portal order is answered on its own; a role that changes none). It fetches nothing.
  */
+// ---- cq fx5 W3-2: one phrase in the bars' words, where their catalogues are not loaded (a held row act's reason in a row's ⋯ menu).
+export function ManySaid({ words }: { words: ManyWords }) {
+  return (
+    <WithMessages namespaces={[...MANY_NAMESPACES]}>
+      <Said words={words} />
+    </WithMessages>
+  )
+}
+function Said({ words }: { words: ManyWords }) {
+  const say = useSay()
+  return <>{say(words)}</>
+}
+/** A row's ⋯ item held by state: disabled, its reason (the Reply window's own words) as the item's second line, the DS menu's place for it. */
+export function heldRowItem(id: string, label: string, held: { readonly key: string; readonly params?: Readonly<Record<string, string | number>> } | null, onSelect: () => void): MenuItemDef {
+  return held ? { id, label, disabled: true, description: <ManySaid words={{ ns: 'orders-sheet', key: held.key, ...(held.params ? { params: held.params } : {}) }} /> } : { id, label, onSelect }
+}
+// ---- end cq fx5 W3-2
+
 export function ManyBar({ bar, onAct }: { bar: Bar; onAct: (id: string) => void }) {
   return (
     <WithMessages namespaces={[...MANY_NAMESPACES]}>

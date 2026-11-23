@@ -591,7 +591,8 @@ describe('cq fx2: the walk\'s gaps', () => {
   })
 
   it('W-12 / W-13: the Sales pages fit 1440 (the ⋯ at 56, New messages at 116); New quote / New request hidden without their right', () => {
-    expect(quotesView).toContain("minWidth: 116, flex: 0.8,")
+    // cq fx5 W-12: New messages takes the icon header and 52–64 px on Sales › Quotes too (its 116 px cut "New mes…").
+    expect(quotesView).toContain("headerTooltip: l('columnHint'), headerComponent: MessagesHeader, minWidth: 52, maxWidth: 64,")
     expect(quotesView).not.toContain('minWidth: 88, maxWidth: 88')
     expect(incomingView).not.toContain('minWidth: 72, maxWidth: 72')
     expect(quotesView).not.toContain("heldReason={model.can.manage ? null : t('held.noManage')} onClick={() => actions?.onNewQuote?.(true)}")
@@ -609,8 +610,11 @@ describe('cq fx2: the walk\'s gaps', () => {
   })
 
   it('W-15: the keys stay on the list after a mouse pick; the phone\'s select bar stays in view', () => {
-    expect(frame).toContain('if (column) now.setFocusedCell(index, column)')
-    expect(src('../../../../../list-frame/list-frame.css')).toContain('.fw-list-cards .nds-cardlist-bulk {')
+    // cq fx5 W-15: fx2's one tick after the click came before the dock's redraw (the walk: focus on the body); the bar stuck to the
+    // bottom, which a bar at the top of its list never reaches. Both moved — see 'cq fx5' below.
+    expect(frame).not.toContain('if (column) now.setFocusedCell(index, column)')
+    expect(frame).toContain('api.setFocusedCell(index, column)')
+    expect(src('../../../../../list-frame/list-frame.css')).toContain('.fw-rcf .fw-list-cards > .nds-cardlist-bulk {')
   })
 
   it('W-16 / W-17: on the tab the rows decide the company code; Company only from XL (L fits whole)', () => {
@@ -659,3 +663,73 @@ describe('cq fx3: the second look\'s gaps', () => {
   })
 })
 // ---- end cq fx3
+
+// ---- cq fx5 (30-walk.md § Last look: W3-1, W-15, W-04, W-12, W3-2, W-09; the bars' and the window's cases are in many-acts and reply-many)
+describe('cq fx5: the last look\'s gaps', () => {
+  const src = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+
+  it('W3-1: the shell clips without being a box the browser scrolls (a tap on Select slid the page 13–29 px at 375)', () => {
+    const shell = src('../../../../../shell/office/office-shell.css')
+    const office = shell.slice(shell.indexOf('.fw-office {'), shell.indexOf('}', shell.indexOf('.fw-office {')))
+    expect(office).toContain('overflow: clip;')
+    expect(office).not.toContain('overflow: hidden;')
+  })
+
+  it('W-15: the focus comes back to the picked row after the dock re-draws the rows; j walks on from it; the phone bar sticks at the top', () => {
+    const frame = src('../../../../../list-frame/ListFrame.tsx')
+    // The row the keys stand on is kept by the frame (a redraw clears the grid's own), on every focus, a click's too.
+    expect(frame).toContain('if (at?.data && !isGroupMarker(at.data)) keysAt.current = { id: rowId(at.data), colId:')
+    // Once the docked row changes, the focus goes back while the rows settle — only when the list held it and it fell to the body.
+    expect(frame).toContain('const timers = [0, 80, 240, 600].map((ms) => window.setTimeout(back, ms))')
+    expect(frame).toContain('if (now && now !== document.body && now.isConnected) return')
+    expect(frame).toContain('gridOwns.current = gridEl.contains(event.target as Node | null)')
+    // The frame's own restore is never reported as the keys' move (the page already shows that row).
+    expect(frame).toContain('if (restoring.current) return')
+    expect(frame).toContain('const focused = api && !api.isDestroyed() ? (api.getFocusedCell()?.rowIndex ?? kept) : null')
+    // The refs are declared before anything reads them.
+    expect(frame.indexOf('const keysAt = useRef')).toBeLessThan(frame.indexOf('keysAt.current &&'))
+    const css = src('../../../../../list-frame/list-frame.css')
+    expect(css).toContain('top: calc(var(--fw-rcf-top, 16px) - 16px);')
+    expect(css).toContain('.fw-rcf .fw-list-cards > .nds-cardlist-bar:has(> .nds-cardlist-all)')
+    expect(css).not.toContain('bottom: var(--nds-space-8);\n  z-index: 2;')
+  })
+
+  it('W-04: Ready\'s tag wraps under "5 of 6" in its least width; "Wanted by" has 132 px — and the columns still fit their rooms', () => {
+    const list = src('../drafts/view/CustomerDraftsList.tsx')
+    expect(list).toContain('<span className="fw-cwd-inline is-wrap">')
+    expect(list).toContain("{ colId: 'wanted', headerName: t('customers.drafts.col.wanted'), minWidth: 132,")
+    expect(src('./quotes-tab.css')).toContain('.fw-cwd-inline.is-wrap {\n  display: flex;\n  flex-wrap: wrap;')
+  })
+
+  it('W-12: the Sales pages at 1440 — New messages an icon at 52–64 px; Number / Customer (quotes), Customer / Subject (requests) wrap', () => {
+    const quotes = src('../../../quotes/list/view/QuotesListView.tsx')
+    expect(quotes).toContain("minWidth: 130, flex: 1, cellRenderer: NumberCell, cellClass: 'fw-ql-wraps', autoHeight: true")
+    expect(quotes).toContain("minWidth: 180, flex: 2, cellRenderer: CustomerCell, cellClass: 'fw-ql-wraps', autoHeight: true")
+    expect(quotes).not.toContain('minWidth: 116, flex: 0.8')
+    expect(src('../../../quotes/quotes.css')).toContain('.fw-ql-wraps .fw-ql-ellipsis {')
+    const incoming = src('../../../inquiries/view/InquiriesView.tsx')
+    expect(incoming).toContain("cellRenderer: CustomerCell, cellClass: 'fw-inq-wraps', autoHeight: true")
+    expect(incoming).toContain("cellRenderer: SubjectCell, cellClass: 'fw-inq-wraps', autoHeight: true")
+    expect(incoming).not.toContain("headerTooltip: l('columnHint'), minWidth: 116, flex: 0.5,")
+    expect(incoming).toContain("{ colId: 'wantedDate', headerName: t('col.wanted'), minWidth: 112")
+    expect(incoming).toContain("{ colId: 'company', headerName: t('col.company'), minWidth: 120")
+    const css = src('../../../inquiries/inquiries.css')
+    for (const rule of ['.fw-inq-wraps .fw-inq-subject {', '.fw-inq-wraps .fw-sheet-door,', '.fw-inq-wraps .fw-inq-who {']) expect(css).toContain(rule)
+  })
+
+  it('W3-2: the tab reads the customer\'s portal once (partners.view + threads.post) and both lists hold Reply with it', () => {
+    const tab = src('../QuotesIncomingTab.tsx')
+    expect(tab).toContain("useReplyPortal(party.id, session.permissions.includes('partners.view') && session.permissions.includes('threads.post'))")
+    expect(tab.match(/replyPortal: replyPortal \?\? null, \/\/ cq fx5 W3-2/g)).toHaveLength(2)
+    expect(src('../../../quotes/list/view/QuotesListView.tsx')).toContain("replyPortalHeld(latest.current.model.replyPortal, 'Quote',")
+    expect(src('../../../inquiries/view/InquiriesView.tsx')).toContain("replyPortalHeld(m.replyPortal, 'Inquiry',")
+  })
+
+  it('W-09: on a phone Kind and How it came fold into More ▾ (a popover, no packages/ui change); its words in both languages', () => {
+    const incoming = src('../../../inquiries/view/InquiriesView.tsx')
+    expect(incoming).toContain('{!repliesView && (phone ? (')
+    expect(incoming).toContain("triggerLabel={t('list.moreTools')} label={t('list.moreTools')} hoverDelay={0}")
+    for (const locale of LOCALES) expect(createTranslator(locale, messagesFor(locale, ['sales-inquiries'])['sales-inquiries']!)('list.moreTools'), locale).not.toBe('list.moreTools')
+  })
+})
+// ---- end cq fx5

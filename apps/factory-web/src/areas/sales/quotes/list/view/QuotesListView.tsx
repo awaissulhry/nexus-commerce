@@ -23,7 +23,8 @@ import { WhereChips, type WhereChipWords } from '../../../_shared/where-cell/vie
 // ---- F-CQ-201 / 202 / 204 (customer page › Quotes & incoming): the bar (3 + More ▾), the ONE many-acts window, Add task to N, the
 // quote's own windows on a row (in place)
 import { CANCELLABLE_QUOTES, orderMakeable, quoteBarOf, type QuoteActKind } from '../bar'
-import { ManyActDialog, ManyBar } from '../../../_shared/many-acts/view/ManyActDialog'
+import { heldRowItem, ManyActDialog, ManyBar } from '../../../_shared/many-acts/view/ManyActDialog'
+import { replyPortalHeld } from '../../../orders/list/reply-many' // cq fx5 W3-2
 import { MessagesHeader, MORE_CELL } from '../../../_shared/list-heads/ListHeads' // cq fx2 W-05: narrow headers whole
 import { TaskNewDialog } from '../../../../../record-panels/tasks/view/TaskNewDialog'
 import { QuoteDialogs } from '../../record/view/Dialogs'
@@ -151,7 +152,9 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
     const CustomerCell = ({ data }: ICellRendererParams<QuoteListRow>) =>
       data ? (
         <span className="fw-ql-cell">
-          <span className="fw-ql-ellipsis">{data.partyName}</span>
+          <span className="fw-ql-ellipsis" title={data.partyName /* cq fx5 W-12: whole on hover when two lines are not enough */}>
+            {data.partyName}
+          </span>
           {data.customerRef && <span className="fw-ql-row-sub">{t('list.ref', { ref: data.customerRef })}</span>}
         </span>
       ) : null
@@ -211,7 +214,8 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
         ...(manage && ['SENT', 'EXPIRED', 'DECLINED'].includes(data.status) ? [{ id: 'revise', label: `${t('action.revise', { next: data.revision + 1 })}…`, onSelect: act('revise') }] : []),
         ...(rights?.orders && orderMakeable(data) ? [{ id: 'makeOrder', label: `${t('record.makeOrder')}…`, onSelect: act('makeOrders') }] : []),
         // F-CQ-304: Reply to <customer>… on this one quote (threads.post): the Reply-to-N window with one record, the tick OFF.
-        ...(rights?.threads ? [{ id: 'reply', label: t('list.row.reply', { customer: latest.current.model.customerName ?? data.partyName }), onSelect: act('reply') }] : []),
+        // cq fx5 W3-2: held with the window's words when the host knows the customer reads no portal.
+        ...(rights?.threads ? [heldRowItem('reply', t('list.row.reply', { customer: latest.current.model.customerName ?? data.partyName }), replyPortalHeld(latest.current.model.replyPortal, 'Quote', latest.current.model.customerName ?? data.partyName), act('reply'))] : []),
         ...(rights?.tasks ? [{ id: 'addTask', label: t('list.row.addTask'), onSelect: act('addTask') }] : []),
       ]
     }
@@ -274,13 +278,14 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
     // ---- end F-CQ-102 / F-CQ-104
     return [
       { colId: 'picture', headerName: t('list.col.picture'), minWidth: 76, maxWidth: 76, sortable: false, suppressHeaderMenuButton: true, cellRenderer: PictureCell }, // TH-6 part B
-      { colId: 'number', headerName: t('list.col.number'), field: 'number', minWidth: 130, flex: 1, cellRenderer: NumberCell },
-      { colId: 'customer', headerName: t('list.col.customer'), field: 'partyName', minWidth: 180, flex: 2, cellRenderer: CustomerCell },
+      { colId: 'number', headerName: t('list.col.number'), field: 'number', minWidth: 130, flex: 1, cellRenderer: NumberCell, cellClass: 'fw-ql-wraps', autoHeight: true /* cq fx5 W-12 */ },
+      { colId: 'customer', headerName: t('list.col.customer'), field: 'partyName', minWidth: 180, flex: 2, cellRenderer: CustomerCell, cellClass: 'fw-ql-wraps', autoHeight: true /* cq fx5 W-12 */ },
       // F-CQ-102: the chips cell keeps the column's id (`status`: its file column and the saved layouts stay); its heading says what it holds.
       { colId: 'status', headerName: t('list.col.where'), field: 'status', minWidth: 220, flex: 1.4, cellRenderer: StatusCell, autoHeight: true },
       // B-TH-257: not drawn without threads.read (no count is ever made up).
-      // cq fx2 W-12: 116 px (with the ⋯ at 56) — the page fits 1314 px at 1440 (it scrolled 51 px sideways).
-      ...(model.unread ? ([{ colId: 'newMessages', headerName: l('column'), headerTooltip: l('columnHint'), minWidth: 116, flex: 0.8, sortable: false, valueGetter: ({ data }: { data?: QuoteListRow }) => unreadValue(data ? latest.current.model.unread?.[data.id] : undefined), cellRenderer: NewMessagesCell }] satisfies ColDef<QuoteListRow>[]) : []),
+      // cq fx5 W-12: the icon header and 52–64 px, as on the customer page (W-05) — "New mes…" was cut at 116 px and its room goes to the
+      // customer and the number, which wrap to a second line rather than cutting ("Seed Customer One S…", "from SEED-INQ-00…").
+      ...(model.unread ? ([{ colId: 'newMessages', headerName: l('column'), headerTooltip: l('columnHint'), headerComponent: MessagesHeader, minWidth: 52, maxWidth: 64, sortable: false, valueGetter: ({ data }: { data?: QuoteListRow }) => unreadValue(data ? latest.current.model.unread?.[data.id] : undefined), cellRenderer: NewMessagesCell }] satisfies ColDef<QuoteListRow>[]) : []),
       { colId: 'units', headerName: t('list.col.units'), field: 'units', minWidth: 110, flex: 1, valueFormatter: (params) => (params.data ? t('list.units', { units: params.data.units, lines: params.data.lineCount }) : '') },
       ...(model.grains.price
         ? ([
@@ -463,7 +468,7 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
           // F-SA-225: Export N through the export job (the same writer as Export ▾, the screen's columns and the picked ids).
           exportSelected: true,
           // F-CQ-201 (10-design §6.1): the bar — 3 + More ▾, each act only with its right, held with words only by the ticked rows' state.
-          actions: model.barRights ? <ManyBar bar={quoteBarOf(model.barRights, picked, model.customerName ?? (picked.length > 0 && picked.every((row) => row.partyId === picked[0]!.partyId) ? picked[0]!.partyName : null))} onAct={(id) => actions?.onBarAct?.(id as QuoteActKind, picked)} /> : null,
+          actions: model.barRights ? <ManyBar bar={quoteBarOf(model.barRights, picked, model.customerName ?? (picked.length > 0 && picked.every((row) => row.partyId === picked[0]!.partyId) ? picked[0]!.partyName : null), model.replyPortal /* cq fx5 W3-2 */)} onAct={(id) => actions?.onBarAct?.(id as QuoteActKind, picked)} /> : null,
         }}
         updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
         more={model.rows.more && shown && shown.length > 0 ? { label: t('list.more'), onMore: () => actions?.onMore?.() } : null}

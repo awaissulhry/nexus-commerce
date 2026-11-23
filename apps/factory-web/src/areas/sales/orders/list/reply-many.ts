@@ -257,6 +257,14 @@ export function portalStateOf(access: { readonly settings: { readonly portalOn: 
   return access.settings.portalOn && access.people.some((person) => person.status === 'ACTIVE') ? 'on' : 'off'
 }
 
+// ---- cq fx5 W3-2 (walk: Reply was drawn for a customer with no portal, and its window had nothing to write): when the host already knows
+// the customer reads no portal, the bar's Reply / Ask and the row's Reply… are held before the click, in the window's own words for the
+// records ("… has no portal yet: write by e-mail in each request's conversation"). Unknown or on: not held (the window says it).
+export function replyPortalHeld(portal: PortalState | null | undefined, recordType: ReplyRecordType, customer: string | null): Phrase | null {
+  return portal === 'off' && customer ? { key: replyKey(recordType, 'portalOff'), params: { customer } } : null
+}
+// ---- end cq fx5 W3-2
+
 /**
  * Why Send waits beyond the composer's own reasons (empty, too long, sending, the names-another-customer hold), or null: the customer
  * has no portal yet (write by e-mail in each order's conversation), or every order is done (nothing left to post on).

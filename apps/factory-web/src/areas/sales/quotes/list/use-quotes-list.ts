@@ -20,6 +20,7 @@ import { useLocale } from '../../../../lib/i18n/provider'
 import { useManyAct } from '../../_shared/many-acts/use-many-act'
 import { useTaskBatch } from '../../_shared/many-acts/use-task-batch'
 import { useReplyMany } from '../../orders/list/use-reply-many' // F-CQ-304: Reply to N given a record type
+import type { PortalState } from '../../orders/list/reply-many' // cq fx5 W3-2
 import { quoteActOf } from './acts'
 import { quoteRecordOf, quoteRightsOf, type QuoteActKind, type QuoteRecord } from './bar'
 import { useQuoteDialog } from '../record/use-quote-dialog'
@@ -91,6 +92,8 @@ export interface QuotesListHost {
   readonly liveParty?: string | null
   /** The customer's one name on this host (the chips say it, never a row's own name: P0-B9). */
   readonly customerName?: string | null
+  /** cq fx5 W3-2: whether the customer reads a portal (the host read it): 'off' holds Reply / Ask before the click, in words. */
+  readonly replyPortal?: PortalState | null
   /** The words of a door group in State ▾ (the host's band words). */
   readonly groupLabel?: string | null
   // ---- end F-CQ-102 / F-CQ-104
@@ -519,6 +522,7 @@ export function useQuotesList(host: QuotesListHost): { model: QuotesListViewMode
     ...(host.columns ? { columns: host.columns } : {}),
     room: host.room ?? null,
     customerName: host.customerName ?? null,
+    replyPortal: host.replyPortal ?? null, // cq fx5 W3-2
     groupLabel: host.groupLabel ?? null,
     // ---- F-CQ-201 / 202 / 204: the bar's rights (each act its own), the windows open now
     barRights: quoteRightsOf(session.permissions, can, grains),

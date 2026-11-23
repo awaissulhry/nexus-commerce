@@ -19,7 +19,7 @@ import type { QuoteRowAct } from './use-quotes-list'
 import type { ManyActActions, ManyActModel } from '../../_shared/many-acts/use-many-act'
 import type { TaskBatchModel } from '../../_shared/many-acts/use-task-batch'
 import type { QuoteDialogOpen } from '../record/use-quote-dialog'
-import type { ReplyManyActions, ReplyManyModel } from '../../orders/list/reply-many' // F-CQ-304
+import type { PortalState, ReplyManyActions, ReplyManyModel } from '../../orders/list/reply-many' // F-CQ-304; cq fx5 W3-2
 import type { QuoteDialogsActions } from '../record/view/Dialogs'
 import type { BatchAnswer, BatchAssignee, TaskDraft } from '../../../../record-panels/tasks/model'
 
@@ -106,6 +106,8 @@ export interface QuotesListViewModel {
   room?: number | null
   /** The customer's one name on this host (the chips say it); absent: each row's own. */
   customerName?: string | null
+  /** cq fx5 W3-2: the customer reads no portal ('off'): Reply / Ask held before the click, in words. Absent: not known here. */
+  replyPortal?: PortalState | null
   /** The words of a door group in State ▾ (the host's band words: one word for one thing). */
   groupLabel?: string | null
   /** The phone card's door to the row's thread (its words; with `active`); absent: none. */
