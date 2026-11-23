@@ -33,7 +33,7 @@ import {
   VIES_RESULTS,
   VIES_STATES,
 } from './api'
-import { ARCHIVED_CUSTOMER, CUSTOMERS, ORDERS, QUOTES, rowOf, SUPPLIERS, withoutMoney } from './fixtures' // F-CL-101: + ARCHIVED_CUSTOMER
+import { CUSTOMERS, ORDERS, QUOTES, rowOf, SUPPLIERS, withoutMoney } from './fixtures'
 import {
   addressDraftProblems,
   blankAddress,
@@ -42,12 +42,10 @@ import {
   bulkReach,
   contactDraftProblems,
   dealRows,
-  emptyWordsOf, // F-CL-101
   identityBody,
   identityProblems,
   identityWanted,
   keyNumbers,
-  listCanOf, // F-CL-101
   loaded,
   money,
   newPartyProblems,
@@ -61,13 +59,11 @@ import {
   partyTabOf,
   reasonProblem,
   recordHref, // F-SA-225
-  rowActsOf, // F-CL-101
   sdiState,
   SIDES,
   suggestCode,
   TILE_VIEW,
   viewQuery,
-  viewsOf, // F-CL-101
   WARNING_ACTION,
 } from './model'
 
@@ -549,6 +545,10 @@ describe('F-SA-274: People & addresses', () => {
 // ---- end F-SA-274
 
 // ---- F-CL-101 (customers list plan §2, K12, settles T10 / T15 / T16): the shared rule fixes, on Customers and Suppliers alike ---
+// (imported here, below the pinned lines above, so those lines stay where they were)
+import { ARCHIVED_CUSTOMER } from './fixtures'
+import { emptyWordsOf, listCanOf, rowActsOf, viewsOf } from './model'
+
 describe('F-CL-101: one Views ▾, an empty view says its own words, an act without its right is not drawn', () => {
   const ROLES: Readonly<Record<string, readonly string[]>> = {
     owner: ['parties.view', 'parties.manage', 'parties.block', 'parties.vies', 'views.export'],
