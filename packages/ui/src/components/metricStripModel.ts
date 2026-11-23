@@ -19,6 +19,14 @@ export function metricMinWidth(px: number | null | undefined): number {
   return px != null && Number.isFinite(px) && px >= 64 ? Math.round(px) : 150
 }
 
+/**
+ * The strip's root class (cq-band, 2026-11-23): `nds-metrics`, `sm` for the compact strip, then the caller's class. No size and
+ * no class: exactly `nds-metrics`, as before.
+ */
+export function metricStripClass(size: 'sm' | undefined, className?: string): string {
+  return ['nds-metrics', size === 'sm' ? 'sm' : '', className ?? ''].filter(Boolean).join(' ')
+}
+
 /** A delta's colour. `neutral` is a change that is neither good nor bad ("same as the month before"). */
 export type MetricDeltaTone = 'positive' | 'negative' | 'neutral'
 

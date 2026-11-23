@@ -1,3 +1,19 @@
+## MetricStrip: a compact size and a tile's tip in words — `size?: 'sm'`, `Metric.title?` (cq-band) — 2026-11-23
+
+Additive only: both are optional; a strip that passes neither renders exactly what it rendered before (the same root class
+`nds-metrics`, no `title` attribute on any tile; `metricStripClass(undefined, className)` is today's class string, held by a
+test). Asked by the factory (Owner, 2026-11-23: the customer page's bands must look like Sales › Orders, "compact design-system
+tiles, the band about as high as today"); Commerce passes nothing new.
+- **`size="sm"`** → root `nds-metrics sm`: the SAME card (surface, `--nds-border-subtle`, radius 2xl, hover, focus outline,
+  pressed ring of a filter tile), tighter — padding 8/12, `--nds-metrics-gap` 8, label `--nds-font-size-xs` (600, muted) with
+  4 px under it, number `--nds-font-size-lg` (800), tiles from 112 px when `minTileWidth` is not given (a given one still wins,
+  inline). The subgrid stays (a row's numbers on one line whatever label wraps); a phone still shows two per row. A one-line
+  tile is about 55 px high (the default ≈ 80); a label that wraps adds one line (≈ 13 px).
+- **`Metric.title`** → the tile's `title` (the button, the link or the plain card): the tip said in words, e.g. "Show the 3 in
+  “To answer” · waits on us". `MetricLinkComponent` takes an optional `title` beside `href` / `className` / `children`.
+- Catalog: the Metric strip specimen shows "Compact — a band of doors" (filter tiles, a pressed one, a plain one, a dot with
+  its words in the tip). CSS beside the metric rules in `components.css` (tokens only).
+
 ## DS words for the parts that spoke English only — a `labels` prop on 11 parts (B-W2b-F41) — 2026-11-13
 
 Additive only: every new prop is optional and defaults to today's English, so a page that passes none renders exactly what

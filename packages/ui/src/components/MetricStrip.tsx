@@ -1,7 +1,7 @@
 import type { ComponentType, CSSProperties, ReactNode } from 'react'
 import NextLink from 'next/link'
 import { ChevronRight } from 'lucide-react'
-import { metricDeltaClass, metricKind, metricMinWidth, type MetricDeltaTone } from './metricStripModel'
+import { metricDeltaClass, metricKind, metricMinWidth, metricStripClass, type MetricDeltaTone } from './metricStripModel'
 
 interface MetricBase {
   label: ReactNode
@@ -26,6 +26,11 @@ interface MetricBase {
    * the primary one".
    */
   accent?: string
+  /**
+   * The tile's tip, in words (its `title`): what a press does, what the number waits on. Additive (cq-band, 2026-11-23): a
+   * tile without it renders as before.
+   */
+  title?: string
 }
 
 interface MetricFilter {
@@ -53,23 +58,28 @@ interface MetricLinkTile {
 export type Metric = MetricBase & (MetricFilter | MetricLinkTile)
 
 /** The host's link for link tiles. The web app passes its workspace `Link` (it keeps `/w/<id>`); default Next's `Link`. */
-export type MetricLinkComponent = ComponentType<{ href: string; className?: string; children?: ReactNode }>
+export type MetricLinkComponent = ComponentType<{ href: string; className?: string; title?: string; children?: ReactNode }>
 
 export interface MetricStripProps {
   metrics: Metric[]
   className?: string
   /** The link a tile with `href` renders. Default Next's `Link`. */
   linkAs?: MetricLinkComponent
-  /** The narrowest a tile gets before the strip wraps, px (default 150). Phones always show two per row. */
+  /** The narrowest a tile gets before the strip wraps, px (default 150; 112 at `size="sm"`). Phones always show two per row. */
   minTileWidth?: number
+  /**
+   * `sm`: the compact strip — the SAME card (surface, border, radius, hover, focus, pressed ring), tighter: padding 8/12, gap 8,
+   * label xs, number lg, tiles from 112 px. For a band of doors above a list (the factory's customer page). Default: as before.
+   */
+  size?: 'sm'
 }
 
 /** Row of KPI tiles (H10 metric strip). Auto-fits to the container width; two per row on a phone. */
-export function MetricStrip({ metrics, className, linkAs, minTileWidth }: MetricStripProps) {
+export function MetricStrip({ metrics, className, linkAs, minTileWidth, size }: MetricStripProps) {
   const Link = linkAs ?? NextLink
   const style = minTileWidth != null ? ({ '--nds-metrics-min': `${metricMinWidth(minTileWidth)}px` } as CSSProperties) : undefined
   return (
-    <div className={`nds-metrics${className ? ` ${className}` : ''}`} style={style}>
+    <div className={metricStripClass(size, className)} style={style}>
       {metrics.map((m, i) => {
         const body = (
           <>
@@ -93,7 +103,7 @@ export function MetricStrip({ metrics, className, linkAs, minTileWidth }: Metric
         const kind = metricKind(m)
         if (kind === 'link' && m.href != null) {
           return (
-            <Link key={i} href={m.href} className="nds-metric link">
+            <Link key={i} href={m.href} className="nds-metric link" title={m.title}>
               {body}
             </Link>
           )
@@ -105,11 +115,12 @@ export function MetricStrip({ metrics, className, linkAs, minTileWidth }: Metric
             className={`nds-metric btn${m.active ? ' active' : ''}`}
             aria-pressed={m.active ?? false}
             onClick={m.onClick}
+            title={m.title}
           >
             {body}
           </button>
         ) : (
-          <div key={i} className="nds-metric">
+          <div key={i} className="nds-metric" title={m.title}>
             {body}
           </div>
         )

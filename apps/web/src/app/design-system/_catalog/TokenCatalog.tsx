@@ -365,6 +365,31 @@ function ToastDemo() {
   )
 }
 
+// MetricStrip `size="sm"` (cq-band, 2026-11-23): a band of doors above a list — each a filter tile (pressed again: all), a plain
+// one without a door, a dot that waits on us with its words in the tip.
+function CompactMetricStripDemo() {
+  const [door, setDoor] = useState<string | null>('quoted')
+  const tile = (id: string, label: string, value: number, extra: { title?: string; accent?: string } = {}) => ({
+    label,
+    value,
+    ...extra,
+    onClick: () => setDoor((now) => (now === id ? null : id)),
+    active: door === id,
+  })
+  return (
+    <MetricStrip
+      size="sm"
+      metrics={[
+        tile('writing', 'Customer is writing', 2, { title: 'Show the 2 in “Customer is writing”' }),
+        tile('answer', 'To answer', 3, { title: 'Show the 3 in “To answer” · waits on us', accent: 'var(--nds-warning)' }),
+        tile('quoted', 'Quote being prepared', 2, { title: 'Show everything (11)' }),
+        { label: 'Waiting for approval', value: 0, title: 'A count with no door' },
+        tile('customer', 'Waiting for the customer', 1, { title: 'Show the 1 in “Waiting for the customer”' }),
+      ]}
+    />
+  )
+}
+
 // A deterministic inline SVG so the ImageUpload "filled" preview renders without
 // a network fetch (SSR + client match; no flaky asset dependency).
 const SAMPLE_IMG =
@@ -993,6 +1018,8 @@ export function TokenCatalog() {
               { label: 'Orders', value: '212', delta: { value: '▼ 3%', positive: false } },
             ]}
           />
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--nds-text-3)', margin: '14px 0 8px' }}>Compact — a band of doors (size=&quot;sm&quot;)</div>
+          <CompactMetricStripDemo />
 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Date range</div>
           <DateRangePicker value={dateRange} onChange={setDateRange} />

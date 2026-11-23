@@ -1606,6 +1606,25 @@ body.nds-drawer-resizing * {
   border-color: var(--nds-primary);
   box-shadow: 0 0 0 1px var(--nds-primary);
 }
+/* The compact strip (`size="sm"`, cq-band 2026-11-23): the SAME card — surface, subtle border, radius, hover, focus, pressed
+   ring — tighter, for a band of doors above a list. Padding 8/12, gap 8, label xs, number lg, tiles from 112 px (a caller's
+   `minTileWidth` still wins: it is set inline). The subgrid stays: a row's numbers on one line whatever label wraps; the label
+   takes back the gap down to 4 px. Additive only: a strip without `sm` is untouched. */
+.nds-metrics.sm {
+  --nds-metrics-gap: var(--nds-space-8);
+  --nds-metrics-min: 112px;
+}
+.nds-metrics.sm > .nds-metric {
+  padding: var(--nds-space-8) var(--nds-space-12);
+}
+.nds-metrics.sm > .nds-metric > .lbl {
+  font-size: var(--nds-font-size-xs);
+  gap: var(--nds-space-6);
+  margin-bottom: calc(var(--nds-space-4) - var(--nds-metrics-gap));
+}
+.nds-metrics.sm > .nds-metric .val {
+  font-size: var(--nds-font-size-lg);
+}
 
 /* ── CoverageSummary (channel footprint in one non-growing line) ──── */
 /* Separated by a middot generated in CSS, so the markup carries only the facts and a part can be
