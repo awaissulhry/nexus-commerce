@@ -413,7 +413,7 @@ describe('the file holds the band door\'s rows (B-CL-007)', () => {
     expect(query).toMatchObject({ work: 'NOT_SENT' })
     const page = await customersFile.read(reader, query, null, 200)
     const screen = await ok('all', `/parties?${CUSTOMERS}&work=NOT_SENT&limit=200`)
-    expect(page.rows.map((row) => row.id).sort()).toEqual(partyIdsOf(screen).sort())
+    expect((page.rows as ReadonlyArray<{ readonly id: string }>).map((row) => row.id).sort()).toEqual(partyIdsOf(screen).sort())
     expect(partyIdsOf(screen)).toContain(R1)
     expect(suppliersFile.query(new URLSearchParams('work=NOT_SENT'))).not.toHaveProperty('work')
     expect(customersFile.query(new URLSearchParams('work=SOMEWHERE'))).not.toHaveProperty('work')

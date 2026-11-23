@@ -571,10 +571,10 @@ describe('F-CL-101: one Views ▾, an empty view says its own words, an act with
 
   it('an empty list names what is empty — the search, the chips, the view — and the first day stays the side’s own', () => {
     expect(emptyWordsOf('customers', 'blocked', {}, '')).toEqual({ kind: 'view', key: 'empty.customers.blocked', view: 'blocked' })
-    expect(emptyWordsOf('customers', 'archived', {}, '').key).toBe('empty.customers.archived')
+    expect(emptyWordsOf('customers', 'archived', {}, '')).toMatchObject({ key: 'empty.customers.archived' })
     expect(emptyWordsOf('customers', 'brands', {}, '')).toEqual({ kind: 'view', key: 'empty.customers.other', view: 'brands' })
-    expect(emptyWordsOf('suppliers', 'blocked', {}, '').key).toBe('empty.suppliers.blocked')
-    expect(emptyWordsOf('suppliers', 'prospects', {}, '').key).toBe('empty.suppliers.other')
+    expect(emptyWordsOf('suppliers', 'blocked', {}, '')).toMatchObject({ key: 'empty.suppliers.blocked' })
+    expect(emptyWordsOf('suppliers', 'prospects', {}, '')).toMatchObject({ key: 'empty.suppliers.other' })
     expect(emptyWordsOf('customers', 'blocked', {}, ' Seed Zeta ')).toEqual({ kind: 'search', key: 'empty.customers.search', q: 'Seed Zeta' })
     expect(emptyWordsOf('customers', 'open', { kind: 'PERSON' }, '')).toEqual({ kind: 'filters', key: 'empty.customers.filters' })
     expect(emptyWordsOf('customers', 'open', {}, '  ')).toEqual({ kind: 'none' })
