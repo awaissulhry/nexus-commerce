@@ -9,6 +9,7 @@ import { WithMessages } from '../../../../../record-panels/i18n'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { Party } from '../../../../parties/_shared/api'
 import { countryName, identitiesOf, keyNumbers, languageName, money, partyName, recordTabs, sideHref, SIDES, writable, type PartyRecordModel, type RecordTab } from '../../../../parties/_shared/model'
+import { shownTab } from '../../../../parties/_shared/model' // F-CQ-301 (P0-B2)
 import { PartyRecordGate, usePartyBand, type OverviewSlot, type PartyRecordActions, type SupplierDepth } from '../../../../parties/_shared/view/PartyRecordView'
 import { AddressesCard, CardHead, ContactsCard, IdentityCard, PartyDialogs, PartyNotices, ShowThreadOnArrival, SidePanel, ViesCard, type TabProps } from '../../../../parties/_shared/view/cards'
 import { dash, PartiesMessages, RoleTags } from '../../../../parties/_shared/view/parts'
@@ -55,6 +56,7 @@ export function CustomerRecordView({
   priceDiffer, // F-CP-141
   workBoard, // F-CW-101
   openQuotesHref, // F-CW-101
+  quotesBadge, // F-CQ-302
 }: {
   model: PartyRecordModel
   actions?: PartyRecordActions
@@ -97,11 +99,14 @@ export function CustomerRecordView({
   workBoard?: Read<OrderBoard>
   /** F-CW-101 (S29): where the Overview's "Open quotes" tile leads (Quotes & incoming at its open quotes); absent: the tab. */
   openQuotesHref?: string | null
+  /** F-CQ-302 (13-backend R13; 10-design §2.5): Quotes & incoming's badge — what waits on us there (To answer + Accepted, order waits),
+   *  from the page's ONE count read, marked when > 0; null while it is read; absent: the old count of the newest quotes. */
+  quotesBadge?: { readonly count: number | null; readonly attention: boolean } | null
 }) {
   return (
     <WithMessages namespaces={[CUSTOMER_MONEY_NAMESPACE]}>
       <PartiesMessages>
-        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} supervisor={supervisor} portalPeople={portalPeople} portalEmails={portalEmails} work={work} workCount={workCount} quotesIncoming={quotesIncoming} threadButton={threadButton ?? null} onNewOrder={onNewOrder} onImport={onImport} priceDiffer={priceDiffer ?? null /* F-CP-141 */} workBoard={workBoard} openQuotesHref={openQuotesHref ?? null /* F-CW-101 */} />
+        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} supervisor={supervisor} portalPeople={portalPeople} portalEmails={portalEmails} work={work} workCount={workCount} quotesIncoming={quotesIncoming} threadButton={threadButton ?? null} onNewOrder={onNewOrder} onImport={onImport} priceDiffer={priceDiffer ?? null /* F-CP-141 */} workBoard={workBoard} openQuotesHref={openQuotesHref ?? null /* F-CW-101 */} quotesBadge={quotesBadge /* F-CQ-302 */} />
       </PartiesMessages>
     </WithMessages>
   )
@@ -131,6 +136,7 @@ interface CustomerProps {
   priceDiffer?: number | null // F-CP-141
   workBoard?: Read<OrderBoard> | undefined // F-CW-101
   openQuotesHref?: string | null // F-CW-101
+  quotesBadge?: { readonly count: number | null; readonly attention: boolean } | null | undefined // F-CQ-302
 }
 
 function Customer(props: CustomerProps) {
@@ -171,7 +177,7 @@ function ScrollOnArrival({ id }: { id: string }) {
   return null
 }
 
-function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor, money: moneyModel, portalPeople, portalEmails, work, workCount, quotesIncoming, threadButton /* F-SA-279 */, onNewOrder, onImport /* F-CP-104 */, priceDiffer /* F-CP-141 */, workBoard, openQuotesHref /* F-CW-101 */ }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
+function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor, money: moneyModel, portalPeople, portalEmails, work, workCount, quotesIncoming, threadButton /* F-SA-279 */, onNewOrder, onImport /* F-CP-104 */, priceDiffer /* F-CP-141 */, workBoard, openQuotesHref /* F-CW-101 */, quotesBadge /* F-CQ-302 */ }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
   const t = useT('parties')
   const side = model.side
   const config = SIDES[side]
@@ -179,12 +185,16 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
   const editable = writable(party, can)
   const tabs = recordTabs(config, can)
   // F-SA-271: no tab asked (or one the reader may not see): the first tab the reader sees.
-  const tab: RecordTab = tabs.includes(model.tab) ? model.tab : (tabs[0] ?? 'overview')
+  // ---- F-CQ-301 (P0-B2): the same pure rule as the page's container (its slots are built for this tab).
+  const tab: RecordTab = shownTab(tabs, model.tab)
+  // ---- end F-CQ-301
   const recordPath = sideHref(model.prefix, config, `/${encodeURIComponent(party.id)}`)
   const activeAddresses = party.addresses.filter((address) => address.status === 'ACTIVE')
   const activeContacts = party.contacts.filter((contact) => contact.status === 'ACTIVE')
   // F-SA-277: Quotes & incoming counts the customer's quotes (the record's newest quotes, when all were read).
-  const quotesCount = model.quotes.items && !model.quotes.more ? model.quotes.items.length : null
+  // ---- F-CQ-302: with the page's count read, what waits on us there (To answer + Accepted, order waits), marked when > 0.
+  const quotesCount = quotesBadge !== undefined ? (quotesBadge?.count ?? null) : model.quotes.items && !model.quotes.more ? model.quotes.items.length : null
+  // ---- end F-CQ-302
   const overdueCount = moneyModel?.can.receivables ? (moneyModel.ageing.items ? (overdueOf(moneyModel.ageing.items, party.id)?.invoices ?? 0) : null) : undefined
   const tabItems: TabItem[] = tabs.map((id) => ({
     id,
@@ -194,6 +204,9 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
     // F-SA-276: Work counts what waits on us (requests to answer + replies waiting on us), marked when something does.
     count: id === 'people' ? activeAddresses.length + activeContacts.length : id === 'work' ? (workCount?.count ?? null) : id === 'quotes' ? quotesCount : id === 'money' ? overdueCount : undefined,
     ...(id === 'work' && workCount?.attention ? { icon: <CircleAlert size={12} role="img" aria-label={t('customers.work.attention', { count: workCount.count ?? 0 })} /> } : {}),
+    // ---- F-CQ-302: Quotes & incoming marked as Work is, when something waits on us there.
+    ...(id === 'quotes' && quotesBadge?.attention ? { icon: <CircleAlert size={12} role="img" aria-label={t('customers.work.attention', { count: quotesBadge.count ?? 0 })} /> } : {}),
+    // ---- end F-CQ-302
   }))
   // F-SA-271: the primary — Activate a prospect, New order for an active customer (orders.manage), none when blocked or archived;
   // Check VIES goes into ⋯ (and stays in Terms › VIES).
@@ -232,7 +245,8 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
         band={band}
         // F-SA-279 (11-customer-page §2.5, P11): Work's dock a third at every width, every other tab 40 %; a width the person picks is
         // kept for that tab, "hidden" for every customer (the record type is Party, even while the dock shows an order).
-        defaultWidth={tab === 'work' ? 'third' : undefined}
+        // F-CQ-301 (10-design §1.2, L17): Quotes & incoming docks a third too (its body 863 px at 1440, as Work's).
+        defaultWidth={tab === 'work' || tab === 'quotes' ? 'third' : undefined}
         dockTab={tab}
         threadButton={threadButton ?? null}
       >
