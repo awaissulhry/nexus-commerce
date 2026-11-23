@@ -17,7 +17,7 @@ import './customer-band.css'
  *             a door is a plain tile; no chevrons, no icons; "waits on us" = the tile's dot + the words in its tip
  *   notes     quiet text and links (a part marked `fw-cb-roomy` only from 1040 px: the window says it below), then the closed
  *             groups APART as quiet `FilterChip`s (after their word), then the ⓘ when the band has no chips row
- *   status    one line on every room (Quotes: the open door)
+ *   status    one line on every room (Quotes: the open door) — not a live region (fx2)
  *   chips     optional (Work's "What waits"): `FilterChip`s with their counts; they wrap to a 2nd row before anything is cut
  *   ⓘ         F-CQ-B fx1 (walk B-01, B-06): ONE for both tabs — the design system's icon button that opens the groups' window, glued to
  *             the last item of its row (never a line of its own)
@@ -151,11 +151,8 @@ export function CustomerBand({ model, actions }: { model: CustomerBandModel; act
         <div className="fw-cb-main">
           {strip}
           {notes}
-          {model.status && (
-            <div className="fw-cb-status" role="status">
-              {model.status}
-            </div>
-          )}
+          {/* F-CQ-B fx2 (re-look B-09): no live region around buttons — the pressed tile (aria-pressed) and the chip say the state. */}
+          {model.status && <div className="fw-cb-status">{model.status}</div>}
         </div>
         {chips && (
           <div className="fw-cb-chips" role="group" aria-label={chips.label}>
