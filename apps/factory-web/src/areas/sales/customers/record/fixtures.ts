@@ -718,7 +718,9 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
     // F-CQ-303: the Work tab always shows the sheet — the drafts are Quotes & incoming's "Customer is writing" (DraftsTabDesign below).
     createElement(
       WorkTools,
-      { tools: work.customise ? { ...workTools, design: { menu: 'columns' } } /* cw T.1: Customise columns open */ : workTools },
+      // cw T.1 → cw fx4: the Customise columns DIALOG open (the list tools' own design state). It was the Views ▾ MENU open: a DS
+      // Menu draws into document.body, so that case could not draw on the server (every case of this screen must).
+      { tools: work.customise ? { ...workTools, design: { dialog: 'customise' } } : workTools },
       createElement(OrdersListView, { model: work.priceWindow && work.price !== false ? { ...list, priceCheck: priceWindowOf(work.priceWindow) } : list /* F-CP-114 */, actions: work.live ? liveDoors(work, can.price) /* cw T.1 */ : workDoors(work, can.price) }),
     ),
     // cw T.1 (10-design §3.6): the foot line under the sheet — the order the rows stand in, the customer's urgency state.
