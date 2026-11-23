@@ -53,7 +53,8 @@
     "incoming": "Requests & portal orders",
     "countOpen": "{open} open · {closed} closed left out",
     "countNotClosed": "{open} not closed · {closed} closed left out",
-    "countGroup": "{count} in “{group}”"
+    "countGroup": "{count} in “{group}”",
+    "writingSub": "drafts in {customer}’s portal · read only · never counted as waiting on us"
   },
   "empty": {
     "tab": "{customer} has nothing before an order yet: no request, no quote, no draft.",
@@ -75,5 +76,132 @@
   "foot": {
     "closedLeftOut": "Closed ones are left out ({count}):",
     "door": "{group} {count}"
+  },
+  "acts": {
+    "label": {
+      "askApproval": "Ask for approval on {count}…",
+      "makeOrders": "Make the orders for {count}…",
+      "newLink": "Send a new link to {count}…",
+      "markLost": "Mark {count} lost…",
+      "askAbout": "Ask {customer} about {count}…",
+      "askAboutAny": "Ask about {count}…"
+    },
+    "held": {
+      "notOpen": "None of the {count} is open: a closed quote is never cancelled.",
+      "notDraft": "None of the {count} is a draft.",
+      "noWait": "None of the {count} waits for its order.",
+      "notSent": "None of the {count} is sent and waiting for the customer.",
+      "notRequest": "None of the {count} is an open request: a portal order is answered on its own.",
+      "notAskable": "None of the {count} is a request New or In progress.",
+      "tooMany": "At most {max} at once.",
+      "text": "Write at least {min} characters.",
+      "long": "At most {max} characters.",
+      "field": "Type the PO number of {number}."
+    },
+    "portalOne_one": "{count} portal order is answered one at a time (⋯ on its row): each needs a promise date, prices and a line map.",
+    "portalOne_other": "{count} portal orders are answered one at a time (⋯ on each row): each needs a promise date, prices and a line map.",
+    "noAct": "Your role reads these and changes none: there is no act for the ticked rows.",
+    "more": "More",
+    "moreLabel": "{count} more acts",
+    "close": "Close",
+    "back": "Back",
+    "records": "The records",
+    "notOnWhy": "Not on: {why}",
+    "title": {
+      "askApproval_one": "Ask for approval on {count} quote",
+      "askApproval_other": "Ask for approval on {count} quotes",
+      "makeOrders_one": "Make the order of {count} quote",
+      "makeOrders_other": "Make the orders of {count} quotes",
+      "newLink_one": "Send a new link to {count} quote",
+      "newLink_other": "Send a new link to {count} quotes",
+      "markLost_one": "Mark {count} request lost",
+      "markLost_other": "Mark {count} requests lost",
+      "askInfo_one": "Ask about {count} request",
+      "askInfo_other": "Ask about {count} requests"
+    },
+    "go": {
+      "askApproval": "Ask for approval on {count}",
+      "makeOrders": "Make {count} orders",
+      "newLink": "Send {count} new links",
+      "markLost": "Mark {count} lost",
+      "askInfo": "Ask on {count}"
+    },
+    "body": {
+      "askApproval": "Each draft goes to an approver; its lines are frozen until one decides. The note goes with each.",
+      "makeOrders": "Each accepted quote’s order is made now, from the version the customer accepted.",
+      "newLink": "One mail per quote with the priced PDF and a new accept link; its older link stops.",
+      "markLost": "Each request closes as lost with this note kept on it; a request from the portal reads “Closed” there.",
+      "askInfo": "Each request waits for its customer: one from the portal gets the question there (“We need something from you”), any other by mail to its contact."
+    },
+    "why": {
+      "quoteClosed": "Closed: a closed quote is never cancelled.",
+      "firmOffer": "A firm offer: it cannot be withdrawn before its last day ({date}).",
+      "waitingAlready": "Waiting for approval already.",
+      "approvedAlready": "Approved already.",
+      "notDraft": "Not a draft.",
+      "approvalRefused": "Not asked: open the quote to see what stops it.",
+      "notAccepted": "Not accepted yet.",
+      "hasOrder": "Its order is made already.",
+      "readAgain": "Its version is not known yet: read the list again.",
+      "notSent": "Not sent and waiting for the customer.",
+      "mailFailed": "The mail could not be sent: open the quote and try again.",
+      "portalOwn": "A portal order is answered on its own (⋯ on its row).",
+      "closed": "Closed already.",
+      "askPortal": "A portal order: ask in its own thread.",
+      "askedAlready": "We asked already: it waits for the customer.",
+      "state": "Its state no longer allows it: open it.",
+      "forbidden": "Your role may not do this here.",
+      "gone": "It can no longer be opened.",
+      "invalid": "Refused as it is: open it to see why.",
+      "later": "The server is busy: run the rest again in a moment.",
+      "failed": "It could not be done: run the rest again."
+    },
+    "done": {
+      "cancelled": "Cancelled.",
+      "asked": "Approval asked.",
+      "orderMade": "Order {number} made.",
+      "linkSent": "New link sent.",
+      "lost": "Marked lost.",
+      "askedInfo": "Asked: it waits for the customer."
+    },
+    "field": {
+      "po": "Customer’s PO number",
+      "question": "The question"
+    }
+  },
+  "tasks": {
+    "quote": {
+      "title_one": "New task on {count} quote",
+      "title_other": "New task on {count} quotes",
+      "assigneeHint": "You, or one person who may read these quotes.",
+      "supervisor": "Each quote’s customer’s production supervisor",
+      "noSupervisor_one": "{count} quote has no production supervisor for its customer: pick a person, or its task is left out.",
+      "noSupervisor_other": "{count} quotes have no production supervisor for their customer: pick a person, or their tasks are left out.",
+      "where": "Each task is on its own quote: in its thread and in the assignee’s Home › My tasks.",
+      "held": {
+        "none": "Tick the quotes first.",
+        "tooMany": "At most {max} quotes at once."
+      },
+      "made": "Task made · for {name}",
+      "due": "due {date}"
+    },
+    "request": {
+      "title_one": "New task on {count} request",
+      "title_other": "New task on {count} requests and portal orders",
+      "assigneeHint": "You, or one person who may read these requests and portal orders.",
+      "supervisor": "Each request’s customer’s production supervisor",
+      "noSupervisor_one": "{count} request has no production supervisor for its customer: pick a person, or its task is left out.",
+      "noSupervisor_other": "{count} requests and portal orders have no production supervisor for their customer: pick a person, or their tasks are left out.",
+      "where": "Each task is on its own request: in its thread and in the assignee’s Home › My tasks.",
+      "held": {
+        "none": "Tick the requests and portal orders first.",
+        "tooMany": "At most {max} requests and portal orders at once."
+      },
+      "made": "Task made · for {name}",
+      "due": "due {date}"
+    }
+  },
+  "drafts": {
+    "picture": "Picture"
   }
 }

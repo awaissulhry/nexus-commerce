@@ -53,7 +53,8 @@
     "incoming": "Richieste e ordini dal portale",
     "countOpen": "{open} aperte · {closed} chiuse restano fuori",
     "countNotClosed": "{open} non chiusi · {closed} chiusi restano fuori",
-    "countGroup": "{count} in «{group}»"
+    "countGroup": "{count} in «{group}»",
+    "writingSub": "bozze nel portale di {customer} · sola lettura · mai contate come cose che toccano a noi"
   },
   "empty": {
     "tab": "{customer} non ha ancora niente prima dell’ordine: nessuna richiesta, nessun preventivo, nessuna bozza.",
@@ -75,5 +76,132 @@
   "foot": {
     "closedLeftOut": "I chiusi restano fuori ({count}):",
     "door": "{group} {count}"
+  },
+  "acts": {
+    "label": {
+      "askApproval": "Chiedi l’approvazione per {count}…",
+      "makeOrders": "Crea gli ordini per {count}…",
+      "newLink": "Invia un nuovo link a {count}…",
+      "markLost": "Segna {count} come perse…",
+      "askAbout": "Chiedi a {customer} su {count}…",
+      "askAboutAny": "Chiedi su {count}…"
+    },
+    "held": {
+      "notOpen": "Nessuno dei {count} è aperto: un preventivo chiuso non si annulla.",
+      "notDraft": "Nessuno dei {count} è una bozza.",
+      "noWait": "Nessuno dei {count} aspetta il suo ordine.",
+      "notSent": "Nessuno dei {count} è inviato e in attesa del cliente.",
+      "notRequest": "Nessuna delle {count} è una richiesta aperta: un ordine dal portale si decide a sé.",
+      "notAskable": "Nessuna delle {count} è una richiesta Nuova o In lavorazione.",
+      "tooMany": "Al massimo {max} alla volta.",
+      "text": "Scrivi almeno {min} caratteri.",
+      "long": "Al massimo {max} caratteri.",
+      "field": "Scrivi il numero d’ordine di {number}."
+    },
+    "portalOne_one": "{count} ordine dal portale si decide uno alla volta (⋯ sulla riga): ognuno chiede una data promessa, i prezzi e una mappa delle righe.",
+    "portalOne_other": "{count} ordini dal portale si decidono uno alla volta (⋯ su ogni riga): ognuno chiede una data promessa, i prezzi e una mappa delle righe.",
+    "noAct": "Il tuo ruolo li legge e non ne cambia nessuno: non c’è nessuna azione per le righe spuntate.",
+    "more": "Altro",
+    "moreLabel": "Altre {count} azioni",
+    "close": "Chiudi",
+    "back": "Indietro",
+    "records": "I record",
+    "notOnWhy": "No: {why}",
+    "title": {
+      "askApproval_one": "Chiedi l’approvazione per {count} preventivo",
+      "askApproval_other": "Chiedi l’approvazione per {count} preventivi",
+      "makeOrders_one": "Crea l’ordine di {count} preventivo",
+      "makeOrders_other": "Crea gli ordini di {count} preventivi",
+      "newLink_one": "Invia un nuovo link a {count} preventivo",
+      "newLink_other": "Invia un nuovo link a {count} preventivi",
+      "markLost_one": "Segna {count} richiesta come persa",
+      "markLost_other": "Segna {count} richieste come perse",
+      "askInfo_one": "Chiedi su {count} richiesta",
+      "askInfo_other": "Chiedi su {count} richieste"
+    },
+    "go": {
+      "askApproval": "Chiedi l’approvazione per {count}",
+      "makeOrders": "Crea {count} ordini",
+      "newLink": "Invia {count} nuovi link",
+      "markLost": "Segna {count} come perse",
+      "askInfo": "Chiedi su {count}"
+    },
+    "body": {
+      "askApproval": "Ogni bozza va a un approvatore; le sue righe restano bloccate finché qualcuno decide. La nota va con ognuna.",
+      "makeOrders": "L’ordine di ogni preventivo accettato si crea ora, dalla versione che il cliente ha accettato.",
+      "newLink": "Una mail per preventivo con il PDF con i prezzi e un nuovo link di accettazione; il link precedente si ferma.",
+      "markLost": "Ogni richiesta si chiude come persa con questa nota; una richiesta dal portale lì si legge «Chiusa».",
+      "askInfo": "Ogni richiesta aspetta il suo cliente: quella dal portale riceve la domanda lì («Ci serve qualcosa da voi»), le altre per e-mail al loro contatto."
+    },
+    "why": {
+      "quoteClosed": "Chiuso: un preventivo chiuso non si annulla.",
+      "firmOffer": "Un’offerta ferma: non si ritira prima del suo ultimo giorno ({date}).",
+      "waitingAlready": "È già in attesa di approvazione.",
+      "approvedAlready": "È già approvato.",
+      "notDraft": "Non è una bozza.",
+      "approvalRefused": "Non chiesto: apri il preventivo per vedere cosa lo ferma.",
+      "notAccepted": "Non ancora accettato.",
+      "hasOrder": "Il suo ordine è già creato.",
+      "readAgain": "La sua versione non è ancora nota: rileggi l’elenco.",
+      "notSent": "Non è inviato e in attesa del cliente.",
+      "mailFailed": "Non è stato possibile inviare la mail: apri il preventivo e riprova.",
+      "portalOwn": "Un ordine dal portale si decide a sé (⋯ sulla riga).",
+      "closed": "È già chiusa.",
+      "askPortal": "Un ordine dal portale: chiedi nella sua conversazione.",
+      "askedAlready": "Abbiamo già chiesto: aspetta il cliente.",
+      "state": "Il suo stato non lo permette più: aprilo.",
+      "forbidden": "Il tuo ruolo non può farlo qui.",
+      "gone": "Non si può più aprire.",
+      "invalid": "Rifiutato così com’è: aprilo per vedere perché.",
+      "later": "Il server è occupato: riprova i restanti fra poco.",
+      "failed": "Non è stato possibile farlo: riprova i restanti."
+    },
+    "done": {
+      "cancelled": "Annullato.",
+      "asked": "Approvazione chiesta.",
+      "orderMade": "Ordine {number} creato.",
+      "linkSent": "Nuovo link inviato.",
+      "lost": "Segnata come persa.",
+      "askedInfo": "Chiesto: aspetta il cliente."
+    },
+    "field": {
+      "po": "Numero d’ordine del cliente",
+      "question": "La domanda"
+    }
+  },
+  "tasks": {
+    "quote": {
+      "title_one": "Nuova attività su {count} preventivo",
+      "title_other": "Nuova attività su {count} preventivi",
+      "assigneeHint": "Tu, o una persona che può leggere questi preventivi.",
+      "supervisor": "Il responsabile di produzione del cliente di ogni preventivo",
+      "noSupervisor_one": "{count} preventivo non ha un responsabile di produzione per il suo cliente: scegli una persona, o la sua attività resta fuori.",
+      "noSupervisor_other": "{count} preventivi non hanno un responsabile di produzione per il loro cliente: scegli una persona, o le loro attività restano fuori.",
+      "where": "Ogni attività è sul suo preventivo: nella sua conversazione e in Home › Le mie attività di chi la riceve.",
+      "held": {
+        "none": "Spunta prima i preventivi.",
+        "tooMany": "Al massimo {max} preventivi alla volta."
+      },
+      "made": "Attività creata · per {name}",
+      "due": "entro il {date}"
+    },
+    "request": {
+      "title_one": "Nuova attività su {count} richiesta",
+      "title_other": "Nuova attività su {count} richieste e ordini dal portale",
+      "assigneeHint": "Tu, o una persona che può leggere queste richieste e ordini dal portale.",
+      "supervisor": "Il responsabile di produzione del cliente di ogni richiesta",
+      "noSupervisor_one": "{count} richiesta non ha un responsabile di produzione per il suo cliente: scegli una persona, o la sua attività resta fuori.",
+      "noSupervisor_other": "{count} richieste e ordini dal portale non hanno un responsabile di produzione per il loro cliente: scegli una persona, o le loro attività restano fuori.",
+      "where": "Ogni attività è sulla sua richiesta: nella sua conversazione e in Home › Le mie attività di chi la riceve.",
+      "held": {
+        "none": "Spunta prima le richieste e ordini dal portale.",
+        "tooMany": "Al massimo {max} richieste e ordini dal portale alla volta."
+      },
+      "made": "Attività creata · per {name}",
+      "due": "entro il {date}"
+    }
+  },
+  "drafts": {
+    "picture": "Immagine"
   }
 }

@@ -1,0 +1,64 @@
+/*
+ * F-CQ-201 (customer page › Quotes & incoming, 10-design §6, §8): the bars (3 + More ▾ with words) and the ONE many-acts window
+ * (its plan "Runs on N · Not on M", the records with why, the text, the receipt that names each record). Layout only; DS tokens only.
+ */
+.fw-many-bar {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-many-note {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-many {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-many-plan {
+  margin: 0;
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-strong);
+}
+
+.fw-many-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-many-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-8);
+}
+
+.fw-many-name {
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-strong);
+}
+
+.fw-many-why {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.fw-many-why.is-bad {
+  color: var(--nds-danger-text, var(--nds-text-2));
+}
+
+.fw-many-field {
+  flex: 1 1 200px;
+  min-width: 0;
+}

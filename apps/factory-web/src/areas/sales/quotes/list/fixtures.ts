@@ -118,6 +118,8 @@ function model(overrides: Partial<QuotesListViewModel> = {}): QuotesListViewMode
     updates: 0,
     newQuote: null,
     notice: null,
+    // F-CQ-201: the bar's rights (the Owner's: every act; a case of another role gives its own).
+    barRights: { can: { ...CAN.owner }, grains: GRAINS.owner, tasks: true, orders: true },
     ...overrides,
   }
 }
@@ -131,8 +133,10 @@ export const designScreen = defineDesignScreen<QuotesListViewModel>({
     { id: 'sales', label: 'Sales · prices and margin %', model: model({ grains: GRAINS.sales, can: CAN.sales }), note: 'S2: margin % and "under the floor", never a cost.' },
     { id: 'finance', label: 'Finance · approves, does not make quotes', model: model({ grains: GRAINS.finance, can: CAN.finance }), note: 'New quote is held with the reason.' },
     { id: 'price-only', label: 'A role with prices only', model: model({ grains: GRAINS.priceOnly, can: CAN.viewer, rows: { items: priceOnly(ROWS), more: false, problem: null } }) },
-    { id: 'selected', label: 'Rows selected: bulk actions in the toolbar', model: model({ selected: [id(42), id(39)], focusRow: 0 }), note: 'The header box is mixed; the toolbar swaps to Export 2 (CSV) and Cancel 2 quotes; x ticks the focused row, shift-click a range.' },
-    { id: 'selected-held', label: 'Selected rows that cannot all be cancelled', model: model({ selected: [id(42), id(38)] }), note: 'An accepted quote is selected: Cancel is held with the reason before the click.' },
+    { id: 'selected', label: 'Rows selected: the bar, 3 + More ▾', model: model({ selected: [id(42), id(39)], focusRow: 0 }), note: 'F-CQ-201: Add task to 2… · Cancel 2 quotes · Ask for approval on 1…, then More ▾ (Make the orders for 0 held in words, Send a new link to 1…) and the frame\'s Export 2; x ticks the focused row, shift-click a range.' },
+    { id: 'selected-held', label: 'Ticked rows an act runs on only in part', model: model({ selected: [id(42), id(38)] }), note: 'F-CQ-201: an accepted quote is ticked — Cancel counts only the open one (Cancel 1 quote); its window says why the other is not on. An act none of the ticked rows takes is held with words.' },
+    { id: 'selected-finance', label: 'Finance ticks rows: only its own acts are drawn', model: model({ grains: GRAINS.finance, can: { ...CAN.finance }, barRights: { can: { ...CAN.finance }, grains: GRAINS.finance, tasks: true, orders: false }, selected: [id(42), id(39)] }), note: 'F-CQ-201: no Cancel, no Ask for approval, no Make the orders (no right: not drawn, never held); Add task to 2… and Export 2.' },
+    { id: 'selected-viewer', label: 'A role that reads and changes none', model: model({ can: { ...CAN.viewer }, barRights: { can: { ...CAN.viewer }, grains: GRAINS.owner, tasks: false, orders: false }, selected: [id(42)] }), note: 'F-CQ-201: no act is drawn — the bar says the role changes none (Export stays the frame\'s, with its own right).' },
     { id: 'tile-waiting', label: 'Tile pressed: Waiting for approval', model: model({ filters: { ...NO_FILTERS, status: 'PENDING_APPROVAL' }, rows: { items: ROWS.filter((item) => item.status === 'PENDING_APPROVAL'), more: false, problem: null } }), note: 'The tile is pressed and its chip is in the filter row (one filter model); Clear all.' },
     { id: 'expiring', label: 'Tile pressed: Expiring in 7 days', model: model({ filters: { ...NO_FILTERS, status: 'SENT', expiring: true }, rows: { items: ROWS.filter((item) => item.status === 'SENT'), more: false, problem: null } }) },
     { id: 'updates', label: 'Live: 3 updates waiting', model: model({ updates: 3 }), note: 'Rows never move under the cursor: "3 updates · Show" reads them.' },

@@ -32,6 +32,7 @@ import {
 } from './demo/fixtures'
 // B-TH-290: the Production column (production's answer on each request).
 import { PRODUCTION_ROWS } from './demo/fixtures'
+import { ROLE_PERMISSIONS } from './demo/fixtures' // F-CQ-201: the bar's rights by the role's template
 import { emptyDecline, emptyLine, HOME_ADDRESS, requestDraftOf, type InquiryTile, type ListAddress, type RecordTab } from './model'
 import { acceptDraftOf, type CatalogueModel } from './catalogue-model'
 // ---- F-CP-157: the accept window's line map ----
@@ -107,6 +108,8 @@ function page(over: Partial<InquiriesModel> = {}, role: RoleCase = 'owner'): Des
       built: ['/sales/orders/[id]', '/sales/quotes/[id]', '/sales/incoming'],
       noticeFacts: {},
       demoPictures: DEMO_PICTURES,
+      // F-CQ-201: the bar's rights, each act its own (the role's template).
+      barRights: { manage: canFor(role).manage, tasks: (ROLE_PERMISSIONS[role] as readonly string[]).includes('tasks.manage') },
       ...over,
     },
   }
@@ -143,8 +146,8 @@ const assignDialog = (people: Extract<RecordDialog, { kind: 'assign' }>['people'
 const ADDRESSES: AddressesModel = { loaded: { status: 'ready', value: { companyId: COMPANY_ID, answer: { addresses: ['orders@demo.example.com', 'rfq@demo.example.com'], source: 'COMPANY', version: 2, hasOwnSettings: true, mayManage: true } } }, draft: ['orders@demo.example.com', 'rfq@demo.example.com'], adding: '', domains: ['demo.example.com'], live: false, busy: false, problem: null, saved: false, offline: false }
 const DOOR = { key: 'addresses.door.notLive', params: { count: 2 } }
 // ── end B-TH-285 ──
-const BULK_ASSIGN: BulkDialog = { kind: 'assign', ids: [ROWS[0]!.id, ROWS[3]!.id], model: { subject: { key: 'bulk.subject', params: { count: 2 } }, current: null, people: { status: 'ready', value: ASSIGNEES }, busy: false, notice: null, offline: false } }
-const BULK_DECLINE: BulkDialog = { kind: 'decline', ids: [ROWS[0]!.id, ROWS[3]!.id], model: { subject: { key: 'bulk.subject', params: { count: 2 } }, draft: { ...emptyDecline, reason: 'CAPACITY' }, message: { to: null, held: { key: 'decline.message.many' } }, busy: false, notice: null, offline: false } }
+const BULK_ASSIGN: BulkDialog = { kind: 'assign', ids: [ROWS[0]!.id, ROWS[3]!.id], model: { subject: { key: 'bulk.subject', params: { count: 2 } }, current: null, people: { status: 'ready', value: ASSIGNEES }, busy: false, notice: null, offline: false, preview: { runs: 2, others: 1 } } }
+const BULK_DECLINE: BulkDialog = { kind: 'decline', ids: [ROWS[0]!.id, ROWS[3]!.id], model: { subject: { key: 'bulk.subject', params: { count: 2 } }, draft: { ...emptyDecline, reason: 'CAPACITY' }, message: { to: null, held: { key: 'decline.message.many', params: { portal: 1, count: 2 } } }, busy: false, notice: null, offline: false, preview: { runs: 2, others: 0 } } }
 
 function ListDesign({ model }: { model: DesignModel }) {
   const [state, setState] = useState(model.model)
@@ -218,7 +221,7 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'th-216-numbering', label: 'TH-1b · One notice: requests by portal and mail are off for a company (no request numbering), 2 more behind', model: page({ list: listOf(OPEN_ROWS, false), noticeFacts: { numberingMissing: [DEMO_COMPANIES[0].name], mailToSort: { count: 4, more: false } } }) },
     { id: 'th-216-mail', label: 'TH-1b · One notice: 4 mails wait in Mail to sort (Open)', model: page({ noticeFacts: { mailToSort: { count: 4, more: false } } }) },
     { id: 'th-216-companies', label: 'TH-1b · Two companies: the Company column (a funnel) and its chip', model: page({ companies: DEMO_COMPANIES.map((entry) => ({ id: entry.id, name: entry.name })), address: at({ company: DEMO_COMPANIES[0].id }) }) },
-    { id: 'th-216-production', label: 'TH-1b · The production manager: reads every request, no target price, every sales action held "Needs the sales permission"', model: page({ selected: [keyOf(ROWS[0]!)] }, 'production') },
+    { id: 'th-216-production', label: 'TH-1b · The production manager: reads every request, no target price; F-CQ-201: no sales act is drawn (no right: never held), only its own', model: page({ selected: [keyOf(ROWS[0]!)] }, 'production') },
     // ── end B-TH-216 ──
     // ── B-TH-230 (TH-2): New messages (the reader's own) and the Waiting column amber by the one rule ──
     { id: 'th-230-new-messages', label: 'TH-2 · New messages: "● 2 new · 10:42" on the requests the customer answered; the Waiting column amber past 1 working day', model: page({ unread: UNREAD }), note: 'One read for the page (POST /threads/unread, ≤ 200 rows); a count only on rows you may open; the cell opens the request beside the list with its thread at the first new message. Waiting on us past 1 working day is amber (the one rule: the thread head and Today say the same); waiting on the customer is never amber.' },
@@ -257,7 +260,7 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'tile-quoted-week', label: 'Tile: Quoted this week', model: page(tile('QUOTED_THIS_WEEK', [ROWS[4]!])) },
     { id: 'all-rows', label: 'Rows ▾ All: closed ones with their quote or the decline reason', model: page({ address: at({ tile: 'ALL' }), list: listOf(ROWS) }) },
     { id: 'filtered', label: 'Filters as chips: source Phone, a search (Clear all)', model: page({ address: at({ source: 'PHONE', q: 'trousers' }), list: listOf([ROWS[0]!]) }) },
-    { id: 'selected', label: 'Two rows selected: Assign 2, Decline 2, Export 2', model: page({ selected: [keyOf(ROWS[0]!), keyOf(ROWS[3]!)] }) },
+    { id: 'selected', label: 'Two rows selected: the bar — Assign 2… · Ask about 2… · Decline 2…, More ▾ (Mark 2 lost…, Add task to 2…), Export 2', model: page({ selected: [keyOf(ROWS[0]!), keyOf(ROWS[3]!)] }) },
     { id: 'selected-closed', label: 'A selection with closed rows: they are left out of Assign and Decline (said before the click)', model: page({ address: at({ tile: 'ALL' }), list: listOf(ROWS), selected: [keyOf(ROWS[0]!), keyOf(ROWS[4]!), keyOf(ROWS[5]!)] }) },
     { id: 'notices', label: 'Notices: the count is partial (one shown, "1 more notice")', model: page({ list: listOf(OPEN_ROWS, false) }) },
     { id: 'notices-open', label: 'Every notice listed (partial count, prospects to match), each dismissed by its value', model: page({ list: listOf(OPEN_ROWS, false), noticesOpen: true }) },
