@@ -831,6 +831,10 @@
     },
     "state": {
       "notClosed": "Non chiusi"
+    },
+    "row": {
+      "sendOnPage": "Invia dalla pagina del preventivo ›",
+      "addTask": "Aggiungi attività…"
     }
   },
   "newQuote": {

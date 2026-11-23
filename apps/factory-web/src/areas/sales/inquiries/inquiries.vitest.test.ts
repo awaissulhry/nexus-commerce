@@ -959,3 +959,74 @@ describe('F-CQ-103: the Incoming list — kinds, To answer and Ended, Most urgen
   })
 })
 // ---- end F-CQ-103
+
+// ---- F-CQ-201 / 203 / 204 (customer page › Quotes & incoming, 10-design §6.2, §7, §8; settles C2, C10, C30; the lead's decision on W1):
+// the Incoming list's acts on both hosts — the bar, Assign N / Decline N with their plan and a refusal that names each request, the
+// row ⋯ hidden without the right, the request's and the portal order's OWN windows opened in place on a host whose dock is the pane,
+// the file keeping the chips cell's waiting and production facts, the Italian "preventivo".
+import { bulkRefusalsOf } from './model'
+
+describe('F-CQ-201 / 203 / 204: the Incoming list acts', () => {
+  const view = readFileSync(new URL('./view/InquiriesView.tsx', import.meta.url), 'utf8')
+  const hook = readFileSync(new URL('./use-inquiries-list.ts', import.meta.url), 'utf8')
+
+  it('a refused Assign / Decline names the requests it was about (body/items/<i>), each once (Q4-B4)', () => {
+    const items = [{ inquiryId: ROWS[0]!.id }, { inquiryId: ROWS[1]!.id }]
+    const refused = new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'body/items/1', message: 'x' }, { path: 'body/items/1/version' }])
+    expect(bulkRefusalsOf(refused, items, ROWS)).toEqual([{ key: 'bulk.refusedOne', params: { number: ROWS[1]!.number } }])
+    expect(bulkRefusalsOf(new ApiError('conflict', 409, 'conflict', 'x'), items, ROWS)).toEqual([])
+    expect(bulkRefusalsOf(new Error('x'), items, ROWS)).toEqual([])
+    expect(hook).toContain('const lines = bulk ? bulkRefusalsOf(error, itemsOf(bulk.ids), list?.rows ?? []) : []')
+    // The plan before the click, in the window: what it runs on, the other kinds left out.
+    expect(hook).toContain('const preview: BulkPreview = { runs: open.length, others: picked.length - open.length }')
+  })
+
+  it('the row ⋯: the request\'s next steps only with the right (never held for it), no key letter in a label; a portal order\'s own verbs', () => {
+    expect(view).toContain('...(request && isOpen(request.status) && m.can.manage')
+    expect(view).toContain("...(m.can.quotes ? [verbItem(data, request, 'quote', `${t('verb.quote')}…`)] : [])")
+    expect(view).toContain("verbItem(data, request, 'lost', t('verb.lost'))")
+    expect(view).not.toContain("t('verb.quoteKey')")
+    expect(view).toContain("data.kind === 'CATALOGUE_ORDER' && data.catalogueOrder?.status === 'SENT' && m.can.orders")
+    // Mark as lost and Make order held by the state, Make order also by its right (the rule keeps it).
+    expect(verbHeld({ ...ROWS[0]!, status: 'LOST' }, 'lost', owner, false)).toEqual({ key: 'refusal.CLOSED', params: { number: ROWS[0]!.number } })
+    expect(verbHeld(ROWS[0]!, 'order', { ...owner, orders: false }, false)).toEqual({ key: 'held.right', params: { right: 'right.orders.manage' } })
+  })
+
+  it('on a host whose dock is the pane a row\'s verb opens its OWN window here (read once, nothing after it closes); Ask for info = the ask window with one (C2)', () => {
+    expect(hook).toContain('inquiryId: address.open ?? verbTarget,')
+    expect(hook).toContain("if (verb === 'askInfo') return many.open(incomingActOf('askInfo', api, [recordOf(row)]), [recordOf(row)])")
+    expect(hook).toContain('requestId: address.catalogue ?? catalogueTarget?.id ?? null,')
+    expect(view).toContain('{hostPane && model.verb && model.verb.loaded.status === \'ready\' && <RecordDialogs model={model.verb} view={model.verb.loaded.value} actions={actions?.record} />}')
+    expect(view).toContain('<CatalogueDialogs model={model.catalogueVerb}')
+    const pane = readFileSync(new URL('./view/pane/catalogue/CataloguePane.tsx', import.meta.url), 'utf8')
+    expect(pane).toContain('export function CatalogueDialogs(')
+    const container = readFileSync(new URL('./use-catalogue-order.tsx', import.meta.url), 'utf8')
+    expect(container).toContain("else actions.onAccept?.(pending === 'order' ? 'ORDER' : 'QUOTE')")
+  })
+
+  it('Add task to N: the ONE batch window (records Inquiry / PortalOrderRequest), Assign to starts on "Me" (C19)', () => {
+    expect(view).toContain("words: { ns: 'before-order', prefix: 'tasks.request' }")
+    expect(view).toContain("defaultAssignee: 'me'")
+    expect(hook).toContain('tasks.open(rows.map((row) => ({ type: THREAD_TYPE[row.kind], id: row.id, label: row.number, supervisor: null })))')
+  })
+
+  it('the file keeps the waiting and production facts by default (screen = file: they are in the chips cell) — never lost', () => {
+    expect(view).toContain("{ key: 'waitingHours', label: t('col.waiting') }")
+    expect(view).toContain("{ key: 'production', label: t('production.col') }")
+    expect(view.match(/context: \{ exportWith: whereExport \}/g)?.length).toBe(2)
+    expect(view).not.toContain("colId: 'waitingHours'")
+    expect(view).not.toContain("colId: 'production'")
+  })
+
+  it('the words in both languages; Italian "Accetta come preventivo" (C30), the true decline words (Q4-B5)', () => {
+    for (const locale of LOCALES) {
+      const all = words(locale)
+      for (const key of ['row.makeOrder', 'row.assign', 'row.decline', 'row.addTask', 'bulk.plan_one', 'bulk.plan_other', 'bulk.planOthers_one', 'bulk.planOthers_other', 'bulk.refusedOne']) expect(all[key], `${locale} ${key}`).toBeTruthy()
+    }
+    expect(words('it')['catalogue.acceptQuote']).toBe('Accetta come preventivo')
+    expect(words('it')['catalogue.acceptQuoteTitle']).toContain('preventivo')
+    expect(words('it')['catalogue.acceptQuoteHint']).toContain('Un preventivo in bozza')
+    expect(words('en')['decline.message.many']).toContain('tells its customer it was declined')
+  })
+})
+// ---- end F-CQ-201 / 203 / 204

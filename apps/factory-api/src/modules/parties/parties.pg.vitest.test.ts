@@ -679,7 +679,7 @@ describe('GET /parties: the order, the work terms and the tax mode in force (B-C
   it('C1-B2: the Tax mode filter matches the identity IN FORCE, never an older one (as the Tax mode column reads it)', async () => {
     // CL-TAX-MOVED: an EU business (DE) since 2020, an Italian business since 2025 — the identity in force today is IT_B2B.
     const moved = await create('sales', { code: 'cl-tax-moved', legalName: 'Seed Moved Customer S.r.l.', roles: ['CUSTOMER'], taxIdentity: { country: 'DE', taxMode: 'EU_B2B', vatNumber: '100000027', validFrom: '2020-01-01' } })
-    const vat = partitaIva('1000000077')
+    const vat = partitaIva('1000000781') // its own number: '1000000077' is RACE-1's (the race case above)
     const added = await call('sales', 'POST', `/parties/${moved.id}/tax-identities`, { country: 'IT', taxMode: 'IT_B2B', vatNumber: vat, fiscalCode: vat, sdiRecipientCode: 'abc1234', validFrom: '2025-01-01' })
     expect(added.statusCode, added.body).toBe(201)
     const italian = await list('sales', 'taxMode=IT_B2B&status=ALL&limit=200')

@@ -6,7 +6,6 @@ import type { BeforeOrderCountsAnswer } from '@nexus/factory-domain/sales/before
 import { useOfficeApi, useOfficeSession } from '../../../../../lib/session/context'
 import { companyPrefix } from '../../../../../lib/session/session'
 import { useLiveBus } from '../../../../../shell/live/use-live'
-import { draftsAddress } from '../drafts/model'
 import { readBeforeOrderCounts } from './api'
 import { COUNTS_WAIT_MS, countsMoved, doorAddress, doorOf, DOORS, tabRightsOf, termsOfDoor, toggledDoor, type Door, type DoorTerms, type TabRights } from './band'
 
@@ -15,8 +14,7 @@ import { COUNTS_WAIT_MS, countsMoved, doorAddress, doorOf, DOORS, tabRightsOf, t
  * this tab is shown; again on a quote, request or portal order change, coalesced 800 ms; everything again after a reconnect), the
  * door the address opens (`?tab=quotes&group=<G>`: each door is a real link; the same door again, or ✕, writes ONE replace without
  * it), the lists' terms under it, and the tab's own room (a ResizeObserver on its root: each list lays out by that room, never by
- * the window). The customer's one name is the page's (P0-B9). The drafts' door is Work › "Drafts of <customer>" until the drafts
- * section moves here (W2 / W3).
+ * the window). The customer's one name is the page's (P0-B9). F-CQ-205: the drafts' door is this tab's own section.
  */
 export interface QuotesTab {
   readonly counts: BeforeOrderCountsAnswer | null
@@ -101,10 +99,9 @@ export function useQuotesTab(partyId: string): { tab: QuotesTab; rootRef: RefObj
   const query = params?.toString() ?? ''
   const hrefs = useMemo(() => {
     const current = new URLSearchParams(query)
-    const out = Object.fromEntries(DOORS.map((each) => [each, doorAddress(base, current, toggledDoor(door, each))])) as Record<Door, string>
-    out.WRITING = draftsAddress(base, partyId, current)
-    return out
-  }, [base, query, door, partyId])
+    // F-CQ-205: every door is this tab's own — WRITING too (the drafts section "Customer is writing" is here now).
+    return Object.fromEntries(DOORS.map((each) => [each, doorAddress(base, current, toggledDoor(door, each))])) as Record<Door, string>
+  }, [base, query, door])
   const everything = useMemo(() => doorAddress(base, new URLSearchParams(query), null), [base, query])
   const onCloseDoor = useCallback(() => router.replace(everything, { scroll: false }), [router, everything])
 

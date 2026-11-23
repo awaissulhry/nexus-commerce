@@ -11,8 +11,8 @@ import type { IncomingTile } from '@nexus/factory-domain/sales/incoming/rules'
  * stays a quiet 0 (the band keeps its shape). No amount, no person: numbers of records only.
  *
  *   door              Requests & portal orders     Quotes                drafts (W1: Work › "Drafts of <customer>")
- *   (none)            Open                         LIVE ("Not closed")   —
- *   WRITING           folded                       folded                the drafts
+ *   (none)            Open                         LIVE ("Not closed")   the drafts
+ *   WRITING           folded                       folded                the drafts (F-CQ-205: the section "Customer is writing")
  *   TO_ANSWER         To answer                    folded                —
  *   PREPARING         folded                       PREPARING             —
  *   APPROVAL          folded                       APPROVAL              —
@@ -124,12 +124,12 @@ export function doorCount(counts: Pick<BeforeOrderCountsAnswer, 'groups' | 'open
 export interface DoorTerms {
   readonly quotes: QuoteGroupTerm | null
   readonly incoming: IncomingTile | null
-  /** The drafts show (only WRITING; W1: the door opens Work › "Drafts of <customer>", their home today). */
+  /** The drafts show (no door, or WRITING; F-CQ-205: the section "Customer is writing" on this tab). */
   readonly drafts: boolean
 }
 
-/** No door: the lists open on their live rows (quotes "Not closed" = LIVE; Incoming's Open). */
-export const NO_DOOR: DoorTerms = Object.freeze({ quotes: 'LIVE', incoming: 'OPEN', drafts: false })
+/** No door: the lists open on their live rows (quotes "Not closed" = LIVE; Incoming's Open); F-CQ-205: the drafts show too. */
+export const NO_DOOR: DoorTerms = Object.freeze({ quotes: 'LIVE', incoming: 'OPEN', drafts: true })
 
 /** The lists' terms of a door — the quotes' `group` term, Incoming's saved row (INCOMING_TILE_OF: the server's one map), the drafts. */
 export function termsOfDoor(door: Door | null): DoorTerms {

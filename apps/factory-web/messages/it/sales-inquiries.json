@@ -82,7 +82,11 @@
     "menu": "Azioni per {number}",
     "open": "Apri",
     "openNewTab": "Apri la pagina intera in una nuova scheda",
-    "copy": "Copia il numero"
+    "copy": "Copia il numero",
+    "makeOrder": "Crea ordine…",
+    "assign": "Assegna…",
+    "decline": "Rifiuta…",
+    "addTask": "Aggiungi attività…"
   },
   "keys": {
     "new": "Nuova richiesta",
@@ -218,7 +222,12 @@
     "declined_one": "{count} richiesta rifiutata ({reason})",
     "declined_other": "{count} richieste rifiutate ({reason})",
     "reachOthers": "{open} richieste aperte · {others} di altri tipi lasciate fuori (ognuna si risponde a sé)",
-    "noneRequests": "Assegna e Rifiuta agiscono sulle richieste: un ordine dal portale si decide nel suo riquadro, una richiesta di modifica in Home › Approvazioni"
+    "noneRequests": "Assegna e Rifiuta agiscono sulle richieste: un ordine dal portale si decide nel suo riquadro, una richiesta di modifica in Home › Approvazioni",
+    "plan_one": "Vale per {count} richiesta",
+    "plan_other": "Vale per {count} richieste",
+    "planOthers_one": "Non per {count}: un ordine dal portale o una richiesta di modifica si decide a sé",
+    "planOthers_other": "Non per {count}: ordini dal portale e richieste di modifica si decidono a sé",
+    "refusedOne": "{number}: è cambiata nel frattempo, o il suo stato non lo permette — aprila."
   },
   "held": {
     "right": "Serve il permesso delle vendite ({right})",
@@ -630,7 +639,7 @@
     "messageLabel": "Messaggio al cliente (facoltativo)",
     "messageTo": "Una e-mail a {to}, nello stesso passo del rifiuto",
     "message": {
-      "many": "Rifiuta N non invia nulla: un messaggio va a un cliente alla volta, dalla sua richiesta",
+      "many": "Non parte nessun messaggio. Ogni richiesta arrivata dal portale dice al suo cliente che è stata rifiutata ({portal} su {count}).",
       "prospect": "Un potenziale cliente non ha ancora una conversazione: rispondi alla sua mail da Posta da smistare",
       "noEmail": "La richiesta non indica un contatto con e-mail: scegline uno in Richiesta",
       "notAnOrder": "«Non un ordine» non invia nulla: il cliente legge «Chiusa»"
@@ -924,7 +933,7 @@
     },
     "hint": {
       "REQUEST": "Una richiesta da portale, e-mail, telefono, fiera o visita",
-      "CATALOGUE_ORDER": "Quello che il cliente chiede nel suo portale (modelli del suo catalogo, a parole sue, su misura): accettalo come ordine o come offerta, oppure rifiutalo",
+      "CATALOGUE_ORDER": "Quello che il cliente chiede nel suo portale (modelli del suo catalogo, a parole sue, su misura): accettalo come ordine o come preventivo, oppure rifiutalo",
       "CHANGE_REQUEST": "Il cliente chiede di modificare o annullare un ordine confermato: si risponde in Home › Approvazioni"
     }
   },
@@ -986,7 +995,7 @@
     "notFoundBody": "Non c’è, oppure non puoi aprirlo.",
     "title": "Ordine dal portale {number}",
     "acceptOrder": "Accetta come ordine",
-    "acceptQuote": "Accetta come offerta",
+    "acceptQuote": "Accetta come preventivo",
     "refuse": "Rifiuta",
     "handled": "Qualcun altro ha cambiato quest'ordine dal portale alle {time}",
     "held": {
@@ -1038,9 +1047,9 @@
     "refuseHint": "In parole semplici, nella lingua del cliente: è quello che mostra il suo portale.",
     "refusePreview": "{customer} legge:",
     "acceptOrderTitle": "Accetta {number} come ordine",
-    "acceptQuoteTitle": "Accetta {number} come offerta",
+    "acceptQuoteTitle": "Accetta {number} come preventivo",
     "acceptOrderHint": "L'ordine si crea con le condizioni e gli indirizzi del cliente; il cliente legge «Confermato» con il suo numero.",
-    "acceptQuoteHint": "Un'offerta in bozza con queste righe ai prezzi di listino di oggi (le taglie non più offerte restano fuori); il cliente la legge quando la invii.",
+    "acceptQuoteHint": "Un preventivo in bozza con queste righe ai prezzi di listino di oggi (le taglie non più offerte restano fuori); il cliente lo legge quando lo invii.",
     "promise": "Data promessa",
     "promiseHint": "Parte dalla data chiesta dal cliente."
   },

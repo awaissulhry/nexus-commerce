@@ -736,3 +736,68 @@ describe('F-CQ-102: the Quotes list — group and order terms, the chips cell, t
   })
 })
 // ---- end F-CQ-102
+
+// ---- F-CQ-201 / 202 / 204 (customer page › Quotes & incoming, 10-design §6.1, §7, §8; settles C1, C19, C28): the Quotes list's bar and
+// row ⋯ on both hosts, the quote's OWN windows opened in place (one place for their acts: record/acts.ts), Make revision N also from
+// Expired / Declined, New link hidden without prices, Add task to N on the shape agreed with the Customers list lane.
+import { QUOTE_ACTS } from './record/acts'
+import { QUOTE_DIALOG_KINDS } from './record/record-model'
+
+describe('F-CQ-201 / 202 / 204: the Quotes list acts — the bar, the row ⋯, the quote\'s own windows in place', () => {
+  const view = readFileSync(new URL('./list/view/QuotesListView.tsx', import.meta.url), 'utf8')
+  const hook = readFileSync(new URL('./list/use-quotes-list.ts', import.meta.url), 'utf8')
+  const page = readFileSync(new URL('./record/QuoteRecord.tsx', import.meta.url), 'utf8')
+  const dialog = readFileSync(new URL('./record/use-quote-dialog.ts', import.meta.url), 'utf8')
+
+  it('the quote page and the list run ONE set of acts (record/acts.ts): no act\'s API call is left in QuoteRecord.tsx', () => {
+    for (const call of ['askApproval(api', 'approveQuote(api', 'rejectQuote(api', 'cancelQuote(api', 'reviseQuote(api', 'sendNewLink(api', 'reopen(api']) expect(page, call).not.toContain(call)
+    for (const kind of QUOTE_DIALOG_KINDS) expect(QUOTE_ACTS[kind], kind).toBeTruthy()
+    expect(page).toContain('QUOTE_ACTS.approve.run(api, current, note)')
+    expect(QUOTE_ACTS.revise.done({ currentRevision: 2 })).toEqual({ key: 'notice.revised', tone: 'success', params: { next: 3 } })
+    expect(QUOTE_ACTS.cancel.done({ currentRevision: 1 })).toEqual({ key: 'notice.cancelled', tone: 'success' })
+  })
+
+  it('a row opens the quote\'s own window in place — the quote read once on open (never for every row), the list read again after', () => {
+    expect(dialog).toContain('getQuote(told.current.api, quoteId)')
+    expect(dialog).toContain('QUOTE_ACTS[kind].run(told.current.api, before, text')
+    expect(view).toContain('{model.quoteDialog && <QuoteDialogs quote={model.quoteDialog.quote} model={model.quoteDialog.model} actions={actions?.quoteDialog} />}')
+    expect(hook).toContain('quoteDialog.openOn(row.id, act)')
+    // The row ⋯: each next step only with its right (the asker never decides: said inside the window), by its state.
+    expect(view).toContain("...(manage && data.status === 'DRAFT' ? [{ id: 'ask'")
+    expect(view).toContain("...(can.approve && data.status === 'PENDING_APPROVAL'")
+    expect(view).toContain("...(manage && ['SENT', 'EXPIRED', 'DECLINED'].includes(data.status) ? [{ id: 'revise'")
+    expect(view).toContain("...(can.send && latest.current.model.grains.price && data.status === 'APPROVED'")
+    expect(view).not.toContain('CancelManyDialog')
+  })
+
+  it('Make revision N from Expired and Declined too (Q1-B3, C28) — for who manages; nothing for who does not', () => {
+    const expired = { ...quote(), current: { ...quote().current, status: 'EXPIRED' as const } }
+    const declined = { ...quote(), current: { ...quote().current, status: 'DECLINED' as const } }
+    expect(nextStep(expired, PEOPLE.sales, CAN.sales)).toEqual({ step: 'revise', held: null })
+    expect(nextStep(declined, PEOPLE.sales, CAN.sales)).toEqual({ step: 'revise', held: null })
+    expect(nextStep(expired, PEOPLE.finance, CAN.finance)).toEqual({ step: 'none', held: null })
+  })
+
+  it('New link only for who may send AND sees prices (the quote page\'s ⋯ and its documents, Q1-B2); the bar\'s too', () => {
+    const recordView = readFileSync(new URL('./record/view/QuoteRecordView.tsx', import.meta.url), 'utf8')
+    expect(recordView).toContain("status === 'SENT' && model.can.send && model.grains.price ? [{ id: 'newLink'")
+    const documents = readFileSync(new URL('./record/view/DocumentsTab.tsx', import.meta.url), 'utf8')
+    expect(documents).toContain("quote.current.status === 'SENT' && model.can.send && model.grains.price && (")
+    expect(documents).not.toContain("heldReason={model.can.send ? null : t('held.noSend')} onClick={() => actions?.onDialog?.('newLink')}")
+  })
+
+  it('Add task to N: the ONE batch window on the agreed shape (C19) — the quotes\' nouns, each name a door, Assign to starts on "Me"', () => {
+    expect(view).toContain("words: { ns: 'before-order', prefix: 'tasks.quote' }")
+    expect(view).toContain('namesOther: null')
+    expect(view).toContain("defaultAssignee: 'me'")
+    expect(hook).toContain("tasks.open(picked.map((row) => ({ type: 'Quote', id: row.id, label: row.number, supervisor: null })))")
+  })
+
+  it('the row\'s words in both languages', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['sales']).sales!)
+      for (const key of ['list.row.sendOnPage', 'list.row.addTask']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+    }
+  })
+})
+// ---- end F-CQ-201 / 202 / 204

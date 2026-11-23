@@ -269,7 +269,8 @@
       "oneKind": "Approve several only for requests of one kind.",
       "reading": "Reading the request…",
       "answerAlone": "A customer’s request is answered in its window: open it.",
-      "changeAlone": "A work order change is decided in its window: open it."
+      "changeAlone": "A work order change is decided in its window: open it.",
+      "quoteAlone": "A quote is decided in its own window: open it."
     }
   },
   "refusal": {

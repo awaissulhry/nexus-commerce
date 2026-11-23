@@ -30,7 +30,7 @@ type CatalogueDialogStyles = NonNullable<NonNullable<Extract<CatalogueDialog, { 
 
 // F-CP-107 (customer page plan D10): `draft` — the customer's portal draft read on its customer page, read only (its title; Accept and
 // Refuse held: "The customer is still writing it"); its changes read again quietly (no "someone else handled it": it is theirs).
-export function useCatalogueOrder(options: { readonly requestId: string | null; /** Its company (from the Incoming row; the thread's files and mentions are the company's). */ readonly companyId?: string | null; readonly onDecided?: (requestId: string) => void; readonly onChanged?: () => void; readonly draft?: { readonly title: string } | null }): { model: CatalogueModel; actions: CatalogueActions; thread: ReactNode } {
+export function useCatalogueOrder(options: { readonly requestId: string | null; /** Its company (from the Incoming row; the thread's files and mentions are the company's). */ readonly companyId?: string | null; readonly onDecided?: (requestId: string) => void; readonly onChanged?: () => void; readonly draft?: { readonly title: string } | null; /** F-CQ-204: a row's verb to open once it is read (Accept as order / quote, Refuse); told back when done. */ readonly pending?: 'order' | 'quote' | 'refuse' | null; readonly onPendingDone?: () => void }): { model: CatalogueModel; actions: CatalogueActions; thread: ReactNode } {
   const { requestId } = options
   const api = useOfficeApi()
   const session = useOfficeSession()
@@ -200,6 +200,18 @@ export function useCatalogueOrder(options: { readonly requestId: string | null; 
     },
     onDismissNotice: () => setNotice(null),
   }
+
+  // ---- F-CQ-204: a row's verb, once the portal order is read (the useInquiry pattern): its own window opens, then it is told back.
+  const pending = options.pending ?? null
+  useEffect(() => {
+    if (!pending || !record || record.request.id !== requestId) return
+    if (pending === 'refuse') actions.onRefuse?.()
+    else actions.onAccept?.(pending === 'order' ? 'ORDER' : 'QUOTE')
+    told.current.onPendingDone?.()
+    // `actions` is rebuilt each render; the record and the verb decide.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending, record, requestId])
+  // ---- end F-CQ-204
 
   // The catalogue order's thread: shared with its customer only (B-TH-040's resolver: company + customer, once SENT).
   const thread: ReactNode =
