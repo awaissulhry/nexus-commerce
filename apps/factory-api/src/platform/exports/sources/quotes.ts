@@ -1,4 +1,6 @@
+import { ValidationError } from '@nexus/factory-domain/core/errors' // B-CQ-013
 import { businessDate } from '@nexus/factory-domain/core/time'
+import { QUOTE_GROUP_TERMS, QUOTE_SORTS, type QuoteGroupTerm, type QuoteSort } from '@nexus/factory-domain/sales/before-order/groups' // B-CQ-013
 import { QUOTES_VIEW } from '@nexus/factory-domain/sales/quotes/permissions'
 import { addDays, QUOTE_STATUSES, type QuoteStatus } from '@nexus/factory-domain/sales/quotes/quotes'
 import { serverClock } from '../../../core/time'
@@ -12,12 +14,24 @@ import { defineExportSource, partyTerm } from '../source' // F-SA-224: + the cus
  * these rows of each page itself, so does the read here) and `?q=` (number or customer reference); nothing: every
  * quote, newest first. F-SA-224: `?party=` (one customer's quotes; malformed: refused). Read through the module's listQuotes (quotes.view, its companies and customers). Net and total
  * are the price grain, the margin % the margin grain: each absent from the file without its grain.
+ * B-CQ-013 (customer page › Quotes & incoming): `?group=` (a before-order group of quotes, OPEN_QUOTES or LIVE) and `?sort=urgent`
+ * ("Most urgent first") read into the same listQuotes — screen = file; a wrong value is refused in words, never dropped (a file of
+ * more rows than the screen).
  */
 
 type Row = Awaited<ReturnType<typeof listQuotes>>['quotes'][number]
 type Query = Omit<ListQuotesQuery, 'cursor' | 'limit'> & { readonly expiring: boolean }
 
 const isStatus = (value: string | null): value is QuoteStatus => value !== null && (QUOTE_STATUSES as readonly string[]).includes(value)
+
+// ---- B-CQ-013: the screen's `group` and `sort` terms (a wrong one refused, never dropped).
+function termOf<Term extends string>(address: URLSearchParams, name: string, terms: readonly Term[]): Term | undefined {
+  const value = address.get(name)?.trim()
+  if (!value) return undefined
+  if (!(terms as readonly string[]).includes(value)) throw new ValidationError(`Not a ${name} of the quotes list: the file would not hold the screen's rows.`, [{ path: `query/${name}`, message: `One of ${terms.join(', ')}.` }])
+  return value as Term
+}
+// ---- end B-CQ-013
 
 /** Sent and valid until today + 7 days at most, not past (web model.ts isExpiring). */
 function isExpiring(row: Row, today: string): boolean {
@@ -32,9 +46,13 @@ export const quotes = defineExportSource<Query, Row>({
     const status = address.get('status')
     const q = address.get('q')?.trim().slice(0, 100) || undefined
     const partyId = partyTerm(address) // F-SA-224: the one customer filter (`?party=`): the file holds the screen's rows
+    const group: QuoteGroupTerm | undefined = termOf(address, 'group', QUOTE_GROUP_TERMS) // B-CQ-013
+    const sort: QuoteSort | undefined = termOf(address, 'sort', QUOTE_SORTS)
     return {
       ...(isStatus(status) ? { status } : {}),
       ...(partyId ? { partyId } : {}),
+      ...(group ? { group } : {}),
+      ...(sort ? { sort } : {}),
       ...(address.get('mine') === '1' ? { mine: 'true' as const } : {}),
       expiring: address.get('expiring') === '1' && status === 'SENT',
       q,

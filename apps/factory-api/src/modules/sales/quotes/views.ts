@@ -27,6 +27,9 @@ import { hasOrderSeries } from '../orders/store'
 import type { QUOTE_ORDER_WAITS } from './contract'
 // TH-6 part B: the request's own state on "Made from".
 import type { InquiryStatus } from '@nexus/factory-domain/sales/inquiries/rules'
+// B-CQ-031: the portal order a quote came from, named only for a reader with orders.view over it.
+import { can, type Actor } from '@nexus/factory-domain/core/permissions'
+import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import {
   APPROVAL_COLUMNS,
   dateTimeText,
@@ -112,14 +115,22 @@ export interface QuoteSources {
     | { readonly state: 'MADE'; readonly id: string; readonly number: string; readonly status: string; readonly reason: null; readonly words: null }
     | { readonly state: 'WAITS'; readonly id: null; readonly number: null; readonly status: null; readonly reason: QuoteOrderWait; readonly words: string }
     | null
+  /**
+   * B-CQ-031 (customer page › Quotes & incoming, Q3-B9): the customer's portal order this quote was accepted as
+   * (PortalOrderRequest.quoteId) — its number only for a reader holding orders.view over that order's company and customer (the
+   * mirror of Incoming's "what it became", modules/sales/incoming catalogueRows); null otherwise. A record number, never a person.
+   */
+  readonly fromPortalOrder: { readonly id: string; readonly number: string } | null
 }
 
 type SourceQuote = Pick<QuoteRow, 'id' | 'status' | 'companyId' | 'partyId' | 'customerRef'>
 
-export async function quoteSourcesOf(db: Reader, quotes: readonly SourceQuote[]): Promise<Map<string, QuoteSources>> {
+export async function quoteSourcesOf(db: Reader, quotes: readonly SourceQuote[], actor?: Actor): Promise<Map<string, QuoteSources>> {
   const ids = quotes.map((quote) => quote.id)
   if (ids.length === 0) return new Map()
   const inquiries = await db.inquiry.findMany({ where: { quoteId: { in: ids } }, select: { id: true, number: true, quoteId: true, status: true, declineReason: true, closedAt: true /* TH-6 part B */ }, orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }] })
+  // B-CQ-031: without a reader (no one to check orders.view for) nothing is named.
+  const portalOrders = actor ? await db.portalOrderRequest.findMany({ where: { quoteId: { in: ids } }, select: { id: true, number: true, quoteId: true, companyId: true, partyId: true }, orderBy: [{ decidedAt: 'asc' }, { id: 'asc' }] }) : []
   const orders = await db.salesOrder.findMany({
     where: { quoteVersion: { quoteId: { in: ids } } },
     select: { id: true, number: true, status: true, quoteVersion: { select: { quoteId: true } } },
@@ -144,6 +155,7 @@ export async function quoteSourcesOf(db: Reader, quotes: readonly SourceQuote[])
       const inquiry = inquiries.find((row) => row.quoteId === quote.id)
       const order = orders.find((row) => row.quoteVersion?.quoteId === quote.id)
       const wait = waits.get(quote.id)
+      const portal = portalOrders.find((row) => row.quoteId === quote.id && row.number !== null) // B-CQ-031
       const sources: QuoteSources = {
         madeFrom: inquiry ? { inquiryId: inquiry.id, number: inquiry.number, status: inquiry.status, declineReason: inquiry.declineReason ?? null, closedAt: inquiry.closedAt ? toUtcIso(inquiry.closedAt) : null /* TH-6 part B */ } : null,
         order: order
@@ -151,6 +163,8 @@ export async function quoteSourcesOf(db: Reader, quotes: readonly SourceQuote[])
           : wait
             ? { state: 'WAITS', id: null, number: null, status: null, reason: wait.reason, words: wait.words }
             : null,
+        // B-CQ-031
+        fromPortalOrder: portal && actor && portal.number !== null && can(actor, ORDERS_VIEW, { companyId: portal.companyId, partyId: portal.partyId }) ? { id: portal.id, number: portal.number } : null,
       }
       return [quote.id, sources]
     }),
@@ -233,16 +247,17 @@ export async function readFacts(db: Reader, quote: QuoteRow, now: Date, options:
 /**
  * The quote record (quotes.view), the same for every caller (a command's answer is kept for its replays): the grain
  * filter drops the marked fields a caller does not see, and `forCaller` the margin amounts of a caller without the cost
- * grain.
+ * grain. B-CQ-031: one part follows the reader — `fromPortalOrder` names the portal order only for a reader with orders.view
+ * over it (`actor`; a replay goes back to the one who asked).
  */
-export async function quoteDetail(db: Reader, quote: QuoteRow, now: Date) {
+export async function quoteDetail(db: Reader, quote: QuoteRow, now: Date, actor?: Actor) {
   const facts = await readFacts(db, quote, now)
   const { version, lines, priced, issues, party } = facts
   const approvals = await db.quoteApproval.findMany({ where: { versionId: version.id }, select: APPROVAL_COLUMNS, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] })
   const marginAmount = (value: number | null) => asMoney('margin', value)
   const pricedBySeq = new Map(priced.lines.map((line) => [line.seq, line]))
   // B-TH-078: "Made from INQ-…" and the order made from it (or why it waits).
-  const sources = (await quoteSourcesOf(db, [quote])).get(quote.id)!
+  const sources = (await quoteSourcesOf(db, [quote], actor /* B-CQ-031 */)).get(quote.id)!
   return {
     id: quote.id,
     number: quote.number,
@@ -355,6 +370,8 @@ export async function quoteDetail(db: Reader, quote: QuoteRow, now: Date) {
     // B-TH-078
     madeFrom: sources.madeFrom,
     order: sources.order,
+    // B-CQ-031
+    fromPortalOrder: sources.fromPortalOrder,
   }
 }
 
