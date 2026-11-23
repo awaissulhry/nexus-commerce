@@ -191,7 +191,11 @@
     "daysLate": "Days late, most first",
     "daysLateBack": "Days late, fewest first",
     "ordered": "Order date, oldest first",
-    "orderedBack": "Order date, newest first"
+    "orderedBack": "Order date, newest first",
+    "urgent": "Most urgent first",
+    "urgentRule": "(our priority, then {customer}'s urgent order, then promise date)",
+    "urgentRuleAll": "(our priority, then each customer's own urgent order, then promise date)",
+    "now": "Sort: {sort}"
   },
   "views": {
     "suggest": "{customer} — tracking",

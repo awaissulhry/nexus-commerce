@@ -191,7 +191,11 @@
     "daysLate": "Giorni di ritardo, prima i più",
     "daysLateBack": "Giorni di ritardo, prima i meno",
     "ordered": "Data ordine, prima la più vecchia",
-    "orderedBack": "Data ordine, prima la più recente"
+    "orderedBack": "Data ordine, prima la più recente",
+    "urgent": "Prima i più urgenti",
+    "urgentRule": "(la nostra priorità, poi l'ordine di urgenza di {customer}, poi la data promessa)",
+    "urgentRuleAll": "(la nostra priorità, poi l'ordine di urgenza di ciascun cliente, poi la data promessa)",
+    "now": "Ordina: {sort}"
   },
   "views": {
     "suggest": "{customer} — monitoraggio",

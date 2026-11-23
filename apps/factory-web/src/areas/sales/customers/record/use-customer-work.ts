@@ -62,6 +62,13 @@ import { orderFilesOf } from '../../../../lib/record-thread/files-view/model'
  * The customer page only: Sales › Orders keeps Open orders as its default.
  */
 export const WORK_DEFAULT_ROWS = 'all' as const
+/**
+ * F-CW-201 (customer Work tab plan §3; lead settles S5, S16): the Work tab's default order — "Most urgent first" (`sort=urgent`: our
+ * priority, then the customer's own urgent order, then the promise date). Written by the entry beside the default view, in the same
+ * write, ONLY when the address names no view and no door; never rewritten afterwards ("Newest first" picked by a person is the
+ * address without a `sort`, and stays so). The customer page only: Sales › Orders and Made to measure keep "Newest first".
+ */
+export const WORK_DEFAULT_SORT = 'urgent' as const
 
 /**
  * The terms that name a view of the sheet (any of them: the address already shows a view, the default is not written).
@@ -91,6 +98,8 @@ export function workEntry(base: string, partyId: string, params: Params): string
     changed = true
   }
   const hasView = () => VIEW_TERMS.some((name) => query.has(name))
+  // F-CW-201 (S16): the address as it arrives names no view — the default view gets the default order beside it, in this same write.
+  const plain = !hasView()
   const merged = asked ? MERGED_TERMS.customers[asked] : undefined
   if (merged && !hasView()) for (const [name, value] of Object.entries(merged)) set(name, value)
   set('tab', 'work')
@@ -103,6 +112,9 @@ export function workEntry(base: string, partyId: string, params: Params): string
   }
   if (query.has('phase') && !query.has('rows')) set('rows', WORK_DEFAULT_ROWS) // F-CW-101 (S16): a phase is over every order
   if (!hasView()) set('rows', WORK_DEFAULT_ROWS) // F-CP-101: All orders (`rows=all`), never `status=all`
+  // F-CW-201 (S16): "Most urgent first" only on the plain default view — a door (`phase`, `priority`) and a view get no `sort`, and
+  // a `sort` the address already names is never overwritten. Applied to its own output this writes nothing (`rows` is there).
+  if (plain && !query.has('priority') && !query.has('sort')) set('sort', WORK_DEFAULT_SORT)
   return changed ? `${base}?${query.toString()}` : null
 }
 

@@ -7,6 +7,9 @@ import { rowsQuery, listAddress } from '../../orders/model'
 import { sheetAddress } from '../../orders/list/use-orders-sheet'
 import { builtInActive, builtInViewsOf, pickBuiltIn, WAITING_US_VIEW, withPreset } from '../../orders/list/view/OrdersListView'
 import { marksOf, sourcesTouched, STRIP_GROUPS, tileOf, tilesShown, workAttention, workEntry, WORK_DEFAULT_ROWS, type WorkReads } from './use-customer-work'
+import { WORK_DEFAULT_SORT } from './use-customer-work' // F-CW-201
+import { sortChoicesOf, sortFromAddress, urgentRuleOf } from '../../orders/model' // F-CW-201
+import { draftsAddress } from './drafts/model' // F-CW-201: the order kept across the Drafts view
 import { valueOf } from './work-band' // F-CW-101: the strip became the band (its chips keep the same reads)
 import { IN_PRODUCTION_VIEW } from './use-customer-work' // F-CW-101 (S3): the In production view = the started orders' door
 import { pickOfRow, WORK_VIEWS, workPreset } from './view/WorkTab'
@@ -64,6 +67,7 @@ describe('F-SA-276: the address the Work tab writes on entry', () => {
     expect(written.get('party')).toBe(ALPHA)
     expect(written.get('rows')).toBe(WORK_DEFAULT_ROWS)
     expect(written.has('status')).toBe(false)
+    expect(written.get('sort')).toBe(WORK_DEFAULT_SORT) // F-CW-201: the default order beside the default view, in the same write
   })
   it('a view in the address is kept; a complete address writes nothing', () => {
     const entry = workEntry(BASE, ALPHA, params(`tab=work&party=${ALPHA}&rows=all`))
@@ -78,6 +82,7 @@ describe('F-SA-276: the address the Work tab writes on entry', () => {
     expect(written.get('party')).toBe(ALPHA)
     expect(written.get('late')).toBe('true')
     expect(written.has('status')).toBe(false)
+    expect(written.has('sort')).toBe(false) // F-CW-201 (S16): a view gets no default order written beside it
   })
   it("another customer's id in the address is overwritten by the page's own (the lock wins)", () => {
     const written = new URL(`https://x${workEntry(BASE, ALPHA, params(`tab=work&party=${BETA}&rows=all`))!}`).searchParams
@@ -88,6 +93,7 @@ describe('F-SA-276: the address the Work tab writes on entry', () => {
     expect(written.get('tab')).toBe('work')
     expect(written.get('rows')).toBe('all')
     expect(written.has('status')).toBe(false)
+    expect(written.get('sort')).toBe('urgent') // F-CW-201: it named no view as it came — the default order with the default view
   })
 })
 
@@ -379,6 +385,101 @@ describe('F-CW-104: the toolbar says "2 of 14 orders" under a door, and searches
   })
 })
 // ---- end F-CW-104
+
+// ---- F-CW-201 (customer Work tab plan §3; lead settles S5, S16, S34; 13-backend B-CW-030): "Most urgent first" ----
+describe('F-CW-201: the Work tab opens most urgent first — written once, with the default view, and never rewritten', () => {
+  const search = (address: string) => address.slice(address.indexOf('?') + 1)
+  const host = { locked: { party: ALPHA }, keep: ['tab', 'dock', 'cols'] }
+
+  it('no view term: `rows=all` AND `sort=urgent` in ONE write; applied to its own output → null (fx-12)', () => {
+    for (const query of ['', 'tab=work', 'tab=orders', 'dock=all', 'tab=work&cols=money', 'q=giacca']) {
+      const once = workEntry(BASE, ALPHA, params(query))!
+      const written = params(search(once))
+      expect([written.get('rows'), written.get('sort'), written.get('party'), written.get('tab')], query).toEqual(['all', 'urgent', ALPHA, 'work'])
+      expect(workEntry(BASE, ALPHA, params(search(once))), query).toBeNull()
+      expect(lockedEntry(BASE, { locked: { party: ALPHA } }, params(search(once))), query).toBeNull()
+    }
+    expect(WORK_DEFAULT_SORT).toBe('urgent')
+  })
+
+  it('"Newest first" stays newest: the address without a sort is never rewritten once a view is there', () => {
+    // A person picked Newest first: the sheet writes the address without `sort` — the entry then writes nothing.
+    const newest = sheetAddress(BASE, host, params(`tab=work&party=${ALPHA}&rows=all&sort=urgent`), { rows: 'all', q: '', layout: 'list', party: ALPHA, sort: null })
+    const written = params(search(newest))
+    expect([written.get('rows'), written.get('party'), written.get('tab'), written.has('sort')]).toEqual(['all', ALPHA, 'work', false])
+    expect(workEntry(BASE, ALPHA, params(search(newest)))).toBeNull()
+    expect(sortFromAddress(params(search(newest)))).toBeNull()
+  })
+
+  it('a view or a door gets NO sort: status, late, waiting, the Drafts view, Not equal, a phase door, a priority door (S16)', () => {
+    for (const query of ['status=IN_PRODUCTION', 'late=true', 'waiting=us', 'list=drafts', 'priceMatch=NOT_EQUAL', 'rows=open', 'tab=work&phase=READY', 'tab=work&rows=open&priority=URGENT', 'tab=work&priority=HIGH']) {
+      const once = workEntry(BASE, ALPHA, params(query))
+      const address = once ?? `${BASE}?${query}`
+      expect(params(search(address)).has('sort'), query).toBe(false)
+      expect(workEntry(BASE, ALPHA, params(search(address))), query).toBeNull()
+    }
+    // A priority door without a rows view still opens on All orders (the default view), in the order the sheet reads by itself.
+    expect(params(search(workEntry(BASE, ALPHA, params('tab=work&priority=HIGH'))!)).get('rows')).toBe('all')
+    // A level the API does not know is no door: dropped, and the plain default view opens most urgent first.
+    const dropped = params(search(workEntry(BASE, ALPHA, params('tab=work&priority=FOO'))!))
+    expect([dropped.has('priority'), dropped.get('rows'), dropped.get('sort')]).toEqual([false, 'all', 'urgent'])
+  })
+
+  it('a sort the address already names is kept, never overwritten', () => {
+    const once = params(search(workEntry(BASE, ALPHA, params('tab=work&sort=promise'))!))
+    expect([once.get('rows'), once.get('sort')]).toEqual(['all', 'promise'])
+  })
+
+  it('the order is kept by every address the page itself writes: the sheet\'s views, Show all orders, the Drafts view and back', () => {
+    const now = params(`tab=work&party=${ALPHA}&rows=all&sort=urgent`)
+    // The sheet: another view, a door, Clear all — the sort stays (it filters nothing).
+    expect(sheetAddress(BASE, host, now, { rows: 'late', q: '', layout: 'list', party: ALPHA, sort: sortFromAddress(now) })).toContain('sort=urgent')
+    expect(sheetAddress(BASE, host, now, { rows: 'all', q: '', layout: 'list', party: ALPHA, sort: sortFromAddress(now), extra: { phase: 'READY' } })).toContain('sort=urgent')
+    const hook = readFileSync(new URL('../../orders/list/use-orders-sheet.ts', import.meta.url), 'utf8')
+    expect(hook).toContain('sort: next.sort === undefined ? sort : next.sort, // B-TH-057')
+    expect(hook).toContain('the sort stays: it filters nothing')
+    // Show all orders (the empty sentences' link): the order the person reads in.
+    const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain("{ rows: 'all', q: '', layout: 'list', party: party.id, sort: sheet.model.sort ?? null })")
+    // The Drafts view drops the sheet's terms but keeps the order for the way back.
+    const drafts = draftsAddress(BASE, ALPHA, now)
+    expect(params(search(drafts)).get('sort')).toBe('urgent')
+    expect(params(search(drafts)).has('rows')).toBe(false)
+    expect(workEntry(BASE, ALPHA, params(search(drafts)))).toBeNull()
+    expect(params(search(draftsAddress(BASE, ALPHA, params(`tab=work&party=${ALPHA}&rows=all`)))).has('sort')).toBe(false)
+  })
+
+  it('the customer page only: Sales › Orders and Made to measure write no default order (they keep "Newest first")', () => {
+    for (const page of ['../../orders/list/OrdersPage.tsx', '../../mtm/MtmPage.tsx', '../../orders/list/use-orders-sheet.ts']) expect(readFileSync(new URL(page, import.meta.url), 'utf8'), page).not.toMatch(/WORK_DEFAULT_SORT|sort=urgent|sort: 'urgent'/)
+    expect(lockedEntry('/w/acme/sales/made-to-measure', { locked: { kind: 'mtm' } }, params(''))).toBe('/w/acme/sales/made-to-measure?kind=mtm')
+  })
+
+  it('the choices on a sheet of ONE customer: Most urgent first, Newest first, then the rest — no Customer A–Z / Z–A (A1-B7)', () => {
+    const one = sortChoicesOf(true).map((choice) => choice.value)
+    expect(one.slice(0, 2)).toEqual(['urgent', ''])
+    expect(one).not.toContain('customer')
+    expect(one).not.toContain('-customer')
+    expect(one).toEqual(sortChoicesOf(false).map((choice) => choice.value).filter((value) => value !== 'customer' && value !== '-customer'))
+    expect(sortChoicesOf(false).map((choice) => choice.value)).toContain('customer')
+  })
+
+  it('the quiet second line says the rule in the reader\'s words — never "the planning order" (S5)', () => {
+    const en = createTranslator('en', messagesFor('en', ['orders-sheet'])['orders-sheet']!)
+    const it_ = createTranslator('it', messagesFor('it', ['orders-sheet'])['orders-sheet']!)
+    const say = (t: typeof en, customer: string | null) => {
+      const rule = urgentRuleOf(customer)
+      return t(rule.key, rule.params)
+    }
+    expect([en('sort.urgent'), it_('sort.urgent')]).toEqual(['Most urgent first', 'Prima i più urgenti'])
+    expect(say(en, 'Seed Racing')).toBe("(our priority, then Seed Racing's urgent order, then promise date)")
+    expect(say(it_, 'Seed Racing')).toBe("(la nostra priorità, poi l'ordine di urgenza di Seed Racing, poi la data promessa)")
+    // Sales › Orders and Made to measure hold many customers: no one name.
+    expect(say(en, null)).toBe("(our priority, then each customer's own urgent order, then promise date)")
+    expect(say(it_, null)).toBe("(la nostra priorità, poi l'ordine di urgenza di ciascun cliente, poi la data promessa)")
+    for (const words of [say(en, 'X'), say(en, null), say(it_, 'X'), say(it_, null)]) expect(words).not.toMatch(/planning|pianificazione/i)
+  })
+})
+// ---- end F-CW-201
 
 // ---- F-CW-105 (lead settle S40; the API's B-CL-005): the priority door term — OUR level, on every host of the ONE sheet ----
 describe('F-CW-105: the door `?tab=work&rows=open&priority=URGENT` (the Customers list\'s) and its chip', () => {
@@ -748,8 +849,9 @@ describe('F-CP-101: All orders by default, written once', () => {
     return { once, address, again: workEntry(BASE, ALPHA, params(search(address))) }
   }
 
-  it("workEntry('') → tab=work&party=A&rows=all; applied to its own output → null", () => {
-    expect(workEntry(BASE, ALPHA, params(''))).toBe(`${BASE}?tab=work&party=${ALPHA}&rows=all`)
+  // F-CW-201 (S16): + `sort=urgent`, in the SAME write (the default order of the default view).
+  it("workEntry('') → tab=work&party=A&rows=all&sort=urgent; applied to its own output → null", () => {
+    expect(workEntry(BASE, ALPHA, params(''))).toBe(`${BASE}?tab=work&party=${ALPHA}&rows=all&sort=urgent`)
     expect(twice('').again).toBeNull()
     expect(WORK_DEFAULT_ROWS).toBe('all')
     expect(new URL(`https://x${workEntry(BASE, ALPHA, params(''))!}`).searchParams.has('status')).toBe(false)
@@ -774,6 +876,7 @@ describe('F-CP-101: All orders by default, written once', () => {
     const written = new URL(`https://x${workEntry(BASE, ALPHA, params('tab=work&cols=money'))!}`).searchParams
     expect(written.get('rows')).toBe('all')
     expect(written.get('cols')).toBe('money')
+    expect(written.get('sort')).toBe('urgent') // F-CW-201: `cols` names no view either
   })
 
   it('the pairs: list=drafts with a view term keeps both, writes no default, once', () => {

@@ -355,7 +355,8 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
   const door = useRequestReviewDoor({ ids: list.ids, batches: list.batches, onChanged: work.reload })
   const rows = sheet.model.rows
   const waiting = sheet.model.waiting ?? null
-  const all = `${prefix}${sheetAddress(basePath, host, params, { rows: 'all', q: '', layout: 'list', party: party.id })}`
+  // F-CW-201: "Show all orders" keeps the order the person reads the orders in (it filters nothing).
+  const all = `${prefix}${sheetAddress(basePath, host, params, { rows: 'all', q: '', layout: 'list', party: party.id, sort: sheet.model.sort ?? null })}`
   // ---- F-CP-107: "Drafts of <customer>" — `list=drafts` draws the customer's portal drafts (read only) in the sheet's place; the strip
   // and the Views ▾ stay; a draft's row docks its own conversation, Enter / Open its read-only window.
   const showDrafts = draftsShown(params)

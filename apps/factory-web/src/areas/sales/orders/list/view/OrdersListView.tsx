@@ -21,7 +21,9 @@ import { money } from '../../../quotes/model'
 import { ORDER_STATUSES, type OrderRow, type OrderStatus } from '../../api'
 import { dayInstant, depositTone, ROW_VIEWS, shippedPercent, STATUS_TONE, tileCount, TILES, viewCount, type Layout, type RowView } from '../../model'
 // ---- B-TH-057 (TH-4: the server sort, the custom field filter) ----
-import { columnSort, SORT_CHOICES, SORT_COLUMNS, sortOfColumn } from '../../model'
+import { columnSort, SORT_COLUMNS, sortOfColumn } from '../../model'
+import { sortChoicesOf, urgentRuleOf } from '../../model' // F-CW-201
+import { ArrowUpDown } from 'lucide-react' // F-CW-201: the Sort ▾ trigger's mark
 import type { OrderSort } from '../../api'
 import type { OrdersListActions, OrdersListModel } from '../list-model'
 import { NewOrderDialog } from './NewOrderDialog'
@@ -244,14 +246,29 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
 
   // ── B-TH-057 (SHEET-G15, feature SHEET.overall-F05): Sort ▾ — every choice sorts every page on the server (the address keeps it);
   // the headers of Customer, Brand, Promised and Ordered do the same. No header sorts only the loaded rows. ──
-  const sortSelect = (
-    <Select size="sm" aria-label={s('sort.label')} value={model.sort ?? ''} onChange={(event) => actions?.onSort?.((event.target.value || null) as OrderSort | null)}>
-      {SORT_CHOICES.map((choice) => (
-        <option key={choice.word} value={choice.value}>
-          {s(`sort.${choice.word}`)}
-        </option>
-      ))}
-    </Select>
+  // F-CW-201 (lead settles S5, S34): a menu button like Views ▾ (the DS Menu the sheet already uses) on every host — its trigger says
+  // the order shown, the choice shown is ticked, and "Most urgent first" carries its rule as a quiet second line. On a sheet of ONE
+  // customer "Customer A–Z / Z–A" are not offered (they order nothing there).
+  const sortChoices = sortChoicesOf(!!model.locked?.party)
+  const sortNow = sortChoices.find((choice) => choice.value === (model.sort ?? '')) ?? null
+  const urgentRule = urgentRuleOf(model.locked?.party ? (model.customer?.name ?? null) : null)
+  const sortWords = sortNow ? s(`sort.${sortNow.word}`) : s('sort.label')
+  const sortMenu = (
+    <Menu
+      label={
+        <>
+          <ArrowUpDown size={13} aria-hidden /> <span className="fw-lt-trigger">{sortWords}</span>
+        </>
+      }
+      triggerProps={{ className: 'nds-btn sm', 'aria-label': sortNow ? s('sort.now', { sort: sortWords }) : s('sort.label'), title: s('sort.label') }}
+      items={sortChoices.map((choice) => ({
+        id: `sort-${choice.word}`,
+        label: s(`sort.${choice.word}`),
+        checked: choice.value === (model.sort ?? ''),
+        ...(choice.value === 'urgent' ? { description: s(urgentRule.key, urgentRule.params) } : {}),
+        onSelect: () => actions?.onSort?.((choice.value || null) as OrderSort | null),
+      }))}
+    />
   )
   // ── end B-TH-057 ──
 
@@ -512,7 +529,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
               {model.columnSet && <ColumnSetSwitch value={model.columnSet.value} s={s} onPick={(set) => actions?.onColumnSet?.(set)} />}
               {switcher /* B-TH-226 */}
               {/* B-TH-243 (ORD-G10): the rows views are the built-in views on top of Views ▾ — no second Rows ▾ beside it. */}
-              {sortSelect /* B-TH-057 */}
+              {sortMenu /* B-TH-057; F-CW-201: Sort ▾ as a menu */}
               {/* B-TH-244 (SHEET.overall-F02): Group by customer — on All customers only (a customer's sheet is one group). */}
               {!model.customer && (
                 <Select size="sm" aria-label={s('group.label')} value={model.group ?? ''} onChange={(event) => actions?.onGroup?.(event.target.value === 'party' ? 'party' : null)}>
