@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Shirt } from 'lucide-react'
+import { MessageSquare, Shirt } from 'lucide-react'
 import { Skeleton } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../lib/i18n/format'
 import type { Locale } from '../../../../../lib/i18n/locales'
@@ -51,6 +51,19 @@ export function ChipDoor({ chip, href, words, measure }: { chip: WorkChip; href:
 }
 
 const useIsoLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
+
+/**
+ * F-CL-301 (walk W-2; 10-design §3): the New messages column's header — the message mark, as the picture draws it; the column's name
+ * stays its accessible name and its hover words (AG passes the header's `displayName`), and the column's hint stays its tooltip.
+ */
+export function MessagesHeader({ displayName }: { displayName?: string }) {
+  return (
+    <span className="fw-cl-hicon" title={displayName}>
+      <MessageSquare size={14} aria-hidden />
+      <span className="nds-vh">{displayName}</span>
+    </span>
+  )
+}
 
 /**
  * Chips in at most `lines` lines (and at most `max` chips): the ones a further line would need fold into "+n more". The chips are

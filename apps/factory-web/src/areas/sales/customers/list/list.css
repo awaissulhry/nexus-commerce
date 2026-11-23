@@ -331,6 +331,19 @@
   height: 100%;
 }
 
+/* ---- F-CL-301 (walk W-2): no cut header — the Picture column's narrow sides, the New messages column's mark ---- */
+.ag-cell.fw-cl-tight,
+.ag-header-cell.fw-cl-tight {
+  padding-left: var(--nds-space-8);
+  padding-right: var(--nds-space-8);
+}
+
+.fw-cl-hicon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--nds-text-2);
+}
+
 /* ---- F-CL-203: the phone card — the picture beside the Customer cell, ≤ 2 Needs us chips, one line of Work, the next promise ---- */
 .fw-cl-card-head {
   display: flex;

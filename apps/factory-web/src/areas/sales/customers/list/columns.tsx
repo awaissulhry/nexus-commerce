@@ -19,7 +19,7 @@ import type { BarAct } from '../../../parties/_shared/bar'
 import { partyName, recordHref, SIDES } from '../../../parties/_shared/model'
 import { StatusPill } from '../../../parties/_shared/view/parts'
 import { CARD_NEEDS_MAX, CARD_ROLES, customerActsOf, CUSTOMER_HIDDEN_COLUMNS, CUSTOMERS_LIST_NS, needsChipsOf, officeDataOf, WIDE_ONLY_COLUMNS, workChipsOf, type CustomerRights, type CustomersWorkModel } from './model'
-import { ChipsCell, factsState, NextPromiseCell, PictureCell, type CellWords } from './view/cells' // F-CL-202
+import { ChipsCell, factsState, MessagesHeader, NextPromiseCell, PictureCell, type CellWords } from './view/cells' // F-CL-202; F-CL-301: + MessagesHeader
 import './list.css'
 
 /**
@@ -87,6 +87,9 @@ export function customerColumnsOf(input: CustomerColumnsInput, c: Translate, l: 
           colId: 'messages',
           headerName: l('column'),
           headerTooltip: c('col.messagesHint'),
+          // F-CL-301 (walk W-2): the message mark for a header (the name was cut at 1440: "New messa…"); the name stays its words.
+          headerComponentParams: { innerHeaderComponent: MessagesHeader },
+          suppressHeaderMenuButton: true,
           sortable: false,
           flex: 0.8,
           minWidth: 132,
@@ -124,7 +127,8 @@ export function customerColumnsOf(input: CustomerColumnsInput, c: Translate, l: 
     return <>{stateOf(data.id) ?? <span className={date ? undefined : 'fw-cl-quiet'}>{date ? formatDate(`${date}T12:00:00Z`, { locale }) : '—'}</span>}</>
   }
   const beforeName: ColDef<PartyRow>[] = work
-    ? [{ colId: 'picture', headerName: words.sheet('col.picture'), headerTooltip: c('col.pictureHint'), sortable: false, width: 60, minWidth: 60, maxWidth: 64, suppressHeaderMenuButton: true, cellRenderer: PictureCellR }]
+    ? // F-CL-301 (walk W-2): the header whole ("Picture", not "Pic…"): a little wider, with less side padding (the thumbnail is 32 px).
+      [{ colId: 'picture', headerName: words.sheet('col.picture'), headerTooltip: c('col.pictureHint'), sortable: false, width: 80, minWidth: 80, maxWidth: 88, suppressHeaderMenuButton: true, headerClass: 'fw-cl-tight', cellClass: 'fw-cl-tight', cellRenderer: PictureCellR }]
     : []
   const workColumns: ColDef<PartyRow>[] = work
     ? [

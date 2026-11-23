@@ -9,6 +9,7 @@ import { CATALOGUE } from '../../../../lib/i18n/messages'
 import type { PartyRow } from '../../../parties/_shared/api'
 import { CUSTOMERS, rowOf } from '../../../parties/_shared/fixtures'
 import { customerColumnsOf, threadHref } from './columns'
+import { MessagesHeader } from './view/cells' // F-CL-301
 import { CARD_ROLES, customerActsOf, CUSTOMER_HIDDEN_COLUMNS, customerRightsOf, namesOtherCustomer, officeDataOf } from './model'
 import { supervisorBodyOf, supervisorPlanOf, supervisorRestOf, supervisorSummaryOf, type SupervisorTarget } from './supervisor/model'
 
@@ -365,6 +366,19 @@ describe('F-CL-203: Sort ▾ and the phone card', () => {
     const narrow = customerColumnsOf({ prefix: '/w/DEMO', unread: {}, work: facts, today: '2026-11-24' }, words, words)
     expect(narrow.hiddenColumns).toEqual(expect.arrayContaining(['lastOrder', 'overdue']))
     expect(narrow.hiddenColumns).not.toContain('needs')
+  })
+
+  it('F-CL-301 (walk W-2): no cut header — Picture whole in a wider column with narrow sides; New messages the message mark, its name kept', () => {
+    const facts = { byParty: new Map([[row('MODA-DEMO').id, WORK]]), problem: null, repliesComplete: true, limited: false }
+    const built = customerColumnsOf({ prefix: '/w/DEMO', unread: {}, work: facts, today: '2026-11-24' }, words, words)
+    const picture = built.beforeName.find((column) => column.colId === 'picture')!
+    expect(picture.width).toBeGreaterThanOrEqual(80)
+    expect(picture.minWidth).toBeGreaterThanOrEqual(80)
+    expect([picture.headerClass, picture.cellClass]).toEqual(['fw-cl-tight', 'fw-cl-tight'])
+    const messages = built.leadingColumns.find((column) => column.colId === 'messages')!
+    expect(messages.headerName).toBe('column')
+    expect(messages.headerComponentParams).toEqual({ innerHeaderComponent: MessagesHeader })
+    expect(messages.suppressHeaderMenuButton).toBe(true)
   })
 })
 
