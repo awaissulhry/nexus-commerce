@@ -11,7 +11,7 @@ import { ListFrame } from '../../../../list-frame/ListFrame'
 import { useListSearch } from '../../../../list-frame/search/use-list-search' // F-SA-223
 import type { ListKey } from '../../../../list-frame/model'
 import type { ListCards } from '../../../../list-frame/w2b/model' // F-CL-101: a side's phone card
-import { PARTY_KINDS, PARTY_TAX_MODES, type PartyKind, type PartyRow, type TaxMode } from '../api'
+import { PARTY_KINDS, PARTY_TAX_MODES, type PartyKind, type PartyRow, type PartySort, type PartyWorkGroup, type TaxMode } from '../api'
 import { barOf, sharedActsOf, whyNotOf, type BarAct, type SharedActId } from '../bar' // F-CL-103
 import {
   BULK_MAX,
@@ -40,6 +40,10 @@ import { dash, Freshness, NoAccess, NoticeBanner, PageHead, PartiesMessages, Rol
 export interface PartiesListActions {
   onQuery?: (query: string) => void
   onView?: (view: ListView) => void
+  /** F-CL-203: another order from Sort ▾ (a side with `sort`). */
+  onSort?: (sort: PartySort) => void
+  /** F-CL-202: the band's door pressed or left (its chip's ✕). */
+  onWork?: (group: PartyWorkGroup | null) => void
   onFilters?: (filters: ListFilters) => void
   onMore?: () => void
   onRetry?: () => void

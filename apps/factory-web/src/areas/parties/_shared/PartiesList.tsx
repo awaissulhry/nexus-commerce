@@ -8,16 +8,18 @@ import { isApiError } from '../../../lib/api/errors'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { WithMessages } from '../../../record-panels/i18n'
-import { checkVies, countParties, createParty, findParties, listParties, moveParty, type PartyRow, type NewPartyBody } from './api'
+import { checkVies, countParties, createParty, findParties, listParties, moveParty, type PartyQuery, type PartyRow, type PartySort, type PartyWorkGroup, type NewPartyBody } from './api'
 import { PARTY_KINDS, PARTY_TAX_MODES, type PartyKind, type TaxMode } from './api' // F-SA-225: the chips' terms in the address
 import { partyEvent, useLive } from './hooks'
 // B-W2b-427: the check for likely duplicates on create.
 import { checkParty } from '../../admin/import/duplicates/api'
 import {
   BULK_MAX,
+  bandTermsOf, // F-CL-201
   identityBody,
   identityWanted,
   listCanOf, // F-CL-101
+  listQueryOf, // F-CL-201
   loaded,
   loading,
   failed,
@@ -26,15 +28,18 @@ import {
   recordHref,
   refusedFields,
   SIDES,
+  sortOf, // F-CL-201
   TILE_VIEW,
   viesApplies,
   viewQuery,
+  workOf, // F-CL-201
   type BulkKind,
   type BulkResult,
   type BulkRun,
   type DuplicateParty,
   type ListDialog,
   type ListFilters,
+  type ListSort, // F-CL-201
   type ListView,
   type Loaded,
   type NewPartyDraft,
@@ -57,6 +62,14 @@ export interface ListDepthArgs {
   /** F-CL-101: the rows the list has loaded (every page read so far). */
   readonly rows: readonly PartyRow[]
   readonly reload: () => void
+  // ---- F-CL-201: the band's read and door (a side with `workTerm`) ----
+  /** The list's own terms without its door, order and page (the band counts what its press would show: K2). */
+  readonly terms: PartyQuery
+  /** The band group the address presses, or none. */
+  readonly work: PartyWorkGroup | null
+  /** Press a group (null: leave it): one write of the address. */
+  readonly onWork: (group: PartyWorkGroup | null) => void
+  // ---- end F-CL-201
 }
 export type ListDepthSlot = (list: ListDepthArgs) => ListDepth
 
@@ -68,10 +81,12 @@ export type ListDepthSlot = (list: ListDepthArgs) => ListDepth
  * selection at a time (F-SA-225: Export ▾ and Export N go through the export job, the view's terms in the address), and listens to the live stream: changes wait behind "N updates · Show"
  * (rows never move under the cursor). `?view=` keeps the view in the address; `?new=1` opens New.
  */
-export function PartiesList({ side, headActions, columns, depth }: { side: Side; headActions?: (reload: () => void) => ReactNode; columns?: readonly ColDef<PartyRow>[]; depth?: ListDepthSlot }) {
+export function PartiesList({ side, headActions, columns, depth, sort, workTerm }: { side: Side; headActions?: (reload: () => void) => ReactNode; columns?: readonly ColDef<PartyRow>[]; depth?: ListDepthSlot; sort?: ListSort | null; workTerm?: boolean }) {
+  // F-CL-201 (13-backend §8.1): two static side options — `sort` (Sort ▾ and `?sort=`; absent: code order, no Sort ▾) and `workTerm`
+  // (read and write `?work=`, the band's door); Suppliers passes neither and reads exactly as before.
   return (
     <WithMessages namespaces={['parties']}>
-      <PartiesListContainer side={side} headActions={headActions} columns={columns} depth={depth} />
+      <PartiesListContainer side={side} headActions={headActions} columns={columns} depth={depth} sort={sort ?? null} workTerm={workTerm === true} />
     </WithMessages>
   )
 }
@@ -80,7 +95,7 @@ const VIEWS = new Set<string>(['open', 'active', 'prospects', 'brands', 'riders'
 /** F-CL-101: no rows read yet — one empty list, the same between renders (a side's per-page read keys on it). */
 const EMPTY_ROWS: readonly PartyRow[] = []
 
-function PartiesListContainer({ side, headActions, columns, depth }: { side: Side; headActions?: (reload: () => void) => ReactNode; columns?: readonly ColDef<PartyRow>[]; depth?: ListDepthSlot }) {
+function PartiesListContainer({ side, headActions, columns, depth, sort, workTerm }: { side: Side; headActions?: (reload: () => void) => ReactNode; columns?: readonly ColDef<PartyRow>[]; depth?: ListDepthSlot; sort: ListSort | null; workTerm: boolean }) {
   const config = SIDES[side]
   const api = useOfficeApi()
   const session = useOfficeSession()
@@ -102,6 +117,13 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
     () => ({ ...((PARTY_KINDS as readonly string[]).includes(askedKind) ? { kind: askedKind as PartyKind } : {}), ...((PARTY_TAX_MODES as readonly string[]).includes(askedMode) ? { taxMode: askedMode as TaxMode } : {}) }),
     [askedKind, askedMode],
   )
+  // F-CL-201: the order and the band's door, read from the address only for a side that asks for them.
+  const sortValue: PartySort | null = sort ? sortOf(params?.get('sort'), sort) : null
+  const work: PartyWorkGroup | null = workTerm ? workOf(params?.get('work')) : null
+  const terms = useMemo(() => viewQuery(config, view, filters, query), [config, view, filters, query])
+  const listQuery = useMemo(() => listQueryOf(terms, sortValue, work), [terms, sortValue, work])
+  const bandTerms = useMemo(() => bandTermsOf(terms), [terms])
+  const [sortedBy, setSortedBy] = useState<PartySort | null>(null)
   const [rows, setRows] = useState<Loaded<PartyRow>>(loading())
   const [total, setTotal] = useState<number | null>(null)
   const [cursor, setCursor] = useState<string | null>(null)
@@ -126,10 +148,11 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
     const controller = new AbortController()
     request.current = controller
     try {
-      const page = await listParties(api, viewQuery(config, view, filters, query), controller.signal)
+      const page = await listParties(api, listQuery, controller.signal)
       if (controller.signal.aborted) return
       setRows(loaded(page.parties))
       setTotal(page.count)
+      setSortedBy(page.sortedBy ?? null) // F-CL-201
       setCursor(page.nextCursor)
       setAsOf(new Date().toISOString())
       setUpdates(0)
@@ -139,7 +162,7 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
       setRows(failed(problemKey(error)))
       setTotal(null)
     }
-  }, [api, can.view, config, filters, query, view])
+  }, [api, can.view, listQuery])
 
   const loadTiles = useCallback(async () => {
     if (!can.view) return
@@ -179,7 +202,8 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
   }
 
   // F-SA-225: one write of the address for a change of the view, the search or the chips (the other terms kept).
-  const writeAddress = (next: { view?: ListView; query?: string; filters?: ListFilters }) => {
+  // F-CL-201: + the band's door and the order (written only when it is not the side's fallback).
+  const writeAddress = (next: { view?: ListView; query?: string; filters?: ListFilters; work?: PartyWorkGroup | null; sort?: PartySort }) => {
     const search = new URLSearchParams(params?.toString() ?? '')
     const nextView = next.view ?? view
     const nextQuery = (next.query ?? query).trim()
@@ -192,6 +216,13 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
     else search.delete('kind')
     if (nextFilters.taxMode) search.set('taxMode', nextFilters.taxMode)
     else search.delete('taxMode')
+    // F-CL-201
+    const nextWork = next.work === undefined ? work : next.work
+    if (workTerm && nextWork) search.set('work', nextWork)
+    else search.delete('work')
+    const nextSort = next.sort ?? sortValue
+    if (sort && nextSort && nextSort !== sort.fallback) search.set('sort', nextSort)
+    else search.delete('sort')
     search.delete('new')
     const qs = search.toString()
     router.replace(`${pathname}${qs ? `?${qs}` : ''}`, { scroll: false })
@@ -201,6 +232,17 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
     setRows(loading())
     setSelected([])
     writeAddress({ view: next })
+  }
+
+  // F-CL-201: a band door pressed or left, and another order: one write of the address each.
+  const changeWork = (next: PartyWorkGroup | null) => {
+    setRows(loading())
+    setSelected([])
+    writeAddress({ work: next })
+  }
+  const changeSort = (next: PartySort) => {
+    setRows(loading())
+    writeAddress({ sort: next })
   }
 
   const closeDialog = () => {
@@ -361,7 +403,7 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
     if (!cursor) return
     setLoadingMore(true)
     try {
-      const page = await listParties(api, { ...viewQuery(config, view, filters, query), cursor })
+      const page = await listParties(api, { ...listQuery, cursor }) // F-CL-201: the same order and door
       setRows((current) => loaded([...(current.items ?? []), ...page.parties]))
       setCursor(page.nextCursor)
       setTotal(page.count)
@@ -379,6 +421,10 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
     selectedRows: (rows.items ?? []).filter((row) => selected.includes(row.id)),
     rows: rows.items ?? EMPTY_ROWS,
     reload: refresh,
+    // F-CL-201
+    terms: bandTerms,
+    work,
+    onWork: changeWork,
   })
 
   return (
@@ -415,6 +461,9 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
         duplicates,
         bulk,
         companies: session.companies.map((company) => ({ id: company.id, name: company.name })),
+        // F-CL-201 / F-CL-203
+        sort: sort && sortValue ? { choices: sort.choices, value: sortValue, sortedBy } : null,
+        work,
       }}
       actions={{
         onQuery: (next) => {
@@ -422,6 +471,8 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
           writeAddress({ query: next }) // F-SA-225
         },
         onView: changeView,
+        onSort: changeSort, // F-CL-203
+        onWork: changeWork, // F-CL-202: the chip's ✕
         onFilters: (next) => {
           setRows(loading())
           setSelected([])

@@ -154,6 +154,48 @@ describe('F-CL-104: Set production supervisor for N… — runs on, not on with 
   })
 })
 
+// ---- F-CL-201: the reads — the band asks what the list asks, minus its own door, order and page (K2) -----------------------------
+import { partyQueryParams } from '../../../parties/_shared/api'
+import { bandTermsOf, listQueryOf, SIDES, sortOf, viewQuery, workOf } from '../../../parties/_shared/model'
+import { customerSortOf } from './model'
+
+describe('F-CL-201: the band query, the order and the door in the address', () => {
+  it('the band query is the list query minus work, sort, cursor and limit (so a band number is the rows its press shows)', () => {
+    const terms = viewQuery(SIDES.customers, 'active', { kind: 'ORGANISATION' }, 'seed')
+    const list = { ...listQueryOf(terms, 'needs', 'NOT_SENT'), cursor: 'abc', limit: 50 }
+    expect(list).toMatchObject({ sort: 'needs', work: 'NOT_SENT', statuses: ['ACTIVE'], kind: 'ORGANISATION', q: 'seed' })
+    expect(bandTermsOf(list)).toEqual(terms)
+    expect(partyQueryParams({ ...bandTermsOf(list), limit: 1, band: true })).toMatchObject({ band: 'true', limit: 1, work: undefined, sort: undefined, status: 'ACTIVE' })
+    // Code is the API's own order: never sent (a reader without orders.view may ask for it).
+    expect(listQueryOf(terms, 'code', null)).toEqual(terms)
+    expect(listQueryOf(terms, 'name', null)).toMatchObject({ sort: 'name' })
+  })
+
+  it('the order from the address: a known choice, else the fallback (never written when it is the fallback)', () => {
+    const withOrders = customerSortOf({ orders: true })
+    const without = customerSortOf({ orders: false })
+    expect(withOrders).toEqual({ choices: ['needs', 'code', 'name'], fallback: 'needs' })
+    expect(without).toEqual({ choices: ['code', 'name'], fallback: 'code' })
+    expect(sortOf(null, withOrders)).toBe('needs')
+    expect(sortOf('name', withOrders)).toBe('name')
+    expect(sortOf('nope', withOrders)).toBe('needs')
+    // Without orders.view "needs" is no choice: the address cannot ask for it.
+    expect(sortOf('needs', without)).toBe('code')
+    const page = readFileSync(new URL('../../../parties/_shared/PartiesList.tsx', import.meta.url), 'utf8')
+    expect(page).toContain("if (sort && nextSort && nextSort !== sort.fallback) search.set('sort', nextSort)")
+  })
+
+  it('the door in the address: a known group or none; pressing and clearing it is one write of the address', () => {
+    expect(workOf('NOT_SENT')).toBe('NOT_SENT')
+    expect(workOf('NEEDS_US')).toBe('NEEDS_US')
+    expect(workOf('CANCELLED')).toBeNull()
+    expect(workOf(null)).toBeNull()
+    const page = readFileSync(new URL('../../../parties/_shared/PartiesList.tsx', import.meta.url), 'utf8')
+    expect(page).toContain('writeAddress({ work: next })')
+    expect(page).toContain("if (workTerm && nextWork) search.set('work', nextWork)")
+  })
+})
+
 // ---- every word the folder names, in both languages (the shape of parties.vitest.test.ts :391) ---------------------------------
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 function sources(dir: string): string[] {
