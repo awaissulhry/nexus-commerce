@@ -141,8 +141,9 @@ export function workEmptyOf(
 export const MONEY_PRESET: NonNullable<OrdersListModel['preset']> = Object.freeze({
   shown: Object.freeze(['number', 'status', 'ourPrice', 'brandPrice', 'priceMatch', 'balance']),
   wide: Object.freeze(['picture', 'promised', 'paid']),
-  // F-CW-103: Customise says so of the three that wait for the widest sheet (ticked, "… · from the widest sheet").
-  later: Object.freeze({ picture: 'widest', promised: 'widest', paid: 'widest' } as const),
+  // F-CW-103: Customise says so of the three that wait for a wider sheet (ticked, "… · from a wider sheet"). F-CW-104 (10-design
+  // §3.8): they return from the `wide` room (1150 px of sheet: the row fits whole), not only at the widest.
+  later: Object.freeze({ picture: 'wider', promised: 'wider', paid: 'wider' } as const),
 })
 
 /** The Not equal view is the one shown: every order (`rows=all`), the price check term Not equal, no waiting term (a price holder's). */
@@ -255,7 +256,7 @@ export function useWorkRoom(): { readonly ref: RefObject<HTMLDivElement | null>;
  * the tab (All orders, a door of the band, In production); Waiting on us and Late beside the open thread show Waiting on in the
  * place of Customer urgency and New messages. Customer and Brand never (the customer is the page's); Status waits (it is the first
  * chip of Where it is). F-CP-141: the money columns (MONEY_PRESET) when `money` — the Not equal view, or the Work · Money toggle
- * (review E5: money never unasked); its wide columns return in the widest room.
+ * (review E5: money never unasked); its wide columns return from the `wide` room (F-CW-104).
  */
 export function workPreset(rows: RowView, waiting: 'us' | null, money = false, room: WorkRoom = 'base'): WorkPreset {
   if (money) return MONEY_PRESET // F-CP-141
@@ -397,7 +398,11 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
       ...(price ? [{ id: NOT_EQUAL_VIEW, label: t('customers.work.view.notEqual'), active: notEqual }] : []), // F-CP-141
     ],
     preset: workPreset(rows, waiting, columnSet === 'money' /* F-CP-141: the Not equal view opens on the money columns; F-CP-105: the toggle on every view */, workRoom.room /* F-CW-103 */),
-    wide: workRoom.room === 'widest', // F-CW-103 (S11): by the tab's own room (the sheet then asks no window)
+    // F-CW-103 (S11): by the tab's own room (the sheet then asks no window). F-CW-104 (10-design §3.8): the Money set's wide columns
+    // (Picture · Promised · Paid) return as soon as the row fits whole — from the `wide` room.
+    wide: columnSet === 'money' ? workRoom.room !== 'base' : workRoom.room === 'widest',
+    countOf: workViewCounts(work.reads.board)?.all ?? null, // F-CW-104: "2 of 14 orders" under a door, a view or a search
+    searchLabel: t('customers.work.search'), // F-CW-104: the shorter words fit the toolbar beside the thread
     columnSet: price ? { value: columnSet } : null, // F-CP-105: the toggle, a price holder's only
     marks: work.marks,
     doorHref: door.hrefOf,
@@ -503,7 +508,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
         {showDrafts ? (
           // F-CP-107: the customer's portal drafts, read only (the dock follows a row: the draft's own conversation).
           <CustomerDraftsList
-            model={{ customer: party.name, read: drafts.read, updates: drafts.updates, activeId: picked && picked.type === 'PortalOrderRequest' ? picked.id : null, views: { model, actions } }}
+            model={{ customer: party.name, read: drafts.read, updates: drafts.updates, activeId: picked && picked.type === 'PortalOrderRequest' ? picked.id : null, views: { model, actions }, wide: workRoom.room !== 'base' /* F-CW-104 (10-design §3.8): Messages (and the value) from the `wide` room */ }}
             actions={{
               ...(can.threads ? { onRow: (row: DraftRow) => onPick(draftPick(row, draftTitle(row, untitled))), onFocusRow: (row: DraftRow) => onFocus?.(draftPick(row, draftTitle(row, untitled))) } : {}),
               onOpen: drafts.onOpen,

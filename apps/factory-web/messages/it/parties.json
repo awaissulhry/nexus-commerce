@@ -266,7 +266,8 @@
       },
       "emptyDrafts_one": "{count} bozza è in scrittura nel portale — mai contata come ordine.",
       "emptyDrafts_other": "{count} bozze sono in scrittura nel portale — mai contate come ordini.",
-      "showDrafts": "Mostra le bozze"
+      "showDrafts": "Mostra le bozze",
+      "search": "Cerca numero, PO o modello"
     },
     "quotesTab": {
       "quotes": "Preventivi",

@@ -60,6 +60,8 @@ export function CustomerDraftsList(props: { model: CustomerDraftsListModel; acti
 }
 
 /** The wide columns (the conversation, the value) from 1800 px, as the Orders sheet's. */
+// F-CW-104 (10-design §3.8; S28: the sideways scroll only): the Work tab hands its own room (`forced`, followed live: the thread
+// closed or opened); without a host's word the window decides as before.
 function useWide(forced: boolean | undefined): boolean {
   const query = '(min-width: 1800px)'
   const [wide, setWide] = useState(() => forced ?? (typeof window !== 'undefined' && !!window.matchMedia?.(query).matches))
@@ -70,7 +72,7 @@ function useWide(forced: boolean | undefined): boolean {
     list.addEventListener('change', on)
     return () => list.removeEventListener('change', on)
   }, [forced])
-  return wide
+  return forced ?? wide
 }
 
 function DraftsList({ model, actions }: { model: CustomerDraftsListModel; actions?: CustomerDraftsListActions }) {
@@ -140,6 +142,7 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
         colId: 'messages',
         headerName: t('customers.drafts.col.messages'),
         minWidth: 120,
+        flex: 1, // F-CW-104: its share of the room (without one the grid gave it 200 px: a sideways scroll at 1183)
         hide: !wide,
         valueGetter: (params) => {
           const words = params.data ? messagesWords(params.data) : null
@@ -153,6 +156,7 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
               colId: 'value',
               headerName: t('customers.drafts.col.value'),
               minWidth: 104,
+              flex: 0.6, // F-CW-104
               hide: !wide,
               type: 'rightAligned',
               // F-CP-141 (follow-up 6): B-CP-076's draft value (minor units) when present, else the net at the prices shown.

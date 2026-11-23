@@ -309,12 +309,75 @@ describe('F-SA-276: words in both languages', () => {
       expect(t('customers.work.attention', { count: 2 }), locale).toContain('2')
       const sheet = createTranslator(locale, messagesFor(locale, ['orders-sheet'])['orders-sheet']!)
       for (const key of ['views.waitingUs', 'chips.waitingUs']) expect(sheet(key), `${locale} ${key}`).not.toBe(key)
+      // ---- F-CW-104: every new word of W1 — the band, the empty sentences, the toolbar, the row's chips, Customise ----
+      const work = [
+        ...['all', 'allCount', 'pipeline', 'groupTip', 'groupOnTip', 'info', 'sum', 'beforeNote', 'before.label', 'before.drafts', 'before.toAnswer', 'before.openQuotes', 'before.orderWaits'].map((key) => `customers.work.band.${key}`),
+        ...['NOT_SENT', 'NOT_STARTED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'DONE', 'CANCELLED', 'waitingUs', 'late'].map((key) => `customers.work.none.${key}`),
+        'customers.work.showDrafts',
+        'customers.work.search',
+      ]
+      for (const key of work) expect(t(key, { customer: 'Brand Alpha', count: 2, group: 'x' }), `${locale} ${key}`).not.toBe(key)
+      for (const key of ['customers.work.band.why.yes', 'customers.work.band.why.deposit', 'customers.work.emptyDrafts']) for (const count of [1, 2]) expect(t(key, { count }), `${locale} ${key} ${count}`).toContain(String(count))
+      const row = [
+        ...['NOT_SENT', 'NOT_STARTED', 'DONE'].map((phase) => `phase.${phase}`),
+        ...['NOT_SENT', 'NOT_STARTED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'DONE', 'CANCELLED'].map((phase) => `phase.note.${phase}`),
+        ...['customerUrgency', 'customerUrgencyHint', 'whereItIsHint'].map((key) => `col.${key}`),
+        ...['URGENT', 'ASKED', 'SET_BACK', 'rank', 'bare', 'bareRank', 'rankTip', 'askedTip', 'lockedTip', 'priority', 'priorityTip'].map((key) => `urgency.${key}`),
+        ...['sewnOf', 'nothingShipped'].map((key) => `where.${key}`),
+        ...['depositOverdue', 'depositExtra', 'reaccept', 'heldTip'].map((key) => `stop.${key}`),
+        'deposit.extra',
+        'customise.wider',
+        'customise.widest',
+      ]
+      for (const key of row) expect(sheet(key, { rank: 2, max: 3, customer: 'Brand Alpha', level: 'x', sewn: 1, ordered: 2, number: 'SO-1', date: 'x', column: 'x' }), `${locale} ${key}`).not.toBe(key)
+      for (const key of ['where.readyNow', 'countOf']) for (const count of [1, 2]) expect(sheet(key, { count, shown: 0 }), `${locale} ${key} ${count}`).toContain(String(count))
+      // ---- end F-CW-104
     }
     // R9: the catalogue's own words ("Tocca a noi").
     const it = createTranslator('it', messagesFor('it', ['parties']).parties!)
     expect(it('customers.work.strip.us')).toBe('Tocca a noi')
   })
 })
+
+// ---- F-CW-104 (customer Work tab; 10-design §3.1, picture 20): the toolbar's own words on the customer page ----
+describe('F-CW-104: the toolbar says "2 of 14 orders" under a door, and searches in the host\'s shorter words', () => {
+  const words = (locale: (typeof LOCALES)[number]) => ({
+    t: createTranslator(locale, messagesFor(locale, ['orders']).orders!),
+    s: createTranslator(locale, messagesFor(locale, ['orders-sheet'])['orders-sheet']!),
+  })
+  it('"14 orders" as a whole; "2 of 14 orders" while the sheet shows fewer; rows still to load say so first; no whole, no "of"', async () => {
+    const { countWords } = await import('../../orders/list/view/OrdersListView')
+    const en = words('en')
+    expect(countWords(14, 14, false, 14, en.t, en.s)).toBe('14 orders')
+    expect(countWords(2, 2, false, 14, en.t, en.s)).toBe('2 of 14 orders')
+    expect(countWords(0, 0, false, 14, en.t, en.s)).toBe('0 of 14 orders')
+    expect(countWords(0, 0, false, 1, en.t, en.s)).toBe('0 of 1 order')
+    expect(countWords(1, null, false, 14, en.t, en.s)).toBe('1 of 14 orders')
+    // Rows that wait to load come first (the count of the rows on screen is not the door's count yet).
+    expect(countWords(50, 120, true, 300, en.t, en.s)).toBe('50 of 120 loaded')
+    expect(countWords(50, null, true, 300, en.t, en.s)).toBe(en.t('list.countMore', { count: 50 }))
+    // Sales › Orders and Made to measure name no whole: their count reads as before.
+    expect(countWords(2, 2, false, null, en.t, en.s)).toBe('2 orders')
+    expect(countWords(2, 2, false, undefined, en.t, en.s)).toBe('2 orders')
+    expect(countWords(15, 15, false, 14, en.t, en.s)).toBe('15 orders') // a board read a moment behind never says "15 of 14"
+    const it = words('it')
+    expect(countWords(2, 2, false, 14, it.t, it.s)).toBe('2 di 14 ordini')
+    expect(countWords(14, 14, false, 14, it.t, it.s)).toBe('14 ordini')
+  })
+  it('host-only: the customer page names its whole (the band\'s All orders) and its search words; the sheet falls back to its own', () => {
+    const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain('countOf: workViewCounts(work.reads.board)?.all ?? null,')
+    expect(tab).toContain("searchLabel: t('customers.work.search'),")
+    const sheet = readFileSync(new URL('../../orders/list/view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(sheet).toContain("placeholder={model.searchLabel ?? t('list.search')}")
+    expect(sheet).toContain('countWords(items.length, count, !!model.list.more, model.countOf, t, s)')
+    for (const page of ['../../orders/list/OrdersPage.tsx', '../../mtm/MtmPage.tsx']) expect(readFileSync(new URL(page, import.meta.url), 'utf8'), page).not.toMatch(/countOf|searchLabel/)
+    const en = createTranslator('en', messagesFor('en', ['parties']).parties!)
+    const it = createTranslator('it', messagesFor('it', ['parties']).parties!)
+    expect([en('customers.work.search'), it('customers.work.search')]).toEqual(['Search number, PO or style', 'Cerca numero, PO o modello'])
+  })
+})
+// ---- end F-CW-104
 
 // ---- F-SA-278 (sales page plan N5, N3; picks R5, P10; Round 4): the strip's two windows — Waiting for <customer> (our asks: the
 // portal's requests card as it is; counter-offers; changes waiting for their new yes) and Open tasks; each row picks its record in the dock.
@@ -976,7 +1039,13 @@ describe('F-CP-141: the Not equal view', () => {
     expect(MONEY_PRESET.wide).toEqual(['picture', 'promised', 'paid'])
     expect([...MONEY_PRESET.shown, ...(MONEY_PRESET.wide ?? [])]).not.toContain('priceDiff')
     expect(workPreset('all', null, true)).toBe(MONEY_PRESET)
-    expect(workPreset('all', null, true, 'widest')).toBe(MONEY_PRESET) // its wide columns return in the widest room (the sheet's `wide`)
+    expect(workPreset('all', null, true, 'widest')).toBe(MONEY_PRESET) // its wide columns return with the sheet's `wide`
+    // F-CW-104 (10-design §3.8): … which the Work tab hands from its `wide` room on (1150 px of sheet), where the whole row fits:
+    // select 43 + Number · Status · Our price · Customer's price · Price check · Balance + Picture · Promised · Paid + ⋯ 64.
+    const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain("wide: columnSet === 'money' ? workRoom.room !== 'base' : workRoom.room === 'widest',")
+    expect(43 + 128 + 112 + 104 + 104 + 112 + 104 + 76 + 108 + 104 + 64).toBeLessThanOrEqual(WORK_ROOMS.wide)
+    expect(MONEY_PRESET.later).toEqual({ picture: 'wider', promised: 'wider', paid: 'wider' }) // Customise: "… · from a wider sheet"
     // Review E5: All orders keeps today's columns (the money comes with the Not equal view or the toggle).
     for (const room of ['base', 'wide', 'wider', 'widest'] as const) {
       expect(workPreset('all', null, false, room).shown, room).not.toContain('ourPrice')

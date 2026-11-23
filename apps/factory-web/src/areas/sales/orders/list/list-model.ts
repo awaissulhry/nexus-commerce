@@ -184,6 +184,12 @@ export interface OrdersListModel {
   hostViews?: ReadonlyArray<{ readonly id: string; readonly label: string; readonly active?: boolean }> | null
   /** F-CP-103 (review A4): the count beside each Views ▾ item, by view id, from the host's one count read (absent id: no number). */
   viewCounts?: Readonly<Record<string, number>> | null
+  // ---- F-CW-104 (10-design §3.1): the host's own toolbar words ----
+  /** Every order of the host's scope (the customer's): the count says "2 of 14 orders" while the sheet shows fewer (a door, a view, a search). */
+  countOf?: number | null
+  /** The host's own search words (placeholder and name): the sheet's longer ones are cut in a narrow toolbar. */
+  searchLabel?: string | null
+  // ---- end F-CW-104
   /** The columns the host shows at first, and from 1800 px (a person's Customise wins); absent: the sheet's own. */
   preset?: {
     readonly shown: readonly string[]

@@ -65,7 +65,7 @@ describe('F-CW-103: wide by the room the tab really has (S11)', () => {
     expect(tab).toContain('const measure = () => setRoom(workRoomOf(node.getBoundingClientRect().width))')
     expect(tab).toContain('const observer = new ResizeObserver(measure)')
     expect(tab).toContain('<div className="fw-cw" ref={workRoom.ref')
-    expect(tab).toContain("wide: workRoom.room === 'widest',")
+    expect(tab).toContain("workRoom.room === 'widest',")
     expect(tab).toContain('workRoom.room /* F-CW-103 */),')
     // The tab's hook asks no window (no media query, no viewport width); the frame's own width state is not read or written.
     const hook = tab.slice(tab.indexOf('export function useWorkRoom'), tab.indexOf('// ---- end F-CW-103'))
@@ -124,7 +124,7 @@ describe('F-CW-103: Customise tells the truth for the Work tab\'s set (S12; A1-B
     expect(workLaterOf(WORK_SETS.wider)).toEqual({ priority: 'widest', units: 'widest', orderDate: 'widest', supervisor: 'widest' })
     expect(workLaterOf(WORK_SETS.widest)).toEqual({})
     expect(workLaterOf(WAITING_SET)).toMatchObject({ customerUrgency: 'wider', newMessages: 'wider' })
-    expect(MONEY_PRESET.later).toEqual({ picture: 'widest', promised: 'widest', paid: 'widest' })
+    expect(MONEY_PRESET.later).toEqual({ picture: 'wider', promised: 'wider', paid: 'wider' }) // F-CW-104: they return from the `wide` room
     const frame = readFileSync(new URL('../../../../list-frame/tools/model.ts', import.meta.url), 'utf8')
     expect(frame).toContain("export const isOptIn = (column: ColDef<unknown>): boolean => contextOf(column).optIn === true")
   })

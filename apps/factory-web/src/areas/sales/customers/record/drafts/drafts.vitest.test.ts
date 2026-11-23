@@ -116,6 +116,20 @@ describe('the view and its address (fx-12, review G4)', () => {
     for (const id of ['draft', 'lines', 'files', 'ready', 'changed', 'wanted']) expect(view.slice(view.indexOf(`colId: '${id}'`)).split('colId:')[1], id).toMatch(/flex: /)
   })
 
+  // F-CW-104 (10-design §3.8; S28: the sideways scroll only): Messages and the value come with the Work tab's `wide` room (1150 px of
+  // sheet), each with its share — before, the window decided (1800 px: 1250 px of columns in the 1183 px beside the thread at 1920).
+  it('F-CW-104: the wide columns come with the tab\'s room and fit it (no sideways scroll at 1183)', () => {
+    const view = readFileSync(new URL('./view/CustomerDraftsList.tsx', import.meta.url), 'utf8')
+    const all = ['draft', 'lines', 'files', 'ready', 'changed', 'wanted', 'messages', 'value', 'more']
+    const widths = all.map((id) => Number(view.slice(view.indexOf(`colId: '${id}'`)).match(/minWidth: (\d+)/)![1]))
+    expect(widths.reduce((sum, width) => sum + width, 0)).toBeLessThanOrEqual(1150)
+    for (const id of ['messages', 'value']) expect(view.slice(view.indexOf(`colId: '${id}'`)).split('colId:')[1], id).toMatch(/flex: /)
+    // The host's word is followed live (the thread closed or opened); without one the window decides as before.
+    expect(view).toContain('return forced ?? wide')
+    const tab = readFileSync(new URL('../view/WorkTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain("wide: workRoom.room !== 'base'")
+  })
+
   it('the pick writes through the record pages\' one history writer; a rows view picked again goes through the sheet (which drops `list`)', () => {
     const tab = readFileSync(new URL('../view/WorkTab.tsx', import.meta.url), 'utf8')
     expect(tab).toContain('if (id === DRAFTS_VIEW) writeSearch(draftsAddress(`${prefix}${basePath}`, party.id, params))')

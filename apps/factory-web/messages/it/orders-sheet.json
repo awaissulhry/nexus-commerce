@@ -463,5 +463,7 @@
   "customise": {
     "wider": "{column} · da un foglio più largo",
     "widest": "{column} · dal foglio più largo"
-  }
+  },
+  "countOf_one": "{shown} di {count} ordine",
+  "countOf_other": "{shown} di {count} ordini"
 }

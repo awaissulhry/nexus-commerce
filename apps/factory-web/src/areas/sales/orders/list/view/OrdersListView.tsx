@@ -227,8 +227,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       size="sm"
       type="search"
       leadingIcon={<Search size={13} aria-hidden />}
-      aria-label={t('list.search')}
-      placeholder={t('list.search')}
+      aria-label={model.searchLabel ?? t('list.search') /* F-CW-104: the host's own shorter words */}
+      placeholder={model.searchLabel ?? t('list.search')}
       {...search.field /* F-SA-223 */}
     />
   )
@@ -496,7 +496,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           rows={state ? [] : items}
           rowId={(row) => row.id}
           columns={columns}
-          count={items ? (count !== null && items.length < count ? s('loadedOf', { loaded: items.length, total: count }) : t(model.list.more ? 'list.countMore' : 'list.count', { count: items.length })) : '—'}
+          count={items ? countWords(items.length, count, !!model.list.more, model.countOf, t, s) /* F-CW-104 */ : '—'}
           search={searchField}
           right={
             model.toolbarLink ? (
@@ -786,6 +786,16 @@ export function hostEmptyOf(model: Pick<OrdersListModel, 'empty' | 'rows'>, narr
 // ── B-TH-243 (threads plan TH-4, ORD-G10; SHEET.brand-view-F01): the Orders' built-in views, on top of Views ▾ ──
 /** The rows views as built-in views (the address terms each stands for), the open orders first; a customer's sheet names them so. */
 // F-SA-221: + "Made-to-measure" after them (`kind=mtm` with the open orders).
+/**
+ * F-CW-104 (10-design §3.1): the toolbar's count in words — "14 orders"; "50 of 120 loaded" while rows wait to load; and on a host
+ * that names its whole (`countOf`: every order of the customer) "2 of 14 orders" while the sheet shows fewer (a door, a view, a search).
+ */
+export function countWords(loaded: number, count: number | null, more: boolean, whole: number | null | undefined, t: Translate, s: Translate): string {
+  if (count !== null && loaded < count) return s('loadedOf', { loaded, total: count })
+  if (!more && typeof whole === 'number' && loaded < whole) return s('countOf', { shown: loaded, count: whole })
+  return t(more ? 'list.countMore' : 'list.count', { count: loaded })
+}
+
 // F-SA-276: + "Waiting on us" (`waiting=us` with the open orders); a host's `views` names which it offers, in its order.
 // F-CP-102: + the host's own views (model.hostViews: Drafts of <customer>, Not equal), each where `views` names its id.
 // F-CP-103 (review A4): + each view's count from the host's one count read (model.viewCounts; `number` writes it in the person's

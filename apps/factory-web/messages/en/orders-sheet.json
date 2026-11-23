@@ -463,5 +463,7 @@
   "customise": {
     "wider": "{column} · from a wider sheet",
     "widest": "{column} · from the widest sheet"
-  }
+  },
+  "countOf_one": "{shown} of {count} order",
+  "countOf_other": "{shown} of {count} orders"
 }

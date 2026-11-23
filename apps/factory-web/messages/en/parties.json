@@ -266,7 +266,8 @@
       },
       "emptyDrafts_one": "{count} draft is being written in the portal — never counted as an order.",
       "emptyDrafts_other": "{count} drafts are being written in the portal — never counted as orders.",
-      "showDrafts": "Show the drafts"
+      "showDrafts": "Show the drafts",
+      "search": "Search number, PO or style"
     },
     "quotesTab": {
       "quotes": "Quotes",
