@@ -13,6 +13,7 @@ import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { addUser, startHarness, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
+import { readableText } from '../../../testing/readable' // cw-fx9
 
 /**
  * B-W2b-113 on the local stack with the app's real routes (a throwaway PostgreSQL 17 database from the migrations, the
@@ -161,7 +162,7 @@ describe('the cost of the NCR by the cost grain (QHS-086)', () => {
     expect((await ok('qa', 'GET', `/quality/ncr/${A.seedNcr2}`)).record.ncr.version).toBe(versionBefore)
     const changes = (await events('ncr.changed')).filter((payload) => payload.ncrId === A.seedNcr2)
     expect(changes.filter((payload) => payload.fields.includes('cost'))).toHaveLength(3)
-    expect(JSON.stringify(changes)).not.toMatch(/2000|1500/)
+    expect(readableText(changes)).not.toMatch(/2000|1500/) // cw-fx9: the figure is looked for in what a person reads — never in a generated id or a time (testing/readable).
     const [audit] = await admin<Json>(`SELECT "after" FROM "AuditLog" WHERE "tenantId" = $1 AND action = 'quality.addNcrCostLine' ORDER BY "at" DESC LIMIT 1`, [A.tenant])
     expect(audit!.after.amount).toEqual({ $money: 'cost', value: 1_500 })
   })

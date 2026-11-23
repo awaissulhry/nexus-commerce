@@ -17,6 +17,7 @@ import { addTenant, addUser, Browser, START, startHarness, WEB_ORIGIN, type Harn
 import { LINK_HEADER, LINK_UNAVAILABLE } from './authenticator'
 import { registerLinkRecordSource } from './records'
 import { linkCommand, useLink } from './use'
+import { readableText } from '../../testing/readable' // cw-fx9
 
 /**
  * One-off links on the local stack (plan A1 §3.10 "Links", §2.2, §2.6; PLAN §4.7 06a-accept and 08-buy; features
@@ -550,7 +551,7 @@ describe('the grants of the purpose: prices only on the party\'s own document', 
     const keys = (value: unknown): string[] =>
       value !== null && typeof value === 'object' ? Object.entries(value).flatMap(([name, inner]) => [name, ...keys(inner)]) : []
     expect([...keys(seen.body), ...keys(opened.body)].filter(looksLikeMoney)).toEqual([])
-    expect(JSON.stringify(seen.body)).not.toMatch(/80\.0|8000/)
+    expect(readableText(seen.body)).not.toMatch(/80\.0|8000/) // cw-fx9: the figure is looked for in what a person reads — never in a generated id or a time (testing/readable).
   })
 })
 

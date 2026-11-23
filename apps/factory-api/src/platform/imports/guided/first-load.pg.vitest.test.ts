@@ -20,6 +20,7 @@ import { startHarness, type Harness } from '../../auth/sessions/testing/harness'
 import { systemContext } from '../../outbox/system'
 import { applyPlan, planImport } from '../worker'
 import { NO_REASON_THEN, writeStepsAll } from './catch-up'
+import { readableText } from '../../../testing/readable' // cw-fx9
 
 /**
  * The guided first load and the import templates (B-W2a-41; PLT-185, PLT-177) on the local stack, with the app's real
@@ -206,7 +207,7 @@ describe('the guided first load (PLT-185)', () => {
     expect(opening.reconciliation.value).toMatchObject({ sheet: 30000, loaded: 30000, rowsAtStandard: 1, currency: 'EUR' })
     const clerk = (await steps('clerk')).openingStock!
     expect(clerk.reconciliation).not.toHaveProperty('value')
-    expect(JSON.stringify(clerk)).not.toMatch(/30000/)
+    expect(readableText(clerk)).not.toMatch(/30000/) // cw-fx9: the figure is looked for in what a person reads — never in a generated id or a time (testing/readable).
     await ok('loader', 'POST', '/imports/first-load/openingStock/done', { companyId: A.companyA })
   })
 

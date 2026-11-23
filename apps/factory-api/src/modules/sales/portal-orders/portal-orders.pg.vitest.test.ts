@@ -24,6 +24,7 @@ import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { readLines as readOrderLines } from '../orders/store'
 import { officeProgressFor, readCellCounts, readStageCounts, stageCountsOf } from './progress'
 import { seedDay } from '@nexus/factory-db/testing' // B-W2b-F53: the seeds' future follows the calendar
+import { readableText } from '../../../testing/readable' // cw-fx9
 
 /**
  * Customer orders in the portal on the local stack (B-W2b-175; SAL-075, SAL-076, SAL-080, SAL-081), through the real app
@@ -392,7 +393,8 @@ describe('shipments, tracking and what is still to ship (SAL-080, SAL-081)', { t
       ['BLK', '50', 1],
       ['RED', '52', 1],
     ])
-    expect(JSON.stringify(answer)).not.toMatch(/freight|internalNote|createdById|18\.50/)
+    // cw-fx9: the freight cost is looked for in what the customer reads — a time such as "…:18.507Z" is no amount (testing/readable).
+    expect(readableText(answer)).not.toMatch(/freight|internalNote|createdById|18\.50/)
     expect(answer.stillToShip.map((row: Json) => [row.colourway?.code, row.size, row.open]).sort()).toEqual([
       ['BLK', '52', 2],
       ['BLK', '54', 1],

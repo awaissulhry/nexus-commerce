@@ -32,6 +32,7 @@ import { localKeyProvider } from '../../../platform/secrets/local'
 import { SECRET_PURPOSES, storeSecret } from '../../../platform/secrets/store'
 import { fileTravelDocuments, TRAVEL_DOCUMENT_PERMISSIONS } from '../documents/testing/compliance'
 import { createCarrierRuntime, useCarrier } from '../labels/carrier'
+import { readableText } from '../../../testing/readable' // cw-fx9
 
 /**
  * Shipping every day (B-W2a-48; LOG-004, LOG-012, LOG-028, LOG-105, LOG-090; SCOPE W2a rules 1 and 3) on the local stack,
@@ -389,7 +390,7 @@ describe('the freight charged (LOG-105): the rule when the goods leave, the offi
     expect(await basis()).toBe('RULE')
     const events = await admin(`SELECT payload FROM "OutboxEvent" WHERE type = 'shipment.freight_changed' AND subject = $1 ORDER BY "occurredAt", id`, [S.sb])
     expect(events.map((row) => row.payload.byHand)).toEqual([false, true, false])
-    expect(JSON.stringify(events)).not.toMatch(/900/)
+    expect(readableText(events)).not.toMatch(/900/) // cw-fx9: the figure is looked for in what a person reads — never in a generated id or a time (testing/readable).
   })
 
   it('B-W2b-19: the carrier\'s freight cost, a cost: the permission and the cost grain to set it, the grain to read it', async () => {
@@ -408,7 +409,7 @@ describe('the freight charged (LOG-105): the rule when the goods leave, the offi
     expect(cleared.freight.cost).toEqual({ amount: null, currency: null })
     const events = await admin(`SELECT payload FROM "OutboxEvent" WHERE type = 'shipment.freight_cost_changed' AND subject = $1 ORDER BY "occurredAt", id`, [S.sb])
     expect(events.map((row) => row.payload.recorded)).toEqual([true, false])
-    expect(JSON.stringify(events)).not.toMatch(/1850/)
+    expect(readableText(events)).not.toMatch(/1850/) // cw-fx9: the figure is looked for in what a person reads — never in a generated id or a time (testing/readable).
   })
 
   it('B-W2b-19: the mode of transport (Intrastat) is recorded after the goods left too', async () => {

@@ -4,6 +4,7 @@ import { businessDate } from '@nexus/factory-domain/core/time'
 import { addDays } from '@nexus/factory-domain/sales/quotes/quotes'
 import { freshGuard } from '../../../platform/auth/portal/testing/portal'
 import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
+import { readableText } from '../../../testing/readable' // cw-fx9
 import { urgencyWorld, type UrgencyWorld } from '../testing/urgency-world'
 
 /**
@@ -202,13 +203,13 @@ describe('B-PR-26: the factory answers its customers’ requests', { timeout: SL
     // The Production role (no price grain): reads the counter-offer and that a price applies; no fee anywhere; cannot answer.
     const page = await ok(productionA, `/portal/approvals/${approvalId}`)
     expect(page.may).toMatchObject({ answer: false, held: 'A price may apply: your buyer answers this counter-offer.' })
-    expect(JSON.stringify(page)).not.toMatch(/2500|25[.,]00/)
+    expect(readableText(page)).not.toMatch(/2500|25[.,]00/) // cw-fx9: the figure is looked for in what a person reads — never in a generated id or a time (testing/readable).
     const refusedAnswer = await send(productionA, 'POST', `/portal/approvals/${approvalId}/answer`, { decision: 'APPROVED', typedName: 'Paolo Production', version: page.request.version })
     expect(refusedAnswer.status).toBe(403)
     // F-PR-14: the list says so too ("Waiting for your buyer" in Waiting for you); the buyer's list does not; never the amount.
     const productionList = await ok(productionA, '/portal/approvals')
     expect((productionList.items as Json[]).find((item) => item.id === approvalId)).toMatchObject({ kind: 'COUNTER_OFFER', waitingFor: null, waitingForBuyer: true })
-    expect(JSON.stringify(productionList)).not.toMatch(/2500|25[.,]00/)
+    expect(readableText(productionList)).not.toMatch(/2500|25[.,]00/) // cw-fx9
     expect(((await ok(buyerA, '/portal/approvals')).items as Json[]).find((item) => item.id === approvalId)).toMatchObject({ waitingForBuyer: false })
     const productionView = ((await ok(productionA, `/portal/sales-orders/${orders.so1.orderId}/change-requests`)).items as Json[]).find((item) => item.id === change.id)!
     expect(productionView.counter).toMatchObject({ priced: true, state: 'WAITING', date: offered })
