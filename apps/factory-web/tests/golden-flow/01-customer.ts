@@ -1,7 +1,7 @@
 import { expect } from '@playwright/test'
 import { defineStage } from './_harness/stages'
-import { answerOf, dialog, press, routerActivity } from './_harness/ui'
-import { words } from './_harness/words' // F-OP-218
+import { answerOf, chooseFromMenu /* cw T.2 */, dialog, press, routerActivity } from './_harness/ui'
+import { startsWith /* cw T.2 */, words } from './_harness/words' // F-OP-218
 import { seen } from './_harness/flow' // F-CP-112
 
 /** The customer of the first order (made up): an Italian brand that sells under its own label. */
@@ -232,6 +232,74 @@ export default defineStage({
       await flow.shot(page, 'customer-dock-order-files')
     })
     // ---- end F-CP-112
+
+    // ---- cw T.2 (customer Work tab, W1–W3): the tab's own things on the seeded customer — a band door, the tab's order, the bar of
+    // ticked rows, Ask production. Found by role and by catalogue word; NOTHING is written (the note window is closed with Escape).
+    await flow.step('the Work tab: a band door opens exactly its count, the order says "Most urgent first", ticked rows show the bar with words, Ask production opens with "Needs an answer" ticked (nothing written)', async () => {
+      const P = words('parties')
+      const S = words('orders-sheet')
+      const D = words('sales-orders-depth')
+      const N = words('production-notes')
+      const L = words('lists')
+      const P1 = await flow.seedId('party:P1')
+      await sales.go(`/sales/customers/${P1}?tab=work`)
+      // The entry writes the tab's own order beside its default view, and the Sort menu says it.
+      await expect(page).toHaveURL(/[?&]sort=urgent(&|$)/, { timeout: 30_000 })
+      await seen(page.getByRole('button', { name: S('sort.now', { sort: S('sort.urgent') }), exact: true }), 60_000)
+      const rows = page.locator('.ag-center-cols-container .ag-row')
+      await seen(rows, 60_000)
+      const all = await rows.count()
+      // A door of the band (the first group that holds an order) shows exactly its count of orders; pressed again: all orders.
+      const doors = page.getByRole('list', { name: P('customers.work.band.pipeline'), exact: true }).getByRole('button')
+      await seen(doors, 30_000)
+      let door = doors.first()
+      let count = 0
+      for (let index = 0; index < (await doors.count()); index += 1) {
+        const held = Number((await doors.nth(index).locator('.fw-cwb-num').first().innerText()).replace(/\D/g, ''))
+        if (held > 0) {
+          door = doors.nth(index)
+          count = held
+          break
+        }
+      }
+      expect(count, 'the seeded customer has an order in a group of the band').toBeGreaterThan(0)
+      await press(door)
+      await expect(door).toHaveAttribute('aria-pressed', 'true', { timeout: 30_000 })
+      await expect(page).toHaveURL(/[?&]phase=[A-Z_]+(&|$)/)
+      await expect(rows).toHaveCount(count, { timeout: 60_000 })
+      await flow.shot(page, 'customer-work-band-door')
+      await press(door)
+      await expect(page).not.toHaveURL(/[?&]phase=/, { timeout: 30_000 })
+      await expect(rows).toHaveCount(all, { timeout: 60_000 })
+      // Tick rows (two when the customer has two): the bar shows its acts WITH WORDS, then More ▾.
+      const boxes = page.locator('.ag-row .ag-selection-checkbox')
+      const ticked = Math.min(2, await boxes.count())
+      expect(ticked, 'a row to tick').toBeGreaterThan(0)
+      for (let index = 0; index < ticked; index += 1) await boxes.nth(index).click()
+      await seen(page.getByText(L('selected', { count: ticked }), { exact: true }), 30_000)
+      const ask = page.getByRole('button', { name: S('bar.ask'), exact: true }).first()
+      await expect(ask).toContainText(S('bar.ask'))
+      await expect(page.getByRole('button', { name: D('list.setPriority', { count: ticked }), exact: true }).first()).toContainText(D('list.setPriority', { count: ticked }))
+      await seen(page.getByRole('button', { name: S('bar.more'), exact: true }), 30_000)
+      await flow.shot(page, 'customer-work-bar')
+      // Ask ▾ › Ask production about N…: production's Note window, "Needs an answer" ticked; Escape closes it and nothing is written.
+      const written: string[] = []
+      const onRequest = (request: import('@playwright/test').Request) => {
+        if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/production/notes')) written.push(request.url())
+      }
+      page.on('request', onRequest)
+      await chooseFromMenu(ask, page.getByRole('menuitem', { name: startsWith(S('bar.askProduction', { count: ticked })) }))
+      const note = page.getByRole('dialog', { name: S('bar.askProductionTitle', { count: ticked }), exact: true })
+      await seen(note, 30_000)
+      await expect(note.getByRole('checkbox', { name: startsWith(N('needsAnswer.label')) }).first()).toBeChecked()
+      await expect(note.getByText(S('bar.askProductionThen'), { exact: true })).toBeVisible()
+      await flow.shot(page, 'customer-work-ask-production')
+      await page.keyboard.press('Escape')
+      await expect(note).toHaveCount(0, { timeout: 15_000 })
+      page.off('request', onRequest)
+      expect(written, 'nothing was written').toEqual([])
+    })
+    // ---- end cw T.2
 
     const saved = (await flow.read(page, `/parties/${party.id}`)).party
     expect(saved).toMatchObject({ code: CUSTOMER.code, legalName: CUSTOMER.legalName })
