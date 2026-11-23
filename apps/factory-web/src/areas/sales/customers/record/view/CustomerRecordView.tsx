@@ -57,6 +57,7 @@ export function CustomerRecordView({
   workBoard, // F-CW-101
   openQuotesHref, // F-CW-101
   quotesBadge, // F-CQ-302
+  quotesTabNote, // F-CQ-306
 }: {
   model: PartyRecordModel
   actions?: PartyRecordActions
@@ -102,11 +103,13 @@ export function CustomerRecordView({
   /** F-CQ-302 (13-backend R13; 10-design §2.5): Quotes & incoming's badge — what waits on us there (To answer + Accepted, order waits),
    *  from the page's ONE count read, marked when > 0; null while it is read; absent: the old count of the newest quotes. */
   quotesBadge?: { readonly count: number | null; readonly attention: boolean } | null
+  /** F-CQ-306 (cq fx3 W2-1b): the reader asked for Quotes & incoming, a tab it may not open: the Work tab shows, with one line why. */
+  quotesTabNote?: boolean
 }) {
   return (
     <WithMessages namespaces={[CUSTOMER_MONEY_NAMESPACE]}>
       <PartiesMessages>
-        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} supervisor={supervisor} portalPeople={portalPeople} portalEmails={portalEmails} work={work} workCount={workCount} quotesIncoming={quotesIncoming} threadButton={threadButton ?? null} onNewOrder={onNewOrder} onImport={onImport} priceDiffer={priceDiffer ?? null /* F-CP-141 */} workBoard={workBoard} openQuotesHref={openQuotesHref ?? null /* F-CW-101 */} quotesBadge={quotesBadge /* F-CQ-302 */} />
+        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} supervisor={supervisor} portalPeople={portalPeople} portalEmails={portalEmails} work={work} workCount={workCount} quotesIncoming={quotesIncoming} threadButton={threadButton ?? null} onNewOrder={onNewOrder} onImport={onImport} priceDiffer={priceDiffer ?? null /* F-CP-141 */} workBoard={workBoard} openQuotesHref={openQuotesHref ?? null /* F-CW-101 */} quotesBadge={quotesBadge /* F-CQ-302 */} quotesTabNote={quotesTabNote /* F-CQ-306 */} />
       </PartiesMessages>
     </WithMessages>
   )
@@ -137,6 +140,7 @@ interface CustomerProps {
   workBoard?: Read<OrderBoard> | undefined // F-CW-101
   openQuotesHref?: string | null // F-CW-101
   quotesBadge?: { readonly count: number | null; readonly attention: boolean } | null | undefined // F-CQ-302
+  quotesTabNote?: boolean // F-CQ-306: the reader asked for Quotes & incoming, a tab it may not open (the page shows Work)
 }
 
 function Customer(props: CustomerProps) {
@@ -168,6 +172,24 @@ function customerMore(model: PartyRecordModel, party: Party, t: ReturnType<typeo
   ]
 }
 
+// ---- F-CQ-306 (cq fx3 W2-1b): the one line that says why the Work tab shows instead of Quotes & incoming (before-order's words).
+function QuotesTabNote() {
+  return (
+    <WithMessages namespaces={['before-order']}>
+      <QuotesTabNoteLine />
+    </WithMessages>
+  )
+}
+function QuotesTabNoteLine() {
+  const b = useT('before-order')
+  return (
+    <p className="fw-cw-line" role="status">
+      {b('note.noTab')}
+    </p>
+  )
+}
+// ---- end F-CQ-306
+
 /** F-SA-271: an old address that asked for a part of a tab (Requirements) opens at it, once. */
 function ScrollOnArrival({ id }: { id: string }) {
   useEffect(() => {
@@ -177,7 +199,7 @@ function ScrollOnArrival({ id }: { id: string }) {
   return null
 }
 
-function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor, money: moneyModel, portalPeople, portalEmails, work, workCount, quotesIncoming, threadButton /* F-SA-279 */, onNewOrder, onImport /* F-CP-104 */, priceDiffer /* F-CP-141 */, workBoard, openQuotesHref /* F-CW-101 */, quotesBadge /* F-CQ-302 */ }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
+function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor, money: moneyModel, portalPeople, portalEmails, work, workCount, quotesIncoming, threadButton /* F-SA-279 */, onNewOrder, onImport /* F-CP-104 */, priceDiffer /* F-CP-141 */, workBoard, openQuotesHref /* F-CW-101 */, quotesBadge /* F-CQ-302 */, quotesTabNote /* F-CQ-306 */ }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
   const t = useT('parties')
   const side = model.side
   const config = SIDES[side]
@@ -257,6 +279,8 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
           <PartyNotices model={model} party={party} actions={actions} />
 
           {/* F-SA-276: Work — the waiting strip and the Orders sheet locked to the customer (no tabs inside the tab, R5). */}
+          {/* F-CQ-306 (cq fx3 W2-1b; 10-design §10): asked for Quotes & incoming without its right, the page shows Work and says why once. */}
+          {tab === 'work' && quotesTabNote && <QuotesTabNote />}
           {tab === 'work' && work}
           {/* F-SA-277: Quotes & incoming — two lists stacked (Quotes, then Incoming requests), each its own list locked to the customer. */}
           {tab === 'quotes' && quotesIncoming}

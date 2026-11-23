@@ -73,7 +73,8 @@
   },
   "note": {
     "noRequests": "Requests and portal orders are not shown: your role does not read requests.",
-    "noQuotes": "Quotes are not shown: your role does not read quotes."
+    "noQuotes": "Quotes are not shown: your role does not read quotes.",
+    "noTab": "Quotes & incoming needs the right to read quotes or requests: this is the Work tab, which your role may open."
   },
   "foot": {
     "closedLeftOut": "Closed ones are left out ({count}):",

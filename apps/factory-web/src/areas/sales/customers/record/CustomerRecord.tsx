@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 // F-SA-271: the band's ⋯ "Add task for <customer>…" — the record's ONE New task dialog (the Party record's task).
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
@@ -40,7 +40,7 @@ import { OpenTasksDialog } from './view/OpenTasksDialog'
 // ---- end F-SA-278
 import { QuotesIncomingTab } from './QuotesIncomingTab' // F-SA-277: two lists stacked, each its own list locked to the customer
 import { useUrgencyFoot } from './urgency-foot' // F-CW-302 (S35): the Work tab's foot — the customer's urgency state
-import { beforeOrderOf, NO_BEFORE_ORDER, quotesGroupDoor } from './before-order' // F-CW-101 (S27, S29): the band's "Before an order" line; the Open quotes door
+import { beforeOrderFor, NO_BEFORE_ORDER, quotesGroupDoor } from './before-order' // F-CW-101 (S27, S29): the band's "Before an order" line; the Open quotes door
 import { useBeforeOrderCounts } from './quotes-tab/use-before-order-counts' // F-CQ-302: the page's one count read
 
 /**
@@ -95,6 +95,14 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   // so the slots below are built for it (a Warehouse reader asking ?tab=quotes gets the Work tab and its body).
   const tab = shownTab(recordTabs(SIDES.customers, can), record.model.tab)
   // ---- end F-CQ-301
+  // ---- F-CQ-306 (cq fx3 W2-1b): asked for Quotes & incoming without its right — the Work tab shows (its entry rewrites the address to
+  // tab=work), and one line says why until the reader leaves Work.
+  const [quotesTabNote, setQuotesTabNote] = useState(false)
+  useEffect(() => {
+    if (record.model.tab === 'quotes' && tab !== 'quotes') setQuotesTabNote(true)
+    else if (tab !== 'work') setQuotesTabNote(false)
+  }, [record.model.tab, tab])
+  // ---- end F-CQ-306
   // ---- F-SA-279: the dock follows the row — a click at once, the keys after 300 ms of rest; `dock=` in the address (a replace: Back
   // leaves the page); the record any row (or a window's row, or a line of All of <customer>) picks, checked against this customer.
   const customerDock = useCustomerDock(partyId, tab, record.party ? partyName(record.party) : null /* F-OF-303: Who can see… names the customer */)
@@ -105,7 +113,9 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   // ---- F-CQ-302 (13-backend R13): the page's ONE count read, on every tab — Quotes & incoming's badge (what waits on us there), its
   // band and doors, and the Work line's four parts (the same answer: no second read of the route).
   const pageCounts = useBeforeOrderCounts(partyId, record.party !== null && record.party !== undefined)
-  const before = useMemo(() => (tab === 'work' && can.orders && pageCounts.counts ? beforeOrderOf(pageCounts.counts) : NO_BEFORE_ORDER), [tab, can.orders, pageCounts.counts])
+  // F-CQ-306 (W2-1): only for a reader who can open Quotes & incoming (every part is a door there).
+  const opensQuotesTab = can.quotes || can.inquiries === true
+  const before = useMemo(() => (tab === 'work' && can.orders ? beforeOrderFor(pageCounts.counts, opensQuotesTab) : NO_BEFORE_ORDER), [tab, can.orders, pageCounts.counts, opensQuotesTab])
   const quotesBadge = pageCounts.counts ? { count: pageCounts.counts.waitsOnUs, attention: (pageCounts.counts.waitsOnUs ?? 0) > 0 } : null
   // ---- end F-CQ-302
   // F-CW-302 (S35): the customer's urgency for the Work tab's foot — ONE read, only while the Work tab is shown AND with workorders.view.
@@ -167,7 +177,7 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
       {windows /* F-SA-278 */}
       {/* F-OF-301 (T): the docked order's Versions… — the page's ONE depth window (as on the order page). */}
       <DepthDialogs depth={customerDock.fileDepth.model} actions={customerDock.fileDepth.actions} />
-      <CustomerRecordView model={record.model} actions={record.actions} thread={dock /* F-SA-276 */} threadButton={threadButton /* F-SA-279 */} work={workTab} workCount={work.attention} quotesIncoming={quotesTab /* F-SA-277 */} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} supervisor={record.party && record.model.tab === 'overview' ? <CustomerSupervisor partyId={partyId} name={partyName(record.party)} /> : null} portalPeople={portalPeople} portalEmails={portalEmails} {...doors /* F-CP-104 */} priceDiffer={priceDifferOf(work.prices) /* F-CP-141 */} workBoard={work.reads.board /* F-CW-101: the Overview's In production and Late */} openQuotesHref={quotesGroupDoor(`${prefix}/sales/customers/${encodeURIComponent(partyId)}`, 'OPEN_QUOTES') /* F-CW-101 (S29) */} quotesBadge={quotesBadge /* F-CQ-302 */} />
+      <CustomerRecordView model={record.model} actions={record.actions} thread={dock /* F-SA-276 */} threadButton={threadButton /* F-SA-279 */} work={workTab} workCount={work.attention} quotesIncoming={quotesTab /* F-SA-277 */} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} supervisor={record.party && record.model.tab === 'overview' ? <CustomerSupervisor partyId={partyId} name={partyName(record.party)} /> : null} portalPeople={portalPeople} portalEmails={portalEmails} {...doors /* F-CP-104 */} priceDiffer={priceDifferOf(work.prices) /* F-CP-141 */} workBoard={work.reads.board /* F-CW-101: the Overview's In production and Late */} openQuotesHref={quotesGroupDoor(`${prefix}/sales/customers/${encodeURIComponent(partyId)}`, 'OPEN_QUOTES') /* F-CW-101 (S29) */} quotesBadge={quotesBadge /* F-CQ-302 */} quotesTabNote={quotesTabNote && tab === 'work' /* F-CQ-306 */} />
     </>
   )
 }
