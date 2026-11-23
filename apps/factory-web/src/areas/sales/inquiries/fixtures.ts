@@ -287,7 +287,7 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'updates', label: '3 changes waiting (Show)', model: page({ updates: 3 }) },
     { id: 'capped', label: 'B-TH-233 · More rows than one page: "Show 200 more" reads the next page (no "first 200 rows" any more)', model: page({ list: listOf(undefined, true, 'next-page'), more: { next: true, busy: false, problem: null, page: 200 } }) },
     { id: 'filtered-empty', label: 'No rows match these filters (Clear filters)', model: page({ address: at({ source: 'FAIR', q: 'zzz' }), list: listOf([]) }) },
-    { id: 'empty', label: 'No inquiries yet (New inquiry)', model: page({ list: { rows: [], counts: { NEW: 0, WAITING_US: 0, WAITING_CUSTOMER: 0, QUOTED_THIS_WEEK: 0, MINE: 0, OPEN: 0, QUOTED: 0, ORDERED: 0, DECLINED: 0, NOT_AN_ORDER: 0, LOST: 0, ALL: 0, CUSTOMER_REPLIES: 0 }, kinds: { REQUEST: 0, CATALOGUE_ORDER: 0, CHANGE_REQUEST: 0 }, next: null, complete: true } }) },
+    { id: 'empty', label: 'No inquiries yet (New inquiry)', model: page({ list: { rows: [], counts: { NEW: 0, WAITING_US: 0, WAITING_CUSTOMER: 0, QUOTED_THIS_WEEK: 0, MINE: 0, OPEN: 0, QUOTED: 0, ORDERED: 0, DECLINED: 0, NOT_AN_ORDER: 0, LOST: 0, ALL: 0, TO_ANSWER: 0, ENDED: 0, CUSTOMER_REPLIES: 0 }, kinds: { REQUEST: 0, CATALOGUE_ORDER: 0, CHANGE_REQUEST: 0 }, next: null, complete: true } }) },
     { id: 'loading', label: 'Loading (tiles "—")', model: page({ list: null, asOf: null, live: 'connecting' }) },
     { id: 'error', label: "Couldn't load inquiries (Try again; tiles \"—\", Couldn't count)", model: page({ list: null, problem: 'problem.unavailable' }) },
     { id: 'offline', label: 'Offline: the rows as last read; every verb held', model: page({ live: 'offline' }) },

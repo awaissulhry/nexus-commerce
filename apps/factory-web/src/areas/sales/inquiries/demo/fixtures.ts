@@ -258,6 +258,9 @@ const counts = (rows: readonly IncomingRow[]): Record<ListTile, number | null> =
   NOT_AN_ORDER: rows.filter((one) => one.request?.declineReason === 'NOT_AN_ORDER').length,
   LOST: 0,
   ALL: rows.length,
+  // B-CQ-020 (factory-domain sales/incoming/rules.ts): what waits on us (the shell's "N waiting on us"), and what ended.
+  TO_ANSWER: rows.filter((one) => ['NEW', 'ASSIGNED', 'SENT', 'OPEN'].includes(one.state)).length,
+  ENDED: rows.filter((one) => ['DECLINED', 'LOST', 'REFUSED', 'WITHDRAWN'].includes(one.state)).length,
   CUSTOMER_REPLIES: REPLIES.length,
 })
 
