@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, type ReactNode } from 'react' // F-CL-301: + ReactNode
 import Link from 'next/link'
 import { AlertTriangle, ClipboardCheck, MessageSquare, UserCheck } from 'lucide-react'
 import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
@@ -128,7 +128,8 @@ export function customerColumnsOf(input: CustomerColumnsInput, c: Translate, l: 
   }
   const beforeName: ColDef<PartyRow>[] = work
     ? // F-CL-301 (walk W-2): the header whole ("Picture", not "Pic…"): a little wider, with less side padding (the thumbnail is 32 px).
-      [{ colId: 'picture', headerName: words.sheet('col.picture'), headerTooltip: c('col.pictureHint'), sortable: false, width: 80, minWidth: 80, maxWidth: 88, suppressHeaderMenuButton: true, headerClass: 'fw-cl-tight', cellClass: 'fw-cl-tight', cellRenderer: PictureCellR }]
+      // F-CL-301 (walk W-13): a leading column — the name stays the row's first (Freeze “Customer”); the picture freezes with it.
+      [{ colId: 'picture', headerName: words.sheet('col.picture'), headerTooltip: c('col.pictureHint'), sortable: false, width: 80, minWidth: 80, maxWidth: 88, suppressHeaderMenuButton: true, headerClass: 'fw-cl-tight', cellClass: 'fw-cl-tight', context: { leading: true }, cellRenderer: PictureCellR }]
     : []
   const workColumns: ColDef<PartyRow>[] = work
     ? [
@@ -160,6 +161,19 @@ export function customerColumnsOf(input: CustomerColumnsInput, c: Translate, l: 
     hiddenColumns: input.wide ? CUSTOMER_HIDDEN_COLUMNS : [...CUSTOMER_HIDDEN_COLUMNS, ...WIDE_ONLY_COLUMNS],
     card,
   }
+}
+
+/**
+ * F-CL-301 (walk W-13; 10-design §8): Customise's own lines — these are the list's own columns (what is on screen is ticked, the
+ * identity columns hidden at first and always in the file), and, for a reader who does not see prices, that Overdue is not offered.
+ */
+export function customiseAboutOf(c: Translate, prices: boolean): ReactNode {
+  return (
+    <>
+      <p>{c('customise.truth')}</p>
+      {!prices && <p>{c('customise.noOverdue')}</p>}
+    </>
+  )
 }
 
 /** The customers' columns for a list in the page's language, rebuilt only when a fact they draw changes. */

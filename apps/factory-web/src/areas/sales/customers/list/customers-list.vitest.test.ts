@@ -8,7 +8,8 @@ import { LOCALES } from '../../../../lib/i18n/locales'
 import { CATALOGUE } from '../../../../lib/i18n/messages'
 import type { PartyRow } from '../../../parties/_shared/api'
 import { CUSTOMERS, rowOf } from '../../../parties/_shared/fixtures'
-import { customerColumnsOf, threadHref } from './columns'
+import { customerColumnsOf, customiseAboutOf, threadHref } from './columns' // F-CL-301: + customiseAboutOf
+import { toolColumnsOf } from '../../../../list-frame/tools/model' // F-CL-301
 import { MessagesHeader } from './view/cells' // F-CL-301
 import { CARD_ROLES, customerActsOf, CUSTOMER_HIDDEN_COLUMNS, customerRightsOf, namesOtherCustomer, officeDataOf, workReadOf } from './model'
 import { supervisorBodyOf, supervisorPlanOf, supervisorRestOf, supervisorSummaryOf, type SupervisorTarget } from './supervisor/model'
@@ -417,6 +418,17 @@ describe('F-CL-203: Sort ▾ and the phone card', () => {
     expect(messages.headerName).toBe('column')
     expect(messages.headerComponentParams).toEqual({ innerHeaderComponent: MessagesHeader })
     expect(messages.suppressHeaderMenuButton).toBe(true)
+  })
+
+  it('F-CL-301 (walk W-13): the picture leads the name (Freeze “Customer”); Customise tells the truth, and Overdue’s absence without prices', () => {
+    const facts = { byParty: new Map([[row('MODA-DEMO').id, WORK]]), problem: null, repliesComplete: true, limited: false }
+    const built = customerColumnsOf({ prefix: '/w/DEMO', unread: {}, work: facts, today: '2026-11-24' }, words, words)
+    expect(built.beforeName[0]!.context).toEqual({ leading: true })
+    expect(toolColumnsOf([...built.beforeName, built.nameColumn, ...built.leadingColumns] as ColDef<unknown>[]).slice(0, 3).map((column) => [column.id, column.fixed])).toEqual([['picture', 'lead'], ['name', 'first'], ['needs', null]])
+    const about = (prices: boolean) => renderToString(createElement('div', null, customiseAboutOf(words, prices)))
+    expect(about(true)).toContain('customise.truth')
+    expect(about(true)).not.toContain('customise.noOverdue')
+    expect(about(false)).toContain('customise.noOverdue')
   })
 })
 

@@ -189,5 +189,9 @@
     "name": "Nome A–Z",
     "aria": "Ordine dell’elenco: {order}",
     "capped": "Più di 2 000 clienti in questa vista: mostrati per codice. Restringi la vista per vederli in questo ordine."
+  },
+  "customise": {
+    "truth": "Queste sono le colonne dell’elenco — è spuntato ciò che è sullo schermo. Le colonne d’identità sono nascoste all’inizio e restano qui (sono sempre nel file esportato).",
+    "noOverdue": "Scaduto non è offerto: serve il permesso di vedere i prezzi."
   }
 }

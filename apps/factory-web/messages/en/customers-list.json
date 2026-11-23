@@ -189,5 +189,9 @@
     "name": "Name A–Z",
     "aria": "Order of the list: {order}",
     "capped": "More than 2 000 customers in this view: shown by code. Narrow the view to see them in this order."
+  },
+  "customise": {
+    "truth": "These are the list’s own columns — what is on screen is ticked. The identity columns are hidden at first and stay here (they are always in the exported file).",
+    "noOverdue": "Overdue is not offered: it needs the right to see prices."
   }
 }

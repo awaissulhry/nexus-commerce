@@ -23,7 +23,7 @@ import { hostTier, reaches } from '../../_shared/list-room' // F-CL-202: the lis
 import type { ListDepth } from '../../../parties/_shared/view/PartiesListView'
 import { useOverdueColumns } from '../money/columns'
 import { useOverdueList } from '../money/hooks'
-import { customerBarActs, customerRowItems, useCustomerColumns } from './columns'
+import { customerBarActs, customerRowItems, customiseAboutOf, useCustomerColumns } from './columns' // F-CL-301: + customiseAboutOf
 import { customerRightsOf, customerSortOf, CUSTOMERS_LIST_NS, namesOtherCustomer, workReadOf } from './model' // F-CL-301: + workReadOf
 import { useCustomersWork } from './use-customers-work' // F-CL-201
 import { useWorkBand } from './use-work-band' // F-CL-201
@@ -61,7 +61,8 @@ export function useCustomersDepth(): { readonly depth: ListDepthSlot; readonly w
   const rights = useMemo(() => customerRightsOf(session.permissions), [session.permissions])
   const workReads = useMemo(() => workReadOf(session.permissions), [session.permissions]) // F-CL-301 (walk W-11): + parties.view
   const prefix = companyPrefix(session.company?.code ?? '')
-  const overdue = useOverdueColumns(useOverdueList())
+  const overdueList = useOverdueList() // F-CL-301: also says whether the reader sees prices (Customise's Overdue line)
+  const overdue = useOverdueColumns(overdueList)
   const [tick, setTick] = useState(0)
   useLiveBus({ onChange: (change) => change.type.startsWith('thread.') && setTick((count) => count + 1), onReconnect: () => setTick((count) => count + 1) }, rights.threads)
   const readUnread = useMemo(() => (rights.threads ? readUnreadWith(api) : null), [api, rights.threads])
@@ -124,6 +125,9 @@ export function useCustomersDepth(): { readonly depth: ListDepthSlot; readonly w
   const today = romeToday()
   const bandWords = useMemo(() => ({ c, ord, sheet, p }), [c, ord, sheet, p])
   const exportAbout = useMemo(() => ({ heading: c('export.heading'), note: c('export.note') }), [c])
+  // F-CL-301 (walk W-13; 10-design §8): Customise tells the truth — the list's own columns, and Overdue not offered without prices.
+  const prices = overdueList.can.price
+  const customiseAbout = useMemo(() => customiseAboutOf(c, prices), [c, prices])
 
   const depth: ListDepthSlot = function useCustomersSlot(list: ListDepthArgs): ListDepth {
     const asked = useMemo(() => list.rows.map((row) => ({ recordType: 'Party', id: row.id })), [list.rows])
@@ -156,6 +160,7 @@ export function useCustomersDepth(): { readonly depth: ListDepthSlot; readonly w
       ...(bandNode ? { band: bandNode } : {}),
       workChip,
       exportAbout,
+      customiseAbout, // F-CL-301
     }
   }
 
