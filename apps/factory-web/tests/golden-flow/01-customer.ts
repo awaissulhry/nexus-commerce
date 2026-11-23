@@ -1,8 +1,16 @@
-import { expect } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 import { defineStage } from './_harness/stages'
 import { answerOf, chooseFromMenu /* cw T.2 */, dialog, press, routerActivity } from './_harness/ui'
 import { startsWith /* cw T.2 */, words } from './_harness/words' // F-OP-218
 import { seen } from './_harness/flow' // F-CP-112
+
+/**
+ * cw fx4: how many rows the grids of the page show now — the DISTINCT `row-id`s of `.ag-row[row-id]`, with no container class.
+ * AG Grid 36 has no `.ag-center-cols-container` any more (it is `.ag-grid-scrolling-container`: the note in packages/ui
+ * grid/editors/openGesture.ts), so a locator through it found nothing and waited its whole timeout; and a pinned column draws the
+ * same row two or three times, so the rows are counted by their own ids. Seen on a running page: 8 rows, 8 ids, 0 by the old class.
+ */
+const shownRows = (page: Page): Promise<number> => page.locator('.ag-row[row-id]').evaluateAll((rows) => new Set(rows.map((row) => row.getAttribute('row-id'))).size)
 
 /** The customer of the first order (made up): an Italian brand that sells under its own label. */
 export const CUSTOMER = {
@@ -246,9 +254,10 @@ export default defineStage({
       // The entry writes the tab's own order beside its default view, and the Sort menu says it.
       await expect(page).toHaveURL(/[?&]sort=urgent(&|$)/, { timeout: 30_000 })
       await seen(page.getByRole('button', { name: S('sort.now', { sort: S('sort.urgent') }), exact: true }), 60_000)
-      const rows = page.locator('.ag-center-cols-container .ag-row')
-      await seen(rows, 60_000)
-      const all = await rows.count()
+      // cw fx4: the rows by their own ids (shownRows above) — never through a container class of the grid.
+      await seen(page.locator('.ag-row[row-id]'), 60_000)
+      const all = await shownRows(page)
+      expect(all, 'the seeded customer has an order').toBeGreaterThan(0)
       // A door of the band (the first group that holds an order) shows exactly its count of orders; pressed again: all orders.
       const doors = page.getByRole('list', { name: P('customers.work.band.pipeline'), exact: true }).getByRole('button')
       await seen(doors, 30_000)
@@ -266,11 +275,11 @@ export default defineStage({
       await press(door)
       await expect(door).toHaveAttribute('aria-pressed', 'true', { timeout: 30_000 })
       await expect(page).toHaveURL(/[?&]phase=[A-Z_]+(&|$)/)
-      await expect(rows).toHaveCount(count, { timeout: 60_000 })
+      await expect.poll(() => shownRows(page), { timeout: 60_000 }).toBe(count)
       await flow.shot(page, 'customer-work-band-door')
       await press(door)
       await expect(page).not.toHaveURL(/[?&]phase=/, { timeout: 30_000 })
-      await expect(rows).toHaveCount(all, { timeout: 60_000 })
+      await expect.poll(() => shownRows(page), { timeout: 60_000 }).toBe(all)
       // Tick rows (two when the customer has two): the bar shows its acts WITH WORDS, then More ▾.
       const boxes = page.locator('.ag-row .ag-selection-checkbox')
       const ticked = Math.min(2, await boxes.count())
@@ -338,8 +347,8 @@ export default defineStage({
       expect(count, 'the seeded customer has something before an order').toBeGreaterThan(0)
       await door.click()
       await expect(page).toHaveURL(/[?&]group=[A-Z_]+(&|$)/, { timeout: 30_000 })
-      const rows = page.locator('.ag-center-cols-container .ag-row')
-      await expect(rows).toHaveCount(count, { timeout: 60_000 })
+      // cw fx4 (the same cause as the Work step above; this step's own locator, nothing else of it touched): the rows by their ids.
+      await expect.poll(() => shownRows(page), { timeout: 60_000 }).toBe(count)
       await flow.shot(page, 'customer-quotes-door')
       // The same door again: everything again (the address without the door, one replace).
       await door.click()
