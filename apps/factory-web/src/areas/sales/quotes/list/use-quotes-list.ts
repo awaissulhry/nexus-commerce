@@ -444,40 +444,6 @@ export function useQuotesList(host: QuotesListHost): { model: QuotesListViewMode
       .catch(failed)
   }
 
-  const model: QuotesListViewModel = {
-    prefix,
-    me: session.user.id,
-    grains,
-    can,
-    filters,
-    rows,
-    tiles,
-    asOf,
-    today: romeToday(),
-    updates,
-    newQuote: newQuote ? { ...newQuote, newFrom: newFrom.model, newFromHeld: newFrom.held } : null,
-    notice,
-    duplicate: duplicate.model,
-    pageLinks: { prefix, promiseDates: session.permissions.includes('planning.promise.view') },
-    embedded: !!host.embedded, // F-SA-277: the host draws what sits above the list
-    // ---- F-CQ-102 / F-CQ-104: the host's face (columns by its room, its customer's one name, its door's words)
-    ...(host.columns ? { columns: host.columns } : {}),
-    room: host.room ?? null,
-    customerName: host.customerName ?? null,
-    groupLabel: host.groupLabel ?? null,
-    // ---- F-CQ-201 / 202 / 204: the bar's rights (each act its own), the windows open now
-    barRights: quoteRightsOf(session.permissions, can, grains),
-    many: many.model,
-    tasks: tasks.model,
-    quoteDialog: quoteDialog.open,
-    // ---- B-TH-257
-    unread: readsThreads ? unread : null,
-    readsRequests: session.permissions.includes('sales.inquiries.view'),
-    readsOrders: session.permissions.includes('orders.view'),
-    // F-SA-224; F-SA-277: a host that locks the customer draws no switcher.
-    switcher: lock ? null : { state: switcherState, query: customerQuery, searching: customerQuery.trim() !== customerSearched, partyName: chosen ? (inRows ?? (chosenName?.id === chosen ? chosenName.name : undefined)) : undefined },
-  }
-
   // ---- F-CQ-201 / 202 / 204: the bar's loops, Add task to N, the quote's own windows on a row. Each run ends with the list read again;
   // a receipt's name docks the quote's thread on a host that docks (the customer's tab), else opens the quote.
   const locale = useLocale()
@@ -524,6 +490,40 @@ export function useQuotesList(host: QuotesListHost): { model: QuotesListViewMode
     quoteDialog.openOn(row.id, act)
   }
   // ---- end F-CQ-201 / 202 / 204
+  const model: QuotesListViewModel = {
+    prefix,
+    me: session.user.id,
+    grains,
+    can,
+    filters,
+    rows,
+    tiles,
+    asOf,
+    today: romeToday(),
+    updates,
+    newQuote: newQuote ? { ...newQuote, newFrom: newFrom.model, newFromHeld: newFrom.held } : null,
+    notice,
+    duplicate: duplicate.model,
+    pageLinks: { prefix, promiseDates: session.permissions.includes('planning.promise.view') },
+    embedded: !!host.embedded, // F-SA-277: the host draws what sits above the list
+    // ---- F-CQ-102 / F-CQ-104: the host's face (columns by its room, its customer's one name, its door's words)
+    ...(host.columns ? { columns: host.columns } : {}),
+    room: host.room ?? null,
+    customerName: host.customerName ?? null,
+    groupLabel: host.groupLabel ?? null,
+    // ---- F-CQ-201 / 202 / 204: the bar's rights (each act its own), the windows open now
+    barRights: quoteRightsOf(session.permissions, can, grains),
+    many: many.model,
+    tasks: tasks.model,
+    quoteDialog: quoteDialog.open,
+    // ---- B-TH-257
+    unread: readsThreads ? unread : null,
+    readsRequests: session.permissions.includes('sales.inquiries.view'),
+    readsOrders: session.permissions.includes('orders.view'),
+    // F-SA-224; F-SA-277: a host that locks the customer draws no switcher.
+    switcher: lock ? null : { state: switcherState, query: customerQuery, searching: customerQuery.trim() !== customerSearched, partyName: chosen ? (inRows ?? (chosenName?.id === chosen ? chosenName.name : undefined)) : undefined },
+  }
+
 
   // F-SA-212: a page's pictures in ONE call (never the original); none yet or out of reach: the placeholder.
   const readPictures = useMemo(() => pictureReader(api), [api])
