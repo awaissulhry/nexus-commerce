@@ -667,8 +667,8 @@ describe('F-CW-102: the row\'s chips', () => {
     expect(pieces).toContain('class="fw-sheet-wi-pcs is-wrap"')
     expect(textOfHtml(pieces)).toBe('Sewn 152 of 244 · 24 ready now')
     // Nothing to say: nothing drawn (never a dash on the card).
-    expect(await where({ ...late, production: null } as OrderRow, { half: 'chips' })).toBe('')
-    expect(await where({ ...late, production: null } as OrderRow, { half: 'pieces' })).toBe('')
+    expect(await where({ ...late, production: undefined }, { half: 'chips' })).toBe('')
+    expect(await where({ ...late, production: undefined }, { half: 'pieces' })).toBe('')
     const css = readFileSync(new URL('./sheet/chips.css', import.meta.url), 'utf8')
     expect(css).toMatch(/\.fw-sheet-wi\.is-card \{\s*max-height: none;/)
     expect(css).toMatch(/\.fw-sheet-wi-pcs\.is-wrap \{[^}]*white-space: normal;/)
