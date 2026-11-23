@@ -163,6 +163,29 @@ export type ViesCheckBody = z.output<typeof viesCheckBody>
 export const PARTY_ATTENTION = ['VIES', 'INVOICE'] as const
 export type PartyAttention = (typeof PARTY_ATTENTION)[number]
 
+// ── B-CL-002 (customers list): where each customer's work stands — the band's groups, the `work` term, the list's order ──
+/**
+ * The band's groups and the `work` term: NEEDS_US (a request to answer, a reply waiting or a late order: something waits on us),
+ * then the order phases except CANCELLED (production-brand/stages ORDER_PHASES, written out here: no import edge from parties to
+ * production-brand; a unit test pins them equal).
+ */
+export const PARTY_WORK_GROUPS = ['NEEDS_US', 'NOT_SENT', 'NOT_STARTED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'DONE'] as const
+export type PartyWorkGroup = (typeof PARTY_WORK_GROUPS)[number]
+/** needs = most urgent first (needs orders.view) · code = today's order · name = A–Z (trade name, else legal name). */
+export const PARTY_SORTS = ['needs', 'code', 'name'] as const
+export type PartySort = (typeof PARTY_SORTS)[number]
+/** The band (`band=true`): where the work of the view's customers stands — counts only, never an amount. */
+export const partyWorkBand = output({
+  /** The 7 groups in order, 0 as 0: customers with ≥ 1 order in it (NEEDS_US: something waits on us); orders = that phase's orders (NEEDS_US: null). */
+  groups: z.array(output({ group: z.enum(PARTY_WORK_GROUPS), customers: z.number().int(), orders: z.number().int().nullable() })),
+  needsUs: output({ requests: z.number().int(), replies: z.number().int(), late: z.number().int(), repliesComplete: z.boolean() }),
+  notSent: output({ waitsForYes: z.number().int(), waitsForDeposit: z.number().int() }),
+  /** Every grant of the reader's orders.view names its customers: the band reads "Your customers". */
+  limited: z.boolean(),
+})
+export type PartyWorkBand = z.infer<typeof partyWorkBand>
+// ── end B-CL-002 ──
+
 /** The list's filters (SCR-032, SCR-056): Customers is `role=CUSTOMER,BRAND`, Suppliers `role=SUPPLIER,SUBCONTRACTOR,CARRIER`. */
 export const listPartiesQuery = input({
   /** Code, legal or trade name, VAT number or codice fiscale. */
@@ -177,8 +200,17 @@ export const listPartiesQuery = input({
   companyId: id().optional(),
   /** Only the parties that need this (PARTY_ATTENTION); `count` counts them. */
   attention: z.enum(PARTY_ATTENTION).optional(),
+  // ── B-CL-002: the band's door, the order, the band itself (each of the three needs orders.view: 403 in words otherwise) ──
+  /** Only the customers in this group of the band (PARTY_WORK_GROUPS); `count` counts them. */
+  work: z.enum(PARTY_WORK_GROUPS).optional(),
+  /** The rows' order (PARTY_SORTS); left out: by code. */
+  sort: z.enum(PARTY_SORTS).optional(),
+  /** `true`: the answer carries the band over every row the other terms keep (`work` aside). */
+  band: z.enum(['true', 'false']).optional(),
+  // ── end B-CL-002 ──
   limit: z.coerce.number().int().min(1).max(200).default(50),
-  cursor: z.string().max(200).optional(),
+  // B-CL-002: a cursor of the name order carries the last row's name (up to 200 characters): room for it.
+  cursor: z.string().max(1000).optional(),
 })
 export type ListPartiesQuery = z.output<typeof listPartiesQuery>
 

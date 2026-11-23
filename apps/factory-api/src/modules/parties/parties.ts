@@ -5,6 +5,13 @@ import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { checkAddress, defaultProblems, type AddressFields } from '@nexus/factory-domain/parties/addresses'
 import { checkContact, duplicateEmails, type ContactFields } from '@nexus/factory-domain/parties/contacts'
 import type { CreatePartyBody, ListPartiesQuery, PartyRow, PartyView, UpdatePartyBody } from '@nexus/factory-domain/parties/contracts'
+// B-CL-002 / B-CL-008 (customers list): the work terms, the order, the band — the facts through the sales module's registered reader.
+import { ForbiddenError } from '@nexus/factory-domain/core/errors'
+import { grantsFor } from '@nexus/factory-domain/core/permissions'
+import type { PartySort, PartyWorkBand } from '@nexus/factory-domain/parties/contracts'
+import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
+import { decodeKeyCursor, encodeKeyCursor, type CodeCursor, type KeyPart } from './cursor'
+import { arrangeParties, compareRowKeys, PARTY_WORK_REFUSAL, partyWorkOf, type WorkAsk } from './work'
 import { PARTIES_BLOCK, PARTIES_MANAGE, PARTIES_VIEW } from '@nexus/factory-domain/parties/permissions'
 import { changeParty, newParty, partyMachine, reasonProblems, type PartyField, type PartyFields, type PartyPatch, type PartyStatus } from '@nexus/factory-domain/parties/rules'
 import { checkTaxIdentity, compactTaxNumber, identityAt, type TaxIdentityFields } from '@nexus/factory-domain/parties/tax'
@@ -23,6 +30,7 @@ import {
   assertWritable,
   contextOf,
   dateText,
+  dateValue, // B-CL-008
   dayOf,
   insertParty,
   isUniqueViolation,
@@ -56,14 +64,33 @@ const codeConflict = (code: string) => new ConflictError(`The party code ${code}
 
 // ---- reads -------------------------------------------------------------------------------------------------------------
 
+/** GET /parties' answer (B-CL-002: + the order the rows are in and the band). */
+export interface PartyListAnswer {
+  readonly parties: PartyRow[]
+  readonly nextCursor: string | null
+  readonly count: number
+  readonly sortedBy: PartySort
+  readonly band: PartyWorkBand | null
+}
+
 /**
  * The parties the caller may see, by code, one page at a time (SCR-032 with role=CUSTOMER,BRAND; SCR-056 with the
  * supplier roles). Each row says what the record still lacks (`attention`, `invoiceBlocked`). With `attention` the
  * filter needs every candidate's facts (its warnings are worked out here, not stored): the candidates are read whole,
  * filtered, then paged by (code, id) in that order; `count` counts the filtered rows.
+ *
+ * B-CL-002 / B-CL-008 (customers list, 13-backend §2): `work=<GROUP>` (the band's door), `sort=needs|code|name` and `band=true`
+ * (where the view's customers' work stands, counted over every row the other terms keep, `work` aside). The plain list (no
+ * `attention`, `taxMode`, `work`, `band`, and the code order) keeps today's two statements; anything else goes ONE memory path
+ * (listInMemory). `work`, `sort=needs` and `band=true` read orders: a reader without orders.view anywhere is refused in words.
  */
-export async function listParties(caller: CommandCaller, query: ListPartiesQuery): Promise<{ parties: PartyRow[]; nextCursor: string | null; count: number }> {
+export async function listParties(caller: CommandCaller, query: ListPartiesQuery): Promise<PartyListAnswer> {
   const context = contextOf(caller)
+  // ── B-CL-002 ──
+  const sort: PartySort = query.sort ?? 'code'
+  const band = query.band === 'true'
+  if ((query.work !== undefined || sort === 'needs' || band) && grantsFor(actorOf(context), ORDERS_VIEW).length === 0) throw new ForbiddenError(PARTY_WORK_REFUSAL.en)
+  // ── end B-CL-002 ──
   const search = query.q?.trim()
   const number = search ? compactTaxNumber(search) : ''
   const statuses = query.status?.includes('ALL') ? null : ((query.status as PartyStatus[] | undefined) ?? ['PROSPECT', 'ACTIVE', 'BLOCKED'])
@@ -86,21 +113,12 @@ export async function listParties(caller: CommandCaller, query: ListPartiesQuery
     query.taxMode ? { taxIdentities: { some: { taxMode: query.taxMode } } } : {},
     query.companyId ? { OR: [{ companyId: query.companyId }, { companyId: null }] } : {},
   ]
-  const cursor = decodeCodeCursor(query.cursor)
   const now = serverClock.now()
 
-  if (query.attention) {
-    const wanted = query.attention
-    const candidates = await caller.withClient((client) => client.party.findMany({ where: { AND: filters }, select: PARTY_COLUMNS }))
-    const rows = (await rowsOf(caller, candidates, now))
-      .filter((row) => (wanted === 'VIES' ? row.attention.includes('VIES_NOT_PROVEN') : row.invoiceBlocked))
-      .sort((a, b) => (a.code < b.code ? -1 : a.code > b.code ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-    const after = cursor ? rows.filter((row) => row.code > cursor.code || (row.code === cursor.code && row.id > cursor.id)) : rows
-    const page = after.slice(0, query.limit)
-    const last = page.at(-1)
-    return { parties: page, nextCursor: after.length > query.limit && last ? encodeCodeCursor(last) : null, count: rows.length }
-  }
+  // B-CL-002 / B-CL-008: attention, the tax mode in force, the work terms and another order are read in memory (one path).
+  if (query.attention || query.taxMode || query.work !== undefined || band || sort !== 'code') return listInMemory(caller, query, filters, now, { work: query.work, sort, band })
 
+  const cursor = decodeCodeCursor(query.cursor)
   const [rows, count] = await caller.withClient((client) =>
     Promise.all([
       client.party.findMany({ where: { AND: [...filters, afterCodeCursor(cursor)] }, select: PARTY_COLUMNS, orderBy: [{ code: 'asc' }, { id: 'asc' }], take: query.limit + 1 }),
@@ -109,8 +127,71 @@ export async function listParties(caller: CommandCaller, query: ListPartiesQuery
   )
   const page = rows.slice(0, query.limit)
   const last = page.at(-1)
-  return { parties: await rowsOf(caller, page, now), nextCursor: rows.length > query.limit && last ? encodeCodeCursor(last) : null, count }
+  return { parties: await rowsOf(caller, page, now), nextCursor: rows.length > query.limit && last ? encodeCodeCursor(last) : null, count, sortedBy: 'code', band: null }
 }
+
+// ── B-CL-002 / B-CL-008 (customers list, 13-backend §2): the ONE memory path ──
+/** What the memory path reads of every candidate (the whole row only for the page, or for `attention`). */
+const CANDIDATE_COLUMNS = { id: true, code: true, legalName: true, tradeName: true } as const satisfies Prisma.PartySelect
+type Candidate = Prisma.PartyGetPayload<{ select: typeof CANDIDATE_COLUMNS }>
+
+const codeKeyOf = (cursor: CodeCursor | null): readonly KeyPart[] | null => (cursor ? [cursor.code, cursor.id] : null)
+
+/**
+ * The list in memory, one statement after another: (1) the candidates by the filters (the tax mode kept as a pre-filter); (2)
+ * `attention` by today's rule (every candidate's row); (3) `taxMode` by the identity IN FORCE today (C1-B2: the Tax mode column's
+ * own rule — an old identity never matches); (4) the work facts, only for `work`, `band` or `sort=needs` (the sales module's reader);
+ * (5) the band over the rows of (1)–(3), before (6) `work`; (7) the order (work.ts arrangeParties: needs, name or code; capped);
+ * (8) the cursor (the order's key), the page, its rows. `count` counts the rows after (6).
+ */
+async function listInMemory(caller: CommandCaller, query: ListPartiesQuery, filters: readonly Prisma.PartyWhereInput[], now: Date, ask: WorkAsk): Promise<PartyListAnswer> {
+  const day = dayOf(now)
+  let candidates: Candidate[]
+  let known: ReadonlyMap<string, PartyRow> | null = null
+  if (query.attention) {
+    const wanted = query.attention
+    const whole = await caller.withClient((client) => client.party.findMany({ where: { AND: [...filters] }, select: PARTY_COLUMNS }))
+    const rows = (await rowsOf(caller, whole, now)).filter((row) => (wanted === 'VIES' ? row.attention.includes('VIES_NOT_PROVEN') : row.invoiceBlocked))
+    const needing = new Map(rows.map((row) => [row.id, row]))
+    known = needing
+    candidates = whole.filter((row) => needing.has(row.id))
+  } else {
+    candidates = await caller.withClient((client) => client.party.findMany({ where: { AND: [...filters] }, select: CANDIDATE_COLUMNS }))
+  }
+  if (query.taxMode && candidates.length > 0) {
+    const mode = query.taxMode
+    const ids = candidates.map((row) => row.id)
+    const found = await caller.withClient((client) => client.partyTaxIdentity.findMany({ where: { partyId: { in: ids }, validFrom: { lte: dateValue(day) } }, select: { partyId: true, validFrom: true, taxMode: true } }))
+    const inForce = currentIdentities(found, day)
+    candidates = candidates.filter((row) => inForce.get(row.id)?.taxMode === mode)
+  }
+  const facts = ask.work !== undefined || ask.band || ask.sort === 'needs' ? await caller.withClient((client) => partyWorkOf(caller, client)) : null
+  const arranged = arrangeParties(candidates, facts, ask)
+  const sortedBy = arranged.sortedBy
+  const cursorKey = sortedBy === 'code' ? codeKeyOf(decodeCodeCursor(query.cursor)) : decodeKeyCursor(query.cursor, sortedBy)
+  const after = cursorKey ? arranged.rows.filter((row) => compareRowKeys(sortedBy, arranged.keyOf(row), cursorKey) > 0) : arranged.rows
+  const page = after.slice(0, query.limit)
+  const last = page.at(-1)
+  const nextCursor = after.length > query.limit && last ? (sortedBy === 'code' ? encodeCodeCursor(last) : encodeKeyCursor(sortedBy, arranged.keyOf(last))) : null
+  return { parties: await pageRowsOf(caller, page, filters, known, now), nextCursor, count: arranged.rows.length, sortedBy, band: arranged.band }
+}
+
+/** The list rows of a page, in the page's order (already worked out for `attention`; else read whole, inside the same filters). */
+async function pageRowsOf(caller: CommandCaller, page: readonly Candidate[], filters: readonly Prisma.PartyWhereInput[], known: ReadonlyMap<string, PartyRow> | null, now: Date): Promise<PartyRow[]> {
+  if (known) {
+    const rows = known
+    return page.flatMap((row) => rows.get(row.id) ?? [])
+  }
+  if (page.length === 0) return []
+  const whole = await caller.withClient((client) => client.party.findMany({ where: { AND: [...filters, { id: { in: page.map((row) => row.id) } }] }, select: PARTY_COLUMNS }))
+  const byId = new Map(whole.map((row) => [row.id, row]))
+  return rowsOf(
+    caller,
+    page.flatMap((row) => byId.get(row.id) ?? []),
+    now,
+  )
+}
+// ── end B-CL-002 / B-CL-008 ──
 
 /** The list rows of these parties: the identity in force, its VIES standing, the city and what each still lacks. */
 async function rowsOf(caller: CommandCaller, parties: readonly PartyRowData[], now: Date): Promise<PartyRow[]> {
