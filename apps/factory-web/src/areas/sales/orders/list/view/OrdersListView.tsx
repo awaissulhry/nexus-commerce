@@ -96,7 +96,9 @@ import { Archive, CheckCheck, PackageCheck } from 'lucide-react'
 import { manyLabel, type ManyCommand } from '../commands/model'
 // ---- F-CW-202: the bar — three acts with words + More ▾ (the pure rule: sheet/bar.ts) ----
 import { ChevronDown, Factory, Flag, MessageCircleQuestion } from 'lucide-react'
+import { MessageSquare } from 'lucide-react' // cw fx5 (walk W-13): the phone card's Thread door
 import { barOf, type AskEntryId, type BarAct, type BarActId, type BarWords } from '../sheet/bar'
+import { promotedFit } from '../sheet/bar' // cw fx5 (walk W-9, W-4, W-14): the bar keeps words on every button
 // ---- F-CW-301: Ship N together… / Create shipment… — Warehouse's own New shipment window, mounted here ----
 import { Truck } from 'lucide-react'
 import { shipRowHeld, shipRowOffered } from '../sheet/ship'
@@ -149,6 +151,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   // urgency) and the lateness (chip 2 of Where it is, or the tag beside the promise date).
   const [priorityShown, setShowsPriority] = useState(false)
   const [whereShown, setShowsWhere] = useState(() => !!model.preset?.shown.includes('whereItIs'))
+  // cw fx5 (walk W-29): and for what waits — the Waiting on column on screen says it, so chip 3 of Where it is does not repeat it.
+  const [waitingShown, setShowsWaiting] = useState(() => !!model.preset?.shown.includes('waitingOn'))
   const phone = useCardList() // the list frame's own rule (cards below 720 px)
   // ---- end F-CP-107 (cp-fx16)
   const [viewer, setViewer] = useState<string | null>(model.viewerOpen ?? null)
@@ -209,7 +213,25 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     return () => window.removeEventListener('keydown', onKey)
   })
 
-  const picked = (items ?? []).filter((row) => selected.includes(row.id))
+  // cw fx5 (walk W-8): one customer, one name — on a page of ONE customer the host's own name of it (the record's, the band's) in
+  // every word that names the customer (the bar, the held words, the windows); the other hosts keep each row's name.
+  const lockedName = model.locked?.party ? (model.customer?.name ?? null) : null
+  const named = <R extends { partyName: string }>(row: R): R => (lockedName ? { ...row, partyName: lockedName } : row)
+  const picked = (items ?? []).filter((row) => selected.includes(row.id)).map(named)
+  // cw fx5: the room the bar has — the sheet's own width, measured (null before the first measure and on the server: every act shown).
+  const sheetRef = useRef<HTMLDivElement | null>(null)
+  const [barRoom, setBarRoom] = useState<number | null>(null)
+  useEffect(() => {
+    const element = sheetRef.current
+    if (!element || typeof ResizeObserver === 'undefined') return
+    // A few px of change (a scroll bar, a dock that slides) redraw nothing: the room is kept until it moves by 4 px or more.
+    const observer = new ResizeObserver((entries) => {
+      const next = Math.round(entries[0]?.contentRect.width ?? element.clientWidth)
+      setBarRoom((was) => (was !== null && Math.abs(was - next) < 4 ? was : next))
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
   // ---- F-CW-202 (10-design §4; lead settles S8, S9): the bar of ticked orders — at most three acts with their words, the rest in ONE
   // More ▾, in one fixed order (sheet/bar.ts: barOf). An act the reader has no right for is not drawn (each act reads its OWN right);
   // an act the ticked orders cannot take now is held with words; when a promoted act is not there the next one moves up. The same on
@@ -244,18 +266,29 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     urgencyUnlock: s('bar.urgencyUnlock'),
     invoice: s('invoiceShipped.action', { count: picked.length }),
   }
-  const bar = barOf(
+  // cw fx5 (walk W-9, W-4, W-14): the bar keeps WORDS on every button, on one line — the acts the room holds beside the frame's own
+  // Edit N, Export N and Clear selection stay promoted; the last one that does not fit moves to the front of More ▾ (sheet/bar.ts).
+  const barArgs = [
     { ship: !!model.ship?.can.manage /* F-CW-301 */, urgency: !!model.urgency?.can /* F-CW-302 */, manage: model.can.manage, close: model.can.close, decide: !!model.commands?.decide, post: !!model.bulkCan?.note, supervisor: !!model.bulkCan?.supervisor, task: model.bulkCan?.task === null, todo: !!model.bulkCan?.todo /* F-CW-203 */, invoices: model.can.manageInvoices },
     picked,
     { locked: model.locked?.party ? (model.customer?.id ?? null) : null, urgencyOff: model.urgencyOff === true /* F-CW-302: the Work tab's own read */ },
-  )
+  ] as const
+  const barAll = barOf(...barArgs)
+  const barRest = [
+    ...(model.can.manage ? [{ label: lists('bulk.edit', { count: picked.length }) }] : []), // the frame's own Edit N (orderEditOf: only with the right)
+    { label: lists('exportSelected.label', { count: picked.length }) },
+    ...(barAll.promoted.length + barAll.more.length > 1 ? [{ label: s('bar.more'), menu: true }] : []),
+    { label: lists('clear') },
+  ]
+  const barFit = promotedFit(barRoom, lists('selected', { count: picked.length }), barAll.promoted.map((act) => (act.id === 'ask' ? { label: s('bar.ask'), menu: true } : { label: barLabel[act.id] })), barRest, phone)
+  const bar = barOf(...barArgs, barFit)
   /** A hold's words, from the catalogue that already says them. */
   const sayBar = (words: BarWords | null): string | null => {
     if (!words) return null
     if (words.ns === 'notes') return n(words.key, words.params)
     if (words.ns === 'supervisor') return m(words.key, words.params)
     if (words.ns === 'depth') return d(words.key, words.params)
-    return wordsText({ key: words.key, ...(words.params ? { params: words.params } : {}), ...(words.ns === 'sheet' ? { sheet: true as const } : {}), ...(words.states ? { states: words.states } : {}) }, t, s, locale)
+    return oneStop(wordsText({ key: words.key, ...(words.params ? { params: words.params } : {}), ...(words.ns === 'sheet' ? { sheet: true as const } : {}), ...(words.states ? { states: words.states } : {}) }, t, s, locale))
   }
   /** Ask ▾: each entry says who reads it in a quiet line; held, it says why instead. */
   // F-CW-203: + "Ask <customer> about N…" — Reply to N with the to-do tick ON (the customer named when the ticked orders are of one).
@@ -307,7 +340,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const barMore =
     barMoreItems.length > 0 ? (
       <Menu
-        align="right"
+        // cw fx5 (walk W-3): on the phone More ▾ stands at the LEFT of its own line — the menu hangs from the side that has room
+        // (it opened from the button's right edge: 117 px wide, partly off the screen, each item on three lines).
+        align={phone ? 'left' : 'right'}
         label={
           <>
             {s('bar.more')} <ChevronDown size={13} aria-hidden />
@@ -333,7 +368,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       type="search"
       leadingIcon={<Search size={13} aria-hidden />}
       aria-label={model.searchLabel ?? t('list.search') /* F-CW-104: the host's own shorter words */}
-      placeholder={model.searchLabel ?? t('list.search')}
+      // cw fx5 (walk W-23): in a room below 480 px the long words were cut ("Search number, PO or"): the short ones there; the
+      // field's name stays whole.
+      placeholder={barRoom !== null && barRoom < SEARCH_SHORT_BELOW ? s('searchShort') : (model.searchLabel ?? t('list.search'))}
       {...search.field /* F-SA-223 */}
     />
   )
@@ -360,7 +397,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     <Menu
       label={
         <>
-          <ArrowUpDown size={13} aria-hidden /> <span className="fw-lt-trigger">{sortWords}</span>
+          <ArrowUpDown size={13} aria-hidden /> <span className="fw-lt-trigger">{sortWords}</span> <ChevronDown size={13} aria-hidden /> {/* cw fx5 (walk W-20) */}
         </>
       }
       triggerProps={{ className: 'nds-btn sm', 'aria-label': sortNow ? s('sort.now', { sort: sortWords }) : s('sort.label'), title: s('sort.label') }}
@@ -376,19 +413,72 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   // ── end B-TH-057 ──
 
   // F-SA-212: the phone card's aside is the picture part at its phone size (the DS card's draw override).
+  // cw fx5 (walk W-13): on a page of ONE customer (the Work tab) the phone card stands as its picture drew it, with the DS card's own
+  // parts — the PO under the number, the chips without a label column, the customer's urgency and our priority, "Promised" beside
+  // the pieces line (it wraps, never cut) and the Thread door at the card's foot. The other hosts keep their card.
+  const workCard = !!model.locked?.party && !!model.preset
+  const cardDoorLabel = workCard && model.active?.cardDoor && actions?.onCardThread ? model.active.cardDoor : null
   const cardFields = useMemo(
-    () =>
-      cardFieldsOf(
+    () => {
+      const urgency = (row: OrderRow) => (urgencyChipOf(row) || priorityChipOf(row) ? <CustomerUrgencyCell row={row} s={s} d={d} bare askedHref={askedHrefOf(model.prefix, row, model.doorHref) /* F-CW-302 */} /> : null)
+      const base = cardFieldsOf(
         (row) => <RecordPicture source="order" recordId={row.id} number={row.number} picture={row.picture} styleCount={row.styleCount} size="phone" read={latest.current.actions?.readPictures} demo={latest.current.model.demoPictures?.[row.id]} onOpen={() => setViewer(row.id)} />,
         // F-CW-102: the customer's urgency on the card says whose it is ("Urgent (customer) 2"); nothing to say: no line.
-        (row) => (urgencyChipOf(row) || priorityChipOf(row) ? <CustomerUrgencyCell row={row} s={s} d={d} bare askedHref={askedHrefOf(model.prefix, row, model.doorHref) /* F-CW-302 */} /> : null),
-      ),
-    [s, d],
+        urgency,
+      )
+      if (!workCard) return base
+      const where = (row: OrderRow, half: 'chips' | 'pieces') => <WhereItIsCell row={row} t={t} s={s} half={half} mark={latest.current.model.marks?.[row.id]} prefix={model.prefix} doorHref={latest.current.model.doorHref} today={model.today} />
+      return {
+        ...base,
+        whereItIs: {
+          role: 'subtitle' as const,
+          draw: (row: OrderRow) => (
+            <span className="fw-sheet-card-lines">
+              <span className="fw-sheet-sub fw-sheet-wraps">{row.customerRef ? t('list.customerRef', { ref: row.customerRef }) : t('list.noCustomerRef')}</span>
+              {where(row, 'chips')}
+              {urgency(row)}
+            </span>
+          ),
+        },
+        customerUrgency: { role: 'hidden' as const },
+        promised: {
+          role: 'subtitle' as const,
+          draw: (row: OrderRow) => (
+            <span className="fw-sheet-card-promise">
+              {row.promiseDate ? (
+                <span>
+                  {t('col.promised')} <b>{formatDate(dayInstant(row.promiseDate), { locale })}</b>
+                </span>
+              ) : (
+                <span>{t('list.noPromise')}</span>
+              )}
+              {where(row, 'pieces')}
+            </span>
+          ),
+        },
+        ...(cardDoorLabel
+          ? {
+              newMessages: {
+                role: 'subtitle' as const,
+                draw: (row: OrderRow) => (
+                  <span className="fw-sheet-card-door">
+                    <Button size="sm" variant="quiet" onClick={() => latest.current.actions?.onCardThread?.(row)}>
+                      <MessageSquare size={13} aria-hidden /> {cardDoorLabel}
+                    </Button>
+                  </span>
+                ),
+              },
+            }
+          : {}),
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the draws read the latest model and actions through `latest`
+    [s, d, t, locale, workCard, cardDoorLabel, model.prefix, model.today, model.doorHref],
   )
   const columns = useMemo<ColDef<OrderRow>[]>(
-    () => sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer: setViewer, statusShown, phone /* F-CP-107 (cp-fx16) */, priorityShown, whereShown /* F-CW-102 */ }),
+    () => sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer: setViewer, statusShown, phone /* F-CP-107 (cp-fx16) */, priorityShown, whereShown /* F-CW-102 */, waitingShown /* cw fx5 (W-29) */ }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the cells read the latest model and actions through `latest`
-    [t, s, d, l, m, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */, model.kind /* F-SA-221 */, model.marks /* F-SA-275 */, model.doorHref /* F-SA-275 */, !!actions?.onAddTask /* F-SA-275 */, model.preset /* F-SA-276 */, model.bulkCan?.task /* F-SA-281 */, statusShown /* F-CP-107 (cp-fx16): Where it is redraws when Status comes or goes */, phone /* F-CP-107 (cp-fx16) */, priorityShown, whereShown /* F-CW-102 */, model.locked?.party /* F-CW-102 */],
+    [t, s, d, l, m, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */, model.kind /* F-SA-221 */, model.marks /* F-SA-275 */, model.doorHref /* F-SA-275 */, !!actions?.onAddTask /* F-SA-275 */, model.preset /* F-SA-276 */, model.bulkCan?.task /* F-SA-281 */, statusShown /* F-CP-107 (cp-fx16): Where it is redraws when Status comes or goes */, phone /* F-CP-107 (cp-fx16) */, priorityShown, whereShown /* F-CW-102 */, waitingShown /* cw fx5 (W-29) */, model.locked?.party /* F-CW-102 */, model.customer?.name /* cw fx5 (W-8) */],
   )
 
   // F-SA-276: the host's default view is not a narrowing; the waiting term is.
@@ -530,7 +620,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const groups = useOverallGroups(model, actions, t, s, locale) // B-TH-244
 
   return (
-    <div className="fw-so">
+    <div className="fw-so" ref={sheetRef /* cw fx5: the bar's room */}>
       {/* F-SA-220: an embedding host draws its own band and the tiles (OrdersLayoutSwitch, OrdersTiles). */}
       {!model.embedded && (
         <div className="fw-so-head">
@@ -646,9 +736,10 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
             setShowsStatus(ids.includes('status')) // F-CP-107 (cp-fx16)
             setShowsPriority(ids.includes('priority')) // F-CW-102
             setShowsWhere(ids.includes('whereItIs')) // F-CW-102
+            setShowsWaiting(ids.includes('waitingOn')) // cw fx5 (W-29)
             actions?.onShownColumns?.(ids) // B-TH-244: Progress reads the floor only while shown
           }}
-          builtInViews={{ items: builtInViewsOf(model, t, s, (value) => formatNumber(value, locale) /* F-CP-103 */), active: builtInActive(model), onPick: (id) => pickBuiltIn(id, model, actions) /* F-SA-221, F-SA-276 */ }}
+          builtInViews={{ items: builtInViewsOf(model, t, s, (value) => formatNumber(value, locale) /* F-CP-103 */, builtInActive(model) /* cw fx5: the view shown is always named */), active: builtInActive(model), onPick: (id) => pickBuiltIn(id, model, actions) /* F-SA-221, F-SA-276 */ }}
           viewName={customerName ? s('views.suggest', { customer: customerName }) : null /* B-TH-243: a customer's sheet saved under its name */}
           // B-TH-057: a header click sorts every page on the server (the address keeps it); the grid only shows the arrow.
           onSortChanged={(colId, direction) => actions?.onSort?.(colId ? sortOfColumn(colId, direction) : null)}
@@ -678,16 +769,17 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
                   id: model.active.id,
                   onFocusRow: (row) => actions?.onFocusRow?.(row),
                   onOpenNewTab: (row) => actions?.onOpenRow?.(row.id, true),
-                  cardDoor: model.active.cardDoor && actions?.onCardThread ? { column: 'newMessages', label: model.active.cardDoor, onOpen: (row) => actions?.onCardThread?.(row) } : null,
+                  // cw fx5 (walk W-13): on the customer's own page the door stands at the card's foot (the card's own line above), not in its top row.
+                  cardDoor: !workCard && model.active.cardDoor && actions?.onCardThread ? { column: 'newMessages', label: model.active.cardDoor, onOpen: (row) => actions?.onCardThread?.(row) } : null,
                 }
               : null
           }
         />
       )}
-      {showing /* F-SA-276; F-CP-102: compared with the host's default — rows=open on the customer page says it */ && <p className="fw-so-hint">{t('list.viewing', { view: t(`rows.${showing}`) })}</p>}
+      {showing /* F-SA-276; F-CP-102: compared with the host's default — rows=open on the customer page says it */ && <p className="fw-so-hint">{t('list.viewing', { view: model.waiting === 'us' && model.rows === 'open' ? s('views.waitingUs') /* cw fx5 (walk W-29): the view really shown */ : t(`rows.${showing}`) })}</p>}
 
       {viewerRow && <PictureViewerFor row={viewerRow} model={model} actions={actions} onClose={() => setViewer(null)} /> /* B-TH-225; F-SA-212: the one viewer */}
-      {model.ship && <ShipWindow model={model.ship} actions={actions?.ship} rows={items ?? []} prefix={model.prefix} /> /* F-CW-301: Warehouse's own window */}
+      {model.ship && <ShipWindow model={model.ship} actions={actions?.ship} rows={(items ?? []).map(named) /* cw fx5 (W-8) */} prefix={model.prefix} /> /* F-CW-301: Warehouse's own window */}
       {model.urgency && <UrgencyWindow model={model.urgency} actions={actions?.urgency} /> /* F-CW-302: the shared urgency window + this page's code dialog */}
       {model.newOrder && <NewOrderDialog model={model.newOrder} actions={actions} />}
       {model.invoiceDrafts && <InvoiceDraftsDialog state={model.invoiceDrafts} prefix={model.prefix} t={s} onClose={() => actions?.onCloseInvoiceDrafts?.()} onRetry={actions?.onInvoiceShippedRetry} /> /* B-TH-244 */}
@@ -874,17 +966,28 @@ export function countWords(loaded: number, count: number | null, more: boolean, 
 // F-CP-102: + the host's own views (model.hostViews: Drafts of <customer>, Not equal), each where `views` names its id.
 // F-CP-103 (review A4): + each view's count from the host's one count read (model.viewCounts; `number` writes it in the person's
 // language); on a page locked to one customer no "Orders of <customer>" line under each (the page names the customer: picture 20).
-export function builtInViewsOf(model: Pick<OrdersListModel, 'customer' | 'views' | 'hostViews' | 'viewCounts' | 'locked'>, t: Translate, s: Translate, number: (value: number) => string = String): Array<{ id: string; label: string; hint?: string; count?: string }> {
+export function builtInViewsOf(model: Pick<OrdersListModel, 'customer' | 'views' | 'hostViews' | 'viewCounts' | 'locked'>, t: Translate, s: Translate, number: (value: number) => string = String, active: string | null = null): Array<{ id: string; label: string; hint?: string; count?: string }> {
   const name = model.locked?.party ? null : (model.customer?.name ?? null)
   const hint = name ? { hint: s('views.ofCustomer', { customer: name }) } : {}
-  const all = [...ROW_VIEWS.map((view) => ({ id: view, label: t(`rows.${view}`), ...hint })), { id: MTM_VIEW, label: s('view.mtm'), ...hint }, { id: WAITING_US_VIEW, label: s('views.waitingUs'), ...hint }, ...(model.hostViews ?? []).map((view) => ({ id: view.id, label: view.label }))]
+  const all = [...ROW_VIEWS.map((view) => ({ id: view, label: t(`rows.${view}`), ...hint })), { id: MTM_VIEW, label: s('views.mtm') /* cw fx5 (walk W-27): the menu showed the raw key "view.mtm" */, ...hint }, { id: WAITING_US_VIEW, label: s('views.waitingUs'), ...hint }, ...(model.hostViews ?? []).map((view) => ({ id: view.id, label: view.label }))]
   const counted = (view: { id: string; label: string; hint?: string }) => {
     const count = model.viewCounts?.[view.id]
     return count === undefined ? view : { ...view, count: number(count) }
   }
   if (!model.views) return all.filter((view) => view.id !== WAITING_US_VIEW && !model.hostViews?.some((own) => own.id === view.id)).map(counted)
-  return model.views.flatMap((id) => all.filter((view) => view.id === id)).map(counted)
+  // cw fx5 (walk W-11, W-17): the view the address shows is ALWAYS one of the items — a door may land on a view the host does not
+  // offer (`rows=open`, `rows=deposit` on the customer's tab): the button then names it ("Open", "Waiting for deposit"), never the
+  // menu's own word ("Columns"). It stands last; picking another view leaves it.
+  const offered = model.views.flatMap((id) => all.filter((view) => view.id === id))
+  const shown = active && !offered.some((view) => view.id === active) ? all.filter((view) => view.id === active) : []
+  return [...offered, ...shown].map(counted)
 }
+
+/**
+ * cw fx5 (walk W-8): a sentence that ends with a name ending in a full stop ("… for Seed Customer One S.r.l.") adds no second one.
+ * An ellipsis ("…", "...") is left as it is.
+ */
+export const oneStop = (text: string): string => (/[^.]\.\.$/.test(text) ? text.slice(0, -1) : text)
 
 /** F-SA-221: the built-in view "Made-to-measure" (`kind=mtm` + the open orders). */
 export const MTM_VIEW = 'kind:mtm'
@@ -965,6 +1068,8 @@ interface ColumnsInput {
   /** F-CW-102: the Priority column is on screen (Customer urgency then leaves our level to it), and Where it is (the lateness is its chip 2). */
   priorityShown?: boolean
   whereShown?: boolean
+  /** cw fx5 (walk W-29): the Waiting on column is on screen — chip 3 of Where it is then never repeats what it says. */
+  waitingShown?: boolean
 }
 
 /**
@@ -1000,11 +1105,13 @@ function PictureViewerFor({ row, model, actions, onClose }: { row: OrderRow; mod
  * tab); Brand, Status and Company narrow the sheet (the funnel mark); a cell the reader may not open says why on hover; the
  * rest of the row opens the order. Money columns are absent without their grain, never zero.
  */
-function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer, statusShown = false, phone = false, priorityShown = false, whereShown = false }: ColumnsInput): ColDef<OrderRow>[] {
-  const input: ColumnsInput = { t, s, d, l, m, locale, model, wide, latest, onViewer, statusShown, phone, priorityShown, whereShown }
+function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer, statusShown = false, phone = false, priorityShown = false, whereShown = false, waitingShown = false }: ColumnsInput): ColDef<OrderRow>[] {
+  const input: ColumnsInput = { t, s, d, l, m, locale, model, wide, latest, onViewer, statusShown, phone, priorityShown, whereShown, waitingShown }
   const { prefix, can } = model
   const day = (value: string | null) => (value ? formatDate(dayInstant(value), { locale }) : '—')
   const act = () => latest.current.actions
+  // cw fx5 (walk W-8): on a page of one customer, the host's own name of it (the record's), else null: each row's own name.
+  const lockedNameNow = (): string | null => (latest.current.model.locked?.party ? (latest.current.model.customer?.name ?? null) : null)
   const door = (value: Door, children: ReactNode, strong?: boolean) => (
     <DoorCell door={value} t={s} strong={strong}>
       {children}
@@ -1049,11 +1156,12 @@ function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer, st
         {data.madeToMeasure ? (
           // F-SA-221: the made-to-measure mark under the number — a funnel door to the made-to-measure orders (never a rider's name).
           <span className="fw-so-inline">
-            <span className="fw-sheet-sub">{data.customerRef ? t('list.customerRef', { ref: data.customerRef }) : t('list.noCustomerRef')}</span>
+            <span className="fw-sheet-sub fw-sheet-wraps">{data.customerRef ? t('list.customerRef', { ref: data.customerRef }) : t('list.noCustomerRef')}</span>
             <MtmMark row={data} s={s} onNarrow={latest.current.model.kind ? undefined : () => act()?.onKind?.('mtm')} />
           </span>
         ) : (
-          <span className="fw-sheet-sub">{data.customerRef ? t('list.customerRef', { ref: data.customerRef }) : t('list.noCustomerRef')}</span>
+          // cw fx5 (walk W-14): the PO line wraps inside the cell (two lines at the most), never cut ("Senza ordine del clie…").
+          <span className="fw-sheet-sub fw-sheet-wraps">{data.customerRef ? t('list.customerRef', { ref: data.customerRef }) : t('list.noCustomerRef')}</span>
         )}
       </span>
     )
@@ -1134,16 +1242,23 @@ function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer, st
     if (!data) return null
     const { state, dueDate } = data.deposit
     const overdue = state === 'OPEN' && dueDate !== null && dueDate < model.today
+    // cw fx5 (walk W-12, W-7, W-33; the API's B-CW-012): an EXTRA deposit still open on an order whose own deposit is not open — the
+    // PILL says so ("Extra deposit open", the row's chip 3's own words; danger once its day passed) with its day as the open
+    // deposit's own line ("due 23/11/2026"). It read "Not needed" over a cut second line.
+    const extra = depositExtraOf(data.deposit, model.today)
+    if (extra)
+      return (
+        <span className="fw-sheet-cell fw-sheet-wraps">
+          {door(depositDoor(prefix, data, can), <Pill tone={extra.overdue ? 'danger' : 'warning'} className="fw-sheet-dep-extra">{s('stop.depositExtra')}</Pill>)}
+          <span className={extra.overdue ? 'fw-sheet-late' : 'fw-sheet-sub'} title={state === 'PAID' ? t('moneyTab.totals.fact.paidExtraWords') : t('moneyTab.totals.fact.notNeededExtraWords', { date: day(extra.due) })}>
+            {t(extra.overdue ? 'list.depositOverdue' : 'list.depositDue', { date: day(extra.due) })}
+          </span>
+        </span>
+      )
     return (
       <span className="fw-sheet-cell">
         {door(depositDoor(prefix, data, can), <Pill tone={depositTone(state, dueDate, model.today)}>{t(`deposit.${state}`)}</Pill>)}
         {state === 'OPEN' && dueDate && <span className={overdue ? 'fw-sheet-late' : 'fw-sheet-sub'}>{t(overdue ? 'list.depositOverdue' : 'list.depositDue', { date: day(dueDate) })}</span>}
-        {/* F-CW-102 (the API's B-CW-012): an EXTRA deposit still open on an order that needs none — the order page's own words. */}
-        {data.deposit.extraOpenDue && (
-          <span className={data.deposit.extraOpenDue < model.today ? 'fw-sheet-late' : 'fw-sheet-sub'} title={t('moneyTab.totals.fact.notNeededExtraWords', { date: day(data.deposit.extraOpenDue) })}>
-            {s('deposit.extra', { date: day(data.deposit.extraOpenDue) })}
-          </span>
-        )}
       </span>
     )
   }
@@ -1158,7 +1273,7 @@ function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer, st
     data ? (
       <span className="fw-sheet-cell">
         <span>{day(data.orderDate)}</span>
-        <span className="fw-sheet-sub">{data.requestedDate ? t('list.requested', { date: day(data.requestedDate) }) : t('list.noRequested')}</span>
+        <span className="fw-sheet-sub fw-sheet-wraps">{data.requestedDate ? t('list.requested', { date: day(data.requestedDate) }) : t('list.noRequested') /* cw fx5 (W-7): wraps, never cut */}</span>
       </span>
     ) : null
   // F-CW-102: the lateness is chip 2 of Where it is ("Late · 3 d") — the tag beside the date only while that column is not on
@@ -1171,7 +1286,8 @@ function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer, st
           {!whereShown && data.daysLate !== null && data.daysLate > 0 && <Tag tone="danger">{t('list.daysLate', { count: data.daysLate })}</Tag>}
         </span>
       ) : (
-        door(linesDoor(prefix, data, true), t('list.noPromise'))
+        // cw fx5 (walk W-14): "No promise" / "Nessuna data promessa" wraps inside the cell (quieter, two lines), never cut.
+        <span className="fw-sheet-wraps is-quiet">{door(linesDoor(prefix, data, true), t('list.noPromise'))}</span>
       )
     ) : null
   const ShippedCell = ({ data }: ICellRendererParams<OrderRow>) =>
@@ -1241,7 +1357,7 @@ function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer, st
   const MoreCell = ({ data }: ICellRendererParams<OrderRow>) => {
     if (!data) return null
     // F-CP-108: the host gives the door (both hosts of the ONE sheet); without it, today's items.
-    const steps = act()?.onCommand ? rowStepsOf(data, can) : []
+    const steps = act()?.onCommand ? rowStepsOf(data, can, !!latest.current.model.commands?.decide /* cw fx5 (W-21): a decision needs its right */) : []
     // F-CW-301 (10-design §5): Create shipment… among the Next steps, before Close order… — only with shipping.manage, only in a
     // state where garments can wait to ship; held with the order page's own words when the row knows nothing is ready now.
     const shipStep: MenuItemDef[] =
@@ -1260,7 +1376,7 @@ function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer, st
       urgencyActs.length > 0
         ? [
             { id: 'head-urgency', heading: true, label: s('col.customerUrgency') },
-            ...urgencyActs.map((kind) => ({ id: `urgency-${kind}`, label: pw(`customerCard.urgency.act.${kind}`), ...(latest.current.model.urgencyOff ? { disabled: true, description: s('urgency.held.off', { customer: data.partyName }) } : { onSelect: () => act()?.onUrgency?.(kind, [data.id]) }) })),
+            ...urgencyActs.map((kind) => ({ id: `urgency-${kind}`, label: pw(`customerCard.urgency.act.${kind}`), ...(latest.current.model.urgencyOff ? { disabled: true, description: oneStop(s('urgency.held.off', { customer: lockedNameNow() ?? data.partyName })) } : { onSelect: () => act()?.onUrgency?.(kind, [data.id]) }) })),
             ...(askedHref ? [{ id: 'urgency-answer', label: s('row.answer'), href: askedHref }] : []),
           ]
         : []
@@ -1312,8 +1428,8 @@ function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer, st
     whereTextOf(row, { status: (status) => t(`status.${status}`), stage: (stage) => pw(`parts.stage.${stage}`), health: (chip) => pw(`parts.health.${chip}`), byHand: (stage) => t('list.byHand.phone', { stage }) })
   // F-CW-102: the chips cell — the host's marks and review door (chip 3), today (a deposit overdue), a dense cell beside the dock.
   const WhereCell = ({ data }: ICellRendererParams<OrderRow>) =>
-    data ? <WhereItIsCell row={data} t={t} s={s} statusShown={statusShown /* F-CP-107 (cp-fx16) */} mark={latest.current.model.marks?.[data.id]} prefix={prefix} doorHref={latest.current.model.doorHref} today={model.today} now={now} dense={!!model.preset?.dense} /> : null
-  const WaitingCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <WaitingOnCell row={data} mark={latest.current.model.marks?.[data.id]} prefix={prefix} doorHref={latest.current.model.doorHref} s={s} now={now} /> : null)
+    data ? <WhereItIsCell row={data} t={t} s={s} statusShown={statusShown /* F-CP-107 (cp-fx16) */} waitingShown={waitingShown && !phone /* cw fx5 (W-29) */} mark={latest.current.model.marks?.[data.id]} prefix={prefix} doorHref={latest.current.model.doorHref} today={model.today} now={now} dense={!!model.preset?.dense} /> : null
+  const WaitingCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <WaitingOnCell row={lockedNameNow() ? { ...data, partyName: lockedNameNow()! } : data /* cw fx5 (W-8) */} mark={latest.current.model.marks?.[data.id]} prefix={prefix} doorHref={latest.current.model.doorHref} s={s} now={now} /> : null)
   const SupervisorColumn = ({ data }: ICellRendererParams<OrderRow>) => (data && m ? <SupervisorCell row={data} s={s} marks={m} /> : null)
   // ---- end F-SA-275
   const also = (key: string, label: string) => ({ exportWith: [{ key, label }] })
@@ -1416,7 +1532,9 @@ function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer, st
     // F-SA-275: Supervisor — Me / Someone else / Not set, never a name on a list (the work orders' right; held in words without it).
     later({ colId: 'supervisor', headerName: s('col.supervisor'), headerTooltip: s('col.supervisorHint'), minWidth: 104, flex: 0.6, cellRenderer: SupervisorColumn, valueGetter: ({ data }: { data?: OrderRow }) => data?.production?.supervisorMark ?? '' }),
     ...laterColumns, // B-TH-244
-    { colId: 'more', headerName: t('col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
+    // cw fx5 (walk W-16): the ⋯ column fits its button whole (it was cut by 8 px in a 64 px column with the grid's padding) and draws
+    // no header word — "More" stays the column's name (a screen reader, Customise). On every host of the sheet.
+    { colId: 'more', headerName: t('col.more'), minWidth: 48, maxWidth: 48, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellClass: 'fw-sheet-more', headerClass: 'fw-sheet-more', cellRenderer: MoreCell },
   ] as ColDef<OrderRow>[])
     // F-SA-276; F-CP-107 (cp-fx16): + the phone card; F-CW-103: + what Customise says of a column that waits for a wider sheet
     .map((column) => withPreset(column, model.preset ?? null, wide, (name, room) => s(`customise.${room}`, { column: name })))
@@ -1463,7 +1581,10 @@ export const LIST_MIN: Readonly<Record<string, number>> = { number: 144, custome
 export const WAIT_FIRST = ['quote', 'season', 'company', 'priority', 'orderDate', 'margin', 'newMessages', 'invoiced'] as const
 
 /** The sum of the shown columns' minimums with the select column: what the row needs. */
-export const rowWidthOf = (columns: readonly ColDef<OrderRow>[]): number => SELECT_WIDTH + columns.filter((column) => !column.hide).reduce((sum, column) => sum + (column.minWidth ?? 0), 0)
+// cw fx5 (walk W-16): the ⋯ column is counted at what it took before — the 16 px it gave back go to the row's words (flex), never to
+// one more column (Sales › Orders keeps its own ten columns).
+export const rowWidthOf = (columns: readonly ColDef<OrderRow>[]): number =>
+  SELECT_WIDTH + columns.filter((column) => !column.hide).reduce((sum, column) => sum + (column.colId === 'more' ? Math.max(column.minWidth ?? 0, MORE_WAS) : (column.minWidth ?? 0)), 0)
 
 /** Sales › Orders on its screen: each column at what its words need, then WAIT_FIRST hidden in turn until the row fits. */
 export function fitToScreen(columns: readonly ColDef<OrderRow>[], wide: boolean): ColDef<OrderRow>[] {
@@ -1514,7 +1635,38 @@ export function withPreset(column: ColDef<OrderRow>, preset: OrdersListModel['pr
   const waits = shown ? null : (preset.later?.[id] ?? null)
   const name = typeof column.headerName === 'string' ? column.headerName : ''
   const context = { ...((column.context as object | undefined) ?? {}), optIn: !shown && !waits, ...(waits && label && name ? { toolLabel: label(name, waits) } : {}) }
-  return { ...column, hide: !shown, context, ...(min ? { minWidth: min } : {}), ...(max ? { maxWidth: max } : {}) }
+  // cw fx5 (walk W-5, W-6): the host's own cell padding for a column (`pad`), a header without its menu button (`plainHeads`: the
+  // narrow fixed columns — the menu stays on the header's right click and in Customise) and headers that may stand on two lines.
+  const pad = preset.pad?.[id]
+  const padClass = pad ? `fw-sheet-${pad}` : null
+  const wrapClass = preset.wrapHeads ? 'fw-sheet-hwrap' : null
+  const looks: ColDef<OrderRow> = {
+    ...(padClass ? { cellClass: joined(column.cellClass, padClass) } : {}),
+    ...(padClass || wrapClass ? { headerClass: joined(column.headerClass, padClass, wrapClass) } : {}),
+    ...(preset.wrapHeads ? { wrapHeaderText: true } : {}),
+    ...(preset.plainHeads?.includes(id) ? { suppressHeaderMenuButton: true } : {}),
+  }
+  return { ...column, hide: !shown, context, ...(min ? { minWidth: min } : {}), ...(max ? { maxWidth: max } : {}), ...looks }
+}
+
+/** A column's class beside the ones it has (the sheet's columns state theirs as one string). */
+function joined(own: unknown, ...more: Array<string | null>): string {
+  return [typeof own === 'string' ? own : null, ...more].filter((name): name is string => !!name).join(' ')
+}
+
+/** cw fx5 (walk W-23): below this room the search field says its short words ("Search orders"). */
+export const SEARCH_SHORT_BELOW = 480
+
+/** cw fx5 (walk W-16): what the ⋯ column took before (64; now 48: a 44 px button with 2 px each side). Sales › Orders' fit rule keeps counting it at this, so the same columns wait there as before. */
+const MORE_WAS = 64
+
+/**
+ * cw fx5 (walk W-12): an EXTRA deposit still open on an order whose own deposit is not open (not needed, paid, waived) — its day
+ * and whether it passed; null: none (an OPEN deposit shows its own pill and day).
+ */
+export function depositExtraOf(deposit: Pick<OrderRow['deposit'], 'state' | 'extraOpenDue'>, today: string): { readonly due: string; readonly overdue: boolean } | null {
+  const due = deposit.state === 'OPEN' ? null : (deposit.extraOpenDue ?? null)
+  return due ? { due, overdue: due < today } : null
 }
 // ── end B-TH-225 ──
 

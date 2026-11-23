@@ -237,7 +237,8 @@ describe('F-CP-108 — never a system move, no free status', () => {
 
   it('the menu offers no status editor: the pill stays a filter and the items are the commands (source)', () => {
     const view = read('../view/OrdersListView.tsx')
-    expect(view).toContain("rowStepsOf(data, can)")
+    // cw fx5 (walk W-21): the row's steps are asked with the reader's right to decide a yes (Confirm or refuse… is not drawn without it).
+    expect(view).toMatch(/rowStepsOf\(data, can, !!latest\.current\.model\.commands\?\.decide/)
     expect(view).toContain("{ id: 'head-next', heading: true, label: t('menu.group.next') }")
     expect(view).toContain("...(cancel ? [{ id: 'sep-danger', separator: true }, stepItem(cancel, data)] : [])")
     expect(view).toContain("tone: 'danger' as const")

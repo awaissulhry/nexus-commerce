@@ -13,7 +13,6 @@ import { CustomerOverrideProvider } from '../../../../_shared/customer-override/
 import { OfficeRecordThread } from '../../../../_shared/record-thread/OfficeRecordThread'
 import { ThreadPick, type ThreadChoice } from '../../../../_shared/record-thread/ThreadPick'
 import { RecordTypeIcon } from '../../../../search/RecordTypeIcon' // F-OP-203: the picked record's icon in its segment
-import { doorListOf } from '../../../../home/approvals/requests/model'
 import { useRequestReviewDoor } from '../../../../home/approvals/requests/use-request-review-door'
 import { RequestDoorNoticeBanner, RequestDoorWindow } from '../../../../home/approvals/requests/view/RequestReview'
 import type { OrderRow } from '../../../orders/api'
@@ -24,6 +23,7 @@ import { OrdersListView, WAITING_US_VIEW } from '../../../orders/list/view/Order
 import type { OrdersListModel } from '../../../orders/list/list-model'
 import { WORK_DEFAULT_ROWS, workEntry, type useCustomerWork, type WorkCan } from '../use-customer-work'
 import { workViewCounts } from '../use-customer-work' // F-CP-103: the Views ▾ counts from the strip's one count read
+import { requestsDoorOf } from '../use-customer-work' // cw fx5 (W-1): the door of "Requests to answer N"
 import type { WorkAsk } from '../use-customer-work' // F-CP-104: the band's New order / ⋯ Import orders, served in place
 import { priceDifferOf } from '../use-customer-work' // F-CP-141: the Not equal view's count (the customer's own counts)
 // ---- F-CP-113: the New order page's own lines editor, in a large window on this page ----
@@ -120,10 +120,16 @@ export function workEmptyOf(
   customer: string,
   t: (key: string, params?: Record<string, string | number>) => string,
   allHref: string,
-  door: { readonly phase?: OrderPhase | null; readonly plain?: boolean; readonly drafts?: { readonly count: number; readonly href: string } | null } = {},
+  door: { readonly phase?: OrderPhase | null; readonly plain?: boolean; readonly drafts?: { readonly count: number; readonly href: string } | null; /** cw fx5 (W-11): the priority door's level, in words. */ readonly priority?: string | null } = {},
 ): OrdersListModel['empty'] {
   const all = { href: allHref, label: t('customers.work.showAll') }
   const plain = door.plain !== false
+  // cw fx5 (walk W-11): the priority door with nothing behind it says its own sentence — "No open order of <customer> has priority
+  // Top now." on the open orders (the door the Customers list opens), "No order of <customer> has priority Top." over every order.
+  if (door.priority && !door.phase && !waiting) {
+    if (!plain || (rows !== 'open' && rows !== 'all')) return null
+    return { title: t(rows === 'open' ? 'customers.work.none.priorityOpen' : 'customers.work.none.priority', { customer, level: door.priority }), link: all, always: true }
+  }
   if (door.phase) return plain && rows === 'all' && !waiting ? { title: t(`customers.work.none.${door.phase}`, { customer }), link: all, always: true } : null
   if (waiting) return plain && rows === 'open' ? { title: t('customers.work.none.waitingUs', { customer }), link: all, always: true } : null
   // F-CP-102: each keyed to its view (the sheet shows it on that view when nothing else narrows it).
@@ -133,6 +139,8 @@ export function workEmptyOf(
   }
   if (rows === 'IN_PRODUCTION') return { title: t('customers.work.empty', { customer }), link: all, view: 'IN_PRODUCTION' }
   if (rows === 'late') return plain ? { title: t('customers.work.none.late', { customer }), link: all, always: true } : null
+  // cw fx5 (walk W-17): the Waiting for deposit view with nothing behind it.
+  if (rows === 'deposit') return plain ? { title: t('customers.work.none.deposit', { customer }), link: all, always: true } : null
   return null
 }
 // ---- end F-CP-101
@@ -202,12 +210,21 @@ export const WORK_SETS: Readonly<Record<WorkRoom, readonly string[]>> = Object.f
 /** Waiting on us and Late beside the open thread: Waiting on takes the place of Customer urgency and New messages (no sideways scroll). */
 export const WAITING_SET: readonly string[] = Object.freeze(['picture', 'number', 'whereItIs', 'promised', 'waitingOn'])
 /**
- * The honest room of each column of the set, with the cell's padding (the grid's 14 px each side): the picture 36 px; a seed's
- * "SEED-SO-W39-01"; three chips of Where it is on two lines at the least; a date and its header; "Urgente (cliente) 2" beside
- * "Priorità: Massima"; the bubble; the longest words of each wider column in Italian. Status (in Customise): "In attesa di
- * approvazione" whole. On this page's sheet only: Sales › Orders keeps the sheet's own widths.
+ * The honest room of each column of the set: the picture 36 px; a seed's "SEED-SO-W39-01"; a date and its header; "Urgente (cliente)
+ * 2" beside "Priorità: Massima"; the bubble; the longest words of each wider column in Italian. Status (in Customise): "In attesa
+ * di approvazione" whole. On this page's sheet only: Sales › Orders keeps the sheet's own widths.
+ *
+ * cw fx5 (walk W-5, W-6, W-7; 30-walk §6.2): the narrow fixed columns stand at the design's widths (Picture 58 · Promised 98 · New
+ * messages 44; the ⋯ column 48 is the sheet's own) with less side padding (WORK_PAD) — the px they give back go to Where it is:
+ * 275 px in the 863 px room beside the thread (it had 232), so two chips and the pieces line fit. The tick box stays 43 px (the
+ * grid engine's own; the design drew 40): Customer urgency gives those 3 px (its words wrap, never cut). Pieces 96: its header
+ * whole beside its menu. Shipped 104 (as on Sales › Orders). Deposit 136: "Extra deposit open" on one line in English.
  */
-export const WORK_MIN: Readonly<Record<string, number>> = Object.freeze({ picture: 64, number: 150, whereItIs: 220, promised: 108, customerUrgency: 150, newMessages: 52, waitingOn: 178, deposit: 118, shipped: 118, priority: 112, units: 84, orderDate: 104, supervisor: 130, status: 196 })
+export const WORK_MIN: Readonly<Record<string, number>> = Object.freeze({ picture: 58, number: 150, whereItIs: 220, promised: 98, customerUrgency: 147, newMessages: 44, waitingOn: 178, deposit: 136, shipped: 104, priority: 112, units: 96, orderDate: 104, supervisor: 130, status: 196 })
+/** cw fx5: the side padding of the set's narrow columns (the grid's own is 14 px): the picture in its middle; Where it is, the date and the Deposit pill closer to their edges. */
+export const WORK_PAD: Readonly<Record<string, 'tight' | 'snug'>> = Object.freeze({ picture: 'tight', whereItIs: 'snug', promised: 'snug', deposit: 'snug' })
+/** cw fx5 (walk W-5, W-14): no menu button in the header of a narrow fixed column — "Promised" / "Promesso" whole beside its sort mark (Picture, New messages and ⋯ have none already). */
+export const WORK_PLAIN_HEADS: readonly string[] = Object.freeze(['picture', 'promised', 'newMessages'])
 /** Every column of the set keeps its width: the room left goes to Where it is (the chips), never to a stretched date. */
 export const WORK_MAX: Readonly<Record<string, number>> = Object.freeze(Object.fromEntries(Object.entries(WORK_MIN).filter(([id]) => id !== 'whereItIs' && id !== 'status')))
 
@@ -228,8 +245,9 @@ function presetOf(room: WorkRoom, waits: boolean): WorkPreset {
   let preset = PRESETS.get(key)
   if (!preset) {
     const shown = waits ? WAITING_SET : WORK_SETS[room]
-    // A narrow cell beside the dock: chip 3 keeps its head, its tail goes to its tooltip (the widest room shows it whole).
-    preset = Object.freeze({ shown, order: WORK_ORDER, min: WORK_MIN, max: WORK_MAX, dense: room !== 'widest', later: workLaterOf(shown) /* F-CW-103 */ })
+    // Chip 3 keeps its head, its tail goes to its tooltip. cw fx5 (walk W-6): in EVERY room — on the widest sheet the tail ("· due
+    // 23/11/2026") is what the Deposit and Waiting on columns beside it already say, and with it the chips took two lines there.
+    preset = Object.freeze({ shown, order: WORK_ORDER, min: WORK_MIN, max: WORK_MAX, dense: true, later: workLaterOf(shown) /* F-CW-103 */, pad: WORK_PAD, plainHeads: WORK_PLAIN_HEADS, wrapHeads: true /* cw fx5 (W-5) */ })
     PRESETS.set(key, preset)
   }
   return preset
@@ -298,6 +316,8 @@ export interface WorkTabProps {
   readonly urgencyFoot?: UrgencyFoot | null
   /** F-CW-302: the reader may change the customer's portal settings (the switch): the foot's door is drawn only then. */
   readonly mayPortal?: boolean
+  /** cw fx5 (walk W-10): the reader may open Sales › Incoming — "Replies waiting on us" is a door only then (else its count, plain). */
+  readonly mayIncoming?: boolean
   /** F-CP-104: the page's ask (the band's New order, ⋯ Import orders for <customer>…), served once the sheet is here; then `onAsked`. */
   readonly ask?: WorkAsk | null
   readonly onAsked?: () => void
@@ -319,16 +339,17 @@ export function WorkTab(props: WorkTabProps) {
       </div>
     )
   return (
-    <WithMessages namespaces={['orders', SHEET_NS /* F-CW-101: the phases' words */]}>
+    <WithMessages namespaces={['orders', SHEET_NS /* F-CW-101: the phases' words */, 'sales-orders-depth' /* cw fx5 (W-11): the priority levels */]}>
       <WorkSheet {...props} />
     </WithMessages>
   )
 }
 
-function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow, ask, onAsked, before, urgencyFoot = null, mayPortal = false }: WorkTabProps) {
+function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow, ask, onAsked, before, urgencyFoot = null, mayPortal = false, mayIncoming = false }: WorkTabProps) {
   const t = useT('parties')
   const o = useT('orders')
   const s = useT(SHEET_NS) // F-CW-101
+  const d = useT('sales-orders-depth') // cw fx5 (W-11): our priority's level words
   const params = useSearchParams()
   // ---- F-CP-113: "Add the lines" opens the ONE lines editor (the New order page's own) in a large window here: no page hop, no
   // address term. Discard and a made order close it (the new order docks, its row arrives behind "N updates · Show"); × keeps the
@@ -342,6 +363,11 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
   const host: OrdersSheetHost = {
     basePath,
     locked: { party: party.id },
+    // cw fx5 (walk W-8): one customer, one name — the record's own (the band's), in every word of the sheet that names the customer.
+    customerName: party.name,
+    // cw fx5 (the requests on entry): the page already reads this customer's board for the band — the sheet reads no second one
+    // while nothing narrows it (undefined: the page may not read it; null: its read is on its way or failed).
+    ...(work.reads.board.status === 'off' ? {} : { board: work.reads.board.status === 'ready' ? work.reads.board.value : null }),
     embedded: true,
     keep: ['tab', 'dock', COLS_TERM /* F-CP-105: Work · Money, kept on every view (Clear all drops it) */],
     listKey: ORDERS_LIST_KEY,
@@ -365,7 +391,8 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
   // ---- end F-CP-104
   // The review window on this page (the four-door window): the customer's requests that wait on us, a batch as one entry.
   const requests = work.reads.requests.status === 'ready' ? work.reads.requests.value : null
-  const list = useMemo(() => doorListOf((requests?.items ?? []).filter((request) => request.waitingOn === 'US')), [requests])
+  // cw fx5 (walk W-1; S24): the door lists EVERY request the chip counts (each that waits on us), not only the reader's own to decide.
+  const list = useMemo(() => requestsDoorOf(requests?.items ?? []), [requests])
   const door = useRequestReviewDoor({ ids: list.ids, batches: list.batches, onChanged: work.reload })
   const rows = sheet.model.rows
   const waiting = sheet.model.waiting ?? null
@@ -424,7 +451,9 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
     empty:
       workEmptyOf(rows, waiting, party.name, t, all, {
         phase,
-        plain: sheet.model.q.trim() === '' && !sheet.model.brand && !sheet.model.company && !sheet.model.cf && !sheet.model.kind && Object.keys(sheet.model.extra ?? {}).every((key) => key === 'phase'),
+        // cw fx5 (walk W-11): a priority door's own sentence, the level in the words the Priority chip says it.
+        priority: sheet.model.extra?.priority ? d(`priority.level.${sheet.model.extra.priority}`) : null,
+        plain: sheet.model.q.trim() === '' && !sheet.model.brand && !sheet.model.company && !sheet.model.cf && !sheet.model.kind && Object.keys(sheet.model.extra ?? {}).every((key) => key === 'phase' || key === 'priority'),
         // F-CQ-303: the drafts' line opens Quotes & incoming at WRITING ("Customer is writing").
         drafts: typeof before?.drafts === 'number' ? { count: before.drafts, href: quotesGroupDoor(`${prefix}${basePath}`, 'WRITING') } : null,
       }) ??
@@ -482,7 +511,8 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
     chips: chipsOf(can, work.reads),
     pressed: waiting || phase ? [] : /* F-CQ-303: no drafts view */ rows === 'late' ? ['late'] : rows === 'deposit' ? ['deposit'] : [],
     workOrdersHref: can.workorders ? `${prefix}/production/work-orders?party=${encodeURIComponent(party.id)}` : null,
-    repliesHref: `${prefix}/sales/incoming?tile=CUSTOMER_REPLIES&party=${encodeURIComponent(party.id)}`,
+    // cw fx5 (walk W-10): a door only for a reader who may open the page it leads to; else the count stays, plain and quiet.
+    repliesHref: mayIncoming ? `${prefix}/sales/incoming?tile=CUSTOMER_REPLIES&party=${encodeURIComponent(party.id)}` : null,
     requestsHref: firstRequest ? door.hrefOf(firstRequest) : null,
   }
   const bandActions: WorkBandActions = {

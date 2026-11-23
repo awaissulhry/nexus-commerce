@@ -201,7 +201,7 @@
   "views": {
     "suggest": "{customer} — tracking",
     "ofCustomer": "Orders of {customer}",
-    "mtm": "Made-to-measure",
+    "mtm": "Made to measure",
     "waitingUs": "Waiting on us"
   },
   "group": {
@@ -514,7 +514,9 @@
       "runRest_one": "Run the rest again ({count})",
       "runRest_other": "Run the rest again ({count})",
       "label": "Each order"
-    }
+    },
+    "noneAsked_one": "Nobody was asked for this order's yes yet: ask for it on the order.",
+    "noneAsked_other": "Nobody was asked for the yes of any of the {count} yet: ask for it on each order."
   },
   "phase": {
     "NOT_SENT": "Not sent to the factory",
@@ -535,9 +537,6 @@
     "depositExtra": "Extra deposit open",
     "reaccept": "Waits for the customer's new yes",
     "heldTip": "On hold: open the Production tab of {number}"
-  },
-  "deposit": {
-    "extra": "extra open, due {date}"
   },
   "customise": {
     "wider": "{column} · from a wider sheet",
@@ -579,5 +578,6 @@
   },
   "receipt": {
     "showThread": "Show the thread of {number}"
-  }
+  },
+  "searchShort": "Search orders"
 }

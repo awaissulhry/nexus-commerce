@@ -357,8 +357,11 @@ export type StopChip =
   | { readonly kind: 'reply'; readonly since: string }
   | { readonly kind: 'keeper'; readonly on: Exclude<WaitingOn, 'US'>; readonly since: string | null }
 
-export function stopChipOf(row: Pick<OrderRow, 'status' | 'waits' | 'deposit' | 'reaccept' | 'production'>, mark: WaitingMark | null | undefined, today: string): StopChip | null {
-  const waiting = waitingItemsOf(row, mark)
+// cw fx5 (walk W-29; F-CP-107 "the same fact never twice in one row"): `waitingShown` — the Waiting on column is on screen. It says
+// the request to answer, the reply that waits and who acts next: chip 3 then leaves those three to it (what stops the order for
+// another reason — credit, measurements, a deposit, a new yes, a hold — stays chip 3).
+export function stopChipOf(row: Pick<OrderRow, 'status' | 'waits' | 'deposit' | 'reaccept' | 'production'>, mark: WaitingMark | null | undefined, today: string, waitingShown = false): StopChip | null {
+  const waiting: readonly WaitingItem[] = waitingShown ? [] : waitingItemsOf(row, mark)
   const request = waiting.find((item): item is Extract<WaitingItem, { kind: 'request' }> => item.kind === 'request')
   const asked: StopChip | null = request ? { kind: 'request', count: request.count, requestId: request.requestId } : null
   if (isAfterProduction(officeStripStateOf(row.status))) return asked
@@ -372,6 +375,7 @@ export function stopChipOf(row: Pick<OrderRow, 'status' | 'waits' | 'deposit' | 
   if (asked) return asked
   const reply = waiting.find((item): item is Extract<WaitingItem, { kind: 'reply' }> => item.kind === 'reply')
   if (reply) return { kind: 'reply', since: reply.since }
+  if (waitingShown) return null
   const on = row.production?.waitingOn ?? null
   return on && on !== 'US' ? { kind: 'keeper', on, since: row.production?.since ?? null } : null
 }

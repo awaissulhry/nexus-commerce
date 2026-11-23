@@ -94,9 +94,11 @@ export function OrderCommandManyBody({ model, actions }: { model: OrderCommandMa
   const preview = manyPreview(model.command, model.targets, model.reads, model.can)
   const read = model.targets.length - preview.reading
   const outOfReach = (count: number) => (count > 0 ? <p className="fw-cmd-hint">{s('commands.many.outOfReach', { count })}</p> : null)
-  const notOn = preview.notOn.length > 0 && (
+  // cw fx5 (walk W-22): the preview's own heading already says "Runs on 0 · Not on 1: why is beside each" — the list under it
+  // does not print the same words again (they were on screen twice); the receipt, which has no such heading, keeps them.
+  const notOnOf = (heading: boolean) => preview.notOn.length > 0 && (
     <section className="fw-cmd" aria-label={s('commands.notOn', { count: preview.notOn.length })}>
-      <p className="fw-cmd-heading">{s('commands.notOn', { count: preview.notOn.length })}</p>
+      {heading && <p className="fw-cmd-heading">{s('commands.notOn', { count: preview.notOn.length })}</p>}
       <ul className="fw-cmd-list">
         {preview.notOn.map((line) => (
           <li key={line.target.id} className="fw-cmd-line">
@@ -124,7 +126,7 @@ export function OrderCommandManyBody({ model, actions }: { model: OrderCommandMa
           ))}
         </ul>
         {outOfReach(receipt.gone)}
-        {notOn}
+        {notOnOf(true)}
       </div>
     )
   }
@@ -163,7 +165,7 @@ export function OrderCommandManyBody({ model, actions }: { model: OrderCommandMa
         </ul>
       </section>
       {outOfReach(preview.gone)}
-      {notOn}
+      {notOnOf(false)}
       {needsReason && (
         <Field label={t(model.command === 'ready' ? 'ready.reason' : 'close.reason')} hint={s('commands.many.reasonAll')}>
           <Textarea value={model.reason} onChange={(event) => actions?.onReason?.(event.target.value)} rows={3} maxLength={1000} readOnly={running} />

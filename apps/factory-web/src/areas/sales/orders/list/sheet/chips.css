@@ -134,9 +134,10 @@ a.fw-sheet-msgs {
   color: var(--nds-text-2);
 }
 /* The bubble's narrow column of a host's own set: less side padding, so the bubble sits in its middle (the column is wide enough
-   for the bubble with the grid's own padding too). */
-.ag-cell.fw-sheet-tight,
-.ag-header-cell.fw-sheet-tight {
+   for the bubble with the grid's own padding too). cw fx5: under the sheet's own root (`.fw-so`), so the rule is stronger than the
+   grid's own cell padding (`.ag-cell:not(.ag-cell-inline-editing)`, the same weight as two classes) whatever the order they load in. */
+.fw-so .ag-cell.fw-sheet-tight,
+.fw-so .ag-header-cell.fw-sheet-tight {
   padding-left: var(--nds-space-4);
   padding-right: var(--nds-space-4);
   text-align: center;
@@ -147,5 +148,117 @@ a.fw-sheet-msgs {
   min-width: 0;
   font-size: var(--nds-font-size-sm);
   color: var(--nds-text-2);
+  white-space: normal;
+}
+
+/* ---- cw fx5 (walk W-5, W-6, W-7, W-12, W-14, W-16, W-33): the row keeps its words — the sheet's own cell rules (never the grid's) ---- */
+/* A column of a host's set with less side padding than the grid's 14 px: the room goes to the words (Where it is: the chips). */
+.fw-so .ag-cell.fw-sheet-snug,
+.fw-so .ag-header-cell.fw-sheet-snug {
+  padding-left: var(--nds-space-6);
+  padding-right: var(--nds-space-6);
+}
+/* The row's ⋯: its button whole in a column that fits it (48 px for a 44 px button); the header's word is not drawn — it stays
+   the column's name for a screen reader and for Customise. */
+.fw-so .ag-cell.fw-sheet-more,
+.fw-so .ag-header-cell.fw-sheet-more {
+  padding-left: 0;
+  padding-right: 0;
+  justify-content: center;
+  text-align: center;
+}
+.fw-so .ag-header-cell.fw-sheet-more .ag-header-cell-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+/* A header of a host's set may stand on two lines ("Customer / urgency") — never cut. */
+.fw-so .ag-header-cell.fw-sheet-hwrap .ag-header-cell-comp-wrapper,
+.fw-so .ag-header-cell.fw-sheet-hwrap .ag-header-cell-text {
+  white-space: normal;
+  line-height: 1.15;
+}
+/* Words that wrap inside their cell on a word's edge instead of being cut: "No promise" / "Nessuna data promessa", the customer's
+   PO line, "nothing requested", "Waiting on customer" over "· 16 d", "Extra deposit open". The row keeps its height: three lines
+   of words at the most. */
+.fw-sheet-wraps,
+.fw-sheet-wraps .fw-sheet-door,
+.fw-sheet-wraps .fw-sheet-held,
+.fw-sheet-wraps .fw-sheet-plain {
+  white-space: normal;
+  overflow-wrap: break-word;
+  line-height: 1.2;
+}
+.fw-sheet-wraps.is-quiet .fw-sheet-door,
+.fw-sheet-wraps.is-quiet .fw-sheet-held,
+.fw-sheet-wraps.is-quiet .fw-sheet-plain {
+  font-size: var(--nds-font-size-sm);
+}
+.fw-sheet-sub.fw-sheet-wraps {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+/* The Deposit pill of an extra deposit still open: its words whole — on two lines where the column is narrow. */
+.fw-sheet-wraps .nds-pill.fw-sheet-dep-extra {
+  white-space: normal;
+  line-height: 1.2;
+  padding-top: var(--nds-space-2);
+  padding-bottom: var(--nds-space-2);
+  border-radius: var(--nds-radius-md);
+  text-align: start;
+}
+/* Beside the dock the chips of Where it is stand closer (their own side padding and the gaps): two chips fit one line, the pieces
+   line stays under them. */
+.fw-sheet-wi.is-dense {
+  column-gap: var(--nds-space-3);
+}
+.fw-sheet-wi.is-dense > .nds-pill {
+  gap: var(--nds-space-3);
+  padding-left: var(--nds-space-6);
+  padding-right: var(--nds-space-6);
+}
+.fw-sheet-wi.is-dense > .nds-tag,
+.fw-sheet-wi.is-dense > .fw-sheet-chip-door > .nds-tag {
+  padding-left: var(--nds-space-6);
+  padding-right: var(--nds-space-6);
+}
+
+/* ---- cw fx5 (walk W-13): the customer page's phone card — the DS card's own lines, laid out as the picture drew them ---- */
+.fw-sheet-card-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+.fw-sheet-card-promise {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-2) var(--nds-space-10);
+  min-width: 0;
+  color: var(--nds-text-2);
+}
+.fw-sheet-card-promise b {
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-sheet-card-door {
+  display: flex;
+  justify-content: flex-end;
+}
+/* On the card the chips wrap freely (no row height to keep) and the pieces line wraps instead of being cut. */
+.fw-sheet-wi.is-card {
+  max-height: none;
+  overflow: visible;
+}
+.fw-sheet-wi-pcs.is-wrap {
+  flex-basis: auto;
+  overflow: visible;
   white-space: normal;
 }

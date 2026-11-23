@@ -13,6 +13,8 @@ import type { TaskItem } from '../../../../record-panels/tasks/model'
 import { getBoard, listOrders, type OrderBoard, type OrderRow } from '../../orders/api'
 import type { OrderPhase } from '../../orders/api' // F-CW-101: the band's groups and their doors
 import { isPriorityLevel } from '@nexus/factory-domain/sales/orders-depth/rules' // F-CW-105 (S40): our levels — the domain's rule
+import { isOrderPhase } from '@nexus/factory-domain/production-brand/stages' // cw fx5 (W-25): the groups the API knows
+import { doorListOf } from '../../../home/approvals/requests/model' // cw fx5 (W-1): the review door's own list rule
 import type { DockPick } from './view/WorkTab' // F-SA-278
 import { useCoalesced } from '../../orders/hooks'
 import type { WaitingMarks } from '../../orders/list/sheet/model'
@@ -100,6 +102,12 @@ export function workEntry(base: string, partyId: string, params: Params): string
   const query = new URLSearchParams(params?.toString() ?? '')
   const asked = query.get('tab')
   let changed = false
+  // cw fx5 (walk W-25): a group the API does not know (`phase=FOO`) is dropped in this same write, like an unknown priority — and
+  // BEFORE the view is read, so the address then names no view and gets the tab's own default (All orders, Most urgent first).
+  if (query.has('phase') && !isOrderPhase(query.get('phase'))) {
+    query.delete('phase')
+    changed = true
+  }
   const set = (name: string, value: string) => {
     if (query.get(name) === value) return
     query.set(name, value)
@@ -289,6 +297,16 @@ export function marksOf(requests: readonly BrandRequest[] | null, replies: reado
     if (!mark.askedSince || ask.createdAt < mark.askedSince) mark.askedSince = ask.createdAt
   }
   return marks
+}
+
+/**
+ * cw fx5 (walk W-1; lead settle S24): the door of "Requests to answer N" lists EVERY request the chip counts — each one that waits on
+ * us, whoever of us may decide it — oldest first, a batch of two or more as one entry (the review window walks them: "Request 1 of
+ * 2 · Next ›"). The Approvals inbox's own list keeps only the reader's (`waitsForMe`): this door is readable without the right to
+ * decide (the window then shows Close only), so the same rule is run with the right set aside.
+ */
+export function requestsDoorOf(requests: readonly BrandRequest[]): { readonly ids: string[]; readonly batches: string[] } {
+  return doorListOf(requests.filter((request) => request.waitingOn === 'US').map((request) => ({ ...request, may: { ...request.may, accept: true } })))
 }
 
 /** The live events each source is read again on (the strip's reads, coalesced). */

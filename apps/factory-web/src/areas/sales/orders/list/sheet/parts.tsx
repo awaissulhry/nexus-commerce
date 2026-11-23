@@ -281,21 +281,21 @@ export function ByHandMark({ old, t }: { old: boolean; t: Translate }) {
  * tail ("· due 25 Nov", "· 3 d") and its mark go to its tooltip. F-CP-107 (cp-fx16) stays: with the Status column on screen a
  * status word is never said twice.
  */
-export function WhereItIsCell({ row, t, s, statusShown = false, mark, prefix, doorHref, today, now, dense = false }: { row: OrderRow; t: Translate; s: Translate; statusShown?: boolean; mark?: WaitingMark | null; prefix?: string; doorHref?: ((requestId: string) => string) | null; today?: string; now?: number; dense?: boolean }) {
+export function WhereItIsCell({ row, t, s, statusShown = false, waitingShown = false, mark, prefix, doorHref, today, now, dense = false, half }: { row: OrderRow; t: Translate; s: Translate; statusShown?: boolean; /** cw fx5 (walk W-29): the Waiting on column is on screen — chip 3 never repeats it. */ waitingShown?: boolean; mark?: WaitingMark | null; prefix?: string; doorHref?: ((requestId: string) => string) | null; today?: string; now?: number; dense?: boolean; /** cw fx5 (walk W-13): one half for the phone card — its chips (they wrap freely), or its pieces line (it wraps, never cut); nothing to say: nothing drawn. */ half?: 'chips' | 'pieces' }) {
   const w = useProductionWords()
   const locale = useLocale()
   const stage = stageChipOf(row)
   // Not read (the production part comes with the column): nothing is guessed.
-  if (!stage) return <span className="fw-sheet-plain">—</span>
+  if (!stage) return half ? null : <span className="fw-sheet-plain">—</span>
   const health = healthChipOf(row)
-  const stop = stopChipOf(row, mark, today ?? romeToday())
+  const stop = stopChipOf(row, mark, today ?? romeToday(), waitingShown)
   const pieces = piecesPartsOf(row)
   // F-CP-107 (cp-fx16): the same fact never twice in one row — a status word is not repeated beside the Status column.
   const first = stage.kind === 'status' && statusShown ? null : stage
   const piecesText = pieces.map((part) => (part.kind === 'stage' ? w.t(`parts.stage.${part.stage}`) : piecesWords(part, t, s, w.t))).join(' · ')
   const piecesLine =
     pieces.length > 0 ? (
-      <span className="fw-sheet-wi-pcs">
+      <span className={half === 'pieces' ? 'fw-sheet-wi-pcs is-wrap' : 'fw-sheet-wi-pcs'}>
         {pieces.map((part, index) => (
           <Fragment key={index}>
             {index > 0 && ' · '}
@@ -313,10 +313,11 @@ export function WhereItIsCell({ row, t, s, statusShown = false, mark, prefix, do
         ))}
       </span>
     ) : null
-  if (!first && !health && !stop) return piecesLine ?? <span className="fw-sheet-plain">—</span>
+  if (half === 'pieces') return piecesLine
+  if (!first && !health && !stop) return half ? null : (piecesLine ?? <span className="fw-sheet-plain">—</span>)
   const Icon = first ? PHASE_ICON[first.phase] : null
   return (
-    <span className={dense ? 'fw-sheet-wi is-dense' : 'fw-sheet-wi'} title={piecesText || undefined}>
+    <span className={half === 'chips' ? 'fw-sheet-wi is-card' : dense ? 'fw-sheet-wi is-dense' : 'fw-sheet-wi'} title={half === 'chips' ? undefined : piecesText || undefined}>
       {first && Icon && first.kind === 'stage' && (
         <Pill tone="info" icon={<Icon size={11} aria-hidden />} className="fw-sheet-st">
           <b>{w.t(`parts.stage.${first.stage}`)}</b>
@@ -331,7 +332,7 @@ export function WhereItIsCell({ row, t, s, statusShown = false, mark, prefix, do
       )}
       {health && <HealthPill face="office" explain={false} computed={health} daysLate={row.daysLate} />}
       {stop && <StopChipPart chip={stop} row={row} t={t} s={s} prefix={prefix} doorHref={doorHref} dense={dense} now={now ?? Date.now()} date={(day) => formatDate(`${day}T12:00:00Z`, { locale })} />}
-      {piecesLine}
+      {half !== 'chips' && piecesLine}
     </span>
   )
 }
@@ -493,6 +494,16 @@ export function MessagesHeader({ displayName }: { displayName?: string }) {
  * order's Changes), a reply that waits on us ("Reply waits · 4 h"), who acts next as the keeper keeps it ("Waiting on supplier ·
  * 2 d"); "+1 more" when more than one. Nothing waits: "—".
  */
+/**
+ * cw fx5 (walk W-7): words that end with a time ("Waiting on customer · 16 d") wrap inside a narrow cell on a word's edge and
+ * never inside the time — "· 16 d" goes to the second line whole (no-break spaces inside the tail and after its dot).
+ */
+export function tailWhole(text: string, tail: string | null): string {
+  if (!tail || !text.endsWith(tail)) return text
+  const head = text.slice(0, text.length - tail.length)
+  return `${head.replace(/· $/, '·\u00a0')}${tail.replace(/ /g, '\u00a0')}`
+}
+
 export function WaitingOnCell({ row, mark, prefix, doorHref, s, now }: { row: OrderRow; mark?: WaitingMark | null; prefix: string; doorHref?: ((requestId: string) => string) | null; s: Translate; now: number }) {
   const w = useProductionWords()
   const items = waitingItemsOf(row, mark)
@@ -515,7 +526,7 @@ export function WaitingOnCell({ row, mark, prefix, doorHref, s, now }: { row: Or
   if (first.kind === 'reply')
     return (
       <span className="fw-sheet-cell">
-        <span>{s('waiting.reply', { time: age(first.since) ?? '—' })}</span>
+        <span className="fw-sheet-wraps">{tailWhole(s('waiting.reply', { time: age(first.since) ?? '—' }), age(first.since))}</span>
         {more}
       </span>
     )
@@ -525,7 +536,7 @@ export function WaitingOnCell({ row, mark, prefix, doorHref, s, now }: { row: Or
     const words = first.kind === 'askedProduction' ? (time ? s('waiting.askedProduction', { time }) : s('waiting.askedProductionNow')) : s('waiting.askedCustomer', { customer: row.partyName, time: time ?? '—' })
     return (
       <span className="fw-sheet-cell">
-        <span>{words}</span>
+        <span className="fw-sheet-wraps">{tailWhole(words, time)}</span>
         {more}
       </span>
     )
@@ -533,7 +544,7 @@ export function WaitingOnCell({ row, mark, prefix, doorHref, s, now }: { row: Or
   const since = age(first.since)
   return (
     <span className="fw-sheet-cell">
-      <span>{since ? s('waiting.keeper', { who: w.t(`parts.waiting.office.${first.on}`), time: since }) : w.t(`parts.waiting.office.${first.on}`)}</span>
+      <span className="fw-sheet-wraps">{since ? tailWhole(s('waiting.keeper', { who: w.t(`parts.waiting.office.${first.on}`), time: since }), since) : w.t(`parts.waiting.office.${first.on}`)}</span>
       {more}
     </span>
   )

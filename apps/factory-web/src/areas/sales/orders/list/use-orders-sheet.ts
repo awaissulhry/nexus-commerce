@@ -117,6 +117,20 @@ export interface OrdersSheetHost {
    * page: a large centred window, no page hop, no address term); absent: the editor's page `/sales/orders/new?…`.
    */
   readonly onAddLines?: (header: NewOrderHeader) => void
+  // ---- cw fx5 (the walk fix wave) ----
+  /**
+   * Walk W-8: the locked customer's DISPLAY name, as the host's page names it (the record's name the band uses). Every word of the
+   * sheet that names the customer then says this name — the Sort rule, the bar's "Reply to … on N…" and "Ask … about N…", the held
+   * words — never the rows' legal name beside it. It also spares the sheet its own look-up of the customer (one read less on entry).
+   */
+  readonly customerName?: string | null
+  /**
+   * The requests on entry: the host's own read of this customer's board (the customer page reads it for its band). While nothing
+   * narrows the sheet (no search, no brand, company or door term) the sheet uses it and reads no second one — the same route was
+   * asked twice on entry. undefined: the host reads none (the sheet reads its own); null: the host's read is on its way or failed.
+   */
+  readonly board?: OrderBoard | null
+  // ---- end cw fx5
 }
 
 /**
@@ -186,6 +200,15 @@ export function lockedEntry(base: string, host: Pick<OrdersSheetHost, 'locked'>,
 }
 
 /** The ONE Orders sheet: the model OrdersListView draws and its actions, for the host's address. */
+/**
+ * cw fx5 (cl-walk W-14): the customer's own read REFUSED — not found, or not this reader's to open (the API answers a customer out
+ * of reach like an unknown one). Anything else is a fault (429 Too Many Requests, a 5xx, the network): the customer is not known to be
+ * unavailable, so nothing may say "you cannot open".
+ */
+export function customerRefused(error: unknown): boolean {
+  return isApiError(error) && (error.kind === 'not_found' || error.kind === 'forbidden')
+}
+
 export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel; actions: OrdersListActions } {
   const locale = useLocale()
   const api = useOfficeApi()
@@ -307,13 +330,16 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   )
   // ── end B-TH-244 ──
 
+  // cw fx5 (the requests on entry): the host's board IS this read while nothing narrows the sheet — then none is sent.
+  const boardFromHost = host.board !== undefined && !!host.locked?.party && q === '' && Object.values(boardNarrowOf(narrow)).every((term) => !term)
   const readBoard = useCallback(
     (id: number) => {
+      if (boardFromHost) return
       getBoard(api, q, undefined, party, boardNarrowOf(narrow) /* B-TH-244 */)
         .then((answer) => id === readId.current && setBoard(answer))
         .catch(() => id === readId.current && setBoard(null))
     },
-    [api, q, party, narrow],
+    [api, q, party, narrow, boardFromHost],
   )
 
   const load = useCallback(async (silent = false) => {
@@ -438,14 +464,17 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     const timer = setTimeout(() => setSearched(customerQuery.trim()), 250)
     return () => clearTimeout(timer)
   }, [customerQuery])
+  // cw fx5 (the requests on entry): a page locked to one customer draws no switcher — its list is not read there.
+  const switcherShown = !host.locked?.party
   useEffect(() => {
+    if (!switcherShown) return
     const abort = new AbortController()
     setCustomers((current) => ({ ...current, customers: searched ? null : current.customers, problem: null }))
     listOrderCustomers(api, { q: searched || undefined, companyId: company, kind /* F-SA-221: "3 open · 1 late" counts what the rows show */, limit: 50 }, abort.signal)
       .then((answer) => !abort.signal.aborted && setCustomers({ customers: answer.customers, total: answer.total, limited: answer.limited, problem: null }))
       .catch((error: unknown) => !abort.signal.aborted && setCustomers({ customers: [], total: 0, limited: false, problem: readProblem(error) }))
     return () => abort.abort()
-  }, [api, searched, company, kind, customersTick])
+  }, [api, searched, company, kind, customersTick, switcherShown])
   // ── end B-TH-226 (the switcher's read) ──
 
   // ── B-TH-201: the customer's name for the chip — from the rows read, else the customer's record (404 when the person may
@@ -455,21 +484,25 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     const read = [...(list.items ?? []), ...lanes.flatMap((lane) => lane.items ?? [])]
     return read.find((row) => row.partyId === party)?.partyName || null
   }, [party, list.items, lanes])
-  const [looked, setLooked] = useState<{ id: string; name: string | null } | null>(null)
+  // cw fx5 (cl-walk W-14): `name: null` = the customer is REFUSED (not found, or out of this reader's reach: the API answers both
+  // the same way) — only then the sheet says "This customer is not available". A read that FAILED (429, 5xx, the network) leaves
+  // the name unknown (`undefined`): no wall is said for a fault, and the look-up is asked again when the rows are read again.
+  const [looked, setLooked] = useState<{ id: string; name: string | null | undefined } | null>(null)
+  const hostNames = !!host.locked?.party && !!host.customerName // cw fx5 (W-8): the host's page names its own customer: no look-up
   useEffect(() => {
-    if (!party || nameInRows || looked?.id === party || customers.customers === null || customers.customers.some((entry) => entry.id === party)) return
+    if (!party || hostNames || nameInRows || looked?.id === party || (switcherShown && (customers.customers === null || customers.customers.some((entry) => entry.id === party)))) return
     let gone = false
     getParty(api, party)
       .then((found) => !gone && setLooked({ id: party, name: found.legalName }))
-      .catch(() => !gone && setLooked({ id: party, name: null }))
+      .catch((error: unknown) => !gone && setLooked(customerRefused(error) ? { id: party, name: null } : null))
     return () => {
       gone = true
     }
-  }, [api, party, nameInRows, looked?.id, customers.customers])
+  }, [api, party, hostNames, nameInRows, looked?.id, customers.customers, switcherShown, asOf])
   // ── end B-TH-201 ──
 
   const nameInSwitcher = party ? (customers.customers?.find((entry) => entry.id === party)?.name ?? null) : null
-  const customer = party ? { id: party, name: nameInSwitcher ?? nameInRows ?? (looked?.id === party ? looked.name : undefined) } : null
+  const customer = party ? { id: party, name: (hostNames ? host.customerName : null) ?? nameInSwitcher ?? nameInRows ?? (looked?.id === party ? looked.name : undefined) } : null
   // ── end B-TH-226 ──
 
   // ── B-TH-225: the label's and the company's names for their chips; the pictures' small previews; a row opens its order ──
@@ -844,7 +877,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   // ---- end B-TH-230
 
   const model: OrdersListModel = {
-    prefix, can, today: romeToday(), layout, rows, q, lanes, board, asOf, live, updates, notice, newOrder, margins,
+    prefix, can, today: romeToday(), layout, rows, q, lanes, board: boardFromHost ? (host.board ?? null) : board /* cw fx5: the host's own read */, asOf, live, updates, notice, newOrder, margins,
     // B-TH-244: the grouped view's rows are its groups' own reads.
     list: grouped ? { items: groupedRows, more: false, problem: summary?.problem ?? null } : list,
     group: grouped ? 'party' : null,

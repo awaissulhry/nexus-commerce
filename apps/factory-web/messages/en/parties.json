@@ -262,7 +262,10 @@
         "DONE": "No order of {customer} is done yet.",
         "CANCELLED": "No order of {customer} is cancelled.",
         "waitingUs": "No order of {customer} waits on us now.",
-        "late": "No order of {customer} is late now."
+        "late": "No order of {customer} is late now.",
+        "priorityOpen": "No open order of {customer} has priority {level} now.",
+        "priority": "No order of {customer} has priority {level}.",
+        "deposit": "No order of {customer} waits for a deposit now."
       },
       "emptyDrafts_one": "{count} draft is being written in the portal — never counted as an order.",
       "emptyDrafts_other": "{count} drafts are being written in the portal — never counted as orders.",

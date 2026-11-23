@@ -323,13 +323,13 @@ export const SORT_CHOICES: ReadonlyArray<{ readonly value: OrderSort | ''; reado
   { value: 'customer', word: 'customer' },
   { value: '-customer', word: 'customerBack' },
   { value: 'brand', word: 'brand' },
+  { value: '-brand', word: 'brandBack' }, // cw fx5 (walk W-20): each pair stands together (Brand Z–A was last)
   { value: 'promise', word: 'promise' },
   { value: '-promise', word: 'promiseBack' },
   { value: '-daysLate', word: 'daysLate' },
   { value: 'daysLate', word: 'daysLateBack' },
   { value: 'ordered', word: 'ordered' },
   { value: '-ordered', word: 'orderedBack' },
-  { value: '-brand', word: 'brandBack' },
 ])
 /** F-CW-201 (review A1-B7): the choices a host offers — on a sheet of ONE customer "Customer A–Z / Z–A" order nothing and are left out. */
 export function sortChoicesOf(oneCustomer: boolean): ReadonlyArray<{ readonly value: OrderSort | ''; readonly word: string }> {
