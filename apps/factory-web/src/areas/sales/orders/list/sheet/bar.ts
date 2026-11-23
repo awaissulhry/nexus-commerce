@@ -3,7 +3,7 @@ import { openHeld } from '../../../../production/_shared/notes/model'
 import { BATCH_MAX } from '../../../../../record-panels/tasks/model'
 import type { OrderRow, OrderStatus } from '../../api'
 import { selectionHeld } from '../../depth/model'
-import { MANY_COMMANDS, manyHeld, manyShown, type ManyCommand } from '../commands/model'
+import { manyHeld, manyShown, type ManyCommand } from '../commands/model'
 import { replyManyHeld } from '../reply-many'
 import { oneCustomerHeld, supervisorTargetsOf } from './model'
 import { invoiceShippedHeld } from './overall'
@@ -187,6 +187,3 @@ export function barOf(can: BarCan, rows: readonly BarRow[], host: BarHost): Bar 
   )
   return { promoted: acts.slice(0, BAR_PROMOTED), more: acts.slice(BAR_PROMOTED), none: acts.length === 0 }
 }
-
-/** The bulk commands among the acts (their window, their icon and their words are the commands' own). */
-export const isManyCommand = (id: BarActId): id is ManyCommand => (MANY_COMMANDS as readonly string[]).includes(id)
