@@ -152,7 +152,9 @@ export interface OrdersListModel {
   // F-CP-102: `view` — the rows view these words are for (the customer page keys them per view): they show on that view when nothing
   // else narrows it; absent: the host's default view only (as before).
   // F-CP-104: `newOrder` — New order beside the words (held with why without orders.manage; the customer page's All orders).
-  empty?: { title: string; body?: string | null; link?: { href: string; label: string } | null; view?: RowView | null; newOrder?: boolean } | null
+  // F-CW-102 (lead settle S20): `always` — the words are for exactly what is on screen now, whatever narrows it (a door of the
+  // customer page's band, its views): the host gives them only then. `note`: one more quiet line under them (the customer's drafts).
+  empty?: { title: string; body?: string | null; link?: { href: string; label: string } | null; view?: RowView | null; newOrder?: boolean; always?: boolean } | null
   // ---- F-SA-220 (the ONE Orders sheet, use-orders-sheet.ts): the host's ----
   /** The list frame's key: 'sales.orders' on every host (one export source, one set of saved views). */
   listKey?: string
@@ -192,6 +194,14 @@ export interface OrdersListModel {
     /** The host's own minimum widths by column id (the honest room of its longest words), over the sheet's. */
     readonly min?: Readonly<Record<string, number>>
     // ---- end F-CP-107 (cp-fx16)
+    // ---- F-CW-102 (10-design §1): the host's set at its own widths ----
+    /** The host's own MAXIMUM widths by column id: with the same minimum the column is fixed, and the room left goes to the flexible one (Where it is). */
+    readonly max?: Readonly<Record<string, number>>
+    /** The sheet sits in a narrow room (beside the dock): the chips cell keeps each chip's head (a tail and a mark go to its tooltip). */
+    readonly dense?: boolean
+    /** The host's own order of its set, left to right (the sheet's other columns follow in their own order; ⋯ stays last). */
+    readonly order?: readonly string[]
+    // ---- end F-CW-102
   } | null
   /** A real link on the toolbar's right ("Work orders of <customer> ›"). */
   toolbarLink?: { readonly href: string; readonly label: string } | null

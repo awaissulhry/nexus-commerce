@@ -46,6 +46,8 @@ export const PRODUCTION_WITHHELD = ['supervisorMark', 'openIssues'] as const
 export { ORDER_PHASES, type OrderPhase } from '@nexus/factory-domain/production-brand/stages'
 import { ORDER_PHASES as PHASES, type OrderPhase as Phase } from '@nexus/factory-domain/production-brand/stages'
 // ---- end F-CW-101
+// F-CW-102 (the API's B-CW-010): the customer's urgency as its chip says it (the Work orders column's own four states).
+import { CUSTOMER_URGENCY_STATES } from '@nexus/factory-domain/production-brand/urgency-state'
 
 // W2b-5 (B-W2b-281): PENDING_APPROVAL, an order waiting for a yes before it goes on (the domain's list, in its order).
 // W2b-6 (B-W2b-372): DELIVERED, every shipment that left was delivered.
@@ -132,7 +134,11 @@ export const orderRowSchema = z.object({
   /** B-SA-070b: the customer's own number of the order ("Your order 12"; absent or null: none given yet). */
   customerSeq: z.number().nullable().optional(),
   status,
-  deposit: z.object({ state: z.enum(DEPOSIT_STATES), dueDate: z.string().nullable() }),
+  // F-CW-102 (the API's B-CW-012): `extraOpenDue` — the due day of an EXTRA deposit still open on an order that needs none (the state
+  // stays NOT_NEEDED); a day, never an amount. Absent from an older answer.
+  deposit: z.object({ state: z.enum(DEPOSIT_STATES), dueDate: z.string().nullable(), extraOpenDue: z.string().nullable().optional() }),
+  /** F-CW-102 (the API's B-CW-011): a change waits for the customer's new yes; absent from an older answer. */
+  reaccept: z.boolean().optional(),
   lineCount: z.number(),
   units: z.number(),
   shippedUnits: z.number(),
@@ -168,7 +174,8 @@ export const orderRowSchema = z.object({
   /** Pieces it still owes (0 once shipped, closed or cancelled). */
   openUnits: z.number().optional(),
   /** Only when asked (`progress=true`): cut, sewn and finished of the pieces in work orders; null: none past draft yet. */
-  progress: z.object({ inWork: z.number(), cut: z.number().nullable(), sewn: z.number().nullable(), finished: z.number().nullable() }).nullable().optional(),
+  // F-CW-102 (the API's B-CW-015): `ordered` — the pieces ordered (fees left out), the order page's base: "Sewn 152 of 244".
+  progress: z.object({ inWork: z.number(), cut: z.number().nullable(), sewn: z.number().nullable(), finished: z.number().nullable(), ordered: z.number().optional() }).nullable().optional(),
   /** Received and still to pay (price grain: absent without it). */
   paid: z.number().optional(),
   balance: z.number().optional(),
@@ -181,6 +188,13 @@ export const orderRowSchema = z.object({
   /** The customer's own mark (read-only); null: none known. */
   customerUrgency: z.enum(CUSTOMER_URGENCIES).nullable().optional(),
   // ── end B-TH-244 ──
+  /**
+   * F-CW-102 (the API's B-CW-010): the same mark as its chip says it — URGENT with `urgentRank` (its place in the customer's OWN
+   * urgent list, 1 first: never a place in our plan), ASKED (an "Urgent – asked" waits: `requestId` is that request), REGULAR, SET_BACK
+   * (set to Regular by us); `locked`: we locked it at Regular. null: none counts (the order left production, or the customer's
+   * urgency switch is off). Absent from an older answer: the chip falls back on `customerUrgency`.
+   */
+  customerUrgencyState: z.object({ state: z.enum(CUSTOMER_URGENCY_STATES), urgentRank: z.number().nullable(), locked: z.boolean(), requestId: z.string().nullable() }).nullable().optional(),
   /** F-SA-213: the office's own priority (its level; the API's words are not drawn: the screen says its own). */
   priority: z.object({ level: z.enum(ORDER_PRIORITY_LEVELS), number: z.number(), urgentReason: z.string().nullable() }).optional(),
   /** F-SA-214 (the API's B-SA-012): why a PENDING_APPROVAL order waits; null for every other order (absent from an older answer). */
@@ -207,6 +221,11 @@ export const orderRowSchema = z.object({
       supervisorMark: z.enum(MARKS).nullable(),
       openRequests: z.number(),
       openIssues: z.number().nullable(),
+      // F-CW-102 (the API's B-CW-013, B-CW-014): the garments ready to ship now (released, on no shipment yet; 0 unless the order's
+      // stage is current), and when its oldest open production issue was raised (null: none, or withheld with `openIssues`).
+      // Both absent from an older answer.
+      readyNow: z.number().optional(),
+      openIssuesSince: z.string().nullable().optional(),
       withheld: z.array(z.enum(PRODUCTION_WITHHELD)),
       // F-MS-104 (the API's B-MS-006, R17): the stage it reads was set by hand and still stands (since when it was set; the order
       // page says who and why), the same for the list, the customer's Work tab and the export; null: the floor's; absent from an

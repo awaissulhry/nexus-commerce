@@ -5,6 +5,8 @@ import type { OrderRow } from '../../api'
 import type { BrandHealth, BrandStage, SupervisorMark, WaitingOn } from '../../api' // F-SA-275
 import type { OrderAbilities } from '../../model'
 import type { OrderPhase } from '../../api' // F-CW-101
+import type { OrderStatus } from '../../api' // F-CW-102
+import { isAfterProduction, officeStripStateOf, orderPhaseOf } from '@nexus/factory-domain/production-brand/stages' // F-CW-102: the ONE phase rule
 
 /**
  * B-TH-225 / B-TH-226 (threads plan TH-1a, pictures 23 + 24; Owner rule 2026-11-16 "every cell is a door", features
@@ -27,7 +29,8 @@ export interface Phrase {
 const seg = encodeURIComponent
 
 /** The order's own page, on one of its tabs. */
-export const orderHref = (prefix: string, row: Pick<OrderRow, 'id'>, tab?: 'lines' | 'shipments' | 'money'): string => `${prefix}/sales/orders/${seg(row.id)}${tab ? `?tab=${tab}` : ''}`
+// F-CW-102: + the Production tab (the door of "On hold").
+export const orderHref = (prefix: string, row: Pick<OrderRow, 'id'>, tab?: 'lines' | 'shipments' | 'money' | 'production'): string => `${prefix}/sales/orders/${seg(row.id)}${tab ? `?tab=${tab}` : ''}`
 
 /** Number and the empty part of the row → the order (its thread docked). */
 export const orderDoor = (prefix: string, row: OrderRow): Door => ({ href: orderHref(prefix, row), tip: { key: 'door.order', params: { number: row.number } } })
@@ -225,6 +228,9 @@ export function piecesLineOf(row: Pick<OrderRow, 'progress'>): (Phrase & { reado
   if (progress === undefined) return null
   if (progress === null) return { key: 'progress.none' }
   if (progress.sewn === null) return { key: 'parts.stage.sewingNotCounted', production: true }
+  // F-CW-102 (the API's B-CW-015; lead settle S13): the order page's own base — "Sewn 152 of 244" of the pieces ORDERED (fees left
+  // out), so the row and the page say the same; an older answer without `ordered` keeps "of the pieces in work".
+  if (progress.ordered !== undefined) return { key: 'where.sewnOf', params: { sewn: progress.sewn, ordered: progress.ordered } }
   return { key: 'where.sewn', params: { done: progress.sewn, total: progress.inWork } }
 }
 
@@ -280,3 +286,133 @@ export function phasePhrase(phase: OrderPhase): Phrase & { readonly orders?: tru
   return { key: `phase.${phase}` }
 }
 // ── end F-CW-101 ──
+
+// ── F-CW-102 (customer Work tab plan §1; 10-design §3.5; lead settles S3, S6, S13, S15, S31, S38; the API's B-CW-010…015, 020) ──
+// The row's chips — the shared sheet's cells (the customer's Work tab, Sales › Orders, Sales › Made to measure draw the SAME cell):
+// Where it is = chip 1 the stage (the order's real status word where no stage is "now"), chip 2 the health (only Late / At risk),
+// chip 3 the ONE thing that stops it or who it waits on; under them this order's own pieces. Customer urgency = the customer's own
+// mark as its chip says it, read-only, with our Priority beside it when it is not Normal. Pure: the tests hold them without a DOM.
+
+/**
+ * Chip 1 — where the order is. In production: its stage (the floor's, or the one set by hand, with its mark), "Preparing" while no
+ * stage is kept yet (S38); Ready: "Ready to ship"; every other state the order's real status word (S3: the pill keeps the status) —
+ * Partly shipped with its pieces ("Partly shipped · 40 of 114"). `phase`: the group it counts in (the domain's orderPhaseOf: its
+ * mark). null: the production part was not read (nothing is guessed).
+ */
+export type StageChip =
+  | { readonly kind: 'stage'; readonly stage: BrandStage; readonly phase: OrderPhase; readonly byHand?: { readonly old: boolean } }
+  | { readonly kind: 'status'; readonly status: OrderStatus; readonly phase: OrderPhase; readonly shipped?: { readonly shipped: number; readonly units: number } }
+
+export function stageChipOf(row: Pick<OrderRow, 'status' | 'production' | 'units' | 'shippedUnits'>, today: BusinessDate = businessDate(new Date())): StageChip | null {
+  const production = row.production
+  if (!production) return null
+  const phase = orderPhaseOf(row.status, production.stage)
+  if (row.status === 'IN_PRODUCTION') {
+    const hand = production.stage !== null ? production.stageByHand : null
+    return { kind: 'stage', stage: production.stage ?? 'PREPARING', phase, ...(hand ? { byHand: { old: handSetOld(hand.since, today) } } : {}) }
+  }
+  if (row.status === 'READY') return { kind: 'stage', stage: 'READY', phase }
+  if (row.status === 'PARTLY_SHIPPED') return { kind: 'status', status: row.status, phase, shipped: { shipped: row.shippedUnits, units: row.units } }
+  return { kind: 'status', status: row.status, phase }
+}
+
+/** Chip 2 — the health, only when something is wrong: Late or At risk. Never "On track", never "No date yet" (a quiet row is fine). */
+export function healthChipOf(row: Pick<OrderRow, 'production'>): 'LATE' | 'AT_RISK' | null {
+  const health = row.production?.health ?? null
+  return health === 'LATE' || health === 'AT_RISK' ? health : null
+}
+
+/**
+ * Chip 3 — the ONE thing that stops the order or who it waits on, the first that applies: credit · the factory review · a deposit
+ * open (the gate's, or an EXTRA one on an order that needs none; overdue once its day passed) · the customer's new yes · on hold ·
+ * a request to answer · a reply that waits on us · waiting on the customer, a supplier or a workshop. "Waiting on us" alone is no
+ * chip (it would be on nearly every row); a plain wait for a yes is chip 1's own word. After production nothing is "now": only a
+ * request still to answer stays (it does wait on us).
+ */
+export type StopChip =
+  | { readonly kind: 'credit' }
+  | { readonly kind: 'review' }
+  | { readonly kind: 'deposit'; readonly due: string | null; readonly overdue: boolean; readonly extra: boolean }
+  | { readonly kind: 'reaccept' }
+  | { readonly kind: 'held' }
+  | { readonly kind: 'request'; readonly count: number; readonly requestId: string | null }
+  | { readonly kind: 'reply'; readonly since: string }
+  | { readonly kind: 'keeper'; readonly on: Exclude<WaitingOn, 'US'>; readonly since: string | null }
+
+export function stopChipOf(row: Pick<OrderRow, 'status' | 'waits' | 'deposit' | 'reaccept' | 'production'>, mark: WaitingMark | null | undefined, today: string): StopChip | null {
+  const waiting = waitingItemsOf(row, mark)
+  const request = waiting.find((item): item is Extract<WaitingItem, { kind: 'request' }> => item.kind === 'request')
+  const asked: StopChip | null = request ? { kind: 'request', count: request.count, requestId: request.requestId } : null
+  if (isAfterProduction(officeStripStateOf(row.status))) return asked
+  if (row.waits?.includes('CREDIT_HOLD')) return { kind: 'credit' }
+  if (row.waits?.includes('MEASUREMENTS')) return { kind: 'review' }
+  if (row.deposit.state === 'OPEN') return { kind: 'deposit', due: row.deposit.dueDate, overdue: row.deposit.dueDate !== null && row.deposit.dueDate < today, extra: false }
+  const extra = row.deposit.extraOpenDue ?? null
+  if (extra) return { kind: 'deposit', due: extra, overdue: extra < today, extra: true }
+  if (row.reaccept) return { kind: 'reaccept' }
+  if (row.production?.held) return { kind: 'held' }
+  if (asked) return asked
+  const reply = waiting.find((item): item is Extract<WaitingItem, { kind: 'reply' }> => item.kind === 'reply')
+  if (reply) return { kind: 'reply', since: reply.since }
+  const on = row.production?.waitingOn ?? null
+  return on && on !== 'US' ? { kind: 'keeper', on, since: row.production?.since ?? null } : null
+}
+
+/**
+ * Line 2 — this order's own pieces, in parts (joined by " · "): while it is being made "Sewn 152 of 244" and, when some are, "24
+ * ready now" (strong); "Not in work yet" before any work order; a partly shipped order starts with its open lines' stage (S38);
+ * once it left: "64 of 64 shipped"; cancelled with nothing gone: "Nothing shipped". No "cut" (S13). None: not read yet.
+ */
+export type PiecesPart =
+  | { readonly kind: 'stage'; readonly stage: BrandStage; readonly byHand?: { readonly old: boolean } }
+  | { readonly kind: 'words'; readonly words: Phrase & { readonly production?: true; readonly orders?: true }; readonly strong?: boolean }
+
+export function piecesPartsOf(row: Pick<OrderRow, 'status' | 'progress' | 'production' | 'units' | 'shippedUnits'>, today: BusinessDate = businessDate(new Date())): PiecesPart[] {
+  if (isAfterProduction(officeStripStateOf(row.status))) {
+    if (row.status === 'CANCELLED' && row.shippedUnits <= 0) return [{ kind: 'words', words: { key: 'where.nothingShipped' } }]
+    return [{ kind: 'words', words: { key: 'list.shipped', params: { shipped: row.shippedUnits, units: row.units }, orders: true } }]
+  }
+  const parts: PiecesPart[] = []
+  const production = row.production
+  if (row.status === 'PARTLY_SHIPPED' && production?.stage) {
+    const hand = production.stageByHand
+    parts.push({ kind: 'stage', stage: production.stage, ...(hand ? { byHand: { old: handSetOld(hand.since, today) } } : {}) })
+  }
+  const made = piecesLineOf(row)
+  if (made) parts.push({ kind: 'words', words: made })
+  const ready = production?.readyNow ?? 0
+  if (ready > 0) parts.push({ kind: 'words', words: { key: 'where.readyNow', params: { count: ready } }, strong: true })
+  return parts
+}
+
+/**
+ * The customer's own urgency as its chip says it (S6, S7; read-only here): Urgent with its place in the customer's OWN urgent list
+ * ("Urgent 2": never a place in our plan), "Urgent – asked" (its request waits on us), "Set to regular by us" (with a lock when we
+ * locked it); Regular, or none that counts (the order left production, the customer's switch is off): nothing. An older answer
+ * without the state: "Urgent" / nothing from the old mark — no place, no "asked", no lock.
+ */
+export type UrgencyChip =
+  | { readonly state: 'URGENT'; readonly rank: number | null }
+  | { readonly state: 'ASKED'; readonly requestId: string | null }
+  | { readonly state: 'SET_BACK'; readonly locked: boolean }
+
+export function urgencyChipOf(row: Pick<OrderRow, 'customerUrgency' | 'customerUrgencyState'>): UrgencyChip | null {
+  const state = row.customerUrgencyState
+  if (state === undefined) return row.customerUrgency === 'URGENT' ? { state: 'URGENT', rank: null } : null
+  if (state === null) return null
+  if (state.state === 'URGENT') return { state: 'URGENT', rank: state.urgentRank }
+  if (state.state === 'ASKED') return { state: 'ASKED', requestId: state.requestId }
+  if (state.state === 'SET_BACK') return { state: 'SET_BACK', locked: state.locked }
+  return null
+}
+
+/**
+ * OUR priority beside the customer's chip (S31: "Priority: Top", never a bare "Top" under the header "Customer urgency"): only when
+ * it is not Normal and the order is still ours to make (nothing after production). The customer never sees it.
+ */
+export function priorityChipOf(row: Pick<OrderRow, 'priority' | 'status'>): 'LOW' | 'HIGH' | 'URGENT' | null {
+  const level = row.priority?.level
+  if (!level || level === 'NORMAL' || isAfterProduction(officeStripStateOf(row.status))) return null
+  return level
+}
+// ── end F-CW-102 ──

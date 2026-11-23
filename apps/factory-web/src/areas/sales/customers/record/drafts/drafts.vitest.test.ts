@@ -101,6 +101,21 @@ describe('the view and its address (fx-12, review G4)', () => {
     expect(params(search(draftsAddress(BASE, ALPHA, params('dock=all')))).get('dock')).toBe('all')
   })
 
+  // F-CW-102 (lead settle S28): the Drafts view beside the dock at 1440 scrolled sideways (1058 px of columns in 863: Ready and
+  // Wanted by took the grid's 200 px default). Every column of the narrow table now has its least width and its share of the room.
+  it('F-CW-102: the columns fit the 863 px beside the dock (no sideways scroll): each has its least width and its share', () => {
+    const view = readFileSync(new URL('./view/CustomerDraftsList.tsx', import.meta.url), 'utf8')
+    const narrow = ['draft', 'lines', 'files', 'ready', 'changed', 'wanted', 'more']
+    const widths = narrow.map((id) => {
+      const column = view.slice(view.indexOf(`colId: '${id}'`))
+      const min = column.match(/minWidth: (\d+)/)
+      expect(min, id).not.toBeNull()
+      return Number(min![1])
+    })
+    expect(widths.reduce((sum, width) => sum + width, 0)).toBeLessThanOrEqual(863)
+    for (const id of ['draft', 'lines', 'files', 'ready', 'changed', 'wanted']) expect(view.slice(view.indexOf(`colId: '${id}'`)).split('colId:')[1], id).toMatch(/flex: /)
+  })
+
   it('the pick writes through the record pages\' one history writer; a rows view picked again goes through the sheet (which drops `list`)', () => {
     const tab = readFileSync(new URL('../view/WorkTab.tsx', import.meta.url), 'utf8')
     expect(tab).toContain('if (id === DRAFTS_VIEW) writeSearch(draftsAddress(`${prefix}${basePath}`, party.id, params))')

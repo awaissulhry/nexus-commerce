@@ -252,7 +252,21 @@
         "info": "About these numbers",
         "sum": "Every order is in exactly one group: the seven add up to all orders.",
         "beforeNote": "Drafts, requests and quotes come before an order: they are never added into these numbers."
-      }
+      },
+      "none": {
+        "NOT_SENT": "No order of {customer} waits to be sent to the factory now.",
+        "NOT_STARTED": "No order of {customer} waits for production to start now.",
+        "IN_PRODUCTION": "No order of {customer} is in production now.",
+        "READY": "No order of {customer} is ready to ship now.",
+        "SHIPPED": "No order of {customer} is shipped now.",
+        "DONE": "No order of {customer} is done yet.",
+        "CANCELLED": "No order of {customer} is cancelled.",
+        "waitingUs": "No order of {customer} waits on us now.",
+        "late": "No order of {customer} is late now."
+      },
+      "emptyDrafts_one": "{count} draft is being written in the portal — never counted as an order.",
+      "emptyDrafts_other": "{count} drafts are being written in the portal — never counted as orders.",
+      "showDrafts": "Show the drafts"
     },
     "quotesTab": {
       "quotes": "Quotes",

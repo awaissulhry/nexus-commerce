@@ -10,7 +10,8 @@ import { marksOf, sourcesTouched, STRIP_GROUPS, tileOf, tilesShown, workAttentio
 import { valueOf } from './work-band' // F-CW-101: the strip became the band (its chips keep the same reads)
 import { IN_PRODUCTION_VIEW } from './use-customer-work' // F-CW-101 (S3): the In production view = the started orders' door
 import { pickOfRow, WORK_VIEWS, workPreset } from './view/WorkTab'
-import { ALL_ORDERS_PRESET, WORK_MIN } from './view/WorkTab' // F-CP-107 (cp-fx16)
+import { WAITING_SET, WORK_ADDS, WORK_MAX, WORK_MIN, WORK_ORDER, WORK_ROOMS, WORK_SETS, workRoomOf, type WorkRoom } from './view/WorkTab' // F-CW-102: the row's sets by room (F-CP-107 (cp-fx16): its honest widths)
+import { orderedByPreset } from '../../orders/list/view/OrdersListView' // F-CW-102
 import { DRAFTS_VIEW, NOT_EQUAL_VIEW, workEmptyOf, workViewsOf } from './view/WorkTab' // F-CP-101
 import { rowsFromAddress } from '../../orders/model' // F-CP-101: Sales › Orders keeps Open
 // ---- F-CP-103 ----
@@ -143,52 +144,77 @@ describe('F-SA-276: the four views (no tabs inside the tab)', () => {
     expect(tab).toContain("else if (id === IN_PRODUCTION_VIEW) sheet.actions.onPhase?.('IN_PRODUCTION')")
     expect(tab).toContain("{ id: IN_PRODUCTION_VIEW, label: o('rows.IN_PRODUCTION'), active: startedShown }")
   })
-  it('the columns of each view (In production: no Status; All orders: Status, Waiting on from 1800 px); ⋯ always; Customer never', () => {
-    const live = workPreset('IN_PRODUCTION', null)
-    expect(live.shown).not.toContain('status')
-    expect(live.shown).toEqual(expect.arrayContaining(['picture', 'number', 'whereItIs', 'promised', 'waitingOn', 'newMessages']))
-    expect(workPreset('all', null).shown).toContain('status')
-    expect(workPreset('all', null).wide).toContain('waitingOn')
-    expect(workPreset('open', 'us').shown).toContain('waitingOn')
-    for (const preset of [live, workPreset('all', null), workPreset('late', null)]) expect([...preset.shown, ...(preset.wide ?? [])]).not.toContain('customer')
-    expect(withPreset({ colId: 'more' }, live, false).hide).toBeUndefined()
-    expect(withPreset({ colId: 'status' }, live, false).hide).toBe(true)
-    expect(withPreset({ colId: 'supervisor' }, live, true).hide).toBe(false)
-    expect(withPreset({ colId: 'supervisor' }, live, false).hide).toBe(true)
+  // F-CW-102 (10-design §1, §3.5; lead settles S4, S31, S39): the row by the ROOM — Picture · Number · Where it is · Promised ·
+  // Customer urgency · New messages beside the open thread; Status waits (it is chip 1); wider rooms ADD columns.
+  it('the columns of each view: the room\'s set on every view; Waiting on us / Late beside the dock show Waiting on; ⋯ always; Customer and Status never at first', () => {
+    const base = workPreset('all', null)
+    expect(base.shown).toEqual(['picture', 'number', 'whereItIs', 'promised', 'customerUrgency', 'newMessages'])
+    expect(workPreset('IN_PRODUCTION', null)).toBe(base) // one preset object per room (the sheet's columns are rebuilt only on a real change)
+    expect(workPreset('open', null)).toBe(base)
+    expect(workPreset('open', 'us').shown).toEqual([...WAITING_SET])
+    expect(workPreset('late', null).shown).toEqual(['picture', 'number', 'whereItIs', 'promised', 'waitingOn'])
+    expect(workPreset('open', 'us', false, 'wide').shown).toEqual([...WORK_SETS.wide]) // from the wide room the full set holds Waiting on
+    for (const room of ['base', 'wide', 'wider', 'widest'] as const) {
+      const preset = workPreset('all', null, false, room)
+      expect([...preset.shown, ...(preset.wide ?? [])], room).not.toContain('customer')
+      expect(preset.shown, room).not.toContain('status')
+      expect(preset.shown, room).not.toContain('brand')
+      expect(preset.shown.slice(0, 2), room).toEqual(['picture', 'number']) // the picture at every width (P0 item 1)
+    }
+    expect(withPreset({ colId: 'more' }, base, false).hide).toBeUndefined()
+    expect(withPreset({ colId: 'status' }, base, false).hide).toBe(true)
+    expect(withPreset({ colId: 'supervisor' }, workPreset('all', null, false, 'widest'), false).hide).toBe(false)
+    expect(withPreset({ colId: 'supervisor' }, base, false).hide).toBe(true)
   })
-  // ---- F-CP-107 (cp-fx16; oo-walk 15 b): All orders at 1440 beside the dock cut "SEED-SO-W39-…" and "Waiting for a y…" ----
-  it('F-CP-107 (cp-fx16): All orders — the number and the status whole beside the dock: honest min widths, Picture in the table from 1800 px', () => {
-    expect(workPreset('all', null)).toBe(ALL_ORDERS_PRESET)
-    // The longest number (a seed's SEED-SO-W39-01: 142 px with the cell's padding) and status words ("In attesa di approvazione": 195 px).
-    expect(WORK_MIN).toEqual({ number: 144, status: 196 })
-    expect(withPreset({ colId: 'number', minWidth: 128 }, ALL_ORDERS_PRESET, false).minWidth).toBe(144)
-    expect(withPreset({ colId: 'status', minWidth: 112 }, ALL_ORDERS_PRESET, false).minWidth).toBe(196)
-    expect(withPreset({ colId: 'promised', minWidth: 108 }, ALL_ORDERS_PRESET, false).minWidth).toBe(108) // the sheet's own
+  it('F-CW-102: closing the thread ADDS columns — Waiting on · Deposit, then Shipped, then Priority · Pieces · Ordered · Supervisor', () => {
+    expect(WORK_ADDS).toEqual({ wide: ['waitingOn', 'deposit'], wider: ['shipped'], widest: ['priority', 'units', 'orderDate', 'supervisor'] })
+    expect(WORK_SETS.wide).toEqual([...WORK_SETS.base, 'waitingOn', 'deposit'])
+    expect(WORK_SETS.wider).toEqual([...WORK_SETS.wide, 'shipped'])
+    expect(WORK_SETS.widest).toEqual([...WORK_SETS.wider, 'priority', 'units', 'orderDate', 'supervisor'])
+    expect([WORK_SETS.base.length, WORK_SETS.wide.length, WORK_SETS.wider.length, WORK_SETS.widest.length]).toEqual([6, 8, 9, 13])
+    // The rooms (the tab's own width, never the window's): 865 beside the thread at 1440, 1185 at 1920, 1314 and 1794 with it closed.
+    expect([343, 865, 1185, 1314, 1794].map((width) => workRoomOf(width))).toEqual(['base', 'base', 'wide', 'wider', 'widest'])
+    expect([workRoomOf(null), workRoomOf(undefined), workRoomOf(WORK_ROOMS.wide - 1), workRoomOf(WORK_ROOMS.wide), workRoomOf(WORK_ROOMS.widest)]).toEqual(['base', 'base', 'base', 'wide', 'widest'])
+    // A narrow cell keeps each chip's head (dense); the widest room shows chip 3 whole.
+    expect((['base', 'wide', 'wider', 'widest'] as const).map((room) => workPreset('all', null, false, room).dense)).toEqual([true, true, true, false])
+  })
+  it('F-CW-102: the set\'s own order on screen, its honest widths, and every column but Where it is at its own width (no stretched date)', () => {
+    expect(WORK_ORDER).toEqual(['picture', 'number', 'whereItIs', 'promised', 'customerUrgency', 'priority', 'waitingOn', 'deposit', 'units', 'shipped', 'orderDate', 'supervisor', 'newMessages'])
+    // The sheet draws the host's set in the host's order; its other columns follow in their own order; ⋯ stays last.
+    const sheet = ['picture', 'number', 'brand', 'status', 'whereItIs', 'newMessages', 'deposit', 'promised', 'waitingOn', 'customerUrgency', 'more'].map((colId) => ({ colId }))
+    expect(orderedByPreset(sheet, workPreset('all', null)).map((column) => column.colId)).toEqual(['picture', 'number', 'whereItIs', 'promised', 'customerUrgency', 'waitingOn', 'deposit', 'newMessages', 'brand', 'status', 'more'])
+    expect(orderedByPreset(sheet, null).map((column) => column.colId)).toEqual(sheet.map((column) => column.colId))
+    // The honest widths: a seed's number, the longest status words (Status in Customise), the picture's 36 px with the cell's padding.
+    expect(WORK_MIN).toMatchObject({ picture: 64, number: 150, whereItIs: 220, promised: 108, customerUrgency: 150, newMessages: 52, status: 196 })
+    expect(withPreset({ colId: 'number', minWidth: 128 }, workPreset('all', null), false)).toMatchObject({ minWidth: 150, maxWidth: 150, hide: false })
+    expect(withPreset({ colId: 'picture', minWidth: 76, maxWidth: 76 }, workPreset('all', null), false)).toMatchObject({ minWidth: 64, maxWidth: 64, hide: false })
+    // Where it is takes the room left (the chips): no maximum; Status (ticked in Customise) shows its longest words whole.
+    expect(WORK_MAX.whereItIs).toBeUndefined()
+    expect(WORK_MAX.status).toBeUndefined()
+    expect(withPreset({ colId: 'whereItIs', minWidth: 150 }, workPreset('all', null), false).maxWidth).toBeUndefined()
+    expect(withPreset({ colId: 'status', minWidth: 112 }, workPreset('all', null), false).minWidth).toBe(196)
+    for (const id of Object.keys(WORK_MAX)) expect(WORK_MAX[id], id).toBe(WORK_MIN[id])
     // Sales › Orders (no preset) keeps the sheet's widths.
     expect(withPreset({ colId: 'status', minWidth: 112 }, null, false).minWidth).toBe(112)
-    // Picture: the table only from 1800 px; the phone card keeps it (its aside, as before).
-    expect(withPreset({ colId: 'picture' }, ALL_ORDERS_PRESET, false).hide).toBe(true)
-    expect(withPreset({ colId: 'picture' }, ALL_ORDERS_PRESET, true).hide).toBe(false)
-    expect(withPreset({ colId: 'picture' }, ALL_ORDERS_PRESET, false, true).hide).toBe(false)
-    for (const id of ['number', 'status', 'whereItIs', 'promised', 'newMessages']) expect(withPreset({ colId: id }, ALL_ORDERS_PRESET, false).hide, id).toBe(false)
-    // The budget (measured on the design case): select 43 + the columns' mins + ⋯ 64 fit the body beside the dock — 863 px @1440,
-    // 1183 px @1920 — so no sideways scroll; flex fills the rest (no dead space).
-    const view = readFileSync(new URL('../../orders/list/view/OrdersListView.tsx', import.meta.url), 'utf8')
-    const minOf = (id: string): number => {
-      const own = ALL_ORDERS_PRESET.min?.[id]
-      if (own) return own
-      const match = view.match(new RegExp(`colId: '${id}'[^}]*?minWidth: (\\d+)`))
-      expect(match, id).not.toBeNull()
-      return Number(match![1])
-    }
-    const SELECT = 43
-    const narrow = ALL_ORDERS_PRESET.shown.filter((id) => !ALL_ORDERS_PRESET.tableWide?.includes(id))
-    expect(SELECT + narrow.reduce((sum, id) => sum + minOf(id), 0) + minOf('more')).toBeLessThanOrEqual(863)
-    // Priority is a depth column (minWidth 108 in the sheet's depth map).
-    const wideMin = (id: string) => (id === 'priority' ? 108 : minOf(id))
-    expect(SELECT + ALL_ORDERS_PRESET.shown.reduce((sum, id) => sum + minOf(id), 0) + (ALL_ORDERS_PRESET.wide ?? []).reduce((sum, id) => sum + wideMin(id), 0) + minOf('more')).toBeLessThanOrEqual(1183)
   })
-  // ---- end F-CP-107 (cp-fx16)
+  it('F-CW-102: the budget of every room — select + the set\'s widths + ⋯ fit the room it starts at (no sideways scroll, S4)', () => {
+    const view = readFileSync(new URL('../../orders/list/view/OrdersListView.tsx', import.meta.url), 'utf8')
+    const more = Number(view.match(/colId: 'more'[^}]*?minWidth: (\d+)/)![1])
+    const SELECT = 43
+    const need = (ids: readonly string[]) => SELECT + ids.reduce((sum, id) => sum + WORK_MIN[id]!, 0) + more
+    // Beside the open thread at 1440 the body is 863 px: the six columns, and the Waiting on us / Late set.
+    expect(need(WORK_SETS.base)).toBeLessThanOrEqual(863)
+    expect(need(WAITING_SET)).toBeLessThanOrEqual(863)
+    // Each wider set fits the width it starts at.
+    const rooms: Array<Exclude<WorkRoom, 'base'>> = ['wide', 'wider', 'widest']
+    for (const room of rooms) expect(need(WORK_SETS[room]), room).toBeLessThanOrEqual(WORK_ROOMS[room])
+    // Every column of every set has its honest width written down (none left to the sheet's smaller default).
+    for (const id of new Set([...WORK_SETS.widest, ...WAITING_SET])) expect(WORK_MIN[id], id).toBeGreaterThan(0)
+    // The measured rooms land in the sets drawn for them: 1183 (1920 beside the thread), 1312 and 1792 (the thread closed).
+    expect(need(WORK_SETS.wide)).toBeLessThanOrEqual(1183)
+    expect(need(WORK_SETS.wider)).toBeLessThanOrEqual(1312)
+    expect(need(WORK_SETS.widest)).toBeLessThanOrEqual(1792)
+  })
   it('a row picks the dock\'s order (its own thread); the tab is drawn by the page (R5)', () => {
     expect(pickOfRow({ id: 'o1', number: 'SO-2026-0142', companyId: 'c1' })).toEqual({ type: 'SalesOrder', id: 'o1', label: 'SO-2026-0142', companyId: 'c1' })
     const view = readFileSync(new URL('./view/CustomerRecordView.tsx', import.meta.url), 'utf8')
@@ -648,13 +674,51 @@ describe('F-CP-101: All orders by default, written once', () => {
     expect(workViewsOf({ price: true })).toEqual(['all', IN_PRODUCTION_VIEW, WAITING_US_VIEW, 'late'])
   })
 
-  it('the empty state per view: All orders says no order yet; In production keeps its way to All orders; other views the sheet\'s own', () => {
+  it('the empty state per view: All orders says no order yet; In production keeps its way to All orders; a door, Waiting on us and Late their own sentence', () => {
     const t = createTranslator('en', messagesFor('en', ['parties']).parties!)
+    const all = { href: '/all', label: 'Show all orders' }
     expect(workEmptyOf('all', null, 'Brand Alpha', t, '/all')).toEqual({ title: 'Brand Alpha has no order yet.', view: 'all', newOrder: true /* F-CP-104 */ })
-    expect(workEmptyOf('IN_PRODUCTION', null, 'Brand Alpha', t, '/all')).toEqual({ title: 'Nothing in production for Brand Alpha.', link: { href: '/all', label: 'Show all orders' }, view: 'IN_PRODUCTION' })
-    expect(workEmptyOf('late', null, 'Brand Alpha', t, '/all')).toBeNull()
-    expect(workEmptyOf('open', 'us', 'Brand Alpha', t, '/all')).toBeNull()
-    expect(createTranslator('it', messagesFor('it', ['parties']).parties!)('customers.work.emptyAll', { customer: 'Brand Alpha' })).toBe('Brand Alpha non ha ancora ordini.')
+    expect(workEmptyOf('IN_PRODUCTION', null, 'Brand Alpha', t, '/all')).toEqual({ title: 'Nothing in production for Brand Alpha.', link: all, view: 'IN_PRODUCTION' })
+    // F-CW-102 (S20; 10-design §3.7): a whole sentence per door and view, with Show all orders — shown whatever the door narrows.
+    expect(workEmptyOf('late', null, 'Brand Alpha', t, '/all')).toEqual({ title: 'No order of Brand Alpha is late now.', link: all, always: true })
+    expect(workEmptyOf('open', 'us', 'Brand Alpha', t, '/all')).toEqual({ title: 'No order of Brand Alpha waits on us now.', link: all, always: true })
+    expect(workEmptyOf('all', null, 'Brand Alpha', t, '/all', { phase: 'NOT_SENT' })).toEqual({ title: 'No order of Brand Alpha waits to be sent to the factory now.', link: all, always: true })
+    expect((['NOT_SENT', 'NOT_STARTED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'DONE', 'CANCELLED'] as const).map((phase) => workEmptyOf('all', null, 'X', t, '/all', { phase })?.title)).toEqual([
+      'No order of X waits to be sent to the factory now.',
+      'No order of X waits for production to start now.',
+      'No order of X is in production now.',
+      'No order of X is ready to ship now.',
+      'No order of X is shipped now.',
+      'No order of X is done yet.',
+      'No order of X is cancelled.',
+    ])
+    // Something else narrows the sheet (a search, another term): the sheet's own "No orders match" is the right answer.
+    expect(workEmptyOf('all', null, 'Brand Alpha', t, '/all', { phase: 'NOT_SENT', plain: false })).toBeNull()
+    expect(workEmptyOf('late', null, 'Brand Alpha', t, '/all', { plain: false })).toBeNull()
+    expect(workEmptyOf('open', 'us', 'Brand Alpha', t, '/all', { plain: false })).toBeNull()
+    // No order at all, drafts in the portal: one more line and the way to them (never counted as orders).
+    expect(workEmptyOf('all', null, 'Brand Alpha', t, '/all', { drafts: { count: 2, href: '/drafts' } })).toEqual({ title: 'Brand Alpha has no order yet.', view: 'all', newOrder: true, body: '2 drafts are being written in the portal — never counted as orders.', link: { href: '/drafts', label: 'Show the drafts' } })
+    expect(workEmptyOf('all', null, 'Brand Alpha', t, '/all', { drafts: { count: 0, href: '/drafts' } })).toEqual({ title: 'Brand Alpha has no order yet.', view: 'all', newOrder: true })
+    const it_ = createTranslator('it', messagesFor('it', ['parties']).parties!)
+    expect(it_('customers.work.emptyAll', { customer: 'Brand Alpha' })).toBe('Brand Alpha non ha ancora ordini.')
+    expect(workEmptyOf('all', null, 'Brand Alpha', it_, '/all', { phase: 'DONE' })?.title).toBe('Nessun ordine di Brand Alpha è ancora concluso.')
+    expect(workEmptyOf('open', 'us', 'Brand Alpha', it_, '/all')?.title).toBe('Nessun ordine di Brand Alpha tocca a noi ora.')
+  })
+
+  // F-CW-102 (P0 item 9): a customer with no order read "No orders match … Clear filters", as if a filter were set — the host's
+  // locked customer counted as a narrowing. It is the page's own: its empty sheet says the host's words.
+  it('F-CW-102: the page\'s own customer is no narrowing — an empty sheet says "<customer> has no order yet."', async () => {
+    const { hostEmptyOf } = await import('../../orders/list/view/OrdersListView')
+    const view = readFileSync(new URL('../../orders/list/view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('(!!model.customer && !model.locked?.party)')
+    const empty = { title: 'Brand Alpha has no order yet.', view: 'all' as const, newOrder: true }
+    expect(hostEmptyOf({ empty, rows: 'all' }, false, false)).toBe(empty)
+    expect(hostEmptyOf({ empty, rows: 'all' }, true, true)).toBeNull() // a search or another term: "No orders match"
+    // A door's sentence shows whatever the door narrows (the host gives it only when nothing else does).
+    const door = { title: 'No order of Brand Alpha is done yet.', always: true }
+    expect(hostEmptyOf({ empty: door, rows: 'all' }, true, true)).toBe(door)
+    // New order beside the words is not drawn without orders.manage (S9), and the host's link sits beside it.
+    expect(view).toContain('(hostEmpty.newOrder && model.can.manage) || hostEmpty.link ? (')
   })
 
   it('Sales › Orders keeps Open orders as its default (the customer page only changes)', () => {
@@ -912,9 +976,12 @@ describe('F-CP-141: the Not equal view', () => {
     expect(MONEY_PRESET.wide).toEqual(['picture', 'promised', 'paid'])
     expect([...MONEY_PRESET.shown, ...(MONEY_PRESET.wide ?? [])]).not.toContain('priceDiff')
     expect(workPreset('all', null, true)).toBe(MONEY_PRESET)
+    expect(workPreset('all', null, true, 'widest')).toBe(MONEY_PRESET) // its wide columns return in the widest room (the sheet's `wide`)
     // Review E5: All orders keeps today's columns (the money comes with the Not equal view or the toggle).
-    expect(workPreset('all', null).shown).not.toContain('ourPrice')
-    expect(workPreset('all', null).wide).not.toContain('priceMatch')
+    for (const room of ['base', 'wide', 'wider', 'widest'] as const) {
+      expect(workPreset('all', null, false, room).shown, room).not.toContain('ourPrice')
+      expect(workPreset('all', null, false, room).shown, room).not.toContain('priceMatch')
+    }
   })
 
   it('the Money tab: "Prices differ on {count} orders ›" for a price holder (the Not equal view\'s door); nothing for anyone else', () => {

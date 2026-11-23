@@ -28,11 +28,11 @@
     "noteHint": "La nota d'ufficio: il cliente non la vede mai",
     "atRisk": "Vicino alla data promessa",
     "atRiskHint": "La promessa è vicina e l’ordine è ancora in lavorazione (i giorni della regola di avviso)",
-    "customerUrgency": "Segno del cliente",
-    "customerUrgencyHint": "Il segno del cliente, in sola lettura (la Priorità resta dell’ufficio)",
+    "customerUrgency": "Urgenza cliente",
+    "customerUrgencyHint": "L'ordine che il cliente dà alle sue urgenze, in sola lettura: mai un posto nel nostro piano. La nostra Priorità compare accanto quando non è Normale.",
     "riders": "Piloti",
     "whereItIs": "A che punto è",
-    "whereItIsHint": "La fase e lo stato, poi i pezzi di questo ordine (letti solo mentre la colonna è mostrata)",
+    "whereItIsHint": "La fase e lo stato, poi l'unica cosa che ferma l'ordine o chi deve agire; sotto, i capi di questo ordine (letti solo mentre la colonna è mostrata)",
     "waitingOn": "In attesa di",
     "waitingOnHint": "La più urgente: una richiesta da rispondere, una risposta che tocca a noi, chi deve agire",
     "supervisor": "Supervisore",
@@ -125,7 +125,7 @@
     "invoiced": "Fatturato: {state}",
     "atRisk": "Vicino alla data promessa",
     "currency": "Valuta: {currency}",
-    "urgency": "Segno del cliente: {urgency}",
+    "urgency": "Urgenza cliente: {urgency}",
     "rider": "Pilota: {name}",
     "riderUnnamed": "Un pilota",
     "waitingUs": "Tocca a noi"
@@ -209,9 +209,19 @@
     "noneBody": "Nessun ordine ha merce spedita in attesa di fattura."
   },
   "urgency": {
-    "URGENT": "Urgente",
+    "URGENT": "Urgente (cliente)",
     "REGULAR": "Normale",
-    "filter": "Mostra solo gli ordini che il cliente segna {urgency}"
+    "filter": "Mostra solo gli ordini che il cliente segna {urgency}",
+    "rank": "Urgente (cliente) {rank}",
+    "bare": "Urgente (cliente)",
+    "bareRank": "Urgente (cliente) {rank}",
+    "ASKED": "Urgente – richiesto",
+    "SET_BACK": "Riportato a normale da noi",
+    "rankTip": "L'ordine che il cliente dà alle sue urgenze: mai un posto nel nostro piano",
+    "askedTip": "Il cliente chiede di renderlo urgente: la sua richiesta tocca a noi",
+    "lockedTip": "Riportato a normale da noi e bloccato: il cliente non può segnarlo urgente finché non lo sblocchiamo",
+    "priority": "Priorità: {level}",
+    "priorityTip": "La nostra priorità: il cliente non la vede mai"
   },
   "atRisk": {
     "filter": "Mostra solo gli ordini vicini alla data promessa",
@@ -293,7 +303,11 @@
     "mtmNoRight": "Nessun ordine su misura in questa vista."
   },
   "where": {
-    "sewn": "{done} di {total} cuciti"
+    "sewn": "{done} di {total} cuciti",
+    "sewnOf": "Cuciti {sewn} di {ordered}",
+    "readyNow_one": "{count} pronto ora",
+    "readyNow_other": "{count} pronti ora",
+    "nothingShipped": "Niente spedito"
   },
   "waiting": {
     "request": "Richiesta da rispondere",
@@ -436,5 +450,14 @@
       "DONE": "consegnati o chiusi",
       "CANCELLED": "annullati"
     }
+  },
+  "stop": {
+    "depositOverdue": "Acconto scaduto",
+    "depositExtra": "Acconto aggiuntivo aperto",
+    "reaccept": "Aspetta il nuovo sì del cliente",
+    "heldTip": "In sospeso: apri la scheda Produzione di {number}"
+  },
+  "deposit": {
+    "extra": "aggiuntivo aperto, scade il {date}"
   }
 }

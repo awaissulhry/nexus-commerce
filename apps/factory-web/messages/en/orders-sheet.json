@@ -28,11 +28,11 @@
     "noteHint": "The office’s own note: the customer never sees it",
     "atRisk": "Close to promise",
     "atRiskHint": "The promise is near and the order is still being made (the alert rule’s days)",
-    "customerUrgency": "Customer’s mark",
-    "customerUrgencyHint": "The customer’s own mark, read-only (Priority stays the office’s)",
+    "customerUrgency": "Customer urgency",
+    "customerUrgencyHint": "The customer's own order of its urgent orders, read-only: never a place in our plan. Our own Priority shows beside it when it is not Normal.",
     "riders": "Riders",
     "whereItIs": "Where it is",
-    "whereItIsHint": "The plain stage and the health, then this order's own pieces (read only while this column is shown)",
+    "whereItIsHint": "The stage and the health, then the one thing that stops the order or who it waits on; under them this order's own pieces (read only while this column is shown)",
     "waitingOn": "Waiting on",
     "waitingOnHint": "The most urgent: a request to answer, a reply that waits on us, who acts next",
     "supervisor": "Supervisor",
@@ -125,7 +125,7 @@
     "invoiced": "Invoiced: {state}",
     "atRisk": "Close to promise",
     "currency": "Currency: {currency}",
-    "urgency": "Customer’s mark: {urgency}",
+    "urgency": "Customer urgency: {urgency}",
     "rider": "Rider: {name}",
     "riderUnnamed": "One rider",
     "waitingUs": "Waiting on us"
@@ -211,7 +211,17 @@
   "urgency": {
     "URGENT": "Urgent",
     "REGULAR": "Regular",
-    "filter": "Show only the orders the customer marks {urgency}"
+    "filter": "Show only the orders the customer marks {urgency}",
+    "rank": "Urgent {rank}",
+    "bare": "Urgent (customer)",
+    "bareRank": "Urgent (customer) {rank}",
+    "ASKED": "Urgent – asked",
+    "SET_BACK": "Set to regular by us",
+    "rankTip": "The customer's own order of its urgent orders: never a place in our plan",
+    "askedTip": "The customer asks to make it urgent: its request waits on us",
+    "lockedTip": "Set to regular by us and locked: the customer cannot mark it urgent until we unlock it",
+    "priority": "Priority: {level}",
+    "priorityTip": "Our own priority: the customer never sees it"
   },
   "atRisk": {
     "filter": "Show only the orders close to their promise",
@@ -293,7 +303,11 @@
     "mtmNoRight": "No made-to-measure orders in this view."
   },
   "where": {
-    "sewn": "{done} of {total} sewn"
+    "sewn": "{done} of {total} sewn",
+    "sewnOf": "Sewn {sewn} of {ordered}",
+    "readyNow_one": "{count} ready now",
+    "readyNow_other": "{count} ready now",
+    "nothingShipped": "Nothing shipped"
   },
   "waiting": {
     "request": "Request to answer",
@@ -436,5 +450,14 @@
       "DONE": "delivered, or closed",
       "CANCELLED": "cancelled"
     }
+  },
+  "stop": {
+    "depositOverdue": "Deposit overdue",
+    "depositExtra": "Extra deposit open",
+    "reaccept": "Waits for the customer's new yes",
+    "heldTip": "On hold: open the Production tab of {number}"
+  },
+  "deposit": {
+    "extra": "extra open, due {date}"
   }
 }

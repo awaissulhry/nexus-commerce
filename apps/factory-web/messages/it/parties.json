@@ -252,7 +252,21 @@
         "info": "Cosa dicono questi numeri",
         "sum": "Ogni ordine sta in un solo gruppo: i sette, sommati, fanno tutti gli ordini.",
         "beforeNote": "Bozze, richieste e preventivi vengono prima dell'ordine: non entrano mai in questi numeri."
-      }
+      },
+      "none": {
+        "NOT_SENT": "Nessun ordine di {customer} aspetta di andare in fabbrica ora.",
+        "NOT_STARTED": "Nessun ordine di {customer} aspetta l'inizio della produzione ora.",
+        "IN_PRODUCTION": "Nessun ordine di {customer} è in produzione ora.",
+        "READY": "Nessun ordine di {customer} è pronto da spedire ora.",
+        "SHIPPED": "Nessun ordine di {customer} è spedito ora.",
+        "DONE": "Nessun ordine di {customer} è ancora concluso.",
+        "CANCELLED": "Nessun ordine di {customer} è annullato.",
+        "waitingUs": "Nessun ordine di {customer} tocca a noi ora.",
+        "late": "Nessun ordine di {customer} è in ritardo ora."
+      },
+      "emptyDrafts_one": "{count} bozza è in scrittura nel portale — mai contata come ordine.",
+      "emptyDrafts_other": "{count} bozze sono in scrittura nel portale — mai contate come ordini.",
+      "showDrafts": "Mostra le bozze"
     },
     "quotesTab": {
       "quotes": "Preventivi",

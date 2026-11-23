@@ -119,8 +119,11 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
     return [
       { colId: 'draft', headerName: t('customers.drafts.col.draft'), minWidth: 200, flex: 2, cellRenderer: DraftCell, valueGetter: (params) => (params.data ? draftTitle(params.data, untitled) : '') },
       { colId: 'lines', headerName: t('customers.drafts.col.lines'), minWidth: 130, flex: 1, valueGetter: (params) => (params.data ? joined(linesWords(params.data)) : '') },
-      { colId: 'files', headerName: t('customers.drafts.col.files'), minWidth: 100, flex: 1, valueGetter: (params) => (params.data ? joined(filesWords(params.data)) : '') },
-      { colId: 'ready', headerName: t('customers.drafts.col.ready'), minWidth: 90, cellRenderer: ReadyCell, valueGetter: (params) => params.data?.draft?.readiness.done ?? null },
+      { colId: 'files', headerName: t('customers.drafts.col.files'), minWidth: 88, flex: 1, valueGetter: (params) => (params.data ? joined(filesWords(params.data)) : '') },
+      // F-CW-102 (lead settle S28: only the Drafts view's sideways scroll): Ready and Wanted by had no share of the room, so the grid
+      // gave each its 200 px default — 1058 px of columns in the 863 px beside the dock, the Open button off-screen. Each now takes
+      // its share from its own least width ("5 of 6" beside "1 problem" whole): 200 + 130 + 88 + 136 + 140 + 92 + 64 = 850 px.
+      { colId: 'ready', headerName: t('customers.drafts.col.ready'), minWidth: 136, flex: 0.8, cellRenderer: ReadyCell, valueGetter: (params) => params.data?.draft?.readiness.done ?? null },
       {
         colId: 'changed',
         headerName: t('customers.drafts.col.changed'),
@@ -132,7 +135,7 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
           return draft.lastEditedBy ? t('customers.drafts.changed', { time: moment(draft.lastEditedAt), name: draft.lastEditedBy }) : moment(draft.lastEditedAt)
         },
       },
-      { colId: 'wanted', headerName: t('customers.drafts.col.wanted'), minWidth: 100, valueGetter: (params) => (params.data?.requestedDate ? formatDate(`${params.data.requestedDate}T12:00:00Z`, { locale }) : '—') },
+      { colId: 'wanted', headerName: t('customers.drafts.col.wanted'), minWidth: 92, flex: 0.6, valueGetter: (params) => (params.data?.requestedDate ? formatDate(`${params.data.requestedDate}T12:00:00Z`, { locale }) : '—') },
       {
         colId: 'messages',
         headerName: t('customers.drafts.col.messages'),

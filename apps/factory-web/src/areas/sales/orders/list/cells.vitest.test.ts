@@ -207,7 +207,8 @@ describe('F-SA-275: the production columns', () => {
 describe('F-CP-107 (cp-fx16): Where it is never repeats the Status the row shows', () => {
   const textOfHtml = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/&#x27;/g, "'").replace(/\s+/g, ' ').trim()
   const part = (over: Partial<NonNullable<OrderRow['production']>> = {}): NonNullable<OrderRow['production']> => ({ stage: null, stageSince: null, health: null, waitingOn: null, since: null, held: false, supervisorMark: 'NOT_SET', openRequests: 0, openIssues: 0, withheld: [], ...over })
-  const waiting: OrderRow = { ...LIST_ROWS[0]!, number: 'SEED-SO-W39-01', status: 'PENDING_APPROVAL', progress: null, production: part() }
+  // F-CW-102: no deposit asked on this made-up row (an open one would be the cell's third chip: its own tests are below).
+  const waiting: OrderRow = { ...LIST_ROWS[0]!, number: 'SEED-SO-W39-01', status: 'PENDING_APPROVAL', deposit: { state: 'NOT_NEEDED', dueDate: null }, progress: null, production: part() }
   const draw = async (row: OrderRow, statusShown?: boolean) => {
     const { WhereItIsCell } = await import('./sheet/parts')
     const cell = createElement(WhereItIsCell, { row, t, s, ...(statusShown === undefined ? {} : { statusShown }) })
@@ -449,3 +450,292 @@ describe('F-MS-104: a stage set by hand in Where it is', () => {
   })
 })
 // ---- end F-MS-104
+
+// ---- F-CW-102 (customer Work tab plan §1; 10-design §3.5; lead settles S3, S6, S7, S13, S15, S31, S33, S38; the API's B-CW-010…015,
+// B-CW-020): the row's chips — the shared sheet's cells, the same on the customer's Work tab, Sales › Orders and Sales › Made to
+// measure. Where it is: chip 1 the stage (the order's real status word where no stage is "now"), chip 2 only Late / At risk, chip 3
+// the ONE thing that stops it; line 2 this order's own pieces. Customer urgency: the customer's own mark as its chip says it, read
+// only, our Priority beside it when it is not Normal. New messages: a count bubble.
+describe('F-CW-102: the row\'s chips', () => {
+  const TODAY = '2026-11-23'
+  const DAY = TODAY as BusinessDate
+  const part = (over: Partial<NonNullable<OrderRow['production']>> = {}): NonNullable<OrderRow['production']> => ({ stage: 'SEWING', stageSince: '2026-11-10', health: 'ON_TRACK', waitingOn: null, since: null, held: false, supervisorMark: 'ME', openRequests: 0, openIssues: 0, withheld: [], ...over })
+  const base: OrderRow = { ...LIST_ROWS[0]!, number: 'SEED-SO-0009', status: 'IN_PRODUCTION', deposit: { state: 'PAID', dueDate: null }, units: 244, shippedUnits: 0, daysLate: null }
+  const row = (over: Partial<OrderRow> = {}, production: Partial<NonNullable<OrderRow['production']>> = {}): OrderRow => ({ ...base, production: part(production), ...over })
+  const textOfHtml = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/&#x27;/g, "'").replace(/\s+/g, ' ').trim()
+  const wordsFor = (locale: (typeof LOCALES)[number]) => ({ t: createTranslator(locale, messagesFor(locale, ['orders']).orders!), s: createTranslator(locale, messagesFor(locale, [NAMESPACE])[NAMESPACE]!), d: createTranslator(locale, messagesFor(locale, ['sales-orders-depth'])['sales-orders-depth']!), l: createTranslator(locale, messagesFor(locale, ['last-message'])['last-message']!) })
+  type WhereProps = Parameters<typeof import('./sheet/parts').WhereItIsCell>[0]
+  type UrgencyProps = Parameters<typeof import('./sheet/parts').CustomerUrgencyCell>[0]
+  const where = async (r: OrderRow, props: Partial<WhereProps> = {}, locale: (typeof LOCALES)[number] = 'en') => {
+    const { WhereItIsCell } = await import('./sheet/parts')
+    const { t: words, s: sheet } = wordsFor(locale)
+    return renderToStaticMarkup(createElement(I18nProvider, { locale, messages: {} }, createElement(WhereItIsCell, { row: r, t: words, s: sheet, today: TODAY, now: Date.parse('2026-11-23T10:00:00Z'), ...props })))
+  }
+  const urgency = async (r: OrderRow, props: Partial<UrgencyProps> = {}, locale: (typeof LOCALES)[number] = 'en') => {
+    const { CustomerUrgencyCell } = await import('./sheet/parts')
+    const { s: sheet, d } = wordsFor(locale)
+    return renderToStaticMarkup(createElement(CustomerUrgencyCell, { row: r, s: sheet, d, ...props }))
+  }
+
+  it('the API row parses every new field, and an older answer without them stays valid (the web never waits)', async () => {
+    const { orderRowSchema } = await import('../api')
+    const now = orderRowSchema.parse({
+      ...base,
+      reaccept: true,
+      deposit: { state: 'NOT_NEEDED', dueDate: null, extraOpenDue: '2026-11-25' },
+      progress: { inWork: 200, cut: 180, sewn: 152, finished: 24, ordered: 244 },
+      customerUrgencyState: { state: 'URGENT', urgentRank: 2, locked: false, requestId: null },
+      production: { ...part(), readyNow: 24, openIssuesSince: '2026-11-21T08:00:00.000Z' },
+    })
+    expect([now.reaccept, now.deposit.extraOpenDue, now.progress?.ordered, now.customerUrgencyState?.urgentRank, now.production?.readyNow, now.production?.openIssuesSince]).toEqual([true, '2026-11-25', 244, 2, 24, '2026-11-21T08:00:00.000Z'])
+    const older = orderRowSchema.parse({ ...base, production: part(), progress: { inWork: 200, cut: 180, sewn: 152, finished: 24 } })
+    expect([older.reaccept, older.deposit.extraOpenDue, older.progress?.ordered, older.customerUrgencyState, older.production?.readyNow, older.production?.openIssuesSince]).toEqual([undefined, undefined, undefined, undefined, undefined, undefined])
+    expect(orderRowSchema.parse({ ...base, customerUrgencyState: null }).customerUrgencyState).toBeNull()
+    expect(orderRowSchema.safeParse({ ...base, customerUrgencyState: { state: 'RUSH', urgentRank: 1, locked: false, requestId: null } }).success).toBe(false)
+  })
+
+  it('chip 1 — the stage of an order in production (Preparing while none is kept), "Ready to ship", else the order\'s real status word', async () => {
+    const { stageChipOf } = await import('./sheet/model')
+    expect(stageChipOf(row(), DAY)).toEqual({ kind: 'stage', stage: 'SEWING', phase: 'IN_PRODUCTION' })
+    expect(stageChipOf(row({}, { stage: 'PREPARING' }), DAY)).toEqual({ kind: 'stage', stage: 'PREPARING', phase: 'NOT_STARTED' })
+    expect(stageChipOf(row({}, { stage: null }), DAY)).toEqual({ kind: 'stage', stage: 'PREPARING', phase: 'NOT_STARTED' }) // S38
+    expect(stageChipOf(row({}, { stageByHand: { since: '2026-11-22T09:00:00.000Z' } }), DAY)).toEqual({ kind: 'stage', stage: 'SEWING', phase: 'IN_PRODUCTION', byHand: { old: false } })
+    expect(stageChipOf(row({}, { stageByHand: { since: '2026-11-10T09:00:00.000Z' } }), DAY)).toMatchObject({ byHand: { old: true } })
+    expect(stageChipOf(row({ status: 'READY' }, { stage: 'READY' }), DAY)).toEqual({ kind: 'stage', stage: 'READY', phase: 'READY' })
+    // The status decides the group (the domain's one rule): a confirmed order whose kept row says a stage is still "Confirmed".
+    expect(stageChipOf(row({ status: 'CONFIRMED' }, { stage: 'QUALITY' }), DAY)).toEqual({ kind: 'status', status: 'CONFIRMED', phase: 'NOT_SENT' })
+    expect(stageChipOf(row({ status: 'PENDING_APPROVAL' }, { stage: null }), DAY)).toEqual({ kind: 'status', status: 'PENDING_APPROVAL', phase: 'NOT_SENT' })
+    expect(stageChipOf(row({ status: 'PARTLY_SHIPPED', units: 114, shippedUnits: 40 }), DAY)).toEqual({ kind: 'status', status: 'PARTLY_SHIPPED', phase: 'SHIPPED', shipped: { shipped: 40, units: 114 } })
+    for (const [status, phase] of [['SHIPPED', 'SHIPPED'], ['DELIVERED', 'DONE'], ['CLOSED', 'DONE'], ['CANCELLED', 'CANCELLED']] as const) expect(stageChipOf(row({ status }, { stage: null, health: null }), DAY), status).toEqual({ kind: 'status', status, phase })
+    // Not read (the production part comes with the column): nothing is guessed.
+    expect(stageChipOf(base, DAY)).toBeNull()
+  })
+
+  it('chip 2 — the health only when something is wrong: Late or At risk; never "On track", never "No date yet"', async () => {
+    const { healthChipOf } = await import('./sheet/model')
+    expect(healthChipOf(row({}, { health: 'LATE' }))).toBe('LATE')
+    expect(healthChipOf(row({}, { health: 'AT_RISK' }))).toBe('AT_RISK')
+    for (const health of ['ON_TRACK', 'NO_DATE', null] as const) expect(healthChipOf(row({}, { health })), String(health)).toBeNull()
+    expect(healthChipOf(base)).toBeNull()
+    const html = textOfHtml(await where(row()))
+    expect(html).not.toMatch(/On track|No date yet/)
+  })
+
+  it('chip 3 — the ONE thing that stops it, the first that applies: credit · the factory review · a deposit · a new yes · on hold · a request · a reply · who it waits on', async () => {
+    const { stopChipOf } = await import('./sheet/model')
+    const everything = row(
+      { status: 'CONFIRMED', waits: ['CREDIT_HOLD', 'MEASUREMENTS'], deposit: { state: 'OPEN', dueDate: '2026-11-25' }, reaccept: true },
+      { held: true, openRequests: 1, waitingOn: 'BRAND', since: '2026-11-20T10:00:00Z' },
+    )
+    const mark = { requestIds: ['req-1'], replySince: '2026-11-23T06:00:00Z' }
+    const kinds: string[] = []
+    let current: OrderRow = everything
+    // Take the first reason away each time: the next one shows — the order of the reasons, pinned.
+    const steps: Array<(r: OrderRow) => OrderRow> = [
+      (r) => ({ ...r, waits: ['MEASUREMENTS'] }),
+      (r) => ({ ...r, waits: null }),
+      (r) => ({ ...r, deposit: { state: 'NOT_NEEDED', dueDate: null, extraOpenDue: '2026-11-25' } }),
+      (r) => ({ ...r, deposit: { state: 'NOT_NEEDED', dueDate: null, extraOpenDue: null } }),
+      (r) => ({ ...r, reaccept: false }),
+      (r) => ({ ...r, production: { ...r.production!, held: false } }),
+    ]
+    kinds.push(stopChipOf(current, mark, TODAY)!.kind)
+    for (const step of steps) {
+      current = step(current)
+      const chip = stopChipOf(current, mark, TODAY)!
+      kinds.push(chip.kind === 'deposit' && chip.extra ? 'deposit-extra' : chip.kind)
+    }
+    expect(kinds).toEqual(['credit', 'review', 'deposit', 'deposit-extra', 'reaccept', 'held', 'request'])
+    // Then a reply that waits, then who it waits on; "Waiting on us" alone is no chip; nothing: no chip.
+    const quiet = { ...current, production: { ...current.production!, openRequests: 0 } }
+    expect(stopChipOf(quiet, { replySince: '2026-11-23T06:00:00Z' }, TODAY)).toEqual({ kind: 'reply', since: '2026-11-23T06:00:00Z' })
+    expect(stopChipOf(quiet, null, TODAY)).toEqual({ kind: 'keeper', on: 'BRAND', since: '2026-11-20T10:00:00Z' })
+    expect(stopChipOf({ ...quiet, production: { ...quiet.production!, waitingOn: 'US' } }, null, TODAY)).toBeNull()
+    expect(stopChipOf({ ...quiet, production: { ...quiet.production!, waitingOn: null } }, null, TODAY)).toBeNull()
+    // A plain wait for a yes is chip 1's own word (no third chip repeats it).
+    expect(stopChipOf(row({ status: 'PENDING_APPROVAL', waits: ['REQUEST_PENDING'] }, { stage: null, health: null }), null, TODAY)).toBeNull()
+    // A deposit: due, overdue once its day passed (the gate's and an extra one alike); the request names what its door opens.
+    expect(stopChipOf(row({ deposit: { state: 'OPEN', dueDate: '2026-11-25' } }), null, TODAY)).toEqual({ kind: 'deposit', due: '2026-11-25', overdue: false, extra: false })
+    expect(stopChipOf(row({ deposit: { state: 'OPEN', dueDate: '2026-11-20' } }), null, TODAY)).toEqual({ kind: 'deposit', due: '2026-11-20', overdue: true, extra: false })
+    expect(stopChipOf(row({ deposit: { state: 'NOT_NEEDED', dueDate: null, extraOpenDue: '2026-11-20' } }), null, TODAY)).toEqual({ kind: 'deposit', due: '2026-11-20', overdue: true, extra: true })
+    expect(stopChipOf(row({}, { openRequests: 2 }), { requestIds: ['req-7', 'req-8'] }, TODAY)).toEqual({ kind: 'request', count: 2, requestId: 'req-7' })
+  })
+
+  it('nothing is "now" after production: no stage, no health, no stop — only a request still to answer stays (it does wait on us)', async () => {
+    const { stopChipOf } = await import('./sheet/model')
+    for (const status of ['SHIPPED', 'DELIVERED', 'CLOSED', 'CANCELLED'] as const) {
+      const done = row({ status, deposit: { state: 'OPEN', dueDate: '2026-11-01' }, reaccept: true, units: 64, shippedUnits: 64 }, { stage: null, health: null, held: false, waitingOn: null })
+      expect(stopChipOf(done, null, TODAY), status).toBeNull()
+      expect(stopChipOf({ ...done, production: { ...done.production!, openRequests: 1 } }, null, TODAY), status).toEqual({ kind: 'request', count: 1, requestId: null })
+    }
+    const shipped = textOfHtml(await where(row({ status: 'SHIPPED', units: 64, shippedUnits: 64 }, { stage: null, health: null })))
+    expect(shipped).toBe('Shipped 64 of 64 shipped')
+    expect(textOfHtml(await where(row({ status: 'CLOSED', units: 36, shippedUnits: 36 }, { stage: null, health: null })))).toBe('Closed 36 of 36 shipped')
+    expect(textOfHtml(await where(row({ status: 'CANCELLED', units: 12, shippedUnits: 0 }, { stage: null, health: null })))).toBe('Cancelled Nothing shipped')
+  })
+
+  it('line 2 — this order\'s own pieces: "Sewn 152 of 244 · 24 ready now" (of the pieces ORDERED, S13); no "cut"; the words of each state', async () => {
+    const { piecesPartsOf, piecesLineOf } = await import('./sheet/model')
+    const made = row({ progress: { inWork: 200, cut: 180, sewn: 152, finished: 24, ordered: 244 } }, { readyNow: 24 })
+    expect(piecesPartsOf(made, DAY)).toEqual([{ kind: 'words', words: { key: 'where.sewnOf', params: { sewn: 152, ordered: 244 } } }, { kind: 'words', words: { key: 'where.readyNow', params: { count: 24 } }, strong: true }])
+    expect(textOfHtml(await where(made))).toBe('Sewing Sewn 152 of 244 · 24 ready now')
+    expect(textOfHtml(await where(made, {}, 'it'))).toBe('Confezione Cuciti 152 di 244 · 24 pronti ora')
+    expect(textOfHtml(await where(made))).not.toMatch(/cut/i)
+    // Nothing ready: no "ready now" part; an older answer without `ordered` keeps "of the pieces in work"; none in work yet; not read.
+    expect(piecesPartsOf(row({ progress: { inWork: 120, cut: 0, sewn: 0, finished: 0, ordered: 120 } }, { stage: 'PREPARING', readyNow: 0 }), DAY)).toEqual([{ kind: 'words', words: { key: 'where.sewnOf', params: { sewn: 0, ordered: 120 } } }])
+    expect(piecesLineOf({ progress: { inWork: 300, cut: 300, sewn: 120, finished: 0 } })).toEqual({ key: 'where.sewn', params: { done: 120, total: 300 } })
+    expect(piecesPartsOf(row({ status: 'CONFIRMED', progress: null }), DAY)).toEqual([{ kind: 'words', words: { key: 'progress.none' } }])
+    expect(piecesPartsOf(row(), DAY)).toEqual([])
+    // A partly shipped order starts with its open lines' stage (S38); what left says how much of it went.
+    const partly = row({ status: 'PARTLY_SHIPPED', units: 114, shippedUnits: 40, progress: { inWork: 114, cut: 114, sewn: 90, finished: 64, ordered: 114 } }, { readyNow: 24 })
+    expect(piecesPartsOf(partly, DAY).map((entry) => (entry.kind === 'stage' ? entry.stage : entry.words.key))).toEqual(['SEWING', 'where.sewnOf', 'where.readyNow'])
+    expect(textOfHtml(await where(partly))).toBe('Partly shipped · 40 of 114 Sewing · Sewn 90 of 114 · 24 ready now')
+    expect(piecesPartsOf(row({ status: 'SHIPPED', units: 64, shippedUnits: 64 }), DAY)).toEqual([{ kind: 'words', words: { key: 'list.shipped', params: { shipped: 64, units: 64 }, orders: true } }])
+    expect(piecesPartsOf(row({ status: 'CANCELLED', units: 12, shippedUnits: 0 }), DAY)).toEqual([{ kind: 'words', words: { key: 'where.nothingShipped' } }])
+    expect(piecesPartsOf(row({ status: 'CANCELLED', units: 12, shippedUnits: 4 }), DAY)).toEqual([{ kind: 'words', words: { key: 'list.shipped', params: { shipped: 4, units: 12 }, orders: true } }])
+  })
+
+  it('the cell: each chip whole with its mark, the door of chip 3, the pieces under them; a dense cell keeps the chip\'s head', async () => {
+    const late = row({ daysLate: 3, deposit: { state: 'OPEN', dueDate: '2026-11-25' }, progress: { inWork: 200, cut: 180, sewn: 152, finished: 24, ordered: 244 } }, { health: 'LATE', readyNow: 24 })
+    const html = await where(late, { prefix: '/w/DEMO' })
+    expect(html).toContain('class="fw-sheet-wi"')
+    expect(html).toContain('nds-pill info fw-sheet-st')
+    expect(html).toContain('lucide-scissors') // the group's mark (In production), never colour alone
+    expect(html).toContain('nds-tag warning fw-sheet-stop')
+    expect(textOfHtml(html)).toBe('Sewing Late · 3 d Deposit open · due 25/11/2026 Sewn 152 of 244 · 24 ready now')
+    // The pieces stay in the cell's tooltip (when three chips need two lines the pieces line gives way: the row keeps its height).
+    expect(html).toContain('title="Sewn 152 of 244 · 24 ready now"')
+    const css = readFileSync(new URL('./sheet/chips.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-sheet-wi \{[^}]*flex-wrap: wrap;[^}]*max-height: 43px;[^}]*overflow: hidden;/)
+    expect(css).toMatch(/\.fw-sheet-wi-pcs \{\s*flex-basis: 100%;/)
+    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(/i) // tokens only
+    // Dense (beside the dock): the chip's head stays whole, its tail and its mark go to its tooltip.
+    const dense = await where(late, { prefix: '/w/DEMO', dense: true })
+    expect(textOfHtml(dense)).toBe('Sewing Late · 3 d Deposit open Sewn 152 of 244 · 24 ready now')
+    expect(dense).toContain('title="Deposit open · due 25/11/2026"')
+    expect(dense).toContain('class="fw-sheet-wi is-dense"')
+    expect(textOfHtml(await where(row({ deposit: { state: 'OPEN', dueDate: '2026-11-20' } }), { dense: true }))).toBe('Sewing Deposit overdue')
+    expect(await where(row({ deposit: { state: 'OPEN', dueDate: '2026-11-20' } }))).toContain('nds-tag danger fw-sheet-stop')
+    expect(textOfHtml(await where(row({ deposit: { state: 'NOT_NEEDED', dueDate: null, extraOpenDue: '2026-11-25' } })))).toBe('Sewing Extra deposit open · due 25/11/2026')
+    expect(textOfHtml(await where(row({ deposit: { state: 'OPEN', dueDate: '2026-11-20' } })))).toBe('Sewing Deposit overdue · 20/11/2026')
+    // On hold: a door to the order's Production tab; a request: its review (the host's door, else the order's Changes tab).
+    const held = await where(row({}, { held: true }), { prefix: '/w/DEMO' })
+    expect(held).toContain(`href="/w/DEMO/sales/orders/${base.id}?tab=production"`)
+    expect(textOfHtml(held)).toBe('Sewing On hold')
+    const asked = await where(row({}, { openRequests: 1 }), { prefix: '/w/DEMO', mark: { requestIds: ['req-1'] }, doorHref: (id: string) => `/w/DEMO/sales/customers/p?tab=work&open=${id}` })
+    expect(asked).toContain('href="/w/DEMO/sales/customers/p?tab=work&amp;open=req-1"')
+    expect(textOfHtml(asked)).toBe('Sewing Request to answer')
+    expect(await where(row({}, { openRequests: 1 }), { prefix: '/w/DEMO' })).toContain(`href="/w/DEMO/sales/orders/${base.id}?tab=changes"`)
+    // Who it waits on, with since when; outlined (told by its words).
+    const waits = await where(row({}, { waitingOn: 'BRAND', since: '2026-11-20T10:00:00Z' }))
+    expect(textOfHtml(waits)).toBe('Sewing Waiting on customer · 3 d')
+    expect(waits).toContain('fw-sheet-stop is-dash')
+    expect(textOfHtml(await where(row({}, { waitingOn: 'BRAND', since: '2026-11-20T10:00:00Z' }), {}, 'it'))).toBe('Confezione Tocca al cliente · 3 g')
+    expect(textOfHtml(await where(row({ status: 'PENDING_APPROVAL', waits: ['CREDIT_HOLD'], progress: null }, { stage: null, health: null })))).toBe('Waiting for a yes Waits for credit Not in work yet')
+    expect(textOfHtml(await where(row({ reaccept: true })))).toBe("Sewing Waits for the customer's new yes")
+  })
+
+  it('Customer urgency — the customer\'s own mark as its chip says it, read only; our Priority beside it when it is not Normal', async () => {
+    const { urgencyChipOf, priorityChipOf } = await import('./sheet/model')
+    const state = (over: Partial<NonNullable<OrderRow['customerUrgencyState']>>) => ({ customerUrgencyState: { state: 'REGULAR' as const, urgentRank: null, locked: false, requestId: null, ...over } })
+    expect(urgencyChipOf(row(state({ state: 'URGENT', urgentRank: 2 })))).toEqual({ state: 'URGENT', rank: 2 })
+    expect(urgencyChipOf(row(state({ state: 'ASKED', requestId: 'req-9' })))).toEqual({ state: 'ASKED', requestId: 'req-9' })
+    expect(urgencyChipOf(row(state({ state: 'SET_BACK', locked: true })))).toEqual({ state: 'SET_BACK', locked: true })
+    expect(urgencyChipOf(row(state({})))).toBeNull() // Regular: nothing
+    expect(urgencyChipOf(row({ customerUrgencyState: null, customerUrgency: 'URGENT' }))).toBeNull() // none counts (the switch off): no chip at all
+    // An older answer without the state: "Urgent" / nothing from the old mark — no place, no "asked", no lock.
+    expect(urgencyChipOf(row({ customerUrgency: 'URGENT' }))).toEqual({ state: 'URGENT', rank: null })
+    expect(urgencyChipOf(row({ customerUrgency: 'REGULAR' }))).toBeNull()
+    expect(urgencyChipOf(row())).toBeNull()
+    // Our priority: only when not Normal, and only while the order is still ours to make.
+    const priority = (level: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT') => ({ priority: { level, number: 1, urgentReason: null } })
+    expect((['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const).map((level) => priorityChipOf(row(priority(level))))).toEqual(['LOW', null, 'HIGH', 'URGENT'])
+    expect(priorityChipOf(row({ ...priority('URGENT'), status: 'SHIPPED' }))).toBeNull()
+    expect(priorityChipOf(row())).toBeNull()
+
+    // The words (S6, S31): "Urgent 2" under the header; "Urgent (customer) 2" where no header names it; Italian always "(cliente)".
+    expect(textOfHtml(await urgency(row({ ...state({ state: 'URGENT', urgentRank: 2 }), ...priority('URGENT') })))).toBe('Urgent 2 Priority: Top')
+    expect(textOfHtml(await urgency(row(state({ state: 'URGENT', urgentRank: 2 })), { bare: true }))).toBe('Urgent (customer) 2')
+    expect(textOfHtml(await urgency(row(state({ state: 'URGENT', urgentRank: 2 })), {}, 'it'))).toBe('Urgente (cliente) 2')
+    expect(textOfHtml(await urgency(row(state({ state: 'URGENT', urgentRank: 2 })), { bare: true }, 'it'))).toBe('Urgente (cliente) 2')
+    expect(textOfHtml(await urgency(row({ customerUrgency: 'URGENT' })))).toBe('Urgent')
+    expect(textOfHtml(await urgency(row({ customerUrgency: 'URGENT' }), {}, 'it'))).toBe('Urgente (cliente)')
+    expect(textOfHtml(await urgency(row(state({ state: 'ASKED' }))))).toBe('Urgent – asked')
+    expect(await urgency(row(state({ state: 'ASKED' })))).toContain('is-dash')
+    expect(textOfHtml(await urgency(row(state({ state: 'SET_BACK' }))))).toBe('Set to regular by us')
+    expect(await urgency(row(state({ state: 'SET_BACK', locked: true })))).toContain('lucide-lock')
+    expect(await urgency(row(state({ state: 'SET_BACK' })))).not.toContain('lucide-lock')
+    expect(textOfHtml(await urgency(row(state({ state: 'SET_BACK' })), {}, 'it'))).toBe('Riportato a normale da noi')
+    expect(textOfHtml(await urgency(row(priority('HIGH'))))).toBe('Priority: High')
+    expect(textOfHtml(await urgency(row(priority('LOW')), {}, 'it'))).toBe('Priorità: Bassa')
+    expect(textOfHtml(await urgency(row(priority('URGENT')), {}, 'it'))).toBe('Priorità: Massima')
+    // Never a bare "Top" under the header "Customer urgency" (S31); with the Priority column on screen the chip leaves the cell.
+    expect(textOfHtml(await urgency(row(priority('URGENT'))))).not.toBe('Top')
+    expect(await urgency(row(priority('URGENT')), { priorityShown: true })).toBe('')
+    expect(await urgency(row())).toBe('') // Regular, Normal: an empty cell
+    // Read only: no funnel, no button, no link in the cell (our acts are in the row's ⋯).
+    const cell = await urgency(row({ ...state({ state: 'ASKED', requestId: 'req-9' }), ...priority('HIGH') }))
+    expect(cell).not.toMatch(/<button|<a |fw-sheet-funnel/)
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('<CustomerUrgencyCell row={data} s={s} d={d} bare={phone} priorityShown={priorityShown} />')
+    expect(view).not.toContain("act()?.onExtra?.({ customerUrgency")
+  })
+
+  it('New messages — a count bubble ("99+" past 99) with the shared cell\'s words and doors; nothing new: an empty cell that says so', async () => {
+    const { NewMessagesBubble } = await import('./sheet/parts')
+    const { l } = wordsFor('en')
+    const draw = (props: Record<string, unknown>) => renderToStaticMarkup(createElement(NewMessagesBubble, { record: 'SEED-SO-0009', href: '/w/DEMO/sales/orders/o1?thread=new', l, ...props } as never))
+    const linked = draw({ unread: { newCount: 2, lastAt: '2026-11-23T09:42:00.000Z' } })
+    expect(textOfHtml(linked)).toBe('2')
+    expect(linked).toMatch(/^<a /)
+    expect(linked).toContain('class="fw-sheet-msgs"')
+    expect(linked).toContain('href="/w/DEMO/sales/orders/o1?thread=new"')
+    expect(linked).toContain('aria-label="2 new messages on SEED-SO-0009: open the thread at the first new one"')
+    expect(textOfHtml(draw({ unread: { newCount: 120, lastAt: null } }))).toBe('99+')
+    // On a page with a dock the bubble is a button that docks the order's thread (⌘ / Ctrl keeps the new tab: the shared dockClick).
+    const docked = draw({ unread: { newCount: 1, lastAt: null }, onOpen: () => undefined })
+    expect(docked).toContain('<button type="button" class="fw-sheet-msgs"')
+    expect(docked).toContain('data-door=""')
+    // Nothing new, or not counted: no bubble, the words for a screen reader.
+    for (const unread of [undefined, { newCount: 0, lastAt: null }]) expect(draw({ unread })).toBe('<span class="nds-vh">No new messages</span>')
+    // A narrow column of a host's set: the header is the message mark, the column's name stays its accessible name (S33).
+    const { MessagesHeader } = await import('./sheet/parts')
+    const header = renderToStaticMarkup(createElement(MessagesHeader, { displayName: 'New messages' }))
+    expect(header).toContain('lucide-message-square')
+    expect(header).toContain('<span class="nds-vh">New messages</span>')
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("...(narrowMessages ? { headerComponentParams: { innerHeaderComponent: MessagesHeader }, suppressHeaderMenuButton: true, cellClass: 'fw-sheet-tight', headerClass: 'fw-sheet-tight' } : {})")
+    expect(view).toContain('const narrowMessages = (model.preset?.max?.newMessages ?? Number.POSITIVE_INFINITY) <= 64')
+  })
+
+  it('the same fact never twice in a row: the lateness tag beside the promise only while Where it is is not on screen; no Customer column on a customer\'s own page', () => {
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("{!whereShown && data.daysLate !== null && data.daysLate > 0 && <Tag tone=\"danger\">{t('list.daysLate', { count: data.daysLate })}</Tag>}")
+    expect(view).toContain("setShowsWhere(ids.includes('whereItIs'))")
+    expect(view).toContain("setShowsPriority(ids.includes('priority'))")
+    expect(view).toContain("...(model.locked?.party ? [] : [{ colId: 'customer', headerName: t('col.customer'), field: 'partyName', minWidth: 112, flex: 1.2, cellRenderer: CustomerCell }]),")
+    // The phone card: the customer's urgency is a line of the card (its own draw: nothing to say, no line).
+    expect(view).toContain("customerUrgency: { role: 'field' as const, draw: urgency }, // F-CW-102")
+  })
+
+  it('every new word of the row in both languages (no key left); the header is "Customer urgency" / "Urgenza cliente" (S6)', () => {
+    for (const locale of LOCALES) {
+      const { s: sheet } = wordsFor(locale)
+      for (const key of ['col.customerUrgency', 'col.customerUrgencyHint', 'urgency.URGENT', 'urgency.bare', 'urgency.ASKED', 'urgency.SET_BACK', 'urgency.rankTip', 'urgency.askedTip', 'urgency.lockedTip', 'urgency.priorityTip', 'where.nothingShipped', 'stop.depositOverdue', 'stop.depositExtra', 'stop.reaccept']) expect(sheet(key), `${locale} ${key}`).not.toBe(key)
+      expect(sheet('urgency.rank', { rank: 2 }), locale).toContain('2')
+      expect(sheet('urgency.bareRank', { rank: 2 }), locale).toContain('2')
+      expect(sheet('urgency.priority', { level: 'X' }), locale).toContain('X')
+      expect(sheet('where.sewnOf', { sewn: 152, ordered: 244 }), locale).toMatch(/152.*244/)
+      for (const count of [1, 24]) expect(sheet('where.readyNow', { count }), `${locale} ${count}`).toMatch(new RegExp(`^${count} `))
+      expect(sheet('stop.heldTip', { number: 'SO-1' }), locale).toContain('SO-1')
+      expect(sheet('deposit.extra', { date: '25 Nov' }), locale).toContain('25 Nov')
+      expect(sheet('chips.urgency', { urgency: 'X' }), locale).toContain('X')
+    }
+    expect([wordsFor('en').s('col.customerUrgency'), wordsFor('it').s('col.customerUrgency')]).toEqual(['Customer urgency', 'Urgenza cliente'])
+    // "Urgente" alone is the planner's rush word: the customer's chip always says whose it is in Italian.
+    expect(wordsFor('it').s('urgency.URGENT')).toBe('Urgente (cliente)')
+    expect([wordsFor('it').s('where.readyNow', { count: 1 }), wordsFor('it').s('where.readyNow', { count: 24 })]).toEqual(['1 pronto ora', '24 pronti ora'])
+  })
+})
+// ---- end F-CW-102
+
