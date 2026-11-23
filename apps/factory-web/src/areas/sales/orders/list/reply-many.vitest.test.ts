@@ -528,3 +528,23 @@ describe('F-CQ-304: Reply to N given a record type', () => {
   })
 })
 // ---- end F-CQ-304
+
+// ---- cq fx3 W2-2 (walk: the window on requests said "each order's conversation" and offered a portal-only box with no portal): the
+// window's lines follow the record type; with no portal there is no box that says "they read it in their portal".
+describe('cq fx3 W2-2: the Reply window on requests and quotes', () => {
+  const model = (more: Partial<ReplyManyModel> = {}): ReplyManyModel => ({ customer: { id: ALPHA, name: BRAND_ALPHA.tradeName }, targets: replyTargetsOf(alpha), batchId: 'c3c3c3c3-0000-4000-8000-0000000000c3', draft: startDraft(replyComposerContext(BRAND_ALPHA.tradeName)), notes: [], language: 'it', portal: 'on', sending: false, progress: null, results: {}, done: false, ...more })
+  it('no portal: the line names the records\' own conversations, and no portal-only box is drawn', () => {
+    const off = textOf(render(createElement(ReplyManyBody, { model: model({ portal: 'off', recordType: 'Inquiry' }) }), 'en'))
+    expect(off).toContain("Brand Alpha has no portal yet: write by e-mail in each request's conversation.")
+    expect(off).not.toContain("each order's conversation")
+    expect(off).not.toContain('No files here')
+    const quote = textOf(render(createElement(ReplyManyBody, { model: model({ portal: 'off', recordType: 'Quote' }) }), 'it'))
+    expect(quote).toContain('nella conversazione di ogni preventivo')
+  })
+  it('with a portal: the files line names the record type too; orders keep their words', () => {
+    expect(textOf(render(createElement(ReplyManyBody, { model: model({ recordType: 'Inquiry' }) }), 'en'))).toContain("No files here: a file belongs to one request, so add it in that request's conversation.")
+    expect(textOf(render(createElement(ReplyManyBody, { model: model() }), 'en'))).toContain("No files here: a file belongs to one order, so add it in that order's conversation.")
+    for (const locale of LOCALES) for (const type of ['Quote', 'Inquiry'] as const) for (const key of ['portalOff', 'noFiles']) expect(tFor(locale)(replyKey(type, key), { customer: 'Brand Alpha' }), `${locale} ${type} ${key}`).not.toMatch(/reply\.|\{/)
+  })
+})
+// ---- end cq fx3 W2-2

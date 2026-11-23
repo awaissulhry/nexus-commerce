@@ -438,7 +438,9 @@
         },
         "todo": {
           "hint": "{customer} sees “Answer our message” under What waits for you. Each quote then waits for the customer, here and on its page, until they answer."
-        }
+        },
+        "portalOff": "{customer} has no portal yet: write by e-mail in each quote's conversation.",
+        "noFiles": "No files here: a file belongs to one quote, so add it in that quote's conversation."
       },
       "request": {
         "title_one": "Reply to {customer} on {count} request",
@@ -458,7 +460,9 @@
         },
         "todo": {
           "hint": "{customer} sees “Answer our message” under What waits for you. Each request then waits for the customer, here and on its page, until they answer."
-        }
+        },
+        "portalOff": "{customer} has no portal yet: write by e-mail in each request's conversation.",
+        "noFiles": "No files here: a file belongs to one request, so add it in that request's conversation."
       }
     }
   },
