@@ -422,5 +422,19 @@
       "runRest_other": "Run the rest again ({count})",
       "label": "Each order"
     }
+  },
+  "phase": {
+    "NOT_SENT": "Not sent to the factory",
+    "NOT_STARTED": "Production not started",
+    "DONE": "Done",
+    "note": {
+      "NOT_SENT": "waiting for a yes, or confirmed: no work order is released yet",
+      "NOT_STARTED": "in production, stage Preparing: released, nothing cut yet",
+      "IN_PRODUCTION": "in production, past Preparing: the first pieces are cut",
+      "READY": "ready: every piece still to ship is released",
+      "SHIPPED": "partly shipped, or shipped",
+      "DONE": "delivered, or closed",
+      "CANCELLED": "cancelled"
+    }
   }
 }

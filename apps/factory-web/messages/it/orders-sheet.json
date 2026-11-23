@@ -422,5 +422,19 @@
       "runRest_other": "Esegui di nuovo il resto ({count})",
       "label": "Ogni ordine"
     }
+  },
+  "phase": {
+    "NOT_SENT": "Non inviati in fabbrica",
+    "NOT_STARTED": "Produzione non iniziata",
+    "DONE": "Conclusi",
+    "note": {
+      "NOT_SENT": "in attesa di approvazione o confermati: nessun ordine di lavoro ancora rilasciato",
+      "NOT_STARTED": "in produzione, fase In preparazione: rilasciato, ancora niente tagliato",
+      "IN_PRODUCTION": "in produzione, oltre la preparazione: i primi capi sono tagliati",
+      "READY": "pronti: ogni capo ancora da spedire è rilasciato",
+      "SHIPPED": "spediti in parte o spediti",
+      "DONE": "consegnati o chiusi",
+      "CANCELLED": "annullati"
+    }
   }
 }

@@ -8,6 +8,7 @@ import { Button, FilterChip, Pill, Tag, Tooltip } from '@nexus/ui/primitives' //
 import { STAGE_SET_CHECK_DAYS } from '@nexus/factory-domain/production-brand/stage-set' // F-MS-104
 import type { Door, Phrase } from './model'
 import './sheet.css'
+import './chips.css' // F-CW-101: the chips' own styles (a new file beside the new parts)
 // ---- F-SA-275: the production columns' cells (the shared health chip and the production parts' words, the supervisor marks) ----
 import { HealthPill } from '../../../../../lib/production/view/HealthPill'
 import { ageOf } from '../../../../../lib/production/model'
@@ -193,6 +194,8 @@ export interface SheetChip {
   readonly label: string
   /** F-SA-221: none — the page holds the term (the Made-to-measure page's "Made to measure"): a fixed chip without ✕. */
   readonly onClear?: (() => void) | null
+  /** F-CW-101: quiet words beside the chip that say what it holds (a phase's whys: "1 waits for a yes · 1 waits for the deposit"). */
+  readonly note?: string | null
 }
 
 /** Every narrowing as a chip with ✕ (grid-F25: nothing filters the sheet that is not a chip); Clear all from two on. */
@@ -202,8 +205,8 @@ export function SheetChips({ chips, t, onClearAll }: { chips: readonly SheetChip
   const removable = chips.filter((chip) => chip.onClear)
   return (
     <div className="fw-sheet-chips" role="group" aria-label={t('chips.label')}>
-      {chips.map((chip) =>
-        chip.onClear ? (
+      {chips.map((chip) => {
+        const drawn = chip.onClear ? (
           <FilterChip key={chip.id} pressed onClick={chip.onClear} aria-label={t('chips.remove', { name: chip.label })}>
             {chip.label} <X size={12} aria-hidden />
           </FilterChip>
@@ -211,8 +214,17 @@ export function SheetChips({ chips, t, onClearAll }: { chips: readonly SheetChip
           <Tag key={chip.id} tone="info">
             {chip.label}
           </Tag>
-        ),
-      )}
+        )
+        // F-CW-101: a chip may say in quiet words what it holds (never a second chip).
+        return chip.note ? (
+          <span key={chip.id} className="fw-sheet-chip-noted">
+            {drawn}
+            <span className="fw-sheet-chip-note">{chip.note}</span>
+          </span>
+        ) : (
+          drawn
+        )
+      })}
       {removable.length > 1 && (
         <Button size="sm" variant="link" onClick={onClearAll}>
           {t('chips.clearAll')}

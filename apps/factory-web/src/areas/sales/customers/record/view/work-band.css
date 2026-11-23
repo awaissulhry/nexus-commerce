@@ -1,0 +1,449 @@
+/* F-CW-101 (customer Work tab; 10-design §2, §14; picture 20) — the Work tab's band: the bigger picture (line 1), its quiet notes,
+   what waits (line 2). ONE card, sized by its OWN room (a container, never the window): 865 px beside the open thread, 1185 / 1314,
+   1794 with the thread closed, 343 on a phone. Layout only; design-system tokens only (no raw colour). */
+
+.fw-cwb {
+  container: fw-cwb / inline-size;
+  min-width: 0;
+  padding: var(--nds-space-10) var(--nds-space-12);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-2xl);
+}
+.fw-cwb-in {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+.fw-cwb-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- line 1: the seven groups, in their order; Cancelled apart ---- */
+.fw-cwb-pipe {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) auto;
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+/* An older answer has six groups (no "Production not started"): five and Cancelled. */
+.fw-cwb-pipe:has(> li:nth-child(6):last-child) {
+  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+}
+.fw-cwb-pipe > li {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+.fw-cwb-pipe > li + li:not(.fw-cwb-apart)::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -4px;
+  border-top: 1.5px solid var(--nds-border-strong);
+  border-right: 1.5px solid var(--nds-border-strong);
+  transform: rotate(45deg);
+}
+.fw-cwb-pipe > li.fw-cwb-apart {
+  padding-left: var(--nds-space-8);
+  border-left: 1px dashed var(--nds-border-strong);
+}
+.fw-cwb-seg {
+  all: unset;
+  box-sizing: border-box;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 42px;
+  padding: 5px var(--nds-space-8) 5px 9px;
+  text-align: left;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-raised);
+  cursor: pointer;
+}
+.fw-cwb-seg.is-plain {
+  cursor: default;
+}
+button.fw-cwb-seg:hover {
+  background: var(--nds-surface-hover);
+  border-color: var(--nds-border);
+}
+.fw-cwb-seg:focus-visible,
+.fw-cwb-chip:focus-visible,
+.fw-cwb-fold:focus-visible,
+.fw-cwb-link:focus-visible,
+.fw-cwb-win-row:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
+}
+.fw-cwb-seg > b {
+  font-size: 17px;
+  font-weight: var(--nds-font-weight-bold);
+  line-height: 1;
+  color: var(--nds-text);
+}
+.fw-cwb-seg-lb {
+  min-width: 0;
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+  line-height: 1.25;
+  color: var(--nds-text-2);
+  overflow-wrap: anywhere;
+}
+.fw-cwb-seg-ic {
+  display: none;
+  flex: none;
+  color: var(--nds-text-muted);
+}
+.fw-cwb-seg.is-zero > b {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-muted);
+}
+.fw-cwb-seg.is-zero .fw-cwb-seg-lb {
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-muted);
+}
+.fw-cwb-seg[aria-pressed='true'] {
+  border-color: var(--nds-primary);
+  box-shadow: 0 0 0 1px var(--nds-primary);
+  background: var(--nds-wash-primary);
+}
+.fw-cwb-seg[aria-pressed='true'] > b,
+.fw-cwb-seg[aria-pressed='true'] .fw-cwb-seg-lb {
+  color: var(--nds-text-link);
+}
+.fw-cwb-apart .fw-cwb-seg {
+  background: transparent;
+  border-style: dashed;
+}
+.fw-cwb-apart .fw-cwb-seg > b {
+  font-size: 14px;
+  font-weight: var(--nds-font-weight-semibold);
+}
+@container fw-cwb (min-width: 1040px) {
+  .fw-cwb-seg-ic {
+    display: block;
+  }
+  .fw-cwb-seg {
+    padding-inline: 11px var(--nds-space-10);
+  }
+}
+
+/* ---- the quiet notes: one line from 1100 px of band, two below it (the "Before an order" note takes the second) ---- */
+.fw-cwb-notes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 18px;
+  min-width: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-cwb-notes > span {
+  min-width: 0;
+}
+.fw-cwb-notes b,
+.fw-cwb-win-p b {
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-cwb-link {
+  all: unset;
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  cursor: pointer;
+  border-radius: var(--nds-radius-sm);
+}
+.fw-cwb-link:hover {
+  text-decoration: underline;
+}
+.fw-cwb-end {
+  margin-left: auto;
+  white-space: nowrap;
+}
+.fw-cwb-brk {
+  flex-basis: 100%;
+  height: 0;
+}
+@container fw-cwb (min-width: 1100px) {
+  .fw-cwb-brk {
+    display: none;
+  }
+}
+
+/* ---- line 2: what waits — six chips on ONE line; when their words do not fit, the LABELS wrap inside the chips (never a second
+   row, never a cut) ---- */
+.fw-cwb-wait {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 5px var(--nds-space-6);
+  min-width: 0;
+}
+.fw-cwb-lab {
+  display: none;
+  align-self: center;
+  margin-right: var(--nds-space-4);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-bold);
+  color: var(--nds-text-2);
+  white-space: nowrap;
+}
+@container fw-cwb (min-width: 1040px) {
+  .fw-cwb-lab {
+    display: inline;
+  }
+}
+.fw-cwb-i {
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin-left: auto;
+}
+.fw-cwb-chip {
+  all: unset;
+  box-sizing: border-box;
+  flex: 0 1 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  min-height: 24px;
+  padding: 2px var(--nds-space-6) 2px 9px;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-xl);
+  background: var(--nds-surface);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+  line-height: 1.2;
+  color: var(--nds-text-strong);
+  text-align: left;
+}
+button.fw-cwb-chip,
+a.fw-cwb-chip {
+  cursor: pointer;
+}
+button.fw-cwb-chip:hover,
+a.fw-cwb-chip:hover {
+  background: var(--nds-surface-hover);
+}
+.fw-cwb-chip-l {
+  min-width: min-content;
+}
+.fw-cwb-chip > b,
+.fw-cwb-chip > svg {
+  flex: none;
+}
+.fw-cwb-chip > b {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-pill-warning-bg);
+  color: var(--nds-pill-warning-fg);
+  line-height: 17px;
+  text-align: center;
+}
+.fw-cwb-chip.is-danger > b {
+  background: var(--nds-pill-danger-bg);
+  color: var(--nds-pill-danger-fg);
+}
+.fw-cwb-chip.is-quiet {
+  border-style: dashed;
+  border-color: var(--nds-border-subtle);
+  background: transparent;
+  color: var(--nds-text-muted);
+  font-weight: var(--nds-font-weight-medium);
+}
+.fw-cwb-chip.is-quiet > b {
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-muted);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-cwb-chip.is-failed > b {
+  background: var(--nds-pill-danger-bg);
+  color: var(--nds-pill-danger-fg);
+}
+.fw-cwb-chip > svg {
+  color: var(--nds-text-muted);
+}
+.fw-cwb-chip[aria-pressed='true'] {
+  border-style: solid;
+  border-color: var(--nds-primary);
+  box-shadow: 0 0 0 1px var(--nds-primary);
+  background: var(--nds-wash-primary);
+}
+.fw-cwb-sep {
+  flex: none;
+  align-self: center;
+  width: 1px;
+  height: 16px;
+  margin-inline: var(--nds-space-2);
+  background: var(--nds-border);
+}
+
+/* ---- the phone: the seven groups fold into ONE button; the six chips in two columns ---- */
+.fw-cwb-fold {
+  display: none;
+}
+@container fw-cwb (max-width: 719px) {
+  .fw-cwb-pipe,
+  .fw-cwb-notes {
+    display: none;
+  }
+  .fw-cwb-fold {
+    all: unset;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: var(--nds-space-8);
+    width: 100%;
+    min-height: 44px;
+    padding: var(--nds-space-4) var(--nds-space-10) var(--nds-space-4) var(--nds-space-12);
+    border: 1px solid var(--nds-border);
+    border-radius: var(--nds-radius-lg);
+    background: var(--nds-surface-raised);
+    font-size: 13px;
+    font-weight: var(--nds-font-weight-semibold);
+    text-align: left;
+    cursor: pointer;
+  }
+  .fw-cwb-fold-l {
+    flex: 1;
+    min-width: 0;
+  }
+  .fw-cwb-fold > b {
+    font-size: 16px;
+  }
+  .fw-cwb-wait {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--nds-space-4) 5px;
+  }
+  .fw-cwb-chip {
+    min-height: 26px;
+    padding-inline: var(--nds-space-8) 5px;
+  }
+  .fw-cwb-chip-l {
+    flex: 1;
+  }
+  .fw-cwb-sep,
+  .fw-cwb-i,
+  .fw-cwb-chip > svg {
+    display: none;
+  }
+  .fw-cwb-in {
+    gap: var(--nds-space-6);
+  }
+  .fw-cwb {
+    padding: var(--nds-space-8);
+  }
+}
+
+/* ---- the widest room (the thread closed at 1920): the picture and its notes on the left, what waits beside them ---- */
+@container fw-cwb (min-width: 1500px) {
+  .fw-cwb-in {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'pipe wait' 'notes wait';
+    gap: 7px 18px;
+    align-items: start;
+  }
+  .fw-cwb-pipe {
+    grid-area: pipe;
+  }
+  .fw-cwb-notes {
+    grid-area: notes;
+  }
+  .fw-cwb-wait {
+    grid-area: wait;
+    align-self: stretch;
+    display: grid;
+    grid-template-columns: repeat(3, auto);
+    align-content: center;
+    justify-content: start;
+    gap: 5px var(--nds-space-6);
+    padding-left: 18px;
+    border-left: 1px solid var(--nds-border-subtle);
+  }
+  .fw-cwb-lab {
+    grid-column: 1 / 3;
+    margin: 0;
+  }
+  .fw-cwb-i {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+    margin: -4px 0;
+  }
+  .fw-cwb-sep {
+    display: none;
+  }
+}
+
+/* ---- the groups' window (the ⓘ, and the phone's fold): each group a row with what it means, then the notes ---- */
+.fw-cwb-win {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+.fw-cwb-win-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-cwb-win-row {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--nds-space-6) var(--nds-space-10);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+  cursor: pointer;
+}
+.fw-cwb-win-row.is-plain {
+  cursor: default;
+}
+button.fw-cwb-win-row:hover {
+  background: var(--nds-surface-hover);
+}
+.fw-cwb-win-row[aria-pressed='true'] {
+  border-color: var(--nds-primary);
+  background: var(--nds-wash-primary);
+}
+.fw-cwb-win-row > svg {
+  flex: none;
+  color: var(--nds-text-muted);
+}
+.fw-cwb-win-w {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.fw-cwb-win-n {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-cwb-win-p {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}

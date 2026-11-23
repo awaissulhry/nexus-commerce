@@ -4,6 +4,7 @@ import { handSetOld } from '@nexus/factory-domain/production-brand/stage-set' //
 import type { OrderRow } from '../../api'
 import type { BrandHealth, BrandStage, SupervisorMark, WaitingOn } from '../../api' // F-SA-275
 import type { OrderAbilities } from '../../model'
+import type { OrderPhase } from '../../api' // F-CW-101
 
 /**
  * B-TH-225 / B-TH-226 (threads plan TH-1a, pictures 23 + 24; Owner rule 2026-11-16 "every cell is a door", features
@@ -266,3 +267,16 @@ export const noteTargetsOf = (rows: readonly Pick<OrderRow, 'id' | 'number' | 'p
   withoutOrder: 0,
 })
 // ── end F-SA-280 ──
+
+// ── F-CW-101 (customer Work tab; lead settles S2, S3, S17; 10-design §2): the phase's words — ONE word for one thing ──
+/**
+ * A phase in words, for its chip above the sheet, the band's group and its door: the approved rows words where they exist (In
+ * production, Ready to ship, Shipped, Cancelled: the `orders` catalogue's `rows.*`, `orders: true`), and this catalogue's own for
+ * the three new groups (Not sent to the factory, Production not started, Done). SHIPPED holds partly shipped and shipped; DONE holds
+ * delivered and closed (the domain's PHASE_STATUSES).
+ */
+export function phasePhrase(phase: OrderPhase): Phrase & { readonly orders?: true } {
+  if (phase === 'IN_PRODUCTION' || phase === 'READY' || phase === 'SHIPPED' || phase === 'CANCELLED') return { key: `rows.${phase}`, orders: true }
+  return { key: `phase.${phase}` }
+}
+// ── end F-CW-101 ──

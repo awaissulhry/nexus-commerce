@@ -11,6 +11,7 @@ import { listCustomerReplies, type WaitingRow } from '../../inquiries/api'
 import { listTasks } from '../../../../record-panels/tasks/api'
 import type { TaskItem } from '../../../../record-panels/tasks/model'
 import { getBoard, listOrders, type OrderBoard, type OrderRow } from '../../orders/api'
+import type { OrderPhase } from '../../orders/api' // F-CW-101: the band's groups and their doors
 import type { DockPick } from './view/WorkTab' // F-SA-278
 import { useCoalesced } from '../../orders/hooks'
 import type { WaitingMarks } from '../../orders/list/sheet/model'
@@ -65,8 +66,9 @@ export const WORK_DEFAULT_ROWS = 'all' as const
  * The terms that name a view of the sheet (any of them: the address already shows a view, the default is not written).
  * F-CP-101 (review E6: this step is their ONE owner): + `priceMatch` (the Not equal view, F-CP-141) and the page term `list` (Drafts of
  * <customer>, F-CP-107) — an address on either view gets no default written beside it. `cols` (F-CP-105) names no view.
+ * F-CW-101 (lead settles S16, S26): + `phase` (a door of the band, of the Overview and of the Customers list: `?tab=work&phase=<PHASE>`).
  */
-const VIEW_TERMS: readonly string[] = Object.freeze(['rows', 'status', 'late', 'deposit', 'reaccept', 'shippedNotInvoiced', 'waiting', 'priceMatch' /* F-CP-101 */, 'list' /* F-CP-101 */])
+const VIEW_TERMS: readonly string[] = Object.freeze(['rows', 'status', 'late', 'deposit', 'reaccept', 'shippedNotInvoiced', 'waiting', 'priceMatch' /* F-CP-101 */, 'list' /* F-CP-101 */, 'phase' /* F-CW-101 */])
 
 type Params = { get(name: string): string | null; toString(): string } | null
 
@@ -75,6 +77,8 @@ type Params = { get(name: string): string | null; toString(): string } | null
  * the transient `tab`: the tab comes back), the customer's lock (`party`), an old address's terms (`?tab=orders` → All orders), and
  * the default view when no view term is there. One write, so the sheet reads once. fx-12: its ONE writer (WorkTab); applied to its
  * own output it writes nothing. F-CP-101: the default is `rows=all`.
+ * F-CW-101 (S16, S26): a phase door keeps its `phase` and gets `rows=all` beside it in the same write (a phase is defined over every
+ * order: without `rows=all` the sheet would read the open ones only) — the door from anywhere is just `?tab=work&phase=<PHASE>`.
  */
 export function workEntry(base: string, partyId: string, params: Params): string | null {
   const query = new URLSearchParams(params?.toString() ?? '')
@@ -90,6 +94,7 @@ export function workEntry(base: string, partyId: string, params: Params): string
   if (merged && !hasView()) for (const [name, value] of Object.entries(merged)) set(name, value)
   set('tab', 'work')
   set('party', partyId)
+  if (query.has('phase') && !query.has('rows')) set('rows', WORK_DEFAULT_ROWS) // F-CW-101 (S16): a phase is over every order
   if (!hasView()) set('rows', WORK_DEFAULT_ROWS) // F-CP-101: All orders (`rows=all`), never `status=all`
   return changed ? `${base}?${query.toString()}` : null
 }
@@ -110,22 +115,34 @@ export const workAskAddress = (recordHref: string, tab: string): string | null =
 // ---- F-CP-103 (customer page plan C1; review A4): the Overview's tiles open their own view; Views ▾ counts each view ------------------
 
 /** The Work view each Overview tile counts (its door shows exactly those rows): Open orders, In production, Late. */
-export const WORK_DOORS = Object.freeze({ open: 'rows=open', inProduction: 'status=IN_PRODUCTION', late: 'late=true' } as const)
+// F-CW-101 (lead settle S3): "In production" means ONE thing on the customer page — the started orders (the phase IN_PRODUCTION).
+export const WORK_DOORS = Object.freeze({ open: 'rows=open', inProduction: 'phase=IN_PRODUCTION', late: 'late=true' } as const)
 
 /** A tile's door: the record's Work tab on the view the tile counts (the entry then adds the lock, once). */
 export const workDoor = (recordHref: string, door: keyof typeof WORK_DOORS): string => `${recordHref}?tab=work&${WORK_DOORS[door]}`
+
+// ---- F-CW-101 (lead settles S3, S16, S19): the phase doors ----
+/** A phase's door from anywhere (the band, the Overview, the Customers list): the entry completes it (`party`, `rows=all`), once. */
+export const phaseDoor = (recordHref: string, phase: OrderPhase): string => `${recordHref}?tab=work&phase=${phase}`
+/** The Views ▾ item "In production" on the Work tab: the door of the started orders (`phase=IN_PRODUCTION`), a view of the host. */
+export const IN_PRODUCTION_VIEW = 'phase:IN_PRODUCTION'
+/** A phase's count from the board (null: an older answer without `byPhase` — never a guess from the states). */
+export const phaseCountOf = (board: OrderBoard, phase: OrderPhase): number | null => (board.byPhase ? (board.byPhase.find((entry) => entry.phase === phase)?.count ?? 0) : null)
+// ---- end F-CW-101
 
 /**
  * The count beside each Views ▾ item, from the ONE count read the strip already makes (the board of this customer: the API walls it
  * to the customer, never a filter in the browser): All orders (every state), In production, Late. A view the read does not count
  * (Waiting on us) gets no number — never a guess. Nothing while the read is not ready.
+ * F-CW-101 (S3): In production counts the started orders (the board's `byPhase`), the number its door opens; no number without it.
  */
 export function workViewCounts(board: Read<OrderBoard>): Readonly<Record<string, number>> | null {
   if (board.status !== 'ready') return null
   const value = board.value
+  const started = phaseCountOf(value, 'IN_PRODUCTION')
   return {
     all: value.byStatus.reduce((sum, entry) => sum + entry.count, 0),
-    IN_PRODUCTION: value.byStatus.find((entry) => entry.status === 'IN_PRODUCTION')?.count ?? 0,
+    ...(started !== null ? { [IN_PRODUCTION_VIEW]: started } : {}),
     late: value.tiles.find((tile) => tile.key === 'late')?.count ?? 0,
   }
 }
@@ -241,7 +258,8 @@ export function marksOf(requests: readonly BrandRequest[] | null, replies: reado
 /** The live events each source is read again on (the strip's reads, coalesced). */
 export function sourcesTouched(type: string): Array<keyof WorkReads> {
   const out: Array<keyof WorkReads> = []
-  if (type.startsWith('sales_order.') || type.startsWith('deposit_request.') || type === 'payment.deposit_paid' || type === 'quote.accepted') out.push('board')
+  // F-CW-101: + a stage reached on the floor moves an order from "Production not started" to "In production" (the band's counts).
+  if (type.startsWith('sales_order.') || type.startsWith('deposit_request.') || type === 'payment.deposit_paid' || type === 'quote.accepted' || type === 'brand_production.stage_reached') out.push('board')
   if (type.startsWith('order_change_request.') || type.startsWith('brand_production.')) out.push('requests')
   if (type === 'thread.message_posted' || type.startsWith('thread.waiting')) out.push('replies')
   if (type.startsWith('partner_task.')) out.push('asks')

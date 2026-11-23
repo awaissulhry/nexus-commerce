@@ -7,7 +7,8 @@ import { rowsQuery, listAddress } from '../../orders/model'
 import { sheetAddress } from '../../orders/list/use-orders-sheet'
 import { builtInActive, builtInViewsOf, pickBuiltIn, WAITING_US_VIEW, withPreset } from '../../orders/list/view/OrdersListView'
 import { marksOf, sourcesTouched, STRIP_GROUPS, tileOf, tilesShown, workAttention, workEntry, WORK_DEFAULT_ROWS, type WorkReads } from './use-customer-work'
-import { valueOf } from './view/WaitingStrip'
+import { valueOf } from './work-band' // F-CW-101: the strip became the band (its chips keep the same reads)
+import { IN_PRODUCTION_VIEW } from './use-customer-work' // F-CW-101 (S3): the In production view = the started orders' door
 import { pickOfRow, WORK_VIEWS, workPreset } from './view/WorkTab'
 import { ALL_ORDERS_PRESET, WORK_MIN } from './view/WorkTab' // F-CP-107 (cp-fx16)
 import { DRAFTS_VIEW, NOT_EQUAL_VIEW, workEmptyOf, workViewsOf } from './view/WorkTab' // F-CP-101
@@ -113,19 +114,34 @@ describe('F-SA-276: the four views (no tabs inside the tab)', () => {
   const orders = createTranslator('en', messagesFor('en', ['orders']).orders!)
   const sheet = createTranslator('en', messagesFor('en', ['orders-sheet'])['orders-sheet']!)
   // F-CP-101: All orders first.
+  // F-CW-101 (S3, S19): In production is the host's view of the STARTED orders (the phase door), no longer the state's rows view.
+  const started = [{ id: IN_PRODUCTION_VIEW, label: orders('rows.IN_PRODUCTION') }]
   it('All orders · In production · Waiting on us · Late, in that order; Sales › Orders keeps its own list (no Waiting on us unasked)', () => {
-    expect(builtInViewsOf({ customer: null, views: workViewsOf({ price: true }) }, orders, sheet).map((view) => view.label)).toEqual(['All orders', 'In production', 'Waiting on us', 'Late'])
+    expect(builtInViewsOf({ customer: null, views: workViewsOf({ price: true }), hostViews: started }, orders, sheet).map((view) => view.label)).toEqual(['All orders', 'In production', 'Waiting on us', 'Late'])
     expect(builtInViewsOf({ customer: null }, orders, sheet).some((view) => view.id === WAITING_US_VIEW)).toBe(false)
+    // Sales › Orders keeps the state's own rows view "In production" (the sheet's), and never the host's door.
+    expect(builtInViewsOf({ customer: null }, orders, sheet).some((view) => view.id === IN_PRODUCTION_VIEW)).toBe(false)
+    expect(builtInViewsOf({ customer: null }, orders, sheet).some((view) => view.id === 'IN_PRODUCTION')).toBe(true)
   })
   it('the active view and a pick: each view stands alone', () => {
     expect(builtInActive({ rows: 'open', kind: null, waiting: 'us' })).toBe(WAITING_US_VIEW)
     expect(builtInActive({ rows: 'IN_PRODUCTION', kind: null, waiting: null })).toBe('IN_PRODUCTION')
+    // F-CW-101: the started orders' door shown (`rows=all&phase=IN_PRODUCTION`) ticks the host's In production, not All orders.
+    expect(builtInActive({ rows: 'all', kind: null, waiting: null, hostViews: [{ ...started[0]!, active: true }] })).toBe(IN_PRODUCTION_VIEW)
+    expect(builtInActive({ rows: 'all', kind: null, waiting: null, hostViews: [{ ...started[0]!, active: false }] })).toBe('all')
     const calls: unknown[][] = []
     const actions = { onRows: (...args: unknown[]) => calls.push(['rows', ...args]), onWaiting: (...args: unknown[]) => calls.push(['waiting', ...args]), onKind: (...args: unknown[]) => calls.push(['kind', ...args]) }
     pickBuiltIn(WAITING_US_VIEW, { waiting: null }, actions)
     pickBuiltIn('late', { waiting: 'us' }, actions)
     pickBuiltIn('all', { waiting: null }, actions)
     expect(calls).toEqual([['waiting', 'us', 'open'], ['waiting', null, 'late'], ['rows', 'all']])
+    // F-CW-101: the host's In production goes to the host (it writes the phase door through the sheet's onPhase, one write).
+    const host: string[] = []
+    pickBuiltIn(IN_PRODUCTION_VIEW, { waiting: null, hostViews: started }, { ...actions, onHostView: (id: string) => host.push(id) })
+    expect(host).toEqual([IN_PRODUCTION_VIEW])
+    const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain("else if (id === IN_PRODUCTION_VIEW) sheet.actions.onPhase?.('IN_PRODUCTION')")
+    expect(tab).toContain("{ id: IN_PRODUCTION_VIEW, label: o('rows.IN_PRODUCTION'), active: startedShown }")
   })
   it('the columns of each view (In production: no Status; All orders: Status, Waiting on from 1800 px); ⋯ always; Customer never', () => {
     const live = workPreset('IN_PRODUCTION', null)
@@ -184,7 +200,7 @@ describe('F-SA-276: the four views (no tabs inside the tab)', () => {
   })
 })
 
-describe('F-SA-276: the waiting strip', () => {
+describe('F-SA-276: the waiting strip (F-CW-101: the band\'s six chips — the same reads)', () => {
   it('"—" while reading (never 0), 0 is an answer, a capped read says "100+", a failed read only on its tile', () => {
     expect(valueOf(tileOf('late', reads()))).toBe('—')
     expect(valueOf(tileOf('late', reads({ board: board({ late: 0, waitingForDeposit: 2, waitingForCustomer: 0 }) })))).toBe('0')
@@ -193,6 +209,8 @@ describe('F-SA-276: the waiting strip', () => {
     const failed = reads({ requests: { status: 'failed' }, board: board({ late: 1 }) })
     expect(tileOf('requests', failed)).toEqual({ status: 'failed' })
     expect(tileOf('late', failed)).toEqual({ status: 'ready', count: 1, more: false })
+    // F-CW-101: a failed read says "!" on its own chip (its press reads it again), never "—" (that is "still reading").
+    expect(valueOf(tileOf('requests', failed))).toBe('!')
   })
   it('a tile without its right is left out (no empty "0" tile)', () => {
     expect(tilesShown({ orders: true, workorders: false, threads: false, partners: false })).toEqual(['requests', 'late', 'deposit', 'customer'])
@@ -294,8 +312,9 @@ describe('F-SA-278: the strip\'s two windows', () => {
     expect(view).toContain("const askHeld = !model.can.requests ? heldWords(t, 'right.requests')")
     const portal = readFileSync(new URL('../portal/PortalAccess.tsx', import.meta.url), 'utf8')
     expect(portal).toContain("(parts ?? PORTAL_PARTS).includes('limits')")
-    const strip = readFileSync(new URL('./view/WaitingStrip.tsx', import.meta.url), 'utf8')
-    expect(strip).toContain("(tile === 'customer' || tile === 'tasks') && doors.onWindow")
+    // F-CW-101: the two windows open from the band's chips (the strip's place), the same doors.
+    const band = readFileSync(new URL('./view/WorkBand.tsx', import.meta.url), 'utf8')
+    expect(band).toContain("(chip.tile === 'customer' || chip.tile === 'tasks') && actions?.onWindow")
   })
   it('every word of the windows in both languages (no key left)', () => {
     for (const locale of LOCALES) {
@@ -622,10 +641,11 @@ describe('F-CP-101: All orders by default, written once', () => {
   })
 
   it('the views in their order; Not equal only with the price grain (and once its step offers it); Drafts once its step offers it', () => {
-    expect(WORK_VIEWS).toEqual(['all', 'IN_PRODUCTION', WAITING_US_VIEW, 'late', DRAFTS_VIEW, NOT_EQUAL_VIEW])
+    expect(WORK_VIEWS).toEqual(['all', IN_PRODUCTION_VIEW, WAITING_US_VIEW, 'late', DRAFTS_VIEW, NOT_EQUAL_VIEW])
+    expect(IN_PRODUCTION_VIEW).toBe('phase:IN_PRODUCTION') // F-CW-101 (S3)
     expect(workViewsOf({ price: true }, { drafts: true, priceCheck: true })).toEqual([...WORK_VIEWS])
-    expect(workViewsOf({ price: false }, { drafts: true, priceCheck: true })).toEqual(['all', 'IN_PRODUCTION', WAITING_US_VIEW, 'late', DRAFTS_VIEW])
-    expect(workViewsOf({ price: true })).toEqual(['all', 'IN_PRODUCTION', WAITING_US_VIEW, 'late'])
+    expect(workViewsOf({ price: false }, { drafts: true, priceCheck: true })).toEqual(['all', IN_PRODUCTION_VIEW, WAITING_US_VIEW, 'late', DRAFTS_VIEW])
+    expect(workViewsOf({ price: true })).toEqual(['all', IN_PRODUCTION_VIEW, WAITING_US_VIEW, 'late'])
   })
 
   it('the empty state per view: All orders says no order yet; In production keeps its way to All orders; other views the sheet\'s own', () => {
@@ -652,18 +672,33 @@ describe('F-CP-103: each tile opens the rows it counts; the Views counts come fr
   const RECORD = `/w/acme/sales/customers/${ALPHA}`
   const viewOf = (href: string) => rowsFromAddress(new URL(`https://x${href}`).searchParams)
 
-  it('Open orders → rows=open, In production → status=IN_PRODUCTION, Late → late=true (the views the tiles count)', () => {
+  // F-CW-101 (lead settle S3): "In production" means ONE thing on the customer page — the STARTED orders (the phase IN_PRODUCTION):
+  // the Overview's tile, the Views ▾ item and the band's group count the same orders and open the same door.
+  it('Open orders → rows=open, In production → phase=IN_PRODUCTION, Late → late=true (the views the tiles count)', () => {
     expect(workDoor(RECORD, 'open')).toBe(`${RECORD}?tab=work&rows=open`)
-    expect(workDoor(RECORD, 'inProduction')).toBe(`${RECORD}?tab=work&status=IN_PRODUCTION`)
+    expect(workDoor(RECORD, 'inProduction')).toBe(`${RECORD}?tab=work&phase=IN_PRODUCTION`)
     expect(workDoor(RECORD, 'late')).toBe(`${RECORD}?tab=work&late=true`)
-    expect([viewOf(workDoor(RECORD, 'open')), viewOf(workDoor(RECORD, 'inProduction')), viewOf(workDoor(RECORD, 'late'))]).toEqual(['open', 'IN_PRODUCTION', 'late'])
-    // The rows each door reads are the rows its tile counts: Open = the open states, Late = open and promised before today.
+    expect([viewOf(workDoor(RECORD, 'open')), viewOf(workDoor(RECORD, 'late'))]).toEqual(['open', 'late'])
+    // The rows each door reads are the rows its tile counts: Open = the open states, Late = open and promised before today,
+    // In production = every order (`rows=all`, written by the entry) in the phase IN_PRODUCTION (the API's own rule).
     expect([...OPEN_ORDERS].sort()).toEqual([...OPEN_STATUSES].sort())
     expect(rowsQuery('open', '', null, ALPHA)).toMatchObject({ open: true, partyId: ALPHA })
-    expect(rowsQuery('IN_PRODUCTION', '', null, ALPHA)).toMatchObject({ status: 'IN_PRODUCTION', partyId: ALPHA })
     expect(rowsQuery('late', '', null, ALPHA)).toMatchObject({ late: true, partyId: ALPHA })
+    const entered = new URL(`https://x${workEntry(RECORD, ALPHA, params(workDoor(RECORD, 'inProduction').split('?')[1]!))!}`).searchParams
+    expect(viewOf(`${RECORD}?${entered.toString()}`)).toBe('all')
+    expect(rowsQuery('all', '', null, ALPHA, { extra: extraFromAddress(entered, 'all') })).toMatchObject({ phase: 'IN_PRODUCTION', partyId: ALPHA })
     const view = readFileSync(new URL('./view/CustomerRecordView.tsx', import.meta.url), 'utf8')
     for (const door of ['open', 'inProduction', 'late']) expect(view).toContain(`href: workDoor(recordHref, '${door}')`)
+    // A1-B5: In production and Late are the board's counts (the API's rule), no longer counted in the browser from the record's orders.
+    expect(view).toContain("const started = board ? phaseCountOf(board, 'IN_PRODUCTION') : null")
+    expect(view).toContain("const late = board ? (board.tiles.find((tile) => tile.key === 'late')?.count ?? 0) : null")
+    expect(view).not.toContain("order.status === 'IN_PRODUCTION'")
+    expect(view).not.toContain('order.promiseDate < today')
+    // S29: Open quotes opens Quotes & incoming at its open quotes.
+    expect(view).toContain("href: openQuotesHref ?? tabHref('quotes')")
+    const page = readFileSync(new URL('./CustomerRecord.tsx', import.meta.url), 'utf8')
+    expect(page).toContain("openQuotesHref={quotesGroupDoor(`${prefix}/sales/customers/${encodeURIComponent(partyId)}`, 'OPEN_QUOTES')")
+    expect(page).toContain('workBoard={work.reads.board')
   })
 
   it('a door arrives with its view: the entry adds the lock once and no default beside the view (fx-12)', () => {
@@ -672,7 +707,9 @@ describe('F-CP-103: each tile opens the rows it counts; the Views counts come fr
       const once = workEntry(BASE, ALPHA, params(query))!
       const written = new URL(`https://x${once}`).searchParams
       expect(written.get('party'), door).toBe(ALPHA)
+      // One view each: rows=open; phase=IN_PRODUCTION with its rows=all (S16: a phase is over every order); late=true.
       expect(written.getAll('rows').length + written.getAll('status').length + written.getAll('late').length, door).toBe(1)
+      expect(written.get('phase'), door).toBe(door === 'inProduction' ? 'IN_PRODUCTION' : null)
       expect(workEntry(BASE, ALPHA, params(once.split('?')[1]!)), door).toBeNull()
     }
   })
@@ -680,13 +717,18 @@ describe('F-CP-103: each tile opens the rows it counts; the Views counts come fr
   it('the counts: All orders (every state), In production, Late from the strip\'s board read; nothing while it reads; Waiting on us no number', () => {
     expect(workViewCounts({ status: 'reading' })).toBeNull()
     expect(workViewCounts({ status: 'failed' })).toBeNull()
-    const ready = { status: 'ready' as const, value: { byStatus: [{ status: 'CONFIRMED', count: 3 }, { status: 'IN_PRODUCTION', count: 7 }, { status: 'CLOSED', count: 32 }], lanes: [], tiles: [{ key: 'late', count: 2, filter: {} }], asOf: '2026-11-19T10:00:00Z' } } as never
+    // F-CW-101 (S3): In production counts the STARTED orders (the board's byPhase: 4 of the 7 in that state), the number its door opens.
+    const byPhase = [{ phase: 'NOT_SENT', count: 3 }, { phase: 'NOT_STARTED', count: 3 }, { phase: 'IN_PRODUCTION', count: 4 }, { phase: 'READY', count: 0 }, { phase: 'SHIPPED', count: 0 }, { phase: 'DONE', count: 32 }, { phase: 'CANCELLED', count: 0 }]
+    const ready = { status: 'ready' as const, value: { byStatus: [{ status: 'CONFIRMED', count: 3 }, { status: 'IN_PRODUCTION', count: 7 }, { status: 'CLOSED', count: 32 }], byPhase, lanes: [], tiles: [{ key: 'late', count: 2, filter: {} }], asOf: '2026-11-19T10:00:00Z' } } as never
     const counts = workViewCounts(ready)!
-    expect(counts).toEqual({ all: 42, IN_PRODUCTION: 7, late: 2 })
+    expect(counts).toEqual({ all: 42, [IN_PRODUCTION_VIEW]: 4, late: 2 })
+    // An older answer without byPhase: no number beside In production (never a guess from the state, which holds the not-started too).
+    const older = { status: 'ready' as const, value: { byStatus: [{ status: 'IN_PRODUCTION', count: 7 }], lanes: [], tiles: [], asOf: '2026-11-19T10:00:00Z' } } as never
+    expect(workViewCounts(older)).toEqual({ all: 7, late: 0 })
     const orders = createTranslator('en', messagesFor('en', ['orders']).orders!)
     const sheet = createTranslator('en', messagesFor('en', ['orders-sheet'])['orders-sheet']!)
-    const items = builtInViewsOf({ customer: { id: ALPHA, name: 'Brand Alpha' }, locked: { party: true, kind: false }, views: workViewsOf({ price: true }), viewCounts: counts }, orders, sheet)
-    expect(items.map((item) => [item.label, item.count ?? null])).toEqual([['All orders', '42'], ['In production', '7'], ['Waiting on us', null], ['Late', '2']])
+    const items = builtInViewsOf({ customer: { id: ALPHA, name: 'Brand Alpha' }, locked: { party: true, kind: false }, views: workViewsOf({ price: true }), hostViews: [{ id: IN_PRODUCTION_VIEW, label: orders('rows.IN_PRODUCTION') }], viewCounts: counts }, orders, sheet)
+    expect(items.map((item) => [item.label, item.count ?? null])).toEqual([['All orders', '42'], ['In production', '4'], ['Waiting on us', null], ['Late', '2']])
     // The page names the customer: no "Orders of Brand Alpha" line under each item on its own page.
     expect(items.some((item) => item.hint)).toBe(false)
   })

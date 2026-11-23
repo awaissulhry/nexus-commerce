@@ -54,6 +54,7 @@ import type { ListEdit } from '../../../../../list-frame/w2b/model' // B-TH-245
 // ---- F-SA-275 (the API's B-SA-070): Where it is, Waiting on, Supervisor (opt-in here, shown by the customer page's views), ⋯ Add task… / Answer request… ----
 import { SupervisorCell, WaitingOnCell, WhereItIsCell } from '../sheet/parts'
 import { answerHrefOf, waitingItemsOf, whereTextOf } from '../sheet/model' // F-MS-104: whereTextOf (the line's words)
+import { phasePhrase } from '../sheet/model' // F-CW-101: a phase door's chip
 import { SUPERVISOR_NS } from '../../../../_shared/production-supervisor/model'
 import { productionWordsFor } from '../../../../../lib/production/words'
 // ---- end F-SA-275
@@ -284,7 +285,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     // B-TH-057 (SHEET-G05): a custom field filter of the address is a chip too (the list, its counts and its file apply it).
     ...(model.cf ? [{ id: 'cf', label: s('chips.cf', { terms: model.cf }), onClear: () => actions?.onClearCf?.() }] : []),
     // B-TH-244: the terms a total's door added (never a hidden filter).
-    ...extraChips(model.extra ?? null, t, s).map((chip) => ({ id: `x-${chip.key}`, label: chip.label, onClear: () => actions?.onClearExtra?.(chip.key) })),
+    // F-CW-101: a phase's chip says in quiet words what it holds (the host's whys of "Not sent to the factory", else the sheet's own line).
+    ...extraChips(model.extra ?? null, t, s).map((chip) => ({ id: `x-${chip.key}`, label: chip.label, onClear: () => actions?.onClearExtra?.(chip.key), ...(chip.key === 'phase' ? { note: model.phaseNote ?? chip.note ?? null } : {}) })),
   ]
   const unavailable = model.customer?.name === null
   // B-TH-244: the honest count — the server's figure for the whole view when it was read (a door's view, the grouped view).
@@ -1324,9 +1326,9 @@ function serverSorted(sort: OrderSort | null, columns: ColDef<OrderRow>[]): ColD
 
 // ── B-TH-244 (threads plan TH-4, picture 26; features SHEET.overall-F02 … F11) ──────────────────────────────────────────────────
 /** The door terms as chips (each with ✕): what a total's door added beside the rows view. */
-export function extraChips(extra: ExtraTerms | null, t: Translate, s: Translate): Array<{ key: keyof ExtraTerms; label: string }> {
+export function extraChips(extra: ExtraTerms | null, t: Translate, s: Translate): Array<{ key: keyof ExtraTerms; label: string; note?: string }> {
   if (!extra) return []
-  const out: Array<{ key: keyof ExtraTerms; label: string }> = []
+  const out: Array<{ key: keyof ExtraTerms; label: string; note?: string }> = []
   if (extra.status) out.push({ key: 'status', label: s('chips.status', { status: t(`status.${extra.status}`) }) })
   if (extra.late) out.push({ key: 'late', label: s('chips.late') })
   if (extra.deposit) out.push({ key: 'deposit', label: s('chips.deposit') })
@@ -1337,6 +1339,11 @@ export function extraChips(extra: ExtraTerms | null, t: Translate, s: Translate)
   if (extra.currency) out.push({ key: 'currency', label: s('chips.currency', { currency: extra.currency }) })
   if (extra.customerUrgency) out.push({ key: 'customerUrgency', label: s('chips.urgency', { urgency: s(`urgency.${extra.customerUrgency}`) }) })
   if (extra.priceMatch) out.push({ key: 'priceMatch', label: t(`priceCheck.chip.${extra.priceMatch}`) }) // F-CP-141 (a price holder's only: the sheet drops it otherwise)
+  // F-CW-101: a phase's door — the group's own words (one word for one thing: phasePhrase); "Production not started" says what it holds.
+  if (extra.phase) {
+    const words = phasePhrase(extra.phase)
+    out.push({ key: 'phase', label: words.orders ? t(words.key) : s(words.key), ...(extra.phase === 'NOT_STARTED' ? { note: s('phase.note.NOT_STARTED') } : {}) })
+  }
   return out
 }
 

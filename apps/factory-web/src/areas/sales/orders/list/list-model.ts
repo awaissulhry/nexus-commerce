@@ -2,6 +2,7 @@ import type { CompanyRef } from '../../../../lib/session/session'
 import type { PartyDetail, PartyRow } from '../../quotes/api'
 import type { OrderBoard, OrderRow, OrderSort } from '../api'
 import type { PriceMatch } from '../api' // F-CP-140
+import type { OrderPhase } from '../api' // F-CW-101
 import type { OrderCustomer } from '../api' // F-SA-224: the switcher's customers carry Orders' counts
 import type { LiveState } from '../hooks'
 import type { Lane, Layout, OrderAbilities, Phrase, RowView } from '../model'
@@ -131,6 +132,11 @@ export interface OrdersListModel {
    * carries it, no rows are read — the sheet says so in ONE line ("Amounts are shown to people who see prices") with Show all orders.
    */
   priceHeld?: boolean
+  /**
+   * F-CW-101: quiet words the host puts beside the phase chip (`extra.phase`) — the customer page's band says why its "Not sent to the
+   * factory" orders wait ("1 waits for a yes · 1 waits for the deposit"); absent: the chip alone (or the sheet's own line for a phase).
+   */
+  phaseNote?: string | null
   /** The view's figures from the server (null while read or not asked; the problem in words when it failed). */
   summary?: { value: OrderSummary | null; problem: string | null } | null
   /** The grouped view: each customer's rows read so far (by customer id), and the groups folded shut. */
@@ -282,6 +288,12 @@ export interface OrdersListActions {
   // F-CP-141: the term in ONE write — no `view`: the funnel (narrows the view shown); with `view`: that view and the term alone (the
   // Not equal view: rows=all); null drops it (leaving the Not equal view for `view`). A price holder's only (absent otherwise).
   onPriceMatch?: (match: PriceMatch | null, view?: { readonly rows: RowView; readonly waiting?: 'us' | null }) => void
+  /**
+   * F-CW-101 (lead settle S16): a door of a phase — that phase alone beside `rows=all` (every order: a phase is defined over all of
+   * them), the search and the waiting term dropped, in ONE write: the rows are exactly the group's count. null drops the term (all
+   * orders again); null with `view`: leaving the door for that view, in the same write (each view stands alone).
+   */
+  onPhase?: (phase: OrderPhase | null, view?: { readonly rows: RowView; readonly waiting?: 'us' | null }) => void
   /** The columns on screen changed (the Progress column reads the floor only while shown). */
   onShownColumns?: (ids: readonly string[]) => void
   onInvoiceShipped?: (ids: readonly string[]) => void

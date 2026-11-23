@@ -226,7 +226,33 @@
           "due": "Scadenza"
         }
       },
-      "emptyAll": "{customer} non ha ancora ordini."
+      "emptyAll": "{customer} non ha ancora ordini.",
+      "band": {
+        "all": "Tutti gli ordini di {customer}",
+        "allCount": "Tutti gli ordini di {customer}:",
+        "pipeline": "Ordini: a che punto sono",
+        "groupTip": "Mostra gli ordini: {group}",
+        "groupOnTip": "Stai vedendo: {group}. Premi di nuovo per vedere tutti gli ordini.",
+        "why": {
+          "yes_one": "{count} aspetta un sì",
+          "yes_other": "{count} aspettano un sì",
+          "deposit_one": "{count} aspetta l'acconto",
+          "deposit_other": "{count} aspettano l'acconto"
+        },
+        "before": {
+          "label": "Prima dell'ordine:",
+          "drafts_one": "{count} bozza",
+          "drafts_other": "{count} bozze",
+          "toAnswer": "{count} da rispondere",
+          "openQuotes_one": "{count} preventivo aperto",
+          "openQuotes_other": "{count} preventivi aperti",
+          "orderWaits_one": "{count} accettato, l'ordine aspetta",
+          "orderWaits_other": "{count} accettati, l'ordine aspetta"
+        },
+        "info": "Cosa dicono questi numeri",
+        "sum": "Ogni ordine sta in un solo gruppo: i sette, sommati, fanno tutti gli ordini.",
+        "beforeNote": "Bozze, richieste e preventivi vengono prima dell'ordine: non entrano mai in questi numeri."
+      }
     },
     "quotesTab": {
       "quotes": "Preventivi",

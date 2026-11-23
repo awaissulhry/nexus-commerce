@@ -61,7 +61,13 @@ import { OrdersListView } from '../../orders/list/view/OrdersListView'
 import { WORK_DEFAULT_ROWS, type WorkReads } from './use-customer-work'
 import { priceWindowOf, type PriceWindowCase } from '../../orders/price-check/fixtures' // F-CP-114
 import { workViewCounts } from './use-customer-work' // F-CP-103: the Views ▾ counts
-import { WaitingStrip } from './view/WaitingStrip'
+// ---- F-CW-101: the band in the strip's place (made-up counts: the domain's own rule over the made-up states) ----
+import { ORDER_PHASES, phaseCountsOf } from '@nexus/factory-domain/production-brand/stages'
+import { IN_PRODUCTION_VIEW } from './use-customer-work'
+import { beforeLineOf, NO_BEFORE_ORDER } from './before-order'
+import { bandOf, chipsOf, whysOf } from './work-band'
+import { WorkBand } from './view/WorkBand'
+// ---- end F-CW-101
 import { workEmptyOf, workPreset, workViewsOf } from './view/WorkTab' // F-CP-101: the views and empty states per view
 import { NOT_EQUAL_VIEW } from './view/WorkTab' // F-CP-141: the Not equal view
 import { columnSetOf, type ColumnSet } from './view/WorkTab' // F-CP-105: Columns: Work · Money
@@ -192,8 +198,19 @@ export const linesWindowOf = (kind: 'lines' | 'discard', price: boolean, party: 
   problem: null,
   discardAsk: kind === 'discard',
 })
+// F-CW-101: the made-up board as the API answers it now — the seven phases (the domain's rule over the made-up states: one of the two
+// orders in production has started) and the two whys of "Not sent to the factory".
+const DESIGN_PHASES = phaseCountsOf(Object.fromEntries(BOARD.byStatus.map((entry) => [entry.status, entry.count])) as Partial<Record<OrderRow['status'], number>>, 1)
 const STRIP_READY: WorkReads = {
-  board: { status: 'ready', value: { ...BOARD, tiles: BOARD.tiles.map((tile) => (tile.key === 'late' ? { ...tile, count: 1 } : tile.key === 'waitingForDeposit' ? { ...tile, count: 1 } : tile)) } },
+  board: {
+    status: 'ready',
+    value: {
+      ...BOARD,
+      byPhase: ORDER_PHASES.map((phase) => ({ phase, count: DESIGN_PHASES[phase] })),
+      notSent: { waitsForYes: 0, waitsForDeposit: 1 },
+      tiles: BOARD.tiles.map((tile) => (tile.key === 'late' ? { ...tile, count: 1 } : tile.key === 'waitingForDeposit' ? { ...tile, count: 1 } : tile)),
+    },
+  },
   requests: { status: 'ready', value: { items: [], open: 2, countered: 1 } },
   replies: { status: 'ready', value: { rows: [], count: 3, complete: true } },
   asks: { status: 'ready', value: { items: [], complete: true } },
@@ -282,6 +299,7 @@ function WorkTools({ tools, children }: { tools: MemoryToolsModel; children?: Re
 /** The Work tab as the page draws it: the strip, then the Orders sheet embedded and locked to the customer (its views, its preset). */
 function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
   const t = useT('parties')
+  const o = useT('orders') // F-CW-101: the In production view's own word
   const name = party.tradeName ?? party.legalName
   const view = work.view ?? WORK_DEFAULT_ROWS
   const notEqual = work.notEqual === 'view' && work.price !== false // F-CP-141
@@ -312,9 +330,10 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
     preset: workPreset(view, null, columnSet === 'money'), // F-CP-141: the Not equal view opens on the money columns; F-CP-105: the toggle
     columnSet: can.price ? { value: columnSet } : null, // F-CP-105: the toggle, a price holder's only
     // ---- F-CP-141: the Not equal view (its host item ticked, the term's chip) or, without the price grain, the held line ----
-    ...(work.notEqual && work.price !== false ? { hostViews: [{ id: NOT_EQUAL_VIEW, label: t('customers.work.view.notEqual'), active: notEqual }], extra: { priceMatch: 'NOT_EQUAL' as const } } : {}),
+    // F-CW-101 (S3): In production = the started orders' door, a view of the host (beside Not equal for a price holder).
+    hostViews: [{ id: IN_PRODUCTION_VIEW, label: o('rows.IN_PRODUCTION') }, ...(work.notEqual && work.price !== false ? [{ id: NOT_EQUAL_VIEW, label: t('customers.work.view.notEqual'), active: notEqual }] : [])],
+    ...(work.notEqual && work.price !== false ? { extra: { priceMatch: 'NOT_EQUAL' as const } } : {}),
     ...(work.notEqual && work.price === false ? { priceHeld: true } : {}),
-    toolbarLink: { href: `/w/DEMO/production/work-orders?party=${party.id}`, label: t('customers.band.workOrders', { customer: name }) },
     empty: workEmptyOf(view, null, name, t, `/w/DEMO/sales/customers/${party.id}?tab=work&rows=all`), // F-CP-101: per view
     // ---- F-CP-112: the row's Next steps window, the ticked orders and their bulk window, the band's New order window ----
     // cp-walk: the ticked orders' bar decides yeses too (Confirm N…), not only while a window is open.
@@ -328,7 +347,21 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
   return createElement(
     'div',
     { className: 'fw-cw' },
-    createElement(WaitingStrip, { customer: name, reads: work.reads, can: { orders: true, workorders: true, threads: true, partners: true }, doors: { onView: () => undefined, repliesHref: '/w/DEMO/sales/incoming?tile=CUSTOMER_REPLIES', onWindow: () => undefined } }),
+    // F-CW-101: the band as the page draws it — the seven groups, the notes, what waits (a pick does nothing here: made-up).
+    createElement(WorkBand, {
+      model: {
+        customer: name,
+        picture: bandOf(work.reads.board),
+        shown: null,
+        whys: whysOf(work.reads.board),
+        before: beforeLineOf(work.reads.board.status === 'ready' ? { drafts: 2, toAnswer: 1, openQuotes: 3, orderWaits: null } : NO_BEFORE_ORDER, `/w/DEMO/sales/customers/${party.id}`),
+        chips: chipsOf({ orders: true, workorders: true, threads: true, partners: true }, work.reads),
+        workOrdersHref: `/w/DEMO/production/work-orders?party=${party.id}`,
+        repliesHref: '/w/DEMO/sales/incoming?tile=CUSTOMER_REPLIES',
+        requestsHref: null,
+      },
+      actions: { onGroup: () => undefined, onAll: () => undefined, onDrafts: () => undefined, onView: () => undefined, onWindow: () => undefined },
+    }),
     // F-CP-107: Drafts of <customer> in the sheet's place (the same Views ▾, the Drafts view ticked).
     work.drafts
       ? createElement(CustomerDraftsList, {
@@ -386,7 +419,7 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
       WithMessages,
       { namespaces: DEPTH_NAMESPACES },
       // B-TH-260: the customer's docked thread (Activity and Documents went to it), with threads.read.
-      createElement(CustomerRecordView, { model: record, thread: party ? partyThread(party, 'customers', record.can) : null, terms: termsCard(terms ?? termsModel()), money, depth: depthNodes(depth, id), supervisor: supervisor && party ? createElement(CustomerSupervisorCard, { model: supervisor, name: party.tradeName ?? party.legalName, designer: designer ?? null /* F-CP-155 */ }) : null, ...(portalEmails ? { portalEmails: new Set(portalEmails) } : {}), work: work && party ? createElement(WorkDesign, { work, party }) : null /* F-SA-276 */, workCount: work ? { count: 5, attention: true } : null, priceDiffer: priceDiffer ?? null /* F-CP-141 */ }),
+      createElement(CustomerRecordView, { model: record, thread: party ? partyThread(party, 'customers', record.can) : null, terms: termsCard(terms ?? termsModel()), money, depth: depthNodes(depth, id), supervisor: supervisor && party ? createElement(CustomerSupervisorCard, { model: supervisor, name: party.tradeName ?? party.legalName, designer: designer ?? null /* F-CP-155 */ }) : null, ...(portalEmails ? { portalEmails: new Set(portalEmails) } : {}), work: work && party ? createElement(WithMessages, { namespaces: ['orders'] /* F-CW-101: as the live Work tab loads them */ }, createElement(WorkDesign, { work, party })) : null /* F-SA-276 */, workCount: work ? { count: 5, attention: true } : null, priceDiffer: priceDiffer ?? null /* F-CP-141 */, workBoard: STRIP_READY.board /* F-CW-101: the Overview's In production and Late */ }),
     ),
   )
 }

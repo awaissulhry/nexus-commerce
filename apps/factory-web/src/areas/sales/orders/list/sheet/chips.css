@@ -1,0 +1,16 @@
+/* F-CW-101 / F-CW-102 (customer Work tab; 10-design §3.4, §3.5) — the Orders sheet's chips, on every host of the ONE sheet (the
+   customer's Work tab, Sales › Orders, Sales › Made to measure). Layout only; design-system tokens only (no raw colour). */
+
+/* ---- F-CW-101: a chip above the sheet may say in quiet words what it holds (a phase's whys) ---- */
+.fw-sheet-chip-noted {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  min-width: 0;
+}
+.fw-sheet-chip-note {
+  min-width: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}

@@ -38,6 +38,7 @@ import { WaitingForCustomerDialog } from './view/WaitingForCustomerDialog'
 import { OpenTasksDialog } from './view/OpenTasksDialog'
 // ---- end F-SA-278
 import { QuotesIncomingTab } from './QuotesIncomingTab' // F-SA-277: two lists stacked, each its own list locked to the customer
+import { quotesGroupDoor, useBeforeOrder } from './before-order' // F-CW-101 (S27, S29): the band's "Before an order" line; the Open quotes door
 
 /**
  * `/w/<company>/sales/customers/<id>` (SCR-033): the customer's record. F-SA-270: its own view (./view/CustomerRecordView), split
@@ -93,6 +94,8 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   const customerDock = useCustomerDock(partyId, tab, record.party ? partyName(record.party) : null /* F-OF-303: Who can see… names the customer */)
   const api = useOfficeApi()
   const session = useOfficeSession()
+  // F-CW-101 (S27): the band's "Before an order" line — counted only while the Work tab is shown, each part with its OWN right.
+  const before = useBeforeOrder(partyId, tab === 'work' && can.orders, { orders: can.orders, inquiries: session.permissions.includes('sales.inquiries.view'), quotes: can.quotes }, record.model.quotes)
   const onPick = customerDock.onRow
   const t = useT('parties')
   const named = record.party ? { id: record.party.id, name: partyName(record.party) } : null
@@ -134,7 +137,7 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   // ---- end F-CP-104
   // F-SA-277: Quotes & incoming — a row's click docks its quote's or request's thread.
   const quotesTab = named && tab === 'quotes' ? <QuotesIncomingTab party={named} onPick={onPick} onFocus={customerDock.onFocus} shown={customerDock.shown} /> : null
-  const workTab = named && tab === 'work' && can.orders ? <WorkTab party={named} prefix={prefix} work={work} can={workCan} picked={customerDock.shown /* F-SA-279: the row marked = the record docked */} onPick={onPick} onFocus={customerDock.onFocus} onWindow={setWin /* F-SA-278 */} ask={ask} onAsked={() => setAsk(null) /* F-CP-104 */} /> : null
+  const workTab = named && tab === 'work' && can.orders ? <WorkTab party={named} prefix={prefix} work={work} can={workCan} picked={customerDock.shown /* F-SA-279: the row marked = the record docked */} onPick={onPick} onFocus={customerDock.onFocus} onWindow={setWin /* F-SA-278 */} ask={ask} onAsked={() => setAsk(null) /* F-CP-104 */} before={before /* F-CW-101 */} /> : null
   // ---- end F-SA-276
   // ---- F-SA-274: People & addresses — the people with portal access (Portal access's people part), tagged against the contacts.
   const [portalEmails, setPortalEmails] = useState<ReadonlySet<string>>(new Set())
@@ -150,7 +153,7 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
       {windows /* F-SA-278 */}
       {/* F-OF-301 (T): the docked order's Versions… — the page's ONE depth window (as on the order page). */}
       <DepthDialogs depth={customerDock.fileDepth.model} actions={customerDock.fileDepth.actions} />
-      <CustomerRecordView model={record.model} actions={record.actions} thread={dock /* F-SA-276 */} threadButton={threadButton /* F-SA-279 */} work={workTab} workCount={work.attention} quotesIncoming={quotesTab /* F-SA-277 */} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} supervisor={record.party && record.model.tab === 'overview' ? <CustomerSupervisor partyId={partyId} name={partyName(record.party)} /> : null} portalPeople={portalPeople} portalEmails={portalEmails} {...doors /* F-CP-104 */} priceDiffer={priceDifferOf(work.prices) /* F-CP-141 */} />
+      <CustomerRecordView model={record.model} actions={record.actions} thread={dock /* F-SA-276 */} threadButton={threadButton /* F-SA-279 */} work={workTab} workCount={work.attention} quotesIncoming={quotesTab /* F-SA-277 */} printThread={record.printThread} fields={record.fields} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} supervisor={record.party && record.model.tab === 'overview' ? <CustomerSupervisor partyId={partyId} name={partyName(record.party)} /> : null} portalPeople={portalPeople} portalEmails={portalEmails} {...doors /* F-CP-104 */} priceDiffer={priceDifferOf(work.prices) /* F-CP-141 */} workBoard={work.reads.board /* F-CW-101: the Overview's In production and Late */} openQuotesHref={quotesGroupDoor(`${prefix}/sales/customers/${encodeURIComponent(partyId)}`, 'OPEN_QUOTES') /* F-CW-101 (S29) */} />
     </>
   )
 }

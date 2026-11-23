@@ -42,6 +42,10 @@ import { SUPERVISOR_MARKS as MARKS } from '@nexus/factory-domain/production-bran
 /** The parts a reader without workorders.view over the order does not get (null, named in `withheld`): the API's PRODUCTION_WITHHELD. */
 export const PRODUCTION_WITHHELD = ['supervisorMark', 'openIssues'] as const
 // ---- end F-SA-275
+// ---- F-CW-101 (customer Work tab; the API's B-CW-001…003): the ONE phase of an order — the domain's rule, never re-written here ----
+export { ORDER_PHASES, type OrderPhase } from '@nexus/factory-domain/production-brand/stages'
+import { ORDER_PHASES as PHASES, type OrderPhase as Phase } from '@nexus/factory-domain/production-brand/stages'
+// ---- end F-CW-101
 
 // W2b-5 (B-W2b-281): PENDING_APPROVAL, an order waiting for a yes before it goes on (the domain's list, in its order).
 // W2b-6 (B-W2b-372): DELIVERED, every shipment that left was delivered.
@@ -270,6 +274,9 @@ export interface OrderQuery {
   // the board); a price holder's only (403 in words otherwise: the sheet never sends it for anyone else) ──
   priceMatch?: PriceMatch | null
   // ── end F-CP-141 ──
+  // F-CW-101 (the API's B-CW-002): the orders in one phase (`?phase=`) — the list, its totals and its file read it; the board counts
+  // every phase itself (`byPhase`), so it takes none (as it takes no status).
+  phase?: Phase | null
   q?: string
   cursor?: string | null
   limit?: number
@@ -302,6 +309,7 @@ export function listOrders(api: ApiClient, query: OrderQuery, signal?: AbortSign
       waiting: query.waiting ?? undefined, // F-SA-276
       ids: query.ids?.length ? query.ids.join(',') : undefined, // F-SA-276
       priceMatch: query.priceMatch ?? undefined, // F-CP-141
+      phase: query.phase ?? undefined, // F-CW-101
       q: query.q?.trim() || undefined,
       cursor: query.cursor ?? undefined,
       limit: query.limit ?? 50,
@@ -313,6 +321,10 @@ export function listOrders(api: ApiClient, query: OrderQuery, signal?: AbortSign
 
 export const boardSchema = z.object({
   byStatus: z.array(z.object({ status, count: z.number() })),
+  // F-CW-101 (the API's B-CW-003): the seven phases in order, each with its count (0 as 0: they add up to byStatus), and the two exact
+  // whys inside "Not sent to the factory". Optional: an older answer has neither (the band then groups by state: work-band.ts).
+  byPhase: z.array(z.object({ phase: z.enum(PHASES), count: z.number() })).optional(),
+  notSent: z.object({ waitsForYes: z.number(), waitsForDeposit: z.number() }).optional(),
   lanes: z.array(status),
   tiles: z.array(z.object({ key: z.enum(TILE_KEYS), count: z.number(), filter: z.record(z.string(), z.string()) })),
   asOf: instant,
@@ -380,6 +392,7 @@ export function getOrderSummary(api: ApiClient, query: OrderQuery, group: 'party
       profile: query.profile ?? undefined, // F-SA-222
       waiting: query.waiting ?? undefined, // F-SA-276: the totals keep the same rows
       priceMatch: query.priceMatch ?? undefined, // F-CP-141: the totals keep the same rows
+      phase: query.phase ?? undefined, // F-CW-101: the totals keep the same rows
       q: query.q?.trim() || undefined,
       group: group ?? undefined,
     },
