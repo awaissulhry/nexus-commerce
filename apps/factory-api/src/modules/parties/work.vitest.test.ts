@@ -69,7 +69,7 @@ describe('the needs order: most urgent first (B-CL-002, settle T3)', () => {
       key({ best: { level: 'NORMAL', priority: 0, promise: '2026-11-30' } }, 'SEED-B', 'b'),
       key({ best: { level: 'NORMAL', priority: 0, promise: '2026-11-30' } }, 'SEED-C', 'c'),
       key({ best: { level: 'LOW', priority: 0, promise: null } }),
-      // With orders but none before or in production (all done): after every level.
+      // With orders but none open (all done; T31: waiting for a yes neither): after every level.
       key({ phases: { DONE: 3 } }, 'SEED-D', 'd'),
       // No facts at all (no order the reader sees): last, by code.
       key(undefined, 'SEED-E', 'e'),

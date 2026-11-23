@@ -104,16 +104,16 @@ const v4 = (expression: string, salt: string): string => {
   return `(substr(${hash}, 1, 8) || '-' || substr(${hash}, 9, 4) || '-4' || substr(${hash}, 14, 3) || '-8' || substr(${hash}, 18, 3) || '-' || substr(${hash}, 21, 12))::uuid`
 }
 
-/** SEED-SO-0001 copied for SEED-R1 as `number`, CONFIRMED, ordered and promised on the days given (its lines and sizes too). */
-async function copyForRider(number: string, orderDate: string, promiseDate: string): Promise<void> {
+/** SEED-SO-0001 copied for SEED-R1 (or the customer given) as `number`, CONFIRMED, ordered and promised on the days given (its lines and sizes too). */
+async function copyForRider(number: string, orderDate: string, promiseDate: string, partyId: string = R1): Promise<void> {
   const salt = number.toLowerCase()
   await admin(
     `CREATE TEMP TABLE o AS SELECT * FROM "SalesOrder" WHERE "tenantId" = '${tenant}' AND number = 'SEED-SO-0001';
      CREATE TEMP TABLE l AS SELECT * FROM "SalesOrderLine" WHERE "orderId" = (SELECT id FROM o);
      CREATE TEMP TABLE s AS SELECT * FROM "SalesOrderLineSize" WHERE "lineId" IN (SELECT id FROM l);
-     UPDATE s SET id = ${v4('id', salt)}, "lineId" = ${v4('"lineId"', salt)}, "partyId" = '${R1}';
-     UPDATE l SET id = ${v4('id', salt)}, "orderId" = ${v4('"orderId"', salt)}, "partyId" = '${R1}', "quoteLineId" = NULL, "styleRevisionId" = NULL;
-     UPDATE o SET id = ${v4('id', salt)}, "partyId" = '${R1}', number = '${number}', "quoteVersionId" = NULL, "customerRef" = NULL, "customerSeq" = NULL,
+     UPDATE s SET id = ${v4('id', salt)}, "lineId" = ${v4('"lineId"', salt)}, "partyId" = '${partyId}';
+     UPDATE l SET id = ${v4('id', salt)}, "orderId" = ${v4('"orderId"', salt)}, "partyId" = '${partyId}', "quoteLineId" = NULL, "styleRevisionId" = NULL;
+     UPDATE o SET id = ${v4('id', salt)}, "partyId" = '${partyId}', number = '${number}', "quoteVersionId" = NULL, "customerRef" = NULL, "customerSeq" = NULL,
        status = 'CONFIRMED', "cancelReason" = NULL, "closedAt" = NULL,
        "orderDate" = '${orderDate}', "promiseDate" = '${promiseDate}', "originalPromiseDate" = '${promiseDate}', "createdAt" = now(), "updatedAt" = now();
      INSERT INTO "SalesOrder" SELECT * FROM o;
@@ -318,6 +318,24 @@ describe('GET /parties: the band = the filter, the needs order (B-CL-002, 13-bac
       if (!cursor) break
     }
     expect(paged).toEqual(ids)
+  })
+
+  // ── T31 (walk W-4): the needs order's second key reads OPEN orders only, the set of the Top / High chips and their door ──
+  it('T31: a Top order waiting for a yes does not put its customer above a customer with an open Top order', async () => {
+    // T-CL-C1-YES-TOP: SEED-C1's order waiting for a yes at our level Top with a high priority number — it would sort SEED-C1 first
+    // if it counted. Both customers wait on us (a reply each); SEED-R1's open Top order (T-CL-R1-TOP) puts SEED-R1 first.
+    await copyForRider('T-CL-C1-YES-TOP', addDays(TODAY, -1), addDays(TODAY, 1), C1)
+    await setOrder('T-CL-C1-YES-TOP', { status: 'PENDING_APPROVAL', level: 'URGENT' })
+    await rulesOff(`UPDATE "SalesOrder" SET priority = 99 WHERE ${orderSql('T-CL-C1-YES-TOP')};`)
+    const ids = partyIdsOf(await ok('all', `/parties?${CUSTOMERS}&sort=needs&limit=200`))
+    expect(ids[0]).toBe(R1)
+    expect(ids.indexOf(R1)).toBeLessThan(ids.indexOf(C1))
+    // The chips say the same: SEED-C1's Top counts its open orders only (the door rows=open), the order waiting for a yes is "Waits for a yes".
+    const c1 = rowOf(await work('all', [C1]), C1)
+    expect(c1.priority.top).toBe(await doorRows('all', `partyId=${C1}&open=true&priority=URGENT`))
+    expect(await doorRows('all', `partyId=${C1}&status=PENDING_APPROVAL&priority=URGENT`)).toBe(1)
+    expect(c1.waitsForYes).toBe(await doorRows('all', `partyId=${C1}&status=PENDING_APPROVAL`))
+    expect(c1.waitsForYes).toBeGreaterThanOrEqual(1)
   })
 })
 

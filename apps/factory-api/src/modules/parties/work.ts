@@ -30,7 +30,7 @@ export interface PartyWork {
   readonly waitsForYes: number
   /** Orders confirmed whose deposit is still open (inside Not sent). */
   readonly waitsForDeposit: number
-  /** Its most urgent order before or in production by our rule (level, priority number, promise); null: none. */
+  /** Its most urgent OPEN order (not shipped yet; T31) by our rule (level, priority number, promise); null: none. */
   readonly best: { readonly level: PriorityLevel; readonly priority: number; readonly promise: string | null } | null
 }
 
@@ -85,8 +85,9 @@ const NO_PROMISE = '9999-12-31'
 const NO_LEVEL = PRIORITY_LEVELS.length
 
 /**
- * A customer's place in "Most urgent first": something waiting on us first, then its most urgent order before or in production by
- * planning's rule order (our level, our priority number, its promise), then code and id. The customer's own urgency is not a key.
+ * A customer's place in "Most urgent first": something waiting on us first, then its most urgent OPEN order (T31: the set of the
+ * Top / High chips) by planning's rule order (our level, our priority number, its promise), then code and id. The customer's own
+ * urgency is not a key.
  * A customer without facts sits after every one with work: [1, 4, 0, '9999-12-31', code, id].
  */
 export function needsKeyOf(work: PartyWork | undefined, code: string, id: string): NeedsKey {
