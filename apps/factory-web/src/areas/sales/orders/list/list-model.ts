@@ -202,6 +202,14 @@ export interface OrdersListModel {
     /** The host's own order of its set, left to right (the sheet's other columns follow in their own order; ⋯ stays last). */
     readonly order?: readonly string[]
     // ---- end F-CW-102
+    // ---- F-CW-103 (lead settle S12; 10-design §3.9): Customise tells the truth for the host's set ----
+    /**
+     * The columns of the host's set that are not on screen in THIS room and show in a wider one (by column id: from a `wider` sheet,
+     * or only from the `widest`). Customise lists them ticked and named so ("Waiting on · from a wider sheet"); a column is never
+     * cut to fit. Every other column the preset does not show is offered unticked (it shows when the person ticks it).
+     */
+    readonly later?: Readonly<Record<string, 'wider' | 'widest'>>
+    // ---- end F-CW-103
   } | null
   /** A real link on the toolbar's right ("Work orders of <customer> ›"). */
   toolbarLink?: { readonly href: string; readonly label: string } | null

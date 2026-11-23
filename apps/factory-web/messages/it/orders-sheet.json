@@ -459,5 +459,9 @@
   },
   "deposit": {
     "extra": "aggiuntivo aperto, scade il {date}"
+  },
+  "customise": {
+    "wider": "{column} · da un foglio più largo",
+    "widest": "{column} · dal foglio più largo"
   }
 }

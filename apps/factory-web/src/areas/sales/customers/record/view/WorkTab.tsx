@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Building2, Eye } from 'lucide-react' // F-OP-203: the segments' icons
 import { Button, Skeleton } from '@nexus/ui/primitives'
@@ -54,6 +54,7 @@ import { bandOf, chipsOf, groupShown, whysOf, type BandGroup } from '../work-ban
 import { beforeLineOf, NO_BEFORE_ORDER, type BeforeOrderCounts } from '../before-order'
 import { WorkBand, type WorkBandActions, type WorkBandModel } from './WorkBand'
 // ---- end F-CW-101
+import { WorkLayoutTools } from '../work-layout' // F-CW-103: the Work tab's own browser layout
 import './customer-work.css'
 
 /**
@@ -140,6 +141,8 @@ export function workEmptyOf(
 export const MONEY_PRESET: NonNullable<OrdersListModel['preset']> = Object.freeze({
   shown: Object.freeze(['number', 'status', 'ourPrice', 'brandPrice', 'priceMatch', 'balance']),
   wide: Object.freeze(['picture', 'promised', 'paid']),
+  // F-CW-103: Customise says so of the three that wait for the widest sheet (ticked, "… · from the widest sheet").
+  later: Object.freeze({ picture: 'widest', promised: 'widest', paid: 'widest' } as const),
 })
 
 /** The Not equal view is the one shown: every order (`rows=all`), the price check term Not equal, no waiting term (a price holder's). */
@@ -201,18 +204,51 @@ export const WORK_MIN: Readonly<Record<string, number>> = Object.freeze({ pictur
 export const WORK_MAX: Readonly<Record<string, number>> = Object.freeze(Object.fromEntries(Object.entries(WORK_MIN).filter(([id]) => id !== 'whereItIs' && id !== 'status')))
 
 type WorkPreset = NonNullable<OrdersListModel['preset']>
+/**
+ * F-CW-103 (S12; 10-design §3.9): the columns of the tab's set that are not on screen in this room, and from which room they show —
+ * what Customise says of each ("Waiting on · from a wider sheet", "Supervisor · from the widest sheet"): ticked, never cut to fit.
+ */
+export function workLaterOf(shown: readonly string[]): Readonly<Record<string, 'wider' | 'widest'>> {
+  const later: Record<string, 'wider' | 'widest'> = {}
+  for (const id of WORK_SETS.widest) if (!shown.includes(id)) later[id] = WORK_ADDS.widest.includes(id) ? 'widest' : 'wider'
+  return Object.freeze(later)
+}
 /** One preset per room and kind, kept (the sheet rebuilds its columns only when the preset really changes). */
 const PRESETS = new Map<string, WorkPreset>()
 function presetOf(room: WorkRoom, waits: boolean): WorkPreset {
   const key = `${room}:${waits ? 'waits' : 'all'}`
   let preset = PRESETS.get(key)
   if (!preset) {
+    const shown = waits ? WAITING_SET : WORK_SETS[room]
     // A narrow cell beside the dock: chip 3 keeps its head, its tail goes to its tooltip (the widest room shows it whole).
-    preset = Object.freeze({ shown: waits ? WAITING_SET : WORK_SETS[room], order: WORK_ORDER, min: WORK_MIN, max: WORK_MAX, dense: room !== 'widest' })
+    preset = Object.freeze({ shown, order: WORK_ORDER, min: WORK_MIN, max: WORK_MAX, dense: room !== 'widest', later: workLaterOf(shown) /* F-CW-103 */ })
     PRESETS.set(key, preset)
   }
   return preset
 }
+
+// ---- F-CW-103 (lead settle S11; 13-backend §8, review A1 (b)): wide by the ROOM ----
+/**
+ * The Work tab measures its OWN room — the width its root really has, with the thread docked a third, a half or hidden, at any
+ * screen — and hands the sheet the set for that room: closing the thread ADDS columns, live. Never the window (the old rule: 1800 px
+ * of viewport, so a closed thread at 1440 added nothing), and no change in the record frame. Until it is measured: the base set.
+ */
+export function useWorkRoom(): { readonly ref: RefObject<HTMLDivElement | null>; readonly room: WorkRoom } {
+  const ref = useRef<HTMLDivElement>(null)
+  const [room, setRoom] = useState<WorkRoom>('base')
+  useLayoutEffect(() => {
+    const node = ref.current
+    if (!node) return
+    const measure = () => setRoom(workRoomOf(node.getBoundingClientRect().width))
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+  return { ref, room }
+}
+// ---- end F-CW-103
 
 /**
  * The columns a view shows at first (10-design §1, §3.5; a person's Customise wins): the room's set — the same on every view of
@@ -300,6 +336,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
     onRowClick: (row, newTab) => (newTab ? window.open(`${prefix}/sales/orders/${encodeURIComponent(row.id)}`, '_blank', 'noopener') : onPick(pickOfRow(row))),
   }
   const sheet = useOrdersSheet(host)
+  const workRoom = useWorkRoom() // F-CW-103 (S11): the tab's own room decides the columns, never the window
   // ---- F-CP-104: the band's New order (the customer picked and held: no Change) and ⋯ Import orders open here, once each ask; no
   // address term is written for them (fx-12: nothing to loop on; a reload does not reopen the window).
   const latest = useRef(sheet.actions)
@@ -359,7 +396,8 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
       { id: DRAFTS_VIEW, label: t('customers.work.view.drafts', { customer: party.name }), active: showDrafts }, // F-CP-107
       ...(price ? [{ id: NOT_EQUAL_VIEW, label: t('customers.work.view.notEqual'), active: notEqual }] : []), // F-CP-141
     ],
-    preset: workPreset(rows, waiting, columnSet === 'money' /* F-CP-141: the Not equal view opens on the money columns; F-CP-105: the toggle on every view */),
+    preset: workPreset(rows, waiting, columnSet === 'money' /* F-CP-141: the Not equal view opens on the money columns; F-CP-105: the toggle on every view */, workRoom.room /* F-CW-103 */),
+    wide: workRoom.room === 'widest', // F-CW-103 (S11): by the tab's own room (the sheet then asks no window)
     columnSet: price ? { value: columnSet } : null, // F-CP-105: the toggle, a price holder's only
     marks: work.marks,
     doorHref: door.hrefOf,
@@ -451,7 +489,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
   const viewName = waiting ? t('customers.work.view.waitingUs') : notEqual ? t('customers.work.view.notEqual') /* F-CP-141 */ : phase ? phaseWords(phase) /* F-CW-101 */ : o(`rows.${rows}`)
   return (
     <CustomerOverrideProvider onDone={door.refresh}>
-      <div className="fw-cw">
+      <div className="fw-cw" ref={workRoom.ref /* F-CW-103: the room the tab measures */}>
         <RequestDoorNoticeBanner door={door} />
         <WorkBand model={bandModel} actions={bandActions} />
         {gone && (
@@ -474,7 +512,10 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
             }}
           />
         ) : (
-          <OrdersListView model={model} actions={actions /* F-SA-279 */} />
+          // F-CW-103 (S12): the sheet under the Work tab's own browser layout (a layout made on Sales › Orders never moves it).
+          <WorkLayoutTools listKey={ORDERS_LIST_KEY}>
+            <OrdersListView model={model} actions={actions /* F-SA-279 */} />
+          </WorkLayoutTools>
         )}
       </div>
       <RequestDoorWindow door={door} />

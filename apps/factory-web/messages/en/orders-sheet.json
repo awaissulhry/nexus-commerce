@@ -459,5 +459,9 @@
   },
   "deposit": {
     "extra": "extra open, due {date}"
+  },
+  "customise": {
+    "wider": "{column} · from a wider sheet",
+    "widest": "{column} · from the widest sheet"
   }
 }

@@ -1291,7 +1291,8 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer,
     ...laterColumns, // B-TH-244
     { colId: 'more', headerName: t('col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
   ] as ColDef<OrderRow>[])
-    .map((column) => withPreset(column, model.preset ?? null, wide, phone)) // F-SA-276; F-CP-107 (cp-fx16): + the phone card
+    // F-SA-276; F-CP-107 (cp-fx16): + the phone card; F-CW-103: + what Customise says of a column that waits for a wider sheet
+    .map((column) => withPreset(column, model.preset ?? null, wide, phone, (name, room) => s(`customise.${room}`, { column: name })))
     .map((column) => withMovedMark(column, () => latest.current.model.commands?.moved ?? [])) // F-CP-108
   // F-OP-315 (order page walk #24): Sales › Orders itself fits its screen (a host's preset and the phone card keep their own rules).
   // F-CW-102: a host's set in the host's own order.
@@ -1363,14 +1364,24 @@ export function withMovedMark(column: ColDef<OrderRow>, moved: () => readonly st
 export const statusShownOf = (preset: OrdersListModel['preset'] | null): boolean => !preset || preset.shown.includes('status')
 
 /** F-SA-276: the host's first columns (its view's preset; from 1800 px its wide ones too); ⋯ always; a person's Customise wins. */
-export function withPreset(column: ColDef<OrderRow>, preset: OrdersListModel['preset'] | null, wide: boolean, phone = false): ColDef<OrderRow> {
+// F-CW-103 (lead settle S12; review A1-B1): Customise tells the truth for a host's set. The list frame reads a column's place in
+// Customise from its `context.optIn` alone (list-frame/tools/model: no change there), and a preset hid built-in columns and showed
+// opt-in ones behind its back — the dialog listed the Orders page's columns: Where it is unticked while on screen, Customer ticked
+// while never shown. So the preset now says each column's truth: on screen → ticked; of the host's set but waiting for a wider
+// sheet (`later`) → ticked and named so (`label`: "Waiting on · from a wider sheet"), shown when the room allows, never cut to fit;
+// any other column → offered unticked (opt-in: it shows when the person ticks it). Only a host that gives a preset is touched.
+export function withPreset(column: ColDef<OrderRow>, preset: OrdersListModel['preset'] | null, wide: boolean, phone = false, label?: (column: string, room: 'wider' | 'widest') => string): ColDef<OrderRow> {
   if (!preset || column.colId === 'more') return column
   const id = column.colId ?? ''
   // F-CP-107 (cp-fx16): a table-wide column of `shown` leaves the table below 1800 px (the phone card keeps it); the host's own min width.
   const first = preset.shown.includes(id) && (wide || phone || !preset.tableWide?.includes(id))
   const min = preset.min?.[id]
   const max = preset.max?.[id] // F-CW-102: a column of the host's set at its own fixed width (the rest goes to Where it is)
-  return { ...column, hide: !(first || (wide && !!preset.wide?.includes(id))), ...(min ? { minWidth: min } : {}), ...(max ? { maxWidth: max } : {}) }
+  const shown = first || (wide && !!preset.wide?.includes(id))
+  const waits = shown ? null : (preset.later?.[id] ?? null)
+  const name = typeof column.headerName === 'string' ? column.headerName : ''
+  const context = { ...((column.context as object | undefined) ?? {}), optIn: !shown && !waits, ...(waits && label && name ? { toolLabel: label(name, waits) } : {}) }
+  return { ...column, hide: !shown, context, ...(min ? { minWidth: min } : {}), ...(max ? { maxWidth: max } : {}) }
 }
 // ── end B-TH-225 ──
 
