@@ -495,6 +495,24 @@
     "none": "Your role reads the orders and changes none: there is no act for the ticked rows.",
     "askCustomer": "Ask {customer} about {count}…",
     "askCustomerAny": "Ask the customer about {count}…",
-    "askCustomerWho": "A message in each order's own conversation, read in the portal, AND a to-do with a date in their list."
+    "askCustomerWho": "A message in each order's own conversation, read in the portal, AND a to-do with a date in their list.",
+    "ship_one": "Ship {count} order…",
+    "ship_other": "Ship {count} together…"
+  },
+  "ship": {
+    "cap": "At most {max} orders in one shipment.",
+    "nothing_one": "Nothing is ready now on the order ticked.",
+    "nothing_other": "Nothing is ready now on the {count} ticked.",
+    "capLine": "One shipment carries at most {max} orders of one customer, to one address, from one site. {count} are ticked.",
+    "notOnLabel": "Not on this shipment",
+    "off": "Taken off here",
+    "complete": "{customer} wants {order} all in one delivery.",
+    "completeCarries": "This shipment would carry {carried} of its {owed} pieces still to ship.",
+    "draft": "A draft of {customer} exists:",
+    "created_one": "Shipment {number} created with {count} order:",
+    "created_other": "Shipment {number} created with {count} orders:",
+    "createdDraft": "a draft: {customer} is not told.",
+    "createdDraftAny": "a draft: the customer is not told.",
+    "showThread": "Show {number}"
   }
 }

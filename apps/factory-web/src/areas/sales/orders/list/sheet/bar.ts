@@ -7,6 +7,7 @@ import { manyHeld, manyShown, type ManyCommand } from '../commands/model'
 import { replyManyHeld } from '../reply-many'
 import { oneCustomerHeld, supervisorTargetsOf } from './model'
 import { invoiceShippedHeld } from './overall'
+import { shipHeld } from './ship' // F-CW-301
 
 /**
  * F-CW-202 (customer Work tab plan §4; 10-design §4; 13-backend §8; lead settles S8, S9, S37) — the bar of ticked orders on the ONE
@@ -28,6 +29,8 @@ import { invoiceShippedHeld } from './overall'
 
 /** What the reader may do on the ticked orders — each act's OWN right. */
 export interface BarCan {
+  /** F-CW-301 — shipping.manage: Ship N together… (Sales holds no shipping right: not drawn for them, S23). */
+  readonly ship: boolean
   /** orders.manage: Set priority, Mark ready, Close. */
   readonly manage: boolean
   /** orders.close: Close (an order that is not settled, with a reason). */
@@ -47,10 +50,10 @@ export interface BarCan {
 }
 
 /** A reader with no act at all (a read-only role). */
-export const NO_BAR_CAN: BarCan = Object.freeze({ manage: false, close: false, decide: false, post: false, supervisor: false, task: false, todo: false, invoices: false })
+export const NO_BAR_CAN: BarCan = Object.freeze({ ship: false, manage: false, close: false, decide: false, post: false, supervisor: false, task: false, todo: false, invoices: false })
 
 /** The bar's acts, by id. */
-export type BarActId = 'ask' | 'priority' | 'reply' | 'assign' | 'task' | 'note' | ManyCommand | 'invoice'
+export type BarActId = 'ship' /* F-CW-301 */ | 'ask' | 'priority' | 'reply' | 'assign' | 'task' | 'note' | ManyCommand | 'invoice'
 /** The entries of Ask ▾ (S8: exactly two; S37: a reader who may not make a customer's to-dos gets the first alone). */
 export type AskEntryId = 'askProduction' | 'askCustomer'
 
@@ -92,10 +95,11 @@ export interface Bar {
 export const BAR_PROMOTED = 3
 
 /**
- * The ONE order of the acts (S8): the promoted ones first (group 0), then More ▾'s groups — what the customer and the office read
- * and write (1), the order's own commands (2), money (4). W3 adds "Ship N together…" in front and the customer's urgency as group 3.
+ * The ONE order of the acts (S8): the promoted ones first (group 0) — F-CW-301: "Ship N together…" leads —, then More ▾'s groups:
+ * what the customer and the office read and write (1), the order's own commands (2), money (4). The customer's urgency is group 3.
  */
 export const BAR_ORDER: ReadonlyArray<{ readonly id: BarActId; readonly group: number }> = Object.freeze([
+  { id: 'ship', group: 0 },
   { id: 'ask', group: 0 },
   { id: 'priority', group: 0 },
   { id: 'reply', group: 1 },
@@ -109,7 +113,7 @@ export const BAR_ORDER: ReadonlyArray<{ readonly id: BarActId; readonly group: n
 ])
 
 /** The ticked orders as the bar's rules read them. */
-export type BarRow = Pick<OrderRow, 'id' | 'number' | 'customerRef' | 'partyId' | 'partyName' | 'companyId' | 'status'>
+export type BarRow = Pick<OrderRow, 'id' | 'number' | 'customerRef' | 'partyId' | 'partyName' | 'companyId' | 'status' | /* F-CW-301 */ 'units' | 'shippedUnits' | 'production'>
 
 export interface BarHost {
   /** The page's own customer (the customer page): a ticked order of another customer holds the acts that take one customer. */
@@ -122,6 +126,8 @@ const of = (ns: BarNs, phrase: { readonly key: string; readonly params?: Readonl
 /** Whether the reader holds the act's own right. */
 export function barAllowed(id: BarActId, can: BarCan): boolean {
   switch (id) {
+    case 'ship':
+      return can.ship
     case 'ask':
     case 'reply':
     case 'note':
@@ -147,6 +153,8 @@ export function barHeld(id: Exclude<BarActId, 'ask'>, rows: readonly BarRow[], c
   // The acts that open ONE window for ONE customer: the one-customer check first (the server checks each record again).
   const one = sheet(oneCustomerHeld(rows, host.locked))
   switch (id) {
+    case 'ship':
+      return sheet(shipHeld(rows, host.locked)) // F-CW-301: one customer, the cap of 20, nothing ready now (only when known)
     case 'priority':
       return one ?? of('depth', selectionHeld(rows.length, { manage: true }))
     case 'reply':

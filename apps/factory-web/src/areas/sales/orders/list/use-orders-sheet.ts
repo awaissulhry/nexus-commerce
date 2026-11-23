@@ -48,6 +48,7 @@ import { orderIdsOfChange, valueTouches, waitingFromAddress } from '../model' //
 import { useAssignSupervisor } from '../../../_shared/production-supervisor/use-assign-supervisor'
 import { useNoteDialog } from '../../../production/_shared/notes/use-note-dialog'
 import { noteTargetsOf, supervisorTargetsOf } from './sheet/model'
+import { useShipTogether } from './use-ship-together' // F-CW-301
 // ---- end F-SA-280
 // ---- F-SA-281: Add task… on one order and Add task to N… (one batch: POST /tasks/batch) ----
 import { newIdempotencyKey } from '../../../../lib/api/client'
@@ -727,6 +728,22 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     setGroupRows((current) => Object.fromEntries(Object.entries(current).map(([key, entry]) => [key, { ...entry, items: entry.items?.map(apply) ?? null }])))
     setMoved((now) => (stillInView(rows, status) ? now.filter((entry) => entry !== id) : now.includes(id) ? now : [...now, id]))
   }
+  // ---- F-CW-301 / F-CW-304: after an act these orders are read again by id and take their new values WHERE THEY STAND (rows never
+  // jump; a row that left the view is greyed until "N updates · Show"), fifty at a time.
+  const rereadInPlace = (ids: readonly string[]) => {
+    const mine = readId.current
+    for (let at = 0; at < ids.length; at += 50) {
+      listOrders(api, { ids: ids.slice(at, at + 50), production: productionShown, progress: progressShown, limit: 50 })
+        .then((page) => {
+          if (mine !== readId.current) return
+          for (const fresh of page.orders) placeRow(fresh.id, () => fresh, fresh.status)
+        })
+        .catch(() => undefined)
+    }
+  }
+  // F-CW-301: Ship N together… and a row's Create shipment… — Warehouse's own New shipment window, mounted here (its third mount).
+  const ship = useShipTogether(api, session.permissions, rereadInPlace)
+  // ---- end F-CW-301
   const commandDoor = useOrderCommandDoor(api, {
     can,
     prefix,
@@ -832,6 +849,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     note: note.model,
     bulkCan: { supervisor: session.permissions.includes('production.brand.manage'), note: noteCan, task: taskHeld /* F-SA-281 */, reply: noteCan /* F-SA-282: threads.post */, todo: session.permissions.includes('partners.tasks.manage') /* F-CW-203 */ },
     replyMany: replyMany.model, // F-SA-282
+    ship: ship.model, // F-CW-301
     priceCheck: priceCheck.model, // F-CP-114
     commands: { window: commandDoor.model, moved, receipt, many: commandMany.model /* F-CP-109 */, decide: session.permissions.includes('approvals.decide') /* F-CP-109 */ }, // F-CP-108
     task, // F-SA-281
@@ -908,6 +926,15 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     task: taskActions, // F-SA-281
     onReplyMany: (ids, options) => replyMany.open(pickedRows(ids), host.locked?.party ?? null, options), // F-SA-282; F-CW-203: + the to-do tick
     replyMany: replyMany.actions, // F-SA-282
+    // ---- F-CW-301 ----
+    onShipTogether: (ids) => ship.open(pickedRows(ids)),
+    onCreateShipment: (id) => {
+      const row = pickedRows([id])[0]
+      if (row) ship.openOne(row)
+    },
+    ship: ship.actions,
+    onDismissShip: ship.dismiss,
+    // ---- end F-CW-301
     // F-CP-114: the door only with the price grain (no door, no call for anyone else).
     ...(can.price
       ? {

@@ -97,6 +97,11 @@ import { manyLabel, type ManyCommand } from '../commands/model'
 // ---- F-CW-202: the bar — three acts with words + More ▾ (the pure rule: sheet/bar.ts) ----
 import { ChevronDown, Factory, Flag, MessageCircleQuestion } from 'lucide-react'
 import { barOf, type AskEntryId, type BarAct, type BarActId, type BarWords } from '../sheet/bar'
+// ---- F-CW-301: Ship N together… / Create shipment… — Warehouse's own New shipment window, mounted here ----
+import { Truck } from 'lucide-react'
+import { shipRowHeld, shipRowOffered } from '../sheet/ship'
+import { ShipNoticeBanner, ShipWindow } from './ShipTogether'
+// ---- end F-CW-301
 // ---- end F-CW-202
 import { OrderCommandManyDialog } from '../commands/view/OrderCommandManyDialog'
 // ---- end F-CP-109
@@ -207,6 +212,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const pickedIds = picked.map((row) => row.id)
   const replyPhrase = replyManyLabel(picked)
   const barRun: Record<Exclude<BarActId, 'ask'>, () => void> = {
+    ship: () => actions?.onShipTogether?.(pickedIds), // F-CW-301
     priority: () => actions?.depth?.onSetPriority?.(pickedIds),
     reply: () => actions?.onReplyMany?.(pickedIds),
     assign: () => actions?.onAssignSupervisor?.(pickedIds),
@@ -218,6 +224,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     invoice: () => actions?.onInvoiceShipped?.(pickedIds),
   }
   const barLabel: Record<Exclude<BarActId, 'ask'>, string> = {
+    ship: s('bar.ship', { count: picked.length }), // F-CW-301
     priority: d('list.setPriority', { count: picked.length }),
     reply: s(replyPhrase.key, replyPhrase.params),
     assign: s('bulk.assign'),
@@ -229,7 +236,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     invoice: s('invoiceShipped.action', { count: picked.length }),
   }
   const bar = barOf(
-    { manage: model.can.manage, close: model.can.close, decide: !!model.commands?.decide, post: !!model.bulkCan?.note, supervisor: !!model.bulkCan?.supervisor, task: model.bulkCan?.task === null, todo: !!model.bulkCan?.todo /* F-CW-203 */, invoices: model.can.manageInvoices },
+    { ship: !!model.ship?.can.manage /* F-CW-301 */, manage: model.can.manage, close: model.can.close, decide: !!model.commands?.decide, post: !!model.bulkCan?.note, supervisor: !!model.bulkCan?.supervisor, task: model.bulkCan?.task === null, todo: !!model.bulkCan?.todo /* F-CW-203 */, invoices: model.can.manageInvoices },
     picked,
     { locked: model.locked?.party ? (model.customer?.id ?? null) : null },
   )
@@ -273,7 +280,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           />
         ) : (
           // The words stay on the button at every width (no DS SelectionLabel): the frame's own Edit N, Export N and Clear give way first.
-          <Button key={act.id} size="sm" heldReason={sayBar(act.held)} onClick={barRun[act.id]}>
+          <Button key={act.id} size="sm" variant={act.id === 'ship' ? 'primary' : undefined /* F-CW-301: the leading act */} heldReason={sayBar(act.held)} onClick={barRun[act.id]}>
             <BarIcon id={act.id} /> {barLabel[act.id]}
           </Button>
         ),
@@ -568,6 +575,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
         />
       )}
 
+      {/* F-CW-301: the ONE notice after a shipment is made here — the draft, its orders (each a door to its thread), the way to Warehouse. */}
+      {model.ship?.notice && <ShipNoticeBanner notice={model.ship.notice} prefix={model.prefix} onOrder={(id) => actions?.onOpenRow?.(id, false)} onDismiss={actions?.onDismissShip} />}
+
       {!model.embedded && <TilesStrip model={model} actions={actions} t={t} s={s} />}
 
       {/* B-TH-225 / B-TH-226: a link to a customer the reader may not open (W27: the words name no one) */}
@@ -674,6 +684,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       {showing /* F-SA-276; F-CP-102: compared with the host's default — rows=open on the customer page says it */ && <p className="fw-so-hint">{t('list.viewing', { view: t(`rows.${showing}`) })}</p>}
 
       {viewerRow && <PictureViewerFor row={viewerRow} model={model} actions={actions} onClose={() => setViewer(null)} /> /* B-TH-225; F-SA-212: the one viewer */}
+      {model.ship && <ShipWindow model={model.ship} actions={actions?.ship} rows={items ?? []} prefix={model.prefix} /> /* F-CW-301: Warehouse's own window */}
       {model.newOrder && <NewOrderDialog model={model.newOrder} actions={actions} />}
       {model.invoiceDrafts && <InvoiceDraftsDialog state={model.invoiceDrafts} prefix={model.prefix} t={s} onClose={() => actions?.onCloseInvoiceDrafts?.()} onRetry={actions?.onInvoiceShippedRetry} /> /* B-TH-244 */}
       {/* B-W2b-323: Set priority, Import orders. */}
@@ -1227,7 +1238,15 @@ function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer, st
     if (!data) return null
     // F-CP-108: the host gives the door (both hosts of the ONE sheet); without it, today's items.
     const steps = act()?.onCommand ? rowStepsOf(data, can) : []
-    const next = steps.filter((step) => step.command !== 'cancel').map((step) => stepItem(step, data))
+    // F-CW-301 (10-design §5): Create shipment… among the Next steps, before Close order… — only with shipping.manage, only in a
+    // state where garments can wait to ship; held with the order page's own words when the row knows nothing is ready now.
+    const shipStep: MenuItemDef[] =
+      can.createShipment && act()?.onCreateShipment && shipRowOffered(data)
+        ? [{ id: 'ship', label: t('step.createShipment'), ...(shipRowHeld(data) ? { disabled: true, description: t('ship.create.held.nothing') } : { onSelect: () => act()?.onCreateShipment?.(data.id) }) }]
+        : []
+    const before = steps.filter((step) => step.command !== 'cancel' && step.command !== 'close').map((step) => stepItem(step, data))
+    const closing = steps.filter((step) => step.command === 'close').map((step) => stepItem(step, data))
+    const next = [...before, ...shipStep, ...closing]
     const cancel = steps.find((step) => step.command === 'cancel')
     const priority = priorityItem(data)
     const rest: MenuItemDef[] = [
@@ -1448,7 +1467,7 @@ const MANY_ICON: Readonly<Record<ManyCommand, typeof PackageCheck>> = { ready: P
 
 /** F-CW-202: each act's mark — the same on its button and in More ▾ (never told apart by colour). */
 function BarIcon({ id }: { id: BarActId }) {
-  const Icon = id === 'ask' ? MessageCircleQuestion : id === 'priority' ? Flag : id === 'reply' ? Globe : id === 'assign' ? UserCog : id === 'task' ? ListPlus : id === 'note' ? MessageSquareLock : id === 'invoice' ? Receipt : MANY_ICON[id]
+  const Icon = id === 'ship' ? Truck : id === 'ask' ? MessageCircleQuestion : id === 'priority' ? Flag : id === 'reply' ? Globe : id === 'assign' ? UserCog : id === 'task' ? ListPlus : id === 'note' ? MessageSquareLock : id === 'invoice' ? Receipt : MANY_ICON[id]
   return <Icon size={13} aria-hidden />
 }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type KeyboardEvent } from 'react'
+import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Banner, EmptyState, Field, Stepper } from '@nexus/ui/components'
 import { Button, CheckboxCard, Input, NumberStepper, RadioCard, Select, Spinner } from '@nexus/ui/primitives'
 import { Modal } from '../../../../../lib/i18n/ds-parts'
@@ -20,8 +20,11 @@ import { DEPTH_NS } from '../../queue/shared/depth'
  * F-OP-121 (order page N6): `model.together` — opened from the order page: step 1 is this order and, beside it, "Add other open
  * orders of <Customer> to this shipment" (the walled ship-together read: the same customer only, each held with its reason;
  * several orders are held off until the switch); step 2 groups the garments under each order ("SO-0150 · PO 4471").
+ *
+ * F-CW-301 (customer Work tab: "Ship N together…" from ticked orders): `above` — the host's own lines over the steps (which ticked
+ * orders it runs on and which not, with why). Warehouse and the order page give none: their window is exactly as before.
  */
-export function NewShipmentDialog({ model, can, actions }: { model: NewShipmentModel; can: ShippingAbilities; actions?: ShipmentsListActions }) {
+export function NewShipmentDialog({ model, can, actions, above }: { model: NewShipmentModel; can: ShippingAbilities; actions?: ShipmentsListActions; above?: ReactNode }) {
   const t = useT('shipments')
   const order = model.orders?.find((entry) => entry.salesOrderId === model.salesOrderId) ?? null
   // F-OP-121: every order the shipment would carry (this one, then the others added).
@@ -88,6 +91,7 @@ export function NewShipmentDialog({ model, can, actions }: { model: NewShipmentM
         }}
         onKeyDown={onKeyDown}
       >
+        {above /* F-CW-301: a host's own lines (the ticked orders it runs on, and not) */}
         {/* F-OP-122: adding to a DRAFT already there is step 2 alone (the order and how it travels are the shipment's). */}
         {!model.join && (
           <Stepper

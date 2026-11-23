@@ -495,6 +495,24 @@
     "none": "Il tuo ruolo legge gli ordini e non ne cambia nessuno: non c'è nessuna azione per le righe spuntate.",
     "askCustomer": "Chiedi a {customer} su {count}…",
     "askCustomerAny": "Chiedi al cliente su {count}…",
-    "askCustomerWho": "Un messaggio nella conversazione di ogni ordine, letto nel portale, E una cosa da fare con una data nella loro lista."
+    "askCustomerWho": "Un messaggio nella conversazione di ogni ordine, letto nel portale, E una cosa da fare con una data nella loro lista.",
+    "ship_one": "Spedisci {count} ordine…",
+    "ship_other": "Spedisci {count} insieme…"
+  },
+  "ship": {
+    "cap": "Al massimo {max} ordini in una spedizione.",
+    "nothing_one": "Niente è pronto ora sull'ordine spuntato.",
+    "nothing_other": "Niente è pronto ora sui {count} spuntati.",
+    "capLine": "Una spedizione porta al massimo {max} ordini di un solo cliente, a un solo indirizzo, da una sola sede. Ne sono spuntati {count}.",
+    "notOnLabel": "Non in questa spedizione",
+    "off": "Tolto qui",
+    "complete": "{customer} vuole {order} in un'unica consegna.",
+    "completeCarries": "Questa spedizione porterebbe {carried} dei suoi {owed} capi ancora da spedire.",
+    "draft": "Esiste già una bozza di {customer}:",
+    "created_one": "Spedizione {number} creata con {count} ordine:",
+    "created_other": "Spedizione {number} creata con {count} ordini:",
+    "createdDraft": "una bozza: {customer} non viene avvisato.",
+    "createdDraftAny": "una bozza: il cliente non viene avvisato.",
+    "showThread": "Mostra {number}"
   }
 }

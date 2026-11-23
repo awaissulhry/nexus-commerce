@@ -67,6 +67,12 @@ export interface NewShipmentModel {
   // ── end F-OP-121 ──
   /** F-OP-122: "Add this order's garments…" — step 2 only, onto this DRAFT of the same customer (the lines route; DRAFT only). */
   join?: { shipmentId: string; number: string } | null
+  /**
+   * F-CW-301 (customer Work tab: "Ship N together…" from ticked orders): every ticked order's id, the asked one first. The window
+   * is the `together` one; `salesOrderId` is then the first ticked order with garments ready and `others` the ticked orders that
+   * may join it. Absent on Warehouse's and the order page's own mounts (nothing changes there).
+   */
+  asked?: string[]
 }
 
 /** B-W2a-71 (design sh-grid selection row "Print 4 DDTs"): the selected shipments' live DDTs on their site's document printer. */

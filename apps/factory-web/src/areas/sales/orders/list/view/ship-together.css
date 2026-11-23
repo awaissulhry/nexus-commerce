@@ -1,0 +1,35 @@
+/* F-CW-301 (customer Work tab; 10-design §6 W1) — the sheet's own lines over Warehouse's New shipment window, and the one notice
+   after Create. Layout only; design-system tokens only (no raw colour). */
+.fw-sst {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.fw-sst-sum {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+}
+.fw-sst-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-sst-list b {
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+.fw-sst-hint {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-sst-made {
+  font-size: var(--nds-font-size-sm);
+}
