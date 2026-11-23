@@ -17,6 +17,8 @@ export function WorkFoot({ line }: { line: WorkFootLine }) {
   const t = useT('parties')
   const s = useT(SHEET_NS)
   const say = (words: FootWords): string => (words.ns === 'sheet' ? s(words.key, words.params) : t(words.key, words.params))
+  // T.0: orders at more than one company — each company's own numbers, joined into the one sentence.
+  const sayUrgency = (words: FootWords): string => (line.each.length > 0 ? t(words.key, { companies: line.each.map(say).join(' · ') }) : say(words))
   if (!line.urgent && !line.sorted && !line.urgency) return null
   return (
     <p className="fw-cw-foot">
@@ -29,7 +31,7 @@ export function WorkFoot({ line }: { line: WorkFootLine }) {
       {line.urgency && (
         <>
           {' '}
-          {say(line.urgency)}
+          {sayUrgency(line.urgency)}
           {line.portalHref ? (
             <>
               {' · '}

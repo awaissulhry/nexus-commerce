@@ -81,6 +81,34 @@ import type { OrderAbilities } from '../../orders/model'
 import { manyTargetsOf, type ManyRead, type ManyResult, type OrderCommandManyModel, type OrderCommandModel } from '../../orders/list/commands/model'
 import type { NewOrderDialogModel } from '../../orders/list/list-model'
 // ---- end F-CP-112
+// ---- cw T.1 (customer Work tab: every state the seed lacks — made-up orders SEED-SO-0001 … 0014 of a made-up customer) ----
+import { useRecordFrame } from '../../../_shared/record-frame/RecordFrame'
+import { useDockTop } from '../../../_shared/record-thread/ThreadPick'
+import { recordDockedThread } from '../../../../lib/record-thread/fixtures'
+import { ThreadCase } from '../../../../lib/record-thread/ThreadCase'
+import type { CardMessage } from '../../../../lib/record-thread/card/model'
+import type { UrgencyAct } from '../../../_shared/customer-urgency/model'
+import { noteModel } from '../../../production/_shared/notes/fixtures'
+import type { NoteCheck } from '../../../production/_shared/notes/api'
+import { NOTES_NS, type NoteResult } from '../../../production/_shared/notes/model'
+import { useLocale } from '../../../../lib/i18n/provider'
+import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
+import { startDraft } from '../../../../lib/record-thread/composer/model'
+import { READY as READY_TO_SHIP } from '../../../warehouse/shipments/_demo/fixtures'
+import type { ReadyOrder } from '../../../warehouse/shipments/api'
+import type { NewShipmentModel } from '../../../warehouse/shipments/list/list-model'
+import { abilitiesOf as shippingAbilitiesOf } from '../../../warehouse/shipments/model'
+import type { OrderPhase, OrderSort } from '../../orders/api'
+import { abilitiesOf as orderAbilitiesOf, sortChoicesOf } from '../../orders/model'
+import { replyComposerContext, replyTargetsOf, type ReplyManyModel } from '../../orders/list/reply-many'
+import { NAMESPACE as SHEET_NS, noteTargetsOf } from '../../orders/list/sheet/model'
+import type { ShipTogetherModel } from '../../orders/list/sheet/ship'
+import { urgencyDialogOf, urgencyLeftOf, type SheetUrgencyModel } from '../../orders/list/sheet/urgency'
+import type { BeforeOrderCounts } from './before-order'
+import { workFootOf, type UrgencyFoot } from './urgency-foot'
+import { WorkFoot } from './view/WorkFoot'
+import type { WorkRoom } from './view/WorkTab'
+// ---- end cw T.1
 
 /**
  * SCR-033 Customer record — made-up customers only. Each case is one state the Owner reviews: an Italian business that
@@ -111,7 +139,7 @@ const OPEN_ORDER_MONEY: OpenOrderMoney[] = [
 /** A case: the record, (B-W2a-49) the Commercial terms card of its Terms & requirements tab (B-TH-260), (B-W2a-81) its money and after-sales reads, (B-W2b-324) its depth. */
 // F-SA-272: + the Overview's "Who looks after <customer>" card (the supervisor and backup, moved from Portal settings).
 // F-SA-274: + the e-mails of the people with portal access (the contacts' "Has portal access").
-type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase; supervisor?: SupervisorModel; portalEmails?: readonly string[]; work?: WorkCase /* F-SA-276 */; designer?: DesignerModel /* F-CP-155 */; priceDiffer?: number /* F-CP-141 */ }
+type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase; supervisor?: SupervisorModel; portalEmails?: readonly string[]; work?: WorkCase /* F-SA-276 */; designer?: DesignerModel /* F-CP-155 */; priceDiffer?: number /* F-CP-141 */; shipmentLine?: boolean /* cw T.1: the docked ORDER's thread with the draft shipment's office line */ }
 
 // ---- F-SA-276: the Work tab's cases — the strip's reads and the sheet's rows (made-up; the production part as the API sends it) ----
 interface WorkCase {
@@ -148,7 +176,40 @@ interface WorkCase {
   /** The band's New order window: the customer held (no Change), Add the lines next. */
   readonly newOrder?: boolean
   // ---- end F-CP-112
+  // ---- cw T.1: the Work tab as the live page gives it (W1–W3), and the states the seed lacks ----
+  /**
+   * The sheet with the live Work tab's own options: "Most urgent first", no List ⇄ Board switch, the count of all orders, the
+   * shipping and urgency acts by the reader's rights, the foot line. (The earlier cases stay as they were drawn.)
+   */
+  readonly live?: boolean
+  /** Who reads it (each act by its OWN right); absent: the Owner. */
+  readonly reader?: WorkReader
+  /** The tab's own room (the columns it shows). */
+  readonly room?: WorkRoom
+  /** The sheet's sort (absent: Most urgent first, the tab's default). */
+  readonly sort?: OrderSort | null
+  /** A door of the band shown: the sheet narrowed to that group, its chip, its why. */
+  readonly phase?: OrderPhase
+  /** The band's "Before an order" line (absent: the made-up counts of the earlier cases). */
+  readonly before?: BeforeOrderCounts
+  /** The customer's urgency as the tab read it (the foot's part; `on: false`: the switch off). */
+  readonly urgencyFoot?: UrgencyFoot | null
+  /** The rows ticked (by id). */
+  readonly tickedIds?: readonly string[]
+  /** Ship N together…: the window at step 1 (Runs on 4 · Not on 2) or step 2, or the notice after Create. */
+  readonly ship?: 'step1' | 'step2' | 'notice'
+  /** The shared urgency window over one row (`row`) or the ticked rows (`many`), or its outcome. */
+  readonly urgency?: { readonly act: UrgencyAct; readonly on: 'row' | 'many' } | 'outcome'
+  /** Production's Note window as "Ask production about N…" (Needs an answer ticked), or its receipt. */
+  readonly note?: 'ask' | 'receipt'
+  /** Reply to N as "Ask <customer> about N…" (the to-do tick on), or its receipt. */
+  readonly reply?: 'ask' | 'receipt'
+  /** Customise columns open (the tab's own set ticked). */
+  readonly customise?: boolean
+  // ---- end cw T.1
 }
+/** cw T.1: the readers of 10-design §4's table. */
+type WorkReader = 'owner' | 'sales' | 'warehouse' | 'manager' | 'reader'
 
 /** F-CP-141: made-up rows whose prices differ (the customer's price, the check, the difference), as a price holder's answer carries them. */
 const notEqualRows = (party: Party): OrderRow[] =>
@@ -272,6 +333,229 @@ const newOrderOf = (party: Party, price: boolean): NewOrderDialogModel => ({
 })
 // ---- end F-CP-112
 
+// ---- cw T.1 (customer Work tab plan; 10-design §8, §9): the states the seed lacks — a busy customer with orders in all seven groups
+// (2 · 1 · 4 · 1 · 2 · 3 · 1), the customer's urgency in every state, our own priority, and each window the bar and the row open.
+// Made-up only: orders SEED-SO-0001 … 0014, shipments SEED-SH-0011 and SEED-SH-0012; no amount is added anywhere.
+const SEED_CUSTOMER = 'MODA-DEMO'
+const SEED_ID = (n: number): string => `d0000000-0000-4000-8000-${String(1000 + n).padStart(12, '0')}`
+const SEED_NUMBER = (n: number): string => `SEED-SO-${String(n).padStart(4, '0')}`
+type MadeUp = NonNullable<OrderRow['production']>
+const made = (over: Partial<MadeUp> = {}): MadeUp => ({ stage: 'SEWING', stageSince: '2026-10-20', health: 'ON_TRACK', waitingOn: null, since: null, held: false, supervisorMark: 'ME', openRequests: 0, openIssues: 0, openIssuesSince: null, readyNow: 0, withheld: [], ...over })
+/** An order with no stage kept: before production, or after it. */
+const NO_STAGE: MadeUp = made({ stage: null, stageSince: null, health: null, supervisorMark: 'NOT_SET' })
+type UrgencyState = NonNullable<OrderRow['customerUrgencyState']>
+const urgent = (state: UrgencyState['state'], over: Partial<UrgencyState> = {}): UrgencyState => ({ state, urgentRank: null, locked: false, requestId: null, ...over })
+type OurPriority = NonNullable<OrderRow['priority']>
+const level = (value: OurPriority['level']): OurPriority => ({ level: value, number: 1, urgentReason: value === 'URGENT' ? 'Made-up: the shop opening' : null })
+const pieces = (cut: number, sewn: number, finished: number, ordered: number): NonNullable<OrderRow['progress']> => ({ inWork: ordered, cut, sewn, finished, ordered })
+const RUSH_REQUEST = 'd0000000-0000-4000-8000-00000000a007'
+/** One made-up order of the customer on a whole row of the API (the first demo row's shape): no stage, nothing marked, nothing invoiced. */
+const seedRow = (party: Party, n: number, status: OrderRow['status'], over: Partial<OrderRow> = {}): OrderRow => ({
+  ...LIST_ROWS[0]!,
+  id: SEED_ID(n),
+  number: SEED_NUMBER(n),
+  customerRef: null,
+  partyId: party.id,
+  partyName: party.tradeName ?? party.legalName,
+  status,
+  deposit: { state: 'PAID', dueDate: null },
+  reaccept: false,
+  units: 244,
+  shippedUnits: 0,
+  daysLate: null,
+  promiseDate: '2026-11-20',
+  priority: level('NORMAL'),
+  waits: null,
+  customerUrgency: null,
+  customerUrgencyState: null,
+  atRisk: null,
+  progress: null,
+  production: NO_STAGE,
+  invoiced: null,
+  doors: { quote: null, depositInvoice: null, deliveryNotes: null, invoices: null },
+  ...over,
+})
+/** The busy customer's fourteen orders, in the seven groups' order. */
+const busyRows = (party: Party): OrderRow[] => [
+  // Not sent to the factory (2): one waits for its deposit, one for a yes.
+  seedRow(party, 1, 'CONFIRMED', { deposit: { state: 'OPEN', dueDate: '2026-11-05' }, promiseDate: '2026-12-18' }),
+  seedRow(party, 2, 'PENDING_APPROVAL', { waits: ['REQUEST_PENDING'], promiseDate: null, customerRef: 'SEED-PO-0002' }),
+  // Production not started (1): set to regular by us and locked; our Low.
+  seedRow(party, 3, 'IN_PRODUCTION', { priority: level('LOW'), customerUrgencyState: urgent('SET_BACK', { locked: true }), production: made({ stage: 'PREPARING', stageSince: '2026-10-27' }), promiseDate: '2026-12-11' }),
+  // In production (4): the customer's urgent 1–3 (our Top and High on the first two; the third on hold), one "Urgent – asked".
+  seedRow(party, 4, 'IN_PRODUCTION', { priority: level('URGENT'), customerUrgency: 'URGENT', customerUrgencyState: urgent('URGENT', { urgentRank: 1 }), production: made({ stage: 'SEWING', health: 'AT_RISK', readyNow: 10 }), progress: pieces(244, 152, 40, 244), promiseDate: '2026-11-06', atRisk: { daysLeft: 8, daysBeforePromise: 10 } }),
+  seedRow(party, 5, 'IN_PRODUCTION', { priority: level('HIGH'), customerUrgency: 'URGENT', customerUrgencyState: urgent('URGENT', { urgentRank: 2 }), production: made({ stage: 'CUTTING', health: 'LATE', supervisorMark: 'SOMEONE_ELSE' }), progress: pieces(120, 0, 0, 180), units: 180, promiseDate: '2026-10-25', daysLate: 4 }),
+  seedRow(party, 6, 'IN_PRODUCTION', { customerUrgency: 'URGENT', customerUrgencyState: urgent('URGENT', { urgentRank: 3 }), production: made({ stage: 'QUALITY', held: true, readyNow: 24 }), progress: pieces(96, 96, 72, 96), units: 96, promiseDate: '2026-11-13' }),
+  seedRow(party, 7, 'IN_PRODUCTION', { customerUrgencyState: urgent('ASKED', { requestId: RUSH_REQUEST }), production: made({ stage: 'SEWING', openRequests: 1, waitingOn: 'US', since: ordersAt(27, 9), openIssues: 1, openIssuesSince: ordersAt(27, 9) }), progress: pieces(60, 20, 0, 60), units: 60, promiseDate: '2026-11-27' }),
+  // Ready to ship (1).
+  seedRow(party, 8, 'READY', { production: made({ stage: 'READY', readyNow: 40 }), progress: pieces(40, 40, 40, 40), units: 40, promiseDate: '2026-11-03' }),
+  // Shipped (2): one partly, one whole.
+  seedRow(party, 9, 'PARTLY_SHIPPED', { production: made({ stage: 'READY', readyNow: 12 }), units: 120, shippedUnits: 80, promiseDate: '2026-10-30' }),
+  seedRow(party, 10, 'SHIPPED', { units: 60, shippedUnits: 60, promiseDate: '2026-10-20' }),
+  // Done (3) and cancelled (1): no stage any more.
+  seedRow(party, 11, 'DELIVERED', { units: 90, shippedUnits: 90, promiseDate: '2026-10-10' }),
+  seedRow(party, 12, 'CLOSED', { units: 150, shippedUnits: 150, promiseDate: '2026-09-26' }),
+  seedRow(party, 13, 'CLOSED', { units: 48, shippedUnits: 48, promiseDate: '2026-09-12' }),
+  seedRow(party, 14, 'CANCELLED', { units: 30, promiseDate: null }),
+]
+type PhaseCounts = Readonly<Record<OrderPhase, number>>
+const NO_PHASES: PhaseCounts = { NOT_SENT: 0, NOT_STARTED: 0, IN_PRODUCTION: 0, READY: 0, SHIPPED: 0, DONE: 0, CANCELLED: 0 }
+const BUSY_PHASES: PhaseCounts = { NOT_SENT: 2, NOT_STARTED: 1, IN_PRODUCTION: 4, READY: 1, SHIPPED: 2, DONE: 3, CANCELLED: 1 }
+interface SeedWaits {
+  readonly yes?: number
+  readonly deposit?: number
+  readonly late?: number
+  readonly requests?: number
+  readonly replies?: number
+  readonly tasks?: number
+}
+const BUSY_WAITS: SeedWaits = { yes: 1, deposit: 1, late: 1, requests: 1, replies: 2, tasks: 3 }
+/** The page's reads for a set of made-up rows: the board's seven groups (as the API counts them), the two whys, what waits. */
+function seedReads(rows: readonly OrderRow[], phases: PhaseCounts, waits: SeedWaits = {}): WorkReads {
+  const statuses = [...new Set(rows.map((row) => row.status))]
+  return {
+    board: {
+      status: 'ready',
+      value: {
+        ...BOARD,
+        byStatus: statuses.map((status) => ({ status, count: rows.filter((row) => row.status === status).length })),
+        byPhase: ORDER_PHASES.map((phase) => ({ phase, count: phases[phase] })),
+        notSent: { waitsForYes: waits.yes ?? 0, waitsForDeposit: waits.deposit ?? 0 },
+        tiles: BOARD.tiles.map((tile) => ({ ...tile, count: tile.key === 'late' ? (waits.late ?? 0) : tile.key === 'waitingForDeposit' ? (waits.deposit ?? 0) : 0 })),
+      },
+    },
+    requests: { status: 'ready', value: { items: [], open: waits.requests ?? 0, countered: 0 } },
+    replies: { status: 'ready', value: { rows: [], count: waits.replies ?? 0, complete: true } },
+    asks: { status: 'ready', value: { items: [], complete: true } },
+    tasks: { status: 'ready', value: { items: [], total: waits.tasks ?? 0, complete: true } },
+  }
+}
+/** What each reader of 10-design §4 holds beyond the demo roles (made-up permission lists; each act reads its OWN right). */
+const READER_RIGHTS: Readonly<Record<'warehouse' | 'reader', readonly string[]>> = {
+  warehouse: ['home.view', 'threads.read', 'threads.post', 'orders.view', 'shipping.view', 'shipping.manage'],
+  reader: ['home.view', 'threads.read', 'orders.view'],
+}
+const SHIP_RIGHTS: readonly string[] = ['shipping.view', 'shipping.manage']
+/** Six ticked for "Ship 6 together…": four have garments ready, one ships to another address, one has nothing released. */
+const SHIP_TICKED = [8, 9, 6, 4, 5, 7].map(SEED_ID)
+const SHIP_ON = [8, 9, 6, 4].map(SEED_ID)
+/** What can ship of a made-up order, as the ready read answers it (the Warehouse demo's own cell, this order's ids and pieces). */
+const readyOf = (row: OrderRow, shippable: number, shipsWith: ReadyOrder['shipsWith']): ReadyOrder => ({
+  salesOrderId: row.id,
+  number: row.number,
+  customerRef: row.customerRef,
+  status: row.status,
+  companyId: row.companyId,
+  partyId: row.partyId,
+  party: { code: 'SEED', legalName: row.partyName },
+  shipsWith,
+  cells: READY_TO_SHIP[0]!.cells.slice(0, 1).map((cell) => ({ ...cell, workOrderSizeId: `${row.id}-cell`, pieces: shippable, released: shippable, onShipments: 0, shippable })),
+})
+/** Warehouse's New shipment window as the sheet opens it over the six ticked orders: step 1 (Runs on 4 · Not on 2) or step 2. */
+function shipWindowOf(rows: readonly OrderRow[], step: 1 | 2): NewShipmentModel {
+  const pick = (n: number): OrderRow => rows.find((row) => row.id === SEED_ID(n))!
+  const may = { allowed: true, why: null }
+  const orders = [readyOf(pick(8), 40, null), readyOf(pick(9), 12, may), readyOf(pick(6), 24, may), readyOf(pick(4), 10, may), readyOf(pick(5), 6, { allowed: false, code: 'SHIP_TO', why: null })]
+  const quantities = step === 2 ? Object.fromEntries(orders.filter((order) => SHIP_ON.includes(order.salesOrderId)).flatMap((order) => order.cells.map((cell) => [cell.workOrderSizeId, cell.shippable] as const))) : {}
+  return { step, orders, problem: null, salesOrderId: SEED_ID(8), quantities, transportBy: 'CARRIER', carrierCode: 'brt', serviceCode: '', busy: false, refused: null, together: true, others: SHIP_ON.slice(1), asked: [...SHIP_TICKED] }
+}
+/** The sheet's mount of the shipping window for a case: the reader's right, the window or the notice after Create. */
+function shipOf(work: WorkCase, rows: readonly OrderRow[], may: boolean, customer: string): ShipTogetherModel {
+  const can = shippingAbilitiesOf(may ? SHIP_RIGHTS : [])
+  const none: ShipTogetherModel = { can, window: null, complete: {}, draft: null, notice: null }
+  if (!may || !work.ship) return none
+  if (work.ship === 'notice') return { ...none, notice: { shipmentId: 'd0000000-0000-4000-8000-0000000b0012', number: 'SEED-SH-0012', orders: [8, 9, 6, 4].map((n) => ({ id: SEED_ID(n), number: SEED_NUMBER(n) })), customer } }
+  // SEED-SO-0009 ships complete: the shipment would carry 12 of the 40 pieces it still owes; a draft of the customer exists already.
+  return { ...none, window: shipWindowOf(rows, work.ship === 'step2' ? 2 : 1), complete: { [SEED_ID(9)]: true }, draft: { shipmentId: 'd0000000-0000-4000-8000-0000000b0011', number: 'SEED-SH-0011' } }
+}
+/** The shared urgency window as the sheet mounts it: over one row, over the ticked rows (Runs on / Not on), or its outcome. */
+function urgencyOf(work: WorkCase, rows: readonly OrderRow[], may: boolean): SheetUrgencyModel | null {
+  if (!may) return null
+  const closed: SheetUrgencyModel = { dialog: null, busy: false, problem: null, outcome: null, can: true, stepUp: ORDERS_STEP_UP_CLOSED, left: [] }
+  const ask = work.urgency
+  if (!ask) return closed
+  if (ask === 'outcome') return { ...closed, outcome: { act: 'regular', done: [SEED_NUMBER(4), SEED_NUMBER(5)], notDone: [{ number: SEED_NUMBER(6), words: { en: 'It changed meanwhile: read it again.', it: 'È cambiato nel frattempo: rileggilo.' } }], notShown: 0 } }
+  // One row: the urgent order (Set to regular…, Lock…) or the locked one (Unlock…); many: the ticked rows.
+  const asked = ask.on === 'row' ? rows.filter((row) => row.id === SEED_ID(ask.act === 'unlock' ? 3 : 4)) : rows.filter((row) => (work.tickedIds ?? []).includes(row.id))
+  return { ...closed, dialog: urgencyDialogOf(ask.act, asked), left: ask.on === 'many' ? urgencyLeftOf(ask.act, asked) : [], draft: { reason: 'Made-up: the line is full until the 20th.' } }
+}
+type Words = (key: string, params?: Readonly<Record<string, string | number>>) => string
+/** Production's Note window as "Ask production about N…" (each order's supervisor asked, Needs an answer ticked), or its receipt. */
+function askNoteOf(kind: NonNullable<WorkCase['note']>, rows: readonly OrderRow[], s: Words, n: Words) {
+  const targets = noteTargetsOf(rows)
+  const answer: NoteCheck = {
+    records: targets.salesOrders.map((record) => ({ type: record.type, id: record.id, label: record.label, customer: { id: record.partyId, name: record.partyName }, canWrite: true, why: null, supervisor: 'SOMEONE_ELSE' as const })),
+    unknown: 0,
+    customers: 1,
+    people: [],
+    noSupervisor: [],
+    noIssue: [],
+    namesOtherCustomer: [],
+    held: false,
+  }
+  const result: NoteResult = { lines: targets.salesOrders.map((record) => ({ key: `SalesOrder:${record.id}`, label: record.label, state: 'written' as const, mentioned: 0, supervisorAsked: true, issue: true })), written: targets.salesOrders.length, unknown: 0, notMentioned: [], tasks: [], notRaised: [] }
+  return noteModel({
+    targets,
+    answer,
+    draft: { on: 'salesOrders', body: 'Made-up: when does the lining for these arrive?', needsAnswer: true },
+    preset: { title: s('bar.askProductionTitle', { count: rows.length }), body: '', needsAnswer: true, send: n('send', { count: rows.length }), hint: s('bar.askProductionThen') },
+    result: kind === 'receipt' ? result : null,
+  })
+}
+/** Reply to N as "Ask <customer> about N…": the to-do tick on with its day; or its receipt (posted, and the to-do made, per order). */
+function askReplyOf(kind: NonNullable<WorkCase['reply']>, rows: readonly OrderRow[]): ReplyManyModel {
+  const targets = replyTargetsOf(rows)
+  const customer = { id: targets[0]!.partyId, name: targets[0]!.partyName }
+  const sent = kind === 'receipt'
+  return {
+    customer,
+    targets,
+    batchId: 'd0000000-0000-4000-8000-0000000c0203',
+    draft: { ...startDraft(replyComposerContext(customer.name)), body: 'Made-up: can you confirm the label position on these orders by Friday?' },
+    notes: [],
+    language: 'en',
+    portal: 'on',
+    sending: false,
+    progress: null,
+    results: sent ? Object.fromEntries(targets.map((target) => [target.id, { state: 'sent' as const, todo: { state: 'made' as const } }])) : {},
+    done: sent,
+    todo: { on: true, due: '2026-11-03' },
+    asked: true,
+    today: ORDERS_TODAY,
+  }
+}
+/**
+ * The doors the live page hands the sheet since W2 and W3 (use-orders-sheet): without them the row ⋯ draws no Create shipment…
+ * and no urgency act. Made-up: a pick does nothing here (each window has its own case).
+ */
+function liveDoors(work: Pick<WorkCase, 'role'>, price: boolean): OrdersListActions {
+  return { ...workDoors(work, price), onReplyMany: () => undefined, onShipTogether: () => undefined, onCreateShipment: () => undefined, onUrgency: () => undefined, onAskProduction: () => undefined, onNote: () => undefined, onAssignSupervisor: () => undefined, onAddTask: () => undefined }
+}
+/**
+ * The docked ORDER's thread with the office-only line a draft shipment writes on each order it carries (the API's own words); the
+ * customer never reads it. Made-up: the demo thread of the order, one system note added.
+ */
+function ShipmentLineThread({ party }: { party: Party }) {
+  const frame = useRecordFrame()
+  const top = useDockTop()
+  const base = recordDockedThread({ recordType: 'SalesOrder', record: SEED_NUMBER(3), party: { name: party.tradeName ?? party.legalName, role: 'customer' } }, { width: frame?.width ?? null })
+  const line: CardMessage = { id: 'd0000000-0000-4000-8000-0000000d0012', kind: 'note', channel: 'APP', author: null, authorKind: 'SYSTEM', at: ordersAt(17, 16, 0, 11), body: `On draft shipment SEED-SH-0012 with ${SEED_NUMBER(3)}, ${SEED_NUMBER(4)}.`, mentions: [], files: [] }
+  const feed = base.thread.feed
+  return createElement(ThreadCase, { model: { ...base, thread: { ...base.thread, feed: feed.state === 'ready' ? { ...feed, messages: [...feed.messages, line] } : feed } }, onWidth: frame?.choose, top })
+}
+const NO_MONEY = { netAmount: undefined, grossAmount: undefined, paid: undefined, balance: undefined }
+const busy = (): OrderRow[] => busyRows(by(SEED_CUSTOMER))
+/** A case of the live Work tab over the busy customer (the Owner reads it unless the case says who). */
+const liveCase = (work: Partial<WorkCase> = {}, over: Partial<PartyRecordModel> = {}): CustomerCase => {
+  const rows = work.rows === undefined ? busy() : work.rows
+  return workCase(SEED_CUSTOMER, { live: true, reads: seedReads(rows ?? [], BUSY_PHASES, BUSY_WAITS), urgencyFoot: { on: true, used: 3, max: 3, companies: [] }, ...work, rows }, over)
+}
+/** The same seen by another reader: no price grain (no amount on any row), the acts by that reader's own rights. */
+const seenAs = (reader: Exclude<WorkReader, 'owner'>, work: Partial<WorkCase> = {}): CustomerCase =>
+  liveCase({ reader, price: false, rows: busy().map((row) => ({ ...row, ...NO_MONEY })), ...work }, { can: { ...RECORD_CAN, price: false, ordersManage: reader === 'sales' } })
+const ROLE_TICKED = [4, 5, 3].map(SEED_ID)
+// ---- end cw T.1
+
 // ---- cp-walk (review walk, F-CP-108 / F-CP-109 / F-CP-114 / F-CP-103): the sheet's doors and list tools as the live Work tab gives them ----
 /**
  * The live page hands the sheet its doors (use-orders-sheet): without them the design drew no row ⋯ "Next steps", no "Set
@@ -304,8 +588,48 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
   const view = work.view ?? WORK_DEFAULT_ROWS
   const notEqual = work.notEqual === 'view' && work.price !== false // F-CP-141
   // F-CP-105: the production manager. B-CP-011: a price holder is the Owner; without prices the real Sales role (no grain).
-  const can = work.role === 'manager' ? canOf('manager') : work.price !== false ? canOf('owner') : canOf('sales')
+  // cw T.1: + the readers of 10-design §4 (Warehouse and Read-only by their own made-up rights); absent: as before.
+  const can =
+    work.reader === 'warehouse' || work.reader === 'reader' ? orderAbilitiesOf(READER_RIGHTS[work.reader]) : work.role === 'manager' || work.reader === 'manager' ? canOf('manager') : work.price !== false && work.reader !== 'sales' ? canOf('owner') : canOf('sales')
   const columnSet = columnSetOf(work.cols, notEqual, can.price) // F-CP-105: without the price grain always Work
+  // ---- cw T.1: the live Work tab's own options since W1–W3 — only for the cases that ask (`live`); the earlier cases stay as drawn.
+  const locale = useLocale()
+  const s = useMemo(() => createTranslator(locale, messagesFor(locale, [SHEET_NS])[SHEET_NS] ?? {}), [locale])
+  const n = useMemo(() => createTranslator(locale, messagesFor(locale, [NOTES_NS])[NOTES_NS] ?? {}), [locale])
+  const reader: WorkReader = work.reader ?? (work.role === 'manager' ? 'manager' : work.price !== false ? 'owner' : 'sales')
+  const shown = work.rows ?? []
+  const ticked = shown.filter((row) => (work.tickedIds ?? []).includes(row.id))
+  const sort: OrderSort | null = work.sort === undefined ? 'urgent' : work.sort
+  const room: WorkRoom = work.room ?? 'base'
+  const whysWords = whysOf(work.reads.board)
+    .map((entry) => t(`customers.work.band.why.${entry.why}`, { count: entry.count }))
+    .join(' · ')
+  const recordHref = `/w/DEMO/sales/customers/${party.id}`
+  const drafts = work.before && typeof work.before.drafts === 'number' && work.before.drafts > 0 ? { count: work.before.drafts, href: `${recordHref}?tab=work&list=drafts` } : null
+  const live: Partial<OrdersListModel> = work.live
+    ? {
+        sort,
+        preset: workPreset(view, null, columnSet === 'money', room),
+        wide: columnSet === 'money' ? room !== 'base' : room === 'widest',
+        countOf: workViewCounts(work.reads.board)?.all ?? null,
+        layoutSwitch: false,
+        searchLabel: t('customers.work.search'),
+        urgencyOff: !!work.urgencyFoot && !work.urgencyFoot.on,
+        // Each act by its OWN right: shipping.manage (Owner, Warehouse), production.brand.override (Owner, Production manager), …
+        ship: shipOf(work, shown, reader === 'owner' || reader === 'warehouse', name),
+        urgency: urgencyOf(work, shown, reader === 'owner' || reader === 'manager'),
+        bulkCan: { supervisor: reader === 'owner' || reader === 'manager', note: reader !== 'reader', task: reader === 'reader' ? 'held.noRight' : null, reply: reader !== 'reader', todo: reader === 'owner' || reader === 'sales' },
+        commands: { window: null, moved: [], receipt: null, many: null, decide: reader === 'owner' || reader === 'sales' || reader === 'warehouse' },
+        ...(work.tickedIds ? { selected: [...work.tickedIds] } : {}),
+        ...(work.phase ? { extra: { phase: work.phase }, phaseNote: work.phase === 'NOT_SENT' && whysWords ? whysWords : null } : {}),
+        ...(work.note ? { note: askNoteOf(work.note, ticked, s, n) } : {}),
+        ...(work.reply ? { replyMany: askReplyOf(work.reply, ticked) } : {}),
+        empty: workEmptyOf(view, null, name, t, `${recordHref}?tab=work&rows=all`, { phase: work.phase ?? null, plain: true, drafts }),
+      }
+    : {}
+  const sortChoice = sortChoicesOf(true).find((choice) => choice.value === (sort ?? '')) ?? null
+  const foot = workFootOf({ sort, sortWord: sortChoice ? s(`sort.${sortChoice.word}`) : null, customer: name, foot: work.urgencyFoot ?? null, portalHref: `${recordHref}?tab=portal#production-limits`, mayPortal: reader === 'owner' })
+  // ---- end cw T.1
   const list: OrdersListModel = {
     prefix: '/w/DEMO',
     can,
@@ -345,6 +669,7 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
     ...(work.newOrder ? { newOrder: newOrderOf(party, can.price) } : {}),
     // ---- end F-CP-112
     ...(work.unread ? { unread: work.unread } : {}), // F-CP-107 (cp-fx16)
+    ...live, // cw T.1: the live tab's own options, over the earlier cases' ones
   }
   return createElement(
     'div',
@@ -354,9 +679,9 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
       model: {
         customer: name,
         picture: bandOf(work.reads.board),
-        shown: null,
+        shown: work.phase ?? null, // cw T.1: a door pressed
         whys: whysOf(work.reads.board),
-        before: beforeLineOf(work.reads.board.status === 'ready' ? { drafts: 2, toAnswer: 1, openQuotes: 3, orderWaits: null } : NO_BEFORE_ORDER, `/w/DEMO/sales/customers/${party.id}`),
+        before: beforeLineOf(work.before ?? (work.reads.board.status === 'ready' ? { drafts: 2, toAnswer: 1, openQuotes: 3, orderWaits: null } : NO_BEFORE_ORDER), `/w/DEMO/sales/customers/${party.id}`),
         chips: chipsOf({ orders: true, workorders: true, threads: true, partners: true }, work.reads),
         workOrdersHref: `/w/DEMO/production/work-orders?party=${party.id}`,
         repliesHref: '/w/DEMO/sales/incoming?tile=CUSTOMER_REPLIES',
@@ -369,7 +694,13 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
       ? createElement(CustomerDraftsList, {
           model: { customer: name, read: { status: 'ready', rows: work.drafts === 'empty' ? [] : draftRowsOf(party, work.price !== false) }, updates: work.drafts === 'list' ? 1 : 0, activeId: null, views: { model: { ...list, hostViews: [{ id: DRAFTS_VIEW, label: t('customers.work.view.drafts', { customer: name }), active: true }], views: workViewsOf({ price: work.price !== false }, { drafts: true }) } } },
         })
-      : createElement(WorkTools, { tools: workTools }, createElement(OrdersListView, { model: work.priceWindow && work.price !== false ? { ...list, priceCheck: priceWindowOf(work.priceWindow) } : list /* F-CP-114 */, actions: workDoors(work, can.price) })),
+      : createElement(
+          WorkTools,
+          { tools: work.customise ? { ...workTools, design: { menu: 'columns' } } /* cw T.1: Customise columns open */ : workTools },
+          createElement(OrdersListView, { model: work.priceWindow && work.price !== false ? { ...list, priceCheck: priceWindowOf(work.priceWindow) } : list /* F-CP-114 */, actions: work.live ? liveDoors(work, can.price) /* cw T.1 */ : workDoors(work, can.price) }),
+        ),
+    // cw T.1 (10-design §3.6): the foot line under the sheet — the order the rows stand in, the customer's urgency state.
+    work.live && !work.drafts ? createElement(WithMessages, { namespaces: [SHEET_NS] }, createElement(WorkFoot, { line: foot })) : null,
     work.drafts === 'window'
       ? createElement(DraftWindow, {
           model: {
@@ -412,7 +743,7 @@ function depthNodes(depth: DepthCase | undefined, partyId: string): SupplierDept
 }
 
 function CustomerDesign({ model }: { model: CustomerCase }) {
-  const { terms, money, depth, supervisor, portalEmails, work, designer, priceDiffer, ...record } = model
+  const { terms, money, depth, supervisor, portalEmails, work, designer, priceDiffer, shipmentLine, ...record } = model
   const party = record.party
   const id = party?.id ?? 'x'
   return inShell(
@@ -421,7 +752,7 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
       WithMessages,
       { namespaces: DEPTH_NAMESPACES },
       // B-TH-260: the customer's docked thread (Activity and Documents went to it), with threads.read.
-      createElement(CustomerRecordView, { model: record, thread: party ? partyThread(party, 'customers', record.can) : null, terms: termsCard(terms ?? termsModel()), money, depth: depthNodes(depth, id), supervisor: supervisor && party ? createElement(CustomerSupervisorCard, { model: supervisor, name: party.tradeName ?? party.legalName, designer: designer ?? null /* F-CP-155 */ }) : null, ...(portalEmails ? { portalEmails: new Set(portalEmails) } : {}), work: work && party ? createElement(WithMessages, { namespaces: ['orders'] /* F-CW-101: as the live Work tab loads them */ }, createElement(WorkDesign, { work, party })) : null /* F-SA-276 */, workCount: work ? { count: 5, attention: true } : null, priceDiffer: priceDiffer ?? null /* F-CP-141 */, workBoard: STRIP_READY.board /* F-CW-101: the Overview's In production and Late */ }),
+      createElement(CustomerRecordView, { model: record, thread: party ? (shipmentLine && record.can.threads ? createElement(ShipmentLineThread, { party }) /* cw T.1 */ : partyThread(party, 'customers', record.can)) : null, terms: termsCard(terms ?? termsModel()), money, depth: depthNodes(depth, id), supervisor: supervisor && party ? createElement(CustomerSupervisorCard, { model: supervisor, name: party.tradeName ?? party.legalName, designer: designer ?? null /* F-CP-155 */ }) : null, ...(portalEmails ? { portalEmails: new Set(portalEmails) } : {}), work: work && party ? createElement(WithMessages, { namespaces: ['orders'] /* F-CW-101: as the live Work tab loads them */ }, createElement(WorkDesign, { work, party })) : null /* F-SA-276 */, workCount: work ? { count: 5, attention: true } : null, priceDiffer: priceDiffer ?? null /* F-CP-141 */, workBoard: STRIP_READY.board /* F-CW-101: the Overview's In production and Late */ }),
     ),
   )
 }
@@ -570,6 +901,50 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     // ---- end F-CP-148
     { id: 'quotes-orders-reading', label: 'F-SA-276 · Work: the strip and the rows reading ("—", never 0)', model: workCase('MODA-DEMO', { reads: STRIP_READING, rows: null }) },
     { id: 'quotes-orders-error', label: "F-SA-276 · Work: the orders couldn't be read (the strip stays usable)", model: workCase('MODA-DEMO', { reads: { ...STRIP_READY, requests: { status: 'failed' } }, rows: [], problem: 'problem.read.unavailable' }) },
+    // ---- cw T.1 (customer Work tab; 10-design §8, §9): the states the seed lacks, on the live tab's own options — made-up orders
+    // SEED-SO-0001 … 0014 of a made-up customer. More ▾, a row's ⋯ and Sort ▾ open by a press in any of these cases.
+    { id: 'cw-busy', label: 'cw · Work: a busy customer — 14 orders in all seven groups (2 · 1 · 4 · 1 · 2 · 3 · 1), "Most urgent first"; the customer\'s Urgent 1–3, one "Urgent – asked" (a door), one "Set to regular by us" (locked); our Top, High and Low; late, at risk, on hold, a request to answer, "Asked production"; shipped, done and cancelled rows with no stage; the foot line', model: liveCase() },
+    { id: 'cw-busy-widest', label: 'cw · The same in the widest room (from 1700 px): Priority, Waiting on, Deposit, Pieces, Shipped, Ordered and Supervisor join', model: liveCase({ room: 'widest' }) },
+    { id: 'cw-switch-off', label: 'cw · The customer\'s urgency switch OFF: no customer chip on any row; the foot says "Customer urgency is off for <customer> · Portal settings ›"; "Most urgent first" has no middle part', model: liveCase({ rows: busy().map((row) => ({ ...row, customerUrgency: null, customerUrgencyState: null })), urgencyFoot: { on: false, used: 0, max: 3, companies: [] } }) },
+    { id: 'cw-two-companies', label: 'cw T.0 · Orders at two of our companies: the foot names each with its own numbers ("Seed A 2 of at most 3 · Seed B 1 of at most 3")', model: liveCase({ urgencyFoot: { on: true, used: 3, max: 6, companies: [{ name: 'Seed A', used: 2, max: 3 }, { name: 'Seed B', used: 1, max: 3 }] } }) },
+    { id: 'cw-drafts-only', label: 'cw · No order yet, two drafts in the portal: seven zeros in the band, "Before an order: 2 drafts", the sheet\'s line with the door to the drafts', model: liveCase({ rows: [], reads: seedReads([], NO_PHASES), before: { drafts: 2, toAnswer: null, openQuotes: null, orderWaits: null }, urgencyFoot: { on: true, used: 0, max: 3, companies: [] } }) },
+    { id: 'cw-no-order', label: 'cw · No order at all: the band keeps its shape with seven zeros, the chips are quiet, "<customer> has no order yet."', model: liveCase({ rows: [], reads: seedReads([], NO_PHASES), before: NO_BEFORE_ORDER, urgencyFoot: null }) },
+    { id: 'cw-all-done', label: 'cw · Everything done: three orders delivered or closed and one cancelled — no stage, no chip, nothing waits', model: liveCase({ rows: busy().slice(10), reads: seedReads(busy().slice(10), { ...NO_PHASES, DONE: 3, CANCELLED: 1 }), before: NO_BEFORE_ORDER, urgencyFoot: { on: true, used: 0, max: 3, companies: [] } }) },
+    { id: 'cw-door-not-sent', label: 'cw · Opened from the door "Not sent to the factory": its two orders ("2 of 14 orders"), the door pressed, why they wait (a yes · a deposit)', model: liveCase({ rows: busy().slice(0, 2), reads: seedReads(busy(), BUSY_PHASES, BUSY_WAITS), phase: 'NOT_SENT' }) },
+    {
+      id: 'cw-extra-deposit',
+      label: 'cw · An extra deposit open on an order that needed none ("Extra deposit due …"), and an order that waits for the customer\'s new yes',
+      model: liveCase({
+        rows: [seedRow(by(SEED_CUSTOMER), 4, 'IN_PRODUCTION', { deposit: { state: 'NOT_NEEDED', dueDate: null, extraOpenDue: '2026-11-25' }, production: made({ stage: 'SEWING' }), progress: pieces(244, 152, 40, 244) }), seedRow(by(SEED_CUSTOMER), 5, 'IN_PRODUCTION', { reaccept: true, production: made({ stage: 'CUTTING' }), progress: pieces(120, 0, 0, 180), units: 180 })],
+        reads: seedReads(busy().slice(3, 5), { ...NO_PHASES, IN_PRODUCTION: 2 }),
+        urgencyFoot: { on: true, used: 0, max: 3, companies: [] },
+      }),
+    },
+    // The row ticked, per reader: an act without its right is not drawn; the next allowed act moves up.
+    { id: 'cw-ticked-owner', label: 'cw · Three ticked as Owner: Ship 3 together… · Ask ▾ · Set priority for 3, then More ▾ (Reply · Assign supervisor · Add task · Note ‖ Mark ready · Close · Confirm ‖ Customer urgency: Set to regular… · Unlock… ‖ Invoice shipped goods)', model: liveCase({ tickedIds: ROLE_TICKED }) },
+    { id: 'cw-ticked-sales', label: 'cw · As Sales (no shipping right): Ask ▾ · Set priority for 3 · Reply to <customer> on 3…, then More ▾ — no Ship, no Assign supervisor, no urgency act, no amount', model: seenAs('sales', { tickedIds: ROLE_TICKED }) },
+    { id: 'cw-ticked-warehouse', label: 'cw · As Warehouse: Ship 3 together… · Ask ▾ (one entry) · Reply to <customer> on 3…, then More ▾ (Add task · Note · Confirm) — no Set priority, no Mark ready, no Close', model: seenAs('warehouse', { tickedIds: ROLE_TICKED }) },
+    { id: 'cw-ticked-manager', label: 'cw · As Production manager: Ask ▾ (one entry) · Reply to <customer> on 3… · Assign supervisor…, then More ▾ (Add task · Note ‖ Customer urgency: Set to regular… · Unlock…)', model: seenAs('manager', { tickedIds: ROLE_TICKED }) },
+    { id: 'cw-ticked-reader', label: 'cw · As Read-only: no act — "Your role reads the orders and changes none: there is no act for the ticked rows."', model: seenAs('reader', { tickedIds: ROLE_TICKED }) },
+    // Ship N together…: Warehouse's own New shipment window, mounted here.
+    { id: 'cw-ship-step1', label: 'cw · Ship 6 together… step 1: "Runs on 4 · Not on 2: why is beside each" (nothing released to ship · another delivery address), the cap of 20, "<customer> wants SEED-SO-0009 all in one delivery", the draft that exists already', model: liveCase({ tickedIds: SHIP_TICKED, ship: 'step1' }) },
+    { id: 'cw-ship-step2', label: 'cw · Ship 6 together… step 2: the garments per size of the four orders it carries', model: liveCase({ tickedIds: SHIP_TICKED, ship: 'step2' }) },
+    { id: 'cw-ship-notice', label: 'cw · After Create: ONE notice — "Shipment SEED-SH-0012 created with 4 orders", each order a door to its thread, "a draft: <customer> is not told", the way to Warehouse', model: liveCase({ ship: 'notice' }) },
+    // Ask ▾.
+    { id: 'cw-ask-production', label: 'cw · Ask ▾ › Ask production about 3…: production\'s Note window — each record\'s supervisor, "Needs an answer" ticked, what the rows then say', model: liveCase({ tickedIds: ROLE_TICKED, note: 'ask' }) },
+    { id: 'cw-ask-production-receipt', label: 'cw · Its receipt: "Written on 3 records" — each order\'s name is a button that shows its thread; the window stays open', model: liveCase({ tickedIds: ROLE_TICKED, note: 'receipt' }) },
+    { id: 'cw-ask-customer', label: 'cw · Ask ▾ › Ask <customer> about 3…: Reply to N with the tick "Put it in their to-do list, answer by" ON and its day', model: liveCase({ tickedIds: ROLE_TICKED, reply: 'ask' }) },
+    { id: 'cw-ask-customer-receipt', label: 'cw · Its receipt: posted on 3 orders, the to-do made on each; each order\'s name a button', model: liveCase({ tickedIds: ROLE_TICKED, reply: 'receipt' }) },
+    // The customer's urgency as we steer it: the shared window (the work order's Customer card mounts the same).
+    { id: 'cw-urgency-regular', label: 'cw · Row ⋯ › Customer urgency › Set to regular… on SEED-SO-0004: a reason the customer reads, Also lock, a fresh code', model: liveCase({ urgency: { act: 'regular', on: 'row' } }) },
+    { id: 'cw-urgency-lock', label: 'cw · Row ⋯ › Lock… on SEED-SO-0004: the reason, "the customer cannot mark it urgent until we unlock it"', model: liveCase({ urgency: { act: 'lock', on: 'row' } }) },
+    { id: 'cw-urgency-unlock', label: 'cw · Row ⋯ › Unlock… on SEED-SO-0003 (locked): no reason asked', model: liveCase({ urgency: { act: 'unlock', on: 'row' } }) },
+    { id: 'cw-urgency-many', label: 'cw · More ▾ › Customer urgency: Set to regular… over three ticked: "Runs on 2 · Not on 1: why is beside each" (not marked urgent by the customer)', model: liveCase({ tickedIds: ROLE_TICKED, urgency: { act: 'regular', on: 'many' } }) },
+    { id: 'cw-urgency-outcome', label: 'cw · After it: the outcome — the orders set back by number, one not changed with why', model: liveCase({ urgency: 'outcome' }) },
+    { id: 'cw-urgency-as-sales', label: 'cw · As Sales: no urgency act anywhere (no right to decide for a customer) — the chips stay read-only, "Urgent – asked" is still a door', model: seenAs('sales') },
+    { id: 'cw-customise', label: 'cw · Views ▾ › Customise columns…: the tab\'s own set ticked, the columns that wait for a wider sheet named so, the rest offered unticked', model: liveCase({ customise: true }) },
+    { id: 'cw-dock-shipment-line', label: 'cw · The docked order\'s thread: the office-only line "On draft shipment SEED-SH-0012 with SEED-SO-0003, SEED-SO-0004." (the customer never reads it)', model: { ...liveCase(), shipmentLine: true } },
+    // ---- end cw T.1
     // ---- F-SA-271: the seven tabs (R5), the landing tab, the band's primary and ⋯ lines.
     { id: 'tabs-landing', label: 'F-SA-271 · No tab asked: the first tab the reader sees (Work for Sales)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')) }) },
     { id: 'tabs-overview-first', label: 'F-SA-271 · A reader without orders.view lands on the Overview', model: record('MODA-DEMO', { tab: 'overview', can: { ...RECORD_CAN, orders: false } }) },

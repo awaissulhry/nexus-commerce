@@ -24,13 +24,26 @@ export interface UrgencyFoot {
   readonly used: number
   /** The most it may mark (each company's own list has its own quota: their sum). */
   readonly max: number
+  /**
+   * T.0 (lead): the customer has orders at MORE than one of our companies — each company with its own marks and quota, in the
+   * read's order, so the foot names each ("Seed A 2 of at most 3 · Seed B 1 of at most 3"). Empty: one company (or none) — the
+   * plain words.
+   */
+  readonly companies: ReadonlyArray<{ readonly name: string; readonly used: number; readonly max: number }>
 }
 
-/** The foot's urgency part from the read: a customer at two companies has two urgent lists — their marks and their quotas are summed. */
+/**
+ * The foot's urgency part from the read. A customer at two of our companies has two urgent lists, each with its own quota: when it
+ * has orders at more than one, each company is named with its own numbers (T.0) — a sum would say a quota nobody has. With orders
+ * at one company: that company's numbers; with none: every list's, summed (nothing is marked then).
+ */
 export function urgencyFootOf(read: Pick<CustomerUrgency, 'urgency' | 'companies'>): UrgencyFoot {
-  const used = read.companies.reduce((sum, entry) => sum + entry.use.used, 0)
-  const max = read.companies.length > 0 ? read.companies.reduce((sum, entry) => sum + entry.use.max, 0) : read.urgency.max
-  return { on: read.urgency.on, used, max }
+  const withOrders = read.companies.filter((entry) => entry.orders.length > 0)
+  const basis = withOrders.length === 1 ? withOrders : read.companies
+  const used = basis.reduce((sum, entry) => sum + entry.use.used, 0)
+  const max = basis.length > 0 ? basis.reduce((sum, entry) => sum + entry.use.max, 0) : read.urgency.max
+  const companies = withOrders.length > 1 ? withOrders.map((entry) => ({ name: entry.company.name, used: entry.use.used, max: entry.use.max })) : []
+  return { on: read.urgency.on, used, max, companies }
 }
 
 /** A live change after which the part is read again: the customer's urgency changed, or its portal settings (the switch, the quota). */
@@ -83,6 +96,11 @@ export interface WorkFootLine {
   readonly sorted: FootWords | null
   /** "Customer urgency: 3 of at most 3 urgent now." or "Customer urgency is off for Seed Racing" — null: not read (no right, or it failed). */
   readonly urgency: FootWords | null
+  /**
+   * T.0: orders at more than one company — one part per company ("Seed A 2 of at most 3"), joined with " · " into `urgency`'s
+   * `{companies}` ("Customer urgency: Seed A 2 of at most 3 · Seed B 1 of at most 3 urgent now."). Empty: `urgency` says it whole.
+   */
+  readonly each: readonly FootWords[]
   /** The ONE quiet door of a switch that is off, only for a reader who may change it: the customer's Portal settings. */
   readonly portalHref: string | null
 }
@@ -96,6 +114,15 @@ export function workFootOf(input: { readonly sort: string | null; readonly sortW
   const off = input.foot !== null && !input.foot.on
   const urgent = input.sort === 'urgent' ? { rule: off ? ({ ns: 'sheet', key: 'sort.urgentRuleOff' } as const) : ({ ns: 'sheet', key: 'sort.urgentRule', params: { customer: input.customer } } as const), after: { ns: 'parties', key: 'customers.work.foot.after' } as const } : null
   const sorted = urgent || !input.sortWord ? null : ({ ns: 'parties', key: 'customers.work.foot.sorted', params: { sort: input.sortWord } } as const)
-  const urgency: FootWords | null = input.foot === null ? null : off ? { ns: 'parties', key: 'customers.work.foot.off', params: { customer: input.customer } } : { ns: 'parties', key: 'customers.work.foot.use', params: { used: input.foot.used, max: input.foot.max } }
-  return { urgent, sorted, urgency, portalHref: off && input.mayPortal ? input.portalHref : null }
+  // T.0: while the switch is on and the customer has orders at more than one company, each company is named with its own numbers.
+  const each: FootWords[] = input.foot !== null && !off ? input.foot.companies.map((entry) => ({ ns: 'parties', key: 'customers.work.foot.useCompany', params: { company: entry.name, used: entry.used, max: entry.max } })) : []
+  const urgency: FootWords | null =
+    input.foot === null
+      ? null
+      : off
+        ? { ns: 'parties', key: 'customers.work.foot.off', params: { customer: input.customer } }
+        : each.length > 0
+          ? { ns: 'parties', key: 'customers.work.foot.useEach' }
+          : { ns: 'parties', key: 'customers.work.foot.use', params: { used: input.foot.used, max: input.foot.max } }
+  return { urgent, sorted, urgency, each, portalHref: off && input.mayPortal ? input.portalHref : null }
 }

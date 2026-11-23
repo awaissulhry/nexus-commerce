@@ -272,7 +272,9 @@
         "after": "Seguono gli ordini usciti dalla produzione, dal più recente.",
         "sorted": "Ordinati: {sort}.",
         "use": "Urgenza cliente: {used} di al massimo {max} urgenti ora.",
-        "off": "L'urgenza cliente è spenta per {customer}"
+        "off": "L'urgenza cliente è spenta per {customer}",
+        "useEach": "Urgenza cliente: {companies} urgenti ora.",
+        "useCompany": "{company} {used} di al massimo {max}"
       }
     },
     "quotesTab": {
