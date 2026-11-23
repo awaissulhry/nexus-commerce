@@ -594,10 +594,7 @@
     "notYet": "Not read yet",
     "loading": "Loading…",
     "failedTitle": "Couldn't load",
-    "noMatch": "No rows match these filters",
     "clearAll": "Clear all",
-    "rowsHeading": "Saved filters",
-    "rows": "Rows: {view}",
     "filters": "Filters",
     "filtersCount": "Filters ({count})",
     "more": "More actions",
@@ -691,9 +688,7 @@
     "goMany_one": "Archive {count}",
     "goMany_other": "Archive {count}",
     "nothing": "Nothing to archive",
-    "andMore": "{count} more",
-    "skipped_one": "{count} selected row is blocked and stays as it is.",
-    "skipped_other": "{count} selected rows are blocked and stay as they are."
+    "andMore": "{count} more"
   },
   "address": {
     "title": "Addresses",
@@ -936,7 +931,6 @@
     }
   },
   "keys": {
-    "title": "Keyboard shortcuts",
     "search": "Search",
     "rows": "Next / previous row",
     "open": "Open the row",
