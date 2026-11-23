@@ -134,6 +134,13 @@
   color: var(--nds-text-2);
 }
 
+/* F-CL-301 (walk W-12): the ⓘ's own box (its popover's trigger inside), so a phone's grid can place it. */
+.fw-cl-band-end {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
 .fw-cl-band-about {
   display: flex;
   flex-direction: column;
@@ -171,6 +178,19 @@
   .fw-cl-band-info {
     justify-self: end;
   }
+  /* F-CL-301 (walk W-12): the label and its ⓘ share the first cell (the label at its start, the ⓘ at its end); Needs us beside them. */
+  .fw-cl-band-label,
+  .fw-cl-band-end {
+    grid-area: 1 / 1;
+    align-self: center;
+  }
+  .fw-cl-band-label {
+    justify-self: start;
+    padding-right: var(--nds-space-24);
+  }
+  .fw-cl-band-end {
+    justify-self: end;
+  }
   .fw-cl-band .fw-cl-door {
     justify-content: space-between;
     width: 100%;
@@ -181,14 +201,16 @@
 }
 
 /* ---- F-CL-202: the work cells — chips that write their count, at most two lines (the rest fold into "+n more": settle T24) ---- */
+/* F-CL-301 (walk W-1): the box is border-box — its height holds both 22 px lines, the gap between them and the padding above and
+   below (56 px), so the row's auto height grows to it (≤ ~61 px, T24) and the second line is never cut. */
 .fw-cl-chips {
   display: flex;
   flex-wrap: wrap;
   align-content: flex-start;
   gap: var(--nds-space-4);
   min-width: 0;
-  max-height: 48px;
-  padding-block: var(--nds-space-6);
+  max-height: calc(2 * 22px + 3 * var(--nds-space-4));
+  padding-block: var(--nds-space-4);
   overflow: hidden;
   line-height: 1;
 }
@@ -329,6 +351,19 @@
   height: 100%;
 }
 
+/* ---- F-CL-301 (walk W-2): no cut header — the Picture column's narrow sides, the New messages column's mark ---- */
+.ag-cell.fw-cl-tight,
+.ag-header-cell.fw-cl-tight {
+  padding-left: var(--nds-space-8);
+  padding-right: var(--nds-space-8);
+}
+
+.fw-cl-hicon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--nds-text-2);
+}
+
 /* ---- F-CL-203: the phone card — the picture beside the Customer cell, ≤ 2 Needs us chips, one line of Work, the next promise ---- */
 .fw-cl-card-head {
   display: flex;
@@ -375,4 +410,54 @@
     order: -1;
     margin-left: auto;
   }
+}
+
+/* ---- F-CL-301 (walk W-6): the supervisor window's customers — runs on ("now: …"), left out (why) ---- */
+.fw-cl-sup-lines {
+  display: flex;
+  flex-direction: column;
+  max-height: 280px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  list-style: none;
+}
+
+.fw-cl-sup-lines li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border-top: 1px solid var(--nds-border);
+}
+
+.fw-cl-sup-lines li:first-child {
+  border-top: 0;
+}
+
+.fw-cl-sup-lines li.is-out {
+  background: var(--nds-surface-sunken);
+}
+
+.fw-cl-sup-lines li > svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--nds-text-2);
+}
+
+.fw-cl-sup-who {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-cl-sup-now {
+  flex: none;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  white-space: nowrap;
 }

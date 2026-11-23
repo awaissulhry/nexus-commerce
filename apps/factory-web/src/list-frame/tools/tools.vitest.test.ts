@@ -12,6 +12,7 @@ import { designScreen } from '../../areas/_shared/list-tools/fixtures'
 import { memoryStore, memoryTransport } from '../../areas/_shared/list-tools/memory'
 import { columnsMenuItems, exportMenuItems, sharingWords } from './ListToolsBar'
 import { applyLayout, exportColumnsOf, failureKey, layoutOfPreferences, preferencesOf, recentJobs, screenState, showsView, sizeText, toolColumnsOf } from './model'
+import { cleanLayout, preferenceColumnsOf } from './model' // F-CL-301
 import type { ExportJob, SavedView, ViewsAnswer } from './transport'
 
 /**
@@ -332,3 +333,25 @@ describe('custom columns: hidden until a view shows them, written by Export when
   })
 })
 // ── end B-TH-241 ──
+
+// ---- F-CL-301 (customers list walk W-13): a leading column before the row's name ----
+describe('F-CL-301: a leading column (ColDef context.leading) is never the row’s name', () => {
+  const columns = [
+    { colId: 'picture', headerName: 'Picture', context: { leading: true } },
+    { colId: 'name', headerName: 'Customer' },
+    { colId: 'needs', headerName: 'Needs us' },
+    { colId: 'actions', headerName: '', pinned: 'right' },
+  ] as ColDef<unknown>[]
+  it('the name stays first (Freeze “Customer”); the picture is lead: always shown, never hidden, kept before the name', () => {
+    const tools = toolColumnsOf(columns)
+    expect(tools.map((column) => [column.id, column.fixed])).toEqual([['picture', 'lead'], ['name', 'first'], ['needs', null], ['actions', 'end']])
+    expect(preferenceColumnsOf(tools).filter((column) => column.alwaysShown).map((column) => column.key)).toEqual(['picture', 'name'])
+    expect(cleanLayout({ order: [], hidden: ['picture', 'needs'], pinned: [] }, tools)).toEqual({ order: [], hidden: ['needs'], pinned: [] })
+    // Frozen together: both pinned left, in the list's order.
+    expect(applyLayout(columns, { order: [], hidden: [], pinned: ['picture', 'name'] }).map((column) => [column.colId, column.pinned ?? null])).toEqual([['picture', 'left'], ['name', 'left'], ['needs', null], ['actions', 'right']])
+  })
+  it('a list without a leading column is unchanged: its first column is the name', () => {
+    expect(toolColumnsOf(columns.slice(1)).map((column) => column.fixed)).toEqual(['first', null, 'end'])
+  })
+})
+// ---- end F-CL-301

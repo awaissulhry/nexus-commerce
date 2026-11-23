@@ -152,6 +152,8 @@ export interface ListFrameProps<T> {
   quick?: ListQuick | null
   /** Columns a person's rights leave out, listed in Columns ▾ as "Hidden: …" (design sec:grid). */
   withheld?: readonly WithheldColumn[]
+  /** F-CL-301: the list's own lines in Customise columns (under the density): what its columns are, why one is not offered. */
+  customiseAbout?: ReactNode
   /** The site's day (YYYY-MM-DD) for the calendar; default today in the site's zone. */
   today?: string
   /** Design cases: the calendar's day open, the bulk edit open at a step with its values. */
@@ -249,7 +251,7 @@ export function ListFrame<T>(props: ListFrameProps<T>) {
   )
 }
 
-function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, search, tools, right, selection, isRowSelectable, updates, more, keys, onHelp, onOpen, state, rowKind = 'two-line', endless, listKey, title, focusRow, keysOpen, modes, cards, edit, quick, withheld, today, design, exportAbout, onRowClick, onSortChanged, custom, groups, builtInViews, viewName, onShownColumns, active /* F-SA-279 */ }: ListFrameProps<T>) {
+function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, search, tools, right, selection, isRowSelectable, updates, more, keys, onHelp, onOpen, state, rowKind = 'two-line', endless, listKey, title, focusRow, keysOpen, modes, cards, edit, quick, withheld, today, design, exportAbout, onRowClick, onSortChanged, custom, groups, builtInViews, viewName, onShownColumns, active /* F-SA-279 */, customiseAbout /* F-CL-301 */ }: ListFrameProps<T>) {
   const t = useT('lists')
   const locale = useLocale()
   const ds = useDsLabels()
@@ -571,7 +573,7 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
   const frameTools = printing ? null : (
     <>
       {quick && quick.filters.length > 0 && <QuickMenu quick={quick} t={t} />}
-      {listTools.transport && <ListToolsBar state={listTools} withheld={withheld} about={exportAbout} builtIns={builtInViews} suggested={viewName} /* B-TH-243 */ />}
+      {listTools.transport && <ListToolsBar state={listTools} withheld={withheld} about={exportAbout} builtIns={builtInViews} suggested={viewName} /* B-TH-243 */ customise={customiseAbout} /* F-CL-301 */ />}
       {modes && <ModeSwitch modes={offered} mode={mode} onMode={modes.onMode} t={t} />}
     </>
   )

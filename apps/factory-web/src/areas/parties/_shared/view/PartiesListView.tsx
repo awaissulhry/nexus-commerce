@@ -117,6 +117,8 @@ export interface ListDepth {
   /** What Export ▾ says the file holds. */
   readonly exportAbout?: ExportAbout | null
   // ---- end F-CL-202
+  /** F-CL-301 (walk W-13): the side's own lines in Customise columns (what its columns are, why one is not offered). */
+  readonly customiseAbout?: ReactNode
 }
 
 export function PartiesListView({ model, actions, headActions, columns: sideColumns, depth }: { model: PartiesListModel; actions?: PartiesListActions; headActions?: ReactNode; columns?: readonly ColDef<PartyRow>[]; depth?: ListDepth | undefined }) {
@@ -557,6 +559,7 @@ function PartiesList({ model, actions, headActions, sideColumns, depth }: { mode
         focusRow={model.focusRow}
         {...(depth?.card ? { cards: { fields: depth.card } } : {}) /* F-CL-101: the side's phone card */}
         {...(depth?.exportAbout ? { exportAbout: depth.exportAbout } : {}) /* F-CL-202: what the file holds */}
+        {...(depth?.customiseAbout ? { customiseAbout: depth.customiseAbout } : {}) /* F-CL-301: the side's own lines in Customise */}
       />
       )}
 

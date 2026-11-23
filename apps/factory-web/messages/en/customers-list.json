@@ -51,7 +51,8 @@
     },
     "task_one": "Add task to {count} customer…",
     "task_other": "Add task to {count} customers…",
-    "supervisor": "Set production supervisor for {count}…",
+    "supervisor_one": "Set production supervisor for {count}…",
+    "supervisor_other": "Set production supervisor for {count}…",
     "tooMany": "At most {max} customers at once: select fewer."
   },
   "p2": {
@@ -96,7 +97,11 @@
       "held": "The text names another customer: change it, or tick “This text names no other customer”."
     },
     "made": "Task made · for {name}",
-    "due": "due {date}"
+    "due": "due {date}",
+    "records": "Customers",
+    "one": "One task on each customer: in its own thread, never one line naming two customers.",
+    "neverWho": "The customer:",
+    "never": "never sees a task."
   },
   "supervisor": {
     "title_one": "Set production supervisor for {count} customer",
@@ -107,7 +112,8 @@
     "listHint": "The list is the first customer’s; the server judges each of the others.",
     "follows": "Its orders without a supervisor of their own follow this one.",
     "notTold": "The customer is not told who it is.",
-    "notices": "{name} will get {count} notices (one per customer). It runs one customer at a time; closing this window stops it before the next one.",
+    "notices_one": "{name} will get {count} notice (one per customer). It runs one customer at a time; closing this window stops it before the next one.",
+    "notices_other": "{name} will get {count} notices (one per customer). It runs one customer at a time; closing this window stops it before the next one.",
     "already": "Already {name}.",
     "notReached": "Your role does not reach its portal settings: its supervisor is set by someone who does.",
     "readFailed": "Its settings could not be read: run it again.",
@@ -120,7 +126,10 @@
     "held": {
       "pick": "Pick a person first.",
       "reading": "The customers are still being read."
-    }
+    },
+    "now": "now: {name}",
+    "nowNone": "now: not set",
+    "leftOut": "left out"
   },
   "band": {
     "label": {
@@ -131,8 +140,16 @@
     "orders_one": "· {count} order",
     "orders_other": "· {count} orders",
     "hint": {
-      "needs": "{count} customers have something waiting on us: {req} requests to answer · {rep} replies waiting on us · {late} late orders.",
-      "group": "{count} customers have at least one order “{group}” · {orders}.",
+      "needs_one": "{count} customer has something waiting on us: {what}.",
+      "needs_other": "{count} customers have something waiting on us: {what}.",
+      "req_one": "{count} request to answer",
+      "req_other": "{count} requests to answer",
+      "rep_one": "{count} reply waiting on us",
+      "rep_other": "{count} replies waiting on us",
+      "late_one": "{count} late order",
+      "late_other": "{count} late orders",
+      "group_one": "{count} customer has at least one order “{group}” · {orders}.",
+      "group_other": "{count} customers have at least one order “{group}” · {orders}.",
       "press": "Press: show these customers. Again: show all.",
       "partial": "Some waiting replies are beyond what one read counts: the number of replies may be higher."
     },
@@ -172,5 +189,9 @@
     "name": "Name A–Z",
     "aria": "Order of the list: {order}",
     "capped": "More than 2 000 customers in this view: shown by code. Narrow the view to see them in this order."
+  },
+  "customise": {
+    "truth": "These are the list’s own columns — what is on screen is ticked. The identity columns are hidden at first and stay here (they are always in the exported file).",
+    "noOverdue": "Overdue is not offered: it needs the right to see prices."
   }
 }

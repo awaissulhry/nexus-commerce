@@ -90,6 +90,7 @@ function Windows({ windows }: { windows: NonNullable<CustomersCase['windows']> }
             words: { ns: 'customers-list', prefix: 'task' },
             namesOther: (text: string) => namesOtherCustomer(text, task.ticked),
             hrefOf: (record: { readonly id: string }) => `/w/DEMO/sales/customers/${record.id}?thread=open`,
+            about: true, // F-CL-301 (walk W-5)
           },
         })
       : null,

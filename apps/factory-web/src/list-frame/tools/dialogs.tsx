@@ -173,8 +173,11 @@ export function RemoveViewDialog({ view, busy, problem, onRemove, onClose }: { v
   )
 }
 
-/** Customise columns (design pop:customise): the DS's one Customise dialog; the density beside the columns. */
-export function CustomiseDialog({ tools, layout, onApply, onClose }: { tools: readonly ToolColumn[]; layout: WorkingLayout; onApply: (next: WorkingLayout) => void; onClose: () => void }) {
+/**
+ * Customise columns (design pop:customise): the DS's one Customise dialog; the density beside the columns. F-CL-301: `about`, the
+ * list's own lines under the density (the customers' "These are the list's own columns…" and why a column is not offered).
+ */
+export function CustomiseDialog({ tools, layout, onApply, onClose, about = null }: { tools: readonly ToolColumn[]; layout: WorkingLayout; onApply: (next: WorkingLayout) => void; onClose: () => void; about?: ReactNode }) {
   const t = useT('lists')
   const [density, setDensity] = useState<Density>(layout.density ?? 'cozy')
   const value = useMemo(() => preferencesOf(tools, layout.columns), [tools, layout.columns])
@@ -189,6 +192,7 @@ export function CustomiseDialog({ tools, layout, onApply, onClose }: { tools: re
         onChange={(next) => setDensity(next as Density)}
         options={DENSITY_CHOICES.map((choice) => ({ value: choice, label: t(`tools.density.${choice}`) }))}
       />
+      {about ? <div className="fw-lt-about">{about}</div> : null /* F-CL-301 */}
     </fieldset>
   )
   return (

@@ -18,8 +18,11 @@ export const SELECTION_COLUMN = 'ag-Grid-SelectionColumn'
 export interface ToolColumn {
   readonly id: string
   readonly label: string
-  /** `first`: the row's name, always shown (it may move); `end`: a trailing ⋯ column pinned right, never moved or exported. */
-  readonly fixed: 'first' | 'end' | null
+  /**
+   * `first`: the row's name, always shown (it may move); `end`: a trailing ⋯ column pinned right, never moved or exported; F-CL-301:
+   * `lead`: a column the list draws before the name (ColDef `context.leading`, the customers' picture) — always shown, frozen with it.
+   */
+  readonly fixed: 'first' | 'end' | 'lead' | null
   /**
    * B-TH-241 (SHEET-G04): a column hidden until a layout shows it (a custom field's `cf:` column, ColDef `context.optIn`): it is
    * shown only while the layout names it in its order and does not hide it, so a list as built and every view saved before it
@@ -31,7 +34,7 @@ export interface ToolColumn {
 }
 
 // ── B-TH-241: a column's tools facts from its ColDef context (opt-in, and its name in Customise) ──
-const contextOf = (column: ColDef<unknown>): { optIn?: unknown; toolLabel?: unknown; toolGroup?: unknown; toolGroupKey?: unknown } => (column.context as { optIn?: unknown; toolLabel?: unknown; toolGroup?: unknown; toolGroupKey?: unknown } | undefined) ?? {}
+const contextOf = (column: ColDef<unknown>): { optIn?: unknown; toolLabel?: unknown; toolGroup?: unknown; toolGroupKey?: unknown; leading?: unknown /* F-CL-301 */ } => (column.context as { optIn?: unknown; toolLabel?: unknown; toolGroup?: unknown; toolGroupKey?: unknown; leading?: unknown } | undefined) ?? {}
 /** An opt-in column (hidden until a layout shows it). */
 export const isOptIn = (column: ColDef<unknown>): boolean => contextOf(column).optIn === true
 // ── end B-TH-241 ──
@@ -48,12 +51,15 @@ export function toolColumnsOf(columns: readonly ColDef<unknown>[]): ToolColumn[]
     const id = columnIdOf(column)
     return id !== null && id !== SELECTION_COLUMN
   })
+  // F-CL-301 (customers list walk W-13): the row's name is the first column that is not a leading one (the customers' picture drew
+  // "Freeze “Picture”" and was the one always shown); a leading column before it is `lead`. A list without one is unchanged.
+  const firstIndex = known.findIndex((column) => contextOf(column).leading !== true)
   return known.map((column, index) => {
     const id = columnIdOf(column)!
     // B-TH-241: a column may name itself apart in Customise ("Heat number (custom field)").
     const toolLabel = contextOf(column).toolLabel
     const label = typeof toolLabel === 'string' && toolLabel.trim() !== '' ? toolLabel : typeof column.headerName === 'string' && column.headerName.trim() !== '' ? column.headerName : id
-    const fixed = column.pinned === 'right' && index === known.length - 1 ? 'end' : index === 0 ? 'first' : null
+    const fixed = column.pinned === 'right' && index === known.length - 1 ? 'end' : index === firstIndex ? 'first' : index < firstIndex ? 'lead' : null
     // F-CP-140: a column may sit under its own heading in Customise (the Orders sheet's "Price check").
     const { toolGroup, toolGroupKey } = contextOf(column)
     const group = typeof toolGroup === 'string' && toolGroup.trim() !== '' ? { label: toolGroup, key: typeof toolGroupKey === 'string' && toolGroupKey !== '' ? toolGroupKey : toolGroup } : null
@@ -109,7 +115,7 @@ export function preferenceColumnsOf(tools: readonly ToolColumn[]): PreferencesCo
   return tools.map((column) => ({
     key: column.id,
     label: column.label,
-    ...(column.fixed === 'first' ? { alwaysShown: true } : {}),
+    ...(column.fixed === 'first' || column.fixed === 'lead' /* F-CL-301 */ ? { alwaysShown: true } : {}),
     ...(column.fixed === 'end' ? { locked: true, lockSide: 'right' as const } : {}),
     ...(column.group ? { group: column.group.label, groupKey: column.group.key } : {}), // F-CP-140: its own heading (the rest: the list's)
   }))

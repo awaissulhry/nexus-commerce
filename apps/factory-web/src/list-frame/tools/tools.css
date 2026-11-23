@@ -104,3 +104,18 @@
   color: var(--nds-text-muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* ---- F-CL-301 (customers list walk W-13): a list's own lines in Customise, under the density ---- */
+.fw-lt-about {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin-top: var(--nds-space-6);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-lt-about p {
+  margin: 0;
+}
+/* ---- end F-CL-301 ---- */
