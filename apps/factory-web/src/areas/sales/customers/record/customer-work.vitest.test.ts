@@ -335,7 +335,6 @@ describe('F-SA-276: words in both languages', () => {
         ...['sewnOf', 'nothingShipped'].map((key) => `where.${key}`),
         ...['depositOverdue', 'depositExtra', 'reaccept', 'heldTip'].map((key) => `stop.${key}`),
         'customise.wider',
-        'customise.widest',
       ]
       for (const key of row) expect(sheet(key, { rank: 2, max: 3, customer: 'Brand Alpha', level: 'x', sewn: 1, ordered: 2, number: 'SO-1', date: 'x', column: 'x' }), `${locale} ${key}`).not.toBe(key)
       for (const key of ['where.readyNow', 'countOf']) for (const count of [1, 2]) expect(sheet(key, { count, shown: 0 }), `${locale} ${key} ${count}`).toContain(String(count))

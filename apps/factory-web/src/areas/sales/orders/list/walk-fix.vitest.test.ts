@@ -6,7 +6,7 @@ import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
 import type { BrandRequest } from '../../../home/approvals/requests/api'
 import type { RequestReviewModel } from '../../../home/approvals/requests/model'
 import { requestsDoorOf, reviewNamed, workEntry } from '../../customers/record/use-customer-work'
-import { WAITING_SET, WORK_CARD_EDGES, WORK_MIN, WORK_MORE, WORK_PAD, WORK_PLAIN_HEADS, WORK_ROOMS, WORK_SETS, WORK_TICK, WORK_WHERE_ROOM, workEmptyOf, workFixedOf, workPreset, workRoomOf } from '../../customers/record/view/WorkTab'
+import { WAITING_SET, WORK_CARD_EDGES, WORK_JOIN_AT, WORK_JOINS, WORK_MIN, WORK_MORE, WORK_PAD, WORK_PLAIN_HEADS, WORK_ROOM_JOINED, WORK_ROOMS, WORK_SETS, WORK_TICK, WORK_WHERE_ROOM, workEmptyOf, workFixedOf, workJoinedOf, workLaterOf, workPreset, workRoomOf, workRoomOfJoined, workSetOf } from '../../customers/record/view/WorkTab'
 import type { OrderRow, OrderStatus } from '../api'
 import { SORT_CHOICES } from '../model'
 import { manyHeld, noYesAsked, rowStepsOf } from './commands/model'
@@ -599,7 +599,7 @@ describe('third look N-1: adding columns never takes "Where it is" under the 275
     expect(read('./view/OrdersListView.tsx')).toContain(`colId: 'more', headerName: t('col.more'), minWidth: ${WORK_MORE}, maxWidth: ${WORK_MORE},`)
   })
   it('in every room, at every width, "Where it is" has 275 px or more (the grid is the room less the card\'s edges)', () => {
-    const whereAt = (width: number) => width - WORK_CARD_EDGES - workFixedOf(WORK_SETS[workRoomOf(width)])
+    const whereAt = (width: number) => width - WORK_CARD_EDGES - workFixedOf(workSetOf(workJoinedOf(width))) // cw fx8: the columns join one at a time
     expect(whereAt(865)).toBe(275) // beside the thread at 1440: the measure every room keeps
     for (let width = 865; width <= 2400; width += 1) if (whereAt(width) < WORK_WHERE_ROOM) throw new Error(`a room of ${width} px leaves Where it is ${whereAt(width)} px`)
     // Where a room starts it has exactly the 275; one px less and the smaller set stays (with more room than that).
@@ -607,9 +607,10 @@ describe('third look N-1: adding columns never takes "Where it is" under the 275
       expect(whereAt(WORK_ROOMS[room]), room).toBe(275)
       expect(whereAt(WORK_ROOMS[room] - 1), room).toBeGreaterThan(275)
     }
-    // The room the third look measured (a sheet of about 1704 px, the thread closed at about 1830): the nine columns stay — it had 214 px.
+    // The room the third look measured (a sheet of about 1704 px, the thread closed at about 1830): it had 214 px with thirteen
+    // columns. cw fx8: twelve now (all but Supervisor), and 346 px.
     expect(workRoomOf(1706)).toBe('wider')
-    expect(whereAt(1706)).toBe(698)
+    expect([workJoinedOf(1706), whereAt(1706)]).toEqual([6, 346])
   })
   it('the measured rooms land in the same sets as before: 6 · 8 · 9 · 13 columns, and Where it is 275 · 281 · 306 · 304 px', () => {
     expect([343, 865, 1185, 1314, 1794].map((width) => workRoomOf(width))).toEqual(['base', 'base', 'wide', 'wider', 'widest'])
@@ -638,5 +639,102 @@ describe('third look R-3, item 3: the Thread door in the card\'s top row; nothin
     expect(dialog).toContain("const lines = box || (!!model.recordType && model.recordType !== 'SalesOrder')")
     expect(dialog).toContain('{lines && language && (')
     expect(dialog).toMatch(/\{lines && \(\n\s*<div className="fw-srm-orders">/)
+  })
+})
+
+// ============================================================ cw fx8 — the fourth look: no dead space ============================================================
+
+describe('fourth look: the extra columns join ONE AT A TIME, each as soon as the room holds it', () => {
+  const BASE = ['picture', 'number', 'whereItIs', 'promised', 'customerUrgency', 'newMessages']
+  const setAt = (width: number) => workSetOf(workJoinedOf(width))
+  const whereAt = (width: number) => width - WORK_CARD_EDGES - workFixedOf(setAt(width))
+
+  it('the order they join in is the design\'s, and each joins at the fixed widths of the set WITH it + 275 + the card\'s 2 px', () => {
+    expect(WORK_JOINS).toEqual(['waitingOn', 'deposit', 'shipped', 'priority', 'units', 'orderDate', 'supervisor'])
+    expect(workSetOf(0)).toEqual(BASE)
+    expect(workSetOf(1)).toEqual([...BASE, 'waitingOn'])
+    expect(workSetOf(7)).toEqual([...WORK_SETS.widest])
+    expect([workSetOf(-1), workSetOf(99)]).toEqual([BASE, [...WORK_SETS.widest]])
+    // The sums by hand: 588 px for the base set's fixed columns, then each column's own width; + 275 + 2.
+    const widths = [178, 136, 104, 112, 96, 144, 130]
+    expect(WORK_JOINS.map((id) => WORK_MIN[id])).toEqual(widths)
+    let fixed = 588
+    const byHand = widths.map((width) => (fixed += width) + 275 + 2)
+    expect(WORK_JOIN_AT).toEqual(byHand)
+    expect(WORK_JOIN_AT).toEqual([1043, 1179, 1283, 1395, 1491, 1635, 1765])
+    WORK_JOINS.forEach((_, index) => expect(WORK_JOIN_AT[index], WORK_JOINS[index]).toBe(workFixedOf(workSetOf(index + 1)) + WORK_WHERE_ROOM + WORK_CARD_EDGES))
+  })
+
+  it('every room from 865 to 2400 px: "Where it is" ≥ 275; its spare width < the next column\'s (≤ 180) until the last has joined; columns only ever join', () => {
+    let before = workJoinedOf(865)
+    let widest = 0
+    for (let width = 865; width <= 2400; width += 1) {
+      const joined = workJoinedOf(width)
+      const where = whereAt(width)
+      if (where < WORK_WHERE_ROOM) throw new Error(`a room of ${width} px leaves Where it is ${where} px`)
+      if (joined < before) throw new Error(`a room of ${width} px drops a column (${before} → ${joined})`)
+      if (joined - before > 1) throw new Error(`a room of ${width} px adds ${joined - before} columns at once`)
+      const next = WORK_JOINS[joined]
+      if (next) {
+        const spare = where - WORK_WHERE_ROOM
+        if (spare >= WORK_MIN[next]!) throw new Error(`a room of ${width} px holds ${spare} px spare while ${next} (${WORK_MIN[next]} px) waits`)
+        widest = Math.max(widest, spare)
+      }
+      before = joined
+    }
+    expect(widest).toBeLessThanOrEqual(180) // the widest column that waits is Waiting on: 178 px
+    expect(widest).toBe(177)
+    expect(before).toBe(7) // all seven have joined by the end
+    // A room only adds: the set of a width is always inside the set of a wider one.
+    for (const [narrow, wide] of [[865, 1043], [1043, 1179], [1283, 1395], [1491, 1635], [1635, 1765]] as const) for (const id of setAt(narrow)) expect(setAt(wide), `${narrow} → ${wide}: ${id}`).toContain(id)
+    expect([workJoinedOf(null), workJoinedOf(undefined), workJoinedOf(343)]).toEqual([0, 0, 0])
+  })
+
+  it('the four measured rooms come out exactly as before: 6 · 8 · 9 · 13 columns and 275 · 281 · 306 · 304 px', () => {
+    expect([865, 1185, 1314, 1794].map((width) => setAt(width).length)).toEqual([6, 8, 9, 13])
+    expect([865, 1185, 1314, 1794].map(whereAt)).toEqual([275, 281, 306, 304])
+    expect([865, 1185, 1314, 1794].map((width) => [...setAt(width)])).toEqual([[...WORK_SETS.base], [...WORK_SETS.wide], [...WORK_SETS.wider], [...WORK_SETS.widest]])
+    // The four rooms by name are four of the steps: where each starts is where its last column joins.
+    expect(WORK_ROOM_JOINED).toEqual({ base: 0, wide: 2, wider: 3, widest: 7 })
+    for (const room of ['wide', 'wider', 'widest'] as const) expect(WORK_ROOMS[room], room).toBe(WORK_JOIN_AT[WORK_ROOM_JOINED[room] - 1])
+    expect([0, 1, 2, 3, 4, 6, 7].map(workRoomOfJoined)).toEqual(['base', 'base', 'wide', 'wider', 'wider', 'wider', 'widest'])
+    expect([343, 865, 1185, 1314, 1794].map((width) => workRoomOf(width))).toEqual(['base', 'base', 'wide', 'wider', 'widest'])
+  })
+
+  it('the rooms between them fill up: a 16-inch laptop (a 1728 px window) no longer leaves hundreds of px inside "Where it is"', () => {
+    // The thread open: a sheet of about 1057 px — Waiting on has joined (it had six columns and 467 px there).
+    expect([...setAt(1057)]).toEqual([...BASE, 'waitingOn'])
+    expect(whereAt(1057)).toBe(289)
+    // The thread closed: about 1602 px — eleven columns (it had nine and about 594 px).
+    expect(setAt(1602).length).toBe(11)
+    expect([...setAt(1602)].slice(-5)).toEqual(['waitingOn', 'deposit', 'shipped', 'priority', 'units'])
+    expect(whereAt(1602)).toBe(386)
+    // Just under a set's old start: 1178 px held 588 px, 1764 px held 756.
+    expect([whereAt(1178), whereAt(1764)]).toEqual([410, 404])
+  })
+
+  it('the tab hands the sheet the number joined; a view\'s preset follows it, and Customise says one thing of a column that waits', () => {
+    const one = workPreset('all', null, false, 1)
+    expect(one.shown).toEqual([...BASE, 'waitingOn'])
+    expect(one.later).toEqual({ deposit: 'wider', shipped: 'wider', priority: 'wider', units: 'wider', orderDate: 'wider', supervisor: 'wider' })
+    expect(workPreset('all', null, false, 7).later).toEqual({})
+    expect(workLaterOf(workSetOf(5))).toEqual({ orderDate: 'wider', supervisor: 'wider' })
+    // A measured room by name is the same preset as its number (one object: the sheet rebuilds its columns only on a real change).
+    expect(workPreset('all', null, false, 'wide')).toBe(workPreset('all', null, false, 2))
+    expect(workPreset('all', null, false, 'widest')).toBe(workPreset('all', null, false, 7))
+    expect(workPreset('all', null, false, 'base')).toBe(workPreset('all', null, false, 0))
+    expect(workPreset('all', null, false, 3.9)).toBe(workPreset('all', null, false, 3))
+    expect(workPreset('all', null, false, 99)).toBe(workPreset('all', null, false, 7))
+    // Waiting on us / Late swap Waiting on in only while NO column has joined: the first to join IS Waiting on.
+    expect(workPreset('open', 'us', false, 0).shown).toEqual([...WAITING_SET])
+    expect(workPreset('late', null, false, 0).shown).toEqual([...WAITING_SET])
+    expect(workPreset('open', 'us', false, 1).shown).toEqual([...BASE, 'waitingOn'])
+    const tab = read('../../customers/record/view/WorkTab.tsx')
+    expect(tab).toContain('const measure = () => setJoined(workJoinedOf(node.getBoundingClientRect().width))')
+    expect(tab).toContain('return { ref, room: workRoomOfJoined(joined), joined }')
+    expect(tab).toContain('workRoom.joined /* F-CW-103; cw fx8: the columns join one at a time */),')
+    // The Money columns and the sheet's own `wide` flag still read the measured room by name (their own rule, left as it is).
+    expect(tab).toContain("wide: columnSet === 'money' ? workRoom.room !== 'base' : workRoom.room === 'widest',")
+    for (const locale of LOCALES) expect(words(locale, 'orders-sheet')('customise.wider', { column: 'X' }), locale).toMatch(/^X · /)
   })
 })

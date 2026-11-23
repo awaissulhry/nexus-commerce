@@ -908,7 +908,7 @@ describe('F-CW-304: rows never jump after an act; nothing unused stays (source)'
   it('dead parts are out: the toolbar link (the band holds that door) and the table-wide set (the tab\'s rooms decide)', () => {
     const model = readFileSync(new URL('./list-model.ts', import.meta.url), 'utf8')
     for (const source of [view, model, readFileSync(new URL('../../customers/record/view/WorkTab.tsx', import.meta.url), 'utf8')]) expect(source).not.toMatch(/toolbarLink|tableWide/)
-    expect(view).toContain("export function withPreset(column: ColDef<OrderRow>, preset: OrdersListModel['preset'] | null, wide: boolean, label?: (column: string, room: 'wider' | 'widest') => string): ColDef<OrderRow> {")
+    expect(view).toContain("export function withPreset(column: ColDef<OrderRow>, preset: OrdersListModel['preset'] | null, wide: boolean, label?: (column: string, room: 'wider') => string): ColDef<OrderRow> {") // cw fx8: one wording
   })
 })
 // ---- end F-CW-304

@@ -240,11 +240,11 @@ export interface OrdersListModel {
     // ---- end cw fx5
     // ---- F-CW-103 (lead settle S12; 10-design §3.9): Customise tells the truth for the host's set ----
     /**
-     * The columns of the host's set that are not on screen in THIS room and show in a wider one (by column id: from a `wider` sheet,
-     * or only from the `widest`). Customise lists them ticked and named so ("Waiting on · from a wider sheet"); a column is never
+     * The columns of the host's set that are not on screen in THIS room and show in a wider one (by column id). Customise lists them
+     * ticked and named so ("Waiting on · from a wider sheet": one wording — cw fx8, the columns join one at a time); a column is never
      * cut to fit. Every other column the preset does not show is offered unticked (it shows when the person ticks it).
      */
-    readonly later?: Readonly<Record<string, 'wider' | 'widest'>>
+    readonly later?: Readonly<Record<string, 'wider'>>
     // ---- end F-CW-103
   } | null
   /**

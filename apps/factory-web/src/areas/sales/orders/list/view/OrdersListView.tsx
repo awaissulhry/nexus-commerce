@@ -1634,7 +1634,7 @@ export const statusShownOf = (preset: OrdersListModel['preset'] | null): boolean
 // while never shown. So the preset now says each column's truth: on screen → ticked; of the host's set but waiting for a wider
 // sheet (`later`) → ticked and named so (`label`: "Waiting on · from a wider sheet"), shown when the room allows, never cut to fit;
 // any other column → offered unticked (opt-in: it shows when the person ticks it). Only a host that gives a preset is touched.
-export function withPreset(column: ColDef<OrderRow>, preset: OrdersListModel['preset'] | null, wide: boolean, label?: (column: string, room: 'wider' | 'widest') => string): ColDef<OrderRow> {
+export function withPreset(column: ColDef<OrderRow>, preset: OrdersListModel['preset'] | null, wide: boolean, label?: (column: string, room: 'wider') => string): ColDef<OrderRow> {
   if (!preset || column.colId === 'more') return column
   const id = column.colId ?? ''
   // F-CP-107 (cp-fx16): the host's own min width. F-CW-304: the table-wide set no host gives any more (the rooms decide: `later`) is gone.
