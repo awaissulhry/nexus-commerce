@@ -5,6 +5,7 @@ import { at, CUSTOMERS, inShell, listModel, NOW, rowOf, SUPPLIERS, useDesignList
 import { blankNewParty, failed, loaded, loading, SIDES, type PartiesListModel } from '../../parties/_shared/model'
 import { demoCustomersImport, importButton } from './_demo/fixtures'
 import type { CustomersImportModel } from './import/view/CustomersImportView'
+import type { CustomerRights } from './list/model'
 import type { OverdueListModel } from './money/columns'
 import { MONEY_CAN, overdueList } from './money/_demo/fixtures'
 import { CustomersView } from './view/CustomersView'
@@ -30,11 +31,15 @@ const UNREAD: UnreadMap = {
  * A case: the list, (B-W2a-49) the band's Import with its wizard when open, (B-W2a-81) the Overdue column's read and (F-CL-102) the
  * New messages read (null: a reader without threads.read — no column).
  */
-type CustomersCase = PartiesListModel & { importer?: CustomersImportModel; overdue?: OverdueListModel; unread?: UnreadMap | null }
+type CustomersCase = PartiesListModel & { importer?: CustomersImportModel; overdue?: OverdueListModel; unread?: UnreadMap | null; rights?: CustomerRights }
+
+/** F-CL-104: the Owner's own rights on the list (the bar's Add task and Set supervisor, the row's doors); a role that only views: none. */
+const OWNER_RIGHTS: CustomerRights = { threads: true, orders: true, tasks: true, supervisor: true }
+const VIEW_RIGHTS: CustomerRights = { threads: false, orders: false, tasks: false, supervisor: false }
 
 function CustomersDesign({ model }: { model: CustomersCase }) {
-  const { importer, overdue, unread, ...list } = model
-  return inShell('/sales/customers', createElement(CustomersView, { ...useDesignList(list), headActions: importButton(importer ?? { held: null, sheet: null }), overdue, unread: unread === undefined ? UNREAD : unread }))
+  const { importer, overdue, unread, rights, ...list } = model
+  return inShell('/sales/customers', createElement(CustomersView, { ...useDesignList(list), headActions: importButton(importer ?? { held: null, sheet: null }), overdue, unread: unread === undefined ? UNREAD : unread, rights: rights ?? (list.can.manage ? OWNER_RIGHTS : VIEW_RIGHTS) }))
 }
 
 const importCase = (importer: CustomersImportModel): CustomersCase => ({ ...list(), importer })

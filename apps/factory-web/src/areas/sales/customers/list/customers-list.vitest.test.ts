@@ -9,7 +9,8 @@ import { CATALOGUE } from '../../../../lib/i18n/messages'
 import type { PartyRow } from '../../../parties/_shared/api'
 import { CUSTOMERS, rowOf } from '../../../parties/_shared/fixtures'
 import { customerColumnsOf, threadHref } from './columns'
-import { CARD_ROLES, CUSTOMER_HIDDEN_COLUMNS, customerRightsOf, officeDataOf } from './model'
+import { CARD_ROLES, customerActsOf, CUSTOMER_HIDDEN_COLUMNS, customerRightsOf, namesOtherCustomer, officeDataOf } from './model'
+import { supervisorBodyOf, supervisorPlanOf, supervisorRestOf, supervisorSummaryOf, type SupervisorTarget } from './supervisor/model'
 
 /**
  * Sales › Customers, the list's own parts (customers list W1, F-CL-102…104): the Customer cell's office chip, the columns and what
@@ -76,6 +77,80 @@ describe('F-CL-102 / F-CL-104: each act reads its own right', () => {
     // A planner holds production.brand.manage without partners.view: no supervisor act (as the customer card).
     expect(customerRightsOf(['production.brand.manage'])).toMatchObject({ supervisor: false })
     expect(customerRightsOf(['production.brand.manage', 'partners.view', 'threads.read', 'orders.view'])).toEqual({ threads: true, orders: true, tasks: false, supervisor: true })
+  })
+})
+
+// ---- F-CL-104: the customers' own acts ------------------------------------------------------------------------------------------
+describe('F-CL-104: Add task to N customers… — the R-47 check of the text', () => {
+  const ticked = [
+    { code: 'SEED-C1', tradeName: 'Seed Racing', legalName: 'Seed Racing S.r.l.' },
+    { code: 'SEED-C3', tradeName: 'Seed Moto Club', legalName: 'Seed Moto Club ASD' },
+    { code: 'AB', tradeName: null, legalName: 'Xy' },
+  ]
+  it('names one customer, two customers, none', () => {
+    expect(namesOtherCustomer('Send the new size chart to Seed Racing', ticked)).toEqual(['Seed Racing'])
+    expect(namesOtherCustomer('seed racing and SEED MOTO CLUB: check the logos', ticked)).toEqual(['Seed Racing', 'Seed Moto Club'])
+    expect(namesOtherCustomer('Check the logos on the new jackets', ticked)).toEqual([])
+    // Its code counts as its name.
+    expect(namesOtherCustomer('About SEED-C3 only', ticked)).toEqual(['Seed Moto Club'])
+  })
+  it('a code inside a longer word is no match; fewer than 3 letters are no name', () => {
+    expect(namesOtherCustomer('Order SEED-C10 is late', ticked)).toEqual([])
+    expect(namesOtherCustomer('XSEED-C1', ticked)).toEqual([])
+    expect(namesOtherCustomer('AB xy ab', ticked)).toEqual([])
+  })
+})
+
+describe('F-CL-104: the bar’s own acts — each by its own right, held only by the cap', () => {
+  it('Add task (10) with tasks.manage + threads.post, Set supervisor (20) with production.brand.manage + partners.view', () => {
+    expect(customerActsOf({ tasks: true, supervisor: true }, 3)).toEqual([
+      { id: 'task', order: 10, held: null },
+      { id: 'supervisor', order: 20, held: null },
+    ])
+    expect(customerActsOf({ tasks: false, supervisor: true }, 3).map((act) => act.id)).toEqual(['supervisor'])
+    expect(customerActsOf({ tasks: false, supervisor: false }, 3)).toEqual([])
+  })
+  it('more than the cap: held with its numbers (tasks 100 per batch, the supervisor 50 at a time)', () => {
+    expect(customerActsOf({ tasks: true, supervisor: true }, 101)).toEqual([
+      { id: 'task', order: 10, held: { max: 100 } },
+      { id: 'supervisor', order: 20, held: { max: 50 } },
+    ])
+    expect(customerActsOf({ tasks: true, supervisor: true }, 51)[0]!.held).toBeNull()
+  })
+})
+
+describe('F-CL-104: Set production supervisor for N… — runs on, not on with why, the receipt, run the rest again', () => {
+  const mario = { id: 'u-mario', name: 'Mario Production', active: true }
+  const anna = { id: 'u-anna', name: 'Anna Office', active: true }
+  const targets: SupervisorTarget[] = [
+    { id: 'p1', name: 'Seed Racing', state: 'read', version: 3, supervisor: null, backup: null },
+    { id: 'p2', name: 'Seed Moto Club', state: 'read', version: 5, supervisor: mario, backup: anna },
+    { id: 'p3', name: 'Seed Track Days', state: 'read', version: 1, supervisor: anna, backup: mario },
+    { id: 'p4', name: 'Seed Customer Four', state: 'unread', why: { ns: 'customers-list', key: 'supervisor.notReached' } },
+  ]
+  it('before the pick every read customer runs; after it, "already this person" leaves one out (with the name)', () => {
+    expect(supervisorPlanOf(targets, null).runs.map((target) => target.id)).toEqual(['p1', 'p2', 'p3'])
+    const plan = supervisorPlanOf(targets, mario.id)
+    expect(plan.runs.map((target) => target.id)).toEqual(['p1', 'p3'])
+    expect(plan.notOn).toEqual([
+      { id: 'p2', name: 'Seed Moto Club', why: { ns: 'customers-list', key: 'supervisor.already', params: { name: 'Mario Production' } }, already: true },
+      { id: 'p4', name: 'Seed Customer Four', why: { ns: 'customers-list', key: 'supervisor.notReached' }, already: false },
+    ])
+  })
+  it('each write sends the version read and keeps the backup — never the pick as its own backup', () => {
+    const plan = supervisorPlanOf(targets, mario.id)
+    expect(supervisorBodyOf(plan.runs[0]!, mario.id)).toEqual({ supervisorId: 'u-mario', backupId: null, version: 3 })
+    expect(supervisorBodyOf(plan.runs[1]!, mario.id)).toEqual({ supervisorId: 'u-mario', backupId: null, version: 1 })
+    expect(supervisorBodyOf({ id: 'p9', name: 'X', state: 'read', version: 7, supervisor: null, backup: anna }, mario.id)).toEqual({ supervisorId: 'u-mario', backupId: 'u-anna', version: 7 })
+  })
+  it('the receipt: done, already so, not run, left out; the rest again = stopped + refused', () => {
+    const plan = supervisorPlanOf(targets, mario.id)
+    const outcomes = { p1: { kind: 'done' as const }, p3: { kind: 'notRun' as const } }
+    expect(supervisorSummaryOf(plan, outcomes)).toEqual({ done: 1, same: 1, notRun: 1, left: 1 })
+    expect(supervisorRestOf(plan, outcomes)).toEqual(['p3'])
+    const refused = { p1: { kind: 'failed' as const, why: { ns: 'production-supervisor' as const, key: 'skip.NO_REACH' } }, p3: { kind: 'done' as const } }
+    expect(supervisorSummaryOf(plan, refused)).toEqual({ done: 1, same: 1, notRun: 0, left: 2 })
+    expect(supervisorRestOf(plan, refused)).toEqual(['p1'])
   })
 })
 

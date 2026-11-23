@@ -1,5 +1,7 @@
 import type { CardFieldRole } from '@nexus/ui/grid/card-list/index'
+import { BATCH_MAX } from '../../../../record-panels/tasks/model'
 import type { PartyRow } from '../../../parties/_shared/api'
+import { BULK_MAX, partyName } from '../../../parties/_shared/model'
 
 /**
  * Sales › Customers, the list's own rules (customers list plan §1, 10-design §3, 13-backend §8; F-CL-102…104), pure: what the
@@ -60,4 +62,38 @@ export function customerRightsOf(permissions: Iterable<string>): CustomerRights 
     tasks: held.has('tasks.manage') && held.has('threads.post'),
     supervisor: held.has('production.brand.manage') && held.has('partners.view'),
   }
+}
+
+// ---- F-CL-104: the customers' own acts on a selection (the bar, 13-backend §8.2) -----------------------------------------------
+
+/** Their places in the bar: Add task first, Set production supervisor second (then the shared VIES 40 · Block 50 · Archive 60). */
+export const CUSTOMER_ACT_ORDER = Object.freeze({ task: 10, supervisor: 20 })
+/** Set production supervisor runs one customer at a time: at most this many at once (the shared cap). */
+export const SUPERVISOR_MAX = BULK_MAX
+
+/** The customers' acts a reader may use on N ticked customers (left out without the right; held only by the cap, with its numbers). */
+export function customerActsOf(rights: Pick<CustomerRights, 'tasks' | 'supervisor'>, count: number): Array<{ readonly id: 'task' | 'supervisor'; readonly order: number; readonly held: { readonly max: number } | null }> {
+  return [
+    ...(rights.tasks ? [{ id: 'task' as const, order: CUSTOMER_ACT_ORDER.task, held: count > BATCH_MAX ? { max: BATCH_MAX } : null }] : []),
+    ...(rights.supervisor ? [{ id: 'supervisor' as const, order: CUSTOMER_ACT_ORDER.supervisor, held: count > SUPERVISOR_MAX ? { max: SUPERVISOR_MAX } : null }] : []),
+  ]
+}
+
+/** The words a name may hide behind (R-47): shorter than 3 letters, a name names nothing. */
+const MIN_NAME = 3
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * R-47 for "Add task to N customers…": the ticked customers the text names — its code, its trade name or its legal name, as a whole
+ * word, any case (a code inside a longer word is no match; fewer than 3 letters count as no name). With two customers or more, any
+ * name is another customer's for every other thread the task lands in. The server has no such check on a batch yet (LATER).
+ */
+export function namesOtherCustomer(text: string, ticked: ReadonlyArray<Pick<PartyRow, 'code' | 'tradeName' | 'legalName'>>): string[] {
+  const named: string[] = []
+  for (const customer of ticked) {
+    const terms = [customer.code, customer.tradeName, customer.legalName].filter((term): term is string => !!term && term.trim().length >= MIN_NAME)
+    const hit = terms.some((term) => new RegExp(`(^|[^\\p{L}\\p{N}])${escape(term.trim())}(?=$|[^\\p{L}\\p{N}])`, 'iu').test(text))
+    if (hit && !named.includes(partyName(customer))) named.push(partyName(customer))
+  }
+  return named
 }

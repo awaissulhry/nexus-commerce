@@ -38,7 +38,11 @@
     "none": {
       "customers": "Your role reads customers and changes none: there is no act for the ticked rows.",
       "suppliers": "Your role reads suppliers and changes none: there is no act for the ticked rows."
-    }
+    },
+    "task_one": "Add task to {count} customer…",
+    "task_other": "Add task to {count} customers…",
+    "supervisor": "Set production supervisor for {count}…",
+    "tooMany": "At most {max} customers at once: select fewer."
   },
   "p2": {
     "why": {
@@ -57,6 +61,55 @@
     "door": {
       "customers": "A customer’s name opens its page with the thread open, in a new tab.",
       "suppliers": "A supplier’s name opens its page with the thread open, in a new tab."
+    }
+  },
+  "door": {
+    "openThread": "Open thread",
+    "openWork": "Open Work tab",
+    "addTask": "Add task…"
+  },
+  "task": {
+    "title_one": "New task on {count} customer",
+    "title_other": "New task on {count} customers",
+    "assigneeHint": "Each customer’s production supervisor, or one person who may read these customers’ records.",
+    "supervisor": "Each customer’s production supervisor",
+    "noSupervisor_one": "{count} customer has no production supervisor: pick a person, or its task is left out.",
+    "noSupervisor_other": "{count} customers have no production supervisor: pick a person, or their tasks are left out.",
+    "where": "Each task is on its own customer: in its thread, in the assignee’s Home › My tasks and in the customer’s open tasks.",
+    "held": {
+      "none": "Tick the customers first.",
+      "tooMany": "At most {max} customers at once."
+    },
+    "namesOther": {
+      "warn": "The text names another customer: {names}. Each customer reads this task in its own thread.",
+      "tick": "This text names no other customer",
+      "held": "The text names another customer: change it, or tick “This text names no other customer”."
+    },
+    "made": "Task made · for {name}",
+    "due": "due {date}"
+  },
+  "supervisor": {
+    "title_one": "Set production supervisor for {count} customer",
+    "title_other": "Set production supervisor for {count} customers",
+    "reading": "Reading the customers: {done} of {count}…",
+    "pick": "Production supervisor",
+    "choose": "Choose a person…",
+    "listHint": "The list is the first customer’s; the server judges each of the others.",
+    "follows": "Its orders without a supervisor of their own follow this one.",
+    "notTold": "The customer is not told who it is.",
+    "notices": "{name} will get {count} notices (one per customer). It runs one customer at a time; closing this window stops it before the next one.",
+    "already": "Already {name}.",
+    "notReached": "Your role does not reach its portal settings: its supervisor is set by someone who does.",
+    "readFailed": "Its settings could not be read: run it again.",
+    "go_one": "Set for {count}",
+    "go_other": "Set for {count}",
+    "stop": "Stop after this one",
+    "stopping": "Stops after the customer being set now",
+    "notRun": "Not run: the window was stopped before it.",
+    "summary": "{name} supervises {done} of them now. Already so: {same} · not run: {notRun} · left out: {left}.",
+    "held": {
+      "pick": "Pick a person first.",
+      "reading": "The customers are still being read."
     }
   }
 }

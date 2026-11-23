@@ -2,8 +2,9 @@
 
 import { useMemo } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, MessageSquare } from 'lucide-react'
+import { AlertTriangle, ClipboardCheck, MessageSquare, UserCheck } from 'lucide-react'
 import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
+import type { MenuItemDef } from '@nexus/ui/components'
 import type { CardFieldOverride } from '@nexus/ui/grid/card-list/index'
 import { Button } from '@nexus/ui/primitives'
 import type { Translate } from '../../../../lib/i18n/messages'
@@ -11,9 +12,10 @@ import { useT } from '../../../../lib/i18n/provider'
 import { unreadValue, type UnreadMap } from '../../../../lib/last-message-cell/model'
 import { LAST_MESSAGE_NS, LastMessageCell } from '../../../../lib/last-message-cell/view/LastMessageCell'
 import type { PartyRow } from '../../../parties/_shared/api'
+import type { BarAct } from '../../../parties/_shared/bar'
 import { partyName, recordHref, SIDES } from '../../../parties/_shared/model'
 import { StatusPill } from '../../../parties/_shared/view/parts'
-import { CARD_ROLES, CUSTOMER_HIDDEN_COLUMNS, CUSTOMERS_LIST_NS, officeDataOf } from './model'
+import { CARD_ROLES, customerActsOf, CUSTOMER_HIDDEN_COLUMNS, CUSTOMERS_LIST_NS, officeDataOf, type CustomerRights } from './model'
 import './list.css'
 
 /**
@@ -121,4 +123,26 @@ function CardThread({ row, prefix, unread, c }: { row: PartyRow; prefix: string;
       </Link>
     </Button>
   )
+}
+
+/**
+ * The customers' own acts of the bar for the ticked rows (F-CL-104): Add task (10) and Set supervisor (20), each left out without
+ * its right and held only by the cap, in words. Shared with the design view (no-op runs there).
+ */
+export function customerBarActs(rights: CustomerRights, ticked: readonly PartyRow[], c: Translate, run: { readonly onTask: (rows: readonly PartyRow[]) => void; readonly onSupervisor: (rows: readonly PartyRow[]) => void }): BarAct[] {
+  const count = ticked.length
+  return customerActsOf(rights, count).map((act) =>
+    act.id === 'task'
+      ? { id: act.id, order: act.order, label: c('bar.task', { count }), icon: <ClipboardCheck size={13} aria-hidden />, held: act.held ? c('bar.tooMany', act.held) : null, run: () => run.onTask(ticked) }
+      : { id: act.id, order: act.order, label: c('bar.supervisor', { count }), icon: <UserCheck size={13} aria-hidden />, held: act.held ? c('bar.tooMany', act.held) : null, run: () => run.onSupervisor(ticked) },
+  )
+}
+
+/** The row's doors in its ⋯ (after "Open in new tab"), each with its own right: Open thread · Open Work tab · Add task… (F-CL-104). */
+export function customerRowItems(rights: CustomerRights, prefix: string, row: PartyRow, c: Translate, onTask: (rows: readonly PartyRow[]) => void): MenuItemDef[] {
+  return [
+    ...(rights.threads ? [{ id: 'thread', label: c('door.openThread'), href: threadHref(prefix, row.id) }] : []),
+    ...(rights.orders ? [{ id: 'work', label: c('door.openWork'), href: recordHref(prefix, SIDES.customers, row.id, 'work') }] : []),
+    ...(rights.tasks ? [{ id: 'task', label: c('door.addTask'), onSelect: () => onTask([row]) }] : []),
+  ]
 }
