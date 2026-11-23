@@ -372,7 +372,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const columns = useMemo<ColDef<OrderRow>[]>(
     () => sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer: setViewer, statusShown, phone /* F-CP-107 (cp-fx16) */, priorityShown, whereShown /* F-CW-102 */ }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the cells read the latest model and actions through `latest`
-    [t, s, d, l, m, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */, model.kind /* F-SA-221 */, model.marks /* F-SA-275 */, model.doorHref /* F-SA-275 */, !!actions?.onAddTask /* F-SA-275 */, model.preset /* F-SA-276 */, r /* F-SA-281 */, model.bulkCan?.task /* F-SA-281 */, statusShown /* F-CP-107 (cp-fx16): Where it is redraws when Status comes or goes */, phone /* F-CP-107 (cp-fx16) */, priorityShown, whereShown /* F-CW-102 */, model.locked?.party /* F-CW-102 */],
+    [t, s, d, l, m, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */, model.kind /* F-SA-221 */, model.marks /* F-SA-275 */, model.doorHref /* F-SA-275 */, !!actions?.onAddTask /* F-SA-275 */, model.preset /* F-SA-276 */, model.bulkCan?.task /* F-SA-281 */, statusShown /* F-CP-107 (cp-fx16): Where it is redraws when Status comes or goes */, phone /* F-CP-107 (cp-fx16) */, priorityShown, whereShown /* F-CW-102 */, model.locked?.party /* F-CW-102 */],
   )
 
   // F-SA-276: the host's default view is not a narrowing; the waiting term is.
