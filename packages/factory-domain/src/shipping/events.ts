@@ -34,7 +34,8 @@ import { TRACKING_VIAS } from './tracking-link/rules'
  *   shipment.tracking_link_made   B-W2b-170: links to the branded tracking page were made (when the goods left, by the
  *                                 office, from the portal, by the public search, or asked for again)
  *   shipment.tracking_changed     B-OP-030: the tracking number of a carrier booked by hand was typed, corrected or cleared
- *   shipment.orders_changed   B-OP-040: the orders a shipment carries changed (its lines' orders; office screens, holds)
+ *   shipment.orders_changed   B-OP-040: the orders a shipment carries changed (its lines' orders; office screens, holds);
+ *                             B-CW-040: + who came on (`added`), who came off (`removed`), `atCreation` — never live fields
  *   ddt.source_issued         a DDT for another reason was issued (B-W2a-17, LOG-056: no shipment; a subcontract kit, goods
  *                             back to a supplier, a repaired garment, returned goods sent back), `replacement` when it
  *                             replaces a cancelled one whose goods left
@@ -187,11 +188,24 @@ export const events = [
   }),
   // B-OP-040 (order page N6, lines-derived): the orders a shipment carries changed (a line of another order added, or an
   // order's last line removed). partyId is never a live field.
+  // B-CW-040 (customer Work tab plan §4): `salesOrderIds` are the orders AFTER the change, so they cannot say who came off. Three
+  // OPTIONAL fields, none of them live: `added` (the orders that came on, with ADDED), `removed` (the orders that came off, with
+  // REMOVED) and `atCreation` (the change rides with the shipment's own shipment.created, which already tells every order). The
+  // office line on each order's thread follows (shipping.orderNotes).
   defineEvent({
     type: 'shipment.orders_changed',
     context: 'shipping',
     description: "The orders a shipment carries changed: a line of another order of its customer was added, or an order's last line was removed.",
-    payload: z.strictObject({ shipmentId: z.uuid(), number: z.string(), salesOrderIds: z.array(z.uuid()).min(1), change: z.enum(SHIPMENT_ORDER_CHANGES), partyId: livePartyId() /* B-SA-004 */ }),
+    payload: z.strictObject({
+      shipmentId: z.uuid(),
+      number: z.string(),
+      salesOrderIds: z.array(z.uuid()).min(1),
+      change: z.enum(SHIPMENT_ORDER_CHANGES),
+      partyId: livePartyId() /* B-SA-004 */,
+      added: z.array(z.uuid()).optional() /* B-CW-040 */,
+      removed: z.array(z.uuid()).optional() /* B-CW-040 */,
+      atCreation: z.boolean().optional() /* B-CW-040 */,
+    }),
     live: { permission: 'shipping.view', fields: ['shipmentId', 'number', 'salesOrderIds', 'change'] },
   }),
   // B-W2b-170 (LOG-062): the branded tracking page's link(s) of a shipment were made (mailed, copied, found by the search).

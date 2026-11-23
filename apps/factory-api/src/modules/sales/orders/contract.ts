@@ -518,7 +518,11 @@ export const listOrdersContract = defineContract({
   querystring: input({
     ...viewTermFields, // B-TH-058: the same terms as before, named once
     // ── B-TH-057 (SHEET-G15): the server sort; with it the cursor is the page before's sort key and id (opaque) ──
-    /** customer, brand, promise, daysLate, ordered; `-` in front: the other way round. None: newest first. */
+    /**
+     * customer, brand, promise, daysLate, ordered; `-` in front: the other way round. None: newest first.
+     * B-CW-030: + `urgent` — "Most urgent first": our priority, then the customer's urgent order, then the promise date; the orders
+     * that left follow, newest first. Office only (the customer's portal never reads this key).
+     */
     sort: z.enum(ORDER_SORTS).optional(),
     cursor: z.string().trim().min(1).max(600).optional(),
     // ── end B-TH-057 ──

@@ -274,7 +274,7 @@ async function splitInCommand(tools: CommandTools, parent: ShipmentHeader, group
     await carryHoldsInCommand(tools, from, to)
     // B-OP-041: a child with lines of another order of the customer carries that order too (after the switch only).
     // B-OS-021: against the child's own first order.
-    ordersChanged(tools, { id, number: number.formatted, companyId: parent.companyId, siteId: parent.siteId, partyId: parent.partyId }, [firstOrder], await ordersOfShipment(tx, { id, salesOrderId: firstOrder }))
+    ordersChanged(tools, { id, number: number.formatted, companyId: parent.companyId, siteId: parent.siteId, partyId: parent.partyId }, [firstOrder], await ordersOfShipment(tx, { id, salesOrderId: firstOrder }), { atCreation: true } /* B-CW-040 */)
     made.push(id)
   }
   // B-OP-041: an order whose last line moved to a child leaves the parent.
