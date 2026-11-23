@@ -1,4 +1,5 @@
 import { REPLY_BATCH_MAX } from '@nexus/factory-domain/threads/replies'
+import { ASK_MAX_DAYS } from '@nexus/factory-domain/portal/tasks/rules' // F-CW-203: how far ahead a customer's to-do may be due
 import type { ComposerContext, ComposerDraft, SwitchNote } from '../../../../lib/record-thread/composer/model'
 import type { OrderRow } from '../api'
 import type { Phrase } from './sheet/model'
@@ -27,10 +28,12 @@ export interface ReplyTarget {
   readonly partyName: string
   /** B-SA-070b: the customer's own number of the order ("Your order 12"; null: none given yet). */
   readonly customerSeq?: number | null
+  /** F-CW-203: the order's company (the customer's to-do is made in it). */
+  readonly companyId?: string | null
 }
 
-export const replyTargetsOf = (rows: readonly (Pick<OrderRow, 'id' | 'number' | 'customerRef' | 'partyId' | 'partyName'> & Partial<Pick<OrderRow, 'customerSeq'>>)[]): ReplyTarget[] =>
-  rows.map((row) => ({ id: row.id, number: row.number, customerRef: row.customerRef, partyId: row.partyId, partyName: row.partyName, customerSeq: row.customerSeq ?? null /* B-SA-070b */ }))
+export const replyTargetsOf = (rows: readonly (Pick<OrderRow, 'id' | 'number' | 'customerRef' | 'partyId' | 'partyName'> & Partial<Pick<OrderRow, 'customerSeq' | 'companyId'>>)[]): ReplyTarget[] =>
+  rows.map((row) => ({ id: row.id, number: row.number, customerRef: row.customerRef, partyId: row.partyId, partyName: row.partyName, customerSeq: row.customerSeq ?? null /* B-SA-070b */, companyId: row.companyId ?? null /* F-CW-203 */ }))
 
 /**
  * Why the bar's Reply to N… is held, in words before the click, or null: a ticked order of another customer than the page's (the
@@ -63,7 +66,65 @@ export function replyComposerContext(customer: string): ComposerContext {
 // ---- one order's answer ---------------------------------------------------------------------------------------------------------
 
 /** What happened on one order: posted, refused for good with why (the server said it), or a fault (tried again by the next Send). */
-export type ReplyResult = { readonly state: 'sent' } | { readonly state: 'refused'; readonly why: Phrase } | { readonly state: 'failed'; readonly why: Phrase }
+// F-CW-203: a posted reply also says what became of the customer's to-do, when one was asked (`todo`; absent: none asked).
+export type ReplyResult = { readonly state: 'sent'; readonly todo?: TodoResult } | { readonly state: 'refused'; readonly why: Phrase } | { readonly state: 'failed'; readonly why: Phrase }
+
+// ---- F-CW-203 (customer Work tab plan §4; 10-design §4, §6 W3; lead settles S8, S37): "Ask <customer> about N…" = this window with
+// ONE tick — "Put it in their to-do list, answer by <date>". After an order's reply is posted, one to-do "Answer our message" is made
+// for the customer on that order (POST /partners/:partyId/tasks, ANSWER_MESSAGE; partners.tasks.manage — without the right the tick is
+// not drawn and Ask ▾ does not offer the entry). The order then waits on the customer, with the days, until they answer. From Ask ▾
+// the tick starts ON, from Reply to N OFF. A to-do that could not be made never loses the message: its line says so, and Try again
+// makes the to-do alone (the reply is not posted twice).
+
+/** The tick and its day (`YYYY-MM-DD`; '' = no date). */
+export interface ReplyTodo {
+  readonly on: boolean
+  readonly due: string
+}
+
+/** What became of one order's to-do: made, refused for good with why, or a fault (tried again by the next Send). */
+export type TodoResult = { readonly state: 'made' } | { readonly state: 'refused'; readonly why: Phrase } | { readonly state: 'failed'; readonly why: Phrase }
+
+const DAY_MS = 86_400_000
+const dayOf = (day: string): number => Date.parse(`${day}T12:00:00.000Z`)
+
+/** The day the tick starts on: three working days from today (Saturday and Sunday are skipped). */
+export function todoDueDefault(today: string): string {
+  let at = dayOf(today)
+  for (let left = 3; left > 0; ) {
+    at += DAY_MS
+    const weekday = new Date(at).getUTCDay()
+    if (weekday !== 0 && weekday !== 6) left -= 1
+  }
+  return new Date(at).toISOString().slice(0, 10)
+}
+
+/** The tick as the window opens: ON from Ask ▾, OFF from Reply to N; its day ready either way. */
+export const todoStart = (asked: boolean, today: string): ReplyTodo => ({ on: asked, due: todoDueDefault(today) })
+
+/** Why the tick's day holds Send, or null: a day that is not after today, or further ahead than the API takes (no day at all is fine). */
+export function todoHeld(todo: ReplyTodo | null | undefined, today: string): Phrase | null {
+  if (!todo?.on || todo.due === '') return null
+  if (todo.due <= today) return { key: 'reply.todo.past' }
+  // The API counts to the END of that day: the last day it takes is the one before the limit.
+  if (Math.round((dayOf(todo.due) - dayOf(today)) / DAY_MS) >= ASK_MAX_DAYS) return { key: 'reply.todo.far', params: { max: ASK_MAX_DAYS } }
+  return null
+}
+
+/** What a refused to-do means: the reader's role, the request as it is (for good), or a fault (tried again). */
+export function todoOutcomeOf(error: ReplyError): Exclude<TodoResult, { state: 'made' }> {
+  if (error.kind === 'forbidden' || error.kind === 'step_up' || error.kind === 'signed_out') return { state: 'refused', why: { key: 'reply.todo.why.forbidden' } }
+  if (error.kind === 'not_found' || error.kind === 'invalid' || error.kind === 'conflict') return { state: 'refused', why: { key: 'reply.why.refused' } }
+  return { state: 'failed', why: { key: 'reply.why.failed' } }
+}
+
+/** The orders whose message is posted and whose to-do a fault stopped: the next Send makes the to-do alone. */
+export const todoLeft = (targets: readonly ReplyTarget[], results: Readonly<Record<string, ReplyResult>>): ReplyTarget[] =>
+  targets.filter((target) => {
+    const result = results[target.id]
+    return result?.state === 'sent' && result.todo?.state === 'failed'
+  })
+// ---- end F-CW-203
 
 /** One reply's error as the hook reads it: the API's refusal code at `refusal/<CODE>` and the error's kind (null: no API answer). */
 export interface ReplyError {
@@ -194,9 +255,15 @@ export function languageInSentence(code: string, locale: string): string {
 }
 
 /** The round's receipt: how many were posted, and each order's line (posted, or not with why) in the ticked order. */
-export function replyReceipt(targets: readonly ReplyTarget[], results: Readonly<Record<string, ReplyResult>>): { sent: number; failed: number; lines: Array<{ id: string; label: string; result: ReplyResult | null }> } {
+// F-CW-203: + `todos` — how many to-dos were made; `failed` also counts an order whose to-do a fault stopped (Try again makes it).
+export function replyReceipt(targets: readonly ReplyTarget[], results: Readonly<Record<string, ReplyResult>>): { sent: number; failed: number; todos: number; lines: Array<{ id: string; label: string; result: ReplyResult | null }> } {
   const lines = targets.map((target) => ({ id: target.id, label: targetLabel(target), result: results[target.id] ?? null }))
-  return { sent: lines.filter((line) => line.result?.state === 'sent').length, failed: lines.filter((line) => line.result?.state === 'failed').length, lines }
+  return {
+    sent: lines.filter((line) => line.result?.state === 'sent').length,
+    failed: lines.filter((line) => line.result?.state === 'failed').length + todoLeft(targets, results).length,
+    todos: lines.filter((line) => line.result?.state === 'sent' && line.result.todo?.state === 'made').length,
+    lines,
+  }
 }
 
 // ---- the window's model (use-reply-many.ts keeps it; view/ReplyManyDialog.tsx draws it) -----------------------------------------
@@ -221,11 +288,19 @@ export interface ReplyManyModel {
   readonly results: Readonly<Record<string, ReplyResult>>
   /** The last round ended with nothing held: the window shows its receipt. */
   readonly done: boolean
+  /** F-CW-203: the to-do tick and its day; null: the reader may not make a customer's to-dos (the tick is not drawn). */
+  readonly todo?: ReplyTodo | null
+  /** F-CW-203: opened from Ask ▾ ("Ask <customer> about N orders"); absent: Reply to N. */
+  readonly asked?: boolean
+  /** F-CW-203: today (the company's day), for the tick's day. */
+  readonly today?: string
 }
 
 export interface ReplyManyActions {
   readonly onDraft: (draft: ComposerDraft, notes: readonly SwitchNote[]) => void
   /** Send (and Try again): the orders still to post. */
   readonly onSend: () => void
+  /** F-CW-203: the to-do tick or its day changed. */
+  readonly onTodo?: (todo: ReplyTodo) => void
   readonly onClose: () => void
 }

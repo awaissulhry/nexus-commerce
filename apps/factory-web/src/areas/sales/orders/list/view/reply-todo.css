@@ -1,0 +1,19 @@
+/* F-CW-203 (customer Work tab; 10-design §6 W3) — the to-do tick of "Ask <customer> about N…" in the Reply window: the tick and its
+   day on one line (they wrap on a phone), its one quiet sentence under them. Layout only; design-system tokens only. */
+.fw-srm-todo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-raised);
+}
+.fw-srm-todo-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-10);
+  min-width: 0;
+}

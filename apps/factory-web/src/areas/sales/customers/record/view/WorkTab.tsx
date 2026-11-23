@@ -355,7 +355,8 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
   const door = useRequestReviewDoor({ ids: list.ids, batches: list.batches, onChanged: work.reload })
   const rows = sheet.model.rows
   const waiting = sheet.model.waiting ?? null
-  const all = `${prefix}${sheetAddress(basePath, host, params, { rows: 'all', q: '', layout: 'list', party: party.id })}`
+  // F-CW-201: "Show all orders" keeps the order the person reads the orders in (it filters nothing).
+  const all = `${prefix}${sheetAddress(basePath, host, params, { rows: 'all', q: '', layout: 'list', party: party.id, sort: sheet.model.sort ?? null })}`
   // ---- F-CP-107: "Drafts of <customer>" — `list=drafts` draws the customer's portal drafts (read only) in the sheet's place; the strip
   // and the Views ▾ stay; a draft's row docks its own conversation, Enter / Open its read-only window.
   const showDrafts = draftsShown(params)
@@ -402,6 +403,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
     // (Picture · Promised · Paid) return as soon as the row fits whole — from the `wide` room.
     wide: columnSet === 'money' ? workRoom.room !== 'base' : workRoom.room === 'widest',
     countOf: workViewCounts(work.reads.board)?.all ?? null, // F-CW-104: "2 of 14 orders" under a door, a view or a search
+    layoutSwitch: false, // F-CW-202 (S36): no List ⇄ Board switch on this tab — the key `v` is off and leaves the keys list
     searchLabel: t('customers.work.search'), // F-CW-104: the shorter words fit the toolbar beside the thread
     columnSet: price ? { value: columnSet } : null, // F-CP-105: the toggle, a price holder's only
     marks: work.marks,

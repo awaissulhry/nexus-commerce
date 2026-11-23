@@ -45,9 +45,13 @@ describe('the order\'s own cells: the note — the lines never', () => {
     expect(edit.fields.note!.held?.(closed)).toBe('A Closed order never changes.')
     expect(edit.fields.note!.held?.(LIST_ROWS[0]!)).toBeNull()
   })
-  it('without orders.manage every cell reads only (Edit N held with the reason)', () => {
-    expect(orderEditOf({ can: canOf('manager') }, s, () => null, () => undefined).held).toBe('Changing the cells needs the right to change orders.')
+  // F-CW-202 (S9): Edit N is an act — without orders.manage it is not drawn (it was shown held); the cells keep their words.
+  it('without orders.manage every cell reads only, held in words, and Edit N is not drawn', () => {
+    const reader = orderEditOf({ can: canOf('manager') }, s, () => null, () => undefined)
+    expect(reader.held).toBe('Changing the cells needs the right to change orders.')
+    expect(reader.bulk).toBeUndefined()
     expect(edit.held).toBeNull()
+    expect(edit.bulk).toBeDefined()
   })
 })
 
