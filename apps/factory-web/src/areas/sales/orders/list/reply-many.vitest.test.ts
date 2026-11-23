@@ -540,7 +540,15 @@ describe('cq fx3 W2-2: the Reply window on requests and quotes', () => {
     expect(off).not.toContain('No files here')
     const asked = textOf(render(createElement(ReplyManyBody, { model: model({ portal: 'off', recordType: 'Inquiry', todo: { on: true, due: '2026-11-26' } }) }), 'en'))
     expect(asked).not.toContain('Put it in their to-do list')
-    expect(textOf(render(createElement(ReplyManyBody, { model: model({ portal: 'off', todo: { on: true, due: '2026-11-26' } }) }), 'en'))).toContain('Put it in their to-do list')
+    // cw fx6 (re-walk item 7): ORDERS too — the reason only, in the orders' own words: no box ("No files here…"), no to-do tick.
+    const orders = textOf(render(createElement(ReplyManyBody, { model: model({ portal: 'off', todo: { on: true, due: '2026-11-26' } }) }), 'en'))
+    expect(orders).toContain("Brand Alpha has no portal yet: write by e-mail in each order's conversation.")
+    expect(orders).not.toContain('Put it in their to-do list')
+    expect(orders).not.toContain('No files here')
+    // With a portal the orders' window is as before: its box and, from Ask ▾, its tick.
+    const on = textOf(render(createElement(ReplyManyBody, { model: model({ todo: { on: true, due: '2026-11-26' } }) }), 'en'))
+    expect(on).toContain('Put it in their to-do list')
+    expect(on).toContain('No files here')
     const quote = textOf(render(createElement(ReplyManyBody, { model: model({ portal: 'off', recordType: 'Quote' }) }), 'it'))
     expect(quote).toContain('nella conversazione di ogni preventivo')
   })
