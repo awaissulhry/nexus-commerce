@@ -286,3 +286,88 @@ describe('F-CQ-205: the drafts section', () => {
   })
 })
 // ---- end F-CQ-205
+
+// ---- cq T (customer page › Quotes & incoming, 15-steps T.1): the gallery — the tab's REAL parts (one set: the live tab and the
+// gallery draw the same frame, sections and drafts frame), every case the plan lists, each window built from the real acts, each
+// role's rights from its own template; the Quotes list's Sort ▾ and chips cases, Incoming's To answer and held-rank cases.
+import { designScreen as tabScreen, type QuotesTabCase } from './fixtures'
+import { CHIP_ROWS, designScreen as quotesScreen } from '../../../quotes/list/fixtures'
+import { designScreen as incomingScreen } from '../../../inquiries/fixtures'
+import { quoteWhereOf } from '../../../quotes/model'
+import { INCOMING_ROWS, listOf } from '../../../inquiries/demo/fixtures'
+
+describe('cq T: the tab\'s gallery', () => {
+  const ids = tabScreen.cases.map((item) => item.id)
+  const of = (id: string): QuotesTabCase => tabScreen.cases.find((item) => item.id === id)!.model
+
+  it('every case T.1 lists: the data, the doors, each role, each bar, every window, the menus, the widths', () => {
+    const wanted = [
+      'busy', 'drafts-only', 'nothing', 'all-closed', 'door-to-answer', 'door-lost', 'door-writing',
+      'role-sales', 'role-finance', 'role-viewer', 'role-production',
+      'bar-owner-quotes', 'bar-owner-incoming', 'bar-sales', 'bar-finance', 'bar-viewer', 'bar-production',
+      'win-cancel', 'win-ask-approval', 'win-make-orders', 'win-new-link', 'win-mark-lost', 'win-ask-about', 'win-receipt', 'win-assign', 'win-decline', 'win-add-task',
+      'win-make-quote', 'win-decline-one', 'win-accept-order', 'win-accept-quote', 'win-refuse', 'win-revise-expired', 'win-approve', 'win-reject',
+      'more-quotes', 'more-incoming', 'row-menu', 'sort', 'customise', 'phone', 'room-779', 'room-863', 'room-1067', 'dark',
+    ]
+    for (const id of wanted) expect(ids, id).toContain(id)
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(tabScreen.screen).toBe('SCR-033-quotes')
+  })
+
+  it('the counts are the server\'s own sums (each door = its rows); a kind the role does not read is null, never 0', () => {
+    const busy = of('busy').counts!
+    expect(busy.groups).toMatchObject({ WRITING: 2, TO_ANSWER: 3, PREPARING: 2, APPROVAL: 1, WAITING_CUSTOMER: 2, ORDER_WAITS: 1, WON: 1, MOVED: 2, LOST: 3 })
+    expect(busy.waitsOnUs).toBe(4)
+    expect(of('busy').quotes.rows.items).toHaveLength(5)
+    expect(of('busy').incoming.list?.rows).toHaveLength(4)
+    expect(of('role-finance').counts!.byKind.requests).toBeNull()
+    expect(of('role-production').counts!.byKind.quotes).toBeNull()
+  })
+
+  it('each window is the real act at a step: its plan, its "Not on (why)", its receipt', () => {
+    expect(of('win-cancel').quotes.many!.plan.runs).toHaveLength(2)
+    expect(of('win-cancel').quotes.many!.plan.notOn.map((one) => one.why.key)).toEqual(['acts.why.quoteClosed'])
+    const orders = of('win-make-orders').quotes.many!
+    expect(orders.plan.runs.map((one) => !!one.field)).toEqual([true, false])
+    expect(orders.plan.notOn.map((one) => one.why.key)).toEqual(['list.where.orderWaits.ACCOUNT_ON_HOLD', 'acts.why.hasOrder'])
+    expect(of('win-mark-lost').incoming.many!.plan.notOn.map((one) => one.why.key)).toEqual(['acts.why.portalOwn'])
+    expect(of('win-ask-about').incoming.many!.plan.notOn.map((one) => one.why.key)).toEqual(['acts.why.askedAlready'])
+    expect(of('win-receipt').quotes.many!.receipt).toEqual({ done: 1, left: 1, rest: [expect.any(String)] })
+    expect(of('win-add-task').quotes.tasks!.records).toHaveLength(3)
+    expect(of('win-make-quote').incoming.verb!.dialog).toMatchObject({ kind: 'quote' })
+    expect(of('win-refuse').incoming.catalogueVerb!.dialog).toMatchObject({ kind: 'refuse' })
+    expect(of('win-revise-expired').quotes.quoteDialog!.quote.current.status).toBe('EXPIRED')
+    // The windows open on the page's customer (never another demo customer's name).
+    expect(of('win-make-quote').incoming.verb!.loaded).toMatchObject({ status: 'ready', value: { fromWords: 'Seed Customer One' } })
+  })
+
+  it('the live tab and the gallery draw the same parts (no copy of the frame in the gallery)', () => {
+    const live = readFileSync(new URL('../QuotesIncomingTab.tsx', import.meta.url), 'utf8')
+    expect(live).toContain('<QuotesTabFrame')
+    expect(live).toContain('<TabSection kind="quotes"')
+    expect(live).toContain('<TabSection kind="incoming"')
+    expect(live).toContain('<DraftsFrame')
+    expect(live).not.toContain('function SectionHead')
+    expect(live).not.toContain('function ClosedDoors')
+    const gallery = readFileSync(new URL('./fixtures.ts', import.meta.url), 'utf8')
+    expect(gallery).toContain('createElement(QuotesTabFrame')
+    expect(gallery).toContain("createElement(TabSection, { kind: 'incoming'")
+    expect(gallery).toContain('manyActModelOf(')
+    const hook = readFileSync(new URL('../../../_shared/many-acts/use-many-act.ts', import.meta.url), 'utf8')
+    expect(hook).toContain('const model: ManyActModel | null = state ? manyActModelOf(state) : null')
+  })
+
+  it('the lists\' own galleries: Sort ▾ Most urgent first and every chip of a quote; To answer and the held rank', () => {
+    const quoteIds = quotesScreen.cases.map((item) => item.id)
+    expect(quoteIds).toEqual(expect.arrayContaining(['sort-urgent', 'chips']))
+    const keys = new Set(CHIP_ROWS.flatMap((row) => quoteWhereOf(row, '2026-10-29', 'Seed Customer One').chips.map((one) => one.key)))
+    for (const key of ['list.where.approvalRejected', 'list.where.holdsSent', 'list.where.approval', 'list.where.approvedReady', 'list.where.endsIn', 'record.validEnded', 'list.where.remindedOn', 'list.where.acceptedOrder', 'list.where.acceptedWaits', 'list.where.declined', 'status.EXPIRED']) expect([...keys], key).toContain(key)
+    const incomingIds = incomingScreen.cases.map((item) => item.id)
+    expect(incomingIds).toEqual(expect.arrayContaining(['tile-to-answer', 'urgent-held']))
+    // The demo counts carry the two new tiles, counted from the rows by the rules' table.
+    const counts = listOf().counts
+    expect(counts.TO_ANSWER).toBe(INCOMING_ROWS.filter((one) => ['NEW', 'ASSIGNED', 'SENT', 'OPEN'].includes(one.state)).length)
+    expect(counts.ENDED).toBe(INCOMING_ROWS.filter((one) => ['DECLINED', 'LOST', 'REFUSED', 'WITHDRAWN'].includes(one.state)).length)
+  })
+})
+// ---- end cq T

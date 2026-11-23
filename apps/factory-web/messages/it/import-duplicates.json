@@ -34,8 +34,8 @@
       "NO_RIGHT": "Per unire servono il diritto di unione e il diritto di modificare entrambi i record."
     },
     "use": {
-      "SALES_one": "Vendite: {count} record (offerte, ordini, resi …)",
-      "SALES_other": "Vendite: {count} record (offerte, ordini, resi …)",
+      "SALES_one": "Vendite: {count} record (preventivi, ordini, resi …)",
+      "SALES_other": "Vendite: {count} record (preventivi, ordini, resi …)",
       "MONEY_one": "Amministrazione: {count} record (fatture, pagamenti …)",
       "MONEY_other": "Amministrazione: {count} record (fatture, pagamenti …)",
       "PURCHASING_one": "Acquisti: {count} record (ordini d'acquisto, ricevimenti …)",

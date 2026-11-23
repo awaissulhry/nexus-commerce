@@ -214,7 +214,10 @@ export default defineStage({
       await sales.go(`/sales/customers/${P1}?tab=work`)
       const row = page.locator(`.ag-row[row-id="${SO1}"]`).first()
       await seen(row, 60_000)
-      await row.locator('.ag-cell[col-id="status"]').first().click()
+      // cw-fx1: the Work tab's row no longer shows Status beside the dock (it is chip 1 of Where it is; Status waits in Customise).
+      // Promised is in every set of the Work tab's columns; the click lands on the cell's own padding (top left), off the date's
+      // link, so it is the row's click: it docks the order and navigates nowhere.
+      await row.locator('.ag-cell[col-id="promised"]').first().click({ position: { x: 6, y: 6 } })
       const card = page.locator('.fw-rcf.has-thread > aside.fw-rcf-dock section.fw-rt-column.is-docked')
       await expect(card).toHaveCount(1, { timeout: 60_000 })
       const chip = card.locator('.fw-rtf-chip').first()

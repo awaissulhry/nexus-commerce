@@ -18,7 +18,7 @@
   },
   "type": {
     "Style": "Modello",
-    "Quote": "Offerta",
+    "Quote": "Preventivo",
     "SalesOrder": "Ordine",
     "PurchaseOrder": "Ordine d'acquisto",
     "SubcontractOrder": "Lavorazione esterna",

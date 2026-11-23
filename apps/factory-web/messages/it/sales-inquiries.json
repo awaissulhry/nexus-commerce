@@ -399,7 +399,7 @@
     "createdByOn": "{name}, {when}",
     "erased": "Potenziale cliente cancellato (i dati personali sono stati rimossi)",
     "unknown": "Mittente sconosciuto — abbinalo a un cliente",
-    "unknownBody": "Un'offerta, un ordine o una risposta si fanno per un cliente: abbina questo potenziale cliente a uno, oppure crea il cliente da lui — prima viene il controllo.",
+    "unknownBody": "Un preventivo, un ordine o una risposta si fanno per un cliente: abbina questo potenziale cliente a uno, oppure crea il cliente da lui — prima viene il controllo.",
     "match": "Abbina a un cliente",
     "matchHint": "Il controllo elenca i clienti che potrebbe già essere (solo i tuoi); una volta abbinato il cliente resta e l’e-mail si unisce alla sua conversazione",
     "new": "nuovo",
@@ -961,13 +961,13 @@
       "at": "Quando"
     },
     "empty": "Nessun cliente aspetta una risposta",
-    "emptyBody": "Una conversazione su un ordine, un’offerta, un reso o un altro record di un cliente arriva qui quando il cliente ha scritto per ultimo; la tua risposta la toglie.",
+    "emptyBody": "Una conversazione su un ordine, un preventivo, un reso o un altro record di un cliente arriva qui quando il cliente ha scritto per ultimo; la tua risposta la toglie.",
     "noRight": "Le risposte dei clienti richiedono il permesso di leggere le conversazioni",
     "noRightBody": "Chiedi a un amministratore il permesso «Leggere le conversazioni» (threads): l'elenco mostra solo le conversazioni dei record che puoi aprire."
   },
   "recordType": {
     "SalesOrder": "Ordine",
-    "Quote": "Offerta",
+    "Quote": "Preventivo",
     "Invoice": "Fattura",
     "PaymentReminder": "Sollecito",
     "Shipment": "Spedizione",
@@ -1010,7 +1010,7 @@
     },
     "done": {
       "order": "{number} è diventato l'ordine {made}",
-      "quote": "{number} è diventato l'offerta {made}",
+      "quote": "{number} è diventato il preventivo {made}",
       "droppedSize": "Riga {n}: la taglia {size} non è più offerta ed è rimasta fuori",
       "droppedLine": "La riga {n} è rimasta fuori",
       "warnings_one": "{count} cosa da controllare su quanto creato",
@@ -1021,7 +1021,7 @@
     "refuseHeld": "Spiega perché: il cliente lo legge",
     "outcome": {
       "order": "Accettato come ordine {made}",
-      "quote": "Accettato come offerta {made}",
+      "quote": "Accettato come preventivo {made}",
       "accepted": "Accettato",
       "refused": "Rifiutato: {reason}",
       "withdrawn": "Ritirato dal cliente prima della nostra risposta"
@@ -1131,7 +1131,7 @@
     },
     "refusal": {
       "REQUEST_PROSPECT": "Questa richiesta viene da un potenziale cliente: crea prima il cliente, poi assegnagli un compito nel suo portale.",
-      "REQUEST_CLOSED": "Questa richiesta è chiusa (rifiutata, persa o diventata un'offerta): chiedi sull'offerta o sull'ordine."
+      "REQUEST_CLOSED": "Questa richiesta è chiusa (rifiutata, persa o diventata un preventivo): chiedi sul preventivo o sull'ordine."
     }
   },
   "addresses": {

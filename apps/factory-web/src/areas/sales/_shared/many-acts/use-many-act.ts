@@ -40,7 +40,7 @@ export interface ManyActActions {
   onName?: (recordId: string) => void
 }
 
-interface ManyState<R extends ManyRecord> {
+export interface ManyState<R extends ManyRecord> {
   readonly act: ManyAct<R>
   readonly records: readonly R[]
   readonly typed: string
@@ -49,6 +49,30 @@ interface ManyState<R extends ManyRecord> {
   readonly progress: { readonly done: number; readonly count: number }
   readonly results: readonly ManyResult[]
   readonly token: number
+}
+
+/** What the window shows at a step (pure: the hook's state, or a design case's — the same plan, holds and receipt). */
+export function manyActModelOf<R extends ManyRecord>(state: Pick<ManyState<R>, 'act' | 'records' | 'typed' | 'fields' | 'phase' | 'progress' | 'results'>): ManyActModel {
+  const plan = planOf(state.records, state.act)
+  const text = state.act.text?.(plan.runs) ?? null
+  return {
+    title: state.act.title,
+    go: state.act.go,
+    body: state.act.body ?? null,
+    danger: !!state.act.danger,
+    plan: {
+      runs: plan.runs.map((record) => ({ id: record.id, label: record.label, field: state.act.field?.(record) ?? null })),
+      notOn: plan.notOn.map(({ record, why }) => ({ id: record.id, label: record.label, why })),
+    },
+    text,
+    typed: state.typed,
+    fields: state.fields,
+    held: state.phase === 'plan' ? manyHeld(plan, text, state.typed, state.fields, state.act.field) : null,
+    phase: state.phase,
+    progress: state.progress,
+    results: state.results,
+    receipt: state.phase === 'receipt' ? receiptOf(state.results) : null,
+  }
 }
 
 export function useManyAct<R extends ManyRecord>(options: { readonly onDone?: () => void; readonly onName?: (recordId: string) => void; /** The record as the list reads it now (Run the rest again acts on fresh versions). */ readonly rowOf?: (recordId: string) => R | undefined } = {}): { model: ManyActModel | null; open: (act: ManyAct<R>, records: readonly R[]) => void; actions: ManyActActions } {
@@ -93,30 +117,7 @@ export function useManyAct<R extends ManyRecord>(options: { readonly onDone?: ()
     told.current.onDone?.()
   }, [])
 
-  const model: ManyActModel | null = state
-    ? (() => {
-        const plan = planOf(state.records, state.act)
-        const text = state.act.text?.(plan.runs) ?? null
-        return {
-          title: state.act.title,
-          go: state.act.go,
-          body: state.act.body ?? null,
-          danger: !!state.act.danger,
-          plan: {
-            runs: plan.runs.map((record) => ({ id: record.id, label: record.label, field: state.act.field?.(record) ?? null })),
-            notOn: plan.notOn.map(({ record, why }) => ({ id: record.id, label: record.label, why })),
-          },
-          text,
-          typed: state.typed,
-          fields: state.fields,
-          held: state.phase === 'plan' ? manyHeld(plan, text, state.typed, state.fields, state.act.field) : null,
-          phase: state.phase,
-          progress: state.progress,
-          results: state.results,
-          receipt: state.phase === 'receipt' ? receiptOf(state.results) : null,
-        }
-      })()
-    : null
+  const model: ManyActModel | null = state ? manyActModelOf(state) : null
 
   const actions: ManyActActions = {
     onText: (text) => setState((now) => (now && now.phase === 'plan' ? { ...now, typed: text } : now)),

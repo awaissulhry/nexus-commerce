@@ -208,7 +208,7 @@
     },
     "kind": {
       "QUOTE": "Preventivo",
-      "INQUIRY": "Richiesta di offerta",
+      "INQUIRY": "Richiesta di preventivo",
       "SALES_ORDER": "Ordine cliente",
       "PURCHASE_ORDER": "Ordine fornitore",
       "GOODS_RECEIPT": "Ricevimento merce",

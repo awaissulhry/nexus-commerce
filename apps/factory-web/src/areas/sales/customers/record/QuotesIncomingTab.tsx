@@ -1,8 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
-import { Button } from '@nexus/ui/primitives'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { useT } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
@@ -16,9 +14,11 @@ import { NewRequestDialog } from '../../inquiries/view/NewRequestDialog'
 import { InquiriesMessages } from '../../inquiries/parts'
 import { HOME_ADDRESS, PAGE_PATH, THREAD_TYPE, type ListAddress } from '../../inquiries/model'
 // ---- F-CQ-101 / F-CQ-104 (customer page › Quotes & incoming): the band, its doors, the sections' states, the tab's own room
-import { bandOf, closedDoorsOf, doorCount, incomingCountsOf, kindDoorCount, INQUIRIES_LAYOUT_KEY, quoteCountsOf, QUOTES_LAYOUT_KEY, sectionCountOf, sectionStateOf, TAB_KINDS, type Band, type Door, type KindCounts, type SectionState } from './quotes-tab/band'
+import { bandOf, emptyTab, INQUIRIES_LAYOUT_KEY, QUOTES_LAYOUT_KEY, sectionStateIn, TAB_KINDS, type Band } from './quotes-tab/band'
 import { useQuotesTab, type QuotesTab } from './quotes-tab/use-quotes-tab'
-import { BEFORE_ORDER_NS, BeforeOrderBand } from './quotes-tab/view/BeforeOrderBand'
+import { BEFORE_ORDER_NS } from './quotes-tab/view/BeforeOrderBand'
+// cq T: the tab's own parts, pure (the live tab and the design gallery draw the same ones)
+import { DraftsFrame, QuotesTabFrame, TabSection } from './quotes-tab/view/QuotesTabParts'
 import './quotes-tab/quotes-tab.css'
 // ---- F-CQ-205: the section "Customer is writing" — the customer's portal drafts, read only (the Work tab's own parts, mounted here)
 import { pictureReader } from '../../../../lib/record-picture/api'
@@ -76,78 +76,19 @@ function Tab({ party, onPick, onFocus, shown }: SectionProps) {
 }
 
 function Body({ party, onPick, onFocus, shown, quotes, incoming }: SectionProps & { quotes: boolean; incoming: boolean }) {
-  const b = useT(BEFORE_ORDER_NS)
   const { tab, rootRef, onCloseDoor, onRetry } = useQuotesTab(party.id)
   const [ask, setAsk] = useState<Ask | null>(null)
   const band = bandOf(tab.counts, tab.rights, tab.door)
-  // F-CQ-101 (10-design §3.6): a customer with nothing before an order — ONE card (the New buttons move into it, never twice).
-  const empty = band !== null && band.total === 0 && tab.door === null
-  const samplesHref = band?.samples ? `${tab.prefix}/products/samples?party=${encodeURIComponent(party.id)}` : null
-  const newRequest = incoming && tab.rights.newRequest
-  const newQuote = quotes && tab.rights.newQuote
-  const sections = { party, onPick, onFocus, shown, tab, ask, hidden: empty, band }
+  const sections = { party, onPick, onFocus, shown, tab, ask, hidden: emptyTab(band, tab.door), band }
   return (
-    <div className="fw-qt" ref={rootRef}>
-      <BeforeOrderBand
-        model={{ customer: party.name, band, failed: tab.failed, door: tab.door, doorCount: tab.door ? doorCount(tab.counts, tab.door) : null, hrefs: tab.hrefs, everything: tab.everything, samplesHref, room: tab.room, newRequest: newRequest && !empty, newQuote: newQuote && !empty }}
-        actions={{ onNewRequest: () => setAsk({ what: 'request', at: Date.now() }), onNewQuote: () => setAsk({ what: 'quote', at: Date.now() }), onCloseDoor, onRetry }}
-      />
-      {empty && (
-        <div className="fw-qt-empty" role="status">
-          <p className="fw-qt-empty-title">{b('empty.tab', { customer: party.name })}</p>
-          <p className="fw-qt-quiet">{b('empty.tabBody', { customer: party.name })}</p>
-          {(newRequest || newQuote) && (
-            <span className="fw-qt-empty-actions">
-              {newRequest && (
-                <Button size="sm" onClick={() => setAsk({ what: 'request', at: Date.now() })}>
-                  {b('band.newRequest', { customer: party.name })}
-                </Button>
-              )}
-              {newQuote && (
-                <Button size="sm" variant="primary" onClick={() => setAsk({ what: 'quote', at: Date.now() })}>
-                  {b('band.newQuote', { customer: party.name })}
-                </Button>
-              )}
-            </span>
-          )}
-        </div>
-      )}
-      {/* F-CQ-101 (L3): what waits on us first — Requests & portal orders, then Quotes. A section the role does not read: one quiet line. */}
-      {incoming ? <IncomingSection {...sections} /> : !empty && <p className="fw-qt-quiet">{b('note.noRequests')}</p>}
-      {quotes ? <QuotesSection {...sections} /> : !empty && <p className="fw-qt-quiet">{b('note.noQuotes')}</p>}
-      {/* F-CQ-205 (10-design §3.5): the customer's portal drafts last — read only, never counted as waiting on us (orders.view). */}
-      {tab.rights.drafts && <DraftsSection {...sections} />}
-    </div>
-  )
-}
-
-/** F-CQ-101: a section's head — its title and the quiet count that never hides a record. */
-function SectionHead({ title, kind, section, tab, customer }: { title: string; kind: KindCounts | null; section: 'quotes' | 'incoming'; tab: QuotesTab; customer: string }) {
-  const b = useT(BEFORE_ORDER_NS)
-  const count = sectionCountOf(kind, section, tab.door, tab.door ? kindDoorCount(tab.counts, section, tab.door) : null, tab.door ? b(`group.${tab.door}`, { customer }) : null)
-  return (
-    <div className="fw-qt-sechead">
-      <h3 className="fw-qt-sectitle">{title}</h3>
-      {count && <p className="fw-qt-quiet">{b(count.key, count.params)}</p>}
-    </div>
-  )
-}
-
-/** F-CQ-101: the closed groups of a kind, each a door ("Closed ones are left out (7): Won 2 · Moved to a quote 3 · Lost 2"). */
-function ClosedDoors({ tab, kind, lead, customer }: { tab: QuotesTab; kind: 'quotes' | 'incoming'; lead: 'foot' | 'empty'; customer: string }) {
-  const b = useT(BEFORE_ORDER_NS)
-  const doors = closedDoorsOf(tab.counts, kind)
-  if (doors.length === 0) return null
-  const total = doors.reduce((sum, entry) => sum + entry.count, 0)
-  return (
-    <span className="fw-qt-doors">
-      <span className="fw-qt-quiet">{b(lead === 'foot' ? 'foot.closedLeftOut' : 'empty.closedDoors', { count: total })}</span>
-      {doors.map((entry) => (
-        <Link key={entry.group} href={tab.hrefs[entry.group as Door]} replace scroll={false} className="fw-bo-quietdoor">
-          {b('foot.door', { group: b(`group.${entry.group}`, { customer }), count: entry.count })}
-        </Link>
-      ))}
-    </span>
+    <QuotesTabFrame
+      rootRef={rootRef}
+      model={{ partyId: party.id, customer: party.name, tab: { ...tab, rights: { ...tab.rights, quotes, requests: incoming } }, band }}
+      actions={{ onNewRequest: () => setAsk({ what: 'request', at: Date.now() }), onNewQuote: () => setAsk({ what: 'quote', at: Date.now() }), onCloseDoor, onRetry }}
+      incoming={<IncomingSection {...sections} />}
+      quotes={<QuotesSection {...sections} />}
+      drafts={tab.rights.drafts && <DraftsSection {...sections} />}
+    />
   )
 }
 
@@ -184,8 +125,7 @@ function QuotesSection({ party, onPick, onFocus, shown, tab, ask, hidden }: Host
   const { model, actions, scope } = useQuotesList(host)
   // F-CQ-104: the band's head asks for a New quote (the customer set: the list's own rule under a lock).
   useAsked(ask, 'quote', () => actions.onNewQuote?.(true))
-  const kind = quoteCountsOf(tab.counts)
-  const state: SectionState = sectionStateOf(kind, group === null, door)
+  const state = sectionStateIn(tab, 'quotes')
   // While a line stands in for the list (no frame, no "N updates · Show"), a live change reads the list again at once.
   useReadAgainWhenEmpty(state !== 'list', model.updates, actions.onShowUpdates)
   // A line stands in for the list: the ONE New quote window still opens here (with the list's own words).
@@ -195,45 +135,27 @@ function QuotesSection({ party, onPick, onFocus, shown, tab, ask, hidden }: Host
     </WithMessages>
   ) : null
   if (hidden) return dialog
-  const title = t('customers.quotesTab.quotes')
   return (
-    <section className="fw-qt-section" aria-label={title}>
-      <SectionHead title={title} kind={kind} section="quotes" tab={tab} customer={party.name} />
-      {state === 'folded' ? (
-        <p className="fw-qt-quiet">{b('fold.quotes')}</p>
-      ) : state === 'none' ? (
-        <p className="fw-qt-quiet">{b('empty.quotesNone', { customer: party.name })}</p>
-      ) : state === 'onlyClosed' ? (
-        <p className="fw-qt-quiet">
-          {t('customers.quotesTab.noQuotes', { customer: party.name })} <ClosedDoors tab={tab} kind="quotes" lead="empty" customer={party.name} />
-        </p>
-      ) : (
-        <>
-          <ScopedListTools listKey={QUOTES_LIST_KEY} layoutKey={QUOTES_LAYOUT_KEY} page={`${prefix}${QUOTES_PATH}`} scope={scope}>
-            <QuotesListView
-              // F-SA-279: the docked quote's row marked; the keys' row docks after the rest. F-CQ-104: a phone card's door to the thread.
-              model={onFocus ? { ...model, active: { id: shown?.type === 'Quote' ? shown.id : null }, cardDoor: t('customers.work.dock.cardDoor') } : model}
-              actions={onFocus ? { ...actions, onFocusRow: (row) => onFocus({ type: 'Quote', id: row.id, label: row.number, companyId: row.companyId }) } : actions}
-            />
-          </ScopedListTools>
-          {door === null && <ClosedDoors tab={tab} kind="quotes" lead="foot" customer={party.name} />}
-        </>
-      )}
-      {state !== 'list' && dialog}
-    </section>
+    <TabSection kind="quotes" customer={party.name} tab={tab} aside={dialog}>
+      <ScopedListTools listKey={QUOTES_LIST_KEY} layoutKey={QUOTES_LAYOUT_KEY} page={`${prefix}${QUOTES_PATH}`} scope={scope}>
+        <QuotesListView
+          // F-SA-279: the docked quote's row marked; the keys' row docks after the rest. F-CQ-104: a phone card's door to the thread.
+          model={onFocus ? { ...model, active: { id: shown?.type === 'Quote' ? shown.id : null }, cardDoor: t('customers.work.dock.cardDoor') } : model}
+          actions={onFocus ? { ...actions, onFocusRow: (row) => onFocus({ type: 'Quote', id: row.id, label: row.number, companyId: row.companyId }) } : actions}
+        />
+      </ScopedListTools>
+    </TabSection>
   )
 }
 
 /** Requests & portal orders: the customer's requests and portal orders (GET /sales/incoming?partyId&kinds), Incoming's own list. */
 function IncomingSection({ party, onPick, onFocus, shown, tab, ask, hidden }: HostProps) {
   const t = useT('parties')
-  const b = useT(BEFORE_ORDER_NS)
   const session = useOfficeSession()
   const prefix = companyPrefix(session.company?.code ?? '')
   const pick = useRef(onPick)
   pick.current = onPick
   const listed = useRef<ListAddress>({ ...HOME_ADDRESS, party: party.id })
-  const door = tab.door
   const tile = tab.terms.incoming
   const host = useMemo<InquiriesListHost>(
     () => ({
@@ -260,8 +182,7 @@ function IncomingSection({ party, onPick, onFocus, shown, tab, ask, hidden }: Ho
   listed.current = model.address
   // F-CQ-104: the band's head asks for a New request (the customer set).
   useAsked(ask, 'request', () => actions.onNew?.())
-  const kind = incomingCountsOf(tab.counts)
-  const state: SectionState = sectionStateOf(kind, tile === null, door)
+  const state = sectionStateIn(tab, 'incoming')
   useReadAgainWhenEmpty(state !== 'list', model.updates, actions.onShowUpdates)
   // A line stands in for the list: the ONE New request window still opens here (with the list's own words).
   const dialog = model.newRequest ? (
@@ -270,33 +191,17 @@ function IncomingSection({ party, onPick, onFocus, shown, tab, ask, hidden }: Ho
     </InquiriesMessages>
   ) : null
   if (hidden) return dialog
-  const title = b('sec.incoming')
   return (
-    <section className="fw-qt-section" aria-label={title}>
-      <SectionHead title={title} kind={kind} section="incoming" tab={tab} customer={party.name} />
-      {state === 'folded' ? (
-        <p className="fw-qt-quiet">{b('fold.incoming')}</p>
-      ) : state === 'none' ? (
-        <p className="fw-qt-quiet">{b('empty.incomingNone', { customer: party.name })}</p>
-      ) : state === 'onlyClosed' ? (
-        <p className="fw-qt-quiet">
-          {b('empty.incomingNoLive', { customer: party.name })} <ClosedDoors tab={tab} kind="incoming" lead="empty" customer={party.name} />
-        </p>
-      ) : (
-        <>
-          <ScopedListTools listKey={INQUIRIES_LIST_KEY} layoutKey={INQUIRIES_LAYOUT_KEY} page={`${prefix}${PAGE_PATH}`} scope={scope}>
-            <InquiriesView
-              // F-SA-279: the docked request's row marked; the keys' row docks after the rest (a change request never: its talk is its order's).
-              model={onFocus ? { ...model, active: { pick: shown ? { type: shown.type, id: shown.id } : null }, cardDoor: t('customers.work.dock.cardDoor') } : model}
-              actions={onFocus ? { ...actions, onFocusRow: (row) => (row.kind === 'CHANGE_REQUEST' ? undefined : onFocus({ type: THREAD_TYPE[row.kind], id: row.id, label: row.number, companyId: row.companyId ?? null })) } : actions}
-              slots={slots}
-            />
-          </ScopedListTools>
-          {door === null && <ClosedDoors tab={tab} kind="incoming" lead="foot" customer={party.name} />}
-        </>
-      )}
-      {state !== 'list' && dialog}
-    </section>
+    <TabSection kind="incoming" customer={party.name} tab={tab} aside={dialog}>
+      <ScopedListTools listKey={INQUIRIES_LIST_KEY} layoutKey={INQUIRIES_LAYOUT_KEY} page={`${prefix}${PAGE_PATH}`} scope={scope}>
+        <InquiriesView
+          // F-SA-279: the docked request's row marked; the keys' row docks after the rest (a change request never: its talk is its order's).
+          model={onFocus ? { ...model, active: { pick: shown ? { type: shown.type, id: shown.id } : null }, cardDoor: t('customers.work.dock.cardDoor') } : model}
+          actions={onFocus ? { ...actions, onFocusRow: (row) => (row.kind === 'CHANGE_REQUEST' ? undefined : onFocus({ type: THREAD_TYPE[row.kind], id: row.id, label: row.number, companyId: row.companyId ?? null })) } : actions}
+          slots={slots}
+        />
+      </ScopedListTools>
+    </TabSection>
   )
 }
 
@@ -316,36 +221,32 @@ function DraftsSection({ party, onPick, onFocus, shown, tab, hidden }: HostProps
   const drafts = useCustomerDrafts(party.id, showing, untitled)
   const draftRows = drafts.read.status === 'ready' ? drafts.read.rows : null
   if (hidden) return null
-  const title = b('group.WRITING', { customer: party.name })
   return (
-    <section className="fw-qt-section" aria-label={title}>
-      <div className="fw-qt-sechead">
-        <h3 className="fw-qt-sectitle">{title}</h3>
-        <p className="fw-qt-quiet">{b('sec.writingSub', { customer: party.name })}</p>
-      </div>
-      {!tab.terms.drafts ? (
-        <p className="fw-qt-quiet">{b('fold.drafts')}</p>
-      ) : count === 0 ? (
-        <p className="fw-qt-quiet">{t('customers.drafts.empty', { customer: party.name })}</p>
-      ) : (
-        <CustomerDraftsList
-          model={{ customer: party.name, read: drafts.read, updates: drafts.updates, activeId: shown?.type === 'PortalOrderRequest' ? shown.id : null, wide: (tab.room ?? 0) >= 1100, pictures: { read: readPictures, header: b('drafts.picture') } }}
-          actions={{
-            ...(onPick ? { onRow: (row: DraftRow) => onPick(draftPick(row, draftTitle(row, untitled))) } : {}),
-            ...(onFocus ? { onFocusRow: (row: DraftRow) => onFocus(draftPick(row, draftTitle(row, untitled))) } : {}),
-            onOpen: drafts.onOpen,
-            onRetry: drafts.onRetry,
-            onShowUpdates: drafts.onShowUpdates,
-          }}
-        />
-      )}
-      {drafts.open && drafts.window && draftRows && (
-        <DraftWindow
-          model={{ customer: party.name, title: draftTitle(drafts.open, untitled), nav: draftsNav(draftRows, drafts.open.id), pane: drafts.window.model, thread: drafts.window.thread }}
-          actions={{ pane: drafts.window.actions, onGo: drafts.onGo, onClose: drafts.onClose }}
-        />
-      )}
-    </section>
+    <DraftsFrame
+      customer={party.name}
+      tab={tab}
+      window={
+        drafts.open &&
+        drafts.window &&
+        draftRows && (
+          <DraftWindow
+            model={{ customer: party.name, title: draftTitle(drafts.open, untitled), nav: draftsNav(draftRows, drafts.open.id), pane: drafts.window.model, thread: drafts.window.thread }}
+            actions={{ pane: drafts.window.actions, onGo: drafts.onGo, onClose: drafts.onClose }}
+          />
+        )
+      }
+    >
+      <CustomerDraftsList
+        model={{ customer: party.name, read: drafts.read, updates: drafts.updates, activeId: shown?.type === 'PortalOrderRequest' ? shown.id : null, wide: (tab.room ?? 0) >= 1100, pictures: { read: readPictures, header: b('drafts.picture') } }}
+        actions={{
+          ...(onPick ? { onRow: (row: DraftRow) => onPick(draftPick(row, draftTitle(row, untitled))) } : {}),
+          ...(onFocus ? { onFocusRow: (row: DraftRow) => onFocus(draftPick(row, draftTitle(row, untitled))) } : {}),
+          onOpen: drafts.onOpen,
+          onRetry: drafts.onRetry,
+          onShowUpdates: drafts.onShowUpdates,
+        }}
+      />
+    </DraftsFrame>
   )
 }
 

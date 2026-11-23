@@ -7,7 +7,7 @@ import { useOfficeApi, useOfficeSession } from '../../../../../lib/session/conte
 import { companyPrefix } from '../../../../../lib/session/session'
 import { useLiveBus } from '../../../../../shell/live/use-live'
 import { readBeforeOrderCounts } from './api'
-import { COUNTS_WAIT_MS, countsMoved, doorAddress, doorOf, DOORS, tabRightsOf, termsOfDoor, toggledDoor, type Door, type DoorTerms, type TabRights } from './band'
+import { COUNTS_WAIT_MS, countsMoved, doorAddress, doorOf, DOORS, tabRightsOf, termsOfDoor, toggledDoor, type Door, type TabFacts } from './band'
 
 /**
  * F-CQ-101 / F-CQ-104 (customer page › Quotes & incoming, 13-backend §11 rows 1–2): the tab's container — the counts (one read while
@@ -16,22 +16,8 @@ import { COUNTS_WAIT_MS, countsMoved, doorAddress, doorOf, DOORS, tabRightsOf, t
  * it), the lists' terms under it, and the tab's own room (a ResizeObserver on its root: each list lays out by that room, never by
  * the window). The customer's one name is the page's (P0-B9). F-CQ-205: the drafts' door is this tab's own section.
  */
-export interface QuotesTab {
-  readonly counts: BeforeOrderCountsAnswer | null
-  /** The counts could not be read (the band says so; the lists still draw). */
-  readonly failed: boolean
-  readonly door: Door | null
-  readonly terms: DoorTerms
-  readonly rights: TabRights
-  /** The tab's own room in px (null until measured). */
-  readonly room: number | null
-  /** Each door's address (the open door's: everything again). */
-  readonly hrefs: Readonly<Record<Door, string>>
-  /** The address without a door (✕, "Show everything"). */
-  readonly everything: string
-  /** The page's company prefix (`/w/<code>`). */
-  readonly prefix: string
-}
+/** The tab's state as its parts read it (band.ts TabFacts: the live tab's, or a design case's). */
+export type QuotesTab = TabFacts
 
 export function useQuotesTab(partyId: string): { tab: QuotesTab; rootRef: RefObject<HTMLDivElement | null>; onCloseDoor: () => void; onRetry: () => void } {
   const api = useOfficeApi()

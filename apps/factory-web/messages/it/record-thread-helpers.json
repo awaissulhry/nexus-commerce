@@ -20,7 +20,7 @@
     "none": "Ancora nessuna risposta salvata",
     "noneHint": "Qui compaiono le risposte salvate scritte in italiano, inglese, tedesco, francese o spagnolo.",
     "notForThis": "Ancora nessuna risposta salvata per questo tipo di record",
-    "notForThisHint": "Le risposte salvate sono per ordini, offerte, ordini d'acquisto, pratiche di assistenza, spedizioni e clienti o fornitori.",
+    "notForThisHint": "Le risposte salvate sono per ordini, preventivi, ordini d'acquisto, pratiche di assistenza, spedizioni e clienti o fornitori.",
     "filling": "La compilo con i dati di questo record…",
     "missing_one": "Uno spazio che questo record non ha potuto compilare:",
     "missing_other": "{count} spazi che questo record non ha potuto compilare:"

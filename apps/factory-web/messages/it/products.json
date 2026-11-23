@@ -464,7 +464,7 @@
     "blocks": "blocca {steps}",
     "whatHappens": "Cosa succede",
     "becomes": "La revisione {revision} diventa quella usata da ogni nuovo ordine di lavoro; distinta, ciclo ed etichetta vengono bloccati.",
-    "obsoletes": "La revisione {revision} diventa obsoleta: gli ordini di lavoro già creati la mantengono, le offerte calcolate su di essa mantengono il prezzo.",
+    "obsoletes": "La revisione {revision} diventa obsoleta: gli ordini di lavoro già creati la mantengono, i preventivi calcolati su di essa mantengono il prezzo.",
     "activates": "Il modello diventa Attivo: si può quotare, ordinare e produrre.",
     "frozen": "Una modifica successiva è una nuova revisione (Avvia revisione).",
     "note": "Cosa è cambiato (facoltativo)",
@@ -486,7 +486,7 @@
   },
   "archive": {
     "title": "Archiviare {code}?",
-    "reach": "Non si potrà più usare in nuove offerte o ordini di lavoro.",
+    "reach": "Non si potrà più usare in nuovi preventivi o ordini di lavoro.",
     "kept": "Gli ordini aperti lo mantengono; non viene mai eliminato.",
     "back": "Riattiva lo riporta in uso.",
     "go": "Archivia"
