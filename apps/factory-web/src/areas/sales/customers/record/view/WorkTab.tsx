@@ -687,21 +687,28 @@ function Dock({ customer, general, dock, feed, prefix, allOffered = true }: Dock
           returnFocusTo={viewer.returnTo}
         />
       )}
-      <ThreadPick label={t('customers.work.dock.label')} choices={choices} value={scope} onPick={dock.onScope} note={dock.draftKept ? t('customers.work.dock.draftKept', { record: dock.draftKept }) : null}>
+      <ThreadPick
+        label={t('customers.work.dock.label')}
+        choices={choices}
+        value={scope}
+        onPick={dock.onScope}
+        note={dock.draftKept ? t('customers.work.dock.draftKept', { record: dock.draftKept }) : null}
+        // ---- F-CQ-305 / cq fx3 W2-3 (10-design §9): the door line in the dock's head, under the pick (inside the card, never above it on
+        // the page): "Came from request … ›", "Became order … ›" — a click docks that record's own thread; none when the row carried none.
+        extra={
+          scope === 'record' && pick?.links && pick.links.length > 0 ? (
+            <span className="fw-qt-doors" aria-label={b('dock.line')}>
+              {pick.links.map((link) => (
+                <Button key={`${link.kind}:${link.pick.id}`} size="sm" variant="link" onClick={() => dock.onRow(link.pick)}>
+                  {b(`dock.${link.kind}`, { number: link.pick.label })}
+                </Button>
+              ))}
+            </span>
+          ) : null
+        }
+        // ---- end F-CQ-305 / W2-3
+      >
         {scope === 'record' && pick ? (
-          <>
-            {/* ---- F-CQ-305 (10-design §9): the door line under the pick — "Came from request … ›", "Became order … ›": a click docks that
-                record's own thread (no thread is merged); none when the row carried none. */}
-            {pick.links && pick.links.length > 0 && (
-              <p className="fw-qt-doors" aria-label={b('dock.line')}>
-                {pick.links.map((link) => (
-                  <Button key={`${link.kind}:${link.pick.id}`} size="sm" variant="link" onClick={() => dock.onRow(link.pick)}>
-                    {b(`dock.${link.kind}`, { number: link.pick.label })}
-                  </Button>
-                ))}
-              </p>
-            )}
-            {/* ---- end F-CQ-305 */}
           <OfficeRecordThread
             key={`${pick.type}:${pick.id}`}
             docked
@@ -714,7 +721,6 @@ function Dock({ customer, general, dock, feed, prefix, allOffered = true }: Dock
             onDraft={(kept) => dock.onDraft(pick, kept)}
             {...(dock.orderFiles && pick.type === 'SalesOrder' ? { orderFiles: dock.orderFiles } : {}) /* F-CP-111: the files line = the order's file set */}
           />
-          </>
         ) : scope === 'all' ? (
           // F-OP-203: All of <customer> in the dock's ONE card (DockColumn): the pick band on top, the read-only feed that scrolls.
           // F-OP-204: its Head row (FeedHead); this page IS the customer's, so its ⋯ has no "Open <customer>".

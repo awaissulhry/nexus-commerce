@@ -438,7 +438,9 @@
         },
         "todo": {
           "hint": "{customer} vede «Rispondere al nostro messaggio» sotto Cosa vi aspetta. Ogni preventivo aspetta poi il cliente, qui e nella sua pagina, finché non risponde."
-        }
+        },
+        "portalOff": "{customer} non ha ancora il portale: scrivi per e-mail nella conversazione di ogni preventivo.",
+        "noFiles": "Niente file qui: un file appartiene a un solo preventivo, aggiungilo nella conversazione di quel preventivo."
       },
       "request": {
         "title_one": "Rispondi a {customer} su {count} richiesta",
@@ -458,7 +460,9 @@
         },
         "todo": {
           "hint": "{customer} vede «Rispondere al nostro messaggio» sotto Cosa vi aspetta. Ogni richiesta aspetta poi il cliente, qui e nella sua pagina, finché non risponde."
-        }
+        },
+        "portalOff": "{customer} non ha ancora il portale: scrivi per e-mail nella conversazione di ogni richiesta.",
+        "noFiles": "Niente file qui: un file appartiene a una sola richiesta, aggiungilo nella conversazione di quella richiesta."
       }
     }
   },

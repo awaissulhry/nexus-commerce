@@ -73,7 +73,8 @@
   },
   "note": {
     "noRequests": "Richieste e ordini dal portale non sono mostrati: il tuo ruolo non legge le richieste.",
-    "noQuotes": "I preventivi non sono mostrati: il tuo ruolo non legge i preventivi."
+    "noQuotes": "I preventivi non sono mostrati: il tuo ruolo non legge i preventivi.",
+    "noTab": "Preventivi e in arrivo richiede il diritto di leggere preventivi o richieste: questa è la scheda Lavori, che il tuo ruolo può aprire."
   },
   "foot": {
     "closedLeftOut": "I chiusi restano fuori ({count}):",

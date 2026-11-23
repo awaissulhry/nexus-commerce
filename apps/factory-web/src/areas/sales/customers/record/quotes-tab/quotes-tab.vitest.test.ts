@@ -619,3 +619,43 @@ describe('cq fx2: the walk\'s gaps', () => {
   })
 })
 // ---- end cq fx2
+
+// ---- cq fx3 (30-walk.md § Second look: W2-1, W2-1b, W2-3; W2-2 is in orders/list/reply-many.vitest.test.ts)
+import { beforeOrderFor, beforeOrderOf, NO_BEFORE_ORDER } from '../before-order'
+
+describe('cq fx3: the second look\'s gaps', () => {
+  const src = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+
+  it('W2-1: a reader who cannot open Quotes & incoming gets no Work line (every part is a door there; Warehouse sees no drafts)', () => {
+    expect(beforeOrderFor(answer(), false)).toEqual(NO_BEFORE_ORDER)
+    expect(beforeOrderFor(answer(), true)).toEqual(beforeOrderOf(answer()))
+    expect(beforeOrderFor(null, true)).toEqual(NO_BEFORE_ORDER)
+    const page = src('../CustomerRecord.tsx')
+    expect(page).toContain('const opensQuotesTab = can.quotes || can.inquiries === true')
+    expect(page).toContain('beforeOrderFor(pageCounts.counts, opensQuotesTab)')
+  })
+
+  it('W2-1b: asked for Quotes & incoming without its right, the Work tab shows with one line why, until the reader leaves Work', () => {
+    const page = src('../CustomerRecord.tsx')
+    expect(page).toContain("if (record.model.tab === 'quotes' && tab !== 'quotes') setQuotesTabNote(true)")
+    expect(page).toContain("quotesTabNote={quotesTabNote && tab === 'work' /* F-CQ-306 */}")
+    const view = src('../view/CustomerRecordView.tsx')
+    expect(view).toContain("{tab === 'work' && quotesTabNote && <QuotesTabNote />}")
+    for (const locale of LOCALES) expect(createTranslator(locale, messagesFor(locale, ['before-order'])['before-order']!)('note.noTab'), locale).not.toBe('note.noTab')
+  })
+
+  it('W2-3: the door line is in the dock\'s head (the pick band\'s line), and the record docked from it keeps its way back', () => {
+    const work = src('../view/WorkTab.tsx')
+    expect(work).toContain("scope === 'record' && pick?.links && pick.links.length > 0 ? (")
+    expect(work.indexOf('// ---- F-CQ-305 / cq fx3 W2-3')).toBeGreaterThan(0)
+    expect(work.indexOf('// ---- F-CQ-305 / cq fx3 W2-3')).toBeLessThan(work.indexOf("{scope === 'record' && pick ? ("))
+    expect(work).not.toContain('<p className="fw-qt-doors" aria-label={b(\'dock.line\')}>')
+    const quote = quoteLinksOf({ id: 'q1', number: 'SEED-QT-0012', companyId: 'c', madeFrom: { inquiryId: 'i1', number: 'SEED-INQ-0005' }, fromPortalOrder: null, order: null })
+    expect(quote[0]!.pick.links).toEqual([{ kind: 'becameQuote', pick: { type: 'Quote', id: 'q1', label: 'SEED-QT-0012', companyId: 'c' } }])
+    const request = incomingLinksOf({ id: 'i1', number: 'SEED-INQ-0005', kind: 'REQUEST', companyId: 'c', request: { quote: { id: 'q1', number: 'SEED-QT-0012' }, order: null } as never, catalogueOrder: null })
+    expect(request[0]!.pick.links).toEqual([{ kind: 'cameFromRequest', pick: { type: 'Inquiry', id: 'i1', label: 'SEED-INQ-0005', companyId: 'c' } }])
+    const portal = incomingLinksOf({ id: 'p1', number: 'SEED-RQ-0086', kind: 'CATALOGUE_ORDER', companyId: 'c', request: null, catalogueOrder: { quote: { id: 'q1', number: 'SEED-QT-0012' }, salesOrder: null } as never })
+    expect(portal[0]!.pick.links?.[0]!.kind).toBe('cameFromPortal')
+  })
+})
+// ---- end cq fx3

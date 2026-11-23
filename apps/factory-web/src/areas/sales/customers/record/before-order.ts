@@ -38,6 +38,12 @@ export function beforeOrderOf(answer: Pick<BeforeOrderCountsAnswer, 'groups' | '
   return { drafts: answer.groups.WRITING, toAnswer: answer.groups.TO_ANSWER, openQuotes: answer.openQuotes, orderWaits: answer.groups.ORDER_WAITS }
 }
 
+// ---- F-CQ-306 (cq fx3, walk W2-1; settle C3): every part of the line is a door to Quotes & incoming — a reader who cannot open that tab
+// (neither quotes.view nor sales.inquiries.view: Warehouse) sees no line at all (its "1 draft" door landed back on Work; Warehouse no
+// longer sees portal drafts on the customer page).
+export const beforeOrderFor = (answer: Pick<BeforeOrderCountsAnswer, 'groups' | 'openQuotes'> | null, opensQuotesTab: boolean): BeforeOrderCounts => (answer && opensQuotesTab ? beforeOrderOf(answer) : NO_BEFORE_ORDER)
+// ---- end F-CQ-306
+
 /** The line's four counts for one customer — the ONE read the page makes for it. */
 export async function readBeforeOrder(api: ApiClient, partyId: string, signal?: AbortSignal): Promise<BeforeOrderCounts> {
   return beforeOrderOf(await api.get('/sales/before-order/counts', { query: { partyId }, schema: beforeOrderCountsAnswer, signal }))
