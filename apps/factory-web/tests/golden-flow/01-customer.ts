@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator /* cw fx10 */, type Page } from '@playwright/test'
 import { defineStage } from './_harness/stages'
 import { answerOf, chooseFromMenu /* cw T.2 */, dialog, press, routerActivity } from './_harness/ui'
 import { startsWith /* cw T.2 */, words } from './_harness/words' // F-OP-218
@@ -11,6 +11,24 @@ import { seen } from './_harness/flow' // F-CP-112
  * same row two or three times, so the rows are counted by their own ids. Seen on a running page: 8 rows, 8 ids, 0 by the old class.
  */
 const shownRows = (page: Page): Promise<number> => page.locator('.ag-row[row-id]').evaluateAll((rows) => new Set(rows.map((row) => row.getAttribute('row-id'))).size)
+
+// cw fx10: tick rows so that the tick HOLDS. The shared grid takes its ticks from the page's state each time the rows' data is new;
+// a tick made in the same moment as a re-read of the rows (after a door: the rows, then their depth, then the unread counts — each
+// one is new row data) is taken off again, and the bar then counts one less (the end check on 5b89a0befc: "1 selected" for two
+// clicks). So: the rows are picked ONCE by their own ids (the grid does not keep its rows in the order on screen), a row is ticked
+// only while its own box is not ticked, and the whole is tried again until the bar counts them. The box is the grid's own:
+// `.ag-selection-checkbox` with its `input[type=checkbox]` inside (read from the failed run's page).
+const tickRows = async (scope: Page | Locator, count: number, said: Locator): Promise<void> => {
+  const ids = (await scope.locator('.ag-row[row-id]:has(.ag-selection-checkbox)').evaluateAll((rows) => Array.from(new Set(rows.map((row) => row.getAttribute('row-id') ?? ''))))).filter((id) => id !== '').slice(0, count)
+  expect(ids.length, 'the rows to tick').toBe(count)
+  await expect(async () => {
+    for (const id of ids) {
+      const box = scope.locator(`.ag-row[row-id="${id}"] .ag-selection-checkbox`).first()
+      if (!(await box.locator('input[type="checkbox"]').first().isChecked({ timeout: 5_000 }))) await box.click({ timeout: 5_000 })
+    }
+    await expect(said.first()).toBeVisible({ timeout: 3_000 })
+  }).toPass({ timeout: 60_000 })
+}
 
 /** The customer of the first order (made up): an Italian brand that sells under its own label. */
 export const CUSTOMER = {
@@ -285,8 +303,8 @@ export default defineStage({
       const boxes = page.locator('.ag-row .ag-selection-checkbox')
       const ticked = Math.min(2, await boxes.count())
       expect(ticked, 'a row to tick').toBeGreaterThan(0)
-      for (let index = 0; index < ticked; index += 1) await boxes.nth(index).click()
-      await seen(page.getByText(L('selected', { count: ticked }), { exact: true }), 30_000)
+      // cw fx10: ticked so that the tick holds (tickRows above) — a single click per row lost one tick in an end check.
+      await tickRows(page, ticked, page.getByText(L('selected', { count: ticked }), { exact: true }))
       const ask = page.getByRole('button', { name: S('bar.ask'), exact: true }).first()
       await expect(ask).toContainText(S('bar.ask'))
       await expect(page.getByRole('button', { name: D('list.setPriority', { count: ticked }), exact: true }).first()).toContainText(D('list.setPriority', { count: ticked }))
@@ -364,8 +382,8 @@ export default defineStage({
       // One ticked quote: the bar shows at most 3 acts, each with words, and More ▾ (with its word) when there are more.
       const boxes = quotes.locator('.ag-row .ag-selection-checkbox')
       await seen(boxes, 60_000)
-      await boxes.first().click()
-      await seen(quotes.getByText(L('selected', { count: 1 }), { exact: true }), 30_000)
+      // cw fx10: the same tick that holds as the Work step's (tickRows above; the same grid, the same shape).
+      await tickRows(quotes, 1, quotes.getByText(L('selected', { count: 1 }), { exact: true }))
       const bar = quotes.locator('.fw-many-bar')
       await seen(bar, 30_000)
       const more = bar.getByRole('button').filter({ hasText: B('acts.more') })
