@@ -96,11 +96,24 @@
   align-items: center;
   margin-block: -2px;
 }
+/* F-CQ-B fx1 (walk B-01): the ⓘ is glued to the last item of its row (one box that wraps whole: never the ⓘ alone on a line); in the
+   chips row the box takes the rest of the line, so the ⓘ still ends it. */
+.fw-cb-tail {
+  display: inline-flex;
+  flex: 1 0 auto;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+.fw-cb-tail > .fw-cb-info,
 .fw-cb-notes > .fw-cb-info {
   margin-inline-start: auto;
 }
-.fw-cb-closed + .fw-cb-info {
-  margin-inline-start: 0;
+.fw-cb-closed > .fw-cb-tail {
+  flex: none;
+}
+/* F-CQ-B fx1 (walk B-07): a note said on the line only from 1040 px of room (below it the groups' window says it). */
+.fw-cb-roomy {
+  display: none;
 }
 .fw-cb-status {
   display: flex;
@@ -128,9 +141,6 @@
   color: var(--nds-text-2);
   white-space: nowrap;
 }
-.fw-cb-chips > .fw-cb-info {
-  margin-inline-start: auto;
-}
 .fw-cb-rule {
   flex: none;
   width: 1px;
@@ -156,7 +166,8 @@
   display: none;
 }
 @container fw-cb (min-width: 1040px) {
-  .fw-cb-chips-w {
+  .fw-cb-chips-w,
+  .fw-cb-roomy {
     display: inline;
   }
 }
@@ -186,7 +197,10 @@
     grid-column: 1 / 3;
     margin: 0;
   }
-  .fw-cb.has-chips .fw-cb-chips > .fw-cb-info {
+  .fw-cb.has-chips .fw-cb-tail {
+    display: contents;
+  }
+  .fw-cb.has-chips .fw-cb-chips .fw-cb-info {
     grid-column: 3;
     grid-row: 1;
     justify-self: end;
@@ -202,8 +216,11 @@
   .fw-cb-groups,
   .fw-cb-notes,
   .fw-cb-rule,
-  .fw-cb-chips > .fw-cb-info {
+  .fw-cb-chips .fw-cb-info {
     display: none;
+  }
+  .fw-cb-tail {
+    display: contents;
   }
   .fw-cb-foldbox {
     display: block;
@@ -271,6 +288,12 @@ button.fw-cb-win-row:hover {
   flex: 1;
   flex-direction: column;
   min-width: 0;
+}
+.fw-cb-win-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-2) var(--nds-space-6);
 }
 .fw-cb-win-n {
   font-size: var(--nds-font-size-sm);

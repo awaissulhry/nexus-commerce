@@ -169,7 +169,8 @@ function Band({ model, actions }: { model: WorkBandModel; actions?: WorkBandActi
       </span>
       {whysLine}
       {beforeLine}
-      {workOrders && <span>{workOrders}</span>}
+      {/* F-CQ-B fx1 (walk B-07): on the line only from 1040 px of room — below it the groups' window says it (Cancelled stays on line 1). */}
+      {workOrders && <span className="fw-cb-roomy">{workOrders}</span>}
     </>
   )
   // The window's lines under the groups (the ⓘ, and the phone's fold) — cw fx5 (walk W-32): the work orders' door its last line.
@@ -217,7 +218,7 @@ function Band({ model, actions }: { model: WorkBandModel; actions?: WorkBandActi
         closed: { groups: cancelled },
         notes,
         chips: { label: t('customers.work.strip.label'), items: chips },
-        info: { window: t('customers.work.band.info') },
+        info: t('customers.work.band.info'), // F-CQ-B fx1 (walk B-06): the ONE ⓘ of both tabs (it opens the groups' window)
         everything: { label: all, value: <span className="fw-cwb-num">{number(picture.total)}</span> },
         window: { title: all, notes: windowNotes, ...(model.windowOpen ? { open: true } : {}) },
       }}

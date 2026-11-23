@@ -31,6 +31,11 @@ export interface BandTile {
   readonly pressed: boolean
   /** It waits on us: the tile's status dot (the warning token) when > 0, the words in its tip — never colour alone (B5). */
   readonly ours?: boolean
+  /**
+   * F-CQ-B fx1 (walk B-05): the words that say it waits on us ("waits on us"), drawn with the warning dot where no tip is read — the
+   * groups' window's row and the phone's button — when the group waits on us and holds something.
+   */
+  readonly oursWords?: string
 }
 
 /** One fact of the chips row (Work's "What waits"): a `FilterChip` with its count. */
@@ -77,15 +82,20 @@ export function metricsOf(tiles: readonly BandTile[], onPick?: (id: string) => v
   })
 }
 
+/** F-CQ-B fx1 (walk B-05): "waits on us" said in words where no tip is read — the group waits on us and holds something; else null. */
+export const oursOf = (tile: Pick<BandTile, 'ours' | 'count' | 'oursWords'>): string | null => (tile.ours && (tile.count ?? 0) > 0 ? (tile.oursWords ?? null) : null)
+
 /** What the phone's ONE button says: the group shown (its words and number), else everything with its number. */
 export interface BandFold {
   /** The group shown; null: everything. */
   readonly id: string | null
   readonly label: string
   readonly value: ReactNode
+  /** F-CQ-B fx1 (walk B-05): the group shown waits on us (its words, drawn with the warning dot); null: it does not. */
+  readonly ours: string | null
 }
 
 export function foldOf(tiles: readonly BandTile[], everything: { readonly label: string; readonly value: ReactNode }): BandFold {
   const shown = tiles.find((tile) => tile.pressed) ?? null
-  return shown ? { id: shown.id, label: shown.label, value: shown.value } : { id: null, label: everything.label, value: everything.value }
+  return shown ? { id: shown.id, label: shown.label, value: shown.value, ours: oursOf(shown) } : { id: null, label: everything.label, value: everything.value, ours: null }
 }

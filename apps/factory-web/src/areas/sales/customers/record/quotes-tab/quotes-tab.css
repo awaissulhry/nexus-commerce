@@ -66,8 +66,8 @@
   gap: var(--nds-space-8);
 }
 
-/* ---- the band (F-CQ-B: drawn by the customer page's ONE band part, band/customer-band.css): only its head and the open door's
-   line are this tab's own. The closed doors of a list's foot (QuotesTabParts) keep their quiet look. ---- */
+/* ---- the band (F-CQ-B: drawn by the customer page's ONE band part, band/customer-band.css): only its head is this tab's own (F-CQ-B
+   fx1: the open door is the Orders sheet's own chip). The closed doors of a list's foot (QuotesTabParts) keep their quiet look. ---- */
 .fw-bo-head {
   display: flex;
   flex-wrap: wrap;
@@ -97,26 +97,6 @@
 
 .fw-bo-quietdoor:hover {
   color: var(--nds-text-strong);
-}
-
-.fw-bo-doorname {
-  font-weight: var(--nds-font-weight-medium);
-  color: var(--nds-text-strong);
-}
-
-.fw-bo-doorclose {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 24px;
-  min-height: 24px;
-  border-radius: var(--nds-radius-sm);
-  color: var(--nds-text-2);
-}
-
-.fw-bo-doorclose:focus-visible {
-  outline: 2px solid var(--nds-text);
-  outline-offset: 1px;
 }
 
 /* cq fx5 W-04: Ready's "5 of 6" and its "1 problem" tag wrap onto two lines in the column's least width (the row grows; nothing cut). */

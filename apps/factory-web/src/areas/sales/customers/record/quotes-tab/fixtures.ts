@@ -327,7 +327,7 @@ export const designScreen = defineDesignScreen<QuotesTabCase>({
     { id: 'all-closed', label: 'Everything closed: each list says so, the closed groups as doors', model: tabCase({ kinds: CLOSED_ONLY, quoteRows: [], incomingRows: [] }), note: 'Won 1 · Moved to a quote 2 · Lost 3 — each a door that opens exactly those rows.' },
     { id: 'counts-failed', label: 'The counts could not be read: the band says so, the lists still draw', model: { ...busy, counts: null, failed: true } },
     // ---- opened from a door
-    { id: 'door-to-answer', label: 'Opened from the door To answer (the Work line, the shell badge): the requests and portal orders that wait on us', model: doorCase('TO_ANSWER', [], [OVERDUE, PORTAL, ASSIGNED]), note: 'The tile To answer pressed; the status line: To answer · 3 — why it holds them · Show everything, ✕; Quotes folds to one line.' },
+    { id: 'door-to-answer', label: 'Opened from the door To answer (the Work line, the shell badge): the requests and portal orders that wait on us', model: doorCase('TO_ANSWER', [], [OVERDUE, PORTAL, ASSIGNED]), note: 'The tile To answer pressed; under the band the Orders sheet\'s own chip "To answer ✕" with why it holds them (✕: everything again); Quotes folds to one line.' },
     { id: 'door-lost', label: 'Opened from the door Lost: the lost quotes and the ended requests', model: doorCase('LOST', LOST_QUOTES, ENDED_INCOMING) },
     { id: 'door-writing', label: 'Opened from the door Customer is writing: the drafts; both lists fold', model: doorCase('WRITING', [], []) },
     { id: 'door-order-waits', label: 'Opened from the door Order waits: the accepted quote whose order waits, with why', model: doorCase('ORDER_WAITS', [ORDER_WAITS_QUOTE], []) },
