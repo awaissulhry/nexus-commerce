@@ -34,6 +34,15 @@ export interface Words {
  *   NOT_AN_ORDER      DECLINED as NOT_AN_ORDER         —                            —
  *   LOST              LOST                             WITHDRAWN by the customer    WITHDRAWN by the customer
  *   ALL               every row                        every row (never a draft)    every row
+ *   TO_ANSWER         NEW, ASSIGNED                    SENT                         OPEN
+ *   ENDED             DECLINED (every reason), LOST,   REFUSED, WITHDRAWN           REFUSED, WITHDRAWN
+ *                     WITHDRAWN
+ *
+ * B-CQ-020 (customer page › Quotes & incoming, settle C8): TO_ANSWER and ENDED are appended at the END (the five of the design stay
+ * first). TO_ANSWER is exactly the shell's "N waiting on us" (GET /sales/incoming/waiting-count): that badge finally has a door
+ * that opens what it counts; ENDED is the before-order group LOST on this list (sales/before-order/groups.ts: no older tile holds it
+ * — LOST is the office's LOST only, DECLINED leaves "Not an order" out, a withdrawn request is in ALL only). The request and
+ * portal-order arms are built from the before-order status sets.
  *
  * A change request the office ACCEPTED is in ALL only (its order changed; nothing of Incoming's waits).
  * B-TH-095: a request its customer withdrew from the portal (WITHDRAWN) is in ALL and in its own outcome (`?outcome=WITHDRAWN`, the
@@ -48,14 +57,15 @@ export type IncomingKind = (typeof INCOMING_KINDS)[number]
 export const INCOMING_CHANGE_KINDS = ['CHANGE', 'CANCEL', 'DESIGN'] as const
 export type IncomingChangeKind = (typeof INCOMING_CHANGE_KINDS)[number]
 
-export const INCOMING_TILES = ['NEW', 'WAITING_US', 'WAITING_CUSTOMER', 'QUOTED_THIS_WEEK', 'MINE', 'OPEN', 'QUOTED', 'ORDERED', 'DECLINED', 'NOT_AN_ORDER', 'LOST', 'ALL'] as const
+// B-CQ-020: TO_ANSWER and ENDED appended at the END (the first five are the design's: incoming.vitest pins them).
+export const INCOMING_TILES = ['NEW', 'WAITING_US', 'WAITING_CUSTOMER', 'QUOTED_THIS_WEEK', 'MINE', 'OPEN', 'QUOTED', 'ORDERED', 'DECLINED', 'NOT_AN_ORDER', 'LOST', 'ALL', 'TO_ANSWER', 'ENDED'] as const
 export type IncomingTile = (typeof INCOMING_TILES)[number]
 
 /** The design's five tiles (O-SAL-INQ-LIST.tiles-F01), counted under the same filters as the list. */
 export const INCOMING_DESIGN_TILES = ['NEW', 'WAITING_US', 'WAITING_CUSTOMER', 'QUOTED_THIS_WEEK', 'MINE'] as const satisfies readonly IncomingTile[]
 
 /** The rows that wait (the queue): oldest first; every other tile newest first. */
-export const QUEUE_TILES: readonly IncomingTile[] = ['NEW', 'WAITING_US', 'WAITING_CUSTOMER', 'MINE', 'OPEN']
+export const QUEUE_TILES: readonly IncomingTile[] = ['NEW', 'WAITING_US', 'WAITING_CUSTOMER', 'MINE', 'OPEN', 'TO_ANSWER' /* B-CQ-020 */]
 
 /** Which kinds can have a row in a tile at all (a kind that cannot is not read for it). */
 export const TILE_KINDS: Readonly<Record<IncomingTile, readonly IncomingKind[]>> = Object.freeze({
@@ -71,6 +81,9 @@ export const TILE_KINDS: Readonly<Record<IncomingTile, readonly IncomingKind[]>>
   NOT_AN_ORDER: ['REQUEST'],
   LOST: INCOMING_KINDS,
   ALL: INCOMING_KINDS,
+  // B-CQ-020
+  TO_ANSWER: INCOMING_KINDS,
+  ENDED: INCOMING_KINDS,
 })
 
 export const INCOMING_LIMITS = Object.freeze({

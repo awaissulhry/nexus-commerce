@@ -42,6 +42,7 @@ import {
   addPeopleContract,
   changePersonContract,
   removePersonContract,
+  orderRequestPicturesContract, // B-CQ-030
 } from './contract'
 import { manifest } from './manifest'
 import { acceptRequest, listOfficeRequests, officeRequestView, refuseRequest } from './office'
@@ -54,6 +55,8 @@ import { orderTemplate, uploadSheet } from './upload'
 // B-W2b-374 (XF3:04): an option's artwork in the portal.
 import { processFiles } from '../../../platform/files/service'
 import { openArtworkContract, openPortalArtwork, portalOptionsContract, portalOrderOptions, shareArtworkContract, shareOrderArtwork } from './artwork'
+// B-CQ-030: the portal orders' small pictures (the one picture helper).
+import { recordPictures } from '../../product/images/small-pictures'
 
 /**
  * Portal ordering (B-W2b-190; SAL-071 customer catalogue, SAL-072 reorder at today's prices, SAL-073 order upload with a
@@ -117,6 +120,8 @@ export default defineRoutes('portal-ordering', manifest, async (app) => {
   app.get('/sales/order-requests/:requestId', { schema: officeGetContract }, async (request) => officeRequestView(request, request.params.requestId))
   app.post('/sales/order-requests/:requestId/accept', { schema: acceptContract }, async (request) => acceptRequest(request, request.params.requestId, request.body, idempotencyKeyFrom(request), appClock(app)))
   app.post('/sales/order-requests/:requestId/refuse', { schema: refuseContract }, async (request) => refuseRequest(request, request.params.requestId, request.body, idempotencyKeyFrom(request)))
+  // B-CQ-030 (customer page › Quotes & incoming): a page of portal orders' pictures in one read (drafts too); absent ids say nothing.
+  app.post('/sales/order-requests/pictures', { schema: orderRequestPicturesContract }, async (request) => recordPictures(request, 'portalOrder', request.body.requestIds))
 
   // B-W2b-F13b: the office's check of the delivery addresses customers add in the portal.
   app.get('/sales/delivery-addresses', { schema: addressChecksContract }, async (request) => listAddressChecks(request, request.query))

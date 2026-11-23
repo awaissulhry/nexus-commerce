@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { incomingListQuery } from './contracts'
 import { changeSummaryOf, compareKeys, INCOMING_DESIGN_TILES, INCOMING_KINDS, INCOMING_TILES, isOpenState, mergePage, stateWords, TILE_KINDS, waitsOnUs, type IncomingCursor } from './rules'
+import { QUEUE_TILES } from './rules' // B-CQ-020
 
 /** B-TH-039: Sales › Incoming's one read, pure — the kinds in the tiles, the states, the merged page and its cursor. */
 describe('Sales › Incoming over every door (B-TH-039)', () => {
@@ -42,5 +43,21 @@ describe('Sales › Incoming over every door (B-TH-039)', () => {
     expect(incomingListQuery.safeParse({ tile: 'NOT_AN_ORDER', kind: 'CHANGE_REQUEST', cursor: 'abc', limit: '50' }).success).toBe(true)
     expect(incomingListQuery.safeParse({ tile: 'SOMETHING' }).success).toBe(false)
     expect(incomingListQuery.safeParse({ limit: '500' }).success).toBe(false)
+  })
+  // ---- B-CQ-020 / B-CQ-021 (customer page › Quotes & incoming, settle C8): two tiles appended at the end; some kinds only
+  it('B-CQ-020: TO_ANSWER and ENDED come last, hold every kind; TO_ANSWER is a queue (oldest first)', () => {
+    expect(INCOMING_TILES.slice(-2)).toEqual(['TO_ANSWER', 'ENDED'])
+    expect(TILE_KINDS.TO_ANSWER).toEqual(INCOMING_KINDS)
+    expect(TILE_KINDS.ENDED).toEqual(INCOMING_KINDS)
+    expect(QUEUE_TILES).toContain('TO_ANSWER')
+    expect(QUEUE_TILES).not.toContain('ENDED')
+    expect(incomingListQuery.safeParse({ tile: 'TO_ANSWER' }).success).toBe(true)
+    expect(incomingListQuery.safeParse({ tile: 'ENDED' }).success).toBe(true)
+  })
+  it('B-CQ-021: `kinds` is a comma list of the kinds (1–3); anything else is refused', () => {
+    const parsed = incomingListQuery.safeParse({ kinds: 'REQUEST,CATALOGUE_ORDER' })
+    expect(parsed.success && parsed.data.kinds).toEqual(['REQUEST', 'CATALOGUE_ORDER'])
+    expect(incomingListQuery.safeParse({ kinds: 'CHANGE_REQUEST' }).success).toBe(true)
+    for (const kinds of ['NOPE', 'REQUEST,NOPE', '', 'REQUEST,,CATALOGUE_ORDER', 'REQUEST,CATALOGUE_ORDER,CHANGE_REQUEST,REQUEST']) expect(incomingListQuery.safeParse({ kinds }).success, kinds).toBe(false)
   })
 })

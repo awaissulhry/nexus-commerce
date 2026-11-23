@@ -73,6 +73,10 @@ const SESSIONS: Record<string, SessionContext> = {
   requestsOnly: office(['parties.view', 'sales.inquiries.view'] as Permission[]),
   noOrders: office(['parties.view', 'quotes.view', 'sales.inquiries.view'] as Permission[]),
   noParties: office(['quotes.view', 'sales.inquiries.view', 'orders.view'] as Permission[]),
+  // B-CQ-030: the portal orders' pictures — orders.view without files.read (the style, never its file), and limited to one customer.
+  pictures: office(['orders.view'] as Permission[]),
+  picturesP1: office(['orders.view'] as Permission[], [P1]),
+  picturesP3: office(['orders.view'] as Permission[], [P3]),
 }
 
 let h: Harness
@@ -347,3 +351,56 @@ describe('B-CQ-002 GET /sales/before-order/counts and the per-party helper', () 
     expect(revised.groups.LOST).toBe(before.groups.LOST)
   })
 })
+
+// ---- B-CQ-030 (customer page › Quotes & incoming, L12, Q3; 13-backend §5): the portal orders' small pictures, drafts too -----------
+describe('B-CQ-030 POST /sales/order-requests/pictures', () => {
+  let serial = 0
+  const post = (session: string, requestIds: readonly string[]) =>
+    app.inject({ method: 'POST', url: '/sales/order-requests/pictures', payload: { requestIds }, headers: { 'x-test-session': session, 'x-run': run, 'idempotency-key': `cq-s1-pictures-${run}-${++serial}` } })
+  /** Each request's first line that names a style, and how many styles its lines name (the seeds' lines). */
+  const stylesOf = async (requestIds: readonly string[]): Promise<Map<string, { first: string; count: number }>> => {
+    const rows = await admin<{ requestId: string; styleId: string }>(`SELECT "requestId"::text AS "requestId", "styleId"::text AS "styleId" FROM "PortalOrderRequestLine" WHERE "requestId" = ANY($1::uuid[]) AND "styleId" IS NOT NULL ORDER BY "requestId", seq`, [requestIds])
+    const out = new Map<string, { first: string; count: number }>()
+    for (const id of requestIds) {
+      const own = rows.filter((row) => row.requestId === id).map((row) => row.styleId)
+      if (own.length > 0) out.set(id, { first: own[0]!, count: new Set(own).size })
+    }
+    return out
+  }
+
+  it('P1’s sent, accepted and refused orders and its draft: each its first style, in the asked order; no files.read: no file', async () => {
+    const asked = [portal.requests.draft, portal.requests.sent, portal.requests.accepted, portal.requests.refused]
+    const response = await post('pictures', asked)
+    expect(response.statusCode, response.body).toBe(200)
+    const answer = response.json() as Json
+    expect(Date.parse(answer.asOf)).not.toBeNaN()
+    const styles = await stylesOf(asked)
+    expect((answer.pictures as Json[]).map((picture) => picture.id)).toEqual(asked.filter((id) => styles.has(id)))
+    for (const picture of answer.pictures as Json[]) {
+      expect(picture.styleId, picture.id).toBe(styles.get(picture.id)!.first)
+      expect(picture.styleCount, picture.id).toBe(styles.get(picture.id)!.count)
+      expect(picture).toMatchObject({ fileId: null, contentType: null, small: null, styleCode: expect.any(String), styleName: expect.any(String) })
+    }
+    // The draft names two styles (the seeds' spring restock).
+    expect((answer.pictures as Json[]).find((picture) => picture.id === portal.requests.draft)?.styleCount).toBe(2)
+  })
+
+  it('the wall: a person limited to P3 asking for P1’s orders gets nothing (as unknown ids); limited to P1, the same as everyone', async () => {
+    const asked = [portal.requests.draft, portal.requests.sent]
+    const other = await post('picturesP3', asked)
+    expect(other.statusCode, other.body).toBe(200)
+    expect((other.json() as Json).pictures).toEqual([])
+    const unknown = await post('picturesP3', [newId(), newId()])
+    expect((unknown.json() as Json).pictures).toEqual([])
+    const own = (await post('picturesP1', asked)).json() as Json
+    const everyone = (await post('pictures', asked)).json() as Json
+    expect(own.pictures).toEqual(everyone.pictures)
+  })
+
+  it('the route asks orders.view; each id once; 1–200 ids', async () => {
+    expect((await post('noOrders', [portal.requests.sent])).statusCode).toBe(403)
+    expect((await post('pictures', [portal.requests.sent, portal.requests.sent])).statusCode).toBe(400)
+    expect((await post('pictures', [])).statusCode).toBe(400)
+  })
+})
+// ---- end B-CQ-030
