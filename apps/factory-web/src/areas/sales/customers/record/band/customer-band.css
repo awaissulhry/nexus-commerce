@@ -141,12 +141,22 @@
   color: var(--nds-text-2);
   white-space: nowrap;
 }
+/* F-CQ-B fx2 (re-look B-08): the thin rule between the chip groups is drawn only where the row holds ONE line — from 1140 px of
+   band room up to the 1500 px layout (its own grid has no rule; the phone none). Below 1140 the six chips with the "What waits"
+   word can need two lines (Italian with a long customer name ≈ 1120 px by the walk's chip widths), and a rule would hang at the
+   end of line 1. */
 .fw-cb-rule {
+  display: none;
   flex: none;
   width: 1px;
   height: 16px;
   margin-inline: var(--nds-space-2);
   background: var(--nds-border);
+}
+@container fw-cb (min-width: 1140px) {
+  .fw-cb-rule {
+    display: block;
+  }
 }
 /* A fact without a door (no right to its page, or nothing to open): its words and number, quiet — no focus stop. */
 .fw-cb-fact {

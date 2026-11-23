@@ -147,6 +147,18 @@ describe('F-CQ-B: the band draws the design system\'s parts', () => {
     expect(part).toMatch(/\{fold\.ours && \(\s*<Pill tone="warning" dot>\s*\{fold\.ours\}/)
   })
 
+  it('fx2 (re-look B-08, B-09): the groups\' rule only where the chips hold one line; the open door is no live region', () => {
+    const css = readFileSync(new URL('./customer-band.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-cb-rule \{\s*display: none;/)
+    expect(css).toMatch(/@container fw-cb \(min-width: 1140px\) \{\s*\.fw-cb-rule \{\s*display: block;/)
+    expect(css).toMatch(/\.fw-cb\.has-chips \.fw-cb-rule \{\s*display: none;/) // the 1500 px layout draws none
+    // The open door's buttons sit in no live region (aria-pressed and the chip say the state); a failed read is still announced.
+    const page = html({ status: createElement('button', { type: 'button' }, 'Lost ✕') })
+    expect(page).toContain('<div class="fw-cb-status"><button type="button">Lost ✕</button></div>')
+    expect(page).not.toContain('role="status"')
+    expect(html({ state: 'failed' })).toContain('<p class="fw-cb-failed" role="status">')
+  })
+
   it('sized by its OWN room (a container), never the window; tokens only; no outer card; it fetches nothing', () => {
     const css = readFileSync(new URL('./customer-band.css', import.meta.url), 'utf8')
     expect(css).toContain('container: fw-cb / inline-size;')
