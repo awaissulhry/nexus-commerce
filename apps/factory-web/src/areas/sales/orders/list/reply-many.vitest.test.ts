@@ -545,10 +545,14 @@ describe('cq fx3 W2-2: the Reply window on requests and quotes', () => {
     expect(orders).toContain("Brand Alpha has no portal yet: write by e-mail in each order's conversation.")
     expect(orders).not.toContain('Put it in their to-do list')
     expect(orders).not.toContain('No files here')
+    // cw fx7 (third look, item 3): nothing can be posted, so the lines that say who reads it, on which orders and how are not drawn.
+    expect(orders).toBe("Brand Alpha has no portal yet: write by e-mail in each order's conversation.")
     // With a portal the orders' window is as before: its box and, from Ask ▾, its tick.
     const on = textOf(render(createElement(ReplyManyBody, { model: model({ todo: { on: true, due: '2026-11-26' } }) }), 'en'))
     expect(on).toContain('Put it in their to-do list')
     expect(on).toContain('No files here')
+    expect(on).toContain('Brand Alpha will read this on 3 orders')
+    expect(on).toContain('Brand Alpha reads Italian')
     const quote = textOf(render(createElement(ReplyManyBody, { model: model({ portal: 'off', recordType: 'Quote' }) }), 'it'))
     expect(quote).toContain('nella conversazione di ogni preventivo')
   })
