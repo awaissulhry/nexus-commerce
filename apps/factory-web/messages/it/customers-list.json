@@ -96,7 +96,11 @@
       "held": "Il testo nomina un altro cliente: cambialo, oppure spunta «Questo testo non nomina altri clienti»."
     },
     "made": "Attività creata · per {name}",
-    "due": "scade il {date}"
+    "due": "scade il {date}",
+    "records": "Clienti",
+    "one": "Un’attività su ogni cliente: nella sua conversazione, mai una riga che nomina due clienti.",
+    "neverWho": "Il cliente:",
+    "never": "non vede mai un’attività."
   },
   "supervisor": {
     "title_one": "Imposta il supervisore di produzione per {count} cliente",
@@ -120,7 +124,10 @@
     "held": {
       "pick": "Scegli prima una persona.",
       "reading": "I clienti sono ancora in lettura."
-    }
+    },
+    "now": "ora: {name}",
+    "nowNone": "ora: non impostato",
+    "leftOut": "escluso"
   },
   "band": {
     "label": {

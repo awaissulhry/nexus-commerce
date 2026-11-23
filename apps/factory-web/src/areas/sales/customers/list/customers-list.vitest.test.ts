@@ -401,7 +401,7 @@ const SHARED = [fileURLToPath(new URL('../../../parties/_shared/view/PartiesList
 
 describe('every customers-list word the code names exists in it and en', () => {
   it('the `c(…)` keys of the folder and of the shared list, with the same placeholders', () => {
-    const keys = new Set<string>(['office.VIES', 'office.SDI', 'office.TAX', 'needs.toAnswer', 'band.needsNow' /* F-CL-202: named through groupWordOf / needsChipsOf */, ...['needs', 'needsHint', 'code', 'codeHint', 'name'].map((key) => `sort.${key}`) /* F-CL-203: Sort ▾ by its choices */])
+    const keys = new Set<string>(['office.VIES', 'office.SDI', 'office.TAX', 'needs.toAnswer', 'band.needsNow' /* F-CL-202: named through groupWordOf / needsChipsOf */, ...['records', 'one', 'neverWho', 'never', 'where'].map((key) => `task.${key}`) /* F-CL-301: the task window reads them under its prefix */, ...['needs', 'needsHint', 'code', 'codeHint', 'name'].map((key) => `sort.${key}`) /* F-CL-203: Sort ▾ by its choices */])
     for (const file of [...sources(HERE), ...SHARED]) for (const match of readFileSync(file, 'utf8').matchAll(/\bc\(['"`]([A-Za-z0-9_.]+)['"`]/g)) keys.add(match[1]!)
     expect(keys.size).toBeGreaterThan(8)
     for (const key of keys) {

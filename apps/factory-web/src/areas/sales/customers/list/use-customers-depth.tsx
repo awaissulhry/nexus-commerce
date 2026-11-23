@@ -173,6 +173,7 @@ export function useCustomersDepth(): { readonly depth: ListDepthSlot; readonly w
             words: { ns: CUSTOMERS_LIST_NS, prefix: 'task' },
             namesOther: (text) => namesOtherCustomer(text, task.ticked),
             hrefOf: (record) => receiptHref(record.id),
+            about: true, // F-CL-301 (walk W-5): the window as the picture (the customers as chips, where each task lives, who never sees it)
           }}
         />
       )}

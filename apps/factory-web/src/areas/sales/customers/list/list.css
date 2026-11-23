@@ -391,3 +391,53 @@
     margin-left: auto;
   }
 }
+
+/* ---- F-CL-301 (walk W-6): the supervisor window's customers — runs on ("now: …"), left out (why) ---- */
+.fw-cl-sup-lines {
+  display: flex;
+  flex-direction: column;
+  max-height: 280px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  list-style: none;
+}
+
+.fw-cl-sup-lines li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border-top: 1px solid var(--nds-border);
+}
+
+.fw-cl-sup-lines li:first-child {
+  border-top: 0;
+}
+
+.fw-cl-sup-lines li.is-out {
+  background: var(--nds-surface-sunken);
+}
+
+.fw-cl-sup-lines li > svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--nds-text-2);
+}
+
+.fw-cl-sup-who {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-cl-sup-now {
+  flex: none;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  white-space: nowrap;
+}

@@ -18,6 +18,10 @@ import { batchHeld, batchReceipt, nextWorkingDay, withoutSupervisor, type BatchA
 import Link from 'next/link' // F-CL-104: the receipt's names as doors
 import { formatDate } from '../../../lib/i18n/format' // F-CL-104
 import { batchWordOf } from '../model' // F-CL-104
+// ---- F-CL-301 (customers list walk W-5): the records as chips, where each task lives, who never sees it ----
+import { Info, Mail } from 'lucide-react'
+import { Tag } from '@nexus/ui/primitives'
+// ---- end F-CL-301
 
 export interface TaskNewDialogProps {
   /** The record it is on ("New task on Q-2026-0142"); null: a task of its own. */
@@ -61,6 +65,14 @@ export interface TaskNewDialogProps {
     /** Who Assign to starts on: the person ('me') or each record's supervisor ('supervisor'); null: today's rule (the supervisor). */
     readonly defaultAssignee?: 'me' | 'supervisor' | null
     // ---- end F-CL-104
+    // ---- F-CL-301 (customers list walk W-5; 10-design §8): the window as the customers' picture — optional; absent, as before.
+    /**
+     * With host `words`, true: the records as chips under their heading (`<prefix>.records`) with the one-task line under them
+     * (`<prefix>.one`), Assign to on a line of its own (its default said whole), and two closing lines — where each task lives (the
+     * host's `where`) and who never sees it (`<prefix>.neverWho` + `<prefix>.never`: "The customer: never sees a task.").
+     */
+    readonly about?: boolean | null
+    // ---- end F-CL-301
   } | null
 }
 
@@ -198,6 +210,7 @@ function BatchDialog({ people, held = null, busy = false, initial, onRetryPeople
   useEffect(() => setNoOther(false), [namedKey])
   const namesHeld = named.length > 0 && !noOther && words ? host(`${words.prefix}.namesOther.held`) : null
   // ---- end F-CL-104
+  const about = batch.about === true && words ? words.prefix : null // F-CL-301: the host's picture words live under this prefix
   const set = (change: Partial<TaskDraft>) => setDraft((current) => ({ ...current, ...change }))
   const records = batch.records
   const missing = assignee.kind === 'SUPERVISOR' ? withoutSupervisor(records) : []
@@ -278,14 +291,28 @@ function BatchDialog({ people, held = null, busy = false, initial, onRetryPeople
         </div>
       ) : (
         <div className="fw-rtask-form" onKeyDown={onKey}>
-          <p className="fw-rtask-hint">
-            {labels}
-            {records.length > LISTED ? ` ${h('batch.more', { count: records.length - LISTED })}` : ''}
-          </p>
+          {about ? (
+            // F-CL-301: the records as chips under their heading, the one-task line under them.
+            <Field label={host(`${about}.records`)} hint={host(`${about}.one`)}>
+              <span className="fw-rtask-chips">
+                {records.slice(0, LISTED).map((record) => (
+                  <Tag key={record.id} tone="neutral">
+                    {record.label}
+                  </Tag>
+                ))}
+                {records.length > LISTED && <Tag tone="neutral">{h('batch.more', { count: records.length - LISTED })}</Tag>}
+              </span>
+            </Field>
+          ) : (
+            <p className="fw-rtask-hint">
+              {labels}
+              {records.length > LISTED ? ` ${h('batch.more', { count: records.length - LISTED })}` : ''}
+            </p>
+          )}
           <Field label={t('tasks.new.field.title')} required htmlFor={titleId}>
             <Input id={titleId} value={draft.title} onChange={(event) => set({ title: event.target.value })} autoFocus maxLength={400} placeholder={t('tasks.new.field.titlePlaceholder')} />
           </Field>
-          <div className="fw-rtask-form-row">
+          <div className={`fw-rtask-form-row${about ? ' is-assign-wide' : ''}` /* F-CL-301: Assign to's default said whole */}>
             <Field label={h('batch.assignee')} hint={w('assigneeHint')}>
               {people.status === 'loading' ? (
                 <Skeleton height={32} />
@@ -321,6 +348,21 @@ function BatchDialog({ people, held = null, busy = false, initial, onRetryPeople
             <Banner tone="warning" title={host(`${words.prefix}.namesOther.warn`, { names: named.join(', ') })}>
               <Checkbox checked={noOther} onChange={(event) => setNoOther(event.target.checked)} label={host(`${words.prefix}.namesOther.tick`)} />
             </Banner>
+          )}
+          {about && (
+            // F-CL-301: where each task lives, and who never sees it.
+            <>
+              <p className="fw-rtask-hint">
+                <Info size={14} aria-hidden />
+                <span>{w('where')}</span>
+              </p>
+              <p className="fw-rtask-hint">
+                <Mail size={14} aria-hidden />
+                <span>
+                  <b>{host(`${about}.neverWho`)}</b> {host(`${about}.never`)}
+                </span>
+              </p>
+            </>
           )}
         </div>
       )}

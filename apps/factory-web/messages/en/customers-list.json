@@ -96,7 +96,11 @@
       "held": "The text names another customer: change it, or tick “This text names no other customer”."
     },
     "made": "Task made · for {name}",
-    "due": "due {date}"
+    "due": "due {date}",
+    "records": "Customers",
+    "one": "One task on each customer: in its own thread, never one line naming two customers.",
+    "neverWho": "The customer:",
+    "never": "never sees a task."
   },
   "supervisor": {
     "title_one": "Set production supervisor for {count} customer",
@@ -120,7 +124,10 @@
     "held": {
       "pick": "Pick a person first.",
       "reading": "The customers are still being read."
-    }
+    },
+    "now": "now: {name}",
+    "nowNone": "now: not set",
+    "leftOut": "left out"
   },
   "band": {
     "label": {
