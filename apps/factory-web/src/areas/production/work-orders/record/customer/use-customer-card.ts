@@ -1,18 +1,18 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { newIdempotencyKey, type ApiClient } from '../../../../../lib/api/client'
+import type { ApiClient } from '../../../../../lib/api/client'
 import { getProductionLimits } from '../../../../admin/users/partners/api'
-import { isStepUpCancelled } from '../../../../quality/_shared/hooks'
+import { useUrgencyOverride, type UrgencyGuard } from '../../../../_shared/customer-urgency/use-urgency-override' // F-CW-302
 import type { WorkOrder } from '../../../_shared/api'
 import { readProblem, type Phrase } from '../../../_shared/model'
-import { getCustomerUrgency, listCustomerIssues, listOrderApprovals, listOrderRequests, setBackUrgency, unlockUrgency } from './api'
-import { cardCustomersOf, urgencyOutcomeOf, urgencyProblemOf, type CardPart, type CustomerBlock, type CustomerCardActions, type CustomerCardModel, type UrgencyDialog, type UrgencyOutcome } from './model'
+import { getCustomerUrgency, listCustomerIssues, listOrderApprovals, listOrderRequests } from './api'
+import { cardCustomersOf, type CardPart, type CustomerBlock, type CustomerCardActions, type CustomerCardModel } from './model'
 
 const LOADING = { value: null, problem: null } as const
 
 /** The page's step-up guard (quality/_shared/hooks useStepUp): asks a fresh code when the API wants one, then runs the write again. */
-type Guard = <T>(sentence: string, work: () => Promise<T>) => Promise<T>
+type Guard = UrgencyGuard
 
 /**
  * F-PR-05b — the Customer card's container part (the view draws it and fetches nothing): while the Overview shows, per customer of the
@@ -27,10 +27,6 @@ export function useCustomerCard(api: ApiClient, workOrder: WorkOrder | null, per
   const approvalsView = permissions.includes('partners.approvals.view')
   const partnersView = permissions.includes('partners.view')
   const [blocks, setBlocks] = useState<CustomerBlock[]>([])
-  const [dialog, setDialog] = useState<UrgencyDialog | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [problem, setProblem] = useState<Phrase | null>(null)
-  const [outcome, setOutcome] = useState<UrgencyOutcome | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const turn = useRef(0)
   const noticeRef = useRef(onNotice)
@@ -70,38 +66,20 @@ export function useCustomerCard(api: ApiClient, workOrder: WorkOrder | null, per
     if (enabled && customers.length > 0) read()
   }, [enabled, read, workOrder?.version])
 
-  const actions: CustomerCardActions = {
-    onDialog: (next) => {
-      setProblem(null)
-      setDialog(next)
+  // F-CW-302: the urgency window's state and its one write are the shared hook's (areas/_shared/customer-urgency: the Orders sheet
+  // mounts the same). After a write the card reads again and says per order what was done; a refused write: it reads again too.
+  const urgency = useUrgencyOverride(
+    api,
+    guard,
+    (done) => {
+      noticeRef.current({ key: `customerCard.urgency.notice.${done.act}`, params: { count: done.done.length } })
+      read()
     },
-    onUrgency: (input) => {
-      if (busy) return
-      setBusy(true)
-      setProblem(null)
-      const orderIds = input.orders.map((order) => order.id)
-      const idempotencyKey = newIdempotencyKey()
-      guard('stepUp.urgencySentence', () => (input.act === 'unlock' ? unlockUrgency(api, { orderIds }, idempotencyKey) : setBackUrgency(api, { orderIds, reason: input.reason.trim(), lock: input.act === 'lock' || input.lock }, idempotencyKey)))
-        .then((answer) => {
-          const done = urgencyOutcomeOf(input.act, answer, input.orders)
-          setOutcome(done)
-          setDialog(null)
-          noticeRef.current({ key: `customerCard.urgency.notice.${input.act}`, params: { count: done.done.length } })
-          read()
-        })
-        .catch((error: unknown) => {
-          if (!isStepUpCancelled(error)) {
-            setProblem(urgencyProblemOf(error))
-            read()
-          }
-        })
-        .finally(() => setBusy(false))
-    },
-    onDismissOutcome: () => setOutcome(null),
-    onRetry: read,
-  }
+    read,
+  )
+  const actions: CustomerCardActions = { ...urgency.actions, onRetry: read }
 
   // Before the first read answers (or after the work order's customers changed), every part reads as loading, never as empty.
   const shown = blocks.length === customers.length && blocks.every((block, index) => block.customer.partyId === customers[index]!.partyId) ? blocks : customers.map((customer) => ({ customer, requests: LOADING, approvals: approvalsView ? LOADING : null, urgency: LOADING, issues: LOADING, limits: partnersView ? LOADING : null }))
-  return { model: customers.length === 0 ? null : { blocks: shown, dialog, busy, problem, outcome, now }, actions }
+  return { model: customers.length === 0 ? null : { blocks: shown, ...urgency.model, now }, actions }
 }

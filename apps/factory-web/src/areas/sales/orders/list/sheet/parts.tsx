@@ -408,8 +408,15 @@ function StopChipPart({ chip, row, t, s, prefix, doorHref, dense, now, date }: {
  * Beside it OUR priority when it is not Normal — "Priority: Top" (never a bare "Top" under this header) — unless the Priority
  * column is on screen (`priorityShown`): then it says it. The customer never sees our priority.
  */
-export function CustomerUrgencyCell({ row, s, d, bare = false, priorityShown = false }: { row: OrderRow; s: Translate; d: Translate; bare?: boolean; priorityShown?: boolean }) {
+export function CustomerUrgencyCell({ row, s, d, bare = false, priorityShown = false, askedHref = null }: { row: OrderRow; s: Translate; d: Translate; bare?: boolean; priorityShown?: boolean; askedHref?: string | null }) {
   const chip = urgencyChipOf(row)
+  // F-CW-302 (S7): "Urgent – asked" is a door to the request that waits on us — the review window in place where the page holds it
+  // (the customer's Work tab), else the order's Changes tab. The cell stays read-only: our own acts sit in the row ⋯ and More ▾.
+  const asked = (
+    <Tag tone="warning" className="fw-sheet-stop is-dash" title={s('urgency.askedTip')}>
+      {s('urgency.ASKED')}
+    </Tag>
+  )
   const level = priorityShown ? null : priorityChipOf(row)
   if (!chip && !level) return null
   return (
@@ -419,11 +426,14 @@ export function CustomerUrgencyCell({ row, s, d, bare = false, priorityShown = f
           {chip.rank !== null ? s(bare ? 'urgency.bareRank' : 'urgency.rank', { rank: chip.rank }) : s(bare ? 'urgency.bare' : 'urgency.URGENT')}
         </Tag>
       )}
-      {chip?.state === 'ASKED' && (
-        <Tag tone="warning" className="fw-sheet-stop is-dash" title={s('urgency.askedTip')}>
-          {s('urgency.ASKED')}
-        </Tag>
-      )}
+      {chip?.state === 'ASKED' &&
+        (askedHref ? (
+          <Link href={askedHref} className="fw-sheet-chip-door" data-door="" title={s('urgency.askedTip')}>
+            {asked}
+          </Link>
+        ) : (
+          asked
+        ))}
       {chip?.state === 'SET_BACK' && (
         <span className="fw-sheet-setback" title={s(chip.locked ? 'urgency.lockedTip' : 'urgency.SET_BACK')}>
           {chip.locked && <Lock size={11} aria-hidden />}

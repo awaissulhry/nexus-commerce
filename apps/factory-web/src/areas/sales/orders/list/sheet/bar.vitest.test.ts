@@ -19,13 +19,13 @@ const rows = (count: number, status: OrderStatus = 'IN_PRODUCTION'): BarRow[] =>
 const HOST = { locked: null }
 const ids = (acts: readonly BarAct[]): BarActId[] => acts.map((act) => act.id)
 
-/** The roles of 10-design §8, as each act's OWN right (W2: no shipping act yet, no customer-urgency act yet). */
+/** The roles of 10-design §8, as each act's OWN right (F-CW-301: shipping.manage; F-CW-302: production.brand.override). */
 const ROLE: Record<'owner' | 'sales' | 'warehouse' | 'manager' | 'finance' | 'reader', BarCan> = {
-  owner: { ship: true, manage: true, close: true, decide: true, post: true, supervisor: true, task: true, todo: true, invoices: true },
-  sales: { ship: false, manage: true, close: true, decide: true, post: true, supervisor: false, task: true, todo: true, invoices: false },
-  warehouse: { ship: true, manage: false, close: false, decide: true, post: true, supervisor: false, task: true, todo: false, invoices: false },
-  manager: { ship: false, manage: false, close: false, decide: true, post: true, supervisor: true, task: true, todo: false, invoices: false },
-  finance: { ship: false, manage: false, close: true, decide: true, post: true, supervisor: false, task: false, todo: false, invoices: true },
+  owner: { ship: true, urgency: true, manage: true, close: true, decide: true, post: true, supervisor: true, task: true, todo: true, invoices: true },
+  sales: { ship: false, urgency: false, manage: true, close: true, decide: true, post: true, supervisor: false, task: true, todo: true, invoices: false },
+  warehouse: { ship: true, urgency: false, manage: false, close: false, decide: true, post: true, supervisor: false, task: true, todo: false, invoices: false },
+  manager: { ship: false, urgency: true, manage: false, close: false, decide: true, post: true, supervisor: true, task: true, todo: false, invoices: false },
+  finance: { ship: false, urgency: false, manage: false, close: true, decide: true, post: true, supervisor: false, task: false, todo: false, invoices: true },
   reader: NO_BAR_CAN,
 }
 
@@ -33,17 +33,18 @@ describe('F-CW-202: three acts with words, then More ▾ — per role (10-design
   const three = rows(3)
 
   // F-CW-301 (S8): "Ship N together…" leads.
-  it('the ONE order of the acts: Ship · Ask · Set priority, then Reply · Assign supervisor · Add task · Note ‖ Mark ready · Close · Confirm ‖ Invoice', () => {
-    expect(BAR_ORDER.map((entry) => entry.id)).toEqual(['ship', 'ask', 'priority', 'reply', 'assign', 'task', 'note', 'ready', 'close', 'confirm', 'invoice'])
+  // F-CW-302 (S7): the customer's urgency as we steer it is its own group, before money.
+  it('the ONE order of the acts: Ship · Ask · Set priority, then Reply · Assign supervisor · Add task · Note ‖ Mark ready · Close · Confirm ‖ Customer urgency ×2 ‖ Invoice', () => {
+    expect(BAR_ORDER.map((entry) => entry.id)).toEqual(['ship', 'ask', 'priority', 'reply', 'assign', 'task', 'note', 'ready', 'close', 'confirm', 'urgencyRegular', 'urgencyUnlock', 'invoice'])
     expect(BAR_PROMOTED).toBe(3)
-    // More ▾ draws a rule where the group changes: what people read and write · the order's own commands · money.
-    expect(BAR_ORDER.map((entry) => entry.group)).toEqual([0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 4])
+    // More ▾ draws a rule where the group changes: what people read and write · the order's own commands · the customer's urgency · money.
+    expect(BAR_ORDER.map((entry) => entry.group)).toEqual([0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 3, 3, 4])
   })
 
   it('Owner: Ship 3 together… · Ask ▾ · Set priority — More ▾ holds the rest in order, Reply first', () => {
     const bar = barOf(ROLE.owner, three, HOST)
     expect(ids(bar.promoted)).toEqual(['ship', 'ask', 'priority'])
-    expect(ids(bar.more)).toEqual(['reply', 'assign', 'task', 'note', 'ready', 'close', 'confirm', 'invoice'])
+    expect(ids(bar.more)).toEqual(['reply', 'assign', 'task', 'note', 'ready', 'close', 'confirm', 'urgencyRegular', 'urgencyUnlock', 'invoice'])
     expect(bar.none).toBe(false)
   })
 
@@ -59,10 +60,10 @@ describe('F-CW-202: three acts with words, then More ▾ — per role (10-design
     expect(ids(bar.more)).toEqual(['task', 'note', 'confirm'])
   })
 
-  it('Production manager: Ask ▾ · Reply · Assign supervisor… — More ▾: Add task · Note · Confirm', () => {
+  it('Production manager: Ask ▾ · Reply · Assign supervisor… — More ▾: Add task · Note · Confirm ‖ Customer urgency ×2', () => {
     const bar = barOf(ROLE.manager, three, HOST)
     expect(ids(bar.promoted)).toEqual(['ask', 'reply', 'assign'])
-    expect(ids(bar.more)).toEqual(['task', 'note', 'confirm'])
+    expect(ids(bar.more)).toEqual(['task', 'note', 'confirm', 'urgencyRegular', 'urgencyUnlock'])
   })
 
   it('Finance: closes, confirms and invoices; changes no order (no Set priority, no Mark ready), makes no task', () => {
@@ -88,6 +89,7 @@ describe('F-CW-202: three acts with words, then More ▾ — per role (10-design
     expect(only({ supervisor: true })).toEqual(['assign'])
     expect(only({ task: true })).toEqual(['task'])
     expect(only({ invoices: true })).toEqual(['invoice'])
+    expect(only({ urgency: true })).toEqual(['urgencyRegular', 'urgencyUnlock']) // F-CW-302: no urgency act for Sales, Warehouse or Read-only
     expect(only({ todo: true })).toEqual([]) // F-CW-203: an entry of Ask ▾, never an act of its own (it needs threads.post too)
     expect(only({})).toEqual([])
     // Fewer than four acts: no More ▾ at all.
@@ -234,8 +236,8 @@ describe('F-CW-202: the view draws the rule — on every host of the sheet (sour
     expect(view).not.toMatch(/SetPriorityButton|manyShown\(model\.can/)
   })
 
-  it('the rights come from the one hook, each act its own: shipping.manage, threads.post, production.brand.manage, tasks.manage, partners.tasks.manage, approvals.decide, orders.manage / close, invoices.manage', () => {
-    expect(view).toContain('{ ship: !!model.ship?.can.manage /* F-CW-301 */, manage: model.can.manage, close: model.can.close, decide: !!model.commands?.decide, post: !!model.bulkCan?.note, supervisor: !!model.bulkCan?.supervisor, task: model.bulkCan?.task === null, todo: !!model.bulkCan?.todo /* F-CW-203 */, invoices: model.can.manageInvoices },')
+  it('the rights come from the one hook, each act its own: shipping.manage, production.brand.override, threads.post, production.brand.manage, tasks.manage, partners.tasks.manage, approvals.decide, orders.manage / close, invoices.manage', () => {
+    expect(view).toContain('{ ship: !!model.ship?.can.manage /* F-CW-301 */, urgency: !!model.urgency?.can /* F-CW-302 */, manage: model.can.manage, close: model.can.close, decide: !!model.commands?.decide, post: !!model.bulkCan?.note, supervisor: !!model.bulkCan?.supervisor, task: model.bulkCan?.task === null, todo: !!model.bulkCan?.todo /* F-CW-203 */, invoices: model.can.manageInvoices },')
     const hook = readFileSync(new URL('../use-orders-sheet.ts', import.meta.url), 'utf8')
     expect(hook).toContain("bulkCan: { supervisor: session.permissions.includes('production.brand.manage'), note: noteCan, task: taskHeld")
     expect(hook).toContain("const noteCan = session.permissions.includes('threads.post')")

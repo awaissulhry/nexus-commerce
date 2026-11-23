@@ -55,6 +55,12 @@ import { beforeLineOf, NO_BEFORE_ORDER, type BeforeOrderCounts } from '../before
 import { WorkBand, type WorkBandActions, type WorkBandModel } from './WorkBand'
 // ---- end F-CW-101
 import { WorkLayoutTools } from '../work-layout' // F-CW-103: the Work tab's own browser layout
+// ---- F-CW-302 (10-design §3.6; S35): the foot line — the order the rows stand in and the customer's urgency state (host-only) ----
+import { sortChoicesOf } from '../../../orders/model'
+import { LIMITS_ANCHOR } from '../../portal/limits/model'
+import { workFootOf, type UrgencyFoot } from '../urgency-foot'
+import { WorkFoot } from './WorkFoot'
+// ---- end F-CW-302
 import './customer-work.css'
 
 /**
@@ -284,6 +290,13 @@ export interface WorkTabProps {
   readonly onWindow?: WorkBandActions['onWindow']
   /** F-CW-101 (S27): the band's "Before an order" line — the page's counts (before-order.ts); absent: no line. */
   readonly before?: BeforeOrderCounts
+  /**
+   * F-CW-302 (S35): the customer's urgency as the page read it for this tab (urgency-foot.ts; workorders.view) — the foot's "3 of at
+   * most 3 urgent now" / "Customer urgency is off"; null or absent: not read (the foot then says the sort only).
+   */
+  readonly urgencyFoot?: UrgencyFoot | null
+  /** F-CW-302: the reader may change the customer's portal settings (the switch): the foot's door is drawn only then. */
+  readonly mayPortal?: boolean
   /** F-CP-104: the page's ask (the band's New order, ⋯ Import orders for <customer>…), served once the sheet is here; then `onAsked`. */
   readonly ask?: WorkAsk | null
   readonly onAsked?: () => void
@@ -311,7 +324,7 @@ export function WorkTab(props: WorkTabProps) {
   )
 }
 
-function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow, ask, onAsked, before }: WorkTabProps) {
+function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow, ask, onAsked, before, urgencyFoot = null, mayPortal = false }: WorkTabProps) {
   const t = useT('parties')
   const o = useT('orders')
   const s = useT(SHEET_NS) // F-CW-101
@@ -404,6 +417,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
     wide: columnSet === 'money' ? workRoom.room !== 'base' : workRoom.room === 'widest',
     countOf: workViewCounts(work.reads.board)?.all ?? null, // F-CW-104: "2 of 14 orders" under a door, a view or a search
     layoutSwitch: false, // F-CW-202 (S36): no List ⇄ Board switch on this tab — the key `v` is off and leaves the keys list
+    urgencyOff: urgencyFoot !== null && !urgencyFoot.on, // F-CW-302 (S35): the customer's switch, as this tab read it
     searchLabel: t('customers.work.search'), // F-CW-104: the shorter words fit the toolbar beside the thread
     columnSet: price ? { value: columnSet } : null, // F-CP-105: the toggle, a price holder's only
     marks: work.marks,
@@ -493,6 +507,10 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
   // The picked order left the view (it moved on, live): the dock keeps its conversation; one line says so, with the way back.
   const items = sheet.model.list.items
   const gone = !showDrafts && picked && picked.type === 'SalesOrder' && items && sheet.model.updates === 0 && !items.some((row) => row.id === picked.id) && !(rows === 'all' && !waiting && !notEqual /* F-CP-141 */ && !phase /* F-CW-101 */)
+  // ---- F-CW-302: the foot line's words (the sort's own word from the sheet's choices; the door to the customer's Portal settings).
+  const sortChoice = sortChoicesOf(true).find((choice) => choice.value === (sheet.model.sort ?? '')) ?? null
+  const foot = workFootOf({ sort: sheet.model.sort ?? null, sortWord: sortChoice ? s(`sort.${sortChoice.word}`) : null, customer: party.name, foot: urgencyFoot, portalHref: `${prefix}${basePath}?tab=portal#${LIMITS_ANCHOR}`, mayPortal })
+  // ---- end F-CW-302
   const viewName = waiting ? t('customers.work.view.waitingUs') : notEqual ? t('customers.work.view.notEqual') /* F-CP-141 */ : phase ? phaseWords(phase) /* F-CW-101 */ : o(`rows.${rows}`)
   return (
     <CustomerOverrideProvider onDone={door.refresh}>
@@ -520,9 +538,13 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
           />
         ) : (
           // F-CW-103 (S12): the sheet under the Work tab's own browser layout (a layout made on Sales › Orders never moves it).
-          <WorkLayoutTools listKey={ORDERS_LIST_KEY}>
-            <OrdersListView model={model} actions={actions /* F-SA-279 */} />
-          </WorkLayoutTools>
+          <>
+            <WorkLayoutTools listKey={ORDERS_LIST_KEY}>
+              <OrdersListView model={model} actions={actions /* F-SA-279 */} />
+            </WorkLayoutTools>
+            {/* F-CW-302 (10-design §3.6): the foot — the order the rows stand in, the customer's urgency state (this tab only). */}
+            <WorkFoot line={foot} />
+          </>
         )}
       </div>
       <RequestDoorWindow door={door} />

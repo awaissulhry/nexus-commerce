@@ -267,7 +267,13 @@
       "emptyDrafts_one": "{count} bozza è in scrittura nel portale — mai contata come ordine.",
       "emptyDrafts_other": "{count} bozze sono in scrittura nel portale — mai contate come ordini.",
       "showDrafts": "Mostra le bozze",
-      "search": "Cerca numero, PO o modello"
+      "search": "Cerca numero, PO o modello",
+      "foot": {
+        "after": "Seguono gli ordini usciti dalla produzione, dal più recente.",
+        "sorted": "Ordinati: {sort}.",
+        "use": "Urgenza cliente: {used} di al massimo {max} urgenti ora.",
+        "off": "L'urgenza cliente è spenta per {customer}"
+      }
     },
     "quotesTab": {
       "quotes": "Preventivi",

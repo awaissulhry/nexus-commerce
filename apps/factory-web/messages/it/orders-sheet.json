@@ -195,7 +195,8 @@
     "urgent": "Prima i più urgenti",
     "urgentRule": "(la nostra priorità, poi l'ordine di urgenza di {customer}, poi la data promessa)",
     "urgentRuleAll": "(la nostra priorità, poi l'ordine di urgenza di ciascun cliente, poi la data promessa)",
-    "now": "Ordina: {sort}"
+    "now": "Ordina: {sort}",
+    "urgentRuleOff": "(la nostra priorità, poi la data promessa)"
   },
   "views": {
     "suggest": "{customer} — monitoraggio",
@@ -225,7 +226,14 @@
     "askedTip": "Il cliente chiede di renderlo urgente: la sua richiesta tocca a noi",
     "lockedTip": "Riportato a normale da noi e bloccato: il cliente non può segnarlo urgente finché non lo sblocchiamo",
     "priority": "Priorità: {level}",
-    "priorityTip": "La nostra priorità: il cliente non la vede mai"
+    "priorityTip": "La nostra priorità: il cliente non la vede mai",
+    "held": {
+      "off": "L'urgenza cliente è spenta per {customer}.",
+      "noneUrgent_one": "L'ordine spuntato non è urgente per {customer}.",
+      "noneUrgent_other": "Nessuno dei {count} è urgente per {customer}.",
+      "noneLocked_one": "L'ordine spuntato non è bloccato.",
+      "noneLocked_other": "Nessuno dei {count} è bloccato."
+    }
   },
   "atRisk": {
     "filter": "Mostra solo gli ordini vicini alla data promessa",
@@ -497,7 +505,9 @@
     "askCustomerAny": "Chiedi al cliente su {count}…",
     "askCustomerWho": "Un messaggio nella conversazione di ogni ordine, letto nel portale, E una cosa da fare con una data nella loro lista.",
     "ship_one": "Spedisci {count} ordine…",
-    "ship_other": "Spedisci {count} insieme…"
+    "ship_other": "Spedisci {count} insieme…",
+    "urgencyRegular": "Urgenza cliente: Riporta a normale…",
+    "urgencyUnlock": "Urgenza cliente: Sblocca…"
   },
   "ship": {
     "cap": "Al massimo {max} ordini in una spedizione.",

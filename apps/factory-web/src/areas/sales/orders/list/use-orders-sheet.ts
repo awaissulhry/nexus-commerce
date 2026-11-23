@@ -10,7 +10,9 @@ import { getBoard, listOrderCustomers, listOrders, nextOrderNumber, type OrderBo
 import { getOrder, type Order } from '../api' // F-CP-110: an order's lines for the picture viewer's styles strip
 import type { StyleTile } from '../../../../lib/record-picture/styles' // F-CP-110
 import type { OrderRow } from '../api' // B-TH-245
-import { useCoalesced, useLive } from '../hooks'
+import { useCoalesced, useLive, useStepUp /* F-CW-302 */ } from '../hooks'
+import { useUrgencyOverride } from '../../../_shared/customer-urgency/use-urgency-override' // F-CW-302
+import { urgencyDialogOf } from './sheet/urgency' // F-CW-302
 import { boardRereadOf } from '../model' // F-SA-214
 import type { BoardLane } from '../api' // F-SA-214
 import { kindFromAddress } from '../model' // F-SA-221
@@ -744,6 +746,15 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   // F-CW-301: Ship N together… and a row's Create shipment… — Warehouse's own New shipment window, mounted here (its third mount).
   const ship = useShipTogether(api, session.permissions, rereadInPlace)
   // ---- end F-CW-301
+  // ---- F-CW-302 (S7, S14): Set to regular… · Lock… · Unlock… — the SHARED urgency window (areas/_shared/customer-urgency: the work
+  // order's Customer card mounts the same hook and dialog), fed a row or the ticked rows; only with production.brand.override; a fresh
+  // code by this page's own step-up. After the write — and after a refused one — the orders it named are read again where they stand.
+  const urgencyCan = session.permissions.includes('production.brand.override')
+  const urgencyStepUp = useStepUp(api)
+  const urgencyAsked = useRef<readonly string[]>([])
+  const urgencyAgain = () => rereadInPlace(urgencyAsked.current)
+  const urgency = useUrgencyOverride(api, urgencyStepUp.guard, urgencyAgain, urgencyAgain)
+  // ---- end F-CW-302
   const commandDoor = useOrderCommandDoor(api, {
     can,
     prefix,
@@ -850,6 +861,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     bulkCan: { supervisor: session.permissions.includes('production.brand.manage'), note: noteCan, task: taskHeld /* F-SA-281 */, reply: noteCan /* F-SA-282: threads.post */, todo: session.permissions.includes('partners.tasks.manage') /* F-CW-203 */ },
     replyMany: replyMany.model, // F-SA-282
     ship: ship.model, // F-CW-301
+    urgency: urgencyCan ? { ...urgency.model, can: true, stepUp: urgencyStepUp.stepUp } : null, // F-CW-302
     priceCheck: priceCheck.model, // F-CP-114
     commands: { window: commandDoor.model, moved, receipt, many: commandMany.model /* F-CP-109 */, decide: session.permissions.includes('approvals.decide') /* F-CP-109 */ }, // F-CP-108
     task, // F-SA-281
@@ -935,6 +947,15 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     ship: ship.actions,
     onDismissShip: ship.dismiss,
     // ---- end F-CW-301
+    // ---- F-CW-302 ----
+    onUrgency: (act, ids) => {
+      const dialog = urgencyCan ? urgencyDialogOf(act, pickedRows(ids)) : null
+      if (!dialog) return
+      urgencyAsked.current = dialog.orders.map((order) => order.id)
+      urgency.actions.onDialog(dialog)
+    },
+    urgency: { ...urgency.actions, onStepUpSubmit: (code) => void urgencyStepUp.submitStepUp(code), onStepUpCancel: urgencyStepUp.cancelStepUp },
+    // ---- end F-CW-302
     // F-CP-114: the door only with the price grain (no door, no call for anyone else).
     ...(can.price
       ? {

@@ -8,6 +8,7 @@ import { replyManyHeld } from '../reply-many'
 import { oneCustomerHeld, supervisorTargetsOf } from './model'
 import { invoiceShippedHeld } from './overall'
 import { shipHeld } from './ship' // F-CW-301
+import { urgencyHeld } from './urgency' // F-CW-302
 
 /**
  * F-CW-202 (customer Work tab plan §4; 10-design §4; 13-backend §8; lead settles S8, S9, S37) — the bar of ticked orders on the ONE
@@ -31,6 +32,8 @@ import { shipHeld } from './ship' // F-CW-301
 export interface BarCan {
   /** F-CW-301 — shipping.manage: Ship N together… (Sales holds no shipping right: not drawn for them, S23). */
   readonly ship: boolean
+  /** F-CW-302 — production.brand.override: Customer urgency: Set to regular… · Unlock… (S7: each with its own right + a fresh code). */
+  readonly urgency: boolean
   /** orders.manage: Set priority, Mark ready, Close. */
   readonly manage: boolean
   /** orders.close: Close (an order that is not settled, with a reason). */
@@ -50,10 +53,10 @@ export interface BarCan {
 }
 
 /** A reader with no act at all (a read-only role). */
-export const NO_BAR_CAN: BarCan = Object.freeze({ ship: false, manage: false, close: false, decide: false, post: false, supervisor: false, task: false, todo: false, invoices: false })
+export const NO_BAR_CAN: BarCan = Object.freeze({ ship: false, urgency: false, manage: false, close: false, decide: false, post: false, supervisor: false, task: false, todo: false, invoices: false })
 
 /** The bar's acts, by id. */
-export type BarActId = 'ship' /* F-CW-301 */ | 'ask' | 'priority' | 'reply' | 'assign' | 'task' | 'note' | ManyCommand | 'invoice'
+export type BarActId = 'ship' /* F-CW-301 */ | 'ask' | 'priority' | 'reply' | 'assign' | 'task' | 'note' | ManyCommand | 'urgencyRegular' | 'urgencyUnlock' /* F-CW-302 */ | 'invoice'
 /** The entries of Ask ▾ (S8: exactly two; S37: a reader who may not make a customer's to-dos gets the first alone). */
 export type AskEntryId = 'askProduction' | 'askCustomer'
 
@@ -109,15 +112,19 @@ export const BAR_ORDER: ReadonlyArray<{ readonly id: BarActId; readonly group: n
   { id: 'ready', group: 2 },
   { id: 'close', group: 2 },
   { id: 'confirm', group: 2 },
+  { id: 'urgencyRegular', group: 3 }, // F-CW-302: the customer's urgency as we steer it
+  { id: 'urgencyUnlock', group: 3 },
   { id: 'invoice', group: 4 },
 ])
 
 /** The ticked orders as the bar's rules read them. */
-export type BarRow = Pick<OrderRow, 'id' | 'number' | 'customerRef' | 'partyId' | 'partyName' | 'companyId' | 'status' | /* F-CW-301 */ 'units' | 'shippedUnits' | 'production'>
+export type BarRow = Pick<OrderRow, 'id' | 'number' | 'customerRef' | 'partyId' | 'partyName' | 'companyId' | 'status' | /* F-CW-301 */ 'units' | 'shippedUnits' | 'production' | /* F-CW-302 */ 'customerUrgencyState'>
 
 export interface BarHost {
   /** The page's own customer (the customer page): a ticked order of another customer holds the acts that take one customer. */
   readonly locked: string | null
+  /** F-CW-302 — the customer's urgency switch is off (only the customer's Work tab reads it): the urgency acts are held with words. */
+  readonly urgencyOff?: boolean
 }
 
 const sheet = (phrase: { readonly key: string; readonly params?: Readonly<Record<string, string | number>> } | null): BarWords | null => (phrase ? { ns: 'sheet', ...phrase } : null)
@@ -142,6 +149,9 @@ export function barAllowed(id: BarActId, can: BarCan): boolean {
       return can.supervisor
     case 'task':
       return can.task
+    case 'urgencyRegular':
+    case 'urgencyUnlock':
+      return can.urgency
     case 'invoice':
       return can.invoices
   }
@@ -165,6 +175,10 @@ export function barHeld(id: Exclude<BarActId, 'ask'>, rows: readonly BarRow[], c
       return one ?? (rows.length > BATCH_MAX ? { ns: 'sheet', key: 'bulk.tooMany', params: { max: BATCH_MAX } } : null)
     case 'note':
       return one ?? of('notes', openHeld(true, rows.length))
+    case 'urgencyRegular':
+      return sheet(urgencyHeld('regular', rows, host)) // F-CW-302: one customer, its switch, a state, the write's cap
+    case 'urgencyUnlock':
+      return sheet(urgencyHeld('unlock', rows, host))
     case 'invoice': {
       const key = invoiceShippedHeld(rows.length)
       return key ? { ns: 'sheet', key } : null

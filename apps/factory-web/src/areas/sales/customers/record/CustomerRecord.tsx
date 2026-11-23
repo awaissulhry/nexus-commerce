@@ -38,6 +38,7 @@ import { WaitingForCustomerDialog } from './view/WaitingForCustomerDialog'
 import { OpenTasksDialog } from './view/OpenTasksDialog'
 // ---- end F-SA-278
 import { QuotesIncomingTab } from './QuotesIncomingTab' // F-SA-277: two lists stacked, each its own list locked to the customer
+import { useUrgencyFoot } from './urgency-foot' // F-CW-302 (S35): the Work tab's foot — the customer's urgency state
 import { quotesGroupDoor, useBeforeOrder } from './before-order' // F-CW-101 (S27, S29): the band's "Before an order" line; the Open quotes door
 
 /**
@@ -97,6 +98,8 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   // F-CW-101 (S27, S27b): the band's "Before an order" line — ONE read, only while the Work tab is shown (the API leaves a part out
   // for a reader without its right).
   const before = useBeforeOrder(partyId, tab === 'work' && can.orders)
+  // F-CW-302 (S35): the customer's urgency for the Work tab's foot — ONE read, only while the Work tab is shown AND with workorders.view.
+  const urgencyFoot = useUrgencyFoot(partyId, tab === 'work' && can.orders && workCan.workorders)
   const onPick = customerDock.onRow
   const t = useT('parties')
   const named = record.party ? { id: record.party.id, name: partyName(record.party) } : null
@@ -138,7 +141,7 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   // ---- end F-CP-104
   // F-SA-277: Quotes & incoming — a row's click docks its quote's or request's thread.
   const quotesTab = named && tab === 'quotes' ? <QuotesIncomingTab party={named} onPick={onPick} onFocus={customerDock.onFocus} shown={customerDock.shown} /> : null
-  const workTab = named && tab === 'work' && can.orders ? <WorkTab party={named} prefix={prefix} work={work} can={workCan} picked={customerDock.shown /* F-SA-279: the row marked = the record docked */} onPick={onPick} onFocus={customerDock.onFocus} onWindow={setWin /* F-SA-278 */} ask={ask} onAsked={() => setAsk(null) /* F-CP-104 */} before={before /* F-CW-101 */} /> : null
+  const workTab = named && tab === 'work' && can.orders ? <WorkTab party={named} prefix={prefix} work={work} can={workCan} picked={customerDock.shown /* F-SA-279: the row marked = the record docked */} onPick={onPick} onFocus={customerDock.onFocus} onWindow={setWin /* F-SA-278 */} ask={ask} onAsked={() => setAsk(null) /* F-CP-104 */} before={before /* F-CW-101 */} urgencyFoot={urgencyFoot /* F-CW-302 */} mayPortal={session.permissions.includes('partners.production.manage') /* F-CW-302: may change the switch */} /> : null
   // ---- end F-SA-276
   // ---- F-SA-274: People & addresses — the people with portal access (Portal access's people part), tagged against the contacts.
   const [portalEmails, setPortalEmails] = useState<ReadonlySet<string>>(new Set())

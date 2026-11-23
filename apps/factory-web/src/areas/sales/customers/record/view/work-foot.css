@@ -1,0 +1,12 @@
+/* F-CW-302 (10-design §3.6) — the Work tab's foot: one quiet line under the sheet (the order the rows stand in, the customer's urgency
+   state). Layout only; design-system tokens only (no raw colour). */
+.fw-cw-foot {
+  margin: var(--nds-space-4) 0 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  min-width: 0;
+}
+.fw-cw-foot b {
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-semibold);
+}

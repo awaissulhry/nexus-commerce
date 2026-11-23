@@ -680,8 +680,16 @@ describe('F-CW-102: the row\'s chips', () => {
     // Read only: no funnel, no button, no link in the cell (our acts are in the row's ⋯).
     const cell = await urgency(row({ ...state({ state: 'ASKED', requestId: 'req-9' }), ...priority('HIGH') }))
     expect(cell).not.toMatch(/<button|<a |fw-sheet-funnel/)
+    // F-CW-302 (S7): "Urgent – asked" is a DOOR to the request that waits on us when the host gives its address — the review window
+    // in place on the customer's Work tab, the order's Changes tab elsewhere; still no button and no funnel (our acts: the row's ⋯).
+    const door = await urgency(row(state({ state: 'ASKED', requestId: 'req-9' })), { askedHref: '/office/sales/orders/o-1?tab=changes' })
+    for (const part of ['<a ', 'class="fw-sheet-chip-door"', 'data-door=""', 'href="/office/sales/orders/o-1?tab=changes"']) expect(door, part).toContain(part)
+    expect(textOfHtml(door)).toBe('Urgent – asked')
+    expect(door).not.toMatch(/<button|fw-sheet-funnel/)
+    // Only that state is a door: an Urgent or a set-back order with the address given draws no link.
+    expect(await urgency(row(state({ state: 'URGENT', urgentRank: 2 })), { askedHref: '/x' })).not.toContain('<a ')
     const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
-    expect(view).toContain('<CustomerUrgencyCell row={data} s={s} d={d} bare={phone} priorityShown={priorityShown} />')
+    expect(view).toContain('<CustomerUrgencyCell row={data} s={s} d={d} bare={phone} priorityShown={priorityShown} askedHref={askedHrefOf(prefix, data, latest.current.model.doorHref)')
     expect(view).not.toContain("act()?.onExtra?.({ customerUrgency")
   })
 

@@ -195,7 +195,8 @@
     "urgent": "Most urgent first",
     "urgentRule": "(our priority, then {customer}'s urgent order, then promise date)",
     "urgentRuleAll": "(our priority, then each customer's own urgent order, then promise date)",
-    "now": "Sort: {sort}"
+    "now": "Sort: {sort}",
+    "urgentRuleOff": "(our priority, then promise date)"
   },
   "views": {
     "suggest": "{customer} — tracking",
@@ -225,7 +226,14 @@
     "askedTip": "The customer asks to make it urgent: its request waits on us",
     "lockedTip": "Set to regular by us and locked: the customer cannot mark it urgent until we unlock it",
     "priority": "Priority: {level}",
-    "priorityTip": "Our own priority: the customer never sees it"
+    "priorityTip": "Our own priority: the customer never sees it",
+    "held": {
+      "off": "Customer urgency is off for {customer}.",
+      "noneUrgent_one": "The order ticked is not urgent for {customer}.",
+      "noneUrgent_other": "None of the {count} is urgent for {customer}.",
+      "noneLocked_one": "The order ticked is not locked.",
+      "noneLocked_other": "None of the {count} is locked."
+    }
   },
   "atRisk": {
     "filter": "Show only the orders close to their promise",
@@ -497,7 +505,9 @@
     "askCustomerAny": "Ask the customer about {count}…",
     "askCustomerWho": "A message in each order's own conversation, read in the portal, AND a to-do with a date in their list.",
     "ship_one": "Ship {count} order…",
-    "ship_other": "Ship {count} together…"
+    "ship_other": "Ship {count} together…",
+    "urgencyRegular": "Customer urgency: Set to regular…",
+    "urgencyUnlock": "Customer urgency: Unlock…"
   },
   "ship": {
     "cap": "At most {max} orders in one shipment.",

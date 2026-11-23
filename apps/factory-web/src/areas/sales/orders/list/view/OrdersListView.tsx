@@ -102,6 +102,11 @@ import { Truck } from 'lucide-react'
 import { shipRowHeld, shipRowOffered } from '../sheet/ship'
 import { ShipNoticeBanner, ShipWindow } from './ShipTogether'
 // ---- end F-CW-301
+// ---- F-CW-302: the customer's urgency as we steer it — the shared window, mounted here; the acts a row offers ----
+import { Undo2, Unlock } from 'lucide-react'
+import { askedHrefOf, rowUrgencyActs } from '../sheet/urgency'
+import { UrgencyNotice, UrgencyWindow } from './UrgencyWindow'
+// ---- end F-CW-302
 // ---- end F-CW-202
 import { OrderCommandManyDialog } from '../commands/view/OrderCommandManyDialog'
 // ---- end F-CP-109
@@ -221,6 +226,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     ready: () => actions?.onCommandMany?.(pickedIds, 'ready'),
     close: () => actions?.onCommandMany?.(pickedIds, 'close'),
     confirm: () => actions?.onCommandMany?.(pickedIds, 'confirm'),
+    urgencyRegular: () => actions?.onUrgency?.('regular', pickedIds), // F-CW-302: the window names the ticked orders it runs on
+    urgencyUnlock: () => actions?.onUrgency?.('unlock', pickedIds),
     invoice: () => actions?.onInvoiceShipped?.(pickedIds),
   }
   const barLabel: Record<Exclude<BarActId, 'ask'>, string> = {
@@ -233,12 +240,14 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     ready: wordsText(manyLabel('ready', picked.length), t, s, locale),
     close: wordsText(manyLabel('close', picked.length), t, s, locale),
     confirm: wordsText(manyLabel('confirm', picked.length), t, s, locale),
+    urgencyRegular: s('bar.urgencyRegular'), // F-CW-302
+    urgencyUnlock: s('bar.urgencyUnlock'),
     invoice: s('invoiceShipped.action', { count: picked.length }),
   }
   const bar = barOf(
-    { ship: !!model.ship?.can.manage /* F-CW-301 */, manage: model.can.manage, close: model.can.close, decide: !!model.commands?.decide, post: !!model.bulkCan?.note, supervisor: !!model.bulkCan?.supervisor, task: model.bulkCan?.task === null, todo: !!model.bulkCan?.todo /* F-CW-203 */, invoices: model.can.manageInvoices },
+    { ship: !!model.ship?.can.manage /* F-CW-301 */, urgency: !!model.urgency?.can /* F-CW-302 */, manage: model.can.manage, close: model.can.close, decide: !!model.commands?.decide, post: !!model.bulkCan?.note, supervisor: !!model.bulkCan?.supervisor, task: model.bulkCan?.task === null, todo: !!model.bulkCan?.todo /* F-CW-203 */, invoices: model.can.manageInvoices },
     picked,
-    { locked: model.locked?.party ? (model.customer?.id ?? null) : null },
+    { locked: model.locked?.party ? (model.customer?.id ?? null) : null, urgencyOff: model.urgencyOff === true /* F-CW-302: the Work tab's own read */ },
   )
   /** A hold's words, from the catalogue that already says them. */
   const sayBar = (words: BarWords | null): string | null => {
@@ -345,7 +354,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   // customer "Customer A–Z / Z–A" are not offered (they order nothing there).
   const sortChoices = sortChoicesOf(!!model.locked?.party)
   const sortNow = sortChoices.find((choice) => choice.value === (model.sort ?? '')) ?? null
-  const urgentRule = urgentRuleOf(model.locked?.party ? (model.customer?.name ?? null) : null)
+  const urgentRule = urgentRuleOf(model.locked?.party ? (model.customer?.name ?? null) : null, model.urgencyOff === true /* F-CW-302: no middle part while the customer's switch is off */)
   const sortWords = sortNow ? s(`sort.${sortNow.word}`) : s('sort.label')
   const sortMenu = (
     <Menu
@@ -372,7 +381,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       cardFieldsOf(
         (row) => <RecordPicture source="order" recordId={row.id} number={row.number} picture={row.picture} styleCount={row.styleCount} size="phone" read={latest.current.actions?.readPictures} demo={latest.current.model.demoPictures?.[row.id]} onOpen={() => setViewer(row.id)} />,
         // F-CW-102: the customer's urgency on the card says whose it is ("Urgent (customer) 2"); nothing to say: no line.
-        (row) => (urgencyChipOf(row) || priorityChipOf(row) ? <CustomerUrgencyCell row={row} s={s} d={d} bare /> : null),
+        (row) => (urgencyChipOf(row) || priorityChipOf(row) ? <CustomerUrgencyCell row={row} s={s} d={d} bare askedHref={askedHrefOf(model.prefix, row, model.doorHref) /* F-CW-302 */} /> : null),
       ),
     [s, d],
   )
@@ -576,6 +585,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       )}
 
       {/* F-CW-301: the ONE notice after a shipment is made here — the draft, its orders (each a door to its thread), the way to Warehouse. */}
+      {/* F-CW-302: what the last set-back, lock or unlock did (the shared outcome). */}
+      {model.urgency && <UrgencyNotice model={model.urgency} actions={actions?.urgency} />}
       {model.ship?.notice && <ShipNoticeBanner notice={model.ship.notice} prefix={model.prefix} onOrder={(id) => actions?.onOpenRow?.(id, false)} onDismiss={actions?.onDismissShip} />}
 
       {!model.embedded && <TilesStrip model={model} actions={actions} t={t} s={s} />}
@@ -685,6 +696,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
 
       {viewerRow && <PictureViewerFor row={viewerRow} model={model} actions={actions} onClose={() => setViewer(null)} /> /* B-TH-225; F-SA-212: the one viewer */}
       {model.ship && <ShipWindow model={model.ship} actions={actions?.ship} rows={items ?? []} prefix={model.prefix} /> /* F-CW-301: Warehouse's own window */}
+      {model.urgency && <UrgencyWindow model={model.urgency} actions={actions?.urgency} /> /* F-CW-302: the shared urgency window + this page's code dialog */}
       {model.newOrder && <NewOrderDialog model={model.newOrder} actions={actions} />}
       {model.invoiceDrafts && <InvoiceDraftsDialog state={model.invoiceDrafts} prefix={model.prefix} t={s} onClose={() => actions?.onCloseInvoiceDrafts?.()} onRetry={actions?.onInvoiceShippedRetry} /> /* B-TH-244 */}
       {/* B-W2b-323: Set priority, Import orders. */}
@@ -1248,6 +1260,18 @@ function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer, st
     const closing = steps.filter((step) => step.command === 'close').map((step) => stepItem(step, data))
     const next = [...before, ...shipStep, ...closing]
     const cancel = steps.find((step) => step.command === 'cancel')
+    // F-CW-302 (10-design §5; S7): Customer urgency — Set to regular… · Lock… · Unlock… (the Customer card's own words and window),
+    // only with production.brand.override; "Answer request…" for an order whose "Urgent – asked" waits on us (its own request).
+    const askedHref = askedHrefOf(prefix, data, latest.current.model.doorHref)
+    const urgencyActs = latest.current.model.urgency?.can && act()?.onUrgency ? rowUrgencyActs(data) : []
+    const urgencyItems: MenuItemDef[] =
+      urgencyActs.length > 0
+        ? [
+            { id: 'head-urgency', heading: true, label: s('col.customerUrgency') },
+            ...urgencyActs.map((kind) => ({ id: `urgency-${kind}`, label: pw(`customerCard.urgency.act.${kind}`), ...(latest.current.model.urgencyOff ? { disabled: true, description: s('urgency.held.off', { customer: data.partyName }) } : { onSelect: () => act()?.onUrgency?.(kind, [data.id]) }) })),
+            ...(askedHref ? [{ id: 'urgency-answer', label: s('row.answer'), href: askedHref }] : []),
+          ]
+        : []
     const priority = priorityItem(data)
     const rest: MenuItemDef[] = [
       // F-CP-114: Set customer's price… — the ONE window, here (a price holder only: the host gives the door with the price grain).
@@ -1259,7 +1283,7 @@ function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer, st
       // ---- F-SA-275: Add task… on this order (the one New task window, F-SA-281) and Answer request… while one waits on us.
       // F-CW-204 (S9): not drawn without the tasks' right (it was drawn greyed with the right's words).
       ...(act()?.onAddTask && !latest.current.model.bulkCan?.task ? [{ id: 'task', label: s('row.addTask'), onSelect: () => act()?.onAddTask?.([data.id], 'row') }] : []),
-      ...answerItem(data),
+      ...answerItem(data).filter((item) => !(urgencyItems.length > 0 && item.href === askedHref)), // F-CW-302: said once (the urgency group holds it)
       // ---- end F-SA-275
     ]
     return (
@@ -1272,6 +1296,7 @@ function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer, st
           { id: 'tab', label: t('list.openNewTab'), href: orderHref(prefix, data), target: '_blank' },
           // F-CP-108: Next steps (the order page's own heading), after a rule.
           ...(next.length > 0 ? [{ id: 'sep-next', separator: true }, { id: 'head-next', heading: true, label: t('menu.group.next') }, ...next] : []),
+          ...(urgencyItems.length > 0 ? [{ id: 'sep-urgency', separator: true }, ...urgencyItems] : []), // F-CW-302
           ...(priority.length > 0 ? [{ id: 'sep-priority', separator: true }, ...priority] : []),
           { id: 'sep-go', separator: true },
           ...goToItems(data),
@@ -1312,7 +1337,7 @@ function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer, st
     ) : null
   // F-CW-102 (S6, S7): the customer's urgency as its chip says it, READ ONLY (no funnel: the address term and saved views still
   // narrow by it); our own Priority beside it when it is not Normal and its own column is not on screen.
-  const UrgencyCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <CustomerUrgencyCell row={data} s={s} d={d} bare={phone} priorityShown={priorityShown} /> : null)
+  const UrgencyCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <CustomerUrgencyCell row={data} s={s} d={d} bare={phone} priorityShown={priorityShown} askedHref={askedHrefOf(prefix, data, latest.current.model.doorHref) /* F-CW-302 (S7): "Urgent – asked" is a door */} /> : null)
   const urgencyText = (row: OrderRow): string => {
     const chip = urgencyChipOf(row)
     const level = priorityChipOf(row)
@@ -1467,7 +1492,7 @@ const MANY_ICON: Readonly<Record<ManyCommand, typeof PackageCheck>> = { ready: P
 
 /** F-CW-202: each act's mark — the same on its button and in More ▾ (never told apart by colour). */
 function BarIcon({ id }: { id: BarActId }) {
-  const Icon = id === 'ship' ? Truck : id === 'ask' ? MessageCircleQuestion : id === 'priority' ? Flag : id === 'reply' ? Globe : id === 'assign' ? UserCog : id === 'task' ? ListPlus : id === 'note' ? MessageSquareLock : id === 'invoice' ? Receipt : MANY_ICON[id]
+  const Icon = id === 'urgencyRegular' ? Undo2 : id === 'urgencyUnlock' ? Unlock : id === 'ship' ? Truck : id === 'ask' ? MessageCircleQuestion : id === 'priority' ? Flag : id === 'reply' ? Globe : id === 'assign' ? UserCog : id === 'task' ? ListPlus : id === 'note' ? MessageSquareLock : id === 'invoice' ? Receipt : MANY_ICON[id]
   return <Icon size={13} aria-hidden />
 }
 
