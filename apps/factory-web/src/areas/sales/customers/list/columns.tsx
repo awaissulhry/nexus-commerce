@@ -18,7 +18,7 @@ import type { PartyRow } from '../../../parties/_shared/api'
 import type { BarAct } from '../../../parties/_shared/bar'
 import { partyName, recordHref, SIDES } from '../../../parties/_shared/model'
 import { StatusPill } from '../../../parties/_shared/view/parts'
-import { CARD_ROLES, customerActsOf, CUSTOMER_HIDDEN_COLUMNS, CUSTOMERS_LIST_NS, needsChipsOf, officeDataOf, WIDE_ONLY_COLUMNS, workChipsOf, type CustomerRights, type CustomersWorkModel } from './model'
+import { CARD_NEEDS_MAX, CARD_ROLES, customerActsOf, CUSTOMER_HIDDEN_COLUMNS, CUSTOMERS_LIST_NS, needsChipsOf, officeDataOf, WIDE_ONLY_COLUMNS, workChipsOf, type CustomerRights, type CustomersWorkModel } from './model'
 import { ChipsCell, factsState, NextPromiseCell, PictureCell, type CellWords } from './view/cells' // F-CL-202
 import './list.css'
 
@@ -142,6 +142,13 @@ export function customerColumnsOf(input: CustomerColumnsInput, c: Translate, l: 
   const card: Record<string, CardFieldOverride<PartyRow>> = {}
   for (const [id, role] of Object.entries(CARD_ROLES)) card[id] = { role }
   if (unread) card.messages = { role: 'aside', draw: (row) => <CardThread row={row} prefix={prefix} unread={unread} c={c} /> }
+  // ---- F-CL-203: the card's head (the picture beside the Customer cell), ≤ 2 Needs us chips, ONE line of Work, the next promise ----
+  if (work) {
+    card.name = { role: 'title', draw: (row) => <span className="fw-cl-card-head"><PictureCell work={factsOf(row.id)} read={input.read ?? null} size="phone" words={words} onOpen={input.onPicture ?? null} /><CustomerName row={row} prefix={prefix} c={c} /></span> }
+    card.needs = { role: 'subtitle', draw: (row) => { const facts = factsOf(row.id); return stateOf(row.id) ?? (facts ? <ChipsCell chips={needsChipsOf(facts)} prefix={prefix} partyId={row.id} customer={partyName(row)} words={words} max={CARD_NEEDS_MAX} /> : null) } }
+    card.work = { role: 'subtitle', draw: (row) => { const facts = factsOf(row.id); return facts && !stateOf(row.id) ? <ChipsCell chips={workChipsOf(facts)} prefix={prefix} partyId={row.id} customer={partyName(row)} words={words} lines={1} empty={<span className="fw-cl-quiet">{c('work.noOrder')}</span>} /> : null } }
+    card.nextPromise = { role: 'subtitle', draw: (row) => { const facts = factsOf(row.id); return facts && facts.orders > 0 && !stateOf(row.id) ? <span className="fw-cl-card-promise">{c('col.nextPromise')} <NextPromiseCell work={facts} today={today} locale={locale} words={words} inline /></span> : null } }
+  }
   return {
     beforeName,
     nameColumn,

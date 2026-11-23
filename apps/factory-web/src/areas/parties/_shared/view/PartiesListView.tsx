@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Archive, Ban, Building2, ChevronDown, MoreHorizontal, Search, ShieldCheck, X } from 'lucide-react'
+import { Archive, ArrowUpDown, Ban, Building2, ChevronDown, MoreHorizontal, Search, ShieldCheck, X } from 'lucide-react'
 import { EmptyState, Menu, MetricStrip, type MenuItemDef, type Metric } from '@nexus/ui/components'
 import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
 import { Button, FilterChip, Input, Skeleton } from '@nexus/ui/primitives'
@@ -23,6 +23,7 @@ import {
   recordHref,
   rowActsOf, // F-CL-101
   sdiState,
+  sortCapped, // F-CL-203
   SIDES,
   TILE_VIEW,
   viesApplies,
@@ -341,10 +342,26 @@ function PartiesList({ model, actions, headActions, sideColumns, depth }: { mode
       {label} <X size={12} aria-hidden />
     </FilterChip>
   )
+  // F-CL-203 (K4, settle T3): a side's Sort ▾ — the order in words ("Most urgent first"), the rule under each choice; the server's
+  // cap said above the rows when it kept the code order.
+  const sort = model.sort ?? null
+  const sortMenu = sort ? (
+    <Menu
+      label={
+        <>
+          <ArrowUpDown size={13} aria-hidden /> {c(`sort.${sort.value}`)} <ChevronDown size={13} aria-hidden />
+        </>
+      }
+      triggerProps={{ className: 'nds-btn sm', 'aria-label': c('sort.aria', { order: c(`sort.${sort.value}`) }) }}
+      items={sort.choices.map((choice) => ({ id: `sort-${choice}`, label: c(`sort.${choice}`), checked: choice === sort.value, ...(choice === 'name' ? {} : { description: c(`sort.${choice}Hint`) }), onSelect: () => actions?.onSort?.(choice) }))}
+    />
+  ) : null
   // F-CL-101 (K12): the chips row holds the real filters only (the view is the Views ▾ label, the search is its field); Clear all with ≥ 2.
   const tools = (
     <>
       <Menu label={filterCount > 0 ? t('list.filtersCount', { count: filterCount }) : t('list.filters')} items={filterItems} />
+      {sortMenu}
+      {sort && sortCapped(sort) && <span className="fw-pty-hint">{c('sort.capped')}</span>}
       {chipCount > 0 && (
         <span className="fw-pty-chips" aria-label={t('list.activeFilters')}>
           {/* F-CL-202: the band's pressed door, with its why in the hint */}

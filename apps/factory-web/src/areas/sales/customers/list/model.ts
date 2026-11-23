@@ -41,10 +41,13 @@ export function officeDataOf(row: Pick<PartyRow, 'attention' | 'invoiceBlocked'>
 export const CUSTOMER_HIDDEN_COLUMNS: readonly string[] = Object.freeze(['roles', 'status', 'country', 'taxMode', 'vies', 'sdi', 'language'])
 
 /**
- * The phone card (10-design §4): the Customer cell is the card's title (name, code, status, office chip), the thread door sits
- * beside it with the row's ⋯ as the card's actions (the shared list pins it right), Overdue is a line; the rest stays off the card.
+ * The phone card (10-design §4; F-CL-203): the picture and the Customer cell are the card's title (name, code, status, office chip),
+ * the thread door sits beside it with the row's ⋯ as the card's actions (the shared list pins it right); under them at most two
+ * Needs us chips, ONE line of Work chips and the next promise; Overdue is a line; the picture column and Last order stay off the card.
  */
-export const CARD_ROLES: Readonly<Record<string, CardFieldRole>> = Object.freeze({ name: 'title', messages: 'aside', overdue: 'field' })
+export const CARD_ROLES: Readonly<Record<string, CardFieldRole>> = Object.freeze({ picture: 'hidden', name: 'title', needs: 'subtitle', work: 'subtitle', nextPromise: 'subtitle', lastOrder: 'hidden', messages: 'aside', overdue: 'field' })
+/** The card's Needs us chips at most (then "+n more"). */
+export const CARD_NEEDS_MAX = 2
 
 // ---- F-CL-102 / F-CL-104: what the reader may do on the list (each act reads its OWN right) ----------------------------------
 

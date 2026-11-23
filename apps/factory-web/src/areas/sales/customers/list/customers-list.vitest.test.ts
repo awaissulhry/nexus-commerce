@@ -66,7 +66,8 @@ describe('F-CL-102: the columns, what starts hidden, the phone card', () => {
     const built = customerColumnsOf({ prefix: '/w/DEMO', unread, overdue }, words, words)
     const fields = cardFieldsOf([built.nameColumn, ...built.leadingColumns, actions], built.card)
     expect(Object.fromEntries(fields.map((field) => [field.id, field.role]))).toEqual({ name: 'title', overdue: 'field', messages: 'aside', actions: 'actions' })
-    expect(CARD_ROLES).toEqual({ name: 'title', messages: 'aside', overdue: 'field' })
+    // F-CL-203: the work columns' places on the card (without orders.view they are not built).
+    expect(CARD_ROLES).toEqual({ picture: 'hidden', name: 'title', needs: 'subtitle', work: 'subtitle', nextPromise: 'subtitle', lastOrder: 'hidden', messages: 'aside', overdue: 'field' })
     // Never a labelled "Actions" line on the card (C1-B9).
     expect(fields.filter((field) => field.role === 'field').map((field) => field.label)).toEqual(['Overdue'])
   })
@@ -335,6 +336,38 @@ describe('F-CL-202 (C1-B1): Overdue read whole — every company, every page (at
   })
 })
 
+// ---- F-CL-203: Most urgent first, the capped notice, the final phone card ---------------------------------------------------------
+import { sortCapped } from '../../../parties/_shared/model'
+
+describe('F-CL-203: Sort ▾ and the phone card', () => {
+  it('the server’s cap is said when it kept the code order; the asked order says nothing', () => {
+    expect(sortCapped({ value: 'needs', sortedBy: 'code' })).toBe(true)
+    expect(sortCapped({ value: 'needs', sortedBy: 'needs' })).toBe(false)
+    expect(sortCapped({ value: 'name', sortedBy: null })).toBe(false)
+  })
+
+  it('the card: picture and Customer as the title, then ≤ 2 Needs us chips, ONE line of Work, the next promise; the thread door beside', () => {
+    const facts = { byParty: new Map([[row('MODA-DEMO').id, WORK]]), problem: null, repliesComplete: true, limited: false }
+    const built = customerColumnsOf({ prefix: '/w/DEMO', unread: {}, overdue: [{ colId: 'overdue', headerName: 'Overdue' }], work: facts, today: '2026-11-24', wide: true }, words, words)
+    const columns = [...built.beforeName, built.nameColumn, ...built.leadingColumns, { colId: 'actions', headerName: '', pinned: 'right' } as ColDef<PartyRow>]
+    expect(columns.map((column) => column.colId)).toEqual(['picture', 'name', 'needs', 'work', 'nextPromise', 'lastOrder', 'overdue', 'messages', 'actions'])
+    const fields = cardFieldsOf(columns, built.card)
+    expect(fields.map((field) => [field.id, field.role])).toEqual([
+      ['name', 'title'],
+      ['needs', 'subtitle'],
+      ['work', 'subtitle'],
+      ['nextPromise', 'subtitle'],
+      ['overdue', 'field'],
+      ['messages', 'aside'],
+      ['actions', 'actions'],
+    ])
+    // At 1440 (not wide) Last order and Overdue wait in Customise; the work columns show at first.
+    const narrow = customerColumnsOf({ prefix: '/w/DEMO', unread: {}, work: facts, today: '2026-11-24' }, words, words)
+    expect(narrow.hiddenColumns).toEqual(expect.arrayContaining(['lastOrder', 'overdue']))
+    expect(narrow.hiddenColumns).not.toContain('needs')
+  })
+})
+
 // ---- every word the folder names, in both languages (the shape of parties.vitest.test.ts :391) ---------------------------------
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 function sources(dir: string): string[] {
@@ -348,7 +381,7 @@ const SHARED = [fileURLToPath(new URL('../../../parties/_shared/view/PartiesList
 
 describe('every customers-list word the code names exists in it and en', () => {
   it('the `c(…)` keys of the folder and of the shared list, with the same placeholders', () => {
-    const keys = new Set<string>(['office.VIES', 'office.SDI', 'office.TAX', 'needs.toAnswer', 'band.needsNow' /* F-CL-202: named through groupWordOf / needsChipsOf */])
+    const keys = new Set<string>(['office.VIES', 'office.SDI', 'office.TAX', 'needs.toAnswer', 'band.needsNow' /* F-CL-202: named through groupWordOf / needsChipsOf */, ...['needs', 'needsHint', 'code', 'codeHint', 'name'].map((key) => `sort.${key}`) /* F-CL-203: Sort ▾ by its choices */])
     for (const file of [...sources(HERE), ...SHARED]) for (const match of readFileSync(file, 'utf8').matchAll(/\bc\(['"`]([A-Za-z0-9_.]+)['"`]/g)) keys.add(match[1]!)
     expect(keys.size).toBeGreaterThan(8)
     for (const key of keys) {

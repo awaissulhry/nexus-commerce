@@ -879,6 +879,9 @@ export function listQueryOf(base: PartyQuery, sort: PartySort | null, work: Part
   return { ...base, ...(sort && sort !== 'code' ? { sort } : {}), ...(work ? { work } : {}) }
 }
 
+/** F-CL-203: the server kept the code order (over its cap of customers for this order): the list says so above the rows. */
+export const sortCapped = (sort: { readonly value: PartySort; readonly sortedBy: PartySort | null }): boolean => sort.sortedBy !== null && sort.sortedBy !== sort.value
+
 /** The band's terms (K2): the list's own query minus its own door, its order and its page — so a band number is the rows its press shows. */
 export function bandTermsOf(query: PartyQuery): PartyQuery {
   const terms: PartyQuery = { ...query }

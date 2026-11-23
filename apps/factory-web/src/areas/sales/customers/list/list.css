@@ -328,3 +328,31 @@
   align-items: center;
   height: 100%;
 }
+
+/* ---- F-CL-203: the phone card — the picture beside the Customer cell, ≤ 2 Needs us chips, one line of Work, the next promise ---- */
+.fw-cl-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-cl-card-head .fw-cl-customer {
+  padding-block: 0;
+}
+
+.fw-cl-card-promise {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-cl-promise.is-inline {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: var(--nds-space-6);
+}

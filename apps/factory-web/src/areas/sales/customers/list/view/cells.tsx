@@ -118,13 +118,13 @@ export function factsState({ work, reading, problem, words }: { work: CustomerWo
 }
 
 /** Next promise: the date and "in 3 d" / "today"; never a past date; "No promise ahead", "No open order", or "—". */
-export function NextPromiseCell({ work, today, locale, words }: { work: CustomerWork; today: string; locale: Locale; words: CellWords }) {
+export function NextPromiseCell({ work, today, locale, words, inline = false }: { work: CustomerWork; today: string; locale: Locale; words: CellWords; inline?: boolean }) {
   const promise = nextPromiseOf(work, today)
   if (promise.kind === 'none') return <span className="fw-cl-quiet">—</span>
   if (promise.kind === 'noneAhead') return <span className="fw-cl-quiet">{words.c('prom.noneAhead')}</span>
   if (promise.kind === 'noOpen') return <span className="fw-cl-quiet">{words.c('prom.noOpen')}</span>
   return (
-    <span className="fw-cl-promise">
+    <span className={inline ? 'fw-cl-promise is-inline' : 'fw-cl-promise'}>
       <span className="fw-cl-promise-date">{formatDate(`${promise.date}T12:00:00Z`, { locale })}</span>
       <span className="fw-cl-quiet">{promise.days === 0 ? words.c('prom.today') : words.c('prom.in', { days: promise.days })}</span>
     </span>

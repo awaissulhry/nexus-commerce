@@ -163,5 +163,14 @@
   "export": {
     "heading": "I clienti di questa vista",
     "note": "In ordine di codice. A che punto è il lavoro non è nel file."
+  },
+  "sort": {
+    "needs": "Prima i più urgenti",
+    "needsHint": "(prima cosa tocca a noi, poi la nostra priorità, poi la data promessa)",
+    "code": "Codice",
+    "codeHint": "L’ordine di oggi: per codice",
+    "name": "Nome A–Z",
+    "aria": "Ordine dell’elenco: {order}",
+    "capped": "Più di 2 000 clienti in questa vista: mostrati per codice. Restringi la vista per vederli in questo ordine."
   }
 }

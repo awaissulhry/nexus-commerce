@@ -163,5 +163,14 @@
   "export": {
     "heading": "The customers of this view",
     "note": "In code order. Where the work stands is not in the file."
+  },
+  "sort": {
+    "needs": "Most urgent first",
+    "needsHint": "(waiting on us, then our priority, then promise date)",
+    "code": "Code",
+    "codeHint": "Today’s order: by code",
+    "name": "Name A–Z",
+    "aria": "Order of the list: {order}",
+    "capped": "More than 2 000 customers in this view: shown by code. Narrow the view to see them in this order."
   }
 }
