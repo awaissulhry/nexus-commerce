@@ -19,7 +19,7 @@ import { WORK_LAYOUT_KEY, workLayoutTransport } from './work-layout'
  */
 
 const en = createTranslator('en', messagesFor('en', ['orders-sheet'])['orders-sheet']!)
-const label = (column: string, room: 'wider' | 'widest') => en(`customise.${room}`, { column })
+const label = (column: string, room: 'wider') => en(`customise.${room}`, { column })
 
 /** The sheet's columns as it builds them before a host's preset: the built-in ones shown, the later ones opt-in. */
 const later = (colId: string, headerName: string): ColDef<OrderRow> => ({ colId, headerName, hide: true, context: { optIn: true } })
@@ -62,11 +62,11 @@ describe('F-CW-103: wide by the room the tab really has (S11)', () => {
 
   it('the tab measures its OWN root and hands the sheet its room — never the window, no change in the record frame', () => {
     const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
-    expect(tab).toContain('const measure = () => setRoom(workRoomOf(node.getBoundingClientRect().width))')
+    expect(tab).toContain('const measure = () => setJoined(workJoinedOf(node.getBoundingClientRect().width))') // cw fx8: how many columns the room holds
     expect(tab).toContain('const observer = new ResizeObserver(measure)')
     expect(tab).toContain('<div className="fw-cw" ref={workRoom.ref')
     expect(tab).toContain("workRoom.room === 'widest',")
-    expect(tab).toContain('workRoom.room /* F-CW-103 */),')
+    expect(tab).toContain('workRoom.joined /* F-CW-103; cw fx8: the columns join one at a time */),')
     // The tab's hook asks no window (no media query, no viewport width); the frame's own width state is not read or written.
     const hook = tab.slice(tab.indexOf('export function useWorkRoom'), tab.indexOf('// ---- end F-CW-103'))
     expect(hook).not.toMatch(/matchMedia|innerWidth|min-width/)
@@ -89,14 +89,15 @@ describe('F-CW-103: Customise tells the truth for the Work tab\'s set (S12; A1-B
       waitingOn: 'Waiting on · from a wider sheet',
       deposit: 'Deposit · from a wider sheet',
       shipped: 'Shipped · from a wider sheet',
-      priority: 'Priority · from the widest sheet',
-      units: 'Pieces · from the widest sheet',
-      orderDate: 'Ordered · from the widest sheet',
-      supervisor: 'Supervisor · from the widest sheet',
+      // cw fx8: one wording — every column that waits says "from a wider sheet" (they join one at a time).
+      priority: 'Priority · from a wider sheet',
+      units: 'Pieces · from a wider sheet',
+      orderDate: 'Ordered · from a wider sheet',
+      supervisor: 'Supervisor · from a wider sheet',
       status: 'Status',
     })
     // In a wider room a column that is on screen loses the note; the widest room has none left.
-    expect(labels(sheetFor('wide'))).toMatchObject({ waitingOn: 'Waiting on', deposit: 'Deposit', shipped: 'Shipped · from a wider sheet', supervisor: 'Supervisor · from the widest sheet' })
+    expect(labels(sheetFor('wide'))).toMatchObject({ waitingOn: 'Waiting on', deposit: 'Deposit', shipped: 'Shipped · from a wider sheet', supervisor: 'Supervisor · from a wider sheet' })
     expect(Object.values(labels(sheetFor('widest'))).filter((text) => String(text).includes('·'))).toEqual([])
     expect(ticked(sheetFor('widest'))).toEqual(ticked(base)) // the same set at every room: the room only decides what fits now
   })
@@ -109,7 +110,7 @@ describe('F-CW-103: Customise tells the truth for the Work tab\'s set (S12; A1-B
     }
     expect(facts('whereItIs', { hide: true, context: { optIn: true } })).toEqual({ hide: false, optIn: false, toolLabel: undefined })
     expect(facts('waitingOn', { hide: true, context: { optIn: true } })).toEqual({ hide: true, optIn: false, toolLabel: 'waitingOn · from a wider sheet' })
-    expect(facts('supervisor')).toEqual({ hide: true, optIn: false, toolLabel: 'supervisor · from the widest sheet' })
+    expect(facts('supervisor')).toEqual({ hide: true, optIn: false, toolLabel: 'supervisor · from a wider sheet' })
     expect(facts('brand')).toEqual({ hide: true, optIn: true, toolLabel: undefined })
     expect(facts('status')).toEqual({ hide: true, optIn: true, toolLabel: undefined })
     // What the column carried stays (the export's second fact, a Customise heading).
@@ -120,8 +121,9 @@ describe('F-CW-103: Customise tells the truth for the Work tab\'s set (S12; A1-B
     const own = { colId: 'whereItIs', hide: true, context: { optIn: true } }
     expect(withPreset(own, null, false)).toBe(own)
     // The rooms each waiting column names (the tab's own table).
-    expect(workLaterOf(WORK_SETS.base)).toEqual({ waitingOn: 'wider', deposit: 'wider', shipped: 'wider', priority: 'widest', units: 'widest', orderDate: 'widest', supervisor: 'widest' })
-    expect(workLaterOf(WORK_SETS.wider)).toEqual({ priority: 'widest', units: 'widest', orderDate: 'widest', supervisor: 'widest' })
+    // cw fx8: one wording — every column that waits says "from a wider sheet" (they join one at a time).
+    expect(workLaterOf(WORK_SETS.base)).toEqual({ waitingOn: 'wider', deposit: 'wider', shipped: 'wider', priority: 'wider', units: 'wider', orderDate: 'wider', supervisor: 'wider' })
+    expect(workLaterOf(WORK_SETS.wider)).toEqual({ priority: 'wider', units: 'wider', orderDate: 'wider', supervisor: 'wider' })
     expect(workLaterOf(WORK_SETS.widest)).toEqual({})
     expect(workLaterOf(WAITING_SET)).toMatchObject({ customerUrgency: 'wider', newMessages: 'wider' })
     expect(MONEY_PRESET.later).toEqual({ picture: 'wider', promised: 'wider', paid: 'wider' }) // F-CW-104: they return from the `wide` room
@@ -149,11 +151,12 @@ describe('F-CW-103: Customise tells the truth for the Work tab\'s set (S12; A1-B
   it('the words of the note in both languages', () => {
     for (const locale of LOCALES) {
       const s = createTranslator(locale, messagesFor(locale, ['orders-sheet'])['orders-sheet']!)
-      for (const room of ['wider', 'widest']) expect(s(`customise.${room}`, { column: 'X' }), `${locale} ${room}`).toMatch(/^X · /)
+      expect(s('customise.wider', { column: 'X' }), locale).toMatch(/^X · /)
+      expect(s('customise.widest', { column: 'X' }), locale).toBe('customise.widest') // cw fx8: the second wording is gone with the sets
     }
     const it_ = createTranslator('it', messagesFor('it', ['orders-sheet'])['orders-sheet']!)
-    expect([en('customise.wider', { column: 'Deposit' }), en('customise.widest', { column: 'Pieces' })]).toEqual(['Deposit · from a wider sheet', 'Pieces · from the widest sheet'])
-    expect([it_('customise.wider', { column: 'Acconto' }), it_('customise.widest', { column: 'Capi' })]).toEqual(['Acconto · da un foglio più largo', 'Capi · dal foglio più largo'])
+    expect([en('customise.wider', { column: 'Deposit' }), en('customise.wider', { column: 'Pieces' })]).toEqual(['Deposit · from a wider sheet', 'Pieces · from a wider sheet'])
+    expect([it_('customise.wider', { column: 'Acconto' }), it_('customise.wider', { column: 'Capi' })]).toEqual(['Acconto · da un foglio più largo', 'Capi · da un foglio più largo'])
   })
 })
 

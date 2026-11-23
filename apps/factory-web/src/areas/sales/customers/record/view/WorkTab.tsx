@@ -187,13 +187,14 @@ export const colsTermOf = (set: ColumnSet, notEqual: boolean): ColumnSet | null 
 /**
  * The rooms of the Work tab's sheet — its OWN width, never the window's (F-CW-103 measures it): `base` beside the open thread at 1440
  * (865 px), `wide` at 1920 beside the thread (1185), `wider` with the thread closed at 1440 (1314), `widest` with it closed at 1920
- * (1794). Closing the thread ADDS columns. Each set starts where its columns fit whole (the budget is pinned by a test): select 43 +
- * the set's widths + ⋯ 64 ≤ the room.
+ * (1794). Closing the thread ADDS columns. cw fx8: these four are the MEASURED rooms; between them the extra columns join one at a
+ * time, each where the set with it still leaves "Where it is" 275 px (WORK_JOINS, WORK_JOIN_AT below; the sums are pinned by a test).
  */
 export type WorkRoom = 'base' | 'wide' | 'wider' | 'widest'
 // cw fx7 (third look N-1): WORK_ROOMS — where each wider room starts — is summed from the sets' own widths, below WORK_MIN.
-export const workRoomOf = (width: number | null | undefined): WorkRoom =>
-  typeof width !== 'number' ? 'base' : width >= WORK_ROOMS.widest ? 'widest' : width >= WORK_ROOMS.wider ? 'wider' : width >= WORK_ROOMS.wide ? 'wide' : 'base'
+// cw fx8: the four rooms are the four MEASURED ones (865 · 1185 · 1314 · 1794 px); between them the columns join one at a time
+// (WORK_JOINS below) — a named room is the last of the four the joined columns have reached.
+export const workRoomOf = (width: number | null | undefined): WorkRoom => workRoomOfJoined(workJoinedOf(width))
 
 /** The row's own order on screen (the sheet's other columns follow in their own order; ⋯ last). */
 export const WORK_ORDER: readonly string[] = Object.freeze(['picture', 'number', 'whereItIs', 'promised', 'customerUrgency', 'priority', 'waitingOn', 'deposit', 'units', 'shipped', 'orderDate', 'supervisor', 'newMessages'])
@@ -251,26 +252,49 @@ export const WORK_ROOMS: Readonly<Record<Exclude<WorkRoom, 'base'>, number>> = O
   widest: workFixedOf(WORK_SETS.widest) + WORK_WHERE_ROOM + WORK_CARD_EDGES,
 })
 // ---- end cw fx7
+
+// ---- cw fx8 (fourth look: "no dead space"): the extra columns join ONE AT A TIME, each as soon as the room holds it ----
+/**
+ * The columns that join the base set, in the design's order: Waiting on · Deposit · Shipped · Priority · Pieces · Ordered ·
+ * Supervisor. They joined in three SETS (two, one, four at once), so just under a set's start all the spare width sat inside "Where
+ * it is": 588 px at a sheet of 1178, 756 px at 1764 for a column of chips that needs about 260. Now each joins alone, by the same
+ * sum the three rooms were given: the fixed widths of the set WITH it + the 275 px of "Where it is" + the card's 2 px. So "Where it
+ * is" is never under 275 px, and never holds more spare width than the next column would take.
+ */
+export const WORK_JOINS: readonly string[] = Object.freeze([...WORK_ADDS.wide, ...WORK_ADDS.wider, ...WORK_ADDS.widest])
+/** The set with the first `joined` of them on screen (0: the base set; all seven: the widest set). */
+export const workSetOf = (joined: number): readonly string[] => [...BASE_SET, ...WORK_JOINS.slice(0, Math.max(0, Math.min(WORK_JOINS.length, Math.floor(joined))))]
+/** The room (the tab's own width, px) from which each column is on screen, in the order they join. */
+export const WORK_JOIN_AT: readonly number[] = Object.freeze(WORK_JOINS.map((_, index) => workFixedOf(workSetOf(index + 1)) + WORK_WHERE_ROOM + WORK_CARD_EDGES))
+/** How many of them a room of this width holds (not measured yet: none). A room only ever adds columns as it grows. */
+export const workJoinedOf = (width: number | null | undefined): number => (typeof width !== 'number' ? 0 : WORK_JOIN_AT.filter((at) => width >= at).length)
+/** The four measured rooms as counts: the base set, + Waiting on · Deposit, + Shipped, all seven. */
+export const WORK_ROOM_JOINED: Readonly<Record<WorkRoom, number>> = Object.freeze({ base: 0, wide: WORK_ADDS.wide.length, wider: WORK_ADDS.wide.length + WORK_ADDS.wider.length, widest: WORK_JOINS.length })
+/** The last of the four measured rooms the joined columns have reached (the sheet's own `wide` flag and the Money columns read it). */
+export const workRoomOfJoined = (joined: number): WorkRoom => (joined >= WORK_ROOM_JOINED.widest ? 'widest' : joined >= WORK_ROOM_JOINED.wider ? 'wider' : joined >= WORK_ROOM_JOINED.wide ? 'wide' : 'base')
+// ---- end cw fx8
 /** Every column of the set keeps its width: the room left goes to Where it is (the chips), never to a stretched date. */
 export const WORK_MAX: Readonly<Record<string, number>> = Object.freeze(Object.fromEntries(Object.entries(WORK_MIN).filter(([id]) => id !== 'whereItIs' && id !== 'status')))
 
 type WorkPreset = NonNullable<OrdersListModel['preset']>
 /**
- * F-CW-103 (S12; 10-design §3.9): the columns of the tab's set that are not on screen in this room, and from which room they show —
- * what Customise says of each ("Waiting on · from a wider sheet", "Supervisor · from the widest sheet"): ticked, never cut to fit.
+ * F-CW-103 (S12; 10-design §3.9): the columns of the tab's set that are not on screen in this room — what Customise says of each
+ * ("Waiting on · from a wider sheet"): ticked, never cut to fit.
  */
-export function workLaterOf(shown: readonly string[]): Readonly<Record<string, 'wider' | 'widest'>> {
-  const later: Record<string, 'wider' | 'widest'> = {}
-  for (const id of WORK_SETS.widest) if (!shown.includes(id)) later[id] = WORK_ADDS.widest.includes(id) ? 'widest' : 'wider'
+// cw fx8: one wording — a column that waits says "· from a wider sheet" (the columns join one at a time now: there is no "widest
+// sheet" a group of them waits for).
+export function workLaterOf(shown: readonly string[]): Readonly<Record<string, 'wider'>> {
+  const later: Record<string, 'wider'> = {}
+  for (const id of WORK_SETS.widest) if (!shown.includes(id)) later[id] = 'wider'
   return Object.freeze(later)
 }
-/** One preset per room and kind, kept (the sheet rebuilds its columns only when the preset really changes). */
+/** One preset per number of joined columns and kind, kept (the sheet rebuilds its columns only when the preset really changes). */
 const PRESETS = new Map<string, WorkPreset>()
-function presetOf(room: WorkRoom, waits: boolean): WorkPreset {
-  const key = `${room}:${waits ? 'waits' : 'all'}`
+function presetOf(joined: number, waits: boolean): WorkPreset {
+  const key = `${joined}:${waits ? 'waits' : 'all'}`
   let preset = PRESETS.get(key)
   if (!preset) {
-    const shown = waits ? WAITING_SET : WORK_SETS[room]
+    const shown = waits ? WAITING_SET : Object.freeze(workSetOf(joined))
     // Chip 3 keeps its head, its tail goes to its tooltip. cw fx5 (walk W-6): in EVERY room — on the widest sheet the tail ("· due
     // 23/11/2026") is what the Deposit and Waiting on columns beside it already say, and with it the chips took two lines there.
     preset = Object.freeze({ shown, order: WORK_ORDER, min: WORK_MIN, max: WORK_MAX, dense: true, later: workLaterOf(shown) /* F-CW-103 */, pad: WORK_PAD, plainHeads: WORK_PLAIN_HEADS, wrapHeads: true /* cw fx5 (W-5) */ })
@@ -285,20 +309,22 @@ function presetOf(room: WorkRoom, waits: boolean): WorkPreset {
  * screen — and hands the sheet the set for that room: closing the thread ADDS columns, live. Never the window (the old rule: 1800 px
  * of viewport, so a closed thread at 1440 added nothing), and no change in the record frame. Until it is measured: the base set.
  */
-export function useWorkRoom(): { readonly ref: RefObject<HTMLDivElement | null>; readonly room: WorkRoom } {
+// cw fx8: `joined` — how many of the extra columns this room holds (they join one at a time); `room` — the last of the four measured
+// rooms reached (what the sheet's `wide` flag and the Money columns read, as before).
+export function useWorkRoom(): { readonly ref: RefObject<HTMLDivElement | null>; readonly room: WorkRoom; readonly joined: number } {
   const ref = useRef<HTMLDivElement>(null)
-  const [room, setRoom] = useState<WorkRoom>('base')
+  const [joined, setJoined] = useState(0)
   useLayoutEffect(() => {
     const node = ref.current
     if (!node) return
-    const measure = () => setRoom(workRoomOf(node.getBoundingClientRect().width))
+    const measure = () => setJoined(workJoinedOf(node.getBoundingClientRect().width))
     measure()
     if (typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(measure)
     observer.observe(node)
     return () => observer.disconnect()
   }, [])
-  return { ref, room }
+  return { ref, room: workRoomOfJoined(joined), joined }
 }
 // ---- end F-CW-103
 
@@ -309,9 +335,12 @@ export function useWorkRoom(): { readonly ref: RefObject<HTMLDivElement | null>;
  * chip of Where it is). F-CP-141: the money columns (MONEY_PRESET) when `money` — the Not equal view, or the Work · Money toggle
  * (review E5: money never unasked); its wide columns return from the `wide` room (F-CW-104).
  */
-export function workPreset(rows: RowView, waiting: 'us' | null, money = false, room: WorkRoom = 'base'): WorkPreset {
+// cw fx8: `room` — one of the four measured rooms by name, or the number of extra columns the room holds (the tab hands that: they
+// join one at a time). Waiting on us / Late swap Waiting on in only while NO column has joined: the first to join IS Waiting on.
+export function workPreset(rows: RowView, waiting: 'us' | null, money = false, room: WorkRoom | number = 'base'): WorkPreset {
   if (money) return MONEY_PRESET // F-CP-141
-  return presetOf(room, room === 'base' && (waiting === 'us' || rows === 'late'))
+  const joined = typeof room === 'number' ? Math.max(0, Math.min(WORK_JOINS.length, Math.floor(room))) : WORK_ROOM_JOINED[room]
+  return presetOf(joined, joined === 0 && (waiting === 'us' || rows === 'late'))
 }
 // ---- end F-CW-102
 
@@ -460,7 +489,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
       { id: IN_PRODUCTION_VIEW, label: o('rows.IN_PRODUCTION'), active: startedShown }, // F-CW-101 (S3): the started orders' door
       ...(price ? [{ id: NOT_EQUAL_VIEW, label: t('customers.work.view.notEqual'), active: notEqual }] : []), // F-CP-141
     ],
-    preset: workPreset(rows, waiting, columnSet === 'money' /* F-CP-141: the Not equal view opens on the money columns; F-CP-105: the toggle on every view */, workRoom.room /* F-CW-103 */),
+    preset: workPreset(rows, waiting, columnSet === 'money' /* F-CP-141: the Not equal view opens on the money columns; F-CP-105: the toggle on every view */, workRoom.joined /* F-CW-103; cw fx8: the columns join one at a time */),
     // F-CW-103 (S11): by the tab's own room (the sheet then asks no window). F-CW-104 (10-design §3.8): the Money set's wide columns
     // (Picture · Promised · Paid) return as soon as the row fits whole — from the `wide` room.
     wide: columnSet === 'money' ? workRoom.room !== 'base' : workRoom.room === 'widest',
