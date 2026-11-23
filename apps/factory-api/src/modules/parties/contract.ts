@@ -10,8 +10,10 @@ import {
   createPartyBody,
   defaultAddressesBody,
   listPartiesQuery,
+  PARTY_SORTS, // B-CL-002
   partyRow,
   partyView,
+  partyWorkBand, // B-CL-002
   statusBody,
   taxIdentityBody,
   updateAddressBody,
@@ -32,7 +34,19 @@ const party = input({ partyId: id() })
 
 export const listPartiesContract = defineContract({
   querystring: listPartiesQuery,
-  response: { 200: output({ parties: z.array(partyRow), nextCursor: z.string().nullable(), count: z.number().int() }) },
+  response: {
+    200: output({
+      parties: z.array(partyRow),
+      nextCursor: z.string().nullable(),
+      count: z.number().int(),
+      // ── B-CL-002 ──
+      /** The order the rows are in: the asked one, or `code` (needs / name over more than PARTY_SORT_CAP candidates, or no work reader). */
+      sortedBy: z.enum(PARTY_SORTS),
+      /** band=true: where the work of the view's customers stands (counts only); else null. */
+      band: partyWorkBand.nullable(),
+      // ── end B-CL-002 ──
+    }),
+  },
 })
 export const getPartyContract = defineContract({ params: party, response: one })
 export const createPartyContract = defineContract({ body: createPartyBody, response: created })

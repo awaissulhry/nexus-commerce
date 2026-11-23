@@ -39,6 +39,7 @@ import { idsTermOf, orderProductionColumns, waitingUsWhere } from './production-
 // B-CW-002 / B-CW-003 (customer Work tab): the `phase` term and the board's counts by phase — one rule.
 import { ORDER_PHASES, phaseCountsOf, type OrderPhase } from '@nexus/factory-domain/production-brand/stages'
 import { phaseWhere } from './production-columns'
+import type { SalesOrderPriorityLevel } from '@nexus/factory-domain/sales/orders-depth/rules' // B-CL-005
 import { asDay, dayOf, dayOrNull, LEFT } from './store'
 import type { OrderView } from './views'
 // B-OP-043 (order page N6, lines-derived): the orders a shipment carries.
@@ -105,6 +106,10 @@ export interface ListFilters {
   readonly priceMatch?: PriceMatch | undefined
   /** B-CW-002: the orders in one phase (factory-domain orderPhaseOf, as ./production-columns phaseWhere): the list, the totals and the file. */
   readonly phase?: OrderPhase | undefined
+  // ── B-CL-005 (customers list): the door of a customer's "Top n" / "High n" — our own level (office only, never the portal's) ──
+  /** The orders at this level of OUR priority (SalesOrder.priorityLevel): the list, the totals and the file. */
+  readonly priority?: SalesOrderPriorityLevel | undefined
+  // ── end B-CL-005 ──
 }
 
 export interface ListQuery extends ListFilters {
@@ -125,7 +130,8 @@ export interface ListQuery extends ListFilters {
 // B-TH-019: exported for the Customer switcher's counts (./customers), the one definition of late.
 export const lateWhere = (today: BusinessDate): Prisma.SalesOrderWhereInput => ({ status: { in: [...OPEN_STATUSES] }, promiseDate: { lt: asDay(today) } })
 // B-W2a-F2: the deposit's requests only (a before-shipping step's own request is the balance, not the deposit).
-const depositOpenWhere: Prisma.SalesOrderWhereInput = { depositRequired: true, depositRequests: { some: { status: 'OPEN', ...ORDER_DEPOSIT_ONLY } } }
+// B-CL-006: exported for the customers list's per-customer counts (./customer-work): the one definition of an open deposit.
+export const depositOpenWhere: Prisma.SalesOrderWhereInput = { depositRequired: true, depositRequests: { some: { status: 'OPEN', ...ORDER_DEPOSIT_ONLY } } }
 // B-W2b-323: the customer must accept a change (W2a's amendment flag, a priced change of B-W2b-309), the order still running.
 const reacceptWhere: Prisma.SalesOrderWhereInput = { reapprovalNeededAt: { not: null }, status: { notIn: ['CLOSED', 'CANCELLED'] } }
 
@@ -171,6 +177,7 @@ export function whereOf(context: OfficeContext, filters: ListFilters, today: Bus
       filters.kind === 'mtm' ? MTM_WHERE : {}, // B-SA-020
       filters.waiting === 'us' ? waitingUsWhere : {}, // B-SA-070
       filters.phase ? phaseWhere(filters.phase) : {}, // B-CW-002
+      filters.priority ? { priorityLevel: filters.priority } : {}, // B-CL-005
     ],
   }
 }
