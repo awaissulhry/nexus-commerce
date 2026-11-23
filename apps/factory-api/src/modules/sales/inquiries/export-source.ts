@@ -9,6 +9,7 @@ import { defineExportSource } from '../../../platform/exports/source'
 import { listIncoming } from '../incoming/incoming'
 // B-TH-094: the Production column's words.
 import { PRODUCTION_EXPORT_WORDS } from '@nexus/factory-domain/sales/inquiries/production-answer'
+import { ValidationError } from '@nexus/factory-domain/core/errors' // B-CQ-021
 
 /**
  * Sales › Incoming (`/sales/incoming`, the list of SCR-105; once Sales › Inquiries — the list key stays `sales.inquiries`, PR-11,
@@ -16,7 +17,7 @@ import { PRODUCTION_EXPORT_WORDS } from '@nexus/factory-domain/sales/inquiries/p
  * (modules/sales/incoming: requests, catalogue orders and change requests, each row checked against its own view permission over
  * its company and customer; the screen's order) and pages to the end by its cursor — no "first 200 rows" any more. The address is
  * the page's: `?tile=` (the saved rows), `?kind=`, `?status=`, `?source=`, `?party=` / `?prospect=1`, `?company=`, `?q=` (B-TH-235:
- * `?from=&to=` the days it came, `?outcome=` what a request became). The
+ * `?from=&to=` the days it came, `?outcome=` what a request became; B-CQ-021: `?kinds=` some kinds only). The
  * columns are the list's (kind, number, from, summary, source, products asked, quantity by size, pieces, target price, wanted
  * date, received, waiting, assigned to, status); the assignee by name, as the list says it (B-TH-016, Owner decision 4); the
  * target price only with the price grain (a request's own; the other kinds have none).
@@ -30,6 +31,19 @@ const prefixed = (prefix: string, words: Readonly<Record<string, { readonly it: 
 const hours = (minutes: number | null): number | null => (minutes === null ? null : Math.round((minutes / 60) * 10) / 10)
 /** The page's own read size (the API's most): the file asks for pages of up to this many rows. */
 const PAGE = 200
+
+// ---- B-CQ-021 (customer page › Quotes & incoming): `?kinds=REQUEST,CATALOGUE_ORDER` — some kinds only (the customer's tab). A wrong
+// one is refused in words, never dropped (a file of every kind for a screen of two).
+function kindsOf(address: URLSearchParams): IncomingKind[] | undefined {
+  const value = address.get('kinds')?.trim()
+  if (!value) return undefined
+  const parts = value.split(',').map((part) => part.trim())
+  if (parts.length > INCOMING_KINDS.length || parts.some((part) => !(INCOMING_KINDS as readonly string[]).includes(part))) {
+    throw new ValidationError('Not kinds of the list: the file would not hold the screen\'s rows.', [{ path: 'query/kinds', message: `Some of ${INCOMING_KINDS.join(', ')}, comma separated.` }])
+  }
+  return parts as IncomingKind[]
+}
+// ---- end B-CQ-021
 
 /** Every state's words in a language, by `state.<kind>.<state>` (a change request's with its kind: `state.CHANGE_REQUEST.<kind>.<state>`). */
 const CATALOGUE_STATES = ['SENT', 'ACCEPTED', 'REFUSED', 'WITHDRAWN'] as const
@@ -66,9 +80,11 @@ export const inquiries = defineExportSource<IncomingListQuery, IncomingRow>({
     const from = dayOf(address.get('from'))
     const to = dayOf(address.get('to'))
     const outcome = address.get('outcome') ?? ''
+    const kinds = kindsOf(address) // B-CQ-021
     return {
       ...((INCOMING_TILES as readonly string[]).includes(tile) ? { tile: tile as IncomingTile } : {}),
       ...((INCOMING_KINDS as readonly string[]).includes(kind) ? { kind: kind as IncomingKind } : {}),
+      ...(kinds ? { kinds } : {}),
       ...((INQUIRY_STATUSES as readonly string[]).includes(status) ? { status: status as InquiryStatus } : {}),
       ...((INQUIRY_SOURCES as readonly string[]).includes(source) ? { source: source as InquirySource } : {}),
       ...(prospect ? { prospect: true } : party ? { partyId: party } : {}),

@@ -48,8 +48,11 @@ import { contentWalledFor } from '../../../platform/files/content-wall'
  * customer A gets the picture of A's own style on A's records and nothing of another customer's.
  */
 
-/** The record kinds a picture is read for (the web part's `source`; B-SA-074: and a work order, POST /production/work-orders/pictures). */
-export type PictureSource = 'order' | 'quote' | 'request' | 'workorder'
+/**
+ * The record kinds a picture is read for (the web part's `source`; B-SA-074: and a work order, POST /production/work-orders/pictures;
+ * B-CQ-030: and a customer's portal order, POST /sales/order-requests/pictures).
+ */
+export type PictureSource = 'order' | 'quote' | 'request' | 'workorder' | 'portalOrder'
 
 /** The most ids one read takes (a page of a list; the POST /threads/unread precedent). */
 export const PICTURES_MAX = 200
@@ -143,6 +146,16 @@ const READS: Readonly<Record<PictureSource, (client: Client, actor: Actor, ids: 
     return seen.map((row) => ({ id: row.id, styleIds: [row.styleId] }))
   },
   // ── end B-SA-074
+  // ── B-CQ-030 (customer page › Quotes & incoming, L12, Q3; 13-backend §5): a customer's portal order — sent, decided OR still a draft
+  // (the drafts section draws it too) — walled exactly as the drafts read and Incoming (orders.view over its company and customer): its
+  // first line that names a style (a described or made-to-measure line names none: skipped; none left: no picture, the placeholder).
+  async portalOrder(client, actor, ids) {
+    const seen = await client.portalOrderRequest.findMany({ where: { AND: [scopeWhere(actor, ORDERS_VIEW, { company: 'companyId', party: 'partyId' }) as Prisma.PortalOrderRequestWhereInput, { id: { in: [...ids] } }] }, select: { id: true } })
+    const visible = seen.map((row) => row.id)
+    const lines = visible.length > 0 ? await client.portalOrderRequestLine.findMany({ where: { requestId: { in: visible }, styleId: { not: null } }, select: { requestId: true, styleId: true }, orderBy: [{ requestId: 'asc' }, { seq: 'asc' }] }) : []
+    return stylesPerRecord(visible, lines.map((line) => ({ recordId: line.requestId, styleId: line.styleId })))
+  },
+  // ── end B-CQ-030
 })
 
 /** The office reader (the routes are office only; a portal, floor or link session never reads these). */
@@ -153,7 +166,7 @@ function officeActorOf(caller: CommandCaller): Actor {
   return actorOf(context)
 }
 
-/** POST /sales/{orders,quotes,inquiries}/pictures: the small pictures of the asked records the reader may see (see the file's head). */
+/** POST /sales/{orders,quotes,inquiries,order-requests}/pictures: the small pictures of the asked records the reader may see (see the file's head). */
 export async function recordPictures(caller: CommandCaller, source: PictureSource, ids: readonly string[]): Promise<{ pictures: SmallPicture[]; asOf: string }> {
   const actor = officeActorOf(caller)
   if (new Set(ids).size !== ids.length) throw new ValidationError('Each id once: the same record was asked twice.', [{ path: 'body', message: 'Each id once.' }])

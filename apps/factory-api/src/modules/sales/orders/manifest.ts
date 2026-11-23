@@ -44,6 +44,9 @@ export const manifest = defineManifest({
   'GET /sales/orders/:orderId/deliveries': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   // B-TH-019: the Customer switcher's numbers (the customers with orders the reader may see; scopeWhere like the list).
   'GET /sales/orders/customers': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  // B-CL-003 (customers list): where each customer's work stands, for a page of customers (scopeWhere like the list; an id the
+  // reader's parties or orders do not reach is absent; replies with threads.read).
+  'GET /sales/orders/customers/work': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   // B-SA-011: the small pictures of a page of orders (scopeWhere like the list in one query; each file with files.read).
   'POST /sales/orders/pictures': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   // B-TH-058: the overall view's totals (scopeWhere like the list: a customer-limited person reads only its customers' figures).

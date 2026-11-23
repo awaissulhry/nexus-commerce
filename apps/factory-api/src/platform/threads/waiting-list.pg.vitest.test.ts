@@ -17,6 +17,7 @@ import { LOCAL_COOKIE_SECRET } from '../../env'
 import { startHarness, type Harness } from '../auth/sessions/testing/harness'
 import { THREAD_RECORDS, useThreadRecords } from './records'
 import { ensureThread, writeMessage } from './threads'
+import { waitingRowsOf } from './waiting-list' // B-CL-004
 
 /**
  * B-TH-047 — conversations waiting on us across records (threads plan TH-3, N10, N25, X-G06; wall W27, W30) through the app's real
@@ -194,3 +195,29 @@ describe('B-TH-047 conversations waiting on us across records', () => {
     for (const type of Object.keys(THREAD_RECORDS)) expect(Object.hasOwn(THREAD_VIEW_GATES, type), `${type} has a view gate`).toBe(true)
   })
 })
+
+// ── B-CL-004 (customers list, 13-backend §5): the read narrowed to a page of customers (`partyIds`); the wall per row is untouched ──
+describe('B-CL-004 waitingRowsOf narrowed to some customers (partyIds)', () => {
+  /** The waiting read as the person, narrowed to these customers (undefined: every customer, as before). */
+  const rowsFor = async (session: string, partyIds: readonly string[] | undefined) => {
+    const context = { ...SESSIONS[session]!, requestId: newId() } as RequestContext
+    const answer = await callerFor(h.database, context).withClient((client) => waitingRowsOf(client, context, { side: 'CUSTOMER', partyIds }))
+    return { complete: answer.complete, records: answer.rows.map((row) => row.recordId), parties: [...new Set(answer.rows.map((row) => row.partyId))] }
+  }
+
+  it('partyIds=[P1]: P1’s conversations only, oldest first; [P3]: P3’s; both: the same as no term; a supplier: none on the customer side', async () => {
+    expect((await rowsFor('ada', [P1])).records).toEqual([records.quoteA, records.orderA])
+    expect((await rowsFor('ada', [P3])).records).toEqual([records.quoteB])
+    expect((await rowsFor('ada', [P1, P3])).records).toEqual((await rowsFor('ada', undefined)).records)
+    expect((await rowsFor('ada', undefined)).records).toEqual([records.quoteA, records.quoteB, records.orderA])
+    expect((await rowsFor('ada', [P2])).records).toEqual([])
+    expect((await rowsFor('ada', [P1])).complete).toBe(true)
+  })
+
+  it('a reader limited to P1 naming P3 gets none; naming both, P1’s only', async () => {
+    expect((await rowsFor('lina', [P3])).records).toEqual([])
+    expect((await rowsFor('lina', [P1, P3])).parties).toEqual([P1])
+  })
+})
+// ── end B-CL-004 ──
+

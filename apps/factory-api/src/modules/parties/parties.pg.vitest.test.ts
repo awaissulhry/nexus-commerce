@@ -84,6 +84,8 @@ const PEOPLE: Record<string, Person> = {
   companyOne: { tenantId: tenantA, permissions: [VIEW, MANAGE, VIES, ...IMPORTS], companies: [companyA1] },
   oneCustomer: { tenantId: tenantA, permissions: [VIEW, MANAGE, ...IMPORTS], companies: 'all', parties: limitedTo },
   otherTenant: { tenantId: tenantB, permissions: [VIEW, MANAGE, VIES], companies: 'all' },
+  // B-CL-002: a reader of the parties AND the orders (the work terms are hers; this tenant has no order).
+  ordersReader: { tenantId: tenantA, permissions: [VIEW, 'orders.view'], companies: 'all' },
 }
 const IDS: Record<string, string> = Object.fromEntries(Object.keys(PEOPLE).map((key) => [key, newId()]))
 const sessionOf = (key: string): SessionContext | null => {
@@ -664,3 +666,103 @@ describe('the customers and suppliers import (SCM-289, PLT-176)', () => {
     expect(await admin('SELECT code, "companyId" FROM "Party" WHERE code = $1', ['IMP-C1'])).toEqual([{ code: 'IMP-C1', companyId: companyA1 }])
   })
 })
+
+// ── B-CL-002 / B-CL-008 (customers list, 13-backend §2; 15-steps S1.1): the new terms of GET /parties, the tax mode in force ──
+describe('GET /parties: the order, the work terms and the tax mode in force (B-CL-002, B-CL-008)', () => {
+  const list = async (session: string, query: string): Promise<Json> => {
+    const response = await call(session, 'GET', `/parties?${query}`)
+    expect(response.statusCode, response.body).toBe(200)
+    return response.json()
+  }
+  const codes = (answer: Json): string[] => (answer.parties as Json[]).map((row) => row.code as string)
+
+  it('C1-B2: the Tax mode filter matches the identity IN FORCE, never an older one (as the Tax mode column reads it)', async () => {
+    // CL-TAX-MOVED: an EU business (DE) since 2020, an Italian business since 2025 — the identity in force today is IT_B2B.
+    const moved = await create('sales', { code: 'cl-tax-moved', legalName: 'Seed Moved Customer S.r.l.', roles: ['CUSTOMER'], taxIdentity: { country: 'DE', taxMode: 'EU_B2B', vatNumber: '100000027', validFrom: '2020-01-01' } })
+    const vat = partitaIva('1000000077')
+    const added = await call('sales', 'POST', `/parties/${moved.id}/tax-identities`, { country: 'IT', taxMode: 'IT_B2B', vatNumber: vat, fiscalCode: vat, sdiRecipientCode: 'abc1234', validFrom: '2025-01-01' })
+    expect(added.statusCode, added.body).toBe(201)
+    const italian = await list('sales', 'taxMode=IT_B2B&status=ALL&limit=200')
+    expect(codes(italian)).toContain('CL-TAX-MOVED')
+    expect((italian.parties as Json[]).find((row) => row.code === 'CL-TAX-MOVED')).toMatchObject({ taxMode: 'IT_B2B' })
+    // Every row the filter keeps says that mode in its own column (one rule), and the count is the kept rows.
+    expect((italian.parties as Json[]).every((row) => row.taxMode === 'IT_B2B')).toBe(true)
+    expect(italian.count).toBe(italian.parties.length)
+    const eu = await list('sales', 'taxMode=EU_B2B&status=ALL&limit=200')
+    expect(codes(eu)).not.toContain('CL-TAX-MOVED')
+    expect(codes(eu)).toEqual(expect.arrayContaining(['DE-OK', 'DE-NO']))
+    expect((eu.parties as Json[]).every((row) => row.taxMode === 'EU_B2B')).toBe(true)
+    // Paged by code with its own count on every page.
+    const first = await list('sales', 'taxMode=EU_B2B&status=ALL&limit=1')
+    const second = await list('sales', `taxMode=EU_B2B&status=ALL&limit=1&cursor=${first.nextCursor}`)
+    expect([...codes(first), ...codes(second)]).toEqual(codes(eu).slice(0, 2))
+    expect([first.count, second.count, first.sortedBy]).toEqual([eu.count, eu.count, 'code'])
+  })
+
+  it('sort=name: A–Z by trade name, else legal name (letter case aside), then code; page by page with limit=1 is the one page', async () => {
+    const all = await list('viewer', 'status=ALL&sort=name&limit=200')
+    expect(all.sortedBy).toBe('name')
+    expect(all.band).toBeNull()
+    const collator = new Intl.Collator('it', { sensitivity: 'base', numeric: true })
+    const nameOf = (row: Json): string => (row.tradeName as string | null) ?? (row.legalName as string)
+    const rows = all.parties as Json[]
+    expect(rows.length).toBeGreaterThan(3)
+    const sorted = [...rows].sort((a, b) => collator.compare(nameOf(a), nameOf(b)) || (a.code < b.code ? -1 : a.code > b.code ? 1 : 0))
+    expect(codes(all)).toEqual(sorted.map((row) => row.code))
+    const paged: string[] = []
+    let cursor: string | null = null
+    for (let guard = 0; guard <= rows.length; guard++) {
+      const page: Json = await list('viewer', `status=ALL&sort=name&limit=1${cursor ? `&cursor=${cursor}` : ''}`)
+      expect(page.count).toBe(all.count)
+      paged.push(...codes(page))
+      cursor = page.nextCursor
+      if (!cursor) break
+    }
+    expect(paged).toEqual(codes(all))
+  })
+
+  it('a cursor of another order is refused in words (400): a code cursor with sort=name, a name cursor on the code order', async () => {
+    const byCode = await list('viewer', 'status=ALL&limit=1')
+    const refused = await call('viewer', 'GET', `/parties?status=ALL&sort=name&limit=1&cursor=${byCode.nextCursor}`)
+    expect(refused.statusCode).toBe(400)
+    expect(refused.json().error.message).toBe('The cursor is not valid.')
+    const byName = await list('viewer', 'status=ALL&sort=name&limit=1')
+    expect((await call('viewer', 'GET', `/parties?status=ALL&limit=1&cursor=${byName.nextCursor}`)).statusCode).toBe(400)
+    expect((await call('viewer', 'GET', '/parties?sort=newest')).statusCode).toBe(400)
+    expect((await call('viewer', 'GET', '/parties?work=SOMEWHERE')).statusCode).toBe(400)
+    expect((await call('viewer', 'GET', '/parties?band=yes')).statusCode).toBe(400)
+  })
+
+  it('work, sort=needs and band=true read orders: refused in words to a reader without orders.view (names no role); code and name stay hers', async () => {
+    for (const query of ['work=NOT_SENT', 'sort=needs', 'band=true', 'role=CUSTOMER,BRAND&band=true&limit=1']) {
+      const response = await call('viewer', 'GET', `/parties?${query}`)
+      expect(response.statusCode, query).toBe(403)
+      expect(response.json().error.message, query).toBe("Seeing where customers' work stands needs the right to see orders.")
+    }
+    expect((await call('viewer', 'GET', '/parties?sort=code')).statusCode).toBe(200)
+    expect((await call('viewer', 'GET', '/parties?sort=name')).statusCode).toBe(200)
+    expect((await call('viewer', 'GET', '/parties?band=false')).statusCode).toBe(200)
+  })
+
+  it('a reader of orders: the sales module\'s reader is registered at boot — needs, band and work answer (no order here: no work, every group 0)', async () => {
+    const needs = await list('ordersReader', 'role=CUSTOMER,BRAND&sort=needs&band=true&limit=200')
+    expect(needs.sortedBy).toBe('needs')
+    // Nobody has work in this tenant: every customer sits in the "no facts" place, so the order falls to the code.
+    expect(codes(needs)).toEqual([...codes(needs)].sort())
+    expect(needs.band.groups.map((group: Json) => group.group)).toEqual(['NEEDS_US', 'NOT_SENT', 'NOT_STARTED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'DONE'])
+    expect(needs.band.groups.every((group: Json) => group.customers === 0)).toBe(true)
+    expect(needs.band).toMatchObject({ needsUs: { requests: 0, replies: 0, late: 0, repliesComplete: true }, notSent: { waitsForYes: 0, waitsForDeposit: 0 }, limited: false })
+    expect(await list('ordersReader', 'role=CUSTOMER,BRAND&work=NOT_SENT')).toMatchObject({ parties: [], count: 0, nextCursor: null })
+  })
+
+  it('the default path is unchanged: Suppliers (role=SUPPLIER,SUBCONTRACTOR,CARRIER) answers the same rows by code, sortedBy code, no band', async () => {
+    const plain = await list('viewer', 'role=SUPPLIER,SUBCONTRACTOR,CARRIER&limit=200')
+    expect(plain.sortedBy).toBe('code')
+    expect(plain.band).toBeNull()
+    expect(plain.parties.length).toBeGreaterThan(0)
+    expect(plain.count).toBe(plain.parties.length)
+    expect(await list('viewer', 'role=SUPPLIER,SUBCONTRACTOR,CARRIER&limit=200&sort=code')).toEqual(plain)
+    expect(await list('viewer', 'role=SUPPLIER,SUBCONTRACTOR,CARRIER&limit=200&band=false')).toEqual(plain)
+  })
+})
+// ── end B-CL-002 / B-CL-008 ──
