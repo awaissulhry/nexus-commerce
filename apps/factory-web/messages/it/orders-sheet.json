@@ -56,12 +56,12 @@
     "ship": "Apri i DDT di {number}",
     "invoiceOne": "Apri la fattura {number}",
     "invoices": "Apri le fatture di {number}",
-    "quote": "Apri l'offerta {number}"
+    "quote": "Apri il preventivo {number}"
   },
   "held": {
     "invoices": "Serve il permesso delle fatture",
     "shipping": "Serve il permesso delle spedizioni",
-    "quotes": "Serve il permesso delle offerte",
+    "quotes": "Serve il permesso dei preventivi",
     "workorders": "Serve il permesso degli ordini di lavoro"
   },
   "invoiced": {

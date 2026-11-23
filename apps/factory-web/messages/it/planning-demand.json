@@ -21,7 +21,7 @@
     "sitesFailed": "Impossibile caricare le sedi",
     "truncated": "Sono mostrati i primi {count} modelli-colore per codice: cerca un modello per vedere gli altri.",
     "unplacedTitle": "Parte della domanda non ha una sede di produzione",
-    "unplaced": "{orders} righe d’ordine, {quotes} righe d’offerta e {rounds} giri campioni di questa azienda non indicano una sede mentre ha più stabilimenti: qui non sono contati."
+    "unplaced": "{orders} righe d’ordine, {quotes} righe di preventivo e {rounds} giri campioni di questa azienda non indicano una sede mentre ha più stabilimenti: qui non sono contati."
   },
   "bucket": {
     "WEEK": "Settimana",
@@ -55,7 +55,7 @@
   },
   "tile": {
     "ORDERS": "Ordini confermati",
-    "QUOTES": "Offerte probabili",
+    "QUOTES": "Preventivi probabili",
     "MTM": "Capi su misura",
     "SAMPLES": "Campioni e prototipi",
     "REMAKES": "Rifacimenti",
@@ -64,7 +64,7 @@
   },
   "layer": {
     "ORDERS": "Ordini confermati",
-    "QUOTES": "Offerte probabili",
+    "QUOTES": "Preventivi probabili",
     "MTM": "Su misura",
     "SAMPLES": "Campioni e prototipi",
     "REMAKES": "Rifacimenti",
@@ -74,7 +74,7 @@
   "layers": {
     "label": "Livelli nella griglia",
     "lastHeld": "Un livello resta acceso: accendine prima un altro.",
-    "quotesNote": "Le offerte non sono ancora vinte: mai acquistate e mai nel totale fermo.",
+    "quotesNote": "I preventivi non sono ancora vinti: mai acquistati e mai nel totale fermo.",
     "held": {
       "BRANDS": "La domanda dei marchi non è ancora nota: arriva con i marchi di Nexus Commerce.",
       "FORECAST": "La previsione non è ancora nota: arriva più avanti."
@@ -83,8 +83,8 @@
   "layerCount": {
     "ORDERS_one": "{count} da ordini",
     "ORDERS_other": "{count} da ordini",
-    "QUOTES_one": "{count} da offerte",
-    "QUOTES_other": "{count} da offerte",
+    "QUOTES_one": "{count} da preventivi",
+    "QUOTES_other": "{count} da preventivi",
     "MTM_one": "{count} su misura",
     "MTM_other": "{count} su misura",
     "SAMPLES_one": "{count} campione",
@@ -121,7 +121,7 @@
     "noMatch": "Nessun modello corrisponde",
     "noMatchBody": "Niente in questo orizzonte per “{q}”.",
     "empty": "Nessuna domanda in questo orizzonte",
-    "emptyBody": "Nessun ordine, offerta, giro campioni o rifacimento aperto aspetta in questa sede.",
+    "emptyBody": "Nessun ordine, preventivo, giro campioni o rifacimento aperto aspetta in questa sede.",
     "past": "In ritardo",
     "none": "Senza data",
     "later": "Più avanti",
@@ -172,8 +172,8 @@
   "kindCount": {
     "ORDER_LINE_one": "{count} ordine",
     "ORDER_LINE_other": "{count} ordini",
-    "QUOTE_LINE_one": "{count} offerta",
-    "QUOTE_LINE_other": "{count} offerte",
+    "QUOTE_LINE_one": "{count} preventivo",
+    "QUOTE_LINE_other": "{count} preventivi",
     "MTM_UNIT_one": "{count} capo su misura",
     "MTM_UNIT_other": "{count} capi su misura",
     "SAMPLE_ROUND_one": "{count} giro campioni",
@@ -189,7 +189,7 @@
   },
   "kind": {
     "ORDER_LINE": "Riga d’ordine",
-    "QUOTE_LINE": "Riga d’offerta",
+    "QUOTE_LINE": "Riga di preventivo",
     "MTM_UNIT": "Capo su misura",
     "SAMPLE_ROUND": "Giro campioni",
     "REWORK": "Rilavorazione",

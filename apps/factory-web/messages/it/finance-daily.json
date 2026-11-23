@@ -464,7 +464,7 @@
       "INVOICE": "La data della fattura",
       "ORDER": "L’ordine (l’acconto)"
     },
-    "explain": "La libreria dei termini: come pagano i clienti, stampati su offerte, ordini e fatture. Le offerte copiano i termini predefiniti del cliente; le fatture ne prendono le scadenze.",
+    "explain": "La libreria dei termini: come pagano i clienti, stampati su preventivi, ordini e fatture. I preventivi copiano i termini predefiniti del cliente; le fatture ne prendono le scadenze.",
     "failed": "Non è stato possibile caricare i termini di pagamento",
     "from": "A partire da",
     "held": {
@@ -474,7 +474,7 @@
       "noManage": "Per modificare i termini serve il permesso di gestire i termini di pagamento."
     },
     "inUseBody": "Le loro regole restano come sono, così documenti e scadenze coincidono sempre. I nomi si possono cambiare; per regole nuove, salvali come nuovi termini.",
-    "inUseTitle": "Questi termini sono usati da offerte o ordini",
+    "inUseTitle": "Questi termini sono usati da preventivi o ordini",
     "instalments": "Rate",
     "keyAdd": "Aggiungi termini",
     "method": "Modalità di pagamento",
@@ -501,7 +501,7 @@
       "fix": "Correggi prima i campi segnati.",
       "forbidden": "Il tuo ruolo non può modificare i termini di pagamento.",
       "from": "Scegli l’evento da cui si conta.",
-      "inUse": "Questi termini sono usati da offerte o ordini: le regole sono fisse. Salvali invece come nuovi termini.",
+      "inUse": "Questi termini sono usati da preventivi o ordini: le regole sono fisse. Salvali invece come nuovi termini.",
       "invalid": "Qualcosa di scritto non è accettato: controlla i campi.",
       "method": "Scegli una modalità di pagamento.",
       "moved": "Qualcuno ha cambiato questi termini nel frattempo: rileggi.",

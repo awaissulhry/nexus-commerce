@@ -76,7 +76,7 @@
     "title": "Elimina la bozza DEMO-7",
     "consequence": "La bozza e le sue righe vengono eliminate.",
     "finding": "Nessun ordine la usa",
-    "unknown": "Offerte aperte",
+    "unknown": "Preventivi aperti",
     "sideEffect": "Il cliente non viene avvisato.",
     "acknowledge": "Capisco che non si può annullare.",
     "verb": "Elimina bozza"

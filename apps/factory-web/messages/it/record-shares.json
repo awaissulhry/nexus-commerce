@@ -46,7 +46,7 @@
     "noRecordRight": "Per invitare a questo record serve anche il permesso di modificarlo.",
     "reading": "Aspetta che gli inviti siano letti.",
     "busy": "Un momento: stiamo salvando l'ultima modifica.",
-    "ALL_COMPANIES": "Questo record è condiviso da tutte le aziende: invita il partner sulla sua offerta o sul suo ordine.",
+    "ALL_COMPANIES": "Questo record è condiviso da tutte le aziende: invita il partner sul suo preventivo o sul suo ordine.",
     "NO_PARTY": "Questo record non ha cliente, fornitore, laboratorio o marchio: non c'è nessun esterno da invitare.",
     "revoked": "Questo invito è stato revocato.",
     "ended": "Questo invito è scaduto: invitalo di nuovo per un nuovo periodo."

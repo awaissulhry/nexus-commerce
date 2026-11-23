@@ -461,8 +461,8 @@
           "what": "Ogni ora: le foto delle misure arrivano al giorno di eliminazione e vengono eliminate."
         },
         "quoteValidity": {
-          "name": "Validità delle offerte",
-          "what": "Ogni giorno alle 06:15: le offerte inviate oltre l'ultimo giorno scadono e i clienti vengono avvisati una volta."
+          "name": "Validità dei preventivi",
+          "what": "Ogni giorno alle 06:15: i preventivi inviati oltre l'ultimo giorno scadono e i clienti vengono avvisati una volta."
         }
       },
       "shipping": {

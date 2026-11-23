@@ -431,7 +431,7 @@
       "NCR_DECISION.WAITING_APPROVAL": "La NC {number} aspetta l'approvazione della sua decisione {code} per {quantity}.",
       "NCR_DECISION.blocks": "Non viene eseguita, e la NC non è decisa, finché un'altra persona non la approva.",
       "PORTAL_ORDER_REQUEST.SENT": "La richiesta d'ordine {number} di {customer} aspetta la tua decisione: {pieces} pezzi su {lines} righe.",
-      "PORTAL_ORDER_REQUEST.blocks": "Non è un ordine finché non ne fai l'ordine o un'offerta; il cliente aspetta la risposta.",
+      "PORTAL_ORDER_REQUEST.blocks": "Non è un ordine finché non ne fai l'ordine o un preventivo; il cliente aspetta la risposta.",
       "ORDER_CHANGE_REQUEST.CHANGE_one": "{customer} chiede di modificare {count} taglia dell'ordine {number}.",
       "ORDER_CHANGE_REQUEST.CHANGE_other": "{customer} chiede di modificare {count} taglie dell'ordine {number}.",
       "ORDER_CHANGE_REQUEST.CHANGE_DELIVERY": "{customer} chiede di modificare la consegna dell'ordine {number}.",
@@ -985,7 +985,7 @@
     "cancel": "Annulla",
     "recordKind": {
       "Certificate": "Certificato",
-      "Quote": "Offerta",
+      "Quote": "Preventivo",
       "SalesOrder": "Ordine",
       "PurchaseOrder": "Ordine di acquisto"
     },

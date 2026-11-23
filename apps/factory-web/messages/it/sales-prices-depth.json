@@ -100,7 +100,7 @@
     "keptTyped": "Parte dal prezzo scritto {price} ({reason})",
     "keptDiscount": "sconto {pct}",
     "net": "Nuovo netto unitario",
-    "netHint": "Sulla base dell'offerta, come lo mostra la riga.",
+    "netHint": "Sulla base del preventivo, come lo mostra la riga.",
     "reason": "Motivo",
     "reasonHint": "Dai motivi di modifica prezzo (Impostazioni vendite).",
     "reasonPick": "Scegli un motivo…",
@@ -198,7 +198,7 @@
     "overhead": "Costi generali",
     "total": "Costo al pezzo",
     "known": "Noto finora",
-    "kept": "Costo che tiene l'offerta",
+    "kept": "Costo che tiene il preventivo",
     "today": "Scheda costi oggi",
     "incomplete": "Non ancora completo",
     "changedUp": "+ {amount} dal calcolo",
@@ -245,7 +245,7 @@
   },
   "discount": {
     "title": "Lo sconto sui documenti",
-    "sub": "Cosa stampano le offerte e le conferme dei clienti di questo listino.",
+    "sub": "Cosa stampano i preventivi e le conferme dei clienti di questo listino.",
     "net": "Solo il prezzo netto",
     "show": "Il prezzo di listino e lo sconto",
     "doneShow": "I documenti ora mostrano il prezzo di listino e lo sconto.",
@@ -258,7 +258,7 @@
     "ofVersion": "Le regole della versione {revision}.",
     "add": "Aggiungi uno scaglione",
     "addTitle": "Aggiungi uno scaglione di quantità",
-    "addBody": "I pezzi sono tutte le righe di un'offerta o di un ordine prezzate da questo prezzo.",
+    "addBody": "I pezzi sono tutte le righe di un preventivo o di un ordine prezzate da questo prezzo.",
     "addGo": "Aggiungi lo scaglione",
     "everyPrice": "Ogni prezzo (uno sconto)",
     "everyColour": "ogni colore",
@@ -287,7 +287,7 @@
     "remove_other": "Togli {count} scaglioni",
     "removeTitle_one": "Togliere {count} scaglione?",
     "removeTitle_other": "Togliere {count} scaglioni?",
-    "removeBody": "I loro prezzi tornano al prezzo di listino a ogni quantità. Le offerte già prezzate tengono i loro prezzi.",
+    "removeBody": "I loro prezzi tornano al prezzo di listino a ogni quantità. I preventivi già prezzati tengono i loro prezzi.",
     "added_one": "Scaglione da {count} pezzo aggiunto.",
     "added_other": "Scaglione da {count} pezzi aggiunto.",
     "removed_one": "{count} scaglione tolto.",
@@ -374,9 +374,9 @@
       "SURCHARGE": "Maggiorazione piccola serie"
     },
     "actionHint": {
-      "WARN": "L'offerta e l'ordine lo dicono; partono lo stesso.",
-      "BLOCK": "Sotto il minimo l'offerta non si può inviare e l'ordine d'ufficio non si può confermare.",
-      "SURCHARGE": "L'offerta indica la maggiorazione piccola serie (prezzata a mano sulla riga)."
+      "WARN": "Il preventivo e l'ordine lo dicono; partono lo stesso.",
+      "BLOCK": "Sotto il minimo il preventivo non si può inviare e l'ordine d'ufficio non si può confermare.",
+      "SURCHARGE": "Il preventivo indica la maggiorazione piccola serie (prezzata a mano sulla riga)."
     },
     "per": {
       "ORDER": "{count} pz per ordine",
@@ -457,7 +457,7 @@
   },
   "floors": {
     "title": "Soglia di margine % per ruolo",
-    "sub": "Una versione d'offerta segue la soglia più bassa dei ruoli di chi l'ha creata; un ruolo senza soglia tiene quella dell'azienda. Sotto la soglia un'offerta chiede un'approvazione.",
+    "sub": "Una versione di preventivo segue la soglia più bassa dei ruoli di chi l'ha creata; un ruolo senza soglia tiene quella dell'azienda. Sotto la soglia un preventivo chiede un'approvazione.",
     "noMargin": "Le soglie richiedono il livello margine: il tuo ruolo non lo ha.",
     "edit": "Cambia le soglie",
     "save": "Salva le soglie",
@@ -475,20 +475,20 @@
       "inForce": "In vigore"
     },
     "companyFloor": "Soglia azienda {floor}",
-    "lowers": "Questo abbassa una soglia: più offerte partono senza approvazione. Salvare chiede un nuovo codice di autenticazione.",
+    "lowers": "Questo abbassa una soglia: più preventivi partono senza approvazione. Salvare chiede un nuovo codice di autenticazione.",
     "stepUpTitle": "Conferma che sei tu",
-    "stepUpSentence": "Abbassare una soglia di margine fa partire più offerte senza approvazione.",
+    "stepUpSentence": "Abbassare una soglia di margine fa partire più preventivi senza approvazione.",
     "stepUpConfirm": "Conferma e salva",
     "stepUpCancelled": "Il codice non è stato dato: nulla è stato salvato.",
     "done": "Le soglie di margine sono salvate.",
     "refused": "Non è stato possibile salvare le soglie.",
     "refusedMoved": "Qualcun altro ha cambiato queste impostazioni nel frattempo: sono state rilette, nulla è stato sovrascritto.",
-    "refusedNoRow": "Questo ambito non ha ancora impostazioni sue: salva prima le sue regole delle offerte.",
+    "refusedNoRow": "Questo ambito non ha ancora impostazioni sue: salva prima le sue regole dei preventivi.",
     "refusedRoles": "Un ruolo non è più un ruolo d'ufficio di questa azienda: rileggi le soglie.",
     "held": {
       "manage": "Cambiare le soglie richiede il permesso di impostare le regole dei preventivi della società.",
-      "noRowCompany": "Questa azienda segue le impostazioni del gruppo: dalle prima impostazioni sue (Regole delle offerte).",
-      "noRowGroup": "Il gruppo non ha ancora impostazioni: salva prima le regole delle offerte del gruppo.",
+      "noRowCompany": "Questa azienda segue le impostazioni del gruppo: dalle prima impostazioni sue (Regole dei preventivi).",
+      "noRowGroup": "Il gruppo non ha ancora impostazioni: salva prima le regole dei preventivi del gruppo.",
       "same": "Non è ancora cambiato nulla.",
       "pct": "{role}: scrivi una percentuale da 0 a 100."
     }

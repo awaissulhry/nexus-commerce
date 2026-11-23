@@ -11,7 +11,7 @@
     "inboxHint": "{unassigned} senza nessuno · {mine} mie",
     "inboxes": "Caselle condivise",
     "none": "Nessuna per ora",
-    "noneHint": "Le caselle condivise (ordini@, offerte@) le crea un amministratore."
+    "noneHint": "Le caselle condivise (ordini@, preventivi@) le crea un amministratore."
   },
   "inbox": {
     "unknownSender": "Mittente sconosciuto",
@@ -245,7 +245,7 @@
   },
   "captureAdmin": {
     "title": "Indirizzo di cattura",
-    "intro": "Inoltra o metti in Ccn qualsiasi mail a questo indirizzo: si unisce al record che l'oggetto nomina (un ordine, un'offerta, una richiesta…), altrimenti alla conversazione del cliente o fornitore; ciò che non può collocare aspetta in Posta da smistare. Si abbinano solo le mail di un collega dal suo indirizzo che superano DMARC.",
+    "intro": "Inoltra o metti in Ccn qualsiasi mail a questo indirizzo: si unisce al record che l'oggetto nomina (un ordine, un preventivo, una richiesta…), altrimenti alla conversazione del cliente o fornitore; ciò che non può collocare aspetta in Posta da smistare. Si abbinano solo le mail di un collega dal suo indirizzo che superano DMARC.",
     "reading": "Lettura dell'indirizzo di cattura…",
     "failed": "Impossibile leggere l'indirizzo di cattura",
     "noDomain": {

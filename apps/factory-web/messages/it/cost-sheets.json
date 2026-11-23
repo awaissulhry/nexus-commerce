@@ -180,7 +180,7 @@
   "verWords": {
     "draft": "Una bozza: il suo obiettivo può cambiare. Inviala in approvazione per bloccarla; chi approva non è mai chi l'ha chiesta o scritta.",
     "waiting": "In attesa dell'approvazione del responsabile dei costi. Modificare o eliminare la bozza ritira la richiesta.",
-    "approved": "Approvata e bloccata: offerte e listini prendono il suo prezzo obiettivo. Una modifica è una nuova versione.",
+    "approved": "Approvata e bloccata: preventivi e listini prendono il suo prezzo obiettivo. Una modifica è una nuova versione.",
     "superseded": "Congelata: al suo posto è stata approvata una versione successiva. Resta com'era.",
     "seasonClosed": "Congelata alla chiusura della sua stagione. Resta com'era.",
     "withdrawn": "Ritirata dal responsabile dei costi: nessuna versione della serie è approvata finché non se ne approva una nuova."
@@ -316,7 +316,7 @@
     "baseSize": "Taglia base",
     "baseSizeHint": "La taglia a cui si legge il costo.",
     "targetPrice": "Prezzo obiettivo",
-    "targetPriceHint": "Facoltativo: il prezzo da cui partono le offerte quando è approvata.",
+    "targetPriceHint": "Facoltativo: il prezzo da cui partono i preventivi quando è approvata.",
     "targetMargin": "Margine obiettivo %",
     "targetMarginHint": "Facoltativo: sotto 100.",
     "note": "Nota",
@@ -344,13 +344,13 @@
   "verApprove": {
     "title": "Approva e blocca la versione {version}",
     "intro": "Approvi la versione così com'è ora:",
-    "after": "Una volta approvata è bloccata: offerte e listini prendono il suo prezzo obiettivo e la versione approvata prima viene congelata.",
+    "after": "Una volta approvata è bloccata: preventivi e listini prendono il suo prezzo obiettivo e la versione approvata prima viene congelata.",
     "approve": "Approva e blocca",
     "comment": "Commento"
   },
   "verBack": {
     "title": "Ritira la versione {version}",
-    "intro": "La versione viene congelata e la sua serie non ha una versione approvata finché non se ne approva una nuova. Le offerte tornano al costo della revisione.",
+    "intro": "La versione viene congelata e la sua serie non ha una versione approvata finché non se ne approva una nuova. I preventivi tornano al costo della revisione.",
     "confirm": "Ritira",
     "reason": "Motivo",
     "reasonHint": "Resta nel registro delle modifiche.",

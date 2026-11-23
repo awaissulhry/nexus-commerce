@@ -1,6 +1,6 @@
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { DEMO_COMPANIES } from '../../../../shell/design-data'
-import type { PartyRow, QuoteListRow } from '../api'
+import type { PartyRow, QuoteListRow, QuoteOrder } from '../api'
 import { NO_FILTERS, type QuoteTile, type TileCount } from '../model'
 import { CAN, GRAINS, PARTY, PEOPLE, PREFIX } from '../record/fixtures'
 import { duplicateOf } from '../duplicate/model'
@@ -124,6 +124,26 @@ function model(overrides: Partial<QuotesListViewModel> = {}): QuotesListViewMode
   }
 }
 
+// ---- cq T (customer page › Quotes & incoming, 15-steps T.1): the builder the customer tab's gallery mounts the list with; the chips
+// cell's every kind (the state and who it waits on, the one fact that matters now, what the customer sees), made-up rows.
+export const quotesListModel = model
+const order = (state: 'MADE' | 'WAITS', reason: QuoteOrder['reason'], number: string | null = null): QuoteOrder => ({ state, id: number ? id(90) : null, number, status: number ? 'CONFIRMED' : null, reason, words: null })
+export const CHIP_ROWS: QuoteListRow[] = [
+  row(50, { status: 'DRAFT', approval: 'REJECTED', marginPct: '12.0000', marginFloorBreached: true }),
+  row(51, { status: 'DRAFT', revision: 2, customerHolds: { revision: 1 } }),
+  row(52, { status: 'PENDING_APPROVAL', approval: 'PENDING' }),
+  row(53, { status: 'APPROVED', approval: 'APPROVED' }),
+  row(54, { status: 'SENT', sentAt: at(27, 10), validUntil: '2026-10-31' }),
+  row(55, { status: 'SENT', sentAt: at(20, 10), validUntil: '2026-10-28' }),
+  row(56, { status: 'SENT', sentAt: at(15, 10), validUntil: '2026-11-30', reminderSentAt: at(25, 9) }),
+  row(57, { status: 'ACCEPTED', order: order('MADE', null, 'SO-2026-0150') }),
+  row(58, { status: 'ACCEPTED', versionId: id(78), order: order('WAITS', 'PO_NUMBER_REQUIRED') }),
+  row(59, { status: 'ACCEPTED', versionId: id(79), order: order('WAITS', 'ACCOUNT_ON_HOLD') }),
+  row(60, { status: 'DECLINED' }),
+  row(61, { status: 'EXPIRED', validUntil: '2026-10-20' }),
+]
+// ---- end cq T
+
 export const designScreen = defineDesignScreen<QuotesListViewModel>({
   screen: 'SCR-034',
   title: 'Quotes: the list, tiles, filters and New quote',
@@ -137,6 +157,10 @@ export const designScreen = defineDesignScreen<QuotesListViewModel>({
     { id: 'selected-held', label: 'Ticked rows an act runs on only in part', model: model({ selected: [id(42), id(38)] }), note: 'F-CQ-201: an accepted quote is ticked — Cancel counts only the open one (Cancel 1 quote); its window says why the other is not on. An act none of the ticked rows takes is held with words.' },
     { id: 'selected-finance', label: 'Finance ticks rows: only its own acts are drawn', model: model({ grains: GRAINS.finance, can: { ...CAN.finance }, barRights: { can: { ...CAN.finance }, grains: GRAINS.finance, tasks: true, orders: false }, selected: [id(42), id(39)] }), note: 'F-CQ-201: no Cancel, no Ask for approval, no Make the orders (no right: not drawn, never held); Add task to 2… and Export 2.' },
     { id: 'selected-viewer', label: 'A role that reads and changes none', model: model({ can: { ...CAN.viewer }, barRights: { can: { ...CAN.viewer }, grains: GRAINS.owner, tasks: false, orders: false }, selected: [id(42)] }), note: 'F-CQ-201: no act is drawn — the bar says the role changes none (Export stays the frame\'s, with its own right).' },
+    // ---- cq T (15-steps T.1): Sort ▾ Most urgent first; the chips cell of every kind
+    { id: 'sort-urgent', label: 'Sort ▾ Most urgent first (the server\'s order)', model: model({ filters: { ...NO_FILTERS, sort: 'urgent' } }), note: 'cq T: Sort ▾ says "Most urgent first"; its title says the rule (what waits on us, then on the customer, then closed). Open Sort ▾: Newest first, Valid until soonest.' },
+    { id: 'chips', label: 'The chips cell "Where it is": every kind of quote', model: model({ rows: { items: CHIP_ROWS, more: false, problem: null }, readsOrders: true }), note: 'cq T: approval rejected; r2 while the customer holds r1; waiting for approval; approved, ready to send; sent, ends in 2 days; sent, offer ended; reminded; accepted with its order (a link with orders.view); accepted, the order waits for the PO number; the order waits: account on hold; declined; expired. No amount in any chip.' },
+    // ---- end cq T
     { id: 'tile-waiting', label: 'Tile pressed: Waiting for approval', model: model({ filters: { ...NO_FILTERS, status: 'PENDING_APPROVAL' }, rows: { items: ROWS.filter((item) => item.status === 'PENDING_APPROVAL'), more: false, problem: null } }), note: 'The tile is pressed and its chip is in the filter row (one filter model); Clear all.' },
     { id: 'expiring', label: 'Tile pressed: Expiring in 7 days', model: model({ filters: { ...NO_FILTERS, status: 'SENT', expiring: true }, rows: { items: ROWS.filter((item) => item.status === 'SENT'), more: false, problem: null } }) },
     { id: 'updates', label: 'Live: 3 updates waiting', model: model({ updates: 3 }), note: 'Rows never move under the cursor: "3 updates · Show" reads them.' },
