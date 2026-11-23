@@ -149,6 +149,13 @@ const DOOR = { key: 'addresses.door.notLive', params: { count: 2 } }
 const BULK_ASSIGN: BulkDialog = { kind: 'assign', ids: [ROWS[0]!.id, ROWS[3]!.id], model: { subject: { key: 'bulk.subject', params: { count: 2 } }, current: null, people: { status: 'ready', value: ASSIGNEES }, busy: false, notice: null, offline: false, preview: { runs: 2, others: 1 } } }
 const BULK_DECLINE: BulkDialog = { kind: 'decline', ids: [ROWS[0]!.id, ROWS[3]!.id], model: { subject: { key: 'bulk.subject', params: { count: 2 } }, draft: { ...emptyDecline, reason: 'CAPACITY' }, message: { to: null, held: { key: 'decline.message.many', params: { portal: 1, count: 2 } } }, busy: false, notice: null, offline: false, preview: { runs: 2, others: 0 } } }
 
+// ---- cq T (customer page › Quotes & incoming, 15-steps T.1): the builders the customer tab's gallery mounts the list and its
+// windows with (one list, the same made-up rows and windows).
+export { page as incomingPage, record as incomingRecord, catalogueModel, BULK_ASSIGN, BULK_DECLINE }
+/** "To answer" (B-CQ-020): the open requests, the portal orders not decided yet and the open change requests (the shell's badge's door). */
+const TO_ANSWER_ROWS = INCOMING_ROWS.filter((one) => ['NEW', 'ASSIGNED', 'SENT', 'OPEN'].includes(one.state))
+// ---- end cq T
+
 function ListDesign({ model }: { model: DesignModel }) {
   const [state, setState] = useState(model.model)
   useEffect(() => setState(model.model), [model])
@@ -227,6 +234,10 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'th-230-new-messages', label: 'TH-2 · New messages: "● 2 new · 10:42" on the requests the customer answered; the Waiting column amber past 1 working day', model: page({ unread: UNREAD }), note: 'One read for the page (POST /threads/unread, ≤ 200 rows); a count only on rows you may open; the cell opens the request beside the list with its thread at the first new message. Waiting on us past 1 working day is amber (the one rule: the thread head and Today say the same); waiting on the customer is never amber.' },
     // ── end B-TH-230 ──
     // ── B-TH-233 (TH-3): Incoming over every door — requests, catalogue orders and change requests in one list; Customer replies ──
+    // ---- cq T (15-steps T.1): the "To answer" tile (the badge's door); Most urgent first held with words over more than one page
+    { id: 'tile-to-answer', label: 'Tile To answer: what waits on us — open requests, portal orders not decided, open change requests', model: page({ address: at({ tile: 'TO_ANSWER' }), list: listOf(TO_ANSWER_ROWS) }), note: 'cq T (B-CQ-020): exactly what the shell\'s "N waiting on us" counts; its count is the tile\'s, the rows most urgent first.' },
+    { id: 'urgent-held', label: 'Most urgent first over more than one page: held, said in words above the rows', model: page({ rank: 'urgent', rankHeld: { key: 'rank.held' }, list: listOf(undefined, false, 'demo-next-page') }), note: 'cq T: the rank orders one page; with more to read the line says to narrow the list (a customer, a state) — never a silent half-sort.' },
+    // ---- end cq T
     { id: 'th3-233-kinds', label: 'TH-3 · Every door in one list: requests, a catalogue order (opens beside the list) and a change request (opens Home › Approvals), each with its kind mark; the tiles count every kind', model: page({ address: at({ tile: 'ALL' }), list: listOf(INCOMING_ROWS) }), note: 'A row is listed only to a reader who may open it (its kind\'s own view right): the production manager reads requests; a reader without orders.view never sees a catalogue order or a change request (the API leaves them out and does not count them).' },
     { id: 'th3-233-kind-chip', label: 'TH-3 · The Kind filter narrowed the list to catalogue orders (its chip)', model: page({ address: at({ tile: 'ALL', kind: 'CATALOGUE_ORDER' }), list: listOf([CATALOGUE_ROW]) }) },
     { id: 'th3-233-catalogue', label: 'TH-3 · A catalogue order beside the list: Accept as order (main), Accept as quote, Refuse; their PO, the date asked, the ship-to waiting for its check, the lines (a size no longer offered named), the thread', model: catalogueOpen() },
