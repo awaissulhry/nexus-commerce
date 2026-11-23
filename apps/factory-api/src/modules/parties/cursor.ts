@@ -49,7 +49,7 @@ export function decodeCodeCursor(value: string | undefined): CodeCursor | null {
 export const afterCodeCursor = (cursor: CodeCursor | null) => (cursor ? { OR: [{ code: { gt: cursor.code } }, { code: cursor.code, id: { gt: cursor.id } }] } : {})
 
 // ── B-CL-002 (customers list): the cursor of the list in another order — the sort and the last row's key, as base64url JSON ──
-/** One part of a row's key in the needs or name order (./work needsKeyOf, nameKeyOf). */
+/** One part of a row's key in the needs or name order (./work arrangeParties: needsKeyOf, or [name, code, id]). */
 export type KeyPart = string | number
 /** The orders whose cursor is a key (the code order keeps its own cursor above). */
 export type KeySort = 'needs' | 'name'
