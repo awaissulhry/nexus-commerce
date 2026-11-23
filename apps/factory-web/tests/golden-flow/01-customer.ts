@@ -39,6 +39,32 @@ export default defineStage({
     flow.state.party = { id: party.id, code: party.code }
     expect(party.roles).toEqual(expect.arrayContaining(['CUSTOMER', 'BRAND']))
 
+    // ---- T.2 (customers list, cl lane): the list's band and its order — a step that writes nothing (one navigation, two address
+    // writes). Most urgent first is the order; the band counts customers; a pressed door shows exactly the customers it counted.
+    await flow.step('the customers list: Most urgent first, the band of customers by phase, a pressed door shows the customers it counts, then leaves', async () => {
+      const CL = words('customers-list')
+      const P = words('parties')
+      await sales.go('/sales/customers')
+      await expect(page.getByRole('button', { name: CL('sort.aria', { order: CL('sort.needs') }), exact: true })).toBeVisible()
+      const band = page.getByRole('group', { name: new RegExp(`^(${CL('band.label.all')}|${CL('band.label.yours')})$`) })
+      await expect(band).toBeVisible()
+      const doors = band.locator('button[aria-pressed]')
+      await expect(doors).toHaveCount(7)
+      const counts = await doors.evaluateAll((nodes) => nodes.map((node) => Number(node.querySelector('.c')?.textContent ?? '0')))
+      const first = counts.findIndex((count) => count > 0)
+      const at = first >= 0 ? first : counts.length - 1
+      const said = counts[at] ?? 0
+      await press(doors.nth(at))
+      await expect(page).toHaveURL(/[?&]work=[A-Z_]+(&|$)/)
+      await expect(doors.nth(at)).toHaveAttribute('aria-pressed', 'true')
+      // The count it said = the rows its press shows (the toolbar's "{shown} of {total}").
+      await expect(page.getByText(P('list.count', { shown: Math.min(said, 50), total: said }), { exact: true }).first()).toBeVisible()
+      await flow.shot(page, 'customers-band-door')
+      // A second press leaves: the list as it was.
+      await press(doors.nth(at))
+      await expect(page).not.toHaveURL(/[?&]work=/)
+    })
+
     // fx-12 (the Owner's test server, 2026-11-19: the customer page asked its tabs ~480 times each): the page opens and rests —
     // over 10 s one document, the Work tab's one address write, a handful of the router's requests; never a loop.
     await flow.step('the customer page rests: over 10 s a handful of navigations at most (no loop)', async () => {

@@ -594,10 +594,7 @@
     "notYet": "Non ancora letto",
     "loading": "Caricamento…",
     "failedTitle": "Caricamento non riuscito",
-    "noMatch": "Nessuna riga corrisponde a questi filtri",
     "clearAll": "Togli tutti i filtri",
-    "rowsHeading": "Filtri salvati",
-    "rows": "Righe: {view}",
     "filters": "Filtri",
     "filtersCount": "Filtri ({count})",
     "more": "Altre azioni",
@@ -691,9 +688,7 @@
     "goMany_one": "Archivia {count}",
     "goMany_other": "Archivia {count}",
     "nothing": "Niente da archiviare",
-    "andMore": "altri {count}",
-    "skipped_one": "{count} riga selezionata è bloccata e resta com’è.",
-    "skipped_other": "{count} righe selezionate sono bloccate e restano come sono."
+    "andMore": "altri {count}"
   },
   "address": {
     "title": "Indirizzi",
@@ -936,7 +931,6 @@
     }
   },
   "keys": {
-    "title": "Scorciatoie da tastiera",
     "search": "Cerca",
     "rows": "Riga successiva / precedente",
     "open": "Apri la riga",

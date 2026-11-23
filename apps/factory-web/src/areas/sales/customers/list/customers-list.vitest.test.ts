@@ -410,3 +410,59 @@ describe('F-CL-202: the reused words of the band and the chips exist in it and e
   })
 })
 
+
+// ---- T.1 (customers list 13-backend §8.10): the gallery — the busy list, its band and work, each role's bar, each window step ------
+import type { ComponentType } from 'react'
+import type { DesignScreen } from '../../../../lib/design/design-screen'
+import { messagesFor } from '../../../../lib/i18n/messages'
+import { I18nProvider } from '../../../../lib/i18n/provider'
+import { designScreen as customersScreen } from '../fixtures'
+
+describe('T.1: the gallery draws the list’s states, both languages, the walls kept', () => {
+  const screen = customersScreen as DesignScreen<unknown>
+  const draw = (id: string, locale: (typeof LOCALES)[number] = 'en') => {
+    const item = screen.cases.find((entry) => entry.id === id)
+    expect(item, id).toBeDefined()
+    return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(screen.view as ComponentType<{ model: unknown }>, { model: item!.model })))
+  }
+
+  it('keeps every pinned case and adds the busy list, the band doors, the roles’ bars and the windows', () => {
+    const ids = screen.cases.map((item) => item.id)
+    expect(ids).toEqual(expect.arrayContaining(['list', 'loading', 'error', 'empty', 'filtered-empty', 'no-access', 'read-only', 'selection', 'new', 'block', 'archive']))
+    expect(ids).toEqual(expect.arrayContaining(['busy', 'busy-wide', 'band-pressed', 'band-pressed-empty', 'view-zero', 'search-none', 'limited', 'band-failed', 'sort-code', 'sort-capped', 'customise']))
+    expect(ids).toEqual(expect.arrayContaining(['bar-owner', 'bar-sales', 'bar-finance', 'bar-pm', 'bar-warehouse', 'bar-readonly', 'task', 'task-r47', 'task-one', 'sup-read', 'sup-pick', 'sup-running', 'sup-done', 'block-noton', 'archive-noton', 'bulk-receipt']))
+    expect(ids).toEqual(expect.arrayContaining(['view-vies', 'view-invoice']))
+    expect(ids).not.toContain('tile-vies')
+    expect(ids).not.toContain('shortcuts')
+  })
+
+  it('the busy list: the band in the head row and Most urgent first, in both languages', () => {
+    const en = draw('busy')
+    expect(en).toContain('All customers')
+    expect(en).toContain('Needs us now')
+    expect(en).toContain('Most urgent first')
+    const it = draw('busy', 'it')
+    expect(it).toContain('Tutti i clienti')
+    expect(it).toContain('Da seguire ora')
+    expect(it).toContain('Prima i più urgenti')
+  })
+
+  it('the limited reader reads “Your customers”; a pressed door with nobody, a view with 0 rows and the cap say their own words', () => {
+    expect(draw('limited')).toContain('Your customers')
+    expect(draw('band-pressed-empty')).toContain('No customer needs us now.')
+    expect(draw('view-zero')).toContain('No blocked customers.')
+    expect(draw('sort-capped')).toContain('More than 2 000 customers')
+  })
+
+  it('each role’s bar holds only its own acts; Read-only says so in words; Sales sees no amount', () => {
+    const owner = draw('bar-owner')
+    expect(owner).toContain('Add task to 6 customers…')
+    expect(owner).toContain('Set production supervisor for 6…')
+    const sales = draw('bar-sales')
+    expect(sales).toContain('Add task to 6 customers…')
+    expect(sales).not.toContain('Set production supervisor for 6…')
+    expect(sales).not.toMatch(/€/)
+    expect(draw('bar-warehouse')).not.toContain('Check VIES')
+    expect(draw('bar-readonly')).toContain('Your role reads customers and changes none')
+  })
+})
