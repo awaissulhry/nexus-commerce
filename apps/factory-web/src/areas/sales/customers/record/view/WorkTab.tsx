@@ -157,7 +157,7 @@ export const MONEY_PRESET: NonNullable<OrdersListModel['preset']> = Object.freez
   shown: Object.freeze(['number', 'status', 'ourPrice', 'brandPrice', 'priceMatch', 'balance']),
   wide: Object.freeze(['picture', 'promised', 'paid']),
   // F-CW-103: Customise says so of the three that wait for a wider sheet (ticked, "… · from a wider sheet"). F-CW-104 (10-design
-  // §3.8): they return from the `wide` room (1150 px of sheet: the row fits whole), not only at the widest.
+  // §3.8): they return from the `wide` room (WORK_ROOMS.wide: the row fits whole), not only at the widest.
   later: Object.freeze({ picture: 'wider', promised: 'wider', paid: 'wider' } as const),
 })
 
@@ -191,7 +191,7 @@ export const colsTermOf = (set: ColumnSet, notEqual: boolean): ColumnSet | null 
  * the set's widths + ⋯ 64 ≤ the room.
  */
 export type WorkRoom = 'base' | 'wide' | 'wider' | 'widest'
-export const WORK_ROOMS: Readonly<Record<Exclude<WorkRoom, 'base'>, number>> = Object.freeze({ wide: 1150, wider: 1300, widest: 1700 })
+// cw fx7 (third look N-1): WORK_ROOMS — where each wider room starts — is summed from the sets' own widths, below WORK_MIN.
 export const workRoomOf = (width: number | null | undefined): WorkRoom =>
   typeof width !== 'number' ? 'base' : width >= WORK_ROOMS.widest ? 'widest' : width >= WORK_ROOMS.wider ? 'wider' : width >= WORK_ROOMS.wide ? 'wide' : 'base'
 
@@ -222,13 +222,35 @@ export const WAITING_SET: readonly string[] = Object.freeze(['picture', 'number'
  *
  * cw fx6 (re-walk R-5): Ordered 144 with the closer padding — its second line ("requested 18/12/2026", "richiesto il 18/12/2026")
  * stands on ONE line: the cell was three lines of text in a 49 px row. The 40 px come from Where it is in the widest room (it has
- * 304 px there at 1792, and its floor is 212 so the set still fits where that room starts, at 1700).
+ * 304 px there at 1792); that room starts later for it (WORK_ROOMS below), so Where it is never falls under its 275 px.
  */
-export const WORK_MIN: Readonly<Record<string, number>> = Object.freeze({ picture: 58, number: 150, whereItIs: 212 /* cw fx6: 8 px to Ordered at the widest room's start */, promised: 98, customerUrgency: 147, newMessages: 44, waitingOn: 178, deposit: 136, shipped: 104, priority: 112, units: 96, orderDate: 144 /* cw fx6 (re-walk R-5) */, supervisor: 130, status: 196 })
+export const WORK_MIN: Readonly<Record<string, number>> = Object.freeze({ picture: 58, number: 150, whereItIs: 220, promised: 98, customerUrgency: 147, newMessages: 44, waitingOn: 178, deposit: 136, shipped: 104, priority: 112, units: 96, orderDate: 144 /* cw fx6 (re-walk R-5) */, supervisor: 130, status: 196 })
 /** cw fx5: the side padding of the set's narrow columns (the grid's own is 14 px): the picture in its middle; Where it is, the date and the Deposit pill closer to their edges. */
 export const WORK_PAD: Readonly<Record<string, 'tight' | 'snug'>> = Object.freeze({ picture: 'tight', whereItIs: 'snug', promised: 'snug', deposit: 'snug', orderDate: 'snug' /* cw fx6 (R-5) */ })
 /** cw fx5 (walk W-5, W-14): no menu button in the header of a narrow fixed column — "Promised" / "Promesso" whole beside its sort mark (Picture, New messages and ⋯ have none already). */
 export const WORK_PLAIN_HEADS: readonly string[] = Object.freeze(['picture', 'promised', 'newMessages'])
+
+// ---- cw fx7 (third look N-1): adding columns never takes "Where it is" under the 275 px it has beside the thread ----
+/** The room "Where it is" keeps in EVERY room: what it has beside the open thread at 1440 (two chips and the pieces line fit). */
+export const WORK_WHERE_ROOM = 275
+/** What stands beside the set in the grid: the tick box (the grid engine's own) and the sheet's ⋯ column; the card's two edges (the tab measures its own room, the grid is that much narrower). */
+export const WORK_TICK = 43
+export const WORK_MORE = 48
+export const WORK_CARD_EDGES = 2
+/** The px a set takes without "Where it is": the tick box, its columns at their own widths, ⋯. */
+export const workFixedOf = (ids: readonly string[]): number => WORK_TICK + WORK_MORE + ids.filter((id) => id !== 'whereItIs').reduce((sum, id) => sum + (WORK_MIN[id] ?? 0), 0)
+/**
+ * Where each wider room starts: the room in which its set leaves "Where it is" the 275 px — never earlier. Summed, not typed: a
+ * column that grows moves its room's start with it (Ordered 104 → 144 had left the widest room at 1700 with 214 px for the chips:
+ * two rows lost their pieces line). 1179 · 1283 · 1765 px of the tab's own room (it was 1150 · 1300 · 1700); the measured rooms
+ * 1185, 1314 and 1794 land in the same sets as before, and a sheet of about 1700–1764 px keeps the nine columns (306 px or more).
+ */
+export const WORK_ROOMS: Readonly<Record<Exclude<WorkRoom, 'base'>, number>> = Object.freeze({
+  wide: workFixedOf(WORK_SETS.wide) + WORK_WHERE_ROOM + WORK_CARD_EDGES,
+  wider: workFixedOf(WORK_SETS.wider) + WORK_WHERE_ROOM + WORK_CARD_EDGES,
+  widest: workFixedOf(WORK_SETS.widest) + WORK_WHERE_ROOM + WORK_CARD_EDGES,
+})
+// ---- end cw fx7
 /** Every column of the set keeps its width: the room left goes to Where it is (the chips), never to a stretched date. */
 export const WORK_MAX: Readonly<Record<string, number>> = Object.freeze(Object.fromEntries(Object.entries(WORK_MIN).filter(([id]) => id !== 'whereItIs' && id !== 'status')))
 

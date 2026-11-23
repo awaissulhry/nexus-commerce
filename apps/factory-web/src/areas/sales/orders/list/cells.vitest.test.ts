@@ -676,7 +676,9 @@ describe('F-CW-102: the row\'s chips', () => {
     // Host-only: the customer's own page; the other two hosts keep their card and the frame's own door.
     expect(view).toContain('const workCard = !!model.locked?.party && !!model.preset')
     expect(view).toContain("customerUrgency: { role: 'hidden' as const },")
-    expect(view).toContain('cardDoor: !workCard && model.active.cardDoor && actions?.onCardThread')
+    // cw fx7 (third look R-3): the Thread door is the frame's own again, in the card's top row beside ⋯ — on every host.
+    expect(view).toContain('cardDoor: model.active.cardDoor && actions?.onCardThread')
+    expect(view).not.toContain('!workCard && model.active.cardDoor')
   })
 
   it('walk W-6: beside the dock the chips stand closer (the sheet\'s own css, tokens only) so two chips and the pieces line fit', () => {

@@ -127,25 +127,31 @@ export function ReplyManyBody({ model, actions }: { model: ReplyManyModel; actio
   // e-mail (a mixed message). The reason only, in the orders' own words ('reply.portalOff'); no box, no to-do tick.
   const box = model.portal !== 'off'
   const todo = box ? (model.todo ?? null) : null
+  // cw fx7 (third look, item 3): on ORDERS with no portal nothing can be posted — the lines that say who reads it, on which orders
+  // and how ("… reads Italian", "… will read this on 1 order", "Each order's conversation gets its own message") are not drawn
+  // either: the reason alone. (Quotes and requests keep their lines: the other lane's own block.)
+  const lines = box || (!!model.recordType && model.recordType !== 'SalesOrder')
   const language = model.language ? languageInSentence(model.language, locale) : null
   return (
     <div className="fw-srm">
       {/* cq fx3 W2-2: in the records' own words (orders keep 'reply.portalOff'). */}
       {model.portal === 'off' && <Banner tone="warning" title={s(replyKey(model.recordType, 'portalOff'), { customer })} />}
       {/* The customer's language: only when the reader may read the customer (never guessed); the composer says it is their portal. */}
-      {language && (
+      {lines && language && (
         <p className="fw-srm-who">
           <Globe size={13} aria-hidden />
           <span>{s('reply.reads', { customer, language })}</span>
         </p>
       )}
       {/* F-CQ-304: each line in the records' own words (a quote, a request); orders keep theirs. */}
-      {sent.length > 0 && <p className="fw-srm-hint">{s(replyKey(model.recordType, 'already'), { count: sent.length, orders: sent.map(targetLabel).join(', ') })}</p>}
+      {lines && sent.length > 0 && <p className="fw-srm-hint">{s(replyKey(model.recordType, 'already'), { count: sent.length, orders: sent.map(targetLabel).join(', ') })}</p>}
+      {lines && (
       <div className="fw-srm-orders">
         <p className="fw-srm-heading">{s(replyKey(model.recordType, 'preview'), { customer, count: pending.length })}</p>
         <p className="fw-srm-list">{pending.map((target) => previewLabel(target, s) /* B-SA-070b */).join(', ')}</p>
         <p className="fw-srm-hint">{s(replyKey(model.recordType, 'each'))}</p>
       </div>
+      )}
       {/* F-CW-203: ONE tick — a to-do "Answer our message" in the customer's list, one per order, after its message is posted. Drawn
           only for a reader who may make a customer's to-dos; ON when the window opens from Ask ▾, OFF from Reply to N. */}
       {todo && (

@@ -6,7 +6,7 @@ import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
 import type { BrandRequest } from '../../../home/approvals/requests/api'
 import type { RequestReviewModel } from '../../../home/approvals/requests/model'
 import { requestsDoorOf, reviewNamed, workEntry } from '../../customers/record/use-customer-work'
-import { WAITING_SET, WORK_MIN, WORK_PAD, WORK_PLAIN_HEADS, WORK_SETS, workEmptyOf, workPreset } from '../../customers/record/view/WorkTab'
+import { WAITING_SET, WORK_CARD_EDGES, WORK_MIN, WORK_MORE, WORK_PAD, WORK_PLAIN_HEADS, WORK_ROOMS, WORK_SETS, WORK_TICK, WORK_WHERE_ROOM, workEmptyOf, workFixedOf, workPreset, workRoomOf } from '../../customers/record/view/WorkTab'
 import type { OrderRow, OrderStatus } from '../api'
 import { SORT_CHOICES } from '../model'
 import { manyHeld, noYesAsked, rowStepsOf } from './commands/model'
@@ -533,9 +533,8 @@ describe('re-walk R-2, R-5: no cell taller than its row, no pill on three lines'
     expect(WORK_MIN.orderDate).toBe(144)
     expect(WORK_PAD.orderDate).toBe('snug')
     const need = (ids: readonly string[]) => 43 + 48 + ids.reduce((sum, id) => sum + WORK_MIN[id]!, 0)
-    expect(need(WORK_SETS.widest)).toBeLessThanOrEqual(1700) // the widest room starts there
-    expect(need(WORK_SETS.wider)).toBeLessThanOrEqual(1300)
-    expect(need(WORK_SETS.wide)).toBeLessThanOrEqual(1150)
+    // cw fx7 (third look N-1): each set fits with room to spare where its room starts (WORK_ROOMS, summed — the test below).
+    for (const room of ['wide', 'wider', 'widest'] as const) expect(need(WORK_SETS[room]), room).toBeLessThanOrEqual(WORK_ROOMS[room] - 2)
     expect(need(WORK_SETS.base)).toBeLessThanOrEqual(863)
     // At 1792 (1920, the thread closed) Where it is keeps more than the three chips of the walked seed need (263 px + the cell's 14).
     expect(1792 - (need(WORK_SETS.widest) - WORK_MIN.whereItIs!)).toBeGreaterThanOrEqual(281)
@@ -545,18 +544,16 @@ describe('re-walk R-2, R-5: no cell taller than its row, no pill on three lines'
 })
 
 describe('re-walk R-3, R-4, item 7, follow-up 8', () => {
-  it('R-3: the phone card is ONE block under the number — the picture at the left, the chips in one flow, Thread on the last line', () => {
+  it('R-3: the phone card is ONE block under the number — the picture at the left, the chips in one flow, "Promised" with the pieces line', () => {
     const view = read('./view/OrdersListView.tsx')
     expect(view).toContain("picture: { role: 'hidden' as const },")
     expect(view).toContain("promised: { role: 'hidden' as const },")
-    expect(view).toContain("...(cardDoorLabel ? { newMessages: { role: 'hidden' as const } } : {}),")
-    const block = view.slice(view.indexOf('<span className="fw-sheet-card">'), view.indexOf("// The door is drawn on the block's last line"))
-    const order = ['fw-sheet-card-pic', 'fw-sheet-card-lines', "t('list.customerRef'", 'fw-sheet-card-chips', "where(row, 'chips')", 'urgency(row)', 'fw-sheet-card-promise', "t('col.promised')", "where(row, 'pieces')", 'fw-sheet-card-door'].map((part) => block.indexOf(part))
+    const block = view.slice(view.indexOf('<span className="fw-sheet-card">'), view.indexOf('// eslint-disable-next-line react-hooks/exhaustive-deps -- the draws read the latest model'))
+    const order = ['fw-sheet-card-pic', 'fw-sheet-card-lines', "t('list.customerRef'", 'fw-sheet-card-chips', "where(row, 'chips')", 'urgency(row)', 'fw-sheet-card-promise', "t('col.promised')", "where(row, 'pieces')"].map((part) => block.indexOf(part))
     expect(order.every((at) => at >= 0)).toBe(true)
     expect([...order].sort((a, b) => a - b)).toEqual(order) // nothing left out, in the picture's order
     const css = read('./sheet/chips.css')
     expect(css).toMatch(/\.fw-sheet-card-chips > \.fw-sheet-wi\.is-card,\s*\.fw-sheet-card-chips > \.fw-sheet-urg \{\s*display: contents;/)
-    expect(css).toMatch(/\.fw-sheet-card-door \{[^}]*margin-left: auto;/)
     expect(css).toMatch(/\.fw-sheet-card \{[^}]*align-items: flex-start;/)
     expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(/i)
   })
@@ -582,5 +579,64 @@ describe('re-walk R-3, R-4, item 7, follow-up 8', () => {
   it('follow-up 8: the picture leads — Customise names Number as the row\'s name', () => {
     expect(read('./view/OrdersListView.tsx')).toMatch(/colId: 'picture',[^}]*cellRenderer: PictureColumn, context: \{ leading: true \} \}/)
     expect(read('../../../../list-frame/tools/model.ts')).toContain('contextOf(column).leading !== true')
+  })
+})
+
+// ============================================================ cw fx7 — the third look (31-rewalk.md "Third look") ============================================================
+
+describe('third look N-1: adding columns never takes "Where it is" under the 275 px it has beside the thread', () => {
+  const ROOMS = ['wide', 'wider', 'widest'] as const
+  it('each room starts at its set\'s fixed widths + 275 (+ the card\'s two edges): summed from the widths, never typed', () => {
+    expect([WORK_WHERE_ROOM, WORK_TICK, WORK_MORE, WORK_CARD_EDGES]).toEqual([275, 43, 48, 2])
+    // The sums by hand: the tick box + the set's columns without Where it is + ⋯.
+    expect(workFixedOf(WORK_SETS.base)).toBe(43 + 58 + 150 + 98 + 147 + 44 + 48)
+    expect(workFixedOf(WORK_SETS.wide)).toBe(588 + 178 + 136)
+    expect(workFixedOf(WORK_SETS.wider)).toBe(902 + 104)
+    expect(workFixedOf(WORK_SETS.widest)).toBe(1006 + 112 + 96 + 144 + 130)
+    for (const room of ROOMS) expect(WORK_ROOMS[room], room).toBe(workFixedOf(WORK_SETS[room]) + 275 + 2)
+    expect(WORK_ROOMS).toEqual({ wide: 1179, wider: 1283, widest: 1765 })
+    // The sheet's own ⋯ width is the one summed here.
+    expect(read('./view/OrdersListView.tsx')).toContain(`colId: 'more', headerName: t('col.more'), minWidth: ${WORK_MORE}, maxWidth: ${WORK_MORE},`)
+  })
+  it('in every room, at every width, "Where it is" has 275 px or more (the grid is the room less the card\'s edges)', () => {
+    const whereAt = (width: number) => width - WORK_CARD_EDGES - workFixedOf(WORK_SETS[workRoomOf(width)])
+    expect(whereAt(865)).toBe(275) // beside the thread at 1440: the measure every room keeps
+    for (let width = 865; width <= 2400; width += 1) if (whereAt(width) < WORK_WHERE_ROOM) throw new Error(`a room of ${width} px leaves Where it is ${whereAt(width)} px`)
+    // Where a room starts it has exactly the 275; one px less and the smaller set stays (with more room than that).
+    for (const room of ROOMS) {
+      expect(whereAt(WORK_ROOMS[room]), room).toBe(275)
+      expect(whereAt(WORK_ROOMS[room] - 1), room).toBeGreaterThan(275)
+    }
+    // The room the third look measured (a sheet of about 1704 px, the thread closed at about 1830): the nine columns stay — it had 214 px.
+    expect(workRoomOf(1706)).toBe('wider')
+    expect(whereAt(1706)).toBe(698)
+  })
+  it('the measured rooms land in the same sets as before: 6 · 8 · 9 · 13 columns, and Where it is 275 · 281 · 306 · 304 px', () => {
+    expect([343, 865, 1185, 1314, 1794].map((width) => workRoomOf(width))).toEqual(['base', 'base', 'wide', 'wider', 'widest'])
+    expect([865, 1185, 1314, 1794].map((width) => WORK_SETS[workRoomOf(width)].length)).toEqual([6, 8, 9, 13])
+    expect([865, 1185, 1314, 1794].map((width) => width - WORK_CARD_EDGES - workFixedOf(WORK_SETS[workRoomOf(width)]))).toEqual([275, 281, 306, 304])
+    expect(WORK_MIN.whereItIs).toBe(220) // its floor is back (it had been lowered to make the widest set fit at 1700)
+    expect(WORK_MIN.orderDate).toBe(144) // Ordered keeps its two lines
+  })
+})
+
+describe('third look R-3, item 3: the Thread door in the card\'s top row; nothing said that cannot be done', () => {
+  it('R-3: the door is the list frame\'s own card door again (the top row, beside ⋯) on every host — no line of the card is only for it', () => {
+    const view = read('./view/OrdersListView.tsx')
+    expect(view).toContain("cardDoor: model.active.cardDoor && actions?.onCardThread ? { column: 'newMessages', label: model.active.cardDoor, onOpen: (row) => actions?.onCardThread?.(row) } : null,")
+    expect(view).not.toMatch(/fw-sheet-card-door|cardDoorLabel/)
+    expect(read('./sheet/chips.css')).not.toContain('fw-sheet-card-door')
+    // The frame puts that door in the card's top row (its `aside`), and ⋯ in its actions.
+    const frame = read('../../../../list-frame/ListFrame.tsx')
+    expect(frame).toContain("{ [door.column]: { role: 'aside' as const, draw: (row: T) => <CardDoor label={door.label} onOpen={() => door.onOpen(row)} /> } }")
+    // The rest of the card is as it was: one block under the number, the picture at its left.
+    expect(view).toContain("picture: { role: 'hidden' as const },")
+    expect(view).toContain('<span className="fw-sheet-card-pic">{picture(row)}</span>')
+  })
+  it('item 3: on orders with no portal the window draws the reason alone; quotes and requests keep their lines', () => {
+    const dialog = read('./view/ReplyManyDialog.tsx')
+    expect(dialog).toContain("const lines = box || (!!model.recordType && model.recordType !== 'SalesOrder')")
+    expect(dialog).toContain('{lines && language && (')
+    expect(dialog).toMatch(/\{lines && \(\n\s*<div className="fw-srm-orders">/)
   })
 })
