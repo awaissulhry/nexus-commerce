@@ -245,23 +245,55 @@ describe('F-CP-108 — never a system move, no free status', () => {
   })
 })
 
-describe('F-CP-108 — held words from the row\'s facts (held, never hidden; no amount without the price grain)', () => {
-  const inProduction = { status: 'IN_PRODUCTION' as const, deposit: { state: 'PAID' as const, dueDate: null } }
-  it('as Production manager (no orders.manage, no orders.close): Mark ready… and Cancel order… held "needs the sales right"; Close order… held', () => {
+// cw fx3 (F-CW-204, lead settle S9): a step is held with words only by the row's STATE; a step the reader has no right for is not
+// drawn at all (it was drawn greyed with "needs the right": these two tests asserted that old rule).
+describe('F-CP-108 — held by the row\'s state with words; not drawn without the right (no amount without the price grain)', () => {
+  const PAID = { state: 'PAID' as const, dueDate: null }
+  const inProduction = { status: 'IN_PRODUCTION' as const, deposit: PAID }
+  const shipped = { status: 'SHIPPED' as const, deposit: PAID }
+  const delivered = { status: 'DELIVERED' as const, deposit: PAID }
+  it('as Production manager (no orders.manage, no orders.close): no Mark ready…, no Cancel order…, no Close order… — a missing right draws no step; with the right the step is there', () => {
     const can = canOf('manager')
-    expect(rowStepsOf(inProduction, can)).toEqual([
-      { command: 'ready', held: { key: 'held.noManage' } },
-      { command: 'cancel', held: { key: 'held.noManage' } },
+    expect([can.manage, can.close, can.makeWorkOrders]).toEqual([false, false, true])
+    // Not held, not greyed: not in the menu.
+    expect(rowStepsOf(inProduction, can)).toEqual([])
+    expect(rowStepsOf(shipped, can)).toEqual([])
+    expect(rowStepsOf(delivered, can)).toEqual([])
+    // The same rows for a reader WITH the right: the step is there, and nothing holds it (the state allows it).
+    const owner = canOf('owner')
+    expect(rowStepsOf(inProduction, owner)).toEqual([
+      { command: 'ready', held: null },
+      { command: 'cancel', held: null },
     ])
-    expect(rowStepsOf({ status: 'SHIPPED', deposit: { state: 'PAID', dueDate: null } }, can)).toEqual([{ command: 'close', held: { key: 'held.noClose' } }])
-    expect(rowStepsOf({ status: 'DELIVERED', deposit: { state: 'PAID', dueDate: null } }, can)).toEqual([{ command: 'close', held: { key: 'held.noClose' } }])
+    expect(rowStepsOf(shipped, owner)).toEqual([{ command: 'close', held: null }])
+    expect(rowStepsOf(delivered, owner)).toEqual([{ command: 'close', held: null }])
+    // Each step reads its OWN right: orders.close alone (Finance) closes and may neither mark ready nor cancel.
+    const finance = canOf('finance')
+    expect([finance.manage, finance.close]).toEqual([false, true])
+    expect(rowStepsOf(shipped, finance)).toEqual([{ command: 'close', held: null }])
+    expect(rowStepsOf(inProduction, finance)).toEqual([])
+    // The production manager's own step, by its own right (workorders.manage) — and a STATE holds it with words, right or not.
+    expect(rowStepsOf({ status: 'CONFIRMED', deposit: PAID }, can)).toEqual([{ command: 'make', held: null }])
+    expect(rowStepsOf({ status: 'CONFIRMED', deposit: { state: 'OPEN', dueDate: '2026-11-04' } }, can)).toEqual([{ command: 'make', held: { key: 'held.deposit', params: { date: '2026-11-04' } } }])
   })
-  it('Make work orders: the production manager\'s right first, then the deposit (open: its due day; never asked: missing)', () => {
+  it('Make work orders: not drawn without its right; with the right the deposit holds it with its words (open: its due day; never asked: missing)', () => {
     const noWork = { ...canOf('sales'), makeWorkOrders: false }
-    expect(rowStepsOf({ status: 'CONFIRMED', deposit: { state: 'PAID', dueDate: null } }, noWork)[0]).toEqual({ command: 'make', held: { key: 'held.noWorkOrders' } })
+    expect(noWork.manage).toBe(true)
+    // Without workorders.manage: no Make work orders, whatever the deposit says — never a greyed "needs the right"; the reader's
+    // own step of the state stays (Cancel order…, by orders.manage).
+    for (const deposit of [PAID, { state: 'OPEN' as const, dueDate: '2026-11-04' }, { state: 'MISSING' as const, dueDate: null }, { state: 'NOT_NEEDED' as const, dueDate: null }]) {
+      const steps = rowStepsOf({ status: 'CONFIRMED', deposit }, noWork)
+      expect(steps, deposit.state).toEqual([{ command: 'cancel', held: null }])
+      expect(steps.some((step) => step.command === 'make'), deposit.state).toBe(false)
+    }
+    // With the right: the STATE holds it, in words — the deposit that production waits for.
     expect(rowStepsOf({ status: 'CONFIRMED', deposit: { state: 'OPEN', dueDate: '2026-11-04' } }, canOf('owner'))[0]).toEqual({ command: 'make', held: { key: 'held.deposit', params: { date: '2026-11-04' } } })
     expect(rowStepsOf({ status: 'CONFIRMED', deposit: { state: 'MISSING', dueDate: null } }, canOf('owner'))[0]).toEqual({ command: 'make', held: { key: 'held.depositMissing' } })
     expect(rowStepsOf({ status: 'CONFIRMED', deposit: { state: 'NOT_NEEDED', dueDate: null } }, canOf('owner'))[0]).toEqual({ command: 'make', held: null })
+    expect(rowStepsOf({ status: 'CONFIRMED', deposit: PAID }, canOf('owner'))[0]).toEqual({ command: 'make', held: null })
+    // The right's own words are the WINDOW's guard now (it never opens without the right), never a row step's.
+    for (const role of ROLE_NAMES) for (const status of ORDER_STATUSES) for (const step of rowStepsOf({ status, deposit: { state: 'MISSING', dueDate: null } }, canOf(role))) expect(['held.noManage', 'held.noClose', 'held.noWorkOrders'], `${role} ${status} ${step.command}`).not.toContain(step.held?.key ?? '')
+    expect(windowHeldOf('ready', full('IN_PRODUCTION'), canOf('manager'))).toEqual({ key: 'held.noManage' })
   })
   it('every held word is words in both languages, without a figure of money', () => {
     for (const locale of LOCALES) {
