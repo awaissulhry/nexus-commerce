@@ -272,7 +272,9 @@
         "after": "Orders that left production follow, newest first.",
         "sorted": "Sorted: {sort}.",
         "use": "Customer urgency: {used} of at most {max} urgent now.",
-        "off": "Customer urgency is off for {customer}"
+        "off": "Customer urgency is off for {customer}",
+        "useEach": "Customer urgency: {companies} urgent now.",
+        "useCompany": "{company} {used} of at most {max}"
       }
     },
     "quotesTab": {

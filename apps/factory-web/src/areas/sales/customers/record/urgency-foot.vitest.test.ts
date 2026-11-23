@@ -12,18 +12,51 @@ import { urgencyFootOf, urgencyFootTouched, workFootOf } from './urgency-foot'
  */
 
 const use = (used: number, max: number) => ({ used, max, agreed: max, left: Math.max(0, max - used), over: used > max, words: { it: '', en: '' } })
-const company = (code: string, used: number, max: number): CustomerUrgency['companies'][number] => ({ company: { id: code, code, name: code }, use: use(used, max), mayOverride: true, orders: [] })
+type UrgencyCompany = CustomerUrgency['companies'][number]
+const anOrder = (id: string): UrgencyCompany['orders'][number] => ({ id, number: `SEED-SO-${id}`, customerRef: null, status: 'IN_PRODUCTION', orderDate: '2026-11-01', urgency: 'REGULAR', counted: false, urgentRank: null, setBy: null, setAt: null, setByPerson: null, locked: false, lockReason: null, lockedAt: null, lockedBy: null, words: { it: '', en: '' } })
+/** One of our companies the customer works with: its own urgent list (`used` of `max`) and how many of the customer's orders it holds. */
+const company = (code: string, used: number, max: number, orders = 1): UrgencyCompany => ({ company: { id: code, code, name: `Seed ${code}` }, use: use(used, max), mayOverride: true, orders: Array.from({ length: orders }, (_, index) => anOrder(`${code}${index + 1}`)) })
 const read = (on: boolean, companies: CustomerUrgency['companies'], max = 3): Pick<CustomerUrgency, 'urgency' | 'companies'> => ({ urgency: { on, max, dormant: null }, companies })
 const PORTAL = '/office/sales/customers/c1?tab=portal#production-limits'
-const line = (over: Partial<Parameters<typeof workFootOf>[0]> = {}) => workFootOf({ sort: 'urgent', sortWord: 'Most urgent first', customer: 'Seed Racing', foot: { on: true, used: 3, max: 3 }, portalHref: PORTAL, mayPortal: true, ...over })
+const line = (over: Partial<Parameters<typeof workFootOf>[0]> = {}) => workFootOf({ sort: 'urgent', sortWord: 'Most urgent first', customer: 'Seed Racing', foot: { on: true, used: 3, max: 3, companies: [] }, portalHref: PORTAL, mayPortal: true, ...over })
 
 describe('F-CW-302: the customer\'s urgency for the foot', () => {
-  it('"3 of at most 3": the marks that count and the quota; a customer at two companies has two lists — both summed', () => {
-    expect(urgencyFootOf(read(true, [company('A', 3, 3)]))).toEqual({ on: true, used: 3, max: 3 })
-    expect(urgencyFootOf(read(true, [company('A', 2, 3), company('B', 1, 3)]))).toEqual({ on: true, used: 3, max: 6 })
-    expect(urgencyFootOf(read(false, [company('A', 0, 3)]))).toEqual({ on: false, used: 0, max: 3 })
-    // No company in the answer: the customer's own quota, nothing marked.
-    expect(urgencyFootOf(read(true, [], 5))).toEqual({ on: true, used: 0, max: 5 })
+  it('"3 of at most 3": the marks that count and the quota of the ONE company the customer has orders at', () => {
+    expect(urgencyFootOf(read(true, [company('A', 3, 3)]))).toEqual({ on: true, used: 3, max: 3, companies: [] })
+    expect(urgencyFootOf(read(false, [company('A', 0, 3)]))).toEqual({ on: false, used: 0, max: 3, companies: [] })
+    // It works with two of our companies but has orders at one only: that company's own numbers, never a sum.
+    expect(urgencyFootOf(read(true, [company('A', 2, 3), company('B', 0, 4, 0)]))).toEqual({ on: true, used: 2, max: 3, companies: [] })
+    // No order anywhere: nothing is marked; every list's quota. No company in the answer: the customer's own quota.
+    expect(urgencyFootOf(read(true, [company('A', 0, 3, 0), company('B', 0, 3, 0)]))).toEqual({ on: true, used: 0, max: 6, companies: [] })
+    expect(urgencyFootOf(read(true, [], 5))).toEqual({ on: true, used: 0, max: 5, companies: [] })
+  })
+
+  // T.0 (lead, after W3): a sum would say a quota nobody has ("3 of at most 6") — each company is named with its own numbers.
+  it('orders at MORE than one company: each company named with its own marks and quota, in the read\'s order', () => {
+    const foot = urgencyFootOf(read(true, [company('A', 2, 3), company('B', 1, 3), company('C', 0, 3, 0)]))
+    expect(foot.companies).toEqual([{ name: 'Seed A', used: 2, max: 3 }, { name: 'Seed B', used: 1, max: 3 }]) // C holds no order of the customer: not named
+    expect([foot.used, foot.max]).toEqual([3, 9])
+    const named = line({ foot })
+    expect(named.urgency).toEqual({ ns: 'parties', key: 'customers.work.foot.useEach' })
+    expect(named.each).toEqual([
+      { ns: 'parties', key: 'customers.work.foot.useCompany', params: { company: 'Seed A', used: 2, max: 3 } },
+      { ns: 'parties', key: 'customers.work.foot.useCompany', params: { company: 'Seed B', used: 1, max: 3 } },
+    ])
+    // The sentence, as the view joins it — in both languages.
+    const say = (locale: (typeof LOCALES)[number]): string => {
+      const t = createTranslator(locale, messagesFor(locale, ['parties']).parties!)
+      return t(named.urgency!.key, { companies: named.each.map((part) => t(part.key, part.params)).join(' · ') })
+    }
+    expect(say('en')).toBe('Customer urgency: Seed A 2 of at most 3 · Seed B 1 of at most 3 urgent now.')
+    expect(say('it')).toBe('Urgenza cliente: Seed A 2 di al massimo 3 · Seed B 1 di al massimo 3 urgenti ora.')
+    // One company: today's words, no part. The switch off: the off line whatever the companies, no part either.
+    expect(line().each).toEqual([])
+    const off = line({ foot: { ...foot, on: false } })
+    expect([off.urgency?.key, off.each]).toEqual(['customers.work.foot.off', []])
+    // The view joins the parts into the one sentence (source).
+    const view = readFileSync(new URL('./view/WorkFoot.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("line.each.length > 0 ? t(words.key, { companies: line.each.map(say).join(' · ') }) : say(words)")
+    expect(view).toContain('{sayUrgency(line.urgency)}')
   })
 
   it('read again when the customer\'s urgency or its portal settings change — on nothing else', () => {
@@ -39,16 +72,17 @@ describe('F-CW-302: the foot line', () => {
       urgent: { rule: { ns: 'sheet', key: 'sort.urgentRule', params: { customer: 'Seed Racing' } }, after: { ns: 'parties', key: 'customers.work.foot.after' } },
       sorted: null,
       urgency: { ns: 'parties', key: 'customers.work.foot.use', params: { used: 3, max: 3 } },
+      each: [],
       portalHref: null,
     })
   })
 
   it('the switch off: the rule has no middle part, the line says so, and the door is there only for a reader who may change it', () => {
-    const off = line({ foot: { on: false, used: 0, max: 3 } })
+    const off = line({ foot: { on: false, used: 0, max: 3, companies: [] } })
     expect(off.urgent?.rule).toEqual({ ns: 'sheet', key: 'sort.urgentRuleOff' })
     expect(off.urgency).toEqual({ ns: 'parties', key: 'customers.work.foot.off', params: { customer: 'Seed Racing' } })
     expect(off.portalHref).toBe(PORTAL)
-    expect(line({ foot: { on: false, used: 0, max: 3 }, mayPortal: false }).portalHref).toBeNull()
+    expect(line({ foot: { on: false, used: 0, max: 3, companies: [] }, mayPortal: false }).portalHref).toBeNull()
   })
 
   it('another sort: "Sorted: Newest first."; not read (no workorders.view, or it failed): the sort only, never "0"', () => {
@@ -66,7 +100,7 @@ describe('F-CW-302: the foot line', () => {
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['parties']).parties!)
       const s = createTranslator(locale, messagesFor(locale, ['orders-sheet'])['orders-sheet']!)
-      for (const key of ['customers.work.foot.after', 'customers.work.foot.sorted', 'customers.work.foot.use', 'customers.work.foot.off', 'customers.tab.portal']) expect(t(key, { sort: 'x', used: 3, max: 3, customer: 'Seed Racing' }), `${locale} ${key}`).not.toBe(key)
+      for (const key of ['customers.work.foot.after', 'customers.work.foot.sorted', 'customers.work.foot.use', 'customers.work.foot.useEach', 'customers.work.foot.useCompany', 'customers.work.foot.off', 'customers.tab.portal']) expect(t(key, { sort: 'x', used: 3, max: 3, customer: 'Seed Racing', company: 'Seed A', companies: 'x' }), `${locale} ${key}`).not.toBe(key)
       for (const key of ['sort.urgent', 'sort.urgentRule', 'sort.urgentRuleOff']) expect(s(key, { customer: 'Seed Racing' }), `${locale} ${key}`).not.toBe(key)
       expect(`${s('sort.urgentRule', { customer: 'Seed Racing' })} ${t('customers.work.foot.after')}`.toLowerCase(), locale).not.toMatch(/planning order|ordine di pianificazione/)
     }
