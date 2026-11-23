@@ -74,6 +74,11 @@ export interface ListFrameSelection {
    * "Export N" until it opts in).
    */
   exportSelected?: boolean
+  // F-CL-103 (customers list plan §1, settle T9): one additive option — drawn after Export N and before Clear (the parties list's
+  // More ▾ right of Export, last before ✕). Absent: every other list unchanged.
+  /** After Export N, before Clear (and in the phone card list's bar). */
+  trailing?: ReactNode
+  // F-CL-103 end
 }
 
 export interface ListFrameProps<T> {
@@ -560,6 +565,7 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
         {selection.exportSelected && exportsOn && listTools.transport && listTools.listKey && (
           <ExportSelected ids={selected} columns={listTools.columns} formats={listTools.answer!.exports!.formats} transport={listTools.transport} listKey={listTools.listKey} title={listTools.title} t={t} onReceipt={receipt} />
         )}
+        {selection.trailing /* F-CL-103 */}
       </>
     ) : null
   const frameTools = printing ? null : (

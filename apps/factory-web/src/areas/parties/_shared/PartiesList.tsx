@@ -286,11 +286,16 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
     }
   }
 
-  /** One call per row, one result per row (the dialog shows them as they come). */
-  const runBulk = async (kind: BulkKind, targets: readonly PartyRow[], reason?: string) => {
+  // F-CL-103: the last run's kind and reason, for its receipt's "Run the rest again".
+  const lastRun = useRef<{ kind: BulkKind; reason?: string } | null>(null)
+
+  /** One call per row, one result per row (the dialog shows them as they come). F-CL-103: + the selected rows it leaves out. */
+  const runBulk = async (kind: BulkKind, targets: readonly PartyRow[], reason?: string, notOn?: readonly string[]) => {
     const list = targets.slice(0, BULK_MAX)
     const results: BulkResult[] = []
-    setBulk({ kind, total: list.length, results: [], done: false })
+    lastRun.current = { kind, ...(reason ? { reason } : {}) }
+    const skipped = notOn && notOn.length > 0 ? { notOn } : {}
+    setBulk({ kind, total: list.length, results: [], done: false, ...skipped })
     setDialog({ kind: 'bulk' })
     for (const row of list) {
       let result: BulkResult
@@ -312,19 +317,20 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
           result = { id: row.id, code: row.code, name: partyName(row), outcome: 'bulk.archived', tone: 'success' }
         }
       } catch (error) {
-        result = { id: row.id, code: row.code, name: partyName(row), outcome: kind === 'vies' && isApiError(error) && error.kind === 'conflict' ? 'vies.refused' : problemKey(error), tone: 'danger' }
+        result = { id: row.id, code: row.code, name: partyName(row), outcome: kind === 'vies' && isApiError(error) && error.kind === 'conflict' ? 'vies.refused' : problemKey(error), tone: 'danger', failed: true }
       }
       results.push(result)
-      setBulk({ kind, total: list.length, results: [...results], done: false })
+      setBulk({ kind, total: list.length, results: [...results], done: false, ...skipped })
     }
-    setBulk({ kind, total: list.length, results: [...results], done: true })
+    setBulk({ kind, total: list.length, results: [...results], done: true, ...skipped })
     setSelected([])
     refresh()
   }
 
-  const onCheckVies = async (ids: readonly string[]) => {
+  const onCheckVies = async (ids: readonly string[], notOn?: readonly string[]) => {
     const targets = ids.map(rowOf).filter((row): row is PartyRow => !!row)
-    if (targets.length !== 1) return void runBulk('vies', targets)
+    // F-CL-103: from the bar with rows it leaves out, the window says which and why (one row alone, as before: a notice).
+    if (targets.length !== 1 || (notOn?.length ?? 0) > 0) return void runBulk('vies', targets, undefined, notOn)
     const row = targets[0]!
     setNotice({ key: 'vies.checkingOne', tone: 'info', params: { name: partyName(row) } })
     try {
@@ -440,7 +446,7 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
         onBlock: (ids, reason) => {
           const targets = ids.map(rowOf).filter((row): row is PartyRow => !!row)
           if (targets.length === 1) void move(targets[0]!.id, 'block', reason)
-          else void runBulk('block', targets, reason)
+          else void runBulk('block', targets, reason, dialog?.kind === 'block' ? dialog.notOn : undefined)
         },
         onOpen: (row) => router.push(recordHref(prefix, config, row.id)),
         onUnblock: (id) => void move(id, 'unblock'),
@@ -457,9 +463,15 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
               })
               .catch((error: unknown) => setDialogProblem(problemKey(error)))
               .finally(() => setBusy(false))
-          } else void runBulk('archive', targets)
+          } else void runBulk('archive', targets, undefined, dialog?.kind === 'archive' ? dialog.notOn : undefined)
         },
-        onCheckVies: (ids) => void onCheckVies(ids),
+        onCheckVies: (ids, notOn) => void onCheckVies(ids, notOn),
+        // F-CL-103: the receipt's "Run the rest again" — the same act on the ones that failed (Block with its reason).
+        onRunRest: (ids) => {
+          const last = lastRun.current
+          const targets = ids.map(rowOf).filter((row): row is PartyRow => !!row)
+          if (last && targets.length > 0) void runBulk(last.kind, targets, last.reason)
+        },
         onRecheckAll: () => void onRecheckAll(),
         onDismissNotice: () => setNotice(null),
       }}

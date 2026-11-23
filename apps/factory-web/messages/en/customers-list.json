@@ -32,5 +32,31 @@
   },
   "card": {
     "thread": "Thread"
+  },
+  "bar": {
+    "more": "More",
+    "none": {
+      "customers": "Your role reads customers and changes none: there is no act for the ticked rows.",
+      "suppliers": "Your role reads suppliers and changes none: there is no act for the ticked rows."
+    }
+  },
+  "p2": {
+    "why": {
+      "noNumber": "No EU VAT number VIES can check.",
+      "blocked": "Already blocked.",
+      "archived": "Already archived.",
+      "prospect": {
+        "customers": "A prospect: only active customers are blocked.",
+        "suppliers": "A prospect: only active suppliers are blocked."
+      }
+    },
+    "each": {
+      "customers": "Each customer",
+      "suppliers": "Each supplier"
+    },
+    "door": {
+      "customers": "A customer’s name opens its page with the thread open, in a new tab.",
+      "suppliers": "A supplier’s name opens its page with the thread open, in a new tab."
+    }
   }
 }

@@ -32,5 +32,31 @@
   },
   "card": {
     "thread": "Conversazione"
+  },
+  "bar": {
+    "more": "Altro",
+    "none": {
+      "customers": "Il tuo ruolo legge i clienti e non ne cambia nessuno: non c’è nessuna azione per le righe spuntate.",
+      "suppliers": "Il tuo ruolo legge i fornitori e non ne cambia nessuno: non c’è nessuna azione per le righe spuntate."
+    }
+  },
+  "p2": {
+    "why": {
+      "noNumber": "Nessuna partita IVA UE controllabile con VIES.",
+      "blocked": "Già bloccato.",
+      "archived": "Già archiviato.",
+      "prospect": {
+        "customers": "Un potenziale: si bloccano solo i clienti attivi.",
+        "suppliers": "Un potenziale: si bloccano solo i fornitori attivi."
+      }
+    },
+    "each": {
+      "customers": "Ogni cliente",
+      "suppliers": "Ogni fornitore"
+    },
+    "door": {
+      "customers": "Il nome di un cliente apre la sua pagina con la conversazione aperta, in una nuova scheda.",
+      "suppliers": "Il nome di un fornitore apre la sua pagina con la conversazione aperta, in una nuova scheda."
+    }
   }
 }

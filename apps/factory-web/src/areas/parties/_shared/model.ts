@@ -796,12 +796,16 @@ export interface BulkResult {
   /** A message key: the VIES result, archived, or why not. */
   outcome: string
   tone: Tone
+  /** F-CL-103: the call failed (a refusal or no answer: "Run the rest again" offers it); a VIES "not valid" is an answer, not a failure. */
+  failed?: boolean
 }
 export interface BulkRun {
   kind: BulkKind
   total: number
   results: readonly BulkResult[]
   done: boolean
+  /** F-CL-103: the selected rows it does not run on (ids; the window says why beside each). */
+  notOn?: readonly string[]
 }
 
 /** Which selected rows a bulk action reaches, and the rest with why not (held before the click, 00 §2.1). */
@@ -875,7 +879,8 @@ export interface ListCan {
 }
 
 // F-CL-101: "Keyboard shortcuts" left ⋯ (the footer's information icon keeps the keys), so the list has no keys window of its own.
-export type ListDialog = { kind: 'new' } | { kind: 'block'; partyIds: readonly string[] } | { kind: 'archive'; partyIds: readonly string[] } | { kind: 'bulk' }
+// F-CL-103: a window opened from the bar names the selected rows it does not run on (`notOn`: ids; the window says why beside each).
+export type ListDialog = { kind: 'new' } | { kind: 'block'; partyIds: readonly string[]; notOn?: readonly string[] } | { kind: 'archive'; partyIds: readonly string[]; notOn?: readonly string[] } | { kind: 'bulk' }
 
 export type LiveState = 'connecting' | 'live' | 'offline'
 

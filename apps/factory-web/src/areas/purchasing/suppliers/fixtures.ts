@@ -1,5 +1,5 @@
 import { createElement, useMemo } from 'react'
-import { Button } from '@nexus/ui/primitives'
+import { FileQuestion } from 'lucide-react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { useT } from '../../../lib/i18n/provider'
 import { WithMessages } from '../../../record-panels/i18n'
@@ -64,7 +64,8 @@ function DepthList({ list, w2b }: { list: ReturnType<typeof useDesignList>; w2b:
               model: { summary: summary ? ready(summary.suppliers) : w2b.summary.status === 'error' ? failedRead(w2b.summary.problem) : LOADING, suppliers: ready(supplierRowsOf(SUPPLIERS)), can, prefix: '/w/DEMO', ...(w2b.expiringSelected ? { selected: w2b.expiringSelected } : {}) },
             })
           : null,
-        bulk: createElement(Button, { size: 'sm', heldReason: held ? t(held.key, held.params) : null }, t('list.request', { count: selected.length })),
+        // F-CL-103: Request documents is a bar act (order 20), not drawn without the right to ask.
+        acts: can.ask ? [{ id: 'request', order: 20, label: t('list.request', { count: selected.length }), icon: createElement(FileQuestion, { size: 13, 'aria-hidden': true }), held: held ? t(held.key, held.params) : null, run: () => undefined }] : [],
       },
     }),
     createElement(RequestDialog, { run: w2b.run ?? null, today: TODAY }),
