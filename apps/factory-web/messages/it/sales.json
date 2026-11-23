@@ -776,7 +776,9 @@
       "validUntil": "Valido fino al",
       "updated": "Aggiornato",
       "more": "Azioni",
-      "picture": "Immagine"
+      "picture": "Immagine",
+      "where": "A che punto è",
+      "wider": "{label} (da una lista più larga)"
     },
     "ref": "Rif. {ref}",
     "units": "{units} · righe {lines}",
@@ -789,7 +791,47 @@
     "madeFrom": "da {number}",
     "order": "Ordine {number}",
     "orderCancelled": "Ordine {number} annullato",
-    "orderWaits": "L'ordine aspetta"
+    "orderWaits": "L'ordine aspetta",
+    "where": {
+      "draftUs": "Bozza · tocca a noi",
+      "approval": "In attesa di approvazione",
+      "approvedReady": "Approvato · pronto da inviare",
+      "sent": "Inviato · in attesa di {customer}",
+      "sentToday": "Inviato oggi · in attesa di {customer}",
+      "sentAgo_one": "Inviato {count} giorno fa · in attesa di {customer}",
+      "sentAgo_other": "Inviato {count} giorni fa · in attesa di {customer}",
+      "acceptedWaits": "Accettato · l’ordine aspetta",
+      "acceptedOrder": "Accettato · {order}",
+      "declined": "Rifiutato da {customer}",
+      "approvalRejected": "Approvazione rifiutata",
+      "holdsSent": "Il cliente ha ancora la revisione inviata",
+      "endsIn_one": "Scade tra {count} giorno",
+      "endsIn_other": "Scade tra {count} giorni",
+      "endsToday": "Scade oggi",
+      "remindedOn": "Promemoria il {date}",
+      "orderCancelled": "Il suo ordine è stato annullato",
+      "orderWaits": {
+        "NO_SALES_ORDER_SERIES": "Manca la numerazione degli ordini",
+        "ACCOUNT_ON_HOLD": "Cliente bloccato",
+        "PO_NUMBER_REQUIRED": "Serve il suo numero d’ordine",
+        "NOT_MADE": "Non ancora creato"
+      },
+      "styles_one": "{count} modello",
+      "styles_other": "{count} modelli",
+      "pieces_one": "{count} pezzo",
+      "pieces_other": "{count} pezzi",
+      "foldValid": "Valido fino al {date}"
+    },
+    "sort": {
+      "urgent": "Prima i più urgenti",
+      "valid": "Validità, prima la più vicina",
+      "ruleUrgent": "Prima i più urgenti: ordine che aspetta, in attesa di approvazione, tocca a noi, in scadenza, in attesa da più tempo.",
+      "tooMany": "Più di 2.000 preventivi: restringi la lista (un cliente, uno stato) per ordinarli per urgenza.",
+      "tooManyTitle": "Troppi preventivi per questo ordine"
+    },
+    "state": {
+      "notClosed": "Non chiusi"
+    }
   },
   "newQuote": {
     "title": "Nuovo preventivo",

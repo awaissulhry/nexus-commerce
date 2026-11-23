@@ -16,6 +16,10 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { previewHref, QUOTE_STATUSES, type QuoteListRow, type QuoteStatus } from '../../api'
 import { activeFilterCount, APPROVAL_TONE, droppedWords, isExpiring, money, NO_FILTERS, percent, QUOTE_TILES, START_FROM, STATUS_TONE, tileOfFilters, warningWords } from '../../model'
+// ---- F-CQ-102 / F-CQ-104 (customer page › Quotes & incoming): the chips cell, the date cell, the order, the host's columns by its room
+import { customerSeesWords, isQuoteGroupTerm, quoteDateOf, quoteWhereOf, sortedQuotes, URGENT_TOO_MANY, type ListFilters, type ListWords, type QuoteListSort } from '../../model'
+import { byRoom, datesFold, hostTier, reaches } from '../../../_shared/list-room'
+import { WhereChips, type WhereChipWords } from '../../../_shared/where-cell/view/WhereChips'
 import { DuplicateDialog } from '../../duplicate/view/DuplicateDialog'
 import type { NewQuoteModel, QuotesListActions, QuotesListViewModel } from '../list-model'
 import '../../quotes.css'
@@ -41,7 +45,7 @@ export type { QuotesListViewModel, QuotesListActions } from '../list-model'
  */
 export function QuotesListView({ model, actions }: { model: QuotesListViewModel; actions?: QuotesListActions }) {
   return (
-    <WithMessages namespaces={['sales', 'lists', LAST_MESSAGE_NS /* B-TH-257 */]}>
+    <WithMessages namespaces={['sales', 'lists', LAST_MESSAGE_NS /* B-TH-257 */, 'orders-sheet' /* F-CQ-102: "Newest first", the money note (read only) */]}>
       <QuotesList model={model} actions={actions} />
     </WithMessages>
   )
@@ -51,6 +55,7 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
   const t = useT('sales')
   const lists = useT('lists')
   const l = useT(LAST_MESSAGE_NS) // B-TH-257
+  const os = useT('orders-sheet') // F-CQ-102: one word for one thing ("Newest first", the money columns' note)
   const locale = useLocale()
   const latest = useRef({ model, actions })
   latest.current = { model, actions }
@@ -81,7 +86,8 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
 
   const pressed = tileOfFilters(model.filters)
   const items = model.rows.items
-  const shown = useMemo(() => (items ? items.filter((row) => !model.filters.expiring || isExpiring(row, model.today)) : null), [items, model.filters.expiring, model.today])
+  // F-CQ-102: "Valid until, soonest first" sorts the loaded rows; every other order is the server's.
+  const shown = useMemo(() => (items ? sortedQuotes(items.filter((row) => !model.filters.expiring || isExpiring(row, model.today)), model.filters.sort) : null), [items, model.filters.expiring, model.today, model.filters.sort])
   const filtered = activeFilterCount(model.filters) > 0
   const recordHref = useCallback((row: QuoteListRow) => `${model.prefix}/sales/quotes/${row.id}`, [model.prefix])
   const picked = (shown ?? []).filter((row) => selected.includes(row.id))
@@ -90,6 +96,12 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
 
   const live = useRef({ actions, manage: model.can.manage })
   live.current = { actions, manage: model.can.manage }
+  // ---- F-CQ-102 / F-CQ-104: the host's face — its columns by the list's own room (never the window), its customer's one name.
+  const host = model.columns === 'host'
+  const tier = hostTier(model.room)
+  const fold = host && datesFold(tier)
+  const say = useCallback((words: ListWords | null | undefined): string => (words ? t(words.key, words.params) : ''), [t])
+  // ---- end F-CQ-102 / F-CQ-104
   const columns = useMemo<ColDef<QuoteListRow>[]>(() => {
     // TH-6 part B (grid-F01): the first style's small preview ("+2"), opening the picture large; the placeholder without a file.
     const PictureCell = ({ data }: ICellRendererParams<QuoteListRow>) =>
@@ -112,7 +124,8 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
           <Link className="fw-ql-link" href={recordHref(data)}>
             {data.number}
           </Link>
-          <span className="fw-ql-row-sub">{t('record.versionChip', { revision: data.revision })}</span>
+          {/* F-CQ-102 (L18): the revision only from r2 — "r1" is never drawn. */}
+          {data.revision >= 2 && <span className="fw-ql-row-sub">{t('record.versionChip', { revision: data.revision })}</span>}
           {/* B-TH-257 (grid-F08): "from INQ-…" — the request the quote was made from (a door with the requests right). */}
           {data.madeFrom &&
             (latest.current.model.readsRequests ? (
@@ -122,6 +135,10 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
             ) : (
               <span className="fw-ql-row-sub">{t('list.madeFrom', { number: data.madeFrom.number })}</span>
             ))}
+          {/* F-CQ-102 (Q3-B9): a quote made from a PORTAL order says so (the number only: the API names it only with orders.view). */}
+          {!data.madeFrom && data.fromPortalOrder && <span className="fw-ql-row-sub">{t('list.madeFrom', { number: data.fromPortalOrder.number })}</span>}
+          {/* F-CQ-102: on the host (no Customer column) the customer's reference sits here when no source does. */}
+          {host && !data.madeFrom && !data.fromPortalOrder && data.customerRef && <span className="fw-ql-row-sub">{t('list.ref', { ref: data.customerRef })}</span>}
         </span>
       ) : null
     const CustomerCell = ({ data }: ICellRendererParams<QuoteListRow>) =>
@@ -132,23 +149,25 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
         </span>
       ) : null
     // B-TH-257 (grid-F07): an accepted row names its order ("SO-…", "SO-… cancelled") or says the order waits.
-    const StatusCell = ({ data }: ICellRendererParams<QuoteListRow>) =>
-      data ? (
-        <span className="fw-ql-cell is-status">
-          <Pill tone={STATUS_TONE[data.status]}>{t(`status.${data.status}`)}</Pill>
-          {data.order?.state === 'MADE' && data.order.id && data.order.number ? (
-            latest.current.model.readsOrders ? (
-              <Link className="fw-ql-row-sub" href={`${model.prefix}/sales/orders/${encodeURIComponent(data.order.id)}`}>
-                {t(data.order.status === 'CANCELLED' ? 'list.orderCancelled' : 'list.order', { number: data.order.number })}
-              </Link>
-            ) : (
-              <span className="fw-ql-row-sub">{t(data.order.status === 'CANCELLED' ? 'list.orderCancelled' : 'list.order', { number: data.order.number })}</span>
-            )
-          ) : data.order?.state === 'WAITS' ? (
-            <span className="fw-ql-row-sub">{t('list.orderWaits')}</span>
-          ) : null}
-        </span>
-      ) : null
+    // F-CQ-102 (10-design §4.3; C32, C33): the ONE chips cell "Where it is" — the state and who it waits on, the one fact that matters
+    // now (approval rejected, ends in N days, why the order waits — t('list.orderWaits') is its title), what the customer sees; the date
+    // folds here under 840 px of list room. The order opens with orders.view. No amount in any chip.
+    const StatusCell = ({ data }: ICellRendererParams<QuoteListRow>) => {
+      if (!data) return null
+      const m = latest.current.model
+      const cell = quoteWhereOf(data, m.today, m.customerName ?? data.partyName)
+      const chips: WhereChipWords[] = cell.chips.map((chip) => ({
+        words: chip.portal ? t(chip.key, { state: customerSeesWords(chip.portal, locale) }) : chip.at ? t(chip.key, { ...chip.params, date: formatDate(chip.at, { locale }) }) : t(chip.key, chip.params),
+        tone: chip.tone,
+        look: chip.look,
+        href: chip.order && m.readsOrders ? `${m.prefix}/sales/orders/${encodeURIComponent(chip.order.id)}` : null,
+        title: chip.key === 'list.where.acceptedWaits' ? t('list.orderWaits') : chip.order ? t('list.order', { number: chip.order.number }) : null,
+      }))
+      const date = quoteDateOf(data, m.today)
+      const folded = fold && date.day ? [t('list.where.foldValid', { date: formatDate(`${date.day}T12:00:00Z`, { locale }) }), say(date.note)].filter(Boolean).join(' · ') : null
+      const quiet = [cell.styles > 0 ? t('list.where.styles', { count: cell.styles }) : '', t('list.where.pieces', { count: cell.pieces })].filter(Boolean).join(' · ')
+      return <WhereChips chips={chips} fold={folded} foldTone={date.tone} quiet={quiet} />
+    }
     // B-TH-257 (grid-F03): the reader's own new messages — a door to the quote's thread at the first new one.
     const NewMessagesCell = ({ data }: ICellRendererParams<QuoteListRow>) => (data ? <LastMessageCell unread={latest.current.model.unread?.[data.id]} href={`${recordHref(data)}?thread=new`} record={data.number} /> : null)
     const MarginCell = ({ data }: ICellRendererParams<QuoteListRow>) =>
@@ -159,17 +178,19 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
         </span>
       ) : null
     const ApprovalCell = ({ data }: ICellRendererParams<QuoteListRow>) => (data?.approval ? <Pill tone={APPROVAL_TONE[data.approval]}>{t(`approvalStatus.${data.approval}`)}</Pill> : <span>—</span>)
-    const ValidCell = ({ data }: ICellRendererParams<QuoteListRow>) =>
-      data ? (
-        data.validUntil ? (
-          <span className="fw-q-inline">
-            {formatDate(`${data.validUntil}T12:00:00Z`, { locale })}
-            {isExpiring(data, model.today) && <Tag tone="warning">{t('list.expiringSoon')}</Tag>}
-          </span>
-        ) : (
-          <span>—</span>
-        )
-      ) : null
+    // F-CQ-102 (10-design §4.4): Valid until — a sent quote's day with how long it stands (amber within 7 days), an expired one's with
+    // "Offer ended", a declined one's day; "—" for a quote not sent yet.
+    const ValidCell = ({ data }: ICellRendererParams<QuoteListRow>) => {
+      if (!data) return null
+      const date = quoteDateOf(data, latest.current.model.today)
+      if (!date.day) return <span>—</span>
+      return (
+        <span className="fw-ql-cell">
+          <span>{formatDate(`${date.day}T12:00:00Z`, { locale })}</span>
+          {date.note && (date.tone === 'warning' ? <Tag tone="warning">{say(date.note)}</Tag> : <span className="fw-ql-row-sub">{say(date.note)}</span>)}
+        </span>
+      )
+    }
     const MoreCell = ({ data }: ICellRendererParams<QuoteListRow>) =>
       data ? (
         <Menu
@@ -179,24 +200,56 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
           items={[
             { id: 'open', label: t('list.open'), href: recordHref(data) },
             { id: 'tab', label: t('list.openNewTab'), href: recordHref(data), target: '_blank' },
-            { id: 'pdf', label: t('action.previewPdf'), icon: <FileText size={14} aria-hidden />, href: previewHref(data.id, 'it'), target: '_blank' },
+            // F-CQ-102 (Q1-B1, Q1-B7): the priced PDF only for a reader who sees prices (the API refuses the others), in the quote's own language.
+            ...(latest.current.model.grains.price ? [{ id: 'pdf', label: t('action.previewPdf'), icon: <FileText size={14} aria-hidden />, href: previewHref(data.id, data.language ?? 'it'), target: '_blank' as const }] : []),
             // B-W2a-49 (SAL-155): a new draft copied from this quote, for this customer or another.
-            {
-              id: 'duplicate',
-              label: t('action.duplicate'),
-              icon: <Copy size={14} aria-hidden />,
-              disabled: !live.current.manage,
-              description: live.current.manage ? undefined : t('held.noManage'),
-              onSelect: () => live.current.actions?.onDuplicateStart?.(data),
-            },
+            // F-CQ-102 (Q1-B9): not drawn without the right (never a held act for a missing right).
+            ...(live.current.manage
+              ? [
+                  {
+                    id: 'duplicate',
+                    label: t('action.duplicate'),
+                    icon: <Copy size={14} aria-hidden />,
+                    onSelect: () => live.current.actions?.onDuplicateStart?.(data),
+                  },
+                ]
+              : []),
           ]}
         />
       ) : null
+    // ---- F-CQ-102 / F-CQ-104 (10-design §4.1; C27): the host's columns by the list's OWN room — no Customer column (one customer's
+    // tab); M− 720–839 the base row (the date folds under the chips) · M + Valid until · L + Updated, Pieces (+ Net, Total with the price
+    // grain) · XL + Approval; Margin % a Customise choice. A column the room leaves out is hidden and an opt-in choice in Customise
+    // (its words "… (from a wider list)"), so "In view" counts only what is shown (P0-B5). The ⋯ column stays last.
+    if (host) {
+      const wider = (column: ColDef<QuoteListRow>, wanted: Parameters<typeof reaches>[1]) => byRoom(column, reaches(tier, wanted), t('list.col.wider', { label: String(column.headerName ?? '') }))
+      const marginLabel = t('list.col.margin')
+      return [
+        { colId: 'picture', headerName: t('list.col.picture'), minWidth: 76, maxWidth: 76, sortable: false, suppressHeaderMenuButton: true, cellRenderer: PictureCell },
+        { colId: 'number', headerName: t('list.col.number'), field: 'number', minWidth: 150, maxWidth: 190, flex: 0, cellRenderer: NumberCell, autoHeight: true },
+        { colId: 'status', headerName: t('list.col.where'), field: 'status', minWidth: 220, flex: 2, cellRenderer: StatusCell, autoHeight: true },
+        wider({ colId: 'valid', headerName: t('list.col.validUntil'), field: 'validUntil', minWidth: 132, maxWidth: 150, cellRenderer: ValidCell }, 'M'),
+        wider({ colId: 'updated', headerName: t('list.col.updated'), field: 'updatedAt', minWidth: 104, maxWidth: 120, valueFormatter: (params) => (params.value ? formatDate(params.value as string, { locale }) : '—') }, 'L'),
+        wider({ colId: 'units', headerName: t('list.col.units'), field: 'units', minWidth: 116, maxWidth: 140, valueFormatter: (params) => (params.data ? t('list.units', { units: params.data.units, lines: params.data.lineCount }) : '') }, 'L'),
+        ...(model.grains.price
+          ? [
+              wider({ colId: 'net', headerName: t('list.col.net'), field: 'netAmount', minWidth: 112, maxWidth: 130, type: 'rightAligned', valueFormatter: (params) => (params.data ? money(params.data.netAmount, params.data.currency, locale) : '') }, 'L'),
+              wider({ colId: 'gross', headerName: t('list.col.gross'), field: 'grossAmount', minWidth: 112, maxWidth: 130, type: 'rightAligned', valueFormatter: (params) => (params.data ? money(params.data.grossAmount, params.data.currency, locale) : '') }, 'L'),
+            ]
+          : []),
+        ...(model.grains.margin ? [{ colId: 'margin', headerName: marginLabel, field: 'marginPct', minWidth: 150, flex: 0, cellRenderer: MarginCell, hide: true, context: { optIn: true } } satisfies ColDef<QuoteListRow>] : []),
+        wider({ colId: 'approval', headerName: t('list.col.approval'), field: 'approval', minWidth: 120, maxWidth: 140, cellRenderer: ApprovalCell }, 'XL'),
+        ...(model.unread ? ([{ colId: 'newMessages', headerName: l('column'), headerTooltip: l('columnHint'), minWidth: 52, maxWidth: 64, sortable: false, valueGetter: ({ data }: { data?: QuoteListRow }) => unreadValue(data ? latest.current.model.unread?.[data.id] : undefined), cellRenderer: NewMessagesCell }] satisfies ColDef<QuoteListRow>[]) : []),
+        { colId: 'more', headerName: t('list.col.more'), minWidth: 56, maxWidth: 56, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
+      ]
+    }
+    // ---- end F-CQ-102 / F-CQ-104
     return [
       { colId: 'picture', headerName: t('list.col.picture'), minWidth: 76, maxWidth: 76, sortable: false, suppressHeaderMenuButton: true, cellRenderer: PictureCell }, // TH-6 part B
       { colId: 'number', headerName: t('list.col.number'), field: 'number', minWidth: 130, flex: 1, cellRenderer: NumberCell },
       { colId: 'customer', headerName: t('list.col.customer'), field: 'partyName', minWidth: 180, flex: 2, cellRenderer: CustomerCell },
-      { colId: 'status', headerName: t('list.col.status'), field: 'status', minWidth: 190, flex: 1, cellRenderer: StatusCell },
+      // F-CQ-102: the chips cell keeps the column's id (`status`: its file column and the saved layouts stay); its heading says what it holds.
+      { colId: 'status', headerName: t('list.col.where'), field: 'status', minWidth: 220, flex: 1.4, cellRenderer: StatusCell, autoHeight: true },
       // B-TH-257: not drawn without threads.read (no count is ever made up).
       ...(model.unread ? ([{ colId: 'newMessages', headerName: l('column'), headerTooltip: l('columnHint'), minWidth: 136, flex: 0.8, sortable: false, valueGetter: ({ data }: { data?: QuoteListRow }) => unreadValue(data ? latest.current.model.unread?.[data.id] : undefined), cellRenderer: NewMessagesCell }] satisfies ColDef<QuoteListRow>[]) : []),
       { colId: 'units', headerName: t('list.col.units'), field: 'units', minWidth: 110, flex: 1, valueFormatter: (params) => (params.data ? t('list.units', { units: params.data.units, lines: params.data.lineCount }) : '') },
@@ -213,9 +266,12 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
       { colId: 'more', headerName: t('list.col.more'), minWidth: 88, maxWidth: 88, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
     // The cells read the words, the language and the person's grains through the closure: a change rebuilds them.
-  }, [t, l, locale, model.grains.price, model.grains.margin, model.today, recordHref, model.prefix, model.unread /* B-TH-257 */, model.readsRequests, model.readsOrders])
+  }, [t, l, locale, model.grains.price, model.grains.margin, model.today, recordHref, model.prefix, model.unread /* B-TH-257 */, model.readsRequests, model.readsOrders, host, tier, fold, say, model.customerName /* F-CQ-102 */])
 
-  const state = model.rows.problem ? (
+  const state = model.rows.problem === URGENT_TOO_MANY ? (
+    // F-CQ-102 (B-CQ-011): more than 2,000 quotes cannot be put in urgency order: said in words, Newest first one click away.
+    <EmptyState title={t('list.sort.tooManyTitle')} description={t(URGENT_TOO_MANY)} action={<Button size="sm" onClick={() => actions?.onFilters?.({ ...model.filters, sort: 'newest' })}>{os('sort.newest')}</Button>} />
+  ) : model.rows.problem ? (
     <EmptyState title={t('list.failed')} description={t(model.rows.problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('common.retry')}</Button>} />
   ) : shown && shown.length === 0 ? (
     filtered ? (
@@ -332,7 +388,16 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
         }
         tools={
           <>
-            <Select size="sm" aria-label={t('list.statusFilter')} value={model.filters.status ?? ''} onChange={(event) => actions?.onFilters?.({ ...model.filters, status: (event.target.value || null) as QuoteStatus | null, expiring: event.target.value === 'SENT' ? model.filters.expiring : false })}>
+            {/* F-CQ-102 (10-design §3.3): Sort ▾ — Most urgent first (the server's order), Newest first, Valid until soonest (the loaded rows). */}
+            <Select size="sm" aria-label={os('sort.label')} title={model.filters.sort === 'urgent' ? t('list.sort.ruleUrgent') : undefined} value={model.filters.sort ?? 'newest'} onChange={(event) => actions?.onFilters?.({ ...model.filters, sort: event.target.value as QuoteListSort })}>
+              <option value="urgent">{t('list.sort.urgent')}</option>
+              <option value="newest">{os('sort.newest')}</option>
+              <option value="valid">{t('list.sort.valid')}</option>
+            </Select>
+            {/* F-CQ-102 (C34): State ▾ gains "Not closed" (group LIVE; the customer's tab opens on it) and, under a band door, that door's group. */}
+            <Select size="sm" aria-label={t('list.statusFilter')} value={stateValue(model.filters)} onChange={(event) => actions?.onFilters?.(stateFilters(model.filters, event.target.value))}>
+              {model.filters.group && model.filters.group !== 'LIVE' && model.groupLabel && <option value={`group:${model.filters.group}`}>{model.groupLabel}</option>}
+              <option value="group:LIVE">{t('list.state.notClosed')}</option>
               <option value="">{t('list.allStatuses')}</option>
               {QUOTE_STATUSES.map((status) => (
                 <option key={status} value={status}>
@@ -389,9 +454,12 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
         state={state}
         focusRow={model.focusRow}
         // F-SA-279: on the customer page a row drives the host's dock (marked; the keys' row reported; ⌘↵ a new tab).
-        active={model.active ? { id: model.active.id, onFocusRow: (row) => actions?.onFocusRow?.(row), onOpenNewTab: (row) => (actions?.onOpenRow ? actions.onOpenRow(row.id, true) : window.open(`${model.prefix}/sales/quotes/${encodeURIComponent(row.id)}`, '_blank', 'noopener')) } : null}
+        active={model.active ? { id: model.active.id, onFocusRow: (row) => actions?.onFocusRow?.(row), onOpenNewTab: (row) => (actions?.onOpenRow ? actions.onOpenRow(row.id, true) : window.open(`${model.prefix}/sales/quotes/${encodeURIComponent(row.id)}`, '_blank', 'noopener')), cardDoor: model.cardDoor ? { column: 'number', label: model.cardDoor, onOpen: (row) => actions?.onOpenRow?.(row.id, false) } : null /* F-CQ-104: the phone card's door to the thread */ } : null}
+        // F-CQ-104 (10-design §4.6): ONE card on a phone — the picture, the number, the chips cell, the new messages, ⋯ (the room hides the rest).
+        cards={host ? { fields: HOST_CARD_FIELDS } : undefined}
       />
-      {!model.grains.margin && <p className="fw-q-hint">{t('list.noMarginNote')}</p>}
+      {/* F-CQ-102 (Q1-B8): without prices the money columns are left out (the words say why, never "margin" alone); without the margin, the margin. */}
+      {!model.grains.price ? <p className="fw-q-hint">{os('export.noteNoPrice')}</p> : !model.grains.margin && <p className="fw-q-hint">{t('list.noMarginNote')}</p>}
 
       {model.newQuote && <NewQuoteDialog model={model.newQuote} actions={actions} />}
       {model.duplicate && <DuplicateDialog model={model.duplicate} canManage={model.can.manage} actions={actions} />}
@@ -430,6 +498,25 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
 }
 
 const CANCELLABLE: ReadonlySet<string> = new Set(['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SENT'])
+
+/** F-CQ-104: the host's phone card — the number names it, the picture and the new messages beside it, the chips under it. */
+const HOST_CARD_FIELDS = Object.freeze({ picture: { role: 'aside' as const }, number: { role: 'title' as const }, status: { role: 'subtitle' as const }, newMessages: { role: 'aside' as const } })
+
+// ---- F-CQ-102 (C34): State ▾ — a group ("Not closed" = LIVE, a band door's group) or one state; "Every state" says null on purpose.
+/** The State ▾ value of the filters: `group:<term>`, a status, or '' (every state). */
+export function stateValue(filters: Pick<ListFilters, 'status' | 'group'>): string {
+  if (filters.status) return filters.status
+  return filters.group ? `group:${filters.group}` : ''
+}
+
+/** The filters a State ▾ choice makes: a group clears the state; a state or "Every state" clears the group (null: no host default). */
+export function stateFilters(filters: ListFilters, value: string): ListFilters {
+  const group = value.startsWith('group:') ? value.slice('group:'.length) : null
+  if (group !== null && isQuoteGroupTerm(group)) return { ...filters, status: null, expiring: false, group }
+  const status = (QUOTE_STATUSES as readonly string[]).includes(value) ? (value as QuoteStatus) : null
+  return { ...filters, status, group: null, expiring: status === 'SENT' ? filters.expiring : false }
+}
+// ---- end F-CQ-102
 
 /** Cancel several quotes: what it does to each, one reason for all (a sent quote needs one: its link says withdrawn). */
 function CancelManyDialog({ rows, busy, actions, onDone, onClose }: { rows: readonly QuoteListRow[]; busy?: boolean; actions?: QuotesListActions; onDone: () => void; onClose: () => void }) {
@@ -479,7 +566,8 @@ function CancelManyDialog({ rows, busy, actions, onDone, onClose }: { rows: read
   )
 }
 
-function NewQuoteDialog({ model, actions }: { model: NewQuoteModel; actions?: QuotesListActions }) {
+/** New quote (F-CQ-104: exported, so a host whose list is folded still opens the ONE dialog — "New quote for <customer>…"). */
+export function NewQuoteDialog({ model, actions }: { model: NewQuoteModel; actions?: QuotesListActions }) {
   const t = useT('sales')
   const [query, setQuery] = useState('')
   const typed = useRef(false)
