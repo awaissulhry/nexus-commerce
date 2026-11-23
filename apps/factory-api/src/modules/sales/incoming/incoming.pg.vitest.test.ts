@@ -356,3 +356,95 @@ describe('B-SA-046: a design change waiting for our answer is listed and counted
   const ours = (rows: readonly Json[]): Json[] => rows.filter((row) => row.waiting.for === 'US')
 })
 // ---- end B-SA-046
+
+// ---- B-CQ-020 / B-CQ-021 (customer page › Quotes & incoming, settle C8, L7; 13-backend §4): the TO_ANSWER and ENDED tiles, `kinds` ----
+describe('B-CQ: the tiles TO_ANSWER and ENDED, the `kinds` term, and the before-order counts behind the same doors', () => {
+  const TO_ANSWER: Readonly<Record<string, readonly string[]>> = { REQUEST: ['NEW', 'ASSIGNED'], CATALOGUE_ORDER: ['SENT'], CHANGE_REQUEST: ['OPEN'] }
+  const ENDED: Readonly<Record<string, readonly string[]>> = { REQUEST: ['DECLINED', 'LOST', 'WITHDRAWN'], CATALOGUE_ORDER: ['REFUSED', 'WITHDRAWN'], CHANGE_REQUEST: ['REFUSED', 'WITHDRAWN'] }
+  const KINDS = 'kinds=REQUEST,CATALOGUE_ORDER'
+
+  it('TO_ANSWER holds exactly what waits on us (the shell badge’s set: its door at last), oldest first; ENDED every ending of every kind', async () => {
+    const toAnswer = await list('sales', 'tile=TO_ANSWER')
+    expect(toAnswer.rows.length).toBeGreaterThan(0)
+    for (const row of toAnswer.rows) {
+      expect(TO_ANSWER[row.kind], `${row.kind} ${row.number}`).toContain(row.state)
+      expect(row.waiting.for, row.number).toBe('US')
+    }
+    // The badge counts exactly these rows (and the landing view's rows that wait on us).
+    expect(toAnswer.counts.TO_ANSWER).toBe(toAnswer.rows.length)
+    expect((await get('sales', '/sales/incoming/waiting-count')).count).toBe(toAnswer.rows.length)
+    expect(numbers(toAnswer.rows).sort()).toEqual(numbers((await list('sales')).rows.filter((row: Json) => row.waiting.for === 'US')).sort())
+    const at = toAnswer.rows.map((row: Json) => row.receivedAt)
+    expect([...at].sort()).toEqual(at)
+    expect(numbers(toAnswer.rows)).toEqual(expect.arrayContaining(['SEED-INQ-0001', 'SEED-INQ-0002', 'SEED-RQ-0001']))
+    expect(numbers(toAnswer.rows)).not.toContain('SEED-INQ-0003')
+    const ended = await list('sales', 'tile=ENDED')
+    for (const row of ended.rows) expect(ENDED[row.kind], `${row.kind} ${row.number}`).toContain(row.state)
+    // Every decline ("Not an order" too), the office's LOST, the refused portal order and the refused cancel request.
+    expect(ended.rows.map((row: Json) => `${row.kind}:${row.number}`)).toEqual(expect.arrayContaining(['REQUEST:SEED-INQ-0005', 'REQUEST:SEED-INQ-0006', 'CATALOGUE_ORDER:SEED-RQ-0003', 'CHANGE_REQUEST:SEED-SO-0003']))
+    expect(ended.counts.ENDED).toBe(ended.rows.length)
+    // Newest first (not a queue).
+    const endedAt = ended.rows.map((row: Json) => row.receivedAt)
+    expect([...endedAt].sort().reverse()).toEqual(endedAt)
+  })
+
+  it('`kinds=REQUEST,CATALOGUE_ORDER` leaves change requests out of the rows, every tile and `kinds`; a wrong kind is refused', async () => {
+    const all = await list('sales', `tile=ALL&${KINDS}`)
+    expect(all.rows.length).toBeGreaterThan(0)
+    expect(new Set(all.rows.map((row: Json) => row.kind))).toEqual(new Set(['REQUEST', 'CATALOGUE_ORDER']))
+    expect(all.kinds.CHANGE_REQUEST).toBeNull()
+    // Every tile's count is the rows that tile lists under the same kinds (one page holds them).
+    for (const tile of Object.keys(all.counts).filter((key) => key !== 'CUSTOMER_REPLIES')) {
+      const rows = (await list('sales', `tile=${tile}&${KINDS}`)).rows as Json[]
+      expect(all.counts[tile], tile).toBe(rows.length)
+      expect(rows.some((row) => row.kind === 'CHANGE_REQUEST'), tile).toBe(false)
+    }
+    const withChanges = await list('sales', 'tile=TO_ANSWER')
+    expect(all.counts.TO_ANSWER).toBe(ofKind(withChanges.rows, 'REQUEST').length + ofKind(withChanges.rows, 'CATALOGUE_ORDER').length)
+    // Page by page, the same rows.
+    expect((await allPages('sales', `tile=ALL&${KINDS}`, 2)).map((row) => row.key)).toEqual(all.rows.map((row: Json) => row.key))
+    for (const kinds of ['NOPE', 'REQUEST,NOPE', 'REQUEST,,CATALOGUE_ORDER']) expect((await call('sales', `/sales/incoming?kinds=${kinds}`)).statusCode, kinds).toBe(400)
+    // The file reads it too (screen = file); a wrong one is refused, never dropped.
+    expect(exportSource.query(new URLSearchParams(`tile=ALL&${KINDS}`))).toMatchObject({ tile: 'ALL', kinds: ['REQUEST', 'CATALOGUE_ORDER'] })
+    expect(() => exportSource.query(new URLSearchParams('kinds=NOPE'))).toThrow()
+  })
+
+  it('T30 with the new terms: a person limited to one customer lists and counts none of the other’s rows in TO_ANSWER, ENDED or with `kinds`', async () => {
+    for (const tile of ['TO_ANSWER', 'ENDED']) {
+      for (const query of [`tile=${tile}`, `tile=${tile}&${KINDS}`]) {
+        const p3 = await list('onlyP3', query)
+        for (const row of p3.rows) expect(row.party === null || row.party.id === P3, `${query} ${row.number}`).toBe(true)
+        const text = JSON.stringify(p3)
+        for (const leak of [P1, 'SEED-RQ-', 'SEED-SO-']) expect(text, `${query} ${leak}`).not.toContain(leak)
+        expect(p3.counts[tile]).toBe(p3.rows.length)
+        const p1 = await list('onlyP1', `${query}&partyId=${P1}`)
+        for (const row of p1.rows) expect(row.party?.id, `${query} ${row.number}`).toBe(P1)
+        expect(JSON.stringify(p1)).not.toContain(P3)
+      }
+    }
+    expect((await list('onlyP3', `tile=TO_ANSWER&${KINDS}&partyId=${P1}`)).rows).toEqual([])
+  })
+
+  it('the before-order counts are these doors: TO_ANSWER, WON = ORDERED, MOVED = QUOTED, LOST = ENDED, WAITING_CUSTOMER — for Sales and the limited person', async () => {
+    for (const session of ['sales', 'onlyP1']) {
+      const counts = await get(session, `/sales/before-order/counts?partyId=${P1}`)
+      const door = async (tile: string): Promise<number> => (await list(session, `tile=${tile}&${KINDS}&partyId=${P1}`)).counts[tile]
+      expect(counts.groups.TO_ANSWER, `${session} TO_ANSWER`).toBe(await door('TO_ANSWER'))
+      expect(counts.byKind.requests.WON + counts.byKind.portalOrders.WON, `${session} WON`).toBe(await door('ORDERED'))
+      expect(counts.groups.MOVED, `${session} MOVED`).toBe(await door('QUOTED'))
+      expect(counts.byKind.requests.LOST + counts.byKind.portalOrders.LOST, `${session} LOST`).toBe(await door('ENDED'))
+      expect(counts.byKind.requests.WAITING_CUSTOMER, `${session} WAITING_CUSTOMER`).toBe(await door('WAITING_CUSTOMER'))
+      // The rows themselves, not only the tile numbers.
+      expect(counts.groups.TO_ANSWER).toBe((await list(session, `tile=TO_ANSWER&${KINDS}&partyId=${P1}`)).rows.length)
+    }
+    // P1's sent portal order waits on us; its accepted one is WON, its refused one LOST (the seeds).
+    expect(numbers((await list('sales', `tile=TO_ANSWER&${KINDS}&partyId=${P1}`)).rows)).toContain('SEED-RQ-0001')
+    expect(numbers((await list('sales', `tile=ORDERED&${KINDS}&partyId=${P1}`)).rows)).toContain('SEED-RQ-0002')
+    expect(numbers((await list('sales', `tile=ENDED&${KINDS}&partyId=${P1}`)).rows)).toContain('SEED-RQ-0003')
+    // The person limited to P1 asks for P3: as an unknown customer.
+    const refused = await call('onlyP1', `/sales/before-order/counts?partyId=${P3}`)
+    expect(refused.statusCode).toBe(404)
+    expect(refused.json().error.message).toBe('Customer not found.')
+  })
+})
+// ---- end B-CQ

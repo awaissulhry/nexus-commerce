@@ -14,6 +14,7 @@ import { CUSTOM_LINE_KINDS, CUSTOM_LINE_LIMITS } from '@nexus/factory-domain/sal
 // B-CP-077: the accept's line map.
 import { ACCEPT_MAP_LIMITS } from '@nexus/factory-domain/sales/portal-ordering/office'
 import { MAX_TEXT } from '@nexus/factory-domain/sales/quotes/quotes'
+import { pictureIds, smallPicturesView } from '../../product/images/small-pictures' // B-CQ-030
 
 /**
  * Portal ordering (B-W2b-190; SAL-071, SAL-072, SAL-073, SAL-074, SAL-079; design portal.customer.catalogue,
@@ -629,6 +630,11 @@ export const officeListContract = defineContract({
 })
 
 export const officeGetContract = defineContract({ params: requestParams, response: { 200: officeRecord } })
+
+// ---- B-CQ-030 (customer page › Quotes & incoming, L12): the small pictures of a page of portal orders (drafts too) in ONE read, the
+// one picture helper and answer shape (modules/product/images/small-pictures.ts): orders.view over each one's company and customer.
+export const orderRequestPicturesContract = defineContract({ body: input({ requestIds: pictureIds() }), response: { 200: smallPicturesView } })
+// ---- end B-CQ-030
 export const acceptContract = defineContract({
   params: requestParams,
   body: input({

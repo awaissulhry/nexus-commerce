@@ -655,3 +655,67 @@ describe('phase: the list, the totals and the file hold the same rows, and the b
   })
 })
 // ── end B-CW-001 / B-CW-002 / B-CW-003 ──
+
+// ── B-CL-005 (customers list, 13-backend §5): priority=<LEVEL> — OUR level, the door of a customer's "Top n" / "High n"; screen = file = count ──
+/**
+ * Stands on the made-up orders of the B-CW block above (copies of SEED-SO-0001), three of them moved to a level of OUR priority past
+ * the order's own rules: T-CW-R1-SEW (SEED-R1, in production) and T-CW-C1-RDY (SEED-C1, ready) to URGENT ("Top"), T-CW-C1-CUT
+ * (SEED-C1, in production) to HIGH. Every other order keeps its level (the seeds' NORMAL). The truth is counted here in SQL.
+ */
+describe('priority: our level narrows the list, the totals and the file alike; another value is refused (B-CL-005)', () => {
+  beforeAll(async () => {
+    await rulesOff(`UPDATE "SalesOrder" SET "priorityLevel" = 'URGENT' WHERE "tenantId" = '${tenant}' AND number IN ('T-CW-R1-SEW', 'T-CW-C1-RDY');
+      UPDATE "SalesOrder" SET "priorityLevel" = 'HIGH' WHERE "tenantId" = '${tenant}' AND number = 'T-CW-C1-CUT';`)
+  })
+
+  /** The order numbers at a level, counted here in SQL (one customer's, the open ones only: not shipped yet). */
+  async function atLevel(level: string, partyId?: string, openOnly = false): Promise<string[]> {
+    const rows = await admin<{ number: string }>(
+      `SELECT o.number FROM "SalesOrder" o WHERE o."tenantId" = $1 AND o."priorityLevel"::text = $2 AND ($3::uuid IS NULL OR o."partyId" = $3::uuid)
+          AND (NOT $4::boolean OR o.status IN ('CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED'))`,
+      [tenant, level, partyId ?? null, openOnly],
+    )
+    return rows.map((row) => row.number).sort()
+  }
+
+  it('each level: the same rows on the list, in the totals (their door keeps the term) and in the file; the row door (open, one customer) too', async () => {
+    const top = await atLevel('URGENT')
+    expect(top).toEqual(expect.arrayContaining(['T-CW-C1-RDY', 'T-CW-R1-SEW']))
+    expect(await atLevel('HIGH')).toEqual(expect.arrayContaining(['T-CW-C1-CUT']))
+    for (const level of ['LOW', 'NORMAL', 'HIGH', 'URGENT']) {
+      const expected = await atLevel(level)
+      expect(await numbers('all', `priority=${level}`), level).toEqual(expected)
+      const summary = await ok('all', `/sales/orders/summary?priority=${level}`)
+      expect(summary.all.orders.count, level).toBe(expected.length)
+      expect(summary.all.orders.filter, level).toMatchObject({ priority: level })
+      expect(await fileNumbers('all', `priority=${level}&rows=all`), level).toEqual(expected)
+    }
+    // The levels split every order (each has exactly one).
+    const every = (await numbers('all', '')).length
+    let summed = 0
+    for (const level of ['LOW', 'NORMAL', 'HIGH', 'URGENT']) summed += (await atLevel(level)).length
+    expect(summed).toBe(every)
+    // A customer row's "Top n" door: that customer's OPEN orders at the level (the file's default view is the open orders too).
+    expect(await numbers('all', `open=true&priority=URGENT&partyId=${R1}`)).toEqual(await atLevel('URGENT', R1, true))
+    expect(await numbers('all', `open=true&priority=URGENT&partyId=${R1}`)).toEqual(['T-CW-R1-SEW'])
+    expect(await numbers('all', `open=true&priority=HIGH&partyId=${C1}`)).toEqual(await atLevel('HIGH', C1, true))
+    expect(await fileNumbers('all', 'priority=HIGH')).toEqual(await atLevel('HIGH', undefined, true))
+  })
+
+  it('a person limited to SEED-R1 reads its own orders at a level only; naming SEED-C1 counts nothing', async () => {
+    expect(await numbers('onlyR1', 'priority=URGENT')).toEqual(await atLevel('URGENT', R1))
+    expect(await numbers('onlyR1', 'priority=URGENT')).not.toContain('T-CW-C1-RDY')
+    expect(await numbers('onlyR1', `priority=HIGH&partyId=${C1}`)).toEqual([])
+    expect((await ok('onlyR1', `/sales/orders/summary?priority=URGENT&partyId=${C1}`)).all.orders.count).toBe(0)
+    expect(await fileNumbers('onlyR1', 'priority=URGENT&rows=all')).toEqual(await atLevel('URGENT', R1))
+  })
+
+  it('another value is refused in words (400) on the list and in the totals, and by the file (never a file of every order)', async () => {
+    for (const url of ['/sales/orders?priority=NOPE', '/sales/orders/summary?priority=NOPE', '/sales/orders?priority=urgent', '/sales/orders?priority=TOP']) {
+      expect((await app.inject({ method: 'GET', url, headers: { 'x-test-session': 'all' } })).statusCode, url).toBe(400)
+    }
+    expect(() => exportSourceOf('sales.orders')!.query(new URLSearchParams('priority=NOPE'))).toThrow('Not a value of priority: the file would not follow the screen.')
+  })
+})
+// ── end B-CL-005 ──
+

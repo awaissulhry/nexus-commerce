@@ -37,6 +37,9 @@ import { applyMoneyPlan, previewMoneyPlan } from './money-plan' // B-OM-011
 import { deliveriesContract, getDeliveries } from './delivered'
 // B-TH-019: the Customer switcher's numbers.
 import { orderCustomers } from './customers'
+// B-CL-001 / B-CL-003 (customers list): the route, and — on import — the work reader the parties list asks for.
+import { customersWork } from './customer-work'
+import { customersWorkContract } from './contract'
 // B-TH-058: the overall view's honest totals.
 import { orderSummary } from './summary'
 // B-TH-077: what points at the order (its complaints and returns, planning's open re-promises, the gates' refusals).
@@ -78,6 +81,9 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
 
   // B-TH-019: the Customer switcher's numbers (registered before /sales/orders/:orderId).
   app.get('/sales/orders/customers', { schema: customersContract }, async (request) => orderCustomers(request, request.query))
+
+  // B-CL-003: where each customer's work stands, for a page of the customers list (before /sales/orders/:orderId).
+  app.get('/sales/orders/customers/work', { schema: customersWorkContract }, async (request) => customersWork(request, request.query))
 
   // B-TH-058: the overall view's totals per customer and for the whole view, each with the filter of its rows (before /:orderId).
   app.get('/sales/orders/summary', { schema: summaryContract }, async (request) => orderSummary(request, request.query))

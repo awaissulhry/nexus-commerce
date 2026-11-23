@@ -36,6 +36,8 @@ import { rowsOf, waitingMinutesOf } from '../inquiries/views'
 import { readLines } from '../portal-ordering/store'
 // B-TH-047: "Customer replies", the conversations waiting on us across the customer's other records.
 import { waitingRowsOf } from '../../../platform/threads/waiting-list'
+// B-CQ-020 (customer page › Quotes & incoming, C8): the TO_ANSWER and ENDED tiles' request and portal-order arms, from one rule.
+import { PORTAL_GROUP_STATUSES, REQUEST_GROUP_STATUSES } from '@nexus/factory-domain/sales/before-order/groups'
 
 /**
  * Sales › Incoming over every door (B-TH-039; threads plan G2, L2-G07): GET /sales/incoming — requests, catalogue orders and
@@ -95,7 +97,8 @@ function kindsOf(actor: Actor, query: IncomingListQuery): { readonly sees: Reado
   const sees = new Set(INCOMING_KINDS.filter((kind) => grantsFor(actor, VIEW_OF[kind]).length > 0))
   // B-TH-235: `outcome` (what a request became, Sales › Reports' request figure) lists requests only.
   const requestsOnly = query.status !== undefined || query.prospect === true || (query.source !== undefined && query.source !== 'PORTAL') || query.outcome !== undefined
-  const listed = INCOMING_KINDS.filter((kind) => sees.has(kind) && (query.kind === undefined || query.kind === kind) && (!requestsOnly || kind === 'REQUEST'))
+  // B-CQ-021: `kinds` (some kinds only, the customer's tab: no change request) beside `kind`.
+  const listed = INCOMING_KINDS.filter((kind) => sees.has(kind) && (query.kind === undefined || query.kind === kind) && (query.kinds === undefined || query.kinds.includes(kind)) && (!requestsOnly || kind === 'REQUEST'))
   return { sees, listed }
 }
 
@@ -226,6 +229,11 @@ function requestTile(tile: IncomingTile, facts: TileFacts): Prisma.InquiryWhereI
       return { status: 'LOST' }
     case 'ALL':
       return {}
+    // B-CQ-020: what waits on us (the shell badge's set) and every ending (every decline, the office's LOST, the customer's withdrawal).
+    case 'TO_ANSWER':
+      return { status: { in: [...REQUEST_GROUP_STATUSES.TO_ANSWER] } }
+    case 'ENDED':
+      return { status: { in: [...REQUEST_GROUP_STATUSES.LOST] } }
   }
 }
 
@@ -250,6 +258,11 @@ function catalogueTile(tile: IncomingTile, facts: TileFacts): Prisma.PortalOrder
       return { status: 'WITHDRAWN' }
     case 'ALL':
       return {}
+    // B-CQ-020: sent and not decided; refused or withdrawn (never a draft: the kind's own filter).
+    case 'TO_ANSWER':
+      return { status: { in: [...PORTAL_GROUP_STATUSES.TO_ANSWER] } }
+    case 'ENDED':
+      return { status: { in: [...PORTAL_GROUP_STATUSES.LOST] } }
     case 'WAITING_CUSTOMER':
     case 'NOT_AN_ORDER':
       return null
@@ -269,6 +282,11 @@ function changeTile(tile: IncomingTile, facts: TileFacts): Prisma.OrderChangeReq
       return { status: 'WITHDRAWN' }
     case 'ALL':
       return {}
+    // B-CQ-020: open (the shell badge's set); refused or withdrawn.
+    case 'TO_ANSWER':
+      return { status: 'OPEN' }
+    case 'ENDED':
+      return { status: { in: ['REFUSED', 'WITHDRAWN'] } }
     default:
       return null
   }

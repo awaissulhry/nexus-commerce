@@ -56,6 +56,8 @@ export interface WaitingQuery {
   readonly recordType?: string | undefined
   readonly companyId?: string | undefined
   readonly partyId?: string | undefined
+  /** B-CL-004 (customers list): only these customers' conversations (a page of the list's rows); the wall per row stays below. */
+  readonly partyIds?: readonly string[] | undefined
   readonly limit?: number | undefined
   readonly cursor?: string | undefined
 }
@@ -108,6 +110,7 @@ export async function waitingRowsOf(client: Reader, context: RequestContext, que
   if (types.length === 0) return { rows: [], complete: true }
   const companyId = query.companyId ?? null
   const partyId = query.partyId ?? null
+  const partyIds = query.partyIds ? [...query.partyIds] : null // B-CL-004
   // The newest shared message of each open thread with a party (INTERNAL_NOTE never counts), kept when the customer or supplier
   // wrote it; one statement, a lateral top-1 per thread on the messages' (tenantId, threadId, at) index.
   const found = await (client as Prisma.TransactionClient).$queryRaw<{ threadId: string; recordType: string; recordId: string; companyId: string | null; siteId: string | null; partyId: string; messageId: string; at: Date }[]>`
@@ -129,6 +132,7 @@ export async function waitingRowsOf(client: Reader, context: RequestContext, que
        AND last."direction" = 'INBOUND'
        AND (${companyId}::uuid IS NULL OR t."companyId" = ${companyId}::uuid)
        AND (${partyId}::uuid IS NULL OR t."partyId" = ${partyId}::uuid)
+       AND (${partyIds}::uuid[] IS NULL OR t."partyId" = ANY(${partyIds}::uuid[])) -- B-CL-004
      ORDER BY last."at" ASC, t."id" ASC
      LIMIT ${WAITING_READ_MAX + 1}`
   const complete = found.length <= WAITING_READ_MAX

@@ -20,6 +20,18 @@ export const incomingListQuery = input({
   tile: z.enum(INCOMING_TILES).optional(),
   /** One kind only (default: every kind the reader may see). */
   kind: z.enum(INCOMING_KINDS).optional(),
+  /**
+   * B-CQ-021 (customer page › Quotes & incoming, L7): some kinds only, a comma list (`REQUEST,CATALOGUE_ORDER`: the customer's tab
+   * leaves change requests out: they are after an order). Beside `kind`; the rows, every tile, `kinds` and the paging follow.
+   */
+  kinds: z
+    .string()
+    .trim()
+    .min(1)
+    .max(100)
+    .transform((value) => value.split(',').map((part) => part.trim()))
+    .pipe(z.array(z.enum(INCOMING_KINDS)).min(1).max(INCOMING_KINDS.length))
+    .optional(),
   /** A request's own status (the State cell): only requests are listed then. */
   status: z.enum(INQUIRY_STATUSES).optional(),
   /** How it came: PORTAL also lists catalogue orders and change requests (they come from the portal); any other only requests. */

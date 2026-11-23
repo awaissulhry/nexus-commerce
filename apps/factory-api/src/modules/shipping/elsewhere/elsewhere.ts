@@ -291,7 +291,7 @@ export async function recordElsewhere(caller: CommandCaller, body: ElsewhereBody
     })
     tools.emit({ type: 'shipment.created', subject: id, companyId: made.companyId, siteId: made.siteId, payload: { shipmentId: id, number: made.number, salesOrderId: plan.order.id, siteId: made.siteId, lines: added.length, garments, partyId: made.partyId } })
     packingChanged(tools, made, 'DRAFT', 'lines')
-    if (plan.others.length > 0) ordersChanged(tools, made, [plan.order.id], await ordersOfShipment(tools.tx, { id, salesOrderId: plan.order.id }))
+    if (plan.others.length > 0) ordersChanged(tools, made, [plan.order.id], await ordersOfShipment(tools.tx, { id, salesOrderId: plan.order.id }), { atCreation: true } /* B-CW-040 */)
 
     // Leaves at the time it left (R-2): DRAFT → SHIPPED, packed then too; stock and cost of sales post now (D5).
     const header = (await readShipment(tools.tx, id))!

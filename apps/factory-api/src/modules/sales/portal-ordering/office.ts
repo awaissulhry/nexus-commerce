@@ -83,8 +83,11 @@ import { ownPriceView } from './people'
  * B-CP-071 (customer page plan D10, K9 reversed): the office READS a customer's draft from its first save — the list of one
  * customer's drafts (who started it and who changed it last, the first line as its title, counts, the checklist, its
  * conversation), and the draft itself read-only (accept and refuse held: "This is still the customer's draft: it is decided once
- * they send it."). A draft is never in Incoming, Home › Approvals or any count; part 6 "Your price" is counted only for a reader
+ * they send it."). A draft is never in Incoming, Home › Approvals or "waits on us"; part 6 "Your price" is counted only for a reader
  * with the price grain (review B4).
+ * B-CQ-033 (customer page › Quotes & incoming, settle C3): made true — a draft IS counted in exactly one place, as the customer's
+ * writing: the before-order group WRITING ("Customer is writing N", GET /sales/before-order/counts, orders.view over the customer,
+ * the same scope as this list). It never counts in TO_ANSWER, in the tab badge or in any Incoming tile.
  */
 
 const LIST_MAX = 200
@@ -286,7 +289,8 @@ async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly Re
 /**
  * GET /sales/order-requests?status=DRAFT&partyId=: ONE customer's drafts, newest change first — orders.view over the customer
  * (any of its companies), else "Customer not found." (a customer out of reach is as unknown as a wrong id); without a customer
- * the list is refused. Never counted anywhere.
+ * the list is refused. B-CQ-033: counted only as the customer's writing (the before-order group WRITING = these rows), never as
+ * waiting on us.
  */
 async function listDrafts(caller: CommandCaller, actor: Actor, partyId: string | undefined, typed: string | undefined) {
   if (!partyId) throw new ValidationError('Drafts are listed per customer.', [{ path: 'querystring/partyId', message: 'Drafts are listed per customer.' }])

@@ -4,6 +4,7 @@ import { PRICED_WORDS } from '@nexus/factory-domain/files/priced'
 import type { ErrorReport } from '@nexus/factory-domain/observability/report'
 import { addDays } from '@nexus/factory-domain/planning/buy'
 import { BLIND_PRICE_WORDS } from '@nexus/factory-domain/sales/blind-price'
+import { BEFORE_ORDER_GROUPS } from '@nexus/factory-domain/sales/before-order/groups' // B-CQ
 import { useServerClock } from '../../core/time' // B-CP-022 (fix wave cp-fx8)
 import { createErrorTracker, useErrorTracker } from '../../observability/tracker'
 import { useAbuseGuard } from '../../platform/abuse/guard'
@@ -388,6 +389,23 @@ describe('B-CP-022 the money wall: every persona, every surface, as Sales worker
     }
     expect(await noPriceIn(P.sales, `/sales/order-requests/${draft.id}`), 'the Sales worker reads the draft').not.toBeNull()
   })
+
+  // ---- B-CQ (customer page › Quotes & incoming, 13-backend §10 case 5): the before-order counts and the quotes list's new terms and
+  // row fields hold no amount for anyone without prices (counts only; the quote row's new facts are instants, ints, a language).
+  it('M03 B-CQ: the before-order counts hold counts only, and the quotes list sorted by urgency with a group carries no price key, for every person without prices', async () => {
+    const url = `/sales/before-order/counts?partyId=${P1()}&companyId=${companyA()}`
+    const owners = await ok(P.owner, 'GET', url)
+    expect(owners.groups.WRITING, 'Brand Alpha’s drafts count as the customer writing').toBeGreaterThanOrEqual(1)
+    const counted = new Set(['partyId', 'groups', 'openQuotes', 'waitsOnUs', 'byKind', 'quotes', 'requests', 'portalOrders', 'drafts', 'sampleRounds', 'asOf', ...BEFORE_ORDER_GROUPS])
+    for (const who of noPrice()) {
+      const counts = await noPriceIn(who, url)
+      if (counts) for (const key of keysOf(counts)) expect(counted.has(key), `${who.key}: ${key}`).toBe(true)
+      const quotes = await noPriceIn(who, `/sales/quotes?partyId=${P1()}&group=LIVE&sort=urgent`)
+      if (quotes) for (const row of (quotes.quotes ?? []) as Json[]) for (const key of ['netAmount', 'grossAmount', 'marginPct', 'marginFloorBreached']) expect(row, `${who.key}: ${key}`).not.toHaveProperty(key)
+    }
+    expect(await noPriceIn(P.sales, url), 'the Sales worker reads the counts').not.toBeNull()
+  })
+  // ---- end B-CQ
 
   it('M04 export: as Sales worker the four price-check columns are left out of the file AND named; the term is refused in words; the Owner’s file carries them', async () => {
     const asked = (who: Person, query: string) => as(who, 'POST', '/exports', { listKey: 'sales.orders', format: 'XLSX', query, columns: EXPORT_COLUMNS, title: 'Orders', locale: 'en' })

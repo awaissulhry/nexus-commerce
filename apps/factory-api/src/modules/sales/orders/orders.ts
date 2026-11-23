@@ -11,6 +11,10 @@ import { actorOf, type OfficeContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { customFilter } from '../../../platform/fields/registry' // B-TH-057 (SHEET-G05)
 import { type OrderSortKey, type OrderSortTerm } from './sort' // B-TH-057 (SHEET-G15)
+// B-CW-030: "Most urgent first" — the pure rule, planning's level type, the customer's Urgent marks of the view.
+import type { PriorityLevel } from '@nexus/factory-domain/planning/backlog/rank'
+import { orderUrgentIn } from './customer-urgency'
+import { urgentOrderOf } from './sort'
 import { ORDER_DEPOSIT_ONLY } from '../deposits/deposits'
 import { assertMay, officeContextOf } from './access'
 import { makeOrderInCommand } from './make'
@@ -35,6 +39,7 @@ import { idsTermOf, orderProductionColumns, waitingUsWhere } from './production-
 // B-CW-002 / B-CW-003 (customer Work tab): the `phase` term and the board's counts by phase — one rule.
 import { ORDER_PHASES, phaseCountsOf, type OrderPhase } from '@nexus/factory-domain/production-brand/stages'
 import { phaseWhere } from './production-columns'
+import type { SalesOrderPriorityLevel } from '@nexus/factory-domain/sales/orders-depth/rules' // B-CL-005
 import { asDay, dayOf, dayOrNull, LEFT } from './store'
 import type { OrderView } from './views'
 // B-OP-043 (order page N6, lines-derived): the orders a shipment carries.
@@ -101,6 +106,10 @@ export interface ListFilters {
   readonly priceMatch?: PriceMatch | undefined
   /** B-CW-002: the orders in one phase (factory-domain orderPhaseOf, as ./production-columns phaseWhere): the list, the totals and the file. */
   readonly phase?: OrderPhase | undefined
+  // ── B-CL-005 (customers list): the door of a customer's "Top n" / "High n" — our own level (office only, never the portal's) ──
+  /** The orders at this level of OUR priority (SalesOrder.priorityLevel): the list, the totals and the file. */
+  readonly priority?: SalesOrderPriorityLevel | undefined
+  // ── end B-CL-005 ──
 }
 
 export interface ListQuery extends ListFilters {
@@ -121,7 +130,8 @@ export interface ListQuery extends ListFilters {
 // B-TH-019: exported for the Customer switcher's counts (./customers), the one definition of late.
 export const lateWhere = (today: BusinessDate): Prisma.SalesOrderWhereInput => ({ status: { in: [...OPEN_STATUSES] }, promiseDate: { lt: asDay(today) } })
 // B-W2a-F2: the deposit's requests only (a before-shipping step's own request is the balance, not the deposit).
-const depositOpenWhere: Prisma.SalesOrderWhereInput = { depositRequired: true, depositRequests: { some: { status: 'OPEN', ...ORDER_DEPOSIT_ONLY } } }
+// B-CL-006: exported for the customers list's per-customer counts (./customer-work): the one definition of an open deposit.
+export const depositOpenWhere: Prisma.SalesOrderWhereInput = { depositRequired: true, depositRequests: { some: { status: 'OPEN', ...ORDER_DEPOSIT_ONLY } } }
 // B-W2b-323: the customer must accept a change (W2a's amendment flag, a priced change of B-W2b-309), the order still running.
 const reacceptWhere: Prisma.SalesOrderWhereInput = { reapprovalNeededAt: { not: null }, status: { notIn: ['CLOSED', 'CANCELLED'] } }
 
@@ -167,6 +177,7 @@ export function whereOf(context: OfficeContext, filters: ListFilters, today: Bus
       filters.kind === 'mtm' ? MTM_WHERE : {}, // B-SA-020
       filters.waiting === 'us' ? waitingUsWhere : {}, // B-SA-070
       filters.phase ? phaseWhere(filters.phase) : {}, // B-CW-002
+      filters.priority ? { priorityLevel: filters.priority } : {}, // B-CL-005
     ],
   }
 }
@@ -283,12 +294,18 @@ function readCursor(text: string, sort: OrderSortTerm): SortCursor {
  *   daysLate  days past the promise while not shipped (factory-domain daysLate; on time 0, shipped or no promise: last);
  *   brand     the first label the Brand cell names (row-extras.ts): a label's name the reader may see, then our own collection,
  *             then a label the reader may not see whose it is (all alike: its name never orders a row), then no line (last).
+ *   urgent    B-CW-030 "Most urgent first" (./sort urgentOrderOf): the orders production still has to do with by our level, our
+ *             number, the promise and the customer's own Urgent places (the brand-slot pass), then the orders that left, newest
+ *             first (last whichever way the sort runs). Its key is a PLACE in that order, not a value: the next page starts after
+ *             the cursor's row where it stands NOW (only when that row left the view: after the cursor's place). An order moved
+ *             between two pages may show twice or wait for the next full read — the sheet's "N updates · Show" reads it again.
  */
 async function sortedPage(client: Reader, context: OfficeContext, where: Prisma.SalesOrderWhereInput, query: ListQuery & { readonly sort: OrderSortTerm }, today: BusinessDate): Promise<{ ids: string[]; nextCursor: string | null }> {
   const sort = query.sort
   const desc = sort.startsWith('-')
   const key = (desc ? sort.slice(1) : sort) as OrderSortKey
-  const rows = await client.salesOrder.findMany({ where, select: { id: true, partyId: true, status: true, orderDate: true, promiseDate: true, party: { select: { legalName: true } } } })
+  // B-CW-030: + the number, our priority and level, the customer's code (four small columns: what the key `urgent` reads).
+  const rows = await client.salesOrder.findMany({ where, select: { id: true, partyId: true, status: true, orderDate: true, promiseDate: true, number: true, priority: true, priorityLevel: true, party: { select: { legalName: true, code: true } } } })
   const actor = actorOf(context)
   // The brand sort's facts: each order's lines in their order with their style's label, and the labels' names.
   const linesOf = new Map<string, (string | null)[]>()
@@ -298,7 +315,21 @@ async function sortedPage(client: Reader, context: OfficeContext, where: Prisma.
   }
   const labels = [...new Set([...linesOf.values()].flat().filter((party): party is string => party !== null))]
   const labelNames = new Map(labels.length > 0 ? (await client.party.findMany({ where: { id: { in: labels } }, select: { id: true, legalName: true } })).map((party) => [party.id, party.legalName]) : [])
+  // ── B-CW-030: each order's place under "Most urgent first" — ONE more read, only for this key: the customer's Urgent marks
+  // that count inside the view (the reader's own where: nothing of an order outside it is read) ──
+  const urgentKeys = new Map<string, SortKey>()
+  if (key === 'urgent' && rows.length > 0) {
+    const marks = await orderUrgentIn(client, where)
+    const order = urgentOrderOf(
+      rows.map((row) => ({ id: row.id, number: row.number, status: row.status as SalesOrderStatus, orderDate: dayOf(row.orderDate), promise: dayOrNull(row.promiseDate), priority: row.priority, priorityLevel: row.priorityLevel as PriorityLevel, customerCode: row.party.code })),
+      marks,
+    )
+    order.open.forEach((id, place) => urgentKeys.set(id, [0, place]))
+    order.left.forEach((id, place) => urgentKeys.set(id, [LAST_GROUP, place]))
+  }
+  // ── end B-CW-030 ──
   const keyOf = (row: (typeof rows)[number]): SortKey => {
+    if (key === 'urgent') return urgentKeys.get(row.id) ?? [LAST_GROUP, null] // B-CW-030
     if (key === 'customer') return [0, row.party.legalName]
     if (key === 'ordered') return [0, dayOf(row.orderDate)]
     const promise = dayOrNull(row.promiseDate)
@@ -318,7 +349,9 @@ async function sortedPage(client: Reader, context: OfficeContext, where: Prisma.
   const compare = (a: { id: string; key: SortKey }, b: { id: string; key: SortKey }): number => compareKeys(a.key, b.key, desc) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0) * (desc ? -1 : 1)
   keyed.sort(compare)
   const after = query.cursor ? readCursor(query.cursor, sort) : null
-  const start = after ? keyed.findIndex((row) => compare(row, { id: after.i, key: after.k }) > 0) : 0
+  // B-CW-030: a place is not a value — for `urgent` the page starts after the cursor's row where it stands now.
+  const at = after && key === 'urgent' ? keyed.findIndex((row) => row.id === after.i) : -1
+  const start = !after ? 0 : at >= 0 ? at + 1 : keyed.findIndex((row) => compare(row, { id: after.i, key: after.k }) > 0)
   const page = start < 0 ? [] : keyed.slice(start, start + query.limit)
   const more = start >= 0 && keyed.length > start + query.limit
   return { ids: page.map((row) => row.id), nextCursor: more ? cursorOf({ s: sort, k: page.at(-1)!.key, i: page.at(-1)!.id }) : null }

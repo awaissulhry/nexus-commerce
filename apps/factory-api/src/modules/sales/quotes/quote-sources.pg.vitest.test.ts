@@ -50,6 +50,9 @@ const SESSIONS: Record<string, () => SessionContext> = {
   sales: () => ({ audience: 'office', tenantId: A.tenant, actorId: newId(), grants: [grant(VIEW)] }),
   // TH-6 part B: quotes.view and files.read, limited to a customer that is not SEED-Q-0001's (the wall).
   otherCustomer: () => ({ audience: 'office', tenantId: A.tenant, actorId: newId(), grants: [{ permissions: [...VIEW, 'files.read'], companies: 'all', sites: 'all', parties: [newId()] }] }),
+  // B-CQ-031: quotes.view and orders.view; and orders.view only over another customer.
+  withOrders: () => ({ audience: 'office', tenantId: A.tenant, actorId: newId(), grants: [grant([...VIEW, 'orders.view'])] }),
+  ordersElsewhere: () => ({ audience: 'office', tenantId: A.tenant, actorId: newId(), grants: [grant(VIEW), { permissions: ['orders.view'], companies: 'all', sites: 'all', parties: [newId()] }] }),
 }
 async function get(url: string): Promise<Json> {
   const response = await app.inject({ method: 'GET', url, headers: { 'x-test-session': 'sales' } })
@@ -164,3 +167,38 @@ describe('TH-6 part B: a quote row names its first line’s style and its pictur
   })
 })
 // ---- end TH-6 part B
+
+// ---- B-CQ-031 (customer page › Quotes & incoming, Q3-B9; 13-backend §5): the quote names the portal order it was accepted as ------
+describe('B-CQ-031: a quote made from a portal order names it — on the record and on the list, for a reader with orders.view only', () => {
+  const getAs = async (session: string, url: string): Promise<Json> => {
+    const response = await app.inject({ method: 'GET', url, headers: { 'x-test-session': session } })
+    expect(response.statusCode, response.body).toBe(200)
+    return response.json() as Json
+  }
+  const rowAs = async (session: string, quoteId: string): Promise<Json> => ((await getAs(session, '/sales/quotes?limit=200')).quotes as Json[]).find((quote) => quote.id === quoteId)!
+
+  it('SEED-Q-0002 accepted from the portal order SEED-RQ-0087: named with orders.view over its customer; null without it', async () => {
+    // The portal order (test data past the guards): the customer's sent order the office accepted as SEED-Q-0002.
+    const requestId = newId()
+    await force(
+      `INSERT INTO "PortalOrderRequest" (id, "tenantId", "companyId", "partyId", number, source, status, "sentAt", "decidedAt", "quoteId", version)
+       SELECT $1, q."tenantId", q."companyId", q."partyId", 'SEED-RQ-0087', 'PICKER', 'ACCEPTED', now(), now(), q.id, 3 FROM "Quote" q WHERE q.id = $2`,
+      [requestId, S.draft],
+    )
+    try {
+      const named = { id: requestId, number: 'SEED-RQ-0087' }
+      expect((await getAs('withOrders', `/sales/quotes/${S.draft}`)).quote.fromPortalOrder).toEqual(named)
+      expect((await rowAs('withOrders', S.draft!)).fromPortalOrder).toEqual(named)
+      // quotes.view alone, or orders.view over another customer: the number stays unsaid.
+      expect((await record(S.draft!)).fromPortalOrder).toBeNull()
+      expect((await row(S.draft!)).fromPortalOrder).toBeNull()
+      expect((await getAs('ordersElsewhere', `/sales/quotes/${S.draft}`)).quote.fromPortalOrder).toBeNull()
+      expect((await rowAs('ordersElsewhere', S.draft!)).fromPortalOrder).toBeNull()
+      // A quote no portal order became: null for every reader.
+      expect((await getAs('withOrders', `/sales/quotes/${S.accepted}`)).quote.fromPortalOrder).toBeNull()
+    } finally {
+      await force(`DELETE FROM "PortalOrderRequest" WHERE id = $1`, [requestId])
+    }
+  })
+})
+// ---- end B-CQ-031

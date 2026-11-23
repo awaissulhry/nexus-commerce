@@ -55,7 +55,7 @@ import { NOT_A_PRICE_HOLDER } from '../../../modules/sales/brand-prices/store'
  * of the file: its read (costing/margins) computes every order in scope, not a page.
  *
  * B-TH-057 (SHEET-G05, SHEET-G15, ORD-G07; threads plan TH-4): the file keeps the screen's order and rows — `?sort=` (customer,
- * brand, promise, daysLate, ordered; `-` the other way round) and `?cf=` (the custom field filter) are the list's own terms,
+ * brand, promise, daysLate, ordered, B-CW-030: urgent = "Most urgent first"; `-` the other way round) and `?cf=` (the custom field filter) are the list's own terms,
  * read by listOrders as the screen reads them (a sort it does not know is refused), and `?q=` searches what the screen searches.
  *
  * B-TH-058 / B-TH-059 (threads plan TH-4; N23, ORD-G08, SHEET-G08): the overall view's door terms narrow the file as they
@@ -86,6 +86,9 @@ import { NOT_A_PRICE_HOLDER } from '../../../modules/sales/brand-prices/store'
  * B-CW-002 (customer Work tab plan §1; screen = file = count): `?phase=NOT_SENT|NOT_STARTED|IN_PRODUCTION|READY|SHIPPED|DONE|CANCELLED`
  * (a door of the customer's big picture; the screen writes it with `rows=all`) narrows the file as it narrows the screen; another
  * value is refused in words.
+ *
+ * B-CL-005 (customers list; screen = file = count): `?priority=LOW|NORMAL|HIGH|URGENT` (our own level: the door of a customer's
+ * "Top n" / "High n", office only) narrows the file as it narrows the screen; another value is refused in words.
  *
  * B-CW-022 (customer Work tab plan §2.8: the file says what the row says): `customerUrgency` writes the row's state of four with
  * its place, in the Work orders file's own words ("Urgent (customer) 2", "Urgent – asked", "Regular", "Set to Regular by us");
@@ -181,7 +184,7 @@ const NAMES: Readonly<Record<ExportLocale, { orders: string; rows: (count: numbe
 /** The address's server sort and custom field filter, as the list reads them; a sort the list does not know is refused. */
 function orderTerms(address: URLSearchParams): Pick<ListQuery, 'sort' | 'cf'> {
   const sort = address.get('sort')?.trim() || undefined
-  if (sort !== undefined && !isOrderSort(sort)) throw new ValidationError('Not a sort of the orders: the file would not follow the screen.', [{ path: 'query/sort', message: 'customer, brand, promise, daysLate or ordered (- in front: the other way round).' }])
+  if (sort !== undefined && !isOrderSort(sort)) throw new ValidationError('Not a sort of the orders: the file would not follow the screen.', [{ path: 'query/sort', message: 'customer, brand, promise, daysLate, ordered or urgent (- in front: the other way round).' /* B-CW-030: + urgent */ }])
   const cf = address.get('cf')?.trim() || undefined
   return { ...(sort ? { sort } : {}), ...(cf ? { cf } : {}) }
 }
@@ -251,6 +254,14 @@ function phaseTerm(address: URLSearchParams): Pick<ListFilters, 'phase'> {
 }
 // ── end B-CW-002 ──
 
+// ── B-CL-005 (customers list; screen = file) ──
+/** The `priority` term of the address (our own level), or nothing; another value is refused (the file would not follow the screen), never dropped. */
+function priorityTerm(address: URLSearchParams): Pick<ListFilters, 'priority'> {
+  const value = oneOf(address, 'priority', SALES_ORDER_PRIORITY_LEVELS)
+  return value ? { priority: value } : {}
+}
+// ── end B-CL-005 ──
+
 // ── B-CW-022 (customer Work tab plan §2.8): the file says what the row says ──
 /**
  * The Customer urgency cell: the row's state with its place in the customer's own Urgent list ("Urgent (customer) 2"), as the Work
@@ -309,7 +320,7 @@ export const salesOrders = defineExportSource<Query, Row>({
     const q = address.get('q')?.trim().slice(0, 100) || undefined
     const status = address.get('status')
     const profile = idTerm(address, ['profile', 'profileId'], 'rider') // B-SA-021
-    const kept = { ...narrowing(address) /* B-TH-008 */, ...orderTerms(address) /* B-TH-057 */, ...doorTerms(address) /* B-TH-058 / B-TH-059 */, ...kindTerm(address) /* B-SA-020 */, ...(profile ? { profile } : {}) /* B-SA-021 */, ...waitingTerm(address) /* B-SA-070 */, ...priceMatchTerm(address) /* B-CP-018 */, ...phaseTerm(address) /* B-CW-002 */ }
+    const kept = { ...narrowing(address) /* B-TH-008 */, ...orderTerms(address) /* B-TH-057 */, ...doorTerms(address) /* B-TH-058 / B-TH-059 */, ...kindTerm(address) /* B-SA-020 */, ...(profile ? { profile } : {}) /* B-SA-021 */, ...waitingTerm(address) /* B-SA-070 */, ...priceMatchTerm(address) /* B-CP-018 */, ...phaseTerm(address) /* B-CW-002 */, ...priorityTerm(address) /* B-CL-005 */ }
     if (address.get('late') === 'true') return { ...kept, late: 'true', q }
     if (address.get('deposit') === 'OPEN') return { ...kept, deposit: 'OPEN', q }
     if (address.get('reaccept') === 'true') return { ...kept, reaccept: 'true', q } // B-TH-008: Waiting for the customer
