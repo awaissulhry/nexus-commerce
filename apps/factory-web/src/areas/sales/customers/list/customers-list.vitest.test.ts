@@ -10,7 +10,7 @@ import type { PartyRow } from '../../../parties/_shared/api'
 import { CUSTOMERS, rowOf } from '../../../parties/_shared/fixtures'
 import { customerColumnsOf, threadHref } from './columns'
 import { MessagesHeader } from './view/cells' // F-CL-301
-import { CARD_ROLES, customerActsOf, CUSTOMER_HIDDEN_COLUMNS, customerRightsOf, namesOtherCustomer, officeDataOf } from './model'
+import { CARD_ROLES, customerActsOf, CUSTOMER_HIDDEN_COLUMNS, customerRightsOf, namesOtherCustomer, officeDataOf, workReadOf } from './model'
 import { supervisorBodyOf, supervisorPlanOf, supervisorRestOf, supervisorSummaryOf, type SupervisorTarget } from './supervisor/model'
 
 /**
@@ -86,6 +86,14 @@ describe('F-CL-102 / F-CL-104: each act reads its own right', () => {
 })
 
 // ---- F-CL-104: the customers' own acts ------------------------------------------------------------------------------------------
+describe('F-CL-301 (walk W-11): no work read without the list’s own right', () => {
+  it('orders.view alone (the Planner, on the no-access page) reads no band and no facts; with parties.view it reads', () => {
+    expect(workReadOf(['orders.view'])).toBe(false)
+    expect(workReadOf(['parties.view'])).toBe(false)
+    expect(workReadOf(['parties.view', 'orders.view', 'threads.read'])).toBe(true)
+  })
+})
+
 describe('F-CL-104: Add task to N customers… — the R-47 check of the text', () => {
   const ticked = [
     { code: 'SEED-C1', tradeName: 'Seed Racing', legalName: 'Seed Racing S.r.l.' },

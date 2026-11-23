@@ -72,6 +72,15 @@ export function customerRightsOf(permissions: Iterable<string>): CustomerRights 
   }
 }
 
+/**
+ * F-CL-301 (walk W-11): where the work stands (the band, the work columns' facts) is read only for a reader of the list itself
+ * (parties.view) who reads orders — the Planner's no-access page asked for the band and got a 403.
+ */
+export function workReadOf(permissions: Iterable<string>): boolean {
+  const held = new Set(permissions)
+  return held.has('parties.view') && held.has('orders.view')
+}
+
 // ---- F-CL-104: the customers' own acts on a selection (the bar, 13-backend §8.2) -----------------------------------------------
 
 /** Their places in the bar: Add task first, Set production supervisor second (then the shared VIES 40 · Block 50 · Archive 60). */

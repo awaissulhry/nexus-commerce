@@ -24,7 +24,7 @@ import type { ListDepth } from '../../../parties/_shared/view/PartiesListView'
 import { useOverdueColumns } from '../money/columns'
 import { useOverdueList } from '../money/hooks'
 import { customerBarActs, customerRowItems, useCustomerColumns } from './columns'
-import { customerRightsOf, customerSortOf, CUSTOMERS_LIST_NS, namesOtherCustomer } from './model'
+import { customerRightsOf, customerSortOf, CUSTOMERS_LIST_NS, namesOtherCustomer, workReadOf } from './model' // F-CL-301: + workReadOf
 import { useCustomersWork } from './use-customers-work' // F-CL-201
 import { useWorkBand } from './use-work-band' // F-CL-201
 import { bandHintOf, CustomersBand, groupName } from './view/CustomersBand' // F-CL-202
@@ -59,6 +59,7 @@ export function useCustomersDepth(): { readonly depth: ListDepthSlot; readonly w
   const sheet = useT('orders-sheet')
   const { toast } = useToast()
   const rights = useMemo(() => customerRightsOf(session.permissions), [session.permissions])
+  const workReads = useMemo(() => workReadOf(session.permissions), [session.permissions]) // F-CL-301 (walk W-11): + parties.view
   const prefix = companyPrefix(session.company?.code ?? '')
   const overdue = useOverdueColumns(useOverdueList())
   const [tick, setTick] = useState(0)
@@ -128,14 +129,15 @@ export function useCustomersDepth(): { readonly depth: ListDepthSlot; readonly w
     const asked = useMemo(() => list.rows.map((row) => ({ recordType: 'Party', id: row.id })), [list.rows])
     const unread = useUnread(readUnread, asked, tick)
     // F-CL-201: each page's work facts and the band — only with orders.view (else no band, no work column: the row as in W1).
-    const work = useCustomersWork(api, list.rows, rights.orders)
-    const band = useWorkBand(api, list.terms, rights.orders)
-    const columns = useCustomerColumns({ prefix, unread: rights.threads ? unread : null, overdue, work: rights.orders ? work : null, today, read: readPictures, onPicture: setViewer, wide })
+    // F-CL-301 (walk W-11): and only for a reader of the list itself (parties.view): a no-access page asks for nothing.
+    const work = useCustomersWork(api, list.rows, workReads)
+    const band = useWorkBand(api, list.terms, workReads)
+    const columns = useCustomerColumns({ prefix, unread: rights.threads ? unread : null, overdue, work: workReads ? work : null, today, read: readPictures, onPicture: setViewer, wide })
     const acts = customerBarActs(rights, list.selectedRows, c, { onTask: openTask, onSupervisor: openSupervisorFor })
     // A company with no customer at all: no band — the empty state carries the page (settle T28 / A11).
     const unfiltered = list.view === 'open' && !list.terms.q?.trim() && !list.terms.kind && !list.terms.taxMode
     const nobody = !!band.band && band.band.groups.every((group) => group.customers === 0) && list.rows.length === 0 && unfiltered && list.work === null
-    const bandNode = rights.orders && !nobody ? <CustomersBand band={band.band} problem={band.problem} work={list.work} onWork={list.onWork} wide={wide} about={p('customers.intro')} words={bandWords} onRoom={setRoom} /> : undefined
+    const bandNode = workReads && !nobody ? <CustomersBand band={band.band} problem={band.problem} work={list.work} onWork={list.onWork} wide={wide} about={p('customers.intro')} words={bandWords} onRoom={setRoom} /> : undefined
     const workChip = list.work
       ? {
           label: groupName(list.work, bandWords),
