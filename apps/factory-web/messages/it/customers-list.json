@@ -25,7 +25,7 @@
     "customer": "Cliente",
     "messagesHint": "I tuoi nuovi messaggi nella conversazione del cliente. I messaggi dei suoi ordini sono contati nella sua scheda Lavori.",
     "needs": "Da seguire",
-    "needsHint": "Cosa tocca a noi, dal più forte; poi gli ordini urgenti del cliente e la nostra priorità Massima / Alta. Ogni chip apre esattamente ciò che conta.",
+    "needsHint": "Cosa tocca a noi, dal più forte; poi gli ordini urgenti del cliente e la nostra priorità Massima / Alta; per ultimo, attenuato, «In attesa di acconto»: aspetta il pagamento del cliente. Ogni chip apre esattamente ciò che conta.",
     "workHint": "I suoi ordini per punto — i gruppi e le parole della scheda Lavori. Ogni chip apre la scheda Lavori su quel gruppo.",
     "nextPromise": "Prossima promessa",
     "nextPromiseHint": "La data promessa più vicina tra i suoi ordini aperti, da oggi in poi",

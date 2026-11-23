@@ -25,7 +25,7 @@
     "customer": "Customer",
     "messagesHint": "Your own new messages in each customer’s own conversation. Its orders’ messages are counted on its Work tab.",
     "needs": "Needs us",
-    "needsHint": "What waits on us, strongest first; then the customer’s urgent orders and our Top / High. Each chip opens exactly what it counts.",
+    "needsHint": "What waits on us, strongest first; then the customer’s urgent orders and our Top / High; last, quiet, “Waiting for deposit”: it waits on the customer’s payment. Each chip opens exactly what it counts.",
     "workHint": "Its orders by where they are — the Work tab’s groups and words. Each chip opens its Work tab at that group.",
     "nextPromise": "Next promise",
     "nextPromiseHint": "The earliest promise date of its open orders, from today on",

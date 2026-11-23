@@ -356,3 +356,23 @@
   align-items: baseline;
   gap: var(--nds-space-6);
 }
+
+/* ---- F-CL-204: the head row with the band — Import · New customer stay at the right end; on a phone they come first (10-design §0) ---- */
+.fw-pty-head:has(.fw-pty-head-band) {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.fw-pty-head:has(.fw-pty-head-band) .fw-pty-actions {
+  flex: none;
+}
+
+@media (max-width: 719px) {
+  .fw-pty-head:has(.fw-pty-head-band) {
+    flex-wrap: wrap;
+  }
+  .fw-pty-head:has(.fw-pty-head-band) .fw-pty-actions {
+    order: -1;
+    margin-left: auto;
+  }
+}
