@@ -31,11 +31,13 @@ import './ship-together.css'
 
 type Row = Pick<OrderRow, 'id' | 'number' | 'customerRef' | 'partyName' | 'units' | 'shippedUnits'>
 
-export function ShipWindow({ model, actions, rows, prefix }: { model: ShipTogetherModel; actions?: NewShipmentActions; rows: readonly Row[]; prefix: string }) {
+// cw fx6 (re-walk W-8): `customerName` — on a customer's own page the host's name of that customer; the window's own lines say it
+// too ("SEED-SO-0002 · <customer>", "Add other open orders of <customer>"). Absent (the other two hosts): Warehouse's own words.
+export function ShipWindow({ model, actions, rows, prefix, customerName = null }: { model: ShipTogetherModel; actions?: NewShipmentActions; rows: readonly Row[]; prefix: string; customerName?: string | null }) {
   if (!model.window) return null
   return (
     <WithMessages namespaces={[...DEPTH_NAMESPACES, SHEET]}>
-      <NewShipmentDialog model={model.window} can={model.can} actions={actions} above={<ShipAbove model={model} rows={rows} prefix={prefix} />} />
+      <NewShipmentDialog model={model.window} can={model.can} actions={actions} above={<ShipAbove model={model} rows={rows} prefix={prefix} />} customer={customerName} />
     </WithMessages>
   )
 }

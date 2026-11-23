@@ -109,7 +109,7 @@ describe('F-CW-301: the third mount of the ONE window — never a copy (source)'
     expect(container).toContain('ship.open(row.id, { together: true })') // a row's Create shipment…: as on the order page
     const view = readFileSync(new URL('../view/ShipTogether.tsx', import.meta.url), 'utf8')
     expect(view).toContain("import { NewShipmentDialog } from '../../../../warehouse/shipments/list/view/NewShipmentDialog'")
-    expect(view).toContain('<NewShipmentDialog model={model.window} can={model.can} actions={actions} above={<ShipAbove model={model} rows={rows} prefix={prefix} />} />')
+    expect(view).toContain('<NewShipmentDialog model={model.window} can={model.can} actions={actions} above={<ShipAbove model={model} rows={rows} prefix={prefix} />} customer={customerName} />' /* cw fx6: + the host's name of the customer */)
     expect(view).not.toMatch(/<Modal|Stepper|NumberStepper/) // no dialog of its own
     const sheet = readFileSync(new URL('../use-orders-sheet.ts', import.meta.url), 'utf8')
     expect(sheet).toContain('const ship = useShipTogether(api, session.permissions, rereadInPlace)')

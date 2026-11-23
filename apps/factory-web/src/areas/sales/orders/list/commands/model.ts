@@ -244,7 +244,10 @@ export function manyHeld(command: ManyCommand, rows: readonly (Pick<OrderRow, 's
 }
 
 /** The row says nobody was asked for its yes yet (the window's "Nobody was asked for this yes yet"). */
-export const noYesAsked = (row: Partial<Pick<OrderRow, 'waits'>>): boolean => !!row.waits && row.waits.includes('NO_REQUEST') && !row.waits.includes('REQUEST_PENDING')
+// cw fx6 (re-walk W-22): for EVERY reason the row gives without an asked yes — nobody asked (NO_REQUEST), and also an order that
+// says only why it waits (CREDIT_HOLD, MEASUREMENTS: SEED-SO-W39-01 said "Waits for credit" and the window still opened on "Runs on
+// 0"). The bulk Confirm decides an ASKED yes and nothing else; a row that gives no reason at all never holds.
+export const noYesAsked = (row: Partial<Pick<OrderRow, 'waits'>>): boolean => Array.isArray(row.waits) && row.waits.length > 0 && !row.waits.includes('REQUEST_PENDING')
 
 /** The bar's button words: "Mark {count} ready…" (orders-sheet `bulk.<command>`). */
 export const manyLabel = (command: ManyCommand, count: number): Words => sheet(`bulk.${command}`, { count })

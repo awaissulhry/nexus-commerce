@@ -27,7 +27,10 @@ import '../../shipments.css'
  * F-CW-301 (customer Work tab: "Ship N together…" from ticked orders): `above` — the host's own lines over the steps (which ticked
  * orders it runs on and which not, with why). Warehouse and the order page give none: their window is exactly as before.
  */
-export function NewShipmentDialog({ model, can, actions, above }: { model: NewShipmentModel; can: ShippingAbilities; actions?: ShipmentsListActions; above?: ReactNode }) {
+// cw fx6 (customer Work tab re-walk W-8): `customer` — a host that shows ONE customer under its own name of it (the customer's page:
+// the record's name) hands that name; the window's lines about that customer say it. Warehouse and the order page give none: the
+// order's own legal name, exactly as before.
+export function NewShipmentDialog({ model, can, actions, above, customer = null }: { model: NewShipmentModel; can: ShippingAbilities; actions?: ShipmentsListActions; above?: ReactNode; customer?: string | null }) {
   const t = useT('shipments')
   const order = model.orders?.find((entry) => entry.salesOrderId === model.salesOrderId) ?? null
   // F-OP-121: every order the shipment would carry (this one, then the others added).
@@ -67,7 +70,7 @@ export function NewShipmentDialog({ model, can, actions, above }: { model: NewSh
       open
       onClose={() => actions?.onNewClose?.()}
       title={model.join ? t('new.join.title', { number: model.join.number }) /* F-OP-122 */ : t('new.title')}
-      subtitle={order ? t('new.subtitle', { order: order.number, customer: order.party.legalName }) : undefined}
+      subtitle={order ? t('new.subtitle', { order: order.number, customer: customer ?? order.party.legalName }) : undefined}
       size="lg"
       footer={
         <>
@@ -123,7 +126,7 @@ export function NewShipmentDialog({ model, can, actions, above }: { model: NewSh
           <EmptyState title={t('new.empty.title')} description={t('new.empty.body')} />
         ) : model.step === 1 ? (
           model.together && order ? (
-            <TogetherStep order={order} model={model} actions={actions} />
+            <TogetherStep order={order} model={model} actions={actions} customer={customer} />
           ) : (
             <OrderStep model={model} actions={actions} />
           )
@@ -138,7 +141,7 @@ export function NewShipmentDialog({ model, can, actions, above }: { model: NewSh
 }
 
 // ── F-OP-121: this order, and the same customer's other open orders beside it (ship together) ────────────────────────────────────
-function TogetherStep({ order, model, actions }: { order: ReadyOrder; model: NewShipmentModel; actions?: ShipmentsListActions }) {
+function TogetherStep({ order, model, actions, customer = null }: { order: ReadyOrder; model: NewShipmentModel; actions?: ShipmentsListActions; customer?: string | null }) {
   const t = useT('shipments')
   const d = useT(DEPTH_NS)
   const shippable = (entry: ReadyOrder) => entry.cells.reduce((sum, cell) => sum + cell.shippable, 0)
@@ -150,11 +153,11 @@ function TogetherStep({ order, model, actions }: { order: ReadyOrder; model: New
       <div className="fw-sh-choices">
         <CheckboxCard checked readOnly aria-readonly="true" selected title={orderWords({ number: order.number, customerRef: order.customerRef }, po)} description={t('new.together.this', { count: shippable(order) })} />
       </div>
-      <h3 className="fw-sh-h3">{t('new.together.add', { customer: order.party.legalName })}</h3>
+      <h3 className="fw-sh-h3">{t('new.together.add', { customer: customer ?? order.party.legalName })}</h3>
       {rows.length === 0 ? (
-        <p className="fw-sh-hint">{t('new.together.none', { customer: order.party.legalName })}</p>
+        <p className="fw-sh-hint">{t('new.together.none', { customer: customer ?? order.party.legalName })}</p>
       ) : (
-        <div className="fw-sh-choices" role="group" aria-label={t('new.together.add', { customer: order.party.legalName })}>
+        <div className="fw-sh-choices" role="group" aria-label={t('new.together.add', { customer: customer ?? order.party.legalName })}>
           {rows.map(({ order: other, held }) => (
             // Held, never hidden nor disabled: it keeps its focus and says why (aria-disabled; ticking it does nothing).
             <CheckboxCard

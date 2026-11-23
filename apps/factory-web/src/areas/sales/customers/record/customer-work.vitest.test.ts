@@ -194,7 +194,7 @@ describe('F-SA-276: the four views (no tabs inside the tab)', () => {
     expect(orderedByPreset(sheet, null).map((column) => column.colId)).toEqual(sheet.map((column) => column.colId))
     // The honest widths: a seed's number, the longest status words (Status in Customise), the picture's 36 px with the cell's padding.
     // cw fx5 (walk W-5, W-6; 30-walk §6.2): the narrow fixed columns at the design's widths (Picture 58 · Promised 98 · New messages 44).
-    expect(WORK_MIN).toMatchObject({ picture: 58, number: 150, whereItIs: 220, promised: 98, customerUrgency: 147, newMessages: 44, status: 196 })
+    expect(WORK_MIN).toMatchObject({ picture: 58, number: 150, whereItIs: 212 /* cw fx6: its floor; it takes the room left */, promised: 98, customerUrgency: 147, newMessages: 44, status: 196 })
     expect(withPreset({ colId: 'number', minWidth: 128 }, workPreset('all', null), false)).toMatchObject({ minWidth: 150, maxWidth: 150, hide: false })
     expect(withPreset({ colId: 'picture', minWidth: 76, maxWidth: 76 }, workPreset('all', null), false)).toMatchObject({ minWidth: 58, maxWidth: 58, hide: false })
     // Where it is takes the room left (the chips): no maximum; Status (ticked in Customise) shows its longest words whole.

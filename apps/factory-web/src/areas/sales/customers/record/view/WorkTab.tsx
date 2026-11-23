@@ -23,7 +23,7 @@ import { OrdersListView, WAITING_US_VIEW } from '../../../orders/list/view/Order
 import type { OrdersListModel } from '../../../orders/list/list-model'
 import { WORK_DEFAULT_ROWS, workEntry, type useCustomerWork, type WorkCan } from '../use-customer-work'
 import { workViewCounts } from '../use-customer-work' // F-CP-103: the Views ▾ counts from the strip's one count read
-import { requestsDoorOf } from '../use-customer-work' // cw fx5 (W-1): the door of "Requests to answer N"
+import { requestsDoorOf, reviewNamed } from '../use-customer-work' // cw fx5 (W-1): the door of "Requests to answer N"; cw fx6: its window names the customer as the page does
 import type { WorkAsk } from '../use-customer-work' // F-CP-104: the band's New order / ⋯ Import orders, served in place
 import { priceDifferOf } from '../use-customer-work' // F-CP-141: the Not equal view's count (the customer's own counts)
 // ---- F-CP-113: the New order page's own lines editor, in a large window on this page ----
@@ -219,10 +219,14 @@ export const WAITING_SET: readonly string[] = Object.freeze(['picture', 'number'
  * 275 px in the 863 px room beside the thread (it had 232), so two chips and the pieces line fit. The tick box stays 43 px (the
  * grid engine's own; the design drew 40): Customer urgency gives those 3 px (its words wrap, never cut). Pieces 96: its header
  * whole beside its menu. Shipped 104 (as on Sales › Orders). Deposit 136: "Extra deposit open" on one line in English.
+ *
+ * cw fx6 (re-walk R-5): Ordered 144 with the closer padding — its second line ("requested 18/12/2026", "richiesto il 18/12/2026")
+ * stands on ONE line: the cell was three lines of text in a 49 px row. The 40 px come from Where it is in the widest room (it has
+ * 304 px there at 1792, and its floor is 212 so the set still fits where that room starts, at 1700).
  */
-export const WORK_MIN: Readonly<Record<string, number>> = Object.freeze({ picture: 58, number: 150, whereItIs: 220, promised: 98, customerUrgency: 147, newMessages: 44, waitingOn: 178, deposit: 136, shipped: 104, priority: 112, units: 96, orderDate: 104, supervisor: 130, status: 196 })
+export const WORK_MIN: Readonly<Record<string, number>> = Object.freeze({ picture: 58, number: 150, whereItIs: 212 /* cw fx6: 8 px to Ordered at the widest room's start */, promised: 98, customerUrgency: 147, newMessages: 44, waitingOn: 178, deposit: 136, shipped: 104, priority: 112, units: 96, orderDate: 144 /* cw fx6 (re-walk R-5) */, supervisor: 130, status: 196 })
 /** cw fx5: the side padding of the set's narrow columns (the grid's own is 14 px): the picture in its middle; Where it is, the date and the Deposit pill closer to their edges. */
-export const WORK_PAD: Readonly<Record<string, 'tight' | 'snug'>> = Object.freeze({ picture: 'tight', whereItIs: 'snug', promised: 'snug', deposit: 'snug' })
+export const WORK_PAD: Readonly<Record<string, 'tight' | 'snug'>> = Object.freeze({ picture: 'tight', whereItIs: 'snug', promised: 'snug', deposit: 'snug', orderDate: 'snug' /* cw fx6 (R-5) */ })
 /** cw fx5 (walk W-5, W-14): no menu button in the header of a narrow fixed column — "Promised" / "Promesso" whole beside its sort mark (Picture, New messages and ⋯ have none already). */
 export const WORK_PLAIN_HEADS: readonly string[] = Object.freeze(['picture', 'promised', 'newMessages'])
 /** Every column of the set keeps its width: the room left goes to Where it is (the chips), never to a stretched date. */
@@ -511,6 +515,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
     chips: chipsOf(can, work.reads),
     pressed: waiting || phase ? [] : /* F-CQ-303: no drafts view */ rows === 'late' ? ['late'] : rows === 'deposit' ? ['deposit'] : [],
     workOrdersHref: can.workorders ? `${prefix}/production/work-orders?party=${encodeURIComponent(party.id)}` : null,
+    failed: work.reads.board.status === 'failed', // cw fx6 (re-walk R-4): the groups' read failed — the notes line says so, with Try again
     // cw fx5 (walk W-10): a door only for a reader who may open the page it leads to; else the count stays, plain and quiet.
     repliesHref: mayIncoming ? `${prefix}/sales/incoming?tile=CUSTOMER_REPLIES&party=${encodeURIComponent(party.id)}` : null,
     requestsHref: firstRequest ? door.hrefOf(firstRequest) : null,
@@ -558,7 +563,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
         {/* F-CW-302 (10-design §3.6): the foot — the order the rows stand in, the customer's urgency state (this tab only). */}
         <WorkFoot line={foot} />
       </div>
-      <RequestDoorWindow door={door} />
+      <RequestDoorWindow door={{ ...door, window: { ...door.window, review: reviewNamed(door.window.review, party.name) } } /* cw fx6 (re-walk W-8) */} />
       {/* F-CQ-303: the draft's read-only window opens from Quotes & incoming now. */}
       {lines && (
         // F-CP-113: the same editor as /sales/orders/new, its customer and header set by the New order window.

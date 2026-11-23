@@ -50,6 +50,8 @@ export interface WorkBandModel {
   readonly requestsHref?: string | null
   /** Design cases: the groups' window open. */
   readonly windowOpen?: boolean
+  /** cw fx6 (re-walk R-4): the read of the groups failed (the seven read "—"): the notes line says so once, with the chips' own retry. */
+  readonly failed?: boolean
 }
 
 export interface WorkBandActions {
@@ -164,6 +166,19 @@ function Band({ model, actions }: { model: WorkBandModel; actions?: WorkBandActi
           <ChevronDown size={14} aria-hidden />
         </button>
         <div className="fw-cwb-notes">
+          {/* cw fx6 (re-walk R-4): the groups could not be read — said ONCE here in the chips' own words ("Couldn't be read · Try
+              again"); the press reads the board again (the retry of the chips this same read feeds). */}
+          {model.failed && (
+            <span role="status">
+              {actions?.onRetry ? (
+                <button type="button" className="fw-cwb-link" onClick={() => actions.onRetry?.('late')}>
+                  {t('customers.work.tile.failed')}
+                </button>
+              ) : (
+                t('customers.work.tile.failed')
+              )}
+            </span>
+          )}
           <span>
             {actions?.onAll ? (
               <button type="button" className="fw-cwb-link" onClick={() => actions.onAll?.()}>

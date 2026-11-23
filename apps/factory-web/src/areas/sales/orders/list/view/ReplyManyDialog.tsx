@@ -123,7 +123,9 @@ export function ReplyManyBody({ model, actions }: { model: ReplyManyModel; actio
   const today = model.today ?? romeToday()
   const held = replySendHeld(model.portal, customer, pending.length + todoLeft(model.targets, model.results).length) ?? todoHeld(model.todo, today)
   // cq fx3 W2-2: no portal yet on quotes and requests — no box (nothing can be posted here), so no to-do tick that follows a post either.
-  const box = model.portal !== 'off' || !model.recordType || model.recordType === 'SalesOrder'
+  // cw fx6 (re-walk item 7): on ORDERS too — the window showed its message box with Send held under a banner that says to write by
+  // e-mail (a mixed message). The reason only, in the orders' own words ('reply.portalOff'); no box, no to-do tick.
+  const box = model.portal !== 'off'
   const todo = box ? (model.todo ?? null) : null
   const language = model.language ? languageInSentence(model.language, locale) : null
   return (
@@ -156,7 +158,7 @@ export function ReplyManyBody({ model, actions }: { model: ReplyManyModel; actio
         </div>
       )}
       {/* cq fx3 W2-2: no portal yet — on quotes and requests no box that says "they read it in their portal" (the banner says to write by
-          e-mail in each record's own conversation; nothing can be posted here). Orders unchanged (Send held with the same words). */}
+          e-mail in each record's own conversation; nothing can be posted here). cw fx6: orders too. */}
       {box && (
       <Composer
         context={replyComposerContext(customer)}
