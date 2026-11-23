@@ -67,7 +67,7 @@ import { CataloguePane } from './pane/catalogue/CataloguePane'
 // B-TH-285: ⋯ Inquiry addresses and the band's door line.
 import type { AddressesModel } from '../addresses/model'
 import { AddressesDialog, type AddressesActions } from '../addresses/view/AddressesDialog'
-import { InquiriesMessages, isPageKey, NoAccess, NoticeLine, SourceTag, StatusPill, useWords, WaitingTag } from '../parts'
+import { InquiriesMessages, isPageKey, NoAccess, NoticeLine, SourceTag, StatusPill, useWords } from '../parts'
 // B-TH-230: the New messages column (LastMessageCell) and the one waiting rule.
 import { LAST_MESSAGE_NS, LastMessageCell } from '../../../../lib/last-message-cell/view/LastMessageCell'
 import { unreadValue, type UnreadMap } from '../../../../lib/last-message-cell/model'
@@ -89,12 +89,22 @@ import { SplitPane } from '../../../../lib/split-pane/SplitPane'
 import { CloseThreadConfirm } from '../../../../lib/record-thread/popups/view/Confirms'
 import { RequestPane, type PaneSlots } from './pane/RequestPane'
 // B-TH-290 (list-F10): the Production column — production's answer on each request.
-import { ProductionCell } from './pane/production/ProductionAnswer'
 import { companyToday, productionCell } from '../production-answer'
 // ---- F-CQ-103 / F-CQ-104 (customer page › Quotes & incoming): the chips cell, the order, the host's kinds and columns by its room
 import { bulkActs, DEFAULT_TILE, incomingWhereOf, INCOMING_RANKS, type IncomingRank, type WhereChipPhrase } from '../model'
 import { byRoom, datesFold, hostTier, reaches, type RoomTier } from '../../_shared/list-room'
 import { WhereChips, type WhereChipWords } from '../../_shared/where-cell/view/WhereChips'
+// ---- F-CQ-201 / 203 / 204 (customer page › Quotes & incoming): the bar (3 + More ▾), the ONE many-acts window, Add task to N, the
+// row's own windows in place (a request's RecordDialogs, a portal order's CatalogueDialogs) on a host whose dock is the pane
+import { incomingBarOf, type IncomingActKind, type IncomingBarRights } from '../bar'
+import type { BulkPreview } from '../model'
+import { ManyActDialog, ManyBar } from '../../_shared/many-acts/view/ManyActDialog'
+import type { ManyActActions, ManyActModel } from '../../_shared/many-acts/use-many-act'
+import type { TaskBatchModel } from '../../_shared/many-acts/use-task-batch'
+import { TaskNewDialog } from '../../../../record-panels/tasks/view/TaskNewDialog'
+import type { BatchAnswer, BatchAssignee, TaskDraft } from '../../../../record-panels/tasks/model'
+import { RecordDialogs } from './pane/sections'
+import { CatalogueDialogs } from './pane/catalogue/CataloguePane'
 
 /** F-SA-224: the From switcher's choice of the requests from prospects (no customer yet), `?prospect=1`. */
 const PROSPECTS = 'prospect'
@@ -193,6 +203,18 @@ export interface InquiriesModel {
   /** The phone card's door to the row's thread (its words; with `active`). */
   cardDoor?: string | null
   // ---- end F-CQ-103 / F-CQ-104
+  // ---- F-CQ-201 / 203 / 204
+  /** What the bar reads of the reader (each act its OWN right); absent: today's Assign / Decline (a design case without it). */
+  barRights?: IncomingBarRights
+  /** The many-acts window open now (Mark N lost, Ask <customer> about N requests), or null. */
+  many?: ManyActModel | null
+  /** "Add task to N…" open now, or null. */
+  tasks?: TaskBatchModel | null
+  /** A request's own window opened from its row on a host whose dock is the pane (the request read for it), or null. */
+  verb?: InquiryRecordModel | null
+  /** A portal order's own window opened from its row on such a host, or null. */
+  catalogueVerb?: CatalogueModel | null
+  // ---- end F-CQ-201 / 203 / 204
 }
 
 export interface InquiriesActions {
@@ -213,7 +235,13 @@ export interface InquiriesActions {
   catalogue?: CatalogueActions
   /** B-TH-285: the inquiry addresses' dialog. */
   addresses?: AddressesActions & { onOpen?: () => void }
-  onBulk?: (kind: 'assign' | 'decline', ids: readonly string[]) => void
+  onBulk?: (kind: 'assign' | 'decline', ids: readonly string[], preview?: BulkPreview) => void
+  // ---- F-CQ-201 / 203 / 204: the bar's act over the ticked rows, a portal order's own verb from its row, the windows' own actions
+  onBarAct?: (kind: IncomingActKind, picked: readonly IncomingRow[]) => void
+  onCatalogueVerb?: (row: IncomingRow, verb: 'order' | 'quote' | 'refuse') => void
+  many?: ManyActActions
+  tasks?: { readonly onSend: (draft: TaskDraft, assignee: BatchAssignee) => Promise<BatchAnswer | null>; readonly onRetryPeople: () => void; readonly onClose: () => void }
+  // ---- end F-CQ-201 / 203 / 204
   bulk?: {
     onAssign?: (assigneeId: string | null) => void
     onRetryPeople?: () => void
@@ -479,7 +507,11 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
         </span>
       )
     }
-    const WaitingCell = ({ data }: ICellRendererParams<IncomingRow>) => (data ? <WaitingTag row={data} short /> : null)
+    // F-CQ-103 fix: the chips cell's facts the file writes as their own columns (the export source's `waitingHours`, `production`).
+    const whereExport = [
+      { key: 'waitingHours', label: t('col.waiting') },
+      { key: 'production', label: t('production.col') },
+    ]
     const StateCell = ({ data }: ICellRendererParams<IncomingRow>) => {
       if (!data) return null
       const request = data.request
@@ -611,14 +643,27 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
             // F-CQ-103 (P0-B7): the change request's door (that request, `&open=`) only for a reader who answers it (orders.manage).
             ...(place === 'approvals' ? (m.can.orders ? [{ id: 'open', label: t('door.approvals', { number: data.number }), href: openHref(data) }] : []) : [{ id: 'open', label: t('row.open'), onSelect: () => act()?.onOpen?.(data.id) }]),
             ...(request ? [{ id: 'tab', label: t('row.openNewTab'), href: recordHref(m.prefix, request.id), target: '_blank' as const }] : []),
-            ...(request && isOpen(request.status)
+            // F-CQ-204 (10-design §7): the request's next steps, each only with its right (never held for it), held by its state in words;
+            // no key letter in a label (the keys live in the ⓘ).
+            ...(request && isOpen(request.status) && m.can.manage
               ? [
-                  verbItem(data, request, 'quote', t('verb.quoteKey')),
-                  verbItem(data, request, 'assign', t('verb.assignKey')),
-                  verbItem(data, request, 'askInfo', t('verb.askInfo')),
-                  { ...verbItem(data, request, 'decline', t('verb.declineKey')), tone: 'danger' as const },
+                  ...(m.can.quotes ? [verbItem(data, request, 'quote', `${t('verb.quote')}…`)] : []),
+                  ...(m.can.orders ? [verbItem(data, request, 'order', t('row.makeOrder'))] : []),
+                  verbItem(data, request, 'assign', t('row.assign')),
+                  ...(request.status !== 'NEED_INFO' ? [verbItem(data, request, 'askInfo', `${t('verb.askInfo')}…`)] : []),
+                  { ...verbItem(data, request, 'decline', t('row.decline')), tone: 'danger' as const },
+                  verbItem(data, request, 'lost', t('verb.lost')),
                 ]
               : []),
+            // F-CQ-204: a portal order sent: Accept as order / as quote, Refuse — its own window (orders.manage; as a quote + quotes.manage).
+            ...(data.kind === 'CATALOGUE_ORDER' && data.catalogueOrder?.status === 'SENT' && m.can.orders
+              ? [
+                  { id: 'acceptOrder', label: `${t('catalogue.acceptOrder')}…`, onSelect: () => act()?.onCatalogueVerb?.(data, 'order') },
+                  ...(m.can.quotes ? [{ id: 'acceptQuote', label: `${t('catalogue.acceptQuote')}…`, onSelect: () => act()?.onCatalogueVerb?.(data, 'quote') }] : []),
+                  { id: 'refuse', label: `${t('catalogue.refuse')}…`, tone: 'danger' as const, onSelect: () => act()?.onCatalogueVerb?.(data, 'refuse') },
+                ]
+              : []),
+            ...(m.barRights?.tasks && data.kind !== 'CHANGE_REQUEST' ? [{ id: 'addTask', label: t('row.addTask'), onSelect: () => act()?.onRowVerb?.(data, 'addTask') }] : []),
             { id: 'copy', label: t('row.copy'), onSelect: () => act()?.onCopy?.([data.number]) },
           ]}
         />
@@ -664,7 +709,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
       return [
         { colId: 'picture', headerName: t('col.picture'), minWidth: 76, maxWidth: 76 /* F-SA-212: one width */, sortable: false, suppressHeaderMenuButton: true, valueGetter: (params) => params.data?.request?.picture?.styleCode ?? '', cellRenderer: PictureRender },
         { colId: 'number', headerName: t('col.number'), minWidth: 160, maxWidth: 220, flex: 0, valueGetter: (params) => params.data?.number ?? '', cellRenderer: HostNumberCell, autoHeight: true },
-        { colId: 'status', headerName: t('col.where'), minWidth: 220, flex: 2, valueGetter: (params) => params.data?.stateWords[locale] ?? '', cellRenderer: WhereCell, autoHeight: true },
+        { colId: 'status', headerName: t('col.where'), minWidth: 220, flex: 2, valueGetter: (params) => params.data?.stateWords[locale] ?? '', cellRenderer: WhereCell, autoHeight: true, context: { exportWith: whereExport } },
         wider({ colId: 'wantedDate', headerName: t('col.wanted'), minWidth: 110, maxWidth: 130, valueGetter: (params) => (params.data ? day(params.data.wantedDate) : '') }, 'M'),
         wider({ colId: 'received', headerName: t('col.received'), minWidth: 104, maxWidth: 150, valueGetter: (params) => (params.data ? when(params.data.receivedAt) : '') }, 'L'),
         wider({ colId: 'owner', headerName: t('col.owner'), minWidth: 120, maxWidth: 150, valueGetter: (params) => (params.data?.request ? (say(assigneePhrase(params.data.request)) ?? '') : '—') }, 'L'),
@@ -688,16 +733,13 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
       { colId: 'pieces', headerName: t('col.quantity'), minWidth: 100, flex: 0.5, hide: !wide, valueGetter: (params) => params.data?.pieces ?? null, cellRenderer: QuantityCell },
       { colId: 'wantedDate', headerName: t('col.wanted'), minWidth: 100, flex: 0.5, valueGetter: (params) => (params.data ? day(params.data.wantedDate) : '') },
       { colId: 'received', headerName: t('col.received'), minWidth: 150, flex: 0.6, hide: !wide, valueGetter: (params) => (params.data ? when(params.data.receivedAt) : '') },
-      // F-CQ-103: Waiting and Production moved into the chips cell — still Customise choices (and in the file when shown).
-      byRoom({ colId: 'waitingHours', headerName: t('col.waiting'), minWidth: 185, flex: 0.8, valueGetter: (params) => params.data?.waiting.workingMinutes ?? null, cellRenderer: WaitingCell }, false),
       { colId: 'owner', headerName: t('col.owner'), minWidth: 120, flex: 0.5, valueGetter: (params) => (params.data?.request ? (say(assigneePhrase(params.data.request)) ?? '') : '—') },
       // F-CQ-103: the ONE chips cell keeps the column's id (`status`: its file column and the saved layouts stay); the State column with
       // its funnel stays a Customise choice.
-      { colId: 'status', headerName: t('col.where'), minWidth: 220, flex: 1.2, valueGetter: (params) => params.data?.stateWords[locale] ?? '', cellRenderer: WhereCell, autoHeight: true },
+      // F-CQ-103 fix (lead decision on W1): Waiting and Production live inside the chips cell — and the file keeps both as their own
+      // columns by default (screen = file: they ARE on screen, in the chips), never lost.
+      { colId: 'status', headerName: t('col.where'), minWidth: 220, flex: 1.2, valueGetter: (params) => params.data?.stateWords[locale] ?? '', cellRenderer: WhereCell, autoHeight: true, context: { exportWith: whereExport } },
       byRoom({ colId: 'stateFunnel', headerName: t('col.state'), minWidth: 170, flex: 0.8, valueGetter: (params) => params.data?.stateWords[locale] ?? '', cellRenderer: StateCell }, false),
-      // B-TH-290 (list-F10, N17): production's answer — "OK" / "Not before week 14" (and how late against the wanted date); '—' until
-      // production answered and for the kinds that take none (a catalogue order, a change request). Screen = file (the export's column).
-      byRoom({ colId: 'production', headerName: t('production.col'), headerTooltip: t('production.colHint'), minWidth: 140, flex: 0.6, valueGetter: (params) => (params.data?.request ? (say(productionCell(params.data.request.production, today)) ?? '') : ''), cellRenderer: ({ data }: ICellRendererParams<IncomingRow>) => (data?.request ? <ProductionCell row={data.request} today={today} /> : data ? <span className="fw-inq-hint">—</span> : null) }, false), // F-CQ-103: in the chips cell now
       // B-TH-230 (list-F01): New messages — the reader's own, only for a reader of threads; a door to the row at the first new one.
       ...(m.unread
         ? [{ colId: 'newMessages', headerName: l('column'), headerTooltip: l('columnHint'), minWidth: 116, flex: 0.5, valueGetter: (params: { data?: IncomingRow }) => unreadValue(unreadOf(params.data)), cellRenderer: ({ data }: ICellRendererParams<IncomingRow>) => (data ? <LastMessageCell unread={unreadOf(data)} href={openHref(data)} record={data.number} /> : null) } satisfies ColDef<IncomingRow>]
@@ -1008,7 +1050,10 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
               selected,
               onChange: setSelected,
               exportSelected: true,
-              actions: (
+              // F-CQ-201 (10-design §6.2): the bar — 3 + More ▾ with words, each act only with its right; a portal order ticked: one line.
+              actions: model.barRights ? (
+                <ManyBar bar={incomingBarOf(model.barRights, (rows ?? []).filter((row) => selected.includes(row.key)), model.customerName ?? null)} onAct={(id) => actions?.onBarAct?.(id as IncomingActKind, (rows ?? []).filter((row) => selected.includes(row.key)))} />
+              ) : (
                 <>
                   {/* B-TH-233 (list-F11): Assign and Decline act on requests only; the other kinds of the selection are left out and said.
                       F-CQ-103 (P0-B6): the words count only what an act runs on; with no open request ticked the words say why and no act is
@@ -1138,6 +1183,28 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
       {viewerRow && <ViewerFor row={viewerRow} model={model} actions={actions} onClose={() => setViewer(null)} />}
       {model.addresses?.open && <AddressesDialog model={model.addresses.model} prefix={model.prefix} actions={actions?.addresses} />}
       {model.newRequest && <NewRequestDialog model={model.newRequest} me={model.me} can={model.can} prefix={model.prefix} actions={actions?.newRequest} />}
+      {/* ---- F-CQ-201 / 203 / 204: the ONE many-acts window, Add task to N, a row's own window in place (a host whose dock is the pane) */}
+      <ManyActDialog model={model.many ?? null} actions={actions?.many} />
+      {model.tasks && (
+        <TaskNewDialog
+          recordLabel={null}
+          people={model.tasks.people}
+          me={model.me}
+          onRetryPeople={() => actions?.tasks?.onRetryPeople()}
+          onClose={() => actions?.tasks?.onClose()}
+          batch={{
+            records: model.tasks.records,
+            today: today,
+            onSend: (draft, assignee) => actions?.tasks?.onSend(draft, assignee) ?? Promise.resolve(null),
+            words: { ns: 'before-order', prefix: 'tasks.request' },
+            namesOther: null,
+            hrefOf: (record) => (record.type === 'Inquiry' ? fullPageHref(model.prefix, record.id, model.address) : `${model.prefix}/sales/incoming?catalogue=${encodeURIComponent(record.id)}`),
+            defaultAssignee: 'me',
+          }}
+        />
+      )}
+      {hostPane && model.verb && model.verb.loaded.status === 'ready' && <RecordDialogs model={model.verb} view={model.verb.loaded.value} actions={actions?.record} />}
+      {hostPane && model.catalogueVerb && model.catalogueVerb.loaded.status === 'ready' && <CatalogueDialogs model={model.catalogueVerb} actions={actions?.catalogue} record={model.catalogueVerb.loaded.value} />}
       {model.bulk?.kind === 'assign' && <AssignDialog model={model.bulk.model} actions={{ onAssign: actions?.bulk?.onAssign, onRetry: actions?.bulk?.onRetryPeople, onClose: actions?.bulk?.onClose }} />}
       {model.bulk?.kind === 'decline' && <DeclineDialog model={model.bulk.model} actions={{ onDraft: actions?.bulk?.onDecline, onSubmit: actions?.bulk?.onSubmit, onClose: actions?.bulk?.onClose }} />}
       {model.detail && model.pane?.closing && model.detail.loaded.status === 'ready' && (

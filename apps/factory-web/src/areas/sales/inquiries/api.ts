@@ -83,8 +83,9 @@ export function assignInquiry(api: ApiClient, inquiryId: string, body: { version
  * it — on a request sent from the portal a reply the customer reads there, else a mail to `to` (the recipient rule, B-TH-004:
  * `sendOutside` ticked for an address of another party); the customer's answer resumes the request by itself.
  */
-export function askInfo(api: ApiClient, inquiryId: string, version: number, idempotencyKey?: string, message?: { body: string; subject?: string; to?: string[]; sendOutside?: boolean }): Promise<InquiryView> {
-  return api.post(`${one(inquiryId)}/ask-info`, { body: { version, ...(message ? { message } : {}) }, schema: answer, ...key(idempotencyKey) }).then((result) => result.inquiry)
+// F-CQ-203 (B-CQ-040): `batchId` — one id on every request of one "Ask <customer> about N requests" (one bell per batch, S2).
+export function askInfo(api: ApiClient, inquiryId: string, version: number, idempotencyKey?: string, message?: { body: string; subject?: string; to?: string[]; sendOutside?: boolean }, batchId?: string): Promise<InquiryView> {
+  return api.post(`${one(inquiryId)}/ask-info`, { body: { version, ...(message ? { message } : {}), ...(batchId ? { batchId } : {}) }, schema: answer, ...key(idempotencyKey) }).then((result) => result.inquiry)
 }
 
 export function resumeInquiry(api: ApiClient, inquiryId: string, version: number, idempotencyKey?: string): Promise<InquiryView> {
@@ -100,7 +101,8 @@ export function declineInquiry(api: ApiClient, inquiryId: string, body: { versio
   return api.post(`${one(inquiryId)}/decline`, { body, schema: answer, ...key(idempotencyKey) }).then((result) => result.inquiry)
 }
 
-export function loseInquiry(api: ApiClient, inquiryId: string, body: { version: number; note: string }, idempotencyKey?: string): Promise<InquiryView> {
+// F-CQ-203 (B-CQ-040): `batchId` — one id on every request of one "Mark N lost" (one bell per batch, S2).
+export function loseInquiry(api: ApiClient, inquiryId: string, body: { version: number; note: string; batchId?: string }, idempotencyKey?: string): Promise<InquiryView> {
   return api.post(`${one(inquiryId)}/lost`, { body, schema: answer, ...key(idempotencyKey) }).then((result) => result.inquiry)
 }
 
