@@ -319,6 +319,11 @@ describe('B-CW-040 the wall of the line: another customer reads nothing of it; a
     expect(await notesOf({ id: newId(), type: 'shipment.orders_changed', payload: { shipmentId: S.id, change: 'ADDED', salesOrderIds: [so2(), ids.beta1], added: [ids.beta1] } })).toEqual([])
     expect(await notesOf({ id: newId(), type: 'shipment.orders_changed', payload: { shipmentId: S.id, change: 'REMOVED', salesOrderIds: [so2()], removed: [ids.beta1] } })).toEqual([])
     expect(await admin(`SELECT m.id FROM "Message" m JOIN "Thread" t ON t.id = m."threadId" WHERE t."recordType" = 'SalesOrder' AND t."recordId" = $1`, [ids.beta1])).toEqual([])
+    // cw-fx1: the same for an id of no order at all (alone, and beside Beta's): the handler does nothing — it never fails (a
+    // failed handler is retried), and a skip is never a command: nothing is audited for it, no row says "nothing written".
+    expect(await notesOf({ id: newId(), type: 'shipment.orders_changed', payload: { shipmentId: S.id, change: 'REMOVED', salesOrderIds: [so2()], removed: [newId()] } })).toEqual([])
+    expect(await notesOf({ id: newId(), type: 'shipment.orders_changed', payload: { shipmentId: S.id, change: 'ADDED', salesOrderIds: [so2(), ids.beta1], added: [newId(), ids.beta1] } })).toEqual([])
+    expect(await admin(`SELECT id FROM "AuditLog" WHERE action = 'shipping.orderNotes' AND ("recordId"::text = $1 OR after->>'written' = 'false')`, [ids.beta1])).toEqual([])
     // A forged event that names Alpha's own order together with Beta's: Alpha's line never names Beta's order.
     const mixed = await notesOf({ id: newId(), type: 'shipment.orders_changed', payload: { shipmentId: S.id, change: 'ADDED', salesOrderIds: [so2(), so3(), ids.beta1], added: [so3(), ids.beta1] } })
     expect(mixed).toEqual([{ orderId: so3(), messageId: expect.any(String) }])
