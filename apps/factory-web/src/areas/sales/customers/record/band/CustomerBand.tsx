@@ -196,21 +196,33 @@ export function CustomerBand({ model, actions }: { model: CustomerBandModel; act
 
 /** One fact of the chips row: a toggle, a door that opens a page or a window, a failed read that reads again — or a plain fact. */
 function Chip({ chip }: { chip: BandChipItem }) {
+  // A short label for the phone: both drawn, the band's own room shows one (`display: none` hides the other from screen readers
+  // too); the chip's name keeps the long words (the customer's name).
+  const label = chip.short ? (
+    <>
+      <span className="fw-cb-chip-long">{chip.label}</span>
+      <span className="fw-cb-chip-short">{chip.short}</span>
+    </>
+  ) : (
+    chip.label
+  )
+  const count = typeof chip.count === 'string' || typeof chip.count === 'number' ? ` ${chip.count}` : ''
+  const name = chip.short ? { 'aria-label': `${chip.label}${count}` } : {}
   if (!chip.onPress)
     return (
-      <span className="fw-cb-fact" title={chip.failed ?? chip.title}>
-        {chip.label} <span className="fw-cb-fact-n">{chip.failed ? '!' : chip.count}</span>
+      <span className="fw-cb-fact" title={chip.failed ?? chip.title} {...name}>
+        {label} <span className="fw-cb-fact-n">{chip.failed ? '!' : chip.count}</span>
       </span>
     )
   if (chip.failed)
     return (
       <FilterChip badge="!" title={chip.failed} aria-label={`${chip.label}: ${chip.failed}`} onClick={chip.onPress}>
-        {chip.label}
+        {label}
       </FilterChip>
     )
   return (
-    <FilterChip count={chip.count} title={chip.title} {...(chip.pressed !== undefined ? { pressed: chip.pressed } : {})} {...(chip.dialog ? { 'aria-haspopup': 'dialog' as const } : {})} onClick={chip.onPress}>
-      {chip.label}
+    <FilterChip count={chip.count} title={chip.title} {...name} {...(chip.pressed !== undefined ? { pressed: chip.pressed } : {})} {...(chip.dialog ? { 'aria-haspopup': 'dialog' as const } : {})} onClick={chip.onPress}>
+      {label}
     </FilterChip>
   )
 }

@@ -92,6 +92,19 @@ describe('F-CQ-B: the band draws the design system\'s parts', () => {
     expect(failed).not.toContain('nds-metrics')
   })
 
+  it('the phone (lead, overflow): the chips flow, never a grid; a long chip shows its short words there, its name keeps the long ones', () => {
+    const items = [{ id: 'customer', label: 'Waiting for Seed Customer Three GmbH', short: 'Waiting for the customer', count: '2', title: 'Waiting on Seed Customer Three GmbH', dialog: true, onPress: () => undefined }]
+    const page = html({ chips: { label: 'What waits', items } })
+    expect(page).toContain('<span class="fw-cb-chip-long">Waiting for Seed Customer Three GmbH</span><span class="fw-cb-chip-short">Waiting for the customer</span>')
+    expect(page).toContain('title="Waiting on Seed Customer Three GmbH" aria-label="Waiting for Seed Customer Three GmbH 2"')
+    const css = readFileSync(new URL('./customer-band.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-cb-chip-short \{\s*display: none;/)
+    const phone = css.slice(css.indexOf('@container fw-cb (max-width: 719px)'))
+    expect(phone).toMatch(/\.fw-cb-chip-long \{\s*display: none;\s*\}\s*\.fw-cb-chip-short \{\s*display: inline;/)
+    expect(phone.slice(0, phone.indexOf('/* ---- the groups\' window'))).not.toContain('grid')
+    expect(css).toMatch(/\.fw-cb-chips \{\s*display: flex;\s*flex-wrap: wrap;/)
+  })
+
   it('a band without chips puts its ⓘ at the end of the notes line', () => {
     const page = html({ chips: undefined, info: { tip: createElement('span', { className: 'seed-tip' }, 'i') } })
     expect(page).toContain('seed-tip')
@@ -139,10 +152,13 @@ describe('F-CQ-B: both tabs draw the ONE band, their pins kept (B11)', () => {
     expect(hook.match(/router\.replace\(/g)?.length).toBe(1)
     expect(src('../QuotesIncomingTab.tsx')).toContain('onCloseDoor, onDoor /* F-CQ-B */, onRetry }}')
   })
-  it('the phone\'s button says everything before an order in both languages', () => {
+  it('the phone\'s button says everything before an order; "Waiting for <customer>" has its short words — both languages', () => {
     for (const locale of LOCALES) {
       const b = createTranslator(locale, messagesFor(locale, ['before-order'])['before-order']!)
       expect(b('band.everything'), locale).not.toBe('band.everything')
     }
+    const parties = (locale: (typeof LOCALES)[number]) => createTranslator(locale, messagesFor(locale, ['parties']).parties!)
+    expect([parties('en')('customers.work.tile.customerShort'), parties('it')('customers.work.tile.customerShort')]).toEqual(['Waiting for the customer', 'In attesa del cliente'])
+    expect(src('../view/WorkBand.tsx')).toContain("return chip.tile === 'customer' ? { ...item, short: t('customers.work.tile.customerShort') } : item")
   })
 })

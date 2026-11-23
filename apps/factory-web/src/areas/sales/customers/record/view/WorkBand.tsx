@@ -199,7 +199,12 @@ function Band({ model, actions }: { model: WorkBandModel; actions?: WorkBandActi
     failedWords
   )
   const state = model.failed || picture.state === 'failed' ? 'failed' : picture.state === 'ready' ? 'ready' : 'reading'
-  const chips = model.chips.map((chip) => chipOf(chip, t(`customers.work.tile.${chip.tile}`, { customer }), t(`customers.work.strip.${chip.group}`, { customer }), failedWords, model, actions))
+  const chips = model.chips.map((chip) => {
+    const item = chipOf(chip, t(`customers.work.tile.${chip.tile}`, { customer }), t(`customers.work.strip.${chip.group}`, { customer }), failedWords, model, actions)
+    // F-CQ-B (lead, phone overflow): "Waiting for <customer>" says "Waiting for the customer" on a phone (a DS chip never wraps a long
+    // name); its name and tip keep the customer's.
+    return chip.tile === 'customer' ? { ...item, short: t('customers.work.tile.customerShort') } : item
+  })
 
   return (
     <CustomerBand

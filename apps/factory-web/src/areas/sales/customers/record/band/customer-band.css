@@ -151,6 +151,10 @@
   color: var(--nds-text-muted);
   font-variant-numeric: tabular-nums;
 }
+/* A chip's short label (the phone's): drawn beside the long one, one of the two shown by the band's own room. */
+.fw-cb-chip-short {
+  display: none;
+}
 @container fw-cb (min-width: 1040px) {
   .fw-cb-chips-w {
     display: inline;
@@ -207,8 +211,16 @@
   .fw-cb-skel {
     height: 40px;
   }
+  /* The chips FLOW (each its own width, a 2nd or 3rd row before anything is cut): never fixed columns of narrow cells. A design-system
+     chip keeps its label on one line, so the long "Waiting for <customer>" gives way to its short words here. */
   .fw-cb-chips {
     gap: var(--nds-space-6) var(--nds-space-4);
+  }
+  .fw-cb-chip-long {
+    display: none;
+  }
+  .fw-cb-chip-short {
+    display: inline;
   }
 }
 

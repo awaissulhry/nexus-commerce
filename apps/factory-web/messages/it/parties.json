@@ -178,6 +178,7 @@
         "late": "In ritardo",
         "deposit": "In attesa di acconto",
         "customer": "In attesa di {customer}",
+        "customerShort": "In attesa del cliente",
         "tasks": "Attività aperte",
         "failed": "Lettura non riuscita · Riprova"
       },

@@ -178,6 +178,7 @@
         "late": "Late",
         "deposit": "Waiting for deposit",
         "customer": "Waiting for {customer}",
+        "customerShort": "Waiting for the customer",
         "tasks": "Open tasks",
         "failed": "Couldn't be read · Try again"
       },

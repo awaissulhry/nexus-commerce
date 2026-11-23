@@ -37,6 +37,11 @@ export interface BandTile {
 export interface BandChipItem {
   readonly id: string
   readonly label: string
+  /**
+   * A shorter visible label on a phone (the band's room < 720), e.g. "Waiting for the customer" for "Waiting for <customer>": a
+   * design-system chip never wraps its label, so a long name would push the row sideways. The long label stays the chip's name.
+   */
+  readonly short?: string
   /** Its number ("—" while read). */
   readonly count: ReactNode
   /** The tip (the fact's group, e.g. "Waiting on us"). */
