@@ -23,6 +23,19 @@ describe('waitingOf', () => {
     expect(waitingOf({ lastShared: { direction: 'INBOUND', at: asked }, hasParty: false })).toBeNull()
   })
 
+  // ---- B-CQ-051 (customer page › Quotes & incoming, Q4-B7): a closed quote or portal order waits on nobody on the customer side
+  it('B-CQ-051: closed and ours the last word — nobody waits; closed and theirs the last word — still on us; a request keeps its own rule', () => {
+    expect(waitingOf({ lastShared: { direction: 'OUTBOUND', at: asked }, hasParty: true, closed: true })).toBeNull()
+    expect(waitingOf({ lastShared: { direction: 'INBOUND', at: asked }, hasParty: true, closed: true })).toEqual({ on: 'US', since: asked, thresholdDays: WAITING_THRESHOLD_DAYS.OTHER })
+    // Open (or not said): as before.
+    expect(waitingOf({ lastShared: { direction: 'OUTBOUND', at: asked }, hasParty: true, closed: false })).toMatchObject({ on: 'CUSTOMER', since: asked })
+    expect(waitingOf({ lastShared: { direction: 'OUTBOUND', at: asked }, hasParty: true })).toMatchObject({ on: 'CUSTOMER', since: asked })
+    expect(waitingOf({ lastShared: null, hasParty: true, closed: true })).toBeNull()
+    // A request is read by its state, whatever `closed` says.
+    expect(waitingOf({ request: { status: 'NEED_INFO', receivedAt: came }, lastShared: { direction: 'OUTBOUND', at: asked }, lastOutbound: asked, hasParty: true, closed: true })).toMatchObject({ on: 'CUSTOMER', since: asked })
+  })
+  // ---- end B-CQ-051
+
   it('amber after 1 working day on us for a request, 3 for any other record; never while it waits on the customer', () => {
     const request = waitingOf({ request: { status: 'NEW', receivedAt: came }, lastShared: null, hasParty: true })!
     expect(amberOf(request, WORKING_DAY_MINUTES)).toBe(false)

@@ -15,6 +15,8 @@ import { ownerKey, workingCalendarsFor } from '../calendars/service'
 import { mayOnThread } from './records'
 import { wallScopeOf } from './records' // B-PR-08a part 2
 import { contextOf, ensureThread, officeRecord, type RecordRef } from './threads' // B-PR-08a part 2: scopeOfThread → wallScopeOf
+// B-CQ-051: a final quote and a decided portal order (the before-order closed groups: one rule).
+import { PORTAL_DECIDED_STATUSES, QUOTE_FINAL_STATUSES } from '@nexus/factory-domain/sales/before-order/groups'
 
 /**
  * B-TH-028 (threads plan TH-2, N1, N2, X-G05; production lane agreement T8; design T1-F01..F03, O-SAL-INQ-LIST.pane-head):
@@ -113,6 +115,22 @@ async function minutesSince(client: Reader, companyId: string | null, since: Dat
   return { minutes: Math.max(0, Math.round(workingMinutesBetween(calendar, since < reach ? reach : since, now))), calendar: true }
 }
 
+// ---- B-CQ-051 (customer page › Quotes & incoming, Q4-B7): the record is closed — a quote in a final state, a decided portal order.
+// Its customer's yes by link, the morning expiry and the office cancel write no message: without this, our last mail would read
+// "Waiting on <customer>" for ever. Any other record: not closed (as before).
+async function closedOf(client: Reader, record: RecordRef): Promise<boolean> {
+  if (record.type === 'Quote') {
+    const quote = await client.quote.findUnique({ where: { id: record.id }, select: { status: true } })
+    return quote !== null && (QUOTE_FINAL_STATUSES as readonly string[]).includes(quote.status)
+  }
+  if (record.type === 'PortalOrderRequest') {
+    const request = await client.portalOrderRequest.findUnique({ where: { id: record.id }, select: { status: true } })
+    return request !== null && (PORTAL_DECIDED_STATUSES as readonly string[]).includes(request.status)
+  }
+  return false
+}
+// ---- end B-CQ-051
+
 /** What the conversation waits on now (see the module's head), or null. */
 export async function waitingNow(client: Reader, record: RecordRef, thread: { readonly id: string; readonly companyId: string | null; readonly partyId: string | null } | null, now: Date): Promise<WaitingView | null> {
   const request = record.type === 'Inquiry' ? await client.inquiry.findUnique({ where: { id: record.id }, select: { status: true, receivedAt: true, companyId: true, partyId: true } }) : null
@@ -123,6 +141,7 @@ export async function waitingNow(client: Reader, record: RecordRef, thread: { re
     lastShared: shared ? { direction: shared.direction as 'INBOUND' | 'OUTBOUND', at: shared.at } : null,
     lastOutbound,
     hasParty: (thread?.partyId ?? request?.partyId ?? null) !== null,
+    closed: request ? false : await closedOf(client, record), // B-CQ-051
   })
   if (!waiting) return null
   const { minutes, calendar } = await minutesSince(client, thread?.companyId ?? request?.companyId ?? null, waiting.since, now)

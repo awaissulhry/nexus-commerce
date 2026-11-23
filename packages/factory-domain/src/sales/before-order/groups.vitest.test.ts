@@ -10,6 +10,8 @@ import {
   byUrgency,
   CLOSED_GROUPS,
   ENDS_SOON_DAYS,
+  PORTAL_DECIDED_STATUSES,
+  QUOTE_FINAL_STATUSES,
   GROUP_WAITS_ON,
   groupOfPortalOrder,
   groupOfQuote,
@@ -143,6 +145,17 @@ describe('B-CQ-001 the before-order groups', () => {
     expect(beforeOrderCounts.safeParse({ ...counts, openQuotes: -1 }).success).toBe(false)
   })
 })
+
+// ---- B-CQ-051: what is closed for the thread head (the closed groups: one rule)
+describe('B-CQ-051 final quotes and decided portal orders', () => {
+  it('a quote is final in the states of the closed groups (an accepted one whatever its order); a portal order once decided', () => {
+    expect([...QUOTE_FINAL_STATUSES].sort()).toEqual(['ACCEPTED', 'CANCELLED', 'DECLINED', 'EXPIRED'])
+    for (const status of QUOTE_STATUSES) expect(QUOTE_FINAL_STATUSES.includes(status), status).toBe((CLOSED_GROUPS as readonly string[]).includes(groupOfQuote(status, true)))
+    expect([...PORTAL_DECIDED_STATUSES].sort()).toEqual(['ACCEPTED', 'REFUSED', 'WITHDRAWN'])
+    for (const status of REQUEST_STATUSES) expect(PORTAL_DECIDED_STATUSES.includes(status), status).toBe((CLOSED_GROUPS as readonly string[]).includes(groupOfPortalOrder(status, 'ORDER')))
+  })
+})
+// ---- end B-CQ-051
 
 describe('B-CQ-011 / B-CQ-022 most urgent first', () => {
   const today = '2026-11-23'
