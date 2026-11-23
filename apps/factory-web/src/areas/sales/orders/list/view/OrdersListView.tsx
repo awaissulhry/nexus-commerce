@@ -96,7 +96,6 @@ import { Archive, CheckCheck, PackageCheck } from 'lucide-react'
 import { manyLabel, type ManyCommand } from '../commands/model'
 // ---- F-CW-202: the bar — three acts with words + More ▾ (the pure rule: sheet/bar.ts) ----
 import { ChevronDown, Factory, Flag, MessageCircleQuestion } from 'lucide-react'
-import { MessageSquare } from 'lucide-react' // cw fx5 (walk W-13): the phone card's Thread door
 import { barOf, type AskEntryId, type BarAct, type BarActId, type BarWords } from '../sheet/bar'
 import { promotedFit } from '../sheet/bar' // cw fx5 (walk W-9, W-4, W-14): the bar keeps words on every button
 // ---- F-CW-301: Ship N together… / Create shipment… — Warehouse's own New shipment window, mounted here ----
@@ -419,9 +418,10 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   // cw fx6 (re-walk R-3): the card was 162–207 px high (128–155 before the build): the picture stood alone beside the number in
   // the card's top row (an empty band under the number) and Thread had a line of its own. Now ONE block under the number: the
   // picture at the left and, beside it, the PO, the chips (the urgency chips beside the stage's while the line has room) and
-  // "Promised" with the pieces line and the Thread door on its last line. Nothing left out, nothing cut, no sideways scroll.
+  // "Promised" with the pieces line. Nothing left out, nothing cut, no sideways scroll.
+  // cw fx7 (third look R-3): the Thread door is back in the card's TOP row, beside ⋯ (the list frame's own card door, where it
+  // stood before this lane): on the block's last line it stood ALONE on a line of its own in 7 of 8 cards (142–186 px a card).
   const workCard = !!model.locked?.party && !!model.preset
-  const cardDoorLabel = workCard && model.active?.cardDoor && actions?.onCardThread ? model.active.cardDoor : null
   const cardFields = useMemo(
     () => {
       const urgency = (row: OrderRow) => (urgencyChipOf(row) || priorityChipOf(row) ? <CustomerUrgencyCell row={row} s={s} d={d} bare askedHref={askedHrefOf(model.prefix, row, model.doorHref) /* F-CW-302 */} /> : null)
@@ -455,24 +455,15 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
                     <span>{t('list.noPromise')}</span>
                   )}
                   {where(row, 'pieces')}
-                  {cardDoorLabel && (
-                    <span className="fw-sheet-card-door">
-                      <Button size="sm" variant="quiet" onClick={() => latest.current.actions?.onCardThread?.(row)}>
-                        <MessageSquare size={13} aria-hidden /> {cardDoorLabel}
-                      </Button>
-                    </span>
-                  )}
                 </span>
               </span>
             </span>
           ),
         },
-        // The door is drawn on the block's last line: the New messages column draws nothing of its own on this card.
-        ...(cardDoorLabel ? { newMessages: { role: 'hidden' as const } } : {}),
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the draws read the latest model and actions through `latest`
-    [s, d, t, locale, workCard, cardDoorLabel, model.prefix, model.today, model.doorHref],
+    [s, d, t, locale, workCard, model.prefix, model.today, model.doorHref],
   )
   const columns = useMemo<ColDef<OrderRow>[]>(
     () => sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer: setViewer, statusShown, phone /* F-CP-107 (cp-fx16) */, priorityShown, whereShown /* F-CW-102 */, waitingShown /* cw fx5 (W-29) */ }),
@@ -771,8 +762,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
                   id: model.active.id,
                   onFocusRow: (row) => actions?.onFocusRow?.(row),
                   onOpenNewTab: (row) => actions?.onOpenRow?.(row.id, true),
-                  // cw fx5 (walk W-13): on the customer's own page the door stands at the card's foot (the card's own line above), not in its top row.
-                  cardDoor: !workCard && model.active.cardDoor && actions?.onCardThread ? { column: 'newMessages', label: model.active.cardDoor, onOpen: (row) => actions?.onCardThread?.(row) } : null,
+                  // cw fx7 (third look R-3): on every host the door is the frame's own, in the card's top row beside ⋯.
+                  cardDoor: model.active.cardDoor && actions?.onCardThread ? { column: 'newMessages', label: model.active.cardDoor, onOpen: (row) => actions?.onCardThread?.(row) } : null,
                 }
               : null
           }
