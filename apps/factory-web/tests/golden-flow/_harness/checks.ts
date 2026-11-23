@@ -59,7 +59,8 @@ const NOT_WRITES: readonly { readonly path: RegExp; readonly when?: (capture: Ca
     why: "the tablet's own state report (app version, battery, queue count): bookkeeping written without an audit row by design (a new app version is audited)",
   },
   // ---- End check (fx-6): the batch picture reads (factory-api modules/product/images/small-pictures.ts; B-SA-074 adds the work orders' one)
-  { path: /^\/(sales\/(orders|quotes|inquiries)|production\/work-orders)\/pictures$/, why: 'the small pictures of a page of records (a read in a POST, its record ids in the body): it answers, it writes nothing' },
+  // B-CQ-030 (cq W3): + the portal orders' and drafts' one (`/sales/order-requests/pictures`, Quotes & incoming's "Customer is writing").
+  { path: /^\/(sales\/(orders|quotes|inquiries|order-requests)|production\/work-orders)\/pictures$/, why: 'the small pictures of a page of records (a read in a POST, its record ids in the body): it answers, it writes nothing' },
   // ---- end fx-6
   // ---- op-fx4: the order page's questions (th9-order-page runs them in the full flow for the first time)
   { path: /^\/sales\/orders\/[0-9a-f-]+\/amendments\/preview$/, why: "what an amendment would change and what each work order would do (modules/sales/orders/amend.ts previewAmendment): it answers, it writes nothing" },

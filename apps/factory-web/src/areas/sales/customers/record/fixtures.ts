@@ -47,9 +47,10 @@ import { inquiriesCan } from '../../inquiries/model'
 import type { CatalogueRecord } from '../../inquiries/api' // cp-walk
 import type { DraftRow } from './drafts/api'
 import { draftTitle } from './drafts/model'
-import { CustomerDraftsList } from './drafts/view/CustomerDraftsList'
 import { DraftWindow } from './drafts/view/DraftWindow'
-import { DRAFTS_VIEW } from './view/WorkTab'
+// ---- cq W3 (F-CQ-303, T part 2): the drafts are Quotes & incoming's "Customer is writing" — that tab's own gallery parts, mounted here
+import { QuotesTabDesign, quotesTabFor, writingTabFor, type TabRole } from './quotes-tab/fixtures'
+// ---- end cq W3
 // ---- end F-CP-107
 import type { OrderRow } from '../../orders/api'
 import type { RowView } from '../../orders/model'
@@ -65,6 +66,7 @@ import { workViewCounts } from './use-customer-work' // F-CP-103: the Views ▾ 
 import { ORDER_PHASES, phaseCountsOf } from '@nexus/factory-domain/production-brand/stages'
 import { IN_PRODUCTION_VIEW } from './use-customer-work'
 import { beforeLineOf, NO_BEFORE_ORDER } from './before-order'
+import { quotesGroupDoor } from './before-order' // F-CQ-303: the drafts' door is Quotes & incoming at WRITING
 import { bandOf, chipsOf, whysOf } from './work-band'
 import { WorkBand } from './view/WorkBand'
 // ---- end F-CW-101
@@ -581,6 +583,29 @@ function WorkTools({ tools, children }: { tools: MemoryToolsModel; children?: Re
 // ---- end cp-walk
 
 /** The Work tab as the page draws it: the strip, then the Orders sheet embedded and locked to the customer (its views, its preset). */
+// ---- F-CQ-303 (T part 2): the customer's portal drafts on Quotes & incoming (the WRITING door): the same list, one open in its window ----
+function DraftsTabDesign({ work, party }: { work: WorkCase; party: Party }) {
+  const t = useT('parties')
+  const name = party.tradeName ?? party.legalName
+  const price = work.price !== false
+  const rows = work.drafts === 'empty' ? [] : draftRowsOf(party, price)
+  const role: TabRole = work.role === 'manager' ? 'production' : price ? 'owner' : 'sales'
+  const window =
+    work.drafts === 'window'
+      ? createElement(DraftWindow, {
+          model: {
+            customer: name,
+            title: draftTitle(draftRowsOf(party, true)[0]!, t('customers.drafts.untitled')),
+            nav: { ids: draftRowsOf(party, true).map((row) => row.id), current: draftRowsOf(party, true)[0]!.id },
+            pane: { prefix: '/w/DEMO', can: inquiriesCan(['orders.view', 'orders.manage', 'quotes.manage', 'threads.read', ...(price ? ['money.price'] : [])]), offline: false, loaded: { status: 'ready', value: { ...CATALOGUE_RECORD, request: draftRequestOf(party), may: { order: false, quote: false, refuse: false } } }, notice: null, dialog: null, handled: null, draft: { title: 'STY-01 Giacca demo' } },
+          },
+        })
+      : null
+  const drafts = { customer: name, read: { status: 'ready' as const, rows }, updates: work.drafts === 'list' ? 1 : 0, activeId: null, wide: true }
+  return createElement(QuotesTabDesign, { model: writingTabFor({ id: party.id, name }, drafts, role, window) })
+}
+// ---- end F-CQ-303
+
 function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
   const t = useT('parties')
   const o = useT('orders') // F-CW-101: the In production view's own word
@@ -605,7 +630,8 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
     .map((entry) => t(`customers.work.band.why.${entry.why}`, { count: entry.count }))
     .join(' · ')
   const recordHref = `/w/DEMO/sales/customers/${party.id}`
-  const drafts = work.before && typeof work.before.drafts === 'number' && work.before.drafts > 0 ? { count: work.before.drafts, href: `${recordHref}?tab=work&list=drafts` } : null
+  // F-CQ-303: the empty line's way to the drafts opens Quotes & incoming at WRITING ("Customer is writing").
+  const drafts = work.before && typeof work.before.drafts === 'number' && work.before.drafts > 0 ? { count: work.before.drafts, href: quotesGroupDoor(recordHref, 'WRITING') } : null
   const live: Partial<OrdersListModel> = work.live
     ? {
         sort,
@@ -687,30 +713,16 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
         repliesHref: '/w/DEMO/sales/incoming?tile=CUSTOMER_REPLIES',
         requestsHref: null,
       },
-      actions: { onGroup: () => undefined, onAll: () => undefined, onDrafts: () => undefined, onView: () => undefined, onWindow: () => undefined },
+      actions: { onGroup: () => undefined, onAll: () => undefined, onView: () => undefined, onWindow: () => undefined } /* F-CQ-303: no onDrafts */,
     }),
-    // F-CP-107: Drafts of <customer> in the sheet's place (the same Views ▾, the Drafts view ticked).
-    work.drafts
-      ? createElement(CustomerDraftsList, {
-          model: { customer: name, read: { status: 'ready', rows: work.drafts === 'empty' ? [] : draftRowsOf(party, work.price !== false) }, updates: work.drafts === 'list' ? 1 : 0, activeId: null, views: { model: { ...list, hostViews: [{ id: DRAFTS_VIEW, label: t('customers.work.view.drafts', { customer: name }), active: true }], views: workViewsOf({ price: work.price !== false }, { drafts: true }) } } },
-        })
-      : createElement(
-          WorkTools,
-          { tools: work.customise ? { ...workTools, design: { menu: 'columns' } } /* cw T.1: Customise columns open */ : workTools },
-          createElement(OrdersListView, { model: work.priceWindow && work.price !== false ? { ...list, priceCheck: priceWindowOf(work.priceWindow) } : list /* F-CP-114 */, actions: work.live ? liveDoors(work, can.price) /* cw T.1 */ : workDoors(work, can.price) }),
-        ),
+    // F-CQ-303: the Work tab always shows the sheet — the drafts are Quotes & incoming's "Customer is writing" (DraftsTabDesign below).
+    createElement(
+      WorkTools,
+      { tools: work.customise ? { ...workTools, design: { menu: 'columns' } } /* cw T.1: Customise columns open */ : workTools },
+      createElement(OrdersListView, { model: work.priceWindow && work.price !== false ? { ...list, priceCheck: priceWindowOf(work.priceWindow) } : list /* F-CP-114 */, actions: work.live ? liveDoors(work, can.price) /* cw T.1 */ : workDoors(work, can.price) }),
+    ),
     // cw T.1 (10-design §3.6): the foot line under the sheet — the order the rows stand in, the customer's urgency state.
-    work.live && !work.drafts ? createElement(WithMessages, { namespaces: [SHEET_NS] }, createElement(WorkFoot, { line: foot })) : null,
-    work.drafts === 'window'
-      ? createElement(DraftWindow, {
-          model: {
-            customer: name,
-            title: draftTitle(draftRowsOf(party, true)[0]!, t('customers.drafts.untitled')),
-            nav: { ids: draftRowsOf(party, true).map((row) => row.id), current: draftRowsOf(party, true)[0]!.id },
-            pane: { prefix: '/w/DEMO', can: inquiriesCan(['orders.view', 'orders.manage', 'quotes.manage', 'threads.read', ...(work.price !== false ? ['money.price'] : [])]), offline: false, loaded: { status: 'ready', value: { ...CATALOGUE_RECORD, request: draftRequestOf(party), may: { order: false, quote: false, refuse: false } } }, notice: null, dialog: null, handled: null, draft: { title: 'STY-01 Giacca demo' } },
-          },
-        })
-      : null,
+    work.live ? createElement(WithMessages, { namespaces: [SHEET_NS] }, createElement(WorkFoot, { line: foot })) : null,
     work.linesWindow ? createElement(NewOrderWindow, { model: linesWindowOf(work.linesWindow, work.price !== false, party) }) : null, // F-CP-113
   )
 }
@@ -744,6 +756,10 @@ function depthNodes(depth: DepthCase | undefined, partyId: string): SupplierDept
 
 function CustomerDesign({ model }: { model: CustomerCase }) {
   const { terms, money, depth, supervisor, portalEmails, work, designer, priceDiffer, shipmentLine, ...record } = model
+  // ---- cq W3 (T part 2): Quotes & incoming — the tab's own gallery parts (quotes-tab/fixtures.ts) for this customer; a Work case's
+  // portal drafts are its "Customer is writing" (F-CQ-303).
+  const quotesIncoming = record.party && record.tab === 'quotes' ? (work?.drafts ? createElement(DraftsTabDesign, { work, party: record.party }) : createElement(QuotesTabDesign, { model: quotesTabFor({ id: record.party.id, name: record.party.tradeName ?? record.party.legalName }) })) : null
+  // ---- end cq W3
   const party = record.party
   const id = party?.id ?? 'x'
   return inShell(
@@ -752,7 +768,7 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
       WithMessages,
       { namespaces: DEPTH_NAMESPACES },
       // B-TH-260: the customer's docked thread (Activity and Documents went to it), with threads.read.
-      createElement(CustomerRecordView, { model: record, thread: party ? (shipmentLine && record.can.threads ? createElement(ShipmentLineThread, { party }) /* cw T.1 */ : partyThread(party, 'customers', record.can)) : null, terms: termsCard(terms ?? termsModel()), money, depth: depthNodes(depth, id), supervisor: supervisor && party ? createElement(CustomerSupervisorCard, { model: supervisor, name: party.tradeName ?? party.legalName, designer: designer ?? null /* F-CP-155 */ }) : null, ...(portalEmails ? { portalEmails: new Set(portalEmails) } : {}), work: work && party ? createElement(WithMessages, { namespaces: ['orders'] /* F-CW-101: as the live Work tab loads them */ }, createElement(WorkDesign, { work, party })) : null /* F-SA-276 */, workCount: work ? { count: 5, attention: true } : null, priceDiffer: priceDiffer ?? null /* F-CP-141 */, workBoard: STRIP_READY.board /* F-CW-101: the Overview's In production and Late */ }),
+      createElement(CustomerRecordView, { model: record, thread: party ? (shipmentLine && record.can.threads ? createElement(ShipmentLineThread, { party }) /* cw T.1 */ : partyThread(party, 'customers', record.can)) : null, terms: termsCard(terms ?? termsModel()), money, depth: depthNodes(depth, id), supervisor: supervisor && party ? createElement(CustomerSupervisorCard, { model: supervisor, name: party.tradeName ?? party.legalName, designer: designer ?? null /* F-CP-155 */ }) : null, ...(portalEmails ? { portalEmails: new Set(portalEmails) } : {}), work: work && party ? createElement(WithMessages, { namespaces: ['orders'] /* F-CW-101: as the live Work tab loads them */ }, createElement(WorkDesign, { work, party })) : null /* F-SA-276 */, workCount: work ? { count: 5, attention: true } : null, priceDiffer: priceDiffer ?? null /* F-CP-141 */, workBoard: STRIP_READY.board /* F-CW-101: the Overview's In production and Late */, quotesIncoming /* cq W3 */ }),
     ),
   )
 }
@@ -859,11 +875,12 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     // ---- F-CP-113: "Add the lines" — the New order page's own editor in a large centred window over the Work tab (one editor, two doors).
     { id: 'work-new-order-lines', label: 'F-CP-113 · Work: New order › Add the lines — the lines editor in a large window on this page (no page hop)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), linesWindow: 'lines' }) },
     { id: 'work-new-order-lines-no-price', label: 'F-CP-113 · Sales worker without prices: the same window, "Priced from <customer>\'s price list", no price typed', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), linesWindow: 'lines', price: false }) },
-    // ---- F-CP-107: "Drafts of <customer>" — the customer's portal drafts, read only (a row docks its conversation; Open: its window).
-    { id: 'work-drafts', label: 'F-CP-107 · Work: Drafts of the customer — two portal drafts, read only (one live update waiting)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'list' }) },
-    { id: 'work-drafts-no-price', label: 'F-CP-107 · Drafts as a Sales worker without prices: no Value column, readiness counted of 6', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'list', price: false }) },
-    { id: 'work-drafts-empty', label: 'F-CP-107 · Drafts: none in the portal yet', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'empty' }) },
-    { id: 'work-drafts-window', label: 'F-CP-107 · A draft open in its window: read only, Accept and Refuse held with why, J / K between drafts', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'window' }) },
+    // ---- F-CP-107 → F-CQ-303: the customer's portal drafts, read only, are Quotes & incoming's "Customer is writing" (the WRITING door;
+    // a row docks its conversation; Open: its window) — no longer a view of the Work tab.
+    { id: 'work-drafts', label: 'F-CQ-303 · Quotes & incoming › Customer is writing: two portal drafts, read only (one live update waiting)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'list' }, { tab: 'quotes', can: { ...RECORD_CAN, inquiries: true } }) },
+    { id: 'work-drafts-no-price', label: 'F-CQ-303 · Customer is writing as a Sales worker without prices: no Value column, readiness counted of 6', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'list', price: false }, { tab: 'quotes', can: { ...RECORD_CAN, inquiries: true } }) },
+    { id: 'work-drafts-empty', label: 'F-CQ-303 · Customer is writing: none in the portal yet', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'empty' }, { tab: 'quotes', can: { ...RECORD_CAN, inquiries: true } }) },
+    { id: 'work-drafts-window', label: 'F-CQ-303 · A draft open in its window (from Customer is writing): read only, Accept and Refuse held with why, J / K between drafts', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'window' }, { tab: 'quotes', can: { ...RECORD_CAN, inquiries: true } }) },
     { id: 'work-new-order-discard', label: 'F-CP-113 · Discard asks first when something is typed', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), linesWindow: 'discard' }) },
     // ---- F-CP-114: "Set customer's price…" (row ⋯, or the Customer's price cell) — the ONE window, price holders only.
     { id: 'work-price-window', label: 'F-CP-114 · Work: Set customer\'s price… — per line a unit price or a line total, the PO file, an optional order total', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')), priceWindow: 'edit' }) },
@@ -897,7 +914,7 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'cp-148-work-manager', label: 'F-CP-148 · Seen as Production manager · Work on All orders: no toggle, no money column, no Set customer\'s price…, New order held', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO'), () => ({ netAmount: undefined, grossAmount: undefined, paid: undefined, balance: undefined })), price: false, role: 'manager' }, { can: { ...RECORD_CAN, price: false, ordersManage: false } }) },
     { id: 'cp-148-work-not-equal-manager', label: 'F-CP-148 · Seen as Production manager · a link with the price term: one line, no rows, Show all orders; no Not equal in Views ▾', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], price: false, notEqual: 'held', role: 'manager' }, { can: { ...RECORD_CAN, price: false, ordersManage: false } }) },
     { id: 'cp-148-price-window-manager', label: 'F-CP-148 · Seen as Production manager · no customer\'s-price door, no window, no call', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO'), () => ({ netAmount: undefined, grossAmount: undefined })), price: false, role: 'manager', priceWindow: 'edit' }, { can: { ...RECORD_CAN, price: false, ordersManage: false } }) },
-    { id: 'cp-148-drafts-manager', label: 'F-CP-148 · Seen as Production manager · Drafts of <customer>: no Value column, readiness counted of 6', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'list', price: false, role: 'manager' }, { can: { ...RECORD_CAN, price: false, ordersManage: false } }) },
+    { id: 'cp-148-drafts-manager', label: 'F-CP-148 · Seen as Production manager · Customer is writing (F-CQ-303: on Quotes & incoming): no Value column, readiness counted of 6', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: [], drafts: 'list', price: false, role: 'manager' }, { tab: 'quotes', can: { ...RECORD_CAN, price: false, ordersManage: false, inquiries: true } }) },
     // ---- end F-CP-148
     { id: 'quotes-orders-reading', label: 'F-SA-276 · Work: the strip and the rows reading ("—", never 0)', model: workCase('MODA-DEMO', { reads: STRIP_READING, rows: null }) },
     { id: 'quotes-orders-error', label: "F-SA-276 · Work: the orders couldn't be read (the strip stays usable)", model: workCase('MODA-DEMO', { reads: { ...STRIP_READY, requests: { status: 'failed' } }, rows: [], problem: 'problem.read.unavailable' }) },
@@ -907,7 +924,7 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'cw-busy-widest', label: 'cw · The same in the widest room (from 1700 px): Priority, Waiting on, Deposit, Pieces, Shipped, Ordered and Supervisor join', model: liveCase({ room: 'widest' }) },
     { id: 'cw-switch-off', label: 'cw · The customer\'s urgency switch OFF: no customer chip on any row; the foot says "Customer urgency is off for <customer> · Portal settings ›"; "Most urgent first" has no middle part', model: liveCase({ rows: busy().map((row) => ({ ...row, customerUrgency: null, customerUrgencyState: null })), urgencyFoot: { on: false, used: 0, max: 3, companies: [] } }) },
     { id: 'cw-two-companies', label: 'cw T.0 · Orders at two of our companies: the foot names each with its own numbers ("Seed A 2 of at most 3 · Seed B 1 of at most 3")', model: liveCase({ urgencyFoot: { on: true, used: 3, max: 6, companies: [{ name: 'Seed A', used: 2, max: 3 }, { name: 'Seed B', used: 1, max: 3 }] } }) },
-    { id: 'cw-drafts-only', label: 'cw · No order yet, two drafts in the portal: seven zeros in the band, "Before an order: 2 drafts", the sheet\'s line with the door to the drafts', model: liveCase({ rows: [], reads: seedReads([], NO_PHASES), before: { drafts: 2, toAnswer: null, openQuotes: null, orderWaits: null }, urgencyFoot: { on: true, used: 0, max: 3, companies: [] } }) },
+    { id: 'cw-drafts-only', label: 'cw · No order yet, two drafts in the portal: seven zeros in the band, "Before an order: 2 drafts" (F-CQ-303: a door to Quotes & incoming › Customer is writing), the sheet\'s line with the same door', model: liveCase({ rows: [], reads: seedReads([], NO_PHASES), before: { drafts: 2, toAnswer: null, openQuotes: null, orderWaits: null }, urgencyFoot: { on: true, used: 0, max: 3, companies: [] } }) },
     { id: 'cw-no-order', label: 'cw · No order at all: the band keeps its shape with seven zeros, the chips are quiet, "<customer> has no order yet."', model: liveCase({ rows: [], reads: seedReads([], NO_PHASES), before: NO_BEFORE_ORDER, urgencyFoot: null }) },
     { id: 'cw-all-done', label: 'cw · Everything done: three orders delivered or closed and one cancelled — no stage, no chip, nothing waits', model: liveCase({ rows: busy().slice(10), reads: seedReads(busy().slice(10), { ...NO_PHASES, DONE: 3, CANCELLED: 1 }), before: NO_BEFORE_ORDER, urgencyFoot: { on: true, used: 0, max: 3, companies: [] } }) },
     { id: 'cw-door-not-sent', label: 'cw · Opened from the door "Not sent to the factory": its two orders ("2 of 14 orders"), the door pressed, why they wait (a yes · a deposit)', model: liveCase({ rows: busy().slice(0, 2), reads: seedReads(busy(), BUSY_PHASES, BUSY_WAITS), phase: 'NOT_SENT' }) },
@@ -948,7 +965,7 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     // ---- F-SA-271: the seven tabs (R5), the landing tab, the band's primary and ⋯ lines.
     { id: 'tabs-landing', label: 'F-SA-271 · No tab asked: the first tab the reader sees (Work for Sales)', model: workCase('MODA-DEMO', { reads: STRIP_READY, rows: workRows(by('MODA-DEMO')) }) },
     { id: 'tabs-overview-first', label: 'F-SA-271 · A reader without orders.view lands on the Overview', model: record('MODA-DEMO', { tab: 'overview', can: { ...RECORD_CAN, orders: false } }) },
-    { id: 'tab-quotes', label: 'F-SA-277 · Quotes & incoming: the tab (its two lists, Quotes then Incoming requests, are their pages\' own lists mounted by the page; see the Sales › Quotes and Incoming design cases)', model: record('MODA-DEMO', { tab: 'quotes', can: { ...RECORD_CAN, inquiries: true } }) },
+    { id: 'tab-quotes', label: 'F-SA-277 / cq W3 · Quotes & incoming on the page: the band, Requests & portal orders, Quotes, Customer is writing; the dock a third (F-CQ-301); the tab\'s badge = what waits on us there (F-CQ-302)', model: record('MODA-DEMO', { tab: 'quotes', can: { ...RECORD_CAN, inquiries: true } }), note: 'The whole tab\'s cases (every role, bar, window, width): its own screen SCR-033-quotes.' },
     // F-SA-273: the Money tab with every card's right (the made-up ageing, returns and open orders of money/_demo).
     { id: 'tab-money', label: 'F-SA-273 · Money: key numbers, credit, open invoices per currency, deposits and balances, payment terms', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true } }), money: moneyModel({ ...MONEY_CAN.finance, orders: true, credit: true, creditLimits: true }, { orders: loaded(OPEN_ORDER_MONEY) }) } }, // B-CP-011
     // F-CP-141: "Prices differ on {count} orders ›" — the door to the Work tab's Not equal view; nothing of it without the price grain.

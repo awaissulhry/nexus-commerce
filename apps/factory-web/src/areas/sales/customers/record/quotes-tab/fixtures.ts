@@ -29,6 +29,9 @@ import { CATALOGUE_RECORD, CATALOGUE_ROW, INCOMING_ROWS, listOf, ROWS as REQUEST
 import { BULK_ASSIGN, BULK_DECLINE, catalogueModel, incomingPage, incomingRecord } from '../../../inquiries/fixtures'
 import { emptyDecline, HOME_ADDRESS, type ListAddress } from '../../../inquiries/model'
 import { InquiriesView, type InquiriesModel } from '../../../inquiries/view/InquiriesView'
+import { replyRowOf } from '../../../inquiries/bar' // F-CQ-304
+import { replyComposerContext, replyTargetsOf, todoStart, type ReplyManyModel, type ReplyRecordType, type ReplyRow } from '../../../orders/list/reply-many' // F-CQ-304
+import { startDraft } from '../../../../../lib/record-thread/composer/model' // F-CQ-304
 import type { DraftRow } from '../drafts/api'
 import { CustomerDraftsList, type CustomerDraftsListModel } from '../drafts/view/CustomerDraftsList'
 import { bandOf, doorAddress, DOORS, emptyTab, TAB_KINDS, tabRightsOf, termsOfDoor, type Door, type TabFacts } from './band'
@@ -49,7 +52,7 @@ const PREFIX = '/w/DEMO'
 const PARTY = { id: '0190f0e2-c1c1-7000-8000-0000000000c1', code: 'SEED-C1', name: 'Seed Customer One' } as const
 const BASE = `${PREFIX}/sales/customers/${PARTY.id}`
 
-type TabRole = 'owner' | 'sales' | 'finance' | 'viewer' | 'production'
+export type TabRole = 'owner' | 'sales' | 'finance' | 'viewer' | 'production'
 /** A role's permissions as a session holds them (its template's permissions and a `money.<grain>` per grain). */
 const template = (key: string): string[] => {
   const role = templateOf(key)
@@ -141,8 +144,11 @@ const DRAFTS: DraftRow[] = [
 
 // ---- the lists as the tab mounts them (the host's columns by the tab's room, Most urgent first, the customer's one name) -----------
 
-const hrefs = Object.fromEntries(DOORS.map((door) => [door, doorAddress(BASE, new URLSearchParams('tab=quotes'), door)])) as Record<Door, string>
-const hrefsUnder = (open: Door | null): Record<Door, string> => (open ? { ...hrefs, [open]: doorAddress(BASE, new URLSearchParams('tab=quotes'), null) } : hrefs)
+/** Each door's address on the customer's page (the open door's: everything again). */
+const hrefsUnder = (base: string, open: Door | null): Record<Door, string> => {
+  const hrefs = Object.fromEntries(DOORS.map((door) => [door, doorAddress(base, new URLSearchParams('tab=quotes'), door)])) as Record<Door, string>
+  return open ? { ...hrefs, [open]: doorAddress(base, new URLSearchParams('tab=quotes'), null) } : hrefs
+}
 
 function quotesOf(role: TabRole, room: number, rows: readonly QuoteListRow[], over: Partial<QuotesListViewModel> = {}): QuotesListViewModel {
   const permissions = PERMISSIONS[role]
@@ -190,6 +196,11 @@ export interface QuotesTabCase {
   readonly drafts: CustomerDraftsListModel
   /** Views ▾ / Export ▾ / Customise of the Quotes list, in memory. */
   readonly tools?: MemoryToolsModel
+  // ---- cq W3 (T part 2): the customer page's own gallery mounts this tab for ITS customer, with a draft open in its window
+  /** The page's customer (absent: Seed Customer One). */
+  readonly party?: { readonly id: string; readonly name: string }
+  /** A draft's read-only window (the page's gallery builds it). */
+  readonly window?: ReactNode
 }
 
 const ROOM = 1240
@@ -226,6 +237,14 @@ function windowOf<R extends ManyRecord>(act: ManyAct<R>, records: readonly R[], 
 const quoteWindow = (kind: 'cancel' | 'askApproval' | 'makeOrders' | 'newLink', rows: readonly QuoteListRow[], step: Parameters<typeof windowOf>[2] = {}) => windowOf(quoteActOf(kind, NO_API, recordsOf(rows), day), recordsOf(rows), step)
 const incomingWindow = (kind: 'lost' | 'askInfo', rows: readonly IncomingRow[], step: Parameters<typeof windowOf>[2] = {}) => windowOf(incomingActOf(kind, NO_API, requestsOf(rows)), requestsOf(rows), step)
 
+/** F-CQ-304: the Reply-to-N window at its first step (nothing typed, the customer reads Italian in its portal). */
+function replyOf(rows: readonly ReplyRow[], recordType: ReplyRecordType | ((row: ReplyRow) => ReplyRecordType), asked: boolean): ReplyManyModel {
+  const targets = replyTargetsOf(rows.map((row, index) => ({ ...row, partyId: PARTY.id, partyName: PARTY.name, customerSeq: index + 3 })), recordType)
+  const today = '2026-10-29'
+  const kinds = new Set(targets.map((target) => target.recordType))
+  return { customer: { id: PARTY.id, name: PARTY.name }, targets, batchId: 'seed-batch-1', draft: startDraft(replyComposerContext(PARTY.name)), notes: [], language: 'it', portal: 'on', sending: false, progress: null, results: {}, done: false, todo: todoStart(asked, today), asked, today, recordType: kinds.size === 1 ? targets[0]!.recordType! : 'Inquiry' }
+}
+
 const PEOPLE = [
   { id: '0190f0e2-7777-7000-8000-0000000000a1', name: 'Seed Person One', me: true },
   { id: '0190f0e2-7777-7000-8000-0000000000a2', name: 'Seed Person Two', me: false },
@@ -247,16 +266,18 @@ const PENDING_QUOTE: QuoteDetail = { ...pendingQuote(), number: APPROVAL_QUOTE.n
 // ---- the gallery's frame ---------------------------------------------------------------------------------------------------------
 
 /** The tab as the customer page mounts it (its words, its room), the lists' own views inside its sections. */
-function QuotesTabDesign({ model }: { model: QuotesTabCase }) {
-  const tab: TabFacts = { counts: model.counts, failed: model.failed ?? false, door: model.door, terms: termsOfDoor(model.door), rights: tabRightsOf(PERMISSIONS[model.role]), room: model.room, hrefs: hrefsUnder(model.door), everything: doorAddress(BASE, new URLSearchParams('tab=quotes'), null), prefix: PREFIX }
+export function QuotesTabDesign({ model }: { model: QuotesTabCase }) {
+  const party = model.party ?? PARTY
+  const base = model.party ? `${PREFIX}/sales/customers/${party.id}` : BASE
+  const tab: TabFacts = { counts: model.counts, failed: model.failed ?? false, door: model.door, terms: termsOfDoor(model.door), rights: tabRightsOf(PERMISSIONS[model.role]), room: model.room, hrefs: hrefsUnder(base, model.door), everything: doorAddress(base, new URLSearchParams('tab=quotes'), null), prefix: PREFIX }
   const band = bandOf(tab.counts, tab.rights, tab.door)
   const hidden = emptyTab(band, tab.door)
-  const quotesList = createElement(QuotesListView, { model: model.quotes })
-  const incoming = hidden ? null : createElement(TabSection, { kind: 'incoming', customer: PARTY.name, tab }, createElement(InquiriesView, { model: model.incoming }))
-  const quotes = hidden ? null : createElement(TabSection, { kind: 'quotes', customer: PARTY.name, tab }, model.tools ? createElement(MemoryTools, { tools: model.tools }, quotesList) : quotesList)
+  const quotesList = createElement(QuotesListView, { model: { ...model.quotes, customerName: party.name } })
+  const incoming = hidden ? null : createElement(TabSection, { kind: 'incoming', customer: party.name, tab }, createElement(InquiriesView, { model: { ...model.incoming, customerName: party.name } }))
+  const quotes = hidden ? null : createElement(TabSection, { kind: 'quotes', customer: party.name, tab }, model.tools ? createElement(MemoryTools, { tools: model.tools }, quotesList) : quotesList)
   const picture = useT(BEFORE_ORDER_NS)('drafts.picture')
-  const drafts = hidden ? null : createElement(DraftsFrame, { customer: PARTY.name, tab }, createElement(CustomerDraftsList, { model: { ...model.drafts, pictures: { read: NO_PICTURES, header: picture } } }))
-  const frame = createElement(QuotesTabFrame, { model: { partyId: PARTY.id, customer: PARTY.name, tab, band }, incoming, quotes, drafts })
+  const drafts = hidden ? null : createElement(DraftsFrame, { customer: party.name, tab, window: model.window ?? null }, createElement(CustomerDraftsList, { model: { ...model.drafts, customer: party.name, pictures: { read: NO_PICTURES, header: picture } } }))
+  const frame = createElement(QuotesTabFrame, { model: { partyId: party.id, customer: party.name, tab, band }, incoming, quotes, drafts })
   return createElement('div', { style: { maxWidth: model.room, margin: '0 auto' } }, createElement(WithMessages, { namespaces: ['parties', BEFORE_ORDER_NS] }, frame))
 }
 
@@ -272,6 +293,16 @@ function MemoryTools({ tools, children }: { tools: MemoryToolsModel; children?: 
 }
 
 const TOOLS: MemoryToolsModel = { pageKey: null, locale: 'en', answer: { views: [], roleDefaultId: null, personalDefaultId: null, roles: [], allRoles: [], can: { save: true, manage: false, export: true }, exports: { formats: ['XLSX', 'CSV'] } }, jobs: [] }
+
+// ---- cq W3 (T part 2): the builders the customer page's gallery mounts this tab with ----------------------------------------------
+
+/** The tab as the page's busy case shows it, for the page's customer. */
+export const quotesTabFor = (party: { readonly id: string; readonly name: string }, role: TabRole = 'owner'): QuotesTabCase => ({ ...tabCase({ role }), party })
+/** "Customer is writing" (the WRITING door) for the page's customer: its drafts (the page's own made-up rows), one open in its window. */
+export function writingTabFor(party: { readonly id: string; readonly name: string }, drafts: CustomerDraftsListModel, role: TabRole, window: ReactNode = null): QuotesTabCase {
+  const count = drafts.read.status === 'ready' ? drafts.read.rows.length : 0
+  return { ...doorCase('WRITING', [], [], role), counts: countsOf({ ...BUSY, drafts: count }, role), drafts, party, ...(window ? { window } : {}) }
+}
 
 // ---- the cases -------------------------------------------------------------------------------------------------------------------
 
@@ -303,12 +334,12 @@ export const designScreen = defineDesignScreen<QuotesTabCase>({
     { id: 'role-viewer', label: 'Read-only: both lists, no New button, no act', model: viewerCase },
     { id: 'role-production', label: 'Production manager: Requests & portal orders only (no target price); Quotes is one quiet line', model: productionCase },
     // ---- rows ticked on each bar (3 + More ▾; never an act for a missing right; held with words by the rows' state)
-    { id: 'bar-owner-quotes', label: 'Bar, Owner, Quotes: Add task to 3… · Cancel 2 quotes… · Ask for approval on 1…, More ▾ (Make the orders for 1… · Send a new link to 1…)', note: 'The accepted quote is ticked too: Cancel counts only the open ones; its window says why the other is not on.', model: ticked(busy, [ORDER_WAITS_QUOTE, REVISED_QUOTE, SENT_QUOTE]) },
-    { id: 'bar-owner-incoming', label: 'Bar, Owner, Incoming: Assign 2… · Ask Seed Customer One about 2… · Decline 2…, More ▾ (Mark 2 lost… · Add task to 3…); a portal order ticked: one line', model: ticked(busy, [], [OVERDUE, ASSIGNED, PORTAL]) },
-    { id: 'bar-sales', label: 'Bar, Sales: no Send a new link (no prices); the next allowed act moves up', model: ticked(salesCase, [REVISED_QUOTE, SENT_QUOTE], [OVERDUE]) },
-    { id: 'bar-finance', label: 'Bar, Finance: only Add task to N (its own act)', model: ticked(financeCase, [REVISED_QUOTE, APPROVAL_QUOTE]) },
+    { id: 'bar-owner-quotes', label: 'Bar, Owner, Quotes: Ask Seed Customer One about 3… · Add task to 3… · Cancel 2 quotes…, More ▾ (Ask for approval on 1… · Make the orders for 1… · Send a new link to 1…)', note: 'The accepted quote is ticked too: Cancel counts only the open ones; its window says why the other is not on.', model: ticked(busy, [ORDER_WAITS_QUOTE, REVISED_QUOTE, SENT_QUOTE]) },
+    { id: 'bar-owner-incoming', label: 'Bar, Owner, Incoming: Assign 2… · Ask Seed Customer One about 2… · Decline 2…, More ▾ (Mark 2 lost… · Reply to Seed Customer One on 3… · Add task to 3…); a portal order ticked: one line', model: ticked(busy, [], [OVERDUE, ASSIGNED, PORTAL]) },
+    { id: 'bar-sales', label: 'Bar, Sales: Ask … about 2… · Add task · Cancel; More ▾ without Send a new link (no prices)', model: ticked(salesCase, [REVISED_QUOTE, SENT_QUOTE], [OVERDUE]) },
+    { id: 'bar-finance', label: 'Bar, Finance: Reply to … on 2… (no to-do: it does not make the customer\'s to-dos) · Add task to 2…', model: ticked(financeCase, [REVISED_QUOTE, APPROVAL_QUOTE]) },
     { id: 'bar-viewer', label: 'Bar, Read-only: no act — one line says the role changes none (Export N stays)', model: ticked(viewerCase, [REVISED_QUOTE], [OVERDUE]) },
-    { id: 'bar-production', label: 'Bar, Production manager: Add task only on Incoming', model: ticked(productionCase, [], [OVERDUE, NEED_INFO]) },
+    { id: 'bar-production', label: 'Bar, Production manager: Reply and Add task only on Incoming (no request act)', model: ticked(productionCase, [], [OVERDUE, NEED_INFO]) },
     { id: 'bar-held', label: 'Bar, held by the state: an accepted quote ticked alone — Cancel and Ask for approval held, in words', model: ticked(busy, [WON_QUOTE]) },
     // ---- every window
     { id: 'win-cancel', label: 'Cancel 3 quotes: Runs on 2 · Not on 1 (closed), a reason for the sent one', model: withQuotes(busy, { many: quoteWindow('cancel', [REVISED_QUOTE, SENT_QUOTE, WON_QUOTE]) }) },
@@ -332,6 +363,9 @@ export const designScreen = defineDesignScreen<QuotesTabCase>({
     },
     { id: 'win-assign', label: 'Assign 2: the plan (Runs on 2 · 1 of another kind left out) and a refusal that names the request', model: withIncoming(busy, { bulk: { ...BULK_ASSIGN, model: { ...BULK_ASSIGN.model, notice: { key: 'refusal.other', tone: 'danger', lines: [{ key: 'bulk.refusedOne', params: { number: ASSIGNED.number } }] } } } as InquiriesModel['bulk'] }) },
     { id: 'win-decline', label: 'Decline 2: the reason; the true words (no message goes; each portal request tells its customer)', model: withIncoming(busy, { bulk: BULK_DECLINE }) },
+    // ---- F-CQ-304: the Orders sheet's Reply-to-N window given the quotes / the requests (their own conversations and words)
+    { id: 'win-ask-quotes', label: 'Ask Seed Customer One about 3 quotes: one message, each quote\'s own conversation, the to-do tick ON ("Your quote 3 …")', model: withQuotes(busy, { reply: replyOf([ORDER_WAITS_QUOTE, REVISED_QUOTE, SENT_QUOTE], 'Quote', true) }) },
+    { id: 'win-reply-requests', label: 'Reply to Seed Customer One on 3: two requests and a portal order, each its own conversation (no to-do from here)', model: withIncoming(busy, { reply: replyOf([OVERDUE, ASSIGNED, PORTAL].map(replyRowOf), (row) => (row.id === PORTAL.id ? 'PortalOrderRequest' : 'Inquiry'), false) }) },
     { id: 'win-add-task', label: 'Add task to 3 quotes: Assign to starts on "Me", each name a door', model: withQuotes(busy, { tasks: { records: [ORDER_WAITS_QUOTE, REVISED_QUOTE, SENT_QUOTE].map((row) => ({ type: 'Quote', id: row.id, label: row.number, supervisor: null })), people: { status: 'ready', data: PEOPLE } } }) },
     { id: 'win-make-quote', label: 'Make quote… on a request row: the request\'s own window, here (no page hop)', model: withIncoming(busy, { verb: incomingRecord(VERB_VIEW, { dialog: { kind: 'quote', customerRef: '', busy: false, notice: null } }) }) },
     { id: 'win-decline-one', label: 'Decline… on a request row: its own window, here', model: withIncoming(busy, { verb: incomingRecord(VERB_VIEW, { dialog: { kind: 'decline', draft: emptyDecline, busy: false, notice: null } }) }) },
@@ -342,8 +376,8 @@ export const designScreen = defineDesignScreen<QuotesTabCase>({
     { id: 'win-approve', label: 'Approve… on a row waiting for approval (the asker never decides: said inside)', model: withQuotes(busy, { quoteDialog: quoteDialogOn('approve', PENDING_QUOTE) }) },
     { id: 'win-reject', label: 'Reject… on a row waiting for approval: a reason', model: withQuotes(busy, { quoteDialog: quoteDialogOn('reject', PENDING_QUOTE) }) },
     // ---- the menus (open them in the frame)
-    { id: 'more-quotes', label: 'More ▾ on the Quotes bar (open it): Make the orders for 1… · Send a new link to 1…', model: ticked(busy, [ORDER_WAITS_QUOTE, REVISED_QUOTE, SENT_QUOTE]), note: 'Open More ▾ in the bar.' },
-    { id: 'more-incoming', label: 'More ▾ on the Incoming bar (open it): Mark 2 lost… · Add task to 3…', model: ticked(busy, [], [OVERDUE, ASSIGNED, PORTAL]), note: 'Open More ▾ in the bar.' },
+    { id: 'more-quotes', label: 'More ▾ on the Quotes bar (open it): Ask for approval on 1… · Make the orders for 1… · Send a new link to 1…', model: ticked(busy, [ORDER_WAITS_QUOTE, REVISED_QUOTE, SENT_QUOTE]), note: 'Open More ▾ in the bar.' },
+    { id: 'more-incoming', label: 'More ▾ on the Incoming bar (open it): Mark 2 lost… · Reply to Seed Customer One on 3… · Add task to 3…', model: ticked(busy, [], [OVERDUE, ASSIGNED, PORTAL]), note: 'Open More ▾ in the bar.' },
     { id: 'row-menu', label: 'Row ⋯ by kind (open one): a draft quote, one waiting for approval, a sent one, an accepted one whose order waits; a request; a portal order', model: busy, note: 'Each next step only with its right, held by the row\'s state; Cancel quote… last (danger); a portal order: Accept as order… / Accept as quote… / Refuse….' },
     { id: 'sort', label: 'Sort ▾ (open it): Most urgent first, Newest first, Valid until soonest', model: busy, note: 'Open Sort ▾ on either list: its title says the rule.' },
     { id: 'customise', label: 'Customise the Quotes list\'s columns (this tab keeps its own layout)', model: { ...busy, tools: { ...TOOLS, design: { dialog: 'customise' } } } },
