@@ -1025,7 +1025,7 @@ describe('F-CQ-201 / 203 / 204: the Incoming list acts', () => {
     }
     expect(words('it')['catalogue.acceptQuote']).toBe('Accetta come preventivo')
     expect(words('it')['catalogue.acceptQuoteTitle']).toContain('preventivo')
-    expect(Object.values(words('it')).filter((text) => /come offerta/.test(text))).toEqual([])
+    expect(words('it')['catalogue.acceptQuoteHint']).toContain('Un preventivo in bozza')
     expect(words('en')['decline.message.many']).toContain('tells its customer it was declined')
   })
 })
