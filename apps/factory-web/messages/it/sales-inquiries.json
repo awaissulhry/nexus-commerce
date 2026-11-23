@@ -47,7 +47,8 @@
     "countMore_one": "{count} riga letta · altre da leggere",
     "countMore_other": "{count} righe lette · altre da leggere",
     "moreReading": "Lettura in corso…",
-    "showMore": "Mostra altre {count}"
+    "showMore": "Mostra altre {count}",
+    "kindNotHere": "Richieste di modifica: non in questa scheda — cambiano un ordine confermato (si rispondono sull’ordine e in Home › Approvazioni)"
   },
   "col": {
     "number": "Numero",
@@ -73,7 +74,9 @@
     "owner": "Responsabile",
     "state": "Stato",
     "company": "Azienda",
-    "request": "Richiesta"
+    "request": "Richiesta",
+    "where": "A che punto è",
+    "wider": "{label} (da una lista più larga)"
   },
   "row": {
     "menu": "Azioni per {number}",
@@ -106,14 +109,18 @@
       "WAITING_US": "Di tutti, sul calendario lavorativo (l'avviso di Oggi conta le tue o di nessuno)",
       "WAITING_CUSTOMER": "Abbiamo chiesto più informazioni",
       "QUOTED_THIS_WEEK": "Diventate preventivo da lunedì",
-      "MINE": "Le richieste aperte che tieni tu"
+      "MINE": "Le richieste aperte che tieni tu",
+      "TO_ANSWER": "Richieste nuove o in lavorazione, e ordini dal portale inviati: aspettano noi",
+      "ENDED": "Richieste rifiutate, perse o ritirate, e ordini dal portale non accettati o ritirati"
     },
     "failed": "Impossibile contare",
     "partial": "Contate sulle 1000 richieste aperte più vecchie",
     "label": "Filtri salvati",
     "ORDERED": "Ordinate",
     "NOT_AN_ORDER": "Non un ordine",
-    "CUSTOMER_REPLIES": "Risposte dei clienti"
+    "CUSTOMER_REPLIES": "Risposte dei clienti",
+    "TO_ANSWER": "Da rispondere",
+    "ENDED": "Chiuse senza ordine"
   },
   "chip": {
     "label": "Filtri",
@@ -683,7 +690,9 @@
       "ALL": "{count} in tutto",
       "ORDERED": "{count} ordinate",
       "NOT_AN_ORDER": "{count} non un ordine",
-      "CUSTOMER_REPLIES": "{count} risposte dei clienti in attesa di noi"
+      "CUSTOMER_REPLIES": "{count} risposte dei clienti in attesa di noi",
+      "TO_ANSWER": "{count} da rispondere",
+      "ENDED": "{count} chiuse senza ordine"
     }
   },
   "door": {
@@ -1337,5 +1346,35 @@
       "brandPrices_one": "{count} prezzo del cliente ripreso su {made}",
       "brandPrices_other": "{count} prezzi del cliente ripresi su {made}"
     }
+  },
+  "where": {
+    "us": "{state} · tocca a noi · {age}",
+    "usNoAge": "{state} · tocca a noi",
+    "customer": "{state} · in attesa di {customer} · {age}",
+    "customerNoAge": "{state} · in attesa di {customer}",
+    "quoted": "Preventivata · {number}",
+    "ordered": "Ordinata · {number}",
+    "weDeclined": "Rifiutata da noi · {reason}",
+    "withdrawnBy": "Ritirata da {customer}",
+    "production": "Produzione: {answer}",
+    "customerSees": "Il cliente legge: {state}",
+    "portalConfirmed": "Ordine dal portale · confermato · {number}",
+    "portalMoved": "Ordine dal portale · passato a preventivo · {number}",
+    "portalState": "Ordine dal portale · {state}",
+    "portalRefused": "Ordine dal portale · non accettato",
+    "portalWithdrawn": "Ordine dal portale · ritirato da {customer}",
+    "kindState": "{kind} · {state}",
+    "styles_one": "{count} modello",
+    "styles_other": "{count} modelli",
+    "pieces_one": "{count} pezzo",
+    "pieces_other": "{count} pezzi",
+    "foldWanted": "Richiesta per il {date}"
+  },
+  "rank": {
+    "label": "Ordina",
+    "arrival": "Per arrivo",
+    "urgent": "Prima i più urgenti",
+    "held": "«Prima i più urgenti» ordina una pagina, e questa lista ne ha di più: restringila (un cliente, uno stato) per ordinarla.",
+    "rule": "Prima i più urgenti: prima quelle che toccano a noi da più tempo, poi quelle in attesa del cliente, poi le chiuse."
   }
 }

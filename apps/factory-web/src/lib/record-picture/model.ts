@@ -12,7 +12,7 @@
  * The record kinds a picture is read for (the batch route of each: orders, quotes, inquiries; F-SA-283: work orders — Production ›
  * Work orders and the planning board, by the production lane's yes, R9; never a floor or TV screen).
  */
-export type PictureSource = 'order' | 'quote' | 'request' | 'workorder'
+export type PictureSource = 'order' | 'quote' | 'request' | 'workorder' | 'portalOrder' /* F-CQ-103 (B-CQ-030): a portal order's style */
 
 /** Where the part is drawn: a list cell, a board card, a phone card, an order line (small or large). */
 export type PictureSize = 'cell' | 'board' | 'phone' | 'line' | 'lineLarge'

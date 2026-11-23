@@ -776,7 +776,9 @@
       "validUntil": "Valid until",
       "updated": "Updated",
       "more": "Actions",
-      "picture": "Picture"
+      "picture": "Picture",
+      "where": "Where it is",
+      "wider": "{label} (from a wider list)"
     },
     "ref": "Ref. {ref}",
     "units": "{units} · lines {lines}",
@@ -789,7 +791,47 @@
     "madeFrom": "from {number}",
     "order": "Order {number}",
     "orderCancelled": "Order {number} cancelled",
-    "orderWaits": "Order waits"
+    "orderWaits": "Order waits",
+    "where": {
+      "draftUs": "Draft · waiting on us",
+      "approval": "Waiting for approval",
+      "approvedReady": "Approved · ready to send",
+      "sent": "Sent · waiting for {customer}",
+      "sentToday": "Sent today · waiting for {customer}",
+      "sentAgo_one": "Sent {count} day ago · waiting for {customer}",
+      "sentAgo_other": "Sent {count} days ago · waiting for {customer}",
+      "acceptedWaits": "Accepted · order waits",
+      "acceptedOrder": "Accepted · {order}",
+      "declined": "Declined by {customer}",
+      "approvalRejected": "Approval rejected",
+      "holdsSent": "Customer still has the sent revision",
+      "endsIn_one": "Ends in {count} day",
+      "endsIn_other": "Ends in {count} days",
+      "endsToday": "Ends today",
+      "remindedOn": "Reminded on {date}",
+      "orderCancelled": "Its order was cancelled",
+      "orderWaits": {
+        "NO_SALES_ORDER_SERIES": "No order numbering yet",
+        "ACCOUNT_ON_HOLD": "Customer on hold",
+        "PO_NUMBER_REQUIRED": "Needs its PO number",
+        "NOT_MADE": "Not made yet"
+      },
+      "styles_one": "{count} style",
+      "styles_other": "{count} styles",
+      "pieces_one": "{count} piece",
+      "pieces_other": "{count} pieces",
+      "foldValid": "Valid until {date}"
+    },
+    "sort": {
+      "urgent": "Most urgent first",
+      "valid": "Valid until, soonest first",
+      "ruleUrgent": "Most urgent first: order waits, waiting for approval, our move, ending soon, waiting longest.",
+      "tooMany": "More than 2,000 quotes: narrow the list (a customer, a state) to sort them by urgency.",
+      "tooManyTitle": "Too many quotes for this order"
+    },
+    "state": {
+      "notClosed": "Not closed"
+    }
   },
   "newQuote": {
     "title": "New quote",

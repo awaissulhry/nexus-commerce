@@ -168,7 +168,7 @@ const SUPERVISOR = '__supervisor__'
 /** At most this many record labels are listed; the rest are counted. */
 const LISTED = 8
 
-function BatchDialog({ people, held = null, busy = false, onRetryPeople, onClose, batch }: TaskNewDialogProps & { batch: NonNullable<TaskNewDialogProps['batch']> }) {
+function BatchDialog({ people, held = null, busy = false, initial, onRetryPeople, onClose, batch }: TaskNewDialogProps & { batch: NonNullable<TaskNewDialogProps['batch']> }) {
   const t = useT('records')
   const h = useT('home-tasks')
   const words = batch.words ?? null
@@ -180,7 +180,8 @@ function BatchDialog({ people, held = null, busy = false, onRetryPeople, onClose
   }
   const locale = useLocale()
   const titleId = useId()
-  const [draft, setDraft] = useState<TaskDraft>({ ...emptyDraft(null), dueDate: nextWorkingDay(batch.today) })
+  // F-CL-T1: a design case's fields filled at once (`initial`, as the one-record window reads it).
+  const [draft, setDraft] = useState<TaskDraft>({ ...emptyDraft(null), dueDate: nextWorkingDay(batch.today), ...initial })
   const [assignee, setAssignee] = useState<BatchAssignee>({ kind: 'SUPERVISOR' })
   const [sending, setSending] = useState(false)
   const [answer, setAnswer] = useState<BatchAnswer | null>(null)

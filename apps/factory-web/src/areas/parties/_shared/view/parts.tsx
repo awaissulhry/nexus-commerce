@@ -52,7 +52,7 @@ export function PageHead({ intro, status, actions, band }: { intro?: ReactNode; 
   // F-CL-101 (settle T22): a side's band sits in the head row's left part in place of the sentence (the band's ⓘ holds it).
   return (
     <div className="fw-pty-head">
-      <div className="fw-pty-head-text">
+      <div className={band ? 'fw-pty-head-text fw-pty-head-band' /* F-CL-202: the band takes the row's room */ : 'fw-pty-head-text'}>
         {band ?? (intro && <p className="fw-pty-intro">{intro}</p>)}
         {status}
       </div>

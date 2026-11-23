@@ -91,6 +91,18 @@ export interface QuotesListViewModel {
   embedded?: boolean
   /** F-SA-279: the quote the host's dock shows (its row marked; null: none); absent: the list drives no dock. */
   active?: { readonly id: string | null } | null
+  // ---- F-CQ-102 / F-CQ-104 (customer page › Quotes & incoming, 13-backend §11 rows 3–4): the host's face
+  /** 'host': the host's columns (no Customer column; the set by `room`); absent: Sales › Quotes' own. */
+  columns?: 'host'
+  /** The list's own room in px (the host measured it); the column set and the folded date follow it, never the window. */
+  room?: number | null
+  /** The customer's one name on this host (the chips say it); absent: each row's own. */
+  customerName?: string | null
+  /** The words of a door group in State ▾ (the host's band words: one word for one thing). */
+  groupLabel?: string | null
+  /** The phone card's door to the row's thread (its words; with `active`); absent: none. */
+  cardDoor?: string | null
+  // ---- end F-CQ-102 / F-CQ-104
 }
 
 export interface QuotesListActions extends DuplicateActions, NewFromActions {

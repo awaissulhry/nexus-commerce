@@ -4,7 +4,7 @@ import { LAST_MESSAGE_NS } from '../../../lib/last-message-cell/view/LastMessage
 import { WithMessages } from '../../../record-panels/i18n'
 import { PartiesList } from '../../parties/_shared/PartiesList'
 import { CustomersImport } from './import/CustomersImport'
-import { CUSTOMERS_LIST_NS } from './list/model'
+import { CUSTOMERS_LIST_NS, WORK_WORDS } from './list/model'
 import { useCustomersDepth } from './list/use-customers-depth'
 import { CUSTOMER_MONEY_NAMESPACE } from './money/model'
 
@@ -14,21 +14,22 @@ import { CUSTOMER_MONEY_NAMESPACE } from './money/model'
  * something the list is read again. B-W2a-81: the Overdue column (price grain, receivables.view) from one read of who owes
  * late in the company. F-CL-102 (customers list plan §1): the customers' own parts — the Customer cell, New messages, the
  * identity columns hidden at first, the phone card (list/use-customers-depth.tsx). F-CL-104: the bar's Add task to N customers… and
- * Set production supervisor for N…, the row's doors; their windows mount beside the list.
+ * Set production supervisor for N…, the row's doors; their windows mount beside the list. F-CL-201…203: the band in the head row,
+ * where each customer's work stands, Most urgent first (Sort ▾) and the band's door in the address (orders.view).
  */
 export function CustomersPage() {
   return (
-    <WithMessages namespaces={[CUSTOMER_MONEY_NAMESPACE, CUSTOMERS_LIST_NS, LAST_MESSAGE_NS, 'records']}>
+    <WithMessages namespaces={[CUSTOMER_MONEY_NAMESPACE, CUSTOMERS_LIST_NS, LAST_MESSAGE_NS, 'records', ...WORK_WORDS]}>
       <Customers />
     </WithMessages>
   )
 }
 
 function Customers() {
-  const { depth, windows } = useCustomersDepth()
+  const { depth, windows, sort, workTerm } = useCustomersDepth()
   return (
     <>
-      <PartiesList side="customers" depth={depth} headActions={(reload) => <CustomersImport onApplied={reload} />} />
+      <PartiesList side="customers" depth={depth} sort={sort} workTerm={workTerm} headActions={(reload) => <CustomersImport onApplied={reload} />} />
       {windows}
     </>
   )

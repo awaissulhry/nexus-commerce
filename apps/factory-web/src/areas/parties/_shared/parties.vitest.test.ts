@@ -319,7 +319,7 @@ function literalKeys(): string[] {
     // B-W2b-172: the Questionnaire tab (purchasing/suppliers/questionnaire) speaks `purchasing-questionnaire` (its own test).
     // B-W2b-334: the supplier in depth (purchasing/suppliers/depth, /list) speaks `purchasing-suppliers-depth` (its own test).
     // B-W2b-324: the customer in depth (sales/customers/depth) speaks `sales-customers-depth` (its own test).
-    for (const file of sources(join(SRC, dir)).filter((path) => !path.includes(`${join('suppliers', 'sources')}`) && !path.includes(`${join('customers', 'portal')}`) && !path.includes(`${join('suppliers', 'portal')}`) && !path.includes(`${join('suppliers', 'questionnaire')}`) && !path.includes(`${join('suppliers', 'depth')}`) && !path.includes(`${join('suppliers', 'list')}`) && !path.includes(`${join('customers', 'depth')}`)))
+    for (const file of sources(join(SRC, dir)).filter((path) => !path.includes(`${join('suppliers', 'sources')}`) && !path.includes(`${join('customers', 'portal')}`) && !path.includes(`${join('suppliers', 'portal')}`) && !path.includes(`${join('suppliers', 'questionnaire')}`) && !path.includes(`${join('suppliers', 'depth')}`) && !path.includes(`${join('suppliers', 'list')}`) && !path.includes(`${join('customers', 'depth')}`) && !path.includes(`${join('customers', 'list')}`) /* T.2: the list folder speaks customers-list (its own key test) */))
       for (const match of readFileSync(file, 'utf8').matchAll(pattern)) if (!NOT_KEYS.has(match[1]!) && !ORDERS_READ.test(match.input.slice(Math.max(0, match.index - 2), match.index))) keys.add(match[1]!)
   return [...keys].sort()
 }
@@ -571,10 +571,10 @@ describe('F-CL-101: one Views ▾, an empty view says its own words, an act with
 
   it('an empty list names what is empty — the search, the chips, the view — and the first day stays the side’s own', () => {
     expect(emptyWordsOf('customers', 'blocked', {}, '')).toEqual({ kind: 'view', key: 'empty.customers.blocked', view: 'blocked' })
-    expect(emptyWordsOf('customers', 'archived', {}, '').key).toBe('empty.customers.archived')
+    expect(emptyWordsOf('customers', 'archived', {}, '')).toMatchObject({ key: 'empty.customers.archived' })
     expect(emptyWordsOf('customers', 'brands', {}, '')).toEqual({ kind: 'view', key: 'empty.customers.other', view: 'brands' })
-    expect(emptyWordsOf('suppliers', 'blocked', {}, '').key).toBe('empty.suppliers.blocked')
-    expect(emptyWordsOf('suppliers', 'prospects', {}, '').key).toBe('empty.suppliers.other')
+    expect(emptyWordsOf('suppliers', 'blocked', {}, '')).toMatchObject({ key: 'empty.suppliers.blocked' })
+    expect(emptyWordsOf('suppliers', 'prospects', {}, '')).toMatchObject({ key: 'empty.suppliers.other' })
     expect(emptyWordsOf('customers', 'blocked', {}, ' Seed Zeta ')).toEqual({ kind: 'search', key: 'empty.customers.search', q: 'Seed Zeta' })
     expect(emptyWordsOf('customers', 'open', { kind: 'PERSON' }, '')).toEqual({ kind: 'filters', key: 'empty.customers.filters' })
     expect(emptyWordsOf('customers', 'open', {}, '  ')).toEqual({ kind: 'none' })

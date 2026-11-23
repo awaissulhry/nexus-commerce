@@ -1,0 +1,72 @@
+/*
+ * F-CQ-102 / F-CQ-103 (customer page › Quotes & incoming, 10-design §4.3): the ONE chips cell "Where it is" of the Quotes and the
+ * Incoming list (both hosts). At most 3 chips that wrap inside the cell (never cut, never past it), then the quiet lines (the date
+ * folded under 840 px of list room; styles · pieces). Layout only; DS tokens only (light and dark come from the tokens).
+ */
+.fw-where {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  max-width: 100%;
+  padding: var(--nds-space-4) 0;
+  line-height: 1.3;
+}
+
+.fw-where-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+/* A long chip wraps inside itself (Italian too): never an ellipsis, never past the cell. */
+.fw-where-chips .nds-pill,
+.fw-where-chips .nds-tag {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  height: auto;
+  text-align: start;
+}
+
+/* What the customer sees in its portal: a quiet dashed chip. */
+.fw-where-chips .nds-tag.fw-where-dashed {
+  border-style: dashed;
+  border-color: var(--nds-border-strong);
+  background: transparent;
+}
+
+.fw-where-door {
+  display: inline-flex;
+  max-width: 100%;
+  text-decoration: none;
+}
+
+.fw-where-door:focus-visible {
+  outline: 2px solid var(--nds-grid-accent);
+  outline-offset: 2px;
+  border-radius: var(--nds-radius-sm);
+}
+
+.fw-where-quiet {
+  display: block;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+.fw-where-quiet.is-warning {
+  color: var(--nds-warning-text, var(--nds-text-2));
+}
+
+/* F-CQ-103: a request's subject under its number on the host — at most two lines (the whole on hover). */
+.fw-where-sub {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  white-space: normal;
+}
