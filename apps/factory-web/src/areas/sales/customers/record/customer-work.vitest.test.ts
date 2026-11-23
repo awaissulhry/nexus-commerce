@@ -14,6 +14,7 @@ import { WAITING_SET, WORK_ADDS, WORK_MAX, WORK_MIN, WORK_ORDER, WORK_ROOMS, WOR
 import { orderedByPreset } from '../../orders/list/view/OrdersListView' // F-CW-102
 import { DRAFTS_VIEW, NOT_EQUAL_VIEW, workEmptyOf, workViewsOf } from './view/WorkTab' // F-CP-101
 import { rowsFromAddress } from '../../orders/model' // F-CP-101: Sales › Orders keeps Open
+import { noExtra, withoutExtra } from '../../orders/model' // F-CW-105
 // ---- F-CP-103 ----
 import { OPEN_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
 import { OPEN_ORDERS } from '../../../parties/_shared/model'
@@ -378,6 +379,73 @@ describe('F-CW-104: the toolbar says "2 of 14 orders" under a door, and searches
   })
 })
 // ---- end F-CW-104
+
+// ---- F-CW-105 (lead settle S40; the API's B-CL-005): the priority door term — OUR level, on every host of the ONE sheet ----
+describe('F-CW-105: the door `?tab=work&rows=open&priority=URGENT` (the Customers list\'s) and its chip', () => {
+  const search = (address: string) => address.slice(address.indexOf('?') + 1)
+  const names = (address: string) => search(address).split('&').map((term) => term.split('=')[0]).sort()
+
+  it('the entry KEEPS the term: one write that adds the lock only — rows=open and priority stay, no sort, no default view; applied to its own output → null', () => {
+    for (const level of ['URGENT', 'HIGH'] as const) {
+      const once = workEntry(BASE, ALPHA, params(`tab=work&rows=open&priority=${level}`))!
+      expect(once, level).toBe(`${BASE}?tab=work&rows=open&priority=${level}&party=${ALPHA}`)
+      expect(names(once), level).toEqual(['party', 'priority', 'rows', 'tab'])
+      expect(once, level).not.toContain('sort=')
+      expect(workEntry(BASE, ALPHA, params(search(once))), level).toBeNull()
+      expect(lockedEntry(BASE, { locked: { party: ALPHA } }, params(search(once))), level).toBeNull()
+    }
+  })
+
+  it('an unknown level is never sent to the server: the entry drops it in the same write, and the sheet reads a known level only', () => {
+    const once = workEntry(BASE, ALPHA, params('tab=work&rows=open&priority=FOO'))!
+    expect(once).toBe(`${BASE}?tab=work&rows=open&party=${ALPHA}`)
+    expect(workEntry(BASE, ALPHA, params(search(once)))).toBeNull()
+    for (const level of ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const) expect(extraFromAddress(params(`rows=open&priority=${level}`), 'open').priority, level).toBe(level)
+    for (const wrong of ['FOO', 'urgent', 'TOP', '']) {
+      const extra = extraFromAddress(params(`rows=open&priority=${wrong}`), 'open')
+      expect(extra.priority, wrong).toBeUndefined()
+      expect(rowsQuery('open', '', null, ALPHA, { extra }), wrong).not.toHaveProperty('priority')
+    }
+  })
+
+  it('the term: written back to the address, sent to the list and its totals, carried to the file by the address — never to the board', () => {
+    expect(listAddress(BASE, { rows: 'all', q: '', layout: 'list', extra: { priority: 'URGENT' } })).toBe(`${BASE}?rows=all&priority=URGENT`)
+    expect(rowsQuery('open', '', null, ALPHA, { extra: { priority: 'HIGH' } })).toMatchObject({ partyId: ALPHA, open: true, priority: 'HIGH' })
+    expect(boardNarrowOf({ extra: { priority: 'URGENT' } })).not.toHaveProperty('priority')
+    expect(noExtra({ priority: 'LOW' })).toBe(false)
+    expect(withoutExtra({ priority: 'URGENT', phase: 'READY' }, 'priority')).toEqual({ phase: 'READY' })
+    const api = readFileSync(new URL('../../orders/api.ts', import.meta.url), 'utf8')
+    expect(api.match(/priority: query\.priority \?\? undefined/g)?.length, 'the list and its totals').toBe(2)
+    // The file and a saved view take the address's terms (the list tools): the level travels with them.
+    expect(viewQuery(`tab=work&party=${ALPHA}&rows=open&priority=URGENT`)).toContain('priority=URGENT')
+    // The levels are the domain's (imported, never re-written in the web).
+    const model = readFileSync(new URL('../../orders/model.ts', import.meta.url), 'utf8')
+    expect(model).toContain("import { isPriorityLevel } from '@nexus/factory-domain/sales/orders-depth/rules'")
+  })
+
+  it('the chip with ✕, in the level\'s own words: Priority: Top / High / Normal / Low — Priorità: Massima / Alta / Normale / Bassa', () => {
+    const words = (locale: (typeof LOCALES)[number]) => ({
+      t: createTranslator(locale, messagesFor(locale, ['orders']).orders!),
+      s: createTranslator(locale, messagesFor(locale, ['orders-sheet'])['orders-sheet']!),
+      d: createTranslator(locale, messagesFor(locale, ['sales-orders-depth'])['sales-orders-depth']!),
+    })
+    const labels = (locale: (typeof LOCALES)[number]) => {
+      const { t, s, d } = words(locale)
+      return (['URGENT', 'HIGH', 'NORMAL', 'LOW'] as const).map((priority) => extraChips({ priority }, t, s, d)[0]!.label)
+    }
+    expect(labels('en')).toEqual(['Priority: Top', 'Priority: High', 'Priority: Normal', 'Priority: Low'])
+    expect(labels('it')).toEqual(['Priorità: Massima', 'Priorità: Alta', 'Priorità: Normale', 'Priorità: Bassa'])
+    const en = words('en')
+    expect(extraChips({ priority: 'URGENT' }, en.t, en.s, en.d)).toEqual([{ key: 'priority', label: 'Priority: Top' }])
+    // Beside a door of the band: two chips, each with its own ✕ ("Clear all" from two).
+    expect(extraChips({ phase: 'READY', priority: 'HIGH' }, en.t, en.s, en.d).map((chip) => chip.key)).toEqual(['phase', 'priority'])
+    // The ONE sheet draws it on its three hosts: the chips row and the "narrowed" test both read the level's words.
+    const view = readFileSync(new URL('../../orders/list/view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('extraChips(model.extra ?? null, t, s, d /* F-CW-105 */)')
+    expect(view).toContain('extraChips(model.extra ?? null, t, s, d).length > 0')
+  })
+})
+// ---- end F-CW-105
 
 // ---- F-SA-278 (sales page plan N5, N3; picks R5, P10; Round 4): the strip's two windows — Waiting for <customer> (our asks: the
 // portal's requests card as it is; counter-offers; changes waiting for their new yes) and Open tasks; each row picks its record in the dock.

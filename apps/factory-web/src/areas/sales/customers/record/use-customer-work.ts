@@ -12,6 +12,7 @@ import { listTasks } from '../../../../record-panels/tasks/api'
 import type { TaskItem } from '../../../../record-panels/tasks/model'
 import { getBoard, listOrders, type OrderBoard, type OrderRow } from '../../orders/api'
 import type { OrderPhase } from '../../orders/api' // F-CW-101: the band's groups and their doors
+import { isPriorityLevel } from '@nexus/factory-domain/sales/orders-depth/rules' // F-CW-105 (S40): our levels — the domain's rule
 import type { DockPick } from './view/WorkTab' // F-SA-278
 import { useCoalesced } from '../../orders/hooks'
 import type { WaitingMarks } from '../../orders/list/sheet/model'
@@ -94,6 +95,12 @@ export function workEntry(base: string, partyId: string, params: Params): string
   if (merged && !hasView()) for (const [name, value] of Object.entries(merged)) set(name, value)
   set('tab', 'work')
   set('party', partyId)
+  // F-CW-105 (S40): a level the API does not know is dropped here, in the same write — the sheet, its file and a saved view never
+  // carry it (no refused read). A known level is kept as it came (it names no view: `rows` beside it is the door's own).
+  if (query.has('priority') && !isPriorityLevel(query.get('priority'))) {
+    query.delete('priority')
+    changed = true
+  }
   if (query.has('phase') && !query.has('rows')) set('rows', WORK_DEFAULT_ROWS) // F-CW-101 (S16): a phase is over every order
   if (!hasView()) set('rows', WORK_DEFAULT_ROWS) // F-CP-101: All orders (`rows=all`), never `status=all`
   return changed ? `${base}?${query.toString()}` : null

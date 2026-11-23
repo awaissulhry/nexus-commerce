@@ -278,7 +278,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const viewNarrowed = model.rows !== home && model.rows !== 'all'
   // F-CW-102 (P0 item 9): a customer the HOST locks is the page's own, not a narrowing — its empty sheet says "<customer> has no
   // order yet.", never "No orders match … Clear filters".
-  const othersNarrowed = model.q.trim() !== '' || !!model.waiting || (!!model.customer && !model.locked?.party) || !!model.brand || !!model.company || !!model.cf || extraChips(model.extra ?? null, t, s).length > 0 || (!!model.kind && !model.locked?.kind) || !!model.profile // B-TH-201, B-TH-225, B-TH-057, B-TH-244, F-SA-221, F-SA-222
+  const othersNarrowed = model.q.trim() !== '' || !!model.waiting || (!!model.customer && !model.locked?.party) || !!model.brand || !!model.company || !!model.cf || extraChips(model.extra ?? null, t, s, d).length > 0 || (!!model.kind && !model.locked?.kind) || !!model.profile // B-TH-201, B-TH-225, B-TH-057, B-TH-244, F-SA-221, F-SA-222
   const narrowed = viewNarrowed || othersNarrowed
   const hostEmpty = hostEmptyOf(model, narrowed, othersNarrowed)
   const showing = showingOf(model)
@@ -304,7 +304,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     ...(model.cf ? [{ id: 'cf', label: s('chips.cf', { terms: model.cf }), onClear: () => actions?.onClearCf?.() }] : []),
     // B-TH-244: the terms a total's door added (never a hidden filter).
     // F-CW-101: a phase's chip says in quiet words what it holds (the host's whys of "Not sent to the factory", else the sheet's own line).
-    ...extraChips(model.extra ?? null, t, s).map((chip) => ({ id: `x-${chip.key}`, label: chip.label, onClear: () => actions?.onClearExtra?.(chip.key), ...(chip.key === 'phase' ? { note: model.phaseNote ?? chip.note ?? null } : {}) })),
+    ...extraChips(model.extra ?? null, t, s, d /* F-CW-105 */).map((chip) => ({ id: `x-${chip.key}`, label: chip.label, onClear: () => actions?.onClearExtra?.(chip.key), ...(chip.key === 'phase' ? { note: model.phaseNote ?? chip.note ?? null } : {}) })),
   ]
   const unavailable = model.customer?.name === null
   // B-TH-244: the honest count — the server's figure for the whole view when it was read (a door's view, the grouped view).
@@ -1412,7 +1412,9 @@ function serverSorted(sort: OrderSort | null, columns: ColDef<OrderRow>[]): ColD
 
 // ── B-TH-244 (threads plan TH-4, picture 26; features SHEET.overall-F02 … F11) ──────────────────────────────────────────────────
 /** The door terms as chips (each with ✕): what a total's door added beside the rows view. */
-export function extraChips(extra: ExtraTerms | null, t: Translate, s: Translate): Array<{ key: keyof ExtraTerms; label: string; note?: string }> {
+// F-CW-105 (S40): + our priority level's chip — "Priority: Top" in the level's own words (`d`: the depth catalogue's
+// `priority.level.*`, which the sheet always hands; without it the level's code).
+export function extraChips(extra: ExtraTerms | null, t: Translate, s: Translate, d?: Translate): Array<{ key: keyof ExtraTerms; label: string; note?: string }> {
   if (!extra) return []
   const out: Array<{ key: keyof ExtraTerms; label: string; note?: string }> = []
   if (extra.status) out.push({ key: 'status', label: s('chips.status', { status: t(`status.${extra.status}`) }) })
@@ -1430,6 +1432,7 @@ export function extraChips(extra: ExtraTerms | null, t: Translate, s: Translate)
     const words = phasePhrase(extra.phase)
     out.push({ key: 'phase', label: words.orders ? t(words.key) : s(words.key), ...(extra.phase === 'NOT_STARTED' ? { note: s('phase.note.NOT_STARTED') } : {}) })
   }
+  if (extra.priority) out.push({ key: 'priority', label: s('urgency.priority', { level: d ? d(`priority.level.${extra.priority}`) : extra.priority }) }) // F-CW-105
   return out
 }
 

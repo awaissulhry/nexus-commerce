@@ -27,6 +27,7 @@ export const CUSTOMER_URGENCIES = ['URGENT', 'REGULAR'] as const
 export type CustomerUrgency = (typeof CUSTOMER_URGENCIES)[number]
 // F-SA-213: the office's priority levels (as depth/api PRIORITY_LEVELS, which reads this file: kept here so no import goes round).
 export const ORDER_PRIORITY_LEVELS = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const
+export type OrderPriorityLevel = (typeof ORDER_PRIORITY_LEVELS)[number] // F-CW-105
 // F-SA-214: why a waiting order waits (factory-domain sales/orders-depth WAIT_WORDS' codes, the row's `waits`).
 export const WAIT_REASONS = ['REQUEST_PENDING', 'NO_REQUEST', 'CREDIT_HOLD', 'MEASUREMENTS'] as const
 export type WaitReason = (typeof WAIT_REASONS)[number]
@@ -296,6 +297,9 @@ export interface OrderQuery {
   // F-CW-101 (the API's B-CW-002): the orders in one phase (`?phase=`) — the list, its totals and its file read it; the board counts
   // every phase itself (`byPhase`), so it takes none (as it takes no status).
   phase?: Phase | null
+  // F-CW-105 (lead settle S40; the API's B-CL-005): the orders at ONE of our priority levels (`?priority=`) — the list, its totals
+  // and its file read it (a wrong value is refused: the sheet only ever sends a known level). Never the board. Office only.
+  priority?: OrderPriorityLevel | null
   q?: string
   cursor?: string | null
   limit?: number
@@ -329,6 +333,7 @@ export function listOrders(api: ApiClient, query: OrderQuery, signal?: AbortSign
       ids: query.ids?.length ? query.ids.join(',') : undefined, // F-SA-276
       priceMatch: query.priceMatch ?? undefined, // F-CP-141
       phase: query.phase ?? undefined, // F-CW-101
+      priority: query.priority ?? undefined, // F-CW-105
       q: query.q?.trim() || undefined,
       cursor: query.cursor ?? undefined,
       limit: query.limit ?? 50,
@@ -412,6 +417,7 @@ export function getOrderSummary(api: ApiClient, query: OrderQuery, group: 'party
       waiting: query.waiting ?? undefined, // F-SA-276: the totals keep the same rows
       priceMatch: query.priceMatch ?? undefined, // F-CP-141: the totals keep the same rows
       phase: query.phase ?? undefined, // F-CW-101: the totals keep the same rows
+      priority: query.priority ?? undefined, // F-CW-105: the totals keep the same rows
       q: query.q?.trim() || undefined,
       group: group ?? undefined,
     },
