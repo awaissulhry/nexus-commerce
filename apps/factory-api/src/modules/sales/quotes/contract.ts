@@ -419,7 +419,8 @@ export const rejectContract = defineContract({ params: quoteParams, body: input(
 
 export const reopenContract = defineContract({ params: quoteParams, body: input({ version, reason: text(MAX_TEXT.reason).nullish() }), response: { 200: one } })
 
-export const cancelContract = defineContract({ params: quoteParams, body: input({ version, reason: text(MAX_TEXT.reason).nullish() }), response: { 200: one } })
+// B-CQ-040 (customer page › Quotes & incoming, C10): `batchId` — one id sent with every quote of one "Cancel N" (one bell per follower).
+export const cancelContract = defineContract({ params: quoteParams, body: input({ version, reason: text(MAX_TEXT.reason).nullish(), batchId: id().optional() }), response: { 200: one } })
 
 // ---- the sales settings -----------------------------------------------------------------------------------------------
 

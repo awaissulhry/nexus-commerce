@@ -3,8 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { FileQuestion } from 'lucide-react'
-import { SelectionLabel } from '@nexus/ui/grid'
-import { Button, Skeleton } from '@nexus/ui/primitives'
+import { Skeleton } from '@nexus/ui/primitives'
 import { useT } from '../../../../lib/i18n/provider'
 import { companyPrefix } from '../../../../lib/session/session'
 import { useOfficeSession } from '../../../../lib/session/context'
@@ -118,11 +117,20 @@ function Suppliers() {
                 <LeaveExpiring onLeave={() => setDocs(false)} />
               )
             ) : null,
-            bulk: (
-              <Button size="sm" aria-label={t('list.request', { count: list.selectedRows.length })} onClick={() => docs.request.open(list.selectedRows.map((row) => ({ id: row.id, name: partyName(row) })))} heldReason={held ? t(held.key, held.params) : null}>
-                <FileQuestion size={13} aria-hidden /> <SelectionLabel>{t('list.request', { count: list.selectedRows.length })}</SelectionLabel>
-              </Button>
-            ),
+            // F-CL-103 (settle T16): Request documents is the bar's second act (after Check VIES, before Export); not drawn without the
+            // right to ask (held only by the selection: none, or more than the cap).
+            acts: docs.can.ask
+              ? [
+                  {
+                    id: 'request',
+                    order: 20,
+                    label: t('list.request', { count: list.selectedRows.length }),
+                    icon: <FileQuestion size={13} aria-hidden />,
+                    held: held ? t(held.key, held.params) : null,
+                    run: () => docs.request.open(list.selectedRows.map((row) => ({ id: row.id, name: partyName(row) }))),
+                  },
+                ]
+              : [],
           }
         }}
       />

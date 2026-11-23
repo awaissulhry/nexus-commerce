@@ -17,7 +17,8 @@ import type { Draft, FanOutRule, RuleContext } from '../fan-out'
  *                                      notice (approval.decided, B-W2b-307), and its approvers hear approval.requested: not
  *                                      told twice here.
  *   inquiry.changed (ASSIGNED)         NT1:02 (B-W2b-322): the person an inquiry was given to (not when they took it
- *                                      themselves), while they may still see inquiries of its company.
+ *                                      themselves), while they may still see inquiries of its company. B-CQ-040: "Assign N" is
+ *                                      ONE bell item (the command's `batchId`).
  *   safety_report.received             NT1:03 (B-W2b-351): the people who assess product-safety reports (sales.safety.manage
  *                                      over the report's company: quality, the product-safety role) hear at once (ALERT); with
  *                                      an accident logged the sentence says so. Never the reporter's words or their injury.
@@ -59,7 +60,7 @@ export const FOLLOW_UP_RULES: readonly FanOutRule[] = Object.freeze([
     name: 'inquiries.assigned',
     events: ['inquiry.changed'],
     async drafts(context: RuleContext, raw: unknown): Promise<Draft[]> {
-      const payload = payloadOf(inquiryEvents, 'inquiry.changed').parse(raw) as { inquiryId: string; number: string; change: string; assigneeId: string | null }
+      const payload = payloadOf(inquiryEvents, 'inquiry.changed').parse(raw) as { inquiryId: string; number: string; change: string; assigneeId: string | null; batchId?: string }
       if (payload.change !== 'ASSIGNED' || payload.assigneeId === null) return []
       const inquiry = await context.tx.inquiry.findUnique({ where: { id: payload.inquiryId }, select: { id: true, number: true, companyId: true, assigneeId: true } })
       // Given to someone else (or taken off) meanwhile: nothing to tell.
@@ -67,7 +68,8 @@ export const FOLLOW_UP_RULES: readonly FanOutRule[] = Object.freeze([
       const reader = await context.reader(payload.assigneeId)
       if (!reader || !holds(reader.actor, HOME_VIEW) || !can(reader.actor, SALES_INQUIRIES_VIEW, { companyId: inquiry.companyId })) return []
       const actorId = await officeActorOf(context, 'Inquiry', inquiry.id)
-      return [{ userId: payload.assigneeId, category: 'ASSIGNMENT', record: { type: 'Inquiry', id: inquiry.id, label: inquiry.number }, companyId: inquiry.companyId, anchor: null, messageKey: 'notifications.inquiries.assigned', params: { actorId }, actorId }]
+      // B-CQ-040 (customer page › Quotes & incoming, C10): "Assign N" is one act — its batch folds the N into ONE bell item.
+      return [{ userId: payload.assigneeId, category: 'ASSIGNMENT', record: { type: 'Inquiry', id: inquiry.id, label: inquiry.number }, companyId: inquiry.companyId, anchor: null, messageKey: 'notifications.inquiries.assigned', params: { actorId }, actorId, ...(payload.batchId ? { batchId: payload.batchId } : {}) }]
     },
   },
   {

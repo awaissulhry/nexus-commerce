@@ -165,6 +165,23 @@ describe('B-TH-028 what waits (one rule)', () => {
     expect((await head('SalesOrder', order.id)).waiting).toMatchObject({ on: 'CUSTOMER', amber: false, thresholdDays: 3 })
   })
 
+  // ---- B-CQ-051 (customer page › Quotes & incoming, Q4-B7): a closed quote waits on nobody on the customer side
+  it('B-CQ-051: an open quote with our mail last waits on the customer; an ACCEPTED one with our mail last waits on nobody — until the customer writes (then on us)', async () => {
+    const open = await one(`SELECT id FROM "Quote" WHERE "tenantId" = $1 AND number = 'SEED-Q-0002'`, [T])
+    await message({ type: 'Quote', id: open.id }, 'OUTBOUND')
+    expect((await head('Quote', open.id)).waiting).toMatchObject({ on: 'CUSTOMER', amber: false, thresholdDays: 3 })
+    // SEED-Q-0001: accepted (its order made). Our last mail would say "waiting on the customer" for ever: it says nothing now.
+    const accepted = await one(`SELECT id, status::text AS status FROM "Quote" WHERE "tenantId" = $1 AND number = 'SEED-Q-0001'`, [T])
+    expect(accepted.status).toBe('ACCEPTED')
+    await message({ type: 'Quote', id: accepted.id }, 'OUTBOUND', new Date(Date.now() - 2 * 3_600_000))
+    expect((await head('Quote', accepted.id)).waiting).toBeNull()
+    // The customer writes after it: we owe the answer, closed or not.
+    const wrote = new Date(Date.now() - 3_600_000)
+    await message({ type: 'Quote', id: accepted.id }, 'INBOUND', wrote)
+    expect((await head('Quote', accepted.id)).waiting).toMatchObject({ on: 'US', since: wrote.toISOString(), thresholdDays: 3 })
+  })
+  // ---- end B-CQ-051
+
   it('W08: the portal reader’s thread answer carries no owner and no waiting', async () => {
     const order = await one(`SELECT id FROM "SalesOrder" WHERE "tenantId" = $1 AND number = 'SEED-SO-0002'`, [T])
     const read = await ok('anna', 'GET', `/threads/SalesOrder/${order.id}`)

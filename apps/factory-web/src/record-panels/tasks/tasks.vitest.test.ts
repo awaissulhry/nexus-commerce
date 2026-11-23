@@ -1,8 +1,12 @@
+import { readFileSync } from 'node:fs' // F-CL-104
 import { describe, expect, it, vi } from 'vitest'
+import { LOCALES } from '../../lib/i18n/locales' // F-CL-104
+import { CATALOGUE } from '../../lib/i18n/messages' // F-CL-104
 import { createApiClient } from '../../lib/api/client'
 import { apiErrorFrom } from '../../lib/api/errors'
 import { addFollower, bulkTasks, createTask, listAssignees, listTasks, setMyFollow, setTaskStatus, taskWriteProblem } from './api'
 import { addTaskHeld, checklistLines, createBody, draftProblem, emptyDraft, followersChangeFor, taskChangeFor, taskDueWords, type TaskItem } from './model'
+import { BATCH_HOST_WORDS, batchWordOf } from './model' // F-CL-104
 
 /** Tasks and followers on any record (B-W2a-40 on B-W2a-20's API): the shared rules and calls. */
 
@@ -129,3 +133,39 @@ describe('the calls (one client: company header, CSRF, Idempotency-Key, the vers
     expect(taskWriteProblem(apiErrorFrom(404, { error: { code: 'not_found', message: 'x' } }))).toMatchObject({ key: 'tasks.problem.gone' })
   })
 })
+
+// ---- F-CL-104 (customers list 13-backend §8.4, settle T12): the batch window's four additive options, the shape agreed with cq ----
+describe('F-CL-104: the batch window reads as today without the new options, and in the host’s own noun with `words`', () => {
+  it('without `words` every batch word is home-tasks’ (the Orders sheet unchanged); with them the record-noun words are the host’s', () => {
+    for (const key of [...BATCH_HOST_WORDS, 'assignee', 'note', 'send', 'held.assignee']) expect(batchWordOf(key, null)).toEqual({ ns: 'home-tasks', key: `batch.${key}` })
+    const words = { ns: 'customers-list', prefix: 'task' }
+    expect(batchWordOf('title', words)).toEqual({ ns: 'customers-list', key: 'task.title' })
+    expect(batchWordOf('held.tooMany', words)).toEqual({ ns: 'customers-list', key: 'task.held.tooMany' })
+    // Words that name no record stay home-tasks' (one word for one thing).
+    for (const key of ['assignee', 'note', 'send', 'made', 'receipt', 'held.assignee']) expect(batchWordOf(key, words).ns, key).toBe('home-tasks')
+  })
+
+  it('the customers list’s words exist for every record-noun key, in it and en, with the same placeholders as home-tasks', () => {
+    const plural = (dictionary: Readonly<Record<string, string>>, key: string) => dictionary[key] ?? dictionary[`${key}_other`]
+    for (const locale of LOCALES) {
+      const host = CATALOGUE[locale]['customers-list'] ?? {}
+      const home = CATALOGUE[locale]['home-tasks'] ?? {}
+      for (const key of [...BATCH_HOST_WORDS, 'namesOther.warn', 'namesOther.tick', 'namesOther.held', 'made', 'due']) expect(plural(host, `task.${key}`), `${locale} task.${key}`).toBeTruthy()
+      for (const key of BATCH_HOST_WORDS) {
+        const ours = (plural(host, `task.${key}`)!.match(/\{\w+\}/g) ?? []).sort()
+        expect(ours, `${locale} task.${key}`).toEqual((plural(home, `batch.${key}`)!.match(/\{\w+\}/g) ?? []).sort())
+      }
+    }
+  })
+
+  it('the four options are additive and optional (null: today’s rule)', () => {
+    const view = readFileSync(new URL('./view/TaskNewDialog.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('readonly words?: { readonly ns: string; readonly prefix: string } | null')
+    expect(view).toContain('readonly namesOther?: ((text: string) => readonly string[]) | null')
+    expect(view).toContain('readonly hrefOf?: ((record: { readonly type: string; readonly id: string }) => string | null) | null')
+    expect(view).toContain("readonly defaultAssignee?: 'me' | 'supervisor' | null")
+    // The window starts on each record's supervisor unless the host asks for the person.
+    expect(view).toContain("useState<BatchAssignee>({ kind: 'SUPERVISOR' })")
+  })
+})
+// ---- end F-CL-104
