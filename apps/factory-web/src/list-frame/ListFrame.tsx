@@ -107,6 +107,8 @@ export interface ListFrameProps<T> {
   updates?: { count: number; onShow: () => void } | null
   /** The footer's "Show N more" (pages of 50 read with a cursor). */
   more?: { label: string; onMore: () => void; held?: string | null } | null
+  /** cq fx2 W-14: words in the foot strip, before the keys' ⓘ (the order's rule, the list's notes, what it leaves out). */
+  foot?: ReactNode
   /** The list's own keys (`c` new …); the frame adds its own after them. */
   keys?: readonly ListKey[]
   /** `?` and the keys panel's "All shortcuts". */
@@ -251,7 +253,7 @@ export function ListFrame<T>(props: ListFrameProps<T>) {
   )
 }
 
-function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, search, tools, right, selection, isRowSelectable, updates, more, keys, onHelp, onOpen, state, rowKind = 'two-line', endless, listKey, title, focusRow, keysOpen, modes, cards, edit, quick, withheld, today, design, exportAbout, onRowClick, onSortChanged, custom, groups, builtInViews, viewName, onShownColumns, active /* F-SA-279 */, customiseAbout /* F-CL-301 */ }: ListFrameProps<T>) {
+function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, search, tools, right, selection, isRowSelectable, updates, more, foot /* cq fx2 W-14 */, keys, onHelp, onOpen, state, rowKind = 'two-line', endless, listKey, title, focusRow, keysOpen, modes, cards, edit, quick, withheld, today, design, exportAbout, onRowClick, onSortChanged, custom, groups, builtInViews, viewName, onShownColumns, active /* F-SA-279 */, customiseAbout /* F-CL-301 */ }: ListFrameProps<T>) {
   const t = useT('lists')
   const locale = useLocale()
   const ds = useDsLabels()
@@ -489,7 +491,7 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
   // B-TH-225: the rest of the row opens the record; a link, a button, a box or a field in the cell keeps its own click.
   const rowClickRef = useRef(onRowClick)
   rowClickRef.current = onRowClick
-  const onRowClicked = useCallback((event: { data?: T; event?: Event | null }) => {
+  const onRowClicked = useCallback((event: { data?: T; event?: Event | null; rowIndex?: number | null }) => {
     const click = event.event as MouseEvent | null | undefined
     const target = click?.target as HTMLElement | null | undefined
     if (!event.data || !click || !rowClickRef.current || isGroupMarker(event.data)) return
@@ -502,7 +504,17 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
     const cellCol = clickedColumn(target, api?.getFocusedCell()?.column.getColId() ?? null)
     if (cellCol && inlineRef.current?.editableFor(event.data, cellCol)) return
     rowClickRef.current(event.data, click)
-  }, [])
+    // cq fx2 W-15: the keys stay on the list after a mouse pick — a host that docks the row re-renders, and the focus fell to the page
+    // body (j / k then walked from the old row, ↓ did nothing). Only when nothing else took the focus (a window the click opened keeps it).
+    const index = event.rowIndex ?? null
+    if (index === null) return
+    window.setTimeout(() => {
+      const now = apiRef.current
+      if (!now || now.isDestroyed() || (document.activeElement && document.activeElement !== document.body)) return
+      const column = now.getFocusedCell()?.column ?? firstColumn(now)
+      if (column) now.setFocusedCell(index, column)
+    }, 0)
+  }, [firstColumn])
 
   // B-TH-057: a person's header click (never the page's own `sort` from the address) reaches the page.
   const sortRef = useRef(onSortChanged)
@@ -626,6 +638,7 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
           {more.label}
         </Button>
       )}
+      {foot && <span className="fw-list-foot">{foot}</span>}
       <GridFooterSpacer />
       <ListKeysInfo keys={listKeys([...(active?.onOpenNewTab ? ACTIVE_KEYS : []) /* F-SA-279 */, ...(keys ?? []), ...(inline.active ? EDIT_KEYS : [])], !!selection)} onHelp={onHelp} open={keysOpen} />
     </GridFooterStrip>

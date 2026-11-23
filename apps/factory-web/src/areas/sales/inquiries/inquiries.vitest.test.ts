@@ -1005,7 +1005,8 @@ describe('F-CQ-201 / 203 / 204: the Incoming list acts', () => {
   })
 
   it('Add task to N: the ONE batch window (records Inquiry / PortalOrderRequest), Assign to starts on "Me" (C19)', () => {
-    expect(view).toContain("words: { ns: 'before-order', prefix: 'tasks.request' }")
+    // cq fx2 W-07: the words by the records' kind (requests, portal orders, or both).
+    expect(view).toContain("words: { ns: 'before-order', prefix: taskWordsOf(model.tasks.records) /* cq fx2 W-07: the records' own kind */ }")
     expect(view).toContain("defaultAssignee: 'me'")
     expect(hook).toContain('tasks.open(rows.map((row) => ({ type: THREAD_TYPE[row.kind], id: row.id, label: row.number, supervisor: null })))')
   })

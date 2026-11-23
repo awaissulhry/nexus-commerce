@@ -99,6 +99,7 @@ import { WhereChips, type WhereChipWords } from '../../_shared/where-cell/view/W
 import { incomingBarOf, type IncomingActKind, type IncomingBarRights } from '../bar'
 import type { BulkPreview } from '../model'
 import { ManyActDialog, ManyBar } from '../../_shared/many-acts/view/ManyActDialog'
+import { MessagesHeader, MORE_CELL } from '../../_shared/list-heads/ListHeads' // cq fx2 W-05: narrow headers whole
 import type { ManyActActions, ManyActModel } from '../../_shared/many-acts/use-many-act'
 import type { TaskBatchModel } from '../../_shared/many-acts/use-task-batch'
 import { TaskNewDialog } from '../../../../record-panels/tasks/view/TaskNewDialog'
@@ -218,6 +219,8 @@ export interface InquiriesModel {
   catalogueVerb?: CatalogueModel | null
   /** F-CQ-304: the Reply-to-N window over the ticked requests and portal orders. */
   reply?: ReplyManyModel | null
+  /** cq fx2 W-14: what the host left out, in the list's foot (the customer's tab: the closed groups as doors). */
+  foot?: ReactNode
   // ---- end F-CQ-201 / 203 / 204
 }
 
@@ -303,6 +306,20 @@ function useWide(forced: boolean | undefined): boolean {
 }
 
 /** F-CQ-104: the host's phone card — the number (+ the subject) names it, the picture and the new messages beside it, the chips under it. */
+// ---- cq fx2 W-07 (P0-B10): words by kind — a list of portal orders never says "requests" ----
+/** The list's count words for the rows it holds (one kind: its own noun; requests with portal orders; any mix with change requests). */
+export function countKeyOf(rows: readonly Pick<IncomingRow, 'kind'>[]): string {
+  const kinds = new Set(rows.map((row) => row.kind))
+  if (kinds.size <= 1) return kinds.has('CATALOGUE_ORDER') ? 'list.countPortal' : kinds.has('CHANGE_REQUEST') ? 'list.countChange' : 'list.count'
+  return kinds.has('CHANGE_REQUEST') ? 'list.countAny' : 'list.countMixed'
+}
+/** The task window's words for its records: requests, portal orders, or both. */
+export function taskWordsOf(records: readonly { readonly type: string }[]): string {
+  const types = new Set(records.map((record) => record.type))
+  return types.size > 1 ? 'tasks.incoming' : types.has('PortalOrderRequest') ? 'tasks.portal' : 'tasks.request'
+}
+// ---- end cq fx2 W-07
+
 const HOST_CARD_FIELDS = Object.freeze({
   number: { role: 'title' as const },
   picture: { role: 'aside' as const },
@@ -345,7 +362,9 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
   const paneRow = model.address.open ? (byId.get(model.address.open)?.request ?? null) : null
   const paneSrc = useRecordPicture({ source: 'request', recordId: paneRow?.id ?? '', picture: paneRow?.picture ?? null, styleCount: paneRow?.styleCount, read: actions?.readPictures, demo: paneRow ? model.demoPictures?.[paneRow.id] : undefined }).src // F-SA-212
   const companies = model.companies ?? []
-  const manyCompanies = companies.length > 1
+  // cq fx2 W-16: on the customer's tab the rows decide — "· SCA" on a number and the Company column only when the list holds rows of
+  // two companies (every row of one company said it on each number, and quotes never did); Sales › Incoming keeps the reader's companies.
+  const manyCompanies = model.columns === 'host' ? new Set((rows ?? []).map((row) => row.companyId)).size > 1 : companies.length > 1
   const companyName = (id: string | null) => (id ? (companies.find((entry) => entry.id === id)?.name ?? null) : null)
   const companyCode = (id: string | null) => (id ? (companies.find((entry) => entry.id === id)?.code ?? null) : null)
   const repliesView = model.address.tile === CUSTOMER_REPLIES
@@ -614,6 +633,9 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
     const chipWords = (chip: WhereChipPhrase): string => {
       const nested = Object.fromEntries(Object.entries(chip.nested ?? {}).map(([name, phrase]) => [name, say(phrase) ?? '']))
       const own = Object.fromEntries(Object.entries(chip.own ?? {}).map(([name, words]) => [name, words[locale]]))
+      // cq fx2 W-11: a change request's own state words already start with its kind ("Change request · Accepted"): said once, never
+      // "Change request · Change request · Accepted".
+      if (chip.key === 'where.kindState' && typeof chip.params?.kind === 'string' && own.state && own.state.toLowerCase().startsWith(t(chip.params.kind).toLowerCase())) return own.state
       return say({ key: chip.key, params: { ...chip.params, ...nested, ...own } }) ?? ''
     }
     const doorOf = (chip: WhereChipPhrase): string | null => {
@@ -724,13 +746,14 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
         wider({ colId: 'owner', headerName: t('col.owner'), minWidth: 120, maxWidth: 150, valueGetter: (params) => (params.data?.request ? (say(assigneePhrase(params.data.request)) ?? '') : '—') }, 'L'),
         wider({ colId: 'pieces', headerName: t('col.quantity'), minWidth: 96, maxWidth: 120, valueGetter: (params) => params.data?.pieces ?? null, cellRenderer: QuantityCell }, 'L'),
         ...(m.can.price ? [wider({ colId: 'targetPrice', headerName: t('col.targetPrice'), minWidth: 120, maxWidth: 140, type: 'rightAligned', valueGetter: (params: { data?: IncomingRow }) => { const request = params.data?.request; const price = request?.targetUnitPrice as string | null | undefined; return request && price ? priceText(price, request.currency, INTL[locale]) : '' } }, 'L')] : []),
-        ...(manyCompanies ? [wider({ colId: 'company', headerName: t('col.company'), minWidth: 100, maxWidth: 140, valueGetter: (params: { data?: IncomingRow }) => (params.data ? (companyName(params.data.companyId) ?? '') : ''), cellRenderer: CompanyCell }, 'L')] : []),
+        // cq fx2 W-17: Company from XL (at L it pushed the row 37 px past 1314: L fits 1200–1599 px whole).
+        ...(manyCompanies ? [wider({ colId: 'company', headerName: t('col.company'), minWidth: 100, maxWidth: 140, valueGetter: (params: { data?: IncomingRow }) => (params.data ? (companyName(params.data.companyId) ?? '') : ''), cellRenderer: CompanyCell }, 'XL')] : []),
         wider({ colId: 'source', headerName: t('col.source'), minWidth: 110, maxWidth: 130, valueGetter: (params) => (params.data ? t(`source.${params.data.request?.source ?? 'PORTAL'}`) : ''), cellRenderer: SourceCell }, 'XL'),
         wider({ colId: 'files', headerName: t('col.files'), minWidth: 110, maxWidth: 140, valueGetter: (params) => (params.data?.request ? joined(filesPhrases(params.data.request) ?? [], say) || '—' : '—'), cellRenderer: FilesCell }, 'XL'),
         ...(m.unread
-          ? [{ colId: 'newMessages', headerName: l('column'), headerTooltip: l('columnHint'), minWidth: 52, maxWidth: 64, valueGetter: (params: { data?: IncomingRow }) => unreadValue(unreadOf(params.data)), cellRenderer: ({ data }: ICellRendererParams<IncomingRow>) => (data ? <LastMessageCell unread={unreadOf(data)} href={openHref(data)} record={data.number} /> : null) } satisfies ColDef<IncomingRow>]
+          ? [{ colId: 'newMessages', headerName: l('column'), headerTooltip: l('columnHint'), headerComponent: MessagesHeader /* cq fx2 W-05 */, minWidth: 52, maxWidth: 64, valueGetter: (params: { data?: IncomingRow }) => unreadValue(unreadOf(params.data)), cellRenderer: ({ data }: ICellRendererParams<IncomingRow>) => (data ? <LastMessageCell unread={unreadOf(data)} href={openHref(data)} record={data.number} /> : null) } satisfies ColDef<IncomingRow>]
           : []),
-        { colId: 'more', headerName: t('col.more'), minWidth: 56, maxWidth: 56, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
+        { colId: 'more', headerName: t('col.more'), minWidth: 56, maxWidth: 56, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellClass: MORE_CELL, headerClass: MORE_CELL /* cq fx2 W-05 */, cellRenderer: MoreCell },
       ]
     }
     // ---- end F-CQ-103 / F-CQ-104
@@ -772,7 +795,8 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
             } satisfies ColDef<IncomingRow>,
           ]
         : []),
-      { colId: 'more', headerName: t('col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
+      // cq fx2 W-05 / W-12: the ⋯ whole in 56 px (no word over it), the page 16 px narrower (it scrolled 15 px at 1440).
+      { colId: 'more', headerName: t('col.more'), minWidth: 56, maxWidth: 56, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellClass: MORE_CELL, headerClass: MORE_CELL, cellRenderer: MoreCell },
     ]
     // The cells read the latest model and actions through `latest`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -846,7 +870,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
   ]
   const salesHeld = say({ key: 'held.right', params: { right: 'right.sales.inquiries.manage' } })
   const newButton = (
-    <Button size="sm" variant="primary" heldReason={model.can.manage ? (offline ? t('held.offline') : null) : salesHeld} onClick={() => actions?.onNew?.()} aria-keyshortcuts="c">
+    <Button size="sm" variant="primary" heldReason={offline ? t('held.offline') : null} onClick={() => actions?.onNew?.()} aria-keyshortcuts="c">
       <Plus size={14} aria-hidden /> {t('list.new')}
     </Button>
   )
@@ -911,9 +935,10 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
               {t(`kind.plural.${kind}`)}
             </option>
           ))}
-          {/* F-CQ-103 (L7): the customer's tab leaves change requests out — said in words, never silently. */}
+          {/* F-CQ-103 (L7): the customer's tab leaves change requests out — said in words, never silently. cq fx2 W-09: a short option
+              (a native select is as wide as its longest option: the whole sentence took a toolbar line), the why in its title. */}
           {model.kinds && !model.kinds.includes('CHANGE_REQUEST') && (
-            <option value="" disabled>
+            <option value="" disabled title={t('list.kindNotHereHint')}>
               {t('list.kindNotHere')}
             </option>
           )}
@@ -1036,14 +1061,15 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
             rows={state ? [] : rows}
             rowId={(row) => row.key}
             columns={columns}
-            count={model.list ? (model.more?.next ? t('list.countMore', { count: rows?.length ?? 0 }) : t('list.count', { count: rows?.length ?? 0 })) : t('list.countReading')}
+            // cq fx2 W-07 (P0-B10): the count names what it counts — "1 portal order", "2 requests", "3 requests and portal orders".
+            count={model.list ? (model.more?.next ? t('list.countMore', { count: rows?.length ?? 0 }) : t(countKeyOf(rows ?? []), { count: rows?.length ?? 0 })) : t('list.countReading')}
             search={
               <Input
                 size="sm"
                 type="search"
                 className="fw-inq-search"
                 aria-label={t('list.search')}
-                placeholder={t('list.search')}
+                placeholder={model.locked ? t('list.searchHost') : t('list.search') /* cq fx2 W-09: one customer's list names no customer */}
                 {...search.field /* F-SA-223 */}
               />
             }
@@ -1090,6 +1116,8 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
             withheld={model.can.price ? [] : [{ label: t('col.targetPrice'), reason: t('list.withheldPrice') }]}
             // On a phone a card opens the request's full page (B-TH-219), the list kept for Back; any other kind its own place.
             // F-CQ-104 (10-design §4.6): the host's ONE card — the number names it, the picture and the new messages beside it, the chips under it.
+            // cq fx2 W-14 (10-design §3.4): a host's list says in its own foot the order's rule and what the host left out.
+            foot={model.columns === 'host' ? <>{model.rank === 'urgent' && <span>{t('rank.rule')}</span>}{model.foot}</> : undefined}
             cards={{ fields: model.columns === 'host' ? HOST_CARD_FIELDS : CARD_FIELDS, hrefOf: (row) => (placeOf(row) === 'request' ? fullPageHref(model.prefix, row.id, model.address) : rowHref(model.prefix, model.address, row)) }}
             // F-SA-279: on the customer page a row drives the host's dock (its row marked by its key; the keys' row reported; ⌘↵ a new tab).
             active={
@@ -1099,7 +1127,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
                     onFocusRow: (row) => actions?.onFocusRow?.(row),
                     onOpenNewTab: (row) => actions?.onOpenRow?.(row, true),
                     // F-CQ-104: the phone card's door to the row's thread (a change request has none: its talk is its order's).
-                    cardDoor: model.cardDoor ? { column: model.columns === 'host' ? 'number' : 'subject', label: model.cardDoor, onOpen: (row) => (row.kind === 'CHANGE_REQUEST' ? undefined : actions?.onOpenRow?.(row, false)) } : null,
+                    cardDoor: model.cardDoor ? { column: model.columns === 'host' ? 'newMessages' /* cq fx2 W-01: never on the number (the card's title) */ : 'subject', label: model.cardDoor, onOpen: (row) => (row.kind === 'CHANGE_REQUEST' ? undefined : actions?.onOpenRow?.(row, false)) } : null,
                   }
                 : null
             }
@@ -1140,7 +1168,8 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
               { id: 'rules', label: t('list.rulesLater'), disabled: true, description: t('list.rulesLaterHint') },
             ]}
           />
-          {newButton}
+          {/* cq fx2 W-13 (plan §5.5): a button you may not use is hidden — no New request without sales.inquiries.manage. */}
+          {model.can.manage && newButton}
         </span>
       </div>
       )}
@@ -1205,7 +1234,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
             records: model.tasks.records,
             today: today,
             onSend: (draft, assignee) => actions?.tasks?.onSend(draft, assignee) ?? Promise.resolve(null),
-            words: { ns: 'before-order', prefix: 'tasks.request' },
+            words: { ns: 'before-order', prefix: taskWordsOf(model.tasks.records) /* cq fx2 W-07: the records' own kind */ },
             namesOther: null,
             hrefOf: (record) => (record.type === 'Inquiry' ? fullPageHref(model.prefix, record.id, model.address) : `${model.prefix}/sales/incoming?catalogue=${encodeURIComponent(record.id)}`),
             defaultAssignee: 'me',

@@ -1,0 +1,23 @@
+/* cq fx2 W-05: narrow headers whole (the Quotes and Incoming lists, on their pages and on the customer's tab). */
+.fw-list-iconhead {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  color: var(--nds-text-2);
+}
+.ag-cell.fw-list-more,
+.ag-header-cell.fw-list-more {
+  padding-left: 0;
+  padding-right: 0;
+  justify-content: center;
+  text-align: center;
+}
+.ag-header-cell.fw-list-more .ag-header-cell-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

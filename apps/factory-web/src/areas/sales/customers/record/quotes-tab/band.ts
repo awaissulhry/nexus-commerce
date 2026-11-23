@@ -237,7 +237,10 @@ export interface TabFacts {
 
 /** A section's state on the tab: its kind's counts under the door (folded when the door holds none of its kind). */
 export function sectionStateIn(tab: Pick<TabFacts, 'counts' | 'door' | 'terms'>, section: 'quotes' | 'incoming'): SectionState {
-  return section === 'quotes' ? sectionStateOf(quoteCountsOf(tab.counts), tab.terms.quotes === null, tab.door) : sectionStateOf(incomingCountsOf(tab.counts), tab.terms.incoming === null, tab.door)
+  // cq fx2 W-03 (10-design §2.4): a door that holds NONE of this kind folds the section to its quiet line ("No quote in this group.")
+  // — never the list's first-use empty state ("No quotes yet") for a customer who has them.
+  const empty = tab.door !== null && kindDoorCount(tab.counts, section, tab.door) === 0
+  return section === 'quotes' ? sectionStateOf(quoteCountsOf(tab.counts), tab.terms.quotes === null || empty, tab.door) : sectionStateOf(incomingCountsOf(tab.counts), tab.terms.incoming === null || empty, tab.door)
 }
 
 /** A customer with nothing before an order (and no door open): ONE card stands in for the sections (10-design §3.6). */

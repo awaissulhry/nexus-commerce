@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { CompanyRef } from '../../../../lib/session/session'
 import type { PartyDetail, PartyRow, QuoteListRow } from '../api'
 import type { DuplicateActions, DuplicateDone, DuplicateModel } from '../duplicate/model'
@@ -120,6 +121,8 @@ export interface QuotesListViewModel {
   quoteDialog?: QuoteDialogOpen | null
   /** F-CQ-304: the Reply-to-N window over the ticked quotes ("Ask <customer> about N quotes" / "Reply to <customer>…"). */
   reply?: ReplyManyModel | null
+  /** cq fx2 W-14: what the host left out, in the list's foot (the customer's tab: the closed groups as doors). */
+  foot?: ReactNode
   // ---- end F-CQ-201 / 202 / 204
   // ---- end F-CQ-102 / F-CQ-104
 }

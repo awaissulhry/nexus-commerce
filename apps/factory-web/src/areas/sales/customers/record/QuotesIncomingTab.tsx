@@ -20,10 +20,11 @@ import type { PageCounts } from './quotes-tab/use-before-order-counts' // F-CQ-3
 import { incomingLinksOf, quoteLinksOf } from './quotes-tab/links' // F-CQ-305: the dock's door line
 import { BEFORE_ORDER_NS } from './quotes-tab/view/BeforeOrderBand'
 // cq T: the tab's own parts, pure (the live tab and the design gallery draw the same ones)
-import { DraftsFrame, QuotesTabFrame, TabSection } from './quotes-tab/view/QuotesTabParts'
+import { DraftsFrame, QuotesTabFrame, SectionFoot, TabSection } from './quotes-tab/view/QuotesTabParts'
 import './quotes-tab/quotes-tab.css'
 // ---- F-CQ-205: the section "Customer is writing" — the customer's portal drafts, read only (the Work tab's own parts, mounted here)
 import { pictureReader } from '../../../../lib/record-picture/api'
+import { RecordPicture } from '../../../../lib/record-picture/view/RecordPicture' // cq fx2 W-06: the draft window's garment
 import { useCustomerDrafts } from './drafts/use-customer-drafts'
 import { CustomerDraftsList } from './drafts/view/CustomerDraftsList'
 import { DraftWindow } from './drafts/view/DraftWindow'
@@ -128,6 +129,9 @@ function QuotesSection({ party, onPick, onFocus, shown, tab, ask, hidden }: Host
   // F-CQ-104: the band's head asks for a New quote (the customer set: the list's own rule under a lock).
   useAsked(ask, 'quote', () => actions.onNewQuote?.(true))
   const state = sectionStateIn(tab, 'quotes')
+  // ---- cq fx2 W-08 / W-14: every state shown (no "left out" words); the closed groups as doors in the list's own foot.
+  const quotesEvery = model.filters.group === null && !model.filters.status
+  const quotesFoot = <SectionFoot kind="quotes" customer={party.name} tab={tab} every={quotesEvery} />
   // While a line stands in for the list (no frame, no "N updates · Show"), a live change reads the list again at once.
   useReadAgainWhenEmpty(state !== 'list', model.updates, actions.onShowUpdates)
   // A line stands in for the list: the ONE New quote window still opens here (with the list's own words).
@@ -138,11 +142,11 @@ function QuotesSection({ party, onPick, onFocus, shown, tab, ask, hidden }: Host
   ) : null
   if (hidden) return dialog
   return (
-    <TabSection kind="quotes" customer={party.name} tab={tab} aside={dialog}>
+    <TabSection kind="quotes" customer={party.name} tab={tab} aside={dialog} every={quotesEvery}>
       <ScopedListTools listKey={QUOTES_LIST_KEY} layoutKey={QUOTES_LAYOUT_KEY} page={`${prefix}${QUOTES_PATH}`} scope={scope}>
         <QuotesListView
           // F-SA-279: the docked quote's row marked; the keys' row docks after the rest. F-CQ-104: a phone card's door to the thread.
-          model={onFocus ? { ...model, active: { id: shown?.type === 'Quote' ? shown.id : null }, cardDoor: t('customers.work.dock.cardDoor') } : model}
+          model={onFocus ? { ...model, foot: quotesFoot, active: { id: shown?.type === 'Quote' ? shown.id : null }, cardDoor: t('customers.work.dock.cardDoor') } : { ...model, foot: quotesFoot }}
           actions={onFocus ? { ...actions, onFocusRow: (row) => onFocus({ type: 'Quote', id: row.id, label: row.number, companyId: row.companyId, links: quoteLinksOf(row) /* F-CQ-305 */ }) } : actions}
         />
       </ScopedListTools>
@@ -185,6 +189,9 @@ function IncomingSection({ party, onPick, onFocus, shown, tab, ask, hidden }: Ho
   // F-CQ-104: the band's head asks for a New request (the customer set).
   useAsked(ask, 'request', () => actions.onNew?.())
   const state = sectionStateIn(tab, 'incoming')
+  // ---- cq fx2 W-08 / W-14: Rows: All shows every state (no "left out" words); the closed groups as doors in the list's own foot.
+  const incomingEvery = model.address.tile === 'ALL'
+  const incomingFoot = <SectionFoot kind="incoming" customer={party.name} tab={tab} every={incomingEvery} />
   useReadAgainWhenEmpty(state !== 'list', model.updates, actions.onShowUpdates)
   // A line stands in for the list: the ONE New request window still opens here (with the list's own words).
   const dialog = model.newRequest ? (
@@ -194,11 +201,11 @@ function IncomingSection({ party, onPick, onFocus, shown, tab, ask, hidden }: Ho
   ) : null
   if (hidden) return dialog
   return (
-    <TabSection kind="incoming" customer={party.name} tab={tab} aside={dialog}>
+    <TabSection kind="incoming" customer={party.name} tab={tab} aside={dialog} every={incomingEvery}>
       <ScopedListTools listKey={INQUIRIES_LIST_KEY} layoutKey={INQUIRIES_LAYOUT_KEY} page={`${prefix}${PAGE_PATH}`} scope={scope}>
         <InquiriesView
           // F-SA-279: the docked request's row marked; the keys' row docks after the rest (a change request never: its talk is its order's).
-          model={onFocus ? { ...model, active: { pick: shown ? { type: shown.type, id: shown.id } : null }, cardDoor: t('customers.work.dock.cardDoor') } : model}
+          model={onFocus ? { ...model, foot: incomingFoot, active: { pick: shown ? { type: shown.type, id: shown.id } : null }, cardDoor: t('customers.work.dock.cardDoor') } : { ...model, foot: incomingFoot }}
           actions={onFocus ? { ...actions, onFocusRow: (row) => (row.kind === 'CHANGE_REQUEST' ? undefined : onFocus({ type: THREAD_TYPE[row.kind], id: row.id, label: row.number, companyId: row.companyId ?? null, links: incomingLinksOf(row) /* F-CQ-305 */ })) } : actions}
           slots={slots}
         />
@@ -232,14 +239,14 @@ function DraftsSection({ party, onPick, onFocus, shown, tab, hidden }: HostProps
         drafts.window &&
         draftRows && (
           <DraftWindow
-            model={{ customer: party.name, title: draftTitle(drafts.open, untitled), nav: draftsNav(draftRows, drafts.open.id), pane: drafts.window.model, thread: drafts.window.thread }}
+            model={{ customer: party.name, title: draftTitle(drafts.open, untitled), nav: draftsNav(draftRows, drafts.open.id), pane: drafts.window.model, thread: drafts.window.thread, picture: <RecordPicture source="portalOrder" recordId={drafts.open.id} number={draftTitle(drafts.open, untitled)} size="cell" read={readPictures} /> /* cq fx2 W-06 */ }}
             actions={{ pane: drafts.window.actions, onGo: drafts.onGo, onClose: drafts.onClose }}
           />
         )
       }
     >
       <CustomerDraftsList
-        model={{ customer: party.name, read: drafts.read, updates: drafts.updates, activeId: shown?.type === 'PortalOrderRequest' ? shown.id : null, wide: (tab.room ?? 0) >= 1100, pictures: { read: readPictures, header: b('drafts.picture') } }}
+        model={{ customer: party.name, read: drafts.read, updates: drafts.updates, activeId: shown?.type === 'PortalOrderRequest' ? shown.id : null, wide: (tab.room ?? 0) >= 1100, room: tab.room /* cq fx2 W-04 */, pictures: { read: readPictures, header: b('drafts.picture') } }}
         actions={{
           ...(onPick ? { onRow: (row: DraftRow) => onPick(draftPick(row, draftTitle(row, untitled))) } : {}),
           ...(onFocus ? { onFocusRow: (row: DraftRow) => onFocus(draftPick(row, draftTitle(row, untitled))) } : {}),

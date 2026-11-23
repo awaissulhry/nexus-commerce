@@ -24,6 +24,7 @@ import { WhereChips, type WhereChipWords } from '../../../_shared/where-cell/vie
 // quote's own windows on a row (in place)
 import { CANCELLABLE_QUOTES, orderMakeable, quoteBarOf, type QuoteActKind } from '../bar'
 import { ManyActDialog, ManyBar } from '../../../_shared/many-acts/view/ManyActDialog'
+import { MessagesHeader, MORE_CELL } from '../../../_shared/list-heads/ListHeads' // cq fx2 W-05: narrow headers whole
 import { TaskNewDialog } from '../../../../../record-panels/tasks/view/TaskNewDialog'
 import { QuoteDialogs } from '../../record/view/Dialogs'
 import { ReplyManyDialog } from '../../../orders/list/view/ReplyManyDialog' // F-CQ-304
@@ -266,8 +267,8 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
           : []),
         ...(model.grains.margin ? [{ colId: 'margin', headerName: marginLabel, field: 'marginPct', minWidth: 150, flex: 0, cellRenderer: MarginCell, hide: true, context: { optIn: true } } satisfies ColDef<QuoteListRow>] : []),
         wider({ colId: 'approval', headerName: t('list.col.approval'), field: 'approval', minWidth: 120, maxWidth: 140, cellRenderer: ApprovalCell }, 'XL'),
-        ...(model.unread ? ([{ colId: 'newMessages', headerName: l('column'), headerTooltip: l('columnHint'), minWidth: 52, maxWidth: 64, sortable: false, valueGetter: ({ data }: { data?: QuoteListRow }) => unreadValue(data ? latest.current.model.unread?.[data.id] : undefined), cellRenderer: NewMessagesCell }] satisfies ColDef<QuoteListRow>[]) : []),
-        { colId: 'more', headerName: t('list.col.more'), minWidth: 56, maxWidth: 56, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
+        ...(model.unread ? ([{ colId: 'newMessages', headerName: l('column'), headerTooltip: l('columnHint'), headerComponent: MessagesHeader /* cq fx2 W-05 */, minWidth: 52, maxWidth: 64, sortable: false, valueGetter: ({ data }: { data?: QuoteListRow }) => unreadValue(data ? latest.current.model.unread?.[data.id] : undefined), cellRenderer: NewMessagesCell }] satisfies ColDef<QuoteListRow>[]) : []),
+        { colId: 'more', headerName: t('list.col.more'), minWidth: 56, maxWidth: 56, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellClass: MORE_CELL, headerClass: MORE_CELL /* cq fx2 W-05 */, cellRenderer: MoreCell },
       ]
     }
     // ---- end F-CQ-102 / F-CQ-104
@@ -278,7 +279,8 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
       // F-CQ-102: the chips cell keeps the column's id (`status`: its file column and the saved layouts stay); its heading says what it holds.
       { colId: 'status', headerName: t('list.col.where'), field: 'status', minWidth: 220, flex: 1.4, cellRenderer: StatusCell, autoHeight: true },
       // B-TH-257: not drawn without threads.read (no count is ever made up).
-      ...(model.unread ? ([{ colId: 'newMessages', headerName: l('column'), headerTooltip: l('columnHint'), minWidth: 136, flex: 0.8, sortable: false, valueGetter: ({ data }: { data?: QuoteListRow }) => unreadValue(data ? latest.current.model.unread?.[data.id] : undefined), cellRenderer: NewMessagesCell }] satisfies ColDef<QuoteListRow>[]) : []),
+      // cq fx2 W-12: 116 px (with the ⋯ at 56) — the page fits 1314 px at 1440 (it scrolled 51 px sideways).
+      ...(model.unread ? ([{ colId: 'newMessages', headerName: l('column'), headerTooltip: l('columnHint'), minWidth: 116, flex: 0.8, sortable: false, valueGetter: ({ data }: { data?: QuoteListRow }) => unreadValue(data ? latest.current.model.unread?.[data.id] : undefined), cellRenderer: NewMessagesCell }] satisfies ColDef<QuoteListRow>[]) : []),
       { colId: 'units', headerName: t('list.col.units'), field: 'units', minWidth: 110, flex: 1, valueFormatter: (params) => (params.data ? t('list.units', { units: params.data.units, lines: params.data.lineCount }) : '') },
       ...(model.grains.price
         ? ([
@@ -290,7 +292,8 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
       { colId: 'approval', headerName: t('list.col.approval'), field: 'approval', minWidth: 125, flex: 1, cellRenderer: ApprovalCell },
       { colId: 'valid', headerName: t('list.col.validUntil'), field: 'validUntil', minWidth: 130, flex: 1, cellRenderer: ValidCell },
       { colId: 'updated', headerName: t('list.col.updated'), field: 'updatedAt', minWidth: 125, flex: 1, valueFormatter: (params) => (params.value ? formatDate(params.value as string, { locale }) : '—') },
-      { colId: 'more', headerName: t('list.col.more'), minWidth: 88, maxWidth: 88, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
+      // cq fx2 W-05 / W-12: the ⋯ whole in 56 px (no word over it), the page 32 px narrower (it scrolled 51 px at 1440).
+      { colId: 'more', headerName: t('list.col.more'), minWidth: 56, maxWidth: 56, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellClass: MORE_CELL, headerClass: MORE_CELL, cellRenderer: MoreCell },
     ]
     // The cells read the words, the language and the person's grains through the closure: a change rebuilds them.
   }, [t, l, locale, model.grains.price, model.grains.margin, model.today, recordHref, model.prefix, model.unread /* B-TH-257 */, model.readsRequests, model.readsOrders, host, tier, fold, say, model.customerName /* F-CQ-102 */])
@@ -330,9 +333,12 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
           </span>
         </div>
         <span className="fw-q-actions">
-          <Button size="sm" variant="primary" heldReason={model.can.manage ? null : t('held.noManage')} onClick={() => actions?.onNewQuote?.(true)} aria-keyshortcuts="c">
-            <Plus size={14} aria-hidden /> {t('list.new')}
-          </Button>
+          {/* cq fx2 W-13 (plan §5.5): a button you may not use is hidden — no New quote without quotes.manage. */}
+          {model.can.manage && (
+            <Button size="sm" variant="primary" onClick={() => actions?.onNewQuote?.(true)} aria-keyshortcuts="c">
+              <Plus size={14} aria-hidden /> {t('list.new')}
+            </Button>
+          )}
           {model.pageLinks && <QuotesPageLinks model={model.pageLinks} />}
         </span>
       </div>
@@ -470,12 +476,22 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
         state={state}
         focusRow={model.focusRow}
         // F-SA-279: on the customer page a row drives the host's dock (marked; the keys' row reported; ⌘↵ a new tab).
-        active={model.active ? { id: model.active.id, onFocusRow: (row) => actions?.onFocusRow?.(row), onOpenNewTab: (row) => (actions?.onOpenRow ? actions.onOpenRow(row.id, true) : window.open(`${model.prefix}/sales/quotes/${encodeURIComponent(row.id)}`, '_blank', 'noopener')), cardDoor: model.cardDoor ? { column: 'number', label: model.cardDoor, onOpen: (row) => actions?.onOpenRow?.(row.id, false) } : null /* F-CQ-104: the phone card's door to the thread */ } : null}
+        active={model.active ? { id: model.active.id, onFocusRow: (row) => actions?.onFocusRow?.(row), onOpenNewTab: (row) => (actions?.onOpenRow ? actions.onOpenRow(row.id, true) : window.open(`${model.prefix}/sales/quotes/${encodeURIComponent(row.id)}`, '_blank', 'noopener')), cardDoor: model.cardDoor ? { column: 'newMessages' /* cq fx2 W-01: never on the number (the card's title) */, label: model.cardDoor, onOpen: (row) => actions?.onOpenRow?.(row.id, false) } : null /* F-CQ-104: the phone card's door to the thread */ } : null}
         // F-CQ-104 (10-design §4.6): ONE card on a phone — the picture, the number, the chips cell, the new messages, ⋯ (the room hides the rest).
         cards={host ? { fields: HOST_CARD_FIELDS } : undefined}
+        // cq fx2 W-14 (10-design §3.4): a host's list says in its own foot the order's rule, the money note and what the host left out.
+        foot={
+          host ? (
+            <>
+              {model.filters.sort === 'urgent' && <span>{t('list.sort.ruleUrgent')}</span>}
+              {!model.grains.price ? <span>{os('export.noteNoPrice')}</span> : !model.grains.margin && <span>{t('list.noMarginNote')}</span>}
+              {model.foot}
+            </>
+          ) : undefined
+        }
       />
       {/* F-CQ-102 (Q1-B8): without prices the money columns are left out (the words say why, never "margin" alone); without the margin, the margin. */}
-      {!model.grains.price ? <p className="fw-q-hint">{os('export.noteNoPrice')}</p> : !model.grains.margin && <p className="fw-q-hint">{t('list.noMarginNote')}</p>}
+      {!host && (!model.grains.price ? <p className="fw-q-hint">{os('export.noteNoPrice')}</p> : !model.grains.margin && <p className="fw-q-hint">{t('list.noMarginNote')}</p>)}
 
       {model.newQuote && <NewQuoteDialog model={model.newQuote} actions={actions} />}
       {model.duplicate && <DuplicateDialog model={model.duplicate} canManage={model.can.manage} actions={actions} />}

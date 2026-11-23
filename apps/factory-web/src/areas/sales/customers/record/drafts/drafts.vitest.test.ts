@@ -133,11 +133,12 @@ describe('the view and its address (fx-12, review G4; F-CQ-303: the drafts moved
 })
 
 describe('read only: the decisions wait until the customer sends it', () => {
-  it('Accept as order, Accept as quote and Refuse are held with why on a draft (the pane draws them held, not hidden)', () => {
+  it('cq fx2 W-06: a draft draws NO decision (a button you may not use is hidden); the rule still holds them if asked', () => {
     const record = { request: { status: 'DRAFT' }, may: { order: false, quote: false, refuse: false } } as never
     for (const action of ['order', 'quote', 'refuse'] as const) expect(catalogueHeld(record, action, { orders: true, quotes: true }, false)).toEqual({ key: 'catalogue.held.DRAFT' })
     const pane = readFileSync(new URL('../../../inquiries/view/pane/catalogue/CataloguePane.tsx', import.meta.url), 'utf8')
-    expect(pane).toContain("main || (model.draft && request.status === 'DRAFT')")
+    expect(pane).toContain("{model.draft ? null : main ? (['order', 'quote', 'refuse'] as const).map(button)")
+    expect(pane).not.toContain("main || (model.draft && request.status === 'DRAFT')")
     const container = readFileSync(new URL('../../../inquiries/use-catalogue-order.tsx', import.meta.url), 'utf8')
     expect(container).toContain('!told.current.draft')
     const window = readFileSync(new URL('./view/DraftWindow.tsx', import.meta.url), 'utf8')

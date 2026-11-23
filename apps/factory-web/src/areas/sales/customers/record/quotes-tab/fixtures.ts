@@ -36,7 +36,7 @@ import type { DraftRow } from '../drafts/api'
 import { CustomerDraftsList, type CustomerDraftsListModel } from '../drafts/view/CustomerDraftsList'
 import { bandOf, doorAddress, DOORS, emptyTab, TAB_KINDS, tabRightsOf, termsOfDoor, type Door, type TabFacts } from './band'
 import { BEFORE_ORDER_NS } from './view/BeforeOrderBand'
-import { DraftsFrame, QuotesTabFrame, TabSection } from './view/QuotesTabParts'
+import { DraftsFrame, QuotesTabFrame, SectionFoot, TabSection } from './view/QuotesTabParts'
 
 /**
  * cq T (customer page › Quotes & incoming, 15-steps T.1; 10-design §1–§8): the tab's gallery — the REAL parts (the band, the sections,
@@ -272,11 +272,14 @@ export function QuotesTabDesign({ model }: { model: QuotesTabCase }) {
   const tab: TabFacts = { counts: model.counts, failed: model.failed ?? false, door: model.door, terms: termsOfDoor(model.door), rights: tabRightsOf(PERMISSIONS[model.role]), room: model.room, hrefs: hrefsUnder(base, model.door), everything: doorAddress(base, new URLSearchParams('tab=quotes'), null), prefix: PREFIX }
   const band = bandOf(tab.counts, tab.rights, tab.door)
   const hidden = emptyTab(band, tab.door)
-  const quotesList = createElement(QuotesListView, { model: { ...model.quotes, customerName: party.name } })
-  const incoming = hidden ? null : createElement(TabSection, { kind: 'incoming', customer: party.name, tab }, createElement(InquiriesView, { model: { ...model.incoming, customerName: party.name } }))
-  const quotes = hidden ? null : createElement(TabSection, { kind: 'quotes', customer: party.name, tab }, model.tools ? createElement(MemoryTools, { tools: model.tools }, quotesList) : quotesList)
+  // cq fx2 W-08 / W-14: every state shown says so; the closed groups as doors in each list's own foot (as the live tab hands them).
+  const quotesEvery = model.quotes.filters.group === null && !model.quotes.filters.status
+  const incomingEvery = model.incoming.address.tile === 'ALL'
+  const quotesList = createElement(QuotesListView, { model: { ...model.quotes, customerName: party.name, foot: createElement(SectionFoot, { kind: 'quotes', customer: party.name, tab, every: quotesEvery }) } })
+  const incoming = hidden ? null : createElement(TabSection, { kind: 'incoming', customer: party.name, tab, every: incomingEvery }, createElement(InquiriesView, { model: { ...model.incoming, customerName: party.name, foot: createElement(SectionFoot, { kind: 'incoming', customer: party.name, tab, every: incomingEvery }) } }))
+  const quotes = hidden ? null : createElement(TabSection, { kind: 'quotes', customer: party.name, tab, every: quotesEvery }, model.tools ? createElement(MemoryTools, { tools: model.tools }, quotesList) : quotesList)
   const picture = useT(BEFORE_ORDER_NS)('drafts.picture')
-  const drafts = hidden ? null : createElement(DraftsFrame, { customer: party.name, tab, window: model.window ?? null }, createElement(CustomerDraftsList, { model: { ...model.drafts, customer: party.name, pictures: { read: NO_PICTURES, header: picture } } }))
+  const drafts = hidden ? null : createElement(DraftsFrame, { customer: party.name, tab, window: model.window ?? null }, createElement(CustomerDraftsList, { model: { ...model.drafts, customer: party.name, room: model.room /* cq fx2 W-04 */, pictures: { read: NO_PICTURES, header: picture } } }))
   const frame = createElement(QuotesTabFrame, { model: { partyId: party.id, customer: party.name, tab, band }, incoming, quotes, drafts })
   return createElement('div', { style: { maxWidth: model.room, margin: '0 auto' } }, createElement(WithMessages, { namespaces: ['parties', BEFORE_ORDER_NS] }, frame))
 }

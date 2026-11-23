@@ -157,11 +157,12 @@ function Loaded({ model, actions, thread, row, nav, onClose, onNext, companyName
   return (
     <div className="fw-rp is-pane" data-place="pane">
       <header className="fw-rp-head">
+        {/* cq fx2 W-06: a draft shows its garment (the host's picture) and the page's one name for the customer. */}
         <span className="fw-rp-pic" aria-hidden>
-          <ShoppingCart size={16} />
+          {model.draft?.picture ?? <ShoppingCart size={16} />}
         </span>
-        <h2 className="fw-rp-title" title={`${number} · ${request.party.name}`}>
-          <span className="fw-rp-who">{request.party.name}</span>
+        <h2 className="fw-rp-title" title={`${number || model.draft?.title || ''} · ${model.draft?.customer ?? request.party.name}`}>
+          <span className="fw-rp-who">{model.draft?.customer ?? request.party.name}</span>
           <span className="fw-rp-sep" aria-hidden>
             —
           </span>
@@ -219,8 +220,9 @@ function Loaded({ model, actions, thread, row, nav, onClose, onNext, companyName
       {model.offline && <Banner tone="warning" title={t('record.offline')} />}
       <NoticeLine notice={model.notice} onDismiss={actions?.onDismissNotice} />
       <div className="fw-rp-row2">
-        {/* F-CP-107: a draft shows the decisions it will have, each held with why ("The customer is still writing it"). */}
-        <div className="fw-rp-actions">{main || (model.draft && request.status === 'DRAFT') ? (['order', 'quote', 'refuse'] as const).map(button) : <span className="fw-inq-hint">{say(outcome)}</span>}</div>
+        {/* cq fx2 W-06 (plan: a button you may not use is hidden): a draft the customer is still writing draws NO decision — the
+            window's banner says it is read only; a sent order draws its acts, or what became of it. */}
+        <div className="fw-rp-actions">{model.draft ? null : main ? (['order', 'quote', 'refuse'] as const).map(button) : <span className="fw-inq-hint">{say(outcome)}</span>}</div>
       </div>
       {main && ship?.approvalStatus === 'WAITING' && <p className="fw-inq-hint">{t('catalogue.shipToWaiting')}</p>}
       <div className="fw-rp-body">

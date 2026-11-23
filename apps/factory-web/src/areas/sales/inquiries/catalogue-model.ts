@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { CatalogueAccepted, CatalogueRecord } from './api'
 import type { InquiriesCan, Loaded, Notice, Phrase } from './model'
 // ---- F-CP-157: the accept's line map ----
@@ -313,7 +314,8 @@ export interface CatalogueModel {
   /** Someone else decided or changed it while it was open: when. */
   readonly handled: string | null
   /** F-CP-107: the customer's portal draft read on its customer page (read only; its title); absent: a sent catalogue order. */
-  readonly draft?: { readonly title: string } | null
+  // cq fx2 W-06: + the page's one name for the customer (the band's: never the legal name) and the draft's picture (its first style).
+  readonly draft?: { readonly title: string; readonly customer?: string; readonly picture?: ReactNode } | null
 }
 
 export interface CatalogueActions {

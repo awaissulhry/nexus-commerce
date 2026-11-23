@@ -54,7 +54,8 @@
     "countOpen": "{open} aperte · {closed} chiuse restano fuori",
     "countNotClosed": "{open} non chiusi · {closed} chiusi restano fuori",
     "countGroup": "{count} in «{group}»",
-    "writingSub": "bozze nel portale di {customer} · sola lettura · mai contate come cose che toccano a noi"
+    "writingSub": "bozze nel portale di {customer} · sola lettura · mai contate come cose che toccano a noi",
+    "countAll": "{count}, ogni stato"
   },
   "empty": {
     "tab": "{customer} non ha ancora niente prima dell’ordine: nessuna richiesta, nessun preventivo, nessuna bozza.",
@@ -188,12 +189,42 @@
     },
     "request": {
       "title_one": "Nuova attività su {count} richiesta",
-      "title_other": "Nuova attività su {count} richieste e ordini dal portale",
-      "assigneeHint": "Tu, o una persona che può leggere queste richieste e ordini dal portale.",
+      "title_other": "Nuova attività su {count} richieste",
+      "assigneeHint": "Tu, o una persona che può leggere queste richieste.",
       "supervisor": "Il responsabile di produzione del cliente di ogni richiesta",
       "noSupervisor_one": "{count} richiesta non ha un responsabile di produzione per il suo cliente: scegli una persona, o la sua attività resta fuori.",
-      "noSupervisor_other": "{count} richieste e ordini dal portale non hanno un responsabile di produzione per il loro cliente: scegli una persona, o le loro attività restano fuori.",
+      "noSupervisor_other": "{count} richieste non hanno un responsabile di produzione per il loro cliente: scegli una persona, o le loro attività restano fuori.",
       "where": "Ogni attività è sulla sua richiesta: nella sua conversazione e in Home › Le mie attività di chi la riceve.",
+      "held": {
+        "none": "Spunta prima le richieste.",
+        "tooMany": "Al massimo {max} richieste alla volta."
+      },
+      "made": "Attività creata · per {name}",
+      "due": "entro il {date}"
+    },
+    "portal": {
+      "title_one": "Nuova attività su {count} ordine dal portale",
+      "title_other": "Nuova attività su {count} ordini dal portale",
+      "assigneeHint": "Tu, o una persona che può leggere questi ordini dal portale.",
+      "supervisor": "Il responsabile di produzione del cliente di ogni ordine dal portale",
+      "noSupervisor_one": "{count} ordine dal portale non ha un responsabile di produzione per il suo cliente: scegli una persona, o la sua attività resta fuori.",
+      "noSupervisor_other": "{count} ordini dal portale non hanno un responsabile di produzione per il loro cliente: scegli una persona, o le loro attività restano fuori.",
+      "where": "Ogni attività è sul suo ordine dal portale: nella sua conversazione e in Home › Le mie attività di chi la riceve.",
+      "held": {
+        "none": "Spunta prima gli ordini dal portale.",
+        "tooMany": "Al massimo {max} ordini dal portale alla volta."
+      },
+      "made": "Attività creata · per {name}",
+      "due": "entro il {date}"
+    },
+    "incoming": {
+      "title_one": "Nuova attività su {count} richiesta o ordine dal portale",
+      "title_other": "Nuova attività su {count} richieste e ordini dal portale",
+      "assigneeHint": "Tu, o una persona che può leggere queste richieste e ordini dal portale.",
+      "supervisor": "Il responsabile di produzione del cliente di ogni record",
+      "noSupervisor_one": "{count} richiesta o ordine dal portale non ha un responsabile di produzione per il suo cliente: scegli una persona, o la sua attività resta fuori.",
+      "noSupervisor_other": "{count} richieste e ordini dal portale non hanno un responsabile di produzione per il loro cliente: scegli una persona, o le loro attività restano fuori.",
+      "where": "Ogni attività è sulla sua richiesta o sul suo ordine dal portale: nella sua conversazione e in Home › Le mie attività di chi la riceve.",
       "held": {
         "none": "Spunta prima le richieste e ordini dal portale.",
         "tooMany": "Al massimo {max} richieste e ordini dal portale alla volta."

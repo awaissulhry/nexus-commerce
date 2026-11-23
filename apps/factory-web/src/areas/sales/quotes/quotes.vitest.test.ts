@@ -711,7 +711,9 @@ describe('F-CQ-102: the Quotes list — group and order terms, the chips cell, t
     expect(view).not.toContain("previewHref(data.id, 'it')")
     expect(view).not.toContain("description: live.current.manage ? undefined : t('held.noManage')")
     // The money note says the truth (Q1-B8): without prices the money columns, not "margin".
-    expect(view).toContain("{!model.grains.price ? <p className=\"fw-q-hint\">{os('export.noteNoPrice')}</p>")
+    // cq fx2 W-14: on the page the note stays under the list; on a host it is in the list's own foot.
+    expect(view).toContain("{!host && (!model.grains.price ? <p className=\"fw-q-hint\">{os('export.noteNoPrice')}</p>")
+    expect(view).toContain("{!model.grains.price ? <span>{os('export.noteNoPrice')}</span>")
   })
 
   it('a customer\'s tab counts only its own live changes: a quote on the screen or a new quote (a quote\'s message names no customer)', () => {
