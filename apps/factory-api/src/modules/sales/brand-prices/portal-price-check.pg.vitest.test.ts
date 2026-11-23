@@ -14,6 +14,7 @@ import { freshGuard, mailedCode, portalBrowser, portalWorld, type PortalWorld } 
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { addUser, Browser, enrolTotp, startHarness, type Answer, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 import { SLOW_TEST_TIMEOUT_MS } from '../../../testing/timeouts'
+import { readableText } from '../../../testing/readable' // cw-fx9
 // B-CP-021: the alert's fan-out, as the worker runs it.
 import type { EventEnvelope } from '@nexus/factory-domain/events/envelope'
 import { MESSAGE_TEMPLATES } from '@nexus/factory-domain/notifications/rules'
@@ -399,7 +400,10 @@ describe('B-CP-021 one alert when the customer changes its price in the portal �
       expect(words).not.toMatch(/\{figure\}|\{count\}|≠|\d/)
       expect(words).toContain('{record}')
     }
-    expect(JSON.stringify(rows)).not.toMatch(/399|420/)
+    // cw-fx9: no amount in anything the person reads of the alert — its category, key, parameters, record and label, in every row.
+    // The generated ids are left out: the Owner's user id once ended "…88e2939977b7", and "399" in it failed this check by chance.
+    expect(rows.length).toBeGreaterThan(0)
+    expect(readableText(rows)).not.toMatch(/399|420/)
     // Never a thread line.
     expect((await threadLines(order.id)).count).toBe(lines)
     // A replayed event makes no second alert.
