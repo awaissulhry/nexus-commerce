@@ -4,6 +4,7 @@ import { LOCALES } from '../../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
 import type { OrderStatus } from '../../api'
 import { BAR_ORDER, BAR_PROMOTED, NO_BAR_CAN, barAllowed, barHeld, barOf, type BarAct, type BarActId, type BarCan, type BarRow } from './bar'
+import { NEW_DRAFT, presetDraftOf } from '../../../../production/_shared/notes/model' // cw fx4: the ask's own rule
 
 /**
  * F-CW-202 (customer Work tab plan §4; 10-design §4, §8; 13-backend §8; lead settles S8, S9, S36, S37) — the bar of ticked orders on
@@ -161,8 +162,16 @@ describe('F-CW-202: held with words only by a state, a cap or orders of more tha
 
 describe('F-CW-202: Ask ▾ — a menu for every role that writes (S37)', () => {
   it('"Ask production about N…": a note to each order\'s supervisor that needs an answer; held like Note to N (one customer, 100)', () => {
-    // Its Send word is the Note window's own ("Write on 3"): the view hands it (source).
-    expect(readFileSync(new URL('../view/OrdersListView.tsx', import.meta.url), 'utf8')).toContain("send: n('send', { count: picked.length }) }),")
+    // cw fx4: the RULE, not a fragment of a line (W3 added a field to that line and a literal pin broke) — the ask is the Note
+    // window's own preset: "Needs an answer" ticked, each record's supervisor asked, the text left to the writer.
+    const asked = presetDraftOf(NEW_DRAFT, { title: 'Ask production about 3 orders', body: '', needsAnswer: true, send: 'Write on 3' })
+    expect([asked.needsAnswer, asked.askSupervisor, asked.body]).toEqual([true, true, ''])
+    expect(NEW_DRAFT.needsAnswer).toBe(false) // a plain Note to N does not ask
+    // Its title and its Send word are handed by the view — the Send word the Note window's own ("Write on 3"), whatever else the
+    // preset carries (source; any other field may stand beside them).
+    const view = readFileSync(new URL('../view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toMatch(/askProduction: \(\) => actions\?\.onAskProduction\?\.\(pickedIds, \{[^\n]*title: s\('bar\.askProductionTitle', \{ count: picked\.length \}\)[^\n]*send: n\('send', \{ count: picked\.length \}\)/)
+    for (const locale of LOCALES) expect(createTranslator(locale, messagesFor(locale, ['production-notes'])['production-notes']!)('send', { count: 3 }), locale).toContain('3')
     const askOf = (bar: ReturnType<typeof barOf>): BarAct => bar.promoted.find((act) => act.id === 'ask')!
     const ask = askOf(barOf(ROLE.warehouse, rows(3), HOST))
     expect(ask).toMatchObject({ id: 'ask', held: null })
@@ -204,7 +213,10 @@ describe('F-CW-202: Ask ▾ — a menu for every role that writes (S37)', () => 
 
   it('it opens production\'s ONE Note window as an ask — the supervisor asked, "Needs an answer" ticked (source)', () => {
     const hook = readFileSync(new URL('../use-orders-sheet.ts', import.meta.url), 'utf8')
-    expect(hook).toContain("onAskProduction: (ids, words) => note.open(noteTargetsOf(pickedRows(ids)), 'selection', undefined, { title: words.title, body: '', needsAnswer: true, send: words.send, ...(words.hint ? { hint: words.hint } : {}) /* F-CW-303 */ }),")
+    // cw fx4: the rule (the same Note window, over the ticked orders, opened with "Needs an answer" and an empty text) — whatever
+    // other field the preset carries.
+    expect(hook).toMatch(/onAskProduction: \(ids, words\) => note\.open\(noteTargetsOf\(pickedRows\(ids\)\), 'selection', undefined, \{[^\n]*body: ''[^\n]*needsAnswer: true[^\n]*send: words\.send/)
+    expect(hook).not.toMatch(/onAskProduction:[^\n]*needsAnswer: false/)
     const notes = readFileSync(new URL('../../../../production/_shared/notes/model.ts', import.meta.url), 'utf8')
     expect(notes).toContain('askSupervisor: preset.askSupervisor ?? true')
     for (const locale of LOCALES) {
