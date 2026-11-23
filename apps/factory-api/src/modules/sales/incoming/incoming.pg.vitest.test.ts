@@ -21,6 +21,10 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { startHarness, type Harness } from '../../../platform/auth/sessions/testing/harness'
 import { inquiries as exportSource } from '../inquiries/export-source'
 import { waitingCount } from './incoming' // B-SA-010
+// B-CQ-050: a question of ours on a request's thread, written through the threads' seam.
+import { command } from '../../../core/command'
+import type { RequestContext } from '../../../core/context'
+import { ensureThread, writeMessage } from '../../../platform/threads/threads'
 
 /**
  * B-TH-039 (threads plan G2, L2-G07; O-SAL-INQ-LIST.list / .tiles / .band, O-HOME-TODAY.incoming, O-HOME-APV.list; wall W27/W30,
@@ -446,5 +450,45 @@ describe('B-CQ: the tiles TO_ANSWER and ENDED, the `kinds` term, and the before-
     expect(refused.statusCode).toBe(404)
     expect(refused.json().error.message).toBe('Customer not found.')
   })
+
+  // ---- B-CQ-050 (PR S2; Q2-B7): the wait clock of a request waiting on the customer
+  it('B-CQ-050: a request waiting on the customer counts from our newest question on its thread — the thread head’s own number; NEW unchanged', async () => {
+    const post = (url: string, payload: unknown) => app.inject({ method: 'POST', url, payload: payload as object, headers: { 'x-test-session': 'sales', 'x-run': run, 'idempotency-key': `cq050-${run}-${newId()}` } })
+    const rowOf = async (number: string): Promise<Json> => ((await list('sales', 'tile=ALL')).rows as Json[]).find((row) => row.number === number)!
+    const fresh = await rowOf('SEED-INQ-0001')
+    // P3's ASSIGNED request (SEED-INQ-0002, since 3 Nov) now waits on the customer (the real route, no message): from arrival, as
+    // nothing of ours is on its thread yet.
+    const target = await rowOf('SEED-INQ-0002')
+    expect((await post(`/sales/inquiries/${target.id}/ask-info`, { version: target.version })).statusCode).toBe(200)
+    const waiting = await rowOf('SEED-INQ-0002')
+    expect(waiting.waiting.for).toBe('CUSTOMER')
+    const fromArrival = waiting.waiting.workingMinutes as number
+    expect(fromArrival).toBeGreaterThan(60)
+    try {
+      // Our question an hour ago on its thread (the threads' seam, as a seeded office person).
+      const askedAt = new Date(Date.now() - 3_600_000)
+      const context = { audience: 'office', tenantId: T, actorId: idOf('user:member'), grants: [grant(SALES)], requestId: newId() } as unknown as RequestContext
+      await command(callerFor(h.database, context), { name: 'threads.postNote', input: { inquiryId: target.id } }, async (tools) => {
+        const { thread } = await ensureThread(tools, { type: 'Inquiry', id: target.id }, idOf('user:member'))
+        await writeMessage(tools, thread, { direction: 'OUTBOUND', channel: 'EMAIL', author: { kind: 'USER', id: idOf('user:member'), name: 'Made-up member' }, bodyText: 'Made-up: which sizes, please?', at: askedAt })
+        return { done: true }
+      })
+      const after = await rowOf('SEED-INQ-0002')
+      expect(after.waiting.for).toBe('CUSTOMER')
+      expect(after.waiting.workingMinutes as number).toBeLessThanOrEqual(60)
+      expect(after.waiting.workingMinutes as number).toBeLessThan(fromArrival)
+      // The row and the thread head tell one wait (one rule; minutes read a moment apart).
+      const head = (await get('sales', `/threads/Inquiry/${target.id}`)).head
+      expect(head.waiting).toMatchObject({ on: 'CUSTOMER', since: askedAt.toISOString() })
+      expect(Math.abs((head.waiting.workingMinutes as number) - (after.waiting.workingMinutes as number))).toBeLessThanOrEqual(1)
+      // A request that waits on us keeps counting from when it came.
+      expect(Math.abs(((await rowOf('SEED-INQ-0001')).waiting.workingMinutes as number) - (fresh.waiting.workingMinutes as number))).toBeLessThanOrEqual(2)
+    } finally {
+      // Back as it was: the customer answered (ASSIGNED again).
+      const back = await rowOf('SEED-INQ-0002')
+      expect((await post(`/sales/inquiries/${target.id}/resume`, { version: back.version })).statusCode).toBe(200)
+    }
+  })
+  // ---- end B-CQ-050
 })
 // ---- end B-CQ

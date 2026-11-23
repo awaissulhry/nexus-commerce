@@ -11,6 +11,10 @@ import { WORKING_DAY_MINUTES, waitingFor as requestWaitingFor, type InquiryStatu
  *   any other record     by its newest SHARED message (an office note never flips it): the customer's or supplier's (INBOUND)
  *                        waits on US since it came, ours (OUTBOUND) waits on the CUSTOMER since we sent it. No party or no
  *                        shared message yet: no pill. Amber after 3 working days on us.
+ *                        B-CQ-051 (customer page › Quotes & incoming, Q4-B7): a CLOSED record (a quote accepted, declined, expired
+ *                        or cancelled; a portal order decided) waits on nobody on the customer side — the customer's yes by link,
+ *                        the morning expiry and the office cancel write no message, so our last mail would say "waiting on the
+ *                        customer" for ever; a later INBOUND message still waits on US (we owe the answer).
  *
  * Waiting on the customer is never amber (it is not ours to answer): the pill shows its time only. The working minutes come from
  * the record's company calendar (the API's); without a calendar, clock minutes (said in the pill's tooltip).
@@ -36,6 +40,8 @@ export interface WaitingFacts {
   readonly lastOutbound?: Date | null | undefined
   /** The record has a customer or supplier to wait on. */
   readonly hasParty: boolean
+  /** B-CQ-051: the record (not a request) is closed: nobody waits on the customer any more. */
+  readonly closed?: boolean | undefined
 }
 
 export interface Waiting {
@@ -53,6 +59,8 @@ export function waitingOf(facts: WaitingFacts): Waiting | null {
     return { on, since, thresholdDays: WAITING_THRESHOLD_DAYS.REQUEST }
   }
   if (!facts.hasParty || facts.lastShared === null) return null
+  // B-CQ-051: closed, ours was the last word: nobody waits (theirs still waits on us).
+  if (facts.closed === true && facts.lastShared.direction === 'OUTBOUND') return null
   return { on: facts.lastShared.direction === 'INBOUND' ? 'US' : 'CUSTOMER', since: facts.lastShared.at, thresholdDays: WAITING_THRESHOLD_DAYS.OTHER }
 }
 

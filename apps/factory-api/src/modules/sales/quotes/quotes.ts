@@ -330,7 +330,7 @@ export async function updateQuote(caller: CommandCaller, quoteId: string, body: 
  * every accept link of the quote stops working (revoked; their evidence stays); a draft revision and the sent version
  * it would replace go together. A firm offer is not withdrawn before its last day (c.c. art. 1329).
  */
-export async function cancelQuote(caller: CommandCaller, quoteId: string, body: { version: number; reason?: string | null | undefined }, idempotencyKey?: string): Promise<{ quote: QuoteDetail }> {
+export async function cancelQuote(caller: CommandCaller, quoteId: string, body: { version: number; reason?: string | null | undefined; batchId?: string | undefined /* B-CQ-040 */ }, idempotencyKey?: string): Promise<{ quote: QuoteDetail }> {
   const quote = await officeQuote(caller, quoteId, QUOTES_MANAGE)
   return onQuote(caller, quote, { name: 'quotes.cancel', idempotencyKey, input: { quoteId, ...body }, version: body.version }, async (tools, current, version) => {
     if (!OPEN_BEFORE_SEND.includes(version.status) && version.status !== 'SENT') throw new InvalidStateError(`The quote is ${STATUS_WORDS[version.status]}; it cannot be cancelled.`)
@@ -355,7 +355,8 @@ export async function cancelQuote(caller: CommandCaller, quoteId: string, body: 
       after: { status: 'CANCELLED', withdrawnApprovalId: withdrawn, cancelledVersionIds: ids, revokedLinkIds },
       ...(reason ? { reason } : {}),
     })
-    tools.emit({ type: 'quote.cancelled', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, partyId: current.partyId /* B-SA-004b */ } })
+    // B-CQ-040: one of N cancelled in one act: its batch (the followers' bell folds them).
+    tools.emit({ type: 'quote.cancelled', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, partyId: current.partyId /* B-SA-004b */, ...(body.batchId ? { batchId: body.batchId } : {}) } })
     return detailInCommand(tools, current.id)
   })
 }
