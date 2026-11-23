@@ -62,7 +62,8 @@
     "incomingNone": "Ancora nessuna richiesta o ordine dal portale da {customer}.",
     "quotesNone": "Ancora nessun preventivo per {customer}.",
     "incomingNoLive": "Niente di {customer} è in attesa ora.",
-    "closedDoors": "Chiusi ({count}):"
+    "closedDoors": "Chiusi ({count}):",
+    "quotesNoLive": "Nessun preventivo aperto per {customer}."
   },
   "fold": {
     "incoming": "Nessuna richiesta o ordine dal portale in questo gruppo.",
@@ -203,5 +204,12 @@
   },
   "drafts": {
     "picture": "Immagine"
+  },
+  "dock": {
+    "cameFromRequest": "Viene da: richiesta {number} ›",
+    "cameFromPortal": "Viene da: ordine dal portale {number} ›",
+    "becameQuote": "Ora è: preventivo {number} ›",
+    "becameOrder": "Ora è: ordine {number} ›",
+    "line": "Da dove viene e dove è andato"
   }
 }

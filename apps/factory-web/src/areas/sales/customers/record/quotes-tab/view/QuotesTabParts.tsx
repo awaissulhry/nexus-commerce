@@ -92,7 +92,8 @@ export function TabSection({ kind, customer, tab, children, aside }: { kind: 'qu
         <p className="fw-qt-quiet">{b(kind === 'quotes' ? 'empty.quotesNone' : 'empty.incomingNone', { customer })}</p>
       ) : state === 'onlyClosed' ? (
         <p className="fw-qt-quiet">
-          {kind === 'quotes' ? t('customers.quotesTab.noQuotes', { customer }) : b('empty.incomingNoLive', { customer })} <ClosedDoors tab={tab} kind={kind} lead="empty" customer={customer} />
+          {/* F-CQ-305: the tab's own words (parties' `customers.quotesTab.noQuotes / noRequests` were removed). */}
+          {b(kind === 'quotes' ? 'empty.quotesNoLive' : 'empty.incomingNoLive', { customer })} <ClosedDoors tab={tab} kind={kind} lead="empty" customer={customer} />
         </p>
       ) : (
         <>
