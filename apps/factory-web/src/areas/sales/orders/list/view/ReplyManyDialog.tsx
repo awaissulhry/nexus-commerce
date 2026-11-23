@@ -11,6 +11,7 @@ import { WithMessages } from '../../../../../record-panels/i18n'
 import { NAMESPACE as SHEET, type Phrase } from '../sheet/model'
 import { languageInSentence, replyComposerContext, replyReceipt, replySendHeld, sentOf, targetLabel, toSend, type ReplyManyActions, type ReplyManyModel } from '../reply-many'
 import { previewLabel } from '../reply-many' // B-SA-070b
+import { replyKey } from '../reply-many' // F-CQ-304: the records' own words
 // ---- F-CW-203: the to-do tick ("Ask <customer> about N…") ----
 import { addDays } from '../../../../admin/users/partners/model'
 import { romeToday } from '../../model'
@@ -45,7 +46,8 @@ function Dialog({ model, actions }: { model: ReplyManyModel; actions?: ReplyMany
       open
       size="md"
       onClose={() => actions?.onClose?.()}
-      title={s(model.asked ? 'reply.askTitle' : 'reply.title', { customer: model.customer.name, count: model.targets.length }) /* F-CW-203: opened from Ask ▾ */}
+      // F-CQ-304: the records' own words ("Ask … about 3 quotes", "Reply to … on 2 requests"); orders keep theirs.
+      title={s(replyKey(model.recordType, model.asked ? 'askTitle' : 'title'), { customer: model.customer.name, count: model.targets.length }) /* F-CW-203: opened from Ask ▾ */}
       footer={
         model.done ? (
           <>
@@ -85,8 +87,8 @@ export function ReplyManyBody({ model, actions }: { model: ReplyManyModel; actio
     const receipt = replyReceipt(model.targets, model.results)
     return (
       <div className="fw-srm">
-        <Banner tone={receipt.sent > 0 ? 'success' : 'warning'} title={receipt.sent > 0 ? s('reply.result.title', { count: receipt.sent, customer }) : s('reply.result.none')} />
-        <ul className="fw-srm-results" aria-label={s('reply.result.label')}>
+        <Banner tone={receipt.sent > 0 ? 'success' : 'warning'} title={receipt.sent > 0 ? s(replyKey(model.recordType, 'result.title') /* F-CQ-304 */, { count: receipt.sent, customer }) : s('reply.result.none')} />
+        <ul className="fw-srm-results" aria-label={s(replyKey(model.recordType, 'result.label') /* F-CQ-304 */)}>
           {receipt.lines.map((line) => (
             <li key={line.id} className="fw-srm-result">
               {line.result?.state === 'sent' ? <CheckCircle2 size={14} aria-hidden /> : <XCircle size={14} aria-hidden />}
@@ -132,11 +134,12 @@ export function ReplyManyBody({ model, actions }: { model: ReplyManyModel; actio
           <span>{s('reply.reads', { customer, language })}</span>
         </p>
       )}
-      {sent.length > 0 && <p className="fw-srm-hint">{s('reply.already', { count: sent.length, orders: sent.map(targetLabel).join(', ') })}</p>}
+      {/* F-CQ-304: each line in the records' own words (a quote, a request); orders keep theirs. */}
+      {sent.length > 0 && <p className="fw-srm-hint">{s(replyKey(model.recordType, 'already'), { count: sent.length, orders: sent.map(targetLabel).join(', ') })}</p>}
       <div className="fw-srm-orders">
-        <p className="fw-srm-heading">{s('reply.preview', { customer, count: pending.length })}</p>
+        <p className="fw-srm-heading">{s(replyKey(model.recordType, 'preview'), { customer, count: pending.length })}</p>
         <p className="fw-srm-list">{pending.map((target) => previewLabel(target, s) /* B-SA-070b */).join(', ')}</p>
-        <p className="fw-srm-hint">{s('reply.each')}</p>
+        <p className="fw-srm-hint">{s(replyKey(model.recordType, 'each'))}</p>
       </div>
       {/* F-CW-203: ONE tick — a to-do "Answer our message" in the customer's list, one per order, after its message is posted. Drawn
           only for a reader who may make a customer's to-dos; ON when the window opens from Ask ▾, OFF from Reply to N. */}
@@ -146,7 +149,7 @@ export function ReplyManyBody({ model, actions }: { model: ReplyManyModel; actio
             <Checkbox checked={todo.on} disabled={model.sending} onChange={(event) => actions?.onTodo?.({ ...todo, on: event.target.checked })} label={s('reply.todo.tick')} />
             <DateField value={todo.due} onChange={(due) => actions?.onTodo?.({ ...todo, due })} locale={INTL_LOCALE[locale]} min={addDays(today, 1)} clearable clearLabel={s('reply.todo.noDate')} ariaLabel={s('reply.todo.date')} disabled={!todo.on || model.sending} />
           </div>
-          <p className="fw-srm-hint">{s('reply.todo.hint', { customer })}</p>
+          <p className="fw-srm-hint">{s(replyKey(model.recordType, 'todo.hint') /* F-CQ-304 */, { customer })}</p>
         </div>
       )}
       <Composer

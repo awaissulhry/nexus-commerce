@@ -66,6 +66,8 @@ import { useTaskBatch } from '../_shared/many-acts/use-task-batch'
 import { incomingActOf } from './acts'
 import { bulkRefusalsOf, type BulkPreview } from './model'
 import { openRequests, type IncomingActKind, type IncomingRecord } from './bar'
+import { replyRowOf, replyTypeOf } from './bar' // F-CQ-304
+import { useReplyMany } from '../orders/list/use-reply-many' // F-CQ-304: Reply to N given a record type
 import { useInquiry } from './use-inquiry'
 // B-TH-228: which receipts stay on the page when the queue moves on.
 import { receiptStays } from './model'
@@ -460,6 +462,11 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
   })
   const tasks = useTaskBatch(api)
   const openTasks = useCallback((rows: readonly IncomingRow[]) => tasks.open(rows.map((row) => ({ type: THREAD_TYPE[row.kind], id: row.id, label: row.number, supervisor: null }))), [tasks])
+  // ---- F-CQ-304 (13-backend §11): Reply to <customer> on N — the Orders sheet's ONE window on the ticked requests and portal orders
+  // (one customer, at most 50, ONE batchId; each record's own conversation: Inquiry / PortalOrderRequest). No to-do tick from here.
+  const reply = useReplyMany(api, session.permissions, () => void load())
+  const onReply = (rows: readonly IncomingRow[]) => reply.open(rows.map(replyRowOf), lock, { recordType: replyTypeOf(rows) })
+  // ---- end F-CQ-304
   // ---- end F-CQ-201 / 203
 
   const onRowVerb = useCallback(
@@ -636,9 +643,10 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
     locked: !!lock,
     // ---- end F-SA-277
     // ---- F-CQ-201 / 204: the bar's rights, the windows open now (the loop, Add task, a row's own window in place)
-    barRights: { manage: can.manage, tasks: session.permissions.includes('tasks.manage') },
+    barRights: { manage: can.manage, tasks: session.permissions.includes('tasks.manage'), threads: session.permissions.includes('threads.post') /* F-CQ-304 */ },
     many: many.model,
     tasks: tasks.model,
+    reply: reply.model, // F-CQ-304
     verb: paneHost && verbTarget ? record.model : null,
     catalogueVerb: paneHost && catalogueTarget ? catalogue.model : null,
     // ---- F-CQ-103 / F-CQ-104: the host's face (its kinds, its door's row, the order and whether it is held, columns by its room)
@@ -710,11 +718,24 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
       const preview: BulkPreview = { runs: open.length, others: picked.length - open.length }
       if (kind === 'assign' || kind === 'decline') return actions.onBulk?.(kind, open.map((row) => row.id), preview)
       if (kind === 'addTask') return openTasks(picked)
+      if (kind === 'reply') return onReply(picked) // F-CQ-304
       const records = picked.map(recordOf)
       many.open(incomingActOf(kind, api, records), records)
     },
     many: many.actions,
     tasks: { onSend: tasks.onSend, onRetryPeople: tasks.onRetryPeople, onClose: tasks.onClose },
+    // ---- F-CQ-304: Reply to <customer> on N (the bar, a row's ⋯); the receipt's record name docks its thread where the host docks.
+    onReply,
+    reply: host.onRowClick
+      ? {
+          ...reply.actions,
+          onOrder: (id: string) => {
+            const row = rowsNow.current.find((entry) => entry.id === id)
+            if (row) host.onRowClick?.(row, false)
+          },
+        }
+      : reply.actions,
+    // ---- end F-CQ-304
     // ---- end F-CQ-201 / 203
     bulk: {
       onAssign: (assigneeId) => void bulkAssign(assigneeId),

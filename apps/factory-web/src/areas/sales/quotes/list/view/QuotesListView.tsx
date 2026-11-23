@@ -26,6 +26,7 @@ import { CANCELLABLE_QUOTES, orderMakeable, quoteBarOf, type QuoteActKind } from
 import { ManyActDialog, ManyBar } from '../../../_shared/many-acts/view/ManyActDialog'
 import { TaskNewDialog } from '../../../../../record-panels/tasks/view/TaskNewDialog'
 import { QuoteDialogs } from '../../record/view/Dialogs'
+import { ReplyManyDialog } from '../../../orders/list/view/ReplyManyDialog' // F-CQ-304
 import { DuplicateDialog } from '../../duplicate/view/DuplicateDialog'
 import type { NewQuoteModel, QuotesListActions, QuotesListViewModel } from '../list-model'
 import '../../quotes.css'
@@ -208,6 +209,8 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
         ...(can.send && latest.current.model.grains.price && data.status === 'APPROVED' ? [{ id: 'send', label: t('list.row.sendOnPage'), href: `${recordHref(data)}?tab=approval` }] : []),
         ...(manage && ['SENT', 'EXPIRED', 'DECLINED'].includes(data.status) ? [{ id: 'revise', label: `${t('action.revise', { next: data.revision + 1 })}…`, onSelect: act('revise') }] : []),
         ...(rights?.orders && orderMakeable(data) ? [{ id: 'makeOrder', label: `${t('record.makeOrder')}…`, onSelect: act('makeOrders') }] : []),
+        // F-CQ-304: Reply to <customer>… on this one quote (threads.post): the Reply-to-N window with one record, the tick OFF.
+        ...(rights?.threads ? [{ id: 'reply', label: t('list.row.reply', { customer: latest.current.model.customerName ?? data.partyName }), onSelect: act('reply') }] : []),
         ...(rights?.tasks ? [{ id: 'addTask', label: t('list.row.addTask'), onSelect: act('addTask') }] : []),
       ]
     }
@@ -515,6 +518,8 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
         />
       )}
       {model.quoteDialog && <QuoteDialogs quote={model.quoteDialog.quote} model={model.quoteDialog.model} actions={actions?.quoteDialog} />}
+      {/* F-CQ-304: the Orders sheet's ONE Reply-to-N window, given the quotes (their own conversations and words). */}
+      {model.reply && <ReplyManyDialog model={model.reply} actions={actions?.reply} />}
       {dialog === 'help' && (
         <Modal open onClose={() => setDialog(null)} title={t('list.keysTitle')} size="sm">
           <ul className="fw-q-list">

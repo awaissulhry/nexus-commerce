@@ -109,7 +109,7 @@ function page(over: Partial<InquiriesModel> = {}, role: RoleCase = 'owner'): Des
       noticeFacts: {},
       demoPictures: DEMO_PICTURES,
       // F-CQ-201: the bar's rights, each act its own (the role's template).
-      barRights: { manage: canFor(role).manage, tasks: (ROLE_PERMISSIONS[role] as readonly string[]).includes('tasks.manage') },
+      barRights: { manage: canFor(role).manage, tasks: (ROLE_PERMISSIONS[role] as readonly string[]).includes('tasks.manage'), threads: (ROLE_PERMISSIONS[role] as readonly string[]).includes('threads.post') /* F-CQ-304 */ },
       ...over,
     },
   }

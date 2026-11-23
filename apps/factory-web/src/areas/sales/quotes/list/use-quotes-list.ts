@@ -19,6 +19,7 @@ import { formatDate } from '../../../../lib/i18n/format'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { useManyAct } from '../../_shared/many-acts/use-many-act'
 import { useTaskBatch } from '../../_shared/many-acts/use-task-batch'
+import { useReplyMany } from '../../orders/list/use-reply-many' // F-CQ-304: Reply to N given a record type
 import { quoteActOf } from './acts'
 import { quoteRecordOf, quoteRightsOf, type QuoteActKind, type QuoteRecord } from './bar'
 import { useQuoteDialog } from '../record/use-quote-dialog'
@@ -98,7 +99,7 @@ export interface QuotesListHost {
 type Lock = Pick<QuotesListHost, 'locked' | 'defaultGroup' | 'defaultSort'> // F-CQ-102: + the host's defaults
 
 /** F-CQ-204: a row's act — one of the quote's own windows, or a loop / Add task on that one quote. */
-export type QuoteRowAct = Extract<QuoteDialog, 'ask' | 'approve' | 'reject' | 'cancel' | 'revise'> | 'makeOrders' | 'addTask'
+export type QuoteRowAct = Extract<QuoteDialog, 'ask' | 'approve' | 'reject' | 'cancel' | 'revise'> | 'makeOrders' | 'addTask' | /* F-CQ-304 */ 'reply'
 
 const TILE_READS: Record<QuoteTile, { status: QuoteStatus; mine?: boolean }> = {
   myDrafts: { status: 'DRAFT', mine: true },
@@ -479,13 +480,21 @@ export function useQuotesList(host: QuotesListHost): { model: QuotesListViewMode
       readAgain()
     },
   })
+  // ---- F-CQ-304 (13-backend §11): Reply to N given a record type — the Orders sheet's ONE window on the ticked quotes (one customer,
+  // at most 50, ONE batchId; each quote's own conversation). "Ask <customer> about N quotes" = the window with the to-do tick ON (the
+  // customer's to-do "Answer our message" on each quote: the same call, recordType Quote); a row's "Reply to <customer>…": tick OFF.
+  const reply = useReplyMany(api, session.permissions, readAgain)
+  const onReply = (picked: readonly QuoteListRow[], ask: boolean) => reply.open(picked, lock, { todo: ask, recordType: 'Quote' })
+  // ---- end F-CQ-304
   const day = (date: string) => formatDate(`${date}T12:00:00Z`, { locale })
   const onBarAct = (kind: QuoteActKind, picked: readonly QuoteListRow[]) => {
+    if (kind === 'ask') return onReply(picked, true) // F-CQ-304 (the hook gives the tick only to who may make the customer's to-dos)
     if (kind === 'addTask') return tasks.open(picked.map((row) => ({ type: 'Quote', id: row.id, label: row.number, supervisor: null })))
     const records = picked.map((row) => quoteRecordOf(row, prefix))
     many.open(quoteActOf(kind, api, records, day), records)
   }
   const onRowAct = (row: QuoteListRow, act: QuoteRowAct) => {
+    if (act === 'reply') return onReply([row], false) // F-CQ-304: "Reply to <customer>…" on one quote
     if (act === 'addTask' || act === 'makeOrders') return onBarAct(act, [row])
     quoteDialog.openOn(row.id, act)
   }
@@ -516,6 +525,7 @@ export function useQuotesList(host: QuotesListHost): { model: QuotesListViewMode
     many: many.model,
     tasks: tasks.model,
     quoteDialog: quoteDialog.open,
+    reply: reply.model, // F-CQ-304
     // ---- B-TH-257
     unread: readsThreads ? unread : null,
     readsRequests: session.permissions.includes('sales.inquiries.view'),
@@ -578,6 +588,16 @@ export function useQuotesList(host: QuotesListHost): { model: QuotesListViewMode
     many: many.actions,
     tasks: { onSend: tasks.onSend, onRetryPeople: tasks.onRetryPeople, onClose: tasks.onClose },
     quoteDialog: quoteDialog.actions,
+    // F-CQ-304: the receipt's quote name docks that quote's thread where the host docks (else the plain name).
+    reply: host.onRowClick
+      ? {
+          ...reply.actions,
+          onOrder: (id: string) => {
+            const row = (rowsRef.current ?? []).find((entry) => entry.id === id)
+            if (row) host.onRowClick?.(row, false)
+          },
+        }
+      : reply.actions,
     readPictures, // F-SA-212
     ...duplicate.actions,
     onDuplicateStart: (row) => duplicate.open({ id: row.id, number: row.number, partyId: row.partyId, partyName: row.partyName, revision: row.revision, versions: [] }),

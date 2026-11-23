@@ -14,7 +14,6 @@ import { getPortalAccess } from '../../../admin/users/partners/api'
 import { askPartner } from '../../../admin/users/partners/api'
 import { endOfDay } from '../../../admin/users/partners/model'
 import { romeToday } from '../model'
-import type { OrderRow } from '../api'
 import {
   keyFor,
   portalStateOf,
@@ -30,6 +29,8 @@ import {
   todoStart,
   toSend,
   type ReplyKey,
+  type ReplyRecordType, // F-CQ-304
+  type ReplyRow, // F-CQ-304
   type ReplyManyActions,
   type ReplyManyModel,
   type ReplyResult,
@@ -52,7 +53,9 @@ import {
 
 // F-CW-203: `open(rows, locked, { todo: true })` — "Ask <customer> about N…": the same window with the to-do tick ON (only for a
 // reader who may make a customer's to-dos: partners.tasks.manage; anyone else gets the plain reply and no tick).
-export function useReplyMany(api: ApiClient, permissions: readonly string[], onPosted: () => void): { model: ReplyManyModel | null; open: (rows: readonly OrderRow[], locked: string | null, options?: { readonly todo?: boolean }) => void; actions: ReplyManyActions } {
+// F-CQ-304: `options.recordType` — the records' own conversations (a quote, a request, a portal order; one per row when a function);
+// absent: orders, exactly as before. The to-do of "Ask <customer> about N quotes" is the same call with that recordType.
+export function useReplyMany(api: ApiClient, permissions: readonly string[], onPosted: () => void): { model: ReplyManyModel | null; open: (rows: readonly ReplyRow[], locked: string | null, options?: { readonly todo?: boolean; readonly recordType?: ReplyRecordType | ((row: ReplyRow) => ReplyRecordType) }) => void; actions: ReplyManyActions } {
   const [model, setModel] = useState<ReplyManyModel | null>(null)
   // The window as it is now (a round's answers come one after the other; a read for an earlier window is dropped by its batch).
   const current = useRef<ReplyManyModel | null>(null)
@@ -71,17 +74,20 @@ export function useReplyMany(api: ApiClient, permissions: readonly string[], onP
     setModel(next)
   }
 
-  const open = (rows: readonly OrderRow[], locked: string | null, options?: { readonly todo?: boolean }) => {
+  const open = (rows: readonly ReplyRow[], locked: string | null, options?: { readonly todo?: boolean; readonly recordType?: ReplyRecordType | ((row: ReplyRow) => ReplyRecordType) }) => {
     // The bar holds these in words before the click; the window never opens on two customers all the same.
     if (rows.length === 0 || replyManyHeld(rows, locked, canPost)) return
-    const targets = replyTargetsOf(rows)
+    const targets = replyTargetsOf(rows, options?.recordType) // F-CQ-304: each record's own type (absent: orders)
+    // F-CQ-304: the window's words follow the records' type (one type, else a request's: an Incoming batch of requests and portal orders).
+    const recordType = targets[0]?.recordType
+    const typed = recordType ? { recordType: targets.every((target) => target.recordType === recordType) ? recordType : ('Inquiry' as const) } : {}
     const customer = { id: targets[0]!.partyId, name: targets[0]!.partyName }
     const batchId = newIdempotencyKey()
     keys.current = new Map()
     todoKeys.current = new Map()
     const today = romeToday()
     const asked = canTodo && !!options?.todo // F-CW-203
-    const next: ReplyManyModel = { customer, targets, batchId, draft: startDraft(replyComposerContext(customer.name)), notes: [], language: undefined, portal: readsPortal ? undefined : 'unknown', sending: false, progress: null, results: {}, done: false, todo: canTodo ? todoStart(asked, today) : null, asked, today /* F-CW-203 */ }
+    const next: ReplyManyModel = { customer, targets, batchId, draft: startDraft(replyComposerContext(customer.name)), notes: [], language: undefined, portal: readsPortal ? undefined : 'unknown', sending: false, progress: null, results: {}, done: false, todo: canTodo ? todoStart(asked, today) : null, asked, today /* F-CW-203 */, ...typed /* F-CQ-304 */ }
     current.current = next
     setModel(next)
     getParty(api, customer.id).then(
@@ -119,7 +125,7 @@ export function useReplyMany(api: ApiClient, permissions: readonly string[], onP
       const key = kept && kept.due === due ? kept : { key: newIdempotencyKey(), due }
       todoKeys.current.set(target.id, key)
       try {
-        await askPartner(api, now.customer.id, { kind: 'ANSWER_MESSAGE', recordType: 'SalesOrder', recordId: target.id, dueAt: due ? endOfDay(due) : null, ...(target.companyId ? { companyId: target.companyId } : {}) }, key.key)
+        await askPartner(api, now.customer.id, { kind: 'ANSWER_MESSAGE', recordType: target.recordType ?? 'SalesOrder' /* F-CQ-304 */, recordId: target.id, dueAt: due ? endOfDay(due) : null, ...(target.companyId ? { companyId: target.companyId } : {}) }, key.key)
         return { state: 'made' }
       } catch (error) {
         return todoOutcomeOf({ code: refusalCode(error), kind: isApiError(error) ? error.kind : null })
@@ -132,7 +138,7 @@ export function useReplyMany(api: ApiClient, permissions: readonly string[], onP
       const key = keyFor(keys.current.get(target.id), body, ticked, newIdempotencyKey, pricesOk)
       keys.current.set(target.id, key)
       try {
-        await postPortalReplyKeyed(api, { type: 'SalesOrder', id: target.id }, { body, attachments: [], batchId, ...(ticked ? { namesNoOtherCustomer: true } : {}), ...(pricesOk ? { pricesInWordsOk: true } : {}) /* F-CP-162 */ }, key.key)
+        await postPortalReplyKeyed(api, { type: target.recordType ?? 'SalesOrder' /* F-CQ-304 */, id: target.id }, { body, attachments: [], batchId, ...(ticked ? { namesNoOtherCustomer: true } : {}), ...(pricesOk ? { pricesInWordsOk: true } : {}) /* F-CP-162 */ }, key.key)
         return { state: 'sent', ...(todo ? { todo: await todoOne(target, todo.due) } : {}) }
       } catch (error) {
         const outcome = replyOutcomeOf({ code: refusalCode(error), kind: isApiError(error) ? error.kind : null }, now.customer.name)

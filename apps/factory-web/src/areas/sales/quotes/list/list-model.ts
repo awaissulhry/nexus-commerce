@@ -18,6 +18,7 @@ import type { QuoteRowAct } from './use-quotes-list'
 import type { ManyActActions, ManyActModel } from '../../_shared/many-acts/use-many-act'
 import type { TaskBatchModel } from '../../_shared/many-acts/use-task-batch'
 import type { QuoteDialogOpen } from '../record/use-quote-dialog'
+import type { ReplyManyActions, ReplyManyModel } from '../../orders/list/reply-many' // F-CQ-304
 import type { QuoteDialogsActions } from '../record/view/Dialogs'
 import type { BatchAnswer, BatchAssignee, TaskDraft } from '../../../../record-panels/tasks/model'
 
@@ -117,6 +118,8 @@ export interface QuotesListViewModel {
   tasks?: TaskBatchModel | null
   /** One of the quote's own windows open on a row (the quote read once), or null. */
   quoteDialog?: QuoteDialogOpen | null
+  /** F-CQ-304: the Reply-to-N window over the ticked quotes ("Ask <customer> about N quotes" / "Reply to <customer>…"). */
+  reply?: ReplyManyModel | null
   // ---- end F-CQ-201 / 202 / 204
   // ---- end F-CQ-102 / F-CQ-104
 }
@@ -157,6 +160,7 @@ export interface QuotesListActions extends DuplicateActions, NewFromActions {
   many?: ManyActActions
   tasks?: { readonly onSend: (draft: TaskDraft, assignee: BatchAssignee) => Promise<BatchAnswer | null>; readonly onRetryPeople: () => void; readonly onClose: () => void }
   quoteDialog?: QuoteDialogsActions
+  reply?: ReplyManyActions // F-CQ-304
   // ---- end F-CQ-201 / 202 / 204
   /** F-SA-212: the page's pictures in ONE batch read (POST /sales/quotes/pictures through lib/record-picture). */
   readPictures?: ReadPictures
