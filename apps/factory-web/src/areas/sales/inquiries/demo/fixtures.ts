@@ -259,6 +259,10 @@ const counts = (rows: readonly IncomingRow[]): Record<ListTile, number | null> =
   LOST: 0,
   ALL: rows.length,
   CUSTOMER_REPLIES: REPLIES.length,
+  // B-CQ-020 (customer page › Quotes & incoming): the two tiles appended after the design tiles — To answer (requests new or
+  // taken, portal orders sent, change requests open) and Ended (declined for any reason, lost, withdrawn, refused).
+  TO_ANSWER: rows.filter((one) => (['NEW', 'ASSIGNED', 'SENT', 'OPEN'] as readonly string[]).includes(one.state)).length,
+  ENDED: rows.filter((one) => (['DECLINED', 'LOST', 'WITHDRAWN', 'REFUSED'] as readonly string[]).includes(one.state)).length,
 })
 
 /** The list as the API answers it: the rows of a tile (requests given as their own rows are read as Incoming rows), the counts of every tile. */
