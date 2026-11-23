@@ -2,6 +2,7 @@ import type { CompanyRef } from '../../../../lib/session/session'
 import type { PartyDetail, PartyRow } from '../../quotes/api'
 import type { OrderBoard, OrderRow, OrderSort } from '../api'
 import type { PriceMatch } from '../api' // F-CP-140
+import type { OrderPhase } from '../api' // F-CW-101
 import type { OrderCustomer } from '../api' // F-SA-224: the switcher's customers carry Orders' counts
 import type { LiveState } from '../hooks'
 import type { Lane, Layout, OrderAbilities, Phrase, RowView } from '../model'
@@ -131,6 +132,11 @@ export interface OrdersListModel {
    * carries it, no rows are read — the sheet says so in ONE line ("Amounts are shown to people who see prices") with Show all orders.
    */
   priceHeld?: boolean
+  /**
+   * F-CW-101: quiet words the host puts beside the phase chip (`extra.phase`) — the customer page's band says why its "Not sent to the
+   * factory" orders wait ("1 waits for a yes · 1 waits for the deposit"); absent: the chip alone (or the sheet's own line for a phase).
+   */
+  phaseNote?: string | null
   /** The view's figures from the server (null while read or not asked; the problem in words when it failed). */
   summary?: { value: OrderSummary | null; problem: string | null } | null
   /** The grouped view: each customer's rows read so far (by customer id), and the groups folded shut. */
@@ -146,7 +152,9 @@ export interface OrdersListModel {
   // F-CP-102: `view` — the rows view these words are for (the customer page keys them per view): they show on that view when nothing
   // else narrows it; absent: the host's default view only (as before).
   // F-CP-104: `newOrder` — New order beside the words (held with why without orders.manage; the customer page's All orders).
-  empty?: { title: string; body?: string | null; link?: { href: string; label: string } | null; view?: RowView | null; newOrder?: boolean } | null
+  // F-CW-102 (lead settle S20): `always` — the words are for exactly what is on screen now, whatever narrows it (a door of the
+  // customer page's band, its views): the host gives them only then. `note`: one more quiet line under them (the customer's drafts).
+  empty?: { title: string; body?: string | null; link?: { href: string; label: string } | null; view?: RowView | null; newOrder?: boolean; always?: boolean } | null
   // ---- F-SA-220 (the ONE Orders sheet, use-orders-sheet.ts): the host's ----
   /** The list frame's key: 'sales.orders' on every host (one export source, one set of saved views). */
   listKey?: string
@@ -176,6 +184,12 @@ export interface OrdersListModel {
   hostViews?: ReadonlyArray<{ readonly id: string; readonly label: string; readonly active?: boolean }> | null
   /** F-CP-103 (review A4): the count beside each Views ▾ item, by view id, from the host's one count read (absent id: no number). */
   viewCounts?: Readonly<Record<string, number>> | null
+  // ---- F-CW-104 (10-design §3.1): the host's own toolbar words ----
+  /** Every order of the host's scope (the customer's): the count says "2 of 14 orders" while the sheet shows fewer (a door, a view, a search). */
+  countOf?: number | null
+  /** The host's own search words (placeholder and name): the sheet's longer ones are cut in a narrow toolbar. */
+  searchLabel?: string | null
+  // ---- end F-CW-104
   /** The columns the host shows at first, and from 1800 px (a person's Customise wins); absent: the sheet's own. */
   preset?: {
     readonly shown: readonly string[]
@@ -186,6 +200,22 @@ export interface OrdersListModel {
     /** The host's own minimum widths by column id (the honest room of its longest words), over the sheet's. */
     readonly min?: Readonly<Record<string, number>>
     // ---- end F-CP-107 (cp-fx16)
+    // ---- F-CW-102 (10-design §1): the host's set at its own widths ----
+    /** The host's own MAXIMUM widths by column id: with the same minimum the column is fixed, and the room left goes to the flexible one (Where it is). */
+    readonly max?: Readonly<Record<string, number>>
+    /** The sheet sits in a narrow room (beside the dock): the chips cell keeps each chip's head (a tail and a mark go to its tooltip). */
+    readonly dense?: boolean
+    /** The host's own order of its set, left to right (the sheet's other columns follow in their own order; ⋯ stays last). */
+    readonly order?: readonly string[]
+    // ---- end F-CW-102
+    // ---- F-CW-103 (lead settle S12; 10-design §3.9): Customise tells the truth for the host's set ----
+    /**
+     * The columns of the host's set that are not on screen in THIS room and show in a wider one (by column id: from a `wider` sheet,
+     * or only from the `widest`). Customise lists them ticked and named so ("Waiting on · from a wider sheet"); a column is never
+     * cut to fit. Every other column the preset does not show is offered unticked (it shows when the person ticks it).
+     */
+    readonly later?: Readonly<Record<string, 'wider' | 'widest'>>
+    // ---- end F-CW-103
   } | null
   /** A real link on the toolbar's right ("Work orders of <customer> ›"). */
   toolbarLink?: { readonly href: string; readonly label: string } | null
@@ -282,6 +312,12 @@ export interface OrdersListActions {
   // F-CP-141: the term in ONE write — no `view`: the funnel (narrows the view shown); with `view`: that view and the term alone (the
   // Not equal view: rows=all); null drops it (leaving the Not equal view for `view`). A price holder's only (absent otherwise).
   onPriceMatch?: (match: PriceMatch | null, view?: { readonly rows: RowView; readonly waiting?: 'us' | null }) => void
+  /**
+   * F-CW-101 (lead settle S16): a door of a phase — that phase alone beside `rows=all` (every order: a phase is defined over all of
+   * them), the search and the waiting term dropped, in ONE write: the rows are exactly the group's count. null drops the term (all
+   * orders again); null with `view`: leaving the door for that view, in the same write (each view stands alone).
+   */
+  onPhase?: (phase: OrderPhase | null, view?: { readonly rows: RowView; readonly waiting?: 'us' | null }) => void
   /** The columns on screen changed (the Progress column reads the floor only while shown). */
   onShownColumns?: (ids: readonly string[]) => void
   onInvoiceShipped?: (ids: readonly string[]) => void

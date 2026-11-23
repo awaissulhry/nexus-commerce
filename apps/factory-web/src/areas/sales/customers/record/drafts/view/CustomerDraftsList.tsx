@@ -60,6 +60,8 @@ export function CustomerDraftsList(props: { model: CustomerDraftsListModel; acti
 }
 
 /** The wide columns (the conversation, the value) from 1800 px, as the Orders sheet's. */
+// F-CW-104 (10-design §3.8; S28: the sideways scroll only): the Work tab hands its own room (`forced`, followed live: the thread
+// closed or opened); without a host's word the window decides as before.
 function useWide(forced: boolean | undefined): boolean {
   const query = '(min-width: 1800px)'
   const [wide, setWide] = useState(() => forced ?? (typeof window !== 'undefined' && !!window.matchMedia?.(query).matches))
@@ -70,7 +72,7 @@ function useWide(forced: boolean | undefined): boolean {
     list.addEventListener('change', on)
     return () => list.removeEventListener('change', on)
   }, [forced])
-  return wide
+  return forced ?? wide
 }
 
 function DraftsList({ model, actions }: { model: CustomerDraftsListModel; actions?: CustomerDraftsListActions }) {
@@ -119,8 +121,11 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
     return [
       { colId: 'draft', headerName: t('customers.drafts.col.draft'), minWidth: 200, flex: 2, cellRenderer: DraftCell, valueGetter: (params) => (params.data ? draftTitle(params.data, untitled) : '') },
       { colId: 'lines', headerName: t('customers.drafts.col.lines'), minWidth: 130, flex: 1, valueGetter: (params) => (params.data ? joined(linesWords(params.data)) : '') },
-      { colId: 'files', headerName: t('customers.drafts.col.files'), minWidth: 100, flex: 1, valueGetter: (params) => (params.data ? joined(filesWords(params.data)) : '') },
-      { colId: 'ready', headerName: t('customers.drafts.col.ready'), minWidth: 90, cellRenderer: ReadyCell, valueGetter: (params) => params.data?.draft?.readiness.done ?? null },
+      { colId: 'files', headerName: t('customers.drafts.col.files'), minWidth: 88, flex: 1, valueGetter: (params) => (params.data ? joined(filesWords(params.data)) : '') },
+      // F-CW-102 (lead settle S28: only the Drafts view's sideways scroll): Ready and Wanted by had no share of the room, so the grid
+      // gave each its 200 px default — 1058 px of columns in the 863 px beside the dock, the Open button off-screen. Each now takes
+      // its share from its own least width ("5 of 6" beside "1 problem" whole): 200 + 130 + 88 + 136 + 140 + 92 + 64 = 850 px.
+      { colId: 'ready', headerName: t('customers.drafts.col.ready'), minWidth: 136, flex: 0.8, cellRenderer: ReadyCell, valueGetter: (params) => params.data?.draft?.readiness.done ?? null },
       {
         colId: 'changed',
         headerName: t('customers.drafts.col.changed'),
@@ -132,11 +137,12 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
           return draft.lastEditedBy ? t('customers.drafts.changed', { time: moment(draft.lastEditedAt), name: draft.lastEditedBy }) : moment(draft.lastEditedAt)
         },
       },
-      { colId: 'wanted', headerName: t('customers.drafts.col.wanted'), minWidth: 100, valueGetter: (params) => (params.data?.requestedDate ? formatDate(`${params.data.requestedDate}T12:00:00Z`, { locale }) : '—') },
+      { colId: 'wanted', headerName: t('customers.drafts.col.wanted'), minWidth: 92, flex: 0.6, valueGetter: (params) => (params.data?.requestedDate ? formatDate(`${params.data.requestedDate}T12:00:00Z`, { locale }) : '—') },
       {
         colId: 'messages',
         headerName: t('customers.drafts.col.messages'),
         minWidth: 120,
+        flex: 1, // F-CW-104: its share of the room (without one the grid gave it 200 px: a sideways scroll at 1183)
         hide: !wide,
         valueGetter: (params) => {
           const words = params.data ? messagesWords(params.data) : null
@@ -150,6 +156,7 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
               colId: 'value',
               headerName: t('customers.drafts.col.value'),
               minWidth: 104,
+              flex: 0.6, // F-CW-104
               hide: !wide,
               type: 'rightAligned',
               // F-CP-141 (follow-up 6): B-CP-076's draft value (minor units) when present, else the net at the prices shown.

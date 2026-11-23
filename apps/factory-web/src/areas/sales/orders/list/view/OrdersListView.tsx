@@ -41,7 +41,7 @@ import { CustomerSwitcher } from '../../../_shared/customer-switcher/view/Custom
 import { RecordPicture } from '../../../../../lib/record-picture/view/RecordPicture'
 import { PictureViewer } from '../../../../../lib/record-picture/view/PictureViewer'
 // B-TH-230: the New messages column (LastMessageCell).
-import { LAST_MESSAGE_NS, LastMessageCell } from '../../../../../lib/last-message-cell/view/LastMessageCell'
+import { LAST_MESSAGE_NS } from '../../../../../lib/last-message-cell/view/LastMessageCell'
 import { unreadValue } from '../../../../../lib/last-message-cell/model'
 // ---- B-TH-244 (TH-4: the overall view grouped by customer, the later columns, Invoice shipped goods for N) ----
 import { Receipt } from 'lucide-react'
@@ -54,6 +54,11 @@ import type { ListEdit } from '../../../../../list-frame/w2b/model' // B-TH-245
 // ---- F-SA-275 (the API's B-SA-070): Where it is, Waiting on, Supervisor (opt-in here, shown by the customer page's views), ⋯ Add task… / Answer request… ----
 import { SupervisorCell, WaitingOnCell, WhereItIsCell } from '../sheet/parts'
 import { answerHrefOf, waitingItemsOf, whereTextOf } from '../sheet/model' // F-MS-104: whereTextOf (the line's words)
+import { phasePhrase } from '../sheet/model' // F-CW-101: a phase door's chip
+// ---- F-CW-102: the row's chips — Customer urgency (read-only) and the New messages bubble; Where it is draws its own ----
+import { CustomerUrgencyCell, MessagesHeader, NewMessagesBubble } from '../sheet/parts'
+import { priorityChipOf, urgencyChipOf } from '../sheet/model'
+// ---- end F-CW-102
 import { SUPERVISOR_NS } from '../../../../_shared/production-supervisor/model'
 import { productionWordsFor } from '../../../../../lib/production/words'
 // ---- end F-SA-275
@@ -128,6 +133,10 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   // F-CP-107 (cp-fx16): is the Status column on screen (the frame tells; a person's Customise wins)? Until it tells: the preset's.
   // F-CP-107 (cp-fx17): the setter is setShowsStatus — commands.vitest F-CP-108 guards this view against any status-editor name.
   const [statusShown, setShowsStatus] = useState(() => statusShownOf(model.preset ?? null))
+  // F-CW-102: the same rule for two more facts a row never says twice — our Priority (its own column, or the chip in Customer
+  // urgency) and the lateness (chip 2 of Where it is, or the tag beside the promise date).
+  const [priorityShown, setShowsPriority] = useState(false)
+  const [whereShown, setShowsWhere] = useState(() => !!model.preset?.shown.includes('whereItIs'))
   const phone = useCardList() // the list frame's own rule (cards below 720 px)
   // ---- end F-CP-107 (cp-fx16)
   const [viewer, setViewer] = useState<string | null>(model.viewerOpen ?? null)
@@ -218,8 +227,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       size="sm"
       type="search"
       leadingIcon={<Search size={13} aria-hidden />}
-      aria-label={t('list.search')}
-      placeholder={t('list.search')}
+      aria-label={model.searchLabel ?? t('list.search') /* F-CW-104: the host's own shorter words */}
+      placeholder={model.searchLabel ?? t('list.search')}
       {...search.field /* F-SA-223 */}
     />
   )
@@ -247,11 +256,19 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   // ── end B-TH-057 ──
 
   // F-SA-212: the phone card's aside is the picture part at its phone size (the DS card's draw override).
-  const cardFields = useMemo(() => cardFieldsOf((row) => <RecordPicture source="order" recordId={row.id} number={row.number} picture={row.picture} styleCount={row.styleCount} size="phone" read={latest.current.actions?.readPictures} demo={latest.current.model.demoPictures?.[row.id]} onOpen={() => setViewer(row.id)} />), [])
+  const cardFields = useMemo(
+    () =>
+      cardFieldsOf(
+        (row) => <RecordPicture source="order" recordId={row.id} number={row.number} picture={row.picture} styleCount={row.styleCount} size="phone" read={latest.current.actions?.readPictures} demo={latest.current.model.demoPictures?.[row.id]} onOpen={() => setViewer(row.id)} />,
+        // F-CW-102: the customer's urgency on the card says whose it is ("Urgent (customer) 2"); nothing to say: no line.
+        (row) => (urgencyChipOf(row) || priorityChipOf(row) ? <CustomerUrgencyCell row={row} s={s} d={d} bare /> : null),
+      ),
+    [s, d],
+  )
   const columns = useMemo<ColDef<OrderRow>[]>(
-    () => sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer: setViewer, statusShown, phone /* F-CP-107 (cp-fx16) */ }),
+    () => sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer: setViewer, statusShown, phone /* F-CP-107 (cp-fx16) */, priorityShown, whereShown /* F-CW-102 */ }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the cells read the latest model and actions through `latest`
-    [t, s, d, l, m, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */, model.kind /* F-SA-221 */, model.marks /* F-SA-275 */, model.doorHref /* F-SA-275 */, !!actions?.onAddTask /* F-SA-275 */, model.preset /* F-SA-276 */, r /* F-SA-281 */, model.bulkCan?.task /* F-SA-281 */, statusShown /* F-CP-107 (cp-fx16): Where it is redraws when Status comes or goes */, phone /* F-CP-107 (cp-fx16) */],
+    [t, s, d, l, m, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */, model.kind /* F-SA-221 */, model.marks /* F-SA-275 */, model.doorHref /* F-SA-275 */, !!actions?.onAddTask /* F-SA-275 */, model.preset /* F-SA-276 */, r /* F-SA-281 */, model.bulkCan?.task /* F-SA-281 */, statusShown /* F-CP-107 (cp-fx16): Where it is redraws when Status comes or goes */, phone /* F-CP-107 (cp-fx16) */, priorityShown, whereShown /* F-CW-102 */, model.locked?.party /* F-CW-102 */],
   )
 
   // F-SA-276: the host's default view is not a narrowing; the waiting term is.
@@ -259,7 +276,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   // view apart from every other narrowing, so a host's words for that one view (model.empty.view) still show.
   const home = homeOf(model)
   const viewNarrowed = model.rows !== home && model.rows !== 'all'
-  const othersNarrowed = model.q.trim() !== '' || !!model.waiting || !!model.customer || !!model.brand || !!model.company || !!model.cf || extraChips(model.extra ?? null, t, s).length > 0 || (!!model.kind && !model.locked?.kind) || !!model.profile // B-TH-201, B-TH-225, B-TH-057, B-TH-244, F-SA-221, F-SA-222
+  // F-CW-102 (P0 item 9): a customer the HOST locks is the page's own, not a narrowing — its empty sheet says "<customer> has no
+  // order yet.", never "No orders match … Clear filters".
+  const othersNarrowed = model.q.trim() !== '' || !!model.waiting || (!!model.customer && !model.locked?.party) || !!model.brand || !!model.company || !!model.cf || extraChips(model.extra ?? null, t, s, d).length > 0 || (!!model.kind && !model.locked?.kind) || !!model.profile // B-TH-201, B-TH-225, B-TH-057, B-TH-244, F-SA-221, F-SA-222
   const narrowed = viewNarrowed || othersNarrowed
   const hostEmpty = hostEmptyOf(model, narrowed, othersNarrowed)
   const showing = showingOf(model)
@@ -284,7 +303,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     // B-TH-057 (SHEET-G05): a custom field filter of the address is a chip too (the list, its counts and its file apply it).
     ...(model.cf ? [{ id: 'cf', label: s('chips.cf', { terms: model.cf }), onClear: () => actions?.onClearCf?.() }] : []),
     // B-TH-244: the terms a total's door added (never a hidden filter).
-    ...extraChips(model.extra ?? null, t, s).map((chip) => ({ id: `x-${chip.key}`, label: chip.label, onClear: () => actions?.onClearExtra?.(chip.key) })),
+    // F-CW-101: a phase's chip says in quiet words what it holds (the host's whys of "Not sent to the factory", else the sheet's own line).
+    ...extraChips(model.extra ?? null, t, s, d /* F-CW-105 */).map((chip) => ({ id: `x-${chip.key}`, label: chip.label, onClear: () => actions?.onClearExtra?.(chip.key), ...(chip.key === 'phase' ? { note: model.phaseNote ?? chip.note ?? null } : {}) })),
   ]
   const unavailable = model.customer?.name === null
   // B-TH-244: the honest count — the server's figure for the whole view when it was read (a door's view, the grouped view).
@@ -335,15 +355,21 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       title={hostEmpty.title}
       description={hostEmpty.body ?? undefined}
       action={
-        hostEmpty.link ? (
-          <Button size="sm" asChild>
-            <Link href={hostEmpty.link.href}>{hostEmpty.link.label}</Link>
-          </Button>
-        ) : hostEmpty.newOrder ? (
-          // F-CP-104: the customer page's All orders, none yet — New order in place (held with why without orders.manage).
-          <Button size="sm" variant="primary" heldReason={model.can.manage ? null : t('held.noManage')} onClick={() => actions?.onNewOrder?.(true)}>
-            {t('list.new')}
-          </Button>
+        // F-CP-104: the customer page's All orders, none yet — New order in place. F-CW-102 (S9, S20): not drawn without
+        // orders.manage (an act the reader has no right for is not there); the host's link beside it (the customer's drafts).
+        (hostEmpty.newOrder && model.can.manage) || hostEmpty.link ? (
+          <span className="fw-so-inline">
+            {hostEmpty.newOrder && model.can.manage && (
+              <Button size="sm" variant="primary" onClick={() => actions?.onNewOrder?.(true)}>
+                {t('list.new')}
+              </Button>
+            )}
+            {hostEmpty.link && (
+              <Button size="sm" asChild>
+                <Link href={hostEmpty.link.href}>{hostEmpty.link.label}</Link>
+              </Button>
+            )}
+          </span>
         ) : undefined
       }
     />
@@ -470,7 +496,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           rows={state ? [] : items}
           rowId={(row) => row.id}
           columns={columns}
-          count={items ? (count !== null && items.length < count ? s('loadedOf', { loaded: items.length, total: count }) : t(model.list.more ? 'list.countMore' : 'list.count', { count: items.length })) : '—'}
+          count={items ? countWords(items.length, count, !!model.list.more, model.countOf, t, s) /* F-CW-104 */ : '—'}
           search={searchField}
           right={
             model.toolbarLink ? (
@@ -501,6 +527,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           edit={orderEdit /* B-TH-245: the order note and the custom values in their cells; Edit N with the preview; lines never */}
           onShownColumns={(ids) => {
             setShowsStatus(ids.includes('status')) // F-CP-107 (cp-fx16)
+            setShowsPriority(ids.includes('priority')) // F-CW-102
+            setShowsWhere(ids.includes('whereItIs')) // F-CW-102
             actions?.onShownColumns?.(ids) // B-TH-244: Progress reads the floor only while shown
           }}
           builtInViews={{ items: builtInViewsOf(model, t, s, (value) => formatNumber(value, locale) /* F-CP-103 */), active: builtInActive(model), onPick: (id) => pickBuiltIn(id, model, actions) /* F-SA-221, F-SA-276 */ }}
@@ -745,9 +773,12 @@ export const homeOf = (model: Pick<OrdersListModel, 'defaultRows'>): RowView => 
 /** The view the "Showing: …" line names: any but the host's default (null there, and on By promise week). */
 export const showingOf = (model: Pick<OrdersListModel, 'rows' | 'defaultRows' | 'layout'>): RowView | null => (model.rows !== homeOf(model) && model.layout !== 'week' ? model.rows : null)
 /** The host's empty words that apply now: words keyed to this view when nothing else narrows it; unkeyed words when nothing narrows. */
+// F-CW-102 (lead settle S20): `always` — the host's words are for exactly what is on screen now (a door of the customer page's
+// band, its views): they show whatever narrows the sheet (the host gives them only then).
 export function hostEmptyOf(model: Pick<OrdersListModel, 'empty' | 'rows'>, narrowed: boolean, othersNarrowed: boolean): NonNullable<OrdersListModel['empty']> | null {
   const empty = model.empty
   if (!empty) return null
+  if (empty.always) return empty
   return (empty.view ? empty.view === model.rows && !othersNarrowed : !narrowed) ? empty : null
 }
 // ── end F-CP-102 ──
@@ -755,6 +786,16 @@ export function hostEmptyOf(model: Pick<OrdersListModel, 'empty' | 'rows'>, narr
 // ── B-TH-243 (threads plan TH-4, ORD-G10; SHEET.brand-view-F01): the Orders' built-in views, on top of Views ▾ ──
 /** The rows views as built-in views (the address terms each stands for), the open orders first; a customer's sheet names them so. */
 // F-SA-221: + "Made-to-measure" after them (`kind=mtm` with the open orders).
+/**
+ * F-CW-104 (10-design §3.1): the toolbar's count in words — "14 orders"; "50 of 120 loaded" while rows wait to load; and on a host
+ * that names its whole (`countOf`: every order of the customer) "2 of 14 orders" while the sheet shows fewer (a door, a view, a search).
+ */
+export function countWords(loaded: number, count: number | null, more: boolean, whole: number | null | undefined, t: Translate, s: Translate): string {
+  if (count !== null && loaded < count) return s('loadedOf', { loaded, total: count })
+  if (!more && typeof whole === 'number' && loaded < whole) return s('countOf', { shown: loaded, count: whole })
+  return t(more ? 'list.countMore' : 'list.count', { count: loaded })
+}
+
 // F-SA-276: + "Waiting on us" (`waiting=us` with the open orders); a host's `views` names which it offers, in its order.
 // F-CP-102: + the host's own views (model.hostViews: Drafts of <customer>, Not equal), each where `views` names its id.
 // F-CP-103 (review A4): + each view's count from the host's one count read (model.viewCounts; `number` writes it in the person's
@@ -816,7 +857,8 @@ function useWide(forced: boolean | undefined): boolean {
 
 /** The phone card (grid-F22): the picture, the number, the customer, the brand, the status and the promise; the row's ⋯. */
 // F-SA-212: the picture is drawn by the one picture part at its phone size (`picture`: the card's own draw).
-const cardFieldsOf = (picture: (row: OrderRow) => ReactNode) => ({
+// F-CW-102: + the customer's urgency as a line of the card when the column is shown (`urgency`: its own draw; nothing to say: no line).
+const cardFieldsOf = (picture: (row: OrderRow) => ReactNode, urgency: (row: OrderRow) => ReactNode) => ({
   number: { role: 'title' as const },
   customer: { role: 'subtitle' as const },
   picture: { role: 'aside' as const, draw: picture },
@@ -825,7 +867,8 @@ const cardFieldsOf = (picture: (row: OrderRow) => ReactNode) => ({
   promised: { role: 'field' as const },
   madeToMeasure: { role: 'field' as const }, // F-SA-221: the mark on the phone card (never a rider's name)
   whereItIs: { role: 'field' as const }, // F-SA-275: the stage and the health on the phone card
-  ...Object.fromEntries(['deposit', 'units', 'orderDate', 'shipped', 'invoiced', 'net', 'gross', 'margin', 'priority', 'season', 'quote', 'company', /* B-TH-244 */ 'openUnits', 'progress', 'paid', 'balance', 'site', 'note', 'atRisk', 'customerUrgency', /* F-SA-221 */ 'riders', /* F-SA-275 */ 'waitingOn', 'supervisor', /* F-CP-140 */ ...PRICE_CHECK_IDS].map((id) => [id, { role: 'hidden' as const }])),
+  customerUrgency: { role: 'field' as const, draw: urgency }, // F-CW-102
+  ...Object.fromEntries(['deposit', 'units', 'orderDate', 'shipped', 'invoiced', 'net', 'gross', 'margin', 'priority', 'season', 'quote', 'company', /* B-TH-244 */ 'openUnits', 'progress', 'paid', 'balance', 'site', 'note', 'atRisk', /* F-SA-221 */ 'riders', /* F-SA-275 */ 'waitingOn', 'supervisor', /* F-CP-140 */ ...PRICE_CHECK_IDS].map((id) => [id, { role: 'hidden' as const }])),
 })
 
 interface ColumnsInput {
@@ -847,6 +890,9 @@ interface ColumnsInput {
   statusShown?: boolean
   /** F-CP-107 (cp-fx16): the phone card list (below 720 px) — a preset's table-wide columns show on the cards. */
   phone?: boolean
+  /** F-CW-102: the Priority column is on screen (Customer urgency then leaves our level to it), and Where it is (the lateness is its chip 2). */
+  priorityShown?: boolean
+  whereShown?: boolean
 }
 
 /**
@@ -882,8 +928,8 @@ function PictureViewerFor({ row, model, actions, onClose }: { row: OrderRow; mod
  * tab); Brand, Status and Company narrow the sheet (the funnel mark); a cell the reader may not open says why on hover; the
  * rest of the row opens the order. Money columns are absent without their grain, never zero.
  */
-function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer, statusShown = false, phone = false }: ColumnsInput): ColDef<OrderRow>[] {
-  const input: ColumnsInput = { t, s, d, l, m, r, locale, model, wide, latest, onViewer, statusShown, phone }
+function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer, statusShown = false, phone = false, priorityShown = false, whereShown = false }: ColumnsInput): ColDef<OrderRow>[] {
+  const input: ColumnsInput = { t, s, d, l, m, r, locale, model, wide, latest, onViewer, statusShown, phone, priorityShown, whereShown }
   const { prefix, can } = model
   const day = (value: string | null) => (value ? formatDate(dayInstant(value), { locale }) : '—')
   const act = () => latest.current.actions
@@ -897,8 +943,10 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer,
   // B-TH-230 (grid-F15): the reader's own new messages; the cell is a door to the order's thread at the first new message.
   // F-CP-110: on a page with a dock (the customer page: model.active) the cell shows the order's conversation in that dock; ⌘ / Ctrl
   // keeps the order page's thread in a new tab; Sales › Orders keeps the link.
+  // F-CW-102 (S33): the cell is a count bubble (the shared cell's own words and doors); a narrow column's header is the message mark.
   const NewMessagesCell = ({ data }: ICellRendererParams<OrderRow>) =>
-    data ? <LastMessageCell unread={latest.current.model.unread?.[data.id]} href={`${orderHref(prefix, data)}?thread=new`} record={data.number} onOpen={latest.current.model.active ? () => latest.current.actions?.onOpenRow?.(data.id, false) : null} /> : null
+    data && l ? <NewMessagesBubble unread={latest.current.model.unread?.[data.id]} href={`${orderHref(prefix, data)}?thread=new`} record={data.number} onOpen={latest.current.model.active ? () => latest.current.actions?.onOpenRow?.(data.id, false) : null} l={l} /> : null
+  const narrowMessages = (model.preset?.max?.newMessages ?? Number.POSITIVE_INFINITY) <= 64
   const NumberCell = ({ data }: ICellRendererParams<OrderRow>) => {
     if (!data) return null
     const opened = orderDoor(prefix, data) as { href: string }
@@ -1018,6 +1066,12 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer,
       <span className="fw-sheet-cell">
         {door(depositDoor(prefix, data, can), <Pill tone={depositTone(state, dueDate, model.today)}>{t(`deposit.${state}`)}</Pill>)}
         {state === 'OPEN' && dueDate && <span className={overdue ? 'fw-sheet-late' : 'fw-sheet-sub'}>{t(overdue ? 'list.depositOverdue' : 'list.depositDue', { date: day(dueDate) })}</span>}
+        {/* F-CW-102 (the API's B-CW-012): an EXTRA deposit still open on an order that needs none — the order page's own words. */}
+        {data.deposit.extraOpenDue && (
+          <span className={data.deposit.extraOpenDue < model.today ? 'fw-sheet-late' : 'fw-sheet-sub'} title={t('moneyTab.totals.fact.notNeededExtraWords', { date: day(data.deposit.extraOpenDue) })}>
+            {s('deposit.extra', { date: day(data.deposit.extraOpenDue) })}
+          </span>
+        )}
       </span>
     )
   }
@@ -1035,12 +1089,14 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer,
         <span className="fw-sheet-sub">{data.requestedDate ? t('list.requested', { date: day(data.requestedDate) }) : t('list.noRequested')}</span>
       </span>
     ) : null
+  // F-CW-102: the lateness is chip 2 of Where it is ("Late · 3 d") — the tag beside the date only while that column is not on
+  // screen (the same fact never twice in one row; Sales › Orders' own default view keeps the tag).
   const PromiseCell = ({ data }: ICellRendererParams<OrderRow>) =>
     data ? (
       data.promiseDate ? (
         <span className="fw-so-inline">
           {door(linesDoor(prefix, data, true), day(data.promiseDate))}
-          {data.daysLate !== null && data.daysLate > 0 && <Tag tone="danger">{t('list.daysLate', { count: data.daysLate })}</Tag>}
+          {!whereShown && data.daysLate !== null && data.daysLate > 0 && <Tag tone="danger">{t('list.daysLate', { count: data.daysLate })}</Tag>}
         </span>
       ) : (
         door(linesDoor(prefix, data, true), t('list.noPromise'))
@@ -1137,7 +1193,9 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer,
   // F-MS-104: the rule moved to the sheet's model (whereTextOf): "Sewing (by hand) · At risk" while a stage set by hand stands.
   const whereText = (row: OrderRow): string =>
     whereTextOf(row, { status: (status) => t(`status.${status}`), stage: (stage) => pw(`parts.stage.${stage}`), health: (chip) => pw(`parts.health.${chip}`), byHand: (stage) => t('list.byHand.phone', { stage }) })
-  const WhereCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <WhereItIsCell row={data} t={t} s={s} statusShown={statusShown /* F-CP-107 (cp-fx16) */} /> : null)
+  // F-CW-102: the chips cell — the host's marks and review door (chip 3), today (a deposit overdue), a dense cell beside the dock.
+  const WhereCell = ({ data }: ICellRendererParams<OrderRow>) =>
+    data ? <WhereItIsCell row={data} t={t} s={s} statusShown={statusShown /* F-CP-107 (cp-fx16) */} mark={latest.current.model.marks?.[data.id]} prefix={prefix} doorHref={latest.current.model.doorHref} today={model.today} now={now} dense={!!model.preset?.dense} /> : null
   const WaitingCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <WaitingOnCell row={data} mark={latest.current.model.marks?.[data.id]} prefix={prefix} doorHref={latest.current.model.doorHref} s={s} now={now} /> : null)
   const SupervisorColumn = ({ data }: ICellRendererParams<OrderRow>) => (data && m ? <SupervisorCell row={data} s={s} marks={m} /> : null)
   // ---- end F-SA-275
@@ -1152,12 +1210,15 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer,
         <Tag tone="warning">{s('atRisk.days', { count: data.atRisk.daysLeft })}</Tag>
       </FunnelButton>
     ) : null
-  const UrgencyCell = ({ data }: ICellRendererParams<OrderRow>) =>
-    data?.customerUrgency ? (
-      <FunnelButton tip={s('urgency.filter', { urgency: s(`urgency.${data.customerUrgency}`) })} onClick={() => act()?.onExtra?.({ customerUrgency: data.customerUrgency })}>
-        {s(`urgency.${data.customerUrgency}`)}
-      </FunnelButton>
-    ) : null
+  // F-CW-102 (S6, S7): the customer's urgency as its chip says it, READ ONLY (no funnel: the address term and saved views still
+  // narrow by it); our own Priority beside it when it is not Normal and its own column is not on screen.
+  const UrgencyCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <CustomerUrgencyCell row={data} s={s} d={d} bare={phone} priorityShown={priorityShown} /> : null)
+  const urgencyText = (row: OrderRow): string => {
+    const chip = urgencyChipOf(row)
+    const level = priorityChipOf(row)
+    const customer = !chip ? null : chip.state === 'URGENT' ? (chip.rank !== null ? s('urgency.bareRank', { rank: chip.rank }) : s('urgency.bare')) : s(`urgency.${chip.state}`)
+    return [customer, level ? s('urgency.priority', { level: d(`priority.level.${level}`) }) : null].filter(Boolean).join(' · ')
+  }
   // ── F-CP-140 (customer page plan C2d; design 11-money §3.1; review F6, G1): the price check — the ONE spec's four columns, opt-in in
   // Customise under "Price check" (none shown by default until the Owner's sheet), each the export's own id; only with the price
   // grain (priceCheckColumnsFor: none without it — no column, no Customise entry, no chip, no export column). Our price = the Net. ──
@@ -1196,7 +1257,7 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer,
     later({ colId: 'site', headerName: s('col.site'), minWidth: 110, flex: 0.8, valueGetter: ({ data }: { data?: OrderRow }) => (data ? (data.sites ?? []).map((site) => site.name).join(', ') : '') }),
     later({ colId: 'note', headerName: s('col.note'), headerTooltip: s('col.noteHint'), minWidth: 160, flex: 1.2, valueGetter: ({ data }: { data?: OrderRow }) => data?.internalNote ?? '' }),
     later({ colId: 'atRisk', headerName: s('col.atRisk'), headerTooltip: s('col.atRiskHint'), minWidth: 120, flex: 0.8, cellRenderer: AtRiskCell }),
-    later({ colId: 'customerUrgency', headerName: s('col.customerUrgency'), headerTooltip: s('col.customerUrgencyHint'), minWidth: 120, flex: 0.8, cellRenderer: UrgencyCell }),
+    later({ colId: 'customerUrgency', headerName: s('col.customerUrgency'), headerTooltip: s('col.customerUrgencyHint'), minWidth: 120, flex: 0.8, cellRenderer: UrgencyCell, valueGetter: ({ data }: { data?: OrderRow }) => (data ? urgencyText(data) : '') }),
     // F-SA-221: made to measure and its riders (the riders only for a reader of measurements: the API names them to no one else) —
     // opt-in, shown at once when the sheet shows made-to-measure orders only (the built-in view, the Made-to-measure page).
     { ...later({ colId: 'madeToMeasure', headerName: s('mtm.mark'), minWidth: 150, flex: 0.9, valueGetter: ({ data }: { data?: OrderRow }) => (data ? mtmText(data, s) : '') }), hide: !model.kind },
@@ -1207,13 +1268,14 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer,
   const columns = serverSorted(model.sort ?? null, [
     { colId: 'picture', headerName: s('col.picture'), minWidth: 76, maxWidth: 76, sortable: false, suppressHeaderMenuButton: true, cellRenderer: PictureColumn },
     { colId: 'number', headerName: t('col.number'), field: 'number', minWidth: 128, flex: 1, cellRenderer: NumberCell, context: also('customerRef', s('col.customerRef')) },
-    { colId: 'customer', headerName: t('col.customer'), field: 'partyName', minWidth: 112, flex: 1.2, cellRenderer: CustomerCell },
+    // F-CW-102 (A1-B8): on a page the host locks to ONE customer the page names it — no Customer column, no card subtitle, no entry in Customise.
+    ...(model.locked?.party ? [] : [{ colId: 'customer', headerName: t('col.customer'), field: 'partyName', minWidth: 112, flex: 1.2, cellRenderer: CustomerCell }]),
     { colId: 'brand', headerName: s('col.brand'), headerTooltip: s('col.brandHint'), minWidth: 100, flex: 1, sortable: false, cellRenderer: BrandCell },
     { colId: 'status', headerName: t('col.status'), field: 'status', minWidth: 112, flex: 0.9, cellRenderer: StatusCell },
     // F-SA-275: Where it is — the plain stage + health, this order's own pieces (reads `production` and `progress` while shown).
     later({ colId: 'whereItIs', headerName: s('col.whereItIs'), headerTooltip: s('col.whereItIsHint'), minWidth: 150, flex: 1, cellRenderer: WhereCell, valueGetter: ({ data }: { data?: OrderRow }) => (data ? whereText(data) : '') }),
     // B-TH-230: only for a reader of threads (the API counts only what the reader may open).
-    ...(model.unread && l ? [{ colId: 'newMessages', headerName: l('column'), headerTooltip: l('columnHint'), minWidth: 136, flex: 0.8, sortable: false, valueGetter: ({ data }: { data?: OrderRow }) => unreadValue(data ? latest.current.model.unread?.[data.id] : undefined), cellRenderer: NewMessagesCell } as ColDef<OrderRow>] : []),
+    ...(model.unread && l ? [{ colId: 'newMessages', headerName: l('column'), headerTooltip: l('columnHint'), minWidth: 136, flex: 0.8, sortable: false, valueGetter: ({ data }: { data?: OrderRow }) => unreadValue(data ? latest.current.model.unread?.[data.id] : undefined), cellRenderer: NewMessagesCell, ...(narrowMessages ? { headerComponentParams: { innerHeaderComponent: MessagesHeader }, suppressHeaderMenuButton: true, cellClass: 'fw-sheet-tight', headerClass: 'fw-sheet-tight' } : {}) /* F-CW-102 (S33) */ } as ColDef<OrderRow>] : []),
     { colId: 'deposit', headerName: t('col.deposit'), minWidth: 96, flex: 0.8, cellRenderer: DepositCell },
     { colId: 'units', headerName: t('col.units'), field: 'units', minWidth: 72, flex: 0.5, cellRenderer: UnitsCell },
     { colId: 'orderDate', headerName: t('col.orderDate'), field: 'orderDate', minWidth: 104, flex: 0.8, hide: !wide, cellRenderer: OrderedCell, context: also('requested', s('col.requested')) },
@@ -1239,10 +1301,25 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer,
     ...laterColumns, // B-TH-244
     { colId: 'more', headerName: t('col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
   ] as ColDef<OrderRow>[])
-    .map((column) => withPreset(column, model.preset ?? null, wide, phone)) // F-SA-276; F-CP-107 (cp-fx16): + the phone card
+    // F-SA-276; F-CP-107 (cp-fx16): + the phone card; F-CW-103: + what Customise says of a column that waits for a wider sheet
+    .map((column) => withPreset(column, model.preset ?? null, wide, phone, (name, room) => s(`customise.${room}`, { column: name })))
     .map((column) => withMovedMark(column, () => latest.current.model.commands?.moved ?? [])) // F-CP-108
   // F-OP-315 (order page walk #24): Sales › Orders itself fits its screen (a host's preset and the phone card keep their own rules).
-  return model.preset || phone ? columns : fitToScreen(columns, wide)
+  // F-CW-102: a host's set in the host's own order.
+  return model.preset ? orderedByPreset(columns, model.preset) : phone ? columns : fitToScreen(columns, wide)
+}
+
+/** F-CW-102: the host's own order of its set, left to right; the sheet's other columns follow in their own order; ⋯ stays last. */
+export function orderedByPreset(columns: readonly ColDef<OrderRow>[], preset: OrdersListModel['preset'] | null): ColDef<OrderRow>[] {
+  const order = preset?.order
+  if (!order || order.length === 0) return [...columns]
+  const place = (column: ColDef<OrderRow>): number => {
+    const at = order.indexOf(column.colId ?? '')
+    return at < 0 ? order.length : at
+  }
+  const body = columns.filter((column) => column.colId !== 'more')
+  const sorted = body.map((column, index) => ({ column, index })).sort((a, b) => place(a.column) - place(b.column) || a.index - b.index)
+  return [...sorted.map((entry) => entry.column), ...columns.filter((column) => column.colId === 'more')]
 }
 
 // ---- F-OP-315 (order page walk #24, follow-up 10): Sales › Orders reads at 1440 and 1920 ----------------------------------------------
@@ -1297,13 +1374,24 @@ export function withMovedMark(column: ColDef<OrderRow>, moved: () => readonly st
 export const statusShownOf = (preset: OrdersListModel['preset'] | null): boolean => !preset || preset.shown.includes('status')
 
 /** F-SA-276: the host's first columns (its view's preset; from 1800 px its wide ones too); ⋯ always; a person's Customise wins. */
-export function withPreset(column: ColDef<OrderRow>, preset: OrdersListModel['preset'] | null, wide: boolean, phone = false): ColDef<OrderRow> {
+// F-CW-103 (lead settle S12; review A1-B1): Customise tells the truth for a host's set. The list frame reads a column's place in
+// Customise from its `context.optIn` alone (list-frame/tools/model: no change there), and a preset hid built-in columns and showed
+// opt-in ones behind its back — the dialog listed the Orders page's columns: Where it is unticked while on screen, Customer ticked
+// while never shown. So the preset now says each column's truth: on screen → ticked; of the host's set but waiting for a wider
+// sheet (`later`) → ticked and named so (`label`: "Waiting on · from a wider sheet"), shown when the room allows, never cut to fit;
+// any other column → offered unticked (opt-in: it shows when the person ticks it). Only a host that gives a preset is touched.
+export function withPreset(column: ColDef<OrderRow>, preset: OrdersListModel['preset'] | null, wide: boolean, phone = false, label?: (column: string, room: 'wider' | 'widest') => string): ColDef<OrderRow> {
   if (!preset || column.colId === 'more') return column
   const id = column.colId ?? ''
   // F-CP-107 (cp-fx16): a table-wide column of `shown` leaves the table below 1800 px (the phone card keeps it); the host's own min width.
   const first = preset.shown.includes(id) && (wide || phone || !preset.tableWide?.includes(id))
   const min = preset.min?.[id]
-  return { ...column, hide: !(first || (wide && !!preset.wide?.includes(id))), ...(min ? { minWidth: min } : {}) }
+  const max = preset.max?.[id] // F-CW-102: a column of the host's set at its own fixed width (the rest goes to Where it is)
+  const shown = first || (wide && !!preset.wide?.includes(id))
+  const waits = shown ? null : (preset.later?.[id] ?? null)
+  const name = typeof column.headerName === 'string' ? column.headerName : ''
+  const context = { ...((column.context as object | undefined) ?? {}), optIn: !shown && !waits, ...(waits && label && name ? { toolLabel: label(name, waits) } : {}) }
+  return { ...column, hide: !shown, context, ...(min ? { minWidth: min } : {}), ...(max ? { maxWidth: max } : {}) }
 }
 // ── end B-TH-225 ──
 
@@ -1324,9 +1412,11 @@ function serverSorted(sort: OrderSort | null, columns: ColDef<OrderRow>[]): ColD
 
 // ── B-TH-244 (threads plan TH-4, picture 26; features SHEET.overall-F02 … F11) ──────────────────────────────────────────────────
 /** The door terms as chips (each with ✕): what a total's door added beside the rows view. */
-export function extraChips(extra: ExtraTerms | null, t: Translate, s: Translate): Array<{ key: keyof ExtraTerms; label: string }> {
+// F-CW-105 (S40): + our priority level's chip — "Priority: Top" in the level's own words (`d`: the depth catalogue's
+// `priority.level.*`, which the sheet always hands; without it the level's code).
+export function extraChips(extra: ExtraTerms | null, t: Translate, s: Translate, d?: Translate): Array<{ key: keyof ExtraTerms; label: string; note?: string }> {
   if (!extra) return []
-  const out: Array<{ key: keyof ExtraTerms; label: string }> = []
+  const out: Array<{ key: keyof ExtraTerms; label: string; note?: string }> = []
   if (extra.status) out.push({ key: 'status', label: s('chips.status', { status: t(`status.${extra.status}`) }) })
   if (extra.late) out.push({ key: 'late', label: s('chips.late') })
   if (extra.deposit) out.push({ key: 'deposit', label: s('chips.deposit') })
@@ -1337,6 +1427,12 @@ export function extraChips(extra: ExtraTerms | null, t: Translate, s: Translate)
   if (extra.currency) out.push({ key: 'currency', label: s('chips.currency', { currency: extra.currency }) })
   if (extra.customerUrgency) out.push({ key: 'customerUrgency', label: s('chips.urgency', { urgency: s(`urgency.${extra.customerUrgency}`) }) })
   if (extra.priceMatch) out.push({ key: 'priceMatch', label: t(`priceCheck.chip.${extra.priceMatch}`) }) // F-CP-141 (a price holder's only: the sheet drops it otherwise)
+  // F-CW-101: a phase's door — the group's own words (one word for one thing: phasePhrase); "Production not started" says what it holds.
+  if (extra.phase) {
+    const words = phasePhrase(extra.phase)
+    out.push({ key: 'phase', label: words.orders ? t(words.key) : s(words.key), ...(extra.phase === 'NOT_STARTED' ? { note: s('phase.note.NOT_STARTED') } : {}) })
+  }
+  if (extra.priority) out.push({ key: 'priority', label: s('urgency.priority', { level: d ? d(`priority.level.${extra.priority}`) : extra.priority }) }) // F-CW-105
   return out
 }
 

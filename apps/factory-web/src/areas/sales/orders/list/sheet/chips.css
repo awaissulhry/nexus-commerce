@@ -1,0 +1,143 @@
+/* F-CW-101 / F-CW-102 (customer Work tab; 10-design §3.4, §3.5) — the Orders sheet's chips, on every host of the ONE sheet (the
+   customer's Work tab, Sales › Orders, Sales › Made to measure). Layout only; design-system tokens only (no raw colour). */
+
+/* ---- F-CW-101: a chip above the sheet may say in quiet words what it holds (a phase's whys) ---- */
+.fw-sheet-chip-noted {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  min-width: 0;
+}
+.fw-sheet-chip-note {
+  min-width: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* ---- F-CW-102: Where it is — line 1 the chips (they wrap WHOLE: never half a chip, never a cut one), line 2 this order's pieces.
+   When the chips need two lines the pieces line gives way for that row (the row keeps its height; the words stay in the tooltip). ---- */
+.fw-sheet-wi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px var(--nds-space-4);
+  width: 100%;
+  min-width: 0;
+  max-height: 43px;
+  overflow: hidden;
+  line-height: 1.25;
+}
+.fw-sheet-wi > .nds-pill,
+.fw-sheet-wi > .nds-tag,
+.fw-sheet-wi > .fw-sheet-chip-door {
+  flex: none;
+  max-width: 100%;
+}
+.fw-sheet-wi-pcs {
+  flex-basis: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  line-height: 1.3;
+}
+.fw-sheet-wi-pcs b {
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-semibold);
+}
+/* A closed order's chip: outlined, quiet (told by its word and mark). */
+.nds-pill.fw-sheet-st.is-line {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--nds-border-strong);
+}
+/* Chip 3 (and "Urgent – asked"): its mark beside its words; who it waits on is outlined. */
+.nds-tag.fw-sheet-stop {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+.nds-tag.fw-sheet-stop.is-dash {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--nds-border-strong);
+}
+.fw-sheet-chip-door {
+  display: inline-flex;
+  border-radius: var(--nds-radius-pill);
+  text-decoration: none;
+}
+.fw-sheet-chip-door:hover > .nds-tag {
+  text-decoration: underline;
+}
+.fw-sheet-chip-door:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: -2px;
+}
+
+/* ---- F-CW-102: Customer urgency — the customer's chip and, beside it, our priority (they wrap; never cut) ---- */
+.fw-sheet-urg {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-2) var(--nds-space-4);
+  min-width: 0;
+  line-height: 1.25;
+}
+.fw-sheet-setback {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+  line-height: 1.25;
+  white-space: normal;
+}
+.fw-sheet-setback > svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+/* ---- F-CW-102: New messages — a count bubble; in a narrow column its header is the message mark ---- */
+.fw-sheet-msgs {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 var(--nds-space-6);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-primary);
+  color: var(--nds-text-inverse);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+button.fw-sheet-msgs,
+a.fw-sheet-msgs {
+  cursor: pointer;
+}
+.fw-sheet-msgs:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+.fw-sheet-hicon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  color: var(--nds-text-2);
+}
+/* The bubble's narrow column of a host's own set: less side padding, so the bubble sits in its middle (the column is wide enough
+   for the bubble with the grid's own padding too). */
+.ag-cell.fw-sheet-tight,
+.ag-header-cell.fw-sheet-tight {
+  padding-left: var(--nds-space-4);
+  padding-right: var(--nds-space-4);
+  text-align: center;
+}

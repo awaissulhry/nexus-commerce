@@ -243,9 +243,14 @@ describe('F-CP-104: New order on the customer page holds its customer', () => {
     }
   })
 
-  it('All orders with none yet offers New order in place, held with why without orders.manage', () => {
+  // F-CW-102 (customer Work tab; lead settles S9, S20): on the EMPTY state the button is drawn only for a person who may take
+  // orders (an act the reader has no right for is not there); the host's link (the customer's drafts) sits beside it. The toolbar's
+  // own New order keeps its held words (F-CP-104).
+  it('All orders with none yet offers New order in place — only with orders.manage (not drawn otherwise); the toolbar\'s stays held with why', () => {
     const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
-    expect(view).toContain(") : hostEmpty.newOrder ? (")
+    expect(view).toContain('(hostEmpty.newOrder && model.can.manage) || hostEmpty.link ? (')
+    expect(view).toContain('{hostEmpty.newOrder && model.can.manage && (')
+    expect(view).not.toContain(') : hostEmpty.newOrder ? (')
     expect(view).toContain("heldReason={model.can.manage ? null : t('held.noManage')} onClick={() => actions?.onNewOrder?.(true)}")
   })
 })

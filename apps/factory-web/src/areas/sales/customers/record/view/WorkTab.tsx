@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Building2, Eye } from 'lucide-react' // F-OP-203: the segments' icons
 import { Button, Skeleton } from '@nexus/ui/primitives'
@@ -17,6 +17,7 @@ import { doorListOf } from '../../../../home/approvals/requests/model'
 import { useRequestReviewDoor } from '../../../../home/approvals/requests/use-request-review-door'
 import { RequestDoorNoticeBanner, RequestDoorWindow } from '../../../../home/approvals/requests/view/RequestReview'
 import type { OrderRow } from '../../../orders/api'
+import type { OrderPhase } from '../../../orders/api' // F-CW-102: a door's own empty words
 import type { ExtraTerms, RowView } from '../../../orders/model'
 import { ORDERS_LIST_KEY, sheetAddress, useOrdersSheet, type OrdersSheetHost } from '../../../orders/list/use-orders-sheet'
 import { OrdersListView, WAITING_US_VIEW } from '../../../orders/list/view/OrdersListView'
@@ -46,7 +47,14 @@ import { ALL_OF_CUSTOMER_NS, AllOfCustomerDock } from '../../../../_shared/recor
 import { FileViewer } from '../../../../../lib/record-thread/popups/view/FileViewer'
 import { FILES_VIEW_NS } from '../../../../../lib/record-thread/files-view/view/FilesView'
 // ---- end F-CP-111
-import { WaitingStrip, type StripDoors } from './WaitingStrip'
+// ---- F-CW-101: the band in the strip's place (the bigger picture, its notes, what waits) ----
+import { NAMESPACE as SHEET_NS, phasePhrase } from '../../../orders/list/sheet/model'
+import { IN_PRODUCTION_VIEW } from '../use-customer-work'
+import { bandOf, chipsOf, groupShown, whysOf, type BandGroup } from '../work-band'
+import { beforeLineOf, NO_BEFORE_ORDER, type BeforeOrderCounts } from '../before-order'
+import { WorkBand, type WorkBandActions, type WorkBandModel } from './WorkBand'
+// ---- end F-CW-101
+import { WorkLayoutTools } from '../work-layout' // F-CW-103: the Work tab's own browser layout
 import './customer-work.css'
 
 /**
@@ -59,6 +67,9 @@ import './customer-work.css'
  * order's conversation (⌘ / Ctrl: the order in a new tab; Enter opens the order). "Requests to answer" opens the view Waiting on us,
  * a request's Answer… the review window on this page (the four-door window, `?open=`). A real link to Production › Work orders of
  * the customer. Live: values in place, rows never jump (the sheet's own rule); the strip's counts re-read on their events.
+ * F-CW-101 (customer Work tab plan §1; lead settles S3, S16, S19, S24): the strip is the band (WorkBand) — the seven groups of the
+ * customer's orders, each a door (`phase=<PHASE>` beside `rows=all`), the notes, and today's six facts as chips; "Requests to
+ * answer" opens the review window on exactly those requests; the view In production is the door of the started orders.
  */
 
 /** A record the dock may show beside the customer's own thread (an order, a quote, a request): its type, id, number, company. */
@@ -75,7 +86,9 @@ export const DRAFTS_VIEW = 'drafts:customer'
 export const NOT_EQUAL_VIEW = 'price:notEqual'
 
 /** The Work tab's views, in their order: All orders · In production · Waiting on us · Late · Drafts of <customer> · Not equal. */
-export const WORK_VIEWS: readonly string[] = Object.freeze([WORK_DEFAULT_ROWS, 'IN_PRODUCTION', WAITING_US_VIEW, 'late', DRAFTS_VIEW, NOT_EQUAL_VIEW])
+// F-CW-101 (lead settles S3, S19): In production is the door of the STARTED orders (`phase=IN_PRODUCTION`, a view of the host) — the
+// same orders as the band's group and the Overview's tile, never the state In production (which holds the not-started ones too).
+export const WORK_VIEWS: readonly string[] = Object.freeze([WORK_DEFAULT_ROWS, IN_PRODUCTION_VIEW, WAITING_US_VIEW, 'late', DRAFTS_VIEW, NOT_EQUAL_VIEW])
 
 /**
  * The views this person is offered, in WORK_VIEWS' order: Not equal only with the price grain (money wall: no view, no count without
@@ -88,12 +101,31 @@ export function workViewsOf(can: { readonly price: boolean }, offered: { readonl
 /**
  * What an empty view says, per view (11-customer-page; 10 §1): All orders — "<customer> has no order yet." (F-CP-104 adds New order
  * beside it); In production — "Nothing in production for <customer>." with Show all orders; every other view the sheet's own words.
+ * F-CW-102 (lead settle S20; 10-design §3.7): a door of the band or a view with nothing behind it says so in a whole sentence, with
+ * Show all orders — "No order of <customer> waits to be sent to the factory now." (seven doors), "… waits on us now.", "… is late
+ * now."; these show whatever the door narrows (`always`), so the host gives them only when nothing else does (`plain`: no search, no
+ * other term — then the sheet's own "No orders match" is the right answer). No order at all with drafts in the portal: one more line
+ * and the way to them (drafts are never counted as orders).
  */
-export function workEmptyOf(rows: RowView, waiting: 'us' | null, customer: string, t: (key: string, params?: Record<string, string | number>) => string, allHref: string): OrdersListModel['empty'] {
-  if (waiting) return null
+export function workEmptyOf(
+  rows: RowView,
+  waiting: 'us' | null,
+  customer: string,
+  t: (key: string, params?: Record<string, string | number>) => string,
+  allHref: string,
+  door: { readonly phase?: OrderPhase | null; readonly plain?: boolean; readonly drafts?: { readonly count: number; readonly href: string } | null } = {},
+): OrdersListModel['empty'] {
+  const all = { href: allHref, label: t('customers.work.showAll') }
+  const plain = door.plain !== false
+  if (door.phase) return plain && rows === 'all' && !waiting ? { title: t(`customers.work.none.${door.phase}`, { customer }), link: all, always: true } : null
+  if (waiting) return plain && rows === 'open' ? { title: t('customers.work.none.waitingUs', { customer }), link: all, always: true } : null
   // F-CP-102: each keyed to its view (the sheet shows it on that view when nothing else narrows it).
-  if (rows === 'all') return { title: t('customers.work.emptyAll', { customer }), view: 'all', newOrder: true /* F-CP-104: New order beside it */ }
-  if (rows === 'IN_PRODUCTION') return { title: t('customers.work.empty', { customer }), link: { href: allHref, label: t('customers.work.showAll') }, view: 'IN_PRODUCTION' }
+  if (rows === 'all') {
+    const drafts = door.drafts && door.drafts.count > 0 ? door.drafts : null
+    return { title: t('customers.work.emptyAll', { customer }), view: 'all', newOrder: true /* F-CP-104: New order beside it */, ...(drafts ? { body: t('customers.work.emptyDrafts', { count: drafts.count }), link: { href: drafts.href, label: t('customers.work.showDrafts') } } : {}) }
+  }
+  if (rows === 'IN_PRODUCTION') return { title: t('customers.work.empty', { customer }), link: all, view: 'IN_PRODUCTION' }
+  if (rows === 'late') return plain ? { title: t('customers.work.none.late', { customer }), link: all, always: true } : null
   return null
 }
 // ---- end F-CP-101
@@ -109,6 +141,9 @@ export function workEmptyOf(rows: RowView, waiting: 'us' | null, customer: strin
 export const MONEY_PRESET: NonNullable<OrdersListModel['preset']> = Object.freeze({
   shown: Object.freeze(['number', 'status', 'ourPrice', 'brandPrice', 'priceMatch', 'balance']),
   wide: Object.freeze(['picture', 'promised', 'paid']),
+  // F-CW-103: Customise says so of the three that wait for a wider sheet (ticked, "… · from a wider sheet"). F-CW-104 (10-design
+  // §3.8): they return from the `wide` room (1150 px of sheet: the row fits whole), not only at the widest.
+  later: Object.freeze({ picture: 'wider', promised: 'wider', paid: 'wider' } as const),
 })
 
 /** The Not equal view is the one shown: every order (`rows=all`), the price check term Not equal, no waiting term (a price holder's). */
@@ -133,38 +168,101 @@ export function columnSetOf(asked: string | null | undefined, notEqual: boolean,
 export const colsTermOf = (set: ColumnSet, notEqual: boolean): ColumnSet | null => (set === viewColumnSet(notEqual) ? null : set)
 // ---- end F-CP-105
 
-// ---- F-CP-107 (cp-fx16; oo-walk 15 b): the number and the status whole on All orders, beside the dock (a third of the page) ----
+// ---- F-CW-102 (customer Work tab plan §1; 10-design §1, §3.5; lead settles S4, S31, S39): the row, by the ROOM the sheet has ----
 /**
- * The honest room of the longest words, with the cell's padding (measured at 1440): the number — a seed's "SEED-SO-W39-01" 142 px
- * (a real "SO-2026-0089" 126); the status — "In attesa di approvazione" 195 px ("Waiting for a yes" 151). On this page's sheet
- * only: Sales › Orders keeps the sheet's own widths (no room there at 1440 for 100 px more).
+ * The rooms of the Work tab's sheet — its OWN width, never the window's (F-CW-103 measures it): `base` beside the open thread at 1440
+ * (865 px), `wide` at 1920 beside the thread (1185), `wider` with the thread closed at 1440 (1314), `widest` with it closed at 1920
+ * (1794). Closing the thread ADDS columns. Each set starts where its columns fit whole (the budget is pinned by a test): select 43 +
+ * the set's widths + ⋯ 64 ≤ the room.
  */
-export const WORK_MIN: Readonly<Record<string, number>> = Object.freeze({ number: 144, status: 196 })
-/**
- * All orders beside the dock: @1440 (the body 863 px) select 43 + Number 144 + Status 196 + Where it is 150 + Promised 108 + New
- * messages 136 + ⋯ 64 = 841 — Picture shows in the table from 1800 px (the phone card keeps it); @1920 (1183 px) + Picture 76 +
- * Waiting on 136 + Priority 108 = 1161 (Deposit and Balance in Customise; Balance with the Money columns).
- */
-export const ALL_ORDERS_PRESET: NonNullable<OrdersListModel['preset']> = Object.freeze({
-  shown: Object.freeze(['picture', 'number', 'status', 'whereItIs', 'promised', 'newMessages']),
-  tableWide: Object.freeze(['picture']),
-  wide: Object.freeze(['waitingOn', 'priority']),
-  min: WORK_MIN,
+export type WorkRoom = 'base' | 'wide' | 'wider' | 'widest'
+export const WORK_ROOMS: Readonly<Record<Exclude<WorkRoom, 'base'>, number>> = Object.freeze({ wide: 1150, wider: 1300, widest: 1700 })
+export const workRoomOf = (width: number | null | undefined): WorkRoom =>
+  typeof width !== 'number' ? 'base' : width >= WORK_ROOMS.widest ? 'widest' : width >= WORK_ROOMS.wider ? 'wider' : width >= WORK_ROOMS.wide ? 'wide' : 'base'
+
+/** The row's own order on screen (the sheet's other columns follow in their own order; ⋯ last). */
+export const WORK_ORDER: readonly string[] = Object.freeze(['picture', 'number', 'whereItIs', 'promised', 'customerUrgency', 'priority', 'waitingOn', 'deposit', 'units', 'shipped', 'orderDate', 'supervisor', 'newMessages'])
+/** What each wider room adds: Waiting on · Deposit, then Shipped, then Priority · Pieces · Ordered · Supervisor. Status waits in Customise (it is chip 1). */
+export const WORK_ADDS: Readonly<Record<Exclude<WorkRoom, 'base'>, readonly string[]>> = Object.freeze({ wide: Object.freeze(['waitingOn', 'deposit']), wider: Object.freeze(['shipped']), widest: Object.freeze(['priority', 'units', 'orderDate', 'supervisor']) })
+const BASE_SET: readonly string[] = Object.freeze(['picture', 'number', 'whereItIs', 'promised', 'customerUrgency', 'newMessages'])
+/** The columns of each room: Picture · Number · Where it is · Promised · Customer urgency · New messages, then each room's adds. */
+export const WORK_SETS: Readonly<Record<WorkRoom, readonly string[]>> = Object.freeze({
+  base: BASE_SET,
+  wide: Object.freeze([...BASE_SET, ...WORK_ADDS.wide]),
+  wider: Object.freeze([...BASE_SET, ...WORK_ADDS.wide, ...WORK_ADDS.wider]),
+  widest: Object.freeze([...BASE_SET, ...WORK_ADDS.wide, ...WORK_ADDS.wider, ...WORK_ADDS.widest]),
 })
-// ---- end F-CP-107 (cp-fx16)
+/** Waiting on us and Late beside the open thread: Waiting on takes the place of Customer urgency and New messages (no sideways scroll). */
+export const WAITING_SET: readonly string[] = Object.freeze(['picture', 'number', 'whereItIs', 'promised', 'waitingOn'])
+/**
+ * The honest room of each column of the set, with the cell's padding (the grid's 14 px each side): the picture 36 px; a seed's
+ * "SEED-SO-W39-01"; three chips of Where it is on two lines at the least; a date and its header; "Urgente (cliente) 2" beside
+ * "Priorità: Massima"; the bubble; the longest words of each wider column in Italian. Status (in Customise): "In attesa di
+ * approvazione" whole. On this page's sheet only: Sales › Orders keeps the sheet's own widths.
+ */
+export const WORK_MIN: Readonly<Record<string, number>> = Object.freeze({ picture: 64, number: 150, whereItIs: 220, promised: 108, customerUrgency: 150, newMessages: 52, waitingOn: 178, deposit: 118, shipped: 118, priority: 112, units: 84, orderDate: 104, supervisor: 130, status: 196 })
+/** Every column of the set keeps its width: the room left goes to Where it is (the chips), never to a stretched date. */
+export const WORK_MAX: Readonly<Record<string, number>> = Object.freeze(Object.fromEntries(Object.entries(WORK_MIN).filter(([id]) => id !== 'whereItIs' && id !== 'status')))
+
+type WorkPreset = NonNullable<OrdersListModel['preset']>
+/**
+ * F-CW-103 (S12; 10-design §3.9): the columns of the tab's set that are not on screen in this room, and from which room they show —
+ * what Customise says of each ("Waiting on · from a wider sheet", "Supervisor · from the widest sheet"): ticked, never cut to fit.
+ */
+export function workLaterOf(shown: readonly string[]): Readonly<Record<string, 'wider' | 'widest'>> {
+  const later: Record<string, 'wider' | 'widest'> = {}
+  for (const id of WORK_SETS.widest) if (!shown.includes(id)) later[id] = WORK_ADDS.widest.includes(id) ? 'widest' : 'wider'
+  return Object.freeze(later)
+}
+/** One preset per room and kind, kept (the sheet rebuilds its columns only when the preset really changes). */
+const PRESETS = new Map<string, WorkPreset>()
+function presetOf(room: WorkRoom, waits: boolean): WorkPreset {
+  const key = `${room}:${waits ? 'waits' : 'all'}`
+  let preset = PRESETS.get(key)
+  if (!preset) {
+    const shown = waits ? WAITING_SET : WORK_SETS[room]
+    // A narrow cell beside the dock: chip 3 keeps its head, its tail goes to its tooltip (the widest room shows it whole).
+    preset = Object.freeze({ shown, order: WORK_ORDER, min: WORK_MIN, max: WORK_MAX, dense: room !== 'widest', later: workLaterOf(shown) /* F-CW-103 */ })
+    PRESETS.set(key, preset)
+  }
+  return preset
+}
+
+// ---- F-CW-103 (lead settle S11; 13-backend §8, review A1 (b)): wide by the ROOM ----
+/**
+ * The Work tab measures its OWN room — the width its root really has, with the thread docked a third, a half or hidden, at any
+ * screen — and hands the sheet the set for that room: closing the thread ADDS columns, live. Never the window (the old rule: 1800 px
+ * of viewport, so a closed thread at 1440 added nothing), and no change in the record frame. Until it is measured: the base set.
+ */
+export function useWorkRoom(): { readonly ref: RefObject<HTMLDivElement | null>; readonly room: WorkRoom } {
+  const ref = useRef<HTMLDivElement>(null)
+  const [room, setRoom] = useState<WorkRoom>('base')
+  useLayoutEffect(() => {
+    const node = ref.current
+    if (!node) return
+    const measure = () => setRoom(workRoomOf(node.getBoundingClientRect().width))
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+  return { ref, room }
+}
+// ---- end F-CW-103
 
 /**
- * The columns a view shows at first (11-customer-page §3.5; a person's Customise wins): In production — no Status (every row is in
- * production); All orders — Status, Waiting on from 1800 px (F-CP-107 (cp-fx16): ALL_ORDERS_PRESET); the other views — Status and
- * Waiting on. Customer and Brand never (the customer is the page's). F-CP-141: the money columns (MONEY_PRESET) when `money` — the Not
- * equal view; All orders keeps its own (review E5: money comes with the Not equal view or the Work · Money toggle, never unasked).
+ * The columns a view shows at first (10-design §1, §3.5; a person's Customise wins): the room's set — the same on every view of
+ * the tab (All orders, a door of the band, In production); Waiting on us and Late beside the open thread show Waiting on in the
+ * place of Customer urgency and New messages. Customer and Brand never (the customer is the page's); Status waits (it is the first
+ * chip of Where it is). F-CP-141: the money columns (MONEY_PRESET) when `money` — the Not equal view, or the Work · Money toggle
+ * (review E5: money never unasked); its wide columns return from the `wide` room (F-CW-104).
  */
-export function workPreset(rows: RowView, waiting: 'us' | null, money = false): NonNullable<OrdersListModel['preset']> {
+export function workPreset(rows: RowView, waiting: 'us' | null, money = false, room: WorkRoom = 'base'): WorkPreset {
   if (money) return MONEY_PRESET // F-CP-141
-  if (rows === 'all' && !waiting) return ALL_ORDERS_PRESET // F-CP-107 (cp-fx16)
-  if (rows === 'IN_PRODUCTION' && !waiting) return { shown: ['picture', 'number', 'whereItIs', 'promised', 'waitingOn', 'newMessages'], wide: ['priority', 'deposit', 'balance', 'supervisor'] }
-  return { shown: ['picture', 'number', 'status', 'whereItIs', 'promised', 'waitingOn', 'newMessages'], wide: ['priority', 'deposit', 'balance', 'supervisor'] }
+  return presetOf(room, room === 'base' && (waiting === 'us' || rows === 'late'))
 }
+// ---- end F-CW-102
 
 /** The dock's pick of an order row. */
 export const pickOfRow = (row: Pick<OrderRow, 'id' | 'number' | 'companyId'>): DockPick => ({ type: 'SalesOrder', id: row.id, label: row.number, companyId: row.companyId })
@@ -183,7 +281,9 @@ export interface WorkTabProps {
   /** F-SA-279: the keys moved the focus to a row (the page's dock follows after its rest). */
   readonly onFocus?: (pick: DockPick) => void
   /** F-SA-278: the strip's two windows (Waiting for <customer>, Open tasks). */
-  readonly onWindow?: StripDoors['onWindow']
+  readonly onWindow?: WorkBandActions['onWindow']
+  /** F-CW-101 (S27): the band's "Before an order" line — the page's counts (before-order.ts); absent: no line. */
+  readonly before?: BeforeOrderCounts
   /** F-CP-104: the page's ask (the band's New order, ⋯ Import orders for <customer>…), served once the sheet is here; then `onAsked`. */
   readonly ask?: WorkAsk | null
   readonly onAsked?: () => void
@@ -205,15 +305,16 @@ export function WorkTab(props: WorkTabProps) {
       </div>
     )
   return (
-    <WithMessages namespaces={['orders']}>
+    <WithMessages namespaces={['orders', SHEET_NS /* F-CW-101: the phases' words */]}>
       <WorkSheet {...props} />
     </WithMessages>
   )
 }
 
-function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow, ask, onAsked }: WorkTabProps) {
+function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow, ask, onAsked, before }: WorkTabProps) {
   const t = useT('parties')
   const o = useT('orders')
+  const s = useT(SHEET_NS) // F-CW-101
   const params = useSearchParams()
   // ---- F-CP-113: "Add the lines" opens the ONE lines editor (the New order page's own) in a large window here: no page hop, no
   // address term. Discard and a made order close it (the new order docks, its row arrives behind "N updates · Show"); × keeps the
@@ -236,6 +337,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
     onRowClick: (row, newTab) => (newTab ? window.open(`${prefix}/sales/orders/${encodeURIComponent(row.id)}`, '_blank', 'noopener') : onPick(pickOfRow(row))),
   }
   const sheet = useOrdersSheet(host)
+  const workRoom = useWorkRoom() // F-CW-103 (S11): the tab's own room decides the columns, never the window
   // ---- F-CP-104: the band's New order (the customer picked and held: no Change) and ⋯ Import orders open here, once each ask; no
   // address term is written for them (fx-12: nothing to loop on; a reload does not reopen the window).
   const latest = useRef(sheet.actions)
@@ -272,20 +374,49 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
   // the view's columns for the money columns; the Not equal view opens on Money.
   const columnSet = columnSetOf(params?.get(COLS_TERM), notEqual, price)
   // ---- end F-CP-105
+  // ---- F-CW-101: the band — the bigger picture from the strip's own board read (no second read), the group the sheet shows now, the
+  // two whys of "Not sent to the factory" (also the quiet words beside that door's chip).
+  const phase = showDrafts ? null : (sheet.model.extra?.phase ?? null)
+  const phaseWords = (which: NonNullable<typeof phase>): string => {
+    const words = phasePhrase(which)
+    return words.orders ? o(words.key) : s(words.key)
+  }
+  const picture = useMemo(() => bandOf(work.reads.board), [work.reads.board])
+  const whys = useMemo(() => whysOf(work.reads.board), [work.reads.board])
+  const whysWords = whys.map((entry) => t(`customers.work.band.why.${entry.why}`, { count: entry.count })).join(' · ')
+  const shownGroup = picture.groups.find((group) => groupShown(group, { rows, waiting, extra: sheet.model.extra, drafts: showDrafts })) ?? null
+  // The In production view = the door of the started orders (S3): ticked while that door is the one shown.
+  const startedShown = phase === 'IN_PRODUCTION' && rows === 'all' && !waiting
+  // ---- end F-CW-101
   const model: OrdersListModel = {
     ...sheet.model,
     views: workViewsOf(sheet.model.can, { drafts: true, priceCheck: true }), // F-CP-101: All orders first; F-CP-107: Drafts of <customer>; F-CP-141: Not equal (price grain)
-    viewCounts: { ...(workViewCounts(work.reads.board) ?? {}), ...(draftRows ? { [DRAFTS_VIEW]: draftRows.length } : {}), ...(notEqualCount !== null ? { [NOT_EQUAL_VIEW]: notEqualCount } : {}) }, // F-CP-103 (no second read); F-CP-107: the drafts once read; F-CP-141: the Not equal count
+    viewCounts: { ...(workViewCounts(work.reads.board) ?? {}), ...(typeof before?.drafts === 'number' ? { [DRAFTS_VIEW]: before.drafts } : {}) /* F-CW-101: the band's own count of the drafts */, ...(draftRows ? { [DRAFTS_VIEW]: draftRows.length } : {}), ...(notEqualCount !== null ? { [NOT_EQUAL_VIEW]: notEqualCount } : {}) }, // F-CP-103 (no second read); F-CP-107: the drafts once read; F-CP-141: the Not equal count
     hostViews: [
+      { id: IN_PRODUCTION_VIEW, label: o('rows.IN_PRODUCTION'), active: startedShown }, // F-CW-101 (S3): the started orders' door
       { id: DRAFTS_VIEW, label: t('customers.work.view.drafts', { customer: party.name }), active: showDrafts }, // F-CP-107
       ...(price ? [{ id: NOT_EQUAL_VIEW, label: t('customers.work.view.notEqual'), active: notEqual }] : []), // F-CP-141
     ],
-    preset: workPreset(rows, waiting, columnSet === 'money' /* F-CP-141: the Not equal view opens on the money columns; F-CP-105: the toggle on every view */),
+    preset: workPreset(rows, waiting, columnSet === 'money' /* F-CP-141: the Not equal view opens on the money columns; F-CP-105: the toggle on every view */, workRoom.room /* F-CW-103 */),
+    // F-CW-103 (S11): by the tab's own room (the sheet then asks no window). F-CW-104 (10-design §3.8): the Money set's wide columns
+    // (Picture · Promised · Paid) return as soon as the row fits whole — from the `wide` room.
+    wide: columnSet === 'money' ? workRoom.room !== 'base' : workRoom.room === 'widest',
+    countOf: workViewCounts(work.reads.board)?.all ?? null, // F-CW-104: "2 of 14 orders" under a door, a view or a search
+    searchLabel: t('customers.work.search'), // F-CW-104: the shorter words fit the toolbar beside the thread
     columnSet: price ? { value: columnSet } : null, // F-CP-105: the toggle, a price holder's only
     marks: work.marks,
     doorHref: door.hrefOf,
-    toolbarLink: can.workorders ? { href: `${prefix}/production/work-orders?party=${encodeURIComponent(party.id)}`, label: t('customers.band.workOrders', { customer: party.name }) } : null,
-    empty: workEmptyOf(rows, waiting, party.name, t, all) ?? sheet.model.empty ?? null, // F-CP-101: per view
+    // F-CW-101 (S38): "Work orders of <customer> ›" moved from the toolbar to the band's notes (it wrapped the toolbar beside the dock).
+    phaseNote: phase === 'NOT_SENT' && whysWords ? whysWords : null, // F-CW-101: why the orders behind that door wait
+    // F-CP-101: per view. F-CW-102 (S20): a door's or a view's own sentence when nothing else narrows the sheet; the drafts' line.
+    empty:
+      workEmptyOf(rows, waiting, party.name, t, all, {
+        phase,
+        plain: sheet.model.q.trim() === '' && !sheet.model.brand && !sheet.model.company && !sheet.model.cf && !sheet.model.kind && Object.keys(sheet.model.extra ?? {}).every((key) => key === 'phase'),
+        drafts: typeof before?.drafts === 'number' ? { count: before.drafts, href: draftsAddress(`${prefix}${basePath}`, party.id, params) } : null,
+      }) ??
+      sheet.model.empty ??
+      null,
     // F-SA-279: the row the dock shows is marked; the keys' row is reported (the dock follows after its rest); a phone card's door.
     active: can.threads ? { id: picked && picked.type === 'SalesOrder' ? picked.id : null, cardDoor: t('customers.work.dock.cardDoor') } : null,
   }
@@ -295,10 +426,17 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
   const onRows = leave ? (next: RowView) => leave(null, { rows: next }) : sheet.actions.onRows
   const onWaiting = leave ? (next: 'us' | null, view?: RowView) => leave(null, { rows: view ?? rows, waiting: next }) : sheet.actions.onWaiting
   // ---- end F-CP-141
+  // ---- F-CW-101 (S16): a phase door stands alone too — every other pick (Views ▾, the band's chips, Show all orders) drops the
+  // phase term in the same write; a door picked sets it alone beside All orders (the sheet's onPhase).
+  const offPhase = sheet.model.extra?.phase ? (sheet.actions.onPhase ?? null) : null
+  const viewRows = offPhase ? (next: RowView) => offPhase(null, { rows: next }) : onRows
+  const viewWaiting = offPhase ? (next: 'us' | null, view?: RowView) => offPhase(null, { rows: view ?? rows, waiting: next }) : onWaiting
+  const showAll = () => (waiting ? viewWaiting?.(null, 'all') : viewRows?.('all'))
+  // ---- end F-CW-101
   const actions = {
     ...sheet.actions,
-    onRows, // F-CP-141
-    onWaiting, // F-CP-141
+    onRows: viewRows, // F-CP-141; F-CW-101
+    onWaiting: viewWaiting, // F-CP-141; F-CW-101
     // F-CP-105: a pick writes `cols` through the sheet (one replace; none when it is the view's own columns: the term goes).
     ...(price ? { onColumnSet: (set: ColumnSet) => sheet.actions.onPageTerm?.(COLS_TERM, colsTermOf(set, notEqual)) } : {}),
     // F-CP-107: Drafts of <customer> — a person's pick writes `list=drafts` once (the record pages' one history writer; a rows view
@@ -307,6 +445,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
     onHostView: (id: string) => {
       if (id === DRAFTS_VIEW) writeSearch(draftsAddress(`${prefix}${basePath}`, party.id, params))
       else if (id === NOT_EQUAL_VIEW) sheet.actions.onPriceMatch?.('NOT_EQUAL', { rows: 'all' })
+      else if (id === IN_PRODUCTION_VIEW) sheet.actions.onPhase?.('IN_PRODUCTION') // F-CW-101 (S3): the started orders' door
     },
     ...(can.threads
       ? {
@@ -318,25 +457,50 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
         }
       : {}),
   }
-  const doors: StripDoors = {
-    onView: (view) => (view === 'waitingUs' ? onWaiting?.('us', 'open') : waiting ? onWaiting?.(null, view) : onRows?.(view)), // F-CP-141: they leave the Not equal view
+  // ---- F-CW-101: the band's model and doors. A group pressed shows its orders; pressed while shown, all orders again. Late and
+  // Waiting for deposit open their views (as the strip's tiles did); "Requests to answer" opens the review window on exactly the
+  // requests it counts (S24: the door's own list, a real link); Replies is a real link; the two windows are the page's.
+  const recordHref = `${prefix}${basePath}`
+  const firstRequest = list.ids[0] ?? null
+  const bandModel: WorkBandModel = {
+    customer: party.name,
+    picture,
+    shown: shownGroup?.phase ?? null,
+    whys,
+    before: beforeLineOf(before ?? NO_BEFORE_ORDER, recordHref),
+    chips: chipsOf(can, work.reads),
+    pressed: showDrafts || waiting || phase ? [] : rows === 'late' ? ['late'] : rows === 'deposit' ? ['deposit'] : [],
+    workOrdersHref: can.workorders ? `${prefix}/production/work-orders?party=${encodeURIComponent(party.id)}` : null,
     repliesHref: `${prefix}/sales/incoming?tile=CUSTOMER_REPLIES&party=${encodeURIComponent(party.id)}`,
+    requestsHref: firstRequest ? door.hrefOf(firstRequest) : null,
+  }
+  const bandActions: WorkBandActions = {
+    onGroup: (group: BandGroup) => {
+      if (!group.door) return
+      if (shownGroup?.phase === group.phase) return showAll()
+      if (group.door.kind === 'phase') sheet.actions.onPhase?.(group.door.phase)
+      else viewRows?.(group.door.status) // an older answer: the one state's own view
+    },
+    onAll: showAll,
+    onDrafts: () => actions.onHostView(DRAFTS_VIEW),
+    onView: (view) => (!showDrafts && !waiting && !phase && rows === view ? showAll() : waiting ? viewWaiting?.(null, view) : viewRows?.(view)),
     onWindow,
     onRetry: work.retry,
   }
+  // ---- end F-CW-101
   // The picked order left the view (it moved on, live): the dock keeps its conversation; one line says so, with the way back.
   const items = sheet.model.list.items
-  const gone = !showDrafts && picked && picked.type === 'SalesOrder' && items && sheet.model.updates === 0 && !items.some((row) => row.id === picked.id) && !(rows === 'all' && !waiting && !notEqual /* F-CP-141 */)
-  const viewName = waiting ? t('customers.work.view.waitingUs') : notEqual ? t('customers.work.view.notEqual') /* F-CP-141 */ : o(`rows.${rows}`)
+  const gone = !showDrafts && picked && picked.type === 'SalesOrder' && items && sheet.model.updates === 0 && !items.some((row) => row.id === picked.id) && !(rows === 'all' && !waiting && !notEqual /* F-CP-141 */ && !phase /* F-CW-101 */)
+  const viewName = waiting ? t('customers.work.view.waitingUs') : notEqual ? t('customers.work.view.notEqual') /* F-CP-141 */ : phase ? phaseWords(phase) /* F-CW-101 */ : o(`rows.${rows}`)
   return (
     <CustomerOverrideProvider onDone={door.refresh}>
-      <div className="fw-cw">
+      <div className="fw-cw" ref={workRoom.ref /* F-CW-103: the room the tab measures */}>
         <RequestDoorNoticeBanner door={door} />
-        <WaitingStrip customer={party.name} reads={work.reads} can={can} doors={doors} />
+        <WorkBand model={bandModel} actions={bandActions} />
         {gone && (
           <p className="fw-cw-line" role="status">
             <span>{t('customers.work.gone', { record: picked?.label ?? '', view: viewName })}</span>
-            <Button size="sm" variant="quiet" onClick={() => (waiting ? onWaiting?.(null, 'all') : onRows?.('all')) /* F-CP-141 */}>
+            <Button size="sm" variant="quiet" onClick={showAll /* F-CP-141; F-CW-101: the phase door left too */}>
               {t('customers.work.showAll')}
             </Button>
           </p>
@@ -344,7 +508,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
         {showDrafts ? (
           // F-CP-107: the customer's portal drafts, read only (the dock follows a row: the draft's own conversation).
           <CustomerDraftsList
-            model={{ customer: party.name, read: drafts.read, updates: drafts.updates, activeId: picked && picked.type === 'PortalOrderRequest' ? picked.id : null, views: { model, actions } }}
+            model={{ customer: party.name, read: drafts.read, updates: drafts.updates, activeId: picked && picked.type === 'PortalOrderRequest' ? picked.id : null, views: { model, actions }, wide: workRoom.room !== 'base' /* F-CW-104 (10-design §3.8): Messages (and the value) from the `wide` room */ }}
             actions={{
               ...(can.threads ? { onRow: (row: DraftRow) => onPick(draftPick(row, draftTitle(row, untitled))), onFocusRow: (row: DraftRow) => onFocus?.(draftPick(row, draftTitle(row, untitled))) } : {}),
               onOpen: drafts.onOpen,
@@ -353,7 +517,10 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
             }}
           />
         ) : (
-          <OrdersListView model={model} actions={actions /* F-SA-279 */} />
+          // F-CW-103 (S12): the sheet under the Work tab's own browser layout (a layout made on Sales › Orders never moves it).
+          <WorkLayoutTools listKey={ORDERS_LIST_KEY}>
+            <OrdersListView model={model} actions={actions /* F-SA-279 */} />
+          </WorkLayoutTools>
         )}
       </div>
       <RequestDoorWindow door={door} />
