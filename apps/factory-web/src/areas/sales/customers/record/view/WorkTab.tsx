@@ -29,13 +29,12 @@ import { priceDifferOf } from '../use-customer-work' // F-CP-141: the Not equal 
 // ---- F-CP-113: the New order page's own lines editor, in a large window on this page ----
 import type { NewOrderHeader } from '../../../orders/new/new-model'
 import { NewOrderEditor } from '../../../orders/new/NewOrderEditor'
-// ---- F-CP-107: Drafts of <customer> (the customer's portal drafts, read only) ----
-import { writeSearch } from '../../../../_shared/record-frame/address'
-import { useCustomerDrafts } from '../drafts/use-customer-drafts'
-import { draftPick, draftsAddress, draftsNav, draftsShown, draftTitle } from '../drafts/model'
-import { CustomerDraftsList } from '../drafts/view/CustomerDraftsList'
-import { DraftWindow } from '../drafts/view/DraftWindow'
-import type { DraftRow } from '../drafts/api'
+// ---- F-CQ-303 (customer page › Quotes & incoming, 13-backend R14): the customer's portal drafts left the Work tab — they are "Customer
+// is writing" on Quotes & incoming (the same list and window, mounted there); the line's drafts part and the empty line's way to them
+// open that tab at WRITING.
+import { quotesGroupDoor } from '../before-order'
+// ---- end F-CQ-303
+import type { DockLink } from '../quotes-tab/links' // F-CQ-305: the dock's door line
 // ---- F-SA-279: the dock follows the row; All of <customer> in the dock ----
 import type { useCustomerDock } from '../use-customer-work'
 import { useRecordFrame } from '../../../../_shared/record-frame/RecordFrame'
@@ -68,8 +67,8 @@ import './customer-work.css'
  * Work tab, no tabs inside the tab: the waiting strip on top, then the ONE Orders sheet (useOrdersSheet) locked to the customer —
  * embedded (the customer's band is the page's), its terms in the page's address beside the page's own `tab` and `dock`, list key
  * 'sales.orders' (one export source, one set of saved views: a view saved here keeps the lock). Its built-in views (F-CP-101): All
- * orders (the default, `rows=all`, written into the address on entry) · In production · Waiting on us · Late (+ Drafts of <customer>,
- * Not equal with their steps). A row click switches the page's dock to that
+ * orders (the default, `rows=all`, written into the address on entry) · In production · Waiting on us · Late (+ Not equal with its
+ * step; F-CQ-303: the drafts went to Quotes & incoming). A row click switches the page's dock to that
  * order's conversation (⌘ / Ctrl: the order in a new tab; Enter opens the order). "Requests to answer" opens the view Waiting on us,
  * a request's Answer… the review window on this page (the four-door window, `?open=`). A real link to Production › Work orders of
  * the customer. Live: values in place, rows never jump (the sheet's own rule); the strip's counts re-read on their events.
@@ -84,24 +83,26 @@ export interface DockPick {
   readonly id: string
   readonly label: string
   readonly companyId: string | null
+  /** F-CQ-305 (customer page › Quotes & incoming, 10-design §9): where the record came from and what it became (the row's own data). */
+  readonly links?: readonly DockLink[]
 }
 
 // ---- F-CP-101 (customer page plan C1, D7, K1): the views of the Work tab, All orders first ----
-/** The host's own views (not rows views of the sheet): Drafts of <customer> (`list=drafts`, F-CP-107) and Not equal (`priceMatch`, F-CP-141). */
-export const DRAFTS_VIEW = 'drafts:customer'
+/** The host's own views (not rows views of the sheet): Not equal (`priceMatch`, F-CP-141). F-CQ-303: Drafts of <customer> left this tab. */
 export const NOT_EQUAL_VIEW = 'price:notEqual'
 
-/** The Work tab's views, in their order: All orders · In production · Waiting on us · Late · Drafts of <customer> · Not equal. */
+/** The Work tab's views, in their order: All orders · In production · Waiting on us · Late · Not equal. */
 // F-CW-101 (lead settles S3, S19): In production is the door of the STARTED orders (`phase=IN_PRODUCTION`, a view of the host) — the
 // same orders as the band's group and the Overview's tile, never the state In production (which holds the not-started ones too).
-export const WORK_VIEWS: readonly string[] = Object.freeze([WORK_DEFAULT_ROWS, IN_PRODUCTION_VIEW, WAITING_US_VIEW, 'late', DRAFTS_VIEW, NOT_EQUAL_VIEW])
+// F-CQ-303: Drafts of <customer> is no view of this tab any more (Quotes & incoming's "Customer is writing").
+export const WORK_VIEWS: readonly string[] = Object.freeze([WORK_DEFAULT_ROWS, IN_PRODUCTION_VIEW, WAITING_US_VIEW, 'late', NOT_EQUAL_VIEW])
 
 /**
  * The views this person is offered, in WORK_VIEWS' order: Not equal only with the price grain (money wall: no view, no count without
- * it); a host view only once its step draws it (`offered`: Drafts by F-CP-107, Not equal by F-CP-141) — never an item that shows nothing.
+ * it); a host view only once its step draws it (`offered`: Not equal by F-CP-141) — never an item that shows nothing.
  */
-export function workViewsOf(can: { readonly price: boolean }, offered: { readonly drafts?: boolean; readonly priceCheck?: boolean } = {}): string[] {
-  return WORK_VIEWS.filter((id) => (id === DRAFTS_VIEW ? !!offered.drafts : id === NOT_EQUAL_VIEW ? !!offered.priceCheck && can.price : true))
+export function workViewsOf(can: { readonly price: boolean }, offered: { readonly priceCheck?: boolean } = {}): string[] {
+  return WORK_VIEWS.filter((id) => (id === NOT_EQUAL_VIEW ? !!offered.priceCheck && can.price : true))
 }
 
 /**
@@ -370,18 +371,14 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
   const waiting = sheet.model.waiting ?? null
   // F-CW-201: "Show all orders" keeps the order the person reads the orders in (it filters nothing).
   const all = `${prefix}${sheetAddress(basePath, host, params, { rows: 'all', q: '', layout: 'list', party: party.id, sort: sheet.model.sort ?? null })}`
-  // ---- F-CP-107: "Drafts of <customer>" — `list=drafts` draws the customer's portal drafts (read only) in the sheet's place; the strip
-  // and the Views ▾ stay; a draft's row docks its own conversation, Enter / Open its read-only window.
-  const showDrafts = draftsShown(params)
-  const untitled = t('customers.drafts.untitled')
-  const drafts = useCustomerDrafts(party.id, showDrafts, untitled)
-  const draftRows = drafts.read.status === 'ready' ? drafts.read.rows : null
-  // ---- end F-CP-107
+  // ---- F-CQ-303: "Drafts of <customer>" (`list=drafts`) left this tab: an old address with it opens Quotes & incoming at WRITING on
+  // entry (use-customer-work.ts workEntry, the tab's one write); the sheet always draws the orders here.
+  // ---- end F-CQ-303
   // ---- F-CP-141: "Not equal" (`rows=all&priceMatch=NOT_EQUAL`) — a price holder's only: the view, its count (the customer's own
   // counts, read by the page: GET /sales/brand-prices/summary) and its money columns. Without the price grain: no view, no count;
   // an address with the term is held by the sheet in one line (no read carries it).
   const price = sheet.model.can.price
-  const notEqual = price && !showDrafts && notEqualShown(rows, waiting, sheet.model.extra)
+  const notEqual = price && notEqualShown(rows, waiting, sheet.model.extra) // F-CQ-303: no drafts view to stand beside
   const notEqualCount = price ? priceDifferOf(work.prices) : null
   // ---- end F-CP-141
   // ---- F-CP-105: "Columns: Work · Money" — the price grain only (no toggle otherwise, and `cols=money` changes nothing); it swaps
@@ -390,7 +387,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
   // ---- end F-CP-105
   // ---- F-CW-101: the band — the bigger picture from the strip's own board read (no second read), the group the sheet shows now, the
   // two whys of "Not sent to the factory" (also the quiet words beside that door's chip).
-  const phase = showDrafts ? null : (sheet.model.extra?.phase ?? null)
+  const phase = sheet.model.extra?.phase ?? null // F-CQ-303: no drafts view to stand beside
   const phaseWords = (which: NonNullable<typeof phase>): string => {
     const words = phasePhrase(which)
     return words.orders ? o(words.key) : s(words.key)
@@ -398,17 +395,16 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
   const picture = useMemo(() => bandOf(work.reads.board), [work.reads.board])
   const whys = useMemo(() => whysOf(work.reads.board), [work.reads.board])
   const whysWords = whys.map((entry) => t(`customers.work.band.why.${entry.why}`, { count: entry.count })).join(' · ')
-  const shownGroup = picture.groups.find((group) => groupShown(group, { rows, waiting, extra: sheet.model.extra, drafts: showDrafts })) ?? null
+  const shownGroup = picture.groups.find((group) => groupShown(group, { rows, waiting, extra: sheet.model.extra, drafts: false /* F-CQ-303: never shown here */ })) ?? null
   // The In production view = the door of the started orders (S3): ticked while that door is the one shown.
   const startedShown = phase === 'IN_PRODUCTION' && rows === 'all' && !waiting
   // ---- end F-CW-101
   const model: OrdersListModel = {
     ...sheet.model,
-    views: workViewsOf(sheet.model.can, { drafts: true, priceCheck: true }), // F-CP-101: All orders first; F-CP-107: Drafts of <customer>; F-CP-141: Not equal (price grain)
-    viewCounts: { ...(workViewCounts(work.reads.board) ?? {}), ...(typeof before?.drafts === 'number' ? { [DRAFTS_VIEW]: before.drafts } : {}) /* F-CW-101: the band's own count of the drafts */, ...(draftRows ? { [DRAFTS_VIEW]: draftRows.length } : {}), ...(notEqualCount !== null ? { [NOT_EQUAL_VIEW]: notEqualCount } : {}) }, // F-CP-103 (no second read); F-CP-107: the drafts once read; F-CP-141: the Not equal count
+    views: workViewsOf(sheet.model.can, { priceCheck: true }), // F-CP-101: All orders first; F-CP-141: Not equal (price grain); F-CQ-303: no Drafts view
+    viewCounts: { ...(workViewCounts(work.reads.board) ?? {}), ...(notEqualCount !== null ? { [NOT_EQUAL_VIEW]: notEqualCount } : {}) }, // F-CP-103 (no second read); F-CP-141: the Not equal count; F-CQ-303: no drafts count
     hostViews: [
       { id: IN_PRODUCTION_VIEW, label: o('rows.IN_PRODUCTION'), active: startedShown }, // F-CW-101 (S3): the started orders' door
-      { id: DRAFTS_VIEW, label: t('customers.work.view.drafts', { customer: party.name }), active: showDrafts }, // F-CP-107
       ...(price ? [{ id: NOT_EQUAL_VIEW, label: t('customers.work.view.notEqual'), active: notEqual }] : []), // F-CP-141
     ],
     preset: workPreset(rows, waiting, columnSet === 'money' /* F-CP-141: the Not equal view opens on the money columns; F-CP-105: the toggle on every view */, workRoom.room /* F-CW-103 */),
@@ -429,7 +425,8 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
       workEmptyOf(rows, waiting, party.name, t, all, {
         phase,
         plain: sheet.model.q.trim() === '' && !sheet.model.brand && !sheet.model.company && !sheet.model.cf && !sheet.model.kind && Object.keys(sheet.model.extra ?? {}).every((key) => key === 'phase'),
-        drafts: typeof before?.drafts === 'number' ? { count: before.drafts, href: draftsAddress(`${prefix}${basePath}`, party.id, params) } : null,
+        // F-CQ-303: the drafts' line opens Quotes & incoming at WRITING ("Customer is writing").
+        drafts: typeof before?.drafts === 'number' ? { count: before.drafts, href: quotesGroupDoor(`${prefix}${basePath}`, 'WRITING') } : null,
       }) ??
       sheet.model.empty ??
       null,
@@ -455,12 +452,10 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
     onWaiting: viewWaiting, // F-CP-141; F-CW-101
     // F-CP-105: a pick writes `cols` through the sheet (one replace; none when it is the view's own columns: the term goes).
     ...(price ? { onColumnSet: (set: ColumnSet) => sheet.actions.onPageTerm?.(COLS_TERM, colsTermOf(set, notEqual)) } : {}),
-    // F-CP-107: Drafts of <customer> — a person's pick writes `list=drafts` once (the record pages' one history writer; a rows view
-    // picked again goes through the sheet, which drops it).
     // F-CP-141: Not equal — `rows=all&priceMatch=NOT_EQUAL` in one write through the sheet (it drops `list`, keeps the lock).
+    // F-CQ-303: no Drafts of <customer> pick here any more.
     onHostView: (id: string) => {
-      if (id === DRAFTS_VIEW) writeSearch(draftsAddress(`${prefix}${basePath}`, party.id, params))
-      else if (id === NOT_EQUAL_VIEW) sheet.actions.onPriceMatch?.('NOT_EQUAL', { rows: 'all' })
+      if (id === NOT_EQUAL_VIEW) sheet.actions.onPriceMatch?.('NOT_EQUAL', { rows: 'all' })
       else if (id === IN_PRODUCTION_VIEW) sheet.actions.onPhase?.('IN_PRODUCTION') // F-CW-101 (S3): the started orders' door
     },
     ...(can.threads
@@ -485,7 +480,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
     whys,
     before: beforeLineOf(before ?? NO_BEFORE_ORDER, recordHref),
     chips: chipsOf(can, work.reads),
-    pressed: showDrafts || waiting || phase ? [] : rows === 'late' ? ['late'] : rows === 'deposit' ? ['deposit'] : [],
+    pressed: waiting || phase ? [] : /* F-CQ-303: no drafts view */ rows === 'late' ? ['late'] : rows === 'deposit' ? ['deposit'] : [],
     workOrdersHref: can.workorders ? `${prefix}/production/work-orders?party=${encodeURIComponent(party.id)}` : null,
     repliesHref: `${prefix}/sales/incoming?tile=CUSTOMER_REPLIES&party=${encodeURIComponent(party.id)}`,
     requestsHref: firstRequest ? door.hrefOf(firstRequest) : null,
@@ -498,15 +493,15 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
       else viewRows?.(group.door.status) // an older answer: the one state's own view
     },
     onAll: showAll,
-    onDrafts: () => actions.onHostView(DRAFTS_VIEW),
-    onView: (view) => (!showDrafts && !waiting && !phase && rows === view ? showAll() : waiting ? viewWaiting?.(null, view) : viewRows?.(view)),
+    // F-CQ-303: the drafts' part is a link to Quotes & incoming (no onDrafts).
+    onView: (view) => (!waiting && !phase && rows === view ? showAll() : waiting ? viewWaiting?.(null, view) : viewRows?.(view)),
     onWindow,
     onRetry: work.retry,
   }
   // ---- end F-CW-101
   // The picked order left the view (it moved on, live): the dock keeps its conversation; one line says so, with the way back.
   const items = sheet.model.list.items
-  const gone = !showDrafts && picked && picked.type === 'SalesOrder' && items && sheet.model.updates === 0 && !items.some((row) => row.id === picked.id) && !(rows === 'all' && !waiting && !notEqual /* F-CP-141 */ && !phase /* F-CW-101 */)
+  const gone = picked && picked.type === 'SalesOrder' /* F-CQ-303: no drafts view */ && items && sheet.model.updates === 0 && !items.some((row) => row.id === picked.id) && !(rows === 'all' && !waiting && !notEqual /* F-CP-141 */ && !phase /* F-CW-101 */)
   // ---- F-CW-302: the foot line's words (the sort's own word from the sheet's choices; the door to the customer's Portal settings).
   const sortChoice = sortChoicesOf(true).find((choice) => choice.value === (sheet.model.sort ?? '')) ?? null
   const foot = workFootOf({ sort: sheet.model.sort ?? null, sortWord: sortChoice ? s(`sort.${sortChoice.word}`) : null, customer: party.name, foot: urgencyFoot, portalHref: `${prefix}${basePath}?tab=portal#${LIMITS_ANCHOR}`, mayPortal })
@@ -525,36 +520,16 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
             </Button>
           </p>
         )}
-        {showDrafts ? (
-          // F-CP-107: the customer's portal drafts, read only (the dock follows a row: the draft's own conversation).
-          <CustomerDraftsList
-            model={{ customer: party.name, read: drafts.read, updates: drafts.updates, activeId: picked && picked.type === 'PortalOrderRequest' ? picked.id : null, views: { model, actions }, wide: workRoom.room !== 'base' /* F-CW-104 (10-design §3.8): Messages (and the value) from the `wide` room */ }}
-            actions={{
-              ...(can.threads ? { onRow: (row: DraftRow) => onPick(draftPick(row, draftTitle(row, untitled))), onFocusRow: (row: DraftRow) => onFocus?.(draftPick(row, draftTitle(row, untitled))) } : {}),
-              onOpen: drafts.onOpen,
-              onRetry: drafts.onRetry,
-              onShowUpdates: drafts.onShowUpdates,
-            }}
-          />
-        ) : (
-          // F-CW-103 (S12): the sheet under the Work tab's own browser layout (a layout made on Sales › Orders never moves it).
-          <>
-            <WorkLayoutTools listKey={ORDERS_LIST_KEY}>
-              <OrdersListView model={model} actions={actions /* F-SA-279 */} />
-            </WorkLayoutTools>
-            {/* F-CW-302 (10-design §3.6): the foot — the order the rows stand in, the customer's urgency state (this tab only). */}
-            <WorkFoot line={foot} />
-          </>
-        )}
+        {/* F-CQ-303: the drafts' list left this tab (Quotes & incoming's "Customer is writing"); the sheet always shows here.
+            F-CW-103 (S12): the sheet under the Work tab's own browser layout (a layout made on Sales › Orders never moves it). */}
+        <WorkLayoutTools listKey={ORDERS_LIST_KEY}>
+          <OrdersListView model={model} actions={actions /* F-SA-279 */} />
+        </WorkLayoutTools>
+        {/* F-CW-302 (10-design §3.6): the foot — the order the rows stand in, the customer's urgency state (this tab only). */}
+        <WorkFoot line={foot} />
       </div>
       <RequestDoorWindow door={door} />
-      {drafts.open && drafts.window && draftRows && (
-        // F-CP-107: the draft in its read-only window — Incoming's own container and pane in draft mode; J / K walk the drafts.
-        <DraftWindow
-          model={{ customer: party.name, title: draftTitle(drafts.open, untitled), nav: draftsNav(draftRows, drafts.open.id), pane: drafts.window.model, thread: drafts.window.thread }}
-          actions={{ pane: drafts.window.actions, onGo: drafts.onGo, onClose: drafts.onClose }}
-        />
-      )}
+      {/* F-CQ-303: the draft's read-only window opens from Quotes & incoming now. */}
       {lines && (
         // F-CP-113: the same editor as /sales/orders/new, its customer and header set by the New order window.
         <NewOrderEditor
@@ -590,7 +565,7 @@ type DockProps = { customer: { id: string; name: string }; general: ReactNode; d
  * hands the dock its feed (end check: a view fetches nothing).
  */
 /** F-OP-203: the dock's catalogues — All of <customer>'s, and the orders' for the pick's short "General" (the order page's word). */
-const CUSTOMER_DOCK_NS = [...ALL_OF_CUSTOMER_NS, 'orders', FILES_VIEW_NS /* F-CP-111: a file of the order's set that did not open */] as const
+const CUSTOMER_DOCK_NS = [...ALL_OF_CUSTOMER_NS, 'orders', FILES_VIEW_NS /* F-CP-111: a file of the order's set that did not open */, 'before-order' /* F-CQ-305: the door line */] as const
 
 export function CustomerDock(props: DockProps) {
   return (
@@ -604,6 +579,7 @@ function Dock({ customer, general, dock, feed, prefix, allOffered = true }: Dock
   const t = useT('parties')
   const o = useT('orders') // F-OP-203
   const rt = useT('record-thread') // F-OP-203
+  const b = useT('before-order') // F-CQ-305: the door line's words
   // ---- F-CP-111: a file of the docked order's set that could not be opened (or shared) is said once, as the order page says it.
   const fv = useT(FILES_VIEW_NS)
   const { toast } = useToast()
@@ -683,6 +659,19 @@ function Dock({ customer, general, dock, feed, prefix, allOffered = true }: Dock
       )}
       <ThreadPick label={t('customers.work.dock.label')} choices={choices} value={scope} onPick={dock.onScope} note={dock.draftKept ? t('customers.work.dock.draftKept', { record: dock.draftKept }) : null}>
         {scope === 'record' && pick ? (
+          <>
+            {/* ---- F-CQ-305 (10-design §9): the door line under the pick — "Came from request … ›", "Became order … ›": a click docks that
+                record's own thread (no thread is merged); none when the row carried none. */}
+            {pick.links && pick.links.length > 0 && (
+              <p className="fw-qt-doors" aria-label={b('dock.line')}>
+                {pick.links.map((link) => (
+                  <Button key={`${link.kind}:${link.pick.id}`} size="sm" variant="link" onClick={() => dock.onRow(link.pick)}>
+                    {b(`dock.${link.kind}`, { number: link.pick.label })}
+                  </Button>
+                ))}
+              </p>
+            )}
+            {/* ---- end F-CQ-305 */}
           <OfficeRecordThread
             key={`${pick.type}:${pick.id}`}
             docked
@@ -695,6 +684,7 @@ function Dock({ customer, general, dock, feed, prefix, allOffered = true }: Dock
             onDraft={(kept) => dock.onDraft(pick, kept)}
             {...(dock.orderFiles && pick.type === 'SalesOrder' ? { orderFiles: dock.orderFiles } : {}) /* F-CP-111: the files line = the order's file set */}
           />
+          </>
         ) : scope === 'all' ? (
           // F-OP-203: All of <customer> in the dock's ONE card (DockColumn): the pick band on top, the read-only feed that scrolls.
           // F-OP-204: its Head row (FeedHead); this page IS the customer's, so its ⋯ has no "Open <customer>".

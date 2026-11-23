@@ -5,13 +5,11 @@ import type { ApiClient } from '../../../../../lib/api/client'
 import { LOCALES } from '../../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
 import { render, textOf } from '../../../../../lib/record-thread/parts/testing'
-import type { OrdersListModel } from '../../../orders/list/list-model'
 import { catalogueHeld } from '../../../inquiries/catalogue-model'
-import { lockedEntry } from '../../../orders/list/use-orders-sheet'
 import { workEntry } from '../use-customer-work'
-import { DRAFTS_VIEW, workViewsOf } from '../view/WorkTab'
+import { workViewsOf } from '../view/WorkTab' // F-CQ-303: no DRAFTS_VIEW (the drafts are Quotes & incoming's "Customer is writing")
 import { listCustomerDrafts, type DraftRow } from './api'
-import { draftPick, draftsAddress, draftsNav, draftsShown, draftsTouched, draftTitle, filesWords, linesWords, messagesWords, readyOf, showsValue } from './model'
+import { draftPick, draftsNav, draftsTouched, draftTitle, filesWords, linesWords, messagesWords, readyOf, showsValue } from './model' // F-CQ-303: no draftsShown / draftsAddress
 import { draftValueOf } from './model' // F-CP-141
 import { CustomerDraftsList, type CustomerDraftsListModel } from './view/CustomerDraftsList'
 
@@ -80,25 +78,21 @@ describe('a draft row in words', () => {
   })
 })
 
-describe('the view and its address (fx-12, review G4)', () => {
-  it('Drafts of <customer> is offered on the Work tab, after Late; list=drafts is the view', () => {
-    expect(workViewsOf({ price: false }, { drafts: true })).toContain(DRAFTS_VIEW)
-    expect(draftsShown(params('tab=work&list=drafts'))).toBe(true)
-    expect(draftsShown(params('tab=work'))).toBe(false)
+describe('the view and its address (fx-12, review G4; F-CQ-303: the drafts moved to Quotes & incoming)', () => {
+  it('F-CQ-303: no Drafts view on the Work tab any more — the drafts are Quotes & incoming\'s "Customer is writing"', () => {
+    expect(workViewsOf({ price: true }, { priceCheck: true })).not.toContain('drafts:customer')
+    const tab = readFileSync(new URL('../QuotesIncomingTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain('<CustomerDraftsList')
+    expect(tab).toContain('<DraftWindow')
   })
 
-  it('the address is written once: the entry and the lock write nothing more; alone and beside the dock', () => {
-    for (const now of ['tab=work&party=x&rows=all', `tab=work&party=${ALPHA}&status=IN_PRODUCTION&dock=SalesOrder.33333333-3333-4333-8333-333333333333`]) {
-      const address = draftsAddress(BASE, ALPHA, params(now))
+  it('F-CQ-303: an old address of the view opens Quotes & incoming at WRITING — in one write, the dock kept, never a loop', () => {
+    for (const now of ['tab=work&party=x&rows=all&list=drafts', `tab=work&party=${ALPHA}&list=drafts&dock=SalesOrder.33333333-3333-4333-8333-333333333333`]) {
+      const address = workEntry(BASE, ALPHA, params(now))!
       const written = params(search(address))
-      expect(written.get('list')).toBe('drafts')
-      expect(written.get('party')).toBe(ALPHA)
-      expect(written.has('rows') || written.has('status')).toBe(false)
-      expect(workEntry(BASE, ALPHA, params(search(address)))).toBeNull()
-      expect(lockedEntry(BASE, { locked: { party: ALPHA } }, params(search(address)))).toBeNull()
-      expect(draftsAddress(BASE, ALPHA, params(search(address)))).toBe(address)
+      expect([written.get('tab'), written.get('group'), written.has('list')]).toEqual(['quotes', 'WRITING', false])
+      expect(written.get('dock')).toBe(params(now).get('dock'))
     }
-    expect(params(search(draftsAddress(BASE, ALPHA, params('dock=all')))).get('dock')).toBe('all')
   })
 
   // F-CW-102 (lead settle S28): the Drafts view beside the dock at 1440 scrolled sideways (1058 px of columns in 863: Ready and
@@ -126,13 +120,14 @@ describe('the view and its address (fx-12, review G4)', () => {
     for (const id of ['messages', 'value']) expect(view.slice(view.indexOf(`colId: '${id}'`)).split('colId:')[1], id).toMatch(/flex: /)
     // The host's word is followed live (the thread closed or opened); without one the window decides as before.
     expect(view).toContain('return forced ?? wide')
-    const tab = readFileSync(new URL('../view/WorkTab.tsx', import.meta.url), 'utf8')
-    expect(tab).toContain("wide: workRoom.room !== 'base'")
+    // F-CQ-303: the host is Quotes & incoming now (its room: `wide` from 1100 px of the tab).
+    const tab = readFileSync(new URL('../QuotesIncomingTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain('wide: (tab.room ?? 0) >= 1100')
   })
 
-  it('the pick writes through the record pages\' one history writer; a rows view picked again goes through the sheet (which drops `list`)', () => {
+  it('F-CQ-303: the Work tab keeps exactly one address writer (its entry, which also sends the old drafts address on)', () => {
     const tab = readFileSync(new URL('../view/WorkTab.tsx', import.meta.url), 'utf8')
-    expect(tab).toContain('if (id === DRAFTS_VIEW) writeSearch(draftsAddress(`${prefix}${basePath}`, party.id, params))')
+    expect(tab).not.toContain('DRAFTS_VIEW')
     expect(tab.match(/router\.replace\(/g)?.length).toBe(1)
   })
 })
@@ -173,8 +168,8 @@ describe('the read, live changes and the states', () => {
     expect(hook).toContain('onShowUpdates: load')
   })
 
-  const views = { model: { rows: 'open', kind: null, waiting: null, customer: { id: ALPHA, name: 'Brand Alpha' }, locked: { party: true, kind: false }, views: workViewsOf({ price: true }, { drafts: true }), hostViews: [{ id: DRAFTS_VIEW, label: 'Drafts of Brand Alpha', active: true }] } as unknown as OrdersListModel }
-  const model = (over: Partial<CustomerDraftsListModel> = {}): CustomerDraftsListModel => ({ customer: 'Brand Alpha', read: { status: 'ready', rows: [row()] }, updates: 0, activeId: null, views, wide: true, ...over })
+  // F-CQ-303: no Views ▾ any more (it was the Work tab's, over its Drafts view).
+  const model = (over: Partial<CustomerDraftsListModel> = {}): CustomerDraftsListModel => ({ customer: 'Brand Alpha', read: { status: 'ready', rows: [row()] }, updates: 0, activeId: null, wide: true, ...over })
 
   it('the states in words: none, failed (Try again); no key left on screen, in both languages', () => {
     for (const locale of LOCALES) {

@@ -57,8 +57,7 @@ export interface WorkBandActions {
   readonly onGroup?: (group: BandGroup) => void
   /** "All orders of <customer>". */
   readonly onAll?: () => void
-  /** "N drafts": the Work tab's Drafts view. */
-  readonly onDrafts?: () => void
+  // F-CQ-303: "N drafts" is a link to Quotes & incoming at WRITING (the Work tab's Drafts view is gone): no drafts handler any more.
   /** Late and Waiting for deposit: their views of the sheet. */
   readonly onView?: (view: 'late' | 'deposit') => void
   /** Waiting for <customer> and Open tasks: their centred windows. */
@@ -102,21 +101,12 @@ function Band({ model, actions }: { model: WorkBandModel; actions?: WorkBandActi
     return (
       <Fragment key={part.part}>
         {index > 0 && ' · '}
+        {/* F-CQ-303 (13-backend R14): every part is a real link now — the drafts' too (Quotes & incoming at WRITING): the Drafts view
+            of this tab is gone, and with it the button that opened it. */}
         {part.href ? (
           <Link className="fw-cwb-link" href={part.href} onClick={() => setOpen(false)}>
             {words}
           </Link>
-        ) : actions?.onDrafts ? (
-          <button
-            type="button"
-            className="fw-cwb-link"
-            onClick={() => {
-              setOpen(false)
-              actions.onDrafts?.()
-            }}
-          >
-            {words}
-          </button>
         ) : (
           words
         )}

@@ -9,13 +9,13 @@ import { builtInActive, builtInViewsOf, pickBuiltIn, WAITING_US_VIEW, withPreset
 import { marksOf, sourcesTouched, STRIP_GROUPS, tileOf, tilesShown, workAttention, workEntry, WORK_DEFAULT_ROWS, type WorkReads } from './use-customer-work'
 import { WORK_DEFAULT_SORT } from './use-customer-work' // F-CW-201
 import { sortChoicesOf, sortFromAddress, urgentRuleOf } from '../../orders/model' // F-CW-201
-import { draftsAddress } from './drafts/model' // F-CW-201: the order kept across the Drafts view
+// F-CQ-303: the Drafts view left the Work tab (no draftsAddress; an old `list=drafts` opens Quotes & incoming at WRITING).
 import { valueOf } from './work-band' // F-CW-101: the strip became the band (its chips keep the same reads)
 import { IN_PRODUCTION_VIEW } from './use-customer-work' // F-CW-101 (S3): the In production view = the started orders' door
 import { pickOfRow, WORK_VIEWS, workPreset } from './view/WorkTab'
 import { WAITING_SET, WORK_ADDS, WORK_MAX, WORK_MIN, WORK_ORDER, WORK_ROOMS, WORK_SETS, workRoomOf, type WorkRoom } from './view/WorkTab' // F-CW-102: the row's sets by room (F-CP-107 (cp-fx16): its honest widths)
 import { orderedByPreset } from '../../orders/list/view/OrdersListView' // F-CW-102
-import { DRAFTS_VIEW, NOT_EQUAL_VIEW, workEmptyOf, workViewsOf } from './view/WorkTab' // F-CP-101
+import { NOT_EQUAL_VIEW, workEmptyOf, workViewsOf } from './view/WorkTab' // F-CP-101 (F-CQ-303: no DRAFTS_VIEW)
 import { rowsFromAddress } from '../../orders/model' // F-CP-101: Sales › Orders keeps Open
 import { noExtra, withoutExtra } from '../../orders/model' // F-CW-105
 // ---- F-CP-103 ----
@@ -412,7 +412,8 @@ describe('F-CW-201: the Work tab opens most urgent first — written once, with 
   })
 
   it('a view or a door gets NO sort: status, late, waiting, the Drafts view, Not equal, a phase door, a priority door (S16)', () => {
-    for (const query of ['status=IN_PRODUCTION', 'late=true', 'waiting=us', 'list=drafts', 'priceMatch=NOT_EQUAL', 'rows=open', 'tab=work&phase=READY', 'tab=work&rows=open&priority=URGENT', 'tab=work&priority=HIGH']) {
+    // F-CQ-303: `list=drafts` is no view of this tab any more (it opens Quotes & incoming at WRITING: its own test below).
+    for (const query of ['status=IN_PRODUCTION', 'late=true', 'waiting=us', 'priceMatch=NOT_EQUAL', 'rows=open', 'tab=work&phase=READY', 'tab=work&rows=open&priority=URGENT', 'tab=work&priority=HIGH']) {
       const once = workEntry(BASE, ALPHA, params(query))
       const address = once ?? `${BASE}?${query}`
       expect(params(search(address)).has('sort'), query).toBe(false)
@@ -430,7 +431,7 @@ describe('F-CW-201: the Work tab opens most urgent first — written once, with 
     expect([once.get('rows'), once.get('sort')]).toEqual(['all', 'promise'])
   })
 
-  it('the order is kept by every address the page itself writes: the sheet\'s views, Show all orders, the Drafts view and back', () => {
+  it('the order is kept by every address the page itself writes: the sheet\'s views, Show all orders (F-CQ-303: an old Drafts address opens Quotes & incoming)', () => {
     const now = params(`tab=work&party=${ALPHA}&rows=all&sort=urgent`)
     // The sheet: another view, a door, Clear all — the sort stays (it filters nothing).
     expect(sheetAddress(BASE, host, now, { rows: 'late', q: '', layout: 'list', party: ALPHA, sort: sortFromAddress(now) })).toContain('sort=urgent')
@@ -441,12 +442,10 @@ describe('F-CW-201: the Work tab opens most urgent first — written once, with 
     // Show all orders (the empty sentences' link): the order the person reads in.
     const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
     expect(tab).toContain("{ rows: 'all', q: '', layout: 'list', party: party.id, sort: sheet.model.sort ?? null })")
-    // The Drafts view drops the sheet's terms but keeps the order for the way back.
-    const drafts = draftsAddress(BASE, ALPHA, now)
-    expect(params(search(drafts)).get('sort')).toBe('urgent')
-    expect(params(search(drafts)).has('rows')).toBe(false)
-    expect(workEntry(BASE, ALPHA, params(search(drafts)))).toBeNull()
-    expect(params(search(draftsAddress(BASE, ALPHA, params(`tab=work&party=${ALPHA}&rows=all`)))).has('sort')).toBe(false)
+    // F-CQ-303: the Drafts view left this tab — an old address with it opens Quotes & incoming at WRITING in the entry's one write
+    // (the dock kept), and that address is no Work address any more.
+    expect(workEntry(BASE, ALPHA, params(`tab=work&party=${ALPHA}&list=drafts&sort=urgent`))).toBe(`${BASE}?tab=quotes&group=WRITING`)
+    expect(workEntry(BASE, ALPHA, params(`tab=work&list=drafts&dock=Quote.q1`))).toBe(`${BASE}?tab=quotes&group=WRITING&dock=Quote.q1`)
   })
 
   it('the customer page only: Sales › Orders and Made to measure write no default order (they keep "Newest first")', () => {
@@ -593,7 +592,7 @@ describe('F-SA-277: the customer page mounts Quotes & incoming', () => {
     expect(view).toContain("{tab === 'quotes' && quotesIncoming}")
     expect(view).not.toContain('function DealsTab')
     const page = readFileSync(new URL('./CustomerRecord.tsx', import.meta.url), 'utf8')
-    expect(page).toContain("<QuotesIncomingTab party={named} onPick={onPick} onFocus={customerDock.onFocus} shown={customerDock.shown} />") // F-SA-279
+    expect(page).toContain("<QuotesIncomingTab party={named} counts={pageCounts /* F-CQ-302 */} onPick={onPick} onFocus={customerDock.onFocus} shown={customerDock.shown} />") // F-SA-279; F-CQ-302: the page's one count read
     const tab = readFileSync(new URL('./QuotesIncomingTab.tsx', import.meta.url), 'utf8')
     expect(tab).toContain("import type { DockPick } from './view/WorkTab'")
     expect(tab).toContain("terms: 'memory'")
@@ -602,7 +601,9 @@ describe('F-SA-277: the customer page mounts Quotes & incoming', () => {
   it('the section words in both languages (the catalogue\'s own titles, R9)', () => {
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['parties']).parties!)
-      for (const key of ['quotes', 'incoming', 'noQuotes', 'noRequests']) expect(t(`customers.quotesTab.${key}`, { customer: 'Brand Alpha' }), `${locale} ${key}`).not.toBe(`customers.quotesTab.${key}`)
+      // F-CQ-305: only `quotes` stays (the tab's own words in before-order.json replaced incoming / noQuotes / noRequests).
+      for (const key of ['quotes']) expect(t(`customers.quotesTab.${key}`, { customer: 'Brand Alpha' }), `${locale} ${key}`).not.toBe(`customers.quotesTab.${key}`)
+      for (const key of ['incoming', 'noQuotes', 'noRequests']) expect(t(`customers.quotesTab.${key}`), `${locale} ${key}`).toBe(`customers.quotesTab.${key}`)
       expect(t('customers.quotesTab.quotes'), locale).toBe(t('deals.titleQuotes'))
     }
   })
@@ -747,7 +748,7 @@ describe('F-SA-279: the page wires it (the sources)', () => {
   })
   it('Work\'s dock a third; the band\'s button below 1280 px names the record docked', () => {
     const view = readFileSync(new URL('./view/CustomerRecordView.tsx', import.meta.url), 'utf8')
-    expect(view).toContain("defaultWidth={tab === 'work' ? 'third' : undefined}")
+    expect(view).toContain("defaultWidth={tab === 'work' || tab === 'quotes' ? 'third' : undefined}") // F-CQ-301: Quotes & incoming docks a third too
     expect(view).toContain('dockTab={tab}')
     const page = readFileSync(new URL('./CustomerRecord.tsx', import.meta.url), 'utf8')
     expect(page).toContain("const threadButton = customerDock.shown ? t('customers.work.dock.button', { record: customerDock.shown.label }) : null")
@@ -857,7 +858,8 @@ describe('F-CP-101: All orders by default, written once', () => {
     expect(new URL(`https://x${workEntry(BASE, ALPHA, params(''))!}`).searchParams.has('status')).toBe(false)
   })
 
-  it.each([['status=IN_PRODUCTION', 'status'], ['late=true', 'late'], ['list=drafts', 'list'], ['priceMatch=NOT_EQUAL', 'priceMatch'], ['waiting=us', 'waiting']])('a view term (%s): no default written beside it', (query, term) => {
+  // F-CQ-303: without `list=drafts` (the old Drafts view opens Quotes & incoming at WRITING).
+  it.each([['status=IN_PRODUCTION', 'status'], ['late=true', 'late'], ['priceMatch=NOT_EQUAL', 'priceMatch'], ['waiting=us', 'waiting']])('a view term (%s): no default written beside it', (query, term) => {
     const { once, again } = twice(`tab=work&party=${ALPHA}&${query}`)
     expect(once).toBeNull()
     expect(again).toBeNull()
@@ -866,7 +868,7 @@ describe('F-CP-101: All orders by default, written once', () => {
     expect(entry.has(term), query).toBe(true)
   })
 
-  it.each(['list=drafts', 'priceMatch=NOT_EQUAL', 'cols=money', 'tab=work&cols=money', `tab=work&party=${ALPHA}&cols=money&rows=all`])('each new term applied twice = the same address (%s)', (query) => {
+  it.each(['priceMatch=NOT_EQUAL', 'cols=money', 'tab=work&cols=money', `tab=work&party=${ALPHA}&cols=money&rows=all`])('each new term applied twice = the same address (%s)', (query) => { // F-CQ-303: no list=drafts
     const { address, again } = twice(query)
     expect(again, address).toBeNull()
     expect(lockedEntry(BASE, { locked: { party: ALPHA } }, params(search(address))), address).toBeNull()
@@ -879,8 +881,8 @@ describe('F-CP-101: All orders by default, written once', () => {
     expect(written.get('sort')).toBe('urgent') // F-CW-201: `cols` names no view either
   })
 
-  it('the pairs: list=drafts with a view term keeps both, writes no default, once', () => {
-    for (const query of ['list=drafts&status=IN_PRODUCTION', 'list=drafts&waiting=us', 'priceMatch=NOT_EQUAL&rows=all']) {
+  it('the pairs: a price term with a view term keeps both, writes no default, once (F-CQ-303: list=drafts is no view here)', () => {
+    for (const query of ['priceMatch=NOT_EQUAL&rows=all']) {
       const { address, again } = twice(query)
       expect(again, address).toBeNull()
       const kept = new URL(`https://x${address}`).searchParams
@@ -900,11 +902,11 @@ describe('F-CP-101: All orders by default, written once', () => {
     expect(saved.again).toBeNull()
   })
 
-  it('the views in their order; Not equal only with the price grain (and once its step offers it); Drafts once its step offers it', () => {
-    expect(WORK_VIEWS).toEqual(['all', IN_PRODUCTION_VIEW, WAITING_US_VIEW, 'late', DRAFTS_VIEW, NOT_EQUAL_VIEW])
+  it('the views in their order; Not equal only with the price grain (and once its step offers it); F-CQ-303: no Drafts view', () => {
+    expect(WORK_VIEWS).toEqual(['all', IN_PRODUCTION_VIEW, WAITING_US_VIEW, 'late', NOT_EQUAL_VIEW])
     expect(IN_PRODUCTION_VIEW).toBe('phase:IN_PRODUCTION') // F-CW-101 (S3)
-    expect(workViewsOf({ price: true }, { drafts: true, priceCheck: true })).toEqual([...WORK_VIEWS])
-    expect(workViewsOf({ price: false }, { drafts: true, priceCheck: true })).toEqual(['all', IN_PRODUCTION_VIEW, WAITING_US_VIEW, 'late', DRAFTS_VIEW])
+    expect(workViewsOf({ price: true }, { priceCheck: true })).toEqual([...WORK_VIEWS])
+    expect(workViewsOf({ price: false }, { priceCheck: true })).toEqual(['all', IN_PRODUCTION_VIEW, WAITING_US_VIEW, 'late'])
     expect(workViewsOf({ price: true })).toEqual(['all', IN_PRODUCTION_VIEW, WAITING_US_VIEW, 'late'])
   })
 
@@ -1169,7 +1171,7 @@ describe('F-CP-141: the Not equal view', () => {
     expect(notEqualShown('all', 'us', { priceMatch: 'NOT_EQUAL' })).toBe(false)
     expect(notEqualShown('all', null, { priceMatch: 'EQUAL' })).toBe(false)
     const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
-    expect(tab).toContain("else if (id === NOT_EQUAL_VIEW) sheet.actions.onPriceMatch?.('NOT_EQUAL', { rows: 'all' })")
+    expect(tab).toContain("if (id === NOT_EQUAL_VIEW) sheet.actions.onPriceMatch?.('NOT_EQUAL', { rows: 'all' })") // F-CQ-303: the Drafts branch before it went
     expect(tab).toContain('const onRows = leave ? (next: RowView) => leave(null, { rows: next }) : sheet.actions.onRows')
     expect(tab.match(/router\.replace\(/g)?.length, 'still one writer of the entry address').toBe(1)
     const sheet = readFileSync(new URL('../../orders/list/use-orders-sheet.ts', import.meta.url), 'utf8')
@@ -1177,8 +1179,8 @@ describe('F-CP-141: the Not equal view', () => {
   })
 
   it('Not equal only with the price grain: the view, its item, its count; as Sales worker / as Production manager none of them', () => {
-    expect(workViewsOf(OWNER, { drafts: true, priceCheck: true })).toContain(NOT_EQUAL_VIEW)
-    for (const can of [SALES_WORKER, MANAGER]) expect(workViewsOf(can, { drafts: true, priceCheck: true })).not.toContain(NOT_EQUAL_VIEW)
+    expect(workViewsOf(OWNER, { priceCheck: true })).toContain(NOT_EQUAL_VIEW)
+    for (const can of [SALES_WORKER, MANAGER]) expect(workViewsOf(can, { priceCheck: true })).not.toContain(NOT_EQUAL_VIEW)
     const tab = readFileSync(new URL('./view/WorkTab.tsx', import.meta.url), 'utf8')
     expect(tab).toContain("...(price ? [{ id: NOT_EQUAL_VIEW, label: t('customers.work.view.notEqual'), active: notEqual }] : [])")
     expect(tab).toContain('const notEqualCount = price ? priceDifferOf(work.prices) : null')
