@@ -316,6 +316,13 @@ a.fw-pty-name:focus-visible {
     flex: 1 0 100%;
     max-width: none;
   }
+  /* F-CL-501 (re-walk W-7 / W-15): the field inside fills its whole line too (it kept its own 163 px width). */
+  .fw-pty .nds-cardlist-search .nds-grid-search,
+  .fw-pty .nds-cardlist-search .nds-field {
+    width: 100%;
+    max-width: none;
+    box-sizing: border-box;
+  }
 }
 
 /* W-8: with cards ticked, "2 selected" is said once — by the bar's own head; the line above the cards stays only for its sort. */
