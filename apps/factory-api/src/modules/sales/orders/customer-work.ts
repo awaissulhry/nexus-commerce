@@ -6,9 +6,9 @@ import { can, grantsFor, scopeWhere } from '@nexus/factory-domain/core/permissio
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { PARTIES_VIEW } from '@nexus/factory-domain/parties/permissions'
 import { PRIORITY_LEVELS, type PriorityLevel } from '@nexus/factory-domain/planning/backlog/rank'
-import { isAfterProduction, officeStripStateOf, ORDER_PHASES, type OrderPhase } from '@nexus/factory-domain/production-brand/stages'
+import { ORDER_PHASES, type OrderPhase } from '@nexus/factory-domain/production-brand/stages'
 import { PROMISE_STATUSES } from '@nexus/factory-domain/sales/customer-360/glance'
-import { OPEN_STATUSES, SALES_ORDER_STATUSES, type SalesOrderStatus } from '@nexus/factory-domain/sales/orders/orders'
+import { OPEN_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
 import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
@@ -45,8 +45,10 @@ import { asDay, dayOf, type Reader } from './store'
  *                   0 here and `replies` withheld on the route)                             door thread=all
  *   waitsForYes     PENDING_APPROVAL                                                         door status=PENDING_APPROVAL
  *   waitsForDeposit CONFIRMED with the deposit still open (cw's notSent.waitsForDeposit) — the band's hint inside Not sent
- *   best            its most urgent order before or in production by planning's rule order (our level, our priority number, its
- *                   promise) — the needs order's second key; the customer's own urgency is not a key (settle T3)
+ *   best            its most urgent OPEN order (CONFIRMED · IN_PRODUCTION · READY · PARTLY_SHIPPED — the set the Top / High chips and
+ *                   their door rows=open&priority=… count; settle T31: an order waiting for a yes never lifts a customer by its level,
+ *                   it is said by "Waiting for a yes") by planning's rule order (our level, our priority number, its promise) — the
+ *                   needs order's second key; the customer's own urgency is not a key (settle T3)
  *
  * A customer the reader's orders.view does not reach is never in the facts (T13: a request or a reply of a party seen only through
  * parties.view or workorders.view counts nowhere here), and one with nothing to count is absent (never a row of zeros).
@@ -62,9 +64,6 @@ import { asDay, dayOf, type Reader } from './store'
  */
 
 // ---- the shared facts ---------------------------------------------------------------------------------------------------
-
-/** The statuses before or in production (factory-domain officeStripStateOf: waiting for a yes, or current). */
-const NOT_AFTER: readonly SalesOrderStatus[] = Object.freeze(SALES_ORDER_STATUSES.filter((status) => !isAfterProduction(officeStripStateOf(status))))
 
 const NO_PROMISE = '9999-12-31'
 type Best = NonNullable<PartyWork['best']>
@@ -137,8 +136,9 @@ export async function partyWorkKeys(client: Reader, context: OfficeContext, toda
   for (const row of await client.salesOrder.groupBy({ by: ['partyId'], where: scoped({ status: 'PENDING_APPROVAL' }), _count: { _all: true } })) of(row.partyId).waitsForYes = row._count._all
   // K7: confirmed, the deposit still open (cw's notSent.waitsForDeposit, the board's B-CW-003 where).
   for (const row of await client.salesOrder.groupBy({ by: ['partyId'], where: scoped({ status: 'CONFIRMED' }, depositOpenWhere), _count: { _all: true } })) of(row.partyId).waitsForDeposit = row._count._all
-  // K8: the most urgent order before or in production (per level and number, the earliest promise; then the best of them).
-  for (const row of await client.salesOrder.groupBy({ by: ['partyId', 'priorityLevel', 'priority'], where: scoped({ status: { in: [...NOT_AFTER] } }), _min: { promiseDate: true } })) {
+  // K8: the most urgent OPEN order (per level and number, the earliest promise; then the best of them). T31: OPEN_STATUSES, the set
+  // of the Top / High chips and their door (rows=open) — an order waiting for a yes never lifts its customer by its level.
+  for (const row of await client.salesOrder.groupBy({ by: ['partyId', 'priorityLevel', 'priority'], where: scoped({ status: { in: [...OPEN_STATUSES] } }), _min: { promiseDate: true } })) {
     const work = of(row.partyId)
     work.best = moreUrgent(work.best, { level: row.priorityLevel as PriorityLevel, priority: row.priority, promise: row._min.promiseDate ? dayOf(row._min.promiseDate) : null })
   }
