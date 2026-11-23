@@ -90,7 +90,7 @@
     },
     "title": "Customers",
     "intro": "Everyone we sell to — companies, brands and riders — with what an e-invoice needs and the VIES proof for zero-rated EU sales.",
-    "search": "Search code, name, VAT number or codice fiscale",
+    "search": "Search name, code or VAT",
     "table": "Customers",
     "failedTitle": "Couldn't load customers",
     "empty": {
@@ -99,7 +99,7 @@
     },
     "noAccess": {
       "title": "You don't have access to customers",
-      "body": "Seeing customers needs the permission \"See customers and suppliers\". The Sales, Buyer and Finance roles have it; ask an administrator."
+      "body": "Seeing customers needs the permission “See customers and suppliers”; ask an administrator."
     },
     "new": {
       "action": "New customer",
@@ -379,7 +379,7 @@
     },
     "title": "Suppliers",
     "intro": "Tanneries, mills, trim and protector makers, subcontractors and carriers: who we buy from and send work and goods with.",
-    "search": "Search code, name or VAT number",
+    "search": "Search name, code or VAT",
     "table": "Suppliers",
     "failedTitle": "Couldn't load suppliers",
     "empty": {
@@ -388,7 +388,7 @@
     },
     "noAccess": {
       "title": "You don't have access to suppliers",
-      "body": "Seeing suppliers needs the permission \"See customers and suppliers\". The Buyer, Sales and Finance roles have it; ask an administrator."
+      "body": "Seeing suppliers needs the permission “See customers and suppliers”; ask an administrator."
     },
     "new": {
       "action": "New supplier",
@@ -523,18 +523,6 @@
   },
   "tile": {
     "unknown": "Couldn't count",
-    "customers": {
-      "active": "Active",
-      "activeHint": "Can be quoted and ordered",
-      "prospects": "Prospects",
-      "prospectsHint": "Not active yet",
-      "vies": "EU businesses without a valid VIES check",
-      "viesHint": "Their sales are not zero-rated yet",
-      "invoice": "Can't be invoiced yet",
-      "invoiceHint": "Tax data missing",
-      "blocked": "Blocked",
-      "blockedHint": "No new quotes, orders or shipments"
-    },
     "suppliers": {
       "active": "Active",
       "activeHint": "Can receive purchase orders",

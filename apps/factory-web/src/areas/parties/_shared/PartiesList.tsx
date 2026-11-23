@@ -17,6 +17,7 @@ import {
   BULK_MAX,
   identityBody,
   identityWanted,
+  listCanOf, // F-CL-101
   loaded,
   loading,
   failed,
@@ -46,8 +47,18 @@ import { PartiesListView, type ListDepth } from './view/PartiesListView'
 /**
  * B-W2b-334: a side's own list parts (Suppliers: the "Documents expiring in 30 days" tile and its view, Request documents
  * N), given the list's view, a way to change it, the selected rows and how to read the list again.
+ * F-CL-101 (13-backend §8.1): + the loaded rows (a side reads its own facts per page of rows: Customers' New messages). The slot is
+ * called once per render of the list, always at the same place, so a side may use hooks inside it (the same ones every render).
  */
-export type ListDepthSlot = (list: { view: ListView; onView: (view: ListView) => void; selectedRows: readonly PartyRow[]; reload: () => void }) => ListDepth
+export interface ListDepthArgs {
+  readonly view: ListView
+  readonly onView: (view: ListView) => void
+  readonly selectedRows: readonly PartyRow[]
+  /** F-CL-101: the rows the list has loaded (every page read so far). */
+  readonly rows: readonly PartyRow[]
+  readonly reload: () => void
+}
+export type ListDepthSlot = (list: ListDepthArgs) => ListDepth
 
 /**
  * The list container of both sides (`/w/<company>/sales/customers` SCR-032, `/w/<company>/purchasing/suppliers`
@@ -66,6 +77,8 @@ export function PartiesList({ side, headActions, columns, depth }: { side: Side;
 }
 
 const VIEWS = new Set<string>(['open', 'active', 'prospects', 'brands', 'riders', 'invoice', 'vies', 'blocked', 'archived', 'all', 'suppliers', 'subcontractors', 'carriers']) // B-W2b-324: riders
+/** F-CL-101: no rows read yet — one empty list, the same between renders (a side's per-page read keys on it). */
+const EMPTY_ROWS: readonly PartyRow[] = []
 
 function PartiesListContainer({ side, headActions, columns, depth }: { side: Side; headActions?: (reload: () => void) => ReactNode; columns?: readonly ColDef<PartyRow>[]; depth?: ListDepthSlot }) {
   const config = SIDES[side]
@@ -75,7 +88,7 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
   const pathname = usePathname()
   const params = useSearchParams()
   const held = useMemo(() => new Set(session.permissions), [session.permissions])
-  const can = { view: held.has('parties.view'), manage: held.has('parties.manage'), block: held.has('parties.block'), vies: held.has('parties.vies') }
+  const can = listCanOf(held) // F-CL-101: + views.export (the bar's Export N)
   const prefix = companyPrefix(session.company?.code ?? '')
   // F-SA-225 (screen = file): the view, the search and the kind / tax-mode chips live in the ADDRESS — Export ▾ and Export N (the export
   // job reads the screen's address: exports/sources/parties.ts), a saved view, Back and a shared link hold the screen's rows; every
@@ -273,11 +286,16 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
     }
   }
 
-  /** One call per row, one result per row (the dialog shows them as they come). */
-  const runBulk = async (kind: BulkKind, targets: readonly PartyRow[], reason?: string) => {
+  // F-CL-103: the last run's kind and reason, for its receipt's "Run the rest again".
+  const lastRun = useRef<{ kind: BulkKind; reason?: string } | null>(null)
+
+  /** One call per row, one result per row (the dialog shows them as they come). F-CL-103: + the selected rows it leaves out. */
+  const runBulk = async (kind: BulkKind, targets: readonly PartyRow[], reason?: string, notOn?: readonly string[]) => {
     const list = targets.slice(0, BULK_MAX)
     const results: BulkResult[] = []
-    setBulk({ kind, total: list.length, results: [], done: false })
+    lastRun.current = { kind, ...(reason ? { reason } : {}) }
+    const skipped = notOn && notOn.length > 0 ? { notOn } : {}
+    setBulk({ kind, total: list.length, results: [], done: false, ...skipped })
     setDialog({ kind: 'bulk' })
     for (const row of list) {
       let result: BulkResult
@@ -299,19 +317,20 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
           result = { id: row.id, code: row.code, name: partyName(row), outcome: 'bulk.archived', tone: 'success' }
         }
       } catch (error) {
-        result = { id: row.id, code: row.code, name: partyName(row), outcome: kind === 'vies' && isApiError(error) && error.kind === 'conflict' ? 'vies.refused' : problemKey(error), tone: 'danger' }
+        result = { id: row.id, code: row.code, name: partyName(row), outcome: kind === 'vies' && isApiError(error) && error.kind === 'conflict' ? 'vies.refused' : problemKey(error), tone: 'danger', failed: true }
       }
       results.push(result)
-      setBulk({ kind, total: list.length, results: [...results], done: false })
+      setBulk({ kind, total: list.length, results: [...results], done: false, ...skipped })
     }
-    setBulk({ kind, total: list.length, results: [...results], done: true })
+    setBulk({ kind, total: list.length, results: [...results], done: true, ...skipped })
     setSelected([])
     refresh()
   }
 
-  const onCheckVies = async (ids: readonly string[]) => {
+  const onCheckVies = async (ids: readonly string[], notOn?: readonly string[]) => {
     const targets = ids.map(rowOf).filter((row): row is PartyRow => !!row)
-    if (targets.length !== 1) return void runBulk('vies', targets)
+    // F-CL-103: from the bar with rows it leaves out, the window says which and why (one row alone, as before: a notice).
+    if (targets.length !== 1 || (notOn?.length ?? 0) > 0) return void runBulk('vies', targets, undefined, notOn)
     const row = targets[0]!
     setNotice({ key: 'vies.checkingOne', tone: 'info', params: { name: partyName(row) } })
     try {
@@ -353,19 +372,19 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
     }
   }
 
+  // B-W2b-334: the side's own tiles, view and bulk actions. F-CL-101: called here, once per render (a side may use hooks in it).
+  const sideDepth = depth?.({
+    view,
+    onView: changeView,
+    selectedRows: (rows.items ?? []).filter((row) => selected.includes(row.id)),
+    rows: rows.items ?? EMPTY_ROWS,
+    reload: refresh,
+  })
+
   return (
     <PartiesListView
       columns={columns}
-      // B-W2b-334: the side's own tiles, view and bulk actions.
-      depth={depth?.({
-        view,
-        onView: changeView,
-        selectedRows: (rows.items ?? []).filter((row) => selected.includes(row.id)),
-        reload: () => {
-          void load()
-          void loadTiles()
-        },
-      })}
+      depth={sideDepth}
       headActions={
         headActions?.(() => {
           void load()
@@ -408,10 +427,6 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
           setSelected([])
           writeAddress({ filters: next }) // F-SA-225
         },
-        onClearAll: () => {
-          setSelected([])
-          writeAddress({ view: 'open', query: '', filters: {} }) // F-SA-225: one write
-        },
         onMore: () => void onMore(),
         onRetry: () => {
           setRows(loading())
@@ -431,7 +446,7 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
         onBlock: (ids, reason) => {
           const targets = ids.map(rowOf).filter((row): row is PartyRow => !!row)
           if (targets.length === 1) void move(targets[0]!.id, 'block', reason)
-          else void runBulk('block', targets, reason)
+          else void runBulk('block', targets, reason, dialog?.kind === 'block' ? dialog.notOn : undefined)
         },
         onOpen: (row) => router.push(recordHref(prefix, config, row.id)),
         onUnblock: (id) => void move(id, 'unblock'),
@@ -448,9 +463,15 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
               })
               .catch((error: unknown) => setDialogProblem(problemKey(error)))
               .finally(() => setBusy(false))
-          } else void runBulk('archive', targets)
+          } else void runBulk('archive', targets, undefined, dialog?.kind === 'archive' ? dialog.notOn : undefined)
         },
-        onCheckVies: (ids) => void onCheckVies(ids),
+        onCheckVies: (ids, notOn) => void onCheckVies(ids, notOn),
+        // F-CL-103: the receipt's "Run the rest again" — the same act on the ones that failed (Block with its reason).
+        onRunRest: (ids) => {
+          const last = lastRun.current
+          const targets = ids.map(rowOf).filter((row): row is PartyRow => !!row)
+          if (last && targets.length > 0) void runBulk(last.kind, targets, last.reason)
+        },
         onRecheckAll: () => void onRecheckAll(),
         onDismissNotice: () => setNotice(null),
       }}

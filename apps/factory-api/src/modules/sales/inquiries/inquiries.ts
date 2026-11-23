@@ -522,8 +522,9 @@ export async function writeInquiry(tools: CommandTools, row: InquiryData, data: 
 
 type Change = 'UPDATED' | 'MATCHED' | 'ASSIGNED' | 'UNASSIGNED' | 'NEED_INFO' | 'RESUMED'
 // B-TH-042: exported for ./make-customer.ts (MATCHED).
-export function emitChanged(tools: CommandTools, row: InquiryData, status: InquiryStatus, change: Change, partyId: string | null, assigneeId: string | null): void {
-  tools.emit({ type: 'inquiry.changed', subject: row.id, companyId: row.companyId, payload: { inquiryId: row.id, number: row.number, status, previousStatus: row.status, change, partyId, assigneeId } })
+// B-CQ-040 (customer page › Quotes & incoming, C10): `batchId` — the act's batch when the change is one of N (Assign N, Ask about N).
+export function emitChanged(tools: CommandTools, row: InquiryData, status: InquiryStatus, change: Change, partyId: string | null, assigneeId: string | null, batchId: string | null = null): void {
+  tools.emit({ type: 'inquiry.changed', subject: row.id, companyId: row.companyId, payload: { inquiryId: row.id, number: row.number, status, previousStatus: row.status, change, partyId, assigneeId, ...(batchId ? { batchId } : {}) } })
 }
 
 // ---- change ------------------------------------------------------------------------------------------------------------
@@ -598,13 +599,13 @@ export async function updateInquiry(caller: CommandCaller, inquiryId: string, bo
 
 // ---- assign ------------------------------------------------------------------------------------------------------------
 
-async function assignInCommand(tools: CommandTools, context: OfficeContext, row: InquiryData, assigneeId: string | null): Promise<InquiryStatus> {
+async function assignInCommand(tools: CommandTools, context: OfficeContext, row: InquiryData, assigneeId: string | null, batchId: string | null = null /* B-CQ-040 */): Promise<InquiryStatus> {
   if (assigneeId === null) {
     refuse(unassignRefusal(factsOf(row)))
     const status = statusAfterUnassign(row.status as InquiryStatus)
     await writeInquiry(tools, row, { assigneeId: null, assignedAt: null, status })
     tools.audit({ action: 'sales.inquiries.unassign', recordType: 'Inquiry', recordId: row.id, companyId: row.companyId, before: { status: row.status, assigneeId: row.assigneeId }, after: { status, assigneeId: null } })
-    emitChanged(tools, row, status, 'UNASSIGNED', row.partyId, null)
+    emitChanged(tools, row, status, 'UNASSIGNED', row.partyId, null, batchId)
     return status
   }
   refuse(assignRefusal(factsOf(row), assigneeId))
@@ -613,7 +614,7 @@ async function assignInCommand(tools: CommandTools, context: OfficeContext, row:
   await writeInquiry(tools, row, { assigneeId, assignedAt: tools.now, status })
   tools.audit({ action: 'sales.inquiries.assign', recordType: 'Inquiry', recordId: row.id, companyId: row.companyId, before: { status: row.status, assigneeId: row.assigneeId }, after: { status, assigneeId, assignedAt: toUtcIso(tools.now) } })
   await followInCommand(tools, { type: 'Inquiry', id: row.id, companyId: row.companyId, siteId: null }, assigneeId, 'ASSIGNEE', authorOf(tools))
-  emitChanged(tools, row, status, 'ASSIGNED', row.partyId, assigneeId)
+  emitChanged(tools, row, status, 'ASSIGNED', row.partyId, assigneeId, batchId)
   return status
 }
 
@@ -628,17 +629,21 @@ export async function assignInquiry(caller: CommandCaller, inquiryId: string, bo
   return result
 }
 
-/** Each item of a selection in ONE command: any refusal refuses all (409 with `body/items/<i>`). */
-async function eachOf(caller: CommandCaller, name: 'sales.inquiries.assignMany' | 'sales.inquiries.declineMany', items: readonly { inquiryId: string; version: number }[], input: unknown, idempotencyKey: string | undefined, work: (tools: CommandTools, context: OfficeContext, row: InquiryData) => Promise<InquiryStatus>) {
+/**
+ * Each item of a selection in ONE command: any refusal refuses all (409 with `body/items/<i>`). B-CQ-040 (customer page › Quotes &
+ * incoming, C10): with 2 items or more, ONE `batchId` on every event the command emits, so each reader's bell folds them into one item.
+ */
+async function eachOf(caller: CommandCaller, name: 'sales.inquiries.assignMany' | 'sales.inquiries.declineMany', items: readonly { inquiryId: string; version: number }[], input: unknown, idempotencyKey: string | undefined, work: (tools: CommandTools, context: OfficeContext, row: InquiryData, batchId: string | null) => Promise<InquiryStatus>) {
   const context = officeOf(caller)
   if (new Set(items.map((item) => item.inquiryId)).size !== items.length) throw new ValidationError('An inquiry is listed twice.', [{ path: 'body/items', message: 'An inquiry is listed twice.' }])
   const { result } = await command(caller, { name, idempotencyKey, input }, async (tools) => {
     const issues: Issue[] = []
     const done: { id: string; number: string; status: InquiryStatus; version: number }[] = []
+    const batchId = items.length >= 2 ? newId() : null // B-CQ-040
     for (const [index, item] of items.entries()) {
       try {
         const row = await lockForChange(tools, context, item.inquiryId, item.version)
-        const status = await work(tools, context, row)
+        const status = await work(tools, context, row, batchId)
         done.push({ id: row.id, number: row.number, status, version: row.version + 1 })
       } catch (error) {
         if (error instanceof DomainError) issues.push({ path: `body/items/${index}`, message: error.message })
@@ -653,7 +658,7 @@ async function eachOf(caller: CommandCaller, name: 'sales.inquiries.assignMany' 
 
 /** POST /sales/inquiries/assign: "Assign to…" on a selection. */
 export async function assignInquiries(caller: CommandCaller, body: BulkAssignBody, idempotencyKey?: string) {
-  return eachOf(caller, 'sales.inquiries.assignMany', body.items, body, idempotencyKey, (tools, context, row) => assignInCommand(tools, context, row, body.assigneeId))
+  return eachOf(caller, 'sales.inquiries.assignMany', body.items, body, idempotencyKey, (tools, context, row, batchId) => assignInCommand(tools, context, row, body.assigneeId, batchId))
 }
 
 // ---- waiting for the customer ------------------------------------------------------------------------------------------
@@ -679,10 +684,12 @@ export async function askInfo(caller: CommandCaller, inquiryId: string, body: As
   const { result } = await command(caller, { name: 'sales.inquiries.askInfo', idempotencyKey, input: { inquiryId, ...body } }, async (tools) => {
     const row = await lockForChange(tools, context, inquiryId, body.version)
     refuse(askInfoRefusal(factsOf(row)))
-    const asked = message ? await messageInCommand(tools, context, row, message, 'ask') : null
+    // B-CQ-040: one of N asks of one "Ask <customer> about N" — its batch on the portal message and the change (one bell).
+    const batchId = body.batchId ?? null
+    const asked = message ? await messageInCommand(tools, context, row, message, 'ask', batchId) : null
     await writeInquiry(tools, row, { status: 'NEED_INFO' })
     tools.audit({ action: 'sales.inquiries.askInfo', recordType: 'Inquiry', recordId: row.id, companyId: row.companyId, before: { status: row.status }, after: { status: 'NEED_INFO', ...(asked ? { asked: asked.via, messageId: asked.messageId } : {}) } })
-    emitChanged(tools, row, 'NEED_INFO', 'NEED_INFO', row.partyId, row.assigneeId)
+    emitChanged(tools, row, 'NEED_INFO', 'NEED_INFO', row.partyId, row.assigneeId, batchId)
     return { inquiry: await viewInCommand(tools, row.id) }
   }).catch(databaseRefusal)
   return result
@@ -713,13 +720,14 @@ async function checkMessage(caller: CommandCaller, context: OfficeContext, inqui
  * (the customer reads it in its portal, no mail); on any other a mail on the request's thread (email-out sendEmail: the one
  * recipient rule, B-TH-004) to `to`, else the request's contact.
  */
-async function messageInCommand(tools: CommandTools, context: OfficeContext, row: InquiryData, message: CustomerMessage, purpose: 'ask' | 'decline'): Promise<{ via: 'PORTAL' | 'MAIL'; messageId: string }> {
+// B-CQ-040: `batchId` rides on the PORTAL message (its followers' bell folds the batch); a mail takes none yet (later: sendEmail).
+async function messageInCommand(tools: CommandTools, context: OfficeContext, row: InquiryData, message: CustomerMessage, purpose: 'ask' | 'decline', batchId: string | null = null): Promise<{ via: 'PORTAL' | 'MAIL'; messageId: string }> {
   const user = await tools.tx.user.findUniqueOrThrow({ where: { id: context.actorId }, select: { displayName: true, email: true } })
   const record = { type: 'Inquiry', id: row.id }
   if (row.source === 'PORTAL') {
     const { thread } = await ensureThread(tools, record, context.actorId)
     if (thread.status !== 'OPEN') throw new InquiryRefusedError({ code: 'CLOSED', message: `The request's conversation is closed; reopen it to ${purpose === 'ask' ? 'ask' : 'write to the customer'}.` })
-    const written = await writeMessage(tools, thread, { direction: 'OUTBOUND', channel: 'PORTAL', author: { kind: 'USER', id: context.actorId, name: user.displayName }, bodyText: cleanBody(message.body) })
+    const written = await writeMessage(tools, thread, { direction: 'OUTBOUND', channel: 'PORTAL', author: { kind: 'USER', id: context.actorId, name: user.displayName }, bodyText: cleanBody(message.body), ...(batchId ? { batchId } : {}) /* B-CQ-040 */ })
     return { via: 'PORTAL', messageId: written.id }
   }
   const contact = row.contactId ? await tools.tx.partyContact.findUnique({ where: { id: row.contactId }, select: { email: true } }) : null
@@ -747,18 +755,19 @@ export async function resumeInquiry(caller: CommandCaller, inquiryId: string, bo
 
 // ---- closing -----------------------------------------------------------------------------------------------------------
 
-// B-TH-025: ORDERED names the order made from it (salesOrderId); every other end names none.
-export function emitClosed(tools: CommandTools, row: InquiryData, status: 'QUOTED' | 'DECLINED' | 'LOST' | 'ORDERED', quoteId: string | null, declineReason: DeclineReason | null, salesOrderId: string | null = null): void {
-  tools.emit({ type: 'inquiry.closed', subject: row.id, companyId: row.companyId, payload: { inquiryId: row.id, number: row.number, status, previousStatus: row.status, quoteId, salesOrderId, declineReason, partyId: row.partyId } })
+// B-TH-025: ORDERED names the order made from it (salesOrderId); every other end names none. B-CQ-040: `batchId` when it is one of
+// N ended in one act (Decline N, Mark N lost).
+export function emitClosed(tools: CommandTools, row: InquiryData, status: 'QUOTED' | 'DECLINED' | 'LOST' | 'ORDERED', quoteId: string | null, declineReason: DeclineReason | null, salesOrderId: string | null = null, batchId: string | null = null): void {
+  tools.emit({ type: 'inquiry.closed', subject: row.id, companyId: row.companyId, payload: { inquiryId: row.id, number: row.number, status, previousStatus: row.status, quoteId, salesOrderId, declineReason, partyId: row.partyId, ...(batchId ? { batchId } : {}) } })
 }
 
 // B-TH-043: `sent` = the one message that went with it (a single decline with "Send to the customer" ticked), in the audit row.
-async function declineInCommand(tools: CommandTools, context: OfficeContext, row: InquiryData, reason: DeclineReason, note: string | null, sent: { via: 'PORTAL' | 'MAIL'; messageId: string } | null = null): Promise<InquiryStatus> {
+async function declineInCommand(tools: CommandTools, context: OfficeContext, row: InquiryData, reason: DeclineReason, note: string | null, sent: { via: 'PORTAL' | 'MAIL'; messageId: string } | null = null, batchId: string | null = null /* B-CQ-040 */): Promise<InquiryStatus> {
   refuse(declineRefusal(factsOf(row), reason, note))
   const closeNote = note === null ? null : note.trim()
   await writeInquiry(tools, row, { status: 'DECLINED', declineReason: reason, closeNote, closedAt: tools.now, closedById: context.actorId })
   tools.audit({ action: 'sales.inquiries.decline', recordType: 'Inquiry', recordId: row.id, companyId: row.companyId, before: { status: row.status }, after: { status: 'DECLINED', declineReason: reason, closedAt: toUtcIso(tools.now), ...(sent ? { sent: sent.via, messageId: sent.messageId } : {}) }, ...(closeNote ? { reason: closeNote } : {}) })
-  emitClosed(tools, row, 'DECLINED', null, reason)
+  emitClosed(tools, row, 'DECLINED', null, reason, null, batchId)
   return 'DECLINED'
 }
 
@@ -789,7 +798,7 @@ export async function declineInquiry(caller: CommandCaller, inquiryId: string, b
 /** POST /sales/inquiries/decline: "Decline N" on a selection (B-TH-043: never sends anything; its body has no message). */
 export async function declineInquiries(caller: CommandCaller, body: BulkDeclineBody, idempotencyKey?: string) {
   if (body.reason === 'OTHER' && !body.note) throw new InquiryRefusedError({ code: 'OTHER_NEEDS_WORDS', message: 'Say in words why they are declined (the reason is Other).' })
-  return eachOf(caller, 'sales.inquiries.declineMany', body.items, body, idempotencyKey, (tools, context, row) => declineInCommand(tools, context, row, body.reason, body.note ?? null))
+  return eachOf(caller, 'sales.inquiries.declineMany', body.items, body, idempotencyKey, (tools, context, row, batchId) => declineInCommand(tools, context, row, body.reason, body.note ?? null, null, batchId))
 }
 
 /** POST /sales/inquiries/:inquiryId/lost: the customer went away before a quote. */
@@ -801,7 +810,7 @@ export async function loseInquiry(caller: CommandCaller, inquiryId: string, body
     refuse(loseRefusal(factsOf(row)))
     await writeInquiry(tools, row, { status: 'LOST', closeNote: body.note, closedAt: tools.now, closedById: context.actorId })
     tools.audit({ action: 'sales.inquiries.lose', recordType: 'Inquiry', recordId: row.id, companyId: row.companyId, before: { status: row.status }, after: { status: 'LOST', closedAt: toUtcIso(tools.now) }, reason: body.note })
-    emitClosed(tools, row, 'LOST', null, null)
+    emitClosed(tools, row, 'LOST', null, null, null, body.batchId ?? null) // B-CQ-040: one of "Mark N lost"
     return { inquiry: await viewInCommand(tools, row.id) }
   }).catch(databaseRefusal)
   return result

@@ -159,8 +159,9 @@ export const events = [
   defineEvent({
     type: 'quote.cancelled',
     context: 'sales',
-    description: 'The office withdrew a quote: before it was sent, or after (its accept links revoked, with a reason).',
-    payload: z.strictObject({ ...ids, partyId: livePartyId() /* B-SA-004b */ }),
+    description: 'The office withdrew a quote: before it was sent, or after (its accept links revoked, with a reason). B-CQ-040: `batchId` when it is one of N quotes cancelled in one act (the followers get one bell for them).',
+    // B-CQ-040 (customer page › Quotes & incoming, settle C10): the act's batch, never live (office notifications only).
+    payload: z.strictObject({ ...ids, partyId: livePartyId() /* B-SA-004b */, batchId: z.uuid().optional() }),
     live,
   }),
   defineEvent({

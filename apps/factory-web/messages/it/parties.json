@@ -90,7 +90,7 @@
     },
     "title": "Clienti",
     "intro": "Chi compra da noi — aziende, marchi e piloti — con ciò che serve alla fattura elettronica e la prova VIES per le vendite UE non imponibili.",
-    "search": "Cerca codice, nome, partita IVA o codice fiscale",
+    "search": "Cerca nome, codice o P. IVA",
     "table": "Clienti",
     "failedTitle": "Caricamento dei clienti non riuscito",
     "empty": {
@@ -99,7 +99,7 @@
     },
     "noAccess": {
       "title": "Non hai accesso ai clienti",
-      "body": "Per vedere i clienti serve il permesso «Vedere clienti e fornitori». Lo hanno i ruoli Vendite, Acquisti e Amministrazione; chiedi a un amministratore."
+      "body": "Per vedere i clienti serve il permesso «Vedere clienti e fornitori»; chiedi a un amministratore."
     },
     "new": {
       "action": "Nuovo cliente",
@@ -379,7 +379,7 @@
     },
     "title": "Fornitori",
     "intro": "Concerie, tessiture, accessori e protezioni, terzisti e corrieri: da chi compriamo e con chi lavoriamo e spediamo.",
-    "search": "Cerca codice, nome o partita IVA",
+    "search": "Cerca nome, codice o P. IVA",
     "table": "Fornitori",
     "failedTitle": "Caricamento dei fornitori non riuscito",
     "empty": {
@@ -388,7 +388,7 @@
     },
     "noAccess": {
       "title": "Non hai accesso ai fornitori",
-      "body": "Per vedere i fornitori serve il permesso «Vedere clienti e fornitori». Lo hanno i ruoli Acquisti, Vendite e Amministrazione; chiedi a un amministratore."
+      "body": "Per vedere i fornitori serve il permesso «Vedere clienti e fornitori»; chiedi a un amministratore."
     },
     "new": {
       "action": "Nuovo fornitore",
@@ -523,18 +523,6 @@
   },
   "tile": {
     "unknown": "Conteggio non riuscito",
-    "customers": {
-      "active": "Attivi",
-      "activeHint": "Si possono preventivare e ordinare",
-      "prospects": "Potenziali",
-      "prospectsHint": "Non ancora attivi",
-      "vies": "Aziende UE senza controllo VIES valido",
-      "viesHint": "Vendite non ancora non imponibili",
-      "invoice": "Non ancora fatturabili",
-      "invoiceHint": "Mancano dati fiscali",
-      "blocked": "Bloccati",
-      "blockedHint": "Niente nuovi preventivi, ordini o spedizioni"
-    },
     "suppliers": {
       "active": "Attivi",
       "activeHint": "Possono ricevere ordini d’acquisto",

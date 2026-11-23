@@ -543,3 +543,93 @@ describe('F-SA-274: People & addresses', () => {
   })
 })
 // ---- end F-SA-274
+
+// ---- F-CL-101 (customers list plan §2, K12, settles T10 / T15 / T16): the shared rule fixes, on Customers and Suppliers alike ---
+// (imported here, below the pinned lines above, so those lines stay where they were)
+import { ARCHIVED_CUSTOMER } from './fixtures'
+import { emptyWordsOf, listCanOf, rowActsOf, viewsOf } from './model'
+
+describe('F-CL-101: one Views ▾, an empty view says its own words, an act without its right is not drawn', () => {
+  const ROLES: Readonly<Record<string, readonly string[]>> = {
+    owner: ['parties.view', 'parties.manage', 'parties.block', 'parties.vies', 'views.export'],
+    sales: ['parties.view', 'parties.manage', 'parties.vies', 'views.export'],
+    finance: ['parties.view', 'parties.manage', 'parties.block', 'parties.vies', 'views.export'],
+    productionManager: ['parties.view', 'views.export'],
+    warehouse: ['parties.view', 'views.export'],
+    readOnly: ['parties.view'],
+  }
+  const byCode = (code: string) => rowOf(CUSTOMERS.find((item) => item.code === code)!)
+
+  it('Views ▾ lists the side’s own views, the one in the address checked; the customers’ five tiles went, the suppliers keep theirs', () => {
+    expect(viewsOf('customers', 'blocked')).toEqual({ ids: SIDES.customers.views, active: 'blocked' })
+    expect(viewsOf('suppliers', 'carriers').active).toBe('carriers')
+    // A view of the other side is not one of these: no view is checked.
+    expect(viewsOf('customers', 'carriers').active).toBeNull()
+    expect(SIDES.customers.tiles).toEqual([])
+    expect(SIDES.suppliers.tiles).toEqual(['active', 'prospects', 'blocked'])
+  })
+
+  it('an empty list names what is empty — the search, the chips, the view — and the first day stays the side’s own', () => {
+    expect(emptyWordsOf('customers', 'blocked', {}, '')).toEqual({ kind: 'view', key: 'empty.customers.blocked', view: 'blocked' })
+    expect(emptyWordsOf('customers', 'archived', {}, '').key).toBe('empty.customers.archived')
+    expect(emptyWordsOf('customers', 'brands', {}, '')).toEqual({ kind: 'view', key: 'empty.customers.other', view: 'brands' })
+    expect(emptyWordsOf('suppliers', 'blocked', {}, '').key).toBe('empty.suppliers.blocked')
+    expect(emptyWordsOf('suppliers', 'prospects', {}, '').key).toBe('empty.suppliers.other')
+    expect(emptyWordsOf('customers', 'blocked', {}, ' Seed Zeta ')).toEqual({ kind: 'search', key: 'empty.customers.search', q: 'Seed Zeta' })
+    expect(emptyWordsOf('customers', 'open', { kind: 'PERSON' }, '')).toEqual({ kind: 'filters', key: 'empty.customers.filters' })
+    expect(emptyWordsOf('customers', 'open', {}, '  ')).toEqual({ kind: 'none' })
+  })
+
+  it('every empty word exists in it and en with the same placeholders (customers-list)', () => {
+    const keys = ['empty.clear', 'empty.clearSearch', ...(['customers', 'suppliers'] as const).flatMap((side) => SIDES[side].views.map((view) => emptyWordsOf(side, view, {}, '').kind === 'view' ? (emptyWordsOf(side, view, {}, '') as { key: string }).key : `empty.${side}.search`)), 'empty.customers.filters', 'empty.suppliers.filters']
+    for (const key of new Set(keys)) {
+      const en = CATALOGUE.en['customers-list']?.[key]
+      const it = CATALOGUE.it['customers-list']?.[key]
+      expect(en, key).toBeTruthy()
+      expect(it, key).toBeTruthy()
+      expect((it!.match(/\{\w+\}/g) ?? []).sort(), key).toEqual((en!.match(/\{\w+\}/g) ?? []).sort())
+    }
+  })
+
+  it('each role sees only the row acts its own rights allow; Archive of a blocked one stays, held by state', () => {
+    const active = byCode('DE-BEISPIEL')
+    const blocked = byCode('BLOCCATO-DEMO')
+    const archived = rowOf(ARCHIVED_CUSTOMER)
+    const acts = (role: string) => [active, blocked, archived].map((row) => rowActsOf(row, listCanOf(ROLES[role]!)))
+    expect(acts('owner')).toEqual([['vies', 'block', 'archive'], ['unblock', 'archive-held'], ['reactivate']])
+    expect(acts('finance')).toEqual(acts('owner'))
+    expect(acts('sales')).toEqual([['vies', 'archive'], ['archive-held'], ['reactivate']])
+    for (const role of ['productionManager', 'warehouse', 'readOnly']) expect(acts(role), role).toEqual([[], [], []])
+    expect(listCanOf(ROLES.readOnly!)).toEqual({ view: true, manage: false, block: false, vies: false, export: false })
+    expect(listCanOf(ROLES.warehouse!).export).toBe(true)
+  })
+
+  it('without the right to manage there is no New customer and no Import (hidden, not held)', () => {
+    const count = (id: string) => (render(customersScreen as DesignScreen<unknown>, customersScreen.cases.find((item) => item.id === id)!.model, 'en').match(/New customer/g) ?? []).length
+    expect(count('read-only')).toBeLessThan(count('list'))
+    const imports = (id: string) => (render(customersScreen as DesignScreen<unknown>, customersScreen.cases.find((item) => item.id === id)!.model, 'en').match(/Import<\/button>/g) ?? []).length
+    expect(imports('list')).toBeGreaterThan(0)
+    expect(imports('import-held')).toBe(0)
+    expect(imports('import-held-manage')).toBe(0)
+  })
+
+  it('no keys window and no Rows ▾: the keys live in the footer’s icon, the views in the one Views ▾', () => {
+    const view = readFileSync(new URL('./view/PartiesListView.tsx', import.meta.url), 'utf8')
+    const dialogs = readFileSync(new URL('./view/dialogs.tsx', import.meta.url), 'utf8')
+    expect(view).not.toContain('ShortcutsModal')
+    expect(view).not.toContain("kind: 'shortcuts'")
+    expect(dialogs).not.toContain('export function ShortcutsModal')
+    expect(view).not.toContain("t('list.rows'")
+    expect(view).toContain('builtInViews={builtInViews')
+    for (const screen of [customersScreen, suppliersScreen] as DesignScreen<unknown>[]) expect(screen.cases.map((item) => item.id)).not.toContain('shortcuts')
+  })
+
+  it('the no-access words name no role, in both languages', () => {
+    for (const locale of LOCALES)
+      for (const side of ['customers', 'suppliers'] as const) {
+        const body = CATALOGUE[locale].parties![`${side}.noAccess.body`]!
+        expect(body, `${locale} ${side}`).not.toMatch(/Sales|Buyer|Finance|Vendite|Acquisti|Amministrazione/)
+      }
+  })
+})
+// ---- end F-CL-101

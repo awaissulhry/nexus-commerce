@@ -1,0 +1,115 @@
+{
+  "empty": {
+    "customers": {
+      "search": "Nessun cliente corrisponde a «{q}».",
+      "filters": "Nessun cliente corrisponde a questi filtri.",
+      "archived": "Nessun cliente archiviato.",
+      "blocked": "Nessun cliente bloccato.",
+      "vies": "Nessun cliente ha problemi VIES.",
+      "prospects": "Nessun potenziale.",
+      "other": "Nessun cliente in «{view}»."
+    },
+    "suppliers": {
+      "search": "Nessun fornitore corrisponde a «{q}».",
+      "filters": "Nessun fornitore corrisponde a questi filtri.",
+      "blocked": "Nessun fornitore bloccato.",
+      "archived": "Nessun fornitore archiviato.",
+      "other": "Nessun fornitore in «{view}»."
+    },
+    "clear": "Togli",
+    "clearSearch": "Svuota la ricerca"
+  },
+  "col": {
+    "customer": "Cliente",
+    "messagesHint": "I tuoi nuovi messaggi nella conversazione del cliente. I messaggi dei suoi ordini sono contati nella sua scheda Lavori."
+  },
+  "office": {
+    "chip": "Servono dati d’ufficio",
+    "hint": "Servono dati d’ufficio: {what}",
+    "VIES": "il controllo VIES non è valido",
+    "SDI": "manca il codice SDI o la PEC",
+    "TAX": "mancano i dati fiscali: non ancora fatturabile"
+  },
+  "card": {
+    "thread": "Conversazione"
+  },
+  "bar": {
+    "more": "Altro",
+    "none": {
+      "customers": "Il tuo ruolo legge i clienti e non ne cambia nessuno: non c’è nessuna azione per le righe spuntate.",
+      "suppliers": "Il tuo ruolo legge i fornitori e non ne cambia nessuno: non c’è nessuna azione per le righe spuntate."
+    },
+    "task_one": "Aggiungi attività a {count} cliente…",
+    "task_other": "Aggiungi attività a {count} clienti…",
+    "supervisor": "Imposta supervisore di produzione per {count}…",
+    "tooMany": "Al massimo {max} clienti alla volta: selezionane meno."
+  },
+  "p2": {
+    "why": {
+      "noNumber": "Nessuna partita IVA UE controllabile con VIES.",
+      "blocked": "Già bloccato.",
+      "archived": "Già archiviato.",
+      "prospect": {
+        "customers": "Un potenziale: si bloccano solo i clienti attivi.",
+        "suppliers": "Un potenziale: si bloccano solo i fornitori attivi."
+      }
+    },
+    "each": {
+      "customers": "Ogni cliente",
+      "suppliers": "Ogni fornitore"
+    },
+    "door": {
+      "customers": "Il nome di un cliente apre la sua pagina con la conversazione aperta, in una nuova scheda.",
+      "suppliers": "Il nome di un fornitore apre la sua pagina con la conversazione aperta, in una nuova scheda."
+    }
+  },
+  "door": {
+    "openThread": "Apri la conversazione",
+    "openWork": "Apri la scheda Lavori",
+    "addTask": "Aggiungi attività…"
+  },
+  "task": {
+    "title_one": "Nuova attività su {count} cliente",
+    "title_other": "Nuova attività su {count} clienti",
+    "assigneeHint": "Il supervisore di produzione di ogni cliente, o una persona che può leggere i record di questi clienti.",
+    "supervisor": "Il supervisore di produzione di ogni cliente",
+    "noSupervisor_one": "{count} cliente non ha un supervisore di produzione: scegli una persona, o la sua attività resta esclusa.",
+    "noSupervisor_other": "{count} clienti non hanno un supervisore di produzione: scegli una persona, o le loro attività restano escluse.",
+    "where": "Ogni attività è sul suo cliente: nella sua conversazione, in Home › Le mie attività di chi la riceve e nelle attività aperte del cliente.",
+    "held": {
+      "none": "Spunta prima i clienti.",
+      "tooMany": "Al massimo {max} clienti alla volta."
+    },
+    "namesOther": {
+      "warn": "Il testo nomina un altro cliente: {names}. Ogni cliente legge questa attività nella sua conversazione.",
+      "tick": "Questo testo non nomina altri clienti",
+      "held": "Il testo nomina un altro cliente: cambialo, oppure spunta «Questo testo non nomina altri clienti»."
+    },
+    "made": "Attività creata · per {name}",
+    "due": "scade il {date}"
+  },
+  "supervisor": {
+    "title_one": "Imposta il supervisore di produzione per {count} cliente",
+    "title_other": "Imposta il supervisore di produzione per {count} clienti",
+    "reading": "Lettura dei clienti: {done} di {count}…",
+    "pick": "Supervisore di produzione",
+    "choose": "Scegli una persona…",
+    "listHint": "L’elenco è del primo cliente; il server giudica ognuno degli altri.",
+    "follows": "I suoi ordini senza un supervisore proprio seguono questo.",
+    "notTold": "Al cliente non viene detto chi è.",
+    "notices": "{name} riceverà {count} avvisi (uno per cliente). Si applica un cliente alla volta; chiudendo la finestra si ferma prima del successivo.",
+    "already": "Già {name}.",
+    "notReached": "Il tuo ruolo non raggiunge le sue impostazioni del portale: il supervisore lo imposta chi le raggiunge.",
+    "readFailed": "Non è stato possibile leggere le sue impostazioni: esegui di nuovo.",
+    "go_one": "Imposta per {count}",
+    "go_other": "Imposta per {count}",
+    "stop": "Fermati dopo questo",
+    "stopping": "Si ferma dopo il cliente in corso",
+    "notRun": "Non eseguito: la finestra è stata fermata prima.",
+    "summary": "Ora {name} ne supervisiona {done}. Già così: {same} · non eseguiti: {notRun} · esclusi: {left}.",
+    "held": {
+      "pick": "Scegli prima una persona.",
+      "reading": "I clienti sono ancora in lettura."
+    }
+  }
+}

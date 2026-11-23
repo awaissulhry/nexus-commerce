@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Banner, Field } from '@nexus/ui/components'
 import { Button, Checkbox, Input, Kbd, SegmentedControl, Select, Spinner, Tag } from '@nexus/ui/primitives'
@@ -569,11 +569,92 @@ export function EditPartyModal({
 
 // ---- Block, archive -----------------------------------------------------------------------------------------------------
 
-/** Block one or several (one reason for all; the API blocks each with it). */
+// ---- F-CL-103 (customers list plan §1, 13-backend §8.3; C3-B3 / C3-B4): the P2 parts of the shared windows -----------------------
+
+/** A selected row the run leaves out, with why in words (the window lists each). */
+export interface NotOnLine {
+  readonly id: string
+  readonly name: string
+  readonly why: string
+}
+
+/** "Runs on 4 · Not on 2: why is beside each" and the left-out rows with their why (the Orders sheet's P2 words, read as they are). */
+export function NotOnLines({ runs, notOn }: { runs: number; notOn: readonly NotOnLine[] }) {
+  const sheet = useT('orders-sheet')
+  if (notOn.length === 0) return null
+  return (
+    <div className="fw-pty-noton">
+      <p className="fw-pty-pop-title">
+        {sheet('commands.runs', { count: runs })} · {sheet('commands.notOn', { count: notOn.length })}
+      </p>
+      <ul className="fw-pty-list">
+        {notOn.map((line) => (
+          <li key={line.id}>
+            <span>
+              <b>{line.name}</b> — {line.why}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+/** One result of a run, in words, for the receipt. */
+export interface ReceiptLine {
+  readonly id: string
+  readonly code?: string | null
+  readonly name: string
+  readonly outcome: string
+  readonly tone: 'success' | 'info' | 'warning' | 'danger' | 'neutral'
+}
+
+/**
+ * The receipt of a run on N records (shared by Block / Archive / Check VIES and the customers' Set production supervisor): one line per
+ * record, its name a door to its page with the thread open (a new tab: this window stays), and "Run the rest again (n)" for the ones
+ * that failed. Draws what it is given.
+ */
+export function BulkReceipt({ lines, label, hrefOf, door, runRest }: { lines: readonly ReceiptLine[]; label: string; hrefOf?: ((id: string) => string | null) | null; door?: string | null; runRest?: { readonly count: number; readonly onRun: () => void } | null }) {
+  const sheet = useT('orders-sheet')
+  return (
+    <>
+      <ul className="fw-pty-results" aria-label={label}>
+        {lines.map((line) => {
+          const href = hrefOf?.(line.id) ?? null
+          return (
+            <li key={line.id}>
+              {line.code ? <span className="fw-pty-code">{line.code}</span> : <span />}
+              {href ? (
+                <Link href={href} target="_blank" rel="noopener noreferrer">
+                  {line.name}
+                </Link>
+              ) : (
+                <span>{line.name}</span>
+              )}
+              <Tag tone={line.tone}>{line.outcome}</Tag>
+            </li>
+          )
+        })}
+      </ul>
+      {door && hrefOf && lines.length > 0 && <p className="fw-pty-hint">{door}</p>}
+      {runRest && runRest.count > 0 && (
+        <span className="fw-pty-actions">
+          <Button size="sm" onClick={runRest.onRun}>
+            {sheet('commands.many.runRest', { count: runRest.count })}
+          </Button>
+        </span>
+      )}
+    </>
+  )
+}
+// ---- end F-CL-103
+
+/** Block one or several (one reason for all; the API blocks each with it). F-CL-103: + the selected rows it leaves out, with why. */
 export function BlockModal({
   side,
   open,
   names,
+  notOn = [],
   busy,
   problem,
   onBlock,
@@ -582,6 +663,7 @@ export function BlockModal({
   side: Side
   open: boolean
   names: readonly string[]
+  notOn?: readonly NotOnLine[]
   busy?: boolean
   problem?: string | null
   onBlock?: (reason: string) => void
@@ -636,6 +718,7 @@ export function BlockModal({
           </ul>
         </div>
         {names.length > 1 && <p className="fw-pty-hint">{names.slice(0, 8).join(' · ') + (names.length > 8 ? ` · ${t('archive.andMore', { count: names.length - 8 })}` : '')}</p>}
+        <NotOnLines runs={names.length} notOn={notOn} />
         <Field label={t('block.reason')} required hint={t('block.reasonHint')} error={tried && issue ? t(issue) : undefined}>
           <Textarea rows={3} autoFocus value={reason} onChange={(event) => setReason(event.target.value)} onBlur={() => setTried(reason !== '' || tried)} />
         </Field>
@@ -645,12 +728,12 @@ export function BlockModal({
   )
 }
 
-/** Archive one or several (design customers.archive: the reach, the reversal). */
+/** Archive one or several (design customers.archive: the reach, the reversal). F-CL-103: + the selected rows it leaves out, with why. */
 export function ArchiveModal({
   side,
   open,
   names,
-  skipped,
+  notOn = [],
   busy,
   problem,
   onArchive,
@@ -659,7 +742,7 @@ export function ArchiveModal({
   side: Side
   open: boolean
   names: readonly string[]
-  skipped?: number
+  notOn?: readonly NotOnLine[]
   busy?: boolean
   problem?: string | null
   onArchive?: () => void
@@ -695,7 +778,7 @@ export function ArchiveModal({
         </div>
         <p className="fw-pty-hint">{t('archive.reversal')}</p>
         {!one && names.length > 0 && <p className="fw-pty-hint">{names.slice(0, 8).join(' · ') + (names.length > 8 ? ` · ${t('archive.andMore', { count: names.length - 8 })}` : '')}</p>}
-        {skipped ? <Banner tone="info" title={t('archive.skipped', { count: skipped })} /> : null}
+        <NotOnLines runs={names.length} notOn={notOn} />
       </div>
     </Modal>
   )
@@ -997,33 +1080,34 @@ export function IdentityModal({
   )
 }
 
-// ---- Keyboard shortcuts, bulk runs --------------------------------------------------------------------------------------
+// ---- Bulk runs (F-CL-101: the keys window went — the list's keys live in the footer's information icon) -------------------
 
-export function ShortcutsModal({ open, keys, onClose }: { open: boolean; keys: ReadonlyArray<{ keys: readonly string[]; does: string }>; onClose?: () => void }) {
+/**
+ * A bulk run (Check VIES for N, Archive N): one call per row, a result per row; the dialog closes when it is done. F-CL-103: the
+ * selected rows it leaves out with why, each name a door (`hrefOf`), and "Run the rest again" for the calls that failed.
+ */
+export function BulkModal({
+  run,
+  open,
+  side,
+  notOn = [],
+  hrefOf,
+  onRunRest,
+  onClose,
+}: {
+  run: BulkRun | null | undefined
+  open: boolean
+  side?: Side
+  notOn?: readonly NotOnLine[]
+  hrefOf?: ((id: string) => string | null) | null
+  onRunRest?: (ids: readonly string[]) => void
+  onClose?: () => void
+}) {
   const t = useT('parties')
-  return (
-    <Modal open={open} onClose={() => onClose?.()} title={t('keys.title')} size="sm" footer={<Button onClick={() => onClose?.()}>{t('common.close')}</Button>}>
-      <dl className="fw-pty-keymap">
-        {keys.map((entry) => (
-          <Fragment key={entry.does}>
-            <dt>
-              {entry.keys.map((key) => (
-                <Kbd key={key}>{key}</Kbd>
-              ))}
-            </dt>
-            <dd>{entry.does}</dd>
-          </Fragment>
-        ))}
-      </dl>
-    </Modal>
-  )
-}
-
-/** A bulk run (Check VIES for N, Archive N): one call per row, a result per row; the dialog closes when it is done. */
-export function BulkModal({ run, open, onClose }: { run: BulkRun | null | undefined; open: boolean; onClose?: () => void }) {
-  const t = useT('parties')
+  const c = useT('customers-list')
   if (!run) return null
   const done = run.results.length
+  const failed = run.done ? run.results.filter((result) => result.failed).map((result) => result.id) : []
   return (
     <Modal
       open={open}
@@ -1042,15 +1126,14 @@ export function BulkModal({ run, open, onClose }: { run: BulkRun | null | undefi
           {run.done ? t(`bulk.${run.kind}.done`, { done, total: run.total }) : t('bulk.progress', { done, total: run.total })}
         </p>
         {run.kind === 'vies' && <p className="fw-pty-hint">{t('bulk.vies.note', { max: BULK_MAX })}</p>}
-        <ul className="fw-pty-results">
-          {run.results.map((result) => (
-            <li key={result.id}>
-              <span className="fw-pty-code">{result.code}</span>
-              <span>{result.name}</span>
-              <Tag tone={result.tone}>{t(result.outcome)}</Tag>
-            </li>
-          ))}
-        </ul>
+        <NotOnLines runs={run.total} notOn={notOn} />
+        <BulkReceipt
+          lines={run.results.map((result) => ({ id: result.id, code: result.code, name: result.name, outcome: t(result.outcome), tone: result.tone }))}
+          label={c(`p2.each.${side ?? 'customers'}`)}
+          hrefOf={hrefOf ?? null}
+          door={side ? c(`p2.door.${side}`) : null}
+          runRest={onRunRest && failed.length > 0 ? { count: failed.length, onRun: () => onRunRest(failed) } : null}
+        />
       </div>
     </Modal>
   )

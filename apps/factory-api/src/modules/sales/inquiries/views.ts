@@ -11,6 +11,8 @@ import { SALES_INQUIRIES_MANAGE } from '@nexus/factory-domain/sales/inquiries/pe
 // B-TH-025 / B-TH-026: the order made from it (orders.view), Make order (orders.manage), Make style draft (product.styles.manage).
 import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { PRODUCT_STYLES_MANAGE, PRODUCT_STYLES_VIEW } from '@nexus/factory-domain/product/styles/permissions'
+// B-CQ-050: the thread head's own waiting rule (a request waiting on the customer counts from our newest question).
+import { waitingOf } from '@nexus/factory-domain/threads/waiting'
 import {
   askInfoRefusal,
   currentOf,
@@ -60,11 +62,33 @@ export const price = (value: Prisma.Decimal | null): string | null => (value ===
 /** The longest a waiting time reaches back (a year): an older open inquiry is counted from a year ago. */
 const WAITING_REACH_DAYS = 366
 
-/** Working minutes since each open inquiry came, on its company's calendar (null once closed). */
+// ---- B-CQ-050 (customer page › Quotes & incoming, Q2-B7): the newest message WE shared on each request's thread (OUTBOUND) — two
+// queries for any number of requests (their threads, then the newest OUTBOUND per thread).
+async function lastOutboundOf(db: Reader, inquiryIds: readonly string[]): Promise<Map<string, Date>> {
+  const out = new Map<string, Date>()
+  if (inquiryIds.length === 0) return out
+  const threads = await db.thread.findMany({ where: { recordType: 'Inquiry', recordId: { in: [...inquiryIds] } }, select: { id: true, recordId: true } })
+  if (threads.length === 0) return out
+  const recordOf = new Map(threads.map((thread) => [thread.id, thread.recordId]))
+  for (const row of await db.message.groupBy({ by: ['threadId'], where: { threadId: { in: threads.map((thread) => thread.id) }, direction: 'OUTBOUND' }, _max: { at: true } })) {
+    const inquiryId = recordOf.get(row.threadId)
+    const at = row._max.at
+    if (inquiryId && at && (!out.has(inquiryId) || at > out.get(inquiryId)!)) out.set(inquiryId, at)
+  }
+  return out
+}
+// ---- end B-CQ-050
+
+/**
+ * Working minutes since each open inquiry waits, on its company's calendar (null once closed): one that waits on us since it came;
+ * B-CQ-050: one that waits on the customer (NEED_INFO) since our newest question on its thread, else since it came — the thread
+ * head's very rule (factory-domain threads/waiting waitingOf), so the row and the head never tell two waits.
+ */
 export async function waitingMinutesOf(db: Reader, rows: readonly Pick<InquiryData, 'id' | 'companyId' | 'status' | 'receivedAt'>[], now: Date): Promise<Map<string, number>> {
   const open = rows.filter((row) => waitingFor(row.status as InquiryStatus) !== null)
   const minutes = new Map<string, number>()
   if (open.length === 0) return minutes
+  const asked = await lastOutboundOf(db, open.filter((row) => waitingFor(row.status as InquiryStatus) === 'CUSTOMER').map((row) => row.id)) // B-CQ-050
   const today = businessDate(now)
   const oldest = open.map((row) => businessDate(row.receivedAt)).reduce((a, b) => (a < b ? a : b))
   const from = daysFrom(oldest, today) > WAITING_REACH_DAYS ? plusDays(today, -WAITING_REACH_DAYS) : plusDays(oldest, -2)
@@ -73,7 +97,9 @@ export async function waitingMinutesOf(db: Reader, rows: readonly Pick<InquiryDa
   for (const row of open) {
     const calendar = calendars.get(ownerKey({ scope: 'COMPANY', id: row.companyId }))?.calendar
     if (!calendar) continue
-    const start = row.receivedAt < reach ? reach : row.receivedAt
+    // B-CQ-050: since when it waits, by the head's rule (a row that waits on us: since it came, as before).
+    const since = waitingOf({ request: { status: row.status as InquiryStatus, receivedAt: row.receivedAt }, lastShared: null, lastOutbound: asked.get(row.id) ?? null, hasParty: true })?.since ?? row.receivedAt
+    const start = since < reach ? reach : since
     minutes.set(row.id, Math.round(workingMinutesBetween(calendar, start, now)))
   }
   return minutes

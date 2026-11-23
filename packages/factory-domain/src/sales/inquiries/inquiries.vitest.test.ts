@@ -3,6 +3,7 @@ import { FACTORY_PERMISSIONS } from '../../auth/permissions/catalogue'
 import { templateOf } from '../../auth/roles/templates'
 import { EVENT_CATALOGUE } from '../../events/catalogue'
 import { createInquiryBody, updateInquiryBody } from './contracts'
+import { askInfoBody, loseBody } from './contracts' // B-CQ-040
 import { SALES_INQUIRIES_MANAGE, SALES_INQUIRIES_VIEW } from './permissions'
 import {
   askInfoRefusal,
@@ -220,3 +221,31 @@ describe('decline with one message, and Not an order (B-TH-043)', () => {
   })
 })
 // ---- end B-TH-043
+
+// ---- B-CQ-040 (customer page › Quotes & incoming, settle C10; 13-backend §6): one batch = one bell — the bodies and the payloads ----
+describe('B-CQ-040 the act’s batchId', () => {
+  const batchId = '018f7a2b-1c3d-7e4f-8a9b-0c1d2e3f4a5b'
+  const inquiryId = '018f7a2b-1c3d-7e4f-8a9b-0c1d2e3f4a6c'
+  it('the ask and the lost bodies take an optional batch id (a uuid)', () => {
+    expect(askInfoBody.safeParse({ version: 1 }).success).toBe(true)
+    expect(askInfoBody.safeParse({ version: 1, batchId }).success).toBe(true)
+    expect(askInfoBody.safeParse({ version: 1, batchId: 'nope' }).success).toBe(false)
+    expect(loseBody.safeParse({ version: 2, note: 'Made-up: went elsewhere.' }).success).toBe(true)
+    expect(loseBody.safeParse({ version: 2, note: 'Made-up: went elsewhere.', batchId }).success).toBe(true)
+    expect(loseBody.safeParse({ version: 2, note: 'Made-up: went elsewhere.', batchId: 'nope' }).success).toBe(false)
+  })
+  it('inquiry.changed, inquiry.closed and quote.cancelled parse with and without it; it is never live (office notifications only)', () => {
+    const changed = { inquiryId, number: 'SEED-INQ-0007', status: 'ASSIGNED', previousStatus: 'NEW', change: 'ASSIGNED', partyId: null, assigneeId: inquiryId }
+    expect(EVENT_CATALOGUE.parse('inquiry.changed', 1, changed)).toEqual(changed)
+    expect(EVENT_CATALOGUE.parse('inquiry.changed', 1, { ...changed, batchId })).toEqual({ ...changed, batchId })
+    expect(() => EVENT_CATALOGUE.parse('inquiry.changed', 1, { ...changed, batchId: 'nope' })).toThrow()
+    const closed = { inquiryId, number: 'SEED-INQ-0007', status: 'DECLINED', previousStatus: 'ASSIGNED', quoteId: null, salesOrderId: null, declineReason: 'CAPACITY', partyId: null }
+    expect(EVENT_CATALOGUE.parse('inquiry.closed', 1, closed)).toEqual(closed)
+    expect(EVENT_CATALOGUE.parse('inquiry.closed', 1, { ...closed, batchId })).toEqual({ ...closed, batchId })
+    const cancelled = { quoteId: inquiryId, versionId: batchId, partyId: inquiryId }
+    expect(EVENT_CATALOGUE.parse('quote.cancelled', 1, cancelled)).toEqual(cancelled)
+    expect(EVENT_CATALOGUE.parse('quote.cancelled', 1, { ...cancelled, batchId })).toEqual({ ...cancelled, batchId })
+    for (const type of ['inquiry.changed', 'inquiry.closed', 'quote.cancelled']) expect(EVENT_CATALOGUE.get(type, 1)?.live?.fields ?? [], type).not.toContain('batchId')
+  })
+})
+// ---- end B-CQ-040
