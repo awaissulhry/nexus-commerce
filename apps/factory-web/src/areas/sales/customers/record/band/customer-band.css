@@ -1,0 +1,287 @@
+/* F-CQ-B (band consistency, Owner 2026-11-23; band/plan.md B1–B11): the customer page's ONE band (Work, Quotes & incoming). The
+   tiles and chips are the design system's own (`MetricStrip size="sm"`, `FilterChip`) — nothing here restyles them; this is the
+   band's layout only: no outer card (B3), 8 px between rows, sized by its OWN room (a container, never the window), nothing
+   scrolls sideways. Design-system tokens only (light and dark come from the tokens). */
+
+.fw-cb {
+  container: fw-cb / inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+.fw-cb-body,
+.fw-cb-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+/* ---- the groups: the strip; the phone's fold; while read; a failed read ---- */
+.fw-cb-groups {
+  min-width: 0;
+}
+.fw-cb-foldbox {
+  display: none;
+}
+.fw-cb-fold-l {
+  flex: 1;
+  min-width: 0;
+}
+.fw-cb-fold-n {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.fw-cb-skel {
+  height: 55px;
+}
+.fw-cb-failed {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+/* ---- the notes line: quiet text and links, the closed groups apart, the ⓘ ---- */
+.fw-cb-notes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) 18px;
+  min-width: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-cb-notes > span {
+  min-width: 0;
+}
+.fw-cb-notes b,
+.fw-cb-win p b {
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+/* A quiet link of the notes (and of the window's lines): link-coloured words, underlined on hover; a button that reads as one. */
+.fw-cb-link {
+  all: unset;
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  cursor: pointer;
+  border-radius: var(--nds-radius-sm);
+}
+.fw-cb-link:hover {
+  text-decoration: underline;
+}
+.fw-cb-link:focus-visible,
+.fw-cb-win-row:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 1px;
+}
+/* The closed groups: apart (a dashed rule before them) at the end of the line, quiet chips after their word. */
+.fw-cb-closed {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-6);
+  margin-inline-start: auto;
+  padding-inline-start: var(--nds-space-8);
+  border-inline-start: 1px dashed var(--nds-border-strong);
+}
+.fw-cb-closed-w {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}
+.fw-cb-info {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  margin-block: -2px;
+}
+.fw-cb-notes > .fw-cb-info {
+  margin-inline-start: auto;
+}
+.fw-cb-closed + .fw-cb-info {
+  margin-inline-start: 0;
+}
+.fw-cb-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+  min-width: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+/* ---- the chips row: FilterChips with their counts; they wrap to a 2nd row before anything is cut ---- */
+.fw-cb-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+.fw-cb-chips-w {
+  display: none;
+  margin-inline-end: var(--nds-space-4);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-bold);
+  color: var(--nds-text-2);
+  white-space: nowrap;
+}
+.fw-cb-chips > .fw-cb-info {
+  margin-inline-start: auto;
+}
+.fw-cb-rule {
+  flex: none;
+  width: 1px;
+  height: 16px;
+  margin-inline: var(--nds-space-2);
+  background: var(--nds-border);
+}
+/* A fact without a door (no right to its page, or nothing to open): its words and number, quiet — no focus stop. */
+.fw-cb-fact {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-4) var(--nds-space-2);
+  font-size: var(--nds-font-size-xs-plus);
+  color: var(--nds-text-2);
+}
+.fw-cb-fact-n {
+  color: var(--nds-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* A chip's short label (the phone's): drawn beside the long one, one of the two shown by the band's own room. */
+.fw-cb-chip-short {
+  display: none;
+}
+@container fw-cb (min-width: 1040px) {
+  .fw-cb-chips-w {
+    display: inline;
+  }
+}
+
+/* ---- the widest room (from 1500 px): the groups and their notes on the left, the chips row beside them ---- */
+@container fw-cb (min-width: 1500px) {
+  .fw-cb.has-chips .fw-cb-body {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 18px;
+  }
+  .fw-cb.has-chips .fw-cb-main {
+    flex: 1;
+  }
+  .fw-cb.has-chips .fw-cb-chips {
+    display: grid;
+    grid-template-columns: repeat(3, auto);
+    align-content: center;
+    align-self: stretch;
+    justify-content: start;
+    justify-items: start;
+    gap: 5px var(--nds-space-6);
+    padding-inline-start: 18px;
+    border-inline-start: 1px solid var(--nds-border-subtle);
+  }
+  .fw-cb.has-chips .fw-cb-chips-w {
+    grid-column: 1 / 3;
+    margin: 0;
+  }
+  .fw-cb.has-chips .fw-cb-chips > .fw-cb-info {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+    margin: -4px 0;
+  }
+  .fw-cb.has-chips .fw-cb-rule {
+    display: none;
+  }
+}
+
+/* ---- the phone (room < 720): the groups fold into ONE button; the notes are said in the window ---- */
+@container fw-cb (max-width: 719px) {
+  .fw-cb-groups,
+  .fw-cb-notes,
+  .fw-cb-rule,
+  .fw-cb-chips > .fw-cb-info {
+    display: none;
+  }
+  .fw-cb-foldbox {
+    display: block;
+  }
+  .fw-cb-skel {
+    height: 40px;
+  }
+  /* The chips FLOW (each its own width, a 2nd or 3rd row before anything is cut): never fixed columns of narrow cells. A design-system
+     chip keeps its label on one line, so the long "Waiting for <customer>" gives way to its short words here. */
+  .fw-cb-chips {
+    gap: var(--nds-space-6) var(--nds-space-4);
+  }
+  .fw-cb-chip-long {
+    display: none;
+  }
+  .fw-cb-chip-short {
+    display: inline;
+  }
+}
+
+/* ---- the groups' window (the ⓘ, and the phone's fold): each group a row with what it holds, then the host's lines ---- */
+.fw-cb-win {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+.fw-cb-win-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fw-cb-win-row {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-10);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--nds-space-6) var(--nds-space-10);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+  cursor: pointer;
+}
+.fw-cb-win-row.is-plain {
+  cursor: default;
+}
+button.fw-cb-win-row:hover {
+  background: var(--nds-surface-hover);
+}
+.fw-cb-win-row[aria-pressed='true'] {
+  border-color: var(--nds-primary);
+  background: var(--nds-wash-primary);
+}
+.fw-cb-win-row > svg {
+  flex: none;
+  color: var(--nds-text-muted);
+}
+.fw-cb-win-w {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.fw-cb-win-n {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+.fw-cb-win-v {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.fw-cb-win p {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}

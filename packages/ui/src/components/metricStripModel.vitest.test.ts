@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { metricDeltaClass, metricKind, metricMinWidth } from './metricStripModel'
+import { metricDeltaClass, metricKind, metricMinWidth, metricStripClass } from './metricStripModel'
 
 describe('metricKind', () => {
   it('is a link when the tile has an address', () => {
@@ -38,5 +38,17 @@ describe('metricDeltaClass', () => {
     expect(metricDeltaClass({ tone: 'neutral', positive: true })).toBe('neutral')
     expect(metricDeltaClass({ tone: 'positive', positive: false })).toBe('up')
     expect(metricDeltaClass({ tone: 'negative' })).toBe('down')
+  })
+})
+
+describe('metricStripClass (cq-band, 2026-11-23)', () => {
+  it('is exactly today\'s class without a size: a caller that passes nothing renders as before', () => {
+    expect(metricStripClass(undefined)).toBe('nds-metrics')
+    expect(metricStripClass(undefined, 'tiles')).toBe('nds-metrics tiles')
+    expect(metricStripClass(undefined, '')).toBe('nds-metrics')
+  })
+  it('adds `sm` for the compact strip, before the caller\'s class', () => {
+    expect(metricStripClass('sm')).toBe('nds-metrics sm')
+    expect(metricStripClass('sm', 'fw-band')).toBe('nds-metrics sm fw-band')
   })
 })

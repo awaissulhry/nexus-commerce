@@ -37,7 +37,7 @@ export function QuotesTabFrame({ model, actions, rootRef, incoming, quotes, draf
   return (
     <div className="fw-qt" ref={rootRef}>
       <BeforeOrderBand
-        model={{ customer, band, failed: tab.failed, door: tab.door, doorCount: tab.door ? doorCount(tab.counts, tab.door) : null, hrefs: tab.hrefs, everything: tab.everything, samplesHref, room: tab.room, newRequest: newRequest && !empty, newQuote: newQuote && !empty }}
+        model={{ customer, band, failed: tab.failed, door: tab.door, doorCount: tab.door ? doorCount(tab.counts, tab.door) : null, everything: tab.everything, samplesHref, room: tab.room, newRequest: newRequest && !empty, newQuote: newQuote && !empty /* F-CQ-B: the doors are buttons (the host's onDoor), no hrefs */ }}
         actions={actions}
       />
       {empty && (

@@ -259,7 +259,8 @@ export default defineStage({
       const all = await shownRows(page)
       expect(all, 'the seeded customer has an order').toBeGreaterThan(0)
       // A door of the band (the first group that holds an order) shows exactly its count of orders; pressed again: all orders.
-      const doors = page.getByRole('list', { name: P('customers.work.band.pipeline'), exact: true }).getByRole('button')
+      // F-CQ-B: the groups are the design system's filter tiles in a named group (they were a list); each number keeps `.fw-cwb-num`.
+      const doors = page.getByRole('group', { name: P('customers.work.band.pipeline'), exact: true }).getByRole('button')
       await seen(doors, 30_000)
       let door = doors.first()
       let count = 0
@@ -327,10 +328,11 @@ export default defineStage({
       }
       page.on('request', onRequest)
       await sales.go(`/sales/customers/${P1}?tab=quotes`)
-      // The band: "Before an order · <customer>", its doors in life order, each a real link with its number.
+      // The band: "Before an order · <customer>", its doors in life order, each a filter tile (a button) with its number.
+      // F-CQ-B: the doors are the design system's filter tiles in a named group (they were links in a list); each number keeps `.fw-bo-count`.
       const band = page.getByRole('region', { name: startsWith(B('band.title')) })
       await seen(band, 60_000)
-      const doors = band.getByRole('list', { name: B('band.pipeline'), exact: true }).getByRole('link')
+      const doors = band.getByRole('group', { name: B('band.pipeline'), exact: true }).getByRole('button')
       await seen(doors, 30_000)
       await flow.shot(page, 'customer-quotes-band')
       // A door that holds something (the seeded customer has its quotes): the lists below show exactly its count of rows.

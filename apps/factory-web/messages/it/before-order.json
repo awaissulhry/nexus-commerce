@@ -2,6 +2,7 @@
   "band": {
     "title": "Prima dell’ordine",
     "pipeline": "Prima dell’ordine, in ordine di vita",
+    "everything": "Tutto prima dell’ordine",
     "closed": "Chiusi:",
     "samples_one": "{count} campionatura in corso ›",
     "samples_other": "{count} campionature in corso ›",
@@ -11,7 +12,6 @@
     "newQuoteShort": "Nuovo preventivo…",
     "segTitle": "Mostra i {count} in «{group}» · aspetta {who}",
     "segTitleClosed": "Mostra i {count} in «{group}»",
-    "waitsOn": "aspetta {who}",
     "who": {
       "us": "noi",
       "customer": "il cliente",

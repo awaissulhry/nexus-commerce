@@ -1,5 +1,6 @@
 /* F-SA-276 (sales page plan R5; picture 21): the customer's Work tab — its parts one under the other; the line under the band.
-   F-CW-101: the waiting strip became the band (its own styles: work-band.css); the group label stays for the strip's windows.
+   F-CW-101: the waiting strip became the band; the group label stays for the strip's windows.
+   F-CQ-B: the band is the customer page's ONE band part (record/band/customer-band.css); work-band.css is gone.
    Tokens only. */
 .fw-cw {
   display: flex;

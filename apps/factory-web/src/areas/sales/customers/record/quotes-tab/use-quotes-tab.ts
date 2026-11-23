@@ -17,7 +17,7 @@ import type { PageCounts } from './use-before-order-counts' // F-CQ-302: the pag
 /** The tab's state as its parts read it (band.ts TabFacts: the live tab's, or a design case's). */
 export type QuotesTab = TabFacts
 
-export function useQuotesTab(partyId: string, page: PageCounts): { tab: QuotesTab; rootRef: RefObject<HTMLDivElement | null>; onCloseDoor: () => void; onRetry: () => void } {
+export function useQuotesTab(partyId: string, page: PageCounts): { tab: QuotesTab; rootRef: RefObject<HTMLDivElement | null>; onCloseDoor: () => void; onDoor: (door: Door) => void; onRetry: () => void } {
   const session = useOfficeSession()
   const router = useRouter()
   const params = useSearchParams()
@@ -54,7 +54,11 @@ export function useQuotesTab(partyId: string, page: PageCounts): { tab: QuotesTa
     return Object.fromEntries(DOORS.map((each) => [each, doorAddress(base, current, toggledDoor(door, each))])) as Record<Door, string>
   }, [base, query, door])
   const everything = useMemo(() => doorAddress(base, new URLSearchParams(query), null), [base, query])
-  const onCloseDoor = useCallback(() => router.replace(everything, { scroll: false }), [router, everything])
+  // F-CQ-B: a door is a button now (the band's filter tile): ONE replace to its address (the open door's: everything again), the
+  // scroll kept — the same one write ✕ makes.
+  const go = useCallback((href: string) => router.replace(href, { scroll: false }), [router])
+  const onCloseDoor = useCallback(() => go(everything), [go, everything])
+  const onDoor = useCallback((each: Door) => go(hrefs[each]), [go, hrefs])
 
-  return { tab: { counts, failed, door, terms, rights, room, hrefs, everything, prefix }, rootRef, onCloseDoor, onRetry }
+  return { tab: { counts, failed, door, terms, rights, room, hrefs, everything, prefix }, rootRef, onCloseDoor, onDoor, onRetry }
 }

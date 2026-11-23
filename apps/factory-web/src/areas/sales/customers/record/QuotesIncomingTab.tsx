@@ -105,7 +105,7 @@ function Tab({ party, counts, onPick, onFocus, shown }: SectionProps & { counts:
 }
 
 function Body({ party, counts, onPick, onFocus, shown, quotes, incoming }: SectionProps & { counts: PageCounts; quotes: boolean; incoming: boolean }) {
-  const { tab, rootRef, onCloseDoor, onRetry } = useQuotesTab(party.id, counts)
+  const { tab, rootRef, onCloseDoor, onDoor, onRetry } = useQuotesTab(party.id, counts) // F-CQ-B: onDoor
   const [ask, setAsk] = useState<Ask | null>(null)
   const band = bandOf(tab.counts, tab.rights, tab.door)
   const session = useOfficeSession()
@@ -115,7 +115,7 @@ function Body({ party, counts, onPick, onFocus, shown, quotes, incoming }: Secti
     <QuotesTabFrame
       rootRef={rootRef}
       model={{ partyId: party.id, customer: party.name, tab: { ...tab, rights: { ...tab.rights, quotes, requests: incoming } }, band }}
-      actions={{ onNewRequest: () => setAsk({ what: 'request', at: Date.now() }), onNewQuote: () => setAsk({ what: 'quote', at: Date.now() }), onCloseDoor, onRetry }}
+      actions={{ onNewRequest: () => setAsk({ what: 'request', at: Date.now() }), onNewQuote: () => setAsk({ what: 'quote', at: Date.now() }), onCloseDoor, onDoor /* F-CQ-B */, onRetry }}
       incoming={<IncomingSection {...sections} />}
       quotes={<QuotesSection {...sections} />}
       drafts={tab.rights.drafts && <DraftsSection {...sections} />}
