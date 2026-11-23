@@ -3,14 +3,9 @@ import type { OrderPhase } from './api'
 
 /**
  * F-CL-202 (customers list 13-backend §4 table + §8.7, settles T6 / T20): every door a count of the list opens — ONE place, pure. A
- * count and the rows its door shows are one where on the server (the pg tests pin each pair). Two doors depend on a sibling lane's
- * web PR; each waits behind one constant the lead flips when that PR is on main:
+ * count and the rows its door shows are one where on the server (the pg tests pin each pair). The sibling lanes' doors are on main:
+ * the Work tab reads `phase=` and `priority=` (cw W1, #1910), the Quotes & incoming tab reads `group=` (cq W1, #1911).
  */
-
-/** cq's Quotes & incoming tab reads `group=` (its web PR on main): then "To answer" / "Open quotes" open their own group. */
-export const QUOTES_GROUP_DOORS = false
-/** cw's Work tab reads `priority=` in its terms (its ExtraTerms change on main): then "Priority: Top / High" open exactly those orders. */
-export const PRIORITY_DOORS = false
 
 export type WorkDoorTerm =
   | { readonly kind: 'phase'; readonly phase: OrderPhase }
@@ -25,15 +20,8 @@ export type WorkDoorTerm =
   /** "+n more": the Work tab as it opens. */
   | { readonly kind: 'work' }
 
-/** Which sibling doors are live (the two constants; a test passes its own). */
-export interface DoorsLive {
-  readonly quotes: boolean
-  readonly priority: boolean
-}
-const LIVE: DoorsLive = { quotes: QUOTES_GROUP_DOORS, priority: PRIORITY_DOORS }
-
 /** The customer page's address for a count: its Work tab on exactly those orders, its quotes, its thread or its review window. */
-export function workDoor(prefix: string, partyId: string, term: WorkDoorTerm, live: DoorsLive = LIVE): string {
+export function workDoor(prefix: string, partyId: string, term: WorkDoorTerm): string {
   const base = recordHref(prefix, SIDES.customers, partyId)
   const query = new URLSearchParams()
   switch (term.kind) {
@@ -59,10 +47,8 @@ export function workDoor(prefix: string, partyId: string, term: WorkDoorTerm, li
       break
     case 'priority':
       query.set('tab', 'work')
-      if (live.priority) {
-        query.set('rows', 'open')
-        query.set('priority', term.level)
-      }
+      query.set('rows', 'open')
+      query.set('priority', term.level)
       break
     case 'requests':
       query.set('tab', 'work')
@@ -73,7 +59,7 @@ export function workDoor(prefix: string, partyId: string, term: WorkDoorTerm, li
       break
     case 'quotes':
       query.set('tab', 'quotes')
-      if (live.quotes) query.set('group', term.group)
+      query.set('group', term.group)
       break
     case 'work':
       query.set('tab', 'work')

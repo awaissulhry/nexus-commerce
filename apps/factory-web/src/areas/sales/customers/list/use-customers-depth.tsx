@@ -5,6 +5,8 @@ import { useToast, type MenuItemDef } from '@nexus/ui/components'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { useT } from '../../../../lib/i18n/provider'
 import { readUnreadWith } from '../../../../lib/last-message-cell/api'
+import { pictureReader } from '../../../../lib/record-picture/api' // F-CL-202
+import { PictureViewer } from '../../../../lib/record-picture/view/PictureViewer' // F-CL-202: the one viewer
 import { useUnread } from '../../../../lib/last-message-cell/use-unread'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
@@ -16,12 +18,16 @@ import { useLiveBus } from '../../../../shell/live/use-live'
 import { romeToday } from '../../../finance/costing/model'
 import type { PartyRow } from '../../../parties/_shared/api'
 import type { ListDepthArgs, ListDepthSlot } from '../../../parties/_shared/PartiesList'
-import { partyName, recordHref, SIDES } from '../../../parties/_shared/model'
+import { partyName, recordHref, SIDES, type ListSort } from '../../../parties/_shared/model'
+import { hostTier, reaches } from '../../_shared/list-room' // F-CL-202: the list's own room (never the window)
 import type { ListDepth } from '../../../parties/_shared/view/PartiesListView'
 import { useOverdueColumns } from '../money/columns'
 import { useOverdueList } from '../money/hooks'
 import { customerBarActs, customerRowItems, useCustomerColumns } from './columns'
-import { customerRightsOf, CUSTOMERS_LIST_NS, namesOtherCustomer } from './model'
+import { customerRightsOf, customerSortOf, CUSTOMERS_LIST_NS, namesOtherCustomer } from './model'
+import { useCustomersWork } from './use-customers-work' // F-CL-201
+import { useWorkBand } from './use-work-band' // F-CL-201
+import { bandHintOf, CustomersBand, groupName } from './view/CustomersBand' // F-CL-202
 import { useSupervisorMany } from './supervisor/use-supervisor-many'
 import { SupervisorManyDialog } from './supervisor/view/SupervisorManyDialog'
 
@@ -42,11 +48,15 @@ interface TaskWindow {
  * Add task…): each hidden without its own right. The slot it gives the list is called once per render of the list, at one place
  * (PartiesList.tsx), so its hooks keep their order; the windows mount beside the list.
  */
-export function useCustomersDepth(): { readonly depth: ListDepthSlot; readonly windows: ReactNode } {
+export function useCustomersDepth(): { readonly depth: ListDepthSlot; readonly windows: ReactNode; readonly sort: ListSort; readonly workTerm: boolean } {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const c = useT(CUSTOMERS_LIST_NS)
   const r = useT('records')
+  // F-CL-202: the words the band reuses (one word per thing).
+  const p = useT('parties')
+  const ord = useT('orders')
+  const sheet = useT('orders-sheet')
   const { toast } = useToast()
   const rights = useMemo(() => customerRightsOf(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
@@ -105,12 +115,46 @@ export function useCustomersDepth(): { readonly depth: ListDepthSlot; readonly w
   // ---- the row's doors (after "Open in new tab"), each with its own right ----
   const rowItems = useCallback((row: PartyRow): MenuItemDef[] => customerRowItems(rights, prefix, row, c, openTask), [rights, prefix, c, openTask])
 
+  // ---- F-CL-202: the pictures' batch read, the one viewer, the list's own room (the band measures it) ----
+  const readPictures = useMemo(() => pictureReader(api), [api])
+  const [viewer, setViewer] = useState<{ readonly id: string; readonly number: string } | null>(null)
+  const [room, setRoom] = useState<number | null>(null)
+  const wide = reaches(hostTier(room), 'XL')
+  const today = romeToday()
+  const bandWords = useMemo(() => ({ c, ord, sheet, p }), [c, ord, sheet, p])
+  const exportAbout = useMemo(() => ({ heading: c('export.heading'), note: c('export.note') }), [c])
+
   const depth: ListDepthSlot = function useCustomersSlot(list: ListDepthArgs): ListDepth {
     const asked = useMemo(() => list.rows.map((row) => ({ recordType: 'Party', id: row.id })), [list.rows])
     const unread = useUnread(readUnread, asked, tick)
-    const columns = useCustomerColumns({ prefix, unread: rights.threads ? unread : null, overdue })
+    // F-CL-201: each page's work facts and the band — only with orders.view (else no band, no work column: the row as in W1).
+    const work = useCustomersWork(api, list.rows, rights.orders)
+    const band = useWorkBand(api, list.terms, rights.orders)
+    const columns = useCustomerColumns({ prefix, unread: rights.threads ? unread : null, overdue, work: rights.orders ? work : null, today, read: readPictures, onPicture: setViewer, wide })
     const acts = customerBarActs(rights, list.selectedRows, c, { onTask: openTask, onSupervisor: openSupervisorFor })
-    return { nameColumn: columns.nameColumn, leadingColumns: columns.leadingColumns, hiddenColumns: columns.hiddenColumns, card: columns.card, rowItems, acts }
+    // A company with no customer at all: no band — the empty state carries the page (settle T28 / A11).
+    const unfiltered = list.view === 'open' && !list.terms.q?.trim() && !list.terms.kind && !list.terms.taxMode
+    const nobody = !!band.band && band.band.groups.every((group) => group.customers === 0) && list.rows.length === 0 && unfiltered && list.work === null
+    const bandNode = rights.orders && !nobody ? <CustomersBand band={band.band} problem={band.problem} work={list.work} onWork={list.onWork} wide={wide} about={p('customers.intro')} words={bandWords} onRoom={setRoom} /> : undefined
+    const workChip = list.work
+      ? {
+          label: groupName(list.work, bandWords),
+          ...(band.band ? { hint: bandHintOf(list.work, band.band, bandWords) } : {}),
+          empty: list.work === 'NEEDS_US' ? c('empty.needs') : c('empty.work', { group: groupName(list.work, bandWords) }),
+        }
+      : null
+    return {
+      beforeName: columns.beforeName,
+      nameColumn: columns.nameColumn,
+      leadingColumns: columns.leadingColumns,
+      hiddenColumns: columns.hiddenColumns,
+      card: columns.card,
+      rowItems,
+      acts,
+      ...(bandNode ? { band: bandNode } : {}),
+      workChip,
+      exportAbout,
+    }
   }
 
   const windows = (
@@ -133,7 +177,12 @@ export function useCustomersDepth(): { readonly depth: ListDepthSlot; readonly w
         />
       )}
       <SupervisorManyDialog model={supervisor.model} actions={supervisor.actions} hrefOf={receiptHref} />
+      {viewer && (
+        // F-CL-202: the newest order's picture large — the ONE viewer, the order one step away.
+        <PictureViewer source="order" recordId={viewer.id} number={viewer.number} read={readPictures} prefix={prefix} recordHref={`${prefix}/sales/orders/${encodeURIComponent(viewer.id)}`} onClose={() => setViewer(null)} />
+      )}
     </>
   )
-  return { depth, windows }
+  // F-CL-201 / F-CL-203: the order (Most urgent first with orders.view) and the band's door, read from the address.
+  return { depth, windows, sort: customerSortOf(rights), workTerm: rights.orders }
 }

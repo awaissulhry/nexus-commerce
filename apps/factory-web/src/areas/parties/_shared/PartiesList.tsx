@@ -473,6 +473,12 @@ function PartiesListContainer({ side, headActions, columns, depth, sort, workTer
         onView: changeView,
         onSort: changeSort, // F-CL-203
         onWork: changeWork, // F-CL-202: the chip's ✕
+        // F-CL-202: Clear all — the band's door and the chips in ONE write of the address.
+        onClearChips: () => {
+          setRows(loading())
+          setSelected([])
+          writeAddress({ filters: {}, work: null })
+        },
         onFilters: (next) => {
           setRows(loading())
           setSelected([])

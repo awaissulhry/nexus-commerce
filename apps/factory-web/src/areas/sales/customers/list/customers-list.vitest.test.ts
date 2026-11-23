@@ -54,9 +54,12 @@ describe('F-CL-102: the columns, what starts hidden, the phone card', () => {
 
   it('the identity columns start hidden (still in Customise and the full file); the shown set is Customer · Overdue · New messages · ⋯', () => {
     expect([...CUSTOMER_HIDDEN_COLUMNS]).toEqual(['roles', 'status', 'country', 'taxMode', 'vies', 'sdi', 'language'])
-    const built = customerColumnsOf({ prefix: '/w/DEMO', unread, overdue }, words, words)
+    // F-CL-202 (T15): Overdue shows at first only in the wide room (1920); at 1440 it waits in Customise.
+    const built = customerColumnsOf({ prefix: '/w/DEMO', unread, overdue, wide: true }, words, words)
     const all = [built.nameColumn.colId, ...built.leadingColumns.map((column) => column.colId), ...CUSTOMER_HIDDEN_COLUMNS, 'actions']
     expect(all.filter((id) => !built.hiddenColumns.includes(id!))).toEqual(['name', 'overdue', 'messages', 'actions'])
+    const narrow = customerColumnsOf({ prefix: '/w/DEMO', unread, overdue }, words, words)
+    expect(all.filter((id) => !narrow.hiddenColumns.includes(id!))).toEqual(['name', 'messages', 'actions'])
   })
 
   it('the card: the Customer cell is the title, the thread door beside it, the row’s ⋯ its actions, Overdue a line', () => {
@@ -196,6 +199,142 @@ describe('F-CL-201: the band query, the order and the door in the address', () =
   })
 })
 
+// ---- F-CL-202: the band, the work cells, the doors, Overdue read whole ------------------------------------------------------------
+import { createElement } from 'react'
+import { renderToString } from 'react-dom/server'
+import { vi } from 'vitest'
+import { createApiClient } from '../../../../lib/api/client'
+import { phaseDoor } from '../record/use-customer-work'
+import { phasePhrase } from '../../orders/list/sheet/model'
+import { getOverdueCustomers } from '../money/api'
+import type { CustomerWork } from './api'
+import { workDoor } from './doors'
+import { bandGroupsOf, foldOf, groupWordOf, needsChipsOf, nextPromiseOf, workChipsOf } from './model'
+import { factsState } from './view/cells'
+
+const WORK: CustomerWork = {
+  partyId: 'p1',
+  orders: 12,
+  phases: [
+    { phase: 'NOT_SENT', count: 2 },
+    { phase: 'NOT_STARTED', count: 1 },
+    { phase: 'IN_PRODUCTION', count: 4 },
+    { phase: 'READY', count: 0 },
+    { phase: 'SHIPPED', count: 1 },
+    { phase: 'DONE', count: 3 },
+    { phase: 'CANCELLED', count: 1 },
+  ],
+  late: 1,
+  waitsForYes: 1,
+  depositOpen: 2,
+  requests: { open: 2, firstId: 'r-1' },
+  replies: 1,
+  customerUrgent: { count: 1, byCompany: [{ companyId: 'c1', count: 1 }] },
+  priority: { top: 1, high: 0 },
+  nextPromise: '2026-11-27',
+  lastOrderDate: '2026-11-20',
+  newestOrder: { id: 'o-9', number: 'SEED-SO-0012' },
+  beforeOrder: { toAnswer: 1, openQuotes: 2 },
+}
+const ZERO: CustomerWork = { ...WORK, orders: 0, phases: WORK.phases.map((entry) => ({ ...entry, count: 0 })), late: 0, waitsForYes: 0, depositOpen: 0, requests: { open: 0, firstId: null }, replies: 0, customerUrgent: { count: 0, byCompany: [] }, priority: { top: 0, high: 0 }, nextPromise: null, newestOrder: null, beforeOrder: {} }
+
+describe('F-CL-202: every count is a door to exactly what it counts', () => {
+  const door = (term: Parameters<typeof workDoor>[2]) => workDoor('/w/DEMO', 'p1', term)
+  it('the Work tab on that group, late, waiting for a yes, deposit open, the customer’s urgency, our priority', () => {
+    for (const phase of ['NOT_SENT', 'NOT_STARTED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'DONE'] as const) {
+      expect(door({ kind: 'phase', phase })).toBe(`/w/DEMO/sales/customers/p1?tab=work&phase=${phase}`)
+      // The same address as the Work tab's own phase door (cw W1).
+      expect(door({ kind: 'phase', phase })).toBe(phaseDoor('/w/DEMO/sales/customers/p1', phase))
+    }
+    expect(door({ kind: 'late' })).toBe('/w/DEMO/sales/customers/p1?tab=work&late=true')
+    expect(door({ kind: 'waitsForYes' })).toBe('/w/DEMO/sales/customers/p1?tab=work&status=PENDING_APPROVAL')
+    expect(door({ kind: 'deposit' })).toBe('/w/DEMO/sales/customers/p1?tab=work&deposit=OPEN')
+    expect(door({ kind: 'customerUrgent' })).toBe('/w/DEMO/sales/customers/p1?tab=work&customerUrgency=URGENT')
+    expect(door({ kind: 'priority', level: 'URGENT' })).toBe('/w/DEMO/sales/customers/p1?tab=work&rows=open&priority=URGENT')
+    expect(door({ kind: 'priority', level: 'HIGH' })).toBe('/w/DEMO/sales/customers/p1?tab=work&rows=open&priority=HIGH')
+  })
+  it('requests open the review window on the first one; replies the thread’s All; to answer / open quotes their own group', () => {
+    expect(door({ kind: 'requests', firstId: 'r-1' })).toBe('/w/DEMO/sales/customers/p1?tab=work&open=r-1')
+    expect(door({ kind: 'requests', firstId: null })).toBe('/w/DEMO/sales/customers/p1?tab=work')
+    expect(door({ kind: 'replies' })).toBe('/w/DEMO/sales/customers/p1?thread=all')
+    expect(door({ kind: 'quotes', group: 'TO_ANSWER' })).toBe('/w/DEMO/sales/customers/p1?tab=quotes&group=TO_ANSWER')
+    expect(door({ kind: 'quotes', group: 'OPEN_QUOTES' })).toBe('/w/DEMO/sales/customers/p1?tab=quotes&group=OPEN_QUOTES')
+    expect(door({ kind: 'work' })).toBe('/w/DEMO/sales/customers/p1?tab=work')
+  })
+})
+
+describe('F-CL-202: the chips — strongest first, zero no chip, the Work tab’s words; the fold at two lines', () => {
+  it('Needs us: requests · to answer · replies · late · waiting for a yes · the customer’s urgent · Top · then deposit, quiet', () => {
+    const chips = needsChipsOf(WORK)
+    expect(chips.map((chip) => chip.id)).toEqual(['requests', 'toAnswer', 'replies', 'late', 'waitsForYes', 'customerUrgent', 'top', 'deposit'])
+    expect(chips.find((chip) => chip.id === 'deposit')?.tone).toBe('quiet')
+    expect(chips.find((chip) => chip.id === 'late')?.tone).toBe('red')
+    // A part without its right is absent (replies withheld, no before-order counts): never a 0 chip.
+    expect(needsChipsOf({ ...WORK, replies: null, beforeOrder: {} }).map((chip) => chip.id)).not.toContain('replies')
+    expect(needsChipsOf(ZERO)).toEqual([])
+  })
+  it('Work: open quotes, then the groups in the Work tab’s order, non-zero only; Done quiet; Cancelled never', () => {
+    const chips = workChipsOf(WORK)
+    expect(chips.map((chip) => chip.id)).toEqual(['openQuotes', 'NOT_SENT', 'NOT_STARTED', 'IN_PRODUCTION', 'SHIPPED', 'DONE'])
+    expect(chips.at(-1)?.tone).toBe('done')
+    expect(workChipsOf(ZERO)).toEqual([])
+    // One word per phase: the Work tab's own (its phasePhrase).
+    for (const phase of ['NOT_SENT', 'NOT_STARTED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'DONE'] as const) expect(groupWordOf(phase).key).toBe(phasePhrase(phase).key)
+    expect(groupWordOf('NEEDS_US')).toEqual({ ns: 'customers-list', key: 'band.needsNow' })
+  })
+  it('the fold keeps what two lines hold and leaves room for "+n more"', () => {
+    expect(foldOf([100, 100, 100], 250, 40)).toBe(3)
+    expect(foldOf([100, 100, 100, 100, 100], 250, 40)).toBe(4)
+    expect(foldOf([100, 100, 100, 100, 100], 250, 60)).toBe(3)
+    expect(foldOf([120, 120, 120], 250, 40, 1)).toBe(1)
+    expect(foldOf([], 250, 40)).toBe(0)
+  })
+})
+
+describe('F-CL-202: Next promise and the cells without facts', () => {
+  it('never a past date; "No promise ahead" with open orders; "No open order"; "—" without an order', () => {
+    expect(nextPromiseOf(WORK, '2026-11-24')).toEqual({ kind: 'date', date: '2026-11-27', days: 3 })
+    expect(nextPromiseOf(WORK, '2026-11-27')).toEqual({ kind: 'date', date: '2026-11-27', days: 0 })
+    expect(nextPromiseOf({ ...WORK, nextPromise: '2026-11-20' }, '2026-11-24')).toEqual({ kind: 'noneAhead' })
+    expect(nextPromiseOf({ ...WORK, nextPromise: null, phases: [{ phase: 'DONE', count: 3 }] }, '2026-11-24')).toEqual({ kind: 'noOpen' })
+    expect(nextPromiseOf(ZERO, '2026-11-24')).toEqual({ kind: 'none' })
+  })
+  it('a customer the reader’s orders.view does not reach says "—", never "No order yet" (T13); a failed read says so in words', () => {
+    const words = { c: (key: string) => key, p: (key: string) => key, ord: (key: string) => key, sheet: (key: string) => key, levels: (key: string) => key, more: (key: string) => key }
+    const html = (node: ReturnType<typeof factsState>) => renderToString(createElement('div', null, node))
+    expect(html(factsState({ work: undefined, reading: false, problem: null, words }))).toContain('—')
+    expect(html(factsState({ work: undefined, reading: false, problem: 'problem.unavailable', words }))).toContain('cell.failed')
+    expect(factsState({ work: ZERO, reading: false, problem: null, words })).toBeNull()
+  })
+  it('the band: seven groups in order, a group the answer lacks is a quiet 0, Cancelled never', () => {
+    const groups = bandGroupsOf({ groups: [{ group: 'IN_PRODUCTION', customers: 8, orders: 14 }], needsUs: { requests: 0, replies: 0, late: 0, repliesComplete: true }, notSent: { waitsForYes: 0, waitsForDeposit: 0 }, limited: false })
+    expect(groups.map((entry) => entry.group)).toEqual(['NEEDS_US', 'NOT_SENT', 'NOT_STARTED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'DONE'])
+    expect(groups.find((entry) => entry.group === 'IN_PRODUCTION')).toEqual({ group: 'IN_PRODUCTION', customers: 8, orders: 14 })
+    expect(groups.find((entry) => entry.group === 'NEEDS_US')).toEqual({ group: 'NEEDS_US', customers: 0, orders: null })
+  })
+})
+
+describe('F-CL-202 (C1-B1): Overdue read whole — every company, every page (at most 5)', () => {
+  const page = (next: number | null) => ({ asOf: '2026-11-23', readAt: '2026-11-23T08:00:00.000Z', tiles: [], customers: [], count: 0, next })
+  it('follows `next` and sends no company', async () => {
+    const answers = [page(1), page(null)]
+    const fetch = vi.fn(async () => new Response(JSON.stringify(answers.shift()), { status: 200, headers: { 'content-type': 'application/json' } }))
+    const api = createApiClient({ baseUrl: '/api', fetch: fetch as unknown as typeof globalThis.fetch, company: 'DEMO', csrfToken: () => 'csrf-1' })
+    const read = await getOverdueCustomers(api)
+    expect(read.complete).toBe(true)
+    const urls = fetch.mock.calls.map((call) => String((call as unknown as [string])[0]))
+    expect(urls).toHaveLength(2)
+    expect(urls.every((url) => !url.includes('companyId'))).toBe(true)
+    expect(urls[1]).toContain('cursor=1')
+  })
+  it('stops after 5 pages and says the read is not whole', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify(page(1)), { status: 200, headers: { 'content-type': 'application/json' } }))
+    const api = createApiClient({ baseUrl: '/api', fetch: fetch as unknown as typeof globalThis.fetch, company: 'DEMO', csrfToken: () => 'csrf-1' })
+    expect((await getOverdueCustomers(api)).complete).toBe(false)
+    expect(fetch).toHaveBeenCalledTimes(5)
+  })
+})
+
 // ---- every word the folder names, in both languages (the shape of parties.vitest.test.ts :391) ---------------------------------
 const HERE = fileURLToPath(new URL('.', import.meta.url))
 function sources(dir: string): string[] {
@@ -209,7 +348,7 @@ const SHARED = [fileURLToPath(new URL('../../../parties/_shared/view/PartiesList
 
 describe('every customers-list word the code names exists in it and en', () => {
   it('the `c(…)` keys of the folder and of the shared list, with the same placeholders', () => {
-    const keys = new Set<string>(['office.VIES', 'office.SDI', 'office.TAX'])
+    const keys = new Set<string>(['office.VIES', 'office.SDI', 'office.TAX', 'needs.toAnswer', 'band.needsNow' /* F-CL-202: named through groupWordOf / needsChipsOf */])
     for (const file of [...sources(HERE), ...SHARED]) for (const match of readFileSync(file, 'utf8').matchAll(/\bc\(['"`]([A-Za-z0-9_.]+)['"`]/g)) keys.add(match[1]!)
     expect(keys.size).toBeGreaterThan(8)
     for (const key of keys) {
@@ -223,3 +362,18 @@ describe('every customers-list word the code names exists in it and en', () => {
     }
   })
 })
+
+// F-CL-202: the words the band and the chips reuse from other catalogues (one word per thing) exist in both languages.
+describe('F-CL-202: the reused words of the band and the chips exist in it and en', () => {
+  it('parties, orders, the sheet, the levels, "+n more"', () => {
+    const reused: Readonly<Record<string, readonly string[]>> = {
+      parties: ['customers.work.tile.requests', 'customers.work.tile.replies', 'customers.work.tile.late', 'customers.work.tile.deposit', 'numbers.openQuotes', 'customers.work.band.why.yes_one', 'customers.work.band.why.yes_other', 'customers.work.band.why.deposit_one', 'customers.work.band.why.deposit_other', 'customers.tab.work', 'customers.intro'],
+      orders: ['rows.PENDING_APPROVAL', 'rows.IN_PRODUCTION', 'rows.READY', 'rows.SHIPPED'],
+      'orders-sheet': ['urgency.bare', 'urgency.priority', 'phase.NOT_SENT', 'phase.NOT_STARTED', 'phase.DONE', 'col.picture'],
+      'sales-orders-depth': ['priority.level.URGENT', 'priority.level.HIGH'],
+      'home-tasks': ['batch.more'],
+    }
+    for (const locale of LOCALES) for (const [ns, keys] of Object.entries(reused)) for (const key of keys) expect(CATALOGUE[locale][ns]?.[key], `${locale} ${ns} ${key}`).toBeTruthy()
+  })
+})
+

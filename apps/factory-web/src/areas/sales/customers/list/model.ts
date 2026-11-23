@@ -4,6 +4,7 @@ import type { PartyRow, PartyWorkBand, PartyWorkGroup } from '../../../parties/_
 import { BULK_MAX, partyName, type ListSort } from '../../../parties/_shared/model'
 import type { CustomerWork, OrderPhase } from './api' // F-CL-202
 import type { WorkDoorTerm } from './doors' // F-CL-202
+import { phasePhrase } from '../../orders/list/sheet/model' // F-CL-202: the Work tab's one word per phase (read only)
 
 /**
  * Sales › Customers, the list's own rules (customers list plan §1, 10-design §3, 13-backend §8; F-CL-102…104), pure: what the
@@ -13,6 +14,8 @@ import type { WorkDoorTerm } from './doors' // F-CL-202
 
 /** The list's own words (`messages/<locale>/customers-list.json`). */
 export const CUSTOMERS_LIST_NS = 'customers-list'
+/** F-CL-202: the catalogues the band and the work cells reuse (one word per thing): parties, orders, the sheet, the levels, "+n more". */
+export const WORK_WORDS: readonly string[] = Object.freeze(['parties', 'orders', 'orders-sheet', 'sales-orders-depth', 'home-tasks'])
 
 // ---- F-CL-102: the Customer cell ------------------------------------------------------------------------------------------
 
@@ -103,6 +106,16 @@ export function namesOtherCustomer(text: string, ticked: ReadonlyArray<Pick<Part
 // ---- F-CL-201 / F-CL-202 / F-CL-203: where each customer's work stands (customers list plan §1, 10-design §2 / §3, settles T2 / T7 /
 // T13 / T23–T25 / T30) -------------------------------------------------------------------------------------------------------------
 
+/** The work facts of the loaded customers: by customer (null while the first read runs), or the read's problem (a `parties` key). */
+export interface CustomersWorkModel {
+  readonly byParty: ReadonlyMap<string, CustomerWork> | null
+  readonly problem: string | null
+  /** false: some waiting replies were beyond the threads' read cap (the hint says so). */
+  readonly repliesComplete: boolean
+  /** Every grant of the reader's orders.view names its customers ("Your customers"). */
+  readonly limited: boolean
+}
+
 /** The live changes after which the work facts and the band are read again (the Work strip's own sources, and the quotes'). */
 export function workTouchedBy(type: string): boolean {
   return (
@@ -125,23 +138,15 @@ export function customerSortOf(rights: Pick<CustomerRights, 'orders'>): ListSort
 
 /** A word of another catalogue, by key (one word per thing: the Work tab's, the orders', the parties'). */
 export interface WordRef {
-  readonly ns: 'customers-list' | 'parties' | 'orders'
+  readonly ns: 'customers-list' | 'parties' | 'orders' | 'orders-sheet'
   readonly key: string
 }
 
-/** A band group's or a phase's words: the Work tab's (cw) — Not sent / Not started / Done are said here until cw's catalogue is on main. */
+/** A band group's or a phase's words: the Work tab's own (cw's phasePhrase: the orders' rows words or the sheet's phase words). */
 export function groupWordOf(group: PartyWorkGroup | OrderPhase): WordRef {
-  switch (group) {
-    case 'NEEDS_US':
-      return { ns: 'customers-list', key: 'band.needsNow' }
-    case 'IN_PRODUCTION':
-    case 'READY':
-    case 'SHIPPED':
-    case 'CANCELLED':
-      return { ns: 'orders', key: `rows.${group}` }
-    default:
-      return { ns: 'customers-list', key: `work.phase.${group}` }
-  }
+  if (group === 'NEEDS_US') return { ns: 'customers-list', key: 'band.needsNow' }
+  const phrase = phasePhrase(group)
+  return phrase.orders ? { ns: 'orders', key: phrase.key } : { ns: 'orders-sheet', key: phrase.key }
 }
 
 /** How a chip is drawn: a count that waits on us, red when late, a tag (the customer's urgency, our priority), quiet, a group, Done. */
@@ -171,7 +176,7 @@ export function needsChipsOf(work: CustomerWork): WorkChip[] {
   add(work.replies, { id: 'replies', label: { ns: 'parties', key: 'customers.work.tile.replies' }, tone: 'warn', door: { kind: 'replies' } })
   add(work.late, { id: 'late', label: { ns: 'parties', key: 'customers.work.tile.late' }, tone: 'red', door: { kind: 'late' } })
   add(work.waitsForYes, { id: 'waitsForYes', label: { ns: 'orders', key: 'rows.PENDING_APPROVAL' }, tone: 'warn', door: { kind: 'waitsForYes' } })
-  add(work.customerUrgent.count, { id: 'customerUrgent', label: { ns: 'orders', key: 'board.customerUrgent' }, tone: 'tag', door: { kind: 'customerUrgent' } })
+  add(work.customerUrgent.count, { id: 'customerUrgent', label: { ns: 'orders-sheet', key: 'urgency.bare' }, tone: 'tag', door: { kind: 'customerUrgent' } })
   add(work.priority.top, { id: 'top', label: { priority: 'URGENT' }, tone: 'tagred', door: { kind: 'priority', level: 'URGENT' } })
   add(work.priority.high, { id: 'high', label: { priority: 'HIGH' }, tone: 'tag', door: { kind: 'priority', level: 'HIGH' } })
   add(work.depositOpen, { id: 'deposit', label: { ns: 'parties', key: 'customers.work.tile.deposit' }, tone: 'quiet', door: { kind: 'deposit' } })

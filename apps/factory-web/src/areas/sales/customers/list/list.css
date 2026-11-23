@@ -63,3 +63,268 @@
   outline-offset: 2px;
   border-radius: var(--nds-radius-sm);
 }
+
+/* ---- F-CL-202: the band in the head row (settle T22): one line of doors; the gaps shrink, then the arrows go; a 2-column grid on a phone ---- */
+.fw-pty-head-band {
+  flex: 1 1 auto;
+  max-width: none;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.fw-cl-band {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-height: 32px;
+  min-width: 0;
+}
+
+.fw-cl-band-label {
+  flex: none;
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+  white-space: nowrap;
+}
+
+.fw-cl-band-phases {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-cl-band-arrow {
+  flex: none;
+  color: var(--nds-text-3);
+}
+
+.fw-cl-band-divider {
+  flex: none;
+  align-self: stretch;
+  width: 1px;
+  margin-block: var(--nds-space-4);
+  background: var(--nds-border);
+}
+
+.fw-cl-door {
+  flex: none;
+  white-space: nowrap;
+}
+
+.fw-cl-door.is-needs:not([aria-pressed='true']) {
+  border-color: transparent;
+  background: var(--nds-warning-soft);
+}
+
+.fw-cl-door.is-quiet:not([aria-pressed='true']) {
+  border-style: dashed;
+  background: transparent;
+  color: var(--nds-text-2);
+}
+
+.fw-cl-door-orders {
+  color: var(--nds-text-2);
+  font-weight: normal;
+}
+
+.fw-cl-band-info {
+  flex: none;
+  color: var(--nds-text-2);
+}
+
+.fw-cl-band-about {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  max-width: 360px;
+}
+
+.fw-cl-band-about p {
+  margin: 0;
+}
+
+@container (max-width: 1180px) {
+  .fw-cl-band,
+  .fw-cl-band-phases {
+    gap: var(--nds-space-2);
+  }
+  .fw-cl-band-arrow {
+    display: none;
+  }
+}
+
+@media (max-width: 719px) {
+  .fw-cl-band {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--nds-space-6);
+  }
+  .fw-cl-band-phases {
+    display: contents;
+  }
+  .fw-cl-band-divider,
+  .fw-cl-band-arrow {
+    display: none;
+  }
+  .fw-cl-band-info {
+    justify-self: end;
+  }
+  .fw-cl-band .fw-cl-door {
+    justify-content: space-between;
+    width: 100%;
+    min-height: 40px;
+    white-space: normal;
+    text-align: left;
+  }
+}
+
+/* ---- F-CL-202: the work cells — chips that write their count, at most two lines (the rest fold into "+n more": settle T24) ---- */
+.fw-cl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  max-height: 48px;
+  padding-block: var(--nds-space-6);
+  overflow: hidden;
+  line-height: 1;
+}
+
+.fw-cl-chips.is-one {
+  max-height: 22px;
+  padding-block: 0;
+}
+
+.fw-cl-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  max-width: 100%;
+  height: 22px;
+  padding: 0 3px 0 var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface);
+  color: var(--nds-text-strong);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.fw-cl-chip:hover {
+  border-color: var(--nds-border-strong);
+  background: var(--nds-surface-hover);
+}
+
+.fw-cl-chip:focus-visible {
+  outline: var(--nds-focus-ring);
+  outline-offset: 1px;
+}
+
+.fw-cl-chip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fw-cl-chip-n {
+  min-width: 18px;
+  padding: 0 var(--nds-space-4);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-pill-neutral-bg);
+  color: var(--nds-pill-neutral-fg);
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+  text-align: center;
+}
+
+.fw-cl-chip.is-warn .fw-cl-chip-n {
+  background: var(--nds-pill-warning-bg);
+  color: var(--nds-pill-warning-fg);
+}
+
+.fw-cl-chip.is-red,
+.fw-cl-chip.is-tagred {
+  border-color: transparent;
+  background: var(--nds-pill-danger-bg);
+  color: var(--nds-pill-danger-fg);
+}
+
+.fw-cl-chip.is-tag {
+  border-color: transparent;
+  background: var(--nds-pill-warning-bg);
+  color: var(--nds-pill-warning-fg);
+}
+
+.fw-cl-chip.is-red .fw-cl-chip-n,
+.fw-cl-chip.is-tagred .fw-cl-chip-n,
+.fw-cl-chip.is-tag .fw-cl-chip-n {
+  background: var(--nds-surface);
+  color: inherit;
+}
+
+.fw-cl-chip.is-quiet {
+  border-style: dashed;
+  background: transparent;
+  color: var(--nds-text-2);
+}
+
+.fw-cl-chip.is-group .fw-cl-chip-n {
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+}
+
+.fw-cl-chip.is-done {
+  border-style: dashed;
+  background: transparent;
+  color: var(--nds-text-2);
+  font-weight: normal;
+}
+
+.fw-cl-chip.is-done .fw-cl-chip-n {
+  min-width: 0;
+  padding: 0 3px 0 0;
+  background: transparent;
+  color: var(--nds-text-2);
+}
+
+.fw-cl-chip.is-more {
+  padding-right: var(--nds-space-8);
+  border-style: dashed;
+  border-color: var(--nds-primary);
+  background: transparent;
+  color: var(--nds-text-link);
+}
+
+.fw-cl-measure {
+  display: inline-flex;
+  flex: none;
+}
+
+.fw-cl-quiet {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-cl-promise {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  line-height: 1.3;
+}
+
+.fw-cl-promise-date {
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-cl-pic {
+  display: inline-flex;
+  align-items: center;
+  height: 100%;
+}

@@ -11,6 +11,7 @@ import { ListFrame } from '../../../../list-frame/ListFrame'
 import { useListSearch } from '../../../../list-frame/search/use-list-search' // F-SA-223
 import type { ListKey } from '../../../../list-frame/model'
 import type { ListCards } from '../../../../list-frame/w2b/model' // F-CL-101: a side's phone card
+import type { ExportAbout } from '../../../../list-frame/tools/ListToolsBar' // F-CL-202
 import { PARTY_KINDS, PARTY_TAX_MODES, type PartyKind, type PartyRow, type PartySort, type PartyWorkGroup, type TaxMode } from '../api'
 import { barOf, sharedActsOf, whyNotOf, type BarAct, type SharedActId } from '../bar' // F-CL-103
 import {
@@ -44,6 +45,8 @@ export interface PartiesListActions {
   onSort?: (sort: PartySort) => void
   /** F-CL-202: the band's door pressed or left (its chip's ✕). */
   onWork?: (group: PartyWorkGroup | null) => void
+  /** F-CL-202: Clear all — every chip of the chips row (the band's door, the kind, the tax mode) in one write. */
+  onClearChips?: () => void
   onFilters?: (filters: ListFilters) => void
   onMore?: () => void
   onRetry?: () => void
@@ -105,6 +108,14 @@ export interface ListDepth {
   /** The phone card's places and drawings per column (the frame's card overrides). */
   readonly card?: ListCards<PartyRow>['fields']
   // ---- end F-CL-101
+  // ---- F-CL-202 (13-backend §8.1 / §8.9): the customers' picture before the name, the band's pressed door as a chip, the file's note
+  /** Columns before the name (the newest order's picture). */
+  readonly beforeName?: readonly ColDef<PartyRow>[]
+  /** The band's pressed door as a chip of the chips row (its words; ✕ leaves it) and what an empty list then says. */
+  readonly workChip?: { readonly label: string; readonly hint?: string; readonly empty: string } | null
+  /** What Export ▾ says the file holds. */
+  readonly exportAbout?: ExportAbout | null
+  // ---- end F-CL-202
 }
 
 export function PartiesListView({ model, actions, headActions, columns: sideColumns, depth }: { model: PartiesListModel; actions?: PartiesListActions; headActions?: ReactNode; columns?: readonly ColDef<PartyRow>[]; depth?: ListDepth | undefined }) {
@@ -122,6 +133,7 @@ function PartiesList({ model, actions, headActions, sideColumns, depth }: { mode
   const sideLeading = depth?.leadingColumns
   const sideHidden = depth?.hiddenColumns
   const sideRowItems = depth?.rowItems
+  const sideBefore = depth?.beforeName // F-CL-202
   const locale = useLocale()
   const config = SIDES[model.side]
   const side = model.side
@@ -243,6 +255,7 @@ function PartiesList({ model, actions, headActions, sideColumns, depth }: { mode
       columns.map((entry) => (entry.colId && hidden.has(entry.colId) ? { ...entry, hide: true, context: { ...((entry.context as object | undefined) ?? {}), optIn: true } } : entry))
     if (side === 'customers')
       return later([
+        ...(sideBefore ?? []), // F-CL-202: the picture
         name,
         ...(sideLeading ?? []), // F-CL-101
         column('roles', t('list.col.roles'), RolesCell, { flex: 1.2, minWidth: 140 }),
@@ -276,11 +289,13 @@ function PartiesList({ model, actions, headActions, sideColumns, depth }: { mode
       actionsColumn,
     ])
     // The cells close over the words, the rights and the actions: a change of language or rights rebuilds them.
-  }, [t, locale, side, config, model.prefix, can.vies, can.block, can.manage, sideColumns, sideName, sideLeading, sideHidden, sideRowItems])
+  }, [t, locale, side, config, model.prefix, can.vies, can.block, can.manage, sideColumns, sideName, sideLeading, sideHidden, sideRowItems, sideBefore])
 
   if (!can.view) return <NoAccess title={t(`${side}.noAccess.title`)} body={t(`${side}.noAccess.body`)} />
 
   const filterCount = (model.filters.kind ? 1 : 0) + (model.filters.taxMode ? 1 : 0)
+  const workChip = model.work && depth?.workChip ? depth.workChip : null // F-CL-202
+  const chipCount = filterCount + (workChip ? 1 : 0)
 
   // ---- the tiles ----
   const tile = (id: TileId) => {
@@ -330,12 +345,18 @@ function PartiesList({ model, actions, headActions, sideColumns, depth }: { mode
   const tools = (
     <>
       <Menu label={filterCount > 0 ? t('list.filtersCount', { count: filterCount }) : t('list.filters')} items={filterItems} />
-      {filterCount > 0 && (
+      {chipCount > 0 && (
         <span className="fw-pty-chips" aria-label={t('list.activeFilters')}>
+          {/* F-CL-202: the band's pressed door, with its why in the hint */}
+          {workChip && (
+            <span title={workChip.hint}>
+              {chip('work', workChip.label, () => actions?.onWork?.(null))}
+            </span>
+          )}
           {model.filters.kind && chip('kind', t(`kind.${model.filters.kind}`), () => actions?.onFilters?.({ ...model.filters, kind: null }))}
           {model.filters.taxMode && chip('mode', t(`taxMode.${model.filters.taxMode}`), () => actions?.onFilters?.({ ...model.filters, taxMode: null }))}
-          {filterCount >= 2 && (
-            <Button size="sm" variant="quiet" onClick={() => actions?.onFilters?.({})}>
+          {chipCount >= 2 && (
+            <Button size="sm" variant="quiet" onClick={() => (actions?.onClearChips ? actions.onClearChips() : actions?.onFilters?.({}))}>
               {t('list.clearAll')}
             </Button>
           )}
@@ -420,7 +441,10 @@ function PartiesList({ model, actions, headActions, sideColumns, depth }: { mode
       }
     />
   ) : model.rows.items !== null && rows.length === 0 ? (
-    empty.kind === 'search' ? (
+    workChip ? (
+      // F-CL-202: a band door pressed with nobody in it says so, with one Clear (the door left).
+      <EmptyState title={workChip.empty} action={clearButton(c('empty.clear'), () => actions?.onWork?.(null))} />
+    ) : empty.kind === 'search' ? (
       <EmptyState title={c(empty.key, { q: empty.q })} action={clearButton(c('empty.clearSearch'), () => actions?.onQuery?.(''))} />
     ) : empty.kind === 'filters' ? (
       <EmptyState title={c(empty.key)} action={clearButton(c('empty.clear'), () => actions?.onFilters?.({}))} />
@@ -452,7 +476,8 @@ function PartiesList({ model, actions, headActions, sideColumns, depth }: { mode
       <PageHead
         intro={t(`${side}.intro`)}
         band={depth?.band /* F-CL-101 (settle T22): drawn only when a side passes one */}
-        status={<Freshness asOf={model.asOf} live={model.live} />}
+        // F-CL-202 (T21): with a band in the head row, "Updated hh:mm" moves to the toolbar's right end (the rows start higher).
+        status={depth?.band ? undefined : <Freshness asOf={model.asOf} live={model.live} />}
         actions={
           <>
             {/* A side's own band actions (Customers: Import, B-W2a-49), before New. F-CL-101: New only with the right. */}
@@ -488,7 +513,14 @@ function PartiesList({ model, actions, headActions, sideColumns, depth }: { mode
         }
         tools={tools}
         builtInViews={builtInViews /* F-CL-101: ONE Views ▾ */}
-        right={moreItems.length > 0 ? <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('list.more') }} items={moreItems} /> : undefined}
+        right={
+          depth?.band || moreItems.length > 0 ? (
+            <>
+              {depth?.band && <Freshness asOf={model.asOf} live={model.live} />}
+              {moreItems.length > 0 && <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('list.more') }} items={moreItems} />}
+            </>
+          ) : undefined
+        }
         selection={{ selected: model.selected, onChange: (ids) => actions?.onSelect?.(ids), actions: bulkActions, exportSelected: true /* F-SA-225 */, trailing: moreActs /* F-CL-103 */ }}
         // F-SA-225: the rest of a row opens its record (⌘ / Ctrl: a new tab), on Customers and Purchasing › Suppliers alike (one list).
         onRowClick={(row, event) => (event.metaKey || event.ctrlKey ? window.open(recordHref(model.prefix, config, row.id), '_blank', 'noopener') : actions?.onOpen?.(row))}
@@ -507,6 +539,7 @@ function PartiesList({ model, actions, headActions, sideColumns, depth }: { mode
         state={state}
         focusRow={model.focusRow}
         {...(depth?.card ? { cards: { fields: depth.card } } : {}) /* F-CL-101: the side's phone card */}
+        {...(depth?.exportAbout ? { exportAbout: depth.exportAbout } : {}) /* F-CL-202: what the file holds */}
       />
       )}
 

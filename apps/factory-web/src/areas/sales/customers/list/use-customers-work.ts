@@ -6,17 +6,7 @@ import { useLiveBus } from '../../../../shell/live/use-live'
 import type { PartyRow } from '../../../parties/_shared/api'
 import { problemKey } from '../../../parties/_shared/model'
 import { CUSTOMERS_WORK_MAX, readCustomersWork, type CustomerWork } from './api'
-import { workTouchedBy } from './model'
-
-/** The work facts of the loaded customers: by customer (null while the first read runs), or the read's problem (a `parties` key). */
-export interface CustomersWorkModel {
-  readonly byParty: ReadonlyMap<string, CustomerWork> | null
-  readonly problem: string | null
-  /** false: some waiting replies were beyond the threads' read cap (the hint says so). */
-  readonly repliesComplete: boolean
-  /** Every grant of the reader's orders.view names its customers ("Your customers"). */
-  readonly limited: boolean
-}
+import { workTouchedBy, type CustomersWorkModel } from './model'
 
 /** The live changes are read again together after this pause (a burst is one read). */
 export const WORK_REREAD_MS = 800

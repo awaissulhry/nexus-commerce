@@ -17,11 +17,21 @@
       "other": "No suppliers in “{view}”."
     },
     "clear": "Clear",
-    "clearSearch": "Clear search"
+    "clearSearch": "Clear search",
+    "work": "No customer has an order “{group}” now.",
+    "needs": "No customer needs us now."
   },
   "col": {
     "customer": "Customer",
-    "messagesHint": "Your own new messages in each customer’s own conversation. Its orders’ messages are counted on its Work tab."
+    "messagesHint": "Your own new messages in each customer’s own conversation. Its orders’ messages are counted on its Work tab.",
+    "needs": "Needs us",
+    "needsHint": "What waits on us, strongest first; then the customer’s urgent orders and our Top / High. Each chip opens exactly what it counts.",
+    "workHint": "Its orders by where they are — the Work tab’s groups and words. Each chip opens its Work tab at that group.",
+    "nextPromise": "Next promise",
+    "nextPromiseHint": "The earliest promise date of its open orders, from today on",
+    "lastOrder": "Last order",
+    "pictureHint": "The picture of the customer’s newest order",
+    "overdueFirst": "The first {count} customers with money late are read: beyond them a customer may show none."
   },
   "office": {
     "chip": "Needs office data",
@@ -111,5 +121,47 @@
       "pick": "Pick a person first.",
       "reading": "The customers are still being read."
     }
+  },
+  "band": {
+    "label": {
+      "all": "All customers",
+      "yours": "Your customers"
+    },
+    "needsNow": "Needs us now",
+    "orders_one": "· {count} order",
+    "orders_other": "· {count} orders",
+    "hint": {
+      "needs": "{count} customers have something waiting on us: {req} requests to answer · {rep} replies waiting on us · {late} late orders.",
+      "group": "{count} customers have at least one order “{group}” · {orders}.",
+      "press": "Press: show these customers. Again: show all.",
+      "partial": "Some waiting replies are beyond what one read counts: the number of replies may be higher."
+    },
+    "about": "About this page",
+    "aboutBody": "The band counts customers, over your customers only and this list’s own view, search and filters; the hint says the orders. A press shows exactly those customers.",
+    "failed": "Where the work stands couldn’t be read"
+  },
+  "needs": {
+    "toAnswer": "To answer"
+  },
+  "work": {
+    "noOrder": "No order yet",
+    "moreHint": "Also: {list} — open {customer} › Work"
+  },
+  "prom": {
+    "in": "in {days} d",
+    "today": "today",
+    "noneAhead": "No promise ahead",
+    "noOpen": "No open order"
+  },
+  "pic": {
+    "newest": "Newest order {number}",
+    "noOrder": "No order yet"
+  },
+  "cell": {
+    "failed": "Couldn’t read"
+  },
+  "export": {
+    "heading": "The customers of this view",
+    "note": "In code order. Where the work stands is not in the file."
   }
 }

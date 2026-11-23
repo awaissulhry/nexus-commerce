@@ -17,11 +17,21 @@
       "other": "Nessun fornitore in «{view}»."
     },
     "clear": "Togli",
-    "clearSearch": "Svuota la ricerca"
+    "clearSearch": "Svuota la ricerca",
+    "work": "Nessun cliente ha un ordine «{group}» ora.",
+    "needs": "Nessun cliente da seguire ora."
   },
   "col": {
     "customer": "Cliente",
-    "messagesHint": "I tuoi nuovi messaggi nella conversazione del cliente. I messaggi dei suoi ordini sono contati nella sua scheda Lavori."
+    "messagesHint": "I tuoi nuovi messaggi nella conversazione del cliente. I messaggi dei suoi ordini sono contati nella sua scheda Lavori.",
+    "needs": "Da seguire",
+    "needsHint": "Cosa tocca a noi, dal più forte; poi gli ordini urgenti del cliente e la nostra priorità Massima / Alta. Ogni chip apre esattamente ciò che conta.",
+    "workHint": "I suoi ordini per punto — i gruppi e le parole della scheda Lavori. Ogni chip apre la scheda Lavori su quel gruppo.",
+    "nextPromise": "Prossima promessa",
+    "nextPromiseHint": "La data promessa più vicina tra i suoi ordini aperti, da oggi in poi",
+    "lastOrder": "Ultimo ordine",
+    "pictureHint": "La foto dell’ordine più recente del cliente",
+    "overdueFirst": "Sono letti i primi {count} clienti con importi scaduti: oltre questi un cliente può risultare senza."
   },
   "office": {
     "chip": "Servono dati d’ufficio",
@@ -111,5 +121,47 @@
       "pick": "Scegli prima una persona.",
       "reading": "I clienti sono ancora in lettura."
     }
+  },
+  "band": {
+    "label": {
+      "all": "Tutti i clienti",
+      "yours": "I tuoi clienti"
+    },
+    "needsNow": "Da seguire ora",
+    "orders_one": "· {count} ordine",
+    "orders_other": "· {count} ordini",
+    "hint": {
+      "needs": "{count} clienti hanno qualcosa che tocca a noi: {req} richieste a cui rispondere · {rep} risposte che toccano a noi · {late} ordini in ritardo.",
+      "group": "{count} clienti hanno almeno un ordine «{group}» · {orders}.",
+      "press": "Premi: mostra questi clienti. Di nuovo: mostra tutti.",
+      "partial": "Alcune risposte in attesa sono oltre ciò che una lettura conta: le risposte possono essere di più."
+    },
+    "about": "Informazioni su questa pagina",
+    "aboutBody": "La fascia conta i clienti, solo i tuoi e secondo vista, ricerca e filtri di questo elenco; il suggerimento dice gli ordini. Premendo si vedono esattamente quei clienti.",
+    "failed": "Non è stato possibile leggere a che punto è il lavoro"
+  },
+  "needs": {
+    "toAnswer": "Da rispondere"
+  },
+  "work": {
+    "noOrder": "Ancora nessun ordine",
+    "moreHint": "Anche: {list} — apri {customer} › Lavori"
+  },
+  "prom": {
+    "in": "tra {days} g",
+    "today": "oggi",
+    "noneAhead": "Nessuna promessa in arrivo",
+    "noOpen": "Nessun ordine aperto"
+  },
+  "pic": {
+    "newest": "Ordine più recente {number}",
+    "noOrder": "Ancora nessun ordine"
+  },
+  "cell": {
+    "failed": "Lettura non riuscita"
+  },
+  "export": {
+    "heading": "I clienti di questa vista",
+    "note": "In ordine di codice. A che punto è il lavoro non è nel file."
   }
 }
