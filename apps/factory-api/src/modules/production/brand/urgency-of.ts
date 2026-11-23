@@ -21,6 +21,8 @@ import type { OrderUrgencyState } from '../../sales/orders/customer-urgency' // 
  *                              them is Urgent, else Regular): the Work orders list's column and the risk sort's tie, the board's chip
  *   customerUrgencyStatesOf    B-CW-010: each order's state of four with its place, our lock and the open "Urgent – asked" (the
  *                              Sales › Orders row's chip; the hook's optional `states`)
+ *   customerUrgentIn           B-CW-030: the Urgent marks that count inside a view (Sales › Orders' sort "Most urgent first"; the
+ *                              hook's optional `urgentIn`)
  *
  * This file imports nothing of the API but types (Sales › Orders registers it when that module loads, in every process); the
  * callers wall the rows they ask about (the list, the board, the order list read only what the reader reaches).
@@ -100,8 +102,25 @@ export async function customerUrgencyStatesOf(db: Reader, orderIds: readonly str
 }
 // ── end B-CW-010 ──
 
+// ── B-CW-030 (customer Work tab plan §3): the Urgent marks that count inside a view — the sort key `urgent` ──
+/**
+ * The Urgent marks that count among the orders `where` keeps: order id → its place in its customer's own Urgent list. The conditions
+ * of `customerUrgencyWhereOf` (the order still kept, its customer's switch on) as a relation filter on the caller's where — never an
+ * id list; each order's own row only. At most the quota per customer and company.
+ */
+export async function customerUrgentIn(db: Reader, where: Prisma.SalesOrderWhereInput): Promise<Map<string, number | null>> {
+  const rows = await db.brandOrderProduction.findMany({
+    where: { urgency: 'URGENT', salesOrder: { AND: [where, { status: { in: [...IN_PRODUCTION] } }, { party: { portalSettings: { some: { productionUrgencyOn: true } } } }] } },
+    select: { salesOrderId: true, key: true, urgentRank: true },
+  })
+  const out = new Map<string, number | null>()
+  for (const row of rows) if (row.key === `brand-production:${row.salesOrderId}`) out.set(row.salesOrderId, row.urgentRank)
+  return out
+}
+// ── end B-CW-030 ──
+
 /** The production lane's reader for threads' hook (modules/sales/orders/customer-urgency.ts `useCustomerUrgency`). */
-export const customerUrgencySource: CustomerUrgencySource = { of: customerUrgencyOf, where: customerUrgencyWhereOf, /* B-CW-010 */ states: customerUrgencyStatesOf }
+export const customerUrgencySource: CustomerUrgencySource = { of: customerUrgencyOf, where: customerUrgencyWhereOf, /* B-CW-010 */ states: customerUrgencyStatesOf, /* B-CW-030 */ urgentIn: customerUrgentIn }
 
 /** A work order's customer urgency with the board's chip words ("Customer urgency: Urgent 2"; null for Regular). */
 export interface WorkOrderUrgency extends CountedUrgency {

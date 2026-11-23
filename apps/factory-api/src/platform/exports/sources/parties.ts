@@ -5,6 +5,10 @@ import { PARTY_KINDS, type PartyRole } from '@nexus/factory-domain/parties/rules
 import { PARTY_TAX_MODES } from '@nexus/factory-domain/parties/tax'
 import { listParties } from '../../../modules/parties/parties'
 import { defineExportSource, type ExportColumn } from '../source'
+// B-CL-007 (customers list): the band's door holds in the file — the work term, and the sales module's work reader registered in
+// this process too (the worker runs the files; as sales-orders.ts loads customer-urgency through the orders module).
+import { PARTY_WORK_GROUPS, type PartyWorkGroup } from '@nexus/factory-domain/parties/contracts'
+import '../../../modules/sales/orders/customer-work'
 
 /**
  * Sales › Customers (SCR-032, `/sales/customers`) and Purchasing › Suppliers (SCR-056, `/purchasing/suppliers`): the
@@ -12,7 +16,8 @@ import { defineExportSource, type ExportColumn } from '../source'
  * viewQuery). The address keeps the saved filter `?view=` (customers: open|active|prospects|brands|riders|invoice|vies|blocked|
  * archived|all; suppliers: open|active|prospects|suppliers|subcontractors|carriers|blocked|archived|all; nothing: open =
  * every status but archived, the side's roles), its search `?q=` and its kind / tax-mode chips `?kind=`, `?taxMode=` (F-SA-225:
- * the screen keeps them in its address too, so Export ▾ and Export N hold exactly the screen's rows). Read through the
+ * the screen keeps them in its address too, so Export ▾ and Export N hold exactly the screen's rows). B-CL-007: Customers' band door
+ * `?work=<GROUP>` too (listParties' work term, orders.view: the file holds the customers the door shows, in code order). Read through the
  * module's listParties (parties.view, its companies and parties), which also counts the view before the run. No
  * money: the Customers page's Overdue column comes from the receivables read, a read of its own, and is not part of
  * this file.
@@ -40,6 +45,7 @@ const VIEW_KIND: Readonly<Record<string, Kind>> = Object.freeze({ riders: 'PERSO
 
 const isKind = (value: string | null): value is Kind => value !== null && (PARTY_KINDS as readonly string[]).includes(value)
 const isTaxMode = (value: string | null): value is TaxMode => value !== null && (PARTY_TAX_MODES as readonly string[]).includes(value)
+const isWorkGroup = (value: string | null): value is PartyWorkGroup => value !== null && (PARTY_WORK_GROUPS as readonly string[]).includes(value) // B-CL-007
 
 /** The side's query of an address (web model.ts viewQuery). */
 function queryOf(side: Side, address: URLSearchParams): Query {
@@ -47,6 +53,7 @@ function queryOf(side: Side, address: URLSearchParams): Query {
   const view = SIDE_VIEWS[side].includes(asked) ? asked : 'open'
   const kind = address.get('kind')
   const taxMode = address.get('taxMode')
+  const work = side === 'customers' ? address.get('work') : null // B-CL-007: the band's door (Customers only; Suppliers has no band)
   const q = address.get('q')?.trim().slice(0, 100) || undefined
   return {
     role: [...(Object.hasOwn(VIEW_ROLES, view) ? VIEW_ROLES[view]! : SIDE_ROLES[side])],
@@ -55,6 +62,7 @@ function queryOf(side: Side, address: URLSearchParams): Query {
     ...(isKind(kind) ? { kind } : {}),
     ...(Object.hasOwn(VIEW_KIND, view) ? { kind: VIEW_KIND[view]! } : {}),
     ...(isTaxMode(taxMode) ? { taxMode } : {}),
+    ...(isWorkGroup(work) ? { work } : {}), // B-CL-007: the file stays in code order (no sort): the screen's rows, by code
     q,
   }
 }

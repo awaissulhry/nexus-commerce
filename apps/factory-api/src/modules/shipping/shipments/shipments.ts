@@ -474,7 +474,7 @@ export async function createShipment(caller: CommandCaller, body: CreateShipment
     tools.emit({ type: 'shipment.created', subject: id, companyId: order.companyId, siteId, payload: { shipmentId: id, number: number.formatted, salesOrderId: order.id, siteId, lines: added.length, garments, partyId: order.partyId /* B-SA-004: the order row's customer, the shipment's */ } })
     changed(tools, scope, 'DRAFT', 'lines')
     // B-OP-040: made with lines of other orders of the customer (only after the switch): their orders joined it.
-    if (others.length > 0) ordersChanged(tools, scope, [order.id], await ordersOfShipment(tools.tx, { id, salesOrderId: order.id }))
+    if (others.length > 0) ordersChanged(tools, scope, [order.id], await ordersOfShipment(tools.tx, { id, salesOrderId: order.id }), { atCreation: true } /* B-CW-040 */)
     return { shipment: await shipmentDetail(tools.tx, (await readShipment(tools.tx, id))!) }
   })
   return result

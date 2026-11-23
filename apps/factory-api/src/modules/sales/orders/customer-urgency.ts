@@ -21,6 +21,8 @@ import { customerUrgencySource } from '../../production/brand/urgency-of'
  *   states B-CW-010 (customer Work tab plan §2), OPTIONAL: each order's urgency as the row's chip says it — the state of four, its
  *          place in the customer's own Urgent list, our lock and the open "Urgent – asked". A reader without it (a test's fake)
  *          leaves `customerUrgencyState` null and the row falls back to `of`.
+ *   urgentIn B-CW-030 (customer Work tab plan §3), OPTIONAL: the Urgent marks that count among the orders of a view, for the sort
+ *          key `urgent` ("Most urgent first"). A reader without it: no mark orders a row.
  */
 
 export const CUSTOMER_URGENCIES = ['URGENT', 'REGULAR'] as const
@@ -44,6 +46,11 @@ export interface CustomerUrgencySource {
   where(urgency: CustomerUrgency): Prisma.SalesOrderWhereInput
   /** B-CW-010: each order's state (an order absent: none counts — no kept order, or its customer's switch off). */
   states?(db: Reader, orderIds: readonly string[]): Promise<ReadonlyMap<string, OrderUrgencyState>>
+  /**
+   * B-CW-030 (the sort key `urgent`), OPTIONAL: the Urgent marks that count among the orders a filter keeps — order id → its place
+   * in its customer's own Urgent list. Read by a relation filter on the caller's own where (the reader's view), never an id list.
+   */
+  urgentIn?(db: Reader, where: Prisma.SalesOrderWhereInput): Promise<ReadonlyMap<string, number | null>>
 }
 
 let source: CustomerUrgencySource | null = null
@@ -68,6 +75,16 @@ export async function orderCustomerUrgencyStates(db: Reader, orderIds: readonly 
   if (!reader?.states) return null
   if (orderIds.length === 0) return new Map()
   return reader.states(db, orderIds)
+}
+
+/**
+ * B-CW-030: the Urgent marks that count among the orders `where` keeps (an empty map until a reader with `urgentIn` is registered:
+ * the marks then order nothing). `where` is the reader's own view: it is the wall.
+ */
+export async function orderUrgentIn(db: Reader, where: Prisma.SalesOrderWhereInput): Promise<ReadonlyMap<string, number | null>> {
+  const reader = source
+  if (!reader?.urgentIn) return new Map()
+  return reader.urgentIn(db, where)
 }
 
 /** The orders of one customer urgency (no order until a reader is registered). */

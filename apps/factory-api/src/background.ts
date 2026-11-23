@@ -225,6 +225,7 @@ import { issueAnsweredHandler } from './modules/production/issues/answered'
 import { orderChangeNotesHandler } from './modules/sales/orders/change-notes'
 // B-OP-030 (order page plan N5): a typed tracking number's office line on the order's thread.
 import { trackingNotesHandler } from './modules/shipping/own-transport/tracking-notes'
+import { shipmentOrderNotesHandler } from './modules/shipping/shipments/order-notes' // B-CW-040
 // B-PR-45: an issue nobody answered goes up (1 working day → the backup or the production managers; 2 → the Owner and Admin).
 import { issueEscalationCron } from './modules/production/issues/escalate'
 
@@ -361,7 +362,9 @@ const W2B_PR43B_HANDLERS: readonly EventHandler[] = [issueAnsweredHandler()]
 const W2B_SA52_HANDLERS: readonly EventHandler[] = [orderChangeNotesHandler()]
 // B-OP-030 (order page plan N5; review R-15: no customer e-mail): shipment.tracking_changed → ONE office-only line on the thread of each
 // order the shipment carries (modules/shipping/own-transport/tracking-notes.ts).
-const W2B_OP30_HANDLERS: readonly EventHandler[] = [trackingNotesHandler()]
+// B-CW-040 (customer Work tab plan §4): shipment.created, shipment.orders_changed, shipment.status_changed → ONE office-only line on the
+// thread of each order that went on a shipment, came off it or whose shipment was cancelled (modules/shipping/shipments/order-notes.ts).
+const W2B_OP30_HANDLERS: readonly EventHandler[] = [trackingNotesHandler(), shipmentOrderNotesHandler()]
 // B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
 await loadReports(fileURLToPath(new URL('.', import.meta.url)))
 // B-W2b-120: the safety calendar's sources (one file each in modules/safety/calendar/sources/), read by an export of the calendar.
