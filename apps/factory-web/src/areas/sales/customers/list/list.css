@@ -181,14 +181,16 @@
 }
 
 /* ---- F-CL-202: the work cells — chips that write their count, at most two lines (the rest fold into "+n more": settle T24) ---- */
+/* F-CL-301 (walk W-1): the box is border-box — its height holds both 22 px lines, the gap between them and the padding above and
+   below (56 px), so the row's auto height grows to it (≤ ~61 px, T24) and the second line is never cut. */
 .fw-cl-chips {
   display: flex;
   flex-wrap: wrap;
   align-content: flex-start;
   gap: var(--nds-space-4);
   min-width: 0;
-  max-height: 48px;
-  padding-block: var(--nds-space-6);
+  max-height: calc(2 * 22px + 3 * var(--nds-space-4));
+  padding-block: var(--nds-space-4);
   overflow: hidden;
   line-height: 1;
 }
