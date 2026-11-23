@@ -506,6 +506,11 @@ const viewTermFields = {
   /** NOT_SENT, NOT_STARTED, IN_PRODUCTION, READY, SHIPPED, DONE or CANCELLED (factory-domain production-brand/stages orderPhaseOf). */
   phase: z.enum(ORDER_PHASES).optional(),
   // ── end B-CW-002 ──
+  // ── B-CL-005 (customers list): the door of a customer's "Top n" / "High n" — the orders at this level of OUR priority (office only);
+  // the list, the totals and the file alike (the board counts no level, as it takes no phase); another value is a 400 ──
+  /** LOW, NORMAL, HIGH or URGENT (on screen "Top"): SalesOrder.priorityLevel. */
+  priority: z.enum(SALES_ORDER_PRIORITY_LEVELS).optional(),
+  // ── end B-CL-005 ──
   ...filterFields,
 }
 
@@ -769,6 +774,55 @@ export const customersContract = defineContract({
   },
 })
 // ── end B-TH-019 ──────────────────────────────────────────────────────────────────────────────────────────────────────
+
+// ── B-CL-003 (customers list, 13-backend §4): where each customer's work stands, for a page of the list (./customer-work) ──
+export const customersWorkContract = defineContract({
+  querystring: input({
+    /** 1 to 50 customer ids, comma separated (./customer-work partyIdsTermOf: 400 in words otherwise). */
+    partyIds: z.string().trim().min(36).max(50 * 37),
+  }),
+  response: {
+    200: output({
+      /** The asked customers the reader reaches (parties.view AND orders.view), in the order asked; an id outside is absent. Counts only. */
+      customers: z.array(
+        output({
+          partyId: id(),
+          /** Every order of the customer the reader sees. */
+          orders: z.number().int(),
+          /** The seven phases in order, 0 as 0 (cw's byPhase shape): they add up to `orders`. */
+          phases: z.array(output({ phase: z.enum(ORDER_PHASES), count: z.number().int() })),
+          /** The promise passed, not shipped yet (door late=true). */
+          late: z.number().int(),
+          /** Waiting for a yes (door status=PENDING_APPROVAL). */
+          waitsForYes: z.number().int(),
+          /** The deposit still open, in every state (door deposit=OPEN). */
+          depositOpen: z.number().int(),
+          /** The customer requests still OPEN, and the oldest one (the review window's door). */
+          requests: output({ open: z.number().int(), firstId: id().nullable() }),
+          /** Conversations whose customer wrote last; null: withheld (no threads.read). */
+          replies: z.number().int().nullable(),
+          /** The customer's own Urgent marks (door customerUrgency=URGENT), per company: ranks and quota are per company. */
+          customerUrgent: output({ count: z.number().int(), byCompany: z.array(output({ companyId: id(), count: z.number().int() })) }),
+          /** OUR levels URGENT ("Top") and HIGH among the open orders (door rows=open&priority=URGENT|HIGH). Office only. */
+          priority: output({ top: z.number().int(), high: z.number().int() }),
+          /** The earliest promise from today on over every company (a passed promise is said by `late` only); business dates. */
+          nextPromise: z.string().nullable(),
+          lastOrderDate: z.string().nullable(),
+          /** The newest order (order date, then made): the row's picture. */
+          newestOrder: output({ id: id(), number: z.string() }).nullable(),
+        }),
+      ),
+      /** Every waiting reply was read (false: beyond the threads' read cap; the web says so in words). */
+      repliesComplete: z.boolean(),
+      /** The parts this reader does not get (null in each row). */
+      withheld: z.array(z.enum(['replies'])),
+      /** Every grant of the reader's orders.view names its customers ("Your customers"). */
+      limited: z.boolean(),
+      asOf: instant(),
+    }),
+  },
+})
+// ── end B-CL-003 ──
 
 // ── B-TH-058 (threads plan TH-4; SHEET-G08; features SHEET.overall-F02, -F03, -F08, -F11; wall W30 / T30): the overall view ──
 /** A number that opens its rows: the list's terms (GET /sales/orders) that read exactly what it counts; null: none (it counts nothing). */

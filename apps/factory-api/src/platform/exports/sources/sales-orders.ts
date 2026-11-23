@@ -87,6 +87,9 @@ import { NOT_A_PRICE_HOLDER } from '../../../modules/sales/brand-prices/store'
  * (a door of the customer's big picture; the screen writes it with `rows=all`) narrows the file as it narrows the screen; another
  * value is refused in words.
  *
+ * B-CL-005 (customers list; screen = file = count): `?priority=LOW|NORMAL|HIGH|URGENT` (our own level: the door of a customer's
+ * "Top n" / "High n", office only) narrows the file as it narrows the screen; another value is refused in words.
+ *
  * B-CW-022 (customer Work tab plan §2.8: the file says what the row says): `customerUrgency` writes the row's state of four with
  * its place, in the Work orders file's own words ("Urgent (customer) 2", "Urgent – asked", "Regular", "Set to Regular by us");
  * `deposit` writes the order page's words for an extra deposit still open on an order that needs none ("Not needed · an extra
@@ -251,6 +254,14 @@ function phaseTerm(address: URLSearchParams): Pick<ListFilters, 'phase'> {
 }
 // ── end B-CW-002 ──
 
+// ── B-CL-005 (customers list; screen = file) ──
+/** The `priority` term of the address (our own level), or nothing; another value is refused (the file would not follow the screen), never dropped. */
+function priorityTerm(address: URLSearchParams): Pick<ListFilters, 'priority'> {
+  const value = oneOf(address, 'priority', SALES_ORDER_PRIORITY_LEVELS)
+  return value ? { priority: value } : {}
+}
+// ── end B-CL-005 ──
+
 // ── B-CW-022 (customer Work tab plan §2.8): the file says what the row says ──
 /**
  * The Customer urgency cell: the row's state with its place in the customer's own Urgent list ("Urgent (customer) 2"), as the Work
@@ -309,7 +320,7 @@ export const salesOrders = defineExportSource<Query, Row>({
     const q = address.get('q')?.trim().slice(0, 100) || undefined
     const status = address.get('status')
     const profile = idTerm(address, ['profile', 'profileId'], 'rider') // B-SA-021
-    const kept = { ...narrowing(address) /* B-TH-008 */, ...orderTerms(address) /* B-TH-057 */, ...doorTerms(address) /* B-TH-058 / B-TH-059 */, ...kindTerm(address) /* B-SA-020 */, ...(profile ? { profile } : {}) /* B-SA-021 */, ...waitingTerm(address) /* B-SA-070 */, ...priceMatchTerm(address) /* B-CP-018 */, ...phaseTerm(address) /* B-CW-002 */ }
+    const kept = { ...narrowing(address) /* B-TH-008 */, ...orderTerms(address) /* B-TH-057 */, ...doorTerms(address) /* B-TH-058 / B-TH-059 */, ...kindTerm(address) /* B-SA-020 */, ...(profile ? { profile } : {}) /* B-SA-021 */, ...waitingTerm(address) /* B-SA-070 */, ...priceMatchTerm(address) /* B-CP-018 */, ...phaseTerm(address) /* B-CW-002 */, ...priorityTerm(address) /* B-CL-005 */ }
     if (address.get('late') === 'true') return { ...kept, late: 'true', q }
     if (address.get('deposit') === 'OPEN') return { ...kept, deposit: 'OPEN', q }
     if (address.get('reaccept') === 'true') return { ...kept, reaccept: 'true', q } // B-TH-008: Waiting for the customer
