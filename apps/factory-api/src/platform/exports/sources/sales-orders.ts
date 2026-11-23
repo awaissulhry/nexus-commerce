@@ -55,7 +55,7 @@ import { NOT_A_PRICE_HOLDER } from '../../../modules/sales/brand-prices/store'
  * of the file: its read (costing/margins) computes every order in scope, not a page.
  *
  * B-TH-057 (SHEET-G05, SHEET-G15, ORD-G07; threads plan TH-4): the file keeps the screen's order and rows — `?sort=` (customer,
- * brand, promise, daysLate, ordered; `-` the other way round) and `?cf=` (the custom field filter) are the list's own terms,
+ * brand, promise, daysLate, ordered, B-CW-030: urgent = "Most urgent first"; `-` the other way round) and `?cf=` (the custom field filter) are the list's own terms,
  * read by listOrders as the screen reads them (a sort it does not know is refused), and `?q=` searches what the screen searches.
  *
  * B-TH-058 / B-TH-059 (threads plan TH-4; N23, ORD-G08, SHEET-G08): the overall view's door terms narrow the file as they
@@ -181,7 +181,7 @@ const NAMES: Readonly<Record<ExportLocale, { orders: string; rows: (count: numbe
 /** The address's server sort and custom field filter, as the list reads them; a sort the list does not know is refused. */
 function orderTerms(address: URLSearchParams): Pick<ListQuery, 'sort' | 'cf'> {
   const sort = address.get('sort')?.trim() || undefined
-  if (sort !== undefined && !isOrderSort(sort)) throw new ValidationError('Not a sort of the orders: the file would not follow the screen.', [{ path: 'query/sort', message: 'customer, brand, promise, daysLate or ordered (- in front: the other way round).' }])
+  if (sort !== undefined && !isOrderSort(sort)) throw new ValidationError('Not a sort of the orders: the file would not follow the screen.', [{ path: 'query/sort', message: 'customer, brand, promise, daysLate, ordered or urgent (- in front: the other way round).' /* B-CW-030: + urgent */ }])
   const cf = address.get('cf')?.trim() || undefined
   return { ...(sort ? { sort } : {}), ...(cf ? { cf } : {}) }
 }

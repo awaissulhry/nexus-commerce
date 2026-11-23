@@ -206,14 +206,18 @@ export async function joinWordsOf(db: Reader, shipment: JoinShipment, salesOrder
  * Inside a command that changed a shipment's lines: shipment.orders_changed when the orders it carries changed (before →
  * after), ADDED or REMOVED (a line of another order added, an order's last line removed). With one order per shipment it
  * never fires.
+ * B-CW-040 (customer Work tab plan §4): the ADDED event names the orders that came on (`added`), the REMOVED one those that came
+ * off (`removed`) — `salesOrderIds` alone (the orders after) cannot say who left. `atCreation`: the command also made the shipment
+ * (its shipment.created tells every order it carries, so the office line of this change is not written twice).
  */
-export function ordersChanged(tools: CommandTools, shipment: Pick<ShipmentHeader, 'id' | 'number' | 'companyId' | 'siteId' | 'partyId'>, before: readonly string[], after: readonly string[]): void {
-  const added = after.some((id) => !before.includes(id))
-  const removed = before.some((id) => !after.includes(id))
-  if (!added && !removed) return
-  for (const change of [...(added ? ['ADDED' as const] : []), ...(removed ? ['REMOVED' as const] : [])]) {
-    tools.emit({ type: 'shipment.orders_changed', subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId, payload: { shipmentId: shipment.id, number: shipment.number, salesOrderIds: [...after], change, partyId: shipment.partyId /* B-SA-004 */ } })
-  }
+export function ordersChanged(tools: CommandTools, shipment: Pick<ShipmentHeader, 'id' | 'number' | 'companyId' | 'siteId' | 'partyId'>, before: readonly string[], after: readonly string[], options: { readonly atCreation?: boolean } = {}): void {
+  const added = after.filter((id) => !before.includes(id))
+  const removed = before.filter((id) => !after.includes(id))
+  if (added.length === 0 && removed.length === 0) return
+  const base = { shipmentId: shipment.id, number: shipment.number, salesOrderIds: [...after], partyId: shipment.partyId /* B-SA-004 */ }
+  const where = { subject: shipment.id, companyId: shipment.companyId, siteId: shipment.siteId }
+  if (added.length > 0) tools.emit({ type: 'shipment.orders_changed', ...where, payload: { ...base, change: 'ADDED', added, ...(options.atCreation ? { atCreation: true } : {}) } })
+  if (removed.length > 0) tools.emit({ type: 'shipment.orders_changed', ...where, payload: { ...base, change: 'REMOVED', removed } })
 }
 
 // ---- GET /shipping/shipments/:shipmentId/orders/candidates ------------------------------------------------------------
