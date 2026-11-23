@@ -583,6 +583,8 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
     onView: (view) => (!waiting && !phase && rows === view ? showAll() : waiting ? viewWaiting?.(null, view) : viewRows?.(view)),
     onWindow,
     onRetry: work.retry,
+    // F-CQ-B: Requests to answer / Replies waiting on us are chips (buttons) now — the host navigates (the review window keeps the scroll).
+    onGo: (href: string, keepScroll: boolean) => router.push(href, keepScroll ? { scroll: false } : undefined),
   }
   // ---- end F-CW-101
   // The picked order left the view (it moved on, live): the dock keeps its conversation; one line says so, with the way back.

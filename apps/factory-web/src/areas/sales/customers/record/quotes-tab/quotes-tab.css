@@ -1,8 +1,8 @@
 /*
- * F-CQ-101 / F-CQ-104 (customer page › Quotes & incoming, 10-design §2, §3, §5): the tab's own look — the band "Before an order ·
- * <customer>" (head row, the pipeline line of equal doors, the closed three apart and quiet, the quiet second line, the open door's
- * chip), the sections' heads and their quiet lines, the empty customer's card. Layout only; DS tokens only (light and dark come
- * from the tokens). No sideways scroll at any room: every row wraps.
+ * F-CQ-101 / F-CQ-104 (customer page › Quotes & incoming, 10-design §2, §3, §5): the tab's own look — the band's head row and its
+ * open door's line (F-CQ-B: the band itself is the customer page's ONE band part), the sections' heads and their quiet lines, the
+ * empty customer's card. Layout only; DS tokens only (light and dark come from the tokens). No sideways scroll at any room: every
+ * row wraps.
  */
 .fw-qt {
   display: flex;
@@ -66,17 +66,8 @@
   gap: var(--nds-space-8);
 }
 
-/* ---- the band ---- */
-.fw-bo {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-8);
-  padding: var(--nds-space-12) var(--nds-space-14);
-  border: 1px solid var(--nds-border-subtle);
-  border-radius: var(--nds-radius-md);
-  min-width: 0;
-}
-
+/* ---- the band (F-CQ-B: drawn by the customer page's ONE band part, band/customer-band.css): only its head and the open door's
+   line are this tab's own. The closed doors of a list's foot (QuotesTabParts) keep their quiet look. ---- */
 .fw-bo-head {
   display: flex;
   flex-wrap: wrap;
@@ -99,116 +90,6 @@
   gap: var(--nds-space-8);
 }
 
-.fw-bo-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  gap: var(--nds-space-4);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.fw-bo-step {
-  display: flex;
-  align-items: center;
-  gap: var(--nds-space-4);
-  flex: 1 1 0;
-  min-width: 0;
-}
-
-.fw-bo-step.is-apart {
-  flex: 0 1 auto;
-  padding-left: var(--nds-space-8);
-  border-left: 1px dashed var(--nds-border-strong);
-}
-
-.fw-bo-sep {
-  color: var(--nds-text-2);
-}
-
-.fw-bo-door {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 44px;
-  padding: var(--nds-space-4) var(--nds-space-8);
-  border: 1px solid transparent;
-  border-radius: var(--nds-radius-sm);
-  color: var(--nds-text-strong);
-  text-decoration: none;
-}
-
-.fw-bo-door:hover {
-  border-color: var(--nds-border);
-}
-
-.fw-bo-door:focus-visible {
-  outline: 2px solid var(--nds-grid-accent);
-  outline-offset: 1px;
-}
-
-.fw-bo-door.is-active {
-  border-color: var(--nds-grid-accent);
-  box-shadow: inset 0 0 0 1px var(--nds-grid-accent);
-}
-
-.fw-bo-door.is-zero .fw-bo-count,
-.fw-bo-door.is-closed {
-  color: var(--nds-text-2);
-}
-
-.fw-bo-door.is-closed {
-  flex: 0 0 auto;
-  min-height: 0;
-  border-style: dashed;
-  border-color: var(--nds-border-subtle);
-}
-
-.fw-bo-count {
-  font-weight: var(--nds-font-weight-semibold);
-  font-variant-numeric: tabular-nums;
-}
-
-.fw-bo-label {
-  font-size: var(--nds-font-size-xs);
-  line-height: 1.25;
-  overflow-wrap: anywhere;
-}
-
-.fw-bo-door.is-closed .fw-bo-label,
-.fw-bo-door.is-closed .fw-bo-count {
-  display: inline;
-}
-
-.fw-bo-closedset {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--nds-space-4);
-}
-
-.fw-bo-closedword {
-  color: var(--nds-text-2);
-  font-size: var(--nds-font-size-xs);
-}
-
-.fw-bo-line2 {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--nds-space-8);
-}
-
-.fw-bo-quiet {
-  margin: 0;
-  color: var(--nds-text-2);
-  font-size: var(--nds-font-size-sm);
-}
-
 .fw-bo-quietdoor {
   color: var(--nds-text-2);
   font-size: var(--nds-font-size-sm);
@@ -216,16 +97,6 @@
 
 .fw-bo-quietdoor:hover {
   color: var(--nds-text-strong);
-}
-
-.fw-bo-doorchip {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--nds-space-4) var(--nds-space-8);
-  padding-top: var(--nds-space-8);
-  border-top: 1px solid var(--nds-border-subtle);
-  font-size: var(--nds-font-size-sm);
 }
 
 .fw-bo-doorname {
@@ -244,25 +115,8 @@
 }
 
 .fw-bo-doorclose:focus-visible {
-  outline: 2px solid var(--nds-grid-accent);
-}
-
-.fw-bo-why {
-  color: var(--nds-text-2);
-}
-
-/* The phone (band room < 600): the live doors as a 2-column grid of 44 px doors, no ›; the closed three wrap under. */
-.fw-bo.is-grid .fw-bo-line {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.fw-bo.is-grid .fw-bo-sep {
-  display: none;
-}
-
-.fw-bo.is-grid .fw-bo-actions {
-  width: 100%;
+  outline: 2px solid var(--nds-text);
+  outline-offset: 1px;
 }
 
 /* cq fx5 W-04: Ready's "5 of 6" and its "1 problem" tag wrap onto two lines in the column's least width (the row grows; nothing cut). */

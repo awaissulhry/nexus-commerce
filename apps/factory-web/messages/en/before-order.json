@@ -2,6 +2,7 @@
   "band": {
     "title": "Before an order",
     "pipeline": "Before an order, in life order",
+    "everything": "Everything before an order",
     "closed": "Closed:",
     "samples_one": "{count} sample round in progress ›",
     "samples_other": "{count} sample rounds in progress ›",
@@ -11,7 +12,6 @@
     "newQuoteShort": "New quote…",
     "segTitle": "Show the {count} in “{group}” · waits on {who}",
     "segTitleClosed": "Show the {count} in “{group}”",
-    "waitsOn": "waits on {who}",
     "who": {
       "us": "us",
       "customer": "the customer",

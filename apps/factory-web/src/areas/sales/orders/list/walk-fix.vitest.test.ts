@@ -422,10 +422,14 @@ describe('walk W-15, W-26, W-32: the foot, the "Waiting for <customer>" window, 
   })
   it('W-32: "Work orders of <customer> ›" is the last line of the groups\' window (on the phone the notes line is folded away)', () => {
     const band = read('../../customers/record/view/WorkBand.tsx')
-    const win = band.slice(band.indexOf('<div className="fw-cwb-win">'))
+    // F-CQ-B: the window is the customer page's ONE band part's; the Work band hands it its lines (`windowNotes`), the door last.
+    const win = band.slice(band.indexOf('const windowNotes = ('), band.indexOf('const failedWords'))
     expect(win.indexOf("t('customers.work.band.beforeNote')")).toBeGreaterThan(0)
     expect(win.indexOf('href={model.workOrdersHref}')).toBeGreaterThan(win.indexOf("t('customers.work.band.beforeNote')"))
     expect(win).toContain("{t('customers.band.workOrders', { customer })}")
+    expect(band).toContain('window: { title: all, notes: windowNotes')
+    // The phone (the band's own room < 720): the notes line folds away; the window says it.
+    expect(read('../../customers/record/band/customer-band.css')).toMatch(/@container fw-cb \(max-width: 719px\) \{\s*\.fw-cb-groups,\s*\.fw-cb-notes,/)
     for (const locale of LOCALES) expect(words(locale, 'parties')('customers.band.workOrders', { customer: 'Seed Racing' }), locale).toContain('Seed Racing')
   })
 })
@@ -557,13 +561,16 @@ describe('re-walk R-3, R-4, item 7, follow-up 8', () => {
     expect(css).toMatch(/\.fw-sheet-card \{[^}]*align-items: flex-start;/)
     expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(/i)
   })
-  it('R-4: a failed read of the groups says so once in the notes line, with the retry the chips use', () => {
+  it('R-4: a failed read of the groups says so once (F-CQ-B: in the strip\'s place), with the retry the chips use', () => {
     const band = read('../../customers/record/view/WorkBand.tsx')
-    const notes = band.slice(band.indexOf('<div className="fw-cwb-notes">'))
-    expect(notes.indexOf('{model.failed && (')).toBeGreaterThan(0)
-    expect(notes.indexOf('{model.failed && (')).toBeLessThan(notes.indexOf("t('customers.work.band.allCount'"))
-    expect(notes).toContain("onClick={() => actions.onRetry?.('late')}")
+    // F-CQ-B: the ONE band part draws the host's `failed` words in the strip's place, once; the Work band hands it the chips' words.
+    const failed = band.slice(band.indexOf("const failedWords = t('customers.work.tile.failed')"), band.indexOf('const state = '))
+    expect(failed).toContain("onClick={() => actions.onRetry?.('late')}")
+    expect(band).toContain("const state = model.failed || picture.state === 'failed' ? 'failed'")
     expect(band.match(/model\.failed/g)?.length).toBe(1) // once
+    const part = read('../../customers/record/band/CustomerBand.tsx')
+    expect(part).toContain("model.state === 'failed' ? (")
+    expect(part.match(/\{model\.failed\}/g)?.length).toBe(1) // said once
     expect(read('../../customers/record/view/WorkTab.tsx')).toContain("failed: work.reads.board.status === 'failed',")
     // 'late' is fed by the board read: its retry reads the board again.
     expect(read('../../customers/record/use-customer-work.ts')).toMatch(/\} else readers\.board\(\)/)

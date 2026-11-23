@@ -321,13 +321,13 @@ export const designScreen = defineDesignScreen<QuotesTabCase>({
   view: QuotesTabDesign,
   cases: [
     // ---- the data
-    { id: 'busy', label: 'Owner · a busy customer: every group, Requests & portal orders then Quotes, then Customer is writing', model: busy, note: 'The band: 2 writing › 3 to answer (amber) › 2 preparing › 1 approval › 2 with the customer › 1 order waits (amber), the closed three apart. SEED-INQ-0007 overdue first; SEED-QT-0015 accepted, its order waits for the PO number; SEED-QT-0012 r2 while the customer holds r1; SEED-QT-0016 from the portal order SEED-RQ-0086 (accepted as a quote: Moved to a quote 1); SEED-INQ-0009 needs info.' },
+    { id: 'busy', label: 'Owner · a busy customer: every group, Requests & portal orders then Quotes, then Customer is writing', model: busy, note: 'The band (F-CQ-B: the design system\'s compact tiles, as Sales › Orders): 2 writing · 3 to answer (the warning dot: it waits on us) · 2 preparing · 1 approval · 2 with the customer · 1 order waits (the warning dot), the closed three apart as quiet chips. SEED-INQ-0007 overdue first; SEED-QT-0015 accepted, its order waits for the PO number; SEED-QT-0012 r2 while the customer holds r1; SEED-QT-0016 from the portal order SEED-RQ-0086 (accepted as a quote: Moved to a quote 1); SEED-INQ-0009 needs info.' },
     { id: 'drafts-only', label: 'Drafts only: the customer writes two portal drafts, nothing else yet', model: tabCase({ kinds: { ...NONE, drafts: 2 }, quoteRows: [], incomingRows: [] }), note: 'Each list says the customer has none (one quiet line each); the drafts list stays.' },
     { id: 'nothing', label: 'Nothing at all: ONE card with New request / New quote for the customer', model: tabCase({ kinds: NONE, quoteRows: [], incomingRows: [] }), note: 'The New buttons move into the card (never twice): the band\'s head has none.' },
     { id: 'all-closed', label: 'Everything closed: each list says so, the closed groups as doors', model: tabCase({ kinds: CLOSED_ONLY, quoteRows: [], incomingRows: [] }), note: 'Won 1 · Moved to a quote 2 · Lost 3 — each a door that opens exactly those rows.' },
     { id: 'counts-failed', label: 'The counts could not be read: the band says so, the lists still draw', model: { ...busy, counts: null, failed: true } },
     // ---- opened from a door
-    { id: 'door-to-answer', label: 'Opened from the door To answer (the Work line, the shell badge): the requests and portal orders that wait on us', model: doorCase('TO_ANSWER', [], [OVERDUE, PORTAL, ASSIGNED]), note: 'The chip: To answer · 3, why it holds them, ✕ and Show everything; Quotes folds to one line.' },
+    { id: 'door-to-answer', label: 'Opened from the door To answer (the Work line, the shell badge): the requests and portal orders that wait on us', model: doorCase('TO_ANSWER', [], [OVERDUE, PORTAL, ASSIGNED]), note: 'The tile To answer pressed; the status line: To answer · 3 — why it holds them · Show everything, ✕; Quotes folds to one line.' },
     { id: 'door-lost', label: 'Opened from the door Lost: the lost quotes and the ended requests', model: doorCase('LOST', LOST_QUOTES, ENDED_INCOMING) },
     { id: 'door-writing', label: 'Opened from the door Customer is writing: the drafts; both lists fold', model: doorCase('WRITING', [], []) },
     { id: 'door-order-waits', label: 'Opened from the door Order waits: the accepted quote whose order waits, with why', model: doorCase('ORDER_WAITS', [ORDER_WAITS_QUOTE], []) },
@@ -385,10 +385,10 @@ export const designScreen = defineDesignScreen<QuotesTabCase>({
     { id: 'sort', label: 'Sort ▾ (open it): Most urgent first, Newest first, Valid until soonest', model: busy, note: 'Open Sort ▾ on either list: its title says the rule.' },
     { id: 'customise', label: 'Customise the Quotes list\'s columns (this tab keeps its own layout)', model: { ...busy, tools: { ...TOOLS, design: { dialog: 'customise' } } } },
     // ---- widths
-    { id: 'phone', label: 'On a phone (open at Phone 375): ONE card per row, a door to its thread', model: tabCase({ room: 375 }), note: 'Open this case at Phone 375: the band\'s doors in a 2-column grid, the short New words, each row one card.' },
+    { id: 'phone', label: 'On a phone (open at Phone 375): ONE card per row, a door to its thread', model: tabCase({ room: 375 }), note: 'Open this case at Phone 375: the band\'s groups fold into ONE button (everything, its number) that opens them as a centred list; the short New words; each row one card.' },
     { id: 'room-779', label: 'The tab\'s room 779 px (a dock open beside it): the base row, the date folds under the chips', model: tabCase({ room: 779 }) },
     { id: 'room-863', label: 'The tab\'s room 863 px: + Valid until', model: tabCase({ room: 863 }) },
     { id: 'room-1067', label: 'The tab\'s room 1067 px: + Updated, Pieces', model: tabCase({ room: 1067 }) },
-    { id: 'dark', label: 'Dark (open with the dark theme): the band\'s amber doors, the chips, the closed doors', model: busy, note: 'Open this case with the dark theme.' },
+    { id: 'dark', label: 'Dark (open with the dark theme): the band\'s tiles and their warning dots, the chips, the closed chips', model: busy, note: 'Open this case with the dark theme.' },
   ],
 })
