@@ -43,7 +43,10 @@ export const datesFold = (tier: RoomTier): boolean => !reaches(tier, 'M')
  * A column the room shows is returned as it is.
  */
 export function byRoom<T>(column: ColDef<T>, shown: boolean, toolLabel: string | null = null): ColDef<T> {
-  if (shown) return column
+  // cq fx2 W-02: a shown column says so (`hide: false`) — without it the grid kept the hidden state it had when the room grew live
+  // (the dock closed: Valid until, Updated, Pieces stayed away) and Customise counted columns it did not draw. The layout still hides
+  // a column Customise hid (applyLayout, after this).
+  if (shown) return { ...column, hide: false }
   const context = (column.context as Record<string, unknown> | undefined) ?? {}
   return { ...column, hide: true, context: { ...context, optIn: true, ...(toolLabel ? { toolLabel } : {}) } }
 }
