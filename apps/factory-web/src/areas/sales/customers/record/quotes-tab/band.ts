@@ -215,6 +215,36 @@ export function sectionCountOf(kind: KindCounts | null, section: 'quotes' | 'inc
   return { key: section === 'quotes' ? 'sec.countNotClosed' : 'sec.countOpen', params: { open: kind.open, closed: kind.closed } }
 }
 
+// ---- cq T (the gallery): what the tab's parts read — the container's state, or a design case's (view/QuotesTabParts.tsx) ----
+
+/** The tab as its parts read it: the counts, the door and its terms, the reader's rights, the tab's room, each door's address. */
+export interface TabFacts {
+  readonly counts: BeforeOrderCountsAnswer | null
+  /** The counts could not be read (the band says so; the lists still draw). */
+  readonly failed: boolean
+  readonly door: Door | null
+  readonly terms: DoorTerms
+  readonly rights: TabRights
+  /** The tab's own room in px (null until measured). */
+  readonly room: number | null
+  /** Each door's address (the open door's: everything again). */
+  readonly hrefs: Readonly<Record<Door, string>>
+  /** The address without a door (✕, "Show everything"). */
+  readonly everything: string
+  /** The page's company prefix (`/w/<code>`). */
+  readonly prefix: string
+}
+
+/** A section's state on the tab: its kind's counts under the door (folded when the door holds none of its kind). */
+export function sectionStateIn(tab: Pick<TabFacts, 'counts' | 'door' | 'terms'>, section: 'quotes' | 'incoming'): SectionState {
+  return section === 'quotes' ? sectionStateOf(quoteCountsOf(tab.counts), tab.terms.quotes === null, tab.door) : sectionStateOf(incomingCountsOf(tab.counts), tab.terms.incoming === null, tab.door)
+}
+
+/** A customer with nothing before an order (and no door open): ONE card stands in for the sections (10-design §3.6). */
+export const emptyTab = (band: Band | null, door: Door | null): boolean => band !== null && band.total === 0 && door === null
+
+// ---- end cq T
+
 /** The live re-read: the events that move a count (a draft's change too: it is counted in WRITING). */
 export const COUNTS_EVENTS = /^(quote\.|inquiry\.|portal_order_request\.)/
 
