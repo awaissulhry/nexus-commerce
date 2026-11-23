@@ -296,6 +296,37 @@
   white-space: nowrap;
 }
 
+/* cq fx5 W-12: Sales › Incoming at 1440 — the subject (with its kind mark and facts) and the customer wrap to at most two lines instead of
+   cutting ("Seed Customer One S…"); the row grows; the whole subject stays its link's own words. */
+.fw-inq-wraps .fw-inq-subject {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  padding-block: var(--nds-space-4);
+  line-height: 1.3;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.fw-inq-wraps .fw-sheet-door,
+.fw-inq-wraps .fw-sheet-held {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  padding-block: var(--nds-space-4);
+  line-height: 1.3;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.fw-inq-wraps .fw-inq-who {
+  flex-wrap: wrap;
+  padding-block: var(--nds-space-4);
+  line-height: 1.3;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 /* F-SA-212: the Picture cell (with its file-kinds fallback) is the ONE picture part (lib/record-picture/record-picture.css). */
 /* ── end B-TH-216 ── */
 
@@ -398,4 +429,23 @@
 .fw-inq-amber {
   color: var(--nds-warning-text);
   font-weight: 600;
+}
+
+/* cq fx5 W-09 (10-design §3.2): on a phone, Kind and How it came sit behind More ▾ (one tool line less); the trigger reads as the bar's
+   quiet small buttons, the two selects stack in the popover. */
+.fw-inq-moretrigger {
+  gap: var(--nds-space-4);
+  min-height: 28px;
+  padding: 0 var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text-strong);
+}
+.fw-inq-moretrigger:hover {
+  background: var(--nds-surface-sunken);
+}
+.fw-inq-moretools {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
 }

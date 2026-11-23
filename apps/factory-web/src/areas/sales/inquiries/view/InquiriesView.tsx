@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { FilePen, Inbox, MoreHorizontal, Plus, ShoppingCart, UserRound, X, XCircle } from 'lucide-react'
-import { EmptyState, Menu, MetricStrip, type MenuItemDef } from '@nexus/ui/components'
+import { ChevronDown, FilePen, Inbox, MoreHorizontal, Plus, ShoppingCart, UserRound, X, XCircle } from 'lucide-react'
+import { DetailPopover, EmptyState, Menu, MetricStrip, type MenuItemDef } from '@nexus/ui/components'
+import { useCardList } from '@nexus/ui/grid/card-list/index' // cq fx5 W-09: the phone (the list's cards) folds Kind and How it came
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, FilterChip, Input, Pill, Select, Tag } from '@nexus/ui/primitives'
 import { ListFrame } from '../../../../list-frame/ListFrame'
@@ -98,13 +99,13 @@ import { WhereChips, type WhereChipWords } from '../../_shared/where-cell/view/W
 // row's own windows in place (a request's RecordDialogs, a portal order's CatalogueDialogs) on a host whose dock is the pane
 import { incomingBarOf, type IncomingActKind, type IncomingBarRights } from '../bar'
 import type { BulkPreview } from '../model'
-import { ManyActDialog, ManyBar } from '../../_shared/many-acts/view/ManyActDialog'
+import { heldRowItem, ManyActDialog, ManyBar } from '../../_shared/many-acts/view/ManyActDialog'
 import { MessagesHeader, MORE_CELL } from '../../_shared/list-heads/ListHeads' // cq fx2 W-05: narrow headers whole
 import type { ManyActActions, ManyActModel } from '../../_shared/many-acts/use-many-act'
 import type { TaskBatchModel } from '../../_shared/many-acts/use-task-batch'
 import { TaskNewDialog } from '../../../../record-panels/tasks/view/TaskNewDialog'
 import { ReplyManyDialog } from '../../orders/list/view/ReplyManyDialog' // F-CQ-304
-import type { ReplyManyActions, ReplyManyModel } from '../../orders/list/reply-many' // F-CQ-304
+import { replyPortalHeld, type PortalState, type ReplyManyActions, type ReplyManyModel } from '../../orders/list/reply-many' // F-CQ-304; cq fx5 W3-2
 import type { BatchAnswer, BatchAssignee, TaskDraft } from '../../../../record-panels/tasks/model'
 import { RecordDialogs } from './pane/sections'
 import { CatalogueDialogs } from './pane/catalogue/CataloguePane'
@@ -203,6 +204,8 @@ export interface InquiriesModel {
   room?: number | null
   /** The customer's one name on this host (the chips say it). */
   customerName?: string | null
+  /** cq fx5 W3-2: the customer reads no portal ('off'): Reply held before the click, in words. Absent: not known here. */
+  replyPortal?: PortalState | null
   /** The phone card's door to the row's thread (its words; with `active`). */
   cardDoor?: string | null
   // ---- end F-CQ-103 / F-CQ-104
@@ -341,6 +344,7 @@ const CARD_FIELDS = Object.freeze({
 
 function List({ model, actions, slots }: { model: InquiriesModel; actions?: InquiriesActions; slots?: ListSlots }) {
   const { t, say, locale, day, when } = useWords()
+  const phone = useCardList() // cq fx5 W-09
   const l = useT(LAST_MESSAGE_NS) // B-TH-230
   const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
   // F-SA-223: the one search rule of every list (300 ms after the last key, Enter at once, Esc clears, 100 at most, follows the address).
@@ -693,7 +697,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
                 ]
               : []),
             // F-CQ-304: Reply to <customer>… on this one request or portal order (threads.post; a prospect's row has no customer to reply to).
-            ...(m.barRights?.threads && data.kind !== 'CHANGE_REQUEST' && data.party ? [{ id: 'reply', label: t('row.reply', { customer: m.customerName ?? data.party.name }), onSelect: () => act()?.onReply?.([data]) }] : []),
+            ...(m.barRights?.threads && data.kind !== 'CHANGE_REQUEST' && data.party ? [heldRowItem('reply', t('row.reply', { customer: m.customerName ?? data.party.name }), replyPortalHeld(m.replyPortal, 'Inquiry', m.customerName ?? data.party.name) /* cq fx5 W3-2 */, () => act()?.onReply?.([data]))] : []),
             ...(m.barRights?.tasks && data.kind !== 'CHANGE_REQUEST' ? [{ id: 'addTask', label: t('row.addTask'), onSelect: () => act()?.onRowVerb?.(data, 'addTask') }] : []),
             { id: 'copy', label: t('row.copy'), onSelect: () => act()?.onCopy?.([data.number]) },
           ]}
@@ -759,11 +763,12 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
     // ---- end F-CQ-103 / F-CQ-104
     return [
       { colId: 'picture', headerName: t('col.picture'), minWidth: 76, maxWidth: 76 /* F-SA-212: one width */, sortable: false, suppressHeaderMenuButton: true, valueGetter: (params) => params.data?.request?.picture?.styleCode ?? '', cellRenderer: PictureRender },
-      { colId: 'customer', headerName: t('col.customer'), minWidth: 150, flex: 1, valueGetter: (params) => (params.data ? customerName(params.data) : ''), cellRenderer: CustomerCell },
-      { colId: 'subject', headerName: t('col.subject'), minWidth: 220, flex: 1.8, valueGetter: (params) => params.data?.summary ?? '', cellRenderer: SubjectCell },
+      // cq fx5 W-12: Sales › Incoming at 1440 — the customer and the subject wrap to at most two lines (the row grows) instead of cutting.
+      { colId: 'customer', headerName: t('col.customer'), minWidth: 150, flex: 1, valueGetter: (params) => (params.data ? customerName(params.data) : ''), cellRenderer: CustomerCell, cellClass: 'fw-inq-wraps', autoHeight: true },
+      { colId: 'subject', headerName: t('col.subject'), minWidth: 220, flex: 1.8, valueGetter: (params) => params.data?.summary ?? '', cellRenderer: SubjectCell, cellClass: 'fw-inq-wraps', autoHeight: true },
       { colId: 'files', headerName: t('col.files'), minWidth: 110, flex: 0.5, valueGetter: (params) => (params.data?.request ? joined(filesPhrases(params.data.request) ?? [], say) || '—' : '—'), cellRenderer: FilesCell },
       { colId: 'pieces', headerName: t('col.quantity'), minWidth: 100, flex: 0.5, hide: !wide, valueGetter: (params) => params.data?.pieces ?? null, cellRenderer: QuantityCell },
-      { colId: 'wantedDate', headerName: t('col.wanted'), minWidth: 100, flex: 0.5, valueGetter: (params) => (params.data ? day(params.data.wantedDate) : '') },
+      { colId: 'wantedDate', headerName: t('col.wanted'), minWidth: 112 /* cq fx5 W-12: a whole date (100 cut one) */, flex: 0.5, valueGetter: (params) => (params.data ? day(params.data.wantedDate) : '') },
       { colId: 'received', headerName: t('col.received'), minWidth: 150, flex: 0.6, hide: !wide, valueGetter: (params) => (params.data ? when(params.data.receivedAt) : '') },
       { colId: 'owner', headerName: t('col.owner'), minWidth: 120, flex: 0.5, valueGetter: (params) => (params.data?.request ? (say(assigneePhrase(params.data.request)) ?? '') : '—') },
       // F-CQ-103: the ONE chips cell keeps the column's id (`status`: its file column and the saved layouts stay); the State column with
@@ -774,11 +779,11 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
       byRoom({ colId: 'stateFunnel', headerName: t('col.state'), minWidth: 170, flex: 0.8, valueGetter: (params) => params.data?.stateWords[locale] ?? '', cellRenderer: StateCell }, false),
       // B-TH-230 (list-F01): New messages — the reader's own, only for a reader of threads; a door to the row at the first new one.
       ...(m.unread
-        ? [{ colId: 'newMessages', headerName: l('column'), headerTooltip: l('columnHint'), minWidth: 116, flex: 0.5, valueGetter: (params: { data?: IncomingRow }) => unreadValue(unreadOf(params.data)), cellRenderer: ({ data }: ICellRendererParams<IncomingRow>) => (data ? <LastMessageCell unread={unreadOf(data)} href={openHref(data)} record={data.number} /> : null) } satisfies ColDef<IncomingRow>]
+        ? [{ colId: 'newMessages', headerName: l('column'), headerTooltip: l('columnHint'), headerComponent: MessagesHeader /* cq fx5 W-12: the icon header ("New mes…" was cut) */, minWidth: 52, maxWidth: 64, valueGetter: (params: { data?: IncomingRow }) => unreadValue(unreadOf(params.data)), cellRenderer: ({ data }: ICellRendererParams<IncomingRow>) => (data ? <LastMessageCell unread={unreadOf(data)} href={openHref(data)} record={data.number} /> : null) } satisfies ColDef<IncomingRow>]
         : []),
       { colId: 'source', headerName: t('col.source'), minWidth: 110, flex: 0.5, hide: !wide, valueGetter: (params) => (params.data ? t(`source.${params.data.request?.source ?? 'PORTAL'}`) : ''), cellRenderer: SourceCell },
       { colId: 'number', headerName: t('col.number'), minWidth: 150, flex: 0.6, hide: !wide, valueGetter: (params) => params.data?.number ?? '', cellRenderer: NumberCell },
-      ...(manyCompanies ? [{ colId: 'company', headerName: t('col.company'), minWidth: 100, flex: 0.4, valueGetter: (params: { data?: IncomingRow }) => (params.data ? (companyName(params.data.companyId) ?? '') : ''), cellRenderer: CompanyCell } satisfies ColDef<IncomingRow>] : []),
+      ...(manyCompanies ? [{ colId: 'company', headerName: t('col.company'), minWidth: 120 /* cq fx5 W-12: "Company" whole ("Comp…" at 100) */, flex: 0.4, valueGetter: (params: { data?: IncomingRow }) => (params.data ? (companyName(params.data.companyId) ?? '') : ''), cellRenderer: CompanyCell } satisfies ColDef<IncomingRow>] : []),
       ...(m.can.price
         ? [
             {
@@ -907,6 +912,35 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
   const fromCustomer = model.address.party ? ((model.customers ?? []).find((party) => party.id === model.address.party) ?? null) : null
   const exportWords = exportPhrases(model.address.tile, model.can)
 
+  // ---- cq fx5 W-09: Kind and How it came, drawn inline or (on a phone) in More ▾.
+  const kindTool = (
+    <Select size="sm" aria-label={t('list.kindLabel')} value={model.address.kind ?? ''} onChange={(event) => actions?.onAddress?.({ kind: (event.target.value || null) as IncomingKind | null })}>
+      <option value="">{t('list.allKinds')}</option>
+      {(model.kinds ?? INCOMING_KINDS).map((kind) => (
+        <option key={kind} value={kind}>
+          {t(`kind.plural.${kind}`)}
+        </option>
+      ))}
+      {/* F-CQ-103 (L7): the customer's tab leaves change requests out — said in words, never silently. cq fx2 W-09: a short option
+          (a native select is as wide as its longest option: the whole sentence took a toolbar line), the why in its title. */}
+      {model.kinds && !model.kinds.includes('CHANGE_REQUEST') && (
+        <option value="" disabled title={t('list.kindNotHereHint')}>
+          {t('list.kindNotHere')}
+        </option>
+      )}
+    </Select>
+  )
+  const sourceTool = (
+    <Select size="sm" aria-label={t('list.sourceLabel')} value={model.address.source ?? ''} onChange={(event) => actions?.onAddress?.({ source: (event.target.value || null) as InquirySource | null })}>
+      <option value="">{t('list.allSources')}</option>
+      {INQUIRY_SOURCES.map((source) => (
+        <option key={source} value={source}>
+          {t(`source.${source}`)}
+        </option>
+      ))}
+    </Select>
+  )
+  // ---- end cq fx5 W-09
   const tools = (
     <>
       <Select size="sm" aria-label={t('list.rows')} value={model.address.tile} onChange={(event) => actions?.onAddress?.({ tile: event.target.value as ListTile })}>
@@ -927,31 +961,20 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
           ))}
         </Select>
       )}
-      {!repliesView && (
-        <Select size="sm" aria-label={t('list.kindLabel')} value={model.address.kind ?? ''} onChange={(event) => actions?.onAddress?.({ kind: (event.target.value || null) as IncomingKind | null })}>
-          <option value="">{t('list.allKinds')}</option>
-          {(model.kinds ?? INCOMING_KINDS).map((kind) => (
-            <option key={kind} value={kind}>
-              {t(`kind.plural.${kind}`)}
-            </option>
-          ))}
-          {/* F-CQ-103 (L7): the customer's tab leaves change requests out — said in words, never silently. cq fx2 W-09: a short option
-              (a native select is as wide as its longest option: the whole sentence took a toolbar line), the why in its title. */}
-          {model.kinds && !model.kinds.includes('CHANGE_REQUEST') && (
-            <option value="" disabled title={t('list.kindNotHereHint')}>
-              {t('list.kindNotHere')}
-            </option>
-          )}
-        </Select>
-      )}
-      {!repliesView && <Select size="sm" aria-label={t('list.sourceLabel')} value={model.address.source ?? ''} onChange={(event) => actions?.onAddress?.({ source: (event.target.value || null) as InquirySource | null })}>
-        <option value="">{t('list.allSources')}</option>
-        {INQUIRY_SOURCES.map((source) => (
-          <option key={source} value={source}>
-            {t(`source.${source}`)}
-          </option>
-        ))}
-      </Select>}
+      {/* cq fx5 W-09 (10-design §3.2): on a phone Kind and How it came fold into More ▾ (one tool line less); elsewhere inline. */}
+      {!repliesView && (phone ? (
+        <DetailPopover trigger={<>{t('list.more')} <ChevronDown size={13} aria-hidden /></>} triggerLabel={t('list.moreTools')} label={t('list.moreTools')} hoverDelay={0} triggerClassName="fw-inq-moretrigger">
+          <span className="fw-inq-moretools">
+            {kindTool}
+            {sourceTool}
+          </span>
+        </DetailPopover>
+      ) : (
+        <>
+          {kindTool}
+          {sourceTool}
+        </>
+      ))}
       {/* F-SA-224: "From" is the Sales lists' one customer filter (`?party=`), with the prospects (no customer yet) as a choice.
           F-SA-277: none for a customer the host locks. */}
       {!model.locked && <CustomerSwitcher
@@ -1087,7 +1110,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
               exportSelected: true,
               // F-CQ-201 (10-design §6.2): the bar — 3 + More ▾ with words, each act only with its right; a portal order ticked: one line.
               actions: model.barRights ? (
-                <ManyBar bar={incomingBarOf(model.barRights, (rows ?? []).filter((row) => selected.includes(row.key)), model.customerName ?? null)} onAct={(id) => actions?.onBarAct?.(id as IncomingActKind, (rows ?? []).filter((row) => selected.includes(row.key)))} />
+                <ManyBar bar={incomingBarOf(model.barRights, (rows ?? []).filter((row) => selected.includes(row.key)), model.customerName ?? null, model.replyPortal /* cq fx5 W3-2 */)} onAct={(id) => actions?.onBarAct?.(id as IncomingActKind, (rows ?? []).filter((row) => selected.includes(row.key)))} />
               ) : (
                 <>
                   {/* B-TH-233 (list-F11): Assign and Decline act on requests only; the other kinds of the selection are left out and said.

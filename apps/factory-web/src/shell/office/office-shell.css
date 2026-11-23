@@ -8,7 +8,10 @@
   display: flex;
   flex-direction: column;
   height: 100dvh;
-  overflow: hidden;
+  /* cq fx5 W3-1 (walk: on a 375 px phone a tap on Select or a card's box slid the whole page 13–29 px left, the left edge cut and a grey
+     strip at the right): `hidden` still makes a box that the browser scrolls when a tap brings something into view, and the top bar's
+     theme tip, laid out while unseen, reached 29 px past the screen (scrollWidth 404 in 375). `clip` cuts the same and never scrolls. */
+  overflow: clip;
   background: var(--nds-bg);
   color: var(--nds-text);
   font-size: var(--nds-font-size-base);

@@ -284,6 +284,12 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
   const shownKey = listTools.columns.filter((column) => !column.hide).map((column) => column.colId ?? (typeof column.field === 'string' ? column.field : '')).join('|')
   useEffect(() => shownRef.current?.(shownKey === '' ? [] : shownKey.split('|')), [shownKey])
   const apiRef = useRef<GridApi<T> | null>(null)
+  // ---- cq fx5 W-15: the row the keys stand on (its id and column, kept by the frame: a redraw of the rows clears the grid's own), and
+  // whether the list held the focus last (a focus that moved into the dock, a window or a field is never taken back).
+  const keysAt = useRef<{ readonly id: string; readonly colId: string | null } | null>(null)
+  const gridOwns = useRef(false)
+  const restoring = useRef(false)
+  // ---- end cq fx5 W-15
   const [ready, setReady] = useState(false)
   // ── B-TH-245 (threads plan TH-4, SHEET-G09): the custom values edit in their cells beside the list's own fields (one bulk target) ──
   const customFields = customColumns.fields
@@ -404,7 +410,9 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
       if (own < 0 || !ownsKeys(own, holding < 0 ? null : holding)) return
       const api = apiRef.current
       const count = api && !api.isDestroyed() ? api.getDisplayedRowCount() : 0
-      const focused = api && !api.isDestroyed() ? (api.getFocusedCell()?.rowIndex ?? null) : null
+      // cq fx5 W-15: the grid's focused cell, else the row the keys stood on before a redraw cleared it (j walks on from the picked row).
+      const kept = keysAt.current && api && !api.isDestroyed() ? (api.getRowNode(keysAt.current.id)?.rowIndex ?? null) : null
+      const focused = api && !api.isDestroyed() ? (api.getFocusedCell()?.rowIndex ?? kept) : null
       if (event.key === '/') {
         const field = frameRef.current?.querySelector<HTMLInputElement>('.nds-toolbar input[type="search"], .nds-toolbar input')
         if (!field) return
@@ -438,16 +446,20 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
   )
   const pointerAt = useRef(0)
   const onCellFocused = useCallback(
-    (event: { rowIndex: number | null; rowPinned?: string | null }) => {
+    (event: { rowIndex: number | null; rowPinned?: string | null; column?: { getColId(): string } | string | null }) => {
       const wants = activeRef.current
       const api = apiRef.current
       if (!wants || !api || api.isDestroyed()) return
+      // cq fx5 W-15: every focused row is kept (a click's too), so the focus can come back to it after the dock re-draws the rows.
+      const at = event.rowIndex !== null && event.rowIndex >= 0 && !event.rowPinned ? api.getDisplayedRowAtIndex(event.rowIndex) : null
+      if (at?.data && !isGroupMarker(at.data)) keysAt.current = { id: rowId(at.data), colId: typeof event.column === 'string' ? event.column : (event.column?.getColId() ?? null) }
+      if (restoring.current) return // the frame put the focus back on the row the page already shows: nothing to report
       if (!focusReported({ rowIndex: event.rowIndex, pinned: event.rowPinned, sincePointer: Date.now() - pointerAt.current })) return
       const node = api.getDisplayedRowAtIndex(event.rowIndex as number)
       if (!node?.data || isGroupMarker(node.data)) return
       wants.onFocusRow(node.data)
     },
-    [],
+    [rowId],
   )
   // ── end F-SA-279 ──
 
@@ -504,17 +516,43 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
     const cellCol = clickedColumn(target, api?.getFocusedCell()?.column.getColId() ?? null)
     if (cellCol && inlineRef.current?.editableFor(event.data, cellCol)) return
     rowClickRef.current(event.data, click)
-    // cq fx2 W-15: the keys stay on the list after a mouse pick — a host that docks the row re-renders, and the focus fell to the page
-    // body (j / k then walked from the old row, ↓ did nothing). Only when nothing else took the focus (a window the click opened keeps it).
-    const index = event.rowIndex ?? null
-    if (index === null) return
-    window.setTimeout(() => {
-      const now = apiRef.current
-      if (!now || now.isDestroyed() || (document.activeElement && document.activeElement !== document.body)) return
-      const column = now.getFocusedCell()?.column ?? firstColumn(now)
-      if (column) now.setFocusedCell(index, column)
-    }, 0)
-  }, [firstColumn])
+  }, [])
+
+  // ---- cq fx5 W-15 (walk: after a pick the focus fell to the page body, the first j went to row 0, ↓ was dead): the dock follows a
+  // pick or the keys by re-drawing the rows (the marked row), which throws the focused cell away AFTER the click — fx2's one tick
+  // came too early. Now: once the docked row changes, the focus goes back to the row the keys stood on, a few times while the rows
+  // settle — only while the list held the focus last and the focus fell to the page body (a window, the dock or a field keeps it).
+  useEffect(() => {
+    if (!gridEl) return
+    const onFocusIn = (event: FocusEvent) => {
+      gridOwns.current = gridEl.contains(event.target as Node | null)
+    }
+    document.addEventListener('focusin', onFocusIn)
+    return () => document.removeEventListener('focusin', onFocusIn)
+  }, [gridEl])
+  useEffect(() => {
+    if (activeId === undefined) return
+    const back = () => {
+      const api = apiRef.current
+      const at = keysAt.current
+      if (!api || api.isDestroyed() || !at || !gridOwns.current) return
+      const now = document.activeElement
+      if (now && now !== document.body && now.isConnected) return
+      const index = api.getRowNode(at.id)?.rowIndex
+      if (index === null || index === undefined) return
+      const column = (at.colId ? api.getColumn(at.colId) : null) ?? firstColumn(api)
+      if (!column) return
+      restoring.current = true
+      try {
+        api.setFocusedCell(index, column)
+      } finally {
+        restoring.current = false
+      }
+    }
+    const timers = [0, 80, 240, 600].map((ms) => window.setTimeout(back, ms))
+    return () => timers.forEach((timer) => window.clearTimeout(timer))
+  }, [activeId, gridEl, firstColumn])
+  // ---- end cq fx5 W-15
 
   // B-TH-057: a person's header click (never the page's own `sort` from the address) reaches the page.
   const sortRef = useRef(onSortChanged)

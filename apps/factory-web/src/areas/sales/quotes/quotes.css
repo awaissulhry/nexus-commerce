@@ -442,6 +442,24 @@ p.fw-q-tablefoot {
   font-size: var(--nds-font-size-xs);
 }
 
+/* cq fx5 W-12: Sales › Quotes at 1440 — the number's "from SEED-INQ-…" and the customer's name wrap (the name at most two lines, whole in
+   its tooltip) instead of cutting; the row grows. */
+.fw-ql-wraps .fw-ql-cell {
+  padding-block: var(--nds-space-4);
+}
+.fw-ql-wraps .fw-ql-row-sub {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.fw-ql-wraps .fw-ql-ellipsis {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 720px) {
   .fw-q-rail {
     position: static;

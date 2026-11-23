@@ -208,9 +208,21 @@
   color: var(--nds-text-2);
 }
 
-/* cq fx2 W-15 (10-design §4.6): on a phone the bar of the ticked cards stays in view (sticky at the bottom of the list). */
-.fw-list-cards .nds-cardlist-bulk {
+/* cq fx5 W-15 (10-design §4.6: "the selection bar is sticky at the top of its list while it scrolls"; fx2 stuck it to the bottom, which a
+   bar at the top of its list never reaches). In a record page the cards scroll in the page under its sticky band, whose height the
+   record frame measures (--fw-rcf-top = the band + 16 px): the box line (N selected · Done) sits right under the band, the acts under it
+   (the box line is 28 px; its padding covers the 8 px gap, so no card shows between the two). */
+.fw-rcf .fw-list-cards > .nds-cardlist-bar:has(> .nds-cardlist-all),
+.fw-rcf .fw-list-cards > .nds-cardlist-bulk {
   position: sticky;
-  bottom: var(--nds-space-8);
   z-index: 2;
+}
+.fw-rcf .fw-list-cards > .nds-cardlist-bar:has(> .nds-cardlist-all) {
+  top: calc(var(--fw-rcf-top, 16px) - 16px);
+  margin-bottom: calc(-1 * var(--nds-space-8));
+  padding-bottom: var(--nds-space-8);
+  background: var(--nds-bg);
+}
+.fw-rcf .fw-list-cards > .nds-cardlist-bulk {
+  top: calc(var(--fw-rcf-top, 16px) - 16px + 28px + var(--nds-space-8));
 }

@@ -559,3 +559,18 @@ describe('cq fx3 W2-2: the Reply window on requests and quotes', () => {
   })
 })
 // ---- end cq fx3 W2-2
+
+// ---- cq fx5 W3-2: with no portal the window opens on its reason and the records — never "<customer> will read this on N…".
+describe('cq fx5 W3-2: the Reply window with no portal', () => {
+  const model = (more: Partial<ReplyManyModel> = {}): ReplyManyModel => ({ customer: { id: ALPHA, name: BRAND_ALPHA.tradeName }, targets: replyTargetsOf(alpha), batchId: 'c5c5c5c5-0000-4000-8000-0000000000c5', draft: startDraft(replyComposerContext(BRAND_ALPHA.tradeName)), notes: [], language: 'it', portal: 'on', sending: false, progress: null, results: {}, done: false, ...more })
+  it('no portal: the reason and the records to write about by e-mail; no "will read this on", no "each gets its own"', () => {
+    for (const recordType of ['Inquiry', 'Quote', undefined] as const) {
+      const off = textOf(render(createElement(ReplyManyBody, { model: model({ portal: 'off', ...(recordType ? { recordType } : {}) }) }), 'en'))
+      expect(off, String(recordType)).toContain('has no portal yet: write by e-mail in each')
+      expect(off, String(recordType)).not.toContain('will read this on')
+      for (const target of replyTargetsOf(alpha)) expect(off).toContain(target.number)
+    }
+    expect(textOf(render(createElement(ReplyManyBody, { model: model({ recordType: 'Inquiry' }) }), 'en'))).toContain('will read this on')
+  })
+})
+// ---- end cq fx5 W3-2

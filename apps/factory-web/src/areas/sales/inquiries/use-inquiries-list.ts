@@ -68,6 +68,7 @@ import { bulkRefusalsOf, type BulkPreview } from './model'
 import { openRequests, type IncomingActKind, type IncomingRecord } from './bar'
 import { replyRowOf, replyTypeOf } from './bar' // F-CQ-304
 import { useReplyMany } from '../orders/list/use-reply-many' // F-CQ-304: Reply to N given a record type
+import type { PortalState } from '../orders/list/reply-many' // cq fx5 W3-2
 import { useInquiry } from './use-inquiry'
 // B-TH-228: which receipts stay on the page when the queue moves on.
 import { receiptStays } from './model'
@@ -128,6 +129,8 @@ export interface InquiriesListHost {
   readonly liveParty?: string | null
   /** The customer's one name on this host (the chips say it, never a row's own: P0-B9). */
   readonly customerName?: string | null
+  /** cq fx5 W3-2: whether the customer reads a portal (the host read it): 'off' holds Reply before the click, in words. */
+  readonly replyPortal?: PortalState | null
   // ---- end F-CQ-103 / F-CQ-104
 }
 
@@ -657,6 +660,7 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
     ...(host.columns ? { columns: host.columns } : {}),
     room: host.room ?? null,
     customerName: host.customerName ?? null,
+    replyPortal: host.replyPortal ?? null, // cq fx5 W3-2
     // ---- end F-CQ-103 / F-CQ-104
   }
 

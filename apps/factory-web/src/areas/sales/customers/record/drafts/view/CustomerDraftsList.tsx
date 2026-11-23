@@ -112,7 +112,8 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
       const ready = data ? readyOf(data) : null
       if (!ready) return <span>—</span>
       return (
-        <span className="fw-cwd-inline">
+        // cq fx5 W-04: "5 of 6" and its tag wrap onto two lines when the column is at its least width ("1 proble…" was cut at every room).
+        <span className="fw-cwd-inline is-wrap">
           <span>{say(ready.words)}</span>
           {ready.problems > 0 && <Tag tone="warning">{t('customers.drafts.problems', { count: ready.problems })}</Tag>}
         </span>
@@ -151,7 +152,8 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
           return draft.lastEditedBy ? t('customers.drafts.changed', { time: moment(draft.lastEditedAt), name: draft.lastEditedBy }) : moment(draft.lastEditedAt)
         },
       },
-      { colId: 'wanted', headerName: t('customers.drafts.col.wanted'), minWidth: 110, flex: 0.6, hide: !roomy, valueGetter: (params) => (params.data?.requestedDate ? formatDate(`${params.data.requestedDate}T12:00:00Z`, { locale }) : '—') },
+      // cq fx5 W-04: 132 px — the header "Wanted by" whole beside its sort mark (110 cut it to "Wanted …" at 1185 and 1314).
+      { colId: 'wanted', headerName: t('customers.drafts.col.wanted'), minWidth: 132, flex: 0.6, hide: !roomy, valueGetter: (params) => (params.data?.requestedDate ? formatDate(`${params.data.requestedDate}T12:00:00Z`, { locale }) : '—') },
       {
         colId: 'messages',
         headerName: t('customers.drafts.col.messages'),
