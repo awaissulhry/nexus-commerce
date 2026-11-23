@@ -114,6 +114,11 @@ export interface OrdersListModel {
   switcher?: (SwitcherState<OrderCustomer> & { query: string; searching: boolean }) | null
   /** Design cases: each row's picture as an address (the page reads the small previews through `actions.readPictures`). */
   demoPictures?: Readonly<Record<string, string>>
+  /**
+   * F-CW-202 (lead settle S36; review A1-B4): false — this host draws no List ⇄ Board switch (the customer's Work tab), so the key
+   * `v` does nothing there and leaves its keys list. Absent: the switch is drawn (the sheet's own band, or the host's).
+   */
+  layoutSwitch?: boolean
   /** Design cases: the viewer open on a row, the switcher open, the widths that show the wide columns. */
   viewerOpen?: string | null
   switcherOpen?: boolean
@@ -348,6 +353,11 @@ export interface OrdersListActions {
   onAssignSupervisor?: (ids: readonly string[]) => void
   supervisor?: AssignSupervisorActions
   onNote?: (ids: readonly string[]) => void
+  /**
+   * F-CW-202 (10-design §4, §6 W2): Ask ▾ › "Ask production about N…" — production's ONE Note window opened as an ask ("Each record's
+   * supervisor" and "Needs an answer" ticked); the caller gives its title and its Send word, said in the page's language.
+   */
+  onAskProduction?: (ids: readonly string[], words: { readonly title: string; readonly send: string }) => void
   note?: NoteDialogActions
   // ---- end F-SA-280
   // ---- F-SA-282: Reply to <customer> on N… on the ticked orders, and the window's own actions

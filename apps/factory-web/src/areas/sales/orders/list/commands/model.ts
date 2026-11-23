@@ -210,18 +210,21 @@ export const MANY_READ_AT_ONCE = 5
 export const MANY_STATES: Readonly<Record<ManyCommand, readonly OrderStatus[]>> = Object.freeze({ ready: ['IN_PRODUCTION'], close: CLOSE_STATUSES, confirm: ['PENDING_APPROVAL'] })
 
 /**
- * The bar's bulk commands for this reader: Mark N ready (held in words without orders.manage), Close N with orders.manage or
- * orders.close, Confirm N for who decides yeses (approvals.decide). Never Cancel: it is one order at a time.
+ * The bar's bulk commands for this reader, each only with its OWN right: Mark N ready with orders.manage, Close N with orders.manage
+ * or orders.close, Confirm N for who decides yeses (approvals.decide). Never Cancel: it is one order at a time.
+ * F-CW-202 (lead settle S9): an act without its right is NOT drawn — Mark N ready was shown held to everyone before.
  */
-export function manyShown(can: OrderAbilities, decide: boolean): ManyCommand[] {
-  return MANY_COMMANDS.filter((command) => (command === 'close' ? can.manage || can.close : command === 'confirm' ? decide : true))
+export function manyShown(can: Pick<OrderAbilities, 'manage' | 'close'>, decide: boolean): ManyCommand[] {
+  return MANY_COMMANDS.filter((command) => (command === 'ready' ? can.manage : command === 'close' ? can.manage || can.close : decide))
 }
 
 /**
  * Why a bulk button waits before the click, or null: more than 50 ticked; the right (Mark ready: orders.manage; Close: manage or close);
  * none of the ticked orders is in the command's state ("None of the 2 is waiting for a yes.").
+ * F-CW-202: the bar no longer draws a command without its right (manyShown), so the right's words are only this rule's own guard —
+ * the window never opens without it.
  */
-export function manyHeld(command: ManyCommand, rows: readonly Pick<OrderRow, 'status'>[], can: OrderAbilities): Words | null {
+export function manyHeld(command: ManyCommand, rows: readonly Pick<OrderRow, 'status'>[], can: Pick<OrderAbilities, 'manage' | 'close'>): Words | null {
   if (rows.length === 0) return null
   if (rows.length > MANY_MAX) return sheet('bulk.tooMany', { max: MANY_MAX })
   if (command === 'ready' && !can.manage) return orders('held.noManage')

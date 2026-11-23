@@ -1,15 +1,15 @@
 'use client'
 
-import { Check, Flag } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { Banner, Field, type MenuItemDef } from '@nexus/ui/components'
-import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
+import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Pill, Radio, Select, Tag } from '@nexus/ui/primitives'
 import { CellSaveMark, Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import type { OrderRow } from '../../api'
 import { PRIORITY_LEVELS, type PriorityLevel } from '../../depth/api'
-import { confirmationHref, depthEditHeld, NAMESPACE, printHeld, PRIORITY_TONE, selectionHeld, selectionOutcome, urgentReasonProblem, URGENT_REASON_MAX } from '../../depth/model'
+import { confirmationHref, depthEditHeld, NAMESPACE, printHeld, PRIORITY_TONE, selectionOutcome, urgentReasonProblem, URGENT_REASON_MAX } from '../../depth/model'
 import type { ListDepthActions, ListDepthModel } from '../use-list-depth'
 import '../../depth/depth.css'
 
@@ -75,25 +75,8 @@ export function printVerb(row: OrderRow, prefix: string, d: Translate): MenuItem
   return held ? { id: 'print', label: d('list.print'), disabled: true, description: d(held.key) } : { id: 'print', label: d('list.print'), href: confirmationHref(prefix, row.id), target: '_blank' }
 }
 
-/** The selection's bulk verb: "Set priority for N" (held with its reason before the click). */
-// F-SA-280: `held` — the host's own reason first, in its words (the Orders sheet's one-customer check), before the selection's own.
-export function SetPriorityButton({ count, model, onClick, held }: { count: number; model: ListDepthModel; onClick: () => void; held?: string | null }) {
-  return (
-    <WithMessages namespaces={[NAMESPACE]}>
-      <SetButton count={count} model={model} onClick={onClick} hostHeld={held ?? null} />
-    </WithMessages>
-  )
-}
-
-function SetButton({ count, model, onClick, hostHeld }: { count: number; model: ListDepthModel; onClick: () => void; hostHeld: string | null }) {
-  const d = useT(NAMESPACE)
-  const held = selectionHeld(count, model.can)
-  return (
-    <Button size="sm" aria-label={d('list.setPriority', { count })} heldReason={hostHeld ?? (held ? d(held.key, held.params) : null)} onClick={onClick}>
-      <Flag size={13} aria-hidden /> <SelectionLabel>{d('list.setPriority', { count })}</SelectionLabel>
-    </Button>
-  )
-}
+// F-CW-202: "Set priority for N" is an act of the Orders sheet's bar now (list/sheet/bar.ts: drawn only with orders.manage, held by
+// the selection's own rule `selectionHeld`); its window is the dialog below, as before.
 
 /**
  * Set priority (design sales.orders grid "Set priority (W2b)" on a selection, and one row's URGENT): the level, URGENT's reason,

@@ -403,6 +403,7 @@ function WorkSheet({ party, prefix, work, can, picked, onPick, onFocus, onWindow
     // (Picture · Promised · Paid) return as soon as the row fits whole — from the `wide` room.
     wide: columnSet === 'money' ? workRoom.room !== 'base' : workRoom.room === 'widest',
     countOf: workViewCounts(work.reads.board)?.all ?? null, // F-CW-104: "2 of 14 orders" under a door, a view or a search
+    layoutSwitch: false, // F-CW-202 (S36): no List ⇄ Board switch on this tab — the key `v` is off and leaves the keys list
     searchLabel: t('customers.work.search'), // F-CW-104: the shorter words fit the toolbar beside the thread
     columnSet: price ? { value: columnSet } : null, // F-CP-105: the toggle, a price holder's only
     marks: work.marks,

@@ -469,5 +469,15 @@
     "widest": "{column} · dal foglio più largo"
   },
   "countOf_one": "{shown} di {count} ordine",
-  "countOf_other": "{shown} di {count} ordini"
+  "countOf_other": "{shown} di {count} ordini",
+  "bar": {
+    "more": "Altro",
+    "ask": "Chiedi",
+    "askProduction": "Chiedi alla produzione su {count}…",
+    "askProductionWho": "Una nota al supervisore di ogni ordine, con risposta richiesta. Solo ufficio: il cliente non la legge mai.",
+    "askProductionTitle_one": "Chiedi alla produzione su {count} ordine",
+    "askProductionTitle_other": "Chiedi alla produzione su {count} ordini",
+    "askSend": "Chiedi",
+    "none": "Il tuo ruolo legge gli ordini e non ne cambia nessuno: non c'è nessuna azione per le righe spuntate."
+  }
 }

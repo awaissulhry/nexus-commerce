@@ -1347,12 +1347,16 @@ describe('cp-walk: the Work design cases draw the live page\'s band and the shee
     for (const id of ['quotes-orders', 'work-new-order', 'work-new-order-no-price', 'work-bulk-bar']) expect(html(id), id).not.toContain(NEEDS_ORDERS)
     for (const id of ['cp-148-work-manager', 'work-bulk-bar-manager']) expect(html(id), id).toContain(NEEDS_ORDERS)
   })
-  it('three orders ticked: Reply to N, Mark 3 ready…, Close 3…, Confirm 3…; the production manager: only Mark 3 ready…, held in words', () => {
+  // F-CW-202 (10-design §4; S8, S9): at most three acts with their words, the rest behind More ▾ (a closed menu draws no item); an
+  // act the reader has no right for is not drawn — the production manager's bar no longer shows a greyed "Mark 3 ready…".
+  it('three orders ticked: Ask ▾ · Set priority for 3 · Reply to N with words, then More ▾; the production manager: Ask ▾ · Reply · Assign supervisor…', () => {
     const owner = html('work-bulk-bar')
-    for (const words of ['Reply to Moda Demo on 3…', 'Mark 3 ready…', 'Close 3…', 'Confirm 3…']) expect(owner, words).toContain(words)
+    for (const words of ['Ask', 'Set priority for 3', 'Reply to Moda Demo on 3…', 'More']) expect(owner, words).toContain(words)
+    // Moved under More ▾, not removed (their rule: sheet/bar.ts; their window as before).
+    for (const words of ['Mark 3 ready…', 'Close 3…', 'Confirm 3…']) expect(owner, words).not.toContain(words)
     const manager = html('work-bulk-bar-manager')
-    expect(manager).toContain('Mark 3 ready…')
-    for (const words of ['Reply to Moda Demo on 3…', 'Close 3…', 'Confirm 3…']) expect(manager, words).not.toContain(words)
+    for (const words of ['Ask', 'Reply to Moda Demo on 3…', 'Assign supervisor…', 'More']) expect(manager, words).toContain(words)
+    for (const words of ['Set priority for 3', 'Mark 3 ready…']) expect(manager, words).not.toContain(words)
   })
   it('the doors the live sheet has: Next steps and the bulk commands for everyone; Set customer\'s price… only with the price grain', async () => {
     const { workDoors } = await import('./fixtures')

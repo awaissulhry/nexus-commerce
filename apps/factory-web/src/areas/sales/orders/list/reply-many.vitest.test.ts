@@ -80,7 +80,10 @@ describe('F-SA-282: held before the click — one customer only, the right, at m
     const hook = readFileSync(new URL('./use-reply-many.ts', import.meta.url), 'utf8')
     expect(hook).toContain('if (rows.length === 0 || replyManyHeld(rows, locked, canPost)) return')
     const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
-    expect(view).toContain('heldReason={replyWords}')
+    // F-CW-202: Reply to N is an act of the bar's ONE rule (sheet/bar.ts): held by this same check with the right given — without
+    // threads.post it is not drawn at all (S9).
+    expect(readFileSync(new URL('./sheet/bar.ts', import.meta.url), 'utf8')).toContain('return sheet(replyManyHeld(rows, host.locked, true))')
+    expect(view).toContain('reply: () => actions?.onReplyMany?.(pickedIds),')
     expect(view).toContain('<ReplyManyDialog model={model.replyMany} actions={actions?.replyMany} />')
     const sheet = readFileSync(new URL('./use-orders-sheet.ts', import.meta.url), 'utf8')
     expect(sheet).toContain('onReplyMany: (ids) => replyMany.open(pickedRows(ids), host.locked?.party ?? null)')

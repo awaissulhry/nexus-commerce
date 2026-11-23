@@ -380,13 +380,19 @@ const conflictOn = (path: string) => new ApiError('conflict', 409, 'conflict', '
 
 describe('F-CP-109 — the bar: Mark {count} ready… · Close {count}… · Confirm {count}…, held in words before the click', () => {
   const rows = (...statuses: OrderStatus[]) => statuses.map((status) => ({ status }))
-  it('which buttons: Mark ready for everyone (held without orders.manage), Close with manage or close, Confirm for who decides yeses; never Cancel', () => {
+  // F-CW-202 (lead settle S9): each command only with its OWN right — an act without it is not drawn (Mark N ready was shown held to
+  // everyone before; the production manager's bar had it greyed with "needs the right").
+  it('which commands: Mark ready with orders.manage, Close with manage or close, Confirm for who decides yeses; never Cancel', () => {
     expect([...MANY_COMMANDS]).toEqual(['ready', 'close', 'confirm'])
     expect(manyShown(canOf('owner'), true)).toEqual(['ready', 'close', 'confirm'])
     expect(manyShown(canOf('owner'), false)).toEqual(['ready', 'close'])
-    expect(manyShown(canOf('finance'), true)).toEqual(['ready', 'close', 'confirm'])
-    // As Production manager (picture 20-pm): only Mark 2 ready…, held in the catalogue's words.
-    expect(manyShown(canOf('manager'), false)).toEqual(['ready'])
+    // Finance closes (orders.close) and decides yeses, and does not change orders: no Mark ready.
+    expect(manyShown(canOf('finance'), true)).toEqual(['close', 'confirm'])
+    // As Production manager (no orders.manage, no orders.close): none of the two; Confirm only when the person decides yeses.
+    expect(manyShown(canOf('manager'), false)).toEqual([])
+    expect(manyShown(canOf('manager'), true)).toEqual(['confirm'])
+    expect(manyShown({ manage: false, close: true }, false)).toEqual(['close'])
+    // The window's own guard keeps the right's words (it never opens without the right, whoever asks).
     expect(manyHeld('ready', rows('IN_PRODUCTION', 'IN_PRODUCTION'), canOf('manager'))).toEqual({ key: 'held.noManage' })
     expect(manyHeld('close', rows('SHIPPED'), canOf('manager'))).toEqual({ key: 'held.noClose' })
   })
@@ -417,12 +423,19 @@ describe('F-CP-109 — the bar: Mark {count} ready… · Close {count}… · Con
     expect(ita.say(manyLabel('ready', 1))).toBe('Segna 1 come pronto…')
     expect(ita.say(manyLabel('confirm', 2))).toBe('Conferma 2…')
   })
-  it('the bar draws them after Reply to N, the bulk window beside the other windows; the sheet gives them on every host (source)', () => {
+  // F-CW-202: the commands are acts of the bar's ONE rule (sheet/bar.ts) — after Reply · Assign supervisor · Add task · Note, as
+  // More ▾'s second group; each by manyShown's right and held by manyHeld's state or cap.
+  it('the bar\'s rule places them after Reply to N (More ▾\'s second group), the bulk window beside the other windows; the sheet gives them on every host (source)', async () => {
     const view = read('../view/OrdersListView.tsx')
-    expect(view).toContain('manyShown(model.can, !!model.commands?.decide).map((command) => {')
-    expect(view).toContain('heldReason={held ? wordsText(held, t, s, locale) : null}')
+    const bar = read('../sheet/bar.ts')
+    expect(bar).toContain('return manyShown(can, can.decide).includes(id) // the commands\' ONE rule')
+    expect(bar).toContain('const words = manyHeld(id, rows, can)')
+    const { BAR_ORDER } = await import('../sheet/bar')
+    const ids = BAR_ORDER.map((entry) => entry.id)
+    expect(ids.indexOf('reply')).toBeLessThan(ids.indexOf('ready'))
+    expect(ids.slice(ids.indexOf('ready'), ids.indexOf('ready') + 3)).toEqual(['ready', 'close', 'confirm'])
+    expect(view).toContain("ready: () => actions?.onCommandMany?.(pickedIds, 'ready'),")
     expect(view).toContain('{model.commands?.many && <OrderCommandManyDialog model={model.commands.many} actions={actions?.commandMany} />}')
-    expect(view.indexOf('actions?.onReplyMany && (')).toBeLessThan(view.indexOf('actions?.onCommandMany &&'))
     const sheet = read('../use-orders-sheet.ts')
     expect(sheet).toContain('onCommandMany: (ids, command) => commandMany.open(command, pickedRows(ids)),')
     expect(sheet).toContain("decide: session.permissions.includes('approvals.decide')")

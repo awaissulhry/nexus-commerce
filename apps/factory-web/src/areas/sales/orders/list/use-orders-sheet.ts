@@ -901,6 +901,8 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     onAssignSupervisor: (ids) => assign.open(supervisorTargetsOf(pickedRows(ids))),
     supervisor: assign.actions,
     onNote: (ids) => note.open(noteTargetsOf(pickedRows(ids)), 'selection'),
+    // F-CW-202: Ask production about N… — the same Note window opened as an ask (the supervisor asked, "Needs an answer" ticked).
+    onAskProduction: (ids, words) => note.open(noteTargetsOf(pickedRows(ids)), 'selection', undefined, { title: words.title, body: '', needsAnswer: true, send: words.send }),
     note: note.actions,
     onAddTask: (ids, from = 'row') => openTask(ids, from), // F-SA-281
     task: taskActions, // F-SA-281

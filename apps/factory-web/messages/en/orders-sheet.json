@@ -469,5 +469,15 @@
     "widest": "{column} · from the widest sheet"
   },
   "countOf_one": "{shown} of {count} order",
-  "countOf_other": "{shown} of {count} orders"
+  "countOf_other": "{shown} of {count} orders",
+  "bar": {
+    "more": "More",
+    "ask": "Ask",
+    "askProduction": "Ask production about {count}…",
+    "askProductionWho": "A note to each order's supervisor that needs an answer. Office only: the customer never reads it.",
+    "askProductionTitle_one": "Ask production about {count} order",
+    "askProductionTitle_other": "Ask production about {count} orders",
+    "askSend": "Ask",
+    "none": "Your role reads the orders and changes none: there is no act for the ticked rows."
+  }
 }

@@ -287,9 +287,13 @@ describe('F-SA-280: bulk on the Orders sheet\'s own bar', () => {
     expect(assignHeld({ manage: false }, { targets: [], leftOut: 0 })).toEqual({ key: 'held.noRight' })
     expect(openHeld(true, 101)).toMatchObject({ key: 'held.tooMany' })
     const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
-    expect(view).toContain('heldReason={assignWords}')
-    expect(view).toContain('heldReason={noteWords}')
-    expect(view).toContain('held={oneCustomerWords /* F-SA-280 */}')
+    // F-CW-202: the bar's ONE rule asks each act's own hold (sheet/bar.ts) — the one-customer check first, then the window's own;
+    // an act without its right is not drawn at all (it was held with "Your role does not …" before).
+    const bar = readFileSync(new URL('./sheet/bar.ts', import.meta.url), 'utf8')
+    expect(bar).toContain("return one ?? of('supervisor', assignHeld({ manage: true }, { targets: supervisorTargetsOf(rows), leftOut: 0 }))")
+    expect(bar).toContain("return one ?? of('notes', openHeld(true, rows.length))")
+    expect(bar).toContain("return one ?? of('depth', selectionHeld(rows.length, { manage: true }))")
+    expect(view).not.toMatch(/heldReason=\{(assignWords|noteWords|taskWords|replyWords)\}/)
     expect(view).toContain('<AssignSupervisorDialog model={model.assign} actions={actions?.supervisor} />')
     expect(view).toContain('<NoteDialog model={model.note} actions={actions?.note} />')
     // Export N stays the export job with the picked ids (never held by the customer check: a file of the list).
@@ -345,9 +349,12 @@ describe('F-SA-281: Add task to N', () => {
   })
   it('the sheet offers it on the bar (one customer, the tasks\' right) and on a row\'s ⋯ (one order: POST /tasks); one batch: POST /tasks/batch', () => {
     const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
-    expect(view).toContain("actions.onAddTask?.(picked.map((row) => row.id), 'selection')")
+    expect(view).toContain("task: () => actions?.onAddTask?.(pickedIds, 'selection'),") // F-CW-202: an act of the bar's rule
     expect(view).toContain("act()?.onAddTask?.([data.id], 'row')")
-    expect(view).toContain('heldReason={taskWords}')
+    // F-CW-202 (S9): without the tasks' right the act is not in the bar (it was held with the right's words); over the cap it is held.
+    const bar = readFileSync(new URL('./sheet/bar.ts', import.meta.url), 'utf8')
+    expect(bar).toContain("return one ?? (rows.length > BATCH_MAX ? { ns: 'sheet', key: 'bulk.tooMany', params: { max: BATCH_MAX } } : null)")
+    expect(view).toContain('task: model.bulkCan?.task === null,')
     const hook = readFileSync(new URL('./use-orders-sheet.ts', import.meta.url), 'utf8')
     expect(hook).toContain("readTaskPeople(many ? { type: 'Party', id: rows[0]!.partyId } : { type: 'SalesOrder', id: rows[0]!.id })")
     const api = readFileSync(new URL('../../../../record-panels/tasks/api.ts', import.meta.url), 'utf8')
