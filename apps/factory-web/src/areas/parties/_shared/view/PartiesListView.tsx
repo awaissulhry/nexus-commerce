@@ -182,7 +182,7 @@ function PartiesList({ model, actions, headActions, sideColumns, depth }: { mode
         </span>
       ) : null
     const ActionsCell = ({ data }: ICellRendererParams<PartyRow>) =>
-      data ? <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('row.menu', { name: partyName(data) }) }} items={rowItems(data)} /> : null
+      data ? <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ className: 'nds-btn sm icon', 'aria-label': t('row.menu', { name: partyName(data) }) }} items={rowItems(data)} /> : null
     // F-CL-101 (K12, settle T15): an act the reader has no right for is not drawn (each act reads its OWN right); held only by state.
     const rowItems = (row: PartyRow): MenuItemDef[] => {
       const href = recordHref(model.prefix, config, row.id)
@@ -210,7 +210,22 @@ function PartiesList({ model, actions, headActions, sideColumns, depth }: { mode
       ...size,
     })
     const name = sideName ?? column('name', t('list.col.name'), NameCell, { flex: 2.2, minWidth: 220 })
-    const actionsColumn = { ...column('actions', t('list.col.actions'), ActionsCell, { width: 92, minWidth: 92 }), suppressHeaderMenuButton: true }
+    // F-CL-102 (C1-B9, 10-design §3): the row's ⋯ is a narrow column without a visible header (its name in Customise and on hover),
+    // pinned right — so the phone card takes it as its actions, never as a labelled line, and the file never writes it.
+    const actionsColumn: ColDef<PartyRow> = {
+      colId: 'actions',
+      headerName: '',
+      headerTooltip: t('list.col.actions'),
+      cellRenderer: ActionsCell,
+      sortable: false,
+      width: 52,
+      minWidth: 52,
+      maxWidth: 52,
+      pinned: 'right',
+      suppressHeaderMenuButton: true,
+      suppressMovable: true,
+      context: { toolLabel: t('list.col.actions') },
+    }
     // F-CL-101 (settle T28): a column hidden at first is an opt-in column — Customise shows it again, a saved view keeps it.
     const hidden = new Set(sideHidden ?? [])
     const later = (columns: ColDef<PartyRow>[]): ColDef<PartyRow>[] =>

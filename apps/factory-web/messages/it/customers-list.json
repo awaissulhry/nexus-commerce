@@ -18,5 +18,19 @@
     },
     "clear": "Togli",
     "clearSearch": "Svuota la ricerca"
+  },
+  "col": {
+    "customer": "Cliente",
+    "messagesHint": "I tuoi nuovi messaggi nella conversazione del cliente. I messaggi dei suoi ordini sono contati nella sua scheda Lavori."
+  },
+  "office": {
+    "chip": "Servono dati d’ufficio",
+    "hint": "Servono dati d’ufficio: {what}",
+    "VIES": "il controllo VIES non è valido",
+    "SDI": "manca il codice SDI o la PEC",
+    "TAX": "mancano i dati fiscali: non ancora fatturabile"
+  },
+  "card": {
+    "thread": "Conversazione"
   }
 }

@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
-import { CUSTOMERS, inShell, listModel, rowOf, SUPPLIERS, useDesignList } from '../../parties/_shared/fixtures'
+import type { UnreadMap } from '../../../lib/last-message-cell/model'
+import { at, CUSTOMERS, inShell, listModel, NOW, rowOf, SUPPLIERS, useDesignList } from '../../parties/_shared/fixtures'
 import { blankNewParty, failed, loaded, loading, SIDES, type PartiesListModel } from '../../parties/_shared/model'
 import { demoCustomersImport, importButton } from './_demo/fixtures'
 import type { CustomersImportModel } from './import/view/CustomersImportView'
@@ -19,12 +20,21 @@ const rows = CUSTOMERS.map(rowOf)
 const list = (over: Partial<PartiesListModel> = {}) => listModel('customers', over)
 const pick = (...codes: string[]) => rows.filter((row) => codes.includes(row.code)).map((row) => row.id)
 
-/** A case: the list, (B-W2a-49) the band's Import with its wizard when open, and (B-W2a-81) the Overdue column's read. */
-type CustomersCase = PartiesListModel & { importer?: CustomersImportModel; overdue?: OverdueListModel }
+/** F-CL-102: the reader's own new messages per customer (made up): two customers with something new. */
+const UNREAD: UnreadMap = {
+  [CUSTOMERS.find((item) => item.code === 'MODA-DEMO')!.id]: { newCount: 2, lastAt: NOW },
+  [CUSTOMERS.find((item) => item.code === 'DE-BEISPIEL')!.id]: { newCount: 1, lastAt: at(28, 16, 5) },
+}
+
+/**
+ * A case: the list, (B-W2a-49) the band's Import with its wizard when open, (B-W2a-81) the Overdue column's read and (F-CL-102) the
+ * New messages read (null: a reader without threads.read — no column).
+ */
+type CustomersCase = PartiesListModel & { importer?: CustomersImportModel; overdue?: OverdueListModel; unread?: UnreadMap | null }
 
 function CustomersDesign({ model }: { model: CustomersCase }) {
-  const { importer, overdue, ...list } = model
-  return inShell('/sales/customers', createElement(CustomersView, { ...useDesignList(list), headActions: importButton(importer ?? { held: null, sheet: null }), overdue }))
+  const { importer, overdue, unread, ...list } = model
+  return inShell('/sales/customers', createElement(CustomersView, { ...useDesignList(list), headActions: importButton(importer ?? { held: null, sheet: null }), overdue, unread: unread === undefined ? UNREAD : unread }))
 }
 
 const importCase = (importer: CustomersImportModel): CustomersCase => ({ ...list(), importer })
