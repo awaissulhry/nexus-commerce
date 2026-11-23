@@ -27,6 +27,7 @@ export const CUSTOMER_URGENCIES = ['URGENT', 'REGULAR'] as const
 export type CustomerUrgency = (typeof CUSTOMER_URGENCIES)[number]
 // F-SA-213: the office's priority levels (as depth/api PRIORITY_LEVELS, which reads this file: kept here so no import goes round).
 export const ORDER_PRIORITY_LEVELS = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const
+export type OrderPriorityLevel = (typeof ORDER_PRIORITY_LEVELS)[number] // F-CW-105
 // F-SA-214: why a waiting order waits (factory-domain sales/orders-depth WAIT_WORDS' codes, the row's `waits`).
 export const WAIT_REASONS = ['REQUEST_PENDING', 'NO_REQUEST', 'CREDIT_HOLD', 'MEASUREMENTS'] as const
 export type WaitReason = (typeof WAIT_REASONS)[number]
@@ -42,6 +43,12 @@ import { SUPERVISOR_MARKS as MARKS } from '@nexus/factory-domain/production-bran
 /** The parts a reader without workorders.view over the order does not get (null, named in `withheld`): the API's PRODUCTION_WITHHELD. */
 export const PRODUCTION_WITHHELD = ['supervisorMark', 'openIssues'] as const
 // ---- end F-SA-275
+// ---- F-CW-101 (customer Work tab; the API's B-CW-001…003): the ONE phase of an order — the domain's rule, never re-written here ----
+export { ORDER_PHASES, type OrderPhase } from '@nexus/factory-domain/production-brand/stages'
+import { ORDER_PHASES as PHASES, type OrderPhase as Phase } from '@nexus/factory-domain/production-brand/stages'
+// ---- end F-CW-101
+// F-CW-102 (the API's B-CW-010): the customer's urgency as its chip says it (the Work orders column's own four states).
+import { CUSTOMER_URGENCY_STATES } from '@nexus/factory-domain/production-brand/urgency-state'
 
 // W2b-5 (B-W2b-281): PENDING_APPROVAL, an order waiting for a yes before it goes on (the domain's list, in its order).
 // W2b-6 (B-W2b-372): DELIVERED, every shipment that left was delivered.
@@ -128,7 +135,11 @@ export const orderRowSchema = z.object({
   /** B-SA-070b: the customer's own number of the order ("Your order 12"; absent or null: none given yet). */
   customerSeq: z.number().nullable().optional(),
   status,
-  deposit: z.object({ state: z.enum(DEPOSIT_STATES), dueDate: z.string().nullable() }),
+  // F-CW-102 (the API's B-CW-012): `extraOpenDue` — the due day of an EXTRA deposit still open on an order that needs none (the state
+  // stays NOT_NEEDED); a day, never an amount. Absent from an older answer.
+  deposit: z.object({ state: z.enum(DEPOSIT_STATES), dueDate: z.string().nullable(), extraOpenDue: z.string().nullable().optional() }),
+  /** F-CW-102 (the API's B-CW-011): a change waits for the customer's new yes; absent from an older answer. */
+  reaccept: z.boolean().optional(),
   lineCount: z.number(),
   units: z.number(),
   shippedUnits: z.number(),
@@ -164,7 +175,8 @@ export const orderRowSchema = z.object({
   /** Pieces it still owes (0 once shipped, closed or cancelled). */
   openUnits: z.number().optional(),
   /** Only when asked (`progress=true`): cut, sewn and finished of the pieces in work orders; null: none past draft yet. */
-  progress: z.object({ inWork: z.number(), cut: z.number().nullable(), sewn: z.number().nullable(), finished: z.number().nullable() }).nullable().optional(),
+  // F-CW-102 (the API's B-CW-015): `ordered` — the pieces ordered (fees left out), the order page's base: "Sewn 152 of 244".
+  progress: z.object({ inWork: z.number(), cut: z.number().nullable(), sewn: z.number().nullable(), finished: z.number().nullable(), ordered: z.number().optional() }).nullable().optional(),
   /** Received and still to pay (price grain: absent without it). */
   paid: z.number().optional(),
   balance: z.number().optional(),
@@ -177,6 +189,13 @@ export const orderRowSchema = z.object({
   /** The customer's own mark (read-only); null: none known. */
   customerUrgency: z.enum(CUSTOMER_URGENCIES).nullable().optional(),
   // ── end B-TH-244 ──
+  /**
+   * F-CW-102 (the API's B-CW-010): the same mark as its chip says it — URGENT with `urgentRank` (its place in the customer's OWN
+   * urgent list, 1 first: never a place in our plan), ASKED (an "Urgent – asked" waits: `requestId` is that request), REGULAR, SET_BACK
+   * (set to Regular by us); `locked`: we locked it at Regular. null: none counts (the order left production, or the customer's
+   * urgency switch is off). Absent from an older answer: the chip falls back on `customerUrgency`.
+   */
+  customerUrgencyState: z.object({ state: z.enum(CUSTOMER_URGENCY_STATES), urgentRank: z.number().nullable(), locked: z.boolean(), requestId: z.string().nullable() }).nullable().optional(),
   /** F-SA-213: the office's own priority (its level; the API's words are not drawn: the screen says its own). */
   priority: z.object({ level: z.enum(ORDER_PRIORITY_LEVELS), number: z.number(), urgentReason: z.string().nullable() }).optional(),
   /** F-SA-214 (the API's B-SA-012): why a PENDING_APPROVAL order waits; null for every other order (absent from an older answer). */
@@ -203,6 +222,11 @@ export const orderRowSchema = z.object({
       supervisorMark: z.enum(MARKS).nullable(),
       openRequests: z.number(),
       openIssues: z.number().nullable(),
+      // F-CW-102 (the API's B-CW-013, B-CW-014): the garments ready to ship now (released, on no shipment yet; 0 unless the order's
+      // stage is current), and when its oldest open production issue was raised (null: none, or withheld with `openIssues`).
+      // Both absent from an older answer.
+      readyNow: z.number().optional(),
+      openIssuesSince: z.string().nullable().optional(),
       withheld: z.array(z.enum(PRODUCTION_WITHHELD)),
       // F-MS-104 (the API's B-MS-006, R17): the stage it reads was set by hand and still stands (since when it was set; the order
       // page says who and why), the same for the list, the customer's Work tab and the export; null: the floor's; absent from an
@@ -270,6 +294,12 @@ export interface OrderQuery {
   // the board); a price holder's only (403 in words otherwise: the sheet never sends it for anyone else) ──
   priceMatch?: PriceMatch | null
   // ── end F-CP-141 ──
+  // F-CW-101 (the API's B-CW-002): the orders in one phase (`?phase=`) — the list, its totals and its file read it; the board counts
+  // every phase itself (`byPhase`), so it takes none (as it takes no status).
+  phase?: Phase | null
+  // F-CW-105 (lead settle S40; the API's B-CL-005): the orders at ONE of our priority levels (`?priority=`) — the list, its totals
+  // and its file read it (a wrong value is refused: the sheet only ever sends a known level). Never the board. Office only.
+  priority?: OrderPriorityLevel | null
   q?: string
   cursor?: string | null
   limit?: number
@@ -302,6 +332,8 @@ export function listOrders(api: ApiClient, query: OrderQuery, signal?: AbortSign
       waiting: query.waiting ?? undefined, // F-SA-276
       ids: query.ids?.length ? query.ids.join(',') : undefined, // F-SA-276
       priceMatch: query.priceMatch ?? undefined, // F-CP-141
+      phase: query.phase ?? undefined, // F-CW-101
+      priority: query.priority ?? undefined, // F-CW-105
       q: query.q?.trim() || undefined,
       cursor: query.cursor ?? undefined,
       limit: query.limit ?? 50,
@@ -313,6 +345,10 @@ export function listOrders(api: ApiClient, query: OrderQuery, signal?: AbortSign
 
 export const boardSchema = z.object({
   byStatus: z.array(z.object({ status, count: z.number() })),
+  // F-CW-101 (the API's B-CW-003): the seven phases in order, each with its count (0 as 0: they add up to byStatus), and the two exact
+  // whys inside "Not sent to the factory". Optional: an older answer has neither (the band then groups by state: work-band.ts).
+  byPhase: z.array(z.object({ phase: z.enum(PHASES), count: z.number() })).optional(),
+  notSent: z.object({ waitsForYes: z.number(), waitsForDeposit: z.number() }).optional(),
   lanes: z.array(status),
   tiles: z.array(z.object({ key: z.enum(TILE_KEYS), count: z.number(), filter: z.record(z.string(), z.string()) })),
   asOf: instant,
@@ -380,6 +416,8 @@ export function getOrderSummary(api: ApiClient, query: OrderQuery, group: 'party
       profile: query.profile ?? undefined, // F-SA-222
       waiting: query.waiting ?? undefined, // F-SA-276: the totals keep the same rows
       priceMatch: query.priceMatch ?? undefined, // F-CP-141: the totals keep the same rows
+      phase: query.phase ?? undefined, // F-CW-101: the totals keep the same rows
+      priority: query.priority ?? undefined, // F-CW-105: the totals keep the same rows
       q: query.q?.trim() || undefined,
       group: group ?? undefined,
     },

@@ -226,7 +226,48 @@
           "due": "Due"
         }
       },
-      "emptyAll": "{customer} has no order yet."
+      "emptyAll": "{customer} has no order yet.",
+      "band": {
+        "all": "All orders of {customer}",
+        "allCount": "All orders of {customer}:",
+        "pipeline": "Orders by where they are",
+        "groupTip": "Show the orders: {group}",
+        "groupOnTip": "Showing: {group}. Press again to show all orders.",
+        "why": {
+          "yes_one": "{count} waits for a yes",
+          "yes_other": "{count} wait for a yes",
+          "deposit_one": "{count} waits for the deposit",
+          "deposit_other": "{count} wait for the deposit"
+        },
+        "before": {
+          "label": "Before an order:",
+          "drafts_one": "{count} draft",
+          "drafts_other": "{count} drafts",
+          "toAnswer": "{count} to answer",
+          "openQuotes_one": "{count} open quote",
+          "openQuotes_other": "{count} open quotes",
+          "orderWaits_one": "{count} accepted, order waits",
+          "orderWaits_other": "{count} accepted, order waits"
+        },
+        "info": "About these numbers",
+        "sum": "Every order is in exactly one group: the seven add up to all orders.",
+        "beforeNote": "Drafts, requests and quotes come before an order: they are never added into these numbers."
+      },
+      "none": {
+        "NOT_SENT": "No order of {customer} waits to be sent to the factory now.",
+        "NOT_STARTED": "No order of {customer} waits for production to start now.",
+        "IN_PRODUCTION": "No order of {customer} is in production now.",
+        "READY": "No order of {customer} is ready to ship now.",
+        "SHIPPED": "No order of {customer} is shipped now.",
+        "DONE": "No order of {customer} is done yet.",
+        "CANCELLED": "No order of {customer} is cancelled.",
+        "waitingUs": "No order of {customer} waits on us now.",
+        "late": "No order of {customer} is late now."
+      },
+      "emptyDrafts_one": "{count} draft is being written in the portal — never counted as an order.",
+      "emptyDrafts_other": "{count} drafts are being written in the portal — never counted as orders.",
+      "showDrafts": "Show the drafts",
+      "search": "Search number, PO or style"
     },
     "quotesTab": {
       "quotes": "Quotes",
