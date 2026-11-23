@@ -96,6 +96,13 @@ export const PORTAL_GROUP_STATUSES: Readonly<Record<PortalGroup, readonly Portal
   LOST: ['REFUSED', 'WITHDRAWN'],
 })
 
+/**
+ * B-CQ-051 (threads: a closed record waits on nobody on the customer side): a quote in a final state (its closed groups: accepted,
+ * declined, expired, cancelled) and a decided portal order (accepted, refused, withdrawn).
+ */
+export const QUOTE_FINAL_STATUSES: readonly QuoteStatus[] = Object.freeze([...QUOTE_GROUP_STATUSES.WON, ...QUOTE_GROUP_STATUSES.LOST])
+export const PORTAL_DECIDED_STATUSES: readonly PortalOrderStatus[] = Object.freeze([...PORTAL_GROUP_STATUSES.WON, ...PORTAL_GROUP_STATUSES.LOST])
+
 export function groupOfQuote(status: QuoteStatus, orderMade: boolean): QuoteGroup {
   switch (status) {
     case 'DRAFT':
