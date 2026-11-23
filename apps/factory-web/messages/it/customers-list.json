@@ -51,7 +51,8 @@
     },
     "task_one": "Aggiungi attività a {count} cliente…",
     "task_other": "Aggiungi attività a {count} clienti…",
-    "supervisor": "Imposta supervisore di produzione per {count}…",
+    "supervisor_one": "Imposta supervisore di produzione per {count}…",
+    "supervisor_other": "Imposta supervisore di produzione per {count}…",
     "tooMany": "Al massimo {max} clienti alla volta: selezionane meno."
   },
   "p2": {
@@ -111,7 +112,8 @@
     "listHint": "L’elenco è del primo cliente; il server giudica ognuno degli altri.",
     "follows": "I suoi ordini senza un supervisore proprio seguono questo.",
     "notTold": "Al cliente non viene detto chi è.",
-    "notices": "{name} riceverà {count} avvisi (uno per cliente). Si applica un cliente alla volta; chiudendo la finestra si ferma prima del successivo.",
+    "notices_one": "{name} riceverà {count} avviso (uno per cliente). Si applica un cliente alla volta; chiudendo la finestra si ferma prima del successivo.",
+    "notices_other": "{name} riceverà {count} avvisi (uno per cliente). Si applica un cliente alla volta; chiudendo la finestra si ferma prima del successivo.",
     "already": "Già {name}.",
     "notReached": "Il tuo ruolo non raggiunge le sue impostazioni del portale: il supervisore lo imposta chi le raggiunge.",
     "readFailed": "Non è stato possibile leggere le sue impostazioni: esegui di nuovo.",
@@ -138,8 +140,16 @@
     "orders_one": "· {count} ordine",
     "orders_other": "· {count} ordini",
     "hint": {
-      "needs": "{count} clienti hanno qualcosa che tocca a noi: {req} richieste a cui rispondere · {rep} risposte che toccano a noi · {late} ordini in ritardo.",
-      "group": "{count} clienti hanno almeno un ordine «{group}» · {orders}.",
+      "needs_one": "{count} cliente ha qualcosa che tocca a noi: {what}.",
+      "needs_other": "{count} clienti hanno qualcosa che tocca a noi: {what}.",
+      "req_one": "{count} richiesta a cui rispondere",
+      "req_other": "{count} richieste a cui rispondere",
+      "rep_one": "{count} risposta che tocca a noi",
+      "rep_other": "{count} risposte che toccano a noi",
+      "late_one": "{count} ordine in ritardo",
+      "late_other": "{count} ordini in ritardo",
+      "group_one": "{count} cliente ha almeno un ordine «{group}» · {orders}.",
+      "group_other": "{count} clienti hanno almeno un ordine «{group}» · {orders}.",
       "press": "Premi: mostra questi clienti. Di nuovo: mostra tutti.",
       "partial": "Alcune risposte in attesa sono oltre ciò che una lettura conta: le risposte possono essere di più."
     },

@@ -214,6 +214,9 @@ import type { CustomerWork } from './api'
 import { workDoor } from './doors'
 import { bandGroupsOf, foldOf, groupWordOf, needsChipsOf, nextPromiseOf, workChipsOf } from './model'
 import { factsState } from './view/cells'
+import { bandHintOf } from './view/CustomersBand' // F-CL-301
+import { createTranslator } from '../../../../lib/i18n/messages' // F-CL-301
+import type { PartyWorkBand } from '../../../parties/_shared/api' // F-CL-301
 
 const WORK: CustomerWork = {
   partyId: 'p1',
@@ -296,6 +299,27 @@ describe('F-CL-202: the chips — strongest first, zero no chip, the Work tab’
     expect(foldOf([100, 100, 100, 100, 100], 250, 60)).toBe(3)
     expect(foldOf([120, 120, 120], 250, 40, 1)).toBe(1)
     expect(foldOf([], 250, 40)).toBe(0)
+  })
+})
+
+describe('F-CL-301 (walk W-10): the band hints say one and many in each language', () => {
+  const band = (customers: number, n: number): PartyWorkBand => ({ groups: [{ group: 'NEEDS_US', customers, orders: null }, { group: 'NOT_STARTED', customers, orders: n }], needsUs: { requests: n, replies: n, late: n, repliesComplete: true }, notSent: { waitsForYes: 0, waitsForDeposit: 0 }, limited: false })
+  const wordsIn = (locale: (typeof LOCALES)[number]) => {
+    const of = (ns: string) => createTranslator(locale, CATALOGUE[locale][ns] ?? {})
+    return { c: of('customers-list'), ord: of('orders'), sheet: of('orders-sheet'), p: of('parties') }
+  }
+  it('one: "1 customer has…", "1 reply waiting on us", "1 late order"; many: the plural; no {placeholder} left', () => {
+    const en = wordsIn('en')
+    const one = bandHintOf('NEEDS_US', band(1, 1), en)
+    expect(one).toContain('1 customer has something waiting on us')
+    expect(one).toContain('1 request to answer · 1 reply waiting on us · 1 late order')
+    const many = bandHintOf('NEEDS_US', band(3, 2), en)
+    expect(many).toContain('3 customers have something waiting on us')
+    expect(many).toContain('2 requests to answer · 2 replies waiting on us · 2 late orders')
+    expect(bandHintOf('NOT_STARTED', band(1, 1), en)).toContain('1 customer has at least one order')
+    expect(bandHintOf('NOT_STARTED', band(4, 1), en)).toContain('4 customers have at least one order')
+    for (const locale of LOCALES) for (const hint of [bandHintOf('NEEDS_US', band(1, 1), wordsIn(locale)), bandHintOf('NOT_STARTED', band(2, 5), wordsIn(locale))]) expect(hint, locale).not.toMatch(/[{}]/)
+    expect(bandHintOf('NEEDS_US', band(1, 1), wordsIn('it'))).toContain('1 cliente ha qualcosa che tocca a noi')
   })
 })
 
