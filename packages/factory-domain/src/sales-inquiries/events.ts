@@ -37,7 +37,9 @@ export const events = [
     type: 'inquiry.changed',
     context: 'sales-inquiries',
     description: 'An inquiry changed while open: what is asked, the customer it is from (a prospect matched), who answers it, or whether it waits for the customer.',
-    payload: z.strictObject({ inquiryId: z.uuid(), number: z.string(), status: z.enum(INQUIRY_STATUSES), previousStatus: z.enum(INQUIRY_STATUSES), change: z.enum(INQUIRY_CHANGES), partyId: z.uuid().nullable(), assigneeId: z.uuid().nullable() }),
+    // B-CQ-040 (customer page › Quotes & incoming, settle C10): `batchId` when the change is one of N in one act (Assign N, Ask about
+    // N): each reader's bell folds them into one item. Never live (not in `fields`): office notifications only.
+    payload: z.strictObject({ inquiryId: z.uuid(), number: z.string(), status: z.enum(INQUIRY_STATUSES), previousStatus: z.enum(INQUIRY_STATUSES), change: z.enum(INQUIRY_CHANGES), partyId: z.uuid().nullable(), assigneeId: z.uuid().nullable(), batchId: z.uuid().optional() }),
     live: { ...live, fields: ['inquiryId', 'number', 'status', 'change', 'partyId'] },
   }),
   defineEvent({
@@ -45,7 +47,8 @@ export const events = [
     context: 'sales-inquiries',
     description: 'An inquiry ended: it became a quote, it was declined (with the reason), the customer went away (lost), an order was made straight from it (B-TH-025), or its customer withdrew it from the portal (B-TH-095).',
     // B-TH-025: ORDERED with the order made from it (salesOrderId; null for every other end). B-TH-095: WITHDRAWN by the customer.
-    payload: z.strictObject({ inquiryId: z.uuid(), number: z.string(), status: z.enum(['QUOTED', 'DECLINED', 'LOST', 'ORDERED', 'WITHDRAWN']), previousStatus: z.enum(INQUIRY_STATUSES), quoteId: z.uuid().nullable(), salesOrderId: z.uuid().nullable(), declineReason: z.enum(DECLINE_REASONS).nullable(), partyId: z.uuid().nullable() }),
+    // B-CQ-040: `batchId` when it is one of N ended in one act (Decline N, Mark N lost): the followers get one bell for them.
+    payload: z.strictObject({ inquiryId: z.uuid(), number: z.string(), status: z.enum(['QUOTED', 'DECLINED', 'LOST', 'ORDERED', 'WITHDRAWN']), previousStatus: z.enum(INQUIRY_STATUSES), quoteId: z.uuid().nullable(), salesOrderId: z.uuid().nullable(), declineReason: z.enum(DECLINE_REASONS).nullable(), partyId: z.uuid().nullable(), batchId: z.uuid().optional() }),
     live: { ...live, fields: ['inquiryId', 'number', 'status', 'quoteId', 'salesOrderId', 'partyId'] },
   }),
   // ---- B-TH-094 (threads plan TH-9, N17): production's answer on a request — office only. Its own event (not inquiry.changed,

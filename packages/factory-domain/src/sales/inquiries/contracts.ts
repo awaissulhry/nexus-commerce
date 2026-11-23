@@ -178,6 +178,8 @@ export const askInfoBody = input({
     to: z.array(z.string().trim().min(3).max(320)).min(1).max(20).optional(),
     sendOutside: z.boolean().optional(),
   }).optional(),
+  /** B-CQ-040 (customer page › Quotes & incoming): one id sent with every ask of one "Ask <customer> about N" (one bell). */
+  batchId: id().optional(),
 })
 export type AskInfoBody = z.output<typeof askInfoBody>
 
@@ -207,7 +209,12 @@ export const bulkDeclineBody = input({ items: z.array(item).min(1).max(INQUIRY_L
 export type BulkDeclineBody = z.output<typeof bulkDeclineBody>
 
 /** The customer went away before a quote: why, in words. */
-export const loseBody = input({ version: version(), note: text(INQUIRY_LIMITS.closeNote) })
+export const loseBody = input({
+  version: version(),
+  note: text(INQUIRY_LIMITS.closeNote),
+  /** B-CQ-040: one id sent with every request of one "Mark N lost" (one bell). */
+  batchId: id().optional(),
+})
 export type LoseBody = z.output<typeof loseBody>
 
 /** "Make quote" (Q): the W1 quote pre-filled from the inquiry (customer, contact, styles, sizes, wanted date). */

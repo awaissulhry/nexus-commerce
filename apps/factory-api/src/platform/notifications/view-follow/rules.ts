@@ -20,7 +20,8 @@ import type { Draft, FanOutRule, RuleContext } from '../fan-out'
  *
  * The record changes are the moves a follower waits for (RECORD_CHANGES): a status or a stage, a quote or a purchase order
  * answered, an inquiry closed. A change that always comes with a message on the record's thread (a quote or an order sent) is
- * left out: its message tells the followers already.
+ * left out: its message tells the followers already. B-CQ-040: N quotes cancelled or N requests ended in one act (their events'
+ * `batchId`) are ONE bell item per follower.
  */
 
 const viewPayload = notificationEvents.find((event) => event.type === 'notification.view_changed')!.payload
@@ -99,8 +100,12 @@ export const FOLLOWING_RULES: readonly FanOutRule[] = Object.freeze([
       // into that command's change of the order — the system line on its thread and the floor notes of its work orders
       // (rules/threads.ts, the same batch) — so a reader told of all of them has ONE bell item, not one per event.
       const correlationId = context.event?.correlationId
-      const batchId = change.type === 'SalesOrder' && correlationId ? orderChangeBatch(correlationId, recordId) : null
-      // ---- end B-SA-051
+      // ---- B-CQ-040 (customer page › Quotes & incoming, C10): a quote or a request changed as one of N in one act (Cancel N, Decline
+      // N, Mark N lost) carries the act's `batchId`: each follower's bell folds the N into ONE item.
+      const stamped = (raw as Record<string, unknown> | null)?.batchId
+      const actBatch = (change.type === 'Quote' || change.type === 'Inquiry') && typeof stamped === 'string' ? stamped : null
+      const batchId = change.type === 'SalesOrder' && correlationId ? orderChangeBatch(correlationId, recordId) : actBatch
+      // ---- end B-SA-051 / B-CQ-040
       const drafts: Draft[] = []
       for (const userId of followers) {
         if (userId === actorId) continue
