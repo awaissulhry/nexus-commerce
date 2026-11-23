@@ -278,10 +278,7 @@
       }
     },
     "quotesTab": {
-      "quotes": "Quotes",
-      "incoming": "Incoming",
-      "noQuotes": "No open quote for {customer}.",
-      "noRequests": "No request from {customer}."
+      "quotes": "Quotes"
     },
     "drafts": {
       "col": {

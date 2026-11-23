@@ -1,11 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
 import { beforeOrderCountsAnswer, type BeforeOrderCountsAnswer } from '@nexus/factory-domain/sales/before-order/contracts'
 import type { ApiClient } from '../../../../lib/api/client'
-import { useOfficeApi } from '../../../../lib/session/context'
-import { useLiveBus } from '../../../../shell/live/use-live'
-import { useCoalesced } from '../../orders/hooks'
 import { sourcesTouched } from './use-customer-work'
 
 /**
@@ -51,7 +47,7 @@ export async function readBeforeOrder(api: ApiClient, partyId: string, signal?: 
 
 export type BeforePart = keyof BeforeOrderCounts
 
-/** Where each part leads: the Work tab's own Drafts view, or the Quotes & incoming tab at its group (the final addresses). */
+/** Where each part leads: the Quotes & incoming tab at its group (the final addresses; F-CQ-303: the drafts at WRITING, below). */
 export const BEFORE_GROUPS: Readonly<Record<Exclude<BeforePart, 'drafts'>, string>> = Object.freeze({ toAnswer: 'TO_ANSWER', openQuotes: 'OPEN_QUOTES', orderWaits: 'ORDER_WAITS' })
 
 /** The Quotes & incoming tab at one of its groups (`?tab=quotes&group=<GROUP>`). */
@@ -60,7 +56,7 @@ export const quotesGroupDoor = (recordHref: string, group: string): string => `$
 export interface BeforeLinePart {
   readonly part: BeforePart
   readonly count: number
-  /** A real link (Quotes & incoming); null: the Drafts view of this tab (the band's own pick). */
+  /** A real link (Quotes & incoming at its group). F-CQ-303: the drafts too ("Customer is writing" there); null is no longer given. */
   readonly href: string | null
 }
 
@@ -70,7 +66,9 @@ export function beforeLineOf(counts: BeforeOrderCounts, recordHref: string): Bef
   return order.flatMap((part) => {
     const count = counts[part]
     if (count === null || count <= 0) return []
-    return [{ part, count, href: part === 'drafts' ? null : quotesGroupDoor(recordHref, BEFORE_GROUPS[part]) }]
+    // ---- F-CQ-303 (13-backend R14): the drafts left the Work tab — their part opens Quotes & incoming at WRITING ("Customer is writing").
+    return [{ part, count, href: quotesGroupDoor(recordHref, part === 'drafts' ? 'WRITING' : BEFORE_GROUPS[part]) }]
+    // ---- end F-CQ-303
   })
 }
 
@@ -81,32 +79,7 @@ export function beforeLineOf(counts: BeforeOrderCounts, recordHref: string): Bef
 export const beforeOrderTouched = (type: string): boolean =>
   type.startsWith('portal_order_request.') || type.startsWith('inquiry.') || type.startsWith('quote.') || sourcesTouched(type).length > 0
 
-/**
- * The line's counts for the customer's Work tab: read only while the tab is shown (`enabled`), again on a live change (coalesced,
- * 800 ms, as the band's other reads) and when the live channel comes back. A failed read: no line.
- */
-export function useBeforeOrder(partyId: string, enabled: boolean): BeforeOrderCounts {
-  const api = useOfficeApi()
-  const [counts, setCounts] = useState<BeforeOrderCounts>(NO_BEFORE_ORDER)
-  const turn = useRef(0)
-  const read = useRef<() => void>(() => undefined)
-  read.current = () => {
-    if (!enabled) return
-    const mine = ++turn.current
-    readBeforeOrder(api, partyId).then(
-      (value) => mine === turn.current && setCounts(value),
-      () => mine === turn.current && setCounts(NO_BEFORE_ORDER),
-    )
-  }
-  useEffect(() => {
-    if (!enabled) {
-      turn.current += 1
-      setCounts(NO_BEFORE_ORDER)
-      return
-    }
-    read.current()
-  }, [api, partyId, enabled])
-  const again = useCoalesced(() => read.current(), 800)
-  useLiveBus({ onChange: (change) => beforeOrderTouched(change.type) && again(), onReconnect: again }, enabled)
-  return counts
-}
+// ---- F-CQ-302 (customer page › Quotes & incoming, 13-backend R13): the line's own read (only while the Work tab was shown) went into
+// the page's ONE count read, on every tab (quotes-tab/use-before-order-counts.ts — the Quotes & incoming badge, its band and this
+// line read the same answer); the page maps it with beforeOrderOf. The live rule stays this module's beforeOrderTouched.
+// ---- end F-CQ-302

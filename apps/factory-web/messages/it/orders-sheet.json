@@ -418,6 +418,48 @@
       "why": {
         "forbidden": "Il tuo ruolo non mette cose da fare nella lista di un cliente."
       }
+    },
+    "byType": {
+      "quote": {
+        "title_one": "Rispondi a {customer} su {count} preventivo",
+        "title_other": "Rispondi a {customer} su {count} preventivi",
+        "askTitle_one": "Chiedi a {customer} su {count} preventivo",
+        "askTitle_other": "Chiedi a {customer} su {count} preventivi",
+        "preview_one": "{customer} lo leggerà su {count} preventivo:",
+        "preview_other": "{customer} lo leggerà su {count} preventivi:",
+        "already_one": "Già pubblicato su {count} preventivo: {orders}",
+        "already_other": "Già pubblicato su {count} preventivi: {orders}",
+        "each": "La conversazione di ogni preventivo riceve il proprio messaggio; niente viene copiato tra i preventivi.",
+        "your": "Il vostro preventivo {seq} ({number})",
+        "result": {
+          "title_one": "Pubblicato su {count} preventivo: {customer} lo legge nella conversazione del preventivo.",
+          "title_other": "Pubblicato su {count} preventivi: {customer} lo legge nella conversazione di ogni preventivo.",
+          "label": "Ogni preventivo"
+        },
+        "todo": {
+          "hint": "{customer} vede «Rispondere al nostro messaggio» sotto Cosa vi aspetta. Ogni preventivo aspetta poi il cliente, qui e nella sua pagina, finché non risponde."
+        }
+      },
+      "request": {
+        "title_one": "Rispondi a {customer} su {count} richiesta",
+        "title_other": "Rispondi a {customer} su {count} richieste",
+        "askTitle_one": "Chiedi a {customer} su {count} richiesta",
+        "askTitle_other": "Chiedi a {customer} su {count} richieste",
+        "preview_one": "{customer} lo leggerà su {count} richiesta:",
+        "preview_other": "{customer} lo leggerà su {count} richieste:",
+        "already_one": "Già pubblicato su {count} richiesta: {orders}",
+        "already_other": "Già pubblicato su {count} richieste: {orders}",
+        "each": "La conversazione di ogni richiesta riceve il proprio messaggio; niente viene copiato tra le richieste.",
+        "your": "La vostra richiesta {seq} ({number})",
+        "result": {
+          "title_one": "Pubblicato su {count} richiesta: {customer} lo legge nella conversazione della richiesta.",
+          "title_other": "Pubblicato su {count} richieste: {customer} lo legge nella conversazione di ogni richiesta.",
+          "label": "Ogni richiesta"
+        },
+        "todo": {
+          "hint": "{customer} vede «Rispondere al nostro messaggio» sotto Cosa vi aspetta. Ogni richiesta aspetta poi il cliente, qui e nella sua pagina, finché non risponde."
+        }
+      }
     }
   },
   "commands": {

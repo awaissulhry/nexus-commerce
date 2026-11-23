@@ -2,6 +2,7 @@ import { normaliseAddress, addressProblems } from '@nexus/factory-domain/parties
 import { contactProblems, normaliseContact } from '@nexus/factory-domain/parties/contacts'
 import { isCountryCode, isLanguageCode, COUNTRY_CODES } from '@nexus/factory-domain/parties/geo'
 import { PARTY_CODE } from '@nexus/factory-domain/parties/rules'
+import { OPEN_QUOTES as DOMAIN_OPEN_QUOTES } from '@nexus/factory-domain/sales/before-order/groups' // F-CQ-302
 import { EU_VAT_FORMATS, normaliseTaxIdentity, splitEuVatNumber, suggestTaxMode, taxIdentityProblems, vatPrefixOf } from '@nexus/factory-domain/parties/tax'
 import { isEuMemberState } from '@nexus/factory-domain/tax/eu'
 import { isValidPartitaIva } from '@nexus/factory-domain/tax/tax-ids'
@@ -360,7 +361,9 @@ export function money(minor: number | undefined, currency: string, locale: strin
 
 // ---- quotes and orders (the customer's Quotes & orders, the supplier's Orders) -----------------------------------------
 
-export const OPEN_QUOTES: ReadonlySet<QuoteRow['status']> = new Set(['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SENT'])
+// F-CQ-302 (customer page › Quotes & incoming, 13-backend R13): the open quotes are the domain's one list (the band's OPEN_QUOTES door,
+// the Work line and Overview count the same quotes).
+export const OPEN_QUOTES: ReadonlySet<QuoteRow['status']> = new Set<QuoteRow['status']>(DOMAIN_OPEN_QUOTES)
 export const OPEN_ORDERS: ReadonlySet<SalesOrderRow['status']> = new Set(['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED'])
 export const OPEN_PURCHASE_ORDERS: ReadonlySet<PurchaseOrderRow['status']> = new Set(['DRAFT', 'SENT', 'CONFIRMED', 'CHANGES_PROPOSED', 'PARTLY_RECEIVED'])
 
@@ -1069,6 +1072,15 @@ export function recordTabs(config: SideConfig, can: RecordCan): RecordTab[] {
     return true
   })
 }
+
+// ---- F-CQ-301 (customer page › Quotes & incoming, 13-backend R16; P0-B2) ----
+/**
+ * The tab a record page SHOWS: the one asked when the reader sees it, else the first tab the reader sees. The page's container builds
+ * its slots for this tab and the view marks it — the same answer in both (a Warehouse reader asking `?tab=quotes` sees the Work tab
+ * with its body, never a marked tab with no body).
+ */
+export const shownTab = (tabs: readonly RecordTab[], asked: RecordTab | null | undefined): RecordTab => (asked && tabs.includes(asked) ? asked : (tabs[0] ?? 'overview'))
+// ---- end F-CQ-301
 
 /** The record's name: its trade name, else its legal name. */
 export const partyName = (party: Pick<PartyRow, 'tradeName' | 'legalName'>) => party.tradeName ?? party.legalName

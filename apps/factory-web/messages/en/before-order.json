@@ -62,7 +62,8 @@
     "incomingNone": "No request or portal order from {customer} yet.",
     "quotesNone": "No quote for {customer} yet.",
     "incomingNoLive": "Nothing from {customer} waits now.",
-    "closedDoors": "Closed ({count}):"
+    "closedDoors": "Closed ({count}):",
+    "quotesNoLive": "No open quote for {customer}."
   },
   "fold": {
     "incoming": "No request or portal order in this group.",
@@ -203,5 +204,12 @@
   },
   "drafts": {
     "picture": "Picture"
+  },
+  "dock": {
+    "cameFromRequest": "Came from request {number} ›",
+    "cameFromPortal": "Came from portal order {number} ›",
+    "becameQuote": "Became quote {number} ›",
+    "becameOrder": "Became order {number} ›",
+    "line": "Where it came from and went"
   }
 }

@@ -16,6 +16,8 @@ import { HOME_ADDRESS, PAGE_PATH, THREAD_TYPE, type ListAddress } from '../../in
 // ---- F-CQ-101 / F-CQ-104 (customer page › Quotes & incoming): the band, its doors, the sections' states, the tab's own room
 import { bandOf, emptyTab, INQUIRIES_LAYOUT_KEY, QUOTES_LAYOUT_KEY, sectionStateIn, TAB_KINDS, type Band } from './quotes-tab/band'
 import { useQuotesTab, type QuotesTab } from './quotes-tab/use-quotes-tab'
+import type { PageCounts } from './quotes-tab/use-before-order-counts' // F-CQ-302
+import { incomingLinksOf, quoteLinksOf } from './quotes-tab/links' // F-CQ-305: the dock's door line
 import { BEFORE_ORDER_NS } from './quotes-tab/view/BeforeOrderBand'
 // cq T: the tab's own parts, pure (the live tab and the design gallery draw the same ones)
 import { DraftsFrame, QuotesTabFrame, TabSection } from './quotes-tab/view/QuotesTabParts'
@@ -50,10 +52,10 @@ import type { DraftRow } from './drafts/api'
 /** What a row's click hands the page's dock: the record whose thread it shows (the Work tab's one DockPick). */
 import type { DockPick } from './view/WorkTab'
 
-export function QuotesIncomingTab({ party, onPick, onFocus, shown }: { party: { id: string; name: string }; onPick?: (pick: DockPick) => void; /* F-SA-279 */ onFocus?: (pick: DockPick) => void; shown?: DockPick | null }) {
+export function QuotesIncomingTab({ party, counts, onPick, onFocus, shown }: { party: { id: string; name: string }; /** F-CQ-302: the page's one count read. */ counts: PageCounts; onPick?: (pick: DockPick) => void; /* F-SA-279 */ onFocus?: (pick: DockPick) => void; shown?: DockPick | null }) {
   return (
     <WithMessages namespaces={['parties', BEFORE_ORDER_NS]}>
-      <Tab party={party} onPick={onPick} onFocus={onFocus} shown={shown ?? null} />
+      <Tab party={party} counts={counts} onPick={onPick} onFocus={onFocus} shown={shown ?? null} />
     </WithMessages>
   )
 }
@@ -67,16 +69,16 @@ type Ask = { readonly what: 'quote' | 'request'; readonly at: number }
 /** F-CQ-101: what a section needs from the tab — the door's terms, its state, its head's count, the band's words for its door. */
 type HostProps = SectionProps & { tab: QuotesTab; ask: Ask | null; hidden: boolean; band: Band | null }
 
-function Tab({ party, onPick, onFocus, shown }: SectionProps) {
+function Tab({ party, counts, onPick, onFocus, shown }: SectionProps & { counts: PageCounts }) {
   const session = useOfficeSession()
   const quotes = session.permissions.includes('quotes.view')
   const incoming = session.permissions.includes('sales.inquiries.view')
   if (!quotes && !incoming) return null
-  return <Body party={party} onPick={onPick} onFocus={onFocus} shown={shown} quotes={quotes} incoming={incoming} />
+  return <Body party={party} counts={counts} onPick={onPick} onFocus={onFocus} shown={shown} quotes={quotes} incoming={incoming} />
 }
 
-function Body({ party, onPick, onFocus, shown, quotes, incoming }: SectionProps & { quotes: boolean; incoming: boolean }) {
-  const { tab, rootRef, onCloseDoor, onRetry } = useQuotesTab(party.id)
+function Body({ party, counts, onPick, onFocus, shown, quotes, incoming }: SectionProps & { counts: PageCounts; quotes: boolean; incoming: boolean }) {
+  const { tab, rootRef, onCloseDoor, onRetry } = useQuotesTab(party.id, counts)
   const [ask, setAsk] = useState<Ask | null>(null)
   const band = bandOf(tab.counts, tab.rights, tab.door)
   const sections = { party, onPick, onFocus, shown, tab, ask, hidden: emptyTab(band, tab.door), band }
@@ -108,7 +110,7 @@ function QuotesSection({ party, onPick, onFocus, shown, tab, ask, hidden }: Host
       locked: { party: party.id },
       embedded: true,
       terms: 'memory',
-      onRowClick: (row, newTab) => (newTab ? void window.open(`${prefix}/sales/quotes/${encodeURIComponent(row.id)}`, '_blank', 'noopener') : pick.current?.({ type: 'Quote', id: row.id, label: row.number, companyId: row.companyId })),
+      onRowClick: (row, newTab) => (newTab ? void window.open(`${prefix}/sales/quotes/${encodeURIComponent(row.id)}`, '_blank', 'noopener') : pick.current?.({ type: 'Quote', id: row.id, label: row.number, companyId: row.companyId, links: quoteLinksOf(row) /* F-CQ-305 */ })),
       // F-CQ-102 / F-CQ-104: the door's group (else "Not closed"), Most urgent first, the host's columns by the tab's room, no tile reads,
       // this customer's live changes only, the customer's one name, the door's words in State ▾.
       defaultGroup: group ?? 'LIVE',
@@ -141,7 +143,7 @@ function QuotesSection({ party, onPick, onFocus, shown, tab, ask, hidden }: Host
         <QuotesListView
           // F-SA-279: the docked quote's row marked; the keys' row docks after the rest. F-CQ-104: a phone card's door to the thread.
           model={onFocus ? { ...model, active: { id: shown?.type === 'Quote' ? shown.id : null }, cardDoor: t('customers.work.dock.cardDoor') } : model}
-          actions={onFocus ? { ...actions, onFocusRow: (row) => onFocus({ type: 'Quote', id: row.id, label: row.number, companyId: row.companyId }) } : actions}
+          actions={onFocus ? { ...actions, onFocusRow: (row) => onFocus({ type: 'Quote', id: row.id, label: row.number, companyId: row.companyId, links: quoteLinksOf(row) /* F-CQ-305 */ }) } : actions}
         />
       </ScopedListTools>
     </TabSection>
@@ -165,7 +167,7 @@ function IncomingSection({ party, onPick, onFocus, shown, tab, ask, hidden }: Ho
       terms: 'memory',
       pane: 'host',
       // A change request is not on this tab (F-CQ-103); on Sales › Incoming it opens Home › Approvals' review window (the list's own rule).
-      onRowClick: (row, newTab) => (newTab ? void window.open(rowPageHref(prefix, row, listed.current), '_blank', 'noopener') : pick.current?.({ type: THREAD_TYPE[row.kind], id: row.id, label: row.number, companyId: row.companyId ?? null })),
+      onRowClick: (row, newTab) => (newTab ? void window.open(rowPageHref(prefix, row, listed.current), '_blank', 'noopener') : pick.current?.({ type: THREAD_TYPE[row.kind], id: row.id, label: row.number, companyId: row.companyId ?? null, links: incomingLinksOf(row) /* F-CQ-305 */ })),
       // F-CQ-103 / F-CQ-104: requests and portal orders only, the door's saved row (else Open), Most urgent first, the host's columns
       // by the tab's room, this customer's live changes only, the customer's one name.
       kinds: TAB_KINDS,
@@ -197,7 +199,7 @@ function IncomingSection({ party, onPick, onFocus, shown, tab, ask, hidden }: Ho
         <InquiriesView
           // F-SA-279: the docked request's row marked; the keys' row docks after the rest (a change request never: its talk is its order's).
           model={onFocus ? { ...model, active: { pick: shown ? { type: shown.type, id: shown.id } : null }, cardDoor: t('customers.work.dock.cardDoor') } : model}
-          actions={onFocus ? { ...actions, onFocusRow: (row) => (row.kind === 'CHANGE_REQUEST' ? undefined : onFocus({ type: THREAD_TYPE[row.kind], id: row.id, label: row.number, companyId: row.companyId ?? null })) } : actions}
+          actions={onFocus ? { ...actions, onFocusRow: (row) => (row.kind === 'CHANGE_REQUEST' ? undefined : onFocus({ type: THREAD_TYPE[row.kind], id: row.id, label: row.number, companyId: row.companyId ?? null, links: incomingLinksOf(row) /* F-CQ-305 */ })) } : actions}
           slots={slots}
         />
       </ScopedListTools>

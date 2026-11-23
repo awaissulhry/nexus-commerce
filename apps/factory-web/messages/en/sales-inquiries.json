@@ -86,7 +86,8 @@
     "makeOrder": "Make order…",
     "assign": "Assign…",
     "decline": "Decline…",
-    "addTask": "Add task…"
+    "addTask": "Add task…",
+    "reply": "Reply to {customer}…"
   },
   "keys": {
     "new": "New request",

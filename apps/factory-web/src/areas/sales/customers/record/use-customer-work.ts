@@ -17,6 +17,7 @@ import type { DockPick } from './view/WorkTab' // F-SA-278
 import { useCoalesced } from '../../orders/hooks'
 import type { WaitingMarks } from '../../orders/list/sheet/model'
 import { MERGED_TERMS } from '../../../parties/_shared/model'
+import { DRAFTS_TERM } from './drafts/model' // F-CQ-303: the old drafts address (`list=drafts`)
 // ---- F-SA-279: the dock follows the row (the address term `dock=`, the summary read that checks a docked record) ----
 import { usePathname, useSearchParams } from 'next/navigation'
 import { CUSTOMER_FEED_TYPES } from '@nexus/factory-domain/sales/customer-feed/kinds'
@@ -89,6 +90,13 @@ type Params = { get(name: string): string | null; toString(): string } | null
  * order: without `rows=all` the sheet would read the open ones only) — the door from anywhere is just `?tab=work&phase=<PHASE>`.
  */
 export function workEntry(base: string, partyId: string, params: Params): string | null {
+  // ---- F-CQ-303 (customer page › Quotes & incoming, 13-backend R14): the drafts left this tab — an old address that asks for them
+  // (`?tab=work&list=drafts`) opens Quotes & incoming at WRITING ("Customer is writing") in this same one write; the page's dock stays.
+  if (params?.get(DRAFTS_TERM.name) === DRAFTS_TERM.value) {
+    const dock = params.get('dock')
+    return `${base}?tab=quotes&group=WRITING${dock ? `&dock=${encodeURIComponent(dock)}` : ''}`
+  }
+  // ---- end F-CQ-303
   const query = new URLSearchParams(params?.toString() ?? '')
   const asked = query.get('tab')
   let changed = false

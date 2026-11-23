@@ -488,13 +488,15 @@ describe('F-SA-277: the Quotes list lifted — the locked container, the page un
       const words = createTranslator(locale, messagesFor(locale, ['parties']).parties!)
       const incoming = createTranslator(locale, messagesFor(locale, ['sales-inquiries'])['sales-inquiries']!)
       expect(words('customers.quotesTab.quotes'), locale).toBe(words('deals.titleQuotes'))
-      expect(words('customers.quotesTab.incoming'), locale).toBe(incoming('page.title'))
-      for (const key of ['customers.quotesTab.noQuotes', 'customers.quotesTab.noRequests']) {
-        const line = words(key, { customer: 'Brand Alpha' })
+      // F-CQ-305: the dead keys are out (incoming, noQuotes, noRequests: no screen read them); the tab's own words are before-order's.
+      for (const key of ['customers.quotesTab.incoming', 'customers.quotesTab.noQuotes', 'customers.quotesTab.noRequests']) expect(words(key), `${locale} ${key}`).toBe(key)
+      const band = createTranslator(locale, messagesFor(locale, ['before-order'])['before-order']!)
+      for (const key of ['empty.quotesNoLive', 'empty.incomingNoLive']) {
+        const line = band(key, { customer: 'Brand Alpha' })
         expect(line, `${locale} ${key}`).not.toBe(key)
         expect(line, `${locale} ${key}`).toContain('Brand Alpha')
-        expect(line, `${locale} ${key}`).not.toContain('{')
       }
+      expect(incoming('page.title'), locale).not.toBe('page.title')
     }
   })
 })

@@ -418,6 +418,48 @@
       "why": {
         "forbidden": "Your role does not put a to-do in a customer's list."
       }
+    },
+    "byType": {
+      "quote": {
+        "title_one": "Reply to {customer} on {count} quote",
+        "title_other": "Reply to {customer} on {count} quotes",
+        "askTitle_one": "Ask {customer} about {count} quote",
+        "askTitle_other": "Ask {customer} about {count} quotes",
+        "preview_one": "{customer} will read this on {count} quote:",
+        "preview_other": "{customer} will read this on {count} quotes:",
+        "already_one": "Already posted on {count} quote: {orders}",
+        "already_other": "Already posted on {count} quotes: {orders}",
+        "each": "Each quote's conversation gets its own message; nothing is copied between quotes.",
+        "your": "Your quote {seq} ({number})",
+        "result": {
+          "title_one": "Posted on {count} quote: {customer} reads it in that quote's conversation.",
+          "title_other": "Posted on {count} quotes: {customer} reads it in each quote's conversation.",
+          "label": "Each quote"
+        },
+        "todo": {
+          "hint": "{customer} sees “Answer our message” under What waits for you. Each quote then waits for the customer, here and on its page, until they answer."
+        }
+      },
+      "request": {
+        "title_one": "Reply to {customer} on {count} request",
+        "title_other": "Reply to {customer} on {count} requests",
+        "askTitle_one": "Ask {customer} about {count} request",
+        "askTitle_other": "Ask {customer} about {count} requests",
+        "preview_one": "{customer} will read this on {count} request:",
+        "preview_other": "{customer} will read this on {count} requests:",
+        "already_one": "Already posted on {count} request: {orders}",
+        "already_other": "Already posted on {count} requests: {orders}",
+        "each": "Each request's conversation gets its own message; nothing is copied between requests.",
+        "your": "Your request {seq} ({number})",
+        "result": {
+          "title_one": "Posted on {count} request: {customer} reads it in that request's conversation.",
+          "title_other": "Posted on {count} requests: {customer} reads it in each request's conversation.",
+          "label": "Each request"
+        },
+        "todo": {
+          "hint": "{customer} sees “Answer our message” under What waits for you. Each request then waits for the customer, here and on its page, until they answer."
+        }
+      }
     }
   },
   "commands": {

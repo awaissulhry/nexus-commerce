@@ -30,10 +30,34 @@ export interface ReplyTarget {
   readonly customerSeq?: number | null
   /** F-CW-203: the order's company (the customer's to-do is made in it). */
   readonly companyId?: string | null
+  /** F-CQ-304: the record's own conversation it goes into (absent: an order, `SalesOrder`). */
+  readonly recordType?: ReplyRecordType
 }
 
-export const replyTargetsOf = (rows: readonly (Pick<OrderRow, 'id' | 'number' | 'customerRef' | 'partyId' | 'partyName'> & Partial<Pick<OrderRow, 'customerSeq' | 'companyId'>>)[]): ReplyTarget[] =>
-  rows.map((row) => ({ id: row.id, number: row.number, customerRef: row.customerRef, partyId: row.partyId, partyName: row.partyName, customerSeq: row.customerSeq ?? null /* B-SA-070b */, companyId: row.companyId ?? null /* F-CW-203 */ }))
+// ---- F-CQ-304 (customer page › Quotes & incoming, 13-backend §11; 10-design §6, §8): Reply to N given a record type — the same window
+// on the customer's quotes ("Ask <customer> about N quotes": the tick ON) and on its requests and portal orders ("Reply to <customer>
+// on N"): POST /threads/<type>/<id>/replies, one per record, ONE batchId; the to-do (F-CW-203) is the same call with that recordType.
+// Orders keep their words and behaviour (no type = SalesOrder).
+/** The records a reply may go to (each its own conversation; the server takes any shareable record, one customer per batch). */
+export type ReplyRecordType = 'SalesOrder' | 'Quote' | 'Inquiry' | 'PortalOrderRequest'
+/** A record as the window names it (an order's fields; a quote's are the same; a request gives its customer as partyId / partyName). */
+export type ReplyRow = Pick<OrderRow, 'id' | 'number' | 'customerRef' | 'partyId' | 'partyName'> & Partial<Pick<OrderRow, 'customerSeq' | 'companyId'>>
+/** The words of a record type: an order's are the window's own keys (`reply.<key>`); a quote's and a request's sit beside them. */
+export const replyKey = (recordType: ReplyRecordType | undefined, key: string): string =>
+  !recordType || recordType === 'SalesOrder' ? `reply.${key}` : `reply.byType.${recordType === 'Quote' ? 'quote' : 'request'}.${key}`
+// ---- end F-CQ-304
+
+export const replyTargetsOf = (rows: readonly ReplyRow[], /** F-CQ-304 */ recordType?: ReplyRecordType | ((row: ReplyRow) => ReplyRecordType)): ReplyTarget[] =>
+  rows.map((row) => ({
+    id: row.id,
+    number: row.number,
+    customerRef: row.customerRef,
+    partyId: row.partyId,
+    partyName: row.partyName,
+    customerSeq: row.customerSeq ?? null /* B-SA-070b */,
+    companyId: row.companyId ?? null /* F-CW-203 */,
+    ...(recordType ? { recordType: typeof recordType === 'function' ? recordType(row) : recordType } : {}) /* F-CQ-304 */,
+  }))
 
 /**
  * Why the bar's Reply to N… is held, in words before the click, or null: a ticked order of another customer than the page's (the
@@ -179,8 +203,9 @@ export const targetLabel = (target: Pick<ReplyTarget, 'number' | 'customerRef'>)
 
 // ---- B-SA-070b: the preview "Brand Alpha will read this on 6 orders:" names each order as the customer reads it — its own number
 // ("Your order 12", the portal's count), the office number beside it for the writer; an order with no number of its own yet: as before.
-export const previewLabel = (target: Pick<ReplyTarget, 'number' | 'customerRef' | 'customerSeq'>, say: (key: string, params: Record<string, string | number>) => string): string =>
-  target.customerSeq ? say('reply.yourOrder', { seq: target.customerSeq, number: target.number }) : targetLabel(target)
+// F-CQ-304: a quote is "Your quote 3 (SEED-QT-0012)", a request "Your request 7 (SEED-INQ-0007)" (the customer's own count, its type's words).
+export const previewLabel = (target: Pick<ReplyTarget, 'number' | 'customerRef' | 'customerSeq' | 'recordType'>, say: (key: string, params: Record<string, string | number>) => string): string =>
+  target.customerSeq ? say(!target.recordType || target.recordType === 'SalesOrder' ? 'reply.yourOrder' : replyKey(target.recordType, 'your'), { seq: target.customerSeq, number: target.number }) : targetLabel(target)
 // ---- end B-SA-070b
 
 /** The Idempotency-Key of one order's reply, and the words and tick it was made for. */
@@ -294,6 +319,8 @@ export interface ReplyManyModel {
   readonly asked?: boolean
   /** F-CW-203: today (the company's day), for the tick's day. */
   readonly today?: string
+  /** F-CQ-304: the records' type (the window's words: "on 3 quotes", "on 2 requests"); absent: orders. */
+  readonly recordType?: ReplyRecordType
 }
 
 export interface ReplyManyActions {

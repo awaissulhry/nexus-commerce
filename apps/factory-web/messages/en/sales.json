@@ -834,7 +834,8 @@
     },
     "row": {
       "sendOnPage": "Send on the quote page ›",
-      "addTask": "Add task…"
+      "addTask": "Add task…",
+      "reply": "Reply to {customer}…"
     }
   },
   "newQuote": {

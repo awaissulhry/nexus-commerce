@@ -443,7 +443,8 @@ describe('F-CW-203: the to-do tick of Reply to N', () => {
     // A day that cannot be asked is said in words beside Send.
     const dialog = readFileSync(new URL('./view/ReplyManyDialog.tsx', import.meta.url), 'utf8')
     expect(dialog).toContain('?? todoHeld(model.todo, today)')
-    expect(dialog).toContain("title={s(model.asked ? 'reply.askTitle' : 'reply.title', { customer: model.customer.name, count: model.targets.length })")
+    // F-CQ-304: the title in the records' own words (orders keep 'reply.askTitle' / 'reply.title': replyKey with no type).
+    expect(dialog).toContain("title={s(replyKey(model.recordType, model.asked ? 'askTitle' : 'title'), { customer: model.customer.name, count: model.targets.length })")
   })
 
   it('the receipt says what became of each order\'s to-do on that order\'s own line', () => {
@@ -463,7 +464,8 @@ describe('F-CW-203: the to-do tick of Reply to N', () => {
     const hook = readFileSync(new URL('./use-reply-many.ts', import.meta.url), 'utf8')
     expect(hook).toContain("const canTodo = permissions.includes('partners.tasks.manage') // F-CW-203")
     expect(hook).toContain('todo: canTodo ? todoStart(asked, today) : null')
-    expect(hook).toContain("await askPartner(api, now.customer.id, { kind: 'ANSWER_MESSAGE', recordType: 'SalesOrder', recordId: target.id, dueAt: due ? endOfDay(due) : null,")
+    // F-CQ-304: the to-do names the record's own type (an order: SalesOrder, as before; a quote: Quote).
+    expect(hook).toContain("await askPartner(api, now.customer.id, { kind: 'ANSWER_MESSAGE', recordType: target.recordType ?? 'SalesOrder' /* F-CQ-304 */, recordId: target.id, dueAt: due ? endOfDay(due) : null,")
     expect(hook).toContain("return { state: 'sent', ...(todo ? { todo: await todoOne(target, todo.due) } : {}) }")
     // A posted message is never posted again: only its to-do is tried.
     expect(hook).toContain("if (now.results[target.id]?.state === 'sent') return { state: 'sent', ...(todo ? { todo: await todoOne(target, todo.due) } : {}) }")
@@ -486,3 +488,43 @@ describe('F-CW-203: the to-do tick of Reply to N', () => {
   })
 })
 // ---- end F-CW-203
+
+// ---- F-CQ-304 (customer page › Quotes & incoming, 13-backend §11): Reply to N given a record type — the same window on quotes and on
+// requests / portal orders: each record's own conversation, its own words ("on 3 quotes", "Your quote 3"); orders exactly as before.
+import { previewLabel as previewOf, replyKey } from './reply-many'
+
+describe('F-CQ-304: Reply to N given a record type', () => {
+  it('a target keeps its type (absent: an order); a quote posts into ITS conversation, the same batch and body', async () => {
+    expect(replyTargetsOf(alpha).every((target) => target.recordType === undefined)).toBe(true)
+    const quotes = replyTargetsOf(alpha, 'Quote')
+    expect(quotes.map((target) => target.recordType)).toEqual(['Quote', 'Quote', 'Quote'])
+    const mixed = replyTargetsOf(alpha.slice(0, 2), (row) => (row.id === alpha[0]!.id ? 'Inquiry' : 'PortalOrderRequest'))
+    expect(mixed.map((target) => target.recordType)).toEqual(['Inquiry', 'PortalOrderRequest'])
+    const calls: string[] = []
+    const api = { post: async (path: string) => (calls.push(path), { message: { id: 'm' } }) } as unknown as ApiClient
+    for (const target of quotes) await postPortalReplyKeyed(api, { type: target.recordType ?? 'SalesOrder', id: target.id }, { body: 'x', attachments: [], batchId: 'b' }, `k-${target.id}`)
+    expect(calls).toEqual(alpha.map((row) => `/threads/Quote/${row.id}/replies`))
+    // The hook posts and makes the to-do with the target's own type (an order: SalesOrder).
+    const hook = readFileSync(new URL('./use-reply-many.ts', import.meta.url), 'utf8')
+    expect(hook).toContain("await postPortalReplyKeyed(api, { type: target.recordType ?? 'SalesOrder' /* F-CQ-304 */, id: target.id },")
+  })
+
+  it('the words by type: orders keep theirs; a quote and a request have their own, in both languages ("Your quote 3 (…)")', () => {
+    expect(replyKey(undefined, 'title')).toBe('reply.title')
+    expect(replyKey('SalesOrder', 'preview')).toBe('reply.preview')
+    expect(replyKey('Quote', 'askTitle')).toBe('reply.byType.quote.askTitle')
+    expect(replyKey('PortalOrderRequest', 'each')).toBe('reply.byType.request.each')
+    for (const locale of LOCALES) {
+      const say = tFor(locale)
+      for (const type of ['Quote', 'Inquiry'] as const) {
+        for (const key of ['title', 'askTitle', 'preview', 'already', 'result.title']) expect(say(replyKey(type, key), { customer: 'Brand Alpha', count: 2, orders: 'x' }), `${locale} ${type} ${key}`).not.toMatch(/reply\.|\{/)
+        for (const key of ['each', 'result.label']) expect(say(replyKey(type, key)), `${locale} ${type} ${key}`).not.toMatch(/reply\.|\{/)
+        expect(say(replyKey(type, 'todo.hint'), { customer: 'Brand Alpha' }), `${locale} ${type}`).toContain('Brand Alpha')
+      }
+      expect(previewOf({ number: 'SEED-QT-0012', customerRef: null, customerSeq: 3, recordType: 'Quote' }, say), locale).toBe(locale === 'en' ? 'Your quote 3 (SEED-QT-0012)' : 'Il vostro preventivo 3 (SEED-QT-0012)')
+      expect(previewOf({ number: 'SEED-INQ-0007', customerRef: null, customerSeq: 7, recordType: 'Inquiry' }, say), locale).toBe(locale === 'en' ? 'Your request 7 (SEED-INQ-0007)' : 'La vostra richiesta 7 (SEED-INQ-0007)')
+      expect(previewOf({ number: 'SO-1', customerRef: null, customerSeq: 12 }, say), locale).toBe(say('reply.yourOrder', { seq: 12, number: 'SO-1' }))
+    }
+  })
+})
+// ---- end F-CQ-304

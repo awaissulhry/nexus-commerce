@@ -84,22 +84,34 @@ describe('F-CQ-201: the many-acts window — the plan, the hold, the receipt', (
 })
 
 describe('F-CQ-201: the bars — never an act for a missing right, held with words by the state, 3 + More ▾', () => {
-  const OWNER: QuoteBarRights = { can: { manage: true, send: true }, grains: { price: true }, tasks: true, orders: true }
-  const SALES: QuoteBarRights = { can: { manage: true, send: true }, grains: { price: false }, tasks: true, orders: true }
-  const FINANCE: QuoteBarRights = { can: { manage: false, send: false }, grains: { price: true }, tasks: true, orders: false }
-  const READER: QuoteBarRights = { can: { manage: false, send: false }, grains: { price: false }, tasks: false, orders: false }
+  // F-CQ-304: + threads.post (Ask / Reply to N) and partners.tasks.manage (the to-do: "Ask"; without it "Reply").
+  const OWNER: QuoteBarRights = { can: { manage: true, send: true }, grains: { price: true }, tasks: true, orders: true, threads: true, customerTasks: true }
+  const SALES: QuoteBarRights = { can: { manage: true, send: true }, grains: { price: false }, tasks: true, orders: true, threads: true, customerTasks: true }
+  const FINANCE: QuoteBarRights = { can: { manage: false, send: false }, grains: { price: true }, tasks: true, orders: false, threads: true, customerTasks: false }
+  const READER: QuoteBarRights = { can: { manage: false, send: false }, grains: { price: false }, tasks: false, orders: false, threads: false, customerTasks: false }
   const draft = QUOTE_ROWS.find((row) => row.status === 'DRAFT')!
   const sent = QUOTE_ROWS.find((row) => row.status === 'SENT')!
   const ids = (bar: ReturnType<typeof quoteBarOf>) => [bar.promoted.map((act) => act.id), bar.more.map((act) => act.id)]
 
-  it('quotes: the Owner draws all five (3 + More ▾); Sales without prices never sees Send a new link (money wall)', () => {
-    expect(ids(quoteBarOf(OWNER, [draft, sent], 'Seed Racing'))).toEqual([['addTask', 'cancel', 'askApproval'], ['makeOrders', 'newLink']])
-    expect(ids(quoteBarOf(SALES, [draft, sent], 'Seed Racing'))).toEqual([['addTask', 'cancel', 'askApproval'], ['makeOrders']])
+  it('quotes: the Owner draws all six (Ask leads; 3 + More ▾); Sales without prices never sees Send a new link (money wall)', () => {
+    const owner = quoteBarOf(OWNER, [draft, { ...sent, partyId: draft.partyId }], 'Seed Racing')
+    expect(ids(owner)).toEqual([['ask', 'addTask', 'cancel'], ['askApproval', 'makeOrders', 'newLink']])
+    expect(owner.promoted[0]!.label).toEqual({ ns: 'before-order', key: 'acts.label.askAbout', params: { customer: 'Seed Racing', count: 2 } })
+    expect(ids(quoteBarOf(SALES, [draft, sent], 'Seed Racing'))).toEqual([['ask', 'addTask', 'cancel'], ['askApproval', 'makeOrders']])
   })
 
-  it('quotes: Finance draws only its own (Add task), the next allowed act moves up; Read-only draws none and the line says so', () => {
+  it('F-CQ-304: Ask / Reply to N — "Reply" without the customer\'s to-dos; held in its own words for two customers or more than 50', () => {
+    const finance = quoteBarOf(FINANCE, [draft], 'Seed Racing')
+    expect(finance.promoted[0]).toMatchObject({ id: 'ask', label: { ns: 'orders-sheet', key: 'bulk.reply', params: { customer: 'Seed Racing', count: 1 } }, held: null })
+    const two = quoteBarOf(OWNER, [draft, { ...sent, partyId: 'another-customer' }], null)
+    expect(two.promoted[0]!.held).toEqual({ ns: 'orders-sheet', key: 'reply.oneCustomer' })
+    const many = Array.from({ length: 51 }, (_, index) => ({ ...draft, id: `q${index}` }))
+    expect(quoteBarOf(OWNER, many, 'Seed Racing').promoted[0]!.held).toEqual({ ns: 'orders-sheet', key: 'reply.tooMany', params: { max: 50 } })
+  })
+
+  it('quotes: Finance draws only its own (Reply, Add task), the next allowed act moves up; Read-only draws none and the line says so', () => {
     const finance = quoteBarOf(FINANCE, [draft], null)
-    expect(ids(finance)).toEqual([['addTask'], []])
+    expect(ids(finance)).toEqual([['ask', 'addTask'], []])
     expect(finance.note).toBeNull()
     const reader = quoteBarOf(READER, [draft], null)
     expect(ids(reader)).toEqual([[], []])
@@ -110,24 +122,26 @@ describe('F-CQ-201: the bars — never an act for a missing right, held with wor
     const accepted = QUOTE_ROWS.find((row) => row.status === 'ACCEPTED')!
     const bar = quoteBarOf(OWNER, [accepted], null)
     expect(bar.promoted.find((act) => act.id === 'cancel')!.held).toEqual({ ns: 'before-order', key: 'acts.held.notOpen', params: { count: 1 } })
-    expect(bar.promoted.find((act) => act.id === 'askApproval')!.held).toEqual({ ns: 'before-order', key: 'acts.held.notDraft', params: { count: 1 } })
+    expect(bar.more.find((act) => act.id === 'askApproval')!.held).toEqual({ ns: 'before-order', key: 'acts.held.notDraft', params: { count: 1 } }) // F-CQ-304: under More ▾ now
     expect(bar.more.find((act) => act.id === 'newLink')!.held?.key).toBe('acts.held.notSent')
     expect(barFrom([{ id: 'x', right: false, label: why, held: null }], null, NO_ACT).note).toBe(NO_ACT)
   })
 
-  it('incoming: Assign · Ask · Decline, More ▾ Mark lost · Add task for who answers requests; the production manager none of the sales acts', () => {
+  it('incoming: Assign · Ask · Decline, More ▾ Mark lost · Reply · Add task for who answers requests; the production manager none of the sales acts', () => {
     const request = incomingRowOf(REQUEST_ROWS[0]!)
-    const owner = incomingBarOf({ manage: true, tasks: true }, [request, CATALOGUE_ROW], 'Seed Racing')
-    expect([owner.promoted.map((act) => act.id), owner.more.map((act) => act.id)]).toEqual([['assign', 'askInfo', 'decline'], ['lost', 'addTask']])
+    const owner = incomingBarOf({ manage: true, tasks: true, threads: true }, [request, CATALOGUE_ROW], 'Seed Racing')
+    expect([owner.promoted.map((act) => act.id), owner.more.map((act) => act.id)]).toEqual([['assign', 'askInfo', 'decline'], ['lost', 'reply', 'addTask']])
+    // F-CQ-304: Reply runs on every ticked row (a request and a portal order alike), in the orders sheet's own words.
+    expect(owner.more.find((act) => act.id === 'reply')!.label).toEqual({ ns: 'orders-sheet', key: 'bulk.reply', params: { customer: 'Seed Racing', count: 2 } })
     // A portal order ticked: one line says it is answered one at a time; the counts count the open requests only.
     expect(owner.note).toEqual({ ns: 'before-order', key: 'acts.portalOne', params: { count: 1 } })
     expect(owner.promoted[0]!.label).toEqual({ ns: 'sales-inquiries', key: 'bulk.assign', params: { count: 1 } })
-    const production = incomingBarOf({ manage: false, tasks: true }, [request], null)
-    expect(production.promoted.map((act) => act.id)).toEqual(['addTask'])
+    const production = incomingBarOf({ manage: false, tasks: true, threads: true }, [request], null)
+    expect(production.promoted.map((act) => act.id)).toEqual(['reply', 'addTask'])
     expect(production.note).toBeNull()
-    expect(incomingBarOf({ manage: false, tasks: false }, [request], null).note).toBe(NO_ACT)
+    expect(incomingBarOf({ manage: false, tasks: false, threads: false }, [request], null).note).toBe(NO_ACT)
     // Only portal orders ticked: the request acts are held with why ("Assign 0" never runs).
-    const portals = incomingBarOf({ manage: true, tasks: false }, [CATALOGUE_ROW], null)
+    const portals = incomingBarOf({ manage: true, tasks: false, threads: false }, [CATALOGUE_ROW], null)
     expect(portals.promoted[0]!.held).toEqual({ ns: 'before-order', key: 'acts.held.notRequest', params: { count: 1 } })
   })
 })

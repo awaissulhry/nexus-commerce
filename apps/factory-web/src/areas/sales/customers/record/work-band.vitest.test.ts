@@ -303,7 +303,10 @@ describe('F-CW-101: "Before an order" — ONE file for the read, its mapping and
     await expect(readBeforeOrder(apiOf(new Error('Not Found')).api, ALPHA)).rejects.toThrow()
     await expect(readBeforeOrder(apiOf({ partyId: ALPHA, groups: { WRITING: 'two' } }).api, ALPHA)).rejects.toThrow()
     const file = readFileSync(new URL('./before-order.ts', import.meta.url), 'utf8')
-    expect(file).toContain('() => mine === turn.current && setCounts(NO_BEFORE_ORDER),')
+    // F-CQ-302: the line's own read went into the page's ONE count read (quotes-tab/use-before-order-counts.ts): a failed read gives
+    // no counts there, so no line here.
+    const page = readFileSync(new URL('./quotes-tab/use-before-order-counts.ts', import.meta.url), 'utf8')
+    expect(page).toContain('if (!controller.signal.aborted) setFailed(true)')
     // The interim reads are gone: no drafts read on entry and no Incoming read for this line; the shape is the contract's, not ours.
     expect(file).not.toMatch(/order-requests|\/sales\/incoming|listIncoming|listCustomerDrafts|z\.object/)
     expect(file).toContain("from '@nexus/factory-domain/sales/before-order/contracts'")
@@ -314,7 +317,7 @@ describe('F-CW-101: "Before an order" — ONE file for the read, its mapping and
     expect(beforeLineOf(NO_BEFORE_ORDER, BASE)).toEqual([])
     expect(beforeLineOf({ drafts: 0, toAnswer: 0, openQuotes: 0, orderWaits: 0 }, BASE)).toEqual([])
     expect(beforeLineOf({ drafts: 2, toAnswer: 1, openQuotes: 3, orderWaits: null }, BASE)).toEqual([
-      { part: 'drafts', count: 2, href: null }, // the Work tab's own Drafts view
+      { part: 'drafts', count: 2, href: `${BASE}?tab=quotes&group=WRITING` }, // F-CQ-303: Quotes & incoming › Customer is writing
       { part: 'toAnswer', count: 1, href: `${BASE}?tab=quotes&group=TO_ANSWER` },
       { part: 'openQuotes', count: 3, href: `${BASE}?tab=quotes&group=OPEN_QUOTES` },
     ])
@@ -332,10 +335,12 @@ describe('F-CW-101: "Before an order" — ONE file for the read, its mapping and
       expect(beforeOrderTouched(type), type).toBe(true)
     }
     expect(beforeOrderTouched('product.updated')).toBe(false)
+    // F-CQ-302: the page's ONE count read (every tab: the Quotes & incoming badge, its band, this line) maps to the line on the Work
+    // tab; it reads again on this module's events (a quote, request or portal order of THIS customer; every order event).
     const page = readFileSync(new URL('./CustomerRecord.tsx', import.meta.url), 'utf8')
-    expect(page).toContain("const before = useBeforeOrder(partyId, tab === 'work' && can.orders)")
-    const file = readFileSync(new URL('./before-order.ts', import.meta.url), 'utf8')
-    expect(file).toContain('useLiveBus({ onChange: (change) => beforeOrderTouched(change.type) && again(), onReconnect: again }, enabled)')
+    expect(page).toContain("const before = useMemo(() => (tab === 'work' && can.orders && pageCounts.counts ? beforeOrderOf(pageCounts.counts) : NO_BEFORE_ORDER), [tab, can.orders, pageCounts.counts])")
+    const file = readFileSync(new URL('./quotes-tab/use-before-order-counts.ts', import.meta.url), 'utf8')
+    expect(file).toContain('countsMoved(change, partyId) || (!COUNTS_EVENTS.test(change.type) && beforeOrderTouched(change.type))')
     // The band's order numbers come from the board alone: the line's counts never enter them.
     const band = readFileSync(new URL('./work-band.ts', import.meta.url), 'utf8')
     expect(band).not.toContain('before-order')

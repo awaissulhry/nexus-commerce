@@ -156,9 +156,9 @@ describe('F-CQ-101: the sections — heads that never hide a record, lines that 
     expect(sectionCountOf(null, 'quotes', null, null, null)).toBeNull()
   })
 
-  it('the tab reads its counts itself (W1; no prop added to the page), with the lists\' host options; change requests are not here', () => {
+  it('the tab takes the page\'s ONE count read (F-CQ-302), with the lists\' host options; change requests are not here', () => {
     const tab = readFileSync(new URL('../QuotesIncomingTab.tsx', import.meta.url), 'utf8')
-    expect(tab).toContain('useQuotesTab(party.id)')
+    expect(tab).toContain('useQuotesTab(party.id, counts)') // F-CQ-302: the page's counts, handed in
     expect(tab).toContain("defaultSort: 'urgent'")
     expect(tab).toContain("defaultRank: 'urgent'")
     expect(tab).toContain('tiles: false')
@@ -275,7 +275,7 @@ describe('F-CQ-205: the drafts section', () => {
     expect(tab).toContain('<DraftWindow')
     expect(tab).toContain("pictures: { read: readPictures, header: b('drafts.picture') }")
     const list = readFileSync(new URL('../drafts/view/CustomerDraftsList.tsx', import.meta.url), 'utf8')
-    expect(list).toContain('readonly views?: { readonly model: OrdersListModel; readonly actions?: OrdersListActions } | null')
+    expect(list).not.toContain('readonly views?:') // F-CQ-303: no Views ▾ at all (the Work tab's Drafts view left)
     expect(list).toContain('source="portalOrder"')
   })
   it('the words in both languages', () => {
@@ -371,3 +371,112 @@ describe('cq T: the tab\'s gallery', () => {
   })
 })
 // ---- end cq T
+
+// ---- cq W3 (customer page › Quotes & incoming, 15-steps W3; 13-backend R13–R17): the Work lane's files — P0-B2 (one shown tab), the
+// dock a third, the page's ONE count read (the badge = what waits on us; the band and the Work line read it), the drafts left the Work
+// tab (its line's door → WRITING), Reply to N given a record type on both bars and rows, the dock's door line, the dead keys out.
+import { recordTabs, shownTab, SIDES, OPEN_QUOTES as PARTY_OPEN_QUOTES } from '../../../../parties/_shared/model'
+import { OPEN_QUOTES as DOMAIN_OPEN_QUOTES } from '@nexus/factory-domain/sales/before-order/groups'
+import { RECORD_CAN } from '../../../../parties/_shared/fixtures'
+import { pageCountsMoved } from './use-before-order-counts'
+import { incomingLinksOf, quoteLinksOf } from './links'
+import { quoteBarOf, quoteRightsOf } from '../../../quotes/list/bar'
+import { designScreen as galleryScreen } from './fixtures'
+
+describe('cq W3: the page around the tab', () => {
+  it('F-CQ-301 (P0-B2): one shown tab — the asked one when the reader sees it, else the first; the page and the view read the same rule', () => {
+    const warehouse = recordTabs(SIDES.customers, { ...RECORD_CAN, quotes: false, inquiries: false, orders: true })
+    expect(warehouse).not.toContain('quotes')
+    expect(shownTab(warehouse, 'quotes')).toBe(warehouse[0])
+    expect(shownTab(recordTabs(SIDES.customers, { ...RECORD_CAN, inquiries: true }), 'quotes')).toBe('quotes')
+    expect(shownTab([], 'quotes')).toBe('overview')
+    const page = readFileSync(new URL('../CustomerRecord.tsx', import.meta.url), 'utf8')
+    expect(page).toContain('const tab = shownTab(recordTabs(SIDES.customers, can), record.model.tab)')
+    const view = readFileSync(new URL('../view/CustomerRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('const tab: RecordTab = shownTab(tabs, model.tab)')
+    expect(view).toContain("defaultWidth={tab === 'work' || tab === 'quotes' ? 'third' : undefined}")
+  })
+
+  it('F-CQ-302: the page reads the counts ONCE (every tab); the badge = what waits on us there, marked; the band and the Work line read it', () => {
+    const page = readFileSync(new URL('../CustomerRecord.tsx', import.meta.url), 'utf8')
+    expect(page).toContain('const pageCounts = useBeforeOrderCounts(partyId, record.party !== null && record.party !== undefined)')
+    expect(page).toContain('const quotesBadge = pageCounts.counts ? { count: pageCounts.counts.waitsOnUs, attention: (pageCounts.counts.waitsOnUs ?? 0) > 0 } : null')
+    expect(page).not.toContain('useBeforeOrder(')
+    const hook = readFileSync(new URL('./use-quotes-tab.ts', import.meta.url), 'utf8')
+    expect(hook).not.toContain('readBeforeOrderCounts')
+    expect(hook).toContain('const { counts, failed, onRetry } = page')
+    const view = readFileSync(new URL('../view/CustomerRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("...(id === 'quotes' && quotesBadge?.attention ? {")
+    // Read again on THIS customer's quote / request / portal order, and on every order event (the Work line's rule); never another's.
+    const fields = (partyId: string) => ({ partyId })
+    expect(pageCountsMoved({ type: 'quote.sent', fields: fields(PARTY) }, PARTY)).toBe(true)
+    expect(pageCountsMoved({ type: 'quote.sent', fields: fields('another') }, PARTY)).toBe(false)
+    expect(pageCountsMoved({ type: 'sales_order.confirmed', fields: {} }, PARTY)).toBe(true)
+    expect(pageCountsMoved({ type: 'product.updated', fields: {} }, PARTY)).toBe(false)
+    // OPEN_QUOTES: the domain's one list (the parties model no longer keeps its own).
+    expect([...PARTY_OPEN_QUOTES].sort()).toEqual([...DOMAIN_OPEN_QUOTES].sort())
+  })
+
+  it('F-CQ-303: the drafts left the Work tab — no view, no list, no window there; the line\'s and the empty line\'s door go to WRITING', () => {
+    const tab = readFileSync(new URL('../view/WorkTab.tsx', import.meta.url), 'utf8')
+    for (const gone of ['DRAFTS_VIEW', 'useCustomerDrafts', '<CustomerDraftsList', '<DraftWindow', 'draftsAddress']) expect(tab, gone).not.toContain(gone)
+    expect(tab).toContain("href: quotesGroupDoor(`${prefix}${basePath}`, 'WRITING')")
+    const band = readFileSync(new URL('../view/WorkBand.tsx', import.meta.url), 'utf8')
+    expect(band).not.toContain('onDrafts')
+  })
+
+  it('F-CQ-304: Ask / Reply to N leads the Quotes bar (rights from the session), the Incoming bar has Reply under More ▾, each row "Reply to <customer>…"', () => {
+    const rights = quoteRightsOf(['threads.post', 'partners.tasks.manage', 'tasks.manage'], { manage: false, send: false }, { price: false })
+    expect(rights).toMatchObject({ threads: true, customerTasks: true, tasks: true })
+    expect(quoteBarOf(rights, [{ status: 'DRAFT', order: null, versionId: null, partyId: PARTY }], 'Seed Customer One').promoted.map((act) => act.id)).toEqual(['ask', 'addTask'])
+    const quotes = readFileSync(new URL('../../../quotes/list/use-quotes-list.ts', import.meta.url), 'utf8')
+    expect(quotes).toContain("const onReply = (picked: readonly QuoteListRow[], ask: boolean) => reply.open(picked, lock, { todo: ask, recordType: 'Quote' })")
+    // Hooks before the model reads them (the lead's lesson of fx1): the window's hook stands above `const model`.
+    expect(quotes.indexOf('const reply = useReplyMany(')).toBeLessThan(quotes.indexOf('const model: QuotesListViewModel = {'))
+    const incoming = readFileSync(new URL('../../../inquiries/use-inquiries-list.ts', import.meta.url), 'utf8')
+    expect(incoming).toContain('const onReply = (rows: readonly IncomingRow[]) => reply.open(rows.map(replyRowOf), lock, { recordType: replyTypeOf(rows) })')
+    expect(incoming.indexOf('const reply = useReplyMany(')).toBeLessThan(incoming.indexOf('const model: InquiriesModel = {'))
+    for (const view of ['../../../quotes/list/view/QuotesListView.tsx', '../../../inquiries/view/InquiriesView.tsx']) {
+      const source = readFileSync(new URL(view, import.meta.url), 'utf8')
+      expect(source, view).toContain('{model.reply && <ReplyManyDialog model={model.reply} actions={actions?.reply} />}')
+      expect(source, view).toContain("{ id: 'reply', label: t(")
+    }
+    expect(galleryScreen.cases.map((item) => item.id)).toEqual(expect.arrayContaining(['win-ask-quotes', 'win-reply-requests']))
+    const ask = galleryScreen.cases.find((item) => item.id === 'win-ask-quotes')!.model.quotes.reply!
+    expect([ask.recordType, ask.asked, ask.todo?.on, ask.targets.every((target) => target.recordType === 'Quote')]).toEqual(['Quote', true, true, true])
+  })
+
+  it('F-CQ-305: the dock\'s door line from the row\'s own data (a click docks that record); the dead keys out of parties', () => {
+    const quote = quoteLinksOf({ companyId: 'c', madeFrom: { inquiryId: 'i1', number: 'SEED-INQ-0005' }, fromPortalOrder: null, order: { state: 'MADE', id: 'o1', number: 'SEED-SO-0150', status: 'CONFIRMED', reason: null, words: null } })
+    expect(quote.map((link) => [link.kind, link.pick.type, link.pick.label])).toEqual([['cameFromRequest', 'Inquiry', 'SEED-INQ-0005'], ['becameOrder', 'SalesOrder', 'SEED-SO-0150']])
+    expect(quoteLinksOf({ companyId: 'c', madeFrom: undefined, fromPortalOrder: { id: 'p1', number: 'SEED-RQ-0086' }, order: null }).map((link) => link.kind)).toEqual(['cameFromPortal'])
+    expect(quoteLinksOf({ companyId: 'c', madeFrom: undefined, fromPortalOrder: null, order: { state: 'WAITS', id: null, number: null, status: null, reason: 'NOT_MADE', words: null } })).toEqual([])
+    expect(incomingLinksOf({ companyId: 'c', request: null, catalogueOrder: { quote: { id: 'q1', number: 'SEED-QT-0012' }, salesOrder: null } as never }).map((link) => link.kind)).toEqual(['becameQuote'])
+    const work = readFileSync(new URL('../view/WorkTab.tsx', import.meta.url), 'utf8')
+    expect(work).toContain('onClick={() => dock.onRow(link.pick)}')
+    expect(work).toContain("{b(`dock.${link.kind}`, { number: link.pick.label })}")
+    const tab = readFileSync(new URL('../QuotesIncomingTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain('links: quoteLinksOf(row) /* F-CQ-305 */')
+    expect(tab).toContain('links: incomingLinksOf(row) /* F-CQ-305 */')
+    for (const locale of LOCALES) {
+      const b = createTranslator(locale, messagesFor(locale, ['before-order'])['before-order']!)
+      for (const key of ['dock.cameFromRequest', 'dock.cameFromPortal', 'dock.becameQuote', 'dock.becameOrder']) expect(b(key, { number: 'SEED-QT-0012' }), `${locale} ${key}`).toContain('SEED-QT-0012')
+      const parties = createTranslator(locale, messagesFor(locale, ['parties']).parties!)
+      for (const key of ['customers.quotesTab.incoming', 'customers.quotesTab.noQuotes', 'customers.quotesTab.noRequests']) expect(parties(key), `${locale} ${key}`).toBe(key)
+    }
+  })
+
+  it('T part 2: the customer page\'s gallery mounts the tab (its own parts) for its customer; the Work cases\' drafts are on Quotes & incoming', () => {
+    const gallery = readFileSync(new URL('../fixtures.ts', import.meta.url), 'utf8')
+    expect(gallery).toContain('createElement(QuotesTabDesign, { model: quotesTabFor({ id: record.party.id, name: record.party.tradeName ?? record.party.legalName }) })')
+    expect(gallery).toContain("{ tab: 'quotes', can: { ...RECORD_CAN, inquiries: true } }) },")
+    expect(gallery).not.toContain('DRAFTS_VIEW')
+    expect(gallery).toContain("href: quotesGroupDoor(recordHref, 'WRITING')")
+    // The golden step: the band, a door's count = its rows, Sort ▾, one ticked quote's bar; nothing written.
+    const golden = readFileSync(new URL('../../../../../../tests/golden-flow/01-customer.ts', import.meta.url), 'utf8')
+    expect(golden).toContain("await sales.go(`/sales/customers/${P1}?tab=quotes`)")
+    expect(golden).toContain("expect(written, 'nothing was written').toEqual([])")
+    expect(golden.indexOf('// ---- cq T.2')).toBeGreaterThan(golden.indexOf('// ---- end cw T.2'))
+  })
+})
+// ---- end cq W3

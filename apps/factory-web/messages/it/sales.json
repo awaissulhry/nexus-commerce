@@ -834,7 +834,8 @@
     },
     "row": {
       "sendOnPage": "Invia dalla pagina del preventivo ›",
-      "addTask": "Aggiungi attività…"
+      "addTask": "Aggiungi attività…",
+      "reply": "Rispondi a {customer}…"
     }
   },
   "newQuote": {

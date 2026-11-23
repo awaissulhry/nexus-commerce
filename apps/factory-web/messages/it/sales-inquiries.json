@@ -86,7 +86,8 @@
     "makeOrder": "Crea ordine…",
     "assign": "Assegna…",
     "decline": "Rifiuta…",
-    "addTask": "Aggiungi attività…"
+    "addTask": "Aggiungi attività…",
+    "reply": "Rispondi a {customer}…"
   },
   "keys": {
     "new": "Nuova richiesta",

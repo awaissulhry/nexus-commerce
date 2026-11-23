@@ -1,19 +1,16 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Banner, EmptyState, Menu } from '@nexus/ui/components'
+import { Banner, EmptyState } from '@nexus/ui/components'
 import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Tag } from '@nexus/ui/primitives'
 import { ListFrame } from '../../../../../../list-frame/ListFrame'
-import { builtInViewItems } from '../../../../../../list-frame/tools/ListToolsBar'
-import { formatDate, formatNumber, formatTime } from '../../../../../../lib/i18n/format'
+import { formatDate, formatTime } from '../../../../../../lib/i18n/format'
 import { INTL_LOCALE } from '../../../../../../lib/i18n/locales'
 import { priceText } from '../../../../inquiries/model'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../../record-panels/i18n'
-import type { OrdersListActions, OrdersListModel } from '../../../../orders/list/list-model'
 import { NAMESPACE as SHEET_NS } from '../../../../orders/list/sheet/model'
-import { builtInActive, builtInViewsOf, pickBuiltIn } from '../../../../orders/list/view/OrdersListView'
 import type { DraftRow } from '../api'
 import { draftTitle, filesWords, linesWords, messagesWords, readyOf, showsValue, type DraftsRead, type Words } from '../model'
 import { draftValueOf } from '../model' // F-CP-141 (follow-up 6): the draft's own value when the API sends it
@@ -39,9 +36,7 @@ export interface CustomerDraftsListModel {
   readonly updates: number
   /** The draft whose conversation the dock shows (marked); null: none. */
   readonly activeId: string | null
-  /** The Work tab's sheet model and actions: its Views ▾ (the same items, the Drafts view ticked) and their picks. F-CQ-205: optional —
-   *  the Quotes & incoming tab's section has no Views ▾. */
-  readonly views?: { readonly model: OrdersListModel; readonly actions?: OrdersListActions } | null
+  // F-CQ-303: no Views ▾ any more (it was the Work tab's, over its Drafts view; that view left with the drafts).
   /** F-CQ-205: each draft's first style as its picture (the host's batch read and its header's words); absent: no Picture column. */
   readonly pictures?: { readonly read: ReadPictures; readonly header: string } | null
   /** Design cases: the widths that show the wide columns. */
@@ -84,9 +79,6 @@ function useWide(forced: boolean | undefined): boolean {
 
 function DraftsList({ model, actions }: { model: CustomerDraftsListModel; actions?: CustomerDraftsListActions }) {
   const t = useT('parties')
-  const o = useT('orders')
-  const s = useT(SHEET_NS)
-  const l = useT('lists')
   const locale = useLocale()
   const wide = useWide(model.wide)
   const latest = useRef(actions)
@@ -186,11 +178,7 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the cells read the latest actions through `latest`
   }, [t, locale, wide, price, untitled, !!model.pictures /* F-CQ-205 */])
 
-  // The Views ▾ of the Work tab: the same items as the sheet's, the Drafts view ticked; a pick goes through the sheet (which drops `list`).
-  const views = model.views ?? null // F-CQ-205: none on the Quotes & incoming tab
-  const builtIns = views ? { items: builtInViewsOf(views.model, o, s, (value) => formatNumber(value, locale)), active: builtInActive(views.model), onPick: (id: string) => pickBuiltIn(id, views.model, views.actions) } : null
-  const active = builtIns ? (builtIns.items.find((view) => view.id === builtIns.active) ?? null) : null
-  const viewsMenu = builtIns ? <Menu label={active ? l('tools.viewsTrigger', { name: active.label }) : l('tools.builtIn')} items={[{ id: 'h-builtin', heading: true, label: l('tools.builtIn') }, ...builtInViewItems(builtIns)]} /> : null
+  // F-CQ-303: the Work tab's Views ▾ over the drafts is gone with its Drafts view (Quotes & incoming draws this list with no Views ▾).
 
   const state =
     model.read.status === 'failed' ? (
@@ -215,7 +203,6 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
       rowId={(row) => row.id}
       columns={columns}
       count={rows ? t('customers.drafts.count', { count: rows.length }) : '—'}
-      tools={viewsMenu}
       state={state}
       updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
       onRowClick={(row) => actions?.onRow?.(row)}

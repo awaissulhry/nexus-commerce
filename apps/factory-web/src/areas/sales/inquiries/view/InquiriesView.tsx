@@ -102,6 +102,8 @@ import { ManyActDialog, ManyBar } from '../../_shared/many-acts/view/ManyActDial
 import type { ManyActActions, ManyActModel } from '../../_shared/many-acts/use-many-act'
 import type { TaskBatchModel } from '../../_shared/many-acts/use-task-batch'
 import { TaskNewDialog } from '../../../../record-panels/tasks/view/TaskNewDialog'
+import { ReplyManyDialog } from '../../orders/list/view/ReplyManyDialog' // F-CQ-304
+import type { ReplyManyActions, ReplyManyModel } from '../../orders/list/reply-many' // F-CQ-304
 import type { BatchAnswer, BatchAssignee, TaskDraft } from '../../../../record-panels/tasks/model'
 import { RecordDialogs } from './pane/sections'
 import { CatalogueDialogs } from './pane/catalogue/CataloguePane'
@@ -214,6 +216,8 @@ export interface InquiriesModel {
   verb?: InquiryRecordModel | null
   /** A portal order's own window opened from its row on such a host, or null. */
   catalogueVerb?: CatalogueModel | null
+  /** F-CQ-304: the Reply-to-N window over the ticked requests and portal orders. */
+  reply?: ReplyManyModel | null
   // ---- end F-CQ-201 / 203 / 204
 }
 
@@ -239,6 +243,9 @@ export interface InquiriesActions {
   // ---- F-CQ-201 / 203 / 204: the bar's act over the ticked rows, a portal order's own verb from its row, the windows' own actions
   onBarAct?: (kind: IncomingActKind, picked: readonly IncomingRow[]) => void
   onCatalogueVerb?: (row: IncomingRow, verb: 'order' | 'quote' | 'refuse') => void
+  /** F-CQ-304: Reply to <customer> on these rows (the Orders sheet's Reply-to-N window, each record's own conversation). */
+  onReply?: (rows: readonly IncomingRow[]) => void
+  reply?: ReplyManyActions
   many?: ManyActActions
   tasks?: { readonly onSend: (draft: TaskDraft, assignee: BatchAssignee) => Promise<BatchAnswer | null>; readonly onRetryPeople: () => void; readonly onClose: () => void }
   // ---- end F-CQ-201 / 203 / 204
@@ -663,6 +670,8 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
                   { id: 'refuse', label: `${t('catalogue.refuse')}…`, tone: 'danger' as const, onSelect: () => act()?.onCatalogueVerb?.(data, 'refuse') },
                 ]
               : []),
+            // F-CQ-304: Reply to <customer>… on this one request or portal order (threads.post; a prospect's row has no customer to reply to).
+            ...(m.barRights?.threads && data.kind !== 'CHANGE_REQUEST' && data.party ? [{ id: 'reply', label: t('row.reply', { customer: m.customerName ?? data.party.name }), onSelect: () => act()?.onReply?.([data]) }] : []),
             ...(m.barRights?.tasks && data.kind !== 'CHANGE_REQUEST' ? [{ id: 'addTask', label: t('row.addTask'), onSelect: () => act()?.onRowVerb?.(data, 'addTask') }] : []),
             { id: 'copy', label: t('row.copy'), onSelect: () => act()?.onCopy?.([data.number]) },
           ]}
@@ -1205,6 +1214,8 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
       )}
       {hostPane && model.verb && model.verb.loaded.status === 'ready' && <RecordDialogs model={model.verb} view={model.verb.loaded.value} actions={actions?.record} />}
       {hostPane && model.catalogueVerb && model.catalogueVerb.loaded.status === 'ready' && <CatalogueDialogs model={model.catalogueVerb} actions={actions?.catalogue} record={model.catalogueVerb.loaded.value} />}
+      {/* F-CQ-304: the Orders sheet's ONE Reply-to-N window, given these records (their own conversations and words). */}
+      {model.reply && <ReplyManyDialog model={model.reply} actions={actions?.reply} />}
       {model.bulk?.kind === 'assign' && <AssignDialog model={model.bulk.model} actions={{ onAssign: actions?.bulk?.onAssign, onRetry: actions?.bulk?.onRetryPeople, onClose: actions?.bulk?.onClose }} />}
       {model.bulk?.kind === 'decline' && <DeclineDialog model={model.bulk.model} actions={{ onDraft: actions?.bulk?.onDecline, onSubmit: actions?.bulk?.onSubmit, onClose: actions?.bulk?.onClose }} />}
       {model.detail && model.pane?.closing && model.detail.loaded.status === 'ready' && (

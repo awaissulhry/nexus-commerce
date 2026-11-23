@@ -2,32 +2,17 @@ import type { DockPick } from '../view/WorkTab'
 import type { DraftRow } from './api'
 
 /**
- * F-CP-107 (customer page plan D10; 10-customer-page §6) — "Drafts of <customer>" on the Work tab, pure: the address term (`list=drafts`,
- * one of the Work tab's view terms), a row in words (its title, started by whom, its counts, its files, how ready it is, its last
+ * F-CP-107 (customer page plan D10; 10-customer-page §6) — the customer's portal drafts, pure (F-CQ-303: "Customer is writing" on
+ * Quotes & incoming): the old address term (`list=drafts`), a row in words (its title, started by whom, its counts, its files, how ready it is, its last
  * change, the day wanted, its conversation), the dock pick of a row (the draft's own conversation), the window's walk (J / K) and the
  * live events a draft list is read again on. Read only: no selection, no export, Accept and Refuse held until the customer sends it.
  */
 
-/** The page term of the view (one of the Work tab's view terms: an address on it gets no default written). */
+/** The page term of the old view (`list=drafts`). F-CQ-303: an address with it opens Quotes & incoming at WRITING (workEntry). */
 export const DRAFTS_TERM = Object.freeze({ name: 'list', value: 'drafts' } as const)
-
-/** The Work tab shows the customer's drafts (`list=drafts`). */
-export const draftsShown = (params: { get(name: string): string | null } | null): boolean => params?.get(DRAFTS_TERM.name) === DRAFTS_TERM.value
-
-/**
- * The address that opens the view: the page's tab, its lock and `list=drafts` — the sheet's own terms dropped (a rows view, a search
- * would not apply to drafts); the page's dock kept. Picking a rows view again goes through the sheet, which drops `list`.
- */
-export function draftsAddress(base: string, partyId: string, params: { get(name: string): string | null } | null): string {
-  const query = new URLSearchParams({ tab: 'work', party: partyId, [DRAFTS_TERM.name]: DRAFTS_TERM.value })
-  const dock = params?.get('dock')
-  if (dock) query.set('dock', dock)
-  // F-CW-201: the order the person reads the orders in is kept for the way back (the drafts themselves are not sorted by it) —
-  // without it a look at the drafts would turn "Most urgent first" into "Newest first".
-  const sort = params?.get('sort')
-  if (sort) query.set('sort', sort)
-  return `${base}?${query.toString()}`
-}
+// ---- F-CQ-303 (customer page › Quotes & incoming, 13-backend R14): the drafts left the Work tab — no view to show (`draftsShown`) or
+// open (`draftsAddress`) there any more; the rest of this module serves the drafts' list and window on Quotes & incoming.
+// ---- end F-CQ-303
 
 /** Words of this screen: a key of `parties` with its parameters. */
 export interface Words {

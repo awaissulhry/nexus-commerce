@@ -15,7 +15,7 @@ export const CUSTOMER = {
 }
 
 export default defineStage({
-  proves: 'Italian B2B customer with tax identity; VIES proof (fake): an Italian VAT number is not a VIES question, and the screen says so; the customer page opens on All orders (rows=all, one document, no loop), New order and its lines open in place, Clear all goes back to All orders, a docked order shows its own files line (F-CP-112); on the Work tab a band door shows exactly its count, the order says Most urgent first, ticked rows show the bar with words and Ask production opens with Needs an answer ticked, nothing written (cw T.2)',
+  proves: 'Italian B2B customer with tax identity; VIES proof (fake): an Italian VAT number is not a VIES question, and the screen says so; the customer page opens on All orders (rows=all, one document, no loop), New order and its lines open in place, Clear all goes back to All orders, a docked order shows its own files line (F-CP-112); on the Work tab a band door shows exactly its count, the order says Most urgent first, ticked rows show the bar with words and Ask production opens with Needs an answer ticked, nothing written (cw T.2); on Quotes & incoming the band shows, a door opens exactly its count, Sort ▾ says Most urgent first, one ticked row shows at most 3 acts and More ▾ with words, nothing written (cq T.2)',
   async run(flow) {
     const sales = await flow.desk('sales')
     const { page } = sales
@@ -300,6 +300,78 @@ export default defineStage({
       expect(written, 'nothing was written').toEqual([])
     })
     // ---- end cw T.2
+
+    // ---- cq T.2 (customer page › Quotes & incoming, W1–W3): the tab's own things on the seeded customer — the band "Before an order",
+    // a door's number = the rows it opens, Sort ▾ Most urgent first, one ticked quote's bar (at most 3 acts + More ▾, each with words).
+    // Found by role and by catalogue word; NOTHING is written (Escape leaves; no write reaches a quote, a request, a thread or a task).
+    await flow.step('Quotes & incoming: the band shows, a door opens exactly its count, Sort ▾ says "Most urgent first", one ticked row shows at most 3 acts and More ▾ with words (nothing written)', async () => {
+      const B = words('before-order')
+      const P = words('parties')
+      const Q = words('sales')
+      const S = words('orders-sheet')
+      const L = words('lists')
+      const P1 = await flow.seedId('party:P1')
+      const written: string[] = []
+      const onRequest = (request: import('@playwright/test').Request) => {
+        const path = new URL(request.url()).pathname
+        if (request.method() !== 'GET' && /\/(sales\/(quotes|inquiries|order-requests)|threads|partners|tasks)(\/|$)/.test(path) && !/\/(pictures|unread)$/.test(path)) written.push(`${request.method()} ${path}`)
+      }
+      page.on('request', onRequest)
+      await sales.go(`/sales/customers/${P1}?tab=quotes`)
+      // The band: "Before an order · <customer>", its doors in life order, each a real link with its number.
+      const band = page.getByRole('region', { name: startsWith(B('band.title')) })
+      await seen(band, 60_000)
+      const doors = band.getByRole('list', { name: B('band.pipeline'), exact: true }).getByRole('link')
+      await seen(doors, 30_000)
+      await flow.shot(page, 'customer-quotes-band')
+      // A door that holds something (the seeded customer has its quotes): the lists below show exactly its count of rows.
+      let door = doors.first()
+      let count = 0
+      for (let index = 0; index < (await doors.count()); index += 1) {
+        const held = Number((await doors.nth(index).locator('.fw-bo-count').first().innerText()).replace(/\D/g, ''))
+        if (held > 0) {
+          door = doors.nth(index)
+          count = held
+          break
+        }
+      }
+      expect(count, 'the seeded customer has something before an order').toBeGreaterThan(0)
+      await door.click()
+      await expect(page).toHaveURL(/[?&]group=[A-Z_]+(&|$)/, { timeout: 30_000 })
+      const rows = page.locator('.ag-center-cols-container .ag-row')
+      await expect(rows).toHaveCount(count, { timeout: 60_000 })
+      await flow.shot(page, 'customer-quotes-door')
+      // The same door again: everything again (the address without the door, one replace).
+      await door.click()
+      await expect(page).not.toHaveURL(/[?&]group=/, { timeout: 30_000 })
+      // The Quotes section: Sort ▾ says "Most urgent first".
+      const quotes = page.getByRole('region', { name: P('customers.quotesTab.quotes'), exact: true })
+      await seen(quotes, 30_000)
+      const sort = quotes.getByRole('combobox', { name: S('sort.label'), exact: true })
+      await expect(sort).toHaveValue('urgent', { timeout: 30_000 })
+      await expect(sort.locator('option:checked')).toHaveText(Q('list.sort.urgent'))
+      // One ticked quote: the bar shows at most 3 acts, each with words, and More ▾ (with its word) when there are more.
+      const boxes = quotes.locator('.ag-row .ag-selection-checkbox')
+      await seen(boxes, 60_000)
+      await boxes.first().click()
+      await seen(quotes.getByText(L('selected', { count: 1 }), { exact: true }), 30_000)
+      const bar = quotes.locator('.fw-many-bar')
+      await seen(bar, 30_000)
+      const more = bar.getByRole('button').filter({ hasText: B('acts.more') })
+      const acts = bar.getByRole('button').filter({ hasNotText: B('acts.more') })
+      const shown = await acts.count()
+      expect(shown, 'at most 3 acts on the bar').toBeLessThanOrEqual(3)
+      for (let index = 0; index < shown; index += 1) expect((await acts.nth(index).innerText()).trim(), 'each act says what it does').not.toBe('')
+      // A role that changes none reads one line instead (never an empty bar).
+      if (shown === 0) await expect(bar.getByText(B('acts.noAct'), { exact: true })).toBeVisible()
+      if ((await more.count()) > 0) await expect(more.first()).toHaveAttribute('aria-label', new RegExp(B('acts.moreLabel', { count: 0 }).replace('0', '\\d+')))
+      await flow.shot(page, 'customer-quotes-bar')
+      await page.keyboard.press('Escape')
+      await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 15_000 })
+      page.off('request', onRequest)
+      expect(written, 'nothing was written').toEqual([])
+    })
+    // ---- end cq T.2
 
     const saved = (await flow.read(page, `/parties/${party.id}`)).party
     expect(saved).toMatchObject({ code: CUSTOMER.code, legalName: CUSTOMER.legalName })
