@@ -77,22 +77,25 @@ const CLOSE_STATUSES: readonly OrderStatus[] = Object.freeze(['SHIPPED', 'DELIVE
  *   Confirmed         → Make work orders (the production manager's right; held while production waits for the deposit) · Cancel order…
  *   In production     → Mark ready… · Cancel order…
  *   Ready             → Cancel order…
- *   Shipped, Delivered → Close order… (held without the right to manage or close orders; "not settled" is the window's, from the read)
- * Partly shipped, Closed, Cancelled: nothing (a system move or a final state). Each held item keeps its words (held-not-disabled).
+ *   Shipped, Delivered → Close order… (with the right to manage or close orders; "not settled" is the window's, from the read)
+ * Partly shipped, Closed, Cancelled: nothing (a system move or a final state).
+ * F-CW-204 (customer Work tab; 10-design §5; lead settle S9): a step the reader has NO RIGHT for is not in the menu at all — Make work
+ * orders without workorders.manage, Mark ready… and Cancel order… without orders.manage, Close order… without orders.manage or
+ * orders.close (each was drawn greyed with "needs the right" before). A step a STATE holds keeps its place and its words (the
+ * deposit that production waits for). The window's own guard still says the right (windowHeldOf): it never opens without it.
  */
-export function rowStepsOf(row: Pick<OrderRow, 'status' | 'deposit'>, can: OrderAbilities): RowStep[] {
+export function rowStepsOf(row: Pick<OrderRow, 'status' | 'deposit'>, can: Pick<OrderAbilities, 'manage' | 'close' | 'makeWorkOrders'>): RowStep[] {
   const steps: RowStep[] = []
   if (row.status === 'PENDING_APPROVAL') steps.push({ command: 'confirm', held: null })
-  if (row.status === 'CONFIRMED') steps.push({ command: 'make', held: makeHeldOfRow(row, can) })
-  if (row.status === 'IN_PRODUCTION') steps.push({ command: 'ready', held: can.manage ? null : orders('held.noManage') })
-  if (CLOSE_STATUSES.includes(row.status)) steps.push({ command: 'close', held: can.manage || can.close ? null : orders('held.noClose') })
-  if (CANCEL_STATUSES.includes(row.status)) steps.push({ command: 'cancel', held: can.manage ? null : orders('held.noManage') })
+  if (row.status === 'CONFIRMED' && can.makeWorkOrders) steps.push({ command: 'make', held: makeHeldOfRow(row) })
+  if (row.status === 'IN_PRODUCTION' && can.manage) steps.push({ command: 'ready', held: null })
+  if (CLOSE_STATUSES.includes(row.status) && (can.manage || can.close)) steps.push({ command: 'close', held: null })
+  if (CANCEL_STATUSES.includes(row.status) && can.manage) steps.push({ command: 'cancel', held: null })
   return steps
 }
 
-/** Make work orders from the row: the production manager's right first, then the deposit gate (the row's deposit is the gate's state). */
-function makeHeldOfRow(row: Pick<OrderRow, 'deposit'>, can: OrderAbilities): Words | null {
-  if (!can.makeWorkOrders) return orders('held.noWorkOrders')
+/** Make work orders from the row, for a reader who may make them: the deposit gate (the row's deposit is the gate's state). */
+function makeHeldOfRow(row: Pick<OrderRow, 'deposit'>): Words | null {
   if (row.deposit.state === 'OPEN') return orders('held.deposit', { date: row.deposit.dueDate ?? '' })
   if (row.deposit.state === 'MISSING') return orders('held.depositMissing')
   return null

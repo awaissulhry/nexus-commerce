@@ -81,7 +81,9 @@ const YES = {
   whoDecides: task({ approve: { allowed: false, why: OTHERS }, reject: { allowed: false, why: OTHERS } }),
 }
 
-describe('F-CP-108 — the PARITY test: A14\'s map on a full order of each status = the row\'s Next steps', () => {
+// F-CW-204 (customer Work tab; 10-design §5; lead settle S9): the row draws A14's commands the reader HOLDS THE RIGHT for — a step
+// without its right is not in the menu (the order page keeps its own held words); a step it draws is held exactly as A14 holds it.
+describe('F-CP-108 — the PARITY test: A14\'s map on a full order of each status = the row\'s Next steps (the ones the reader has the right for)', () => {
   for (const role of ROLE_NAMES) {
     for (const status of ORDER_STATUSES) {
       it(`${role} · ${status}`, () => {
@@ -91,22 +93,42 @@ describe('F-CP-108 — the PARITY test: A14\'s map on a full order of each statu
         const step = nextStep(value, can)
         // Waiting for a yes: Confirm or refuse… (its door is the window's: who decides, the asker's hold).
         expect(has(steps, 'confirm')).toBe(step.kind === 'confirmYes' || step.kind === 'askYes')
-        // Confirmed: Make work orders, held exactly as the band's primary.
-        expect(has(steps, 'make')).toBe(step.kind === 'makeWorkOrders')
-        if (step.kind === 'makeWorkOrders') expect(heldOf(steps, 'make')).toEqual(step.held)
-        // Shipped or delivered: Close order…, held as closeHeld (settled; "not settled" is the window's, from the read).
-        expect(has(steps, 'close')).toBe(step.kind === 'close')
-        if (step.kind === 'close') expect(heldOf(steps, 'close')).toEqual(closeHeld(value, can))
-        // In production: Mark ready…, held as readyHeld (the API's markReady action is there) — F-OO-112: on a released fixture (`full`'s
-        // default); the quality hold is the window's, from the read (as Close's "not settled"): see the F-OO-112 test.
-        expect(has(steps, 'ready')).toBe(!!actionOf(value, 'markReady'))
+        // Confirmed: Make work orders — only for who may make them; held exactly as the band's primary (the deposit gate).
+        expect(has(steps, 'make')).toBe(step.kind === 'makeWorkOrders' && can.makeWorkOrders)
+        if (has(steps, 'make')) expect(heldOf(steps, 'make')).toEqual(step.held)
+        // Shipped or delivered: Close order… — only with orders.manage or orders.close; held as closeHeld (settled; "not settled"
+        // is the window's, from the read).
+        expect(has(steps, 'close')).toBe(step.kind === 'close' && (can.manage || can.close))
+        if (has(steps, 'close')) expect(heldOf(steps, 'close')).toEqual(closeHeld(value, can))
+        // In production: Mark ready… — only with orders.manage; held as readyHeld (the API's markReady action is there) — F-OO-112: on
+        // a released fixture (`full`'s default); the quality hold is the window's, from the read: see the F-OO-112 test.
+        expect(has(steps, 'ready')).toBe(!!actionOf(value, 'markReady') && can.manage)
         if (has(steps, 'ready')) expect(heldOf(steps, 'ready')).toEqual(readyHeld(value, can))
-        // Cancel order…: where the API offers the cancel; held as cancelHeld.
-        expect(has(steps, 'cancel')).toBe(!!actionOf(value, 'cancel') && CANCEL_STATUSES.includes(status))
+        // Cancel order… — only with orders.manage, where the API offers the cancel; held as cancelHeld.
+        expect(has(steps, 'cancel')).toBe(!!actionOf(value, 'cancel') && CANCEL_STATUSES.includes(status) && can.manage)
         if (has(steps, 'cancel')) expect(heldOf(steps, 'cancel')).toEqual(cancelHeld(value, can))
+        // Whatever the role: no step of the row is held by a missing right (it would not be drawn).
+        for (const entry of steps) expect(['held.noManage', 'held.noClose', 'held.noWorkOrders'], `${role} ${status} ${entry.command}`).not.toContain(entry.held?.key ?? '')
       })
     }
   }
+
+  it('F-CW-204: an act without its right is not in the row\'s menu — the production manager makes work orders and nothing else', () => {
+    const commands = (status: OrderStatus, role: (typeof ROLE_NAMES)[number]) => rowStepsOf({ status, deposit: { state: 'PAID', dueDate: null } }, canOf(role)).map((entry) => entry.command)
+    expect(commands('CONFIRMED', 'manager')).toEqual(['make'])
+    expect(commands('IN_PRODUCTION', 'manager')).toEqual([])
+    expect(commands('SHIPPED', 'manager')).toEqual([])
+    expect(commands('READY', 'manager')).toEqual([])
+    // Finance closes (orders.close) and changes no order.
+    expect(commands('SHIPPED', 'finance')).toEqual(['close'])
+    expect(commands('IN_PRODUCTION', 'finance')).toEqual([])
+    // The Owner: every step of the state, Cancel order… last.
+    expect(commands('CONFIRMED', 'owner')).toEqual(['make', 'cancel'])
+    expect(commands('IN_PRODUCTION', 'owner')).toEqual(['ready', 'cancel'])
+    expect(commands('DELIVERED', 'owner')).toEqual(['close'])
+    // A state still holds with words: production waits for the deposit.
+    expect(rowStepsOf({ status: 'CONFIRMED', deposit: { state: 'OPEN', dueDate: '2026-11-09' } }, canOf('owner'))[0]).toEqual({ command: 'make', held: { key: 'held.deposit', params: { date: '2026-11-09' } } })
+  })
 
   it('the deposit gate: the row\'s deposit holds Make work orders as the band does (waiting, missing, paid, waived, not needed)', () => {
     const can = canOf('owner')
@@ -159,8 +181,9 @@ describe('F-OO-112 — the row holds Mark ready by the right only (as Close); th
     const preview = manyPreview('ready', [target('a', 'SO-1'), target('b', 'SO-2')], { a: { state: 'ready', order: held }, b: { state: 'ready', order: full('IN_PRODUCTION') } }, can)
     expect(preview.runs.map((line) => line.target.number)).toEqual(['SO-2'])
     expect(preview.notOn.map((line) => [line.target.number, line.why])).toEqual([['SO-1', { key: 'held.readyQuality', params: { n: 7, m: 14 } }]])
-    // Without orders.manage the row and the window say the right first (unchanged).
-    expect(heldOf(rowStepsOf(rowOf(held), canOf('manager')), 'ready')).toEqual(windowHeldOf('ready', held, canOf('manager')))
+    // F-CW-204 (S9): without orders.manage the row does not draw Mark ready… at all; the window's own guard still says the right.
+    expect(has(rowStepsOf(rowOf(held), canOf('manager')), 'ready')).toBe(false)
+    expect(windowHeldOf('ready', held, canOf('manager'))).toEqual({ key: 'held.noManage' })
   })
 })
 // ---- end F-OO-112
@@ -178,6 +201,38 @@ describe('F-CP-108 — never a system move, no free status', () => {
     // Cancel order… is last (the menu draws it after a rule, in the danger tone).
     const steps = rowStepsOf({ status: 'IN_PRODUCTION', deposit: { state: 'PAID', dueDate: null } }, canOf('owner'))
     expect(steps.map((step) => step.command)).toEqual(['ready', 'cancel'])
+  })
+
+  // F-CW-204 (customer Work tab plan §5; 10-design §5; S9): the row ⋯ on every host of the sheet.
+  it('F-CW-204: the row ⋯ — Set priority… with orders.manage, Go to: Production › · Shipments › · Files › · Money ›, nothing drawn without its right (source)', async () => {
+    const view = read('../view/OrdersListView.tsx')
+    // The doors: real links to the order's own tabs, under the order page's own heading "Go to".
+    expect(view).toContain("{ id: 'head-go', heading: true, label: t('menu.group.goTo') },")
+    expect(view).toContain("...(['production', 'shipments', 'files'] as const).map((tab) => ({ id: `go-${tab}`, label: `${t(`tab.${tab}`)} ›`, href: orderHref(prefix, row, tab) })),")
+    expect(view).toContain("{ id: 'deposit', label: `${t('tab.money')} ›`, href: orderHref(prefix, row, 'money') },")
+    const { orderHref } = await import('../sheet/model')
+    for (const tab of ['production', 'shipments', 'files', 'money'] as const) expect(orderHref('/w/DEMO', { id: 'o1' }, tab)).toBe(`/w/DEMO/sales/orders/o1?tab=${tab}`)
+    // Set priority…: only for a person who may change orders; a closed or cancelled order holds it in words (a state).
+    expect(view).toContain('if (!can.manage || !model.depth) return []')
+    expect(view).toContain("const held = depthEditHeld(row.status, { manage: true })")
+    expect(view).toContain('onSelect: () => act()?.depth?.onSetPriority?.([row.id])')
+    // Add task…: not drawn without the tasks' right (it was drawn greyed with the right's words); Set customer's price… only with the price grain.
+    expect(view).toContain("...(act()?.onAddTask && !latest.current.model.bulkCan?.task ? [{ id: 'task', label: s('row.addTask'), onSelect: () => act()?.onAddTask?.([data.id], 'row') }] : []),")
+    expect(view).not.toContain('disabled: !!latest.current.model.bulkCan?.task')
+    expect(view).toContain("...(can.price && act()?.onPriceCheck ? [{ id: 'priceCheck'")
+    // No rule is drawn before an empty group, and none twice.
+    expect(view).toContain("...(rest.length > 0 ? [{ id: 'sep-rest', separator: true }, ...rest] : []),")
+    expect(view).toContain("...(priority.length > 0 ? [{ id: 'sep-priority', separator: true }, ...priority] : []),")
+    // The words exist in both languages (the order page's own tab names; the depth catalogue's "Set priority…").
+    for (const locale of ['en', 'it'] as const) {
+      const say = words(locale)
+      for (const key of ['menu.group.goTo', 'menu.group.next', 'tab.production', 'tab.shipments', 'tab.files', 'tab.money']) expect(say.t(key), `${locale} ${key}`).not.toBe(key)
+      const depth = createTranslator(locale, messagesFor(locale, ['sales-orders-depth'])['sales-orders-depth']!)
+      expect(depth('action.priority'), locale).not.toBe('action.priority')
+      expect(depth('held.final'), locale).not.toBe('held.final')
+    }
+    expect(words('en').t('menu.group.goTo')).toBe('Go to')
+    expect(words('it').t('menu.group.goTo')).toBe('Vai a')
   })
 
   it('the menu offers no status editor: the pill stays a filter and the items are the commands (source)', () => {

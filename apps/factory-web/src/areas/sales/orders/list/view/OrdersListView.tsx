@@ -34,6 +34,7 @@ import { depthColumns, printVerb, SetPriorityDialog } from '../../list-depth/vie
 import { WeekBoard } from '../../week/view/WeekBoard'
 import { OrdersImportView } from '../../import/view/OrdersImportView'
 import { NAMESPACE as DEPTH } from '../../depth/model'
+import { depthEditHeld } from '../../depth/model' // F-CW-204: a closed order's priority never changes (the row's Set priority…)
 import '../../orders.css'
 // ---- B-TH-225 / B-TH-226 (TH-1a: the Orders sheet, every cell a door; the Customer switcher) ----
 import { brandCell, customerDoor, depositDoor, exportAbout, invoicedCell, invoicedDoor, linesDoor, NAMESPACE as SHEET, orderDoor, orderHref, quoteDoor, shippedDoor, type Door } from '../sheet/model'
@@ -115,7 +116,7 @@ export type { OrdersListActions, OrdersListModel } from '../list-model'
  */
 export function OrdersListView({ model, actions }: { model: OrdersListModel; actions?: OrdersListActions }) {
   return (
-    <WithMessages namespaces={['orders', 'lists', DEPTH /* B-W2b-323 */, SHEET /* B-TH-225 */, LAST_MESSAGE_NS /* B-TH-230 */, SUPERVISOR_NS /* F-SA-275: the supervisor marks */, NOTES_NS /* F-SA-280: the note dialog's held words */, 'records' /* F-SA-281: the tasks' held words */]}>
+    <WithMessages namespaces={['orders', 'lists', DEPTH /* B-W2b-323 */, SHEET /* B-TH-225 */, LAST_MESSAGE_NS /* B-TH-230 */, SUPERVISOR_NS /* F-SA-275: the supervisor marks */, NOTES_NS /* F-SA-280: the note dialog's held words */]}>
       <OrdersList model={model} actions={actions} />
     </WithMessages>
   )
@@ -129,7 +130,6 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const l = useT(LAST_MESSAGE_NS) // B-TH-230
   const m = useT(SUPERVISOR_NS) // F-SA-275
   const n = useT(NOTES_NS) // F-SA-280
-  const r = useT('records') // F-SA-281
   const locale = useLocale()
   const wide = useWide(model.wide) // B-TH-225: Ordered, Margin %, Priority, Season and From quote at 1920
   // F-CP-107 (cp-fx16): is the Status column on screen (the frame tells; a person's Customise wins)? Until it tells: the preset's.
@@ -370,7 +370,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     [s, d],
   )
   const columns = useMemo<ColDef<OrderRow>[]>(
-    () => sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer: setViewer, statusShown, phone /* F-CP-107 (cp-fx16) */, priorityShown, whereShown /* F-CW-102 */ }),
+    () => sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer: setViewer, statusShown, phone /* F-CP-107 (cp-fx16) */, priorityShown, whereShown /* F-CW-102 */ }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the cells read the latest model and actions through `latest`
     [t, s, d, l, m, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */, model.kind /* F-SA-221 */, model.marks /* F-SA-275 */, model.doorHref /* F-SA-275 */, !!actions?.onAddTask /* F-SA-275 */, model.preset /* F-SA-276 */, r /* F-SA-281 */, model.bulkCan?.task /* F-SA-281 */, statusShown /* F-CP-107 (cp-fx16): Where it is redraws when Status comes or goes */, phone /* F-CP-107 (cp-fx16) */, priorityShown, whereShown /* F-CW-102 */, model.locked?.party /* F-CW-102 */],
   )
@@ -938,8 +938,6 @@ interface ColumnsInput {
   l?: Translate
   /** F-SA-275: the supervisor marks' words (production-supervisor). */
   m?: Translate
-  /** F-SA-281: the tasks' words (records). */
-  r?: Translate
   locale: Locale
   model: OrdersListModel
   wide: boolean
@@ -987,8 +985,8 @@ function PictureViewerFor({ row, model, actions, onClose }: { row: OrderRow; mod
  * tab); Brand, Status and Company narrow the sheet (the funnel mark); a cell the reader may not open says why on hover; the
  * rest of the row opens the order. Money columns are absent without their grain, never zero.
  */
-function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer, statusShown = false, phone = false, priorityShown = false, whereShown = false }: ColumnsInput): ColDef<OrderRow>[] {
-  const input: ColumnsInput = { t, s, d, l, m, r, locale, model, wide, latest, onViewer, statusShown, phone, priorityShown, whereShown }
+function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer, statusShown = false, phone = false, priorityShown = false, whereShown = false }: ColumnsInput): ColDef<OrderRow>[] {
+  const input: ColumnsInput = { t, s, d, l, m, locale, model, wide, latest, onViewer, statusShown, phone, priorityShown, whereShown }
   const { prefix, can } = model
   const day = (value: string | null) => (value ? formatDate(dayInstant(value), { locale }) : '—')
   const act = () => latest.current.actions
@@ -1209,12 +1207,42 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer,
     return { id: command, label: STEP_LABEL[command](), ...(command === 'cancel' ? { tone: 'danger' as const } : {}), ...(held ? { disabled: true, description: held } : { onSelect: () => act()?.onCommand?.(row.id, command) }) }
   }
   // ---- end F-CP-108
+  // ---- F-CW-204 (customer Work tab plan §5; 10-design §5; lead settle S9): the row ⋯ on every host of the sheet —
+  //   Open · Open in a new tab ‖ Next steps ‖ Set priority… ‖ Go to: Production › · Shipments › · Files › · Money › ‖ Set customer's
+  //   price… · Print confirmation · Add task… · Answer request… ‖ Cancel order…
+  // An act the reader has no right for is NOT drawn (the steps by rowStepsOf; Set priority… with orders.manage; Add task… with the
+  // tasks' right; Set customer's price… with the price grain); a state holds with words (the deposit; a closed order's priority).
+  // The doors are real links (⌘-click opens a new tab); every reader of the order reads each of its tabs.
+  const priorityItem = (row: OrderRow): MenuItemDef[] => {
+    if (!can.manage || !model.depth) return []
+    const held = depthEditHeld(row.status, { manage: true })
+    return [{ id: 'priority', label: d('action.priority'), ...(held ? { disabled: true, description: d(held.key, held.params) } : { onSelect: () => act()?.depth?.onSetPriority?.([row.id]) }) }]
+  }
+  const goToItems = (row: OrderRow): MenuItemDef[] => [
+    { id: 'head-go', heading: true, label: t('menu.group.goTo') },
+    ...(['production', 'shipments', 'files'] as const).map((tab) => ({ id: `go-${tab}`, label: `${t(`tab.${tab}`)} ›`, href: orderHref(prefix, row, tab) })),
+    { id: 'deposit', label: `${t('tab.money')} ›`, href: orderHref(prefix, row, 'money') },
+  ]
   const MoreCell = ({ data }: ICellRendererParams<OrderRow>) => {
     if (!data) return null
     // F-CP-108: the host gives the door (both hosts of the ONE sheet); without it, today's items.
     const steps = act()?.onCommand ? rowStepsOf(data, can) : []
     const next = steps.filter((step) => step.command !== 'cancel').map((step) => stepItem(step, data))
     const cancel = steps.find((step) => step.command === 'cancel')
+    const priority = priorityItem(data)
+    const rest: MenuItemDef[] = [
+      // F-CP-114: Set customer's price… — the ONE window, here (a price holder only: the host gives the door with the price grain).
+      ...(can.price && act()?.onPriceCheck ? [{ id: 'priceCheck', label: t('priceCheck.edit'), onSelect: () => act()?.onPriceCheck?.(data.id) }] : []),
+      // F-CP-108: Make work orders is a Next step now (held with its words); a host without the door keeps today's item.
+      ...(steps.length === 0 && data.status === 'CONFIRMED' && can.makeWorkOrders ? [{ id: 'make', label: t('step.makeWorkOrders'), href: `${prefix}/production/work-orders?new=1&order=${encodeURIComponent(data.number)}` }] : []),
+      // B-W2b-323: Print confirmation (the confirmation PDF in a new tab; held while it waits for a yes or was cancelled).
+      ...(model.depth ? [printVerb(data, prefix, d)] : []),
+      // ---- F-SA-275: Add task… on this order (the one New task window, F-SA-281) and Answer request… while one waits on us.
+      // F-CW-204 (S9): not drawn without the tasks' right (it was drawn greyed with the right's words).
+      ...(act()?.onAddTask && !latest.current.model.bulkCan?.task ? [{ id: 'task', label: s('row.addTask'), onSelect: () => act()?.onAddTask?.([data.id], 'row') }] : []),
+      ...answerItem(data),
+      // ---- end F-SA-275
+    ]
     return (
       <Menu
         label={<MoreHorizontal size={16} aria-hidden />}
@@ -1223,25 +1251,19 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer,
         items={[
           { id: 'open', label: t('list.open'), href: orderHref(prefix, data) },
           { id: 'tab', label: t('list.openNewTab'), href: orderHref(prefix, data), target: '_blank' },
-          // F-CP-108: Next steps (the order page's own heading), between rules.
-          ...(next.length > 0 ? [{ id: 'sep-next', separator: true }, { id: 'head-next', heading: true, label: t('menu.group.next') }, ...next, { id: 'sep-rest', separator: true }] : []),
-          { id: 'deposit', label: t('tab.money'), href: orderHref(prefix, data, 'money') },
-          // F-CP-114: Set customer's price… — the ONE window, here (a price holder only: the host gives the door with the price grain).
-          ...(can.price && act()?.onPriceCheck ? [{ id: 'priceCheck', label: t('priceCheck.edit'), onSelect: () => act()?.onPriceCheck?.(data.id) }] : []),
-          // F-CP-108: Make work orders is a Next step now (held with its words); a host without the door keeps today's item.
-          ...(steps.length === 0 && data.status === 'CONFIRMED' && can.makeWorkOrders ? [{ id: 'make', label: t('step.makeWorkOrders'), href: `${prefix}/production/work-orders?new=1&order=${encodeURIComponent(data.number)}` }] : []),
-          // B-W2b-323: Print confirmation (the confirmation PDF in a new tab; held while it waits for a yes or was cancelled).
-          ...(model.depth ? [printVerb(data, prefix, d)] : []),
-          // ---- F-SA-275: Add task… on this order (the one New task window, F-SA-281) and Answer request… while one waits on us.
-          ...(act()?.onAddTask ? [{ id: 'task', label: s('row.addTask'), onSelect: () => act()?.onAddTask?.([data.id], 'row'), disabled: !!latest.current.model.bulkCan?.task, ...(latest.current.model.bulkCan?.task && r ? { description: r(latest.current.model.bulkCan.task) } : {}) }] : []),
-          ...answerItem(data),
-          // ---- end F-SA-275
+          // F-CP-108: Next steps (the order page's own heading), after a rule.
+          ...(next.length > 0 ? [{ id: 'sep-next', separator: true }, { id: 'head-next', heading: true, label: t('menu.group.next') }, ...next] : []),
+          ...(priority.length > 0 ? [{ id: 'sep-priority', separator: true }, ...priority] : []),
+          { id: 'sep-go', separator: true },
+          ...goToItems(data),
+          ...(rest.length > 0 ? [{ id: 'sep-rest', separator: true }, ...rest] : []),
           // F-CP-108: Cancel order… last, after a rule (each cancel shows what it stops: one order at a time).
           ...(cancel ? [{ id: 'sep-danger', separator: true }, stepItem(cancel, data)] : []),
         ]}
       />
     )
   }
+  // ---- end F-CW-204
   // ---- F-SA-275: the production columns (opt-in on Sales › Orders, shown by the customer page's views; their reads only while shown) ----
   const now = Date.now()
   const pw = productionWordsFor(locale)

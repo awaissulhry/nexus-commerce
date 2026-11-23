@@ -30,7 +30,7 @@ const seg = encodeURIComponent
 
 /** The order's own page, on one of its tabs. */
 // F-CW-102: + the Production tab (the door of "On hold").
-export const orderHref = (prefix: string, row: Pick<OrderRow, 'id'>, tab?: 'lines' | 'shipments' | 'money' | 'production'): string => `${prefix}/sales/orders/${seg(row.id)}${tab ? `?tab=${tab}` : ''}`
+export const orderHref = (prefix: string, row: Pick<OrderRow, 'id'>, tab?: 'lines' | 'shipments' | 'money' | 'production' | 'files' /* F-CW-204 */): string => `${prefix}/sales/orders/${seg(row.id)}${tab ? `?tab=${tab}` : ''}`
 
 /** Number and the empty part of the row → the order (its thread docked). */
 export const orderDoor = (prefix: string, row: OrderRow): Door => ({ href: orderHref(prefix, row), tip: { key: 'door.order', params: { number: row.number } } })
