@@ -58,7 +58,8 @@
     "countAny_one": "{count} riga",
     "countAny_other": "{count} righe",
     "kindNotHereHint": "Le richieste di modifica non sono in questa scheda: cambiano un ordine confermato (si rispondono sull’ordine e in Home › Approvazioni).",
-    "searchHost": "Cerca numero, richiesta…"
+    "searchHost": "Cerca numero, richiesta…",
+    "moreTools": "Altro: tipo e come è arrivata"
   },
   "col": {
     "number": "Numero",

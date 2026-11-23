@@ -1,7 +1,7 @@
 import { isOpen } from '@nexus/factory-domain/sales/inquiries/rules'
 import type { IncomingRow } from './api'
 import { barFrom, NO_ACT, type Bar, type ManyRecord, type ManyWords } from '../_shared/many-acts/model'
-import { replyManyHeld, type ReplyRecordType, type ReplyRow } from '../orders/list/reply-many' // F-CQ-304
+import { replyManyHeld, replyPortalHeld, type PortalState, type ReplyRecordType, type ReplyRow } from '../orders/list/reply-many' // F-CQ-304; cq fx5 W3-2
 
 /**
  * F-CQ-201 (customer page › Quotes & incoming, 10-design §6.2; settle C10) — the Incoming list's bar, pure (on Sales › Incoming and
@@ -46,13 +46,14 @@ export const replyTypeOf = (rows: readonly Pick<IncomingRow, 'id' | 'kind'>[]): 
 // ---- end F-CQ-304
 
 /** F-CQ-304: Reply's words and hold (the orders sheet's own; a prospect's row has no customer: "one customer" holds it). */
-function replyAct(rights: IncomingBarRights, picked: readonly IncomingRow[], customer: string | null): { id: string; right: boolean; label: ManyWords; held: ManyWords | null } {
+function replyAct(rights: IncomingBarRights, picked: readonly IncomingRow[], customer: string | null, portal?: PortalState | null): { id: string; right: boolean; label: ManyWords; held: ManyWords | null } {
   const count = picked.length
-  const held = replyManyHeld(picked.map(replyRowOf), null, true)
+  // cq fx5 W3-2: … or the customer reads no portal (the host knows it): held in the requests' own words, never a window to write in.
+  const held = replyManyHeld(picked.map(replyRowOf), null, true) ?? replyPortalHeld(portal, 'Inquiry', customer)
   return { id: 'reply', right: rights.threads, label: customer ? { ns: 'orders-sheet', key: 'bulk.reply', params: { customer, count } } : { ns: 'orders-sheet', key: 'bulk.replyAny', params: { count } }, held: held ? { ns: 'orders-sheet', key: held.key, ...(held.params ? { params: held.params } : {}) } : null }
 }
 
-export function incomingBarOf(rights: IncomingBarRights, picked: readonly IncomingRow[], customer: string | null): Bar {
+export function incomingBarOf(rights: IncomingBarRights, picked: readonly IncomingRow[], customer: string | null, /** cq fx5 W3-2 */ portal?: PortalState | null): Bar {
   const count = picked.length
   const open = openRequests(picked).length
   const askable = askableRequests(picked).length
@@ -65,7 +66,7 @@ export function incomingBarOf(rights: IncomingBarRights, picked: readonly Incomi
       { id: 'decline', right: rights.manage, danger: true, label: { ns: 'sales-inquiries', key: 'bulk.decline', params: { count: open } }, held: notRequest },
       { id: 'lost', right: rights.manage, label: bi('acts.label.markLost', { count: open }), held: open === 0 ? bi('acts.held.notRequest', { count }) : null },
       // F-CQ-304: Reply to <customer> on N… — every ticked row (one customer, at most 50: the window's own hold, in its words).
-      replyAct(rights, picked, customer),
+      replyAct(rights, picked, customer, portal),
       { id: 'addTask', right: rights.tasks, label: { ns: 'orders-sheet', key: 'bulk.addTask', params: { count } }, held: null },
     ],
     portals > 0 && rights.manage ? bi('acts.portalOne', { count: portals }) : null,

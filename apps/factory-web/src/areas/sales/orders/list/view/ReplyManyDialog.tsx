@@ -145,11 +145,13 @@ export function ReplyManyBody({ model, actions }: { model: ReplyManyModel; actio
       )}
       {/* F-CQ-304: each line in the records' own words (a quote, a request); orders keep theirs. */}
       {lines && sent.length > 0 && <p className="fw-srm-hint">{s(replyKey(model.recordType, 'already'), { count: sent.length, orders: sent.map(targetLabel).join(', ') })}</p>}
+      {/* cq fx5 W3-2: with no portal a quote's or request's window opens on its reason and the records to write about by e-mail — never
+          "<customer> will read this on N…" (nothing is posted), never an empty window. (Orders: the reason alone, cw fx7 above.) */}
       {lines && (
       <div className="fw-srm-orders">
-        <p className="fw-srm-heading">{s(replyKey(model.recordType, 'preview'), { customer, count: pending.length })}</p>
+        {box && <p className="fw-srm-heading">{s(replyKey(model.recordType, 'preview'), { customer, count: pending.length })}</p>}
         <p className="fw-srm-list">{pending.map((target) => previewLabel(target, s) /* B-SA-070b */).join(', ')}</p>
-        <p className="fw-srm-hint">{s(replyKey(model.recordType, 'each'))}</p>
+        {box && <p className="fw-srm-hint">{s(replyKey(model.recordType, 'each'))}</p>}
       </div>
       )}
       {/* F-CW-203: ONE tick — a to-do "Answer our message" in the customer's list, one per order, after its message is posted. Drawn

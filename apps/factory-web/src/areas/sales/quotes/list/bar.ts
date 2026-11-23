@@ -1,7 +1,7 @@
 import type { QuoteListRow } from '../api'
 import type { Grains, QuoteAbilities } from '../model'
 import { barFrom, NO_ACT, type Bar, type ManyRecord, type ManyWords } from '../../_shared/many-acts/model'
-import { replyManyHeld } from '../../orders/list/reply-many' // F-CQ-304: Reply to N's own hold (one customer, at most 50)
+import { replyManyHeld, replyPortalHeld, type PortalState } from '../../orders/list/reply-many' // F-CQ-304: Reply to N's own hold (one customer, at most 50); cq fx5 W3-2: no portal
 
 /**
  * F-CQ-201 (customer page › Quotes & incoming, 10-design §6.1) — the Quotes list's bar, pure (the view draws it over the ticked rows;
@@ -49,15 +49,16 @@ export function quoteRightsOf(permissions: readonly string[], can: Pick<QuoteAbi
 }
 
 /** F-CQ-304: Ask / Reply's words and hold (the orders sheet's own: one customer, at most REPLY_MAX). */
-function askAct(rights: QuoteBarRights, picked: readonly Pick<QuoteListRow, 'partyId'>[], customer: string | null): { id: string; right: boolean; label: ManyWords; held: ManyWords | null } {
+function askAct(rights: QuoteBarRights, picked: readonly Pick<QuoteListRow, 'partyId'>[], customer: string | null, portal?: PortalState | null): { id: string; right: boolean; label: ManyWords; held: ManyWords | null } {
   const count = picked.length
   const label: ManyWords = rights.customerTasks ? (customer ? bo('acts.label.askAbout', { customer, count }) : bo('acts.label.askAboutAny', { count })) : customer ? { ns: 'orders-sheet', key: 'bulk.reply', params: { customer, count } } : { ns: 'orders-sheet', key: 'bulk.replyAny', params: { count } }
-  const held = replyManyHeld(picked, null, true)
+  // cq fx5 W3-2: … or the customer reads no portal (the host knows it): held in the quotes' own words, never a window to write in.
+  const held = replyManyHeld(picked, null, true) ?? replyPortalHeld(portal, 'Quote', customer)
   return { id: 'ask', right: rights.threads, label, held: held ? { ns: 'orders-sheet', key: held.key, ...(held.params ? { params: held.params } : {}) } : null }
 }
 
 /** The Quotes bar over the ticked quotes (F-CQ-201): ≤ 3 + More ▾; never an act for a missing right; held by state in words. */
-export function quoteBarOf(rights: QuoteBarRights, picked: readonly Pick<QuoteListRow, 'status' | 'order' | 'versionId' | 'partyId'>[], customer: string | null): Bar {
+export function quoteBarOf(rights: QuoteBarRights, picked: readonly Pick<QuoteListRow, 'status' | 'order' | 'versionId' | 'partyId'>[], customer: string | null, /** cq fx5 W3-2 */ portal?: PortalState | null): Bar {
   const count = picked.length
   const cancellable = picked.filter((row) => CANCELLABLE_QUOTES.includes(row.status)).length
   const drafts = picked.filter((row) => row.status === 'DRAFT').length
@@ -65,7 +66,7 @@ export function quoteBarOf(rights: QuoteBarRights, picked: readonly Pick<QuoteLi
   const sent = picked.filter((row) => row.status === 'SENT').length
   return barFrom(
     [
-      askAct(rights, picked, customer), // F-CQ-304: leads the bar
+      askAct(rights, picked, customer, portal), // F-CQ-304: leads the bar
       { id: 'addTask', right: rights.tasks, label: { ns: 'orders-sheet', key: 'bulk.addTask', params: { count } }, held: null },
       { id: 'cancel', right: rights.can.manage, danger: true, label: { ns: 'sales', key: 'list.bulk.cancel', params: { count: cancellable } }, held: cancellable === 0 ? bo('acts.held.notOpen', { count }) : null },
       { id: 'askApproval', right: rights.can.manage, label: bo('acts.label.askApproval', { count: drafts }), held: drafts === 0 ? bo('acts.held.notDraft', { count }) : null },

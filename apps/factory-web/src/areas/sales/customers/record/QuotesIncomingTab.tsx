@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { useT } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
+import { getPortalAccess } from '../../../admin/users/partners/api' // cq fx5 W3-2: the customer's portal, read once for Reply's hold
+import { portalStateOf, type PortalState } from '../../orders/list/reply-many' // cq fx5 W3-2
 import { companyPrefix } from '../../../../lib/session/session'
 import { ScopedListTools } from '../../_shared/scoped-list-tools/ScopedListTools'
 import { QUOTES_LIST_KEY, QUOTES_PATH, useQuotesList, type QuotesListHost } from '../../quotes/list/use-quotes-list'
@@ -68,7 +70,31 @@ type SectionProps = { party: { id: string; name: string }; onPick?: ((pick: Dock
 type Ask = { readonly what: 'quote' | 'request'; readonly at: number }
 
 /** F-CQ-101: what a section needs from the tab — the door's terms, its state, its head's count, the band's words for its door. */
-type HostProps = SectionProps & { tab: QuotesTab; ask: Ask | null; hidden: boolean; band: Band | null }
+type HostProps = SectionProps & { tab: QuotesTab; ask: Ask | null; hidden: boolean; band: Band | null; replyPortal?: PortalState | null /* cq fx5 W3-2 */ }
+
+// ---- cq fx5 W3-2 (walk: Reply to <customer> was drawn for a customer with no portal, and its window had nothing to write): whether the
+// customer reads a portal, read ONCE for the tab — only for a reader who may see it (partners.view, as the Reply window reads it) and may
+// reply (threads.post). 'off' holds Reply / Ask in both lists before the click, in the window's own words; unknown: not held.
+function useReplyPortal(partyId: string, reads: boolean): PortalState | null {
+  const api = useOfficeApi()
+  const [portal, setPortal] = useState<PortalState | null>(null)
+  useEffect(() => {
+    if (!reads) {
+      setPortal(null)
+      return
+    }
+    let live = true
+    getPortalAccess(api, partyId).then(
+      (access) => live && setPortal(portalStateOf(access)),
+      () => live && setPortal(null),
+    )
+    return () => {
+      live = false
+    }
+  }, [api, partyId, reads])
+  return portal
+}
+// ---- end cq fx5 W3-2
 
 function Tab({ party, counts, onPick, onFocus, shown }: SectionProps & { counts: PageCounts }) {
   const session = useOfficeSession()
@@ -82,7 +108,9 @@ function Body({ party, counts, onPick, onFocus, shown, quotes, incoming }: Secti
   const { tab, rootRef, onCloseDoor, onRetry } = useQuotesTab(party.id, counts)
   const [ask, setAsk] = useState<Ask | null>(null)
   const band = bandOf(tab.counts, tab.rights, tab.door)
-  const sections = { party, onPick, onFocus, shown, tab, ask, hidden: emptyTab(band, tab.door), band }
+  const session = useOfficeSession()
+  const replyPortal = useReplyPortal(party.id, session.permissions.includes('partners.view') && session.permissions.includes('threads.post')) // cq fx5 W3-2
+  const sections = { party, onPick, onFocus, shown, tab, ask, hidden: emptyTab(band, tab.door), band, replyPortal }
   return (
     <QuotesTabFrame
       rootRef={rootRef}
@@ -96,7 +124,7 @@ function Body({ party, counts, onPick, onFocus, shown, quotes, incoming }: Secti
 }
 
 /** Quotes: the customer's quotes (GET /sales/quotes?partyId), the Quotes page's own list. */
-function QuotesSection({ party, onPick, onFocus, shown, tab, ask, hidden }: HostProps) {
+function QuotesSection({ party, onPick, onFocus, shown, tab, ask, hidden, replyPortal }: HostProps) {
   const t = useT('parties')
   const b = useT(BEFORE_ORDER_NS)
   const session = useOfficeSession()
@@ -121,9 +149,10 @@ function QuotesSection({ party, onPick, onFocus, shown, tab, ask, hidden }: Host
       tiles: false,
       liveParty: party.id,
       customerName: party.name,
+      replyPortal: replyPortal ?? null, // cq fx5 W3-2
       groupLabel: door && group && group !== 'LIVE' ? b(`group.${door}`, { customer: party.name }) : null,
     }),
-    [party.id, party.name, prefix, group, door, tab.room, b],
+    [party.id, party.name, prefix, group, door, tab.room, b, replyPortal],
   )
   const { model, actions, scope } = useQuotesList(host)
   // F-CQ-104: the band's head asks for a New quote (the customer set: the list's own rule under a lock).
@@ -155,7 +184,7 @@ function QuotesSection({ party, onPick, onFocus, shown, tab, ask, hidden }: Host
 }
 
 /** Requests & portal orders: the customer's requests and portal orders (GET /sales/incoming?partyId&kinds), Incoming's own list. */
-function IncomingSection({ party, onPick, onFocus, shown, tab, ask, hidden }: HostProps) {
+function IncomingSection({ party, onPick, onFocus, shown, tab, ask, hidden, replyPortal }: HostProps) {
   const t = useT('parties')
   const session = useOfficeSession()
   const prefix = companyPrefix(session.company?.code ?? '')
@@ -181,8 +210,9 @@ function IncomingSection({ party, onPick, onFocus, shown, tab, ask, hidden }: Ho
       room: tab.room,
       liveParty: party.id,
       customerName: party.name,
+      replyPortal: replyPortal ?? null, // cq fx5 W3-2
     }),
-    [party.id, party.name, prefix, tile, tab.room],
+    [party.id, party.name, prefix, tile, tab.room, replyPortal],
   )
   const { model, actions, slots, scope } = useInquiriesList(host)
   listed.current = model.address
