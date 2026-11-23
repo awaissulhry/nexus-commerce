@@ -259,6 +259,14 @@ describe('B-PR-10 the brand-wall sweep', () => {
       expect(swept.has(key), key).toBe(true)
       expect(EXEMPT[key], key).toBeUndefined()
     }
+    // B-CQ (customer page › Quotes & incoming, 13-backend §10): the two new routes — the before-order counts (a customer-limited person
+    // gets the same "Customer not found." as an unknown id) and the portal orders' small pictures (another customer's id is simply
+    // absent) — are met by the sweep by themselves: swept, never EXEMPT.
+    for (const key of ['GET /sales/before-order/counts', 'POST /sales/order-requests/pictures']) {
+      expect(swept.has(key), key).toBe(true)
+      expect(EXEMPT[key], key).toBeUndefined()
+    }
+    // ---- end B-CQ
     expect(sweeper.routes.get('GET /production/floor-notes/asks')?.manifest.audiences).toEqual(['floor'])
     expect(swept.size).toBeGreaterThan(walked.length)
     // The golden production world's traces of A, here too: its portal people and their mails, stock moves of its work orders,

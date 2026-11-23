@@ -21,6 +21,7 @@ import { linkProofView, shownProofsField } from '../quote-proofs/contract'
 // TH-6 part B: the request's own state on "Made from".
 import { INQUIRY_STATUSES } from '@nexus/factory-domain/sales/inquiries/rules'
 import { pictureIds, smallPicturesView } from '../../product/images/small-pictures' // B-SA-011
+import { QUOTE_GROUP_TERMS, QUOTE_SORTS } from '@nexus/factory-domain/sales/before-order/groups' // B-CQ-010, B-CQ-011
 
 // B-OC-015 (order changes tab R11): the signed PDF's check, in words (quotes/versions.ts documentCheckOf).
 export const DOCUMENT_CHECKS = ['MATCHES', 'PDF_MISSING', 'DIFFERS'] as const
@@ -199,6 +200,9 @@ export const quoteOrderView = output({
 }).nullable()
 // ---- end B-TH-078
 
+// B-CQ-031 (customer page › Quotes & incoming, Q3-B9): the portal order the quote was accepted as (a record number; orders.view).
+export const fromPortalOrderView = output({ id: id(), number: z.string() }).nullable()
+
 export const quoteView = output({
   id: id(),
   number: z.string(),
@@ -235,6 +239,8 @@ export const quoteView = output({
   // B-TH-078
   madeFrom: madeFromView,
   order: quoteOrderView,
+  // B-CQ-031
+  fromPortalOrder: fromPortalOrderView,
 })
 
 const one = output({ quote: quoteView })
@@ -252,6 +258,13 @@ export const listQuotesContract = defineContract({
     q: z.string().trim().min(1).max(100).optional(),
     cursor: id().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
+    /**
+     * B-CQ-010 (customer page › Quotes & incoming, L12): one before-order group of quotes, the set OPEN_QUOTES, or LIVE (groups 3–6;
+     * the tab's default) — factory-domain sales/before-order/groups. A door group no quote is in (WRITING, TO_ANSWER, MOVED) is 400.
+     */
+    group: z.enum(QUOTE_GROUP_TERMS).optional(),
+    /** B-CQ-011: newest first (the default) or most urgent first (at most 2,000 quotes in the list: else 400 in words). */
+    sort: z.enum(QUOTE_SORTS).optional(),
   }),
   response: {
     200: output({
@@ -289,6 +302,20 @@ export const listQuotesContract = defineContract({
           picture: output({ styleId: id(), styleCode: z.string(), styleName: z.string(), fileId: id().nullable(), contentType: z.string().nullable(), small: z.boolean() }).nullable(),
           styleCount: z.number().int(),
           // ---- end TH-6 part B
+          // ---- B-CQ-012, B-CQ-031 (customer page › Quotes & incoming, L12, Q1-B7, Q3-B9, Q3-B14): no amount in any of them.
+          /** The current version (Make the orders for N: POST /sales/orders {quoteVersionId}). */
+          versionId: id().nullable(),
+          /** The current version's send ("Sent 5 days ago") and the reminder before its last day. */
+          sentAt: instant().nullable(),
+          reminderSentAt: instant().nullable(),
+          /** The customer's own running number of its quotes ("Your quote 3"). */
+          customerSeq: z.number().int().nullable(),
+          /** The current version's document language (Preview PDF in the quote's language). */
+          language: z.enum(['it', 'en']),
+          /** An older version still SENT that the customer holds while this one is being made (its revision: "r1"). */
+          customerHolds: output({ revision: z.number().int() }).nullable(),
+          fromPortalOrder: fromPortalOrderView,
+          // ---- end B-CQ-012
         }),
       ),
       nextCursor: id().nullable(),

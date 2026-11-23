@@ -25,6 +25,9 @@ import { forCaller, quoteDetail, quoteSourcesOf, type QuoteDetail } from './view
 // TH-6 part B (B-TH-257 follow-up): each row's picture (files.read only), as the Orders sheet's.
 import { quoteRowExtras } from './row-picture'
 import { withCompanyTerms } from '../../parties/company-terms/in-force'
+// B-CQ-010 … 012 (customer page › Quotes & incoming): the `group` and `sort` terms and the row's new facts.
+import type { QuoteGroupTerm, QuoteSort } from '@nexus/factory-domain/sales/before-order/groups'
+import { customerHoldsOf, quoteGroupWhere, urgentQuotePage } from './list-terms'
 
 /**
  * Quotes (B-W1-21; SAL-143, SAL-157; A2 SCR-030, SCR-034): the list, the record, a new quote, its header and its draft
@@ -44,7 +47,7 @@ export async function detailInCommand(tools: CommandTools, quoteId: string): Pro
   const quote = (await readQuote(tools.tx, quoteId))!
   const context = tools.context
   if (context.audience !== 'office') throw new InvalidStateError('Quotes are written by the office.')
-  return { quote: await quoteDetail(tools.tx, quote, tools.now) }
+  return { quote: await quoteDetail(tools.tx, quote, tools.now, actorOf(context) /* B-CQ-031 */) }
 }
 
 /**
@@ -370,7 +373,7 @@ export async function withdrawPending(tools: CommandTools, versionId: string): P
 export async function getQuote(caller: CommandCaller, quoteId: string): Promise<{ quote: QuoteDetail }> {
   const context = officeContextOf(caller)
   const quote = await officeQuote(caller, quoteId)
-  return forCaller({ quote: await caller.withClient((client) => quoteDetail(client, quote, serverClock.now())) }, grainsOf(context))
+  return forCaller({ quote: await caller.withClient((client) => quoteDetail(client, quote, serverClock.now(), actorOf(context) /* B-CQ-031 */)) }, grainsOf(context))
 }
 
 export interface ListQuotesQuery {
@@ -381,36 +384,43 @@ export interface ListQuotesQuery {
   readonly q?: string | undefined
   readonly cursor?: string | undefined
   readonly limit: number
+  // B-CQ-010, B-CQ-011
+  readonly group?: QuoteGroupTerm | undefined
+  readonly sort?: QuoteSort | undefined
 }
 
 /** The quotes the caller may see (its companies and customers), newest first, with their current version's figures. */
 export async function listQuotes(caller: CommandCaller, query: ListQuotesQuery) {
   const context = officeContextOf(caller)
-  const where: Prisma.QuoteWhereInput = {
-    AND: [
-      scopeWhere(actorOf(context), QUOTES_VIEW, { company: 'companyId', party: 'partyId' }) as Prisma.QuoteWhereInput,
-      query.status ? { status: query.status } : {},
-      query.companyId ? { companyId: query.companyId } : {},
-      query.partyId ? { partyId: query.partyId } : {},
-      query.mine === 'true' ? { createdById: context.actorId } : {},
-      query.q ? { OR: [{ number: { contains: query.q, mode: 'insensitive' } }, { customerRef: { contains: query.q, mode: 'insensitive' } }] } : {},
-      query.cursor ? { id: { lt: query.cursor } } : {},
-    ],
-  }
+  const filters: Prisma.QuoteWhereInput[] = [
+    scopeWhere(actorOf(context), QUOTES_VIEW, { company: 'companyId', party: 'partyId' }) as Prisma.QuoteWhereInput,
+    query.status ? { status: query.status } : {},
+    query.companyId ? { companyId: query.companyId } : {},
+    query.partyId ? { partyId: query.partyId } : {},
+    query.mine === 'true' ? { createdById: context.actorId } : {},
+    query.q ? { OR: [{ number: { contains: query.q, mode: 'insensitive' } }, { customerRef: { contains: query.q, mode: 'insensitive' } }] } : {},
+    quoteGroupWhere(query.group), // B-CQ-010
+  ]
   return caller.withClient(async (client) => {
-    const rows = await client.quote.findMany({ where, orderBy: { id: 'desc' }, take: query.limit + 1, select: { id: true, number: true, companyId: true, partyId: true, contactId: true, customerRef: true, status: true, currentRevision: true, createdById: true, updatedAt: true, version: true } })
+    // B-CQ-011: "Most urgent first" picks the page's ids (./list-terms.ts); newest first pages by id as before.
+    const urgent = query.sort === 'urgent' ? await urgentQuotePage(client, { AND: filters }, query.cursor, query.limit, serverClock.now()) : null
+    const where: Prisma.QuoteWhereInput = { AND: [...filters, urgent ? { id: { in: urgent.ids } } : query.cursor ? { id: { lt: query.cursor } } : {}] }
+    const found = await client.quote.findMany({ where, orderBy: { id: 'desc' }, ...(urgent ? {} : { take: query.limit + 1 }), select: { id: true, number: true, companyId: true, partyId: true, contactId: true, customerRef: true, customerSeq: true /* B-CQ-012 */, status: true, currentRevision: true, createdById: true, updatedAt: true, version: true } })
+    const rows = urgent ? urgent.ids.flatMap((id) => found.filter((row) => row.id === id)) : found
     const page = rows.slice(0, query.limit)
     const ids = page.map((row) => row.id)
-    const versions = (await client.quoteVersion.findMany({ where: { quoteId: { in: ids } }, select: { id: true, quoteId: true, revision: true, currency: true, netAmount: true, grossAmount: true, marginPct: true, marginFloorBreached: true, validUntil: true, promiseDate: true } })).filter(
-      (version) => page.find((row) => row.id === version.quoteId)?.currentRevision === version.revision,
-    )
+    // B-CQ-012: + status, sentAt, reminderSentAt, language (every version of the page's quotes is read, as before: the older one the
+    // customer still holds comes with it).
+    const allVersions = await client.quoteVersion.findMany({ where: { quoteId: { in: ids } }, select: { id: true, quoteId: true, revision: true, status: true, currency: true, netAmount: true, grossAmount: true, marginPct: true, marginFloorBreached: true, validUntil: true, promiseDate: true, sentAt: true, reminderSentAt: true, language: true } })
+    const holds = customerHoldsOf(allVersions, new Map(page.map((row) => [row.id, row.currentRevision])))
+    const versions = allVersions.filter((version) => page.find((row) => row.id === version.quoteId)?.currentRevision === version.revision)
     const versionOf = new Map(versions.map((version) => [version.quoteId, version]))
     const versionIds = versions.map((version) => version.id)
     const lines = await client.quoteLine.findMany({ where: { versionId: { in: versionIds } }, select: { versionId: true, quantity: true } })
     const approvals = await client.quoteApproval.findMany({ where: { versionId: { in: versionIds } }, select: { versionId: true, status: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] })
     const parties = new Map((await client.party.findMany({ where: { id: { in: [...new Set(page.map((row) => row.partyId))] } }, select: { id: true, legalName: true } })).map((party) => [party.id, party.legalName]))
-    // B-TH-078: each row's request and order (or why its order waits).
-    const sources = await quoteSourcesOf(client, page)
+    // B-TH-078: each row's request and order (or why its order waits). B-CQ-031: and the portal order it came from (orders.view).
+    const sources = await quoteSourcesOf(client, page, actorOf(context))
     // TH-6 part B: each row's first style and its picture (the file only with files.read).
     const extras = await quoteRowExtras(client, actorOf(context), new Map(versions.map((version) => [version.quoteId, version.id])))
     return {
@@ -446,9 +456,18 @@ export async function listQuotes(caller: CommandCaller, query: ListQuotesQuery) 
           // TH-6 part B
           picture: extras.get(row.id)?.picture ?? null,
           styleCount: extras.get(row.id)?.styleCount ?? 0,
+          // B-CQ-012, B-CQ-031: the current version (Make the orders for N), its send and reminder, the customer's own number, the
+          // document's language; the older version the customer still holds; the portal order it came from. No amount.
+          versionId: version?.id ?? null,
+          sentAt: version?.sentAt ? toUtcIso(version.sentAt) : null,
+          reminderSentAt: version?.reminderSentAt ? toUtcIso(version.reminderSentAt) : null,
+          customerSeq: row.customerSeq,
+          language: (version?.language === 'en' ? 'en' : 'it') as 'it' | 'en',
+          customerHolds: holds.has(row.id) ? { revision: holds.get(row.id)! } : null,
+          fromPortalOrder: sources.get(row.id)?.fromPortalOrder ?? null,
         }
       }),
-      nextCursor: rows.length > query.limit ? page[page.length - 1]!.id : null,
+      nextCursor: urgent ? urgent.next : rows.length > query.limit ? page[page.length - 1]!.id : null,
     }
   })
 }
