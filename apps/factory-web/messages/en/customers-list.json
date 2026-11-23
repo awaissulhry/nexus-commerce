@@ -1,0 +1,22 @@
+{
+  "empty": {
+    "customers": {
+      "search": "No customer matches “{q}”.",
+      "filters": "No customer matches these filters.",
+      "archived": "No archived customers.",
+      "blocked": "No blocked customers.",
+      "vies": "No customer has a VIES problem.",
+      "prospects": "No prospects.",
+      "other": "No customers in “{view}”."
+    },
+    "suppliers": {
+      "search": "No supplier matches “{q}”.",
+      "filters": "No supplier matches these filters.",
+      "blocked": "No blocked suppliers.",
+      "archived": "No archived suppliers.",
+      "other": "No suppliers in “{view}”."
+    },
+    "clear": "Clear",
+    "clearSearch": "Clear search"
+  }
+}

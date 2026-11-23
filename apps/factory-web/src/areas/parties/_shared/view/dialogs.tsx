@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Banner, Field } from '@nexus/ui/components'
 import { Button, Checkbox, Input, Kbd, SegmentedControl, Select, Spinner, Tag } from '@nexus/ui/primitives'
@@ -997,27 +997,7 @@ export function IdentityModal({
   )
 }
 
-// ---- Keyboard shortcuts, bulk runs --------------------------------------------------------------------------------------
-
-export function ShortcutsModal({ open, keys, onClose }: { open: boolean; keys: ReadonlyArray<{ keys: readonly string[]; does: string }>; onClose?: () => void }) {
-  const t = useT('parties')
-  return (
-    <Modal open={open} onClose={() => onClose?.()} title={t('keys.title')} size="sm" footer={<Button onClick={() => onClose?.()}>{t('common.close')}</Button>}>
-      <dl className="fw-pty-keymap">
-        {keys.map((entry) => (
-          <Fragment key={entry.does}>
-            <dt>
-              {entry.keys.map((key) => (
-                <Kbd key={key}>{key}</Kbd>
-              ))}
-            </dt>
-            <dd>{entry.does}</dd>
-          </Fragment>
-        ))}
-      </dl>
-    </Modal>
-  )
-}
+// ---- Bulk runs (F-CL-101: the keys window went — the list's keys live in the footer's information icon) -------------------
 
 /** A bulk run (Check VIES for N, Archive N): one call per row, a result per row; the dialog closes when it is done. */
 export function BulkModal({ run, open, onClose }: { run: BulkRun | null | undefined; open: boolean; onClose?: () => void }) {

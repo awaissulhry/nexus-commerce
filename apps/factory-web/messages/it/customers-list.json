@@ -1,0 +1,22 @@
+{
+  "empty": {
+    "customers": {
+      "search": "Nessun cliente corrisponde a «{q}».",
+      "filters": "Nessun cliente corrisponde a questi filtri.",
+      "archived": "Nessun cliente archiviato.",
+      "blocked": "Nessun cliente bloccato.",
+      "vies": "Nessun cliente ha problemi VIES.",
+      "prospects": "Nessun potenziale.",
+      "other": "Nessun cliente in «{view}»."
+    },
+    "suppliers": {
+      "search": "Nessun fornitore corrisponde a «{q}».",
+      "filters": "Nessun fornitore corrisponde a questi filtri.",
+      "blocked": "Nessun fornitore bloccato.",
+      "archived": "Nessun fornitore archiviato.",
+      "other": "Nessun fornitore in «{view}»."
+    },
+    "clear": "Togli",
+    "clearSearch": "Svuota la ricerca"
+  }
+}

@@ -56,7 +56,7 @@ function DepthList({ list, w2b }: { list: ReturnType<typeof useDesignList>; w2b:
     createElement(SuppliersView, {
       ...list,
       columns,
-      headActions: createElement(ImportButton, { label: t('import.suppliers'), held: can.manage ? null : t('held.manage') }),
+      headActions: can.manage ? createElement(ImportButton, { label: t('import.suppliers'), held: null }) : null, // F-CL-101: hidden without the right
       depth: {
         tiles: [{ label: t('tile.expiring'), value: summary ? String(summary.expiringIn30Days) : w2b.summary.status === 'loading' ? '…' : '—', hint: w2b.summary.status === 'error' ? t('tile.unknown') : t('tile.expiringHint'), active: w2b.expiring === true }],
         body: w2b.expiring
@@ -91,7 +91,7 @@ export const designScreen = defineDesignScreen<SuppliersCase>({
   view: SuppliersDesign,
   cases: [
     { id: 'list', label: 'The list: roles, VAT number with its VIES mark', model: list(), note: 'Pelletteria Doppia is also a customer: one party record, both lists.' },
-    { id: 'view-subcontractors', label: 'Rows ▾ Subcontractors', model: list({ view: 'subcontractors', rows: loaded(rows.filter((row) => row.roles.includes('SUBCONTRACTOR'))), total: 1 }) },
+    { id: 'view-subcontractors', label: 'Views ▾ Subcontractors', model: list({ view: 'subcontractors', rows: loaded(rows.filter((row) => row.roles.includes('SUBCONTRACTOR'))), total: 1 }) },
     { id: 'tile-prospects', label: 'Tile pressed: prospects (no POs until approved)', model: list({ view: 'prospects', rows: loaded(rows.filter((row) => row.status === 'PROSPECT')), total: 1 }) },
     { id: 'search', label: 'Search', model: list({ query: 'conceria', rows: loaded(rows.filter((row) => /conceria/i.test(row.legalName))), total: 1 }) },
     { id: 'filtered-empty', label: 'No rows match these filters', model: list({ query: 'zzz', rows: loaded([]), total: 0 }) },
@@ -117,7 +117,6 @@ export const designScreen = defineDesignScreen<SuppliersCase>({
     { id: 'block', label: 'Block a supplier', model: list({ dialog: { kind: 'block', partyIds: pick('TESSITURA-ESEMPIO') } }) },
     { id: 'all-selected', label: 'Every loaded row selected (header box)', model: list({ selected: rows.map((row) => row.id) }) },
     { id: 'archive', label: 'Archive a supplier', model: list({ dialog: { kind: 'archive', partyIds: pick('PROTEZIONI-PROVA') } }) },
-    { id: 'shortcuts', label: 'Keyboard shortcuts (?)', model: list({ dialog: { kind: 'shortcuts' } }) },
     { id: 'w2b-334-list', label: 'W2b: Import, the Documents column, Documents expiring in 30 days', model: w2b(), note: 'The tile is a saved view; the column says valid · expiring · expired · missing per supplier.' },
     { id: 'w2b-334-selection', label: 'W2b: a selection — Request documents (N)', model: w2b({}, { selected: pick('CONCERIA-DEMO', 'TESSITURA-ESEMPIO', 'TERZISTA-DEMO') }) },
     { id: 'w2b-334-selection-held', label: 'W2b: Request documents held (no right to ask partners)', model: w2b({ can: READ_CAN }, { selected: pick('CONCERIA-DEMO'), can: { view: true, manage: false, block: false, vies: false } }) },

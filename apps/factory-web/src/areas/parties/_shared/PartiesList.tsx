@@ -17,6 +17,7 @@ import {
   BULK_MAX,
   identityBody,
   identityWanted,
+  listCanOf, // F-CL-101
   loaded,
   loading,
   failed,
@@ -46,8 +47,18 @@ import { PartiesListView, type ListDepth } from './view/PartiesListView'
 /**
  * B-W2b-334: a side's own list parts (Suppliers: the "Documents expiring in 30 days" tile and its view, Request documents
  * N), given the list's view, a way to change it, the selected rows and how to read the list again.
+ * F-CL-101 (13-backend §8.1): + the loaded rows (a side reads its own facts per page of rows: Customers' New messages). The slot is
+ * called once per render of the list, always at the same place, so a side may use hooks inside it (the same ones every render).
  */
-export type ListDepthSlot = (list: { view: ListView; onView: (view: ListView) => void; selectedRows: readonly PartyRow[]; reload: () => void }) => ListDepth
+export interface ListDepthArgs {
+  readonly view: ListView
+  readonly onView: (view: ListView) => void
+  readonly selectedRows: readonly PartyRow[]
+  /** F-CL-101: the rows the list has loaded (every page read so far). */
+  readonly rows: readonly PartyRow[]
+  readonly reload: () => void
+}
+export type ListDepthSlot = (list: ListDepthArgs) => ListDepth
 
 /**
  * The list container of both sides (`/w/<company>/sales/customers` SCR-032, `/w/<company>/purchasing/suppliers`
@@ -66,6 +77,8 @@ export function PartiesList({ side, headActions, columns, depth }: { side: Side;
 }
 
 const VIEWS = new Set<string>(['open', 'active', 'prospects', 'brands', 'riders', 'invoice', 'vies', 'blocked', 'archived', 'all', 'suppliers', 'subcontractors', 'carriers']) // B-W2b-324: riders
+/** F-CL-101: no rows read yet — one empty list, the same between renders (a side's per-page read keys on it). */
+const EMPTY_ROWS: readonly PartyRow[] = []
 
 function PartiesListContainer({ side, headActions, columns, depth }: { side: Side; headActions?: (reload: () => void) => ReactNode; columns?: readonly ColDef<PartyRow>[]; depth?: ListDepthSlot }) {
   const config = SIDES[side]
@@ -75,7 +88,7 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
   const pathname = usePathname()
   const params = useSearchParams()
   const held = useMemo(() => new Set(session.permissions), [session.permissions])
-  const can = { view: held.has('parties.view'), manage: held.has('parties.manage'), block: held.has('parties.block'), vies: held.has('parties.vies') }
+  const can = listCanOf(held) // F-CL-101: + views.export (the bar's Export N)
   const prefix = companyPrefix(session.company?.code ?? '')
   // F-SA-225 (screen = file): the view, the search and the kind / tax-mode chips live in the ADDRESS — Export ▾ and Export N (the export
   // job reads the screen's address: exports/sources/parties.ts), a saved view, Back and a shared link hold the screen's rows; every
@@ -353,19 +366,19 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
     }
   }
 
+  // B-W2b-334: the side's own tiles, view and bulk actions. F-CL-101: called here, once per render (a side may use hooks in it).
+  const sideDepth = depth?.({
+    view,
+    onView: changeView,
+    selectedRows: (rows.items ?? []).filter((row) => selected.includes(row.id)),
+    rows: rows.items ?? EMPTY_ROWS,
+    reload: refresh,
+  })
+
   return (
     <PartiesListView
       columns={columns}
-      // B-W2b-334: the side's own tiles, view and bulk actions.
-      depth={depth?.({
-        view,
-        onView: changeView,
-        selectedRows: (rows.items ?? []).filter((row) => selected.includes(row.id)),
-        reload: () => {
-          void load()
-          void loadTiles()
-        },
-      })}
+      depth={sideDepth}
       headActions={
         headActions?.(() => {
           void load()
@@ -407,10 +420,6 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
           setRows(loading())
           setSelected([])
           writeAddress({ filters: next }) // F-SA-225
-        },
-        onClearAll: () => {
-          setSelected([])
-          writeAddress({ view: 'open', query: '', filters: {} }) // F-SA-225: one write
         },
         onMore: () => void onMore(),
         onRetry: () => {

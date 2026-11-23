@@ -16,23 +16,29 @@ import '../parties.css'
  * (LiveUpdates = a Button in the head, RecordNav and SaveStatus absent, the page band = the record's own DetailHeader).
  */
 
-/** The parties text (`parties`), the record panels' (`records`) and the list frame's (`lists`), in the page's language. */
+/**
+ * The parties text (`parties`), the record panels' (`records`) and the list frame's (`lists`), in the page's language. F-CL-101
+ * (settle T11): + the list's new words (`customers-list`: the empty words of a view, the bar's More ▾, the P2 lines), loaded by
+ * both lists, and the Orders sheet's P2 words read as they are (`orders-sheet` commands.runs / notOn / many.runRest).
+ */
 export function PartiesMessages({ children }: { children?: ReactNode }) {
-  return <WithMessages namespaces={['parties', 'records', 'lists']}>{children}</WithMessages>
+  return <WithMessages namespaces={['parties', 'records', 'lists', 'customers-list', 'orders-sheet']}>{children}</WithMessages>
 }
 
 /** "—" for an unknown value (never 0, never empty). */
 export const dash = (value: ReactNode | null | undefined): ReactNode => (value === null || value === undefined || value === '' ? '—' : value)
 
-/** The freshness and the live state, in words ("Updated 10:42 · Live"). */
+/**
+ * The freshness in words ("Updated 10:42"). F-CL-101 (P0-B8): one Live mark — the page bar's; the list no longer repeats it. Offline
+ * still says so here (rows stay readable with their time).
+ */
 export function Freshness({ asOf, live }: { asOf: string | null; live: LiveState }) {
   const t = useT('parties')
   const locale = useLocale()
   return (
     <span className="fw-pty-asof" role="status">
       {asOf ? <time dateTime={asOf}>{t('list.updated', { time: formatTime(asOf, { locale }) })}</time> : t('list.notYet')}
-      {' · '}
-      {t(`live.${live}`)}
+      {live === 'offline' ? ` · ${t('live.offline')}` : ''}
     </span>
   )
 }
@@ -42,11 +48,12 @@ export function Freshness({ asOf, live }: { asOf: string | null; live: LiveState
  * a page's status and actions yet — `usePageBand`, design 00 §6.3 — so they sit here): one plain sentence, the
  * freshness, and at most two actions with the primary last.
  */
-export function PageHead({ intro, status, actions }: { intro?: ReactNode; status?: ReactNode; actions?: ReactNode }) {
+export function PageHead({ intro, status, actions, band }: { intro?: ReactNode; status?: ReactNode; actions?: ReactNode; band?: ReactNode }) {
+  // F-CL-101 (settle T22): a side's band sits in the head row's left part in place of the sentence (the band's ⓘ holds it).
   return (
     <div className="fw-pty-head">
       <div className="fw-pty-head-text">
-        {intro && <p className="fw-pty-intro">{intro}</p>}
+        {band ?? (intro && <p className="fw-pty-intro">{intro}</p>)}
         {status}
       </div>
       {actions && <div className="fw-pty-actions">{actions}</div>}

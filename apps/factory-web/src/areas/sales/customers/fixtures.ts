@@ -44,7 +44,7 @@ export const designScreen = defineDesignScreen<CustomersCase>({
   title: 'Customers',
   view: CustomersDesign,
   cases: [
-    { id: 'list', label: 'The list: tiles, roles, VIES and SDI columns', model: list(), note: 'Press a VIES mark for the result; a tile is a saved filter (its chip shows in the filter row).' },
+    { id: 'list', label: 'The list: the Customer cell, Views ▾ (the five tiles went: their filters are views)', model: list(), note: 'The identity columns are in Customise; a view is the Views ▾ label, never a chip.' },
     // B-W2a-81: the Overdue column (price grain, receivables.view). B-CP-011: Finance holds the grain; Sales sees no amount.
     { id: 'w2a-overdue', label: 'Overdue (W2a): what each customer owes late, per currency, with how late', model: { ...list(), overdue: overdueList(MONEY_CAN.finance) }, note: 'Moda Demo 4,270.00 (38 days late); Beispiel 1,220.00 · CHF 300.00; the others "none".' }, // B-CP-011
     { id: 'w2a-overdue-reading', label: 'Overdue (W2a) still reading: "—", never 0', model: { ...list(), overdue: overdueList(MONEY_CAN.finance, { byParty: null }) } },
@@ -52,25 +52,25 @@ export const designScreen = defineDesignScreen<CustomersCase>({
     { id: 'w2a-overdue-no-price', label: 'Overdue (W2a) seen as Sales (no price grain, B-CP-011): the column is not drawn', model: { ...list(), overdue: overdueList(MONEY_CAN.sales) } },
     {
       id: 'tile-vies',
-      label: 'Tile pressed: EU businesses without a valid VIES check',
+      label: 'Views ▾ VIES problems: EU businesses without a valid VIES check',
       model: list({ view: 'vies', rows: loaded(rows.filter((row) => row.attention.includes('VIES_NOT_PROVEN'))), total: 3 }),
     },
-    { id: 'tile-invoice', label: "Tile pressed: can't be invoiced yet", model: list({ view: 'invoice', rows: loaded(rows.filter((row) => row.invoiceBlocked)), total: 2 }) },
+    { id: 'tile-invoice', label: 'Views ▾ Missing tax data: can’t be invoiced yet', model: list({ view: 'invoice', rows: loaded(rows.filter((row) => row.invoiceBlocked)), total: 2 }) },
     {
       id: 'view-brands',
-      label: 'Rows ▾ Brands, with a kind filter',
+      label: 'Views ▾ Brands, with a kind filter',
       model: list({ view: 'brands', filters: { kind: 'ORGANISATION' }, rows: loaded(rows.filter((row) => row.roles.includes('BRAND'))), total: 2 }),
     },
-    // B-W2b-324: Rows ▾ Riders (people): the customers that are people (a team's riders and private riders).
+    // B-W2b-324: Views ▾ Riders (people): the customers that are people (a team's riders and private riders).
     {
       id: 'w2b-324-riders',
-      label: 'W2b Rows ▾ Riders (people): the customers that are people',
+      label: 'W2b Views ▾ Riders (people): the customers that are people',
       model: list({ view: 'riders', rows: loaded(rows.filter((row) => row.kind === 'PERSON')), total: rows.filter((row) => row.kind === 'PERSON').length }),
       note: 'A rider opens on its record: its team, its measurement profiles. Personal data stays inside the record (never a total).',
     },
-    { id: 'w2b-324-riders-empty', label: 'W2b Rows ▾ Riders: none yet', model: list({ view: 'riders', rows: loaded([]), total: 0 }) },
+    { id: 'w2b-324-riders-empty', label: 'W2b Views ▾ Riders: none yet', model: list({ view: 'riders', rows: loaded([]), total: 0 }) },
     { id: 'search', label: 'Search by name or VAT number', model: list({ query: 'demo', rows: loaded(rows.filter((row) => /demo/i.test(`${row.code} ${row.legalName}`))), total: 6 }) },
-    { id: 'filtered-empty', label: 'No rows match these filters', model: list({ query: 'zzz', rows: loaded([]), total: 0 }) },
+    { id: 'filtered-empty', label: 'A search with no match: its own words and Clear search', model: list({ query: 'zzz', rows: loaded([]), total: 0 }) },
     { id: 'empty', label: 'First day: no customer yet', model: list({ rows: loaded([]), total: 0, tiles: { active: 0, prospects: 0, vies: 0, invoice: 0, blocked: 0 } }) },
     { id: 'loading', label: 'Loading', model: list({ rows: loading(), total: null, tiles: {}, asOf: null, live: 'connecting' }) },
     {
@@ -82,9 +82,9 @@ export const designScreen = defineDesignScreen<CustomersCase>({
     { id: 'no-access', label: 'No permission: what is needed and who has it', model: list({ can: { view: false, manage: false, block: false, vies: false } }) },
     {
       id: 'read-only',
-      label: 'Read-only rights: actions held with their reason',
+      label: 'Read-only rights: no act without its right',
       model: list({ can: { view: true, manage: false, block: false, vies: false }, selected: pick('DE-BEISPIEL', 'MODA-DEMO') }),
-      note: 'New customer, Check VIES and Archive stay focusable and say which right is missing.',
+      note: 'No New customer, no Import, no identity act on a row or in ⋯ (each act reads its own right).',
     },
     {
       id: 'selection',
@@ -156,13 +156,12 @@ export const designScreen = defineDesignScreen<CustomersCase>({
         },
       }),
     },
-    { id: 'shortcuts', label: 'Keyboard shortcuts (?)', model: list({ dialog: { kind: 'shortcuts' } }) },
     // B-W2a-49 (design pop:customers.import, band "Import (W2a)"): the customers and suppliers importer.
     { id: 'import-upload', label: 'W2a: Import — the sheet (every company by default)', model: importCase({ held: null, sheet: demoCustomersImport('upload') }), note: 'Rows by code: new customers, changed ones; nothing is written before Apply.' },
     { id: 'import-check', label: 'W2a: Import — the dry run (2 new, 1 changed, 1 refused)', model: importCase({ held: null, sheet: demoCustomersImport('planned') }), note: 'The columns read and ignored; the refused row says why; Apply 3.' },
     { id: 'import-result', label: 'W2a: Import — applied', model: importCase({ held: null, sheet: demoCustomersImport('applied') }), note: 'Closing reads the list and its tiles again.' },
     { id: 'import-no-apply', label: 'W2a: Import without the apply right (Apply held)', model: importCase({ held: null, sheet: demoCustomersImport('planned', { run: true, apply: false }) }) },
-    { id: 'import-held', label: 'W2a: Import held (no import right)', model: importCase({ held: 'import.held.run', sheet: null }), note: 'The button says why on hover and focus.' },
-    { id: 'import-held-manage', label: 'W2a: Import held (a role that only views customers)', model: { ...list({ can: { view: true, manage: false, block: false, vies: false } }), importer: { held: 'import.held.manage', sheet: null } } },
+    { id: 'import-held', label: 'W2a: Import hidden (no import right)', model: importCase({ held: 'import.held.run', sheet: null }), note: 'Without the right the button is not drawn.' },
+    { id: 'import-held-manage', label: 'W2a: Import hidden (a role that only views customers)', model: { ...list({ can: { view: true, manage: false, block: false, vies: false } }), importer: { held: 'import.held.manage', sheet: null } } },
   ],
 })
