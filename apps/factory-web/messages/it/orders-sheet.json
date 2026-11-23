@@ -514,7 +514,9 @@
       "runRest_one": "Esegui di nuovo il resto ({count})",
       "runRest_other": "Esegui di nuovo il resto ({count})",
       "label": "Ogni ordine"
-    }
+    },
+    "noneAsked_one": "Il sì di questo ordine non è ancora stato chiesto a nessuno: chiedilo sull'ordine.",
+    "noneAsked_other": "Il sì di nessuno dei {count} è ancora stato chiesto: chiedilo su ogni ordine."
   },
   "phase": {
     "NOT_SENT": "Non inviati in fabbrica",
@@ -536,12 +538,11 @@
     "reaccept": "Aspetta il nuovo sì del cliente",
     "heldTip": "In sospeso: apri la scheda Produzione di {number}"
   },
-  "deposit": {
-    "extra": "aggiuntivo aperto, scade il {date}"
-  },
   "customise": {
     "wider": "{column} · da un foglio più largo",
-    "widest": "{column} · dal foglio più largo"
+    "widest": "{column} · dal foglio più largo",
+    "waits_one": "{count} colonna spuntata non è a schermo in questo spazio: dice da quale foglio compare (uno più largo: chiudi la conversazione, o usa uno schermo più largo).",
+    "waits_other": "{count} colonne spuntate non sono a schermo in questo spazio: ognuna dice da quale foglio compare (uno più largo: chiudi la conversazione, o usa uno schermo più largo)."
   },
   "countOf_one": "{shown} di {count} ordine",
   "countOf_other": "{shown} di {count} ordini",
@@ -579,5 +580,6 @@
   },
   "receipt": {
     "showThread": "Mostra la conversazione di {number}"
-  }
+  },
+  "searchShort": "Cerca ordini"
 }

@@ -84,9 +84,11 @@ const CLOSE_STATUSES: readonly OrderStatus[] = Object.freeze(['SHIPPED', 'DELIVE
  * orders.close (each was drawn greyed with "needs the right" before). A step a STATE holds keeps its place and its words (the
  * deposit that production waits for). The window's own guard still says the right (windowHeldOf): it never opens without it.
  */
-export function rowStepsOf(row: Pick<OrderRow, 'status' | 'deposit'>, can: Pick<OrderAbilities, 'manage' | 'close' | 'makeWorkOrders'>): RowStep[] {
+// cw fx5 (walk W-21; S9): Confirm or refuse… is a decision — drawn only for a reader who may decide a yes (`decide`: approvals.decide,
+// the host says it; absent: as before). A reader without it keeps the read-only doors of the row (its chips).
+export function rowStepsOf(row: Pick<OrderRow, 'status' | 'deposit'>, can: Pick<OrderAbilities, 'manage' | 'close' | 'makeWorkOrders'>, decide = true): RowStep[] {
   const steps: RowStep[] = []
-  if (row.status === 'PENDING_APPROVAL') steps.push({ command: 'confirm', held: null })
+  if (row.status === 'PENDING_APPROVAL' && decide) steps.push({ command: 'confirm', held: null })
   if (row.status === 'CONFIRMED' && can.makeWorkOrders) steps.push({ command: 'make', held: makeHeldOfRow(row) })
   if (row.status === 'IN_PRODUCTION' && can.manage) steps.push({ command: 'ready', held: null })
   if (CLOSE_STATUSES.includes(row.status) && (can.manage || can.close)) steps.push({ command: 'close', held: null })
@@ -227,14 +229,22 @@ export function manyShown(can: Pick<OrderAbilities, 'manage' | 'close'>, decide:
  * F-CW-202: the bar no longer draws a command without its right (manyShown), so the right's words are only this rule's own guard —
  * the window never opens without it.
  */
-export function manyHeld(command: ManyCommand, rows: readonly Pick<OrderRow, 'status'>[], can: Pick<OrderAbilities, 'manage' | 'close'>): Words | null {
+export function manyHeld(command: ManyCommand, rows: readonly (Pick<OrderRow, 'status'> & Partial<Pick<OrderRow, 'waits'>>)[], can: Pick<OrderAbilities, 'manage' | 'close'>): Words | null {
   if (rows.length === 0) return null
   if (rows.length > MANY_MAX) return sheet('bulk.tooMany', { max: MANY_MAX })
   if (command === 'ready' && !can.manage) return orders('held.noManage')
   if (command === 'close' && !can.manage && !can.close) return orders('held.noClose')
   if (!rows.some((row) => MANY_STATES[command].includes(row.status))) return { key: 'bulk.noneInState', params: { count: rows.length }, sheet: true, states: MANY_STATES[command] }
+  // cw fx5 (walk W-22): Confirm N… on orders none of which can be confirmed — every one that waits for a yes says nobody was asked
+  // for it yet (the row's `waits`: NO_REQUEST): there is no yes to confirm, so the act is held with the window's own reason and the
+  // window never opens on "Runs on 0". A row that does not say why it waits never holds (the window says it then); whose yes it is
+  // to decide is the order's own read.
+  if (command === 'confirm' && rows.filter((row) => MANY_STATES.confirm.includes(row.status)).every(noYesAsked)) return sheet('commands.noneAsked', { count: rows.length })
   return null
 }
+
+/** The row says nobody was asked for its yes yet (the window's "Nobody was asked for this yes yet"). */
+export const noYesAsked = (row: Partial<Pick<OrderRow, 'waits'>>): boolean => !!row.waits && row.waits.includes('NO_REQUEST') && !row.waits.includes('REQUEST_PENDING')
 
 /** The bar's button words: "Mark {count} ready…" (orders-sheet `bulk.<command>`). */
 export const manyLabel = (command: ManyCommand, count: number): Words => sheet(`bulk.${command}`, { count })

@@ -262,7 +262,10 @@
         "DONE": "Nessun ordine di {customer} è ancora concluso.",
         "CANCELLED": "Nessun ordine di {customer} è annullato.",
         "waitingUs": "Nessun ordine di {customer} tocca a noi ora.",
-        "late": "Nessun ordine di {customer} è in ritardo ora."
+        "late": "Nessun ordine di {customer} è in ritardo ora.",
+        "priorityOpen": "Nessun ordine aperto di {customer} ha priorità {level} ora.",
+        "priority": "Nessun ordine di {customer} ha priorità {level}.",
+        "deposit": "Nessun ordine di {customer} aspetta un acconto ora."
       },
       "emptyDrafts_one": "{count} bozza è in scrittura nel portale — mai contata come ordine.",
       "emptyDrafts_other": "{count} bozze sono in scrittura nel portale — mai contate come ordini.",

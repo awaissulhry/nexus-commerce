@@ -41,7 +41,9 @@ export function WaitingForCustomerDialog({ party, can, requests, reaccept, onPic
   )
   const counters = requests.status === 'ready' ? counterOffersOf(requests.value.items) : null
   return (
-    <Modal open onClose={onClose} size="lg" title={t('customers.work.window.customerTitle', { customer: party.name })}>
+    // cw fx5 (walk W-26): the wide window — the portal's requests card needs about 800 px for its own columns (Request, On, By,
+    // Asked by, ⋯); in the 660 px window it scrolled sideways by 213 px with "Asked by" off screen and the date cut.
+    <Modal open onClose={onClose} size="xl" title={t('customers.work.window.customerTitle', { customer: party.name })}>
       <div className="fw-cw">
         {can.partners && (
           <section className="fw-cw" aria-label={t('customers.work.window.asked', { customer: party.name })}>

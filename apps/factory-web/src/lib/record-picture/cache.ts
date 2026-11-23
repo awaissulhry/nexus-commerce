@@ -1,4 +1,4 @@
-import { BATCH_MAX, BATCH_WAIT_MS, recordKey, RETRY_AFTER_MS, untilOf, type PictureAnswer, type PictureSource } from './model'
+import { BATCH_MAX, BATCH_WAIT_MS, EXPIRY_MARGIN_MS, recordKey, RETRY_AFTER_MS, untilOf, type PictureAnswer, type PictureSource } from './model'
 
 /**
  * F-SA-211 — the ONE picture cache and batch queue of the office (12-lists-board §2.4). Module-level, shared by every list, board
@@ -27,7 +27,11 @@ interface Small {
 }
 
 const byFile = new Map<string, Small>()
-const lastDrawn = new Map<string, string>()
+// cw fx5 (walk W-18): the address last drawn is kept WITH the moment it dies — a dead address is never handed out again (a cell
+// drawn again asked the dead address first: a 403 in the console at every redraw, 18 in one walk).
+const lastDrawn = new Map<string, { readonly url: string; readonly dead: number }>()
+/** An address's life when the cache was not told it (the API signs a small picture for 60 seconds), less the margin. */
+const LINK_LIFE_MS = 60_000 - EXPIRY_MARGIN_MS
 const byRecord = new Map<string, { readonly answer: PictureAnswer | null; readonly until: number }>()
 const failedUntil = new Map<string, number>()
 const inflight = new Map<string, Promise<Wanted>>()
@@ -49,14 +53,22 @@ export function smallOf(fileId: string | null | undefined, now = Date.now()): st
   return known && known.until > now ? known.url : null
 }
 
-/** The address last drawn for a file (maybe expired: shown while the fresh one is read). */
-export function staleOf(fileId: string | null | undefined): string | null {
-  return fileId ? (lastDrawn.get(fileId) ?? null) : null
+/**
+ * The address last drawn for a file while that address is still ALIVE (past the cache's margin, before its own end): shown while the
+ * fresh one is read. Once its life is over it is a miss — the part shows its placeholder and asks a fresh address; the dead one is
+ * never asked of the storage again.
+ */
+export function staleOf(fileId: string | null | undefined, now = Date.now()): string | null {
+  if (!fileId) return null
+  const last = lastDrawn.get(fileId)
+  return last && last.dead > now ? last.url : null
 }
 
-/** The part drew this address for this file. */
-export function drawn(fileId: string | null | undefined, url: string): void {
-  if (fileId) lastDrawn.set(fileId, url)
+/** The part drew this address for this file (its end: the cache's own when it holds this address, else the API's 60 seconds). */
+export function drawn(fileId: string | null | undefined, url: string, now = Date.now()): void {
+  if (!fileId) return
+  const known = byFile.get(fileId)
+  lastDrawn.set(fileId, { url, dead: known && known.url === url ? known.until + EXPIRY_MARGIN_MS : now + LINK_LIFE_MS })
 }
 
 /** A caller that already holds a file's small address (the order read's lines) gives it to the cache. */

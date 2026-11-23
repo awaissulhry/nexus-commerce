@@ -230,6 +230,14 @@ export interface OrdersListModel {
     /** The host's own order of its set, left to right (the sheet's other columns follow in their own order; ⋯ stays last). */
     readonly order?: readonly string[]
     // ---- end F-CW-102
+    // ---- cw fx5 (walk W-5, W-6): the row keeps its words in a narrow room ----
+    /** The host's own side padding of a column's cells and header, by column id: `tight` 4 px, `snug` 6 px (the grid's own is 14). */
+    readonly pad?: Readonly<Record<string, 'tight' | 'snug'>>
+    /** Columns whose header draws no menu button (the narrow fixed ones: the word needs the room). */
+    readonly plainHeads?: readonly string[]
+    /** A header of the set may stand on two lines ("Customer / urgency"), never cut. */
+    readonly wrapHeads?: boolean
+    // ---- end cw fx5
     // ---- F-CW-103 (lead settle S12; 10-design §3.9): Customise tells the truth for the host's set ----
     /**
      * The columns of the host's set that are not on screen in THIS room and show in a wider one (by column id: from a `wider` sheet,

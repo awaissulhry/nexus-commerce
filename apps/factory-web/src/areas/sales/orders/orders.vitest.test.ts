@@ -370,19 +370,37 @@ function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof L
   return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(View, { model })))
 }
 
+// cw fx5 (part G; end check run 45106331675): the order page's screen (SCR-039) has 369 cases — drawn in both languages inside ONE
+// test it took 21.7 s, 26.9 s and then 30.96 s (vitest's limit is 30 s: a slower runner made it fail). Every case is still drawn in
+// both languages, now one test per language and per part of at most GALLERY_PART cases (a few seconds each, far from the limit).
+const GALLERY_PART = 80
+
 describe('every design case draws in both languages with no key left on screen', () => {
   for (const screen of [listScreen, recordScreen, changesScreen] as unknown as DesignScreen<unknown>[]) {
-    it(`${screen.screen}: ${screen.cases.length} cases × it, en`, () => {
-      for (const item of screen.cases) {
-        for (const locale of LOCALES) {
-          const html = render(screen, item.model, locale).replace(NOT_KEYS, '')
-          expect(html.length, `${screen.screen}/${item.id}`).toBeGreaterThan(200)
-          expect(html.match(LEFT_KEY)?.[0] ?? null, `${screen.screen}/${item.id} (${locale})`).toBeNull()
-          expect(html, `${screen.screen}/${item.id} (${locale}): a permission name on screen`).not.toMatch(/\b(?:orders|payments|invoices|workorders|quotes)\.(?:view|manage|close|record|issue)\b/)
-        }
+    const total = screen.cases.length
+    for (const locale of LOCALES) {
+      for (let from = 0; from < total; from += GALLERY_PART) {
+        const part = screen.cases.slice(from, from + GALLERY_PART)
+        const name = total <= GALLERY_PART ? `${screen.screen} in ${locale}: ${total} cases` : `${screen.screen} in ${locale}: cases ${from + 1}–${from + part.length} of ${total}`
+        it(name, () => {
+          for (const item of part) {
+            const html = render(screen, item.model, locale).replace(NOT_KEYS, '')
+            expect(html.length, `${screen.screen}/${item.id}`).toBeGreaterThan(200)
+            expect(html.match(LEFT_KEY)?.[0] ?? null, `${screen.screen}/${item.id} (${locale})`).toBeNull()
+            expect(html, `${screen.screen}/${item.id} (${locale}): a permission name on screen`).not.toMatch(/\b(?:orders|payments|invoices|workorders|quotes)\.(?:view|manage|close|record|issue)\b/)
+          }
+        })
       }
-    })
+    }
   }
+
+  it('the parts leave no case out: every case of the three screens is in exactly one part', () => {
+    for (const screen of [listScreen, recordScreen, changesScreen] as unknown as DesignScreen<unknown>[]) {
+      const parts: string[] = []
+      for (let from = 0; from < screen.cases.length; from += GALLERY_PART) parts.push(...screen.cases.slice(from, from + GALLERY_PART).map((item) => item.id))
+      expect(parts, screen.screen).toEqual(screen.cases.map((item) => item.id))
+    }
+  })
 
   // SCR-199 (the customer's deposit page) is held by links/pay/pay.vitest.test.ts since B-W2b-199.
 

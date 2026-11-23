@@ -183,7 +183,8 @@ describe('F-SA-276: the four views (no tabs inside the tab)', () => {
     expect([343, 865, 1185, 1314, 1794].map((width) => workRoomOf(width))).toEqual(['base', 'base', 'wide', 'wider', 'widest'])
     expect([workRoomOf(null), workRoomOf(undefined), workRoomOf(WORK_ROOMS.wide - 1), workRoomOf(WORK_ROOMS.wide), workRoomOf(WORK_ROOMS.widest)]).toEqual(['base', 'base', 'base', 'wide', 'widest'])
     // A narrow cell keeps each chip's head (dense); the widest room shows chip 3 whole.
-    expect((['base', 'wide', 'wider', 'widest'] as const).map((room) => workPreset('all', null, false, room).dense)).toEqual([true, true, true, false])
+    // cw fx5 (walk W-6): chip 3 keeps its head in EVERY room (on the widest sheet its tail is what the Deposit and Waiting on columns say).
+    expect((['base', 'wide', 'wider', 'widest'] as const).map((room) => workPreset('all', null, false, room).dense)).toEqual([true, true, true, true])
   })
   it('F-CW-102: the set\'s own order on screen, its honest widths, and every column but Where it is at its own width (no stretched date)', () => {
     expect(WORK_ORDER).toEqual(['picture', 'number', 'whereItIs', 'promised', 'customerUrgency', 'priority', 'waitingOn', 'deposit', 'units', 'shipped', 'orderDate', 'supervisor', 'newMessages'])
@@ -192,9 +193,10 @@ describe('F-SA-276: the four views (no tabs inside the tab)', () => {
     expect(orderedByPreset(sheet, workPreset('all', null)).map((column) => column.colId)).toEqual(['picture', 'number', 'whereItIs', 'promised', 'customerUrgency', 'waitingOn', 'deposit', 'newMessages', 'brand', 'status', 'more'])
     expect(orderedByPreset(sheet, null).map((column) => column.colId)).toEqual(sheet.map((column) => column.colId))
     // The honest widths: a seed's number, the longest status words (Status in Customise), the picture's 36 px with the cell's padding.
-    expect(WORK_MIN).toMatchObject({ picture: 64, number: 150, whereItIs: 220, promised: 108, customerUrgency: 150, newMessages: 52, status: 196 })
+    // cw fx5 (walk W-5, W-6; 30-walk §6.2): the narrow fixed columns at the design's widths (Picture 58 · Promised 98 · New messages 44).
+    expect(WORK_MIN).toMatchObject({ picture: 58, number: 150, whereItIs: 220, promised: 98, customerUrgency: 147, newMessages: 44, status: 196 })
     expect(withPreset({ colId: 'number', minWidth: 128 }, workPreset('all', null), false)).toMatchObject({ minWidth: 150, maxWidth: 150, hide: false })
-    expect(withPreset({ colId: 'picture', minWidth: 76, maxWidth: 76 }, workPreset('all', null), false)).toMatchObject({ minWidth: 64, maxWidth: 64, hide: false })
+    expect(withPreset({ colId: 'picture', minWidth: 76, maxWidth: 76 }, workPreset('all', null), false)).toMatchObject({ minWidth: 58, maxWidth: 58, hide: false })
     // Where it is takes the room left (the chips): no maximum; Status (ticked in Customise) shows its longest words whole.
     expect(WORK_MAX.whereItIs).toBeUndefined()
     expect(WORK_MAX.status).toBeUndefined()
@@ -332,7 +334,6 @@ describe('F-SA-276: words in both languages', () => {
         ...['URGENT', 'ASKED', 'SET_BACK', 'rank', 'bare', 'bareRank', 'rankTip', 'askedTip', 'lockedTip', 'priority', 'priorityTip'].map((key) => `urgency.${key}`),
         ...['sewnOf', 'nothingShipped'].map((key) => `where.${key}`),
         ...['depositOverdue', 'depositExtra', 'reaccept', 'heldTip'].map((key) => `stop.${key}`),
-        'deposit.extra',
         'customise.wider',
         'customise.widest',
       ]
@@ -376,7 +377,8 @@ describe('F-CW-104: the toolbar says "2 of 14 orders" under a door, and searches
     expect(tab).toContain('countOf: workViewCounts(work.reads.board)?.all ?? null,')
     expect(tab).toContain("searchLabel: t('customers.work.search'),")
     const sheet = readFileSync(new URL('../../orders/list/view/OrdersListView.tsx', import.meta.url), 'utf8')
-    expect(sheet).toContain("placeholder={model.searchLabel ?? t('list.search')}")
+    // cw fx5 (walk W-23): the host's words, or — in a room below 480 px — the sheet's short ones ("Search orders").
+    expect(sheet).toContain("placeholder={barRoom !== null && barRoom < SEARCH_SHORT_BELOW ? s('searchShort') : (model.searchLabel ?? t('list.search'))}")
     expect(sheet).toContain('countWords(items.length, count, !!model.list.more, model.countOf, t, s)')
     for (const page of ['../../orders/list/OrdersPage.tsx', '../../mtm/MtmPage.tsx']) expect(readFileSync(new URL(page, import.meta.url), 'utf8'), page).not.toMatch(/countOf|searchLabel/)
     const en = createTranslator('en', messagesFor('en', ['parties']).parties!)

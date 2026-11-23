@@ -238,6 +238,14 @@ function Band({ model, actions }: { model: WorkBandModel; actions?: WorkBandActi
             {whysLine && <p className="fw-cwb-win-p">{whysLine}</p>}
             {beforeLine && <p className="fw-cwb-win-p">{beforeLine}</p>}
             <p className="fw-cwb-win-p">{t('customers.work.band.beforeNote')}</p>
+            {/* cw fx5 (walk W-32): on the phone the notes line is folded away — the door to the customer's work orders moved here, the window's last line. */}
+            {model.workOrdersHref && (
+              <p className="fw-cwb-win-p">
+                <Link className="fw-cwb-link" href={model.workOrdersHref}>
+                  {t('customers.band.workOrders', { customer })}
+                </Link>
+              </p>
+            )}
           </div>
         </Modal>
       )}

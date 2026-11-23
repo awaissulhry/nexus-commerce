@@ -639,6 +639,55 @@ describe('F-CW-102: the row\'s chips', () => {
     expect(textOfHtml(await where(row({ reaccept: true })))).toBe("Sewing Waits for the customer's new yes")
   })
 
+  // ---- cw fx5 (the walk fix wave: W-29, W-13, W-6) ----
+  it('walk W-29: with the Waiting on column on screen, chip 3 never repeats it — a request, a reply, who acts next; what else stops the order stays', async () => {
+    const { stopChipOf } = await import('./sheet/model')
+    const asked = row({}, { openRequests: 1 })
+    const mark = { requestIds: ['req-1'] }
+    expect(stopChipOf(asked, mark, TODAY)).toEqual({ kind: 'request', count: 1, requestId: 'req-1' })
+    expect(stopChipOf(asked, mark, TODAY, true)).toBeNull()
+    expect(stopChipOf(row({}, { waitingOn: 'BRAND', since: '2026-11-20T10:00:00Z' }), null, TODAY, true)).toBeNull()
+    // Credit, measurements, a deposit, a new yes and a hold are not the Waiting on column's: they stay chip 3.
+    expect(stopChipOf(row({ status: 'PENDING_APPROVAL', waits: ['CREDIT_HOLD'] }), null, TODAY, true)).toEqual({ kind: 'credit' })
+    expect(stopChipOf(row({ deposit: { state: 'NOT_NEEDED', dueDate: null, extraOpenDue: '2026-11-25' } }, { openRequests: 1 }), mark, TODAY, true)).toMatchObject({ kind: 'deposit', extra: true })
+    expect(stopChipOf(row({}, { held: true }), null, TODAY, true)).toEqual({ kind: 'held' })
+    expect(textOfHtml(await where(asked, { prefix: '/w/DEMO', mark }))).toBe('Sewing Request to answer')
+    expect(textOfHtml(await where(asked, { prefix: '/w/DEMO', mark, waitingShown: true }))).toBe('Sewing')
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("setShowsWaiting(ids.includes('waitingOn'))") // the frame tells which columns are on screen (a person's Customise wins)
+    expect(view).toContain('waitingShown={waitingShown && !phone')
+  })
+
+  it('walk W-13: the phone card takes the cell in two halves — the chips (they wrap freely) and the pieces line (it wraps, never cut)', async () => {
+    const late = row({ daysLate: 3, deposit: { state: 'OPEN', dueDate: '2026-11-25' }, progress: { inWork: 200, cut: 180, sewn: 152, finished: 24, ordered: 244 } }, { health: 'LATE', readyNow: 24 })
+    const chips = await where(late, { prefix: '/w/DEMO', half: 'chips' })
+    expect(chips).toContain('class="fw-sheet-wi is-card"')
+    expect(textOfHtml(chips)).toBe('Sewing Late · 3 d Deposit open · due 25/11/2026')
+    const pieces = await where(late, { half: 'pieces' })
+    expect(pieces).toContain('class="fw-sheet-wi-pcs is-wrap"')
+    expect(textOfHtml(pieces)).toBe('Sewn 152 of 244 · 24 ready now')
+    // Nothing to say: nothing drawn (never a dash on the card).
+    expect(await where({ ...late, production: undefined }, { half: 'chips' })).toBe('')
+    expect(await where({ ...late, production: undefined }, { half: 'pieces' })).toBe('')
+    const css = readFileSync(new URL('./sheet/chips.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-sheet-wi\.is-card \{\s*max-height: none;/)
+    expect(css).toMatch(/\.fw-sheet-wi-pcs\.is-wrap \{[^}]*white-space: normal;/)
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    // Host-only: the customer's own page; the other two hosts keep their card and the frame's own door.
+    expect(view).toContain('const workCard = !!model.locked?.party && !!model.preset')
+    expect(view).toContain("customerUrgency: { role: 'hidden' as const },")
+    expect(view).toContain('cardDoor: !workCard && model.active.cardDoor && actions?.onCardThread')
+  })
+
+  it('walk W-6: beside the dock the chips stand closer (the sheet\'s own css, tokens only) so two chips and the pieces line fit', () => {
+    const css = readFileSync(new URL('./sheet/chips.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-sheet-wi\.is-dense \{\s*column-gap: var\(--nds-space-3\);/)
+    expect(css).toMatch(/\.fw-sheet-wi\.is-dense > \.nds-pill \{[^}]*padding-left: var\(--nds-space-6\);[^}]*padding-right: var\(--nds-space-6\);/)
+    expect(css).toMatch(/\.fw-sheet-wi\.is-dense > \.nds-tag,\s*\.fw-sheet-wi\.is-dense > \.fw-sheet-chip-door > \.nds-tag \{[^}]*padding-left: var\(--nds-space-6\);/)
+    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(/i)
+  })
+  // ---- end cw fx5
+
   it('Customer urgency — the customer\'s own mark as its chip says it, read only; our Priority beside it when it is not Normal', async () => {
     const { urgencyChipOf, priorityChipOf } = await import('./sheet/model')
     const state = (over: Partial<NonNullable<OrderRow['customerUrgencyState']>>) => ({ customerUrgencyState: { state: 'REGULAR' as const, urgentRank: null, locked: false, requestId: null, ...over } })
@@ -740,7 +789,9 @@ describe('F-CW-102: the row\'s chips', () => {
       expect(sheet('where.sewnOf', { sewn: 152, ordered: 244 }), locale).toMatch(/152.*244/)
       for (const count of [1, 24]) expect(sheet('where.readyNow', { count }), `${locale} ${count}`).toMatch(new RegExp(`^${count} `))
       expect(sheet('stop.heldTip', { number: 'SO-1' }), locale).toContain('SO-1')
-      expect(sheet('deposit.extra', { date: '25 Nov' }), locale).toContain('25 Nov')
+      // cw fx5 (walk W-12): the Deposit pill itself says "Extra deposit open" (chip 3's own words) over the open deposit's own "due …" line.
+      expect(sheet('stop.depositExtra'), locale).not.toBe('stop.depositExtra')
+      expect(wordsFor(locale).t('list.depositDue', { date: '25 Nov' }), locale).toContain('25 Nov')
       expect(sheet('chips.urgency', { urgency: 'X' }), locale).toContain('X')
     }
     expect([wordsFor('en').s('col.customerUrgency'), wordsFor('it').s('col.customerUrgency')]).toEqual(['Customer urgency', 'Urgenza cliente'])

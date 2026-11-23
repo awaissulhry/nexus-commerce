@@ -103,10 +103,25 @@ describe('the one cache, keyed by file id', () => {
     vi.setSystemTime(NOW + 55_000)
     expect(smallOf('f1')).toBeNull()
   })
-  it('stale-while-reading: the address last drawn stays known after it expired', () => {
+  // cw fx5 (walk W-18): the address last drawn is shown while the fresh one is read only while it is still ALIVE; a dead address is
+  // a miss — it was handed out again at every redraw and the storage answered 403 (18 console errors in one walk).
+  it('stale-while-reading: the address last drawn is known while it lives, and is a miss once its life is over', () => {
     drawn('f1', 'old')
     expect(staleOf('f1')).toBe('old')
     expect(staleOf('f2')).toBeNull()
+    // Not told its end: the API's 60 seconds, less the margin.
+    vi.setSystemTime(NOW + 54_999)
+    expect(staleOf('f1')).toBe('old')
+    vi.setSystemTime(NOW + 55_000)
+    expect(staleOf('f1')).toBeNull()
+    // An address the cache holds: its own end (the margin is the window in which it is stale and still alive).
+    vi.setSystemTime(NOW)
+    keepSmall('f3', { url: 'u3', expiresAt: new Date(NOW + 30_000).toISOString() })
+    drawn('f3', 'u3')
+    vi.setSystemTime(NOW + 25_000)
+    expect([smallOf('f3'), staleOf('f3')]).toEqual([null, 'u3']) // past the margin, not dead yet: shown while the fresh one is read
+    vi.setSystemTime(NOW + 30_000)
+    expect(staleOf('f3')).toBeNull() // dead: never asked again
   })
   it('a new main picture is a new file id: the cache never shows the old photo', () => {
     keepSmall('f1', { url: 'u1', expiresAt: new Date(NOW + 60_000).toISOString() })

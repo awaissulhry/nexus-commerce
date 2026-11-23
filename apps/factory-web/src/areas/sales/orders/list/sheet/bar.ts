@@ -202,10 +202,54 @@ export function askEntriesOf(rows: readonly BarRow[], can: Pick<BarCan, 'todo'>,
   ]
 }
 
-/** The bar for this reader over the ticked orders: its first three acts with words, the rest for More ▾. */
-export function barOf(can: BarCan, rows: readonly BarRow[], host: BarHost): Bar {
+/**
+ * The bar for this reader over the ticked orders: its first three acts with words, the rest for More ▾.
+ * cw fx5 (walk W-9, W-4, W-14): `promoted` — how many acts the room holds WITH their words (promotedFit below; absent: three). An act
+ * that does not fit moves to the front of More ▾ (the last promoted first): a button never loses its words.
+ */
+export function barOf(can: BarCan, rows: readonly BarRow[], host: BarHost, promoted: number = BAR_PROMOTED): Bar {
   const acts: BarAct[] = BAR_ORDER.filter((entry) => barAllowed(entry.id, can)).map((entry) =>
     entry.id === 'ask' ? { id: entry.id, group: entry.group, held: null, entries: askEntriesOf(rows, can, host) } : { id: entry.id, group: entry.group, held: barHeld(entry.id, rows, can, host) },
   )
-  return { promoted: acts.slice(0, BAR_PROMOTED), more: acts.slice(BAR_PROMOTED), none: acts.length === 0 }
+  const shown = Math.max(1, Math.min(BAR_PROMOTED, promoted))
+  return { promoted: acts.slice(0, shown), more: acts.slice(shown), none: acts.length === 0 }
 }
+
+// ---- cw fx5 (walk W-9, W-4, W-14; 30-walk §6.4, §6.5): the bar keeps WORDS on every button, on one line ------------------------------
+/**
+ * What the bar's parts take, measured on the real page with three orders ticked (30-walk §6.4): a button is about 45 px (its icon and
+ * padding) + 6.5 px a character, a menu's ▾ 16 more, 8 px stand between two parts, and "N selected" leads. The sum is a little
+ * generous on purpose (971 px measured for the Production manager's bar, 992 by this rule): a word is never lost to a near miss.
+ */
+export const BAR_PX = Object.freeze({ button: 45, char: 6.5, chevron: 16, gap: 8, lead: 12, phonePad: 24 })
+
+/** One part of the bar as it is measured: its words, and whether it is a menu (▾). */
+export interface BarPart {
+  readonly label: string
+  readonly menu?: boolean
+}
+export const barPartPx = (part: BarPart): number => Math.round(BAR_PX.button + BAR_PX.char * part.label.length + (part.menu ? BAR_PX.chevron : 0))
+
+/** The whole bar's width with every word: "N selected", the promoted acts, then the parts that always stand (Export N, More ▾, Clear selection …). */
+export function barPx(lead: string, promoted: readonly BarPart[], rest: readonly BarPart[]): number {
+  const parts = [...promoted, ...rest]
+  return Math.round(BAR_PX.lead + BAR_PX.char * lead.length) + parts.reduce((sum, part) => sum + barPartPx(part), 0) + BAR_PX.gap * parts.length
+}
+
+/**
+ * How many promoted acts keep their words in `room` px: all of them when the bar fits, else the LAST one gives way (it moves into
+ * More ▾), then the next — never fewer than one. The DS bar hides the words of its own buttons (Export N, Clear selection) as soon
+ * as the cluster does not fit, so the sheet makes the cluster fit first. `room` null (not measured yet: the server's draw): all.
+ * On the phone (`phone`) at most two: "N selected" · the promoted acts · Export N + More ▾ are then three lines.
+ */
+export function promotedFit(room: number | null, lead: string, promoted: readonly BarPart[], rest: readonly BarPart[], phone = false): number {
+  const most = Math.max(1, Math.min(promoted.length, phone ? 2 : BAR_PROMOTED))
+  if (room === null) return most
+  for (let count = most; count > 1; count -= 1) {
+    // The phone's bar: the promoted acts stand on a line of their own inside the bar's padding ("N selected" is the card list's own line).
+    const need = phone ? barPx('', promoted.slice(0, count), []) - BAR_PX.lead + BAR_PX.phonePad : barPx(lead, promoted.slice(0, count), rest)
+    if (need <= room) return count
+  }
+  return 1
+}
+// ---- end cw fx5

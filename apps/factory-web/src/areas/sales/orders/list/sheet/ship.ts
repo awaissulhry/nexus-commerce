@@ -35,19 +35,36 @@ export function shipHeld(rows: readonly ShipRow[], locked: string | null): Phras
   const one = oneCustomerHeld(rows, locked)
   if (one) return one
   if (rows.length > SHIP_TOGETHER_MAX) return { key: 'ship.cap', params: { max: SHIP_TOGETHER_MAX } }
-  if (rows.every((row) => isOver(row) || readyNowOf(row) === 0)) return { key: 'ship.nothing', params: { count: rows.length } }
+  // cw fx5 (walk W-28): by the FACT first — an order that knows it has garments ready counts whatever its status says (a confirmed
+  // order with a released garment ships); the status decides only where the count is not known.
+  if (rows.every((row) => nothingReady(row))) return { key: 'ship.nothing', params: { count: rows.length } }
   return null
 }
 
-/** A row offers "Create shipment…" only in a state where garments can wait to ship (never before production, never once all left). */
-export const shipRowOffered = (row: Pick<OrderRow, 'status'>): boolean => !isOver(row)
+/** Nothing of the order can ship now: it knows 0 ready, or — the count not read — its state alone says so. */
+const nothingReady = (row: Pick<OrderRow, 'status' | 'production'>): boolean => {
+  const ready = readyNowOf(row)
+  return ready === null ? isOver(row) : ready === 0
+}
+
+/** The states after which nothing waits to ship: all left, or the order ended. */
+const SHIP_ENDED: readonly OrderRow['status'][] = Object.freeze(['SHIPPED', 'DELIVERED', 'CLOSED', 'CANCELLED'])
+
+/**
+ * A row offers "Create shipment…" by the fact, not the status alone (walk W-28): whenever it knows garments are ready now (a
+ * confirmed order with a released garment ships), in a state where garments can wait to ship, and on any order that stands at a
+ * stage of the floor and has not ended — there it is held with words while none is ready. Never on an order with nothing ready
+ * and no stage (before production), never once all left.
+ */
+export const shipRowOffered = (row: Pick<OrderRow, 'status' | 'production'>): boolean =>
+  (readyNowOf(row) ?? 0) > 0 || !isOver(row) || (!!row.production?.stage && !SHIP_ENDED.includes(row.status))
 
 /** …held, with the order page's own words, when the row knows nothing is ready now. */
 export const shipRowHeld = (row: Pick<OrderRow, 'production'>): boolean => readyNowOf(row) === 0
 
 /** The order the window is made for first: a ticked row that knows it has garments ready, else the first ticked. */
 export function shipFirstOf(rows: readonly ShipRow[]): string | null {
-  return (rows.find((row) => !isOver(row) && (readyNowOf(row) ?? 0) > 0) ?? rows.find((row) => !isOver(row)) ?? rows[0])?.id ?? null
+  return (rows.find((row) => (readyNowOf(row) ?? 0) > 0) ?? rows.find((row) => !isOver(row)) ?? rows[0])?.id ?? null
 }
 
 // ---- the words over the window -----------------------------------------------------------------------------------------------------
