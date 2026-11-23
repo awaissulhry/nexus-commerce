@@ -6,6 +6,7 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { moneyText } from '../../../finance/costing/model'
 import type { PartyRow } from '../../../parties/_shared/api'
 import { CUSTOMER_MONEY_NAMESPACE, type CustomerMoneyCan, type Overdue } from './model'
+import { OVERDUE_PAGE, OVERDUE_PAGES } from './api' // F-CL-202
 import './money.css'
 
 /** The list's Overdue column: who owes late, read once per list (null while it reads), or the read's problem. */
@@ -13,6 +14,8 @@ export interface OverdueListModel {
   readonly can: CustomerMoneyCan
   readonly byParty: ReadonlyMap<string, Overdue> | null
   readonly problem: string | null
+  /** F-CL-202: false — beyond the 5 pages read (the header says it holds the first 2 500). */
+  readonly complete?: boolean
 }
 
 /**
@@ -23,6 +26,7 @@ export interface OverdueListModel {
  */
 export function useOverdueColumns(model: OverdueListModel | null): ColDef<PartyRow>[] | undefined {
   const t = useT(CUSTOMER_MONEY_NAMESPACE)
+  const c = useT('customers-list') // F-CL-202: the column's "first 2 500" words
   const locale = useLocale()
   return useMemo(() => {
     if (!model || !model.can.receivables || !model.can.price) return undefined
@@ -41,6 +45,6 @@ export function useOverdueColumns(model: OverdueListModel | null): ColDef<PartyR
         </span>
       )
     }
-    return [{ colId: 'overdue', headerName: t('col.overdue'), sortable: false, flex: 1, minWidth: 140, cellRenderer: OverdueCell }]
-  }, [model, t, locale])
+    return [{ colId: 'overdue', headerName: t('col.overdue'), ...(model.complete === false ? { headerTooltip: c('col.overdueFirst', { count: OVERDUE_PAGES * OVERDUE_PAGE }) } : {}), sortable: false, flex: 1, minWidth: 140, cellRenderer: OverdueCell }]
+  }, [model, t, c, locale])
 }

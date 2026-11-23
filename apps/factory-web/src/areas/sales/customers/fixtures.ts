@@ -1,11 +1,20 @@
-import { createElement } from 'react'
+import { createElement, useMemo, useRef, useState, type ReactNode } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import type { UnreadMap } from '../../../lib/last-message-cell/model'
+import { ListToolsContext } from '../../../list-frame/tools/transport'
+import type { TaskDraft } from '../../../record-panels/tasks/model'
+import { TaskNewDialog } from '../../../record-panels/tasks/view/TaskNewDialog'
+import { memoryStore, memoryTransport, type MemoryToolsModel } from '../../_shared/list-tools/memory'
+import type { PartyRow } from '../../parties/_shared/api'
 import { at, CUSTOMERS, inShell, listModel, NOW, rowOf, SUPPLIERS, useDesignList } from '../../parties/_shared/fixtures'
 import { blankNewParty, failed, loaded, loading, SIDES, type PartiesListModel } from '../../parties/_shared/model'
 import { demoCustomersImport, importButton } from './_demo/fixtures'
 import type { CustomersImportModel } from './import/view/CustomersImportView'
-import type { CustomerRights } from './list/model'
+import { namesOtherCustomer, type CustomerRights } from './list/model'
+import type { SupervisorManyModel } from './list/supervisor/model'
+import { SupervisorManyDialog } from './list/supervisor/view/SupervisorManyDialog'
+import { bandOf, BUSY_ROWS, BUSY_UNREAD, busyId, DEMO_TODAY, LIMITED_CODES, ROLE_RIGHTS, SUPERVISOR_PEOPLE, supervisorWindow, workModel } from './list/_demo/fixtures'
+import type { CustomersViewWork } from './view/CustomersView'
 import type { OverdueListModel } from './money/columns'
 import { MONEY_CAN, overdueList } from './money/_demo/fixtures'
 import { CustomersView } from './view/CustomersView'
@@ -31,16 +40,84 @@ const UNREAD: UnreadMap = {
  * A case: the list, (B-W2a-49) the band's Import with its wizard when open, (B-W2a-81) the Overdue column's read and (F-CL-102) the
  * New messages read (null: a reader without threads.read — no column).
  */
-type CustomersCase = PartiesListModel & { importer?: CustomersImportModel; overdue?: OverdueListModel; unread?: UnreadMap | null; rights?: CustomerRights }
+type CustomersCase = PartiesListModel & {
+  importer?: CustomersImportModel
+  overdue?: OverdueListModel
+  unread?: UnreadMap | null
+  rights?: CustomerRights
+  // ---- T.1 (customers list): where the work stands, Views ▾ / Export ▾ / Customise in memory, and the windows of the bar
+  workView?: CustomersViewWork | null
+  tools?: MemoryToolsModel
+  windows?: { readonly task?: { readonly ticked: readonly PartyRow[]; readonly initial?: Partial<TaskDraft> }; readonly supervisor?: SupervisorManyModel }
+}
 
 /** F-CL-104: the Owner's own rights on the list (the bar's Add task and Set supervisor, the row's doors); a role that only views: none. */
 const OWNER_RIGHTS: CustomerRights = { threads: true, orders: true, tasks: true, supervisor: true }
 const VIEW_RIGHTS: CustomerRights = { threads: false, orders: false, tasks: false, supervisor: false }
 
 function CustomersDesign({ model }: { model: CustomersCase }) {
-  const { importer, overdue, unread, rights, ...list } = model
-  return inShell('/sales/customers', createElement(CustomersView, { ...useDesignList(list), headActions: importButton(importer ?? { held: null, sheet: null }), overdue, unread: unread === undefined ? UNREAD : unread, rights: rights ?? (list.can.manage ? OWNER_RIGHTS : VIEW_RIGHTS) }))
+  const { importer, overdue, unread, rights, workView, tools, windows, ...list } = model
+  const view = createElement(CustomersView, { ...useDesignList(list), headActions: importButton(importer ?? { held: null, sheet: null }), overdue, unread: unread === undefined ? UNREAD : unread, rights: rights ?? (list.can.manage ? OWNER_RIGHTS : VIEW_RIGHTS), work: workView ?? null })
+  const page = createElement('div', null, tools ? createElement(MemoryTools, { tools }, view) : view, windows ? createElement(Windows, { windows }) : null)
+  return inShell('/sales/customers', page)
 }
+
+/** T.1: Views ▾ (the side's views, saved ones), Export ▾ and Customise in memory — the Office's list tools, made up. */
+function MemoryTools({ tools, children }: { tools: MemoryToolsModel; children?: ReactNode }) {
+  const [query, setQuery] = useState('')
+  const store = useRef(memoryStore(tools))
+  const transport = useMemo(() => memoryTransport(tools, store.current, query, setQuery), [tools, query])
+  return createElement(ListToolsContext.Provider, { value: transport }, children)
+}
+
+/** T.1: the bar's windows at a step (nothing is sent from the gallery). */
+function Windows({ windows }: { windows: NonNullable<CustomersCase['windows']> }) {
+  const task = windows.task
+  return createElement(
+    'div',
+    null,
+    task
+      ? createElement(TaskNewDialog, {
+          recordLabel: null,
+          people: { status: 'ready', data: SUPERVISOR_PEOPLE },
+          me: SUPERVISOR_PEOPLE[1]!.id,
+          onClose: () => undefined,
+          ...(task.initial ? { initial: task.initial } : {}),
+          batch: {
+            records: task.ticked.map((row) => ({ type: 'Party', id: row.id, label: row.tradeName ?? row.legalName, supervisor: null })),
+            today: DEMO_TODAY,
+            onSend: async () => null,
+            words: { ns: 'customers-list', prefix: 'task' },
+            namesOther: (text: string) => namesOtherCustomer(text, task.ticked),
+            hrefOf: (record: { readonly id: string }) => `/w/DEMO/sales/customers/${record.id}?thread=open`,
+          },
+        })
+      : null,
+    windows.supervisor ? createElement(SupervisorManyDialog, { model: windows.supervisor, actions: SUPERVISOR_ACTIONS, hrefOf: (id: string) => `/w/DEMO/sales/customers/${id}?thread=open` }) : null,
+  )
+}
+const SUPERVISOR_ACTIONS = { onPick: () => undefined, onGo: () => undefined, onStop: () => undefined, onRunRest: () => undefined, onClose: () => undefined }
+
+// ---- T.1: the busy list (14 customers in every state), its band and work, each role, each window step ----
+const TOOLS: MemoryToolsModel = { pageKey: 'sales.customers', locale: 'en', answer: { views: [], roleDefaultId: null, personalDefaultId: null, roles: [], allRoles: [], can: { save: true, manage: false, export: true }, exports: { formats: ['XLSX', 'CSV'] } }, jobs: [] }
+const SORT = { choices: ['needs', 'code', 'name'] as const, value: 'needs' as const, sortedBy: 'needs' as const }
+const busyWork = (codes?: readonly string[], limited = false): CustomersViewWork => {
+  const facts = workModel(codes, { limited })
+  return { facts, band: { band: bandOf(facts, limited), problem: null }, today: DEMO_TODAY, wide: false }
+}
+const busy = (over: Partial<CustomersCase> = {}): CustomersCase => ({
+  ...list({ rows: loaded(BUSY_ROWS), total: BUSY_ROWS.length, sort: SORT }),
+  unread: BUSY_UNREAD,
+  rights: OWNER_RIGHTS,
+  workView: busyWork(),
+  tools: TOOLS,
+  ...over,
+})
+const busyRows = (...codes: string[]) => BUSY_ROWS.filter((row) => codes.includes(row.code))
+const SIX = ['SEED-C1', 'SEED-C3', 'SEED-C5', 'SEED-C8', 'SEED-C13', 'SEED-C9']
+const asRole = (role: keyof typeof ROLE_RIGHTS, over: Partial<CustomersCase> = {}): CustomersCase =>
+  busy({ rights: ROLE_RIGHTS[role].rights, can: ROLE_RIGHTS[role].can, selected: busyRows(...SIX).map((row) => row.id), ...over })
+const notSentCodes = BUSY_ROWS.filter((row) => (workModel().byParty?.get(row.id)?.phases.find((entry) => entry.phase === 'NOT_SENT')?.count ?? 0) > 0).map((row) => row.code)
 
 const importCase = (importer: CustomersImportModel): CustomersCase => ({ ...list(), importer })
 
@@ -65,12 +142,58 @@ export const designScreen = defineDesignScreen<CustomersCase>({
     { id: 'w2a-overdue-reading', label: 'Overdue (W2a) still reading: "—", never 0', model: { ...list(), overdue: overdueList(MONEY_CAN.finance, { byParty: null }) } },
     { id: 'w2a-overdue-failed', label: "Overdue (W2a) couldn't be read: \"—\" with the reason on hover", model: { ...list(), overdue: overdueList(MONEY_CAN.finance, { byParty: null, problem: 'problem.unavailable' }) } },
     { id: 'w2a-overdue-no-price', label: 'Overdue (W2a) seen as Sales (no price grain, B-CP-011): the column is not drawn', model: { ...list(), overdue: overdueList(MONEY_CAN.sales) } },
+    // ---- T.1 (customers list): the busy list and its states ----
+    { id: 'busy', label: 'The busy list: 14 customers in every state — the band, Needs us, Work, Next promise, New messages (Owner, 1440)', model: busy(), note: 'Most urgent first; Seed Customer Eleven is a customer your orders.view does not reach: "—".' },
+    { id: 'busy-wide', label: 'The busy list at 1920: + Last order and Overdue (the wide room)', model: busy({ workView: { ...busyWork(), wide: true }, overdue: overdueList(MONEY_CAN.finance) }) },
+    { id: 'band-pressed', label: 'A band door pressed: Not sent to the factory (its chip with its why, the rows it counts)', model: busy({ work: 'NOT_SENT', rows: loaded(busyRows(...notSentCodes)), total: notSentCodes.length }) },
+    { id: 'band-pressed-empty', label: 'A band door with nobody in it now: its own words and one Clear', model: busy({ query: 'Seed Customer Six', work: 'NEEDS_US', rows: loaded([]), total: 0, workView: busyWork(['SEED-C6']) }) },
+    { id: 'view-zero', label: 'A view with 0 rows: “No blocked customers.” and one Clear', model: busy({ view: 'blocked', rows: loaded([]), total: 0, workView: { ...busyWork(), band: { band: bandOf(workModel([])), problem: null } } }) },
+    { id: 'search-none', label: 'A search with no match: the band follows the search (zeros), its own words and Clear search', model: busy({ query: 'Seed Zeta', rows: loaded([]), total: 0, workView: { ...busyWork(), band: { band: bandOf(workModel([])), problem: null } } }) },
+    { id: 'limited', label: 'The limited reader (Sales over two customers): “Your customers”, their band only', model: busy({ rows: loaded(busyRows(...LIMITED_CODES)), total: LIMITED_CODES.length, rights: ROLE_RIGHTS.sales.rights, can: ROLE_RIGHTS.sales.can, workView: busyWork(LIMITED_CODES, true), unread: { [busyId('SEED-C1')]: { newCount: 1, lastAt: '2026-11-24T08:12:00.000Z' } } }) },
+    { id: 'band-failed', label: 'The band and the work couldn’t be read: words, never 0', model: busy({ workView: { facts: workModel([], { byParty: null, problem: 'problem.unavailable' }), band: { band: null, problem: 'problem.unavailable' }, today: DEMO_TODAY } }) },
+    { id: 'sort-code', label: 'Sort ▾ Code (today’s order)', model: busy({ sort: { ...SORT, value: 'code', sortedBy: 'code' } }) },
+    { id: 'sort-capped', label: 'Most urgent first over the cap: shown by code, said above the rows', model: busy({ sort: { ...SORT, sortedBy: 'code' } }) },
+    { id: 'customise', label: 'Customise columns: the list’s own columns, the identity columns unticked', model: busy({ tools: { ...TOOLS, design: { dialog: 'customise' } } }) },
+    // ---- T.1: the bar per role (6 ticked) ----
+    { id: 'bar-owner', label: 'Bar, Owner: Add task to 6 customers… · Set production supervisor for 6… · Export 6 · More ▾ (VIES · Block · Archive)', model: asRole('owner') },
+    { id: 'bar-sales', label: 'Bar, Sales: Add task · Check VIES · Export · More ▾ (Archive)', model: asRole('sales') },
+    { id: 'bar-finance', label: 'Bar, Finance: Add task · Check VIES · Export · More ▾ (Block · Archive)', model: asRole('finance') },
+    { id: 'bar-pm', label: 'Bar, Production manager: Add task · Set production supervisor · Export', model: asRole('productionManager') },
+    { id: 'bar-warehouse', label: 'Bar, Warehouse: Add task · Export', model: asRole('warehouse') },
+    { id: 'bar-readonly', label: 'Bar, Read-only: no act, said in words', model: asRole('readOnly') },
+    // ---- T.1: each window step ----
+    { id: 'task', label: 'Add task to 3 customers… (each customer’s production supervisor by default)', model: busy({ selected: busyRows('SEED-C1', 'SEED-C3', 'SEED-C10').map((row) => row.id), windows: { task: { ticked: busyRows('SEED-C1', 'SEED-C3', 'SEED-C10') } } }) },
+    { id: 'task-r47', label: 'Add task: the text names another customer — Make waits for “This text names no other customer”', model: busy({ selected: busyRows('SEED-C1', 'SEED-C3', 'SEED-C10').map((row) => row.id), windows: { task: { ticked: busyRows('SEED-C1', 'SEED-C3', 'SEED-C10'), initial: { title: 'Send Seed Moto Club the new size chart' } } } }) },
+    { id: 'task-one', label: 'Row ⋯ Add task…: the same window on one customer', model: busy({ windows: { task: { ticked: busyRows('SEED-C7') } } }) },
+    { id: 'sup-read', label: 'Set production supervisor for 3…: reading the customers', model: busy({ windows: { supervisor: supervisorWindow('read') } }) },
+    { id: 'sup-pick', label: 'Set production supervisor for 6…: Runs on 3 · Not on 3 with why, one pick, who gets the notices', model: busy({ windows: { supervisor: supervisorWindow('pick') } }) },
+    { id: 'sup-running', label: 'Set production supervisor: running, one customer at a time (Stop after this one)', model: busy({ windows: { supervisor: supervisorWindow('running') } }) },
+    { id: 'sup-done', label: 'Set production supervisor: the receipt — Done / Already so / Not done / Not run, Run the rest again', model: busy({ windows: { supervisor: supervisorWindow('done') } }) },
+    { id: 'block-noton', label: 'Block 2…: Runs on 2 · Not on 2 with why (a prospect, already blocked)', model: busy({ selected: busyRows('SEED-C1', 'SEED-C3', 'SEED-C13', 'SEED-C8').map((row) => row.id), dialog: { kind: 'block', partyIds: busyRows('SEED-C1', 'SEED-C3').map((row) => row.id), notOn: busyRows('SEED-C13', 'SEED-C8').map((row) => row.id) } }) },
+    { id: 'archive-noton', label: 'Archive 2…: Not on 1 with why (unblock it first)', model: busy({ selected: busyRows('SEED-C1', 'SEED-C13', 'SEED-C8').map((row) => row.id), dialog: { kind: 'archive', partyIds: busyRows('SEED-C1', 'SEED-C13').map((row) => row.id), notOn: busyRows('SEED-C8').map((row) => row.id) } }) },
     {
-      id: 'tile-vies',
+      id: 'bulk-receipt',
+      label: 'A receipt: each name a door to its customer with the thread open, Run the rest again (1)',
+      model: busy({
+        dialog: { kind: 'bulk' },
+        bulk: {
+          kind: 'archive',
+          total: 2,
+          done: true,
+          notOn: [busyId('SEED-C8')],
+          results: [
+            { id: busyId('SEED-C1'), code: 'SEED-C1', name: 'Seed Racing', outcome: 'bulk.archived', tone: 'success' },
+            { id: busyId('SEED-C13'), code: 'SEED-C13', name: 'Seed Customer Three GmbH', outcome: 'problem.conflict', tone: 'danger', failed: true },
+          ],
+        },
+      }),
+    },
+    {
+      id: 'view-vies',
       label: 'Views ▾ VIES problems: EU businesses without a valid VIES check',
       model: list({ view: 'vies', rows: loaded(rows.filter((row) => row.attention.includes('VIES_NOT_PROVEN'))), total: 3 }),
     },
-    { id: 'tile-invoice', label: 'Views ▾ Missing tax data: can’t be invoiced yet', model: list({ view: 'invoice', rows: loaded(rows.filter((row) => row.invoiceBlocked)), total: 2 }) },
+    { id: 'view-invoice', label: 'Views ▾ Missing tax data: can’t be invoiced yet', model: list({ view: 'invoice', rows: loaded(rows.filter((row) => row.invoiceBlocked)), total: 2 }) },
     {
       id: 'view-brands',
       label: 'Views ▾ Brands, with a kind filter',

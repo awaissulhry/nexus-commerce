@@ -37,10 +37,25 @@ export const customerComplaintSchema = z.object({
 })
 export type CustomerComplaint = z.infer<typeof customerComplaintSchema>
 
-/** GET /receivables/ageing?bucket=OVERDUE: every customer of the company with money late (one read for the list's column). */
-export function getOverdueCustomers(api: ApiClient, companyId: string | null, signal?: AbortSignal): Promise<Ageing> {
-  return getAgeing(api, { companyId, bucket: 'OVERDUE', limit: 500 }, signal)
+// ── F-CL-202 (customers list C1-B1): Overdue read whole — every company the reader reaches (no company term) and every page (`next`),
+// at most 5 pages of 500; beyond them the column says it holds the first 2 500 (a partyIds term on the ageing read is a later job) ──
+/** Pages of the ageing read the list's Overdue column follows at most. */
+export const OVERDUE_PAGES = 5
+export const OVERDUE_PAGE = 500
+
+/** GET /receivables/ageing?bucket=OVERDUE, page after page: every customer with money late; `complete` false beyond 5 pages. */
+export async function getOverdueCustomers(api: ApiClient, signal?: AbortSignal): Promise<{ readonly customers: Ageing['customers']; readonly complete: boolean }> {
+  const customers: Ageing['customers'] = []
+  let cursor: number | null = null
+  for (let page = 0; page < OVERDUE_PAGES; page += 1) {
+    const answer: Ageing = await getAgeing(api, { bucket: 'OVERDUE', limit: OVERDUE_PAGE, cursor }, signal)
+    customers.push(...answer.customers)
+    if (answer.next === null) return { customers, complete: true }
+    cursor = answer.next
+  }
+  return { customers, complete: false }
 }
+// ── end F-CL-202 ──
 
 /** GET /receivables/ageing?partyId=: what one customer owes in the company (one row per currency). */
 export function getCustomerAgeing(api: ApiClient, partyId: string, companyId: string | null, signal?: AbortSignal): Promise<Ageing> {

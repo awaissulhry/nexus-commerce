@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { ADDRESS_KINDS, MASTER_STATUSES } from '@nexus/factory-domain/parties/addresses'
 import { CONTACT_ROLES } from '@nexus/factory-domain/parties/contacts'
 import { PARTY_KINDS, PARTY_ROLES, PARTY_STATUSES } from '@nexus/factory-domain/parties/rules'
+import { PARTY_SORTS, PARTY_WORK_GROUPS } from '@nexus/factory-domain/parties/contracts' // F-CL-201
 import { PARTY_TAX_MODES } from '@nexus/factory-domain/parties/tax'
 import { VIES_RESULTS, VIES_STATES } from '@nexus/factory-domain/parties/vies'
 import { PARTY_WARNINGS } from '@nexus/factory-domain/parties/warnings'
@@ -170,7 +171,30 @@ export const partySchema = z.object({
 })
 export type Party = z.infer<typeof partySchema>
 
-const listAnswer = z.object({ parties: z.array(partyRowSchema), nextCursor: z.string().nullable(), count: z.number() })
+// ---- F-CL-201 (customers list 13-backend §2, B-CL-002): the work terms and the band — every new answer field optional on the web ----
+export { PARTY_SORTS, PARTY_WORK_GROUPS }
+export type PartySort = (typeof PARTY_SORTS)[number]
+export type PartyWorkGroup = (typeof PARTY_WORK_GROUPS)[number]
+
+/** `band=true`: where the work of the view's customers stands — counts only, never an amount. */
+export const partyWorkBandSchema = z.object({
+  groups: z.array(z.object({ group: z.enum(PARTY_WORK_GROUPS), customers: z.number(), orders: z.number().nullable() })),
+  needsUs: z.object({ requests: z.number(), replies: z.number(), late: z.number(), repliesComplete: z.boolean() }),
+  notSent: z.object({ waitsForYes: z.number(), waitsForDeposit: z.number() }),
+  /** Every grant of the reader's orders.view names its customers: the band reads "Your customers". */
+  limited: z.boolean(),
+})
+export type PartyWorkBand = z.infer<typeof partyWorkBandSchema>
+// ---- end F-CL-201
+
+const listAnswer = z.object({
+  parties: z.array(partyRowSchema),
+  nextCursor: z.string().nullable(),
+  count: z.number(),
+  // F-CL-201: the order the rows are in (the asked one, or `code` above the server's cap) and the band (null unless asked).
+  sortedBy: z.enum(PARTY_SORTS).optional(),
+  band: partyWorkBandSchema.nullable().optional(),
+})
 export type PartyPage = z.infer<typeof listAnswer>
 const oneAnswer = z.object({ party: partySchema })
 const viesAnswer = z.object({ check: viesCheckSchema, vies: viesStanding, party: partySchema })
@@ -189,6 +213,10 @@ export interface PartyQuery {
   kind?: PartyKind
   taxMode?: TaxMode
   attention?: Attention
+  // F-CL-201 (B-CL-002; each needs orders.view on the server): the band's door, the order, the band itself.
+  work?: PartyWorkGroup
+  sort?: PartySort
+  band?: boolean
   limit?: number
   cursor?: string | null
 }
@@ -201,6 +229,9 @@ export function partyQueryParams(query: PartyQuery): Record<string, string | num
     kind: query.kind,
     taxMode: query.taxMode,
     attention: query.attention,
+    work: query.work, // F-CL-201
+    sort: query.sort, // F-CL-201
+    band: query.band ? 'true' : undefined, // F-CL-201
     limit: query.limit ?? 50,
     cursor: query.cursor ?? undefined,
   }
