@@ -30,6 +30,9 @@ import { ordersOfShipment } from './orders-of'
  *
  * One bell per event: every line of one event carries the event's id as its batch (the followers' notifications of a batch fold
  * into one item). Run again (a retry), an event writes nothing more: the command's key is the event and the order.
+ *
+ * cw-fx1: which orders get a line is decided before any command (`noteTargets`): an event that names an order of another customer,
+ * an id of no order or a shipment that is not there makes the handler do nothing — it never fails (a failed handler is retried).
  */
 
 export const ORDER_NOTES_HANDLER = 'shipping.orderNotes'
@@ -100,26 +103,43 @@ async function siblingNumbers(db: FactoryClient | CommandTx, shipment: { readonl
   return rows.map((row) => row.number).sort(byNumber)
 }
 
+/**
+ * cw-fx1: the orders one event writes on, decided BEFORE any command — a command must record an audit row, so "nothing to write" is
+ * never a command (a skip inside one made the handler fail, and a failing handler is retried). Only a shipment that exists, and of
+ * the orders the event names (or the shipment carries now) only those that exist and are the shipment's own customer's: an order of
+ * another customer, an id of no order and a shipment that is not there make the handler do nothing.
+ */
+async function noteTargets(caller: CommandCaller, plan: NotePlan): Promise<string[]> {
+  return caller.withClient(async (client) => {
+    const shipment = await client.shipment.findUnique({ where: { id: plan.shipmentId }, select: { id: true, salesOrderId: true, partyId: true } })
+    if (!shipment) return []
+    const named = [...new Set(plan.orderIds ?? (await ordersOfShipment(client, shipment)))]
+    if (named.length === 0) return []
+    const rows = await client.salesOrder.findMany({ where: { id: { in: named }, partyId: shipment.partyId }, select: { id: true } })
+    return rows.map((row) => row.id).sort()
+  })
+}
+
 /** One event's lines (the handler's work; tests call it with the system caller): the line written on each order's own thread. */
 export async function shipmentOrderNotes(caller: CommandCaller, event: Pick<EventEnvelope, 'eventId' | 'type' | 'payload'>): Promise<{ orderId: string; messageId: string }[]> {
   const plan = notePlanOf(event)
   if (!plan) return []
-  const orderIds =
-    plan.orderIds ??
-    (await caller.withClient(async (client) => {
-      const shipment = await client.shipment.findUnique({ where: { id: plan.shipmentId }, select: { id: true, salesOrderId: true } })
-      return shipment ? ordersOfShipment(client, shipment) : []
-    }))
   const out: { orderId: string; messageId: string }[] = []
-  for (const orderId of [...new Set(orderIds)].sort()) {
+  for (const orderId of await noteTargets(caller, plan)) {
     const { result } = await command(
       caller,
       { name: ORDER_NOTES_HANDLER, idempotencyKey: `shipment-order-notes:${event.eventId}:${orderId}`, input: { eventId: event.eventId, shipmentId: plan.shipmentId, orderId, kind: plan.kind }, causationId: event.eventId },
       async (tools) => {
         const shipment = await tools.tx.shipment.findUnique({ where: { id: plan.shipmentId }, select: { id: true, number: true, status: true, partyId: true, salesOrderId: true } })
         const order = await tools.tx.salesOrder.findUnique({ where: { id: orderId }, select: { id: true, companyId: true, partyId: true } })
-        // Belt and braces (the database guards it already): only an order of the shipment's own customer gets a line.
-        if (!shipment || !order || order.partyId !== shipment.partyId) return null
+        // The hard guard, inside the write's own transaction: only an order of the shipment's own customer gets a line. noteTargets
+        // decided the same just before, and a shipment or an order is never deleted nor moved to another customer, so this does not
+        // happen. If it ever did, no line is written and nothing is thrown (a throw would fail the handler): one audit row says that
+        // nothing was written — every command records one (the keeper's rule, production/brand/keeper.ts).
+        if (!shipment || !order || order.partyId !== shipment.partyId) {
+          tools.audit({ action: ORDER_NOTES_HANDLER, recordType: 'Shipment', recordId: plan.shipmentId, after: { eventType: event.type, kind: plan.kind, written: false } })
+          return null
+        }
         const company = await tools.tx.company.findUnique({ where: { id: order.companyId }, select: { locale: true } })
         const siblings = plan.kind === 'ON' ? await siblingNumbers(tools.tx, shipment, order.id) : []
         const text = shipmentOrderLineOf({ kind: plan.kind, shipment: shipment.number, draft: shipment.status === 'DRAFT', siblings }, localeOf(company?.locale))
