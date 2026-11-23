@@ -470,6 +470,8 @@ export function nextStep(quote: QuoteDetail, me: string, can: QuoteAbilities, gr
   }
   if (status === 'APPROVED') return { step: 'send', held: can.send ? pricedSendHeld(grains) /* F-CP-146 */ : { key: 'held.noSend' } }
   if (status === 'SENT') return { step: 'revise', held: can.manage ? null : { key: 'held.noManage' } }
+  // F-CQ-204 (Q1-B3, C28): an expired or declined quote gets a new revision too ("Make revision N"; the API allows it) — for who manages.
+  if ((status === 'EXPIRED' || status === 'DECLINED') && can.manage) return { step: 'revise', held: null }
   return { step: 'none', held: null }
 }
 

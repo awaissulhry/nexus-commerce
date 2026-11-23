@@ -21,9 +21,6 @@ import { MTM_PERMISSIONS } from '../../mtm/model'
 import { isApiError } from '../../../../lib/api/errors'
 import {
   addLine,
-  approveQuote,
-  askApproval,
-  cancelQuote,
   editLine,
   findStyles,
   getParty,
@@ -34,12 +31,8 @@ import {
   makeOrderFromQuote,
   previewBytes,
   previewHref,
-  rejectQuote,
   removeLine,
-  reopen,
-  reviseQuote,
   sendCheck,
-  sendNewLink,
   sendQuote,
   updateQuote,
   type QuoteDetail,
@@ -51,6 +44,7 @@ import { abilitiesOf, grainsOf, lineWrites, parsePrice, romeToday, tabOf, type Q
 import { readProblem, writeProblem } from '../problems'
 import type { ComposerState, Loaded, QuoteDialog, QuoteNotice, QuoteRecordViewModel, SaveState } from './record-model'
 import { sendItems } from './send-model'
+import { QUOTE_ACTS } from './acts' // F-CQ-204: the quote's own acts, one place (the lists open the same windows)
 import { QuoteRecordView } from './view/QuoteRecordView'
 import { QuoteProofs } from './proofs/QuoteProofs'
 // ---- B-TH-257: the docked thread on the quote (RecordFrame; Activity's tools in its "⋯") ----
@@ -579,23 +573,14 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
         onComposerClear: () => setComposer((current) => ({ ...current, chosen: null, picked: [] })),
         onTermsSave: (patch) => enqueue(() => runWrite((current) => updateQuote(api, current, patch), { key: 'terms.saved', tone: 'success' })) as Promise<boolean>,
         onDialog: setDialog,
-        onAsk: (note) => decide(() => runWrite((current) => askApproval(api, current, note), { key: 'notice.asked', tone: 'success' })),
-        onWithdraw: (reason) => decide(() => runWrite((current) => reopen(api, current, reason), { key: 'notice.reopened', tone: 'success' })),
-        onApprove: (note) => decide(() => runWrite((current) => approveQuote(api, current, note), { key: 'notice.approved', tone: 'success' })),
-        onReject: (reason) => decide(() => runWrite((current) => rejectQuote(api, current, reason), { key: 'notice.rejected', tone: 'success' })),
-        onCancelQuote: (reason) => decide(() => runWrite((current) => cancelQuote(api, current, reason), { key: 'notice.cancelled', tone: 'success' })),
-        onRevise: (changeNote) => decide(() => runWrite((current) => reviseQuote(api, current, changeNote), { key: 'notice.revised', tone: 'success', params: { next: (quoteRef.current?.currentRevision ?? 0) + 1 } })),
-        onNewLink: () =>
-          decide(() =>
-            runWrite(
-              async (current) => {
-                const answer = await sendNewLink(api, current)
-                if (answer.delivery === 'failed') setNotice({ key: 'notice.linkFailed', tone: 'danger' })
-                return answer.quote
-              },
-              { key: 'notice.linkSent', tone: 'success' },
-            ),
-          ),
+        // F-CQ-204: the quote's own acts (record/acts.ts QUOTE_ACTS) — the same as a list's row opens.
+        onAsk: (note) => decide(() => runWrite((current) => QUOTE_ACTS.ask.run(api, current, note), QUOTE_ACTS.ask.done({ currentRevision: quoteRef.current?.currentRevision ?? 0 }))),
+        onWithdraw: (reason) => decide(() => runWrite((current) => QUOTE_ACTS.withdraw.run(api, current, reason), QUOTE_ACTS.withdraw.done({ currentRevision: quoteRef.current?.currentRevision ?? 0 }))),
+        onApprove: (note) => decide(() => runWrite((current) => QUOTE_ACTS.approve.run(api, current, note), QUOTE_ACTS.approve.done({ currentRevision: quoteRef.current?.currentRevision ?? 0 }))),
+        onReject: (reason) => decide(() => runWrite((current) => QUOTE_ACTS.reject.run(api, current, reason), QUOTE_ACTS.reject.done({ currentRevision: quoteRef.current?.currentRevision ?? 0 }))),
+        onCancelQuote: (reason) => decide(() => runWrite((current) => QUOTE_ACTS.cancel.run(api, current, reason), QUOTE_ACTS.cancel.done({ currentRevision: quoteRef.current?.currentRevision ?? 0 }))),
+        onRevise: (changeNote) => decide(() => runWrite((current) => QUOTE_ACTS.revise.run(api, current, changeNote), QUOTE_ACTS.revise.done({ currentRevision: quoteRef.current?.currentRevision ?? 0 }))),
+        onNewLink: () => decide(() => runWrite((current) => QUOTE_ACTS.newLink.run(api, current, '', setNotice), QUOTE_ACTS.newLink.done({ currentRevision: quoteRef.current?.currentRevision ?? 0 }))),
         onOpenSend: openSend,
         onPreviewLanguage: setPreviewLanguage,
         onDownload: (fileId) => {

@@ -269,7 +269,8 @@
       "oneKind": "Si approvano insieme solo richieste dello stesso tipo.",
       "reading": "Lettura della richiesta…",
       "answerAlone": "A una richiesta del cliente si risponde nella sua finestra: aprila.",
-      "changeAlone": "Una modifica dell'ordine di lavoro si decide nella sua finestra: aprila."
+      "changeAlone": "Una modifica dell'ordine di lavoro si decide nella sua finestra: aprila.",
+      "quoteAlone": "Un preventivo si decide nella sua finestra: aprilo."
     }
   },
   "refusal": {

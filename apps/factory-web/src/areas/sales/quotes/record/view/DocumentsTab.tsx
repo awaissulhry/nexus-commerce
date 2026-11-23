@@ -100,9 +100,10 @@ export function DocumentsTab({ quote, model, actions, proofs, depositActions }: 
                 ]}
               />
               <p className="fw-q-hint">{t('docs.link.never')}</p>
-              {quote.current.status === 'SENT' && (
+              {/* F-CQ-204 (Q1-B2): not drawn without the right to send AND the price grain (a new link mails the priced PDF). */}
+              {quote.current.status === 'SENT' && model.can.send && model.grains.price && (
                 <div>
-                  <Button size="sm" heldReason={model.can.send ? null : t('held.noSend')} onClick={() => actions?.onDialog?.('newLink')}>
+                  <Button size="sm" onClick={() => actions?.onDialog?.('newLink')}>
                     {t('action.newLink')}
                   </Button>
                 </div>

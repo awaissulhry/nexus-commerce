@@ -210,7 +210,8 @@ function ReadyRecord({ quote, model, actions, thread, printThread, fields, sendA
   const more: MenuItemDef[] = [
     { id: 'preview', label: t('action.previewPdf'), icon: <ExternalLink size={14} aria-hidden />, href: previewHref(quote.id, quote.current.language === 'en' ? 'en' : 'it'), target: '_blank' as const },
     ...(status === 'APPROVED' && model.can.manage ? [{ id: 'reopen', label: t('action.reopen'), onSelect: () => actions?.onDialog?.('reopen') }] : []),
-    ...(status === 'SENT' && model.can.send ? [{ id: 'newLink', label: t('action.newLink'), onSelect: () => actions?.onDialog?.('newLink') }] : []),
+    // F-CQ-204 (Q1-B2): a new link mails the priced PDF — only for a reader who may send quotes AND sees prices (the API refuses the others).
+    ...(status === 'SENT' && model.can.send && model.grains.price ? [{ id: 'newLink', label: t('action.newLink'), onSelect: () => actions?.onDialog?.('newLink') }] : []),
     // B-W2a-49 (SAL-155): a new draft copied from a version of this quote, for this customer or another.
     { id: 'duplicate', label: t('action.duplicate'), icon: <Copy size={14} aria-hidden />, disabled: !model.can.manage, description: model.can.manage ? undefined : t('held.noManage'), onSelect: () => actions?.onDuplicateStart?.() },
     {
