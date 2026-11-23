@@ -6,6 +6,7 @@ import { EU_VAT_FORMATS, normaliseTaxIdentity, splitEuVatNumber, suggestTaxMode,
 import { isEuMemberState } from '@nexus/factory-domain/tax/eu'
 import { isValidPartitaIva } from '@nexus/factory-domain/tax/tax-ids'
 import { isApiError, issuePath } from '../../../lib/api/errors'
+import { PARTY_WORK_GROUPS } from './api' // F-CL-201
 // B-W2b-427: the reasons a likely duplicate looks alike.
 import type { DuplicateReasonFound } from '../../admin/import/duplicates/api'
 import type {
@@ -21,6 +22,8 @@ import type {
   PartyQuery,
   PartyRole,
   PartyRow,
+  PartySort, // F-CL-201
+  PartyWorkGroup, // F-CL-201
   PartyStatus,
   PurchaseOrderRow,
   QuoteRow,
@@ -853,6 +856,44 @@ export function listCanOf(permissions: Iterable<string>): ListCan {
   return { view: held.has('parties.view'), manage: held.has('parties.manage'), block: held.has('parties.block'), vies: held.has('parties.vies'), export: held.has('views.export') }
 }
 
+// ---- F-CL-201 (customers list 13-backend §8.1): the list's order and the band's door, address terms of a side that asks for them ----
+
+/** A side's Sort ▾: the orders offered and the one the list falls back to (Customers with orders.view: needs; without: code). */
+export interface ListSort {
+  readonly choices: readonly PartySort[]
+  readonly fallback: PartySort
+}
+
+/** The order an address asks for: one of the side's choices, else its fallback (an unknown or a withheld one never reaches the API). */
+export function sortOf(asked: string | null | undefined, sort: ListSort): PartySort {
+  return sort.choices.find((choice) => choice === asked) ?? sort.fallback
+}
+
+/** The band group an address presses (`?work=`), or none. */
+export function workOf(asked: string | null | undefined): PartyWorkGroup | null {
+  return PARTY_WORK_GROUPS.find((group) => group === asked) ?? null
+}
+
+/** The list's own read: the view's query, the order (code goes unsaid: it is the API's own), the band's door. */
+export function listQueryOf(base: PartyQuery, sort: PartySort | null, work: PartyWorkGroup | null): PartyQuery {
+  return { ...base, ...(sort && sort !== 'code' ? { sort } : {}), ...(work ? { work } : {}) }
+}
+
+/** F-CL-203: the server kept the code order (over its cap of customers for this order): the list says so above the rows. */
+export const sortCapped = (sort: { readonly value: PartySort; readonly sortedBy: PartySort | null }): boolean => sort.sortedBy !== null && sort.sortedBy !== sort.value
+
+/** The band's terms (K2): the list's own query minus its own door, its order and its page — so a band number is the rows its press shows. */
+export function bandTermsOf(query: PartyQuery): PartyQuery {
+  const terms: PartyQuery = { ...query }
+  delete terms.work
+  delete terms.sort
+  delete terms.cursor
+  delete terms.limit
+  delete terms.band
+  return terms
+}
+// ---- end F-CL-201
+
 /** The identity acts of a row's ⋯ the reader may use (an act without its right is not drawn; Archive of a blocked one is held by state). */
 export type RowAct = 'vies' | 'block' | 'unblock' | 'archive' | 'archive-held' | 'reactivate'
 export function rowActsOf(row: Pick<PartyRow, 'status' | 'vies'>, can: ListCan): RowAct[] {
@@ -919,6 +960,10 @@ export interface PartiesListModel {
   bulk?: BulkRun | null
   /** A design case's focused row (keyboard). */
   focusRow?: number
+  // ---- F-CL-201 / F-CL-203: a side's Sort ▾ (absent: no Sort ▾, code order) and the band's pressed door (absent: none)
+  sort?: { readonly choices: readonly PartySort[]; readonly value: PartySort; readonly sortedBy: PartySort | null } | null
+  work?: PartyWorkGroup | null
+  // ---- end F-CL-201
 }
 
 export interface RecordCan {

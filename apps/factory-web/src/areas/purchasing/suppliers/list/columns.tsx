@@ -29,6 +29,7 @@ export function useDocumentsColumn(byParty: ReadonlyMap<string, SupplierDocument
         </span>
       )
     }
-    return [{ colId: 'documents', headerName: t('list.documents.col'), sortable: false, flex: 1.4, minWidth: 190, cellRenderer: DocumentsCell }]
+    // F-CL-204 (T29, P0-B10): the words wrap inside their pill (its colour stays) and the row grows to hold them — never cut at 1440 / 1920.
+    return [{ colId: 'documents', headerName: t('list.documents.col'), sortable: false, flex: 1.6, minWidth: 220, autoHeight: true, cellRenderer: DocumentsCell }]
   }, [byParty, problem, t])
 }

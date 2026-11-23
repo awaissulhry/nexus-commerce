@@ -21,18 +21,18 @@ export function useOverdueList(): OverdueListModel {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const can = useMemo(() => customerMoneyCanOf(session.permissions), [session.permissions])
-  const companyId = session.company?.id ?? null
-  const [state, setState] = useState<{ byParty: OverdueListModel['byParty']; problem: string | null }>({ byParty: null, problem: null })
+  const [state, setState] = useState<{ byParty: OverdueListModel['byParty']; problem: string | null; complete?: boolean }>({ byParty: null, problem: null })
   useEffect(() => {
     if (!can.receivables || !can.price) return
     const abort = new AbortController()
-    getOverdueCustomers(api, companyId, abort.signal)
-      .then((ageing) => setState({ byParty: overdueByParty(ageing.customers), problem: null }))
+    // F-CL-202 (C1-B1): every company the reader reaches and every page (≤ 5 × 500) — never "none" for a customer late elsewhere.
+    getOverdueCustomers(api, abort.signal)
+      .then((ageing) => setState({ byParty: overdueByParty(ageing.customers), problem: null, complete: ageing.complete }))
       .catch((error: unknown) => {
         if (!abort.signal.aborted) setState({ byParty: null, problem: readProblem(error) })
       })
     return () => abort.abort()
-  }, [api, can.receivables, can.price, companyId])
+  }, [api, can.receivables, can.price])
   return useMemo(() => ({ can, ...state }), [can, state])
 }
 
