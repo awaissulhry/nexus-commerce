@@ -80,7 +80,7 @@ export function CustomersBand({ band, problem, work, onWork, wide, about, words,
         <span className="fw-cl-quiet" title={words.p(problem)}>
           {c('band.failed')}
         </span>
-        {info}
+        <span className="fw-cl-band-end">{info}</span>
       </div>
     )
   if (!band)
@@ -123,7 +123,8 @@ export function CustomersBand({ band, problem, work, onWork, wide, about, words,
           </Fragment>
         ))}
       </span>
-      {info}
+      {/* F-CL-301 (walk W-12): the ⓘ in its own box — at the end of the line; on a phone on the label's row */}
+      <span className="fw-cl-band-end">{info}</span>
     </div>
   )
 }

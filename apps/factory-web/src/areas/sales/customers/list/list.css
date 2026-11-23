@@ -134,6 +134,13 @@
   color: var(--nds-text-2);
 }
 
+/* F-CL-301 (walk W-12): the ⓘ's own box (its popover's trigger inside), so a phone's grid can place it. */
+.fw-cl-band-end {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
 .fw-cl-band-about {
   display: flex;
   flex-direction: column;
@@ -169,6 +176,19 @@
     display: none;
   }
   .fw-cl-band-info {
+    justify-self: end;
+  }
+  /* F-CL-301 (walk W-12): the label and its ⓘ share the first cell (the label at its start, the ⓘ at its end); Needs us beside them. */
+  .fw-cl-band-label,
+  .fw-cl-band-end {
+    grid-area: 1 / 1;
+    align-self: center;
+  }
+  .fw-cl-band-label {
+    justify-self: start;
+    padding-right: var(--nds-space-24);
+  }
+  .fw-cl-band-end {
     justify-self: end;
   }
   .fw-cl-band .fw-cl-door {
