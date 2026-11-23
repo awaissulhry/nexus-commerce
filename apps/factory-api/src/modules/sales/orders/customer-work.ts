@@ -16,6 +16,8 @@ import { serverClock } from '../../../core/time'
 import { waitingRowsOf } from '../../../platform/threads/waiting-list'
 import { PARTY_SCOPE } from '../../parties/store'
 import { usePartyWork, type PartyWork, type PartyWorkFacts } from '../../parties/work'
+import { beforeOrderCountsByParty } from '../before-order/counts' // B-CL-009 (cq's one rule for "to answer" / "open quotes")
+import type { BeforeOrderCounts } from '@nexus/factory-domain/sales/before-order/contracts' // B-CL-009
 import { brandRequestWhere } from '../../production/brand-requests/read'
 import { officeContextOf } from './access'
 import { customerUrgencyWhere } from './customer-urgency'
@@ -53,6 +55,10 @@ import { asDay, dayOf, type Reader } from './store'
  * in every state (the Work strip's tile), the customer's own Urgent marks per company (ranks and quota are per company), our levels
  * Top and High among the open orders, the next promise (promisesOf.next over every company: a passed promise is said only by Late),
  * and the newest order (the picture's). No amount anywhere; no person.
+ *
+ * B-CL-009 (settle T19): + `beforeOrder` — "to answer" (groups.TO_ANSWER) and "open quotes" (openQuotes) of the Quotes & incoming
+ * lane's ONE rule (../before-order/counts beforeOrderCountsByParty, the same numbers as GET /sales/before-order/counts), asked
+ * with the R0 reached ids only (it answers 0s for an id out of reach); a part the reader holds no right of is LEFT OUT, never 0.
  */
 
 // ---- the shared facts ---------------------------------------------------------------------------------------------------
@@ -186,6 +192,21 @@ export interface CustomerWorkRow {
   readonly nextPromise: string | null
   readonly lastOrderDate: string | null
   readonly newestOrder: { readonly id: string; readonly number: string } | null
+  /** B-CL-009: cq's "to answer" and "open quotes"; a part without its right is absent (never 0). */
+  readonly beforeOrder: BeforeOrderPart
+}
+
+/** B-CL-009: the two before-order parts the list draws (each absent without its right). */
+export interface BeforeOrderPart {
+  readonly toAnswer?: number
+  readonly openQuotes?: number
+}
+
+/** B-CL-009: cq's counts of one customer as the list's two parts — a null part (no right) is left out. */
+export function beforeOrderPartOf(counts: BeforeOrderCounts | undefined): BeforeOrderPart {
+  const toAnswer = counts?.groups.TO_ANSWER ?? null
+  const openQuotes = counts?.openQuotes ?? null
+  return { ...(toAnswer !== null ? { toAnswer } : {}), ...(openQuotes !== null ? { openQuotes } : {}) }
 }
 
 export interface CustomersWorkAnswer {
@@ -237,6 +258,8 @@ export async function customersWork(caller: CommandCaller, query: { readonly par
     const newest = new Map(
       (await client.salesOrder.findMany({ where: scoped(), orderBy: [{ orderDate: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }], distinct: ['partyId'], select: { id: true, partyId: true, number: true } })).map((row) => [row.partyId, { id: row.id, number: row.number }]),
     )
+    // R8 (B-CL-009): cq's before-order counts — the reached ids only (an unreached id would come back with 0s).
+    const before = await beforeOrderCountsByParty(client, actor, reached)
     const reachedSet = new Set(reached)
     const customers = ids
       .filter((partyId) => reachedSet.has(partyId))
@@ -260,6 +283,7 @@ export async function customersWork(caller: CommandCaller, query: { readonly par
           nextPromise: next ? dayOf(next) : null,
           lastOrderDate: counted?._max.orderDate ? dayOf(counted._max.orderDate) : null,
           newestOrder: newest.get(partyId) ?? null,
+          beforeOrder: beforeOrderPartOf(before.get(partyId)), // B-CL-009
         }
       })
     return { customers, repliesComplete: facts.repliesComplete, withheld, limited, asOf: toUtcIso(serverClock.now()) }

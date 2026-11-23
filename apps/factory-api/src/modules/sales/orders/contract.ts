@@ -814,6 +814,11 @@ export const customersWorkContract = defineContract({
           lastOrderDate: z.string().nullable(),
           /** The newest order (order date, then made): the row's picture. */
           newestOrder: output({ id: id(), number: z.string() }).nullable(),
+          // ── B-CL-009 (settle T19): the Quotes & incoming lane's ONE rule (GET /sales/before-order/counts' numbers); a part the reader
+          // holds no right of is absent, never 0 ──
+          /** "to answer" (requests NEW / ASSIGNED + portal orders SENT) and "open quotes" (DRAFT, PENDING_APPROVAL, APPROVED, SENT). */
+          beforeOrder: output({ toAnswer: z.number().int().optional(), openQuotes: z.number().int().optional() }),
+          // ── end B-CL-009 ──
         }),
       ),
       /** Every waiting reply was read (false: beyond the threads' read cap; the web says so in words). */
