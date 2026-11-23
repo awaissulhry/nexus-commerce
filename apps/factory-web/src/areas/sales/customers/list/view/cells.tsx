@@ -43,7 +43,7 @@ export function chipText(chip: WorkChip, words: CellWords): string {
 export function ChipDoor({ chip, href, words, measure }: { chip: WorkChip; href: string; words: CellWords; measure?: boolean }) {
   const text = chipText(chip, words)
   return (
-    <Link className={`fw-cl-chip is-${chip.tone}`} href={href} title={`${text} ${chip.count}`} {...(measure ? { 'data-chip': '' } : {})}>
+    <Link className={`fw-cl-chip is-${chip.tone}`} href={href} title={`${text} ${chip.count}`} data-chip={measure ? '' : undefined}>
       <span className="fw-cl-chip-text">{text}</span>
       <b className="fw-cl-chip-n">{chip.count}</b>
     </Link>
