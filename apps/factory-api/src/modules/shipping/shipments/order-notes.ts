@@ -60,7 +60,8 @@ export function shipmentOrderLineOf(input: { readonly kind: ShipmentOrderNote; r
   return `On ${input.draft ? 'draft ' : ''}shipment ${input.shipment}${others === '' ? '' : ` with ${others}`}.`
 }
 
-interface NotePlan {
+/** What one event asks of the handler. */
+export interface NotePlan {
   readonly shipmentId: string
   readonly kind: ShipmentOrderNote
   /** The orders the event itself names; null: every order the shipment carries when the lines are written. */

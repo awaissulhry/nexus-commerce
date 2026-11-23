@@ -303,3 +303,80 @@ describe('B-CW-040: orders on and off a shipment — one office line in each ord
     expect([(await bodiesOf(so2(), S.number)).length, (await bodiesOf(so3(), S.number)).length]).toEqual(counts)
   })
 })
+
+// ── the wall of the line (customer Work tab plan §4 "Brand wall"; 13-backend §7) ──
+/**
+ * Stands on the lines the cases above wrote on Brand Alpha's three orders (SEED-SO-0002, SEED-SO-0003, SO-ALPHA-2) and on Brand
+ * Beta's order SO-BETA-1, which no shipment of Alpha ever carried. The reader is an office person limited to Brand Beta
+ * (`betaOnly`) and the customers' own database role (the portal's). The Owner's rule: one brand must not be able to see anything
+ * related to any other brand; the office sees it all.
+ */
+describe('B-CW-040 the wall of the line: another customer reads nothing of it; a line holds no name, no amount, no person', () => {
+  const alphaNumbers = ['SEED-SO-0002', 'SEED-SO-0003', 'SO-ALPHA-2']
+
+  it("Brand Beta's order gets no line, also when an event wrongly names it; Beta's office person reads no line and no order number of Brand Alpha", async () => {
+    // A forged event naming Beta's order on Alpha's shipment: the handler writes only on an order of the shipment's own customer.
+    expect(await notesOf({ id: newId(), type: 'shipment.orders_changed', payload: { shipmentId: S.id, change: 'ADDED', salesOrderIds: [so2(), ids.beta1], added: [ids.beta1] } })).toEqual([])
+    expect(await notesOf({ id: newId(), type: 'shipment.orders_changed', payload: { shipmentId: S.id, change: 'REMOVED', salesOrderIds: [so2()], removed: [ids.beta1] } })).toEqual([])
+    expect(await admin(`SELECT m.id FROM "Message" m JOIN "Thread" t ON t.id = m."threadId" WHERE t."recordType" = 'SalesOrder' AND t."recordId" = $1`, [ids.beta1])).toEqual([])
+    // A forged event that names Alpha's own order together with Beta's: Alpha's line never names Beta's order.
+    const mixed = await notesOf({ id: newId(), type: 'shipment.orders_changed', payload: { shipmentId: S.id, change: 'ADDED', salesOrderIds: [so2(), so3(), ids.beta1], added: [so3(), ids.beta1] } })
+    expect(mixed).toEqual([{ orderId: so3(), messageId: expect.any(String) }])
+    expect((await bodiesOf(so3(), S.number)).at(-1)).not.toContain('SO-BETA-1')
+
+    // Beta's office person: Alpha's order conversations are not found — the unknown id's own answer.
+    const markers = [S.number, ...alphaNumbers]
+    const unknown = await call('betaOnly', 'GET', `/threads/SalesOrder/${newId()}`)
+    expect(unknown.statusCode, unknown.body).toBe(404)
+    for (const order of [so2(), so3(), ids.alpha2]) {
+      const refused = await call('betaOnly', 'GET', `/threads/SalesOrder/${order}`)
+      expect(refused.statusCode, `${order}: ${refused.body}`).toBe(404)
+      expect((refused.json() as Json).error.message).toBe((unknown.json() as Json).error.message)
+      for (const marker of markers) expect(refused.body, marker).not.toContain(marker)
+    }
+    // Its own order's conversation holds nothing of Alpha's shipment or orders.
+    const own = await call('betaOnly', 'GET', `/threads/SalesOrder/${ids.beta1}`)
+    expect(own.statusCode, own.body).toBe(200)
+    for (const marker of markers) expect(own.body, marker).not.toContain(marker)
+
+    // The office of every customer reads the line where it works: in the order's own conversation, as an office-only system note.
+    const thread = await ok('warehouse', 'GET', `/threads/SalesOrder/${so3()}?limit=100`)
+    const shown = (thread.messages as Json[]).filter((message) => String(message.body).includes(S.number))
+    expect(shown.length).toBeGreaterThan(0)
+    for (const message of shown) expect(message).toMatchObject({ direction: 'INTERNAL_NOTE', audience: 'OFFICE', author: { kind: 'SYSTEM' } })
+  })
+
+  it("the customers' portals read no line: the database's partner role of Brand Beta — and of Brand Alpha itself — sees none (a draft shipment is ours alone)", async () => {
+    for (const partyId of [beta, A.alpha]) {
+      const rows = await database.withScope({ audience: 'partner', tenantId: A.tenant, actorId: newId(), partyId }, (client) => client.message.findMany({ select: { id: true, direction: true, audience: true, bodyText: true } }))
+      expect(rows.every((row) => row.direction !== 'INTERNAL_NOTE' && row.audience === 'PARTNER'), partyId).toBe(true)
+      for (const row of rows) expect(row.bodyText, partyId).not.toContain(S.number)
+    }
+  })
+
+  it('a line holds a shipment number and order numbers only: no customer name, no amount, no person, nothing for the floor', async () => {
+    const party = (await admin<{ legalName: string; tradeName: string | null; code: string }>(`SELECT "legalName", "tradeName", code FROM "Party" WHERE id = $1`, [A.alpha]))[0]!
+    const rows = await admin<{ bodyText: string; authorId: string | null; authorName: string | null; partyId: string | null; amount: string | number | null; amountCurrency: string | null; mentions: number; attachments: number; forFloor: boolean }>(
+      `SELECT m."bodyText", m."authorId"::text AS "authorId", m."authorName", m."partyId"::text AS "partyId", m.amount, m."amountCurrency", cardinality(m."mentionedUserIds") AS mentions, cardinality(m."attachmentFileIds") AS attachments, m."forFloor"
+         FROM "Message" m JOIN "Thread" t ON t.id = m."threadId"
+        WHERE t."recordType" = 'SalesOrder' AND t."recordId" = ANY($1::uuid[]) AND m."authorKind" = 'SYSTEM' AND m.direction = 'INTERNAL_NOTE'`,
+      [[so2(), so3(), ids.alpha2]],
+    )
+    expect(rows.length).toBeGreaterThan(5)
+    // Exactly one of the three settled shapes, in the company's language: a shipment number and order numbers, nothing else.
+    const shape =
+      locale === 'it'
+        ? /^(In spedizione( in bozza)? SH-\d+( con [A-Z0-9-]+(, [A-Z0-9-]+)*)?\.|Non più nella spedizione( in bozza)? SH-\d+\.|La spedizione SH-\d+ è stata annullata\.)$/
+        : /^(On (draft )?shipment SH-\d+( with [A-Z0-9-]+(, [A-Z0-9-]+)*)?\.|No longer on (draft )?shipment SH-\d+\.|Shipment SH-\d+ was cancelled\.)$/
+    for (const row of rows) {
+      expect(row, row.bodyText).toMatchObject({ authorId: null, authorName: null, partyId: null, amount: null, amountCurrency: null, mentions: 0, attachments: 0, forFloor: false })
+      expect(row.bodyText).toMatch(shape)
+      for (const name of [party.legalName, party.tradeName, party.code, 'Brand Beta', 'BRAND-BETA', 'SO-BETA-1']) if (name) expect(row.bodyText, name).not.toContain(name)
+      expect(row.bodyText).not.toMatch(/€|EUR|\d[.,]\d{2}\b/)
+    }
+    // The audit rows of the lines name the event and the shipment — no person wrote them.
+    const audits = await admin<{ after: Json }>(`SELECT after FROM "AuditLog" WHERE action = 'shipping.orderNotes' AND "recordType" = 'SalesOrder'`)
+    expect(audits.length).toBeGreaterThan(5)
+    for (const audit of audits) expect(Object.keys(audit.after).sort().filter((key) => key !== 'siblings')).toEqual(['eventType', 'kind', 'messageId', 'shipmentId'])
+  })
+})
