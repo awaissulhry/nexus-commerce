@@ -1,5 +1,9 @@
 import { recordHref, SIDES } from '../../../parties/_shared/model'
+import { THREAD_TERM } from '../../../_shared/record-frame/address' // F-CL-301: the frame's thread term
 import type { OrderPhase } from './api'
+
+/** F-CL-301: the customer page's dock term (`dock=`, cu/record's DOCK_PARAM — the test reads the door back with its own parser). */
+const DOCK_TERM = 'dock'
 
 /**
  * F-CL-202 (customers list 13-backend §4 table + §8.7, settles T6 / T20): every door a count of the list opens — ONE place, pure. A
@@ -55,7 +59,12 @@ export function workDoor(prefix: string, partyId: string, term: WorkDoorTerm): s
       if (term.firstId) query.set('open', term.firstId)
       break
     case 'replies':
-      query.set('thread', 'all')
+      // F-CL-301 (walk W-3): `thread=all` is the order page's scope and opened the customer's General. The customer page's own term
+      // docks All of <customer> (`dock=all`, every conversation, the waiting reply's among them), the frame's `thread=open` shows the
+      // thread (on a phone its full view), on the Work tab where the reply's order says "Reply waits".
+      query.set('tab', 'work')
+      query.set(DOCK_TERM, 'all')
+      query.set(THREAD_TERM, 'open')
       break
     case 'quotes':
       query.set('tab', 'quotes')

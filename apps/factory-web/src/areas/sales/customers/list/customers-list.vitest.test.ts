@@ -206,7 +206,8 @@ import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
 import { vi } from 'vitest'
 import { createApiClient } from '../../../../lib/api/client'
-import { phaseDoor } from '../record/use-customer-work'
+import { DOCK_PARAM, dockOnTab, dockTermOf, phaseDoor } from '../record/use-customer-work' // F-CL-301: + the dock's term
+import { showsOnArrival } from '../../../_shared/record-frame/model' // F-CL-301
 import { phasePhrase } from '../../orders/list/sheet/model'
 import { getOverdueCustomers } from '../money/api'
 import type { CustomerWork } from './api'
@@ -258,7 +259,12 @@ describe('F-CL-202: every count is a door to exactly what it counts', () => {
   it('requests open the review window on the first one; replies the thread’s All; to answer / open quotes their own group', () => {
     expect(door({ kind: 'requests', firstId: 'r-1' })).toBe('/w/DEMO/sales/customers/p1?tab=work&open=r-1')
     expect(door({ kind: 'requests', firstId: null })).toBe('/w/DEMO/sales/customers/p1?tab=work')
-    expect(door({ kind: 'replies' })).toBe('/w/DEMO/sales/customers/p1?thread=all')
+    // F-CL-301 (walk W-3): All of <customer> in the dock (the customer page's own term), the thread shown on arrival, the Work tab.
+    expect(door({ kind: 'replies' })).toBe('/w/DEMO/sales/customers/p1?tab=work&dock=all&thread=open')
+    const replies = new URL(door({ kind: 'replies' }), 'https://factory.example.com')
+    expect(dockTermOf(replies.searchParams.get(DOCK_PARAM))).toEqual({ kind: 'all' })
+    expect(dockOnTab('work', dockTermOf(replies.searchParams.get(DOCK_PARAM)))).toEqual({ kind: 'all' })
+    expect(showsOnArrival(replies.search)).toBe(true)
     expect(door({ kind: 'quotes', group: 'TO_ANSWER' })).toBe('/w/DEMO/sales/customers/p1?tab=quotes&group=TO_ANSWER')
     expect(door({ kind: 'quotes', group: 'OPEN_QUOTES' })).toBe('/w/DEMO/sales/customers/p1?tab=quotes&group=OPEN_QUOTES')
     expect(door({ kind: 'work' })).toBe('/w/DEMO/sales/customers/p1?tab=work')
