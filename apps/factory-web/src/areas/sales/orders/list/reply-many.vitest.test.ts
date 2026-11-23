@@ -545,10 +545,14 @@ describe('cq fx3 W2-2: the Reply window on requests and quotes', () => {
     expect(orders).toContain("Brand Alpha has no portal yet: write by e-mail in each order's conversation.")
     expect(orders).not.toContain('Put it in their to-do list')
     expect(orders).not.toContain('No files here')
+    // cw fx7 (third look, item 3): nothing can be posted, so the lines that say who reads it, on which orders and how are not drawn.
+    expect(orders).toBe("Brand Alpha has no portal yet: write by e-mail in each order's conversation.")
     // With a portal the orders' window is as before: its box and, from Ask ▾, its tick.
     const on = textOf(render(createElement(ReplyManyBody, { model: model({ todo: { on: true, due: '2026-11-26' } }) }), 'en'))
     expect(on).toContain('Put it in their to-do list')
     expect(on).toContain('No files here')
+    expect(on).toContain('Brand Alpha will read this on 3 orders')
+    expect(on).toContain('Brand Alpha reads Italian')
     const quote = textOf(render(createElement(ReplyManyBody, { model: model({ portal: 'off', recordType: 'Quote' }) }), 'it'))
     expect(quote).toContain('nella conversazione di ogni preventivo')
   })
@@ -564,12 +568,15 @@ describe('cq fx3 W2-2: the Reply window on requests and quotes', () => {
 describe('cq fx5 W3-2: the Reply window with no portal', () => {
   const model = (more: Partial<ReplyManyModel> = {}): ReplyManyModel => ({ customer: { id: ALPHA, name: BRAND_ALPHA.tradeName }, targets: replyTargetsOf(alpha), batchId: 'c5c5c5c5-0000-4000-8000-0000000000c5', draft: startDraft(replyComposerContext(BRAND_ALPHA.tradeName)), notes: [], language: 'it', portal: 'on', sending: false, progress: null, results: {}, done: false, ...more })
   it('no portal: the reason and the records to write about by e-mail; no "will read this on", no "each gets its own"', () => {
-    for (const recordType of ['Inquiry', 'Quote', undefined] as const) {
-      const off = textOf(render(createElement(ReplyManyBody, { model: model({ portal: 'off', ...(recordType ? { recordType } : {}) }) }), 'en'))
-      expect(off, String(recordType)).toContain('has no portal yet: write by e-mail in each')
-      expect(off, String(recordType)).not.toContain('will read this on')
+    for (const recordType of ['Inquiry', 'Quote'] as const) {
+      const off = textOf(render(createElement(ReplyManyBody, { model: model({ portal: 'off', recordType }) }), 'en'))
+      expect(off, recordType).toContain('has no portal yet: write by e-mail in each')
+      expect(off, recordType).not.toContain('will read this on')
+      expect(off, recordType).not.toContain('gets its own')
       for (const target of replyTargetsOf(alpha)) expect(off).toContain(target.number)
     }
+    // Orders (cw fx7): the reason alone.
+    expect(textOf(render(createElement(ReplyManyBody, { model: model({ portal: 'off' }) }), 'en'))).toBe("Brand Alpha has no portal yet: write by e-mail in each order's conversation.")
     expect(textOf(render(createElement(ReplyManyBody, { model: model({ recordType: 'Inquiry' }) }), 'en'))).toContain('will read this on')
   })
 })

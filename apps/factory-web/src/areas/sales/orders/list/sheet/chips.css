@@ -230,7 +230,8 @@ a.fw-sheet-msgs {
 }
 
 /* ---- cw fx5 (walk W-13), cw fx6 (re-walk R-3): the customer page's phone card — ONE block under the number: the picture at the left
-   and its lines beside it (the PO, the chips, "Promised" with the pieces line and the Thread door). Layout only, tokens only. ---- */
+   and its lines beside it (the PO, the chips, "Promised" with the pieces line). cw fx7: the Thread door is the card's own, in its
+   top row beside ⋯. Layout only, tokens only. ---- */
 .fw-sheet-card {
   display: flex;
   align-items: flex-start;
@@ -272,11 +273,6 @@ a.fw-sheet-msgs {
 .fw-sheet-card-promise b {
   color: var(--nds-text);
   font-weight: var(--nds-font-weight-semibold);
-}
-/* The Thread door ends the card's last line (it had a line of its own); without room there it wraps under, still at the right. */
-.fw-sheet-card-door {
-  display: inline-flex;
-  margin-left: auto;
 }
 /* On the card the chips wrap freely (no row height to keep) and the pieces line wraps instead of being cut. */
 .fw-sheet-wi.is-card {
