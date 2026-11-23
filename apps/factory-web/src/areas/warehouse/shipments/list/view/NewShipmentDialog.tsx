@@ -10,6 +10,9 @@ import { newShipmentLines, newShipmentProblems, orderWords, ordersOfNew, togethe
 import type { NewShipmentModel, ShipmentsListActions } from '../list-model'
 // F-OP-121: the customer's other orders, held with the join reason in the screen's words (the depth catalogue's shipOrders.*).
 import { DEPTH_NS } from '../../queue/shared/depth'
+// cw fx5 (walk W-2): the window carries its own styles wherever it is mounted (its classes `fw-sh-…` live in Warehouse's sheet; a
+// host that loaded no Warehouse page drew it unstyled). Warehouse's pages and the order page already load this same file.
+import '../../shipments.css'
 
 /**
  * New shipment (design sh-new, W1): two steps — 1 the order (only orders with garments quality released and not on a

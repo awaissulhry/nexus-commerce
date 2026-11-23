@@ -33,3 +33,22 @@
 .fw-sst-made {
   font-size: var(--nds-font-size-sm);
 }
+/* cw fx5 (walk W-24): the existing-draft door ("SEED-SH-0002 ›") and the notice's door are the app's quiet link, never a bare
+   underlined browser link. */
+.fw-sst-hint a,
+.fw-sst-made a {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  text-decoration: none;
+  border-radius: var(--nds-radius-sm);
+  white-space: nowrap;
+}
+.fw-sst-hint a:hover,
+.fw-sst-made a:hover {
+  text-decoration: underline;
+}
+.fw-sst-hint a:focus-visible,
+.fw-sst-made a:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
+}
