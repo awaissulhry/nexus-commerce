@@ -345,6 +345,8 @@ export interface IncomingQuery {
   receivedFrom?: string | null
   receivedTo?: string | null
   outcome?: RequestOutcome | null
+  /** F-CQ-103 (B-CQ-021): some kinds only (the customer's tab: requests and portal orders; change requests are after an order). */
+  kinds?: readonly IncomingKind[] | null
 }
 
 /**
@@ -367,6 +369,7 @@ export function listIncoming(api: ApiClient, query: IncomingQuery, options: { cu
       receivedFrom: query.receivedFrom ?? undefined,
       receivedTo: query.receivedTo ?? undefined,
       outcome: query.outcome ?? undefined,
+      kinds: query.kinds && query.kinds.length > 0 ? query.kinds.join(',') : undefined, // F-CQ-103
       limit: options.limit ?? INCOMING_PAGE,
       cursor: options.cursor ?? undefined,
     },

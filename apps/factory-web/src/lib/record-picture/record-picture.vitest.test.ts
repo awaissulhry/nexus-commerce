@@ -181,6 +181,8 @@ describe('the reads and the words', () => {
       request: { path: '/sales/inquiries/pictures', key: 'inquiryIds' },
       // F-SA-283 (B-SA-074): Production › Work orders and the planning board.
       workorder: { path: '/production/work-orders/pictures', key: 'workOrderIds' },
+      // F-CQ-103 (B-CQ-030): a portal order's first style (Incoming's portal orders, the customer's drafts).
+      portalOrder: { path: '/sales/order-requests/pictures', key: 'requestIds' },
     })
   })
   it('the local store\'s address through /api (#1649), a store\'s absolute address as it is', () => {

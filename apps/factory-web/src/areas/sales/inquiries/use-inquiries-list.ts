@@ -56,6 +56,9 @@ import {
   type RowVerb,
 } from './model'
 import type { RecordVerb } from './record-model'
+// ---- F-CQ-103 (customer page › Quotes & incoming): the host's kinds and door, Most urgent first on one page.
+import { DEFAULT_TILE, rankedRows, rankHeld, type IncomingRank } from './model'
+import type { IncomingKind, ListTile } from './model'
 import { useInquiry } from './use-inquiry'
 // B-TH-228: which receipts stay on the page when the queue moves on.
 import { receiptStays } from './model'
@@ -100,9 +103,39 @@ export interface InquiriesListHost {
   readonly pane?: 'own' | 'host'
   /** A row's click (never a change request's: that opens Home › Approvals). */
   readonly onRowClick?: (row: IncomingRow, newTab: boolean) => void
+  // ---- F-CQ-103 / F-CQ-104 (customer page › Quotes & incoming, 13-backend §11 row 5): the host's own options — (a) this host only;
+  // Sales › Incoming gives none and keeps its list as it was.
+  /** Some kinds only, in every read, every count and the tools' query (the customer's tab: requests and portal orders). */
+  readonly kinds?: readonly IncomingKind[] | null
+  /** The saved row the list opens on (the band's door; else Open); Clear filters keeps it; a new door starts the list again on it. */
+  readonly defaultTile?: ListTile | null
+  /** The order the list opens on ('urgent': Most urgent first, ranked on one page). */
+  readonly defaultRank?: IncomingRank | null
+  /** 'host': the host's columns (Number first, no Customer column; the set by `room`). */
+  readonly columns?: 'host'
+  /** The list's own room in px (the host measures its root; never the window). */
+  readonly room?: number | null
+  /** One customer's tab: a live change that names another customer (or a prospect) is not counted in "N updates" (Q2-B9). */
+  readonly liveParty?: string | null
+  /** The customer's one name on this host (the chips say it, never a row's own: P0-B9). */
+  readonly customerName?: string | null
+  // ---- end F-CQ-103 / F-CQ-104
 }
 
 type Lock = Pick<InquiriesListHost, 'locked' | 'pane'>
+
+/**
+ * F-CQ-103 (Q2-B9): whether a live change counts in "N updates": a request, a portal order (never a draft's change: drafts are not
+ * in this list), a change request; on one customer's tab only one that names this customer (or names none); Customer replies counts
+ * a message.
+ */
+export function incomingLiveCounts(change: { readonly type: string; readonly fields: Readonly<Record<string, unknown>> }, liveParty: string | null, repliesView: boolean): boolean {
+  if (change.type === 'portal_order_request.draft_changed') return false
+  const kind = change.type.startsWith('inquiry.') || change.type.startsWith('portal_order_request.') || change.type.startsWith('order_change_request.')
+  if (!kind) return repliesView && change.type.startsWith('thread.')
+  if (liveParty && 'partyId' in change.fields) return change.fields.partyId === liveParty
+  return true
+}
 
 const readDismissed = (): string[] => {
   try {
@@ -137,7 +170,14 @@ export function incomingMemory(host: Lock, next: ListAddress): ListAddress {
 export const incomingAddress = (base: string, address: ListAddress): string => `${base}${addressText(address)}`
 
 /** The list's terms as its tools read them on an embedding host (Export ▾, Export N, saved views): the lock in, nothing open. */
-export const incomingToolsQuery = (host: Pick<InquiriesListHost, 'locked'>, address: ListAddress): string => addressText({ ...incomingLocked(host, address), open: null, catalogue: null, tab: 'request', isNew: false, mail: null }).replace(/^\?/, '')
+export function incomingToolsQuery(host: Pick<InquiriesListHost, 'locked' | 'kinds'>, address: ListAddress): string {
+  const text = addressText({ ...incomingLocked(host, address), open: null, catalogue: null, tab: 'request', isNew: false, mail: null, rank: null }).replace(/^\?/, '')
+  if (!host.kinds || host.kinds.length === 0) return text
+  // F-CQ-103: the host's kinds go with the file's terms (screen = file: no change request in the customer tab's file).
+  const params = new URLSearchParams(text)
+  params.set('kinds', host.kinds.join(','))
+  return params.toString()
+}
 
 /** A saved view's terms back into the list's memory (a lock stays the host's). */
 export const incomingFromQuery = (host: Lock, query: string): ListAddress => incomingMemory(host, addressOf(new URLSearchParams(query.replace(/^\?/, ''))))
@@ -163,7 +203,20 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
   const embedded = !!host.embedded
   const lock = host.locked?.party ?? null
   const lockHost = useMemo<Lock>(() => ({ locked: lock ? { party: lock } : null, pane: host.pane }), [lock, host.pane])
-  const [kept, setKept] = useState<ListAddress>(() => incomingMemory(lockHost, HOME_ADDRESS))
+  // ---- F-CQ-103: the host's door (its saved row), its kinds, its order
+  const hostTile = host.defaultTile ?? null
+  const kindsKey = host.kinds?.join(',') ?? ''
+  const kinds = useMemo<readonly IncomingKind[] | null>(() => (kindsKey ? (kindsKey.split(',') as IncomingKind[]) : null), [kindsKey])
+  const liveParty = host.liveParty ?? null
+  const [kept, setKept] = useState<ListAddress>(() => incomingMemory(lockHost, hostTile ? { ...HOME_ADDRESS, tile: hostTile } : HOME_ADDRESS))
+  // A new door starts the list again on its saved row (the State and the row open under the old door go; once, not on arrival).
+  const lastTile = useRef(hostTile)
+  useEffect(() => {
+    if (lastTile.current === hostTile) return
+    lastTile.current = hostTile
+    setKept((now) => incomingMemory(lockHost, { ...now, tile: hostTile ?? DEFAULT_TILE, status: null }))
+  }, [hostTile, lockHost])
+  // ---- end F-CQ-103
   const fromAddress = useMemo(() => addressOf(params), [params])
   const address = memory ? kept : fromAddress
   // ---- end F-SA-277
@@ -192,7 +245,7 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
   const readId = useRef(0)
   // F-SA-277: every read takes the host's lock.
   const read = useMemo(() => incomingLocked(lockHost, address), [lockHost, address])
-  const query = useMemo(() => queryOf(read), [read])
+  const query = useMemo(() => ({ ...queryOf(read), ...(kinds ? { kinds } : {}) /* F-CQ-103 */ }), [read, kinds])
   const queryKey = JSON.stringify(query)
 
   const repliesView = address.tile === CUSTOMER_REPLIES
@@ -225,7 +278,13 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
   }, [load])
 
   // The rows read so far (each row once) with the first page's counts; "Show more" reads the next page by the last page's cursor.
-  const list = useMemo<IncomingList | null>(() => (pages && pages.length > 0 ? { ...pages[0]!, rows: repliesView ? [] : mergePages(pages), next: pages[pages.length - 1]!.next } : null), [pages, repliesView])
+  // F-CQ-103 (C7): Most urgent first ranks the rows when they are the whole list (one page); with more pages they keep the server's order.
+  const rank: IncomingRank = address.rank ?? host.defaultRank ?? 'arrival'
+  const list = useMemo<IncomingList | null>(() => {
+    if (!pages || pages.length === 0) return null
+    const next = pages[pages.length - 1]!.next
+    return { ...pages[0]!, rows: repliesView ? [] : rankedRows(mergePages(pages), rank, next === null), next }
+  }, [pages, repliesView, rank])
   const waiting = useMemo<WaitingPage | null>(() => (replies && replies.length > 0 ? { ...replies[0]!, rows: replies.flatMap((page) => page.rows), next: replies[replies.length - 1]!.next } : null), [replies])
   const readMore = useCallback(async () => {
     if (more.busy) return
@@ -283,10 +342,10 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
   const live = useLiveBus(
     {
       onChange: (change) => {
-        // B-TH-233: every kind of row changes live — a request, a catalogue order, a change request (the rows wait behind "N updates").
-        if (change.type.startsWith('inquiry.') || change.type.startsWith('portal_order_request.') || change.type.startsWith('order_change_request.')) setUpdates((count) => count + 1)
-        // Customer replies: a message moves a conversation in or out of the view.
-        else if (repliesView && change.type.startsWith('thread.')) setUpdates((count) => count + 1)
+        // B-TH-233: every kind of row changes live — a request, a catalogue order, a change request (the rows wait behind "N updates");
+        // Customer replies: a message moves a conversation in or out of the view. F-CQ-103: never a draft's change; on a customer's tab
+        // only that customer's (Q2-B9).
+        if (incomingLiveCounts(change, liveParty, repliesView)) setUpdates((count) => count + 1)
       },
       onReconnect: () => void load(),
     },
@@ -396,6 +455,7 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
   const newRequest = useNewRequest({
     open: newOpen,
     mailId: address.mail,
+    partyId: lock, // F-CQ-104: on one customer's tab "New request for <customer>…" starts with the customer set
     api,
     companyId,
     can,
@@ -499,14 +559,23 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
     paneMode: paneHost ? 'host' : 'own',
     locked: !!lock,
     // ---- end F-SA-277
+    // ---- F-CQ-103 / F-CQ-104: the host's face (its kinds, its door's row, the order and whether it is held, columns by its room)
+    ...(kinds ? { kinds } : {}),
+    ...(hostTile ? { homeTile: hostTile } : {}),
+    rank,
+    rankHeld: rankHeld(rank, list),
+    ...(host.columns ? { columns: host.columns } : {}),
+    room: host.room ?? null,
+    customerName: host.customerName ?? null,
+    // ---- end F-CQ-103 / F-CQ-104
   }
 
   const slots: ListSlots = { thread: record.thread, catalogueThread: catalogue.thread }
 
   const actions: InquiriesActions = {
     onAddress: (patch) => go({ ...patch, open: patch.open ?? null, catalogue: patch.catalogue ?? null }),
-    // F-SA-277: a lock comes back (the memory keeps it; the page has none).
-    onClearFilters: () => go({ ...HOME_ADDRESS }),
+    // F-SA-277: a lock comes back (the memory keeps it; the page has none). F-CQ-103: and the host's door (its saved row).
+    onClearFilters: () => go({ ...HOME_ADDRESS, ...(hostTile ? { tile: hostTile } : {}) }),
     onRetry: () => void load(),
     onShowUpdates: () => void load(),
     // B-TH-233: a row opens by its kind — a request or a catalogue order beside the list, a change request in Home › Approvals.
@@ -520,7 +589,7 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
     // B-TH-216 (grid-F29 as on the Orders sheet): the rest of a row opens it; ⌘ / Ctrl a request's full page (any other's own place) in a new tab.
     onOpenRow: (row, newTab) => {
       const place = placeOf(row)
-      if (place === 'approvals') return newTab ? void window.open(approvalsHref(prefix), '_blank', 'noopener') : router.push(approvalsHref(prefix))
+      if (place === 'approvals') return newTab ? void window.open(approvalsHref(prefix, row.opens.id), '_blank', 'noopener') : router.push(approvalsHref(prefix, row.opens.id))
       // F-SA-277: the host's row click (the customer page docks the request's thread); a host-drawn pane without one: the row's page.
       if (host.onRowClick) return host.onRowClick(row, newTab)
       if (paneHost) return openPage(row, newTab)
@@ -577,7 +646,7 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
   }
 
   // F-SA-277: an embedding host's list tools read the list's own terms (its lock in) and write a saved view's back into its memory.
-  const scope: ListScope = { query: incomingToolsQuery(lockHost, address), onGoTo: (query) => setKept(incomingFromQuery(lockHost, query)) }
+  const scope: ListScope = { query: incomingToolsQuery({ ...lockHost, kinds }, address), onGoTo: (query) => setKept(incomingFromQuery(lockHost, query)) }
 
   return { model, actions, slots, scope }
 }

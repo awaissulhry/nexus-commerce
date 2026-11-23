@@ -427,9 +427,9 @@ describe('B-TH-233 Incoming over every door', () => {
     expect([placeOf(request), placeOf(CATALOGUE_ROW), placeOf(CHANGE_ROW)]).toEqual(['request', 'catalogue', 'approvals'])
     expect(rowHref('/w/DEMO', HOME_ADDRESS, request)).toBe(`/w/DEMO/sales/incoming?open=${request.id}`)
     expect(rowHref('/w/DEMO', HOME_ADDRESS, CATALOGUE_ROW)).toBe(`/w/DEMO/sales/incoming?catalogue=${CATALOGUE_ROW.id}`)
-    // Approvals' review window reads approval tasks only: the door opens the waiting change requests (never a "not found" window).
-    expect(rowHref('/w/DEMO', HOME_ADDRESS, CHANGE_ROW)).toBe(approvalsHref('/w/DEMO'))
-    expect(approvalsHref('/w/DEMO')).toBe('/w/DEMO/home/approvals?kind=ORDER_CHANGE_REQUEST')
+    // F-CQ-103 (Q2-B1): Approvals opens one change request by its id — the door opens THAT request (`&open=`), never the kind's list.
+    expect(rowHref('/w/DEMO', HOME_ADDRESS, CHANGE_ROW)).toBe(approvalsHref('/w/DEMO', CHANGE_ROW.opens.id))
+    expect(approvalsHref('/w/DEMO', CHANGE_ROW.opens.id)).toBe(`/w/DEMO/home/approvals?kind=ORDER_CHANGE_REQUEST&open=${CHANGE_ROW.opens.id}`)
     // J / K and "after a decision, the next" walk only what opens beside the list.
     expect(navIdsOf(listOf(INCOMING_ROWS))).toEqual(INCOMING_ROWS.filter((row) => row.kind !== 'CHANGE_REQUEST').map((row) => row.id))
     // Each kind's own thread for its New messages.
@@ -584,6 +584,7 @@ describe('Sales › Incoming mounts the ONE picture part (F-SA-212)', () => {
   const cells = readFileSync(new URL('./view/cells.tsx', import.meta.url), 'utf8')
   it('the cell with the file-kinds fallback, the pane\'s row 1 and the picture large come from lib/record-picture; one width, 76 px', () => {
     expect(view).toContain('source="request"')
+    expect(view).toContain('source="portalOrder"') // F-CQ-103 (B-CQ-030): a portal order's garment, never a cart icon
     expect(view).toContain('fallback={files}')
     expect(view).toContain("useRecordPicture({ source: 'request'")
     expect(view).toContain('<PictureViewer')
@@ -669,8 +670,8 @@ describe('F-SA-277: the Incoming list lifted — the locked container, the page 
 
   it('a change request opens Home › Approvals on every host, before the host\'s row click (as on Incoming); a row\'s click docks its thread', () => {
     expect(placeOf(CHANGE_ROW)).toBe('approvals')
-    expect(rowPageHref('/w/DEMO', CHANGE_ROW, at({ party: LOCK }))).toBe(approvalsHref('/w/DEMO'))
-    const approvals = hook.indexOf("if (place === 'approvals') return newTab ? void window.open(approvalsHref(prefix), '_blank', 'noopener') : router.push(approvalsHref(prefix))")
+    expect(rowPageHref('/w/DEMO', CHANGE_ROW, at({ party: LOCK }))).toBe(approvalsHref('/w/DEMO', CHANGE_ROW.opens.id)) // F-CQ-103: that request
+    const approvals = hook.indexOf("if (place === 'approvals') return newTab ? void window.open(approvalsHref(prefix, row.opens.id), '_blank', 'noopener') : router.push(approvalsHref(prefix, row.opens.id))")
     expect(approvals).toBeGreaterThan(0)
     expect(approvals).toBeLessThan(hook.indexOf('if (host.onRowClick) return host.onRowClick(row, newTab)'))
     expect(THREAD_TYPE.REQUEST).toBe('Inquiry')
@@ -838,3 +839,123 @@ describe('F-CP-157: the accept window maps the lines in the customer\'s words an
   })
 })
 // ---- end F-CP-157
+
+// ---- F-CQ-103 (customer page › Quotes & incoming, 10-design §3.2, §4.3; settles C6, C7, C8, C29, C33): the ONE Incoming list's host
+// face — some kinds in every read and in the file's terms, the two new saved rows with their words, Most urgent first ranked on ONE page
+// (held in words with more), the chips cell per kind, the selection words that count only what an act runs on, live changes of this
+// customer only (never a draft's), and the door of a change request (that request) only for who answers it.
+import { bulkActs, incomingWhereOf, rankedRows, rankHeld, urgencyFactsOf } from './model'
+import { incomingLiveCounts } from './use-inquiries-list'
+import type { IncomingRow as IncomingRowT } from './api'
+
+describe('F-CQ-103: the Incoming list — kinds, To answer and Ended, Most urgent first, the chips cell', () => {
+  const LOCK = '0190f0e2-0000-7000-8000-00000000a1a1'
+  const hook = readFileSync(new URL('./use-inquiries-list.ts', import.meta.url), 'utf8')
+  const view = readFileSync(new URL('./view/InquiriesView.tsx', import.meta.url), 'utf8')
+  const row = (patch: Partial<IncomingRowT>, waiting: Partial<IncomingRowT['waiting']> = {}): IncomingRowT => ({ ...incomingRowOf(ROWS[0]!), ...patch, waiting: { ...incomingRowOf(ROWS[0]!).waiting, ...waiting } })
+
+  it('the host\'s kinds go in every read and in the file\'s terms (no change request in the tab\'s file); Sales › Incoming unchanged', () => {
+    const address = incomingMemory({ locked: { party: LOCK }, pane: 'host' }, HOME_ADDRESS)
+    expect(new URLSearchParams(incomingToolsQuery({ locked: { party: LOCK }, kinds: ['REQUEST', 'CATALOGUE_ORDER'] }, address)).get('kinds')).toBe('REQUEST,CATALOGUE_ORDER')
+    expect(incomingToolsQuery({ locked: { party: LOCK } }, address)).toBe(`party=${LOCK}`)
+    expect(hook).toContain('...(kinds ? { kinds } : {}) /* F-CQ-103 */')
+    // The order is not a file term (it ranks the screen's one page): never written into the tools' query.
+    expect(incomingToolsQuery({ locked: { party: LOCK } }, { ...address, rank: 'urgent' })).toBe(`party=${LOCK}`)
+    // Kind ▾ offers the host's kinds only and says why change requests are not here.
+    expect(view).toContain('(model.kinds ?? INCOMING_KINDS).map((kind) =>')
+    expect(view).toContain("{t('list.kindNotHere')}")
+  })
+
+  it('To answer and Ended are saved rows with their words, hints and band counts in both languages (C8)', () => {
+    expect(SAVED_ROWS).toContain('TO_ANSWER')
+    expect(SAVED_ROWS).toContain('ENDED')
+    expect(SAVED_ROWS.indexOf('TO_ANSWER')).toBe(1)
+    for (const locale of LOCALES) {
+      const all = words(locale)
+      for (const tile of ['TO_ANSWER', 'ENDED']) {
+        expect(all[`tile.${tile}`], `${locale} tile.${tile}`).toBeTruthy()
+        expect(all[`tile.hint.${tile}`], `${locale} tile.hint.${tile}`).toBeTruthy()
+        expect(all[`band.count.${tile}`], `${locale} band.count.${tile}`).toContain('{count}')
+      }
+    }
+    expect(bandCount({ counts: { TO_ANSWER: 3 }, complete: true }, 'TO_ANSWER', false)).toEqual({ key: 'band.count.TO_ANSWER', params: { count: 3 } })
+    // The host's own saved row is not a filter: no chip of its own, no "Clear filters" for it (the band's door chip says it).
+    expect(view).toContain('const narrowed = model.homeTile && narrowing.tile === model.homeTile ? { ...narrowing, tile: DEFAULT_TILE } : narrowing')
+    expect(hook).toContain('onClearFilters: () => go({ ...HOME_ADDRESS, ...(hostTile ? { tile: hostTile } : {}) })')
+  })
+
+  it('Most urgent first ranks one page: overdue on us, then on us, then for the customer, then closed; held in words with more pages (C7)', () => {
+    const closed = row({ id: 'r-closed', open: false, receivedAt: '2026-11-20T08:00:00.000Z' }, { for: null, workingMinutes: null, overdue: false })
+    const customer = row({ id: 'r-customer', open: true }, { for: 'CUSTOMER', workingMinutes: 2000, overdue: false })
+    const us = row({ id: 'r-us', open: true }, { for: 'US', workingMinutes: 200, overdue: false })
+    const late = row({ id: 'r-late', open: true }, { for: 'US', workingMinutes: 900, overdue: true })
+    const rows = [closed, customer, us, late]
+    expect(rankedRows(rows, 'urgent', true).map((one) => one.id)).toEqual(['r-late', 'r-us', 'r-customer', 'r-closed'])
+    expect(rankedRows(rows, 'urgent', false).map((one) => one.id)).toEqual(rows.map((one) => one.id))
+    expect(rankedRows(rows, 'arrival', true).map((one) => one.id)).toEqual(rows.map((one) => one.id))
+    expect(urgencyFactsOf(late)).toMatchObject({ waitsOnUs: true, overdue: true, workingMinutes: 900 })
+    expect(rankHeld('urgent', { next: 'cursor' })).toEqual({ key: 'rank.held' })
+    expect(rankHeld('urgent', { next: null })).toBeNull()
+    expect(rankHeld('arrival', { next: 'cursor' })).toBeNull()
+    // The order is an address term of Sales › Incoming (kept), never a filter.
+    expect(addressOf(new URLSearchParams('rank=urgent')).rank).toBe('urgent')
+    expect(addressOf(new URLSearchParams('rank=sideways')).rank).toBeUndefined()
+    expect(isFiltered({ ...HOME_ADDRESS, rank: 'urgent' })).toBe(false)
+    for (const locale of LOCALES) for (const key of ['rank.label', 'rank.arrival', 'rank.urgent', 'rank.held', 'rank.rule']) expect(words(locale)[key], `${locale} ${key}`).toBeTruthy()
+  })
+
+  it('the chips per kind: waiting on us with its working time (amber past a day), for the customer, what it became, why it ended (C6, C29)', () => {
+    const request = ROWS[0]!
+    const of = (patch: Partial<typeof request>, waiting: Partial<IncomingRowT['waiting']> = {}) => incomingWhereOf({ ...incomingRowOf({ ...request, ...patch }), waiting: { ...incomingRowOf({ ...request, ...patch }).waiting, ...waiting } }, 'Seed Customer One').chips
+    const fresh = of({ status: 'NEW', source: 'MAIL' }, { for: 'US', workingMinutes: 120, overdue: false })
+    expect(fresh[0]).toMatchObject({ key: 'where.us', params: { state: 'status.NEW' }, nested: { age: { key: 'time.hours', params: { n: 2 } } }, look: 'pill' })
+    expect(of({ status: 'ASSIGNED', source: 'MAIL' }, { for: 'US', workingMinutes: 1200, overdue: true })[0]!.tone).toBe('warning')
+    expect(of({ status: 'NEED_INFO', source: 'MAIL' }, { for: 'CUSTOMER', workingMinutes: 480, overdue: false })[0]).toMatchObject({ key: 'where.customer', params: { state: 'status.NEED_INFO', customer: 'Seed Customer One' } })
+    expect(of({ status: 'NEW', source: 'MAIL' }, { for: 'US', workingMinutes: null, overdue: false })[0]!.key).toBe('where.usNoAge')
+    expect(of({ status: 'QUOTED', source: 'MAIL', quote: { id: 'q-1', number: 'SEED-QT-0012' } }, { for: null, workingMinutes: null })[0]).toMatchObject({ key: 'where.quoted', door: { kind: 'quote', id: 'q-1' } })
+    expect(of({ status: 'DECLINED', source: 'MAIL', declineReason: 'NOT_AN_ORDER' }, { for: null, workingMinutes: null })[0]!.key).toBe('decline.NOT_AN_ORDER')
+    expect(of({ status: 'DECLINED', source: 'MAIL', declineReason: 'CAPACITY' }, { for: null, workingMinutes: null })[0]).toMatchObject({ key: 'where.weDeclined', params: { reason: 'decline.CAPACITY' } })
+    expect(of({ status: 'WITHDRAWN', source: 'MAIL' }, { for: null, workingMinutes: null })[0]).toMatchObject({ key: 'where.withdrawnBy', params: { customer: 'Seed Customer One' } })
+    // From the portal and open: what the customer reads (the portal's own words), dashed; production's answer is the one fact.
+    const portal = incomingWhereOf({ ...incomingRowOf({ ...request, status: 'NEW', source: 'PORTAL' }) }, 'Seed Customer One', { key: 'production.cell.OK' }).chips
+    expect(portal.map((chip) => chip.key).slice(1)).toEqual(['where.production', 'where.customerSees'])
+    expect(portal.find((chip) => chip.key === 'where.production')).toMatchObject({ tone: 'success', look: 'tag' })
+    expect(portal.find((chip) => chip.key === 'where.customerSees')).toMatchObject({ look: 'dashed', own: { state: { en: 'Sent' } } })
+    // A portal order: waiting on us; moved to a quote (never "Confirmed": Q2-B8); confirmed as an order.
+    const sent = incomingWhereOf({ ...CATALOGUE_ROW, catalogueOrder: { ...CATALOGUE_ROW.catalogueOrder!, status: 'SENT' } }, 'Seed Customer One').chips
+    expect(sent[0]!.params).toMatchObject({ state: 'kind.CATALOGUE_ORDER' })
+    expect(sent.at(-1)).toMatchObject({ key: 'where.customerSees', look: 'dashed', own: { state: { en: 'Request sent' } } })
+    const moved = incomingWhereOf({ ...CATALOGUE_ROW, catalogueOrder: { ...CATALOGUE_ROW.catalogueOrder!, status: 'ACCEPTED', salesOrder: null, quote: { id: 'q-2', number: 'SEED-QT-0014' } } }, 'Seed Customer One').chips
+    expect(moved[0]).toMatchObject({ key: 'where.portalMoved', params: { number: 'SEED-QT-0014' } })
+    for (const one of [...INCOMING_ROWS, CATALOGUE_ROW, CHANGE_ROW]) {
+      const cell = incomingWhereOf(one, 'Seed Customer One')
+      expect(cell.chips.length).toBeLessThanOrEqual(3)
+      expect(JSON.stringify(cell)).not.toMatch(/targetUnitPrice|amount/)
+    }
+    for (const locale of LOCALES) {
+      const all = words(locale)
+      for (const key of ['us', 'usNoAge', 'customer', 'customerNoAge', 'quoted', 'ordered', 'weDeclined', 'withdrawnBy', 'production', 'customerSees', 'portalConfirmed', 'portalMoved', 'portalState', 'portalRefused', 'portalWithdrawn', 'kindState', 'foldWanted', 'styles_one', 'styles_other', 'pieces_one', 'pieces_other']) expect(all[`where.${key}`], `${locale} where.${key}`).toBeTruthy()
+      expect(all['col.where'], locale).toBeTruthy()
+    }
+    expect(words('it')['where.us']).toContain('tocca a noi') // C29
+  })
+
+  it('the selection words count only what an act runs on: no open request ticked → why in words, no act drawn ("Assign 0" never)', () => {
+    expect(bulkActs(bulkReach(INCOMING_ROWS, [CATALOGUE_ROW.key, CHANGE_ROW.key]))).toBe(false)
+    expect(bulkActs(bulkReach(INCOMING_ROWS, [incomingRowOf(ROWS[0]!).key]))).toBe(true)
+    expect(view).toContain('{!bulkActs(reach) ? say(reach.held) :')
+    expect(view).toContain('{bulkActs(reach) && (')
+  })
+
+  it('a customer\'s tab counts only its own live changes, never a draft\'s; the change request\'s door only for who answers it (P0-B7)', () => {
+    expect(incomingLiveCounts({ type: 'inquiry.changed', fields: { inquiryId: 'i-1', partyId: LOCK } }, LOCK, false)).toBe(true)
+    expect(incomingLiveCounts({ type: 'inquiry.changed', fields: { inquiryId: 'i-2', partyId: 'another' } }, LOCK, false)).toBe(false)
+    expect(incomingLiveCounts({ type: 'inquiry.received', fields: { inquiryId: 'i-3', partyId: null } }, LOCK, false)).toBe(false)
+    expect(incomingLiveCounts({ type: 'portal_order_request.draft_changed', fields: { requestId: 'd-1' } }, null, false)).toBe(false)
+    expect(incomingLiveCounts({ type: 'portal_order_request.sent', fields: { requestId: 'p-1', partyId: 'another' } }, null, false)).toBe(true)
+    expect(incomingLiveCounts({ type: 'thread.message_posted', fields: {} }, null, true)).toBe(true)
+    expect(incomingLiveCounts({ type: 'thread.message_posted', fields: {} }, null, false)).toBe(false)
+    expect(view).toContain("...(place === 'approvals' ? (m.can.orders ? [{ id: 'open'")
+  })
+})
+// ---- end F-CQ-103

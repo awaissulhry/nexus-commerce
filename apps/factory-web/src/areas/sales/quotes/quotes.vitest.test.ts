@@ -302,6 +302,7 @@ const salesBuilt = [
   ...QUOTE_TILES.map((tile) => `list.tile.${tile}`),
   ...QUOTE_TABS.map((tab) => `tab.${tab}`),
   ...QUOTE_ORDER_WAITS.map((reason) => `record.orderWaits.${reason}`), // B-TH-257
+  ...QUOTE_ORDER_WAITS.map((reason) => `list.where.orderWaits.${reason}`), // F-CQ-102: the chip's short words
   ...['signed_out', 'forbidden', 'not_found', 'unavailable', 'rate_limited', 'contract', 'internal'].map((kind) => `problem.read.${kind}`),
   ...['signed_out', 'forbidden', 'not_found', 'invalid', 'rate_limited', 'unavailable', 'internal', 'moved', 'state', 'stepUp'].map((kind) => `problem.write.${kind}`),
   ...['not_found', 'forbidden', 'error'].flatMap((state) => [`record.state.${state}.title`, `record.state.${state}.body`]),
@@ -607,3 +608,131 @@ describe('B-CP-012: the quote a Sales worker reads, without any money key, is a 
   })
 })
 // ---- end B-CP-012
+
+// ---- F-CQ-102 (customer page › Quotes & incoming, 10-design §3.3, §4.2–4.4; settles C4, C5, C32, C33, C34): the ONE Quotes list's
+// group and order terms (sent only when set: the read keeps its shape), a host's defaults (Clear all keeps them), the chips cell and
+// the date cell per state (no amount, no approver role, calendar days), "r1" never, Preview PDF only with prices and in the quote's
+// language, nothing held for a missing right on the row ⋯, and a customer's tab counting only its own live changes.
+import { daysSince, quoteDateOf, quoteWhereOf, serverSortOf, sortedQuotes, URGENT_TOO_MANY } from './model'
+import { quoteLiveCounts } from './list/use-quotes-list'
+import { stateFilters, stateValue } from './list/view/QuotesListView'
+import { ROWS as LIST_ROWS } from './list/fixtures'
+import type { QuoteListRow } from './api'
+
+describe('F-CQ-102: the Quotes list — group and order terms, the chips cell, the date cell', () => {
+  const LOCK = '0190f0e2-0000-7000-8000-00000000a1a1'
+  const locked = { locked: { party: LOCK } }
+  const tab = { locked: { party: LOCK }, defaultGroup: 'LIVE' as const, defaultSort: 'urgent' as const }
+  const TODAY = '2026-11-23'
+  const base = LIST_ROWS[0]!
+  const at = (patch: Partial<QuoteListRow>): QuoteListRow => ({ ...base, ...patch })
+  const echoCell = (row: QuoteListRow) => quoteWhereOf(row, TODAY, 'Seed Customer One').chips.map((chip) => echo(chip.key, chip.params as Record<string, string | number> | undefined))
+  const view = readFileSync(new URL('./list/view/QuotesListView.tsx', import.meta.url), 'utf8')
+  const hook = readFileSync(new URL('./list/use-quotes-list.ts', import.meta.url), 'utf8')
+
+  it('the group and the order go in the read only when set; Valid until sorts the loaded rows (no server term)', () => {
+    expect(quotesReadOf(locked, { ...NO_FILTERS, group: 'APPROVAL', sort: 'urgent' })).toEqual({ status: undefined, mine: false, q: '', partyId: LOCK, group: 'APPROVAL', sort: 'urgent' })
+    expect(quotesReadOf(locked, { ...NO_FILTERS, group: 'LIVE', sort: 'valid' })).toEqual({ status: undefined, mine: false, q: '', partyId: LOCK, group: 'LIVE' })
+    expect(quotesReadOf(locked, { ...NO_FILTERS, sort: 'newest', group: null })).toEqual({ status: undefined, mine: false, q: '', partyId: LOCK })
+    expect([serverSortOf('urgent'), serverSortOf('newest'), serverSortOf('valid'), serverSortOf(null)]).toEqual(['urgent', undefined, undefined, undefined])
+    const rows = [at({ id: 'b', validUntil: '2026-12-10' }), at({ id: 'a', validUntil: null }), at({ id: 'c', validUntil: '2026-11-25' })]
+    expect(sortedQuotes(rows, 'valid').map((row) => row.id)).toEqual(['c', 'b', 'a'])
+    expect(sortedQuotes(rows, 'urgent').map((row) => row.id)).toEqual(['b', 'a', 'c'])
+  })
+
+  it('a host opens on its door (LIVE = "Not closed") and Most urgent first; Clear all keeps them; "Every state" is null on purpose', () => {
+    expect(quotesFiltersFor(tab, NO_FILTERS)).toEqual({ ...NO_FILTERS, party: null, group: 'LIVE', sort: 'urgent' })
+    expect(quotesReadOf(tab, quotesFiltersFor(tab, NO_FILTERS))).toEqual({ status: undefined, mine: false, q: '', partyId: LOCK, group: 'LIVE', sort: 'urgent' })
+    expect(quotesFiltersFor(tab, { ...NO_FILTERS, group: null, sort: 'newest' })).toMatchObject({ group: null, sort: 'newest' })
+    expect(quotesFiltersFor({ ...tab, defaultGroup: 'APPROVAL' }, NO_FILTERS).group).toBe('APPROVAL')
+    // The file follows the screen's group and a server order (Valid until is the loaded rows' order: never in the file's terms).
+    expect(new URLSearchParams(quotesToolsQuery(tab, quotesFiltersFor(tab, NO_FILTERS))).get('group')).toBe('LIVE')
+    expect(new URLSearchParams(quotesToolsQuery(tab, quotesFiltersFor(tab, NO_FILTERS))).get('sort')).toBe('urgent')
+    expect(new URLSearchParams(quotesToolsQuery(tab, { ...NO_FILTERS, sort: 'valid' })).get('sort')).toBeNull()
+    // Sales › Quotes keeps the choice in its address.
+    expect(filtersOf(new URLSearchParams('group=LIVE&sort=urgent'))).toEqual({ ...NO_FILTERS, group: 'LIVE', sort: 'urgent' })
+    expect(filtersOf(new URLSearchParams('group=TO_ANSWER&sort=sideways'))).toEqual(NO_FILTERS)
+    expect(searchOf({ ...NO_FILTERS, group: 'LIVE', sort: 'urgent' })).toBe('?group=LIVE&sort=urgent')
+    // State ▾: "Not closed", a door's group, every state, one state.
+    expect(stateValue({ status: null, group: 'LIVE' })).toBe('group:LIVE')
+    expect(stateValue({ status: 'SENT', group: null })).toBe('SENT')
+    expect(stateFilters({ ...NO_FILTERS, status: 'SENT' }, 'group:LIVE')).toMatchObject({ status: null, group: 'LIVE' })
+    expect(stateFilters({ ...NO_FILTERS, group: 'LIVE' }, '')).toMatchObject({ status: null, group: null })
+    expect(stateFilters({ ...NO_FILTERS, group: 'LIVE' }, 'DRAFT')).toMatchObject({ status: 'DRAFT', group: null })
+    expect(stateFilters(NO_FILTERS, 'group:NOPE')).toMatchObject({ status: null, group: null })
+    // A new door starts the list again on its group (once, never on arrival); the 2,000 refusal has its own words.
+    expect(hook).toContain('if (lastGroup.current === hostGroup) return')
+    expect(URGENT_TOO_MANY).toBe('list.sort.tooMany')
+    expect(view).toContain("{os('sort.newest')}")
+  })
+
+  it('the chips per state: the state and who it waits on, the one fact, what the customer sees — never a role, never an amount', () => {
+    expect(echoCell(at({ status: 'DRAFT', approval: 'REJECTED' }))).toEqual(['list.where.draftUs', 'list.where.approvalRejected'])
+    expect(echoCell(at({ status: 'DRAFT', approval: null, customerHolds: { revision: 1 } }))).toEqual(['list.where.draftUs', 'list.where.holdsSent'])
+    expect(echoCell(at({ status: 'PENDING_APPROVAL', approval: 'PENDING' }))).toEqual(['list.where.approval'])
+    expect(echoCell(at({ status: 'APPROVED' }))).toEqual(['list.where.approvedReady'])
+    // C33: calendar days from the send, "waiting for <customer>"; ending within 7 days is the one fact.
+    expect(echoCell(at({ status: 'SENT', sentAt: '2026-11-18T09:00:00.000Z', validUntil: '2026-11-26' }))).toEqual(['list.where.sentAgo:{"count":5,"customer":"Seed Customer One"}', 'list.where.endsIn:{"count":3}'])
+    expect(echoCell(at({ status: 'SENT', sentAt: '2026-11-23T08:00:00.000Z', validUntil: '2026-11-23' }))).toEqual(['list.where.sentToday:{"customer":"Seed Customer One"}', 'list.where.endsToday'])
+    expect(echoCell(at({ status: 'SENT', sentAt: null, validUntil: '2027-01-30', reminderSentAt: '2026-11-20T08:00:00.000Z' }))).toEqual(['list.where.sent:{"customer":"Seed Customer One"}', 'list.where.remindedOn'])
+    expect(echoCell(at({ status: 'SENT', validUntil: '2026-11-20' }))[1]).toBe('record.validEnded')
+    // An accepted quote: its order (a door), or why the order waits.
+    const made = quoteWhereOf(at({ status: 'ACCEPTED', order: { state: 'MADE', id: 'o-1', number: 'SEED-SO-0150', status: 'CONFIRMED', reason: null, words: null } }), TODAY, 'Seed Customer One')
+    expect(made.chips[0]).toMatchObject({ key: 'list.where.acceptedOrder', params: { order: 'SEED-SO-0150' }, tone: 'success', order: { id: 'o-1', number: 'SEED-SO-0150' } })
+    for (const reason of QUOTE_ORDER_WAITS) expect(echoCell(at({ status: 'ACCEPTED', order: { state: 'WAITS', id: null, number: null, status: null, reason, words: null } }))).toEqual(['list.where.acceptedWaits', `list.where.orderWaits.${reason}`])
+    expect(echoCell(at({ status: 'DECLINED' }))).toEqual(['list.where.declined:{"customer":"Seed Customer One"}'])
+    expect(echoCell(at({ status: 'EXPIRED' }))).toEqual(['status.EXPIRED'])
+    // Made from a request: what the customer reads in its portal (the quote page's own rule), dashed.
+    const sourced = quoteWhereOf(at({ status: 'SENT', validUntil: '2027-01-30', madeFrom: { inquiryId: 'i-1', number: 'SEED-INQ-0007', status: 'QUOTED' } }), TODAY, 'Seed Customer One')
+    expect(sourced.chips.at(-1)).toMatchObject({ key: 'record.customerSees', look: 'dashed' })
+    // At most 3 chips; the quiet line counts styles and pieces; no chip names a role or holds an amount.
+    for (const row of LIST_ROWS) {
+      const cell = quoteWhereOf(row, TODAY, 'Seed Customer One')
+      expect(cell.chips.length).toBeLessThanOrEqual(3)
+      expect(JSON.stringify(cell)).not.toMatch(/Amount|netAmount|grossAmount|Finance|marginPct/)
+    }
+    expect(daysSince('2026-11-18T23:30:00.000Z', TODAY)).toBe(4) // Rome's own day
+  })
+
+  it('the date cell: a sent quote stands N more days (amber within 7), an expired one "Offer ended", a draft "—"', () => {
+    expect(quoteDateOf(at({ status: 'SENT', validUntil: '2026-11-26' }), TODAY)).toEqual({ day: '2026-11-26', note: { key: 'record.validLeft', params: { count: 3 } }, tone: 'warning' })
+    expect(quoteDateOf(at({ status: 'SENT', validUntil: '2027-01-30' }), TODAY).tone).toBe('neutral')
+    expect(quoteDateOf(at({ status: 'EXPIRED', validUntil: '2026-11-01' }), TODAY).note).toEqual({ key: 'record.validEnded' })
+    expect(quoteDateOf(at({ status: 'DECLINED', validUntil: '2026-11-01' }), TODAY)).toEqual({ day: '2026-11-01', note: null, tone: 'neutral' })
+    expect(quoteDateOf(at({ status: 'DRAFT', validUntil: '2026-12-01' }), TODAY).day).toBeNull()
+  })
+
+  it('"r1" never; Preview PDF only with prices and in the quote\'s language; Duplicate not drawn without the right', () => {
+    expect(view).toContain('{data.revision >= 2 && <span className="fw-ql-row-sub">{t(\'record.versionChip\', { revision: data.revision })}</span>}')
+    expect(view).toContain("...(latest.current.model.grains.price ? [{ id: 'pdf'")
+    expect(view).toContain("previewHref(data.id, data.language ?? 'it')")
+    expect(view).not.toContain("previewHref(data.id, 'it')")
+    expect(view).not.toContain("description: live.current.manage ? undefined : t('held.noManage')")
+    // The money note says the truth (Q1-B8): without prices the money columns, not "margin".
+    expect(view).toContain("{!model.grains.price ? <p className=\"fw-q-hint\">{os('export.noteNoPrice')}</p>")
+  })
+
+  it('a customer\'s tab counts only its own live changes: a quote on the screen or a new quote (a quote\'s message names no customer)', () => {
+    const screen = new Set(['q-1'])
+    expect(quoteLiveCounts({ type: 'quote.sent', fields: { quoteId: 'q-1' } }, LOCK, screen)).toBe(true)
+    expect(quoteLiveCounts({ type: 'quote.sent', fields: { quoteId: 'q-other' } }, LOCK, screen)).toBe(false)
+    expect(quoteLiveCounts({ type: 'quote.created', fields: { quoteId: 'q-new' } }, LOCK, screen)).toBe(true)
+    expect(quoteLiveCounts({ type: 'quote.sent', fields: { quoteId: 'q-1', partyId: 'another' } }, LOCK, screen)).toBe(false)
+    expect(quoteLiveCounts({ type: 'thread.message_posted', fields: {} }, LOCK, screen)).toBe(false)
+    // Sales › Quotes: every quote change, as before.
+    expect(quoteLiveCounts({ type: 'quote.sent', fields: { quoteId: 'q-other' } }, null, screen)).toBe(true)
+  })
+
+  it('the new words in both languages, every plural and placeholder said (Italian "tocca a noi", C29; no role, C32)', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['sales']).sales!)
+      for (const key of ['draftUs', 'approval', 'approvedReady', 'acceptedWaits', 'approvalRejected', 'holdsSent', 'endsToday', 'orderCancelled', 'foldValid']) expect(t(`list.where.${key}`, { date: '1' }), `${locale} ${key}`).not.toBe(`list.where.${key}`)
+      for (const key of ['sentAgo', 'endsIn', 'styles', 'pieces']) for (const count of [1, 3]) expect(t(`list.where.${key}`, { count, customer: 'Seed Racing' }), `${locale} ${key} ${count}`).not.toContain('{')
+      for (const key of ['list.col.where', 'list.sort.urgent', 'list.sort.valid', 'list.sort.ruleUrgent', 'list.sort.tooMany', 'list.sort.tooManyTitle', 'list.state.notClosed']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+      expect(t('list.where.approval'), locale).not.toMatch(/Finance|Amministrazione/)
+    }
+    expect(createTranslator('it', messagesFor('it', ['sales']).sales!)('list.where.draftUs')).toBe('Bozza · tocca a noi')
+    expect(createTranslator('en', messagesFor('en', ['sales']).sales!)('list.where.sentAgo', { count: 5, customer: 'Seed Racing' })).toBe('Sent 5 days ago · waiting for Seed Racing')
+  })
+})
+// ---- end F-CQ-102

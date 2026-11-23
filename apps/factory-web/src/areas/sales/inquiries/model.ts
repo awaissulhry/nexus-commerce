@@ -30,6 +30,10 @@ import { REQUEST_OUTCOMES, type RequestOutcome } from '@nexus/factory-domain/sal
 // B-TH-233: Incoming over every door (B-TH-039's one read: requests, catalogue orders, change requests).
 import { INCOMING_KINDS, INCOMING_TILES, stateWords, type IncomingKind, type IncomingTile } from '@nexus/factory-domain/sales/incoming/rules'
 import { isApiError, issuePath } from '../../../lib/api/errors'
+// ---- F-CQ-103 (customer page › Quotes & incoming): Most urgent first (the before-order rule, B-CQ-022), what the customer reads.
+import { byUrgency, incomingUrgencyKey, type IncomingUrgencyFacts } from '@nexus/factory-domain/sales/before-order/groups'
+import { REQUEST_STATE_WORDS, requestStateOf } from '@nexus/factory-domain/sales/portal-requests/state'
+import { REQUEST_STATUS_WORDS } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { recordAddress } from '../../../lib/records/record-links'
 import type { IncomingList, IncomingQuery, IncomingRow, InquiryFile, InquiryLine, InquiryRow, InquiryView, WaitingRow } from './api'
 // B-TH-234: answer a new customer, hand the customer a task.
@@ -195,6 +199,8 @@ export interface ListAddress {
   readonly kind: IncomingKind | null
   readonly catalogue: string | null
   // ---- end B-TH-233
+  /** F-CQ-103 (`?rank=`): the order — when it came (the server's: the queue oldest first) or Most urgent first; absent: the host's default. */
+  readonly rank?: IncomingRank | null
 }
 
 export const HOME_ADDRESS: ListAddress = { tile: DEFAULT_TILE, status: null, source: null, company: null, party: null, prospect: false, q: '', open: null, tab: 'request', isNew: false, mail: null, from: null, to: null, outcome: null, kind: null, catalogue: null }
@@ -229,6 +235,8 @@ export function addressOf(params: { get(name: string): string | null }): ListAdd
     // B-TH-233: one kind; a catalogue order open beside the list (never with a request open: the request wins).
     kind,
     catalogue: openAsCatalogue ? idOf(params.get('open')) : idOf(params.get('open')) ? null : idOf(params.get('catalogue')),
+    // F-CQ-103: the order, only when the address says it.
+    ...(oneOf(INCOMING_RANKS, params.get('rank')) ? { rank: oneOf(INCOMING_RANKS, params.get('rank')) } : {}),
   }
 }
 
@@ -252,6 +260,7 @@ export function addressText(address: ListAddress): string {
   if (address.open && address.tab !== 'request') params.set('tab', address.tab)
   if (address.isNew) params.set('new', '1')
   if (address.mail) params.set('mail', address.mail)
+  if (address.rank) params.set('rank', address.rank) // F-CQ-103
   const text = params.toString()
   return text ? `?${text}` : ''
 }
@@ -319,7 +328,9 @@ export const DESIGN_TILES = ['NEW', 'WAITING_US', 'WAITING_CUSTOMER', 'QUOTED_TH
  * Not an order · Lost · All, then "Customer replies" (B-TH-233: the one office inbox of conversations waiting on us, B-TH-047).
  * Catalogue orders and change requests are the Kind filter (`?kind=`), with every saved row.
  */
-export const SAVED_ROWS = ['OPEN', 'MINE', 'NEW', 'WAITING_US', 'WAITING_CUSTOMER', 'QUOTED_THIS_WEEK', 'QUOTED', 'ORDERED', 'DECLINED', 'NOT_AN_ORDER', 'LOST', 'ALL', CUSTOMER_REPLIES] as const satisfies readonly ListTile[]
+// F-CQ-103 (B-CQ-020, C8): + To answer (what waits on us: the shell's "N waiting on us" finally has a door) and Ended (declined, lost,
+// withdrawn, not accepted: the band's Lost door), each with its count — on Sales › Incoming and the customer's tab alike.
+export const SAVED_ROWS = ['OPEN', 'TO_ANSWER', 'MINE', 'NEW', 'WAITING_US', 'WAITING_CUSTOMER', 'QUOTED_THIS_WEEK', 'QUOTED', 'ORDERED', 'DECLINED', 'NOT_AN_ORDER', 'LOST', 'ENDED', 'ALL', CUSTOMER_REPLIES] as const satisfies readonly ListTile[]
 
 /** What a tile's number is read from: Incoming's counts (B-TH-233: `counts.CUSTOMER_REPLIES` too). */
 type Counted = Pick<IncomingList, 'counts' | 'complete'>
@@ -1142,16 +1153,15 @@ export type RowPlace = 'request' | 'catalogue' | 'approvals'
 export const placeOf = (row: Pick<IncomingRow, 'kind' | 'opens'>): RowPlace => (row.opens.place === 'APPROVALS' ? 'approvals' : row.kind === 'CATALOGUE_ORDER' ? 'catalogue' : 'request')
 
 /**
- * Home › Approvals for a change request (agreement T3). Approvals' review window (`?open=`) reads the approval engine's tasks only
- * (areas/home/approvals/Approvals.tsx), so a change request's id would open "not found" there: the door opens Approvals on its kind
- * — the change requests waiting, each opening its order — until Approvals opens one by its id (then `&open=<opens.id>`, one line).
+ * Home › Approvals for a change request (agreement T3). F-CQ-103 (Q2-B1): Approvals opens one change request by its id now
+ * (areas/home/approvals inbox `open=`), so the door opens THAT request (`&open=<opens.id>`), never the whole kind's list.
  */
-export const approvalsHref = (prefix: string): string => `${prefix}/home/approvals?kind=ORDER_CHANGE_REQUEST`
+export const approvalsHref = (prefix: string, id: string): string => `${prefix}/home/approvals?kind=ORDER_CHANGE_REQUEST&open=${encodeURIComponent(id)}`
 
 /** The address a row opens at — a real link (⌘-click: a new tab): the pane beside the list, or Home › Approvals. */
 export function rowHref(prefix: string, address: ListAddress, row: Pick<IncomingRow, 'kind' | 'id' | 'opens'>): string {
   const place = placeOf(row)
-  if (place === 'approvals') return approvalsHref(prefix)
+  if (place === 'approvals') return approvalsHref(prefix, row.opens.id)
   return listHref(prefix, { ...address, isNew: false, mail: null, open: place === 'request' ? row.id : null, catalogue: place === 'catalogue' ? row.id : null, tab: 'request' })
 }
 
@@ -1317,3 +1327,124 @@ export function taskHeld(view: Pick<InquiryView, 'party' | 'status'>, draft: Tas
 export const TASK_REFUSALS = ['REQUEST_PROSPECT', 'REQUEST_CLOSED'] as const
 export const taskRefusal = (code: string | null): Phrase | null => (code && (TASK_REFUSALS as readonly string[]).includes(code) ? { key: `task.refusal.${code}` } : null)
 // ---- end B-TH-234
+
+// ---- F-CQ-103 (customer page › Quotes & incoming, 10-design §3.2, §4.3; settles C6, C7, C29, C33): the ONE Incoming list's order
+// (Most urgent first ranks ONE page with the before-order rule; with more pages it is held in words) and its chips cell "Where it is"
+// (the state and who it waits on with the working-time age, production's answer, what the customer reads in its portal). Shared by
+// Sales › Incoming and the customer's tab. Pure: the view says the words. No amount, no person.
+
+export const INCOMING_RANKS = ['arrival', 'urgent'] as const
+export type IncomingRank = (typeof INCOMING_RANKS)[number]
+
+/** The facts a row's place in "Most urgent first" is read from (its own open, waiting, wanted and arrival). */
+export const urgencyFactsOf = (row: Pick<IncomingRow, 'id' | 'open' | 'waiting' | 'wantedDate' | 'receivedAt'>): IncomingUrgencyFacts => ({
+  id: row.id,
+  open: row.open,
+  waitsOnUs: row.waiting.for === 'US',
+  overdue: row.waiting.overdue,
+  workingMinutes: row.waiting.workingMinutes,
+  wantedDate: row.wantedDate,
+  receivedAt: row.receivedAt,
+})
+
+/** Most urgent first ranks the rows only when they are the whole list (one page, C7); else they stay in the server's order. */
+export function rankedRows<Row extends Pick<IncomingRow, 'id' | 'open' | 'waiting' | 'wantedDate' | 'receivedAt'>>(rows: readonly Row[], rank: IncomingRank, onePage: boolean): Row[] {
+  if (rank !== 'urgent' || !onePage) return [...rows]
+  return [...rows].sort(byUrgency((row: Row) => incomingUrgencyKey(urgencyFactsOf(row))))
+}
+
+/** Most urgent first asked over more than one page: held in words (it would rank only what is loaded). */
+export const rankHeld = (rank: IncomingRank, list: Pick<IncomingList, 'next'> | null): Phrase | null => (rank === 'urgent' && list?.next ? { key: 'rank.held' } : null)
+
+/** One chip of the chips cell. Params that are keys (`status.…`, `kind.…`, `decline.…`) are said by `say`; `nested` phrases first. */
+export interface WhereChipPhrase extends Phrase {
+  readonly tone: Tone
+  /** pill: the state and who it waits on · tag: the one fact (production's answer) · dashed: what the customer reads in its portal. */
+  readonly look: 'pill' | 'tag' | 'dashed'
+  /** Params that are phrases of their own (the working-time age, production's answer). */
+  readonly nested?: Readonly<Record<string, Phrase>>
+  /** Params in the customer's own words, by language (the portal's state). */
+  readonly own?: Readonly<Record<string, { readonly it: string; readonly en: string }>>
+  /** The chip opens the record it became (with that record's view right). */
+  readonly door?: { readonly kind: 'quote' | 'order'; readonly id: string; readonly number: string }
+}
+
+export interface IncomingWhere {
+  readonly chips: readonly WhereChipPhrase[]
+  readonly styles: number
+  readonly pieces: number | null
+}
+
+/**
+ * The chips cell of an Incoming row (10-design §4.3). `customer`: the customer's one name on this host (the tab's own; on Sales ›
+ * Incoming the row's). `production`: production's answer as the Production column says it (production-answer productionCell).
+ * Chip 1: a request or a portal order waiting on us "· tocca a noi · 2 working d" (amber past one working day, C29, C33), one waiting
+ * for the customer "· waiting for <customer> · 3 working d", what it became (a door), why it ended (C6: we declined and why, not an
+ * order, withdrawn by <customer>, not accepted). Chip 2: production's answer. Chip 3: what the customer reads in its portal.
+ */
+export function incomingWhereOf(row: IncomingRow, customer: string, production: Phrase | null = null): IncomingWhere {
+  const chips: WhereChipPhrase[] = []
+  const age = row.waiting.workingMinutes !== null ? workingTime(row.waiting.workingMinutes) : null
+  const aged = (key: string, tone: Tone, params: Readonly<Record<string, string | number>>): WhereChipPhrase => (age ? { key, params, nested: { age }, tone, look: 'pill' } : { key: `${key}NoAge`, params, tone, look: 'pill' })
+  const amber = waitingOf(row)?.tone === 'warning' ? 'warning' : 'neutral'
+  const request = row.kind === 'REQUEST' ? row.request : null
+  const portal = row.kind === 'CATALOGUE_ORDER' ? row.catalogueOrder : null
+  if (request) {
+    switch (request.status) {
+      case 'NEW':
+      case 'ASSIGNED':
+        chips.push(aged('where.us', amber, { state: `status.${request.status}` }))
+        break
+      case 'NEED_INFO':
+        chips.push(aged('where.customer', 'neutral', { state: 'status.NEED_INFO', customer }))
+        break
+      case 'QUOTED':
+        chips.push(request.quote ? { key: 'where.quoted', params: { number: request.quote.number }, tone: 'info', look: 'pill', door: { kind: 'quote', id: request.quote.id, number: request.quote.number } } : { key: 'status.QUOTED', tone: 'info', look: 'pill' })
+        break
+      case 'ORDERED':
+        chips.push(request.order ? { key: 'where.ordered', params: { number: request.order.number }, tone: 'success', look: 'pill', door: { kind: 'order', id: request.order.id, number: request.order.number } } : { key: 'status.ORDERED', tone: 'success', look: 'pill' })
+        break
+      case 'DECLINED':
+        chips.push(request.declineReason === 'NOT_AN_ORDER' ? { key: 'decline.NOT_AN_ORDER', tone: 'neutral', look: 'pill' } : request.declineReason ? { key: 'where.weDeclined', params: { reason: `decline.${request.declineReason}` }, tone: 'neutral', look: 'pill' } : { key: 'status.DECLINED', tone: 'neutral', look: 'pill' })
+        break
+      case 'LOST':
+        chips.push({ key: 'status.LOST', tone: 'neutral', look: 'pill' })
+        break
+      case 'WITHDRAWN':
+        chips.push({ key: 'where.withdrawnBy', params: { customer }, tone: 'neutral', look: 'pill' })
+        break
+    }
+    if (production) chips.push({ key: 'where.production', nested: { answer: production }, tone: production.key === 'production.cell.OK' ? 'success' : 'warning', look: 'tag' })
+    // What the customer reads while the request is open (a request from its portal; the portal's own words).
+    if (request.source === 'PORTAL' && isOpen(request.status)) chips.push({ key: 'where.customerSees', own: { state: REQUEST_STATE_WORDS[requestStateOf({ status: request.status, quoteStatus: null, orderStatus: null, declineReason: request.declineReason })] }, tone: 'neutral', look: 'dashed' })
+  } else if (portal) {
+    switch (portal.status) {
+      case 'SENT':
+        chips.push(aged('where.us', amber, { state: 'kind.CATALOGUE_ORDER' }))
+        chips.push({ key: 'where.customerSees', own: { state: REQUEST_STATUS_WORDS.SENT }, tone: 'neutral', look: 'dashed' })
+        break
+      case 'ACCEPTED':
+        if (portal.salesOrder) chips.push({ key: 'where.portalConfirmed', params: { number: portal.salesOrder.number }, tone: 'success', look: 'pill', door: { kind: 'order', id: portal.salesOrder.id, number: portal.salesOrder.number } })
+        else if (portal.quote) chips.push({ key: 'where.portalMoved', params: { number: portal.quote.number }, tone: 'info', look: 'pill', door: { kind: 'quote', id: portal.quote.id, number: portal.quote.number } })
+        else chips.push({ key: 'where.portalState', own: { state: row.stateWords }, tone: 'success', look: 'pill' })
+        break
+      case 'REFUSED':
+        chips.push({ key: 'where.portalRefused', tone: 'neutral', look: 'pill' })
+        break
+      case 'WITHDRAWN':
+        chips.push({ key: 'where.portalWithdrawn', params: { customer }, tone: 'neutral', look: 'pill' })
+        break
+    }
+  } else {
+    // A change request (Sales › Incoming only: it changes a confirmed order): its kind and its own state's words.
+    chips.push({ key: 'where.kindState', params: { kind: `kind.${row.kind}` }, own: { state: row.stateWords }, tone: stateTone(row), look: 'pill' })
+  }
+  return { chips: chips.slice(0, 3), styles: request?.styleCount ?? portal?.styles.length ?? 0, pieces: row.pieces }
+}
+
+/**
+ * P0-B6: what the selection words count — only what an act runs on (the open requests); a selection with none says why in words
+ * and draws no act ("Assign 0" never).
+ */
+export const bulkActs = (reach: ReturnType<typeof bulkReach>): boolean => reach.open.length > 0
+// ---- end F-CQ-103

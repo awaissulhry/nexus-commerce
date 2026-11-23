@@ -16,6 +16,9 @@ import { ListToolsContext, useListToolsTransport, type ListToolsTransport } from
  *   goTo      a saved view's terms written back into that list's memory
  *   linked    none: the page's `?savedView=` / `?export=` are not this list's
  *   viewLink  Copy link opens the view on the list's own page
+ *   layoutKey F-CQ-104 (customer page › Quotes & incoming, P0-B5): a host's OWN working layout (`sales.quotes:customer-quotes`) — the
+ *             columns a person arranges on the customer's tab never change Sales › Quotes' layout, nor the other way round; views,
+ *             exports and custom fields stay the list's own (only the layout this browser keeps is the host's)
  *
  * Without the page's list tools (a design case, a test) there are none here either.
  */
@@ -27,7 +30,10 @@ export interface ListScope {
 }
 
 /** The page's transport, scoped to one list (pure: a test holds it without a DOM). */
-export function scopedTransport(parent: ListToolsTransport, scope: { readonly listKey: string; readonly page: string; readonly query: string; readonly goTo: (query: string) => void }): ListToolsTransport {
+export function scopedTransport(parent: ListToolsTransport, scope: { readonly listKey: string; readonly page: string; readonly query: string; readonly goTo: (query: string) => void; readonly layoutKey?: string | null }): ListToolsTransport {
+  // F-CQ-104: the host's own working layout key, for the list's own key only (any other key — a second frame — passes through).
+  const layoutKey = scope.layoutKey ?? null
+  const keyOf = (key: string): string => (layoutKey && key === scope.listKey ? layoutKey : key)
   return {
     ...parent,
     pageKey: scope.listKey,
@@ -36,13 +42,14 @@ export function scopedTransport(parent: ListToolsTransport, scope: { readonly li
     goTo: scope.goTo,
     clearLinked: () => undefined,
     viewLink: (viewId) => `${window.location.origin}${scope.page}?savedView=${encodeURIComponent(viewId)}`,
+    ...(layoutKey ? { readLayout: (key: string) => parent.readLayout(keyOf(key)), writeLayout: (key: string, layout: Parameters<ListToolsTransport['writeLayout']>[1]) => parent.writeLayout(keyOf(key), layout) } : {}),
   }
 }
 
-export function ScopedListTools({ listKey, page, scope, children }: { listKey: string; page: string; scope: ListScope; children?: ReactNode }) {
+export function ScopedListTools({ listKey, page, scope, layoutKey, children }: { listKey: string; page: string; scope: ListScope; /* F-CQ-104 */ layoutKey?: string | null; children?: ReactNode }) {
   const parent = useListToolsTransport()
   const goTo = useRef(scope.onGoTo)
   goTo.current = scope.onGoTo
-  const transport = useMemo(() => (parent ? scopedTransport(parent, { listKey, page, query: scope.query, goTo: (query) => goTo.current(query) }) : null), [parent, listKey, page, scope.query])
+  const transport = useMemo(() => (parent ? scopedTransport(parent, { listKey, page, query: scope.query, goTo: (query) => goTo.current(query), layoutKey: layoutKey ?? null }) : null), [parent, listKey, page, scope.query, layoutKey])
   return <ListToolsContext.Provider value={transport}>{children}</ListToolsContext.Provider>
 }

@@ -10,6 +10,7 @@ import type {
   QuoteIssue,
   QuoteLine,
   QuoteListRow,
+  QuoteOrder, // F-CQ-102
   QuoteStatus,
   QuoteVersionRow,
   SendCheck,
@@ -21,6 +22,8 @@ import type {
 import { colourRowsOf, gridLinesOf } from './record/lines/key'
 // B-TH-257: "Customer sees: …" — the portal's own mapping of a request's state.
 import { REQUEST_STATE_WORDS, requestStateOf, type PortalRequestState } from '@nexus/factory-domain/sales/portal-requests/state'
+// F-CQ-102: the quotes list's group term and the "ends soon" days — the before-order rule's own (B-CQ-001).
+import { ENDS_SOON_DAYS, QUOTE_GROUP_TERMS, type QuoteGroupTerm } from '@nexus/factory-domain/sales/before-order/groups'
 
 /**
  * The quotes screens' pure rules (SCR-034 list, SCR-035 record; B-W1-21, B-W1-24): what a person may see of the money
@@ -162,6 +165,15 @@ export interface ListFilters {
   q: string
   /** F-SA-224: one customer's quotes (`?party=`, the Sales lists' one customer filter); none: every customer. */
   party?: string | null
+  // ---- F-CQ-102 (customer page › Quotes & incoming, 10-design §3.3): the group and the order, each kept only when said.
+  /**
+   * A before-order group of quotes (`?group=`): the band's door, OPEN_QUOTES, or LIVE ("Not closed"). null: every state, said on
+   * purpose (a host's default no longer applies); absent: the host's default (Sales › Quotes: every state).
+   */
+  group?: QuoteGroupTerm | null
+  /** The order (`?sort=`): Most urgent first, Newest first (the server's default), Valid until soonest (the loaded rows). */
+  sort?: QuoteListSort | null
+  // ---- end F-CQ-102
 }
 
 export const NO_FILTERS: ListFilters = { status: null, mine: false, expiring: false, q: '', party: null }
@@ -217,6 +229,143 @@ export function tileCount(tile: QuoteTile, rows: readonly QuoteListRow[] | null,
   const value = tile === 'accepted' && kept.every((row) => row.netAmount !== undefined) ? kept.reduce((sum, row) => sum + (row.netAmount ?? 0), 0) : null
   return { count: kept.length, more, ...(tile === 'accepted' ? { value } : {}) }
 }
+
+// ---- F-CQ-102 (customer page › Quotes & incoming, 10-design §3.3, §4.2–4.4; settles C4, C5, C6, C32, C33, C34): the Quotes list's
+// terms and its row in words — the group (`group`: the band's doors, "Not closed" = LIVE), the order (`sort`: Most urgent first on the
+// server, Newest first, Valid until soonest on the loaded rows), the ONE chips cell "Where it is" (≤ 3 chips: the state and who it
+// waits on, the one fact that matters now, what the customer sees in its portal; then a quiet line) and the date cell. Shared by
+// Sales › Quotes and the customer's tab (one list, two hosts). Pure: the view says the words. No amount in any chip (money wall);
+// no person and no approver role (C4, C32); a quote's age in calendar days (C33).
+
+export const QUOTE_LIST_SORTS = ['urgent', 'newest', 'valid'] as const
+export type QuoteListSort = (typeof QUOTE_LIST_SORTS)[number]
+export type { QuoteGroupTerm }
+
+export const isQuoteGroupTerm = (value: string | null | undefined): value is QuoteGroupTerm => value !== null && value !== undefined && (QUOTE_GROUP_TERMS as readonly string[]).includes(value)
+export const isQuoteListSort = (value: string | null | undefined): value is QuoteListSort => value !== null && value !== undefined && (QUOTE_LIST_SORTS as readonly string[]).includes(value)
+
+/** The urgent read refused above 2,000 quotes (B-CQ-011, `querystring/sort`): its own words; the view offers Newest first. */
+export const URGENT_TOO_MANY = 'list.sort.tooMany'
+
+/** The server's order term of a sort: only Most urgent first is one (newest is its default; Valid until sorts the loaded rows). */
+export const serverSortOf = (sort: QuoteListSort | null | undefined): 'urgent' | undefined => (sort === 'urgent' ? 'urgent' : undefined)
+
+/** The rows in the order the list draws them: "Valid until, soonest first" sorts the loaded rows (none last); else the server's order. */
+export function sortedQuotes<T extends Pick<QuoteListRow, 'id' | 'validUntil'>>(rows: readonly T[], sort: QuoteListSort | null | undefined): T[] {
+  if (sort !== 'valid') return [...rows]
+  return [...rows].sort((a, b) => {
+    if (a.validUntil === b.validUntil) return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+    if (a.validUntil === null) return 1
+    if (b.validUntil === null) return -1
+    return a.validUntil < b.validUntil ? -1 : 1
+  })
+}
+
+/** Whole calendar days in Rome from an instant to `today` (0: today; never negative). */
+export const daysSince = (instant: string, today: string): number => Math.max(0, daysUntil(today, romeToday(new Date(instant))))
+
+/** Words of the list's catalogue (`sales`), with their parameters. */
+export interface ListWords {
+  readonly key: string
+  readonly params?: Readonly<Record<string, string | number>>
+}
+
+/** One chip of the chips cell. */
+export interface WhereChip extends ListWords {
+  readonly tone: Tone
+  /** pill: the state and who it waits on · tag: the one fact that matters now · dashed: what the customer sees in its portal. */
+  readonly look: 'pill' | 'tag' | 'dashed'
+  /** The chip opens the quote's order (with orders.view). */
+  readonly order?: { readonly id: string; readonly number: string }
+  /** "Customer sees: …": the portal's own state (the view says its words in the reader's language). */
+  readonly portal?: PortalRequestState
+  /** A day the view formats into `{date}` ("Reminded on 20 Nov"). */
+  readonly at?: string
+}
+
+/** The chips cell of a row: at most 3 chips, then the quiet line's counts (styles, pieces; never an amount). */
+export interface WhereCell {
+  readonly chips: readonly WhereChip[]
+  readonly styles: number
+  readonly pieces: number
+}
+
+/** The short words of why an accepted quote's order waits (the chip; the quote page keeps its long sentence). */
+const ORDER_WAITS_CHIP = (reason: QuoteOrder['reason']): ListWords | null => (reason ? { key: `list.where.orderWaits.${reason}` } : null)
+
+/**
+ * The chips cell of a quote row (10-design §4.3, C32, C33). `customer`: the one name of the customer on this host (the tab's own
+ * name; on Sales › Quotes the row's). Chip 1 the state and who it waits on; chip 2 the one fact (approval rejected, the sent revision
+ * the customer still holds, ends in N days, reminded on, why the order waits, the order cancelled); chip 3 what the customer sees in
+ * its portal (a quote made from a request: the quote page's own "Customer sees").
+ */
+export function quoteWhereOf(row: QuoteListRow, today: string, customer: string): WhereCell {
+  const chips: WhereChip[] = []
+  const fact = (chip: Omit<WhereChip, 'look'>) => chips.push({ ...chip, look: 'tag' })
+  switch (row.status) {
+    case 'DRAFT':
+      chips.push({ key: 'list.where.draftUs', tone: 'neutral', look: 'pill' })
+      if (row.approval === 'REJECTED') fact({ key: 'list.where.approvalRejected', tone: 'danger' })
+      else if (row.customerHolds) fact({ key: 'list.where.holdsSent', tone: 'info' })
+      break
+    case 'PENDING_APPROVAL':
+      chips.push({ key: 'list.where.approval', tone: 'warning', look: 'pill' })
+      break
+    case 'APPROVED':
+      chips.push({ key: 'list.where.approvedReady', tone: 'info', look: 'pill' })
+      break
+    case 'SENT': {
+      const sent = row.sentAt ? daysSince(row.sentAt, today) : null
+      chips.push(sent === null ? { key: 'list.where.sent', params: { customer }, tone: 'info', look: 'pill' } : sent === 0 ? { key: 'list.where.sentToday', params: { customer }, tone: 'info', look: 'pill' } : { key: 'list.where.sentAgo', params: { count: sent, customer }, tone: 'info', look: 'pill' })
+      const left = row.validUntil ? daysUntil(row.validUntil, today) : null
+      if (left !== null && left < 0) fact({ key: 'record.validEnded', tone: 'warning' })
+      else if (left === 0) fact({ key: 'list.where.endsToday', tone: 'warning' })
+      else if (left !== null && left <= ENDS_SOON_DAYS) fact({ key: 'list.where.endsIn', params: { count: left }, tone: 'warning' })
+      else if (row.reminderSentAt) fact({ key: 'list.where.remindedOn', tone: 'neutral', at: row.reminderSentAt })
+      break
+    }
+    case 'ACCEPTED': {
+      const order = row.order ?? null
+      if (order?.state === 'MADE' && order.number) {
+        chips.push({ key: 'list.where.acceptedOrder', params: { order: order.number }, tone: 'success', look: 'pill', ...(order.id ? { order: { id: order.id, number: order.number } } : {}) })
+        if (order.status === 'CANCELLED') fact({ key: 'list.where.orderCancelled', tone: 'neutral' })
+      } else if (order?.state === 'WAITS') {
+        chips.push({ key: 'list.where.acceptedWaits', tone: 'warning', look: 'pill' })
+        const why = ORDER_WAITS_CHIP(order.reason)
+        if (why) fact({ ...why, tone: order.reason === 'NOT_MADE' ? 'neutral' : 'warning' })
+      } else chips.push({ key: 'status.ACCEPTED', tone: 'success', look: 'pill' })
+      break
+    }
+    case 'DECLINED':
+      chips.push({ key: 'list.where.declined', params: { customer }, tone: 'neutral', look: 'pill' })
+      break
+    case 'EXPIRED':
+    case 'CANCELLED':
+      chips.push({ key: `status.${row.status}`, tone: 'neutral', look: 'pill' })
+      break
+  }
+  const sees = customerSeesOf(row)
+  if (sees) chips.push({ key: 'record.customerSees', tone: 'neutral', look: 'dashed', portal: sees })
+  return { chips: chips.slice(0, 3), styles: row.styleCount ?? (row.picture ? 1 : 0), pieces: row.units }
+}
+
+/** The date cell of a quote (10-design §4.4): the day and its quiet words, or none ("—": not sent yet). */
+export interface DateCell {
+  readonly day: string | null
+  readonly note: ListWords | null
+  readonly tone: Tone
+}
+
+/** Valid until: a sent quote's day with how long it stands (amber within 7 days), an expired one's with "Offer ended", a declined one's day. */
+export function quoteDateOf(row: Pick<QuoteListRow, 'status' | 'validUntil'>, today: string): DateCell {
+  if (!row.validUntil || !['SENT', 'EXPIRED', 'DECLINED'].includes(row.status)) return { day: null, note: null, tone: 'neutral' }
+  if (row.status === 'DECLINED') return { day: row.validUntil, note: null, tone: 'neutral' }
+  const left = daysUntil(row.validUntil, today)
+  if (row.status === 'EXPIRED' || left < 0) return { day: row.validUntil, note: { key: 'record.validEnded' }, tone: 'neutral' }
+  if (left === 0) return { day: row.validUntil, note: { key: 'list.where.endsToday' }, tone: 'warning' }
+  return { day: row.validUntil, note: { key: 'record.validLeft', params: { count: left } }, tone: left <= ENDS_SOON_DAYS ? 'warning' : 'neutral' }
+}
+// ---- end F-CQ-102
 
 // ---- the record (SCR-035) ----------------------------------------------------------------------------------------------
 
