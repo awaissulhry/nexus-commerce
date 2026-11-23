@@ -3,6 +3,8 @@ import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 // TH-6 part B (B-TH-257 follow-up): the request's own state on "Made from" (the factory-domain list the API checks against).
 import { INQUIRY_STATUSES } from '@nexus/factory-domain/sales/inquiries/rules'
 import { quoteLineBody, type Grains } from './model' // F-CP-146: no price key without the price grain
+// F-CQ-102: the quotes list's group term (the band's doors, "Not closed" = LIVE) — the domain's one list (B-CQ-010).
+import type { QuoteGroupTerm } from '@nexus/factory-domain/sales/before-order/groups'
 
 /**
  * The quotes screens' calls to the factory API (apps/factory-api modules/sales/quotes; B-W1-21, B-W1-24), through the
@@ -208,6 +210,23 @@ export const listRowSchema = z.object({
   // placeholder; `small`: its ~320 px preview exists — the one picture part's batch read reads it), and how many styles ("+2").
   picture: z.object({ styleId: z.string(), styleCode: z.string(), styleName: z.string(), fileId: z.string().nullable(), contentType: z.string().nullable(), small: z.boolean() }).nullable().optional(),
   styleCount: z.number().optional(),
+  // ---- F-CQ-102 (B-CQ-012, B-CQ-031; customer page › Quotes & incoming): the row's facts the chips cell and the row's acts read.
+  // Optional: an API answer before S1 has none (that chip or that act is then not drawn). Instants, numbers, a language: no amount.
+  /** The current version (Make the orders for N: POST /sales/orders {quoteVersionId}). */
+  versionId: z.string().nullable().optional(),
+  /** When the current version was sent ("Sent 5 days ago · waiting for <customer>", calendar days). */
+  sentAt: instant.nullable().optional(),
+  /** When the customer was last reminded of it ("Reminded on 20 Nov"). */
+  reminderSentAt: instant.nullable().optional(),
+  /** The customer's own count of its quotes ("Your quote 3" in the Reply window). */
+  customerSeq: z.number().int().nullable().optional(),
+  /** The quote's own language (row ⋯ Preview PDF opens in it, never always Italian — Q1-B7). */
+  language: z.enum(['it', 'en']).optional(),
+  /** A draft revised from a sent version the customer still holds (Q3-B14): that version's revision. */
+  customerHolds: z.object({ revision: z.number().int() }).nullable().optional(),
+  /** The portal order it was made from ("from SEED-POR-0028"; only with orders.view there). */
+  fromPortalOrder: z.object({ id: z.string(), number: z.string() }).nullable().optional(),
+  // ---- end F-CQ-102
 })
 export type QuoteListRow = z.infer<typeof listRowSchema>
 
@@ -409,11 +428,17 @@ export interface ListFilter {
   q?: string
   /** One customer's quotes (New quote › Start from a past quote). */
   partyId?: string
+  // ---- F-CQ-102 (B-CQ-010, B-CQ-011): sent only when set (the read keeps its shape otherwise).
+  /** A before-order group of quotes (the band's door), OPEN_QUOTES or LIVE ("Not closed"). */
+  group?: QuoteGroupTerm
+  /** 'urgent': Most urgent first (the server's order, at most 2,000 quotes); absent: newest first. */
+  sort?: 'urgent'
+  // ---- end F-CQ-102
 }
 
 export async function listQuotes(api: ApiClient, filter: ListFilter, cursor?: string | null, signal?: AbortSignal): Promise<{ quotes: QuoteListRow[]; nextCursor: string | null }> {
   return api.get('/sales/quotes', {
-    query: { status: filter.status, mine: filter.mine ? 'true' : undefined, q: filter.q?.trim() || undefined, partyId: filter.partyId, cursor: cursor ?? undefined, limit: 50 },
+    query: { status: filter.status, mine: filter.mine ? 'true' : undefined, q: filter.q?.trim() || undefined, partyId: filter.partyId, group: filter.group /* F-CQ-102 */, sort: filter.sort /* F-CQ-102 */, cursor: cursor ?? undefined, limit: 50 },
     schema: z.object({ quotes: z.array(listRowSchema), nextCursor: z.string().nullable() }),
     signal,
   })

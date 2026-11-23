@@ -1,0 +1,79 @@
+{
+  "band": {
+    "title": "Prima dell’ordine",
+    "pipeline": "Prima dell’ordine, in ordine di vita",
+    "closed": "Chiusi:",
+    "samples_one": "{count} campionatura in corso ›",
+    "samples_other": "{count} campionature in corso ›",
+    "newRequest": "Nuova richiesta per {customer}…",
+    "newRequestShort": "Nuova richiesta…",
+    "newQuote": "Nuovo preventivo per {customer}…",
+    "newQuoteShort": "Nuovo preventivo…",
+    "segTitle": "Mostra i {count} in «{group}» · aspetta {who}",
+    "segTitleClosed": "Mostra i {count} in «{group}»",
+    "waitsOn": "aspetta {who}",
+    "who": {
+      "us": "noi",
+      "customer": "il cliente",
+      "approver": "un approvatore"
+    },
+    "info": "Tutto ciò che questo cliente ha prima dell’ordine, ogni record in un solo gruppo: quello che il cliente sta ancora scrivendo, quello che tocca a noi, i preventivi in corso, quello che aspetta il cliente — poi quello che si è chiuso. Ogni numero apre esattamente le sue righe qui sotto.",
+    "failed": "Non è stato possibile leggere i conteggi adesso: le liste qui sotto mostrano comunque ogni record.",
+    "retry": "Riprova"
+  },
+  "group": {
+    "WRITING": "Il cliente sta scrivendo",
+    "TO_ANSWER": "Da rispondere",
+    "PREPARING": "Preventivo in preparazione",
+    "APPROVAL": "In attesa di approvazione",
+    "WAITING_CUSTOMER": "In attesa di {customer}",
+    "ORDER_WAITS": "Accettati, l’ordine aspetta",
+    "WON": "Vinti",
+    "MOVED": "Passati a preventivo",
+    "LOST": "Persi",
+    "OPEN_QUOTES": "Preventivi aperti"
+  },
+  "door": {
+    "showAll": "Mostra tutto ({count})",
+    "close": "Mostra tutto, non solo «{group}»",
+    "why": {
+      "WRITING": "bozze nel portale del cliente: sola lettura, mai contate come cose che toccano a noi",
+      "TO_ANSWER": "richieste Nuove o In lavorazione, e ordini dal portale inviati: aspettano noi",
+      "PREPARING": "preventivi in Bozza, o Approvati e non ancora inviati",
+      "APPROVAL": "preventivi su cui decide un approvatore",
+      "WAITING_CUSTOMER": "preventivi inviati, e richieste per cui abbiamo chiesto più informazioni",
+      "ORDER_WAITS": "il cliente ha detto sì; il suo ordine non è ancora stato creato",
+      "WON": "preventivi accettati con il loro ordine, richieste e ordini dal portale diventati ordini",
+      "MOVED": "richieste e ordini dal portale diventati un preventivo: il preventivo continua",
+      "LOST": "preventivi rifiutati, scaduti o annullati; richieste rifiutate, perse o ritirate; ordini dal portale non accettati o ritirati",
+      "OPEN_QUOTES": "preventivi in Bozza, in attesa di approvazione, Approvati o Inviati"
+    }
+  },
+  "sec": {
+    "incoming": "Richieste e ordini dal portale",
+    "countOpen": "{open} aperte · {closed} chiuse restano fuori",
+    "countNotClosed": "{open} non chiusi · {closed} chiusi restano fuori",
+    "countGroup": "{count} in «{group}»"
+  },
+  "empty": {
+    "tab": "{customer} non ha ancora niente prima dell’ordine: nessuna richiesta, nessun preventivo, nessuna bozza.",
+    "tabBody": "Una richiesta dal portale di {customer} arriva qui da sola.",
+    "incomingNone": "Ancora nessuna richiesta o ordine dal portale da {customer}.",
+    "quotesNone": "Ancora nessun preventivo per {customer}.",
+    "incomingNoLive": "Niente di {customer} è in attesa ora.",
+    "closedDoors": "Chiusi ({count}):"
+  },
+  "fold": {
+    "incoming": "Nessuna richiesta o ordine dal portale in questo gruppo.",
+    "quotes": "Nessun preventivo in questo gruppo.",
+    "drafts": "Nessuna bozza in questo gruppo."
+  },
+  "note": {
+    "noRequests": "Richieste e ordini dal portale non sono mostrati: il tuo ruolo non legge le richieste.",
+    "noQuotes": "I preventivi non sono mostrati: il tuo ruolo non legge i preventivi."
+  },
+  "foot": {
+    "closedLeftOut": "I chiusi restano fuori ({count}):",
+    "door": "{group} {count}"
+  }
+}

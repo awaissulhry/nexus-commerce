@@ -68,10 +68,13 @@ export interface NewRequestFacts {
   readonly onDone: (inquiry: InquiryView, failedFiles: number) => void
   /** The window closes (the address loses `?new=1` / `?mail=`). */
   readonly onClose: () => void
+  /** F-CQ-104 (Q2-B10): the customer a new request starts with (one customer's tab: "New request for <customer>…"); absent: none. */
+  readonly partyId?: string | null
 }
 
 export function useNewRequest(facts: NewRequestFacts): { model: NewRequestModel | null; actions: NewRequestActions } {
   const { open, mailId, api, companyId, can, offline, unnumbered } = facts
+  const startParty = facts.partyId ?? null // F-CQ-104
   const latest = useRef(facts)
   latest.current = facts
   const [state, setState] = useState<State | null>(null)
@@ -92,7 +95,8 @@ export function useNewRequest(facts: NewRequestFacts): { model: NewRequestModel 
       return
     }
     key.current = null
-    setState({ draft: emptyNewRequest(DEFAULT_CURRENCY), mail: mailId ? { id: mailId, draft: { status: 'loading' } } : null, contacts: null, shipTo: { state: 'none', choices: [] }, files: [], detailsOpen: false, shown: {}, tried: false, refused: {}, busy: false, notice: null, leaving: false })
+    // F-CQ-104: a new request (not one from a mail) starts with the host's customer set.
+    setState({ draft: startParty && !mailId ? withWho(emptyNewRequest(DEFAULT_CURRENCY), 'customer', startParty) : emptyNewRequest(DEFAULT_CURRENCY), mail: mailId ? { id: mailId, draft: { status: 'loading' } } : null, contacts: null, shipTo: { state: 'none', choices: [] }, files: [], detailsOpen: false, shown: {}, tried: false, refused: {}, busy: false, notice: null, leaving: false })
     if (!mailId) return
     readMailDraft(api, mailId)
       .then((value) => setState((now) => (now ? { ...now, mail: { id: mailId, draft: { status: 'ready', value } }, draft: newRequestFromMail(value, DEFAULT_CURRENCY) } : now)))
@@ -100,7 +104,7 @@ export function useNewRequest(facts: NewRequestFacts): { model: NewRequestModel 
         const kind = isApiError(error) ? error.kind : null
         setState((now) => (now ? { ...now, mail: { id: mailId, draft: kind === 'not_found' ? { status: 'notFound' } : kind === 'forbidden' ? { status: 'forbidden' } : { status: 'error', problem: readProblem(error) } } } : now))
       })
-  }, [open, mailId, can.view, api])
+  }, [open, mailId, can.view, api, startParty])
 
   // ── the customers this person may make a request for (W23) ──
   useEffect(() => {

@@ -31,6 +31,9 @@ export const PICTURE_ROUTES: Readonly<Record<PictureSource, { readonly path: str
   request: { path: '/sales/inquiries/pictures', key: 'inquiryIds' },
   // F-SA-283 (B-SA-074): a work order's style picture, walled as the work-order list (a mixed one only for every-customer people).
   workorder: { path: '/production/work-orders/pictures', key: 'workOrderIds' },
+  // F-CQ-103 (B-CQ-030, customer page › Quotes & incoming): a portal order's (a draft's too) first style, walled as the drafts and
+  // Incoming read it (orders.view over its company and customer) — never again a cart icon for a garment.
+  portalOrder: { path: '/sales/order-requests/pictures', key: 'requestIds' },
 })
 
 /** One batch read (the page's own API client). */

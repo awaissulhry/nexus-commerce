@@ -10,6 +10,9 @@ import { cancelQuote, createQuote, duplicateQuote, findCustomers, getParty, list
 import { pictureReader } from '../../../../lib/record-picture/api'
 import { useDuplicate } from '../duplicate/use-duplicate'
 import { abilitiesOf, filtersOfTile, grainsOf, NO_FILTERS, romeToday, tileCount, type ListFilters, type QuoteTile, type TileCount } from '../model'
+// F-CQ-102: the group and the order of the list (the band's doors, Most urgent first), and the urgent read's 2,000 refusal.
+import { isQuoteGroupTerm, isQuoteListSort, serverSortOf, URGENT_TOO_MANY, type QuoteGroupTerm, type QuoteListSort } from '../model'
+import { isApiError, issuePath } from '../../../../lib/api/errors'
 // F-SA-224: the one customer filter of the Sales lists (`?party=`; names only: Quotes has no count read per customer).
 import { partyOfAddress, type SwitcherState } from '../../_shared/customer-switcher/model'
 import type { PartyRow } from '../api'
@@ -58,9 +61,31 @@ export interface QuotesListHost {
   readonly terms?: 'address' | 'memory'
   /** A row's click; default: open the quote. */
   readonly onRowClick?: (row: QuoteListRow, newTab: boolean) => void
+  // ---- F-CQ-102 / F-CQ-104 (customer page › Quotes & incoming, 13-backend §11 row 3): the host's own options — (a) this host only;
+  // Sales › Quotes gives none and keeps its list as it was.
+  /** The group the list opens on (the band's door, else LIVE = "Not closed"); Clear all keeps it; a new door starts the list again on it. */
+  readonly defaultGroup?: QuoteGroupTerm | null
+  /** The order the list opens on ('urgent': Most urgent first). */
+  readonly defaultSort?: QuoteListSort | null
+  /** 'host': the host's columns (no Customer column; the set by `room`). */
+  readonly columns?: 'host'
+  /** The list's own room in px (the host measures its root; never the window). */
+  readonly room?: number | null
+  /** false: no tile reads (the host draws no tiles: none of the 4–5 hidden reads per open, Q1-B4 / P0-B8). */
+  readonly tiles?: false
+  /**
+   * One customer's tab: a live change counts in "N updates" only when it names a quote on the screen, or is a new quote (a quote's
+   * live message names no customer: party ids never reach the browser) — never another customer's change (Q1-B10).
+   */
+  readonly liveParty?: string | null
+  /** The customer's one name on this host (the chips say it, never a row's own name: P0-B9). */
+  readonly customerName?: string | null
+  /** The words of a door group in State ▾ (the host's band words). */
+  readonly groupLabel?: string | null
+  // ---- end F-CQ-102 / F-CQ-104
 }
 
-type Lock = Pick<QuotesListHost, 'locked'>
+type Lock = Pick<QuotesListHost, 'locked' | 'defaultGroup' | 'defaultSort'> // F-CQ-102: + the host's defaults
 
 const TILE_READS: Record<QuoteTile, { status: QuoteStatus; mine?: boolean }> = {
   myDrafts: { status: 'DRAFT', mine: true },
@@ -72,6 +97,23 @@ const TILE_READS: Record<QuoteTile, { status: QuoteStatus; mine?: boolean }> = {
 
 const isQuoteChange = (type: string) => type.startsWith('quote.') || type === 'deposit_request.created'
 
+/**
+ * F-CQ-102 (Q1-B10): whether a live change counts in "N updates". On one customer's tab (`liveParty`) a change counts when it names a
+ * quote on the screen or is a new quote (the live message of a quote names no customer); a message that names a customer counts only
+ * when it is this one. Elsewhere every quote change counts, as before.
+ */
+export function quoteLiveCounts(change: { readonly type: string; readonly fields: Readonly<Record<string, unknown>> }, liveParty: string | null, onScreen: ReadonlySet<string>): boolean {
+  if (!isQuoteChange(change.type)) return false
+  if (!liveParty) return true
+  const party = change.fields.partyId
+  if (typeof party === 'string') return party === liveParty
+  const quoteId = change.fields.quoteId
+  return change.type === 'quote.created' || (typeof quoteId === 'string' && onScreen.has(quoteId))
+}
+
+/** F-CQ-102 (B-CQ-011): the urgent read refused above 2,000 quotes (`querystring/sort`): said in words, Newest first one click away. */
+const urgentRefused = (error: unknown): boolean => isApiError(error) && error.status === 400 && error.issues.some((issue) => issuePath(issue).includes('sort'))
+
 /** The filters in the address (`?status=SENT&mine=1&expiring=1&q=…`), so a filtered list can be shared and Back works. */
 export function filtersOf(params: { get(name: string): string | null } | null): ListFilters {
   const status = params?.get('status') ?? ''
@@ -81,6 +123,9 @@ export function filtersOf(params: { get(name: string): string | null } | null): 
     expiring: params?.get('expiring') === '1' && status === 'SENT',
     q: params?.get('q') ?? '',
     party: partyOfAddress(params), // F-SA-224
+    // F-CQ-102: the group and the order, only when the address says them.
+    ...(isQuoteGroupTerm(params?.get('group')) ? { group: params?.get('group') as QuoteGroupTerm } : {}),
+    ...(isQuoteListSort(params?.get('sort')) ? { sort: params?.get('sort') as QuoteListSort } : {}),
   }
 }
 
@@ -91,6 +136,9 @@ export function searchOf(filters: ListFilters): string {
   if (filters.expiring) search.set('expiring', '1')
   if (filters.q.trim()) search.set('q', filters.q.trim())
   if (filters.party) search.set('party', filters.party) // F-SA-224
+  // F-CQ-102: the group and the order (Sales › Quotes keeps them in its address; a host's list in its memory).
+  if (filters.group) search.set('group', filters.group)
+  if (filters.sort) search.set('sort', filters.sort)
   const text = search.toString()
   return text ? `?${text}` : ''
 }
@@ -102,7 +150,8 @@ export const quotesPartyOf = (host: Lock, filters: Pick<ListFilters, 'party'>): 
 /** The rows' read: the filters, the lock over the chosen customer. */
 export function quotesReadOf(host: Lock, filters: ListFilters): ListFilter {
   const partyId = quotesPartyOf(host, filters)
-  return { status: filters.status ?? undefined, mine: filters.mine, q: filters.q, ...(partyId ? { partyId } : {}) }
+  const sort = serverSortOf(filters.sort) // F-CQ-102: only Most urgent first is a server term
+  return { status: filters.status ?? undefined, mine: filters.mine, q: filters.q, ...(partyId ? { partyId } : {}), ...(filters.group ? { group: filters.group } : {}), ...(sort ? { sort } : {}) }
 }
 
 /** A tile's read (its own status, only mine), the lock over the chosen customer (a tile keeps the customer). */
@@ -112,13 +161,20 @@ export function quotesTileReadOf(host: Lock, filters: Pick<ListFilters, 'party'>
 }
 
 /** The filters the view draws and the list keeps: a locked customer is the host's (no switcher, no chip; Clear all keeps it). */
-export const quotesFiltersFor = (host: Lock, filters: ListFilters): ListFilters => (host.locked?.party ? { ...filters, party: null } : filters)
+export const quotesFiltersFor = (host: Lock, filters: ListFilters): ListFilters => withHostDefaults(host, host.locked?.party ? { ...filters, party: null } : filters)
+
+/** F-CQ-102: a host's default group and order fill what the filters do not say (Clear all keeps them; null is "every state" on purpose). */
+function withHostDefaults(host: Lock, filters: ListFilters): ListFilters {
+  const group = filters.group === undefined && host.defaultGroup ? { group: host.defaultGroup } : {}
+  const sort = filters.sort === undefined && host.defaultSort ? { sort: host.defaultSort } : {}
+  return 'group' in group || 'sort' in sort ? { ...filters, ...group, ...sort } : filters
+}
 
 /** The address Sales › Quotes writes: its own terms on its own path (as before the lift). */
 export const quotesAddress = (base: string, filters: ListFilters): string => `${base}${searchOf(filters)}`
 
 /** The list's terms as its tools read them on an embedding host (Export ▾, Export N, saved views): the lock in, so the file is the screen. */
-export const quotesToolsQuery = (host: Lock, filters: ListFilters): string => searchOf({ ...filters, party: quotesPartyOf(host, filters) }).replace(/^\?/, '')
+export const quotesToolsQuery = (host: Lock, filters: ListFilters): string => searchOf({ ...filters, party: quotesPartyOf(host, filters), sort: serverSortOf(filters.sort) ?? null /* F-CQ-102: the file follows a server order only */ }).replace(/^\?/, '')
 
 /** A saved view's terms back into the list's memory (a lock stays the host's). */
 export const quotesFromQuery = (host: Lock, query: string): ListFilters => quotesFiltersFor(host, filtersOf(new URLSearchParams(query.replace(/^\?/, ''))))
@@ -135,8 +191,25 @@ export function useQuotesList(host: QuotesListHost): { model: QuotesListViewMode
   const base = `${prefix}${host.basePath}`
   const memory = host.terms === 'memory'
   const lock = host.locked?.party ?? null
-  const lockHost = useMemo<Lock>(() => ({ locked: lock ? { party: lock } : null }), [lock])
+  // F-CQ-102: the host's door (its group) and its order are part of the lock's memory.
+  const hostGroup = host.defaultGroup ?? null
+  const hostSort = host.defaultSort ?? null
+  const noTiles = host.tiles === false
+  const liveParty = host.liveParty ?? null
+  const lockHost = useMemo<Lock>(() => ({ locked: lock ? { party: lock } : null, defaultGroup: hostGroup, defaultSort: hostSort }), [lock, hostGroup, hostSort])
   const [kept, setKept] = useState<ListFilters>(NO_FILTERS)
+  // F-CQ-102: a new door starts the list again on its group (the State ▾ choice made under the old door goes; once, not on arrival).
+  const lastGroup = useRef(hostGroup)
+  useEffect(() => {
+    if (lastGroup.current === hostGroup) return
+    lastGroup.current = hostGroup
+    setKept((now) => {
+      if (now.group === undefined && now.status === null) return now
+      const next: ListFilters = { ...now, status: null }
+      delete next.group
+      return next
+    })
+  }, [hostGroup])
   const fromAddress = useMemo(() => filtersOf(params), [params])
   const filters = useMemo(() => quotesFiltersFor(lockHost, memory ? kept : fromAddress), [lockHost, memory, kept, fromAddress])
   // ---- end F-SA-277
@@ -168,7 +241,8 @@ export function useQuotesList(host: QuotesListHost): { model: QuotesListViewMode
         setCursor(page.nextCursor)
         if (!more) setAsOf(new Date().toISOString())
       } catch (error) {
-        setRows((current) => ({ ...current, problem: readProblem(error) }))
+        // F-CQ-102: more than 2,000 quotes for Most urgent first: its own words (the view offers Newest first).
+        setRows((current) => ({ ...current, problem: urgentRefused(error) ? URGENT_TOO_MANY : readProblem(error) }))
       }
     },
     [api, lockHost],
@@ -177,6 +251,7 @@ export function useQuotesList(host: QuotesListHost): { model: QuotesListViewMode
   // F-SA-224: the tiles count the chosen customer's quotes as the rows do (F-SA-277: the host's lock wins).
   const tileParty = quotesPartyOf(lockHost, filters)
   const loadTiles = useCallback(async () => {
+    if (noTiles) return // F-CQ-102: a host that draws no tiles reads none
     const today = romeToday()
     const entries = await Promise.all(
       (Object.keys(TILE_READS) as QuoteTile[]).map(async (tile): Promise<[QuoteTile, TileCount]> => {
@@ -197,7 +272,7 @@ export function useQuotesList(host: QuotesListHost): { model: QuotesListViewMode
       }),
     )
     setTiles(Object.fromEntries(entries) as Record<QuoteTile, TileCount>)
-  }, [api, session.user.id, tileParty, lockHost])
+  }, [api, session.user.id, tileParty, lockHost, noTiles])
 
   useEffect(() => {
     setRows({ items: null, more: false, problem: null })
@@ -215,9 +290,12 @@ export function useQuotesList(host: QuotesListHost): { model: QuotesListViewMode
   const unread = useUnread(readsThreads ? readUnreadWith(api) : null, unreadRows, unreadTick)
   // ---- end B-TH-257
 
+  // F-CQ-102: the quotes on the screen (a customer's tab counts only their changes, and new quotes).
+  const onScreen = useRef<ReadonlySet<string>>(new Set())
+  onScreen.current = new Set((rows.items ?? []).map((row) => row.id))
   useLiveChanges({
     onChange: (change) => {
-      if (isQuoteChange(change.type)) setUpdates((count) => count + 1)
+      if (quoteLiveCounts(change, liveParty, onScreen.current)) setUpdates((count) => count + 1)
       if (change.type.startsWith('thread.')) setUnreadTick((tick) => tick + 1) // B-TH-257
     },
     onReconnect: () => {
@@ -371,6 +449,11 @@ export function useQuotesList(host: QuotesListHost): { model: QuotesListViewMode
     duplicate: duplicate.model,
     pageLinks: { prefix, promiseDates: session.permissions.includes('planning.promise.view') },
     embedded: !!host.embedded, // F-SA-277: the host draws what sits above the list
+    // ---- F-CQ-102 / F-CQ-104: the host's face (columns by its room, its customer's one name, its door's words)
+    ...(host.columns ? { columns: host.columns } : {}),
+    room: host.room ?? null,
+    customerName: host.customerName ?? null,
+    groupLabel: host.groupLabel ?? null,
     // ---- B-TH-257
     unread: readsThreads ? unread : null,
     readsRequests: session.permissions.includes('sales.inquiries.view'),
@@ -430,7 +513,11 @@ export function useQuotesList(host: QuotesListHost): { model: QuotesListViewMode
       void load()
       void loadTiles()
     },
-    onNewQuote: openNew,
+    // F-CQ-104: on one customer's tab (the head's "New quote for <customer>…", the key c) the dialog opens with the customer set.
+    onNewQuote: (open) => {
+      openNew(open)
+      if (open && lock) pick(lock)
+    },
     onNewCompany: (company) => {
       setNewQuote((current) => (current ? { ...current, companyId: company, party: null, contactId: '' } : current))
       search('', company)

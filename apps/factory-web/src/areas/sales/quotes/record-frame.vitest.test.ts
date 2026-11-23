@@ -149,7 +149,9 @@ describe('the Quotes list: New messages, "from INQ-…", an accepted row’s ord
 
   it('"from INQ-…" (a door with the requests right) and an accepted row’s order ("Order SO-…", "Order waits"), in it and en', () => {
     expect(listView).toContain("t('list.madeFrom', { number: data.madeFrom.number })")
+    // F-CQ-102: "Order waits" now lives in the ONE chips cell ("Where it is"): the chip says why, its title the words.
     expect(listView).toContain("t('list.orderWaits')")
+    expect(listView).toContain('const cell = quoteWhereOf(data, m.today, m.customerName ?? data.partyName)')
     expect(listScreen.cases.some((item) => item.id === 'th-257-sources')).toBe(true)
     for (const locale of ['en', 'it'] as const) expect(textOf(list('th-257-sources', locale)).length).toBeGreaterThan(100)
   })

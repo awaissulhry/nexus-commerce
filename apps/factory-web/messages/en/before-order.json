@@ -1,0 +1,79 @@
+{
+  "band": {
+    "title": "Before an order",
+    "pipeline": "Before an order, in life order",
+    "closed": "Closed:",
+    "samples_one": "{count} sample round in progress ›",
+    "samples_other": "{count} sample rounds in progress ›",
+    "newRequest": "New request for {customer}…",
+    "newRequestShort": "New request…",
+    "newQuote": "New quote for {customer}…",
+    "newQuoteShort": "New quote…",
+    "segTitle": "Show the {count} in “{group}” · waits on {who}",
+    "segTitleClosed": "Show the {count} in “{group}”",
+    "waitsOn": "waits on {who}",
+    "who": {
+      "us": "us",
+      "customer": "the customer",
+      "approver": "an approver"
+    },
+    "info": "Everything of this customer before an order, each record in exactly one group: what the customer is still writing, what waits on us, the quotes on their way, what waits for the customer — then what ended. Each number opens exactly its rows below.",
+    "failed": "The counts could not be read just now: the lists below still show every record.",
+    "retry": "Try again"
+  },
+  "group": {
+    "WRITING": "Customer is writing",
+    "TO_ANSWER": "To answer",
+    "PREPARING": "Quote being prepared",
+    "APPROVAL": "Waiting for approval",
+    "WAITING_CUSTOMER": "Waiting for {customer}",
+    "ORDER_WAITS": "Accepted, order waits",
+    "WON": "Won",
+    "MOVED": "Moved to a quote",
+    "LOST": "Lost",
+    "OPEN_QUOTES": "Open quotes"
+  },
+  "door": {
+    "showAll": "Show everything ({count})",
+    "close": "Show everything, not only “{group}”",
+    "why": {
+      "WRITING": "drafts in the customer’s portal: read only, never counted as waiting on us",
+      "TO_ANSWER": "requests New or In progress, and portal orders sent: they wait on us",
+      "PREPARING": "quotes in Draft, or Approved and not sent yet",
+      "APPROVAL": "quotes an approver decides",
+      "WAITING_CUSTOMER": "quotes sent, and requests where we asked for more information",
+      "ORDER_WAITS": "the customer said yes; its order is not made yet",
+      "WON": "accepted quotes with their order, requests and portal orders that became an order",
+      "MOVED": "requests and portal orders that became a quote: the quote carries on",
+      "LOST": "quotes declined, expired or cancelled; requests declined, lost or withdrawn; portal orders not accepted or withdrawn",
+      "OPEN_QUOTES": "quotes in Draft, waiting for approval, Approved or Sent"
+    }
+  },
+  "sec": {
+    "incoming": "Requests & portal orders",
+    "countOpen": "{open} open · {closed} closed left out",
+    "countNotClosed": "{open} not closed · {closed} closed left out",
+    "countGroup": "{count} in “{group}”"
+  },
+  "empty": {
+    "tab": "{customer} has nothing before an order yet: no request, no quote, no draft.",
+    "tabBody": "A request from {customer}’s portal lands here by itself.",
+    "incomingNone": "No request or portal order from {customer} yet.",
+    "quotesNone": "No quote for {customer} yet.",
+    "incomingNoLive": "Nothing from {customer} waits now.",
+    "closedDoors": "Closed ({count}):"
+  },
+  "fold": {
+    "incoming": "No request or portal order in this group.",
+    "quotes": "No quote in this group.",
+    "drafts": "No draft in this group."
+  },
+  "note": {
+    "noRequests": "Requests and portal orders are not shown: your role does not read requests.",
+    "noQuotes": "Quotes are not shown: your role does not read quotes."
+  },
+  "foot": {
+    "closedLeftOut": "Closed ones are left out ({count}):",
+    "door": "{group} {count}"
+  }
+}
