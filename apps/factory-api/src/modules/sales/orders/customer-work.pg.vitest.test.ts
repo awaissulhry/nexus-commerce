@@ -37,10 +37,11 @@ import { ensureThread, writeMessage } from '../../../platform/threads/threads'
  *   T-CL-R1-DONE      delivered (Done)
  *   two OPEN customer requests (on TEST-SO-R1-LATER, two days ago; on T-CL-R1-CUT, today), and a reply waiting on SEED-R1's own
  *   conversation (the customer wrote last); a reply waiting on SEED-C1's own conversation too.
+ *   B-CL-009: T-CL-Q-R1, an open (DRAFT) quote of SEED-R1 copied from the seeds' SEED-Q-0002.
  *
  * Sessions (each with parties.view): all (+ threads.read) · onlyR1 · onlyC1 · companyB · noOrders (parties and quotes, no orders) ·
  * partiesAllOrdersR1 (parties over every customer, orders over SEED-R1 only) · partner · sales (the real Sales template: the money
- * wall). Every name and number is made up. Run with `node scripts/factory/run-pg-tests.mjs modules/sales/orders/customer-work`.
+ * wall) · B-CL-009: quotes (quotes.view + sales.inquiries.view), quotesOnlyR1, quotesNoRequests. Every name and number is made up. Run with `node scripts/factory/run-pg-tests.mjs modules/sales/orders/customer-work`.
  */
 
 let db: MigratedDatabase
@@ -73,6 +74,10 @@ const SESSIONS: Record<string, () => SessionContext> = {
   partiesAllOrdersR1: office(grant(['parties.view', 'threads.read']), grant(['orders.view'], [R1])),
   partner: () => ({ audience: 'partner', tenantId: tenant, actorId: newId(), partyId: C1, grants: [grant(['orders.view', 'parties.view'], [C1])] }),
   sales: office(grant(salesTemplate())),
+  // ── B-CL-009 (S1b): readers of the quotes and the requests (cq's two parts), over every customer or SEED-R1 only; quotes only ──
+  quotes: office(grant(['orders.view', 'parties.view', 'quotes.view', 'sales.inquiries.view'])),
+  quotesOnlyR1: office(grant(['orders.view', 'parties.view', 'quotes.view', 'sales.inquiries.view'], [R1])),
+  quotesNoRequests: office(grant(['orders.view', 'parties.view', 'quotes.view'])),
 }
 
 type Json = Record<string, any>
@@ -172,6 +177,11 @@ beforeAll(async () => {
   await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, $3, 'Made-up writer', 'ACTIVE')`, [writer, tenant, `cl-writer-${writer.slice(-6)}@example.com`])
   await customerWrote(R1)
   await customerWrote(C1)
+  // B-CL-009: an open quote of SEED-R1 (SEED-Q-0002, a DRAFT of SEED-C1, copied; the guards and the customer's running number off).
+  await rulesOff(`CREATE TEMP TABLE q AS SELECT * FROM "Quote" WHERE "tenantId" = '${tenant}' AND number = 'SEED-Q-0002';
+    UPDATE q SET id = '${newId()}', "partyId" = '${R1}', number = 'T-CL-Q-R1', "contactId" = NULL, "customerSeq" = NULL, "customerRef" = NULL, status = 'DRAFT';
+    INSERT INTO "Quote" SELECT * FROM q;
+    DROP TABLE q;`)
   app = await buildApp(
     { environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET },
     { database, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])]?.() ?? null) },
@@ -243,6 +253,8 @@ describe('GET /sales/orders/customers/work — every count is the rows its door 
       nextPromise: null,
       lastOrderDate: null,
       newestOrder: null,
+      // B-CL-009: this reader holds neither quotes.view nor sales.inquiries.view: both parts are left out (never 0).
+      beforeOrder: {},
     })
   })
 
@@ -407,3 +419,52 @@ describe('the file holds the band door\'s rows (B-CL-007)', () => {
     expect(customersFile.query(new URLSearchParams('work=SOMEWHERE'))).not.toHaveProperty('work')
   })
 })
+
+// ── B-CL-009 (S1b; settle T19): "to answer" and "open quotes" per customer — cq's ONE rule, the reached customers only ──
+/**
+ * Stands on the seeds' SEED-Q-0001 (accepted) and SEED-Q-0002 (a draft) of SEED-C1 and T-CL-Q-R1, a draft of SEED-R1 (above). The
+ * route's part of each customer is cq's single read (GET /sales/before-order/counts?partyId=…) as the same person: `toAnswer` =
+ * groups.TO_ANSWER, `openQuotes` = openQuotes; a part the person holds no right of is absent, never 0.
+ */
+describe('beforeOrder: the route\'s "to answer" and "open quotes" are cq\'s single read (B-CL-009)', () => {
+  /** cq's single read of one customer, as the route's two parts (a null part left out). */
+  const single = async (session: string, partyId: string): Promise<Json> => {
+    const answer = await ok(session, `/sales/before-order/counts?partyId=${partyId}`)
+    return { ...(answer.groups.TO_ANSWER !== null ? { toAnswer: answer.groups.TO_ANSWER } : {}), ...(answer.openQuotes !== null ? { openQuotes: answer.openQuotes } : {}) }
+  }
+
+  it('each customer\'s part equals cq\'s single read; SEED-R1 and SEED-C1 have an open quote', async () => {
+    for (const session of ['quotes', 'sales']) {
+      const answer = await work(session, [C1, C2, R1])
+      for (const partyId of [C1, C2, R1]) expect(rowOf(answer, partyId).beforeOrder, `${session} ${partyId}`).toEqual(await single(session, partyId))
+    }
+    const parts = await work('quotes', [C1, C2, R1])
+    expect(rowOf(parts, R1).beforeOrder).toEqual({ toAnswer: 0, openQuotes: 1 })
+    expect(rowOf(parts, C1).beforeOrder.openQuotes).toBeGreaterThanOrEqual(1)
+    expect(rowOf(parts, C2).beforeOrder).toEqual({ toAnswer: 0, openQuotes: 0 })
+  })
+
+  it('a part without its right is absent, never 0: no quotes.view → no openQuotes; no requests right → no toAnswer', async () => {
+    const noRequests = await work('quotesNoRequests', [C1, R1])
+    for (const partyId of [C1, R1]) {
+      const part = rowOf(noRequests, partyId).beforeOrder
+      expect(part, partyId).not.toHaveProperty('toAnswer')
+      expect(part.openQuotes, partyId).toEqual(expect.any(Number))
+      expect(part, partyId).toEqual(await single('quotesNoRequests', partyId))
+    }
+    const neither = await work('all', [C1, R1])
+    for (const partyId of [C1, R1]) expect(rowOf(neither, partyId).beforeOrder, partyId).toEqual({})
+  })
+
+  it('a person limited to SEED-R1 gets SEED-R1\'s part only — never SEED-C1\'s row or open quotes', async () => {
+    const limited = await work('quotesOnlyR1', [C1, R1])
+    expect((limited.customers as Json[]).map((row) => row.partyId)).toEqual([R1])
+    expect(rowOf(limited, R1).beforeOrder).toEqual(await single('quotesOnlyR1', R1))
+    expect(rowOf(limited, R1).beforeOrder).toEqual(rowOf(await work('quotes', [R1]), R1).beforeOrder)
+    expect(JSON.stringify(limited)).not.toContain(C1)
+    // cq's single read refuses the other customer as unknown (the same wall).
+    expect((await call('quotesOnlyR1', `/sales/before-order/counts?partyId=${C1}`)).statusCode).toBe(404)
+  })
+})
+// ── end B-CL-009 ──
+
