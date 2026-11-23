@@ -73,13 +73,14 @@ export function QuotesTabFrame({ model, actions, rootRef, incoming, quotes, draf
  * One list's section: its head, its state under the door, the list (the host's own container renders it), the closed groups as doors
  * under it when no door is open. `aside`: what still opens while a line stands in for the list (the section's New window).
  */
-export function TabSection({ kind, customer, tab, children, aside }: { kind: 'quotes' | 'incoming'; customer: string; tab: TabFacts; children?: ReactNode; aside?: ReactNode }) {
+export function TabSection({ kind, customer, tab, children, aside, every = false }: { kind: 'quotes' | 'incoming'; customer: string; tab: TabFacts; children?: ReactNode; aside?: ReactNode; /** cq fx2 W-08: the list shows every state now (Rows: All) — nothing is left out. */ every?: boolean }) {
   const t = useT('parties')
   const b = useT(BEFORE_ORDER_NS)
   const counts = kind === 'quotes' ? quoteCountsOf(tab.counts) : incomingCountsOf(tab.counts)
   const state = sectionStateIn(tab, kind)
   const title = kind === 'quotes' ? t('customers.quotesTab.quotes') : b('sec.incoming')
-  const count = sectionCountOf(counts, kind, tab.door, tab.door ? kindDoorCount(tab.counts, kind, tab.door) : null, tab.door ? b(`group.${tab.door}`, { customer }) : null)
+  const all = every && tab.door === null ? counts : null
+  const count = all ? { key: 'sec.countAll', params: { count: all.open + all.closed } } : sectionCountOf(counts, kind, tab.door, tab.door ? kindDoorCount(tab.counts, kind, tab.door) : null, tab.door ? b(`group.${tab.door}`, { customer }) : null)
   return (
     <section className="fw-qt-section" aria-label={title}>
       <div className="fw-qt-sechead">
@@ -97,13 +98,22 @@ export function TabSection({ kind, customer, tab, children, aside }: { kind: 'qu
         </p>
       ) : (
         <>
+          {/* cq fx2 W-14: the closed ones' doors are in the list's own foot (SectionFoot, beside the order's rule), not a loose line here. */}
           {children}
-          {tab.door === null && <ClosedDoors tab={tab} kind={kind} lead="foot" customer={customer} />}
         </>
       )}
       {state !== 'list' && aside}
     </section>
   )
+}
+
+/**
+ * cq fx2 W-14 (10-design §3.4): what a list's foot says the tab left out — the closed groups as doors, when no door is open and the
+ * list does not show every state (W-08: under Rows: All nothing is left out). The host hands it to its list (the list's `foot`).
+ */
+export function SectionFoot({ kind, customer, tab, every = false }: { kind: 'quotes' | 'incoming'; customer: string; tab: TabFacts; every?: boolean }) {
+  if (tab.door !== null || every) return null
+  return <ClosedDoors tab={tab} kind={kind} lead="foot" customer={customer} />
 }
 
 /** F-CQ-101: the closed groups of a kind, each a door ("Closed ones are left out (7): Won 2 · Moved to a quote 3 · Lost 2"). */

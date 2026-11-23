@@ -48,7 +48,17 @@
     "countMore_other": "{count} rows read · more to read",
     "moreReading": "Reading more…",
     "showMore": "Show {count} more",
-    "kindNotHere": "Change requests: not on this tab — they change a confirmed order (answered on the order and in Home › Approvals)"
+    "kindNotHere": "Change requests: not here",
+    "countPortal_one": "{count} portal order",
+    "countPortal_other": "{count} portal orders",
+    "countChange_one": "{count} change request",
+    "countChange_other": "{count} change requests",
+    "countMixed_one": "{count} request or portal order",
+    "countMixed_other": "{count} requests and portal orders",
+    "countAny_one": "{count} row",
+    "countAny_other": "{count} rows",
+    "kindNotHereHint": "Change requests are not on this tab: they change a confirmed order (answered on the order and in Home › Approvals).",
+    "searchHost": "Search number, request…"
   },
   "col": {
     "number": "Number",

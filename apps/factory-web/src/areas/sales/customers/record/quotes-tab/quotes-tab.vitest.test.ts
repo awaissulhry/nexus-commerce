@@ -192,7 +192,8 @@ describe('F-CQ-104: the tab\'s room → the lists\' columns (never the window); 
     expect(reaches('M', 'L')).toBe(false)
     // A column the room leaves out: hidden and an opt-in choice in Customise ("In view" counts only what is shown, P0-B5).
     const column = { colId: 'updated', headerName: 'Updated' }
-    expect(byRoom(column, true)).toBe(column)
+    // cq fx2 W-02: a shown column says it is shown (the grid would keep a hidden state when the room grows live).
+    expect(byRoom(column, true)).toEqual({ ...column, hide: false })
     expect(byRoom(column, false, 'Updated (from a wider list)')).toEqual({ colId: 'updated', headerName: 'Updated', hide: true, context: { optIn: true, toolLabel: 'Updated (from a wider list)' } })
   })
 
@@ -480,3 +481,141 @@ describe('cq W3: the page around the tab', () => {
   })
 })
 // ---- end cq W3
+
+// ---- cq fx2 (customer page › Quotes & incoming, 30-walk.md W-01 … W-17): the walk's gaps, each fixed where the walk read its cause.
+import { SectionFoot } from './view/QuotesTabParts'
+import { sectionStateIn, type Door } from './band'
+import { countKeyOf, taskWordsOf } from '../../../inquiries/view/InquiriesView'
+
+describe('cq fx2: the walk\'s gaps', () => {
+  const src = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+  const quotesView = src('../../../quotes/list/view/QuotesListView.tsx')
+  const incomingView = src('../../../inquiries/view/InquiriesView.tsx')
+  const frame = src('../../../../../list-frame/ListFrame.tsx')
+
+  it('W-01: a phone card\'s title is the number — the thread door sits on New messages, never on the number column', () => {
+    expect(quotesView).toContain("cardDoor: model.cardDoor ? { column: 'newMessages'")
+    expect(incomingView).toContain("column: model.columns === 'host' ? 'newMessages'")
+    expect(quotesView).toContain("number: { role: 'title' as const }")
+    expect(incomingView).toContain("number: { role: 'title' as const }")
+  })
+
+  it('W-02: a room column shown again after the dock closes says so (the grid kept "hidden"; Customise counted it)', () => {
+    const column = { colId: 'validUntil', headerName: 'Valid until' }
+    const narrow = byRoom(column, false, 'Valid until (from a wider list)')
+    expect(narrow.hide).toBe(true)
+    expect(byRoom(column, true).hide).toBe(false)
+  })
+
+  it('W-03: a door that holds none of a kind folds that list to its quiet line (never "No quotes yet" for a customer who has them)', () => {
+    const counts = answer()
+    const tab = (door: Door) => ({ counts, door, terms: termsOfDoor(door) })
+    // Lost: the customer lost 2 quotes and 1 request — both lists show; To answer: 1 request, no quote group.
+    expect(kindDoorCount(counts, 'quotes', 'WAITING_CUSTOMER')).toBe(1)
+    expect(sectionStateIn(tab('WAITING_CUSTOMER'), 'incoming')).toBe('folded') // requests WAITING_CUSTOMER: 0 in the answer
+    expect(sectionStateIn(tab('WAITING_CUSTOMER'), 'quotes')).toBe('list')
+    expect(sectionStateIn(tab('TO_ANSWER'), 'incoming')).toBe('list')
+  })
+
+  it('W-04: "Customer is writing" fits the tab\'s room — Files and Wanted by from 1000 px, two-fact cells wrap, nothing cut', () => {
+    const list = src('../drafts/view/CustomerDraftsList.tsx')
+    expect(list).toContain('const roomy = model.room === undefined || model.room === null || model.room >= 1000')
+    for (const id of ['files', 'wanted']) expect(list.slice(list.indexOf(`colId: '${id}'`)).split('colId:')[1], id).toContain('hide: !roomy')
+    const narrow = ['draft', 'lines', 'ready', 'changed', 'more'].map((id) => Number(list.slice(list.indexOf(`colId: '${id}'`)).match(/minWidth: (\d+)/)![1]))
+    expect(narrow.reduce((sum, width) => sum + width, 0) + 76 /* the Picture */).toBeLessThanOrEqual(779 - 40)
+    expect(src('../QuotesIncomingTab.tsx')).toContain('room: tab.room /* cq fx2 W-04 */')
+    expect(src('./quotes-tab.css')).toContain('.fw-cwd-cell.is-wrap .fw-cwd-sub')
+  })
+
+  it('W-05: narrow headers whole — New messages draws its icon (its words its name), ⋯ draws no word and keeps its button whole', () => {
+    for (const view of [quotesView, incomingView]) {
+      expect(view).toContain('headerComponent: MessagesHeader /* cq fx2 W-05 */')
+      expect(view).toContain('cellClass: MORE_CELL')
+    }
+    const heads = src('../../../_shared/list-heads/list-heads.css')
+    expect(heads).toContain('.ag-header-cell.fw-list-more .ag-header-cell-text')
+  })
+
+  it('W-06: the draft window draws no decision, names the customer as the page does and shows the draft\'s garment', () => {
+    const window = src('../drafts/view/DraftWindow.tsx')
+    expect(window).toContain('customer: model.customer, ...(model.picture ? { picture: model.picture } : {})')
+    const pane = src('../../../inquiries/view/pane/catalogue/CataloguePane.tsx')
+    expect(pane).toContain('<span className="fw-rp-who">{model.draft?.customer ?? request.party.name}</span>')
+    expect(pane).toContain('{model.draft?.picture ?? <ShoppingCart size={16} />}')
+  })
+
+  it('W-07: words by kind — "1 portal order", "2 requests", "3 requests and portal orders"; the task window too', () => {
+    const r = (kind: 'REQUEST' | 'CATALOGUE_ORDER' | 'CHANGE_REQUEST') => ({ kind })
+    expect(countKeyOf([r('REQUEST'), r('REQUEST')])).toBe('list.count')
+    expect(countKeyOf([r('CATALOGUE_ORDER')])).toBe('list.countPortal')
+    expect(countKeyOf([r('REQUEST'), r('CATALOGUE_ORDER')])).toBe('list.countMixed')
+    expect(countKeyOf([r('REQUEST'), r('CHANGE_REQUEST')])).toBe('list.countAny')
+    expect(countKeyOf([])).toBe('list.count')
+    expect(taskWordsOf([{ type: 'Inquiry' }, { type: 'Inquiry' }])).toBe('tasks.request')
+    expect(taskWordsOf([{ type: 'PortalOrderRequest' }])).toBe('tasks.portal')
+    expect(taskWordsOf([{ type: 'Inquiry' }, { type: 'PortalOrderRequest' }])).toBe('tasks.incoming')
+    for (const locale of LOCALES) {
+      const inq = createTranslator(locale, messagesFor(locale, ['sales-inquiries'])['sales-inquiries']!)
+      for (const key of ['list.countPortal', 'list.countChange', 'list.countMixed', 'list.countAny']) for (const count of [1, 2]) expect(inq(key, { count }), `${locale} ${key}`).toContain(String(count))
+      const b = createTranslator(locale, messagesFor(locale, ['before-order'])['before-order']!)
+      expect(b('tasks.request.title', { count: 2 }), locale).not.toMatch(/portal/i)
+      for (const noun of ['portal', 'incoming']) for (const key of ['title', 'assigneeHint', 'supervisor', 'noSupervisor', 'where', 'held.none', 'held.tooMany', 'made', 'due']) expect(b(`tasks.${noun}.${key}`, { count: 2, max: 50, name: 'x', date: 'y' }), `${locale} ${noun} ${key}`).not.toMatch(/tasks\.|\{/)
+    }
+  })
+
+  it('W-08: under Rows: All nothing is "left out" — the head counts every state, the closed foot goes', () => {
+    const tab = { counts: answer(), failed: false, door: null, terms: NO_DOOR, rights: OWNER, room: 1000, hrefs: {} as never, everything: '', prefix: '/w/DEMO' }
+    expect(SectionFoot({ kind: 'incoming', customer: 'Seed Racing', tab, every: true })).toBeNull()
+    expect(SectionFoot({ kind: 'incoming', customer: 'Seed Racing', tab: { ...tab, door: 'LOST' }, every: false })).toBeNull()
+    expect(SectionFoot({ kind: 'incoming', customer: 'Seed Racing', tab, every: false })).not.toBeNull()
+    const parts = src('./view/QuotesTabParts.tsx')
+    expect(parts).toContain("const count = all ? { key: 'sec.countAll', params: { count: all.open + all.closed } }")
+    const live = src('../QuotesIncomingTab.tsx')
+    expect(live).toContain("const incomingEvery = model.address.tile === 'ALL'")
+    for (const locale of LOCALES) expect(createTranslator(locale, messagesFor(locale, ['before-order'])['before-order']!)('sec.countAll', { count: 7 }), locale).toContain('7')
+  })
+
+  it('W-09: the Kind option is short (the why in its title); one customer\'s search names no customer', () => {
+    expect(incomingView).toContain("<option value=\"\" disabled title={t('list.kindNotHereHint')}>")
+    expect(incomingView).toContain("placeholder={model.locked ? t('list.searchHost') : t('list.search')")
+    for (const locale of LOCALES) {
+      const inq = createTranslator(locale, messagesFor(locale, ['sales-inquiries'])['sales-inquiries']!)
+      expect(inq('list.kindNotHere').length, locale).toBeLessThanOrEqual(32)
+      expect(inq('list.kindNotHereHint'), locale).not.toBe('list.kindNotHereHint')
+    }
+  })
+
+  it('W-10 / W-11: the change request\'s door asks no engine task first; its kind is said once in its chip', () => {
+    expect(src('../../../../home/approvals/Approvals.tsx')).toContain('tasks: can.tasks && controls.kind !== REQUEST_INBOX_KIND')
+    expect(incomingView).toContain("if (chip.key === 'where.kindState' && typeof chip.params?.kind === 'string' && own.state")
+  })
+
+  it('W-12 / W-13: the Sales pages fit 1440 (the ⋯ at 56, New messages at 116); New quote / New request hidden without their right', () => {
+    expect(quotesView).toContain("minWidth: 116, flex: 0.8,")
+    expect(quotesView).not.toContain('minWidth: 88, maxWidth: 88')
+    expect(incomingView).not.toContain('minWidth: 72, maxWidth: 72')
+    expect(quotesView).not.toContain("heldReason={model.can.manage ? null : t('held.noManage')} onClick={() => actions?.onNewQuote?.(true)}")
+    expect(quotesView).toContain('{model.can.manage && (')
+    expect(incomingView).toContain('{model.can.manage && newButton}')
+  })
+
+  it('W-14: each list\'s foot says the order\'s rule, its notes and what the tab left out (the frame\'s foot)', () => {
+    expect(frame).toContain('{foot && <span className="fw-list-foot">{foot}</span>}')
+    expect(quotesView).toContain("{model.filters.sort === 'urgent' && <span>{t('list.sort.ruleUrgent')}</span>}")
+    expect(incomingView).toContain("{model.rank === 'urgent' && <span>{t('rank.rule')}</span>}{model.foot}")
+    const live = src('../QuotesIncomingTab.tsx')
+    expect(live).toContain('<SectionFoot kind="quotes"')
+    expect(live).toContain('<SectionFoot kind="incoming"')
+  })
+
+  it('W-15: the keys stay on the list after a mouse pick; the phone\'s select bar stays in view', () => {
+    expect(frame).toContain('if (column) now.setFocusedCell(index, column)')
+    expect(src('../../../../../list-frame/list-frame.css')).toContain('.fw-list-cards .nds-cardlist-bulk {')
+  })
+
+  it('W-16 / W-17: on the tab the rows decide the company code; Company only from XL (L fits whole)', () => {
+    expect(incomingView).toContain("const manyCompanies = model.columns === 'host' ? new Set((rows ?? []).map((row) => row.companyId)).size > 1 : companies.length > 1")
+    expect(incomingView).toContain("cellRenderer: CompanyCell }, 'XL')] : []),")
+  })
+})
+// ---- end cq fx2

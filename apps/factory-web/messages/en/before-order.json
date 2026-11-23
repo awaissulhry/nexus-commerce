@@ -54,7 +54,8 @@
     "countOpen": "{open} open · {closed} closed left out",
     "countNotClosed": "{open} not closed · {closed} closed left out",
     "countGroup": "{count} in “{group}”",
-    "writingSub": "drafts in {customer}’s portal · read only · never counted as waiting on us"
+    "writingSub": "drafts in {customer}’s portal · read only · never counted as waiting on us",
+    "countAll": "{count}, every state"
   },
   "empty": {
     "tab": "{customer} has nothing before an order yet: no request, no quote, no draft.",
@@ -188,12 +189,42 @@
     },
     "request": {
       "title_one": "New task on {count} request",
-      "title_other": "New task on {count} requests and portal orders",
-      "assigneeHint": "You, or one person who may read these requests and portal orders.",
+      "title_other": "New task on {count} requests",
+      "assigneeHint": "You, or one person who may read these requests.",
       "supervisor": "Each request’s customer’s production supervisor",
       "noSupervisor_one": "{count} request has no production supervisor for its customer: pick a person, or its task is left out.",
-      "noSupervisor_other": "{count} requests and portal orders have no production supervisor for their customer: pick a person, or their tasks are left out.",
+      "noSupervisor_other": "{count} requests have no production supervisor for their customer: pick a person, or their tasks are left out.",
       "where": "Each task is on its own request: in its thread and in the assignee’s Home › My tasks.",
+      "held": {
+        "none": "Tick the requests first.",
+        "tooMany": "At most {max} requests at once."
+      },
+      "made": "Task made · for {name}",
+      "due": "due {date}"
+    },
+    "portal": {
+      "title_one": "New task on {count} portal order",
+      "title_other": "New task on {count} portal orders",
+      "assigneeHint": "You, or one person who may read these portal orders.",
+      "supervisor": "Each portal order’s customer’s production supervisor",
+      "noSupervisor_one": "{count} portal order has no production supervisor for its customer: pick a person, or its task is left out.",
+      "noSupervisor_other": "{count} portal orders have no production supervisor for their customer: pick a person, or their tasks are left out.",
+      "where": "Each task is on its own portal order: in its thread and in the assignee’s Home › My tasks.",
+      "held": {
+        "none": "Tick the portal orders first.",
+        "tooMany": "At most {max} portal orders at once."
+      },
+      "made": "Task made · for {name}",
+      "due": "due {date}"
+    },
+    "incoming": {
+      "title_one": "New task on {count} request or portal order",
+      "title_other": "New task on {count} requests and portal orders",
+      "assigneeHint": "You, or one person who may read these requests and portal orders.",
+      "supervisor": "Each record’s customer’s production supervisor",
+      "noSupervisor_one": "{count} request or portal order has no production supervisor for its customer: pick a person, or its task is left out.",
+      "noSupervisor_other": "{count} requests and portal orders have no production supervisor for their customer: pick a person, or their tasks are left out.",
+      "where": "Each task is on its own request or portal order: in its thread and in the assignee’s Home › My tasks.",
       "held": {
         "none": "Tick the requests and portal orders first.",
         "tooMany": "At most {max} requests and portal orders at once."

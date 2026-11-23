@@ -41,6 +41,8 @@ export interface CustomerDraftsListModel {
   readonly pictures?: { readonly read: ReadPictures; readonly header: string } | null
   /** Design cases: the widths that show the wide columns. */
   readonly wide?: boolean
+  /** cq fx2 W-04: the host's own room in px (Quotes & incoming's): Files and Wanted by from 1000 px; under it the list fits whole. */
+  readonly room?: number | null
 }
 
 export interface CustomerDraftsListActions {
@@ -92,11 +94,14 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
   const moment = (iso: string) => (new Date(iso).toDateString() === today ? formatTime(iso, { locale }) : formatDate(iso, { locale }))
   const rows = model.read.status === 'ready' ? model.read.rows : null
   const price = showsValue(rows) // the money wall: no Value column without the price grain
+  // cq fx2 W-04 (walk: 173 px sideways at 779, cut cells at every width): under 1000 px of the host's room the list leaves out Files and
+  // Wanted by; "by <name>" goes on a second line (the rows grow) — no cell is cut, nothing scrolls sideways.
+  const roomy = model.room === undefined || model.room === null || model.room >= 1000
 
   const columns = useMemo<ColDef<DraftRow>[]>(() => {
     const DraftCell = ({ data }: ICellRendererParams<DraftRow>) =>
       data ? (
-        <span className="fw-cwd-cell">
+        <span className="fw-cwd-cell is-wrap">
           <strong className="fw-cwd-title">{draftTitle(data, untitled)}</strong>
           <span className="fw-cwd-sub">
             {data.draft?.startedBy ? t('customers.drafts.started', { date: formatDate(data.draft.startedAt, { locale }), name: data.draft.startedBy }) : data.draft ? t('customers.drafts.startedNoName', { date: formatDate(data.draft.startedAt, { locale }) }) : '—'}
@@ -124,25 +129,29 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
     const PictureCell = ({ data }: ICellRendererParams<DraftRow>) => (data ? <RecordPicture source="portalOrder" recordId={data.id} number={draftTitle(data, untitled)} size="cell" read={picturesNow.current?.read ?? null} /> : null)
     return [
       ...(pictures ? [{ colId: 'picture', headerName: pictures.header, minWidth: 76, maxWidth: 76, sortable: false, suppressHeaderMenuButton: true, cellRenderer: PictureCell } satisfies ColDef<DraftRow>] : []),
-      { colId: 'draft', headerName: t('customers.drafts.col.draft'), minWidth: 200, flex: 2, cellRenderer: DraftCell, valueGetter: (params) => (params.data ? draftTitle(params.data, untitled) : '') },
-      { colId: 'lines', headerName: t('customers.drafts.col.lines'), minWidth: 130, flex: 1, valueGetter: (params) => (params.data ? joined(linesWords(params.data)) : '') },
-      { colId: 'files', headerName: t('customers.drafts.col.files'), minWidth: 88, flex: 1, valueGetter: (params) => (params.data ? joined(filesWords(params.data)) : '') },
+      // cq fx2 W-04: the two-fact cells wrap (autoHeight) instead of cutting; least widths 180 · 110 · 120 · 120 · 64 (+ Files 88, Wanted by
+      // 110 from 1000 px): 670 px beside the dock at 779 with the Picture, 868 from 1000.
+      { colId: 'draft', headerName: t('customers.drafts.col.draft'), minWidth: 180, flex: 2, autoHeight: true, cellRenderer: DraftCell, valueGetter: (params) => (params.data ? draftTitle(params.data, untitled) : '') },
+      { colId: 'lines', headerName: t('customers.drafts.col.lines'), minWidth: 110, flex: 1, autoHeight: true, wrapText: true, valueGetter: (params) => (params.data ? joined(linesWords(params.data)) : '') },
+      { colId: 'files', headerName: t('customers.drafts.col.files'), minWidth: 88, flex: 1, hide: !roomy, autoHeight: true, wrapText: true, valueGetter: (params) => (params.data ? joined(filesWords(params.data)) : '') },
       // F-CW-102 (lead settle S28: only the Drafts view's sideways scroll): Ready and Wanted by had no share of the room, so the grid
       // gave each its 200 px default — 1058 px of columns in the 863 px beside the dock, the Open button off-screen. Each now takes
       // its share from its own least width ("5 of 6" beside "1 problem" whole): 200 + 130 + 88 + 136 + 140 + 92 + 64 = 850 px.
-      { colId: 'ready', headerName: t('customers.drafts.col.ready'), minWidth: 136, flex: 0.8, cellRenderer: ReadyCell, valueGetter: (params) => params.data?.draft?.readiness.done ?? null },
+      { colId: 'ready', headerName: t('customers.drafts.col.ready'), minWidth: 120, flex: 0.8, autoHeight: true, cellRenderer: ReadyCell, valueGetter: (params) => params.data?.draft?.readiness.done ?? null },
       {
         colId: 'changed',
         headerName: t('customers.drafts.col.changed'),
-        minWidth: 140,
+        minWidth: 120,
         flex: 1,
+        autoHeight: true,
+        wrapText: true, // cq fx2 W-04: "02/11/2026 by <name>" wraps instead of "02/11/2026 by S…"
         valueGetter: (params) => {
           const draft = params.data?.draft
           if (!draft) return '—'
           return draft.lastEditedBy ? t('customers.drafts.changed', { time: moment(draft.lastEditedAt), name: draft.lastEditedBy }) : moment(draft.lastEditedAt)
         },
       },
-      { colId: 'wanted', headerName: t('customers.drafts.col.wanted'), minWidth: 92, flex: 0.6, valueGetter: (params) => (params.data?.requestedDate ? formatDate(`${params.data.requestedDate}T12:00:00Z`, { locale }) : '—') },
+      { colId: 'wanted', headerName: t('customers.drafts.col.wanted'), minWidth: 110, flex: 0.6, hide: !roomy, valueGetter: (params) => (params.data?.requestedDate ? formatDate(`${params.data.requestedDate}T12:00:00Z`, { locale }) : '—') },
       {
         colId: 'messages',
         headerName: t('customers.drafts.col.messages'),
@@ -176,7 +185,7 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
       { colId: 'more', headerName: '', minWidth: 64, maxWidth: 88, sortable: false, cellRenderer: OpenCell },
     ]
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the cells read the latest actions through `latest`
-  }, [t, locale, wide, price, untitled, !!model.pictures /* F-CQ-205 */])
+  }, [t, locale, wide, price, untitled, !!model.pictures /* F-CQ-205 */, roomy /* cq fx2 W-04 */])
 
   // F-CQ-303: the Work tab's Views ▾ over the drafts is gone with its Drafts view (Quotes & incoming draws this list with no Views ▾).
 

@@ -48,7 +48,17 @@
     "countMore_other": "{count} righe lette · altre da leggere",
     "moreReading": "Lettura in corso…",
     "showMore": "Mostra altre {count}",
-    "kindNotHere": "Richieste di modifica: non in questa scheda — cambiano un ordine confermato (si rispondono sull’ordine e in Home › Approvazioni)"
+    "kindNotHere": "Richieste di modifica: non qui",
+    "countPortal_one": "{count} ordine dal portale",
+    "countPortal_other": "{count} ordini dal portale",
+    "countChange_one": "{count} richiesta di modifica",
+    "countChange_other": "{count} richieste di modifica",
+    "countMixed_one": "{count} richiesta o ordine dal portale",
+    "countMixed_other": "{count} richieste e ordini dal portale",
+    "countAny_one": "{count} riga",
+    "countAny_other": "{count} righe",
+    "kindNotHereHint": "Le richieste di modifica non sono in questa scheda: cambiano un ordine confermato (si rispondono sull’ordine e in Home › Approvazioni).",
+    "searchHost": "Cerca numero, richiesta…"
   },
   "col": {
     "number": "Numero",

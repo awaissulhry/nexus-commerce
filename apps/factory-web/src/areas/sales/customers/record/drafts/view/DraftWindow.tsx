@@ -13,7 +13,8 @@ import '../../../../inquiries/view/pane/pane.css'
 /**
  * F-CP-107 (customer page plan D10; 10-customer-page §6; 12 §3) — a customer's portal draft in a large centred window (DS DetailModal):
  * ONE banner "Read only: <customer> is still writing it." over Incoming's own catalogue pane in draft mode (the same container and view
- * as Incoming: its lines, files, facts and conversation; Accept as order, Accept as quote and Refuse held with why). J / K walk the
+ * as Incoming: its lines, files, facts and conversation). cq fx2 W-06: no decision is drawn on a draft (the customer still writes it; a
+ * button you may not use is hidden), the head names the customer as the page does and shows the draft's garment. J / K walk the
  * customer's drafts in the list's order (the window's ▲ / ▼; key hints in the footer's info icon). Draws its model; fetches nothing.
  */
 
@@ -24,6 +25,8 @@ export interface DraftWindowModel {
   readonly nav: { readonly ids: readonly string[]; readonly current: string }
   readonly pane: CatalogueModel
   readonly thread?: ReactNode
+  /** cq fx2 W-06: the draft's garment (the host's picture of its first style). */
+  readonly picture?: ReactNode
 }
 
 export interface DraftWindowActions {
@@ -52,7 +55,7 @@ function Window({ model, actions }: { model: DraftWindowModel; actions?: DraftWi
     >
       <div className="fw-cwd-window">
         <Banner tone="info" title={t('customers.drafts.readOnly', { customer: model.customer })} />
-        <CataloguePane model={model.pane} actions={actions?.pane} thread={model.thread} />
+        <CataloguePane model={{ ...model.pane, draft: { title: model.pane.draft?.title ?? model.title, customer: model.customer, ...(model.picture ? { picture: model.picture } : {}) } /* cq fx2 W-06 */ }} actions={actions?.pane} thread={model.thread} />
       </div>
     </DetailModal>
   )

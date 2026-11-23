@@ -264,3 +264,10 @@
 .fw-bo.is-grid .fw-bo-actions {
   width: 100%;
 }
+
+/* cq fx2 W-04: the drafts' two-fact cells wrap (the rows grow) instead of cutting "Started … by Seed P…". */
+.fw-cwd-cell.is-wrap .fw-cwd-title,
+.fw-cwd-cell.is-wrap .fw-cwd-sub {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
