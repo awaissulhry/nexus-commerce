@@ -50,7 +50,7 @@
   "failed": {
     "versions": "Impossibile leggere le revisioni",
     "changes": "Impossibile leggere le modifiche del modello",
-    "drift": "Impossibile leggere offerte e ordini su revisioni precedenti",
+    "drift": "Impossibile leggere preventivi e ordini su revisioni precedenti",
     "released": "Impossibile leggere per cosa è rilasciata la revisione in vigore"
   },
   "col": {
@@ -59,7 +59,7 @@
     "why": "Cosa è cambiato",
     "released": "Rilasciata",
     "workOrders": "Ordini di lavoro",
-    "quotes": "Righe offerta",
+    "quotes": "Righe preventivo",
     "orders": "Righe ordine",
     "compare": "Confronto",
     "change": "Modifica",
@@ -84,7 +84,7 @@
   },
   "drift": {
     "title": "Ordini su revisioni precedenti",
-    "intro": "Offerte e ordini aperti con righe su una revisione diversa da quella in vigore, e come differisce la scheda.",
+    "intro": "Preventivi e ordini aperti con righe su una revisione diversa da quella in vigore, e come differisce la scheda.",
     "cost": "Differenza di costo",
     "perGarment": "per capo",
     "incomplete": "una voce non ha prezzo",
@@ -112,7 +112,7 @@
     "ATTRIBUTES": "Attributi del tipo di prodotto",
     "CHANGE_ORDERS": "Ordini di modifica",
     "SCOPE": "Ambito del rilascio",
-    "DRIFT": "Offerte e ordini aperti"
+    "DRIFT": "Preventivi e ordini aperti"
   },
   "gateWhat": {
     "BOM": "Quantità, colori per variante e taglie; gruppi e sottoassiemi.",
@@ -126,7 +126,7 @@
     "ATTRIBUTES": "Ogni attributo richiesto dal tipo di prodotto è compilato.",
     "CHANGE_ORDERS": "L'ordine di modifica che propone questa bozza è approvato e in vigore.",
     "SCOPE": "Le varianti e le taglie che questo rilascio prende.",
-    "DRIFT": "Offerte e ordini sulla revisione che diventa obsoleta la mantengono."
+    "DRIFT": "Preventivi e ordini sulla revisione che diventa obsoleta la mantengono."
   },
   "gateState": {
     "OK": "Fatto",
@@ -169,7 +169,7 @@
     "CHANGE_ORDER_NOT_APPROVED": "L'ordine di modifica che propone questa bozza non è ancora approvato.",
     "CHANGE_ORDER_NOT_EFFECTIVE": "L'ordine di modifica è approvato ma entra in vigore in un giorno successivo.",
     "CHANGE_ORDER_OPEN": "Un altro ordine di modifica è aperto su questo modello: rilasciare fuori da esso lo lascia da decidere di nuovo.",
-    "OPEN_QUOTES": "Offerte aperte sono state calcolate sulla revisione che diventa obsoleta: mantengono il prezzo.",
+    "OPEN_QUOTES": "Preventivi aperti sono stati calcolati sulla revisione che diventa obsoleta: mantengono il prezzo.",
     "OPEN_ORDERS": "Ordini aperti sono stati presi sulla revisione che diventa obsoleta."
   },
   "scope": {
@@ -205,7 +205,7 @@
     "noRequest": "Il tuo ruolo non richiede modifiche."
   },
   "effect": {
-    "drift": "Offerte e ordini aperti sulla revisione {revision} la mantengono: vedi Ordini su revisioni precedenti.",
+    "drift": "Preventivi e ordini aperti sulla revisione {revision} la mantengono: vedi Ordini su revisioni precedenti.",
     "widen": "La revisione {revision} resta quella in vigore; cresce solo ciò per cui è rilasciata.",
     "widenNever": "Un rilascio successivo aggiunge soltanto: ciò che è rilasciato resta rilasciato."
   },
@@ -265,7 +265,7 @@
       "same": "Nulla è cambiato: il modello in vigore è ancora la revisione {revision}.",
       "nothing": "Nessuna parte differisce.",
       "noBomRight": "Il dettaglio riga per riga richiede il permesso di leggere la distinta.",
-      "orders": "Righe d'ordine offerte o ordinate su un'altra revisione"
+      "orders": "Righe di preventivo o d'ordine su un'altra revisione"
     },
     "change": {
       "title": "Richiesta di modifica",

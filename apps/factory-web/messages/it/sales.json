@@ -50,7 +50,7 @@
     "NO_SHIP_TO": "Scegli l'indirizzo di consegna.",
     "NO_CONTACT_EMAIL": "Il contatto non ha un'email: il preventivo e il suo link partono per email.",
     "NO_PROMISE_DATE": "Un consumatore deve vedere la data di consegna: impostala (Codice del Consumo art. 49).",
-    "ACCOUNT_ON_HOLD": "Il conto del cliente è bloccato: l'offerta può proseguire, i nuovi ordini e le spedizioni attendono lo sblocco."
+    "ACCOUNT_ON_HOLD": "Il conto del cliente è bloccato: il preventivo può proseguire, i nuovi ordini e le spedizioni attendono lo sblocco."
   },
   "check": {
     "fix": "Correggi",

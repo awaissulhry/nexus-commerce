@@ -35,3 +35,26 @@ describe('one word for a note only the office reads (B-TH-215)', () => {
     })
   }
 })
+
+// ---- cq T (customer page › Quotes & incoming; the lead's decision on W2): ONE word for a quote in Italian — "preventivo". A line whose
+// English says "quote" never calls it "offerta" in Italian. Kept on purpose: a supplier's offer (a tannery's, a supplier quote on a
+// shipment) and the sizes "no longer offered" inside a quote's lines. The firm offer ("Offerta ferma / irrevocabile") and the offer a
+// quote stands as ("The offer", "Offer ended") are the English "offer", not the record's name.
+describe('one word for a quote in Italian: preventivo (cq T)', () => {
+  const KEPT = new Set(['library:materials.cost.reasonHint', 'shipments:ref.SUPPLIER_QUOTE', 'sales-inquiries:catalogue.acceptQuoteHint'])
+  it('no Italian line says "offerta" where its English says quote', () => {
+    const found = Object.entries(CATALOGUE.it).flatMap(([namespace, dictionary]) =>
+      Object.entries(dictionary)
+        .filter(([key, text]) => /offert[ae]\b/i.test(text) && /\bquot/i.test(CATALOGUE.en[namespace]?.[key] ?? '') && !KEPT.has(`${namespace}:${key}`))
+        .map(([key, text]) => `${namespace}:${key} = ${text}`),
+    )
+    expect(found).toEqual([])
+  })
+  it('the portal order accepted as a quote says it in the same word as its button', () => {
+    const words = CATALOGUE.it['sales-inquiries']!
+    expect(words['catalogue.acceptQuote']).toBe('Accetta come preventivo')
+    expect(words['catalogue.outcome.quote']).toBe('Accettato come preventivo {made}')
+    expect(words['catalogue.done.quote']).toBe('{number} è diventato il preventivo {made}')
+  })
+})
+// ---- end cq T

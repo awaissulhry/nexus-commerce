@@ -333,7 +333,7 @@
         "title": "Margine per ordine",
         "question": "Che margine facciamo su ogni ordine?",
         "definition": "Ogni ordine (esclusi gli annullati) con data ordine nel periodo. Margine quotato = imponibile meno il costo quotato; margine attuale = imponibile meno la stima attuale (ordini di produzione chiusi al costo effettivo, gli altri al maggiore tra piano ed effettivo); margine finora = il costo registrato fino a oggi. Un margine vuoto: nessun costo è ancora noto.",
-        "sources": "Ordini di vendita, le loro offerte, ordini di produzione e costi registrati",
+        "sources": "Ordini di vendita, i loro preventivi, ordini di produzione e costi registrati",
         "col": {
           "order": "Ordine",
           "customer": "Cliente",
