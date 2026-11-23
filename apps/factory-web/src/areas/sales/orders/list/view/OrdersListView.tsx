@@ -261,7 +261,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   // F-CW-203: + "Ask <customer> about N…" — Reply to N with the to-do tick ON (the customer named when the ticked orders are of one).
   const askRun: Record<AskEntryId, () => void> = {
     // Production's own Note window as an ask: its title here, its Send word the notes' own ("Write on 3").
-    askProduction: () => actions?.onAskProduction?.(pickedIds, { title: s('bar.askProductionTitle', { count: picked.length }), send: n('send', { count: picked.length }) }),
+    askProduction: () => actions?.onAskProduction?.(pickedIds, { title: s('bar.askProductionTitle', { count: picked.length }), send: n('send', { count: picked.length }), hint: s('bar.askProductionThen') /* F-CW-303 */ }),
     askCustomer: () => actions?.onReplyMany?.(pickedIds, { todo: true }),
   }
   const askLabel: Record<AskEntryId, string> = {

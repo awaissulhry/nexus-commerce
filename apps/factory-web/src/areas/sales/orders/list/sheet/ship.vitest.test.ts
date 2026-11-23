@@ -87,7 +87,7 @@ describe('F-CW-301: the sheet\'s words over the window', () => {
     for (const locale of LOCALES) {
       const s = createTranslator(locale, messagesFor(locale, ['orders-sheet'])['orders-sheet']!)
       const params = { count: 3, max: 20, customer: 'Seed Racing', order: 'SEED-SO-0009', carried: 24, owed: 244, number: 'SEED-SH-0012' }
-      for (const key of ['bar.ship', 'ship.cap', 'ship.nothing', 'ship.capLine', 'ship.notOnLabel', 'ship.off', 'ship.complete', 'ship.completeCarries', 'ship.draft', 'ship.created', 'ship.createdDraft', 'ship.createdDraftAny', 'ship.showThread', 'commands.runs', 'commands.notOn']) expect(s(key, params), `${locale} ${key}`).not.toBe(key)
+      for (const key of ['bar.ship', 'ship.cap', 'ship.nothing', 'ship.capLine', 'ship.notOnLabel', 'ship.off', 'ship.complete', 'ship.completeCarries', 'ship.draft', 'ship.created', 'ship.createdDraft', 'ship.createdDraftAny', 'receipt.showThread', 'commands.runs', 'commands.notOn']) expect(s(key, params), `${locale} ${key}`).not.toBe(key)
       expect(createTranslator(locale, messagesFor(locale, ['shipments']).shipments!)('new.empty.title'), locale).not.toBe('new.empty.title')
       expect(createTranslator(locale, messagesFor(locale, ['warehouse-shipments-depth'])['warehouse-shipments-depth']!)('shipOrders.why.SHIP_TO'), locale).not.toBe('shipOrders.why.SHIP_TO')
     }

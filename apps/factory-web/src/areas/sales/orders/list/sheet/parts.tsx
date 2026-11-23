@@ -519,6 +519,17 @@ export function WaitingOnCell({ row, mark, prefix, doorHref, s, now }: { row: Or
         {more}
       </span>
     )
+  // F-CW-303: what WE asked and still wait for — production (the order's open production issues), the customer (our open ask).
+  if (first.kind === 'askedProduction' || first.kind === 'askedCustomer') {
+    const time = age(first.since)
+    const words = first.kind === 'askedProduction' ? (time ? s('waiting.askedProduction', { time }) : s('waiting.askedProductionNow')) : s('waiting.askedCustomer', { customer: row.partyName, time: time ?? '—' })
+    return (
+      <span className="fw-sheet-cell">
+        <span>{words}</span>
+        {more}
+      </span>
+    )
+  }
   const since = age(first.since)
   return (
     <span className="fw-sheet-cell">

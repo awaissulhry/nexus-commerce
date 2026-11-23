@@ -81,6 +81,12 @@ function Dialog({ model, actions }: { model: NoteDialogModel; actions?: NoteDial
 
 const SHOWN = 3
 
+/** F-CW-303: a result line's record, from its key (`<type>:<id>`). */
+const recordOfLine = (key: string): { readonly type: string; readonly id: string } => {
+  const at = key.indexOf(':')
+  return { type: key.slice(0, at), id: key.slice(at + 1) }
+}
+
 /** The dialog's content (also drawn on its own by the tests: the DS Modal draws nothing before the page is hydrated). */
 export function NoteDialogBody({ model, actions }: { model: NoteDialogModel; actions?: NoteDialogActions }) {
   const t = useT(NOTES_NS)
@@ -109,7 +115,15 @@ export function NoteDialogBody({ model, actions }: { model: NoteDialogModel; act
             <li key={line.key} className="fw-pnt-result">
               {line.state === 'written' ? <CheckCircle2 size={14} aria-hidden /> : <XCircle size={14} aria-hidden />}
               <span>
-                <b>{line.label}</b> ·{' '}
+                {/* F-CW-303: on a host that shows a record's thread beside the window, the name is a button (else plain, as before). */}
+                {actions?.onRecord ? (
+                  <Button size="sm" variant="link" onClick={() => actions.onRecord?.(recordOfLine(line.key))}>
+                    {line.label}
+                  </Button>
+                ) : (
+                  <b>{line.label}</b>
+                )}{' '}
+                ·{' '}
                 {line.state === 'written'
                   ? [t('result.written'), line.mentioned > 0 ? t('result.mentioned', { count: line.mentioned }) : null, line.supervisorAsked ? t('result.supervisorAsked') : null, line.issue ? t('result.issue') : null].filter(Boolean).join(' · ')
                   : t('result.notWritten', { why: t(line.why) })}
@@ -257,6 +271,8 @@ export function NoteDialogBody({ model, actions }: { model: NoteDialogModel; act
         )}
       </div>
 
+      {/* F-CW-303: a ready ask may say, in one quiet line, what it does on the caller's page (the caller's own words). */}
+      {model.preset?.hint && <p className="fw-pnt-hint">{model.preset.hint}</p>}
       {model.offline && <Banner tone="warning" title={t('held.offline')} />}
       {model.problem && <Banner tone="danger" title={t(model.problem)} />}
       {model.busy && (

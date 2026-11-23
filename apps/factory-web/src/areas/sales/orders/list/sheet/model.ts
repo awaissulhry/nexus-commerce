@@ -149,13 +149,24 @@ export interface WaitingMark {
   readonly requestIds?: readonly string[]
   /** Since when the customer's newest shared message on the order's conversation waits on us (an instant). */
   readonly replySince?: string | null
+  /**
+   * F-CW-303: since when our oldest open ask of the customer on this order waits (an instant) — the customer page's own asks read
+   * (what we put in the customer's to-do list). Sales › Orders and Made to measure have none.
+   */
+  readonly askedSince?: string | null
 }
 export type WaitingMarks = Readonly<Record<string, WaitingMark>>
 
-/** One thing an order waits on — the most urgent first: a request to answer, a reply that waits, then who acts next. */
+/**
+ * One thing an order waits on — the most urgent first: a request to answer, a reply that waits (both wait on US), then what WE asked
+ * and still wait for (F-CW-303: production — the order's open production issues, since the oldest; the customer — our open ask of
+ * it), then who acts next.
+ */
 export type WaitingItem =
   | { readonly kind: 'request'; readonly count: number; readonly requestId: string | null }
   | { readonly kind: 'reply'; readonly since: string }
+  | { readonly kind: 'askedProduction'; readonly count: number; readonly since: string | null } // F-CW-303
+  | { readonly kind: 'askedCustomer'; readonly since: string } // F-CW-303
   | { readonly kind: 'keeper'; readonly on: WaitingOn; readonly since: string | null }
 
 /** The Waiting on cell's items (the cell shows the first and "+N more"); none: nothing waits (or the part was not read). */
@@ -165,8 +176,15 @@ export function waitingItemsOf(row: Pick<OrderRow, 'production'>, mark?: Waiting
   const requests = Math.max(production?.openRequests ?? 0, mark?.requestIds?.length ?? 0)
   if (requests > 0) items.push({ kind: 'request', count: requests, requestId: mark?.requestIds?.[0] ?? null })
   if (mark?.replySince) items.push({ kind: 'reply', since: mark.replySince })
-  // The keeper's "waiting on us" while a request waits is that request: said once.
-  if (production?.waitingOn && !(production.waitingOn === 'US' && requests > 0)) items.push({ kind: 'keeper', on: production.waitingOn, since: production.since })
+  // F-CW-303: what we asked and still wait for — "Asked production · 2 d" (the order's open production issues; a count withheld from
+  // this reader is null: nothing is said) and, on the customer's page, "Asked <customer> · 3 d".
+  const issues = production?.openIssues ?? 0
+  if (issues > 0) items.push({ kind: 'askedProduction', count: issues, since: production?.openIssuesSince ?? null })
+  const asked = mark?.askedSince ?? null
+  if (asked) items.push({ kind: 'askedCustomer', since: asked })
+  // The keeper's "waiting on us" while a request waits is that request, and its "waiting on the customer" while our ask of the
+  // customer waits is that ask: each said once.
+  if (production?.waitingOn && !(production.waitingOn === 'US' && requests > 0) && !(production.waitingOn === 'BRAND' && asked)) items.push({ kind: 'keeper', on: production.waitingOn, since: production.since })
   return items
 }
 

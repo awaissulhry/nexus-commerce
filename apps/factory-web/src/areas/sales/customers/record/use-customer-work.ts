@@ -259,9 +259,12 @@ export function workAttention(reads: WorkReads): { readonly count: number | null
   return { count, attention: count > 0 }
 }
 
-/** The sheet's Waiting on marks, by order id: the requests waiting on us (oldest first) and the order conversations whose reply waits. */
-export function marksOf(requests: readonly BrandRequest[] | null, replies: readonly WaitingRow[] | null): WaitingMarks {
-  const marks: Record<string, { requestIds?: string[]; replySince?: string }> = {}
+/**
+ * The sheet's Waiting on marks, by order id: the requests waiting on us (oldest first), the order conversations whose reply waits and
+ * — F-CW-303 — what we asked of the customer on an order and still waits (the page's own asks read: the oldest open one's day).
+ */
+export function marksOf(requests: readonly BrandRequest[] | null, replies: readonly WaitingRow[] | null, asks: readonly Pick<PartnerRequest, 'record' | 'status' | 'createdAt'>[] | null = null): WaitingMarks {
+  const marks: Record<string, { requestIds?: string[]; replySince?: string; askedSince?: string }> = {}
   for (const request of [...(requests ?? [])].filter((entry) => entry.waitingOn === 'US').sort((a, b) => a.askedAt.localeCompare(b.askedAt))) {
     const mark = (marks[request.orderId] ??= {})
     mark.requestIds = [...(mark.requestIds ?? []), request.id]
@@ -270,6 +273,12 @@ export function marksOf(requests: readonly BrandRequest[] | null, replies: reado
     if (row.recordType !== 'SalesOrder') continue
     const mark = (marks[row.recordId] ??= {})
     mark.replySince = row.waiting.since
+  }
+  // F-CW-303: "Asked <customer> · 3 d" — our open asks on an ORDER (an ask on another record marks no order), the oldest first.
+  for (const ask of asks ?? []) {
+    if (ask.status !== 'OPEN' || ask.record.type !== 'SalesOrder') continue
+    const mark = (marks[ask.record.id] ??= {})
+    if (!mark.askedSince || ask.createdAt < mark.askedSince) mark.askedSince = ask.createdAt
   }
   return marks
 }
@@ -461,7 +470,8 @@ export function useCustomerWork(partyId: string, can: WorkCan) {
 
   const requests = ready(reads.requests)
   const replies = ready(reads.replies)
-  const marks = useMemo(() => marksOf(requests?.items ?? null, replies?.rows ?? null), [requests, replies])
+  const asked = ready(reads.asks) // F-CW-303: what we asked of the customer, joined by order ("Asked <customer> · 3 d")
+  const marks = useMemo(() => marksOf(requests?.items ?? null, replies?.rows ?? null, asked?.items ?? null), [requests, replies, asked])
   const retry = (tile: StripTile) => {
     if (tile === 'requests') readers.requests()
     else if (tile === 'replies') readers.replies()

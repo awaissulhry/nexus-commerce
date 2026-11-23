@@ -743,6 +743,13 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
         .catch(() => undefined)
     }
   }
+  // F-CW-303 (10-design §6 W6): a receipt names each order as a button that SHOWS that order's thread while the window stays open —
+  // the host's own row click where it docks the order (the customer's page); elsewhere the order opens in a new tab.
+  const showOrder = (id: string) => {
+    const row = host.onRowClick ? [...(list.items ?? []), ...Object.values(groupRows).flatMap((entry) => entry.items ?? [])].find((entry) => entry.id === id) : undefined
+    if (host.onRowClick && row) return host.onRowClick(row, false)
+    window.open(`${prefix}/sales/orders/${encodeURIComponent(id)}`, '_blank', 'noopener')
+  }
   // F-CW-301: Ship N together… and a row's Create shipment… — Warehouse's own New shipment window, mounted here (its third mount).
   const ship = useShipTogether(api, session.permissions, rereadInPlace)
   // ---- end F-CW-301
@@ -932,12 +939,13 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     supervisor: assign.actions,
     onNote: (ids) => note.open(noteTargetsOf(pickedRows(ids)), 'selection'),
     // F-CW-202: Ask production about N… — the same Note window opened as an ask (the supervisor asked, "Needs an answer" ticked).
-    onAskProduction: (ids, words) => note.open(noteTargetsOf(pickedRows(ids)), 'selection', undefined, { title: words.title, body: '', needsAnswer: true, send: words.send }),
-    note: note.actions,
+    onAskProduction: (ids, words) => note.open(noteTargetsOf(pickedRows(ids)), 'selection', undefined, { title: words.title, body: '', needsAnswer: true, send: words.send, ...(words.hint ? { hint: words.hint } : {}) /* F-CW-303 */ }),
+    // F-CW-303: a receipt's order name shows that order's thread; the window stays open.
+    note: { ...note.actions, onRecord: (record) => (record.type === 'SalesOrder' ? showOrder(record.id) : undefined) },
     onAddTask: (ids, from = 'row') => openTask(ids, from), // F-SA-281
     task: taskActions, // F-SA-281
     onReplyMany: (ids, options) => replyMany.open(pickedRows(ids), host.locked?.party ?? null, options), // F-SA-282; F-CW-203: + the to-do tick
-    replyMany: replyMany.actions, // F-SA-282
+    replyMany: { ...replyMany.actions, onOrder: showOrder /* F-CW-303 */ }, // F-SA-282
     // ---- F-CW-301 ----
     onShipTogether: (ids) => ship.open(pickedRows(ids)),
     onCreateShipment: (id) => {

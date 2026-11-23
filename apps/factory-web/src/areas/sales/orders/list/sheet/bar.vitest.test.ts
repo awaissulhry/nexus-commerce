@@ -204,7 +204,7 @@ describe('F-CW-202: Ask ▾ — a menu for every role that writes (S37)', () => 
 
   it('it opens production\'s ONE Note window as an ask — the supervisor asked, "Needs an answer" ticked (source)', () => {
     const hook = readFileSync(new URL('../use-orders-sheet.ts', import.meta.url), 'utf8')
-    expect(hook).toContain("onAskProduction: (ids, words) => note.open(noteTargetsOf(pickedRows(ids)), 'selection', undefined, { title: words.title, body: '', needsAnswer: true, send: words.send }),")
+    expect(hook).toContain("onAskProduction: (ids, words) => note.open(noteTargetsOf(pickedRows(ids)), 'selection', undefined, { title: words.title, body: '', needsAnswer: true, send: words.send, ...(words.hint ? { hint: words.hint } : {}) /* F-CW-303 */ }),")
     const notes = readFileSync(new URL('../../../../production/_shared/notes/model.ts', import.meta.url), 'utf8')
     expect(notes).toContain('askSupervisor: preset.askSupervisor ?? true')
     for (const locale of LOCALES) {

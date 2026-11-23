@@ -119,7 +119,7 @@ export function ShipNoticeBanner({ notice, prefix, onOrder, onDismiss }: { notic
         {notice.orders.map((order, index) => (
           <Fragment key={order.id}>
             {index > 0 && ', '}
-            <Button size="sm" variant="link" title={s('ship.showThread', { number: order.number })} onClick={() => onOrder?.(order.id)}>
+            <Button size="sm" variant="link" title={s('receipt.showThread', { number: order.number })} onClick={() => onOrder?.(order.id)}>
               {order.number}
             </Button>
           </Fragment>

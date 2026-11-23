@@ -367,6 +367,8 @@ export interface NotePreset {
   readonly send: string
   /** F-PT-202: false — a note to someone the text @mentions (a gate's planner), not the record's supervisor; absent: the supervisor. */
   readonly askSupervisor?: boolean
+  /** F-CW-303: one quiet line under the form — what the ask then shows on the caller's page (its own words); absent: no line. */
+  readonly hint?: string
 }
 
 /** The draft a preset opens with: its text and "Needs an answer"; the supervisor asked (the dialog's own default) unless it says not. */
@@ -398,6 +400,11 @@ export interface NoteDialogActions {
   readonly onSend?: () => void
   readonly onRetryCheck?: () => void
   readonly onRetryPeople?: () => void
+  /**
+   * F-CW-303 (customer Work tab; 10-design §6 W6): the receipt's record name pressed — a host that can show a record's thread beside
+   * the window (the Orders sheet) gives this; the window stays open. Absent (every production page): the names are plain, as before.
+   */
+  readonly onRecord?: (record: { readonly type: string; readonly id: string }) => void
   readonly onClose?: () => void
 }
 

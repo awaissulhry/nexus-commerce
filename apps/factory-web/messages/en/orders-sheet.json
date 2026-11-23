@@ -328,7 +328,10 @@
     "reply": "Reply waits · {time}",
     "keeper": "{who} · {time}",
     "more_one": "+{count} more",
-    "more_other": "+{count} more"
+    "more_other": "+{count} more",
+    "askedProduction": "Asked production · {time}",
+    "askedProductionNow": "Asked production",
+    "askedCustomer": "Asked {customer} · {time}"
   },
   "row": {
     "addTask": "Add task…",
@@ -507,7 +510,8 @@
     "ship_one": "Ship {count} order…",
     "ship_other": "Ship {count} together…",
     "urgencyRegular": "Customer urgency: Set to regular…",
-    "urgencyUnlock": "Customer urgency: Unlock…"
+    "urgencyUnlock": "Customer urgency: Unlock…",
+    "askProductionThen": "Each row then says “Asked production” with the time in Waiting on."
   },
   "ship": {
     "cap": "At most {max} orders in one shipment.",
@@ -522,7 +526,9 @@
     "created_one": "Shipment {number} created with {count} order:",
     "created_other": "Shipment {number} created with {count} orders:",
     "createdDraft": "a draft: {customer} is not told.",
-    "createdDraftAny": "a draft: the customer is not told.",
-    "showThread": "Show {number}"
+    "createdDraftAny": "a draft: the customer is not told."
+  },
+  "receipt": {
+    "showThread": "Show the thread of {number}"
   }
 }

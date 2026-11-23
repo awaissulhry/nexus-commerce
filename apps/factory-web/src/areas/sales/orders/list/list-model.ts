@@ -376,7 +376,7 @@ export interface OrdersListActions {
    * F-CW-202 (10-design §4, §6 W2): Ask ▾ › "Ask production about N…" — production's ONE Note window opened as an ask ("Each record's
    * supervisor" and "Needs an answer" ticked); the caller gives its title and its Send word, said in the page's language.
    */
-  onAskProduction?: (ids: readonly string[], words: { readonly title: string; readonly send: string }) => void
+  onAskProduction?: (ids: readonly string[], words: { readonly title: string; readonly send: string; /** F-CW-303: what the rows then say. */ readonly hint?: string }) => void
   // ---- F-CW-301: Ship N together… (the ticked orders) and a row's Create shipment… — Warehouse's own window and its own actions ----
   onShipTogether?: (ids: readonly string[]) => void
   onCreateShipment?: (id: string) => void
