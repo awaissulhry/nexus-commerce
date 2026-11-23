@@ -1,11 +1,13 @@
-import { URGENCY_LOCK_REASON_MAX, URGENCY_OFFICE_BATCH_MAX } from '@nexus/factory-domain/production-brand/urgency'
-import { isApiError } from '../../../../../lib/api/errors'
 import type { ProductionLimits } from '../../../../admin/users/partners/api'
 import { LIMITS_ANCHOR, seesNow } from '../../../../sales/customers/portal/limits/model'
 import type { WorkOrder } from '../../../_shared/api'
 import type { Phrase } from '../../../_shared/model'
 import type { OrderThreadChoice, ThreadPick } from '../order-files/model'
-import type { AskedApproval, CustomerIssue, CustomerIssues, CustomerRequest, CustomerUrgency, UrgencyAnswer, UrgencyOrder } from './api'
+import type { AskedApproval, CustomerIssue, CustomerIssues, CustomerRequest, CustomerUrgency, UrgencyOrder } from './api'
+// F-CW-302: the urgency window (its acts, dialog, outcome and refusals) moved to areas/_shared/customer-urgency — the Orders sheet
+// mounts the same one. The card's own files keep reading these names from here.
+import type { UrgencyAct, UrgencyDialog, UrgencyOutcome, UrgencyTarget } from '../../../../_shared/customer-urgency/model'
+export { CARD_LIMITS, urgencyDialogHeld, urgencyOutcomeOf, urgencyProblemOf, type UrgencyAct, type UrgencyDialog, type UrgencyOutcome } from '../../../../_shared/customer-urgency/model'
 
 /**
  * F-PR-05b — the work order record's Customer card, without a screen (production plan §3 "Set a customer's order back to Regular, lock,
@@ -32,7 +34,6 @@ import type { AskedApproval, CustomerIssue, CustomerIssues, CustomerRequest, Cus
  * Words: catalogue `production` (`customerCard.*`); the level and section words are the limits card's (`portal-access`).
  */
 
-export const CARD_LIMITS = Object.freeze({ reason: URGENCY_LOCK_REASON_MAX, orders: URGENCY_OFFICE_BATCH_MAX })
 
 /** A part the card reads (null value while it is read; a problem when it failed: never drawn as empty). */
 export interface CardPart<T> {
@@ -42,11 +43,8 @@ export interface CardPart<T> {
 
 // ---- whose card ---------------------------------------------------------------------------------------------------------------
 
-export interface CardOrder {
-  readonly id: string
-  readonly number: string
-  readonly customerRef: string | null
-}
+/** An order of the card: the order the urgency window names (F-CW-302: the shared window's own target). */
+export type CardOrder = UrgencyTarget
 
 export interface CardCustomer {
   readonly partyId: string
@@ -174,9 +172,6 @@ export function urgencyByOf(line: UrgencyLine): { readonly set: { readonly name:
   }
 }
 
-/** The urgency acts the office has: Set to regular… (an Urgent order), Lock (not locked), Unlock (locked). */
-export type UrgencyAct = 'regular' | 'lock' | 'unlock'
-
 /** The acts a line offers, each with why it waits (null: it may): production.brand.override over its company and customer. */
 export function urgencyActsOf(line: UrgencyLine, busy: boolean): ReadonlyArray<{ readonly act: UrgencyAct; readonly held: Phrase | null }> {
   const held: Phrase | null = !line.mayOverride ? { key: 'customerCard.urgency.held.noOverride' } : busy ? { key: 'held.busy' } : null
@@ -184,55 +179,6 @@ export function urgencyActsOf(line: UrgencyLine, busy: boolean): ReadonlyArray<{
   if (line.order.urgency === 'URGENT') acts.push('regular')
   acts.push(line.order.locked ? 'unlock' : 'lock')
   return acts.map((act) => ({ act, held }))
-}
-
-export interface UrgencyDialog {
-  readonly act: UrgencyAct
-  readonly partyId: string
-  readonly orders: readonly CardOrder[]
-}
-
-/** Why the dialog's Send waits: a reason the customer reads for Set to regular and Lock (one line, at most 500); busy. */
-export function urgencyDialogHeld(act: UrgencyAct, reason: string, busy: boolean): Phrase | null {
-  if (act !== 'unlock') {
-    if (reason.trim() === '') return { key: 'customerCard.urgency.held.reason' }
-    if (/[\r\n]/.test(reason)) return { key: 'customerCard.urgency.held.line' }
-    if (reason.trim().length > CARD_LIMITS.reason) return { key: 'customerCard.urgency.held.long', params: { count: CARD_LIMITS.reason } }
-  }
-  if (busy) return { key: 'held.busy' }
-  return null
-}
-
-/** What a set-back, lock or unlock did: per order done, or why not (the API's words, only for this card's own orders); others counted. */
-export interface UrgencyOutcome {
-  readonly act: UrgencyAct
-  readonly done: readonly string[]
-  readonly notDone: ReadonlyArray<{ readonly number: string; readonly words: { readonly it: string; readonly en: string } | null }>
-  /** Rows the reader does not reach, or not of this card: counted, never named (PW-10). */
-  readonly notShown: number
-}
-
-export function urgencyOutcomeOf(act: UrgencyAct, answer: UrgencyAnswer, asked: readonly CardOrder[]): UrgencyOutcome {
-  const own = (orderId: string) => asked.some((order) => order.id === orderId)
-  const rows = answer.results.filter((row) => own(row.orderId))
-  return {
-    act,
-    done: rows.filter((row) => row.done).map((row) => row.number),
-    notDone: rows.filter((row) => !row.done).map((row) => ({ number: row.number, words: row.words })),
-    notShown: answer.notFound + (answer.results.length - rows.length),
-  }
-}
-
-/** A refused write in the card's words (a 409 carries each row's words: the card reads again). */
-export function urgencyProblemOf(error: unknown): Phrase {
-  if (isApiError(error)) {
-    if (error.kind === 'forbidden') return { key: 'customerCard.urgency.problem.forbidden' }
-    if (error.kind === 'conflict') return { key: 'customerCard.urgency.problem.conflict' }
-    if (error.kind === 'not_found') return { key: 'customerCard.urgency.problem.gone' }
-    if (error.kind === 'invalid') return { key: 'customerCard.urgency.problem.invalid' }
-    if (error.kind === 'unavailable') return { key: 'error.offline' }
-  }
-  return { key: 'customerCard.urgency.problem.failed' }
 }
 
 // ---- open problems --------------------------------------------------------------------------------------------------------------

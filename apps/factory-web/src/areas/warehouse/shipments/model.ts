@@ -658,3 +658,67 @@ export function togetherRows(model: Pick<NewShipmentModel, 'orders' | 'salesOrde
 }
 
 // ── end F-OP-121 ──
+
+// ── F-CW-301 (customer Work tab plan §4; 13-backend §5, §8; 10-design §6 W1): "Ship N together…" from a selection of orders ─────────
+// The SAME window as the order page's Create shipment… (together): the hook is opened with the ticked orders (`asked`); these pure
+// rules say which order the shipment is made for, which ticked orders join it at once, and why a ticked order is not on it.
+
+/** One shipment carries at most this many orders (the API's own limit on the orders of a new shipment). */
+export const SHIP_TOGETHER_MAX = 20
+/** The read gives 100 orders a page: a ticked order may sit on a later one. At most this many pages are followed. */
+export const READY_PAGES_MAX = 3
+
+const shippableOf = (order: Pick<ReadyOrder, 'cells'>): number => order.cells.reduce((sum, cell) => sum + cell.shippable, 0)
+
+/**
+ * The ticked order the shipment is made for: the first (in the ticked order, the asked one first) that the read holds with garments
+ * ready. Null: none has anything ready. The first order decides every other verdict — the API judges the others against ITS site —
+ * so when it is not the asked one the read is asked again with it (never trust verdicts read for an order that is not in the answer).
+ */
+export function firstReadyOf(asked: readonly string[], orders: readonly ReadyOrder[]): string | null {
+  return asked.find((id) => orders.some((order) => order.salesOrderId === id && shippableOf(order) > 0)) ?? null
+}
+
+/** The ticked orders the pages read so far do not hold (they may sit on a later page, or have nothing ready). */
+export const askedMissing = (asked: readonly string[], orders: readonly ReadyOrder[]): string[] => asked.filter((id) => !orders.some((order) => order.salesOrderId === id))
+
+/** The other ticked orders that join the first at once: read, with garments ready, their verdict allows — the cap counts the first. */
+export function othersOfAsked(asked: readonly string[], first: string, orders: readonly ReadyOrder[]): string[] {
+  return asked
+    .filter((id) => id !== first)
+    .filter((id) => {
+      const order = orders.find((entry) => entry.salesOrderId === id)
+      return !!order && shippableOf(order) > 0 && !!order.shipsWith && joinHeld(order.shipsWith) === null
+    })
+    .slice(0, SHIP_TOGETHER_MAX - 1)
+}
+
+/**
+ * Why a ticked order is not on the shipment: nothing of it is released to ship (the read does not hold it, or nothing of it can
+ * still ship), its verdict (another delivery address, another site … in the screen's words), the cap of orders, or the person took
+ * it off here.
+ */
+export type AskedWhy = { readonly kind: 'nothing' } | { readonly kind: 'held'; readonly held: NonNullable<ReturnType<typeof joinHeld>> } | { readonly kind: 'cap' } | { readonly kind: 'off' }
+
+export interface AskedLine {
+  readonly id: string
+  /** On the shipment as the window stands now. */
+  readonly on: boolean
+  readonly why: AskedWhy | null
+}
+
+/** Each ticked order as the window stands: on the shipment, or not with why ("Runs on 4 · Not on 2: why is beside each"). */
+export function askedLines(model: Pick<NewShipmentModel, 'orders' | 'salesOrderId' | 'others' | 'asked'>): AskedLine[] {
+  const orders = model.orders ?? []
+  const first = model.salesOrderId && orders.some((order) => order.salesOrderId === model.salesOrderId && shippableOf(order) > 0) ? model.salesOrderId : null
+  const on = new Set(first ? [first, ...(model.others ?? [])] : [])
+  return (model.asked ?? []).map((id) => {
+    if (on.has(id)) return { id, on: true, why: null }
+    const order = orders.find((entry) => entry.salesOrderId === id)
+    if (!order || shippableOf(order) <= 0 || !first) return { id, on: false, why: { kind: 'nothing' } }
+    const held = order.shipsWith ? joinHeld(order.shipsWith) : { key: 'shipOrders.cannotJoin', detail: null }
+    if (held) return { id, on: false, why: { kind: 'held', held } }
+    return { id, on: false, why: on.size >= SHIP_TOGETHER_MAX ? { kind: 'cap' } : { kind: 'off' } }
+  })
+}
+// ── end F-CW-301 ──

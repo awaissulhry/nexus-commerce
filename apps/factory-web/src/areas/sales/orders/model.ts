@@ -340,7 +340,9 @@ export function sortChoicesOf(oneCustomer: boolean): ReadonlyArray<{ readonly va
  * F-CW-201 (S5): the quiet words under "Most urgent first" — the rule in the reader's words, never "the planning order": our
  * priority, then the customer's own urgent order, then the promise date. One customer's sheet names the customer.
  */
-export function urgentRuleOf(customer: string | null): { readonly key: string; readonly params?: Readonly<Record<string, string>> } {
+export function urgentRuleOf(customer: string | null, urgencyOff = false): { readonly key: string; readonly params?: Readonly<Record<string, string>> } {
+  // F-CW-302 (10-design §8): while the customer's urgency switch is off (only its own Work tab knows) the rule has no middle part.
+  if (customer && urgencyOff) return { key: 'sort.urgentRuleOff' }
   return customer ? { key: 'sort.urgentRule', params: { customer } } : { key: 'sort.urgentRuleAll' }
 }
 // ── end B-TH-057 ──

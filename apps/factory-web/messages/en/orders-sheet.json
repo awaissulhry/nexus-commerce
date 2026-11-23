@@ -195,7 +195,8 @@
     "urgent": "Most urgent first",
     "urgentRule": "(our priority, then {customer}'s urgent order, then promise date)",
     "urgentRuleAll": "(our priority, then each customer's own urgent order, then promise date)",
-    "now": "Sort: {sort}"
+    "now": "Sort: {sort}",
+    "urgentRuleOff": "(our priority, then promise date)"
   },
   "views": {
     "suggest": "{customer} — tracking",
@@ -225,7 +226,21 @@
     "askedTip": "The customer asks to make it urgent: its request waits on us",
     "lockedTip": "Set to regular by us and locked: the customer cannot mark it urgent until we unlock it",
     "priority": "Priority: {level}",
-    "priorityTip": "Our own priority: the customer never sees it"
+    "priorityTip": "Our own priority: the customer never sees it",
+    "held": {
+      "off": "Customer urgency is off for {customer}.",
+      "noneUrgent_one": "The order ticked is not urgent for {customer}.",
+      "noneUrgent_other": "None of the {count} is urgent for {customer}.",
+      "noneLocked_one": "The order ticked is not locked.",
+      "noneLocked_other": "None of the {count} is locked."
+    },
+    "left": {
+      "label": "Not on these orders",
+      "notUrgent": "Not marked urgent by the customer",
+      "notLocked": "Not locked",
+      "locked": "Locked already",
+      "none": "No customer urgency counts on it: it left production, or the customer's urgent orders are off"
+    }
   },
   "atRisk": {
     "filter": "Show only the orders close to their promise",
@@ -320,7 +335,10 @@
     "reply": "Reply waits · {time}",
     "keeper": "{who} · {time}",
     "more_one": "+{count} more",
-    "more_other": "+{count} more"
+    "more_other": "+{count} more",
+    "askedProduction": "Asked production · {time}",
+    "askedProductionNow": "Asked production",
+    "askedCustomer": "Asked {customer} · {time}"
   },
   "row": {
     "addTask": "Add task…",
@@ -495,6 +513,29 @@
     "none": "Your role reads the orders and changes none: there is no act for the ticked rows.",
     "askCustomer": "Ask {customer} about {count}…",
     "askCustomerAny": "Ask the customer about {count}…",
-    "askCustomerWho": "A message in each order's own conversation, read in the portal, AND a to-do with a date in their list."
+    "askCustomerWho": "A message in each order's own conversation, read in the portal, AND a to-do with a date in their list.",
+    "ship_one": "Ship {count} order…",
+    "ship_other": "Ship {count} together…",
+    "urgencyRegular": "Customer urgency: Set to regular…",
+    "urgencyUnlock": "Customer urgency: Unlock…",
+    "askProductionThen": "Each row then says “Asked production” with the time in Waiting on."
+  },
+  "ship": {
+    "cap": "At most {max} orders in one shipment.",
+    "nothing_one": "Nothing is ready now on the order ticked.",
+    "nothing_other": "Nothing is ready now on the {count} ticked.",
+    "capLine": "One shipment carries at most {max} orders of one customer, to one address, from one site. {count} are ticked.",
+    "notOnLabel": "Not on this shipment",
+    "off": "Taken off here",
+    "complete": "{customer} wants {order} all in one delivery.",
+    "completeCarries": "This shipment would carry {carried} of its {owed} pieces still to ship.",
+    "draft": "A draft of {customer} exists:",
+    "created_one": "Shipment {number} created with {count} order:",
+    "created_other": "Shipment {number} created with {count} orders:",
+    "createdDraft": "a draft: {customer} is not told.",
+    "createdDraftAny": "a draft: the customer is not told."
+  },
+  "receipt": {
+    "showThread": "Show the thread of {number}"
   }
 }

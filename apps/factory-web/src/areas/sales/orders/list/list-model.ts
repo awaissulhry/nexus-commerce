@@ -1,6 +1,10 @@
 import type { CompanyRef } from '../../../../lib/session/session'
 import type { PartyDetail, PartyRow } from '../../quotes/api'
 import type { OrderBoard, OrderRow, OrderSort } from '../api'
+import type { NewShipmentActions } from '../../../warehouse/shipments/new/use-new-shipment' // F-CW-301
+import type { ShipTogetherModel } from './sheet/ship' // F-CW-301
+import type { UrgencyAct } from '../../../_shared/customer-urgency/model' // F-CW-302
+import type { SheetUrgencyActions, SheetUrgencyModel } from './sheet/urgency' // F-CW-302
 import type { PriceMatch } from '../api' // F-CP-140
 import type { OrderPhase } from '../api' // F-CW-101
 import type { OrderCustomer } from '../api' // F-SA-224: the switcher's customers carry Orders' counts
@@ -115,6 +119,21 @@ export interface OrdersListModel {
   /** Design cases: each row's picture as an address (the page reads the small previews through `actions.readPictures`). */
   demoPictures?: Readonly<Record<string, string>>
   /**
+   * F-CW-301 (10-design §6 W1): Warehouse's ONE New shipment window mounted on the sheet (Ship N together…, a row's Create
+   * shipment…), the shipping rights, and the one notice after Create. Absent: the host gives no shipping act.
+   */
+  ship?: ShipTogetherModel | null
+  /**
+   * F-CW-302 (S7, S14): the shared urgency window mounted on the sheet (Set to regular… · Lock… · Unlock… from a row's ⋯ and More ▾)
+   * and its outcome. Absent without production.brand.override: no urgency act is drawn.
+   */
+  urgency?: SheetUrgencyModel | null
+  /**
+   * F-CW-302 (S35) — host-only, the customer's Work tab: the customer's urgency switch is OFF (its own read, workorders.view). The
+   * urgency acts are then held with words and "Most urgent first" has no middle part. The other hosts never set it.
+   */
+  urgencyOff?: boolean
+  /**
    * F-CW-202 (lead settle S36; review A1-B4): false — this host draws no List ⇄ Board switch (the customer's Work tab), so the key
    * `v` does nothing there and leaves its keys list. Absent: the switch is drawn (the sheet's own band, or the host's).
    */
@@ -200,8 +219,6 @@ export interface OrdersListModel {
     readonly shown: readonly string[]
     readonly wide?: readonly string[]
     // ---- F-CP-107 (cp-fx16): the number and the status whole beside the dock (oo-walk 15 b) ----
-    /** Of `shown`, the ones the TABLE shows only from 1800 px (beside the dock their room goes to the number and the status); the phone card keeps them. */
-    readonly tableWide?: readonly string[]
     /** The host's own minimum widths by column id (the honest room of its longest words), over the sheet's. */
     readonly min?: Readonly<Record<string, number>>
     // ---- end F-CP-107 (cp-fx16)
@@ -222,8 +239,6 @@ export interface OrdersListModel {
     readonly later?: Readonly<Record<string, 'wider' | 'widest'>>
     // ---- end F-CW-103
   } | null
-  /** A real link on the toolbar's right ("Work orders of <customer> ›"). */
-  toolbarLink?: { readonly href: string; readonly label: string } | null
   /**
    * F-CP-105: "Columns: Work · Money" at the toolbar's start — the columns shown now (the host's view preset, or the money columns);
    * the host gives it only with the price grain (absent: no toggle at all). Picked through `actions.onColumnSet`.
@@ -357,7 +372,17 @@ export interface OrdersListActions {
    * F-CW-202 (10-design §4, §6 W2): Ask ▾ › "Ask production about N…" — production's ONE Note window opened as an ask ("Each record's
    * supervisor" and "Needs an answer" ticked); the caller gives its title and its Send word, said in the page's language.
    */
-  onAskProduction?: (ids: readonly string[], words: { readonly title: string; readonly send: string }) => void
+  onAskProduction?: (ids: readonly string[], words: { readonly title: string; readonly send: string; /** F-CW-303: what the rows then say. */ readonly hint?: string }) => void
+  // ---- F-CW-301: Ship N together… (the ticked orders) and a row's Create shipment… — Warehouse's own window and its own actions ----
+  onShipTogether?: (ids: readonly string[]) => void
+  onCreateShipment?: (id: string) => void
+  ship?: NewShipmentActions
+  onDismissShip?: () => void
+  // ---- end F-CW-301
+  // ---- F-CW-302: an urgency act over these orders (a row's ⋯: one; More ▾: the ticked ones it runs on) — the shared window opens ----
+  onUrgency?: (act: UrgencyAct, ids: readonly string[]) => void
+  urgency?: SheetUrgencyActions
+  // ---- end F-CW-302
   note?: NoteDialogActions
   // ---- end F-SA-280
   // ---- F-SA-282: Reply to <customer> on N… on the ticked orders, and the window's own actions

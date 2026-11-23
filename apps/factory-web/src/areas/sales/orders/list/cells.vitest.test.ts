@@ -680,8 +680,16 @@ describe('F-CW-102: the row\'s chips', () => {
     // Read only: no funnel, no button, no link in the cell (our acts are in the row's ⋯).
     const cell = await urgency(row({ ...state({ state: 'ASKED', requestId: 'req-9' }), ...priority('HIGH') }))
     expect(cell).not.toMatch(/<button|<a |fw-sheet-funnel/)
+    // F-CW-302 (S7): "Urgent – asked" is a DOOR to the request that waits on us when the host gives its address — the review window
+    // in place on the customer's Work tab, the order's Changes tab elsewhere; still no button and no funnel (our acts: the row's ⋯).
+    const door = await urgency(row(state({ state: 'ASKED', requestId: 'req-9' })), { askedHref: '/office/sales/orders/o-1?tab=changes' })
+    for (const part of ['<a ', 'class="fw-sheet-chip-door"', 'data-door=""', 'href="/office/sales/orders/o-1?tab=changes"']) expect(door, part).toContain(part)
+    expect(textOfHtml(door)).toBe('Urgent – asked')
+    expect(door).not.toMatch(/<button|fw-sheet-funnel/)
+    // Only that state is a door: an Urgent or a set-back order with the address given draws no link.
+    expect(await urgency(row(state({ state: 'URGENT', urgentRank: 2 })), { askedHref: '/x' })).not.toContain('<a ')
     const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
-    expect(view).toContain('<CustomerUrgencyCell row={data} s={s} d={d} bare={phone} priorityShown={priorityShown} />')
+    expect(view).toContain('<CustomerUrgencyCell row={data} s={s} d={d} bare={phone} priorityShown={priorityShown} askedHref={askedHrefOf(prefix, data, latest.current.model.doorHref)')
     expect(view).not.toContain("act()?.onExtra?.({ customerUrgency")
   })
 
@@ -743,3 +751,111 @@ describe('F-CW-102: the row\'s chips', () => {
 })
 // ---- end F-CW-102
 
+
+// ---- F-CW-303 (customer Work tab plan §4; 10-design §6 W2, W3, W6): the Waiting on cell says what WE asked and still wait for —
+// "Asked production · 2 d" (the order's open production issues, since the oldest) and, on the customer's page, "Asked <customer> ·
+// 3 d" (the page's own asks read, joined by order in its marks); the receipts name each order as a button that shows its thread.
+describe('F-CW-303: what we asked and still wait for; the receipts\' order names', () => {
+  const NOW = Date.parse('2026-11-23T10:00:00Z')
+  const part = (over: Partial<NonNullable<OrderRow['production']>> = {}): NonNullable<OrderRow['production']> => ({ stage: 'SEWING', stageSince: '2026-11-10', health: 'ON_TRACK', waitingOn: null, since: null, held: false, supervisorMark: 'ME', openRequests: 0, openIssues: 0, withheld: [], ...over })
+  const row = (production: Partial<NonNullable<OrderRow['production']>> = {}): OrderRow => ({ ...LIST_ROWS[0]!, partyName: 'Seed Racing', production: part(production) })
+  const text = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  const cell = async (r: OrderRow, mark: Parameters<typeof import('./sheet/parts').WaitingOnCell>[0]['mark'] = null, locale: (typeof LOCALES)[number] = 'en') => {
+    const { WaitingOnCell } = await import('./sheet/parts')
+    return text(renderToStaticMarkup(createElement(I18nProvider, { locale, messages: {} }, createElement(WaitingOnCell, { row: r, mark, prefix: '/office', s: createTranslator(locale, messagesFor(locale, [NAMESPACE])[NAMESPACE]!), now: NOW }))))
+  }
+
+  it('the two new kinds, after what waits on US and before who acts next; a withheld or zero count says nothing', async () => {
+    const { waitingItemsOf } = await import('./sheet/model')
+    expect(waitingItemsOf(row({ openIssues: 2, openIssuesSince: '2026-11-21T10:00:00Z' }))).toEqual([{ kind: 'askedProduction', count: 2, since: '2026-11-21T10:00:00Z' }])
+    expect(waitingItemsOf(row({ openIssues: 1 }))).toEqual([{ kind: 'askedProduction', count: 1, since: null }]) // an older answer without the day
+    expect(waitingItemsOf(row({ openIssues: 0, openIssuesSince: null }))).toEqual([])
+    expect(waitingItemsOf(row({ openIssues: null, withheld: ['openIssues'] }))).toEqual([]) // not this reader's to know: never guessed
+    expect(waitingItemsOf(row(), { askedSince: '2026-11-20T10:00:00Z' })).toEqual([{ kind: 'askedCustomer', since: '2026-11-20T10:00:00Z' }])
+    // The order: a request to answer, a reply that waits, what we asked of production, of the customer, then who acts next.
+    const all = waitingItemsOf(row({ openRequests: 1, openIssues: 1, openIssuesSince: '2026-11-21T10:00:00Z', waitingOn: 'SUPPLIER', since: '2026-11-16T08:00:00Z' }), { requestIds: ['req-1'], replySince: '2026-11-22T08:00:00Z', askedSince: '2026-11-20T10:00:00Z' })
+    expect(all.map((item) => item.kind)).toEqual(['request', 'reply', 'askedProduction', 'askedCustomer', 'keeper'])
+    // The keeper's "waiting on the customer" while our ask of the customer waits IS that ask: said once.
+    expect(waitingItemsOf(row({ waitingOn: 'BRAND', since: '2026-11-19T08:00:00Z' }), { askedSince: '2026-11-20T10:00:00Z' }).map((item) => item.kind)).toEqual(['askedCustomer'])
+    expect(waitingItemsOf(row({ waitingOn: 'BRAND', since: '2026-11-19T08:00:00Z' })).map((item) => item.kind)).toEqual(['keeper'])
+  })
+
+  it('the cell: "Asked production · 2 d", "Asked Seed Racing · 3 d", "+1 more"; no day known: "Asked production"', async () => {
+    expect(await cell(row({ openIssues: 1, openIssuesSince: '2026-11-21T10:00:00Z' }))).toBe('Asked production · 2 d')
+    expect(await cell(row({ openIssues: 1 }))).toBe('Asked production')
+    expect(await cell(row(), { askedSince: '2026-11-20T10:00:00Z' })).toBe('Asked Seed Racing · 3 d')
+    expect(await cell(row({ openIssues: 1, openIssuesSince: '2026-11-23T07:00:00Z' }), { askedSince: '2026-11-20T10:00:00Z' })).toBe('Asked production · 3 h +1 more')
+    expect(await cell(row({ openIssues: 1, openIssuesSince: '2026-11-21T10:00:00Z' }), null, 'it')).toBe('Chiesto alla produzione · 2 g')
+    expect(await cell(row(), { askedSince: '2026-11-20T10:00:00Z' }, 'it')).toBe('Chiesto a Seed Racing · 3 g')
+    expect(await cell(row())).toBe('—')
+    for (const locale of LOCALES) {
+      const sheet = createTranslator(locale, messagesFor(locale, [NAMESPACE])[NAMESPACE]!)
+      for (const key of ['waiting.askedProduction', 'waiting.askedProductionNow', 'waiting.askedCustomer', 'receipt.showThread', 'bar.askProductionThen']) expect(sheet(key, { time: '2 d', customer: 'Seed Racing', number: 'SEED-SO-0009' }), `${locale} ${key}`).not.toBe(key)
+    }
+  })
+
+  it('the customer page joins its asks by order in the marks: the oldest open ask on an ORDER; other records and closed asks mark nothing', async () => {
+    const { marksOf } = await import('../../customers/record/use-customer-work')
+    const ask = (id: string, type: string, createdAt: string, status: 'OPEN' | 'DONE' | 'CANCELLED' = 'OPEN') => ({ record: { type, id, label: id }, status, createdAt })
+    expect(marksOf(null, null, [ask('o1', 'SalesOrder', '2026-11-21T09:00:00Z'), ask('o1', 'SalesOrder', '2026-11-19T09:00:00Z'), ask('o2', 'SalesOrder', '2026-11-20T09:00:00Z', 'DONE'), ask('q1', 'Quote', '2026-11-18T09:00:00Z')])).toEqual({ o1: { askedSince: '2026-11-19T09:00:00Z' } })
+    // Beside the other marks of the same order; without the asks read (no right): as before.
+    expect(marksOf([{ id: 'r1', orderId: 'o1', askedAt: '2026-11-17T09:00:00Z', waitingOn: 'US' }] as never, null, [ask('o1', 'SalesOrder', '2026-11-19T09:00:00Z')])).toEqual({ o1: { requestIds: ['r1'], askedSince: '2026-11-19T09:00:00Z' } })
+    expect(marksOf(null, null)).toEqual({})
+    const hook = readFileSync(new URL('../../customers/record/use-customer-work.ts', import.meta.url), 'utf8')
+    expect(hook).toContain('const marks = useMemo(() => marksOf(requests?.items ?? null, replies?.rows ?? null, asked?.items ?? null), [requests, replies, asked])')
+    // Sales › Orders and Made to measure read no asks: their rows never say "Asked <customer>".
+    for (const host of ['./OrdersPage.tsx', '../../mtm/MtmPage.tsx', './use-orders-sheet.ts']) expect(readFileSync(new URL(host, import.meta.url), 'utf8'), host).not.toMatch(/askedSince|listPartnerRequests/)
+  })
+
+  it('a receipt names each order as a button that shows its thread — by a host callback; the window stays open (source)', () => {
+    const hook = readFileSync(new URL('./use-orders-sheet.ts', import.meta.url), 'utf8')
+    // The customer's page docks the order (its own row click); elsewhere the order opens in a new tab — never a page hop under an open window.
+    expect(hook).toContain('if (host.onRowClick && row) return host.onRowClick(row, false)')
+    expect(hook).toContain("window.open(`${prefix}/sales/orders/${encodeURIComponent(id)}`, '_blank', 'noopener')")
+    expect(hook).toContain("note: { ...note.actions, onRecord: (record) => (record.type === 'SalesOrder' ? showOrder(record.id) : undefined) },")
+    expect(hook).toContain('replyMany: { ...replyMany.actions, onOrder: showOrder /* F-CW-303 */ }, // F-SA-282')
+    const reply = readFileSync(new URL('./view/ReplyManyDialog.tsx', import.meta.url), 'utf8')
+    expect(reply).toContain("<Button size=\"sm\" variant=\"link\" title={s('receipt.showThread', { number: line.label })} onClick={() => actions.onOrder?.(line.id)}>")
+    // Production's own Note window: the name is a button only where a host gives the callback — its own pages pass none (as before).
+    const note = readFileSync(new URL('../../../production/_shared/notes/view/NoteDialog.tsx', import.meta.url), 'utf8')
+    expect(note).toContain('<Button size="sm" variant="link" onClick={() => actions.onRecord?.(recordOfLine(line.key))}>')
+    expect(note).toContain('<b>{line.label}</b>')
+    expect(note).toContain('{model.preset?.hint && <p className="fw-pnt-hint">{model.preset.hint}</p>}')
+    // "Ask production about N…" says what the rows then show.
+    expect(readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')).toContain("hint: s('bar.askProductionThen') /* F-CW-303 */ }),")
+  })
+})
+// ---- end F-CW-303
+
+// ---- F-CW-304 (customer Work tab plan §4): after each act the orders it named are read again WHERE THEY STAND — rows never jump
+// under the reader (the sheet stands in "Most urgent first": a silent reload of the whole list re-sorted it); dead parts are out.
+describe('F-CW-304: rows never jump after an act; nothing unused stays (source)', () => {
+  const hook = readFileSync(new URL('./use-orders-sheet.ts', import.meta.url), 'utf8')
+  const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+
+  it('every act of the bar reads only its own orders again, by id, and puts each where it stands', () => {
+    // The ONE in-place read: by id, fifty at a time; a row that left the view is greyed until "N updates · Show" (placeRow).
+    expect(hook).toContain('listOrders(api, { ids: ids.slice(at, at + 50), production: productionShown, progress: progressShown, limit: 50 })')
+    expect(hook).toContain('for (const fresh of page.orders) placeRow(fresh.id, () => fresh, fresh.status)')
+    expect(hook).toContain('const assign = useAssignSupervisor(api, () => rereadInPlace(acted.current.assign))')
+    expect(hook).toContain('const note = useNoteDialog(api, { can: noteCan, onDone: () => rereadInPlace(acted.current.note) })')
+    expect(hook).toContain('rereadInPlace(task.records.map((record) => record.id))')
+    expect(hook).toContain('const replyMany = useReplyMany(api, session.permissions, () => rereadInPlace(acted.current.reply)')
+    expect(hook).toContain('const ship = useShipTogether(api, session.permissions, rereadInPlace)')
+    expect(hook).toContain('const urgencyAgain = () => rereadInPlace(urgencyAsked.current)')
+    // The orders are the open window's own targets.
+    expect(hook).toContain('if (assign.model) acted.current.assign = assign.model.targets.map((target) => target.orderId)')
+    expect(hook).toContain('if (note.model) acted.current.note = note.model.targets.salesOrders.map((record) => record.id)')
+    expect(hook).toContain('if (replyMany.model) acted.current.reply = replyMany.model.targets.map((target) => target.id)')
+    // No act reloads the whole list silently any more: the one silent reload left is the board's own (a live change of its counts).
+    expect(hook.match(/load\(true\)/g)).toHaveLength(1)
+    expect(hook).toContain('const rereadBoard = useCoalesced(() => void load(true), 900)')
+  })
+
+  it('dead parts are out: the toolbar link (the band holds that door) and the table-wide set (the tab\'s rooms decide)', () => {
+    const model = readFileSync(new URL('./list-model.ts', import.meta.url), 'utf8')
+    for (const source of [view, model, readFileSync(new URL('../../customers/record/view/WorkTab.tsx', import.meta.url), 'utf8')]) expect(source).not.toMatch(/toolbarLink|tableWide/)
+    expect(view).toContain("export function withPreset(column: ColDef<OrderRow>, preset: OrdersListModel['preset'] | null, wide: boolean, label?: (column: string, room: 'wider' | 'widest') => string): ColDef<OrderRow> {")
+  })
+})
+// ---- end F-CW-304

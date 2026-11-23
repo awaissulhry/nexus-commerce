@@ -43,7 +43,7 @@ const SHEET: ColDef<OrderRow>[] = [
 ]
 const sheetFor = (room: WorkRoom, waiting: 'us' | null = null): ColDef<OrderRow>[] => {
   const preset = workPreset(waiting ? 'open' : 'all', waiting, false, room)
-  return orderedByPreset(SHEET.map((column) => withPreset(column, preset, room === 'widest', false, label)), preset)
+  return orderedByPreset(SHEET.map((column) => withPreset(column, preset, room === 'widest', label)), preset)
 }
 const onScreen = (columns: readonly ColDef<OrderRow>[]) => columns.filter((column) => !column.hide).map((column) => column.colId)
 const ticked = (columns: readonly ColDef<OrderRow>[]) => preferencesOf(toolColumnsOf(columns as readonly ColDef<unknown>[]), undefined).visibleColumns
@@ -104,7 +104,7 @@ describe('F-CW-103: Customise tells the truth for the Work tab\'s set (S12; A1-B
   it('the preset says each column\'s truth to the list frame: on screen or waiting → not opt-in; anything else → opt-in (no list-frame change)', () => {
     const preset = workPreset('all', null)
     const facts = (colId: string, column: Partial<ColDef<OrderRow>> = {}) => {
-      const out = withPreset({ colId, headerName: colId, ...column }, preset, false, false, label)
+      const out = withPreset({ colId, headerName: colId, ...column }, preset, false, label)
       return { hide: out.hide, optIn: (out.context as { optIn?: boolean }).optIn, toolLabel: (out.context as { toolLabel?: string }).toolLabel }
     }
     expect(facts('whereItIs', { hide: true, context: { optIn: true } })).toEqual({ hide: false, optIn: false, toolLabel: undefined })

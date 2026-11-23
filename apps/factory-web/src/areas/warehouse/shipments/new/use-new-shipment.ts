@@ -4,8 +4,10 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import type { ApiClient } from '../../../../lib/api/client'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { addLines, createShipment, getShipment, readyToShip, type Shipment, type TransportBy } from '../api'
+import { readyToShipPage, type ReadyOrder } from '../api' // F-CW-301
 import type { NewShipmentModel } from '../list/list-model'
 import { newShipmentLines, ordersOfNew, readProblem, togetherRows, writeProblem } from '../model'
+import { askedMissing, firstReadyOf, othersOfAsked, READY_PAGES_MAX, SHIP_TOGETHER_MAX } from '../model' // F-CW-301
 
 /**
  * F-OP-121 (order page plan N6): New shipment as ONE hook — the Warehouse list (choose among every order with released garments)
@@ -43,16 +45,58 @@ export function useNewShipment(input: { readonly api: ApiClient; readonly defaul
   const { api, defaults, onCreated, onClosed } = input
   const [model, setModel] = useState<NewShipmentModel | null>(null)
   const key = useRef<string | null>(null)
+  // F-CW-301: the reads of a selection belong to the window that asked them (a window closed or opened again drops the earlier ones).
+  const turn = useRef(0)
 
   /**
    * Opens New shipment: `salesOrderId` chosen (or null: pick one); `together` (the order page): that order fixed, and the same
    * customer's other open orders with released garments beside it, each with its verdict.
    */
+  // F-CW-301 (13-backend §5, §8): `asked` — "Ship N together…" from ticked orders (every ticked id, `salesOrderId` among them).
+  // The same `together` window: after the read `salesOrderId` is the first ticked order with garments ready and `others` the ticked
+  // orders whose verdict allows. Two facts of the read are respected: (1) the first order decides the verdicts — when the asked one
+  // has nothing ready the read is asked again with a ticked order that has (two reads at most); (2) the read gives 100 orders a
+  // page — the cursor is followed while a ticked order is missing (READY_PAGES_MAX pages at most). Without `asked`: as before.
   const open = useCallback(
-    (salesOrderId: string | null, options: { readonly together?: boolean } = {}) => {
+    (salesOrderId: string | null, options: { readonly together?: boolean; readonly asked?: readonly string[] } = {}) => {
       key.current = newIdempotencyKey()
       const given = defaults()
       const together = !!options.together && !!salesOrderId
+      const mine = ++turn.current
+      if (salesOrderId && options.asked && options.asked.length > 0) {
+        const asked = [...new Set([salesOrderId, ...options.asked])]
+        setModel({ ...CLOSED, salesOrderId, step: 1, transportBy: given.transportBy, carrierCode: given.carrierCode, serviceCode: given.serviceCode, together: true, others: [], asked })
+        const readFor = async (first: string): Promise<ReadyOrder[]> => {
+          const orders: ReadyOrder[] = []
+          let cursor: string | null = null
+          for (let page = 0; page < READY_PAGES_MAX; page += 1) {
+            const answer: { orders: ReadyOrder[]; nextCursor: string | null } = await readyToShipPage(api, { salesOrderId: first, cursor })
+            for (const order of answer.orders) if (!orders.some((known) => known.salesOrderId === order.salesOrderId)) orders.push(order)
+            cursor = answer.nextCursor
+            if (!cursor || askedMissing(asked, orders).length === 0) break
+          }
+          return orders
+        }
+        void (async () => {
+          let orders = await readFor(salesOrderId)
+          let first = firstReadyOf(asked, orders)
+          // The asked order has nothing ready: its answer judged the others against no site — ask again with one that has.
+          if (first && first !== salesOrderId) {
+            orders = await readFor(first)
+            first = firstReadyOf([first, ...asked], orders) ?? first
+          }
+          return { orders, first }
+        })().then(
+          ({ orders, first }) => {
+            if (mine !== turn.current) return
+            setModel((current) => (current ? { ...current, orders, salesOrderId: first ?? salesOrderId, others: first ? othersOfAsked(asked, first, orders) : [] } : current))
+          },
+          (error: unknown) => {
+            if (mine === turn.current) setModel((current) => (current ? { ...current, problem: readProblem(error) } : current))
+          },
+        )
+        return
+      }
       setModel({ ...CLOSED, salesOrderId, step: 1, transportBy: given.transportBy, carrierCode: given.carrierCode, serviceCode: given.serviceCode, together, others: [] })
       readyToShip(api, together ? { salesOrderId, together: true } : {})
         .then((orders) => {
@@ -84,6 +128,7 @@ export function useNewShipment(input: { readonly api: ApiClient; readonly defaul
   )
 
   const close = useCallback(() => {
+    turn.current += 1 // F-CW-301: a read on its way belongs to the window that closed
     setModel(null)
     onClosed?.()
   }, [onClosed])
@@ -140,6 +185,8 @@ export function useNewShipment(input: { readonly api: ApiClient; readonly defaul
           if (!current) return current
           const row = togetherRows(current).find((entry) => entry.order.salesOrderId === salesOrderId)
           if (on && (!row || row.held)) return current
+          // F-CW-301: from a selection, one more than the cap is not added (the window says why beside it); the other mounts as before.
+          if (on && current.asked && !(current.others ?? []).includes(salesOrderId) && (current.others ?? []).length >= SHIP_TOGETHER_MAX - 1) return current
           const others = (current.others ?? []).filter((id) => id !== salesOrderId)
           const dropped = on ? [] : (current.orders ?? []).find((order) => order.salesOrderId === salesOrderId)?.cells.map((cell) => cell.workOrderSizeId) ?? []
           const quantities = Object.fromEntries(Object.entries(current.quantities).filter(([cellId]) => !dropped.includes(cellId)))

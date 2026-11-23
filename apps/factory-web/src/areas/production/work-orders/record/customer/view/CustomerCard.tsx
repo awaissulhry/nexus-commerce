@@ -1,16 +1,17 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, ExternalLink, Eye, Lock, MessageSquare, Unlock, Zap } from 'lucide-react'
 import { KIND_RULES } from '@nexus/factory-domain/approvals-out/kinds'
-import { Banner, Card, Field, KeyValue } from '@nexus/ui/components'
-import { Button, Checkbox, Input, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
-import { Modal } from '../../../../../../lib/i18n/ds-parts'
+import { Card, KeyValue } from '@nexus/ui/components'
+import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../../record-panels/i18n'
 import { useRecordFrame } from '../../../../../_shared/record-frame/RecordFrame'
+// F-CW-302: the urgency window and its outcome moved to areas/_shared/customer-urgency (one window for the card and the Orders sheet).
+import { UrgencyOutcome } from '../../../../../_shared/customer-urgency/view/UrgencyOutcome'
+import { UrgencyOverrideDialog } from '../../../../../_shared/customer-urgency/view/UrgencyOverrideDialog'
 import { supervisorFactOf } from '../../../../../_shared/production-supervisor/model'
 import { SupervisorFact } from '../../../../../_shared/production-supervisor/view/SupervisorFact'
 import type { WorkOrder } from '../../../../_shared/api'
@@ -21,7 +22,6 @@ import {
   ageOf,
   answerHref,
   approvalsOf,
-  CARD_LIMITS,
   issueThreadOf,
   issuesOfWorkOrder,
   limitsHref,
@@ -31,14 +31,12 @@ import {
   seesOf,
   urgencyActsOf,
   urgencyByOf,
-  urgencyDialogHeld,
   urgencyLinesOf,
   urgencyWordsOf,
   waitingRushOf,
   type CardPart,
   type CustomerBlock,
   type CustomerCardModel,
-  type UrgencyAct,
   type UrgencyLine,
 } from '../model'
 import '../customer-card.css'
@@ -62,7 +60,7 @@ export function CustomerCard({ workOrder, model, card, actions }: { workOrder: W
         {card.blocks.map((block) => (
           <Block key={block.customer.partyId} block={block} many={card.blocks.length > 1} workOrder={workOrder} model={model} card={card} actions={actions} />
         ))}
-        {card.dialog && <UrgencyDialog card={card} actions={actions} />}
+        {card.dialog && <UrgencyOverrideDialog model={card} actions={actions?.customerCard} /> /* F-CW-302: the shared window (the Orders sheet mounts the same) */}
       </div>
     </WithMessages>
   )
@@ -96,7 +94,7 @@ function Block({ block, many, workOrder, model, card, actions }: { block: Custom
         <span className="fw-pr-hint">{t('customerCard.title')}</span>
       </div>
       {many && <p className="fw-pr-hint">{t('customerCard.mixedBlock', { count: block.customer.orders.length })}</p>}
-      {card.outcome && card.blocks[0]?.customer.partyId === block.customer.partyId && <OutcomeBanner card={card} actions={actions} />}
+      {card.outcome && card.blocks[0]?.customer.partyId === block.customer.partyId && <UrgencyOutcome outcome={card.outcome} onDismiss={actions?.customerCard?.onDismissOutcome} /> /* F-CW-302: the shared outcome */}
       <KeyValue items={items} />
     </Card>
   )
@@ -237,87 +235,6 @@ function UrgencyRow({ block, lines, card, actions }: { block: CustomerBlock; lin
       )}
       <span className="fw-pr-hint">{t('customerCard.urgency.hint')}</span>
     </div>
-  )
-}
-
-function OutcomeBanner({ card, actions }: { card: CustomerCardModel; actions?: WorkOrderRecordActions }) {
-  const t = useT('production')
-  const locale = useLocale()
-  const outcome = card.outcome
-  if (!outcome) return null
-  const tone = outcome.notDone.length === 0 ? 'success' : outcome.done.length === 0 ? 'warning' : 'info'
-  return (
-    <Banner
-      tone={tone}
-      title={outcome.done.length > 0 ? t(`customerCard.urgency.outcome.${outcome.act}`, { numbers: outcome.done.join(', ') }) : t('customerCard.urgency.outcome.none')}
-      action={
-        <Button size="sm" variant="quiet" onClick={() => actions?.customerCard?.onDismissOutcome?.()}>
-          {t('common.dismiss')}
-        </Button>
-      }
-    >
-      {outcome.notDone.length > 0 && (
-        <ul className="fw-pr-list">
-          {outcome.notDone.map((row) => (
-            <li key={row.number}>{t('customerCard.urgency.outcome.notDone', { number: row.number, why: row.words ? row.words[locale] : t('customerCard.urgency.outcome.unchanged') })}</li>
-          ))}
-        </ul>
-      )}
-      {outcome.notShown > 0 && <p className="fw-pr-hint">{t('customerCard.urgency.outcome.notShown', { count: outcome.notShown })}</p>}
-    </Banner>
-  )
-}
-
-/** Set to regular… · Lock · Unlock: the order named, a reason the customer reads (not for Unlock), a fresh code; no second person. */
-function UrgencyDialog({ card, actions }: { card: CustomerCardModel; actions?: WorkOrderRecordActions }) {
-  const t = useT('production')
-  const dialog = card.dialog!
-  const [reason, setReason] = useState(card.draft?.reason ?? '')
-  const [lock, setLock] = useState(dialog.act === 'lock' || !!card.draft?.lock)
-  const held = urgencyDialogHeld(dialog.act, reason, card.busy)
-  const act: UrgencyAct = dialog.act === 'regular' && lock ? 'lock' : dialog.act
-  const go = held ? null : () => actions?.customerCard?.onUrgency?.({ act: dialog.act, partyId: dialog.partyId, orders: dialog.orders, reason, lock })
-  const numbers = dialog.orders.map((order) => (order.customerRef ? t('customerCard.po', { po: order.customerRef, number: order.number }) : order.number)).join(', ')
-  return (
-    <Modal
-      open
-      onClose={() => actions?.customerCard?.onDialog?.(null)}
-      title={t(`customerCard.dialog.title.${dialog.act}`, { numbers })}
-      size="md"
-      footer={
-        <span className="fw-pr-actions">
-          <Button size="sm" variant="quiet" onClick={() => actions?.customerCard?.onDialog?.(null)}>
-            {t('common.cancel')}
-          </Button>
-          <Button size="sm" variant="primary" heldReason={say(t, held)} onClick={() => go?.()} aria-keyshortcuts="Meta+Enter Control+Enter">
-            {card.busy ? <Spinner size={12} /> : act === 'unlock' ? <Unlock size={13} aria-hidden /> : act === 'lock' ? <Lock size={13} aria-hidden /> : null} {t(`customerCard.dialog.go.${act}`)}
-          </Button>
-        </span>
-      }
-    >
-      {/* F-PR-16: no form element — Enter in the reason field sends nothing; the send button and ⌘↵ send. */}
-      <div
-        className="fw-pr-dialog"
-        onKeyDown={(event) => {
-          if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && go) {
-            event.preventDefault()
-            go()
-          }
-        }}
-      >
-        {card.problem && <Banner tone="danger" title={t(card.problem.key, card.problem.params)} />}
-        <p>{t(`customerCard.dialog.body.${act}`)}</p>
-        {dialog.act !== 'unlock' && (
-          <>
-            <Field label={t('customerCard.dialog.reason')} hint={t('customerCard.dialog.reasonHint', { count: CARD_LIMITS.reason })}>
-              <Input value={reason} onChange={(event) => setReason(event.target.value)} maxLength={CARD_LIMITS.reason} autoFocus />
-            </Field>
-            {dialog.act === 'regular' && <Checkbox checked={lock} onChange={(event) => setLock(event.target.checked)} label={t('customerCard.dialog.alsoLock')} />}
-          </>
-        )}
-        <p className="fw-pr-hint">{t('customerCard.dialog.stepUp')}</p>
-      </div>
-    </Modal>
   )
 }
 

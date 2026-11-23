@@ -302,5 +302,7 @@ export interface ReplyManyActions {
   readonly onSend: () => void
   /** F-CW-203: the to-do tick or its day changed. */
   readonly onTodo?: (todo: ReplyTodo) => void
+  /** F-CW-303: the receipt's order name pressed — the host shows that order's thread; the window stays open. Absent: plain names. */
+  readonly onOrder?: (orderId: string) => void
   readonly onClose: () => void
 }

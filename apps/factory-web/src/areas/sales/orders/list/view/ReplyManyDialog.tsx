@@ -91,7 +91,15 @@ export function ReplyManyBody({ model, actions }: { model: ReplyManyModel; actio
             <li key={line.id} className="fw-srm-result">
               {line.result?.state === 'sent' ? <CheckCircle2 size={14} aria-hidden /> : <XCircle size={14} aria-hidden />}
               <span>
-                <b>{line.label}</b> · {line.result?.state === 'sent' ? s('reply.result.sent') : s('reply.result.notSent', { why: say(line.result?.why ?? { key: 'reply.why.failed' }) })}
+                {/* F-CW-303: the order's name is a button that shows that order's thread (the window stays open). */}
+                {actions?.onOrder ? (
+                  <Button size="sm" variant="link" title={s('receipt.showThread', { number: line.label })} onClick={() => actions.onOrder?.(line.id)}>
+                    {line.label}
+                  </Button>
+                ) : (
+                  <b>{line.label}</b>
+                )}{' '}
+                · {line.result?.state === 'sent' ? s('reply.result.sent') : s('reply.result.notSent', { why: say(line.result?.why ?? { key: 'reply.why.failed' }) })}
                 {/* F-CW-203: what became of the customer's to-do, on the order's own line (never an amount, never a name). */}
                 {line.result?.state === 'sent' && line.result.todo && (
                   <>

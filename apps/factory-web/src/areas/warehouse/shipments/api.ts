@@ -210,6 +210,14 @@ export function readyToShip(api: ApiClient, query: { salesOrderId?: string | nul
     .then((answer) => answer.orders)
 }
 
+// F-CW-301 (customer Work tab; 13-backend §5): the ship-together read ONE PAGE at a time with its cursor — the read gives 100 orders
+// a page (by number), so an order of a selection may sit on a later page. `readyToShip` above keeps the first page, as before.
+export function readyToShipPage(api: ApiClient, query: { salesOrderId: string; cursor?: string | null }, signal?: AbortSignal): Promise<{ orders: ReadyOrder[]; nextCursor: string | null }> {
+  return api
+    .get('/shipping/ready', { query: { salesOrderId: query.salesOrderId, together: '1', cursor: query.cursor ?? undefined }, schema: z.object({ orders: z.array(readyOrderSchema), nextCursor: z.string().nullable().optional() }), signal })
+    .then((answer) => ({ orders: answer.orders, nextCursor: answer.nextCursor ?? null }))
+}
+
 // ---- the record -----------------------------------------------------------------------------------------------------------
 
 export const lineSchema = z.object({

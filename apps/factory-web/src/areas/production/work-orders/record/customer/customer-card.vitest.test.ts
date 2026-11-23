@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createElement, type ComponentType } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { URGENCY_LOCK_REASON_MAX, URGENCY_OFFICE_BATCH_MAX } from '@nexus/factory-domain/production-brand/urgency'
 import { leftKeys, renderView, textOf } from '../../../../../lib/record-thread/parts/testing'
 import { LOCALES } from '../../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
@@ -14,7 +13,6 @@ import {
   ageOf,
   answerHref,
   approvalsOf,
-  CARD_LIMITS,
   cardCustomersOf,
   issueThreadOf,
   issuesOfWorkOrder,
@@ -23,14 +21,10 @@ import {
   ownRows,
   requestsOf,
   urgencyActsOf,
-  urgencyDialogHeld,
   urgencyLinesOf,
-  urgencyOutcomeOf,
-  urgencyProblemOf,
   urgencyWordsOf,
   waitingRushOf,
 } from './model'
-import { ApiError } from '../../../../../lib/api/errors'
 
 // The DS Modal draws only after it mounts in a browser: here a plain section, so a dialog's words are read on the server too (as the
 // other dialog tests do).
@@ -139,43 +133,21 @@ describe('F-PR-05b — Customer urgency', () => {
     expect(urgencyActsOf(urgent, true)[0]!.held).toEqual({ key: 'held.busy' })
   })
 
-  it('the dialog: a reason the customer reads for Set to regular and Lock (one line, ≤ 500); Unlock needs none', () => {
-    expect(CARD_LIMITS).toEqual({ reason: URGENCY_LOCK_REASON_MAX, orders: URGENCY_OFFICE_BATCH_MAX })
-    expect(urgencyDialogHeld('regular', '  ', false)).toEqual({ key: 'customerCard.urgency.held.reason' })
-    expect(urgencyDialogHeld('lock', 'a\nb', false)).toEqual({ key: 'customerCard.urgency.held.line' })
-    expect(urgencyDialogHeld('lock', 'x'.repeat(501), false)).toEqual({ key: 'customerCard.urgency.held.long', params: { count: 500 } })
-    expect(urgencyDialogHeld('regular', 'Capacity', false)).toBeNull()
-    expect(urgencyDialogHeld('unlock', '', false)).toBeNull()
-    expect(urgencyDialogHeld('unlock', '', true)).toEqual({ key: 'held.busy' })
-  })
-
-  it('PW-10: the result names only this card’s own orders; any other row (or one not reached) is counted, never named', () => {
-    const answer = {
-      results: [
-        { orderId: ORDER.id, number: ORDER.number, customerRef: null, outcome: 'DONE' as const, done: true, words: null, urgency: 'REGULAR' as const },
-        { orderId: 'someone-else', number: 'SO-OTHER-1', customerRef: null, outcome: 'NO_RIGHT' as const, done: false, words: { en: 'Not yours', it: 'Non tuo' }, urgency: null },
-      ],
-      notFound: 2,
-      replayed: false,
-    }
-    const outcome = urgencyOutcomeOf('regular', answer, ONE.orders)
-    expect(outcome).toEqual({ act: 'regular', done: [ORDER.number], notDone: [], notShown: 3 })
-    expect(JSON.stringify(outcome)).not.toContain('SO-OTHER-1')
-  })
-
-  it('refusals in the card’s words', () => {
-    expect(urgencyProblemOf(new ApiError('forbidden', 403, 'forbidden', 'x'))).toEqual({ key: 'customerCard.urgency.problem.forbidden' })
-    expect(urgencyProblemOf(new ApiError('conflict', 409, 'conflict', 'x'))).toEqual({ key: 'customerCard.urgency.problem.conflict' })
-    expect(urgencyProblemOf(new Error('x'))).toEqual({ key: 'customerCard.urgency.problem.failed' })
-  })
-
-  it('the writes are the API’s routes and the step-up sentence is the page’s catalogue (one step-up modal per page)', () => {
-    const api = readFileSync(join(__dirname, 'api.ts'), 'utf8')
-    expect(api).toContain("'/production/brand-orders/urgency/regular'")
-    expect(api).toContain("'/production/brand-orders/urgency/unlock'")
-    expect(api).toContain('/production/brands/${encodeURIComponent(partyId)}/urgency')
+  // F-CW-302: the urgency window (its dialog rules, its outcome, its refusals, its one write) moved to areas/_shared/customer-urgency
+  // with its unit cases (customer-urgency.vitest.test.ts): the Orders sheet mounts the same window. The card mounts it, never a copy.
+  it('the card mounts the shared urgency window and outcome; its hook calls the shared write; the page says the step-up sentence', () => {
+    const cardView = readFileSync(join(__dirname, 'view', 'CustomerCard.tsx'), 'utf8')
+    expect(cardView).toContain("import { UrgencyOverrideDialog } from '../../../../../_shared/customer-urgency/view/UrgencyOverrideDialog'")
+    expect(cardView).toContain('{card.dialog && <UrgencyOverrideDialog model={card} actions={actions?.customerCard} />')
+    expect(cardView).toContain('<UrgencyOutcome outcome={card.outcome} onDismiss={actions?.customerCard?.onDismissOutcome} />')
+    expect(cardView).not.toMatch(/<Modal\b|function UrgencyDialog|function OutcomeBanner/)
     const hook = readFileSync(join(__dirname, 'use-customer-card.ts'), 'utf8')
-    expect(hook).toContain("guard('stepUp.urgencySentence'")
+    expect(hook).toContain('const urgency = useUrgencyOverride(')
+    expect(hook).not.toMatch(/setBackUrgency|unlockUrgency/)
+    // The same names are still read from the card's own files (its fixtures, its view): re-exported, not copied.
+    const model = readFileSync(join(__dirname, 'model.ts'), 'utf8')
+    expect(model).toContain("export { CARD_LIMITS, urgencyDialogHeld, urgencyOutcomeOf, urgencyProblemOf, type UrgencyAct, type UrgencyDialog, type UrgencyOutcome } from '../../../../_shared/customer-urgency/model'")
+    expect(model).not.toMatch(/export function urgencyDialogHeld|export function urgencyOutcomeOf|export function urgencyProblemOf/)
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['production-work-orders'])['production-work-orders'] ?? {})
       expect(t('stepUp.urgencySentence')).not.toBe('stepUp.urgencySentence')
@@ -261,15 +233,7 @@ describe('F-PR-05b — the card on screen', () => {
     expect(text).toContain('1 more order was not changed.')
   })
 
-  // ---- F-PR-16 (the browser walk): Enter sends only from the send button
-  it('Enter in the reason field sends nothing: the dialog’s field sits in no form (Lock… and ⌘↵ send)', () => {
-    // The DS Modal draws only in a browser: the card's own source is read (the walk checked the screen).
-    const source = readFileSync(join(__dirname, 'view', 'CustomerCard.tsx'), 'utf8')
-    expect(source).not.toContain('<form')
-    expect(source).toContain('className="fw-pr-dialog"')
-    expect(source).toContain('aria-keyshortcuts="Meta+Enter Control+Enter"')
-  })
-  // ---- end F-PR-16
+  // F-PR-16 (Enter in the reason field sends nothing): the dialog moved — its source pin is the shared window's (F-CW-302).
 
   it('a part that failed says so with Try again; one being read is a skeleton', () => {
     const text = textOf(draw('customer-card-failed'))
