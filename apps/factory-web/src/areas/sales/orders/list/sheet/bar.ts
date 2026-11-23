@@ -40,17 +40,19 @@ export interface BarCan {
   readonly supervisor: boolean
   /** tasks.manage (with threads.post): Add task. */
   readonly task: boolean
+  /** F-CW-203 — partners.tasks.manage: "Ask <customer> about N…" (a to-do in the customer's list beside the message). */
+  readonly todo: boolean
   /** Finance's right to make invoice drafts: Invoice shipped goods. */
   readonly invoices: boolean
 }
 
 /** A reader with no act at all (a read-only role). */
-export const NO_BAR_CAN: BarCan = Object.freeze({ manage: false, close: false, decide: false, post: false, supervisor: false, task: false, invoices: false })
+export const NO_BAR_CAN: BarCan = Object.freeze({ manage: false, close: false, decide: false, post: false, supervisor: false, task: false, todo: false, invoices: false })
 
 /** The bar's acts, by id. */
 export type BarActId = 'ask' | 'priority' | 'reply' | 'assign' | 'task' | 'note' | ManyCommand | 'invoice'
-/** The entries of Ask ▾. */
-export type AskEntryId = 'askProduction'
+/** The entries of Ask ▾ (S8: exactly two; S37: a reader who may not make a customer's to-dos gets the first alone). */
+export type AskEntryId = 'askProduction' | 'askCustomer'
 
 /** Words of a hold, in the catalogue that already says them. */
 export type BarNs = 'sheet' | 'orders' | 'notes' | 'supervisor' | 'depth'
@@ -166,15 +168,22 @@ export function barHeld(id: Exclude<BarActId, 'ask'>, rows: readonly BarRow[], c
   }
 }
 
-/** Ask ▾'s entries for this reader: "Ask production about N…" (a note to each record's supervisor that needs an answer). */
-export function askEntriesOf(rows: readonly BarRow[], host: BarHost): AskEntry[] {
-  return [{ id: 'askProduction', held: barHeld('note', rows, { ...NO_BAR_CAN, post: true }, host) }]
+/**
+ * Ask ▾'s entries for this reader: "Ask production about N…" (an office note to each order's supervisor that needs an answer) and —
+ * F-CW-203, only with partners.tasks.manage — "Ask <customer> about N…" (Reply to N with the to-do tick ON: held as Reply to N is).
+ * Without that right the customer is asked by a plain "Reply to <customer> on N…" (the bar's own act).
+ */
+export function askEntriesOf(rows: readonly BarRow[], can: Pick<BarCan, 'todo'>, host: BarHost): AskEntry[] {
+  return [
+    { id: 'askProduction', held: barHeld('note', rows, { ...NO_BAR_CAN, post: true }, host) },
+    ...(can.todo ? [{ id: 'askCustomer' as const, held: barHeld('reply', rows, { ...NO_BAR_CAN, post: true }, host) }] : []),
+  ]
 }
 
 /** The bar for this reader over the ticked orders: its first three acts with words, the rest for More ▾. */
 export function barOf(can: BarCan, rows: readonly BarRow[], host: BarHost): Bar {
   const acts: BarAct[] = BAR_ORDER.filter((entry) => barAllowed(entry.id, can)).map((entry) =>
-    entry.id === 'ask' ? { id: entry.id, group: entry.group, held: null, entries: askEntriesOf(rows, host) } : { id: entry.id, group: entry.group, held: barHeld(entry.id, rows, can, host) },
+    entry.id === 'ask' ? { id: entry.id, group: entry.group, held: null, entries: askEntriesOf(rows, can, host) } : { id: entry.id, group: entry.group, held: barHeld(entry.id, rows, can, host) },
   )
   return { promoted: acts.slice(0, BAR_PROMOTED), more: acts.slice(BAR_PROMOTED), none: acts.length === 0 }
 }

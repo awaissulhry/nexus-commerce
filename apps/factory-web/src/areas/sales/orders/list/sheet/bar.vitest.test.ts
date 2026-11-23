@@ -21,11 +21,11 @@ const ids = (acts: readonly BarAct[]): BarActId[] => acts.map((act) => act.id)
 
 /** The roles of 10-design §8, as each act's OWN right (W2: no shipping act yet, no customer-urgency act yet). */
 const ROLE: Record<'owner' | 'sales' | 'warehouse' | 'manager' | 'finance' | 'reader', BarCan> = {
-  owner: { manage: true, close: true, decide: true, post: true, supervisor: true, task: true, invoices: true },
-  sales: { manage: true, close: true, decide: true, post: true, supervisor: false, task: true, invoices: false },
-  warehouse: { manage: false, close: false, decide: true, post: true, supervisor: false, task: true, invoices: false },
-  manager: { manage: false, close: false, decide: true, post: true, supervisor: true, task: true, invoices: false },
-  finance: { manage: false, close: true, decide: true, post: true, supervisor: false, task: false, invoices: true },
+  owner: { manage: true, close: true, decide: true, post: true, supervisor: true, task: true, todo: true, invoices: true },
+  sales: { manage: true, close: true, decide: true, post: true, supervisor: false, task: true, todo: true, invoices: false },
+  warehouse: { manage: false, close: false, decide: true, post: true, supervisor: false, task: true, todo: false, invoices: false },
+  manager: { manage: false, close: false, decide: true, post: true, supervisor: true, task: true, todo: false, invoices: false },
+  finance: { manage: false, close: true, decide: true, post: true, supervisor: false, task: false, todo: false, invoices: true },
   reader: NO_BAR_CAN,
 }
 
@@ -86,6 +86,7 @@ describe('F-CW-202: three acts with words, then More ▾ — per role (10-design
     expect(only({ supervisor: true })).toEqual(['assign'])
     expect(only({ task: true })).toEqual(['task'])
     expect(only({ invoices: true })).toEqual(['invoice'])
+    expect(only({ todo: true })).toEqual([]) // F-CW-203: an entry of Ask ▾, never an act of its own (it needs threads.post too)
     expect(only({})).toEqual([])
     // Fewer than four acts: no More ▾ at all.
     expect(barOf({ ...NO_BAR_CAN, post: true }, three, HOST)).toMatchObject({ more: [], none: false })
@@ -155,6 +156,8 @@ describe('F-CW-202: held with words only by a state, a cap or orders of more tha
 
 describe('F-CW-202: Ask ▾ — a menu for every role that writes (S37)', () => {
   it('"Ask production about N…": a note to each order\'s supervisor that needs an answer; held like Note to N (one customer, 100)', () => {
+    // Its Send word is the Note window's own ("Write on 3"): the view hands it (source).
+    expect(readFileSync(new URL('../view/OrdersListView.tsx', import.meta.url), 'utf8')).toContain("send: n('send', { count: picked.length }) }),")
     const ask = barOf(ROLE.warehouse, rows(3), HOST).promoted[0]!
     expect(ask).toMatchObject({ id: 'ask', held: null })
     expect(ask.entries!.map((entry) => entry.id)).toContain('askProduction')
@@ -165,6 +168,34 @@ describe('F-CW-202: Ask ▾ — a menu for every role that writes (S37)', () => 
     expect(mixed.entries!.find((entry) => entry.id === 'askProduction')!.held).toEqual({ ns: 'sheet', key: 'bulk.oneCustomer', params: { count: 2 } })
   })
 
+  // F-CW-203 (S8, S37): the second entry only for a reader who may make a customer's to-dos (partners.tasks.manage).
+  it('"Ask <customer> about N…" only with partners.tasks.manage — Owner and Sales; Warehouse and Production manager get the first entry alone', () => {
+    const entries = (role: keyof typeof ROLE) => barOf(ROLE[role], rows(3), HOST).promoted[0]!.entries!.map((entry) => entry.id)
+    expect(entries('owner')).toEqual(['askProduction', 'askCustomer'])
+    expect(entries('sales')).toEqual(['askProduction', 'askCustomer'])
+    expect(entries('warehouse')).toEqual(['askProduction'])
+    expect(entries('manager')).toEqual(['askProduction'])
+    // Without the to-do right the customer is still asked by the plain reply: "Reply to <customer> on N…" stays an act of the bar.
+    expect(ids(barOf(ROLE.warehouse, rows(3), HOST).promoted)).toContain('reply')
+    // It is Reply to N with the tick ON: held exactly as Reply to N is (one customer, this page's customer, 50).
+    const held = (picked: readonly BarRow[], locked: string | null = null) => barOf(ROLE.owner, picked, { locked }).promoted[0]!.entries!.find((entry) => entry.id === 'askCustomer')!.held
+    expect(held(rows(3))).toBeNull()
+    expect(held(rows(51))).toEqual({ ns: 'sheet', key: 'reply.tooMany', params: { max: 50 } })
+    expect(held([row(1), row(2, 'READY', BETA)])).toEqual({ ns: 'sheet', key: 'reply.oneCustomer' })
+    expect(held([row(1, 'READY', BETA)], ALPHA)).toEqual({ ns: 'sheet', key: 'bulk.notThisCustomer' })
+    const view = readFileSync(new URL('../view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('askCustomer: () => actions?.onReplyMany?.(pickedIds, { todo: true }),')
+    expect(view).toContain('todo: !!model.bulkCan?.todo /* F-CW-203 */')
+    for (const locale of LOCALES) {
+      const s = createTranslator(locale, messagesFor(locale, ['orders-sheet'])['orders-sheet']!)
+      expect(s('bar.askCustomer', { customer: 'Brand Alpha', count: 3 }), locale).toContain('Brand Alpha')
+      for (const key of ['bar.askCustomerAny', 'bar.askCustomerWho']) expect(s(key, { count: 3 }), `${locale} ${key}`).not.toBe(key)
+    }
+    const en = createTranslator('en', messagesFor('en', ['orders-sheet'])['orders-sheet']!)
+    const it_ = createTranslator('it', messagesFor('it', ['orders-sheet'])['orders-sheet']!)
+    expect([en('bar.askCustomer', { customer: 'Seed Racing', count: 3 }), it_('bar.askCustomer', { customer: 'Seed Racing', count: 3 })]).toEqual(['Ask Seed Racing about 3…', 'Chiedi a Seed Racing su 3…'])
+  })
+
   it('it opens production\'s ONE Note window as an ask — the supervisor asked, "Needs an answer" ticked (source)', () => {
     const hook = readFileSync(new URL('../use-orders-sheet.ts', import.meta.url), 'utf8')
     expect(hook).toContain("onAskProduction: (ids, words) => note.open(noteTargetsOf(pickedRows(ids)), 'selection', undefined, { title: words.title, body: '', needsAnswer: true, send: words.send }),")
@@ -172,7 +203,7 @@ describe('F-CW-202: Ask ▾ — a menu for every role that writes (S37)', () => 
     expect(notes).toContain('askSupervisor: preset.askSupervisor ?? true')
     for (const locale of LOCALES) {
       const s = createTranslator(locale, messagesFor(locale, ['orders-sheet'])['orders-sheet']!)
-      for (const key of ['bar.ask', 'bar.more', 'bar.askProductionWho', 'bar.askSend']) expect(s(key), `${locale} ${key}`).not.toBe(key)
+      for (const key of ['bar.ask', 'bar.more', 'bar.askProductionWho']) expect(s(key), `${locale} ${key}`).not.toBe(key)
       expect(s('bar.askProduction', { count: 3 }), locale).toContain('3')
       for (const count of [1, 3]) expect(s('bar.askProductionTitle', { count }), locale).toContain(String(count))
     }
@@ -199,8 +230,8 @@ describe('F-CW-202: the view draws the rule — on every host of the sheet (sour
     expect(view).not.toMatch(/SetPriorityButton|manyShown\(model\.can/)
   })
 
-  it('the rights come from the one hook, each act its own: threads.post, production.brand.manage, tasks.manage, approvals.decide, orders.manage / close, invoices.manage', () => {
-    expect(view).toContain('{ manage: model.can.manage, close: model.can.close, decide: !!model.commands?.decide, post: !!model.bulkCan?.note, supervisor: !!model.bulkCan?.supervisor, task: model.bulkCan?.task === null, invoices: model.can.manageInvoices },')
+  it('the rights come from the one hook, each act its own: threads.post, production.brand.manage, tasks.manage, partners.tasks.manage, approvals.decide, orders.manage / close, invoices.manage', () => {
+    expect(view).toContain('{ manage: model.can.manage, close: model.can.close, decide: !!model.commands?.decide, post: !!model.bulkCan?.note, supervisor: !!model.bulkCan?.supervisor, task: model.bulkCan?.task === null, todo: !!model.bulkCan?.todo /* F-CW-203 */, invoices: model.can.manageInvoices },')
     const hook = readFileSync(new URL('../use-orders-sheet.ts', import.meta.url), 'utf8')
     expect(hook).toContain("bulkCan: { supervisor: session.permissions.includes('production.brand.manage'), note: noteCan, task: taskHeld")
     expect(hook).toContain("const noteCan = session.permissions.includes('threads.post')")

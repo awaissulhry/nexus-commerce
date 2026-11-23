@@ -233,7 +233,7 @@ export interface OrdersListModel {
   // ---- F-SA-280 (bulk on the sheet's own bar): production's assign and note dialogs while open, and the rights they need ----
   assign?: AssignSupervisorModel | null
   note?: NoteDialogModel | null
-  bulkCan?: { readonly supervisor: boolean; readonly note: boolean; /** F-SA-281: why a task is held (a `records` key), or null. */ readonly task?: string | null; /** F-SA-282: threads.post (Reply to N). */ readonly reply?: boolean }
+  bulkCan?: { readonly supervisor: boolean; readonly note: boolean; /** F-SA-281: why a task is held (a `records` key), or null. */ readonly task?: string | null; /** F-SA-282: threads.post (Reply to N). */ readonly reply?: boolean; /** F-CW-203: partners.tasks.manage (Ask <customer>: a to-do in their list). */ readonly todo?: boolean }
   // ---- end F-SA-280
   // ---- F-SA-281: the New task window while open — on one order, or on N (one batch) — and who the person is ("Me") ----
   task?: { readonly mode: 'one' | 'many'; readonly records: readonly BatchRecord[]; readonly people: PanelRead<readonly Assignable[]>; readonly busy: boolean } | null
@@ -361,7 +361,8 @@ export interface OrdersListActions {
   note?: NoteDialogActions
   // ---- end F-SA-280
   // ---- F-SA-282: Reply to <customer> on N… on the ticked orders, and the window's own actions
-  onReplyMany?: (ids: readonly string[]) => void
+  // F-CW-203: `todo` — "Ask <customer> about N…": the same window with the to-do tick ON.
+  onReplyMany?: (ids: readonly string[], options?: { readonly todo?: boolean }) => void
   replyMany?: ReplyManyActions
   // F-CP-114: open the customer's-price window of one order (given only to a price holder: no door, no call for anyone else).
   onPriceCheck?: (orderId: string) => void

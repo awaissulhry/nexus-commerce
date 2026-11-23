@@ -375,7 +375,9 @@
       "none": "Non è stato pubblicato niente.",
       "label": "Ogni ordine",
       "sent": "Pubblicato",
-      "notSent": "Non pubblicato. {why}"
+      "notSent": "Non pubblicato. {why}",
+      "todoMade": "nella loro lista di cose da fare",
+      "todoNot": "la cosa da fare non è stata creata. {why}"
     },
     "why": {
       "closed": "La sua conversazione è chiusa: riaprila per rispondere.",
@@ -385,7 +387,20 @@
       "forbidden": "Il tuo ruolo non scrive nella conversazione di questo ordine.",
       "failed": "Non è arrivato: riprova."
     },
-    "yourOrder": "Il vostro ordine {seq} ({number})"
+    "yourOrder": "Il vostro ordine {seq} ({number})",
+    "askTitle_one": "Chiedi a {customer} su {count} ordine",
+    "askTitle_other": "Chiedi a {customer} su {count} ordini",
+    "todo": {
+      "tick": "Mettilo nella loro lista di cose da fare, risposta entro il",
+      "date": "Risposta entro il",
+      "noDate": "Nessuna data",
+      "hint": "{customer} vede «Rispondere al nostro messaggio» sotto Cosa vi aspetta. Ogni ordine dice poi Tocca al cliente con i giorni, qui e nella sua pagina, finché non risponde.",
+      "past": "Il giorno della cosa da fare deve essere dopo oggi.",
+      "far": "Il giorno della cosa da fare deve essere entro {max} giorni.",
+      "why": {
+        "forbidden": "Il tuo ruolo non mette cose da fare nella lista di un cliente."
+      }
+    }
   },
   "commands": {
     "confirmOrRefuse": "Conferma o rifiuta…",
@@ -474,10 +489,12 @@
     "more": "Altro",
     "ask": "Chiedi",
     "askProduction": "Chiedi alla produzione su {count}…",
-    "askProductionWho": "Una nota al supervisore di ogni ordine, con risposta richiesta. Solo ufficio: il cliente non la legge mai.",
+    "askProductionWho": "Una nota d'ufficio al supervisore di ogni ordine, con «Serve una risposta». Il cliente non la legge mai.",
     "askProductionTitle_one": "Chiedi alla produzione su {count} ordine",
     "askProductionTitle_other": "Chiedi alla produzione su {count} ordini",
-    "askSend": "Chiedi",
-    "none": "Il tuo ruolo legge gli ordini e non ne cambia nessuno: non c'è nessuna azione per le righe spuntate."
+    "none": "Il tuo ruolo legge gli ordini e non ne cambia nessuno: non c'è nessuna azione per le righe spuntate.",
+    "askCustomer": "Chiedi a {customer} su {count}…",
+    "askCustomerAny": "Chiedi al cliente su {count}…",
+    "askCustomerWho": "Un messaggio nella conversazione di ogni ordine, letto nel portale, E una cosa da fare con una data nella loro lista."
   }
 }

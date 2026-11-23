@@ -830,7 +830,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     // ---- F-SA-280 ----
     assign: assign.model,
     note: note.model,
-    bulkCan: { supervisor: session.permissions.includes('production.brand.manage'), note: noteCan, task: taskHeld /* F-SA-281 */, reply: noteCan /* F-SA-282: threads.post */ },
+    bulkCan: { supervisor: session.permissions.includes('production.brand.manage'), note: noteCan, task: taskHeld /* F-SA-281 */, reply: noteCan /* F-SA-282: threads.post */, todo: session.permissions.includes('partners.tasks.manage') /* F-CW-203 */ },
     replyMany: replyMany.model, // F-SA-282
     priceCheck: priceCheck.model, // F-CP-114
     commands: { window: commandDoor.model, moved, receipt, many: commandMany.model /* F-CP-109 */, decide: session.permissions.includes('approvals.decide') /* F-CP-109 */ }, // F-CP-108
@@ -906,7 +906,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     note: note.actions,
     onAddTask: (ids, from = 'row') => openTask(ids, from), // F-SA-281
     task: taskActions, // F-SA-281
-    onReplyMany: (ids) => replyMany.open(pickedRows(ids), host.locked?.party ?? null), // F-SA-282
+    onReplyMany: (ids, options) => replyMany.open(pickedRows(ids), host.locked?.party ?? null, options), // F-SA-282; F-CW-203: + the to-do tick
     replyMany: replyMany.actions, // F-SA-282
     // F-CP-114: the door only with the price grain (no door, no call for anyone else).
     ...(can.price

@@ -94,8 +94,8 @@ import '../commands/commands.css'
 import { Archive, CheckCheck, PackageCheck } from 'lucide-react'
 import { manyLabel, type ManyCommand } from '../commands/model'
 // ---- F-CW-202: the bar — three acts with words + More ▾ (the pure rule: sheet/bar.ts) ----
-import { ChevronDown, Flag, MessageCircleQuestion } from 'lucide-react'
-import { barOf, type BarAct, type BarActId, type BarWords } from '../sheet/bar'
+import { ChevronDown, Factory, Flag, MessageCircleQuestion } from 'lucide-react'
+import { barOf, type AskEntryId, type BarAct, type BarActId, type BarWords } from '../sheet/bar'
 // ---- end F-CW-202
 import { OrderCommandManyDialog } from '../commands/view/OrderCommandManyDialog'
 // ---- end F-CP-109
@@ -229,7 +229,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     invoice: s('invoiceShipped.action', { count: picked.length }),
   }
   const bar = barOf(
-    { manage: model.can.manage, close: model.can.close, decide: !!model.commands?.decide, post: !!model.bulkCan?.note, supervisor: !!model.bulkCan?.supervisor, task: model.bulkCan?.task === null, invoices: model.can.manageInvoices },
+    { manage: model.can.manage, close: model.can.close, decide: !!model.commands?.decide, post: !!model.bulkCan?.note, supervisor: !!model.bulkCan?.supervisor, task: model.bulkCan?.task === null, todo: !!model.bulkCan?.todo /* F-CW-203 */, invoices: model.can.manageInvoices },
     picked,
     { locked: model.locked?.party ? (model.customer?.id ?? null) : null },
   )
@@ -242,10 +242,20 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     return wordsText({ key: words.key, ...(words.params ? { params: words.params } : {}), ...(words.ns === 'sheet' ? { sheet: true as const } : {}), ...(words.states ? { states: words.states } : {}) }, t, s, locale)
   }
   /** Ask ▾: each entry says who reads it in a quiet line; held, it says why instead. */
+  // F-CW-203: + "Ask <customer> about N…" — Reply to N with the to-do tick ON (the customer named when the ticked orders are of one).
+  const askRun: Record<AskEntryId, () => void> = {
+    // Production's own Note window as an ask: its title here, its Send word the notes' own ("Write on 3").
+    askProduction: () => actions?.onAskProduction?.(pickedIds, { title: s('bar.askProductionTitle', { count: picked.length }), send: n('send', { count: picked.length }) }),
+    askCustomer: () => actions?.onReplyMany?.(pickedIds, { todo: true }),
+  }
+  const askLabel: Record<AskEntryId, string> = {
+    askProduction: s('bar.askProduction', { count: picked.length }),
+    askCustomer: replyPhrase.key === 'bulk.reply' ? s('bar.askCustomer', { customer: picked[0]?.partyName ?? '', count: picked.length }) : s('bar.askCustomerAny', { count: picked.length }),
+  }
   const askItems = (act: BarAct): MenuItemDef[] =>
     (act.entries ?? []).map((entry) => {
       const held = sayBar(entry.held)
-      return { id: entry.id, label: s(`bar.${entry.id}`, { count: picked.length }), description: held ?? s(`bar.${entry.id}Who`), ...(held ? { disabled: true } : { onSelect: () => actions?.onAskProduction?.(pickedIds, { title: s('bar.askProductionTitle', { count: picked.length }), send: s('bar.askSend') }) }) }
+      return { id: entry.id, label: askLabel[entry.id], icon: entry.id === 'askProduction' ? <Factory size={14} aria-hidden /> : <Globe size={14} aria-hidden />, description: held ?? s(`bar.${entry.id}Who`), ...(held ? { disabled: true } : { onSelect: askRun[entry.id] }) }
     })
   const barActs = (
     <>
