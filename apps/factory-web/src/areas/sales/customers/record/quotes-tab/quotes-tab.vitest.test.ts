@@ -440,7 +440,8 @@ describe('cq W3: the page around the tab', () => {
     for (const view of ['../../../quotes/list/view/QuotesListView.tsx', '../../../inquiries/view/InquiriesView.tsx']) {
       const source = readFileSync(new URL(view, import.meta.url), 'utf8')
       expect(source, view).toContain('{model.reply && <ReplyManyDialog model={model.reply} actions={actions?.reply} />}')
-      expect(source, view).toContain("{ id: 'reply', label: t(")
+      // cq fx5 (W3-2): the row's Reply is held with the Reply window's no-portal words — one held-item helper in both views.
+      expect(source, view).toContain("heldRowItem('reply', t(")
     }
     expect(galleryScreen.cases.map((item) => item.id)).toEqual(expect.arrayContaining(['win-ask-quotes', 'win-reply-requests']))
     const ask = galleryScreen.cases.find((item) => item.id === 'win-ask-quotes')!.model.quotes.reply!
