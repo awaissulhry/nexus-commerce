@@ -122,7 +122,9 @@ export function ReplyManyBody({ model, actions }: { model: ReplyManyModel; actio
   // F-CW-203: a to-do a fault stopped is still left to do; the tick's day may hold Send.
   const today = model.today ?? romeToday()
   const held = replySendHeld(model.portal, customer, pending.length + todoLeft(model.targets, model.results).length) ?? todoHeld(model.todo, today)
-  const todo = model.todo ?? null
+  // cq fx3 W2-2: no portal yet on quotes and requests — no box (nothing can be posted here), so no to-do tick that follows a post either.
+  const box = model.portal !== 'off' || !model.recordType || model.recordType === 'SalesOrder'
+  const todo = box ? (model.todo ?? null) : null
   const language = model.language ? languageInSentence(model.language, locale) : null
   return (
     <div className="fw-srm">
@@ -155,7 +157,7 @@ export function ReplyManyBody({ model, actions }: { model: ReplyManyModel; actio
       )}
       {/* cq fx3 W2-2: no portal yet — on quotes and requests no box that says "they read it in their portal" (the banner says to write by
           e-mail in each record's own conversation; nothing can be posted here). Orders unchanged (Send held with the same words). */}
-      {(model.portal !== 'off' || !model.recordType || model.recordType === 'SalesOrder') && (
+      {box && (
       <Composer
         context={replyComposerContext(customer)}
         draft={model.draft}
