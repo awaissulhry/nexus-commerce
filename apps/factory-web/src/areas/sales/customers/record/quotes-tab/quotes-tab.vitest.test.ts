@@ -92,7 +92,7 @@ describe('F-CQ-101: the band — the six live groups in life order, the closed t
 
   it('every door → exactly the lists\' terms (the server\'s own map): a section with none of its kind folds; no door = the live rows', () => {
     expect(termsOfDoor(null)).toEqual(NO_DOOR)
-    expect(NO_DOOR).toEqual({ quotes: 'LIVE', incoming: 'OPEN', drafts: false })
+    expect(NO_DOOR).toEqual({ quotes: 'LIVE', incoming: 'OPEN', drafts: true }) // F-CQ-205: the drafts section shows with no door
     expect(termsOfDoor('WRITING')).toEqual({ quotes: null, incoming: null, drafts: true })
     expect(termsOfDoor('TO_ANSWER')).toEqual({ quotes: null, incoming: 'TO_ANSWER', drafts: false })
     expect(termsOfDoor('PREPARING')).toEqual({ quotes: 'PREPARING', incoming: null, drafts: false })
@@ -122,8 +122,9 @@ describe('F-CQ-101: the band — the six live groups in life order, the closed t
     expect(toggledDoor(null, 'WON')).toBe('WON')
     const hook = readFileSync(new URL('./use-quotes-tab.ts', import.meta.url), 'utf8')
     expect(hook.match(/router\.replace\(/g)?.length).toBe(1)
-    // W1: the drafts' door opens their home today (Work › "Drafts of <customer>"); W2 / W3 bring the section here.
-    expect(hook).toContain('out.WRITING = draftsAddress(base, partyId, current)')
+    // F-CQ-205: every door is this tab's own — WRITING opens the section "Customer is writing" here (no hop to the Work tab).
+    expect(hook).not.toContain('draftsAddress')
+    expect(doorAddress(base, new URLSearchParams('tab=quotes'), 'WRITING')).toBe(`${base}?tab=quotes&group=WRITING`)
   })
 })
 
@@ -259,3 +260,29 @@ describe('F-CQ-101: the words in both languages (before-order.json; no key left,
     expect(it('band.newQuoteShort')).toBe('Nuovo preventivo…')
   })
 })
+
+// ---- F-CQ-205 (customer page › Quotes & incoming, 10-design §3.5; settles C3, C14): "Customer is writing" — the drafts section on this
+// tab (the Work tab's own parts mounted here, read only), read only while it shows, never counted but in WRITING.
+describe('F-CQ-205: the drafts section', () => {
+  const tab = readFileSync(new URL('../QuotesIncomingTab.tsx', import.meta.url), 'utf8')
+  it('mounted with the drafts\' right (orders.view), last; read only while it shows and the counts say there is one', () => {
+    expect(tab).toContain('{tab.rights.drafts && <DraftsSection {...sections} />}')
+    expect(tab.indexOf('<QuotesSection {...sections} />')).toBeLessThan(tab.indexOf('<DraftsSection {...sections} />'))
+    expect(tab).toContain('const showing = tab.terms.drafts && !hidden && count !== 0')
+    expect(tab).toContain('useCustomerDrafts(party.id, showing, untitled)')
+    // One list, no copy: the Work tab's list and window; no Views ▾ here; each draft's garment (the portalOrder picture source).
+    expect(tab).toContain('<CustomerDraftsList')
+    expect(tab).toContain('<DraftWindow')
+    expect(tab).toContain("pictures: { read: readPictures, header: b('drafts.picture') }")
+    const list = readFileSync(new URL('../drafts/view/CustomerDraftsList.tsx', import.meta.url), 'utf8')
+    expect(list).toContain('readonly views?: { readonly model: OrdersListModel; readonly actions?: OrdersListActions } | null')
+    expect(list).toContain('source="portalOrder"')
+  })
+  it('the words in both languages', () => {
+    for (const locale of LOCALES) {
+      const b = createTranslator(locale, messagesFor(locale, ['before-order'])['before-order']!)
+      for (const key of ['sec.writingSub', 'drafts.picture', 'fold.drafts']) expect(b(key, { customer: 'Seed Racing' }), `${locale} ${key}`).not.toContain('{')
+    }
+  })
+})
+// ---- end F-CQ-205

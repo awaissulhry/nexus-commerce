@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Button } from '@nexus/ui/primitives'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { useT } from '../../../../lib/i18n/provider'
-import { useOfficeSession } from '../../../../lib/session/context'
+import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
 import { ScopedListTools } from '../../_shared/scoped-list-tools/ScopedListTools'
 import { QUOTES_LIST_KEY, QUOTES_PATH, useQuotesList, type QuotesListHost } from '../../quotes/list/use-quotes-list'
@@ -20,6 +20,13 @@ import { bandOf, closedDoorsOf, doorCount, incomingCountsOf, kindDoorCount, INQU
 import { useQuotesTab, type QuotesTab } from './quotes-tab/use-quotes-tab'
 import { BEFORE_ORDER_NS, BeforeOrderBand } from './quotes-tab/view/BeforeOrderBand'
 import './quotes-tab/quotes-tab.css'
+// ---- F-CQ-205: the section "Customer is writing" — the customer's portal drafts, read only (the Work tab's own parts, mounted here)
+import { pictureReader } from '../../../../lib/record-picture/api'
+import { useCustomerDrafts } from './drafts/use-customer-drafts'
+import { CustomerDraftsList } from './drafts/view/CustomerDraftsList'
+import { DraftWindow } from './drafts/view/DraftWindow'
+import { draftPick, draftsNav, draftTitle } from './drafts/model'
+import type { DraftRow } from './drafts/api'
 
 /**
  * F-SA-277 (sales page plan R5, P18; 11-customer-page §3.6): the customer's Quotes & incoming tab — each list that list's own component
@@ -105,15 +112,11 @@ function Body({ party, onPick, onFocus, shown, quotes, incoming }: SectionProps 
           )}
         </div>
       )}
-      {/* W1: the drafts' home is still Work › "Drafts of <customer>" (the section moves here in W2 / W3): an old `group=WRITING` link says where. */}
-      {tab.door === 'WRITING' && (
-        <Link className="fw-bo-quietdoor" href={tab.hrefs.WRITING}>
-          {b('group.WRITING', { customer: party.name })} ›
-        </Link>
-      )}
       {/* F-CQ-101 (L3): what waits on us first — Requests & portal orders, then Quotes. A section the role does not read: one quiet line. */}
       {incoming ? <IncomingSection {...sections} /> : !empty && <p className="fw-qt-quiet">{b('note.noRequests')}</p>}
       {quotes ? <QuotesSection {...sections} /> : !empty && <p className="fw-qt-quiet">{b('note.noQuotes')}</p>}
+      {/* F-CQ-205 (10-design §3.5): the customer's portal drafts last — read only, never counted as waiting on us (orders.view). */}
+      {tab.rights.drafts && <DraftsSection {...sections} />}
     </div>
   )
 }
@@ -293,6 +296,55 @@ function IncomingSection({ party, onPick, onFocus, shown, tab, ask, hidden }: Ho
         </>
       )}
       {state !== 'list' && dialog}
+    </section>
+  )
+}
+
+/**
+ * F-CQ-205 (10-design §3.5; settles C3, C14): "Customer is writing" — the customer's portal drafts, the Work tab's own parts mounted here
+ * (one list, no copy): read only, no selection, no export; a row docks the draft's own thread, Open shows its read-only window. Read
+ * only while the section shows (no door, or the WRITING door) and the counts say there is one; never counted but in WRITING.
+ */
+function DraftsSection({ party, onPick, onFocus, shown, tab, hidden }: HostProps) {
+  const t = useT('parties')
+  const b = useT(BEFORE_ORDER_NS)
+  const api = useOfficeApi()
+  const readPictures = useMemo(() => pictureReader(api), [api])
+  const untitled = t('customers.drafts.untitled')
+  const count = tab.counts?.byKind.drafts ?? null
+  const showing = tab.terms.drafts && !hidden && count !== 0
+  const drafts = useCustomerDrafts(party.id, showing, untitled)
+  const draftRows = drafts.read.status === 'ready' ? drafts.read.rows : null
+  if (hidden) return null
+  const title = b('group.WRITING', { customer: party.name })
+  return (
+    <section className="fw-qt-section" aria-label={title}>
+      <div className="fw-qt-sechead">
+        <h3 className="fw-qt-sectitle">{title}</h3>
+        <p className="fw-qt-quiet">{b('sec.writingSub', { customer: party.name })}</p>
+      </div>
+      {!tab.terms.drafts ? (
+        <p className="fw-qt-quiet">{b('fold.drafts')}</p>
+      ) : count === 0 ? (
+        <p className="fw-qt-quiet">{t('customers.drafts.empty', { customer: party.name })}</p>
+      ) : (
+        <CustomerDraftsList
+          model={{ customer: party.name, read: drafts.read, updates: drafts.updates, activeId: shown?.type === 'PortalOrderRequest' ? shown.id : null, wide: (tab.room ?? 0) >= 1100, pictures: { read: readPictures, header: b('drafts.picture') } }}
+          actions={{
+            ...(onPick ? { onRow: (row: DraftRow) => onPick(draftPick(row, draftTitle(row, untitled))) } : {}),
+            ...(onFocus ? { onFocusRow: (row: DraftRow) => onFocus(draftPick(row, draftTitle(row, untitled))) } : {}),
+            onOpen: drafts.onOpen,
+            onRetry: drafts.onRetry,
+            onShowUpdates: drafts.onShowUpdates,
+          }}
+        />
+      )}
+      {drafts.open && drafts.window && draftRows && (
+        <DraftWindow
+          model={{ customer: party.name, title: draftTitle(drafts.open, untitled), nav: draftsNav(draftRows, drafts.open.id), pane: drafts.window.model, thread: drafts.window.thread }}
+          actions={{ pane: drafts.window.actions, onGo: drafts.onGo, onClose: drafts.onClose }}
+        />
+      )}
     </section>
   )
 }
