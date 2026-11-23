@@ -231,7 +231,8 @@ describe('the page wires the source, the window and the follow-ups', () => {
     const page = readFileSync(fileURLToPath(new URL('../Approvals.tsx', import.meta.url)), 'utf8')
     expect(page).toContain('can.requests ? listWaitingRequests(api) : Promise.resolve(null)')
     // F-SA-245: a work-order change opens in its own window from Approvals too: the probe asks it third.
-    expect(page).toContain('probeOpen(api, openId, { tasks: can.tasks, requests: can.requests, changes: can.changes })')
+    // cq fx2 W-10: an address that names the customer requests' kind asks no engine task for that id first (it read a 404 on the way).
+    expect(page).toContain('probeOpen(api, openId, { tasks: can.tasks && controls.kind !== REQUEST_INBOX_KIND, requests: can.requests, changes: can.changes })')
     expect(page).toContain("type.startsWith('order_change_request.')")
     const view = readFileSync(fileURLToPath(new URL('../view/InboxView.tsx', import.meta.url)), 'utf8')
     // F-SA-240: the window's own props — the inbox's rows are this door's list.

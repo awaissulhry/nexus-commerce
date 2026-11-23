@@ -30,6 +30,7 @@ import { recordAddress } from '../../../lib/records/record-links'
 import { listWaitingRequests, type BrandRequestList } from './requests/api'
 import { requestGroupsOf, type FollowUp } from './requests/model'
 import { clearRush, liftCustomerPause, probeOpen, useRequestReview, type RequestNotice } from './requests/use-request-review'
+import { REQUEST_INBOX_KIND } from './requests/model' // cq fx2 W-10
 // F-SA-245: a work-order change's row "Work order change · WO-…" opens its decide window here.
 import { useWorkOrderChangeReview } from './work-order-changes/use-work-order-change'
 import type { ChangeNotice } from './work-order-changes/model'
@@ -162,13 +163,15 @@ export function Approvals() {
   useEffect(() => {
     if (!openId || rows === null || listed !== null || probed?.id === openId || target !== null) return // F-SA-241: target kept
     let gone = false
-    void probeOpen(api, openId, { tasks: can.tasks, requests: can.requests, changes: can.changes }).then((as) => {
+    // cq fx2 W-10: an address that names the customer requests' kind (`?kind=ORDER_CHANGE_REQUEST&open=<id>`, Sales › Incoming's door
+    // of a change request) opens a customer request — no engine task is asked for that id first (it answered 404 on the way).
+    void probeOpen(api, openId, { tasks: can.tasks && controls.kind !== REQUEST_INBOX_KIND, requests: can.requests, changes: can.changes }).then((as) => {
       if (!gone) setProbed({ id: openId, as })
     })
     return () => {
       gone = true
     }
-  }, [api, openId, rows === null, listed, probed?.id, can.tasks, can.requests, can.changes])
+  }, [api, openId, rows === null, listed, probed?.id, can.tasks, can.requests, can.changes, controls.kind])
   const isTask = target === 'task' || target === 'none'
   const readTask = useCallback(async () => {
     if (!openId || target !== 'task') return
