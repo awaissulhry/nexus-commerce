@@ -745,6 +745,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           onSortChanged={(colId, direction) => actions?.onSort?.(colId ? sortOfColumn(colId, direction) : null)}
           title={customerName ? s('export.title', { customer: customerName }) : undefined /* B-TH-225: the export job names the customer */}
           exportAbout={about}
+          // cw fx5 (walk W-31): Customise counts every ticked column ("In view · 13 of 29", the dialog's own counter) while a narrow room
+          // shows fewer — the host's set says so in the dialog's own lines (the frame's option): which ticked ones wait, and for what.
+          customiseAbout={waitingColumnsOf(model.preset ?? null) > 0 ? <p>{s('customise.waits', { count: waitingColumnsOf(model.preset ?? null) })}</p> : undefined}
           onRowClick={(row, event) => actions?.onOpenRow?.(row.id, event.metaKey || event.ctrlKey)}
           cards={{ fields: cardFields, hrefOf: (row) => orderHref(model.prefix, row) }}
           selection={{
@@ -1653,6 +1656,9 @@ export function withPreset(column: ColDef<OrderRow>, preset: OrdersListModel['pr
 function joined(own: unknown, ...more: Array<string | null>): string {
   return [typeof own === 'string' ? own : null, ...more].filter((name): name is string => !!name).join(' ')
 }
+
+/** cw fx5 (walk W-31): how many columns of the host's set wait for a wider sheet in this room (ticked in Customise, not on screen). */
+export const waitingColumnsOf = (preset: OrdersListModel['preset'] | null): number => Object.keys(preset?.later ?? {}).length
 
 /** cw fx5 (walk W-23): below this room the search field says its short words ("Search orders"). */
 export const SEARCH_SHORT_BELOW = 480

@@ -15,7 +15,7 @@ import { tailWhole } from './sheet/parts'
 import { shipFirstOf, shipHeld, shipRowHeld, shipRowOffered, type ShipRow } from './sheet/ship'
 import { urgencyHeld } from './sheet/urgency'
 import { customerRefused } from './use-orders-sheet'
-import { builtInActive, builtInViewsOf, depositExtraOf, MTM_VIEW, oneStop, rowWidthOf, SEARCH_SHORT_BELOW, withPreset } from './view/OrdersListView'
+import { builtInActive, builtInViewsOf, depositExtraOf, MTM_VIEW, oneStop, rowWidthOf, SEARCH_SHORT_BELOW, waitingColumnsOf, withPreset } from './view/OrdersListView'
 
 /**
  * cw fx5 — the WALK FIX WAVE of the customer page's Work tab (design/customer-work-2026-11-22/30-walk.md, gaps W-1 … W-33; the
@@ -426,6 +426,24 @@ describe('walk W-15, W-26, W-32: the foot, the "Waiting for <customer>" window, 
     expect(win.indexOf('href={model.workOrdersHref}')).toBeGreaterThan(win.indexOf("t('customers.work.band.beforeNote')"))
     expect(win).toContain("{t('customers.band.workOrders', { customer })}")
     for (const locale of LOCALES) expect(words(locale, 'parties')('customers.band.workOrders', { customer: 'Seed Racing' }), locale).toContain('Seed Racing')
+  })
+})
+
+describe('walk W-31: Customise says which ticked columns wait for a wider sheet', () => {
+  it('the dialog\'s own counter counts every ticked column; the host\'s set adds how many of them are not on screen in this room', () => {
+    expect(waitingColumnsOf(workPreset('all', null, false, 'base'))).toBe(7) // Waiting on · Deposit · Shipped · Priority · Pieces · Ordered · Supervisor
+    expect(waitingColumnsOf(workPreset('all', null, false, 'wide'))).toBe(5)
+    expect(waitingColumnsOf(workPreset('all', null, false, 'widest'))).toBe(0)
+    expect(waitingColumnsOf(null)).toBe(0)
+    for (const locale of LOCALES) {
+      for (const count of [1, 7]) {
+        const line = words(locale, 'orders-sheet')('customise.waits', { count })
+        expect(line, `${locale} ${count}`).toMatch(new RegExp(`^${count} `))
+        expect(line, `${locale} ${count}`).not.toMatch(/customise\.waits|\{count\}/)
+      }
+    }
+    // Through the frame's own option (no change in the frame); nothing for a host without such columns.
+    expect(read('./view/OrdersListView.tsx')).toContain("customiseAbout={waitingColumnsOf(model.preset ?? null) > 0 ? <p>{s('customise.waits', { count: waitingColumnsOf(model.preset ?? null) })}</p> : undefined}")
   })
 })
 

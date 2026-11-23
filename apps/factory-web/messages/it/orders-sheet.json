@@ -540,7 +540,9 @@
   },
   "customise": {
     "wider": "{column} · da un foglio più largo",
-    "widest": "{column} · dal foglio più largo"
+    "widest": "{column} · dal foglio più largo",
+    "waits_one": "{count} colonna spuntata non è a schermo in questo spazio: dice da quale foglio compare (uno più largo: chiudi la conversazione, o usa uno schermo più largo).",
+    "waits_other": "{count} colonne spuntate non sono a schermo in questo spazio: ognuna dice da quale foglio compare (uno più largo: chiudi la conversazione, o usa uno schermo più largo)."
   },
   "countOf_one": "{shown} di {count} ordine",
   "countOf_other": "{shown} di {count} ordini",

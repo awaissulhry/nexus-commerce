@@ -540,7 +540,9 @@
   },
   "customise": {
     "wider": "{column} · from a wider sheet",
-    "widest": "{column} · from the widest sheet"
+    "widest": "{column} · from the widest sheet",
+    "waits_one": "{count} ticked column is not on screen in this room: it says from which sheet it shows (a wider one: close the thread, or use a wider screen).",
+    "waits_other": "{count} ticked columns are not on screen in this room: each says from which sheet it shows (a wider one: close the thread, or use a wider screen)."
   },
   "countOf_one": "{shown} of {count} order",
   "countOf_other": "{shown} of {count} orders",
