@@ -31,7 +31,11 @@ export function bandHintOf(group: PartyWorkGroup, band: PartyWorkBand, words: Cu
   const entry = bandGroupsOf(band).find((item) => item.group === group)
   const customers = entry?.customers ?? 0
   const press = c('band.hint.press')
-  if (group === 'NEEDS_US') return `${c('band.hint.needs', { count: customers, req: band.needsUs.requests, rep: band.needsUs.replies, late: band.needsUs.late })} ${press}`
+  if (group === 'NEEDS_US') {
+    // F-CL-301 (walk W-10): each number with its own plural form ("1 reply waiting on us", "1 customer has…").
+    const what = [c('band.hint.req', { count: band.needsUs.requests }), c('band.hint.rep', { count: band.needsUs.replies }), c('band.hint.late', { count: band.needsUs.late })].join(' · ')
+    return `${c('band.hint.needs', { count: customers, what })} ${press}`
+  }
   const ordersWords = c('band.orders', { count: entry?.orders ?? 0 }).replace(/^·\s*/, '')
   const why = group === 'NOT_SENT' ? `: ${[words.p('customers.work.band.why.yes', { count: band.notSent.waitsForYes }), words.p('customers.work.band.why.deposit', { count: band.notSent.waitsForDeposit })].join(' · ')}` : ''
   return `${c('band.hint.group', { count: customers, group: groupName(group, words), orders: `${ordersWords}${why}` })} ${press}`
@@ -76,7 +80,7 @@ export function CustomersBand({ band, problem, work, onWork, wide, about, words,
         <span className="fw-cl-quiet" title={words.p(problem)}>
           {c('band.failed')}
         </span>
-        {info}
+        <span className="fw-cl-band-end">{info}</span>
       </div>
     )
   if (!band)
@@ -119,7 +123,8 @@ export function CustomersBand({ band, problem, work, onWork, wide, about, words,
           </Fragment>
         ))}
       </span>
-      {info}
+      {/* F-CL-301 (walk W-12): the ⓘ in its own box — at the end of the line; on a phone on the label's row */}
+      <span className="fw-cl-band-end">{info}</span>
     </div>
   )
 }

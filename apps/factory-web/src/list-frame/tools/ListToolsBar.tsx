@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react' // F-CL-301: + ReactNode
 import { Columns3, Download } from 'lucide-react'
 import { Menu, useToast, type MenuItemDef } from '@nexus/ui/components'
 import type { ExportFormat } from '@nexus/factory-domain/views/exports'
@@ -235,7 +235,7 @@ function useReceipt(): (message: string, tone?: 'success' | 'danger') => void {
   return (message, tone = 'success') => api?.toast(message, tone)
 }
 
-export function ListToolsBar<T>({ state, withheld, about, builtIns, suggested }: { state: ListToolsState<T>; withheld?: readonly WithheldColumn[]; about?: ExportAbout | null /* B-TH-225 */; builtIns?: ListBuiltInViews | null /* B-TH-243 */; suggested?: string | null /* B-TH-243 */ }) {
+export function ListToolsBar<T>({ state, withheld, about, builtIns, suggested, customise }: { state: ListToolsState<T>; withheld?: readonly WithheldColumn[]; about?: ExportAbout | null /* B-TH-225 */; builtIns?: ListBuiltInViews | null /* B-TH-243 */; suggested?: string | null /* B-TH-243 */; customise?: ReactNode /* F-CL-301: the list's own lines in Customise */ }) {
   const t = useT('lists')
   const locale = useLocale()
   const receipt = useReceipt()
@@ -408,7 +408,10 @@ export function ListToolsBar<T>({ state, withheld, about, builtIns, suggested }:
         const first = state.tools.find((column) => column.fixed === 'first')
         if (!first) return
         const current = state.layout.columns ?? { order: [], hidden: [], pinned: [] }
-        const pinned = frozen ? [first.id, ...current.pinned.filter((id) => id !== first.id)] : current.pinned.filter((id) => id !== first.id)
+        // F-CL-301: a leading column (the customers' picture) freezes with the name, in its place before it.
+        const together = [...state.tools.filter((column) => column.fixed === 'lead').map((column) => column.id), first.id]
+        const rest = current.pinned.filter((id) => !together.includes(id))
+        const pinned = frozen ? [...together, ...rest] : rest
         const next = { ...current, pinned }
         state.setLayout({ ...state.layout, columns: next.order.length + next.hidden.length + next.pinned.length > 0 ? next : undefined })
       },
@@ -449,7 +452,7 @@ export function ListToolsBar<T>({ state, withheld, about, builtIns, suggested }:
         />
       )}
 
-      {dialog?.kind === 'customise' && <CustomiseDialog tools={state.tools} layout={state.layout} onApply={(next) => state.setLayout(next)} onClose={close} />}
+      {dialog?.kind === 'customise' && <CustomiseDialog tools={state.tools} layout={state.layout} onApply={(next) => state.setLayout(next)} onClose={close} about={customise ?? null} /* F-CL-301 */ />}
       {(dialog?.kind === 'save' || dialog?.kind === 'edit') && state.answer && (
         <SaveViewDialog
           view={dialog.kind === 'edit' ? dialog.view : null}

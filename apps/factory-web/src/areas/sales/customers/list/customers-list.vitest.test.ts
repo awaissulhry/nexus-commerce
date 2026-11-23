@@ -8,8 +8,10 @@ import { LOCALES } from '../../../../lib/i18n/locales'
 import { CATALOGUE } from '../../../../lib/i18n/messages'
 import type { PartyRow } from '../../../parties/_shared/api'
 import { CUSTOMERS, rowOf } from '../../../parties/_shared/fixtures'
-import { customerColumnsOf, threadHref } from './columns'
-import { CARD_ROLES, customerActsOf, CUSTOMER_HIDDEN_COLUMNS, customerRightsOf, namesOtherCustomer, officeDataOf } from './model'
+import { customerColumnsOf, customiseAboutOf, threadHref } from './columns' // F-CL-301: + customiseAboutOf
+import { toolColumnsOf } from '../../../../list-frame/tools/model' // F-CL-301
+import { MessagesHeader } from './view/cells' // F-CL-301
+import { CARD_ROLES, customerActsOf, CUSTOMER_HIDDEN_COLUMNS, customerRightsOf, namesOtherCustomer, officeDataOf, workReadOf } from './model'
 import { supervisorBodyOf, supervisorPlanOf, supervisorRestOf, supervisorSummaryOf, type SupervisorTarget } from './supervisor/model'
 
 /**
@@ -85,6 +87,14 @@ describe('F-CL-102 / F-CL-104: each act reads its own right', () => {
 })
 
 // ---- F-CL-104: the customers' own acts ------------------------------------------------------------------------------------------
+describe('F-CL-301 (walk W-11): no work read without the list’s own right', () => {
+  it('orders.view alone (the Planner, on the no-access page) reads no band and no facts; with parties.view it reads', () => {
+    expect(workReadOf(['orders.view'])).toBe(false)
+    expect(workReadOf(['parties.view'])).toBe(false)
+    expect(workReadOf(['parties.view', 'orders.view', 'threads.read'])).toBe(true)
+  })
+})
+
 describe('F-CL-104: Add task to N customers… — the R-47 check of the text', () => {
   const ticked = [
     { code: 'SEED-C1', tradeName: 'Seed Racing', legalName: 'Seed Racing S.r.l.' },
@@ -205,13 +215,17 @@ import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
 import { vi } from 'vitest'
 import { createApiClient } from '../../../../lib/api/client'
-import { phaseDoor } from '../record/use-customer-work'
+import { DOCK_PARAM, dockOnTab, dockTermOf, phaseDoor } from '../record/use-customer-work' // F-CL-301: + the dock's term
+import { showsOnArrival } from '../../../_shared/record-frame/model' // F-CL-301
 import { phasePhrase } from '../../orders/list/sheet/model'
 import { getOverdueCustomers } from '../money/api'
 import type { CustomerWork } from './api'
 import { workDoor } from './doors'
 import { bandGroupsOf, foldOf, groupWordOf, needsChipsOf, nextPromiseOf, workChipsOf } from './model'
 import { factsState } from './view/cells'
+import { bandHintOf } from './view/CustomersBand' // F-CL-301
+import { createTranslator } from '../../../../lib/i18n/messages' // F-CL-301
+import type { PartyWorkBand } from '../../../parties/_shared/api' // F-CL-301
 
 const WORK: CustomerWork = {
   partyId: 'p1',
@@ -257,7 +271,12 @@ describe('F-CL-202: every count is a door to exactly what it counts', () => {
   it('requests open the review window on the first one; replies the thread’s All; to answer / open quotes their own group', () => {
     expect(door({ kind: 'requests', firstId: 'r-1' })).toBe('/w/DEMO/sales/customers/p1?tab=work&open=r-1')
     expect(door({ kind: 'requests', firstId: null })).toBe('/w/DEMO/sales/customers/p1?tab=work')
-    expect(door({ kind: 'replies' })).toBe('/w/DEMO/sales/customers/p1?thread=all')
+    // F-CL-301 (walk W-3): All of <customer> in the dock (the customer page's own term), the thread shown on arrival, the Work tab.
+    expect(door({ kind: 'replies' })).toBe('/w/DEMO/sales/customers/p1?tab=work&dock=all&thread=open')
+    const replies = new URL(door({ kind: 'replies' }), 'https://factory.example.com')
+    expect(dockTermOf(replies.searchParams.get(DOCK_PARAM))).toEqual({ kind: 'all' })
+    expect(dockOnTab('work', dockTermOf(replies.searchParams.get(DOCK_PARAM)))).toEqual({ kind: 'all' })
+    expect(showsOnArrival(replies.search)).toBe(true)
     expect(door({ kind: 'quotes', group: 'TO_ANSWER' })).toBe('/w/DEMO/sales/customers/p1?tab=quotes&group=TO_ANSWER')
     expect(door({ kind: 'quotes', group: 'OPEN_QUOTES' })).toBe('/w/DEMO/sales/customers/p1?tab=quotes&group=OPEN_QUOTES')
     expect(door({ kind: 'work' })).toBe('/w/DEMO/sales/customers/p1?tab=work')
@@ -289,6 +308,27 @@ describe('F-CL-202: the chips — strongest first, zero no chip, the Work tab’
     expect(foldOf([100, 100, 100, 100, 100], 250, 60)).toBe(3)
     expect(foldOf([120, 120, 120], 250, 40, 1)).toBe(1)
     expect(foldOf([], 250, 40)).toBe(0)
+  })
+})
+
+describe('F-CL-301 (walk W-10): the band hints say one and many in each language', () => {
+  const band = (customers: number, n: number): PartyWorkBand => ({ groups: [{ group: 'NEEDS_US', customers, orders: null }, { group: 'NOT_STARTED', customers, orders: n }], needsUs: { requests: n, replies: n, late: n, repliesComplete: true }, notSent: { waitsForYes: 0, waitsForDeposit: 0 }, limited: false })
+  const wordsIn = (locale: (typeof LOCALES)[number]) => {
+    const of = (ns: string) => createTranslator(locale, CATALOGUE[locale][ns] ?? {})
+    return { c: of('customers-list'), ord: of('orders'), sheet: of('orders-sheet'), p: of('parties') }
+  }
+  it('one: "1 customer has…", "1 reply waiting on us", "1 late order"; many: the plural; no {placeholder} left', () => {
+    const en = wordsIn('en')
+    const one = bandHintOf('NEEDS_US', band(1, 1), en)
+    expect(one).toContain('1 customer has something waiting on us')
+    expect(one).toContain('1 request to answer · 1 reply waiting on us · 1 late order')
+    const many = bandHintOf('NEEDS_US', band(3, 2), en)
+    expect(many).toContain('3 customers have something waiting on us')
+    expect(many).toContain('2 requests to answer · 2 replies waiting on us · 2 late orders')
+    expect(bandHintOf('NOT_STARTED', band(1, 1), en)).toContain('1 customer has at least one order')
+    expect(bandHintOf('NOT_STARTED', band(4, 1), en)).toContain('4 customers have at least one order')
+    for (const locale of LOCALES) for (const hint of [bandHintOf('NEEDS_US', band(1, 1), wordsIn(locale)), bandHintOf('NOT_STARTED', band(2, 5), wordsIn(locale))]) expect(hint, locale).not.toMatch(/[{}]/)
+    expect(bandHintOf('NEEDS_US', band(1, 1), wordsIn('it'))).toContain('1 cliente ha qualcosa che tocca a noi')
   })
 })
 
@@ -366,6 +406,30 @@ describe('F-CL-203: Sort ▾ and the phone card', () => {
     expect(narrow.hiddenColumns).toEqual(expect.arrayContaining(['lastOrder', 'overdue']))
     expect(narrow.hiddenColumns).not.toContain('needs')
   })
+
+  it('F-CL-301 (walk W-2): no cut header — Picture whole in a wider column with narrow sides; New messages the message mark, its name kept', () => {
+    const facts = { byParty: new Map([[row('MODA-DEMO').id, WORK]]), problem: null, repliesComplete: true, limited: false }
+    const built = customerColumnsOf({ prefix: '/w/DEMO', unread: {}, work: facts, today: '2026-11-24' }, words, words)
+    const picture = built.beforeName.find((column) => column.colId === 'picture')!
+    expect(picture.width).toBeGreaterThanOrEqual(80)
+    expect(picture.minWidth).toBeGreaterThanOrEqual(80)
+    expect([picture.headerClass, picture.cellClass]).toEqual(['fw-cl-tight', 'fw-cl-tight'])
+    const messages = built.leadingColumns.find((column) => column.colId === 'messages')!
+    expect(messages.headerName).toBe('column')
+    expect(messages.headerComponentParams).toEqual({ innerHeaderComponent: MessagesHeader })
+    expect(messages.suppressHeaderMenuButton).toBe(true)
+  })
+
+  it('F-CL-301 (walk W-13): the picture leads the name (Freeze “Customer”); Customise tells the truth, and Overdue’s absence without prices', () => {
+    const facts = { byParty: new Map([[row('MODA-DEMO').id, WORK]]), problem: null, repliesComplete: true, limited: false }
+    const built = customerColumnsOf({ prefix: '/w/DEMO', unread: {}, work: facts, today: '2026-11-24' }, words, words)
+    expect(built.beforeName[0]!.context).toEqual({ leading: true })
+    expect(toolColumnsOf([...built.beforeName, built.nameColumn, ...built.leadingColumns] as ColDef<unknown>[]).slice(0, 3).map((column) => [column.id, column.fixed])).toEqual([['picture', 'lead'], ['name', 'first'], ['needs', null]])
+    const about = (prices: boolean) => renderToString(createElement('div', null, customiseAboutOf(words, prices)))
+    expect(about(true)).toContain('customise.truth')
+    expect(about(true)).not.toContain('customise.noOverdue')
+    expect(about(false)).toContain('customise.noOverdue')
+  })
 })
 
 // ---- every word the folder names, in both languages (the shape of parties.vitest.test.ts :391) ---------------------------------
@@ -381,7 +445,7 @@ const SHARED = [fileURLToPath(new URL('../../../parties/_shared/view/PartiesList
 
 describe('every customers-list word the code names exists in it and en', () => {
   it('the `c(…)` keys of the folder and of the shared list, with the same placeholders', () => {
-    const keys = new Set<string>(['office.VIES', 'office.SDI', 'office.TAX', 'needs.toAnswer', 'band.needsNow' /* F-CL-202: named through groupWordOf / needsChipsOf */, ...['needs', 'needsHint', 'code', 'codeHint', 'name'].map((key) => `sort.${key}`) /* F-CL-203: Sort ▾ by its choices */])
+    const keys = new Set<string>(['office.VIES', 'office.SDI', 'office.TAX', 'needs.toAnswer', 'band.needsNow' /* F-CL-202: named through groupWordOf / needsChipsOf */, ...['records', 'one', 'neverWho', 'never', 'where'].map((key) => `task.${key}`) /* F-CL-301: the task window reads them under its prefix */, ...['needs', 'needsHint', 'code', 'codeHint', 'name'].map((key) => `sort.${key}`) /* F-CL-203: Sort ▾ by its choices */])
     for (const file of [...sources(HERE), ...SHARED]) for (const match of readFileSync(file, 'utf8').matchAll(/\bc\(['"`]([A-Za-z0-9_.]+)['"`]/g)) keys.add(match[1]!)
     expect(keys.size).toBeGreaterThan(8)
     for (const key of keys) {

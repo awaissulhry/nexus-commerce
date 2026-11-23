@@ -307,3 +307,28 @@ a.fw-pty-name:focus-visible {
   bottom: 0;
   z-index: 3;
 }
+
+/* ---- F-CL-301 (customers list walk W-7 / W-8 / W-9; both sides of the shared list) ---- */
+/* W-7: on a phone the search takes its whole line, so its words fit ("Search name, code or VAT" needs 175 px; it had 163). */
+@media (max-width: 719px) {
+  .fw-pty .nds-grid-search,
+  .fw-pty .nds-cardlist-search {
+    flex: 1 0 100%;
+    max-width: none;
+  }
+}
+
+/* W-8: with cards ticked, "2 selected" is said once — by the bar's own head; the line above the cards stays only for its sort. */
+.fw-pty .nds-cardlist-bulk + .nds-cardlist-meta:not(:has(.nds-cardlist-sort)) {
+  display: none;
+}
+
+/* W-9: a row opens its record — the pointer on it, and the 3 px left mark the selected row has, quieter, while hovered. */
+.fw-pty .ag-row {
+  cursor: pointer;
+}
+
+.fw-pty .ag-row.ag-row-hover:not(.ag-row-selected) .ag-cell[col-id='ag-Grid-SelectionColumn'] {
+  box-shadow: inset 3px 0 0 var(--nds-border-strong);
+}
+/* ---- end F-CL-301 ---- */

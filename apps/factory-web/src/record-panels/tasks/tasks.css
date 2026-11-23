@@ -116,3 +116,17 @@
   align-items: center;
   gap: var(--nds-space-4);
 }
+
+/* ---- F-CL-301 (customers list walk W-5): the records as chips; Assign to on a line of its own, its default said whole ---- */
+.fw-rtask-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+.fw-rtask-form-row.is-assign-wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+.fw-rtask-form-row.is-assign-wide > :last-child {
+  max-width: 280px;
+}
+/* ---- end F-CL-301 ---- */

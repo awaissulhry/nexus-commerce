@@ -51,7 +51,8 @@
     },
     "task_one": "Aggiungi attività a {count} cliente…",
     "task_other": "Aggiungi attività a {count} clienti…",
-    "supervisor": "Imposta supervisore di produzione per {count}…",
+    "supervisor_one": "Imposta supervisore di produzione per {count}…",
+    "supervisor_other": "Imposta supervisore di produzione per {count}…",
     "tooMany": "Al massimo {max} clienti alla volta: selezionane meno."
   },
   "p2": {
@@ -96,7 +97,11 @@
       "held": "Il testo nomina un altro cliente: cambialo, oppure spunta «Questo testo non nomina altri clienti»."
     },
     "made": "Attività creata · per {name}",
-    "due": "scade il {date}"
+    "due": "scade il {date}",
+    "records": "Clienti",
+    "one": "Un’attività su ogni cliente: nella sua conversazione, mai una riga che nomina due clienti.",
+    "neverWho": "Il cliente:",
+    "never": "non vede mai un’attività."
   },
   "supervisor": {
     "title_one": "Imposta il supervisore di produzione per {count} cliente",
@@ -107,7 +112,8 @@
     "listHint": "L’elenco è del primo cliente; il server giudica ognuno degli altri.",
     "follows": "I suoi ordini senza un supervisore proprio seguono questo.",
     "notTold": "Al cliente non viene detto chi è.",
-    "notices": "{name} riceverà {count} avvisi (uno per cliente). Si applica un cliente alla volta; chiudendo la finestra si ferma prima del successivo.",
+    "notices_one": "{name} riceverà {count} avviso (uno per cliente). Si applica un cliente alla volta; chiudendo la finestra si ferma prima del successivo.",
+    "notices_other": "{name} riceverà {count} avvisi (uno per cliente). Si applica un cliente alla volta; chiudendo la finestra si ferma prima del successivo.",
     "already": "Già {name}.",
     "notReached": "Il tuo ruolo non raggiunge le sue impostazioni del portale: il supervisore lo imposta chi le raggiunge.",
     "readFailed": "Non è stato possibile leggere le sue impostazioni: esegui di nuovo.",
@@ -120,7 +126,10 @@
     "held": {
       "pick": "Scegli prima una persona.",
       "reading": "I clienti sono ancora in lettura."
-    }
+    },
+    "now": "ora: {name}",
+    "nowNone": "ora: non impostato",
+    "leftOut": "escluso"
   },
   "band": {
     "label": {
@@ -131,8 +140,16 @@
     "orders_one": "· {count} ordine",
     "orders_other": "· {count} ordini",
     "hint": {
-      "needs": "{count} clienti hanno qualcosa che tocca a noi: {req} richieste a cui rispondere · {rep} risposte che toccano a noi · {late} ordini in ritardo.",
-      "group": "{count} clienti hanno almeno un ordine «{group}» · {orders}.",
+      "needs_one": "{count} cliente ha qualcosa che tocca a noi: {what}.",
+      "needs_other": "{count} clienti hanno qualcosa che tocca a noi: {what}.",
+      "req_one": "{count} richiesta a cui rispondere",
+      "req_other": "{count} richieste a cui rispondere",
+      "rep_one": "{count} risposta che tocca a noi",
+      "rep_other": "{count} risposte che toccano a noi",
+      "late_one": "{count} ordine in ritardo",
+      "late_other": "{count} ordini in ritardo",
+      "group_one": "{count} cliente ha almeno un ordine «{group}» · {orders}.",
+      "group_other": "{count} clienti hanno almeno un ordine «{group}» · {orders}.",
       "press": "Premi: mostra questi clienti. Di nuovo: mostra tutti.",
       "partial": "Alcune risposte in attesa sono oltre ciò che una lettura conta: le risposte possono essere di più."
     },
@@ -172,5 +189,9 @@
     "name": "Nome A–Z",
     "aria": "Ordine dell’elenco: {order}",
     "capped": "Più di 2 000 clienti in questa vista: mostrati per codice. Restringi la vista per vederli in questo ordine."
+  },
+  "customise": {
+    "truth": "Queste sono le colonne dell’elenco — è spuntato ciò che è sullo schermo. Le colonne d’identità sono nascoste all’inizio e restano qui (sono sempre nel file esportato).",
+    "noOverdue": "Scaduto non è offerto: serve il permesso di vedere i prezzi."
   }
 }

@@ -8,7 +8,7 @@ import type { PartyWorkBand } from '../../../parties/_shared/api'
 import type { PartiesListModel } from '../../../parties/_shared/model'
 import { PartiesListView, type ListDepth, type PartiesListActions } from '../../../parties/_shared/view/PartiesListView'
 import { useT } from '../../../../lib/i18n/provider'
-import { customerBarActs, customerRowItems, useCustomerColumns } from '../list/columns'
+import { customerBarActs, customerRowItems, customiseAboutOf, useCustomerColumns } from '../list/columns' // F-CL-301: + customiseAboutOf
 import { CUSTOMERS_LIST_NS, WORK_WORDS, type CustomerRights, type CustomersWorkModel } from '../list/model'
 import { bandHintOf, CustomersBand, groupName } from '../list/view/CustomersBand'
 import { useOverdueColumns, type OverdueListModel } from '../money/columns'
@@ -68,8 +68,9 @@ function Customers({ model, actions, headActions, overdue, unread, rights, work 
       ...(work ? { band: <CustomersBand band={work.band.band} problem={work.band.problem} work={pressed} onWork={(group) => actions?.onWork?.(group)} wide={work.wide === true} about={p('customers.intro')} words={bandWords} /> } : {}),
       workChip: pressed ? { label: groupName(pressed, bandWords), ...(work?.band.band ? { hint: bandHintOf(pressed, work.band.band, bandWords) } : {}), empty: pressed === 'NEEDS_US' ? c('empty.needs') : c('empty.work', { group: groupName(pressed, bandWords) }) } : null,
       exportAbout: { heading: c('export.heading'), note: c('export.note') },
+      customiseAbout: customiseAboutOf(c, overdue?.can.price === true), // F-CL-301 (walk W-13)
     }),
-    [columns, rights, model.prefix, c, p, ticked, work, pressed, bandWords, actions],
+    [columns, rights, model.prefix, c, p, ticked, work, pressed, bandWords, actions, overdue],
   )
   return <PartiesListView model={{ ...model, side: 'customers' }} actions={actions} headActions={headActions} depth={depth} />
 }

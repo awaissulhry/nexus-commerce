@@ -1,12 +1,14 @@
 'use client'
 
+import Link from 'next/link' // F-CL-301
+import { Minus, UserRound } from 'lucide-react' // F-CL-301
 import { Banner, Field } from '@nexus/ui/components'
 import { Button, Select, Skeleton, Spinner } from '@nexus/ui/primitives'
 import { Modal } from '../../../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../../record-panels/i18n'
-import { BulkReceipt, NotOnLines, type ReceiptLine } from '../../../../../parties/_shared/view/dialogs'
-import { supervisorPlanOf, supervisorRestOf, supervisorSummaryOf, type SupervisorManyActions, type SupervisorManyModel, type SupervisorWhy } from '../model'
+import { BulkReceipt, type ReceiptLine } from '../../../../../parties/_shared/view/dialogs'
+import { supervisorPlanOf, supervisorRestOf, supervisorSummaryOf, type SupervisorManyActions, type SupervisorManyModel, type SupervisorPlan, type SupervisorWhy } from '../model'
 import '../../list.css'
 
 /** "Nobody yet" in the pick list. */
@@ -70,7 +72,11 @@ function Dialog({ model, actions, hrefOf }: { model: SupervisorManyModel; action
         )}
         {model.step === 'pick' && (
           <>
-            <NotOnLines runs={plan.runs.length} notOn={plan.notOn.map((line) => ({ id: line.id, name: line.name, why: words(line.why) }))} />
+            {/* F-CL-301 (walk W-6): "Runs on 3 · Not on 3: why is beside each" before the pick too; the customers under the pick. */}
+            <p className="fw-pty-pop-title">
+              {sheet('commands.runs', { count: plan.runs.length })}
+              {plan.notOn.length > 0 ? ` · ${sheet('commands.notOn', { count: plan.notOn.length })}` : ''}
+            </p>
             <Field label={c('supervisor.pick')} hint={c('supervisor.listHint')}>
               {model.people.status === 'loading' ? (
                 <Skeleton height={32} />
@@ -90,8 +96,8 @@ function Dialog({ model, actions, hrefOf }: { model: SupervisorManyModel; action
               )}
             </Field>
             {model.people.status === 'ready' && !model.people.complete && <p className="fw-pty-hint">{ps('dialog.partial')}</p>}
+            <SupervisorLines plan={plan} hrefOf={hrefOf} words={words} />
             {person && plan.runs.length > 0 && <p className="fw-pty-hint">{c('supervisor.notices', { name: person.name, count: plan.runs.length })}</p>}
-            <p className="fw-pty-hint">{c('supervisor.follows')}</p>
             <p className="fw-pty-hint">{c('supervisor.notTold')}</p>
           </>
         )}
@@ -103,6 +109,50 @@ function Dialog({ model, actions, hrefOf }: { model: SupervisorManyModel; action
         {model.step === 'done' && <Receipt model={model} hrefOf={hrefOf} words={words} name={person?.name ?? '—'} onRunRest={actions.onRunRest} />}
       </div>
     </Modal>
+  )
+}
+
+/**
+ * F-CL-301 (walk W-6; 10-design §8): every ticked customer before the run — the ones it runs on (its orders without a supervisor of
+ * their own follow the pick; "now: …" its supervisor today, an office person) and the ones it leaves out, each with why. A name
+ * opens the customer in a new tab (this window stays).
+ */
+function SupervisorLines({ plan, hrefOf, words }: { plan: SupervisorPlan; hrefOf: ((id: string) => string | null) | null; words: (why: SupervisorWhy) => string }) {
+  const c = useT('customers-list')
+  if (plan.runs.length + plan.notOn.length === 0) return null
+  const name = (id: string, text: string) => {
+    const href = hrefOf?.(id) ?? null
+    return href ? (
+      <Link href={href} target="_blank" rel="noopener noreferrer">
+        {text}
+      </Link>
+    ) : (
+      <b>{text}</b>
+    )
+  }
+  return (
+    <ul className="fw-cl-sup-lines" aria-label={c('p2.each.customers')}>
+      {plan.runs.map((target) => (
+        <li key={target.id}>
+          <UserRound size={14} aria-hidden />
+          <span className="fw-cl-sup-who">
+            {name(target.id, target.name)}
+            <span className="fw-pty-hint">{c('supervisor.follows')}</span>
+          </span>
+          <span className="fw-cl-sup-now">{target.supervisor ? c('supervisor.now', { name: target.supervisor.name }) : c('supervisor.nowNone')}</span>
+        </li>
+      ))}
+      {plan.notOn.map((line) => (
+        <li key={line.id} className="is-out">
+          <Minus size={14} aria-hidden />
+          <span className="fw-cl-sup-who">
+            {name(line.id, line.name)}
+            <span className="fw-pty-hint">{words(line.why)}</span>
+          </span>
+          <span className="fw-cl-sup-now">{c('supervisor.leftOut')}</span>
+        </li>
+      ))}
+    </ul>
   )
 }
 
