@@ -78,6 +78,8 @@ export default defineStage({
       // F-CP-112 (customer page plan C1, F-CP-101): the customer page opens on All orders — the entry address written once, rows=all.
       await expect(page).toHaveURL(/[?&]rows=all(&|$)/)
       expect(page.url()).not.toMatch(/[?&]status=all(&|$)/)
+      // F-CW-201 (lead settle S16): … most urgent first — the default order written beside the default view, in the same ONE write.
+      await expect(page).toHaveURL(/[?&]sort=urgent(&|$)/)
     })
 
     // F-OP-218 (order page plan N4; 11-dock §0, §3.4; D11): the customer page's dock is the same ONE card as the order page's — the pick

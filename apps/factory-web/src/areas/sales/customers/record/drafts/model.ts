@@ -22,6 +22,10 @@ export function draftsAddress(base: string, partyId: string, params: { get(name:
   const query = new URLSearchParams({ tab: 'work', party: partyId, [DRAFTS_TERM.name]: DRAFTS_TERM.value })
   const dock = params?.get('dock')
   if (dock) query.set('dock', dock)
+  // F-CW-201: the order the person reads the orders in is kept for the way back (the drafts themselves are not sorted by it) —
+  // without it a look at the drafts would turn "Most urgent first" into "Newest first".
+  const sort = params?.get('sort')
+  if (sort) query.set('sort', sort)
   return `${base}?${query.toString()}`
 }
 

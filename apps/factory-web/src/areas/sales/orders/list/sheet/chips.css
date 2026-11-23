@@ -141,3 +141,11 @@ a.fw-sheet-msgs {
   padding-right: var(--nds-space-4);
   text-align: center;
 }
+
+/* F-CW-202: the bar's one sentence for a reader with no act on the ticked orders (quiet, whole: it may wrap). */
+.fw-sheet-bar-none {
+  min-width: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  white-space: normal;
+}

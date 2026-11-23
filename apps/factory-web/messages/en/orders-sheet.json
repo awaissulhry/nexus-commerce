@@ -191,7 +191,11 @@
     "daysLate": "Days late, most first",
     "daysLateBack": "Days late, fewest first",
     "ordered": "Order date, oldest first",
-    "orderedBack": "Order date, newest first"
+    "orderedBack": "Order date, newest first",
+    "urgent": "Most urgent first",
+    "urgentRule": "(our priority, then {customer}'s urgent order, then promise date)",
+    "urgentRuleAll": "(our priority, then each customer's own urgent order, then promise date)",
+    "now": "Sort: {sort}"
   },
   "views": {
     "suggest": "{customer} — tracking",
@@ -371,7 +375,9 @@
       "none": "Nothing was posted.",
       "label": "Each order",
       "sent": "Posted",
-      "notSent": "Not posted. {why}"
+      "notSent": "Not posted. {why}",
+      "todoMade": "in their to-do list",
+      "todoNot": "the to-do was not made. {why}"
     },
     "why": {
       "closed": "Its conversation is closed: reopen it to reply.",
@@ -381,7 +387,20 @@
       "forbidden": "Your role does not write in this order's conversation.",
       "failed": "It did not go through: try again."
     },
-    "yourOrder": "Your order {seq} ({number})"
+    "yourOrder": "Your order {seq} ({number})",
+    "askTitle_one": "Ask {customer} about {count} order",
+    "askTitle_other": "Ask {customer} about {count} orders",
+    "todo": {
+      "tick": "Put it in their to-do list, answer by",
+      "date": "Answer by",
+      "noDate": "No date",
+      "hint": "{customer} sees “Answer our message” under What waits for you. Each order then says Waiting on customer with the days, here and on its page, until they answer.",
+      "past": "The to-do's day must be after today.",
+      "far": "The to-do's day must be within {max} days.",
+      "why": {
+        "forbidden": "Your role does not put a to-do in a customer's list."
+      }
+    }
   },
   "commands": {
     "confirmOrRefuse": "Confirm or refuse…",
@@ -465,5 +484,17 @@
     "widest": "{column} · from the widest sheet"
   },
   "countOf_one": "{shown} of {count} order",
-  "countOf_other": "{shown} of {count} orders"
+  "countOf_other": "{shown} of {count} orders",
+  "bar": {
+    "more": "More",
+    "ask": "Ask",
+    "askProduction": "Ask production about {count}…",
+    "askProductionWho": "An office note to each order's supervisor, with “Needs an answer”. The customer never reads it.",
+    "askProductionTitle_one": "Ask production about {count} order",
+    "askProductionTitle_other": "Ask production about {count} orders",
+    "none": "Your role reads the orders and changes none: there is no act for the ticked rows.",
+    "askCustomer": "Ask {customer} about {count}…",
+    "askCustomerAny": "Ask the customer about {count}…",
+    "askCustomerWho": "A message in each order's own conversation, read in the portal, AND a to-do with a date in their list."
+  }
 }

@@ -282,7 +282,8 @@ export interface Narrowing {
 // ── end B-TH-225 ──
 
 // ── B-TH-057 (threads plan TH-4; SHEET-G15, SHEET-G05, feature SHEET.overall-F05): the server sort and the custom field filter ──
-const SORTS: readonly string[] = [...ORDER_SORT_KEYS, ...ORDER_SORT_KEYS.map((key) => `-${key}`)]
+// F-CW-201: "Most urgent first" has no other way round on the sheet (no choice offers `-urgent`; typed by hand it is not read).
+const SORTS: readonly string[] = [...ORDER_SORT_KEYS, ...ORDER_SORT_KEYS.filter((key) => key !== 'urgent').map((key) => `-${key}`)]
 
 /** The server sort the address names (`?sort=promise`, `?sort=-daysLate`), or null: newest first. */
 export function sortFromAddress(params: { get(name: string): string | null } | null): OrderSort | null {
@@ -314,7 +315,10 @@ export function sortOfColumn(colId: string, direction: 'asc' | 'desc' | null): O
 }
 
 /** The Sort menu's choices ('' = newest first), each with its `orders-sheet` word (`sort.<word>`). */
+// F-CW-201 (lead settles S5, S34): "Most urgent first" is the first choice on every host of the sheet (the customer page's default,
+// written by its entry; Sales › Orders and Made to measure keep "Newest first" until a person picks it).
 export const SORT_CHOICES: ReadonlyArray<{ readonly value: OrderSort | ''; readonly word: string }> = Object.freeze([
+  { value: 'urgent', word: 'urgent' },
   { value: '', word: 'newest' },
   { value: 'customer', word: 'customer' },
   { value: '-customer', word: 'customerBack' },
@@ -327,6 +331,18 @@ export const SORT_CHOICES: ReadonlyArray<{ readonly value: OrderSort | ''; reado
   { value: '-ordered', word: 'orderedBack' },
   { value: '-brand', word: 'brandBack' },
 ])
+/** F-CW-201 (review A1-B7): the choices a host offers — on a sheet of ONE customer "Customer A–Z / Z–A" order nothing and are left out. */
+export function sortChoicesOf(oneCustomer: boolean): ReadonlyArray<{ readonly value: OrderSort | ''; readonly word: string }> {
+  return oneCustomer ? SORT_CHOICES.filter((choice) => choice.value !== 'customer' && choice.value !== '-customer') : SORT_CHOICES
+}
+
+/**
+ * F-CW-201 (S5): the quiet words under "Most urgent first" — the rule in the reader's words, never "the planning order": our
+ * priority, then the customer's own urgent order, then the promise date. One customer's sheet names the customer.
+ */
+export function urgentRuleOf(customer: string | null): { readonly key: string; readonly params?: Readonly<Record<string, string>> } {
+  return customer ? { key: 'sort.urgentRule', params: { customer } } : { key: 'sort.urgentRuleAll' }
+}
 // ── end B-TH-057 ──
 // ── end B-TH-201 ──
 

@@ -29,6 +29,11 @@ import {
   replyTargetsOf,
   sentOf,
   targetLabel,
+  todoDueDefault,
+  todoHeld,
+  todoLeft,
+  todoOutcomeOf,
+  todoStart,
   toSend,
   type ReplyManyModel,
   type ReplyResult,
@@ -36,6 +41,7 @@ import {
 } from './reply-many'
 import { NAMESPACE } from './sheet/model'
 import { ReplyManyBody } from './view/ReplyManyDialog'
+import { addDays } from '../../../admin/users/partners/model' // F-CW-203
 
 /**
  * F-SA-282 (sales page plan N5, picks P10, R7; 11-customer-page §3.8; review BW-6; rule 7 / T11): Reply to <customer> on N — never one
@@ -80,10 +86,13 @@ describe('F-SA-282: held before the click — one customer only, the right, at m
     const hook = readFileSync(new URL('./use-reply-many.ts', import.meta.url), 'utf8')
     expect(hook).toContain('if (rows.length === 0 || replyManyHeld(rows, locked, canPost)) return')
     const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
-    expect(view).toContain('heldReason={replyWords}')
+    // F-CW-202: Reply to N is an act of the bar's ONE rule (sheet/bar.ts): held by this same check with the right given — without
+    // threads.post it is not drawn at all (S9).
+    expect(readFileSync(new URL('./sheet/bar.ts', import.meta.url), 'utf8')).toContain('return sheet(replyManyHeld(rows, host.locked, true))')
+    expect(view).toContain('reply: () => actions?.onReplyMany?.(pickedIds),')
     expect(view).toContain('<ReplyManyDialog model={model.replyMany} actions={actions?.replyMany} />')
     const sheet = readFileSync(new URL('./use-orders-sheet.ts', import.meta.url), 'utf8')
-    expect(sheet).toContain('onReplyMany: (ids) => replyMany.open(pickedRows(ids), host.locked?.party ?? null)')
+    expect(sheet).toContain('onReplyMany: (ids, options) => replyMany.open(pickedRows(ids), host.locked?.party ?? null, options)') // F-CW-203: + the to-do tick
   })
 })
 
@@ -373,3 +382,107 @@ describe('F-CP-162: Reply to N whose words look like a price — warned once, ne
   })
 })
 // ── end F-CP-162 ──
+
+// ---- F-CW-203 (customer Work tab plan §4; 10-design §4, §6 W3; lead settles S8, S37): "Ask <customer> about N…" = Reply to N with
+// ONE tick — "Put it in their to-do list, answer by <date>". After each order's message is posted, one to-do "Answer our message" for
+// the customer on that order; hidden without partners.tasks.manage; its result on the order's own line of the receipt.
+describe('F-CW-203: the to-do tick of Reply to N', () => {
+  const targets: ReplyTarget[] = replyTargetsOf(alpha)
+  const TODAY = '2026-11-23' // a Monday
+  const model = (more: Partial<ReplyManyModel> = {}): ReplyManyModel => ({ customer: { id: ALPHA, name: BRAND_ALPHA.tradeName }, targets, batchId: 'c3c3c3c3-0000-4000-8000-0000000000c3', draft: startDraft(replyComposerContext(BRAND_ALPHA.tradeName)), notes: [], language: 'it', portal: 'on', sending: false, progress: null, results: {}, done: false, today: TODAY, ...more })
+
+  it('the tick starts ON from Ask ▾ and OFF from Reply to N; its day is three working days ahead (the weekend skipped)', () => {
+    expect(todoStart(true, TODAY)).toEqual({ on: true, due: '2026-11-26' })
+    expect(todoStart(false, TODAY)).toEqual({ on: false, due: '2026-11-26' })
+    expect(todoDueDefault('2026-11-26')).toBe('2026-12-01') // Thursday → Friday, Monday, Tuesday
+    expect(todoDueDefault('2026-11-27')).toBe('2026-12-02') // Friday → Monday, Tuesday, Wednesday
+    expect(todoDueDefault('2026-11-28')).toBe('2026-12-02') // Saturday → the same three working days
+  })
+
+  it('the day holds Send only when it cannot be asked: not after today, or beyond what the API takes; no day at all is fine', () => {
+    expect(todoHeld(null, TODAY)).toBeNull()
+    expect(todoHeld({ on: false, due: '2020-01-01' }, TODAY)).toBeNull() // unticked: no to-do, no hold
+    expect(todoHeld({ on: true, due: '' }, TODAY)).toBeNull()
+    expect(todoHeld({ on: true, due: TODAY }, TODAY)).toEqual({ key: 'reply.todo.past' })
+    expect(todoHeld({ on: true, due: '2026-11-20' }, TODAY)).toEqual({ key: 'reply.todo.past' })
+    expect(todoHeld({ on: true, due: addDays(TODAY, 1) }, TODAY)).toBeNull()
+    expect(todoHeld({ on: true, due: addDays(TODAY, 179) }, TODAY)).toBeNull()
+    expect(todoHeld({ on: true, due: addDays(TODAY, 180) }, TODAY)).toEqual({ key: 'reply.todo.far', params: { max: 180 } })
+  })
+
+  it('a to-do that is not made never loses the message: refused for good with why, or a fault that Try again makes alone', () => {
+    expect(todoOutcomeOf({ code: null, kind: 'forbidden' })).toEqual({ state: 'refused', why: { key: 'reply.todo.why.forbidden' } })
+    expect(todoOutcomeOf({ code: null, kind: 'invalid' })).toEqual({ state: 'refused', why: { key: 'reply.why.refused' } })
+    expect(todoOutcomeOf({ code: null, kind: 'unavailable' })).toEqual({ state: 'failed', why: { key: 'reply.why.failed' } })
+    expect(todoOutcomeOf({ code: null, kind: null })).toEqual({ state: 'failed', why: { key: 'reply.why.failed' } })
+    const results: Record<string, ReplyResult> = {
+      [targets[0]!.id]: { state: 'sent', todo: { state: 'made' } },
+      [targets[1]!.id]: { state: 'sent', todo: { state: 'failed', why: { key: 'reply.why.failed' } } },
+      [targets[2]!.id]: { state: 'failed', why: { key: 'reply.why.failed' } },
+    }
+    // Try again: the message of the third, and ONLY the to-do of the second (a posted message is never posted twice).
+    expect(toSend(targets, results).map((target) => target.id)).toEqual([targets[2]!.id])
+    expect(todoLeft(targets, results).map((target) => target.id)).toEqual([targets[1]!.id])
+    expect(replyReceipt(targets, results)).toMatchObject({ sent: 2, failed: 2, todos: 1 })
+    // A to-do refused for good is not tried again.
+    expect(todoLeft(targets, { [targets[0]!.id]: { state: 'sent', todo: { state: 'refused', why: { key: 'reply.why.refused' } } } })).toEqual([])
+    // Without the tick nothing changes: the receipt counts no to-do.
+    expect(replyReceipt(targets, { [targets[0]!.id]: { state: 'sent' } })).toMatchObject({ sent: 1, failed: 0, todos: 0 })
+  })
+
+  it('the window: the tick, its day and the sentence that says what the customer sees — not drawn without the right', () => {
+    const asked = textOf(render(createElement(ReplyManyBody, { model: model({ todo: todoStart(true, TODAY), asked: true }) }), 'en'))
+    expect(asked).toContain('Put it in their to-do list, answer by')
+    expect(asked).toContain('Brand Alpha sees “Answer our message” under What waits for you.')
+    expect(asked).toContain('Waiting on customer')
+    const italian = textOf(render(createElement(ReplyManyBody, { model: model({ todo: todoStart(true, TODAY), asked: true }) }), 'it'))
+    expect(italian).toContain('Mettilo nella loro lista di cose da fare, risposta entro il')
+    expect(italian).toContain('Tocca al cliente')
+    // No right to make a customer's to-dos (todo: null), or an older model without the field: no tick at all.
+    for (const plain of [model({ todo: null }), model()]) expect(textOf(render(createElement(ReplyManyBody, { model: plain }), 'en'))).not.toContain('to-do list')
+    // A day that cannot be asked is said in words beside Send.
+    const dialog = readFileSync(new URL('./view/ReplyManyDialog.tsx', import.meta.url), 'utf8')
+    expect(dialog).toContain('?? todoHeld(model.todo, today)')
+    expect(dialog).toContain("title={s(model.asked ? 'reply.askTitle' : 'reply.title', { customer: model.customer.name, count: model.targets.length })")
+  })
+
+  it('the receipt says what became of each order\'s to-do on that order\'s own line', () => {
+    const results: Record<string, ReplyResult> = {
+      [targets[0]!.id]: { state: 'sent', todo: { state: 'made' } },
+      [targets[1]!.id]: { state: 'sent', todo: { state: 'failed', why: { key: 'reply.why.failed' } } },
+      [targets[2]!.id]: { state: 'sent' },
+    }
+    const text = textOf(render(createElement(ReplyManyBody, { model: model({ results, done: true, todo: todoStart(true, TODAY) }) }), 'en'))
+    expect(text).toContain(`${targetLabel(targets[0]!)} · Posted · in their to-do list`)
+    expect(text).toContain(`${targetLabel(targets[1]!)} · Posted · the to-do was not made. It did not go through: try again.`)
+    expect(text).toContain(`${targetLabel(targets[2]!)} · Posted`)
+    expect(text).not.toContain(`${targetLabel(targets[2]!)} · Posted ·`)
+  })
+
+  it('the hook: one to-do per order AFTER its reply, its own key, the order\'s company; only with partners.tasks.manage (source)', () => {
+    const hook = readFileSync(new URL('./use-reply-many.ts', import.meta.url), 'utf8')
+    expect(hook).toContain("const canTodo = permissions.includes('partners.tasks.manage') // F-CW-203")
+    expect(hook).toContain('todo: canTodo ? todoStart(asked, today) : null')
+    expect(hook).toContain("await askPartner(api, now.customer.id, { kind: 'ANSWER_MESSAGE', recordType: 'SalesOrder', recordId: target.id, dueAt: due ? endOfDay(due) : null,")
+    expect(hook).toContain("return { state: 'sent', ...(todo ? { todo: await todoOne(target, todo.due) } : {}) }")
+    // A posted message is never posted again: only its to-do is tried.
+    expect(hook).toContain("if (now.results[target.id]?.state === 'sent') return { state: 'sent', ...(todo ? { todo: await todoOne(target, todo.due) } : {}) }")
+    // The ONE sheet hands the option through on every host; the existing ask command is used (no new route).
+    const sheet = readFileSync(new URL('./use-orders-sheet.ts', import.meta.url), 'utf8')
+    expect(sheet).toContain('onReplyMany: (ids, options) => replyMany.open(pickedRows(ids), host.locked?.party ?? null, options)')
+    expect(sheet).toContain("todo: session.permissions.includes('partners.tasks.manage') /* F-CW-203 */")
+    const api = readFileSync(new URL('../../../admin/users/partners/api.ts', import.meta.url), 'utf8')
+    expect(api).toContain("export const ASKABLE = ['UPLOAD_DOCUMENT', 'ANSWER_MESSAGE', 'SEND_MEASUREMENTS', 'REPORT_PROGRESS'] as const")
+  })
+
+  it('every new word in both languages (no key left)', () => {
+    for (const locale of LOCALES) {
+      const t = tFor(locale)
+      for (const key of ['reply.todo.tick', 'reply.todo.date', 'reply.todo.noDate', 'reply.todo.hint', 'reply.todo.past', 'reply.todo.far', 'reply.todo.why.forbidden', 'reply.result.todoMade', 'reply.result.todoNot']) expect(t(key, { customer: 'Brand Alpha', max: 180, why: 'x' }), `${locale} ${key}`).not.toBe(key)
+      for (const count of [1, 3]) expect(t('reply.askTitle', { customer: 'Brand Alpha', count }), `${locale} ${count}`).toContain('Brand Alpha')
+    }
+    expect(tFor('en')('reply.askTitle', { customer: 'Seed Racing', count: 3 })).toBe('Ask Seed Racing about 3 orders')
+    expect(tFor('it')('reply.askTitle', { customer: 'Seed Racing', count: 3 })).toBe('Chiedi a Seed Racing su 3 ordini')
+  })
+})
+// ---- end F-CW-203

@@ -3,6 +3,8 @@ import { LOCALES } from '../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
 import { getBoard, listOrders } from '../api'
 import { cfFromAddress, columnSort, laneQuery, listAddress, rowsQuery, SORT_CHOICES, SORT_COLUMNS, sortFromAddress, sortOfColumn } from '../model'
+import { sortChoicesOf } from '../model' // F-CW-201
+import { readFileSync } from 'node:fs' // F-CW-201
 import { NAMESPACE } from './sheet/model'
 
 /**
@@ -67,6 +69,44 @@ describe('every read sends them: the rows, each lane and the counts', () => {
   })
 })
 
+// ---- F-CW-201 (the API's B-CW-030; lead settles S5, S34): "Most urgent first" — a term of the address like every other sort ----
+describe('F-CW-201: "Most urgent first" on the shared sheet (all three hosts)', () => {
+  it('`sort=urgent` is read from the address, written back, sent to the list; no column header shows its arrow', async () => {
+    expect(sortFromAddress(params('sort=urgent'))).toBe('urgent')
+    expect(listAddress('/w/acme/sales/orders', { rows: 'all', q: '', layout: 'list', sort: 'urgent' })).toBe('/w/acme/sales/orders?rows=all&sort=urgent')
+    const { api, calls } = recorder()
+    await listOrders(api, rowsQuery('all', '', null, null, { sort: 'urgent' }))
+    expect(calls[0]!.query.sort).toBe('urgent')
+    for (const column of Object.keys(SORT_COLUMNS)) expect(columnSort('urgent', column), column).toBeNull()
+  })
+
+  it('no choice offers it the other way round, and `sort=-urgent` typed by hand is not read (nothing is sent)', async () => {
+    expect(SORT_CHOICES.map((choice) => choice.value)).not.toContain('-urgent')
+    expect(sortFromAddress(params('sort=-urgent'))).toBeNull()
+    // The other sorts keep both ways.
+    expect(sortFromAddress(params('sort=-promise'))).toBe('-promise')
+  })
+
+  it('Sort ▾ is a menu like Views ▾: the order shown on its trigger, the choice ticked, the rule as the quiet second line (source)', () => {
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('const sortChoices = sortChoicesOf(!!model.locked?.party)')
+    expect(view).toContain("checked: choice.value === (model.sort ?? ''),")
+    expect(view).toContain("...(choice.value === 'urgent' ? { description: s(urgentRule.key, urgentRule.params) } : {}),")
+    expect(view).toContain('{sortMenu /* B-TH-057; F-CW-201: Sort ▾ as a menu */}')
+    // The Select is gone: one way to sort.
+    expect(view).not.toContain("<Select size=\"sm\" aria-label={s('sort.label')}")
+    // Every host draws the same menu; only a sheet of ONE customer leaves Customer A–Z / Z–A out.
+    expect(sortChoicesOf(false)).toBe(SORT_CHOICES)
+    expect(sortChoicesOf(true).length).toBe(SORT_CHOICES.length - 2)
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, [NAMESPACE])[NAMESPACE]!)
+      for (const key of ['sort.urgent', 'sort.urgentRule', 'sort.urgentRuleAll', 'sort.now']) expect(t(key, { customer: 'Brand Alpha', sort: 'x' }), `${locale} ${key}`).not.toBe(key)
+      expect(t('sort.now', { sort: t('sort.urgent') })).toContain(t('sort.urgent'))
+    }
+  })
+})
+// ---- end F-CW-201
+
 describe('only the columns the server sorts by keep a header sort (no header sorts the loaded rows only)', () => {
   it('Customer, Brand, Promised and Ordered sort every page; the arrow follows the address', () => {
     expect(Object.keys(SORT_COLUMNS).sort()).toEqual(['brand', 'customer', 'orderDate', 'promised'])
@@ -87,8 +127,9 @@ describe('only the columns the server sorts by keep a header sort (no header sor
 
   it('the Sort menu offers newest first and every server sort, each with its words in it and en', () => {
     const values = SORT_CHOICES.map((choice) => choice.value)
-    expect(values[0]).toBe('')
-    for (const key of ['customer', 'brand', 'promise', 'daysLate', 'ordered']) expect(values.some((value) => value === key || value === `-${key}`), key).toBe(true)
+    // F-CW-201 (S34): "Most urgent first" leads on every host; "Newest first" (no term) is next.
+    expect(values.slice(0, 2)).toEqual(['urgent', ''])
+    for (const key of ['customer', 'brand', 'promise', 'daysLate', 'ordered', 'urgent']) expect(values.some((value) => value === key || value === `-${key}`), key).toBe(true)
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, [NAMESPACE])[NAMESPACE]!)
       for (const choice of SORT_CHOICES) expect(t(`sort.${choice.word}`), `${locale} ${choice.word}`).not.toMatch(/^sort\./)

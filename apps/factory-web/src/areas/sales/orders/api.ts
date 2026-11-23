@@ -306,7 +306,9 @@ export interface OrderQuery {
 }
 
 // ── B-TH-057: what the sheet sorts by on the server (apps/factory-api modules/sales/orders/sort.ts) ──
-export const ORDER_SORT_KEYS = ['customer', 'brand', 'promise', 'daysLate', 'ordered'] as const
+// F-CW-201 (the API's B-CW-030): + `urgent` — "Most urgent first" (our priority, then the customer's urgent order, then the promise
+// date; the orders that left production follow, newest first). Office only.
+export const ORDER_SORT_KEYS = ['customer', 'brand', 'promise', 'daysLate', 'ordered', 'urgent'] as const
 export type OrderSortKey = (typeof ORDER_SORT_KEYS)[number]
 export type OrderSort = OrderSortKey | `-${OrderSortKey}`
 // ── end B-TH-057 ──

@@ -10,6 +10,10 @@ import { postPortalReplyKeyed } from '../../../_shared/record-thread/api'
 import { refusalCode } from '../../../_shared/record-thread/state'
 import { getParty } from '../../../parties/_shared/api'
 import { getPortalAccess } from '../../../admin/users/partners/api'
+// F-CW-203: the customer's to-do beside the message — the existing ask command (POST /partners/:partyId/tasks, ANSWER_MESSAGE).
+import { askPartner } from '../../../admin/users/partners/api'
+import { endOfDay } from '../../../admin/users/partners/model'
+import { romeToday } from '../model'
 import type { OrderRow } from '../api'
 import {
   keyFor,
@@ -20,12 +24,17 @@ import {
   replyRound,
   replySendHeld,
   replyTargetsOf,
+  todoHeld,
+  todoLeft,
+  todoOutcomeOf,
+  todoStart,
   toSend,
   type ReplyKey,
   type ReplyManyActions,
   type ReplyManyModel,
   type ReplyResult,
   type ReplyTarget,
+  type TodoResult,
 } from './reply-many'
 
 /**
@@ -41,13 +50,18 @@ import {
  * (no amount repeated), Send reads "Send anyway" and the next round sends the same words with `pricesInWordsOk: true`.
  */
 
-export function useReplyMany(api: ApiClient, permissions: readonly string[], onPosted: () => void): { model: ReplyManyModel | null; open: (rows: readonly OrderRow[], locked: string | null) => void; actions: ReplyManyActions } {
+// F-CW-203: `open(rows, locked, { todo: true })` — "Ask <customer> about N…": the same window with the to-do tick ON (only for a
+// reader who may make a customer's to-dos: partners.tasks.manage; anyone else gets the plain reply and no tick).
+export function useReplyMany(api: ApiClient, permissions: readonly string[], onPosted: () => void): { model: ReplyManyModel | null; open: (rows: readonly OrderRow[], locked: string | null, options?: { readonly todo?: boolean }) => void; actions: ReplyManyActions } {
   const [model, setModel] = useState<ReplyManyModel | null>(null)
   // The window as it is now (a round's answers come one after the other; a read for an earlier window is dropped by its batch).
   const current = useRef<ReplyManyModel | null>(null)
   const keys = useRef(new Map<string, ReplyKey>())
+  // F-CW-203: one key per order's to-do and day (a try after a lost answer never makes two).
+  const todoKeys = useRef(new Map<string, { readonly key: string; readonly due: string }>())
   const canPost = permissions.includes('threads.post')
   const readsPortal = permissions.includes('partners.view')
+  const canTodo = permissions.includes('partners.tasks.manage') // F-CW-203
 
   const update = (batchId: string, change: (now: ReplyManyModel) => ReplyManyModel) => {
     const now = current.current
@@ -57,14 +71,17 @@ export function useReplyMany(api: ApiClient, permissions: readonly string[], onP
     setModel(next)
   }
 
-  const open = (rows: readonly OrderRow[], locked: string | null) => {
+  const open = (rows: readonly OrderRow[], locked: string | null, options?: { readonly todo?: boolean }) => {
     // The bar holds these in words before the click; the window never opens on two customers all the same.
     if (rows.length === 0 || replyManyHeld(rows, locked, canPost)) return
     const targets = replyTargetsOf(rows)
     const customer = { id: targets[0]!.partyId, name: targets[0]!.partyName }
     const batchId = newIdempotencyKey()
     keys.current = new Map()
-    const next: ReplyManyModel = { customer, targets, batchId, draft: startDraft(replyComposerContext(customer.name)), notes: [], language: undefined, portal: readsPortal ? undefined : 'unknown', sending: false, progress: null, results: {}, done: false }
+    todoKeys.current = new Map()
+    const today = romeToday()
+    const asked = canTodo && !!options?.todo // F-CW-203
+    const next: ReplyManyModel = { customer, targets, batchId, draft: startDraft(replyComposerContext(customer.name)), notes: [], language: undefined, portal: readsPortal ? undefined : 'unknown', sending: false, progress: null, results: {}, done: false, todo: canTodo ? todoStart(asked, today) : null, asked, today /* F-CW-203 */ }
     current.current = next
     setModel(next)
     getParty(api, customer.id).then(
@@ -82,22 +99,41 @@ export function useReplyMany(api: ApiClient, permissions: readonly string[], onP
   const send = async () => {
     const now = current.current
     if (!now || now.sending) return
-    const pending = toSend(now.targets, now.results)
+    // F-CW-203: + the orders whose message is posted and whose to-do a fault stopped (their to-do alone, never the message again).
+    const todoOnly = todoLeft(now.targets, now.results)
+    const pending = [...toSend(now.targets, now.results), ...todoOnly]
     const context = replyComposerContext(now.customer.name)
-    if (replySendHeld(now.portal, now.customer.name, pending.length) || heldReason(now.draft, context)) return
+    const todo = now.todo?.on ? now.todo : null
+    if (replySendHeld(now.portal, now.customer.name, pending.length) || todoHeld(todo, now.today ?? romeToday())) return
+    // A round that only makes to-dos posts no text: the composer's own holds (an empty box) do not apply to it.
+    if (pending.length > todoOnly.length && heldReason(now.draft, context)) return
     const { batchId } = now
     const body = now.draft.body
     const ticked = namesNoOtherCustomerOf(now.draft)
     // F-CP-162: "Send anyway" after the price warning (only for the very words it warned about).
     const pricesOk = pricesInWordsOkOf(now.draft)
     update(batchId, (m) => ({ ...m, sending: true, done: false, progress: { done: 0, count: pending.length } }))
+    // F-CW-203: one order's to-do "Answer our message", after its reply is posted — made, refused for good, or a fault.
+    const todoOne = async (target: ReplyTarget, due: string): Promise<TodoResult> => {
+      const kept = todoKeys.current.get(target.id)
+      const key = kept && kept.due === due ? kept : { key: newIdempotencyKey(), due }
+      todoKeys.current.set(target.id, key)
+      try {
+        await askPartner(api, now.customer.id, { kind: 'ANSWER_MESSAGE', recordType: 'SalesOrder', recordId: target.id, dueAt: due ? endOfDay(due) : null, ...(target.companyId ? { companyId: target.companyId } : {}) }, key.key)
+        return { state: 'made' }
+      } catch (error) {
+        return todoOutcomeOf({ code: refusalCode(error), kind: isApiError(error) ? error.kind : null })
+      }
+    }
     // One order's reply: posted, refused or failed with why — or the hold of a text that names another customer of ours.
     const postOne = async (target: ReplyTarget): Promise<ReplyResult | 'namesOther' | /* F-CP-162 */ 'namesPrice'> => {
+      // F-CW-203: its message is already posted — only its to-do is tried again.
+      if (now.results[target.id]?.state === 'sent') return { state: 'sent', ...(todo ? { todo: await todoOne(target, todo.due) } : {}) }
       const key = keyFor(keys.current.get(target.id), body, ticked, newIdempotencyKey, pricesOk)
       keys.current.set(target.id, key)
       try {
         await postPortalReplyKeyed(api, { type: 'SalesOrder', id: target.id }, { body, attachments: [], batchId, ...(ticked ? { namesNoOtherCustomer: true } : {}), ...(pricesOk ? { pricesInWordsOk: true } : {}) /* F-CP-162 */ }, key.key)
-        return { state: 'sent' }
+        return { state: 'sent', ...(todo ? { todo: await todoOne(target, todo.due) } : {}) }
       } catch (error) {
         const outcome = replyOutcomeOf({ code: refusalCode(error), kind: isApiError(error) ? error.kind : null }, now.customer.name)
         // F-CP-162: the price warning stops the round like the names-another-customer hold.
@@ -117,6 +153,11 @@ export function useReplyMany(api: ApiClient, permissions: readonly string[], onP
       if (now) update(now.batchId, (m) => ({ ...m, draft, notes }))
     },
     onSend: () => void send(),
+    // F-CW-203: the tick or its day (not while a round runs).
+    onTodo: (todo) => {
+      const now = current.current
+      if (now && now.todo && !now.sending) update(now.batchId, (m) => ({ ...m, todo }))
+    },
     onClose: () => {
       // A round on its way finishes first: every order then says what happened to it.
       if (current.current?.sending) return

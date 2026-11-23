@@ -21,17 +21,20 @@ import { money } from '../../../quotes/model'
 import { ORDER_STATUSES, type OrderRow, type OrderStatus } from '../../api'
 import { dayInstant, depositTone, ROW_VIEWS, shippedPercent, STATUS_TONE, tileCount, TILES, viewCount, type Layout, type RowView } from '../../model'
 // ---- B-TH-057 (TH-4: the server sort, the custom field filter) ----
-import { columnSort, SORT_CHOICES, SORT_COLUMNS, sortOfColumn } from '../../model'
+import { columnSort, SORT_COLUMNS, sortOfColumn } from '../../model'
+import { sortChoicesOf, urgentRuleOf } from '../../model' // F-CW-201
+import { ArrowUpDown } from 'lucide-react' // F-CW-201: the Sort ▾ trigger's mark
 import type { OrderSort } from '../../api'
 import type { OrdersListActions, OrdersListModel } from '../list-model'
 import { NewOrderDialog } from './NewOrderDialog'
 import { marginColumn } from '../margin/MarginColumn'
 import { OrdersBoard } from './OrdersBoard'
 // ---- B-W2b-323 (orders in depth on screen) ----
-import { depthColumns, printVerb, SetPriorityButton, SetPriorityDialog } from '../../list-depth/view/ListDepth'
+import { depthColumns, printVerb, SetPriorityDialog } from '../../list-depth/view/ListDepth'
 import { WeekBoard } from '../../week/view/WeekBoard'
 import { OrdersImportView } from '../../import/view/OrdersImportView'
 import { NAMESPACE as DEPTH } from '../../depth/model'
+import { depthEditHeld } from '../../depth/model' // F-CW-204: a closed order's priority never changes (the row's Set priority…)
 import '../../orders.css'
 // ---- B-TH-225 / B-TH-226 (TH-1a: the Orders sheet, every cell a door; the Customer switcher) ----
 import { brandCell, customerDoor, depositDoor, exportAbout, invoicedCell, invoicedDoor, linesDoor, NAMESPACE as SHEET, orderDoor, orderHref, quoteDoor, shippedDoor, type Door } from '../sheet/model'
@@ -45,9 +48,8 @@ import { LAST_MESSAGE_NS } from '../../../../../lib/last-message-cell/view/LastM
 import { unreadValue } from '../../../../../lib/last-message-cell/model'
 // ---- B-TH-244 (TH-4: the overall view grouped by customer, the later columns, Invoice shipped goods for N) ----
 import { Receipt } from 'lucide-react'
-import { SelectionLabel } from '@nexus/ui/grid'
 import type { ListGroups } from '../../../../../list-frame/groups/model'
-import { figureDoors, groupHref, invoiceShippedHeld, timingKey, totalNameKey } from '../sheet/overall'
+import { figureDoors, groupHref, timingKey, totalNameKey } from '../sheet/overall'
 import { FiguresLine, InvoiceDraftsDialog } from '../sheet/overall-parts'
 import type { ExtraTerms } from '../../model'
 import type { ListEdit } from '../../../../../list-frame/w2b/model' // B-TH-245
@@ -65,19 +67,16 @@ import { productionWordsFor } from '../../../../../lib/production/words'
 // ---- F-SA-280 (bulk on the sheet's own bar): production's assign and note dialogs, reused in place; one customer only ----
 import { MessageSquareLock, UserCog } from 'lucide-react'
 import { AssignSupervisorDialog } from '../../../../_shared/production-supervisor/view/AssignSupervisorDialog'
-import { assignHeld } from '../../../../_shared/production-supervisor/model'
 import { NoteDialog } from '../../../../production/_shared/notes/view/NoteDialog'
-import { NOTES_NS, openHeld } from '../../../../production/_shared/notes/model'
-import { oneCustomerHeld, supervisorTargetsOf } from '../sheet/model'
+import { NOTES_NS } from '../../../../production/_shared/notes/model'
 // ---- end F-SA-280
 // ---- F-SA-281: the one New task window (one order, or N in one batch) ----
 import { ListPlus } from 'lucide-react'
 import { TaskNewDialog } from '../../../../../record-panels/tasks/view/TaskNewDialog'
-import { BATCH_MAX } from '../../../../../record-panels/tasks/model'
 // ---- end F-SA-281
 // ---- F-SA-282: Reply to <customer> on N… (one customer, ≤ 50, one batchId; each order's own conversation, the portal only) ----
 import { Globe } from 'lucide-react'
-import { replyManyHeld, replyManyLabel } from '../reply-many'
+import { replyManyLabel } from '../reply-many'
 import { ReplyManyDialog } from './ReplyManyDialog'
 // ---- end F-SA-282
 // ---- F-CP-140: the price check columns (ONE spec: ../price-check-columns.ts) and their cells ----
@@ -94,7 +93,11 @@ import '../commands/commands.css'
 // ---- end F-CP-108
 // ---- F-CP-109: Mark N ready… · Close N… · Confirm N… on the bar (≤ 50; Cancel stays one at a time) ----
 import { Archive, CheckCheck, PackageCheck } from 'lucide-react'
-import { manyHeld, manyLabel, manyShown, type ManyCommand } from '../commands/model'
+import { manyLabel, type ManyCommand } from '../commands/model'
+// ---- F-CW-202: the bar — three acts with words + More ▾ (the pure rule: sheet/bar.ts) ----
+import { ChevronDown, Factory, Flag, MessageCircleQuestion } from 'lucide-react'
+import { barOf, type AskEntryId, type BarAct, type BarActId, type BarWords } from '../sheet/bar'
+// ---- end F-CW-202
 import { OrderCommandManyDialog } from '../commands/view/OrderCommandManyDialog'
 // ---- end F-CP-109
 
@@ -113,7 +116,7 @@ export type { OrdersListActions, OrdersListModel } from '../list-model'
  */
 export function OrdersListView({ model, actions }: { model: OrdersListModel; actions?: OrdersListActions }) {
   return (
-    <WithMessages namespaces={['orders', 'lists', DEPTH /* B-W2b-323 */, SHEET /* B-TH-225 */, LAST_MESSAGE_NS /* B-TH-230 */, SUPERVISOR_NS /* F-SA-275: the supervisor marks */, NOTES_NS /* F-SA-280: the note dialog's held words */, 'records' /* F-SA-281: the tasks' held words */]}>
+    <WithMessages namespaces={['orders', 'lists', DEPTH /* B-W2b-323 */, SHEET /* B-TH-225 */, LAST_MESSAGE_NS /* B-TH-230 */, SUPERVISOR_NS /* F-SA-275: the supervisor marks */, NOTES_NS /* F-SA-280: the note dialog's held words */]}>
       <OrdersList model={model} actions={actions} />
     </WithMessages>
   )
@@ -127,7 +130,6 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const l = useT(LAST_MESSAGE_NS) // B-TH-230
   const m = useT(SUPERVISOR_NS) // F-SA-275
   const n = useT(NOTES_NS) // F-SA-280
-  const r = useT('records') // F-SA-281
   const locale = useLocale()
   const wide = useWide(model.wide) // B-TH-225: Ordered, Margin %, Priority, Season and From quote at 1920
   // F-CP-107 (cp-fx16): is the Status column on screen (the frame tells; a person's Customise wins)? Until it tells: the preset's.
@@ -184,7 +186,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       }
       if (event.metaKey || event.ctrlKey || event.altKey || help || model.newOrder) return
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]') || target.isContentEditable)) return
-      if (event.key === 'v') {
+      if (event.key === 'v' && model.layoutSwitch !== false /* F-CW-202 (S36): only where the switch is drawn */) {
         event.preventDefault()
         actions?.onLayout?.(model.layout === 'list' ? 'board' : 'list')
       }
@@ -198,24 +200,111 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   })
 
   const picked = (items ?? []).filter((row) => selected.includes(row.id))
-  // ---- F-SA-280: the one-customer check before any window (the server checks each record again), then each window's own holds.
-  const oneCustomer = oneCustomerHeld(picked, model.locked?.party ? (model.customer?.id ?? null) : null)
-  const oneCustomerWords = oneCustomer ? s(oneCustomer.key, oneCustomer.params) : null
-  const assignWait = assignHeld({ manage: !!model.bulkCan?.supervisor }, { targets: supervisorTargetsOf(picked), leftOut: 0 })
-  const noteWait = openHeld(!!model.bulkCan?.note, picked.length)
-  const assignWords = oneCustomerWords ?? (assignWait ? m(assignWait.key, assignWait.params) : null)
-  const noteWords = oneCustomerWords ?? (noteWait ? n(noteWait.key, noteWait.params) : null)
-  // ---- end F-SA-280
-  // F-SA-281: Add task to N… — one customer, the tasks' right, at most BATCH_MAX (the dialog and the API check again).
-  const taskWords = oneCustomerWords ?? (model.bulkCan?.task ? r(model.bulkCan.task) : picked.length > BATCH_MAX ? s('bulk.tooMany', { max: BATCH_MAX }) : null)
-  // F-SA-282: Reply to <customer> on N… — held in words before the click: another customer's order on this customer's page, orders of
-  // more than one customer (one message never reaches two customers), no right, more than 50 (the window and the API check again).
-  const replyHold = replyManyHeld(picked, model.locked?.party ? (model.customer?.id ?? null) : null, !!model.bulkCan?.reply)
-  const replyWords = replyHold ? s(replyHold.key, replyHold.params) : null
+  // ---- F-CW-202 (10-design §4; lead settles S8, S9): the bar of ticked orders — at most three acts with their words, the rest in ONE
+  // More ▾, in one fixed order (sheet/bar.ts: barOf). An act the reader has no right for is not drawn (each act reads its OWN right);
+  // an act the ticked orders cannot take now is held with words; when a promoted act is not there the next one moves up. The same on
+  // every host of the sheet. Each act opens its own existing window (F-SA-280, F-SA-281, F-SA-282, F-CP-109, B-TH-244, B-W2b-323).
+  const pickedIds = picked.map((row) => row.id)
   const replyPhrase = replyManyLabel(picked)
-  const replyLabel = s(replyPhrase.key, replyPhrase.params)
+  const barRun: Record<Exclude<BarActId, 'ask'>, () => void> = {
+    priority: () => actions?.depth?.onSetPriority?.(pickedIds),
+    reply: () => actions?.onReplyMany?.(pickedIds),
+    assign: () => actions?.onAssignSupervisor?.(pickedIds),
+    task: () => actions?.onAddTask?.(pickedIds, 'selection'),
+    note: () => actions?.onNote?.(pickedIds),
+    ready: () => actions?.onCommandMany?.(pickedIds, 'ready'),
+    close: () => actions?.onCommandMany?.(pickedIds, 'close'),
+    confirm: () => actions?.onCommandMany?.(pickedIds, 'confirm'),
+    invoice: () => actions?.onInvoiceShipped?.(pickedIds),
+  }
+  const barLabel: Record<Exclude<BarActId, 'ask'>, string> = {
+    priority: d('list.setPriority', { count: picked.length }),
+    reply: s(replyPhrase.key, replyPhrase.params),
+    assign: s('bulk.assign'),
+    task: s('bulk.addTask', { count: picked.length }),
+    note: s('bulk.note', { count: picked.length }),
+    ready: wordsText(manyLabel('ready', picked.length), t, s, locale),
+    close: wordsText(manyLabel('close', picked.length), t, s, locale),
+    confirm: wordsText(manyLabel('confirm', picked.length), t, s, locale),
+    invoice: s('invoiceShipped.action', { count: picked.length }),
+  }
+  const bar = barOf(
+    { manage: model.can.manage, close: model.can.close, decide: !!model.commands?.decide, post: !!model.bulkCan?.note, supervisor: !!model.bulkCan?.supervisor, task: model.bulkCan?.task === null, todo: !!model.bulkCan?.todo /* F-CW-203 */, invoices: model.can.manageInvoices },
+    picked,
+    { locked: model.locked?.party ? (model.customer?.id ?? null) : null },
+  )
+  /** A hold's words, from the catalogue that already says them. */
+  const sayBar = (words: BarWords | null): string | null => {
+    if (!words) return null
+    if (words.ns === 'notes') return n(words.key, words.params)
+    if (words.ns === 'supervisor') return m(words.key, words.params)
+    if (words.ns === 'depth') return d(words.key, words.params)
+    return wordsText({ key: words.key, ...(words.params ? { params: words.params } : {}), ...(words.ns === 'sheet' ? { sheet: true as const } : {}), ...(words.states ? { states: words.states } : {}) }, t, s, locale)
+  }
+  /** Ask ▾: each entry says who reads it in a quiet line; held, it says why instead. */
+  // F-CW-203: + "Ask <customer> about N…" — Reply to N with the to-do tick ON (the customer named when the ticked orders are of one).
+  const askRun: Record<AskEntryId, () => void> = {
+    // Production's own Note window as an ask: its title here, its Send word the notes' own ("Write on 3").
+    askProduction: () => actions?.onAskProduction?.(pickedIds, { title: s('bar.askProductionTitle', { count: picked.length }), send: n('send', { count: picked.length }) }),
+    askCustomer: () => actions?.onReplyMany?.(pickedIds, { todo: true }),
+  }
+  const askLabel: Record<AskEntryId, string> = {
+    askProduction: s('bar.askProduction', { count: picked.length }),
+    askCustomer: replyPhrase.key === 'bulk.reply' ? s('bar.askCustomer', { customer: picked[0]?.partyName ?? '', count: picked.length }) : s('bar.askCustomerAny', { count: picked.length }),
+  }
+  const askItems = (act: BarAct): MenuItemDef[] =>
+    (act.entries ?? []).map((entry) => {
+      const held = sayBar(entry.held)
+      return { id: entry.id, label: askLabel[entry.id], icon: entry.id === 'askProduction' ? <Factory size={14} aria-hidden /> : <Globe size={14} aria-hidden />, description: held ?? s(`bar.${entry.id}Who`), ...(held ? { disabled: true } : { onSelect: askRun[entry.id] }) }
+    })
+  const barActs = (
+    <>
+      {bar.promoted.map((act) =>
+        act.id === 'ask' ? (
+          <Menu
+            key={act.id}
+            label={
+              <>
+                <MessageCircleQuestion size={13} aria-hidden /> {s('bar.ask')} <ChevronDown size={13} aria-hidden />
+              </>
+            }
+            triggerProps={{ className: 'nds-btn sm' }}
+            items={askItems(act)}
+          />
+        ) : (
+          // The words stay on the button at every width (no DS SelectionLabel): the frame's own Edit N, Export N and Clear give way first.
+          <Button key={act.id} size="sm" heldReason={sayBar(act.held)} onClick={barRun[act.id]}>
+            <BarIcon id={act.id} /> {barLabel[act.id]}
+          </Button>
+        ),
+      )}
+      {bar.none && <span className="fw-sheet-bar-none">{s('bar.none')}</span>}
+    </>
+  )
+  const barMoreItems: MenuItemDef[] = bar.more.flatMap((act, index): MenuItemDef[] => {
+    const rule: MenuItemDef[] = index > 0 && bar.more[index - 1]!.group !== act.group ? [{ id: `sep-${act.id}`, separator: true }] : []
+    if (act.id === 'ask') return [...rule, ...askItems(act)]
+    const id = act.id
+    const held = sayBar(act.held)
+    return [...rule, { id, label: barLabel[id], icon: <BarIcon id={id} />, ...(held ? { disabled: true, description: held } : { onSelect: barRun[id] }) }]
+  })
+  const barMore =
+    barMoreItems.length > 0 ? (
+      <Menu
+        align="right"
+        label={
+          <>
+            {s('bar.more')} <ChevronDown size={13} aria-hidden />
+          </>
+        }
+        triggerProps={{ className: 'nds-btn sm' }}
+        items={barMoreItems}
+      />
+    ) : null
+  // ---- end F-CW-202
   const ownKeys: ListKey[] = [
-    { keys: ['v'], does: t('list.keyView') },
+    // F-CW-202 (S36; review A1-B4): List ⇄ Board has its key only where the switch is drawn (not on the customer's Work tab).
+    ...(model.layoutSwitch === false ? [] : [{ keys: ['v'], does: t('list.keyView') }]),
     ...(model.can.manage && !model.embedded ? [{ keys: ['c'], does: t('list.keyNew') }] : []),
     // B-TH-225: the doors' keys (the footer's information icon holds every key; none above the table).
     { keys: ['o'], does: s('keys.door') },
@@ -244,14 +333,29 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
 
   // ── B-TH-057 (SHEET-G15, feature SHEET.overall-F05): Sort ▾ — every choice sorts every page on the server (the address keeps it);
   // the headers of Customer, Brand, Promised and Ordered do the same. No header sorts only the loaded rows. ──
-  const sortSelect = (
-    <Select size="sm" aria-label={s('sort.label')} value={model.sort ?? ''} onChange={(event) => actions?.onSort?.((event.target.value || null) as OrderSort | null)}>
-      {SORT_CHOICES.map((choice) => (
-        <option key={choice.word} value={choice.value}>
-          {s(`sort.${choice.word}`)}
-        </option>
-      ))}
-    </Select>
+  // F-CW-201 (lead settles S5, S34): a menu button like Views ▾ (the DS Menu the sheet already uses) on every host — its trigger says
+  // the order shown, the choice shown is ticked, and "Most urgent first" carries its rule as a quiet second line. On a sheet of ONE
+  // customer "Customer A–Z / Z–A" are not offered (they order nothing there).
+  const sortChoices = sortChoicesOf(!!model.locked?.party)
+  const sortNow = sortChoices.find((choice) => choice.value === (model.sort ?? '')) ?? null
+  const urgentRule = urgentRuleOf(model.locked?.party ? (model.customer?.name ?? null) : null)
+  const sortWords = sortNow ? s(`sort.${sortNow.word}`) : s('sort.label')
+  const sortMenu = (
+    <Menu
+      label={
+        <>
+          <ArrowUpDown size={13} aria-hidden /> <span className="fw-lt-trigger">{sortWords}</span>
+        </>
+      }
+      triggerProps={{ className: 'nds-btn sm', 'aria-label': sortNow ? s('sort.now', { sort: sortWords }) : s('sort.label'), title: s('sort.label') }}
+      items={sortChoices.map((choice) => ({
+        id: `sort-${choice.word}`,
+        label: s(`sort.${choice.word}`),
+        checked: choice.value === (model.sort ?? ''),
+        ...(choice.value === 'urgent' ? { description: s(urgentRule.key, urgentRule.params) } : {}),
+        onSelect: () => actions?.onSort?.((choice.value || null) as OrderSort | null),
+      }))}
+    />
   )
   // ── end B-TH-057 ──
 
@@ -266,7 +370,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     [s, d],
   )
   const columns = useMemo<ColDef<OrderRow>[]>(
-    () => sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer: setViewer, statusShown, phone /* F-CP-107 (cp-fx16) */, priorityShown, whereShown /* F-CW-102 */ }),
+    () => sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer: setViewer, statusShown, phone /* F-CP-107 (cp-fx16) */, priorityShown, whereShown /* F-CW-102 */ }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the cells read the latest model and actions through `latest`
     [t, s, d, l, m, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */, model.kind /* F-SA-221 */, model.marks /* F-SA-275 */, model.doorHref /* F-SA-275 */, !!actions?.onAddTask /* F-SA-275 */, model.preset /* F-SA-276 */, r /* F-SA-281 */, model.bulkCan?.task /* F-SA-281 */, statusShown /* F-CP-107 (cp-fx16): Where it is redraws when Status comes or goes */, phone /* F-CP-107 (cp-fx16) */, priorityShown, whereShown /* F-CW-102 */, model.locked?.party /* F-CW-102 */],
   )
@@ -512,7 +616,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
               {model.columnSet && <ColumnSetSwitch value={model.columnSet.value} s={s} onPick={(set) => actions?.onColumnSet?.(set)} />}
               {switcher /* B-TH-226 */}
               {/* B-TH-243 (ORD-G10): the rows views are the built-in views on top of Views ▾ — no second Rows ▾ beside it. */}
-              {sortSelect /* B-TH-057 */}
+              {sortMenu /* B-TH-057; F-CW-201: Sort ▾ as a menu */}
               {/* B-TH-244 (SHEET.overall-F02): Group by customer — on All customers only (a customer's sheet is one group). */}
               {!model.customer && (
                 <Select size="sm" aria-label={s('group.label')} value={model.group ?? ''} onChange={(event) => actions?.onGroup?.(event.target.value === 'party' ? 'party' : null)}>
@@ -544,53 +648,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
             onChange: setSelected,
             // B-TH-225 (ORD-G02): Export N goes through the export job with the picked ids (the same writer as the full list).
             exportSelected: true,
-            actions: (
-              <>
-                {/* B-W2b-323: Set priority for N (one command over the selection). */}
-                {model.depth && <SetPriorityButton count={picked.length} model={model.depth} held={oneCustomerWords /* F-SA-280 */} onClick={() => actions?.depth?.onSetPriority?.(picked.map((row) => row.id))} />}
-                {/* F-SA-280: Assign supervisor… (≤ 100; the customer is never told who) and Note to N… / Ask the supervisor (≤ 100, one batch). */}
-                {actions?.onAssignSupervisor && (
-                  <Button size="sm" aria-label={s('bulk.assign')} heldReason={assignWords} onClick={() => actions.onAssignSupervisor?.(picked.map((row) => row.id))}>
-                    <UserCog size={13} aria-hidden /> <SelectionLabel>{s('bulk.assign')}</SelectionLabel>
-                  </Button>
-                )}
-                {/* F-SA-281: Add task to N… (Assign to each order's supervisor by default; one batch, its receipt). */}
-                {actions?.onAddTask && (
-                  <Button size="sm" aria-label={s('bulk.addTask', { count: picked.length })} heldReason={taskWords} onClick={() => actions.onAddTask?.(picked.map((row) => row.id), 'selection')}>
-                    <ListPlus size={13} aria-hidden /> <SelectionLabel>{s('bulk.addTask', { count: picked.length })}</SelectionLabel>
-                  </Button>
-                )}
-                {actions?.onNote && (
-                  <Button size="sm" aria-label={s('bulk.note', { count: picked.length })} heldReason={noteWords} onClick={() => actions.onNote?.(picked.map((row) => row.id))}>
-                    <MessageSquareLock size={13} aria-hidden /> <SelectionLabel>{s('bulk.note', { count: picked.length })}</SelectionLabel>
-                  </Button>
-                )}
-                {/* F-SA-282: Reply to <customer> on N… — the same words in each order's own conversation, in the portal (never one message to two customers). */}
-                {actions?.onReplyMany && (
-                  <Button size="sm" aria-label={replyLabel} heldReason={replyWords} onClick={() => actions.onReplyMany?.(picked.map((row) => row.id))}>
-                    <Globe size={13} aria-hidden /> <SelectionLabel>{replyLabel}</SelectionLabel>
-                  </Button>
-                )}
-                {/* F-CP-109: Mark N ready… · Close N… · Confirm N… — the order page's own commands over the ticked orders (≤ 50), held in words. */}
-                {actions?.onCommandMany &&
-                  manyShown(model.can, !!model.commands?.decide).map((command) => {
-                    const held = manyHeld(command, picked, model.can)
-                    const label = wordsText(manyLabel(command, picked.length), t, s, locale)
-                    const Icon = MANY_ICON[command]
-                    return (
-                      <Button key={command} size="sm" aria-label={label} heldReason={held ? wordsText(held, t, s, locale) : null} onClick={() => actions.onCommandMany?.(picked.map((row) => row.id), command)}>
-                        <Icon size={13} aria-hidden /> <SelectionLabel>{label}</SelectionLabel>
-                      </Button>
-                    )
-                  })}
-                {/* B-TH-244 (SHEET.overall-F07, ORD-G06): finance only — Finance's From-DDTs dialog with their DDTs chosen, never an invoice from here. */}
-                {model.can.manageInvoices && (
-                  <Button size="sm" heldReason={invoiceShippedHeld(picked.length) ? s(invoiceShippedHeld(picked.length)!) : null} aria-label={s('invoiceShipped.action', { count: picked.length })} onClick={() => actions?.onInvoiceShipped?.(picked.map((row) => row.id))}>
-                    <Receipt size={13} aria-hidden /> <SelectionLabel>{s('invoiceShipped.action', { count: picked.length })}</SelectionLabel>
-                  </Button>
-                )}
-              </>
-            ),
+            actions: barActs, // F-CW-202: at most three acts with words
+            trailing: barMore, // F-CW-202: More ▾ — after the frame's own Edit N and Export N, last before Clear (as the Customers list's)
           }}
           updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
           more={!model.group && model.list.more && items && items.length > 0 ? { label: t('list.more'), onMore: () => actions?.onMore?.() } : null}
@@ -879,8 +938,6 @@ interface ColumnsInput {
   l?: Translate
   /** F-SA-275: the supervisor marks' words (production-supervisor). */
   m?: Translate
-  /** F-SA-281: the tasks' words (records). */
-  r?: Translate
   locale: Locale
   model: OrdersListModel
   wide: boolean
@@ -928,8 +985,8 @@ function PictureViewerFor({ row, model, actions, onClose }: { row: OrderRow; mod
  * tab); Brand, Status and Company narrow the sheet (the funnel mark); a cell the reader may not open says why on hover; the
  * rest of the row opens the order. Money columns are absent without their grain, never zero.
  */
-function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer, statusShown = false, phone = false, priorityShown = false, whereShown = false }: ColumnsInput): ColDef<OrderRow>[] {
-  const input: ColumnsInput = { t, s, d, l, m, r, locale, model, wide, latest, onViewer, statusShown, phone, priorityShown, whereShown }
+function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer, statusShown = false, phone = false, priorityShown = false, whereShown = false }: ColumnsInput): ColDef<OrderRow>[] {
+  const input: ColumnsInput = { t, s, d, l, m, locale, model, wide, latest, onViewer, statusShown, phone, priorityShown, whereShown }
   const { prefix, can } = model
   const day = (value: string | null) => (value ? formatDate(dayInstant(value), { locale }) : '—')
   const act = () => latest.current.actions
@@ -1150,12 +1207,42 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer,
     return { id: command, label: STEP_LABEL[command](), ...(command === 'cancel' ? { tone: 'danger' as const } : {}), ...(held ? { disabled: true, description: held } : { onSelect: () => act()?.onCommand?.(row.id, command) }) }
   }
   // ---- end F-CP-108
+  // ---- F-CW-204 (customer Work tab plan §5; 10-design §5; lead settle S9): the row ⋯ on every host of the sheet —
+  //   Open · Open in a new tab ‖ Next steps ‖ Set priority… ‖ Go to: Production › · Shipments › · Files › · Money › ‖ Set customer's
+  //   price… · Print confirmation · Add task… · Answer request… ‖ Cancel order…
+  // An act the reader has no right for is NOT drawn (the steps by rowStepsOf; Set priority… with orders.manage; Add task… with the
+  // tasks' right; Set customer's price… with the price grain); a state holds with words (the deposit; a closed order's priority).
+  // The doors are real links (⌘-click opens a new tab); every reader of the order reads each of its tabs.
+  const priorityItem = (row: OrderRow): MenuItemDef[] => {
+    if (!can.manage || !model.depth) return []
+    const held = depthEditHeld(row.status, { manage: true })
+    return [{ id: 'priority', label: d('action.priority'), ...(held ? { disabled: true, description: d(held.key, held.params) } : { onSelect: () => act()?.depth?.onSetPriority?.([row.id]) }) }]
+  }
+  const goToItems = (row: OrderRow): MenuItemDef[] => [
+    { id: 'head-go', heading: true, label: t('menu.group.goTo') },
+    ...(['production', 'shipments', 'files'] as const).map((tab) => ({ id: `go-${tab}`, label: `${t(`tab.${tab}`)} ›`, href: orderHref(prefix, row, tab) })),
+    { id: 'deposit', label: `${t('tab.money')} ›`, href: orderHref(prefix, row, 'money') },
+  ]
   const MoreCell = ({ data }: ICellRendererParams<OrderRow>) => {
     if (!data) return null
     // F-CP-108: the host gives the door (both hosts of the ONE sheet); without it, today's items.
     const steps = act()?.onCommand ? rowStepsOf(data, can) : []
     const next = steps.filter((step) => step.command !== 'cancel').map((step) => stepItem(step, data))
     const cancel = steps.find((step) => step.command === 'cancel')
+    const priority = priorityItem(data)
+    const rest: MenuItemDef[] = [
+      // F-CP-114: Set customer's price… — the ONE window, here (a price holder only: the host gives the door with the price grain).
+      ...(can.price && act()?.onPriceCheck ? [{ id: 'priceCheck', label: t('priceCheck.edit'), onSelect: () => act()?.onPriceCheck?.(data.id) }] : []),
+      // F-CP-108: Make work orders is a Next step now (held with its words); a host without the door keeps today's item.
+      ...(steps.length === 0 && data.status === 'CONFIRMED' && can.makeWorkOrders ? [{ id: 'make', label: t('step.makeWorkOrders'), href: `${prefix}/production/work-orders?new=1&order=${encodeURIComponent(data.number)}` }] : []),
+      // B-W2b-323: Print confirmation (the confirmation PDF in a new tab; held while it waits for a yes or was cancelled).
+      ...(model.depth ? [printVerb(data, prefix, d)] : []),
+      // ---- F-SA-275: Add task… on this order (the one New task window, F-SA-281) and Answer request… while one waits on us.
+      // F-CW-204 (S9): not drawn without the tasks' right (it was drawn greyed with the right's words).
+      ...(act()?.onAddTask && !latest.current.model.bulkCan?.task ? [{ id: 'task', label: s('row.addTask'), onSelect: () => act()?.onAddTask?.([data.id], 'row') }] : []),
+      ...answerItem(data),
+      // ---- end F-SA-275
+    ]
     return (
       <Menu
         label={<MoreHorizontal size={16} aria-hidden />}
@@ -1164,25 +1251,19 @@ function sheetColumns({ t, s, d, l, m, r, locale, model, wide, latest, onViewer,
         items={[
           { id: 'open', label: t('list.open'), href: orderHref(prefix, data) },
           { id: 'tab', label: t('list.openNewTab'), href: orderHref(prefix, data), target: '_blank' },
-          // F-CP-108: Next steps (the order page's own heading), between rules.
-          ...(next.length > 0 ? [{ id: 'sep-next', separator: true }, { id: 'head-next', heading: true, label: t('menu.group.next') }, ...next, { id: 'sep-rest', separator: true }] : []),
-          { id: 'deposit', label: t('tab.money'), href: orderHref(prefix, data, 'money') },
-          // F-CP-114: Set customer's price… — the ONE window, here (a price holder only: the host gives the door with the price grain).
-          ...(can.price && act()?.onPriceCheck ? [{ id: 'priceCheck', label: t('priceCheck.edit'), onSelect: () => act()?.onPriceCheck?.(data.id) }] : []),
-          // F-CP-108: Make work orders is a Next step now (held with its words); a host without the door keeps today's item.
-          ...(steps.length === 0 && data.status === 'CONFIRMED' && can.makeWorkOrders ? [{ id: 'make', label: t('step.makeWorkOrders'), href: `${prefix}/production/work-orders?new=1&order=${encodeURIComponent(data.number)}` }] : []),
-          // B-W2b-323: Print confirmation (the confirmation PDF in a new tab; held while it waits for a yes or was cancelled).
-          ...(model.depth ? [printVerb(data, prefix, d)] : []),
-          // ---- F-SA-275: Add task… on this order (the one New task window, F-SA-281) and Answer request… while one waits on us.
-          ...(act()?.onAddTask ? [{ id: 'task', label: s('row.addTask'), onSelect: () => act()?.onAddTask?.([data.id], 'row'), disabled: !!latest.current.model.bulkCan?.task, ...(latest.current.model.bulkCan?.task && r ? { description: r(latest.current.model.bulkCan.task) } : {}) }] : []),
-          ...answerItem(data),
-          // ---- end F-SA-275
+          // F-CP-108: Next steps (the order page's own heading), after a rule.
+          ...(next.length > 0 ? [{ id: 'sep-next', separator: true }, { id: 'head-next', heading: true, label: t('menu.group.next') }, ...next] : []),
+          ...(priority.length > 0 ? [{ id: 'sep-priority', separator: true }, ...priority] : []),
+          { id: 'sep-go', separator: true },
+          ...goToItems(data),
+          ...(rest.length > 0 ? [{ id: 'sep-rest', separator: true }, ...rest] : []),
           // F-CP-108: Cancel order… last, after a rule (each cancel shows what it stops: one order at a time).
           ...(cancel ? [{ id: 'sep-danger', separator: true }, stepItem(cancel, data)] : []),
         ]}
       />
     )
   }
+  // ---- end F-CW-204
   // ---- F-SA-275: the production columns (opt-in on Sales › Orders, shown by the customer page's views; their reads only while shown) ----
   const now = Date.now()
   const pw = productionWordsFor(locale)
@@ -1364,6 +1445,12 @@ export function fitToScreen(columns: readonly ColDef<OrderRow>[], wide: boolean)
 
 /** F-CP-109: the bar's bulk commands' marks (lucide, as the bar's other buttons). */
 const MANY_ICON: Readonly<Record<ManyCommand, typeof PackageCheck>> = { ready: PackageCheck, close: Archive, confirm: CheckCheck }
+
+/** F-CW-202: each act's mark — the same on its button and in More ▾ (never told apart by colour). */
+function BarIcon({ id }: { id: BarActId }) {
+  const Icon = id === 'ask' ? MessageCircleQuestion : id === 'priority' ? Flag : id === 'reply' ? Globe : id === 'assign' ? UserCog : id === 'task' ? ListPlus : id === 'note' ? MessageSquareLock : id === 'invoice' ? Receipt : MANY_ICON[id]
+  return <Icon size={13} aria-hidden />
+}
 
 /** F-CP-108: a row a command moved out of the view stays where it is, every cell greyed, until "N updates · Show" (rows never jump). */
 export function withMovedMark(column: ColDef<OrderRow>, moved: () => readonly string[]): ColDef<OrderRow> {
@@ -1547,7 +1634,9 @@ export function orderEditOf(model: Pick<OrdersListModel, 'can'>, s: Translate, h
     versionOf: (row) => row.version,
     labelOf: (row) => row.number,
     onSaved,
-    bulk: { noun: { one: s('cells.nounOne'), other: s('cells.nounOther') } },
+    // F-CW-202 (S9): Edit N is drawn only for a person who may change orders (an act without its right is not in the bar); the
+    // cells themselves stay readable, held in words.
+    ...(model.can.manage ? { bulk: { noun: { one: s('cells.nounOne'), other: s('cells.nounOther') } } } : {}),
     held: model.can.manage ? null : s('cells.noManage'),
   }
 }
