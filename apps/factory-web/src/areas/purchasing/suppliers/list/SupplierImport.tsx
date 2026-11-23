@@ -52,6 +52,8 @@ function ImportContainer({ importer, onApplied, label }: { importer: 'parties.pa
     locale: locale === 'en' ? 'en' : 'it',
     onApplied,
   })
+  // F-CL-101 (K12, settle T16): the list's Import is not drawn without its right (the record's Import price list keeps its words).
+  if (why && importer === 'parties.parties') return null
   return (
     <>
       <ImportButton label={label ?? t(importer === 'parties.parties' ? 'import.suppliers' : 'import.prices')} held={why ? t(why) : null} onOpen={() => (why ? undefined : sheet.open())} />

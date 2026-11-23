@@ -33,11 +33,14 @@ export function CustomersImportView({ model, onOpen, actions }: { model: Custome
 
 function ImportButton({ model, onOpen, actions }: { model: CustomersImportModel; onOpen?: () => void; actions?: WizardActions }) {
   const t = useT('customer-terms')
+  // F-CL-101 (K12, settle T15): `held` is a missing right (manage, or imports.run + files.upload): the button is not drawn then.
   return (
     <>
-      <Button size="sm" heldReason={model.held ? t(model.held) : null} onClick={() => onOpen?.()}>
-        <Upload size={13} aria-hidden /> {t('import.action')}
-      </Button>
+      {!model.held && (
+        <Button size="sm" onClick={() => onOpen?.()}>
+          <Upload size={13} aria-hidden /> {t('import.action')}
+        </Button>
+      )}
       {model.sheet && <SheetImportDialog model={model.sheet} actions={actions} inline={model.inline} />}
     </>
   )

@@ -92,7 +92,8 @@ export const SIDES: Readonly<Record<Side, SideConfig>> = {
     base: '/sales/customers',
     newStatus: 'ACTIVE',
     views: ['open', 'active', 'prospects', 'brands', 'riders', 'invoice', 'vies', 'blocked', 'archived', 'all'], // B-W2b-324: riders
-    tiles: ['active', 'prospects', 'vies', 'invoice', 'blocked'],
+    // F-CL-101 (customers list plan §4.1, settle T15): the five tiles go — their filters stay in Views ▾; the band takes the place (W2).
+    tiles: [],
     tabs: ['work', 'quotes', 'overview', 'money', 'people', 'terms', 'portal'], // B-W2b-180: portal; B-TH-260: Terms & requirements; F-SA-271: the seven of R5
     recordType: 'Party',
   },
@@ -795,12 +796,16 @@ export interface BulkResult {
   /** A message key: the VIES result, archived, or why not. */
   outcome: string
   tone: Tone
+  /** F-CL-103: the call failed (a refusal or no answer: "Run the rest again" offers it); a VIES "not valid" is an answer, not a failure. */
+  failed?: boolean
 }
 export interface BulkRun {
   kind: BulkKind
   total: number
   results: readonly BulkResult[]
   done: boolean
+  /** F-CL-103: the selected rows it does not run on (ids; the window says why beside each). */
+  notOn?: readonly string[]
 }
 
 /** Which selected rows a bulk action reaches, and the rest with why not (held before the click, 00 §2.1). */
@@ -813,6 +818,55 @@ export function bulkReach(kind: BulkKind, rows: readonly PartyRow[]): { reach: P
 /** At most this many rows in one bulk run (one gateway call each for VIES). */
 export const BULK_MAX = 50
 
+// ---- F-CL-101 (customers list plan §2, K12): ONE Views ▾ and the empty words that name the view, on both lists ----------------
+
+/** The built-in views of Views ▾ (the side's own, in its order) and the one the address shows: the ONE menu of views. */
+export function viewsOf(side: Side, active: ListView): { readonly ids: readonly ListView[]; readonly active: ListView | null } {
+  const ids = SIDES[side].views
+  return { ids, active: ids.includes(active) ? active : null }
+}
+
+/**
+ * What an empty list says (a `customers-list` key and what it names): a search with no match names the search; the kind / tax-mode
+ * chips their own words; a view with 0 rows names the view ("No blocked customers."); else the side's first-day words (`parties`).
+ * One Clear each: the search, the chips, or back to the default view.
+ */
+export type EmptyWords =
+  | { readonly kind: 'search'; readonly key: string; readonly q: string }
+  | { readonly kind: 'filters'; readonly key: string }
+  | { readonly kind: 'view'; readonly key: string; readonly view: ListView }
+  | { readonly kind: 'none' }
+
+const NAMED_VIEWS: Readonly<Record<Side, readonly ListView[]>> = { customers: ['archived', 'blocked', 'vies', 'prospects'], suppliers: ['blocked', 'archived'] }
+
+export function emptyWordsOf(side: Side, view: ListView, filters: ListFilters, q: string): EmptyWords {
+  const query = q.trim()
+  if (query !== '') return { kind: 'search', key: `empty.${side}.search`, q: query }
+  if (filters.kind || filters.taxMode) return { kind: 'filters', key: `empty.${side}.filters` }
+  if (view !== 'open') return { kind: 'view', key: NAMED_VIEWS[side].includes(view) ? `empty.${side}.${view}` : `empty.${side}.other`, view }
+  return { kind: 'none' }
+}
+
+/** The list's rights from the person's permissions (each act reads its own; the API checks every call again). */
+export function listCanOf(permissions: Iterable<string>): ListCan {
+  const held = new Set(permissions)
+  return { view: held.has('parties.view'), manage: held.has('parties.manage'), block: held.has('parties.block'), vies: held.has('parties.vies'), export: held.has('views.export') }
+}
+
+/** The identity acts of a row's ⋯ the reader may use (an act without its right is not drawn; Archive of a blocked one is held by state). */
+export type RowAct = 'vies' | 'block' | 'unblock' | 'archive' | 'archive-held' | 'reactivate'
+export function rowActsOf(row: Pick<PartyRow, 'status' | 'vies'>, can: ListCan): RowAct[] {
+  const acts: RowAct[] = []
+  if (can.vies && viesApplies(row) && row.status !== 'ARCHIVED') acts.push('vies')
+  if (can.block && row.status === 'ACTIVE') acts.push('block')
+  if (can.block && row.status === 'BLOCKED') acts.push('unblock')
+  if (can.manage && (row.status === 'ACTIVE' || row.status === 'PROSPECT')) acts.push('archive')
+  if (can.manage && row.status === 'BLOCKED') acts.push('archive-held')
+  if (can.manage && row.status === 'ARCHIVED') acts.push('reactivate')
+  return acts
+}
+// ---- end F-CL-101
+
 // ---- view models ------------------------------------------------------------------------------------------------------
 
 export interface ListCan {
@@ -820,9 +874,13 @@ export interface ListCan {
   manage: boolean
   block: boolean
   vies: boolean
+  /** F-CL-101: views.export — the frame draws Export N (the bar's third act); absent: as before (the frame decides). */
+  export?: boolean
 }
 
-export type ListDialog = { kind: 'new' } | { kind: 'block'; partyIds: readonly string[] } | { kind: 'archive'; partyIds: readonly string[] } | { kind: 'bulk' } | { kind: 'shortcuts' }
+// F-CL-101: "Keyboard shortcuts" left ⋯ (the footer's information icon keeps the keys), so the list has no keys window of its own.
+// F-CL-103: a window opened from the bar names the selected rows it does not run on (`notOn`: ids; the window says why beside each).
+export type ListDialog = { kind: 'new' } | { kind: 'block'; partyIds: readonly string[]; notOn?: readonly string[] } | { kind: 'archive'; partyIds: readonly string[]; notOn?: readonly string[] } | { kind: 'bulk' }
 
 export type LiveState = 'connecting' | 'live' | 'offline'
 

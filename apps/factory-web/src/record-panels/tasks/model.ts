@@ -238,6 +238,16 @@ export function batchBody(draft: Pick<TaskDraft, 'title' | 'description' | 'dueD
   }
 }
 
+// ---- F-CL-104 (customers list 13-backend §8.4, settle T12): a host's own record noun for the batch window's words ----------------
+/** The `batch.*` words a host may say in its own noun (the rest stay home-tasks'). */
+export const BATCH_HOST_WORDS: readonly string[] = Object.freeze(['title', 'assigneeHint', 'supervisor', 'noSupervisor', 'where', 'held.none', 'held.tooMany'])
+
+/** Where a `batch.*` word is read: the host's catalogue under its prefix when it gives one, else home-tasks (today's words). */
+export function batchWordOf(key: string, words: { readonly ns: string; readonly prefix: string } | null | undefined): { readonly ns: string; readonly key: string } {
+  return words && BATCH_HOST_WORDS.includes(key) ? { ns: words.ns, key: `${words.prefix}.${key}` } : { ns: 'home-tasks', key: `batch.${key}` }
+}
+// ---- end F-CL-104
+
 /** The receipt: how many were made, how many left out, and each left out with its label (when the maker reads it) and why. */
 export function batchReceipt(answer: BatchAnswer, locale: 'it' | 'en'): { made: number; left: number; lines: string[] } {
   return { made: answer.made.length, left: answer.skipped.length, lines: answer.skipped.map((skip) => `${skip.label ? `${skip.label}: ` : ''}${skip.words[locale]}`) }
