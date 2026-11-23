@@ -1,6 +1,6 @@
 import type { Prisma } from '@nexus/factory-db'
 import { ForbiddenError, ValidationError } from '@nexus/factory-domain/core/errors'
-import { can, scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
+import { can, scopeWhere, type Actor, type Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import type { HoldReason } from '@nexus/factory-domain/parties/holds/holds'
@@ -157,11 +157,19 @@ async function creditOf(db: Reader, partyId: string, companyId: string, now: Dat
   }
 }
 
+// ---- B-CQ-003 (customer page › Quotes & incoming, 13-backend §1.2): ONE rule for a customer's sample rounds in progress — Overview's
+// part below and the before-order counts' `sampleRounds` (modules/sales/before-order/counts.ts) read the same where.
+/** The customer's sample rounds in progress the reader may see (sales.samples.view's own scope), with the company when named. */
+export function openSampleRoundsWhere(actor: Actor, partyId: string, companyId: string | null): Prisma.SampleRoundWhereInput {
+  return {
+    AND: [scopeWhere(actor, SALES_SAMPLES_VIEW, { company: 'companyId', party: { field: 'partyId', nullable: true } }) as Prisma.SampleRoundWhereInput, { partyId, ...(companyId ? { companyId } : {}), stage: { in: [...SAMPLE_OPEN_STAGES] } }],
+  }
+}
+// ---- end B-CQ-003
+
 /** Sample rounds of the customer with the company in progress, the earliest due first (none last). */
 async function samplesOf(db: Reader, context: OfficeContext, partyId: string, companyId: string, today: string) {
-  const where: Prisma.SampleRoundWhereInput = {
-    AND: [scopeWhere(actorOf(context), SALES_SAMPLES_VIEW, { company: 'companyId', party: { field: 'partyId', nullable: true } }) as Prisma.SampleRoundWhereInput, { partyId, companyId, stage: { in: [...SAMPLE_OPEN_STAGES] } }],
-  }
+  const where = openSampleRoundsWhere(actorOf(context), partyId, companyId) // B-CQ-003
   const [count, rows] = [
     await db.sampleRound.count({ where }),
     await db.sampleRound.findMany({
