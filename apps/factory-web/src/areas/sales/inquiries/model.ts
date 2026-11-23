@@ -497,15 +497,17 @@ export const refusalPhrase = (code: string | null | undefined, number?: string):
 
 const factsOf = (row: Pick<InquiryRow, 'number' | 'status' | 'assigneeId' | 'party'>) => ({ number: row.number, status: row.status, assigneeId: row.assigneeId, partyId: row.party?.id ?? null })
 
-export type RowVerb = 'quote' | 'assign' | 'askInfo' | 'decline'
+// F-CQ-204: + Mark as lost and Make order from the row (the request's own windows), + Add task (the batch window with one record).
+export type RowVerb = 'quote' | 'assign' | 'askInfo' | 'decline' | 'lost' | 'order' | 'addTask'
 
 /** Why a verb on a row (or the record) is held now, in words, or null: the rule's own check first, then the right, then offline. */
 export function verbHeld(row: Pick<InquiryRow, 'number' | 'status' | 'assigneeId' | 'party'>, verb: RowVerb, can: InquiriesCan, offline: boolean): Phrase | null {
   if (!can.manage) return { key: 'held.right', params: { right: 'right.sales.inquiries.manage' } }
   const facts = factsOf(row)
-  const refusal = verb === 'quote' ? quoteRefusal(facts) : verb === 'assign' ? (isClosed(row.status) ? { code: 'CLOSED' } : null) : verb === 'askInfo' ? askInfoRefusal(facts) : declineRefusal(facts, 'PRICE', null)
+  const refusal = verb === 'quote' ? quoteRefusal(facts) : verb === 'assign' || verb === 'lost' || verb === 'order' || verb === 'addTask' ? (isClosed(row.status) && verb !== 'addTask' ? { code: 'CLOSED' } : null) : verb === 'askInfo' ? askInfoRefusal(facts) : declineRefusal(facts, 'PRICE', null)
   if (refusal) return refusalPhrase(refusal.code, row.number)
   if (verb === 'quote' && !can.quotes) return { key: 'held.right', params: { right: 'right.quotes.manage' } }
+  if (verb === 'order' && !can.orders) return { key: 'held.right', params: { right: 'right.orders.manage' } } // F-CQ-204
   if (offline) return { key: 'held.offline' }
   return null
 }
@@ -1448,3 +1450,29 @@ export function incomingWhereOf(row: IncomingRow, customer: string, production: 
  */
 export const bulkActs = (reach: ReturnType<typeof bulkReach>): boolean => reach.open.length > 0
 // ---- end F-CQ-103
+
+// ---- F-CQ-203 (customer page › Quotes & incoming, 10-design §8; Q4-B4): Assign N / Decline N — what they run on before the click, and
+// a refusal that names the requests it was about.
+
+/** The plan an all-or-none window says first: the open requests it runs on, the other ticked rows it does not (each answered on its own). */
+export interface BulkPreview {
+  readonly runs: number
+  readonly others: number
+}
+
+/**
+ * A refused all-or-none command, in lines that name each request (`body/items/<i>` → its number): "SEED-INQ-0009: it changed meanwhile
+ * or its state does not allow this" — never "some of these". No path names an item: no line (the notice's own words say it).
+ */
+export function bulkRefusalsOf(error: unknown, items: readonly { readonly inquiryId: string }[], rows: readonly Pick<IncomingRow, 'id' | 'number'>[]): Phrase[] {
+  if (!isApiError(error)) return []
+  const lines: Phrase[] = []
+  for (const issue of error.issues) {
+    const match = /items[./](\d+)/.exec(issuePath(issue))
+    const item = match ? items[Number(match[1])] : undefined
+    const number = item ? rows.find((row) => row.id === item.inquiryId)?.number : undefined
+    if (number && !lines.some((line) => line.params?.number === number)) lines.push({ key: 'bulk.refusedOne', params: { number } })
+  }
+  return lines
+}
+// ---- end F-CQ-203

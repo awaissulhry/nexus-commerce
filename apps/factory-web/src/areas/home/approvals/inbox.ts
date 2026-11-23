@@ -178,6 +178,8 @@ export function selectHeld(row: InboxRow, state: { readonly offline: boolean; re
   if (row.task && row.task.requireStepUp) return 'inbox.held.codeOneByOne'
   // F-PR-08: never ticked for Approve N: a customer's request is answered in its window (a batch there: Accept all, each re-checked).
   if (row.request) return 'inbox.held.answerAlone'
+  // F-CQ-204 (Q1-B14): Approve N keeps engine tasks only — a ticked quote was dropped in silence. A quote is decided in its own window.
+  if (row.quote) return 'inbox.held.quoteAlone'
   return state.offline ? 'inbox.held.offline' : null
 }
 

@@ -301,3 +301,14 @@ describe('B-TH-270: the review window — Change · Context & history, the reque
     expect(review).toContain("target?.closest('.fw-apv-window-thread')")
   })
 })
+
+// ---- F-CQ-204 (customer page › Quotes & incoming, Q1-B14 / Q4-B8): Approve N keeps engine tasks only — a ticked quote vanished in
+// silence. A quote row is never ticked for it: it is decided in its own window (the words say so, both languages).
+describe('F-CQ-204: a quote is not ticked for Approve N', () => {
+  it('selectHeld names its own window for a quote; the words exist in it and en', () => {
+    expect(selectHeld(QUOTE, { offline: false, busy: false })).toBe('inbox.held.quoteAlone')
+    for (const locale of ['en', 'it'] as const) expect(CATALOGUE[locale][NS]?.['inbox.held.quoteAlone'], locale).toBeTruthy()
+    expect(CATALOGUE.en[NS]?.['inbox.held.quoteAlone']).toBe('A quote is decided in its own window: open it.')
+  })
+})
+// ---- end F-CQ-204

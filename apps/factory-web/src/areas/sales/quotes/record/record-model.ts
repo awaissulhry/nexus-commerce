@@ -13,7 +13,9 @@ import type { Grains, QuoteAbilities, QuoteTab, Tone } from '../model'
 
 export type Loaded<T> = { status: 'loading' } | { status: 'ready'; value: T } | { status: 'error'; problem: string } | { status: 'not_found' } | { status: 'forbidden' }
 
-export type QuoteDialog = 'ask' | 'withdraw' | 'reject' | 'approve' | 'cancel' | 'revise' | 'newLink' | 'reopen'
+/** F-CQ-204: every small window of the quote (record/acts.ts holds one act for each; a list's row opens them too). */
+export const QUOTE_DIALOG_KINDS = ['ask', 'withdraw', 'reject', 'approve', 'cancel', 'revise', 'newLink', 'reopen'] as const
+export type QuoteDialog = (typeof QUOTE_DIALOG_KINDS)[number]
 
 export interface QuoteNotice {
   key: string

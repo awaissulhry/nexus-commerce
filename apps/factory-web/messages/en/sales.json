@@ -831,6 +831,10 @@
     },
     "state": {
       "notClosed": "Not closed"
+    },
+    "row": {
+      "sendOnPage": "Send on the quote page ›",
+      "addTask": "Add task…"
     }
   },
   "newQuote": {

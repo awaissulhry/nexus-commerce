@@ -82,7 +82,11 @@
     "menu": "Actions for {number}",
     "open": "Open",
     "openNewTab": "Open full page in a new tab",
-    "copy": "Copy number"
+    "copy": "Copy number",
+    "makeOrder": "Make order…",
+    "assign": "Assign…",
+    "decline": "Decline…",
+    "addTask": "Add task…"
   },
   "keys": {
     "new": "New request",
@@ -218,7 +222,12 @@
     "declined_one": "{count} request declined ({reason})",
     "declined_other": "{count} requests declined ({reason})",
     "reachOthers": "{open} open requests · {others} of other kinds left out (each answered on its own)",
-    "noneRequests": "Assign and Decline act on requests: a portal order is answered in its pane, a change request in Home › Approvals"
+    "noneRequests": "Assign and Decline act on requests: a portal order is answered in its pane, a change request in Home › Approvals",
+    "plan_one": "Runs on {count} request",
+    "plan_other": "Runs on {count} requests",
+    "planOthers_one": "Not on {count}: a portal order or a change request is answered on its own",
+    "planOthers_other": "Not on {count}: portal orders and change requests are answered on their own",
+    "refusedOne": "{number}: it changed meanwhile, or its state does not allow this — open it."
   },
   "held": {
     "right": "Needs the sales permission ({right})",
@@ -630,7 +639,7 @@
     "messageLabel": "Message to the customer (optional)",
     "messageTo": "A mail to {to}, in the same step as the decline",
     "message": {
-      "many": "Decline N sends nothing: a message goes to one customer at a time, from its own request",
+      "many": "No message goes with it. Each request that came from the portal tells its customer it was declined ({portal} of {count}).",
       "prospect": "A prospect has no customer conversation yet: answer their mail from Mail to sort",
       "noEmail": "The request names no contact with an e-mail: pick one on Request first",
       "notAnOrder": "\"Not an order\" sends nothing: the customer reads \"Closed\""

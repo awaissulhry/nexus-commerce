@@ -12,6 +12,7 @@ import { DECLINE_REASONS, declineHeld, lostHeld, type DeclineDraft, type Decline
 import type { MessageReach } from '../model' // B-TH-234
 // th-backend-g step 2: the decline's message starts from the mail template (the reason where "…" stands); the five languages' names.
 import { hasBlank, type DeclineStart } from '../model'
+import type { BulkPreview } from '../model' // F-CQ-203
 import { MESSAGE_LANGUAGES } from '@nexus/factory-domain/templates/message-languages'
 import { NoticeLine, useWords } from '../parts'
 import { ListboxPanel } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
@@ -53,6 +54,8 @@ export interface AssignModel {
   readonly busy: boolean
   readonly notice: Notice | null
   readonly offline: boolean
+  /** F-CQ-203: a selection's plan before the click ("Runs on 2 · Not on 1: a portal order is answered on its own"). */
+  readonly preview?: BulkPreview
 }
 
 export interface AssignActions {
@@ -79,6 +82,7 @@ export function AssignDialog({ model, actions }: { model: AssignModel; actions?:
   return (
     <Modal open onClose={() => actions?.onClose?.()} size="sm" title={t('assign.title')} subtitle={say(model.subject) ?? undefined} footer={<Buttons onClose={actions?.onClose}>{null}</Buttons>}>
       <div className="fw-inq-dialog">
+        <PreviewLine preview={model.preview} />
         <NoticeLine notice={model.notice} />
         <p className="fw-inq-hint">{model.current ? t('assign.now', { name: model.current.name }) : t('assign.nobodyNow')}</p>
         {model.people.status === 'loading' && <Skeleton height={120} />}
@@ -129,6 +133,8 @@ export interface DeclineModel {
   readonly busy: boolean
   readonly notice: Notice | null
   readonly offline: boolean
+  /** F-CQ-203: a selection's plan before the click. */
+  readonly preview?: BulkPreview
 }
 
 export interface DeclineActions {
@@ -165,6 +171,7 @@ export function DeclineDialog({ model, actions }: { model: DeclineModel; actions
       }
     >
       <div className="fw-inq-dialog">
+        <PreviewLine preview={model.preview} />
         <NoticeLine notice={model.notice} />
         <fieldset className="fw-inq-stack" aria-label={t('decline.reason')}>
           <legend className="fw-inq-h3">{t('decline.reason')}</legend>
@@ -576,5 +583,17 @@ export function StyleDraftDialog({ model, actions }: { model: StyleDraftModel; a
         <p className="fw-inq-hint">{t('styleDraft.stays')}</p>
       </div>
     </Modal>
+  )
+}
+
+/** F-CQ-203 (Q4-B4): a selection's plan, said before the click — what it runs on, and the other kinds left out (each answered on its own). */
+function PreviewLine({ preview }: { preview?: BulkPreview }) {
+  const { t } = useWords()
+  if (!preview) return null
+  return (
+    <p className="fw-inq-hint" role="status">
+      {t('bulk.plan', { count: preview.runs })}
+      {preview.others > 0 ? ` · ${t('bulk.planOthers', { count: preview.others })}` : ''}
+    </p>
   )
 }

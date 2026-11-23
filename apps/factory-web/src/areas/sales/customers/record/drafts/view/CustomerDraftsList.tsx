@@ -18,6 +18,10 @@ import type { DraftRow } from '../api'
 import { draftTitle, filesWords, linesWords, messagesWords, readyOf, showsValue, type DraftsRead, type Words } from '../model'
 import { draftValueOf } from '../model' // F-CP-141 (follow-up 6): the draft's own value when the API sends it
 import { money } from '../../../../quotes/model' // F-CP-141: minor units
+// ---- F-CQ-205 (customer page › Quotes & incoming): the section "Customer is writing" mounts this list too — no Views ▾ there, each
+// draft's garment picture (the one picture part, `portalOrder` source)
+import type { ReadPictures } from '../../../../../../lib/record-picture/cache'
+import { RecordPicture } from '../../../../../../lib/record-picture/view/RecordPicture'
 
 /**
  * F-CP-107 (customer page plan D10; 10-customer-page §6; picture 22's office list) — "Drafts of <customer>": the customer's portal drafts,
@@ -35,8 +39,11 @@ export interface CustomerDraftsListModel {
   readonly updates: number
   /** The draft whose conversation the dock shows (marked); null: none. */
   readonly activeId: string | null
-  /** The Work tab's sheet model and actions: its Views ▾ (the same items, the Drafts view ticked) and their picks. */
-  readonly views: { readonly model: OrdersListModel; readonly actions?: OrdersListActions }
+  /** The Work tab's sheet model and actions: its Views ▾ (the same items, the Drafts view ticked) and their picks. F-CQ-205: optional —
+   *  the Quotes & incoming tab's section has no Views ▾. */
+  readonly views?: { readonly model: OrdersListModel; readonly actions?: OrdersListActions } | null
+  /** F-CQ-205: each draft's first style as its picture (the host's batch read and its header's words); absent: no Picture column. */
+  readonly pictures?: { readonly read: ReadPictures; readonly header: string } | null
   /** Design cases: the widths that show the wide columns. */
   readonly wide?: boolean
 }
@@ -83,6 +90,8 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
   const locale = useLocale()
   const wide = useWide(model.wide)
   const latest = useRef(actions)
+  const picturesNow = useRef(model.pictures ?? null) // F-CQ-205: the cells read the host's batch read through it
+  picturesNow.current = model.pictures ?? null
   latest.current = actions
   const say = (words: Words) => t(words.key, words.params)
   const joined = (list: readonly Words[]) => (list.length > 0 ? list.map(say).join(' · ') : '—')
@@ -118,7 +127,11 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
           {t('customers.drafts.open')}
         </Button>
       ) : null
+    // F-CQ-205: the draft's garment (the one picture part; the batch read names its first style) — only when the host hands its read.
+    const pictures = picturesNow.current
+    const PictureCell = ({ data }: ICellRendererParams<DraftRow>) => (data ? <RecordPicture source="portalOrder" recordId={data.id} number={draftTitle(data, untitled)} size="cell" read={picturesNow.current?.read ?? null} /> : null)
     return [
+      ...(pictures ? [{ colId: 'picture', headerName: pictures.header, minWidth: 76, maxWidth: 76, sortable: false, suppressHeaderMenuButton: true, cellRenderer: PictureCell } satisfies ColDef<DraftRow>] : []),
       { colId: 'draft', headerName: t('customers.drafts.col.draft'), minWidth: 200, flex: 2, cellRenderer: DraftCell, valueGetter: (params) => (params.data ? draftTitle(params.data, untitled) : '') },
       { colId: 'lines', headerName: t('customers.drafts.col.lines'), minWidth: 130, flex: 1, valueGetter: (params) => (params.data ? joined(linesWords(params.data)) : '') },
       { colId: 'files', headerName: t('customers.drafts.col.files'), minWidth: 88, flex: 1, valueGetter: (params) => (params.data ? joined(filesWords(params.data)) : '') },
@@ -171,13 +184,13 @@ function DraftsList({ model, actions }: { model: CustomerDraftsListModel; action
       { colId: 'more', headerName: '', minWidth: 64, maxWidth: 88, sortable: false, cellRenderer: OpenCell },
     ]
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the cells read the latest actions through `latest`
-  }, [t, locale, wide, price, untitled])
+  }, [t, locale, wide, price, untitled, !!model.pictures /* F-CQ-205 */])
 
   // The Views ▾ of the Work tab: the same items as the sheet's, the Drafts view ticked; a pick goes through the sheet (which drops `list`).
-  const views = model.views
-  const builtIns = { items: builtInViewsOf(views.model, o, s, (value) => formatNumber(value, locale)), active: builtInActive(views.model), onPick: (id: string) => pickBuiltIn(id, views.model, views.actions) }
-  const active = builtIns.items.find((view) => view.id === builtIns.active) ?? null
-  const viewsMenu = <Menu label={active ? l('tools.viewsTrigger', { name: active.label }) : l('tools.builtIn')} items={[{ id: 'h-builtin', heading: true, label: l('tools.builtIn') }, ...builtInViewItems(builtIns)]} />
+  const views = model.views ?? null // F-CQ-205: none on the Quotes & incoming tab
+  const builtIns = views ? { items: builtInViewsOf(views.model, o, s, (value) => formatNumber(value, locale)), active: builtInActive(views.model), onPick: (id: string) => pickBuiltIn(id, views.model, views.actions) } : null
+  const active = builtIns ? (builtIns.items.find((view) => view.id === builtIns.active) ?? null) : null
+  const viewsMenu = builtIns ? <Menu label={active ? l('tools.viewsTrigger', { name: active.label }) : l('tools.builtIn')} items={[{ id: 'h-builtin', heading: true, label: l('tools.builtIn') }, ...builtInViewItems(builtIns)]} /> : null
 
   const state =
     model.read.status === 'failed' ? (

@@ -551,7 +551,8 @@ export async function removeLine(api: ApiClient, quote: Pick<QuoteDetail, 'id' |
 export const recompute = (api: ApiClient, quote: Pick<QuoteDetail, 'id' | 'version'>) => write(api, `${quotePath(quote.id)}/recompute`, { version: quote.version })
 export const askApproval = (api: ApiClient, quote: Pick<QuoteDetail, 'id' | 'version'>, note: string | null) => write(api, `${quotePath(quote.id)}/approval`, { version: quote.version, note: note?.trim() || null })
 export const reopen = (api: ApiClient, quote: Pick<QuoteDetail, 'id' | 'version'>, reason: string | null) => write(api, `${quotePath(quote.id)}/reopen`, { version: quote.version, reason: reason?.trim() || null })
-export const cancelQuote = (api: ApiClient, quote: Pick<QuoteDetail, 'id' | 'version'>, reason: string | null) => write(api, `${quotePath(quote.id)}/cancel`, { version: quote.version, reason: reason?.trim() || null })
+// F-CQ-202 (B-CQ-040): `batchId` — one id on every quote of one "Cancel N" (one bell per follower, S2); absent: one quote's own cancel.
+export const cancelQuote = (api: ApiClient, quote: Pick<QuoteDetail, 'id' | 'version'>, reason: string | null, batchId?: string) => write(api, `${quotePath(quote.id)}/cancel`, { version: quote.version, reason: reason?.trim() || null, ...(batchId ? { batchId } : {}) })
 export const reviseQuote = (api: ApiClient, quote: Pick<QuoteDetail, 'id' | 'version'>, changeNote: string | null) => write(api, `${quotePath(quote.id)}/revise`, { version: quote.version, changeNote: changeNote?.trim() || null })
 
 const decisionSchema = z.object({ quote: quoteSchema })
@@ -578,8 +579,9 @@ export function sendNewLink(api: ApiClient, quote: Pick<QuoteDetail, 'id' | 'ver
 // ---- B-TH-257 (O-SAL-QUO-REC.band-F03): "Order waits: … Make the order now" — POST /sales/orders from the accepted version
 // (orders.manage over the quote's customer; the API answers the order it made, or the one already made: `created` false).
 const madeOrderSchema = z.object({ created: z.boolean(), order: z.object({ id: z.string(), number: z.string() }) })
-export function makeOrderFromQuote(api: ApiClient, quoteVersionId: string): Promise<z.infer<typeof madeOrderSchema>> {
-  return api.post('/sales/orders', { body: { quoteVersionId }, schema: madeOrderSchema, idempotencyKey: newIdempotencyKey() })
+// F-CQ-202 (C36): with the customer's PO number (`customerRef`) when its terms need one on every order (the command takes it).
+export function makeOrderFromQuote(api: ApiClient, quoteVersionId: string, customerRef: string | null = null): Promise<z.infer<typeof madeOrderSchema>> {
+  return api.post('/sales/orders', { body: { quoteVersionId, ...(customerRef ? { customerRef } : {}) }, schema: madeOrderSchema, idempotencyKey: newIdempotencyKey() })
 }
 // ---- end B-TH-257
 

@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Ban, Copy, FileText, MoreHorizontal, Plus, Search } from 'lucide-react'
+import { Copy, FileText, MoreHorizontal, Plus, Search } from 'lucide-react'
 import { Banner, EmptyState, Field, KeyValue, Menu, MetricStrip } from '@nexus/ui/components'
-import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
+import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
 import { Button, FilterChip, Input, Pill, RadioCard, Select, Spinner, Tag, TokenChip } from '@nexus/ui/primitives'
-import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
+import { Modal } from '../../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { useListSearch } from '../../../../../list-frame/search/use-list-search' // F-SA-223
 import { CustomerSwitcher } from '../../../_shared/customer-switcher/view/CustomerSwitcher' // F-SA-224
@@ -20,6 +20,12 @@ import { activeFilterCount, APPROVAL_TONE, droppedWords, isExpiring, money, NO_F
 import { customerSeesWords, isQuoteGroupTerm, quoteDateOf, quoteWhereOf, sortedQuotes, URGENT_TOO_MANY, type ListFilters, type ListWords, type QuoteListSort } from '../../model'
 import { byRoom, datesFold, hostTier, reaches } from '../../../_shared/list-room'
 import { WhereChips, type WhereChipWords } from '../../../_shared/where-cell/view/WhereChips'
+// ---- F-CQ-201 / 202 / 204 (customer page › Quotes & incoming): the bar (3 + More ▾), the ONE many-acts window, Add task to N, the
+// quote's own windows on a row (in place)
+import { CANCELLABLE_QUOTES, orderMakeable, quoteBarOf, type QuoteActKind } from '../bar'
+import { ManyActDialog, ManyBar } from '../../../_shared/many-acts/view/ManyActDialog'
+import { TaskNewDialog } from '../../../../../record-panels/tasks/view/TaskNewDialog'
+import { QuoteDialogs } from '../../record/view/Dialogs'
 import { DuplicateDialog } from '../../duplicate/view/DuplicateDialog'
 import type { NewQuoteModel, QuotesListActions, QuotesListViewModel } from '../list-model'
 import '../../quotes.css'
@@ -62,7 +68,7 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
   // F-SA-223: the one search rule of every list (300 ms after the last key, Enter at once, Esc clears, 100 at most, follows the address).
   const search = useListSearch(model.filters.q, (q) => latest.current.actions?.onFilters?.({ ...latest.current.model.filters, q }))
   const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
-  const [dialog, setDialog] = useState<'cancel' | 'help' | null>(null)
+  const [dialog, setDialog] = useState<'help' | null>(null)
   const [viewer, setViewer] = useState<string | null>(null) // TH-6 part B: the row whose picture is open large
   // A new read (filters, Show updates) starts with nothing selected; the design cases set their own.
   const rowsKey = model.rows.items?.map((row) => row.id).join(',') ?? ''
@@ -91,11 +97,10 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
   const filtered = activeFilterCount(model.filters) > 0
   const recordHref = useCallback((row: QuoteListRow) => `${model.prefix}/sales/quotes/${row.id}`, [model.prefix])
   const picked = (shown ?? []).filter((row) => selected.includes(row.id))
-  const notCancellable = picked.filter((row) => !CANCELLABLE.has(row.status)).length
   const ownKeys: ListKey[] = [{ keys: ['c'], does: t('list.keyNew') }]
 
-  const live = useRef({ actions, manage: model.can.manage })
-  live.current = { actions, manage: model.can.manage }
+  const live = useRef({ actions, manage: model.can.manage, rights: model.barRights ?? null })
+  live.current = { actions, manage: model.can.manage, rights: model.barRights ?? null }
   // ---- F-CQ-102 / F-CQ-104: the host's face — its columns by the list's own room (never the window), its customer's one name.
   const host = model.columns === 'host'
   const tier = hostTier(model.room)
@@ -191,6 +196,21 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
         </span>
       )
     }
+    // F-CQ-204: a row's next steps (the quote's own windows: Ask for approval, Approve / Reject — the asker never decides, said inside —,
+    // Make revision N also from Expired / Declined, Make the order now, Add task), Send on the quote page as a door; never for a missing right.
+    const rowActs = (data: QuoteListRow) => {
+      const { manage, rights, actions: acts } = live.current
+      const can = latest.current.model.can
+      const act = (id: Parameters<NonNullable<QuotesListActions['onRowAct']>>[1]) => () => acts?.onRowAct?.(data, id)
+      return [
+        ...(manage && data.status === 'DRAFT' ? [{ id: 'ask', label: `${t('action.ask')}…`, onSelect: act('ask') }] : []),
+        ...(can.approve && data.status === 'PENDING_APPROVAL' ? [{ id: 'approve', label: `${t('action.approve')}…`, onSelect: act('approve') }, { id: 'reject', label: `${t('action.reject')}…`, onSelect: act('reject') }] : []),
+        ...(can.send && latest.current.model.grains.price && data.status === 'APPROVED' ? [{ id: 'send', label: t('list.row.sendOnPage'), href: `${recordHref(data)}?tab=approval` }] : []),
+        ...(manage && ['SENT', 'EXPIRED', 'DECLINED'].includes(data.status) ? [{ id: 'revise', label: `${t('action.revise', { next: data.revision + 1 })}…`, onSelect: act('revise') }] : []),
+        ...(rights?.orders && orderMakeable(data) ? [{ id: 'makeOrder', label: `${t('record.makeOrder')}…`, onSelect: act('makeOrders') }] : []),
+        ...(rights?.tasks ? [{ id: 'addTask', label: t('list.row.addTask'), onSelect: act('addTask') }] : []),
+      ]
+    }
     const MoreCell = ({ data }: ICellRendererParams<QuoteListRow>) =>
       data ? (
         <Menu
@@ -200,6 +220,8 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
           items={[
             { id: 'open', label: t('list.open'), href: recordHref(data) },
             { id: 'tab', label: t('list.openNewTab'), href: recordHref(data), target: '_blank' },
+            // ---- F-CQ-204 (10-design §7; C1, C28): the quote's next steps in its OWN windows, here — each only with its right, by its state.
+            ...rowActs(data),
             // F-CQ-102 (Q1-B1, Q1-B7): the priced PDF only for a reader who sees prices (the API refuses the others), in the quote's own language.
             ...(latest.current.model.grains.price ? [{ id: 'pdf', label: t('action.previewPdf'), icon: <FileText size={14} aria-hidden />, href: previewHref(data.id, data.language ?? 'it'), target: '_blank' as const }] : []),
             // B-W2a-49 (SAL-155): a new draft copied from this quote, for this customer or another.
@@ -214,6 +236,8 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
                   },
                 ]
               : []),
+            { id: 'copy', label: t('action.copyNumber'), onSelect: () => void navigator.clipboard?.writeText(data.number).catch(() => undefined) },
+            ...(live.current.manage && CANCELLABLE_QUOTES.includes(data.status) ? [{ id: 'cancel', label: t('action.cancel'), tone: 'danger' as const, onSelect: () => live.current.actions?.onRowAct?.(data, 'cancel') }] : []),
           ]}
         />
       ) : null
@@ -429,19 +453,8 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
           onChange: setSelected,
           // F-SA-225: Export N through the export job (the same writer as Export ▾, the screen's columns and the picked ids).
           exportSelected: true,
-          actions: (
-            <>
-              <Button
-                size="sm"
-                variant="danger-outline"
-                aria-label={t('list.bulk.cancel', { count: picked.length })}
-                heldReason={!model.can.manage ? t('held.noManage') : notCancellable > 0 ? t('list.bulk.cancelHeld', { count: notCancellable }) : null}
-                onClick={() => setDialog('cancel')}
-              >
-                <Ban size={13} aria-hidden /> <SelectionLabel>{t('list.bulk.cancel', { count: picked.length })}</SelectionLabel>
-              </Button>
-            </>
-          ),
+          // F-CQ-201 (10-design §6.1): the bar — 3 + More ▾, each act only with its right, held with words only by the ticked rows' state.
+          actions: model.barRights ? <ManyBar bar={quoteBarOf(model.barRights, picked, model.customerName ?? (picked.length > 0 && picked.every((row) => row.partyId === picked[0]!.partyId) ? picked[0]!.partyName : null))} onAct={(id) => actions?.onBarAct?.(id as QuoteActKind, picked)} /> : null,
         }}
         updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
         more={model.rows.more && shown && shown.length > 0 ? { label: t('list.more'), onMore: () => actions?.onMore?.() } : null}
@@ -481,7 +494,27 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
           />
         ) : null
       })()}
-      {dialog === 'cancel' && <CancelManyDialog rows={picked} busy={model.busy} actions={actions} onDone={() => setSelected([])} onClose={() => setDialog(null)} />}
+      {/* ---- F-CQ-201 / 202 / 204: the ONE many-acts window, Add task to N, the quote's own window on a row */}
+      <ManyActDialog model={model.many ?? null} actions={actions?.many} />
+      {model.tasks && (
+        <TaskNewDialog
+          recordLabel={null}
+          people={model.tasks.people}
+          me={model.me}
+          onRetryPeople={() => actions?.tasks?.onRetryPeople()}
+          onClose={() => actions?.tasks?.onClose()}
+          batch={{
+            records: model.tasks.records,
+            today: model.today,
+            onSend: (draft, assignee) => actions?.tasks?.onSend(draft, assignee) ?? Promise.resolve(null),
+            words: { ns: 'before-order', prefix: 'tasks.quote' },
+            namesOther: null,
+            hrefOf: (record) => `${model.prefix}/sales/quotes/${encodeURIComponent(record.id)}?thread=open`,
+            defaultAssignee: 'me',
+          }}
+        />
+      )}
+      {model.quoteDialog && <QuoteDialogs quote={model.quoteDialog.quote} model={model.quoteDialog.model} actions={actions?.quoteDialog} />}
       {dialog === 'help' && (
         <Modal open onClose={() => setDialog(null)} title={t('list.keysTitle')} size="sm">
           <ul className="fw-q-list">
@@ -497,7 +530,6 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
   )
 }
 
-const CANCELLABLE: ReadonlySet<string> = new Set(['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SENT'])
 
 /** F-CQ-104: the host's phone card — the number names it, the picture and the new messages beside it, the chips under it. */
 const HOST_CARD_FIELDS = Object.freeze({ picture: { role: 'aside' as const }, number: { role: 'title' as const }, status: { role: 'subtitle' as const }, newMessages: { role: 'aside' as const } })
@@ -517,54 +549,6 @@ export function stateFilters(filters: ListFilters, value: string): ListFilters {
   return { ...filters, status, group: null, expiring: status === 'SENT' ? filters.expiring : false }
 }
 // ---- end F-CQ-102
-
-/** Cancel several quotes: what it does to each, one reason for all (a sent quote needs one: its link says withdrawn). */
-function CancelManyDialog({ rows, busy, actions, onDone, onClose }: { rows: readonly QuoteListRow[]; busy?: boolean; actions?: QuotesListActions; onDone: () => void; onClose: () => void }) {
-  const t = useT('sales')
-  const [reason, setReason] = useState('')
-  const sent = rows.filter((row) => row.status === 'SENT').length
-  const length = reason.trim().length
-  const held = sent > 0 && length < 3 ? t('list.bulk.reasonNeeded', { count: sent }) : length > 500 ? t('dialog.held.long') : busy ? t('held.busy') : null
-  const go = () => {
-    if (held) return
-    void actions?.onCancelMany?.(rows.map((row) => row.id), reason).then((done) => {
-      if (done) {
-        onDone()
-        onClose()
-      }
-    })
-  }
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      title={t('list.bulk.cancelTitle', { count: rows.length })}
-      size="md"
-      footer={
-        <>
-          <Button onClick={onClose}>{t('common.back')}</Button>
-          <Button variant="danger" heldReason={held} onClick={go}>
-            {t('list.bulk.cancel', { count: rows.length })}
-          </Button>
-        </>
-      }
-    >
-      <div className="fw-q-dialog">
-        <p className="fw-q-hint">{t(sent > 0 ? 'list.bulk.cancelBodySent' : 'list.bulk.cancelBody', { count: sent })}</p>
-        <ul className="fw-q-list">
-          {rows.map((row) => (
-            <li key={row.id}>
-              {row.number} · {row.partyName} · {t(`status.${row.status}`)}
-            </li>
-          ))}
-        </ul>
-        <Field label={t('dialog.reason')} required={sent > 0}>
-          <Textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={3} maxLength={500} />
-        </Field>
-      </div>
-    </Modal>
-  )
-}
 
 /** New quote (F-CQ-104: exported, so a host whose list is folded still opens the ONE dialog — "New quote for <customer>…"). */
 export function NewQuoteDialog({ model, actions }: { model: NewQuoteModel; actions?: QuotesListActions }) {

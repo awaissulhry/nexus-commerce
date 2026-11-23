@@ -34,7 +34,11 @@ interface DialogSpec {
  * question each, its consequence in words, and one button that says what it does. ⌘↵ runs it; Esc closes and keeps the
  * record as it was. A reject and a cancel after sending need a reason.
  */
-export function QuoteDialogs({ quote, model, actions }: { quote: QuoteDetail; model: QuoteRecordViewModel; actions?: QuoteRecordActions }) {
+/** F-CQ-204: what the windows read of their host — the quote page's model, or a list's that opens them on a row (use-quote-dialog.ts). */
+export type QuoteDialogsModel = Pick<QuoteRecordViewModel, 'dialog' | 'me' | 'can' | 'grains' | 'busy'>
+export type QuoteDialogsActions = Pick<QuoteRecordActions, 'onDialog' | 'onAsk' | 'onWithdraw' | 'onApprove' | 'onReject' | 'onCancelQuote' | 'onRevise' | 'onNewLink'>
+
+export function QuoteDialogs({ quote, model, actions }: { quote: QuoteDetail; model: QuoteDialogsModel; actions?: QuoteDialogsActions }) {
   const t = useT('sales')
   const [text, setText] = useState('')
   useEffect(() => setText(''), [model.dialog])

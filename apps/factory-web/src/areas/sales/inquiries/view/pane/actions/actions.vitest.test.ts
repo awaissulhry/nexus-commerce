@@ -171,7 +171,9 @@ describe('B-TH-234 — decline in words, Not an order, Ask the customer for…',
 
   it('a selection never sends: Decline N says so (one customer at a time)', () => {
     expect(messageReach(null, owner)).toEqual({ to: null, via: null, language: null, held: { key: 'decline.message.many' } })
-    expect(words['decline.message.many']).toContain('sends nothing')
+    // F-CQ-203 (Q4-B5): the true words — nothing goes with it, and each request from the portal still tells its customer it was declined.
+    expect(words['decline.message.many']).toContain('No message goes with it')
+    expect(words['decline.message.many']).toContain('({portal} of {count})')
   })
 
   it('⋯ holds Make or match the customer for a prospect, Ask <customer> for…, Not an order — each held with its reason', () => {

@@ -59,6 +59,13 @@ import type { RecordVerb } from './record-model'
 // ---- F-CQ-103 (customer page › Quotes & incoming): the host's kinds and door, Most urgent first on one page.
 import { DEFAULT_TILE, rankedRows, rankHeld, type IncomingRank } from './model'
 import type { IncomingKind, ListTile } from './model'
+// ---- F-CQ-201 / 203 / 204 (customer page › Quotes & incoming): the bar's loops (the ONE many-acts window), Add task to N, the row's
+// own windows in place (a request's RecordDialogs, a portal order's CatalogueDialogs) on a host whose dock is the pane.
+import { useManyAct } from '../_shared/many-acts/use-many-act'
+import { useTaskBatch } from '../_shared/many-acts/use-task-batch'
+import { incomingActOf } from './acts'
+import { bulkRefusalsOf, type BulkPreview } from './model'
+import { openRequests, type IncomingActKind, type IncomingRecord } from './bar'
 import { useInquiry } from './use-inquiry'
 // B-TH-228: which receipts stay on the page when the queue moves on.
 import { receiptStays } from './model'
@@ -388,8 +395,14 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
     },
     [prefix, router],
   )
+  // ---- F-CQ-204: on a host whose dock is the pane, a row's verb opens the request's OWN window here (no page hop): the request is read
+  // once for it (useInquiry, the pane's container), its dialog drawn by the list; closed, it reads nothing more.
+  const [verbTarget, setVerbTarget] = useState<string | null>(null)
+  const [catalogueTarget, setCatalogueTarget] = useState<{ readonly id: string; readonly companyId: string | null } | null>(null)
+  const [cataloguePending, setCataloguePending] = useState<'order' | 'quote' | 'refuse' | null>(null)
+  // ---- end F-CQ-204
   const record = useInquiry({
-    inquiryId: address.open,
+    inquiryId: address.open ?? verbTarget,
     tab: address.tab,
     onTab: (tab) => go({ tab }),
     onChanged: () => void load(),
@@ -403,8 +416,11 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
   // B-TH-233 (B-TH-040, pane-actions-F13): a catalogue order beside the list — its facts, its thread, Accept as order / quote, Refuse.
   const catalogueRow = address.catalogue ? (list?.rows.find((row) => row.id === address.catalogue) ?? null) : null
   const catalogue = useCatalogueOrder({
-    requestId: address.catalogue,
-    companyId: catalogueRow?.companyId ?? companyId,
+    requestId: address.catalogue ?? catalogueTarget?.id ?? null,
+    companyId: catalogueRow?.companyId ?? catalogueTarget?.companyId ?? companyId,
+    // F-CQ-204: a row's Accept as order / quote, Refuse opens the portal order's own window once it is read.
+    pending: cataloguePending,
+    onPendingDone: () => setCataloguePending(null),
     onChanged: () => void load(),
     onDecided: (requestId) => {
       const next = nextAfter(idsRef.current, requestId)
@@ -423,16 +439,74 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
     if (detailNotice && receiptStays(detailNotice.key)) setNotice(detailNotice)
   }, [detailNotice])
 
+  // ---- F-CQ-201 / 203: the bar's loops and Add task to N (both hosts); the receipt's names dock the record on a host that docks.
+  const rowsNow = useRef<readonly IncomingRow[]>([])
+  rowsNow.current = list?.rows ?? []
+  const recordOf = useCallback((row: IncomingRow): IncomingRecord => ({ ...row, label: row.number, href: rowPageHref(prefix, row, addressRef.current) }), [prefix])
+  const many = useManyAct<IncomingRecord>({
+    onDone: () => void load(),
+    rowOf: (id) => {
+      const row = rowsNow.current.find((entry) => entry.id === id)
+      return row ? recordOf(row) : undefined
+    },
+    ...(host.onRowClick
+      ? {
+          onName: (id: string) => {
+            const row = rowsNow.current.find((entry) => entry.id === id)
+            if (row) host.onRowClick?.(row, false)
+          },
+        }
+      : {}),
+  })
+  const tasks = useTaskBatch(api)
+  const openTasks = useCallback((rows: readonly IncomingRow[]) => tasks.open(rows.map((row) => ({ type: THREAD_TYPE[row.kind], id: row.id, label: row.number, supervisor: null }))), [tasks])
+  // ---- end F-CQ-201 / 203
+
   const onRowVerb = useCallback(
     (row: IncomingRow, verb: RowVerb) => {
+      if (verb === 'addTask') return openTasks([row]) // F-CQ-203: one task, the batch window with one record
       if (row.kind !== 'REQUEST') return
-      // F-SA-277: no reading pane on this host — the verb is on the request's own page.
-      if (paneHost) return openPage(row, false)
+      // F-CQ-204: no reading pane on this host — the request's OWN window opens here; Ask for info is the ask window with this one (C2).
+      if (paneHost) {
+        if (verb === 'askInfo') return many.open(incomingActOf('askInfo', api, [recordOf(row)]), [recordOf(row)])
+        setVerbTarget(row.id)
+        setPendingVerb(verb)
+        return
+      }
       setPendingVerb(verb)
       go({ open: row.id, catalogue: null, tab: verb === 'quote' ? 'quote' : 'request' })
     },
-    [go, paneHost, openPage],
+    [go, paneHost, openTasks, many, api, recordOf],
   )
+  // F-CQ-204: a portal order's Accept as order / quote, Refuse from its row — its own window (the pane's, or here on a host).
+  const onCatalogueVerb = useCallback(
+    (row: IncomingRow, verb: 'order' | 'quote' | 'refuse') => {
+      if (row.kind !== 'CATALOGUE_ORDER') return
+      setCataloguePending(verb)
+      if (paneHost) setCatalogueTarget({ id: row.id, companyId: row.companyId })
+      else go({ open: null, catalogue: row.id, tab: 'request' })
+    },
+    [go, paneHost],
+  )
+  // A window opened in place closed (or its record could not be read): nothing more is read for it.
+  const recordDialog = record.model.dialog
+  const recordStatus = record.model.loaded.status
+  useEffect(() => {
+    if (!verbTarget || pendingVerb) return
+    if (recordDialog === null && recordStatus !== 'loading') setVerbTarget(null)
+  }, [verbTarget, pendingVerb, recordDialog, recordStatus])
+  useEffect(() => {
+    if (verbTarget && pendingVerb && (recordStatus === 'error' || recordStatus === 'notFound' || recordStatus === 'forbidden')) {
+      setPendingVerb(null)
+      setVerbTarget(null)
+    }
+  }, [verbTarget, pendingVerb, recordStatus])
+  const catalogueDialog = catalogue.model.dialog
+  const catalogueStatus = catalogue.model.loaded.status
+  useEffect(() => {
+    if (!catalogueTarget || cataloguePending) return
+    if (catalogueDialog === null && catalogueStatus !== 'loading') setCatalogueTarget(null)
+  }, [catalogueTarget, cataloguePending, catalogueDialog, catalogueStatus])
 
   // ---- B-TH-285: ⋯ Inquiry addresses (the orders@ door's setting) and the band's line while that door is not open --------------
   const [addressesOpen, setAddressesOpen] = useState(false)
@@ -476,9 +550,9 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
   const bulkKey = useRef<string | null>(null)
   const subjectOf = (count: number) => ({ key: 'bulk.subject', params: { count } })
   const readBulkPeople = useCallback(
-    (inquiryIds: readonly string[]) => {
+    (inquiryIds: readonly string[], preview?: BulkPreview) => {
       if (!companyId) return
-      setBulk({ kind: 'assign', ids: inquiryIds, model: { subject: subjectOf(inquiryIds.length), current: null, people: { status: 'loading' }, busy: false, notice: null, offline: false } })
+      setBulk({ kind: 'assign', ids: inquiryIds, model: { subject: subjectOf(inquiryIds.length), current: null, people: { status: 'loading' }, busy: false, notice: null, offline: false, ...(preview ? { preview } : {}) } })
       listAssignees(api, companyId, null)
         .then((value) => setBulk((now) => (now?.kind === 'assign' ? { ...now, model: { ...now.model, people: { status: 'ready', value } } } : now)))
         .catch((error: unknown) => setBulk((now) => (now?.kind === 'assign' ? { ...now, model: { ...now.model, people: { status: 'error', problem: readProblem(error) } } } : now)))
@@ -490,7 +564,9 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
   const bulkFailed = (error: unknown) => {
     bulkKey.current = null
     const problem = writeProblem(error)
-    setBulk((now) => (now ? ({ ...now, model: { ...now.model, busy: false, notice: { key: problem.key, params: problem.params, tone: 'danger' } } } as BulkDialog) : now))
+    // F-CQ-203 (Q4-B4): a refusal names the requests it was about (`body/items/<i>`), never "some of these".
+    const lines = bulk ? bulkRefusalsOf(error, itemsOf(bulk.ids), list?.rows ?? []) : []
+    setBulk((now) => (now ? ({ ...now, model: { ...now.model, busy: false, notice: { key: problem.key, params: problem.params, tone: 'danger', ...(lines.length > 0 ? { lines } : {}) } } } as BulkDialog) : now))
     if (problem.stale) void load()
   }
   const bulkAssign = async (assigneeId: string | null) => {
@@ -559,6 +635,12 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
     paneMode: paneHost ? 'host' : 'own',
     locked: !!lock,
     // ---- end F-SA-277
+    // ---- F-CQ-201 / 204: the bar's rights, the windows open now (the loop, Add task, a row's own window in place)
+    barRights: { manage: can.manage, tasks: session.permissions.includes('tasks.manage') },
+    many: many.model,
+    tasks: tasks.model,
+    verb: paneHost && verbTarget ? record.model : null,
+    catalogueVerb: paneHost && catalogueTarget ? catalogue.model : null,
     // ---- F-CQ-103 / F-CQ-104: the host's face (its kinds, its door's row, the order and whether it is held, columns by its room)
     ...(kinds ? { kinds } : {}),
     ...(hostTile ? { homeTile: hostTile } : {}),
@@ -612,14 +694,31 @@ export function useInquiriesList(host: InquiriesListHost): { model: InquiriesMod
       onCancelClose: record.onCancelClose,
     },
     onRowVerb,
-    onBulk: (kind, inquiryIds) => {
+    onCatalogueVerb, // F-CQ-204
+    onBulk: (kind, inquiryIds, preview) => {
       bulkKey.current = null
-      if (kind === 'assign') readBulkPeople(inquiryIds)
-      else setBulk({ kind: 'decline', ids: inquiryIds, model: { subject: subjectOf(inquiryIds.length), draft: emptyDecline, message: { to: null, held: { key: 'decline.message.many' } }, busy: false, notice: null, offline: false } })
+      if (kind === 'assign') readBulkPeople(inquiryIds, preview)
+      // F-CQ-203 (Q4-B5): the true words — nothing goes with it, and each request from the portal tells its customer it was declined.
+      else {
+        const portal = (list?.rows ?? []).filter((row) => inquiryIds.includes(row.id) && row.request?.source === 'PORTAL').length
+        setBulk({ kind: 'decline', ids: inquiryIds, model: { subject: subjectOf(inquiryIds.length), draft: emptyDecline, message: { to: null, held: { key: 'decline.message.many', params: { portal, count: inquiryIds.length, customer: host.customerName ?? '' } } }, busy: false, notice: null, offline: false, ...(preview ? { preview } : {}) } })
+      }
     },
+    // ---- F-CQ-201 / 203: the bar's act over the ticked rows (Assign / Decline: the all-or-none windows with their plan; the loops; tasks)
+    onBarAct: (kind: IncomingActKind, picked: readonly IncomingRow[]) => {
+      const open = openRequests(picked)
+      const preview: BulkPreview = { runs: open.length, others: picked.length - open.length }
+      if (kind === 'assign' || kind === 'decline') return actions.onBulk?.(kind, open.map((row) => row.id), preview)
+      if (kind === 'addTask') return openTasks(picked)
+      const records = picked.map(recordOf)
+      many.open(incomingActOf(kind, api, records), records)
+    },
+    many: many.actions,
+    tasks: { onSend: tasks.onSend, onRetryPeople: tasks.onRetryPeople, onClose: tasks.onClose },
+    // ---- end F-CQ-201 / 203
     bulk: {
       onAssign: (assigneeId) => void bulkAssign(assigneeId),
-      onRetryPeople: () => bulk && readBulkPeople(bulk.ids),
+      onRetryPeople: () => bulk && readBulkPeople(bulk.ids, bulk.model.preview),
       onDecline: (patch) => setBulk((now) => (now?.kind === 'decline' ? { ...now, model: { ...now.model, draft: { ...now.model.draft, ...patch } } } : now)),
       onSubmit: () => void bulkDecline(),
       onClose: () => setBulk(null),

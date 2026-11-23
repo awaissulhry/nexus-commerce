@@ -78,8 +78,8 @@ function BandView({ model, actions }: { model: BeforeOrderBandModel; actions?: B
     return (
       <Link
         href={model.hrefs[door.group]}
-        // A door of this tab replaces the address (Back leaves the page); the drafts' door opens their home (Work) as a step.
-        replace={door.group !== 'WRITING'}
+        // A door of this tab replaces the address (Back leaves the page); F-CQ-205: the drafts' door too (their section is here).
+        replace
         scroll={false}
         className={`fw-bo-door${quiet ? ' is-closed' : ''}${door.active ? ' is-active' : ''}${door.count === 0 ? ' is-zero' : ''}`}
         aria-current={door.active ? 'true' : undefined}

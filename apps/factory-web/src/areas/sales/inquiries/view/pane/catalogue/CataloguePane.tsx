@@ -287,7 +287,8 @@ function Loaded({ model, actions, thread, row, nav, onClose, onNext, companyName
 }
 
 /** Accept as order (the promise date, a price per line with the price grain), Accept as quote, Refuse (the words the customer reads). */
-function CatalogueDialogs({ model, actions, record }: { model: CatalogueModel; actions?: CatalogueActions; record: CatalogueRecord }) {
+/** F-CQ-204: exported — the portal order's own windows (Accept as order / quote, Refuse) open on a host's row too, never a copy. */
+export function CatalogueDialogs({ model, actions, record }: { model: CatalogueModel; actions?: CatalogueActions; record: CatalogueRecord }) {
   const { t, say } = useWords()
   const dialog = model.dialog
   if (!dialog) return null
