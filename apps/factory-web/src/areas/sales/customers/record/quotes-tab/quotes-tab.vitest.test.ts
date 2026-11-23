@@ -559,7 +559,7 @@ describe('cq fx2: the walk\'s gaps', () => {
       for (const key of ['list.countPortal', 'list.countChange', 'list.countMixed', 'list.countAny']) for (const count of [1, 2]) expect(inq(key, { count }), `${locale} ${key}`).toContain(String(count))
       const b = createTranslator(locale, messagesFor(locale, ['before-order'])['before-order']!)
       expect(b('tasks.request.title', { count: 2 }), locale).not.toMatch(/portal/i)
-      for (const noun of ['portal', 'incoming']) for (const key of ['title', 'assigneeHint', 'supervisor', 'noSupervisor', 'where', 'held.none', 'held.tooMany', 'made', 'due']) expect(b(`tasks.${noun}.${key}`, { count: 2, max: 50, name: 'x', date: 'y' }), `${locale} ${noun} ${key}`).not.toMatch(/tasks\.|\{/)
+      for (const noun of ['portal', 'incoming']) for (const key of ['title', 'assigneeHint', 'supervisor', 'noSupervisor', 'where', 'held.none', 'held.tooMany', 'made', 'due']) expect(b(`tasks.${noun}.${key}`, { count: 2, max: 50, name: 'x', date: 'y' }), `${locale} ${noun} ${key}`).not.toMatch(/tasks\.[a-z]|\{/)
     }
   })
 

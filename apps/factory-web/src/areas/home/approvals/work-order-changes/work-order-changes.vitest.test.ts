@@ -377,7 +377,8 @@ describe('Home › Approvals: the row "Work order change · WO-…" opens the wi
     const read = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8')
     const page = read('../Approvals.tsx')
     expect(page).toContain("type.startsWith('work_order_change.')")
-    expect(page).toContain('probeOpen(api, openId, { tasks: can.tasks, requests: can.requests, changes: can.changes })')
+    // cq fx2 (W-10): with the request inbox's kind in the address no engine task is probed (no 404 first); requests and changes as before.
+    expect(page).toContain('probeOpen(api, openId, { tasks: can.tasks && controls.kind !== REQUEST_INBOX_KIND, requests: can.requests, changes: can.changes })')
     expect(page).toContain("openId: target === 'change' ? openId : null")
     expect(read('../requests/use-request-review.ts')).toContain('await getWorkOrderChange(api, id)')
     const inboxView = read('../view/InboxView.tsx')

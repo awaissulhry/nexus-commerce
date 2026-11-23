@@ -697,7 +697,8 @@ describe('F-OP-203 — the order dock, the customer dock and the work order’s 
 
   it('the hosts keep their shape: <ThreadPick …>{thread}</ThreadPick>, the same props as before', () => {
     expect(order).toMatch(/<ThreadPick label=\{t\('record\.dock\.label'\)\} choices=\{choices\} value=\{choiceOfScope\(scope\)\} onPick=\{[^}]*\} extra=\{extra\}>\s*\{shown\}\s*<\/ThreadPick>/)
-    expect(customer).toContain("<ThreadPick label={t('customers.work.dock.label')} choices={choices} value={scope} onPick={dock.onScope} note={dock.draftKept ? t('customers.work.dock.draftKept', { record: dock.draftKept }) : null}>")
+    // cq fx3 (F-CQ-305, W2-3): the customer dock's pick keeps its five props and gains the `extra` slot (the "Came from / Became" line).
+    expect(customer).toMatch(/<ThreadPick\s+label=\{t\('customers\.work\.dock\.label'\)\}\s+choices=\{choices\}\s+value=\{scope\}\s+onPick=\{dock\.onScope\}\s+note=\{dock\.draftKept \? t\('customers\.work\.dock\.draftKept', \{ record: dock\.draftKept \}\) : null\}[\s\S]*?extra=\{/)
     expect(workOrder).toMatch(/<ThreadPick label=\{t\('thread\.pickLabel'\)\} choices=\{threads\} value=\{pick\} onPick=\{onPick\}>\s*\{children\}\s*<\/ThreadPick>/)
     expect(workOrder).toContain('export function WorkOrderThreads({ choices, pick, onPick, children }: { choices: readonly OrderThreadChoice[]; pick: OrderFilesPick; onPick?: (pick: OrderFilesPick) => void; children: ReactNode })')
   })
