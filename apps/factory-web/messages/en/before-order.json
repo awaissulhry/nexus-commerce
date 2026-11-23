@@ -12,6 +12,7 @@
     "newQuoteShort": "New quote…",
     "segTitle": "Show the {count} in “{group}” · waits on {who}",
     "segTitleClosed": "Show the {count} in “{group}”",
+    "waitsOn": "waits on {who}",
     "who": {
       "us": "us",
       "customer": "the customer",
@@ -35,7 +36,6 @@
   },
   "door": {
     "showAll": "Show everything ({count})",
-    "close": "Show everything, not only “{group}”",
     "why": {
       "WRITING": "drafts in the customer’s portal: read only, never counted as waiting on us",
       "TO_ANSWER": "requests New or In progress, and portal orders sent: they wait on us",

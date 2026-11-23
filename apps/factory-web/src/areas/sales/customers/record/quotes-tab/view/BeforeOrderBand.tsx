@@ -1,13 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { X } from 'lucide-react'
 import { GROUP_WAITS_ON, type BeforeOrderGroup } from '@nexus/factory-domain/sales/before-order/groups'
-import { Button, InfoTip } from '@nexus/ui/primitives'
+import { Button } from '@nexus/ui/primitives'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../../record-panels/i18n'
 import { CustomerBand } from '../../band/CustomerBand' // F-CQ-B: the customer page's ONE band part
 import type { BandTile } from '../../band/customer-band'
+// F-CQ-B fx1 (walk B-02, B-03): the open door is drawn by the Orders sheet's own chips part (the same chip + why as the Work tab's).
+import { SheetChips } from '../../../../orders/list/sheet/parts'
+import { NAMESPACE as SHEET_NS } from '../../../../orders/list/sheet/model'
 import type { Band, BandDoor, Door } from '../band'
 import '../quotes-tab.css'
 
@@ -26,8 +28,6 @@ export interface BeforeOrderBandModel {
   /** The door the lists show, its count (the band's own number). */
   readonly door: Door | null
   readonly doorCount: number | null
-  /** The address without a door (✕, "Show everything"). */
-  readonly everything: string
   /** Products › Samples narrowed to the customer (Overview's door), when the line shows. */
   readonly samplesHref: string | null
   /** The band's own room in px (null until measured: the full New words). */
@@ -50,7 +50,8 @@ export interface BeforeOrderBandActions {
  * F-CQ-101 (customer page › Quotes & incoming, 10-design §2; settles C25, C26, C31): the band "Before an order · <customer>" — the
  * head row (the title, New request / New quote for <customer>… by right), the live groups in life order as equal doors (the two that
  * wait on us carry the warning dot when > 0, said in words in the tip), the closed three apart and quiet ("Closed:"), the ⓘ; the
- * sample rounds' door; the open door's line (its group, its count, why it holds what it holds, "Show everything", ✕).
+ * sample rounds' door; the open door (F-CQ-B fx1: the Orders sheet's own chip — its group, ✕ for everything — and why it holds what
+ * it holds).
  *
  * F-CQ-B (band consistency, Owner 2026-11-23; band/plan.md B1–B11): drawn by the customer page's ONE band part (CustomerBand) with
  * the design system's own parts, as Sales › Orders draws its tiles: the live groups as compact filter tiles (a press: the host's ONE
@@ -59,7 +60,7 @@ export interface BeforeOrderBandActions {
  */
 export function BeforeOrderBand({ model, actions }: { model: BeforeOrderBandModel; actions?: BeforeOrderBandActions }) {
   return (
-    <WithMessages namespaces={[BEFORE_ORDER_NS]}>
+    <WithMessages namespaces={[BEFORE_ORDER_NS, 'parties', SHEET_NS] /* F-CQ-B fx1: the ⓘ's words; the sheet's chip words */}>
       <BandView model={model} actions={actions} />
     </WithMessages>
   )
@@ -67,6 +68,8 @@ export function BeforeOrderBand({ model, actions }: { model: BeforeOrderBandMode
 
 function BandView({ model, actions }: { model: BeforeOrderBandModel; actions?: BeforeOrderBandActions }) {
   const b = useT(BEFORE_ORDER_NS)
+  const p = useT('parties')
+  const s = useT(SHEET_NS)
   const locale = useLocale()
   const { band, room, customer } = model
   const short = room !== null && (room < SHORT_NEW_BELOW.every || (locale === 'it' && room < SHORT_NEW_BELOW.it))
@@ -90,6 +93,7 @@ function BandView({ model, actions }: { model: BeforeOrderBandModel; actions?: B
       door: true,
       pressed: door.active,
       ours: door.ours,
+      oursWords: b('band.waitsOn', { who: b('band.who.us') }), // F-CQ-B fx1 (walk B-05): said on the phone too
     }
   }
   const title = `${b('band.title')} · ${customer}`
@@ -118,33 +122,9 @@ function BandView({ model, actions }: { model: BeforeOrderBandModel; actions?: B
         {b('band.samples', { count: band.samples })}
       </Link>
     ) : null
-  // B8: the open door — one quiet status line "<group> · N — <why> · Show everything (N)" and its ✕.
-  const status = model.door ? (
-    <>
-      <span className="fw-bo-doorname">
-        {label(model.door)}
-        {model.doorCount !== null ? ` · ${model.doorCount}` : ''}
-      </span>
-      <span>— {b(`door.why.${model.door}`)}</span>
-      <Link href={model.everything} replace scroll={false} className="fw-cb-link">
-        {b('door.showAll', { count: band?.total ?? 0 })}
-      </Link>
-      <Link
-        href={model.everything}
-        replace
-        scroll={false}
-        className="fw-bo-doorclose"
-        aria-label={b('door.close', { group: label(model.door) })}
-        onClick={(event) => {
-          if (event.metaKey || event.ctrlKey || !actions?.onCloseDoor) return
-          event.preventDefault()
-          actions.onCloseDoor()
-        }}
-      >
-        <X size={12} aria-hidden />
-      </Link>
-    </>
-  ) : null
+  // F-CQ-B fx1 (walk B-02, B-03): the open door as the Orders sheet draws an open view — its pressed chip with ✕ (everything again)
+  // and, beside it in quiet words, why it holds what it holds. ONE part (the sheet's SheetChips), so the ✕ never stands alone.
+  const status = model.door ? <SheetChips chips={[{ id: model.door, label: label(model.door), onClear: () => actions?.onCloseDoor?.(), note: b(`door.why.${model.door}`) }]} t={s} onClearAll={() => actions?.onCloseDoor?.()} /> : null
   // The open door that is no group of the band (Open quotes: the Work line's door): the phone's button says it with its number.
   const everything =
     model.door && band && ![...band.live, ...band.closed].some((door) => door.group === model.door)
@@ -170,7 +150,7 @@ function BandView({ model, actions }: { model: BeforeOrderBandModel; actions?: B
         closed: { word: b('band.closed'), groups: band ? band.closed.map(tileOf) : [] },
         notes: samples,
         status,
-        info: { tip: <InfoTip tip={b('band.info')} /> },
+        info: p('customers.work.band.info'), // F-CQ-B fx1 (walk B-06): the ONE ⓘ of both tabs — it opens the groups' window
         everything,
         window: {
           title,

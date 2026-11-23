@@ -6,7 +6,7 @@ import { metricKind } from '@nexus/ui/components'
 import { LOCALES } from '../../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../../lib/i18n/messages'
 import { I18nProvider } from '../../../../../lib/i18n/provider'
-import { BAND_FOLD_BELOW, foldOf, metricsOf, OURS_ACCENT, type BandTile } from './customer-band'
+import { BAND_FOLD_BELOW, foldOf, metricsOf, oursOf, OURS_ACCENT, type BandTile } from './customer-band'
 import { CustomerBand, type CustomerBandModel } from './CustomerBand'
 
 /**
@@ -42,9 +42,16 @@ describe('F-CQ-B: the groups as the design system\'s tiles', () => {
 
   it('the phone\'s ONE button: the group shown (a closed one too), else everything with its number', () => {
     const everything = { label: 'All orders of Seed Customer One', value: '14' }
-    expect(foldOf([tile('A', 2), tile('B', 1)], everything)).toEqual({ id: null, label: everything.label, value: '14' })
-    expect(foldOf([tile('A', 2), tile('B', 1, { pressed: true })], everything)).toEqual({ id: 'B', label: 'Group B', value: '1' })
+    expect(foldOf([tile('A', 2), tile('B', 1)], everything)).toEqual({ id: null, label: everything.label, value: '14', ours: null })
+    expect(foldOf([tile('A', 2), tile('B', 1, { pressed: true })], everything)).toEqual({ id: 'B', label: 'Group B', value: '1', ours: null })
     expect(BAND_FOLD_BELOW).toBe(720)
+  })
+
+  it('fx1 (walk B-05): "waits on us" in words where no tip is read — the group waits on us AND holds something', () => {
+    const words = 'waits on us'
+    expect(oursOf(tile('A', 1, { ours: true, oursWords: words }))).toBe(words)
+    expect([oursOf(tile('A', 0, { ours: true, oursWords: words })), oursOf(tile('A', null, { ours: true, oursWords: words })), oursOf(tile('A', 3, { oursWords: words }))]).toEqual([null, null, null])
+    expect(foldOf([tile('A', 2, { pressed: true, ours: true, oursWords: words })], { label: 'x', value: '2' }).ours).toBe(words)
   })
 })
 
@@ -58,7 +65,7 @@ describe('F-CQ-B: the band draws the design system\'s parts', () => {
     closed: { word: 'Closed:', groups: [tile('X', 4)] },
     notes: 'All orders: 7',
     chips: { label: 'What waits', items: [{ id: 'late', label: 'Late', count: '1', pressed: true, onPress: () => undefined }, { id: 'tasks', label: 'Open tasks', count: '0', dialog: true, rule: true, onPress: () => undefined }, { id: 'replies', label: 'Replies', count: '2' }] },
-    info: { window: 'About these numbers' },
+    info: 'About these numbers',
     everything: { label: 'All orders of Seed Customer One', value: '7' },
     window: { title: 'All orders of Seed Customer One' },
     ...over,
@@ -105,10 +112,39 @@ describe('F-CQ-B: the band draws the design system\'s parts', () => {
     expect(css).toMatch(/\.fw-cb-chips \{\s*display: flex;\s*flex-wrap: wrap;/)
   })
 
-  it('a band without chips puts its ⓘ at the end of the notes line', () => {
-    const page = html({ chips: undefined, info: { tip: createElement('span', { className: 'seed-tip' }, 'i') } })
-    expect(page).toContain('seed-tip')
-    expect(page).not.toContain('What waits')
+  it('fx1 (walk B-01, B-06): ONE ⓘ — the DS icon button that opens the window — glued to the last item of its row, never alone', () => {
+    const button = 'class="nds-btn quiet sm icon" aria-label="About these numbers" title="About these numbers" aria-haspopup="dialog"'
+    // With a chips row: in one box with the last chip.
+    const chips = html()
+    expect(chips.match(/aria-label="About these numbers"/g)?.length).toBe(1)
+    expect(chips).toMatch(/<span class="fw-cb-tail"><button[^>]*class="nds-fchip"[^>]*>(?:(?!<\/button>).)*Replies(?:(?!<\/button>).)*<\/button>|<span class="fw-cb-tail"><span class="fw-cb-fact"[^>]*>Replies/)
+    expect(chips).toContain(button)
+    // Without one (the Quotes tab): at the end of the notes line, in one box with the last closed group.
+    const notes = html({ chips: undefined })
+    expect(notes).not.toContain('What waits')
+    expect(notes).toMatch(/<span class="fw-cb-closed">.*<span class="fw-cb-tail"><button[^>]*class="nds-fchip"[^>]*>.*?Group X.*?<\/button><span class="fw-cb-info">/)
+    // No groups to show: no ⓘ (its window would be empty).
+    expect(html({ chips: undefined, groups: [], closed: { groups: [] }, state: 'reading' })).not.toContain('About these numbers')
+    const css = readFileSync(new URL('./customer-band.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-cb-tail \{\s*display: inline-flex;\s*flex: 1 0 auto;/)
+    expect(css).toMatch(/\.fw-cb-roomy \{\s*display: none;/)
+    expect(css).toMatch(/@container fw-cb \(min-width: 1040px\) \{\s*\.fw-cb-chips-w,\s*\.fw-cb-roomy \{\s*display: inline;/)
+  })
+
+  it('fx1 (walk B-05): on a phone "waits on us" is said — the fold showing such a group, and each such row of the window', () => {
+    const ours = { ours: true, oursWords: 'waits on us' }
+    // The fold (drawn on the server; the band's room shows it on a phone): the pressed group waits on us and holds 2.
+    const shown = html({ groups: [tile('A', 2, { ...ours, pressed: true }), tile('B', 0, ours)] })
+    expect(shown.match(/class="nds-pill warning has-dot"/g)?.length).toBe(1)
+    expect(shown).toContain('waits on us')
+    // A group that waits on us but holds nothing, or none shown: no mark.
+    expect(html({ groups: [tile('A', 0, { ...ours, pressed: true })] })).not.toContain('nds-pill warning has-dot')
+    expect(html({ groups: [tile('A', 2, ours)] })).not.toContain('nds-pill warning has-dot')
+    // The window (drawn once open, in the browser): its rows use the same rule and the same DS pill.
+    const part = readFileSync(new URL('./CustomerBand.tsx', import.meta.url), 'utf8')
+    const rows = part.slice(part.indexOf('const ours = oursOf(group)'))
+    expect(rows).toMatch(/\{ours && \(\s*<Pill tone="warning" dot>\s*\{ours\}/)
+    expect(part).toMatch(/\{fold\.ours && \(\s*<Pill tone="warning" dot>\s*\{fold\.ours\}/)
   })
 
   it('sized by its OWN room (a container), never the window; tokens only; no outer card; it fetches nothing', () => {
@@ -135,6 +171,9 @@ describe('F-CQ-B: both tabs draw the ONE band, their pins kept (B11)', () => {
     expect(work).toContain("groupsLabel: t('customers.work.band.pipeline'),")
     expect(work).toContain("const cancelled = picture.groups.filter((group) => group.phase === 'CANCELLED').map(tileOf)")
     expect(work).toContain('closed: { groups: cancelled },')
+    // fx1 (walk B-07): "Work orders of <customer> ›" on the notes line only from 1040 px (the window says it below), Cancelled stays.
+    expect(work).toContain('{workOrders && <span className="fw-cb-roomy">{workOrders}</span>}')
+    expect(work).toContain("info: t('customers.work.band.info'),")
     // The two doors that navigate: the host's (WorkTab: router.push), the view stays pure.
     expect(work).toContain('onPress: () => actions?.onGo?.(href, true)')
     expect(src('../view/WorkTab.tsx')).toContain('onGo: (href: string, keepScroll: boolean) => router.push(href, keepScroll ? { scroll: false } : undefined),')
@@ -147,6 +186,11 @@ describe('F-CQ-B: both tabs draw the ONE band, their pins kept (B11)', () => {
     expect(quotes).toContain("closed: { word: b('band.closed'), groups: band ? band.closed.map(tileOf) : [] },")
     expect(quotes).toContain('actions={{ onGroup: (id) => actions?.onDoor?.(id as Door) }}')
     expect(quotes).not.toContain('BAND_EDGES')
+    // fx1 (walk B-02, B-03, B-05, B-06): the open door = the Orders sheet's own chip + why; the ONE ⓘ (no InfoTip); "waits on us" words.
+    expect(quotes).toContain("<SheetChips chips={[{ id: model.door, label: label(model.door), onClear: () => actions?.onCloseDoor?.(), note: b(`door.why.${model.door}`) }]} t={s} onClearAll={() => actions?.onCloseDoor?.()} />")
+    expect(quotes).toContain("info: p('customers.work.band.info'),")
+    expect(quotes).not.toContain('InfoTip')
+    expect(quotes).toContain("oursWords: b('band.waitsOn', { who: b('band.who.us') }),")
     const hook = src('../quotes-tab/use-quotes-tab.ts')
     expect(hook).toContain('const onDoor = useCallback((each: Door) => go(hrefs[each]), [go, hrefs])')
     expect(hook.match(/router\.replace\(/g)?.length).toBe(1)

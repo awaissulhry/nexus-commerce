@@ -12,6 +12,7 @@
     "newQuoteShort": "Nuovo preventivo…",
     "segTitle": "Mostra i {count} in «{group}» · aspetta {who}",
     "segTitleClosed": "Mostra i {count} in «{group}»",
+    "waitsOn": "aspetta {who}",
     "who": {
       "us": "noi",
       "customer": "il cliente",
@@ -35,7 +36,6 @@
   },
   "door": {
     "showAll": "Mostra tutto ({count})",
-    "close": "Mostra tutto, non solo «{group}»",
     "why": {
       "WRITING": "bozze nel portale del cliente: sola lettura, mai contate come cose che toccano a noi",
       "TO_ANSWER": "richieste Nuove o In lavorazione, e ordini dal portale inviati: aspettano noi",
