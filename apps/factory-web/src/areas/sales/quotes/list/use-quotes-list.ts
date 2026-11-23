@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session' // F-SA-277
 import { useLiveChanges } from '../../../../record-panels/live'
-import { cancelQuote, createQuote, duplicateQuote, findCustomers, getParty, listQuotes, nextNumber, QUOTE_STATUSES, type ListFilter, type QuoteListRow, type QuoteStatus } from '../api'
+import { createQuote, duplicateQuote, findCustomers, getParty, listQuotes, nextNumber, QUOTE_STATUSES, type ListFilter, type QuoteListRow, type QuoteStatus } from '../api'
 // F-SA-212: the Picture cell is the ONE picture part (its batch read; #1649's browserAddress kept there).
 import { pictureReader } from '../../../../lib/record-picture/api'
 import { useDuplicate } from '../duplicate/use-duplicate'
@@ -13,6 +13,16 @@ import { abilitiesOf, filtersOfTile, grainsOf, NO_FILTERS, romeToday, tileCount,
 // F-CQ-102: the group and the order of the list (the band's doors, Most urgent first), and the urgent read's 2,000 refusal.
 import { isQuoteGroupTerm, isQuoteListSort, serverSortOf, URGENT_TOO_MANY, type QuoteGroupTerm, type QuoteListSort } from '../model'
 import { isApiError, issuePath } from '../../../../lib/api/errors'
+// ---- F-CQ-201 / 202 / 204 (customer page › Quotes & incoming): the bar's loops (the ONE many-acts window), Add task to N (the ONE
+// batch task window), the quote's own small windows on a row (in place).
+import { formatDate } from '../../../../lib/i18n/format'
+import { useLocale } from '../../../../lib/i18n/provider'
+import { useManyAct } from '../../_shared/many-acts/use-many-act'
+import { useTaskBatch } from '../../_shared/many-acts/use-task-batch'
+import { quoteActOf } from './acts'
+import { quoteRecordOf, quoteRightsOf, type QuoteActKind, type QuoteRecord } from './bar'
+import { useQuoteDialog } from '../record/use-quote-dialog'
+import type { QuoteDialog } from '../record/record-model'
 // F-SA-224: the one customer filter of the Sales lists (`?party=`; names only: Quotes has no count read per customer).
 import { partyOfAddress, type SwitcherState } from '../../_shared/customer-switcher/model'
 import type { PartyRow } from '../api'
@@ -86,6 +96,9 @@ export interface QuotesListHost {
 }
 
 type Lock = Pick<QuotesListHost, 'locked' | 'defaultGroup' | 'defaultSort'> // F-CQ-102: + the host's defaults
+
+/** F-CQ-204: a row's act — one of the quote's own windows, or a loop / Add task on that one quote. */
+export type QuoteRowAct = Extract<QuoteDialog, 'ask' | 'approve' | 'reject' | 'cancel' | 'revise'> | 'makeOrders' | 'addTask'
 
 const TILE_READS: Record<QuoteTile, { status: QuoteStatus; mine?: boolean }> = {
   myDrafts: { status: 'DRAFT', mine: true },
@@ -222,7 +235,6 @@ export function useQuotesList(host: QuotesListHost): { model: QuotesListViewMode
   const [tiles, setTiles] = useState<Record<QuoteTile, TileCount>>(() => Object.fromEntries(Object.keys(TILE_READS).map((tile) => [tile, { count: null, more: false }])) as Record<QuoteTile, TileCount>)
   const [updates, setUpdates] = useState(0)
   const [notice, setNotice] = useState<QuotesListViewModel['notice']>(null)
-  const [busy, setBusy] = useState(false)
   // F-SA-277: `?new=1` (the palette's "New quote") is the page's own term; a list in memory never reads the address.
   const [newQuote, setNewQuote] = useState<NewQuoteModel | null>(!memory && params?.get('new') === '1' && can.manage ? emptyNew(session.companies, companyId) : null)
   const filtersRef = useRef(filters)
@@ -445,7 +457,6 @@ export function useQuotesList(host: QuotesListHost): { model: QuotesListViewMode
     updates,
     newQuote: newQuote ? { ...newQuote, newFrom: newFrom.model, newFromHeld: newFrom.held } : null,
     notice,
-    busy,
     duplicate: duplicate.model,
     pageLinks: { prefix, promiseDates: session.permissions.includes('planning.promise.view') },
     embedded: !!host.embedded, // F-SA-277: the host draws what sits above the list
@@ -454,6 +465,11 @@ export function useQuotesList(host: QuotesListHost): { model: QuotesListViewMode
     room: host.room ?? null,
     customerName: host.customerName ?? null,
     groupLabel: host.groupLabel ?? null,
+    // ---- F-CQ-201 / 202 / 204: the bar's rights (each act its own), the windows open now
+    barRights: quoteRightsOf(session.permissions, can, grains),
+    many: many.model,
+    tasks: tasks.model,
+    quoteDialog: quoteDialog.open,
     // ---- B-TH-257
     unread: readsThreads ? unread : null,
     readsRequests: session.permissions.includes('sales.inquiries.view'),
@@ -462,28 +478,52 @@ export function useQuotesList(host: QuotesListHost): { model: QuotesListViewMode
     switcher: lock ? null : { state: switcherState, query: customerQuery, searching: customerQuery.trim() !== customerSearched, partyName: chosen ? (inRows ?? (chosenName?.id === chosen ? chosenName.name : undefined)) : undefined },
   }
 
-  const cancelMany = async (ids: readonly string[], reason: string): Promise<boolean> => {
-    const chosen = (rows.items ?? []).filter((row) => ids.includes(row.id))
-    setBusy(true)
-    setNotice(null)
-    let done = 0
-    for (const row of chosen) {
-      try {
-        // One by one, each with the version it was read with: a quote moved meanwhile is refused, never overwritten.
-        await cancelQuote(api, { id: row.id, version: row.version }, reason)
-        done++
-      } catch {
-        // Counted below; the list is read again.
-      }
-    }
-    setBusy(false)
-    const failed = chosen.length - done
-    setNotice(failed === 0 ? { key: 'list.bulk.cancelled', tone: 'success', params: { count: done } } : { key: 'list.bulk.cancelPartly', tone: 'warning', params: { done, failed } })
+  // ---- F-CQ-201 / 202 / 204: the bar's loops, Add task to N, the quote's own windows on a row. Each run ends with the list read again;
+  // a receipt's name docks the quote's thread on a host that docks (the customer's tab), else opens the quote.
+  const locale = useLocale()
+  const rowsRef = useRef(rows.items)
+  rowsRef.current = rows.items
+  const readAgain = useCallback(() => {
     setUpdates(0)
     void load()
-    void loadTiles()
-    return failed === 0
+  }, [load])
+  const many = useManyAct<QuoteRecord>({
+    onDone: readAgain,
+    rowOf: (id) => {
+      const row = (rowsRef.current ?? []).find((entry) => entry.id === id)
+      return row ? quoteRecordOf(row, prefix) : undefined
+    },
+    ...(host.onRowClick
+      ? {
+          onName: (id: string) => {
+            const row = (rowsRef.current ?? []).find((entry) => entry.id === id)
+            if (row) host.onRowClick?.(row, false)
+          },
+        }
+      : {}),
+  })
+  const tasks = useTaskBatch(api)
+  const quoteDialog = useQuoteDialog({
+    api,
+    me: session.user.id,
+    can,
+    grains,
+    onDone: (done) => {
+      setNotice(done)
+      readAgain()
+    },
+  })
+  const day = (date: string) => formatDate(`${date}T12:00:00Z`, { locale })
+  const onBarAct = (kind: QuoteActKind, picked: readonly QuoteListRow[]) => {
+    if (kind === 'addTask') return tasks.open(picked.map((row) => ({ type: 'Quote', id: row.id, label: row.number, supervisor: null })))
+    const records = picked.map((row) => quoteRecordOf(row, prefix))
+    many.open(quoteActOf(kind, api, records, day), records)
   }
+  const onRowAct = (row: QuoteListRow, act: QuoteRowAct) => {
+    if (act === 'addTask' || act === 'makeOrders') return onBarAct(act, [row])
+    quoteDialog.openOn(row.id, act)
+  }
+  // ---- end F-CQ-201 / 202 / 204
 
   // F-SA-212: a page's pictures in ONE call (never the original); none yet or out of reach: the placeholder.
   const readPictures = useMemo(() => pictureReader(api), [api])
@@ -532,7 +572,12 @@ export function useQuotesList(host: QuotesListHost): { model: QuotesListViewMode
     onOpen: (id) => router.push(`${prefix}/sales/quotes/${id}`),
     // F-SA-277: the rest of a row (the view's row click once it names this action; until then its click is onOpen's).
     onOpenRow: openRow,
-    onCancelMany: cancelMany,
+    // F-CQ-201 / 202 / 204
+    onBarAct,
+    onRowAct,
+    many: many.actions,
+    tasks: { onSend: tasks.onSend, onRetryPeople: tasks.onRetryPeople, onClose: tasks.onClose },
+    quoteDialog: quoteDialog.actions,
     readPictures, // F-SA-212
     ...duplicate.actions,
     onDuplicateStart: (row) => duplicate.open({ id: row.id, number: row.number, partyId: row.partyId, partyName: row.partyName, revision: row.revision, versions: [] }),

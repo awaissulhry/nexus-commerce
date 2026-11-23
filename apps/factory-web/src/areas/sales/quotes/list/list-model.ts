@@ -12,6 +12,14 @@ import type { UnreadMap } from '../../../../lib/last-message-cell/model'
 // F-SA-212: the Picture column is the ONE picture part (its batch read).
 import type { ReadPictures } from '../../../../lib/record-picture/cache'
 import type { SwitcherState } from '../../_shared/customer-switcher/model' // F-SA-224
+// ---- F-CQ-201 / 202 / 204: the bar's rights, the many-acts window, Add task to N, the quote's own windows on a row
+import type { QuoteBarRights, QuoteActKind } from './bar'
+import type { QuoteRowAct } from './use-quotes-list'
+import type { ManyActActions, ManyActModel } from '../../_shared/many-acts/use-many-act'
+import type { TaskBatchModel } from '../../_shared/many-acts/use-task-batch'
+import type { QuoteDialogOpen } from '../record/use-quote-dialog'
+import type { QuoteDialogsActions } from '../record/view/Dialogs'
+import type { BatchAnswer, BatchAssignee, TaskDraft } from '../../../../record-panels/tasks/model'
 
 /** The quotes list's view model (SCR-034; design sales.quotes): the container (QuotesPage.tsx) fills it. */
 
@@ -66,8 +74,6 @@ export interface QuotesListViewModel {
   updates: number
   newQuote: NewQuoteModel | null
   notice: { key: string; tone: Tone; params?: Record<string, string | number> } | null
-  /** A bulk action runs (the dialog's button is held meanwhile). */
-  busy?: boolean
   /** B-W2a-49: Duplicate a quote (row ⋯); null: closed. */
   duplicate?: DuplicateModel | null
   /** B-W2b-316: the page's ⋯ (Quote templates, Planning › Promise dates). */
@@ -102,6 +108,16 @@ export interface QuotesListViewModel {
   groupLabel?: string | null
   /** The phone card's door to the row's thread (its words; with `active`); absent: none. */
   cardDoor?: string | null
+  // ---- F-CQ-201 / 202 / 204
+  /** What the bar reads of the reader (each act its OWN right); absent: no bar acts but the frame's Export N (a design case). */
+  barRights?: QuoteBarRights
+  /** The many-acts window open now (Cancel N, Ask for approval on N, Make the orders for N, Send a new link to N), or null. */
+  many?: ManyActModel | null
+  /** "Add task to N…" open now (the ONE batch task window), or null. */
+  tasks?: TaskBatchModel | null
+  /** One of the quote's own windows open on a row (the quote read once), or null. */
+  quoteDialog?: QuoteDialogOpen | null
+  // ---- end F-CQ-201 / 202 / 204
   // ---- end F-CQ-102 / F-CQ-104
 }
 
@@ -135,9 +151,13 @@ export interface QuotesListActions extends DuplicateActions, NewFromActions {
   onDismissNotice?: () => void
   /** Enter on a row: open its record. */
   onOpen?: (id: string) => void
-  /** The selected rows as a CSV file (the columns this person sees). */
-  /** Cancel the selected quotes, one by one with each one's version; resolves true when all were cancelled. */
-  onCancelMany?: (ids: readonly string[], reason: string) => Promise<boolean>
+  // ---- F-CQ-201 / 202 / 204: the bar's act over the ticked quotes, a row's act, the windows' own actions
+  onBarAct?: (kind: QuoteActKind, picked: readonly QuoteListRow[]) => void
+  onRowAct?: (row: QuoteListRow, act: QuoteRowAct) => void
+  many?: ManyActActions
+  tasks?: { readonly onSend: (draft: TaskDraft, assignee: BatchAssignee) => Promise<BatchAnswer | null>; readonly onRetryPeople: () => void; readonly onClose: () => void }
+  quoteDialog?: QuoteDialogsActions
+  // ---- end F-CQ-201 / 202 / 204
   /** F-SA-212: the page's pictures in ONE batch read (POST /sales/quotes/pictures through lib/record-picture). */
   readPictures?: ReadPictures
 }
