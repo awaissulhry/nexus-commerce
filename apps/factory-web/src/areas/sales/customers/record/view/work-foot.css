@@ -1,12 +1,32 @@
 /* F-CW-302 (10-design §3.6) — the Work tab's foot: one quiet line under the sheet (the order the rows stand in, the customer's urgency
    state). Layout only; design-system tokens only (no raw colour). */
 .fw-cw-foot {
-  margin: var(--nds-space-4) 0 0;
-  font-size: var(--nds-font-size-sm);
-  color: var(--nds-text-2);
+  /* cw fx5 (walk W-15): the quiet foot look — small and muted, set in from the card's edge like the card's own foot strip above it
+     (the list frame's foot takes no host content: the line stays under the card). */
+  margin: var(--nds-space-6) 0 0;
+  padding: 0 var(--nds-space-12);
+  font-size: var(--nds-font-size-xs);
+  line-height: 1.45;
+  color: var(--nds-text-muted);
   min-width: 0;
 }
 .fw-cw-foot b {
-  color: var(--nds-text);
+  color: var(--nds-text-2);
   font-weight: var(--nds-font-weight-semibold);
+}
+/* cw fx5 (walk W-24): the foot's one door ("Portal settings ›") is the app's quiet link (the band's notes' look), never a bare
+   underlined browser link. */
+.fw-cw-foot a {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  text-decoration: none;
+  border-radius: var(--nds-radius-sm);
+  white-space: nowrap;
+}
+.fw-cw-foot a:hover {
+  text-decoration: underline;
+}
+.fw-cw-foot a:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
 }
