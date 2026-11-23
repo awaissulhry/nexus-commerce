@@ -9,7 +9,7 @@ import { lockedEntry } from '../../orders/list/use-orders-sheet'
 import { phasePhrase } from '../../orders/list/sheet/model'
 import { PHASE_ICON } from '../../orders/list/sheet/phase-icon'
 import { extraChips } from '../../orders/list/view/OrdersListView'
-import { BEFORE_GROUPS, beforeLineOf, beforeOrderTouched, NO_BEFORE_ORDER, openQuotesOf, quotesGroupDoor, readBeforeOrder, toAnswerOf } from './before-order'
+import { BEFORE_GROUPS, beforeLineOf, beforeOrderOf, beforeOrderTouched, NO_BEFORE_ORDER, quotesGroupDoor, readBeforeOrder } from './before-order'
 import { IN_PRODUCTION_VIEW, phaseCountOf, phaseDoor, sourcesTouched, workEntry, type Read, type WorkReads } from './use-customer-work'
 import { bandOf, chipsOf, groupShown, valueOf, whysOf } from './work-band'
 
@@ -246,70 +246,68 @@ describe('F-CW-101: what waits — today\'s six facts as chips (the same reads, 
   })
 })
 
-describe('F-CW-101: "Before an order" — ONE file for the rule, the reads and the doors (S27)', () => {
-  const RIGHTS = { orders: true, inquiries: true, quotes: true }
-  const quote = (status: string) => ({ status }) as never
-  const quotes = (statuses: readonly string[], more = false) => ({ items: statuses.map(quote), problem: null, more })
-
-  it('open quotes: the record\'s quotes in DRAFT / PENDING_APPROVAL / APPROVED / SENT; not counted while read or when more exist', () => {
-    expect(openQuotesOf(quotes(['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'SENT', 'ACCEPTED', 'DECLINED', 'EXPIRED', 'CANCELLED']))).toBe(4)
-    expect(openQuotesOf(quotes([]))).toBe(0)
-    expect(openQuotesOf(quotes(['SENT'], true))).toBeNull()
-    expect(openQuotesOf({ items: null, problem: null })).toBeNull()
+describe('F-CW-101: "Before an order" — ONE file for the read, its mapping and the doors (S27, S27b)', () => {
+  /** The API's answer for one customer (made up), as the shared contract names it: every count `int | null`. */
+  const answer = (over: { groups?: Partial<Record<'WRITING' | 'TO_ANSWER' | 'ORDER_WAITS', number | null>>; openQuotes?: number | null } = {}) => ({
+    partyId: ALPHA,
+    groups: { WRITING: 2, TO_ANSWER: 1, PREPARING: 0, APPROVAL: 0, WAITING_CUSTOMER: 3, ORDER_WAITS: 0, WON: 4, MOVED: 0, LOST: 1, ...over.groups },
+    openQuotes: 'openQuotes' in over ? (over.openQuotes ?? null) : 3,
+    waitsOnUs: 1,
+    byKind: {
+      quotes: { PREPARING: 0, APPROVAL: 0, WAITING_CUSTOMER: 3, ORDER_WAITS: 0, WON: 4, LOST: 1 },
+      requests: { TO_ANSWER: 1, WAITING_CUSTOMER: 0, WON: 0, MOVED: 0, LOST: 0 },
+      portalOrders: { TO_ANSWER: 0, WON: 0, MOVED: 0, LOST: 0 },
+      drafts: 2,
+    },
+    sampleRounds: null,
+    asOf: '2026-11-23T09:00:00.000Z',
   })
-
-  it('to answer: requests NEW or ASSIGNED, plus portal orders SENT for a reader of orders — never a change request, never the tile "Waiting on us"', () => {
-    const rows = [
-      { kind: 'REQUEST', state: 'NEW' },
-      { kind: 'REQUEST', state: 'ASSIGNED' },
-      { kind: 'REQUEST', state: 'NEED_INFO' }, // waits on the customer
-      { kind: 'CATALOGUE_ORDER', state: 'SENT' },
-      { kind: 'CHANGE_REQUEST', state: 'OPEN' }, // the strip's "Requests to answer": a request on an ORDER
-    ]
-    expect(toAnswerOf(rows, { orders: true })).toBe(3)
-    expect(toAnswerOf(rows, { orders: false })).toBe(2)
-    expect(toAnswerOf([], { orders: true })).toBe(0)
-  })
-
-  /** A made-up API: the two interim reads, counted. */
-  const apiOf = (answers: { drafts?: number | Error; incoming?: { rows: Array<{ kind: string; state: string }>; next: string | null } | Error }) => {
+  /** A made-up API: the ONE read, parsed with the schema the caller hands (the shared contract). */
+  const apiOf = (body: unknown) => {
     const calls: string[] = []
     const api = {
-      get: async (path: string, options: { query?: Record<string, unknown> }) => {
-        calls.push(`${path}?${new URLSearchParams(Object.entries(options.query ?? {}).filter(([, value]) => value !== undefined).map(([name, value]) => [name, String(value)])).toString()}`)
-        if (path === '/sales/order-requests') {
-          if (answers.drafts instanceof Error) throw answers.drafts
-          return { requests: Array.from({ length: answers.drafts ?? 0 }, () => ({})) }
-        }
-        if (answers.incoming instanceof Error) throw answers.incoming
-        return { rows: answers.incoming?.rows ?? [], counts: {}, kinds: { REQUEST: null, CATALOGUE_ORDER: null, CHANGE_REQUEST: null }, next: answers.incoming?.next ?? null, complete: true }
+      get: async (path: string, options: { query?: Record<string, unknown>; schema: { parse: (value: unknown) => unknown } }) => {
+        calls.push(`${path}?${new URLSearchParams(Object.entries(options.query ?? {}).map(([name, value]) => [name, String(value)])).toString()}`)
+        if (body instanceof Error) throw body
+        return options.schema.parse(body)
       },
     }
     return { api: api as never, calls }
   }
 
-  it('each part reads its OWN right: a part without it is left out (null), and its read is never made', async () => {
-    const { api, calls } = apiOf({ drafts: 2, incoming: { rows: [{ kind: 'REQUEST', state: 'NEW' }, { kind: 'CATALOGUE_ORDER', state: 'SENT' }], next: null } })
-    expect(await readBeforeOrder(api, ALPHA, RIGHTS, quotes(['SENT', 'DRAFT', 'ACCEPTED']))).toEqual({ drafts: 2, toAnswer: 2, openQuotes: 2, orderWaits: null })
-    expect(calls).toEqual([`/sales/order-requests?status=DRAFT&partyId=${ALPHA}`, `/sales/incoming?tile=OPEN&partyId=${ALPHA}&limit=200`])
-    // The final source is NOT called before it is on main (a 404 would be noise).
-    expect(calls.some((call) => call.includes('before-order'))).toBe(false)
-    // No sales.inquiries.view: "to answer" is left out whole (the Incoming list is the only place that shows those rows).
-    const noInquiries = apiOf({ drafts: 2, incoming: { rows: [{ kind: 'CATALOGUE_ORDER', state: 'SENT' }], next: null } })
-    expect(await readBeforeOrder(noInquiries.api, ALPHA, { ...RIGHTS, inquiries: false }, quotes(['SENT']))).toEqual({ drafts: 2, toAnswer: null, openQuotes: 1, orderWaits: null })
-    expect(noInquiries.calls).toEqual([`/sales/order-requests?status=DRAFT&partyId=${ALPHA}`])
-    // No orders.view: no drafts, and the portal orders sent are not counted beside the requests.
-    const noOrders = apiOf({ drafts: 2, incoming: { rows: [{ kind: 'REQUEST', state: 'NEW' }, { kind: 'CATALOGUE_ORDER', state: 'SENT' }], next: null } })
-    expect(await readBeforeOrder(noOrders.api, ALPHA, { ...RIGHTS, orders: false }, quotes(['SENT']))).toEqual({ drafts: null, toAnswer: 1, openQuotes: 1, orderWaits: null })
-    // No quotes.view: no open quotes.
-    expect((await readBeforeOrder(apiOf({}).api, ALPHA, { ...RIGHTS, quotes: false }, quotes(['SENT']))).openQuotes).toBeNull()
+  it('ONE read (GET /sales/before-order/counts), parsed with the shared contract; drafts = WRITING · to answer = TO_ANSWER · open quotes = openQuotes · order waits = ORDER_WAITS', async () => {
+    const { api, calls } = apiOf(answer({ groups: { ORDER_WAITS: 1 } }))
+    expect(await readBeforeOrder(api, ALPHA)).toEqual({ drafts: 2, toAnswer: 1, openQuotes: 3, orderWaits: 1 })
+    expect(calls).toEqual([`/sales/before-order/counts?partyId=${ALPHA}`])
+    // The groups the line does not show (Preparing, Waiting for the customer, Won…) never enter it.
+    expect(beforeOrderOf(answer())).toEqual({ drafts: 2, toAnswer: 1, openQuotes: 3, orderWaits: 0 })
   })
 
-  it('never a wrong number: a failed read or more than one page of open rows leaves that part out; the others stand', async () => {
-    const failed = apiOf({ drafts: new Error('down'), incoming: { rows: [{ kind: 'REQUEST', state: 'NEW' }], next: null } })
-    expect(await readBeforeOrder(failed.api, ALPHA, RIGHTS, quotes(['SENT']))).toEqual({ drafts: null, toAnswer: 1, openQuotes: 1, orderWaits: null })
-    const capped = apiOf({ drafts: 1, incoming: { rows: [{ kind: 'REQUEST', state: 'NEW' }], next: 'cursor' } })
-    expect((await readBeforeOrder(capped.api, ALPHA, RIGHTS, quotes([]))).toAnswer).toBeNull()
+  it('a part the reader has no right for arrives null: it stays null and is LEFT OUT (never "0"); a 0 part is left out; all out → no line', () => {
+    // No right of any kind: every part null → no line at all.
+    const none = beforeOrderOf(answer({ groups: { WRITING: null, TO_ANSWER: null, ORDER_WAITS: null }, openQuotes: null }))
+    expect(none).toEqual(NO_BEFORE_ORDER)
+    expect(beforeLineOf(none, BASE)).toEqual([])
+    // Nothing before an order: every part 0 → no line.
+    expect(beforeLineOf(beforeOrderOf(answer({ groups: { WRITING: 0, TO_ANSWER: 0, ORDER_WAITS: 0 }, openQuotes: 0 })), BASE)).toEqual([])
+    // No orders.view (drafts null), nothing to answer (0), one open quote, two accepted quotes whose order waits.
+    const mixed = beforeOrderOf(answer({ groups: { WRITING: null, TO_ANSWER: 0, ORDER_WAITS: 2 }, openQuotes: 1 }))
+    expect(mixed).toEqual({ drafts: null, toAnswer: 0, openQuotes: 1, orderWaits: 2 })
+    expect(beforeLineOf(mixed, BASE).map((part) => [part.part, part.count])).toEqual([['openQuotes', 1], ['orderWaits', 2]])
+    // No quotes.view: the quotes' parts are out, the drafts and the requests stand.
+    const noQuotes = beforeOrderOf(answer({ groups: { ORDER_WAITS: null }, openQuotes: null }))
+    expect(beforeLineOf(noQuotes, BASE).map((part) => [part.part, part.count])).toEqual([['drafts', 2], ['toAnswer', 1]])
+  })
+
+  it('a read that fails (an API without the route, the network, an answer off the contract) gives no line — quiet, never an error band', async () => {
+    await expect(readBeforeOrder(apiOf(new Error('Not Found')).api, ALPHA)).rejects.toThrow()
+    await expect(readBeforeOrder(apiOf({ partyId: ALPHA, groups: { WRITING: 'two' } }).api, ALPHA)).rejects.toThrow()
+    const file = readFileSync(new URL('./before-order.ts', import.meta.url), 'utf8')
+    expect(file).toContain('() => mine === turn.current && setCounts(NO_BEFORE_ORDER),')
+    // The interim reads are gone: no drafts read on entry and no Incoming read for this line; the shape is the contract's, not ours.
+    expect(file).not.toMatch(/order-requests|\/sales\/incoming|listIncoming|listCustomerDrafts|z\.object/)
+    expect(file).toContain("from '@nexus/factory-domain/sales/before-order/contracts'")
+    expect(file).toContain("api.get('/sales/before-order/counts', { query: { partyId }, schema: beforeOrderCountsAnswer, signal })")
   })
 
   it('the line: a part left out and a part that is 0 are not there; all out → no line; the doors (final addresses)', () => {
@@ -325,12 +323,19 @@ describe('F-CW-101: "Before an order" — ONE file for the rule, the reads and t
     expect(quotesGroupDoor(BASE, 'OPEN_QUOTES')).toBe(`${BASE}?tab=quotes&group=OPEN_QUOTES`)
   })
 
-  it('counted only on the Work tab, again on a draft\'s, a request\'s or a portal order\'s change; never added into the order numbers', () => {
-    expect(beforeOrderTouched('inquiry.created')).toBe(true)
-    expect(beforeOrderTouched('portal_order_request.sent')).toBe(true)
-    expect(beforeOrderTouched('sales_order.confirmed')).toBe(false)
+  it('read only on the Work tab, again on its own records\' changes and on every event the band\'s other reads listen to; never added into the order numbers', () => {
+    // Its own records: a portal draft, a request, a portal order, a quote.
+    for (const type of ['portal_order_request.draft_changed', 'portal_order_request.sent', 'inquiry.created', 'quote.sent', 'quote.accepted']) expect(beforeOrderTouched(type), type).toBe(true)
+    // The events the strip already listens to (an order made from an accepted quote leaves "accepted, order waits").
+    for (const type of ['sales_order.confirmed', 'deposit_request.created', 'brand_production.stage_reached', 'order_change_request.created', 'thread.message_posted', 'partner_task.created', 'task.created']) {
+      expect(sourcesTouched(type).length, type).toBeGreaterThan(0)
+      expect(beforeOrderTouched(type), type).toBe(true)
+    }
+    expect(beforeOrderTouched('product.updated')).toBe(false)
     const page = readFileSync(new URL('./CustomerRecord.tsx', import.meta.url), 'utf8')
-    expect(page).toContain("const before = useBeforeOrder(partyId, tab === 'work' && can.orders, { orders: can.orders, inquiries: session.permissions.includes('sales.inquiries.view'), quotes: can.quotes }, record.model.quotes)")
+    expect(page).toContain("const before = useBeforeOrder(partyId, tab === 'work' && can.orders)")
+    const file = readFileSync(new URL('./before-order.ts', import.meta.url), 'utf8')
+    expect(file).toContain('useLiveBus({ onChange: (change) => beforeOrderTouched(change.type) && again(), onReconnect: again }, enabled)')
     // The band's order numbers come from the board alone: the line's counts never enter them.
     const band = readFileSync(new URL('./work-band.ts', import.meta.url), 'utf8')
     expect(band).not.toContain('before-order')

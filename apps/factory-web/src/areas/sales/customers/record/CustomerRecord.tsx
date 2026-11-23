@@ -94,8 +94,9 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   const customerDock = useCustomerDock(partyId, tab, record.party ? partyName(record.party) : null /* F-OF-303: Who can see… names the customer */)
   const api = useOfficeApi()
   const session = useOfficeSession()
-  // F-CW-101 (S27): the band's "Before an order" line — counted only while the Work tab is shown, each part with its OWN right.
-  const before = useBeforeOrder(partyId, tab === 'work' && can.orders, { orders: can.orders, inquiries: session.permissions.includes('sales.inquiries.view'), quotes: can.quotes }, record.model.quotes)
+  // F-CW-101 (S27, S27b): the band's "Before an order" line — ONE read, only while the Work tab is shown (the API leaves a part out
+  // for a reader without its right).
+  const before = useBeforeOrder(partyId, tab === 'work' && can.orders)
   const onPick = customerDock.onRow
   const t = useT('parties')
   const named = record.party ? { id: record.party.id, name: partyName(record.party) } : null
