@@ -6,7 +6,7 @@ import { CARD_LIMITS } from '../../../../_shared/customer-urgency/model'
 import type { OrderRow } from '../../api'
 import { urgentRuleOf } from '../../model'
 import { barHeld, NO_BAR_CAN } from './bar'
-import { askedHrefOf, rowUrgencyActs, urgencyDialogOf, urgencyHeld, urgencyTargetsOf, type UrgencyRow } from './urgency'
+import { askedHrefOf, rowUrgencyActs, urgencyDialogOf, urgencyHeld, urgencyLeftOf, urgencyTargetsOf, type UrgencyRow } from './urgency'
 
 /**
  * F-CW-302 (customer Work tab plan §4; 10-design §4, §5; lead settles S7, S14, S35) — the customer's urgency as WE steer it, on the ONE
@@ -43,6 +43,24 @@ describe('F-CW-302: the acts a row offers — the Customer card\'s own rule', ()
     expect(urgencyDialogOf('regular', picked)).toEqual({ act: 'regular', partyId: ALPHA, orders: urgencyTargetsOf('regular', picked) })
     expect(urgencyDialogOf('unlock', [row(1, state('URGENT'))])).toBeNull() // nothing to unlock: no window
     expect(urgencyDialogOf('regular', [])).toBeNull()
+  })
+
+  // F-CW-304 (10-design §6 W4): the window says which ticked orders it does not run on, each with why — never silently dropped.
+  it('"Runs on 2 · Not on 2: why is beside each": not marked urgent, not locked, no urgency that counts; one row or all taking it: nothing', () => {
+    const picked = [row(1, state('URGENT')), row(2, state('URGENT', { urgentRank: 2 })), row(3, state('SET_BACK', { locked: true })), row(4, null)]
+    expect(urgencyLeftOf('regular', picked)).toEqual([{ id: 'o3', label: 'SEED-SO-0003', why: 'notUrgent' }, { id: 'o4', label: 'SEED-SO-0004', why: 'none' }])
+    expect(urgencyLeftOf('unlock', picked)).toEqual([{ id: 'o1', label: 'SEED-SO-0001', why: 'notLocked' }, { id: 'o2', label: 'SEED-SO-0002 (PO-7)', why: 'notLocked' }, { id: 'o4', label: 'SEED-SO-0004', why: 'none' }])
+    expect(urgencyLeftOf('lock', [row(3, state('SET_BACK', { locked: true }))])).toEqual([{ id: 'o3', label: 'SEED-SO-0003', why: 'locked' }])
+    expect(urgencyLeftOf('regular', [row(1, state('URGENT'))])).toEqual([])
+    for (const locale of LOCALES) {
+      const s = createTranslator(locale, messagesFor(locale, ['orders-sheet'])['orders-sheet']!)
+      for (const key of ['urgency.left.label', 'urgency.left.notUrgent', 'urgency.left.notLocked', 'urgency.left.locked', 'urgency.left.none']) expect(s(key), `${locale} ${key}`).not.toBe(key)
+      for (const count of [1, 2]) for (const key of ['commands.runs', 'commands.notOn']) expect(s(key, { count }), `${locale} ${key}`).not.toBe(key)
+    }
+    // The shared window only gains a slot for a host's own lines: the work order's Customer card gives none (it looks as before).
+    const dialog = readFileSync(new URL('../../../../_shared/customer-urgency/view/UrgencyOverrideDialog.tsx', import.meta.url), 'utf8')
+    expect(dialog).toContain('        {above}\n        {model.problem && <Banner')
+    expect(readFileSync(new URL('../../../../production/work-orders/record/customer/view/CustomerCard.tsx', import.meta.url), 'utf8')).not.toContain('above=')
   })
 })
 
@@ -116,7 +134,7 @@ describe('F-CW-302: the sheet mounts the SHARED window — never a copy (source)
     const window = read('../view/UrgencyWindow.tsx')
     expect(window).toContain("import { UrgencyOverrideDialog } from '../../../../_shared/customer-urgency/view/UrgencyOverrideDialog'")
     expect(window).toContain("import { UrgencyOutcome } from '../../../../_shared/customer-urgency/view/UrgencyOutcome'")
-    expect(window).toContain('{model.dialog && <UrgencyOverrideDialog model={model} actions={actions} />}')
+    expect(window).toContain('{model.dialog && <UrgencyOverrideDialog model={model} actions={actions} above={<UrgencyAbove model={model} />} />}')
     expect(window).not.toMatch(/<Modal\b|<Input\b|<Checkbox\b|setBackUrgency|unlockUrgency/)
     const card = read('../../../../production/work-orders/record/customer/use-customer-card.ts')
     expect(card).toContain('const urgency = useUrgencyOverride(')
@@ -127,7 +145,7 @@ describe('F-CW-302: the sheet mounts the SHARED window — never a copy (source)
   it('hidden without production.brand.override; a fresh code by this page\'s own step-up; the orders named are read again in place', () => {
     const hook = read('../use-orders-sheet.ts')
     expect(hook).toContain("const urgencyCan = session.permissions.includes('production.brand.override')")
-    expect(hook).toContain('urgency: urgencyCan ? { ...urgency.model, can: true, stepUp: urgencyStepUp.stepUp } : null, // F-CW-302')
+    expect(hook).toContain('urgency: urgencyCan ? { ...urgency.model, can: true, stepUp: urgencyStepUp.stepUp, left: urgencyLeft /* F-CW-304 */ } : null, // F-CW-302')
     expect(hook).toContain('const urgencyStepUp = useStepUp(api)')
     expect(hook).toContain('const urgencyAgain = () => rereadInPlace(urgencyAsked.current)')
     const view = read('../view/OrdersListView.tsx')

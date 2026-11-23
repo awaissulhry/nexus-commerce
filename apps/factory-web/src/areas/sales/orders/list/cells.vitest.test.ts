@@ -826,3 +826,36 @@ describe('F-CW-303: what we asked and still wait for; the receipts\' order names
   })
 })
 // ---- end F-CW-303
+
+// ---- F-CW-304 (customer Work tab plan §4): after each act the orders it named are read again WHERE THEY STAND — rows never jump
+// under the reader (the sheet stands in "Most urgent first": a silent reload of the whole list re-sorted it); dead parts are out.
+describe('F-CW-304: rows never jump after an act; nothing unused stays (source)', () => {
+  const hook = readFileSync(new URL('./use-orders-sheet.ts', import.meta.url), 'utf8')
+  const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+
+  it('every act of the bar reads only its own orders again, by id, and puts each where it stands', () => {
+    // The ONE in-place read: by id, fifty at a time; a row that left the view is greyed until "N updates · Show" (placeRow).
+    expect(hook).toContain('listOrders(api, { ids: ids.slice(at, at + 50), production: productionShown, progress: progressShown, limit: 50 })')
+    expect(hook).toContain('for (const fresh of page.orders) placeRow(fresh.id, () => fresh, fresh.status)')
+    expect(hook).toContain('const assign = useAssignSupervisor(api, () => rereadInPlace(acted.current.assign))')
+    expect(hook).toContain('const note = useNoteDialog(api, { can: noteCan, onDone: () => rereadInPlace(acted.current.note) })')
+    expect(hook).toContain('rereadInPlace(task.records.map((record) => record.id))')
+    expect(hook).toContain('const replyMany = useReplyMany(api, session.permissions, () => rereadInPlace(acted.current.reply)')
+    expect(hook).toContain('const ship = useShipTogether(api, session.permissions, rereadInPlace)')
+    expect(hook).toContain('const urgencyAgain = () => rereadInPlace(urgencyAsked.current)')
+    // The orders are the open window's own targets.
+    expect(hook).toContain('if (assign.model) acted.current.assign = assign.model.targets.map((target) => target.orderId)')
+    expect(hook).toContain('if (note.model) acted.current.note = note.model.targets.salesOrders.map((record) => record.id)')
+    expect(hook).toContain('if (replyMany.model) acted.current.reply = replyMany.model.targets.map((target) => target.id)')
+    // No act reloads the whole list silently any more: the one silent reload left is the board's own (a live change of its counts).
+    expect(hook.match(/load\(true\)/g)).toHaveLength(1)
+    expect(hook).toContain('const rereadBoard = useCoalesced(() => void load(true), 900)')
+  })
+
+  it('dead parts are out: the toolbar link (the band holds that door) and the table-wide set (the tab\'s rooms decide)', () => {
+    const model = readFileSync(new URL('./list-model.ts', import.meta.url), 'utf8')
+    for (const source of [view, model, readFileSync(new URL('../../customers/record/view/WorkTab.tsx', import.meta.url), 'utf8')]) expect(source).not.toMatch(/toolbarLink|tableWide/)
+    expect(view).toContain("export function withPreset(column: ColDef<OrderRow>, preset: OrdersListModel['preset'] | null, wide: boolean, label?: (column: string, room: 'wider' | 'widest') => string): ColDef<OrderRow> {")
+  })
+})
+// ---- end F-CW-304

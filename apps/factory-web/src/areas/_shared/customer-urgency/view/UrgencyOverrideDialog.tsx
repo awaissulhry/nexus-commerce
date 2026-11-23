@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Lock, Unlock } from 'lucide-react'
 import { Banner, Field } from '@nexus/ui/components'
 import { Button, Checkbox, Input, Spinner } from '@nexus/ui/primitives'
@@ -17,7 +17,7 @@ const say = (t: ReturnType<typeof useT>, words: Phrase | null): string | null =>
  * reads (not for Unlock), a fresh code; no second person. Words: `production` (`customerCard.dialog.*`) — the host provides that
  * catalogue. Draws its model; the hook (use-urgency-override.ts) writes.
  */
-export function UrgencyOverrideDialog({ model, actions }: { model: UrgencyOverrideModel; actions?: UrgencyOverrideActions }) {
+export function UrgencyOverrideDialog({ model, actions, above }: { model: UrgencyOverrideModel; actions?: UrgencyOverrideActions; /** A host's own lines over the window (the Orders sheet: which ticked orders it runs on and which not); the card gives none. */ above?: ReactNode }) {
   const t = useT('production')
   const dialog = model.dialog!
   const [reason, setReason] = useState(model.draft?.reason ?? '')
@@ -53,6 +53,7 @@ export function UrgencyOverrideDialog({ model, actions }: { model: UrgencyOverri
           }
         }}
       >
+        {above}
         {model.problem && <Banner tone="danger" title={t(model.problem.key, model.problem.params)} />}
         <p>{t(`customerCard.dialog.body.${act}`)}</p>
         {dialog.act !== 'unlock' && (

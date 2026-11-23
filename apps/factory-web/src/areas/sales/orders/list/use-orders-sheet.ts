@@ -12,7 +12,7 @@ import type { StyleTile } from '../../../../lib/record-picture/styles' // F-CP-1
 import type { OrderRow } from '../api' // B-TH-245
 import { useCoalesced, useLive, useStepUp /* F-CW-302 */ } from '../hooks'
 import { useUrgencyOverride } from '../../../_shared/customer-urgency/use-urgency-override' // F-CW-302
-import { urgencyDialogOf } from './sheet/urgency' // F-CW-302
+import { urgencyDialogOf, urgencyLeftOf, type UrgencyLeft } from './sheet/urgency' // F-CW-302; F-CW-304: the orders an act leaves out
 import { boardRereadOf } from '../model' // F-SA-214
 import type { BoardLane } from '../api' // F-SA-214
 import { kindFromAddress } from '../model' // F-SA-221
@@ -641,9 +641,13 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   })
   // ---- F-SA-280: Assign supervisor… (≤ 100, production.brand.manage) and Note to N… / Ask the supervisor (≤ 100, one batch, threads.post)
   // over the ticked orders; a Send reads the rows again (their marks). The one-customer check is the bar's, before any window.
-  const assign = useAssignSupervisor(api, () => void load(true))
+  // F-CW-304: after a Send the orders the window named are read again WHERE THEY STAND (rows never jump under the reader; a row
+  // that left the view is greyed until "N updates · Show") — it was a silent reload of the whole list, which re-sorted it. The
+  // orders are the open window's own targets (kept here while it is open: its answer comes while it still shows them).
+  const acted = useRef<{ assign: readonly string[]; note: readonly string[]; reply: readonly string[] }>({ assign: [], note: [], reply: [] })
+  const assign = useAssignSupervisor(api, () => rereadInPlace(acted.current.assign))
   const noteCan = session.permissions.includes('threads.post')
-  const note = useNoteDialog(api, { can: noteCan, onDone: () => void load(true) })
+  const note = useNoteDialog(api, { can: noteCan, onDone: () => rereadInPlace(acted.current.note) })
   const pickedRows = (ids: readonly string[]) => (shownItems ?? []).filter((row) => ids.includes(row.id))
   // ---- end F-SA-280
   // ---- F-SA-281: the one New task window — on one order (a row's ⋯: its people, "Me" first) or on N orders (the selection: one task
@@ -690,7 +694,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
       if (!task) return null
       try {
         const answer = await createTasks(api, batchBody(draft, assignee, task.records), taskKey.current ?? newIdempotencyKey())
-        void load(true)
+        rereadInPlace(task.records.map((record) => record.id)) // F-CW-304: in place (it was a silent reload of the whole list)
         return answer
       } catch (error) {
         setNotice({ tone: 'danger', words: { key: readProblem(error) } })
@@ -706,7 +710,11 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   // ---- end F-SA-281
   // ---- F-SA-282: Reply to <customer> on N… — the ticked orders of one customer (the bar holds it otherwise, the API checks again);
   // a Send that posted reads the rows again (their New messages).
-  const replyMany = useReplyMany(api, session.permissions, () => void load(true))
+  const replyMany = useReplyMany(api, session.permissions, () => rereadInPlace(acted.current.reply) /* F-CW-304: in place */)
+  // F-CW-304: the orders each open window names (see `acted`).
+  if (assign.model) acted.current.assign = assign.model.targets.map((target) => target.orderId)
+  if (note.model) acted.current.note = note.model.targets.salesOrders.map((record) => record.id)
+  if (replyMany.model) acted.current.reply = replyMany.model.targets.map((target) => target.id)
   // ---- end F-SA-282
   // ---- F-CP-114 (customer page plan C2d, C3; review A3): the ONE customer's-price window, opened from a row (⋯ "Set customer's price…",
   // the Customer's price cell) for a price holder only; it reads that order's price check once. A save puts the order's new figures
@@ -759,6 +767,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   const urgencyCan = session.permissions.includes('production.brand.override')
   const urgencyStepUp = useStepUp(api)
   const urgencyAsked = useRef<readonly string[]>([])
+  const [urgencyLeft, setUrgencyLeft] = useState<readonly UrgencyLeft[]>([]) // F-CW-304: "Not on 1: why is beside each"
   const urgencyAgain = () => rereadInPlace(urgencyAsked.current)
   const urgency = useUrgencyOverride(api, urgencyStepUp.guard, urgencyAgain, urgencyAgain)
   // ---- end F-CW-302
@@ -868,7 +877,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     bulkCan: { supervisor: session.permissions.includes('production.brand.manage'), note: noteCan, task: taskHeld /* F-SA-281 */, reply: noteCan /* F-SA-282: threads.post */, todo: session.permissions.includes('partners.tasks.manage') /* F-CW-203 */ },
     replyMany: replyMany.model, // F-SA-282
     ship: ship.model, // F-CW-301
-    urgency: urgencyCan ? { ...urgency.model, can: true, stepUp: urgencyStepUp.stepUp } : null, // F-CW-302
+    urgency: urgencyCan ? { ...urgency.model, can: true, stepUp: urgencyStepUp.stepUp, left: urgencyLeft /* F-CW-304 */ } : null, // F-CW-302
     priceCheck: priceCheck.model, // F-CP-114
     commands: { window: commandDoor.model, moved, receipt, many: commandMany.model /* F-CP-109 */, decide: session.permissions.includes('approvals.decide') /* F-CP-109 */ }, // F-CP-108
     task, // F-SA-281
@@ -960,6 +969,7 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
       const dialog = urgencyCan ? urgencyDialogOf(act, pickedRows(ids)) : null
       if (!dialog) return
       urgencyAsked.current = dialog.orders.map((order) => order.id)
+      setUrgencyLeft(urgencyLeftOf(act, pickedRows(ids))) // F-CW-304
       urgency.actions.onDialog(dialog)
     },
     urgency: { ...urgency.actions, onStepUpSubmit: (code) => void urgencyStepUp.submitStepUp(code), onStepUpCancel: urgencyStepUp.cancelStepUp },

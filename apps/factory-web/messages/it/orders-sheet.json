@@ -233,6 +233,13 @@
       "noneUrgent_other": "Nessuno dei {count} è urgente per {customer}.",
       "noneLocked_one": "L'ordine spuntato non è bloccato.",
       "noneLocked_other": "Nessuno dei {count} è bloccato."
+    },
+    "left": {
+      "label": "Non su questi ordini",
+      "notUrgent": "Non segnato urgente dal cliente",
+      "notLocked": "Non bloccato",
+      "locked": "Già bloccato",
+      "none": "Nessuna urgenza cliente conta: è uscito dalla produzione, o gli ordini urgenti del cliente sono spenti"
     }
   },
   "atRisk": {

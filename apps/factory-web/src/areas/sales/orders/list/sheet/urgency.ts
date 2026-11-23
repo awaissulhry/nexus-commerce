@@ -50,6 +50,28 @@ export function urgencyDialogOf(act: UrgencyAct, rows: readonly UrgencyRow[]): U
   return first && orders.length > 0 ? { act, partyId: first.partyId, orders } : null
 }
 
+/** Why a ticked order is not one an act runs on. */
+export type UrgencyLeftWhy = 'notUrgent' | 'notLocked' | 'locked' | 'none'
+
+/** A ticked order the window does not run on, with why ("Runs on 2 · Not on 1: why is beside each"). */
+export interface UrgencyLeft {
+  readonly id: string
+  /** The order as the sheet names it: its number, and the customer's PO when it gave one. */
+  readonly label: string
+  readonly why: UrgencyLeftWhy
+}
+
+/**
+ * F-CW-304 (10-design §6 W4): the ticked orders an act does NOT run on, each with why — no urgency that counts on it (it left
+ * production, or the customer's switch is off), not marked urgent, not locked (or locked already). Said over the window, never
+ * silently dropped.
+ */
+export function urgencyLeftOf(act: UrgencyAct, rows: readonly UrgencyRow[]): UrgencyLeft[] {
+  return rows
+    .filter((row) => !rowUrgencyActs(row).includes(act))
+    .map((row) => ({ id: row.id, label: row.customerRef ? `${row.number} (${row.customerRef})` : row.number, why: !row.customerUrgencyState ? 'none' : act === 'regular' ? 'notUrgent' : act === 'unlock' ? 'notLocked' : 'locked' }))
+}
+
 /** The two acts More ▾ offers over ticked orders (Lock… is a row's own act: it needs each order's own reason). */
 export type ManyUrgencyAct = 'regular' | 'unlock'
 
@@ -85,6 +107,8 @@ export interface SheetUrgencyModel extends UrgencyOverrideModel {
   readonly can: boolean
   /** The host's step-up dialog (orders/hooks useStepUp): open with the sentence of what the code allows. */
   readonly stepUp: StepUpState
+  /** F-CW-304: the ticked orders the open window does not run on, each with why (none: an act on one row, or every ticked order takes it). */
+  readonly left: readonly UrgencyLeft[]
 }
 
 export interface SheetUrgencyActions extends UrgencyOverrideActions {

@@ -233,6 +233,13 @@
       "noneUrgent_other": "None of the {count} is urgent for {customer}.",
       "noneLocked_one": "The order ticked is not locked.",
       "noneLocked_other": "None of the {count} is locked."
+    },
+    "left": {
+      "label": "Not on these orders",
+      "notUrgent": "Not marked urgent by the customer",
+      "notLocked": "Not locked",
+      "locked": "Locked already",
+      "none": "No customer urgency counts on it: it left production, or the customer's urgent orders are off"
     }
   },
   "atRisk": {
