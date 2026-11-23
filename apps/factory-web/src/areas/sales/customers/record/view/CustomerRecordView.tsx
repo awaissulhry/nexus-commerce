@@ -19,6 +19,8 @@ import { useCustomerOverview, type CustomerMoneyModel } from '../../money/overvi
 import { MoneyTab } from './MoneyTab' // F-SA-273
 import { overdueOf } from '../../money/model' // F-SA-273
 import { workDoor } from '../use-customer-work' // F-CP-103: each tile opens the view it counts
+import { phaseCountOf, type Read } from '../use-customer-work' // F-CW-101: the Overview's In production and Late read the board
+import type { OrderBoard } from '../../../orders/api' // F-CW-101
 
 /**
  * SCR-033 Customer record (design sales.customers "records: Customer"; F-SA-270, sales page plan N5, picks P10, R5): the customer's
@@ -51,6 +53,8 @@ export function CustomerRecordView({
   onNewOrder,
   onImport,
   priceDiffer, // F-CP-141
+  workBoard, // F-CW-101
+  openQuotesHref, // F-CW-101
 }: {
   model: PartyRecordModel
   actions?: PartyRecordActions
@@ -86,11 +90,18 @@ export function CustomerRecordView({
   onImport?: () => void
   /** F-CP-141: how many of the customer's orders read Not equal (a price holder's only; null: none read, or no price grain). */
   priceDiffer?: number | null
+  /**
+   * F-CW-101 (A1-B5; lead settle S3): the customer's board (the Work tab's own count read, walled to the customer by the API) — the
+   * Overview's "In production" (the STARTED orders: the phase) and "Late" read it, so each tile counts what its door opens.
+   */
+  workBoard?: Read<OrderBoard>
+  /** F-CW-101 (S29): where the Overview's "Open quotes" tile leads (Quotes & incoming at its open quotes); absent: the tab. */
+  openQuotesHref?: string | null
 }) {
   return (
     <WithMessages namespaces={[CUSTOMER_MONEY_NAMESPACE]}>
       <PartiesMessages>
-        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} supervisor={supervisor} portalPeople={portalPeople} portalEmails={portalEmails} work={work} workCount={workCount} quotesIncoming={quotesIncoming} threadButton={threadButton ?? null} onNewOrder={onNewOrder} onImport={onImport} priceDiffer={priceDiffer ?? null /* F-CP-141 */} />
+        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} supervisor={supervisor} portalPeople={portalPeople} portalEmails={portalEmails} work={work} workCount={workCount} quotesIncoming={quotesIncoming} threadButton={threadButton ?? null} onNewOrder={onNewOrder} onImport={onImport} priceDiffer={priceDiffer ?? null /* F-CP-141 */} workBoard={workBoard} openQuotesHref={openQuotesHref ?? null /* F-CW-101 */} />
       </PartiesMessages>
     </WithMessages>
   )
@@ -118,6 +129,8 @@ interface CustomerProps {
   onNewOrder?: (() => void) | undefined // F-CP-104
   onImport?: (() => void) | undefined // F-CP-104
   priceDiffer?: number | null // F-CP-141
+  workBoard?: Read<OrderBoard> | undefined // F-CW-101
+  openQuotesHref?: string | null // F-CW-101
 }
 
 function Customer(props: CustomerProps) {
@@ -158,7 +171,7 @@ function ScrollOnArrival({ id }: { id: string }) {
   return null
 }
 
-function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor, money: moneyModel, portalPeople, portalEmails, work, workCount, quotesIncoming, threadButton /* F-SA-279 */, onNewOrder, onImport /* F-CP-104 */, priceDiffer /* F-CP-141 */ }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
+function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor, money: moneyModel, portalPeople, portalEmails, work, workCount, quotesIncoming, threadButton /* F-SA-279 */, onNewOrder, onImport /* F-CP-104 */, priceDiffer /* F-CP-141 */, workBoard, openQuotesHref /* F-CW-101 */ }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
   const t = useT('parties')
   const side = model.side
   const config = SIDES[side]
@@ -233,7 +246,7 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
           {tab === 'work' && work}
           {/* F-SA-277: Quotes & incoming — two lists stacked (Quotes, then Incoming requests), each its own list locked to the customer. */}
           {tab === 'quotes' && quotesIncoming}
-          {tab === 'overview' && <CustomerOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} overview={overview} depth={depth} supervisor={supervisor} />}
+          {tab === 'overview' && <CustomerOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} overview={overview} depth={depth} supervisor={supervisor} workBoard={workBoard} openQuotesHref={openQuotesHref ?? null /* F-CW-101 */} />}
           {/* F-SA-273: Money — key numbers, credit, open invoices, the open orders' deposits and balances, payment terms. */}
           {tab === 'money' && <MoneyTab model={model} party={party} money={moneyModel} overview={overview} depth={depth} priceDiffer={priceDiffer ?? null /* F-CP-141 */} />}
           {tab === 'people' && (
@@ -292,17 +305,17 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
 
 // ---- Overview (moved from PartyRecordView.tsx, F-SA-270) ---------------------------------------------------------------
 
-/** F-SA-272: the open orders' states the Overview counts (the record's newest 200 orders). */
-const OPEN_ORDER_STATES: readonly string[] = ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTLY_SHIPPED']
-
 /**
  * F-SA-272 (11-customer-page §4): who they are, how they stand, who looks after them — Key numbers (at most 6, each a door: Open
  * orders · In production · Late → Work on the view each counts (F-CP-103), Open quotes → Quotes & incoming, Overdue → Money), Identity, Also open (samples, repairs,
  * open returns and claims), the custom fields (the frame's, on this tab only); beside it Status, Who looks after <customer> (the
  * supervisor and backup, moved from Portal settings), Next steps, VIES, the team and the requirements in force, the main contacts.
  * Ordered in <year>, Returns in <year> and Free credit went to Money; the Now card to Work and Quotes & incoming.
+ * F-CW-101 (A1-B5; lead settles S3, S29): In production and Late are the customer's BOARD's counts (the read the Work tab's band
+ * makes: the API's own rule, walled to the customer), never counted here from the record's newest orders — so each tile says the
+ * number its door opens; In production = the started orders (`phase=IN_PRODUCTION`); Open quotes opens Quotes & incoming at them.
  */
-function CustomerOverview({ model, party, actions, editable, viesHeld, overview, depth, supervisor }: TabProps & { viesHeld: string | null; overview?: OverviewSlot | undefined; depth?: SupplierDepth | undefined; supervisor?: ReactNode }) {
+function CustomerOverview({ model, party, actions, editable, viesHeld, overview, depth, supervisor, workBoard, openQuotesHref }: TabProps & { viesHeld: string | null; overview?: OverviewSlot | undefined; depth?: SupplierDepth | undefined; supervisor?: ReactNode; workBoard?: Read<OrderBoard> | undefined; openQuotesHref?: string | null }) {
   const t = useT('parties')
   const locale = useLocale()
   const can = model.can
@@ -311,9 +324,12 @@ function CustomerOverview({ model, party, actions, editable, viesHeld, overview,
   const amount = (value: number | null | undefined, currency: string | null) => (can.price && value !== null && value !== undefined && currency ? money(value, currency, locale) : null)
   const recordHref = sideHref(model.prefix, SIDES.customers, `/${encodeURIComponent(party.id)}`)
   const tabHref = (tab: string) => `${recordHref}?tab=${tab}`
-  const today = new Date().toISOString().slice(0, 10)
-  const orders = model.orders.items && !model.orders.more ? model.orders.items : null
   const ordersHint = t(model.orders.problem ? 'tile.unknown' : 'numbers.reading')
+  // F-CW-101: the board's own counts ("—" while read or when it could not be read; never a guess from the states).
+  const board = workBoard?.status === 'ready' ? workBoard.value : null
+  const started = board ? phaseCountOf(board, 'IN_PRODUCTION') : null
+  const late = board ? (board.tiles.find((tile) => tile.key === 'late')?.count ?? 0) : null
+  const boardHint = t(workBoard?.status === 'failed' || (board !== null && started === null) ? 'tile.unknown' : 'numbers.reading')
   const metrics: Metric[] = [
     ...(can.orders
       ? [
@@ -323,11 +339,11 @@ function CustomerOverview({ model, party, actions, editable, viesHeld, overview,
             hint: numbers.backlog ? [t('numbers.units', { count: numbers.backlog.units }), amount(numbers.backlog.amount, numbers.backlog.currency)].filter(Boolean).join(' · ') : ordersHint,
             href: workDoor(recordHref, 'open'), // F-CP-103: the open orders it counts
           },
-          { label: t('numbers.inProduction'), value: orders ? String(orders.filter((order) => order.status === 'IN_PRODUCTION').length) : '—', hint: orders ? t('numbers.inProductionHint') : ordersHint, href: workDoor(recordHref, 'inProduction') /* F-CP-103 */ },
+          { label: t('numbers.inProduction'), value: started !== null ? String(started) : '—', hint: started !== null ? t('numbers.inProductionHint') : boardHint, href: workDoor(recordHref, 'inProduction') /* F-CP-103; F-CW-101 (S3): the started orders */ },
           {
             label: t('numbers.late'),
-            value: orders ? String(orders.filter((order) => OPEN_ORDER_STATES.includes(order.status) && order.promiseDate !== null && order.promiseDate < today).length) : '—',
-            hint: orders ? t('numbers.lateHint') : ordersHint,
+            value: late !== null ? String(late) : '—',
+            hint: late !== null ? t('numbers.lateHint') : boardHint,
             href: workDoor(recordHref, 'late'), // F-CP-103: the late orders it counts
           },
         ]
@@ -338,7 +354,7 @@ function CustomerOverview({ model, party, actions, editable, viesHeld, overview,
             label: t('numbers.openQuotes'),
             value: numbers.openQuotes ? String(numbers.openQuotes.count) : '—',
             hint: numbers.openQuotes ? (amount(numbers.openQuotes.amount, numbers.openQuotes.currency) ?? t('numbers.quotesHint')) : t(model.quotes.problem ? 'tile.unknown' : 'numbers.reading'),
-            href: tabHref('quotes'),
+            href: openQuotesHref ?? tabHref('quotes'), // F-CW-101 (S29): Quotes & incoming at its open quotes
           },
         ]
       : []),

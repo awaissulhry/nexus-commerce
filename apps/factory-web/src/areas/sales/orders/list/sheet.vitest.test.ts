@@ -664,7 +664,8 @@ describe('F-OP-315: Sales › Orders fits 1440 and 1920 with its words whole', (
   })
 
   it('only Sales › Orders itself: a host\'s preset (the customer\'s Work tab) and the phone card keep their own widths', () => {
-    expect(view).toContain('return model.preset || phone ? columns : fitToScreen(columns, wide)')
+    // F-CW-102: a host's preset also keeps its own ORDER of the set (orderedByPreset); the fit stays Sales › Orders' own.
+    expect(view).toContain('return model.preset ? orderedByPreset(columns, model.preset) : phone ? columns : fitToScreen(columns, wide)')
     // The sheet's own minimums stay in its definitions (the Work tab's budgets read them).
     expect(minOf('number')).toBe(128)
     expect(minOf('status')).toBe(112)

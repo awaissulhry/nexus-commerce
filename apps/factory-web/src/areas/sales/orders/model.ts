@@ -25,9 +25,12 @@ import {
 } from './api'
 import { CUSTOMER_URGENCIES, INVOICED_STATES, type CustomerUrgency, type InvoicedState } from './api' // B-TH-244
 import { PRICE_MATCHES, type PriceMatch } from './api' // F-CP-141: the price check term (the Not equal view)
+import { isOrderPhase, type OrderPhase } from '@nexus/factory-domain/production-brand/stages' // F-CW-101: the phase term (the band's doors)
 import type { DockDefault } from '../../_shared/record-frame/model' // F-SA-263
 // ---- F-OP-111: Split into new orders… (the API's own limits; the body the split sends) ----
 import { ORDERS_DEPTH_LIMITS } from '@nexus/factory-domain/sales/orders-depth/rules'
+import { isPriorityLevel } from '@nexus/factory-domain/sales/orders-depth/rules' // F-CW-105: our priority levels — the domain's rule, never re-written here
+import type { OrderPriorityLevel } from './api' // F-CW-105
 import { releasedPiecesOf } from '@nexus/factory-domain/sales/orders/orders' // F-OO-112: Mark ready's held counts (B-OO-002's one rule)
 import { orderLinkCountsOf } from '@nexus/factory-domain/sales/orders/linked-counts' // F-OO-206: the tabs count as the Linked card (one rule)
 // F-OO-142: the curated reasons a promise move shows the customer (B-OO-009 sends the code; the portal reads these words).
@@ -1120,6 +1123,14 @@ export interface ExtraTerms {
   // refuses it in words without the price grain, and the sheet carries it in no read for such a person (it holds the view in words).
   readonly priceMatch?: PriceMatch | null
   // ---- end F-CP-141
+  // F-CW-101 (customer Work tab; lead settles S16, S17): the orders in ONE phase (`?phase=`: Not sent to the factory … Cancelled; the
+  // domain's orderPhaseOf) — a door of the customer page's band; the list, its totals and its file read it (never the board: it
+  // counts every phase itself). A chip with ✕ like every other door term; its doors write it beside `rows=all`.
+  readonly phase?: OrderPhase | null
+  // F-CW-105 (lead settle S40): the orders at ONE of OUR priority levels (`?priority=URGENT`: Top) — the Customers list's door
+  // (`?tab=work&rows=open&priority=URGENT`); the list, its totals and its file read it (never the board). A chip with ✕ on every
+  // host of the sheet. Our level is the office's: nothing of it reaches the portal.
+  readonly priority?: OrderPriorityLevel | null
 }
 
 const CURRENCY = /^[A-Z]{3}$/
@@ -1132,6 +1143,8 @@ export function extraFromAddress(params: { get(name: string): string | null } | 
   const currency = params.get('currency')?.trim() ?? ''
   const urgency = params.get('customerUrgency')
   const priceMatch = params.get('priceMatch') // F-CP-141
+  const phase = params.get('phase') // F-CW-101
+  const priority = params.get('priority') // F-CW-105
   return {
     ...(isStatus(status) && rows !== status ? { status } : {}),
     ...(params.get('late') === 'true' && rows !== 'late' ? { late: true } : {}),
@@ -1143,6 +1156,8 @@ export function extraFromAddress(params: { get(name: string): string | null } | 
     ...(CURRENCY.test(currency) ? { currency } : {}),
     ...(urgency && (CUSTOMER_URGENCIES as readonly string[]).includes(urgency) ? { customerUrgency: urgency as CustomerUrgency } : {}),
     ...(priceMatch && (PRICE_MATCHES as readonly string[]).includes(priceMatch) ? { priceMatch: priceMatch as PriceMatch } : {}), // F-CP-141
+    ...(isOrderPhase(phase) ? { phase } : {}), // F-CW-101: a known phase only (another value narrows nothing: the sheet never guesses)
+    ...(isPriorityLevel(priority) ? { priority } : {}), // F-CW-105: a known level only (an unknown one is never sent: no refused read)
   }
 }
 
@@ -1162,6 +1177,8 @@ function extraEntries(extra: ExtraTerms, rows: RowView): Array<[string, string]>
   if (extra.currency) out.push(['currency', extra.currency])
   if (extra.customerUrgency) out.push(['customerUrgency', extra.customerUrgency])
   if (extra.priceMatch) out.push(['priceMatch', extra.priceMatch]) // F-CP-141
+  if (extra.phase) out.push(['phase', extra.phase]) // F-CW-101
+  if (extra.priority) out.push(['priority', extra.priority]) // F-CW-105
   return out
 }
 
@@ -1179,6 +1196,8 @@ function extraQueryOf(extra: ExtraTerms | null): OrderQuery {
     ...(extra.currency ? { currency: extra.currency } : {}),
     ...(extra.customerUrgency ? { customerUrgency: extra.customerUrgency } : {}),
     ...(extra.priceMatch ? { priceMatch: extra.priceMatch } : {}), // F-CP-141: the list and its totals (never the board: boardNarrowOf)
+    ...(extra.phase ? { phase: extra.phase } : {}), // F-CW-101: the list and its totals (never the board: boardNarrowOf)
+    ...(extra.priority ? { priority: extra.priority } : {}), // F-CW-105: the list and its totals (never the board: boardNarrowOf)
   }
 }
 

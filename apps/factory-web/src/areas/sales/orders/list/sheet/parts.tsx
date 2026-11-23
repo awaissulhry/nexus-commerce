@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { Filter, Hand, X } from 'lucide-react' // F-MS-104: + Hand
@@ -8,14 +8,25 @@ import { Button, FilterChip, Pill, Tag, Tooltip } from '@nexus/ui/primitives' //
 import { STAGE_SET_CHECK_DAYS } from '@nexus/factory-domain/production-brand/stage-set' // F-MS-104
 import type { Door, Phrase } from './model'
 import './sheet.css'
+import './chips.css' // F-CW-101: the chips' own styles (a new file beside the new parts)
 // ---- F-SA-275: the production columns' cells (the shared health chip and the production parts' words, the supervisor marks) ----
 import { HealthPill } from '../../../../../lib/production/view/HealthPill'
 import { ageOf } from '../../../../../lib/production/model'
 import { useProductionWords } from '../../../../../lib/production/words'
+import { formatDate } from '../../../../../lib/i18n/format' // F-CW-102: a deposit's due day
+import { useLocale } from '../../../../../lib/i18n/provider' // F-CW-102
 import type { OrderRow } from '../../api'
 import { STATUS_TONE } from '../../model'
-import { answerHrefOf, HEALTH_CHIP, piecesLineOf, supervisorCellOf, waitingItemsOf, whereLineOf, type WaitingMark } from './model'
+import { answerHrefOf, supervisorCellOf, waitingItemsOf, type WaitingMark } from './model'
 // ---- end F-SA-275
+// ---- F-CW-102: the row's chips (Where it is, Customer urgency) and the New messages bubble ----
+import { Banknote, CirclePause, Hourglass, Lock, MessageSquare } from 'lucide-react'
+import { romeToday } from '../../model'
+import { cellOf as unreadCellOf, type Unread } from '../../../../../lib/last-message-cell/model'
+import { dockClick } from '../../../../../lib/last-message-cell/view/LastMessageCell'
+import { healthChipOf, orderHref, piecesPartsOf, priorityChipOf, stageChipOf, stopChipOf, urgencyChipOf, type PiecesPart, type StopChip } from './model'
+import { PHASE_ICON } from './phase-icon'
+// ---- end F-CW-102
 
 type Translate = (key: string, params?: Readonly<Record<string, string | number>>) => string
 const say = (t: Translate, phrase: Phrase) => t(phrase.key, phrase.params)
@@ -193,6 +204,8 @@ export interface SheetChip {
   readonly label: string
   /** F-SA-221: none — the page holds the term (the Made-to-measure page's "Made to measure"): a fixed chip without ✕. */
   readonly onClear?: (() => void) | null
+  /** F-CW-101: quiet words beside the chip that say what it holds (a phase's whys: "1 waits for a yes · 1 waits for the deposit"). */
+  readonly note?: string | null
 }
 
 /** Every narrowing as a chip with ✕ (grid-F25: nothing filters the sheet that is not a chip); Clear all from two on. */
@@ -202,8 +215,8 @@ export function SheetChips({ chips, t, onClearAll }: { chips: readonly SheetChip
   const removable = chips.filter((chip) => chip.onClear)
   return (
     <div className="fw-sheet-chips" role="group" aria-label={t('chips.label')}>
-      {chips.map((chip) =>
-        chip.onClear ? (
+      {chips.map((chip) => {
+        const drawn = chip.onClear ? (
           <FilterChip key={chip.id} pressed onClick={chip.onClear} aria-label={t('chips.remove', { name: chip.label })}>
             {chip.label} <X size={12} aria-hidden />
           </FilterChip>
@@ -211,8 +224,17 @@ export function SheetChips({ chips, t, onClearAll }: { chips: readonly SheetChip
           <Tag key={chip.id} tone="info">
             {chip.label}
           </Tag>
-        ),
-      )}
+        )
+        // F-CW-101: a chip may say in quiet words what it holds (never a second chip).
+        return chip.note ? (
+          <span key={chip.id} className="fw-sheet-chip-noted">
+            {drawn}
+            <span className="fw-sheet-chip-note">{chip.note}</span>
+          </span>
+        ) : (
+          drawn
+        )
+      })}
       {removable.length > 1 && (
         <Button size="sm" variant="link" onClick={onClearAll}>
           {t('chips.clearAll')}
@@ -250,30 +272,208 @@ export function ByHandMark({ old, t }: { old: boolean; t: Translate }) {
  * own pieces ("120 of 300 sewn") or "Sewing not counted here" (never 0). No stage kept (waiting for a yes, shipped, closed…): the
  * order's status. Not read: "—". F-MS-104: a stage set by hand carries its mark (ByHandMark); the customer page's Work tab draws
  * this same cell.
+ * F-CW-102 (10-design §3.5; lead settles S3, S13, S15, S38) — the chips cell, the same on every host of the ONE sheet. Line 1 = up to
+ * three chips, never cut: (1) the stage with its group's mark — the order's real status word where no stage is "now" (Partly
+ * shipped with its pieces); (2) the health, only Late / At risk; (3) the ONE thing that stops it or who it waits on (a door where
+ * there is one: On hold → the order's Production tab, a request → its review). Line 2 = this order's own pieces ("Sewn 152 of 244 ·
+ * 24 ready now"), quiet. The chips WRAP whole (never half a chip): when they need two lines the pieces line gives way for that row
+ * (it stays in the cell's tooltip; the row keeps its height). `dense` (a narrow cell beside the dock): chip 3 keeps its head — its
+ * tail ("· due 25 Nov", "· 3 d") and its mark go to its tooltip. F-CP-107 (cp-fx16) stays: with the Status column on screen a
+ * status word is never said twice.
  */
-export function WhereItIsCell({ row, t, s, statusShown = false }: { row: OrderRow; t: Translate; s: Translate; statusShown?: boolean }) {
+export function WhereItIsCell({ row, t, s, statusShown = false, mark, prefix, doorHref, today, now, dense = false }: { row: OrderRow; t: Translate; s: Translate; statusShown?: boolean; mark?: WaitingMark | null; prefix?: string; doorHref?: ((requestId: string) => string) | null; today?: string; now?: number; dense?: boolean }) {
   const w = useProductionWords()
-  const line = whereLineOf(row)
-  const pieces = piecesLineOf(row)
-  if (line.kind === 'unread') return <span className="fw-sheet-plain">—</span>
-  // F-CP-107 (cp-fx16): the same fact never twice in one row — no stage kept while the row shows the Status column: only this
-  // order's pieces ("Not in work yet"); "—" while they were not read. Status hidden (Customise, a view without it): the status here.
-  if (line.kind === 'status' && statusShown)
-    return pieces ? <span className="fw-sheet-sub">{pieces.production ? w.t(pieces.key, pieces.params) : s(pieces.key, pieces.params)}</span> : <span className="fw-sheet-plain">—</span>
-  // ---- end F-CP-107 (cp-fx16)
+  const locale = useLocale()
+  const stage = stageChipOf(row)
+  // Not read (the production part comes with the column): nothing is guessed.
+  if (!stage) return <span className="fw-sheet-plain">—</span>
+  const health = healthChipOf(row)
+  const stop = stopChipOf(row, mark, today ?? romeToday())
+  const pieces = piecesPartsOf(row)
+  // F-CP-107 (cp-fx16): the same fact never twice in one row — a status word is not repeated beside the Status column.
+  const first = stage.kind === 'status' && statusShown ? null : stage
+  const piecesText = pieces.map((part) => (part.kind === 'stage' ? w.t(`parts.stage.${part.stage}`) : piecesWords(part, t, s, w.t))).join(' · ')
+  const piecesLine =
+    pieces.length > 0 ? (
+      <span className="fw-sheet-wi-pcs">
+        {pieces.map((part, index) => (
+          <Fragment key={index}>
+            {index > 0 && ' · '}
+            {part.kind === 'stage' ? (
+              <>
+                <b>{w.t(`parts.stage.${part.stage}`)}</b>
+                {part.byHand && <ByHandMark old={part.byHand.old} t={t} />}
+              </>
+            ) : part.strong ? (
+              <b>{piecesWords(part, t, s, w.t)}</b>
+            ) : (
+              piecesWords(part, t, s, w.t)
+            )}
+          </Fragment>
+        ))}
+      </span>
+    ) : null
+  if (!first && !health && !stop) return piecesLine ?? <span className="fw-sheet-plain">—</span>
+  const Icon = first ? PHASE_ICON[first.phase] : null
   return (
-    <span className="fw-sheet-cell">
-      {line.kind === 'status' ? (
-        <Pill tone={STATUS_TONE[row.status]}>{t(`status.${row.status}`)}</Pill>
-      ) : (
-        <span className="fw-sheet-where">
-          <b>{w.t(`parts.stage.${line.stage}`)}</b>
-          {line.byHand && <ByHandMark old={line.byHand.old} t={t} /> /* F-MS-104 */}
-          {line.health && <HealthPill face="office" explain={false} computed={HEALTH_CHIP[line.health]} daysLate={row.daysLate} />}
-          {line.held && <Tag tone="warning">{w.t('parts.stage.blocked')}</Tag>}
+    <span className={dense ? 'fw-sheet-wi is-dense' : 'fw-sheet-wi'} title={piecesText || undefined}>
+      {first && Icon && first.kind === 'stage' && (
+        <Pill tone="info" icon={<Icon size={11} aria-hidden />} className="fw-sheet-st">
+          <b>{w.t(`parts.stage.${first.stage}`)}</b>
+          {first.byHand && <ByHandMark old={first.byHand.old} t={t} /> /* F-MS-104 */}
+        </Pill>
+      )}
+      {first && Icon && first.kind === 'status' && (
+        <Pill tone={STATUS_TONE[first.status]} icon={<Icon size={11} aria-hidden />} className={first.status === 'CLOSED' ? 'fw-sheet-st is-line' : 'fw-sheet-st'}>
+          {t(`status.${first.status}`)}
+          {first.shipped ? ` · ${s('shippedOf', first.shipped)}` : ''}
+        </Pill>
+      )}
+      {health && <HealthPill face="office" explain={false} computed={health} daysLate={row.daysLate} />}
+      {stop && <StopChipPart chip={stop} row={row} t={t} s={s} prefix={prefix} doorHref={doorHref} dense={dense} now={now ?? Date.now()} date={(day) => formatDate(`${day}T12:00:00Z`, { locale })} />}
+      {piecesLine}
+    </span>
+  )
+}
+
+/** One part of the pieces line in words: the sheet's, the `orders` catalogue's (shipped) or the production parts' (sewing not counted). */
+function piecesWords(part: Extract<PiecesPart, { kind: 'words' }>, t: Translate, s: Translate, production: Translate): string {
+  const words = part.words
+  return words.production ? production(words.key, words.params) : words.orders ? t(words.key, words.params) : s(words.key, words.params)
+}
+
+/**
+ * F-CW-102: chip 3 — the ONE thing that stops the order or who it waits on, in the approved words (the orders', the sheet's and the
+ * production parts' own): its head always whole; its tail and its mark give way in a dense cell (they stay in its tooltip).
+ */
+function StopChipPart({ chip, row, t, s, prefix, doorHref, dense, now, date }: { chip: StopChip; row: OrderRow; t: Translate; s: Translate; prefix?: string | undefined; doorHref?: ((requestId: string) => string) | null | undefined; dense: boolean; now: number; date: (day: string) => string }) {
+  const w = useProductionWords()
+  const age = (since: string | null): string | null => {
+    const phrase = ageOf(since, now)
+    return phrase ? w.say(phrase) : null
+  }
+  let head: string
+  let tail: string | null = null
+  let tone: 'warning' | 'danger' | 'neutral' = 'warning'
+  let Icon: typeof Hourglass = Hourglass
+  let href: string | null = null
+  let tip: string | null = null
+  if (chip.kind === 'credit') head = t('waits.credit')
+  else if (chip.kind === 'review') head = t('waits.review')
+  else if (chip.kind === 'deposit') {
+    Icon = Banknote
+    tone = chip.overdue ? 'danger' : 'warning'
+    head = chip.overdue ? s('stop.depositOverdue') : chip.extra ? s('stop.depositExtra') : t('board.deposit.OPEN')
+    tail = chip.due ? (chip.overdue ? date(chip.due) : t('list.depositDue', { date: date(chip.due) })) : null
+  } else if (chip.kind === 'reaccept') head = s('stop.reaccept')
+  else if (chip.kind === 'held') {
+    Icon = CirclePause
+    head = t('production.held')
+    href = prefix !== undefined ? orderHref(prefix, row, 'production') : null
+    tip = s('stop.heldTip', { number: row.number })
+  } else if (chip.kind === 'request') {
+    Icon = MessageSquare
+    head = chip.count > 1 ? s('waiting.requests', { count: chip.count }) : s('waiting.request')
+    href = prefix !== undefined ? answerHrefOf(prefix, row, { kind: 'request', count: chip.count, requestId: chip.requestId }, doorHref) : null
+    tip = s('waiting.answerTip', { number: row.number })
+  } else if (chip.kind === 'reply') {
+    Icon = MessageSquare
+    head = s('waiting.reply', { time: age(chip.since) ?? '—' }) // the Waiting on cell's own words, whole
+  } else {
+    tone = 'neutral'
+    head = w.t(`parts.waiting.office.${chip.on}`)
+    tail = age(chip.since)
+  }
+  const full = tail ? `${head} · ${tail}` : head
+  const body = (
+    <Tag tone={tone} className={tone === 'neutral' ? 'fw-sheet-stop is-dash' : 'fw-sheet-stop'} title={href ? undefined : (tip ?? full)}>
+      {!dense && <Icon size={11} aria-hidden />}
+      {head}
+      {tail && !dense && ` · ${tail}`}
+    </Tag>
+  )
+  if (!href) return body
+  return (
+    <Link href={href} className="fw-sheet-chip-door" data-door="" title={tip ?? full}>
+      {body}
+    </Link>
+  )
+}
+
+/**
+ * F-CW-102 (10-design §3.5; lead settles S6, S7, S31): the Customer urgency cell — READ ONLY. The customer's own mark as its chip
+ * says it: "Urgent 2" (its place in the customer's OWN urgent list: never a place in our plan), "Urgent – asked" (dashed: its
+ * request waits on us), "Set to regular by us" (a lock when we locked it); Regular: nothing. Where no header names the column (the
+ * phone card: `bare`) "Urgent (customer) 2"; Italian always "Urgente (cliente) 2" ("Urgente" alone is the planner's rush word).
+ * Beside it OUR priority when it is not Normal — "Priority: Top" (never a bare "Top" under this header) — unless the Priority
+ * column is on screen (`priorityShown`): then it says it. The customer never sees our priority.
+ */
+export function CustomerUrgencyCell({ row, s, d, bare = false, priorityShown = false }: { row: OrderRow; s: Translate; d: Translate; bare?: boolean; priorityShown?: boolean }) {
+  const chip = urgencyChipOf(row)
+  const level = priorityShown ? null : priorityChipOf(row)
+  if (!chip && !level) return null
+  return (
+    <span className="fw-sheet-urg">
+      {chip?.state === 'URGENT' && (
+        <Tag tone="warning" title={s('urgency.rankTip')}>
+          {chip.rank !== null ? s(bare ? 'urgency.bareRank' : 'urgency.rank', { rank: chip.rank }) : s(bare ? 'urgency.bare' : 'urgency.URGENT')}
+        </Tag>
+      )}
+      {chip?.state === 'ASKED' && (
+        <Tag tone="warning" className="fw-sheet-stop is-dash" title={s('urgency.askedTip')}>
+          {s('urgency.ASKED')}
+        </Tag>
+      )}
+      {chip?.state === 'SET_BACK' && (
+        <span className="fw-sheet-setback" title={s(chip.locked ? 'urgency.lockedTip' : 'urgency.SET_BACK')}>
+          {chip.locked && <Lock size={11} aria-hidden />}
+          <span>{s('urgency.SET_BACK')}</span>
         </span>
       )}
-      {pieces && <span className="fw-sheet-sub">{pieces.production ? w.t(pieces.key, pieces.params) : s(pieces.key, pieces.params)}</span>}
+      {level && (
+        <Tag tone={level === 'URGENT' ? 'danger' : level === 'HIGH' ? 'warning' : 'neutral'} title={s('urgency.priorityTip')}>
+          {s('urgency.priority', { level: d(`priority.level.${level}`) })}
+        </Tag>
+      )}
+    </span>
+  )
+}
+
+/**
+ * F-CW-102 (10-design §3.5; lead settle S33): New messages as a count bubble — the reader's own new messages on the order ("2",
+ * "99+"), a door to its thread at the first new one (a link; on a page with a dock, a button that docks it — ⌘ / Ctrl keeps the new
+ * tab); nothing new: an empty cell with its words for a screen reader. The words are the shared cell's own (`last-message`).
+ */
+export function NewMessagesBubble({ unread, href, record, onOpen, l }: { unread: Unread | undefined; href: string | null; record: string; onOpen?: (() => void) | null; l: Translate }) {
+  const cell = unreadCellOf(unread)
+  if (cell.kind === 'empty') return <span className="nds-vh">{l('cell.none')}</span>
+  const label = l('cell.label', { count: cell.count, record })
+  const count = cell.key === 'cell.many' ? '99+' : String(cell.count)
+  if (onOpen)
+    return (
+      <button type="button" className="fw-sheet-msgs" aria-label={label} title={label} data-door="" onClick={(event) => dockClick(event, href, onOpen)} onAuxClick={(event) => event.button === 1 && href && window.open(href, '_blank', 'noopener')}>
+        {count}
+      </button>
+    )
+  if (!href)
+    return (
+      <span className="fw-sheet-msgs" title={label}>
+        {count}
+      </span>
+    )
+  return (
+    <Link className="fw-sheet-msgs" href={href} aria-label={label} title={label} data-door="">
+      {count}
+    </Link>
+  )
+}
+
+/** F-CW-102 (S33): the New messages column's header in a narrow column — the message mark; the column's name stays its accessible name. */
+export function MessagesHeader({ displayName }: { displayName?: string }) {
+  return (
+    <span className="fw-sheet-hicon" title={displayName}>
+      <MessageSquare size={14} aria-hidden />
+      <span className="nds-vh">{displayName}</span>
     </span>
   )
 }

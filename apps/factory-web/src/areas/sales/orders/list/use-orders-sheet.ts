@@ -854,6 +854,14 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
     onSummaryRetry: () => readSummary(readId.current),
     onClearExtra: (key) => go({ extra: key === null ? null : withoutExtra(extra, key) }),
     onExtra: (next) => go({ extra: { ...extra, ...next } }),
+    // F-CW-101 (S16): a phase's door — the term alone beside `rows=all`, the search and the waiting term dropped (the rows are
+    // exactly the group's count); null drops the term and keeps every other one — with `view`, for that view in the same write.
+    onPhase: (phase, view) =>
+      go({
+        extra: phase ? { phase } : withoutExtra(extra, 'phase'),
+        ...(phase ? { rows: 'all' as const, waiting: null, q: '' } : view ? { rows: view.rows, waiting: view.waiting ?? null } : {}),
+        ...(layout === 'week' ? { layout: 'list' as const } : {}),
+      }),
     // F-SA-275: Where it is reads the pieces too; the production columns read the rows' production part.
     onShownColumns: (ids) => {
       setProgressShown(ids.some((id) => PIECES_COLUMNS.includes(id)))
