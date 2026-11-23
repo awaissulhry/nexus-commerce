@@ -416,60 +416,59 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   // cw fx5 (walk W-13): on a page of ONE customer (the Work tab) the phone card stands as its picture drew it, with the DS card's own
   // parts — the PO under the number, the chips without a label column, the customer's urgency and our priority, "Promised" beside
   // the pieces line (it wraps, never cut) and the Thread door at the card's foot. The other hosts keep their card.
+  // cw fx6 (re-walk R-3): the card was 162–207 px high (128–155 before the build): the picture stood alone beside the number in
+  // the card's top row (an empty band under the number) and Thread had a line of its own. Now ONE block under the number: the
+  // picture at the left and, beside it, the PO, the chips (the urgency chips beside the stage's while the line has room) and
+  // "Promised" with the pieces line and the Thread door on its last line. Nothing left out, nothing cut, no sideways scroll.
   const workCard = !!model.locked?.party && !!model.preset
   const cardDoorLabel = workCard && model.active?.cardDoor && actions?.onCardThread ? model.active.cardDoor : null
   const cardFields = useMemo(
     () => {
       const urgency = (row: OrderRow) => (urgencyChipOf(row) || priorityChipOf(row) ? <CustomerUrgencyCell row={row} s={s} d={d} bare askedHref={askedHrefOf(model.prefix, row, model.doorHref) /* F-CW-302 */} /> : null)
-      const base = cardFieldsOf(
-        (row) => <RecordPicture source="order" recordId={row.id} number={row.number} picture={row.picture} styleCount={row.styleCount} size="phone" read={latest.current.actions?.readPictures} demo={latest.current.model.demoPictures?.[row.id]} onOpen={() => setViewer(row.id)} />,
-        // F-CW-102: the customer's urgency on the card says whose it is ("Urgent (customer) 2"); nothing to say: no line.
-        urgency,
-      )
+      const picture = (row: OrderRow) => <RecordPicture source="order" recordId={row.id} number={row.number} picture={row.picture} styleCount={row.styleCount} size="phone" read={latest.current.actions?.readPictures} demo={latest.current.model.demoPictures?.[row.id]} onOpen={() => setViewer(row.id)} />
+      // F-CW-102: the customer's urgency on the card says whose it is ("Urgent (customer) 2"); nothing to say: no line.
+      const base = cardFieldsOf(picture, urgency)
       if (!workCard) return base
       const where = (row: OrderRow, half: 'chips' | 'pieces') => <WhereItIsCell row={row} t={t} s={s} half={half} mark={latest.current.model.marks?.[row.id]} prefix={model.prefix} doorHref={latest.current.model.doorHref} today={model.today} />
       return {
         ...base,
+        picture: { role: 'hidden' as const }, // drawn in the block below, at its left (the card's top row is the number and ⋯)
+        customerUrgency: { role: 'hidden' as const },
+        promised: { role: 'hidden' as const },
         whereItIs: {
           role: 'subtitle' as const,
           draw: (row: OrderRow) => (
-            <span className="fw-sheet-card-lines">
-              <span className="fw-sheet-sub fw-sheet-wraps">{row.customerRef ? t('list.customerRef', { ref: row.customerRef }) : t('list.noCustomerRef')}</span>
-              {where(row, 'chips')}
-              {urgency(row)}
-            </span>
-          ),
-        },
-        customerUrgency: { role: 'hidden' as const },
-        promised: {
-          role: 'subtitle' as const,
-          draw: (row: OrderRow) => (
-            <span className="fw-sheet-card-promise">
-              {row.promiseDate ? (
-                <span>
-                  {t('col.promised')} <b>{formatDate(dayInstant(row.promiseDate), { locale })}</b>
+            <span className="fw-sheet-card">
+              <span className="fw-sheet-card-pic">{picture(row)}</span>
+              <span className="fw-sheet-card-lines">
+                <span className="fw-sheet-sub fw-sheet-wraps">{row.customerRef ? t('list.customerRef', { ref: row.customerRef }) : t('list.noCustomerRef')}</span>
+                <span className="fw-sheet-card-chips">
+                  {where(row, 'chips')}
+                  {urgency(row)}
                 </span>
-              ) : (
-                <span>{t('list.noPromise')}</span>
-              )}
-              {where(row, 'pieces')}
+                <span className="fw-sheet-card-promise">
+                  {row.promiseDate ? (
+                    <span>
+                      {t('col.promised')} <b>{formatDate(dayInstant(row.promiseDate), { locale })}</b>
+                    </span>
+                  ) : (
+                    <span>{t('list.noPromise')}</span>
+                  )}
+                  {where(row, 'pieces')}
+                  {cardDoorLabel && (
+                    <span className="fw-sheet-card-door">
+                      <Button size="sm" variant="quiet" onClick={() => latest.current.actions?.onCardThread?.(row)}>
+                        <MessageSquare size={13} aria-hidden /> {cardDoorLabel}
+                      </Button>
+                    </span>
+                  )}
+                </span>
+              </span>
             </span>
           ),
         },
-        ...(cardDoorLabel
-          ? {
-              newMessages: {
-                role: 'subtitle' as const,
-                draw: (row: OrderRow) => (
-                  <span className="fw-sheet-card-door">
-                    <Button size="sm" variant="quiet" onClick={() => latest.current.actions?.onCardThread?.(row)}>
-                      <MessageSquare size={13} aria-hidden /> {cardDoorLabel}
-                    </Button>
-                  </span>
-                ),
-              },
-            }
-          : {}),
+        // The door is drawn on the block's last line: the New messages column draws nothing of its own on this card.
+        ...(cardDoorLabel ? { newMessages: { role: 'hidden' as const } } : {}),
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the draws read the latest model and actions through `latest`
@@ -782,7 +781,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       {showing /* F-SA-276; F-CP-102: compared with the host's default — rows=open on the customer page says it */ && <p className="fw-so-hint">{t('list.viewing', { view: model.waiting === 'us' && model.rows === 'open' ? s('views.waitingUs') /* cw fx5 (walk W-29): the view really shown */ : t(`rows.${showing}`) })}</p>}
 
       {viewerRow && <PictureViewerFor row={viewerRow} model={model} actions={actions} onClose={() => setViewer(null)} /> /* B-TH-225; F-SA-212: the one viewer */}
-      {model.ship && <ShipWindow model={model.ship} actions={actions?.ship} rows={(items ?? []).map(named) /* cw fx5 (W-8) */} prefix={model.prefix} /> /* F-CW-301: Warehouse's own window */}
+      {model.ship && <ShipWindow model={model.ship} actions={actions?.ship} rows={(items ?? []).map(named) /* cw fx5 (W-8) */} prefix={model.prefix} customerName={lockedName /* cw fx6 (re-walk W-8): Warehouse's own lines of the window too */} /> /* F-CW-301: Warehouse's own window */}
       {model.urgency && <UrgencyWindow model={model.urgency} actions={actions?.urgency} /> /* F-CW-302: the shared urgency window + this page's code dialog */}
       {model.newOrder && <NewOrderDialog model={model.newOrder} actions={actions} />}
       {model.invoiceDrafts && <InvoiceDraftsDialog state={model.invoiceDrafts} prefix={model.prefix} t={s} onClose={() => actions?.onCloseInvoiceDrafts?.()} onRetry={actions?.onInvoiceShippedRetry} /> /* B-TH-244 */}
@@ -1146,7 +1145,7 @@ function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer, st
                 </>
               }
               rows={[
-                [s('peek.who'), data.partyName || '—'],
+                [s('peek.who'), (lockedNameNow() ?? data.partyName) || '—' /* cw fx6 (re-walk W-8): the peek card too */],
                 [s('peek.promised'), data.promiseDate ? `${day(data.promiseDate)}${data.daysLate ? ` · ${t('list.daysLate', { count: data.daysLate })}` : ''}` : s('peek.noPromise')],
                 [s('peek.pieces'), String(data.units)],
               ]}
@@ -1252,7 +1251,22 @@ function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer, st
     if (extra)
       return (
         <span className="fw-sheet-cell fw-sheet-wraps">
-          {door(depositDoor(prefix, data, can), <Pill tone={extra.overdue ? 'danger' : 'warning'} className="fw-sheet-dep-extra">{s('stop.depositExtra')}</Pill>)}
+          {door(
+            depositDoor(prefix, data, can),
+            // cw fx6 (re-walk R-2): in a column without the room for the whole words (Sales › Orders, Made to measure: 112 px — the pill
+            // stood on three lines and the cell ran out of its row) the pill says the open deposit's own short word ("Open"); the
+            // whole words stay its tooltip and what a screen reader hears. A host that gives Deposit the room keeps them on screen.
+            <Pill tone={extra.overdue ? 'danger' : 'warning'} className="fw-sheet-dep-extra" title={s('stop.depositExtra')}>
+              {depositRoomy(model.preset ?? null) ? (
+                s('stop.depositExtra')
+              ) : (
+                <>
+                  <span aria-hidden="true">{t('deposit.OPEN')}</span>
+                  <span className="nds-vh">{s('stop.depositExtra')}</span>
+                </>
+              )}
+            </Pill>,
+          )}
           <span className={extra.overdue ? 'fw-sheet-late' : 'fw-sheet-sub'} title={state === 'PAID' ? t('moneyTab.totals.fact.paidExtraWords') : t('moneyTab.totals.fact.notNeededExtraWords', { date: day(extra.due) })}>
             {t(extra.overdue ? 'list.depositOverdue' : 'list.depositDue', { date: day(extra.due) })}
           </span>
@@ -1502,7 +1516,9 @@ function sheetColumns({ t, s, d, l, m, locale, model, wide, latest, onViewer, st
   ]
   // ── end B-TH-244 ──
   const columns = serverSorted(model.sort ?? null, [
-    { colId: 'picture', headerName: s('col.picture'), minWidth: 76, maxWidth: 76, sortable: false, suppressHeaderMenuButton: true, cellRenderer: PictureColumn },
+    // cw fx6 (follow-up 8): the picture LEADS (the list frame's `context.leading`, F-CL-301) — the row's name in Customise is Number
+    // ("Freeze “Number”"), never "Freeze “Picture”".
+    { colId: 'picture', headerName: s('col.picture'), minWidth: 76, maxWidth: 76, sortable: false, suppressHeaderMenuButton: true, cellRenderer: PictureColumn, context: { leading: true } },
     { colId: 'number', headerName: t('col.number'), field: 'number', minWidth: 128, flex: 1, cellRenderer: NumberCell, context: also('customerRef', s('col.customerRef')) },
     // F-CW-102 (A1-B8): on a page the host locks to ONE customer the page names it — no Customer column, no card subtitle, no entry in Customise.
     ...(model.locked?.party ? [] : [{ colId: 'customer', headerName: t('col.customer'), field: 'partyName', minWidth: 112, flex: 1.2, cellRenderer: CustomerCell }]),
@@ -1665,6 +1681,11 @@ export const SEARCH_SHORT_BELOW = 480
 
 /** cw fx5 (walk W-16): what the ⋯ column took before (64; now 48: a 44 px button with 2 px each side). Sales › Orders' fit rule keeps counting it at this, so the same columns wait there as before. */
 const MORE_WAS = 64
+
+/** cw fx6 (re-walk R-2): from this width a host's Deposit column holds "Extra deposit open" on one line (the Work tab gives 136). */
+export const DEPOSIT_FULL_FROM = 130
+/** The host gives the Deposit column the room for the pill's whole words; no preset (Sales › Orders, Made to measure): the short word. */
+export const depositRoomy = (preset: OrdersListModel['preset'] | null): boolean => (preset?.min?.deposit ?? 0) >= DEPOSIT_FULL_FROM
 
 /**
  * cw fx5 (walk W-12): an EXTRA deposit still open on an order whose own deposit is not open (not needed, paid, waived) — its day

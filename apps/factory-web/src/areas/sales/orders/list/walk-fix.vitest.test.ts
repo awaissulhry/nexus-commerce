@@ -4,7 +4,8 @@ import { ApiError } from '../../../../lib/api/errors'
 import { LOCALES } from '../../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
 import type { BrandRequest } from '../../../home/approvals/requests/api'
-import { requestsDoorOf, workEntry } from '../../customers/record/use-customer-work'
+import type { RequestReviewModel } from '../../../home/approvals/requests/model'
+import { requestsDoorOf, reviewNamed, workEntry } from '../../customers/record/use-customer-work'
 import { WAITING_SET, WORK_MIN, WORK_PAD, WORK_PLAIN_HEADS, WORK_SETS, workEmptyOf, workPreset } from '../../customers/record/view/WorkTab'
 import type { OrderRow, OrderStatus } from '../api'
 import { SORT_CHOICES } from '../model'
@@ -15,7 +16,7 @@ import { tailWhole } from './sheet/parts'
 import { shipFirstOf, shipHeld, shipRowHeld, shipRowOffered, type ShipRow } from './sheet/ship'
 import { urgencyHeld } from './sheet/urgency'
 import { customerRefused } from './use-orders-sheet'
-import { builtInActive, builtInViewsOf, depositExtraOf, MTM_VIEW, oneStop, rowWidthOf, SEARCH_SHORT_BELOW, waitingColumnsOf, withPreset } from './view/OrdersListView'
+import { builtInActive, builtInViewsOf, DEPOSIT_FULL_FROM, depositExtraOf, depositRoomy, MTM_VIEW, oneStop, rowWidthOf, SEARCH_SHORT_BELOW, waitingColumnsOf, withPreset } from './view/OrdersListView'
 
 /**
  * cw fx5 — the WALK FIX WAVE of the customer page's Work tab (design/customer-work-2026-11-22/30-walk.md, gaps W-1 … W-33; the
@@ -230,7 +231,7 @@ describe('walk W-5, W-6, W-7, W-16: the row keeps its words in the four rooms (8
   it('the host\'s own cell padding, plain headers and two-line headers reach the columns (the sheet\'s own css, never the grid\'s)', () => {
     const preset = workPreset('all', null, false, 'base')
     expect(preset).toMatchObject({ pad: WORK_PAD, plainHeads: WORK_PLAIN_HEADS, wrapHeads: true, dense: true })
-    expect(WORK_PAD).toEqual({ picture: 'tight', whereItIs: 'snug', promised: 'snug', deposit: 'snug' })
+    expect(WORK_PAD).toEqual({ picture: 'tight', whereItIs: 'snug', promised: 'snug', deposit: 'snug', orderDate: 'snug' })
     expect(withPreset({ colId: 'whereItIs', headerName: 'Where it is', minWidth: 150 }, preset, false)).toMatchObject({ cellClass: 'fw-sheet-snug', headerClass: 'fw-sheet-snug fw-sheet-hwrap', wrapHeaderText: true })
     expect(withPreset({ colId: 'promised', headerName: 'Promised', minWidth: 108 }, preset, false)).toMatchObject({ minWidth: 98, maxWidth: 98, cellClass: 'fw-sheet-snug', suppressHeaderMenuButton: true })
     expect(withPreset({ colId: 'picture', headerName: 'Picture', minWidth: 76, maxWidth: 76 }, preset, false)).toMatchObject({ minWidth: 58, maxWidth: 58, cellClass: 'fw-sheet-tight', headerClass: 'fw-sheet-tight fw-sheet-hwrap' })
@@ -277,7 +278,7 @@ describe('walk W-12: the Deposit pill says the truth', () => {
   })
   it('the pill reads "Extra deposit open" over the open deposit\'s own "due …" line — never "Not needed" over a second line', () => {
     const view = read('./view/OrdersListView.tsx')
-    expect(view).toContain(`<Pill tone={extra.overdue ? 'danger' : 'warning'} className="fw-sheet-dep-extra">{s('stop.depositExtra')}</Pill>`)
+    expect(view).toContain(`<Pill tone={extra.overdue ? 'danger' : 'warning'} className="fw-sheet-dep-extra" title={s('stop.depositExtra')}>`)
     expect(view).toContain("{t(extra.overdue ? 'list.depositOverdue' : 'list.depositDue', { date: day(extra.due) })}")
     expect(view).not.toContain("s('deposit.extra'")
     for (const locale of LOCALES) {
@@ -454,5 +455,132 @@ describe('the sheet has three hosts: what this wave gives the customer\'s page a
   it('a row of another customer still holds the acts that take one customer (the name rule changes no wall)', () => {
     const rows = [{ partyId: ALPHA, partyName: 'Seed Racing' }, { partyId: BETA, partyName: 'Brand Beta' }]
     expect(replyManyLabel(rows)).toEqual({ key: 'bulk.replyAny', params: { count: 2 } })
+  })
+})
+
+// ============================================================ cw fx6 — the last round, from the re-walk (31-rewalk.md) ============================================================
+
+describe('re-walk W-8: one name in every window opened from the customer\'s own page', () => {
+  it('the rows a window is opened with carry the host\'s name of the customer (Reply to N, Ask production / Note, Assign supervisor, the urgency and shipment windows)', () => {
+    const hook = read('./use-orders-sheet.ts')
+    expect(hook).toContain('const name = hostNames ? host.customerName : null')
+    expect(hook).toContain('return name ? rows.map((row) => ({ ...row, partyName: name })) : rows')
+    // Every window takes its rows from that one function.
+    for (const open of ['replyMany.open(pickedRows(ids)', 'ship.open(pickedRows(ids))', 'assign.open(supervisorTargetsOf(pickedRows(ids)))', 'note.open(noteTargetsOf(pickedRows(ids))', 'urgencyDialogOf(act, pickedRows(ids))', 'commandMany.open(command, pickedRows(ids))']) expect(hook, open).toContain(open)
+    expect(read('./use-reply-many.ts')).toContain('const customer = { id: targets[0]!.partyId, name: targets[0]!.partyName }') // the Reply window's title, lines and button
+  })
+  it('the peek card and Warehouse\'s own lines of the shipment window say it too; Warehouse and the order page give no name (as before)', () => {
+    const view = read('./view/OrdersListView.tsx')
+    expect(view).toContain("[s('peek.who'), (lockedNameNow() ?? data.partyName) || '—'")
+    expect(view).toContain('customerName={lockedName')
+    expect(read('./view/ShipTogether.tsx')).toContain('customer={customerName} />')
+    const dialog = read('../../../warehouse/shipments/list/view/NewShipmentDialog.tsx')
+    expect(dialog.match(/customer: customer \?\? order\.party\.legalName/g)?.length).toBe(4)
+    expect(dialog).toContain('<TogetherStep order={order} model={model} actions={actions} customer={customer} />')
+    expect(read('../../../warehouse/shipments/list/view/ShipmentsListView.tsx')).toContain('{model.create && <NewShipmentDialog model={model.create} can={model.can} actions={actions} />}')
+  })
+  it('the review window names the customer as the page does — one request, a batch; nothing read yet or no name: the model as it is', () => {
+    const request = (id: string) => ({ id, party: { id: ALPHA, code: 'SEED', name: 'Seed Customer One S.r.l.' } })
+    const one = { as: 'request', id: 'r1', record: { status: 'ready', value: { asOf: 'x', request: request('r1'), counterApproval: null, batch: [] } }, impact: { status: 'loading' } } as unknown as RequestReviewModel
+    const named = reviewNamed(one, 'Seed Racing')
+    expect(named?.as === 'request' && named.record.status === 'ready' ? named.record.value.request.party : null).toEqual({ id: ALPHA, code: 'SEED', name: 'Seed Racing' })
+    expect(one.as === 'request' && one.record.status === 'ready' ? one.record.value.request.party.name : null).toBe('Seed Customer One S.r.l.') // the read itself is untouched
+    const batch = { as: 'batch', id: 'b1', batch: { status: 'ready', value: [request('r1'), request('r2')] } } as unknown as RequestReviewModel
+    const both = reviewNamed(batch, 'Seed Racing')
+    expect(both?.as === 'batch' && both.batch.status === 'ready' ? both.batch.value.map((entry) => entry.party.name) : null).toEqual(['Seed Racing', 'Seed Racing'])
+    const reading = { as: 'request', id: 'r1', record: { status: 'loading' }, impact: { status: 'loading' } } as unknown as RequestReviewModel
+    expect(reviewNamed(reading, 'Seed Racing')).toBe(reading)
+    expect(reviewNamed(one, null)).toBe(one)
+    expect(reviewNamed(null, 'Seed Racing')).toBeNull()
+    expect(reviewNamed(undefined, 'Seed Racing')).toBeUndefined()
+    expect(read('../../customers/record/view/WorkTab.tsx')).toContain('review: reviewNamed(door.window.review, party.name)')
+  })
+})
+
+describe('re-walk W-22: "Confirm N…" is held for every reason the bulk Confirm cannot decide', () => {
+  const can = { manage: false, close: false }
+  const row = (waits: OrderRow['waits'], status: OrderStatus = 'PENDING_APPROVAL') => ({ status, waits })
+  it('an order that only says why it waits (credit, measurements) has no asked yes either: held, the window never opens on "Runs on 0"', () => {
+    expect(manyHeld('confirm', [row(['CREDIT_HOLD'])], can)).toMatchObject({ key: 'commands.noneAsked', params: { count: 1 } }) // SEED-SO-W39-01
+    expect(manyHeld('confirm', [row(['MEASUREMENTS']), row(['NO_REQUEST'])], can)).toMatchObject({ key: 'commands.noneAsked', params: { count: 2 } })
+    expect([noYesAsked({ waits: ['CREDIT_HOLD'] }), noYesAsked({ waits: ['MEASUREMENTS'] }), noYesAsked({ waits: ['NO_REQUEST'] })]).toEqual([true, true, true])
+  })
+  it('an asked yes opens the window (whatever else the order waits for); a row that gives no reason never holds', () => {
+    expect(manyHeld('confirm', [row(['REQUEST_PENDING', 'CREDIT_HOLD'])], can)).toBeNull()
+    expect(manyHeld('confirm', [row(['CREDIT_HOLD']), row(['REQUEST_PENDING'])], can)).toBeNull()
+    expect(manyHeld('confirm', [row([])], can)).toBeNull()
+    expect(manyHeld('confirm', [row(null)], can)).toBeNull()
+    expect(manyHeld('confirm', [{ status: 'PENDING_APPROVAL' }], can)).toBeNull()
+    expect([noYesAsked({ waits: ['REQUEST_PENDING', 'CREDIT_HOLD'] }), noYesAsked({ waits: [] }), noYesAsked({ waits: null }), noYesAsked({})]).toEqual([false, false, false, false])
+  })
+})
+
+describe('re-walk R-2, R-5: no cell taller than its row, no pill on three lines', () => {
+  it('R-2: a Deposit column without the room says the open deposit\'s short word; the whole words stay its tooltip and what a screen reader hears', () => {
+    expect(DEPOSIT_FULL_FROM).toBe(130)
+    expect(depositRoomy(workPreset('all', null, false, 'wide'))).toBe(true) // the Work tab gives Deposit 136
+    expect(depositRoomy(null)).toBe(false) // Sales › Orders, Made to measure (112 px)
+    expect(depositRoomy({ shown: [], min: { deposit: 112 } })).toBe(false)
+    const view = read('./view/OrdersListView.tsx')
+    expect(view).toContain("{depositRoomy(model.preset ?? null) ? (")
+    expect(view).toContain(`<span aria-hidden="true">{t('deposit.OPEN')}</span>`)
+    expect(view).toContain(`<span className="nds-vh">{s('stop.depositExtra')}</span>`)
+    for (const locale of LOCALES) expect(words(locale, 'orders')('deposit.OPEN'), locale).toBe(locale === 'en' ? 'Open' : 'Aperto')
+    // Sales › Orders keeps its own widths (no column pushed off at 1312): the fix is in the words, not in the room.
+    expect(view).toMatch(/LIST_MIN: Readonly<Record<string, number>> = \{[^}]*deposit: 112,/)
+  })
+  it('R-5: Ordered holds its second line on ONE line (144 px with the closer padding); the set still fits where each room starts', () => {
+    expect(WORK_MIN.orderDate).toBe(144)
+    expect(WORK_PAD.orderDate).toBe('snug')
+    const need = (ids: readonly string[]) => 43 + 48 + ids.reduce((sum, id) => sum + WORK_MIN[id]!, 0)
+    expect(need(WORK_SETS.widest)).toBeLessThanOrEqual(1700) // the widest room starts there
+    expect(need(WORK_SETS.wider)).toBeLessThanOrEqual(1300)
+    expect(need(WORK_SETS.wide)).toBeLessThanOrEqual(1150)
+    expect(need(WORK_SETS.base)).toBeLessThanOrEqual(863)
+    // At 1792 (1920, the thread closed) Where it is keeps more than the three chips of the walked seed need (263 px + the cell's 14).
+    expect(1792 - (need(WORK_SETS.widest) - WORK_MIN.whereItIs!)).toBeGreaterThanOrEqual(281)
+    // Beside the thread nothing moved: Where it is is still 275 px.
+    expect(863 - (need(WORK_SETS.base) - WORK_MIN.whereItIs!)).toBe(275)
+  })
+})
+
+describe('re-walk R-3, R-4, item 7, follow-up 8', () => {
+  it('R-3: the phone card is ONE block under the number — the picture at the left, the chips in one flow, Thread on the last line', () => {
+    const view = read('./view/OrdersListView.tsx')
+    expect(view).toContain("picture: { role: 'hidden' as const },")
+    expect(view).toContain("promised: { role: 'hidden' as const },")
+    expect(view).toContain("...(cardDoorLabel ? { newMessages: { role: 'hidden' as const } } : {}),")
+    const block = view.slice(view.indexOf('<span className="fw-sheet-card">'), view.indexOf("// The door is drawn on the block's last line"))
+    const order = ['fw-sheet-card-pic', 'fw-sheet-card-lines', "t('list.customerRef'", 'fw-sheet-card-chips', "where(row, 'chips')", 'urgency(row)', 'fw-sheet-card-promise', "t('col.promised')", "where(row, 'pieces')", 'fw-sheet-card-door'].map((part) => block.indexOf(part))
+    expect(order.every((at) => at >= 0)).toBe(true)
+    expect([...order].sort((a, b) => a - b)).toEqual(order) // nothing left out, in the picture's order
+    const css = read('./sheet/chips.css')
+    expect(css).toMatch(/\.fw-sheet-card-chips > \.fw-sheet-wi\.is-card,\s*\.fw-sheet-card-chips > \.fw-sheet-urg \{\s*display: contents;/)
+    expect(css).toMatch(/\.fw-sheet-card-door \{[^}]*margin-left: auto;/)
+    expect(css).toMatch(/\.fw-sheet-card \{[^}]*align-items: flex-start;/)
+    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(/i)
+  })
+  it('R-4: a failed read of the groups says so once in the notes line, with the retry the chips use', () => {
+    const band = read('../../customers/record/view/WorkBand.tsx')
+    const notes = band.slice(band.indexOf('<div className="fw-cwb-notes">'))
+    expect(notes.indexOf('{model.failed && (')).toBeGreaterThan(0)
+    expect(notes.indexOf('{model.failed && (')).toBeLessThan(notes.indexOf("t('customers.work.band.allCount'"))
+    expect(notes).toContain("onClick={() => actions.onRetry?.('late')}")
+    expect(band.match(/model\.failed/g)?.length).toBe(1) // once
+    expect(read('../../customers/record/view/WorkTab.tsx')).toContain("failed: work.reads.board.status === 'failed',")
+    // 'late' is fed by the board read: its retry reads the board again.
+    expect(read('../../customers/record/use-customer-work.ts')).toMatch(/\} else readers\.board\(\)/)
+    expect([words('en', 'parties')('customers.work.tile.failed'), words('it', 'parties')('customers.work.tile.failed')]).toEqual(["Couldn't be read · Try again", 'Lettura non riuscita · Riprova'])
+  })
+  it('item 7: the Reply window on ORDERS of a customer with no portal shows the reason only — no box, no to-do tick', () => {
+    const dialog = read('./view/ReplyManyDialog.tsx')
+    expect(dialog).toMatch(/const box = model\.portal !== 'off'\n/)
+    expect(dialog).toContain('const todo = box ? (model.todo ?? null) : null')
+    expect(dialog).toContain("{model.portal === 'off' && <Banner tone=\"warning\" title={s(replyKey(model.recordType, 'portalOff'), { customer })} />}")
+    for (const locale of LOCALES) expect(words(locale, 'orders-sheet')('reply.portalOff', { customer: 'Seed Racing' }), locale).toContain('Seed Racing')
+  })
+  it('follow-up 8: the picture leads — Customise names Number as the row\'s name', () => {
+    expect(read('./view/OrdersListView.tsx')).toMatch(/colId: 'picture',[^}]*cellRenderer: PictureColumn, context: \{ leading: true \} \}/)
+    expect(read('../../../../list-frame/tools/model.ts')).toContain('contextOf(column).leading !== true')
   })
 })

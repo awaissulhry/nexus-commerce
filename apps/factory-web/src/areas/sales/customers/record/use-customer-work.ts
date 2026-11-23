@@ -14,7 +14,7 @@ import { getBoard, listOrders, type OrderBoard, type OrderRow } from '../../orde
 import type { OrderPhase } from '../../orders/api' // F-CW-101: the band's groups and their doors
 import { isPriorityLevel } from '@nexus/factory-domain/sales/orders-depth/rules' // F-CW-105 (S40): our levels — the domain's rule
 import { isOrderPhase } from '@nexus/factory-domain/production-brand/stages' // cw fx5 (W-25): the groups the API knows
-import { doorListOf } from '../../../home/approvals/requests/model' // cw fx5 (W-1): the review door's own list rule
+import { doorListOf, type RequestReviewModel } from '../../../home/approvals/requests/model' // cw fx5 (W-1): the review door's own list rule; cw fx6: its window's model
 import type { DockPick } from './view/WorkTab' // F-SA-278
 import { useCoalesced } from '../../orders/hooks'
 import type { WaitingMarks } from '../../orders/list/sheet/model'
@@ -307,6 +307,22 @@ export function marksOf(requests: readonly BrandRequest[] | null, replies: reado
  */
 export function requestsDoorOf(requests: readonly BrandRequest[]): { readonly ids: string[]; readonly batches: string[] } {
   return doorListOf(requests.filter((request) => request.waitingOn === 'US').map((request) => ({ ...request, may: { ...request.may, accept: true } })))
+}
+
+/**
+ * cw fx6 (re-walk W-8): the review window on the customer's own page names the customer as the page does (the record's name) — the
+ * request's own read carries the legal name. Pure: the window's model with the party's name replaced, the read itself untouched;
+ * nothing read yet, or no name: the model as it is.
+ */
+export function reviewNamed(review: RequestReviewModel | null | undefined, name: string | null | undefined): RequestReviewModel | null | undefined {
+  if (!review || !name) return review
+  if (review.as === 'batch') {
+    if (review.batch.status !== 'ready') return review
+    return { ...review, batch: { status: 'ready', value: review.batch.value.map((request) => ({ ...request, party: { ...request.party, name } })) } }
+  }
+  if (review.record.status !== 'ready') return review
+  const record = review.record.value
+  return { ...review, record: { status: 'ready', value: { ...record, request: { ...record.request, party: { ...record.request.party, name } } } } }
 }
 
 /** The live events each source is read again on (the strip's reads, coalesced). */

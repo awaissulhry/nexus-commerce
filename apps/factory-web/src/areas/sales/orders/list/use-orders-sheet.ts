@@ -681,7 +681,14 @@ export function useOrdersSheet(host: OrdersSheetHost): { model: OrdersListModel;
   const assign = useAssignSupervisor(api, () => rereadInPlace(acted.current.assign))
   const noteCan = session.permissions.includes('threads.post')
   const note = useNoteDialog(api, { can: noteCan, onDone: () => rereadInPlace(acted.current.note) })
-  const pickedRows = (ids: readonly string[]) => (shownItems ?? []).filter((row) => ids.includes(row.id))
+  // cw fx6 (re-walk W-8): on a customer's own page every window opened from the rows names the customer as the page does (Reply to
+  // N, Ask production / Note, Assign supervisor, the urgency and shipment windows) — the rows are handed with the host's name of it;
+  // the other two hosts keep each row's own name.
+  const pickedRows = (ids: readonly string[]) => {
+    const rows = (shownItems ?? []).filter((row) => ids.includes(row.id))
+    const name = hostNames ? host.customerName : null
+    return name ? rows.map((row) => ({ ...row, partyName: name })) : rows
+  }
   // ---- end F-SA-280
   // ---- F-SA-281: the one New task window — on one order (a row's ⋯: its people, "Me" first) or on N orders (the selection: one task
   // on each, Assign to each order's supervisor by default or one person who may read the customer's records; one batch, its receipt).
