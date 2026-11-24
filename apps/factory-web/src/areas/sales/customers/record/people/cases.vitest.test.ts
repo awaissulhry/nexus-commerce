@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import type { ComponentType } from 'react'
 import { describe, expect, it } from 'vitest'
 import { LOCALES, type Locale } from '../../../../../lib/i18n/locales'
@@ -131,3 +132,22 @@ describe('F-CA T.1: the People tab\'s gallery cases (SCR-033, ids ca-*)', () => 
   }
 })
 
+// ---- T.3: the golden step (it writes nothing; its parts by role and catalogue word; the steps before it as written, Z22)
+describe('F-CA T.3: the golden flow\'s People & addresses step', () => {
+  it('after the contacts are added: #addresses shows its section, People lists them with what each gets — nothing written', () => {
+    const golden = readFileSync(new URL('../../../../../../tests/golden-flow/01-customer.ts', import.meta.url), 'utf8')
+    const step = golden.slice(golden.indexOf('// ---- ca T.3'), golden.indexOf('// ---- end ca T.3'))
+    expect(golden.indexOf('// ---- ca T.3')).toBeGreaterThan(golden.indexOf("await flow.shot(page, 'addresses-contacts')"))
+    expect(golden.indexOf('// ---- end ca T.3')).toBeLessThan(golden.indexOf("await flow.step('VIES:"))
+    expect(step).toContain('await sales.go(`/sales/customers/${party.id}?tab=people#addresses`)')
+    expect(step).toContain("page.getByRole('region', { name: P('address.title'), exact: true })")
+    expect(step).toContain("page.getByRole('list', { name: exactly(C('people.listLabel')) })")
+    expect(step).toContain("C('gets.QUOTES_AND_CONFIRMATIONS')")
+    expect(step).toContain("C('gets.INVOICES_AND_REMINDERS')")
+    expect(step).toContain("expect(written, 'nothing was written').toEqual([])")
+    expect(step).not.toMatch(/press\(|\.fill\(|\.check\(|answerOf\(/)
+    // Z22: the first address press is the picture's word; the shared windows' words stay.
+    expect(golden).toContain("await press(page.getByRole('button', { name: 'Add the registered office', exact: true }).first())")
+    expect(golden).toContain("await press(page.getByRole('button', { name: 'Add contact' }).first())")
+  })
+})
