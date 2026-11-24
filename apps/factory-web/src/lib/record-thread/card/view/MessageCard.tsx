@@ -171,7 +171,7 @@ export function MessageCard({
   const failed = message.outbox?.state === 'failed'
   const sending = message.outbox?.state === 'sending'
   const label = t('label', { author, audience: t(audienceKey(message), { party }), time })
-  const tone = senderTone(message.senderKey)
+  const tone = (message.senderKey ? context.tones?.get(message.senderKey) : undefined) ?? senderTone(message.senderKey) // tw- fx2 (G-7)
   const cls = ['fw-rt-msg', `is-${message.kind}`, body === 'erased' ? 'is-erased' : '', sending ? 'is-pending' : '', failed ? 'is-failed' : '', system ? 'is-system' : `is-${place.side}`, place.first ? 'is-start' : ''].filter(Boolean).join(' ')
   // tw- W1.3: the jump's flash on the whole row — the one named constant, cleared when its animation ends (no timer).
   const lit = flash
@@ -427,7 +427,7 @@ export function MessageCard({
       <Bubble model={{ side: place.side, run: { first: place.first, last: place.last }, name, senderTone: tone }} tools={tools}>
         {/* TOP: the correction, the quote — both from this message's OWN links (R1) — and what it is about. */}
         {message.corrects && <CorrectionLink link={message.corrects} onJump={onJump} />}
-        {message.replyTo && <QuoteBlock link={message.replyTo} onJump={onJump} />}
+        {message.replyTo && <QuoteBlock link={message.replyTo} onJump={onJump} tones={context.tones} />}
         {/* F-SA-265: a message about a part of its record (a line, a shipment…) jumps back to its row on the page. */}
         {!readOnly && message.about && actions?.onShowOnPage && (
           <button type="button" className="fw-rt-about" onClick={() => actions.onShowOnPage?.(message.id)}>

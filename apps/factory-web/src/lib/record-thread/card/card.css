@@ -306,9 +306,18 @@ button.fw-rt-corrected:hover {
   opacity: 1;
 }
 
+/* tw- fx2 (walk G-18): on touch (no hover) the arrow sits in the foot beside the time — never over the words of the first line. */
 @media (hover: none) {
   .fw-rt-tools {
+    top: auto;
+    bottom: 2px;
+    padding-inline-start: 0;
+    background: none;
     opacity: 1;
+  }
+
+  .fw-rt-bub:has(> .fw-rt-tools) .fw-rt-meta {
+    margin-inline-end: 22px;
   }
 }
 

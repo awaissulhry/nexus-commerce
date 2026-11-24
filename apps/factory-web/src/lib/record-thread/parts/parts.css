@@ -52,6 +52,16 @@
   --fw-rt-tone-fg: var(--nds-grid-tone-slate-fg);
 }
 
+.fw-rt-tone-violet {
+  --fw-rt-tone-bg: var(--nds-grid-tone-violet-bg);
+  --fw-rt-tone-fg: var(--nds-grid-tone-violet-fg);
+}
+
+.fw-rt-tone-red {
+  --fw-rt-tone-bg: var(--nds-grid-tone-red-bg);
+  --fw-rt-tone-fg: var(--nds-grid-tone-red-fg);
+}
+
 .fw-rt-tone-purple {
   --fw-rt-tone-bg: var(--nds-grid-tone-purple-bg);
   --fw-rt-tone-fg: var(--nds-grid-tone-purple-fg);
