@@ -638,6 +638,17 @@ describe('the cards: People, Next dates, Requests & changes, Linked records, Cus
   })
 })
 
+describe('the tab\'s reads (S11, S12; 13-backend §1.3)', () => {
+  it('W2.2: the customer\'s 200 newest quotes are no longer read — the shared party hook names no quotes read; the orders and the purchase orders as before', () => {
+    const hook = readFileSync(new URL('../../../../parties/_shared/PartyRecord.tsx', import.meta.url), 'utf8')
+    expect(hook).not.toContain('listQuotesOf')
+    expect(hook).toContain("if (side === 'customers' && can.orders)")
+    expect(hook).toContain('listSalesOrdersOf(api, partyId).then(')
+    expect(hook).toContain("if (side === 'suppliers' && can.purchaseOrders)")
+    expect(hook).toContain('listPurchaseOrdersOf(api, partyId).then(')
+  })
+})
+
 describe('the walls (13-backend §4)', () => {
   const RULES = ['./model.ts', './headline.ts', './strips.ts', './rows.ts', './doors.ts'].map((file) => readFileSync(new URL(file, import.meta.url), 'utf8'))
   const [, HEADLINE, STRIPS, ROWS] = RULES
