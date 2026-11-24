@@ -31,10 +31,9 @@ import type { Glance, Privacy } from '../depth/api'
 import { DEPTH_NAMESPACES } from '../depth/CustomerDepth'
 import { ALL_CAN, COMPANIES, COPY, FILES, glanceOf, HELD_GLANCE, HOLDS, KEPT, NO_HOLDS, PRIVACY, READ_CAN, REQUIREMENTS, SALES_CAN, STYLES, TERMS as COMPANY_TERMS, TODAY, TWO_HOLDS, WITHHELD, withoutPrices } from '../depth/_demo/fixtures'
 import { basisDraftOf, blankRequirement, failedRead, LOADING, ready, requirementDraftOf, type DepthCan, type Read } from '../depth/model'
-import { GlanceNow } from '../depth/view/GlanceParts'
 import { HoldCard, type HoldCardModel } from '../depth/view/HoldCard'
 import { PoNumberCard, type PoNumberModel } from '../depth/view/PoNumberCard'
-import { PrivacyCard, type PrivacyModel } from '../depth/view/PrivacyCard'
+import type { PrivacyModel } from '../depth/view/PrivacyCard'
 import { RequirementsTab, type RequirementsModel } from '../depth/view/RequirementsTab'
 // F-CA-120 (customer People & addresses, lane ca-; 15-steps W1.4): the People tab of a case — the page's own model rule over the case's
 // party, rights, portal and personal data (made-up), today's riders and personal-data cards under it until ca-w2.
@@ -790,17 +789,13 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
 }
 // ---- end F-SA-276
 
-function depthNodes(depth: DepthCase | undefined, partyId: string): SupplierDepth | undefined {
+function depthNodes(depth: DepthCase | undefined): SupplierDepth | undefined {
   if (!depth) return undefined
-  const recordHref = `/w/DEMO/sales/customers/${partyId}`
-  const glance = depth.glance ? { read: depth.glance, prefix: '/w/DEMO', recordHref } : null
+  // F-CO-203: the Overview's old parts went — the Overview's rules read the case's glance (OverviewDesign below). F-CA-229 (ca-w2 W2.5):
+  // People's riders / profiles card and personal-data card went — the People tab draws the case's glance (its riders) and privacy.
   return {
-    // F-SA-274: riders and measurement profiles on People & addresses. F-CO-203: the Overview's old parts (tiles, Now's samples and
-    // repairs, the status card, the side panel) went — the Overview's rules read the case's glance (OverviewDesign below).
-    ...(glance ? { people: createElement(GlanceNow, { model: glance, parts: ['profiles', 'riders'] }) } : {}),
     tax: depth.hold || depth.po ? createElement('div', { className: 'fw-cdp-two-wide' }, depth.hold ? createElement(HoldCard, { model: depth.hold }) : null, depth.po ? createElement(PoNumberCard, { model: depth.po }) : null) : null,
     requirements: depth.requirements ? createElement(RequirementsTab, { model: depth.requirements }) : null,
-    contacts: depth.privacy ? createElement(PrivacyCard, { model: depth.privacy }) : null,
   }
 }
 
@@ -1042,7 +1037,7 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
   // ---- end F-CM-104
   // F-CA-120 (ca-w1 W1.4): People & addresses, built for the tab the page shows (as the live container builds it) — the page's own model
   // rule over the case's models; today's riders / profiles and personal-data cards under it (the depth slot's, until ca-w2).
-  const nodes = depthNodes(depth, id)
+  const nodes = depthNodes(depth)
   const portal = record.can.partners ? (people?.portal ?? null) : null
   const peopleTab =
     party && shownTab(recordTabs(SIDES.customers, record.can), record.tab) === 'people'

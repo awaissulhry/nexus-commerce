@@ -7,12 +7,10 @@ import type { SupplierDepth } from '../../../parties/_shared/view/PartyRecordVie
 import { WithMessages } from '../../../../record-panels/i18n'
 import { NS } from './model'
 import { useCustomerDepth, type CustomerDepthState } from './use-depth'
-import { GlanceNow, type GlanceNowPart, type GlanceModel } from './view/GlanceParts'
 import { HoldCard } from './view/HoldCard'
 import { HoldDialogView } from './view/HoldCard' // F-CM-301: Money's Credit & terms opens the same window
 import { NoticeLine } from './view/parts'
 import { PoNumberCard } from './view/PoNumberCard'
-import { PrivacyCard } from './view/PrivacyCard'
 import { RequirementsTab } from './view/RequirementsTab'
 import './depth.css'
 
@@ -59,7 +57,7 @@ export function useCustomerPrivacy(reload?: () => void): { readonly state: Custo
 // drawn where Money asks for it. `release` is null while the holds are read, or when several are in force (Terms lists each one).
 export function useCustomerHold(party: Party): { readonly place: () => void; readonly release: (() => void) | null; readonly window: ReactNode } {
   const state = useDepth()
-  const { prefix } = useAddresses(party)
+  const { prefix } = useAddresses()
   const holds = state.holds.read.status === 'ready' ? state.holds.read.value.holds.filter((hold) => hold.inForce) : null
   const single = holds && holds.length === 1 ? holds[0]! : null
   return {
@@ -70,11 +68,10 @@ export function useCustomerHold(party: Party): { readonly place: () => void; rea
 }
 // ---- end F-CM-301
 
-/** `/w/<company>` and the record's own address, from the page's path. */
-function useAddresses(party: Party): { prefix: string; recordHref: string } {
+/** `/w/<company>` of the office addresses, from the page's path. */
+function useAddresses(): { prefix: string } {
   const pathname = usePathname() ?? ''
-  const prefix = pathname.replace(/\/sales\/customers\/.*$/, '')
-  return { prefix, recordHref: `${prefix}/sales/customers/${encodeURIComponent(party.id)}` }
+  return { prefix: pathname.replace(/\/sales\/customers\/.*$/, '') }
 }
 
 /**
@@ -83,12 +80,12 @@ function useAddresses(party: Party): { prefix: string; recordHref: string } {
  * the status card, the side panel) went — the Overview's own rules read the glance (`useCustomerGlance` above).
  */
 export function customerDepthSlot(party: Party, reload: () => void): SupplierDepth {
+  // F-CA-229 (customer People & addresses ca-w2 W2.5): People's riders / profiles card and its personal-data card went — the tab's own
+  // Riders & measurements and Personal data sections draw them (cu/record/view/people), the personal-data windows through
+  // useCustomerPrivacy. Terms & requirements keeps its two parts.
   return {
-    // F-SA-274: riders and measurement profiles on People & addresses.
-    people: <NowPart party={party} parts={['profiles', 'riders']} />,
     tax: <TaxPart party={party} reload={reload} />,
     requirements: <RequirementsPart party={party} />,
-    contacts: <ContactsPart party={party} reload={reload} />,
   }
 }
 
@@ -103,18 +100,9 @@ function useSync(reload?: () => void) {
   return state
 }
 
-function useGlanceModel(party: Party): GlanceModel {
-  const state = useDepth()
-  return { read: state.glance.read, ...useAddresses(party) }
-}
-
-function NowPart({ party, parts }: { party: Party; /* F-SA-274 */ parts?: readonly GlanceNowPart[] }) {
-  return <GlanceNow model={useGlanceModel(party)} {...(parts ? { parts } : {})} />
-}
-
 function TaxPart({ party, reload }: { party: Party; reload: () => void }) {
   const state = useSync(reload)
-  const { prefix } = useAddresses(party)
+  const { prefix } = useAddresses()
   return (
     <div className="fw-cdp-stack">
       <NoticeLine notice={state.notice} onDismiss={state.onDismissNotice} />
@@ -134,20 +122,6 @@ function RequirementsPart({ party }: { party: Party }) {
       <RequirementsTab
         model={{ read: state.requirements.read, can: state.can, status: party.status, dialog: state.requirements.dialog, styles: state.requirements.styles, files: state.requirements.files, companies: state.companies }}
         actions={state.requirements}
-      />
-    </div>
-  )
-}
-
-function ContactsPart({ party, reload }: { party: Party; reload: () => void }) {
-  const state = useSync(reload)
-  const { recordHref } = useAddresses(party)
-  return (
-    <div className="fw-cdp-stack">
-      <NoticeLine notice={state.notice} onDismiss={state.onDismissNotice} />
-      <PrivacyCard
-        model={{ read: state.privacy.read, can: state.can, status: party.status, today: state.today, dialog: state.privacy.dialog, stepUp: state.privacy.stepUp, portalHref: `${recordHref}?tab=portal` }}
-        actions={state.privacy}
       />
     </div>
   )

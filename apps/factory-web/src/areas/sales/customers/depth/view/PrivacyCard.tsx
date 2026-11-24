@@ -1,23 +1,22 @@
 'use client'
 
 import Link from 'next/link'
-import { MoreHorizontal } from 'lucide-react'
-import { Banner, Field, KeyValue, Menu, SummaryTable } from '@nexus/ui/components'
-import { Button, Input, Select, Tag } from '@nexus/ui/primitives'
+import { Banner, Field, KeyValue, SummaryTable } from '@nexus/ui/components'
+import { Button, Input, Select } from '@nexus/ui/primitives'
 import { DateField, Modal, StepUpModal, Textarea } from '../../../../../lib/i18n/ds-parts'
+import { useT } from '../../../../../lib/i18n/provider' // F-CA-228
 import type { StepUpModel } from '../../../../admin/shared/model'
 import type { Privacy, PrivacyContact } from '../api'
-import { BASES, basisProblems, copyCounts, keptKey, privacyHeld, valueOf, wordsProblem, type DepthCan, type PrivacyDialog, type Read } from '../model'
-import { DepthCard, ReadOr, useSay } from './parts'
+import { BASES, basisProblems, copyCounts, keptKey, wordsProblem, type DepthCan, type PrivacyDialog, type Read } from '../model'
+import { useSay } from './parts'
 
 /**
- * Addresses & contacts › Contacts: consent, lawful basis and the personal-data actions (B-W2b-324; SAL-022; design
- * customer.contacts.grid#1 "Consent and lawful basis", #2 "Personal-data actions: access copy, erasure (keeps what law
- * requires)"): for every contact, why we may keep their details (GDPR art. 6) with its article, their consent (when and
- * how), an objection, an erasure; the acts in each row's ⋯ — record the lawful basis, record an objection, make an access
- * copy (art. 15: what we hold, counted kind by kind, downloaded as a file), erase (art. 17: the person's fields blanked for
- * good, the documents the law keeps kept and said; a fresh code; refused while a portal user still has the e-mail).
- * Personal data stays inside this record. Fetches nothing.
+ * The contacts' personal-data windows (B-W2b-324; SAL-022; design customer.contacts.grid#2): record the lawful basis (GDPR art. 6,
+ * its article; a consent's when and how), record an objection (art. 21, on the day it was made), make an access copy (art. 15: what
+ * we hold, counted kind by kind, downloaded as a file), erase (art. 17: the person's fields blanked for good, the documents the law
+ * keeps kept and said; a fresh code; refused while a portal user still has the e-mail). F-CA-229 (customer People & addresses ca-w2
+ * W2.5; Z14): today's table of every contact went — each act is on the person's ⋯ in People and opens these windows
+ * (`PrivacyWindows`); the summary and the people who need a look are People's Personal data section. Fetches nothing.
  */
 
 export interface PrivacyModel {
@@ -39,79 +38,6 @@ export interface PrivacyActions {
   onRetry?: () => void
   onStepUpCode?: (code: string) => void
   onStepUpClose?: () => void
-}
-
-export function PrivacyCard({ model, actions }: { model: PrivacyModel; actions?: PrivacyActions }) {
-  const { t, day } = useSay()
-  const read = valueOf(model.read)
-  const item = (contact: PrivacyContact, act: 'basis' | 'objection' | 'copy' | 'erase') => {
-    const held = privacyHeld(contact, act, model.can, model.status)
-    return { id: act, label: t(`privacy.act.${act}`), onSelect: () => actions?.onOpen?.(act, contact), disabled: held !== null, description: held ? t(held) : t(`privacy.act.${act}Hint`) }
-  }
-  return (
-    <DepthCard title={t('privacy.title')} hint={t('privacy.hint')}>
-      <ReadOr status={model.read.status} problem={model.read.status === 'error' ? model.read.problem : undefined} title={t('privacy.title')} onRetry={actions?.onRetry}>
-        {read ? (
-          <div className="fw-cdp-stack">
-            {read.notRecorded > 0 && <Banner tone="warning" title={t('privacy.notRecorded', { count: read.notRecorded })} />}
-            {read.contacts.length === 0 ? (
-              <p className="fw-cdp-hint">{t('privacy.none')}</p>
-            ) : (
-              <SummaryTable
-                label={t('privacy.title')}
-                stackOnPhone
-                density="roomy"
-                columns={[t('privacy.col.contact'), t('privacy.col.basis'), t('privacy.col.consent'), t('privacy.col.objection'), t('privacy.col.state'), '']}
-                widths={['20%', '24%', '20%', '12%', '16%', '8%']}
-                rows={read.contacts.map((contact) => ({
-                  id: contact.id,
-                  cells: [
-                    contact.erased ? <span key="n" className="fw-cdp-hint">{t('privacy.erasedName')}</span> : <span key="n" className="fw-cdp-name">{contact.name}</span>,
-                    contact.lawfulBasis ? (
-                      <span key="b" className="fw-cdp-cell">
-                        <span>{t(`basis.${contact.lawfulBasis}`)}</span>
-                        <span className="fw-cdp-hint">{t(`basisArticle.${contact.lawfulBasis}`)}</span>
-                      </span>
-                    ) : (
-                      <span key="b" className="fw-cdp-warn">
-                        {t('privacy.basisMissing')}
-                      </span>
-                    ),
-                    contact.consentAt ? (
-                      <span key="c" className="fw-cdp-cell">
-                        <span>{day(contact.consentAt)}</span>
-                        <span className="fw-cdp-hint">{contact.consentSource ?? ''}</span>
-                      </span>
-                    ) : (
-                      '—'
-                    ),
-                    contact.objectedAt ? <Tag key="o" tone="warning">{t('privacy.objectedOn', { date: day(contact.objectedAt) })}</Tag> : '—',
-                    contact.erased ? (
-                      <span key="s" className="fw-cdp-cell">
-                        <Tag tone="neutral">{t('privacy.erased')}</Tag>
-                        <span className="fw-cdp-hint">{contact.erasedAt ? t('privacy.erasedOn', { date: day(contact.erasedAt), by: contact.erasedBy ?? t('hold.system') }) : ''}</span>
-                      </span>
-                    ) : (
-                      t(`contactStatus.${contact.status === 'ARCHIVED' ? 'ARCHIVED' : 'ACTIVE'}`)
-                    ),
-                    <Menu
-                      key="m"
-                      align="right"
-                      label={<MoreHorizontal size={16} aria-hidden />}
-                      triggerProps={{ 'aria-label': t('privacy.menu', { name: contact.erased ? t('privacy.erasedName') : contact.name }) }}
-                      items={[item(contact, 'basis'), item(contact, 'objection'), { id: 'sep', separator: true }, item(contact, 'copy'), item(contact, 'erase')]}
-                    />,
-                  ],
-                }))}
-              />
-            )}
-            <p className="fw-cdp-hint">{t('privacy.rule')}</p>
-          </div>
-        ) : null}
-      </ReadOr>
-      <PrivacyWindows model={model} actions={actions} />
-    </DepthCard>
-  )
 }
 
 /**
@@ -150,6 +76,7 @@ function download(raw: unknown, name: string): void {
 
 function PrivacyDialogView({ model, actions }: { model: PrivacyModel; actions?: PrivacyActions | undefined }) {
   const { t, say, when } = useSay()
+  const cp = useT('customer-people') // F-CA-228: the objection's day says the People tab's words (Z20: new words live there)
   const dialog = model.dialog
   if (!dialog) return null
   const name = dialog.contact.name
@@ -230,6 +157,10 @@ function PrivacyDialogView({ model, actions }: { model: PrivacyModel; actions?: 
       >
         <div className="fw-cdp-stack">
           <p className="fw-cdp-hint">{t('objection.body')}</p>
+          {/* F-CA-228 (ca-w2 W2.5; R-B7): the day the person objected — recorded as that day, not the day it was typed. */}
+          <Field label={cp('privacy.objectionDay')} hint={cp('privacy.objectionDayHint')}>
+            <DateField value={dialog.day ?? model.today} max={model.today} onChange={(value) => actions?.onDraft?.({ ...dialog, day: value })} />
+          </Field>
           {words(t('objection.words'), t('objection.wordsHint'))}
           {failed}
         </div>

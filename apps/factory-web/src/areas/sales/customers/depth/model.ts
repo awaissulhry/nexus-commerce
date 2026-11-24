@@ -88,6 +88,8 @@ export type PrivacyDialog =
       readonly copy: (AccessCopy & { raw: unknown }) | null
       /** What the erasure kept (erase, done). */
       readonly kept: Erased['kept'] | null
+      /** F-CA-228 (R-B7): the day the person objected (objection only; YYYY-MM-DD, today or before). */
+      readonly day?: string
     })
 
 // ---- who may do what -------------------------------------------------------------------------------------------------------
@@ -324,6 +326,13 @@ export function wordsProblem(words: string): Words | null {
   if (text === '') return say('privacy.problem.words')
   if (text.length > PRIVACY_LIMITS.words) return say('problem.tooLong', { max: PRIVACY_LIMITS.words })
   return null
+}
+
+/** F-CA-228 (R-B7): the objection's day as the API's instant — noon UTC of that day, never later than now (today's stays today). */
+export function objectionAt(day: string | undefined, now: Date = new Date()): string | null {
+  if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return null
+  const noon = `${day}T12:00:00.000Z`
+  return Date.parse(noon) > now.getTime() ? now.toISOString() : noon
 }
 
 /** Why an act on a contact is held (a key), or null. */

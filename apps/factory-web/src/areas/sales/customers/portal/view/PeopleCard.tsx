@@ -27,8 +27,8 @@ const BULK: ReadonlyArray<{ action: RowAction; icon: ReactElement; tone?: 'dange
  * selected; the keys in the footer's one icon; cards on a phone). ⋯ per row: change the access, the invitation again or
  * revoked, suspend, reactivate, deactivate. Each action says why it is held.
  */
-// F-SA-274: `contactEmails` — the customer's contacts' e-mails (People & addresses): a person with the same e-mail is tagged "Contact".
-export function PeopleCard({ model, actions, contactEmails }: { model: PortalAccessModel; actions?: PortalAccessActions; contactEmails?: ReadonlySet<string> | undefined }) {
+// F-CA-229 (customer People & addresses ca-w2 W2.5): the "Contact" tag on the same e-mail went with People's two cards (one row per person).
+export function PeopleCard({ model, actions }: { model: PortalAccessModel; actions?: PortalAccessActions }) {
   const t = usePortalT()
   const locale = useLocale()
   const access = model.access!
@@ -46,7 +46,6 @@ export function PeopleCard({ model, actions, contactEmails }: { model: PortalAcc
         <span className="fw-pa-cell">
           <span className="fw-pa-strong">{data.displayName}</span>
           {data.admin ? <Pill tone="neutral">{t('people.admin')}</Pill> : null}
-          {contactEmails?.has(data.email.trim().toLowerCase()) ? <Pill tone="neutral">{t('people.isContact')}</Pill> : null}
         </span>
       ) : null
     const RoleCell = ({ data }: ICellRendererParams<PartnerPerson>) =>
@@ -115,7 +114,7 @@ export function PeopleCard({ model, actions, contactEmails }: { model: PortalAcc
     )
     return list
     // roleOf and open read only `t` and `actions`.
-  }, [t, locale, now, prices, model.can, actions, contactEmails])
+  }, [t, locale, now, prices, model.can, actions])
 
   const left = seatsLeft(access.seats)
   const seats = access.seats.max === null ? t('people.seatsOpen', { count: access.seats.taken }) : t('people.seats', { taken: access.seats.taken, max: access.seats.max })

@@ -242,8 +242,7 @@
     "emptyHint": {
       "customers": "Invite the first person: they get an e-mail and sign in with a code.",
       "suppliers": "Links still work without an account. Invite a contact to give them the portal."
-    },
-    "isContact": "Contact"
+    }
   },
   "row": {
     "change": "Change access…",

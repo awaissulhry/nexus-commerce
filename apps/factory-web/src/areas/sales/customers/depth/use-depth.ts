@@ -59,6 +59,7 @@ import {
   requirementProblems,
   requirementRefusal,
   todayOf,
+  objectionAt, // F-CA-228
   valueOf,
   wordsProblem,
   type HoldDialog,
@@ -115,7 +116,9 @@ export function useCustomerDepth(partyId: string) {
     else if (tab === 'money') void Promise.all([loadGlance(), loadHolds()])
     // B-TH-260: Terms & requirements reads the hold, the PO-number terms and the requirements in force together.
     else if (tab === 'terms') void Promise.all([loadHolds(), loadTerms(), loadRequirements()])
-    else if (tab === 'people') void Promise.all([loadPrivacy(), loadGlance()]) // F-SA-271: Addresses & contacts → People & addresses
+    // F-CA-228 (ca-w2 W2.5): People reads the contacts' privacy only — its riders and profiles are its own reads now (the glance stays the
+    // Overview's and Money's).
+    else if (tab === 'people') void loadPrivacy() // F-SA-271: Addresses & contacts → People & addresses
   }, [loadGlance, loadHolds, loadPrivacy, loadRequirements, loadTerms, tab])
 
   useEffect(() => {
@@ -255,7 +258,7 @@ export function useCustomerDepth(partyId: string) {
   const [privacyDialog, setPrivacyDialog] = useState<PrivacyDialog | null>(null)
   const openPrivacy = (kind: PrivacyDialog['kind'], contact: PrivacyContact) => {
     if (kind === 'basis') setPrivacyDialog({ kind, contact, draft: basisDraftOf(contact), busy: false, failed: null, portal: false, tried: false })
-    else setPrivacyDialog({ kind, contact, words: '', busy: false, failed: null, portal: false, tried: false, copy: null, kept: null })
+    else setPrivacyDialog({ kind, contact, words: '', busy: false, failed: null, portal: false, tried: false, copy: null, kept: null, ...(kind === 'objection' ? { day: today } : {}) }) // F-CA-228: the objection's day, today to start
   }
   const confirmPrivacy = async () => {
     const dialog = privacyDialog
@@ -273,7 +276,7 @@ export function useCustomerDepth(partyId: string) {
         setPrivacyDialog(null)
         setNotice({ tone: 'success', words: { key: 'privacy.done.basis', params: { name: contact.name } } })
       } else if (dialog.kind === 'objection') {
-        setPrivacy(ready(await recordObjection(api, partyId, contact.id, { version: contact.version, words: dialog.words.trim() }, newIdempotencyKey())))
+        setPrivacy(ready(await recordObjection(api, partyId, contact.id, { version: contact.version, words: dialog.words.trim(), at: objectionAt(dialog.day) /* F-CA-228 (R-B7): the real day */ }, newIdempotencyKey())))
         setPrivacyDialog(null)
         setNotice({ tone: 'success', words: { key: 'privacy.done.objection', params: { name: contact.name } } })
       } else if (dialog.kind === 'copy') {

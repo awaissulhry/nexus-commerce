@@ -11,6 +11,7 @@ import type { PrivacyContact } from '../../depth/api'
 import { addressRows, invoiceAddressOf, refusedInView, shownAddresses, addressMenu } from './addresses'
 import { peopleAnswer, peopleBadge, peopleSectionAnswer, personFilterOf, privacyExceptions, privacySectionAnswer, type PeopleFacts } from './answer'
 import { addressArchiveWarnings, contactArchiveWarnings } from './archive'
+import { objectionAt } from '../../depth/model'
 import { CP, failedRead, PEOPLE_SECTIONS, PEOPLE_TAB_NAMESPACES, peopleCan, READING, readyRead, said, sayOf, type Said } from './model'
 import { partyUsageSchema, type PartyUsage, type RidersView } from './api'
 import { riderMenu, riderRows, ridersAnswer } from './riders'
@@ -246,9 +247,11 @@ describe('the tab\'s model (tab.ts) and the windows mounted in place', () => {
 
   it('the portal container is ONE hook moved out of PortalAccess.tsx (the body as is); the requests read only where they are drawn', () => {
     const portal = readFileSync(new URL('../../portal/PortalAccess.tsx', import.meta.url), 'utf8')
-    expect(portal).toContain('export function usePortalAccess({ side, party, parts, onPeople, enabled }: PortalAccessInput): { model: PortalAccessModel; actions: PortalAccessActions } {')
-    expect(portal).toContain('const { model, actions } = usePortalAccess({ side, party, parts, onPeople })')
-    expect(portal).toContain('<PortalAccessView parts={parts} contactEmails={contactEmails} model={model} actions={actions} />')
+    // F-CA-229 (W2.5): the e-mail tags (contactEmails, onPeople) went with People's two cards.
+    expect(portal).toContain('export function usePortalAccess({ side, party, parts, enabled }: PortalAccessInput): { model: PortalAccessModel; actions: PortalAccessActions } {')
+    expect(portal).toContain('const { model, actions } = usePortalAccess({ side, party, parts })')
+    expect(portal).toContain('<PortalAccessView parts={parts} model={model} actions={actions} />')
+    expect(portal).not.toMatch(/contactEmails|onPeople/)
     expect(portal).toContain("const drawsRequests = (parts ?? PORTAL_PARTS).includes('requests')")
     expect(portal).toContain('if (!can.view || !on || !drawsRequests) return')
     const tab = readFileSync(new URL('./use-people-tab.ts', import.meta.url), 'utf8')
@@ -572,5 +575,33 @@ describe('Personal data, its acts on the person, the Archive windows (W2.4)', ()
     expect(container).toContain('openPrivacy: privacy.state.onOpen')
     expect(readFileSync(new URL('../view/people/PeopleTab.tsx', import.meta.url), 'utf8')).toContain('<PrivacyWindows model={privacy.model} actions={privacy.actions} />')
     expect(readFileSync(new URL('./use-people-tab.ts', import.meta.url), 'utf8')).toContain("input.openPrivacy?.(act, row.privacy)")
+  })
+})
+
+// ---- ca-w2 W2.5: the old code out (each after a grep of its every use on main)
+describe('the old People parts are out (W2.5)', () => {
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+
+  it('People reads the contacts\' privacy only (its riders and profiles are its own reads); the glance stays the Overview\'s and Money\'s', () => {
+    const depth = source('../../depth/use-depth.ts')
+    expect(depth).toContain("else if (tab === 'people') void loadPrivacy()")
+    expect(depth).not.toContain('loadPrivacy(), loadGlance()')
+    expect(depth).toContain("else if (tab === 'money') void Promise.all([loadGlance(), loadHolds()])")
+  })
+
+  it('R-B7: an objection is recorded on the day the person objected (noon UTC of that day; never later than now)', () => {
+    expect(objectionAt('2026-11-20', new Date('2026-11-24T09:00:00.000Z'))).toBe('2026-11-20T12:00:00.000Z')
+    expect(objectionAt('2026-11-24', new Date('2026-11-24T09:00:00.000Z'))).toBe('2026-11-24T09:00:00.000Z')
+    expect(objectionAt(undefined)).toBeNull()
+    expect(source('../../depth/use-depth.ts')).toContain('at: objectionAt(dialog.day)')
+  })
+
+  it('the depth slot keeps only Terms & requirements\' parts; the hold connector stays (the Money lane\'s KEEP); the glance parts and the table went', () => {
+    const slot = source('../../depth/CustomerDepth.tsx')
+    expect(slot).not.toMatch(/NowPart|ContactsPart|GlanceNow|PrivacyCard\b/)
+    expect(slot).toContain('export function useCustomerHold(party: Party)')
+    expect(readdirSync(new URL('../../depth/view/', import.meta.url))).not.toContain('GlanceParts.tsx')
+    expect(source('../../depth/view/PrivacyCard.tsx')).not.toContain('export function PrivacyCard(')
+    expect(source('../../portal/view/PeopleCard.tsx')).not.toMatch(/contactEmails|isContact/)
   })
 })

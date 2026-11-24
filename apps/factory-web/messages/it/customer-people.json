@@ -170,7 +170,9 @@
     "allGood": "Ogni contatto ha una base giuridica; nessuna opposizione, nessuna cancellazione.",
     "foot": "I dati dei contatti (nomi, e-mail, telefoni) li vede ogni ruolo che apre i clienti: Titolare, Commerciale, Amministrazione contabile, Acquisti, Responsabile di produzione, Magazzino, Designer della fabbrica e Sola lettura. Le azioni sono nel ⋯ di ogni persona in Persone.",
     "request": "Apri una richiesta in Amministrazione › Privacy ›",
-    "info": "Dati personali (GDPR): perché possiamo conservare i dati di ogni persona (art. 6), un'opposizione (art. 21), una copia di ciò che conserviamo (art. 15), una cancellazione (art. 17). Ogni azione è nel ⋯ della persona in Persone; qui solo ciò che va guardato."
+    "info": "Dati personali (GDPR): perché possiamo conservare i dati di ogni persona (art. 6), un'opposizione (art. 21), una copia di ciò che conserviamo (art. 15), una cancellazione (art. 17). Ogni azione è nel ⋯ della persona in Persone; qui solo ciò che va guardato.",
+    "objectionDay": "Quando la persona si è opposta",
+    "objectionDayHint": "Oggi o prima: viene registrata con quel giorno."
   },
   "row": {
     "menu": "Azioni per {name}",
