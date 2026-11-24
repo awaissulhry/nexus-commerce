@@ -151,7 +151,7 @@ import { CustomerOverviewView } from './view/overview/CustomerOverviewView'
 /** F-CA-120: the portal of the people-portal case — Moda Demo's orders contact (same e-mail, another case of letters) and one person who is no contact. */
 const PEOPLE_PORTAL: PartnerPerson[] = [
   { id: 'd0000000-0000-4000-8000-0000000ca001', displayName: 'Anna Demo', email: 'ACQUISTI@moda-demo.example.com', kind: 'CUSTOMER', status: 'ACTIVE', roleKey: 'customer-buyer', roleName: 'Buyer', seesPrices: true, admin: false, capabilities: ['comment'], accessUntil: null, accessEndsSoon: false, lastSignInAt: '2026-10-28T15:10:00.000Z', invitation: null, version: 3 },
-  { id: 'd0000000-0000-4000-8000-0000000ca002', displayName: 'Paolo Campione', email: 'paolo.campione@example.com', kind: 'CUSTOMER', status: 'INVITED', roleKey: null, roleName: null, seesPrices: false, capabilities: [], accessUntil: null, accessEndsSoon: false, lastSignInAt: null, invitation: { id: 'd0000000-0000-4000-8000-0000000ca003', expiresAt: '2026-11-30T09:00:00.000Z' }, version: 1 },
+  { id: 'd0000000-0000-4000-8000-0000000ca002', displayName: 'Paolo Campione', email: 'paolo.campione@example.com', kind: 'CUSTOMER', status: 'INVITED', roleKey: null, roleName: null, seesPrices: false, admin: false, capabilities: [], accessUntil: null, accessEndsSoon: false, lastSignInAt: null, invitation: { id: 'd0000000-0000-4000-8000-0000000ca003', expiresAt: '2026-11-30T09:00:00.000Z' }, version: 1 },
 ]
 const by = (code: string): Party => [...CUSTOMERS, ARCHIVED_CUSTOMER].find((item) => item.code === code)!
 const record = (code: string, over: Partial<PartyRecordModel> = {}) => recordModel('customers', by(code), over)
