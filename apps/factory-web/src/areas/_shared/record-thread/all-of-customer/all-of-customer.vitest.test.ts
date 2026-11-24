@@ -330,7 +330,6 @@ describe('F-OP-204 — All of <Customer> inside the card: FeedHead, the width me
 // inside the card ---------------------------------------------------------------------------------------------------------------------
 describe('F-OP-205 — compact lines, expand in place, the states inside the card', () => {
   const model = (state: FeedState, over: Partial<Parameters<typeof feedModel>[1]> = {}) => feedModel(state, { customerName: 'Brand Alpha', prefix: '/w/x', view: 'all', kind: 'every', canReadFiles: true, ...over })
-  const file = (id: string, status: 'AVAILABLE' | 'QUARANTINED' = 'AVAILABLE') => ({ id, name: `${id}.pdf`, sizeBytes: 10, contentType: 'application/pdf', status })
 
   // tw- W2.5 (replaces the compact lines): the thread's own bubbles — runs by the thread's rule, a run ends where the record changes.
   it('the rows: oldest first; a run ends where the record changes, then by the thread’s rule (sender, who reads it, day)', () => {
