@@ -924,7 +924,7 @@ describe('tw- W2.2 — the walls of the face: never forward, star, delete, edit,
 import { SENDER_TONES, tonesFor } from '../parts/tones'
 
 describe('tw- fx2 — colours, audience icons and the touch arrow after the walk', () => {
-  it('G-7: eight person tones (no yellow, no slate); one colour per person inside a list, deterministic', () => {
+  it('G-7: seven person tones (no yellow, no red, no slate); one colour per person inside a list, deterministic', () => {
     expect([...SENDER_TONES]).toEqual(['purple', 'emerald', 'pink', 'orange', 'blue', 'cyan', 'violet'])
     expect(SENDER_TONES as readonly string[]).not.toContain('red')
     expect(SENDER_TONES as readonly string[]).not.toContain('yellow')
@@ -933,8 +933,12 @@ describe('tw- fx2 — colours, audience icons and the touch arrow after the walk
     expect(new Set(keys.map((key) => tones.get(key))).size).toBe(5)
     expect(tonesFor([...keys].reverse())).toEqual(tones)
     expect(tonesFor([null, undefined, 'USER:mario']).size).toBe(1)
-    const many = Array.from({ length: 8 }, (_, index) => `USER:${index}`)
-    expect(new Set(many.map((key) => tonesFor(many).get(key))).size).toBe(8)
+    const many = Array.from({ length: 7 }, (_, index) => `USER:${index}`)
+    expect(new Set(many.map((key) => tonesFor(many).get(key))).size).toBe(7)
+    // An eighth sender shares a tone (there are seven), the same way every time.
+    const eight = Array.from({ length: 8 }, (_, index) => `USER:${index}`)
+    expect(new Set(eight.map((key) => tonesFor(eight).get(key))).size).toBe(7)
+    expect(tonesFor([...eight].reverse())).toEqual(tonesFor(eight))
   })
 
   it('G-11: a shared message of channel APP carries the portal icon (never shared by colour alone)', () => {
