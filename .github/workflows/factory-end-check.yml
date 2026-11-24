@@ -415,6 +415,16 @@ jobs:
         if: steps.browsers.outputs.cache-hit != 'true'
       - run: npx playwright install-deps chromium
         if: steps.browsers.outputs.cache-hit == 'true'
+      # 2026-11-24 (lane ca-): the 30 stages peak at ~15 GB of the runner's 16 GB (th9-order-page, also before ca-). A runner
+      # WITH swap passed (swap used up to 2.7 GB); one WITHOUT swap was killed at 15.5 GB (run 45402984206, exit 143) or ran into
+      # the time limit. 8 GB more swap on the runner's disk makes the run not depend on which runner GitHub gives.
+      - name: Swap space (the stages peak near the runner's memory)
+        run: |
+          sudo fallocate -l 8G /mnt/factory-extra.swap
+          sudo chmod 600 /mnt/factory-extra.swap
+          sudo mkswap /mnt/factory-extra.swap
+          sudo swapon /mnt/factory-extra.swap
+          free -m
       - name: node scripts/factory/browser-golden-flow.mjs --next-start
         # Its own ports (8276, 8277, 3276), queue prefix and the local stack's Redis: the defaults, nothing else runs here.
         # One memory line a minute in this step's log (not in browser.log): if the runner is lost again, the log shows why.
