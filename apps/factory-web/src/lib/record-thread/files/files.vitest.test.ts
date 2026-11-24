@@ -9,7 +9,8 @@ import { createTranslator, messagesFor } from '../../i18n/messages'
 import { leftKeys, render, textOf } from '../parts/testing'
 import { fromApiFile, toViewerFile, type ThreadFile } from './model'
 import { fileSeries, isPricedLock, namedSeries, previewOf, pricedLockedOf, pricedMarkOf, pricedRefusalKey } from './model' // F-CP-144
-import { FileStrip } from './view/FileStrip' // F-CP-144
+import { headFiles } from '../head/model' // tw- W2.1: the head's Files icon counts what the files line counted
+import { HeadFiles } from '../head/view/RecordThreadHead'
 import { pickerGroups, pickerPricedLocked } from '../attachments/model' // F-CP-144
 import { carriable, offeredTargets, openRefusal, queryReady, sourceLine, targetLabel, useOnRefusal, type UseOnTarget } from './use-on'
 import { UseOnBody, type UseOnModel } from './view/UseOnDialog'
@@ -238,28 +239,29 @@ describe('F-CP-144: the PRICED lock on the files line and in the attach picker',
     expect(toViewerFile(lockedOne, undefined, 'Priced document — you cannot open it')).toMatchObject({ mayOpen: false, name: 'Priced document — you cannot open it' })
   })
 
-  it('the files line: no tile and no preview of a priced document, one counted line, in it and en (as Sales worker)', () => {
+  // tw- W2.1: the files line went; the head's Files icon counts the named documents only — a priced one is counted apart, never named.
+  it('the head\'s Files count: no name and no preview of a priced document, counted apart, in it and en (as Sales worker)', () => {
+    expect(headFiles([lockedOne, lockedTwo, plain])).toEqual({ count: 1, locked: 2 })
+    expect(headFiles([])).toEqual({ count: 0, locked: 0 })
+    expect(headFiles(null)).toBeNull()
     for (const locale of ['en', 'it'] as const) {
-      const html = render(createElement(FileStrip, { model: { files: [lockedOne, lockedTwo, plain], party: null, open: true } }), locale)
-      expect(textOf(html)).toContain(locale === 'en' ? '2 priced documents — you cannot open them' : '2 documenti con prezzi — non puoi aprirli')
+      const html = render(createElement(HeadFiles, { count: headFiles([lockedOne, lockedTwo, plain])!.count }), locale)
+      expect(html).toContain(locale === 'en' ? 'aria-label="Files (1)"' : 'aria-label="File (1)"')
       expect(html).not.toContain('preview-p1')
-      expect(html).toContain('preview-f1')
-      expect(html.match(/data-tile/g)?.length).toBe(2) // the plain file's tile and "All files": none for the priced ones
-      expect(leftKeys(html, ['priced', 'chip', 'strip'])).toEqual([])
+      expect(leftKeys(html, ['files'])).toEqual([])
     }
   })
 
-  it('the order\'s dock line: the read\'s pricedLeftOut counted on one line; the chip counts only the files the reader sees', async () => {
+  it('the order\'s dock: the read\'s pricedLeftOut counted apart; the Files icon counts only the files the reader sees', async () => {
     const { stripFilesOf } = await import('../../../areas/_shared/record-thread/use-order-files')
     const read = { order: { id: 'so-alpha', number: 'SO-2026-0142' }, groups: [{ key: 'ORDER', words: { en: 'Order & thread', it: 'Ordine e conversazione' }, files: [], leftOut: 0, measurementsLeftOut: 0, pricedLeftOut: 2 }], total: 0, truncated: false }
     const tiles = stripFilesOf(read, null)
     expect(tiles.map((tile) => tile.locked)).toEqual(['PRICED', 'PRICED'])
     expect(tiles.every((tile) => tile.name === '' && tile.previewUrl === null)).toBe(true)
-    const shut = textOf(render(createElement(FileStrip, { model: { files: tiles, party: null, open: false } })))
-    expect(shut).toContain('2 priced documents — you cannot open them')
-    expect(shut).not.toContain('Files (2)')
-    const mixed = textOf(render(createElement(FileStrip, { model: { files: [...tiles, plain], party: null, open: false } })))
-    expect(mixed).toContain('Files (1)')
+    // tw- W2.1: the head's Files icon counts only the files the reader may see by name.
+    expect(headFiles(tiles)).toEqual({ count: 0, locked: 2 })
+    expect(render(createElement(HeadFiles, { count: headFiles(tiles)!.count }))).not.toContain('Files (2)')
+    expect(render(createElement(HeadFiles, { count: headFiles([...tiles, plain])!.count }))).toContain('aria-label="Files (1)"')
   })
 
   it('never offered to attach: the picker leaves out every locked file and counts the priced ones', () => {

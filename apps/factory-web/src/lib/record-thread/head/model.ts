@@ -1,4 +1,5 @@
 import type { CountKind, CountPopoverModel } from '../popups/model'
+import { fileSeries, namedSeries, pricedLockedOf, type ThreadFile } from '../files/model' // tw- W2.1: the Files icon's count
 
 /**
  * B-TH-209 — the thread's Head (threads plan T1; features T1-F01…F14, rule R-ACT): ONE row that fits the narrowest dock
@@ -14,6 +15,12 @@ import type { CountKind, CountPopoverModel } from '../popups/model'
  * B-TH-288 (TH-9, on B-TH-093 / B-TH-097): "Mark done" / "Open again" — a work state apart from Close (the customer can still write;
  * a new message opens it again) — and "Search in the thread" (office only, on the server's index: never a search over the messages
  * loaded on screen; each hit re-checked by the API against its thread).
+ *
+ * tw- W2.1 (THE THREAD REBUILD; 10-design §8; P0-B1, P0-B4, Z4, P8, P12): ONE row of two lines — the title (the record, or the
+ * dock's pick as ONE menu: one label per thread) and ONE line under it (who answers next · how long · the owner; closed; done; the
+ * View with Show all; offline) — and at the right only Files (its count) · Search · ⓘ (the keys) · ⋮, so every control stays inside
+ * a 433 px dock. Everything else is a row of the ⋮ in one order (`menuRows`), the counts said as words, no hint lines; the "N new"
+ * pill went (one unread count: the feed's band and its down button).
  *
  * Brand wall (W06, W08, W24, W34): the portal head is one plain line from real states, with no office count; "Share with a
  * partner" and "Ask a partner to approve" reach only this record's party (held when it has none); the doors open the
@@ -82,8 +89,6 @@ export interface HeadOwner {
   readonly source: 'SET' | 'ASSIGNEE' | 'SUPERVISOR' | 'MAKER'
 }
 
-/** "2 new", "99+ new": the reader's own new messages (null: nothing new, no chip). */
-export const newWords = (count: number): { readonly key: 'new.count' | 'new.many'; readonly n: number } | null => (count <= 0 ? null : count > 99 ? { key: 'new.many', n: 99 } : { key: 'new.count', n: count })
 // ---- end B-TH-229
 
 /**
@@ -246,9 +251,9 @@ export interface HeadModel {
   readonly owner?: HeadOwner | null
   /** "Change owner" (threads.post): held with why, or null; undefined: not offered. */
   readonly ownerHeld?: Held | null
-  /** The reader's own new messages ("2 new"); 0: no chip. */
-  readonly newCount?: number
   // ---- end B-TH-229
+  // ---- tw- W2.1: the Files icon — how many documents the reader may open (`headFiles`); absent: no Files icon (files.read).
+  readonly files?: { readonly count: number } | null
   // ---- B-TH-251 (PROJ.linked-F05): "In project: FW27 airbag line" — the projects linking this record that the reader may open (open
   // ones first, each with its page); absent or empty: no chip. A project the reader may not open never comes here (the API's read).
   readonly projects?: readonly HeadProject[]
@@ -329,47 +334,96 @@ export function inProjectWords(projects: readonly HeadProject[] | undefined): { 
 }
 // ---- end B-TH-251
 
-/** One row of the "⋯", in order: an R-ACT door, a View choice (phone), Print, Close / Reopen. */
-export type MenuRow =
-  | { readonly kind: 'door'; readonly door: HeadDoor; readonly held: Held | null; readonly label: { readonly key: string; readonly params?: Readonly<Record<string, string | number>> }; readonly hint?: { readonly key: string; readonly params?: Readonly<Record<string, string | number>> } }
-  | { readonly kind: 'view'; readonly view: ThreadView; readonly checked: boolean }
-  | { readonly kind: 'print' }
-  | { readonly kind: 'close' | 'reopen' }
-  // B-TH-229: "Change owner…" (threads.post), after the doors.
-  | { readonly kind: 'owner'; readonly held: Held | null }
-  // B-TH-288: "Mark done" / "Open again" (threads.post), after Change owner.
-  | { readonly kind: 'done'; readonly done: boolean; readonly held: Held | null }
-  // B-TH-288: "Search in the thread" (office) — on the phone head, where the search icon does not fit.
-  | { readonly kind: 'search' }
+// ── tw- W2.1: the one line under the title, the Files count ─────────────────────────────────────────────────────────
 
 /**
- * The "⋯" rows: the five R-ACT tools ALWAYS (held with why, also at count 0), the views on a phone, Print, then Close.
- * `folded`: the count chips did not fit the row (a narrow dock): the counts go on their door's line.
+ * The ONE line under the title (office only, 10-design §8): closed ("Closed by Alex Demo, 12 Nov"), else done ("Done · Bea Esempio,
+ * 23 Nov"), else a View that is not All ("Showing Office notes · Show all"), else offline, else who answers next and how long (amber
+ * past the rule's days) and the owner. Null: nothing to say.
  */
-export function menuRows(model: Pick<HeadModel, 'holds' | 'follow' | 'reminder' | 'counts' | 'canManage' | 'closed' | 'compact' | 'views' | 'view' | 'print' | 'ownerHeld' | 'reopenWithRecord'> & Partial<Pick<HeadModel, 'done' | 'doneHeld' | 'search'>>, folded = false): MenuRow[] {
+export type HeadLine =
+  | { readonly kind: 'closed'; readonly by: string | null; readonly at: string }
+  | { readonly kind: 'done'; readonly by: string | null; readonly at: string }
+  | { readonly kind: 'view'; readonly view: ThreadView }
+  | { readonly kind: 'offline'; readonly asOf: string }
+  | { readonly kind: 'waiting'; readonly answers: Answers | null; readonly owner: HeadOwner | null | undefined }
+
+export function headLine(model: Pick<HeadModel, 'closed' | 'view' | 'offline' | 'answers' | 'owner'> & Partial<Pick<HeadModel, 'done'>>): HeadLine | null {
+  if (model.closed) return { kind: 'closed', by: model.closed.by, at: model.closed.at }
+  if (model.done) return { kind: 'done', by: model.done.by, at: model.done.at }
+  if (model.view !== 'all') return { kind: 'view', view: model.view }
+  if (model.offline) return { kind: 'offline', asOf: model.offline.asOf }
+  if (!model.answers && model.owner === undefined) return null
+  return { kind: 'waiting', answers: model.answers, owner: model.owner }
+}
+
+/**
+ * The Files icon's count: the record's documents in force the reader may open — a priced document locked for them is never counted
+ * nor named (F-CP-144; the Files window says it in one counted line). Null files (not read yet): no number.
+ */
+export function headFiles(files: readonly ThreadFile[] | null): { readonly count: number; readonly locked: number } | null {
+  if (files === null) return null
+  const series = fileSeries(files)
+  return { count: namedSeries(series).length, locked: pricedLockedOf(series) }
+}
+
+/** The keys the ⓘ lists — the ONE place for key hints (PR-14, S12): the key's glyph or its words' key, and what it does. */
+export const HEAD_KEYS: ReadonlyArray<{ readonly glyph: string | { readonly key: string }; readonly key: string }> = [
+  { glyph: 'J / K', key: 'keys.jk' },
+  { glyph: 'R', key: 'keys.r' },
+  { glyph: 'N', key: 'keys.n' },
+  { glyph: { key: 'keys.enterKey' }, key: 'keys.quote' },
+  { glyph: '/', key: 'keys.slash' },
+  { glyph: { key: 'keys.enterKey' }, key: 'keys.enter' },
+  { glyph: { key: 'keys.shiftEnterKey' }, key: 'keys.shiftEnter' },
+  { glyph: 'Esc', key: 'keys.esc' },
+]
+
+// ── the "⋮" (tw- W2.1: ONE order, 10-design §8; R-ACT) ────────────────────────────────────────────────────────────────
+
+/** One row of the "⋮", in order. Words are keys of `record-thread-head`; a held row says why (R-ACT), no other line under a row. */
+export type MenuRow =
+  | { readonly kind: 'view'; readonly view: ThreadView; readonly checked: boolean }
+  | { readonly kind: 'done'; readonly done: boolean; readonly held: Held | null }
+  | { readonly kind: 'door'; readonly door: HeadDoor; readonly held: Held | null; readonly label: { readonly key: string; readonly params?: Readonly<Record<string, string | number>> }; readonly count?: { readonly key: string; readonly params: Readonly<Record<string, string | number>> } }
+  // B-TH-229: "Change owner…" (threads.post).
+  | { readonly kind: 'owner'; readonly held: Held | null }
+  | { readonly kind: 'width'; readonly width: DockWidth | 'hide' | 'reset'; readonly checked: boolean }
+  | { readonly kind: 'print' }
+  | { readonly kind: 'close' | 'reopen' }
+
+/**
+ * The "⋮" rows, in ONE order (10-design §8): Show (the views) · Mark done · Follow · Mute · Remind me · Change owner… · Ask a partner to
+ * approve… · Share with a partner… · Followers (5) · Add task · Width · Print or save as PDF · Close thread… (threads.manage). "In
+ * project: …" stays a link in the head's line (B-TH-251).
+ * The five R-ACT tools are ALWAYS there, held with why (also at count 0); the counts are said on their rows ("Add task · 3 open").
+ */
+export function menuRows(model: Pick<HeadModel, 'holds' | 'follow' | 'reminder' | 'counts' | 'canManage' | 'closed' | 'views' | 'view' | 'print' | 'ownerHeld' | 'reopenWithRecord' | 'width'> & Partial<Pick<HeadModel, 'done' | 'doneHeld'>>): MenuRow[] {
   const following = model.follow?.following ?? false
   const muted = model.follow?.muted ?? false
-  const followers = model.counts.followers?.count
   const count = (kind: CountKind, key: string) => {
     const n = model.counts[kind]?.count ?? 0
-    return folded && n > 0 ? { hint: { key, params: { count: n } } } : {}
+    return n > 0 ? { count: { key, params: { count: n } } } : {}
   }
-  const rows: MenuRow[] = [
-    { kind: 'door', door: 'task', held: model.holds.task, label: { key: 'act.task' }, ...count('tasks', 'act.openTasks') },
-    { kind: 'door', door: 'approve', held: model.holds.approve, label: { key: 'act.approve' }, ...count('approvals', 'act.openApprovals') },
-    { kind: 'door', door: 'share', held: model.holds.share, label: { key: 'act.share' }, ...count('partners', 'act.invited') },
-    { kind: 'door', door: 'followers', held: model.holds.followers, label: followers ? { key: 'act.followersN', params: { count: followers } } : { key: 'act.followers' } },
-    { kind: 'door', door: 'follow', held: model.holds.follow, label: { key: following ? 'act.unfollow' : 'act.follow' } },
-    // Muting keeps a follow without its news: one must follow first.
-    { kind: 'door', door: 'mute', held: model.holds.mute ?? (following ? null : { key: 'held.followFirst' }), label: { key: muted ? 'act.unmute' : 'act.mute' }, hint: { key: 'act.muteHint' } },
-    { kind: 'door', door: 'remind', held: model.holds.remind, label: { key: 'act.remind' }, ...(model.reminder ? { hint: { key: model.reminder.followUp ? 'act.followUpSet' : 'act.reminderSet', params: { at: model.reminder.at } } } : {}) },
-  ]
-  // B-TH-229: who answers it, changed by whoever may write on it.
-  if (model.ownerHeld !== undefined) rows.push({ kind: 'owner', held: model.ownerHeld })
+  const followers = model.counts.followers?.count
+  const rows: MenuRow[] = []
+  if (model.views.length > 1) for (const view of model.views) rows.push({ kind: 'view', view, checked: view === model.view })
   // B-TH-288: Done apart from Close — not offered on a closed thread (closed is more than done).
   if (model.done !== undefined && !model.closed) rows.push({ kind: 'done', done: model.done !== null, held: model.doneHeld ?? null })
-  if (model.compact && model.search) rows.push({ kind: 'search' })
-  if (model.compact) for (const view of model.views) rows.push({ kind: 'view', view, checked: view === model.view })
+  rows.push({ kind: 'door', door: 'follow', held: model.holds.follow, label: { key: following ? 'act.unfollow' : 'act.follow' } })
+  // Muting keeps a follow without its news: one must follow first.
+  rows.push({ kind: 'door', door: 'mute', held: model.holds.mute ?? (following ? null : { key: 'held.followFirst' }), label: { key: muted ? 'act.unmute' : 'act.mute' } })
+  // My reminder on the record, said on its row ("Remind me · Reminder set for 18 Nov"; B-TH-289: "… if no answer").
+  rows.push({ kind: 'door', door: 'remind', held: model.holds.remind, label: { key: 'act.remind' }, ...(model.reminder ? { count: { key: model.reminder.followUp ? 'act.followUpSet' : 'act.reminderSet', params: { at: model.reminder.at } } } : {}) })
+  if (model.ownerHeld !== undefined) rows.push({ kind: 'owner', held: model.ownerHeld })
+  rows.push({ kind: 'door', door: 'approve', held: model.holds.approve, label: { key: 'act.approve' }, ...count('approvals', 'act.openApprovals') })
+  rows.push({ kind: 'door', door: 'share', held: model.holds.share, label: { key: 'act.share' }, ...count('partners', 'act.invited') })
+  rows.push({ kind: 'door', door: 'followers', held: model.holds.followers, label: followers ? { key: 'act.followersN', params: { count: followers } } : { key: 'act.followers' } })
+  rows.push({ kind: 'door', door: 'task', held: model.holds.task, label: { key: 'act.task' }, ...count('tasks', 'act.openTasks') })
+  if (model.width !== null) {
+    for (const width of DOCK_WIDTHS) rows.push({ kind: 'width', width, checked: width === model.width })
+    rows.push({ kind: 'width', width: 'hide', checked: false }, { kind: 'width', width: 'reset', checked: false })
+  }
   if (model.print) rows.push({ kind: 'print' })
   // TH-5 follow-up: a closed thread its record reopens (a closed project) offers no Reopen here; closing an open one stays.
   if (model.canManage && !(model.closed && model.reopenWithRecord)) rows.push({ kind: model.closed ? 'reopen' : 'close' })

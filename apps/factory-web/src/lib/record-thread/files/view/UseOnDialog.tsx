@@ -8,6 +8,7 @@ import { useT } from '../../../i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { typeKey } from '../../../../areas/search/model'
 import { queryReady, relationKey, targetLabel, type OfferedTarget } from '../use-on'
+import '../files.css' // tw- W2.1: its own rules (they came with the files line, which went)
 
 export const USE_ON_NS = 'record-thread-files'
 

@@ -174,18 +174,17 @@ export const designScreen = defineDesignScreen<ThreadCaseModel>({
     // ---- B-TH-300: the docked thread ----
     {
       id: 'docked',
-      label: 'Docked on a record page: Head, files line, feed, box',
+      label: 'Docked on a record page: Head, feed, box',
       model: DOCKED,
-      note: 'Three bands above the first message with the record band in the shell’s row: the Head (who answers next, the counts, View ▾, the width menu, the "⋯" that always holds Activity’s doors — R-ACT), the files line, then the feed. Saved replies ▾ beside @ in the box. Below 720 px the phone head: the record and the pill, the rest in "⋯".',
+      note: 'tw- W2.1: ONE head row of two lines — the title and who answers next · the owner — with Files (its count) · Search · ⓘ (the keys) · ⋮ (every other tool, Activity’s doors always there — R-ACT; Show, Width and the counts inside), then the feed. Saved replies ▾ beside @ in the box.',
     },
-    { id: 'docked-strip', label: 'Docked: the files strip open', model: { ...DOCKED, docked: { ...DOCKED.docked!, stripOpen: true } }, note: '← / → walk the tiles, Enter opens the one file viewer; "All files" opens the Files view.' },
     { id: 'docked-notes', label: 'Docked: View › Office notes', model: { ...DOCKED, docked: { ...DOCKED.docked!, head: { ...DOCKED.docked!.head, view: 'notes' } } }, note: 'The chip names the view; its × shows everything again.' },
     {
       id: 'docked-closed',
       label: 'Docked: a closed thread',
       model: { ...DOCKED, thread: { ...DOCKED.thread, composer: { ...DOCKED.thread.composer, context: { ...DOCKED.thread.composer.context, closed: { by: 'Bea Esempio', at: '2026-11-12T15:00:00.000Z' } } } }, docked: { ...DOCKED.docked!, head: { ...DOCKED.docked!.head, closed: { by: 'Bea Esempio', at: '2026-11-12T15:00:00.000Z' } } } },
     },
-    { id: 'docked-no-files', label: 'Docked: no files (no line)', model: { ...DOCKED, docked: { ...DOCKED.docked!, files: [] } }, note: 'Nothing empty takes a band (T2-F09): the feed starts under the Head.' },
+    { id: 'docked-no-files', label: 'Docked: no files', model: { ...DOCKED, docked: { ...DOCKED.docked!, files: [] } }, note: 'The Files icon without a number; the feed starts under the Head.' },
     { id: 'docked-brand-beta', label: 'Docked: Brand Beta’s order (brand wall)', model: dockedThread(BRAND_BETA), note: 'Brand Beta’s order shows nothing of Brand Alpha: its own files only (none here), its own name on Reply.' },
   ],
 })

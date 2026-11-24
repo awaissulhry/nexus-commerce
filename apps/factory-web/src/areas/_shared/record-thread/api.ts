@@ -288,6 +288,8 @@ export const pinSchema = z.object({
     audience: z.enum(['OFFICE', 'PARTNER']).optional(),
     attachmentCount: z.number().int(),
     removed: z.boolean(),
+    // tw- W2.1 (tw-s S.2): the writer's kind, office only; a hidden floor worker is a WORKER with no name (R12).
+    authorKind: z.enum(['USER', 'WORKER', 'PARTY', 'SYSTEM']).optional(),
   }),
 })
 export type ApiPin = z.infer<typeof pinSchema>

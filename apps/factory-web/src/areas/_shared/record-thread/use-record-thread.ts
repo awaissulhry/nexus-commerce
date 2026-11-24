@@ -10,6 +10,7 @@ import { excerptOf, replyWay } from '../../../lib/record-thread/card/model'
 import { senderTone } from '../../../lib/record-thread/parts/tones'
 import type { FeedPin } from '../../../lib/record-thread/feed/model'
 import { JUMP_LIMIT, JUMP_PAGE, type OfficeMessage } from './api'
+import { barPinsOf } from '../../../lib/record-thread/head/pins-bar' // tw- W2.1: the pinned bar (Z14: every host)
 import { jumpRefusal } from './state'
 import { cardDepth } from '../../../lib/record-thread/card/model' // B-TH-255
 import { startDraft, switchMode, type ComposerContext, type ComposerDraft } from '../../../lib/record-thread/composer/model'
@@ -575,6 +576,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   // B-TH-286: the pinned messages (the card's pin and its ⋯ "Unpin").
   const pinnedIds = useMemo(() => new Set((pins ?? []).map((pin) => pin.messageId)), [pins])
   // tw- W1.3 (10-design §7): "Alex Demo pinned a message" — the office's pins with who pinned them (this container is office only).
+  // tw- W2.1 (W-080, P11, R12): the pinned bar's pins, newest first (a writer kept back by the gate: "A person on the floor").
+  const pinned = useMemo(() => barPinsOf(pins ?? []), [pins])
   const pinPills = useMemo<FeedPin[]>(() => (pins ?? []).flatMap((pin) => (pin.pinnedBy?.name ? [{ messageId: pin.messageId, at: pin.pinnedAt, by: pin.pinnedBy.name }] : [])), [pins])
   const cards = useMemo<CardMessage[]>(
     // B-TH-255 (T3-F14, T3-F15): each card also says whether its writer was erased and which files of its mail were not kept.
@@ -666,6 +669,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     kept,
     notice,
     saved, // B-TH-287
+    pinned, // tw- W2.1
   }
 
   // ── doing ────────────────────────────────────────────────────────────────────────────────────────────────────────

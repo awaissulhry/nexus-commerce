@@ -10,10 +10,9 @@ import { ThreadMessages } from './parts/ThreadMessages'
 import { DockedStage } from './parts/DockedStage'
 import { RecordThread, type RecordThreadModel } from './RecordThread'
 // B-TH-300: the docked thread's bands in the design case.
-import type { DockWidth, HeadModel, ThreadView } from './head/model'
+import { headFiles, type DockWidth, type HeadModel, type ThreadView } from './head/model'
 import { RecordThreadHead } from './head/view/RecordThreadHead'
 import { fileSeries, toViewerFile, type FilesParty, type ThreadFile } from './files/model'
-import { FileStrip } from './files/view/FileStrip'
 import type { SavedRepliesModel } from './helpers/model'
 import { SavedReplies } from './helpers/view/SavedReplies'
 import { FileViewer } from './popups/view/FileViewer'
@@ -27,7 +26,6 @@ export interface ThreadCaseModel {
     head: HeadModel
     files: readonly ThreadFile[] | null
     party: FilesParty | null
-    stripOpen?: boolean
     replies?: SavedRepliesModel
     /** Made-up pictures and PDFs for the one file viewer. */
     sources?: Readonly<Record<string, string | Uint8Array>>
@@ -76,7 +74,6 @@ function Case({ model, onWidth, top }: { model: ThreadCaseModel; onWidth?: (choi
   const docked = model.docked
   const [feedView, setFeedView] = useState<ThreadView>(docked?.head.view ?? 'all')
   const [width, setWidth] = useState<DockWidth | null>(docked?.head.width ?? null)
-  const [stripOpen, setStripOpen] = useState(docked?.stripOpen ?? false)
   const [viewing, setViewing] = useState<string | null>(null)
   const [phone, setPhone] = useState(false)
   useEffect(() => {
@@ -93,11 +90,11 @@ function Case({ model, onWidth, top }: { model: ThreadCaseModel; onWidth?: (choi
     ? {
         head: (
           <RecordThreadHead
-            model={{ ...docked.head, view: feedView, width: phone ? null : onWidth ? docked.head.width : width, compact: phone }}
-            actions={{ onView: setFeedView, onWidth: onWidth ?? ((choice) => setWidth(choice === 'hide' ? width : choice === 'reset' ? 'forty' : choice)) }}
+            model={{ ...docked.head, view: feedView, width: phone ? null : onWidth ? docked.head.width : width, compact: phone, files: { count: headFiles(docked.files ?? [])?.count ?? 0 } }}
+            // tw- W2.1: the Files icon opens the one viewer on the newest document here (the live thread opens the Files window).
+            actions={{ onView: setFeedView, onWidth: onWidth ?? ((choice) => setWidth(choice === 'hide' ? width : choice === 'reset' ? 'forty' : choice)), onFiles: () => setViewing(latest[0]?.id ?? null) }}
           />
         ),
-        filesLine: docked.files === null || docked.files.length > 0 ? <FileStrip model={{ files: docked.files, party: docked.party, open: stripOpen }} actions={{ onToggle: setStripOpen, onOpen: (fileId) => setViewing(fileId) }} /> : null,
         helpers: docked.replies ? <SavedReplies model={docked.replies} /> : null,
         overlays: viewing && viewerIndex >= 0 ? <FileViewer files={viewerFiles} index={viewerIndex} onIndex={(index) => setViewing(viewerFiles[index]?.id ?? null)} onClose={() => setViewing(null)} /> : null,
       }

@@ -1312,13 +1312,14 @@ describe('F-CP-111 — the docked order\'s files line is the order\'s file set (
   })
   it('files count = the order\'s Files tab: one tile per listed file, "Files (N)" with N = read.total (the same container\'s read)', async () => {
     const { stripFilesOf } = await import('../../../_shared/record-thread/use-order-files')
-    const { fileSeries, filesChip } = await import('../../../../lib/record-thread/files/model')
     const { ORDER_FILES } = await import('../../orders/record/overview/fixtures')
     const tiles = stripFilesOf(ORDER_FILES, ALPHA)
-    expect(filesChip(fileSeries(tiles)).count).toBe(ORDER_FILES.total)
-    const { render, textOf } = await import('../../../../lib/record-thread/parts/testing')
-    const { FileStrip } = await import('../../../../lib/record-thread/files/view/FileStrip')
-    expect(textOf(render(createElement(FileStrip, { model: { files: tiles, party: null, open: false } })))).toContain(`Files (${ORDER_FILES.total})`)
+    // tw- W2.1: the files line went — the head's Files icon says "Files (N)" with the same count.
+    const { headFiles } = await import('../../../../lib/record-thread/head/model')
+    expect(headFiles(tiles)!.count).toBe(ORDER_FILES.total)
+    const { render } = await import('../../../../lib/record-thread/parts/testing')
+    const { HeadFiles } = await import('../../../../lib/record-thread/head/view/RecordThreadHead')
+    expect(render(createElement(HeadFiles, { count: headFiles(tiles)!.count }))).toContain(`aria-label="Files (${ORDER_FILES.total})"`)
     // The order page's Files tab counts the same read (model.files.read.total).
     expect(read('../../orders/record/view/OrderRecordView.tsx')).toContain("count: tab === 'files' ? (model.files?.read?.total ?? null)")
   })

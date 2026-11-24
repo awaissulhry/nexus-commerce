@@ -707,10 +707,12 @@ describe('F-OP-213 — scopes by rights: General when its thread is readable, Al
     expect(work).toContain("...(allOffered ? [{ value: 'all' as const")
     expect(work).toContain("const scope = dock.scope === 'all' && !allOffered ? 'general' : dock.scope")
   })
-  it('a picked thread that answers forbidden says so inside the card, the pick band kept (RecordThread: the band before the forbidden feed)', () => {
+  // tw- W2.1 (Z4, P19): the pick is the head's title; a forbidden feed keeps the title alone (the pick), so the person can switch away.
+  it('a picked thread that answers forbidden says so inside the card, the pick kept as the title (RecordThread: the title before the forbidden feed)', () => {
     const thread = readFileSync(new URL('../../../../lib/record-thread/RecordThread.tsx', import.meta.url), 'utf8')
-    expect(thread).toContain('{slots?.top ? <div className="fw-rt-top">{slots.top}</div> : null}')
-    expect(thread).toContain("{model.feed.state !== 'forbidden' && slots?.head}")
+    expect(thread).toContain("{model.feed.state !== 'forbidden' && slots?.head ? slots.head : slots?.top ? <TitleOnly pick={slots.top} /> : null}")
+    expect(thread).toContain('<HeadPickProvider pick={slots?.top ?? null}>')
+    expect(thread).not.toContain('fw-rt-top')
   })
 })
 // ---- end F-OP-213
@@ -718,22 +720,26 @@ describe('F-OP-213 — scopes by rights: General when its thread is readable, Al
 // ---- F-OP-217 (order page plan N4; 11-dock §2, §3, §7): the dock's scopes in the design screen, and the narrow-card rules ----------------
 describe('F-OP-217 — every dock scope drawn in the one card (design cases), the rules of a card of 480 px or less', () => {
   const dockOf = (html: string) => html.slice(html.indexOf('class="fw-rcf-dock"'))
-  it('This order, General and a work order: the pick band is the card\'s first band; the work order\'s line in the office tone', () => {
+  // tw- W2.1 (Z4, P0-B4): the pick is the head's title (ONE menu, one label per thread); an office-only thread shows a lock there.
+  it('This order, General and a work order: the pick is the head\'s title inside the card; the work order\'s notes with the lock', () => {
     for (const id of ['f-op-217-dock-order', 'f-op-217-dock-general', 'f-op-217-dock-work-order']) {
       const dock = dockOf(draw(id))
       expect(dock.match(/class="fw-rt-column is-docked"/g)?.length, id).toBe(1)
-      expect(dock.indexOf('class="fw-rt-top"'), id).toBeGreaterThan(dock.indexOf('class="fw-rt-column is-docked"'))
-      expect(dock, id).toContain('class="fw-thread-pick"')
+      expect(dock, id).not.toContain('class="fw-rt-top"')
+      expect(dock.indexOf('class="fw-thread-pick"'), id).toBeGreaterThan(dock.indexOf('class="fw-rth-title"'))
+      expect(dock.indexOf('class="fw-thread-pick"'), id).toBeLessThan(dock.indexOf('class="fw-rth-tools"'))
     }
-    expect(dockOf(draw('f-op-217-dock-work-order'))).toContain('class="fw-thread-pick-line is-office"')
+    expect(dockOf(draw('f-op-217-dock-work-order'))).toContain('fw-thread-pick-lock')
     expect(textOf(dockOf(draw('f-op-217-dock-general')))).toContain('Moto Demo S.r.l.')
   })
   it('All of <customer>: the card with the pick band, its Head, compact lines and the foot "Read only. Write in:" — both languages', () => {
     for (const locale of ['en', 'it'] as const) {
       const dock = dockOf(draw('f-op-217-dock-all', locale))
       const at = (part: string) => dock.indexOf(part)
-      expect(at('class="fw-rt-top"')).toBeGreaterThan(-1)
-      expect(at('class="fw-rt-top"')).toBeLessThan(at('class="fw-rth fw-aoc-head"'))
+      // tw- W2.1: the pick is All of's own head's title (one look for every scope).
+      expect(at('class="fw-rt-top"')).toBe(-1)
+      expect(at('class="fw-rth fw-aoc-head"')).toBeLessThan(at('class="fw-thread-pick"'))
+      expect(at('class="fw-thread-pick"')).toBeLessThan(at('class="fw-rt-scroll"'))
       expect(at('class="fw-rth fw-aoc-head"')).toBeLessThan(at('class="fw-rt-scroll"'))
       expect(at('class="fw-rt-scroll"')).toBeLessThan(at('class="fw-rt-foot"'))
       expect(dock.match(/<article class="fw-aoc-line/g)?.length, locale).toBe(5)
@@ -758,20 +764,20 @@ describe('F-OP-215 — the files line counts the order\'s file set (the Files ta
   const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
   it('the order\'s set as tiles: one per listed file, the count = read.total; body data locked; what the customer sees marked theirs', async () => {
     const { stripFilesOf } = await import('../../../_shared/record-thread/use-order-files')
-    const { fileSeries, filesChip } = await import('../../../../lib/record-thread/files/model')
+    const { headFiles } = await import('../../../../lib/record-thread/head/model')
     const { ORDER_FILES } = await import('./overview/fixtures')
     const tiles = stripFilesOf(ORDER_FILES, 'party-a')
     expect(tiles.map((tile) => tile.name)).toEqual(['Ordine firmato.pdf', 'Note ufficio.pdf', 'Logo ricamo.pdf', 'Taglio nero.jpg'])
-    expect(filesChip(fileSeries(tiles)).count).toBe(ORDER_FILES.total)
+    expect(headFiles(tiles)!.count).toBe(ORDER_FILES.total)
     expect(tiles[0]).toMatchObject({ visibility: ['OFFICE', 'PARTNER'], partyId: 'party-a', messageId: '0190f0e2-8282-7000-8000-000000000001', status: 'AVAILABLE' })
     expect(tiles[1]).toMatchObject({ visibility: ['OFFICE'], partyId: null })
     expect(tiles[3]).toMatchObject({ kind: 'PHOTO', recordType: 'WorkOrder' })
     const body = stripFilesOf({ ...ORDER_FILES, groups: [{ ...ORDER_FILES.groups[0]!, files: [{ ...ORDER_FILES.groups[0]!.files[0]!, bodyData: true }] }], total: 1 }, null)
     expect(body[0]).toMatchObject({ locked: 'MEASUREMENTS' })
-    // The strip draws "Files (4)", the Files tab's own count (model.files.read.total).
-    const { render, textOf: text } = await import('../../../../lib/record-thread/parts/testing')
-    const { FileStrip } = await import('../../../../lib/record-thread/files/view/FileStrip')
-    expect(text(render(createElement(FileStrip, { model: { files: tiles, party: null, open: false } })))).toContain(`Files (${ORDER_FILES.total})`)
+    // tw- W2.1: the head's Files icon says "Files (4)", the Files tab's own count (model.files.read.total).
+    const { render } = await import('../../../../lib/record-thread/parts/testing')
+    const { HeadFiles } = await import('../../../../lib/record-thread/head/view/RecordThreadHead')
+    expect(render(createElement(HeadFiles, { count: headFiles(tiles)!.count }))).toContain(`aria-label="Files (${ORDER_FILES.total})"`)
     expect(read('./view/OrderRecordView.tsx')).toContain("count: tab === 'files' ? (model.files?.read?.total ?? null)")
   })
   it('the dock reads no files of its own on the order: the page\'s ONE container, its tiles and All files to the Files tab', () => {
@@ -779,8 +785,9 @@ describe('F-OP-215 — the files line counts the order\'s file set (the Files ta
     expect(docked).toContain("const hostFiles = key.type === 'SalesOrder' ? (host.orderFiles ?? null) : null")
     expect(docked).toContain("orderId: key.type === 'SalesOrder' && !hostFiles ? key.id : null")
     expect(docked).toContain('const orderFiles = hostFiles ?? ownOrderFiles')
-    expect(docked).toContain('onAllFiles: () => (hostFiles ? hostFiles.onAll() : setFilesOpen(true)),')
-    expect(docked).toContain('model={{ files: stripFiles, party: filesParty')
+    // tw- W2.1: the files line went — the head's Files icon counts the same set and opens the Files tab on the order.
+    expect(docked).toContain('onFiles: () => (hostFiles ? hostFiles.onAll() : setFilesOpen(true)),')
+    expect(docked).toContain('files: can.readFiles ? { count: stripFiles ? (headFiles(stripFiles)?.count ?? 0) : 0 } : null,')
     const page = read('./OrderRecord.tsx')
     expect(page.match(/useOrderFiles\(api, \{/g)).toHaveLength(1)
     expect(page).toContain("enabled: tab === 'files' || session.permissions.includes('files.read'),")

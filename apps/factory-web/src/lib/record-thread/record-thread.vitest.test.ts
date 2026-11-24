@@ -153,23 +153,27 @@ describe('B-TH-300 — the docked thread', () => {
   const cases = everyCase(designScreen)
   const docked = (id: string) => cases.find(([locale, caseId]) => locale === 'en' && caseId === id)?.[2] ?? ''
 
-  it('three bands above the first message: the Head, the files line, then the feed (pictures 6–11)', () => {
+  // tw- W2.1 (10-design §8; S7): ONE head row, then (with pins) the pinned bar, then the feed — the files line went (Files is an icon).
+  it('ONE head row above the first message, its Files icon with the count; no files line (pictures 6–11)', () => {
     const html = docked('docked')
     const head = html.indexOf('class="fw-rth')
-    const files = html.indexOf('fw-rtf-line')
     const feedAt = html.indexOf('role="feed"')
     expect(head).toBeGreaterThan(-1)
-    expect(files).toBeGreaterThan(head)
-    expect(feedAt).toBeGreaterThan(files)
+    expect(feedAt).toBeGreaterThan(head)
+    expect(html).not.toContain('fw-rtf-line')
+    expect(html).not.toContain('fw-rt-top')
+    expect(html).toMatch(/class="[^"]*fw-rth-files[^"]*" aria-label="Files \(\d+\)"/)
     expect(html).toContain('class="fw-rt-column is-docked"')
     expect(html).toContain('fw-rtm-replies')
   })
 
-  it('R-ACT: the Head’s "⋯" is there at count 0 too (Activity’s tools never hide), and no "?" key overlay in the thread (PR-14)', () => {
+  it('R-ACT: the Head’s ⋮ is there at count 0 too (Activity’s tools never hide); key hints only in the ONE ⓘ (P8, PR-14)', () => {
     const html = docked('docked-no-files')
     expect(html).toContain('aria-label="Thread tools"')
+    expect(html).toContain('aria-label="Files (0)"')
     expect(textOf(html)).not.toMatch(/Keyboard shortcuts|Press \?/)
     expect(html).not.toContain('fw-rtf-line')
+    expect(html.match(/fw-rth-keys/g)?.length).toBe(1)
   })
 
   it('the brand wall: Brand Beta’s docked order shows nothing of Brand Alpha (B-TH-203)', () => {
@@ -186,56 +190,56 @@ import { createElement } from 'react'
 import { render } from './parts/testing'
 import { RecordThread, type RecordThreadActions } from './RecordThread'
 import { DockColumn } from './DockColumn'
+import { useHeadPick } from './head/view/HeadPick'
 
-describe('F-OP-201 — the one card: the pick band inside the column, DockColumn, the same band CSS', () => {
+describe('F-OP-201 / tw- W2.1 — the one card: the pick as the head’s title inside the column, DockColumn, the same band CSS', () => {
   const noop = () => undefined
   const actions: RecordThreadActions = { onDraft: noop, onSend: noop, onFiles: noop, onRemoveFile: noop, onRetryFile: noop, onShareFile: noop, onPicker: noop, onAddRecordFiles: noop, onLines: noop, onCheckBack: noop, onCheckRetry: noop, onOutside: noop, onConfirm: noop, onStay: noop, onDiscard: noop }
   const threadOfCase = (id: string) => designScreen.cases.find((item) => item.id === id)!.model.thread
-  const slots = { top: createElement('p', null, 'THE PICK'), head: createElement('p', null, 'THE HEAD'), filesLine: createElement('p', null, 'THE FILES') }
+  // A head that draws the pick as its title, as RecordThreadHead and All of's FeedHead do (useHeadPick).
+  const PickHead = () => createElement('header', null, 'THE HEAD', createElement('b', null, useHeadPick()))
+  const slots = { top: createElement('p', null, 'THE PICK'), head: createElement(PickHead) }
 
-  it('slots.top is the FIRST band inside the column, before the Head, the files line and the feed', () => {
+  it('slots.top is handed to the Head as its title, inside the column, before the feed; no band of its own', () => {
     const html = render(createElement(RecordThread, { model: threadOfCase('full-page'), actions, slots }))
     const column = html.indexOf('class="fw-rt-column is-docked"')
-    const top = html.indexOf('<div class="fw-rt-top"><p>THE PICK</p></div>')
     expect(column).toBeGreaterThan(-1)
-    expect(top).toBeGreaterThan(column)
-    expect(html.indexOf('THE HEAD')).toBeGreaterThan(top)
-    expect(html.indexOf('THE FILES')).toBeGreaterThan(html.indexOf('THE HEAD'))
-    expect(html.indexOf('role="feed"')).toBeGreaterThan(html.indexOf('THE FILES'))
+    expect(html).toContain('<header>THE HEAD<b><p>THE PICK</p></b></header>')
+    expect(html.indexOf('THE HEAD')).toBeGreaterThan(column)
+    expect(html.indexOf('role="feed"')).toBeGreaterThan(html.indexOf('THE PICK'))
+    expect(html).not.toContain('fw-rt-top')
   })
 
-  it('a forbidden thread keeps the pick (the person can switch away); the Head, the files line and the box hide as before', () => {
+  it('a forbidden thread keeps the pick as the title alone (the person can switch away); the Head and the box hide as before (P19)', () => {
     const html = render(createElement(RecordThread, { model: threadOfCase('forbidden'), actions, slots }))
-    expect(html).toContain('<div class="fw-rt-top"><p>THE PICK</p></div>')
+    expect(html).toContain('<div class="fw-rth is-title-only"><div class="fw-rth-titleblock"><div class="fw-rth-title"><p>THE PICK</p></div></div></div>')
     expect(html).not.toContain('THE HEAD')
-    expect(html).not.toContain('THE FILES')
     expect(html).not.toContain('fw-rt-composer')
     expect(textOf(html)).toContain('You cannot read this thread')
   })
 
-  it('no pick: no band, the column as before (a page without a pick: an invoice, a quote)', () => {
+  it('no pick: the Head with the record’s own title, the column as before (a page without a pick: an invoice, a quote)', () => {
     const html = render(createElement(RecordThread, { model: threadOfCase('full-page'), actions, slots: { head: slots.head } }))
-    expect(html).not.toContain('fw-rt-top')
+    expect(html).toContain('<header>THE HEAD<b></b></header>')
     expect(html).toContain('class="fw-rt-column is-docked"')
     const bare = render(createElement(RecordThread, { model: threadOfCase('full-page'), actions }))
-    expect(bare).not.toContain('fw-rt-top')
+    expect(bare).not.toContain('is-title-only')
     expect(bare).toContain('class="fw-rt-column"')
   })
 
-  it('DockColumn draws the same card: section.fw-rt-column.is-docked, named, pick band → Head → body → foot', () => {
-    const html = render(createElement(DockColumn, { label: 'All of Brand Alpha · Read only', top: createElement('p', null, 'THE PICK'), head: createElement('header', null, 'THE HEAD'), body: createElement('ol', null, 'THE LINES'), foot: createElement('span', null, 'THE FOOT') }))
+  it('DockColumn draws the same card: section.fw-rt-column.is-docked, named, Head (with the pick as its title) → body → foot', () => {
+    const html = render(createElement(DockColumn, { label: 'All of Brand Alpha · Read only', top: createElement('p', null, 'THE PICK'), head: createElement(PickHead), body: createElement('ol', null, 'THE LINES'), foot: createElement('span', null, 'THE FOOT') }))
     expect(html.startsWith('<section class="fw-rt-column is-docked" aria-label="All of Brand Alpha · Read only">')).toBe(true)
-    const top = html.indexOf('<div class="fw-rt-top"><p>THE PICK</p></div>')
-    const head = html.indexOf('<header>THE HEAD</header>')
+    const head = html.indexOf('<header>THE HEAD<b><p>THE PICK</p></b></header>')
     const body = html.indexOf('<div class="fw-rt-scroll"><ol>THE LINES</ol></div>')
     const foot = html.indexOf('<div class="fw-rt-foot"><span>THE FOOT</span></div>')
-    expect(top).toBeGreaterThan(-1)
-    expect(head).toBeGreaterThan(top)
+    expect(head).toBeGreaterThan(-1)
     expect(body).toBeGreaterThan(head)
     expect(foot).toBeGreaterThan(body)
-    // Nothing to pick, no foot: no empty band.
+    // A pick and no Head: the title alone. Nothing to pick, no foot: no empty band.
+    expect(render(createElement(DockColumn, { label: 'x', top: createElement('p', null, 'THE PICK'), body: 'B' }))).toContain('<div class="fw-rth is-title-only"><div class="fw-rth-titleblock"><div class="fw-rth-title"><p>THE PICK</p></div></div></div>')
     const bare = render(createElement(DockColumn, { label: 'x', body: 'THE LINES' }))
-    expect(bare).not.toContain('fw-rt-top')
+    expect(bare).not.toContain('fw-rth')
     expect(bare).not.toContain('fw-rt-foot')
     expect(bare).toContain('<div class="fw-rt-scroll">THE LINES</div>')
   })
@@ -250,8 +254,9 @@ describe('F-OP-201 — the one card: the pick band inside the column, DockColumn
   it('one band CSS for both: record-thread.css holds .fw-rt-top / .fw-rt-scroll / .fw-rt-foot once, both parts draw them, tokens only', () => {
     const css = readFileSync(new URL('./record-thread.css', import.meta.url), 'utf8')
     // op-fx1: once at the top level (F-OP-217's narrow-card rules re-pad them inside @container fw-rtcol, indented: not a second copy).
-    for (const band of ['fw-rt-top', 'fw-rt-scroll', 'fw-rt-foot']) expect(css.match(new RegExp(`^\\.${band} \\{`, 'gm'))?.length, band).toBe(1)
-    expect(css).toMatch(/\.fw-rt-top \{[^}]*padding: var\(--nds-space-10\) var\(--nds-space-12\) var\(--nds-space-9\);[^}]*border-bottom: 1px solid var\(--nds-border-subtle\);/)
+    // tw- W2.1: the pick band (.fw-rt-top) went — the pick is the head's title.
+    for (const band of ['fw-rt-scroll', 'fw-rt-foot']) expect(css.match(new RegExp(`^\\.${band} \\{`, 'gm'))?.length, band).toBe(1)
+    expect(css).not.toContain('.fw-rt-top')
     expect(css).toMatch(/\.fw-rt-scroll \{[^}]*flex: 1 1 auto;[^}]*min-height: 0;[^}]*overflow-y: auto;[^}]*overscroll-behavior: contain;/)
     expect(css).toMatch(/\.fw-rt-foot \{[^}]*flex: none;[^}]*border-top: 1px solid var\(--nds-border-subtle\);/)
     expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i)
@@ -262,12 +267,13 @@ describe('F-OP-201 — the one card: the pick band inside the column, DockColumn
     const dock = readFileSync(new URL('./DockColumn.tsx', import.meta.url), 'utf8')
     expect(dock).toContain("import './record-thread.css'")
     expect(dock).toContain('className="fw-rt-column is-docked"')
-    for (const band of ['fw-rt-top', 'fw-rt-scroll', 'fw-rt-foot']) expect(dock).toContain(`className="${band}"`)
+    for (const band of ['fw-rt-scroll', 'fw-rt-foot']) expect(dock).toContain(`className="${band}"`)
+    expect(dock).toContain('<HeadPickProvider pick={top ?? null}>')
     // F-OP-304 (walk #12): the dock's scroller never shares a class with a message's words (.fw-rt-body, card.css: max-width 72ch).
     expect(css).not.toMatch(/^\s*\.fw-rt-body \{/m)
     expect(dock).not.toContain('className="fw-rt-body"')
     expect(readFileSync(new URL('./card/card.css', import.meta.url), 'utf8')).toMatch(/^\.fw-rt-body \{[^}]*max-width: 72ch;/m)
-    expect(readFileSync(new URL('./RecordThread.tsx', import.meta.url), 'utf8')).toContain('<div className="fw-rt-top">{slots.top}</div>')
+    expect(readFileSync(new URL('./RecordThread.tsx', import.meta.url), 'utf8')).not.toContain('fw-rt-top')
   })
 })
 // ── end F-OP-201
