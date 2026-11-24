@@ -6,11 +6,13 @@ import { CATALOGUE, createScopedTranslator, messagesFor } from '../../../../../l
 import type { Address, Contact, Party } from '../../../../parties/_shared/api'
 import { CUSTOMERS } from '../../../../parties/_shared/fixtures'
 import type { PartnerPerson, PortalAccess } from '../../../../admin/users/partners/api'
-import { customerAccess, CUSTOMER_PEOPLE } from '../../portal/demo'
+import { customerAccess, CUSTOMER_PEOPLE, portalModel as portalModelOf } from '../../portal/demo'
 import type { PrivacyContact } from '../../depth/api'
 import { addressRows, invoiceAddressOf, refusedInView, shownAddresses, addressMenu } from './addresses'
 import { peopleAnswer, peopleBadge, peopleSectionAnswer, personFilterOf, type PeopleFacts } from './answer'
-import { CP, PEOPLE_SECTIONS, PEOPLE_TAB_NAMESPACES, peopleCan, sayOf, type Said } from './model'
+import { CP, failedRead, PEOPLE_SECTIONS, PEOPLE_TAB_NAMESPACES, peopleCan, READING, readyRead, sayOf, type Said } from './model'
+import type { PartyUsage } from './api'
+import { PEOPLE_TAB_START, peopleTabModel, type PeopleTabReads } from './tab'
 import { peopleRows, personMenu, shownPeople, type PeopleInput } from './people'
 
 /**
@@ -201,5 +203,58 @@ describe('the words: every key the tab says exists in both languages, the four s
     expect([en['field.partyLanguage'], it['field.partyLanguage']]).toEqual(['Default language', 'Lingua predefinita'])
     expect([en['form.contact.emailTwice'], it['form.contact.emailTwice']]).toEqual(['Another contact here has this e-mail', 'Un altro contatto qui ha questa e-mail'])
     for (const locale of LOCALES) expect(JSON.stringify(CATALOGUE[locale][CP])).not.toMatch(/\bpart(y|ies)\b/i)
+  })
+})
+
+// ---- W1.2: the container's model and the windows in place (13-backend §3; Z13)
+describe('the tab\'s model (tab.ts) and the windows mounted in place', () => {
+  const portalModel = portalModelOf('customers', { access: customerAccess({ people: [person('u1', 'Anna Demo', 'acquisti@moda-demo.example.com')] }) })
+  const reads = (over: Partial<PeopleTabReads> = {}): PeopleTabReads => ({ party: MODA, prefix: '/w/DEMO', can: ALL, now: NOW, portal: portalModel, privacy: null, usage: null, approverId: null, glance: null, ...over })
+
+  it('the usage lines are left out while the usage read reads or failed — never 0; read, a contact says its open quotes', () => {
+    expect(peopleTabModel(reads({ usage: READING }), PEOPLE_TAB_START).addresses.usageIn).toBe(false)
+    const usage: PartyUsage = { partyId: MODA.id, asOf: NOW, contacts: [{ contactId: MODA.contacts[0]!.id, openQuotes: 2, lastQuoteAt: null, openReturns: 0, openComplaints: 0, openServiceCases: 0, lastMailInAt: null }], addresses: [] }
+    const model = peopleTabModel(reads({ usage: readyRead(usage) }), PEOPLE_TAB_START)
+    expect(model.addresses.usageIn).toBe(true)
+    expect(model.people.all.find((row) => row.contact?.id === MODA.contacts[0]!.id)?.usage?.openQuotes).toBe(2)
+    expect(peopleTabModel(reads({ usage: failedRead('problem.read.unavailable') }), PEOPLE_TAB_START).addresses.usageIn).toBe(false)
+  })
+
+  it('without the portal right: no portal column, no portal act, the People answer says it once', () => {
+    const model = peopleTabModel(reads({ can: peopleCan(['parties.view', 'parties.manage']), portal: null }), PEOPLE_TAB_START)
+    expect(model.people.portalColumn).toBe(false)
+    expect(model.people.invite.shown).toBe(false)
+    expect(sentence(model.people.answer, 'en')).toContain('portal access is not shown for your role')
+  })
+
+  it('a chip filters its section to exactly its rows; "Show all" counts the list without it', () => {
+    const model = peopleTabModel(reads(), { ...PEOPLE_TAB_START, filter: 'noInvoices' })
+    expect(model.people.rows.map((row) => row.contact?.name)).toEqual(['Bruno Esempio'])
+    expect(model.people.unfiltered).toBe(2)
+  })
+
+  it('the portal container is ONE hook moved out of PortalAccess.tsx (the body as is); the requests read only where they are drawn', () => {
+    const portal = readFileSync(new URL('../../portal/PortalAccess.tsx', import.meta.url), 'utf8')
+    expect(portal).toContain('export function usePortalAccess({ side, party, parts, onPeople, enabled }: PortalAccessInput): { model: PortalAccessModel; actions: PortalAccessActions } {')
+    expect(portal).toContain('const { model, actions } = usePortalAccess({ side, party, parts, onPeople })')
+    expect(portal).toContain('<PortalAccessView parts={parts} contactEmails={contactEmails} model={model} actions={actions} />')
+    expect(portal).toContain("const drawsRequests = (parts ?? PORTAL_PARTS).includes('requests')")
+    expect(portal).toContain('if (!can.view || !on || !drawsRequests) return')
+    const tab = readFileSync(new URL('./use-people-tab.ts', import.meta.url), 'utf8')
+    expect(tab).toContain("parts: ['people'], enabled: on && can.portal })")
+    expect(tab).not.toMatch(/listRequests|getPortalAccess\(/)
+  })
+
+  it('the personal-data windows are ONE export; the card draws them as before', () => {
+    const card = readFileSync(new URL('../../depth/view/PrivacyCard.tsx', import.meta.url), 'utf8')
+    expect(card).toContain('export function PrivacyWindows({ model, actions }: { model: PrivacyModel; actions?: PrivacyActions | undefined })')
+    expect(card).toContain('<PrivacyWindows model={model} actions={actions} />')
+  })
+
+  it('every write names the version it read and carries an Idempotency-Key; a 409 reads the party again', () => {
+    const tab = readFileSync(new URL('./use-people-tab.ts', import.meta.url), 'utf8')
+    expect(tab).toContain('approveDeliveryAddress(api, row.id, { version: row.address.version }, newIdempotencyKey())')
+    expect(tab).toContain('refuseDeliveryAddress(api, row.id, { version: row.version, reason }, key)')
+    expect(tab).toContain("if (conflict) reload()")
   })
 })

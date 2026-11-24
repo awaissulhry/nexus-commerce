@@ -109,6 +109,20 @@ export function PrivacyCard({ model, actions }: { model: PrivacyModel; actions?:
           </div>
         ) : null}
       </ReadOr>
+      <PrivacyWindows model={model} actions={actions} />
+    </DepthCard>
+  )
+}
+
+/**
+ * F-CA-102 (customer People & addresses, lane ca-; 13-backend §3; Z13): the personal-data windows — Lawful basis, Objection, Access copy,
+ * Erase and its fresh code — as ONE export, so People & addresses opens them in place from a person's ⋯ (ca-w2). The card above draws
+ * them exactly as before.
+ */
+export function PrivacyWindows({ model, actions }: { model: PrivacyModel; actions?: PrivacyActions | undefined }) {
+  const { t } = useSay()
+  return (
+    <>
       <PrivacyDialogView model={model} actions={actions} />
       <StepUpModal
         open={model.stepUp.open}
@@ -120,7 +134,7 @@ export function PrivacyCard({ model, actions }: { model: PrivacyModel; actions?:
         onClose={() => actions?.onStepUpClose?.()}
         confirmLabel={t('erase.stepUpConfirm')}
       />
-    </DepthCard>
+    </>
   )
 }
 
