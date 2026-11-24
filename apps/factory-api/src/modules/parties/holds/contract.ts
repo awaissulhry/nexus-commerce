@@ -19,6 +19,8 @@ const holdView = output({
   releasedBy: z.string().nullable(),
   releaseWords: z.string().nullable(),
   version: z.number().int(),
+  /** F-CT-S3 (customer terms lane): in force, and the reader may release it; false once released. */
+  mayRelease: z.boolean(),
 })
 const holdsView = output({
   partyId: id(),

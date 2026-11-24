@@ -1,7 +1,7 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { DomainError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { can, type Permission } from '@nexus/factory-domain/core/permissions'
+import { can, type Actor, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { INVOICES_VIEW } from '@nexus/factory-domain/invoicing/permissions'
 import { PARTIES_MANAGE, PARTIES_VIEW } from '@nexus/factory-domain/parties/permissions'
@@ -22,7 +22,7 @@ import { QUOTES_VIEW } from '@nexus/factory-domain/sales/quotes/permissions'
 import { SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
-import { assertMayWrite, contextOf, lockParty, readParty, type PartyRowData } from '../store'
+import { assertMayWrite, contextOf, lockParty, mayWrite, readParty, type PartyRowData } from '../store'
 
 /**
  * A customer's requirements (B-W2b-290; SAL-014; design sales.customers record › Requirements; rules factory-domain
@@ -82,7 +82,7 @@ async function labelsOf(db: Reader, rows: readonly RequirementRow[], partyId: st
 }
 type Labels = Awaited<ReturnType<typeof labelsOf>>
 
-function requirementViewOf(row: RequirementRow, labels: Labels) {
+function requirementViewOf(row: RequirementRow, labels: Labels, mayChange: boolean) {
   const stages = row.appliesAt as RequirementStage[]
   return {
     id: row.id,
@@ -103,20 +103,30 @@ function requirementViewOf(row: RequirementRow, labels: Labels) {
     endedBy: row.endedById ? (labels.people.get(row.endedById) ?? null) : null,
     endReason: row.endReason,
     version: row.version,
+    /** F-CT-S3 (customer terms lane): in force, and the reader may replace or end it (its own right); false once ended. */
+    mayChange,
   }
 }
 export type RequirementView = ReturnType<typeof requirementViewOf>
 
+/** F-CT-S3: assertMayKeep's rule as a boolean (a rule's `mayChange`, the read's `mayAdd`). */
+function mayKeep(actor: Actor, party: { readonly id: string; readonly companyId: string | null }, companyId: string | null): boolean {
+  return companyId === null ? mayWrite(actor, PARTIES_MANAGE, party) : can(actor, PARTIES_MANAGE, { companyId, partyId: party.id })
+}
+
 /** The party's requirements the caller may see (its companies' and every company's): in force first, then the history. */
 export async function requirementsOf(db: Reader, context: OfficeContext, partyId: string) {
-  const party = await db.party.findUniqueOrThrow({ where: { id: partyId }, select: { id: true, code: true } })
+  const party = await db.party.findUniqueOrThrow({ where: { id: partyId }, select: { id: true, code: true, companyId: true } })
   const actor = actorOf(context)
   const rows = (await db.customerRequirement.findMany({ where: { partyId }, select: REQUIREMENT_COLUMNS, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] })).filter(
     (row) => row.companyId === null || can(actor, PARTIES_VIEW, { companyId: row.companyId, partyId }),
   )
   const labels = await labelsOf(db, rows, partyId)
-  const views = rows.map((row) => requirementViewOf(row, labels))
-  return { partyId: party.id, code: party.code, inForce: views.filter((view) => view.active), ended: views.filter((view) => !view.active) }
+  const views = rows.map((row) => requirementViewOf(row, labels, row.active && mayKeep(actor, party, row.companyId))) // F-CT-S3
+  // F-CT-S3: a rule may be added for every company, or for one of the companies the reader sees this customer with.
+  const companies = party.companyId ? [party.companyId] : (await db.company.findMany({ select: { id: true } })).map((company) => company.id)
+  const mayAdd = mayKeep(actor, party, null) || companies.some((companyId) => mayKeep(actor, party, companyId))
+  return { partyId: party.id, code: party.code, inForce: views.filter((view) => view.active), ended: views.filter((view) => !view.active), mayAdd }
 }
 export type PartyRequirementsView = Awaited<ReturnType<typeof requirementsOf>>
 
@@ -322,8 +332,10 @@ export async function requirementsForRecord(caller: CommandCaller, recordType: R
     const stages = RECORD_STAGES[recordType]
     const rows = await requirementsApplying(client, place.partyId, { companyId: place.companyId, stages, styleIds: place.styleIds })
     const labels = await labelsOf(client, rows, place.partyId)
-    const party = await client.party.findUnique({ where: { id: place.partyId }, select: { code: true, legalName: true } })
-    const views = rows.map((row) => requirementViewOf(row, labels))
+    const party = await client.party.findUnique({ where: { id: place.partyId }, select: { code: true, legalName: true, companyId: true } })
+    // F-CT-S3: the record's read shares the rule's view, so it says mayChange too (the same rule over the record's customer).
+    const holder = { id: place.partyId, companyId: party?.companyId ?? null }
+    const views = rows.map((row) => requirementViewOf(row, labels, row.active && mayKeep(actor, holder, row.companyId)))
     return {
       record: { type: recordType, id: recordId, number: place.number, companyId: place.companyId },
       party: { id: place.partyId, code: party?.code ?? '', legalName: party?.legalName ?? '' },

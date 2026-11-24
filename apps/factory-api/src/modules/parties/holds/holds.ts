@@ -1,7 +1,7 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { DomainError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { can } from '@nexus/factory-domain/core/permissions'
+import { can, type Actor } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { HOLD_REASONS, holdsInForceFor, holdWordsProblem, REASON_WORDS, type HoldReason } from '@nexus/factory-domain/parties/holds/holds'
 import { PARTIES_HOLD } from '@nexus/factory-domain/parties/holds/permissions'
@@ -9,7 +9,7 @@ import { PARTIES_VIEW } from '@nexus/factory-domain/parties/permissions'
 import { isCustomer, type PartyRole } from '@nexus/factory-domain/parties/rules'
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
-import { assertMayWrite, contextOf, isUniqueViolation, lockParty, readParty } from '../store'
+import { assertMayWrite, contextOf, isUniqueViolation, lockParty, mayWrite, readParty } from '../store'
 
 /**
  * A customer's account on hold (B-W2b-290; SAL-023; design sales.customers record › Tax & terms › Hold; rules
@@ -53,7 +53,7 @@ async function namesOf(db: Reader, ids: readonly (string | null)[]): Promise<Map
   return new Map((await db.user.findMany({ where: { id: { in: wanted } }, select: { id: true, displayName: true } })).map((row) => [row.id, row.displayName]))
 }
 
-function holdViewOf(row: HoldRow, names: ReadonlyMap<string, string>, companies: ReadonlyMap<string, { code: string; name: string }>) {
+function holdViewOf(row: HoldRow, names: ReadonlyMap<string, string>, companies: ReadonlyMap<string, { code: string; name: string }>, mayRelease: boolean) {
   return {
     id: row.id,
     companyId: row.companyId,
@@ -69,6 +69,8 @@ function holdViewOf(row: HoldRow, names: ReadonlyMap<string, string>, companies:
     releasedBy: row.releasedById ? (names.get(row.releasedById) ?? null) : null,
     releaseWords: row.releaseWords,
     version: row.version,
+    /** F-CT-S3 (customer terms lane): in force, and the reader may release it (the release's own right); false once released. */
+    mayRelease,
   }
 }
 
@@ -86,7 +88,7 @@ export async function holdsOf(db: Reader, context: OfficeContext, partyId: strin
   const companies = new Map(visible.map((company) => [company.id, { code: company.code, name: company.tradeName ?? company.legalName }]))
   const rows = (await db.partyHold.findMany({ where: { partyId }, select: HOLD_COLUMNS, orderBy: [{ placedAt: 'desc' }, { id: 'desc' }] })).filter((row) => row.companyId === null || companies.has(row.companyId))
   const names = await namesOf(db, rows.flatMap((row) => [row.placedById, row.releasedById]))
-  const views = rows.map((row) => holdViewOf(row, names, companies))
+  const views = rows.map((row) => holdViewOf(row, names, companies, row.releasedAt === null && mayHold(actor, party, row.companyId))) // F-CT-S3
   return {
     partyId: party.id,
     code: party.code,
@@ -110,6 +112,11 @@ export async function getHolds(caller: CommandCaller, partyId: string): Promise<
   const context = officeOf(caller)
   await readParty(caller, partyId)
   return caller.withClient(async (client) => ({ holds: await holdsOf(client, context, partyId) }))
+}
+
+/** F-CT-S3: assertMayHold's rule as a boolean (a hold's `mayRelease` on the read). */
+function mayHold(actor: Actor, party: { readonly id: string; readonly companyId: string | null }, companyId: string | null): boolean {
+  return companyId === null ? mayWrite(actor, PARTIES_HOLD, party) : can(actor, PARTIES_HOLD, { companyId, partyId: party.id })
 }
 
 /** parties.hold over the party, and over the company named (null: every company, as a tenant-wide write). */

@@ -86,6 +86,8 @@ export const commercialTermsView = output({
   preferredCarrierCode: z.string().nullable(),
   minimumOrderAmount: money.price(z.number().int().nullable()),
   version: z.number().int(),
+  /** F-CT-S3 (customer terms lane): the reader may change these terms (the PATCH's right over this customer). */
+  mayChange: z.boolean(),
 })
 export const getCommercialTermsContract = defineContract({ params: party, response: { 200: output({ terms: commercialTermsView }) } })
 export const updateCommercialTermsContract = defineContract({

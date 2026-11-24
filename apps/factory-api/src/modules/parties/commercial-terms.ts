@@ -1,6 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { InvalidStateError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
+import type { Actor } from '@nexus/factory-domain/core/permissions'
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
 import { PARTIES_MANAGE } from '@nexus/factory-domain/parties/permissions'
 import { isCustomer, type PartyRole } from '@nexus/factory-domain/parties/rules'
@@ -9,13 +10,13 @@ import { PRICE_LISTS_MANAGE, PRICE_LISTS_VIEW } from '@nexus/factory-domain/sale
 import type { PriceListKind } from '@nexus/factory-domain/sales/pricelists/pricelists'
 import { commercialTermsProblems, depositOf, instalmentsOf, invoiceTypePreset, termsSummary, type InvoiceTiming } from '@nexus/factory-domain/sales/terms/terms'
 import { command, type CommandCaller, type CommandTx } from '../../core/command'
-import type { OfficeContext } from '../../core/context'
+import { actorOf, type OfficeContext } from '../../core/context'
 import { givePriceListInCommand } from '../sales/pricelists/assignments'
 import { listCodesOf, listProblemFor } from '../sales/pricelists/lists'
 import { LIST_COLUMNS, mayOnList } from '../sales/pricelists/store'
 import { officeContextOf, type Reader } from '../sales/quotes/store'
 import { termsForParty } from '../sales/terms/terms'
-import { assertMayWrite, assertWritable, readParty } from './store'
+import { assertMayWrite, assertWritable, contextOf, mayWrite, readParty } from './store'
 
 /**
  * A customer's commercial terms (B-W2a-19; SAL-012; design sales.customers record, Tax & terms › "Commercial terms":
@@ -61,8 +62,8 @@ async function chainOf(db: Reader, listId: string | null) {
   return chain
 }
 
-/** The commercial terms as the customer's card reads them. */
-export async function commercialTermsOf(db: Reader, partyId: string) {
+/** The commercial terms as the customer's card reads them (F-CT-S3: with whether `actor` may change them). */
+export async function commercialTermsOf(db: Reader, partyId: string, actor: Actor) {
   const party: TermsPartyRow = await db.party.findUniqueOrThrow({ where: { id: partyId }, select: COLUMNS })
   const terms = party.paymentTermsId ? await db.paymentTerms.findUnique({ where: { id: party.paymentTermsId }, select: { id: true, code: true, name: true, nameI18n: true, method: true, instalments: true, earlyPaymentDiscountPct: true, earlyPaymentDays: true, status: true, companyId: true } }) : null
   const chain = await chainOf(db, party.priceListId)
@@ -92,6 +93,9 @@ export async function commercialTermsOf(db: Reader, partyId: string) {
     preferredCarrierCode: party.preferredCarrierCode,
     minimumOrderAmount: asMoney('price', party.minimumOrderAmount),
     version: party.version,
+    // F-CT-S3 (customer terms lane): the PATCH's own rule as a boolean (parties.manage over the customer; a tenant-wide one
+    // over every company) — the screen hides "Change terms…" without it. Whether the customer is archived is its state.
+    mayChange: mayWrite(actor, PARTIES_MANAGE, party),
   }
 }
 export type CommercialTermsView = Awaited<ReturnType<typeof commercialTermsOf>>
@@ -99,7 +103,8 @@ export type CommercialTermsView = Awaited<ReturnType<typeof commercialTermsOf>>
 /** GET /parties/:partyId/commercial-terms (parties.view). */
 export async function getCommercialTerms(caller: CommandCaller, partyId: string): Promise<{ terms: CommercialTermsView }> {
   await readParty(caller, partyId)
-  return caller.withClient(async (client) => ({ terms: await commercialTermsOf(client, partyId) }))
+  const actor = actorOf(contextOf(caller)) // F-CT-S3
+  return caller.withClient(async (client) => ({ terms: await commercialTermsOf(client, partyId, actor) }))
 }
 
 export interface CommercialTermsBody {
@@ -227,7 +232,7 @@ export async function updateCommercialTerms(caller: CommandCaller, partyId: stri
     }
     tools.audit({ action: 'parties.setCommercialTerms', recordType: 'Party', recordId: partyId, companyId: row.companyId, before: auditOf(before), after: auditOf(next) })
     if (changed.length > 0) tools.emit({ type: 'party.updated', subject: partyId, companyId: row.companyId, payload: { partyId, code: row.code, fields: [...changed] } })
-    return { terms: await commercialTermsOf(tx, partyId) }
+    return { terms: await commercialTermsOf(tx, partyId, actorOf(context)) } // F-CT-S3: the answer says mayChange too
   })
   return result
 }

@@ -318,6 +318,75 @@ describe('terms per company (SAL-028, SAL-013)', () => {
     const inA = await ok('sales', 'POST', '/sales/quotes', { companyId: A.companyA, partyId: A.p1, customerRef: 'RFQ-290-A' }, 201)
     expect(Number(inA.quote.current.depositPct)).toBe(30)
   })
+
+  // F-CT-S3 (customer terms lane, S3): each read says what its reader may change, so a screen hides what the server refuses.
+  it("a person of company B reads mayChange false on A's rule, hold and terms, true on B's", async () => {
+    // A made-up customer of company B only, beside SEED-C1 (a customer of every company: changed only by a role over every company).
+    const onlyB = newId()
+    await admin(`INSERT INTO "Party" (id, "tenantId", "companyId", code, kind, "legalName", roles, status) VALUES ($1, $2, $3, $4, 'ORGANISATION', 'Made-up Customer of B S.r.l.', '{CUSTOMER}', 'ACTIVE')`, [onlyB, A.tenant, A.companyB, `CT-B-${run}`.toUpperCase()])
+
+    // Commercial terms (the read and the PATCH's answer).
+    const termsOf = async (session: string, partyId: string): Promise<Json> => (await ok(session, 'GET', `/parties/${partyId}/commercial-terms`)).terms
+    expect((await termsOf('sales', A.p1)).mayChange).toBe(true)
+    expect((await termsOf('salesB', A.p1)).mayChange).toBe(false)
+    expect((await termsOf('reader', onlyB)).mayChange).toBe(false)
+    const own = await termsOf('salesB', onlyB)
+    expect(own.mayChange).toBe(true)
+    const patched = await ok('salesB', 'PATCH', `/parties/${onlyB}/commercial-terms`, { version: own.version, incoterm: 'EXW' })
+    expect(patched.terms).toMatchObject({ incoterm: 'EXW', mayChange: true })
+    await no('salesB', 'PATCH', `/parties/${A.p1}/commercial-terms`, { version: (await termsOf('salesB', A.p1)).version, incoterm: 'EXW' }, 403)
+    // Terms per company: a person of B reads B's row only, and may change it.
+    const perCompany = (await ok('salesB', 'GET', `/parties/${A.p1}/company-terms`)).terms.companies
+    expect(perCompany.map((row: Json) => [row.company.id, row.mayChange])).toEqual([[A.companyB, true]])
+
+    // Requirements: A's rule is not even read by a person of B; every company's rule is read, not changed; B's is changed.
+    const ruleA = (await ok('sales', 'POST', `/parties/${A.p1}/requirements`, { companyId: A.companyA, kind: 'OTHER', words: 'A rule with company A (made up).', appliesAt: ['ORDER'] }, 201)).requirementId
+    const ruleB = (await ok('salesB', 'POST', `/parties/${A.p1}/requirements`, { companyId: A.companyB, kind: 'OTHER', words: 'A rule with company B (made up).', appliesAt: ['ORDER'] }, 201)).requirementId
+    const rulesOf = async (session: string): Promise<Json> => (await ok(session, 'GET', `/parties/${A.p1}/requirements`)).requirements
+    const ruleIn = (read: Json, ruleId: string): Json | undefined => read.inForce.find((row: Json) => row.id === ruleId)
+    const forB = await rulesOf('salesB')
+    expect(forB.mayAdd).toBe(true)
+    expect(ruleIn(forB, ruleB)).toMatchObject({ mayChange: true })
+    expect(ruleIn(forB, ruleA)).toBeUndefined()
+    const everyCompany = forB.inForce.filter((row: Json) => row.companyId === null)
+    expect(everyCompany.length).toBeGreaterThan(0)
+    expect(everyCompany.every((row: Json) => row.mayChange === false)).toBe(true)
+    const forAll = await rulesOf('sales')
+    expect(forAll.mayAdd).toBe(true)
+    expect([ruleIn(forAll, ruleA)?.mayChange, ruleIn(forAll, ruleB)?.mayChange]).toEqual([true, true])
+    expect(forAll.ended.length).toBeGreaterThan(0)
+    expect(forAll.ended.every((row: Json) => row.mayChange === false)).toBe(true)
+    const forReader = await rulesOf('reader')
+    expect(forReader.mayAdd).toBe(false)
+    expect([...forReader.inForce, ...forReader.ended].every((row: Json) => row.mayChange === false)).toBe(true)
+    // The record's read shares the rule's view: SEED-SO-0001 (company A) says the same for the same reader.
+    const onOrder = await ok('sales', 'GET', `/parties/requirements/for/SalesOrder/${so1.id}`)
+    expect(onOrder.stages[0].requirements.find((row: Json) => row.id === ruleA)).toMatchObject({ mayChange: true })
+    // The server refuses what the flag hides.
+    await no('salesB', 'POST', `/parties/${A.p1}/requirements/${everyCompany[0].id}/end`, { version: everyCompany[0].version, reason: 'No.' }, 403)
+
+    // Holds: one of every company, one with B; A's (the released CREDIT hold) is not read by a person of B.
+    const holdsOf = async (session: string): Promise<Json> => (await ok(session, 'GET', `/parties/${A.p1}/holds`)).holds
+    const holdIn = (read: Json, holdId: string): Json | undefined => read.holds.find((row: Json) => row.id === holdId)
+    const everyHold = (await ok('finance', 'POST', `/parties/${A.p1}/holds`, { companyId: null, reason: 'OTHER', words: 'A hold of every company (made up).' }, 201)).holds.holds.find((row: Json) => row.inForce && row.companyId === null).id
+    const holdB = (await ok('salesB', 'POST', `/parties/${A.p1}/holds`, { companyId: A.companyB, reason: 'DATA_MISSING', words: 'A hold with company B (made up).' }, 201)).holds.holds.find((row: Json) => row.inForce && row.companyId === A.companyB).id
+    const heldB = await holdsOf('salesB')
+    expect(heldB.mayPlace).toBe(true)
+    expect([holdIn(heldB, everyHold)?.mayRelease, holdIn(heldB, holdB)?.mayRelease]).toEqual([false, true])
+    expect(heldB.holds.some((row: Json) => row.companyId === A.companyA)).toBe(false)
+    const heldAll = await holdsOf('finance')
+    expect([holdIn(heldAll, everyHold)?.mayRelease, holdIn(heldAll, holdB)?.mayRelease]).toEqual([true, true])
+    expect(heldAll.holds.filter((row: Json) => !row.inForce).length).toBeGreaterThan(0)
+    expect(heldAll.holds.filter((row: Json) => !row.inForce).every((row: Json) => row.mayRelease === false)).toBe(true)
+    const heldReader = await holdsOf('reader')
+    expect(heldReader.mayPlace).toBe(false)
+    expect(heldReader.holds.every((row: Json) => row.mayRelease === false)).toBe(true)
+    await no('salesB', 'POST', `/parties/${A.p1}/holds/${everyHold}/release`, { version: holdIn(heldB, everyHold)!.version, words: 'No.' }, 403)
+
+    // Test data out again: the holds released, the two rules ended (the tests after this one read SEED-C1 as before).
+    for (const holdId of [everyHold, holdB]) await ok('finance', 'POST', `/parties/${A.p1}/holds/${holdId}/release`, { version: holdIn(heldAll, holdId)!.version, words: 'Test data (made up).' })
+    for (const ruleId of [ruleA, ruleB]) await ok('sales', 'POST', `/parties/${A.p1}/requirements/${ruleId}/end`, { version: ruleIn(forAll, ruleId)!.version, reason: 'Test data (made up).' })
+  })
 })
 
 describe("contacts' personal data (SAL-022)", () => {
