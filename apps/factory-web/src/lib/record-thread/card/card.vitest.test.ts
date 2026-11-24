@@ -678,10 +678,14 @@ describe('tw- W1.2 — the bubble', () => {
   })
 
   it('a quote is drawn only from the message’s own replyTo / corrects (R1): the card never looks a quoted message up among loaded ones', () => {
+    // pt-w1 W1.1: the quote and the correction are drawn by the row both doors share; the card hands it the message's OWN links.
+    const row = readFileSync(new URL('./view/MessageRow.tsx', import.meta.url), 'utf8')
+    expect(row).toContain('<QuoteBlock link={message.replyTo} onJump={onJump} tones={context.tones} />') // tw- fx2 (G-7): the list's colours
+    expect(row).toContain('<CorrectionLink link={message.corrects} onJump={onJump} />')
     const card = readFileSync(new URL('./view/MessageCard.tsx', import.meta.url), 'utf8')
-    expect(card).toContain('<QuoteBlock link={message.replyTo} onJump={onJump} tones={context.tones} />') // tw- fx2 (G-7): the list's colours
-    expect(card).toContain('<CorrectionLink link={message.corrects} onJump={onJump} />')
-    for (const file of ['./view/MessageCard.tsx', './view/QuoteBlock.tsx', './quote.ts']) {
+    expect(card).toContain('corrects: message.corrects,')
+    expect(card).toContain('replyTo: message.replyTo,')
+    for (const file of ['./view/MessageCard.tsx', './view/MessageRow.tsx', './view/QuoteBlock.tsx', './quote.ts']) {
       const source = readFileSync(new URL(file, import.meta.url), 'utf8')
       expect(source, file).not.toMatch(/\.find\(|messages\.(filter|some)\(|\bmessages\b\s*[:=]/)
     }
@@ -714,7 +718,7 @@ describe('tw- W1.2 — the bubble', () => {
     expect(html).toContain('class="fw-rt-tools"')
     const css = readFileSync(new URL('./card.css', import.meta.url), 'utf8')
     expect(css).toMatch(/\.fw-rt-bub:hover \.fw-rt-tools,\s*\.fw-rt-bub:focus-within \.fw-rt-tools/)
-    expect(readFileSync(new URL('./view/MessageCard.tsx', import.meta.url), 'utf8')).not.toContain('Hint`)')
+    for (const file of ['./view/MessageCard.tsx', './view/MessageRow.tsx']) expect(readFileSync(new URL(file, import.meta.url), 'utf8'), file).not.toContain('Hint`)') // pt-w1 W1.1
     expect(render(createElement(MessageCard, { message: MAIL, context: CONTEXT, readOnly: true }))).not.toContain('fw-rt-msg-more')
   })
 
@@ -743,6 +747,59 @@ describe('tw- W1.2 — the bubble', () => {
   })
 })
 // ---- end tw- W1.2
+
+// ---- pt-w1 W1.1 (lane pt-, S2; ONE SHARED THREAD): the row both doors draw — narrow, no office field, no office import --------------
+import { MessageRow, type RowModel } from './view/MessageRow'
+
+describe('pt-w1 W1.1 — the shared message row', () => {
+  const row = readFileSync(new URL('./view/MessageRow.tsx', import.meta.url), 'utf8')
+
+  it('RowModel has no audience, note, author id or office field (the narrow row both doors fill)', () => {
+    expectTypeOf<keyof RowModel>().toEqualTypeOf<'id' | 'at' | 'kindClass' | 'ariaLabel' | 'who' | 'face' | 'org' | 'tone' | 'words' | 'names' | 'pending' | 'failed' | 'corrects' | 'replyTo' | 'correctedBy' | 'files' | 'pinned'>()
+    const start = row.indexOf('export interface RowModel {')
+    const model = row.slice(start, row.indexOf('\n}\n', start)).replace(/\/\*\*[\s\S]*?\*\//g, '')
+    expect(model).toContain('readonly kindClass: string')
+    expect(model).not.toMatch(/\b(audience|note|office|authorId|author|senderKey|amount|email|mail|channel|kind|forFloor|outbox|about|ask|change)\??:/)
+  })
+
+  it('MessageRow imports no office, portal or session code (and never the office card)', () => {
+    expect(row).not.toMatch(/from '[^']*(areas|portal|shell|record-panels|lib\/api|lib\/session)\//)
+    expect(row).not.toMatch(/from '\.\/MessageCard'/)
+    expect(row).not.toMatch(/\bfetch\(/)
+    // The office card fills it: its kind as a class, its own lines and foot parts in the row's slots.
+    const card = readFileSync(new URL('./view/MessageCard.tsx', import.meta.url), 'utf8')
+    expect(card).toContain('kindClass: `is-${message.kind}`,')
+    expect(card).toContain('lines={{ words: tail, end }}')
+  })
+
+  it('drawn alone (no host slots) it draws the article, the bubble, the quote, the words and the time — no lock, globe, tick, audience words or menu', () => {
+    const message: RowModel = {
+      id: 'p1',
+      at: '2026-11-17T09:41:00.000Z',
+      kindClass: 'is-theirs',
+      ariaLabel: 'Bea Esempio, 09:41',
+      who: 'Bea Esempio',
+      face: 'Bea Esempio',
+      org: 'Example Works',
+      tone: 'blue',
+      words: { text: 'The sizes are fine.', quoted: null },
+      replyTo: { id: 'p0', author: 'Lia Modello', excerpt: 'Are the sizes fine?', at: '2026-11-17T09:12:00.000Z', authorKind: 'PARTY' },
+      files: cardFiles([], true, true),
+    }
+    const html = render(createElement(MessageRow, { message, context: {}, run: { side: 'others', first: true, last: true, showName: true } }))
+    expect(html).toMatch(/<article class="fw-rt-msg is-theirs is-others is-start" id="message-p1" data-message-id="p1" data-feed-item="p1"/)
+    expect(html).toContain('aria-label="Bea Esempio, 09:41"')
+    expect(html).toContain('fw-rt-av is-run')
+    expect(html).toContain('class="fw-rt-quote fw-rt-tone-')
+    expect(textOf(html)).toContain('Bea Esempio Example Works')
+    expect(textOf(html)).toContain('The sizes are fine.')
+    expect(html).toMatch(/<time [^>]*>\d\d:\d\d<\/time>/)
+    for (const office of ['fw-rt-lock', 'lucide-lock', 'lucide-globe', 'lucide-check', 'fw-rt-audwords', 'fw-rt-msg-more', 'is-note']) expect(html, office).not.toContain(office)
+    // An erased message: the one shared line, no name of what it said.
+    expect(textOf(render(createElement(MessageRow, { message: { ...message, words: 'erased' }, context: {}, run: { side: 'others', first: true, last: true, showName: true } })))).toContain('Message removed after a privacy request')
+  })
+})
+// ---- end pt-w1 W1.1
 
 
 // ---- tw- W2.2 (THE THREAD REBUILD; 10-design §9, S8; B7, Z2; W-060, W-061; R6–R9, R15, R16): ONE menu, ONE order, Email details ----
@@ -815,7 +872,7 @@ describe('tw- W2.2 — the message menu per kind and per reader (10-design §9)'
     expect(withDoors).toContain(`aria-label="More for the message of Lia Modello at`)
     const css = readFileSync(new URL('./card.css', import.meta.url), 'utf8')
     expect(css).toMatch(/\.fw-rt-bub:hover \.fw-rt-tools,\s*\.fw-rt-bub:focus-within \.fw-rt-tools,/)
-    const source = readFileSync(new URL('./view/MessageCard.tsx', import.meta.url), 'utf8')
+    const source = readFileSync(new URL('./view/MessageRow.tsx', import.meta.url), 'utf8') // pt-w1 W1.1: the row's article
     expect(source).toContain('onContextMenu={onContextMenu}')
     expect(opensOnRightClick({ target: { closest: () => null } as unknown as EventTarget }, '')).toBe(true)
     expect(opensOnRightClick({ target: { closest: () => ({}) } as unknown as EventTarget }, '')).toBe(false)

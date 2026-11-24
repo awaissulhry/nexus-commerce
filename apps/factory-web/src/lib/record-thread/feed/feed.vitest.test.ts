@@ -577,7 +577,7 @@ describe('tw- W1.3 — the feed: older pages on scroll, pills, one unread count,
     expect(css).toMatch(/\.fw-rt-msg\[data-flash\]::before \{[^}]*background: var\(--nds-tonal-border\);[^}]*animation: fw-rt-flash var\(--fw-rt-flash-ms\)/)
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.fw-rt-msg\[data-flash\]::before \{\s*animation-name: fw-rt-flash-still;/)
     // One constant: no other 1500 in the feed's or the card's code and styles.
-    for (const file of ['./view/Feed.tsx', './feed.css', '../card/view/MessageCard.tsx', '../card/card.css']) expect(readFileSync(new URL(file, import.meta.url), 'utf8'), file).not.toMatch(/1500|1\.5s/)
+    for (const file of ['./view/Feed.tsx', './feed.css', '../card/view/MessageCard.tsx', '../card/view/MessageRow.tsx' /* pt-w1 W1.1 */, '../card/card.css']) expect(readFileSync(new URL(file, import.meta.url), 'utf8'), file).not.toMatch(/1500|1\.5s/)
     expect(renderView(FeedCase, caseOf('conversation'))).not.toContain('data-flash')
   })
 
