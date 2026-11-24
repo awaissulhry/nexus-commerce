@@ -8,6 +8,7 @@ import type { AgeingRow } from '../../../finance/receivables/api'
 import type { Loaded } from '../../../parties/_shared/model'
 import type { OverviewSlot } from '../../../parties/_shared/view/PartyRecordView'
 import type { CustomerComplaint, CustomerReturn, OpenOrderMoney } from './api'
+import type { OpenItemsRead } from '../record/money/model' // F-CM-103
 import { CUSTOMER_MONEY_NAMESPACE, openAfterSales, overdueOf, receivablesOfCustomer, returnsThisYear, type CustomerMoneyCan } from './model'
 import { OpenAfterSalesCard } from './view/OpenAfterSalesCard'
 
@@ -25,6 +26,18 @@ export interface CustomerMoneyModel {
   readonly orders?: Loaded<OpenOrderMoney>
   /** The returns list with this customer, once Sales › Returns is built (else the tile is not a link). */
   readonly returnsHref: string | null
+  // ── F-CM-103 (customer MONEY tab, cm-w1 W1.2; 13-backend §1.3, §5.2): the page reads the ageing WITHOUT the company term and splits it
+  // by company (`ageing` keeps its shape: this company's rows), the open items become a page read (the tab's count), and the money
+  // reads read again by themselves when this customer's money moves. Every field optional: a design case may hand none. ──
+  /** This customer's ageing in the OTHER companies the reader reaches (receivables.view): "Also owes Seed Company B ›". */
+  readonly ageingElsewhere?: Loaded<AgeingRow>
+  /** Open deposit requests and invoices and the money on account (payments.view; null without it or without a company). */
+  readonly openItems?: { readonly value: OpenItemsRead | null; readonly problem: string | null } | null
+  /** When the server counted the ageing ("Counts as of 10:44"). */
+  readonly readAt?: string | null
+  /** Read the page's money again (a section's Try again). */
+  readonly reload?: () => void
+  // ── end F-CM-103 ──
 }
 
 /**

@@ -7,6 +7,8 @@ import type { Party } from '../../../parties/_shared/api'
 import { BLANK_TERMS, editing, GROUP_TERMS, PAYMENT_TERMS, TERMS, TERMS_CAN, termsCard, termsModel } from '../_demo/fixtures'
 import type { CommercialTermsModel } from '../terms/view/CommercialTermsCard'
 import { MONEY_CAN, MONEY_STATES, moneyModel } from '../money/_demo/fixtures'
+import { moneyTabDemo } from '../money/_demo/fixtures' // F-CM-104: the Money tab's made-up reads
+import { CustomerMoneyTab } from './view/money/CustomerMoneyTab' // F-CM-104: the Money tab's view
 import type { CustomerMoneyModel } from '../money/overview'
 import { CustomerRecordView } from './view/CustomerRecordView'
 // F-SA-272 → F-CO-201: who looks after the customer, as People's rows and their two Change… windows (made-up people of the portal demo).
@@ -861,16 +863,20 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
   // ---- end cq W3
   const party = record.party
   const id = party?.id ?? 'x'
-  // F-CO-103: the Overview tab, built for the tab the page shows (as the live container builds it); until its rows land in People,
-  // the "Who looks after <customer>" card (F-SA-272, F-CP-155) stands under the People pair, as it is.
+  // F-CO-103: the Overview tab, built for the tab the page shows (as the live container builds it); F-CO-201: who looks after is
+  // People's rows (the case's supervisor and designer models), each Change… the page's own window.
   const overviewTab = party && shownTab(recordTabs(SIDES.customers, record.can), record.tab) === 'overview' ? createElement(OverviewDesign, { record, party, money, depth, supervisor, designer, supervisorOpen: supervisorOpen === true }) : null
+  // ---- F-CM-104 (cm-w1 W1.4): the Money tab, built for the tab the page shows (as the live container builds it) from made-up reads —
+  // Finance's view with the price grain, else Sales' (words only); a case's priceDiffer is the page's price count.
+  const moneyTab = party && shownTab(recordTabs(SIDES.customers, record.can), record.tab) === 'money' ? createElement(CustomerMoneyTab, { input: moneyTabDemo(record.can.price ? 'finance' : 'sales', { priceDiffer: priceDiffer ?? null }), prefix: record.prefix, asOf: '2026-10-31T09:44:00.000Z', onRetry: () => undefined }) : null
+  // ---- end F-CM-104
   return inShell(
     `/sales/customers/${id}`,
     createElement(
       WithMessages,
       { namespaces: DEPTH_NAMESPACES },
       // B-TH-260: the customer's docked thread (Activity and Documents went to it), with threads.read.
-      createElement(CustomerRecordView, { model: record, thread: party ? (shipmentLine && record.can.threads ? createElement(ShipmentLineThread, { party }) /* cw T.1 */ : partyThread(party, 'customers', record.can)) : null, terms: termsCard(terms ?? termsModel()), money, depth: depthNodes(depth, id), overviewTab /* F-CO-103 */, ...(portalEmails ? { portalEmails: new Set(portalEmails) } : {}), work: work && party ? createElement(WithMessages, { namespaces: ['orders'] /* F-CW-101: as the live Work tab loads them */ }, createElement(WorkDesign, { work, party })) : null /* F-SA-276 */, workCount: work ? { count: 5, attention: true } : null, priceDiffer: priceDiffer ?? null /* F-CP-141 */, quotesIncoming /* cq W3 */ }),
+      createElement(CustomerRecordView, { model: record, thread: party ? (shipmentLine && record.can.threads ? createElement(ShipmentLineThread, { party }) /* cw T.1 */ : partyThread(party, 'customers', record.can)) : null, terms: termsCard(terms ?? termsModel()), money, depth: depthNodes(depth, id), overviewTab /* F-CO-103 */, ...(portalEmails ? { portalEmails: new Set(portalEmails) } : {}), work: work && party ? createElement(WithMessages, { namespaces: ['orders'] /* F-CW-101: as the live Work tab loads them */ }, createElement(WorkDesign, { work, party })) : null /* F-SA-276 */, workCount: work ? { count: 5, attention: true } : null, priceDiffer: priceDiffer ?? null /* F-CP-141 */, quotesIncoming /* cq W3 */, moneyTab /* F-CM-104 */ }),
     ),
   )
 }
@@ -1069,11 +1075,11 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'tabs-overview-first', label: 'F-SA-271 · A reader without orders.view lands on the Overview', model: record('MODA-DEMO', { tab: 'overview', can: { ...RECORD_CAN, orders: false } }) },
     { id: 'tab-quotes', label: 'F-SA-277 / cq W3 · Quotes & incoming on the page: the band, Requests & portal orders, Quotes, Customer is writing; the dock a third (F-CQ-301); the tab\'s badge = what waits on us there (F-CQ-302)', model: record('MODA-DEMO', { tab: 'quotes', can: { ...RECORD_CAN, inquiries: true } }), note: 'The whole tab\'s cases (every role, bar, window, width): its own screen SCR-033-quotes.' },
     // F-SA-273: the Money tab with every card's right (the made-up ageing, returns and open orders of money/_demo).
-    { id: 'tab-money', label: 'F-SA-273 · Money: key numbers, credit, open invoices per currency, deposits and balances, payment terms', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true } }), money: moneyModel({ ...MONEY_CAN.finance, orders: true, credit: true, creditLimits: true }, { orders: loaded(OPEN_ORDER_MONEY) }) } }, // B-CP-011
+    { id: 'tab-money', label: 'F-CM-104 · Money (Finance): the answer line, Balance with What needs you, To collect by due day', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true } }), money: moneyModel({ ...MONEY_CAN.finance, orders: true, credit: true, creditLimits: true }, { orders: loaded(OPEN_ORDER_MONEY) }) } }, // B-CP-011
     // F-CP-141: "Prices differ on {count} orders ›" — the door to the Work tab's Not equal view; nothing of it without the price grain.
-    { id: 'tab-money-price-differ', label: 'F-CP-141 · Money: "Prices differ on 2 orders ›" under the key numbers (opens Work › Not equal)', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true } }), money: moneyModel({ ...MONEY_CAN.finance, orders: true, credit: true, creditLimits: true }, { orders: loaded(OPEN_ORDER_MONEY) }), priceDiffer: 2 } }, // B-CP-011
-    { id: 'tab-money-price-differ-no-price', label: 'F-CP-141 · Money as Sales worker: no line, no count (the page reads none)', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true, price: false } }), money: moneyModel(MONEY_CAN.sales, { orders: loaded(OPEN_ORDER_MONEY.map((row) => ({ id: row.id, number: row.number, currency: row.currency, deposit: row.deposit }))) }), priceDiffer: 2 } }, // B-CP-011
-    { id: 'tab-money-blind', label: 'F-SA-273 · Money without the price grain and without sales.credit.limits: counts only, Change limit… held', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true, price: false } }), money: moneyModel(MONEY_CAN.sales, { orders: loaded(OPEN_ORDER_MONEY.map((row) => ({ id: row.id, number: row.number, currency: row.currency, deposit: row.deposit }))) }) } }, // B-CP-011
+    { id: 'tab-money-price-differ', label: 'F-CM-104 · Money: "Prices differ on 2 orders ›" in What needs you (opens Work › Not equal until Price check)', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true } }), money: moneyModel({ ...MONEY_CAN.finance, orders: true, credit: true, creditLimits: true }, { orders: loaded(OPEN_ORDER_MONEY) }), priceDiffer: 2 } }, // B-CP-011
+    { id: 'tab-money-price-differ-no-price', label: 'F-CM-104 · Money as Sales: words only — no line, no count, no amount, no act', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true, price: false } }), money: moneyModel(MONEY_CAN.sales, { orders: loaded(OPEN_ORDER_MONEY.map((row) => ({ id: row.id, number: row.number, currency: row.currency, deposit: row.deposit }))) }), priceDiffer: 2 } }, // B-CP-011
+    { id: 'tab-money-blind', label: 'F-CM-104 · Money without the price grain: the answer in words, no figures, no act (nothing held)', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true, price: false } }), money: moneyModel(MONEY_CAN.sales, { orders: loaded(OPEN_ORDER_MONEY.map((row) => ({ id: row.id, number: row.number, currency: row.currency, deposit: row.deposit }))) }) } }, // B-CP-011
     { id: 'band-held', label: 'F-SA-271 · New order and Add task held with why (no orders.manage, no tasks.manage)', model: record('MODA-DEMO', { can: { ...RECORD_CAN, ordersManage: false, tasks: false, workorders: true } }) },
     { id: 'band-doors', label: 'F-SA-271 · ⋯ Check VIES, Add task for <customer>…, Import orders…, Open in Sales › Orders, Work orders of <customer> ›', model: record('MODA-DEMO', { can: { ...RECORD_CAN, ordersManage: true, tasks: true, workorders: true } }) },
     // ---- F-SA-272: the Overview — key numbers as doors, Also open, and who looks after the customer (moved from Portal settings).

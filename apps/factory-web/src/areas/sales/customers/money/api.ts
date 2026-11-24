@@ -81,7 +81,9 @@ export const openOrderMoneySchema = z.object({
   id: z.string(),
   number: z.string(),
   currency: z.string(),
-  deposit: z.object({ state: z.enum(DEPOSIT_STATES), dueDate: z.string().nullable() }),
+  // F-CM-103 (cm-w1): + `extraOpenDue` (the API's B-CW-012) — the due day of an EXTRA deposit still open on an order that needs none:
+  // the customer's Money tab tells that request apart (To collect: "Extra deposit", production does not wait for it). Optional.
+  deposit: z.object({ state: z.enum(DEPOSIT_STATES), dueDate: z.string().nullable(), extraOpenDue: z.string().nullable().optional() }),
   /** The price grain: absent without it. */
   paid: z.number().optional(),
   balance: z.number().optional(),

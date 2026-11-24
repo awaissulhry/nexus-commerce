@@ -18,6 +18,8 @@ import type { PortalPart } from '../portal/view/PortalAccessView' // F-SA-274
 import { CommercialTerms } from '../terms/CommercialTerms'
 // B-W2b-324: Customer 360 and customers in depth (the glance, requirements, the hold, PO number, consent and personal data).
 import { CustomerDepthProvider, customerDepthSlot } from '../depth/CustomerDepth'
+import { useCustomerGlance } from '../depth/CustomerDepth' // F-CM-104: the Money tab's credit standing (the hold, over the limit)
+import { CustomerMoney } from './money/CustomerMoney' // F-CM-104: the Money tab's container
 import { CustomerRecordView } from './view/CustomerRecordView'
 import { partyName } from '../../../parties/_shared/model'
 import { recordTabs, shownTab, SIDES } from '../../../parties/_shared/model' // F-CQ-301 (P0-B2)
@@ -106,6 +108,15 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
     else if (tab !== 'work') setQuotesTabNote(false)
   }, [record.model.tab, tab])
   // ---- end F-CQ-306
+  // ---- F-CM-104 (cm-w1 W1.4; Z27): asked for Money without its right (Production manager, Warehouse) — the Work tab shows, and one line
+  // says why until the reader leaves Work (the Quotes line's pattern).
+  const [moneyTabNote, setMoneyTabNote] = useState(false)
+  useEffect(() => {
+    if (record.model.tab === 'money' && tab !== 'money') setMoneyTabNote(true)
+    else if (tab !== 'work') setMoneyTabNote(false)
+  }, [record.model.tab, tab])
+  const glance = useCustomerGlance()
+  // ---- end F-CM-104
   // ---- F-SA-279: the dock follows the row — a click at once, the keys after 300 ms of rest; `dock=` in the address (a replace: Back
   // leaves the page); the record any row (or a window's row, or a line of All of <customer>) picks, checked against this customer.
   const customerDock = useCustomerDock(partyId, tab, record.party ? partyName(record.party) : null /* F-OF-303: Who can see… names the customer */)
@@ -184,6 +195,10 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
       <CustomerOverview party={record.party} model={record.model} actions={record.actions} reads={work.reads} counts={pageCounts} before={before} money={money} standing={standing} onWindow={windowOnWork} onRetry={work.reload} fields={record.fields} />
     ) : null
   // ---- end F-CO-102
+  // ---- F-CM-104 (cm-w1 W1.4; 13-backend §5.3): the Money tab, built here like Work, Quotes and the Overview (a view fetches nothing) —
+  // only on `?tab=money`: the page's money reads, the price counts, the glance; a row's "Show in the thread" docks its order.
+  const moneyTab = named && record.party && tab === 'money' ? <CustomerMoney party={record.party} prefix={prefix} money={money} priceDiffer={priceDifferOf(work.prices)} glance={glance.read} onPick={onPick} /> : null
+  // ---- end F-CM-104
   // F-SA-277: Quotes & incoming — a row's click docks its quote's or request's thread.
   const quotesTab = named && tab === 'quotes' ? <QuotesIncomingTab party={named} counts={pageCounts /* F-CQ-302 */} onPick={onPick} onFocus={customerDock.onFocus} shown={customerDock.shown} /> : null
   const workTab = named && tab === 'work' && can.orders ? <WorkTab party={named} prefix={prefix} work={work} can={workCan} picked={customerDock.shown /* F-SA-279: the row marked = the record docked */} onPick={onPick} onFocus={customerDock.onFocus} onWindow={setWin /* F-SA-278 */} ask={ask} onAsked={() => setAsk(null) /* F-CP-104 */} before={before /* F-CW-101 */} urgencyFoot={urgencyFoot /* F-CW-302 */} mayPortal={session.permissions.includes('partners.production.manage') /* F-CW-302: may change the switch */} mayIncoming={session.permissions.includes('sales.inquiries.view') /* cw fx5 (W-10): may open Sales › Incoming */} /> : null
@@ -202,7 +217,7 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
       {windows /* F-SA-278 */}
       {/* F-OF-301 (T): the docked order's Versions… — the page's ONE depth window (as on the order page). */}
       <DepthDialogs depth={customerDock.fileDepth.model} actions={customerDock.fileDepth.actions} />
-      <CustomerRecordView model={record.model} actions={record.actions} thread={dock /* F-SA-276 */} threadButton={threadButton /* F-SA-279 */} work={workTab} workCount={work.attention} quotesIncoming={quotesTab /* F-SA-277 */} overviewTab={overviewTab /* F-CO-102 */} printThread={record.printThread} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} portalPeople={portalPeople} portalEmails={portalEmails} {...doors /* F-CP-104 */} priceDiffer={priceDifferOf(work.prices) /* F-CP-141 */} quotesBadge={quotesBadge /* F-CQ-302 */} quotesTabNote={quotesTabNote && tab === 'work' /* F-CQ-306 */} />
+      <CustomerRecordView model={record.model} actions={record.actions} thread={dock /* F-SA-276 */} threadButton={threadButton /* F-SA-279 */} work={workTab} workCount={work.attention} quotesIncoming={quotesTab /* F-SA-277 */} overviewTab={overviewTab /* F-CO-102 */} printThread={record.printThread} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} portalPeople={portalPeople} portalEmails={portalEmails} {...doors /* F-CP-104 */} priceDiffer={priceDifferOf(work.prices) /* F-CP-141 */} quotesBadge={quotesBadge /* F-CQ-302 */} quotesTabNote={quotesTabNote && tab === 'work' /* F-CQ-306 */} moneyTab={moneyTab /* F-CM-104 */} moneyTabNote={moneyTabNote && tab === 'work' /* F-CM-104 */} />
     </>
   )
 }
