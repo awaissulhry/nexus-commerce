@@ -8,6 +8,7 @@ import type { CardAction } from '../model'
 
 /** The words of each row (record-thread-card); Answer… keeps the ask's own word. */
 const ROW_KEY: Readonly<Record<CardAction, string>> = {
+  answerThere: 'menu.answerThere', // tw- W2.5: All of <Customer>
   reply: 'menu.reply',
   replyPrivately: 'menu.replyPrivately',
   copyText: 'menu.copyText',

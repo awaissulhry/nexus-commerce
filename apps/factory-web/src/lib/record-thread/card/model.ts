@@ -330,10 +330,13 @@ export const sizeWords = (bytes: number, intlLocale: string): string =>
 
 // ── the card's ⋯ menu (T3-F07, F09, F10) ─────────────────────────────────────────────────────────────────────────────
 
-export type CardAction = 'reply' | 'replyPrivately' | 'copyText' | 'link' | 'pin' | 'unpin' | 'remind' | 'task' | 'answer' | 'correct' | 'emailDetails' | 'useOn'
+export type CardAction = 'answerThere' | 'reply' | 'replyPrivately' | 'copyText' | 'link' | 'pin' | 'unpin' | 'remind' | 'task' | 'answer' | 'correct' | 'emailDetails' | 'useOn'
 
 /** tw- W2.2 (S8): the ONE order of a message's menu — whatever a row's right, a row keeps its place. */
-export const MENU_ORDER: readonly CardAction[] = ['reply', 'replyPrivately', 'copyText', 'link', 'pin', 'unpin', 'remind', 'task', 'answer', 'correct', 'emailDetails', 'useOn']
+export const MENU_ORDER: readonly CardAction[] = ['answerThere', 'reply', 'replyPrivately', 'copyText', 'link', 'pin', 'unpin', 'remind', 'task', 'answer', 'correct', 'emailDetails', 'useOn']
+
+/** tw- W2.5 (10-design §9 "All of Brand Alpha"): a read-only card's menu — Answer in its thread · Copy text · Copy link, each by its door. */
+export const READ_ONLY_MENU: readonly CardAction[] = ['answerThere', 'copyText', 'link']
 
 // ---- tw- W1.1 (D4, Z12, P15; 10-design §9 "Reply keeps the audience") ------------------------------------------------------------
 /** How a reply goes: an office note, the customer by email, or the customer's portal (the composer's modes). */

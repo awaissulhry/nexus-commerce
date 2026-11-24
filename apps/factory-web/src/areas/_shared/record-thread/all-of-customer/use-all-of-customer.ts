@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ApiClient } from '../../../../lib/api/client'
 import { isApiError } from '../../../../lib/api/errors'
 import { useLiveChanges } from '../../../../record-panels/live'
+import { useOfficeSession } from '../../../../lib/session/context' // tw- W2.5: mine on the right
 import { readCustomerFeed } from './api'
 import {
   afterFirst,
@@ -55,6 +56,7 @@ export function useAllOfCustomer(
   input: { readonly partyId: string | null; readonly customerName: string; readonly enabled: boolean; readonly prefix: string; readonly canReadFiles: boolean },
 ): { model: AllOfCustomerModel; actions: AllOfCustomerActions; state: FeedState } {
   const { partyId, enabled } = input
+  const me = useOfficeSession().user.id
   const [state, setState] = useState<FeedState>(EMPTY_FEED)
   const [view, setView] = useState<FeedView>('all')
   const [kind, setKind] = useState<FeedKindChoice>('every')
@@ -124,6 +126,6 @@ export function useAllOfCustomer(
       scrollTop.current = top
     },
   }
-  const model = feedModel(state, { customerName: input.customerName, prefix: input.prefix, view, kind, canReadFiles: input.canReadFiles, scrollTop: scrollTop.current })
+  const model = feedModel(state, { customerName: input.customerName, prefix: input.prefix, view, kind, canReadFiles: input.canReadFiles, scrollTop: scrollTop.current, me })
   return { model, actions, state }
 }

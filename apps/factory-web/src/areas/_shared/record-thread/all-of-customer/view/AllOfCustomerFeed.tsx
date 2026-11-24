@@ -1,18 +1,18 @@
 'use client'
 
-import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { CornerDownRight, Lock, Paperclip } from 'lucide-react'
+import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { Lock } from 'lucide-react'
 import { Banner, EmptyState } from '@nexus/ui/components'
 import { Button, InfoTip, Skeleton } from '@nexus/ui/primitives'
-import { useLocale, useT } from '../../../../../lib/i18n/provider'
-import { dayOf } from '../../../../../lib/record-thread/parts/time' // F-OP-205: a line's time
+import { useT } from '../../../../../lib/i18n/provider'
 import { MessageCard } from '../../../../../lib/record-thread/card/view/MessageCard'
+import { copyTextOf } from '../../../../../lib/record-thread/card/model' // tw- W2.5: Copy text
 import { WIDTH_NS } from '../../../../../lib/record-thread/head/view/WidthMenu' // F-OP-204: the Head's words (width, ⋯)
 import { RecordTypeIcon } from '../../../../search/RecordTypeIcon'
 import { PickedDockColumn } from '../../ThreadPick' // F-OP-204: the dock's one card
-import { opensItself, type AllOfCustomerModel, type FeedItem, type FeedKindChoice, type FeedView, type Words } from '../model'
-import { lineTimeOf } from '../model' // F-OP-205
+import { opensItself, type AllOfCustomerModel, type FeedKindChoice, type FeedView, type Words } from '../model'
 import { answerOf, type FeedDoor } from '../model' // F-OP-207
+import { feedRowsOf } from '../model' // tw- W2.5: oldest at the top, a run ends where the record changes
 import { feedKeyOf, linePlaceOf, rovingIndexOf } from '../keys' // F-OP-206: the list's keys, one tab stop
 import { FeedHead } from './FeedHead' // F-OP-204
 import '../all-of-customer.css'
@@ -74,7 +74,8 @@ function DockFoot({ children }: { children?: ReactNode }) {
   const t = useT('record-thread')
   return (
     <>
-      {children}
+      {/* tw- W2.5 (10-design §10): with no door of the host's, the foot is ONE line — read only, and how to write. */}
+      {children ?? <span className="fw-aoc-readonly">{t('allOfCustomer.readOnly')}</span>}
       <span className="fw-aoc-foot-tip">
         <InfoTip tip={t('allOfCustomer.keysTip')} />
       </span>
@@ -89,25 +90,22 @@ function DockFoot({ children }: { children?: ReactNode }) {
  * ONLY, a "New" dot, and its door; Show older at the foot; what is left out said in words. Draws its model only.
  * F-OP-204: the body of the card — its one line, View ▾, Kind ▾ and "N new · Show" moved to the pick band and FeedHead.
  */
+/*
+ * tw- W2.5 (THE THREAD REBUILD; 10-design §9, S1 "one face"): the SAME bubbles as a thread, read only — oldest at the top, the newest
+ * at the bottom (the list opens there), Show older at the top; a record chip on top of the first bubble of each record's run (a run
+ * ends where the record changes, and by the thread's own rule: the sender, who reads it, the day); each bubble's menu: Answer in its
+ * thread · Copy text · Copy link. The compact lines (`fw-aoc-line`) went.
+ */
 export function AllOfCustomerFeed({ model, actions }: { model: AllOfCustomerModel; actions?: AllOfCustomerFeedActions | undefined }) {
   const t = useT('record-thread')
   const customer = model.customerName
   const words = (text: Words) => t(text.key, text.params)
-  // F-OP-205: a line opens its whole card in place on the person's act (More, or Space), and closes again; nothing opens by itself.
-  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set())
-  const toggle = (key: string) =>
-    setOpened((now) => {
-      const next = new Set(now)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
   const filtered = model.view !== 'all' || model.kind !== 'every'
-  const today = dayOf(new Date())
+  const rows = useMemo(() => feedRowsOf(model.items), [model.items])
   // F-OP-206 (11-dock §3.3, D7): ONE tab stop for the list — the line last focused holds it; J / K and the arrows walk the lines.
-  const [active, setActive] = useState(0)
+  const [active, setActive] = useState(-1) // -1: the newest (the list opens at the bottom)
   const lineRefs = useRef<Array<HTMLElement | null>>([])
-  const roving = rovingIndexOf(active, model.items.length)
+  const roving = rovingIndexOf(active < 0 ? rows.length - 1 : active, rows.length)
   const moveTo = (index: number) => {
     setActive(index)
     lineRefs.current[index]?.focus()
@@ -121,11 +119,22 @@ export function AllOfCustomerFeed({ model, actions }: { model: AllOfCustomerMode
   useLayoutEffect(() => {
     const scroller = root.current?.closest<HTMLElement>('.fw-rt-scroll')
     if (!scroller) return
-    if (scrolledTo > 0) scroller.scrollTop = scrolledTo
+    // tw- W2.5: the first visit opens at the newest (the bottom); a revisit where the person was.
+    scroller.scrollTop = scrolledTo > 0 ? scrolledTo : scroller.scrollHeight
     const onScroll = () => keepScroll.current?.(scroller.scrollTop)
     scroller.addEventListener('scroll', onScroll, { passive: true })
     return () => scroller.removeEventListener('scroll', onScroll)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps -- once per visit
+  // tw- W2.5: older messages come in at the TOP — the person keeps what they were reading (the list keeps its distance from the bottom).
+  const oldest = rows[0]?.item.key ?? null
+  const kept = useRef<{ oldest: string | null; fromBottom: number }>({ oldest, fromBottom: 0 })
+  useLayoutEffect(() => {
+    const scroller = root.current?.closest<HTMLElement>('.fw-rt-scroll')
+    // The first messages read after the skeleton: at the newest too (unless the person's own place was kept).
+    if (scroller && kept.current.oldest === null && oldest !== null && scrolledTo === 0) scroller.scrollTop = scroller.scrollHeight
+    else if (scroller && kept.current.oldest !== null && oldest !== kept.current.oldest) scroller.scrollTop = scroller.scrollHeight - kept.current.fromBottom
+    kept.current = { oldest, fromBottom: scroller ? scroller.scrollHeight - scroller.scrollTop : 0 }
+  })
 
   // F-OP-205 (11-dock §3.5): every state inside the card — the pick band, the Head and the foot stay; only the body says it.
   return (
@@ -181,26 +190,30 @@ export function AllOfCustomerFeed({ model, actions }: { model: AllOfCustomerMode
             : {})}
         />
       ) : (
-        // F-OP-206: a feed (busy while older lines are read), each line an article with its place in it.
+        // F-OP-206: a feed (busy while older messages are read), each message an article with its place in it. tw- W2.5: Show older on top.
         <div className="fw-aoc-list" role="feed" aria-busy={model.older === 'loading'} aria-label={t('allOfCustomer.feedLabel', { customer })}>
-          {model.items.map((item, index) => (
-            <FeedLine
-              key={item.key}
-              item={item}
+          {model.more && (
+            <div className="fw-aoc-older">
+              <Button size="sm" variant="quiet" aria-busy={model.older === 'loading'} onClick={() => actions?.onOlder?.()}>
+                {t(model.older === 'loading' ? 'allOfCustomer.olderLoading' : model.older === 'failed' ? 'allOfCustomer.olderFailed' : 'allOfCustomer.showOlder')}
+              </Button>
+            </div>
+          )}
+          {rows.map((row, index) => (
+            <FeedBubble
+              key={row.item.key}
+              row={row}
               model={model}
               actions={actions}
-              chip={words(item.chip)}
-              open={opened.has(item.key)}
-              onToggle={() => toggle(item.key)}
-              today={today}
-              place={linePlaceOf(index, model.items.length, model.more)}
+              chip={words(row.item.chip)}
+              place={linePlaceOf(index, rows.length, model.more)}
               current={index === roving}
               lineRef={(element) => {
                 lineRefs.current[index] = element
               }}
               onFocusLine={() => setActive(index)}
               onKey={(event) => {
-                const act = feedKeyOf(event, index, model.items.length)
+                const act = feedKeyOf(event, index, rows.length)
                 if (!act) return false
                 if (act.kind === 'move') moveTo(act.to)
                 return act
@@ -212,11 +225,7 @@ export function AllOfCustomerFeed({ model, actions }: { model: AllOfCustomerMode
 
       {model.status === 'ready' && (
         <footer className="fw-aoc-foot">
-          {model.more ? (
-            <Button size="sm" variant="quiet" aria-busy={model.older === 'loading'} onClick={() => actions?.onOlder?.()}>
-              {t(model.older === 'loading' ? 'allOfCustomer.olderLoading' : model.older === 'failed' ? 'allOfCustomer.olderFailed' : 'allOfCustomer.showOlder')}
-            </Button>
-          ) : model.olderThreads > 0 ? (
+          {!model.more && model.olderThreads > 0 ? (
             <p className="fw-aoc-note">{t('allOfCustomer.older', { count: model.olderThreads })}</p>
           ) : null}
           {model.threadsNotShown > 0 && <p className="fw-aoc-note">{t('allOfCustomer.notShown', { count: model.threadsNotShown, customer })}</p>}
@@ -227,32 +236,26 @@ export function AllOfCustomerFeed({ model, actions }: { model: AllOfCustomerMode
 }
 
 /**
- * One message of the feed, as ONE compact line (F-OP-205, 11-dock §3.2): row 1 its record chip (a real link: ⌘-click a new tab; a plain
- * click switches the dock to that conversation), the "New" dot, who reads it and its time; row 2 "author: words" (two lines at most);
- * row 3 at most three file chips and "+N"; the edge in the audience's colour. More opens the conversation's own card READ ONLY in
- * place (aria-expanded), Less closes it; the door answers in its conversation.
+ * tw- W2.5 — one message of the feed as the thread's own bubble, READ ONLY (MessageCard `readOnly`: its words, files, foot — no
+ * Reply, no Pin), with the record chip on top of its record's run (a real link: ⌘-click a new tab; a plain click switches the dock to
+ * that thread) and "New" when it is new to the reader. Its menu: Answer in its thread (the frame's compose ask, else the dock's switch,
+ * else its record's page at the message) · Copy text · Copy link. Enter on it answers; a record no longer there has no door.
  */
-function FeedLine({
-  item,
+function FeedBubble({
+  row,
   model,
   actions,
   chip,
-  open,
-  onToggle,
-  today,
   place,
   current,
   lineRef,
   onFocusLine,
   onKey,
 }: {
-  item: FeedItem
+  row: ReturnType<typeof feedRowsOf>[number]
   model: AllOfCustomerModel
   actions: AllOfCustomerFeedActions | undefined
   chip: string
-  open: boolean
-  onToggle: () => void
-  today: string
   /** F-OP-206: its place in the feed, whether it holds the list's one tab stop, and the list's keys (a move is the list's own). */
   place: { readonly posinset: number; readonly setsize: number }
   current: boolean
@@ -261,127 +264,90 @@ function FeedLine({
   onKey: (event: KeyboardEvent<HTMLElement>) => ReturnType<typeof feedKeyOf> | false
 }) {
   const t = useT('record-thread')
-  const tc = useT('record-thread-card')
-  const locale = useLocale()
+  const { item } = row
   const answer = actions?.onAnswer
   const door: FeedDoor | null = actions?.canAnswer && actions.onCompose ? answerOf(item, actions.canAnswer) : null // F-OP-207
   const openFile = (fileId: string) => (actions?.onOpenFile ? actions.onOpenFile(fileId, item.record, item.key) : answer?.(item.record, item.key))
-  const { line, card } = item
-  const author = 'text' in line.author ? line.author.text : tc(line.author.key)
-  const gist = 'text' in line.gist ? line.gist.text : line.gist.ns === 'record-thread-card' ? tc(line.gist.key) : t(line.gist.key)
-  const wholeId = `fw-aoc-whole-${item.key}`
-  // F-OP-206: the line is named by its chip, its writer and its time; only the line holding the tab stop lets Tab into its controls.
   const base = `fw-aoc-${item.key}`
   const inner = current ? undefined : -1
-  const doorButton = useRef<HTMLButtonElement>(null)
-  const doorLink = useRef<HTMLAnchorElement>(null)
+  // Answer in its thread: the frame's compose ask (F-OP-207), else the dock's switch at the message, else the message on its page.
+  const answerThere = item.gone
+    ? undefined
+    : () => {
+        if (door?.kind === 'answer') actions?.onCompose?.(door.ask)
+        else if (door?.kind === 'open') window.location.assign(door.href)
+        else if (answer) answer(item.record, item.key)
+        else window.location.assign(item.messageHref)
+      }
+  const copy = (words: string | null) => {
+    if (words !== null) void navigator.clipboard?.writeText(words).catch(() => undefined)
+  }
   return (
     <article
       ref={lineRef}
-      className={`fw-aoc-line is-${line.audience}${item.isNew ? ' is-new' : ''}`}
+      className={`fw-aoc-item${row.recordStart ? ' is-recstart' : ''}${item.isNew ? ' is-new' : ''}`}
       tabIndex={current ? 0 : -1}
       aria-posinset={place.posinset}
       aria-setsize={place.setsize}
-      aria-labelledby={`${base}-chip ${base}-author ${base}-time`}
+      aria-labelledby={`${base}-chip message-${item.key}`}
       onFocus={onFocusLine}
       onKeyDown={(event) => {
-        // Keys on the line itself only: a control inside keeps its own (Enter on a button presses it).
+        // Keys on the message itself only: a control inside keeps its own (Enter on a button presses it).
         if (event.target !== event.currentTarget) return
         const act = onKey(event)
         if (!act) return
         event.preventDefault()
-        if (act.kind === 'expand') onToggle()
-        else if (act.kind === 'answer') (doorButton.current ?? doorLink.current)?.click()
+        if (act.kind === 'answer') answerThere?.()
       }}
     >
-      <div className="fw-aoc-line-top">
-        {item.gone ? (
-          // F-OP-305 (walk #13): the true words, no link — the record is no longer there.
-          <span className="fw-aoc-chip is-gone">
-            <RecordTypeIcon type={item.record.type} size={14} />
-            <span id={`${base}-chip`}>{chip}</span>
-          </span>
-        ) : (
-          <a
-            className="fw-aoc-chip"
-            tabIndex={inner}
-            href={item.href}
-            title={t('allOfCustomer.openRecord', { record: chip })}
-            onClick={(event) => {
-              if (!answer || opensItself(event)) return
-              event.preventDefault()
-              answer(item.record, item.key)
-            }}
-          >
-            <RecordTypeIcon type={item.record.type} size={14} />
-            <span id={`${base}-chip`}>{chip}</span>
-          </a>
-        )}
-        {item.isNew && (
-          <span className="fw-aoc-new">
-            <span className="fw-aoc-dot" aria-hidden />
-            {t('allOfCustomer.new')}
-          </span>
-        )}
-        <span className="fw-aoc-audience">{line.audience === 'shared' ? t('allOfCustomer.audience.shared', { customer: model.customerName }) : t('allOfCustomer.audience.office')}</span>
-        <time id={`${base}-time`} className="fw-aoc-time" dateTime={card.at}>
-          {lineTimeOf(card.at, locale, today)}
-        </time>
-      </div>
-      <p className="fw-aoc-gist">
-        <span id={`${base}-author`} className="fw-aoc-author">
-          {author}:
-        </span>{' '}
-        {gist}
-      </p>
-      {(line.files.shown.length > 0 || line.files.more > 0) && (
-        <div className="fw-aoc-files">
-          {line.files.shown.map((file) => (
-            <button key={file.id} type="button" className="fw-aoc-file" tabIndex={inner} title={file.name} onClick={() => openFile(file.id)}>
-              <Paperclip size={12} aria-hidden />
-              <span>{file.name}</span>
-            </button>
-          ))}
-          {line.files.more > 0 && (
-            <span className="fw-aoc-file is-more" aria-label={t('allOfCustomer.moreFiles', { count: line.files.more })}>
-              +{line.files.more}
+      {row.recordStart ? (
+        <p className="fw-aoc-recrow">
+          {item.gone ? (
+            // F-OP-305 (walk #13): the true words, no link — the record is no longer there.
+            <span className="fw-aoc-chip is-gone">
+              <RecordTypeIcon type={item.record.type} size={14} />
+              <span id={`${base}-chip`}>{chip}</span>
             </span>
+          ) : (
+            <a
+              className="fw-aoc-chip"
+              tabIndex={inner}
+              href={item.href}
+              title={t('allOfCustomer.openRecord', { record: chip })}
+              onClick={(event) => {
+                if (!answer || opensItself(event)) return
+                event.preventDefault()
+                answer(item.record, item.key)
+              }}
+            >
+              <RecordTypeIcon type={item.record.type} size={14} />
+              <span id={`${base}-chip`}>{chip}</span>
+            </a>
           )}
-        </div>
+        </p>
+      ) : (
+        <span id={`${base}-chip`} className="nds-vh">
+          {chip}
+        </span>
       )}
-      <div className="fw-aoc-doors">
-        <Button size="sm" variant="quiet" tabIndex={inner} aria-expanded={open} aria-controls={wholeId} onClick={onToggle}>
-          {t(open ? 'allOfCustomer.less' : 'allOfCustomer.more')}
-        </Button>
-        {/* F-OP-207: Answer in that thread (Reply / Office note, the box focused), or Open <record> at the message. F-OP-305: none
-            for a record no longer there. */}
-        {item.gone ? null : door?.kind === 'answer' ? (
-          <Button ref={doorButton} size="sm" variant="quiet" tabIndex={inner} aria-label={t('allOfCustomer.answerLabel', { record: chip })} onClick={() => actions?.onCompose?.(door.ask)}>
-            <CornerDownRight size={14} aria-hidden /> {t('allOfCustomer.answer')}
-          </Button>
-        ) : door?.kind === 'open' ? (
-          <a ref={doorLink} className="nds-btn sm quiet" tabIndex={inner} href={door.href}>
-            <CornerDownRight size={14} aria-hidden /> {t('allOfCustomer.openRecord', { record: chip })}
-          </a>
-        ) : answer ? (
-          <Button ref={doorButton} size="sm" variant="quiet" tabIndex={inner} aria-label={t('allOfCustomer.answerLabel', { record: chip })} onClick={() => answer(item.record, item.key)}>
-            <CornerDownRight size={14} aria-hidden /> {t('allOfCustomer.answer')}
-          </Button>
-        ) : (
-          <a
-            ref={doorLink}
-            className="nds-btn sm quiet"
-            tabIndex={inner}
-            href={item.messageHref}
-            aria-label={t('allOfCustomer.answerLabel', { record: chip })}
-          >
-            <CornerDownRight size={14} aria-hidden /> {t('allOfCustomer.answer')}
-          </a>
-        )}
-      </div>
-      <div id={wholeId} className="fw-aoc-whole" hidden={!open}>
-        {open && <MessageCard message={card} context={model.card} readOnly actions={{ onOpenFile: openFile }} />}
-      </div>
+      {item.isNew && (
+        <span className="fw-aoc-new">
+          <span className="fw-aoc-dot" aria-hidden />
+          {t('allOfCustomer.new')}
+        </span>
+      )}
+      <MessageCard
+        message={item.card}
+        context={model.card}
+        run={row.place}
+        readOnly
+        actions={{
+          onOpenFile: openFile,
+          ...(answerThere ? { onAnswerThere: () => answerThere() } : {}),
+          onCopyText: () => copy(copyTextOf(item.card)),
+          onCopyLink: () => copy(`${window.location.origin}${item.messageHref}`),
+        }}
+      />
     </article>
   )
 }

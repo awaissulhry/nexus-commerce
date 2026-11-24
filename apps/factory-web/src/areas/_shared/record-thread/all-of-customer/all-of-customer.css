@@ -1,5 +1,5 @@
-/* F-SA-261: "All of <Customer>" (view/AllOfCustomerFeed.tsx) — the read-only merged feed in the dock: one message per line (its chip
-   above the conversation's own card, its door under it), the foot. Tokens only.
+/* F-SA-261: "All of <Customer>" (view/AllOfCustomerFeed.tsx) — the read-only merged feed in the dock (tw- W2.5: the thread's own
+   bubbles, a record's chip on top of its run), the foot. Tokens only.
    F-OP-204: its one line, the two filters and "N new · Show" moved to the pick band and FeedHead (below). */
 /* F-OP-205 (order page plan N4; 11-dock §1, §3.2, §3.5; RC2, RC3): the body of the card — it fills .fw-rt-scroll (which scrolls, 12/16
    padded) and draws ONE compact line per message, 8 px apart. Every space was re-read against the px it means (--nds-space-N is N px):
@@ -34,35 +34,35 @@
   min-width: 0;
 }
 
-/* One line: its edge says who reads it — blue, the customer too; yellow on the soft warning background, the office only. */
-.fw-aoc-line {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-4);
-  min-width: 0;
-  padding: var(--nds-space-8) var(--nds-space-10);
-  border: 1px solid var(--nds-border-subtle);
-  border-inline-start: 3px solid var(--nds-info);
-  border-radius: var(--nds-radius-md);
-  background: var(--nds-surface);
+/* tw- W2.5 (THE THREAD REBUILD; 10-design §9): the thread's own bubbles, read only — a run's bubbles 2 px apart, a new record's run
+   10 px from the one before, its chip on top; Show older on top (the newest at the bottom). */
+.fw-aoc-list {
+  gap: var(--nds-space-2);
 }
 
-.fw-aoc-line:focus-visible {
+.fw-aoc-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+  border-radius: var(--nds-radius-md);
+}
+
+.fw-aoc-item.is-recstart:not(:first-child) {
+  margin-top: var(--nds-space-10);
+}
+
+.fw-aoc-item:focus-visible {
   outline: 2px solid var(--nds-text);
   outline-offset: 2px;
 }
 
-.fw-aoc-line.is-office {
-  border-inline-start-color: var(--nds-warning);
-  background: var(--nds-warning-soft);
-}
-
-.fw-aoc-line-top {
+.fw-aoc-recrow {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: var(--nds-space-6);
   min-width: 0;
+  margin: 0;
 }
 
 .fw-aoc-chip {
@@ -92,8 +92,7 @@
   border-color: var(--nds-border);
 }
 
-.fw-aoc-chip:focus-visible,
-.fw-aoc-file:focus-visible {
+.fw-aoc-chip:focus-visible {
   outline: 2px solid var(--nds-text);
   outline-offset: 2px;
 }
@@ -114,97 +113,17 @@
   background: var(--nds-info);
 }
 
-.fw-aoc-audience {
-  color: var(--nds-text-2);
-  font-size: var(--nds-font-size-xs);
-}
-
-.fw-aoc-time {
-  margin-inline-start: auto;
-  color: var(--nds-text-muted);
-  font-size: var(--nds-font-size-xs);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-/* "author: words", two lines at most (the whole message opens in place). */
-.fw-aoc-gist {
-  display: -webkit-box;
-  margin: 0;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  color: var(--nds-text);
-  font-size: var(--nds-font-size-sm);
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-}
-
-.fw-aoc-author {
-  color: var(--nds-text-strong);
-  font-weight: 600;
-}
-
-.fw-aoc-files {
+.fw-aoc-older {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--nds-space-4);
-  min-width: 0;
-}
-
-.fw-aoc-file {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--nds-space-4);
-  min-width: 0;
-  max-width: 180px;
-  height: 20px;
-  padding: 0 var(--nds-space-8);
-  border: 1px solid var(--nds-border-subtle);
-  border-radius: var(--nds-radius-pill);
-  background: var(--nds-surface);
-  color: var(--nds-text-2);
-  font: inherit;
-  font-size: var(--nds-font-size-xs);
-  cursor: pointer;
-}
-
-.fw-aoc-file > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.fw-aoc-file:hover {
-  background: var(--nds-surface-hover);
-}
-
-.fw-aoc-file.is-more {
-  cursor: default;
-  font-variant-numeric: tabular-nums;
-}
-
-.fw-aoc-doors {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--nds-space-4);
-}
-
-.fw-aoc-whole {
-  padding-top: var(--nds-space-4);
-}
-
-.fw-aoc-whole[hidden] {
-  display: none;
+  justify-content: center;
+  padding-bottom: var(--nds-space-6);
 }
 
 .fw-aoc-foot {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: var(--nds-space-6);
+  align-items: center;
+  gap: var(--nds-space-4);
 }
 /* ── end F-OP-205 */
 
@@ -258,16 +177,8 @@
 /* ── F-OP-217 (order page plan N4; 11-dock §7): All of <customer> in a card of 480 px or less (one third at 1440, a phone) — each line
    full width, its chip never wider than the line, the time under the chip when they do not fit side by side, the doors on one row. ── */
 @container fw-rtcol (max-width: 480px) {
-  .fw-aoc-line {
-    padding: var(--nds-space-8);
-  }
-
   .fw-aoc-chip {
     max-width: calc(100% - var(--nds-space-24));
-  }
-
-  .fw-aoc-doors {
-    justify-content: flex-start;
   }
 }
 /* ── end F-OP-217 */
@@ -279,3 +190,4 @@
   color: var(--nds-text-muted);
 }
 /* ── end F-OP-305 */
+.fw-aoc-readonly { min-width: 0; color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); }

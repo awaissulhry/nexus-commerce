@@ -78,8 +78,8 @@
     "gone": "The threads of this customer are out of your reach.",
     "empty": "No message with {customer} yet",
     "emptyFiltered": "Nothing with this view and kind: choose All and Every kind to see every message.",
-    "feedLabel": "Messages with {customer}, newest first",
-    "keysTip": "J / K walk · Enter answers · Space shows the whole message. Seeing a line here marks nothing read: open its thread.",
+    "feedLabel": "Messages with {customer}, oldest first",
+    "keysTip": "J / K walk · Enter answers in its thread. Seeing a message here marks nothing read: open its thread.",
     "showOlder": "Show older",
     "olderLoading": "Reading older messages…",
     "olderFailed": "Couldn't read older messages · Try again",
@@ -88,18 +88,10 @@
     "notShown_other": "{count} threads of {customer} you cannot open are left out.",
     "openRecord": "Open {record}",
     "new": "New",
-    "audience": {
-      "shared": "{customer} reads it",
-      "office": "Office only"
-    },
-    "filesOnly": "Files only",
     "more": "More",
     "less": "Less",
-    "moreFiles_one": "1 more file",
-    "moreFiles_other": "{count} more files",
     "writeFirst": "Write the first one in {thread}",
     "showEverything": "Show everything",
-    "answer": "Answer",
     "answerLabel": "Answer in the thread of {record}",
     "chip": {
       "general": "{customer} (general)",
@@ -110,7 +102,8 @@
         "QUOTE": "{number} · Your quote {seq}",
         "REQUEST": "{number} · Your request {seq}"
       }
-    }
+    },
+    "readOnly": "Read only: to write, pick one thread."
   },
   "dock": {
     "newCount_one": "1 new",

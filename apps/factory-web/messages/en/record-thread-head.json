@@ -201,5 +201,8 @@
     "esc": "close a menu, drop the reply",
     "enterKey": "Enter",
     "shiftEnterKey": "Shift+Enter"
+  },
+  "allOf": {
+    "line": "Read only · {count} threads"
   }
 }
