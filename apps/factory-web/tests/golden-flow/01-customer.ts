@@ -1,7 +1,7 @@
 import { expect, type Locator /* cw fx10 */, type Page } from '@playwright/test'
 import { defineStage } from './_harness/stages'
 import { answerOf, chooseFromMenu /* cw T.2 */, dialog, press, routerActivity } from './_harness/ui'
-import { startsWith /* cw T.2 */, words } from './_harness/words' // F-OP-218
+import { exactly /* ca T.3 */, startsWith /* cw T.2 */, words } from './_harness/words' // F-OP-218
 import { seen } from './_harness/flow' // F-CP-112
 
 /**
@@ -41,7 +41,7 @@ export const CUSTOMER = {
 }
 
 export default defineStage({
-  proves: 'Italian B2B customer with tax identity; VIES proof (fake): an Italian VAT number is not a VIES question, and the screen says so; the customer page opens on All orders (rows=all, one document, no loop), New order and its lines open in place, Clear all goes back to All orders, a docked order shows its own files line (F-CP-112); on the Work tab a band door shows exactly its count, the order says Most urgent first, ticked rows show the bar with words and Ask production opens with Needs an answer ticked, nothing written (cw T.2); on Quotes & incoming the band shows, a door opens exactly its count, Sort ▾ says Most urgent first, one ticked row shows at most 3 acts and More ▾ with words, nothing written (cq T.2); the Overview shows its sentence and a group of its band opens Work on exactly the orders it counts, nothing written (co T.3)',
+  proves: 'Italian B2B customer with tax identity; VIES proof (fake): an Italian VAT number is not a VIES question, and the screen says so; the customer page opens on All orders (rows=all, one document, no loop), New order and its lines open in place, Clear all goes back to All orders, a docked order shows its own files line (F-CP-112); on the Work tab a band door shows exactly its count, the order says Most urgent first, ticked rows show the bar with words and Ask production opens with Needs an answer ticked, nothing written (cw T.2); on Quotes & incoming the band shows, a door opens exactly its count, Sort ▾ says Most urgent first, one ticked row shows at most 3 acts and More ▾ with words, nothing written (cq T.2); the Overview shows its sentence and a group of its band opens Work on exactly the orders it counts, nothing written (co T.3); People & addresses opened at #addresses shows its section, and People lists the two contacts with what each gets by e-mail, nothing written (ca T.3)',
   async run(flow) {
     const sales = await flow.desk('sales')
     const { page } = sales
@@ -236,6 +236,41 @@ export default defineStage({
       await answerOf(page, 'POST', /^\/parties\/[0-9a-f-]+\/contacts$/, () => press(form.getByRole('button', { name: 'Add contact' })))
       await flow.shot(page, 'addresses-contacts')
     })
+
+    // ---- ca T.3 (customer page › People & addresses; 15-steps T.3): a door to #addresses shows the Addresses section in view; People
+    // lists the two contacts just added, each with what it gets by e-mail (the mail rule's words). A step that writes nothing. Its parts
+    // are found by their role and their catalogue word: the Kit's section is a region named by its title, People's list is named
+    // "People of <customer>", each person a list item.
+    await flow.step('People & addresses: #addresses shows its section; People lists Anna and Bruno with what each gets by e-mail (nothing written)', async () => {
+      const P = words('parties')
+      const C = words('customer-people')
+      // Nothing is written: no change reaches the customer, its contacts or addresses, an address check, the portal or a profile.
+      const written: string[] = []
+      const onRequest = (request: import('@playwright/test').Request) => {
+        const path = new URL(request.url()).pathname
+        if (request.method() !== 'GET' && /\/(parties|sales\/delivery-addresses|partners|sales\/mtm)(\/|$)/.test(path)) written.push(`${request.method()} ${path}`)
+      }
+      page.on('request', onRequest)
+      await sales.go(`/sales/customers/${party.id}?tab=people#addresses`)
+      const addresses = page.getByRole('region', { name: P('address.title'), exact: true })
+      await seen(addresses, 60_000)
+      await expect(addresses).toHaveCount(1)
+      await expect(addresses).toBeInViewport({ timeout: 30_000 })
+      const people = page.getByRole('list', { name: exactly(C('people.listLabel')) })
+      await seen(people, 60_000)
+      const anna = people.getByRole('listitem').filter({ hasText: CUSTOMER.orders.name })
+      const bruno = people.getByRole('listitem').filter({ hasText: CUSTOMER.invoices.name })
+      await expect(anna).toHaveCount(1)
+      await expect(bruno).toHaveCount(1)
+      // Anna is the Orders contact (the oldest with an e-mail): quotes and confirmations go to her; Bruno gets the invoices.
+      await expect(anna).toContainText(C('gets.QUOTES_AND_CONFIRMATIONS'))
+      await expect(bruno).toContainText(C('gets.INVOICES_AND_REMINDERS'))
+      await expect(bruno).not.toContainText(C('gets.QUOTES_AND_CONFIRMATIONS'))
+      await flow.shot(page, 'people-addresses')
+      page.off('request', onRequest)
+      expect(written, 'nothing was written').toEqual([])
+    })
+    // ---- end ca T.3
 
     await flow.step('VIES: the tax tab says an Italian number is not a VIES question (EU numbers outside Italy only)', async () => {
       await sales.go(`/sales/customers/${party.id}?tab=tax`)
