@@ -45,10 +45,10 @@
   },
   "clip": {
     "label": "Aggiungi file",
-    "device": "Carica da questo dispositivo",
-    "photo": "Scatta una foto",
+    "device": "Documento",
+    "photo": "Foto",
     "photoHint": "la fotocamera del telefono; altrove la scelta del file",
-    "record": "Da questo record…",
+    "record": "Da questo record",
     "noRight": "Per aggiungere file serve il permesso di caricare o leggere file",
     "noUpload": "serve il permesso di caricare file",
     "noRead": "serve il permesso di leggere file",

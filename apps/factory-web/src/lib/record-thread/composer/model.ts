@@ -87,6 +87,8 @@ export interface DraftLink {
   audience?: 'note' | 'shared'
   quote?: { readonly name: string | null; readonly you?: boolean; readonly tone: SenderTone; readonly line: string }
   // ---- end tw- W1.4
+  /** tw- fx2 (walk G-24): the audience the box had before Reply — × on the bar puts it back (the safe default). */
+  before?: ComposerMode
 }
 
 export interface ComposerDraft {
@@ -283,6 +285,17 @@ export interface SwitchNote {
  * notes, T5-F05) and named; the floor tick goes (only a note goes to the floor). Files are the tray's: the tray marks an office-only
  * file in a reply and Send waits until it is shared or taken off (B-TH-206).
  */
+/**
+ * tw- fx2 (walk G-24): × on the bar — the draft without its reply (or correction). A reply puts the audience back to what the box had
+ * before Reply (the safe default), when that audience is still offered; `notes` null: the box keeps the notes it shows.
+ */
+export function withoutLink(draft: ComposerDraft, modes: readonly ComposerMode[], people: readonly ComposerPerson[]): { draft: ComposerDraft; notes: SwitchNote[] | null } {
+  const { link, ...rest } = draft
+  const before = link?.kind === 'reply' ? link.before : undefined
+  if (before && before !== draft.mode && modes.includes(before)) return switchMode(rest, before, people)
+  return { draft: rest, notes: null }
+}
+
 export function switchMode(draft: ComposerDraft, to: ComposerMode, people: readonly ComposerPerson[]): { draft: ComposerDraft; notes: SwitchNote[] } {
   if (draft.mode === to) return { draft, notes: [] }
   // B-TH-236: a correction keeps the way of the message it corrects; leaving that way lets the correction go (said).

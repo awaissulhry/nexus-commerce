@@ -25,11 +25,15 @@ describe('starts on Office note, safe by default (P3)', () => {
     expect(startDraft({ ...ORDER, can: { post: false, email: true, manage: false } }).mode).toBe('reply')
   })
 
-  it('the reply needs a customer and email.send; without a customer the note only, said in words', () => {
+  // tw- fx2 (walk G-15): without a customer the one audience chip says it ("Office note", no menu) — no extra line under the box.
+  it('the reply needs a customer and email.send; without a customer the note only, said by the chip', () => {
     expect(composerModes(ORDER)).toEqual(['note', 'reply'])
     expect(composerModes({ ...ORDER, can: { ...ORDER.can, email: false } })).toEqual(['note'])
     expect(composerModes({ ...ORDER, party: null })).toEqual(['note'])
-    expect(textOf(composer({ ...ORDER, party: null }, draft()))).toContain('This record has no customer: notes only.')
+    const alone = composer({ ...ORDER, party: null }, draft())
+    expect(alone).toContain('class="fw-rt-cx-chipbtn is-static"')
+    expect(textOf(alone)).toContain('Office note')
+    expect(textOf(alone)).not.toContain('This record has no customer: notes only.')
   })
 
   it('“Reply to <customer>” names only this record’s customer (W20)', () => {
@@ -538,7 +542,7 @@ describe('tw- W1.4 — a reply to an office note never takes its quote to the cu
 // ---- end tw- W1.4
 
 // ---- tw- W2.3 (THE THREAD REBUILD; 10-design §10, S9; P0-B2, D5, Z3, P6): the composer in one row ----------------------------------
-import { enterSends } from './model'
+import { enterSends, withoutLink } from './model'
 import { ClipMenu } from '../attachments/view/AttachmentTray'
 
 describe('tw- W2.3 — the composer is ONE row at rest: + · the audience chip · the box · the Send arrow', () => {
@@ -579,7 +583,12 @@ describe('tw- W2.3 — the composer is ONE row at rest: + · the audience chip �
   })
 
   it('a chips row only when a chip is on: Follow up on a message to the customer, the Amount, For the floor, About', () => {
-    expect(render(createElement(Composer, { context: ORDER, draft: draft({ mode: 'reply', body: 'x' }), followUp: createElement('b', null, 'FOLLOW'), onDraft: () => undefined, onSend: () => undefined }))).toContain('<div class="fw-rt-cx-chips"><b>FOLLOW</b>')
+    // tw- fx2 (G-13): in a customer mode the audience chip leads the chips row, in words; then Follow up.
+    const reply = render(createElement(Composer, { context: ORDER, draft: draft({ mode: 'reply', body: 'x' }), followUp: createElement('b', null, 'FOLLOW'), onDraft: () => undefined, onSend: () => undefined }))
+    const chipsRow = reply.slice(reply.indexOf('<div class="fw-rt-cx-chips">'), reply.indexOf('class="fw-rt-cx-row"'))
+    expect(chipsRow).toContain('fw-rt-cx-chipbtn')
+    expect(chipsRow.indexOf('fw-rt-cx-chipbtn')).toBeLessThan(chipsRow.indexOf('<b>FOLLOW</b>'))
+    expect(reply.slice(reply.indexOf('class="fw-rt-cx-row"'))).not.toContain('fw-rt-cx-chipbtn')
     expect(render(createElement(Composer, { context: ORDER, draft: draft({ body: 'x' }), followUp: createElement('b', null, 'FOLLOW'), onDraft: () => undefined, onSend: () => undefined }))).not.toContain('FOLLOW')
   })
 
@@ -597,7 +606,12 @@ describe('tw- W2.3 — the composer is ONE row at rest: + · the audience chip �
   it('P0-B2: ONE height rule for the box, owned by composer.css — one line at rest, never 0 px, about 8 lines at most', () => {
     const css = readFileSync(new URL('./composer.css', import.meta.url), 'utf8')
     // tw- fx1: stronger than the DS's `.nds-textarea { min-height: 168px }` (the real page drew ~170 px), the wrapper the flex item.
-    expect(css).toMatch(/\.fw-rt-composer \.fw-rt-cx-box textarea\.fw-rt-cx-text \{[^}]*min-height: 24px;[^}]*max-height: calc\(8 \* 1\.55em \+ 12px\);/)
+    // tw- fx2 (walk G-19): the box as drawn — text 15 / 22, the box 40 at rest (the text 30 + its padding), about 8 lines at most.
+    expect(css).toMatch(/\.fw-rt-composer \.fw-rt-cx-box textarea\.fw-rt-cx-text \{[^}]*min-height: 30px;[^}]*max-height: calc\(8 \* 22px \+ 8px\);[^}]*font-size: var\(--nds-font-size-md\);[^}]*line-height: 22px;/)
+    expect(css).toMatch(/\.fw-rt-composer \.fw-rt-cx-box \{\s*min-height: 40px;/)
+    expect(css).toMatch(/\.fw-rt-composer \.fw-rt-cx-row > \.fw-rt-clip \.nds-btn,\s*\.fw-rt-composer \.fw-rt-cx-row > \.fw-rt-clip-menu > \.nds-btn \{\s*width: 40px;\s*height: 40px;\s*border: 1px solid var\(--nds-border\);\s*border-radius: var\(--nds-radius-pill\);/)
+    expect(css).toMatch(/\.fw-rt-composer \.fw-rt-cx-send\.nds-btn \{\s*height: 40px;\s*min-width: 40px;/)
+    expect(css).toMatch(/\.fw-rt-composer \.fw-rt-cx-send\.nds-btn\[aria-disabled='true'\],\s*\.fw-rt-composer \.fw-rt-cx-send\.nds-btn:disabled \{[^}]*background: var\(--nds-surface-sunken\);[^}]*color: var\(--nds-text-muted\);/)
     expect(css).toMatch(/\.fw-rt-cx-box > \.fw-rtm \{\s*flex: 1 1 160px;\s*min-width: 0;/)
     expect(css).not.toMatch(/^\.fw-rt-cx-box \.fw-rt-cx-text \{/m)
     const source = readFileSync(new URL('./view/Composer.tsx', import.meta.url), 'utf8')
@@ -626,3 +640,48 @@ describe('tw- W2.3 — the composer is ONE row at rest: + · the audience chip �
   })
 })
 // ---- end tw- W2.3
+
+// ---- tw- fx2 (the walk: G-12, G-13, G-14, G-24) --------------------------------------------------------------------------------------
+describe('tw- fx2 — the composer after the walk', () => {
+  const REPLY_LINK = { kind: 'reply' as const, messageId: 'm-1', who: 'Bea Esempio', at: '2026-11-17T09:41:00.000Z', before: 'note' as const }
+  it('G-24: × on a reply bar puts the audience back to what it was before Reply; G-12: Esc drops the bar first and keeps the box', () => {
+    // × after Reply on an office note that took the box to the portal: back to the office note, the bar gone.
+    const back = withoutLink(draft({ mode: 'portal', body: 'Thanks', link: REPLY_LINK }), ['note', 'reply', 'portal'], OFFICE_PEOPLE)
+    expect(back.draft.mode).toBe('note')
+    expect(back.draft.link).toBeUndefined()
+    expect(back.draft.body).toBe('Thanks')
+    // The audience it had is no longer offered, or there was none: the bar goes, the audience stays, the notes too.
+    expect(withoutLink(draft({ mode: 'portal', link: REPLY_LINK }), ['portal'], OFFICE_PEOPLE)).toEqual({ draft: draft({ mode: 'portal' }), notes: null })
+    expect(withoutLink(draft({ mode: 'reply', link: { ...REPLY_LINK, before: 'reply' } }), ['note', 'reply'], OFFICE_PEOPLE)).toEqual({ draft: draft({ mode: 'reply' }), notes: null })
+    // A correction's × keeps its audience (it was the corrected message's own).
+    expect(withoutLink(draft({ mode: 'reply', link: { kind: 'correct', messageId: 'm-2', who: null, at: '2026-11-17T09:41:00.000Z', way: 'reply' } }), ['note', 'reply'], OFFICE_PEOPLE).draft.mode).toBe('reply')
+    const source = readFileSync(new URL('./view/Composer.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('const next = withoutLink(draft, modes, context.people)')
+    expect(source).toContain('if (link) dropLink()')
+    const container = readFileSync(new URL('../../../areas/_shared/record-thread/use-record-thread.ts', import.meta.url), 'utf8')
+    expect(container).toContain("before: workRef.current.draft.link?.kind === 'reply' ? (workRef.current.draft.link.before ?? workRef.current.draft.mode) : workRef.current.draft.mode")
+    let drafted: ComposerDraft | null = null
+    const html = render(createElement(Composer, { context: { ...ORDER, portal: true }, draft: draft({ mode: 'portal', link: REPLY_LINK }), onDraft: (next) => (drafted = next), onSend: () => undefined }))
+    expect(html).toContain('aria-label="Not a reply to that message any more"')
+    expect(drafted).toBeNull()
+  })
+
+  it('G-13: under 420 px the audience chip takes its own row in words (no icon-only chip)', () => {
+    const css = readFileSync(new URL('./composer.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/@container fw-rtcol \(max-width: 420px\) \{\s*\.fw-rt-cx-row:has\(> \.fw-rt-cx-aud, > \.fw-rt-cx-chipbtn\) \{\s*display: grid;[^}]*grid-template-areas: 'chip chip chip' 'plus box send';/)
+    // With a chip on (here the amount), the audience chip leads the chips row at every width.
+    const amounted = render(createElement(Composer, { context: { ...ORDER, can: { ...ORDER.can, price: true } }, draft: draft({ mode: 'note', amount: '180.00', currency: 'EUR' }), onDraft: () => undefined, onSend: () => undefined }))
+    const row = amounted.slice(amounted.indexOf('<div class="fw-rt-cx-chips">'), amounted.indexOf('class="fw-rt-cx-row"'))
+    expect(row).toContain('fw-rt-cx-chipbtn')
+    expect(css).not.toMatch(/\.fw-rt-cx-aud-word \{\s*display: none;/)
+  })
+
+  it('G-14: the "+" says Document · Photos · (Measurement sheet…) · From this record, then the composer’s own rows', () => {
+    for (const [locale, words] of [['en', ['Document', 'Photos', 'From this record']], ['it', ['Documento', 'Foto', 'Da questo record']]] as const) {
+      const attach = translatorFor(locale, wordsFor(locale, ['record-thread-attach'])['record-thread-attach']!)
+      expect([attach('clip.device'), attach('clip.photo'), attach('clip.record')]).toEqual(words)
+      expect(attach('clip.sheet')).toMatch(/…$/)
+    }
+  })
+})
+// ---- end tw- fx2
