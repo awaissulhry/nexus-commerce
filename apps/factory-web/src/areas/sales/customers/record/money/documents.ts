@@ -5,6 +5,7 @@ import { word, type MoneyWord } from '../../../orders/record/money/word'
 import { invoiceHref, orderMoneyHref, recordPaymentOnInvoiceHref } from './doors'
 import { figuresOf } from './head'
 import { isFailed, isReading, type MoneyTabInput, type Part, type ShippedNotInvoiced } from './model'
+import { readProblem } from '../../../orders/model' // cm-fx2: the orders catalogue's own key of a failed read (its rule, never a literal here)
 
 /**
  * F-CM-202 (customer page › MONEY tab, cm-w2 W2.2; 10-design §5.3; 18-lead-settles Z6, Z21, Z25) — section 3, Invoices & credit notes
@@ -163,7 +164,7 @@ export function documentsOf(input: MoneyTabInput, read: Part<DocumentsRead> | nu
   const invoiceShipped = shippedRead && shippedRead.ddtIds.length > 0 && input.can.invoicesManage ? `${prefix}/finance/invoices?${new URLSearchParams({ new: '1', ddts: shippedRead.ddtIds.join(','), party: input.party.id }).toString()}` : null
   if (isReading(read)) return { reading: true, problem: null, rows: [], answer: [word('cm.invoices.reading')], shipped, invoiceShipped, more: false }
   const value = read.value
-  if (isFailed(read) || !value) return { reading: false, problem: read.problem ?? 'problem.read.internal', rows: [], answer: [], shipped, invoiceShipped, more: false }
+  if (isFailed(read) || !value) return { reading: false, problem: read.problem ?? readProblem(null), rows: [], answer: [], shipped, invoiceShipped, more: false }
   const rows = value.rows.map((row) => documentRowOf(row, value.rows, input, prefix))
   const more = value.next !== null
   const answer: MoneyWord[] = []

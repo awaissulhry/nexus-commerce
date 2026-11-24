@@ -109,7 +109,7 @@
       "down": "{section} ↓",
       "invoices": "Apri in Amministrazione › Fatture ›",
       "payments": "Apri in Amministrazione › Incassi ›",
-      "refunds": "Apri in Amministrazione › Rimborsi ›",
+      "refunds": "Apri in Amministrazione › Incassi › Rimborsi ›",
       "margins": "Apri in Amministrazione › Margini ›"
     },
     "more": {
@@ -214,7 +214,8 @@
       "foot": "Quanto ha pagato e quanto deve ancora ogni ordine, anche ciò che non è ancora richiesto:",
       "footDoor": "Lavori › Tutti gli ordini ›",
       "ofTotal": "di {amount}",
-      "stopTitle": "Blocca i solleciti di {invoice}"
+      "stopTitle": "Blocca i solleciti di {invoice}",
+      "stopDone": "Fatto"
     },
     "none": {
       "title": "Qui ancora niente",

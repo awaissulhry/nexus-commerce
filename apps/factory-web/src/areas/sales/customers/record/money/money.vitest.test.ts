@@ -34,7 +34,7 @@ import type { OrderRow } from '../../../orders/api'
 import type { CustomerReturn } from '../../money/api'
 import { createElement } from 'react' // F-CM T.2
 import { render, textOf } from '../../../../../lib/record-thread/parts/testing' // F-CM T.2
-import { CM_CASES, cmTabOf, CmMoneyDesign, type CmCaseModel, type CmRole } from './_demo/cases' // F-CM T.2
+import { CM_CASES, cmTabOf, CmMoneyDesign, type CmCaseModel, type CmRole } from './_demo/fixtures' // F-CM T.2
 import { inShell } from '../../../../parties/_shared/fixtures' // F-CM T.2: the tab drawn in the office shell, as the gallery draws it
 
 /**
@@ -393,7 +393,8 @@ describe('F-CM-101: the views (cm-w1 W1.3; 10-design §1, §2; 18-lead-settles L
     for (let index = 1; index < order.length; index += 1) expect(tab.indexOf(order[index]!), order[index]).toBeGreaterThan(tab.indexOf(order[index - 1]!))
     expect(tab).toContain("import { MoneyAnswer } from '../../../../orders/record/money/view/parts'")
     expect(view('BalanceSection.tsx')).toContain("import { Facts, GapRow } from '../../../../orders/record/money/view/parts'")
-    expect(view('BalanceSection.tsx')).toContain("<Section id={kitId('balance')}")
+    // cm-fx2: the kit's Section with the balance's id, its props on lines of their own (the head's buttons grew in cm-w2/cm-w3).
+    expect(view('BalanceSection.tsx')).toMatch(/<Section\s+id=\{kitId\('balance'\)\}/)
     expect(view('CollectSection.tsx')).toContain("const head = { id: kitId('collect')")
     // A shared part is never redrawn here (no copy of its markup), and the kit is used in place.
     for (const file of ['CustomerMoneyTab.tsx', 'BalanceSection.tsx', 'CollectSection.tsx']) expect(view(file), file).not.toMatch(/className="fw-om-(head|gap|facts|fold|il)\b/)

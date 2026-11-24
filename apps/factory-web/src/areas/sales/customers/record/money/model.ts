@@ -8,6 +8,7 @@ import type { OrderSummary } from '../../../orders/api'
 import type { CustomerReturn, OpenOrderMoney } from '../../money/api'
 import { doorCanOf, type DoorCan } from '../../../orders/record/money/door/model' // F-CM-201: a row's acts are the money door's rule
 import { stopsCanOf } from '../../../../finance/receivables/reminder-stops/model' // F-CM-201: Finance's own rule decides the stop's door
+import { readProblem } from '../../../orders/model' // cm-fx2: the orders catalogue's own key of a failed read (its rule, never a literal here)
 
 /**
  * F-CM-101 (customer page › MONEY tab, 10-design §1–§4; 18-lead-settles Z3–Z11, Z18–Z25) — what the customer's Money tab is handed and
@@ -134,7 +135,7 @@ export interface OpenItemsRead {
 export function orderProblemOf(problem: string): string {
   if (problem.startsWith('problem.read.')) return problem
   const kind = problem.replace(/^problem\./, '')
-  return ['signed_out', 'forbidden', 'not_found', 'unavailable', 'rate_limited'].includes(kind) ? `problem.read.${kind}` : 'problem.read.internal'
+  return ['signed_out', 'forbidden', 'not_found', 'unavailable', 'rate_limited'].includes(kind) ? `problem.read.${kind}` : readProblem(null)
 }
 
 /**

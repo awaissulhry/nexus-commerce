@@ -1,4 +1,4 @@
-import { createElement, type CSSProperties, type ReactNode } from 'react'
+import { createElement, type CSSProperties, type HTMLAttributes, type ReactNode } from 'react'
 import { grantOf } from '@nexus/factory-domain/auth/roles/roles'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { DEMO_COMPANIES } from '../../../../../../shell/design-data'
@@ -96,7 +96,7 @@ const PAYMENTS: PaymentsRead = {
 }
 const ON_ACCOUNT: CreditBalanceRead = { balances: [{ currency: 'EUR', amount: 120000 }], payments: [{ id: uid('9393', 2), receivedOn: '2026-10-27', externalRef: 'CRO-0000-ESEMPIO-42', currency: 'EUR', amount: 300000, unplacedAmount: 120000 }] }
 const REFUND_MADE: Refund = { ...MONEY_OPEN_REFUNDS.refundsDue[0]!, id: uid('5151', 9), status: 'PAID', paidOn: '2026-10-02', externalRef: 'CRO-0000-ESEMPIO-07', dueDate: '2026-10-02' }
-const LIMIT_ROW: LimitRow = { termsId: uid('a1a1', 1), version: 3, party: { id: moda.id, code: moda.code, name: NAME }, company: { id: COMPANY.id, code: COMPANY.code }, currency: 'EUR', limit: 5_000_000, used: 3_120_000, openOrders: 2_449_000, openInvoices: 671_000, overdue: 427_000, available: 1_880_000, overLimitBy: null, usedPct: 62, onHold: false, findings: [], held: { orders: 0, releases: 0, shipments: 0, firstOrders: [] } } as LimitRow
+const LIMIT_ROW: LimitRow = { termsId: uid('a1a1', 1), version: 3, party: { id: moda.id, code: moda.code, name: NAME }, company: { id: COMPANY.id, code: COMPANY.code }, currency: 'EUR', limit: 5_000_000, used: 3_120_000, openOrders: 2_449_000, openInvoices: 671_000, overdue: 427_000, available: 1_880_000, overLimitBy: null, usedPct: 62, onHold: false, findings: [], held: { orders: 0, releases: 0, shipments: 0, firstOrders: [] }, changedAt: '2026-09-14T10:20:00.000Z', mayChange: true }
 const TRUST: CustomerTrust = { customer: { id: moda.id, code: moda.code, name: NAME, version: 2 }, level: 2, companies: [{ id: COMPANY.id, code: COMPANY.code, remindersEnabled: true, steps: [{ level: 1, offsetDays: 0, action: 'EMAIL' }, { level: 2, offsetDays: 7, action: 'EMAIL' }] }], mayChange: true }
 const priceRow = (n: number, ours: number, theirs: number, lines: number, accepted = false): OrderRow => ({ id: uid('6161', n), number: `MODA-SO-00${10 + n}`, currency: 'EUR', netAmount: ours, brandPrice: theirs, priceDiff: ours - theirs, priceNotEqualLines: lines, priceAccepted: accepted, priceMatch: 'NOT_EQUAL' }) as unknown as OrderRow
 const PRICE_ROWS = [priceRow(4, 1_224_000, 1_200_000, 2), priceRow(5, 980_000, 992_000, 1, true)]
@@ -278,18 +278,14 @@ function windowOf(window: CmWindow, held: readonly string[], glance: Glance): Re
 }
 
 /** The design's Money tab for a case: the tab in its room, and the window opened in place. */
-export function CmMoneyDesign({ cm }: { cm: CmCaseModel }) {
+export function CmMoneyDesign({ cm }: { cm: CmCaseModel }): ReactNode {
   const { input, lazy } = cmTabOf(cm)
   const held = cm.held ?? cmHeld(cm.role)
   const tab = createElement(CustomerMoneyTab, { input, lazy, prefix: PREFIX, asOf: '2026-10-31T09:44:00.000Z', onRetry: noop })
   const glance = input.glance?.status === 'ready' ? input.glance.value : glanceOf('MODA-DEMO')
   const room: CSSProperties | null = cm.room ? { width: `${cm.room}px`, maxWidth: '100%' } : null
-  return (
-    <div data-cm-room={cm.room} style={room ?? undefined}>
-      {tab}
-      {cm.window ? windowOf(cm.window, held, glance) : null}
-    </div>
-  )
+  const box: HTMLAttributes<HTMLDivElement> & { readonly 'data-cm-room'?: number } = { 'data-cm-room': cm.room, style: room ?? undefined }
+  return createElement('div', box, tab, cm.window ? windowOf(cm.window, held, glance) : null)
 }
 
 // ── the cases (ids `cm-*`; the labels say what each shows) ──

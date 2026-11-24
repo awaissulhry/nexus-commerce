@@ -13,7 +13,7 @@ import { templateOf } from '@nexus/factory-domain/auth/roles/templates' // F-CO-
 import { withheldParts } from '@nexus/factory-domain/sales/customer-360/glance' // F-CO-301: the glance's parts by right
 import { moneyTabDemo } from '../money/_demo/fixtures' // F-CM-104: the Money tab's made-up reads
 import { CustomerMoneyTab } from './view/money/CustomerMoneyTab' // F-CM-104: the Money tab's view
-import { CM_CASES, cmHeld, CmMoneyDesign, type CmCaseModel } from './money/_demo/cases' // F-CM T.1: the Money tab's cm-* cases
+import { CM_CASES, cmHeld, CmMoneyDesign, type CmCaseModel } from './money/_demo/fixtures' // F-CM T.1: the Money tab's cm-* cases
 import type { CustomerMoneyModel } from '../money/overview'
 import { CustomerRecordView } from './view/CustomerRecordView'
 // F-SA-272 → F-CO-201: who looks after the customer, as People's rows and their two Change… windows (made-up people of the portal demo).
@@ -995,7 +995,7 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
   const overviewTab = party && shownTab(recordTabs(SIDES.customers, record.can), record.tab) === 'overview' ? createElement(OverviewDesign, { record, party, money, depth, supervisor, designer, supervisorOpen: supervisorOpen === true, ...(overview ? { over: overview } : {}) }) : null
   // ---- F-CM-104 (cm-w1 W1.4): the Money tab, built for the tab the page shows (as the live container builds it) from made-up reads —
   // Finance's view with the price grain, else Sales' (words only); a case's priceDiffer is the page's price count.
-  // F-CM T.1: a cm-* case draws the tab with every section's reads, its room and the window it opens in place (money/_demo/cases.tsx).
+  // F-CM T.1: a cm-* case draws the tab with every section's reads, its room and the window it opens in place (money/_demo/fixtures.ts).
   const moneyTab = party && shownTab(recordTabs(SIDES.customers, record.can), record.tab) === 'money' ? (model.cm ? createElement(CmMoneyDesign, { cm: model.cm }) : createElement(CustomerMoneyTab, { input: moneyTabDemo(record.can.price ? 'finance' : 'sales', { priceDiffer: priceDiffer ?? null }), prefix: record.prefix, asOf: '2026-10-31T09:44:00.000Z', onRetry: () => undefined })) : null
   // ---- end F-CM-104
   return inShell(
