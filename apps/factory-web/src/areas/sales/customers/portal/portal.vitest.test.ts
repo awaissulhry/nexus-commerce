@@ -554,15 +554,59 @@ describe('F-CA-fx3 (P0-B1): `?invite=` opens the invitation only for who may inv
     const start = container.indexOf('const invited = useRef(false)')
     expect(start).toBeGreaterThan(-1)
     const effect = container.slice(start, container.indexOf('// ---- end F-SA-274', start))
-    // The address door checks the right BEFORE it marks itself used and opens the window.
-    const guard = "if (invited.current || !can.invite || !email || !access || !(parts ?? PORTAL_PARTS).includes('people')) return"
+    // F-CA-fx5 (walk W-11; pin moved, same strictness): the address door is read once the people are read (by a mount that draws them),
+    // marks itself used, and opens the window ONLY with the right — checked right before the window, never after it opens.
+    const guard = "if (invited.current || left === null || !access || !(parts ?? PORTAL_PARTS).includes('people')) return"
     expect(effect).toContain(guard)
     expect(effect.indexOf(guard)).toBeLessThan(effect.indexOf('invited.current = true'))
-    expect(effect.indexOf('invited.current = true')).toBeLessThan(effect.indexOf("setDialog({ kind: 'invite', email,"))
+    const opens = "if (can.invite && email) setDialog({ kind: 'invite', email, ...(search?.get('inviteName') ? { name: search.get('inviteName')! } : {}) })"
+    expect(effect.indexOf('invited.current = true')).toBeLessThan(effect.indexOf(opens))
     // With the right: the same window as before (its e-mail and name from the address).
-    expect(effect).toContain("setDialog({ kind: 'invite', email, ...(search?.get('inviteName') ? { name: search.get('inviteName')! } : {}) })")
+    expect(effect).toContain(opens)
+    expect(effect.match(/setDialog\(/g)).toHaveLength(1)
     // The address is the container's only door that opens the invitation by itself (the button and People's ⋯ hand it to onDialog).
     expect(container.match(/setDialog\(\{ kind: 'invite'/g)).toHaveLength(1)
   })
 })
 // ---- end F-CA-fx3
+
+// ---- F-CA-fx5 (customer People & addresses, walk W-11): `?invite=` is read once, then the address leaves it — with or without the right
+import { INVITE_PARAMS, queryWithoutInvite } from './model'
+
+describe('F-CA-fx5 (walk W-11): the address leaves `?invite=` (and `inviteName`) once it was read, as People\'s `&add=`', () => {
+  it('the query keeps everything else; an address that asks nothing is left as it is (null)', () => {
+    expect([...INVITE_PARAMS]).toEqual(['invite', 'inviteName'])
+    expect(queryWithoutInvite('tab=people&invite=walk.check%40example.com&inviteName=Seed+Buyer')).toBe('tab=people')
+    expect(queryWithoutInvite('tab=people&add=contact&invite=walk.check%40example.com')).toBe('tab=people&add=contact')
+    expect(queryWithoutInvite('invite=')).toBe('')
+    expect(queryWithoutInvite('tab=people&inviteName=Seed+Buyer')).toBe('tab=people')
+    expect(queryWithoutInvite('tab=people&add=address')).toBeNull()
+    expect(queryWithoutInvite('')).toBeNull()
+  })
+
+  it('the portal hook drops it for every reader once the people are read — the window only with the right; Portal settings reads nothing', () => {
+    const container = readFileSync(new URL('./PortalAccess.tsx', import.meta.url), 'utf8')
+    const start = container.indexOf('const invited = useRef(false)')
+    const effect = container.slice(start, container.indexOf('// ---- end F-SA-274', start))
+    expect(effect).toContain("const left = queryWithoutInvite(search?.toString() ?? '')")
+    // Not refused by the right any more: a reader without partners.invite reads it too (no window), so the address leaves it for both.
+    expect(effect).not.toMatch(/!can\.invite\b/)
+    const leaves = "router.replace(`${pathname}${left ? `?${left}` : ''}${typeof window === 'undefined' ? '' : window.location.hash}`, { scroll: false })"
+    expect(effect).toContain(leaves)
+    expect(effect.indexOf('invited.current = true')).toBeLessThan(effect.indexOf(leaves))
+    expect(effect.match(/router\.replace\(/g)).toHaveLength(1)
+    // A mount that does not draw the people (the customer's Portal settings, the requests window) returns before it: as before.
+    const record = readFileSync(new URL('../record/CustomerRecord.tsx', import.meta.url), 'utf8')
+    expect(record).toContain("const PORTAL_SETTINGS_PARTS: readonly PortalPart[] = ['settings', 'preview', 'limits', 'requests']")
+    expect(readFileSync(new URL('../record/view/WaitingForCustomerDialog.tsx', import.meta.url), 'utf8')).toContain("parts={['requests']}")
+  })
+
+  it('a People reader without the portal (no partners.view: no portal read) loses it at the arrival, with `&add=`', () => {
+    const tab = readFileSync(new URL('../record/people/use-people-tab.ts', import.meta.url), 'utf8')
+    expect(tab).toContain("const left = can.portal ? null : queryWithoutInvite(search?.toString() ?? '')")
+    expect(tab).toContain('if (add || left !== null) {')
+    expect(tab).toContain("const next = new URLSearchParams(left ?? search?.toString() ?? '')")
+    expect(tab).toContain("next.delete('add')")
+  })
+})
+// ---- end F-CA-fx5
