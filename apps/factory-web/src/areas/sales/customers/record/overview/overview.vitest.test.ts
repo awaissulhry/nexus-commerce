@@ -629,7 +629,9 @@ describe('the cards: People, Next dates, Requests & changes, Linked records, Cus
     expect(value('kind')).toBe('Company · Italian')
     expect(value('kind', 'it')).toBe('Azienda · Italiano')
     // "valid from …": quiet words after the door, on the same line (10-design §8; picture 20) — no door of its own.
-    expect(value('identity')).toBe('Italian business · VAT IT00000000000 · 00000000000 · SDI DEMO123 · valid from 01/01/2026')
+    // co-fx2 (walk CO-W-6): no bare number — the codice fiscale says its label, in both languages.
+    expect(value('identity')).toBe('Italian business · VAT IT00000000000 · Codice fiscale 00000000000 · SDI DEMO123 · valid from 01/01/2026')
+    expect(value('identity', 'it')).toContain('P. IVA IT00000000000 · Codice fiscale 00000000000 · SDI DEMO123')
     const identity = facts.rows.find((row) => row.key === 'identity')!
     expect(identity.parts.map((part) => [part.door?.kind ?? null, part.quiet === true])).toEqual([['href', false], [null, true]])
     expect(value('requirements')).toBe('3')

@@ -573,7 +573,8 @@ export function factsOf(input: OverviewInput): FactsCard {
   if (identity) {
     const said: Param[] = [say(`taxMode.${identity.taxMode}`)]
     if (identity.vatNumber) said.push(ov('facts.vat', { number: identity.vatNumber }))
-    if (identity.fiscalCode && identity.fiscalCode !== identity.vatNumber) said.push(text(identity.fiscalCode))
+    // co-fx2 (walk CO-W-6): the codice fiscale with its label (the identity form's own word), as VAT and SDI carry theirs.
+    if (identity.fiscalCode && identity.fiscalCode !== identity.vatNumber) said.push(joined([say('field.fiscalCode'), text(identity.fiscalCode)], ' '))
     if (identity.sdiRecipientCode) said.push(ov('facts.sdi', { code: identity.sdiRecipientCode }))
     if (identity.pec) said.push(ov('facts.pec', { pec: identity.pec }))
     // "valid from …" as quiet words after the door, on the same line (10-design §8; picture 20), as the next promise's quiet part.
