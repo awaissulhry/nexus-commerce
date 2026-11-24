@@ -4,7 +4,7 @@ import { ARCHIVED_CUSTOMER, at, CUSTOMERS, inShell, NOW, ORDERS, partyThread, QU
 import { loaded, loading, type PartyRecordModel } from '../../../parties/_shared/model'
 import { recordTabs, shownTab, SIDES } from '../../../parties/_shared/model' // F-CO-103: the tab the page shows (the Overview is built for it)
 import type { Party } from '../../../parties/_shared/api'
-import { BLANK_TERMS, editing, GROUP_TERMS, PAYMENT_TERMS, TERMS, TERMS_CAN, termsCard, termsModel } from '../_demo/fixtures'
+import { BLANK_TERMS, editing, GROUP_TERMS, PAYMENT_TERMS, TERMS, TERMS_CAN, termsModel } from '../_demo/fixtures'
 import type { CommercialTermsModel } from '../terms/view/CommercialTermsCard'
 import { MONEY_CAN, MONEY_STATES, moneyModel } from '../money/_demo/fixtures'
 import { OVERDUE_ROWS } from '../money/_demo/fixtures' // F-CO-301: Moda Demo's late money
@@ -32,8 +32,18 @@ import type { Glance, Privacy } from '../depth/api'
 import { DEPTH_NAMESPACES } from '../depth/CustomerDepth'
 import { ALL_CAN, COMPANIES, COPY, FILES, glanceOf, HELD_GLANCE, HOLDS, KEPT, NO_HOLDS, PRIVACY, READ_CAN, REQUIREMENTS, SALES_CAN, STYLES, TERMS as COMPANY_TERMS, TODAY, TWO_HOLDS, WITHHELD, withoutPrices } from '../depth/_demo/fixtures'
 import { basisDraftOf, blankRequirement, failedRead, LOADING, ready, requirementDraftOf, type DepthCan, type Read } from '../depth/model'
-import { HoldCard, type HoldCardModel } from '../depth/view/HoldCard'
-import { PoNumberCard, type PoNumberModel } from '../depth/view/PoNumberCard'
+import type { HoldCardModel } from '../depth/view/HoldCard'
+import type { PoNumberModel } from '../depth/view/PoNumberCard'
+// ---- F-CT-408 (customer page › Terms & requirements, lane ct-; 13-backend §6.8): the tab's own parts — its ONE model rule, its view,
+// the Change terms… window's inside (an edit case draws it under the tab: never a Modal open here), its notices.
+import { Card } from '@nexus/ui/components'
+import type { CarrierAccount } from './terms/api'
+import { said, termsCan, TERMS_TAB_NAMESPACES } from './terms/model'
+import { TERMS_TAB_START, termsTabModel, type TermsTabReads } from './terms/tab'
+import { TermsTab } from './view/terms/TermsTab'
+import { ChangeTermsBody } from './view/terms/ChangeTermsDialog'
+import { TermsNotices } from './view/terms/TermsNotices'
+// ---- end F-CT-408
 import type { PrivacyModel } from '../depth/view/PrivacyCard'
 import { RequirementsTab, type RequirementsModel } from '../depth/view/RequirementsTab'
 // F-CA-120 (customer People & addresses, lane ca-; 15-steps W1.4): the People tab of a case — the page's own model rule over the case's
@@ -794,11 +804,78 @@ function depthNodes(depth: DepthCase | undefined): SupplierDepth | undefined {
   if (!depth) return undefined
   // F-CO-203: the Overview's old parts went — the Overview's rules read the case's glance (OverviewDesign below). F-CA-229 (ca-w2 W2.5):
   // People's riders / profiles card and personal-data card went — the People tab draws the case's glance (its riders) and privacy.
+  // F-CT-408 (ct-w1 W1.4): the hold and PO-number cards went — the case's Terms tab draws its hold and company-terms reads (TermsDesign).
   return {
-    tax: depth.hold || depth.po ? createElement('div', { className: 'fw-cdp-two-wide' }, depth.hold ? createElement(HoldCard, { model: depth.hold }) : null, depth.po ? createElement(PoNumberCard, { model: depth.po }) : null) : null,
     requirements: depth.requirements ? createElement(RequirementsTab, { model: depth.requirements }) : null,
   }
 }
+
+// ---- F-CT-408 (customer page › Terms & requirements, lane ct-; 13-backend §6.8): the Terms tab of a case — the tab's ONE model rule
+// (termsTabModel, the container's own) over the case's reads: its commercial terms (the old card's model), its holds and company terms
+// (the old depth cards' models, their windows kept), else made-up defaults; every Terms case keeps its id and its label. An edit of the
+// old in-place form is the Change terms… window's inside under the tab; a save is the record's ONE notice. Made-up data only.
+
+/** The case's company terms: tenant-wide, two of our companies; a customer of one company: its own only. */
+function companyTermsOfCase(party: Party): typeof COMPANY_TERMS {
+  if (party.companyId === null) return { ...COMPANY_TERMS, partyId: party.id, code: party.code }
+  const own = COMPANY_TERMS.companies.find((entry) => entry.company.id === party.companyId) ?? COMPANY_TERMS.companies[0]!
+  return { ...COMPANY_TERMS, partyId: party.id, code: party.code, tenantWide: false, companies: [own] }
+}
+
+/** The case's carrier block (made-up: its preferred carrier from the terms, nothing on file, we pay). */
+const carrierOfCase = (party: Party, own: CommercialTermsModel): CarrierAccount => {
+  const code = own.terms?.preferredCarrierCode?.toLowerCase() ?? null
+  return { partyId: party.id, code: party.code, name: party.tradeName ?? party.legalName, carrierCode: code, carrierName: code ? code.toUpperCase() : null, accountOnFile: false, freightBilling: 'SENDER', defaultCarrierService: null, version: party.version }
+}
+
+/** The tab's rights from a case's rights: the record's, the old card's (terms) and the old depth cards' (hold, PO, requirements). */
+function termsCanOfCase(can: PartyRecordModel['can'], terms: CommercialTermsModel, depth: DepthCase | undefined) {
+  const card = terms.can
+  const deep = depth?.hold?.can ?? depth?.po?.can ?? depth?.requirements?.can ?? null
+  const held: string[] = ['parties.view', 'files.read']
+  if (can.manage && card.manage && (deep?.manage ?? true)) held.push('parties.manage')
+  if (deep ? deep.hold : can.manage) held.push('parties.hold')
+  if (can.vies) held.push('parties.vies')
+  if (card.terms) held.push('paymentterms.view')
+  if (card.lists) held.push('pricelists.view')
+  if (card.listsManage) held.push('pricelists.manage')
+  if (card.price && can.price && (deep?.price ?? true)) held.push('money.price')
+  if (can.quotes) held.push('quotes.view')
+  if (can.money === true) held.push('sales.credit.view')
+  if (can.manage) held.push('audit.read')
+  return termsCan(held)
+}
+
+function TermsDesign({ record, party, terms: termsOfCase, depth }: { record: PartyRecordModel; party: Party; terms: CommercialTermsModel | undefined; depth: DepthCase | undefined }) {
+  const locale = useLocale()
+  const terms = termsOfCase ?? termsModel()
+  const commercial: TermsTabReads['commercial'] = terms.problem ? failedRead(terms.problem) : terms.terms ? ready(terms.terms) : LOADING
+  const reads: TermsTabReads = {
+    party,
+    prefix: record.prefix,
+    can: termsCanOfCase(record.can, terms, depth),
+    locale,
+    now: NOW,
+    companyId: COMPANIES[0]!.id,
+    companyNames: Object.fromEntries(COMPANIES.map((company) => [company.id, company.name])),
+    commercial,
+    carrier: ready(carrierOfCase(party, terms)),
+    holds: depth?.hold?.read ?? ready(NO_HOLDS),
+    companies: depth?.po?.read ?? ready(companyTermsOfCase(party)),
+    requirements: depth?.requirements?.read ?? null,
+    library: terms.library ? ready(terms.library) : null,
+    lists: terms.lists ? ready(terms.lists) : null,
+  }
+  const edit = terms.draft ? { kind: 'terms' as const, draft: terms.draft, busy: terms.busy, tried: true, problem: terms.saveProblem } : null
+  const model = termsTabModel(reads, { ...TERMS_TAB_START, window: edit })
+  return createElement(
+    Fragment,
+    null,
+    createElement(TermsTab, { model: { ...model, windows: { ...model.windows, window: null } }, hold: depth?.hold ? { model: depth.hold } : null }),
+    edit ? createElement(WithMessages, { namespaces: TERMS_TAB_NAMESPACES }, createElement(Card, { padded: true }, createElement(ChangeTermsBody, { window: edit, windows: model.windows }))) : null,
+  )
+}
+// ---- end F-CT-408
 
 // ---- F-CO-103 (customer page › Overview; 13-backend §3.9): the Overview tab of a case — the tab's own rules (./overview) over the
 // case's models, with made-up work reads, counts and standing, so every case that drew the old Overview draws the new one. A read
@@ -1053,13 +1130,17 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
           })
       : null
   // F-CA-120: end
+  // F-CT-408 (ct-w1 W1.4): Terms & requirements, built for the tab the page shows (as the live container builds it); a saved case's
+  // notice in the record's ONE notice area.
+  const termsTab = party && shownTab(recordTabs(SIDES.customers, record.can), record.tab) === 'terms' ? createElement(TermsDesign, { record, party, terms, depth }) : null
+  const termsNotice = terms?.saved ? createElement(TermsNotices, { notices: { own: { tone: 'success', words: said('terms.saved') }, depth: null } }) : null
   return inShell(
     `/sales/customers/${id}`,
     createElement(
       WithMessages,
       { namespaces: DEPTH_NAMESPACES },
       // B-TH-260: the customer's docked thread (Activity and Documents went to it), with threads.read.
-      createElement(CustomerRecordView, { model: record, thread: party ? (shipmentLine && record.can.threads ? createElement(ShipmentLineThread, { party }) /* cw T.1 */ : partyThread(party, 'customers', record.can)) : null, terms: termsCard(terms ?? termsModel()), money, depth: nodes, overviewTab /* F-CO-103 */, peopleTab /* F-CA-120 */, peopleBadge: party ? peopleBadgeOf(party) : null /* F-CA-120 */, work: work && party ? createElement(WithMessages, { namespaces: ['orders'] /* F-CW-101: as the live Work tab loads them */ }, createElement(WorkDesign, { work, party })) : null /* F-SA-276 */, workCount: work ? { count: 5, attention: true } : null, priceDiffer: priceDiffer ?? null /* F-CP-141 */, quotesIncoming /* cq W3 */, moneyTab /* F-CM-104 */ }),
+      createElement(CustomerRecordView, { model: record, thread: party ? (shipmentLine && record.can.threads ? createElement(ShipmentLineThread, { party }) /* cw T.1 */ : partyThread(party, 'customers', record.can)) : null, termsTab /* F-CT-408 */, termsNotice /* F-CT-408 */, money, depth: nodes, overviewTab /* F-CO-103 */, peopleTab /* F-CA-120 */, peopleBadge: party ? peopleBadgeOf(party) : null /* F-CA-120 */, work: work && party ? createElement(WithMessages, { namespaces: ['orders'] /* F-CW-101: as the live Work tab loads them */ }, createElement(WorkDesign, { work, party })) : null /* F-SA-276 */, workCount: work ? { count: 5, attention: true } : null, priceDiffer: priceDiffer ?? null /* F-CP-141 */, quotesIncoming /* cq W3 */, moneyTab /* F-CM-104 */ }),
     ),
   )
 }

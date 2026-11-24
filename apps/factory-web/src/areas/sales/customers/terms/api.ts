@@ -26,7 +26,8 @@ export const commercialTermsSchema = z.object({
   currency: z.string(),
   language: z.string(),
   paymentTermsId: z.string().nullable(),
-  paymentTerms: z.object({ id: z.string(), code: z.string(), name: z.string(), companyId: z.string().nullable(), status: z.string(), summary, deposit: deposit.nullable() }).nullable(),
+  // F-CT-202 (customer Terms & requirements, ct-w1 W1.2; ct-s S5): + the name per language (read on the server, dropped before ct-s).
+  paymentTerms: z.object({ id: z.string(), code: z.string(), name: z.string(), nameI18n: z.record(z.string(), z.string()).nullable().optional(), companyId: z.string().nullable(), status: z.string(), summary, deposit: deposit.nullable() }).nullable(),
   paymentTermsText: z.string().nullable(),
   priceListId: z.string().nullable(),
   priceList: chainList.nullable(),
@@ -39,6 +40,8 @@ export const commercialTermsSchema = z.object({
   preferredCarrierCode: z.string().nullable(),
   minimumOrderAmount: z.number().nullable().optional(),
   version: z.number(),
+  // F-CT-202 (ct-s S3): may the reader change these terms (absent before ct-s: the session's right).
+  mayChange: z.boolean().optional(),
 })
 export type CommercialTerms = z.infer<typeof commercialTermsSchema>
 const oneTerms = z.object({ terms: commercialTermsSchema })

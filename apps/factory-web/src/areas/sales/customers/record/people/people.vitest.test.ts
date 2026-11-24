@@ -333,8 +333,9 @@ describe('the page mounts the tab (W1.4)', () => {
     const view = source('../view/CustomerRecordView.tsx')
     expect(view).toContain("{tab === 'people' && peopleTab}")
     expect(view).toContain("count: id === 'people' ? (peopleBadge?.count ?? undefined)")
-    expect(view).toContain("<PartyNotices model={model} party={party} actions={actions}>{tab === 'people' ? peopleNotice : null}</PartyNotices>")
-    expect(view).toContain("tab === 'money' || tab === 'people' ? 'third' : undefined")
+    // F-CT-406 (ct-w1 W1.4): the same ONE notice area holds Terms' notices too; Terms docks a third too (D3) — the pins follow the line.
+    expect(view).toContain("<PartyNotices model={model} party={party} actions={actions}>{tab === 'people' ? peopleNotice : tab === 'terms' ? termsNotice : null}</PartyNotices>")
+    expect(view).toContain("tab === 'money' || tab === 'people' || tab === 'terms' ? 'third' : undefined")
     expect(view).not.toMatch(/ContactsCard|AddressesCard|activeContacts/)
     // KEEP (the Money lane's ask): the Money count and its props stay as they are.
     expect(view).toContain("id === 'money' ? moneyCount : undefined")

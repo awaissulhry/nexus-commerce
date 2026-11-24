@@ -102,14 +102,20 @@ const holdSchema = z.object({
   releasedBy: z.string().nullable(),
   releaseWords: z.string().nullable(),
   version: z.number(),
+  // F-CT-201 (customer Terms & requirements, ct-w1 W1.2; ct-s S3): may the reader release THIS hold (absent before ct-s: the session's right).
+  mayRelease: z.boolean().optional(),
 })
 export type Hold = z.infer<typeof holdSchema>
+// F-CT-201 (ct-s S4): why each accepted quote waits (the hold first, then a missing PO number); the rows are left out without quotes.view,
+// the counts stay. Both absent before ct-s.
+const WAITS_FOR = ['ACCOUNT_ON_HOLD', 'PO_NUMBER_REQUIRED'] as const
 const holdsSchema = z.object({
   holds: z.object({
     onHold: z.boolean(),
     holds: z.array(holdSchema),
-    ordersWaiting: z.array(z.object({ quoteId: z.string(), number: z.string(), revision: z.number(), quoteVersionId: z.string(), companyId: z.string(), customerRef: z.string().nullable() })),
+    ordersWaiting: z.array(z.object({ quoteId: z.string(), number: z.string(), revision: z.number(), quoteVersionId: z.string(), companyId: z.string(), customerRef: z.string().nullable(), waitsFor: z.enum(WAITS_FOR).nullable().optional() /* F-CT-201 */ })),
     mayPlace: z.boolean(),
+    ordersWaitingCount: z.object({ onHold: z.number(), poNumber: z.number(), other: z.number() }).optional(), // F-CT-201
   }),
 })
 export type Holds = z.infer<typeof holdsSchema>['holds']
@@ -144,9 +150,12 @@ const requirementSchema = z.object({
   endedBy: z.string().nullable(),
   endReason: z.string().nullable(),
   version: z.number(),
+  // F-CT-201 (ct-s S3): may the reader replace / end THIS rule (absent before ct-s: the session's right).
+  mayChange: z.boolean().optional(),
 })
 export type Requirement = z.infer<typeof requirementSchema>
-const requirementsView = z.object({ inForce: z.array(requirementSchema), ended: z.array(requirementSchema) })
+// F-CT-201 (ct-s S3): + `mayAdd` (a company the reader may add a rule for, or every company); absent before ct-s.
+const requirementsView = z.object({ inForce: z.array(requirementSchema), ended: z.array(requirementSchema), mayAdd: z.boolean().optional() })
 export type Requirements = z.infer<typeof requirementsView>
 
 export interface RequirementBody {
@@ -186,20 +195,67 @@ export async function readPartyFiles(api: ApiClient, partyId: string, signal?: A
 
 // ---- terms per company: Customer PO number required ----------------------------------------------------------------------
 
-const termsRow = z.object({ id: z.string(), companyId: z.string(), poNumberRequired: z.boolean(), setBy: z.string().nullable(), setAt: z.string(), version: z.number() })
-const companyTermsSchema = z.object({
+// F-CT-201 (customer Terms & requirements, ct-w1 W1.2; 13-backend §6.2): the read in FULL — every field of the server's view
+// (company-terms/contract.ts) — the terms in force are named by the ONE helper (record/terms/in-force.ts). The credit limit's amount is
+// the price grain's (absent without it) and never drawn on Terms; S5's named terms in force are absent before ct-s.
+const label = z.object({ code: z.string(), name: z.string() })
+const source = z.enum(['COMPANY', 'PARTY'])
+const termsRow = z.object({
+  id: z.string(),
+  companyId: z.string(),
+  paymentTermsId: z.string().nullable(),
+  paymentTermsLabel: label.nullable(),
+  paymentTermsText: z.string().nullable(),
+  priceListId: z.string().nullable(),
+  priceListLabel: label.nullable(),
+  depositPct: z.string().nullable(),
+  poNumberRequired: z.boolean(),
+  creditLimitAmount: z.number().nullable().optional(),
+  creditLimitCurrency: z.string().nullable(),
+  setBy: z.string().nullable(),
+  setAt: z.string(),
+  endedAt: z.string().nullable(),
+  endedBy: z.string().nullable(),
+  version: z.number(),
+})
+/** S5: the payment terms in force, named (the commercial-terms read's own shape, by the server's ONE label helper). */
+const namedTerms = z.object({
+  id: z.string(),
+  code: z.string(),
+  name: z.string(),
+  nameI18n: z.record(z.string(), z.string()).nullable(),
+  companyId: z.string().nullable(),
+  status: z.string(),
+  summary: z.object({ it: z.string(), en: z.string() }),
+  deposit: z.object({ sharePct: z.string(), days: z.number() }).nullable(),
+})
+export const companyTermsSchema = z.object({
   terms: z.object({
+    partyId: z.string(),
+    code: z.string(),
     tenantWide: z.boolean(),
+    partyVersion: z.number(),
     companies: z.array(
       z.object({
         company: z.object({ id: z.string(), code: z.string(), name: z.string() }),
         terms: termsRow.nullable(),
-        inForce: z.object({ poNumberRequired: z.boolean() }),
+        inForce: z.object({
+          paymentTermsId: z.string().nullable(),
+          paymentTermsText: z.string().nullable(),
+          priceListId: z.string().nullable(),
+          depositPct: z.string().nullable(),
+          poNumberRequired: z.boolean(),
+          source: z.object({ paymentTerms: source, priceList: source, deposit: source }),
+          paymentTerms: namedTerms.nullable().optional(),
+          priceList: z.object({ id: z.string(), code: z.string(), name: z.string() }).nullable().optional(),
+        }),
         mayChange: z.boolean(),
+        history: z.array(termsRow),
       }),
     ),
   }),
 })
+// F-CT-201: end
 export type CompanyTerms = z.infer<typeof companyTermsSchema>['terms']
 
 export async function readCompanyTerms(api: ApiClient, partyId: string, signal?: AbortSignal): Promise<CompanyTerms> {
