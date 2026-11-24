@@ -13,6 +13,7 @@ import { cancelRefund, listRefunds, openRefunds as readOpenRefunds, payRefund, r
 import { refundAbilitiesOf, refundAskOf, refundRowsFrom, refundRowsOf, refundsCsv, refundsTouched, settlesWords, targetOfNote, type RefundMove, type RefundRow, type RefundRows } from '../refunds/model'
 import { PAYMENT_ROWS_VIEWS, type PaymentRowsView, type PaymentsListModel, type PickedCustomer, type RecordInput } from './list-model'
 import { PaymentsListView } from './view/PaymentsListView'
+import { getParty } from '../../../parties/_shared/api' // F-CM-204: `?new=1&party=` names the customer
 // B-W2b-425: what is not placed, what came back unpaid by Ri.Ba., the Ri.Ba. batch.
 import { csvOf, PAY_DEPTH, scoped } from '../riba/depth'
 import { RibaBatch } from '../riba/RibaBatch'
@@ -202,6 +203,23 @@ function PaymentsContainer() {
     if (opened.current || params?.get('new') !== '1' || !can.recordPayments) return
     opened.current = true
     const invoiceId = params.get('invoice')
+    // F-CM-204 (customer MONEY tab, 13-backend §4.3): `?new=1&party=<id>` (no invoice) — Record a payment opens with THAT customer chosen in
+    // the page's company (the customer's Money tab: "Record a payment ›"); a party the reader may not read: the dialog opens empty.
+    const partyId = invoiceId ? null : params.get('party')
+    if (partyId && companyId) {
+      void (async () => {
+        try {
+          const party = await getParty(api, partyId)
+          const customer = { id: party.id, name: party.legalName, companyId }
+          setDialog({ kind: 'record', step: 1, customer, invoiceId: null })
+          void readItems(customer)
+        } catch {
+          setDialog({ kind: 'record', step: 1, customer: null, invoiceId: null })
+          void searchCustomers('')
+        }
+      })()
+      return
+    }
     if (!invoiceId) {
       setDialog({ kind: 'record', step: 1, customer: null, invoiceId: null })
       void searchCustomers('')
@@ -218,7 +236,7 @@ function PaymentsContainer() {
         void searchCustomers('')
       }
     })()
-  }, [params, can.recordPayments, api, readItems, searchCustomers])
+  }, [params, can.recordPayments, api, readItems, searchCustomers, companyId /* F-CM-204 */])
 
   const record = useCallback(
     async (input: RecordInput) => {

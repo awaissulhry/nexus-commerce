@@ -1,6 +1,7 @@
 import type { OpenItem } from '../../../../finance/_shared/api'
 import type { Reminder } from '../../../../finance/receivables/api'
 import type { ReminderStop } from '../../../../finance/receivables/reminder-stops/api'
+import { doorLabelOf, rowActsOf, type DoorActId } from '../../../orders/record/money/door/model' // F-CM-201: the money door's one rule
 import { word, type MoneyWord } from '../../../orders/record/money/word'
 import { invoiceHref, orderMoneyHref, recordPaymentOnInvoiceHref, requestRowAnchor } from './doors'
 import { daysFrom, isFailed, isReading, type MoneyTabInput } from './model'
@@ -18,11 +19,11 @@ import { collectAnchor } from './sections'
  * invoice's id in the browser — Z26 c) · amount (open, "of {total}": price grain) · ONE act · ⋯.
  *
  * Acts, by kind and right (hidden without the right; held only by state, with words, inside the ⋯):
- *   a request   Record a payment (the ORDER's own window, in place through the money door: payments.record + price) · ⋯ Send the page…
- *               (payments.record + price) · Move due day… · Change the deposit… (not before shipping) · Accept short (bank charges)… (only
- *               on a row the server's own figures call short: part paid — Z26 f) (orders.moneyPlan + price) · Waive… (orders.waive) ·
- *               Open the order's Money › · Show in the thread · Copy link. NEVER from a row: Open for payment, Ask again…, Undo this
- *               payment…, Stop the page (they stay on the order's Money, one door away).
+ *   a request   the money door's ONE rule (cm-k2 door/model.ts rowActsOf, F-CM-201): Record a payment (payments.record + price) · ⋯ Send
+ *               the page… (payments.record) · Move due day… (orders.moneyPlan) · Change the deposit… (+ price; not before shipping) ·
+ *               Accept short (bank charges)… (+ price; not on a row the server's figures call paid nothing — Z26 f) · Waive… (orders.waive)
+ *               — each the ORDER's own window, in place through the door · Open the order's Money › · Show in the thread · Copy link.
+ *               NEVER from a row: Open for payment, Ask again…, Undo this payment…, Stop the page (they stay on the order's Money).
  *   an invoice  Record payment… (Finance's window with the invoice chosen — a door, as on the order page; euro only: a row in another
  *               currency has no act and "Record payment…" is held by state in its ⋯ — Z21, payments.ts refuses non-EUR) · ⋯ Promise to
  *               pay / dispute… (Finance's own stop form, in place: receivables.reminders.manage) · Credit note… (invoices.manage) ·
@@ -181,16 +182,13 @@ export function collectRowOf(item: OpenItem, input: MoneyTabInput, prefix: strin
   if (kind === 'DEPOSIT' && item.stepKind === 'DEPOSIT') notes.push({ word: word('orders:moneyTab.plan.note.productionWaits'), tone: 'warning', icon: 'factory' })
   if (kind === 'BEFORE_SHIPPING') notes.push({ word: word('orders:moneyTab.plan.note.holdsShipment'), tone: 'neutral', icon: 'truck' })
   if (partPaid && amount !== null && whole !== null) notes.push({ word: word('cm.collect.partPaid', { money: { paid: whole - amount, amount: whole } }), tone: 'neutral', icon: 'coins' })
-  const plan = can.moneyPlan && price
-  const payer = can.paymentsRecord && price
-  const more: CollectItem[] = [
-    ...(payer ? [{ id: 'send' as const, label: word('orders:moneyTab.plan.act.send'), held: null }] : []),
-    ...(plan ? [{ id: 'MOVE_DUE' as const, label: word('orders:moneyTab.plan.act.MOVE_DUE'), held: null }] : []),
-    ...(plan && kind !== 'BEFORE_SHIPPING' ? [{ id: 'REPLACE_DEPOSIT' as const, label: word('orders:moneyTab.plan.act.REPLACE_DEPOSIT'), held: null }] : []),
-    ...(plan && partPaid ? [{ id: 'ACCEPT_SHORT' as const, label: word('orders:moneyTab.plan.act.ACCEPT_SHORT'), held: null }] : []),
-    ...(can.waive ? [{ id: 'waive' as const, label: word('orders:moneyTab.plan.act.waive'), held: null }] : []),
-    ...tail,
-  ]
+  // F-CM-201: the money door's rule (one rule with the order page); its words the order's own, named with their catalogue.
+  const acts = rowActsOf({ stepKind: item.stepKind ?? null, partPaid: amount !== null && whole !== null ? partPaid : null }, can.door)
+  const labelOf = (id: DoorActId): MoneyWord => {
+    const said = doorLabelOf(id)
+    return { ...said, key: `orders:${said.key}` }
+  }
+  const more: CollectItem[] = [...acts.more.map((id): CollectItem => ({ id, label: labelOf(id), held: null })), ...tail]
   return {
     anchor,
     target: 'DEPOSIT_REQUEST',
@@ -205,7 +203,7 @@ export function collectRowOf(item: OpenItem, input: MoneyTabInput, prefix: strin
     amount,
     of: partPaid ? whole : null,
     currency: item.currency,
-    act: payer ? { id: 'record', label: word('orders:deposit.record'), held: null } : null,
+    act: acts.act ? { id: acts.act, label: labelOf(acts.act), held: null } : null,
     more,
   }
 }

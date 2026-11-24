@@ -14,10 +14,15 @@ import { amountsOf, type MoneyWord } from '../../../orders/record/money/word'
 import type { Glance } from '../../depth/api'
 import { balanceOf, moneyBadgeOf } from './balance'
 import { collectOf, COLLECT_SHOWN, IN_PLACE_ACTS } from './collect'
+import { documentQueryOf, documentsOf, DOCUMENTS_SHOWN, paymentWordOf } from './documents' // F-CM-202
+import type { InvoiceRow } from '../../../../finance/_shared/api'
+import type { PaymentRow } from '../../../../finance/_shared/api' // F-CM-203
+import { PAYMENTS_SHOWN, receivedOf, refundsMadeOf } from './received' // F-CM-203
 import { moneyAnswerOf, type CustomerAnswer } from './head'
 import { CM, MONEY_TAB_NAMESPACES, moneyChangeIsOurs, moneyTabCanOf, partFailed, partReady, READING, type MoneyTabInput } from './model'
 import { sayOf } from './say'
 import { CUSTOMER_MONEY_ANCHORS, CUSTOMER_MONEY_SECTIONS } from './sections'
+import { recordPaymentForCustomerHref } from './doors' // F-CM-204
 
 /**
  * F-CM-101…105 (customer page › MONEY tab, cm-w1 W1.1; 10-design §4–§5.2; 18-lead-settles Z3–Z11, Z20, Z21, Z26) — the pure rules of
@@ -402,6 +407,93 @@ describe('F-CM-101: the views (cm-w1 W1.3; 10-design §1, §2; 18-lead-settles L
   })
 })
 
+describe('F-CM-201: To collect\'s acts in place (cm-w2 W2.1; 13-backend §4.1, §4.2; Z5)', () => {
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+
+  it('a request row\'s acts are the money door\'s ONE rule (cm-k2 rowActsOf), hidden without the right; Finance\'s stopsCanOf decides the stop', () => {
+    expect(source('./collect.ts')).toContain('rowActsOf({ stepKind: item.stepKind ?? null')
+    expect(source('./model.ts')).toContain('door: doorCanOf(permissions)')
+    expect(source('./model.ts')).toContain('remindersManage: stopsCanOf(permissions).manage')
+    const invoice = (role: Role) => collectOf(input(role), PREFIX)!.rows.find((row) => row.id === 'inv-1')!.more.map((item) => item.id)
+    expect(invoice('owner')).toContain('stop')
+    expect(invoice('finance')).toContain('stop')
+    for (const role of ['sales', 'readonly'] as const) expect(invoice(role), role).not.toContain('stop')
+  })
+
+  it('the windows are the owners\' own, mounted in place, never copied: the order\'s through the door, Finance\'s stop container in ONE centred window', () => {
+    const container = source('./CustomerMoney.tsx')
+    expect(container).toContain('<OrderMoneyWindow model={windows.door.model} actions={windows.door.actions} />')
+    expect(container).toContain('<StopWindow partyId={party.id} ask={windows.stop}')
+    const stop = source('./StopWindow.tsx')
+    expect(stop).toContain('<ReminderDepth reminder={{ customer: { id: partyId }')
+    expect(stop).not.toMatch(/<form|<Field|<Select|<DateInput/)
+    expect(source('./use-money-windows.ts')).toContain('useOrderMoneyDoor(api, {')
+    // Finance's container: ONE type line (the fields it reads), nothing else.
+    expect(source('../../../../finance/receivables/reminder-stops/ReminderDepth.tsx')).toContain("reminder: Pick<Reminder, 'status' | 'invoices' | 'trusted'> & { readonly customer: { readonly id: string } }")
+    // The door is opened only for a request row with its order; the stop only for an invoice row.
+    const windows = source('./use-money-windows.ts')
+    expect(windows).toContain("if (row.target === 'INVOICE') setStop(")
+    expect(windows).toContain("if (row.target === 'DEPOSIT_REQUEST' && row.order) open(")
+  })
+})
+
+describe('F-CM-202: Invoices & credit notes (cm-w2 W2.2; 10-design §5.3; Z6, Z25)', () => {
+  const doc = (id: string, over: Partial<InvoiceRow> = {}): InvoiceRow => ({ id, docType: 'TD01', status: 'SENT', number: `FT-2026-0001${id.slice(-1)}`, issueDate: '2026-10-01', companyId: COMPANY_A.id, buyerPartyId: CUSTOMER.id, partyName: CUSTOMER.name, currency: 'EUR', netTotal: 200000, vatTotal: 44000, grossTotal: 244000, depositRequestId: null, creditOfId: null, salesOrderId: 'o-2', filesPending: false, paidAmount: 0, creditedAmount: 0, openAmount: 244000, dueDate: '2026-11-12', version: 1, createdAt: '2026-10-01T09:00:00Z', ...over })
+  const read = (rows: InvoiceRow[], next: string | null = null) => partReady({ rows, next })
+
+  it('the chips are the read\'s own terms: All · Credit notes (TD04) · Drafts (DRAFT); no "open" chip', () => {
+    expect(documentQueryOf('all')).toEqual({ docType: null, status: null })
+    expect(documentQueryOf('creditNotes')).toEqual({ docType: 'TD04', status: null })
+    expect(documentQueryOf('drafts')).toEqual({ docType: null, status: 'DRAFT' })
+    expect(DOCUMENTS_SHOWN).toBe(5)
+  })
+
+  it('an invoice NOT in the open items is never "Open" or "Part paid" (the list\'s own open amount ignores write-offs and refunds); one a credit note gives money back from: Refund due', () => {
+    const owner = input('owner')
+    expect(paymentWordOf(doc('inv-1'), owner)?.word.key).toBe('moneyTab.invoices.pay.open')
+    expect(paymentWordOf(doc('inv-8', { openAmount: 120000, paidAmount: 50000 }), owner)?.word.key).toBe('moneyTab.invoices.pay.paid')
+    const refundOf = input('owner', { refunds: partReady({ ...REFUNDS, refundsDue: REFUNDS.refundsDue.map((refund) => ({ ...refund, creditNote: { ...refund.creditNote!, creditOfId: 'inv-1' } })) }) })
+    expect(paymentWordOf(doc('inv-1'), refundOf)?.word.key).toBe('moneyTab.invoices.pay.refund')
+    expect(paymentWordOf(doc('cn-1', { docType: 'TD04' }), owner)?.word.key).toBe('moneyTab.invoices.pay.credited')
+    const model = documentsOf(owner, read([doc('inv-1'), doc('inv-8')]), 'all', PREFIX)!
+    expect(model.rows.map((row) => row.list.open)).toEqual([244000, 0])
+  })
+
+  it('no Payment word and no amount without the price grain (the part then leaves the column out, never blank); the words are ORDER words, said by the part', () => {
+    for (const role of ['sales', 'readonly'] as const) {
+      const model = documentsOf(input(role), read([doc('inv-1', { grossTotal: undefined, openAmount: undefined, paidAmount: undefined })]), 'all', PREFIX)!
+      expect(model.rows[0]!.list.payment, role).toBeNull()
+      expect(model.rows[0]!.list.total, role).toBeNull()
+      for (const said of [model.rows[0]!.list.kind, model.rows[0]!.list.state.word, ...model.rows[0]!.list.subs, ...model.answer]) expect(amountsOf(said), role).toEqual([])
+    }
+    const row = documentsOf(input('owner'), read([doc('inv-1')]), 'all', PREFIX)!.rows[0]!
+    expect(row.list.kind.key).toBe('docType.TD01')
+    expect(row.list.state.word.key).toBe('invoiceStatus.SENT')
+  })
+
+  it('its order is the sixth column: the number when the server sends it (S8), else "Order ›"; a door to that order\'s Invoices', () => {
+    const [named, plain] = documentsOf(input('owner'), read([doc('inv-1', { orderNumber: 'SEED-SO-0002' }), doc('inv-2')]), 'all', PREFIX)!.rows
+    expect(named!.order).toEqual({ id: 'o-2', number: 'SEED-SO-0002', href: `${PREFIX}/sales/orders/o-2?tab=money#invoices` })
+    expect(plain!.order?.number).toBeNull()
+  })
+
+  it('the five doors into Finance, each with its right; a credit note\'s Credit note… held with the order page\'s words; none for Read-only', () => {
+    const owner = documentsOf(input('owner'), read([doc('inv-1'), doc('cn-1', { docType: 'TD04', status: 'ISSUED' })]), 'all', PREFIX)!.rows
+    expect(owner[0]!.doors.map((door) => door.id)).toEqual(['record', 'credit', 'payments', 'pdf'])
+    expect(owner[1]!.doors.find((door) => door.id === 'credit')?.held?.key).toBe('orders:moneyTab.invoices.held.creditNote')
+    expect(owner[1]!.doors.map((door) => door.id)).toContain('sdi')
+    expect(documentsOf(input('readonly'), read([doc('inv-1')]), 'all', PREFIX)!.rows[0]!.doors).toEqual([])
+    expect(documentsOf(input('owner', { can: { ...moneyTabCanOf(ROLES.owner), invoices: false } }), read([doc('inv-1')]), 'all', PREFIX)).toBeNull()
+  })
+
+  it('the head: "n documents · n invoices open · drafts · rejected"; the open count is the ageing\'s, never a sum of the rows (Z6); more pages say "+"', () => {
+    const model = documentsOf(input('owner'), read([doc('inv-1'), doc('d-1', { status: 'DRAFT', number: null }), doc('r-1', { status: 'REJECTED' })], 'cursor-2'), 'all', PREFIX)!
+    expect(model.answer.map((said) => said.key)).toEqual(['cm.invoices.countMore', 'finance-receivables:tiles.invoices', 'cm.invoices.drafts', 'cm.invoices.rejected'])
+    expect(model.answer[1]).toEqual({ key: 'finance-receivables:tiles.invoices', params: { count: 3 } })
+    expect(model.more).toBe(true)
+  })
+})
+
 describe('F-CM-104: the page (cm-w1 W1.4; 13-backend §5.3–§5.6; Z11, Z27, D2)', () => {
   const page = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
 
@@ -425,5 +517,83 @@ describe('F-CM-104: the page (cm-w1 W1.4; 13-backend §5.3–§5.6; Z11, Z27, D2
       expect(words['money.allMoney'], locale).toBeTruthy()
       expect(words['money.statement'], locale).toBeUndefined()
     }
+  })
+})
+
+describe('F-CM-203: Payments & refunds (cm-w2 W2.3; 10-design §5.4; Z7, Z18, Z22, Z25)', () => {
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+  const pay = (id: string, receivedOn: string, over: Partial<PaymentRow> = {}): PaymentRow => ({ id, companyId: COMPANY_A.id, partyId: CUSTOMER.id, partyName: CUSTOMER.name, method: 'BANK_TRANSFER', amount: 120000, allocated: 120000, unallocated: 0, currency: 'EUR', receivedOn, externalRef: `CRO-${id}`, status: 'RECEIVED', placedOn: [{ target: 'INVOICE', targetId: 'inv-0', amount: 120000, number: 'FT-2026-00009', docType: 'TD01', orderNumber: 'SEED-SO-0009' }], refunded: 0, createdAt: `${receivedOn}T09:00:00Z`, ...over })
+  const payments = (rows: PaymentRow[], next: string | null = null) => partReady({ rows, next })
+  const credit = partReady({ balances: [{ currency: 'EUR', amount: 120000 }], payments: [{ id: 'pay-7', receivedOn: '2026-11-15', externalRef: 'CRO-7', currency: 'EUR', amount: 300000, unplacedAmount: 120000 }] })
+
+  it('On account: from the page\'s open items, the payment that holds it and how long it waits; Refund… only with payments.refund and prices', () => {
+    const model = receivedOf(input('owner'), payments([pay('p-1', '2026-11-14')]), credit, PREFIX)!
+    expect(model.onAccount).toHaveLength(1)
+    expect(model.onAccount[0]).toMatchObject({ currency: 'EUR', amount: 120000, waits: 9, refundable: true, from: { paymentId: 'pay-7', receivedOn: '2026-11-15' } })
+    expect(receivedOf(input('finance'), payments([]), credit, PREFIX)!.onAccount[0]!.refundable).toBe(true)
+    const sales = receivedOf(input('sales'), payments([]), credit, PREFIX)!
+    expect(sales.onAccount[0]).toMatchObject({ amount: null, refundable: false })
+    expect(sales.refundable).toBe(false)
+  })
+
+  it('To give back: a refund to make (Mark made… · ⋯ Cancel…), a credit note with money left (Refund…) — Finance\'s windows; no "Change…" (Z7)', () => {
+    const notes = { ...REFUNDS, creditNotesToRefund: [{ creditNoteId: 'cn-2', number: 'NC-2026-00008', issueDate: '2026-11-01', companyId: COMPANY_A.id, partyId: CUSTOMER.id, party: { code: CUSTOMER.code, legalName: CUSTOMER.name }, currency: 'EUR', grossTotal: 50000, creditOfId: 'inv-3', creditOfNumber: 'FT-2026-00003', creditOfDocType: 'TD01', orderNumber: null, refundedAmount: 0, refundableAmount: 50000 }] }
+    const rows = receivedOf(input('owner', { refunds: partReady(notes) }), payments([]), null, PREFIX)!.giveBack
+    expect(rows.map((row) => [row.kind, row.act?.id ?? null, row.more.map((item) => item.id)])).toEqual([
+      ['refund', 'paid', ['cancel', 'openNote']],
+      ['note', 'refund', ['openNote']],
+    ])
+    for (const row of rows) expect(JSON.stringify(row.more)).not.toContain('change')
+    const sales = receivedOf(input('sales', { refunds: partReady({ ...notes, refundsDue: notes.refundsDue.map((refund) => ({ ...refund, amount: undefined })), creditNotesToRefund: notes.creditNotesToRefund.map((note) => ({ ...note, refundableAmount: undefined, grossTotal: undefined })) }) }), payments([]), null, PREFIX)!.giveBack
+    for (const row of sales) {
+      expect(row.act).toBeNull()
+      expect(row.amount).toBeNull()
+      expect(row.more.map((item) => item.id)).toEqual(['openNote'])
+    }
+  })
+
+  it('Payments received: newest first, the first 3 then more (Z25); what each was placed on; no amount without prices; the head\'s answer', () => {
+    expect(PAYMENTS_SHOWN).toBe(3)
+    const rows = [pay('p-1', '2026-10-01'), pay('p-2', '2026-11-14', { placedOn: [{ target: 'DEPOSIT_REQUEST', targetId: 'rq-11', amount: 120000, number: null, docType: null, orderNumber: 'SEED-SO-0011' }] }), pay('p-3', '2026-11-02', { unallocated: 30000, allocated: 90000 })]
+    const model = receivedOf(input('owner'), payments(rows), credit, PREFIX)!
+    expect(model.payments.map((row) => row.id)).toEqual(['p-2', 'p-3', 'p-1'])
+    expect(model.payments[0]!.placed.map((chip) => chip.word.key)).toEqual(['cm.received.depositOf'])
+    expect(model.payments[1]!.placed.map((chip) => chip.word.key)).toEqual(['cm.received.placedOn', 'cm.received.notPlaced'])
+    expect(model.answer.map((said) => said.key)).toEqual(['cm.received.count', 'cm.received.last', 'cm.answer.onAccount', 'cm.answer.pair'])
+    const sales = receivedOf(input('sales'), payments(rows.map((row) => ({ ...row, amount: undefined, allocated: undefined, unallocated: undefined, placedOn: row.placedOn.map((entry) => ({ ...entry, amount: undefined })) }))), credit, PREFIX)!
+    for (const row of sales.payments) {
+      expect(row.amount).toBeNull()
+      for (const chip of row.placed) expect(amountsOf(chip.word)).toEqual([])
+    }
+    for (const said of sales.answer) expect(amountsOf(said)).toEqual([])
+  })
+
+  it('Refunds made (folded): made, cancelled or voided; Void… only on a made one with payments.void and prices; the section left out without payments.view', () => {
+    const made = [{ ...REFUNDS.refundsDue[0]!, id: 'rf-2', status: 'PAID' as const, paidOn: '2026-11-20' }, { ...REFUNDS.refundsDue[0]!, id: 'rf-3', status: 'CANCELLED' as const }, REFUNDS.refundsDue[0]!]
+    expect(refundsMadeOf(made, input('owner')).map((row) => [row.refund.id, row.voidable])).toEqual([['rf-2', true], ['rf-3', false]])
+    expect(refundsMadeOf(made, input('sales')).every((row) => !row.voidable && row.amount === null)).toBe(true)
+    expect(receivedOf(input('owner', { can: { ...moneyTabCanOf(ROLES.owner), payments: false } }), payments([]), null, PREFIX)).toBeNull()
+  })
+
+  it('Finance\'s refund windows are opened as they are (never copied); the ⓘ says Finance\'s word for the money on account (Z22)', () => {
+    const windows = source('./RefundWindowsView.tsx')
+    expect(windows).toContain("import { RefundDialog, RefundMoveDialog } from '../../../../finance/payments/refunds/view/RefundDialogs'")
+    expect(windows).not.toMatch(/<DialogFrame|<form/)
+    expect(source('./use-money-windows.ts')).toContain('recordRefund(api, refundAskOf(target, draft), key)')
+    for (const locale of LOCALES) expect(messagesFor(locale, [CM])[CM]!['cm.received.info'], locale).toMatch(locale === 'en' ? /Finance calls this money the customer’s credit balance\./ : /credito del cliente/)
+    // The section is the fourth: Invoices & credit notes first, then Payments & refunds.
+    const tab = readFileSync(new URL('../view/money/CustomerMoneyTab.tsx', import.meta.url), 'utf8')
+    expect(tab.indexOf('<ReceivedSection')).toBeGreaterThan(tab.indexOf('<DocumentsSection'))
+  })
+})
+
+describe('F-CM-204: "Record a payment ›" — Finance\'s window with this customer chosen (cm-w2 W2.4; 13-backend §4.3; S3)', () => {
+  it('the door names THIS customer; Balance draws it only with payments.record and prices (hidden, never held)', () => {
+    expect(recordPaymentForCustomerHref(PREFIX, 'p-1')).toBe(`${PREFIX}/finance/payments?new=1&party=p-1`)
+    const tab = readFileSync(new URL('../view/money/CustomerMoneyTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain('recordPaymentHref={can.paymentsRecord && can.price ? recordPaymentForCustomerHref(prefix, partyId) : null')
+    const balance = readFileSync(new URL('../view/money/BalanceSection.tsx', import.meta.url), 'utf8')
+    expect(balance).toContain("<Link href={recordPaymentHref}>{`${say(word('finance:recordPay.title'))} ›`}</Link>")
+    expect(balance).not.toMatch(/heldReason/)
   })
 })

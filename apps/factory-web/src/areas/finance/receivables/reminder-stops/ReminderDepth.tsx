@@ -18,7 +18,7 @@ import { ReminderDepthView } from './view/ReminderDepthView'
  * lifts one, and sets the level (receivables.reminders.trust, the Owner's; a fresh code first for a level). After a move the
  * reminder is read again (its held reasons change). Live: a stop or a trusted level of the customer reads it again.
  */
-export function ReminderDepth({ reminder, onChanged }: { reminder: Reminder; onChanged: () => void }) {
+export function ReminderDepth({ reminder, onChanged }: { reminder: Pick<Reminder, 'status' | 'invoices' | 'trusted'> & { readonly customer: { readonly id: string } } /* F-CM-201: the fields it reads */; onChanged: () => void }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const can = useMemo(() => stopsCanOf(session.permissions), [session.permissions])

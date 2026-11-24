@@ -6,6 +6,8 @@ import type { Glance } from '../../depth/api'
 import type { Read } from '../../depth/model'
 import type { OrderSummary } from '../../../orders/api'
 import type { OpenOrderMoney } from '../../money/api'
+import { doorCanOf, type DoorCan } from '../../../orders/record/money/door/model' // F-CM-201: a row's acts are the money door's rule
+import { stopsCanOf } from '../../../../finance/receivables/reminder-stops/model' // F-CM-201: Finance's own rule decides the stop's door
 
 /**
  * F-CM-101 (customer page › MONEY tab, 10-design §1–§4; 18-lead-settles Z3–Z11, Z18–Z25) — what the customer's Money tab is handed and
@@ -29,7 +31,7 @@ export const CM = 'customer-money'
  * tab's WithMessages loads exactly this list, and a test holds every `namespace:` the rules and views name inside it (Z29: a raw key can
  * never show).
  */
-export const MONEY_TAB_NAMESPACES = ['orders', CM, 'sales-customers-depth', 'finance-receivables', 'finance-payments-depth', 'record-frame', 'parties', 'customers-list'] as const
+export const MONEY_TAB_NAMESPACES = ['orders', CM, 'sales-customers-depth', 'finance-receivables', 'finance-payments-depth', 'record-frame', 'parties', 'customers-list', 'finance', 'finance-daily' /* F-CM-203, F-CM-204 */] as const
 
 export interface MoneyTabCan {
   /** money.price — every amount (the server drops them without it). */
@@ -63,6 +65,8 @@ export interface MoneyTabCan {
   readonly statementsSend: boolean
   /** parties.hold — Put on hold… · Release… */
   readonly hold: boolean
+  /** F-CM-201 (W2.1): the money door's rights for a To-collect request row, by the order page's own rule (door/model.ts doorCanOf). */
+  readonly door: DoorCan
 }
 
 export function moneyTabCanOf(permissions: readonly string[]): MoneyTabCan {
@@ -83,9 +87,10 @@ export function moneyTabCanOf(permissions: readonly string[]): MoneyTabCan {
     waive: held.has('orders.waive'),
     credit: held.has('sales.credit.view'),
     creditLimits: held.has('sales.credit.limits'),
-    remindersManage: held.has('receivables.reminders.manage'),
+    remindersManage: stopsCanOf(permissions).manage, // F-CM-201: Finance's stop rule (receivables.reminders.manage)
     statementsSend: held.has('receivables.statements.send'),
     hold: held.has('parties.hold'),
+    door: doorCanOf(permissions), // F-CM-201
   }
 }
 
@@ -109,6 +114,8 @@ export interface ShippedNotInvoiced {
   readonly currency: string | null
   /** The nearest legal deadline to invoice them (a day), if any. */
   readonly invoiceBy: string | null
+  /** F-CM-202: the DDTs not invoiced — Finance's "Invoice shipped goods" window opens with them chosen (`?new=1&ddts=…&party=`). */
+  readonly ddtIds: readonly string[]
 }
 
 /** The open items answer (GET /payments/open-items?partyId): every open request and invoice, and the money on account per currency. */
@@ -202,5 +209,8 @@ export const LIVE_COALESCE_MS = 800
 /** The tab's own reads (use-customer-money-tab.ts), each with its Try again. */
 export const TAB_READS = ['refunds', 'stops', 'reminders', 'summary', 'shipped'] as const
 export type TabRead = (typeof TAB_READS)[number]
+/** F-CM-202: the tab's reads made only when their section nears the room (13-backend §1.4 "scrolling to the end"). */
+export const LAZY_READS = ['documents', 'received', 'refundsMade'] as const // F-CM-203: + Payments & refunds, and its folded Refunds made
+export type LazyRead = (typeof LAZY_READS)[number]
 /** What a section's Try again reads again: the page's money reads (the ageing, the open items) or one of the tab's own. */
-export type MoneyRead = 'page' | TabRead
+export type MoneyRead = 'page' | TabRead | LazyRead
