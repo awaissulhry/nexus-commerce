@@ -65,7 +65,7 @@
     "picturesBlocked_one": "One picture from the internet is not shown, so the sender cannot see that the mail was opened.",
     "picturesBlocked_other": "{count} pictures from the internet are not shown, so the sender cannot see that the mail was opened.",
     "showPictures": "Show pictures",
-    "frame": "The e-mail as it arrived (links shown as text, nothing runs)",
+    "frame": "The email as it arrived (links shown as text, nothing runs)",
     "empty": "This mail has no text.",
     "subject": "Subject",
     "sent": "Sent",
@@ -85,7 +85,7 @@
     "confirm": "Close thread",
     "party": "{party} can no longer write here.",
     "noParty": "Nobody can write here until the thread is reopened.",
-    "mail": "Their e-mails will wait in Mail to sort.",
+    "mail": "Their emails will wait in Mail to sort.",
     "office": "Everyone who could read it still can.",
     "reopen": "Reopen",
     "conflict": "Someone changed the thread meanwhile. Reload it and try again."
@@ -104,27 +104,6 @@
     "outsideTitle": "An address does not belong to this customer.",
     "outsideTick": "Send outside this customer",
     "outsideRecorded": "The tick is recorded with your name and the addresses."
-  },
-  "count": {
-    "title": {
-      "tasks": "Tasks ({count})",
-      "approvals": "Approvals ({count})",
-      "partners": "Partners ({count})",
-      "followers": "Followers ({count})"
-    },
-    "none": {
-      "tasks": "No open task.",
-      "approvals": "No request waits for an answer.",
-      "partners": "No partner is invited.",
-      "followers": "Nobody follows this record."
-    },
-    "action": {
-      "tasks": "Add task",
-      "approvals": "Ask a partner to approve",
-      "partners": "Share with a partner",
-      "followers": "Add a colleague"
-    },
-    "more": "and {count} more"
   },
   "design": {
     "openAgain": "Open again"

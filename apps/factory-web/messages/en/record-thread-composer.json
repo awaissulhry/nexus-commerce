@@ -15,7 +15,7 @@
   "live": {
     "note": "Office note — only your colleagues read it",
     "reply": "Reply to {party} — {party} reads this",
-    "portal": "In the portal only — {party} reads this in their portal, no e-mail"
+    "portal": "In the portal — {party} reads this in their portal, no email"
   },
   "held": {
     "offline": "You are offline · your text stays on this device",

@@ -41,19 +41,12 @@
   "menu": {
     "label": "Altro per il messaggio di {author} delle {time}",
     "reply": "Rispondi",
-    "replyHint": "A viene compilato da questa email",
     "task": "Crea un'attività",
-    "taskHint": "testo da questo messaggio, scadenza, persona",
     "link": "Copia il link",
-    "linkHint": "apre il record con questo messaggio aperto",
     "useOn": "Usa su un altro record…",
-    "useOnHint": "Copia i suoi file su un ordine, un preventivo o un modello dello stesso cliente",
     "correct": "Correggi",
-    "correctHint": "un nuovo messaggio legato a questo; nulla viene modificato",
     "pin": "Fissa",
-    "pinHint": "tutti su questo record lo trovano tra i «fissati»; non è un segnalibro personale",
     "unpin": "Togli dai fissati",
-    "unpinHint": "esce dai «fissati» per tutti; il messaggio resta",
     "replyPrivately": "Rispondi in privato",
     "copyText": "Copia il testo",
     "remind": "Ricordamelo",
@@ -64,10 +57,6 @@
     "showAll": "Mostra tutto ({count} righe)",
     "showQuoted": "Mostra il testo citato e la firma",
     "hideQuoted": "Nascondi il testo citato e la firma"
-  },
-  "mentioned": {
-    "list": "Menzionati: {names}",
-    "more": "Menzionati: {names} +{count}"
   },
   "files": {
     "label": "Foto",
@@ -94,9 +83,6 @@
       "file": "File"
     }
   },
-  "details": {
-    "email": "A {to} · Oggetto: {subject}"
-  },
   "bounce": {
     "text": "{to} non ha potuto ricevere questa email",
     "task": "Apri l'attività",
@@ -112,7 +98,7 @@
     "network": "la connessione è caduta",
     "refused": "la fabbrica lo ha rifiutato così com'è",
     "forbidden": "non puoi scrivere qui",
-    "conflict": "la conversazione è cambiata nel frattempo",
+    "conflict": "il thread è cambiato nel frattempo",
     "unavailable": "Nexus non è raggiungibile",
     "outside": "un indirizzo è di un altro cliente",
     "failed": "qualcosa non è andato"
@@ -126,29 +112,23 @@
     "line": "Importo {amount}"
   },
   "undo": {
-    "sending": "Invio a {party} in corso…",
     "button": "Annulla ({seconds})",
     "label": "Riprendi la mail: restano {seconds} secondi"
   },
   "erased": {
-    "line": "Messaggio rimosso dopo una richiesta di privacy",
-    "short": "Messaggio rimosso (richiesta di privacy)"
+    "line": "Messaggio rimosso dopo una richiesta di privacy"
   },
   "skipped": {
-    "line_one": "{count} file di questa e-mail non è stato tenuto: {files}",
-    "line_other": "{count} file di questa e-mail non sono stati tenuti: {files}",
+    "line_one": "{count} file di questa email non è stato tenuto: {files}",
+    "line_other": "{count} file di questa email non sono stati tenuti: {files}",
     "item": "{name} ({reason})",
     "reason": {
       "type_not_allowed": "tipo non accettato",
       "too_large": "troppo grande",
       "empty": "file vuoto",
-      "too_many": "troppi file in una sola e-mail",
+      "too_many": "troppi file in una sola email",
       "other": "non tenuto"
     }
-  },
-  "filesOnly": {
-    "line_one": "{count} file",
-    "line_other": "{count} file"
   },
   "pin": {
     "pinned": "Fissato per tutti su questo record"
@@ -172,7 +152,7 @@
     "whoWasTold": "Chi è stato avvisato"
   },
   "place": {
-    "line": "Se ne parla nella conversazione dell'ordine",
+    "line": "Se ne parla nel thread dell'ordine",
     "open": "Apri"
   },
   "quote": {

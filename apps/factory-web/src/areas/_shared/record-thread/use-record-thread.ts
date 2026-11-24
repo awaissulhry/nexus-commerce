@@ -43,7 +43,7 @@ import { heldForNamesPrice, pricesInWordsOkOf } from '../../../lib/record-thread
 import { namesPriceRefused } from '../../../lib/record-thread/send-check/model'
 import { refusalCode } from './state'
 import { aboutRefOf, bodyWithAbout } from '../../../lib/record-thread/composer/model' // F-SA-265 (Discuss)
-import { afterRead, applyNewest, applyOlder, checkProblemOf, EMPTY_SERVER, readStatusOf, replyRefusal, sendReason, uploadReason, type ServerThread, type Work } from './state'
+import { afterRead, applyNewest, applyOlder, checkProblemOf, EMPTY_SERVER, readStatusOf, replyRefusal, sendReason, stepUpOf, uploadReason, type ServerThread, type Work } from './state'
 // B-TH-229: the person's own read mark (B-TH-027).
 import { markThreadRead } from './api'
 import { readMarker } from './state'
@@ -197,7 +197,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
         return next
       })
     } catch (error) {
-      setServer((current) => (current.status === 'ready' ? current : { ...current, status: readStatusOf(error) }))
+      setServer((current) => (current.status === 'ready' ? current : { ...current, status: readStatusOf(error), ...(stepUpOf(error) ? { stepUp: true } : {}) /* tw- W2.4 (B6) */ }))
     }
   }, [api, key])
   const loadOlder = useCallback(async () => {
@@ -611,6 +611,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   }
   const feed: FeedModel = {
     state: server.status,
+    ...(server.status === 'forbidden' && server.stepUp ? { forbiddenWhy: 'stepUp' as const } : {}), // tw- W2.4 (B6)
     messages: withOutbox(cards, work.outbox),
     events: changes.filter(feedShowsChange).map((entry) => eventOf(entry, names)),
     context: {

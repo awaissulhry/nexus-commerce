@@ -1,18 +1,19 @@
 {
   "feed": {
-    "label": "Messaggi della conversazione, dal più vecchio"
+    "label": "Messaggi del thread, dal più vecchio"
   },
   "state": {
-    "loading": "Lettura della conversazione…",
-    "error": "Non è stato possibile caricare la conversazione",
+    "loading": "Lettura del thread…",
+    "error": "Non è stato possibile caricare il thread",
     "errorBody": "Quello che hai scritto nel riquadro sotto resta.",
     "tryAgain": "Riprova",
-    "forbidden": "Non puoi leggere questa conversazione",
-    "forbiddenBody": "Per leggerla serve il permesso “{right}”. Un amministratore può darlo al tuo ruolo.",
+    "forbidden": "Non puoi leggere questo thread",
+    "forbiddenBody": "Il tuo ruolo non lo comprende.",
     "empty": "Ancora nessun messaggio",
     "emptyBody": "Scrivi il primo qui sotto.",
     "offline": "Offline · aggiornato alle {time}",
-    "offlineBody": "Questi sono i messaggi fino ad allora. I nuovi compaiono quando torni online; quello che scrivi resta su questo dispositivo."
+    "offlineBody": "Questi sono i messaggi fino ad allora. I nuovi compaiono quando torni online; quello che scrivi resta su questo dispositivo.",
+    "stepUp": "Conferma che sei tu per leggerlo: accedi di nuovo con il secondo passaggio."
   },
   "older": {
     "show": "Mostra i {count} precedenti",
@@ -24,17 +25,6 @@
     "today": "Oggi",
     "yesterday": "Ieri",
     "zone": "Giorni e orari nel fuso orario dell'azienda (Europa/Roma), uguali per tutti"
-  },
-  "fold": {
-    "count_one": "{count} messaggio precedente",
-    "count_other": "{count} messaggi precedenti",
-    "range": "{from} – {to}",
-    "show": "Mostra",
-    "label_one": "Mostra {count} messaggio precedente",
-    "label_other": "Mostra {count} messaggi precedenti"
-  },
-  "folded": {
-    "label": "Apri il messaggio di {author} delle {time}"
   },
   "step": {
     "text": "{who} {verb}",
@@ -109,8 +99,8 @@
   "live": {
     "bar_one": "{count} nuovo messaggio",
     "bar_other": "{count} nuovi messaggi",
-    "arrived_one": "{count} nuovo messaggio nella conversazione",
-    "arrived_other": "{count} nuovi messaggi nella conversazione"
+    "arrived_one": "{count} nuovo messaggio nel thread",
+    "arrived_other": "{count} nuovi messaggi nel thread"
   },
   "unread": {
     "line_one": "{count} messaggio non letto",
@@ -123,12 +113,12 @@
     "showAll": "Mostra tutto"
   },
   "waiting": {
-    "review_one": "{count} e-mail per questa conversazione attende in Posta da smistare",
-    "review_other": "{count} e-mail per questa conversazione attendono in Posta da smistare",
-    "reviewWhy_one": "{count} e-mail per questa conversazione attende in Posta da smistare — {why}",
-    "reviewWhy_other": "{count} e-mail per questa conversazione attendono in Posta da smistare — {why}",
-    "reviewMany": "50 o più e-mail per questa conversazione attendono in Posta da smistare",
-    "reviewManyWhy": "50 o più e-mail per questa conversazione attendono in Posta da smistare — {why}",
+    "review_one": "{count} email attende in Posta da smistare",
+    "review_other": "{count} email attendono in Posta da smistare",
+    "reviewWhy_one": "{count} email attende in Posta da smistare — {why}",
+    "reviewWhy_other": "{count} email attendono in Posta da smistare — {why}",
+    "reviewMany": "50 o più email attendono in Posta da smistare",
+    "reviewManyWhy": "50 o più email attendono in Posta da smistare — {why}",
     "colleague_one": "Una risposta attende che un collega la controlli",
     "colleague_other": "{count} risposte attendono che un collega le controlli",
     "colleagueMany": "50 o più risposte attendono che un collega le controlli",
@@ -137,7 +127,7 @@
       "UNKNOWN_SENDER": "mittente non tra i contatti",
       "DMARC_FAIL": "il dominio del mittente non ha superato il controllo",
       "SPAM": "segnata come spam",
-      "THREAD_CLOSED": "questa conversazione è chiusa",
+      "THREAD_CLOSED": "questo thread è chiuso",
       "TRIAGE": "non ancora smistata",
       "other": "da controllare"
     }

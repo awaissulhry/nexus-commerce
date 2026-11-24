@@ -697,7 +697,7 @@ function Docked({ host, model, actions, base, reminder }: { host: DockedHost; mo
         .then((answer) =>
           setSearch((now) =>
             now && now.query === searchQuery
-              ? { ...now, state: answer.tooShort ? 'short' : 'ready', words: answer.words, total: answer.total, hits: answer.results.map((hit) => ({ id: hit.recordId, excerpt: hit.subtitle, direction: hit.status })) }
+              ? { ...now, state: answer.tooShort ? 'short' : 'ready', words: answer.words, total: answer.total, hits: answer.results.map((hit) => ({ id: hit.recordId, excerpt: hit.subtitle, direction: hit.status, ...(hit.message ? { at: hit.message.at, sender: { name: hit.message.authorName, kind: hit.message.authorKind } } : {}) /* tw- W2.4 */ })) }
               : now,
           ),
         )

@@ -15,7 +15,7 @@
   "live": {
     "note": "Nota d'ufficio — la leggono solo i tuoi colleghi",
     "reply": "Rispondi a {party} — {party} la legge",
-    "portal": "Solo nel portale — {party} lo legge nel suo portale, nessuna e-mail"
+    "portal": "Nel portale — {party} lo legge nel suo portale, nessuna email"
   },
   "held": {
     "offline": "Sei offline · il tuo testo resta su questo dispositivo",

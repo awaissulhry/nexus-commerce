@@ -65,7 +65,7 @@
     "picturesBlocked_one": "Un'immagine da internet non è mostrata, così il mittente non può vedere che la mail è stata aperta.",
     "picturesBlocked_other": "{count} immagini da internet non sono mostrate, così il mittente non può vedere che la mail è stata aperta.",
     "showPictures": "Mostra le immagini",
-    "frame": "La e-mail come è arrivata (link mostrati come testo, non si esegue nulla)",
+    "frame": "L'email come è arrivata (link mostrati come testo, non si esegue nulla)",
     "empty": "Questa mail non ha testo.",
     "subject": "Oggetto",
     "sent": "Inviata",
@@ -85,7 +85,7 @@
     "confirm": "Chiudi thread",
     "party": "{party} non potrà più scrivere qui.",
     "noParty": "Nessuno potrà scrivere qui finché il thread non viene riaperto.",
-    "mail": "Le sue e-mail aspetteranno in Posta da smistare.",
+    "mail": "Le sue email aspetteranno in Posta da smistare.",
     "office": "Chi poteva leggerlo continua a poterlo leggere.",
     "reopen": "Riapri",
     "conflict": "Qualcuno ha cambiato il thread nel frattempo. Ricaricalo e riprova."
@@ -104,27 +104,6 @@
     "outsideTitle": "Un indirizzo non appartiene a questo cliente.",
     "outsideTick": "Invia fuori da questo cliente",
     "outsideRecorded": "La spunta viene registrata con il tuo nome e gli indirizzi."
-  },
-  "count": {
-    "title": {
-      "tasks": "Attività ({count})",
-      "approvals": "Approvazioni ({count})",
-      "partners": "Partner ({count})",
-      "followers": "Chi segue ({count})"
-    },
-    "none": {
-      "tasks": "Nessuna attività aperta.",
-      "approvals": "Nessuna richiesta aspetta una risposta.",
-      "partners": "Nessun partner invitato.",
-      "followers": "Nessuno segue questo record."
-    },
-    "action": {
-      "tasks": "Aggiungi attività",
-      "approvals": "Chiedi a un partner di approvare",
-      "partners": "Condividi con un partner",
-      "followers": "Aggiungi un collega"
-    },
-    "more": "e altri {count}"
   },
   "design": {
     "openAgain": "Apri di nuovo"

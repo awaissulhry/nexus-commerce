@@ -143,14 +143,14 @@
   },
   "order": {
     "source": {
-      "thread": "nella conversazione",
+      "thread": "nel thread",
       "order": "sull'ordine",
       "from": "da {record}"
     },
     "alsoOn": "anche su {record}",
     "alsoOnOther_one": "anche su {count} altro record",
     "alsoOnOther_other": "anche su altri {count} record",
-    "inThread": "Apri nella conversazione",
+    "inThread": "Apri nel thread",
     "leftOut_one": "{count} file che non puoi aprire",
     "leftOut_other": "{count} file che non puoi aprire",
     "truncated": "Sono elencati i {count} file più recenti.",
@@ -290,10 +290,10 @@
       "titleBulk_other": "Chi può vedere {count} file",
       "save": "Salva chi può vederlo",
       "floor": "Il reparto lo vede: si imposta sull'ordine di lavoro.",
-      "link": "Il link delle misure lo vede: si imposta con un invito in testa alla conversazione.",
+      "link": "Il link delle misure lo vede: si imposta con un invito in testa al thread.",
       "happens": "Solo ufficio, oppure ufficio e {party}: vale subito.",
-      "customerShown": "{party} lo vede subito nei Documenti del suo portale. Nessuna e-mail viene inviata.",
-      "customerGone": "Da ora {party} non lo vede più nel suo portale. Nessuna e-mail viene inviata.",
+      "customerShown": "{party} lo vede subito nei Documenti del suo portale. Nessuna email viene inviata.",
+      "customerGone": "Da ora {party} non lo vede più nel suo portale. Nessuna email viene inviata.",
       "never": "Chi l'ha aggiunto e le sue versioni restano. Un altro cliente non lo vede mai."
     },
     "rename": {

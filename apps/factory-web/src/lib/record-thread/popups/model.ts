@@ -157,5 +157,3 @@ export interface CountPopoverModel {
   readonly held?: string | null
 }
 
-/** At most this many lines in a popover; the rest are counted ("and 3 more"). */
-export const COUNT_LINES_MAX = 5

@@ -143,14 +143,14 @@
   },
   "order": {
     "source": {
-      "thread": "in the conversation",
+      "thread": "in the thread",
       "order": "on the order",
       "from": "from {record}"
     },
     "alsoOn": "also on {record}",
     "alsoOnOther_one": "also on {count} other record",
     "alsoOnOther_other": "also on {count} other records",
-    "inThread": "Open in the conversation",
+    "inThread": "Open in the thread",
     "leftOut_one": "{count} file you cannot open",
     "leftOut_other": "{count} files you cannot open",
     "truncated": "The newest {count} files are listed.",
@@ -292,8 +292,8 @@
       "floor": "The floor sees it: that is set on the work order.",
       "link": "The measurement link sees it: that is set by an invite at the thread's head.",
       "happens": "Office only, or Office and {party}: it applies at once.",
-      "customerShown": "{party} sees it in their portal's Documents at once. No e-mail is sent.",
-      "customerGone": "{party} does not see it in their portal from now on. No e-mail is sent.",
+      "customerShown": "{party} sees it in their portal's Documents at once. No email is sent.",
+      "customerGone": "{party} does not see it in their portal from now on. No email is sent.",
       "never": "Who added it and its versions stay. Another customer never sees it."
     },
     "rename": {

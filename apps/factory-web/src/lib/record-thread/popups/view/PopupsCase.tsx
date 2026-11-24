@@ -1,14 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { ListChecks } from 'lucide-react'
 import { Button } from '@nexus/ui/primitives'
 import { useT } from '../../../i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { DockedStage } from '../../parts/DockedStage'
-import type { CountPopoverModel, ViewerFile } from '../model'
+import type { ViewerFile } from '../model'
 import { CloseThreadConfirm, LeaveConfirm, SendCheckWindow, type SendCheckWindowModel } from './Confirms'
-import { CountPopover } from './CountPopover'
 import { FileViewer, POPUPS_NS } from './FileViewer'
 import { OriginalEmail, type OriginalEmailModel } from './OriginalEmail'
 
@@ -22,7 +20,6 @@ export type PopupsCaseModel =
   | { readonly show: 'send'; readonly send: SendCheckWindowModel }
   | { readonly show: 'leave'; readonly files: number }
   | { readonly show: 'close'; readonly record: string; readonly party: string | null; readonly problem: string | null }
-  | { readonly show: 'count'; readonly count: CountPopoverModel }
 
 export function PopupsCase({ model }: { model: PopupsCaseModel }) {
   return (
@@ -41,21 +38,9 @@ function Case({ model }: { model: PopupsCaseModel }) {
   return (
     <DockedStage>
       <div className="fw-rtp-stage">
-        {model.show === 'count' ? (
-          <CountPopover
-            model={model.count}
-            trigger={
-              <span className="fw-rtp-countchip-in">
-                <ListChecks size={14} aria-hidden /> {model.count.count}
-              </span>
-            }
-            triggerLabel={t(`count.title.${model.count.kind}`, { count: model.count.count })}
-          />
-        ) : (
-          <Button size="sm" onClick={() => setOpen(true)}>
-            {t('design.openAgain')}
-          </Button>
-        )}
+        <Button size="sm" onClick={() => setOpen(true)}>
+          {t('design.openAgain')}
+        </Button>
         {open && model.show === 'viewer' && <FileViewer files={model.files} index={index} onIndex={setIndex} onClose={close} onGoToMessage={() => undefined} />}
         {open && model.show === 'original' && <OriginalEmail model={model.original} onClose={close} />}
         {open && model.show === 'send' && (

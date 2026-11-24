@@ -277,6 +277,20 @@ export interface SearchHit {
   readonly excerpt: string | null
   /** The message's direction code (INBOUND = theirs, OUTBOUND = ours to them, INTERNAL_NOTE = an office note), or null. */
   readonly direction: string | null
+  // ---- tw- W2.4 (tw-s part 5; R10): when it was written and by whom (a floor writer the gate keeps back: no name). Absent: as before.
+  readonly at?: string | null
+  readonly sender?: { readonly name: string | null; readonly kind: string } | null
+}
+
+/**
+ * tw- W2.4 (R10): who wrote a hit, in words — the name, or "A person on the floor" for a floor writer the gate keeps back (never a
+ * name, never a guess), or the system's own name; null: the server did not say.
+ */
+export function hitWho(hit: Pick<SearchHit, 'sender'>): { readonly text: string } | { readonly key: string } | null {
+  const sender = hit.sender
+  if (!sender) return null
+  if (sender.name) return { text: sender.name }
+  return sender.kind === 'SYSTEM' ? { key: 'author.SYSTEM' } : { key: 'author.floorPerson' }
 }
 
 export interface ThreadSearchModel {

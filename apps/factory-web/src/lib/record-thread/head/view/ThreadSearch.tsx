@@ -3,8 +3,9 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import { Search, X } from 'lucide-react'
 import { Button, Input, Spinner } from '@nexus/ui/primitives'
-import { useT } from '../../../i18n/provider'
-import { hitSideKey, markWords, type ThreadSearchModel } from '../model'
+import { useLocale, useT } from '../../../i18n/provider'
+import { dayOf, shortDateOf, timeOf } from '../../parts/time'
+import { hitSideKey, hitWho, markWords, type ThreadSearchModel } from '../model'
 
 /** The Head's catalogue (RecordThreadHead's HEAD_NS; named here so the two files do not import each other). */
 const HEAD_NS = 'record-thread-head'
@@ -26,6 +27,8 @@ export interface ThreadSearchActions {
  */
 export function ThreadSearch({ record, model, actions }: { record: string; model: ThreadSearchModel; actions?: ThreadSearchActions }) {
   const t = useT(HEAD_NS)
+  const card = useT('record-thread-card') // tw- W2.4: "A person on the floor", the system's name
+  const locale = useLocale()
   const listId = useId()
   const input = useRef<HTMLInputElement>(null)
   const [active, setActive] = useState(0)
@@ -117,7 +120,15 @@ export function ThreadSearch({ record, model, actions }: { record: string; model
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => actions?.onPick?.(hit.id)}
                   >
-                    <span className="fw-rth-search-side">{t(hitSideKey(hit.direction))}</span>
+                    <span className="fw-rth-search-side">
+                      {t(hitSideKey(hit.direction))}
+                      {/* tw- W2.4 (R10): who wrote it and when (a floor writer kept back: "A person on the floor"). */}
+                      {(() => {
+                        const who = hitWho(hit)
+                        const words = [who ? ('text' in who ? who.text : card(who.key)) : null, hit.at ? `${shortDateOf(hit.at, locale, dayOf(new Date().toISOString()))} ${timeOf(hit.at, locale)}` : null].filter(Boolean).join(' · ')
+                        return words ? <span className="fw-rth-search-who"> · {words}</span> : null
+                      })()}
+                    </span>
                     <span className="fw-rth-search-words">
                       {markWords(words, model.words).map((part, at) => (part.hit ? <mark key={at}>{part.text}</mark> : <span key={at}>{part.text}</span>))}
                     </span>

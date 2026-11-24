@@ -386,7 +386,7 @@ describe('B-TH-255 — erased after a privacy request vs files only; the files a
       ],
     }
     const text = textOf(card(mail))
-    expect(text).toContain('2 files in this e-mail were not kept: logo.ai (type not accepted), clip.mov (too large)')
+    expect(text).toContain('2 files in this email were not kept: logo.ai (type not accepted), clip.mov (too large)')
     expect(text).not.toContain('sig.png')
     expect(textOf(card({ ...mail, skipped: [mail.skipped![1]!] }, 'it'))).toContain('1 file di questa e-mail non è stato tenuto: clip.mov (troppo grande)')
     expect(textOf(card(MAIL))).not.toContain('were not kept')

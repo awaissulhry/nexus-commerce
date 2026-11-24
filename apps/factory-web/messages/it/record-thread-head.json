@@ -97,11 +97,6 @@
     "frame375": "Telefono, 375 px",
     "frameLabel": "Colonna del thread larga {width} px"
   },
-  "new": {
-    "count_one": "{count} nuovo",
-    "count_other": "{count} nuovi",
-    "many": "99+ nuovi"
-  },
   "owner": {
     "label": "Responsabile: {name}",
     "nobody": "Nessun responsabile",
@@ -109,13 +104,13 @@
     "change": "Cambia responsabile…",
     "now": "Ora: {name}",
     "title": "Cambia responsabile",
-    "subtitle": "Chi risponde nella conversazione di {record}",
-    "hint": "Le persone dell'ufficio che leggono questa conversazione. Se non scegli nessuno risponde il responsabile del record (l'assegnatario della richiesta, il supervisore dell'ordine, altrimenti chi l'ha creato).",
+    "subtitle": "Chi risponde nel thread di {record}",
+    "hint": "Le persone dell'ufficio che leggono questo thread. Se non scegli nessuno risponde il responsabile del record (l'assegnatario della richiesta, il supervisore dell'ordine, altrimenti chi l'ha creato).",
     "search": "Cerca persone",
-    "listLabel": "Persone che possono essere responsabili della conversazione",
+    "listLabel": "Persone che possono essere responsabili del thread",
     "recordOwn": "Il responsabile del record",
     "me": "{name} (io)",
-    "noPeople": "Nessun altro legge ancora questa conversazione.",
+    "noPeople": "Nessun altro legge ancora questo thread.",
     "done": "Ora risponde {name}.",
     "doneRecord": "Risponde di nuovo il responsabile del record.",
     "failed": "Non è stato possibile cambiare il responsabile: {reason}",
@@ -127,14 +122,14 @@
     },
     "cancel": "Annulla",
     "problem": {
-      "forbidden": "non puoi scrivere in questa conversazione.",
-      "invalid": "questa persona non legge la conversazione o non è più attiva.",
+      "forbidden": "non puoi scrivere in questo thread.",
+      "invalid": "questa persona non legge il thread o non è più attiva.",
       "notFound": "il record non c'è più.",
       "network": "la rete non risponde; riprova.",
       "failed": "qualcosa è andato storto; riprova."
     },
-    "loading": "Lettura di chi legge questa conversazione…",
-    "peopleFailed": "Non è stato possibile leggere chi legge questa conversazione.",
+    "loading": "Lettura di chi legge questo thread…",
+    "peopleFailed": "Non è stato possibile leggere chi legge questo thread.",
     "retry": "Riprova"
   },
   "rule": {
@@ -206,8 +201,5 @@
     "esc": "chiudi un menu, togli la risposta",
     "enterKey": "Invio",
     "shiftEnterKey": "Maiusc+Invio"
-  },
-  "allOf": {
-    "line": "Sola lettura · {count} thread"
   }
 }

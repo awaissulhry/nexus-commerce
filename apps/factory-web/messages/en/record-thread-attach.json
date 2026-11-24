@@ -41,7 +41,7 @@
     "failed_other": "{count} files failed · Retry or take them off",
     "tooMany": "At most {max} files in one message",
     "officeFile": "Share or take off the office-only file first",
-    "mailLimit": "Files over 10 MB together cannot go by e-mail — send fewer"
+    "mailLimit": "Files over 10 MB together cannot go by email — send fewer"
   },
   "clip": {
     "label": "Add files",
@@ -61,7 +61,7 @@
     "noShare": "Sharing it needs the right to manage files.",
     "remove": "Remove it"
   },
-  "mailLimit": "Files over 10 MB together cannot go by e-mail. Send fewer, or share the larger ones by link (later). An office note has no mail limit.",
+  "mailLimit": "Files over 10 MB together cannot go by email. Send fewer, or share the larger ones by link (later). An office note has no mail limit.",
   "picker": {
     "title": "From this record",
     "bodyReply": "Files {party} may already see come first. Sending an office-only file asks you to share it first.",

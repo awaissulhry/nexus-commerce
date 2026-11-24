@@ -46,7 +46,7 @@ export interface HeadActions {
  */
 export function RecordThreadHead({ model, actions }: { model: HeadModel; actions?: HeadActions }) {
   return (
-    <WithMessages namespaces={[HEAD_NS]}>
+    <WithMessages namespaces={[HEAD_NS, 'record-thread-card' /* tw- W2.4: a search hit's writer */]}>
       <Head model={model} actions={actions} />
     </WithMessages>
   )

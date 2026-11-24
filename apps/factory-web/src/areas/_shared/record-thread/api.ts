@@ -388,7 +388,18 @@ export async function setThreadDone(api: ApiClient, record: RecordKey, done: boo
 const threadHits = z.object({
   words: z.array(z.string()),
   tooShort: z.boolean(),
-  results: z.array(z.object({ recordId: z.string(), subtitle: z.string().nullable(), status: z.string().nullable(), indexedAt: z.string() }).passthrough()),
+  results: z.array(
+    z
+      .object({
+        recordId: z.string(),
+        subtitle: z.string().nullable(),
+        status: z.string().nullable(),
+        indexedAt: z.string(),
+        // tw- W2.4 (tw-s part 5; R10): when it was written and by whom — a floor writer the gate keeps back has no name.
+        message: z.object({ at: z.string(), authorName: z.string().nullable(), authorKind: z.string() }).optional(),
+      })
+      .passthrough(),
+  ),
   total: z.number().int(),
   nextOffset: z.number().int().nullable(),
 })

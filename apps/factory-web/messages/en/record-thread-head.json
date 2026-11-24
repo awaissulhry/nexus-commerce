@@ -97,11 +97,6 @@
     "frame375": "Phone, 375 px",
     "frameLabel": "Thread column {width} px wide"
   },
-  "new": {
-    "count_one": "{count} new",
-    "count_other": "{count} new",
-    "many": "99+ new"
-  },
   "owner": {
     "label": "Owner: {name}",
     "nobody": "No owner yet",
@@ -206,8 +201,5 @@
     "esc": "close a menu, drop the reply",
     "enterKey": "Enter",
     "shiftEnterKey": "Shift+Enter"
-  },
-  "allOf": {
-    "line": "Read only · {count} threads"
   }
 }

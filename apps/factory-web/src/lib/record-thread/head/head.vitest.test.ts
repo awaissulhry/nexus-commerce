@@ -648,3 +648,52 @@ describe('tw- W2.1 — the pinned bar (W-080 / W-081, R12): newest pin first, "S
   })
 })
 // ---- end tw- W2.1
+
+// ---- tw- W2.4 (tw-s part 5; R10): a search hit says who wrote it and when ----------------------------------------------------------
+import { hitWho } from './model'
+
+describe('tw- W2.4 — search hits with the writer and the time', () => {
+  const head = (search: ThreadSearchModel, locale: 'it' | 'en' = 'en') => drawAll(createElement(RecordThreadHead, { model: base({ search }) }), locale)
+  const open = (hits: ThreadSearchModel['hits']): ThreadSearchModel => ({ open: true, query: 'collar', state: 'ready', hits, total: hits.length, words: ['collar'] })
+
+  it('R10: a hit on a floor note with the gate shut shows "A person on the floor" — never a name', () => {
+    const hidden = { id: 'm-9', excerpt: 'Collar cut', direction: 'INTERNAL_NOTE', at: '2026-11-17T09:40:00.000Z', sender: { name: null, kind: 'WORKER' } }
+    expect(hitWho(hidden)).toEqual({ key: 'author.floorPerson' })
+    expect(textOf(head(open([hidden])))).toContain('A person on the floor')
+    expect(textOf(head(open([hidden]), 'it'))).toContain('Una persona in reparto')
+    expect(hitWho({ sender: { name: null, kind: 'SYSTEM' } })).toEqual({ key: 'author.SYSTEM' })
+  })
+
+  it('a named writer and the time beside the hit’s side; a hit the server says nothing of stays as before', () => {
+    const named = { id: 'm-1', excerpt: 'Collar in yellow piping', direction: 'INBOUND', at: '2026-11-17T09:40:00.000Z', sender: { name: 'Lia Modello', kind: 'PARTY' } }
+    const text = textOf(head(open([named])))
+    expect(text).toMatch(/Lia Modello · \d{1,2} Nov \d\d:\d\d/)
+    expect(hitWho({ sender: null })).toBeNull()
+    expect(head(open([{ id: 'm-2', excerpt: 'Collar', direction: 'INBOUND' }]))).not.toContain('fw-rth-search-who')
+    const api = readFileSync(new URL('../../../areas/_shared/record-thread/api.ts', import.meta.url), 'utf8')
+    expect(api).toContain('message: z.object({ at: z.string(), authorName: z.string().nullable(), authorKind: z.string() }).optional(),')
+  })
+})
+// ---- end tw- W2.4
+
+// ---- tw- W2.4: the catalogue scan — both catalogues hold every key; no removed word is read anywhere ----------------------------
+describe('tw- W2.4 — the thread’s catalogues: the same keys in it and en, and the words this rebuild removed are read nowhere', () => {
+  const GONE: Readonly<Record<string, readonly string[]>> = {
+    'record-thread-head': ['new.count_one', 'new.count_other', 'new.many'],
+    'record-thread-card': ['menu.replyHint', 'menu.taskHint', 'menu.linkHint', 'menu.useOnHint', 'menu.correctHint', 'menu.pinHint', 'menu.unpinHint', 'mentioned.list', 'mentioned.more', 'details.email', 'undo.sending', 'erased.short', 'filesOnly.line_one'],
+    'record-thread-composer': ['mark.note', 'mark.reply', 'mark.portal', 'placeholder.note', 'placeholder.reply', 'placeholder.portal', 'portal.line', 'floor.off'],
+    'record-thread-feed': ['fold.count_one', 'fold.range', 'fold.show', 'fold.label_one', 'folded.label'],
+    'record-thread-files': ['pins.chip_one', 'pins.go', 'pins.unpin', 'design.frame519'],
+  }
+
+  it('every thread namespace has the same keys in it and en', () => {
+    for (const name of ['record-thread', 'record-thread-head', 'record-thread-card', 'record-thread-composer', 'record-thread-feed', 'record-thread-files', 'record-thread-popups', 'record-thread-helpers', 'record-thread-attach', 'record-thread-send']) {
+      expect(Object.keys(CATALOGUE.it[name] ?? {}).sort(), name).toEqual(Object.keys(CATALOGUE.en[name] ?? {}).sort())
+    }
+  })
+
+  it('a removed word is in neither catalogue', () => {
+    for (const [name, keys] of Object.entries(GONE)) for (const key of keys) for (const locale of ['en', 'it'] as const) expect(CATALOGUE[locale][name]?.[key], `${locale} ${name} ${key}`).toBeUndefined()
+  })
+})
+// ---- end tw- W2.4 catalogue

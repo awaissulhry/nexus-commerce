@@ -19,7 +19,7 @@
     "taskFromMessage": "Task made: it links back to this message.",
     "portal": {
       "NO_PARTY": "Not posted: this record has no customer yet (a prospect has no portal). Make the customer first; your text is back in the box.",
-      "NO_PORTAL": "Not posted: nobody of this customer reads this record in the portal now. Reply by e-mail instead; your text is back in the box.",
+      "NO_PORTAL": "Not posted: nobody of this customer reads this record in the portal now. Reply by email instead; your text is back in the box.",
       "CLOSED": "Not posted: this thread is closed. Reopen it to reply; your text is back in the box.",
       "NOT_SHAREABLE": "Not posted: this record’s thread stays inside the factory and is never shared with a customer. Write an office note; your text is back in the box.",
       "other": "Not posted in the portal: the factory refused it as it is. Your text is back in the box.",
@@ -29,9 +29,9 @@
     "unpinned": "Unpinned: the message stays in the thread.",
     "pin": {
       "HELD": "A mail still in its 10 seconds to take it back, or taken back, is not pinned.",
-      "FULL": "This conversation already has 50 pinned messages: unpin one first.",
-      "forbidden": "Pinning needs the right to write on this conversation.",
-      "gone": "That message is no longer in this conversation.",
+      "FULL": "This thread already has 50 pinned messages: unpin one first.",
+      "forbidden": "Pinning needs the right to write in this thread.",
+      "gone": "That message is out of your reach.",
       "failed": "The pin could not be changed. Try again."
     },
     "messageGone": "Too far back to open here.",
