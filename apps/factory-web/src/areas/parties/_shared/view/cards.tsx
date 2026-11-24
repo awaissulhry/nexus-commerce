@@ -51,7 +51,8 @@ export function ShowThreadOnArrival() {
 }
 
 /** B-TH-260: ONE notice in the body column, the most serious first; the rest behind "N more notices". */
-export function PartyNotices({ model, party, actions }: { model: PartyRecordModel; party: Party; actions?: PartyRecordActions | undefined }) {
+// F-CA-116 (customer People & addresses, lane ca-; Z15): `children` — a tab's own notices in the same ONE area (absent: as before).
+export function PartyNotices({ model, party, actions, children }: { model: PartyRecordModel; party: Party; actions?: PartyRecordActions | undefined; children?: ReactNode }) {
   const t = useT('parties')
   const locale = useLocale()
   const side = model.side
@@ -64,6 +65,7 @@ export function PartyNotices({ model, party, actions }: { model: PartyRecordMode
         </Banner>
       )}
       {model.notice ? <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} /> : null}
+      {children /* F-CA-116 */}
       {model.changedAt && (
         <Banner
           tone="warning"

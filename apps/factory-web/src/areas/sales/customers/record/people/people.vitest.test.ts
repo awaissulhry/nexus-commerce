@@ -11,7 +11,13 @@ import type { PrivacyContact } from '../../depth/api'
 import { addressRows, invoiceAddressOf, refusedInView, shownAddresses, addressMenu } from './addresses'
 import { peopleAnswer, peopleBadge, peopleSectionAnswer, personFilterOf, type PeopleFacts } from './answer'
 import { CP, failedRead, PEOPLE_SECTIONS, PEOPLE_TAB_NAMESPACES, peopleCan, READING, readyRead, sayOf, type Said } from './model'
-import type { PartyUsage } from './api'
+import { partyUsageSchema, type PartyUsage } from './api'
+import { partyUsageAnswer } from '@nexus/factory-domain/parties/usage'
+import { createElement, type ComponentType } from 'react'
+import { renderToString } from 'react-dom/server'
+import type { DesignScreen } from '../../../../../lib/design/design-screen'
+import { I18nProvider } from '../../../../../lib/i18n/provider'
+import { designScreen as customerRecordScreen } from '../fixtures'
 import { PEOPLE_TAB_START, peopleTabModel, type PeopleTabReads } from './tab'
 import { peopleRows, personMenu, shownPeople, type PeopleInput } from './people'
 
@@ -293,5 +299,61 @@ describe('the views of the tab', () => {
     expect(views.find((view) => view.name === 'AddressesSection.tsx')!.source).toContain("'parties:address.add'")
     expect(CATALOGUE.en.parties!['contact.add']).toBe('Add contact')
     expect(CATALOGUE.en.parties!['address.add']).toBe('Add address')
+  })
+})
+
+// ---- W1.4: the page (CR, CRV, the shared notice area, the Home row; D2: People docks a third)
+/** A gallery case drawn as the design index draws it (the shell's words; the screen loads its own). */
+function render(screen: DesignScreen<unknown>, model: unknown, locale: Locale): string {
+  const View = screen.view as ComponentType<{ model: unknown }>
+  return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(View, { model })))
+}
+
+describe('the page mounts the tab (W1.4)', () => {
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+
+  it('the record builds the container on every tab (it reads only on People) and the view only on ?tab=people', () => {
+    const container = source('../CustomerRecord.tsx')
+    expect(container).toContain("privacy: privacy.read, glance: glance.read, enabled: tab === 'people' })")
+    expect(container).toContain("named && record.party && tab === 'people' ? (")
+    expect(container).not.toMatch(/parts=\{\['people'\]\}|portalEmails|contactEmails/)
+  })
+
+  it('the view: People\'s count = the addresses waiting for our check, marked; its notices in the ONE notice area; a third of the dock', () => {
+    const view = source('../view/CustomerRecordView.tsx')
+    expect(view).toContain("{tab === 'people' && peopleTab}")
+    expect(view).toContain("count: id === 'people' ? (peopleBadge?.count ?? undefined)")
+    expect(view).toContain("<PartyNotices model={model} party={party} actions={actions}>{tab === 'people' ? peopleNotice : null}</PartyNotices>")
+    expect(view).toContain("tab === 'money' || tab === 'people' ? 'third' : undefined")
+    expect(view).not.toMatch(/ContactsCard|AddressesCard|activeContacts/)
+    // KEEP (the Money lane's ask): the Money count and its props stay as they are.
+    expect(view).toContain("id === 'money' ? moneyCount : undefined")
+    expect(view).toContain('moneyTab={moneyTab /* F-CM-104 */} moneyTabNote={moneyTabNote /* F-CM-104 */}')
+    expect(source('../../../../parties/_shared/view/cards.tsx')).toContain('{children /* F-CA-116 */}')
+  })
+
+  it('the depth provider hands its ONE privacy read; the hold connector stays (the Money lane\'s KEEP)', () => {
+    const depth = source('../../depth/CustomerDepth.tsx')
+    expect(depth).toContain("export function useCustomerPrivacy(): CustomerDepthState['privacy'] {")
+    expect(depth).toContain('export function useCustomerHold(party: Party)')
+  })
+
+  it('the web reads the usage answer with its OWN schema of the server\'s fixed shape (D3)', () => {
+    expect(Object.keys(partyUsageSchema.shape)).toEqual(Object.keys(partyUsageAnswer.shape))
+    expect(Object.keys(partyUsageSchema.shape.contacts.element.shape)).toEqual(Object.keys(partyUsageAnswer.shape.contacts.element.shape))
+    expect(Object.keys(partyUsageSchema.shape.addresses.element.shape)).toEqual(Object.keys(partyUsageAnswer.shape.addresses.element.shape))
+  })
+
+  it('every gallery case on People draws the new tab — its answer line and its two sections — with today\'s cards under it', () => {
+    for (const locale of LOCALES)
+      for (const item of customerRecordScreen.cases.filter((entry) => (entry.model as { tab?: string; party?: unknown }).tab === 'people' && (entry.model as { party?: unknown }).party)) {
+        const html = render(customerRecordScreen as DesignScreen<unknown>, item.model, locale)
+        expect(html, item.id).toContain('id="answer"')
+        expect(html, item.id).toContain('id="people"')
+        expect(html, item.id).toContain('id="addresses"')
+      }
+    const privacy = render(customerRecordScreen as DesignScreen<unknown>, customerRecordScreen.cases.find((entry) => entry.id === 'w2b-324-privacy')!.model, 'en')
+    expect(privacy).toContain('id="people"')
+    expect(privacy.indexOf('id="addresses"')).toBeLessThan(privacy.lastIndexOf('Erased contact'))
   })
 })

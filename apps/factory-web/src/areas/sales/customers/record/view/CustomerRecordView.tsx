@@ -11,7 +11,7 @@ import type { Party } from '../../../../parties/_shared/api'
 import { identitiesOf, partyName, recordTabs, sideHref, SIDES, writable, type PartyRecordModel, type RecordTab } from '../../../../parties/_shared/model'
 import { shownTab } from '../../../../parties/_shared/model' // F-CQ-301 (P0-B2)
 import { PartyRecordGate, usePartyBand, type PartyRecordActions, type SupplierDepth } from '../../../../parties/_shared/view/PartyRecordView'
-import { AddressesCard, ContactsCard, IdentityCard, PartyDialogs, PartyNotices, ShowThreadOnArrival, ViesCard } from '../../../../parties/_shared/view/cards'
+import { IdentityCard, PartyDialogs, PartyNotices, ShowThreadOnArrival, ViesCard } from '../../../../parties/_shared/view/cards' // F-CA-119: the contacts and addresses cards stay the supplier's
 import { PartiesMessages } from '../../../../parties/_shared/view/parts'
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { rightRef } from '../../../../../lib/i18n/rights' // F-SA-271
@@ -45,8 +45,9 @@ export function CustomerRecordView({
   depth,
   onAddTask,
   taskDialog,
-  portalPeople,
-  portalEmails,
+  peopleTab, // F-CA-119
+  peopleBadge, // F-CA-119
+  peopleNotice, // F-CA-119
   work,
   workCount,
   quotesIncoming,
@@ -78,9 +79,12 @@ export function CustomerRecordView({
   /** F-SA-271: the band's ⋯ "Add task for <customer>…" (the record's New task dialog, drawn by the container). */
   onAddTask?: () => void
   taskDialog?: ReactNode
-  /** F-SA-274: People & addresses' people with portal access (Portal access's people part) and their e-mails (the contacts' tags). */
-  portalPeople?: ReactNode
-  portalEmails?: ReadonlySet<string>
+  // F-CA-119 (customer page › People & addresses, lane ca-; 13-backend §5.4; Z4, Z15): the tab (drawn by the container or a design case),
+  // its count (the addresses waiting for our check; null: none) and its notices in the record's ONE notice area.
+  peopleTab?: ReactNode
+  peopleBadge?: { readonly count: number; readonly attention: boolean } | null
+  peopleNotice?: ReactNode
+  // F-CA-119: end
   /** F-SA-276: the Work tab (the waiting strip and the Orders sheet locked to the customer, drawn by the container). */
   work?: ReactNode
   /** F-SA-276: the Work tab's count — what waits on us (requests to answer + replies waiting on us); null while read. */
@@ -107,7 +111,7 @@ export function CustomerRecordView({
   return (
     <WithMessages namespaces={[CUSTOMER_MONEY_NAMESPACE]}>
       <PartiesMessages>
-        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} overviewTab={overviewTab /* F-CO-103 */} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} portalPeople={portalPeople} portalEmails={portalEmails} work={work} workCount={workCount} quotesIncoming={quotesIncoming} threadButton={threadButton ?? null} onNewOrder={onNewOrder} onImport={onImport} priceDiffer={priceDiffer ?? null /* F-CP-141 */} quotesBadge={quotesBadge /* F-CQ-302 */} quotesTabNote={quotesTabNote /* F-CQ-306 */} moneyTab={moneyTab /* F-CM-104 */} moneyTabNote={moneyTabNote /* F-CM-104 */} />
+        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} overviewTab={overviewTab /* F-CO-103 */} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} peopleTab={peopleTab /* F-CA-119 */} peopleBadge={peopleBadge /* F-CA-119 */} peopleNotice={peopleNotice /* F-CA-119 */} work={work} workCount={workCount} quotesIncoming={quotesIncoming} threadButton={threadButton ?? null} onNewOrder={onNewOrder} onImport={onImport} priceDiffer={priceDiffer ?? null /* F-CP-141 */} quotesBadge={quotesBadge /* F-CQ-302 */} quotesTabNote={quotesTabNote /* F-CQ-306 */} moneyTab={moneyTab /* F-CM-104 */} moneyTabNote={moneyTabNote /* F-CM-104 */} />
       </PartiesMessages>
     </WithMessages>
   )
@@ -125,8 +129,9 @@ interface CustomerProps {
   depth?: SupplierDepth | undefined
   onAddTask?: (() => void) | undefined
   taskDialog?: ReactNode
-  portalPeople?: ReactNode
-  portalEmails?: ReadonlySet<string> | undefined
+  peopleTab?: ReactNode // F-CA-119
+  peopleBadge?: { readonly count: number; readonly attention: boolean } | null | undefined // F-CA-119
+  peopleNotice?: ReactNode // F-CA-119
   work?: ReactNode // F-SA-276
   workCount?: { readonly count: number | null; readonly attention: boolean } | null | undefined
   quotesIncoming?: ReactNode // F-SA-277
@@ -206,7 +211,7 @@ function ScrollOnArrival({ id }: { id: string }) {
   return null
 }
 
-function CustomerBody({ model, party, actions, thread, printThread, overviewTab /* F-CO-103 */, terms, portal, depth, onAddTask, taskDialog, money: moneyModel, portalPeople, portalEmails, work, workCount, quotesIncoming, threadButton /* F-SA-279 */, onNewOrder, onImport /* F-CP-104 */, quotesBadge /* F-CQ-302 */, quotesTabNote /* F-CQ-306 */, moneyTab /* F-CM-104 */, moneyTabNote /* F-CM-104 */ }: CustomerProps & { party: Party }) {
+function CustomerBody({ model, party, actions, thread, printThread, overviewTab /* F-CO-103 */, terms, portal, depth, onAddTask, taskDialog, money: moneyModel, peopleTab, peopleBadge, peopleNotice /* F-CA-119 */, work, workCount, quotesIncoming, threadButton /* F-SA-279 */, onNewOrder, onImport /* F-CP-104 */, quotesBadge /* F-CQ-302 */, quotesTabNote /* F-CQ-306 */, moneyTab /* F-CM-104 */, moneyTabNote /* F-CM-104 */ }: CustomerProps & { party: Party }) {
   const t = useT('parties')
   const side = model.side
   const config = SIDES[side]
@@ -218,8 +223,6 @@ function CustomerBody({ model, party, actions, thread, printThread, overviewTab 
   const tab: RecordTab = shownTab(tabs, model.tab)
   // ---- end F-CQ-301
   const recordPath = sideHref(model.prefix, config, `/${encodeURIComponent(party.id)}`)
-  const activeAddresses = party.addresses.filter((address) => address.status === 'ACTIVE')
-  const activeContacts = party.contacts.filter((contact) => contact.status === 'ACTIVE')
   // F-SA-277: Quotes & incoming counts the customer's quotes (the record's newest quotes, when all were read).
   // ---- F-CQ-302: with the page's count read, what waits on us there (To answer + Accepted, order waits), marked when > 0.
   const quotesCount = quotesBadge !== undefined ? (quotesBadge?.count ?? null) : model.quotes.items && !model.quotes.more ? model.quotes.items.length : null
@@ -234,8 +237,10 @@ function CustomerBody({ model, party, actions, thread, printThread, overviewTab 
     label: t(`${side}.tab.${id}`),
     // F-CM-104 (Z11): Money counts the late invoices and the late deposit requests (null while reading; none: no chip).
     // F-SA-276: Work counts what waits on us (requests to answer + replies waiting on us), marked when something does.
-    count: id === 'people' ? activeAddresses.length + activeContacts.length : id === 'work' ? (workCount?.count ?? null) : id === 'quotes' ? quotesCount : id === 'money' ? moneyCount : undefined,
+    // F-CA-119 (Z4): People counts the addresses waiting for our check only (from the party read), marked as Work is; none: no chip.
+    count: id === 'people' ? (peopleBadge?.count ?? undefined) : id === 'work' ? (workCount?.count ?? null) : id === 'quotes' ? quotesCount : id === 'money' ? moneyCount : undefined,
     ...(id === 'work' && workCount?.attention ? { icon: <CircleAlert size={12} role="img" aria-label={t('customers.work.attention', { count: workCount.count ?? 0 })} /> } : {}),
+    ...(id === 'people' && peopleBadge?.attention ? { icon: <CircleAlert size={12} role="img" aria-label={t('customers.work.attention', { count: peopleBadge.count })} /> } : {}), // F-CA-119
     // ---- F-CQ-302: Quotes & incoming marked as Work is, when something waits on us there.
     ...(id === 'quotes' && quotesBadge?.attention ? { icon: <CircleAlert size={12} role="img" aria-label={t('customers.work.attention', { count: quotesBadge.count ?? 0 })} /> } : {}),
     // ---- end F-CQ-302
@@ -281,7 +286,8 @@ function CustomerBody({ model, party, actions, thread, printThread, overviewTab 
         // order's Overview has) — written for the Overview ONLY: Money, People, Terms and Portal stay 40 %.
         // F-CM-104 (customer Money plan D2, the Owner's pick): Money a third too (865 px at 1440, the order's Money room); People, Terms
         // and Portal stay 40 %.
-        defaultWidth={tab === 'work' || tab === 'quotes' || tab === 'overview' || tab === 'money' ? 'third' : undefined}
+        // F-CA-119 (customer People plan D2, the Owner's pick 2026-11-24): People a third too (865 px at 1440); Terms and Portal stay 40 %.
+        defaultWidth={tab === 'work' || tab === 'quotes' || tab === 'overview' || tab === 'money' || tab === 'people' ? 'third' : undefined}
         dockTab={tab}
         threadButton={threadButton ?? null}
       >
@@ -291,7 +297,8 @@ function CustomerBody({ model, party, actions, thread, printThread, overviewTab 
           <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabItems} active={tab} size="sm" overflow="scroll" />
           {/* F-CO-103 (plan §6.7): on the Overview the headline and the first strip say Blocked / Archived — its notice area keeps the
               receipt, "someone else changed" and "You can view, not change"; every other tab keeps the shared notice area whole. */}
-          {tab === 'overview' ? <OverviewNotices model={model} party={party} actions={actions} /> : <PartyNotices model={model} party={party} actions={actions} />}
+          {/* F-CA-119 (Z15): People's own notices (an address checked, a portal act) in the same ONE notice area. */}
+          {tab === 'overview' ? <OverviewNotices model={model} party={party} actions={actions} /> : <PartyNotices model={model} party={party} actions={actions}>{tab === 'people' ? peopleNotice : null}</PartyNotices>}
 
           {/* F-SA-276: Work — the waiting strip and the Orders sheet locked to the customer (no tabs inside the tab, R5). */}
           {/* F-CQ-306 (cq fx3 W2-1b; 10-design §10): asked for Quotes & incoming without its right, the page shows Work and says why once. */}
@@ -305,19 +312,9 @@ function CustomerBody({ model, party, actions, thread, printThread, overviewTab 
           {tab === 'overview' && overviewTab}
           {/* F-CM-104 (cm-w1 W1.4): Money — the answer line, Balance, To collect… (the container's tab, cu/record/money/CustomerMoney.tsx). */}
           {tab === 'money' && moneyTab}
-          {tab === 'people' && (
-            // F-SA-274: People & addresses — the contacts ("Has portal access" on an exact e-mail match, ⋯ Invite to the portal…), the
-            // people with portal access (moved as is from Portal settings, "Contact" on the same e-mail), the addresses, the riders and
-            // measurement profiles (moved from the Overview; profiles behind sales.measurements.view), the contacts' personal data.
-            <div className="fw-pty-stack">
-              <ContactsCard model={model} party={party} actions={actions} editable={editable} portalEmails={portalEmails} inviteHref={can.partners ? (contact) => (contact.email ? `${recordPath}?tab=people&invite=${encodeURIComponent(contact.email)}&inviteName=${encodeURIComponent(contact.name)}` : null) : undefined} />
-              {portalPeople}
-              <AddressesCard model={model} party={party} actions={actions} editable={editable} />
-              {depth?.people}
-              {/* B-W2b-324: consent, lawful basis and the personal-data actions (Sales' depth slot). */}
-              {depth?.contacts}
-            </div>
-          )}
+          {/* F-CA-119 (customer page › People & addresses, lane ca-): the container's tab — the answer line, People, Addresses (and, until
+              ca-w2, today's riders / profiles and personal-data cards under them): cu/record/view/people/PeopleTab.tsx. */}
+          {tab === 'people' && peopleTab}
           {tab === 'terms' && (
             // F-SA-272: Terms & requirements — an anchor line (in-page jumps, not tabs), then the Commercial terms first (the most used),
             // the hold and PO number required (B-W2b-324), the requirements in force, the tax identity and VIES.

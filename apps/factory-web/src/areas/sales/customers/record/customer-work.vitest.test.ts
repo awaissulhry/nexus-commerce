@@ -755,7 +755,7 @@ describe('F-SA-279: the page wires it (the sources)', () => {
   })
   it('Work\'s dock a third; the band\'s button below 1280 px names the record docked', () => {
     const view = readFileSync(new URL('./view/CustomerRecordView.tsx', import.meta.url), 'utf8')
-    expect(view).toContain("defaultWidth={tab === 'work' || tab === 'quotes' || tab === 'overview' || tab === 'money' ? 'third' : undefined}") // F-CQ-301: Quotes & incoming docks a third too; F-CO-103 (S13): the Overview a third too; F-CM-104 (D2): Money a third too — People, Terms and Portal stay 40 %
+    expect(view).toContain("defaultWidth={tab === 'work' || tab === 'quotes' || tab === 'overview' || tab === 'money' || tab === 'people' ? 'third' : undefined}") // F-CQ-301: Quotes & incoming docks a third too; F-CO-103 (S13): the Overview a third too; F-CM-104 (D2): Money a third too; F-CA-119 (D2): People a third too — Terms and Portal stay 40 %
     expect(view).toContain('dockTab={tab}')
     const page = readFileSync(new URL('./CustomerRecord.tsx', import.meta.url), 'utf8')
     expect(page).toContain("const threadButton = customerDock.shown ? t('customers.work.dock.button', { record: customerDock.shown.label }) : null")

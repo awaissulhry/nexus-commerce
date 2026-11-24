@@ -281,6 +281,9 @@ export const ATTENTION_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // pop-up (B-W2b-244's `?decide=`); the SMV row's record is the version.
   CHANGE_ORDER: '/products/changes?tile=MINE_TO_APPROVE&decide=order:[id]',
   SMV_CHANGE: '/products/changes?decide=smv:[id]',
+  // F-CA-117 (customer People & addresses, lane ca-; Z16): a delivery address a customer added in the portal (its record: the
+  // customer) is checked on the customer's People & addresses, at its Addresses — never every Party link (RECORD_PAGES stays).
+  DELIVERY_ADDRESS: '/sales/customers/[id]?tab=people#addresses',
 })
 
 /** An API list route → the web page that shows it (with the same query). */

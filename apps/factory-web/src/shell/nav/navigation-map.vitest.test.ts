@@ -512,6 +512,10 @@ describe('record links and list addresses (lib/records/record-links.ts)', () => 
     expect(attentionAddress('INVOICE_SDI', { type: 'Invoice', id: 'i1' }, OFFICE_PAGES)).toBe('/finance/invoices/i1')
     // B-W2b-57: a correction request is decided on Labour & corrections.
     expect(attentionAddress('SCAN_CORRECTION', { type: 'ScanCorrectionRequest', id: 'k1' }, OFFICE_PAGES)).toBe('/production/labour?open=CORRECTION:k1')
+    // F-CA-117 (customer People & addresses, Z16): a delivery address waiting for our check opens the customer's Addresses — only that
+    // row; every other Party link still opens the customer's own page.
+    expect(attentionAddress('DELIVERY_ADDRESS', { type: 'Party', id: 'p1' }, OFFICE_PAGES)).toBe('/sales/customers/p1?tab=people#addresses')
+    expect(recordAddress({ type: 'Party', id: 'p1' }, OFFICE_PAGES)).not.toContain('tab=people')
   })
 })
 

@@ -521,28 +521,30 @@ describe('F-SA-271: the customer’s seven tabs and band', () => {
 })
 // ---- end F-SA-271
 
-// ---- F-SA-274: People & addresses — the same-e-mail tags (a hint from two reads) and the invitation filled in from a contact
-describe('F-SA-274: People & addresses', () => {
-  it('a contact whose e-mail a portal person has is tagged "Has portal access" (exact e-mail, case aside); the others are not', () => {
-    const moda = CUSTOMERS.find((item) => item.code === 'MODA-DEMO')!
-    const html = render(customerRecordScreen as DesignScreen<unknown>, customerRecordScreen.cases.find((item) => item.id === 'people-portal')!.model, 'en')
-    const tagged = moda.contacts.filter((contact) => contact.email).slice(0, 1)
-    expect(tagged.length).toBe(1)
-    expect((html.match(/Has portal access/g) ?? []).length).toBe(1)
-    expect(render(customerRecordScreen as DesignScreen<unknown>, customerRecordScreen.cases.find((item) => item.id === 'addresses')!.model, 'en')).not.toContain('Has portal access')
-    expect(render(customerRecordScreen as DesignScreen<unknown>, customerRecordScreen.cases.find((item) => item.id === 'people-portal')!.model, 'it')).toContain('Ha accesso al portale')
+// ---- F-SA-274 → F-CA-120 (customer People & addresses, lane ca-; Z1; 13-backend §5.8): one row per person (the same-e-mail tag became
+// the join), and the invitation from a contact opened in place
+describe('F-SA-274 → F-CA-120: People & addresses', () => {
+  it('a contact and the portal person of its e-mail (letters aside) are ONE row with its portal state; a portal person who is no contact is "Portal only"', () => {
+    const peopleCase = customerRecordScreen.cases.find((item) => item.id === 'people-portal')!.model
+    const html = render(customerRecordScreen as DesignScreen<unknown>, peopleCase, 'en')
+    expect((html.match(/id="person-c-/g) ?? []).length).toBe(2)
+    expect((html.match(/id="person-u-/g) ?? []).length).toBe(1)
+    expect(html).toContain('Portal only')
+    expect(html).not.toContain('Has portal access')
+    expect(render(customerRecordScreen as DesignScreen<unknown>, customerRecordScreen.cases.find((item) => item.id === 'addresses')!.model, 'en')).not.toContain('Portal only')
+    expect(render(customerRecordScreen as DesignScreen<unknown>, peopleCase, 'it')).toContain('Solo portale')
   })
 
-  it('the invitation from a contact fills in its e-mail and name (the portal reads ?invite= and ?inviteName= once)', () => {
-    const view = readFileSync(new URL('../../sales/customers/record/view/CustomerRecordView.tsx', import.meta.url), 'utf8')
-    expect(view).toContain('?tab=people&invite=${encodeURIComponent(contact.email)}&inviteName=${encodeURIComponent(contact.name)}')
+  it('the invitation from a contact opens the portal\'s own window in place, its e-mail and name filled in (?invite= still opens it once on arrival)', () => {
+    const tab = readFileSync(new URL('../../sales/customers/record/people/use-people-tab.ts', import.meta.url), 'utf8')
+    expect(tab).toContain("portalActions.onDialog?.({ kind: 'invite', email: contact.email, name: contact.name })")
     const portal = readFileSync(new URL('../../sales/customers/portal/PortalAccess.tsx', import.meta.url), 'utf8')
     expect(portal).toContain("setDialog({ kind: 'invite', email,")
     const dialog = readFileSync(new URL('../../sales/customers/portal/view/PortalDialogs.tsx', import.meta.url), 'utf8')
     expect(dialog).toContain('{ ...blankInvite(access, locale), ...from }')
   })
 })
-// ---- end F-SA-274
+// ---- end F-SA-274 → F-CA-120
 
 // ---- F-CL-101 (customers list plan §2, K12, settles T10 / T15 / T16): the shared rule fixes, on Customers and Suppliers alike ---
 // (imported here, below the pinned lines above, so those lines stay where they were)
