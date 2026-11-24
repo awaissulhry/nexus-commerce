@@ -234,7 +234,7 @@ export const events = [
     context: 'sales',
     description: 'The deposit request of an accepted quote version was made (OPEN), with its due date and fiscal decision.',
     payload: z.strictObject({ depositRequestId: z.uuid(), quoteId: z.uuid(), versionId: z.uuid(), partyId: z.uuid(), fiscalDocument: z.enum(['TD02', 'NONE']), dueDate: z.iso.date() }),
-    live: { permission: 'quotes.view', fields: ['depositRequestId', 'quoteId', 'versionId'] },
+    live: { permission: 'quotes.view', fields: ['depositRequestId', 'quoteId', 'versionId', 'partyId' /* F-CM-S1 */] },
   }),
   defineEvent({
     type: 'company.bank_details_changed',
@@ -422,13 +422,13 @@ export const events = [
     context: 'sales',
     description: "A deposit request was made on an order without a quote version (OPEN): a typed order's deposit, or a balance before shipping (an advance invoiced with a TD02 when paid before the goods leave).",
     payload: z.strictObject({ depositRequestId: z.uuid(), orderId: z.uuid(), number: z.string(), partyId: z.uuid(), stepKind: z.enum(['DEPOSIT', 'BEFORE_SHIPPING']), fiscalDocument: z.enum(['TD02', 'NONE']), dueDate: z.iso.date() }),
-    live: { ...orderLive, fields: ['depositRequestId', 'orderId', 'number', 'stepKind'] },
+    live: { ...orderLive, fields: ['depositRequestId', 'orderId', 'number', 'stepKind', 'partyId' /* F-CM-S1 */] },
   }),
   defineEvent({
     type: 'deposit_request.waived',
     context: 'sales',
     description: "The owner waived an order's deposit request with a reason and a fresh step-up (nothing was paid on it): the customer need not pay it in advance; a waived deposit lets production start.",
     payload: z.strictObject({ depositRequestId: z.uuid(), orderId: z.uuid(), number: z.string(), partyId: z.uuid(), milestoneIds: z.array(z.uuid()) }),
-    live: { ...orderLive, fields: ['depositRequestId', 'orderId', 'number'] },
+    live: { ...orderLive, fields: ['depositRequestId', 'orderId', 'number', 'partyId' /* F-CM-S1 */] },
   }),
 ] as const

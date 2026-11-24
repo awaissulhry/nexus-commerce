@@ -692,3 +692,69 @@ describe('a work order change reaches the order’s and the work order’s reade
   })
 })
 // ── end B-SA-004c ──
+
+// ── F-CM-S1 ──
+/**
+ * F-CM-S1 (customer MONEY tab, 13-backend §2.1): the money events that name their customer copy its id to the browser, so the
+ * customer's Money tab re-reads on its own customer's events only. The wall is unchanged: a person limited to some customers gets a
+ * message only when its customer is theirs, and then reads that customer's id; the production unit (every customer) gets them all.
+ * payment.allocated, payment.allocation_reversed and payment.voided stay as B-SA-004 pins them (never copied: the tab matches them by
+ * the ids it holds); refund.changed names no customer. Every id is made up.
+ */
+describe('the money events copy their customer to the browser (F-CM-S1)', () => {
+  const P1 = '0190a000-0000-7000-8000-0000000000b1'
+  const P2 = '0190a000-0000-7000-8000-0000000000b2'
+  const PAYMENT = '0190a000-0000-7000-8000-0000000000f1'
+  const MONEY = [
+    'payment.recorded',
+    'payment.deposit_paid',
+    'refund.recorded',
+    'refund.paid',
+    'refund.cancelled',
+    'refund.voided',
+    'payment.overpayment_released',
+    'invoice.issued',
+    'invoice.refund_due',
+    'deposit_request.created',
+    'deposit_request.created_for_order',
+    'deposit_request.waived',
+  ]
+  const definitionOf = (type: string) => EVENT_CATALOGUE.get(type, 1)
+  /** An office person holding the event's live permission, over every customer or some. */
+  const viewerOf = (type: string, parties: Grant['parties']): Actor => office([{ permissions: [definitionOf(type).live!.permission], companies: 'all', sites: 'all', parties }])
+  const messageOf = (type: string, payload: Record<string, unknown>) => {
+    const definition = definitionOf(type)
+    return { ...liveMessageFor(envelope(definition, payload), definition)!, subject: 'a-money-record' }
+  }
+
+  it.each(MONEY)('%s names its customer (an id, never a name) and copies it as a live field', (type) => {
+    const definition = definitionOf(type)
+    const field = definition.payload.shape.partyId
+    expect(field, `${type} names its customer`).toBeDefined()
+    expect(field!.safeParse(P1).success).toBe(true)
+    expect(field!.safeParse('Seed Racing').success).toBe(false)
+    expect(definition.live!.fields).toContain('partyId')
+  })
+
+  it('a rep limited to P1 gets payment.recorded of P1 with fields.partyId = P1, and nothing of P2; every-customer viewers get both', () => {
+    const of = (partyId: string) => messageOf('payment.recorded', { paymentId: PAYMENT, partyId, method: 'BANK_TRANSFER' })
+    expect(liveViewFor(of(P1), viewerOf('payment.recorded', [P1]), EVENT_CATALOGUE)?.fields).toEqual({ paymentId: PAYMENT, partyId: P1 })
+    expect(liveViewFor(of(P2), viewerOf('payment.recorded', [P1]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(of(P2), viewerOf('payment.recorded', 'all'), EVENT_CATALOGUE)?.fields).toEqual({ paymentId: PAYMENT, partyId: P2 })
+    // The message's own party list never reaches the browser.
+    expect(liveViewFor(of(P1), viewerOf('payment.recorded', [P1]), EVENT_CATALOGUE)).not.toHaveProperty('partyIds')
+  })
+
+  it.each(MONEY)("%s: a person limited to customer B never receives customer A's (nor its id); B's own carries B's id", (type) => {
+    expect(liveViewFor(messageOf(type, { partyId: P1 }), viewerOf(type, [P2]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(messageOf(type, { partyId: P2 }), viewerOf(type, [P2]), EVENT_CATALOGUE)?.fields).toMatchObject({ partyId: P2 })
+    expect(liveViewFor(messageOf(type, { partyId: P1 }), viewerOf(type, 'all'), EVENT_CATALOGUE)?.fields).toMatchObject({ partyId: P1 })
+  })
+
+  it('unchanged: payment.allocated, allocation_reversed and voided never copy it (B-SA-004); refund.changed names no customer', () => {
+    for (const type of ['payment.allocated', 'payment.allocation_reversed', 'payment.voided']) expect(definitionOf(type).live!.fields, type).not.toContain('partyId')
+    expect(definitionOf('refund.changed').payload.shape.partyId).toBeUndefined()
+    expect(definitionOf('refund.changed').live!.fields).toEqual(['refundId'])
+  })
+})
+// ── end F-CM-S1 ──

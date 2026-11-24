@@ -426,6 +426,17 @@ describe('the walls', () => {
     expect(sent.status).toBe(403)
   })
 
+  // F-CM-S8 (customer MONEY tab, 13-backend §2.5): a list row names the order it bills by its number — not money, so every reader of the
+  // row reads it; a row of no order says null; the row's wall holds.
+  it('a list row names the order it bills by its number (with and without the price grain); a row of no order says null', async () => {
+    for (const session of ['noPrice', 'withPrice']) {
+      const list = (await wall(session, 'GET', `/invoicing/invoices?partyId=${ids.itCustomer}`)).body.invoices as Json[]
+      expect(list.find((row) => row.id === invoiceId), session).toMatchObject({ salesOrderId: ids.order, orderNumber: 'SO-0001' })
+      for (const row of list) if (row.salesOrderId === null) expect(row.orderNumber, `${session} ${row.id}`).toBeNull()
+    }
+    expect((await wall('companyTwo', 'GET', `/invoicing/invoices?partyId=${ids.itCustomer}`)).body.invoices).toEqual([])
+  })
+
   it('a floor device and a portal session are refused', async () => {
     for (const session of ['floor', 'partner']) {
       expect((await wall(session, 'GET', '/invoicing/invoices')).status).toBe(403)

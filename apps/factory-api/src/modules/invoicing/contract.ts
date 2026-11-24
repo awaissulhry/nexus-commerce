@@ -153,6 +153,8 @@ export const listInvoicesContract = defineContract({
           /** A credit note's invoice; the sales order it bills (when one). */
           creditOfId: id().nullable(),
           salesOrderId: id().nullable(),
+          /** F-CM-S8 (customer MONEY tab): that order's number (not money); null: no order. */
+          orderNumber: z.string().nullable(),
           filesPending: z.boolean(),
           /** What payments pay on it, its issued credit notes, what it still asks (0 for a draft, a TD02, a TD04). */
           paidAmount: money.price(z.number().int()),

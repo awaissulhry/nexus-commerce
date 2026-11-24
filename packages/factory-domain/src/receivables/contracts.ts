@@ -54,6 +54,8 @@ export const ageingRow = output({
   overdue: amount(),
   buckets: buckets(),
   invoices: z.number().int(),
+  /** F-CM-S7 (customer MONEY tab): of those, the invoices with an open instalment past its due day — a count, not money (every reader). */
+  lateInvoices: z.number().int(),
   /** The oldest due date among what is open, and how late it is (null: not late). */
   oldestDueDate: businessDate().nullable(),
   daysLate: z.number().int().nullable(),
