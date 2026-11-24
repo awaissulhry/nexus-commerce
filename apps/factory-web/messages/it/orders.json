@@ -1022,7 +1022,6 @@
     }
   },
   "part": {
-    "loading": "Caricamento di {part}…",
     "failed": "Impossibile caricare {part}"
   },
   "notice": {

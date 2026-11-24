@@ -1022,7 +1022,6 @@
     }
   },
   "part": {
-    "loading": "Loading {part}…",
     "failed": "Couldn't load {part}"
   },
   "notice": {

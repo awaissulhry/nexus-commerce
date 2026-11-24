@@ -1494,6 +1494,18 @@ describe('F-CO-K1: the Overview is drawn by the shared overview kit — the same
     for (const gone of ["t('part.loading'", "t('part.failed'"]) expect(page, gone).not.toContain(gone)
     // Its three users did not change.
     for (const card of ['ProgressCard', 'PeopleCard', 'RequestsCard']) expect(read(`../view/overview/${card}.tsx`), card).toMatch(/return <PartState problem=\{/)
+    // K1.5: "Loading {part}…" left the order's catalogue with its one reader; "Couldn't load {part}" and "Try again" stay (Production's
+    // section kit and the whole page read them). The kit says the same words, letter for letter, in both languages.
+    expect(read('../view/production/Kit.tsx')).toContain("t('part.failed', { part })")
+    for (const locale of LOCALES) {
+      const words = messagesFor(locale, ['orders']).orders!
+      const kit = messagesFor(locale, ['record-overview'])['record-overview']!
+      expect(words['part.loading'], locale).toBeUndefined()
+      expect(kit['state.failed'], locale).toBe(words['part.failed'])
+      expect(kit['state.retry'], locale).toBe(words['common.retry'])
+      expect(kit['state.failed'], locale).toContain('{part}')
+      expect(kit['state.loading'], locale).toBe(locale === 'en' ? 'Loading {part}…' : 'Caricamento di {part}…')
+    }
   })
 
   it('the kit\'s seven text rules are copies of the order area\'s, declaration for declaration, in the same order (so a frame looks as it did)', () => {
