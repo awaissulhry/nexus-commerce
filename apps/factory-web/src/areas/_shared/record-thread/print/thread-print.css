@@ -75,20 +75,44 @@
   font-weight: 500;
 }
 
-/* The feed grows with the paper instead of scrolling in a column. */
+/* The feed grows with the paper instead of scrolling in a column; the paper's own ground. */
 .fw-rtp-feed .fw-rt-feedwrap,
 .fw-rtp-feed .fw-rt-feed {
   flex: none;
   min-height: 0;
   height: auto;
   overflow: visible;
+  background: none;
 }
 
 .fw-rtp-feed .fw-rt-feed {
   padding: 0;
 }
 
-/* Every message whole, every field change listed; the per-message menu and the folding links are for the screen. */
+/* tw- W1.4 (R18): one column — every bubble on the left at the full width, its name and who reads it in words (MessageCard on
+   paper); no tile, no tail. */
+.fw-rtp-feed .fw-rt-msg,
+.fw-rtp-feed .fw-rt-msg.is-others,
+.fw-rtp-feed .fw-rt-msg.is-mine {
+  justify-content: flex-start;
+  padding-inline: 0;
+}
+
+.fw-rtp-feed .fw-rt-bub {
+  max-width: none;
+  width: 100%;
+  border: 1px solid var(--nds-border-subtle);
+}
+
+.fw-rtp-feed .fw-rt-bub.is-tail::before {
+  display: none;
+}
+
+.fw-rtp-feed .fw-rt-bub.is-tail {
+  border-radius: var(--nds-radius-md);
+}
+
+/* Every message whole, every field change listed; the per-message tools and the screen's own controls are for the screen. */
 .fw-rtp-feed .fw-rt-body.is-folded {
   max-height: none;
   overflow: visible;
@@ -100,16 +124,18 @@
   display: block;
 }
 
-.fw-rtp-feed .fw-rt-msg-menu,
+.fw-rtp-feed .fw-rt-tools,
 .fw-rtp-feed .fw-rt-showall,
 .fw-rtp-feed .fw-rt-event button,
-.fw-rtp-feed .fw-rt-newbar {
+.fw-rtp-feed .fw-rt-down,
+.fw-rtp-feed .fw-rt-float,
+.fw-rtp-feed .fw-rt-sentinel {
   display: none;
 }
 
 @media print {
-  /* Buttons do nothing on paper (Show 50 earlier, Try again, the "…" of quoted text). */
-  .fw-rtp button {
+  /* Buttons do nothing on paper (Try again, the "…" of quoted text) — but a picture's tile and a file's row name a file: they print. */
+  .fw-rtp button:not(.fw-rt-tile):not(.fw-rt-file) {
     display: none !important;
   }
 

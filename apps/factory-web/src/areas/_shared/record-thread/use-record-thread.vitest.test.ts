@@ -453,12 +453,14 @@ describe('TH-9 — pins, the draft on the server, Done, search, the follow-up', 
     expect(applyNewest(first, { thread, messages: [], nextCursor: null, done: null }).done).toBeNull()
   })
 
+  // tw- W1.4: the pins move with the jump — pages of 200 (JUMP_PAGE), and the View reset lives in the ONE door (jumpInView).
   it('B-TH-288: a hit or a pin is brought on screen (older pages read), the View back to All first; search only for readers', () => {
     const container = readFileSync(new URL('./use-record-thread.ts', import.meta.url), 'utf8')
     expect(container).toContain('const jumpTo = useCallback(')
-    expect(container).toContain('readThreadPage(api, key, current.cursor)')
+    expect(container).toContain('readThreadPage(api, key, current.cursor, undefined, JUMP_PAGE)')
     const docked = readFileSync(new URL('./DockedOfficeThread.tsx', import.meta.url), 'utf8')
-    expect(docked).toMatch(/const pickHit = \(messageId: string\) => \{\s*setSearch\(null\)[\s\S]*?setView\('all'\)\s*void base\.jumpTo\(messageId\)/)
+    expect(docked).toMatch(/const pickHit = \(messageId: string\) => \{\s*setSearch\(null\)[\s\S]*?void jumpInView\(messageId\)/)
+    expect(docked).toMatch(/const jumpInView = useCallback\([\s\S]*?if \(viewHides\(viewRef\.current, [\s\S]*?setView\('all'\)[\s\S]*?return base\.jumpTo\(messageId\)/)
     expect(docked).toContain('const searchOffered = can.read')
     expect(docked).toContain('searchThread(api, key, searchQuery, controller.signal)')
   })
@@ -790,4 +792,93 @@ describe('B-CP-014 — a draft keeps a priced file locked for this reader, and t
   })
 })
 // ── end B-CP-014
+
+// ---- tw- W1.4 (THE THREAD REBUILD; 13-backend §1.3, §1.4; Z8, Z10, Z12, B10; R3, R4) --------------------------------------------------
+import { JUMP_LIMIT, JUMP_PAGE, THREAD_PAGE } from './api'
+import { jumpRefusal, withCorrections } from './state'
+import { viewHides, viewKeeps } from '../../../lib/record-thread/model'
+
+describe('tw- W1.4 — one door to a message, the jump, Reply on every message, a live correction', () => {
+  const container = readFileSync(new URL('./use-record-thread.ts', import.meta.url), 'utf8')
+  const docked = readFileSync(new URL('./DockedOfficeThread.tsx', import.meta.url), 'utf8')
+  const linked = (id: string, at: string) => ({ id, authorName: 'A', excerpt: id, at })
+
+  it('R3: a jump reads the SAME page read (GET /threads/<type>/<id>, no new route) in pages of 200, at most 1,000 older messages, ONE render', async () => {
+    expect([THREAD_PAGE, JUMP_PAGE, JUMP_LIMIT]).toEqual([50, 200, 1000])
+    const calls: Array<{ path: string; query: unknown }> = []
+    const api = { get: async (path: string, options: { query?: unknown; schema: { parse: (v: unknown) => unknown } }) => (calls.push({ path, query: options.query }), options.schema.parse({ thread: null, messages: [], nextCursor: null })) } as unknown as ApiClient
+    await readThreadPage(api, { type: 'SalesOrder', id: 'o1' }, 'c1', undefined, JUMP_PAGE)
+    expect(calls[0]).toEqual({ path: '/threads/SalesOrder/o1', query: { cursor: 'c1', limit: 200 } })
+    await readThreadPage(api, { type: 'SalesOrder', id: 'o1' }, null)
+    expect(calls[1]).toEqual({ path: '/threads/SalesOrder/o1', query: { cursor: undefined, limit: 50 } })
+    expect(container).toContain('pages * JUMP_PAGE < JUMP_LIMIT')
+    // One render for every page read: the pages are applied in ONE setServer after the loop.
+    const loop = container.slice(container.indexOf('const jumpTo = useCallback('), container.indexOf('const refusal = jumpRefusal('))
+    expect(loop.match(/setServer\(/g)?.length).toBe(1)
+    expect(loop).toContain('setServer((now) => applyOlder(now, { messages: read, nextCursor: cursor }))')
+  })
+
+  it('B10: the words when a jump does not reach its message — a page failed, too far back (more left past 1,000), out of reach', () => {
+    expect(jumpRefusal({ found: true, failed: false, cursor: 'c' })).toBeNull()
+    expect(jumpRefusal({ found: false, failed: true, cursor: 'c' })).toEqual({ ns: 'record-thread-feed', key: 'older.failed' })
+    expect(jumpRefusal({ found: false, failed: false, cursor: 'c' })).toEqual({ ns: 'record-thread', key: 'notice.messageGone' })
+    expect(jumpRefusal({ found: false, failed: false, cursor: null })).toEqual({ ns: 'record-thread', key: 'notice.outOfReach' })
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['record-thread'])['record-thread']!)
+      expect(t('notice.messageGone')).toBe(locale === 'en' ? 'Too far back to open here.' : 'Troppo indietro per aprirlo qui.')
+      expect(t('notice.outOfReach')).toBe(locale === 'en' ? 'That message is out of your reach.' : 'Quel messaggio è fuori dalla tua portata.')
+      expect(t('notice.viewAll')).toBe(locale === 'en' ? 'Showing all messages' : 'Mostro tutti i messaggi')
+    }
+  })
+
+  it('the found message is lit (the flash, seq again on the next jump), centred at once and focused — no anchor ring', () => {
+    expect(container).toContain('setFlash((now) => ({ id: messageId, seq: (now?.seq ?? 0) + 1 }))')
+    expect(container).toMatch(/target\?\.scrollIntoView\(\{ block: 'center' \}\)\s*target\?\.focus\(\{ preventScroll: true \}\)/)
+    expect(container).not.toMatch(/setAnchor\(messageId\)/)
+    expect(container).toMatch(/\n\s*flash,\n\s*pins: pinPills,/)
+  })
+
+  it('Z10: ONE door for a quote, "Correction of", "Corrected", a pin, a search hit, an ask and the file viewer: the View back to All when it hides it', () => {
+    expect(viewHides('all', undefined)).toBe(false)
+    expect(viewHides('shared', { kind: 'note' })).toBe(true)
+    expect(viewHides('shared', { kind: 'theirs' })).toBe(false)
+    expect(viewHides('notes', { kind: 'floor' })).toBe(false)
+    expect(viewHides('notes', undefined)).toBe(true) // not loaded yet: it may be hidden once read
+    expect(viewHides('changes', { kind: 'ours' })).toBe(true)
+    expect(viewKeeps('shared', { kind: 'ours' })).toBe(true)
+    expect(docked).toContain("base.notify({ ns: 'record-thread', key: 'notice.viewAll', tone: 'info' })")
+    expect(docked).toContain('onJump: (messageId) => void jumpInView(messageId),')
+    expect(docked).toContain('onPin: (messageId) => void jumpInView(messageId)')
+    expect(docked).toContain('void jumpInView(messageId) // tw- W1.4: the one door (older pages read, the row lit)')
+    expect(docked).toContain('latestCompose.current = { onReply: actions.onReply, jumpTo: jumpInView, messages: base.server.messages }')
+    expect(docked).not.toMatch(/void base\.jumpTo\(/)
+    expect(docked).not.toContain("querySelector<HTMLElement>(`[data-message-id=")
+    // The pane host (Incoming) has no View: it jumps straight.
+    expect(container).toContain('onJump: (messageId) => void jumpTo(messageId),')
+  })
+
+  it('D4 / Z12 / R4: Reply on every message keeps its audience (replyWay); Reply privately is an office note; the link says who reads the quoted one', () => {
+    expect(container).toContain("const way: ComposerMode | null = privately ? (can.post ? 'note' : null) : replyWay(card, feed.context)")
+    expect(container).toContain("audience: card.kind === 'note' || card.kind === 'floor' ? 'note' : 'shared',")
+    expect(container).toContain('onReplyPrivately: (messageId) => answer(messageId, true),')
+    expect(container).toContain('replyWays: { note: can.post, email: can.email && party !== null, portal: context.portal === true },')
+    // A message on its way is the reader's own: on the right, in their run.
+    expect(container.match(/\.\.\.mineOf \}/g)?.length).toBe(3)
+  })
+
+  it('Z8: a live correction of a message on an older page says "Corrected" on that message at once (no read)', () => {
+    const old = { ...msg('m1', '2026-11-16T09:00:00Z') }
+    const first = applyNewest(EMPTY_SERVER, { thread, messages: [old], nextCursor: null })
+    const correction = { ...msg('m9', '2026-11-17T10:00:00Z'), corrects: linked('m1', old.at) }
+    const live = applyNewest(first, { thread, messages: [correction], nextCursor: 'c1' })
+    expect(live.messages.find((item) => item.id === 'm1')?.correctedBy).toEqual({ id: 'm9', at: '2026-11-17T10:00:00Z' })
+    // The newest correction wins; one the server already named newer stays.
+    const two = withCorrections([old, correction, { ...msg('m10', '2026-11-17T11:00:00Z'), corrects: linked('m1', old.at) }])
+    expect(two.find((item) => item.id === 'm1')?.correctedBy).toEqual({ id: 'm10', at: '2026-11-17T11:00:00Z' })
+    const named = withCorrections([{ ...old, correctedBy: { id: 'm12', at: '2026-11-18T09:00:00Z' } }, correction])
+    expect(named[0]!.correctedBy).toEqual({ id: 'm12', at: '2026-11-18T09:00:00Z' })
+    expect(withCorrections([old])).toEqual([old])
+  })
+})
+// ---- end tw- W1.4
 

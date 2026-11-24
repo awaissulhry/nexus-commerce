@@ -53,7 +53,8 @@
     "pin": "Fissa per tutti",
     "pinHint": "tutti su questo record lo trovano tra i «fissati»; non è un segnalibro personale",
     "unpin": "Togli dai fissati",
-    "unpinHint": "esce dai «fissati» per tutti; il messaggio resta"
+    "unpinHint": "esce dai «fissati» per tutti; il messaggio resta",
+    "replyPrivately": "Rispondi in privato"
   },
   "body": {
     "showAll": "Mostra tutto ({count} righe)",
@@ -93,8 +94,8 @@
     "email": "A {to} · Oggetto: {subject}"
   },
   "bounce": {
-    "text": "{to} non ha potuto ricevere questa email: lo ha detto il servizio di posta.",
-    "task": "Attività creata per te · Apri",
+    "text": "{to} non ha potuto ricevere questa email",
+    "task": "Apri l'attività",
     "complained": "Il destinatario ha segnalato questa email come spam: all'indirizzo non va più posta finché un amministratore non lo sblocca.",
     "failed": "Il servizio di posta non ha preso questa email dopo i suoi tentativi. Scrivila di nuovo per inviarla."
   },
@@ -118,7 +119,7 @@
     "correctedBelow": "Corretto più sotto · {time}"
   },
   "amount": {
-    "line": "Importo: {amount} · solo ufficio, per chi vede i prezzi"
+    "line": "Importo {amount}"
   },
   "undo": {
     "sending": "Invio a {party} in corso…",
@@ -169,5 +170,27 @@
   "place": {
     "line": "Se ne parla nella conversazione dell'ordine",
     "open": "Apri"
+  },
+  "quote": {
+    "you": "Tu",
+    "removed": "Messaggio rimosso",
+    "photos_one": "Foto",
+    "photos_other": "{count} foto",
+    "files_one": "{count} file",
+    "files_other": "{count} file",
+    "label": "Vai al messaggio di {who} delle {time}"
+  },
+  "foot": {
+    "office": "Solo ufficio",
+    "email": "Email",
+    "portal": "Nel portale",
+    "pinned": "Fissato",
+    "corrected": "Corretto",
+    "floor": "Anche in reparto",
+    "fromFloor": "Dal reparto",
+    "sending": "Invio"
+  },
+  "org": {
+    "floor": "Reparto"
   }
 }

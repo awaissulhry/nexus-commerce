@@ -10,6 +10,7 @@ import { formatDate } from '../../../lib/i18n/format'
 import { rightRef } from '../../../lib/i18n/rights'
 import { useLocale, useT } from '../../../lib/i18n/provider'
 import { feedForView, feedKinds } from '../../../lib/record-thread/model'
+import { viewHides } from '../../../lib/record-thread/model' // tw- W1.4 (Z10): the one door
 import { RecordThread, type RecordThreadActions, type RecordThreadModel } from '../../../lib/record-thread/RecordThread'
 import { doorHolds, viewsOffered, whoAnswers, type HeadAbilities, type HeadDoor, type HeadModel, type ThreadView } from '../../../lib/record-thread/head/model'
 // B-TH-229: the API's waiting and owner (B-TH-028), "Change owner…".
@@ -192,6 +193,24 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   // how many messages new to the reader it hides (the timeline read with the view's audience), read again whenever a message arrives:
   // "1 new message hidden by this view · Show all" at the end of the feed, so a forgotten view never hides news.
   useEffect(() => setView('all'), [key.type, key.id])
+  // ---- tw- W1.4 (Z10, 13-backend §1.3): ONE door to a message for every way in — a quote, "Correction of", "Corrected", a pin, a
+  // search hit, an ask, the file viewer: the View goes back to All when it hides the message (one notice), then the jump (older pages
+  // read, the row lit). The Incoming pane has no View: it jumps straight (the container's own onJump).
+  const viewRef = useRef(shown)
+  viewRef.current = shown
+  const messagesRef = useRef(model.feed.messages)
+  messagesRef.current = model.feed.messages
+  const jumpInView = useCallback(
+    (messageId: string): Promise<boolean> => {
+      if (viewHides(viewRef.current, messagesRef.current.find((message) => message.id === messageId))) {
+        setView('all')
+        base.notify({ ns: 'record-thread', key: 'notice.viewAll', tone: 'info' })
+      }
+      return base.jumpTo(messageId)
+    },
+    [base],
+  )
+  // ---- end tw- W1.4
   const [hiddenNew, setHiddenNew] = useState(0)
   const newestId = base.server.messages[base.server.messages.length - 1]?.id ?? null
   useEffect(() => {
@@ -606,8 +625,8 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const composeAsk = frame?.composeAsk ?? null
   const clearCompose = frame?.clearCompose
   const feedReady = model.feed.state === 'ready'
-  const latestCompose = useRef({ onReply: actions.onReply, jumpTo: base.jumpTo, messages: base.server.messages })
-  latestCompose.current = { onReply: actions.onReply, jumpTo: base.jumpTo, messages: base.server.messages }
+  const latestCompose = useRef({ onReply: actions.onReply, jumpTo: jumpInView, messages: base.server.messages })
+  latestCompose.current = { onReply: actions.onReply, jumpTo: jumpInView, messages: base.server.messages }
   useEffect(() => {
     if (!composeAsk || !feedReady || !takesAsk(composeAsk.record, key)) return
     clearCompose?.()
@@ -620,8 +639,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
       setDraft?.(switched.draft, switched.notes)
     }
     if (messageId) {
-      setView('all')
-      const reached = jumpTo(messageId)
+      const reached = jumpTo(messageId) // tw- W1.4: jumpInView (the View back to All when it hides it)
       // F-OP-207: Answer on a line of All of <customer> — a message beyond the first page is read first, then answered (the box names
       // the message it answers, "Replying to …", as the card's own Reply does).
       if (reply && messages.some((message) => message.id === messageId)) onReply?.(messageId)
@@ -697,9 +715,8 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const openSearch = (open: boolean) => setSearch((now) => (open ? { ...(now ?? CLOSED_SEARCH), open: true } : null))
   const pickHit = (messageId: string) => {
     setSearch(null)
-    // A view that hides the hit goes back to All first.
-    setView('all')
-    void base.jumpTo(messageId)
+    // A view that hides the hit goes back to All first (tw- W1.4: the one door).
+    void jumpInView(messageId)
   }
   // ── end B-TH-288
 
@@ -785,6 +802,8 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     onShowAll: () => setView('all'),
     onSeen: shown === 'all' ? actions.onSeen : undefined,
     // ---- end B-TH-255
+    // tw- W1.4 (Z10): a quote, "Correction of" and "Corrected" go through the one door.
+    onJump: (messageId) => void jumpInView(messageId),
     // TH-5 follow-up (B-TH-249): a closed project's box offers no Reopen either (the API refuses it; the project's band reopens both).
     ...(host.reopenWithRecord ? { onReopen: undefined } : {}),
     onTask: (messageId) => {
@@ -929,10 +948,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
         onToggle: strip.toggle,
         onOpen: (fileId, opener) => (hostFiles ? hostFiles.onOpen(fileId, opener) : openViewer(latestOf(threadFiles), fileId, opener)),
         onAllFiles: () => (hostFiles ? hostFiles.onAll() : setFilesOpen(true)),
-        onPin: (messageId) => {
-          setView('all')
-          void base.jumpTo(messageId)
-        },
+        onPin: (messageId) => void jumpInView(messageId), // tw- W1.4: the one door
         onUnpin: (messageId) => void base.unpin(messageId),
       }}
     />
@@ -950,9 +966,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
           onGoToMessage={(messageId) => {
             setViewer(null)
             setFilesOpen(false)
-            const target = document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`)
-            target?.scrollIntoView({ block: 'center' })
-            target?.focus()
+            void jumpInView(messageId) // tw- W1.4: the one door (older pages read, the row lit)
           }}
         />
       )}
@@ -1003,7 +1017,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
                   },
                   onOrderMessage: (messageId: string) => {
                     setFilesOpen(false)
-                    void base.jumpTo(messageId)
+                    void jumpInView(messageId) // tw- W1.4: the one door
                   },
                 }
               : {}),

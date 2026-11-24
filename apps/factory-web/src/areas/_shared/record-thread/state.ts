@@ -62,7 +62,7 @@ export function applyNewest(server: ServerThread, page: { thread: ServerThread['
   return {
     status: 'ready',
     thread: page.thread,
-    messages: [...kept, ...page.messages].sort(byTime),
+    messages: withCorrections([...kept, ...page.messages].sort(byTime)), // tw- W1.4 (Z8)
     cursor: loadedOlder ? server.cursor : page.nextCursor,
     more: loadedOlder ? server.more : page.nextCursor !== null,
     older: 'idle',
@@ -78,11 +78,45 @@ export function applyNewest(server: ServerThread, page: { thread: ServerThread['
   }
 }
 
-/** An older page ("Show 50 earlier"): added at the top. */
+/** An older page (the top of the list, or a jump's pages at once): added at the top. */
 export function applyOlder(server: ServerThread, page: { messages: readonly OfficeMessage[]; nextCursor: string | null }): ServerThread {
   const ids = new Set(server.messages.map((message) => message.id))
-  return { ...server, messages: [...page.messages.filter((message) => !ids.has(message.id)), ...server.messages].sort(byTime), cursor: page.nextCursor, more: page.nextCursor !== null, older: 'idle' }
+  return { ...server, messages: withCorrections([...page.messages.filter((message) => !ids.has(message.id)), ...server.messages].sort(byTime)), cursor: page.nextCursor, more: page.nextCursor !== null, older: 'idle' }
 }
+
+// ---- tw- W1.4 (Z8, 13-backend §1.4; B10, 10-design §6) -------------------------------------------------------------------------
+/**
+ * A correction that arrives live names the message it corrects; that message may sit on an older page the live re-read keeps as it
+ * was — so it says "Corrected" at once from the new message (no read). The newest correction wins; a newer one the server named stays.
+ */
+export function withCorrections(messages: readonly OfficeMessage[]): OfficeMessage[] {
+  const latest = new Map<string, { id: string; at: string }>()
+  for (const message of messages) {
+    const corrected = message.corrects?.id
+    if (!corrected) continue
+    const known = latest.get(corrected)
+    if (!known || known.at < message.at) latest.set(corrected, { id: message.id, at: message.at })
+  }
+  if (latest.size === 0) return [...messages]
+  return messages.map((message) => {
+    const by = latest.get(message.id)
+    if (!by || (message.correctedBy && message.correctedBy.at >= by.at)) return message
+    return { ...message, correctedBy: by }
+  })
+}
+
+/**
+ * Why a jump (a quote, a correction, a pin, a search hit, an ask, the file viewer) did not reach its message, in words (null: it is
+ * there): an older page could not be read; the 1,000 messages a jump reads ran out with more left ("Too far back to open here."); or
+ * the thread has no such message for this reader ("That message is out of your reach.").
+ */
+export function jumpRefusal(outcome: { readonly found: boolean; readonly failed: boolean; readonly cursor: string | null }): { readonly ns: string; readonly key: string } | null {
+  if (outcome.found) return null
+  if (outcome.failed) return { ns: 'record-thread-feed', key: 'older.failed' }
+  if (outcome.cursor !== null) return { ns: 'record-thread', key: 'notice.messageGone' }
+  return { ns: 'record-thread', key: 'notice.outOfReach' }
+}
+// ---- end tw- W1.4
 
 /** After a re-read: the outbox items the server now lists leave; the draft, files and recipients stay as they are. */
 export function afterRead(work: Work, server: ServerThread): Work {

@@ -113,9 +113,9 @@
     "arrived_other": "{count} nuovi messaggi nella conversazione"
   },
   "unread": {
-    "line_one": "Nuovo dalla tua ultima visita · {count} messaggio",
-    "line_other": "Nuovo dalla tua ultima visita · {count} messaggi",
-    "lineMany": "Nuovo dalla tua ultima visita · oltre 200 messaggi"
+    "line_one": "{count} messaggio non letto",
+    "line_other": "{count} messaggi non letti",
+    "lineMany": "oltre 200 messaggi non letti"
   },
   "hidden": {
     "line_one": "{count} nuovo messaggio nascosto da questa vista",
@@ -141,5 +141,11 @@
       "TRIAGE": "non ancora smistata",
       "other": "da controllare"
     }
+  },
+  "down": {
+    "label": "Vai al messaggio più recente"
+  },
+  "pinned": {
+    "pill": "{who} ha fissato un messaggio"
   }
 }

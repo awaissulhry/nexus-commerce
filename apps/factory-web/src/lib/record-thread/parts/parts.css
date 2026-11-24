@@ -31,6 +31,57 @@
   font-size: 9px;
 }
 
+/* tw- W1.2 (10-design §2, W-016): the bubble's tile — 28 px, the person's initials in their own colour; "?" in the neutral grey. */
+.fw-rt-av.is-run {
+  width: 28px;
+  height: 28px;
+  background: var(--fw-rt-tone-bg, var(--nds-pill-neutral-bg));
+  color: var(--fw-rt-tone-fg, var(--nds-text-2));
+  font-size: var(--nds-font-size-micro-plus);
+}
+
+.fw-rt-av.is-hidden {
+  background: var(--nds-pill-neutral-bg);
+  color: var(--nds-text-2);
+}
+
+/* tw- W1.1 (10-design §3 "Tones"): ONE colour per sender — the name, the tile and the quote bar read these; the DS group tones
+   (AA+ in light and dark). Slate is the colour of no key: a floor writer kept back, the system. Never yellow or red. */
+.fw-rt-tone-slate {
+  --fw-rt-tone-bg: var(--nds-grid-tone-slate-bg);
+  --fw-rt-tone-fg: var(--nds-grid-tone-slate-fg);
+}
+
+.fw-rt-tone-purple {
+  --fw-rt-tone-bg: var(--nds-grid-tone-purple-bg);
+  --fw-rt-tone-fg: var(--nds-grid-tone-purple-fg);
+}
+
+.fw-rt-tone-emerald {
+  --fw-rt-tone-bg: var(--nds-grid-tone-emerald-bg);
+  --fw-rt-tone-fg: var(--nds-grid-tone-emerald-fg);
+}
+
+.fw-rt-tone-pink {
+  --fw-rt-tone-bg: var(--nds-grid-tone-pink-bg);
+  --fw-rt-tone-fg: var(--nds-grid-tone-pink-fg);
+}
+
+.fw-rt-tone-orange {
+  --fw-rt-tone-bg: var(--nds-grid-tone-orange-bg);
+  --fw-rt-tone-fg: var(--nds-grid-tone-orange-fg);
+}
+
+.fw-rt-tone-blue {
+  --fw-rt-tone-bg: var(--nds-grid-tone-blue-bg);
+  --fw-rt-tone-fg: var(--nds-grid-tone-blue-fg);
+}
+
+.fw-rt-tone-cyan {
+  --fw-rt-tone-bg: var(--nds-grid-tone-cyan-bg);
+  --fw-rt-tone-fg: var(--nds-grid-tone-cyan-fg);
+}
+
 /* Words only a screen reader reads (a live line, a field's name). */
 .fw-rt-sr {
   position: absolute;
