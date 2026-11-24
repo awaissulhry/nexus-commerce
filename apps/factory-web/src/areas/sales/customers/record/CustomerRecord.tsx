@@ -197,7 +197,7 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   // ---- end F-CO-102
   // ---- F-CM-104 (cm-w1 W1.4; 13-backend §5.3): the Money tab, built here like Work, Quotes and the Overview (a view fetches nothing) —
   // only on `?tab=money`: the page's money reads, the price counts, the glance; a row's "Show in the thread" docks its order.
-  const moneyTab = named && record.party && tab === 'money' ? <CustomerMoney party={record.party} prefix={prefix} money={money} priceDiffer={priceDifferOf(work.prices)} glance={glance.read} onPick={onPick} /> : null
+  const moneyTab = named && record.party && tab === 'money' ? <CustomerMoney party={record.party} prefix={prefix} money={money} priceDiffer={priceDifferOf(work.prices)} priceMissing={work.prices.status === 'ready' ? work.prices.value.priceMissingCount : null /* F-CM-303 */} glance={glance.read} onPick={onPick} /> : null
   // ---- end F-CM-104
   // F-SA-277: Quotes & incoming — a row's click docks its quote's or request's thread.
   const quotesTab = named && tab === 'quotes' ? <QuotesIncomingTab party={named} counts={pageCounts /* F-CQ-302 */} onPick={onPick} onFocus={customerDock.onFocus} shown={customerDock.shown} /> : null

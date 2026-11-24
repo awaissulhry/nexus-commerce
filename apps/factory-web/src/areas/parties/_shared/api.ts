@@ -404,17 +404,6 @@ const purchaseOrderRow = z.object({
 })
 export type PurchaseOrderRow = z.infer<typeof purchaseOrderRow>
 
-/** The party's quotes, newest first (one page of 200: a customer's quotes fit; `more` says when they do not). */
-export async function listQuotesOf(api: ApiClient, partyId: string): Promise<{ rows: QuoteRow[]; more: boolean }> {
-  const answer = await api.get('/sales/quotes', { query: { partyId, limit: 200 }, schema: z.object({ quotes: z.array(quoteRow), nextCursor: z.string().nullable() }) })
-  return { rows: answer.quotes, more: answer.nextCursor !== null }
-}
-
-export async function listSalesOrdersOf(api: ApiClient, partyId: string): Promise<{ rows: SalesOrderRow[]; more: boolean }> {
-  const answer = await api.get('/sales/orders', { query: { partyId, limit: 200 }, schema: z.object({ orders: z.array(salesOrderRow), nextCursor: z.string().nullable() }) })
-  return { rows: answer.orders, more: answer.nextCursor !== null }
-}
-
 export async function listPurchaseOrdersOf(api: ApiClient, partyId: string): Promise<{ rows: PurchaseOrderRow[]; more: boolean }> {
   const answer = await api.get('/purchasing/orders', { query: { partyId, limit: 200 }, schema: z.object({ orders: z.array(purchaseOrderRow), nextCursor: z.string().nullable() }) })
   return { rows: answer.orders, more: answer.nextCursor !== null }

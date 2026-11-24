@@ -19,6 +19,9 @@ import { RefundWindowsView } from './RefundWindowsView' // F-CM-203: Finance's o
 import { targetOfNote, type RefundTarget } from '../../../../finance/payments/refunds/model' // F-CM-203
 import { useCustomerMoneyTab } from './use-customer-money-tab'
 import { useMoneyWindows } from './use-money-windows' // F-CM-201
+import { useAccountWindows } from './use-account-windows' // F-CM-301, F-CM-302: Finance's Change limit and Statement windows
+import { AccountWindowsView } from './AccountWindowsView' // F-CM-301, F-CM-302
+import { useCustomerHold } from '../../depth/CustomerDepth' // F-CM-301: the Terms tab's own hold window, one state with Terms
 
 /**
  * F-CM-101 (customer page › MONEY tab, 13-backend §5.3) — the tab's container: the reader's rights, the page's money reads (the ageing
@@ -33,6 +36,8 @@ export interface CustomerMoneyProps {
   readonly priceDiffer: number | null
   readonly glance: Read<Glance> | null
   readonly onPick?: (pick: DockPick) => void
+  /** F-CM-303: orders with no customer price yet (the page's price counts; the price grain). */
+  readonly priceMissing?: number | null
 }
 
 export function CustomerMoney(props: CustomerMoneyProps) {
@@ -44,7 +49,7 @@ export function CustomerMoney(props: CustomerMoneyProps) {
   )
 }
 
-function CustomerMoneyReads({ party, prefix, money, priceDiffer, glance, onPick }: CustomerMoneyProps) {
+function CustomerMoneyReads({ party, prefix, money, priceDiffer, glance, onPick, priceMissing }: CustomerMoneyProps) {
   const session = useOfficeSession()
   const can = useMemo(() => moneyTabCanOf(session.permissions), [session.permissions])
   const company = session.company ? { id: session.company.id, name: session.company.name } : null
@@ -54,7 +59,15 @@ function CustomerMoneyReads({ party, prefix, money, priceDiffer, glance, onPick 
   const onAccount = (page.openItems?.value?.creditBalance ?? []).some((entry) => entry.amount === undefined || entry.amount > 0) // F-CM-203
   const reads = useCustomerMoneyTab({ partyId: party.id, companyId: company?.id ?? null, currency: party.currency, can, heldIds, onAccount })
   const input: MoneyTabInput = {
-    party: { id: party.id, name: partyName(party), currency: party.currency, paymentTerms: party.paymentTerms },
+    party: {
+      id: party.id,
+      name: partyName(party),
+      currency: party.currency,
+      paymentTerms: party.paymentTerms,
+      // F-CM-301 (Z32): the party read's own "can't be invoiced" (the Overview strip's source).
+      invoiceBlocked: party.invoiceBlocked,
+      blocking: party.warnings.filter((warning) => warning.blocksInvoice).map((warning) => warning.code),
+    },
     company,
     companies: session.companies.length,
     can,
@@ -68,6 +81,9 @@ function CustomerMoneyReads({ party, prefix, money, priceDiffer, glance, onPick 
     glance,
     openOrders: money?.orders?.items ?? null,
     priceDiffer,
+    priceMissing: priceMissing ?? null, // F-CM-303
+    // F-CM-303 (E52): the page's returns read (sales.returns.view) — the credit value of this year's returns.
+    returns: money?.can.returns && money.returns.items ? { rows: money.returns.items, year: money.year, href: money.returnsHref } : null,
   }
   const onRetry = (read: MoneyRead) => (read === 'page' ? money?.reload?.() : reads.retry(read))
   // F-CM-201: a write in place (the order's window, Finance's) → every money read of the page and the tab again (the burst).
@@ -78,6 +94,8 @@ function CustomerMoneyReads({ party, prefix, money, priceDiffer, glance, onPick 
     reloadTab()
   }, [reloadPage, reloadTab])
   const windows = useMoneyWindows({ prefix, onBurst })
+  const account = useAccountWindows({ prefix, party: { id: party.id, code: party.code, legalName: party.legalName, tradeName: party.tradeName, currency: party.currency }, onBurst }) // F-CM-301/302
+  const hold = useCustomerHold(party) // F-CM-301
   // F-CM-203: what Refund… may settle for THIS customer — its credit notes with money left (the refunds read) and its payments' money
   // on account (the credit-balance read); null while they are read (Finance's window says it is reading).
   const name = partyName(party)
@@ -114,11 +132,24 @@ function CustomerMoneyReads({ party, prefix, money, priceDiffer, glance, onPick 
             windows.refunds.onOpen(start)
           },
           onMoveRefund: windows.refunds.onMove /* F-CM-203 */,
+          creditRow: reads.creditRow,
+          terms: reads.terms,
+          trust: reads.trust,
+          settings: reads.settings,
+          priceRows: reads.priceRows,
+          margin: reads.margin,
+          onChangeLimit: account.limit.onOpen,
+          onPlaceHold: hold.place,
+          ...(hold.release ? { onReleaseHold: hold.release } : {}),
+          onStatement: account.statement.onOpen,
+          onLift: (stop) => windows.onStop({ id: stop.invoice.id, number: stop.invoice.number, dueDate: null }) /* F-CM-301…303 */,
         }}
       />
       {windows.door.model ? <OrderMoneyWindow model={windows.door.model} actions={windows.door.actions} /> : null}
       {windows.stop ? <StopWindow partyId={party.id} ask={windows.stop} onClose={windows.closeStop} onChanged={onBurst} /> : null}
       <RefundWindowsView windows={windows.refunds} targets={targets} today={today} />
+      <AccountWindowsView limit={account.limit} statement={account.statement} companyCode={session.company?.code ?? ''} prefix={prefix} />
+      {hold.window /* F-CM-301: the Terms tab's own hold window (Release… / Put on hold…) */}
     </>
   )
 }
