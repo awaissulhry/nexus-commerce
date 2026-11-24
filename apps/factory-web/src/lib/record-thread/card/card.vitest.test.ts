@@ -460,3 +460,135 @@ describe('F-SA-244: the customer\'s ask and a change\'s line on their cards (off
   })
 })
 // ---- end F-SA-244
+
+// ---- tw- W1.1 (10-design §5, §9; D4, Z12, P15; R1): the quote's words in every case, and how Reply answers each message ----------
+import { createTranslator as translatorOf, messagesFor as catalogueFor } from '../../i18n/messages'
+import { quoteMediaOf, quoteOf, type QuoteModel } from './quote'
+import { repliesPrivately, replyWay } from './model'
+
+describe('tw- W1.1 — the quote says who and what, in both languages, words only', () => {
+  const words = (locale: 'en' | 'it') => translatorOf(locale, catalogueFor(locale, ['record-thread-card'])['record-thread-card']!)
+  const said = (quote: QuoteModel, locale: 'en' | 'it' = 'en') => {
+    const t = words(locale)
+    const name = quote.name === null ? null : 'text' in quote.name ? quote.name.text : t(quote.name.key)
+    const text = 'text' in quote.text ? quote.text.text : t(quote.text.key, quote.text.count === undefined ? undefined : { count: quote.text.count })
+    return { name, text }
+  }
+  const link = { id: 'q1', author: 'Lia Modello', excerpt: 'Good morning! Attached is the final size split.', at: '2026-11-19T08:20:00.000Z' }
+
+  it('the words: a person’s name in their tone, up to 3 lines; "You" for mine; the customer’s person without the company', () => {
+    expect(said(quoteOf({ ...link, authorKind: 'PARTY', senderKey: 'PARTY:p1' }))).toEqual({ name: 'Lia Modello', text: 'Good morning! Attached is the final size split.' })
+    expect(quoteOf({ ...link, authorKind: 'PARTY', senderKey: 'PARTY:p1' })).toMatchObject({ lines: 3, media: null, lock: false, removed: false })
+    expect(quoteOf({ ...link, senderKey: 'PARTY:p1' }).tone).not.toBe('slate')
+    const mine = quoteOf({ ...link, author: 'Bea Esempio', authorKind: 'USER', senderKey: 'USER:u2', mine: true })
+    expect(said(mine)).toEqual({ name: 'You', text: link.excerpt })
+    expect(said(mine, 'it').name).toBe('Tu')
+    expect(said(quoteOf({ ...link, author: 'Carlo Prova', authorKind: 'USER', senderKey: 'USER:u3' })).name).toBe('Carlo Prova')
+    expect(said(quoteOf(link)).name).not.toContain('Brand Alpha')
+  })
+
+  it('a message of files: "Photo", "PDF", "Document", "2 files" — the caption instead when it has words', () => {
+    const files = (count: number, kind: 'IMAGE' | 'DOCUMENT' | 'OTHER', contentType: string) => ({ ...link, excerpt: '', fileCount: count, firstFile: { id: 'f1', kind, contentType } })
+    expect(said(quoteOf(files(1, 'IMAGE', 'image/jpeg')))).toMatchObject({ text: 'Photo' })
+    expect(said(quoteOf(files(1, 'IMAGE', 'image/jpeg')), 'it')).toMatchObject({ text: 'Foto' })
+    expect(said(quoteOf(files(1, 'DOCUMENT', 'application/pdf')))).toMatchObject({ text: 'PDF' })
+    expect(said(quoteOf(files(1, 'DOCUMENT', 'application/vnd.ms-excel')))).toMatchObject({ text: 'Document' })
+    expect(said(quoteOf(files(1, 'DOCUMENT', 'application/vnd.ms-excel')), 'it')).toMatchObject({ text: 'Documento' })
+    expect(said(quoteOf(files(2, 'IMAGE', 'image/jpeg')))).toMatchObject({ text: '2 files' })
+    expect(said(quoteOf(files(2, 'IMAGE', 'image/jpeg')), 'it')).toMatchObject({ text: '2 file' })
+    expect(quoteOf(files(2, 'IMAGE', 'image/jpeg'))).toMatchObject({ lines: 1, media: 'files' })
+    expect(said(quoteOf({ ...files(1, 'IMAGE', 'image/png'), excerpt: 'The sleeve' }))).toMatchObject({ text: 'The sleeve' })
+    // A file the reader may not open never counts (the server's fileCount): no files left, the words alone.
+    expect(quoteMediaOf({ fileCount: 0, firstFile: null })).toBeNull()
+  })
+
+  it('erased: no name, a slate bar, "Message removed"; a hidden floor writer: "A person on the floor", slate', () => {
+    const erased = quoteOf({ ...link, author: null, excerpt: '', erased: true, senderKey: 'PARTY:p1' })
+    expect(erased).toMatchObject({ name: null, tone: 'slate', lines: 1, removed: true })
+    expect(said(erased)).toEqual({ name: null, text: 'Message removed' })
+    expect(said(erased, 'it')).toEqual({ name: null, text: 'Messaggio rimosso' })
+    const floor = quoteOf({ ...link, author: null, authorKind: 'WORKER', excerpt: 'Collar cut' })
+    expect(floor.tone).toBe('slate')
+    expect(said(floor)).toEqual({ name: 'A person on the floor', text: 'Collar cut' })
+    expect(said(floor, 'it').name).toBe('Una persona in reparto')
+    // The server before tw-s sends no kind: a link with no writer is still the floor's, kept back.
+    expect(said(quoteOf({ ...link, author: null })).name).toBe('A person on the floor')
+  })
+
+  it('a quoted office note shows a small lock (office reads only); a shared one none', () => {
+    expect(quoteOf({ ...link, audience: 'OFFICE' }).lock).toBe(true)
+    expect(quoteOf({ ...link, audience: 'PARTNER' }).lock).toBe(false)
+    expect(quoteOf(link).lock).toBe(false)
+  })
+
+  it('never an amount: the quote is built of its link alone — the excerpt’s words, never a price field', () => {
+    const quote = quoteOf({ ...link, excerpt: 'See the price below.' })
+    expect(Object.keys(quote).sort()).toEqual(['at', 'id', 'lines', 'lock', 'media', 'name', 'removed', 'text', 'tone'])
+    expect(JSON.stringify(quote)).not.toMatch(/amount|currency|€/i)
+  })
+
+  it('every quote word exists in both languages, the plurals in pairs', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const catalogue = CATALOGUE[locale]['record-thread-card'] ?? {}
+      for (const key of ['quote.you', 'quote.removed', 'quote.photos_one', 'quote.photos_other', 'quote.files_one', 'quote.files_other', 'quote.label', 'menu.replyPrivately']) expect(catalogue[key], `${locale} ${key}`).toBeTruthy()
+    }
+  })
+})
+
+describe('tw- W1.1 — Reply keeps the audience of what it answers (D4), for every kind and reader', () => {
+  const ALL = { note: true, email: true, portal: true }
+  const at = '2026-11-19T08:20:00.000Z'
+  const card = (kind: CardMessage['kind'], channel: CardMessage['channel'], more: Partial<CardMessage> = {}): CardMessage => ({ id: `${kind}-${channel}`, kind, channel, author: 'X', authorKind: kind === 'theirs' ? 'PARTY' : kind === 'floor' ? 'WORKER' : 'USER', at, body: 'x', mentions: [], files: [], ...more })
+  const way = (message: CardMessage, ways: { note: boolean; email: boolean; portal: boolean } | undefined, canReply = true) => replyWay(message, { canReply, replyWays: ways })
+
+  it('Owner / Sales (every way): the customer’s mail → email, their portal message → portal; ours the same way; a note → note', () => {
+    expect(way(card('theirs', 'EMAIL'), ALL)).toBe('reply')
+    expect(way(card('theirs', 'PORTAL'), ALL)).toBe('portal')
+    expect(way(card('ours', 'EMAIL', { email: { to: ['a@example.com'], subject: 's', status: 'DELIVERED' } }), ALL)).toBe('reply')
+    expect(way(card('ours', 'PORTAL'), ALL)).toBe('portal')
+    expect(way(card('note', 'APP'), ALL)).toBe('note')
+    expect(way(card('floor', 'APP', { authorHidden: true, author: null }), ALL)).toBe('note')
+  })
+
+  it('a Production manager with the portal way only: the customer’s mail is answered in the portal; a note stays a note', () => {
+    const PM = { note: true, email: false, portal: true }
+    expect(way(card('theirs', 'EMAIL'), PM)).toBe('portal')
+    expect(way(card('ours', 'EMAIL'), PM)).toBe('portal')
+    expect(way(card('note', 'APP'), PM)).toBe('note')
+  })
+
+  it('Z12: a reader with neither way answers the customer with an office note that quotes it — and no second "Reply privately" row', () => {
+    const NONE = { note: true, email: false, portal: false }
+    expect(way(card('theirs', 'EMAIL'), NONE)).toBe('note')
+    expect(way(card('ours', 'EMAIL'), NONE)).toBe('note')
+    expect(repliesPrivately(card('theirs', 'EMAIL'), { replyWays: NONE })).toBe(false)
+    expect(cardActions(card('theirs', 'EMAIL'), { canReply: false, replyWays: NONE })).toEqual(['reply', 'link'])
+  })
+
+  it('Reply privately only on the customer’s message, beside a Reply that goes to the customer', () => {
+    expect(cardActions(card('theirs', 'EMAIL'), { canReply: true, replyWays: ALL })).toEqual(['reply', 'replyPrivately', 'link'])
+    expect(cardActions(card('ours', 'EMAIL'), { canReply: true, replyWays: ALL })).toEqual(['reply', 'link'])
+    expect(cardActions(card('note', 'APP'), { canReply: true, replyWays: ALL })).toEqual(['reply', 'link'])
+    expect(repliesPrivately(card('theirs', 'PORTAL'), { replyWays: { note: false, email: true, portal: true } })).toBe(false)
+  })
+
+  it('Read-only (no way at all): no Reply anywhere', () => {
+    const NO = { note: false, email: false, portal: false }
+    for (const message of [card('theirs', 'EMAIL'), card('ours', 'PORTAL'), card('note', 'APP'), card('floor', 'APP')]) expect(way(message, NO), message.id).toBeNull()
+  })
+
+  it('never on a message on its way, a mail in its 10 seconds or taken back, or the system’s own line', () => {
+    expect(way(card('ours', 'EMAIL', { outbox: { state: 'sending' } }), ALL)).toBeNull()
+    expect(way(card('ours', 'EMAIL', { email: { to: ['a@example.com'], subject: 's', status: 'QUEUED', undoUntil: at } }), ALL)).toBeNull()
+    expect(way(card('ours', 'EMAIL', { email: { to: ['a@example.com'], subject: 's', status: 'WITHDRAWN' } }), ALL)).toBeNull()
+    expect(way(card('note', 'APP', { authorKind: 'SYSTEM', author: null }), ALL)).toBeNull()
+  })
+
+  it('a host that does not say its ways: Reply on the customer’s message only, as before', () => {
+    expect(way(card('theirs', 'EMAIL'), undefined)).toBe('reply')
+    expect(way(card('theirs', 'EMAIL'), undefined, false)).toBeNull()
+    expect(way(card('note', 'APP'), undefined)).toBeNull()
+    expect(way(card('ours', 'EMAIL'), undefined)).toBeNull()
+  })
+})
+// ---- end tw- W1.1

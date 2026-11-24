@@ -1,28 +1,27 @@
 import type { CardMessage } from '../card/model'
 import { dayOf, THREAD_TIME_ZONE } from '../parts/time'
+import { runPlace, type RunPlace } from './runs'
 
 /**
  * B-TH-204 — the record thread's feed (threads plan T4; picture 1, approved 2026-11-17): the order and rhythm of a record's
- * messages in the office. It reads like e-mail: oldest at the top, newest at the bottom, the box under it, and opens at the
- * newest message (or the one a link names). Day lines in the company's time zone. Older messages fold BY AGE (PR-08: all but
- * the last 3) until per-person reads arrive; B-TH-229 (the person's own read mark, B-TH-027) then folds READ messages: what is new
- * to the reader stays open with the one read message just before it (what the new ones answer), and the line "New since your last
- * visit" sits above the first new message; with nothing new it folds by age as before. The oldest run is one line "12 earlier
- * messages", the two just before the open ones are one line each. Record steps are one thin line; field changes group by person
- * and hour ("5 changes by Bea Esempio · Show"). Pure: the view draws these rows.
+ * messages in the office. Oldest at the top, newest at the bottom, the box under it; it opens at the newest message (or the one a
+ * link names, or the unread band). Days in the company's time zone. Record steps and grouped field changes ("5 changes by Bea
+ * Esempio · Show"). Pure: the view draws these rows.
  *
- * B-TH-255 (TH-6, on B-TH-079): two quiet lines at the end of the feed — the messages new to the reader that the Head's View hides
- * ("1 new message hidden by this view · Show all": a view left on never hides news, T1-F05) and the mail for this conversation that
- * waits for a person ("1 mail for this conversation waits in Mail to sort — sender not a contact · Review" for a reader with
- * email.triage; "A reply waits for a colleague to check it" for everyone else, never the sender or why: T4-F10, W07 / W08 / W22).
+ * tw- W1.1 / W1.3 (THE THREAD REBUILD; 10-design §3, §6, §7; D10): no fold any more — older messages load as the person scrolls up
+ * (the top sentinel, `shouldLoadOlder`); each message row carries its place in a run (`runs.ts`: side, first, last, name); every row
+ * that is not a message is a centred pill (the day, a step, a run of steps, changes, "Alex Demo pinned a message" — office only); the
+ * band "3 unread messages" sits above the first message new to the reader (B-TH-229's reading) and the thread opens there; ONE order
+ * for messages and rows: time, then id (B15). A jump lights the whole row for FLASH_MS.
+ *
+ * B-TH-255 (TH-6, on B-TH-079): two quiet pills at the end of the feed — the messages new to the reader that the View hides
+ * ("1 new message hidden by this view · Show all": a view left on never hides news, T1-F05) and the mail that waits for a person
+ * ("1 email waits in Mail to sort · Review" for a reader with email.triage; "A reply waits for a colleague to check it" for everyone
+ * else, never the sender or why: T4-F10, W07 / W08 / W22).
  */
 
-/** The last messages that stay open (PR-08). */
-export const OPEN_LAST = 3
-/** Folded messages shown one line each just before the open ones; older ones fold into one line. */
-export const FOLDED_ROWS = 2
-/** A page of messages ("Show 50 earlier"; the API allows up to 200). */
-export const PAGE_SIZE = 50
+/** tw- W1.3 (Z5, Z22 P2): how long a row lights up after a jump — ONE named constant (no DS motion token runs past 180 ms). */
+export const FLASH_MS = 1500
 
 export type ActorAudience = 'OFFICE' | 'FLOOR' | 'PARTNER' | 'LINK' | 'SYSTEM'
 
@@ -129,72 +128,57 @@ export function whoWords(event: Pick<FeedEvent, 'who' | 'whoHidden' | 'actorAudi
 
 export type FeedRow =
   | { kind: 'day'; key: string; day: string }
-  // B-TH-229: "New since your last visit" above the first message new to the reader (T4-F04); `count` the reader's new messages.
+  // B-TH-229 / tw- W1.3: "3 unread messages" above the first message new to the reader (T4-F04); `count` the reader's new messages.
   | { kind: 'new'; key: string; count: number }
-  | { kind: 'fold'; key: string; count: number; from: string; to: string }
-  | { kind: 'folded'; key: string; message: CardMessage }
-  | { kind: 'message'; key: string; message: CardMessage }
+  // tw- W1.1: a message and its place in a run (runs.ts).
+  | { kind: 'message'; key: string; message: CardMessage; run: RunPlace }
   | { kind: 'step'; key: string; event: FeedEvent }
-  // F-OP-214: 2+ consecutive record steps of the same actor within an hour, one line ("5 steps by Nexus Factory · Show").
+  // F-OP-214: 2+ consecutive record steps of the same actor within an hour, one pill ("5 steps by Nexus Factory · Show").
   | { kind: 'steps'; key: string; events: readonly FeedEvent[] }
   | { kind: 'changes'; key: string; events: readonly FeedEvent[] }
+  // tw- W1.3 (10-design §7): "Alex Demo pinned a message" — office only (the container hands pins with who pinned them).
+  | { kind: 'pin'; key: string; pin: FeedPin }
+
+/** tw- W1.3: a pin as the feed's pill says it — who pinned which message, when (office only; never the portal). */
+export interface FeedPin {
+  readonly messageId: string
+  /** ISO instant (UTC) of the pin. */
+  readonly at: string
+  /** Who pinned it, by name. */
+  readonly by: string
+}
 
 export interface FeedRowsInput {
   messages: readonly CardMessage[]
   events: readonly FeedEvent[]
-  /** Messages the reader opened in place. */
-  openIds?: readonly string[]
-  /** The message a link names (`?message=`): open. */
-  anchorId?: string | null
-  /** "12 earlier messages" was opened: its messages show one line each. */
-  runOpen?: boolean
   timeZone?: string
   // ---- B-TH-229: the reader's own reading as it was on arrival (the thread's `reading`, B-TH-027)
-  /** The first message new to the reader: the line sits above it and the read ones before it fold; null / absent: nothing new. */
+  /** The first message new to the reader: the band sits above it; null / absent: nothing new. */
   firstNewId?: string | null
-  /** How many are new to the reader (the line's and the Head's number); 0 / absent: nothing new. */
+  /** How many are new to the reader (the band's number); 0 / absent: nothing new. */
   newCount?: number
   // ---- end B-TH-229
+  /** tw- W1.3: the pins with who pinned them (office): their pills. */
+  pins?: readonly FeedPin[]
+  /** tw- W1.4 (R18): paper — every message alone, on the left, with its name. */
+  paper?: boolean
 }
 
-const byTime = <T extends { at: string; id: string }>(a: T, b: T) => (a.at === b.at ? a.id.localeCompare(b.id) : a.at < b.at ? -1 : 1)
-
-/**
- * The messages that fold, oldest first: all but the last 3 (by age) — or, B-TH-229, when something is new to the reader, the READ
- * ones before the first new message except the one just before it (what the new ones answer). Never the opened ones, the anchor or
- * a message on its way. A first new message older than the page read: every message of the page is new, none folds.
- */
-export function foldedIds(messages: readonly CardMessage[], openIds: readonly string[] = [], anchorId: string | null = null, firstNewId: string | null = null, newCount = 0): string[] {
-  const sorted = [...messages].sort(byTime)
-  const newAt = firstNewId ? sorted.findIndex((message) => message.id === firstNewId) : -1
-  const unreadOutside = firstNewId !== null && newAt === -1 && newCount > 0
-  const openFrom = unreadOutside ? 0 : newAt !== -1 ? Math.max(0, newAt - 1) : Math.max(0, sorted.length - OPEN_LAST)
-  const open = new Set([...sorted.slice(openFrom).map((message) => message.id), ...openIds, ...(anchorId ? [anchorId] : [])])
-  // A message on its way or not sent never folds: its writer is looking at it.
-  return sorted.filter((message) => !open.has(message.id) && !message.outbox).map((message) => message.id)
-}
+/** tw- W1.1 (B15): ONE order for the feed's messages and rows — time, then id — the view's J / K and "seen" use it too. */
+export const byTime = <T extends { at: string; id: string }>(a: T, b: T): number => (a.at === b.at ? a.id.localeCompare(b.id) : a.at < b.at ? -1 : 1)
 
 /** The rows of the feed, oldest first. */
 export function feedRows(input: FeedRowsInput): FeedRow[] {
   const timeZone = input.timeZone ?? THREAD_TIME_ZONE
   const firstNewId = input.firstNewId ?? null
   const newCount = input.newCount ?? 0
-  const folded = foldedIds(input.messages, input.openIds, input.anchorId ?? null, firstNewId, newCount)
-  const foldedSet = new Set(folded)
   const sorted = [...input.messages].sort(byTime)
-  let run = !input.runOpen && folded.length - FOLDED_ROWS >= 2 ? folded.slice(0, folded.length - FOLDED_ROWS) : []
-  // A link to a message inside the old run opens the run: the message is read among its neighbours, one line each.
-  const anchorAt = input.anchorId ? sorted.findIndex((message) => message.id === input.anchorId) : -1
-  if (anchorAt !== -1 && run.length > 0 && anchorAt < sorted.findIndex((message) => message.id === run[run.length - 1])) run = []
-  const runSet = new Set(run)
-  const runMessages = sorted.filter((message) => runSet.has(message.id))
-  const runEnd = runMessages.length > 0 ? runMessages[runMessages.length - 1].at : null
 
-  type Item = { at: string; id: string; message?: CardMessage; event?: FeedEvent }
+  type Item = { at: string; id: string; message?: CardMessage; event?: FeedEvent; pin?: FeedPin }
   const items: Item[] = [
     ...sorted.map((message) => ({ at: message.at, id: message.id, message })),
-    // Steps inside the folded run fold with it.
-    ...input.events.filter((event) => runEnd === null || event.at > runEnd).map((event) => ({ at: event.at, id: event.id, event })),
+    ...input.events.map((event) => ({ at: event.at, id: event.id, event })),
+    ...(input.pins ?? []).map((pin) => ({ at: pin.at, id: `pin:${pin.messageId}`, pin })),
   ].sort(byTime)
 
   const rows: FeedRow[] = []
@@ -204,26 +188,23 @@ export function feedRows(input: FeedRowsInput): FeedRow[] {
     if (day !== lastDay) rows.push({ kind: 'day', key: `day:${day}`, day })
     lastDay = day
   }
-  let foldShown = false
   let newShown = false
+  const placeholder: RunPlace = { side: 'others', first: true, last: true, showName: true }
   for (const item of items) {
     if (item.message) {
       const message = item.message
-      if (runSet.has(message.id)) {
-        if (!foldShown) {
-          rows.push({ kind: 'fold', key: 'fold', count: runMessages.length, from: runMessages[0].at, to: runMessages[runMessages.length - 1].at })
-          foldShown = true
-        }
-        lastDay = dayOf(message.at, timeZone)
-        continue
-      }
       dayLine(message.at)
-      // B-TH-229: the line above the first new message (or above the page's first message when the first new one is older).
+      // B-TH-229: the band above the first new message (or above the page's first message when the first new one is older).
       if (newCount > 0 && !newShown && (message.id === firstNewId || (firstNewId !== null && !sorted.some((one) => one.id === firstNewId)))) {
         rows.push({ kind: 'new', key: 'new', count: newCount })
         newShown = true
       }
-      rows.push(foldedSet.has(message.id) ? { kind: 'folded', key: `folded:${message.id}`, message } : { kind: 'message', key: `message:${message.id}`, message })
+      rows.push({ kind: 'message', key: `message:${message.id}`, message, run: placeholder })
+      continue
+    }
+    if (item.pin) {
+      dayLine(item.pin.at)
+      rows.push({ kind: 'pin', key: `pin:${item.pin.messageId}:${item.pin.at}`, pin: item.pin })
       continue
     }
     const event = item.event as FeedEvent
@@ -243,19 +224,29 @@ export function feedRows(input: FeedRowsInput): FeedRow[] {
       rows.push({ kind: 'step', key: `step:${event.id}`, event })
     }
   }
-  return rows
+  // tw- W1.1: each message's place in its run — its neighbours are the rows right beside it (any other row between ends the run).
+  return rows.map((row, index) => {
+    if (row.kind !== 'message') return row
+    const before = rows[index - 1]
+    const after = rows[index + 1]
+    const previous = before?.kind === 'message' ? before.message : null
+    const next = after?.kind === 'message' ? after.message : null
+    return { ...row, run: runPlace(previous, row.message, next, { timeZone, paper: input.paper === true }) }
+  })
+}
+
+/**
+ * tw- W1.3 (D10, W-153): the top sentinel asks for the next older page ONCE per page — while older messages exist, no page is being
+ * read and none failed (Retry then), and the page now shown (its message count) was not asked for already.
+ */
+export function shouldLoadOlder(state: { readonly more: boolean; readonly older?: 'idle' | 'loading' | 'failed' | undefined; readonly count: number; readonly askedAt: number | null }): boolean {
+  return state.more && (state.older ?? 'idle') === 'idle' && state.askedAt !== state.count
 }
 
 /** Two changes group when the same person (or audience) made them in the same hour of the same day. */
 function sameGroup(first: FeedEvent, next: FeedEvent, timeZone: string): boolean {
   const sameWho = first.whoHidden === next.whoHidden && first.who === next.who && first.actorAudience === next.actorAudience
   return sameWho && dayOf(first.at, timeZone) === dayOf(next.at, timeZone) && Math.abs(Date.parse(next.at) - Date.parse(first.at)) < 3_600_000
-}
-
-/** A folded message's one line: its first words. */
-export function gistOf(body: string): string {
-  const line = body.split(/\r?\n/).find((part) => part.trim() !== '') ?? ''
-  return line.length > 140 ? `${line.slice(0, 139)}…` : line
 }
 
 /**
@@ -269,7 +260,7 @@ export function walkTarget(ids: readonly string[], current: string | null, key: 
   return ids[Math.min(ids.length - 1, Math.max(0, index + (key === 'j' ? 1 : -1)))]
 }
 
-/** How many messages arrived at the end since the last read (the "2 new messages" bar); an older page is not new. */
+/** How many messages arrived at the end since the last read (the down button's count); an older page is not new. */
 export function arrivedAtEnd(before: readonly string[], after: readonly string[]): number {
   if (before.length === 0) return 0
   const last = before[before.length - 1]
@@ -316,15 +307,3 @@ export function waitingMailLine(waiting: FeedWaitingMail | null | undefined): { 
 
 /** "1 new message hidden by this view · Show all": the line's count, or null (All, or nothing new hidden). */
 export const hiddenNewLine = (hiddenNew: number | undefined): { readonly count: number } | null => (hiddenNew && hiddenNew > 0 ? { count: hiddenNew } : null)
-
-/**
- * A folded message's one line (B-TH-255): its first words; an erased message says so ("Message removed (privacy request)"); a message
- * of files only names how many ("2 files"), never an empty line that looks erased.
- */
-export function foldedGist(message: Pick<CardMessage, 'body' | 'files' | 'erased'> & Partial<Pick<CardMessage, 'hiddenFiles' | 'lockedSheets' | /* B-CP-014 */ 'lockedPriced'>>): { readonly text: string } | { readonly key: string; readonly count?: number } {
-  if (message.erased) return { key: 'erased.short' }
-  const gist = gistOf(message.body)
-  if (gist.trim() !== '') return { text: gist }
-  const files = message.files.length + (message.hiddenFiles ?? 0) + (message.lockedSheets ?? 0) + (message.lockedPriced ?? 0) // B-CP-014
-  return files > 0 ? { key: 'filesOnly.line', count: files } : { text: '' }
-}

@@ -53,7 +53,8 @@
     "amount": "Un importo resta nelle note d'ufficio: tolto da questo messaggio.",
     "correction": "Una correzione segue la strada del suo messaggio: ora è un messaggio nuovo, non una correzione.",
     "numbers": "Il cliente legge i suoi numeri, mai quelli dell’ufficio: cambiati in questo messaggio: {numbers}.",
-    "about": "Il riferimento resta nelle note d'ufficio: tolto da questo messaggio."
+    "about": "Il riferimento resta nelle note d'ufficio: tolto da questo messaggio.",
+    "quote": "La citazione di una nota d'ufficio non va mai al cliente: tolta."
   },
   "floor": {
     "label": "Per il reparto",

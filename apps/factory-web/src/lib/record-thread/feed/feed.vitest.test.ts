@@ -7,136 +7,157 @@ import { demoThread } from '../demo-data'
 import { dayOf, dayWord } from '../parts/time'
 import { everyCase, leftKeys, renderView, textOf } from '../parts/testing'
 import { designScreen } from './fixtures'
-import { arrivedAtEnd, feedRows, foldedIds, gistOf, isFieldChange, verbKey, walkTarget, whoWords, type FeedEvent, type FeedRow } from './model'
+import { arrivedAtEnd, feedRows, isFieldChange, verbKey, walkTarget, whoWords, type FeedEvent, type FeedRow } from './model'
 import { FeedCase } from './view/FeedCase'
 // B-TH-255
 import { HELD_REASONS } from '@nexus/factory-domain/email-in/rules'
 import { CATALOGUE } from '../../i18n/messages'
-import { foldedGist, HELD_REASON_CODES, hiddenNewLine, waitingMailLine } from './model'
+import { HELD_REASON_CODES, hiddenNewLine, waitingMailLine } from './model'
 import { FOREIGN_ACTIONS, isStatusStep, stepsWordsOf, stepVerbKey } from './model' // F-OP-214
 import { createTranslator, messagesFor } from '../../i18n/messages' // F-OP-214
-import { eventOf } from '../model' // F-OP-214
+import { cardOf, eventOf } from '../model' // F-OP-214; tw- W1.1: cardOf's sender key
+// tw- W1.1: one order, runs, R5, the tones
+import { byTime } from './model'
+import { audienceKind, runPlace, sameRun } from './runs'
+import { senderKeyOf } from '../card/model'
+import { SENDER_TONES, senderTone } from '../parts/tones'
 
-/** B-TH-204 — the feed (T4): the order, folding by age (all but the last 3), day lines, grouping, every state. */
+/** B-TH-204 — the feed (T4): the order, day pills, grouping, every state. tw- W1.1: no fold, runs, one sort with the id tie-break. */
 
 const THREAD = demoThread(BRAND_ALPHA)
 const kinds = (rows: readonly FeedRow[]) => rows.map((row) => row.kind)
-const messageIds = (rows: readonly FeedRow[]) => rows.flatMap((row) => (row.kind === 'message' || row.kind === 'folded' ? [row.message.id] : []))
+const messageIds = (rows: readonly FeedRow[]) => rows.flatMap((row) => (row.kind === 'message' ? [row.message.id] : []))
 const msg = (id: string, at: string, more: Partial<CardMessage> = {}): CardMessage => ({ id, kind: 'theirs', channel: 'EMAIL', author: 'A', authorKind: 'PARTY', at, body: `body ${id}`, mentions: [], files: [], ...more })
 const change = (id: string, at: string, who = 'Bea Esempio', more: Partial<FeedEvent> = {}): FeedEvent => ({ id, at, who, actorAudience: 'OFFICE', verb: 'update', status: null, values: [{ field: id, before: '1', after: '2' }], fields: [id], ...more })
 
 describe('oldest at the top, newest at the bottom', () => {
   it('orders the messages by time whatever order they came in (the API answers newest first)', () => {
     const rows = feedRows({ messages: [...THREAD].reverse(), events: [] })
-    const shown = messageIds(rows)
-    const expected = THREAD.map((message) => message.id).filter((id) => shown.includes(id))
-    expect(shown).toEqual(expected)
-    expect(rows[rows.length - 1]).toMatchObject({ kind: 'message', message: { id: THREAD[THREAD.length - 1].id } })
+    expect(messageIds(rows)).toEqual([...THREAD].sort(byTime).map((message) => message.id))
+    expect(rows[rows.length - 1]).toMatchObject({ kind: 'message', message: { id: [...THREAD].sort(byTime).at(-1)!.id } })
+  })
+
+  // ---- tw- W1.1 (B15): ONE order with the id tie-break, for the ids the view walks AND the rows it draws.
+  it('two messages at the same instant are ordered by their id, the same way for the rows and for J / K', () => {
+    const same = '2026-11-17T09:00:00.000Z'
+    const rows = feedRows({ messages: [msg('b', same), msg('a', same), msg('c', '2026-11-17T08:00:00.000Z')], events: [] })
+    expect(messageIds(rows)).toEqual(['c', 'a', 'b'])
+    expect([msg('b', same), msg('a', same)].sort(byTime).map((message) => message.id)).toEqual(['a', 'b'])
+    const view = readFileSync(new URL('./view/Feed.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('[...model.messages].sort(byTime)')
+    expect(view).not.toMatch(/\.sort\(\(a, b\) => \(a\.at < b\.at/)
   })
 })
 
-// ---- B-TH-229 (TH-2, on B-TH-027): the reader's own reading ----------------------------------------------------------------
-describe('B-TH-229 — New since your last visit, and read messages fold', () => {
-  // The demo thread in the feed's order (time, then id).
-  const T = [...THREAD].sort((a, b) => (a.at === b.at ? a.id.localeCompare(b.id) : a.at < b.at ? -1 : 1))
-  const ids = (rows: readonly FeedRow[]) => rows.flatMap((row) => (row.kind === 'new' ? ['NEW'] : row.kind === 'message' ? [row.message.id] : row.kind === 'folded' ? [`~${row.message.id}`] : row.kind === 'fold' ? [`fold:${row.count}`] : []))
+// ---- B-TH-229 (TH-2, on B-TH-027): the reader's own reading; tw- W1.1 / W1.3: nothing folds — the band "3 unread messages" --------
+describe('B-TH-229 / tw- W1.3 — the unread band, and nothing folds', () => {
+  const T = [...THREAD].sort(byTime)
+  const ids = (rows: readonly FeedRow[]) => rows.flatMap((row) => (row.kind === 'new' ? ['NEW'] : row.kind === 'message' ? [row.message.id] : []))
 
-  it('the line sits right above the first new message; the read ones before it fold, except the one they answer', () => {
+  it('the band sits right above the first new message; every message is drawn whole (no fold rows any more)', () => {
     const firstNew = T[T.length - 2]
     const rows = feedRows({ messages: T, events: [], firstNewId: firstNew.id, newCount: 2 })
-    const order = ids(rows)
-    expect(order.slice(-4)).toEqual([T[T.length - 3].id, 'NEW', firstNew.id, T[T.length - 1].id])
+    expect(ids(rows).slice(-4)).toEqual([T[T.length - 3].id, 'NEW', firstNew.id, T[T.length - 1].id])
     expect(rows.find((row) => row.kind === 'new')).toMatchObject({ count: 2 })
-    // Every read message before the one they answer folds (the old run in one line, the two before it one line each).
-    expect(foldedIds(T, [], null, firstNew.id, 2)).toHaveLength(T.length - 3)
-    expect(rows.filter((row) => row.kind === 'message')).toHaveLength(3)
+    expect(rows.filter((row) => row.kind === 'message')).toHaveLength(T.length)
+    expect(kinds(rows).filter((kind) => !['day', 'new', 'message'].includes(kind))).toEqual([])
   })
 
-  it('many new: every new message stays open (never folded by age), however old', () => {
-    const firstNew = T[5]
-    const rows = feedRows({ messages: T, events: [], firstNewId: firstNew.id, newCount: T.length - 5 })
-    const open = rows.flatMap((row) => (row.kind === 'message' ? [row.message.id] : []))
-    expect(open).toEqual(T.slice(4).map((message) => message.id))
-    expect(ids(rows).indexOf('NEW')).toBe(ids(rows).indexOf(firstNew.id) - 1)
+  it('nothing new: no band', () => {
+    expect(feedRows({ messages: T, events: [], firstNewId: null, newCount: 0 }).some((row) => row.kind === 'new')).toBe(false)
   })
 
-  it('nothing new: no line, and the feed folds by age as before (all but the last 3)', () => {
-    const rows = feedRows({ messages: T, events: [], firstNewId: null, newCount: 0 })
-    expect(rows.some((row) => row.kind === 'new')).toBe(false)
-    expect(foldedIds(T, [], null, null, 0)).toEqual(foldedIds(T))
-  })
-
-  it('the first new message is older than the page read: the line tops the page, nothing folds, 200+ is said by the view', () => {
+  it('the first new message is older than the page read: the band tops the page', () => {
     const rows = feedRows({ messages: T, events: [], firstNewId: 'not-on-this-page', newCount: 240 })
     expect(rows.find((row) => row.kind !== 'day')).toMatchObject({ kind: 'new', count: 240 })
-    expect(rows.some((row) => row.kind === 'folded' || row.kind === 'fold')).toBe(false)
   })
 
-  it('a link to a message still opens it among read ones; a message on its way never folds', () => {
-    const firstNew = T[T.length - 1]
-    expect(foldedIds(T, [], T[3].id, firstNew.id, 1)).not.toContain(T[3].id)
-    const sending = [...T.slice(0, 4).map((message, index) => (index === 1 ? { ...message, outbox: { state: 'sending' as const } } : message))]
-    expect(foldedIds(sending as CardMessage[], [], null, sending[3].id, 1)).not.toContain(sending[1].id)
-  })
-
-  it('every case draws the line in words (it + en), "200+" above 200, and the bar beside it', () => {
-    for (const locale of ['en', 'it'] as const) {
-      const html = renderView(FeedCase, designScreen.cases.find((entry) => entry.id === 'unread')!.model, locale)
-      expect(textOf(html)).toMatch(locale === 'en' ? /New since your last visit · 2 messages/ : /Nuovo dalla tua ultima visita · 2 messaggi/)
-      expect(html).toContain('data-feed-new')
-      const many = renderView(FeedCase, designScreen.cases.find((entry) => entry.id === 'unread-many')!.model, locale)
-      expect(textOf(many)).toMatch(locale === 'en' ? /200\+ messages/ : /oltre 200 messaggi/)
-      const bar = renderView(FeedCase, designScreen.cases.find((entry) => entry.id === 'unread-bar')!.model, locale)
-      expect(textOf(bar)).toMatch(locale === 'en' ? /8 new messages/ : /8 nuovi messaggi/)
-    }
+  it('no fold at 500 messages: every one is a message row, oldest first', () => {
+    const many = Array.from({ length: 500 }, (_, index) => msg(`m${String(index).padStart(3, '0')}`, new Date(Date.UTC(2026, 10, 17, 8, 0, index)).toISOString()))
+    const rows = feedRows({ messages: [...many].reverse(), events: [] })
+    expect(rows.filter((row) => row.kind === 'message')).toHaveLength(500)
+    expect(messageIds(rows)).toEqual(many.map((message) => message.id))
+    expect(readFileSync(new URL('./model.ts', import.meta.url), 'utf8')).not.toMatch(/OPEN_LAST|FOLDED_ROWS|foldedIds|runOpen|openIds/)
   })
 })
 // ---- end B-TH-229
 
-describe('older messages fold by age (PR-08: all but the last 3)', () => {
-  it('the oldest run is one line, the two before the open ones one line each, the last three open', () => {
-    const rows = feedRows({ messages: THREAD, events: [] })
-    const fold = rows.find((row) => row.kind === 'fold')
-    expect(fold).toMatchObject({ count: 13 })
-    expect(rows.filter((row) => row.kind === 'folded')).toHaveLength(2)
-    expect(rows.filter((row) => row.kind === 'message').map((row) => (row.kind === 'message' ? row.message.id : ''))).toEqual(THREAD.slice(-3).map((message) => message.id))
-    expect(foldedIds(THREAD)).toHaveLength(15)
+// ---- tw- W1.1 (10-design §3; D1, D3; R5): sides and runs --------------------------------------------------------------------------
+describe('tw- W1.1 — sides and runs: one sender, one audience, one day, nothing between', () => {
+  const at = (minute: number, day = 17) => new Date(Date.UTC(2026, 10, day, 8, minute)).toISOString()
+  const note = (id: string, who: string, minute: number, more: Partial<CardMessage> = {}): CardMessage => ({ id, kind: 'note', channel: 'APP', author: who, authorKind: 'USER', at: at(minute), body: id, mentions: [], files: [], senderKey: `USER:${who}`, ...more })
+  const places = (rows: readonly FeedRow[]) => rows.flatMap((row) => (row.kind === 'message' ? [`${row.message.id}:${row.run.first ? 'F' : '-'}${row.run.last ? 'L' : '-'}${row.run.showName ? 'N' : '-'}${row.run.side === 'mine' ? 'M' : 'O'}`] : []))
+
+  it('three notes of one person in a row are ONE run: the name and the tile once, the last bubble ends it', () => {
+    const rows = feedRows({ messages: [note('c1', 'carlo', 40), note('c2', 'carlo', 41), note('c3', 'carlo', 41)], events: [] })
+    expect(places(rows)).toEqual(['c1:F-NO', 'c2:---O', 'c3:-L-O'])
   })
 
-  it('one message never folds; a few fold one line each, without a fold line for a single one', () => {
-    expect(kinds(feedRows({ messages: THREAD.slice(-1), events: [] }))).toEqual(['day', 'message'])
-    const four = feedRows({ messages: THREAD.slice(-4), events: [] })
-    expect(four.filter((row) => row.kind === 'folded')).toHaveLength(1)
-    expect(four.some((row) => row.kind === 'fold')).toBe(false)
-    const six = feedRows({ messages: THREAD.slice(-6), events: [] })
-    expect(six.filter((row) => row.kind === 'folded')).toHaveLength(3)
-    expect(six.some((row) => row.kind === 'fold')).toBe(false)
+  it('the audience changes the run (a note, then an email of the same person); another person starts a run', () => {
+    const email: CardMessage = { ...note('b2', 'bea', 55), kind: 'ours', channel: 'EMAIL' }
+    expect(places(feedRows({ messages: [note('b1', 'bea', 31), email, note('a1', 'alex', 56)], events: [] }))).toEqual(['b1:FLNO', 'b2:FLNO', 'a1:FLNO'])
+    expect(audienceKind({ kind: 'floor' })).toBe('note')
+    expect(audienceKind({ kind: 'theirs' })).toBe('shared')
   })
 
-  it('“12 earlier messages” opened shows each one line; a message opened in place shows whole', () => {
-    const opened = feedRows({ messages: THREAD, events: [], runOpen: true })
-    expect(opened.some((row) => row.kind === 'fold')).toBe(false)
-    expect(opened.filter((row) => row.kind === 'folded')).toHaveLength(15)
-    const one = feedRows({ messages: THREAD, events: [], runOpen: true, openIds: [THREAD[0].id] })
-    expect(one.find((row) => row.kind === 'message')).toMatchObject({ message: { id: THREAD[0].id } })
+  it('a day pill, a step or the unread band between two of the same person: two runs', () => {
+    const late = note('c2', 'carlo', 10, { at: at(10, 18) })
+    expect(places(feedRows({ messages: [note('c1', 'carlo', 40), late], events: [] }))).toEqual(['c1:FLNO', 'c2:FLNO'])
+    expect(places(feedRows({ messages: [note('c1', 'carlo', 40), note('c2', 'carlo', 42)], events: [change('e', at(41))] }))).toEqual(['c1:FLNO', 'c2:FLNO'])
+    expect(places(feedRows({ messages: [note('c1', 'carlo', 40), note('c2', 'carlo', 42)], events: [], firstNewId: 'c2', newCount: 1 }))).toEqual(['c1:FLNO', 'c2:FLNO'])
   })
 
-  it('a link to a message opens it, and opens the old run around it', () => {
-    const rows = feedRows({ messages: THREAD, events: [], anchorId: THREAD[4].id })
-    expect(rows.some((row) => row.kind === 'fold')).toBe(false)
-    expect(rows.find((row) => row.kind === 'message')).toMatchObject({ message: { id: THREAD[4].id } })
+  it('a bubble that starts with a quote or files stays in its run (no tail) but names its sender again (W-018)', () => {
+    const quoting = note('c2', 'carlo', 41, { replyTo: { id: 'x', author: 'Lia Modello', excerpt: 'Hello', at: at(1) } })
+    expect(places(feedRows({ messages: [note('c1', 'carlo', 40), quoting], events: [] }))).toEqual(['c1:F-NO', 'c2:-LNO'])
   })
 
-  it('a message on its way or not sent never folds', () => {
-    const sending = { ...THREAD[0], outbox: { state: 'sending' as const } }
-    expect(foldedIds([sending, ...THREAD.slice(1)])).not.toContain(THREAD[0].id)
+  it('mine: on the right, never a name; my own messages run together too', () => {
+    const mine = (id: string, minute: number) => note(id, 'me', minute, { mine: true })
+    expect(places(feedRows({ messages: [mine('m1', 1), mine('m2', 2)], events: [] }))).toEqual(['m1:F--M', 'm2:-L-M'])
   })
 
-  it('a folded line shows the first words', () => {
-    expect(gistOf('\n\nHello Alex,\nmore')).toBe('Hello Alex,')
-    expect(gistOf('x'.repeat(200))).toHaveLength(140)
+  it('R5: two hidden floor notes in a row are two runs with the same neutral colour, never keyed on an id', () => {
+    const api = (id: string) => cardOf({ id, direction: 'INTERNAL_NOTE', channel: 'APP', author: { kind: 'WORKER', id: 'worker-1', name: null }, authorHidden: true, forFloor: true, body: id, attachments: [], at: at(id === 'w1' ? 1 : 2) }, { emails: new Map(), names: new Map() })
+    const [one, two] = [api('w1'), api('w2')]
+    expect(one.senderKey).toBeUndefined()
+    expect(two.senderKey).toBeUndefined()
+    expect(senderKeyOf({ kind: 'WORKER', id: 'worker-1', name: 'Nino Telaio' }, true)).toBeUndefined()
+    expect(places(feedRows({ messages: [one, two], events: [] }))).toEqual(['w1:FLNO', 'w2:FLNO'])
+    expect(sameRun(one, two)).toBe(false)
+    expect(senderTone(one.senderKey)).toBe('slate')
+    expect(senderTone(two.senderKey)).toBe('slate')
+    // A named worker (the gate open) runs normally, with a person colour.
+    const named = (id: string, minute: number) => note(id, 'nino', minute, { kind: 'floor', authorKind: 'WORKER', senderKey: 'WORKER:nino' })
+    expect(places(feedRows({ messages: [named('n1', 1), named('n2', 2)], events: [] }))).toEqual(['n1:F-NO', 'n2:-L-O'])
+    expect(senderTone('WORKER:nino')).not.toBe('slate')
+  })
+
+  it('the sender key: kind + id; a party with no id by its name; the system and a hidden writer none', () => {
+    expect(senderKeyOf({ kind: 'USER', id: 'u1', name: 'Bea Esempio' })).toBe('USER:u1')
+    expect(senderKeyOf({ kind: 'PARTY', id: null, name: 'Lia Modello' })).toBe('PARTY~Lia Modello')
+    expect(senderKeyOf({ kind: 'SYSTEM', id: 's1', name: 'Nexus Factory' })).toBeUndefined()
+    expect(senderKeyOf({ kind: 'USER', id: null, name: 'Bea Esempio' })).toBeUndefined()
+    expect(cardOf({ id: 'm', direction: 'INBOUND', channel: 'EMAIL', author: { kind: 'PARTY', id: 'p1', name: 'Lia Modello' }, authorHidden: false, forFloor: false, body: 'x', attachments: [], at: at(1) }, { emails: new Map(), names: new Map() }).senderKey).toBe('PARTY:p1')
+  })
+
+  it('one tone per sender: the same key the same tone everywhere; six person tones, never yellow or red; slate without a key', () => {
+    expect(senderTone('USER:u1')).toBe(senderTone('USER:u1'))
+    expect([...SENDER_TONES]).toEqual(['purple', 'emerald', 'pink', 'orange', 'blue', 'cyan'])
+    const seen = new Set(Array.from({ length: 200 }, (_, index) => senderTone(`USER:${index}`)))
+    expect([...seen].sort()).toEqual([...SENDER_TONES].sort())
+    for (const tone of seen) expect(['yellow', 'red', 'amber', 'slate']).not.toContain(tone)
+    expect(senderTone(null)).toBe('slate')
+    expect(senderTone(undefined)).toBe('slate')
+  })
+
+  it('on paper every message stands alone, on the left, with its name (R18)', () => {
+    const mine = note('m1', 'me', 1, { mine: true })
+    expect(runPlace(null, mine, null, { paper: true })).toEqual({ side: 'others', first: true, last: true, showName: true })
+    expect(places(feedRows({ messages: [note('c1', 'carlo', 40), note('c2', 'carlo', 41)], events: [], paper: true }))).toEqual(['c1:FLNO', 'c2:FLNO'])
   })
 })
+// ---- end tw- W1.1
 
 describe('day lines in the company’s time zone, words in the reader’s language', () => {
   it('a message at 00:30 in Rome is on the Rome day, not the UTC day', () => {
@@ -145,13 +166,19 @@ describe('day lines in the company’s time zone, words in the reader’s langua
     expect(rows.filter((row) => row.kind === 'day').map((row) => (row.kind === 'day' ? row.day : ''))).toEqual(['2026-11-16', '2026-11-17'])
   })
 
-  it('Today, Yesterday, the weekday and date', () => {
+  // tw- W1.1 (10-design §7): the weekday only inside 7 days, then the date; no time-zone tooltip per day (S12).
+  it('Today, Yesterday, the weekday inside 7 days, then the date (a past year adds it)', () => {
     expect(dayWord('2026-11-17', '2026-11-17', 'en')).toEqual({ kind: 'today' })
     expect(dayWord('2026-11-16', '2026-11-17', 'it')).toEqual({ kind: 'yesterday' })
-    expect(dayWord('2026-11-13', '2026-11-17', 'en')).toEqual({ kind: 'date', text: 'Friday 13 Nov' })
-    expect(dayWord('2026-11-13', '2026-11-17', 'it')).toEqual({ kind: 'date', text: 'venerdì 13 nov' })
-    expect(dayWord('2025-12-01', '2026-11-17', 'en').kind === 'date' && (dayWord('2025-12-01', '2026-11-17', 'en') as { text: string }).text).toContain('2025')
+    expect(dayWord('2026-11-13', '2026-11-17', 'en')).toEqual({ kind: 'date', text: 'Friday' })
+    expect(dayWord('2026-11-13', '2026-11-17', 'it')).toEqual({ kind: 'date', text: 'venerdì' })
+    expect(dayWord('2026-11-11', '2026-11-17', 'en')).toEqual({ kind: 'date', text: 'Wednesday' })
+    expect(dayWord('2026-11-10', '2026-11-17', 'en')).toEqual({ kind: 'date', text: '10 November' })
+    expect(dayWord('2026-11-03', '2026-11-17', 'it')).toEqual({ kind: 'date', text: '3 novembre' })
+    expect(dayWord('2025-10-20', '2026-11-17', 'en')).toEqual({ kind: 'date', text: '20 October 2025' })
+    expect(dayWord('2025-10-20', '2026-11-17', 'it')).toEqual({ kind: 'date', text: '20 ottobre 2025' })
     expect(dayWord('2026-03-01', '2026-03-02', 'en')).toEqual({ kind: 'yesterday' })
+    expect(readFileSync(new URL('./view/Feed.tsx', import.meta.url), 'utf8')).not.toContain("t('day.zone')")
   })
 })
 
@@ -179,10 +206,11 @@ describe('quiet record steps and grouped changes', () => {
     expect(whoWords({ who: null, actorAudience: 'SYSTEM' })).toEqual({ key: 'who.SYSTEM' })
   })
 
-  it('steps inside the folded run fold with it', () => {
+  // tw- W1.1: nothing folds, so a step among old messages is drawn where it happened (a pill), never swallowed.
+  it('a step among old messages is a row of its own, in time order', () => {
     const early = change('early', THREAD[1].at, 'Bea Esempio', { verb: 'create' })
     const rows = feedRows({ messages: THREAD, events: [early] })
-    expect(rows.some((row) => row.kind === 'step')).toBe(false)
+    expect(rows.some((row) => row.kind === 'step' && row.event.id === 'early')).toBe(true)
   })
 })
 

@@ -141,5 +141,11 @@
       "TRIAGE": "non ancora smistata",
       "other": "da controllare"
     }
+  },
+  "down": {
+    "label": "Vai al messaggio più recente"
+  },
+  "pinned": {
+    "pill": "{who} ha fissato un messaggio"
   }
 }

@@ -37,7 +37,9 @@
     "messageGone": "Quel messaggio non è più in questa conversazione, oppure non puoi vederlo.",
     "done": "Segnata come fatta. Si riapre da sola quando arriva un nuovo messaggio.",
     "openAgain": "Riaperta: la conversazione torna negli elenchi di lavoro.",
-    "doneFailed": "Non è stato possibile cambiare «Fatta». Riprova."
+    "doneFailed": "Non è stato possibile cambiare «Fatta». Riprova.",
+    "outOfReach": "Quel messaggio è fuori dalla tua portata.",
+    "viewAll": "Mostro tutti i messaggi"
   },
   "pane": {
     "label": "Riquadro di lettura",

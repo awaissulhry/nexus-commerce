@@ -18,16 +18,25 @@ export function dayBefore(day: string): string {
   return previous.toISOString().slice(0, 10)
 }
 
-/** How a day line reads: Today, Yesterday, or the weekday and date ("Friday 13 Nov"; a past year adds it). */
+/**
+ * How a day pill reads (tw- W1.1, 10-design §7): Today, Yesterday, the weekday inside 7 days ("Thursday"), then the date
+ * ("3 November"; a past year adds it: "20 October 2025"). The words are the reader's language; the day is the company's.
+ */
 export type DayWord = { kind: 'today' } | { kind: 'yesterday' } | { kind: 'date'; text: string }
+
+const noonOf = (day: string): Date => {
+  const [year, month, date] = day.split('-').map(Number)
+  return new Date(Date.UTC(year, month - 1, date, 12))
+}
 
 export function dayWord(day: string, today: string, locale: Locale): DayWord {
   if (day === today) return { kind: 'today' }
   if (day === dayBefore(today)) return { kind: 'yesterday' }
-  const [year, month, date] = day.split('-').map(Number)
-  const noon = new Date(Date.UTC(year, month - 1, date, 12))
+  const noon = noonOf(day)
+  const daysBack = Math.round((noonOf(today).getTime() - noon.getTime()) / 86_400_000)
+  if (daysBack > 1 && daysBack < 7) return { kind: 'date', text: new Intl.DateTimeFormat(INTL_LOCALE[locale], { timeZone: 'UTC', weekday: 'long' }).format(noon) }
   const sameYear = day.slice(0, 4) === today.slice(0, 4)
-  const text = new Intl.DateTimeFormat(INTL_LOCALE[locale], { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }) }).format(noon)
+  const text = new Intl.DateTimeFormat(INTL_LOCALE[locale], { timeZone: 'UTC', day: 'numeric', month: 'long', ...(sameYear ? {} : { year: 'numeric' }) }).format(noon)
   return { kind: 'date', text: text.replace(/,/g, '') }
 }
 

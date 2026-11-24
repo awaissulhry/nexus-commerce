@@ -109,6 +109,11 @@ export interface CardMessage {
   // ---- B-TH-286 (B-TH-091; T3-F12): pinned for everyone on the record (the files line's "2 pinned" lists it).
   pinned?: boolean
   // ---- end B-TH-286
+  // ---- tw- W1.1 (10-design §3): who wrote it as ONE key — runs and the person's colour hang on it. A user, a party contact or a
+  // floor worker the reader may see: kind + id (a party with no id: kind + name); a writer the site's gate keeps back and the system:
+  // none (R5: never a run, never a person colour). `senderKeyOf` makes it.
+  senderKey?: string
+  // ---- end tw- W1.1
 }
 
 // ---- B-TH-255: a file of an inbound mail that was not kept (the API's skippedAttachments; never a signature logo).
@@ -128,6 +133,22 @@ export interface CardLink {
   author: string | null
   excerpt: string
   at: string
+  // ---- tw- W1.1 (S10 (1), tw-server § "Shapes"): the quote's details as the server sends them for THIS reader — every one optional.
+  /** Who wrote it, by kind (a floor worker behind the gate: WORKER with no name). */
+  authorKind?: 'USER' | 'PARTY' | 'WORKER' | 'SYSTEM'
+  /** The quoted writer's key (`senderKeyOf`): their colour in the quote bar; none for a hidden writer or the system. */
+  senderKey?: string
+  /** Office reads only: the quoted message was an office note (OFFICE) or shared with the customer (PARTNER). */
+  audience?: 'OFFICE' | 'PARTNER'
+  /** Erased after a privacy request: "Message removed", no name. */
+  erased?: boolean
+  /** The reader wrote it: "You". */
+  mine?: boolean
+  /** The files of the quoted message THIS reader may open (a locked or walled one never counts). */
+  fileCount?: number
+  /** The first of those files: "Photo" / "PDF" / "Document". */
+  firstFile?: { id: string; kind: 'IMAGE' | 'DOCUMENT' | 'OTHER'; contentType: string } | null
+  // ---- end tw- W1.1
 }
 
 /** What every card of one thread shares. */
@@ -153,6 +174,12 @@ export interface CardContext {
   anchorId?: string | null
   /** B-TH-286 (B-TH-091): "Pin for everyone" / "Unpin" — threads.post, online (the API checks again). Absent: not offered. */
   canPin?: boolean
+  /**
+   * tw- W1.1 (D4, Z12): the ways this reader may answer — an office note (threads.post), the customer by email (email.send and a
+   * customer on the record), in the customer's portal (offered on the record). Reply is then on EVERY message (`replyWay`). Absent:
+   * Reply on the customer's message only, for a reader who may answer it (`canReply`), as before.
+   */
+  replyWays?: { readonly note: boolean; readonly email: boolean; readonly portal: boolean }
 }
 
 // ── the words of a card's head ──────────────────────────────────────────────────────────────────────────────────────
@@ -181,6 +208,18 @@ export function audienceKey(message: Pick<CardMessage, 'kind' | 'forFloor'>): st
   if (message.kind === 'note') return message.forFloor ? 'audience.noteFloor' : 'audience.note'
   if (message.kind === 'floor') return 'audience.floor'
   return message.kind === 'theirs' ? 'audience.theirs' : 'audience.ours'
+}
+
+/**
+ * tw- W1.1 (10-design §3): the sender's ONE key — runs and the person's colour hang on it. A user, a party contact or a floor worker
+ * the reader may see: kind + id; a party with no id (a mail with no contact): kind + name. A writer the site's gate keeps back and
+ * the system have none: they never form a run and never get a person colour (R5).
+ */
+export function senderKeyOf(author: { readonly kind: CardMessage['authorKind']; readonly id?: string | null | undefined; readonly name: string | null }, hidden = false): string | undefined {
+  if (hidden || author.kind === 'SYSTEM') return undefined
+  if (author.id) return `${author.kind}:${author.id}`
+  if (author.kind === 'PARTY' && author.name) return `PARTY~${author.name}`
+  return undefined
 }
 
 /** Who wrote it, in words: the name; "A person on the floor" behind the gate; the system's name; "Someone" otherwise. */
@@ -277,20 +316,60 @@ export const sizeWords = (bytes: number, intlLocale: string): string =>
 
 // ── the card's ⋯ menu (T3-F07, F09, F10) ─────────────────────────────────────────────────────────────────────────────
 
-export type CardAction = 'reply' | 'correct' | 'task' | 'link' | 'useOn' | 'pin' | 'unpin'
+export type CardAction = 'reply' | 'replyPrivately' | 'correct' | 'task' | 'link' | 'useOn' | 'pin' | 'unpin'
+
+// ---- tw- W1.1 (D4, Z12, P15; 10-design §9 "Reply keeps the audience") ------------------------------------------------------------
+/** How a reply goes: an office note, the customer by email, or the customer's portal (the composer's modes). */
+export type ReplyWay = 'note' | 'reply' | 'portal'
 
 /**
- * What the ⋯ of a card offers: Reply on the customer's message (when the reader may answer), Make a task (where the host has
- * tasks), Copy link to message (always: it opens the record with this message unfolded and focused). Remind me is the host's own
- * part beside the menu (B-W2b-388). B-TH-236: Correct on one's own message (`correctionWay`); a message on its way offers nothing yet.
+ * How Reply answers this message, or null when it is not offered. Reply keeps the audience of what it answers: the customer's
+ * message → the customer (in the portal when it came from there and the portal is offered, else by email, else in the portal); our
+ * own shared message (a colleague's email too, P15) → the customer, the same way first; an office note or a floor note → an office
+ * note. A reader with neither way to the customer (Z12) answers the customer's message with an office note that quotes it. Never on a
+ * message on its way, a mail in its 10 seconds or taken back, or the system's own line (a pill: no menu). Without `replyWays` (a host
+ * that does not say): Reply on the customer's message only, for a reader who may answer it, as before.
+ */
+export function replyWay(
+  message: Pick<CardMessage, 'kind' | 'outbox'> & Partial<Pick<CardMessage, 'channel' | 'authorKind' | 'email'>>,
+  context: Pick<CardContext, 'canReply' | 'replyWays'>,
+): ReplyWay | null {
+  if (!pinnable(message)) return null
+  if (message.kind === 'note' && message.authorKind === 'SYSTEM') return null
+  const ways = context.replyWays
+  if (!ways) return message.kind === 'theirs' && context.canReply ? 'reply' : null
+  const toCustomer = (first: 'reply' | 'portal'): ReplyWay | null => {
+    if (first === 'portal' && ways.portal) return 'portal'
+    if (ways.email) return 'reply'
+    if (ways.portal) return 'portal'
+    return ways.note ? 'note' : null
+  }
+  if (message.kind === 'theirs' || message.kind === 'ours') return toCustomer(message.channel === 'PORTAL' ? 'portal' : 'reply')
+  return ways.note ? 'note' : null
+}
+
+/** "Reply privately" (W-037): on the customer's message, an office note that quotes it — only beside a Reply that goes to the customer. */
+export function repliesPrivately(message: Pick<CardMessage, 'kind' | 'outbox'> & Partial<Pick<CardMessage, 'channel' | 'authorKind' | 'email'>>, context: Pick<CardContext, 'canReply' | 'replyWays'>): boolean {
+  if (message.kind !== 'theirs' || !context.replyWays?.note) return false
+  const way = replyWay(message, context)
+  return way === 'reply' || way === 'portal'
+}
+// ---- end tw- W1.1
+
+/**
+ * What the ⋯ of a card offers: Reply (tw- W1.1: on every message the reader may answer, `replyWay`; Reply privately beside it on the
+ * customer's message), Make a task (where the host has tasks), Copy link to message (always: it opens the record with this message
+ * in view). Remind me is the host's own part beside the menu (B-W2b-388). B-TH-236: Correct on one's own message (`correctionWay`);
+ * a message on its way offers nothing yet.
  */
 export function cardActions(
   message: Pick<CardMessage, 'kind' | 'outbox'> & Partial<Pick<CardMessage, 'channel' | 'authorKind' | 'mine' | 'email' | 'pinned'>> & { files?: readonly Pick<CardFile, 'status'>[] },
-  context: Pick<CardContext, 'canReply' | 'canTask' | 'canUseOn' | 'canCorrect' | 'canPin'> & { readonly canReadFiles?: boolean },
+  context: Pick<CardContext, 'canReply' | 'canTask' | 'canUseOn' | 'canCorrect' | 'canPin' | 'replyWays'> & { readonly canReadFiles?: boolean },
 ): CardAction[] {
   if (message.outbox) return []
   const actions: CardAction[] = []
-  if (message.kind === 'theirs' && context.canReply) actions.push('reply')
+  if (replyWay(message, context) !== null) actions.push('reply')
+  if (repliesPrivately(message, context)) actions.push('replyPrivately')
   // B-TH-236 (B-TH-050): Correct on one's own message, by the way it went (never an edit: a new message linked to the old one).
   if (correctionWay(message, context) !== null) actions.push('correct')
   if (context.canTask) actions.push('task')

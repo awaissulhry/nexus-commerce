@@ -37,7 +37,9 @@
     "messageGone": "That message is no longer in this conversation, or it is out of your reach.",
     "done": "Marked done. It opens again by itself when a new message arrives.",
     "openAgain": "Open again: the thread is back in the work lists.",
-    "doneFailed": "Done could not be changed. Try again."
+    "doneFailed": "Done could not be changed. Try again.",
+    "outOfReach": "That message is out of your reach.",
+    "viewAll": "Showing all messages"
   },
   "pane": {
     "label": "Reading pane",

@@ -141,5 +141,11 @@
       "TRIAGE": "not sorted yet",
       "other": "to be checked"
     }
+  },
+  "down": {
+    "label": "Go to the newest message"
+  },
+  "pinned": {
+    "pill": "{who} pinned a message"
   }
 }
