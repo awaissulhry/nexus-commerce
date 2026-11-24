@@ -6,6 +6,7 @@ import { word, type MoneyWord } from '../../../orders/record/money/word'
 import type { CreditBalanceRead } from './api'
 import { invoiceHref } from './doors'
 import { daysFrom, isFailed, isReading, type MoneyTabInput, type Part } from './model'
+import { readProblem } from '../../../orders/model' // cm-fx2: the orders catalogue's own key of a failed read (its rule, never a literal here)
 
 /**
  * F-CM-203 (customer page › MONEY tab, cm-w2 W2.3; 10-design §5.4; 18-lead-settles Z7, Z18, Z22, Z25) — section 4, Payments & refunds
@@ -207,7 +208,7 @@ export function receivedOf(input: MoneyTabInput, payments: Part<PaymentsRead> | 
   const returnsCredit = returnsCreditOf(input) // F-CM-303 (E52)
   if (isReading(payments)) return { reading: true, problem: null, answer: [word('cm.received.reading')], onAccount, giveBack, payments: [], more: false, refundable, returnsCredit }
   const value = payments.value
-  if (isFailed(payments) || !value) return { reading: false, problem: payments.problem ?? 'problem.read.internal', answer: [], onAccount, giveBack, payments: [], more: false, refundable, returnsCredit }
+  if (isFailed(payments) || !value) return { reading: false, problem: payments.problem ?? readProblem(null), answer: [], onAccount, giveBack, payments: [], more: false, refundable, returnsCredit }
   const items = paymentItemsOf(value.rows, input, prefix)
   const more = value.next !== null
   const answer: MoneyWord[] = []

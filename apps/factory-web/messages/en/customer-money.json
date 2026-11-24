@@ -214,7 +214,8 @@
       "foot": "What each order has paid and still owes, also what is not asked yet:",
       "footDoor": "Work › All orders ›",
       "ofTotal": "of {amount}",
-      "stopTitle": "Stop reminders of {invoice}"
+      "stopTitle": "Stop reminders of {invoice}",
+      "stopDone": "Done"
     },
     "none": {
       "title": "Nothing here yet",
