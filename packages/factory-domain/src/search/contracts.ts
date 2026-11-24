@@ -19,6 +19,12 @@ export const RECORD_TYPE = /^[A-Z][A-Za-z0-9]*$/
 export const SEARCH_MATCHES = ['number', 'words', 'similar'] as const
 export type SearchMatch = (typeof SEARCH_MATCHES)[number]
 
+/**
+ * tw-s S.4: who wrote a message — the threads' AUTHOR_KINDS (threads/rules), written again here: this contract is the web's too, and
+ * threads/rules reads node:crypto (search.vitest pins the two lists equal).
+ */
+export const MESSAGE_AUTHOR_KINDS = ['USER', 'WORKER', 'PARTY', 'SYSTEM'] as const
+
 export const searchQuery = input({
   q: z.string().max(200),
   /** One record type only (the results page's chip); absent: every type. */
@@ -49,6 +55,11 @@ export const searchResult = output({
   indexedAt: instant(),
   /** B-TH-097: a message's result names the record whose thread holds it (the result opens that record at the message). */
   record: output({ type: z.string(), id: id() }).optional(),
+  /**
+   * tw-s S.4 (thread rebuild W-112; wall R10): a message's result only — when it was written and who wrote it, as its thread shows it: a
+   * floor worker only through the site's gate (`authorName` null: "A person on the floor"). Search is the office's only.
+   */
+  message: output({ at: instant(), authorName: z.string().nullable(), authorKind: z.enum(MESSAGE_AUTHOR_KINDS) }).optional(),
 })
 export type SearchResult = z.infer<typeof searchResult>
 

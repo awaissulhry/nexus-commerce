@@ -2,7 +2,7 @@ import type { FastifyRequest } from 'fastify'
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { EMAIL_TRIAGE } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { can, type Actor } from '@nexus/factory-domain/core/permissions'
-import type { HeldReason, InboundAttachment, SkipReason } from '@nexus/factory-domain/email-in/rules'
+import type { HeldReason, InboundAttachment, MailVerdict, SkipReason } from '@nexus/factory-domain/email-in/rules'
 import type { FeedAudience } from '@nexus/factory-domain/threads/timeline'
 import type { CommandCaller, CommandTx } from '../../core/command'
 import { systemCallerOf } from '../files/files'
@@ -23,6 +23,8 @@ import { systemCallerOf } from '../files/files'
  *                 may review it (email.triage over the mail's company); the office only — a customer is never told.
  *   skipped parts the files of an inbound mail that were not kept, with why (a type files do not take, too large, empty, too many) on
  *                 its message, for the office; a signature logo (an inline part) is skipped silently, never listed.
+ *   mail details  tw-s S.5 (the thread rebuild, "Email details"): an inbound mail's header From, To and Cc, its subject and SES's checks
+ *                 (SPF, DKIM, DMARC) on its message, for the office — read with the skipped parts in ONE read of the page's mails.
  */
 
 /** What a waiting mail waits for: HELD's reason, or TRIAGE (Mail to sort). */
@@ -95,21 +97,67 @@ export interface SkippedPart {
 
 type MailRow = { readonly id: string; readonly direction: string; readonly channel: string }
 
+/** The inbound mails' messages among these. */
+const inboundIdsOf = (rows: readonly MailRow[]): string[] => rows.filter((row) => row.direction === 'INBOUND' && row.channel === 'EMAIL').map((row) => row.id)
+
+/** The parts of a mail that were not kept, as its message lists them (a signature logo left out). */
+function partsOf(attachments: unknown): SkippedPart[] {
+  return (Array.isArray(attachments) ? (attachments as unknown as InboundAttachment[]) : []).flatMap((part) =>
+    part.kept || part.reason === 'inline' ? [] : [{ name: part.name, contentType: part.contentType, sizeBytes: part.sizeBytes, reason: part.reason as Exclude<SkipReason, 'inline'> }],
+  )
+}
+
 /** The skipped parts of each inbound mail's message among these (office readers only), a signature logo left out. */
 export async function skippedPartsOf(client: FactoryClient | CommandTx, rows: readonly MailRow[]): Promise<Map<string, SkippedPart[]>> {
-  const ids = rows.filter((row) => row.direction === 'INBOUND' && row.channel === 'EMAIL').map((row) => row.id)
+  const ids = inboundIdsOf(rows)
   const out = new Map<string, SkippedPart[]>()
   if (ids.length === 0) return out
   const mails = await client.inboundEmail.findMany({ where: { messageId: { in: ids } }, select: { messageId: true, attachments: true } })
   for (const mail of mails) {
     if (!mail.messageId) continue
-    const parts = (Array.isArray(mail.attachments) ? (mail.attachments as unknown as InboundAttachment[]) : []).flatMap((part) =>
-      part.kept || part.reason === 'inline' ? [] : [{ name: part.name, contentType: part.contentType, sizeBytes: part.sizeBytes, reason: part.reason as Exclude<SkipReason, 'inline'> }],
-    )
+    const parts = partsOf(mail.attachments)
     if (parts.length > 0) out.set(mail.messageId, parts)
   }
   return out
 }
+
+// ---- tw-s S.5 (the thread rebuild; Z2 "Email details"): an inbound mail's details on its message, the office's only.
+/** An inbound mail as its message's "Email details" show it: the header From, To and Cc (lower case), its subject, SES's checks. */
+export interface MailDetails {
+  readonly from: { readonly address: string | null; readonly name: string | null }
+  /** Mutable arrays: the view goes out as the contract's inboundMailView. */
+  readonly to: string[]
+  readonly cc: string[]
+  readonly subject: string | null
+  readonly verdicts: { readonly spf: MailVerdict; readonly dkim: MailVerdict; readonly dmarc: MailVerdict }
+}
+
+/** A page's inbound mails, read once: each message's skipped parts and its mail's details. */
+export interface InboundMails {
+  readonly skipped: ReadonlyMap<string, SkippedPart[]>
+  readonly mails: ReadonlyMap<string, MailDetails>
+}
+export const NO_INBOUND_MAILS: InboundMails = Object.freeze({ skipped: new Map(), mails: new Map() })
+
+/** The skipped parts and the details of each inbound mail's message among these, in ONE read of the mails (office readers only). */
+export async function inboundMailsOf(client: FactoryClient | CommandTx, rows: readonly MailRow[]): Promise<InboundMails> {
+  const ids = inboundIdsOf(rows)
+  if (ids.length === 0) return NO_INBOUND_MAILS
+  const found = await client.inboundEmail.findMany({
+    where: { messageId: { in: ids } },
+    select: { messageId: true, attachments: true, fromAddress: true, fromName: true, to: true, cc: true, subject: true, spfVerdict: true, dkimVerdict: true, dmarcVerdict: true },
+  })
+  const skipped = new Map<string, SkippedPart[]>()
+  const mails = new Map<string, MailDetails>()
+  for (const mail of found) {
+    if (!mail.messageId) continue
+    const parts = partsOf(mail.attachments)
+    if (parts.length > 0) skipped.set(mail.messageId, parts)
+    mails.set(mail.messageId, { from: { address: mail.fromAddress, name: mail.fromName }, to: mail.to, cc: mail.cc, subject: mail.subject, verdicts: { spf: mail.spfVerdict, dkim: mail.dkimVerdict, dmarc: mail.dmarcVerdict } })
+  }
+  return { skipped, mails }
+}
+// ---- end tw-s S.5
 
 /** The messages a view shows (FEED_AUDIENCES): every one, the shared ones, or the office notes. */
 export function feedAudienceWhere(audience: FeedAudience): Prisma.MessageWhereInput {

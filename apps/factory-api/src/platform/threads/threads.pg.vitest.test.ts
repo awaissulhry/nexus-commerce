@@ -375,6 +375,26 @@ describe('attachments (COL-045, COL-050)', () => {
     // An office reader without files.read sees the message, not its files.
     expect(await attachmentsOf('reader')).toEqual([])
   })
+
+  // ---- tw-s S.3 (the thread rebuild; B5): "One file you cannot open" is the office's word only.
+  it("a link or portal read of GET /threads never says how many files it cannot open; the office's read does", async () => {
+    const portal = await file('Quote', quote, { visibility: ['OFFICE', 'PARTNER'], partyId: partyOne })
+    const link = await file('Quote', quote, { visibility: ['OFFICE', 'LINK'], partyId: partyOne })
+    const sent = await sendToParty(quote, 'Made-up: one file for the portal, one for the link.', [portal, link])
+    expect(sent.problems).toEqual([])
+    const seen = async (session: string): Promise<Json> => ((await thread(session, 'Quote', quote)).messages as Json[]).find((message) => message.id === sent.id)!
+    // Each outside reader sees its own file, and nothing says another one is there.
+    const asPortal = await seen('partner-one')
+    expect(asPortal.attachments.map((attachment: Json) => attachment.id)).toEqual([portal])
+    expect(asPortal).not.toHaveProperty('hiddenAttachments')
+    const asLink = await seen('link-one')
+    expect(asLink.attachments.map((attachment: Json) => attachment.id)).toEqual([link])
+    expect(asLink).not.toHaveProperty('hiddenAttachments')
+    // The office: a reader without files.read is told how many it cannot open; the author sees both and is told nothing.
+    expect(await seen('reader')).toMatchObject({ attachments: [], hiddenAttachments: 2 })
+    expect(await seen('author')).not.toHaveProperty('hiddenAttachments')
+  })
+  // ---- end tw-s S.3
 })
 
 describe('mentions (COL-006) and events', () => {
@@ -645,3 +665,47 @@ describe('a floor worker on the timeline stays behind the PERFORMANCE gate (B-W2
     await closed('author', true)
   })
 })
+
+// ---- tw-s S.5 (the thread rebuild; Z2 "Email details"): an inbound mail's details on its message, the office's only.
+describe('tw-s S.5: an inbound mail’s details', () => {
+  it("an inbound mail's From, To, Cc, Subject and checks reach the office's read only; a portal or link read never carries mail", async () => {
+    const SUBJECT = 'Made-up: the sizes for the quote'
+    const { result } = await command(office(), { name: 'email.receive', input: { quote, tws: 'S.5' } }, async (tools) => {
+      const { thread: row } = await ensureThread(tools, { type: 'Quote', id: quote }, author)
+      const inbound = await writeMessage(tools, row, { direction: 'INBOUND', channel: 'EMAIL', author: { kind: 'PARTY', id: null, name: 'Bea Esempio' }, bodyText: 'Made-up: here are the sizes we need.' })
+      return { message: inbound.id, threadId: row.id }
+    })
+    const ours = await sendToParty(quote, 'Made-up: thanks, the quote follows.')
+    expect(ours.problems).toEqual([])
+    // The mail SES received, matched to the thread as that INBOUND message (written past the guards: the email steps are platform/email-in's).
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin(
+        `INSERT INTO "InboundEmail" (id, "tenantId", "companyId", "accountId", "receiptId", "sesMessageId", "s3Bucket", "s3Key", "receivedAt",
+           "fromAddress", "fromName", "to", "cc", "subject", "spfVerdict", "dkimVerdict", "dmarcVerdict", "spamVerdict", "virusVerdict", status, "threadId", "messageId")
+         VALUES ($1, $2, $3, $4, $5, $6, 'made-up-bucket', $7, now(), 'bea.esempio@example.com', 'Bea Esempio', '{orders@example.com}', '{desk@example.com,lia.modello@example.com}', $8,
+           'PASS', 'PASS', 'FAIL', 'PASS', 'PASS', 'MATCHED', $9, $10)`,
+        [newId(), tenantA, companyOne, newId(), newId(), `tws-${newId()}`, `inbound/${newId()}`, SUBJECT, result.threadId, result.message],
+      )
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
+    const mail = { from: { address: 'bea.esempio@example.com', name: 'Bea Esempio' }, to: ['orders@example.com'], cc: ['desk@example.com', 'lia.modello@example.com'], subject: SUBJECT, verdicts: { spf: 'PASS', dkim: 'PASS', dmarc: 'FAIL' } }
+    const messageOf = async (session: string, id: string): Promise<Json> => ((await thread(session, 'Quote', quote)).messages as Json[]).find((message) => message.id === id)!
+    // The office: the inbound mail with its details, for any reader of the thread; our own mail carries none.
+    expect((await messageOf('author', result.message)).mail).toEqual(mail)
+    expect((await messageOf('reader', result.message)).mail).toEqual(mail)
+    expect(await messageOf('author', ours.id)).not.toHaveProperty('mail')
+    // A portal or link reader reads the same message, never its mail: not its subject, not whom else it went to.
+    for (const session of ['partner-one', 'link-one']) {
+      const response = await call(session, 'GET', `/threads/Quote/${quote}`)
+      expect(response.statusCode, response.body).toBe(200)
+      const seen = (response.json().messages as Json[]).find((message) => message.id === result.message)
+      expect(seen, session).toMatchObject({ direction: 'INBOUND', body: 'Made-up: here are the sizes we need.' })
+      expect(seen, session).not.toHaveProperty('mail')
+      expect(response.body, session).not.toContain(SUBJECT)
+      expect(response.body, session).not.toContain('desk@example.com')
+    }
+  })
+})
+// ---- end tw-s S.5
