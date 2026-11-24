@@ -13,7 +13,7 @@ import { daysFrom, isFailed, isReading, type MoneyTabInput, type Part } from './
  * section is LEFT OUT).
  *
  *   On account     per currency, the money paid and placed on nothing (the page's open items: their credit balance) — from which payment
- *                  and how long it waits (GET /payments/credit-balance); Refu nd… (Finance's own window, in place: payments.refund +
+ *                  and how long it waits (GET /payments/credit-balance); Refund… (Finance's own window, in place: payments.refund +
  *                  price) · Place it › (the payment's record in Finance). "On account" stays the word (Z22).
  *   To give back   the refunds to make (Mark made… · ⋯ Cancel…) and the credit notes with money left to refund (Refund…) — the refunds
  *                  read; every window is Finance's own (RefundDialogs), opened in place. No "Change…": no such window exists (Z7).
