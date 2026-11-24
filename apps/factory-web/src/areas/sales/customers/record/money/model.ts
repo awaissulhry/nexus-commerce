@@ -114,6 +114,8 @@ export interface ShippedNotInvoiced {
   readonly currency: string | null
   /** The nearest legal deadline to invoice them (a day), if any. */
   readonly invoiceBy: string | null
+  /** F-CM-202: the DDTs not invoiced — Finance's "Invoice shipped goods" window opens with them chosen (`?new=1&ddts=…&party=`). */
+  readonly ddtIds: readonly string[]
 }
 
 /** The open items answer (GET /payments/open-items?partyId): every open request and invoice, and the money on account per currency. */
@@ -207,5 +209,8 @@ export const LIVE_COALESCE_MS = 800
 /** The tab's own reads (use-customer-money-tab.ts), each with its Try again. */
 export const TAB_READS = ['refunds', 'stops', 'reminders', 'summary', 'shipped'] as const
 export type TabRead = (typeof TAB_READS)[number]
+/** F-CM-202: the tab's reads made only when their section nears the room (13-backend §1.4 "scrolling to the end"). */
+export const LAZY_READS = ['documents'] as const
+export type LazyRead = (typeof LAZY_READS)[number]
 /** What a section's Try again reads again: the page's money reads (the ageing, the open items) or one of the tab's own. */
-export type MoneyRead = 'page' | TabRead
+export type MoneyRead = 'page' | TabRead | LazyRead

@@ -5,11 +5,13 @@ import { useOfficeApi } from '../../../../../lib/session/context'
 import { useLiveBus } from '../../../../../shell/live/use-live'
 import { openRefunds, type OpenRefunds } from '../../../../finance/payments/refunds/api'
 import { listReminders, type Reminder } from '../../../../finance/receivables/api'
+import { listInvoices } from '../../../../finance/_shared/api' // F-CM-202
 import { listStops, type ReminderStop } from '../../../../finance/receivables/reminder-stops/api'
 import { getOrderSummary, type OrderSummary } from '../../../orders/api'
 import { readProblem } from '../../../orders/model'
 import { shippedOfCustomer } from './api'
-import { LIVE_COALESCE_MS, moneyChangeIsOurs, partReady, READING, TAB_READS, type MoneyTabCan, type Part, type ShippedNotInvoiced, type TabRead } from './model'
+import { documentQueryOf, DOCUMENTS_READ, type DocumentChip, type DocumentsRead } from './documents' // F-CM-202
+import { LIVE_COALESCE_MS, moneyChangeIsOurs, partReady, READING, TAB_READS, type LazyRead, type MoneyTabCan, type Part, type ShippedNotInvoiced, type TabRead } from './model'
 
 /**
  * F-CM-103 (customer page › MONEY tab, cm-w1 W1.2; 13-backend §1.4, §5.2) — the tab's OWN reads, made only while the tab is shown, each
@@ -28,9 +30,18 @@ export interface CustomerMoneyTabReads {
   readonly summary: Part<OrderSummary> | null
   readonly shipped: Part<ShippedNotInvoiced | null> | null
   /** A section's Try again: that read again. */
-  readonly retry: (read: TabRead) => void
+  readonly retry: (read: TabRead | LazyRead) => void
   /** F-CM-201: after a write in place, every read of the tab again (keeping what it shows while it reads). */
   readonly reload: () => void
+  // ── F-CM-202: the reads made when their section nears the room ──
+  /** A section came near: make its read (once; later bursts read it again). */
+  readonly want: (read: LazyRead) => void
+  /** Every document of the customer under the chip (invoices.view; null without it), the pages read so far. */
+  readonly documents: Part<DocumentsRead> | null
+  readonly chip: DocumentChip
+  readonly onChip: (chip: DocumentChip) => void
+  /** The documents' next page (the read's cursor). */
+  readonly moreDocuments: () => void
 }
 
 /** At most this many reminders of the customer (the read's own page cap). */
@@ -98,6 +109,42 @@ export function useCustomerMoneyTab(input: { readonly partyId: string; readonly 
     }
   }, [load])
 
+  // ── F-CM-202: the lazy reads — made once their section nears the room, read again by a burst once made ──
+  const [wanted, setWanted] = useState<ReadonlySet<LazyRead>>(() => new Set())
+  const want = useCallback((read: LazyRead) => setWanted((now) => (now.has(read) ? now : new Set([...now, read]))), [])
+  const [chip, setChip] = useState<DocumentChip>('all')
+  const [documents, setDocuments] = useState<Part<DocumentsRead>>(READING)
+  const documentsAbort = useRef<AbortController | null>(null)
+  const loadDocuments = useCallback(
+    (mode: 'first' | 'again' | 'next', cursor: string | null) => {
+      if (!can.invoices) return
+      documentsAbort.current?.abort()
+      const abort = new AbortController()
+      documentsAbort.current = abort
+      if (mode === 'first') setDocuments(READING)
+      const terms = documentQueryOf(chip)
+      listInvoices(api, { partyId, companyId, docType: terms.docType, status: terms.status, limit: DOCUMENTS_READ, cursor }, abort.signal)
+        .then((page) => !abort.signal.aborted && setDocuments((was) => partReady({ rows: mode === 'next' ? [...(was.value?.rows ?? []), ...page.invoices] : page.invoices, next: page.nextCursor })))
+        .catch((error: unknown) => !abort.signal.aborted && setDocuments({ value: null, problem: readProblem(error) }))
+    },
+    [api, can.invoices, chip, companyId, partyId],
+  )
+  const wantsDocuments = wanted.has('documents')
+  useEffect(() => {
+    if (wantsDocuments) loadDocuments('first', null)
+  }, [wantsDocuments, loadDocuments])
+  useEffect(() => () => documentsAbort.current?.abort(), [])
+  const lazyNow = useRef({ wanted, loadDocuments })
+  lazyNow.current = { wanted, loadDocuments }
+  const againLazy = useCallback(() => {
+    if (lazyNow.current.wanted.has('documents')) lazyNow.current.loadDocuments('again', null)
+  }, [])
+  const moreDocuments = useCallback(() => {
+    const next = documents.value?.next ?? null
+    if (next) loadDocuments('next', next)
+  }, [documents.value?.next, loadDocuments])
+  // ── end F-CM-202 ──
+
   // Live: this customer's money moved → ONE re-read of the tab's reads (coalesced).
   const held = useRef<ReadonlySet<string>>(new Set())
   held.current = new Set([...input.heldIds, ...(refunds.value?.refundsDue ?? []).map((refund) => refund.id), ...(refunds.value?.creditNotesToRefund ?? []).map((note) => note.creditNoteId)])
@@ -107,15 +154,17 @@ export function useCustomerMoneyTab(input: { readonly partyId: string; readonly 
     timer.current = setTimeout(() => {
       timer.current = null
       for (const read of TAB_READS) load(read, true)
+      againLazy() // F-CM-202
     }, LIVE_COALESCE_MS)
-  }, [load])
+  }, [load, againLazy])
   useEffect(() => () => (timer.current ? clearTimeout(timer.current) : undefined), [])
   useLiveBus({ onChange: (change) => (moneyChangeIsOurs(change, partyId, held.current) ? burst() : undefined), onReconnect: burst })
 
-  const retry = useCallback((read: TabRead) => load(read, false), [load])
+  const retry = useCallback((read: TabRead | LazyRead) => (read === 'documents' ? loadDocuments('first', null) : load(read, false)), [load, loadDocuments])
   const reload = useCallback(() => {
     for (const read of TAB_READS) load(read, true)
-  }, [load])
+    againLazy() // F-CM-202
+  }, [load, againLazy])
   return useMemo(
     () => ({
       refunds: allowed.refunds ? refunds : null,
@@ -125,7 +174,12 @@ export function useCustomerMoneyTab(input: { readonly partyId: string; readonly 
       shipped: allowed.shipped ? shipped : null,
       retry,
       reload,
+      want,
+      documents: can.invoices ? documents : null,
+      chip,
+      onChip: setChip,
+      moreDocuments,
     }),
-    [allowed, refunds, stops, reminders, summary, shipped, retry, reload],
+    [allowed, refunds, stops, reminders, summary, shipped, retry, reload, want, can.invoices, documents, chip, moreDocuments],
   )
 }

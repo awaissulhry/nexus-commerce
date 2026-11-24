@@ -77,7 +77,15 @@ function CustomerMoneyReads({ party, prefix, money, priceDiffer, glance, onPick 
   const windows = useMoneyWindows({ prefix, onBurst })
   return (
     <>
-      <CustomerMoneyTab input={input} prefix={prefix} asOf={money?.readAt ?? null} onRetry={onRetry} onPick={onPick} onAct={windows.onAct} />
+      <CustomerMoneyTab
+        input={input}
+        prefix={prefix}
+        asOf={money?.readAt ?? null}
+        onRetry={onRetry}
+        onPick={onPick}
+        onAct={windows.onAct}
+        lazy={{ want: reads.want, documents: reads.documents, chip: reads.chip, onChip: reads.onChip, onMoreDocuments: reads.moreDocuments } /* F-CM-202 */}
+      />
       {windows.door.model ? <OrderMoneyWindow model={windows.door.model} actions={windows.door.actions} /> : null}
       {windows.stop ? <StopWindow partyId={party.id} ask={windows.stop} onClose={windows.closeStop} onChanged={onBurst} /> : null}
     </>

@@ -38,5 +38,6 @@ export async function shippedOfCustomer(api: ApiClient, input: { readonly compan
     value: rows.length === 1 && typeof values[0] === 'number' ? values[0] : null,
     currency: input.currency,
     invoiceBy: days.sort()[0] ?? null,
+    ddtIds: rows.flatMap((row) => row.ddts.map((ddt) => ddt.ddtId)), // F-CM-202
   }
 }

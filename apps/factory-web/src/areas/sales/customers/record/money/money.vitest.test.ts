@@ -14,6 +14,8 @@ import { amountsOf, type MoneyWord } from '../../../orders/record/money/word'
 import type { Glance } from '../../depth/api'
 import { balanceOf, moneyBadgeOf } from './balance'
 import { collectOf, COLLECT_SHOWN, IN_PLACE_ACTS } from './collect'
+import { documentQueryOf, documentsOf, DOCUMENTS_SHOWN, paymentWordOf } from './documents' // F-CM-202
+import type { InvoiceRow } from '../../../../finance/_shared/api'
 import { moneyAnswerOf, type CustomerAnswer } from './head'
 import { CM, MONEY_TAB_NAMESPACES, moneyChangeIsOurs, moneyTabCanOf, partFailed, partReady, READING, type MoneyTabInput } from './model'
 import { sayOf } from './say'
@@ -429,5 +431,62 @@ describe('F-CM-201: To collect\'s acts in place (cm-w2 W2.1; 13-backend §4.1, �
     const windows = source('./use-money-windows.ts')
     expect(windows).toContain("if (row.target === 'INVOICE') setStop(")
     expect(windows).toContain("if (row.target === 'DEPOSIT_REQUEST' && row.order) open(")
+  })
+})
+
+describe('F-CM-202: Invoices & credit notes (cm-w2 W2.2; 10-design §5.3; Z6, Z25)', () => {
+  const doc = (id: string, over: Partial<InvoiceRow> = {}): InvoiceRow => ({ id, docType: 'TD01', status: 'SENT', number: `FT-2026-0001${id.slice(-1)}`, issueDate: '2026-10-01', companyId: COMPANY_A.id, buyerPartyId: CUSTOMER.id, partyName: CUSTOMER.name, currency: 'EUR', netTotal: 200000, vatTotal: 44000, grossTotal: 244000, depositRequestId: null, creditOfId: null, salesOrderId: 'o-2', filesPending: false, paidAmount: 0, creditedAmount: 0, openAmount: 244000, dueDate: '2026-11-12', version: 1, createdAt: '2026-10-01T09:00:00Z', ...over })
+  const read = (rows: InvoiceRow[], next: string | null = null) => partReady({ rows, next })
+
+  it('the chips are the read\'s own terms: All · Credit notes (TD04) · Drafts (DRAFT); no "open" chip', () => {
+    expect(documentQueryOf('all')).toEqual({ docType: null, status: null })
+    expect(documentQueryOf('creditNotes')).toEqual({ docType: 'TD04', status: null })
+    expect(documentQueryOf('drafts')).toEqual({ docType: null, status: 'DRAFT' })
+    expect(DOCUMENTS_SHOWN).toBe(5)
+  })
+
+  it('an invoice NOT in the open items is never "Open" or "Part paid" (the list\'s own open amount ignores write-offs and refunds); one a credit note gives money back from: Refund due', () => {
+    const owner = input('owner')
+    expect(paymentWordOf(doc('inv-1'), owner)?.word.key).toBe('moneyTab.invoices.pay.open')
+    expect(paymentWordOf(doc('inv-8', { openAmount: 120000, paidAmount: 50000 }), owner)?.word.key).toBe('moneyTab.invoices.pay.paid')
+    const refundOf = input('owner', { refunds: partReady({ ...REFUNDS, refundsDue: REFUNDS.refundsDue.map((refund) => ({ ...refund, creditNote: { ...refund.creditNote!, creditOfId: 'inv-1' } })) }) })
+    expect(paymentWordOf(doc('inv-1'), refundOf)?.word.key).toBe('moneyTab.invoices.pay.refund')
+    expect(paymentWordOf(doc('cn-1', { docType: 'TD04' }), owner)?.word.key).toBe('moneyTab.invoices.pay.credited')
+    const model = documentsOf(owner, read([doc('inv-1'), doc('inv-8')]), 'all', PREFIX)!
+    expect(model.rows.map((row) => row.list.open)).toEqual([244000, 0])
+  })
+
+  it('no Payment word and no amount without the price grain (the part then leaves the column out, never blank); the words are ORDER words, said by the part', () => {
+    for (const role of ['sales', 'readonly'] as const) {
+      const model = documentsOf(input(role), read([doc('inv-1', { grossTotal: undefined, openAmount: undefined, paidAmount: undefined })]), 'all', PREFIX)!
+      expect(model.rows[0]!.list.payment, role).toBeNull()
+      expect(model.rows[0]!.list.total, role).toBeNull()
+      for (const said of [model.rows[0]!.list.kind, model.rows[0]!.list.state.word, ...model.rows[0]!.list.subs, ...model.answer]) expect(amountsOf(said), role).toEqual([])
+    }
+    const row = documentsOf(input('owner'), read([doc('inv-1')]), 'all', PREFIX)!.rows[0]!
+    expect(row.list.kind.key).toBe('docType.TD01')
+    expect(row.list.state.word.key).toBe('invoiceStatus.SENT')
+  })
+
+  it('its order is the sixth column: the number when the server sends it (S8), else "Order ›"; a door to that order\'s Invoices', () => {
+    const [named, plain] = documentsOf(input('owner'), read([doc('inv-1', { orderNumber: 'SEED-SO-0002' }), doc('inv-2')]), 'all', PREFIX)!.rows
+    expect(named!.order).toEqual({ id: 'o-2', number: 'SEED-SO-0002', href: `${PREFIX}/sales/orders/o-2?tab=money#invoices` })
+    expect(plain!.order?.number).toBeNull()
+  })
+
+  it('the five doors into Finance, each with its right; a credit note\'s Credit note… held with the order page\'s words; none for Read-only', () => {
+    const owner = documentsOf(input('owner'), read([doc('inv-1'), doc('cn-1', { docType: 'TD04', status: 'ISSUED' })]), 'all', PREFIX)!.rows
+    expect(owner[0]!.doors.map((door) => door.id)).toEqual(['record', 'credit', 'payments', 'pdf'])
+    expect(owner[1]!.doors.find((door) => door.id === 'credit')?.held?.key).toBe('orders:moneyTab.invoices.held.creditNote')
+    expect(owner[1]!.doors.map((door) => door.id)).toContain('sdi')
+    expect(documentsOf(input('readonly'), read([doc('inv-1')]), 'all', PREFIX)!.rows[0]!.doors).toEqual([])
+    expect(documentsOf(input('owner', { can: { ...moneyTabCanOf(ROLES.owner), invoices: false } }), read([doc('inv-1')]), 'all', PREFIX)).toBeNull()
+  })
+
+  it('the head: "n documents · n invoices open · drafts · rejected"; the open count is the ageing\'s, never a sum of the rows (Z6); more pages say "+"', () => {
+    const model = documentsOf(input('owner'), read([doc('inv-1'), doc('d-1', { status: 'DRAFT', number: null }), doc('r-1', { status: 'REJECTED' })], 'cursor-2'), 'all', PREFIX)!
+    expect(model.answer.map((said) => said.key)).toEqual(['cm.invoices.countMore', 'finance-receivables:tiles.invoices', 'cm.invoices.drafts', 'cm.invoices.rejected'])
+    expect(model.answer[1]).toEqual({ key: 'finance-receivables:tiles.invoices', params: { count: 3 } })
+    expect(model.more).toBe(true)
   })
 })

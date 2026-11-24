@@ -155,12 +155,16 @@
       "finance": "Open in Finance ›",
       "terms": "Terms & requirements ›",
       "receivables": "Open in Finance › Receivables & credit ›",
-      "down": "{section} ↓"
+      "down": "{section} ↓",
+      "invoices": "Open in Finance › Invoices ›"
     },
     "more": {
       "rows_one": "Show {count} more row",
       "rows_other": "Show {count} more rows",
-      "fewer": "Show fewer"
+      "fewer": "Show fewer",
+      "documents_one": "Show {count} more document",
+      "documents_other": "Show {count} more documents",
+      "documentsNext": "Show more documents"
     },
     "balance": {
       "title": "Balance",
@@ -254,12 +258,41 @@
     },
     "none": {
       "title": "Nothing here yet",
-      "collect": "Nothing to collect: no deposit is asked and no invoice is open."
+      "collect": "Nothing to collect: no deposit is asked and no invoice is open.",
+      "invoices": "No document yet: invoices appear here when goods ship or a deposit is paid."
     },
     "done": {
       "record": "Payment recorded on {number}.",
       "send": "Pay page sent for {number}.",
       "saved": "{number}: saved."
+    },
+    "amount": "{amount}",
+    "invoices": {
+      "part": "the documents",
+      "more": "More for Invoices & credit notes",
+      "reading": "Reading the documents…",
+      "info": "Invoices & credit notes: every document of this customer, where it stands and what is still to pay. Each ⋯ opens Finance’s own window. An issued invoice never changes: a credit note corrects it.",
+      "count_one": "{count} document",
+      "count_other": "{count} documents",
+      "countMore_one": "{count}+ documents",
+      "countMore_other": "{count}+ documents",
+      "drafts_one": "{count} draft waits to be issued",
+      "drafts_other": "{count} drafts wait to be issued",
+      "rejected_one": "{count} rejected by SDI",
+      "rejected_other": "{count} rejected by SDI",
+      "shipped": "Shipped, not invoiced: {what}",
+      "shipments_one": "{count} shipment",
+      "shipments_other": "{count} shipments",
+      "invoiceBy": "invoice by {date}",
+      "order": "Order",
+      "orderDoor": "Order ›",
+      "chip": {
+        "all": "All",
+        "creditNotes": "Credit notes",
+        "drafts": "Drafts"
+      },
+      "chips": "Which documents",
+      "noneChip": "No document under this filter."
     }
   }
 }

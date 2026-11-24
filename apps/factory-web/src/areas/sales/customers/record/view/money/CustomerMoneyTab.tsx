@@ -11,13 +11,15 @@ import { Section } from '../../../../orders/record/view/production/Kit'
 import { statementOf } from '../../../money/model'
 import { balanceOf } from '../../money/balance'
 import { collectOf, type CollectInPlace, type CollectRow } from '../../money/collect'
+import { documentsOf, type DocumentChip, type DocumentsRead } from '../../money/documents' // F-CM-202
 import { otherCompanyHref, receivablesHref, workAllOrdersHref } from '../../money/doors'
 import { moneyAnswerOf } from '../../money/head'
-import { MONEY_TAB_NAMESPACES, type MoneyRead, type MoneyTabInput, type Part } from '../../money/model'
+import { MONEY_TAB_NAMESPACES, type LazyRead, type MoneyRead, type MoneyTabInput, type Part } from '../../money/model'
 import { kitId, NOTHING_YET, type CustomerMoneySectionId } from '../../money/sections'
 import type { DockPick } from '../WorkTab'
 import { BalanceSection } from './BalanceSection'
 import { CollectSection } from './CollectSection'
+import { DocumentsSection } from './DocumentsSection' // F-CM-202
 import { useSayIn } from './say'
 import '../../../../orders/record/money/view/money.css'
 import './customer-money.css'
@@ -44,7 +46,21 @@ export interface CustomerMoneyTabProps {
   readonly onPick?: (pick: DockPick) => void
   /** cm-w2: an act in place on a To-collect row (the order's own windows through the money door). */
   readonly onAct?: (act: CollectInPlace, row: CollectRow) => void
+  /** F-CM-202: the reads made when their section nears the room, and their controls. */
+  readonly lazy?: LazyParts
 }
+
+/** F-CM-202: the lazy reads the container hands (null: no right). */
+export interface LazyParts {
+  readonly want: (read: LazyRead) => void
+  readonly documents: Part<DocumentsRead> | null
+  readonly chip: DocumentChip
+  readonly onChip: (chip: DocumentChip) => void
+  readonly onMoreDocuments: () => void
+}
+
+/** The sections whose read is made when they near the room: their id → their read. */
+const LAZY_OF: Readonly<Record<string, LazyRead>> = { invoices: 'documents' }
 
 export function CustomerMoneyTab(props: CustomerMoneyTabProps) {
   return (
@@ -56,7 +72,7 @@ export function CustomerMoneyTab(props: CustomerMoneyTabProps) {
 
 const stateOf = (part: Part<unknown> | null): string => (!part ? '-' : part.value !== null ? 'v' : part.problem ? 'p' : 'r')
 
-function CustomerMoneyBody({ input, prefix, asOf, onRetry, onPick, onAct }: CustomerMoneyTabProps) {
+function CustomerMoneyBody({ input, prefix, asOf, onRetry, onPick, onAct, lazy }: CustomerMoneyTabProps) {
   const sayIn = useSayIn()
   const unit = input.party.currency ?? 'EUR'
   const say = sayIn(unit)
@@ -69,19 +85,46 @@ function CustomerMoneyBody({ input, prefix, asOf, onRetry, onPick, onAct }: Cust
   const answer = moneyAnswerOf(ruled)
   const balance = balanceOf(ruled, prefix)
   const collect = collectOf(ruled, prefix)
+  const chip = lazy?.chip ?? 'all'
+  const documents = documentsOf(ruled, lazy?.documents ?? null, chip, prefix) // F-CM-202
   const partyId = input.party.id
 
   // ---- the sections drawn, and those with nothing (their quiet lines share ONE card at the foot) ----
   const collectEmpty = !!collect && !collect.reading && !collect.problem && collect.rows.length === 0
-  const present = new Set<string>(['balance', ...(collect && !collectEmpty ? ['collect'] : [])])
-  const none: { readonly id: CustomerMoneySectionId; readonly title: string; readonly line: string }[] = collectEmpty ? [{ id: 'collect', title: say(word('cm.collect.title')), line: say(word('cm.none.collect')) }] : []
+  // F-CM-202: Invoices with nothing goes to the foot only under "All" (a chip with nothing keeps its section, so the chips stay).
+  const documentsEmpty = !!documents && !documents.reading && !documents.problem && documents.rows.length === 0 && chip === 'all'
+  const present = new Set<string>(['balance', ...(collect && !collectEmpty ? ['collect'] : []), ...(documents && !documentsEmpty ? ['invoices'] : [])])
+  const none: { readonly id: CustomerMoneySectionId; readonly title: string; readonly line: string }[] = [
+    ...(collectEmpty ? [{ id: 'collect' as const, title: say(word('cm.collect.title')), line: say(word('cm.none.collect')) }] : []),
+    ...(documentsEmpty ? [{ id: 'invoices' as const, title: say(word('orders:moneyTab.invoices.title')), line: say(word('cm.none.invoices')) }] : []),
+  ]
 
   // ---- the landing: `#<id>` comes into view, and again as each read above it arrives ----
-  const landing = [input.ageing, input.openItems, input.refunds, input.stops, input.reminders, input.summary, input.shipped].map(stateOf).join('')
+  const landing = [input.ageing, input.openItems, input.refunds, input.stops, input.reminders, input.summary, input.shipped, lazy?.documents ?? null].map(stateOf).join('')
   useEffect(() => {
     const id = typeof window === 'undefined' ? '' : decodeURIComponent(window.location.hash.slice(1))
     if (id) document.getElementById(id)?.scrollIntoView({ block: 'start' })
   }, [landing])
+
+  // ---- F-CM-202: a lazy section's read is made when it nears the room (600 px ahead); without an observer, at once ----
+  const want = lazy?.want
+  const lazyIds = [...present].filter((id) => LAZY_OF[id]).join(',')
+  useEffect(() => {
+    if (!want || !lazyIds) return
+    const ids = lazyIds.split(',')
+    if (typeof IntersectionObserver === 'undefined') {
+      for (const id of ids) want(LAZY_OF[id]!)
+      return
+    }
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) if (entry.isIntersecting && LAZY_OF[entry.target.id]) want(LAZY_OF[entry.target.id]!)
+    }, { rootMargin: '600px 0px' })
+    for (const id of ids) {
+      const element = document.getElementById(id)
+      if (element) observer.observe(element)
+    }
+    return () => observer.disconnect()
+  }, [want, lazyIds])
 
   // ---- the heads' ⋯: doors with this customer chosen, each with its right (cm-w1 stand-ins: Statement ›, Change limit ›) ----
   const receivables: MenuItemDef[] = can.receivables ? [{ id: 'receivables', label: say(word('cm.door.receivables')), href: receivablesHref(prefix, partyId) }] : []
@@ -90,6 +133,8 @@ function CustomerMoneyBody({ input, prefix, asOf, onRetry, onPick, onAct }: Cust
     ...(can.receivables && input.company ? [{ id: 'statement', label: say(word('tab.openStatement')), href: statementOf(prefix, partyId, input.company.id, unit) }] : []),
     ...(can.creditLimits ? [{ id: 'changeLimit', label: say(word('tab.changeLimit')), href: receivablesHref(prefix, partyId) }] : []),
   ]
+  // F-CM-202: Finance's Invoices list (the whole list, as the order page's door: a customer-chosen address is LATER).
+  const invoicesMenu: MenuItemDef[] = [{ id: 'finance', label: say(word('cm.door.invoices')), href: `${prefix}/finance/invoices` }]
   const pageFailed = input.ageing?.problem ?? input.openItems?.problem ?? null
 
   // ---- the answer line: one sentence per currency; under it, quiet, the company and another company's line ----
@@ -135,6 +180,9 @@ function CustomerMoneyBody({ input, prefix, asOf, onRetry, onPick, onAct }: Cust
       <BalanceSection model={balance} present={present} sayIn={sayIn} unit={unit} asOf={asOf} menu={balanceMenu} failed={pageFailed} onRetry={() => onRetry('page')} />
       {collect && present.has('collect') ? (
         <CollectSection model={collect} sayIn={sayIn} unit={unit} companyId={input.company?.id ?? null} menu={receivables} onRetry={() => onRetry('page')} onPick={onPick} onAct={onAct} allOrdersHref={workAllOrdersHref(prefix, partyId)} />
+      ) : null}
+      {documents && lazy && present.has('invoices') ? (
+        <DocumentsSection model={documents} price={can.price} chip={chip} onChip={lazy.onChip} onMore={lazy.onMoreDocuments} sayIn={sayIn} unit={unit} companyId={input.company?.id ?? null} menu={invoicesMenu} onRetry={() => onRetry('documents')} onPick={onPick} />
       ) : null}
       {none.length === 1 ? (
         <Section id={kitId(none[0]!.id)} title={none[0]!.title} answer={none[0]!.line}>

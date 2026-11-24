@@ -155,12 +155,16 @@
       "finance": "Apri in Amministrazione ›",
       "terms": "Condizioni e requisiti ›",
       "receivables": "Apri in Amministrazione › Crediti e fidi ›",
-      "down": "{section} ↓"
+      "down": "{section} ↓",
+      "invoices": "Apri in Amministrazione › Fatture ›"
     },
     "more": {
       "rows_one": "Mostra {count} altra riga",
       "rows_other": "Mostra altre {count} righe",
-      "fewer": "Mostra meno"
+      "fewer": "Mostra meno",
+      "documents_one": "Mostra {count} altro documento",
+      "documents_other": "Mostra altri {count} documenti",
+      "documentsNext": "Mostra altri documenti"
     },
     "balance": {
       "title": "Saldo",
@@ -254,12 +258,41 @@
     },
     "none": {
       "title": "Qui ancora niente",
-      "collect": "Niente da incassare: nessun acconto richiesto e nessuna fattura aperta."
+      "collect": "Niente da incassare: nessun acconto richiesto e nessuna fattura aperta.",
+      "invoices": "Ancora nessun documento: le fatture compaiono qui quando parte la merce o viene pagato un acconto."
     },
     "done": {
       "record": "Incasso registrato su {number}.",
       "send": "Pagina di pagamento inviata per {number}.",
       "saved": "{number}: salvato."
+    },
+    "amount": "{amount}",
+    "invoices": {
+      "part": "i documenti",
+      "more": "Altro per Fatture e note di credito",
+      "reading": "Lettura dei documenti…",
+      "info": "Fatture e note di credito: ogni documento di questo cliente, a che punto è e quanto resta da pagare. Ogni ⋯ apre la finestra di Amministrazione. Una fattura emessa non cambia mai: la corregge una nota di credito.",
+      "count_one": "{count} documento",
+      "count_other": "{count} documenti",
+      "countMore_one": "{count}+ documenti",
+      "countMore_other": "{count}+ documenti",
+      "drafts_one": "{count} bozza da emettere",
+      "drafts_other": "{count} bozze da emettere",
+      "rejected_one": "{count} scartata dallo SDI",
+      "rejected_other": "{count} scartate dallo SDI",
+      "shipped": "Spedito, non fatturato: {what}",
+      "shipments_one": "{count} spedizione",
+      "shipments_other": "{count} spedizioni",
+      "invoiceBy": "da fatturare entro il {date}",
+      "order": "Ordine",
+      "orderDoor": "Ordine ›",
+      "chip": {
+        "all": "Tutti",
+        "creditNotes": "Note di credito",
+        "drafts": "Bozze"
+      },
+      "chips": "Quali documenti",
+      "noneChip": "Nessun documento con questo filtro."
     }
   }
 }
