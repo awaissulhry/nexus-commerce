@@ -313,6 +313,41 @@ describe('terms per company (SAL-028, SAL-013)', () => {
     expect(sales.terms.companies.find((row: Json) => row.company.id === A.companyA).terms).not.toHaveProperty('creditLimitAmount')
   })
 
+  // F-CT-S5 (customer terms lane, S5): ONE source of the terms in force, named the same way by both reads.
+  it("the terms in force name their payment terms in both languages, from the company's row or the customer's own", async () => {
+    const own = (await ok('sales', 'GET', `/parties/${A.p1}/commercial-terms`)).terms
+    // SEED-C1's own terms: DEP30 (seed/pricing.ts) — its name, its English name, what it means in Italian and English, its deposit.
+    expect(own.paymentTerms).toMatchObject({
+      code: 'DEP30',
+      name: "30% all'ordine, saldo prima della spedizione",
+      nameI18n: { en: '30% with the order, the balance before shipping' },
+      summary: { it: expect.any(String), en: expect.any(String) },
+      deposit: { sharePct: '30', days: 0 },
+    })
+    expect(own.paymentTerms.summary.it).not.toBe('')
+    expect(own.paymentTerms.summary.en).not.toBe(own.paymentTerms.summary.it)
+    const { terms } = await ok('sales', 'GET', `/parties/${A.p1}/company-terms`)
+    const a = terms.companies.find((row: Json) => row.company.id === A.companyA)
+    const b = terms.companies.find((row: Json) => row.company.id === A.companyB)
+    // With B the row names no payment terms or list: the customer's own, the SAME object the commercial terms read gives.
+    expect(b.inForce.source).toMatchObject({ paymentTerms: 'PARTY', priceList: 'PARTY' })
+    expect(b.inForce.paymentTerms).toEqual(own.paymentTerms)
+    expect(b.inForce.priceList).toEqual({ id: own.priceList.id, code: own.priceList.code, name: own.priceList.name })
+    // With A the company's own row: its library terms, named the same way, in both languages.
+    const library = await one<{ id: string; code: string; name: string; nameI18n: Json | null }>(
+      `SELECT t.id::text AS id, t.code, t.name, t."nameI18n" FROM "PaymentTerms" t JOIN "PartyCompanyTerms" c ON c."paymentTermsId" = t.id WHERE c."partyId" = $1 AND c."companyId" = $2 AND c."endedAt" IS NULL`,
+      [A.p1, A.companyA],
+    )
+    expect(a.inForce.source).toMatchObject({ paymentTerms: 'COMPANY', priceList: 'COMPANY' })
+    expect(a.inForce.paymentTerms).toMatchObject({ id: library.id, code: library.code, name: library.name, nameI18n: library.nameI18n, summary: { it: expect.any(String), en: expect.any(String) } })
+    expect(a.inForce.paymentTerms.summary.en).not.toBe('')
+    expect(a.inForce.paymentTerms.code).toBe(a.terms.paymentTermsLabel.code)
+    expect(a.inForce.priceList).toMatchObject({ id: a.terms.priceListId, code: a.terms.priceListLabel.code, name: a.terms.priceListLabel.name })
+    // A person of B reads B's row only: the customer's own terms, named.
+    const ofB = (await ok('salesB', 'GET', `/parties/${A.p1}/company-terms`)).terms.companies
+    expect(ofB.map((row: Json) => [row.company.id, row.inForce.paymentTerms?.code])).toEqual([[A.companyB, 'DEP30']])
+  })
+
   it('makes, changes and ends one company’s terms; a person of B changes only B’s', async () => {
     // Company A is not one salesB works for: not found for them.
     await no('salesB', 'PUT', `/parties/${A.p3}/company-terms/${A.companyA}`, { depositPct: '25' }, 404)

@@ -62,12 +62,58 @@ async function chainOf(db: Reader, listId: string | null) {
   return chain
 }
 
+// ---- F-CT-S5 (customer terms lane, S5): payment terms named — ONE helper for the commercial terms and the company terms ----
+
+/** The columns of a payment terms row (the library, FIN-075) its label reads. */
+export const PAYMENT_TERMS_LABEL_COLUMNS = {
+  id: true,
+  code: true,
+  name: true,
+  nameI18n: true,
+  method: true,
+  instalments: true,
+  earlyPaymentDiscountPct: true,
+  earlyPaymentDays: true,
+  status: true,
+  companyId: true,
+} as const satisfies Prisma.PaymentTermsSelect
+export type PaymentTermsLabelRow = Prisma.PaymentTermsGetPayload<{ select: typeof PAYMENT_TERMS_LABEL_COLUMNS }>
+
+/** Payment terms as a customer's terms name them: code, name and its other languages, what they mean (IT, EN), the deposit. */
+export interface PaymentTermsLabel {
+  readonly id: string
+  readonly code: string
+  readonly name: string
+  /** The name in other languages (`{ en: '…' }`), as the library keeps it; null: none. */
+  readonly nameI18n: Record<string, string> | null
+  readonly companyId: string | null
+  readonly status: string
+  readonly summary: { readonly it: string; readonly en: string }
+  /** The deposit they ask on the order (its share and due days after acceptance); null: none. */
+  readonly deposit: { readonly sharePct: string; readonly days: number } | null
+}
+
+/** The label of a payment terms row (the commercial terms' `paymentTerms`, the company terms' `inForce.paymentTerms`). */
+export function paymentTermsLabel(row: PaymentTermsLabelRow): PaymentTermsLabel {
+  const facts = { method: row.method, instalments: instalmentsOf(row.instalments), earlyPaymentDiscountPct: row.earlyPaymentDiscountPct === null ? null : decimalText(row.earlyPaymentDiscountPct.toString()), earlyPaymentDays: row.earlyPaymentDays }
+  const names = row.nameI18n !== null && typeof row.nameI18n === 'object' && !Array.isArray(row.nameI18n) ? (row.nameI18n as Record<string, string>) : null
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    nameI18n: names,
+    companyId: row.companyId,
+    status: row.status,
+    summary: { it: termsSummary(facts, 'it'), en: termsSummary(facts, 'en') },
+    deposit: depositOf(facts.instalments),
+  }
+}
+
 /** The commercial terms as the customer's card reads them (F-CT-S3: with whether `actor` may change them). */
 export async function commercialTermsOf(db: Reader, partyId: string, actor: Actor) {
   const party: TermsPartyRow = await db.party.findUniqueOrThrow({ where: { id: partyId }, select: COLUMNS })
-  const terms = party.paymentTermsId ? await db.paymentTerms.findUnique({ where: { id: party.paymentTermsId }, select: { id: true, code: true, name: true, nameI18n: true, method: true, instalments: true, earlyPaymentDiscountPct: true, earlyPaymentDays: true, status: true, companyId: true } }) : null
+  const terms = party.paymentTermsId ? await db.paymentTerms.findUnique({ where: { id: party.paymentTermsId }, select: PAYMENT_TERMS_LABEL_COLUMNS }) : null
   const chain = await chainOf(db, party.priceListId)
-  const facts = terms ? { method: terms.method, instalments: instalmentsOf(terms.instalments), earlyPaymentDiscountPct: terms.earlyPaymentDiscountPct === null ? null : decimalText(terms.earlyPaymentDiscountPct.toString()), earlyPaymentDays: terms.earlyPaymentDays } : null
   const group = chain.find((row) => row.kind === 'GROUP') ?? null
   return {
     partyId: party.id,
@@ -76,7 +122,7 @@ export async function commercialTermsOf(db: Reader, partyId: string, actor: Acto
     currency: party.currency,
     language: party.language,
     paymentTermsId: party.paymentTermsId,
-    paymentTerms: terms && facts ? { id: terms.id, code: terms.code, name: terms.name, companyId: terms.companyId, status: terms.status, summary: { it: termsSummary(facts, 'it'), en: termsSummary(facts, 'en') }, deposit: depositOf(facts.instalments) } : null,
+    paymentTerms: terms ? paymentTermsLabel(terms) : null, // F-CT-S5: the one label (now with nameI18n)
     /** The W1 printed text (used on its quotes when it has no library terms; its purchase orders as a supplier). */
     paymentTermsText: party.paymentTerms,
     priceListId: party.priceListId,

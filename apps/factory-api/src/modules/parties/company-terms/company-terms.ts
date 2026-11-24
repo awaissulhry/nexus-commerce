@@ -14,6 +14,8 @@ import { actorOf, type OfficeContext } from '../../../core/context'
 import { listProblemFor } from '../../sales/pricelists/lists'
 import { LIST_COLUMNS, mayOnList } from '../../sales/pricelists/store'
 import { termsForParty } from '../../sales/terms/terms'
+// F-CT-S5: the one label of payment terms, shared with the commercial terms read.
+import { PAYMENT_TERMS_LABEL_COLUMNS, paymentTermsLabel, type PaymentTermsLabel } from '../commercial-terms'
 import { assertWritable, contextOf, lockParty, readParty, type PartyRowData } from '../store'
 import { companyTermsRow, TERMS_COLUMNS, type TermsRow } from './in-force'
 
@@ -68,14 +70,27 @@ function termsViewOf(row: TermsRow, names: ReadonlyMap<string, string>, labels: 
 }
 export type CompanyTermsView = ReturnType<typeof termsViewOf>
 
-const inForceView = (terms: TermsInForce) => ({
-  paymentTermsId: terms.paymentTermsId,
-  paymentTermsText: terms.paymentTerms,
-  priceListId: terms.priceListId,
-  depositPct: terms.depositPct === null ? null : decimalText(terms.depositPct),
-  poNumberRequired: terms.poNumberRequired,
-  source: { ...terms.source },
-})
+/** F-CT-S5: the payment terms and price lists the read names, by id (the company rows' and the party's own). */
+interface Named {
+  readonly terms: ReadonlyMap<string, PaymentTermsLabel>
+  readonly lists: ReadonlyMap<string, { code: string; name: string }>
+}
+
+function inForceView(terms: TermsInForce, named: Named) {
+  const list = terms.priceListId ? (named.lists.get(terms.priceListId) ?? null) : null
+  return {
+    paymentTermsId: terms.paymentTermsId,
+    paymentTermsText: terms.paymentTerms,
+    priceListId: terms.priceListId,
+    depositPct: terms.depositPct === null ? null : decimalText(terms.depositPct),
+    poNumberRequired: terms.poNumberRequired,
+    source: { ...terms.source },
+    // F-CT-S5 (customer terms lane, S5): what is in force, named, whichever source it comes from (the company's row or the
+    // customer's own) — the payment terms as the commercial terms read names them (one helper), and the price list.
+    paymentTerms: terms.paymentTermsId ? (named.terms.get(terms.paymentTermsId) ?? null) : null,
+    priceList: terms.priceListId && list ? { id: terms.priceListId, code: list.code, name: list.name } : null,
+  }
+}
 
 const PARTY_TERMS = { id: true, code: true, companyId: true, roles: true, status: true, currency: true, paymentTerms: true, paymentTermsId: true, priceListId: true, defaultDepositPct: true, version: true } as const
 
@@ -88,12 +103,15 @@ export async function companyTermsOf(db: Reader, context: OfficeContext, partyId
   )
   const rows = await db.partyCompanyTerms.findMany({ where: { partyId, companyId: { in: companies.map((company) => company.id) } }, select: TERMS_COLUMNS, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] })
   const names = await namesOf(db, rows.flatMap((row) => [row.updatedById, row.endedById]))
-  const termIds = [...new Set(rows.flatMap((row) => (row.paymentTermsId ? [row.paymentTermsId] : [])))]
-  const listIds = [...new Set(rows.flatMap((row) => (row.priceListId ? [row.priceListId] : [])))]
+  // F-CT-S5: the party's own payment terms and list too (in force where a company has no row, or a row leaves them out).
+  const termIds = [...new Set([party.paymentTermsId, ...rows.map((row) => row.paymentTermsId)].filter((id): id is string => id !== null))]
+  const listIds = [...new Set([party.priceListId, ...rows.map((row) => row.priceListId)].filter((id): id is string => id !== null))]
+  const termRows = termIds.length > 0 ? await db.paymentTerms.findMany({ where: { id: { in: termIds } }, select: PAYMENT_TERMS_LABEL_COLUMNS }) : []
   const labels = {
-    terms: new Map((termIds.length > 0 ? await db.paymentTerms.findMany({ where: { id: { in: termIds } }, select: { id: true, code: true, name: true } }) : []).map((row) => [row.id, { code: row.code, name: row.name }])),
+    terms: new Map(termRows.map((row) => [row.id, { code: row.code, name: row.name }])),
     lists: new Map((listIds.length > 0 ? await db.priceList.findMany({ where: { id: { in: listIds } }, select: { id: true, code: true, name: true } }) : []).map((row) => [row.id, { code: row.code, name: row.name }])),
   }
+  const named: Named = { terms: new Map(termRows.map((row) => [row.id, paymentTermsLabel(row)])), lists: labels.lists }
   return {
     partyId: party.id,
     code: party.code,
@@ -105,7 +123,7 @@ export async function companyTermsOf(db: Reader, context: OfficeContext, partyId
       return {
         company: { id: company.id, code: company.code, name: company.tradeName ?? company.legalName },
         terms: live ? termsViewOf(live, names, labels) : null,
-        inForce: inForceView(termsInForce(party, live)),
+        inForce: inForceView(termsInForce(party, live), named),
         mayChange: can(actor, PARTIES_MANAGE, { companyId: company.id, partyId }),
         history: mine.filter((row) => row.endedAt !== null).map((row) => termsViewOf(row, names, labels)),
       }
