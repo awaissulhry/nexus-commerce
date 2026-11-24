@@ -194,3 +194,9 @@ export function moneyChangeIsOurs(change: { readonly type: string; readonly fiel
 
 /** The live re-read waits this long after the last event (one burst for many events). */
 export const LIVE_COALESCE_MS = 800
+
+/** The tab's own reads (use-customer-money-tab.ts), each with its Try again. */
+export const TAB_READS = ['refunds', 'stops', 'reminders', 'summary', 'shipped'] as const
+export type TabRead = (typeof TAB_READS)[number]
+/** What a section's Try again reads again: the page's money reads (the ageing, the open items) or one of the tab's own. */
+export type MoneyRead = 'page' | TabRead

@@ -161,7 +161,8 @@
     "door": {
       "finance": "Open in Finance ›",
       "terms": "Terms & requirements ›",
-      "receivables": "Open in Finance › Receivables & credit ›"
+      "receivables": "Open in Finance › Receivables & credit ›",
+      "down": "{section} ↓"
     },
     "more": {
       "rows_one": "Show {count} more row",
@@ -254,7 +255,8 @@
       "stop": "Promise to pay / dispute…",
       "euroOnly": "Payments are recorded in euro only today: this invoice is in {currency}.",
       "foot": "What each order has paid and still owes, also what is not asked yet:",
-      "footDoor": "Work › All orders ›"
+      "footDoor": "Work › All orders ›",
+      "ofTotal": "of {amount}"
     },
     "none": {
       "title": "Nothing here yet",

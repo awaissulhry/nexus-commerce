@@ -347,3 +347,42 @@ describe('F-CM-103: the reads (cm-w1 W1.2; 13-backend §1.3, §1.4, §5.2)', () 
     expect(moneyChangeIsOurs({ type: 'quote.sent', fields: {} }, 'p-1', held)).toBe(false)
   })
 })
+
+describe('F-CM-101: the views (cm-w1 W1.3; 10-design §1, §2; 18-lead-settles L2, Z2, Z15)', () => {
+  const view = (name: string) => readFileSync(new URL(`../view/money/${name}`, import.meta.url), 'utf8')
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+
+  it('our stylesheet holds only `.fw-cm` rules: no rule on a kit or order Money class, the room never the viewport, tokens only', () => {
+    const css = view('customer-money.css')
+    expect(css).not.toMatch(/\.fw-(om|pt)-/)
+    expect(css).not.toMatch(/@media/)
+    expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/)
+    for (const selector of css.replace(/\/\*[\s\S]*?\*\//g, '').match(/^[^@{}\n][^{}]*(?=\{)/gm) ?? []) for (const part of selector.split(',')) expect(part.trim(), part).toMatch(/^\.fw-cm/)
+    expect(css).toContain('.fw-cm-list { container: cmls / inline-size;')
+  })
+
+  it('the views draw their models and fetch nothing (no API client, no fetching hook); the container is the one caller of the tab\'s reads', () => {
+    for (const file of readdirSync(new URL('../view/money/', import.meta.url)).filter((name) => /\.tsx?$/.test(name))) {
+      expect(view(file), file).not.toMatch(/lib\/api|use-customer-money-tab|useCustomerMoney\b|useOfficeApi|fetch\(|use-money-acts/)
+    }
+    expect(source('./CustomerMoney.tsx')).toContain('useCustomerMoneyTab({ partyId: party.id')
+  })
+
+  it('the layout: the kit\'s room with the order Money\'s class and ours, the ONE shared answer, Balance then To collect, the shared parts imported, never copied', () => {
+    const tab = view('CustomerMoneyTab.tsx')
+    expect(tab).toContain('<div className="fw-pt fw-om fw-cm">')
+    const order = ['<MoneyAnswer', '<BalanceSection', '<CollectSection']
+    for (let index = 1; index < order.length; index += 1) expect(tab.indexOf(order[index]!), order[index]).toBeGreaterThan(tab.indexOf(order[index - 1]!))
+    expect(tab).toContain("import { MoneyAnswer } from '../../../../orders/record/money/view/parts'")
+    expect(view('BalanceSection.tsx')).toContain("import { Facts, GapRow } from '../../../../orders/record/money/view/parts'")
+    expect(view('BalanceSection.tsx')).toContain("<Section id={kitId('balance')}")
+    expect(view('CollectSection.tsx')).toContain("const head = { id: kitId('collect')")
+    // A shared part is never redrawn here (no copy of its markup), and the kit is used in place.
+    for (const file of ['CustomerMoneyTab.tsx', 'BalanceSection.tsx', 'CollectSection.tsx']) expect(view(file), file).not.toMatch(/className="fw-om-(head|gap|facts|fold|il)\b/)
+  })
+
+  it('the tab says its own words from customer-money and names the catalogue of every word it reuses (Z15: never a customer word of `orders`)', () => {
+    for (const file of ['CustomerMoneyTab.tsx', 'BalanceSection.tsx', 'CollectSection.tsx']) expect(view(file), file).not.toMatch(/useT\('orders'\)|useSay\(/)
+    expect(view('say.ts')).toContain('useScopedT(CM)')
+  })
+})

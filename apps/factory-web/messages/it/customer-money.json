@@ -161,7 +161,8 @@
     "door": {
       "finance": "Apri in Amministrazione ›",
       "terms": "Condizioni e requisiti ›",
-      "receivables": "Apri in Amministrazione › Crediti e fidi ›"
+      "receivables": "Apri in Amministrazione › Crediti e fidi ›",
+      "down": "{section} ↓"
     },
     "more": {
       "rows_one": "Mostra {count} altra riga",
@@ -254,7 +255,8 @@
       "stop": "Promessa di pagamento / contestazione…",
       "euroOnly": "Oggi gli incassi si registrano solo in euro: questa fattura è in {currency}.",
       "foot": "Quanto ha pagato e quanto deve ancora ogni ordine, anche ciò che non è ancora richiesto:",
-      "footDoor": "Lavori › Tutti gli ordini ›"
+      "footDoor": "Lavori › Tutti gli ordini ›",
+      "ofTotal": "di {amount}"
     },
     "none": {
       "title": "Qui ancora niente",

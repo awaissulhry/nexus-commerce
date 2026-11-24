@@ -9,7 +9,7 @@ import { listStops, type ReminderStop } from '../../../../finance/receivables/re
 import { getOrderSummary, type OrderSummary } from '../../../orders/api'
 import { readProblem } from '../../../orders/model'
 import { shippedOfCustomer } from './api'
-import { LIVE_COALESCE_MS, moneyChangeIsOurs, partReady, READING, type MoneyTabCan, type Part, type ShippedNotInvoiced } from './model'
+import { LIVE_COALESCE_MS, moneyChangeIsOurs, partReady, READING, TAB_READS, type MoneyTabCan, type Part, type ShippedNotInvoiced, type TabRead } from './model'
 
 /**
  * F-CM-103 (customer page › MONEY tab, cm-w1 W1.2; 13-backend §1.4, §5.2) — the tab's OWN reads, made only while the tab is shown, each
@@ -20,9 +20,6 @@ import { LIVE_COALESCE_MS, moneyChangeIsOurs, partReady, READING, type MoneyTabC
  * customer here. Live: a money event of this customer (the rule in model.ts) → ONE coalesced re-read of these reads, keeping what they
  * show while they read; a reconnect → the same.
  */
-
-export const TAB_READS = ['refunds', 'stops', 'reminders', 'summary', 'shipped'] as const
-export type TabRead = (typeof TAB_READS)[number]
 
 export interface CustomerMoneyTabReads {
   readonly refunds: Part<OpenRefunds> | null
