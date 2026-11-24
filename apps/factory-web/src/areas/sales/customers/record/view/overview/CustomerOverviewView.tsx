@@ -9,7 +9,7 @@ import { ageOf } from '../../../../../../lib/production/model'
 import { useProductionWords } from '../../../../../../lib/production/words'
 import { WithMessages } from '../../../../../../record-panels/i18n'
 // The shared overview kit: every card, row, strip, fact and group below is ITS part — this file hands them data and doors only.
-import { CardState, Door, Fact, FactCols, Group, GroupRow, Headline, Overview, OverviewCard, OverviewPair, QuietLine, Row, RowAge, RowList, Strip, Strips, StripSaid, useOverviewWords } from '../../../../../_shared/record-overview/Overview'
+import { CardState, Door, Fact, FactCols, Group, GroupRow, Groups, Headline, Overview, OverviewCard, OverviewPair, QuietLine, Row, RowAge, RowList, Strip, Strips, StripSaid, useOverviewWords } from '../../../../../_shared/record-overview/Overview'
 import type { BeforeLinePart } from '../../before-order'
 import {
   OVERVIEW_NAMESPACES,
@@ -387,7 +387,7 @@ function RequestsView({ card, title, problem, words, ageOfStart, actions }: { ca
   if (card.state !== 'ready') return <CardState part={title} problem={card.state === 'failed' ? problem : null} onRetry={actions?.onRetryRequests} />
   return (
     <OverviewCard title={title}>
-      <div className="fw-so-rq-groups">
+      <Groups>
         {card.groups.map((group) => (
           <Group key={group.key} title={`${words.said(group.title)} · ${group.count}`}>
             {group.rows.map((row) => {
@@ -402,7 +402,7 @@ function RequestsView({ card, title, problem, words, ageOfStart, actions }: { ca
             })}
           </Group>
         ))}
-      </div>
+      </Groups>
     </OverviewCard>
   )
 }
