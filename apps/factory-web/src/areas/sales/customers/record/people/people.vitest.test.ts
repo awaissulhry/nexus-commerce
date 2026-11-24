@@ -258,3 +258,40 @@ describe('the tab\'s model (tab.ts) and the windows mounted in place', () => {
     expect(tab).toContain("if (conflict) reload()")
   })
 })
+
+// ---- W1.3: the views (a part owns its stylesheet; views fetch nothing; no AG grid on the tab)
+describe('the views of the tab', () => {
+  const folder = new URL('../view/people/', import.meta.url)
+  const views = readdirSync(folder).filter((name) => /\.tsx?$/.test(name)).map((name) => ({ name, source: readFileSync(new URL(name, folder), 'utf8') }))
+
+  it('people.css restyles no kit, party or shared class (only its own fw-ca-* classes, tokens only)', () => {
+    const css = readFileSync(new URL('people.css', folder), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(css).not.toMatch(/\.fw-(pt|pty|om|co|cm|cdp|pa)[-\s{.,:]/)
+    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b/i)
+    expect(css).not.toMatch(/@media/)
+  })
+
+  it('a view fetches nothing (no API client, no session, no fetching hook) and the tab has no AG grid', () => {
+    expect(views.length).toBeGreaterThanOrEqual(7)
+    for (const { name, source } of views) {
+      expect(source, name).not.toMatch(/lib\/api\/|lib\/session\/|use-people-tab|usePortalAccess|fetch\(/)
+      expect(source, name).not.toMatch(/@nexus\/ui\/grid|ListFrame|ag-grid/)
+    }
+  })
+
+  it('the tab is the kit used in place: its root, its words, its sections by their addresses', () => {
+    const tab = views.find((view) => view.name === 'PeopleTab.tsx')!.source
+    expect(tab).toContain('<div className="fw-pt fw-ca">')
+    expect(tab).toContain('<WithMessages namespaces={PEOPLE_TAB_NAMESPACES}>')
+    expect([...PEOPLE_TAB_NAMESPACES]).toEqual(['orders', CP, 'parties', 'portal-access', 'sales-customers-depth'])
+    expect(views.find((view) => view.name === 'PeopleSection.tsx')!.source).toContain("id: peopleKitId('people')")
+    expect(views.find((view) => view.name === 'AddressesSection.tsx')!.source).toContain("id: peopleKitId('addresses')")
+  })
+
+  it('the golden flow\'s words stay: the heads say "Add contact" and "Add address" (the shared catalogue\'s own)', () => {
+    expect(views.find((view) => view.name === 'PeopleSection.tsx')!.source).toContain("say(said('parties:contact.add'))")
+    expect(views.find((view) => view.name === 'AddressesSection.tsx')!.source).toContain("'parties:address.add'")
+    expect(CATALOGUE.en.parties!['contact.add']).toBe('Add contact')
+    expect(CATALOGUE.en.parties!['address.add']).toBe('Add address')
+  })
+})

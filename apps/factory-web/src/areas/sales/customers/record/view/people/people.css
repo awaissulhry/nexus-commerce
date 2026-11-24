@@ -1,0 +1,120 @@
+/*
+ * F-CA-113 (customer page › PEOPLE & ADDRESSES tab, lane ca-; 10-design §1, §8; 18-lead-settles Z2) — ONLY what is new for the tab, in
+ * its own `fw-ca-*` classes, tokens only. Every other look is the Production kit's (production.css: Section, InfoTip, PartReading,
+ * PartFailed, Quiet) or a DS part's (Banner, FilterChip, Tag, Pill, Button, Menu, Modal): this sheet restyles none of their classes.
+ * The lists lay out by the ROOM they have (each list is its own size container `cals`), never the viewport.
+ *
+ *   (1) the answer line           one sentence + the chips of what waits on us (each a door to exactly its rows)
+ *   (2) the filter line           "Showing the 1 person without a lawful basis · Show all 6 people"
+ *   (3) THE lists                 one row shape per list (people · addresses); columns join one at a time as the LIST grows:
+ *                                 S < 560 (blocks) · M 560–959 · L 960–1239 · XL ≥ 1240
+ *   (4) the check block           of an address the customer added in the portal (waiting: Approve / Refuse…; refused: why)
+ *   (5) the bulk bar              of the ticked portal people
+ *   (6) the Refuse window         its inside (the DS Modal draws the frame)
+ */
+
+/* (1) the answer line */
+.fw-ca-ans { min-width: 0; }
+.fw-ca-chips { display: flex; flex-wrap: wrap; gap: var(--nds-space-6); align-items: center; margin-top: var(--nds-space-6); min-width: 0; }
+.fw-ca-chips > button { white-space: normal; text-align: left; }
+.fw-ca-chips > button svg { flex: none; margin-right: var(--nds-space-4); vertical-align: -2px; }
+.fw-ca-chips > button.is-warning svg { color: var(--nds-warning); }
+.fw-ca-chips > button.is-danger svg { color: var(--nds-danger); }
+.fw-ca-chips > button.is-info svg { color: var(--nds-info); }
+
+/* (2) the filter a chip set */
+.fw-ca-filt { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-4) var(--nds-space-10); padding: var(--nds-space-6) var(--nds-space-10); border-radius: var(--nds-radius-lg); background: var(--nds-wash-primary); font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+.fw-ca-filt > svg { flex: none; color: var(--nds-primary); }
+
+/* (3) THE lists */
+.fw-ca-ls { container: cals / inline-size; display: flex; flex-direction: column; min-width: 0; }
+.fw-ca-row, .fw-ca-hd { gap: var(--nds-space-4) var(--nds-space-14); align-items: start; min-width: 0; }
+.fw-ca-row { display: grid; padding: var(--nds-space-10) var(--nds-space-2); border-bottom: 1px solid var(--nds-border-subtle); scroll-margin-top: 96px; }
+.fw-ca-row:last-child { border-bottom: 0; }
+.fw-ca-row:target { background: var(--nds-wash-primary); border-radius: var(--nds-radius-lg); }
+.fw-ca-row > div { min-width: 0; display: flex; flex-direction: column; gap: var(--nds-space-2); font-size: var(--nds-font-size-sm); }
+.fw-ca-row.is-off > div:not(.fw-ca-o) { opacity: 0.72; }
+.fw-ca-hd { display: none; padding: 0 var(--nds-space-2) var(--nds-space-6); border-bottom: 1px solid var(--nds-border); font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-muted); }
+.fw-ca-name { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-4) var(--nds-space-8); min-height: 22px; }
+.fw-ca-name > b { font-size: var(--nds-font-size-sm-plus); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); overflow-wrap: anywhere; }
+.fw-ca-name > b.is-erased { font-style: italic; color: var(--nds-text-2); }
+.fw-ca-tags { display: flex; flex-wrap: wrap; gap: var(--nds-space-4); align-items: center; min-width: 0; }
+.fw-ca-tags svg { flex: none; vertical-align: -2px; }
+.fw-ca-sub { font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); line-height: 1.45; overflow-wrap: anywhere; }
+.fw-ca-sub > svg { vertical-align: -2px; margin-right: 3px; }
+.fw-ca-sub.is-warning { color: var(--nds-warning-text); }
+.fw-ca-ln { display: inline-flex; align-items: center; gap: var(--nds-space-6); min-width: 0; max-width: 100%; color: var(--nds-text-link); text-decoration: none; font-size: var(--nds-font-size-sm); overflow-wrap: anywhere; }
+.fw-ca-ln:hover { text-decoration: underline; }
+.fw-ca-ln:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-xs); }
+.fw-ca-ln > svg { flex: none; color: var(--nds-text-muted); }
+.fw-ca-none { font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+.fw-ca-ph { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-2) var(--nds-space-6); }
+.fw-ca-o { align-items: flex-end; }
+.fw-ca-ckc { grid-area: ck; padding-top: 2px; }
+/* the usual lawful basis and "Not on open work" only where they have a column of their own (P6) */
+.fw-ca-pd-ok, .fw-ca-used > .fw-ca-none { display: none; }
+@container cals (min-width: 960px) { .fw-ca-used > .fw-ca-none { display: block; } .no-portal .fw-ca-pd-ok { display: block; } }
+@container cals (min-width: 1240px) { .fw-ca-pd-ok { display: block; } }
+
+/* People: S = blocks */
+.fw-ca-who { grid-area: who; } .fw-ca-reach { grid-area: reach; } .fw-ca-gets { grid-area: gets; } .fw-ca-portal { grid-area: portal; } .fw-ca-pd { grid-area: pd; } .fw-ca-o { grid-area: o; }
+.fw-ca-row.is-p { grid-template-columns: minmax(0, 1fr) 44px; grid-template-areas: "who o" "reach reach" "gets gets" "portal portal" "pd pd"; }
+.fw-ca-row.is-p.has-ck { grid-template-columns: 26px minmax(0, 1fr) 44px; grid-template-areas: "ck who o" ". reach reach" ". gets gets" ". portal portal" ". pd pd"; }
+.no-portal .fw-ca-row.is-p { grid-template-areas: "who o" "reach reach" "gets gets" "pd pd"; }
+@container cals (min-width: 560px) {
+  .fw-ca-row.is-p { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) 44px; grid-template-areas: "who reach o" "gets portal o" "pd portal o"; }
+  .no-portal .fw-ca-row.is-p { grid-template-areas: "who reach o" "gets pd o"; }
+  .fw-ca-row.is-p.has-ck { grid-template-columns: 26px minmax(0, 1.15fr) minmax(0, 1fr) 44px; grid-template-areas: "ck who reach o" ". gets portal o" ". pd portal o"; }
+}
+@container cals (min-width: 960px) {
+  .fw-ca-hd.is-p { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 44px; grid-template-areas: "who reach gets portal o"; }
+  .fw-ca-hd.is-p > .fw-ca-pd { display: none; }
+  .fw-ca-row.is-p { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 44px; grid-template-areas: "who reach gets portal o" "pd reach gets portal o"; }
+  .no-portal .fw-ca-hd.is-p, .no-portal .fw-ca-row.is-p { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.9fr) 44px; grid-template-areas: "who reach gets pd o"; }
+  .no-portal .fw-ca-hd.is-p > .fw-ca-pd { display: flex; }
+  .fw-ca-hd.is-p.has-ck, .fw-ca-row.is-p.has-ck { grid-template-columns: 26px minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 44px; grid-template-areas: "ck who reach gets portal o" ". pd reach gets portal o"; }
+  .fw-ca-hd.is-p.has-ck { grid-template-areas: "ck who reach gets portal o"; }
+}
+@container cals (min-width: 1240px) {
+  .fw-ca-hd.is-p, .fw-ca-row.is-p { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.9fr) 44px; grid-template-areas: "who reach gets portal pd o"; }
+  .fw-ca-hd.is-p > .fw-ca-pd { display: flex; }
+  .fw-ca-hd.is-p.has-ck, .fw-ca-row.is-p.has-ck { grid-template-columns: 26px minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.9fr) 44px; grid-template-areas: "ck who reach gets portal pd o"; }
+}
+
+/* Addresses: S = blocks · M: address | for + at | ⋯ · L: address | for | at the address | used on | ⋯ ; the check block spans the row */
+.fw-ca-addr { grid-area: addr; } .fw-ca-for { grid-area: for; } .fw-ca-at { grid-area: at; } .fw-ca-used { grid-area: used; } .fw-ca-chk { grid-area: chk; }
+.fw-ca-row.is-a { grid-template-columns: minmax(0, 1fr) 44px; grid-template-areas: "addr o" "for for" "at at" "used used" "chk chk"; }
+@container cals (min-width: 560px) {
+  .fw-ca-row.is-a { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) 44px; grid-template-areas: "addr for o" "addr at o" "used at o" "chk chk chk"; }
+}
+@container cals (min-width: 960px) {
+  .fw-ca-hd.is-a { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 0.9fr) 44px; grid-template-areas: "addr for at used o"; }
+  .fw-ca-row.is-a { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 0.9fr) 44px; grid-template-areas: "addr for at used o" "chk chk chk chk chk"; }
+}
+.fw-ca-used svg { vertical-align: -2px; color: var(--nds-text-muted); }
+.fw-ca-lines { font-size: var(--nds-font-size-sm); color: var(--nds-text-2); line-height: 1.45; overflow-wrap: anywhere; }
+
+/* (4) the check of an address the customer added in the portal */
+.fw-ca-chkb { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8) var(--nds-space-14); margin-top: var(--nds-space-4); padding: var(--nds-space-8) var(--nds-space-12); border: 1px solid var(--nds-border-subtle); border-left: 3px solid var(--nds-warning); border-radius: var(--nds-radius-lg); background: var(--nds-warning-soft); min-width: 0; }
+.fw-ca-chkb.is-refused { border-left-color: var(--nds-border-strong); background: var(--nds-surface-raised); }
+.fw-ca-chkb-t { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: var(--nds-space-2); font-size: var(--nds-font-size-sm); color: var(--nds-warning-text); overflow-wrap: anywhere; }
+.fw-ca-chkb.is-refused .fw-ca-chkb-t { color: var(--nds-text-2); }
+.fw-ca-chkb-t b { font-weight: var(--nds-font-weight-semibold); }
+.fw-ca-chkb-t b > svg { vertical-align: -2px; }
+.fw-ca-chkb-a { display: flex; gap: var(--nds-space-6); flex-wrap: wrap; align-items: center; }
+@container cals (max-width: 559px) { .fw-ca-chkb-a { flex: 1 1 100%; } .fw-ca-chkb-a > * { min-height: 44px; flex: 1 1 auto; justify-content: center; } }
+
+/* (5) the bulk bar of the ticked portal people */
+.fw-ca-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6) var(--nds-space-10); padding: var(--nds-space-6) var(--nds-space-10); border: 1px solid var(--nds-tonal-border); border-radius: var(--nds-radius-lg); background: var(--nds-tonal-bg); font-size: var(--nds-font-size-sm); color: var(--nds-tonal-fg); }
+.fw-ca-bulk > b { margin-right: var(--nds-space-4); }
+.fw-ca-sp { flex: 1; }
+
+/* the foot line and the "Show N more" door */
+.fw-ca-foot { margin: 0; display: flex; gap: var(--nds-space-6); align-items: flex-start; font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); line-height: 1.45; }
+.fw-ca-foot > svg { flex: none; margin-top: 1px; }
+.fw-ca-more { align-self: flex-start; }
+
+/* (6) the Refuse window's inside */
+.fw-ca-win { display: flex; flex-direction: column; gap: var(--nds-space-10); min-width: 0; }
+.fw-ca-win-addr { margin: 0; display: flex; flex-direction: column; gap: var(--nds-space-2); padding: var(--nds-space-8) var(--nds-space-12); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg); background: var(--nds-surface-raised); font-size: var(--nds-font-size-sm); color: var(--nds-text-2); overflow-wrap: anywhere; }
+.fw-ca-win-addr > b { color: var(--nds-text-strong); }
