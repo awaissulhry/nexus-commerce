@@ -13,13 +13,13 @@ import { getProductionLimits } from '../../../../admin/users/partners/api'
 import { partnerCan, personReach, type RowAction } from '../../../../admin/users/partners/model'
 import { usePortalAccess } from '../../portal/PortalAccess'
 import type { PortalAccessActions, PortalAccessModel } from '../../portal/model'
-import type { Privacy } from '../../depth/api'
+import type { Privacy, PrivacyContact } from '../../depth/api'
 import { listProfiles, listTemplates, type ProfilesView, type TemplateOption } from '../../../mtm/api' // F-CA-204
 import { mtmCan, recordHref } from '../../../mtm/model' // F-CA-208
 import { useMeasurementsDialog } from '../../../mtm/use-measurements' // F-CA-208: Made-to-measure's own windows, in place
 import { useLinkDialog } from '../../../mtm/use-dialogs' // F-CA-208
 import { useLocale } from '../../../../../lib/i18n/provider' // F-CA-208: a measurement link's language
-import type { Read as DepthRead } from '../../depth/model'
+import type { PrivacyDialog, Read as DepthRead } from '../../depth/model'
 import { readProblem } from '../../../orders/model'
 import { approveDeliveryAddress, createRider, readPartyUsage, readRiders, refuseDeliveryAddress, setRiderTeam, type PartyUsage, type RidersView } from './api'
 import type { PeopleChip } from './answer'
@@ -51,6 +51,9 @@ export interface PeopleTabInput {
   readonly reload: () => void
   /** The contacts' personal data (the depth provider's read on People). */
   readonly privacy: DepthRead<Privacy> | null
+  /** F-CA-222 (W2.4; Z14): the depth provider's own personal-data windows, opened from a person's ⋯ (absent: none offered). */
+  readonly openPrivacy?: ((kind: PrivacyDialog['kind'], contact: PrivacyContact) => void) | undefined
+  readonly retryPrivacy?: (() => void) | undefined
   /** People & addresses is the tab shown: only then does the tab read. */
   readonly enabled: boolean
 }
@@ -429,7 +432,8 @@ export function usePeopleTab(input: PeopleTabInput): PeopleTabContainer {
     else if (act === 'invite' && contact?.email) portalActions.onDialog?.({ kind: 'invite', email: contact.email, name: contact.name })
     else if (act === 'change' && person) portalActions.onDialog?.({ kind: 'person', userId: person.id })
     else if ((act === 'resend' || act === 'revoke' || act === 'suspend' || act === 'reactivate' || act === 'deactivate') && person) portalActions.onDialog?.({ kind: 'confirm', action: act, userIds: [person.id] })
-    else if (act === 'archive' && contact) recordActions.onContactStatus?.(contact.id, 'ARCHIVED')
+    else if (act === 'archive' && contact) patch({ archive: { kind: 'contact', id: contact.id } }) // F-CA-222: the NEW window first
+    else if ((act === 'basis' || act === 'objection' || act === 'copy' || act === 'erase') && row.privacy) input.openPrivacy?.(act, row.privacy) // F-CA-222
     else if (act === 'restore' && contact) recordActions.onContactStatus?.(contact.id, 'ACTIVE')
     else if (act === 'link') copy(linkTo(personAnchor(row.id)))
   }
@@ -437,7 +441,7 @@ export function usePeopleTab(input: PeopleTabInput): PeopleTabContainer {
     if (act === 'edit') recordActions.onDialog?.({ kind: 'address', addressId: row.id })
     else if (act === 'billTo' || act === 'shipTo') recordActions.onDefault?.(act, row.id)
     else if (act === 'copy') copy(addressText(row.address))
-    else if (act === 'archive') recordActions.onAddressStatus?.(row.id, 'ARCHIVED')
+    else if (act === 'archive') patch({ archive: { kind: 'address', id: row.id } }) // F-CA-222: the NEW window first
     else if (act === 'restore') recordActions.onAddressStatus?.(row.id, 'ACTIVE')
     else if (act === 'approve') void approve(row)
     else if (act === 'refuse') {
@@ -470,6 +474,15 @@ export function usePeopleTab(input: PeopleTabInput): PeopleTabContainer {
     onTeamDraft: (next) => patchTeam(next),
     onTeamConfirm: () => void confirmTeam(),
     onTeamClose: () => patch({ team: null }),
+    // ---- F-CA-222: the Archive window sends the record's own change (it warns, never refuses)
+    onArchiveConfirm: () => {
+      const archive = state.archive
+      if (archive?.kind === 'contact') recordActions.onContactStatus?.(archive.id, 'ARCHIVED')
+      else if (archive?.kind === 'address') recordActions.onAddressStatus?.(archive.id, 'ARCHIVED')
+      patch({ archive: null })
+    },
+    onArchiveClose: () => patch({ archive: null }),
+    onRetryPrivacy: () => input.retryPrivacy?.(),
     onNewMeasurements: () => measurements.openNew({ partyId, customerQ }),
     onSendLink: () => {
       readTemplates()

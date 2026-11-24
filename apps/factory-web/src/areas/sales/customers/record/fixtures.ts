@@ -27,7 +27,7 @@ import type { SupervisorModel } from '../portal/limits/model'
 // B-W2b-324: the customer in depth (made-up data in ../depth/_demo/fixtures.ts).
 import { WithMessages } from '../../../../record-panels/i18n'
 import type { SupplierDepth } from '../../../parties/_shared/view/PartyRecordView'
-import type { Glance } from '../depth/api'
+import type { Glance, Privacy } from '../depth/api'
 import { DEPTH_NAMESPACES } from '../depth/CustomerDepth'
 import { ALL_CAN, COMPANIES, COPY, FILES, glanceOf, HELD_GLANCE, HOLDS, KEPT, NO_HOLDS, PRIVACY, READ_CAN, REQUIREMENTS, SALES_CAN, STYLES, TERMS as COMPANY_TERMS, TODAY, TWO_HOLDS, WITHHELD, withoutPrices } from '../depth/_demo/fixtures'
 import { basisDraftOf, blankRequirement, failedRead, LOADING, ready, requirementDraftOf, type DepthCan, type Read } from '../depth/model'
@@ -183,9 +183,12 @@ interface PeopleCase {
 }
 
 /** F-CA-120: the tab's rights from a case's record rights (the gallery's roles: a portal right covers invite and manage). */
-const peopleCanOf = (can: PartyRecordModel['can']): PeopleCan => ({ view: can.view, manage: can.manage, ordersManage: can.ordersManage === true, portal: can.partners === true, invite: can.partners === true, portalManage: can.partners === true, audit: false, ...NO_MEASUREMENTS })
+const peopleCanOf = (can: PartyRecordModel['can'], privacy?: DepthCan): PeopleCan => ({ view: can.view, manage: can.manage, ordersManage: can.ordersManage === true, portal: can.partners === true, invite: can.partners === true, portalManage: can.partners === true, audit: false, ...NO_MEASUREMENTS, privacy: privacy?.privacy === true, erase: privacy?.erase === true /* F-CA-226: a privacy case's own rights */ })
 /** F-CA-205 (ca-w2): the gallery's older People cases see no measurement profile and no personal-data act (the ca-* cases set their own). */
 const NO_MEASUREMENTS = { measurements: false, mtmRecord: false, mtmLink: false, mtmReview: false, fittings: false, ordersView: false, privacy: false, erase: false, privacyRequests: false } as const
+/** F-CA-226: a case without its own privacy read: every contact with the contract as its lawful basis (made-up), so Personal data draws. */
+const privacyOfCase = (party: Party): Read<Privacy> =>
+  ready({ notRecorded: 0, contacts: party.contacts.map((contact) => ({ id: contact.id, name: contact.name, erased: false, status: contact.status, lawfulBasis: 'CONTRACT' as const, consentAt: null, consentSource: null, objectedAt: null, erasedAt: null, erasedBy: null, version: contact.version })) })
 /** F-CA-205: a case's riders read, from its glance (its riders with their own page, a rider's team); none: a team with no rider yet. */
 function ridersOfCase(party: Party, glance: Read<Glance> | undefined): PeopleRead<RidersView> {
   const value = glance?.status === 'ready' ? glance.value : null
@@ -1044,10 +1047,10 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
   const peopleTab =
     party && shownTab(recordTabs(SIDES.customers, record.can), record.tab) === 'people'
       ? createElement(PeopleTab, {
-          model: peopleTabModel({ party, prefix: record.prefix, can: peopleCanOf(record.can), now: NOW, portal, privacy: depth?.privacy?.read ?? null, usage: null, approverId: null, profiles: null, riders: ridersOfCase(party, depth?.glance) }, PEOPLE_TAB_START),
+          model: peopleTabModel({ party, prefix: record.prefix, can: peopleCanOf(record.can, depth?.privacy?.can), now: NOW, portal, privacy: depth?.privacy?.read ?? privacyOfCase(party), usage: null, approverId: null, profiles: null, riders: ridersOfCase(party, depth?.glance) }, PEOPLE_TAB_START),
           portal: portal ? { model: portal } : null,
           recordHref: `${record.prefix}/sales/customers/${id}`,
-          after: nodes?.contacts /* F-CA-209: Riders & measurements is the tab's own section now */,
+          privacy: depth?.privacy ? { model: depth.privacy } : null /* F-CA-226: the case's personal-data windows (its dialog cases draw them) */,
         })
       : null
   // F-CA-120: end

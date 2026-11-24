@@ -143,7 +143,34 @@
     "noPrices": "Senza prezzi"
   },
   "privacy": {
-    "onlyPortal": "Solo nel portale"
+    "onlyPortal": "Solo nel portale",
+    "title": "Dati personali",
+    "more": "Altro per Dati personali",
+    "reading": "Lettura dei dati personali dei contatti…",
+    "listLabel": "Le persone i cui dati personali vanno guardati",
+    "answer": {
+      "none": "Ancora nessun contatto: qui compare la base giuridica di ogni persona.",
+      "basis": "Base giuridica registrata per {count} contatti su {total}",
+      "noObjection": "nessuna opposizione",
+      "objections_one": "{count} opposizione",
+      "objections_other": "{count} opposizioni",
+      "nothingErased": "nessuna cancellazione",
+      "erasedOn": "1 cancellato il {date}",
+      "erased": "{count} cancellati"
+    },
+    "basisMissing": "Base giuridica mancante",
+    "inPeople": "In Persone ↑",
+    "ex": {
+      "basis": "Non è ancora registrato perché possiamo conservare i dati di questa persona.",
+      "objected": "Registrata una volta, mai revocata. Le mail non si fermano ancora da sole: avvisa i colleghi che scrivono.",
+      "erasedOn": "Cancellato il {date}",
+      "erasedBy": "Da {name}. Nome, e-mail e telefono sono cancellati per sempre.",
+      "kept": "Resta ciò che la legge conserva (i documenti, le mail ricevute). La cancellazione rapida non vale per le controversie aperte e lascia i nomi nelle mail e nella cronologia: per questo, apri una richiesta."
+    },
+    "allGood": "Ogni contatto ha una base giuridica; nessuna opposizione, nessuna cancellazione.",
+    "foot": "I dati dei contatti (nomi, e-mail, telefoni) li vede ogni ruolo che apre i clienti: Titolare, Commerciale, Amministrazione contabile, Acquisti, Responsabile di produzione, Magazzino, Designer della fabbrica e Sola lettura. Le azioni sono nel ⋯ di ogni persona in Persone.",
+    "request": "Apri una richiesta in Amministrazione › Privacy ›",
+    "info": "Dati personali (GDPR): perché possiamo conservare i dati di ogni persona (art. 6), un'opposizione (art. 21), una copia di ciò che conserviamo (art. 15), una cancellazione (art. 17). Ogni azione è nel ⋯ della persona in Persone; qui solo ciò che va guardato."
   },
   "row": {
     "menu": "Azioni per {name}",
@@ -152,7 +179,9 @@
     "history": "Storico ›",
     "copyLink": "Copia il link a questa riga",
     "erasedLine": "Contatto cancellato",
-    "erasedHeld": "Questo contatto è stato cancellato: non si può fare altro."
+    "erasedHeld": "Questo contatto è stato cancellato: non si può fare altro.",
+    "archive": "Archivia…",
+    "changeBasis": "Cambia la base giuridica…"
   },
   "held": {
     "noEmailInvite": "Un invito ha bisogno di un'e-mail: aggiungila prima al contatto."
@@ -242,7 +271,8 @@
   "part": {
     "portal": "l'accesso al portale",
     "profiles": "i profili di misura",
-    "riders": "i piloti"
+    "riders": "i piloti",
+    "privacy": "i dati personali dei contatti"
   },
   "linkTo": "Copia il link a {section}",
   "keys": "Tasti: Tab passa all'azione successiva, Invio o Spazio la apre; Esc chiude un menu o una finestra.",
@@ -359,6 +389,39 @@
     "kept": "Gli ordini già fatti mantengono il loro cliente e le loro misure: una squadra ordina solo con le misure tenute sulla squadra.",
     "problem": {
       "pick": "Scegli la squadra in cui spostarlo."
+    }
+  },
+  "archive": {
+    "confirm": "Archivia",
+    "contact": {
+      "title": "Archiviare {name}?",
+      "never": "Archiviato, mai cancellato: Ripristina riporta {name}. Preventivi, ordini e documenti mantengono la loro copia.",
+      "quotesNext": "Ora riceve preventivi e conferme: dopo, vanno a {name} (il prossimo contatto Ordini con e-mail).",
+      "quotesNobody": "L'unico contatto che riceve preventivi e conferme: dopo, nessuno li riceve finché un altro contatto non ha il ruolo Ordini.",
+      "invoicesStill": "Ora riceve fatture e solleciti; {names} continuerà a riceverli.",
+      "invoicesNobody": "L'unico contatto che riceve fatture e solleciti: dopo, nessuno li riceve e i solleciti non possono partire.",
+      "signsIn": "Accede ancora al portale: l'archiviazione non lo ferma. Disattiva anche il suo accesso al portale, da questa riga.",
+      "invited": "È ancora invitato al portale: l'archiviazione non lo ferma. Revoca anche l'invito, da questa riga.",
+      "approver": "L'approvatore della produzione nominato nel portale: nominane un altro in Impostazioni del portale, o le approvazioni non aspettano nessuno.",
+      "openQuotes_one": "Indicato su {count} preventivo aperto: mantiene questo contatto; la sua conferma va poi a {name}, mai a un contatto archiviato.",
+      "openQuotes_other": "Indicato su {count} preventivi aperti: mantengono questo contatto; le loro conferme vanno poi a {name}, mai a un contatto archiviato.",
+      "openQuotesNobody_one": "Indicato su {count} preventivo aperto: senza nessun altro in Ordini, la sua conferma non avrebbe destinatario.",
+      "openQuotesNobody_other": "Indicato su {count} preventivi aperti: senza nessun altro in Ordini, le loro conferme non avrebbero destinatario.",
+      "mailIn": "La sua prossima e-mail non viene più abbinata alle conversazioni di {customer}."
+    },
+    "address": {
+      "title": "Archiviare “{name}”?",
+      "never": "Archiviato, mai cancellato: Ripristina lo riporta.",
+      "copies": "Gli ordini aperti mantengono la loro copia dell'indirizzo: nessuno cambia.",
+      "shipTo": "Il predefinito per le consegne: dopo non ce n'è uno finché non lo imposti — i nuovi preventivi e ordini chiedono un indirizzo di consegna.",
+      "billTo": "Il predefinito per le fatture: dopo non ce n'è uno finché non lo imposti.",
+      "einvoiceOther": "Le fatture elettroniche usano questo indirizzo: useranno la sede legale di {city}.",
+      "einvoiceBillTo": "Le fatture elettroniche usano questo indirizzo: useranno l'indirizzo predefinito per le fatture di {city}.",
+      "einvoiceNone": "Le fatture elettroniche usano questo indirizzo: senza, il cliente non si può fatturare finché non c'è un'altra sede legale o un indirizzo predefinito per le fatture.",
+      "draftQuotes_one": "Indicato su {count} preventivo in bozza: non si può inviare finché non si sceglie un altro indirizzo.",
+      "draftQuotes_other": "Indicato su {count} preventivi in bozza: non si possono inviare finché non si sceglie un altro indirizzo.",
+      "shipments_one": "{count} spedizione preparata va qui: mantiene questo indirizzo.",
+      "shipments_other": "{count} spedizioni preparate vanno qui: mantengono questo indirizzo."
     }
   }
 }

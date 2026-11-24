@@ -9,7 +9,8 @@ import type { PartnerPerson, PortalAccess } from '../../../../admin/users/partne
 import { customerAccess, CUSTOMER_PEOPLE, portalModel as portalModelOf } from '../../portal/demo'
 import type { PrivacyContact } from '../../depth/api'
 import { addressRows, invoiceAddressOf, refusedInView, shownAddresses, addressMenu } from './addresses'
-import { peopleAnswer, peopleBadge, peopleSectionAnswer, personFilterOf, type PeopleFacts } from './answer'
+import { peopleAnswer, peopleBadge, peopleSectionAnswer, personFilterOf, privacyExceptions, privacySectionAnswer, type PeopleFacts } from './answer'
+import { addressArchiveWarnings, contactArchiveWarnings } from './archive'
 import { CP, failedRead, PEOPLE_SECTIONS, PEOPLE_TAB_NAMESPACES, peopleCan, READING, readyRead, said, sayOf, type Said } from './model'
 import { partyUsageSchema, type PartyUsage, type RidersView } from './api'
 import { riderMenu, riderRows, ridersAnswer } from './riders'
@@ -320,7 +321,7 @@ describe('the page mounts the tab (W1.4)', () => {
 
   it('the record builds the container on every tab (it reads only on People) and the view only on ?tab=people', () => {
     const container = source('../CustomerRecord.tsx')
-    expect(container).toContain("privacy: privacy.read, enabled: tab === 'people' })") // F-CA-204: Riders read the riders and profiles, not the glance
+    expect(container).toContain("retryPrivacy: privacy.state.onRetry, enabled: tab === 'people' })") // F-CA-204 / F-CA-224: no glance; the privacy windows' acts
     expect(container).toContain("named && record.party && tab === 'people' ? (")
     expect(container).not.toMatch(/parts=\{\['people'\]\}|portalEmails|contactEmails/)
   })
@@ -340,7 +341,7 @@ describe('the page mounts the tab (W1.4)', () => {
 
   it('the depth provider hands its ONE privacy read; the hold connector stays (the Money lane\'s KEEP)', () => {
     const depth = source('../../depth/CustomerDepth.tsx')
-    expect(depth).toContain("export function useCustomerPrivacy(): CustomerDepthState['privacy'] {")
+    expect(depth).toContain("export function useCustomerPrivacy(reload?: () => void): { readonly state: CustomerDepthState['privacy']; readonly can: CustomerDepthState['can']") // F-CA-223
     expect(depth).toContain('export function useCustomerHold(party: Party)')
   })
 
@@ -360,7 +361,10 @@ describe('the page mounts the tab (W1.4)', () => {
       }
     const privacy = render(customerRecordScreen as DesignScreen<unknown>, customerRecordScreen.cases.find((entry) => entry.id === 'w2b-324-privacy')!.model, 'en')
     expect(privacy).toContain('id="people"')
-    expect(privacy.indexOf('id="addresses"')).toBeLessThan(privacy.lastIndexOf('Erased contact'))
+    // F-CA-226 (W2.4): the personal-data card left the tab — its section draws the exceptions (here: no lawful basis) after Addresses.
+    expect(privacy.indexOf('id="addresses"')).toBeLessThan(privacy.indexOf('id="personal-data"'))
+    expect(privacy.slice(privacy.indexOf('id="personal-data"'))).toContain('Lawful basis missing')
+    expect(privacy).not.toContain('Personal-data actions for')
   })
 })
 
@@ -506,5 +510,67 @@ describe('Add rider… and Change team… (W2.3)', () => {
     expect(container).toContain("teamPartyId: dialog.choice === 'off' ? null : dialog.picked!.id }, key)")
     expect(container).toContain("setPreset(blankContact(['RIDER']))")
     expect(readFileSync(new URL('../view/people/PeopleTab.tsx', import.meta.url), 'utf8')).toContain('<ChangeTeamDialog dialog={model.team} actions={actions} />')
+  })
+})
+
+// ---- ca-w2 W2.4: Personal data, the personal-data acts on a person's ⋯ (Z14), the Archive windows (P14)
+describe('Personal data, its acts on the person, the Archive windows (W2.4)', () => {
+  const PRIVACY_CAN = peopleCan(['parties.view', 'parties.manage', 'parties.privacy', 'parties.erase', 'partners.view'])
+  const anna = contact(1, 'Anna Demo', 'anna@example.com', ['ORDERS'])
+  const bruno = contact(2, 'Bruno Esempio', 'bruno@example.com', ['ORDERS', 'INVOICES'])
+  const context = (can = PRIVACY_CAN, archivedCustomer = false) => ({ can, access: null, archivedCustomer, prefix: '/w/DEMO' })
+
+  it('the acts of today\'s table are on the person\'s ⋯ — each its own right (hidden without it), held only by state', () => {
+    const [row] = peopleRows(input([anna], null, { privacy: [privacyOf(anna, { objectedAt: NOW })] }))
+    const items = personMenu(row!, context())
+    expect(items.filter((item) => ['basis', 'objection', 'copy', 'erase'].includes(item.id)).map((item) => [item.id, item.held ? say('en')(item.held) : null])).toEqual([
+      ['basis', null],
+      ['objection', 'An objection is already recorded for this person.'],
+      ['copy', null],
+      ['erase', null],
+    ])
+    expect(personMenu(row!, context(peopleCan(['parties.view', 'parties.manage']))).map((item) => item.id)).not.toContain('basis')
+    expect(personMenu(row!, context(peopleCan(['parties.view', 'parties.privacy']))).map((item) => item.id)).not.toContain('erase')
+    // R-B5: an erase while a login still uses the e-mail is held, pointing at this row's Deactivate.
+    const [signedIn] = peopleRows(input([anna], [person('u1', 'Anna Demo', 'anna@example.com')]))
+    expect(say('en')(personMenu(signedIn!, context()).find((item) => item.id === 'erase')!.held!)).toMatch(/end their portal access first/)
+    expect(say('en')(personMenu(row!, context(PRIVACY_CAN, true)).find((item) => item.id === 'basis')!.held!)).toBe('The customer is archived: reactivate it first.')
+  })
+
+  it('the Personal data section: the summary in both languages and ONLY the people who need a look', () => {
+    const rows = peopleRows(input([anna, bruno], null, { privacy: [privacyOf(anna), privacyOf(bruno, { lawfulBasis: null })] }))
+    expect(sentence(privacySectionAnswer(rows), 'en')).toBe('Lawful basis recorded for 1 of 2 contacts · no objection · nothing erased')
+    expect(sentence(privacySectionAnswer(rows), 'it')).toBe('Base giuridica registrata per 1 contatti su 2 · nessuna opposizione · nessuna cancellazione')
+    expect(privacyExceptions(rows).map((entry) => [entry.row.contact?.name, entry.kind])).toEqual([['Bruno Esempio', 'basis']])
+  })
+
+  it('Archive {name}? says who gets its mails after (the mail rule run without it), its portal access, the open quotes that name it', () => {
+    const facts = { contact: anna, contacts: [anna, bruno], customer: 'Moda Demo', portal: 'ACTIVE' as const, approver: true, usage: { contactId: anna.id, openQuotes: 2, lastQuoteAt: null, openReturns: 0, openComplaints: 0, openServiceCases: 0, lastMailInAt: null } }
+    const words = contactArchiveWarnings(facts).map((warning) => [warning.tone, say('en')(warning.words)])
+    expect(words).toEqual([
+      ['warning', 'Gets quotes & confirmations now: after this, they go to Bruno Esempio (the next Orders contact with an e-mail).'],
+      ['warning', 'Still signs in to the portal: archiving does not end that. Deactivate their portal access too, from this row.'],
+      ['warning', 'The named production approver in the portal: name another one on Portal settings, or approvals wait for nobody.'],
+      ['info', 'Named on 2 open quotes: they keep this contact; their confirmations then go to Bruno Esempio, never to an archived contact.'],
+      ['info', "Their next e-mail to us is no longer matched to Moda Demo's threads."],
+    ])
+    const alone = contactArchiveWarnings({ ...facts, contact: bruno, contacts: [bruno], portal: null, approver: false, usage: null })
+    expect(alone.map((warning) => warning.tone)).toEqual(['danger', 'danger', 'info'])
+  })
+
+  it('Archive "{address}"? says its defaults, what the e-invoices use after, the draft quotes and shipments that name it', () => {
+    const office = address(1, { kinds: ['REGISTERED', 'BILL_TO'], isDefaultBillTo: true, isDefaultShipTo: false, city: 'Firenze' })
+    const usage = { addressId: office.id, draftQuoteVersions: 1, preparedShipments: 2, openSampleShipments: 0, openPortalRequests: 0, openChangeRequests: 0 }
+    expect(addressArchiveWarnings({ address: office, addresses: [office], usage }).map((warning) => warning.tone)).toEqual(['info', 'warning', 'danger', 'warning', 'info'])
+    const second = address(2, { kinds: ['REGISTERED'], isDefaultBillTo: false, city: 'Milano' })
+    expect(say('en')(addressArchiveWarnings({ address: office, addresses: [office, second], usage: null })[2]!.words)).toBe('E-invoices use this address: they will use the registered office in Milano.')
+  })
+
+  it('the old personal-data card left the tab in the same step: the acts open the depth provider\'s own windows from the ⋯', () => {
+    const container = readFileSync(new URL('../CustomerRecord.tsx', import.meta.url), 'utf8')
+    expect(container).not.toMatch(/depth\?\.contacts|after=\{/)
+    expect(container).toContain('openPrivacy: privacy.state.onOpen')
+    expect(readFileSync(new URL('../view/people/PeopleTab.tsx', import.meta.url), 'utf8')).toContain('<PrivacyWindows model={privacy.model} actions={privacy.actions} />')
+    expect(readFileSync(new URL('./use-people-tab.ts', import.meta.url), 'utf8')).toContain("input.openPrivacy?.(act, row.privacy)")
   })
 })

@@ -143,7 +143,34 @@
     "noPrices": "No prices"
   },
   "privacy": {
-    "onlyPortal": "Only in the portal"
+    "onlyPortal": "Only in the portal",
+    "title": "Personal data",
+    "more": "More for Personal data",
+    "reading": "Reading the personal data of the contacts…",
+    "listLabel": "The people whose personal data needs a look",
+    "answer": {
+      "none": "No contact yet: the lawful basis of each person shows here.",
+      "basis": "Lawful basis recorded for {count} of {total} contacts",
+      "noObjection": "no objection",
+      "objections_one": "{count} objection",
+      "objections_other": "{count} objections",
+      "nothingErased": "nothing erased",
+      "erasedOn": "1 erased on {date}",
+      "erased": "{count} erased"
+    },
+    "basisMissing": "Lawful basis missing",
+    "inPeople": "In People ↑",
+    "ex": {
+      "basis": "Why we may keep this person's details is not recorded yet.",
+      "objected": "Recorded once, never lifted. The mails do not stop by themselves yet: tell the colleagues who write.",
+      "erasedOn": "Erased {date}",
+      "erasedBy": "By {name}. Name, e-mail and phone are blanked for good.",
+      "kept": "What the law keeps stays (documents, the mails received). The quick erase does not hold for open disputes and leaves names in mails and history: for that, open a data request."
+    },
+    "allGood": "Every contact has a lawful basis; no objection, nothing erased.",
+    "foot": "Contact details (names, e-mails, phones) are seen by every role that opens customers: Owner, Sales, Finance, Buyer, Production manager, Warehouse, Factory designer and Read-only. The acts are on each person's ⋯ in People.",
+    "request": "Open a data request in Admin › Privacy ›",
+    "info": "Personal data (GDPR): why we may keep each person's details (art. 6), an objection (art. 21), a copy of what we hold (art. 15), an erasure (art. 17). Each act is on the person's ⋯ in People; here only what needs a look."
   },
   "row": {
     "menu": "Actions for {name}",
@@ -152,7 +179,9 @@
     "history": "History ›",
     "copyLink": "Copy link to this row",
     "erasedLine": "Erased contact",
-    "erasedHeld": "This contact was erased: nothing more can be done with it."
+    "erasedHeld": "This contact was erased: nothing more can be done with it.",
+    "archive": "Archive…",
+    "changeBasis": "Change the lawful basis…"
   },
   "held": {
     "noEmailInvite": "An invitation needs an e-mail: add it to the contact first."
@@ -242,7 +271,8 @@
   "part": {
     "portal": "the portal access",
     "profiles": "the measurement profiles",
-    "riders": "the riders"
+    "riders": "the riders",
+    "privacy": "the personal data of the contacts"
   },
   "linkTo": "Copy link to {section}",
   "keys": "Keys: Tab moves to the next act, Enter or Space opens it; Esc closes a menu or a window.",
@@ -359,6 +389,39 @@
     "kept": "Orders already made keep their customer and their measurements: a team orders only with the measurements kept on the team.",
     "problem": {
       "pick": "Pick the team to move to."
+    }
+  },
+  "archive": {
+    "confirm": "Archive",
+    "contact": {
+      "title": "Archive {name}?",
+      "never": "Archived, never deleted: Restore brings {name} back. Quotes, orders and documents keep their own copy.",
+      "quotesNext": "Gets quotes & confirmations now: after this, they go to {name} (the next Orders contact with an e-mail).",
+      "quotesNobody": "The only contact who gets quotes & confirmations: after this nobody gets them, until another contact has the role Orders.",
+      "invoicesStill": "Gets invoices & reminders now; {names} still will.",
+      "invoicesNobody": "The only contact who gets invoices & reminders: after this nobody gets them and reminders cannot go out.",
+      "signsIn": "Still signs in to the portal: archiving does not end that. Deactivate their portal access too, from this row.",
+      "invited": "Still invited to the portal: archiving does not end that. Revoke the invitation too, from this row.",
+      "approver": "The named production approver in the portal: name another one on Portal settings, or approvals wait for nobody.",
+      "openQuotes_one": "Named on {count} open quote: it keeps this contact; its confirmation then goes to {name}, never to an archived contact.",
+      "openQuotes_other": "Named on {count} open quotes: they keep this contact; their confirmations then go to {name}, never to an archived contact.",
+      "openQuotesNobody_one": "Named on {count} open quote: with nobody else in Orders, its confirmation would have nobody to go to.",
+      "openQuotesNobody_other": "Named on {count} open quotes: with nobody else in Orders, their confirmations would have nobody to go to.",
+      "mailIn": "Their next e-mail to us is no longer matched to {customer}'s threads."
+    },
+    "address": {
+      "title": "Archive “{name}”?",
+      "never": "Archived, never deleted: Restore brings it back.",
+      "copies": "Open orders keep their own copy of the address: none of them changes.",
+      "shipTo": "The default for deliveries: after this there is none until you set one — new quotes and orders ask for a delivery address.",
+      "billTo": "The default for invoices: after this there is none until you set one.",
+      "einvoiceOther": "E-invoices use this address: they will use the registered office in {city}.",
+      "einvoiceBillTo": "E-invoices use this address: they will use the default address for invoices in {city}.",
+      "einvoiceNone": "E-invoices use this address: without it the customer can't be invoiced, until another registered office or a default address for invoices is set.",
+      "draftQuotes_one": "Named on {count} draft quote: it cannot be sent until another address is picked.",
+      "draftQuotes_other": "Named on {count} draft quotes: they cannot be sent until another address is picked.",
+      "shipments_one": "{count} prepared shipment goes here: it keeps this address.",
+      "shipments_other": "{count} prepared shipments go here: they keep this address."
     }
   }
 }

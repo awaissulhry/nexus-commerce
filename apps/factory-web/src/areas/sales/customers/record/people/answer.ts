@@ -187,3 +187,30 @@ export function peopleBadge(party: Pick<Party, 'addresses'>): { readonly count: 
   const count = party.addresses.filter((address) => address.status === 'ACTIVE' && address.approval?.status === 'WAITING').length
   return count > 0 ? { count, attention: true } : null
 }
+
+// ---- F-CA-218 (ca-w2 W2.4; 10-design §5.4; Z8): Personal data — the summary and ONLY what needs a look ----------------------------
+
+export type PrivacyException = 'basis' | 'objected' | 'erased'
+
+/** The people whose personal data needs a look: no lawful basis, an objection, an erasure (each once, in that order). */
+export function privacyExceptions(rows: readonly PersonRow[]): Array<{ readonly row: PersonRow; readonly kind: PrivacyException }> {
+  return [
+    ...rows.filter((row) => row.basisMissing).map((row) => ({ row, kind: 'basis' as const })),
+    ...rows.filter((row) => row.contact !== null && !row.erased && row.privacy?.objectedAt).map((row) => ({ row, kind: 'objected' as const })),
+    ...rows.filter((row) => row.erased && row.privacy).map((row) => ({ row, kind: 'erased' as const })),
+  ]
+}
+
+/** Personal data's answer: "Lawful basis recorded for 4 of 5 contacts · no objection · nothing erased." (the privacy read's own facts). */
+export function privacySectionAnswer(rows: readonly PersonRow[]): Said[] {
+  const contacts = rows.filter((row) => row.contact !== null && isLive(row) && row.privacy !== null)
+  const erased = rows.filter((row) => row.erased && row.privacy)
+  if (contacts.length === 0 && erased.length === 0) return [said('privacy.answer.none')]
+  const objected = rows.filter((row) => row.contact !== null && !row.erased && row.privacy?.objectedAt).length
+  const first = erased[0]?.privacy?.erasedAt ?? null
+  return [
+    said('privacy.answer.basis', { params: { count: contacts.filter((row) => row.privacy?.lawfulBasis).length, total: contacts.length } }),
+    objected > 0 ? said('privacy.answer.objections', { params: { count: objected } }) : said('privacy.answer.noObjection'),
+    erased.length === 0 ? said('privacy.answer.nothingErased') : erased.length === 1 && first ? said('privacy.answer.erasedOn', { days: { date: first } }) : said('privacy.answer.erased', { params: { count: erased.length } }),
+  ]
+}

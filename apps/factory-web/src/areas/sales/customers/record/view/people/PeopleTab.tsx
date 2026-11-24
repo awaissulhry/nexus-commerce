@@ -1,6 +1,5 @@
 'use client'
 
-import type { ReactNode } from 'react'
 import { WithMessages } from '../../../../../../record-panels/i18n'
 import { PortalAccessMessages, PortalStepUp } from '../../../portal/view/parts'
 import { PortalDialogs } from '../../../portal/view/PortalDialogs'
@@ -13,6 +12,9 @@ import { MeasurementsDialog } from '../../../../mtm/view/MeasurementsDialog' // 
 import { RidersSection } from './RidersSection' // F-CA-209
 import { AddRiderDialog } from './AddRiderDialog' // F-CA-215: the NEW windows of Riders
 import { ChangeTeamDialog } from './ChangeTeamDialog' // F-CA-215
+import { PrivacySection } from './PrivacySection' // F-CA-225
+import { ArchiveDialog } from './ArchiveDialogs' // F-CA-225
+import { PrivacyWindows, type PrivacyActions, type PrivacyModel } from '../../../depth/view/PrivacyCard' // F-CA-225: the depth provider's own windows
 import { AddressesSection } from './AddressesSection'
 import { PeopleAnswer } from './PeopleAnswer'
 import { PeopleSection } from './PeopleSection'
@@ -23,8 +25,8 @@ import './people.css'
  * F-CA-113 (customer page › PEOPLE & ADDRESSES tab, lane ca-; 10-design §1, §2, §8; 18-lead-settles Z2, Z13) — the tab's LAYOUT, and
  * only that. Its root is the Production kit's size container and ours (`fw-pt fw-ca`: every list chooses its columns by the ROOM it
  * has, never the screen, so the thread dock re-lays it at once). The answer line on top, then the sections STACK at every room: People
- * (#people) · Addresses (#addresses) · Riders & measurements (#riders) — Personal data (#personal-data) joins in W2.4; until then
- * today's personal-data card stands under them (`after`): nothing is lost. Made-to-measure's New measurements and Send a link open here. The windows open here in place:
+ * (#people) · Addresses (#addresses) · Riders & measurements (#riders) · Personal data (#personal-data). Made-to-measure's New
+ * measurements and Send a link, the personal-data windows (from each person's ⋯) and the Archive windows open here. The windows open here in place:
  * the portal's own (PortalDialogs and its fresh code), and the NEW Refuse… window; the contact and address windows are the record's
  * (PartyDialogs, mounted by the record). Draws its model; reads nothing.
  */
@@ -37,8 +39,8 @@ export interface PeopleTabProps {
   readonly portal?: { readonly model: PortalAccessModel; readonly actions?: PortalAccessActions | undefined } | null | undefined
   /** The customer's own page (Portal settings ›). */
   readonly recordHref: string
-  /** Today's personal-data card, drawn under the new sections until W2.4 moves its acts onto each person's ⋯. */
-  readonly after?: ReactNode
+  /** F-CA-225 (W2.4; Z14): the personal-data windows (the depth provider's own), opened from each person's ⋯; null: none mounted. */
+  readonly privacy?: { readonly model: PrivacyModel; readonly actions?: PrivacyActions | undefined } | null | undefined
   /** F-CA-209: Made-to-measure's windows (New measurements, Send a measurement link); null: none mounted. */
   readonly mtm?: PeopleMtm | null | undefined
 }
@@ -54,7 +56,7 @@ export function PeopleTab(props: PeopleTabProps) {
   )
 }
 
-function PeopleTabBody({ model, actions, portal, recordHref, after, mtm }: PeopleTabProps) {
+function PeopleTabBody({ model, actions, portal, recordHref, mtm, privacy }: PeopleTabProps) {
   if (!model)
     return (
       <div className="fw-pt fw-ca">
@@ -73,7 +75,7 @@ function PeopleTabBody({ model, actions, portal, recordHref, after, mtm }: Peopl
       <PeopleSection model={model} actions={actions} recordHref={recordHref} />
       <AddressesSection model={model} actions={actions} />
       <RidersSection model={model} actions={actions} />
-      {after}
+      <PrivacySection model={model} actions={actions} />
       {portal && portal.model.access ? (
         <PortalAccessMessages>
           <PortalDialogs model={portal.model} actions={portal.actions} />
@@ -82,6 +84,8 @@ function PeopleTabBody({ model, actions, portal, recordHref, after, mtm }: Peopl
       ) : null}
       {mtm?.measurements ? <MeasurementsDialog model={mtm.measurements} actions={mtm.measurementsActions} /> : null}
       {mtm?.link ? <LinkDialog model={mtm.link} can={mtm.can} actions={mtm.linkActions} /> : null}
+      {privacy ? <PrivacyWindows model={privacy.model} actions={privacy.actions} /> : null}
+      {model.archive ? <ArchiveDialog model={model.archive} customer={model.name} actions={actions} /> : null}
       {model.addRider ? <AddRiderDialog dialog={model.addRider} team={model.name} actions={actions} /> : null}
       {model.team ? <ChangeTeamDialog dialog={model.team} actions={actions} /> : null}
       {model.refuse && refused ? <RefuseAddressDialog dialog={model.refuse} address={refused.address} customer={model.name} actions={actions} /> : null}

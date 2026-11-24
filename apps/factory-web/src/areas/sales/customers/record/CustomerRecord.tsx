@@ -214,13 +214,21 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   // F-CA-118 (customer page › People & addresses, lane ca-; 13-backend §5.3; Z13, Z15): the tab's container, built on every tab (it reads
   // only while People shows), its view only on `?tab=people`; today's riders / profiles and personal-data cards stand under the new
   // sections until ca-w2. "Add as a contact…" starts the record's own Add contact window with the portal person's name and e-mail.
-  const privacy = useCustomerPrivacy()
-  const people = usePeopleTab({ partyId, party: record.party, model: record.model, actions: record.actions, reload: record.reload, privacy: privacy.read, enabled: tab === 'people' }) // F-CA-204: Riders read the riders and profiles, no longer the glance
+  const privacy = useCustomerPrivacy(record.reload) // F-CA-224: an erase reads the party again
+  const people = usePeopleTab({ partyId, party: record.party, model: record.model, actions: record.actions, reload: record.reload, privacy: privacy.state.read, openPrivacy: privacy.state.onOpen /* F-CA-224 */, retryPrivacy: privacy.state.onRetry, enabled: tab === 'people' }) // F-CA-204: Riders read the riders and profiles, no longer the glance
   const peopleTab =
     named && record.party && tab === 'people' ? (
-      <PeopleTab model={people.model} actions={people.actions} portal={people.portal} recordHref={`${prefix}/sales/customers/${encodeURIComponent(partyId)}`} after={record.depth?.contacts /* F-CA-209: Riders & measurements is the tab's own section now; the personal-data card until W2.4 */} mtm={people.mtm /* F-CA-209 */} />
+      <PeopleTab
+        model={people.model}
+        actions={people.actions}
+        portal={people.portal}
+        recordHref={`${prefix}/sales/customers/${encodeURIComponent(partyId)}`}
+        mtm={people.mtm /* F-CA-209 */}
+        // F-CA-224 (W2.4; Z14): the personal-data windows, opened from each person's ⋯ (the old card and its table left the tab)
+        privacy={{ model: { read: privacy.state.read, can: privacy.can, status: record.party.status, today: privacy.today, dialog: privacy.state.dialog, stepUp: privacy.state.stepUp, portalHref: `${prefix}/sales/customers/${encodeURIComponent(partyId)}?tab=people#people` }, actions: privacy.state }}
+      />
     ) : null
-  const peopleNotice = <PeopleNotices notices={people.notices} />
+  const peopleNotice = <PeopleNotices notices={{ ...people.notices, depth: privacy.notice, onDismissDepth: privacy.onDismissNotice } /* F-CA-224: + the personal-data windows' notice */} />
   const peopleBadge = record.party ? peopleBadgeOf(record.party) : null
   const recordModel = people.contactDraft ? { ...record.model, contactDraft: people.contactDraft } : record.model
   // F-CA-118: end

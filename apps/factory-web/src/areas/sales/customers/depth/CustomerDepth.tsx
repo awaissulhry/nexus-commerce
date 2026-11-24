@@ -46,8 +46,11 @@ export function useCustomerGlance(): CustomerDepthState['glance'] {
 
 // F-CA-115 (customer People & addresses, lane ca-; 13-backend §3, §5.5): the contacts' personal data for the People tab's container —
 // the provider's ONE privacy read (read on People), no second read of it.
-export function useCustomerPrivacy(): CustomerDepthState['privacy'] {
-  return useDepth().privacy
+// F-CA-223 (ca-w2 W2.4; Z14): + its windows' rights, today and their notice (the acts moved onto each person's ⋯); `reload` reads the
+// party again after an erase (the old card's connector did it).
+export function useCustomerPrivacy(reload?: () => void): { readonly state: CustomerDepthState['privacy']; readonly can: CustomerDepthState['can']; readonly today: string; readonly notice: CustomerDepthState['notice']; readonly onDismissNotice: () => void } {
+  const depth = useSync(reload)
+  return { state: depth.privacy, can: depth.can, today: depth.today, notice: depth.notice, onDismissNotice: depth.onDismissNotice }
 }
 // F-CA-115: end
 
