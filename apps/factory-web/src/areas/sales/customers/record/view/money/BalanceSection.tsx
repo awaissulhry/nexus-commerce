@@ -36,7 +36,7 @@ function TileLink({ href, className, title, children }: { href: string; classNam
 }
 
 /** The words of a section a need scrolls to ("To collect ↓"); a section not drawn yet has none (its need takes its address). */
-const DOWN_TITLE: Readonly<Record<string, string>> = { collect: 'cm.collect.title', invoices: 'orders:moneyTab.invoices.title' /* F-CM-202 */ }
+const DOWN_TITLE: Readonly<Record<string, string>> = { collect: 'cm.collect.title', invoices: 'orders:moneyTab.invoices.title' /* F-CM-202 */, received: 'cm.received.title', 'on-account': 'cm.received.title', 'give-back': 'cm.balance.giveBack' /* F-CM-203 */ }
 
 export interface BalanceSectionProps {
   readonly model: BalanceModel

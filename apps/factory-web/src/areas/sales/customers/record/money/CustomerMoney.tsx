@@ -15,6 +15,8 @@ import type { DockPick } from '../view/WorkTab'
 import { pagePartsOf } from './balance'
 import { MONEY_TAB_NAMESPACES, moneyTabCanOf, type MoneyRead, type MoneyTabInput } from './model'
 import { StopWindow } from './StopWindow' // F-CM-201: Finance's own stop container, in one centred window
+import { RefundWindowsView } from './RefundWindowsView' // F-CM-203: Finance's own refund windows, in place
+import { targetOfNote, type RefundTarget } from '../../../../finance/payments/refunds/model' // F-CM-203
 import { useCustomerMoneyTab } from './use-customer-money-tab'
 import { useMoneyWindows } from './use-money-windows' // F-CM-201
 
@@ -49,7 +51,8 @@ function CustomerMoneyReads({ party, prefix, money, priceDiffer, glance, onPick 
   const today = useMemo(() => romeToday(), [])
   const page = useMemo(() => pagePartsOf(money), [money])
   const heldIds = useMemo(() => (page.openItems?.value?.items ?? []).map((item) => item.id), [page.openItems])
-  const reads = useCustomerMoneyTab({ partyId: party.id, companyId: company?.id ?? null, currency: party.currency, can, heldIds })
+  const onAccount = (page.openItems?.value?.creditBalance ?? []).some((entry) => entry.amount === undefined || entry.amount > 0) // F-CM-203
+  const reads = useCustomerMoneyTab({ partyId: party.id, companyId: company?.id ?? null, currency: party.currency, can, heldIds, onAccount })
   const input: MoneyTabInput = {
     party: { id: party.id, name: partyName(party), currency: party.currency, paymentTerms: party.paymentTerms },
     company,
@@ -75,6 +78,18 @@ function CustomerMoneyReads({ party, prefix, money, priceDiffer, glance, onPick 
     reloadTab()
   }, [reloadPage, reloadTab])
   const windows = useMoneyWindows({ prefix, onBurst })
+  // F-CM-203: what Refund… may settle for THIS customer — its credit notes with money left (the refunds read) and its payments' money
+  // on account (the credit-balance read); null while they are read (Finance's window says it is reading).
+  const name = partyName(party)
+  const notes = reads.refunds?.value?.creditNotesToRefund ?? null
+  const holders = reads.credit?.value?.payments ?? null
+  const targets: RefundTarget[] | null =
+    notes === null
+      ? null
+      : [
+          ...notes.map(targetOfNote),
+          ...(holders ?? []).filter((payment) => payment.unplacedAmount === undefined || payment.unplacedAmount > 0).map((payment): RefundTarget => ({ kind: 'payment', paymentId: payment.id, label: payment.externalRef, partyName: name, currency: payment.currency, cap: payment.unplacedAmount ?? null })),
+        ]
   return (
     <>
       <CustomerMoneyTab
@@ -84,10 +99,26 @@ function CustomerMoneyReads({ party, prefix, money, priceDiffer, glance, onPick 
         onRetry={onRetry}
         onPick={onPick}
         onAct={windows.onAct}
-        lazy={{ want: reads.want, documents: reads.documents, chip: reads.chip, onChip: reads.onChip, onMoreDocuments: reads.moreDocuments } /* F-CM-202 */}
+        lazy={{
+          want: reads.want,
+          documents: reads.documents,
+          chip: reads.chip,
+          onChip: reads.onChip,
+          onMoreDocuments: reads.moreDocuments /* F-CM-202 */,
+          payments: reads.payments,
+          credit: reads.credit,
+          refundsMade: reads.refundsMade,
+          onMorePayments: reads.morePayments,
+          onRefund: (start) => {
+            reads.want('received') // its money on account's payments are the window's targets
+            windows.refunds.onOpen(start)
+          },
+          onMoveRefund: windows.refunds.onMove /* F-CM-203 */,
+        }}
       />
       {windows.door.model ? <OrderMoneyWindow model={windows.door.model} actions={windows.door.actions} /> : null}
       {windows.stop ? <StopWindow partyId={party.id} ask={windows.stop} onClose={windows.closeStop} onChanged={onBurst} /> : null}
+      <RefundWindowsView windows={windows.refunds} targets={targets} today={today} />
     </>
   )
 }

@@ -20,6 +20,10 @@ import type { DockPick } from '../WorkTab'
 import { BalanceSection } from './BalanceSection'
 import { CollectSection } from './CollectSection'
 import { DocumentsSection } from './DocumentsSection' // F-CM-202
+import { ReceivedSection } from './ReceivedSection' // F-CM-203
+import { receivedOf, type GiveBackMove, type PaymentsRead } from '../../money/received' // F-CM-203
+import type { CreditBalanceRead } from '../../money/api' // F-CM-203
+import type { Refund } from '../../../../../finance/payments/refunds/api' // F-CM-203
 import { useSayIn } from './say'
 import '../../../../orders/record/money/view/money.css'
 import './customer-money.css'
@@ -57,10 +61,19 @@ export interface LazyParts {
   readonly chip: DocumentChip
   readonly onChip: (chip: DocumentChip) => void
   readonly onMoreDocuments: () => void
+  // ── F-CM-203: Payments & refunds ──
+  readonly payments: Part<PaymentsRead> | null
+  readonly credit: Part<CreditBalanceRead> | null
+  readonly refundsMade: Part<readonly Refund[]> | null
+  readonly onMorePayments: () => void
+  /** Finance's Refund… window (on a credit note's or a payment's id; null: chosen in it). */
+  readonly onRefund?: (start: string | null) => void
+  /** Finance's Mark made… / Cancel… / Void… window. */
+  readonly onMoveRefund?: (refund: Refund, move: GiveBackMove) => void
 }
 
 /** The sections whose read is made when they near the room: their id → their read. */
-const LAZY_OF: Readonly<Record<string, LazyRead>> = { invoices: 'documents' }
+const LAZY_OF: Readonly<Record<string, LazyRead>> = { invoices: 'documents', received: 'received' /* F-CM-203 */ }
 
 export function CustomerMoneyTab(props: CustomerMoneyTabProps) {
   return (
@@ -87,20 +100,29 @@ function CustomerMoneyBody({ input, prefix, asOf, onRetry, onPick, onAct, lazy }
   const collect = collectOf(ruled, prefix)
   const chip = lazy?.chip ?? 'all'
   const documents = documentsOf(ruled, lazy?.documents ?? null, chip, prefix) // F-CM-202
+  const received = receivedOf(ruled, lazy?.payments ?? null, lazy?.credit ?? null, prefix) // F-CM-203
   const partyId = input.party.id
 
   // ---- the sections drawn, and those with nothing (their quiet lines share ONE card at the foot) ----
   const collectEmpty = !!collect && !collect.reading && !collect.problem && collect.rows.length === 0
   // F-CM-202: Invoices with nothing goes to the foot only under "All" (a chip with nothing keeps its section, so the chips stay).
   const documentsEmpty = !!documents && !documents.reading && !documents.problem && documents.rows.length === 0 && chip === 'all'
-  const present = new Set<string>(['balance', ...(collect && !collectEmpty ? ['collect'] : []), ...(documents && !documentsEmpty ? ['invoices'] : [])])
+  // F-CM-203: Payments & refunds with nothing at all (no payment, nothing on account, nothing to give back) goes to the foot.
+  const receivedEmpty = !!received && !received.reading && !received.problem && received.payments.length === 0 && received.onAccount.length === 0 && received.giveBack.length === 0
+  const present = new Set<string>([
+    'balance',
+    ...(collect && !collectEmpty ? ['collect'] : []),
+    ...(documents && !documentsEmpty ? ['invoices'] : []),
+    ...(received && !receivedEmpty ? ['received', ...(received.onAccount.length > 0 ? ['on-account'] : []), ...(received.giveBack.length > 0 ? ['give-back'] : [])] : []),
+  ])
   const none: { readonly id: CustomerMoneySectionId; readonly title: string; readonly line: string }[] = [
     ...(collectEmpty ? [{ id: 'collect' as const, title: say(word('cm.collect.title')), line: say(word('cm.none.collect')) }] : []),
     ...(documentsEmpty ? [{ id: 'invoices' as const, title: say(word('orders:moneyTab.invoices.title')), line: say(word('cm.none.invoices')) }] : []),
+    ...(receivedEmpty ? [{ id: 'received' as const, title: say(word('cm.received.title')), line: say(word('cm.none.received')) }] : []),
   ]
 
   // ---- the landing: `#<id>` comes into view, and again as each read above it arrives ----
-  const landing = [input.ageing, input.openItems, input.refunds, input.stops, input.reminders, input.summary, input.shipped, lazy?.documents ?? null].map(stateOf).join('')
+  const landing = [input.ageing, input.openItems, input.refunds, input.stops, input.reminders, input.summary, input.shipped, lazy?.documents ?? null, lazy?.payments ?? null].map(stateOf).join('')
   useEffect(() => {
     const id = typeof window === 'undefined' ? '' : decodeURIComponent(window.location.hash.slice(1))
     if (id) document.getElementById(id)?.scrollIntoView({ block: 'start' })
@@ -135,6 +157,11 @@ function CustomerMoneyBody({ input, prefix, asOf, onRetry, onPick, onAct, lazy }
   ]
   // F-CM-202: Finance's Invoices list (the whole list, as the order page's door: a customer-chosen address is LATER).
   const invoicesMenu: MenuItemDef[] = [{ id: 'finance', label: say(word('cm.door.invoices')), href: `${prefix}/finance/invoices` }]
+  // F-CM-203: Finance › Payments and its Refunds view (the whole lists; a customer-chosen address is LATER).
+  const receivedMenu: MenuItemDef[] = [
+    { id: 'payments', label: say(word('cm.door.payments')), href: `${prefix}/finance/payments` },
+    { id: 'refunds', label: say(word('cm.door.refunds')), href: `${prefix}/finance/payments?rows=refunds` },
+  ]
   const pageFailed = input.ageing?.problem ?? input.openItems?.problem ?? null
 
   // ---- the answer line: one sentence per currency; under it, quiet, the company and another company's line ----
@@ -183,6 +210,22 @@ function CustomerMoneyBody({ input, prefix, asOf, onRetry, onPick, onAct, lazy }
       ) : null}
       {documents && lazy && present.has('invoices') ? (
         <DocumentsSection model={documents} price={can.price} chip={chip} onChip={lazy.onChip} onMore={lazy.onMoreDocuments} sayIn={sayIn} unit={unit} companyId={input.company?.id ?? null} menu={invoicesMenu} onRetry={() => onRetry('documents')} onPick={onPick} />
+      ) : null}
+      {received && lazy && present.has('received') ? (
+        <ReceivedSection
+          model={received}
+          input={ruled}
+          made={lazy.refundsMade}
+          sayIn={sayIn}
+          unit={unit}
+          menu={receivedMenu}
+          onRetry={() => onRetry('received')}
+          onRetryMade={() => onRetry('refundsMade')}
+          onFold={() => lazy.want('refundsMade')}
+          onMorePayments={lazy.onMorePayments}
+          onRefund={lazy.onRefund}
+          onMove={lazy.onMoveRefund}
+        />
       ) : null}
       {none.length === 1 ? (
         <Section id={kitId(none[0]!.id)} title={none[0]!.title} answer={none[0]!.line}>

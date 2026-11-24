@@ -156,7 +156,9 @@
       "terms": "Terms & requirements ›",
       "receivables": "Open in Finance › Receivables & credit ›",
       "down": "{section} ↓",
-      "invoices": "Open in Finance › Invoices ›"
+      "invoices": "Open in Finance › Invoices ›",
+      "payments": "Open in Finance › Payments ›",
+      "refunds": "Open in Finance › Refunds ›"
     },
     "more": {
       "rows_one": "Show {count} more row",
@@ -164,7 +166,10 @@
       "fewer": "Show fewer",
       "documents_one": "Show {count} more document",
       "documents_other": "Show {count} more documents",
-      "documentsNext": "Show more documents"
+      "documentsNext": "Show more documents",
+      "payments_one": "Show {count} more payment",
+      "payments_other": "Show {count} more payments",
+      "paymentsNext": "Show more payments"
     },
     "balance": {
       "title": "Balance",
@@ -259,12 +264,15 @@
     "none": {
       "title": "Nothing here yet",
       "collect": "Nothing to collect: no deposit is asked and no invoice is open.",
-      "invoices": "No document yet: invoices appear here when goods ship or a deposit is paid."
+      "invoices": "No document yet: invoices appear here when goods ship or a deposit is paid.",
+      "received": "No payment received yet, and nothing to give back."
     },
     "done": {
       "record": "Payment recorded on {number}.",
       "send": "Pay page sent for {number}.",
-      "saved": "{number}: saved."
+      "saved": "{number}: saved.",
+      "refund": "Refund recorded.",
+      "refundMoved": "Refund saved."
     },
     "amount": "{amount}",
     "invoices": {
@@ -296,6 +304,36 @@
     },
     "note": {
       "noTab": "Money needs the right to see prices, receivables or credit: this is the Work tab, which your role may open."
+    },
+    "received": {
+      "title": "Payments & refunds",
+      "part": "the payments and the refunds",
+      "reading": "Reading the payments and the refunds…",
+      "more": "More for Payments & refunds",
+      "info": "Payments & refunds: what came in and where it was placed, and what goes back. Money placed on nothing is the customer’s money on account: place it on an invoice, or give it back. Finance calls this money the customer’s credit balance. To give back: refunds to make, and credit notes that give back money already paid. No bank is called: the office pays in its bank and marks the refund made here.",
+      "count_one": "{count} payment",
+      "count_other": "{count} payments",
+      "countMore_one": "{count}+ payments",
+      "countMore_other": "{count}+ payments",
+      "last": "last {date}",
+      "ofPayment": "the payment of {date}",
+      "openNote": "Open the credit note ›",
+      "openPayment": "Open the payment ›",
+      "depositOf": "Deposit of {order}",
+      "placedOn": "{number} · {amount}",
+      "notPlaced": "{amount} not placed",
+      "onAccountTitle": "On account — paid, placed on nothing",
+      "from": "From the payment of {date} · waits {days}. Reminders are held while it is not placed.",
+      "held": "Reminders are held while it is not placed.",
+      "place": "Place it ›",
+      "giveBackTitle": "To give back · {count}",
+      "paymentsTitle": "Payments received · {count}",
+      "made": "Refunds made",
+      "madeCount": "Refunds made ({count})",
+      "madeHint": "kept with the value date and the bank’s reference",
+      "madeNone": "No refund made, cancelled or voided yet.",
+      "madeOn": "Made {date}",
+      "ref": "ref {reference}"
     }
   }
 }

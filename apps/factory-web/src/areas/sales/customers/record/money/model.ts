@@ -210,7 +210,7 @@ export const LIVE_COALESCE_MS = 800
 export const TAB_READS = ['refunds', 'stops', 'reminders', 'summary', 'shipped'] as const
 export type TabRead = (typeof TAB_READS)[number]
 /** F-CM-202: the tab's reads made only when their section nears the room (13-backend §1.4 "scrolling to the end"). */
-export const LAZY_READS = ['documents'] as const
+export const LAZY_READS = ['documents', 'received', 'refundsMade'] as const // F-CM-203: + Payments & refunds, and its folded Refunds made
 export type LazyRead = (typeof LAZY_READS)[number]
 /** What a section's Try again reads again: the page's money reads (the ageing, the open items) or one of the tab's own. */
 export type MoneyRead = 'page' | TabRead | LazyRead

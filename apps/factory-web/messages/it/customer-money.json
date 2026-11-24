@@ -156,7 +156,9 @@
       "terms": "Condizioni e requisiti ›",
       "receivables": "Apri in Amministrazione › Crediti e fidi ›",
       "down": "{section} ↓",
-      "invoices": "Apri in Amministrazione › Fatture ›"
+      "invoices": "Apri in Amministrazione › Fatture ›",
+      "payments": "Apri in Amministrazione › Incassi ›",
+      "refunds": "Apri in Amministrazione › Rimborsi ›"
     },
     "more": {
       "rows_one": "Mostra {count} altra riga",
@@ -164,7 +166,10 @@
       "fewer": "Mostra meno",
       "documents_one": "Mostra {count} altro documento",
       "documents_other": "Mostra altri {count} documenti",
-      "documentsNext": "Mostra altri documenti"
+      "documentsNext": "Mostra altri documenti",
+      "payments_one": "Mostra {count} altro incasso",
+      "payments_other": "Mostra altri {count} incassi",
+      "paymentsNext": "Mostra altri incassi"
     },
     "balance": {
       "title": "Saldo",
@@ -259,12 +264,15 @@
     "none": {
       "title": "Qui ancora niente",
       "collect": "Niente da incassare: nessun acconto richiesto e nessuna fattura aperta.",
-      "invoices": "Ancora nessun documento: le fatture compaiono qui quando parte la merce o viene pagato un acconto."
+      "invoices": "Ancora nessun documento: le fatture compaiono qui quando parte la merce o viene pagato un acconto.",
+      "received": "Ancora nessun incasso, e niente da restituire."
     },
     "done": {
       "record": "Incasso registrato su {number}.",
       "send": "Pagina di pagamento inviata per {number}.",
-      "saved": "{number}: salvato."
+      "saved": "{number}: salvato.",
+      "refund": "Rimborso registrato.",
+      "refundMoved": "Rimborso salvato."
     },
     "amount": "{amount}",
     "invoices": {
@@ -296,6 +304,36 @@
     },
     "note": {
       "noTab": "Importi richiede il diritto di vedere prezzi, crediti o fidi: questa è la scheda Lavori, che il tuo ruolo può aprire."
+    },
+    "received": {
+      "title": "Incassi e rimborsi",
+      "part": "gli incassi e i rimborsi",
+      "reading": "Lettura degli incassi e dei rimborsi…",
+      "more": "Altro per Incassi e rimborsi",
+      "info": "Incassi e rimborsi: ciò che è entrato e dove è stato collocato, e ciò che torna indietro. Il denaro non collocato su nulla è il credito del cliente: collocalo su una fattura, o restituiscilo. In Amministrazione questo denaro si chiama credito del cliente. Da restituire: i rimborsi da fare e le note di credito che restituiscono denaro già pagato. Nessuna banca viene chiamata: l’ufficio paga dalla sua banca e qui segna il rimborso come fatto.",
+      "count_one": "{count} incasso",
+      "count_other": "{count} incassi",
+      "countMore_one": "{count}+ incassi",
+      "countMore_other": "{count}+ incassi",
+      "last": "l’ultimo il {date}",
+      "ofPayment": "l’incasso del {date}",
+      "openNote": "Apri la nota di credito ›",
+      "openPayment": "Apri l’incasso ›",
+      "depositOf": "Acconto di {order}",
+      "placedOn": "{number} · {amount}",
+      "notPlaced": "{amount} da collocare",
+      "onAccountTitle": "Credito del cliente — incassato, non collocato",
+      "from": "Dall’incasso del {date} · in attesa da {days}. I solleciti restano fermi finché non è collocato.",
+      "held": "I solleciti restano fermi finché non è collocato.",
+      "place": "Collocalo ›",
+      "giveBackTitle": "Da restituire · {count}",
+      "paymentsTitle": "Incassi ricevuti · {count}",
+      "made": "Rimborsi fatti",
+      "madeCount": "Rimborsi fatti ({count})",
+      "madeHint": "conservati con la data valuta e il riferimento della banca",
+      "madeNone": "Ancora nessun rimborso fatto, annullato o stornato.",
+      "madeOn": "Fatto il {date}",
+      "ref": "rif. {reference}"
     }
   }
 }

@@ -16,6 +16,8 @@ import { balanceOf, moneyBadgeOf } from './balance'
 import { collectOf, COLLECT_SHOWN, IN_PLACE_ACTS } from './collect'
 import { documentQueryOf, documentsOf, DOCUMENTS_SHOWN, paymentWordOf } from './documents' // F-CM-202
 import type { InvoiceRow } from '../../../../finance/_shared/api'
+import type { PaymentRow } from '../../../../finance/_shared/api' // F-CM-203
+import { PAYMENTS_SHOWN, receivedOf, refundsMadeOf } from './received' // F-CM-203
 import { moneyAnswerOf, type CustomerAnswer } from './head'
 import { CM, MONEY_TAB_NAMESPACES, moneyChangeIsOurs, moneyTabCanOf, partFailed, partReady, READING, type MoneyTabInput } from './model'
 import { sayOf } from './say'
@@ -514,5 +516,72 @@ describe('F-CM-104: the page (cm-w1 W1.4; 13-backend §5.3–§5.6; Z11, Z27, D2
       expect(words['money.allMoney'], locale).toBeTruthy()
       expect(words['money.statement'], locale).toBeUndefined()
     }
+  })
+})
+
+describe('F-CM-203: Payments & refunds (cm-w2 W2.3; 10-design §5.4; Z7, Z18, Z22, Z25)', () => {
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+  const pay = (id: string, receivedOn: string, over: Partial<PaymentRow> = {}): PaymentRow => ({ id, companyId: COMPANY_A.id, partyId: CUSTOMER.id, partyName: CUSTOMER.name, method: 'BANK_TRANSFER', amount: 120000, allocated: 120000, unallocated: 0, currency: 'EUR', receivedOn, externalRef: `CRO-${id}`, status: 'RECEIVED', placedOn: [{ target: 'INVOICE', targetId: 'inv-0', amount: 120000, number: 'FT-2026-00009', docType: 'TD01', orderNumber: 'SEED-SO-0009' }], refunded: 0, createdAt: `${receivedOn}T09:00:00Z`, ...over })
+  const payments = (rows: PaymentRow[], next: string | null = null) => partReady({ rows, next })
+  const credit = partReady({ balances: [{ currency: 'EUR', amount: 120000 }], payments: [{ id: 'pay-7', receivedOn: '2026-11-15', externalRef: 'CRO-7', currency: 'EUR', amount: 300000, unplacedAmount: 120000 }] })
+
+  it('On account: from the page\'s open items, the payment that holds it and how long it waits; Refund… only with payments.refund and prices', () => {
+    const model = receivedOf(input('owner'), payments([pay('p-1', '2026-11-14')]), credit, PREFIX)!
+    expect(model.onAccount).toHaveLength(1)
+    expect(model.onAccount[0]).toMatchObject({ currency: 'EUR', amount: 120000, waits: 9, refundable: true, from: { paymentId: 'pay-7', receivedOn: '2026-11-15' } })
+    expect(receivedOf(input('finance'), payments([]), credit, PREFIX)!.onAccount[0]!.refundable).toBe(true)
+    const sales = receivedOf(input('sales'), payments([]), credit, PREFIX)!
+    expect(sales.onAccount[0]).toMatchObject({ amount: null, refundable: false })
+    expect(sales.refundable).toBe(false)
+  })
+
+  it('To give back: a refund to make (Mark made… · ⋯ Cancel…), a credit note with money left (Refund…) — Finance\'s windows; no "Change…" (Z7)', () => {
+    const notes = { ...REFUNDS, creditNotesToRefund: [{ creditNoteId: 'cn-2', number: 'NC-2026-00008', issueDate: '2026-11-01', companyId: COMPANY_A.id, partyId: CUSTOMER.id, party: { code: CUSTOMER.code, legalName: CUSTOMER.name }, currency: 'EUR', grossTotal: 50000, creditOfId: 'inv-3', creditOfNumber: 'FT-2026-00003', creditOfDocType: 'TD01', orderNumber: null, refundedAmount: 0, refundableAmount: 50000 }] }
+    const rows = receivedOf(input('owner', { refunds: partReady(notes) }), payments([]), null, PREFIX)!.giveBack
+    expect(rows.map((row) => [row.kind, row.act?.id ?? null, row.more.map((item) => item.id)])).toEqual([
+      ['refund', 'paid', ['cancel', 'openNote']],
+      ['note', 'refund', ['openNote']],
+    ])
+    for (const row of rows) expect(JSON.stringify(row.more)).not.toContain('change')
+    const sales = receivedOf(input('sales', { refunds: partReady({ ...notes, refundsDue: notes.refundsDue.map((refund) => ({ ...refund, amount: undefined })), creditNotesToRefund: notes.creditNotesToRefund.map((note) => ({ ...note, refundableAmount: undefined, grossTotal: undefined })) }) }), payments([]), null, PREFIX)!.giveBack
+    for (const row of sales) {
+      expect(row.act).toBeNull()
+      expect(row.amount).toBeNull()
+      expect(row.more.map((item) => item.id)).toEqual(['openNote'])
+    }
+  })
+
+  it('Payments received: newest first, the first 3 then more (Z25); what each was placed on; no amount without prices; the head\'s answer', () => {
+    expect(PAYMENTS_SHOWN).toBe(3)
+    const rows = [pay('p-1', '2026-10-01'), pay('p-2', '2026-11-14', { placedOn: [{ target: 'DEPOSIT_REQUEST', targetId: 'rq-11', amount: 120000, number: null, docType: null, orderNumber: 'SEED-SO-0011' }] }), pay('p-3', '2026-11-02', { unallocated: 30000, allocated: 90000 })]
+    const model = receivedOf(input('owner'), payments(rows), credit, PREFIX)!
+    expect(model.payments.map((row) => row.id)).toEqual(['p-2', 'p-3', 'p-1'])
+    expect(model.payments[0]!.placed.map((chip) => chip.word.key)).toEqual(['cm.received.depositOf'])
+    expect(model.payments[1]!.placed.map((chip) => chip.word.key)).toEqual(['cm.received.placedOn', 'cm.received.notPlaced'])
+    expect(model.answer.map((said) => said.key)).toEqual(['cm.received.count', 'cm.received.last', 'cm.answer.onAccount', 'cm.answer.pair'])
+    const sales = receivedOf(input('sales'), payments(rows.map((row) => ({ ...row, amount: undefined, allocated: undefined, unallocated: undefined, placedOn: row.placedOn.map((entry) => ({ ...entry, amount: undefined })) }))), credit, PREFIX)!
+    for (const row of sales.payments) {
+      expect(row.amount).toBeNull()
+      for (const chip of row.placed) expect(amountsOf(chip.word)).toEqual([])
+    }
+    for (const said of sales.answer) expect(amountsOf(said)).toEqual([])
+  })
+
+  it('Refunds made (folded): made, cancelled or voided; Void… only on a made one with payments.void and prices; the section left out without payments.view', () => {
+    const made = [{ ...REFUNDS.refundsDue[0]!, id: 'rf-2', status: 'PAID' as const, paidOn: '2026-11-20' }, { ...REFUNDS.refundsDue[0]!, id: 'rf-3', status: 'CANCELLED' as const }, REFUNDS.refundsDue[0]!]
+    expect(refundsMadeOf(made, input('owner')).map((row) => [row.refund.id, row.voidable])).toEqual([['rf-2', true], ['rf-3', false]])
+    expect(refundsMadeOf(made, input('sales')).every((row) => !row.voidable && row.amount === null)).toBe(true)
+    expect(receivedOf(input('owner', { can: { ...moneyTabCanOf(ROLES.owner), payments: false } }), payments([]), null, PREFIX)).toBeNull()
+  })
+
+  it('Finance\'s refund windows are opened as they are (never copied); the ⓘ says Finance\'s word for the money on account (Z22)', () => {
+    const windows = source('./RefundWindowsView.tsx')
+    expect(windows).toContain("import { RefundDialog, RefundMoveDialog } from '../../../../finance/payments/refunds/view/RefundDialogs'")
+    expect(windows).not.toMatch(/<DialogFrame|<form/)
+    expect(source('./use-money-windows.ts')).toContain('recordRefund(api, refundAskOf(target, draft), key)')
+    for (const locale of LOCALES) expect(messagesFor(locale, [CM])[CM]!['cm.received.info'], locale).toMatch(locale === 'en' ? /Finance calls this money the customer’s credit balance\./ : /credito del cliente/)
+    // The section is the fourth: Invoices & credit notes first, then Payments & refunds.
+    const tab = readFileSync(new URL('../view/money/CustomerMoneyTab.tsx', import.meta.url), 'utf8')
+    expect(tab.indexOf('<ReceivedSection')).toBeGreaterThan(tab.indexOf('<DocumentsSection'))
   })
 })
