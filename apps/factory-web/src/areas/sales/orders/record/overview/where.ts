@@ -348,8 +348,8 @@ export interface WhereStrips {
   readonly holds: 'reading' | 'failed' | 'read'
 }
 
-/** At most this many strips show; the rest fold behind "Show {n} more". */
-export const STRIPS_SHOWN = 4
+/** At most this many strips show; the rest fold behind "Show {n} more". F-CO-K2: the shared overview kit's cap (its Strips part folds them). */
+export { STRIPS_SHOWN } from '../../../../_shared/record-overview/model'
 
 /** Each hold kind of the waiting list that has a strip of its own, in its blocking order; any other HOLD kind is `other`. */
 // quick-check fix (W07): Partial — any other hold kind is absent here (its own strip, 'other'), so the lookup says it may be undefined.

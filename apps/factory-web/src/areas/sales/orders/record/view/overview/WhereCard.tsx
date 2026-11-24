@@ -1,9 +1,8 @@
 'use client'
 
-import { useState } from 'react' // F-OO-105: "Show {n} more"
+import { useState } from 'react' // F-OO-106: the credit dialog's note (F-CO-K2: "Show {n} more" is the kit's Strips' own)
 import { Menu } from '@nexus/ui/components' // F-OO-107: Menu (More ▾)
-import { Button, Skeleton } from '@nexus/ui/primitives'
-import { CircleAlert } from 'lucide-react' // F-OO-105: the failed read's mark (each strip's own: ./StripRow)
+import { Button } from '@nexus/ui/primitives'
 import { ChevronDown } from 'lucide-react' // F-OO-107: More ▾
 import { formatDate } from '../../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
@@ -20,7 +19,7 @@ import { tabHref } from '../../../../../_shared/record-frame/address'
 import './where.css' // F-OO-103: the section 1 frame's own CSS
 // ---- F-OO-105: the strips' doors — the band's yes door (DepthBand, imported as it is), the depth's words, the page's tab links ----
 import { readOnlyOnPage } from '../../../model'
-import { STRIPS_SHOWN, stripDoorsOf, whereStripsOf, type StripDoorsInput } from '../../overview/where'
+import { stripDoorsOf, whereStripsOf, type StripDoorsInput } from '../../overview/where'
 // ---- end F-OO-105
 import { whereMovesOf, type WhereMove, type WhereMoveId } from '../../overview/where' // F-OO-107: the order's own moves
 // ---- F-OO-106: the credit strip's own doors, lines and dialogs (Check credit again, Ask for a yes…) — the page's dialog frame ----
@@ -40,9 +39,9 @@ import { handDoorOf, handRowOf, type HandDoor, type HandRow } from '../../overvi
 import { useSayHand } from './StageByHandDialog' // F-MS-103: the door's words (F-SC-W2: the dialogs are the page's, OrderDialogs)
 import { stagePicksOf } from '../../overview/where' // F-SC-W3: the steps of the stages open the stage dialog
 import { CREDIT_NS, StripRow } from './StripRow' // F-PT-301: the ONE strip row (Production › Problems & holds draws it too)
-// ---- F-CO-K1 (the shared overview kit): the card's frame and its headline are the kit's parts. Imported last, after ./where.css: the
-// kit's stylesheet keeps its place after it (the strips' and the hand row's alignment rests on that order until co-k2). ----
-import { Headline, OverviewCard } from '../../../../../_shared/record-overview/Overview'
+// ---- F-CO-K1 (the shared overview kit): the card's frame and its headline are the kit's parts. F-CO-K2: the strips' list too (its cap,
+// "Show {n} more", the reading and the failed rows). No stylesheet order decides a look any more (the dead align-items went). ----
+import { Headline, OverviewCard, Strips } from '../../../../../_shared/record-overview/Overview'
 // ---- end F-CO-K1
 
 /**
@@ -99,7 +98,7 @@ export function WhereCard({ order, model, actions, waiting }: { order: Order; mo
       {/* ---- F-OO-103: the strips slot — one strip per hold or wait, most blocking first, each with its real door (F-OO-104, F-OO-105) ---- */}
       {/* F-OO-106: the credit strip names what its check found in the Finance page's own words (sales-credit finding.*). */}
       <WithMessages namespaces={CREDIT_NS}>
-        <Strips order={order} model={model} actions={actions} waiting={waiting} retry={!stagesShown(words.state)} />
+        <WhereStrips order={order} model={model} actions={actions} waiting={waiting} retry={!stagesShown(words.state)} />
       </WithMessages>
       {stagesShown(words.state) ? (
         <div className="fw-so-where-stages">
@@ -210,10 +209,11 @@ function HandRowView({ order, row, door, actions }: { order: Order; row: HandRow
 /**
  * The strips slot: at most four strips, the rest behind "Show {n} more"; while the production read comes, one quiet row; a failed
  * read says so here (Try again only when the stages, which carry their own, are not drawn) — the order read's strips stay.
+ * F-CO-K2: drawn by the shared overview kit's `Strips` (the cap, "Show {n} more", the reading and the failed rows are its own); the
+ * order hands it every strip row (StripRow) and its words.
  */
-function Strips({ order, model, actions, waiting, retry }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; waiting: WaitingState; retry: boolean }) {
+function WhereStrips({ order, model, actions, waiting, retry }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; waiting: WaitingState; retry: boolean }) {
   const t = useT('orders')
-  const [all, setAll] = useState(false)
   const read = readOf(model.production)
   const approval = model.depth?.approval?.value ?? null
   const { strips, holds } = whereStripsOf(order, read, approval, waiting)
@@ -231,41 +231,16 @@ function Strips({ order, model, actions, waiting, retry }: { order: Order; model
     acts: model.workOrderActs?.can ?? null,
     credit: model.credit ?? null, // F-OO-106
   }
-  const shown = all ? strips : strips.slice(0, STRIPS_SHOWN)
   const now = Date.now()
   return (
-    <div className="fw-so-strips-box">
-      <ul className="fw-so-strips" aria-label={t('where.strips')}>
-        {shown.map((entry) => (
-          <StripRow key={entry.key} strip={entry} doors={stripDoorsOf(entry, input)} order={order} model={model} actions={actions} now={now} />
-        ))}
-        {holds === 'reading' && (
-          <li className="fw-so-strip-reading">
-            <Skeleton height={22} />
-          </li>
-        )}
-        {holds === 'failed' && (
-          <li className="fw-so-ov-row fw-so-strip" data-tone="danger">
-            <span className="fw-so-strip-mark">
-              <CircleAlert size={14} aria-hidden />
-            </span>
-            <span className="fw-so-strip-said">{t('where.strip.failed')}</span>
-            {retry && (
-              <span className="fw-so-ov-doors">
-                <Button size="sm" onClick={() => actions?.onRetryProduction?.()}>
-                  {t('common.retry')}
-                </Button>
-              </span>
-            )}
-          </li>
-        )}
-      </ul>
-      {strips.length > STRIPS_SHOWN && (
-        <Button size="sm" variant="quiet" aria-expanded={all} onClick={() => setAll(!all)}>
-          {all ? t('where.strip.showFewer') : t('where.strip.showMore', { count: strips.length - STRIPS_SHOWN })}
-        </Button>
-      )}
-    </div>
+    <Strips
+      label={t('where.strips')}
+      rows={strips.map((entry) => (
+        <StripRow key={entry.key} strip={entry} doors={stripDoorsOf(entry, input)} order={order} model={model} actions={actions} now={now} />
+      ))}
+      reading={holds === 'reading'}
+      failed={holds === 'failed' ? { words: t('where.strip.failed'), ...(retry ? { onRetry: () => actions?.onRetryProduction?.() } : {}) } : null}
+    />
   )
 }
 

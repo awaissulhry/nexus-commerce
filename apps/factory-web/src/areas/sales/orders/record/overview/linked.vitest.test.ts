@@ -118,7 +118,7 @@ describe('F-OO-207: Linked records — one row per kind through the ONE count ru
     }
     const html = card(MIXED, 'owner')
     // One list (a reader's landmark: the golden flow finds it by name), each row the shared card row.
-    expect(html).toContain('<ul class="fw-so-linked-list" aria-label="Linked records">')
+    expect(html).toContain('<ul class="fw-so-ov-list" aria-label="Linked records">') // F-CO-K2: the kit's ONE list, named
     expect(html.match(/<li class="fw-so-ov-row">/g)?.length).toBeGreaterThanOrEqual(3)
     expect(html).toMatch(/<a [^>]*href="\/w\/[^"]*\?tab=production"[^>]*>5 · 2 in work/)
     // The dashed count chips went (no is-plain, no countbtn).
@@ -268,12 +268,19 @@ describe('F-OO-207: source and css — one count rule, the band\'s own door rule
     expect(rules).not.toMatch(/chain\.(workOrders|shipments|invoices|depositRequests)\.(length|filter)/)
     for (const name of ['makeHeldOf(order, can)', 'createShipmentDoor(order, can, prefix, input.shipInPlace)', 'createShipmentHeld(order, can)', 'linesNotInProduction(order)']) expect(rules, name).toContain(name)
     const view = read('../view/overview/LinkedCard.tsx')
-    expect(view).toContain("import './linked.css'")
+    // F-CO-K2 (settle S3): the card's rows are the kit's ONE list — the card has no stylesheet of its own (linked.css went).
+    expect(view).not.toContain("import './linked.css'")
+    expect(view).not.toMatch(/import '[^']*\.css'/)
+    expect(view).toContain("<RowList label={t('overview.linked.title')}>")
     expect(view).toContain('actions?.makeWorkOrders?.onOpen?.()')
     expect(view).toContain('actions?.onCreateShipment?.()')
     expect(read('../view/OverviewTab.tsx')).toMatch(/<LinkedCard order=\{order\} model=\{model\} actions=\{actions/)
-    const css = read('../view/overview/linked.css')
-    expect(css).toMatch(/\.fw-so-linked-list > \.fw-so-ov-row \{\s*grid-column: 1 \/ -1;\s*grid-template-columns: subgrid;/)
+    // Its rules are the kit's list block (record-overview.css), the quiet line's span included.
+    const kit = read('../../../../_shared/record-overview/record-overview.css')
+    const css = kit.slice(kit.indexOf("/* ── F-CO-K2 (the shared overview kit's rows): the ONE list"), kit.indexOf('/* ── end F-CO-K2 (the ONE list) ── */'))
+    expect(css.length).toBeGreaterThan(100)
+    expect(css).toMatch(/\.fw-so-ov-list > \.fw-so-ov-row \{\s*grid-column: 1 \/ -1;\s*grid-template-columns: subgrid;/)
+    expect(css).toMatch(/\.fw-so-ov-quiet \{\s*grid-column: 1 \/ -1;\s*margin: 0;/)
     expect(css).toMatch(/@container fw-so-ov-card \(max-width: 479px\)/)
     expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/)
     expect(css).not.toContain('container:')

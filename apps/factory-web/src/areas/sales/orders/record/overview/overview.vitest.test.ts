@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs' // F-CO-K2: readdirSync — every stylesheet of the order area
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import type { ComponentType } from 'react'
 import { LOCALES } from '../../../../../lib/i18n/locales'
@@ -717,7 +717,7 @@ describe('F-OO-201: the Overview draws two full-width cards, then three pairs; a
     expect(orders).not.toContain('.fw-so-overview {')
     expect(orders).toContain('areas/_shared/record-overview/record-overview.css')
     expect(css).toMatch(/\.fw-so-overview \{\s*display: flex;\s*flex-direction: column;\s*gap: var\(--nds-space-16\);\s*min-width: 0;\s*\}/)
-    // F-OO-207: Linked records' count chips left with their card's rows (record/view/overview/linked.css).
+    // F-OO-207: Linked records' count chips left with their card's rows (F-CO-K2: now the shared overview kit's ONE list).
     for (const gone of ['.fw-so-linked {', '.fw-so-countbtn {']) expect(orders, gone).not.toContain(gone)
     // F-OO-103: "Where it is now"'s own rules left it for the card's own file. F-CO-K1: the card's column went on to the kit (its lead card).
     expect(css).toContain('.fw-so-where {')
@@ -1226,21 +1226,30 @@ describe('F-OO-205: Requests & changes — Waiting on us · N, Waiting on <custo
     expect(cardOf(draw('f-oo-205-requests'))).toContain('nds-btn')
   })
 
-  it('source and css: the ONE Still to do door, its own requests.css (the shared row, subgrid, the 480 / 360 rules, tokens only, no container)', () => {
+  // F-CO-K2: requests.css moved whole into the shared overview kit's ONE stylesheet (its Groups, Group, GroupRow, RowAge): the card
+  // imports no stylesheet; the same rules, read there with the same strictness (tokens only; the kit names no container but its two).
+  it('source and css: the ONE Still to do door, the kit\'s groups (the shared row, subgrid, the 480 / 360 rules, tokens only, no container)', () => {
     const card = read('../view/overview/RequestsCard.tsx')
-    expect(card).toContain("import './requests.css'")
+    expect(card).not.toContain("import './requests.css'")
+    expect(card).not.toMatch(/import '[^']*\.css'/)
+    expect(card).toContain("import { Group, GroupRow, Groups } from '../../../../../_shared/record-overview/Overview'")
+    expect(card).not.toMatch(/function Group\(|className="fw-so-rq-groups"|className="fw-so-h3"/)
     expect(card).toContain('<StillDoorView row={row} order={order} model={model} actions={actions} />')
     expect(card).toContain('changesBadgeOf(card)')
     expect(card).toContain("t('told.aboutChanges', { count: told })")
     for (const gone of ['card.latest', 'overview.requests.latest', '<StillRow', 'WithMessages']) expect(card, gone).not.toContain(gone)
     for (const gone of ['readonly latest', 'latestRevision']) expect(read('./model.ts'), gone).not.toContain(gone)
-    const css = read('../view/overview/requests.css')
+    const kit = read(KIT_CSS)
+    const css = kit.slice(kit.indexOf("/* ── F-CO-K2 (the shared overview kit's rows): the groups"))
+    expect(css.length).toBeGreaterThan(100)
     expect(css).toMatch(/\.fw-so-rq-list \{\s*display: grid;\s*grid-template-columns: minmax\(0, 1fr\) max-content auto;/)
     expect(css).toMatch(/\.fw-so-rq-list > \.fw-so-ov-row \{\s*grid-column: 1 \/ -1;\s*grid-template-columns: subgrid;/)
     expect(css).toMatch(/@container fw-so-ov-card \(max-width: 479px\)/)
     expect(css).toMatch(/@container fw-so-ov-card \(max-width: 359px\)/)
     expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/)
     expect(css).not.toContain('container:')
+    // The groups' rules are said once, in the kit only.
+    for (const rule of ['.fw-so-rq-groups {', '.fw-so-rq-group {', '.fw-so-rq-list {', '.fw-so-rq-age {', '.fw-so-rq-more {', '.fw-so-rq-foot {']) expect(kit.split(`\n${rule}`), rule).toHaveLength(2)
     for (const locale of LOCALES) {
       const words = messagesFor(locale, ['orders']).orders!
       for (const key of ['requests.changesCount', 'requests.more_one', 'requests.more_other', 'requests.seeHolds', 'requests.seeDates', 'overview.requests.nothing', 'overview.requests.still', 'told.aboutChanges_one', 'told.aboutChanges_other']) expect(words[key]?.trim(), `${locale} ${key}`).toBeTruthy()
@@ -1547,24 +1556,36 @@ describe('F-CO-K1: the Overview is drawn by the shared overview kit — the same
     for (const [theirs] of COPIES) expect(orders, theirs).toContain(`${theirs} {`)
   })
 
-  it('the stylesheets keep their order: the kit\'s file is first imported after where.css (the strips\' and the hand row\'s alignment rests on it until co-k2)', () => {
-    const kitAt = (text: string): number => text.indexOf("_shared/record-overview/Overview'")
-    const where = read('../view/overview/WhereCard.tsx')
-    expect(kitAt(where)).toBeGreaterThan(where.indexOf("import './where.css'"))
-    expect(kitAt(where)).toBeGreaterThan(where.indexOf("from './StripRow'"))
-    const page = read('../view/OrderRecordView.tsx')
-    expect(kitAt(page)).toBeGreaterThan(page.indexOf("import { ProductionTab } from './ProductionTab'"))
-    expect(kitAt(page)).toBeGreaterThan(page.indexOf("from './OverviewTab'"))
-    expect(page.indexOf("import { ProductionTab } from './ProductionTab'")).toBeGreaterThan(-1)
-    // Each card imports the kit after its own stylesheet.
-    for (const [card, css] of [['ProgressCard', './progress.css'], ['PeopleCard', './people.css'], ['DatesCard', './dates.css'], ['RequestsCard', './requests.css'], ['LinkedCard', './linked.css'], ['FactsCard', './facts.css']] as const) {
-      const text = read(`../view/overview/${card}.tsx`)
-      expect(text.indexOf(`import '${css}'`), card).toBeGreaterThan(-1)
-      expect(kitAt(text), card).toBeGreaterThan(text.indexOf(`import '${css}'`))
-    }
-    // The clash the order rests on is still in the two files (co-k2 deletes the dead declaration, then no order decides).
+  // F-CO-K2 (settle S4, 13-backend §2.8): this replaces co-k1's "the stylesheets keep their order" — the two dead `align-items: start`
+  // (the strip's, the hand row's) are deleted, so NO stylesheet order decides the alignment any more, on Overview or on Production:
+  // no rule of the kit or of the order area sets align-items on a strip or on the hand row; the shared row says baseline; both ARE it.
+  it('no stylesheet order decides a look: no rule sets align-items on a strip or on the hand row; both are the shared row (baseline)', () => {
+    const uncommented = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//g, '')
+    /** Every innermost rule of a stylesheet: its selector list and its declarations. */
+    const rulesOf = (css: string): (readonly [string, string])[] => [...uncommented(css).matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => [match[1]!.trim(), match[2]!] as const)
+    const sheets = [KIT_CSS, ...(readdirSync(new URL('../../', import.meta.url), { recursive: true }) as string[]).filter((file) => file.endsWith('.css')).map((file) => `../../${file.split('\\').join('/')}`)]
+    for (const sheet of ['../../orders.css', '../../record/view/overview/where.css', '../../record/view/overview/progress.css']) expect(sheets, sheet).toContain(sheet)
+    let strips = 0
+    for (const sheet of sheets)
+      for (const [selectors, body] of rulesOf(read(sheet)))
+        for (const selector of selectors.split(',').map((one) => one.trim()))
+          if (/\.fw-so-(?:strip|hand)(?![\w-])[^\s>+~]*$/.test(selector)) {
+            strips += 1
+            expect(body, `${sheet}: ${selector}`).not.toMatch(/\balign-items\s*:/)
+          }
+    // The rules themselves stay (the strip's in the kit, the hand row's in where.css; their tones too), each with its one comment.
+    expect(strips).toBeGreaterThanOrEqual(5)
+    expect(uncommented(read(KIT_CSS))).toMatch(/\n\.fw-so-strip \{\s*padding-block: var\(--nds-space-2\);/)
+    expect(uncommented(read('../view/overview/where.css'))).toMatch(/\n\.fw-so-hand \{\s*padding-block: var\(--nds-space-2\);/)
+    for (const css of [read(KIT_CSS), read('../view/overview/where.css')]) expect(css.split("/* No align-items here: the row's baseline wins (measured 2026-11-23). */")).toHaveLength(2)
+    // The shared row says baseline; a strip and the hand row ARE that row (so no other rule can give them another alignment).
     expect(read(KIT_CSS)).toMatch(/\.fw-so-ov-row \{[^}]*align-items: baseline;/)
-    expect(read('../view/overview/where.css')).toMatch(/\.fw-so-strip \{\s*align-items: start;/)
+    expect(read('../../../../_shared/record-overview/Overview.tsx')).toContain('<li className="fw-so-ov-row fw-so-strip" data-tone={tone} ')
+    expect(read('../view/overview/WhereCard.tsx')).toContain('<div className="fw-so-ov-row fw-so-hand" data-tone={row.tone}>')
+    // No order file draws a strip by hand any more: StripRow, the failed read's row and the gate rows are the kit's Strip.
+    for (const file of ['../view/overview/WhereCard.tsx', '../view/overview/StripRow.tsx', '../links/view/OrderLinks.tsx']) expect(read(file), file).not.toContain('fw-so-strip')
+    // The cards that keep a stylesheet of their own still import it.
+    for (const [card, css] of [['ProgressCard', './progress.css'], ['PeopleCard', './people.css'], ['DatesCard', './dates.css']] as const) expect(read(`../view/overview/${card}.tsx`), card).toContain(`import '${css}'`)
   })
 })
 // ---- end F-CO-K1

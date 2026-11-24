@@ -85,6 +85,8 @@ describe('F-PT-301: one strip rule on both tabs', () => {
     expect(view).toContain('stripDoorsOf(strip, input)')
     expect(view).toContain('<Section id="holds"')
     expect(readFileSync(new URL('../view/overview/WhereCard.tsx', import.meta.url), 'utf8')).toContain("import { CREDIT_NS, StripRow } from './StripRow'")
+    // F-CO-K2: and that ONE row is the shared overview kit's strip — both tabs still draw one row.
+    expect(readFileSync(new URL('../view/overview/StripRow.tsx', import.meta.url), 'utf8')).toContain('<Strip tone={toneOf(strip, model.today)} mark={MARK[strip.kind]} ')
     // B-PT-018: the tab no longer reads quality.issues (the ONE issues list instead).
     expect(view).not.toContain('quality?.issues')
     // F-PT-302: Raise a nonconformance… is Quality's own New NCR from the inspection, only with quality.ncr.raise.
@@ -102,7 +104,9 @@ describe('F-PT-301: one strip rule on both tabs', () => {
     // One title, one sentence, one door for the notice and the row (never a second copy of their words).
     expect(links.match(/t\('links\.gate\.title'/g)?.length).toBe(1)
     expect(links.match(/t\('links\.gate\.open'\)/g)?.length).toBe(1)
-    expect(links).toContain('id={anchors[index]}')
+    // F-CO-K2: the row is the kit's Strip — its anchor is the row's id (the kit's part draws `id={anchor}`).
+    expect(links).toContain('anchor={anchors[index]}')
+    expect(readFileSync(new URL('../../../../_shared/record-overview/Overview.tsx', import.meta.url), 'utf8')).toContain('id={anchor} tabIndex={anchor === undefined ? undefined : -1}')
     // The page notice: drawn for every tab (no tab condition in front of it), inside the page's notices.
     const page = readFileSync(new URL('../view/OrderRecordView.tsx', import.meta.url), 'utf8')
     expect(page).toMatch(/\n\s*<GateNotices model=\{model\.links\} prefix=\{model\.prefix\} \/>/)

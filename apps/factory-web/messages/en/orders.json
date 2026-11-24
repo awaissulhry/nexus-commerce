@@ -1153,7 +1153,6 @@
     "fixed": "Fixed",
     "fixedTitle": "Set when the order was made; it does not change.",
     "set": "Set…",
-    "unread": "Could not be read",
     "note": {
       "label": "Office note",
       "tag": "Only the office sees it",
@@ -1697,9 +1696,7 @@
       "release": "Release on Quality ›",
       "releaseOf": "Release on Quality: the holds of {number}",
       "openWo": "Open {number} ›",
-      "failed": "Holds could not be read",
-      "showMore": "Show {count} more",
-      "showFewer": "Show fewer"
+      "failed": "Holds could not be read"
     },
     "moves": "The order's moves",
     "more": "More",
@@ -2376,10 +2373,6 @@
     "seeDates": "Dates that wait: see Next dates"
   },
   "linked": {
-    "value": "{value} ›",
-    "labelled": "{label}: {value}",
-    "none": "None yet: {kinds}",
-    "unread": "Could not be read",
     "wo": {
       "inWork_one": "{count} in work",
       "inWork_other": "{count} in work",

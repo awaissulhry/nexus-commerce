@@ -18,12 +18,15 @@ import { NAMESPACE as DEPTH } from '../../../depth/model'
 import { say } from '../../overview/model'
 import { creditLinesOf, refuseLineOf, type StripDoor, type WhereStrip } from '../../overview/where'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
-import './where.css' // the strips' own look (moved with them)
+// F-CO-K2: the row is the shared overview kit's Strip (its look comes with it, on Overview and on Production › Problems & holds alike)
+import { Strip, StripSaid } from '../../../../../_shared/record-overview/Overview'
 
 /**
  * F-PT-301 (order PRODUCTION tab; plan D2 / L9) — ONE strip row for what stops the order, moved out of WhereCard unchanged (F-OO-105,
  * F-OO-106, F-OO-109): Overview's "Where it is now" and Production › Problems & holds draw the SAME rows with the SAME doors
  * (whereStripsOf + stripDoorsOf — one rule: a door the reader may not use is not drawn).
+ * F-CO-K2: the row itself is the shared overview kit's `Strip` + `StripSaid` (mark | words | doors, the tone's rule); this file keeps
+ * the order's kinds, words, quiet lines and doors.
  */
 
 /** The Finance page's catalogue: the credit strip names what its check found in its words (WhereCard's credit dialogs too). */
@@ -110,34 +113,9 @@ export function StripRow({ strip, doors, order, model, actions, now }: { strip: 
   // ---- end F-OO-106
   const age = ageOf(strip.since, now)
   return (
-    <li className="fw-so-ov-row fw-so-strip" data-tone={toneOf(strip, model.today)}>
-      <span className="fw-so-strip-mark">{MARK[strip.kind]}</span>
-      <span className="fw-so-strip-said">
-        <span>
-          {title}
-          {age && strip.since ? (
-            <>
-              {' · '}
-              <time dateTime={strip.since} title={day(strip.since)}>
-                {w.t(age.key, age.params)}
-              </time>
-            </>
-          ) : null}
-        </span>
-        {lines.map((line) => (
-          <span key={line} className="fw-so-hint">
-            {line}
-          </span>
-        ))}
-      </span>
-      {doors.length > 0 && (
-        <span className="fw-so-ov-doors">
-          {doors.map((door) => (
-            <StripDoorView key={door.kind} door={door} order={order} model={model} actions={actions} />
-          ))}
-        </span>
-      )}
-    </li>
+    <Strip tone={toneOf(strip, model.today)} mark={MARK[strip.kind]} doors={doors.length > 0 ? doors.map((door) => <StripDoorView key={door.kind} door={door} order={order} model={model} actions={actions} />) : undefined}>
+      <StripSaid title={title} since={age && strip.since ? { iso: strip.since, day: day(strip.since), words: w.t(age.key, age.params) } : null} lines={lines} />
+    </Strip>
   )
 }
 
