@@ -83,6 +83,7 @@ export function useCustomerDepth(partyId: string) {
   const params = useSearchParams()
   const tab = partyTabOf('customers', params?.get('tab')) // B-TH-260
   const can = useMemo(() => depthCan(session.permissions), [session.permissions])
+  const readsCustomer = session.permissions.includes('parties.view') // F-CA-fx5 (walk W-05): the record's own right — without it the page refuses
   const today = useMemo(() => todayOf(), [])
   const companyId = session.company?.id ?? null
   const companies = useMemo(() => session.companies.map((company) => ({ id: company.id, name: company.name })), [session.companies])
@@ -107,7 +108,7 @@ export function useCustomerDepth(partyId: string) {
   const loadHolds = useCallback(() => readOne(() => readHolds(api, partyId), setHolds), [api, partyId, readOne])
   const loadTerms = useCallback(() => readOne(() => readCompanyTerms(api, partyId), setTerms), [api, partyId, readOne])
   const loadRequirements = useCallback(() => readOne(() => readRequirements(api, partyId), setRequirements), [api, partyId, readOne])
-  const loadPrivacy = useCallback(() => readOne(() => readPrivacy(api, partyId), setPrivacy), [api, partyId, readOne])
+  const loadPrivacy = useCallback(() => (readsCustomer ? readOne(() => readPrivacy(api, partyId), setPrivacy) : Promise.resolve()), [api, partyId, readOne, readsCustomer]) // F-CA-fx5 (walk W-05): only who may read the customer — the refused page sends no People read
 
   const loadTab = useCallback(() => {
     // F-SA-271: the glance also on Money (the credit) and People & addresses (riders and profiles).
