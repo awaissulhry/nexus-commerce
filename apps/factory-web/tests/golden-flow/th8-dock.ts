@@ -50,7 +50,8 @@ const dockOf = (page: Page): Locator => page.locator('.fw-rcf.has-thread > aside
 const cardOf = (page: Page): Locator => dockOf(page).locator('section.fw-rt-column.is-docked')
 /** tw- T.3 (W2.1, Z4, P0-B4): the pick is the head's title — ONE menu named "<Which thread>: <the picked thread>", one label per thread. */
 const pickOf = (page: Page): Locator => cardOf(page).locator('.fw-rth-title button.fw-thread-pick-title')
-const pickedName = (long: string) => `${OD('record.dock.label')}: ${long}`
+/** tw- fx2 (G-21): the title is the thread's record label; the name keeps the picked row's long label ("<label>: <record> · <long>"). */
+const pickedName = (long: string) => new RegExp(`^${escape(OD('record.dock.label'))}: (?:.+ · )?${escape(long)}$`)
 async function expectPicked(page: Page, long: string, timeout = 30_000): Promise<void> {
   await expect(pickOf(page)).toHaveAttribute('aria-label', pickedName(long), { timeout })
 }
@@ -170,7 +171,7 @@ export default defineStage({
       await seen(cardOf(page).getByText(GENERAL_NOTE))
       await pick(page, OD('record.dock.all', { customer }))
       await expectCard(page, 'All of · 40 %', 'all')
-      await expect(feedHead(page).locator('.fw-rth-line')).toContainText(lead(HEAD('allOf.line'))) // "Read only · N threads"
+      await expect(feedHead(page).locator('.fw-rth-line')).toContainText(lead(HEAD('allOf.line_other'))) // "Read only · N threads"
       await expect(cardOf(page).locator('.fw-rt-foot')).toContainText(`${OD('record.dock.readOnly')}. ${OD('record.dock.writeIn')}`)
       await seen(allItem(page, FROM_ALPHA), 60_000)
       await expectBodyScrolls(page, 'All of', 'all')

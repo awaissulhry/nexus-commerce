@@ -5,6 +5,7 @@ import { ChevronDown, Lock } from 'lucide-react'
 import { Menu, type MenuItemDef } from '@nexus/ui/components'
 import { useT } from '../../../lib/i18n/provider'
 import { DockColumn, type DockColumnProps } from '../../../lib/record-thread/DockColumn' // F-OP-202
+import { useHeadTitle } from '../../../lib/record-thread/head/view/HeadPick' // tw- fx2 (G-21)
 import { WithMessages } from '../../../record-panels/i18n'
 import './thread-pick.css'
 
@@ -149,6 +150,9 @@ export function ThreadPick<V extends string>({ label, choices, value, onPick, ch
 function PickBand<V extends string>({ label, choices, picked, onPick, note, extra }: { label: string; choices: readonly ThreadChoice<V>[]; picked: ThreadChoice<V>; onPick: ((value: V) => void) | undefined; note: string | null; extra: ReactNode }) {
   const t = useT('record-thread')
   const shown = segmentOf(picked)
+  // tw- fx2 (walk G-21): the title is the current thread's record label when its head gives one; the menu's rows keep the long labels.
+  const title = useHeadTitle() ?? shown.long
+  const named = title === shown.long ? `${label}: ${title}` : `${label}: ${title} · ${shown.long}`
   const icons = new Map(choices.map((choice) => [choice.value, choice.icon] as const))
   const items: MenuItemDef[] = pickRows(choices, picked.value).map((row) => {
     const icon = icons.get(row.value)
@@ -160,13 +164,13 @@ function PickBand<V extends string>({ label, choices, picked, onPick, note, extr
         className="fw-thread-pick-menu"
         label={
           <>
-            <span className="fw-thread-pick-long">{shown.long}</span>
+            <span className="fw-thread-pick-long">{title}</span>
             {picked.tone === 'office' && <Lock size={13} className="fw-thread-pick-lock" aria-hidden />}
             <ChevronDown size={14} aria-hidden />
           </>
         }
         items={items}
-        triggerProps={{ className: 'fw-thread-pick-title', 'aria-label': `${label}: ${shown.long}`, title: shown.title }}
+        triggerProps={{ className: 'fw-thread-pick-title', 'aria-label': named, title: shown.title }}
       />
       {extra ? <div className="fw-thread-pick-extra">{extra /* F-SA-262 */}</div> : null}
       {note && <p className="fw-thread-pick-line is-note">{note}</p> /* F-SA-279 */}
