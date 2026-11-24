@@ -41,7 +41,7 @@ export const CUSTOMER = {
 }
 
 export default defineStage({
-  proves: 'Italian B2B customer with tax identity; VIES proof (fake): an Italian VAT number is not a VIES question, and the screen says so; the customer page opens on All orders (rows=all, one document, no loop), New order and its lines open in place, Clear all goes back to All orders, a docked order shows its own files line (F-CP-112); on the Work tab a band door shows exactly its count, the order says Most urgent first, ticked rows show the bar with words and Ask production opens with Needs an answer ticked, nothing written (cw T.2); on Quotes & incoming the band shows, a door opens exactly its count, Sort ▾ says Most urgent first, one ticked row shows at most 3 acts and More ▾ with words, nothing written (cq T.2); the Overview shows its sentence and a group of its band opens Work on exactly the orders it counts, nothing written (co T.3); People & addresses opened at #addresses shows its section, and People lists the two contacts with what each gets by e-mail, nothing written (ca T.3)',
+  proves: 'Italian B2B customer with tax identity; VIES proof (fake): an Italian VAT number is not a VIES question, and the screen says so; the customer page opens on All orders (rows=all, one document, no loop), New order and its lines open in place, Clear all goes back to All orders, a docked order shows its own files line (F-CP-112); on the Work tab a band door shows exactly its count, the order says Most urgent first, ticked rows show the bar with words and Ask production opens with Needs an answer ticked, nothing written (cw T.2); on Quotes & incoming the band shows, a door opens exactly its count, Sort ▾ says Most urgent first, one ticked row shows at most 3 acts and More ▾ with words, nothing written (cq T.2); the Overview shows its sentence and a group of its band opens Work on exactly the orders it counts, nothing written (co T.3); People & addresses opened at #addresses shows its section, and People lists the two contacts with what each gets by e-mail, nothing written (ca T.3); the payment terms set with Change terms… on Terms & requirements, #party-hold in view and the answer line naming them, nothing written (ct T.3)',
   async run(flow) {
     const sales = await flow.desk('sales')
     const { page } = sales
@@ -280,6 +280,29 @@ export default defineStage({
       await expect(page.getByRole('button', { name: 'Check VIES' })).toHaveCount(0)
       await flow.shot(page, 'tax-vies')
     })
+
+    // ---- ct T.3 (customer page › Terms & requirements, ct-t; 15-steps T.3): the Hold door lands on the Hold section in view, and the
+    // answer line names the payment terms the "Change terms…" step above set (the base seed's BB30FM, its English name). A step that
+    // writes nothing. Its parts are found by the ids the tab draws (`#party-hold`, the answer line `#answer`); selectors from the code.
+    await flow.step('Terms & requirements: #party-hold shows the Hold section in view; the answer line names the payment terms (nothing written)', async () => {
+      // Nothing is written: no change reaches the customer, its terms, holds, requirements or carrier account.
+      const written: string[] = []
+      const onRequest = (request: import('@playwright/test').Request) => {
+        const path = new URL(request.url()).pathname
+        if (request.method() !== 'GET' && /\/(parties|customer-carrier-accounts)(\/|$)/.test(path)) written.push(`${request.method()} ${path}`)
+      }
+      page.on('request', onRequest)
+      await sales.go(`/sales/customers/${party.id}?tab=terms#party-hold`)
+      const hold = page.locator('#party-hold')
+      await seen(hold, 60_000)
+      await expect(hold).toHaveCount(1)
+      await expect(hold).toBeInViewport({ timeout: 30_000 })
+      await expect(page.locator('#answer')).toContainText('Bank transfer 30 days end of month', { timeout: 30_000 })
+      await flow.shot(page, 'terms-hold')
+      page.off('request', onRequest)
+      expect(written, 'nothing was written').toEqual([])
+    })
+    // ---- end ct T.3
 
     // ---- F-CP-112 (customer page plan C2a, F-CP-104 / F-CP-113): New order from the band opens in place — the customer held (no
     // Change), Add the lines opens the New order page's own editor in a large window — with no document and no address written.
