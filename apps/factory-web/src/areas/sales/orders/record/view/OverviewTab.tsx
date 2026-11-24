@@ -17,7 +17,7 @@ import { RequestsCard } from './overview/RequestsCard'
 import { LinkedCard } from './overview/LinkedCard'
 import { FactsCard } from './overview/FactsCard'
 // ---- end F-OO-100
-import './overview/overview.css' // F-OO-201: the pairs and the shared card row
+import '../../../../_shared/record-overview/record-overview.css' // F-CO-K1 (K1.1): the pairs and the shared card row moved to the shared overview kit (after the cards: where.css stays before it)
 
 /**
  * F-SA-232 (sales page plan N2, picks P2, P3, P4, P15, R9; 10-order-page §2.1 O1, O2; review OW-6, OW-7) — Overview, the order page's

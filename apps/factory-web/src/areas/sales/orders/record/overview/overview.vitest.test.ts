@@ -41,6 +41,8 @@ const SECTIONS = ['where', 'progress', 'people', 'dates', 'linked', 'facts'] as 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
 const overviewViews = () => [read('../view/OverviewTab.tsx'), ...CARDS.map((card) => read(`../view/overview/${card}.tsx`))].join('\n')
 const overviewRules = () => [read('./model.ts'), ...SECTIONS.map((section) => read(`./${section}.ts`))].join('\n')
+// F-CO-K1 (the shared overview kit): the Overview's grid, its shared row and the lead card's rules moved to the kit's ONE stylesheet.
+const KIT_CSS = '../../../../_shared/record-overview/record-overview.css'
 
 describe('the production read on the page: a re-read keeps the other parts', () => {
   it('a re-read of some parts keeps the others (and their withheld keys); the newest time wins', () => {
@@ -684,11 +686,11 @@ describe('F-OO-201: the Overview draws two full-width cards, then three pairs; a
     const html = draw('overview')
     const pairs = [...html.matchAll(/<div class="fw-so-ov-pair">/g)].map((match) => match.index!)
     expect(pairs.map((at) => elementAt(html, at).children.length)).toEqual([2, 2, 1])
-    expect(read('../view/overview/overview.css')).toMatch(/\.fw-so-ov-pair > :only-child \{\s*grid-column: 1 \/ -1;\s*\}/)
+    expect(read(KIT_CSS) /* F-CO-K1: the rule moved with its file */).toMatch(/\.fw-so-ov-pair > :only-child \{\s*grid-column: 1 \/ -1;\s*\}/)
   })
 
   it('the css: the Overview is the container; 1 column, 2 equal ones from 720 px; the cards stretch; the shared row and the facts\' columns', () => {
-    const css = read('../view/overview/overview.css')
+    const css = read(KIT_CSS) // F-CO-K1: overview.css is the kit's record-overview.css now (git mv)
     expect(css).toMatch(/\.fw-so-overview \{\s*container: fw-so-ov \/ inline-size;\s*\}/)
     expect(css).toMatch(/\.fw-so-ov-pair \{\s*display: grid;\s*grid-template-columns: minmax\(0, 1fr\);\s*align-items: stretch;/)
     expect(css).toMatch(/@container fw-so-ov \(min-width: 720px\) \{\s*\.fw-so-ov-pair \{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/)
@@ -700,16 +702,23 @@ describe('F-OO-201: the Overview draws two full-width cards, then three pairs; a
     // Tokens only (no raw colour, no new size outside the scale).
     expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/)
     const tab = read('../view/OverviewTab.tsx')
-    expect(tab).toContain("import './overview/overview.css'")
+    // F-CO-K1 (K1.1): the tab loads the kit's stylesheet (the card's old file is gone), after its cards.
+    expect(tab).toContain("import '../../../../_shared/record-overview/record-overview.css'")
+    expect(tab).not.toContain("import './overview/overview.css'")
     expect(tab).not.toContain('fw-so-overview-cards')
-    // orders.css lost only the old grid rule (the order page lane's file: nothing else of it changed).
+    // orders.css lost the old grid rule and (F-CO-K1, settle S1) the Overview's column, which went to the kit: a record page that draws
+    // the kit does not load orders.css. Nothing else of it changed, and it says where the rule went.
     const orders = read('../../orders.css')
     expect(orders).not.toMatch(/\.fw-so-overview-cards \{/)
-    for (const kept of ['.fw-so-overview {', '.fw-so-datelist {']) expect(orders, kept).toContain(kept)
+    expect(orders).toContain('.fw-so-datelist {')
+    expect(orders).not.toContain('.fw-so-overview {')
+    expect(orders).toContain('areas/_shared/record-overview/record-overview.css')
+    expect(css).toMatch(/\.fw-so-overview \{\s*display: flex;\s*flex-direction: column;\s*gap: var\(--nds-space-16\);\s*min-width: 0;\s*\}/)
     // F-OO-207: Linked records' count chips left with their card's rows (record/view/overview/linked.css).
     for (const gone of ['.fw-so-linked {', '.fw-so-countbtn {']) expect(orders, gone).not.toContain(gone)
-    // F-OO-103: "Where it is now"'s own rules left it for the card's own file.
-    expect(read('../view/overview/where.css')).toContain('.fw-so-where {')
+    // F-OO-103: "Where it is now"'s own rules left it for the card's own file. F-CO-K1: the card's column went on to the kit (its lead card).
+    expect(css).toContain('.fw-so-where {')
+    expect(read('../view/overview/where.css')).not.toContain('.fw-so-where {')
   })
 })
 // ---- end F-OO-201
@@ -865,9 +874,19 @@ describe('F-OO-103: "Where it is now" keeps its title, Live, the headline and th
     for (const gone of ['KeyValue', 'WaitingOnPill', 'HealthPill', 'exFactoryOf', 'inWorkOf', 'preparingNote', 'whoActsNext', "'overview.fact.", 'board.customerUrgent']) expect(card, gone).not.toContain(gone)
     expect(card).toContain("import './where.css'")
     const css = read('../view/overview/where.css')
-    for (const rule of ['.fw-so-where {', '.fw-so-where-said {', '.fw-so-headline {', '.fw-so-where-stages {']) expect(css, rule).toContain(rule)
+    expect(css).toContain('.fw-so-where-stages {')
     expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(|\bpx\b/)
     expect(css).not.toMatch(/container(?:-type|-name)?:/)
+    // F-CO-K1 (K1.1): the card's column and the headline's two rules moved to the kit's stylesheet — each read there, once, with the
+    // same strictness (tokens only, no raw size, no container of its own); where.css keeps none of the three.
+    const kit = read(KIT_CSS)
+    for (const rule of ['.fw-so-where {', '.fw-so-where-said {', '.fw-so-headline {']) {
+      expect(kit.split(`\n${rule}`), rule).toHaveLength(2)
+      const body = kit.slice(kit.indexOf(`\n${rule}`), kit.indexOf('}', kit.indexOf(`\n${rule}`)))
+      expect(body, rule).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(|\bpx\b/)
+      expect(body, rule).not.toMatch(/container(?:-type|-name)?:/)
+      expect(css, rule).not.toContain(rule)
+    }
     // so/orders.css lost the card's rules (the order page lane's file: only these lines), and keeps a pointer to where they went.
     const orders = read('../../orders.css')
     expect(orders).not.toMatch(/\.fw-so-where \{|\.fw-so-headline \{/)
