@@ -23,27 +23,6 @@
     "returns": "Returns in {year}",
     "returnsHint": "{units} units · {open} open"
   },
-  "now": {
-    "title": "Open returns and claims",
-    "reading": "Reading…",
-    "nothingOpen": "No open return or claim.",
-    "return": "Return",
-    "complaint": "Complaint",
-    "late": "goods late",
-    "requested": "Asked {date} · {units} units",
-    "answerDue": "Answer due {date}",
-    "received": "Received {date}",
-    "col": {
-      "type": "Type",
-      "number": "Number",
-      "state": "State",
-      "when": "When"
-    },
-    "more_one": "{count} more open: see the lists.",
-    "more_other": "{count} more open: see the lists.",
-    "owes": "What this customer owes, by age:",
-    "receivables": "Finance › Receivables & credit"
-  },
   "returnStatus": {
     "REQUESTED": "Requested",
     "AUTHORISED": "Authorised",
@@ -72,39 +51,11 @@
   },
   "tab": {
     "openToPay": "Open to pay",
-    "openToPayHint": "Every open invoice",
-    "nothingOpen": "Nothing open",
-    "depositsWaiting": "Deposits waiting",
-    "depositsWaitingHint": "Open orders whose deposit is asked",
     "credit": "Credit",
     "noLimit": "No limit set",
     "changeLimit": "Change limit…",
-    "changeLimitHeld": "Changing a credit limit needs the right to set credit limits.",
     "paymentTerms": "Payment terms",
-    "editTerms": "Edit in Terms & requirements",
-    "openInvoices": "Open invoices",
-    "noOpenInvoice": "No open invoice",
-    "bucket": {
-      "NOT_DUE": "Current",
-      "D1_30": "1–30",
-      "D31_60": "31–60",
-      "D61_90": "61–90",
-      "OVER_90": "90+"
-    },
-    "openStatement": "Open statement",
-    "deposits": "Deposits and balances of open orders",
-    "noOrderOwes": "No open order owes money",
-    "deposit": {
-      "NOT_NEEDED": "No deposit",
-      "MISSING": "Deposit not asked",
-      "OPEN": "Deposit open",
-      "PAID": "Deposit paid",
-      "WAIVED": "Deposit waived"
-    },
-    "depositDue": "due {date}",
-    "paid": "paid {amount}",
-    "balance": "still to pay {amount}",
-    "seeAll": "See all · Work › All orders"
+    "editTerms": "Edit in Terms & requirements"
   },
   "cm": {
     "days_one": "{count} day",
@@ -158,7 +109,8 @@
       "down": "{section} ↓",
       "invoices": "Open in Finance › Invoices ›",
       "payments": "Open in Finance › Payments ›",
-      "refunds": "Open in Finance › Refunds ›"
+      "refunds": "Open in Finance › Refunds ›",
+      "margins": "Open in Finance › Margins ›"
     },
     "more": {
       "rows_one": "Show {count} more row",
@@ -228,7 +180,10 @@
       "shipped_one": "{count} shipment is not invoiced yet",
       "shipped_other": "{count} shipments are not invoiced yet",
       "reminders_one": "{count} reminder waits for a yes",
-      "reminders_other": "{count} reminders wait for a yes"
+      "reminders_other": "{count} reminders wait for a yes",
+      "cantInvoice": "Can’t be invoiced yet: {why}",
+      "priceDiffer_one": "Prices differ on {count} order",
+      "priceDiffer_other": "Prices differ on {count} orders"
     },
     "collect": {
       "title": "To collect",
@@ -265,14 +220,19 @@
       "title": "Nothing here yet",
       "collect": "Nothing to collect: no deposit is asked and no invoice is open.",
       "invoices": "No document yet: invoices appear here when goods ship or a deposit is paid.",
-      "received": "No payment received yet, and nothing to give back."
+      "received": "No payment received yet, and nothing to give back.",
+      "statement": "No reminder and no stop.",
+      "priceCheck": "No order to compare yet.",
+      "margin": "No order to count yet."
     },
     "done": {
       "record": "Payment recorded on {number}.",
       "send": "Pay page sent for {number}.",
       "saved": "{number}: saved.",
       "refund": "Refund recorded.",
-      "refundMoved": "Refund saved."
+      "refundMoved": "Refund saved.",
+      "limit": "Credit limit saved.",
+      "statement": "Statement sent."
     },
     "amount": "{amount}",
     "invoices": {
@@ -333,7 +293,101 @@
       "madeHint": "kept with the value date and the bank’s reference",
       "madeNone": "No refund made, cancelled or voided yet.",
       "madeOn": "Made {date}",
-      "ref": "ref {reference}"
+      "ref": "ref {reference}",
+      "returns_one": "Credit value of its returns in {year}: {amount} on {count} return",
+      "returns_other": "Credit value of its returns in {year}: {amount} on {count} returns",
+      "returnsDoor": "Returns ›"
+    },
+    "credit": {
+      "title": "Credit & terms",
+      "part": "credit and terms",
+      "more": "More for Credit & terms",
+      "reading": "Reading the credit and the terms…",
+      "info": "Credit & terms: may it order on credit, and how it pays. Used = open invoices + orders not invoiced yet. Over the limit or on hold, a new order waits for a yes and a shipment is held. The terms are changed on Terms & requirements.",
+      "waitOrders_one": "{count} order waits for a yes",
+      "waitOrders_other": "{count} orders wait for a yes",
+      "waitShipments_one": "{count} shipment held",
+      "waitShipments_other": "{count} shipments held",
+      "waitReleases_one": "{count} release refused",
+      "waitReleases_other": "{count} releases refused",
+      "overBy": "Over by",
+      "free": "Free",
+      "overdue": "{amount} of it is overdue",
+      "noneWith": "No credit limit with {company}",
+      "within": "Within the limit: {free} free of {limit}",
+      "holdSince": "on hold since {date}",
+      "pays": "pays: {terms}",
+      "deposit": "Default deposit",
+      "pct": "{pct}",
+      "noDeposit": "No deposit",
+      "usedIs": "used = open invoices + orders not invoiced yet",
+      "terms": "Terms",
+      "set": "Set a limit…",
+      "onHold": "On hold — {reason}"
+    },
+    "chase": {
+      "title": "Statement & reminders",
+      "part": "the reminders",
+      "more": "More for Statement & reminders",
+      "reading": "Reading the reminders…",
+      "info": "Statement & reminders: the statement of account, the reminders of this customer and the stops in force (a promise to pay, a dispute). A stop holds the reminders of ONE invoice until its day or until it is lifted. A stop is added from the invoice’s row in To collect. The talk itself is in the thread beside the tab.",
+      "sent": "Sent {date}",
+      "prepared": "Prepared {date}",
+      "waits": "Waits for a person: approve and send, edit or skip",
+      "until": "Until {date}",
+      "recorded": "Recorded {date}",
+      "recordedBy": "Recorded {date} by {name}",
+      "sentCount_one": "{count} sent",
+      "sentCount_other": "{count} sent",
+      "stops_one": "{count} stop in force",
+      "stops_other": "{count} stops in force",
+      "noStop": "no stop in force",
+      "level": "trusted level {level}",
+      "noLevel": "no trusted level",
+      "review": "Review in Finance ›",
+      "remindersTitle": "Reminders · {count}",
+      "stopsTitle": "Stops in force · {count}",
+      "forInvoices": "for {invoices}",
+      "interest": "+ late interest {amount}",
+      "statement": "Statement…",
+      "sendStatement": "Send statement…",
+      "theirFigures": "Their figures ›",
+      "riba": "Ri.Ba. ›"
+    },
+    "price": {
+      "part": "the orders whose prices differ",
+      "more": "More for Price check",
+      "reading": "Reading the orders whose prices differ…",
+      "info": "Price check: the orders whose price differs from the customer’s own price (its PO, its portal, or typed by us). A price is typed, changed or the difference accepted on the order.",
+      "calm": "= No order differs",
+      "missing_one": "{count} order has no customer price yet ›",
+      "missing_other": "{count} orders have no customer price yet ›",
+      "seeWork": "See them on Work ›",
+      "foot": "A price is typed, changed or accepted on the order.",
+      "ours": "Our amount",
+      "theirs": "Customer’s amount",
+      "diff": "Difference"
+    },
+    "margin": {
+      "title": "Margin & cost",
+      "part": "the margin",
+      "more": "More for Margin & cost",
+      "reading": "Reading the margin…",
+      "info": "Margin & cost: what this customer’s orders are worth and what they cost us — materials used, work, subcontract work. Now = the estimate. Read when you reach the section.",
+      "now_one": "Margin {pct} now over {count} order",
+      "now_other": "Margin {pct} now over {count} orders",
+      "belowFloor_one": "{count} below the floor ({floor})",
+      "belowFloor_other": "{count} below the floor ({floor})",
+      "below_one": "{count} below the floor",
+      "below_other": "{count} below the floor",
+      "value": "Value",
+      "cost": "Estimated cost",
+      "pctLabel": "Margin %",
+      "belowRow_one": "{count} order is below the floor.",
+      "belowRow_other": "{count} orders are below the floor.",
+      "seeThem": "See them ›",
+      "honest": "What its orders cost us: materials used, work, and subcontract work. A supplier’s invoice is on the ORDER’s Margin › Documents — never a supplier’s total here.",
+      "twoCurrencies": "Its orders are in two currencies: no one figure is honest."
     }
   }
 }

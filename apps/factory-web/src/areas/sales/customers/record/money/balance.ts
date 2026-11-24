@@ -47,7 +47,7 @@ export interface BalanceBlock {
 }
 
 export interface Need {
-  readonly code: 'depositLate' | 'invoicesLate' | 'onHold' | 'overLimit' | 'onAccount' | 'giveBack' | 'shipped' | 'reminders' | 'priceDiffer'
+  readonly code: 'depositLate' | 'invoicesLate' | 'onHold' | 'overLimit' | 'onAccount' | 'giveBack' | 'shipped' | 'cantInvoice' | 'reminders' | 'priceDiffer'
   readonly tone: 'danger' | 'warning'
   readonly words: MoneyWord
   /** Its ONE door: a section of this tab when drawn (`down`), else `fallback` (an address with this customer chosen), else none. */
@@ -163,12 +163,17 @@ export function needsOf(input: MoneyTabInput, figures: readonly CurrencyFigures[
   const shipped = input.can.invoices ? (input.shipped?.value ?? null) : null
   if (shipped && shipped.shipments > 0)
     out.push({ code: 'shipped', tone: 'warning', words: shipped.invoiceBy ? word('cm.needs.shippedBy', { params: { count: shipped.shipments }, days: { date: shipped.invoiceBy } }) : word('cm.needs.shipped', { params: { count: shipped.shipments } }), down: 'invoices', fallback: { kind: 'href', href: `${prefix}/finance/invoices`, label: word('cm.door.finance') } /* W1.5: every count a door — Finance › Invoices until the section is drawn (cm-w2) */ })
+  // 8 can't be invoiced yet (Z32): the party read's own block — the Overview strip's source, no read of its own; its home is Terms.
+  if (input.party.invoiceBlocked) {
+    const why = (input.party.blocking ?? [])[0]
+    out.push({ code: 'cantInvoice', tone: 'danger', words: why ? word('cm.needs.cantInvoice', { words: { why: word(`parties:warning.${why}`) } }) : word('parties:list.cannotInvoice'), down: null, fallback: { kind: 'href', href: customerTabHref(prefix, input.party.id, 'terms', 'party-identity'), label: word('cm.door.terms') } })
+  }
   // 9 reminders that wait for a yes (prepared, not held by a stop or a rule).
   const waiting = input.can.receivables ? (input.reminders?.value ?? []).filter((reminder) => reminder.status === 'PREPARED' && reminder.held.length === 0).length : 0
   if (waiting > 0) out.push({ code: 'reminders', tone: 'warning', words: word('cm.needs.reminders', { params: { count: waiting } }), down: 'statement', fallback: finance })
   // 10 prices differ (the price grain): the Price check section (cm-w3); until then today's line and door (Work › Not equal).
   if (price && input.can.orders && input.priceDiffer !== null && input.priceDiffer > 0)
-    out.push({ code: 'priceDiffer', tone: 'warning', words: word('parties:customers.work.priceDiffer', { params: { count: input.priceDiffer } }), down: 'price-check', fallback: { kind: 'href', href: priceDifferHref(prefix, input.party.id), label: word('parties:customers.work.priceDiffer', { params: { count: input.priceDiffer } }) } })
+    out.push({ code: 'priceDiffer', tone: 'warning', words: word('cm.needs.priceDiffer', { params: { count: input.priceDiffer } }), down: 'price-check', fallback: { kind: 'href', href: priceDifferHref(prefix, input.party.id), label: word('parties:customers.work.priceDiffer', { params: { count: input.priceDiffer } }) } }) // F-CM-303 (Z31): ↓ Price check
   return out
 }
 
@@ -268,4 +273,4 @@ export function moneyBadgeOf(input: { readonly can: Pick<MoneyTabCan, 'receivabl
   return count > 0 ? count : undefined
 }
 
-const BADGE_CAN: MoneyTabCan = { price: false, margin: false, receivables: false, payments: false, paymentsRecord: false, paymentsRefund: false, paymentsVoid: false, invoices: false, invoicesManage: false, invoicesIssue: false, orders: false, moneyPlan: false, waive: false, credit: false, creditLimits: false, remindersManage: false, statementsSend: false, hold: false, door: { recordPayment: false, price: false, moneyPlan: false, waive: false } }
+const BADGE_CAN: MoneyTabCan = { price: false, margin: false, receivables: false, payments: false, paymentsRecord: false, paymentsRefund: false, paymentsVoid: false, invoices: false, invoicesManage: false, invoicesIssue: false, orders: false, moneyPlan: false, waive: false, credit: false, creditLimits: false, remindersManage: false, statementsSend: false, hold: false, door: { recordPayment: false, price: false, moneyPlan: false, waive: false }, costing: false, cost: false }

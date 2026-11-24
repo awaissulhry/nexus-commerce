@@ -9,6 +9,7 @@ import { NS } from './model'
 import { useCustomerDepth, type CustomerDepthState } from './use-depth'
 import { GlanceNow, type GlanceNowPart, type GlanceModel } from './view/GlanceParts'
 import { HoldCard } from './view/HoldCard'
+import { HoldDialogView } from './view/HoldCard' // F-CM-301: Money's Credit & terms opens the same window
 import { NoticeLine } from './view/parts'
 import { PoNumberCard } from './view/PoNumberCard'
 import { PrivacyCard } from './view/PrivacyCard'
@@ -42,6 +43,22 @@ export function useCustomerGlance(): CustomerDepthState['glance'] {
   return useDepth().glance
 }
 // ---- end F-CO-102
+
+// ---- F-CM-301 (customer MONEY tab, cm-w3 W3.1; 13-backend §4.2): the hold for Money's Credit & terms — the provider's ONE hold state,
+// shared with Terms & requirements: Put on hold… and Release… (the one hold in force, with its version) open the Terms tab's own window,
+// drawn where Money asks for it. `release` is null while the holds are read, or when several are in force (Terms lists each one).
+export function useCustomerHold(party: Party): { readonly place: () => void; readonly release: (() => void) | null; readonly window: ReactNode } {
+  const state = useDepth()
+  const { prefix } = useAddresses(party)
+  const holds = state.holds.read.status === 'ready' ? state.holds.read.value.holds.filter((hold) => hold.inForce) : null
+  const single = holds && holds.length === 1 ? holds[0]! : null
+  return {
+    place: () => state.holds.onPlace(),
+    release: single ? () => state.holds.onRelease(single) : null,
+    window: <HoldDialogView model={{ read: state.holds.read, can: state.can, status: party.status, prefix, dialog: state.holds.dialog, companies: state.companies }} actions={state.holds} />,
+  }
+}
+// ---- end F-CM-301
 
 /** `/w/<company>` and the record's own address, from the page's path. */
 function useAddresses(party: Party): { prefix: string; recordHref: string } {

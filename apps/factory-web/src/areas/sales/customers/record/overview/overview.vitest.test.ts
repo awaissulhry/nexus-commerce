@@ -643,11 +643,12 @@ describe('the cards: People, Next dates, Requests & changes, Linked records, Cus
 })
 
 describe('the tab\'s reads (S11, S12; 13-backend §1.3)', () => {
-  it('W2.2: the customer\'s 200 newest quotes are no longer read — the shared party hook names no quotes read; the orders and the purchase orders as before', () => {
+  it('W2.2: the customer\'s 200 newest quotes are no longer read — the shared party hook names no quotes read; the purchase orders as before', () => {
     const hook = readFileSync(new URL('../../../../parties/_shared/PartyRecord.tsx', import.meta.url), 'utf8')
     expect(hook).not.toContain('listQuotesOf')
-    expect(hook).toContain("if (side === 'customers' && can.orders)")
-    expect(hook).toContain('listSalesOrdersOf(api, partyId).then(')
+    // F-CM-304 (cm-w3 W3.4): nor are the customer's 200 newest orders.
+    expect(hook).not.toContain("if (side === 'customers' && can.orders)")
+    expect(hook).not.toContain('listSalesOrdersOf')
     expect(hook).toContain("if (side === 'suppliers' && can.purchaseOrders)")
     expect(hook).toContain('listPurchaseOrdersOf(api, partyId).then(')
   })

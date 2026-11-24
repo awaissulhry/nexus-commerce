@@ -23,6 +23,10 @@ export const customerReturnSchema = z.object({
   units: z.number(),
   requestedAt: z.string(),
   late: z.boolean(),
+  // F-CM-303 (customer MONEY tab, E52): the credit value of the return (the API's `creditTotal`: price grain, absent without it) and
+  // its currency — the field the web dropped; additive, optional.
+  creditTotal: z.number().optional(),
+  currency: z.string().nullable().optional(),
 })
 export type CustomerReturn = z.infer<typeof customerReturnSchema>
 

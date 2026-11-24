@@ -37,7 +37,7 @@ function TileLink({ href, className, title, children }: { href: string; classNam
 }
 
 /** The words of a section a need scrolls to ("To collect ↓"); a section not drawn yet has none (its need takes its address). */
-const DOWN_TITLE: Readonly<Record<string, string>> = { collect: 'cm.collect.title', invoices: 'orders:moneyTab.invoices.title' /* F-CM-202 */, received: 'cm.received.title', 'on-account': 'cm.received.title', 'give-back': 'cm.balance.giveBack' /* F-CM-203 */ }
+const DOWN_TITLE: Readonly<Record<string, string>> = { collect: 'cm.collect.title', invoices: 'orders:moneyTab.invoices.title' /* F-CM-202 */, received: 'cm.received.title', 'on-account': 'cm.received.title', 'give-back': 'cm.balance.giveBack' /* F-CM-203 */, credit: 'cm.credit.title', statement: 'cm.chase.title', 'price-check': 'orders:moneyTab.price.title' /* F-CM-301…303 (Z31) */ }
 
 export interface BalanceSectionProps {
   readonly model: BalanceModel
@@ -55,9 +55,11 @@ export interface BalanceSectionProps {
   readonly onRetry: () => void
   /** F-CM-204: "Record a payment ›" — Finance's window with this customer chosen (payments.record + price); null: not drawn. */
   readonly recordPaymentHref?: string | null
+  /** F-CM-302: Statement… — Finance's statement window, in place (receivables.view + price, something to state); absent: not drawn. */
+  readonly onStatement?: () => void
 }
 
-export function BalanceSection({ model, present, sayIn, unit, asOf, menu, failed, onRetry, recordPaymentHref }: BalanceSectionProps) {
+export function BalanceSection({ model, present, sayIn, unit, asOf, menu, failed, onRetry, recordPaymentHref, onStatement }: BalanceSectionProps) {
   const locale = useLocale()
   const say = sayIn(unit)
   const title = say(word('cm.balance.title'))
@@ -83,14 +85,14 @@ export function BalanceSection({ model, present, sayIn, unit, asOf, menu, failed
   }
   const needWords = (need: Need): ReactNode => {
     const text = sayIn(need.currency ?? unit)(need.words)
-    // F-CP-141 → F-CM-104: "Prices differ on N orders ›" is its own door (Work › Not equal) until Price check is drawn (cm-w3).
+    // F-CP-141 → F-CM-303 (Z31): "Prices differ on N orders" points ↓ to Price check; without that section, its own door (Work › Not equal).
     if (need.code === 'priceDiffer' && need.fallback?.kind === 'href' && !(need.down && present.has(need.down)))
       return (
         <Link className="fw-pt-link" href={need.fallback.href}>
-          {text}
+          {say(need.fallback.label)}
         </Link>
       )
-    return need.code === 'priceDiffer' ? text : keepNumbers(sentenceOf([text]))
+    return keepNumbers(sentenceOf([text]))
   }
   const items: MenuItemDef[] = [...menu, { id: 'link', label: say(word('cm.linkTo', { params: { section: title } })), onSelect: () => copyLinkTo('balance') }]
   const info = (
@@ -105,15 +107,22 @@ export function BalanceSection({ model, present, sayIn, unit, asOf, menu, failed
       title={title}
       answer={model.answer.map(say).join(' · ')}
       asOf={asOf}
-      buttons={
-        recordPaymentHref
+      buttons={[
+        ...(recordPaymentHref
           ? [
               <Button key="record" size="sm" asChild>
                 <Link href={recordPaymentHref}>{`${say(word('finance:recordPay.title'))} ›`}</Link>
               </Button>,
             ]
-          : []
-      }
+          : []),
+        ...(onStatement
+          ? [
+              <Button key="statement" size="sm" onClick={onStatement}>
+                {say(word('cm.chase.statement'))}
+              </Button>,
+            ]
+          : []),
+      ]}
       more={<LineMenuButton label={say(word('cm.balance.more'))} items={items} />}
       info={info}
     >

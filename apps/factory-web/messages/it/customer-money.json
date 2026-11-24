@@ -23,27 +23,6 @@
     "returns": "Resi nel {year}",
     "returnsHint": "{units} pezzi · {open} aperti"
   },
-  "now": {
-    "title": "Resi e reclami aperti",
-    "reading": "Lettura…",
-    "nothingOpen": "Nessun reso o reclamo aperto.",
-    "return": "Reso",
-    "complaint": "Reclamo",
-    "late": "merce in ritardo",
-    "requested": "Richiesto il {date} · {units} pezzi",
-    "answerDue": "Risposta entro il {date}",
-    "received": "Ricevuto il {date}",
-    "col": {
-      "type": "Tipo",
-      "number": "Numero",
-      "state": "Stato",
-      "when": "Quando"
-    },
-    "more_one": "Altro {count} aperto: vedi gli elenchi.",
-    "more_other": "Altri {count} aperti: vedi gli elenchi.",
-    "owes": "Quanto deve questo cliente, per anzianità:",
-    "receivables": "Amministrazione › Crediti e fidi"
-  },
   "returnStatus": {
     "REQUESTED": "Richiesto",
     "AUTHORISED": "Autorizzato",
@@ -72,39 +51,11 @@
   },
   "tab": {
     "openToPay": "Da pagare",
-    "openToPayHint": "Tutte le fatture aperte",
-    "nothingOpen": "Niente di aperto",
-    "depositsWaiting": "Acconti in attesa",
-    "depositsWaitingHint": "Ordini aperti con l’acconto richiesto",
     "credit": "Fido",
     "noLimit": "Nessun fido impostato",
     "changeLimit": "Cambia fido…",
-    "changeLimitHeld": "Per cambiare un fido serve il permesso di impostare i fidi.",
     "paymentTerms": "Condizioni di pagamento",
-    "editTerms": "Modifica in Condizioni e requisiti",
-    "openInvoices": "Fatture aperte",
-    "noOpenInvoice": "Nessuna fattura aperta",
-    "bucket": {
-      "NOT_DUE": "Non scaduto",
-      "D1_30": "1–30",
-      "D31_60": "31–60",
-      "D61_90": "61–90",
-      "OVER_90": "90+"
-    },
-    "openStatement": "Apri estratto conto",
-    "deposits": "Acconti e saldi degli ordini aperti",
-    "noOrderOwes": "Nessun ordine aperto deve denaro",
-    "deposit": {
-      "NOT_NEEDED": "Nessun acconto",
-      "MISSING": "Acconto non chiesto",
-      "OPEN": "Acconto aperto",
-      "PAID": "Acconto pagato",
-      "WAIVED": "Acconto rinunciato"
-    },
-    "depositDue": "scade il {date}",
-    "paid": "pagato {amount}",
-    "balance": "da pagare {amount}",
-    "seeAll": "Vedi tutti · Lavori › Tutti gli ordini"
+    "editTerms": "Modifica in Condizioni e requisiti"
   },
   "cm": {
     "days_one": "{count} giorno",
@@ -158,7 +109,8 @@
       "down": "{section} ↓",
       "invoices": "Apri in Amministrazione › Fatture ›",
       "payments": "Apri in Amministrazione › Incassi ›",
-      "refunds": "Apri in Amministrazione › Rimborsi ›"
+      "refunds": "Apri in Amministrazione › Rimborsi ›",
+      "margins": "Apri in Amministrazione › Margini ›"
     },
     "more": {
       "rows_one": "Mostra {count} altra riga",
@@ -228,7 +180,10 @@
       "shipped_one": "{count} spedizione non è ancora fatturata",
       "shipped_other": "{count} spedizioni non sono ancora fatturate",
       "reminders_one": "{count} sollecito aspetta un sì",
-      "reminders_other": "{count} solleciti aspettano un sì"
+      "reminders_other": "{count} solleciti aspettano un sì",
+      "cantInvoice": "Non ancora fatturabile: {why}",
+      "priceDiffer_one": "Prezzi diversi su {count} ordine",
+      "priceDiffer_other": "Prezzi diversi su {count} ordini"
     },
     "collect": {
       "title": "Da incassare",
@@ -265,14 +220,19 @@
       "title": "Qui ancora niente",
       "collect": "Niente da incassare: nessun acconto richiesto e nessuna fattura aperta.",
       "invoices": "Ancora nessun documento: le fatture compaiono qui quando parte la merce o viene pagato un acconto.",
-      "received": "Ancora nessun incasso, e niente da restituire."
+      "received": "Ancora nessun incasso, e niente da restituire.",
+      "statement": "Nessun sollecito e nessun blocco.",
+      "priceCheck": "Ancora nessun ordine da confrontare.",
+      "margin": "Ancora nessun ordine da contare."
     },
     "done": {
       "record": "Incasso registrato su {number}.",
       "send": "Pagina di pagamento inviata per {number}.",
       "saved": "{number}: salvato.",
       "refund": "Rimborso registrato.",
-      "refundMoved": "Rimborso salvato."
+      "refundMoved": "Rimborso salvato.",
+      "limit": "Fido salvato.",
+      "statement": "Estratto conto inviato."
     },
     "amount": "{amount}",
     "invoices": {
@@ -333,7 +293,101 @@
       "madeHint": "conservati con la data valuta e il riferimento della banca",
       "madeNone": "Ancora nessun rimborso fatto, annullato o stornato.",
       "madeOn": "Fatto il {date}",
-      "ref": "rif. {reference}"
+      "ref": "rif. {reference}",
+      "returns_one": "Valore accreditato dei suoi resi nel {year}: {amount} su {count} reso",
+      "returns_other": "Valore accreditato dei suoi resi nel {year}: {amount} su {count} resi",
+      "returnsDoor": "Resi ›"
+    },
+    "credit": {
+      "title": "Fido e condizioni",
+      "part": "fido e condizioni",
+      "more": "Altro per Fido e condizioni",
+      "reading": "Lettura del fido e delle condizioni…",
+      "info": "Fido e condizioni: può ordinare a credito, e come paga. Utilizzato = fatture aperte + ordini non ancora fatturati. Oltre il fido o in blocco, un nuovo ordine aspetta un sì e una spedizione resta ferma. Le condizioni si cambiano in Condizioni e requisiti.",
+      "waitOrders_one": "{count} ordine aspetta un sì",
+      "waitOrders_other": "{count} ordini aspettano un sì",
+      "waitShipments_one": "{count} spedizione ferma",
+      "waitShipments_other": "{count} spedizioni ferme",
+      "waitReleases_one": "{count} rilascio rifiutato",
+      "waitReleases_other": "{count} rilasci rifiutati",
+      "overBy": "Oltre di",
+      "free": "Disponibile",
+      "overdue": "di cui {amount} scaduti",
+      "noneWith": "Nessun fido con {company}",
+      "within": "Entro il fido: {free} disponibili su {limit}",
+      "holdSince": "in blocco dal {date}",
+      "pays": "paga: {terms}",
+      "deposit": "Acconto predefinito",
+      "pct": "{pct}",
+      "noDeposit": "Nessun acconto",
+      "usedIs": "utilizzato = fatture aperte + ordini non ancora fatturati",
+      "terms": "Condizioni",
+      "set": "Imposta un fido…",
+      "onHold": "In blocco — {reason}"
+    },
+    "chase": {
+      "title": "Estratto conto e solleciti",
+      "part": "i solleciti",
+      "more": "Altro per Estratto conto e solleciti",
+      "reading": "Lettura dei solleciti…",
+      "info": "Estratto conto e solleciti: l’estratto conto, i solleciti di questo cliente e i blocchi attivi (una promessa di pagamento, una contestazione). Un blocco ferma i solleciti di UNA fattura fino al suo giorno o finché non viene tolto. Un blocco si aggiunge dalla riga della fattura in Da incassare. La conversazione è nel thread accanto alla scheda.",
+      "sent": "Inviato il {date}",
+      "prepared": "Preparato il {date}",
+      "waits": "Aspetta una persona: approva e invia, modifica o salta",
+      "until": "Fino al {date}",
+      "recorded": "Registrato il {date}",
+      "recordedBy": "Registrato il {date} da {name}",
+      "sentCount_one": "{count} inviato",
+      "sentCount_other": "{count} inviati",
+      "stops_one": "{count} blocco attivo",
+      "stops_other": "{count} blocchi attivi",
+      "noStop": "nessun blocco attivo",
+      "level": "livello di fiducia {level}",
+      "noLevel": "nessun livello di fiducia",
+      "review": "Rivedi in Amministrazione ›",
+      "remindersTitle": "Solleciti · {count}",
+      "stopsTitle": "Blocchi attivi · {count}",
+      "forInvoices": "per {invoices}",
+      "interest": "+ interessi di mora {amount}",
+      "statement": "Estratto conto…",
+      "sendStatement": "Invia l’estratto conto…",
+      "theirFigures": "Le loro cifre ›",
+      "riba": "Ri.Ba. ›"
+    },
+    "price": {
+      "part": "gli ordini con prezzi diversi",
+      "more": "Altro per Verifica prezzi",
+      "reading": "Lettura degli ordini con prezzi diversi…",
+      "info": "Verifica prezzi: gli ordini il cui prezzo è diverso dal prezzo del cliente (il suo ordine d’acquisto, il suo portale, o scritto da noi). Un prezzo si scrive, si cambia o la differenza si accetta sull’ordine.",
+      "calm": "= Nessun ordine diverso",
+      "missing_one": "{count} ordine senza prezzo del cliente ›",
+      "missing_other": "{count} ordini senza prezzo del cliente ›",
+      "seeWork": "Vedili in Lavori ›",
+      "foot": "Un prezzo si scrive, si cambia o si accetta sull’ordine.",
+      "ours": "Nostro importo",
+      "theirs": "Importo del cliente",
+      "diff": "Differenza"
+    },
+    "margin": {
+      "title": "Margine e costi",
+      "part": "il margine",
+      "more": "Altro per Margine e costi",
+      "reading": "Lettura del margine…",
+      "info": "Margine e costi: quanto valgono gli ordini di questo cliente e quanto ci costano — materiali usati, lavoro, lavorazioni esterne. Ora = la stima. Si legge quando arrivi alla sezione.",
+      "now_one": "Margine {pct} ora su {count} ordine",
+      "now_other": "Margine {pct} ora su {count} ordini",
+      "belowFloor_one": "{count} sotto il margine minimo ({floor})",
+      "belowFloor_other": "{count} sotto il margine minimo ({floor})",
+      "below_one": "{count} sotto il margine minimo",
+      "below_other": "{count} sotto il margine minimo",
+      "value": "Valore",
+      "cost": "Costo stimato",
+      "pctLabel": "Margine %",
+      "belowRow_one": "{count} ordine è sotto il margine minimo.",
+      "belowRow_other": "{count} ordini sono sotto il margine minimo.",
+      "seeThem": "Vedili ›",
+      "honest": "Quanto ci costano i suoi ordini: materiali usati, lavoro e lavorazioni esterne. La fattura di un fornitore è sull’ordine, in Margine › Documenti: qui mai il totale di un fornitore.",
+      "twoCurrencies": "I suoi ordini sono in due valute: nessuna cifra unica è onesta."
     }
   }
 }

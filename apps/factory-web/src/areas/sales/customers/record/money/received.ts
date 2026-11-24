@@ -91,6 +91,21 @@ export interface ReceivedModel {
   readonly more: boolean
   /** The head's Refund… (something can be refunded: a credit note with money left, or money on account; payments.refund + price). */
   readonly refundable: boolean
+  /**
+   * F-CM-303 (E52): "Credit value of its returns in {year}: {amount} on {n} returns · Returns ›" — the page's returns read (its
+   * `creditTotal`, price grain); null without prices, without a credit this year, or when this year's credits are in two currencies.
+   */
+  readonly returnsCredit: { readonly year: string; readonly amount: number; readonly count: number; readonly currency: string; readonly href: string | null } | null
+}
+
+/** E52: the credit value of this year's returns, in one currency (price grain; the return's own creditTotal). */
+export function returnsCreditOf(input: MoneyTabInput): ReceivedModel['returnsCredit'] {
+  const returns = input.returns ?? null
+  if (!input.can.price || !returns) return null
+  const credited = returns.rows.filter((row) => row.requestedAt.slice(0, 4) === returns.year && typeof row.creditTotal === 'number' && row.creditTotal > 0)
+  const currencies = new Set(credited.map((row) => row.currency ?? input.party.currency ?? 'EUR'))
+  if (credited.length === 0 || currencies.size !== 1) return null
+  return { year: returns.year, amount: credited.reduce((total, row) => total + (row.creditTotal ?? 0), 0), count: credited.length, currency: [...currencies][0]!, href: returns.href }
 }
 
 const paymentHref = (prefix: string, row: { readonly id: string; readonly externalRef: string }, companyId: string | null): string =>
@@ -189,9 +204,10 @@ export function receivedOf(input: MoneyTabInput, payments: Part<PaymentsRead> | 
       }
     })
   const refundable = can.paymentsRefund && price && (onAccount.length > 0 || (input.refunds?.value?.creditNotesToRefund.length ?? 0) > 0)
-  if (isReading(payments)) return { reading: true, problem: null, answer: [word('cm.received.reading')], onAccount, giveBack, payments: [], more: false, refundable }
+  const returnsCredit = returnsCreditOf(input) // F-CM-303 (E52)
+  if (isReading(payments)) return { reading: true, problem: null, answer: [word('cm.received.reading')], onAccount, giveBack, payments: [], more: false, refundable, returnsCredit }
   const value = payments.value
-  if (isFailed(payments) || !value) return { reading: false, problem: payments.problem ?? 'problem.read.internal', answer: [], onAccount, giveBack, payments: [], more: false, refundable }
+  if (isFailed(payments) || !value) return { reading: false, problem: payments.problem ?? 'problem.read.internal', answer: [], onAccount, giveBack, payments: [], more: false, refundable, returnsCredit }
   const items = paymentItemsOf(value.rows, input, prefix)
   const more = value.next !== null
   const answer: MoneyWord[] = []
@@ -207,7 +223,7 @@ export function receivedOf(input: MoneyTabInput, payments: Part<PaymentsRead> | 
     const firstDay = due.map((row) => row.due).filter((day): day is string => !!day).sort()[0] ?? null
     answer.push(due.length > 0 && firstDay ? word('cm.answer.pair', { words: { first: back, second: word('cm.needs.refundsBy', { params: { count: due.length }, days: { date: firstDay } }) } }) : back)
   }
-  return { reading: false, problem: null, answer, onAccount, giveBack, payments: items, more, refundable }
+  return { reading: false, problem: null, answer, onAccount, giveBack, payments: items, more, refundable, returnsCredit }
 }
 
 /** A refund made, cancelled or voided (the fold's rows): its state, the day, and Void… on a made one (payments.void + price). */

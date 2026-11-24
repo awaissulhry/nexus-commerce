@@ -51,6 +51,8 @@ export interface LimitsQuery {
   readonly view: LimitView
   readonly q: string | null
   readonly cursor?: number | null
+  /** F-CM-301 (customer MONEY tab; the API's S2): one customer's row (it has one only with a limit); absent: the request of today. */
+  readonly partyId?: string | null
 }
 
 /** GET /sales/credit/limits: the customers with a limit with the company, their use and what waits for credit. */
@@ -61,6 +63,7 @@ export async function getCreditLimits(api: ApiClient, query: LimitsQuery): Promi
       view: query.view,
       ...(query.q ? { q: query.q } : {}),
       ...(query.cursor ? { cursor: String(query.cursor) } : {}),
+      ...(query.partyId ? { partyId: query.partyId } : {}), // F-CM-301
       limit: '100',
     },
     schema: limitsSchema,
