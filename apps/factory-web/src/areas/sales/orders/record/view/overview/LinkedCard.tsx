@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { Fragment } from 'react'
-import { Card } from '@nexus/ui/components'
 import { Button, Skeleton } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
@@ -13,6 +12,7 @@ import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { useSearchParams } from 'next/navigation'
 import { TabLink } from '../../../../../../lib/tab-link/TabLink'
 import './linked.css' // F-OO-207: the card's own rows
+import { OverviewCard } from '../../../../../_shared/record-overview/Overview' // F-CO-K1: the card's frame is the shared overview kit's
 
 /** F-OM-fx6 (re-walk): a door's arrow never stands alone on a line — the space before "›" does not break. */
 const door = (words: string): string => words.replace(/ ›$/, '\u00a0›')
@@ -48,8 +48,7 @@ export function LinkedCard({ order, model, actions }: { order: Order; model: Ord
   })
   const label = (kind: LinkedRow['kind']) => t(`overview.linked.${kind}`)
   return (
-    <Card padded>
-      <h2 className="fw-so-h2">{t('overview.linked.title')}</h2>
+    <OverviewCard title={t('overview.linked.title')}>
       <ul className="fw-so-linked-list" aria-label={t('overview.linked.title')}>
         {view.rows.map((row) =>
           row.held ? (
@@ -77,7 +76,7 @@ export function LinkedCard({ order, model, actions }: { order: Order; model: Ord
           </li>
         )}
       </ul>
-    </Card>
+    </OverviewCard>
   )
 }
 

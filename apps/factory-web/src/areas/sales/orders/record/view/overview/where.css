@@ -2,27 +2,8 @@
    and the stage) with its quiet line, the strips slot (F-OO-104 / F-OO-105), the five stages with their quiet line, the moves slot
    (F-OO-107). The card is a container already (overview.css makes every Overview card `fw-so-ov-card`): no container here.
    Its rules came from so/orders.css (.fw-so-where, .fw-so-headline). Tokens only. ── */
-.fw-so-where {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-12);
-  min-width: 0;
-}
-
-/* The headline and its quiet line sit close together; at 375 the headline wraps (never a sideways scroll). */
-.fw-so-where-said {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-4);
-  min-width: 0;
-}
-
-.fw-so-headline {
-  margin: 0;
-  font-size: var(--nds-font-size-xl);
-  font-weight: var(--nds-font-weight-medium);
-  overflow-wrap: break-word;
-}
+/* F-CO-K1: the card's column (.fw-so-where) and the headline with its quiet line (.fw-so-where-said, .fw-so-headline) moved on to
+   the shared overview kit: areas/_shared/record-overview/record-overview.css (its lead card and its Headline part). */
 
 /* The five stages and their quiet line under them — F-MS-101: "set by the floor and quality, or by hand when the floor cannot record
    them" (with its door, and the hand stage's row while one stands: F-MS-102). */

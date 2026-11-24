@@ -1,7 +1,6 @@
 'use client'
 
 import { useId, type ReactNode } from 'react'
-import { Card } from '@nexus/ui/components'
 import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
@@ -15,6 +14,7 @@ import { NAMESPACE as DEPTH } from '../../../depth/model'
 import { factsDoorsOf, incotermOf, languageOf, madeOf, shipToOf } from '../../overview/facts'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import './facts.css'
+import { OverviewCard } from '../../../../../_shared/record-overview/Overview' // F-CO-K1: the card's frame is the shared overview kit's
 
 /** The quote's delivery terms words (the Incoterm's name, ship complete / as ready): the words the quote showed (one word per meaning). */
 const QUOTE_TERMS = 'sales-quotes-depth'
@@ -62,8 +62,7 @@ function Facts({ order, model, actions }: { order: Order; model: OrderRecordMode
   const fixed = <span className="fw-so-hint fw-so-fact-fixed" title={t('facts.fixedTitle')}>{t('facts.fixed')}</span>
   const search = useSearchParams()?.toString() ?? '' // F-OM-204: the terms row's door keeps the dock's scope
   return (
-    <Card padded>
-      <h2 className="fw-so-h2">{t('overview.facts.title')}</h2>
+    <OverviewCard title={t('overview.facts.title')}>
       <ul className="fw-so-ov-cols fw-so-facts">
         <Fact
           label={t('overview.facts.customerRef')}
@@ -123,7 +122,7 @@ function Facts({ order, model, actions }: { order: Order; model: OrderRecordMode
           />
         )}
       </ul>
-    </Card>
+    </OverviewCard>
   )
 }
 

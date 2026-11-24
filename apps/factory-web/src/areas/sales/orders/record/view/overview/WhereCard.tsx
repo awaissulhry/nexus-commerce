@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react' // F-OO-105: "Show {n} more"
-import { Card, Menu } from '@nexus/ui/components' // F-OO-107: Menu (More ▾)
+import { Menu } from '@nexus/ui/components' // F-OO-107: Menu (More ▾)
 import { Button, Skeleton } from '@nexus/ui/primitives'
 import { CircleAlert } from 'lucide-react' // F-OO-105: the failed read's mark (each strip's own: ./StripRow)
 import { ChevronDown } from 'lucide-react' // F-OO-107: More ▾
@@ -40,6 +40,10 @@ import { handDoorOf, handRowOf, type HandDoor, type HandRow } from '../../overvi
 import { useSayHand } from './StageByHandDialog' // F-MS-103: the door's words (F-SC-W2: the dialogs are the page's, OrderDialogs)
 import { stagePicksOf } from '../../overview/where' // F-SC-W3: the steps of the stages open the stage dialog
 import { CREDIT_NS, StripRow } from './StripRow' // F-PT-301: the ONE strip row (Production › Problems & holds draws it too)
+// ---- F-CO-K1 (the shared overview kit): the card's frame and its headline are the kit's parts. Imported last, after ./where.css: the
+// kit's stylesheet keeps its place after it (the strips' and the hand row's alignment rests on that order until co-k2). ----
+import { Headline, OverviewCard } from '../../../../../_shared/record-overview/Overview'
+// ---- end F-CO-K1
 
 /**
  * F-OO-100 (order overview lane: one file per card) — "Where it is now".
@@ -52,6 +56,8 @@ import { CREDIT_NS, StripRow } from './StripRow' // F-PT-301: the ONE strip row 
  * moves, F-OO-107). What left, each living on in ONE other place: Who acts next (Requests & changes' groups), Ex-factory and how it
  * moved (Next dates' Promised row), Health and the customer's Urgent (the band's chip and tag), Bundles in work (Progress by line's
  * counts), the deposit note on Preparing (the deposit strip).
+ * F-CO-K1: the frame is the shared overview kit's lead card (`OverviewCard lead`: the title, "Live · as of" at its right) and its
+ * `Headline` (the sentence, its quiet line, the placeholder while it is read) — the same markup as before.
  */
 export function WhereCard({ order, model, actions, waiting }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; /** OverviewTab's ONE waiting list: the strips read its holds (F-OO-104). */ waiting: WaitingState }) {
   const t = useT('orders')
@@ -88,15 +94,8 @@ export function WhereCard({ order, model, actions, waiting }: { order: Order; mo
   // (end check fix wave: named in words, so the source test that no such read exists reads only code).
   // F-OO-104: its strips name what stops the order (holds, the yes, the deposit) — the ONE list's HOLD rows, never a "waiting on".
   return (
-    <Card padded className="fw-so-where">
-      <div className="fw-so-card-head">
-        <h2 className="fw-so-h2">{t('overview.where')}</h2>
-        <FreshnessLine mode={model.liveState === 'live' ? 'live' : model.liveState === 'offline' ? 'offline' : 'connecting'} asOf={read?.asOf ?? null} />
-      </div>
-      <div className="fw-so-where-said">
-        {loading ? <Skeleton width={260} height={24} /> : <p className="fw-so-headline">{sentence}</p>}
-        {!loading && quiet ? <p className="fw-so-hint">{quiet}</p> : null}
-      </div>
+    <OverviewCard lead title={t('overview.where')} aside={<FreshnessLine mode={model.liveState === 'live' ? 'live' : model.liveState === 'offline' ? 'offline' : 'connecting'} asOf={read?.asOf ?? null} />}>
+      <Headline sentence={loading ? null : sentence} quiet={quiet} />
       {/* ---- F-OO-103: the strips slot — one strip per hold or wait, most blocking first, each with its real door (F-OO-104, F-OO-105) ---- */}
       {/* F-OO-106: the credit strip names what its check found in the Finance page's own words (sales-credit finding.*). */}
       <WithMessages namespaces={CREDIT_NS}>
@@ -144,7 +143,7 @@ export function WhereCard({ order, model, actions, waiting }: { order: Order; mo
       {/* F-OO-106: the credit strip's dialogs, in the page's one slot (Overview's own: use-overview-acts). */}
       <CreditDialogs order={order} model={model} actions={actions} />
       {/* F-SC-W2: the stage set by hand's dialogs (Set / Change, Clear…) are mounted once for the page (OrderDialogs). */}
-    </Card>
+    </OverviewCard>
   )
 }
 

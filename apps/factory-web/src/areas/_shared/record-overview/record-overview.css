@@ -1,0 +1,184 @@
+/* ── F-CO-K1 (customer overview lane: the shared overview kit) — the ONE stylesheet of a record page's Overview ────────────────────
+   The parts (./Overview.tsx) import this file, so every page that draws a part has its rules: a part owns its stylesheet, and no
+   host file restyles a class of this file. Layout by the room the tab has (the two size containers below), never the viewport.
+   The Overview-only names (fw-so-overview, fw-so-ov-*, fw-so-where*, fw-so-headline) kept their names when their rules moved here
+   from the order page (areas/sales/orders: orders.css, record/view/overview/overview.css, record/view/overview/where.css); the text
+   classes a part draws are the kit's own (fw-ro-*). Tokens only. ── */
+
+/* The Overview's column: its cards one under the other (moved from the order area's orders.css, F-SA-232). */
+.fw-so-overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+/* ── F-OO-201 (order overview lane; review F4: the pairs) — the Overview's grid and its shared card row ──────────────────────────
+   "Where it is now" and "Progress by line" take the full width. Then the cards in pairs, each pair its own row: [People, Next dates],
+   [Requests & changes, Linked records], [Order facts, Custom fields]. A pair is 2 equal columns while the Overview is at least
+   720 px wide, 1 column below; a pair with one card gives it the whole row (never an empty cell); the two cards of a pair stretch
+   to one height, so their bottoms line up. Each card's own CSS is its own file beside it (one file per card). */
+
+/* The Overview is the container the pairs read (its width, not the page's: the dock open or closed). */
+.fw-so-overview {
+  container: fw-so-ov / inline-size;
+}
+
+.fw-so-ov-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+@container fw-so-ov (min-width: 720px) {
+  .fw-so-ov-pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.fw-so-ov-pair > :only-child {
+  grid-column: 1 / -1;
+}
+
+/* Every card of the Overview is a container: a row inside reads the card's own width. */
+.fw-so-overview > :not(.fw-so-ov-pair),
+.fw-so-ov-pair > * {
+  container: fw-so-ov-card / inline-size;
+}
+
+/* Walk #6: every card's title keeps 12 px above its first row — what "Where it is now" has from its own column gap (so not added
+   there). One rule for the cards whose title (or title row) is their first child. */
+.fw-so-overview > :not(.fw-so-ov-pair, .fw-so-where) > :is(.fw-ro-head, .fw-ro-h2):first-child,
+.fw-so-ov-pair > * > :is(.fw-ro-head, .fw-ro-h2):first-child {
+  margin-block-end: var(--nds-space-12);
+}
+
+/* The shared card row: label | value | doors. Below a 480 px card the doors wrap under the words, kept to the right. */
+.fw-so-ov-row {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-so-ov-doors {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--nds-space-8);
+}
+
+@container fw-so-ov-card (max-width: 479px) {
+  .fw-so-ov-row {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+
+  .fw-so-ov-row > .fw-so-ov-doors {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+}
+
+/* Order facts and Custom fields: their rows in two columns inside a card of 800 px or more. */
+.fw-so-ov-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-8) var(--nds-space-24);
+  min-width: 0;
+}
+
+@container fw-so-ov-card (min-width: 800px) {
+  .fw-so-ov-cols {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ── F-CO-K1: the text a part draws — the kit's own classes. Each is a copy of the order area's text rule (orders.css: the card
+   head, the hint and its status line, the link, the tight stack, h2 / h3), declaration for declaration, in that file's order.
+   The hint stands BEFORE the link: an element that carries both takes the link's colour, as on the order page. ── */
+.fw-ro-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-ro-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+p.fw-ro-hint[role='status'] {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-ro-link {
+  color: var(--nds-text-link);
+  font-weight: var(--nds-font-weight-medium);
+  text-decoration: none;
+}
+
+.fw-ro-link:hover,
+.fw-ro-link:focus-visible {
+  text-decoration: underline;
+}
+
+.fw-ro-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-ro-h2,
+.fw-ro-h3 {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-strong);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-ro-h2 {
+  font-size: var(--nds-font-size-md, var(--nds-font-size-sm));
+}
+
+.fw-ro-h3 {
+  font-size: var(--nds-font-size-sm);
+}
+
+/* ── F-CO-K1: the lead card — the Overview's first card, a column whose parts keep one gap ("Where it is now" on the order page:
+   moved from its where.css, F-OO-103). The card is a container already (the rule above makes every Overview card
+   `fw-so-ov-card`): none is named here. ── */
+.fw-so-where {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+/* The headline and its quiet line sit close together; at 375 the headline wraps (never a sideways scroll). */
+.fw-so-where-said {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-so-headline {
+  margin: 0;
+  font-size: var(--nds-font-size-xl);
+  font-weight: var(--nds-font-weight-medium);
+  overflow-wrap: break-word;
+}

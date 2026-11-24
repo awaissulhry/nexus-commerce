@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { Card } from '@nexus/ui/components'
 import { Button, Skeleton } from '@nexus/ui/primitives'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { formatDate } from '../../../../../../lib/i18n/format' // F-OO-134: a workshop's day
@@ -23,6 +22,7 @@ import { FollowersDoor } from '../Discuss' // F-SA-266
 import { askPresetOf, askStarterOf } from '../../production/asks' // F-PT-103b: the ready ask
 import { readOf } from '../../overview/model' // F-PT-103b: the promise the starter names
 import './people.css' // F-OO-131: the card's own rows
+import { OverviewCard } from '../../../../../_shared/record-overview/Overview' // F-CO-K1: the card's frame is the shared overview kit's
 
 /**
  * F-OO-100 (order overview lane: one file per card) — moved out of OverviewTab.tsx unchanged.
@@ -66,13 +66,9 @@ function PeopleBody({ order, model, actions }: { order: Order; model: OrderRecor
   const planning = planningWorkOrderOf(order.chain.workOrders, { plan: !!model.workOrderActs?.can.planning, final: isFinal(order) })
   const day = (value: string) => formatDate(dayInstant(value), { locale })
   return (
-    <Card padded className="fw-so-people">
-      <div className="fw-so-card-head">
-        <h2 className="fw-so-h2">{t('overview.people.title')}</h2>
-        {/* F-SA-265 / F-SA-266: who is told about this order — the thread's followers (the frame's door); F-OO-131: in the head.
-            F-OO-135: "Followers · 4 ›" — the count the dock reported to the frame; no conversation on the page: no door. */}
-        <FollowersDoor />
-      </div>
+    // F-SA-265 / F-SA-266: who is told about this order — the thread's followers (the frame's door); F-OO-131: in the head.
+    // F-OO-135: "Followers · 4 ›" — the count the dock reported to the frame; no conversation on the page: no door (the head row stays).
+    <OverviewCard className="fw-so-people" title={t('overview.people.title')} aside={<FollowersDoor />}>
       {view.status === 'loading' ? (
         <Skeleton height={44} />
       ) : view.status === 'withheld' ? (
@@ -142,6 +138,6 @@ function PeopleBody({ order, model, actions }: { order: Order; model: OrderRecor
           </li>
         </ul>
       )}
-    </Card>
+    </OverviewCard>
   )
 }
