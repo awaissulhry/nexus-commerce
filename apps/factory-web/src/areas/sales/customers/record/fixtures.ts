@@ -27,7 +27,6 @@ import type { OpenOrderMoney } from '../money/api' // F-SA-273
 import type { SupervisorModel } from '../portal/limits/model'
 // B-W2b-324: the customer in depth (made-up data in ../depth/_demo/fixtures.ts).
 import { WithMessages } from '../../../../record-panels/i18n'
-import type { SupplierDepth } from '../../../parties/_shared/view/PartyRecordView'
 import type { Glance, Privacy } from '../depth/api'
 import { DEPTH_NAMESPACES } from '../depth/CustomerDepth'
 import { ALL_CAN, COMPANIES, COPY, FILES, glanceOf, HELD_GLANCE, HOLDS, KEPT, NO_HOLDS, PRIVACY, READ_CAN, REQUIREMENTS, SALES_CAN, STYLES, TERMS as COMPANY_TERMS, TODAY, TWO_HOLDS, WITHHELD, withoutPrices } from '../depth/_demo/fixtures'
@@ -45,7 +44,7 @@ import { ChangeTermsBody } from './view/terms/ChangeTermsDialog'
 import { TermsNotices } from './view/terms/TermsNotices'
 // ---- end F-CT-408
 import type { PrivacyModel } from '../depth/view/PrivacyCard'
-import { RequirementsTab, type RequirementsModel } from '../depth/view/RequirementsTab'
+import type { RequirementsModel } from '../depth/view/RequirementsTab'
 // F-CA-120 (customer People & addresses, lane ca-; 15-steps W1.4): the People tab of a case — the page's own model rule over the case's
 // party, rights, portal and personal data (made-up), today's riders and personal-data cards under it until ca-w2.
 import { PeopleTab } from './view/people/PeopleTab'
@@ -800,16 +799,6 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
 }
 // ---- end F-SA-276
 
-function depthNodes(depth: DepthCase | undefined): SupplierDepth | undefined {
-  if (!depth) return undefined
-  // F-CO-203: the Overview's old parts went — the Overview's rules read the case's glance (OverviewDesign below). F-CA-229 (ca-w2 W2.5):
-  // People's riders / profiles card and personal-data card went — the People tab draws the case's glance (its riders) and privacy.
-  // F-CT-408 (ct-w1 W1.4): the hold and PO-number cards went — the case's Terms tab draws its hold and company-terms reads (TermsDesign).
-  return {
-    requirements: depth.requirements ? createElement(RequirementsTab, { model: depth.requirements }) : null,
-  }
-}
-
 // ---- F-CT-408 (customer page › Terms & requirements, lane ct-; 13-backend §6.8): the Terms tab of a case — the tab's ONE model rule
 // (termsTabModel, the container's own) over the case's reads: its commercial terms (the old card's model), its holds and company terms
 // (the old depth cards' models, their windows kept), else made-up defaults; every Terms case keeps its id and its label. An edit of the
@@ -871,7 +860,7 @@ function TermsDesign({ record, party, terms: termsOfCase, depth }: { record: Par
   return createElement(
     Fragment,
     null,
-    createElement(TermsTab, { model: { ...model, windows: { ...model.windows, window: null } }, hold: depth?.hold ? { model: depth.hold } : null }),
+    createElement(TermsTab, { model: { ...model, windows: { ...model.windows, window: null } }, hold: depth?.hold ? { model: depth.hold } : null, requirements: depth?.requirements ? { model: depth.requirements } : null /* F-CT-508: its windows, as the page mounts them */ }),
     edit ? createElement(WithMessages, { namespaces: TERMS_TAB_NAMESPACES }, createElement(Card, { padded: true }, createElement(ChangeTermsBody, { window: edit, windows: model.windows }))) : null,
   )
 }
@@ -1115,7 +1104,6 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
   // ---- end F-CM-104
   // F-CA-120 (ca-w1 W1.4): People & addresses, built for the tab the page shows (as the live container builds it) — the page's own model
   // rule over the case's models; today's riders / profiles and personal-data cards under it (the depth slot's, until ca-w2).
-  const nodes = depthNodes(depth)
   const portal = record.can.partners ? (people?.portal ?? null) : null
   // F-CA T.1: a ca-* case draws the tab from its customer's reads, in its room, with a window's inside under it (people/_demo/fixtures.ts).
   const peopleTab =
@@ -1140,7 +1128,7 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
       WithMessages,
       { namespaces: DEPTH_NAMESPACES },
       // B-TH-260: the customer's docked thread (Activity and Documents went to it), with threads.read.
-      createElement(CustomerRecordView, { model: record, thread: party ? (shipmentLine && record.can.threads ? createElement(ShipmentLineThread, { party }) /* cw T.1 */ : partyThread(party, 'customers', record.can)) : null, termsTab /* F-CT-408 */, termsNotice /* F-CT-408 */, money, depth: nodes, overviewTab /* F-CO-103 */, peopleTab /* F-CA-120 */, peopleBadge: party ? peopleBadgeOf(party) : null /* F-CA-120 */, work: work && party ? createElement(WithMessages, { namespaces: ['orders'] /* F-CW-101: as the live Work tab loads them */ }, createElement(WorkDesign, { work, party })) : null /* F-SA-276 */, workCount: work ? { count: 5, attention: true } : null, priceDiffer: priceDiffer ?? null /* F-CP-141 */, quotesIncoming /* cq W3 */, moneyTab /* F-CM-104 */ }),
+      createElement(CustomerRecordView, { model: record, thread: party ? (shipmentLine && record.can.threads ? createElement(ShipmentLineThread, { party }) /* cw T.1 */ : partyThread(party, 'customers', record.can)) : null, termsTab /* F-CT-408 */, termsNotice /* F-CT-408 */, money, overviewTab /* F-CO-103 */, peopleTab /* F-CA-120 */, peopleBadge: party ? peopleBadgeOf(party) : null /* F-CA-120 */, work: work && party ? createElement(WithMessages, { namespaces: ['orders'] /* F-CW-101: as the live Work tab loads them */ }, createElement(WorkDesign, { work, party })) : null /* F-SA-276 */, workCount: work ? { count: 5, attention: true } : null, priceDiffer: priceDiffer ?? null /* F-CP-141 */, quotesIncoming /* cq W3 */, moneyTab /* F-CM-104 */ }),
     ),
   )
 }

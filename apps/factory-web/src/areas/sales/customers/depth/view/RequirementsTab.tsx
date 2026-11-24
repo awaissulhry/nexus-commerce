@@ -1,20 +1,19 @@
 'use client'
 
-import { MoreHorizontal, Plus } from 'lucide-react'
-import { Banner, EmptyState, Field, Menu, SummaryTable } from '@nexus/ui/components'
-import { Button, Checkbox, Radio, Select, Tag } from '@nexus/ui/primitives'
-import { Modal, Textarea, Timeline } from '../../../../../lib/i18n/ds-parts'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Checkbox, Input, Radio, Select } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
+import { useT } from '../../../../../lib/i18n/provider'
 import type { PartyFile, Requirement, Requirements, StyleOption } from '../api'
-import { endReasonProblem, KINDS, requirementProblems, shownOnKeys, STAGES, valueOf, writeHeld, type DepthCan, type Read, type RequirementDialog, type RequirementDraft } from '../model'
-import { DepthCard, ReadOr, useSay } from './parts'
+import { endReasonProblem, KINDS, requirementProblems, STAGES, type DepthCan, type Read, type RequirementDialog, type RequirementDraft } from '../model'
+import { useSay } from './parts'
 import { MultiSelect } from '../../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
 /**
- * Customer › Requirements (B-W2b-324; SAL-014; design sales.customers record customer.requirements, customer.req.rules):
- * the rules in force (packing, labelling, documents, the routing guide), each with what it applies to (all orders or some
- * styles), where people will see it (the quote, the order, the pick & pack screen, the shipping checklist, the invoice) and
- * its attachment; Add rule (a Modal), Replace (the old one ended and the new one written in one step) and End with a
- * reason; the ended rules below, with who ended them and why. Fetches nothing.
+ * Customer › Requirements (B-W2b-324; SAL-014; design sales.customers record customer.requirements, customer.req.rules): the
+ * windows of a requirement — Add (a Modal), Replace (the old one ended and the new one written in one step) and End with a
+ * reason. F-CT-503 (ct-w2 W2.1): the card went — the Terms tab's Requirements section draws the rules (record/view/terms). Fetches
+ * nothing.
  */
 
 export interface RequirementsModel {
@@ -25,6 +24,8 @@ export interface RequirementsModel {
   readonly styles: Read<readonly StyleOption[]> | null
   readonly files: Read<readonly PartyFile[]> | null
   readonly companies: readonly { readonly id: string; readonly name: string }[]
+  /** F-CT-503: what the style search asks the server (the provider's state; one search per typed pause). */
+  readonly styleQuery?: string | undefined
 }
 
 export interface RequirementsActions {
@@ -35,89 +36,18 @@ export interface RequirementsActions {
   onConfirm?: () => void
   onClose?: () => void
   onRetry?: () => void
+  /** F-CT-503: a style search typed (the provider searches after a pause). */
+  onStyleSearch?: (q: string) => void
 }
 
-export function RequirementsTab({ model, actions }: { model: RequirementsModel; actions?: RequirementsActions }) {
-  const { t, day, when } = useSay()
-  const read = valueOf(model.read)
-  const held = writeHeld(model.can, 'manage', model.status)
-  const add = (
-    <Button size="sm" variant="primary" onClick={() => actions?.onAdd?.()} heldReason={held ? t(held) : null}>
-      <Plus size={14} aria-hidden /> {t('req.add')}
-    </Button>
-  )
-  return (
-    <div className="fw-cdp-stack">
-      <DepthCard title={t('req.title')} hint={t('req.hint')} action={add}>
-        <ReadOr status={model.read.status} problem={model.read.status === 'error' ? model.read.problem : undefined} title={t('req.title')} onRetry={actions?.onRetry} rows={4}>
-          {read && read.inForce.length === 0 ? (
-            <EmptyState title={t('req.empty')} description={t('req.emptyBody')} action={add} />
-          ) : read ? (
-            <SummaryTable
-              label={t('req.title')}
-              stackOnPhone
-              density="roomy"
-              columns={[t('req.col.rule'), t('req.col.appliesTo'), t('req.col.shownOn'), t('req.col.attachment'), t('req.col.written'), '']}
-              widths={['32%', '15%', '18%', '13%', '15%', '7%']}
-              rows={read.inForce.map((row) => ({
-                id: row.id,
-                cells: [
-                  <span key="r" className="fw-cdp-cell">
-                    <span className="fw-cdp-tags">
-                      <Tag>{t(`kind.${row.kind}`)}</Tag>
-                      <span className="fw-cdp-hint">{row.companyCode ?? t('hold.everyCompany')}</span>
-                    </span>
-                    <span>{row.words}</span>
-                  </span>,
-                  row.everyStyle ? t('req.allOrders') : row.styles.map((style) => style.code).join(', '),
-                  shownOnKeys(row.appliesAt)
-                    .map((key) => t(key))
-                    .join(' · '),
-                  row.file ? row.file.fileName : '—',
-                  <span key="w" className="fw-cdp-hint">
-                    {row.createdBy ? t('req.writtenBy', { by: row.createdBy, date: day(row.createdAt) }) : day(row.createdAt)}
-                  </span>,
-                  <Menu
-                    key="m"
-                    align="right"
-                    label={<MoreHorizontal size={16} aria-hidden />}
-                    triggerProps={{ 'aria-label': t('req.menu', { kind: t(`kind.${row.kind}`) }) }}
-                    items={[
-                      { id: 'replace', label: t('req.replace'), onSelect: () => actions?.onReplace?.(row), disabled: held !== null, description: held ? t(held) : t('req.replaceHint') },
-                      { id: 'end', label: t('req.end'), onSelect: () => actions?.onEnd?.(row), disabled: held !== null, description: held ? t(held) : undefined },
-                    ]}
-                  />,
-                ],
-              }))}
-            />
-          ) : null}
-        </ReadOr>
-      </DepthCard>
-      {read && (
-        <DepthCard title={t('req.history')} hint={t('req.historyHint')}>
-          {read.ended.length === 0 ? (
-            <p className="fw-cdp-hint">{t('req.noHistory')}</p>
-          ) : (
-            <Timeline
-              label={t('req.history')}
-              steps={read.ended.map((row) => ({
-                key: row.id,
-                tone: 'neutral',
-                at: row.endedAt,
-                label: t('req.endedLine', { kind: t(`kind.${row.kind}`), by: row.endedBy ?? t('hold.system') }),
-                detail: `${row.words} · ${row.endReason ?? ''}${row.endedAt ? ` · ${when(row.endedAt)}` : ''}`,
-              }))}
-            />
-          )}
-        </DepthCard>
-      )}
-      <RequirementDialogView model={model} actions={actions} />
-    </div>
-  )
-}
-
-function RequirementDialogView({ model, actions }: { model: RequirementsModel; actions?: RequirementsActions | undefined }) {
+/**
+ * F-CT-503 (customer Terms & requirements, ct-w2 W2.1; 13-backend §3): EXPORTED — the Requirements section of the Terms tab opens these
+ * windows in place (Add requirement · Replace with a new version… · End…), the depth provider's ONE state. Inside, the style picker
+ * searches on the server (our own styles and THIS customer's, S1) and the words say where a rule really shows (Z12).
+ */
+export function RequirementWindows({ model, actions }: { model: RequirementsModel; actions?: RequirementsActions | undefined }) {
   const { t, say } = useSay()
+  const ct = useT('customer-terms') // F-CT-503: the tab's new words
   const dialog = model.dialog
   if (!dialog) return null
   if (dialog.kind === 'end') {
@@ -152,6 +82,8 @@ function RequirementDialogView({ model, actions }: { model: RequirementsModel; a
   const set = (next: Partial<RequirementDraft>) => actions?.onDraft?.({ ...dialog, draft: { ...draft, ...next } })
   const styles = model.styles?.status === 'ready' ? model.styles.value : []
   const styleOptions = [...draft.styles.filter((style) => !styles.some((option) => option.id === style.id)).map((style) => ({ id: style.id, code: style.code, name: '' })), ...styles]
+  // F-CT-503 (Z36): a style saved before the wall that is not ours or this customer's has no code here: it is never named.
+  const styleLabel = (style: { readonly code: string; readonly name: string }) => (style.code === '' ? ct('ct.req.styleGone') : style.name ? `${style.code} · ${style.name}` : style.code)
   const files = model.files?.status === 'ready' ? model.files.value : []
   const stylesHeld = !model.can.styles ? t('held.styles') : model.styles?.status === 'error' ? t('req.stylesFailed') : null
   return (
@@ -217,18 +149,22 @@ function RequirementDialogView({ model, actions }: { model: RequirementsModel; a
           </div>
           {stylesHeld && draft.styles.length === 0 ? <p className="fw-cdp-hint">{stylesHeld}</p> : null}
           {!draft.everyStyle && (
-            <Field label={t('req.field.styles')} error={problems.styles ? say(problems.styles) : undefined}>
-              <MultiSelect
-                searchable
-                ariaLabel={t('req.field.styles')}
-                placeholder={model.styles?.status === 'loading' ? t('read.loading') : t('req.field.stylesPick')}
-                searchPlaceholder={t('req.field.stylesSearch')}
-                options={styleOptions.map((style) => ({ value: style.id, label: style.name ? `${style.code} · ${style.name}` : style.code }))}
-                value={draft.styles.map((style) => style.id)}
-                onChange={(next) => set({ styles: next.map((id) => ({ id, code: styleOptions.find((style) => style.id === id)?.code ?? '' })) })}
-                width="auto"
-              />
-            </Field>
+            <>
+              {/* F-CT-503 (S1): the search goes to the server — this customer's styles and our own only; the DS MultiSelect lists its answer. */}
+              <Field label={ct('ct.req.searchStyles')} hint={ct('ct.req.searchStylesHint')}>
+                <Input type="search" value={model.styleQuery ?? ''} autoComplete="off" placeholder={t('req.field.stylesSearch')} onChange={(event) => actions?.onStyleSearch?.(event.target.value)} />
+              </Field>
+              <Field label={t('req.field.styles')} error={problems.styles ? say(problems.styles) : undefined}>
+                <MultiSelect
+                  ariaLabel={t('req.field.styles')}
+                  placeholder={model.styles?.status === 'loading' ? t('read.loading') : t('req.field.stylesPick')}
+                  options={styleOptions.map((style) => ({ value: style.id, label: styleLabel(style) }))}
+                  value={draft.styles.map((style) => style.id)}
+                  onChange={(next) => set({ styles: next.map((id) => ({ id, code: styleOptions.find((style) => style.id === id)?.code ?? '' })) })}
+                  width="auto"
+                />
+              </Field>
+            </>
           )}
         </fieldset>
         <Field label={t('req.field.attachment')} hint={model.can.files ? t('req.field.attachmentHint') : t('held.files')}>

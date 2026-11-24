@@ -1,7 +1,7 @@
 import type { Party } from '../../../../parties/_shared/api'
 import type { PriceListRow } from '../../../pricelists/api'
 import type { PaymentTermsRow } from '../../terms/api'
-import type { CompanyTerms, Holds, Requirements } from '../../depth/api'
+import type { CompanyTerms, Holds, RequirementKind, Requirements } from '../../depth/api'
 import type { Read } from '../../depth/model'
 import type { CarrierAccount } from './api'
 import { identityFactsOf, termsAnswer, type TermsAnswer, type TermsChipId } from './answer'
@@ -10,6 +10,7 @@ import { holdSection, type HoldFacts, type HoldSectionModel } from './holds'
 import { companyOf, termsInForce } from './in-force'
 import type { Said, TermsCan } from './model'
 import { endLines, type TermsTabWindow } from './windows'
+import { requirementsSection, type RequirementRow, type RequirementsSectionModel } from './requirements' // F-CT-504 (W2.1)
 
 /**
  * F-CT-205 (customer page › TERMS & REQUIREMENTS tab, lane ct-; 13-backend §6.2 `termsTabModel`) — the tab's ONE model, pure: the reads
@@ -47,8 +48,12 @@ export interface TermsTabState {
   readonly releasedOpen: boolean
   readonly endedOpen: boolean
   readonly window: TermsTabWindow | null
+  // F-CT-504 (ct-w2 W2.1): Requirements — the kind chip pressed, "Show n more", the ended and replaced rules folded.
+  readonly kind: RequirementKind | null
+  readonly moreRequirements: boolean
+  readonly requirementsEndedOpen: boolean
 }
-export const TERMS_TAB_START: TermsTabState = { chip: null, releasedOpen: false, endedOpen: false, window: null }
+export const TERMS_TAB_START: TermsTabState = { chip: null, releasedOpen: false, endedOpen: false, window: null, kind: null, moreRequirements: false, requirementsEndedOpen: false }
 
 /** What the four NEW windows draw (the one open; its reads). */
 export interface TermsWindowsModel {
@@ -84,6 +89,7 @@ export interface TermsTabModel {
   readonly marked: readonly string[]
   readonly hold: HoldSectionModel
   readonly commercial: CommercialSectionModel
+  readonly requirements: RequirementsSectionModel // F-CT-504 (W2.1)
   readonly windows: TermsWindowsModel
 }
 
@@ -147,6 +153,7 @@ export function termsTabModel(reads: TermsTabReads, state: TermsTabState): Terms
     marked: pressed ? pressed.rows : [],
     hold,
     commercial,
+    requirements: requirementsSection({ read: reads.requirements, can, archived, companyNames: names, kind: state.kind, more: state.moreRequirements, endedOpen: state.requirementsEndedOpen }), // F-CT-504
     windows: {
       window,
       customer: name,
@@ -172,7 +179,7 @@ export interface TermsNotice {
 export interface TermsTabActions {
   /** A chip pressed (null: pressed again, the mark leaves); a door chip leaves the tab. */
   readonly onChip?: (chip: TermsChipId | null) => void
-  readonly onFold?: (fold: 'released' | 'ended', open: boolean) => void
+  readonly onFold?: (fold: 'released' | 'ended' | 'requirementsEnded', open: boolean) => void
   /** Put on hold… / Put on hold for another reason… — the depth provider's own window (HoldDialogView). */
   readonly onPlaceHold?: () => void
   readonly onReleaseHold?: (hold: HoldFacts) => void
@@ -192,4 +199,15 @@ export interface TermsTabActions {
   readonly onRetryChoices?: () => void
   /** Copy a link to a section or a row (its address). */
   readonly onCopyLink?: (anchor: string) => void
+  // ---- F-CT-504 (ct-w2 W2.1): Requirements — the depth provider's own windows (RequirementWindows), the kind chips, a file's door
+  readonly onAddRequirement?: () => void
+  readonly onReplaceRequirement?: (row: RequirementRow) => void
+  readonly onEndRequirement?: (row: RequirementRow) => void
+  readonly onKind?: (kind: RequirementKind | null) => void
+  readonly onMoreRequirements?: (more: boolean) => void
+  readonly onRetryRequirements?: () => void
+  /** Open a requirement's file (files.read: its preview link, read on the click). */
+  readonly onOpenFile?: (fileId: string) => void
+  /** Copy a rule's words. */
+  readonly onCopyWords?: (words: string) => void
 }

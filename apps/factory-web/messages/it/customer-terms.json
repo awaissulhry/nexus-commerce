@@ -403,6 +403,63 @@
         "what": "{company} smette di usare le sue condizioni: i nuovi preventivi e ordini con essa prendono quelle del cliente. Le condizioni terminate restano in “Condizioni di azienda terminate”.",
         "confirm": "Torna alle condizioni del cliente"
       }
+    },
+    "req": {
+      "title": "Requisiti",
+      "add": "Aggiungi requisito",
+      "part": "i requisiti",
+      "none": "Nessun requisito particolare.",
+      "answer_one": "{count} requisito in vigore: {kinds} · {printed}.",
+      "answer_other": "{count} requisiti in vigore: {kinds} · {printed}.",
+      "kindLower": "{kind}",
+      "ddtSome_one": "{count} stampato sul documento di trasporto (DDT); gli altri conservati, non ancora sulle altre schermate",
+      "ddtSome_other": "{count} stampati sul documento di trasporto (DDT); gli altri conservati, non ancora sulle altre schermate",
+      "ddtAll_one": "{count} stampato sul documento di trasporto (DDT)",
+      "ddtAll_other": "{count} stampati sul documento di trasporto (DDT)",
+      "ddtNone": "nessuno sul documento di trasporto (DDT): conservati, non ancora sulle altre schermate",
+      "version": "v{version} · sostituisce la v{before} del {date}",
+      "styleGone": "un modello non più offerto",
+      "ddt": "Stampato sul documento di trasporto (DDT)",
+      "ddtUnless": "Salvo note scritte dall'ufficio",
+      "keptOne": "Conservato per {stages} — non ancora su quella schermata",
+      "keptMany": "Conservato per {stages} — non ancora su quelle schermate",
+      "noFile": "Nessun file",
+      "writtenBy": "Scritto da {name}, {date}",
+      "written": "Scritto il {date}",
+      "rowMore": "Azioni per il requisito {kind}",
+      "replace": "Sostituisci con una nuova versione…",
+      "openFile": "Apri {file} ›",
+      "copyWords": "Copia il testo",
+      "wordsCopied": "Copiato: il testo del requisito.",
+      "fileFailed": "Il file non si è potuto aprire: riprova.",
+      "endedFold": "Terminati e sostituiti ({count})",
+      "endedInline": "Terminati e sostituiti ({count}) ›",
+      "hideEnded": "Nascondi i terminati e sostituiti",
+      "endedList": "Requisiti terminati e sostituiti",
+      "replaced": "Sostituito",
+      "ended": "Terminato",
+      "replacedBy": "v{version} · sostituito dalla v{next} il {date} da {name}: “{reason}”",
+      "replacedByBare": "v{version} · sostituito dalla v{next} il {date} da {name}",
+      "endedOn": "Terminato il {date} da {name}: “{reason}”",
+      "endedOnBare": "Terminato il {date} da {name}",
+      "kindsLabel": "Mostra un tipo",
+      "all": "Tutti",
+      "listLabel": "Requisiti in vigore",
+      "col": {
+        "what": "Requisito",
+        "where": "Dove si vede",
+        "file": "File · scritto"
+      },
+      "showMore_one": "Mostra {count} altro requisito",
+      "showMore_other": "Mostra altri {count} requisiti",
+      "showFewer": "Mostra meno",
+      "searchStyles": "Cerca modelli",
+      "searchStylesHint": "I modelli di questo cliente e la nostra collezione, cercati sul server",
+      "info": {
+        "what": "Requisiti: le regole del marchio per imballo, etichette, documenti, spedizione, qualità e fatturazione. Una regola non si modifica: un cambio termina la vecchia e inizia una nuova versione in un solo passo.",
+        "where": "Oggi solo le regole di spedizione arrivano su carta (le note del documento di trasporto). Le schermate di preventivo, ordine, prelievo e imballo, checklist e fattura le leggeranno in un lavoro successivo.",
+        "styles": "Una regola nomina solo modelli di questo cliente o della nostra collezione."
+      }
     }
   }
 }

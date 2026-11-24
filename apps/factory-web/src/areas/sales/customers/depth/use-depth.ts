@@ -178,16 +178,34 @@ export function useCustomerDepth(partyId: string) {
   const [reqDialog, setReqDialog] = useState<RequirementDialog | null>(null)
   const [styles, setStyles] = useState<Read<readonly StyleOption[]> | null>(null)
   const [files, setFiles] = useState<Read<readonly PartyFile[]> | null>(null)
-  const loadPickers = () => {
-    if (can.styles && styles === null) {
+  // F-CT-502 (customer Terms & requirements, ct-w2 W2.1; S1): the style picker searches on the server — our own styles and THIS customer's
+  // (`forCustomer`), one search per typed pause (300 ms; an older answer never lands over a newer one); the styles picked stay chosen.
+  const [styleQuery, setStyleQuery] = useState('')
+  const pickingStyles = reqDialog !== null && reqDialog.kind !== 'end' && can.styles
+  useEffect(() => {
+    if (!pickingStyles) return
+    const controller = new AbortController()
+    const timer = setTimeout(() => {
       setStyles(LOADING)
-      void readOne(() => searchStyles(api, ''), setStyles)
+      searchStyles(api, styleQuery, partyId, controller.signal)
+        .then((rows) => setStyles(ready(rows)))
+        .catch((error: unknown) => {
+          if (!controller.signal.aborted) setStyles(failedRead(problemOf(error)))
+        })
+    }, 300)
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
     }
+  }, [api, partyId, pickingStyles, styleQuery])
+  const loadPickers = () => {
+    setStyleQuery('')
     if (can.files && files === null) {
       setFiles(LOADING)
       void readOne(() => readPartyFiles(api, partyId), setFiles)
     }
   }
+  // F-CT-502: end
   const openAdd = () => {
     loadPickers()
     setReqDialog({ kind: 'add', target: null, draft: blankRequirement(companyId), busy: false, failed: null, tried: false })
@@ -303,6 +321,8 @@ export function useCustomerDepth(partyId: string) {
       dialog: reqDialog,
       styles,
       files,
+      styleQuery, // F-CT-502
+      onStyleSearch: setStyleQuery, // F-CT-502
       onAdd: openAdd,
       onReplace: openReplace,
       onEnd: openEnd,

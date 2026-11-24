@@ -2,6 +2,7 @@
 
 import { WithMessages } from '../../../../../../record-panels/i18n'
 import { HoldDialogView, type HoldCardActions, type HoldCardModel } from '../../../depth/view/HoldCard'
+import { RequirementWindows, type RequirementsActions, type RequirementsModel } from '../../../depth/view/RequirementsTab' // F-CT-507 (W2.1)
 import type { TermsChipId } from '../../terms/answer'
 import { TERMS_TAB_NAMESPACES } from '../../terms/model'
 import type { TermsTabActions, TermsTabModel } from '../../terms/tab'
@@ -10,6 +11,7 @@ import { CommercialSection } from './CommercialSection'
 import { CompanyEndDialog, CompanyTermsDialog } from './CompanyTermsDialog'
 import { DeliveryDialog } from './DeliveryDialog'
 import { HoldSection } from './HoldSection'
+import { RequirementsSection } from './RequirementsSection' // F-CT-507 (W2.1)
 import { TermsAnswer } from './TermsAnswer'
 import './terms.css'
 
@@ -28,6 +30,8 @@ export interface TermsTabProps {
   readonly actions?: TermsTabActions | undefined
   /** The depth provider's hold window (its model and acts, as they are); null: not mounted. */
   readonly hold?: { readonly model: HoldCardModel; readonly actions?: HoldCardActions | undefined } | null | undefined
+  /** F-CT-507: the depth provider's requirement windows (their model and acts, as they are); null: not mounted. */
+  readonly requirements?: { readonly model: RequirementsModel; readonly actions?: RequirementsActions | undefined } | null | undefined
 }
 
 export function TermsTab(props: TermsTabProps) {
@@ -38,7 +42,7 @@ export function TermsTab(props: TermsTabProps) {
   )
 }
 
-function TermsTabBody({ model, actions, hold }: TermsTabProps) {
+function TermsTabBody({ model, actions, hold, requirements }: TermsTabProps) {
   if (!model)
     return (
       <div className="fw-pt fw-ctr">
@@ -58,7 +62,9 @@ function TermsTabBody({ model, actions, hold }: TermsTabProps) {
       <TermsAnswer answer={model.answer} chip={model.chip} reading={model.answerReading} onChip={onChip} />
       <HoldSection model={model} actions={actions} />
       <CommercialSection model={model} actions={actions} />
+      <RequirementsSection model={model} actions={actions} />
       {hold ? <HoldDialogView model={hold.model} actions={hold.actions} /> : null}
+      {requirements ? <RequirementWindows model={requirements.model} actions={requirements.actions} /> : null}
       {open?.kind === 'terms' ? <ChangeTermsDialog window={open} windows={model.windows} actions={actions} /> : null}
       {open?.kind === 'delivery' ? <DeliveryDialog window={open} windows={model.windows} actions={actions} /> : null}
       {open?.kind === 'company' ? <CompanyTermsDialog window={open} windows={model.windows} actions={actions} /> : null}

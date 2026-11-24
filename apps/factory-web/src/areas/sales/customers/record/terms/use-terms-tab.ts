@@ -14,9 +14,10 @@ import { listPriceLists, type PriceListRow } from '../../../pricelists/api'
 import type { CompanyTerms, Holds, Requirements } from '../../depth/api'
 import { failedRead, LOADING, ready, type Notice, type Read } from '../../depth/model'
 import type { HoldCardActions, HoldCardModel } from '../../depth/view/HoldCard'
+import type { RequirementsActions, RequirementsModel } from '../../depth/view/RequirementsTab' // F-CT-505 (W2.1)
 import { getCommercialTerms, listPaymentTerms, updateCommercialTerms, type CommercialTerms, type PaymentTermsRow } from '../../terms/api'
 import { termsAbilitiesOf } from '../../terms/model'
-import { endCompanyTerms, readCarrierAccount, setCarrierAccount, setCompanyTerms, type CarrierAccount } from './api'
+import { endCompanyTerms, fileDoor, readCarrierAccount, setCarrierAccount, setCompanyTerms, type CarrierAccount } from './api'
 import { TERMS_SECTIONS, said, termsCan, type TermsSectionId } from './model'
 import { TERMS_TAB_START, termsTabModel, type TermsNotice, type TermsTabActions, type TermsTabModel, type TermsTabState } from './tab'
 import {
@@ -58,6 +59,8 @@ export interface TermsDepth {
   readonly requirements: Read<Requirements>
   /** The hold window — the provider's ONE state, shared with Money: mounted as it is. */
   readonly hold: { readonly model: HoldCardModel; readonly actions: HoldCardActions }
+  /** F-CT-505 (W2.1): the requirement windows (Add · Replace with a new version… · End…) — the provider's ONE state, mounted as they are. */
+  readonly requirementsWindow: { readonly model: RequirementsModel; readonly actions: RequirementsActions }
   /** A company-terms write answered (R5, R6): the provider keeps the fresh read (no second read). */
   readonly onCompanyTerms: (answer: CompanyTerms) => void
   readonly onRetryHolds: () => void
@@ -94,6 +97,8 @@ export interface TermsTabContainer {
   readonly actions: TermsTabActions
   /** The depth provider's hold window (HoldDialogView), mounted by the view as it is; null: not handed. */
   readonly hold: TermsDepth['hold'] | null
+  /** F-CT-505: the provider's requirement windows (RequirementWindows), mounted by the view as they are; null: not handed. */
+  readonly requirementsWindow: TermsDepth['requirementsWindow'] | null
   readonly notices: TermsNotices
 }
 
@@ -317,7 +322,7 @@ export function useTermsTab(input: TermsTabInput): TermsTabContainer {
       }
       patch({ chip })
     },
-    onFold: (fold, open) => patch(fold === 'released' ? { releasedOpen: open } : { endedOpen: open }),
+    onFold: (fold, open) => patch(fold === 'released' ? { releasedOpen: open } : fold === 'requirementsEnded' ? { requirementsEndedOpen: open } : { endedOpen: open }),
     onPlaceHold: () => depth?.hold.actions.onPlace?.(),
     onReleaseHold: (hold) => {
       const row = depth?.holds.status === 'ready' ? depth.holds.value.holds.find((entry) => entry.id === hold.id) : undefined
@@ -361,12 +366,31 @@ export function useTermsTab(input: TermsTabInput): TermsTabContainer {
       copyLinkTo(anchor)
       setNotice({ tone: 'info', words: said('ct.copied') })
     },
+    // ---- F-CT-505 (ct-w2 W2.1): Requirements — the provider's own windows; a file's door is ONE preview read on the click.
+    onAddRequirement: () => depth?.requirementsWindow.actions.onAdd?.(),
+    onReplaceRequirement: (row) => depth?.requirementsWindow.actions.onReplace?.(row.requirement),
+    onEndRequirement: (row) => depth?.requirementsWindow.actions.onEnd?.(row.requirement),
+    onKind: (kind) => patch({ kind, moreRequirements: false }),
+    onMoreRequirements: (more) => patch({ moreRequirements: more }),
+    onRetryRequirements: () => depth?.onRetryRequirements(),
+    onOpenFile: (fileId) => {
+      fileDoor(api, fileId)
+        .then((url) => {
+          if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener')
+        })
+        .catch(() => setNotice({ tone: 'danger', words: said('ct.req.fileFailed') }))
+    },
+    onCopyWords: (words) => {
+      void navigator.clipboard?.writeText(words).catch(() => undefined)
+      setNotice({ tone: 'info', words: said('ct.req.wordsCopied') })
+    },
   }
 
   return {
     model,
     actions,
     hold: on ? (depth?.hold ?? null) : null,
+    requirementsWindow: on ? (depth?.requirementsWindow ?? null) : null, // F-CT-505
     notices: {
       own: on ? notice : null,
       onDismissOwn: () => setNotice(null),

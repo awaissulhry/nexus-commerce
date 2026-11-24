@@ -220,7 +220,7 @@ function ScrollOnArrival({ id }: { id: string }) {
   return null
 }
 
-function CustomerBody({ model, party, actions, thread, printThread, overviewTab /* F-CO-103 */, portal, depth, onAddTask, taskDialog, money: moneyModel, peopleTab, peopleBadge, peopleNotice /* F-CA-119 */, work, workCount, quotesIncoming, threadButton /* F-SA-279 */, onNewOrder, onImport /* F-CP-104 */, quotesBadge /* F-CQ-302 */, quotesTabNote /* F-CQ-306 */, moneyTab /* F-CM-104 */, moneyTabNote /* F-CM-104 */, termsTab, termsNotice /* F-CT-406 */ }: CustomerProps & { party: Party }) {
+function CustomerBody({ model, party, actions, thread, printThread, overviewTab /* F-CO-103 */, portal, onAddTask, taskDialog, money: moneyModel, peopleTab, peopleBadge, peopleNotice /* F-CA-119 */, work, workCount, quotesIncoming, threadButton /* F-SA-279 */, onNewOrder, onImport /* F-CP-104 */, quotesBadge /* F-CQ-302 */, quotesTabNote /* F-CQ-306 */, moneyTab /* F-CM-104 */, moneyTabNote /* F-CM-104 */, termsTab, termsNotice /* F-CT-406 */ }: CustomerProps & { party: Party }) {
   const t = useT('parties')
   const side = model.side
   const config = SIDES[side]
@@ -332,11 +332,6 @@ function CustomerBody({ model, party, actions, thread, printThread, overviewTab 
             // doors); today's Requirements and Tax identity cards stand under it until ct-w2 (their ids are the doors' addresses).
             <div className="fw-pty-stack">
               {termsTab}
-              {depth?.requirements && (
-                <section id="party-requirements" className="fw-pty-anchor" aria-label={t('customers.requirementsLabel')}>
-                  {depth.requirements}
-                </section>
-              )}
               <section id="party-identity" className="fw-pty-anchor fw-pty-two-wide" aria-label={t('customers.anchor.identity')}>
                 <IdentityCard model={model} party={party} current={current} actions={actions} editable={editable} />
                 <ViesCard model={model} party={party} actions={actions} viesHeld={viesHeld} />

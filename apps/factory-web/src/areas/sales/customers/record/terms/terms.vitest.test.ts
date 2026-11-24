@@ -5,7 +5,7 @@ import { CATALOGUE, createScopedTranslator, messagesFor } from '../../../../../l
 import type { Party, TaxIdentity } from '../../../../parties/_shared/api'
 import { CUSTOMERS } from '../../../../parties/_shared/fixtures'
 import type { CommercialTerms } from '../../terms/api'
-import type { Holds } from '../../depth/api'
+import type { Holds, Requirement, Requirements } from '../../depth/api'
 import { ready, failedRead, LOADING } from '../../depth/model'
 import { identityFactsOf, termsAnswer, type TermsFacts } from './answer'
 import { commercialSection, type CarrierFacts, type CommercialInput, type CompanyTermsRead, type CompanyTermsReadEntry, type CompanyTermsRow } from './commercial'
@@ -18,8 +18,9 @@ import { termsAbilitiesOf } from '../../terms/model'
 import { TERMS as COMPANY_TERMS } from '../../depth/_demo/fixtures'
 import { endCompanyTerms, readCarrierAccount, setCarrierAccount, setCompanyTerms, type CarrierAccount } from './api'
 import { TERMS_TAB_START, termsTabModel, type TermsTabReads, type TermsTabState } from './tab'
+import { endedLine, keptWords, requirementsSection, versionsOf, type RequirementsInput } from './requirements'
 import { companyBody, companyEndWindowOf, companyProblems, companyWindowOf, deliveryBody, deliveryProblems, deliveryRefusal, deliveryWindowOf, endLines, termsWindowOf, termsWindowPatch } from './windows'
-import { createElement, type ReactElement } from 'react'
+import { createElement, type ComponentType, type ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { I18nProvider } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
@@ -28,7 +29,6 @@ import { ChangeTermsBody } from '../view/terms/ChangeTermsDialog'
 import { DeliveryBody } from '../view/terms/DeliveryDialog'
 import { CompanyEndBody, CompanyTermsBody } from '../view/terms/CompanyTermsDialog'
 import { TermsNotices } from '../view/terms/TermsNotices'
-import type { ComponentType } from 'react'
 import { designScreen as customerRecordScreen } from '../fixtures'
 
 /**
@@ -699,7 +699,9 @@ describe('the page mounts the tab (W1.4)', () => {
 
   it('the view: the tab, then today\'s Requirements and Tax identity cards; its notices in the ONE notice area; a third of the dock (D3)', () => {
     const view = source('../view/CustomerRecordView.tsx')
-    expect(view).toMatch(/\{tab === 'terms' && \([\s\S]*?\{termsTab\}[\s\S]*?id="party-requirements"[\s\S]*?id="party-identity"/)
+    // F-CT-508 (ct-w2 W2.1): the tab draws Requirements itself now — no old requirements section in the record view.
+    expect(view).toMatch(/\{tab === 'terms' && \([\s\S]*?\{termsTab\}[\s\S]*?id="party-identity"/)
+    expect(view).not.toContain('id="party-requirements"')
     expect(view).toContain("{tab === 'people' ? peopleNotice : tab === 'terms' ? termsNotice : null}")
     expect(view).toContain("|| tab === 'people' || tab === 'terms' ? 'third' : undefined}")
     expect(view).not.toMatch(/customers\.anchor\.(label|commercial|hold)|href="#party-commercial"|depth\?\.tax/) // the anchor line and the old Tax part went
@@ -749,5 +751,93 @@ describe('the page mounts the tab (W1.4)', () => {
       expect(html.indexOf('id="party-hold"'), item.id).toBeGreaterThan(-1)
       expect(html.indexOf('id="party-hold"'), item.id).toBeLessThan(html.indexOf('id="party-identity"'))
     }
+  })
+})
+
+// ---- W2.1: Requirements -----------------------------------------------------------------------------------------------------------
+
+describe('Requirements (W2.1, 10-design §5.3; Z12, Z31, Z36)', () => {
+  const rule = (n: number, over: Partial<Requirement> = {}): Requirement => ({
+    id: `0190f0e2-c700-7000-8000-00000000080${n}`,
+    companyId: A.id,
+    companyCode: A.code,
+    kind: 'PACKING',
+    words: `Rule ${n} (made-up).`,
+    appliesAt: ['ORDER'],
+    styles: [],
+    everyStyle: true,
+    file: null,
+    supersedesId: null,
+    active: true,
+    createdAt: '2026-11-04T09:00:00.000Z',
+    createdBy: 'Alex Demo',
+    endedAt: null,
+    endedBy: null,
+    endReason: null,
+    version: 1,
+    mayChange: true,
+    ...over,
+  })
+  const v1 = rule(1, { active: false, endedAt: '2026-11-12T09:00:00.000Z', endedBy: 'Alex Demo', endReason: 'New brand book (made-up).' })
+  const v2 = rule(2, { supersedesId: v1.id, createdAt: '2026-11-12T09:00:00.000Z', appliesAt: ['ORDER', 'SHIPMENT'], file: { id: '0190f0e2-c700-7000-8000-000000000901', fileName: 'Routing guide demo.pdf' } })
+  const ended = rule(3, { kind: 'LABEL', active: false, endedAt: '2026-11-10T09:00:00.000Z', endedBy: 'Alex Demo', endReason: 'No longer asked (made-up).' })
+  const READ: Requirements = { inForce: [v2], ended: [v1, ended], mayAdd: true }
+  const input = (over: Partial<RequirementsInput> = {}): RequirementsInput => ({ read: ready(READ), can: OWNER, archived: false, companyNames: NAMES, kind: null, more: false, endedOpen: false, ...over })
+
+  it('the version chain: v2 replaces v1 (of its day); replaced and ended are told apart, with no dangling " · "', () => {
+    expect(versionsOf(READ).get(v2.id)).toBe(2)
+    const model = requirementsSection(input())
+    expect(said1(said('ct.req.version', { params: { version: model.rows[0]!.version, before: model.rows[0]!.replaces!.version }, days: { date: model.rows[0]!.replaces!.on } }))).toBe('v2 · replaces v1 of 04/11/2026')
+    expect(model.ended.map((row) => [row.replaced, row.nextVersion])).toEqual([[true, 2], [false, null]])
+    expect(said1(endedLine(model.ended[0]!))).toBe('v1 · replaced by v2 on 12/11/2026 by Alex Demo: “New brand book (made-up).”')
+    expect(said1(endedLine(model.ended[1]!), 'it')).toBe('Terminato il 10/11/2026 da Alex Demo: “No longer asked (made-up).”')
+    expect(said1(endedLine({ ...model.ended[1]!, reason: null }))).toBe('Ended on 10/11/2026 by Alex Demo')
+  })
+
+  it('where it really shows (Z12): a shipping rule is printed on the delivery note; every other stage is kept, not on that screen yet', () => {
+    const row = requirementsSection(input()).rows[0]!
+    expect([row.ddt, row.kept]).toEqual([true, ['ORDER']])
+    expect(said1(keptWords(row.kept)!)).toBe(`Kept for ${said1(said('sales-customers-depth:stage.ORDER'))} — not on that screen yet`)
+    expect(said1(said('ct.req.ddtUnless'))).toBe('Unless the office types its own remarks')
+    expect(said1(requirementsSection(input()).answer!)).toBe(`1 requirement in force: ${said1(said('sales-customers-depth:kind.PACKING')).toLowerCase()} · 1 printed on the delivery note (DDT).`)
+  })
+
+  it('Z36: a style saved before the wall that is not ours or this customer\'s is never named — "a style no longer offered"', () => {
+    const gone = requirementsSection(input({ read: ready({ ...READ, inForce: [{ ...v2, everyStyle: false, styles: [{ id: 's1', code: 'SEED-01', name: 'Seed jacket' }, { id: 's2', code: '', name: '' }] }] }) }))
+    expect(gone.rows[0]!.styles).toEqual([{ id: 's1', code: 'SEED-01', name: 'Seed jacket' }, { id: 's2', code: null, name: '' }])
+    expect(said1(said('ct.req.styleGone'), 'it')).toBe('un modello non più offerto')
+  })
+
+  it('kind chips from six rules in force (Z31); ten rows, then "Show n more"; a chip shows only its kind', () => {
+    const many: Requirement[] = Array.from({ length: 12 }, (_, at) => rule(at, { id: `r-${at}`, kind: at < 3 ? 'LABEL' : 'PACKING' }))
+    const model = requirementsSection(input({ read: ready({ inForce: many, ended: [] }) }))
+    expect(model.kinds).toEqual([{ kind: 'LABEL', count: 3 }, { kind: 'PACKING', count: 9 }])
+    expect([model.rows.length, model.hidden]).toEqual([10, 2])
+    expect(requirementsSection(input({ read: ready({ inForce: many, ended: [] }), kind: 'LABEL' })).rows.map((row) => row.kind)).toEqual(['LABEL', 'LABEL', 'LABEL'])
+    expect(requirementsSection(input({ read: ready({ inForce: many.slice(0, 5), ended: [] }) })).kinds).toBeNull()
+  })
+
+  it('hidden, never held, for a right (the server\'s mayAdd / mayChange first); held only by state; the file a door only with files.read', () => {
+    for (const can of [PM, RO]) {
+      const model = requirementsSection(input({ can }))
+      expect([model.add.shown, model.rows[0]!.replace.shown, model.rows[0]!.end.shown]).toEqual([false, false, false])
+    }
+    expect(requirementsSection(input({ read: ready({ ...READ, mayAdd: false, inForce: [{ ...v2, mayChange: false }] }) })).add.shown).toBe(false)
+    expect(said1(requirementsSection(input({ archived: true })).add.held!)).toBe('Archived: reactivate it to change its terms')
+    expect(requirementsSection(input()).rows[0]!.fileDoor).toBe(true)
+    expect(requirementsSection(input({ can: termsCan(['parties.view']) })).rows[0]!.fileDoor).toBe(false)
+  })
+
+  it('the wall: the style search names THIS customer (forCustomer) — one search per typed pause, an older answer never lands over a newer one', () => {
+    const useDepth = readFileSync(new URL('../../depth/use-depth.ts', import.meta.url), 'utf8')
+    expect(useDepth).toContain('searchStyles(api, styleQuery, partyId, controller.signal)')
+    expect(useDepth).toMatch(/setTimeout\(\(\) => \{[\s\S]*?\}, 300\)/)
+    expect(useDepth).toContain('controller.abort()')
+    expect(readFileSync(new URL('../../depth/api.ts', import.meta.url), 'utf8')).toContain("query: { q: q.trim() || undefined, status: 'OPEN', limit: 50, forCustomer }")
+    // the windows are the provider's own, exported and mounted as they are; the old card went
+    const windows = readFileSync(new URL('../../depth/view/RequirementsTab.tsx', import.meta.url), 'utf8')
+    expect(windows).toContain('export function RequirementWindows(')
+    expect(windows).not.toMatch(/export function RequirementsTab\(|DepthCard|SummaryTable/)
+    expect(readFileSync(new URL('../view/terms/TermsTab.tsx', import.meta.url), 'utf8')).toContain('<RequirementWindows model={requirements.model} actions={requirements.actions} />')
   })
 })

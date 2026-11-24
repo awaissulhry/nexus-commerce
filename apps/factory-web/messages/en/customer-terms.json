@@ -403,6 +403,63 @@
         "what": "{company} stops using its own terms: new quotes and orders with it take the customer's. The ended terms stay under “Ended company terms”.",
         "confirm": "Back to the customer's terms"
       }
+    },
+    "req": {
+      "title": "Requirements",
+      "add": "Add requirement",
+      "part": "the requirements",
+      "none": "No special requirements.",
+      "answer_one": "{count} requirement in force: {kinds} · {printed}.",
+      "answer_other": "{count} requirements in force: {kinds} · {printed}.",
+      "kindLower": "{kind}",
+      "ddtSome_one": "{count} printed on the delivery note (DDT); the rest kept, not on the other screens yet",
+      "ddtSome_other": "{count} printed on the delivery note (DDT); the rest kept, not on the other screens yet",
+      "ddtAll_one": "{count} printed on the delivery note (DDT)",
+      "ddtAll_other": "{count} printed on the delivery note (DDT)",
+      "ddtNone": "none on the delivery note (DDT): kept, not on the other screens yet",
+      "version": "v{version} · replaces v{before} of {date}",
+      "styleGone": "a style no longer offered",
+      "ddt": "Printed on the delivery note (DDT)",
+      "ddtUnless": "Unless the office types its own remarks",
+      "keptOne": "Kept for {stages} — not on that screen yet",
+      "keptMany": "Kept for {stages} — not on those screens yet",
+      "noFile": "No file",
+      "writtenBy": "Written by {name}, {date}",
+      "written": "Written {date}",
+      "rowMore": "Actions for the {kind} requirement",
+      "replace": "Replace with a new version…",
+      "openFile": "Open {file} ›",
+      "copyWords": "Copy the words",
+      "wordsCopied": "Copied: the requirement's words.",
+      "fileFailed": "The file could not be opened: try again.",
+      "endedFold": "Ended and replaced ({count})",
+      "endedInline": "Ended and replaced ({count}) ›",
+      "hideEnded": "Hide the ended and replaced ones",
+      "endedList": "Ended and replaced requirements",
+      "replaced": "Replaced",
+      "ended": "Ended",
+      "replacedBy": "v{version} · replaced by v{next} on {date} by {name}: “{reason}”",
+      "replacedByBare": "v{version} · replaced by v{next} on {date} by {name}",
+      "endedOn": "Ended on {date} by {name}: “{reason}”",
+      "endedOnBare": "Ended on {date} by {name}",
+      "kindsLabel": "Show one kind",
+      "all": "All",
+      "listLabel": "Requirements in force",
+      "col": {
+        "what": "Requirement",
+        "where": "Where it shows",
+        "file": "File · written"
+      },
+      "showMore_one": "Show {count} more requirement",
+      "showMore_other": "Show {count} more requirements",
+      "showFewer": "Show fewer",
+      "searchStyles": "Search styles",
+      "searchStylesHint": "This customer's styles and our own collection, searched on the server",
+      "info": {
+        "what": "Requirements: the brand's own rules for packing, labels, documents, shipping, quality and invoicing. A rule is never edited: a change ends the old one and starts a new version in one step.",
+        "where": "Today only the shipping rules reach a paper (the delivery note's remarks). The quote, order, pick & pack, checklist and invoice screens will read them in a later job.",
+        "styles": "A rule names styles of this customer or of our own collection only."
+      }
     }
   }
 }

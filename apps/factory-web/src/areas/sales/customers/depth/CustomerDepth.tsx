@@ -3,12 +3,10 @@
 import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react'
 import { usePathname } from 'next/navigation'
 import type { Party } from '../../../parties/_shared/api'
-import type { SupplierDepth } from '../../../parties/_shared/view/PartyRecordView'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { NS } from './model'
 import { useCustomerDepth, type CustomerDepthState } from './use-depth'
 import { HoldDialogView } from './view/HoldCard' // F-CM-301: Money's Credit & terms opens the same window
-import { RequirementsTab } from './view/RequirementsTab'
 import type { TermsDepth } from '../record/terms/use-terms-tab' // F-CT-402: the Terms & requirements tab's part of the provider
 import './depth.css'
 
@@ -78,6 +76,11 @@ export function useCustomerTerms(party: Party | null | undefined): TermsDepth | 
     companyTerms: state.terms.read,
     requirements: state.requirements.read,
     hold: { model: { read: state.holds.read, can: state.can, status: party.status, prefix, dialog: state.holds.dialog, companies: state.companies }, actions: state.holds },
+    // F-CT-505 (ct-w2 W2.1): the requirement windows, the provider's ONE state (the style search with this customer named, S1).
+    requirementsWindow: {
+      model: { read: state.requirements.read, can: state.can, status: party.status, dialog: state.requirements.dialog, styles: state.requirements.styles, files: state.requirements.files, companies: state.companies, styleQuery: state.requirements.styleQuery },
+      actions: state.requirements,
+    },
     onCompanyTerms: state.terms.onAnswer,
     onRetryHolds: state.holds.onRetry,
     onRetryCompanyTerms: state.terms.onRetry,
@@ -87,27 +90,13 @@ export function useCustomerTerms(party: Party | null | undefined): TermsDepth | 
   }
 }
 // ---- end F-CT-402
+// F-CT-508 (ct-w2 W2.1): the record's `depth` slot went with its last part (the old Requirements card) — the Terms tab draws the rules
+// and opens their windows through useCustomerTerms above.
 
 /** `/w/<company>` of the office addresses, from the page's path. */
 function useAddresses(): { prefix: string } {
   const pathname = usePathname() ?? ''
   return { prefix: pathname.replace(/\/sales\/customers\/.*$/, '') }
-}
-
-/**
- * The slot of the shared party record (areas/parties/_shared PartyRecord `depth`, B-W2b-334's) for a customer: each part a
- * connector to the state above. F-CO-203 (co-w2 W2.3): the Overview's old parts (the key-number tiles, Now's samples and repairs,
- * the status card, the side panel) went — the Overview's own rules read the glance (`useCustomerGlance` above).
- */
-export function customerDepthSlot(party: Party): SupplierDepth {
-  // F-CA-229 (customer People & addresses ca-w2 W2.5): People's riders / profiles card and its personal-data card went — the tab's own
-  // Riders & measurements and Personal data sections draw them (cu/record/view/people), the personal-data windows through
-  // useCustomerPrivacy. Terms & requirements keeps its two parts.
-  // F-CT-402 (ct-w1 W1.4): the hold and PO-number cards went — the tab's Hold and Commercial terms sections draw them; Requirements
-  // stays until ct-w2. The record's reload reaches the state through useCustomerPrivacy (the page calls it on every tab).
-  return {
-    requirements: <RequirementsPart party={party} />,
-  }
 }
 
 /** The record's reload goes to the state (a contact erased moves the party's contacts). */
@@ -119,17 +108,4 @@ function useSync(reload?: () => void) {
     if (reload) latest.current.setReloadParty(reload)
   }, [reload])
   return state
-}
-
-function RequirementsPart({ party }: { party: Party }) {
-  const state = useDepth()
-  return (
-    // F-CT-402 (Z5): the requirement acts' notice is the record's ONE notice area's on Terms (TermsNotices), no second line here.
-    <div className="fw-cdp-stack">
-      <RequirementsTab
-        model={{ read: state.requirements.read, can: state.can, status: party.status, dialog: state.requirements.dialog, styles: state.requirements.styles, files: state.requirements.files, companies: state.companies }}
-        actions={state.requirements}
-      />
-    </div>
-  )
 }
