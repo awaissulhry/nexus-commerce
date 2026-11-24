@@ -144,7 +144,8 @@ describe('tw- W1.1 — sides and runs: one sender, one audience, one day, nothin
   // tw- fx2 (walk G-7, Z27): every DS group tone but yellow (the office note's) — eight; slate stays the no-key tone.
   it('one tone per sender: the same key the same tone everywhere; eight person tones, never yellow; slate without a key', () => {
     expect(senderTone('USER:u1')).toBe(senderTone('USER:u1'))
-    expect([...SENDER_TONES]).toEqual(['purple', 'emerald', 'pink', 'orange', 'blue', 'cyan', 'violet'])
+    expect([...SENDER_TONES]).toEqual(['purple', 'emerald', 'pink', 'orange', 'blue', 'cyan'])
+    expect(SENDER_TONES as readonly string[]).not.toContain('violet')
     expect(SENDER_TONES as readonly string[]).not.toContain('red')
     expect(SENDER_TONES as readonly string[]).not.toContain('yellow')
     const seen = new Set(Array.from({ length: 200 }, (_, index) => senderTone(`USER:${index}`)))

@@ -10,8 +10,11 @@
  * The person tones, in the DS's group-tone order (packages/ui tokens groupTones). tw- fx2 (walk G-7: four people, two colours): every
  * DS group tone but yellow (the office note's) and slate (no key) — eight.
  */
-/** The person tones: never yellow (the one yellow = not sent to the customer) and never red (red = an error, a bounce) — 10-design § 3. */
-export const SENDER_TONES = ['purple', 'emerald', 'pink', 'orange', 'blue', 'cyan', 'violet'] as const
+/**
+ * The person tones: never yellow (the one yellow = not sent to the customer), never red (red = an error, a bounce) — 10-design § 3 —
+ * and never violet beside purple (the walk's G-25: the two read as one colour; the DS rule: colours that look similar must go).
+ */
+export const SENDER_TONES = ['purple', 'emerald', 'pink', 'orange', 'blue', 'cyan'] as const
 export type PersonTone = (typeof SENDER_TONES)[number]
 /** A person's tone, or slate: no key (a hidden floor writer, the system). */
 export type SenderTone = PersonTone | 'slate'
