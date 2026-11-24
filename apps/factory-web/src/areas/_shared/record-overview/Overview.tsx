@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, type ReactNode } from 'react'
+import { useId, useMemo, useState, type ReactNode } from 'react'
 import { Card, EmptyState } from '@nexus/ui/components'
 import { Button, Skeleton, Spinner } from '@nexus/ui/primitives'
 import { CircleAlert } from 'lucide-react' // F-CO-K2: the failed read's strip mark
@@ -21,7 +21,8 @@ import './record-overview.css'
  * 720 px of the Overview, one below; a card alone takes the row), `OverviewCard` (the card with its title), `Headline` (the lead
  * card's sentence and its quiet line), `CardState` (a card while its part loads, or when its read failed), `useOverviewWords`.
  * The rows (F-CO-K2): `Strips`, `Strip`, `StripSaid` (what stops the record, one row each, most blocking first); `RowList`, `Row`,
- * `QuietLine` (a card's ONE list: label | value | doors, on the list's own columns).
+ * `QuietLine` (a card's ONE list: label | value | doors, on the list's own columns); `FactCols`, `Fact`, `Door` (a record's facts in
+ * one or two column sets, each with its quiet door).
  */
 
 /** The kit's own words in the page's language. */
@@ -283,3 +284,39 @@ export function QuietLine({ children }: { children?: ReactNode }): ReactNode {
   return <li className="fw-so-ov-quiet fw-ro-hint">{children}</li>
 }
 // ---- end F-CO-K2 (the ONE list)
+
+// ---- F-CO-K2 (the shared overview kit's rows): the facts — label | value | door, one label column for the whole card ------------------
+/**
+ * The facts' list: every fact lies on the list's own columns (one label column for the card, so every value starts at the same x);
+ * from an 800 px card two such column sets side by side; below a 360 px card a fact stacks, its door under it to the right.
+ */
+export function FactCols({ children }: { children?: ReactNode }): ReactNode {
+  return <ul className="fw-so-ov-cols fw-so-facts">{children}</ul>
+}
+
+/**
+ * One fact: its label, its value, and its door — handed the label's id (the door's `aria-describedby`); `null`: no door. A door can
+ * be quiet words in its place too ("Fixed"). `wide`: the whole row (both column sets), the value under its label and its door.
+ */
+export function Fact({ label, value, door, wide = false }: { label: ReactNode; value: ReactNode; door: ((describedBy: string) => ReactNode) | null; wide?: boolean }): ReactNode {
+  const id = useId()
+  return (
+    <li className={wide ? 'fw-so-ov-row fw-so-fact fw-so-fact-note' : 'fw-so-ov-row fw-so-fact'}>
+      <span id={id} className="fw-so-fact-label">
+        {label}
+      </span>
+      <span className="fw-so-fact-value">{value}</span>
+      {door && <span className="fw-so-ov-doors">{door(id)}</span>}
+    </li>
+  )
+}
+
+/** A fact's quiet door (Change…, Set…): the page's command, held with words, described by its fact's label. */
+export function Door({ label, held, describedBy, onClick }: { label: string; held: string | null; describedBy: string; onClick: () => void }): ReactNode {
+  return (
+    <Button size="sm" variant="quiet" heldReason={held} aria-describedby={describedBy} onClick={onClick}>
+      {label}
+    </Button>
+  )
+}
+// ---- end F-CO-K2 (facts)

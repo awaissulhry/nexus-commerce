@@ -13,6 +13,7 @@ import { GROUP_ROWS_SHOWN, OVERVIEW_NS, STRIPS_SHOWN } from './model'
 import { CardState, Headline, Overview, OverviewCard, OverviewPair, useOverviewWords } from './Overview'
 import { Strip, StripSaid, Strips } from './Overview' // F-CO-K2: the strips
 import { QuietLine, Row, RowList } from './Overview' // F-CO-K2: the ONE list
+import { Door, Fact, FactCols } from './Overview' // F-CO-K2: the facts
 import { LAB_WIDTHS } from './view/OverviewLab'
 
 /**
@@ -314,6 +315,36 @@ describe('F-CO-K2: the ONE list — RowList, Row and QuietLine; the rows\' words
   })
 })
 // ---- end F-CO-K2 (the ONE list)
+
+// ---- F-CO-K2: the facts ------------------------------------------------------------------------------------------------------------
+describe('F-CO-K2: the facts — FactCols, Fact and Door (moved out of the order\'s Order facts as they were)', () => {
+  it('the stylesheet: the facts\' block moved whole — one label column (subgrid), two column sets from 800 px, the wide note, tokens only', () => {
+    const text = css()
+    for (const rule of ['.fw-so-facts {', '.fw-so-ov-cols.fw-so-facts {', '.fw-so-facts > .fw-so-ov-row {', '.fw-so-facts > .fw-so-ov-row > .fw-so-ov-doors {', '.fw-so-fact-label {', '.fw-so-fact-value {', '.fw-so-fact-fixed {', '.fw-so-ov-row.fw-so-fact-note {', '.fw-so-fact-note > .fw-so-fact-value {', '.fw-so-fact-text {']) expect(text.split(`\n${rule}`), rule).toHaveLength(2)
+    expect(text).toMatch(/@container fw-so-ov-card \(min-width: 800px\) \{\s*\.fw-so-ov-cols\.fw-so-facts \{\s*grid-template-columns: max-content minmax\(0, 1fr\) auto 0 max-content minmax\(0, 1fr\) auto;/)
+    expect(text).toMatch(/@container fw-so-ov-card \(max-width: 359px\) \{\s*\.fw-so-ov-cols\.fw-so-facts \{\s*grid-template-columns: minmax\(0, 1fr\);/)
+    // The wide note's rule comes after the facts' row rule (same weight: the note's columns win by that order, as before).
+    expect(text.indexOf('\n.fw-so-ov-row.fw-so-fact-note {')).toBeGreaterThan(text.indexOf('\n.fw-so-facts > .fw-so-ov-row {'))
+  })
+
+  it('FactCols, Fact: the list, then label | value | door — the door handed the label\'s id; no door: no cell; wide: the note\'s row', () => {
+    expect(render(createElement(FactCols, null, 'facts'))).toBe('<ul class="fw-so-ov-cols fw-so-facts">facts</ul>')
+    const fact = render(createElement(Fact, { label: 'Season', value: 'SS27', door: (describedBy: string) => createElement('button', { 'aria-describedby': describedBy }, 'Set…') }))
+    const id = /<span id="([^"]+)" class="fw-so-fact-label">Season<\/span>/.exec(fact)?.[1]
+    expect(id).toBeTruthy()
+    expect(fact).toBe(`<li class="fw-so-ov-row fw-so-fact"><span id="${id}" class="fw-so-fact-label">Season</span><span class="fw-so-fact-value">SS27</span><span class="fw-so-ov-doors"><button aria-describedby="${id}">Set…</button></span></li>`)
+    expect(render(createElement(Fact, { label: 'Made', value: 'Today', door: null }))).toMatch(/^<li class="fw-so-ov-row fw-so-fact"><span id="[^"]+" class="fw-so-fact-label">Made<\/span><span class="fw-so-fact-value">Today<\/span><\/li>$/)
+    expect(render(createElement(Fact, { label: 'Note', value: 'Words', door: null, wide: true }))).toMatch(/^<li class="fw-so-ov-row fw-so-fact fw-so-fact-note">/)
+  })
+
+  it('Door: the quiet DS button, held with words, described by its fact\'s label', () => {
+    const free = render(createElement(Door, { label: 'Change…', held: null, describedBy: 'f-1', onClick: () => undefined }))
+    expect(free).toMatch(/^<button[^>]*aria-describedby="f-1"[^>]*>Change…<\/button>$/)
+    expect(free).not.toContain('aria-disabled')
+    expect(render(createElement(Door, { label: 'Change…', held: 'The order is closed', describedBy: 'f-1', onClick: () => undefined }))).toMatch(/aria-disabled="true"[^>]*aria-description="The order is closed"|aria-description="The order is closed"[^>]*aria-disabled="true"/)
+  })
+})
+// ---- end F-CO-K2 (facts)
 
 describe('the /design/record-overview lab', () => {
   it('has its own screen id (the design index finds every fixtures.ts by itself) and the frame\'s cases', () => {

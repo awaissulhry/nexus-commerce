@@ -214,6 +214,13 @@ describe('F-OO-209: Order facts drawn', () => {
     expect(card).toContain("actions?.depth?.onDialog?.({ kind: 'priority'")
     expect(card).toContain("actions?.depth?.onDialog?.({ kind: 'season'")
     expect(readFileSync(new URL('../view/OverviewTab.tsx', import.meta.url), 'utf8')).toContain('<FactsCard order={order} model={model} actions={actions')
+    // F-CO-K2: the list, each fact and its door are the shared overview kit's parts, with their look (facts.css moved whole into the
+    // kit's ONE stylesheet): the card keeps no Fact / Door of its own and no stylesheet.
+    expect(card).toContain("import { Door, Fact, FactCols, useOverviewWords } from '../../../../../_shared/record-overview/Overview'")
+    expect(card).toContain('<FactCols>')
+    expect(card).not.toMatch(/function (?:Fact|Door)\(|import '[^']*\.css'|className="fw-so-ov-cols fw-so-facts"/)
+    const kit = readFileSync(new URL('../../../../_shared/record-overview/record-overview.css', import.meta.url), 'utf8')
+    for (const rule of ['.fw-so-facts {', '.fw-so-ov-cols.fw-so-facts {', '.fw-so-facts > .fw-so-ov-row {', '.fw-so-fact-label {', '.fw-so-fact-value {', '.fw-so-fact-fixed {', '.fw-so-ov-row.fw-so-fact-note {', '.fw-so-fact-text {']) expect(kit, rule).toContain(rule)
   })
 })
 
