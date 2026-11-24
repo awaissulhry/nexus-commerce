@@ -106,6 +106,7 @@ beforeAll(async () => {
   office('reader', 'read_only')
   office('salesB', 'sales', [A.companyB])
   office('noOrders', 'sales', 'all', ['orders.view'])
+  office('noMeasurements', 'sales', 'all', ['sales.measurements.view']) // F-CA-S4: parties.view, no measurements right
   for (const [key, actorId] of Object.entries(ACTORS)) await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, $3, $4, 'ACTIVE')`, [actorId, A.tenant, `w2b290-${key}-${run}@example.com`, `Made-up ${key}`])
   const colourway = await one<{ id: string; size: string }>(`SELECT c.id, (s.sizes)[1] AS size FROM "Colourway" c JOIN "Style" s ON s.id = c."styleId" WHERE c."tenantId" = $1 AND c."styleId" = (SELECT "styleIds"[1] FROM "CustomerRequirement" WHERE "tenantId" = $1 AND "supersedesId" IS NOT NULL) ORDER BY c."createdAt", c.id LIMIT 1`, [A.tenant])
   LINE.colourwayId = colourway.id
@@ -470,4 +471,16 @@ describe('riders under a team (SAL-021)', () => {
       expect.objectContaining({ partyId: rider.id, teamPartyId: null, previousTeamPartyId: A.p1 }),
     ])
   })
+
+  // ── F-CA-S4 (ca-s S.4; R-B10 — body data) ──
+  it('a reader without the measurements right reads no profile count on riders', async () => {
+    const counted = (await ok('sales', 'GET', `/parties/${A.p1}/riders`)).riders.riders as Json[]
+    expect(counted.length).toBeGreaterThan(0)
+    for (const row of counted) expect(typeof row.measurementProfiles).toBe('number')
+    const withheld = (await ok('noMeasurements', 'GET', `/parties/${A.p1}/riders`)).riders.riders as Json[]
+    // The same riders (names and codes: parties.view), never how many profiles each one has.
+    expect(withheld.map((row) => row.id)).toEqual(counted.map((row) => row.id))
+    expect(withheld.map((row) => row.measurementProfiles)).toEqual(withheld.map(() => null))
+  })
+  // ── F-CA-S4 end ──
 })
