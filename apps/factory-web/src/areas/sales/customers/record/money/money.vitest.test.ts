@@ -617,7 +617,7 @@ describe('F-CM-301…304: the account sections, Finance\'s windows in place, the
   const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
   const view = (name: string) => source(`../view/money/${name}`)
   const terms = partReady({ currency: 'EUR', defaultDepositPct: '30', invoiceTiming: 'ON_SHIPMENT' } as unknown as CommercialTerms)
-  const limitRow = (held = { orders: 0, shipments: 0, releases: 0 }): LimitRow => ({ company: COMPANY_A, currency: 'EUR', limit: 2000000, used: 1688000, available: 312000, overLimitBy: null, overdue: 244000, held, version: 3 }) as unknown as LimitRow
+  const limitRow = (held = { orders: 0, shipments: 0, releases: 0 }): LimitRow => ({ company: COMPANY_A, currency: 'EUR', limit: 2000000, used: 1688000, available: 312000, overLimitBy: null, overdue: 244000, held: { firstOrders: [], ...held } /* cm-fx4: the row's own list, as the API sends it */, version: 3 }) as unknown as LimitRow
   const glanced = (credit: Partial<NonNullable<Glance['credit']>>, hold = false) => ({ status: 'ready' as const, value: { ...glanceOf({ onHold: hold }), credit: { ...glanceOf().credit!, ...credit } } })
   const can = (role: Role, more: readonly string[] = []) => moneyTabCanOf([...ROLES[role], ...more])
 
@@ -667,7 +667,7 @@ describe('F-CM-301…304: the account sections, Finance\'s windows in place, the
     expect(model.reminders[0]!.notes.map((note) => note.key)).toEqual(['cm.chase.waits'])
     expect(model.reminders[1]!.notes.map((note) => note.key)).toEqual(['finance-receivables:heldReason.STOP_DISPUTE'])
     expect(model.reminders[0]!.href).toBe(`${PREFIX}/finance/receivables?reminder=r-2`)
-    expect(model.answer.map((said) => said.key)).toEqual(['cm.needs.reminders', 'cm.chase.noStop'])
+    expect(model.answer.map((said) => said.key)).toEqual(['cm.needs.reminders', 'cm.chase.heldCount', 'cm.chase.noStop']) // cm-fx4 (M-7): the held one counted too
     expect(chaseOf(input('owner', { reminders }), null, partReady({ switch: { on: true } } as never), PREFIX, true)!.off).toBeNull()
   })
 
@@ -733,7 +733,7 @@ describe('F-CM-301…304: the account sections, Finance\'s windows in place, the
     expect(balance).toContain("credit: 'cm.credit.title', statement: 'cm.chase.title', 'price-check': 'orders:moneyTab.price.title'")
     const tab = view('CustomerMoneyTab.tsx')
     expect(tab).not.toMatch(/tab\.openStatement|statementOf\(|id: 'changeLimit'/)
-    expect(tab).toContain("const LAZY_OF: Readonly<Record<string, LazyRead>> = { invoices: 'documents', received: 'received' /* F-CM-203 */, credit: 'credit', statement: 'statement', 'price-check': 'priceRows', margin: 'margin' /* F-CM-301…303 */ }")
+    expect(tab).toContain("const LAZY_OF: Readonly<Record<string, LazyRead>> = { balance: 'terms' /* M-2 (cm-fx4): its payment terms */, invoices: 'documents', received: 'received' /* F-CM-203 */, credit: 'credit', statement: 'statement', 'price-check': 'priceRows', margin: 'margin' /* F-CM-301…303 */ }")
   })
 
   it('Z32: "Can\'t be invoiced yet" from the party read (the Overview strip\'s source), its home on Terms', () => {
@@ -909,3 +909,101 @@ describe('the wall tests, by name (15-steps; cm-t T.2)', () => {
   })
 })
 // ---- end F-CM T.2
+
+// ---- cm-fx4 (the walk's gaps, 30-walk.md §3): each fixed, each held here ----
+describe('cm-fx4: the walk\'s gaps', () => {
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+  const view = (name: string) => source(`../view/money/${name}`)
+  const reminder = (id: string, status: string, held: readonly string[]) => ({ id, level: 1, action: 'EMAIL', status, held: held.map((code) => ({ code })), preparedAt: '2026-11-20T09:00:00Z', sentAt: status === 'SENT' ? '2026-11-20T10:00:00Z' : null, invoices: [{ id: 'inv-1', number: 'FT-2026-00001' }], amountDue: 244000, interestAmount: 0, currency: 'EUR' }) as unknown as Reminder
+
+  it('M-1: "Review in Finance ›" only for who decides reminders (receivables.reminders.manage) — hidden, never held', () => {
+    const reminders = partReady([reminder('r-1', 'PREPARED', [])])
+    expect(chaseOf(input('owner', { reminders }), null, null, PREFIX, true)!.reminders[0]!.href).toBe(`${PREFIX}/finance/receivables?reminder=r-1`)
+    for (const role of ['sales', 'readonly'] as const) expect(chaseOf(input(role, { reminders }), null, null, PREFIX, true)!.reminders[0]!.href, role).toBeNull()
+    const section = view('ChaseSection.tsx')
+    expect(section).toContain('{row.href ? (')
+    expect(section).not.toMatch(/disabled=|heldReason/)
+  })
+
+  it('M-2: "Payment terms" is ONE fact from ONE helper — the commercial terms first, the party\'s field the fallback', () => {
+    const terms = partReady({ paymentTerms: { name: 'Deposit 30% at acceptance, balance at delivery' }, paymentTermsText: null, currency: 'EUR', defaultDepositPct: '30', invoiceTiming: 'ON_SHIPMENT' } as unknown as CommercialTerms)
+    const balanceFact = balanceOf(input('owner', { terms }), PREFIX).facts.find((fact) => fact.key === 'paymentTerms')!
+    const creditFact = creditOf(input('owner'), null, terms, PREFIX).facts.find((fact) => fact.key === 'paymentTerms')!
+    expect(balanceFact.value).toEqual(creditFact.value)
+    expect(balanceFact.value).toEqual({ key: 'cm.text', params: { text: 'Deposit 30% at acceptance, balance at delivery' } })
+    // While the terms are read Balance says none (never one text, then another); without a read, the party's own field.
+    expect(balanceOf(input('owner', { terms: READING }), PREFIX).facts.map((fact) => fact.key)).not.toContain('paymentTerms')
+    expect(balanceOf(input('owner'), PREFIX).facts.find((fact) => fact.key === 'paymentTerms')!.value).toEqual({ key: 'cm.text', params: { text: '30 days end of month' } })
+    for (const file of ['./balance.ts', './credit.ts']) expect(source(file), file).toContain('paymentTermsOf(')
+    expect(source('./balance.ts')).not.toContain('input.party.paymentTerms ?')
+  })
+
+  it('M-3: a late need is drawn in danger (the shared line\'s optional tone); the order page passes none', () => {
+    expect(view('BalanceSection.tsx')).toContain("{...(need.tone === 'danger' ? { tone: 'danger' as const } : {})")
+    expect(view('customer-money.css')).toContain('.fw-cm-needs > .is-danger > svg { color: var(--nds-danger); }')
+    // The order page's own lines pass no tone (its markup stays as it was).
+    for (const name of readdirSync(new URL('../../../orders/record/money/view/', import.meta.url)).filter((file) => file.endsWith('.tsx'))) {
+      expect(readFileSync(new URL(`../../../orders/record/money/view/${name}`, import.meta.url), 'utf8'), name).not.toMatch(/<GapRow[^>]*\btone=/)
+    }
+  })
+
+  it('M-4, M-5, M-8: no empty ⋯, no head door repeated on a row, each row\'s ⋯ its own name', () => {
+    const documents = view('DocumentsSection.tsx')
+    expect(documents).toContain("items.push({ id: 'link', label: say(word('orders:moneyTab.menu.copyLinkRow')), onSelect: () => copyLinkTo(row.list.anchor) })")
+    expect(documents).toContain('name: [`${say(word(\'orders:money.draft\'))} ${(drafts += 1)}`')
+    const chase = view('ChaseSection.tsx')
+    expect(chase).not.toContain('[...menu, { id: \'link\', label: say(word(\'orders:moneyTab.menu.copyLinkRow\'))')
+    expect(chase).toContain('<ReminderRowView key={row.anchor} row={row} say={sayIn(row.currency)} />')
+    expect(view('ReceivedSection.tsx')).toContain('· ${row.reference}')
+    expect(view('CollectSection.tsx')).toContain('`${what} · ${row.order.number}`')
+  })
+
+  it('M-6: without prices the refund is said once, with its day', () => {
+    const answer = receivedOf(input('sales'), partReady({ rows: [], next: null }), null, PREFIX)!.answer
+    expect(answer.map((said) => said.key)).toContain('cm.answer.refundsWordsBy')
+    expect(answer.map((said) => said.key)).not.toContain('cm.answer.pair')
+    expect(sayIn('en')(answer.find((said) => said.key === 'cm.answer.refundsWordsBy')!)).toBe(`1 refund to make by ${d('2026-11-28', 'en')}`)
+  })
+
+  it('M-7: the Statement & reminders answer counts every reminder it lists (waiting, held, approved, sent)', () => {
+    const reminders = partReady([reminder('r-1', 'PREPARED', ['STOP_DISPUTE']), reminder('r-2', 'APPROVED', []), reminder('r-3', 'SENT', [])])
+    const keys = chaseOf(input('owner', { reminders }), null, null, PREFIX, true)!.answer.map((said) => said.key)
+    expect(keys).toEqual(['cm.chase.heldCount', 'cm.chase.approvedCount', 'cm.chase.sentCount', 'cm.chase.noStop'])
+  })
+
+  it('M-9: what is late is said for what it is — a late deposit is never read as a late invoice', () => {
+    const model = balanceOf(input('owner', { ageing: partReady([ageingRow({ overdue: 0, daysLate: null, lateInvoices: 0, buckets: { NOT_DUE: 842000, D1_30: 0, D31_60: 0, D61_90: 0, OVER_90: 0 } } as Partial<AgeingRow>)]) }), PREFIX)
+    const keys = model.answer.map((said) => said.key)
+    expect(keys).toContain('cm.answer.depositsLate')
+    expect(keys).not.toContain('cm.answer.lateCount')
+    expect(keys.indexOf('cm.answer.depositsLate')).toBe(keys.indexOf('cm.answer.depositsWords') + 1)
+  })
+
+  it('M-11: an "invoice by" day already past is said as past, and is danger', () => {
+    const shipped = partReady({ shipments: 1, value: 120000, invoiceBy: '2026-11-11', ddtIds: ['ddt-1'] } as never)
+    const need = balanceOf(input('owner', { shipped }), PREFIX).needs.find((entry) => entry.code === 'shipped')!
+    expect(need.tone).toBe('danger')
+    expect(sayIn('en')(need.words)).toBe(`1 shipment is not invoiced yet (invoice by ${d('2026-11-11', 'en')} — 13 days ago)`)
+    const calm = balanceOf(input('owner', { shipped: partReady({ shipments: 1, value: 120000, invoiceBy: '2026-11-30', ddtIds: ['ddt-1'] } as never) }), PREFIX).needs.find((entry) => entry.code === 'shipped')!
+    expect(calm.tone).toBe('warning')
+    const documents = documentsOf(input('owner', { shipped }), partReady({ rows: [], next: null }), 'all', PREFIX)!
+    expect(documents.shippedLate).toBe(true)
+    expect(sayIn('en')(documents.shipped!)).toContain('13 days ago')
+  })
+
+  it('M-12: what waits for credit names its orders (each a door) and where a person says yes', () => {
+    const row = { held: { orders: 2, releases: 0, shipments: 0, firstOrders: [{ id: 'o-7', number: 'SEED-SO-0007' }] }, limit: 2000000, used: 1688000, available: 312000, overLimitBy: null, overdue: 244000, currency: 'EUR' } as unknown as LimitRow
+    const model = creditOf(input('owner'), partReady(row), null, PREFIX)
+    expect(model.waitingOrders).toEqual([{ id: 'o-7', number: 'SEED-SO-0007', href: `${PREFIX}/sales/orders/o-7` }])
+    expect(model.waitingDoor).toBe(`${PREFIX}/finance/receivables?party=p-1`)
+    expect(creditOf(input('owner'), partReady(null), null, PREFIX).waitingDoor).toBeNull()
+  })
+
+  it('M-13, M-14: On account said once without prices; a list without amount or act closes its columns up (no dead space)', () => {
+    expect(view('ReceivedSection.tsx')).toContain('{box.amount !== null ? <b>{amount(box.amount, box.currency)}</b> : null}')
+    const css = view('customer-money.css')
+    expect(css).toContain('.fw-cm-list.is-np.is-na .fw-cm-row-g { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) 214px var(--m) var(--a) 44px; grid-template-areas: "k n d m a o"; }')
+    expect(css).toContain('@container cmls (min-width: 1000px) {\n  .fw-cm-list.is-np.is-na')
+  })
+})
+// ---- end cm-fx4
