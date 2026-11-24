@@ -87,11 +87,8 @@
     "notShown_other": "{count} threads of {customer} you cannot open are left out.",
     "openRecord": "Open {record}",
     "new": "New",
-    "more": "More",
-    "less": "Less",
     "writeFirst": "Write the first one in {thread}",
     "showEverything": "Show everything",
-    "answerLabel": "Answer in the thread of {record}",
     "chip": {
       "general": "{customer} (general)",
       "number": "{number}",

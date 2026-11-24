@@ -4,7 +4,7 @@ import { brandMarkersIn, expectNothingOf, pageWords } from './_harness/brand-sca
 import { seen, type Desk, type Flow } from './_harness/flow'
 import { defineStage } from './_harness/stages'
 import { ensureBrand, signInToPortal, type PortalDesk } from './_harness/two-brands'
-import { day, dialog, press } from './_harness/ui'
+import { day, dialog, press, audienceChip, chooseAudience } from './_harness/ui'
 import { startsWith, words } from './_harness/words'
 
 /**
@@ -260,9 +260,9 @@ export default defineStage({
       await flow.shot(page, 'office-order-docked')
 
       // The reply to Brand Alpha: the box's way "Reply to <party>", then the send check, which names A's contact only (W08).
-      const modes = dock.getByRole('radiogroup', { name: BOX('modeLabel') })
-      await seen(modes, 60_000)
-      await modes.getByRole('radio', { name: BOX('mode.reply', { party }), exact: true }).click()
+      // tw- T.3 (W2.3): the audience chip — ONE menu of radio rows ("Reply to <party> by email").
+      await seen(audienceChip(dock), 60_000)
+      await chooseAudience(page, dock, 'reply')
       await dock.getByRole('combobox', { name: shaped(BOX('mode.reply')) }).fill(REPLY)
       await dock.getByRole('button', { name: BOX('send.reply', { party }), exact: true }).click()
       const check = dialog(page)
@@ -294,7 +294,7 @@ export default defineStage({
         .toBeGreaterThan(before)
 
       // A message for A's portal readers (B-TH-237): "In the portal only", Post to Brand Alpha.
-      await modes.getByRole('radio', { name: BOX('mode.portal'), exact: true }).click()
+      await chooseAudience(page, dock, 'portal')
       await dock.getByRole('combobox', { name: BOX('mode.portal'), exact: true }).fill(TO_ALPHA)
       await dock.getByRole('button', { name: BOX('send.portal', { party }), exact: true }).click()
       await seen(dock.getByText(TO_ALPHA).first(), 60_000)
@@ -353,11 +353,14 @@ export default defineStage({
       const dock = officeDock(page)
       await seen(dock, 60_000)
       await seen(dock.getByRole('group', { name: HEAD('label', { record: run.quote.number }) }), 60_000)
-      const modes = dock.getByRole('radiogroup', { name: BOX('modeLabel') })
-      await seen(modes, 60_000)
-      await seen(modes.getByRole('radio', { name: BOX('mode.reply', { party }), exact: true }))
-      expect(brandMarkersIn(await modes.innerText(), BRAND_BETA), 'the quote’s box offers customer B').toEqual([])
-      await modes.getByRole('radio', { name: BOX('mode.note'), exact: true }).click()
+      // tw- T.3 (W2.3): the chip's menu offers the reply to this quote's customer only; then an office note.
+      await seen(audienceChip(dock), 60_000)
+      await audienceChip(dock).first().click()
+      const offered = page.getByRole('menu')
+      await seen(offered.getByRole('menuitemcheckbox', { name: BOX('modeMenu.reply', { party }), exact: true }))
+      expect(brandMarkersIn(await offered.innerText(), BRAND_BETA), 'the quote’s box offers customer B').toEqual([])
+      await page.keyboard.press('Escape')
+      await chooseAudience(page, dock, 'note')
       await dock.getByRole('combobox', { name: BOX('mode.note'), exact: true }).fill(NOTE)
       await dock.getByRole('button', { name: BOX('send.note'), exact: true }).click()
       await seen(dock.getByText(NOTE).first(), 60_000)

@@ -110,18 +110,19 @@ export default defineStage({
 
     // F-OP-218 (order page plan N4; 11-dock §0, §3.4; D11): the customer page's dock is the same ONE card as the order page's — the pick
     // band inside it; All of <customer> read only, with its Head and the foot "Read only. Write in: [<customer> (general)]".
-    await flow.step('the customer page’s dock: the pick band in the one card; All of <customer> with its Head and its read-only foot', async () => {
+    // tw- T.3 (W2.1, Z4): the pick is the head's title — ONE menu, one label per thread.
+    await flow.step('the customer page’s dock: the pick in the head’s title; All of <customer> with its Head and its read-only foot', async () => {
       const P = words('parties')
-      const RT = words('record-thread')
       const OD = words('orders')
       const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       const card = page.locator('.fw-rcf.has-thread > aside.fw-rcf-dock section.fw-rt-column.is-docked')
       await expect(card).toHaveCount(1, { timeout: 60_000 })
-      const pick = card.locator('.fw-rt-top').getByRole('radiogroup', { name: P('customers.work.dock.label'), exact: true })
+      const pick = card.locator('.fw-rth-title button.fw-thread-pick-title')
       await expect(pick).toBeVisible()
-      const all = pick.getByRole('radio', { name: new RegExp(`^(${escape(P('customers.work.dock.all', { customer: CUSTOMER.legalName }))}|${escape(RT('allOfCustomer.view.all'))})`) })
-      await all.click()
-      await expect(all).toHaveAttribute('aria-checked', 'true')
+      await expect(pick).toHaveAttribute('aria-label', new RegExp(`^${escape(P('customers.work.dock.label'))}: `))
+      const allWords = P('customers.work.dock.all', { customer: CUSTOMER.legalName })
+      await chooseFromMenu(pick, page.getByRole('menuitemcheckbox', { name: new RegExp(`^${escape(allWords)}`) }))
+      await expect(pick).toHaveAttribute('aria-label', `${P('customers.work.dock.label')}: ${allWords}`)
       await expect(page).toHaveURL(/[?&]dock=all/)
       await expect(card.locator('.fw-rth.fw-aoc-head')).toBeVisible()
       await expect(card.locator('.fw-rt-foot')).toContainText(`${P('customers.work.dock.readOnly')}. ${OD('record.dock.writeIn')}`)
@@ -353,9 +354,10 @@ export default defineStage({
       expect(page.url()).not.toMatch(/[?&]rows=open(&|$)/)
     })
 
-    // ---- F-CP-112 (F-CP-111): a row of a customer's orders docks that order — its thread and its own files line (the order's set).
-    await flow.step('the dock’s files line: a row of a customer’s orders docks the order with its own files line', async () => {
-      const RTF = words('record-thread-files')
+    // ---- F-CP-112 (F-CP-111): a row of a customer's orders docks that order — its thread and its own files (the order's set).
+    // tw- T.3 (W2.1): the files line went; the head's Files icon says "Files (N)", N = the order's Files tab's count.
+    await flow.step('the dock’s Files icon: a row of a customer’s orders docks the order with its own files count', async () => {
+      const HEAD = words('record-thread-head')
       const P1 = await flow.seedId('party:P1')
       const SO1 = await flow.seedId('sales:SO1')
       await sales.go(`/sales/customers/${P1}?tab=work`)
@@ -367,15 +369,12 @@ export default defineStage({
       await row.locator('.ag-cell[col-id="promised"]').first().click({ position: { x: 6, y: 6 } })
       const card = page.locator('.fw-rcf.has-thread > aside.fw-rcf-dock section.fw-rt-column.is-docked')
       await expect(card).toHaveCount(1, { timeout: 60_000 })
-      const chip = card.locator('.fw-rtf-chip').first()
-      await seen(chip, 60_000)
-      // "Files (N)" — the order's own set, N = its Files tab's count — or, when every file is priced for this reader, the lock's words.
-      const RF = words('record-files')
+      const files = card.locator('.fw-rth-tools button.fw-rth-files').first()
+      await seen(files, 60_000)
+      // "Files (N)" — the order's own set (a priced file is counted apart, never named): look only, nothing opened.
       const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      const shown = [escape(RTF('chip.label', { count: 7 })).replace('7', '\\d+'), escape(RF('priced.lockedCount', { count: 7 })).replace('7', '\\d+'), escape(RF('priced.lockedCount', { count: 1 }))]
-      await expect(chip).toHaveText(new RegExp(`^(${shown.join('|')})`))
-      await chip.click()
-      await expect(card.locator('.fw-rtf-all').first()).toContainText(RTF('strip.all'))
+      await expect(files).toHaveAttribute('aria-label', new RegExp(`^${escape(HEAD('files.label', { count: 7 })).replace('7', '\\d+')}$`))
+      await expect(card.locator('.fw-rtf-chip, .fw-rtf-line')).toHaveCount(0)
       await flow.shot(page, 'customer-dock-order-files')
     })
     // ---- end F-CP-112

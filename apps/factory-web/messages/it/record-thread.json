@@ -87,11 +87,8 @@
     "notShown_other": "{count} thread di {customer} che non puoi aprire sono esclusi.",
     "openRecord": "Apri {record}",
     "new": "Nuovo",
-    "more": "Altro",
-    "less": "Meno",
     "writeFirst": "Scrivi il primo in {thread}",
     "showEverything": "Mostra tutto",
-    "answerLabel": "Rispondi nel thread di {record}",
     "chip": {
       "general": "{customer} (generale)",
       "number": "{number}",

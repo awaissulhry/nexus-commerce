@@ -4,7 +4,7 @@ import { expectNothingOf, pageWords } from './_harness/brand-scan'
 import { seen, type Desk, type Flow } from './_harness/flow'
 import { defineStage } from './_harness/stages'
 import { ensureBrand, signInToPortal, type PortalDesk } from './_harness/two-brands'
-import { chooseFromMenu, day, pickDate } from './_harness/ui'
+import { chooseFromMenu, day, pickDate, audienceChip, chooseAudience } from './_harness/ui'
 import { words } from './_harness/words'
 
 /**
@@ -206,13 +206,13 @@ export default defineStage({
     await flow.step('sales writes an office note and a message to Brand Alpha in the portal, in the project’s thread', async () => {
       const { page } = sales
       await sales.go(`/products/projects/${run.id}`)
-      const modes = page.getByRole('radiogroup', { name: BOX('modeLabel') })
-      await seen(modes, 60_000)
-      await modes.getByRole('radio', { name: BOX('mode.note'), exact: true }).click()
+      // tw- T.3 (W2.3): the audience chip — ONE menu of radio rows.
+      await seen(audienceChip(page), 60_000)
+      await chooseAudience(page, page, 'note')
       await page.getByRole('combobox', { name: BOX('mode.note'), exact: true }).fill(NOTE)
       await page.getByRole('button', { name: BOX('send.note'), exact: true }).click()
       await seen(page.getByText(NOTE).first(), 60_000)
-      await modes.getByRole('radio', { name: BOX('mode.portal'), exact: true }).click()
+      await chooseAudience(page, page, 'portal')
       await page.getByRole('combobox', { name: BOX('mode.portal'), exact: true }).fill(TO_ALPHA)
       await page.getByRole('button', { name: shaped(BOX('send.portal')) }).click()
       await seen(page.getByText(TO_ALPHA).first(), 60_000)
