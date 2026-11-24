@@ -1,8 +1,12 @@
 /*
  * RecordThread v1 (B-TH-212): ONE column — the feed fills it and scrolls, the box sits at the bottom. It fills the height its host
  * gives it (Incoming's reading pane, the request's full page); no max-width (no dead space at 1920). DS tokens only.
+ * tw- W1.4 (B12, D14, P17): EVERY column measures itself (the size container fw-rtcol, not only a docked one) and names the list's
+ * width L for the bubble's one width rule (card.css): the column less its borders and the rows' 16 px gutters.
  */
 .fw-rt-column {
+  --L: calc(100cqi - 34px);
+  container: fw-rtcol / inline-size;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -30,6 +34,8 @@
   .fw-rt-column {
     border-radius: 0;
     border-inline: none;
+    /* No side borders at the phone's edge: the list is the column less the rows' gutters. */
+    --L: calc(100cqi - 32px);
   }
 
   .fw-rt-thread-case {
@@ -107,11 +113,7 @@
   border-radius: 0;
 }
 
-/* B-TH-300: the docked column measures itself: in the narrowest dock (one third at 1440) Saved replies shows its icon only. */
-.fw-rt-column.is-docked {
-  container: fw-rtcol / inline-size;
-}
-
+/* B-TH-300: in the narrowest dock (one third at 1440) Saved replies shows its icon only (every column is the container: above). */
 @container fw-rtcol (max-width: 480px) {
   .fw-rtm-replies-word {
     display: none;

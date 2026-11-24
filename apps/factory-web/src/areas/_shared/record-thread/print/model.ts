@@ -4,8 +4,9 @@ import { fileSeries, recordFiles, type FileSeries, type FilesParty, type ThreadF
 
 /**
  * B-TH-280 — the record's thread for paper (the record frame's print view, `?print=1`; threads plan T1-F09): the docked thread's
- * own feed drawn read-only — every message open (no fold by age, no "New since your last visit", no "N new" bar, no link anchor),
- * nothing to answer, correct, task or carry — then the record's documents in force with who sees each. It replaces the old record
+ * own feed drawn read-only — every message whole (no unread band, no down button, no link anchor, no flash), nothing to answer,
+ * correct, task or carry — then the record's documents in force with who sees each. tw- W1.4 (R18): on paper the two sides of
+ * the bubbles would waste the page — every message stands alone on the left, full width, with its name and who reads it IN WORDS. It replaces the old record
  * panels' print form (thread, tasks, files and history panels): the feed already holds the record's steps and field changes, and
  * a measurement sheet the reader may not open prints as "Measurement sheet — you cannot open it", never by its name. Pure: the
  * container (ThreadPrint.tsx) reads, the view (view/ThreadPrintView.tsx) draws.
@@ -23,17 +24,17 @@ export interface ThreadPrintModel {
   readonly now: number
 }
 
-/** The feed for paper: everything open and nothing to act on (the reading actions — older messages, Try again — stay). */
+/** The feed for paper: one column, every name and audience in words, nothing to act on (the reading actions — older messages, Try again — stay). */
 export function paperFeed(feed: FeedModel): FeedModel {
   return {
     ...feed,
-    runOpen: true,
-    openIds: feed.messages.map((message) => message.id),
+    paper: true,
     firstNewId: null,
     newSince: 0,
     newCount: 0,
     hiddenNew: 0,
-    context: { ...feed.context, canReply: false, canTask: false, canUseOn: false, anchorId: null, canCorrect: { note: false, email: false, portal: false } },
+    flash: null,
+    context: { ...feed.context, canReply: false, canTask: false, canUseOn: false, anchorId: null, canCorrect: { note: false, email: false, portal: false }, replyWays: { note: false, email: false, portal: false }, canPin: false },
   }
 }
 

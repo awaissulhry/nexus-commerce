@@ -294,8 +294,22 @@ export type FeedView = 'all' | 'shared' | 'notes' | 'changes'
 export function feedForView<F extends { readonly messages: readonly CardMessage[]; readonly events: readonly FeedEvent[] }>(feed: F, view: FeedView): F {
   if (view === 'all') return feed
   if (view === 'changes') return { ...feed, messages: [] }
-  const keep = view === 'shared' ? (card: CardMessage) => card.kind === 'theirs' || card.kind === 'ours' : (card: CardMessage) => card.kind === 'note' || card.kind === 'floor'
-  return { ...feed, messages: feed.messages.filter(keep), events: [] }
+  return { ...feed, messages: feed.messages.filter((card) => viewKeeps(view, card)), events: [] }
+}
+
+/** tw- W1.4: whether the View draws a message (the one rule `feedForView` filters by). */
+export function viewKeeps(view: FeedView, card: Pick<CardMessage, 'kind'>): boolean {
+  if (view === 'all') return true
+  if (view === 'changes') return false
+  return view === 'shared' ? card.kind === 'theirs' || card.kind === 'ours' : card.kind === 'note' || card.kind === 'floor'
+}
+
+/**
+ * tw- W1.4 (Z10, 13-backend §1.3): a door to a message (a quote, "Correction of", "Corrected", a pin, a search hit, an ask, the file
+ * viewer) puts the View back to All first when the View hides it — or when it is not loaded yet (it may be hidden once read).
+ */
+export function viewHides(view: FeedView, card: Pick<CardMessage, 'kind'> | undefined): boolean {
+  return view !== 'all' && (!card || !viewKeeps(view, card))
 }
 
 /** What the Head's View offers for this thread (a kind the thread does not hold is not offered). */

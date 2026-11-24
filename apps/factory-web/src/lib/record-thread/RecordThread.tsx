@@ -177,6 +177,11 @@ function Column({ model, actions, remind, slots }: { model: RecordThreadModel; a
               actions.onReply?.(messageId)
               focusBox()
             },
+            // tw- W1.4 (W-037): Reply privately — an office note that quotes the customer's message — puts the cursor in the box too.
+            onReplyPrivately: (messageId) => {
+              actions.onReplyPrivately?.(messageId)
+              focusBox()
+            },
             // B-TH-236: Correct puts the box on the message's way, with its "Correcting …" line, and the cursor in it.
             onCorrect: (messageId) => {
               actions.onCorrect?.(messageId)

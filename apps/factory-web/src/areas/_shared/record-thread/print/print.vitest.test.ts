@@ -33,17 +33,24 @@ describe('the feed for paper', () => {
   const fixture = caseOf('normal') as { paper: { feed: Parameters<typeof paperFeed>[0] } }
   const feed = fixture.paper.feed
 
-  it('opens every message and drops the screen-only lines (fold by age, new since, new bar, link anchor, hidden by a view)', () => {
-    const paper = paperFeed({ ...feed, runOpen: false, openIds: [], firstNewId: 'm1', newSince: 3, newCount: 2, hiddenNew: 4, context: { ...feed.context, anchorId: 'm2' } })
-    expect(paper.runOpen).toBe(true)
-    expect(paper.openIds).toEqual(feed.messages.map((message) => message.id))
-    expect(paper).toMatchObject({ firstNewId: null, newSince: 0, newCount: 0, hiddenNew: 0 })
+  // tw- W1.4 (R18): no fold any more; paper is one column, every message alone with its name and who reads it in words.
+  it('paper: one column and every message whole; the screen-only lines go (the unread band, the down button, a link anchor, a flash, hidden by a view)', () => {
+    const paper = paperFeed({ ...feed, firstNewId: 'm1', newSince: 3, newCount: 2, hiddenNew: 4, flash: { id: 'm2', seq: 1 }, context: { ...feed.context, anchorId: 'm2' } })
+    expect(paper.paper).toBe(true)
+    expect(paper).toMatchObject({ firstNewId: null, newSince: 0, newCount: 0, hiddenNew: 0, flash: null })
     expect(paper.context.anchorId).toBeNull()
+    expect(paper).not.toHaveProperty('runOpen')
+    const text = textOf(renderView(view, caseOf('normal')))
+    expect(text).toContain('Office note, office only')
+    expect(text).toContain(`message from ${BRAND_ALPHA.tradeName}`)
+    const css = readFileSync(new URL('./thread-print.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-rtp-feed \.fw-rt-bub \{[^}]*max-width: none;/)
+    expect(css).toContain('.fw-rtp button:not(.fw-rt-tile):not(.fw-rt-file)')
   })
 
   it('offers nothing to act on: no reply, task, carry or correction', () => {
     const paper = paperFeed({ ...feed, context: { ...feed.context, canReply: true, canTask: true, canUseOn: true, canCorrect: { note: true, email: true, portal: true } } })
-    expect(paper.context).toMatchObject({ canReply: false, canTask: false, canUseOn: false, canCorrect: { note: false, email: false, portal: false } })
+    expect(paper.context).toMatchObject({ canReply: false, canTask: false, canUseOn: false, canCorrect: { note: false, email: false, portal: false }, replyWays: { note: false, email: false, portal: false } })
     expect(paper.context.canReadFiles).toBe(feed.context.canReadFiles)
     expect(paper.messages).toBe(feed.messages)
   })

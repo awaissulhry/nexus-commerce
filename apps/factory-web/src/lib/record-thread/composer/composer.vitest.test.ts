@@ -486,3 +486,29 @@ describe('F-SA-265: the chip "About: …" follows the audience', () => {
   })
 })
 // ---- end F-SA-265
+
+// ---- tw- W1.4 (D4, R4): a reply to an office note starts as an office note; going to the customer drops its quote, said ------------
+import { replyWay } from '../card/model'
+
+describe('tw- W1.4 — a reply to an office note never takes its quote to the customer (R4)', () => {
+  const NOTE_REPLY = { kind: 'reply' as const, messageId: 'n-1', who: 'Carlo Prova', at: '2026-11-17T09:41:00.000Z', audience: 'note' as const, quote: { name: 'Carlo Prova', tone: 'emerald' as const, line: 'Week 50 works.' } }
+  const SHARED_REPLY = { ...NOTE_REPLY, messageId: 't-1', audience: 'shared' as const }
+
+  it('Reply on an office note starts an office note; switching it to the customer drops the quote and says so', () => {
+    const note = { id: 'n-1', kind: 'note' as const, channel: 'APP' as const, author: 'Carlo Prova', authorKind: 'USER' as const, at: NOTE_REPLY.at, body: 'Week 50 works.', mentions: [], files: [] }
+    expect(replyWay(note, { canReply: true, replyWays: { note: true, email: true, portal: true } })).toBe('note')
+    const toMail = switchMode(draft({ body: 'Fine for us.', link: NOTE_REPLY }), 'reply', OFFICE_PEOPLE)
+    expect(toMail.draft.link).toBeUndefined()
+    expect(toMail.draft.body).toBe('Fine for us.')
+    expect(toMail.notes).toEqual([{ key: 'switch.quote' }])
+    expect(switchMode(draft({ body: 'x', link: NOTE_REPLY }), 'portal', OFFICE_PEOPLE).draft.link).toBeUndefined()
+    // Back to an office note, or a quote of a shared message: the quote stays.
+    expect(switchMode(draft({ mode: 'reply', body: 'x', link: NOTE_REPLY }), 'note', OFFICE_PEOPLE).draft.link).toEqual(NOTE_REPLY)
+    expect(switchMode(draft({ body: 'x', link: SHARED_REPLY }), 'reply', OFFICE_PEOPLE).draft.link).toEqual(SHARED_REPLY)
+    for (const locale of ['en', 'it'] as const) {
+      const said = textOf(render(createElement(Composer, { context: ORDER, draft: draft({ mode: 'reply', body: 'x' }), notes: [{ key: 'switch.quote' }], onDraft: () => undefined, onSend: () => undefined }), locale))
+      expect(said).toContain(locale === 'en' ? "An office note's quote never goes to the customer: taken off." : "La citazione di una nota d'ufficio non va mai al cliente: tolta.")
+    }
+  })
+})
+// ---- end tw- W1.4
