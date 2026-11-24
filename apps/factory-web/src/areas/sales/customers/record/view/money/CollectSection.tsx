@@ -113,7 +113,8 @@ function CollectRowView({ row, say, companyId, onPick, onAct, drawable }: { row:
   const tag = dayTagOf(row.late)
   const what = say(row.chip)
   // M-8 (cm-fx4): a request is named by what it is AND its order (a deposit and a balance of one order are two rows).
-  const name = row.invoice?.number ?? (row.order?.number ? `${what} · ${row.order.number}` : what)
+  // R-2 (cm-fx5): an invoice is named by its kind AND its number, so its ⋯ is not the same name as its row in Invoices & credit notes.
+  const name = row.invoice?.number ? `${what} · ${row.invoice.number}` : row.order?.number ? `${what} · ${row.order.number}` : what
   const items: MenuItemDef[] = []
   for (const item of row.more) {
     if (item.held) items.push({ id: item.id, label: say(item.label), disabled: true, description: say(item.held) })

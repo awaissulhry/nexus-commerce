@@ -106,6 +106,10 @@
   .fw-cm-list.is-np .fw-cm-row-g, .fw-cm-list.is-na .fw-cm-row-g { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) 214px var(--m) var(--a) 44px; grid-template-areas: "k n d m a o"; }
   .fw-cm-list.is-np .fw-cm-row-n, .fw-cm-list.is-na .fw-cm-row-n { padding-left: var(--nds-space-14); }
 }
+/* R-3 (cm-fx5): a list where NO row has words gives the words column back — the room goes to "what": what · when, from 1000 px. */
+@container cmls (min-width: 1000px) {
+  .fw-cm-list:not(:has(.fw-cm-row-n:not(:empty))) .fw-cm-row-g { grid-template-columns: minmax(0, 1fr) 204px var(--m) var(--a) 44px; grid-template-areas: "k d m a o" "n d m a o"; }
+}
 .fw-cm-more { align-self: flex-start; margin-top: var(--nds-space-4); }
 .fw-cm-foot { margin: 0; padding-top: var(--nds-space-6); font-size: var(--nds-font-size-sm); color: var(--nds-text-2); display: flex; flex-wrap: wrap; gap: var(--nds-space-4) var(--nds-space-14); align-items: center; }
 /* M-11 (cm-fx4): shipped goods whose "invoice by" day is past: the line is danger. */
