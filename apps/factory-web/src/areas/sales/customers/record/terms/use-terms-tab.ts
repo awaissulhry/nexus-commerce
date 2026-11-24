@@ -11,6 +11,7 @@ import type { PartyRecordModel } from '../../../../parties/_shared/model'
 import type { PartyRecordActions } from '../../../../parties/_shared/view/PartyRecordView' // F-CT-516 (W2.2): the record's own identity window and VIES act
 import { readProblem } from '../../../orders/model'
 import { copyLinkTo } from '../../../orders/record/shipments/view/hrefs'
+import { storeUrl } from '../../../../../record-panels/store' // ct-fx3 G-W03: the file door's address, as Work and the order page open it
 import { listPriceLists, type PriceListRow } from '../../../pricelists/api'
 import type { CompanyTerms, Holds, Requirements } from '../../depth/api'
 import { failedRead, LOADING, ready, type Notice, type Read } from '../../depth/model'
@@ -82,6 +83,8 @@ export interface TermsTabInput {
   readonly actions?: PartyRecordActions | undefined
   /** F-CT-516 (W2.2; Z7): the record's VIES checks, the next page by the server's cursor. */
   readonly moreHistory?: (() => void) | undefined
+  /** ct-fx3 G-W08 (walk W-08): the record's VIES checks read again (their failed part's Try again). */
+  readonly retryHistory?: (() => void) | undefined
   /** The depth provider's part; null: not handed (the sections then read). */
   readonly depth: TermsDepth | null
   /** Terms & requirements is the tab shown: only then does the tab read. */
@@ -384,7 +387,8 @@ export function useTermsTab(input: TermsTabInput): TermsTabContainer {
     onOpenFile: (fileId) => {
       fileDoor(api, fileId)
         .then((url) => {
-          if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener')
+          // ct-fx3 G-W03 (walk W-03): the address as this browser reaches it (a local store's path goes through /api), as Work does.
+          if (typeof window !== 'undefined') window.open(storeUrl(url), '_blank', 'noopener')
         })
         .catch(() => setNotice({ tone: 'danger', words: said('ct.req.fileFailed') }))
     },
@@ -397,6 +401,7 @@ export function useTermsTab(input: TermsTabInput): TermsTabContainer {
     onNewIdentity: () => input.actions?.onDialog?.({ kind: 'identity', mode: 'new' }),
     onCheckVies: () => input.actions?.onCheckVies?.(),
     onMoreChecks: () => input.moreHistory?.(),
+    onRetryChecks: () => input.retryHistory?.(), // ct-fx3 G-W08
   }
 
   return {

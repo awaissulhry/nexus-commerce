@@ -418,6 +418,7 @@ export function usePartyRecord(side: Side, partyId: string, slots: PartySlots = 
     party,
     reload: () => void load(),
     moreHistory: () => void moreHistory(), // F-CT-513: the VIES checks' next page (Terms & requirements)
+    retryHistory: () => void loadHistory(), // ct-fx3 G-W08: the VIES checks read again after it failed (Terms' Try again)
     actions: {
       onRetry: () => {
         setProblem(null)

@@ -107,6 +107,8 @@ export function useCustomerDepth(partyId: string) {
   const loadPrivacy = useCallback(() => (readsCustomer ? readOne(() => readPrivacy(api, partyId), setPrivacy) : Promise.resolve()), [api, partyId, readOne, readsCustomer]) // F-CA-fx5 (walk W-05): only who may read the customer — the refused page sends no People read
 
   const loadTab = useCallback(() => {
+    // ct-fx3 G-W07 (walk W-07; P0-B3, Z43): a reader without parties.view gets the refused page — no read of any tab is sent (403 × 3).
+    if (!readsCustomer) return
     // F-SA-271: the glance also on Money (the credit) and People & addresses (riders and profiles).
     // F-CT-525 (customer Terms & requirements, ct-w2 W2.3; Z32): the Overview also reads the terms per company (its Payment fact).
     if (tab === 'overview') void Promise.all([loadGlance(), loadTerms()])
@@ -117,7 +119,7 @@ export function useCustomerDepth(partyId: string) {
     // F-CA-228 (ca-w2 W2.5): People reads the contacts' privacy only — its riders and profiles are its own reads now (the glance stays the
     // Overview's and Money's).
     else if (tab === 'people') void loadPrivacy() // F-SA-271: Addresses & contacts → People & addresses
-  }, [loadGlance, loadHolds, loadPrivacy, loadRequirements, loadTerms, tab])
+  }, [loadGlance, loadHolds, loadPrivacy, loadRequirements, loadTerms, readsCustomer, tab])
 
   useEffect(() => {
     loadTab()

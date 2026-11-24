@@ -15,6 +15,17 @@
  *   (5) the windows' insides      the DS Modal draws the frame (it is portaled: these classes stand on their own)
  */
 
+/* ct-fx3 G-W02 (walk W-02; 18-lead-settles Z26; People's F-CA-fx5): a door to a section or a row lands UNDER the record's sticky band,
+   never behind it. The record frame measures its band (RecordFrame: --fw-rcf-top = the band + 16 px, the same line the docked thread
+   starts on); before it has measured, the band's own size in tokens (48 + 16). The kit's 4 px margin (production.css) stays as it is:
+   ours wins on our ids; the rows land on the same line. */
+.fw-ctr { --fw-ctr-land: var(--fw-rcf-top, calc(var(--nds-space-48) + var(--nds-space-16))); }
+.fw-ctr > #answer,
+.fw-ctr > #party-hold,
+.fw-ctr > #party-commercial,
+.fw-ctr > #party-requirements,
+.fw-ctr > #party-identity { scroll-margin-top: var(--fw-ctr-land); }
+
 /* (1) the answer line */
 .fw-ctr-ans { min-width: 0; }
 .fw-ctr-ans-t { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
@@ -42,14 +53,14 @@
 .fw-ctr-g { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
 .fw-ctr-g.is-order, .fw-ctr-g.is-deliv { padding-top: var(--nds-space-12); border-top: 1px solid var(--nds-border-subtle); }
 .fw-ctr-wpo { display: flex; flex-direction: column; gap: var(--nds-space-4); margin-top: var(--nds-space-4); }
-.fw-ctr-wi { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-4); font-size: var(--nds-font-size-sm); color: var(--nds-warning-text); padding: 2px 4px; scroll-margin-top: 96px; }
+.fw-ctr-wi { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-4); font-size: var(--nds-font-size-sm); color: var(--nds-warning-text); padding: 2px 4px; scroll-margin-top: var(--fw-ctr-land); }
 .fw-ctr-wi > svg { flex: none; }
 .fw-ctr-wi.is-mark { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-lg); }
 
 /* (4) THE lists: S < 560 (blocks) · M ≥ 560 (columns + a head row) — of the LIST's own width */
 .fw-ctr-ls { container: ctls / inline-size; display: flex; flex-direction: column; min-width: 0; }
 .fw-ctr-row, .fw-ctr-hd { gap: var(--nds-space-4) var(--nds-space-14); align-items: start; min-width: 0; }
-.fw-ctr-row { display: grid; padding: var(--nds-space-10) var(--nds-space-2); border-bottom: 1px solid var(--nds-border-subtle); scroll-margin-top: 96px; }
+.fw-ctr-row { display: grid; padding: var(--nds-space-10) var(--nds-space-2); border-bottom: 1px solid var(--nds-border-subtle); scroll-margin-top: var(--fw-ctr-land); }
 .fw-ctr-row:last-child { border-bottom: 0; }
 .fw-ctr-row > div { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-2); font-size: var(--nds-font-size-sm); }
 .fw-ctr-row.is-mark { background: var(--nds-wash-primary); border-radius: var(--nds-radius-lg); }
@@ -118,7 +129,7 @@
 .fw-ctr-warn { display: inline-flex; gap: var(--nds-space-4); align-items: flex-start; color: var(--nds-warning-text); }
 .fw-ctr-warn > svg { flex: none; margin-top: 2px; }
 .fw-ctr-val.is-mark { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-md); }
-.fw-ctr-vies { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; padding: var(--nds-space-12); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-lg); background: var(--nds-surface-raised); scroll-margin-top: 96px; }
+.fw-ctr-vies { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; padding: var(--nds-space-12); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-lg); background: var(--nds-surface-raised); scroll-margin-top: var(--fw-ctr-land); }
 .fw-ctr-vies.is-mark { outline: 2px solid var(--nds-primary); outline-offset: 2px; }
 .fw-ctr-vh { display: flex; flex-wrap: wrap; gap: var(--nds-space-8); align-items: center; justify-content: space-between; min-width: 0; }
 .fw-ctr-vh > h3 { margin: 0; }
@@ -130,6 +141,45 @@
   .fw-ctr-row.is-v, .fw-ctr-hd.is-v { grid-template-columns: minmax(0, 0.8fr) minmax(0, 0.7fr) minmax(0, 1.2fr) minmax(0, 1fr); }
   .fw-ctr-hd.is-v { display: grid; }
 }
+
+/* ct-fx3 G-W09 (walk W-09): a chip with no rows of its own marks its section's answer line, as a row is marked */
+.fw-ctr-sa.is-mark { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-md); }
+
+/* ct-fx3 G-W06 (walk W-06; AAA "no dead space"): Money's facts grid (auto-fit, 190 px + a 20 px gap: k columns from 210k − 20 px) is
+   balanced by its COUNT in the box's own room, so no line holds a lone fact beside a hole: 4 → 2 + 2 (not 3 + 1), 5 → 3 + 2 (not 4 + 1),
+   6 → 3 + 3 (not 4 + 2 or 5 + 1), 7 → 4 + 3 (2 columns where 3 + 3 + 1), 8 → 4 + 4, 9 → 3 × 3; with room for all of them, one line (auto-fit). Facts untouched. */
+.fw-ctr-fx { container: ctfx / inline-size; min-width: 0; }
+@container ctfx (min-width: 610px) and (max-width: 819.98px) {
+  .fw-ctr-fx[data-n="4"] > dl,
+  .fw-ctr-fx[data-n="7"] > dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container ctfx (min-width: 820px) and (max-width: 1029.98px) {
+  .fw-ctr-fx[data-n="5"] > dl,
+  .fw-ctr-fx[data-n="6"] > dl,
+  .fw-ctr-fx[data-n="9"] > dl { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@container ctfx (min-width: 1030px) and (max-width: 1239.98px) {
+  .fw-ctr-fx[data-n="6"] > dl,
+  .fw-ctr-fx[data-n="9"] > dl { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .fw-ctr-fx[data-n="7"] > dl,
+  .fw-ctr-fx[data-n="8"] > dl { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@container ctfx (min-width: 1240px) and (max-width: 1449.98px) {
+  .fw-ctr-fx[data-n="7"] > dl,
+  .fw-ctr-fx[data-n="8"] > dl { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .fw-ctr-fx[data-n="9"] > dl { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@container ctfx (min-width: 1450px) and (max-width: 1659.98px) {
+  .fw-ctr-fx[data-n="8"] > dl { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .fw-ctr-fx[data-n="9"] > dl { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@container ctfx (min-width: 1660px) and (max-width: 1869.98px) {
+  .fw-ctr-fx[data-n="9"] > dl { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* ct-fx3 G-W04 (walk W-04): a company row's tags wrap inside their cell (Italian at 865: "Numero d'ordine obbligatorio" ran under the
+   row's ⋯) — the DS's own wrap pattern (components.css, the media board's tags), on our class, inside our rows only. */
+.fw-ctr-row.is-c .fw-ctr-tag { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: start; }
 
 /* (5) the windows' insides */
 .fw-ctr-win { container: ctw / inline-size; display: flex; flex-direction: column; gap: var(--nds-space-14); min-width: 0; margin: 0; padding: 0; border: 0; }

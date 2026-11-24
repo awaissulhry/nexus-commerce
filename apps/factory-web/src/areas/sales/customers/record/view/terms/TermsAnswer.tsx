@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import { Ban, CircleAlert, Clock, Hourglass, Info } from 'lucide-react'
 import { Banner } from '@nexus/ui/components'
 import { FilterChip, Skeleton } from '@nexus/ui/primitives'
@@ -64,4 +64,9 @@ export function TermsAnswer({ answer, chip, reading, onChip }: { answer: Answer 
       </Banner>
     </div>
   )
+}
+
+/** ct-fx3 G-W09 (walk W-09): a section's answer line, marked when a chip with no rows of its own points at the section. */
+export function SectionAnswer({ marked, children }: { marked: boolean; children: ReactNode }): ReactElement {
+  return <span className={`fw-ctr-sa${marked ? ' is-mark' : ''}`}>{children}</span>
 }

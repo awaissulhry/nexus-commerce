@@ -3,7 +3,8 @@
 import type { ReactElement, ReactNode } from 'react'
 import { CheckCircle2, CircleAlert, Eye, Hourglass, Pencil, Plus, RefreshCw } from 'lucide-react'
 import { Button, Tag } from '@nexus/ui/primitives'
-import { Facts, Fold } from '../../../../orders/record/money/view/parts'
+import { Fold } from '../../../../orders/record/money/view/parts'
+import { BalancedFacts } from './CommercialSection' // ct-fx3 G-W06: the facts balanced by their count
 import { RESULT_TONE } from '../../../../../parties/_shared/model' // the record's own tones of a VIES result
 import { LineMenuButton } from '../../../../orders/record/view/LineMenu'
 import { PartFailed, Quiet, Section } from '../../../../orders/record/view/production/Kit'
@@ -11,6 +12,7 @@ import type { DatedIdentityRow, IdentityFact, ViesRowModel } from '../../terms/i
 import { kitProblemOf, said, termsKitId, type Say } from '../../terms/model'
 import type { TermsTabActions, TermsTabModel } from '../../terms/tab'
 import { menuOf, useTermsSay } from './say'
+import { SectionAnswer } from './TermsAnswer' // ct-fx3 G-W09
 
 /**
  * F-CT-517 (customer page › TERMS & REQUIREMENTS tab, lane ct-; 10-design §5.4; 18-lead-settles D2, Z3, Z7, Z21, Z22, Z23) — section 4,
@@ -65,15 +67,15 @@ export function IdentitySection({ model, actions }: { model: TermsTabModel; acti
   }
   if (id.none)
     return (
-      <Section {...head} answer={say(id.answer)}>
+      <Section {...head} answer={<SectionAnswer marked={marked.has('party-identity')}>{say(id.answer)}</SectionAnswer>}>
         {null}
       </Section>
     )
   return (
-    <Section {...head} answer={say(id.answer)}>
+    <Section {...head} answer={<SectionAnswer marked={marked.has('party-identity')}>{say(id.answer)}</SectionAnswer>}>
       <div className="fw-ctr-idw">
         <div className="fw-ctr-id">
-          <Facts facts={id.facts.map((fact) => ({ key: fact.key, label: say(fact.label), value: <FactValue fact={fact} marked={fact.anchor ? marked.has(fact.anchor) : false} say={say} /> }))} />
+          <BalancedFacts facts={id.facts.map((fact) => ({ key: fact.key, label: say(fact.label), value: <FactValue fact={fact} marked={fact.anchor ? marked.has(fact.anchor) : false} say={say} /> }))} />
           {id.earlier.length > 0 ? (
             <>
               <div className="fw-ctr-foldw">
@@ -108,9 +110,17 @@ export function IdentitySection({ model, actions }: { model: TermsTabModel; acti
 
 function FactValue({ fact, marked, say }: { fact: IdentityFact; marked: boolean; say: Say }) {
   const words = say(fact.value)
+  // ct-fx3 G-W11: a code inside the words is monospace on its own ("By SDI code ‹FAKE001›"), the sentence keeps the text face.
+  const at = fact.code ? words.indexOf(fact.code) : -1
   const value: ReactNode = fact.warning ? (
     <span className="fw-ctr-warn">
       <CircleAlert size={13} aria-hidden /> {words}
+    </span>
+  ) : at >= 0 ? (
+    <span>
+      {words.slice(0, at)}
+      <span className="fw-ctr-mono">{fact.code}</span>
+      {words.slice(at + fact.code!.length)}
     </span>
   ) : (
     <span className={fact.none ? 'fw-ctr-none' : fact.mono ? 'fw-ctr-mono' : undefined}>{words}</span>
@@ -163,9 +173,9 @@ function ViesRow({ vies, marked, say, actions }: { vies: ViesRowModel; marked: b
           <span>{say(said('parties:vies.notYet'))}</span>
         </p>
       )}
-      {vies.facts.length > 0 ? <Facts facts={vies.facts.map((fact) => ({ key: fact.key, label: say(fact.label), value: <FactValue fact={fact} marked={false} say={say} /> }))} /> : null}
+      {vies.facts.length > 0 ? <BalancedFacts facts={vies.facts.map((fact) => ({ key: fact.key, label: say(fact.label), value: <FactValue fact={fact} marked={false} say={say} /> }))} /> : null}
       {vies.checksProblem ? (
-        <PartFailed part={say(said('ct.id.checksPart'))} problem={kitProblemOf(vies.checksProblem)} />
+        <PartFailed part={say(said('ct.id.checksPart'))} problem={kitProblemOf(vies.checksProblem)} onRetry={actions?.onRetryChecks /* ct-fx3 G-W08 */} />
       ) : vies.checks.length > 0 ? (
         <>
           <div className="fw-ctr-foldw">
