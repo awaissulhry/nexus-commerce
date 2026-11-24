@@ -142,6 +142,9 @@
   .fw-ctr-hd.is-v { display: grid; }
 }
 
+/* ct-fx3 G-W09 (walk W-09): a chip with no rows of its own marks its section's answer line, as a row is marked */
+.fw-ctr-sa.is-mark { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-md); }
+
 /* ct-fx3 G-W06 (walk W-06; AAA "no dead space"): Money's facts grid (auto-fit, 190 px + a 20 px gap: k columns from 210k − 20 px) is
    balanced by its COUNT in the box's own room, so no line holds a lone fact beside a hole: 4 → 2 + 2 (not 3 + 1), 5 → 3 + 2 (not 4 + 1),
    6 → 3 + 3 (not 4 + 2 or 5 + 1), 7 → 4 + 3 (2 columns where 3 + 3 + 1), 8 → 4 + 4, 9 → 3 × 3; with room for all of them, one line (auto-fit). Facts untouched. */

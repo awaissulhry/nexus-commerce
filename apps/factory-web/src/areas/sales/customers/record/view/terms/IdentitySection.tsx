@@ -12,6 +12,7 @@ import type { DatedIdentityRow, IdentityFact, ViesRowModel } from '../../terms/i
 import { kitProblemOf, said, termsKitId, type Say } from '../../terms/model'
 import type { TermsTabActions, TermsTabModel } from '../../terms/tab'
 import { menuOf, useTermsSay } from './say'
+import { SectionAnswer } from './TermsAnswer' // ct-fx3 G-W09
 
 /**
  * F-CT-517 (customer page › TERMS & REQUIREMENTS tab, lane ct-; 10-design §5.4; 18-lead-settles D2, Z3, Z7, Z21, Z22, Z23) — section 4,
@@ -66,12 +67,12 @@ export function IdentitySection({ model, actions }: { model: TermsTabModel; acti
   }
   if (id.none)
     return (
-      <Section {...head} answer={say(id.answer)}>
+      <Section {...head} answer={<SectionAnswer marked={marked.has('party-identity')}>{say(id.answer)}</SectionAnswer>}>
         {null}
       </Section>
     )
   return (
-    <Section {...head} answer={say(id.answer)}>
+    <Section {...head} answer={<SectionAnswer marked={marked.has('party-identity')}>{say(id.answer)}</SectionAnswer>}>
       <div className="fw-ctr-idw">
         <div className="fw-ctr-id">
           <BalancedFacts facts={id.facts.map((fact) => ({ key: fact.key, label: say(fact.label), value: <FactValue fact={fact} marked={fact.anchor ? marked.has(fact.anchor) : false} say={say} /> }))} />

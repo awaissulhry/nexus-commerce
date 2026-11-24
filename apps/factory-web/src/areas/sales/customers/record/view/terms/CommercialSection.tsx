@@ -12,6 +12,7 @@ import { sourceWords, type CompanyRow, type EndedCompanyRow, type Fact } from '.
 import { said, termsKitId, type Say } from '../../terms/model'
 import type { TermsTabActions, TermsTabModel } from '../../terms/tab'
 import { actItem, menuOf, useTermsSay } from './say'
+import { SectionAnswer } from './TermsAnswer' // ct-fx3 G-W09: a chip with no rows marks its section's answer line
 
 /**
  * F-CT-304 (customer page › TERMS & REQUIREMENTS tab, lane ct-; 10-design §5.2; 18-lead-settles Z2, Z11, Z21, Z24–Z26, Z29, Z31) —
@@ -116,7 +117,7 @@ export function CommercialSection({ model, actions }: { model: TermsTabModel; ac
     </>
   )
   return (
-    <Section {...head} answer={com.answer.map(say).join(' ') /* whole sentences, one after the other (the picture's) */}>
+    <Section {...head} answer={<SectionAnswer marked={marked.has('party-commercial')}>{com.answer.map(say).join(' ') /* whole sentences, one after the other (the picture's) */}</SectionAnswer>}>
       <div className="fw-ctr-gw">
         <div className="fw-ctr-grp">
           <div className="fw-ctr-g is-pays">

@@ -1181,3 +1181,37 @@ describe('ct-fx3 G-W08: a failed VIES-checks read has its Try again (§2: PartFa
     }
   })
 })
+
+describe('ct-fx3 G-W09: a chip with no rows of its own marks its section (B)', () => {
+  const reads = (over: Partial<TermsTabReads> = {}): TermsTabReads => ({
+    party: partyWith({ id: PARTY_ID, taxIdentities: [], warnings: [], vies: { ...MODA.vies, state: 'NOT_APPLICABLE' } }),
+    prefix: '/w/SEEDA',
+    can: OWNER,
+    locale: 'en',
+    now: NOW,
+    companyId: A.id,
+    companyNames: NAMES,
+    commercial: ready(own()),
+    carrier: ready({ partyId: PARTY_ID, code: 'SEED-ONE', name: 'Seed Customer One S.r.l.', carrierCode: null, carrierName: null, accountOnFile: false, freightBilling: 'SENDER', defaultCarrierService: null, version: 7 }),
+    holds: ready(HOLDS),
+    companies: ready(COMPANY_TERMS),
+    requirements: null,
+    library: null,
+    lists: null,
+    history: { items: [] },
+    viesRunning: false,
+    ...over,
+  })
+
+  it('"No tax identity" marks Tax identity\'s answer line; a chip with rows still marks exactly its rows', () => {
+    const model = termsTabModel(reads(), { ...TERMS_TAB_START, chip: 'noIdentity' })
+    expect(model.answer.chips.find((chip) => chip.id === 'noIdentity')!.rows).toEqual([])
+    expect(model.marked).toEqual(['party-identity'])
+    const html = renderToStaticMarkup(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(WithMessages, { namespaces: [...TERMS_TAB_NAMESPACES] }, createElement(TermsTab, { model }))))
+    expect(html).toContain('class="fw-ctr-sa is-mark"')
+    expect(html.match(/fw-ctr-sa is-mark/g)).toHaveLength(1)
+    expect(termsTabModel(reads(), { ...TERMS_TAB_START, chip: 'hold' }).marked).toEqual([termsTabModel(reads(), TERMS_TAB_START).hold.inForce[0]!.anchor])
+    const css = readFileSync(new URL('../view/terms/terms.css', import.meta.url), 'utf8')
+    expect(css).toContain('.fw-ctr-sa.is-mark { outline: 2px solid var(--nds-primary);')
+  })
+})
