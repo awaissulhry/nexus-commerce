@@ -498,6 +498,10 @@ describe('F-SA-271: the customer’s seven tabs and band', () => {
     expect(partyTabOf('customers', 'requirements')).toBe('terms')
     expect(anchorOnArrival('customers', 'requirements')).toBe('party-requirements')
     expect(anchorOnArrival('customers', 'terms')).toBeNull()
+    // F-CT-404 (customer Terms & requirements, ct-w1 W1.4; T2-B9): a quote's "customer on hold" door (?tab=holds) lands on Hold.
+    expect(partyTabOf('customers', 'holds')).toBe('terms')
+    expect(anchorOnArrival('customers', 'holds')).toBe('party-hold')
+    expect(anchorOnArrival('suppliers', 'holds')).toBeNull()
     expect(partyTabOf('customers', 'portal')).toBe('portal')
     for (const old of ['documents', 'activity']) expect(partyTabOf('customers', old)).toBe('overview')
     // The supplier's tabs and old ids are untouched.

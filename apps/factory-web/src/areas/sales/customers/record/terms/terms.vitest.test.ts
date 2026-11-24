@@ -28,6 +28,8 @@ import { ChangeTermsBody } from '../view/terms/ChangeTermsDialog'
 import { DeliveryBody } from '../view/terms/DeliveryDialog'
 import { CompanyEndBody, CompanyTermsBody } from '../view/terms/CompanyTermsDialog'
 import { TermsNotices } from '../view/terms/TermsNotices'
+import type { ComponentType } from 'react'
+import { designScreen as customerRecordScreen } from '../fixtures'
 
 /**
  * F-CT-101…105 (customer page › TERMS & REQUIREMENTS tab, lane ct-; 15-steps W1.1) — the tab's pure rules: the ONE source of the terms
@@ -676,6 +678,76 @@ describe('the views of the tab (W1.3)', () => {
       ]
       expect(model.windows.window).toBeNull()
       for (const body of bodies) expect(left(draw(body, locale)), locale).toBeNull()
+    }
+  })
+})
+
+// ---- W1.4: the page --------------------------------------------------------------------------------------------------------------
+
+describe('the page mounts the tab (W1.4)', () => {
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+
+  it('the record builds the container on every tab (it reads only on Terms) and the view only on ?tab=terms; the old card left the slot', () => {
+    const cr = source('../CustomerRecord.tsx')
+    expect(cr).toContain("const terms = useTermsTab({ partyId, party: record.party, model: record.model, reload: record.reload, depth: termsDepth, enabled: tab === 'terms' })")
+    expect(cr).toContain("const termsTab = named && record.party && tab === 'terms' ? <TermsTab model={terms.model} actions={terms.actions} hold={terms.hold} /> : null")
+    expect(cr).toContain('const termsNotice = <TermsNotices notices={terms.notices} />')
+    expect(cr).not.toMatch(/CommercialTerms\b|terms: \(party, reload\)/)
+    // People's notice line is untouched (Z5: the depth's notice is split instead).
+    expect(cr).toContain('const peopleNotice = <PeopleNotices notices={{ ...people.notices, depth: privacy.notice, onDismissDepth: privacy.onDismissNotice }')
+  })
+
+  it('the view: the tab, then today\'s Requirements and Tax identity cards; its notices in the ONE notice area; a third of the dock (D3)', () => {
+    const view = source('../view/CustomerRecordView.tsx')
+    expect(view).toMatch(/\{tab === 'terms' && \([\s\S]*?\{termsTab\}[\s\S]*?id="party-requirements"[\s\S]*?id="party-identity"/)
+    expect(view).toContain("{tab === 'people' ? peopleNotice : tab === 'terms' ? termsNotice : null}")
+    expect(view).toContain("|| tab === 'people' || tab === 'terms' ? 'third' : undefined}")
+    expect(view).not.toMatch(/customers\.anchor\.(label|commercial|hold)|href="#party-commercial"|depth\?\.tax/) // the anchor line and the old Tax part went
+  })
+
+  it('the depth provider hands the tab its part — its ONE reads, its hold window, its notice — and keeps Money\'s hold connector word for word', () => {
+    const depth = source('../../depth/CustomerDepth.tsx')
+    expect(depth).toContain('export function useCustomerTerms(party: Party | null | undefined): TermsDepth | null {')
+    expect(depth).toContain('export function useCustomerHold(party: Party)')
+    expect(depth).toContain('window: <HoldDialogView model={{ read: state.holds.read, can: state.can, status: party.status, prefix, dialog: state.holds.dialog, companies: state.companies }} actions={state.holds} />,')
+    expect(depth).not.toMatch(/function TaxPart|<HoldCard |PoNumberCard|tax: </)
+    expect(source('../../depth/view/HoldCard.tsx')).toContain('export function HoldDialogView(')
+  })
+
+  it('Z5: the hold, PO and requirement acts made on Terms say their result in the tab\'s notice; People\'s notice is the personal data\'s only', () => {
+    const useDepth = source('../../depth/use-depth.ts')
+    expect(useDepth).toContain('const [termsNotice, setTermsNotice] = useState<Notice>(null)')
+    expect(useDepth).toContain("if (tab === 'terms') setTermsNotice(next)")
+    expect(useDepth.match(/actNotice\(\{/g)?.length).toBe(2) // the hold window's, the requirement windows'
+    expect(useDepth.match(/\bsetNotice\(\{/g)?.length).toBe(2) // the lawful basis, the objection (People's)
+    // the glance after an act is read only off Terms (Money and the Overview draw it; Terms draws the holds read itself)
+    expect(useDepth.match(/if \(tab !== 'terms'\) void loadGlance\(\)/g)?.length).toBe(2)
+  })
+
+  it('the hold switch and the PO loop went: ONE PUT per act and company (T1-B16), its answer kept in the provider\'s ONE read', () => {
+    const useDepth = source('../../depth/use-depth.ts')
+    expect(useDepth).not.toMatch(/toggleHold|savePo|poDraft|setPoNumberRequired|for \(const row of changes\)/)
+    expect(useDepth).toContain('onAnswer: (answer: CompanyTerms) => setTerms(ready(answer)),')
+    const container = source('./use-terms-tab.ts')
+    expect(container).toContain('depth.onCompanyTerms(await setCompanyTerms(api, partyId, window.companyId, body, newIdempotencyKey()))')
+  })
+
+  it('P0-B1 (Z15, Z33): every .fw-cdp-stack has its column again — CSS only', () => {
+    const css = source('../../depth/depth.css').replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(css).toMatch(/\.fw-cdp-loading,\s*\.fw-cdp-stack \{\s*display: flex;\s*flex-direction: column;/)
+    expect(css).not.toMatch(/fw-cdp-two-wide|fw-cdp-now/)
+  })
+
+  it('every Terms case of the gallery draws the new tab (its id kept): the answer line, Hold first, Commercial terms', () => {
+    const screen = customerRecordScreen as unknown as { cases: Array<{ id: string; label: string; model: { tab?: string } }>; view: ComponentType<{ model: unknown }> }
+    const terms = screen.cases.filter((item) => item.model.tab === 'terms')
+    expect(terms.length).toBeGreaterThan(25)
+    for (const id of ['terms', 'terms-blank', 'terms-edit', 'terms-saved', 'w2b-324-tax', 'w2b-324-tax-none', 'w2b-324-req']) expect(terms.map((item) => item.id), id).toContain(id)
+    for (const item of terms.filter((entry) => /^(terms|w2b-324-tax)/.test(entry.id))) {
+      const html = renderToStaticMarkup(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(screen.view, { model: item.model })))
+      expect(html, item.id).toContain('class="fw-pt fw-ctr"')
+      expect(html.indexOf('id="party-hold"'), item.id).toBeGreaterThan(-1)
+      expect(html.indexOf('id="party-hold"'), item.id).toBeLessThan(html.indexOf('id="party-identity"'))
     }
   })
 })
