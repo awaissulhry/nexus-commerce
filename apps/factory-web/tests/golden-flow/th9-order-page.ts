@@ -1713,11 +1713,21 @@ export default defineStage({
       await seen(answer, 60_000)
       await expect(answer).not.toContainText(lead(CMW('cm.answer.nothing')))
       // To collect: the balance's request is its own row (sorted by due day; past the first rows, "Show n more rows" opens them).
+      // cm-fx3: the row comes from GET /payments/open-items (an OPEN request of this customer in the page's company) — said first, by
+      // the API, so a missing row is told apart from a slow one.
+      const requestId = now!.depositRequestId as string
+      const open = await flow.read(page, `/payments/open-items?companyId=${encodeURIComponent(flow.companyId)}&partyId=${encodeURIComponent(customer)}`)
+      expect(((open.items ?? []) as Json[]).map((item) => item.id), `the balance's request ${requestId} is an open item of P1 in the page's company`).toContain(requestId)
+      // cm-fx3 (end check): the section's frame draws BEFORE its rows (the open items still reading: the kit's skeleton, aria-busy) —
+      // wait for the reading to end, then for the row or the "Show n more rows" door; press the door only when it is there.
       const collect = page.locator('#collect')
       await seen(collect, 60_000)
-      const row = page.locator(`#cm-DepositRequest-${now!.depositRequestId as string}`)
-      if ((await row.count()) === 0) await press(collect.getByRole('button', { name: /^Show \d+ more rows?$/ }))
-      await seen(row, 60_000)
+      await expect(collect.locator('[aria-busy="true"]'), 'To collect has read its rows').toHaveCount(0, { timeout: 60_000 })
+      const row = page.locator(`#cm-DepositRequest-${requestId}`)
+      const moreRows = collect.getByRole('button', { name: /^Show \d+ more rows?$/ })
+      await expect(row.or(moreRows).first(), 'the row, or the door to the rows past the first ones').toBeVisible({ timeout: 60_000 })
+      if ((await row.count()) === 0 && (await moreRows.count()) > 0) await press(moreRows)
+      await expect(row, `the balance's request ${requestId} is a row of To collect`).toBeVisible({ timeout: 60_000 })
       const later = nextDay(now!.dueDate as string)
       await expect(row).toContainText(dayWords(now!.dueDate as string))
       // Its ⋯ Move due day… opens the ORDER's own hand window (its title in the order's words), in place on the customer's tab.
