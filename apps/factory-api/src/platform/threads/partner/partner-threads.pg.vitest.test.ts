@@ -399,6 +399,11 @@ describe('pt-s S.6: a portal post answers a shared message of its own record', {
     // The answer to our mail lands.
     const answered = await post(buyer, 'SalesOrder', order, { body: 'Made-up pt-s S.2: Friday works for us.', replyToMessageId: written.mail }, newId())
     expect(answered.status, JSON.stringify(answered.body)).toBe(201)
+    // S.3: the stored message carries the link (never a correction), and its audit row names it.
+    const [stored] = await admin('SELECT "replyToMessageId", "correctsMessageId", direction, audience, channel, "authorKind", "authorId" FROM "Message" WHERE id = $1', [answered.body.message.id])
+    expect(stored).toEqual({ replyToMessageId: written.mail, correctsMessageId: null, direction: 'INBOUND', audience: 'PARTNER', channel: 'PORTAL', authorKind: 'PARTY', authorId: null })
+    const [audit] = await admin('SELECT after FROM "AuditLog" WHERE "recordType" = $1 AND "recordId" = $2 AND action = $3', ['Message', answered.body.message.id, 'portal.postMessage'])
+    expect(audit!.after).toMatchObject({ threadId: written.threadId, replyToMessageId: written.mail, direction: 'INBOUND', audience: 'PARTNER', channel: 'PORTAL' })
 
     // An office note, a held mail, another record's message, a message that is not there: refused alike — 409, ONE neutral sentence in
     // the person's language, never which case it was — and nothing written (no message, no audit row, the conversation as it was).

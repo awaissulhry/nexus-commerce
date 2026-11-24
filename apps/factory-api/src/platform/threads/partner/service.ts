@@ -459,6 +459,8 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
           emailMessageId: null,
           at: tools.now,
           createdAt: tools.now,
+          // pt-s S.3: the shared message it answers (checked above; the database's composer guard reads it as the person again).
+          ...(replyToMessageId === null ? {} : { replyToMessageId }),
         },
         select: MESSAGE_PARTNER,
       })
@@ -467,7 +469,8 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
         recordId: id,
         companyId: current.companyId,
         siteId: current.siteId,
-        after: { threadId: current.id, recordType: current.recordType, recordId: current.recordId, direction: 'INBOUND', audience: 'PARTNER', channel: 'PORTAL', attachments: [...draft.attachments] },
+        // pt-s S.3: + the message it answers, when it answers one.
+        after: { threadId: current.id, recordType: current.recordType, recordId: current.recordId, direction: 'INBOUND', audience: 'PARTNER', channel: 'PORTAL', attachments: [...draft.attachments], ...(replyToMessageId === null ? {} : { replyToMessageId }) },
       })
       tools.emit(
         eventFor(messagePosted, {
