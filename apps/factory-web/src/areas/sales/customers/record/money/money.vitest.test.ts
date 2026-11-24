@@ -1013,11 +1013,17 @@ describe('cm-fx4: the walk\'s gaps', () => {
     expect(collect).not.toContain('const name = row.invoice?.number ??')
   })
 
-  it('R-3: a list where no row has words gives the words column back (what · when), after the M-14 rules so it wins', () => {
+  it('R-3, S-1: a list where no row has words gives the words column back, and "when" keeps the 214px column of the lists beside it', () => {
     const css = view('customer-money.css')
-    const rule = '.fw-cm-list:not(:has(.fw-cm-row-n:not(:empty))) .fw-cm-row-g { grid-template-columns: minmax(0, 1fr) 204px var(--m) var(--a) 44px; grid-template-areas: "k d m a o" "n d m a o"; }'
-    expect(css).toContain(`@container cmls (min-width: 1000px) {\n  ${rule}`)
-    expect(css.indexOf(rule)).toBeGreaterThan(css.lastIndexOf('.fw-cm-list.is-np .fw-cm-row-g, .fw-cm-list.is-na .fw-cm-row-g'))
+    const none = ':not(:has(.fw-cm-row-n:not(:empty)))'
+    const cols = '{ grid-template-columns: minmax(0, 1fr) 0 214px var(--m) var(--a) 44px; }'
+    // Each three-column room of M-14 and of 1500 px is mirrored: the same selector + "no words", only the words track 0.
+    expect(css).toContain(`@container cmls (min-width: 1000px) {\n  .fw-cm-list.is-np.is-na${none} .fw-cm-row-g ${cols}`)
+    expect(css).toContain(`@container cmls (min-width: 1300px) {\n  .fw-cm-list.is-np${none} .fw-cm-row-g, .fw-cm-list.is-na${none} .fw-cm-row-g ${cols}`)
+    expect(css).toContain(`@container cmls (min-width: 1500px) {\n  .fw-cm-list${none} .fw-cm-row-g ${cols}`)
+    // After the rules it narrows, so it wins at equal weight; the old 204px two-column form is gone.
+    expect(css.indexOf(`.fw-cm-list${none} .fw-cm-row-g ${cols}`)).toBeGreaterThan(css.lastIndexOf('.fw-cm-list.is-np .fw-cm-row-g, .fw-cm-list.is-na .fw-cm-row-g'))
+    expect(css).not.toContain(`${none} .fw-cm-row-g { grid-template-columns: minmax(0, 1fr) 204px`)
   })
 })
 // ---- end cm-fx4 + cm-fx5
