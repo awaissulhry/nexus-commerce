@@ -1,10 +1,9 @@
 'use client'
 
-import { CheckCircle2, Clock, Info, Lock, RefreshCw, TriangleAlert } from 'lucide-react'
-import { Banner } from '@nexus/ui/components'
 import type { Order } from '../../../api'
 import type { OrderRecordModel } from '../../record-model'
 import { moneyHeadOf } from '../head'
+import { MoneyAnswer } from './parts' // F-CM-k1: the shared answer line (its look); this file keeps the order's rule
 import { keepNumbers, sentenceOf, useSay } from './say'
 
 /**
@@ -16,15 +15,6 @@ import { keepNumbers, sentenceOf, useSay } from './say'
 export function MoneyHead({ order, model }: { order: Order; model: OrderRecordModel }) {
   const say = useSay(order.currency)
   const head = moneyHeadOf({ order, schedule: model.schedule, settlement: model.settlement?.value ?? null, can: model.can, today: model.today, settlementFailed: model.can.viewInvoices && !!model.settlement?.problem })
-  const icon = head.reading ? <RefreshCw size={18} aria-hidden /> : head.tone === 'success' ? <CheckCircle2 size={18} aria-hidden /> : head.tone === 'danger' ? <TriangleAlert size={18} aria-hidden /> : head.tone === 'warning' ? <Clock size={18} aria-hidden /> : <Info size={18} aria-hidden />
   const below = [...head.wall, ...(head.closed ? [head.closed] : [])].map(say)
-  return (
-    <Banner className="fw-om-head" tone={head.tone} icon={icon} title={keepNumbers(sentenceOf(head.parts.map(say))) /* F-OM-fx6 (N11) */}>
-      {below.length > 0 ? (
-        <span className="fw-om-head-wall">
-          <Lock size={13} aria-hidden /> {below.join(' ')}
-        </span>
-      ) : null}
-    </Banner>
-  )
+  return <MoneyAnswer tone={head.tone} reading={head.reading} title={keepNumbers(sentenceOf(head.parts.map(say))) /* F-OM-fx6 (N11) */} below={below} />
 }

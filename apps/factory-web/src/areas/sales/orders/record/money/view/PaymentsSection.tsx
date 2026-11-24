@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, History } from 'lucide-react'
+import { History } from 'lucide-react'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { money } from '../../../../quotes/model'
 import type { Order } from '../../../api'
@@ -12,6 +12,7 @@ import { PartFailed, PartReading, Section } from '../../view/production/Kit' // 
 import { PAYMENTS_ALIASES } from '../layout'
 import { planHistoryHref, planOf, type EarlierRow } from '../plan'
 import { stillToPayOf } from '../totals'
+import { Fold } from './parts' // F-CM-k1: the shared fold
 import { PlanRowView } from './PlanRow'
 import { lineOf, useSay, type Say } from './say'
 
@@ -69,10 +70,7 @@ function EarlierSteps({ rows, say, currency }: { rows: readonly EarlierRow[]; sa
   const [open, setOpen] = useState(false)
   return (
     <div className="fw-om-pl-foot">
-      <button type="button" className="fw-om-fold" aria-expanded={open} onClick={() => setOpen((now) => !now)}>
-        {open ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
-        {t('moneyTab.payments.earlier', { count: rows.length })} <span>· {t('moneyTab.payments.earlierHint')}</span>
-      </button>
+      <Fold open={open} onToggle={() => setOpen((now) => !now)} label={t('moneyTab.payments.earlier', { count: rows.length })} hint={t('moneyTab.payments.earlierHint')} />
       {open
         ? rows.map((row) => (
             <p key={row.key} className="fw-om-er">
