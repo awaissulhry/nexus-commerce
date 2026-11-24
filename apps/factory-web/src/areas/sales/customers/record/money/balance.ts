@@ -162,7 +162,7 @@ export function needsOf(input: MoneyTabInput, figures: readonly CurrencyFigures[
   // 7 shipped, not invoiced (invoices.view).
   const shipped = input.can.invoices ? (input.shipped?.value ?? null) : null
   if (shipped && shipped.shipments > 0)
-    out.push({ code: 'shipped', tone: 'warning', words: shipped.invoiceBy ? word('cm.needs.shippedBy', { params: { count: shipped.shipments }, days: { date: shipped.invoiceBy } }) : word('cm.needs.shipped', { params: { count: shipped.shipments } }), down: 'invoices', fallback: null })
+    out.push({ code: 'shipped', tone: 'warning', words: shipped.invoiceBy ? word('cm.needs.shippedBy', { params: { count: shipped.shipments }, days: { date: shipped.invoiceBy } }) : word('cm.needs.shipped', { params: { count: shipped.shipments } }), down: 'invoices', fallback: { kind: 'href', href: `${prefix}/finance/invoices`, label: word('cm.door.finance') } /* W1.5: every count a door — Finance › Invoices until the section is drawn (cm-w2) */ })
   // 9 reminders that wait for a yes (prepared, not held by a stop or a rule).
   const waiting = input.can.receivables ? (input.reminders?.value ?? []).filter((reminder) => reminder.status === 'PREPARED' && reminder.held.length === 0).length : 0
   if (waiting > 0) out.push({ code: 'reminders', tone: 'warning', words: word('cm.needs.reminders', { params: { count: waiting } }), down: 'statement', fallback: finance })
