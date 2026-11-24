@@ -327,7 +327,6 @@
       "pays": "pays: {terms}",
       "deposit": "Default deposit",
       "pct": "{pct}",
-      "noDeposit": "No deposit",
       "usedIs": "used = open invoices + orders not invoiced yet",
       "terms": "Terms",
       "set": "Set a limit…",

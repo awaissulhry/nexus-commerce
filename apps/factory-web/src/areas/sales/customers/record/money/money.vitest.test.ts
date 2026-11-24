@@ -980,6 +980,14 @@ describe('cm-fx4: the walk\'s gaps', () => {
     expect(section).toMatch(/<Quiet>\s*\{say\(model\.termsFallback\)\}[\s\S]*?onClick=\{onRetry\}/)
   })
 
+  it('T.6 (Z41): the deposit word nothing says any more went, in both languages; the words it sits beside stay', () => {
+    for (const locale of LOCALES) {
+      const flat = messagesFor(locale, ['customer-money'])['customer-money'] ?? {}
+      expect('cm.credit.deposit' in flat, locale).toBe(true)
+      expect('cm.credit.noDeposit' in flat, locale).toBe(false)
+    }
+  })
+
   it('M-3: a late need is drawn in danger (the shared line\'s optional tone); the order page passes none', () => {
     expect(view('BalanceSection.tsx')).toContain("{...(need.tone === 'danger' ? { tone: 'danger' as const } : {})")
     expect(view('customer-money.css')).toContain('.fw-cm-needs > .is-danger > svg { color: var(--nds-danger); }')
