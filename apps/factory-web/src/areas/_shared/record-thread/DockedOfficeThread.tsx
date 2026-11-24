@@ -801,9 +801,9 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     // the conversation, so marking the newest shown message would mark the messages the view hides as read too (the news they are).
     onShowAll: () => setView('all'),
     onSeen: shown === 'all' ? actions.onSeen : undefined,
+    // ---- end B-TH-255
     // tw- W1.4 (Z10): a quote, "Correction of" and "Corrected" go through the one door.
     onJump: (messageId) => void jumpInView(messageId),
-    // ---- end B-TH-255
     // TH-5 follow-up (B-TH-249): a closed project's box offers no Reopen either (the API refuses it; the project's band reopens both).
     ...(host.reopenWithRecord ? { onReopen: undefined } : {}),
     onTask: (messageId) => {
