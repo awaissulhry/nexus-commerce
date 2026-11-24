@@ -250,7 +250,8 @@ export function useCustomerMoneyTab(input: { readonly partyId: string; readonly 
   // F-CM-301…303: the account's sections. The credit row names THIS customer on the server (S2): its one row, never a filter here.
   const wantsCredit = wanted.has('credit')
   const creditRow = useLazyRead(wantsCredit, can.credit, () => getCreditLimits(api, { companyId, view: 'ALL', q: null, partyId }).then((answer) => answer.rows[0] ?? null))
-  const terms = useLazyRead(wantsCredit, true, (signal) => getCommercialTerms(api, partyId, signal))
+  // M-2 (cm-fx4): the commercial terms are wanted by Balance too (its payment terms: one source with Credit & terms) — read once.
+  const terms = useLazyRead(wantsCredit || wanted.has('terms'), true, (signal) => getCommercialTerms(api, partyId, signal))
   const wantsStatement = wanted.has('statement')
   const trust = useLazyRead(wantsStatement, can.receivables, (signal) => customerTrust(api, partyId, signal))
   const settings = useLazyRead(wantsStatement, can.receivables, (signal) => getReceivablesSettings(api, companyId, signal))
@@ -301,9 +302,12 @@ export function useCustomerMoneyTab(input: { readonly partyId: string; readonly 
     } else if (read === 'priceRows') now.priceRows.load(false)
   }, [])
   const marginLoad = margin.load
+  const termsLoad = terms.load
   const retry = useCallback(
     (read: TabRead | LazyRead) =>
-      read === 'documents'
+      read === 'terms'
+        ? termsLoad(false)
+        : read === 'documents'
         ? loadDocuments('first', null)
         : read === 'received'
           ? loadReceived('first', null)
@@ -314,7 +318,7 @@ export function useCustomerMoneyTab(input: { readonly partyId: string; readonly 
               : read === 'credit' || read === 'statement' || read === 'priceRows'
                 ? retryAccount(read)
                 : load(read, false),
-    [load, loadDocuments, loadReceived, loadMade, marginLoad, retryAccount],
+    [load, loadDocuments, loadReceived, loadMade, marginLoad, termsLoad, retryAccount],
   )
   const reload = useCallback(() => {
     for (const read of TAB_READS) load(read, true)

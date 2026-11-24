@@ -101,7 +101,7 @@ export interface LazyParts {
 }
 
 /** The sections whose read is made when they near the room: their id → their read. */
-const LAZY_OF: Readonly<Record<string, LazyRead>> = { invoices: 'documents', received: 'received' /* F-CM-203 */, credit: 'credit', statement: 'statement', 'price-check': 'priceRows', margin: 'margin' /* F-CM-301…303 */ }
+const LAZY_OF: Readonly<Record<string, LazyRead>> = { balance: 'terms' /* M-2 (cm-fx4): its payment terms */, invoices: 'documents', received: 'received' /* F-CM-203 */, credit: 'credit', statement: 'statement', 'price-check': 'priceRows', margin: 'margin' /* F-CM-301…303 */ }
 
 export function CustomerMoneyTab(props: CustomerMoneyTabProps) {
   return (
@@ -125,7 +125,8 @@ function CustomerMoneyBody({ input, prefix, asOf, onRetry, onPick, onAct, lazy }
   const priceDiffer = input.priceDiffer
   // F-CP-141 → F-CM-104: the line only for a price holder, and only when an order's prices differ (0, reading or failed: no line).
   const differ = price && can.orders && priceDiffer !== null && priceDiffer > 0 ? priceDiffer : null
-  const ruled: MoneyTabInput = { ...input, priceDiffer: differ }
+  // M-2 (cm-fx4): the commercial terms (the container's read) reach Balance's payment terms too: one source.
+  const ruled: MoneyTabInput = { ...input, priceDiffer: differ, ...(lazy ? { terms: lazy.terms } : {}) }
   const answer = moneyAnswerOf(ruled)
   const balance = balanceOf(ruled, prefix)
   const collect = collectOf(ruled, prefix)
