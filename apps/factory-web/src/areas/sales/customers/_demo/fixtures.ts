@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, type ReactNode } from 'react'
 import type { ImportJob, ImportRow, Importer } from '../../../admin/import/api'
 import { blankDraft, emptyWizard } from '../../../admin/import/model'
 import type { SheetImport } from '../../../products/styles/import/sheet-import'
