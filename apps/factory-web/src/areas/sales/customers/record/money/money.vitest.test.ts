@@ -34,7 +34,7 @@ import type { OrderRow } from '../../../orders/api'
 import type { CustomerReturn } from '../../money/api'
 import { createElement } from 'react' // F-CM T.2
 import { render, textOf } from '../../../../../lib/record-thread/parts/testing' // F-CM T.2
-import { CM_CASES, cmTabOf, CmMoneyDesign, type CmCaseModel, type CmRole } from './_demo/cases' // F-CM T.2
+import { CM_CASES, cmTabOf, CmMoneyDesign, type CmCaseModel, type CmRole } from './_demo/fixtures' // F-CM T.2
 import { inShell } from '../../../../parties/_shared/fixtures' // F-CM T.2: the tab drawn in the office shell, as the gallery draws it
 
 /**
