@@ -3,7 +3,8 @@
 import type { ReactElement, ReactNode } from 'react'
 import { CheckCircle2, CircleAlert, Eye, Hourglass, Pencil, Plus, RefreshCw } from 'lucide-react'
 import { Button, Tag } from '@nexus/ui/primitives'
-import { Facts, Fold } from '../../../../orders/record/money/view/parts'
+import { Fold } from '../../../../orders/record/money/view/parts'
+import { BalancedFacts } from './CommercialSection' // ct-fx3 G-W06: the facts balanced by their count
 import { RESULT_TONE } from '../../../../../parties/_shared/model' // the record's own tones of a VIES result
 import { LineMenuButton } from '../../../../orders/record/view/LineMenu'
 import { PartFailed, Quiet, Section } from '../../../../orders/record/view/production/Kit'
@@ -73,7 +74,7 @@ export function IdentitySection({ model, actions }: { model: TermsTabModel; acti
     <Section {...head} answer={say(id.answer)}>
       <div className="fw-ctr-idw">
         <div className="fw-ctr-id">
-          <Facts facts={id.facts.map((fact) => ({ key: fact.key, label: say(fact.label), value: <FactValue fact={fact} marked={fact.anchor ? marked.has(fact.anchor) : false} say={say} /> }))} />
+          <BalancedFacts facts={id.facts.map((fact) => ({ key: fact.key, label: say(fact.label), value: <FactValue fact={fact} marked={fact.anchor ? marked.has(fact.anchor) : false} say={say} /> }))} />
           {id.earlier.length > 0 ? (
             <>
               <div className="fw-ctr-foldw">
@@ -163,7 +164,7 @@ function ViesRow({ vies, marked, say, actions }: { vies: ViesRowModel; marked: b
           <span>{say(said('parties:vies.notYet'))}</span>
         </p>
       )}
-      {vies.facts.length > 0 ? <Facts facts={vies.facts.map((fact) => ({ key: fact.key, label: say(fact.label), value: <FactValue fact={fact} marked={false} say={say} /> }))} /> : null}
+      {vies.facts.length > 0 ? <BalancedFacts facts={vies.facts.map((fact) => ({ key: fact.key, label: say(fact.label), value: <FactValue fact={fact} marked={false} say={say} /> }))} /> : null}
       {vies.checksProblem ? (
         <PartFailed part={say(said('ct.id.checksPart'))} problem={kitProblemOf(vies.checksProblem)} />
       ) : vies.checks.length > 0 ? (

@@ -1120,3 +1120,40 @@ describe('ct-fx3 G-W05: an Italian consumer\'s answer says no e-invoice word (on
     expect(termsAnswer(facts({ identity: identityFactsOf(business) })).words.map((words) => words.key)).toContain('ct.answer.noSdi')
   })
 })
+
+describe('ct-fx3 G-W06: the facts are balanced by their count — no line holds a lone fact beside a hole (AAA)', () => {
+  /** The columns the auto-fit grid gives in a room (190 px + 20 px gap), and the ones terms.css sets instead (by count). */
+  const css = readFileSync(new URL('../view/terms/terms.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+  const autoFit = (width: number, n: number) => Math.max(1, Math.min(n, Math.floor((width + 20) / 210)))
+  const set = (width: number, n: number): number | null => {
+    for (const block of css.matchAll(/@container ctfx \(min-width: (\d+)px\) and \(max-width: ([\d.]+)px\) \{([\s\S]*?)\n\}/g)) {
+      if (width < Number(block[1]) || width > Number(block[2])) continue
+      for (const rule of block[3]!.matchAll(/([^{}]+)\{ grid-template-columns: repeat\((\d), minmax\(0, 1fr\)\); \}/g)) if (rule[1]!.includes(`[data-n="${n}"]`)) return Number(rule[2])
+    }
+    return null
+  }
+
+  it('every count from 4 to 9, at every room from a phone to the widest: the last line is full, or holds at least half a line', () => {
+    let checked = 0
+    for (let width = 190; width <= 1900; width += 5) {
+      for (let n = 4; n <= 9; n += 1) {
+        const columns = set(width, n) ?? autoFit(width, n)
+        const last = n % columns
+        if (columns >= 3) expect(last === 0 || last >= columns / 2, `${n} facts in ${width} px: ${columns} columns`).toBe(true)
+        checked += 1
+      }
+    }
+    expect(checked).toBeGreaterThan(1500)
+    // the walk's own cases: 6 facts at 1150 px (1920 open) and at 830 px (1440 open), 4 VIES facts at 801 px
+    expect([set(1150, 6), set(830, 6), set(801, 4)]).toEqual([3, 3, 2])
+  })
+
+  it('the sections draw Money\'s facts in the counted box (Facts itself untouched); the box is its own size container', () => {
+    expect(css).toContain('.fw-ctr-fx { container: ctfx / inline-size; min-width: 0; }')
+    const commercial = readFileSync(new URL('../view/terms/CommercialSection.tsx', import.meta.url), 'utf8')
+    expect(commercial).toContain('<div className="fw-ctr-fx" data-n={facts.length}>')
+    expect(commercial.match(/<BalancedFacts /g)).toHaveLength(3)
+    expect(readFileSync(new URL('../view/terms/IdentitySection.tsx', import.meta.url), 'utf8').match(/<BalancedFacts /g)).toHaveLength(2)
+    for (const name of ['CommercialSection.tsx', 'IdentitySection.tsx']) expect(readFileSync(new URL(`../view/terms/${name}`, import.meta.url), 'utf8'), name).not.toMatch(/<Facts facts=\{(?!facts\})/)
+  })
+})

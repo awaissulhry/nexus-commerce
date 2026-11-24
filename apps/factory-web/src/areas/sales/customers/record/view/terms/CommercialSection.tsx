@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import Link from 'next/link'
 import { Clock, Eye, Lock, Pencil, Truck } from 'lucide-react'
 import type { MenuItemDef } from '@nexus/ui/components'
@@ -121,7 +121,7 @@ export function CommercialSection({ model, actions }: { model: TermsTabModel; ac
         <div className="fw-ctr-grp">
           <div className="fw-ctr-g is-pays">
             <h3 className="fw-pt-h3">{say(said('ct.com.pays'))}</h3>
-            <Facts facts={factsOf(com.pays, say)} />
+            <BalancedFacts facts={factsOf(com.pays, say)} />
             {com.noPrice ? (
               <p className="fw-pt-hint">
                 <Lock size={13} aria-hidden />
@@ -131,12 +131,12 @@ export function CommercialSection({ model, actions }: { model: TermsTabModel; ac
           </div>
           <div className="fw-ctr-g is-order">
             <h3 className="fw-pt-h3">{say(said('ct.com.order'))}</h3>
-            <Facts facts={factsOf(com.order, say, { po: poExtra })} />
+            <BalancedFacts facts={factsOf(com.order, say, { po: poExtra })} />
             {com.companiesProblem ? <PartFailed part={say(said('ct.com.companiesPart'))} problem={com.companiesProblem} onRetry={actions?.onRetryCompanies} /> : null}
           </div>
           <div className="fw-ctr-g is-deliv">
             <h3 className="fw-pt-h3">{say(said('ct.com.delivery'))}</h3>
-            <Facts facts={factsOf(com.delivery, say)} />
+            <BalancedFacts facts={factsOf(com.delivery, say)} />
             {com.deliveryProblem ? <PartFailed part={say(said('ct.com.carrierPart'))} problem={com.deliveryProblem} onRetry={actions?.onRetryCarrier} /> : com.deliveryReading ? <PartReading rows={1} height={30} /> : null}
           </div>
         </div>
@@ -162,6 +162,18 @@ export function CommercialSection({ model, actions }: { model: TermsTabModel; ac
 }
 
 /** The rules' facts as Money's Facts takes them (label → value; a value may be a door, with its sub-lines and source). */
+/**
+ * ct-fx3 G-W06 (walk W-06; AAA "no dead space"): Money's facts, unchanged, in a box that says how many they are — terms.css balances the
+ * columns by that count (6 → 3 + 3, never 5 + a lone one with a hole), by the box's own room.
+ */
+export function BalancedFacts({ facts }: { facts: readonly { key: string; label: string; value: ReactNode }[] }): ReactElement {
+  return (
+    <div className="fw-ctr-fx" data-n={facts.length}>
+      <Facts facts={facts} />
+    </div>
+  )
+}
+
 function factsOf(facts: readonly Fact[], say: Say, extra: Readonly<Record<string, ReactNode>> = {}): Array<{ key: string; label: string; value: ReactNode }> {
   return facts.map((fact) => ({ key: fact.key, label: say(fact.label), value: <FactValue fact={fact} say={say} extra={extra[fact.key]} /> }))
 }
