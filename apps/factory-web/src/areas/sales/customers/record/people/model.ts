@@ -14,7 +14,7 @@ import type { SectionId } from '../../../orders/record/production/layout'
 export const CP = 'customer-people'
 
 /** Every catalogue the tab and the windows it opens say words from (the kit speaks `orders`). */
-export const PEOPLE_TAB_NAMESPACES: readonly string[] = ['orders', CP, 'parties', 'portal-access', 'sales-customers-depth']
+export const PEOPLE_TAB_NAMESPACES: readonly string[] = ['orders', CP, 'parties', 'portal-access', 'sales-customers-depth', 'sales-mtm' /* F-CA-203: Riders & measurements reuse its words */]
 
 /** The four sections, top to bottom (Z2: they stack at every room). Riders & measurements and Personal data are drawn from ca-w2 on. */
 export const PEOPLE_SECTIONS = ['people', 'addresses', 'riders', 'personal-data'] as const
@@ -49,6 +49,25 @@ export interface PeopleCan {
   readonly portalManage: boolean
   /** audit.read — History ›. */
   readonly audit: boolean
+  // ---- F-CA-201 (ca-w2 W2.1–W2.4): Riders & measurements and Personal data
+  /** sales.measurements.view — measurement profiles at all (body data: without it, the riders' names only). */
+  readonly measurements: boolean
+  /** sales.mtm.record — New measurements. */
+  readonly mtmRecord: boolean
+  /** sales.measurements.manage — Send a measurement link. */
+  readonly mtmLink: boolean
+  /** sales.mtm.review — the factory review. */
+  readonly mtmReview: boolean
+  /** sales.fittings.manage — Book a fitting. */
+  readonly fittings: boolean
+  /** orders.view — a rider's orders. */
+  readonly ordersView: boolean
+  /** parties.privacy — lawful basis, objection, access copy. */
+  readonly privacy: boolean
+  /** parties.erase — erase a contact. */
+  readonly erase: boolean
+  /** privacy.view + privacy.requests.manage — a full data request in Admin › Privacy. */
+  readonly privacyRequests: boolean
 }
 
 export function peopleCan(permissions: readonly string[]): PeopleCan {
@@ -61,8 +80,20 @@ export function peopleCan(permissions: readonly string[]): PeopleCan {
     invite: held.has('partners.invite'),
     portalManage: held.has('partners.manage'),
     audit: held.has('audit.read'),
+    measurements: held.has('sales.measurements.view'),
+    mtmRecord: held.has('sales.mtm.record'),
+    mtmLink: held.has('sales.measurements.manage'),
+    mtmReview: held.has('sales.mtm.review'),
+    fittings: held.has('sales.fittings.manage'),
+    ordersView: held.has('orders.view'),
+    privacy: held.has('parties.privacy'),
+    erase: held.has('parties.erase'),
+    privacyRequests: held.has('privacy.view') && held.has(PRIVACY_REQUESTS_RIGHT), // the page (privacy.view) and a new request
   }
 }
+
+/** The right of a new data request in Admin › Privacy › Requests (admin/privacy/requests). */
+export const PRIVACY_REQUESTS_RIGHT = 'privacy.requests.manage'
 
 /** A read the tab makes or is handed: reading, failed (a key), or its value. A read the reader may not make is `null` (left out). */
 export type Read<T> = { readonly status: 'loading' } | { readonly status: 'error'; readonly problem: string } | { readonly status: 'ready'; readonly value: T }
@@ -122,3 +153,5 @@ export const REFUSED_IN_VIEW_DAYS = 30
 /** The People list shows this many rows, then "Show N more people"; Addresses this many (10-design §5.1, the picture). */
 export const PEOPLE_ROWS = 10
 export const ADDRESS_ROWS = 6
+/** F-CA-203: Riders & measurements shows this many riders, then "Show N more riders" (10-design §5.3). */
+export const RIDER_ROWS = 10

@@ -3,17 +3,19 @@ import type { Party } from '../../../../parties/_shared/api'
 import type { PortalAccess } from '../../../../admin/users/partners/api'
 import { inviteHeld, type RowAction } from '../../../../admin/users/partners/model'
 import type { PortalAccessModel } from '../../portal/model'
-import type { Glance, Privacy } from '../../depth/api'
+import type { Privacy } from '../../depth/api'
+import type { ProfilesView } from '../../../mtm/api' // F-CA-203
 import type { Read as DepthRead } from '../../depth/model'
-import type { PartyUsage } from './api'
+import type { PartyUsage, RidersView } from './api'
 import { addressFilterOf, addressesSectionAnswer, peopleAnswer, peopleSectionAnswer, personFilterOf, type PeopleAnswer, type PeopleChip, type PeopleFacts } from './answer'
 import { addressRows, archivedCount, shownAddresses, type AddressAct, type AddressMenuContext, type AddressRow } from './addresses'
-import { ADDRESS_ROWS, kitProblemOf, PEOPLE_ROWS, said, valueOf, type PeopleCan, type Read, type Said } from './model'
+import { ADDRESS_ROWS, kitProblemOf, PEOPLE_ROWS, RIDER_ROWS, said, valueOf, type PeopleCan, type Read, type Said } from './model'
 import { hiddenCounts, peopleRows, shownPeople, tickable, type PersonAct, type PersonMenuContext, type PersonRow } from './people'
+import { linkHeldOf, newMeasurementsHeld, profilesOf, riderRows, ridersAnswer, type RiderAct, type RiderMenuContext, type RiderRow } from './riders' // F-CA-203
 
 /**
  * F-CA-106 (customer page › PEOPLE & ADDRESSES tab, lane ca-; 13-backend §5.1) — the tab's ONE model, pure: the reads the container holds
- * (the party, the portal of THIS customer, its contacts' personal data, the usage read, the production approver, the glance) and the
+ * (the party, the portal of THIS customer, its contacts' personal data, the usage read, the production approver, the riders) and the
  * tab's own state (the chip pressed, the toggles, the ticks, the windows) become what the view draws. The container builds it on the
  * page; a design case builds it from made-up reads — one rule for both.
  */
@@ -26,13 +28,14 @@ export interface PeopleTabState {
   readonly ticking: boolean
   readonly morePeople: boolean
   readonly moreAddresses: boolean
+  readonly moreRiders: boolean // F-CA-203
   /** The address being approved (one click), else null. */
   readonly approving: string | null
   /** The Refuse… window (null: closed). */
   readonly refuse: RefuseDialog | null
 }
 
-export const PEOPLE_TAB_START: PeopleTabState = { filter: null, showArchivedContacts: false, showArchivedAddresses: false, ticking: false, morePeople: false, moreAddresses: false, approving: null, refuse: null }
+export const PEOPLE_TAB_START: PeopleTabState = { filter: null, showArchivedContacts: false, showArchivedAddresses: false, ticking: false, morePeople: false, moreAddresses: false, moreRiders: false, approving: null, refuse: null }
 
 /** The Refuse the delivery address window: the reason the customer reads (3–500 characters). */
 export interface RefuseDialog {
@@ -58,8 +61,35 @@ export interface PeopleTabReads {
   readonly usage: Read<PartyUsage> | null
   /** The portal user who approves production (the limits read; null: anyone, not read or failed). */
   readonly approverId: string | null
-  /** The customer at a glance (the riders' count, a rider's team; null: not handed). */
-  readonly glance: DepthRead<Glance> | null
+  // F-CA-203 (ca-w2 W2.1): Riders & measurements' two reads (the glance is no longer read on People).
+  /** The profiles kept on THIS customer (the MTM list's read; null: not made — no measurements right). */
+  readonly profiles: Read<ProfilesView> | null
+  /** The riders of THIS customer, or its team (null: not made). */
+  readonly riders: Read<RidersView> | null
+}
+
+/** F-CA-203: Riders & measurements (#riders), as the view draws it. */
+export interface RidersSectionModel {
+  readonly kind: Party['kind']
+  readonly answer: readonly Said[]
+  readonly all: readonly RiderRow[]
+  readonly rows: readonly RiderRow[]
+  readonly more: boolean
+  /** The reader sees measurement profiles (else the riders' names only, said once). */
+  readonly measurements: boolean
+  /** The first reads are still out (the section's skeleton). */
+  readonly reading: boolean
+  /** The profiles read failed (a kit key), else null: the riders' names still draw. */
+  readonly profilesProblem: string | null
+  /** The riders read failed (a kit key), else null. */
+  readonly ridersProblem: string | null
+  /** How many profiles Made-to-measure holds for this customer (the read is a page of them); null: not read. */
+  readonly matching: number | null
+  /** A rider's own page: its team (a customer the reader may see). */
+  readonly team: { readonly id: string; readonly code: string; readonly name: string } | null
+  /** The head's acts, each with its own right; held only by state. */
+  readonly head: { readonly newShown: boolean; readonly newHeld: Said | null; readonly linkShown: boolean; readonly linkHeld: Said | null; readonly addRider: boolean; readonly changeTeam: boolean; readonly held: Said | null }
+  readonly menu: RiderMenuContext
 }
 
 export interface PeopleSectionModel {
@@ -120,6 +150,7 @@ export interface PeopleTabModel {
   readonly filter: PeopleChip | null
   readonly people: PeopleSectionModel
   readonly addresses: AddressesSectionModel
+  readonly riders: RidersSectionModel // F-CA-203
   readonly refuse: RefuseDialog | null
 }
 
@@ -134,7 +165,10 @@ export function peopleTabModel(reads: PeopleTabReads, state: PeopleTabState): Pe
   const portalPeople = access && portalOn ? access.people : null
   const privacy = reads.privacy && reads.privacy.status === 'ready' ? reads.privacy.value : null
   const usage = valueOf(reads.usage)
-  const glance = reads.glance && reads.glance.status === 'ready' ? reads.glance.value : null
+  // F-CA-203: the riders of both kinds (the profiles only with the measurements right: body data).
+  const profileRead = can.measurements ? reads.profiles : null
+  const ridersRead = valueOf(reads.riders)
+  const riderList = riderRows({ kind: party.kind, partyId: party.id, partyName: party.tradeName ?? party.legalName, contacts: party.contacts, profiles: valueOf(profileRead)?.rows ?? null, riders: ridersRead })
   const mails = mailsOfContacts(party.contacts.map((contact) => ({ id: contact.id, name: contact.name, email: contact.email, roles: contact.roles, status: contact.status, createdAt: contact.createdAt })))
   const all = peopleRows({ contacts: party.contacts, portal: portalPeople, privacy: privacy?.contacts ?? null, mails, usage: usage?.contacts ?? null, approverId: reads.approverId, now })
   const addresses = addressRows(party.addresses, usage?.addresses ?? null)
@@ -145,8 +179,9 @@ export function peopleTabModel(reads: PeopleTabReads, state: PeopleTabState): Pe
     portal: access && portalOn ? { on: true, seats: access.seats } : access ? { on: false, seats: access.seats } : null,
     portalRight: can.portal,
     privacyIn: privacy !== null,
-    riders: glance?.riders ? glance.riders.count : null,
-    team: glance?.team?.name ?? null,
+    // F-CA-203: the riders' count once a riders read is in (never 0 for "not read"); a rider's team from the riders read.
+    riders: ridersRead !== null || valueOf(profileRead) !== null ? riderList.length : null,
+    team: ridersRead?.team?.legalName ?? null,
   }
   const showLeft = portalModel?.showLeft ?? false
   // ---- People
@@ -202,6 +237,29 @@ export function peopleTabModel(reads: PeopleTabReads, state: PeopleTabState): Pe
       usageIn: usage !== null,
       menu: { can, archivedCustomer, prefix: reads.prefix },
     },
+    riders: {
+      kind: party.kind,
+      answer: ridersAnswer({ kind: party.kind, rows: riderList, measurements: can.measurements, matching: valueOf(profileRead)?.matching ?? null }),
+      all: riderList,
+      rows: state.moreRiders ? riderList : riderList.slice(0, RIDER_ROWS),
+      more: state.moreRiders,
+      measurements: can.measurements,
+      reading: (reads.riders === null || reads.riders.status === 'loading') && (profileRead === null || profileRead.status === 'loading'),
+      profilesProblem: profileRead?.status === 'error' ? profileRead.problem : null,
+      ridersProblem: reads.riders?.status === 'error' ? reads.riders.problem : null,
+      matching: valueOf(profileRead)?.matching ?? null,
+      team: ridersRead?.team ? { id: ridersRead.team.id, code: ridersRead.team.code, name: ridersRead.team.legalName } : null,
+      head: {
+        newShown: can.measurements && can.mtmRecord,
+        newHeld: archivedCustomer ? said('parties:held.archived') : newMeasurementsHeld(party.status),
+        linkShown: can.measurements && can.mtmLink,
+        linkHeld: archivedCustomer ? said('parties:held.archived') : linkHeldOf(profilesOf(riderList)),
+        addRider: party.kind === 'ORGANISATION' && can.manage,
+        changeTeam: party.kind === 'PERSON' && can.manage,
+        held: archivedCustomer ? said('parties:held.archived') : null,
+      },
+      menu: { can, prefix: reads.prefix, status: party.status },
+    },
     refuse: state.refuse,
   }
 }
@@ -226,11 +284,17 @@ export interface PeopleTabActions {
   readonly onTicking?: (ticking: boolean) => void
   readonly onTick?: (userId: string, ticked: boolean) => void
   readonly onBulk?: (action: RowAction) => void
-  readonly onMore?: (section: 'people' | 'addresses', more: boolean) => void
+  readonly onMore?: (section: 'people' | 'addresses' | 'riders', more: boolean) => void
   readonly onRetryPortal?: () => void
   readonly onRefuseDraft?: (reason: string) => void
   readonly onRefuseConfirm?: () => void
   readonly onRefuseClose?: () => void
+  // ---- F-CA-203 (ca-w2): Riders & measurements
+  readonly onRiderAct?: (act: RiderAct, row: RiderRow, profileId?: string) => void
+  readonly onNewMeasurements?: () => void
+  readonly onSendLink?: () => void
+  readonly onRetryProfiles?: () => void
+  readonly onRetryRiders?: () => void
 }
 
 /** The tab's notices for the record's ONE notice area (the portal container's own, and the tab's). */

@@ -65,3 +65,45 @@ export function approveDeliveryAddress(api: ApiClient, addressId: string, body: 
 export function refuseDeliveryAddress(api: ApiClient, addressId: string, body: { readonly version: number; readonly reason: string }, key: string): Promise<AddressCheckAnswer> {
   return api.post(`/sales/delivery-addresses/${enc(addressId)}/refuse`, { body, idempotencyKey: key, schema: addressCheckAnswer })
 }
+
+// ---- F-CA-201 (ca-w2 W2.1; 13-backend §5.2): the riders of THIS customer — a team's riders with their own page, or a rider's team ----
+
+const partyKind = z.enum(['ORGANISATION', 'PERSON'])
+/** `GET /parties/:partyId/riders` and `PUT /parties/:partyId/team` (modules/parties/riders/contract.ts): one shape, the RIDER's view after a PUT. */
+export const ridersSchema = z.object({
+  partyId: z.string(),
+  code: z.string(),
+  kind: partyKind,
+  /** This party's team, when it is a rider (and a team the reader may see). */
+  team: z.object({ id: z.string(), code: z.string(), legalName: z.string(), status: z.string() }).nullable(),
+  riders: z.array(
+    z.object({
+      id: z.string(),
+      code: z.string(),
+      legalName: z.string(),
+      tradeName: z.string().nullable(),
+      status: z.string(),
+      country: z.string(),
+      language: z.string(),
+      /** ca-s S.4 (R-B10): null without the measurements right over the rider — never 0 for "not shown". */
+      measurementProfiles: z.number().int().nullable(),
+      version: z.number(),
+      updatedAt: z.string(),
+    }),
+  ),
+  /** The party's own version (a rider's: the one its team change names). */
+  version: z.number(),
+})
+export type RidersView = z.infer<typeof ridersSchema>
+export type RiderParty = RidersView['riders'][number]
+const ridersAnswer = z.object({ riders: ridersSchema })
+
+/** The riders of THIS customer (parties.view; only those the reader may see), or its team when it is a rider. */
+export async function readRiders(api: ApiClient, partyId: string, signal?: AbortSignal): Promise<RidersView> {
+  return (await api.get(`/parties/${enc(partyId)}/riders`, { schema: ridersAnswer, ...(signal ? { signal } : {}) })).riders
+}
+
+/** Put a rider under a team, move it, or take it off (null): parties.manage on the RIDER, the rider's version; answers the rider's view. */
+export async function setRiderTeam(api: ApiClient, riderId: string, body: { readonly version: number; readonly teamPartyId: string | null }, key: string): Promise<RidersView> {
+  return (await api.request('PUT', `/parties/${enc(riderId)}/team`, { body, idempotencyKey: key, schema: ridersAnswer })).riders
+}

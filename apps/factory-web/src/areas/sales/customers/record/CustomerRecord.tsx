@@ -215,7 +215,7 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   // only while People shows), its view only on `?tab=people`; today's riders / profiles and personal-data cards stand under the new
   // sections until ca-w2. "Add as a contact…" starts the record's own Add contact window with the portal person's name and e-mail.
   const privacy = useCustomerPrivacy()
-  const people = usePeopleTab({ partyId, party: record.party, model: record.model, actions: record.actions, reload: record.reload, privacy: privacy.read, glance: glance.read, enabled: tab === 'people' })
+  const people = usePeopleTab({ partyId, party: record.party, model: record.model, actions: record.actions, reload: record.reload, privacy: privacy.read, enabled: tab === 'people' }) // F-CA-204: Riders read the riders and profiles, no longer the glance
   const peopleTab =
     named && record.party && tab === 'people' ? (
       <PeopleTab model={people.model} actions={people.actions} portal={people.portal} recordHref={`${prefix}/sales/customers/${encodeURIComponent(partyId)}`} after={<>{record.depth?.people}{record.depth?.contacts}</>} />

@@ -235,9 +235,75 @@
     "copyFailed": "Couldn't copy: select the text and copy it by hand."
   },
   "part": {
-    "portal": "the portal access"
+    "portal": "the portal access",
+    "profiles": "the measurement profiles",
+    "riders": "the riders"
   },
   "linkTo": "Copy link to {section}",
   "keys": "Keys: Tab moves to the next act, Enter or Space opens it; Esc closes a menu or a window.",
-  "showFewer": "Show fewer"
+  "showFewer": "Show fewer",
+  "riders": {
+    "title": "Riders & measurements",
+    "answer": {
+      "none": "No rider yet: add a rider, or record the first measurements.",
+      "noneSelf": "No measurements yet.",
+      "ridersBoth": "{riders} ({here} kept here, {own} with their own page)",
+      "profiles_one": "{count} profile kept here",
+      "profiles_other": "{count} profiles kept here",
+      "profilesWith_one": "{count} profile kept here: {states}",
+      "profilesWith_other": "{count} profiles kept here: {states}",
+      "waiting": "{count} waiting for review",
+      "needMore": "{count} need more",
+      "old": "{count} to re-measure",
+      "and": "{a}, {b}",
+      "nextFitting": "next fitting {date}, {rider}",
+      "nextFittingSelf": "next fitting {date}",
+      "hidden": "profiles are not shown: your role does not see measurement profiles"
+    },
+    "held": {
+      "notActive": "New measurements need an active customer: activate it first.",
+      "noProfile": "A link needs a profile first: record the first measurements."
+    },
+    "row": {
+      "open": "Open {name}'s page ›",
+      "orders": "Orders of {name} ›",
+      "ordersOf": "Orders of {name} · {garment} ›",
+      "team": "Change team…",
+      "newFor": "New measurements for {name}",
+      "linkOf": "Send a measurement link · {garment}…",
+      "reviewOf": "Review measurements · {garment}",
+      "fittingOf": "Book a fitting · {garment}",
+      "editContact": "Edit the contact…",
+      "menu": "Actions for the rider {name}"
+    },
+    "kind": {
+      "contact": "Rider · a contact of {customer}",
+      "name": "Rider · a name on the profiles of {customer}",
+      "self": "This customer",
+      "own": "A customer of its own · {code} · {status}"
+    },
+    "ownPage": "Own page ›",
+    "ownProfiles_one": "{count} profile on its own page ›",
+    "ownProfiles_other": "{count} profiles on its own page ›",
+    "profile": {
+      "rev": "{garment} · Rev. {revision} ›",
+      "size": "Closest size {size}",
+      "measured": "Measured {date}",
+      "openOrders_one": "{count} open order ›",
+      "openOrders_other": "{count} open orders ›",
+      "nextFitting": "Next fitting {date}"
+    },
+    "noMeasurements": "No measurements yet",
+    "team": "Team: {name} ›",
+    "teamLine": "{name} orders and is measured on its own page; {team} lists it among its riders.",
+    "seeAll": "See all in Made-to-measure ›",
+    "seeAllCount": "See all {count} in Made-to-measure ›",
+    "foot": "The measurements themselves stay on each profile, for the roles that may see them: never in a row or a tip.",
+    "more": "More for Riders & measurements",
+    "mtm": "Made-to-measure ›",
+    "info": "Two kinds of rider. Kept here: a contact with the role Rider, or a name on this customer's profiles — measured and ordered by the team. With their own page: a customer of their own under this team — their own measurements, orders and personal data; the team cannot order with their measurements.",
+    "listLabel": "Riders of {name}",
+    "showMore_one": "Show {count} more rider",
+    "showMore_other": "Show {count} more riders"
+  }
 }

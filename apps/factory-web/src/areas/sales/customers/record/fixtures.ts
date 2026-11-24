@@ -41,7 +41,8 @@ import { RequirementsTab, type RequirementsModel } from '../depth/view/Requireme
 import { PeopleTab } from './view/people/PeopleTab'
 import { PEOPLE_TAB_START, peopleTabModel } from './people/tab'
 import { peopleBadge as peopleBadgeOf } from './people/answer'
-import type { PeopleCan } from './people/model'
+import { readyRead as peopleReady, type PeopleCan, type Read as PeopleRead } from './people/model'
+import type { RidersView } from './people/api' // F-CA-205
 import type { PortalAccessModel } from '../portal/model'
 import { customerAccess, portalModel as portalDemo } from '../portal/demo'
 import type { PartnerPerson } from '../../../admin/users/partners/api'
@@ -182,7 +183,21 @@ interface PeopleCase {
 }
 
 /** F-CA-120: the tab's rights from a case's record rights (the gallery's roles: a portal right covers invite and manage). */
-const peopleCanOf = (can: PartyRecordModel['can']): PeopleCan => ({ view: can.view, manage: can.manage, ordersManage: can.ordersManage === true, portal: can.partners === true, invite: can.partners === true, portalManage: can.partners === true, audit: false })
+const peopleCanOf = (can: PartyRecordModel['can']): PeopleCan => ({ view: can.view, manage: can.manage, ordersManage: can.ordersManage === true, portal: can.partners === true, invite: can.partners === true, portalManage: can.partners === true, audit: false, ...NO_MEASUREMENTS })
+/** F-CA-205 (ca-w2): the gallery's older People cases see no measurement profile and no personal-data act (the ca-* cases set their own). */
+const NO_MEASUREMENTS = { measurements: false, mtmRecord: false, mtmLink: false, mtmReview: false, fittings: false, ordersView: false, privacy: false, erase: false, privacyRequests: false } as const
+/** F-CA-205: a case's riders read, from its glance (its riders with their own page, a rider's team); none: a team with no rider yet. */
+function ridersOfCase(party: Party, glance: Read<Glance> | undefined): PeopleRead<RidersView> {
+  const value = glance?.status === 'ready' ? glance.value : null
+  return peopleReady({
+    partyId: party.id,
+    code: party.code,
+    kind: party.kind,
+    team: value?.team ? { id: value.team.id, code: value.team.code, legalName: value.team.name, status: value.team.status } : null,
+    riders: (value?.riders?.rows ?? []).map((rider) => ({ id: rider.id, code: rider.code, legalName: rider.name, tradeName: null, status: rider.status, country: 'IT', language: 'it', measurementProfiles: null, version: 1, updatedAt: NOW })),
+    version: party.version,
+  })
+}
 // F-CA-120: end
 
 // ---- F-SA-276: the Work tab's cases — the strip's reads and the sheet's rows (made-up; the production part as the API sends it) ----
@@ -1029,7 +1044,7 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
   const peopleTab =
     party && shownTab(recordTabs(SIDES.customers, record.can), record.tab) === 'people'
       ? createElement(PeopleTab, {
-          model: peopleTabModel({ party, prefix: record.prefix, can: peopleCanOf(record.can), now: NOW, portal, privacy: depth?.privacy?.read ?? null, usage: null, approverId: null, glance: depth?.glance ?? null }, PEOPLE_TAB_START),
+          model: peopleTabModel({ party, prefix: record.prefix, can: peopleCanOf(record.can), now: NOW, portal, privacy: depth?.privacy?.read ?? null, usage: null, approverId: null, profiles: null, riders: ridersOfCase(party, depth?.glance) }, PEOPLE_TAB_START),
           portal: portal ? { model: portal } : null,
           recordHref: `${record.prefix}/sales/customers/${id}`,
           after: createElement(Fragment, null, nodes?.people, nodes?.contacts),

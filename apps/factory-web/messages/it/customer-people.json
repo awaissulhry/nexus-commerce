@@ -235,9 +235,75 @@
     "copyFailed": "Non copiato: seleziona il testo e copialo a mano."
   },
   "part": {
-    "portal": "l'accesso al portale"
+    "portal": "l'accesso al portale",
+    "profiles": "i profili di misura",
+    "riders": "i piloti"
   },
   "linkTo": "Copia il link a {section}",
   "keys": "Tasti: Tab passa all'azione successiva, Invio o Spazio la apre; Esc chiude un menu o una finestra.",
-  "showFewer": "Mostra meno"
+  "showFewer": "Mostra meno",
+  "riders": {
+    "title": "Piloti e misure",
+    "answer": {
+      "none": "Ancora nessun pilota: aggiungi un pilota o registra le prime misure.",
+      "noneSelf": "Ancora nessuna misura.",
+      "ridersBoth": "{riders} ({here} tenuti qui, {own} con una pagina propria)",
+      "profiles_one": "{count} profilo tenuto qui",
+      "profiles_other": "{count} profili tenuti qui",
+      "profilesWith_one": "{count} profilo tenuto qui: {states}",
+      "profilesWith_other": "{count} profili tenuti qui: {states}",
+      "waiting": "{count} in attesa di controllo",
+      "needMore": "{count} da completare",
+      "old": "{count} da rimisurare",
+      "and": "{a}, {b}",
+      "nextFitting": "prossima prova {date}, {rider}",
+      "nextFittingSelf": "prossima prova {date}",
+      "hidden": "i profili non sono mostrati: il tuo ruolo non vede i profili di misura"
+    },
+    "held": {
+      "notActive": "Le nuove misure richiedono un cliente attivo: attivalo prima.",
+      "noProfile": "Un link richiede prima un profilo: registra le prime misure."
+    },
+    "row": {
+      "open": "Apri la pagina di {name} ›",
+      "orders": "Ordini di {name} ›",
+      "ordersOf": "Ordini di {name} · {garment} ›",
+      "team": "Cambia squadra…",
+      "newFor": "Nuove misure per {name}",
+      "linkOf": "Invia un link per le misure · {garment}…",
+      "reviewOf": "Controlla le misure · {garment}",
+      "fittingOf": "Fissa una prova · {garment}",
+      "editContact": "Modifica il contatto…",
+      "menu": "Azioni per il pilota {name}"
+    },
+    "kind": {
+      "contact": "Pilota · contatto di {customer}",
+      "name": "Pilota · nome sui profili di {customer}",
+      "self": "Questo cliente",
+      "own": "Cliente a sé · {code} · {status}"
+    },
+    "ownPage": "Pagina propria ›",
+    "ownProfiles_one": "{count} profilo sulla sua pagina ›",
+    "ownProfiles_other": "{count} profili sulla sua pagina ›",
+    "profile": {
+      "rev": "{garment} · Rev. {revision} ›",
+      "size": "Taglia più vicina {size}",
+      "measured": "Misurato il {date}",
+      "openOrders_one": "{count} ordine aperto ›",
+      "openOrders_other": "{count} ordini aperti ›",
+      "nextFitting": "Prossima prova {date}"
+    },
+    "noMeasurements": "Ancora nessuna misura",
+    "team": "Squadra: {name} ›",
+    "teamLine": "{name} ordina ed è misurato sulla sua pagina; {team} lo elenca tra i suoi piloti.",
+    "seeAll": "Vedi tutto in Su misura ›",
+    "seeAllCount": "Vedi tutti i {count} in Su misura ›",
+    "foot": "Le misure restano su ogni profilo, per i ruoli che possono vederle: mai in una riga o in un suggerimento.",
+    "more": "Altro per Piloti e misure",
+    "mtm": "Su misura ›",
+    "info": "Due tipi di pilota. Tenuti qui: un contatto con il ruolo Pilota, o un nome sui profili di questo cliente — misurati e ordinati dalla squadra. Con una pagina propria: un cliente a sé sotto questa squadra — le sue misure, i suoi ordini e i suoi dati personali; la squadra non può ordinare con le sue misure.",
+    "listLabel": "Piloti di {name}",
+    "showMore_one": "Mostra {count} altro pilota",
+    "showMore_other": "Mostra altri {count} piloti"
+  }
 }

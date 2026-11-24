@@ -11,7 +11,10 @@ import type { PrivacyContact } from '../../depth/api'
 import { addressRows, invoiceAddressOf, refusedInView, shownAddresses, addressMenu } from './addresses'
 import { peopleAnswer, peopleBadge, peopleSectionAnswer, personFilterOf, type PeopleFacts } from './answer'
 import { CP, failedRead, PEOPLE_SECTIONS, PEOPLE_TAB_NAMESPACES, peopleCan, READING, readyRead, sayOf, type Said } from './model'
-import { partyUsageSchema, type PartyUsage } from './api'
+import { partyUsageSchema, type PartyUsage, type RidersView } from './api'
+import { riderMenu, riderRows, ridersAnswer } from './riders'
+import type { ProfileRow, ProfilesView } from '../../../mtm/api'
+import { ROWS as MTM_ROWS } from '../../../mtm/demo/fixtures'
 import { partyUsageAnswer } from '@nexus/factory-domain/parties/usage'
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
@@ -33,6 +36,7 @@ const say = (locale: Locale) => sayOf(createScopedTranslator(locale, messagesFor
 const sentence = (words: readonly Said[], locale: Locale) => words.map(say(locale)).join(' · ')
 const ALL = peopleCan(['parties.view', 'parties.manage', 'orders.manage', 'partners.view', 'partners.invite', 'partners.manage', 'audit.read'])
 const READ_ONLY = peopleCan(['parties.view', 'partners.view'])
+const ALL_MEASURED = peopleCan(['parties.view', 'parties.manage', 'orders.view', 'sales.measurements.view', 'sales.mtm.record', 'sales.measurements.manage', 'sales.mtm.review', 'sales.fittings.manage'])
 
 const contact = (n: number, name: string, email: string | null, roles: Contact['roles'], over: Partial<Contact> = {}): Contact => ({ id: `c${n}`, name, email, phone: null, roles, language: null, status: 'ACTIVE', version: 1, createdAt: `2026-0${n}-01T00:00:00.000Z`, updatedAt: NOW, ...over })
 const person = (id: string, displayName: string, email: string, over: Partial<PartnerPerson> = {}): PartnerPerson => ({ ...CUSTOMER_PEOPLE[1]!, id, displayName, email, ...over })
@@ -215,7 +219,7 @@ describe('the words: every key the tab says exists in both languages, the four s
 // ---- W1.2: the container's model and the windows in place (13-backend §3; Z13)
 describe('the tab\'s model (tab.ts) and the windows mounted in place', () => {
   const portalModel = portalModelOf('customers', { access: customerAccess({ people: [person('u1', 'Anna Demo', 'acquisti@moda-demo.example.com')] }) })
-  const reads = (over: Partial<PeopleTabReads> = {}): PeopleTabReads => ({ party: MODA, prefix: '/w/DEMO', can: ALL, now: NOW, portal: portalModel, privacy: null, usage: null, approverId: null, glance: null, ...over })
+  const reads = (over: Partial<PeopleTabReads> = {}): PeopleTabReads => ({ party: MODA, prefix: '/w/DEMO', can: ALL, now: NOW, portal: portalModel, privacy: null, usage: null, approverId: null, profiles: null, riders: null, ...over })
 
   it('the usage lines are left out while the usage read reads or failed — never 0; read, a contact says its open quotes', () => {
     expect(peopleTabModel(reads({ usage: READING }), PEOPLE_TAB_START).addresses.usageIn).toBe(false)
@@ -289,7 +293,7 @@ describe('the views of the tab', () => {
     const tab = views.find((view) => view.name === 'PeopleTab.tsx')!.source
     expect(tab).toContain('<div className="fw-pt fw-ca">')
     expect(tab).toContain('<WithMessages namespaces={PEOPLE_TAB_NAMESPACES}>')
-    expect([...PEOPLE_TAB_NAMESPACES]).toEqual(['orders', CP, 'parties', 'portal-access', 'sales-customers-depth'])
+    expect([...PEOPLE_TAB_NAMESPACES]).toEqual(['orders', CP, 'parties', 'portal-access', 'sales-customers-depth', 'sales-mtm'])
     expect(views.find((view) => view.name === 'PeopleSection.tsx')!.source).toContain("id: peopleKitId('people')")
     expect(views.find((view) => view.name === 'AddressesSection.tsx')!.source).toContain("id: peopleKitId('addresses')")
   })
@@ -316,7 +320,7 @@ describe('the page mounts the tab (W1.4)', () => {
 
   it('the record builds the container on every tab (it reads only on People) and the view only on ?tab=people', () => {
     const container = source('../CustomerRecord.tsx')
-    expect(container).toContain("privacy: privacy.read, glance: glance.read, enabled: tab === 'people' })")
+    expect(container).toContain("privacy: privacy.read, enabled: tab === 'people' })") // F-CA-204: Riders read the riders and profiles, not the glance
     expect(container).toContain("named && record.party && tab === 'people' ? (")
     expect(container).not.toMatch(/parts=\{\['people'\]\}|portalEmails|contactEmails/)
   })
@@ -357,5 +361,71 @@ describe('the page mounts the tab (W1.4)', () => {
     const privacy = render(customerRecordScreen as DesignScreen<unknown>, customerRecordScreen.cases.find((entry) => entry.id === 'w2b-324-privacy')!.model, 'en')
     expect(privacy).toContain('id="people"')
     expect(privacy.indexOf('id="addresses"')).toBeLessThan(privacy.lastIndexOf('Erased contact'))
+  })
+})
+
+// ---- ca-w2 W2.1: Riders & measurements, pure (both kinds of rider; no measurement without its right; a rider's own page and its team)
+describe('Riders & measurements (W2.1)', () => {
+  const profile = (n: number, over: Partial<ProfileRow>): ProfileRow => ({ ...MTM_ROWS[0]!, id: `pr-${n}`, partyId: MODA.id, nextFittingAt: null, openUnits: 0, old: false, ...over })
+  const kept = contact(7, 'Davide Conti', 'davide@example.com', ['RIDER'])
+  const waiting = contact(8, 'Lia Gori', null, ['RIDER'])
+  const PROFILES = [
+    profile(1, { contactId: kept.id, riderName: 'Davide Conti', garmentType: 'SUIT', review: { status: 'WAITING', at: null }, nextFittingAt: '2026-11-27T09:00:00.000Z' }),
+    profile(2, { contactId: kept.id, riderName: 'Davide Conti', garmentType: 'JACKET', review: { status: 'CONFIRMED', at: NOW }, old: true }),
+    profile(3, { contactId: null, riderName: ' Sara Neri ', garmentType: 'SUIT', review: { status: 'NEED_MORE', at: NOW } }),
+  ]
+  const RIDERS: RidersView = { partyId: MODA.id, code: MODA.code, kind: 'ORGANISATION', team: null, riders: [{ id: 'r1', code: 'CUS-0191', legalName: 'Marco Valli', tradeName: null, status: 'ACTIVE', country: 'IT', language: 'it', measurementProfiles: 2, version: 3, updatedAt: NOW }], version: MODA.version }
+
+  it('both kinds: kept here (a Rider contact, a name on the profiles, a Rider contact not measured yet), then those with their own page', () => {
+    const rows = riderRows({ kind: 'ORGANISATION', partyId: MODA.id, partyName: 'Moda Demo', contacts: [kept, waiting], profiles: PROFILES, riders: RIDERS })
+    expect(rows.map((row) => [row.kind, row.name, row.profiles.length])).toEqual([
+      ['here', 'Davide Conti', 2],
+      ['here', 'Lia Gori', 0],
+      ['here', 'Sara Neri', 1],
+      ['own', 'Marco Valli', 0],
+    ])
+    const answer = ridersAnswer({ kind: 'ORGANISATION', rows, measurements: true, matching: 3 })
+    expect(sentence(answer, 'en')).toBe('4 riders (3 kept here, 1 with their own page) · 3 profiles kept here: 1 waiting for review, 1 need more, 1 to re-measure · next fitting 27/11/2026, Davide Conti')
+    expect(sentence(answer, 'it')).toBe('4 piloti (3 tenuti qui, 1 con una pagina propria) · 3 profili tenuti qui: 1 in attesa di controllo, 1 da completare, 1 da rimisurare · prossima prova 27/11/2026, Davide Conti')
+  })
+
+  it('without the measurements right: no profile, no review, no size — the riders\' names only, said ONCE; no measurement act', () => {
+    const model = peopleTabModel({ party: { ...MODA, contacts: [...MODA.contacts, kept] }, prefix: '/w/DEMO', can: peopleCan(['parties.view', 'parties.manage', 'orders.view']), now: NOW, portal: null, privacy: null, usage: null, approverId: null, profiles: readyRead({ rows: PROFILES, matching: 3 } as unknown as ProfilesView), riders: readyRead(RIDERS) }, PEOPLE_TAB_START)
+    expect(model.riders.all.every((row) => row.profiles.length === 0)).toBe(true)
+    expect(model.riders.head.newShown || model.riders.head.linkShown).toBe(false)
+    const words = sentence(model.riders.answer, 'en')
+    expect(words).toContain('profiles are not shown: your role does not see measurement profiles')
+    expect(words).not.toMatch(/review|re-measure|fitting/)
+    for (const row of model.riders.all) expect(riderMenu(row, model.riders.menu).map((item) => item.id).filter((id) => /^(link|review|fitting|newFor)/.test(id))).toEqual([])
+  })
+
+  it('a rider\'s own page (a person customer) shows its team, and its own profiles as ONE row', () => {
+    const rider = { ...MODA, id: 'p-rider', kind: 'PERSON' as const, tradeName: null, legalName: 'Marco Valli', contacts: [], addresses: [] }
+    const team: RidersView = { ...RIDERS, partyId: rider.id, kind: 'PERSON', team: { id: MODA.id, code: MODA.code, legalName: 'Moda Demo S.r.l.', status: 'ACTIVE' }, riders: [] }
+    const model = peopleTabModel({ party: rider, prefix: '/w/DEMO', can: ALL_MEASURED, now: NOW, portal: null, privacy: null, usage: null, approverId: null, profiles: readyRead({ rows: [profile(4, { partyId: rider.id })], matching: 1 } as unknown as ProfilesView), riders: readyRead(team) }, PEOPLE_TAB_START)
+    expect(model.riders.team?.name).toBe('Moda Demo S.r.l.')
+    expect(model.riders.all.map((row) => row.kind)).toEqual(['self'])
+    expect(sentence(model.answer.words, 'en')).toContain('rider of Moda Demo S.r.l.')
+    expect(model.riders.head.changeTeam).toBe(true)
+    expect(model.riders.head.addRider).toBe(false)
+  })
+
+  it('a link needs a profile first (held by STATE); New measurements need an active customer; acts hidden without their right', () => {
+    const none = peopleTabModel({ party: MODA, prefix: '/w/DEMO', can: ALL_MEASURED, now: NOW, portal: null, privacy: null, usage: null, approverId: null, profiles: readyRead({ rows: [], matching: 0 } as unknown as ProfilesView), riders: readyRead(RIDERS) }, PEOPLE_TAB_START)
+    expect(say('en')(none.riders.head.linkHeld!)).toBe('A link needs a profile first: record the first measurements.')
+    const prospect = peopleTabModel({ party: { ...MODA, status: 'PROSPECT' }, prefix: '/w/DEMO', can: ALL_MEASURED, now: NOW, portal: null, privacy: null, usage: null, approverId: null, profiles: readyRead({ rows: PROFILES, matching: 3 } as unknown as ProfilesView), riders: readyRead(RIDERS) }, PEOPLE_TAB_START)
+    expect(say('en')(prospect.riders.head.newHeld!)).toBe('New measurements need an active customer: activate it first.')
+    const own = riderRows({ kind: 'ORGANISATION', partyId: MODA.id, partyName: 'Moda Demo', contacts: [], profiles: [], riders: RIDERS })[0]!
+    expect(riderMenu(own, { can: READ_ONLY, prefix: '/w/DEMO', status: 'ACTIVE' }).map((item) => item.id)).toEqual(['open', 'sep-1', 'copyLink'])
+    expect(riderMenu(own, { can: ALL_MEASURED, prefix: '/w/DEMO', status: 'ACTIVE' }).map((item) => item.id)).toContain('team')
+  })
+
+  it('the container reads the profiles only with the measurements right, the riders for every reader of the customer; live by event', () => {
+    const tab = readFileSync(new URL('./use-people-tab.ts', import.meta.url), 'utf8')
+    expect(tab).toContain('if (!on || !can.measurements) return')
+    expect(tab).toContain('listProfiles(api, { partyId })')
+    expect(tab).toContain('readRiders(api, partyId)')
+    expect(tab).toContain("change.type === 'party.team_changed'")
+    expect(tab).toContain('timers[what] = setTimeout(() => void run(), 400)')
   })
 })

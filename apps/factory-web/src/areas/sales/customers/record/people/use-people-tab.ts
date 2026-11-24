@@ -13,13 +13,14 @@ import { getProductionLimits } from '../../../../admin/users/partners/api'
 import { partnerCan, personReach, type RowAction } from '../../../../admin/users/partners/model'
 import { usePortalAccess } from '../../portal/PortalAccess'
 import type { PortalAccessActions, PortalAccessModel } from '../../portal/model'
-import type { Glance, Privacy } from '../../depth/api'
+import type { Privacy } from '../../depth/api'
+import { listProfiles, type ProfilesView } from '../../../mtm/api' // F-CA-204
 import type { Read as DepthRead } from '../../depth/model'
 import { readProblem } from '../../../orders/model'
-import { approveDeliveryAddress, readPartyUsage, refuseDeliveryAddress, type PartyUsage } from './api'
+import { approveDeliveryAddress, readPartyUsage, readRiders, refuseDeliveryAddress, type PartyUsage, type RidersView } from './api'
 import type { PeopleChip } from './answer'
 import { addressShort, addressText, type AddressAct, type AddressRow } from './addresses'
-import { addressAnchor, failedRead, peopleCan, personAnchor, READING, readyRead, said, type Read } from './model'
+import { addressAnchor, failedRead, peopleCan, personAnchor, READING, readyRead, said, valueOf, type Read } from './model'
 import type { PersonAct, PersonRow } from './people'
 import { PEOPLE_TAB_START, peopleTabModel, type PeopleNotice, type PeopleNotices, type PeopleTabActions, type PeopleTabModel, type PeopleTabState } from './tab'
 
@@ -45,8 +46,6 @@ export interface PeopleTabInput {
   readonly reload: () => void
   /** The contacts' personal data (the depth provider's read on People). */
   readonly privacy: DepthRead<Privacy> | null
-  /** The customer at a glance (the depth provider's; the riders' count, a rider's team). */
-  readonly glance: DepthRead<Glance> | null
   /** People & addresses is the tab shown: only then does the tab read. */
   readonly enabled: boolean
 }
@@ -64,6 +63,8 @@ export interface PeopleTabContainer {
 }
 
 const LIVE = /^(party\.|quote\.|shipment\.|sample_shipment\.|return\.|complaint\.|service_case\.|portal_order_request\.|order_change_request\.)/
+/** F-CA-204 (13-backend §1.4): the made-to-measure events that move a profile of this customer or of one of its riders. */
+const MTM_LIVE = /^(measurement_profile\.|measurements\.submitted$|appointment\.|fitting_result\.)/
 
 export function usePeopleTab(input: PeopleTabInput): PeopleTabContainer {
   const { partyId, party, model: record, actions: recordActions, reload, enabled } = input
@@ -99,26 +100,71 @@ export function usePeopleTab(input: PeopleTabInput): PeopleTabContainer {
       setApproverId(null) // the tag is left out; nothing else depends on it
     }
   }, [api, can.portal, on, partyId])
+  // ---- F-CA-204 (ca-w2 W2.1): Riders & measurements — the profiles kept on THIS customer (the MTM list's own read, with the
+  // measurements right only: body data) and its riders (both kinds; a rider's team). Each names this customer on the server.
+  const [profiles, setProfiles] = useState<Read<ProfilesView> | null>(null)
+  const [riders, setRiders] = useState<Read<RidersView> | null>(null)
+  const loadProfiles = useCallback(async () => {
+    if (!on || !can.measurements) return
+    try {
+      setProfiles(readyRead(await listProfiles(api, { partyId })))
+    } catch (error) {
+      setProfiles(failedRead(readProblem(error)))
+    }
+  }, [api, can.measurements, on, partyId])
+  const loadRiders = useCallback(async () => {
+    if (!on || !can.view) return
+    try {
+      setRiders(readyRead(await readRiders(api, partyId)))
+    } catch (error) {
+      setRiders(failedRead(readProblem(error)))
+    }
+  }, [api, can.view, on, partyId])
   useEffect(() => {
     if (!on) return
     setUsage((current) => current ?? READING)
+    setRiders((current) => current ?? READING)
+    if (can.measurements) setProfiles((current) => current ?? READING)
     void loadUsage()
     void loadApprover()
-  }, [on, loadUsage, loadApprover])
-  const pending = useRef<ReturnType<typeof setTimeout> | null>(null)
+    void loadRiders()
+    void loadProfiles()
+  }, [on, can.measurements, loadUsage, loadApprover, loadRiders, loadProfiles])
+  // Live: each read again on its own events, a burst once (400 ms). A made-to-measure event names the party measured — this customer
+  // or one of its riders; a team change names the rider and both teams.
+  const riderIds = useRef<ReadonlySet<string>>(new Set())
+  riderIds.current = new Set(valueOf(riders)?.riders.map((rider) => rider.id) ?? [])
+  const pending = useRef<Partial<Record<'usage' | 'profiles' | 'riders', ReturnType<typeof setTimeout>>>>({})
+  const later = (what: 'usage' | 'profiles' | 'riders', run: () => Promise<void>) => {
+    const timers = pending.current
+    if (timers[what]) clearTimeout(timers[what])
+    timers[what] = setTimeout(() => void run(), 400)
+  }
   useLiveBus({
     onChange: (change) => {
-      if (!on || !LIVE.test(change.type)) return
+      if (!on) return
       const about = change.fields.partyId ?? change.fields.customerId
-      if (typeof about === 'string' && about !== partyId) return
-      if (pending.current) clearTimeout(pending.current)
-      pending.current = setTimeout(() => void loadUsage(), 400)
+      const ours = typeof about !== 'string' || about === partyId
+      if (LIVE.test(change.type) && ours) later('usage', loadUsage)
+      if (MTM_LIVE.test(change.type) && typeof about === 'string' && (about === partyId || riderIds.current.has(about))) {
+        if (about === partyId) later('profiles', loadProfiles)
+        else later('riders', loadRiders) // a rider's own profiles: its count on the riders read
+      }
+      if (change.type === 'party.team_changed' && [change.fields.partyId, change.fields.teamPartyId, change.fields.previousTeamPartyId].includes(partyId)) later('riders', loadRiders)
     },
     onReconnect: () => {
-      if (on) void loadUsage()
+      if (!on) return
+      void loadUsage()
+      void loadRiders()
+      void loadProfiles()
     },
   })
-  useEffect(() => () => (pending.current ? clearTimeout(pending.current) : undefined), [])
+  useEffect(
+    () => () => {
+      for (const timer of Object.values(pending.current)) if (timer) clearTimeout(timer)
+    },
+    [],
+  )
 
   // ---- the arrival: `#<section or row>` once, `&add=contact|address` once (then the address leaves it)
   const search = useSearchParams()
@@ -259,7 +305,15 @@ export function usePeopleTab(input: PeopleTabInput): PeopleTabContainer {
     },
     onTick: (userId, ticked) => portalActions.onSelected?.(ticked ? [...new Set([...portal.model.selected, userId])] : portal.model.selected.filter((id) => id !== userId)),
     onBulk,
-    onMore: (section, more) => patch(section === 'people' ? { morePeople: more } : { moreAddresses: more }),
+    onMore: (section, more) => patch(section === 'people' ? { morePeople: more } : section === 'riders' ? { moreRiders: more } : { moreAddresses: more }),
+    onRetryProfiles: () => {
+      setProfiles(READING)
+      void loadProfiles()
+    },
+    onRetryRiders: () => {
+      setRiders(READING)
+      void loadRiders()
+    },
     onRetryPortal: () => portalActions.onRetry?.(),
     onRefuseDraft: (reason) => setState((current) => (current.refuse ? { ...current, refuse: { ...current.refuse, reason } } : current)),
     onRefuseConfirm: () => void confirmRefuse(),
@@ -269,7 +323,7 @@ export function usePeopleTab(input: PeopleTabInput): PeopleTabContainer {
     },
   }
 
-  const model = on && party ? peopleTabModel({ party, prefix: record.prefix, can, now, portal: can.portal ? portal.model : null, privacy: input.privacy, usage, approverId, glance: input.glance }, state) : null
+  const model = on && party ? peopleTabModel({ party, prefix: record.prefix, can, now, portal: can.portal ? portal.model : null, privacy: input.privacy, usage, approverId, profiles: can.measurements ? profiles : null, riders }, state) : null
   // "Add as a contact…" only while the Add contact window it opened is open (any other window: as always).
   const dialog = record.dialog
   const contactDraft = preset && dialog?.kind === 'contact' && !dialog.contactId ? preset : null
