@@ -346,7 +346,11 @@ export function linkedOf(input: OverviewInput): LinkedCard {
   const incomingLabel = ov('linked.incoming')
   const before = input.counts.counts
   if (before === null) {
-    if (can.quotesTab) stated('quotes', quotesLabel, input.counts.failed ? 'unread' : 'reading')
+    // Both kinds live on Quotes & incoming: while its count read is out, each says so in its row (picture 20, reading).
+    if (can.quotesTab) {
+      stated('quotes', quotesLabel, input.counts.failed ? 'unread' : 'reading')
+      stated('incoming', incomingLabel, input.counts.failed ? 'unread' : 'reading')
+    }
   } else {
     const group = (name: 'WRITING' | 'TO_ANSWER' | 'OPEN_QUOTES' | 'ORDER_WAITS'): Pick<RowPart, 'door'> => through(can.quotesTab ? quotesDoor(prefix, id, name) : null)
     if (before.openQuotes !== null) {

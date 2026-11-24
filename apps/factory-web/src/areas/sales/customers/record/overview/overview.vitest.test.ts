@@ -516,6 +516,10 @@ describe('the cards: People, Next dates, Requests & changes, Linked records, Cus
     expect(factsOf(input({ glance: LOADING })).rows.map((row) => row.key).slice(4, 8)).toEqual(['identity', 'requirements', 'credit', 'since'])
     // Read: the credit only with its right, even when the answer carries it.
     expect(factsOf(input({ glance: ready(glance({ credit: OVER })), can: { ...CAN, credit: false } })).rows.some((row) => row.key === 'credit')).toBe(false)
+    // Quotes & incoming's ONE count read out: Quotes AND Incoming each say so in their row (reading, then failed).
+    const beforeStates = (failed: boolean) => linkedOf(input({ counts: { counts: null, failed } })).rows.filter((row) => row.key === 'quotes' || row.key === 'incoming').map((row) => [row.key, row.state])
+    expect(beforeStates(false)).toEqual([['quotes', 'reading'], ['incoming', 'reading']])
+    expect(beforeStates(true)).toEqual([['quotes', 'unread'], ['incoming', 'unread']])
     // Next dates' failed line names the sample dates: only for a reader who may read them.
     const calm: Partial<OverviewInput> = { reads: reads({ board: board({ COMPLETED: 2 }), ...QUIET }), standing: { status: 'ready', value: standing({ nextPromise: null }) } }
     expect(datesOf(input({ ...calm, glance: failedRead('problem.unavailable') }))?.failed).not.toBeNull()
