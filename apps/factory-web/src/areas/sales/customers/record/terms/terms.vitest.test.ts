@@ -1092,3 +1092,31 @@ describe('ct-fx3 G-W04: a company row\'s tags wrap inside their cell (Italian at
     expect(it_.length).toBeGreaterThan(20) // the Italian word that ran out of its cell
   })
 })
+
+/** The answer's facts for the walk's gaps (the answer line's own describe keeps its own). */
+const gapFacts = (over: Partial<TermsFacts> = {}): TermsFacts => ({
+  multi: false,
+  company: A.name,
+  inForce: termsInForce({ commercial: own(), companies: { tenantWide: false, companies: [entry(A, row({ poNumberRequired: true }), own())] }, companyId: A.id, typed: null }, 'en'),
+  companiesFailed: false,
+  blank: false,
+  holds: [],
+  waiting: waitingOf(null, OWNER, NAMES, '/w/SEEDA', PARTY_ID),
+  requirements: 4,
+  identity: identityFactsOf(partyWith({ taxIdentities: [identity()], warnings: [], vies: { ...MODA.vies, state: 'NOT_APPLICABLE' } })),
+  now: NOW,
+  ...over,
+})
+
+describe('ct-fx3 G-W05: an Italian consumer\'s answer says no e-invoice word (only what a section shows; Z3)', () => {
+  const facts = gapFacts
+  it('IT_B2C: no "no SDI code or PEC" in the answer, as Tax identity draws no E-invoice fact; IT_B2B keeps its word', () => {
+    const consumer = partyWith({ kind: 'PERSON', taxIdentities: [identity({ taxMode: 'IT_B2C', vatNumber: null, fiscalCode: 'XXXXXX00X00X000X', sdiRecipientCode: '0000000' })], warnings: [], vies: { ...MODA.vies, state: 'NOT_APPLICABLE' } })
+    const answer = termsAnswer(facts({ identity: identityFactsOf(consumer) }))
+    for (const locale of LOCALES) expect(sentence(answer, locale), locale).not.toContain(said1(said('ct.answer.noSdi'), locale))
+    for (const key of ['ct.answer.noSdi', 'ct.answer.sdi', 'ct.answer.pec']) expect(answer.words.map((words) => words.key), key).not.toContain(key)
+    expect(identitySection({ party: consumer, can: OWNER, history: { items: [] }, viesRunning: false, now: NOW, earlierOpen: false, laterOpen: false, checksOpen: false }).facts.map((fact) => fact.key)).not.toContain('einvoice')
+    const business = partyWith({ taxIdentities: [identity({ sdiRecipientCode: '0000000' })], warnings: [], vies: { ...MODA.vies, state: 'NOT_APPLICABLE' } })
+    expect(termsAnswer(facts({ identity: identityFactsOf(business) })).words.map((words) => words.key)).toContain('ct.answer.noSdi')
+  })
+})

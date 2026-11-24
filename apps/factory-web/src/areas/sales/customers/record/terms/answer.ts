@@ -70,14 +70,15 @@ export interface TermsAnswer {
   readonly tone: 'info' | 'warning' | 'danger'
 }
 
-const ITALIAN = new Set(['IT_B2B', 'IT_B2C'])
 const realSdi = (code: string | null): boolean => code !== null && code.trim() !== '' && code !== '0000000'
 
 /** The invoicing part of the sentence: by SDI code / by PEC / no SDI code or PEC · VIES · no tax identity. */
 function invoicingWords(facts: IdentityFacts): Said | null {
   const identity = facts.identity
   if (!identity) return said('ct.answer.noIdentity')
-  if (ITALIAN.has(identity.taxMode)) return realSdi(identity.sdiRecipientCode) ? said('ct.answer.sdi') : identity.pec ? said('ct.answer.pec') : said('ct.answer.noSdi')
+  // ct-fx3 G-W05 (walk W-05; Z3): the e-invoice is an Italian BUSINESS's (as Tax identity's ONE fact, identity.ts): a consumer has none
+  // to say — the sentence says only what a section shows.
+  if (identity.taxMode === 'IT_B2B') return realSdi(identity.sdiRecipientCode) ? said('ct.answer.sdi') : identity.pec ? said('ct.answer.pec') : said('ct.answer.noSdi')
   if (identity.taxMode === 'EU_B2B') {
     const vies = facts.vies
     if (vies.state === 'VALID' && vies.validUntil) return said('ct.answer.viesValid', { days: { date: vies.validUntil } })
