@@ -429,3 +429,41 @@ describe('Riders & measurements (W2.1)', () => {
     expect(tab).toContain('timers[what] = setTimeout(() => void run(), 400)')
   })
 })
+
+// ---- ca-w2 W2.2: the Riders view and Made-to-measure's windows in place
+describe('Riders & measurements on the tab, Made-to-measure\'s windows in place (W2.2)', () => {
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+
+  it('New measurements takes an additive preset: absent, the window opens exactly as on Made-to-measure\'s page', () => {
+    const hook = source('../../../mtm/use-measurements.ts')
+    expect(hook).toContain('const openNew = useCallback((preset?: MeasurementsPreset) => {')
+    expect(hook).toContain("customerQ: preset?.customerQ ?? '', // F-CA-206: absent = '' (as before)")
+    expect(hook).toContain("partyId: preset?.partyId ?? '',")
+    expect(hook).toContain("riderName: preset?.riderName ?? '',")
+    // Without a preset the contacts' read still picks the first Rider contact (today's rule).
+    expect(hook).toContain("asked?.riderName ? undefined : items.find((contact) => contact.roles.includes('RIDER'))")
+    expect(source('../../../mtm/MtmPage.tsx')).toContain('measurements.openNew()')
+  })
+
+  it('the tab mounts Made-to-measure\'s own windows unchanged; New measurements starts with THIS customer', () => {
+    const tab = source('../view/people/PeopleTab.tsx')
+    expect(tab).toContain('<MeasurementsDialog model={mtm.measurements} actions={mtm.measurementsActions} />')
+    expect(tab).toContain('<LinkDialog model={mtm.link} can={mtm.can} actions={mtm.linkActions} />')
+    const container = source('./use-people-tab.ts')
+    expect(container).toContain('onNewMeasurements: () => measurements.openNew({ partyId, customerQ }),')
+    expect(container).toContain("if (act === 'newFor') measurements.openNew({ partyId, customerQ, contactId: row.contact?.id ?? null, riderName: row.contact ? null : row.name })")
+  })
+
+  it('Review, New revision and Book a fitting are exact doors to the profile; a rider\'s orders by its profile', () => {
+    const own = riderRows({ kind: 'PERSON', partyId: 'p-r', partyName: 'Marco Valli', contacts: [], profiles: [{ ...MTM_ROWS[0]!, id: 'pr-9' }], riders: null })[0]!
+    const hrefs = riderMenu(own, { can: peopleCan(['parties.view', 'orders.view', 'sales.measurements.view', 'sales.mtm.review', 'sales.fittings.manage']), prefix: '/w/DEMO', status: 'ACTIVE' }).flatMap((item) => (item.href ? [item.href] : []))
+    expect(hrefs).toEqual(['/w/DEMO/sales/made-to-measure/pr-9?do=review', '/w/DEMO/sales/made-to-measure/pr-9?do=fitting', '/w/DEMO/sales/orders?profile=pr-9'])
+  })
+
+  it('a profile line says its record, size, day and state — never a measurement value', () => {
+    const view = source('../view/people/RidersSection.tsx')
+    expect(view).not.toMatch(/profile\.(measurements|measuredPlace|takenBy)|fitNotes/)
+    expect(view).toContain("'sales-mtm:list.new'")
+    expect(view).toContain("'sales-mtm:list.sendLink'")
+  })
+})

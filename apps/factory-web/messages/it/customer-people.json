@@ -232,7 +232,9 @@
     "approved": "L'indirizzo di consegna “{name}” è approvato: ora si può scegliere per le consegne, in ufficio e nel portale.",
     "refused": "L'indirizzo di consegna “{name}” è rifiutato: il cliente legge il perché.",
     "copied": "Copiato.",
-    "copyFailed": "Non copiato: seleziona il testo e copialo a mano."
+    "copyFailed": "Non copiato: seleziona il testo e copialo a mano.",
+    "measured": "Nuove misure salvate (revisione {revision}): attendono il controllo della fabbrica.",
+    "openProfile": "Apri il profilo ›"
   },
   "part": {
     "portal": "l'accesso al portale",
@@ -304,6 +306,8 @@
     "info": "Due tipi di pilota. Tenuti qui: un contatto con il ruolo Pilota, o un nome sui profili di questo cliente — misurati e ordinati dalla squadra. Con una pagina propria: un cliente a sé sotto questa squadra — le sue misure, i suoi ordini e i suoi dati personali; la squadra non può ordinare con le sue misure.",
     "listLabel": "Piloti di {name}",
     "showMore_one": "Mostra {count} altro pilota",
-    "showMore_other": "Mostra altri {count} piloti"
+    "showMore_other": "Mostra altri {count} piloti",
+    "reading": "Lettura dei piloti e dei loro profili…",
+    "addRider": "Aggiungi pilota…"
   }
 }

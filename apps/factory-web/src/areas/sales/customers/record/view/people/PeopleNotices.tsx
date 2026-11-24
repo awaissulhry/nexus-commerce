@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { Banner } from '@nexus/ui/components'
 import { Button } from '@nexus/ui/primitives'
 import { WithMessages } from '../../../../../../record-panels/i18n'
@@ -37,10 +38,19 @@ function OwnNotice({ notice, onDismiss }: { notice: PeopleNotice; onDismiss?: ((
       tone={notice.tone}
       title={say(notice.words)}
       action={
-        onDismiss ? (
-          <Button size="sm" variant="quiet" onClick={onDismiss}>
-            {say(said('parties:common.dismiss'))}
-          </Button>
+        notice.link || onDismiss ? (
+          <span className="fw-ca-acts">
+            {notice.link ? (
+              <Button size="sm" asChild>
+                <Link href={notice.link.href}>{say(notice.link.label)}</Link>
+              </Button>
+            ) : null}
+            {onDismiss ? (
+              <Button size="sm" variant="quiet" onClick={onDismiss}>
+                {say(said('parties:common.dismiss'))}
+              </Button>
+            ) : null}
+          </span>
         ) : undefined
       }
     />

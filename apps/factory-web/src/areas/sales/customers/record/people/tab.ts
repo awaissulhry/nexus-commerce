@@ -5,6 +5,8 @@ import { inviteHeld, type RowAction } from '../../../../admin/users/partners/mod
 import type { PortalAccessModel } from '../../portal/model'
 import type { Privacy } from '../../depth/api'
 import type { ProfilesView } from '../../../mtm/api' // F-CA-203
+import type { MtmCan } from '../../../mtm/model' // F-CA-208
+import type { LinkDialogActions, LinkDialogModel, MeasurementsDialogActions, MeasurementsDialogModel } from '../../../mtm/view-model' // F-CA-208
 import type { Read as DepthRead } from '../../depth/model'
 import type { PartyUsage, RidersView } from './api'
 import { addressFilterOf, addressesSectionAnswer, peopleAnswer, peopleSectionAnswer, personFilterOf, type PeopleAnswer, type PeopleChip, type PeopleFacts } from './answer'
@@ -268,6 +270,8 @@ export function peopleTabModel(reads: PeopleTabReads, state: PeopleTabState): Pe
 export interface PeopleNotice {
   readonly tone: 'success' | 'info' | 'warning' | 'danger'
   readonly words: Said
+  /** F-CA-208: a door with it (new measurements: "Open the profile ›"). */
+  readonly link?: { readonly href: string; readonly label: Said }
 }
 
 /** What the view asks of its container (each act through the owner's own window or command). */
@@ -295,6 +299,10 @@ export interface PeopleTabActions {
   readonly onSendLink?: () => void
   readonly onRetryProfiles?: () => void
   readonly onRetryRiders?: () => void
+  /** Add rider… (an organisation's head ⋯). */
+  readonly onAddRider?: () => void
+  /** Change team… — of a rider with its own page (its row), or of this customer itself (a rider's own page: null). */
+  readonly onChangeTeam?: (row: RiderRow | null) => void
 }
 
 /** The tab's notices for the record's ONE notice area (the portal container's own, and the tab's). */
@@ -303,4 +311,13 @@ export interface PeopleNotices {
   readonly own: PeopleNotice | null
   readonly onDismissPortal?: () => void
   readonly onDismissOwn?: () => void
+}
+
+/** F-CA-208: Made-to-measure's windows as the tab mounts them (its own models and acts, unchanged). */
+export interface PeopleMtm {
+  readonly can: MtmCan
+  readonly measurements: MeasurementsDialogModel | null
+  readonly measurementsActions?: MeasurementsDialogActions
+  readonly link: LinkDialogModel | null
+  readonly linkActions?: LinkDialogActions
 }

@@ -218,7 +218,7 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   const people = usePeopleTab({ partyId, party: record.party, model: record.model, actions: record.actions, reload: record.reload, privacy: privacy.read, enabled: tab === 'people' }) // F-CA-204: Riders read the riders and profiles, no longer the glance
   const peopleTab =
     named && record.party && tab === 'people' ? (
-      <PeopleTab model={people.model} actions={people.actions} portal={people.portal} recordHref={`${prefix}/sales/customers/${encodeURIComponent(partyId)}`} after={<>{record.depth?.people}{record.depth?.contacts}</>} />
+      <PeopleTab model={people.model} actions={people.actions} portal={people.portal} recordHref={`${prefix}/sales/customers/${encodeURIComponent(partyId)}`} after={record.depth?.contacts /* F-CA-209: Riders & measurements is the tab's own section now; the personal-data card until W2.4 */} mtm={people.mtm /* F-CA-209 */} />
     ) : null
   const peopleNotice = <PeopleNotices notices={people.notices} />
   const peopleBadge = record.party ? peopleBadgeOf(record.party) : null

@@ -1047,7 +1047,7 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
           model: peopleTabModel({ party, prefix: record.prefix, can: peopleCanOf(record.can), now: NOW, portal, privacy: depth?.privacy?.read ?? null, usage: null, approverId: null, profiles: null, riders: ridersOfCase(party, depth?.glance) }, PEOPLE_TAB_START),
           portal: portal ? { model: portal } : null,
           recordHref: `${record.prefix}/sales/customers/${id}`,
-          after: createElement(Fragment, null, nodes?.people, nodes?.contacts),
+          after: nodes?.contacts /* F-CA-209: Riders & measurements is the tab's own section now */,
         })
       : null
   // F-CA-120: end

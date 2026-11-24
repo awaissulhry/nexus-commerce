@@ -118,3 +118,31 @@
 .fw-ca-win { display: flex; flex-direction: column; gap: var(--nds-space-10); min-width: 0; }
 .fw-ca-win-addr { margin: 0; display: flex; flex-direction: column; gap: var(--nds-space-2); padding: var(--nds-space-8) var(--nds-space-12); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg); background: var(--nds-surface-raised); font-size: var(--nds-font-size-sm); color: var(--nds-text-2); overflow-wrap: anywhere; }
 .fw-ca-win-addr > b { color: var(--nds-text-strong); }
+
+/* F-CA-207 (ca-w2 W2.2): Riders & measurements — a rider and its profiles. S = blocks · M from 560: rider | profiles | ⋯ */
+.fw-ca-row.is-r { grid-template-columns: minmax(0, 1fr) 44px; grid-template-areas: "rider o" "prs prs"; }
+.fw-ca-rider { grid-area: rider; } .fw-ca-prs { grid-area: prs; }
+@container cals (min-width: 560px) {
+  .fw-ca-row.is-r { grid-template-columns: minmax(150px, 0.32fr) minmax(0, 1fr) 44px; grid-template-areas: "rider prs o"; }
+}
+.fw-ca-prs { container: capr / inline-size; }
+/* without the right to see measurements: one line per rider, no empty profile column */
+.no-meas .fw-ca-row.is-r { grid-template-columns: minmax(0, 1fr) 44px; grid-template-areas: "rider o"; }
+.no-meas .fw-ca-prs { display: none; }
+@container cals (min-width: 560px) { .no-meas .fw-ca-rider { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: var(--nds-space-2) var(--nds-space-12); } }
+.fw-ca-pr { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-2) var(--nds-space-14); padding: var(--nds-space-4) 0; border-top: 1px dashed var(--nds-border-subtle); min-width: 0; }
+.fw-ca-pr:first-child { border-top: 0; padding-top: 0; }
+.fw-ca-pr > div { min-width: 0; display: flex; flex-wrap: wrap; gap: var(--nds-space-4) var(--nds-space-8); align-items: center; font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+.fw-ca-pr.is-own > div:first-child { grid-column: 1 / -1; }
+@container capr (min-width: 520px) {
+  .fw-ca-pr { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.5fr); align-items: start; }
+}
+/* a door inside a row or a line (its own class: the kit's link stays the kit's) */
+.fw-ca-lk { color: var(--nds-text-link); font-weight: var(--nds-font-weight-semibold); text-decoration: none; font-size: var(--nds-font-size-sm); overflow-wrap: anywhere; }
+.fw-ca-lk:hover { text-decoration: underline; }
+.fw-ca-lk:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-xs); }
+/* a rider's own page: its team on top */
+.fw-ca-team { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-6) var(--nds-space-10); padding: var(--nds-space-8) var(--nds-space-10); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg); background: var(--nds-surface-raised); font-size: var(--nds-font-size-sm); }
+.fw-ca-team > svg { flex: none; color: var(--nds-text-muted); }
+/* a notice's two acts side by side */
+.fw-ca-acts { display: inline-flex; flex-wrap: wrap; gap: var(--nds-space-6); align-items: center; }

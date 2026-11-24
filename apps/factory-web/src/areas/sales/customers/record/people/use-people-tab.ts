@@ -14,7 +14,11 @@ import { partnerCan, personReach, type RowAction } from '../../../../admin/users
 import { usePortalAccess } from '../../portal/PortalAccess'
 import type { PortalAccessActions, PortalAccessModel } from '../../portal/model'
 import type { Privacy } from '../../depth/api'
-import { listProfiles, type ProfilesView } from '../../../mtm/api' // F-CA-204
+import { listProfiles, listTemplates, type ProfilesView, type TemplateOption } from '../../../mtm/api' // F-CA-204
+import { mtmCan, recordHref } from '../../../mtm/model' // F-CA-208
+import { useMeasurementsDialog } from '../../../mtm/use-measurements' // F-CA-208: Made-to-measure's own windows, in place
+import { useLinkDialog } from '../../../mtm/use-dialogs' // F-CA-208
+import { useLocale } from '../../../../../lib/i18n/provider' // F-CA-208: a measurement link's language
 import type { Read as DepthRead } from '../../depth/model'
 import { readProblem } from '../../../orders/model'
 import { approveDeliveryAddress, readPartyUsage, readRiders, refuseDeliveryAddress, type PartyUsage, type RidersView } from './api'
@@ -22,7 +26,8 @@ import type { PeopleChip } from './answer'
 import { addressShort, addressText, type AddressAct, type AddressRow } from './addresses'
 import { addressAnchor, failedRead, peopleCan, personAnchor, READING, readyRead, said, valueOf, type Read } from './model'
 import type { PersonAct, PersonRow } from './people'
-import { PEOPLE_TAB_START, peopleTabModel, type PeopleNotice, type PeopleNotices, type PeopleTabActions, type PeopleTabModel, type PeopleTabState } from './tab'
+import { riderAnchor, type RiderAct, type RiderRow } from './riders' // F-CA-208
+import { PEOPLE_TAB_START, peopleTabModel, type PeopleMtm, type PeopleNotice, type PeopleNotices, type PeopleTabActions, type PeopleTabModel, type PeopleTabState } from './tab'
 
 /**
  * F-CA-107 (customer page › PEOPLE & ADDRESSES tab, lane ca-; 13-backend §1, §3, §5.3, §5.7; 18-lead-settles Z13, Z15, Z16, Z17) — the
@@ -60,7 +65,10 @@ export interface PeopleTabContainer {
   readonly notices: PeopleNotices
   /** "Add as a contact…": the Add contact window starts with the portal person's name and e-mail (null: as always). */
   readonly contactDraft: ContactDraft | null
+  /** F-CA-208: Made-to-measure's own windows (New measurements, Send a measurement link), mounted on the tab. */
+  readonly mtm: PeopleMtm
 }
+
 
 const LIVE = /^(party\.|quote\.|shipment\.|sample_shipment\.|return\.|complaint\.|service_case\.|portal_order_request\.|order_change_request\.)/
 /** F-CA-204 (13-backend §1.4): the made-to-measure events that move a profile of this customer or of one of its riders. */
@@ -140,7 +148,7 @@ export function usePeopleTab(input: PeopleTabInput): PeopleTabContainer {
     if (timers[what]) clearTimeout(timers[what])
     timers[what] = setTimeout(() => void run(), 400)
   }
-  useLiveBus({
+  const live = useLiveBus({
     onChange: (change) => {
       if (!on) return
       const about = change.fields.partyId ?? change.fields.customerId
@@ -251,6 +259,46 @@ export function usePeopleTab(input: PeopleTabInput): PeopleTabContainer {
       () => setNotice({ tone: 'warning', words: said('done.copyFailed') }),
     )
   }
+  // ---- F-CA-208 (ca-w2 W2.2; 13-backend §3): Made-to-measure's New measurements and Send a measurement link, IN PLACE — its own hooks,
+  // "for both containers"; New measurements starts with THIS customer chosen (an additive preset; absent = as on its page). The garment
+  // types are read once, the first time a link is asked (a link says how many points it asks).
+  const mtm = useMemo(() => mtmCan(session.permissions), [session.permissions])
+  const locale = useLocale()
+  const offline = live === 'offline'
+  const me = useMemo(() => ({ id: session.user.id, name: session.user.displayName }), [session.user.id, session.user.displayName])
+  const companyId = session.company?.id ?? null
+  const measurements = useMeasurementsDialog({
+    api,
+    can: mtm,
+    me,
+    companyId,
+    offline,
+    onSaved: (answer) => {
+      void loadProfiles()
+      setNotice({ tone: 'success', words: said('done.measured', { params: { revision: answer.profile.revision } }), link: { href: recordHref(record.prefix, answer.profile.id), label: said('done.openProfile') } })
+    },
+  })
+  const [templates, setTemplates] = useState<readonly TemplateOption[] | null>(null)
+  const pointsOf = useCallback((garment: string) => templates?.find((template) => template.code === garment)?.points ?? null, [templates])
+  const link = useLinkDialog({ api, can: mtm, companyId, language: locale === 'en' ? 'en' : 'it', offline, pointsOf })
+  const readTemplates = () => {
+    if (templates !== null || !mtm.styles) return
+    listTemplates(api, { status: 'ALL' })
+      .then((answer) => setTemplates(answer.templates))
+      .catch(() => setTemplates([]))
+  }
+  const customerQ = party ? (party.tradeName ?? party.legalName) : ''
+  const onRiderAct = (act: RiderAct, row: RiderRow, profileId?: string) => {
+    if (act === 'newFor') measurements.openNew({ partyId, customerQ, contactId: row.contact?.id ?? null, riderName: row.contact ? null : row.name })
+    else if (act === 'link') {
+      const profile = row.profiles.find((entry) => entry.id === profileId)
+      if (!profile) return
+      readTemplates()
+      link.openFor({ profileId: profile.id, riderName: profile.riderName, garmentType: profile.garmentType, contactId: profile.contactId, pointCount: pointsOf(profile.garmentType) })
+    } else if (act === 'editContact' && row.contact) recordActions.onDialog?.({ kind: 'contact', contactId: row.contact.id })
+    else if (act === 'copyLink') copy(linkTo(riderAnchor(row.id)))
+  }
+
   const linkTo = (anchor: string) => (typeof window === 'undefined' ? '' : `${window.location.origin}${window.location.pathname}${window.location.search}#${anchor}`)
 
   const portalActions = portal.actions
@@ -290,6 +338,12 @@ export function usePeopleTab(input: PeopleTabInput): PeopleTabContainer {
   }
 
   const actions: PeopleTabActions = {
+    onRiderAct, // F-CA-208
+    onNewMeasurements: () => measurements.openNew({ partyId, customerQ }),
+    onSendLink: () => {
+      readTemplates()
+      link.openFromBand(valueOf(profiles)?.rows ?? [])
+    },
     onChip: (chip: PeopleChip | null) => patch({ filter: chip }),
     onPersonAct,
     onAddressAct,
@@ -336,5 +390,6 @@ export function usePeopleTab(input: PeopleTabInput): PeopleTabContainer {
     portal: can.portal ? { model: portal.model, actions: portalActions } : null,
     notices: { portal: on && can.portal ? portal.model.notice : null, own: on ? notice : null, onDismissPortal: () => portalActions.onDismissNotice?.(), onDismissOwn: () => setNotice(null) },
     contactDraft,
+    mtm: { can: mtm, measurements: measurements.model, measurementsActions: measurements.actions, link: link.model, linkActions: link.actions },
   }
 }

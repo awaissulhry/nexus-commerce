@@ -232,7 +232,9 @@
     "approved": "The delivery address “{name}” was approved: it can be chosen for deliveries now, in the office and in the portal.",
     "refused": "The delivery address “{name}” was refused: the customer reads why.",
     "copied": "Copied.",
-    "copyFailed": "Couldn't copy: select the text and copy it by hand."
+    "copyFailed": "Couldn't copy: select the text and copy it by hand.",
+    "measured": "New measurements saved (revision {revision}): they wait for the factory review.",
+    "openProfile": "Open the profile ›"
   },
   "part": {
     "portal": "the portal access",
@@ -304,6 +306,8 @@
     "info": "Two kinds of rider. Kept here: a contact with the role Rider, or a name on this customer's profiles — measured and ordered by the team. With their own page: a customer of their own under this team — their own measurements, orders and personal data; the team cannot order with their measurements.",
     "listLabel": "Riders of {name}",
     "showMore_one": "Show {count} more rider",
-    "showMore_other": "Show {count} more riders"
+    "showMore_other": "Show {count} more riders",
+    "reading": "Reading the riders and their profiles…",
+    "addRider": "Add rider…"
   }
 }
