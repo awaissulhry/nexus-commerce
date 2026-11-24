@@ -1,5 +1,5 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
-import { ConflictError, ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
+import { ConflictError, DomainError, ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can, grantsFor, type Actor, type Permission, type ScopeColumns } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
@@ -470,12 +470,27 @@ export async function lockTaxNumbers(tx: Pick<CommandTx, '$executeRaw'>, tenantI
 }
 
 /**
+ * F-CT-S2 (customer terms lane, S2 — the brand wall): may the one who reads the duplicate refusal learn which party holds
+ * the number? An office person: only when they may see that party (can(), as readParty). A job (the parties import, the
+ * system's context): it works for the person who runs it, who reaches every party of the job's company (the importer's
+ * authorize), and it writes only parties of that company — so the holder is named when it is a party of every company or of
+ * the written party's company (or the job is for every company), else not.
+ */
+async function seesTaxHolder(tx: CommandTx, context: RequestContext, partyId: string, holder: { readonly id: string; readonly companyId: string | null }): Promise<boolean> {
+  if (context.audience !== 'system') return can(actorOf(context), PARTIES_VIEW, { companyId: holder.companyId, partyId: holder.id })
+  if (holder.companyId === null) return true
+  const written = await tx.party.findUnique({ where: { id: partyId }, select: { companyId: true } })
+  return written !== null && (written.companyId === null || written.companyId === holder.companyId)
+}
+
+/**
  * Refuses a VAT number or codice fiscale another party of the tenant holds (in any of its identities, archived parties
  * included): one record per business partner (A1 §2.4 A). The index on the numbers is not unique (a party keeps its
  * number across identities), so writers of the same numbers are serialised by a transaction lock per number, taken
- * after the party's own lock.
+ * after the party's own lock. F-CT-S2: the holder's code only to a reader who may see it (`seesTaxHolder`), else "another
+ * business partner"; the issue names the field (`<at>/vatNumber` or `<at>/fiscalCode`, `at` the body's identity).
  */
-export async function assertNoTaxDuplicate(tx: CommandTx, context: RequestContext, partyId: string, identity: Pick<TaxIdentityFields, 'vatNumber' | 'fiscalCode'>): Promise<void> {
+export async function assertNoTaxDuplicate(tx: CommandTx, context: RequestContext, partyId: string, identity: Pick<TaxIdentityFields, 'vatNumber' | 'fiscalCode'>, at = 'body'): Promise<void> {
   const keys = taxKeysOf(identity)
   if (keys.vatNumbers.length + keys.fiscalCodes.length === 0) return
   await lockTaxNumbers(tx, tenantOf(context), identity)
@@ -484,12 +499,16 @@ export async function assertNoTaxDuplicate(tx: CommandTx, context: RequestContex
       partyId: { not: partyId },
       OR: [...(keys.vatNumbers.length > 0 ? [{ vatNumber: { in: [...keys.vatNumbers] } }] : []), ...(keys.fiscalCodes.length > 0 ? [{ fiscalCode: { in: [...keys.fiscalCodes] } }] : [])],
     },
-    select: { vatNumber: true, party: { select: { code: true, status: true } } },
+    select: { vatNumber: true, party: { select: { id: true, companyId: true, code: true, status: true } } },
     orderBy: [{ createdAt: 'asc' }],
   })
   if (!clash) return
-  const what = clash.vatNumber !== null && keys.vatNumbers.includes(clash.vatNumber) ? 'VAT number' : 'codice fiscale'
-  throw new ConflictError(`This ${what} belongs to party ${clash.party.code}${clash.party.status === 'ARCHIVED' ? ' (archived)' : ''}: one record per business partner. Open that party, or give it the role it lacks.`)
+  const byVat = clash.vatNumber !== null && keys.vatNumbers.includes(clash.vatNumber)
+  const what = byVat ? 'VAT number' : 'codice fiscale'
+  const message = (await seesTaxHolder(tx, context, partyId, clash.party))
+    ? `This ${what} belongs to party ${clash.party.code}${clash.party.status === 'ARCHIVED' ? ' (archived)' : ''}: one record per business partner. Open that party, or give it the role it lacks.`
+    : `This ${what} belongs to another business partner: one record per business partner.`
+  throw new DomainError('conflict', message, [{ path: `${at}/${byVat ? 'vatNumber' : 'fiscalCode'}`, message }])
 }
 
 // ---- writes (inside a command) -------------------------------------------------------------------------------------------
@@ -569,7 +588,7 @@ export async function insertParty(tools: CommandTools, record: NewPartyRecord, a
   tools.audit({ ...(action ? { action } : {}), recordType: 'Party', recordId: id, companyId: record.companyId, after: { ...record.fields, status: record.status, ...(supplier ? { supplierStatus: supplier.status, supplierStatusReason: supplier.reason } : {}) } })
   const party = { id, companyId: record.companyId }
   if (record.identity) {
-    await assertNoTaxDuplicate(tx, context, id, record.identity)
+    await assertNoTaxDuplicate(tx, context, id, record.identity, 'body/taxIdentity') // F-CT-S2: the create body's identity
     await insertTaxIdentity(tools, party, record.identity, action)
   }
   for (const address of record.addresses) {
