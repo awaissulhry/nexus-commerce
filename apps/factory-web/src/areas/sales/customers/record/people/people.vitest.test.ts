@@ -259,10 +259,10 @@ describe('the tab\'s model (tab.ts) and the windows mounted in place', () => {
     expect(tab).not.toMatch(/listRequests|getPortalAccess\(/)
   })
 
-  it('the personal-data windows are ONE export; the card draws them as before', () => {
+  it('the personal-data windows are ONE export; People mounts them (F-CA-229: the old card that drew them went in W2.5)', () => {
     const card = readFileSync(new URL('../../depth/view/PrivacyCard.tsx', import.meta.url), 'utf8')
     expect(card).toContain('export function PrivacyWindows({ model, actions }: { model: PrivacyModel; actions?: PrivacyActions | undefined })')
-    expect(card).toContain('<PrivacyWindows model={model} actions={actions} />')
+    expect(readFileSync(new URL('../view/people/PeopleTab.tsx', import.meta.url), 'utf8')).toContain('<PrivacyWindows model={privacy.model} actions={privacy.actions} />')
   })
 
   it('every write names the version it read and carries an Idempotency-Key; a 409 reads the party again', () => {
