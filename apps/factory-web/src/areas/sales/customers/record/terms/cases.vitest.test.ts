@@ -70,9 +70,19 @@ describe('F-CT T.1: the Terms & requirements tab\'s gallery cases (SCR-033, ids 
 
   it('the rooms: each case says its width; the windows: each inside drawn on a plain card under the tab', () => {
     for (const room of [343, 865, 1314, 1794]) expect(draw(`ct-room-${room}`), String(room)).toContain(`data-ct-room="${room}"`)
-    for (const id of CT_PARTS.windows) {
-      const html = draw(id)
-      expect(html.match(/class="fw-pt-h2"/g)?.length ?? 0, id).toBeGreaterThan(0)
+    // Each window's inside says its own title (the window's words) on its card — the tab alone never says them.
+    const TITLES: Readonly<Record<string, string>> = {
+      'ct-win-terms': 'Change the terms of Seed Brand',
+      'ct-win-terms-problems': 'Change the terms of Seed Brand',
+      'ct-win-terms-refused': 'Change the terms of Seed Brand',
+      'ct-win-delivery': 'Change the delivery of Seed Brand',
+      'ct-win-delivery-replace': 'Change the delivery of Seed Brand',
+      'ct-win-company': 'Set terms for Seed Company A',
+      'ct-win-company-po': 'Customer PO number',
+      'ct-win-end': 'Back to the customer\'s terms with Seed Company A?',
     }
+    expect(Object.keys(TITLES).sort()).toEqual([...CT_PARTS.windows].sort())
+    for (const [id, title] of Object.entries(TITLES)) expect(words(id), id).toContain(title)
+    expect(words('ct-busy')).not.toContain('Change the terms of Seed Brand')
   })
 })
