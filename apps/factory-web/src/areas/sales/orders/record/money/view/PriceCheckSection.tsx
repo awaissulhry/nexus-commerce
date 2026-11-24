@@ -17,6 +17,7 @@ import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { LineMenuButton } from '../../view/LineMenu'
 import { PartFailed, PartReading, Section } from '../../view/production/Kit' // F-OM-101 (L6): the Production kit, in place
 import { priceCheckOf, type PriceCheckView, type PriceLineRow, type PriceTag } from '../price'
+import { Fold } from './parts' // F-CM-k1: the shared fold
 import { lineOf, useSay, type Say } from './say'
 
 /**
@@ -186,10 +187,7 @@ function Filled({ order, model, actions, check, stale, taking, problem, title, i
             ) : null}
           </div>
           {view.first.length < view.rows.length ? (
-            <button type="button" className="fw-om-fold" aria-expanded={all} onClick={() => setAll((now) => !now)}>
-              {all ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
-              {all ? t('moneyTab.price.onlyDiffering') : t('moneyTab.price.showAll', { count: view.rows.length })}
-            </button>
+            <Fold open={all} onToggle={() => setAll((now) => !now)} label={all ? t('moneyTab.price.onlyDiffering') : t('moneyTab.price.showAll', { count: view.rows.length })} />
           ) : null}
           <Sources view={view} check={check} />
         </>

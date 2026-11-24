@@ -1,6 +1,5 @@
 'use client'
 
-import type { ReactNode } from 'react'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import type { Order } from '../../../api'
 import { readOnlyOnPage } from '../../../model' // F-OO-205: Read-only sees no moves (the band's own rule)
@@ -16,11 +15,14 @@ import { TEAM_WORDS, type ApplyTeam } from '@nexus/factory-domain/sales/change-r
 import { useSearchParams } from 'next/navigation'
 import { tabHref } from '../../../../../_shared/record-frame/address'
 import { TabLink } from '../../../../../../lib/tab-link/TabLink'
-import './requests.css' // F-OO-205: the card's own rows
 import { OverviewCard } from '../../../../../_shared/record-overview/Overview' // F-CO-K1: the card's frame is the shared overview kit's
+// ---- F-CO-K2: the groups and their rows are the kit's parts (their look comes with them: the card has no stylesheet of its own) ----
+import { Group, GroupRow, Groups } from '../../../../../_shared/record-overview/Overview'
+import { GROUP_ROWS_SHOWN } from '../../../../../_shared/record-overview/model'
+// ---- end F-CO-K2
 
-/** F-OO-205 (11-design §5.2, Q10): the rows a customer's or a Still to do group shows before "N more on Changes ›"; every row waiting on us shows. */
-export const REQUESTS_SHOWN = 3
+/** F-OO-205 (11-design §5.2, Q10): the rows a customer's or a Still to do group shows before "N more on Changes ›"; every row waiting on us shows. F-CO-K2: the kit's cap. */
+export const REQUESTS_SHOWN = GROUP_ROWS_SHOWN
 
 /**
  * F-OO-100 (order overview lane: one file per card) — moved out of OverviewTab.tsx.
@@ -36,6 +38,8 @@ export const REQUESTS_SHOWN = 3
  * order's holds and dates are when it has some (never "Nothing waits" while one does). The foot's quiet line: "Told about changes:
  * N people" (F-SA-244's count, moved from People). Read-only sees the words and the ages, no door. No "Latest change" (Changes ›
  * History tells it).
+ * F-CO-K2: the groups, each group and each row are the shared overview kit's `Groups`, `Group`, `GroupRow` (the order's age stays
+ * RequestsSection's `RowAge`, its words over the kit's).
  */
 export function RequestsCard({ order, model, actions, waiting }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; waiting: WaitingState }) {
   const t = useT('orders')
@@ -74,7 +78,7 @@ export function RequestsCard({ order, model, actions, waiting }: { order: Order;
           )}
         </div>
       ) : (
-        <div className="fw-so-rq-groups">
+        <Groups>
           {card.onUs.length > 0 && (
             <Group title={t('waiting.onUs', { count: card.onUs.length })}>
               {card.onUs.map((row) => (
@@ -96,21 +100,10 @@ export function RequestsCard({ order, model, actions, waiting }: { order: Order;
               ))}
             </Group>
           )}
-        </div>
+        </Groups>
       )}
       {told !== null && <p className="fw-so-hint fw-so-rq-foot">{t('told.aboutChanges', { count: told })}</p>}
     </OverviewCard>
-  )
-}
-
-/** One group: its head with its count, its rows (`words | age | door`), and "N more on Changes ›" when it is cut. */
-function Group({ title, more = null, children }: { title: string; more?: ReactNode; children: ReactNode }) {
-  return (
-    <section className="fw-so-rq-group">
-      <h3 className="fw-so-h3">{title}</h3>
-      <ul className="fw-so-rq-list">{children}</ul>
-      {more}
-    </section>
   )
 }
 
@@ -122,14 +115,11 @@ function StillItem({ row, order, model, actions, asOf, readOnly }: { row: StillR
   const t = useT('orders')
   const locale = useLocale()
   const team = TEAM_WORDS[row.waitingOn as ApplyTeam]
+  // F-CO-K2: the kit's GroupRow — the words in one span, the age, the doors cell (empty for Read-only).
   return (
-    <li className="fw-so-ov-row fw-so-rq-row">
-      <span>
-        {stillWordsOf(row, model.orderChanges?.list?.value, order.lines, t, locale) /* fx6 (walk 7): the ONE sentence, as Changes */}
-        {team && row.kind !== 'WORK_ORDER_CHANGE' ? <span className="fw-so-hint">{` · ${said(team, locale)}`}</span> : null}
-      </span>
-      <RowAge since={row.since} asOf={asOf} />
-      <span className="fw-so-ov-doors">{readOnly ? null : <StillDoorView row={row} order={order} model={model} actions={actions} />}</span>
-    </li>
+    <GroupRow age={<RowAge since={row.since} asOf={asOf} />} doors={readOnly ? null : <StillDoorView row={row} order={order} model={model} actions={actions} />}>
+      {stillWordsOf(row, model.orderChanges?.list?.value, order.lines, t, locale) /* fx6 (walk 7): the ONE sentence, as Changes */}
+      {team && row.kind !== 'WORK_ORDER_CHANGE' ? <span className="fw-so-hint">{` · ${said(team, locale)}`}</span> : null}
+    </GroupRow>
   )
 }

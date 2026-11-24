@@ -55,7 +55,7 @@ describe('F-OO-131: People — one aligned list, label | value | one door; Follo
     const { record } = base('owner', value, { tab: 'overview', production: withPeople, people: rights(true) })
     const html = card(record)
     expect(rowsOf(html).map((row) => textOf(row).split(' ')[0])).toEqual(['Supervisor', 'Backup', 'Answers', 'Where'])
-    expect(html).toContain('<ul class="fw-so-people-list">')
+    expect(html).toContain('<ul class="fw-so-ov-list">') // F-CO-K2: the kit's ONE list (People's has no name: no aria-label)
     expect(textOf(rowOf(html, 'Supervisor'))).toContain('Bea Esempio · this order')
     expect(rowOf(html, 'Supervisor')).toContain('>Ask</button>')
     expect(rowOf(html, 'Supervisor')).not.toContain('aria-disabled')
@@ -95,9 +95,9 @@ describe('F-OO-131: People — one aligned list, label | value | one door; Follo
   it('Finance (no workorders.view): only the card’s sentence — no row, never "Not set"; reading: no row; a failed read says so with Try again', () => {
     const finance = card(base('finance', value, { tab: 'overview', production: ready(NO_WORK_READ) }).record)
     expect(textOf(finance)).toContain('Who works on it is shown to people who follow production.')
-    expect(finance).not.toContain('fw-so-people-list')
+    expect(finance).not.toContain('fw-so-ov-list') // F-CO-K2: the kit's ONE list
     expect(textOf(finance)).not.toContain('not set')
-    expect(card(base('sales', value, { tab: 'overview', production: LOADING_STATE }).record)).not.toContain('fw-so-people-list')
+    expect(card(base('sales', value, { tab: 'overview', production: LOADING_STATE }).record)).not.toContain('fw-so-ov-list')
     const failed = textOf(card(base('sales', value, { tab: 'overview', production: FAILED_STATE }).record))
     expect(failed).toContain("Couldn't load People")
     expect(failed).toContain('Try again')
@@ -109,7 +109,7 @@ describe('F-OO-131: People — one aligned list, label | value | one door; Follo
     expect(view.indexOf('<OverviewCard ')).toBeGreaterThan(-1)
     expect(view.indexOf('<FollowersDoor />')).toBeGreaterThan(view.indexOf('<OverviewCard '))
     expect(view).toContain('aside={<FollowersDoor />}')
-    expect(view.indexOf('<FollowersDoor />')).toBeLessThan(view.indexOf('fw-so-people-list'))
+    expect(view.indexOf('<FollowersDoor />')).toBeLessThan(view.indexOf('<RowList>')) // F-CO-K2: the rows are the kit's ONE list
     expect(view).toContain("import './people.css'")
     expect(view).not.toContain('madeBy')
     expect(view).not.toContain('told.aboutChanges')
@@ -124,15 +124,25 @@ describe('F-OO-131: People — one aligned list, label | value | one door; Follo
     expect(createTranslator('it', messagesFor('it', ['orders']).orders!)('people.followers')).toBe('Chi segue ›')
   })
 
+  // F-CO-K2 (settle S3): People's list rules and Linked records' identical ones are the kit's ONE list now (record-overview.css,
+  // .fw-so-ov-list); people.css keeps only the supervisor's own doors. The same four rules, read on the kit's list block.
   it('375: below a 360 px card a row stacks (label, value, doors); the rows line up on the list’s columns; tokens only', () => {
-    const css = source('../view/overview/people.css')
-    expect(css).toMatch(/\.fw-so-people-list \{\s*display: grid;\s*grid-template-columns: max-content minmax\(0, 1fr\) auto;/)
-    expect(css).toMatch(/\.fw-so-people-list > \.fw-so-ov-row \{\s*grid-column: 1 \/ -1;\s*grid-template-columns: subgrid;/)
-    expect(css).toMatch(/@container fw-so-ov-card \(max-width: 479px\) \{\s*\.fw-so-people-list \{\s*grid-template-columns: max-content minmax\(0, 1fr\);/)
-    expect(css).toMatch(/@container fw-so-ov-card \(max-width: 359px\) \{\s*\.fw-so-people-list \{\s*grid-template-columns: minmax\(0, 1fr\);/)
-    expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/)
-    // The card declares no container of its own: the grid makes every Overview card one (overview.css).
-    expect(css).not.toMatch(/container(-type)?:/)
+    const kit = source('../../../../_shared/record-overview/record-overview.css')
+    const css = kit.slice(kit.indexOf("/* ── F-CO-K2 (the shared overview kit's rows): the ONE list"), kit.indexOf('/* ── end F-CO-K2 (the ONE list) ── */'))
+    expect(css.length).toBeGreaterThan(100)
+    expect(css).toMatch(/\.fw-so-ov-list \{\s*display: grid;\s*grid-template-columns: max-content minmax\(0, 1fr\) auto;/)
+    expect(css).toMatch(/\.fw-so-ov-list > \.fw-so-ov-row \{\s*grid-column: 1 \/ -1;\s*grid-template-columns: subgrid;/)
+    expect(css).toMatch(/@container fw-so-ov-card \(max-width: 479px\) \{\s*\.fw-so-ov-list \{\s*grid-template-columns: max-content minmax\(0, 1fr\);/)
+    expect(css).toMatch(/@container fw-so-ov-card \(max-width: 359px\) \{\s*\.fw-so-ov-list \{\s*grid-template-columns: minmax\(0, 1fr\);/)
+    expect(css).toMatch(/\.fw-so-ov-label \{\s*color: var\(--nds-text-muted\);/)
+    // The list declares no container of its own (the kit makes every Overview card one); tokens only — in the kit's list block and in
+    // what is left of people.css.
+    for (const sheet of [css, source('../view/overview/people.css')]) {
+      expect(sheet).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/)
+      expect(sheet).not.toMatch(/container(-type)?:/)
+    }
+    // people.css names no list rule of its own any more (the kit's list is the ONE list: never restyled by a host).
+    expect(source('../view/overview/people.css')).not.toMatch(/\.fw-so-(?:people|ov)-(?:list|label) \{/)
   })
 })
 // ---- end F-OO-131
@@ -170,7 +180,8 @@ describe('F-OO-132: People › Supervisor — the row face; Change… held in it
 
   it('the css: the supervisor’s doors wrap under the words below a 480 px card, as every row’s doors', () => {
     const css = readFileSync(new URL('../view/overview/people.css', import.meta.url), 'utf8')
-    expect(css).toMatch(/@container fw-so-ov-card \(max-width: 479px\) \{[^@]*\.fw-so-people-list > \.fw-so-ov-row > \.fw-psv-doors \{\s*grid-column: 1 \/ -1;\s*justify-self: end;/)
+    // F-CO-K2: the list is the kit's ONE list (.fw-so-ov-list); this rule stays the card's own (people.css).
+    expect(css).toMatch(/@container fw-so-ov-card \(max-width: 479px\) \{[^@]*\.fw-so-ov-list > \.fw-so-ov-row > \.fw-psv-doors \{\s*grid-column: 1 \/ -1;\s*justify-self: end;/)
   })
 })
 // ---- end F-OO-132
@@ -274,7 +285,7 @@ describe('F-OO-133: People › Answers the customer — who and why in the threa
   it('the design index’s overview case draws the real card (W05 follow-up): the four rows, never the withheld sentence', () => {
     const view = designScreen.view as ComponentType<{ model: unknown }>
     const html = renderView(view, designScreen.cases.find((item) => item.id === 'overview')!.model)
-    expect(html).toContain('<ul class="fw-so-people-list">')
+    expect(html).toContain('<ul class="fw-so-ov-list">') // F-CO-K2: the kit's ONE list
     expect(textOf(html)).not.toContain('Who works on it is shown to people who follow production.')
     expect(textOf(answersRow(html))).toContain("Bea Esempio · the order's supervisor")
   })
@@ -373,7 +384,7 @@ describe('F-OO-135: People › "Followers · N ›" — the reported count shown
   const inFrame = (thread: boolean, locale: 'en' | 'it' = 'en') =>
     render(createElement(RecordFrame, { recordType: 'SalesOrder', personId: 'u1', band, thread: thread ? createElement('div', null, 'thread') : null, threadLabel: 'The order’s thread', record: { type: 'SalesOrder', id: value.id }, children: createElement(PeopleCard, { order: value, model: record }) }), locale)
   /** The card's head (title and its link), before the rows. */
-  const headOf = (html: string) => html.slice(html.indexOf('<div class="fw-ro-head">') /* F-CO-K1: the kit's card head */, html.indexOf('<ul class="fw-so-people-list">'))
+  const headOf = (html: string) => html.slice(html.indexOf('<div class="fw-ro-head">') /* F-CO-K1: the kit's card head */, html.indexOf('<ul class="fw-so-ov-list">') /* F-CO-K2: the kit's ONE list */)
 
   it('the reported count is shown: "Followers · 4 ›" / "Chi segue · 4 ›"; none known yet: "Followers ›"; a count of 0 is said too', () => {
     const link = (count: number | null, locale: 'en' | 'it' = 'en') => textOf(render(createElement(FollowersLink, { count, onOpen: () => undefined }), locale))

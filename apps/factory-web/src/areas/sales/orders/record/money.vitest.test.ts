@@ -45,7 +45,9 @@ describe('F-OP-118: Money = this order\'s share', () => {
   it('the tab: invoice total beside this order\'s share, the also-bills links, one statement link — no customer-wide figure', () => {
     // F-OM-203: the section draws its model (money/invoices.ts): Total · This order · Open, the statement one link.
     const invoices = readFileSync(new URL('./money/view/InvoicesSection.tsx', import.meta.url), 'utf8')
-    expect(invoices).toContain("<div className=\"fw-om-ir-am fw-om-ir-share\">{t('money.share')}</div>")
+    // F-CM-k1 (Z13, 13-backend §3.4): the list is the shared part — the section hands the sixth column's head, the part draws it.
+    expect(invoices).toContain("extraHead={t('money.share')}")
+    expect(readFileSync(new URL('./money/view/parts.tsx', import.meta.url), 'utf8')).toContain('<div className="fw-om-ir-am fw-om-ir-share">{extraHead}</div>')
     expect(invoices).toContain("t('money.statement', { customer: order.party.legalName })")
     const totals = readFileSync(new URL('./money/view/TotalsSection.tsx', import.meta.url), 'utf8')
     expect(totals).toContain('const totals = totalsOf({ order, settlement: settlementPart?.value ?? null, can: model.can,')
@@ -60,7 +62,8 @@ describe('F-OP-118: Money = this order\'s share', () => {
     expect(invoices).toContain('const freight = amounts && price ? freightOf(amounts) : null')
     expect(invoices).toContain("const total = !price ? null :")
     // F-OM-203 (B-OM-023): without the price grain no amount column; the Payment words only (has-pay) once the settlement names them.
-    expect(readFileSync(new URL('./money/view/InvoicesSection.tsx', import.meta.url), 'utf8')).toContain("<div className={`fw-om-il${price ? '' : ` is-np${words ? ' has-pay' : ''}`}`}>")
+    // F-CM-k1 (13-backend §3.4): the list's own file now (the shared InvoiceList).
+    expect(readFileSync(new URL('./money/view/parts.tsx', import.meta.url), 'utf8')).toContain("<div className={`fw-om-il${price ? '' : ` is-np${words ? ' has-pay' : ''}`}`}>")
     expect(totalsOf({ order: value, settlement: settlement() as never, can: canOf('sales'), today: '2026-11-20' }).tiles).toBeNull()
     expect(readFileSync(new URL('./money/head.ts', import.meta.url), 'utf8')).toContain("...(price ? [] : [word('moneyTab.head.wallPrice')])")
     for (const locale of LOCALES) {

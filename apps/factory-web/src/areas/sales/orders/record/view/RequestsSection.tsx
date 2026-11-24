@@ -26,6 +26,8 @@ import { YesDoorView } from '../../depth/view/DepthBand'
 import { yesDoorOf } from '../../depth/model'
 import { rowWordsOf, type WaitingDoor, type WaitingRow } from '../overview/model'
 import { rowActsOf } from '../../../../../lib/production/work-order-acts/model' // F-OP-116: the row's own Lift rule
+// F-CO-K2: a row of Overview's card and its age are the shared overview kit's (GroupRow, RowAge); the order's RowAge is its words over it
+import { GroupRow, RowAge as KitRowAge } from '../../../../_shared/record-overview/Overview'
 
 /** The words the request card's lines are written with (Home › Approvals' own: `approvals` customerRequest.*). */
 const APPROVALS_NS = 'approvals'
@@ -188,33 +190,25 @@ export function WaitingRowItem({ row, order, model, actions, readOnly = false }:
       customer: order.party?.legalName ?? '',
       askWords: (request) => askWordsOf(request, { kind: w.t(`parts.request.kind.${request.kind}`), say: t, day: w.day }), // F-OO-204
     })
-  // F-OO-204: Overview's card row (the shared card row's columns: requests.css lays them out).
+  // F-OO-204: Overview's card row (the shared card row's columns). F-CO-K2: the shared overview kit's GroupRow lays them out.
   return (
-    <li className="fw-so-ov-row fw-so-rq-row">
-      <span>{due ? `${words} · ${due}` : words}</span>
-      <RowAge since={row.since} asOf={readOf(model.production)?.asOf ?? null} />
-      <span className="fw-so-ov-doors">
-        <WaitingDoorView door={row.door} order={order} model={model} actions={actions} readOnly={readOnly} />
-      </span>
-    </li>
+    <GroupRow age={<RowAge since={row.since} asOf={readOf(model.production)?.asOf ?? null} />} doors={<WaitingDoorView door={row.door} order={order} model={model} actions={actions} readOnly={readOnly} />}>
+      {due ? `${words} · ${due}` : words}
+    </GroupRow>
   )
 }
 
 /**
  * F-OO-204: how long a row waits — "15 d" (the parts' words), counted to the production read's own time; its exact day in the title
- * ("since 02/11/2026, 09:00"); no start known: "—". Shared by the card's request and Still to do rows.
+ * ("since 02/11/2026, 09:00"); no start known: "—". Shared by the card's request and Still to do rows (and Changes' rows).
+ * F-CO-K2: the order's adapter over the shared overview kit's `RowAge` — this says the order's words, the kit draws the cell.
  */
 export function RowAge({ since, asOf }: { since: string | null; asOf: string | null }) {
   const t = useT('orders')
   const w = useProductionWords()
   const locale = useLocale()
   const age = rowAgeOf(since, asOf)
-  if (!since || !age) return <span className="fw-so-rq-age">—</span>
-  return (
-    <time className="fw-so-rq-age" dateTime={since} title={t('changes.still.since', { when: formatDateTime(since, { locale }) })}>
-      {w.say(age)}
-    </time>
-  )
+  return <KitRowAge since={since} words={age ? w.say(age) : null} title={since && age ? t('changes.still.since', { when: formatDateTime(since, { locale }) }) : undefined} />
 }
 
 /**
