@@ -52,7 +52,8 @@ function TodayRow({ row, price, words, items }: { row: InvoiceListRow; price: bo
   const number = row.number ?? t('money.draft')
   const sub = [...(row.issueDate ? [formatDate(dayInstant(row.issueDate), { locale })] : []), ...row.subs.map(say)].join(' · ')
   const amount = (value: number | null) => (value === null ? null : money(value, row.currency, locale))
-  const pay = () => h('div', { className: 'fw-om-ir-p' }, row.payment ? h(Tag, { tone: row.payment.tone }, say(row.payment.word)) : null)
+  // cm-fx1: Tag and Pill take their children as a prop (TagProps / PillProps: `children` required) — the same element, typed honestly.
+  const pay = () => h('div', { className: 'fw-om-ir-p' }, row.payment ? h(Tag, { tone: row.payment.tone, children: say(row.payment.word) }) : null)
   return h(
     'div',
     { className: 'fw-om-ir', id: row.anchor, tabIndex: -1 },
@@ -80,7 +81,7 @@ function TodayRow({ row, price, words, items }: { row: InvoiceListRow; price: bo
         ? h('span', { className: 'fw-pt-inline' }, h(Spinner, { size: 12 }), ' ', t('deposit.step.sdiReading'))
         : row.sdi === 'failed'
           ? h('span', { className: 'fw-pt-inline' }, t('moneyTab.invoices.sdiFailed'), h(Button, { size: 'sm', variant: 'link', onClick: noop }, t('common.retry')))
-          : h(Pill, { tone: row.state.tone }, say(row.state.word)),
+          : h(Pill, { tone: row.state.tone, children: say(row.state.word) }),
     ),
     price
       ? h(
