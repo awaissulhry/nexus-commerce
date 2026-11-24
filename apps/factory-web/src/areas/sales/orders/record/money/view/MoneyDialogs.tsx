@@ -21,6 +21,7 @@ import { costAmountOf, HAND_COST_KINDS, marginAfterOf, targetOf, targetPctOf } f
 import type { CostLineKind } from '../../../../../finance/margins/api' // F-OM-302
 import { stillToPayOf } from '../totals'
 import { lineOf, pctOf, useSay } from './say' // F-OM-fx3 (W-19): pctOf, the page's one percent format; (W-11) lineOf, the sub-line
+import './money.css' // F-CM-k1 (M2-B1): the windows own their stylesheet — mounted outside the tab (the page), and through the door
 
 /**
  * F-OM-101 / 201 / 202 (order MONEY tab, 10-design §9) — the payment plan's windows, mounted ONCE by the page (OrderRecordView, the

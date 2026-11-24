@@ -30,9 +30,12 @@ export function keepNumbers(text: string): ReactNode {
 /** Says a model's word in the page's language: amounts in the order's currency, days and instants as days, percents, inner words. */
 export type Say = (said: MoneyWord) => string
 
-/** F-OM-101: the Money tab's one way to say its models' words (the models never format; this does, in the page's language). */
-export function useSay(currency: string): Say {
-  const t = useT('orders')
+/**
+ * F-OM-101: the Money tab's one way to say its models' words (the models never format; this does, in the page's language).
+ * F-CM-k1 (Z15): `namespace` — the shared parts say ORDER words (the default); a host page says its own catalogue's words with it.
+ */
+export function useSay(currency: string, namespace = 'orders'): Say {
+  const t = useT(namespace)
   const locale = useLocale()
   const say: Say = (said) => {
     const values: Record<string, string | number> = { ...(said.params ?? {}) }

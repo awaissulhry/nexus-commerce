@@ -84,8 +84,9 @@ describe('F-OM-203: one row per document — its state, its payment in words, it
     // The word-code wins over the amounts for a price holder too (one rule with the server).
     expect(rowOf(model('finance', shipped(), coded('REFUND_DUE')), GOODS_ID).payment!.word.key).toBe('moneyTab.invoices.pay.refund')
     // The view draws the Payment column for Sales once a row carries the words (has-pay), never an amount column.
-    const view = readFileSync(new URL('./view/InvoicesSection.tsx', import.meta.url), 'utf8')
-    expect(view).toContain("const words = !price && view.rows.some((row) => row.payment !== null)")
+    // F-CM-k1 (13-backend §3.4): the list is the shared part now (view/parts.tsx InvoiceList): the same two lines, there.
+    const view = readFileSync(new URL('./view/parts.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("const words = !price && rows.some((row) => row.payment !== null)")
     expect(view).toContain("is-np${words ? ' has-pay' : ''}")
   })
 })
@@ -188,15 +189,18 @@ describe('F-OM-fx5w: the walk\'s gaps in Invoices & credit notes', () => {
 
   it('N4 / N5: "Also bills" keeps a gap before its links; a draft says "Draft" once (its State) and its row ends with its ⋯', () => {
     const view = readFileSync(new URL('./view/InvoicesSection.tsx', import.meta.url), 'utf8')
-    expect(view).toContain('<span className="fw-pt-sub fw-om-ir-also">')
-    expect(view).not.toContain('fw-pt-sub fw-pt-inline')
+    // F-CM-k1 (13-backend §3.4): the row view is the shared list's now (view/parts.tsx): its lines are pinned there; the menu stays here.
+    const parts = readFileSync(new URL('./view/parts.tsx', import.meta.url), 'utf8')
+    expect(parts).toContain('<span className="fw-pt-sub fw-om-ir-also">')
+    for (const file of [parts, view]) expect(file).not.toContain('fw-pt-sub fw-pt-inline')
     expect(readFileSync(new URL('./view/money.css', import.meta.url), 'utf8')).toContain('.fw-om-ir-n > .fw-om-ir-also { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--nds-space-2) var(--nds-space-4); }')
     // The number's door names what a draft lacks; its sub-line has no "Draft"; every row's ⋯ copies a link to it.
-    expect(view).toContain("{`${invoice.number ?? t('moneyTab.invoices.noNumber')} ›`")
-    expect(view).not.toContain(": t('money.draft'), ...row.subs.map(say)]")
-    expect(view).toContain("const sub = [...(invoice.issueDate ? [formatDate(dayInstant(invoice.issueDate), { locale })] : []), ...row.subs.map(say)].join(' · ')")
+    expect(parts).toContain("{`${row.number ?? t('moneyTab.invoices.noNumber')} ›`")
+    for (const file of [parts, view]) expect(file).not.toContain(": t('money.draft'), ...row.subs.map(say)]")
+    expect(parts).toContain("const sub = [...(row.issueDate ? [formatDate(dayInstant(row.issueDate), { locale })] : []), ...row.subs.map(say)].join(' · ')")
     expect(view).toContain("label: t('moneyTab.menu.copyLinkRow'),")
-    expect(view).not.toContain('items.length > 0 ? <LineMenuButton')
+    for (const file of [parts, view]) expect(file).not.toContain('items.length > 0 ? <LineMenuButton')
+    expect(parts).toContain('<LineMenuButton label={t(\'moneyTab.invoices.more\', { number })} items={[...items]} />')
   })
 })
 
