@@ -1086,7 +1086,7 @@ describe('ct-fx3 G-W03: the requirement\'s file opens where this browser reaches
 describe('ct-fx3 G-W04: a company row\'s tags wrap inside their cell (Italian at 865)', () => {
   it('the row\'s tags carry the tab\'s own class, and only inside a company row they wrap (the DS\'s own wrap pattern; no DS class restyled)', () => {
     const css = readFileSync(new URL('../view/terms/terms.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
-    expect(css).toContain('.fw-ctr-row.is-c .fw-ctr-tag { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: start; }')
+    expect(css).toContain('.fw-ctr-row.is-c .fw-ctr-tag { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: center; text-wrap: balance; }') // ct-fx4 R-01
     expect(css).not.toMatch(/\.nds-/)
     const view = readFileSync(new URL('../view/terms/CommercialSection.tsx', import.meta.url), 'utf8')
     expect(view.match(/className="fw-ctr-tag"/g)).toHaveLength(3) // the source tag, "You work here", the PO tag
