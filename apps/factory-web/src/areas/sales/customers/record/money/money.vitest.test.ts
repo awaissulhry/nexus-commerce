@@ -32,6 +32,10 @@ import type { CommercialTerms } from '../../terms/api'
 import type { Margins } from '../../../../finance/margins/api'
 import type { OrderRow } from '../../../orders/api'
 import type { CustomerReturn } from '../../money/api'
+import { createElement } from 'react' // F-CM T.2
+import { render, textOf } from '../../../../../lib/record-thread/parts/testing' // F-CM T.2
+import { CM_CASES, cmTabOf, CmMoneyDesign, type CmCaseModel, type CmRole } from './_demo/cases' // F-CM T.2
+import { inShell } from '../../../../parties/_shared/fixtures' // F-CM T.2: the tab drawn in the office shell, as the gallery draws it
 
 /**
  * F-CM-101…105 (customer page › MONEY tab, cm-w1 W1.1; 10-design §4–§5.2; 18-lead-settles Z3–Z11, Z20, Z21, Z26) — the pure rules of
@@ -781,3 +785,126 @@ describe('F-CM-301…304: the account sections, Finance\'s windows in place, the
   })
 })
 // ---- end F-CM-301…304
+
+// ---- F-CM T.2 (customer page › MONEY tab, cm-t; 15-steps "The wall tests, by name") — the web's walls, each under its own name ----
+describe('the wall tests, by name (15-steps; cm-t T.2)', () => {
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+  /** Every file of the tab: its rules and container (record/money) and its views (record/view/money); the tests left out. */
+  const tabFiles = (): (readonly [string, string])[] => [
+    ...readdirSync(new URL('./', import.meta.url)).filter((name) => /\.tsx?$/.test(name) && !name.includes('vitest')).map((name) => [`money/${name}`, source(`./${name}`)] as const),
+    ...readdirSync(new URL('../view/money/', import.meta.url)).filter((name) => /\.tsx?$/.test(name)).map((name) => [`view/money/${name}`, source(`../view/money/${name}`)] as const),
+  ]
+  /** The tab of a case as a role reads it (the container's reads made up; the server's money wall applied). */
+  const tabAs = (cm: CmCaseModel, role: CmRole, locale: (typeof LOCALES)[number] = 'en') => render(inShell('/sales/customers/moda?tab=money', createElement(CmMoneyDesign, { cm: { role, ...(cm.input ? { input: cm.input } : {}), ...(cm.lazy ? { lazy: cm.lazy } : {}), ...(cm.room ? { room: cm.room } : {}) } })), locale)
+  const TAB_CASES = CM_CASES.filter((item) => !item.cm.window)
+  /** An amount on screen: a currency sign or a figure with cents. */
+  const AMOUNT = /€|\d[.,]\d{2}\b/
+
+  it('customer B sees nothing of customer A', () => {
+    // Every read of the tab names THIS customer (the reminders' switch is the company's: no customer in it).
+    const hook = source('./use-customer-money-tab.ts')
+    for (const call of ['openRefunds(api', 'listStops(api', 'listReminders(api', 'getOrderSummary(api', 'shippedOfCustomer(api', 'listInvoices(api', 'listPayments(api', 'creditBalanceOf(api', 'listRefunds(api', 'getCreditLimits(api', 'getCommercialTerms(api', 'customerTrust(api', 'listOrders(api', 'getMargins(api']) {
+      const line = hook.split('\n').find((text) => text.includes(call))
+      expect(line, call).toBeDefined()
+      expect(line, call).toContain('partyId')
+    }
+    expect(hook).toContain('getReceivablesSettings(api, companyId, signal)')
+    // No rule, container or view filters a list by customer.
+    for (const [name, text] of tabFiles()) expect(text, name).not.toMatch(/customer\.id\s*[!=]==|partyId\s*[!=]==|\.filter\([^)]*partyId/)
+    // The other company's line names only this customer's own rows (the read without the company term, split by COMPANY).
+    const { input } = cmTabOf(CM_CASES.find((item) => item.id === 'cm-elsewhere')!.cm)
+    const also = moneyAnswerOf(input).elsewhere
+    expect(also).toHaveLength(1)
+    for (const said of [also[0]!.words, also[0]!.door]) expect(JSON.stringify(said)).not.toMatch(/MARCHIO|BEISPIEL/)
+  })
+
+  for (const locale of LOCALES) {
+    it(`no digit of an amount for Sales and Read-only (${locale})`, () => {
+      for (const role of ['sales', 'read_only'] as const) {
+        for (const item of TAB_CASES) {
+          const text = textOf(tabAs(item.cm, role, locale))
+          expect(text, `${item.id} as ${role} (${locale})`).not.toMatch(AMOUNT)
+        }
+      }
+    })
+  }
+
+  it('no digit of an amount for Sales and Read-only: amountsOf of every word is empty', () => {
+    for (const role of ['sales', 'read_only'] as const) {
+      for (const item of TAB_CASES) {
+        const { input, lazy } = cmTabOf({ ...item.cm, role, held: undefined })
+        const balance = balanceOf(input, PREFIX)
+        const credit = creditOf(input, lazy.creditRow, lazy.terms, PREFIX)
+        const said: MoneyWord[] = [
+          ...everyWord(moneyAnswerOf(input)),
+          ...balance.answer,
+          ...balance.needs.map((need) => need.words),
+          ...credit.answer,
+          ...credit.facts.map((fact) => fact.value),
+          ...(credit.waiting ?? []),
+          ...(credit.overdue ? [credit.overdue] : []),
+          ...(chaseOf(input, lazy.trust, lazy.settings, PREFIX, true)?.answer ?? []),
+          ...(receivedOf(input, lazy.payments, lazy.credit, PREFIX)?.answer ?? []),
+        ]
+        for (const one of said) expect(amountsOf(one), `${item.id} as ${role}: ${one.key}`).toEqual([])
+      }
+    }
+  })
+
+  it('no Margin & cost without the margin grain; no Price check without the price grain', () => {
+    const busy = CM_CASES.find((item) => item.id === 'cm-busy')!.cm
+    const owner = tabAs(busy, 'owner')
+    expect(owner).toContain('id="price-check"')
+    expect(owner).toContain('id="margin"')
+    for (const role of ['sales', 'read_only'] as const) {
+      const html = tabAs(busy, role)
+      expect(html, role).not.toContain('id="price-check"')
+      expect(html, role).not.toContain('id="margin"')
+      // … and their reads are not made: the container hands none, and the hook reads them only with their grains.
+      const { lazy } = cmTabOf({ ...busy, role })
+      expect([lazy.priceRows, lazy.margin], role).toEqual([null, null])
+    }
+    const hook = source('./use-customer-money-tab.ts')
+    expect(hook).toContain("const priceRows = useLazyRead(wanted.has('priceRows'), can.orders && can.price,")
+    expect(hook).toContain("const margin = useLazyRead(wanted.has('margin'), can.margin && can.costing,")
+    expect(hook).toContain('priceRows: can.orders && can.price ? priceRows.part : null,')
+    expect(hook).toContain('margin: can.margin && can.costing ? margin.part : null,')
+  })
+
+  it('no supplier total', () => {
+    const demo = readdirSync(new URL('./_demo/', import.meta.url)).map((name) => [`money/_demo/${name}`, source(`./_demo/${name}`)] as const)
+    for (const [name, text] of [...tabFiles(), ...demo]) {
+      expect(text, name).not.toMatch(/areas\/finance\/payables|finance\/payables|\/payables\//)
+    }
+    // Margin & cost reads GET /costing/margins only (Finance's getMargins), never a supplier's invoices.
+    expect(source('./use-customer-money-tab.ts')).toContain("import { getMargins, type Margins } from '../../../../finance/margins/api'")
+    expect(source('../../../../finance/margins/api.ts')).toContain("api.get('/costing/margins', {")
+  })
+
+  it('hidden, never held for a right', () => {
+    const busy = CM_CASES.find((item) => item.id === 'cm-busy')!.cm
+    const buttons = ['Change limit…', 'Statement…', 'Record a payment ›']
+    const owner = textOf(tabAs(busy, 'owner'))
+    for (const name of buttons) expect(owner, name).toContain(name)
+    for (const role of ['sales', 'read_only'] as const) {
+      const html = tabAs(busy, role)
+      const text = textOf(html)
+      for (const name of buttons) expect(text, `${role}: ${name}`).not.toContain(name)
+      // Nothing drawn held with a right's name, and no money act held (disabled) in its place.
+      expect(text, role).not.toMatch(/\b(?:payments|receivables|invoices|orders|sales|money|parties|costing)\.[a-z]+/)
+      expect(html, role).not.toMatch(/<button[^>]*disabled[^>]*>(?:(?!<\/button>).)*(?:Change limit|Statement…|Record a payment|Refund…)/)
+    }
+    // Statement… only with the price grain (in the rule), whatever else the reader holds.
+    const { input } = cmTabOf({ ...busy, role: 'owner', held: [...ROLES.owner].filter((right) => right !== 'money.price') })
+    expect(chaseOf(input, null, null, PREFIX, true)!.statement).toBe(false)
+  })
+
+  it('the portal imports none of it', () => {
+    const walk = (url: URL): string[] =>
+      readdirSync(url, { withFileTypes: true }).flatMap((entry) => (entry.isDirectory() ? walk(new URL(`${entry.name}/`, url)) : /\.tsx?$/.test(entry.name) ? [new URL(entry.name, url).pathname] : []))
+    const files = walk(new URL('../../../../../portal/', import.meta.url))
+    expect(files.length).toBeGreaterThan(50)
+    for (const file of files) expect(readFileSync(file, 'utf8'), file).not.toMatch(/customers\/record\/money|orders\/record\/money\/door/)
+  })
+})
+// ---- end F-CM T.2
