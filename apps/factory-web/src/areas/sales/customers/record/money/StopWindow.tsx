@@ -33,7 +33,7 @@ export function StopWindow({ partyId, ask, onClose, onChanged }: { partyId: stri
         </>
       }
     >
-      <ReminderDepth reminder={{ customer: { id: partyId }, invoices: [{ id: invoice.id, number: invoice.number, issueDate: null, dueDate: invoice.dueDate }], status: 'PREPARED', trusted: null }} onChanged={onChanged} />
+      <ReminderDepth reminder={{ customer: { id: partyId }, invoices: [{ id: invoice.id, number: invoice.number, issueDate: null, dueDate: invoice.dueDate }], status: 'PREPARED' /* cm-fx1: no `trusted` — none read here; ReminderDepth says null itself */ }} onChanged={onChanged} />
     </Modal>
   )
 }
