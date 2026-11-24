@@ -575,7 +575,10 @@ const pinView = output({
   /** Office only: who pinned it. */
   pinnedBy: output({ id: id(), name: z.string().nullable() }).optional(),
   message: output({
+    /** Null: a floor worker the site's gate keeps back (tw-s S.2, as the note's card), or no name. */
     authorName: z.string().nullable(),
+    /** tw-s S.2, office only: who wrote it (a WORKER with no name: "A person on the floor"). */
+    authorKind: z.enum(AUTHOR_KINDS).optional(),
     /** One line of its words (empty when it carries files only). */
     excerpt: z.string(),
     at: instant(),
