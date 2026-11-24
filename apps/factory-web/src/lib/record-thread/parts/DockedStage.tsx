@@ -9,9 +9,9 @@ import './docked-stage.css'
  * (inert, hidden from screen readers) — so a case uses the whole width (no dead space at 1920). Below 1280 px the thread alone, full
  * width, as RecordFrame shows it there. Design cases only: the live frame is areas/_shared/record-frame.
  */
-export function DockedStage({ children, foot = false }: { children?: ReactNode; foot?: boolean }) {
+export function DockedStage({ children, foot = false, width = 'forty' }: { children?: ReactNode; foot?: boolean; /* tw- T.1 (B13): a third beside 40 % */ width?: 'forty' | 'third' }) {
   return (
-    <div className="fw-rt-stage">
+    <div className={`fw-rt-stage${width === 'third' ? ' is-third' : ''}`}>
       <div className="fw-rt-stage-body" inert aria-hidden="true">
         <div className="fw-rt-stage-tabs">
           <span className="is-on" />
