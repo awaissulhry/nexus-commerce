@@ -13,6 +13,7 @@ import { templateOf } from '@nexus/factory-domain/auth/roles/templates' // F-CO-
 import { withheldParts } from '@nexus/factory-domain/sales/customer-360/glance' // F-CO-301: the glance's parts by right
 import { moneyTabDemo } from '../money/_demo/fixtures' // F-CM-104: the Money tab's made-up reads
 import { CustomerMoneyTab } from './view/money/CustomerMoneyTab' // F-CM-104: the Money tab's view
+import { CM_CASES, cmHeld, CmMoneyDesign, type CmCaseModel } from './money/_demo/cases' // F-CM T.1: the Money tab's cm-* cases
 import type { CustomerMoneyModel } from '../money/overview'
 import { CustomerRecordView } from './view/CustomerRecordView'
 // F-SA-272 → F-CO-201: who looks after the customer, as People's rows and their two Change… windows (made-up people of the portal demo).
@@ -158,7 +159,7 @@ const OPEN_ORDER_MONEY: OpenOrderMoney[] = [
 /** A case: the record, (B-W2a-49) the Commercial terms card of its Terms & requirements tab (B-TH-260), (B-W2a-81) its money and after-sales reads, (B-W2b-324) its depth. */
 // F-SA-272: + the Overview's "Who looks after <customer>" card (the supervisor and backup, moved from Portal settings).
 // F-SA-274: + the e-mails of the people with portal access (the contacts' "Has portal access").
-type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase; supervisor?: SupervisorModel; portalEmails?: readonly string[]; work?: WorkCase /* F-SA-276 */; designer?: DesignerModel /* F-CP-155 */; priceDiffer?: number /* F-CP-141 */; shipmentLine?: boolean /* cw T.1: the docked ORDER's thread with the draft shipment's office line */; supervisorOpen?: boolean /* F-CO-201: People's Change… (the supervisor) open — the form's own states */; overview?: OverviewOver /* F-CO-301: the Overview's own state */ }
+type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase; supervisor?: SupervisorModel; portalEmails?: readonly string[]; work?: WorkCase /* F-SA-276 */; designer?: DesignerModel /* F-CP-155 */; priceDiffer?: number /* F-CP-141 */; shipmentLine?: boolean /* cw T.1: the docked ORDER's thread with the draft shipment's office line */; supervisorOpen?: boolean /* F-CO-201: People's Change… (the supervisor) open — the form's own states */; overview?: OverviewOver /* F-CO-301: the Overview's own state */; cm?: CmCaseModel /* F-CM T.1: a cm-* case of the Money tab */ }
 
 // ---- F-SA-276: the Work tab's cases — the strip's reads and the sheet's rows (made-up; the production part as the API sends it) ----
 interface WorkCase {
@@ -994,7 +995,8 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
   const overviewTab = party && shownTab(recordTabs(SIDES.customers, record.can), record.tab) === 'overview' ? createElement(OverviewDesign, { record, party, money, depth, supervisor, designer, supervisorOpen: supervisorOpen === true, ...(overview ? { over: overview } : {}) }) : null
   // ---- F-CM-104 (cm-w1 W1.4): the Money tab, built for the tab the page shows (as the live container builds it) from made-up reads —
   // Finance's view with the price grain, else Sales' (words only); a case's priceDiffer is the page's price count.
-  const moneyTab = party && shownTab(recordTabs(SIDES.customers, record.can), record.tab) === 'money' ? createElement(CustomerMoneyTab, { input: moneyTabDemo(record.can.price ? 'finance' : 'sales', { priceDiffer: priceDiffer ?? null }), prefix: record.prefix, asOf: '2026-10-31T09:44:00.000Z', onRetry: () => undefined }) : null
+  // F-CM T.1: a cm-* case draws the tab with every section's reads, its room and the window it opens in place (money/_demo/cases.tsx).
+  const moneyTab = party && shownTab(recordTabs(SIDES.customers, record.can), record.tab) === 'money' ? (model.cm ? createElement(CmMoneyDesign, { cm: model.cm }) : createElement(CustomerMoneyTab, { input: moneyTabDemo(record.can.price ? 'finance' : 'sales', { priceDiffer: priceDiffer ?? null }), prefix: record.prefix, asOf: '2026-10-31T09:44:00.000Z', onRetry: () => undefined })) : null
   // ---- end F-CM-104
   return inShell(
     `/sales/customers/${id}`,
@@ -1227,6 +1229,10 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'tab-money-price-differ', label: 'F-CM-104 · Money: "Prices differ on 2 orders ›" in What needs you (opens Work › Not equal until Price check)', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true } }), money: moneyModel({ ...MONEY_CAN.finance, orders: true, credit: true, creditLimits: true }, { orders: loaded(OPEN_ORDER_MONEY) }), priceDiffer: 2 } }, // B-CP-011
     { id: 'tab-money-price-differ-no-price', label: 'F-CM-104 · Money as Sales: words only — no line, no count, no amount, no act', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true, price: false } }), money: moneyModel(MONEY_CAN.sales, { orders: loaded(OPEN_ORDER_MONEY.map((row) => ({ id: row.id, number: row.number, currency: row.currency, deposit: row.deposit }))) }), priceDiffer: 2 } }, // B-CP-011
     { id: 'tab-money-blind', label: 'F-CM-104 · Money without the price grain: the answer in words, no figures, no act (nothing held)', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true, price: false } }), money: moneyModel(MONEY_CAN.sales, { orders: loaded(OPEN_ORDER_MONEY.map((row) => ({ id: row.id, number: row.number, currency: row.currency, deposit: row.deposit }))) }) } }, // B-CP-011
+    // ---- F-CM T.1 (cm-t; 15-steps T.1): the Money tab's cm-* cases — the nine customers of the picture, reminders off, each read reading
+    // and failed, no payments.view, the four roles (their template's REAL grant), the rooms 343 / 865 / 1314, each window in place.
+    ...CM_CASES.map((item) => ({ id: item.id, label: item.label, model: { ...record('MODA-DEMO', { tab: 'money', can: recordCanOf(new Set(item.cm.held ?? cmHeld(item.cm.role))) }), cm: item.cm } })),
+    // ---- end F-CM T.1
     { id: 'band-held', label: 'F-SA-271 · New order and Add task held with why (no orders.manage, no tasks.manage)', model: record('MODA-DEMO', { can: { ...RECORD_CAN, ordersManage: false, tasks: false, workorders: true } }) },
     { id: 'band-doors', label: 'F-SA-271 · ⋯ Check VIES, Add task for <customer>…, Import orders…, Open in Sales › Orders, Work orders of <customer> ›', model: record('MODA-DEMO', { can: { ...RECORD_CAN, ordersManage: true, tasks: true, workorders: true } }) },
     // ---- F-SA-272: the Overview — key numbers as doors, Also open, and who looks after the customer (moved from Portal settings).
