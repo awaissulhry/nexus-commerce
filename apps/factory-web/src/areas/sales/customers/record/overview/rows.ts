@@ -6,6 +6,7 @@ import { supervisorHeld } from '../../portal/limits/model' // F-CO-201
 import { requestsDoorOf, tileOf, type TileRead } from '../use-customer-work'
 import { valueOf as tileValueOf } from '../work-band'
 import { complaintDoor, complaintsDoor, depositDoor, moneyDoor, ordersDoor, projectsDoor, promiseDoor, quotesDoor, receivablesDoor, repairsDoor, sampleDoor, samplesDoor, tabDoor, termsDoor, workOrdersDoor } from './doors'
+import { peopleAddDoor, peopleDoor } from './doors' // F-CA-121: People & addresses' section ids
 import { boardNumbersOf, boardOf, headlineOf, nextPromiseOf } from './headline'
 import { overAmountsOf, stepDoorOf, stripsOf } from './strips'
 import {
@@ -117,7 +118,7 @@ export function bandStateOf(input: Pick<OverviewInput, 'can' | 'reads'>): BandSt
 export function peopleOf(input: OverviewInput): PeopleCard {
   const { party, can, prefix } = input
   const id = party.id
-  const head = linkDoor('people', say('customers.tab.people'), tabDoor(prefix, id, 'people'))
+  const head = linkDoor('people', say('customers.tab.people'), peopleDoor(prefix, id, 'people')) // F-CA-121
   const looksAfter = input.looksAfter
   if (looksAfter && !looksAfter.supervisor.read) {
     const supervisor = looksAfter.supervisor
@@ -144,7 +145,7 @@ export function peopleOf(input: OverviewInput): PeopleCard {
       })
     }
   }
-  const add: LabelledDoor[] = can.manage ? [stepDoor('contact', say('step.action.contact'), href(tabDoor(prefix, id, 'people')), party.status === 'ARCHIVED' ? say('held.archived') : null)] : []
+  const add: LabelledDoor[] = can.manage ? [stepDoor('contact', say('step.action.contact'), href(peopleAddDoor(prefix, id, 'contact')) /* F-CA-121 */, party.status === 'ARCHIVED' ? say('held.archived') : null)] : []
   const nobody = (key: string, label: string): OverviewRow => ({ key, label: ov(label), parts: [{ say: ov('people.nobody') }], ...(add.length > 0 ? { doors: add } : {}) })
   if (!orders && !invoices) contacts.push(nobody('nobody', 'people.contactBoth'))
   else if (!orders) contacts.unshift(nobody('nobody-orders', 'people.contactOrders'))
@@ -536,8 +537,8 @@ export function linkedOf(input: OverviewInput): LinkedCard {
 
   // Projects (threads.read), then a team's riders and the measurement profiles (only when there are some).
   if (input.projects) kind('projects', ov('linked.projects'), input.projects.all > 0 ? [{ say: ov('linked.openOf', { open: input.projects.open, total: input.projects.all }), door: href(projectsDoor(prefix, id)) }] : [])
-  if (glance?.riders && glance.riders.count > 0) rows.push({ key: 'riders', label: depth('riders.title'), parts: [{ say: text(String(glance.riders.count)), door: href(tabDoor(prefix, id, 'people')) }] })
-  if (glance?.profiles && glance.profiles.count > 0) rows.push({ key: 'profiles', label: depth('profiles.title'), parts: [{ say: text(String(glance.profiles.count)), door: href(tabDoor(prefix, id, 'people')) }] })
+  if (glance?.riders && glance.riders.count > 0) rows.push({ key: 'riders', label: depth('riders.title'), parts: [{ say: text(String(glance.riders.count)), door: href(peopleDoor(prefix, id, 'riders')) /* F-CA-121 */ }] })
+  if (glance?.profiles && glance.profiles.count > 0) rows.push({ key: 'profiles', label: depth('profiles.title'), parts: [{ say: text(String(glance.profiles.count)), door: href(peopleDoor(prefix, id, 'riders')) /* F-CA-121 */ }] })
 
   // Plain doors with no count read.
   const quiet: LabelledDoor[] = []

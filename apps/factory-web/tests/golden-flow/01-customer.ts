@@ -196,7 +196,8 @@ export default defineStage({
 
     await flow.step('addresses: registered office + invoices; the warehouse for deliveries', async () => {
       await sales.go(`/sales/customers/${party.id}?tab=addresses`)
-      await press(page.getByRole('button', { name: 'Add address', exact: true }).first())
+      // F-CA-W1 (ca-w1, Z22): with no address yet, the Addresses head says "Add the registered office" (the Owner's picture).
+      await press(page.getByRole('button', { name: 'Add the registered office', exact: true }).first())
       let form = dialog(page)
       await form.getByRole('checkbox', { name: 'Deliveries', exact: true }).uncheck()
       await form.getByRole('checkbox', { name: 'Default delivery address' }).uncheck()

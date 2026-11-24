@@ -31,6 +31,16 @@ export const MONEY_ANCHORS = Object.freeze({ collect: 'collect', credit: 'credit
 export type MoneyAnchor = keyof typeof MONEY_ANCHORS
 export const moneyDoor = (prefix: string, partyId: string, anchor: MoneyAnchor): string => `${tabDoor(prefix, partyId, 'money')}#${MONEY_ANCHORS[anchor]}`
 
+// F-CA-121 (customer People & addresses, lane ca- W1.6; Z21, F38): People & addresses' section ids — ONE constant (the tab's own
+// sections, cu/record/people/model.ts PEOPLE_SECTIONS). The Overview's People card, its Add contact, Linked records' riders and
+// profiles and the "Can't invoice yet" steps land at the section; Add contact / Add address open the record's own window on arrival.
+export const PEOPLE_ANCHORS = Object.freeze({ people: 'people', addresses: 'addresses', riders: 'riders', privacy: 'personal-data' } as const)
+export type PeopleAnchor = keyof typeof PEOPLE_ANCHORS
+export const peopleDoor = (prefix: string, partyId: string, anchor: PeopleAnchor): string => `${tabDoor(prefix, partyId, 'people')}#${PEOPLE_ANCHORS[anchor]}`
+/** People & addresses with the Add contact / Add address window open on arrival (`&add=`; the tab drops it once it opened). */
+export const peopleAddDoor = (prefix: string, partyId: string, what: 'contact' | 'address'): string => `${tabDoor(prefix, partyId, 'people')}&add=${what}`
+// F-CA-121: end
+
 /** The parts of Terms & requirements (the element ids the customer page draws: `party-hold`, `party-requirements`, `party-identity`). */
 export const TERMS_ANCHORS = Object.freeze({ hold: 'party-hold', requirements: 'party-requirements', identity: 'party-identity' } as const)
 export type TermsAnchor = keyof typeof TERMS_ANCHORS

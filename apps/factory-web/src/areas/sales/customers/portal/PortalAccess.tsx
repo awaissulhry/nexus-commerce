@@ -28,7 +28,7 @@ import { dayOf, endOfDay, inviteBody, partnerCan, partnerChangeOf, partnerProble
 import { openPreview } from '../../../admin/users/partners/preview'
 import { limitsApply, productionPreviewAddress } from './limits/model' // F-PR-07
 import { useLimits } from './limits/use-limits' // F-PR-07
-import type { PortalDialog, PortalNotice, PortalSide, RequestRow } from './model'
+import type { PortalAccessActions, PortalAccessModel, PortalDialog, PortalNotice, PortalSide, RequestRow } from './model'
 import { PORTAL_PARTS, PortalAccessView, type PortalPart } from './view/PortalAccessView' // F-SA-274: + the parts
 
 const SENTENCE: Readonly<Record<RowAction, string>> = {
@@ -56,6 +56,28 @@ const SENTENCE: Readonly<Record<RowAction, string>> = {
  * access"); an address `?invite=<e-mail>&inviteName=` opens the invitation filled in, once.
  */
 export function PortalAccess({ side, party, parts, contactEmails, onPeople }: { side: PortalSide; party: { id: string; name: string; companyId: string | null }; parts?: readonly PortalPart[]; contactEmails?: ReadonlySet<string>; onPeople?: (emails: ReadonlySet<string>) => void }) {
+  // F-CA-102 (customer People & addresses, lane ca-; 13-backend §3; Z13): the container's state and acts live in usePortalAccess (below,
+  // moved as is) so People & addresses opens the same windows in place; this mount draws them with the tab's view, as before.
+  const { model, actions } = usePortalAccess({ side, party, parts, onPeople })
+  return <PortalAccessView parts={parts} contactEmails={contactEmails} model={model} actions={actions} />
+}
+
+/** F-CA-102: what a mount of the portal container asks — its side, the party, the parts it draws; `enabled` false reads nothing (absent: on). */
+export interface PortalAccessInput {
+  readonly side: PortalSide
+  readonly party: { id: string; name: string; companyId: string | null }
+  readonly parts?: readonly PortalPart[] | undefined
+  readonly onPeople?: ((emails: ReadonlySet<string>) => void) | undefined
+  /** F-CA-102: a mount that is not shown yet (People & addresses on another tab) reads and listens to nothing. Absent: on. */
+  readonly enabled?: boolean | undefined
+}
+
+/**
+ * F-CA-102 (moved as is from PortalAccess above): the portal of one party — its reads (the portal; the open requests only where the
+ * mount draws them, R-B15), its live events, every change after a fresh code when asked, the dialogs' state. A mount draws `model`
+ * with `actions` (PortalAccessView, or People & addresses' rows with PortalDialogs).
+ */
+export function usePortalAccess({ side, party, parts, onPeople, enabled }: PortalAccessInput): { model: PortalAccessModel; actions: PortalAccessActions } {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const can = useMemo(() => partnerCan(session.permissions), [session.permissions])
@@ -89,8 +111,10 @@ export function PortalAccess({ side, party, parts, contactEmails, onPeople }: { 
     onNotice: setNotice,
   })
 
+  const on = enabled !== false // F-CA-102
+  const drawsRequests = (parts ?? PORTAL_PARTS).includes('requests') // F-CA-102 (R-B15): the requests read only where they are drawn
   const load = useCallback(async (): Promise<Access | null> => {
-    if (!can.view) return null
+    if (!can.view || !on) return null
     try {
       const answer = await getPortalAccess(api, party.id)
       setAccess(answer)
@@ -102,17 +126,17 @@ export function PortalAccess({ side, party, parts, contactEmails, onPeople }: { 
       setProblem(partnerProblem(error))
       return null
     }
-  }, [api, can.view, party.id])
+  }, [api, can.view, party.id, on])
 
   const loadRequests = useCallback(async () => {
-    if (!can.view) return
+    if (!can.view || !on || !drawsRequests) return
     try {
       const answer = await listRequests(api, party.id)
       setRequests({ items: answer.items.map((item) => ({ ...item, href: `${prefix}${recordAddress({ type: item.record.type, id: item.record.id, label: item.record.label, companyId: item.companyId }, OFFICE_PAGES)}` })), problem: null })
     } catch (error) {
       setRequests({ items: null, problem: partnerProblem(error) })
     }
-  }, [api, can.view, party.id, prefix])
+  }, [api, can.view, party.id, prefix, on, drawsRequests])
 
   useEffect(() => {
     void load()
@@ -121,6 +145,7 @@ export function PortalAccess({ side, party, parts, contactEmails, onPeople }: { 
 
   const live = useLiveBus({
     onChange: (change) => {
+      if (!on) return // F-CA-102: a mount not shown listens to nothing
       if (partnerChangeOf(change, party.id)) {
         const userId = signedInOf(change)
         void load().then((answer) => {
@@ -132,6 +157,7 @@ export function PortalAccess({ side, party, parts, contactEmails, onPeople }: { 
       limits.onLive(change) // F-PR-07
     },
     onReconnect: () => {
+      if (!on) return // F-CA-102
       void load()
       void loadRequests()
       limits.reloadAll() // F-PR-07
@@ -216,11 +242,8 @@ export function PortalAccess({ side, party, parts, contactEmails, onPeople }: { 
   }, [access])
   // ---- end F-SA-274
 
-  return (
-    <PortalAccessView
-      parts={parts}
-      contactEmails={contactEmails}
-      model={{
+  return {
+    model: {
         side,
         prefix,
         partyName: party.name,
@@ -242,8 +265,8 @@ export function PortalAccess({ side, party, parts, contactEmails, onPeople }: { 
         requests: { ...requests, selected: selectedRequests },
         previewing,
         limits: limits.model, // F-PR-07
-      }}
-      actions={{
+    },
+    actions: {
         onRetry: () => {
           setProblem(null)
           setAccess(null)
@@ -339,7 +362,6 @@ export function PortalAccess({ side, party, parts, contactEmails, onPeople }: { 
         onStepUp: (code) => void submitStepUp(code),
         onStepUpClose: cancelStepUp,
         onDismissNotice: () => setNotice(null),
-      }}
-    />
-  )
+    },
+  }
 }

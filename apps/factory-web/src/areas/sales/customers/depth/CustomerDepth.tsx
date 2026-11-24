@@ -44,6 +44,13 @@ export function useCustomerGlance(): CustomerDepthState['glance'] {
 }
 // ---- end F-CO-102
 
+// F-CA-115 (customer People & addresses, lane ca-; 13-backend §3, §5.5): the contacts' personal data for the People tab's container —
+// the provider's ONE privacy read (read on People), no second read of it.
+export function useCustomerPrivacy(): CustomerDepthState['privacy'] {
+  return useDepth().privacy
+}
+// F-CA-115: end
+
 // ---- F-CM-301 (customer MONEY tab, cm-w3 W3.1; 13-backend §4.2): the hold for Money's Credit & terms — the provider's ONE hold state,
 // shared with Terms & requirements: Put on hold… and Release… (the one hold in force, with its version) open the Terms tab's own window,
 // drawn where Money asks for it. `release` is null while the holds are read, or when several are in force (Terms lists each one).

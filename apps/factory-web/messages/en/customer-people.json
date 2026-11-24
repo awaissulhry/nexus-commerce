@@ -1,0 +1,243 @@
+{
+  "answer": {
+    "nothing": "Nobody and no address yet",
+    "people_one": "{count} person",
+    "people_other": "{count} people",
+    "portal": {
+      "signIn_one": "{count} signs in to the portal",
+      "signIn_other": "{count} sign in to the portal",
+      "invited_one": "{count} invited",
+      "invited_other": "{count} invited",
+      "invitedOnly_one": "{count} invited to the portal",
+      "invitedOnly_other": "{count} invited to the portal",
+      "nobody": "nobody in the portal yet",
+      "both": "{signIn}, {invited}",
+      "seats": "({taken} of {max} seats)",
+      "withSeats": "{who} {seats}"
+    },
+    "addresses_one": "{count} address",
+    "addresses_other": "{count} addresses",
+    "riders_one": "{count} rider",
+    "riders_other": "{count} riders",
+    "riderOf": "rider of {team}",
+    "chipsLabel": "What waits on us here"
+  },
+  "chip": {
+    "check_one": "{count} address waits for our check",
+    "check_other": "{count} addresses wait for our check",
+    "basis": "{count} without a lawful basis",
+    "expired_one": "{count} invitation expired",
+    "expired_other": "{count} invitations expired",
+    "ends_one": "{count} access ends within 14 days",
+    "ends_other": "{count} accesses end within 14 days",
+    "seats": "Seats full ({taken} of {max})",
+    "noQuotes": "Nobody gets quotes & confirmations",
+    "noInvoices": "Nobody gets invoices",
+    "registered": "{count} registered offices",
+    "noRegistered": "No registered office: can't invoice yet"
+  },
+  "filter": {
+    "check_one": "Showing the {count} address that waits for our check.",
+    "check_other": "Showing the {count} addresses that wait for our check.",
+    "basis_one": "Showing the {count} person without a lawful basis.",
+    "basis_other": "Showing the {count} people without a lawful basis.",
+    "expired_one": "Showing the {count} person whose invitation expired.",
+    "expired_other": "Showing the {count} people whose invitations expired.",
+    "ends_one": "Showing the {count} person whose access ends within 14 days.",
+    "ends_other": "Showing the {count} people whose access ends within 14 days.",
+    "seats_one": "Showing the {count} person who takes a seat.",
+    "seats_other": "Showing the {count} people who take a seat.",
+    "noQuotes": "Nobody gets quotes & confirmations: give a contact with an e-mail the role Orders.",
+    "noInvoices": "Nobody gets invoices & reminders: give a contact with an e-mail the role Invoices.",
+    "registered": "Showing the {count} registered offices.",
+    "showAllPeople_one": "Show {count} person",
+    "showAllPeople_other": "Show all {count} people",
+    "showAllAddresses_one": "Show {count} address",
+    "showAllAddresses_other": "Show all {count} addresses"
+  },
+  "people": {
+    "title": "People",
+    "more": "More for People",
+    "info": "Gets by e-mail: who our mails go to by default. Quotes and order confirmations go to the oldest Orders contact with an e-mail; shipping notices to every Orders contact; delay notices to up to 3 of them; invoices, reminders and statements to every Invoices contact; deposit pages to the first Invoices contact, else Orders; recall notices to the Quality contact.",
+    "infoQuote": "A quote's own contact wins for its own mails (its confirmation, its deposit page, its delay notice). A portal person who is no contact gets only what their portal settings say.",
+    "answer": {
+      "none": "Nobody yet: add the person who orders — quotes and confirmations go to them.",
+      "contacts_one": "{count} contact",
+      "contacts_other": "{count} contacts",
+      "contactsAndPortal": "{contacts} and {count} only in the portal",
+      "seats": "{taken} of {max} portal seats",
+      "seatsFull": "{taken} of {max} portal seats (full)",
+      "allTo": "quotes, confirmations, invoices and reminders go to {name}",
+      "quotesTo": "quotes & confirmations go to {name}",
+      "noQuotes": "nobody gets quotes & confirmations",
+      "invoicesTo": "invoices & reminders to {names}",
+      "noInvoices": "nobody gets invoices & reminders",
+      "portalHidden": "portal access is not shown for your role",
+      "portalOff": "the portal is off for this customer"
+    },
+    "col": {
+      "person": "Person",
+      "reach": "E-mail and phone",
+      "gets": "Gets by e-mail",
+      "portal": "Portal",
+      "privacy": "Personal data"
+    },
+    "listLabel": "People of {name}",
+    "portalOnly": "Portal only",
+    "sameName": "Same name as the contact {name}: check the e-mail",
+    "blanked": "Blanked for good",
+    "noEmail": "No e-mail",
+    "writesIn": "writes in {language}",
+    "showArchived": "Show archived contacts ({count})",
+    "hideArchived": "Hide archived contacts",
+    "hideLeft": "Hide people who left",
+    "tick": "Tick portal people to act on many…",
+    "portalSettings": "Portal settings ›",
+    "history": "History of the contacts ›",
+    "showMore_one": "Show {count} more person",
+    "showMore_other": "Show {count} more people"
+  },
+  "gets": {
+    "QUOTES_AND_CONFIRMATIONS": "Quotes & confirmations",
+    "SHIPPING_NOTICES": "Shipping notices",
+    "DELAY_NOTICES": "Delay notices",
+    "DEPOSIT_PAGES": "Deposit pages",
+    "INVOICES_AND_REMINDERS": "Invoices & reminders",
+    "RECALLS": "Recall notices",
+    "none": "No mail by role",
+    "archived": "Nothing: archived",
+    "noEmail": "Gets nothing: no e-mail. Orders, invoices and quality mails need one.",
+    "portalOnly": "Not a contact: gets no mail by role. Portal notices follow their own settings."
+  },
+  "used": {
+    "quotes_one": "{count} open quote",
+    "quotes_other": "{count} open quotes",
+    "complaints_one": "{count} open complaint",
+    "complaints_other": "{count} open complaints",
+    "returns_one": "{count} open return",
+    "returns_other": "{count} open returns",
+    "service_one": "{count} open service case",
+    "service_other": "{count} open service cases",
+    "mailIn": "last mail in {date}",
+    "on": "Used on {what}",
+    "draftQuotes_one": "{count} draft quote",
+    "draftQuotes_other": "{count} draft quotes",
+    "shipments_one": "{count} prepared shipment",
+    "shipments_other": "{count} prepared shipments",
+    "samples_one": "{count} sample shipment",
+    "samples_other": "{count} sample shipments",
+    "portalRequests_one": "{count} portal order request",
+    "portalRequests_other": "{count} portal order requests",
+    "changeRequests_one": "{count} change request",
+    "changeRequests_other": "{count} change requests",
+    "notOnWork": "Not on open work"
+  },
+  "portal": {
+    "none": "No portal access",
+    "approver": "Production approver",
+    "expired": "Invitation expired",
+    "endsIn": "Access ends {date} · in {count} d",
+    "lastSignIn": "Last sign-in {date}",
+    "never": "Not signed in yet",
+    "prices": "Sees prices",
+    "noPrices": "No prices"
+  },
+  "privacy": {
+    "onlyPortal": "Only in the portal"
+  },
+  "row": {
+    "menu": "Actions for {name}",
+    "addContact": "Add as a contact…",
+    "copyEmail": "Copy e-mail",
+    "history": "History ›",
+    "copyLink": "Copy link to this row",
+    "erasedLine": "Erased contact",
+    "erasedHeld": "This contact was erased: nothing more can be done with it."
+  },
+  "held": {
+    "noEmailInvite": "An invitation needs an e-mail: add it to the contact first."
+  },
+  "bulk": {
+    "label": "Acts on the ticked portal people",
+    "ticked_one": "{count} person ticked",
+    "ticked_other": "{count} people ticked",
+    "none": "Tick the portal people to act on together",
+    "done": "Done",
+    "tick": "Tick {name}"
+  },
+  "addresses": {
+    "more": "More for Addresses",
+    "info": "Defaults: a new quote and a new order start with the default address for invoices and for deliveries. The e-invoices name the oldest active registered office (else the default address for invoices).",
+    "infoCheck": "An address the customer adds in the portal waits for our check: it is not used for deliveries until a colleague who manages orders approves it. Refuse it with the words the customer reads.",
+    "answer": {
+      "none": "No address yet: invoices name the registered office; deliveries go to the default delivery address.",
+      "invoicesTo": "invoices go to {where}",
+      "noInvoices": "no default for invoices",
+      "deliveriesTo": "deliveries go to {where}",
+      "deliveriesToo": "deliveries there too",
+      "noDeliveries": "no default for deliveries: new orders ask for one",
+      "waits_one": "{count} waits for our check",
+      "waits_other": "{count} wait for our check",
+      "registered": "{count} registered offices: e-invoices use the oldest"
+    },
+    "col": {
+      "used": "Used on"
+    },
+    "listLabel": "Addresses of {name}",
+    "defaultBillTo": "Default for invoices",
+    "defaultShipTo": "Default for deliveries",
+    "einvoice": "E-invoices use this address",
+    "otherRegistered": "Also a registered office, but e-invoices use the oldest one ({city}). Archive the one that is no longer right.",
+    "nobodyAt": "Nobody named at the address",
+    "showArchived": "Show archived addresses ({count})",
+    "hideArchived": "Hide archived addresses",
+    "history": "History of the addresses ›",
+    "showMore_one": "Show {count} more address",
+    "showMore_other": "Show {count} more addresses"
+  },
+  "address": {
+    "copy": "Copy address",
+    "setBillTo": "Set as default for invoices",
+    "setShipTo": "Set as default for deliveries",
+    "waitingHeld": "It waits for our check: it can be a default once it is approved.",
+    "refusedLine": "Refused address",
+    "refusedHeld": "A refused address never changes: the customer can add another."
+  },
+  "check": {
+    "label": "Check of {name}",
+    "waits": "Waits for our check",
+    "added": "added in the portal by {name} on {date}",
+    "addedNoName": "added in the portal on {date}",
+    "notUsed": "Not used for deliveries until it is approved; it cannot be a default before.",
+    "colleague": "A colleague who manages orders approves or refuses it.",
+    "approve": "Approve",
+    "approving": "Approving…",
+    "refuse": "Refuse…",
+    "refusedOn": "Refused on {date} by {name}",
+    "refusedOnNoName": "Refused on {date}",
+    "reason": "“{reason}” — the customer reads these words. A refused address never comes back: they can add another."
+  },
+  "refuse": {
+    "title": "Refuse the delivery address",
+    "sub": "{customer} · added in the portal by {name} on {date}",
+    "why": "Why (the customer reads these words)",
+    "never": "A refused address never comes back and cannot be edited: the customer can add another.",
+    "noOrder": "No order uses it yet: it was waiting for our check.",
+    "confirm": "Refuse the address",
+    "sending": "Refusing…",
+    "tooShort": "Say why the address is not accepted: the customer reads it.",
+    "tooLong": "At most {max} characters."
+  },
+  "done": {
+    "approved": "The delivery address “{name}” was approved: it can be chosen for deliveries now, in the office and in the portal.",
+    "refused": "The delivery address “{name}” was refused: the customer reads why.",
+    "copied": "Copied.",
+    "copyFailed": "Couldn't copy: select the text and copy it by hand."
+  },
+  "part": {
+    "portal": "the portal access"
+  },
+  "linkTo": "Copy link to {section}",
+  "keys": "Keys: Tab moves to the next act, Enter or Space opens it; Esc closes a menu or a window.",
+  "showFewer": "Show fewer"
+}

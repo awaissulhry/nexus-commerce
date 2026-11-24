@@ -47,6 +47,14 @@ import { useBeforeOrderCounts } from './quotes-tab/use-before-order-counts' // F
 import { CustomerOverview } from './overview/CustomerOverview'
 import { useCustomersWork } from '../list/use-customers-work'
 // ---- end F-CO-102
+// F-CA-118 (customer page › People & addresses, lane ca-; 13-backend §5.3): the tab's container (reads only on People), its view, its
+// notices in the record's ONE notice area, the tab's count from the party read.
+import { usePeopleTab } from './people/use-people-tab'
+import { peopleBadge as peopleBadgeOf } from './people/answer'
+import { PeopleTab } from './view/people/PeopleTab'
+import { PeopleNotices } from './view/people/PeopleNotices'
+import { useCustomerPrivacy } from '../depth/CustomerDepth'
+// F-CA-118: end
 
 /**
  * `/w/<company>/sales/customers/<id>` (SCR-033): the customer's record. F-SA-270: its own view (./view/CustomerRecordView), split
@@ -203,21 +211,25 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   const quotesTab = named && tab === 'quotes' ? <QuotesIncomingTab party={named} counts={pageCounts /* F-CQ-302 */} onPick={onPick} onFocus={customerDock.onFocus} shown={customerDock.shown} /> : null
   const workTab = named && tab === 'work' && can.orders ? <WorkTab party={named} prefix={prefix} work={work} can={workCan} picked={customerDock.shown /* F-SA-279: the row marked = the record docked */} onPick={onPick} onFocus={customerDock.onFocus} onWindow={setWin /* F-SA-278 */} ask={ask} onAsked={() => setAsk(null) /* F-CP-104 */} before={before /* F-CW-101 */} urgencyFoot={urgencyFoot /* F-CW-302 */} mayPortal={session.permissions.includes('partners.production.manage') /* F-CW-302: may change the switch */} mayIncoming={session.permissions.includes('sales.inquiries.view') /* cw fx5 (W-10): may open Sales › Incoming */} /> : null
   // ---- end F-SA-276
-  // ---- F-SA-274: People & addresses — the people with portal access (Portal access's people part), tagged against the contacts.
-  const [portalEmails, setPortalEmails] = useState<ReadonlySet<string>>(new Set())
-  const contactEmails = useMemo(() => new Set((record.party?.contacts ?? []).filter((contact) => contact.status === 'ACTIVE' && contact.email).map((contact) => contact.email!.trim().toLowerCase())), [record.party])
-  const party = record.party
-  const portalPeople =
-    party && record.model.tab === 'people' && record.model.can.partners ? (
-      <PortalAccess side="customers" party={{ id: party.id, name: party.tradeName ?? party.legalName, companyId: party.companyId }} parts={['people']} contactEmails={contactEmails} onPeople={setPortalEmails} />
+  // F-CA-118 (customer page › People & addresses, lane ca-; 13-backend §5.3; Z13, Z15): the tab's container, built on every tab (it reads
+  // only while People shows), its view only on `?tab=people`; today's riders / profiles and personal-data cards stand under the new
+  // sections until ca-w2. "Add as a contact…" starts the record's own Add contact window with the portal person's name and e-mail.
+  const privacy = useCustomerPrivacy()
+  const people = usePeopleTab({ partyId, party: record.party, model: record.model, actions: record.actions, reload: record.reload, privacy: privacy.read, glance: glance.read, enabled: tab === 'people' })
+  const peopleTab =
+    named && record.party && tab === 'people' ? (
+      <PeopleTab model={people.model} actions={people.actions} portal={people.portal} recordHref={`${prefix}/sales/customers/${encodeURIComponent(partyId)}`} after={<>{record.depth?.people}{record.depth?.contacts}</>} />
     ) : null
-  // ---- end F-SA-274
+  const peopleNotice = <PeopleNotices notices={people.notices} />
+  const peopleBadge = record.party ? peopleBadgeOf(record.party) : null
+  const recordModel = people.contactDraft ? { ...record.model, contactDraft: people.contactDraft } : record.model
+  // F-CA-118: end
   return (
     <>
       {windows /* F-SA-278 */}
       {/* F-OF-301 (T): the docked order's Versions… — the page's ONE depth window (as on the order page). */}
       <DepthDialogs depth={customerDock.fileDepth.model} actions={customerDock.fileDepth.actions} />
-      <CustomerRecordView model={record.model} actions={record.actions} thread={dock /* F-SA-276 */} threadButton={threadButton /* F-SA-279 */} work={workTab} workCount={work.attention} quotesIncoming={quotesTab /* F-SA-277 */} overviewTab={overviewTab /* F-CO-102 */} printThread={record.printThread} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} portalPeople={portalPeople} portalEmails={portalEmails} {...doors /* F-CP-104 */} priceDiffer={priceDifferOf(work.prices) /* F-CP-141 */} quotesBadge={quotesBadge /* F-CQ-302 */} quotesTabNote={quotesTabNote && tab === 'work' /* F-CQ-306 */} moneyTab={moneyTab /* F-CM-104 */} moneyTabNote={moneyTabNote && tab === 'work' /* F-CM-104 */} />
+      <CustomerRecordView model={recordModel /* F-CA-118 */} actions={record.actions} thread={dock /* F-SA-276 */} threadButton={threadButton /* F-SA-279 */} work={workTab} workCount={work.attention} quotesIncoming={quotesTab /* F-SA-277 */} overviewTab={overviewTab /* F-CO-102 */} printThread={record.printThread} terms={record.terms} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} peopleTab={peopleTab /* F-CA-118 */} peopleBadge={peopleBadge /* F-CA-118 */} peopleNotice={peopleNotice /* F-CA-118 */} {...doors /* F-CP-104 */} priceDiffer={priceDifferOf(work.prices) /* F-CP-141 */} quotesBadge={quotesBadge /* F-CQ-302 */} quotesTabNote={quotesTabNote && tab === 'work' /* F-CQ-306 */} moneyTab={moneyTab /* F-CM-104 */} moneyTabNote={moneyTabNote && tab === 'work' /* F-CM-104 */} />
     </>
   )
 }
