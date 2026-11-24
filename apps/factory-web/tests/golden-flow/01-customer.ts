@@ -41,7 +41,7 @@ export const CUSTOMER = {
 }
 
 export default defineStage({
-  proves: 'Italian B2B customer with tax identity; VIES proof (fake): an Italian VAT number is not a VIES question, and the screen says so; the customer page opens on All orders (rows=all, one document, no loop), New order and its lines open in place, Clear all goes back to All orders, a docked order shows its own files line (F-CP-112); on the Work tab a band door shows exactly its count, the order says Most urgent first, ticked rows show the bar with words and Ask production opens with Needs an answer ticked, nothing written (cw T.2); on Quotes & incoming the band shows, a door opens exactly its count, Sort ▾ says Most urgent first, one ticked row shows at most 3 acts and More ▾ with words, nothing written (cq T.2); the Overview shows its sentence and a group of its band opens Work on exactly the orders it counts, nothing written (co T.3); People & addresses opened at #addresses shows its section, and People lists the two contacts with what each gets by e-mail, nothing written (ca T.3)',
+  proves: 'Italian B2B customer with tax identity; VIES proof (fake): an Italian VAT number is not a VIES question, and the screen says so; the customer page opens on All orders (rows=all, one document, no loop), New order and its lines open in place, Clear all goes back to All orders, a docked order shows its own files line (F-CP-112); on the Work tab a band door shows exactly its count, the order says Most urgent first, ticked rows show the bar with words and Ask production opens with Needs an answer ticked, nothing written (cw T.2); on Quotes & incoming the band shows, a door opens exactly its count, Sort ▾ says Most urgent first, one ticked row shows at most 3 acts and More ▾ with words, nothing written (cq T.2); the Overview shows its sentence and a group of its band opens Work on exactly the orders it counts, nothing written (co T.3); People & addresses opened at #addresses shows its section, and People lists the two contacts with what each gets by e-mail, nothing written (ca T.3); the payment terms set with Change terms… on Terms & requirements, #party-hold in view and the answer line naming them, nothing written (ct T.3)',
   async run(flow) {
     const sales = await flow.desk('sales')
     const { page } = sales
@@ -129,13 +129,18 @@ export default defineStage({
       await flow.shot(page, 'customer-dock-all')
     })
 
-    await flow.step('payment terms on the identity card', async () => {
-      // F-SA-271 (sales page plan, pick R5): a customer opens on Work for Sales; the identity card is the Overview's.
-      await sales.go(`/sales/customers/${party.id}?tab=overview`)
-      await press(page.getByRole('button', { name: 'Edit', exact: true }).first())
-      await dialog(page).getByRole('textbox', { name: 'Payment terms', exact: true }).fill('Bonifico 30 gg d.f.')
-      await answerOf(page, 'PATCH', /^\/parties\/[0-9a-f-]+$/, () => press(dialog(page).getByRole('button', { name: 'Save' })))
-      await expect(page.getByText('Saved.').first()).toBeVisible()
+    // F-CT-527 (customer page › Terms & requirements, ct-w2 W2.3; Z8): the payment terms have ONE editor — Change terms… on Terms &
+    // requirements (the Edit window no longer carries them): a term of the library (the base seed's BB30FM), PATCH …/commercial-terms.
+    await flow.step('payment terms on Terms & requirements: Change terms… picks a term of the library', async () => {
+      await sales.go(`/sales/customers/${party.id}?tab=terms#party-commercial`)
+      await press(page.getByRole('button', { name: 'Change terms…', exact: true }).first())
+      await dialog(page).getByRole('combobox', { name: 'Payment terms', exact: true }).selectOption({ label: 'BB30FM · Bank transfer 30 days end of month' })
+      // ct-fx2: BB30FM asks no share on the order, so a new quote would carry NO deposit (quoteDefaultsOf: terms with no order
+      // share → none) — the later stages (06a accept, 06b TD02, 07 order, 10 release) read the deposit the sales settings gave
+      // before (30 %). The customer's own default deposit keeps it: 30 %.
+      await dialog(page).getByRole('textbox', { name: 'Default deposit %', exact: true }).fill('30')
+      await answerOf(page, 'PATCH', /^\/parties\/[0-9a-f-]+\/commercial-terms$/, () => press(dialog(page).getByRole('button', { name: 'Save terms', exact: true })))
+      await expect(page.getByText('Commercial terms saved.', { exact: false }).first()).toBeVisible()
     })
 
     // ---- co T.3 (customer page › Overview, co-w1 / co-w2; 15-steps T.3): the Overview on the seeded customer, WRITING NOTHING — its
@@ -274,10 +279,34 @@ export default defineStage({
 
     await flow.step('VIES: the tax tab says an Italian number is not a VIES question (EU numbers outside Italy only)', async () => {
       await sales.go(`/sales/customers/${party.id}?tab=tax`)
-      await expect(page.getByText('VIES checks EU VAT numbers outside Italy. This party has none to check.')).toBeVisible()
+      // F-CT-518 (ct-w2 W2.2): the old tax tab opens Terms & requirements; its Tax identity section says it in ONE quiet line.
+      await expect(page.getByText('VIES is not needed: it checks EU VAT numbers outside Italy.')).toBeVisible()
       await expect(page.getByRole('button', { name: 'Check VIES' })).toHaveCount(0)
       await flow.shot(page, 'tax-vies')
     })
+
+    // ---- ct T.3 (customer page › Terms & requirements, ct-t; 15-steps T.3): the Hold door lands on the Hold section in view, and the
+    // answer line names the payment terms the "Change terms…" step above set (the base seed's BB30FM, its English name). A step that
+    // writes nothing. Its parts are found by the ids the tab draws (`#party-hold`, the answer line `#answer`); selectors from the code.
+    await flow.step('Terms & requirements: #party-hold shows the Hold section in view; the answer line names the payment terms (nothing written)', async () => {
+      // Nothing is written: no change reaches the customer, its terms, holds, requirements or carrier account.
+      const written: string[] = []
+      const onRequest = (request: import('@playwright/test').Request) => {
+        const path = new URL(request.url()).pathname
+        if (request.method() !== 'GET' && /\/(parties|customer-carrier-accounts)(\/|$)/.test(path)) written.push(`${request.method()} ${path}`)
+      }
+      page.on('request', onRequest)
+      await sales.go(`/sales/customers/${party.id}?tab=terms#party-hold`)
+      const hold = page.locator('#party-hold')
+      await seen(hold, 60_000)
+      await expect(hold).toHaveCount(1)
+      await expect(hold).toBeInViewport({ timeout: 30_000 })
+      await expect(page.locator('#answer')).toContainText('Bank transfer 30 days end of month', { timeout: 30_000 })
+      await flow.shot(page, 'terms-hold')
+      page.off('request', onRequest)
+      expect(written, 'nothing was written').toEqual([])
+    })
+    // ---- end ct T.3
 
     // ---- F-CP-112 (customer page plan C2a, F-CP-104 / F-CP-113): New order from the band opens in place — the customer held (no
     // Change), Add the lines opens the New order page's own editor in a large window — with no document and no address written.

@@ -2,10 +2,10 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { LOCALES, type Locale } from '../../../../../lib/i18n/locales'
 import { CATALOGUE, createScopedTranslator, messagesFor } from '../../../../../lib/i18n/messages'
-import type { Party, TaxIdentity } from '../../../../parties/_shared/api'
+import type { Party, TaxIdentity, ViesCheck } from '../../../../parties/_shared/api'
 import { CUSTOMERS } from '../../../../parties/_shared/fixtures'
 import type { CommercialTerms } from '../../terms/api'
-import type { Holds } from '../../depth/api'
+import type { Holds, Requirement, Requirements } from '../../depth/api'
 import { ready, failedRead, LOADING } from '../../depth/model'
 import { identityFactsOf, termsAnswer, type TermsFacts } from './answer'
 import { commercialSection, type CarrierFacts, type CommercialInput, type CompanyTermsRead, type CompanyTermsReadEntry, type CompanyTermsRow } from './commercial'
@@ -18,8 +18,11 @@ import { termsAbilitiesOf } from '../../terms/model'
 import { TERMS as COMPANY_TERMS } from '../../depth/_demo/fixtures'
 import { endCompanyTerms, readCarrierAccount, setCarrierAccount, setCompanyTerms, type CarrierAccount } from './api'
 import { TERMS_TAB_START, termsTabModel, type TermsTabReads, type TermsTabState } from './tab'
+import { endedLine, keptWords, requirementsSection, versionsOf, type RequirementsInput } from './requirements'
+import { datedIdentities, fiscalCodeHidden, identitySection, type IdentityInput } from './identity'
+import { problemKey, refusedFields } from '../../../../parties/_shared/model'
 import { companyBody, companyEndWindowOf, companyProblems, companyWindowOf, deliveryBody, deliveryProblems, deliveryRefusal, deliveryWindowOf, endLines, termsWindowOf, termsWindowPatch } from './windows'
-import { createElement, type ReactElement } from 'react'
+import { createElement, type ComponentType, type ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { I18nProvider } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
@@ -28,7 +31,6 @@ import { ChangeTermsBody } from '../view/terms/ChangeTermsDialog'
 import { DeliveryBody } from '../view/terms/DeliveryDialog'
 import { CompanyEndBody, CompanyTermsBody } from '../view/terms/CompanyTermsDialog'
 import { TermsNotices } from '../view/terms/TermsNotices'
-import type { ComponentType } from 'react'
 import { designScreen as customerRecordScreen } from '../fixtures'
 
 /**
@@ -555,6 +557,8 @@ describe('the tab model (tab.ts): the container and the gallery build it alike',
     requirements: null,
     library: null,
     lists: null,
+    history: { items: [] },
+    viesRunning: false,
     ...over,
   })
 
@@ -590,7 +594,8 @@ describe('the views of the tab (W1.3)', () => {
   })
 
   it('a view fetches nothing (no API client, no session, no fetching hook, never its container) and draws no AG grid', () => {
-    expect(views.length).toBeGreaterThanOrEqual(10)
+    // ct-fx (People end check): the floor was miscounted (ct-w1 shipped 9 views, not 10) — the guard is the TRUE list of the tab's views.
+    expect(views.map((view) => view.name).sort()).toEqual(['ChangeTermsDialog.tsx', 'CommercialSection.tsx', 'CompanyTermsDialog.tsx', 'DeliveryDialog.tsx', 'HoldSection.tsx', 'IdentitySection.tsx', 'RequirementsSection.tsx', 'TermsAnswer.tsx', 'TermsNotices.tsx', 'TermsTab.tsx', 'say.ts'])
     for (const { name, source: text } of views) {
       expect(text, name).not.toMatch(/lib\/api\/|lib\/session\/|use-terms-tab|use-depth|fetch\(|useRouter/)
       expect(text, name).not.toMatch(/@nexus\/ui\/grid|ListFrame|ag-grid/)
@@ -639,7 +644,7 @@ describe('the views of the tab (W1.3)', () => {
   const party = partyWith({ id: PARTY_ID, taxIdentities: [], warnings: [], vies: { ...MODA.vies, state: 'NOT_APPLICABLE' } })
   const carrier: CarrierAccount = { partyId: PARTY_ID, code: 'SEED-ONE', name: 'Seed Customer One S.r.l.', carrierCode: 'brt', carrierName: 'BRT', accountOnFile: true, freightBilling: 'COLLECT', defaultCarrierService: 'Express 24h', version: 7 }
   const two = { ...COMPANY_TERMS, companies: COMPANY_TERMS.companies.map((item, at) => (at === 0 ? { ...item, terms: { ...item.terms!, creditLimitCurrency: 'EUR' }, history: [{ ...item.terms!, id: '0190f0e2-c700-7000-8000-000000000499', endedAt: '2026-10-01T09:00:00.000Z', endedBy: 'Alex Demo' }] } : item)) }
-  const reads = (locale: Locale): TermsTabReads => ({ party, prefix: '/w/SEEDA', can: OWNER, locale, now: NOW, companyId: two.companies[0]!.company.id, companyNames: {}, commercial: ready(own({ incoterm: 'DAP' })), carrier: ready(carrier), holds: ready(HOLDS), companies: ready(two), requirements: ready({ inForce: [], ended: [] }), library: ready([]), lists: ready([]) })
+  const reads = (locale: Locale): TermsTabReads => ({ party, prefix: '/w/SEEDA', can: OWNER, locale, now: NOW, companyId: two.companies[0]!.company.id, companyNames: {}, commercial: ready(own({ incoterm: 'DAP' })), carrier: ready(carrier), holds: ready(HOLDS), companies: ready(two), requirements: ready({ inForce: [], ended: [] }), library: ready([]), lists: ready([]), history: { items: [] }, viesRunning: false })
 
   it('the whole tab draws in English and in Italian with no key left (on hold, two companies, every fold open)', () => {
     for (const locale of LOCALES) {
@@ -689,17 +694,19 @@ describe('the page mounts the tab (W1.4)', () => {
 
   it('the record builds the container on every tab (it reads only on Terms) and the view only on ?tab=terms; the old card left the slot', () => {
     const cr = source('../CustomerRecord.tsx')
-    expect(cr).toContain("const terms = useTermsTab({ partyId, party: record.party, model: record.model, reload: record.reload, depth: termsDepth, enabled: tab === 'terms' })")
-    expect(cr).toContain("const termsTab = named && record.party && tab === 'terms' ? <TermsTab model={terms.model} actions={terms.actions} hold={terms.hold} /> : null")
+    expect(cr).toContain("const terms = useTermsTab({ partyId, party: record.party, model: record.model, reload: record.reload, actions: record.actions /* F-CT-516 */, moreHistory: record.moreHistory, depth: termsDepth, enabled: tab === 'terms' })")
+    expect(cr).toContain("const termsTab = named && record.party && tab === 'terms' ? <TermsTab model={terms.model} actions={terms.actions} hold={terms.hold} requirements={terms.requirementsWindow /* F-CT-508 */} /> : null")
     expect(cr).toContain('const termsNotice = <TermsNotices notices={terms.notices} />')
     expect(cr).not.toMatch(/CommercialTerms\b|terms: \(party, reload\)/)
     // People's notice line is untouched (Z5: the depth's notice is split instead).
     expect(cr).toContain('const peopleNotice = <PeopleNotices notices={{ ...people.notices, depth: privacy.notice, onDismissDepth: privacy.onDismissNotice }')
   })
 
-  it('the view: the tab, then today\'s Requirements and Tax identity cards; its notices in the ONE notice area; a third of the dock (D3)', () => {
+  it('the view: the tab in one line (it draws all four sections); its notices in the ONE notice area; a third of the dock (D3)', () => {
     const view = source('../view/CustomerRecordView.tsx')
-    expect(view).toMatch(/\{tab === 'terms' && \([\s\S]*?\{termsTab\}[\s\S]*?id="party-requirements"[\s\S]*?id="party-identity"/)
+    // F-CT-508 / F-CT-518 (ct-w2 W2.1, W2.2): the tab draws Requirements and Tax identity itself — no old section in the record view.
+    expect(view).toContain("{tab === 'terms' && termsTab}")
+    expect(view).not.toMatch(/id="party-(requirements|identity)"/)
     expect(view).toContain("{tab === 'people' ? peopleNotice : tab === 'terms' ? termsNotice : null}")
     expect(view).toContain("|| tab === 'people' || tab === 'terms' ? 'third' : undefined}")
     expect(view).not.toMatch(/customers\.anchor\.(label|commercial|hold)|href="#party-commercial"|depth\?\.tax/) // the anchor line and the old Tax part went
@@ -734,8 +741,9 @@ describe('the page mounts the tab (W1.4)', () => {
 
   it('P0-B1 (Z15, Z33): every .fw-cdp-stack has its column again — CSS only', () => {
     const css = source('../../depth/depth.css').replace(/\/\*[\s\S]*?\*\//g, '')
-    expect(css).toMatch(/\.fw-cdp-loading,\s*\.fw-cdp-stack \{\s*display: flex;\s*flex-direction: column;/)
-    expect(css).not.toMatch(/fw-cdp-two-wide|fw-cdp-now/)
+    expect(css).toMatch(/\.fw-cdp-stack \{\s*display: flex;\s*flex-direction: column;/)
+    // F-CT-534 (ct-w2 W2.4): the old cards' rules went with them (no reader left).
+    expect(css).not.toMatch(/fw-cdp-(two-wide|now|loading|card|head|title|toggle-row|bar|clip|code|tags)\b/)
   })
 
   it('every Terms case of the gallery draws the new tab (its id kept): the answer line, Hold first, Commercial terms', () => {
@@ -748,6 +756,267 @@ describe('the page mounts the tab (W1.4)', () => {
       expect(html, item.id).toContain('class="fw-pt fw-ctr"')
       expect(html.indexOf('id="party-hold"'), item.id).toBeGreaterThan(-1)
       expect(html.indexOf('id="party-hold"'), item.id).toBeLessThan(html.indexOf('id="party-identity"'))
+    }
+  })
+})
+
+// ---- W2.1: Requirements -----------------------------------------------------------------------------------------------------------
+
+describe('Requirements (W2.1, 10-design §5.3; Z12, Z31, Z36)', () => {
+  const rule = (n: number, over: Partial<Requirement> = {}): Requirement => ({
+    id: `0190f0e2-c700-7000-8000-00000000080${n}`,
+    companyId: A.id,
+    companyCode: A.code,
+    kind: 'PACKING',
+    words: `Rule ${n} (made-up).`,
+    appliesAt: ['ORDER'],
+    styles: [],
+    everyStyle: true,
+    file: null,
+    supersedesId: null,
+    active: true,
+    createdAt: '2026-11-04T09:00:00.000Z',
+    createdBy: 'Alex Demo',
+    endedAt: null,
+    endedBy: null,
+    endReason: null,
+    version: 1,
+    mayChange: true,
+    ...over,
+  })
+  const v1 = rule(1, { active: false, endedAt: '2026-11-12T09:00:00.000Z', endedBy: 'Alex Demo', endReason: 'New brand book (made-up).' })
+  const v2 = rule(2, { supersedesId: v1.id, createdAt: '2026-11-12T09:00:00.000Z', appliesAt: ['ORDER', 'SHIPMENT'], file: { id: '0190f0e2-c700-7000-8000-000000000901', fileName: 'Routing guide demo.pdf' } })
+  const ended = rule(3, { kind: 'LABEL', active: false, endedAt: '2026-11-10T09:00:00.000Z', endedBy: 'Alex Demo', endReason: 'No longer asked (made-up).' })
+  const READ: Requirements = { inForce: [v2], ended: [v1, ended], mayAdd: true }
+  const input = (over: Partial<RequirementsInput> = {}): RequirementsInput => ({ read: ready(READ), can: OWNER, archived: false, companyNames: NAMES, kind: null, more: false, endedOpen: false, ...over })
+
+  it('the version chain: v2 replaces v1 (of its day); replaced and ended are told apart, with no dangling " · "', () => {
+    expect(versionsOf(READ).get(v2.id)).toBe(2)
+    const model = requirementsSection(input())
+    expect(said1(said('ct.req.version', { params: { version: model.rows[0]!.version, before: model.rows[0]!.replaces!.version }, days: { date: model.rows[0]!.replaces!.on } }))).toBe('v2 · replaces v1 of 04/11/2026')
+    expect(model.ended.map((row) => [row.replaced, row.nextVersion])).toEqual([[true, 2], [false, null]])
+    expect(said1(endedLine(model.ended[0]!))).toBe('v1 · replaced by v2 on 12/11/2026 by Alex Demo: “New brand book (made-up).”')
+    expect(said1(endedLine(model.ended[1]!), 'it')).toBe('Terminato il 10/11/2026 da Alex Demo: “No longer asked (made-up).”')
+    expect(said1(endedLine({ ...model.ended[1]!, reason: null }))).toBe('Ended on 10/11/2026 by Alex Demo')
+  })
+
+  it('where it really shows (Z12): a shipping rule is printed on the delivery note; every other stage is kept, not on that screen yet', () => {
+    const row = requirementsSection(input()).rows[0]!
+    expect([row.ddt, row.kept]).toEqual([true, ['ORDER']])
+    expect(said1(keptWords(row.kept)!)).toBe(`Kept for ${said1(said('sales-customers-depth:stage.ORDER'))} — not on that screen yet`)
+    expect(said1(said('ct.req.ddtUnless'))).toBe('Unless the office types its own remarks')
+    expect(said1(requirementsSection(input()).answer!)).toBe(`1 requirement in force: ${said1(said('sales-customers-depth:kind.PACKING')).toLowerCase()} · 1 printed on the delivery note (DDT).`)
+  })
+
+  it('Z36: a style saved before the wall that is not ours or this customer\'s is never named — "a style no longer offered"', () => {
+    const gone = requirementsSection(input({ read: ready({ ...READ, inForce: [{ ...v2, everyStyle: false, styles: [{ id: 's1', code: 'SEED-01', name: 'Seed jacket' }, { id: 's2', code: '', name: '' }] }] }) }))
+    expect(gone.rows[0]!.styles).toEqual([{ id: 's1', code: 'SEED-01', name: 'Seed jacket' }, { id: 's2', code: null, name: '' }])
+    expect(said1(said('ct.req.styleGone'), 'it')).toBe('un modello non più offerto')
+  })
+
+  it('kind chips from six rules in force (Z31); ten rows, then "Show n more"; a chip shows only its kind', () => {
+    const many: Requirement[] = Array.from({ length: 12 }, (_, at) => rule(at, { id: `r-${at}`, kind: at < 3 ? 'LABEL' : 'PACKING' }))
+    const model = requirementsSection(input({ read: ready({ inForce: many, ended: [] }) }))
+    expect(model.kinds).toEqual([{ kind: 'LABEL', count: 3 }, { kind: 'PACKING', count: 9 }])
+    expect([model.rows.length, model.hidden]).toEqual([10, 2])
+    expect(requirementsSection(input({ read: ready({ inForce: many, ended: [] }), kind: 'LABEL' })).rows.map((row) => row.kind)).toEqual(['LABEL', 'LABEL', 'LABEL'])
+    expect(requirementsSection(input({ read: ready({ inForce: many.slice(0, 5), ended: [] }) })).kinds).toBeNull()
+  })
+
+  it('hidden, never held, for a right (the server\'s mayAdd / mayChange first); held only by state; the file a door only with files.read', () => {
+    for (const can of [PM, RO]) {
+      const model = requirementsSection(input({ can }))
+      expect([model.add.shown, model.rows[0]!.replace.shown, model.rows[0]!.end.shown]).toEqual([false, false, false])
+    }
+    expect(requirementsSection(input({ read: ready({ ...READ, mayAdd: false, inForce: [{ ...v2, mayChange: false }] }) })).add.shown).toBe(false)
+    expect(said1(requirementsSection(input({ archived: true })).add.held!)).toBe('Archived: reactivate it to change its terms')
+    expect(requirementsSection(input()).rows[0]!.fileDoor).toBe(true)
+    expect(requirementsSection(input({ can: termsCan(['parties.view']) })).rows[0]!.fileDoor).toBe(false)
+  })
+
+  it('the wall: the style search names THIS customer (forCustomer) — one search per typed pause, an older answer never lands over a newer one', () => {
+    const useDepth = readFileSync(new URL('../../depth/use-depth.ts', import.meta.url), 'utf8')
+    expect(useDepth).toContain('searchStyles(api, styleQuery, partyId, controller.signal)')
+    expect(useDepth).toMatch(/setTimeout\(\(\) => \{[\s\S]*?\}, 300\)/)
+    expect(useDepth).toContain('controller.abort()')
+    expect(readFileSync(new URL('../../depth/api.ts', import.meta.url), 'utf8')).toContain("query: { q: q.trim() || undefined, status: 'OPEN', limit: 50, forCustomer }")
+    // the windows are the provider's own, exported and mounted as they are; the old card went
+    const windows = readFileSync(new URL('../../depth/view/RequirementsTab.tsx', import.meta.url), 'utf8')
+    expect(windows).toContain('export function RequirementWindows(')
+    expect(windows).not.toMatch(/export function RequirementsTab\(|DepthCard|SummaryTable/)
+    expect(readFileSync(new URL('../view/terms/TermsTab.tsx', import.meta.url), 'utf8')).toContain('<RequirementWindows model={requirements.model} actions={requirements.actions} />')
+  })
+})
+
+// ---- W2.2: Tax identity & e-invoice -------------------------------------------------------------------------------------------------
+
+describe('Tax identity & e-invoice (W2.2, 10-design §5.4; D2, Z3, Z7, Z21, Z23, Z37)', () => {
+  const DE = identity({ id: 'id-de', country: 'DE', taxMode: 'EU_B2B', vatNumber: '000000000', sdiRecipientCode: null, validFrom: '2026-03-01' })
+  const check = (over: Partial<ViesCheck> = {}): ViesCheck => ({ id: 'vc-1', taxIdentityId: DE.id, companyId: null, countryCode: 'DE', vatNumber: '000000000', requesterVatNumber: null, requestedAt: '2026-11-20T08:00:00.000Z', result: 'VALID', consultationNumber: 'WAPIAAAA0000FAKE', traderName: 'Seed Customer Two GmbH', traderAddress: 'Musterstraße 1, 00000 Example', errorCode: null, errorMeaning: null, requestId: 'r-1', createdById: null, ...over })
+  const eu = (over: Partial<Party> = {}): Party => partyWith({ id: PARTY_ID, legalName: 'Seed Customer Two GmbH', taxIdentities: [DE], viesChecks: [check()], vies: { state: 'VALID', message: '', proofCheckId: 'vc-1', checkedAt: '2026-11-20T08:00:00.000Z', validUntil: '2026-11-28T08:00:00.000Z', maxAgeDays: 30 }, ...over })
+  const input = (party: Party, over: Partial<IdentityInput> = {}): IdentityInput => ({ party, can: OWNER, history: { items: party.viesChecks }, viesRunning: false, now: NOW, earlierOpen: false, laterOpen: false, checksOpen: false, ...over })
+  const all = (model: ReturnType<typeof identitySection>, locale: Locale = 'en') => [model.answer, ...model.facts.flatMap((fact) => [fact.value, ...(fact.subs ?? [])]), ...(model.vies?.facts ?? []).map((fact) => fact.value)].map((words) => said1(words, locale)).join(' | ')
+
+  it('Z23: an outage is never "not valid" — the last attempt says no answer, the older proof still counts, with its days left', () => {
+    const outage = eu({ viesChecks: [check({ id: 'vc-2', result: 'ERROR', requestedAt: '2026-11-24T08:00:00.000Z', consultationNumber: null, traderName: null, traderAddress: null }), check()] })
+    const model = identitySection(input(outage))
+    expect(model.vies!.noAnswer).toEqual({ at: '2026-11-24T08:00:00.000Z' })
+    expect(model.vies!.proof).toEqual({ result: 'VALID', at: '2026-11-20T08:00:00.000Z', stillCounts: true })
+    expect(model.vies!.until).toEqual({ date: '2026-11-28T08:00:00.000Z', days: 3, warning: true })
+    expect(said1(model.answer)).toBe('EU business in Germany · VAT 000000000 · VIES: valid until 28/11/2026; the last check got no answer.')
+    const held = identitySection(input(eu({ viesChecks: [check({ result: 'ERROR' })], vies: { ...outage.vies, state: 'HELD', proofCheckId: null, validUntil: null } })))
+    for (const model of [identitySection(input(outage)), held]) expect(all(model)).not.toMatch(/not valid/i)
+    expect(said1(held.answer, 'it')).toBe('Azienda UE · Germania · Partita IVA 000000000 · VIES: ancora senza risposta, non è un rifiuto; ricontrolla più tardi.')
+    expect(held.vies!.proof).toBeNull()
+  })
+
+  it('Z21: the VIES row is under the facts, only for an EU business outside Italy; a name that differs is marked, never written over ours', () => {
+    const differs = identitySection(input(eu({ viesChecks: [check({ traderName: 'Another Name GmbH' })] })))
+    expect(said1(differs.vies!.facts.find((fact) => fact.key === 'name')!.subs![0]!)).toBe('Differs from ours: Seed Customer Two GmbH')
+    const italian = identitySection(input(partyWith({ taxIdentities: [identity()], vies: { ...eu().vies, state: 'NOT_APPLICABLE' } })))
+    expect(italian.vies).toBeNull()
+    expect(said1(italian.viesNotNeeded!)).toBe('VIES is not needed: it checks EU VAT numbers outside Italy.')
+    // Z3: the e-invoice is ONE fact; the fiscal drawer is a warning, never "cannot be invoiced"
+    const drawer = identitySection(input(partyWith({ taxIdentities: [identity({ sdiRecipientCode: '0000000' })], vies: { ...eu().vies, state: 'NOT_APPLICABLE' } })))
+    expect(drawer.facts.filter((fact) => fact.key === 'einvoice')).toHaveLength(1)
+    expect(drawer.facts.find((fact) => fact.key === 'einvoice')!.warning).toBe(true)
+    expect(all(drawer)).not.toMatch(/cannot be invoiced/i)
+    expect(said1(italian.answer)).toBe('Italian business · Partita IVA IT00000000000 · e-invoices by SDI code FAKE001.')
+  })
+
+  it('the dated identities: the earlier ones "From … to …", one that starts later "From {date} (n)"; Correct… only with one in force', () => {
+    const before = identity({ id: 'id-0', vatNumber: 'IT00000000001', validFrom: '2025-01-01', current: false })
+    const now = identity({ id: 'id-1', validFrom: '2026-01-01' })
+    const later = identity({ id: 'id-2', vatNumber: 'IT00000000002', validFrom: '2027-01-01', current: false })
+    const party = partyWith({ taxIdentities: [later, now, before], vies: { ...eu().vies, state: 'NOT_APPLICABLE' } })
+    expect(datedIdentities(party)).toMatchObject({ current: { id: 'id-1' }, earlier: [{ id: 'id-0' }], later: [{ id: 'id-2' }] })
+    const model = identitySection(input(party))
+    expect(said1(model.earlier[0]!.when)).toBe('From 01/01/2025 to 01/01/2026')
+    expect(said1(model.later[0]!.when, 'it')).toBe('Dal 01/01/2027')
+    expect(model.laterFrom).toBe('2027-01-01')
+    expect(said1(model.later[0]!.subs[0]!)).toBe('VAT number IT00000000002')
+    expect([model.correct.shown, model.add.shown]).toEqual([true, true])
+    const none = identitySection(input(partyWith({ taxIdentities: [], vies: { ...eu().vies, state: 'NOT_APPLICABLE' } })))
+    expect([none.none, none.correct.shown, none.add.shown]).toEqual([true, false, true])
+    expect(identitySection(input(party, { can: PM })).add.shown).toBe(false)
+  })
+
+  it('D2: a PERSON\'s codice fiscale only for those who may change customers — said once, never in the answer line', () => {
+    const cf = 'XXXXXX00X00X000X'
+    const person = partyWith({ kind: 'PERSON', taxIdentities: [identity({ taxMode: 'IT_B2C', vatNumber: null, fiscalCode: cf, sdiRecipientCode: null })], vies: { ...eu().vies, state: 'NOT_APPLICABLE' } })
+    expect(fiscalCodeHidden(person, RO)).toBe(true)
+    const hidden = identitySection(input(person, { can: RO }))
+    expect(all(hidden)).not.toContain(cf)
+    expect(hidden.hiddenFiscalCode).toBe(true)
+    expect(said1(hidden.facts.find((fact) => fact.key === 'fiscalCode')!.value, 'it')).toBe('Nascosto per il tuo ruolo')
+    expect(all(hidden).match(/personal data/g)).toHaveLength(1)
+    expect(said1(hidden.answer)).toBe('Italian consumer.')
+    const shown = identitySection(input(person, { can: OWNER }))
+    expect(said1(shown.answer)).toBe(`Italian consumer · codice fiscale ${cf}.`)
+    expect(fiscalCodeHidden({ kind: 'ORGANISATION' }, RO)).toBe(false)
+  })
+
+  it('Z7: every check folded — "The 50 newest · Show 50 more" with the server\'s cursor, never a total; Check again held by state only', () => {
+    const model = identitySection(input(eu(), { history: { items: [check()], more: true, next: 'cursor-1' }, viesRunning: true, checksOpen: true }))
+    expect([model.vies!.more, model.vies!.checksOpen]).toEqual([true, true])
+    expect(said1(model.vies!.checkAgain.held!)).toBe('A check is running')
+    expect(identitySection(input(eu(), { can: termsCan(['parties.view', 'parties.manage']) })).vies!.checkAgain.shown).toBe(false)
+    const record = readFileSync(new URL('../../../../parties/_shared/PartyRecord.tsx', import.meta.url), 'utf8')
+    expect(record).toContain('viesHistory(api, partyId, history.next)')
+    expect(record).toContain('next: answer.nextCursor')
+    expect(said1(said('ct.id.moreChecks'))).toBe('Show 50 more')
+    expect(said1(said('ct.id.checksNewest', { params: { count: 50 } }), 'it')).toBe('Gli ultimi 50')
+  })
+
+  it('Z37: a VAT number another business partner holds marks its field — a refused value, not "someone else changed it"', () => {
+    const clash = new ApiError('conflict', 409, 'conflict', 'This VAT number belongs to another business partner: one record per business partner.', null, [{ path: 'body/vatNumber', message: 'x' }])
+    expect(problemKey(clash)).toBe('new.conflictNumber')
+    expect(refusedFields(clash)).toEqual(['vatNumber'])
+    expect(problemKey(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'body/taxIdentity/fiscalCode', message: 'x' }]))).toBe('new.conflictNumber')
+    expect(problemKey(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'body/addresses/0/city', message: 'x' }]))).toBe('problem.invalid')
+    expect(problemKey(new ApiError('conflict', 409, 'conflict', 'stale'))).toBe('problem.conflict')
+    expect(problemKey(new ApiError('conflict', 409, 'conflict', 'stale', null, [{ path: 'body/version', message: 'x' }]))).toBe('problem.conflict')
+  })
+
+  it('the record view draws Terms in one line; the identity window and VIES act are the record\'s own (the supplier\'s cards untouched)', () => {
+    const view = readFileSync(new URL('../view/CustomerRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("{tab === 'terms' && termsTab}")
+    expect(view).not.toMatch(/<IdentityCard|<ViesCard/)
+    const container = readFileSync(new URL('./use-terms-tab.ts', import.meta.url), 'utf8')
+    expect(container).toContain("onCorrectIdentity: () => input.actions?.onDialog?.({ kind: 'identity', mode: 'correct' })")
+    expect(container).toContain("onNewIdentity: () => input.actions?.onDialog?.({ kind: 'identity', mode: 'new' })")
+    expect(readFileSync(new URL('../../../../parties/_shared/view/PartyRecordView.tsx', import.meta.url), 'utf8')).toContain('<IdentityCard')
+  })
+})
+
+// ---- W2.3: one source in Money and the Overview; one editor ------------------------------------------------------------------------
+
+describe('one source, one editor (W2.3; 13-backend §4, Z8, Z32)', () => {
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+
+  it('Terms, Money and the Overview ask the ONE helper — no tab says the payment terms its own way', () => {
+    expect(read('../money/model.ts')).toMatch(/export function paymentTermsOf\([\s\S]*?paymentTermsInForce\(moneyTermsSources\(terms, input\)/)
+    expect(read('../money/credit.ts')).toContain('termsInForce(moneyTermsSources(terms.value, input)')
+    expect(read('../overview/rows.ts')).toContain('paymentTermsInForce({ commercial: null, companies, companyId: input.companyId ?? null, typed: party.paymentTerms }')
+    // The Overview's terms per company are the depth provider's ONE read (read on the Overview and on Terms), no second read.
+    expect(read('../../depth/use-depth.ts')).toContain("if (tab === 'overview') void Promise.all([loadGlance(), loadTerms()])")
+    expect(read('../../depth/CustomerDepth.tsx')).toContain('export function useCustomerCompanyTerms(): CustomerDepthState[\'terms\'][\'read\'] {')
+    expect(read('../overview/CustomerOverview.tsx')).toContain('const companyTerms = useCustomerCompanyTerms()')
+  })
+
+  it('Z8: the customer\'s Edit window leaves out currency, document language and payment terms; New and the supplier\'s form keep them', () => {
+    const dialogs = read('../../../../parties/_shared/view/dialogs.tsx')
+    expect(dialogs).toContain('side={side} withTerms withCommercial={false} roles={')
+    expect(dialogs.match(/withCommercial=\{false\}/g)).toHaveLength(1)
+    expect(dialogs).toContain('withCommercial = true,')
+    expect(read('../../../../parties/_shared/view/PartyRecordView.tsx')).not.toContain('withCommercial')
+    for (const locale of LOCALES) {
+      const words = createScopedTranslator(locale, messagesFor(locale, ['parties']), 'parties')('edit.subtitle')
+      expect(words, locale).toContain(locale === 'en' ? 'Terms & requirements' : 'Condizioni e requisiti')
+      expect(words, locale).not.toMatch(/\bparty\b/i)
+    }
+  })
+})
+
+// ---- W2.4: the old code out ----------------------------------------------------------------------------------------------------
+
+describe('the old parts went; the supplier\'s record stays as it was (W2.4; D1)', () => {
+  const at = (path: string) => new URL(path, import.meta.url)
+  const read = (path: string) => readFileSync(at(path), 'utf8')
+  const gone = (path: string) => expect(() => readFileSync(at(path), 'utf8'), path).toThrow()
+
+  it('the old Commercial terms card, its container and styles, the PO number card and the Hold card are gone; the hold window stays', () => {
+    for (const path of ['../../terms/CommercialTerms.tsx', '../../terms/view/CommercialTermsCard.tsx', '../../terms/terms.css', '../../depth/view/PoNumberCard.tsx']) gone(path)
+    const hold = read('../../depth/view/HoldCard.tsx')
+    expect(hold).toContain('export function HoldDialogView(')
+    expect(hold).not.toMatch(/export function HoldCard\(|onToggle|DepthCard|ReadOr/)
+    expect(read('../../depth/view/parts.tsx')).not.toMatch(/export function (DepthCard|ReadOr|Head)\(/)
+    expect(read('../../depth/model.ts')).not.toMatch(/toggleHeld|poRows|poChanges|poHeld|shownOnKeys|export const valueOf/)
+    // cu/terms/api.ts and model.ts stay (the Quotes record and Home approvals read them)
+    for (const path of ['../../terms/api.ts', '../../terms/model.ts']) expect(read(path).length, path).toBeGreaterThan(0)
+    expect(read('../view/CustomerRecordView.tsx')).not.toMatch(/SupplierDepth|\bdepth=\{|\bterms=\{/)
+    expect(read('../CustomerRecord.tsx')).not.toContain('depth={record.depth}')
+  })
+
+  it('D1: the VIES card was the customer\'s only — it went; the supplier keeps its compact identity card and its VIES row', () => {
+    const cards = read('../../../../parties/_shared/view/cards.tsx')
+    expect(cards).not.toContain('export function ViesCard(')
+    expect(cards).toContain('export function IdentityCard({ model, party, current, actions, editable, compact = false, viesHeld }')
+    expect(cards).toContain('...(compact && viesApplies(party)')
+    expect(read('../../../../parties/_shared/view/PartyRecordView.tsx')).toMatch(/<IdentityCard [^>]*compact viesHeld=\{viesHeld\} \/>/)
+  })
+
+  it('the list\'s office chip opens Tax identity & e-invoice; the words nothing says any more went, in both languages', () => {
+    expect(read('../../list/columns.tsx')).toContain("href={`${recordHref(prefix, SIDES.customers, row.id, 'terms')}#party-identity`")
+    for (const locale of LOCALES) {
+      // ct-w2 lead fix: the catalogues are FLAT maps ("vies.notApplicable"), so the keys are checked as they are — each a real check.
+      const keys = (ns: string): string[] => Object.keys(messagesFor(locale, [ns])[ns] ?? {})
+      expect(keys('parties').length, locale).toBeGreaterThan(400)
+      expect(keys('parties').filter((key) => /\.(notApplicable|recheck)$/.test(key) || key.startsWith('customers.anchor.')), locale).toEqual([])
+      expect(keys('sales-customers-depth').filter((key) => ['po.toggle', 'po.save', 'po.setBy', 'hold.toggle', 'hold.toggleMany', 'hold.on', 'hold.off'].includes(key)), locale).toEqual([])
+      expect(keys('sales-customers-depth').length, locale).toBeGreaterThan(50)
+      expect(keys('customer-terms'), locale).not.toContain('termsField.carrier')
+      expect(keys('customer-terms'), locale).toContain('termsField.paymentTerms')
     }
   })
 })

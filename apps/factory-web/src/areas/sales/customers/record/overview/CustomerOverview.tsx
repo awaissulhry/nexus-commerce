@@ -8,7 +8,8 @@ import { romeToday } from '../../../../finance/costing/model'
 import type { Party } from '../../../../parties/_shared/api'
 import type { PartyRecordModel } from '../../../../parties/_shared/model'
 import type { PartyRecordActions } from '../../../../parties/_shared/view/PartyRecordView'
-import { useCustomerGlance } from '../../depth/CustomerDepth'
+import { useCustomerCompanyTerms, useCustomerGlance } from '../../depth/CustomerDepth'
+import { useLocale } from '../../../../../lib/i18n/provider' // F-CT-524 (W2.3): the payment terms' name in the page's language
 import type { CustomersWorkModel } from '../../list/model'
 import type { CustomerMoneyModel } from '../../money/overview'
 import { useWhoLooksAfter } from '../../portal/CustomerSupervisor' // F-CO-201: who looks after, read ONCE (People + the urgency strip)
@@ -61,6 +62,8 @@ export interface CustomerOverviewProps {
 export function CustomerOverview({ party, model, actions, reads, counts, before, money, standing, onWindow, onRetry, fields }: CustomerOverviewProps) {
   const router = useRouter()
   const glance = useCustomerGlance()
+  const companyTerms = useCustomerCompanyTerms() // F-CT-524 (ct-w2 W2.3; Z32): the Payment fact's terms per company
+  const locale = useLocale()
   const looksAfter = useWhoLooksAfter(party.id)
   const [supervisorOpen, setSupervisorOpen] = useState(false)
   const session = useOfficeSession()
@@ -104,6 +107,9 @@ export function CustomerOverview({ party, model, actions, reads, counts, before,
     looksAfter: looks,
     projects: model.can.projects ? (model.projects ?? null) : null,
     viesRunning: model.viesRunning === true,
+    companyTerms, // F-CT-524
+    companyId: session.company?.id ?? null,
+    locale,
   }
   const overview = overviewOf(input)
 

@@ -85,9 +85,51 @@
   .fw-ctr-hd.is-c { display: grid; }
 }
 
+/* F-CT-506 (ct-w2 W2.1): requirements — S blocks · M (≥ 560): what | applies + company / where | file · L (≥ 960): what | applies | where
+   | file | ⋯ with a head row; the kind chips (from six rules) */
+.fw-ctr-row.is-r { grid-template-columns: minmax(0, 1fr) 44px; grid-template-areas: "what o" "app app" "where where" "file file"; }
+.fw-ctr-what { grid-area: what; }
+.fw-ctr-app { grid-area: app; }
+.fw-ctr-where { grid-area: where; }
+.fw-ctr-file { grid-area: file; }
+.fw-ctr-words { color: var(--nds-text); font-size: var(--nds-font-size-sm-plus); line-height: 1.45; overflow-wrap: anywhere; }
+.fw-ctr-words.is-old { color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
+.fw-ctr-sty { overflow-wrap: anywhere; }
+.fw-ctr-sty > b { font-family: var(--nds-font-mono); font-weight: var(--nds-font-weight-semibold); font-size: var(--nds-font-size-xs-plus); }
+.fw-ctr-tags { display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-2); min-width: 0; }
+.fw-ctr-kinds { display: flex; flex-wrap: wrap; gap: var(--nds-space-6); min-width: 0; }
+.fw-ctr-more { align-self: flex-start; }
+@container ctls (min-width: 560px) {
+  .fw-ctr-row.is-r { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) 44px; grid-template-areas: "what app o" "where file o"; }
+}
+@container ctls (min-width: 960px) {
+  .fw-ctr-row.is-r, .fw-ctr-hd.is-r { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.95fr) 44px; grid-template-areas: "what app where file o"; }
+  .fw-ctr-hd.is-r { display: grid; }
+}
+
 /* ended / released rows: one block of words */
 .fw-ctr-row.is-e { grid-template-columns: minmax(0, 1fr); padding-block: var(--nds-space-8); }
 .fw-ctr-row.is-e > div > span:not(.fw-ctr-sub):not(.fw-ctr-name) { color: var(--nds-text-2); }
+
+/* F-CT-520 (ct-w2 W2.2) Tax identity & e-invoice: the facts, the dated folds, then the VIES row — a raised box UNDER the facts (Z21) */
+.fw-ctr-idw { container: ctid / inline-size; min-width: 0; }
+.fw-ctr-id { display: flex; flex-direction: column; gap: var(--nds-space-10); min-width: 0; }
+.fw-ctr-mono { font-family: var(--nds-font-mono); overflow-wrap: anywhere; }
+.fw-ctr-warn { display: inline-flex; gap: var(--nds-space-4); align-items: flex-start; color: var(--nds-warning-text); }
+.fw-ctr-warn > svg { flex: none; margin-top: 2px; }
+.fw-ctr-val.is-mark { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-md); }
+.fw-ctr-vies { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; padding: var(--nds-space-12); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-lg); background: var(--nds-surface-raised); scroll-margin-top: 96px; }
+.fw-ctr-vies.is-mark { outline: 2px solid var(--nds-primary); outline-offset: 2px; }
+.fw-ctr-vh { display: flex; flex-wrap: wrap; gap: var(--nds-space-8); align-items: center; justify-content: space-between; min-width: 0; }
+.fw-ctr-vh > h3 { margin: 0; }
+.fw-ctr-vl { margin: 0; display: flex; flex-wrap: wrap; gap: var(--nds-space-4) var(--nds-space-8); align-items: center; font-size: var(--nds-font-size-sm); min-width: 0; }
+.fw-ctr-vl svg { flex: none; vertical-align: -2px; }
+/* every VIES check: checked | result | consultation number | number checked */
+.fw-ctr-row.is-v { grid-template-columns: minmax(0, 1fr) auto; }
+@container ctls (min-width: 560px) {
+  .fw-ctr-row.is-v, .fw-ctr-hd.is-v { grid-template-columns: minmax(0, 0.8fr) minmax(0, 0.7fr) minmax(0, 1.2fr) minmax(0, 1fr); }
+  .fw-ctr-hd.is-v { display: grid; }
+}
 
 /* (5) the windows' insides */
 .fw-ctr-win { container: ctw / inline-size; display: flex; flex-direction: column; gap: var(--nds-space-14); min-width: 0; margin: 0; padding: 0; border: 0; }

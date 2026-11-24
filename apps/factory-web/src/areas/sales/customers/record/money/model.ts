@@ -2,7 +2,7 @@ import type { OpenItem } from '../../../../finance/_shared/api'
 import type { OpenRefunds } from '../../../../finance/payments/refunds/api'
 import type { AgeingRow, Reminder } from '../../../../finance/receivables/api'
 import type { ReminderStop } from '../../../../finance/receivables/reminder-stops/api'
-import type { Glance } from '../../depth/api'
+import type { CompanyTerms, Glance } from '../../depth/api'
 import type { Read } from '../../depth/model'
 import type { OrderSummary } from '../../../orders/api'
 import type { CustomerReturn, OpenOrderMoney } from '../../money/api'
@@ -10,6 +10,7 @@ import { doorCanOf, type DoorCan } from '../../../orders/record/money/door/model
 import { stopsCanOf } from '../../../../finance/receivables/reminder-stops/model' // F-CM-201: Finance's own rule decides the stop's door
 import { readProblem } from '../../../orders/model' // cm-fx2: the orders catalogue's own key of a failed read (its rule, never a literal here)
 import type { CommercialTerms } from '../../terms/api' // M-2 (cm-fx4)
+import { paymentTermsInForce, type TermsSources } from '../terms/in-force' // F-CT-521 (ct-w2 W2.3): the ONE source of the terms in force
 
 /**
  * F-CM-101 (customer page › MONEY tab, 10-design §1–§4; 18-lead-settles Z3–Z11, Z18–Z25) — what the customer's Money tab is handed and
@@ -113,12 +114,20 @@ export const partFailed = (problem: string): Part<never> => ({ value: null, prob
 export const isReading = (part: Part<unknown> | null): boolean => part !== null && part.value === null && part.problem === null
 
 /**
- * M-2 (cm-fx4): the customer's payment terms in ONE place, for Balance and Credit & terms alike — the commercial terms first (their
- * named terms, else their own text), the party's field as the fallback; null: none anywhere.
+ * M-2 (cm-fx4): the customer's payment terms in ONE place, for Balance and Credit & terms alike; null: none anywhere. F-CT-521 (ct-w2
+ * W2.3; 13-backend §4, Z32): the ONE helper of the three tabs (cu/record/terms/in-force.ts) — this company's own row first, else the
+ * customer's own terms (their named terms, else their own text), the party's field as the fallback; named in the page's language.
  */
-export function paymentTermsOf(terms: CommercialTerms | null, party: MoneyTabInput['party']): string | null {
-  return terms?.paymentTerms?.name ?? terms?.paymentTermsText ?? party.paymentTerms ?? null
+export function paymentTermsOf(terms: CommercialTerms | null, input: Pick<MoneyTabInput, 'party' | 'company' | 'companyTerms' | 'locale'>): string | null {
+  return paymentTermsInForce(moneyTermsSources(terms, input), input.locale ?? 'en')?.name ?? null
 }
+/** F-CT-521: what the helper reads for Money — the customer's own terms, the company-terms read, the page's company, the typed text. */
+export const moneyTermsSources = (terms: CommercialTerms | null, input: Pick<MoneyTabInput, 'party' | 'company' | 'companyTerms'>): TermsSources => ({
+  commercial: terms,
+  companies: input.companyTerms?.value ?? null,
+  companyId: input.company?.id ?? null,
+  typed: input.party.paymentTerms,
+})
 export const isFailed = (part: Part<unknown> | null): boolean => part !== null && part.problem !== null
 
 /** The customer's shipped goods not invoiced yet (GET /invoicing/shipped-not-invoiced?partyId: one customer's row, or none). */
@@ -198,6 +207,10 @@ export interface MoneyTabInput {
    * absent or null: not read (the party's own field then).
    */
   readonly terms?: Part<CommercialTerms> | null
+  /** F-CT-521 (ct-w2 W2.3; Z32): the terms per company (the tab's own lazy read, with the commercial terms); absent or null: not read. */
+  readonly companyTerms?: Part<CompanyTerms> | null
+  /** F-CT-521: the page's language (the payment terms' name in it); absent: English. */
+  readonly locale?: 'en' | 'it'
   /** F-CM-303 (E52): the customer's returns (the page's read: sales.returns.view) — the credit value of this year's; absent: not read. */
   readonly returns?: { readonly rows: readonly CustomerReturn[]; readonly year: string; readonly href: string | null } | null
 }

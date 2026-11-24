@@ -143,13 +143,13 @@ export function paymentTermsInForce(input: TermsSources, locale: 'en' | 'it'): P
   if (entry && entry.inForce.source.paymentTerms === 'COMPANY') {
     const company = entry.company.name
     const named = entry.inForce.paymentTerms ?? null
-    if (named) return { id: named.id, code: named.code, name: nameIn(named, locale), meaning: named.summary[locale], source: 'COMPANY', company, typed: false, orderShare: named.deposit?.sharePct ?? null }
+    if (named) return { id: named.id, code: named.code, name: nameIn(named, locale), meaning: named.summary?.[locale] ?? null, source: 'COMPANY', company, typed: false, orderShare: named.deposit?.sharePct ?? null }
     const label = entry.terms?.paymentTermsLabel ?? null
     if (label) return { id: entry.inForce.paymentTermsId, code: label.code, name: label.name, meaning: null, source: 'COMPANY', company, typed: false, orderShare: null }
     if (entry.inForce.paymentTermsText) return { id: null, code: null, name: entry.inForce.paymentTermsText, meaning: null, source: 'COMPANY', company, typed: true, orderShare: null }
   }
   const own = input.commercial?.paymentTerms ?? (entry && entry.inForce.source.paymentTerms === 'PARTY' ? (entry.inForce.paymentTerms ?? null) : null)
-  if (own) return { id: own.id, code: own.code, name: nameIn(own, locale), meaning: own.summary[locale], source: 'PARTY', company: null, typed: false, orderShare: own.deposit?.sharePct ?? null }
+  if (own) return { id: own.id, code: own.code, name: nameIn(own, locale), meaning: own.summary?.[locale] ?? null, source: 'PARTY', company: null, typed: false, orderShare: own.deposit?.sharePct ?? null }
   // R1's typed text IS the customer's own column; without R1 the company read's (PARTY source), else the party's field.
   const typed = input.commercial ? input.commercial.paymentTermsText : ((entry?.inForce.source.paymentTerms === 'PARTY' ? entry.inForce.paymentTermsText : null) ?? input.typed)
   if (typed) return { id: null, code: null, name: typed, meaning: null, source: 'PARTY', company: null, typed: true, orderShare: null }

@@ -19,7 +19,6 @@ import {
   nextSteps,
   partyDraftOf,
   partyName,
-  RESULT_TONE,
   viesApplies,
   WARNING_ACTION,
   type PartyRecordModel,
@@ -584,83 +583,3 @@ export function IdentityCard({ model, party, current, actions, editable, compact
   )
 }
 
-export function ViesCard({ model, party, actions, viesHeld }: Omit<TabProps, 'editable'> & { viesHeld: string | null }) {
-  const t = useT('parties')
-  const locale = useLocale()
-  const last = party.viesChecks[0] ?? null
-  if (!viesApplies(party)) {
-    return (
-      <Card padded>
-        <div className="fw-pty-card-body">
-          <CardHead title={t('vies.title')} />
-          <p className="fw-pty-hint">{t('vies.notApplicable')}</p>
-        </div>
-      </Card>
-    )
-  }
-  const history = model.history.items ?? party.viesChecks
-  return (
-    <Card padded>
-      <div className="fw-pty-card-body">
-        <CardHead
-          title={t('vies.title')}
-          action={
-            <Button size="sm" variant="primary" onClick={() => actions?.onCheckVies?.()} heldReason={viesHeld}>
-              {t('step.action.vies')}
-            </Button>
-          }
-        />
-        <p className="fw-pty-hint">{t(`vies.meaning.${party.vies.state}`, { days: party.vies.maxAgeDays })}</p>
-        {!last ? (
-          <p className="fw-pty-hint">{t('vies.notYet')}</p>
-        ) : (
-          <>
-            {last.result === 'ERROR' && <Banner tone="warning" title={t('vies.noAnswer')} />}
-            <KeyValue
-              columns={2}
-              labelCase="sentence"
-              items={[
-                { label: t('vies.resultLabel'), value: <Tag tone={RESULT_TONE[last.result]}>{t(`vies.result.${last.result}`)}</Tag> },
-                { label: t('vies.checkedAt'), value: formatDateTime(last.requestedAt, { locale }) },
-                { label: t('vies.consultation'), value: <span className="fw-pty-code">{dash(last.consultationNumber)}</span> },
-                { label: t('vies.number'), value: <span className="fw-pty-code">{`${last.countryCode}${last.vatNumber}`}</span> },
-                { label: t('vies.traderName'), value: dash(last.traderName) },
-                { label: t('vies.traderAddress'), value: dash(last.traderAddress) },
-                ...(party.vies.validUntil ? [{ label: t('vies.validUntil'), value: formatDate(party.vies.validUntil, { locale }) }] : []),
-              ]}
-            />
-          </>
-        )}
-        <p className="fw-pty-hint">{t('vies.recheck', { days: party.vies.maxAgeDays })}</p>
-        {history.length > 0 && (
-          <>
-            <p className="fw-pty-pop-title">{t('vies.history')}</p>
-            {model.history.problem ? (
-              <p className="fw-pty-hint">{t(model.history.problem)}</p>
-            ) : (
-              <SummaryTable
-                label={t('vies.history')}
-                stackOnPhone
-                columns={[t('vies.checkedAt'), t('vies.number'), t('vies.resultLabel'), t('vies.consultation')]}
-                align={['left', 'left', 'left', 'left']}
-                rows={history.map((check) => ({
-                  id: check.id,
-                  cells: [
-                    formatDateTime(check.requestedAt, { locale }),
-                    <span key="n" className="fw-pty-code">{`${check.countryCode}${check.vatNumber}`}</span>,
-                    <Tag key="r" tone={RESULT_TONE[check.result]}>
-                      {t(`vies.result.${check.result}`)}
-                    </Tag>,
-                    <span key="c" className="fw-pty-code">
-                      {dash(check.consultationNumber)}
-                    </span>,
-                  ],
-                }))}
-              />
-            )}
-          </>
-        )}
-      </div>
-    </Card>
-  )
-}

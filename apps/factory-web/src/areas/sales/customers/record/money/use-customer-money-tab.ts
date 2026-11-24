@@ -9,6 +9,7 @@ import { getCreditLimits, type LimitRow } from '../../../../finance/receivables/
 import { customerTrust, type CustomerTrust } from '../../../../finance/receivables/reminder-stops/api' // F-CM-302
 import { getMargins, type Margins } from '../../../../finance/margins/api' // F-CM-303
 import { getCommercialTerms, type CommercialTerms } from '../../terms/api' // F-CM-301
+import { readCompanyTerms, type CompanyTerms } from '../../depth/api' // F-CT-522 (ct-w2 W2.3; Z32)
 import { listInvoices, listPayments } from '../../../../finance/_shared/api' // F-CM-202, F-CM-203
 import { listStops, type ReminderStop } from '../../../../finance/receivables/reminder-stops/api'
 import { getOrderSummary, listOrders, type OrderRow, type OrderSummary } from '../../../orders/api'
@@ -60,6 +61,8 @@ export interface CustomerMoneyTabReads {
   readonly creditRow: Part<LimitRow | null> | null
   /** The customer's commercial terms (payment terms, default deposit, invoicing, currency). */
   readonly terms: Part<CommercialTerms> | null
+  /** F-CT-522 (ct-w2 W2.3; Z32): the terms per company — this company's own row wins (the ONE helper, cu/record/terms/in-force.ts). */
+  readonly companyTerms: Part<CompanyTerms> | null
   /** The customer's trusted level (receivables.view). */
   readonly trust: Part<CustomerTrust> | null
   /** Reminders ON or OFF for the company (receivables.view). */
@@ -252,13 +255,15 @@ export function useCustomerMoneyTab(input: { readonly partyId: string; readonly 
   const creditRow = useLazyRead(wantsCredit, can.credit, () => getCreditLimits(api, { companyId, view: 'ALL', q: null, partyId }).then((answer) => answer.rows[0] ?? null))
   // M-2 (cm-fx4): the commercial terms are wanted by Balance too (its payment terms: one source with Credit & terms) — read once.
   const terms = useLazyRead(wantsCredit || wanted.has('terms'), true, (signal) => getCommercialTerms(api, partyId, signal))
+  // F-CT-522 (ct-w2 W2.3; Z32): with them, the terms per company (a company's own row wins) — read once, never again on a burst.
+  const companyTerms = useLazyRead(wantsCredit || wanted.has('terms'), true, (signal) => readCompanyTerms(api, partyId, signal))
   const wantsStatement = wanted.has('statement')
   const trust = useLazyRead(wantsStatement, can.receivables, (signal) => customerTrust(api, partyId, signal))
   const settings = useLazyRead(wantsStatement, can.receivables, (signal) => getReceivablesSettings(api, companyId, signal))
   const priceRows = useLazyRead(wanted.has('priceRows'), can.orders && can.price, (signal) => listOrders(api, { partyId, companyId, priceMatch: 'NOT_EQUAL', limit: 10 }, signal).then((page) => page.orders))
   const margin = useLazyRead(wanted.has('margin'), can.margin && can.costing, (signal) => getMargins(api, { partyId, companyId, limit: 1 }, signal))
-  const lazyNow = useRef({ wanted, loadDocuments, loadReceived, loadMade, creditRow, terms, trust, settings, priceRows })
-  lazyNow.current = { wanted, loadDocuments, loadReceived, loadMade, creditRow, terms, trust, settings, priceRows }
+  const lazyNow = useRef({ wanted, loadDocuments, loadReceived, loadMade, creditRow, terms, companyTerms, trust, settings, priceRows })
+  lazyNow.current = { wanted, loadDocuments, loadReceived, loadMade, creditRow, terms, companyTerms, trust, settings, priceRows }
   const againLazy = useCallback(() => {
     const now = lazyNow.current
     if (now.wanted.has('documents')) now.loadDocuments('again', null)
@@ -296,6 +301,7 @@ export function useCustomerMoneyTab(input: { readonly partyId: string; readonly 
     if (read === 'credit') {
       now.creditRow.load(false)
       now.terms.load(false)
+      now.companyTerms.load(false) // F-CT-522
     } else if (read === 'statement') {
       now.trust.load(false)
       now.settings.load(false)
@@ -303,10 +309,11 @@ export function useCustomerMoneyTab(input: { readonly partyId: string; readonly 
   }, [])
   const marginLoad = margin.load
   const termsLoad = terms.load
+  const companyTermsLoad = companyTerms.load // F-CT-522
   const retry = useCallback(
     (read: TabRead | LazyRead) =>
       read === 'terms'
-        ? termsLoad(false)
+        ? (termsLoad(false), companyTermsLoad(false))
         : read === 'documents'
         ? loadDocuments('first', null)
         : read === 'received'
@@ -318,7 +325,7 @@ export function useCustomerMoneyTab(input: { readonly partyId: string; readonly 
               : read === 'credit' || read === 'statement' || read === 'priceRows'
                 ? retryAccount(read)
                 : load(read, false),
-    [load, loadDocuments, loadReceived, loadMade, marginLoad, termsLoad, retryAccount],
+    [load, loadDocuments, loadReceived, loadMade, marginLoad, termsLoad, companyTermsLoad, retryAccount],
   )
   const reload = useCallback(() => {
     for (const read of TAB_READS) load(read, true)
@@ -344,11 +351,12 @@ export function useCustomerMoneyTab(input: { readonly partyId: string; readonly 
       morePayments,
       creditRow: can.credit ? creditRow.part : null,
       terms: terms.part,
+      companyTerms: companyTerms.part, // F-CT-522
       trust: can.receivables ? trust.part : null,
       settings: can.receivables ? settings.part : null,
       priceRows: can.orders && can.price ? priceRows.part : null,
       margin: can.margin && can.costing ? margin.part : null,
     }),
-    [allowed, refunds, stops, reminders, summary, shipped, retry, reload, want, can.invoices, documents, chip, moreDocuments, can.payments, payments, credit, refundsMade, morePayments, can.credit, creditRow.part, terms.part, can.receivables, trust.part, settings.part, can.orders, can.price, priceRows.part, can.margin, can.costing, margin.part],
+    [allowed, refunds, stops, reminders, summary, shipped, retry, reload, want, can.invoices, documents, chip, moreDocuments, can.payments, payments, credit, refundsMade, morePayments, can.credit, creditRow.part, terms.part, companyTerms.part, can.receivables, trust.part, settings.part, can.orders, can.price, priceRows.part, can.margin, can.costing, margin.part],
   )
 }

@@ -2,7 +2,8 @@ import type { LimitRow } from '../../../../finance/receivables/credit/api'
 import { word, type MoneyWord } from '../../../orders/record/money/word'
 import type { CommercialTerms } from '../../terms/api'
 import { customerTabHref, receivablesHref } from './doors'
-import { isFailed, isReading, paymentTermsOf, type MoneyTabInput, type Part } from './model'
+import { isFailed, isReading, moneyTermsSources, paymentTermsOf, type MoneyTabInput, type Part } from './model'
+import { termsInForce, type DepositInForce } from '../terms/in-force' // F-CT-521 (ct-w2 W2.3; Z32)
 
 /**
  * F-CM-301 (customer page › MONEY tab, cm-w3 W3.1; 10-design §5.5; 18-lead-settles Z8) — section 5, Credit & terms (#credit): may it
@@ -42,6 +43,11 @@ export interface CreditModel {
   readonly overdue: MoneyWord | null
   /** The terms as facts (each label → value). */
   readonly facts: readonly { readonly key: string; readonly label: MoneyWord; readonly value: MoneyWord }[]
+  /**
+   * F-CT-601 (customer Terms & requirements, ct-t T.5; 18-lead-settles Z41, Z42): the terms per company could not be read — the facts
+   * above are the customer's own, said so in ONE quiet line with Try again (never shown as if in force with every company); else null.
+   */
+  readonly termsFallback: MoneyWord | null
   readonly termsHref: string
   /** Change limit… (a limit) / Set a limit… (none) — Finance's window in place; null: hidden. */
   readonly change: 'change' | 'set' | null
@@ -52,10 +58,18 @@ export interface CreditModel {
 }
 
 /** M-2 (cm-fx4): the payment terms from the ONE helper Balance uses too. */
-const paysOf = (terms: CommercialTerms | null, party: MoneyTabInput['party']): MoneyWord | null => {
-  const text = paymentTermsOf(terms, party)
+const paysOf = (terms: CommercialTerms | null, input: MoneyTabInput): MoneyWord | null => {
+  const text = paymentTermsOf(terms, input)
   return text ? word('cm.text', { params: { text } }) : null
 }
+
+/** F-CT-521 (ct-w2 W2.3; Z32): the deposit a new quote takes, said as Terms & requirements says it (the same helper, the same words). */
+const depositOf = (deposit: DepositInForce): MoneyWord =>
+  deposit.from === 'TERMS' && deposit.pct
+    ? word('customer-terms:ct.com.depositFromTerms', { pcts: { pct: deposit.pct } })
+    : deposit.pct
+      ? word('cm.credit.pct', { pcts: { pct: deposit.pct } })
+      : word('customer-terms:terms.depositSettings')
 
 /** The section's model (pure). The glance (the credit, the hold) is the page's; the S2 row and the terms are the section's reads. */
 export function creditOf(input: MoneyTabInput, creditRow: Part<LimitRow | null> | null, terms: Part<CommercialTerms> | null, prefix: string): CreditModel {
@@ -109,13 +123,14 @@ export function creditOf(input: MoneyTabInput, creditRow: Part<LimitRow | null> 
     else answer.push(free !== null && limit !== null ? word('cm.credit.within', { money: { free, limit } }) : word('sales-customers-depth:credit.within'))
   }
   if (holdRow) answer.push(word('cm.credit.holdSince', { instants: { date: holdRow.placedAt } }))
-  const pays = paysOf(terms?.value ?? null, input.party)
+  const pays = paysOf(terms?.value ?? null, input)
   if (pays) answer.push(word('cm.credit.pays', { words: { terms: pays } }))
-  const t = terms?.value ?? null
+  // F-CT-521 (ct-w2 W2.3; Z32): every fact from the ONE in-force terms object of this company (cu/record/terms/in-force.ts).
+  const t = terms?.value ? termsInForce(moneyTermsSources(terms.value, input), input.locale ?? 'en') : null
   const facts = [
     { key: 'paymentTerms', label: word('tab.paymentTerms'), value: pays ?? word('cm.balance.noTerms') },
-    ...(t ? [{ key: 'deposit', label: word('cm.credit.deposit'), value: t.defaultDepositPct ? word('cm.credit.pct', { pcts: { pct: t.defaultDepositPct } }) : word('cm.credit.noDeposit') }] : []),
-    ...(t ? [{ key: 'invoicing', label: word('customer-terms:termsField.invoicing'), value: word(`customer-terms:invoicing.${t.invoiceTiming}`) }] : []),
+    ...(t ? [{ key: 'deposit', label: word('cm.credit.deposit'), value: depositOf(t.deposit) }] : []),
+    ...(t?.invoicing ? [{ key: 'invoicing', label: word('customer-terms:termsField.invoicing'), value: word(`customer-terms:invoicing.${t.invoicing}`) }] : []),
     { key: 'currency', label: word('customer-terms:termsField.currency'), value: word('cm.text', { params: { text: t?.currency ?? input.party.currency ?? 'EUR' } }) },
   ]
   return {
@@ -129,6 +144,7 @@ export function creditOf(input: MoneyTabInput, creditRow: Part<LimitRow | null> 
     usedPct,
     overdue,
     facts,
+    termsFallback: t && isFailed(input.companyTerms ?? null) ? word('customer-terms:ct.answer.fallback') : null, // F-CT-601: Terms' own words
     termsHref: customerTabHref(prefix, input.party.id, 'terms', 'party-commercial'),
     change: can.creditLimits && price && credit ? (credit.state === 'NONE' ? 'set' : 'change') : null,
     mayHold: can.hold,

@@ -1,12 +1,12 @@
 import { HOLD_LIMITS, HOLD_REASONS } from '@nexus/factory-domain/parties/holds/holds'
 import { LAWFUL_BASES, PRIVACY_LIMITS } from '@nexus/factory-domain/parties/contact-privacy/privacy'
 import { REQUIREMENT_KINDS, REQUIREMENT_LIMITS, REQUIREMENT_STAGES } from '@nexus/factory-domain/parties/requirements/requirements'
-import type { AccessCopy, CompanyTerms, Erased, Hold, HoldReason, LawfulBasis, PrivacyContact, Requirement, RequirementBody, RequirementKind, RequirementStage } from './api'
+import type { AccessCopy, Erased, Hold, HoldReason, LawfulBasis, PrivacyContact, Requirement, RequirementBody, RequirementKind, RequirementStage } from './api'
 
 /**
  * Customer 360 and customers in depth (B-W2b-324), pure: who may do what (`depthCan`), the glance's words (free credit,
  * promises, the hold reason), the drafts and their problems of every dialog (a hold, its release, a requirement and its
- * replacement or end, the PO number per company, a lawful basis, an objection, an access copy, an erasure), and what each
+ * replacement or end, a lawful basis, an objection, an access copy, an erasure), and what each
  * refusal means in words. Every word is a key of `sales-customers-depth` with its figures: the API's English is never
  * drawn. The tests hold it.
  */
@@ -23,7 +23,6 @@ export type Read<T> = { readonly status: 'loading' } | { readonly status: 'error
 export const LOADING = { status: 'loading' } as const
 export const ready = <T>(value: T): Read<T> => ({ status: 'ready', value })
 export const failedRead = (problem: string): Read<never> => ({ status: 'error', problem })
-export const valueOf = <T>(read: Read<T>): T | null => (read.status === 'ready' ? read.value : null)
 
 export const REASONS = HOLD_REASONS
 export const KINDS = REQUIREMENT_KINDS
@@ -158,12 +157,6 @@ export function holdDraftProblem(draft: { readonly reason?: HoldReason | null; r
   return null
 }
 
-/** The toggle of the card: on with any hold in force; switching it off releases the one hold, else it says to pick one. */
-export function toggleHeld(holds: readonly Hold[], held: string | null): string | null {
-  if (held) return held
-  return holds.filter((hold) => hold.inForce).length > 1 ? 'hold.toggleMany' : null
-}
-
 /** A refusal of a hold write in words: one in force for that reason already, or the API's kind. */
 export function holdRefusal(error: unknown): string {
   const paths = pathsOf(error)
@@ -245,46 +238,8 @@ export function requirementRefusal(error: unknown): string {
   return problemOf(error)
 }
 
-/** Where a requirement is shown, as stage keys in the design's order ("the order · the pick & pack screen …"). */
-export const shownOnKeys = (stages: readonly RequirementStage[]): string[] => STAGES.filter((stage) => stages.includes(stage)).map((stage) => `stage.${stage}`)
-
-// ---- Customer PO number required (terms per company) ---------------------------------------------------------------------
-
-export interface PoRow {
-  readonly companyId: string
-  readonly code: string
-  readonly name: string
-  readonly required: boolean
-  /** The company's own row decides (else nothing is required). */
-  readonly own: boolean
-  readonly version: number | null
-  readonly mayChange: boolean
-  readonly setBy: string | null
-  readonly setAt: string | null
-}
-
-export function poRows(terms: CompanyTerms): PoRow[] {
-  return terms.companies.map((entry) => ({
-    companyId: entry.company.id,
-    code: entry.company.code,
-    name: entry.company.name,
-    required: entry.inForce.poNumberRequired,
-    own: entry.terms !== null,
-    version: entry.terms?.version ?? null,
-    mayChange: entry.mayChange,
-    setBy: entry.terms?.setBy ?? null,
-    setAt: entry.terms?.setAt ?? null,
-  }))
-}
-
-/** The companies whose switch the draft changes (draft: company id → required). */
-export const poChanges = (rows: readonly PoRow[], draft: Readonly<Record<string, boolean>>): PoRow[] => rows.filter((row) => draft[row.companyId] !== undefined && draft[row.companyId] !== row.required)
-
-/** Why one company's switch is held (a key), or null. */
-export function poHeld(row: PoRow, can: DepthCan, status: string): string | null {
-  if (!row.mayChange) return 'held.manageCompany'
-  return writeHeld(can, 'manage', status)
-}
+// F-CT-535 (ct-w2 W2.4): the old cards' rules went with them — the Hold card's toggle, the PO number card's rows, changes and switch
+// (Commercial terms says the PO rule per company: cu/record/terms/commercial.ts), the Requirements card's "shown on" keys.
 
 // ---- contacts: consent, lawful basis, personal-data actions -------------------------------------------------------------
 

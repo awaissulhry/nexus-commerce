@@ -208,7 +208,7 @@ function CustomerName({ row, prefix, c }: { row: PartyRow; prefix: string; c: Tr
         <span className="fw-pty-code">{row.code}</span>
         {row.status !== 'ACTIVE' && <StatusPill status={row.status} />}
         {office.length > 0 && (
-          <Link className="fw-cl-office" href={recordHref(prefix, SIDES.customers, row.id, 'terms')} title={c('office.hint', { what })} aria-label={c('office.hint', { what })}>
+          <Link className="fw-cl-office" href={`${recordHref(prefix, SIDES.customers, row.id, 'terms')}#party-identity` /* F-CT-537 (ct-w2 W2.4): VIES, SDI / PEC and tax data are Tax identity & e-invoice's */} title={c('office.hint', { what })} aria-label={c('office.hint', { what })}>
             <AlertTriangle size={11} aria-hidden />
             {c('office.chip')}
           </Link>

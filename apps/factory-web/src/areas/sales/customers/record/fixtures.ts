@@ -4,8 +4,7 @@ import { ARCHIVED_CUSTOMER, at, CUSTOMERS, inShell, NOW, ORDERS, partyThread, QU
 import { loaded, loading, type PartyRecordModel } from '../../../parties/_shared/model'
 import { recordTabs, shownTab, SIDES } from '../../../parties/_shared/model' // F-CO-103: the tab the page shows (the Overview is built for it)
 import type { Party } from '../../../parties/_shared/api'
-import { BLANK_TERMS, editing, GROUP_TERMS, PAYMENT_TERMS, TERMS, TERMS_CAN, termsModel } from '../_demo/fixtures'
-import type { CommercialTermsModel } from '../terms/view/CommercialTermsCard'
+import { BLANK_TERMS, editing, GROUP_TERMS, PAYMENT_TERMS, TERMS, TERMS_CAN, termsModel, type CommercialTermsModel } from '../_demo/fixtures' // F-CT-530: the cases' own shape (the old card went)
 import { MONEY_CAN, MONEY_STATES, moneyModel } from '../money/_demo/fixtures'
 import { OVERDUE_ROWS } from '../money/_demo/fixtures' // F-CO-301: Moda Demo's late money
 import { grantOf } from '@nexus/factory-domain/auth/roles/roles' // F-CO-301: a role's REAL grant
@@ -15,6 +14,7 @@ import { moneyTabDemo } from '../money/_demo/fixtures' // F-CM-104: the Money ta
 import { CustomerMoneyTab } from './view/money/CustomerMoneyTab' // F-CM-104: the Money tab's view
 import { CM_CASES, cmHeld, CmMoneyDesign, type CmCaseModel } from './money/_demo/fixtures' // F-CM T.1: the Money tab's cm-* cases
 import { CA_CASES, caHeld, CaPeopleDesign, type CaCaseModel } from './people/_demo/fixtures' // F-CA T.1: the People tab's ca-* cases
+import { CT_CASES, ctHeld, CtTermsDesign, type CtCaseModel } from './terms/_demo/fixtures' // F-CT T.1: the Terms tab's ct-* cases
 import type { CustomerMoneyModel } from '../money/overview'
 import { CustomerRecordView } from './view/CustomerRecordView'
 // F-SA-272 → F-CO-201: who looks after the customer, as People's rows and their two Change… windows (made-up people of the portal demo).
@@ -27,13 +27,11 @@ import type { OpenOrderMoney } from '../money/api' // F-SA-273
 import type { SupervisorModel } from '../portal/limits/model'
 // B-W2b-324: the customer in depth (made-up data in ../depth/_demo/fixtures.ts).
 import { WithMessages } from '../../../../record-panels/i18n'
-import type { SupplierDepth } from '../../../parties/_shared/view/PartyRecordView'
-import type { Glance, Privacy } from '../depth/api'
+import type { CompanyTerms, Glance, Privacy } from '../depth/api'
 import { DEPTH_NAMESPACES } from '../depth/CustomerDepth'
 import { ALL_CAN, COMPANIES, COPY, FILES, glanceOf, HELD_GLANCE, HOLDS, KEPT, NO_HOLDS, PRIVACY, READ_CAN, REQUIREMENTS, SALES_CAN, STYLES, TERMS as COMPANY_TERMS, TODAY, TWO_HOLDS, WITHHELD, withoutPrices } from '../depth/_demo/fixtures'
 import { basisDraftOf, blankRequirement, failedRead, LOADING, ready, requirementDraftOf, type DepthCan, type Read } from '../depth/model'
 import type { HoldCardModel } from '../depth/view/HoldCard'
-import type { PoNumberModel } from '../depth/view/PoNumberCard'
 // ---- F-CT-408 (customer page › Terms & requirements, lane ct-; 13-backend §6.8): the tab's own parts — its ONE model rule, its view,
 // the Change terms… window's inside (an edit case draws it under the tab: never a Modal open here), its notices.
 import { Card } from '@nexus/ui/components'
@@ -45,7 +43,7 @@ import { ChangeTermsBody } from './view/terms/ChangeTermsDialog'
 import { TermsNotices } from './view/terms/TermsNotices'
 // ---- end F-CT-408
 import type { PrivacyModel } from '../depth/view/PrivacyCard'
-import { RequirementsTab, type RequirementsModel } from '../depth/view/RequirementsTab'
+import type { RequirementsModel } from '../depth/view/RequirementsTab'
 // F-CA-120 (customer People & addresses, lane ca-; 15-steps W1.4): the People tab of a case — the page's own model rule over the case's
 // party, rights, portal and personal data (made-up), today's riders and personal-data cards under it until ca-w2.
 import { PeopleTab } from './view/people/PeopleTab'
@@ -170,7 +168,8 @@ const record = (code: string, over: Partial<PartyRecordModel> = {}) => recordMod
 interface DepthCase {
   glance?: Read<Glance>
   hold?: HoldCardModel
-  po?: PoNumberModel
+  /** F-CT-532 (ct-w2 W2.4): the terms per company of a case (the old PO number card went; Commercial terms draws its rule). */
+  po?: { readonly read: Read<CompanyTerms>; readonly can: DepthCan }
   requirements?: RequirementsModel
   privacy?: PrivacyModel
 }
@@ -185,7 +184,7 @@ const OPEN_ORDER_MONEY: OpenOrderMoney[] = [
 /** A case: the record, (B-W2a-49) the Commercial terms card of its Terms & requirements tab (B-TH-260), (B-W2a-81) its money and after-sales reads, (B-W2b-324) its depth. */
 // F-SA-272: + the Overview's "Who looks after <customer>" card (the supervisor and backup, moved from Portal settings).
 // F-SA-274 → F-CA-120: + People's portal (one row per person: the portal state on the contact of the same e-mail).
-type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase; supervisor?: SupervisorModel; people?: PeopleCase /* F-CA-120 */; work?: WorkCase /* F-SA-276 */; designer?: DesignerModel /* F-CP-155 */; priceDiffer?: number /* F-CP-141 */; shipmentLine?: boolean /* cw T.1: the docked ORDER's thread with the draft shipment's office line */; supervisorOpen?: boolean /* F-CO-201: People's Change… (the supervisor) open — the form's own states */; overview?: OverviewOver /* F-CO-301: the Overview's own state */; cm?: CmCaseModel /* F-CM T.1: a cm-* case of the Money tab */; ca?: CaCaseModel /* F-CA T.1: a ca-* case of the People tab */ }
+type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase; supervisor?: SupervisorModel; people?: PeopleCase /* F-CA-120 */; work?: WorkCase /* F-SA-276 */; designer?: DesignerModel /* F-CP-155 */; priceDiffer?: number /* F-CP-141 */; shipmentLine?: boolean /* cw T.1: the docked ORDER's thread with the draft shipment's office line */; supervisorOpen?: boolean /* F-CO-201: People's Change… (the supervisor) open — the form's own states */; overview?: OverviewOver /* F-CO-301: the Overview's own state */; cm?: CmCaseModel /* F-CM T.1: a cm-* case of the Money tab */; ca?: CaCaseModel /* F-CA T.1: a ca-* case of the People tab */; ct?: CtCaseModel /* F-CT T.1: a ct-* case of the Terms tab */ }
 
 // F-CA-120: what a People case adds — the portal of THIS customer as its container would read it (null: none read).
 interface PeopleCase {
@@ -800,16 +799,6 @@ function WorkDesign({ work, party }: { work: WorkCase; party: Party }) {
 }
 // ---- end F-SA-276
 
-function depthNodes(depth: DepthCase | undefined): SupplierDepth | undefined {
-  if (!depth) return undefined
-  // F-CO-203: the Overview's old parts went — the Overview's rules read the case's glance (OverviewDesign below). F-CA-229 (ca-w2 W2.5):
-  // People's riders / profiles card and personal-data card went — the People tab draws the case's glance (its riders) and privacy.
-  // F-CT-408 (ct-w1 W1.4): the hold and PO-number cards went — the case's Terms tab draws its hold and company-terms reads (TermsDesign).
-  return {
-    requirements: depth.requirements ? createElement(RequirementsTab, { model: depth.requirements }) : null,
-  }
-}
-
 // ---- F-CT-408 (customer page › Terms & requirements, lane ct-; 13-backend §6.8): the Terms tab of a case — the tab's ONE model rule
 // (termsTabModel, the container's own) over the case's reads: its commercial terms (the old card's model), its holds and company terms
 // (the old depth cards' models, their windows kept), else made-up defaults; every Terms case keeps its id and its label. An edit of the
@@ -865,13 +854,15 @@ function TermsDesign({ record, party, terms: termsOfCase, depth }: { record: Par
     requirements: depth?.requirements?.read ?? null,
     library: terms.library ? ready(terms.library) : null,
     lists: terms.lists ? ready(terms.lists) : null,
+    history: record.history, // F-CT-519 (W2.2): the case's VIES checks, as the record reads them
+    viesRunning: record.viesRunning === true,
   }
   const edit = terms.draft ? { kind: 'terms' as const, draft: terms.draft, busy: terms.busy, tried: true, problem: terms.saveProblem } : null
   const model = termsTabModel(reads, { ...TERMS_TAB_START, window: edit })
   return createElement(
     Fragment,
     null,
-    createElement(TermsTab, { model: { ...model, windows: { ...model.windows, window: null } }, hold: depth?.hold ? { model: depth.hold } : null }),
+    createElement(TermsTab, { model: { ...model, windows: { ...model.windows, window: null } }, hold: depth?.hold ? { model: depth.hold } : null, requirements: depth?.requirements ? { model: depth.requirements } : null /* F-CT-508: its windows, as the page mounts them */ }),
     edit ? createElement(WithMessages, { namespaces: TERMS_TAB_NAMESPACES }, createElement(Card, { padded: true }, createElement(ChangeTermsBody, { window: edit, windows: model.windows }))) : null,
   )
 }
@@ -1098,7 +1089,7 @@ const warning = (code: Party['warnings'][number]['code'], blocksInvoice: boolean
 // ---- end F-CO-301 (helpers)
 
 function CustomerDesign({ model }: { model: CustomerCase }) {
-  const { terms, money, depth, supervisor, people, work, designer, priceDiffer, shipmentLine, supervisorOpen, overview, ca, ...record } = model
+  const { terms, money, depth, supervisor, people, work, designer, priceDiffer, shipmentLine, supervisorOpen, overview, ca, ct, ...record } = model
   // ---- cq W3 (T part 2): Quotes & incoming — the tab's own gallery parts (quotes-tab/fixtures.ts) for this customer; a Work case's
   // portal drafts are its "Customer is writing" (F-CQ-303).
   const quotesIncoming = record.party && record.tab === 'quotes' ? (work?.drafts ? createElement(DraftsTabDesign, { work, party: record.party }) : createElement(QuotesTabDesign, { model: quotesTabFor({ id: record.party.id, name: record.party.tradeName ?? record.party.legalName }) })) : null
@@ -1115,7 +1106,6 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
   // ---- end F-CM-104
   // F-CA-120 (ca-w1 W1.4): People & addresses, built for the tab the page shows (as the live container builds it) — the page's own model
   // rule over the case's models; today's riders / profiles and personal-data cards under it (the depth slot's, until ca-w2).
-  const nodes = depthNodes(depth)
   const portal = record.can.partners ? (people?.portal ?? null) : null
   // F-CA T.1: a ca-* case draws the tab from its customer's reads, in its room, with a window's inside under it (people/_demo/fixtures.ts).
   const peopleTab =
@@ -1132,7 +1122,8 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
   // F-CA-120: end
   // F-CT-408 (ct-w1 W1.4): Terms & requirements, built for the tab the page shows (as the live container builds it); a saved case's
   // notice in the record's ONE notice area.
-  const termsTab = party && shownTab(recordTabs(SIDES.customers, record.can), record.tab) === 'terms' ? createElement(TermsDesign, { record, party, terms, depth }) : null
+  // F-CT T.1: a ct-* case draws the tab from its customer's reads, in its room, with a window's inside under it (terms/_demo/fixtures.ts).
+  const termsTab = party && shownTab(recordTabs(SIDES.customers, record.can), record.tab) === 'terms' ? (ct ? createElement(CtTermsDesign, { ct }) : createElement(TermsDesign, { record, party, terms, depth })) : null
   const termsNotice = terms?.saved ? createElement(TermsNotices, { notices: { own: { tone: 'success', words: said('terms.saved') }, depth: null } }) : null
   return inShell(
     `/sales/customers/${id}`,
@@ -1140,7 +1131,7 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
       WithMessages,
       { namespaces: DEPTH_NAMESPACES },
       // B-TH-260: the customer's docked thread (Activity and Documents went to it), with threads.read.
-      createElement(CustomerRecordView, { model: record, thread: party ? (shipmentLine && record.can.threads ? createElement(ShipmentLineThread, { party }) /* cw T.1 */ : partyThread(party, 'customers', record.can)) : null, termsTab /* F-CT-408 */, termsNotice /* F-CT-408 */, money, depth: nodes, overviewTab /* F-CO-103 */, peopleTab /* F-CA-120 */, peopleBadge: party ? peopleBadgeOf(party) : null /* F-CA-120 */, work: work && party ? createElement(WithMessages, { namespaces: ['orders'] /* F-CW-101: as the live Work tab loads them */ }, createElement(WorkDesign, { work, party })) : null /* F-SA-276 */, workCount: work ? { count: 5, attention: true } : null, priceDiffer: priceDiffer ?? null /* F-CP-141 */, quotesIncoming /* cq W3 */, moneyTab /* F-CM-104 */ }),
+      createElement(CustomerRecordView, { model: record, thread: party ? (shipmentLine && record.can.threads ? createElement(ShipmentLineThread, { party }) /* cw T.1 */ : partyThread(party, 'customers', record.can)) : null, termsTab /* F-CT-408 */, termsNotice /* F-CT-408 */, money, overviewTab /* F-CO-103 */, peopleTab /* F-CA-120 */, peopleBadge: party ? peopleBadgeOf(party) : null /* F-CA-120 */, work: work && party ? createElement(WithMessages, { namespaces: ['orders'] /* F-CW-101: as the live Work tab loads them */ }, createElement(WorkDesign, { work, party })) : null /* F-SA-276 */, workCount: work ? { count: 5, attention: true } : null, priceDiffer: priceDiffer ?? null /* F-CP-141 */, quotesIncoming /* cq W3 */, moneyTab /* F-CM-104 */ }),
     ),
   )
 }
@@ -1151,8 +1142,8 @@ const DEPTH_CAN = { ...RECORD_CAN, depth: true }
 type GlanceCode = 'MODA-DEMO' | 'MARCHIO-ESEMPIO' | 'PILOTA-DEMO'
 const glanceCase = (code: GlanceCode, glance: Read<Glance>, over: Partial<PartyRecordModel> = {}): CustomerCase => ({ ...record(code, { can: DEPTH_CAN, ...over }), depth: { glance } })
 const holdModel = (over: Partial<HoldCardModel> = {}, can: DepthCan = ALL_CAN): HoldCardModel => ({ read: ready(HOLDS), can, status: 'ACTIVE', prefix: '/w/DEMO', dialog: null, companies: COMPANIES, ...over })
-const poModel = (over: Partial<PoNumberModel> = {}, can: DepthCan = ALL_CAN): PoNumberModel => ({ read: ready(COMPANY_TERMS), can, status: 'ACTIVE', draft: {}, saving: false, failed: null, ...over })
-const taxCase = (hold: Partial<HoldCardModel> = {}, po: Partial<PoNumberModel> = {}, can: DepthCan = ALL_CAN, over: Partial<PartyRecordModel> = {}): CustomerCase => ({
+const poModel = (over: { readonly read?: Read<CompanyTerms> } = {}, can: DepthCan = ALL_CAN): NonNullable<DepthCase['po']> => ({ read: ready(COMPANY_TERMS), can, ...over })
+const taxCase = (hold: Partial<HoldCardModel> = {}, po: { readonly read?: Read<CompanyTerms> } = {}, can: DepthCan = ALL_CAN, over: Partial<PartyRecordModel> = {}): CustomerCase => ({
   ...record('MARCHIO-ESEMPIO', { tab: 'terms', can: DEPTH_CAN, ...over }),
   depth: { hold: holdModel(hold, can), po: poModel(po, can) },
 })
@@ -1404,6 +1395,11 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     // grant), the rooms 343 / 865 / 1314 / 1794, and the NEW windows' insides on a plain card (people/_demo/fixtures.ts).
     ...CA_CASES.map((item) => ({ id: item.id, label: item.label, model: { ...recordModel('customers', item.ca.customer.party, { tab: 'people', can: recordCanOf(new Set(caHeld(item.ca))) }), ca: item.ca } })),
     // ---- end F-CA T.1
+    // ---- F-CT T.1 (ct-t; 15-steps T.1): the Terms & requirements tab's ct-* cases — the customers of the picture, a sole trader as each
+    // office role, each read reading and failed, the rooms 343 / 865 / 1314 / 1794, and the NEW windows' insides on a plain card
+    // (terms/_demo/fixtures.ts).
+    ...CT_CASES.map((item) => ({ id: item.id, label: item.label, model: { ...recordModel('customers', item.ct.customer.party, { tab: 'terms', can: recordCanOf(new Set(ctHeld(item.ct))) }), ct: item.ct } })),
+    // ---- end F-CT T.1
     // ---- B-TH-260: the thread docked (the rule of picture 38); Activity and Documents are gone, their tools in the thread's "⋯" (R-ACT)
     // and its Files view.
     { id: 'thread-docked', label: 'TH-6 · The customer’s thread docked beside the Overview (40 %): Reply to this customer only', model: record('MODA-DEMO'), note: 'The band sits in the shell’s band row with ONE pill; "Projects (2)" opens this customer’s projects. The thread is docked at 40 %, sticky while the body scrolls, ⌘J hides it. Its "⋯" holds Activity’s tools (Add task, Ask a partner to approve, Share with a partner, Followers, Remind me); its Files view the old Documents tab’s files. An old ?tab=activity or ?tab=documents opens the thread; ?tab=tax and ?tab=requirements land on Terms & requirements.' },
@@ -1457,7 +1453,6 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'w2b-324-tax-place-problem', label: 'W2b Put on hold: held until a reason is picked', model: taxCase({ read: ready(NO_HOLDS), dialog: { kind: 'place', draft: { companyId: null, reason: null, words: '' }, busy: false, failed: null, tried: true } }) },
     { id: 'w2b-324-tax-place-refused', label: 'W2b Put on hold refused: one for that reason is in force', model: taxCase({ dialog: { kind: 'place', draft: { companyId: null, reason: 'QUALITY_DISPUTE', words: 'Again (made-up).' }, busy: false, failed: 'hold.refused.same', tried: true } }) },
     { id: 'w2b-324-tax-release', label: 'W2b Release the hold, with why', model: taxCase({ dialog: { kind: 'release', hold: HOLDS.holds[0]!, draft: { holdId: HOLDS.holds[0]!.id, words: 'Answered and closed (made-up).' }, ...dialogState } }) },
-    { id: 'w2b-324-tax-po-changed', label: 'W2b Customer PO number: one change waiting for Save (⌘S)', model: taxCase({}, { draft: { [COMPANIES[1]!.id]: true } }) },
     { id: 'w2b-324-tax-read-only', label: 'W2b Terms & requirements for a reader: Put on hold, Release and the switches held with why', model: taxCase({}, {}, READ_CAN, { can: { ...DEPTH_CAN, manage: false, block: false } }) },
     { id: 'w2b-324-tax-loading', label: 'W2b Terms & requirements: hold and PO number reading', model: taxCase({ read: LOADING }, { read: LOADING }) },
     { id: 'w2b-324-tax-error', label: "W2b Terms & requirements: hold and PO number couldn't be read", model: taxCase({ read: failedRead('problem.unavailable') }, { read: failedRead('problem.unavailable') }) },

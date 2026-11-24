@@ -1,7 +1,8 @@
-import type { Party } from '../../../../parties/_shared/api'
+import type { Party, ViesCheck } from '../../../../parties/_shared/api'
+import type { Loaded } from '../../../../parties/_shared/model'
 import type { PriceListRow } from '../../../pricelists/api'
 import type { PaymentTermsRow } from '../../terms/api'
-import type { CompanyTerms, Holds, Requirements } from '../../depth/api'
+import type { CompanyTerms, Holds, RequirementKind, Requirements } from '../../depth/api'
 import type { Read } from '../../depth/model'
 import type { CarrierAccount } from './api'
 import { identityFactsOf, termsAnswer, type TermsAnswer, type TermsChipId } from './answer'
@@ -10,6 +11,8 @@ import { holdSection, type HoldFacts, type HoldSectionModel } from './holds'
 import { companyOf, termsInForce } from './in-force'
 import type { Said, TermsCan } from './model'
 import { endLines, type TermsTabWindow } from './windows'
+import { requirementsSection, type RequirementRow, type RequirementsSectionModel } from './requirements' // F-CT-504 (W2.1)
+import { identitySection, type IdentitySectionModel } from './identity' // F-CT-515 (W2.2)
 
 /**
  * F-CT-205 (customer page › TERMS & REQUIREMENTS tab, lane ct-; 13-backend §6.2 `termsTabModel`) — the tab's ONE model, pure: the reads
@@ -40,6 +43,9 @@ export interface TermsTabReads {
   /** The windows' choices: the payment-terms library (paymentterms.view), the price lists (pricelists.view); null: not read. */
   readonly library: Read<readonly PaymentTermsRow[]> | null
   readonly lists: Read<readonly PriceListRow[]> | null
+  // F-CT-515 (ct-w2 W2.2): the record's VIES checks (the 50 newest, then each next page) and whether a check runs.
+  readonly history: Loaded<ViesCheck>
+  readonly viesRunning: boolean
 }
 
 export interface TermsTabState {
@@ -47,8 +53,16 @@ export interface TermsTabState {
   readonly releasedOpen: boolean
   readonly endedOpen: boolean
   readonly window: TermsTabWindow | null
+  // F-CT-504 (ct-w2 W2.1): Requirements — the kind chip pressed, "Show n more", the ended and replaced rules folded.
+  readonly kind: RequirementKind | null
+  readonly moreRequirements: boolean
+  readonly requirementsEndedOpen: boolean
+  // F-CT-515 (ct-w2 W2.2): Tax identity & e-invoice — the earlier and the later identities, every VIES check, folded.
+  readonly earlierOpen: boolean
+  readonly laterOpen: boolean
+  readonly checksOpen: boolean
 }
-export const TERMS_TAB_START: TermsTabState = { chip: null, releasedOpen: false, endedOpen: false, window: null }
+export const TERMS_TAB_START: TermsTabState = { chip: null, releasedOpen: false, endedOpen: false, window: null, kind: null, moreRequirements: false, requirementsEndedOpen: false, earlierOpen: false, laterOpen: false, checksOpen: false }
 
 /** What the four NEW windows draw (the one open; its reads). */
 export interface TermsWindowsModel {
@@ -84,6 +98,8 @@ export interface TermsTabModel {
   readonly marked: readonly string[]
   readonly hold: HoldSectionModel
   readonly commercial: CommercialSectionModel
+  readonly requirements: RequirementsSectionModel // F-CT-504 (W2.1)
+  readonly identity: IdentitySectionModel // F-CT-515 (W2.2)
   readonly windows: TermsWindowsModel
 }
 
@@ -147,6 +163,8 @@ export function termsTabModel(reads: TermsTabReads, state: TermsTabState): Terms
     marked: pressed ? pressed.rows : [],
     hold,
     commercial,
+    requirements: requirementsSection({ read: reads.requirements, can, archived, companyNames: names, kind: state.kind, more: state.moreRequirements, endedOpen: state.requirementsEndedOpen }), // F-CT-504
+    identity: identitySection({ party, can, history: reads.history, viesRunning: reads.viesRunning, now: reads.now, earlierOpen: state.earlierOpen, laterOpen: state.laterOpen, checksOpen: state.checksOpen }), // F-CT-515
     windows: {
       window,
       customer: name,
@@ -172,7 +190,7 @@ export interface TermsNotice {
 export interface TermsTabActions {
   /** A chip pressed (null: pressed again, the mark leaves); a door chip leaves the tab. */
   readonly onChip?: (chip: TermsChipId | null) => void
-  readonly onFold?: (fold: 'released' | 'ended', open: boolean) => void
+  readonly onFold?: (fold: 'released' | 'ended' | 'requirementsEnded' | 'earlier' | 'later' | 'checks', open: boolean) => void
   /** Put on hold… / Put on hold for another reason… — the depth provider's own window (HoldDialogView). */
   readonly onPlaceHold?: () => void
   readonly onReleaseHold?: (hold: HoldFacts) => void
@@ -192,4 +210,20 @@ export interface TermsTabActions {
   readonly onRetryChoices?: () => void
   /** Copy a link to a section or a row (its address). */
   readonly onCopyLink?: (anchor: string) => void
+  // ---- F-CT-504 (ct-w2 W2.1): Requirements — the depth provider's own windows (RequirementWindows), the kind chips, a file's door
+  readonly onAddRequirement?: () => void
+  readonly onReplaceRequirement?: (row: RequirementRow) => void
+  readonly onEndRequirement?: (row: RequirementRow) => void
+  readonly onKind?: (kind: RequirementKind | null) => void
+  readonly onMoreRequirements?: (more: boolean) => void
+  readonly onRetryRequirements?: () => void
+  /** Open a requirement's file (files.read: its preview link, read on the click). */
+  readonly onOpenFile?: (fileId: string) => void
+  /** Copy a rule's words. */
+  readonly onCopyWords?: (words: string) => void
+  // ---- F-CT-515 (ct-w2 W2.2): Tax identity & e-invoice — the record's own identity window and its VIES act, the checks' next page
+  readonly onCorrectIdentity?: () => void
+  readonly onNewIdentity?: () => void
+  readonly onCheckVies?: () => void
+  readonly onMoreChecks?: () => void
 }

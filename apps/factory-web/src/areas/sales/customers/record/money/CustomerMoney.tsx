@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo } from 'react'
 import { useOfficeSession } from '../../../../../lib/session/context'
+import { useLocale } from '../../../../../lib/i18n/provider' // F-CT-522 (ct-w2 W2.3): the payment terms' name in the page's language
 import { WithMessages } from '../../../../../record-panels/i18n' // F-CM-201: the windows' toasts and titles say loaded words
 import { romeToday } from '../../../../finance/costing/model'
 import type { Party } from '../../../../parties/_shared/api'
@@ -58,6 +59,7 @@ function CustomerMoneyReads({ party, prefix, money, priceDiffer, glance, onPick,
   const heldIds = useMemo(() => (page.openItems?.value?.items ?? []).map((item) => item.id), [page.openItems])
   const onAccount = (page.openItems?.value?.creditBalance ?? []).some((entry) => entry.amount === undefined || entry.amount > 0) // F-CM-203
   const reads = useCustomerMoneyTab({ partyId: party.id, companyId: company?.id ?? null, currency: party.currency, can, heldIds, onAccount })
+  const locale = useLocale()
   const input: MoneyTabInput = {
     party: {
       id: party.id,
@@ -84,6 +86,9 @@ function CustomerMoneyReads({ party, prefix, money, priceDiffer, glance, onPick,
     priceMissing: priceMissing ?? null, // F-CM-303
     // F-CM-303 (E52): the page's returns read (sales.returns.view) — the credit value of this year's returns.
     returns: money?.can.returns && money.returns.items ? { rows: money.returns.items, year: money.year, href: money.returnsHref } : null,
+    // F-CT-522 (ct-w2 W2.3; Z32): the terms per company (a company's own row wins) and the page's language, for the ONE helper.
+    companyTerms: reads.companyTerms,
+    locale,
   }
   const onRetry = (read: MoneyRead) => (read === 'page' ? money?.reload?.() : reads.retry(read))
   // F-CM-201: a write in place (the order's window, Finance's) → every money read of the page and the tab again (the burst).

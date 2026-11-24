@@ -6,8 +6,8 @@ import { EVERY_COMPANY } from '../../../products/styles/import/sheet-import'
 import { LIST_ROWS } from '../../pricelists/_demo/fixtures'
 import { rolePermissions } from '../../../../shell/design-data' // B-CP-011
 import type { CommercialTerms, PaymentTermsRow } from '../terms/api'
+import type { PriceListRow } from '../../pricelists/api'
 import { termsAbilitiesOf, termsDraftOf, type TermsAbilities, type TermsDraft } from '../terms/model'
-import { CommercialTermsCard, type CommercialTermsModel } from '../terms/view/CommercialTermsCard'
 import { CustomersImportView, type CustomersImportModel } from '../import/view/CustomersImportView'
 
 /**
@@ -157,6 +157,31 @@ export const TERMS_CAN = {
   noLists: { ...OWNER, listsManage: false },
 }
 
+/**
+ * F-CT-530 (customer Terms & requirements, ct-w2 W2.4): a gallery case's commercial terms — the reads and the draft the Terms tab's
+ * case draws from (record/fixtures.ts TermsDesign). The old Commercial terms card it once drew went; its shape stays the cases' own.
+ */
+export interface CommercialTermsModel {
+  /** `/w/<company>` */
+  prefix: string
+  can: TermsAbilities
+  /** null while read; `problem` when it could not be. */
+  terms: CommercialTerms | null
+  problem: string | null
+  /** Why the terms are text only (a message key), or null when they can be changed. */
+  held: string | null
+  /** Change terms…'s draft; null: the window is closed. */
+  draft: TermsDraft | null
+  /** The choices (read when the window opens); null while read. */
+  library: PaymentTermsRow[] | null
+  lists: PriceListRow[] | null
+  choicesProblem: string | null
+  busy: boolean
+  /** A save the API refused, in words. */
+  saveProblem: string | null
+  saved: boolean
+}
+
 export function termsModel(over: Partial<CommercialTermsModel> = {}): CommercialTermsModel {
   return { prefix: '/w/DEMO', can: OWNER, terms: TERMS, problem: null, held: null, draft: null, library: null, lists: null, choicesProblem: null, busy: false, saveProblem: null, saved: false, ...over }
 }
@@ -166,4 +191,3 @@ export function editing(terms: CommercialTerms, change: Partial<TermsDraft> = {}
   return termsModel({ terms, draft: { ...termsDraftOf(terms), ...change }, library: PAYMENT_TERMS, lists: LIST_ROWS, ...over })
 }
 
-export const termsCard = (model: CommercialTermsModel): ReactNode => createElement(CommercialTermsCard, { model })
