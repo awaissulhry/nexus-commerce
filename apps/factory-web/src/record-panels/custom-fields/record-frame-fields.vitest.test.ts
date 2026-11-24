@@ -91,7 +91,9 @@ describe('F-OO-211 — the order page builds its custom fields once and Overview
   })
 
   it('OverviewTab draws it inside the 7 + 8 pair, after Order facts (alone, Order facts takes the row)', () => {
-    const pair = tab.slice(tab.lastIndexOf('<div className="fw-so-ov-pair">'), tab.indexOf('</div>', tab.lastIndexOf('<div className="fw-so-ov-pair">')))
+    // F-CO-K1 (K1.3): the pair is the shared overview kit's part (it draws the same div.fw-so-ov-pair).
+    expect(tab.lastIndexOf('<OverviewPair>')).toBeGreaterThan(-1)
+    const pair = tab.slice(tab.lastIndexOf('<OverviewPair>'), tab.indexOf('</OverviewPair>', tab.lastIndexOf('<OverviewPair>')))
     expect(pair.indexOf('<FactsCard ')).toBeGreaterThan(-1)
     expect(pair.indexOf('{customFields')).toBeGreaterThan(pair.indexOf('<FactsCard '))
     expect(tab).toContain('customFields?: ReactNode')

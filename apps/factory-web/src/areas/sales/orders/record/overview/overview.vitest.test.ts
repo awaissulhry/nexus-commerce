@@ -655,9 +655,9 @@ describe('F-OO-201: the Overview draws two full-width cards, then three pairs; a
     }
     throw new Error(`the element at ${at} never closes`)
   }
-  /** A card's heading (the first `fw-so-h2` inside the element at `at`), as a reader sees it. */
+  /** A card's heading (the first `fw-ro-h2` inside the element at `at`: F-CO-K1, the kit's card draws the title), as a reader sees it. */
   const headOf = (html: string, at: number): string | null => {
-    const match = /<h2 class="fw-so-h2">([^<]*)<\/h2>/.exec(html.slice(at, elementAt(html, at).end))
+    const match = /<h2 class="fw-ro-h2">([^<]*)<\/h2>/.exec(html.slice(at, elementAt(html, at).end))
     return match ? textOf(match[1]!) : null
   }
 
@@ -702,9 +702,12 @@ describe('F-OO-201: the Overview draws two full-width cards, then three pairs; a
     // Tokens only (no raw colour, no new size outside the scale).
     expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/)
     const tab = read('../view/OverviewTab.tsx')
-    // F-CO-K1 (K1.1): the tab loads the kit's stylesheet (the card's old file is gone), after its cards.
-    expect(tab).toContain("import '../../../../_shared/record-overview/record-overview.css'")
-    expect(tab).not.toContain("import './overview/overview.css'")
+    // F-CO-K1 (K1.3): the tab draws the kit's parts and the kit brings its stylesheet (a part owns it): the parts' file imports it,
+    // the tab imports the parts — after its cards, where overview.css was — and no stylesheet of its own.
+    expect(read('../../../../_shared/record-overview/Overview.tsx')).toContain("import './record-overview.css'")
+    expect(tab).toContain("import { Overview, OverviewPair } from '../../../../_shared/record-overview/Overview'")
+    expect(tab.indexOf("from '../../../../_shared/record-overview/Overview'")).toBeGreaterThan(tab.indexOf("import { FactsCard } from './overview/FactsCard'"))
+    expect(tab).not.toMatch(/import '[^']*\.css'/)
     expect(tab).not.toContain('fw-so-overview-cards')
     // orders.css lost the old grid rule and (F-CO-K1, settle S1) the Overview's column, which went to the kit: a record page that draws
     // the kit does not load orders.css. Nothing else of it changed, and it says where the rule went.
@@ -824,8 +827,8 @@ describe('F-OO-103: "Where it is now" keeps its title, Live, the headline and th
   /** Section 1's own markup: from its card up to the next card's heading (Progress by line). */
   const sectionOne = (html: string): string => {
     const from = html.indexOf('fw-so-where')
-    const title = html.indexOf('<h2 class="fw-so-h2">', from)
-    return html.slice(from, html.indexOf('<h2 class="fw-so-h2">', title + 1))
+    const title = html.indexOf('<h2 class="fw-ro-h2">', from)
+    return html.slice(from, html.indexOf('<h2 class="fw-ro-h2">', title + 1))
   }
   const CASES = ['overview', 'overview-confirmed', 'f-oo-102-waiting', 'f-oo-102-shipped', 'f-oo-102-cancelled', 'f-op-301-so2-overview', 'f-op-301-so3-overview']
   const GONE = {
@@ -851,14 +854,14 @@ describe('F-OO-103: "Where it is now" keeps its title, Live, the headline and th
 
   it('it keeps the title, "Live · as of", the headline (with its quiet line) and the stages\' one link, in this order', () => {
     const html = sectionOne(draw('overview'))
-    const at = ['<h2 class="fw-so-h2">Where it is now</h2>', 'fw-prp-fresh', '<p class="fw-so-headline">In production · Sewing</p>', 'class="fw-prp-strip-go"', 'Stages are set by the floor and quality, or by hand when their records are wrong or missing' /* F-MS-101 */].map((part) => html.indexOf(part))
+    const at = ['<h2 class="fw-ro-h2">Where it is now</h2>', 'fw-prp-fresh', '<p class="fw-so-headline">In production · Sewing</p>', 'class="fw-prp-strip-go"', 'Stages are set by the floor and quality, or by hand when their records are wrong or missing' /* F-MS-101 */].map((part) => html.indexOf(part))
     expect(at.every((index) => index >= 0), at.join(',')).toBe(true)
     expect([...at].sort((a, b) => a - b)).toEqual(at)
     // Waiting for a yes and cancelled keep the title, Live and the headline with its quiet line; there are no dots to link.
     for (const id of ['f-oo-102-waiting', 'f-oo-102-cancelled']) {
       const frame = sectionOne(draw(id))
       expect(frame, id).toContain('fw-prp-fresh')
-      expect(frame, id).toMatch(/<p class="fw-so-headline">[^<]+<\/p><p class="fw-so-hint">[^<]+<\/p>/)
+      expect(frame, id).toMatch(/<p class="fw-so-headline">[^<]+<\/p><p class="fw-ro-hint">[^<]+<\/p>/)
       expect(frame, id).not.toContain('fw-prp-strip')
     }
   })
@@ -868,7 +871,10 @@ describe('F-OO-103: "Where it is now" keeps its title, Live, the headline and th
     const strips = card.indexOf('F-OO-103: the strips slot')
     const stages = card.indexOf('<StageStrip')
     const moves = card.indexOf('F-OO-103: the moves slot')
-    expect(strips).toBeGreaterThan(card.indexOf('className="fw-so-headline"'))
+    // F-CO-K1 (K1.3): the headline is the kit's part; the strips slot still comes after it.
+    expect(card.indexOf('<Headline ')).toBeGreaterThan(-1)
+    expect(strips).toBeGreaterThan(card.indexOf('<Headline '))
+    expect(card).not.toContain('className="fw-so-headline"')
     expect(stages).toBeGreaterThan(strips)
     expect(moves).toBeGreaterThan(stages)
     for (const gone of ['KeyValue', 'WaitingOnPill', 'HealthPill', 'exFactoryOf', 'inWorkOf', 'preparingNote', 'whoActsNext', "'overview.fact.", 'board.customerUrgent']) expect(card, gone).not.toContain(gone)
@@ -1158,8 +1164,8 @@ describe('F-OO-205: Requests & changes — Waiting on us · N, Waiting on <custo
   const cardOf = (html: string): string => {
     const from = html.indexOf('fw-so-rq"')
     if (from < 0) throw new Error('no Requests & changes card')
-    const title = html.indexOf('<h2 class="fw-so-h2">', from)
-    const next = html.indexOf('<h2 class="fw-so-h2">', title + 1)
+    const title = html.indexOf('<h2 class="fw-ro-h2">', from)
+    const next = html.indexOf('<h2 class="fw-ro-h2">', title + 1)
     return html.slice(from, next < 0 ? undefined : next)
   }
   const WORDS = {
@@ -1249,8 +1255,8 @@ describe('F-MS-102: "Where it is now" draws a stage set by hand — the door on 
   /** Section 1's own markup: from its card up to the next card's heading (Progress by line). */
   const sectionOf = (html: string): string => {
     const from = html.indexOf('fw-so-where')
-    const title = html.indexOf('<h2 class="fw-so-h2">', from)
-    return html.slice(from, html.indexOf('<h2 class="fw-so-h2">', title + 1))
+    const title = html.indexOf('<h2 class="fw-ro-h2">', from)
+    return html.slice(from, html.indexOf('<h2 class="fw-ro-h2">', title + 1))
   }
   /** The hand stage's row: from its row up to the moves row. */
   const rowOf = (html: string): string => html.slice(html.indexOf('class="fw-so-ov-row fw-so-hand"'), html.indexOf('class="fw-so-where-moves"'))
@@ -1417,3 +1423,97 @@ describe('F-MS-102: "Where it is now" draws a stage set by hand — the door on 
   })
 })
 // ---- end F-MS-102
+
+// ---- F-CO-K1 (customer overview lane; settles S1, S2, S4): the order's Overview draws the shared overview kit's frame, markup unchanged ----
+describe('F-CO-K1: the Overview is drawn by the shared overview kit — the same frame as before, the kit\'s own text classes, one stylesheet', () => {
+  /** The tab's own markup: from its root on. */
+  const tabOf = (html: string): string => html.slice(html.indexOf('<div class="fw-so-overview">'))
+
+  it('drawn: the root, the lead card with its head row, the pairs, a card with a bare title — every title the kit\'s h2, no order text class on a frame', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const html = draw('overview', locale)
+      expect(html.match(/<div class="fw-so-overview">/g), locale).toHaveLength(1)
+      const tab = tabOf(html)
+      // The lead card: the kit's column class on the DS card, the head row (the title, then "Live · as of"), then the headline.
+      expect(tab, locale).toMatch(/^<div class="fw-so-overview"><div class="nds-card pad fw-so-where"><div class="fw-ro-head"><h2 class="fw-ro-h2">[^<]+<\/h2><span class="fw-prp-fresh" role="status">/)
+      expect(tab, locale).toMatch(/<\/div><div class="fw-so-where-said"><p class="fw-so-headline">[^<]+<\/p>/)
+      // The cards a host names for its tests keep their class beside the DS card's; each has the head row.
+      for (const hook of ['fw-so-people', 'fw-so-dates', 'fw-so-rq']) expect(tab, `${locale} ${hook}`).toContain(`<div class="nds-card pad ${hook}"><div class="fw-ro-head"><h2 class="fw-ro-h2">`)
+      // Linked records and Order facts: a bare title (no head row), then the list.
+      expect(tab.match(/<div class="nds-card pad"><h2 class="fw-ro-h2">[^<]+<\/h2><ul class="/g), locale).toHaveLength(2)
+      // Seven cards, seven titles, all the kit's; no frame keeps the order area's text classes.
+      expect(tab.match(/<h2 class="fw-ro-h2">/g), locale).toHaveLength(7)
+      expect(tab, locale).not.toContain('fw-so-card-head')
+      expect(tab, locale).not.toContain('class="fw-so-h2"')
+    }
+  })
+
+  it('drawn while read and when the read failed: Progress is busy under its title; a failed or loading part is the kit\'s card state in the order\'s words', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const reading = tabOf(draw('overview-loading', locale))
+      // The lead card reads: the placeholder of the sentence, no quiet line; Progress by line: busy, a bare title, its rows' placeholders.
+      expect(reading, locale).toMatch(/<div class="fw-so-where-said"><span class="nds-skeleton"[^>]*><\/span><\/div>/)
+      expect(reading, locale).toMatch(/<div class="nds-card pad" aria-busy="true"><h2 class="fw-ro-h2">[^<]+<\/h2><div class="fw-so-stack" role="status"/)
+      // Requests & changes: the kit's loading card — its status line is the kit's hint (the spinner, then the words).
+      expect(reading, locale).toMatch(/<div class="nds-card pad" aria-busy="true"><p class="fw-ro-hint" role="status"><span class="nds-spinner"[^>]*><\/span> [^<]+…<\/p><\/div>/)
+      expect(textOf(reading), locale).toContain(locale === 'en' ? 'Loading Requests & changes…' : 'Caricamento di Richieste e modifiche…')
+      const failed = textOf(tabOf(draw('overview-failed', locale)))
+      for (const part of locale === 'en' ? ["Couldn't load Progress by line", "Couldn't load People", "Couldn't load Requests & changes", 'Try again'] : ['Impossibile caricare Avanzamento per riga', 'Impossibile caricare Persone', 'Impossibile caricare Richieste e modifiche', 'Riprova']) expect(failed, `${locale} ${part}`).toContain(part)
+      // The problem is said in the order's words (the adapter translates its key): never a key on screen.
+      expect(failed, locale).not.toMatch(/\bproblem\.[a-z_.]+|\bstate\.[a-z]+|\bpart\.[a-z]+/)
+    }
+  })
+
+  it('the source: the tab and the seven cards draw the kit\'s parts; no card draws a DS card, a head row or a title by hand', () => {
+    const tab = read('../view/OverviewTab.tsx')
+    expect(tab).toContain('<Overview>')
+    expect(tab.match(/<OverviewPair>/g)).toHaveLength(3)
+    expect(tab).not.toMatch(/className="fw-so-overview"|className="fw-so-ov-pair"/)
+    for (const card of CARDS) {
+      const text = read(`../view/overview/${card}.tsx`)
+      expect(text, card).toContain("from '../../../../../_shared/record-overview/Overview'")
+      expect(text.match(/<OverviewCard[ \n]/g)?.length ?? 0, card).toBeGreaterThan(0)
+      expect(text, card).not.toMatch(/<Card[ >]/)
+      expect(text, card).not.toMatch(/className="fw-so-card-head"|className="fw-so-h2"/)
+    }
+    // Progress by line has two frames (while read: busy, a bare title; read: the head row, its right side null when there is no line).
+    const progress = read('../view/overview/ProgressCard.tsx')
+    expect(progress).toContain("<OverviewCard busy title={t('overview.progress')}>")
+    expect(progress).toMatch(/<OverviewCard title=\{t\('overview\.progress'\)\} aside=\{rows\.length > 0 \? <span className="fw-so-hint">[^\n]+<\/span> : null\}>/)
+    // The lead card and its headline; Linked records and Order facts hand no right side (a bare title).
+    const where = read('../view/overview/WhereCard.tsx')
+    expect(where).toContain("<OverviewCard lead title={t('overview.where')} aside={<FreshnessLine ")
+    expect(where).toContain('<Headline sentence={loading ? null : sentence} quiet={quiet} />')
+    expect(read('../view/overview/LinkedCard.tsx')).toContain("<OverviewCard title={t('overview.linked.title')}>")
+    expect(read('../view/overview/FactsCard.tsx')).toContain("<OverviewCard title={t('overview.facts.title')}>")
+  })
+
+  it('the source: PartState is the order\'s adapter over the kit\'s CardState — it translates the problem\'s key, the kit says the rest', () => {
+    const page = read('../view/OrderRecordView.tsx')
+    expect(page).toContain('<CardState part={label} problem={problem ? t(problem) : null} onRetry={onRetry} />')
+    for (const gone of ["t('part.loading'", "t('part.failed'"]) expect(page, gone).not.toContain(gone)
+    // Its three users did not change.
+    for (const card of ['ProgressCard', 'PeopleCard', 'RequestsCard']) expect(read(`../view/overview/${card}.tsx`), card).toMatch(/return <PartState problem=\{/)
+  })
+
+  it('the stylesheets keep their order: the kit\'s file is first imported after where.css (the strips\' and the hand row\'s alignment rests on it until co-k2)', () => {
+    const kitAt = (text: string): number => text.indexOf("_shared/record-overview/Overview'")
+    const where = read('../view/overview/WhereCard.tsx')
+    expect(kitAt(where)).toBeGreaterThan(where.indexOf("import './where.css'"))
+    expect(kitAt(where)).toBeGreaterThan(where.indexOf("from './StripRow'"))
+    const page = read('../view/OrderRecordView.tsx')
+    expect(kitAt(page)).toBeGreaterThan(page.indexOf("import { ProductionTab } from './ProductionTab'"))
+    expect(kitAt(page)).toBeGreaterThan(page.indexOf("from './OverviewTab'"))
+    expect(page.indexOf("import { ProductionTab } from './ProductionTab'")).toBeGreaterThan(-1)
+    // Each card imports the kit after its own stylesheet.
+    for (const [card, css] of [['ProgressCard', './progress.css'], ['PeopleCard', './people.css'], ['DatesCard', './dates.css'], ['RequestsCard', './requests.css'], ['LinkedCard', './linked.css'], ['FactsCard', './facts.css']] as const) {
+      const text = read(`../view/overview/${card}.tsx`)
+      expect(text.indexOf(`import '${css}'`), card).toBeGreaterThan(-1)
+      expect(kitAt(text), card).toBeGreaterThan(text.indexOf(`import '${css}'`))
+    }
+    // The clash the order rests on is still in the two files (co-k2 deletes the dead declaration, then no order decides).
+    expect(read(KIT_CSS)).toMatch(/\.fw-so-ov-row \{[^}]*align-items: baseline;/)
+    expect(read('../view/overview/where.css')).toMatch(/\.fw-so-strip \{\s*align-items: start;/)
+  })
+})
+// ---- end F-CO-K1

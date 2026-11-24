@@ -17,7 +17,10 @@ import { RequestsCard } from './overview/RequestsCard'
 import { LinkedCard } from './overview/LinkedCard'
 import { FactsCard } from './overview/FactsCard'
 // ---- end F-OO-100
-import '../../../../_shared/record-overview/record-overview.css' // F-CO-K1 (K1.1): the pairs and the shared card row moved to the shared overview kit (after the cards: where.css stays before it)
+// ---- F-CO-K1 (the shared overview kit): the tab's column and its pairs are the kit's parts; the kit brings its ONE stylesheet (the
+// old overview.css moved there: F-OO-201's pairs and the shared card row). Imported after the cards, where overview.css was. ----
+import { Overview, OverviewPair } from '../../../../_shared/record-overview/Overview'
+// ---- end F-CO-K1
 
 /**
  * F-SA-232 (sales page plan N2, picks P2, P3, P4, P15, R9; 10-order-page §2.1 O1, O2; review OW-6, OW-7) — Overview, the order page's
@@ -32,6 +35,8 @@ import '../../../../_shared/record-overview/record-overview.css' // F-CO-K1 (K1.
  * before (who acts next, the ex-factory date, the health, Urgent, the bundles) lives in one other place each (WhereCard.tsx says where).
  * F-OO-211 (11-design §8.1): `customFields` — the order's custom fields (the container's, built once) are the 7 + 8 pair's second card,
  * beside Order facts; when no field applies (or the reader may not see them) they draw nothing and Order facts takes the row.
+ * F-CO-K1: the column, the pairs and each card's frame are the shared overview kit's parts (areas/_shared/record-overview) — the same
+ * markup as before, now drawn by `Overview`, `OverviewPair` and `OverviewCard`.
  */
 export function OverviewTab({ order, model, actions, customFields }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; /* F-OO-211 */ customFields?: ReactNode }) {
   const locale = useLocale()
@@ -40,25 +45,25 @@ export function OverviewTab({ order, model, actions, customFields }: { order: Or
   // F-OP-301 (walk #1–#3): through the ONE call the badge and the Changes tab make too; nothing claimed before the production read.
   const waiting = orderWaitingOf(order, model, locale)
   return (
-    <div className="fw-so-overview">
+    <Overview>
       <WhereCard order={order} model={model} actions={actions} waiting={waiting} />
       <ProgressCard order={order} model={model} actions={actions} />
       {/* F-OO-201 (F4): then the cards in pairs, each pair its own row — 2 equal columns while the Overview is 720 px or wider, 1
-          below; a card alone takes the whole row; the two cards of a pair stretch to one height (overview.css). */}
-      <div className="fw-so-ov-pair">
+          below; a card alone takes the whole row; the two cards of a pair stretch to one height (the kit's stylesheet). */}
+      <OverviewPair>
         <PeopleCard order={order} model={model} actions={actions} />
         <DatesCard order={order} model={model} actions={actions} waiting={waiting /* F-OO-143: its DATE rows */} />
-      </div>
-      <div className="fw-so-ov-pair">
+      </OverviewPair>
+      <OverviewPair>
         <RequestsCard order={order} model={model} actions={actions} waiting={waiting} />
         <LinkedCard order={order} model={model} actions={actions /* F-OO-207: its doors (Make work orders…, Create shipment…) */} />
-      </div>
+      </OverviewPair>
       {/* Order facts, with Custom fields as the pair's second card (F-OO-211); alone, Order facts takes the row. */}
-      <div className="fw-so-ov-pair">
+      <OverviewPair>
         <FactsCard order={order} model={model} actions={actions /* F-OO-209: its doors */} />
         {customFields /* F-OO-211: the order's custom fields (RecordCustomFields: nothing when no field applies) */}
-      </div>
-    </div>
+      </OverviewPair>
+    </Overview>
   )
 }
 

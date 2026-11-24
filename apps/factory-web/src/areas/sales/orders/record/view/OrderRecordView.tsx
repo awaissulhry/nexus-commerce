@@ -75,6 +75,10 @@ import type { MilestonesActions, MilestonesModel } from '../../../../planning/mi
 // ---- end F-PT-202
 import { askPresetOf, askStarterOf } from '../production/asks' // F-PT-103: the band's "Ask for an update…" is a ready ask
 // ---- end F-SA-232
+// ---- F-CO-K1 (the shared overview kit): PartState draws the kit's CardState. Imported last — after ProductionTab and OverviewTab, so
+// the kit's stylesheet keeps its place after where.css (the strips' and the hand row's alignment rests on that order until co-k2). ----
+import { CardState } from '../../../../_shared/record-overview/Overview'
+// ---- end F-CO-K1
 
 export type { OrderRecordActions, OrderRecordModel } from '../record-model'
 
@@ -637,31 +641,12 @@ function FrameBridge({ into }: { into: { current: RecordFrameState | null } }) {
   return null
 }
 
-/** A tab's part while it loads, or when its read failed (never drawn as empty): with Try again. */
+/**
+ * A tab's part while it loads, or when its read failed (never drawn as empty): with Try again.
+ * F-CO-K1 (settle S2): the card is the shared overview kit's `CardState`, which takes WORDS — this is the order's adapter: it says the
+ * problem's KEY in the order's own words and hands them on (the kit says "Loading…", "Couldn't load…" and "Try again" itself).
+ */
 export function PartState({ problem, onRetry, label }: { problem: string | null; onRetry?: () => void; label: string }) {
   const t = useT('orders')
-  if (problem) {
-    return (
-      <Card padded>
-        <EmptyState
-          title={t('part.failed', { part: label })}
-          description={t(problem)}
-          action={
-            onRetry ? (
-              <Button size="sm" onClick={onRetry}>
-                {t('common.retry')}
-              </Button>
-            ) : undefined
-          }
-        />
-      </Card>
-    )
-  }
-  return (
-    <Card padded aria-busy="true">
-      <p className="fw-so-hint" role="status">
-        <Spinner size={14} /> {t('part.loading', { part: label })}
-      </p>
-    </Card>
-  )
+  return <CardState part={label} problem={problem ? t(problem) : null} onRetry={onRetry} />
 }

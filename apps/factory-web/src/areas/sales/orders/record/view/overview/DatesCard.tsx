@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, Menu, type MenuItemDef } from '@nexus/ui/components' // F-OO-145: a gate's More ▾
+import { Menu, type MenuItemDef } from '@nexus/ui/components' // F-OO-145: a gate's More ▾
 import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
@@ -15,6 +15,7 @@ import { useSearchParams } from 'next/navigation'
 import { tabHref } from '../../../../../_shared/record-frame/address'
 import { TabLink } from '../../../../../../lib/tab-link/TabLink'
 import './dates.css' // F-OO-141: the card's own rows
+import { OverviewCard } from '../../../../../_shared/record-overview/Overview' // F-CO-K1: the card's frame is the shared overview kit's
 // ---- F-OO-143: the new date the customer refused (the ONE waiting list's DATE row) and Decide… (the ONE promise dialog) ----
 import type { WaitingState } from '../../overview/model'
 import { ageWordsOf, decideDialogOf, refusedDatesOf } from '../../overview/dates'
@@ -130,13 +131,15 @@ function Dates({ order, model, actions, waiting }: { order: Order; model: OrderR
     return t(value.kind === 'after' ? 'dates.planAfter' : 'dates.planBefore', { date: day(value.date), days: value.days })
   }
   return (
-    <Card padded className="fw-so-dates">
-      <div className="fw-so-card-head">
-        <h2 className="fw-so-h2">{t('overview.dates.title')}</h2>
+    <OverviewCard
+      className="fw-so-dates"
+      title={t('overview.dates.title')}
+      aside={
         <TabLink className="fw-so-link fw-so-hint" href={`${tabHref(`${model.prefix}/sales/orders/${order.id}`, 'production', search)}#dates`}>
           {t('overview.dates.all')}
         </TabLink>
-      </div>
+      }
+    >
       <div className="fw-so-dates-grid">
         {/* F-OP-104: the order's own dates, each changed in place; F-OO-141: the promise first, what the plan says under it. */}
         <ul className="fw-so-dates-rows" aria-label={t('doors.ownDates')}>
@@ -261,6 +264,6 @@ function Dates({ order, model, actions, waiting }: { order: Order; model: OrderR
         ) : null}
       </div>
       {/* F-PT-202: Planning's own gate dialogs are mounted ONCE for the page (OrderRecordView): this card opens them (gateActs). */}
-    </Card>
+    </OverviewCard>
   )
 }
