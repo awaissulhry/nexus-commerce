@@ -28,7 +28,7 @@ import {
 import { AllOfCustomerFeed } from './view/AllOfCustomerFeed'
 import { AllOfCustomerDock } from './view/AllOfCustomerFeed' // F-OP-204
 import { FeedHead } from './view/FeedHead' // F-OP-204
-import { gistOf, GIST_CHARS, LINE_FILES, lineAudienceOf, lineFilesOf, lineTimeOf } from './model' // F-OP-205
+import { feedRowsOf } from './model' // tw- W2.5
 import { feedKeyOf, linePlaceOf, rovingIndexOf } from './keys' // F-OP-206
 import { answerOf } from './model' // F-OP-207
 import { freshFolder, heldRecordsOf, listKeyOf, onShowOf } from './model' // F-OP-208
@@ -184,29 +184,30 @@ describe('F-SA-261 the view, in both languages', () => {
   )
 
   // F-OP-204: the card — its Head (the filters, "1 new · Show"), the feed, the foot's info icon; the one line is the pick band's now.
-  it('read only: the filters, the chips, "1 new · Show", the New dot, the door, Show older, what is left out — no ⋯ on a card', () => {
+  // tw- W2.5 (10-design §9; S1): the thread's own bubbles, read only; each bubble's menu Answer in its thread · Copy text · Copy link.
+  it('read only: the filters, the chips, "1 new · Show", the New dot, the bubble’s menu, Show older, what is left out', () => {
     const html = render(createElement(AllOfCustomerDock, { label: 'All of Brand Alpha · Read only', model: model(state), actions: { onAnswer: () => undefined } }))
     const text = textOf(html)
-    // F-OP-206: the foot's ONE info icon says the keys and that seeing a line marks nothing read.
-    expect(html).toContain('aria-label="J / K walk · Enter answers · Space shows the whole message. Seeing a line here marks nothing read: open its thread."')
+    // F-OP-206: the foot's ONE info icon says the keys and that seeing a message marks nothing read.
+    expect(html).toContain('aria-label="J / K walk · Enter answers in its thread. Seeing a message here marks nothing read: open its thread."')
     expect(text).toContain('View: All')
     expect(text).toContain('Kind: Every kind')
     expect(text).toContain('SO-0142 · Your order 12')
     expect(text).toContain('Brand Alpha (general)')
     expect(text).toContain('1 new · Show')
     expect(text).toContain('New')
-    expect(text).toContain('Answer') // F-OP-216: the door's short word; its name keeps the record
-    expect(html).toContain('aria-label="Answer in the thread of SO-0142 · Your order 12"')
-    expect(text).not.toContain('Answer in its conversation')
+    expect(text).toContain('Read only · 2 threads')
+    // Each bubble is the thread's own, read only, with its small menu (Answer in its thread · Copy text · Copy link).
+    expect(html.match(/class="fw-rt-msg /g)?.length).toBe(3)
+    expect(html).toContain('fw-rt-msg-more')
+    expect(html).not.toContain('fw-aoc-line')
     expect(text).toContain('Show older')
     expect(text).toContain('1 thread of Brand Alpha you cannot open is left out.')
-    expect(html).not.toContain('fw-rt-msg-more')
     // The chip is a real link to the record (⌘-click opens a new tab).
     expect(html).toContain('href="/w/x/sales/orders/so-1"')
-    expect(leftKeys(html, ['allOfCustomer', 'view', 'kind', 'chip'])).toEqual([])
+    expect(leftKeys(html, ['allOfCustomer', 'view', 'kind', 'chip', 'menu'])).toEqual([])
     const italian = render(createElement(AllOfCustomerDock, { label: 'Tutto di Brand Alpha · Sola lettura', model: model(state), actions: { onAnswer: () => undefined } }), 'it')
-    expect(textOf(italian)).toContain('Rispondi')
-    expect(italian).toContain('aria-label="Rispondi nella conversazione di SO-0142 · Ordine 12 del cliente"')
+    expect(textOf(italian)).toContain('Sola lettura · 2 thread')
     expect(textOf(italian)).toContain('Brand Alpha (generale)')
     expect(textOf(italian)).toContain('Vista: Tutto')
     expect(textOf(italian)).toContain('Tipo: Ogni tipo')
@@ -214,9 +215,19 @@ describe('F-SA-261 the view, in both languages', () => {
     expect(leftKeys(italian, ['allOfCustomer', 'view', 'kind', 'chip'])).toEqual([])
   })
 
-  it('without a dock to switch, the door is a link to the message on its record’s page', () => {
+  // tw- W2.5: oldest at the top, the newest at the bottom; Show older on top; a record's chip on top of its run (the run ends there).
+  it('oldest at the top, the newest at the bottom; Show older on top; the record’s chip on its run’s first bubble only', () => {
     const html = render(createElement(AllOfCustomerFeed, { model: model(state) }))
-    expect(html).toContain('href="/w/x/sales/orders/so-1?message=m3"')
+    expect(html.indexOf('Message m1')).toBeLessThan(html.indexOf('Message m2'))
+    expect(html.indexOf('Message m2')).toBeLessThan(html.indexOf('Message m3'))
+    expect(html.indexOf('Show older')).toBeLessThan(html.indexOf('Message m1'))
+    // m1 (the order) · m2 (general) · m3 (the order again): three runs, three chips.
+    expect(html.match(/<a class="fw-aoc-chip"/g)?.length).toBe(3)
+    const one = render(createElement(AllOfCustomerFeed, { model: model(afterFirst(EMPTY_FEED, answer([entry('m3', 30), entry('m2', 20), entry('m1', 10)]))) }))
+    expect(one.match(/<a class="fw-aoc-chip"/g)?.length).toBe(1)
+    expect(one.match(/fw-aoc-item is-recstart/g)?.length).toBe(1)
+    const source = readFileSync(new URL('./view/AllOfCustomerFeed.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('scroller.scrollTop = scrolledTo > 0 ? scrolledTo : scroller.scrollHeight')
   })
 
   it('the states: reading, nothing yet (and with a filter), failed with Try again, out of reach; older conversations said', () => {
@@ -319,55 +330,39 @@ describe('F-OP-204 — All of <Customer> inside the card: FeedHead, the width me
 // inside the card ---------------------------------------------------------------------------------------------------------------------
 describe('F-OP-205 — compact lines, expand in place, the states inside the card', () => {
   const model = (state: FeedState, over: Partial<Parameters<typeof feedModel>[1]> = {}) => feedModel(state, { customerName: 'Brand Alpha', prefix: '/w/x', view: 'all', kind: 'every', canReadFiles: true, ...over })
-  const file = (id: string, status: 'AVAILABLE' | 'QUARANTINED' = 'AVAILABLE') => ({ id, name: `${id}.pdf`, sizeBytes: 10, contentType: 'application/pdf', status })
 
-  it('the gist: the message\'s own words in one run (the quoted reply left out), at most two lines\' worth; an erased one says why', () => {
-    const card = cardOfEntry(entry('m1', 10))
-    expect(gistOf({ ...card, body: 'Can we move the delivery?\n\nOn 12 Nov, Alex wrote:\n> the old text' })).toEqual({ text: 'Can we move the delivery?' })
-    expect(gistOf({ ...card, body: 'one\n  two\tthree' })).toEqual({ text: 'one two three' })
-    const long = gistOf({ ...card, body: 'x'.repeat(600) })
-    expect('text' in long && long.text.length).toBe(GIST_CHARS)
-    expect(gistOf({ ...card, erased: true })).toEqual({ key: 'erased.line', ns: 'record-thread-card' })
-    expect(gistOf({ ...card, body: '', files: [file('f1')] })).toEqual({ key: 'allOfCustomer.filesOnly', ns: 'record-thread' })
+  // tw- W2.5 (replaces the compact lines): the thread's own bubbles — runs by the thread's rule, a run ends where the record changes.
+  it('the rows: oldest first; a run ends where the record changes, then by the thread’s rule (sender, who reads it, day)', () => {
+    const items = model(afterFirst(EMPTY_FEED, answer([entry('m4', 40, GENERAL), entry('m3', 30), entry('m2', 20), entry('m1', 10, ORDER, { direction: 'INTERNAL_NOTE', audience: 'OFFICE' })]))).items
+    const rows = feedRowsOf(items)
+    expect(rows.map((row) => row.item.key)).toEqual(['m1', 'm2', 'm3', 'm4'])
+    expect(rows.map((row) => row.recordStart)).toEqual([true, false, false, true])
+    // m2 and m3: one sender in one record, one run (the first has the tile and the name, the second neither); m4 is a new record.
+    expect(rows[1]!.place).toMatchObject({ first: true, last: false })
+    expect(rows[2]!.place).toMatchObject({ first: false, last: true })
+    expect(rows[3]!.place).toMatchObject({ first: true, last: true })
+    expect(feedRowsOf([])).toEqual([])
   })
 
-  it('at most three file chips and "+N" for the rest; a file in quarantine or without files.read is only counted', () => {
-    expect(LINE_FILES).toBe(3)
-    const five = ['a', 'b', 'c', 'd', 'e'].map((id) => file(id))
-    expect(lineFilesOf(five, true)).toEqual({ shown: five.slice(0, 3), more: 2 })
-    expect(lineFilesOf(five.slice(0, 2), true)).toEqual({ shown: five.slice(0, 2), more: 0 })
-    expect(lineFilesOf([file('q', 'QUARANTINED'), file('a')], true)).toEqual({ shown: [file('a')], more: 1 })
-    expect(lineFilesOf(five, false)).toEqual({ shown: [], more: 5 })
-  })
-
-  it('who reads it: the customer\'s messages and ours reach them; a note stays in the office; the time of day today, else the date', () => {
-    expect(lineAudienceOf({ kind: 'theirs' })).toBe('shared')
-    expect(lineAudienceOf({ kind: 'ours' })).toBe('shared')
-    expect(lineAudienceOf({ kind: 'note' })).toBe('office')
-    expect(lineAudienceOf({ kind: 'floor' })).toBe('office')
-    expect(lineTimeOf('2026-11-18T09:12:00.000Z', 'en', '2026-11-18')).toBe('10:12')
-    expect(lineTimeOf('2026-11-16T09:12:00.000Z', 'en', '2026-11-18')).toMatch(/^16 Nov 10:12$/)
-  })
-
-  it('a line: chip · New · who reads it · time, then "author: words"; the edge in the audience\'s colour; the card only after More', () => {
+  it('a bubble is the thread’s own card, read only: its words, its audience in words and icons, the New mark; no Reply, no Pin', () => {
     const state = afterFirst(EMPTY_FEED, answer([entry('m2', 20, ORDER, { new: true }), entry('m1', 10, ORDER, { direction: 'INTERNAL_NOTE', audience: 'OFFICE' })]))
     const html = render(createElement(AllOfCustomerFeed, { model: model(state), actions: { onAnswer: () => undefined } }))
-    expect(html.match(/class="fw-aoc-line is-shared is-new"/g)?.length).toBe(1)
-    expect(html.match(/class="fw-aoc-line is-office"/g)?.length).toBe(1)
+    expect(html.match(/class="fw-rt-msg /g)?.length).toBe(2)
+    expect(html).toContain('fw-rt-msg is-note')
+    expect(html).toContain('class="fw-aoc-item is-new"')
     const text = textOf(html)
-    expect(text).toContain('Brand Alpha reads it')
-    expect(text).toContain('Office only')
-    expect(text).toContain('Madeup Buyer: Message m2')
-    // Collapsed: no card drawn; More says it opens (aria-expanded), the region it controls is there and hidden.
-    expect(html).not.toContain('class="fw-rt-msg ')
-    expect(html.match(/aria-expanded="false"/g)?.length).toBe(2)
-    expect(html).toContain('aria-controls="fw-aoc-whole-m2"')
-    expect(html).toContain('id="fw-aoc-whole-m2" class="fw-aoc-whole" hidden=""')
-    const italian = textOf(render(createElement(AllOfCustomerFeed, { model: model(state) }), 'it'))
-    expect(italian).toContain('Brand Alpha lo legge')
-    expect(italian).toContain('Solo ufficio')
-    expect(italian).toContain('Altro')
-    expect(leftKeys(render(createElement(AllOfCustomerFeed, { model: model(state) }), 'it'), ['allOfCustomer', 'erased'])).toEqual([])
+    expect(text).toContain('Message m2')
+    expect(text).toContain('New')
+    expect(html).not.toContain('fw-aoc-line')
+    expect(html).not.toContain('aria-expanded="true"')
+    expect(leftKeys(render(createElement(AllOfCustomerFeed, { model: model(state) }), 'it'), ['allOfCustomer', 'erased', 'menu', 'foot'])).toEqual([])
+  })
+
+  it('mine on the right: the container says who reads (the session), the card puts the reader’s own message there', () => {
+    const mine = feedEntrySchema.parse({ ...entry('m9', 10, ORDER, { direction: 'OUTBOUND' }), message: { ...entry('m9', 10, ORDER, { direction: 'OUTBOUND' }).message, author: { kind: 'USER', id: 'u-me', name: 'Bea Esempio' } } })
+    expect(cardOfEntry(mine, 'u-me').mine).toBe(true)
+    expect(cardOfEntry(mine).mine).toBeFalsy()
+    expect(readFileSync(new URL('./use-all-of-customer.ts', import.meta.url), 'utf8')).toContain('const me = useOfficeSession().user.id')
   })
 
   it('the states inside the card: three 64 px lines while reading, a danger banner, a lock when out of reach, the empty doors', () => {
@@ -394,12 +389,12 @@ describe('F-OP-205 — compact lines, expand in place, the states inside the car
     const customer = readFileSync(new URL('../../../sales/customers/record/view/WorkTab.tsx', import.meta.url), 'utf8')
     expect(customer).toContain("frame.compose({ record: { type: 'Party', id: customer.id }, messageId: null, mode: 'note' })")
     const css = readFileSync(new URL('./all-of-customer.css', import.meta.url), 'utf8')
-    // RC3: the 2–5 px gaps and the 2 px / 3 px chip padding are gone; the line is 8 / 10 px, 8 px apart, its chips 20 px high.
-    expect(css).not.toMatch(/var\(--nds-space-[235]\)/)
-    expect(css).toMatch(/\.fw-aoc-line \{[^}]*padding: var\(--nds-space-8\) var\(--nds-space-10\);/)
-    expect(css).toMatch(/\.fw-aoc-list \{[^}]*gap: var\(--nds-space-8\);/)
+    // tw- W2.5: a run's bubbles 2 px apart, a new record's run 10 px from the one before; the chip 20 px high; the compact line gone.
+    expect(css).toMatch(/\.fw-aoc-list \{[^}]*gap: var\(--nds-space-2\);/)
+    expect(css).toMatch(/\.fw-aoc-item\.is-recstart:not\(:first-child\) \{[^}]*margin-top: var\(--nds-space-10\);/)
     expect(css).toMatch(/\.fw-aoc-chip \{[^}]*height: 20px;[^}]*padding: 0 var\(--nds-space-8\);/)
-    expect(css).toMatch(/\.fw-aoc-line\.is-office \{[^}]*background: var\(--nds-warning-soft\);/)
+    expect(css).not.toContain('.fw-aoc-line')
+    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|color-mix/i)
     // RC2: the body scrolls in the card (.fw-rt-scroll), never the feed itself.
     expect(css).not.toMatch(/overflow-y:\s*auto/)
   })
@@ -407,7 +402,7 @@ describe('F-OP-205 — compact lines, expand in place, the states inside the car
 // ---- end F-OP-205
 
 // ---- F-OP-206 (order page plan N4; 11-dock §3.3; D7): the keys and the a11y of the list — a feed of articles, ONE tab stop --------------
-describe('F-OP-206 — J / K walk the lines, Enter answers, Space shows the whole message; one tab stop', () => {
+describe('F-OP-206 / tw- W2.5 — J / K walk the messages, Enter answers in its thread; one tab stop', () => {
   const model = (state: FeedState) => feedModel(state, { customerName: 'Brand Alpha', prefix: '/w/x', view: 'all', kind: 'every', canReadFiles: true })
   const plain = { metaKey: false, ctrlKey: false, altKey: false }
 
@@ -438,15 +433,14 @@ describe('F-OP-206 — J / K walk the lines, Enter answers, Space shows the whol
   it('a feed of articles named by chip, writer and time; only the first line is a tab stop, its controls too; busy while older ones come', () => {
     const state = afterFirst(EMPTY_FEED, answer([entry('m2', 20), entry('m1', 10)], 'c-1'))
     const html = render(createElement(AllOfCustomerFeed, { model: model(state), actions: { onAnswer: () => undefined } }))
-    expect(html).toMatch(/<div class="fw-aoc-list" role="feed" aria-busy="false" aria-label="Messages with Brand Alpha, newest first">/)
-    expect(html).toContain('<article class="fw-aoc-line is-shared" tabindex="0" aria-posinset="1" aria-setsize="-1" aria-labelledby="fw-aoc-m2-chip fw-aoc-m2-author fw-aoc-m2-time">')
-    expect(html).toContain('<article class="fw-aoc-line is-shared" tabindex="-1" aria-posinset="2" aria-setsize="-1" aria-labelledby="fw-aoc-m1-chip fw-aoc-m1-author fw-aoc-m1-time">')
-    for (const id of ['fw-aoc-m2-chip', 'fw-aoc-m2-author', 'fw-aoc-m2-time']) expect(html).toContain(`id="${id}"`)
-    // op-fx1: a control is <a …> or <button …> — `\b` so the next line's own <article … tabindex="-1"> is not taken for one.
-    const second = html.slice(html.indexOf('aria-posinset="2"'))
-    expect(second.match(/<(a|button)\b[^>]*tabindex="-1"/g)?.length).toBeGreaterThanOrEqual(3)
+    // tw- W2.5: oldest first — the newest (the last) holds the one tab stop; each article named by its chip and its bubble.
+    expect(html).toMatch(/<div class="fw-aoc-list" role="feed" aria-busy="false" aria-label="Messages with Brand Alpha, oldest first">/)
+    expect(html).toContain('<article class="fw-aoc-item is-recstart" tabindex="-1" aria-posinset="1" aria-setsize="-1" aria-labelledby="fw-aoc-m1-chip message-m1">')
+    expect(html).toContain('<article class="fw-aoc-item" tabindex="0" aria-posinset="2" aria-setsize="-1" aria-labelledby="fw-aoc-m2-chip message-m2">')
+    for (const id of ['fw-aoc-m1-chip', 'fw-aoc-m2-chip', 'message-m1', 'message-m2']) expect(html).toContain(`id="${id}"`)
+    // Only the line holding the tab stop lets Tab into its chip.
     const first = html.slice(html.indexOf('aria-posinset="1"'), html.indexOf('aria-posinset="2"'))
-    expect(first).not.toMatch(/<(a|button)\b[^>]*tabindex="-1"/)
+    expect(first).toMatch(/<a class="fw-aoc-chip" tabindex="-1"/)
     const older = render(createElement(AllOfCustomerFeed, { model: model({ ...state, older: 'loading' }) }))
     expect(older).toContain('role="feed" aria-busy="true"')
   })
@@ -454,8 +448,8 @@ describe('F-OP-206 — J / K walk the lines, Enter answers, Space shows the whol
   it('the sources: keys on the line itself only (a control keeps its own Enter); Enter presses the line\'s door; no list role lost', () => {
     const view = readFileSync(new URL('./view/AllOfCustomerFeed.tsx', import.meta.url), 'utf8')
     expect(view).toContain('if (event.target !== event.currentTarget) return')
-    expect(view).toContain("else if (act.kind === 'answer') (doorButton.current ?? doorLink.current)?.click()")
-    expect(view).toContain("if (act.kind === 'expand') onToggle()")
+    expect(view).toContain("if (act.kind === 'answer') answerThere?.()")
+    expect(view).not.toContain('onToggle') // tw- W2.5: a bubble shows its whole message (a long one folds inside the card itself)
     expect(view).toContain('lineRefs.current[index]?.focus()')
     expect(view).not.toContain('<ol')
   })
@@ -486,14 +480,19 @@ describe('F-OP-207 — Answer per line and the read-only foot', () => {
     expect(answerOf(other!, onlyThisOrder)).toEqual({ kind: 'open', href: '/w/x/sales/orders/so-9?message=m1' })
   })
 
-  it('the doors drawn: "Answer" (its name the thread it answers in) asks the frame; another record "Open …" is a real link', () => {
-    const asked: unknown[] = []
-    const html = render(createElement(AllOfCustomerFeed, { model: model(state), actions: { canAnswer: onlyThisOrder, onCompose: (ask) => asked.push(ask), onAnswer: () => undefined } }))
-    expect(html.match(/aria-label="Answer in the thread of SO-0142 · Your order 12"/g)?.length).toBe(2)
-    expect(html).toContain('href="/w/x/sales/orders/so-9?message=m1"')
-    expect(textOf(html)).toContain('Open SO-0150')
-    // Without the host's threads the door is what it was (Answer through onAnswer, or the message's link).
-    expect(render(createElement(AllOfCustomerFeed, { model: model(state) }))).toContain('href="/w/x/sales/orders/so-1?message=m3"')
+  // tw- W2.5 (10-design §9): the door is the bubble's menu row "Answer in its thread" — the frame's compose ask, else the dock's switch,
+  // else the message on its record's page; another record's line opens that page at the message.
+  it('the door: each bubble’s menu (Answer in its thread · Copy text · Copy link); the answer goes by the frame, the switch or the page', () => {
+    const html = render(createElement(AllOfCustomerFeed, { model: model(state), actions: { canAnswer: onlyThisOrder, onCompose: () => undefined, onAnswer: () => undefined } }))
+    expect(html.match(/class="fw-rt-msg-more"/g)?.length).toBe(3)
+    const view = readFileSync(new URL('./view/AllOfCustomerFeed.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("if (door?.kind === 'answer') actions?.onCompose?.(door.ask)")
+    expect(view).toContain("else if (door?.kind === 'open') window.location.assign(door.href)")
+    expect(view).toContain('else if (answer) answer(item.record, item.key)')
+    expect(view).toContain('else window.location.assign(item.messageHref)')
+    const card = readFileSync(new URL('../../../../lib/record-thread/card/view/MessageCard.tsx', import.meta.url), 'utf8')
+    expect(card).toContain("const READ_ONLY_DOOR: Partial<Record<CardAction, keyof CardActions>> = { answerThere: 'onAnswerThere', copyText: 'onCopyText', link: 'onCopyLink' }")
+    for (const locale of LOCALES) expect(createTranslator(locale, messagesFor(locale, ['record-thread-card'])['record-thread-card']!)('menu.answerThere')).toBe(locale === 'en' ? 'Answer in its thread' : 'Rispondi nel suo thread')
   })
 
   it('the hosts: only this customer\'s threads the dock can show (order: this order, General, a linked project; customer page: General, the record picked)', () => {
@@ -574,7 +573,7 @@ describe('F-OP-208 — revisit keeps the list and reads fresh; a hint on a held 
     expect(hook).toContain('scrollTop: scrollTop.current')
     const view = readFileSync(new URL('./view/AllOfCustomerFeed.tsx', import.meta.url), 'utf8')
     expect(view).toContain("const scroller = root.current?.closest<HTMLElement>('.fw-rt-scroll')")
-    expect(view).toContain('if (scrolledTo > 0) scroller.scrollTop = scrolledTo')
+    expect(view).toContain('scroller.scrollTop = scrolledTo > 0 ? scrolledTo : scroller.scrollHeight') // tw- W2.5: the first visit at the newest
     // The hosts call the container on every render (it reads only while All shows), so leaving All never drops it.
     const order = readFileSync(new URL('../../../sales/orders/record/dock/OrderDock.tsx', import.meta.url), 'utf8')
     expect(order).toMatch(/const feed = useAllOfCustomer\(api, \{ partyId: order\.partyId, customerName: customer, enabled: scope\.kind === 'all'/)
@@ -600,7 +599,9 @@ describe('F-OP-305 — "A record no longer there": the true words, no door', () 
     expect(answerOf(there!, anyRecord)).toMatchObject({ kind: 'answer' })
   })
 
-  it('drawn: its chip is words, never a link; no "Open A record no longer there", no Answer — with every host and none', () => {
+  it('drawn: its chip is words, never a link; no "Open A record no longer there", no Answer in its thread — with every host and none', () => {
+    const view = readFileSync(new URL('./view/AllOfCustomerFeed.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('const answerThere = item.gone')
     for (const actions of [undefined, { onAnswer: () => undefined }, { canAnswer: anyRecord, onCompose: () => undefined, onAnswer: () => undefined }, { canAnswer: () => false, onCompose: () => undefined }]) {
       const html = render(createElement(AllOfCustomerFeed, { model: model(afterFirst(EMPTY_FEED, answer([entry('m2', 20, GONE)]))), actions }))
       const text = textOf(html)
@@ -609,8 +610,41 @@ describe('F-OP-305 — "A record no longer there": the true words, no door', () 
       expect(html).not.toContain('/so-gone')
       expect(text).not.toContain('Open A record no longer there')
       expect(text).not.toContain('Answer')
-      expect(text).toContain('More') // the message itself still opens in place
+      expect(text).toContain('Message m2') // tw- W2.5: the message itself is shown whole
     }
   })
 })
 // ---- end F-OP-305
+
+// ---- tw- W2.5 (THE THREAD REBUILD; 10-design §9, §10; S1): the same face — one line read-only foot, the menu of a read-only bubble ----
+describe('tw- W2.5 — All of <Customer> in the thread’s own face', () => {
+  const model = (state: FeedState) => feedModel(state, { customerName: 'Brand Alpha', prefix: '/w/x', view: 'all', kind: 'every', canReadFiles: true })
+  const state = afterFirst(EMPTY_FEED, answer([entry('m2', 20), entry('m1', 10, GENERAL)]))
+
+  it('with no door of the host’s, the foot is ONE line: "Read only: to write, pick one thread." — in both languages', () => {
+    for (const [locale, words] of [['en', 'Read only: to write, pick one thread.'], ['it', 'Sola lettura: per scrivere, scegli un thread.']] as const) {
+      const html = render(createElement(AllOfCustomerDock, { label: 'x', model: model(state) }), locale)
+      expect(textOf(html.slice(html.indexOf('class="fw-rt-foot"'))), locale).toContain(words)
+    }
+    const withDoors = render(createElement(AllOfCustomerDock, { label: 'x', model: model(state), foot: createElement('span', null, 'WRITE IN') }))
+    expect(withDoors).not.toContain('fw-aoc-readonly')
+  })
+
+  it('a read-only bubble’s menu is Answer in its thread · Copy text · Copy link, each by its door; none without doors (no Reply, no Pin)', () => {
+    const card = cardOfEntry(entry('m1', 10))
+    const context = { partyName: 'Brand Alpha', canReadFiles: true, canReply: true, canPin: true }
+    expect(render(createElement(MessageCard, { message: card, context, readOnly: true }))).not.toContain('fw-rt-msg-more')
+    expect(render(createElement(MessageCard, { message: card, context, readOnly: true, actions: { onAnswerThere: () => undefined } }))).toContain('fw-rt-msg-more')
+    const model_ = readFileSync(new URL('../../../../lib/record-thread/card/model.ts', import.meta.url), 'utf8')
+    expect(model_).toContain("export const READ_ONLY_MENU: readonly CardAction[] = ['answerThere', 'copyText', 'link']")
+  })
+
+  it('the brand wall holds: the feed draws only the messages its one customer read gave (nothing looked up elsewhere)', () => {
+    const view = readFileSync(new URL('./view/AllOfCustomerFeed.tsx', import.meta.url), 'utf8')
+    expect(view).not.toMatch(/\bfetch\(|useOfficeApi|readCustomerFeed/)
+    const html = textOf(render(createElement(AllOfCustomerFeed, { model: model(state) })))
+    expect(html).toContain('Brand Alpha (general)')
+    expect(html).not.toContain('Brand Beta')
+  })
+})
+// ---- end tw- W2.5

@@ -49,7 +49,7 @@
   },
   "allOfCustomer": {
     "title": "Tutto di {customer}",
-    "line": "Sola lettura: i messaggi di ordini, preventivi, richieste, progetti e conversazione generale di {customer}. Per scrivere, scegli una conversazione.",
+    "line": "Sola lettura: i messaggi di ordini, preventivi, richieste, progetti e thread generale di {customer}. Per scrivere, scegli un thread.",
     "view": {
       "label": "Vista",
       "menu": "Scegli quali messaggi mostra l'elenco",
@@ -75,32 +75,24 @@
     "loading": "Lettura dei messaggi di {customer}…",
     "failed": "Non è stato possibile leggere i messaggi.",
     "retry": "Riprova",
-    "gone": "Le conversazioni di questo cliente sono fuori dalla tua portata.",
+    "gone": "I thread di questo cliente sono fuori dalla tua portata.",
     "empty": "Ancora nessun messaggio con {customer}",
     "emptyFiltered": "Niente con questa vista e questo tipo: scegli Tutto e Ogni tipo per vedere ogni messaggio.",
-    "feedLabel": "Messaggi con {customer}, i più recenti prima",
-    "keysTip": "J / K scorrono · Invio risponde · Spazio mostra tutto il messaggio. Vedere una riga qui non segna nulla come letto: apri la sua conversazione.",
+    "feedLabel": "Messaggi con {customer}, dal più vecchio",
+    "keysTip": "J / K scorrono · Invio risponde nel suo thread. Vedere un messaggio qui non segna nulla come letto: apri il suo thread.",
     "showOlder": "Mostra i più vecchi",
     "olderLoading": "Lettura dei messaggi più vecchi…",
     "olderFailed": "Non è stato possibile leggere i messaggi più vecchi · Riprova",
     "older": "Conversazioni più vecchie: apri il loro record",
-    "notShown_one": "1 conversazione di {customer} che non puoi aprire è esclusa.",
-    "notShown_other": "{count} conversazioni di {customer} che non puoi aprire sono escluse.",
+    "notShown_one": "1 thread di {customer} che non puoi aprire è escluso.",
+    "notShown_other": "{count} thread di {customer} che non puoi aprire sono esclusi.",
     "openRecord": "Apri {record}",
     "new": "Nuovo",
-    "audience": {
-      "shared": "{customer} lo legge",
-      "office": "Solo ufficio"
-    },
-    "filesOnly": "Solo file",
     "more": "Altro",
     "less": "Meno",
-    "moreFiles_one": "1 altro file",
-    "moreFiles_other": "altri {count} file",
     "writeFirst": "Scrivi il primo in {thread}",
     "showEverything": "Mostra tutto",
-    "answer": "Rispondi",
-    "answerLabel": "Rispondi nella conversazione di {record}",
+    "answerLabel": "Rispondi nel thread di {record}",
     "chip": {
       "general": "{customer} (generale)",
       "number": "{number}",
@@ -110,7 +102,8 @@
         "QUOTE": "{number} · Preventivo {seq} del cliente",
         "REQUEST": "{number} · Richiesta {seq} del cliente"
       }
-    }
+    },
+    "readOnly": "Sola lettura: per scrivere, scegli un thread."
   },
   "dock": {
     "newCount_one": "1 nuovo",

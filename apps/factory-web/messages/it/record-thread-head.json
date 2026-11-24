@@ -201,5 +201,8 @@
     "esc": "chiudi un menu, togli la risposta",
     "enterKey": "Invio",
     "shiftEnterKey": "Maiusc+Invio"
+  },
+  "allOf": {
+    "line": "Sola lettura · {count} thread"
   }
 }

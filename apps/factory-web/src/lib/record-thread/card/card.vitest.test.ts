@@ -781,7 +781,8 @@ describe('tw- W2.2 — the message menu per kind and per reader (10-design §9)'
   })
 
   it('every row keeps its place in ONE order; a message with no words has no Copy text; one on its way no menu', () => {
-    expect(MENU_ORDER).toEqual(['reply', 'replyPrivately', 'copyText', 'link', 'pin', 'unpin', 'remind', 'task', 'answer', 'correct', 'emailDetails', 'useOn'])
+    // tw- W2.5: "Answer in its thread" leads a read-only bubble's menu (All of <Customer>); cardActions never offers it.
+    expect(MENU_ORDER).toEqual(['answerThere', 'reply', 'replyPrivately', 'copyText', 'link', 'pin', 'unpin', 'remind', 'task', 'answer', 'correct', 'emailDetails', 'useOn'])
     for (const message of [THEIR_MAIL, COLLEAGUE_NOTE, MY_MAIL, MY_PORTAL, FLOOR]) {
       const rows = cardActions(message, OWNER)
       expect(rows, message.id).toEqual([...rows].sort((a, b) => MENU_ORDER.indexOf(a) - MENU_ORDER.indexOf(b)))

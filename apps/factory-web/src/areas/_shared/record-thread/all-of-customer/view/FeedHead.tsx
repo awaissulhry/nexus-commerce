@@ -31,7 +31,7 @@ export interface FeedHeadProps {
  */
 export function FeedHead(props: FeedHeadProps) {
   return (
-    <WithMessages namespaces={['record-thread', WIDTH_NS]}>
+    <WithMessages namespaces={['record-thread', WIDTH_NS /* the head's words: width, ⋯, tw- W2.5 allOf.line */]}>
       <Head {...props} />
     </WithMessages>
   )
@@ -54,18 +54,25 @@ function Head({ title, model, actions, customerHref }: FeedHeadProps) {
     ...(customerHref ? [{ id: 'customer', label: t('allOfCustomer.openRecord', { record: model.customerName }), href: customerHref }] : []),
   ]
   const pick = useHeadPick()
+  // tw- W2.5 (10-design §8): the one line under the title — "Read only · 3 threads" (the threads its messages come from).
+  const threads = new Set(model.items.map((item) => `${item.record.type}:${item.record.id}`)).size
+  const line = model.status === 'ready' && threads > 0 ? <p className="fw-rth-line">{th('allOf.line', { count: threads })}</p> : null
   return (
     <div className="fw-rth fw-aoc-head" role="group" aria-label={title}>
       {/* tw- W2.1 (Z4): the dock's pick as the title (one look for every scope), else the card's own name. */}
       {pick ? (
         <div className="fw-rth-titleblock">
           <div className="fw-rth-title">{pick}</div>
+          {line}
         </div>
       ) : (
-        <span className="fw-aoc-title" title={title}>
-          <Eye size={14} aria-hidden />
-          <span className="fw-aoc-title-words">{title}</span>
-        </span>
+        <div className="fw-rth-titleblock">
+          <span className="fw-aoc-title" title={title}>
+            <Eye size={14} aria-hidden />
+            <span className="fw-aoc-title-words">{title}</span>
+          </span>
+          {line}
+        </div>
       )}
       <Menu
         align="right"

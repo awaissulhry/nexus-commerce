@@ -22,6 +22,8 @@ import {
   authorWords,
   cardActions,
   cardFiles,
+  copyTextOf, // tw- W2.5
+  READ_ONLY_MENU, // tw- W2.5
   deliveryMark,
   fileKindKey,
   footMarks,
@@ -81,10 +83,14 @@ export interface CardActions {
   onCopyText?: (messageId: string) => void
   onRemind?: (messageId: string) => void
   onEmailDetails?: (messageId: string) => void
+  /** tw- W2.5: a read-only card (All of <Customer>): "Answer in its thread" — the dock switches to the message's own thread. */
+  onAnswerThere?: (messageId: string) => void
 }
 
 /** tw- W2.2: a row whose door the host does not give is not drawn. */
 const DOOR_OF: Partial<Record<CardAction, keyof CardActions>> = { answer: 'onAnswer', remind: 'onRemind', emailDetails: 'onEmailDetails', copyText: 'onCopyText' }
+/** tw- W2.5: a read-only card's rows, each by its door. */
+const READ_ONLY_DOOR: Partial<Record<CardAction, keyof CardActions>> = { answerThere: 'onAnswerThere', copyText: 'onCopyText', link: 'onCopyLink' }
 
 const MARK_ICON = { lock: Lock, mail: Mail, globe: Globe, tablet: Tablet } as const
 const DELIVERY_ICON = { clock: Clock, check: Check, checks: CheckCheck, alert: CircleAlert, back: Undo2 } as const
@@ -156,7 +162,12 @@ export function MessageCard({
   const folded = fold.folds && !allShown
   const files = cardFiles(message.files, context.canReadFiles, true, { hidden: message.hiddenFiles ?? 0, sheets: message.lockedSheets ?? 0, priced: message.lockedPriced ?? 0 /* B-CP-014 */ })
   // F-SA-261: none read-only. tw- W2.2: ONE order; a row whose door the host does not give is not drawn.
-  const menu = readOnly ? [] : cardActions(message, context).filter((action) => !DOOR_OF[action] || Boolean(actions?.[DOOR_OF[action]!]))
+  // tw- W2.5: read only (All of <Customer>), the card's own small menu: Answer in its thread · Copy text · Copy link, each by its door.
+  const menu = readOnly
+    ? message.outbox
+      ? []
+      : READ_ONLY_MENU.filter((action) => Boolean(actions?.[READ_ONLY_DOOR[action]!]) && (action !== 'copyText' || copyTextOf(message) !== null))
+    : cardActions(message, context).filter((action) => !DOOR_OF[action] || Boolean(actions?.[DOOR_OF[action]!]))
   const failed = message.outbox?.state === 'failed'
   const sending = message.outbox?.state === 'sending'
   const label = t('label', { author, audience: t(audienceKey(message), { party }), time })
@@ -382,7 +393,8 @@ export function MessageCard({
   )
 
   const pick = (action: CardAction) => {
-    if (action === 'reply') actions?.onReply?.(message.id)
+    if (action === 'answerThere') actions?.onAnswerThere?.(message.id) // tw- W2.5
+    else if (action === 'reply') actions?.onReply?.(message.id)
     else if (action === 'replyPrivately') actions?.onReplyPrivately?.(message.id) // tw- W1.1
     else if (action === 'copyText') actions?.onCopyText?.(message.id)
     else if (action === 'link') actions?.onCopyLink?.(message.id)

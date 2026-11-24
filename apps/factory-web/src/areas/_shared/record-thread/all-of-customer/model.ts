@@ -1,8 +1,6 @@
 import { CUSTOMER_FEED_KINDS, customerFeedKindOf, type CustomerFeedKind } from '@nexus/factory-domain/sales/customer-feed/kinds'
 import { cardDepth, messageLink, type CardContext, type CardMessage } from '../../../../lib/record-thread/card/model'
-import { authorWords, bodyKind, excerptOf, splitQuoted, type CardFile } from '../../../../lib/record-thread/card/model' // F-OP-205: one line
-import { dayOf, shortDateOf, timeOf } from '../../../../lib/record-thread/parts/time' // F-OP-205
-import type { Locale } from '../../../../lib/i18n/locales' // F-OP-205
+import { runPlace, type RunPlace } from '../../../../lib/record-thread/feed/runs' // tw- W2.5: the thread's own run rule
 import { cardOf } from '../../../../lib/record-thread/model'
 import { recordAddress } from '../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
@@ -12,13 +10,13 @@ import type { FeedAnswer, FeedEntry, FeedQuery, FeedRecord } from './api'
  * F-SA-261 (sales page plan R4, P9, N4, N5; 10-order-page §6.2, 11-customer-page §9.2; review C-1, C-13, BW-4) — "All of <Customer>",
  * the rules of the read-only merged view, pure: what a page of `GET /sales/customers/:partyId/feed` becomes on screen.
  *
- *   each line    a record chip — "SO-0142 · Your order 12", "<Customer> (general)", "QT-0031 · Your quote 3", "PRJ-0004 …" — and the
- *                conversation's own message card, READ ONLY (MessageCard `readOnly`: its audience edge — blue, the customer reads it;
- *                yellow, office only —, its words, files and time, no ⋯), a "New" dot when it is new to the reader
+ *   each message the thread's own bubble, READ ONLY (tw- W2.5: MessageCard `readOnly` — its words, files, foot; its menu Answer in
+ *                its thread · Copy text · Copy link), oldest at the top; a record chip — "SO-0142 · Your order 12", "<Customer>
+ *                (general)", "QT-0031 · Your quote 3", "PRJ-0004 …" — on top of each record's run; a "New" mark when it is new
  *   doors        "Answer" (F-OP-216; the host switches the dock to that record's ONE thread, at that message) and the chip,
  *                a real link to the record's page (⌘-click: a new tab); nothing is written from here
  *   never jumps  a live hint reads the newest page again in the background; what is newer than the top waits behind "N new · Show"
- *                (the list moves only when the person asks), Show older adds the next page at the foot, without a gap or a repeat
+ *                (the list moves only when the person asks), Show older adds the next page at the top (tw- W2.5), without a gap or a repeat
  *   filters      View ▾ All · With the customer · Office notes (the API's audience) and Kind ▾ (one kind, or every kind)
  *   read marks   seeing a line here marks nothing read ("Open a conversation to mark it read")
  */
@@ -186,9 +184,9 @@ export function recordHrefOf(record: FeedRecord, prefix: string): string {
 /** The message on its record's page (`?message=<id>`: the record opens with that message, the bell's form). */
 export const messageHrefOf = (entry: FeedEntry, prefix: string): string => messageLink(recordHrefOf(entry.record, prefix), entry.message.id)
 
-/** The card of a line: the thread's own card of the message (no mail state, no mentions: open the conversation for them). */
-export function cardOfEntry(entry: FeedEntry): CardMessage {
-  return { ...cardOf(entry.message, { emails: new Map(), names: new Map() }), ...cardDepth(entry.message), mentions: [] }
+/** The card of a message: the thread's own card (no mail state, no mentions: open the thread for them); `me` puts mine on the right. */
+export function cardOfEntry(entry: FeedEntry, me?: string): CardMessage {
+  return { ...cardOf(entry.message, { emails: new Map(), names: new Map(), ...(me ? { me } : {}) }), ...cardDepth(entry.message), mentions: [] }
 }
 
 // ── the view model ──────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -198,8 +196,6 @@ export interface FeedItem {
   readonly record: FeedRecord
   readonly chip: Words
   readonly card: CardMessage
-  /** F-OP-205: the compact line drawn for it (its audience, its gist, its files); the card shows only when the line is opened. */
-  readonly line: FeedLineFacts
   readonly isNew: boolean
   /** The record's page (the chip; ⌘-click opens a new tab). */
   readonly href: string
@@ -228,7 +224,10 @@ export interface AllOfCustomerModel {
   readonly scrollTop: number
 }
 
-export function feedModel(state: FeedState, input: { readonly customerName: string; readonly prefix: string; readonly view: FeedView; readonly kind: FeedKindChoice; readonly canReadFiles: boolean; readonly scrollTop?: number }): AllOfCustomerModel {
+export function feedModel(
+  state: FeedState,
+  input: { readonly customerName: string; readonly prefix: string; readonly view: FeedView; readonly kind: FeedKindChoice; readonly canReadFiles: boolean; readonly scrollTop?: number; /* tw- W2.5 */ readonly me?: string },
+): AllOfCustomerModel {
   const name = state.customer?.name ?? input.customerName
   return {
     customerName: name,
@@ -237,8 +236,7 @@ export function feedModel(state: FeedState, input: { readonly customerName: stri
       key: entry.message.id,
       record: entry.record,
       chip: chipOf(entry.record, name),
-      card: cardOfEntry(entry),
-      line: lineOf(cardOfEntry(entry), input.canReadFiles), // F-OP-205
+      card: cardOfEntry(entry, input.me),
       isNew: entry.new,
       href: recordHrefOf(entry.record, input.prefix),
       messageHref: messageHrefOf(entry, input.prefix),
@@ -260,60 +258,35 @@ export function feedModel(state: FeedState, input: { readonly customerName: stri
 export const opensItself = (event: { readonly metaKey: boolean; readonly ctrlKey: boolean; readonly shiftKey: boolean; readonly altKey: boolean; readonly button: number }): boolean =>
   event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0
 
-// ---- F-OP-205 (order page plan N4; 11-dock §3.2, §3.5; RC2, RC3): ONE compact line per message — row 1: the record chip, the "New" dot,
-// who reads it ("Brand Alpha reads it" / "Office only") and its time; row 2: "author: words", at most two lines; row 3: at most three file
-// chips and "+N"; an edge in the audience's colour (blue: the customer reads it; yellow on the soft warning background: an office note).
-// The whole card opens in place on the person's act (Space, or More); nothing moves by itself.
+// ---- tw- W2.5 (THE THREAD REBUILD; 10-design §9, S1 "one face"; replaces F-OP-205's compact lines): the SAME bubbles as a thread —
+// oldest at the top, the newest at the bottom; a run ends where the record changes (then the thread's own rule: the sender, who reads
+// it, the day), and the record's chip sits on top of the first bubble of each record's run.
 
-/** At most this many file chips on a line; the rest is "+N". */
-export const LINE_FILES = 3
-/** The gist's characters at most (the view clamps it to two lines). */
-export const GIST_CHARS = 240
-
-/** Who reads a message: the customer too (a reply, a message of theirs), or the office only (a note, a floor comment). */
-export type LineAudience = 'shared' | 'office'
-
-export interface FeedLineFacts {
-  readonly audience: LineAudience
-  /** The writer in words: a name, or a key of `record-thread-card` ("A person on the floor", the system). */
-  readonly author: { readonly key: string } | { readonly text: string }
-  /**
-   * The message's own words in one run (the quoted reply and the signature left out); words of a catalogue when there are none to
-   * show (an erased message: the card's own words; files alone).
-   */
-  readonly gist: { readonly text: string } | { readonly key: string; readonly ns: 'record-thread' | 'record-thread-card' }
-  /** The file chips (the first three the reader may open) and how many more there are. */
-  readonly files: { readonly shown: readonly CardFile[]; readonly more: number }
+export interface FeedRow {
+  readonly item: FeedItem
+  /** The first message of a run of one record: its chip on top. */
+  readonly recordStart: boolean
+  /** Its place in its run (the tile and the name on the first, the tail). */
+  readonly place: RunPlace
 }
 
-/** The audience of a card: the customer reads its messages and ours; a note and a floor comment stay in the office. */
-export const lineAudienceOf = (card: Pick<CardMessage, 'kind'>): LineAudience => (card.kind === 'theirs' || card.kind === 'ours' ? 'shared' : 'office')
+const sameRecord = (a: FeedItem | undefined, b: FeedItem | undefined): boolean => Boolean(a && b && a.record.type === b.record.type && a.record.id === b.record.id)
 
-/** A message's gist: its own words in one run (at most GIST_CHARS); an erased message says why; files alone say nothing more. */
-export function gistOf(card: Pick<CardMessage, 'body' | 'kind' | 'erased' | 'files' | 'hiddenFiles' | 'lockedSheets' | /* B-CP-014 */ 'lockedPriced'>): FeedLineFacts['gist'] {
-  const kind = bodyKind(card)
-  if (kind === 'erased') return { key: 'erased.line', ns: 'record-thread-card' }
-  if (kind !== 'text') return { key: 'allOfCustomer.filesOnly', ns: 'record-thread' }
-  return { text: excerptOf(splitQuoted(card.body, card.kind).text, GIST_CHARS) }
+/** The model's items (newest first, as the API pages them) as the feed draws them: oldest first, each with its place. */
+export function feedRowsOf(items: readonly FeedItem[]): FeedRow[] {
+  const shown = [...items].reverse()
+  return shown.map((item, index) => {
+    const previous = shown[index - 1]
+    const next = shown[index + 1]
+    return {
+      item,
+      recordStart: !sameRecord(previous, item),
+      place: runPlace(sameRecord(previous, item) ? previous!.card : null, item.card, sameRecord(next, item) ? next!.card : null),
+    }
+  })
 }
 
-/** The file chips of a line: the first LINE_FILES files the reader may open (none without files.read), and "+N" for the rest. */
-export function lineFilesOf(files: readonly CardFile[], canReadFiles: boolean, max = LINE_FILES): FeedLineFacts['files'] {
-  const open = canReadFiles ? files.filter((file) => file.status === 'AVAILABLE') : []
-  const shown = open.slice(0, max)
-  return { shown, more: files.length - shown.length }
-}
-
-/** The compact line of a card. */
-export function lineOf(card: CardMessage, canReadFiles: boolean): FeedLineFacts {
-  return { audience: lineAudienceOf(card), author: authorWords(card), gist: gistOf(card), files: lineFilesOf(card.files, canReadFiles) }
-}
-
-/** A line's time: the time of day today, else the short date and the time (the company's day, the reader's words). */
-export function lineTimeOf(at: string, locale: Locale, today: string): string {
-  return dayOf(at) === today ? timeOf(at, locale) : `${shortDateOf(at, locale, today)} ${timeOf(at, locale)}`
-}
-// ---- end F-OP-205
+// ---- end tw- W2.5
 
 // ---- F-OP-207 (order page plan N4; 11-dock §3.2, §3.4; pick P7: no merged composer): a line's door. Answer — for a line of a thread
 // the dock can write in (the order page: this order, its customer's general thread, a linked project; the customer page: its general

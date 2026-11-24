@@ -474,7 +474,7 @@ describe('F-OP-204 — the width menu is one part', () => {
 // ---- end F-OP-204
 
 // ---- F-OP-216 (order page plan N4; 11-dock §6.3, §6.4, §8; review R-21): the dock's words — the Head's pill names the thread, All of
-// <Customer> says "thread" in English (Italian keeps "conversazione", the dock's word), the door is "Answer" / "Rispondi" ----------------
+// <Customer> says "thread" (tw- W2.5: in Italian too), the door is "Answer in its thread" ----------------
 describe('F-OP-216 — the dock\'s words, one word each, the same keys in both languages', () => {
   const flat = (tree: Record<string, unknown>, prefix = ''): Record<string, string> =>
     Object.fromEntries(Object.entries(tree).flatMap(([key, value]) => (typeof value === 'string' ? [[`${prefix}${key}`, value]] : Object.entries(flat(value as Record<string, unknown>, `${prefix}${key}.`)))))
@@ -496,25 +496,27 @@ describe('F-OP-216 — the dock\'s words, one word each, the same keys in both l
     expect(dock).not.toMatch(/waitingOf|requests\.onUs|answers\./)
   })
 
-  it('All of <Customer> in English says "thread", never "conversation"; Italian keeps "conversazione"', () => {
+  // tw- W2.5 (§13: one word set): All of <Customer> says "thread" in both languages now — never "conversation" / "conversazione".
+  it('All of <Customer> says "thread" in both languages, never "conversation" / "conversazione"', () => {
     const en = Object.entries(catalogue('en', 'record-thread')).filter(([key]) => key.startsWith('allOfCustomer.'))
     expect(en.length).toBeGreaterThan(20)
     for (const [key, text] of en) expect(text, key).not.toMatch(/conversation/i)
     expect(Object.fromEntries(en)['allOfCustomer.kind.GENERAL']).toBe('General thread')
     expect(Object.fromEntries(en)['allOfCustomer.line']).toContain('To write, pick one thread.')
     const it = Object.fromEntries(Object.entries(catalogue('it', 'record-thread')).filter(([key]) => key.startsWith('allOfCustomer.')))
-    expect(it['allOfCustomer.line']).toContain('conversazione')
-    expect(it['allOfCustomer.answerLabel']).toBe('Rispondi nella conversazione di {record}')
-    // The words a reader sees: a {placeholder}'s name is never shown ("Scrivi il primo in {thread}" shows the thread's own name).
-    for (const text of Object.values(it)) expect(text.replace(/\{\w+\}/g, '{…}')).not.toMatch(/\bthread\b/i)
+    for (const [key, text] of Object.entries(it)) expect(text, key).not.toMatch(/conversazion/i)
+    expect(it['allOfCustomer.line']).toContain('Per scrivere, scegli un thread.')
+    expect(it['allOfCustomer.readOnly']).toBe('Sola lettura: per scrivere, scegli un thread.')
+    expect(Object.fromEntries(en)['allOfCustomer.feedLabel']).toBe('Messages with {customer}, oldest first')
   })
 
-  it('the door is "Answer" / "Rispondi"; its accessible name keeps the thread it answers in', () => {
-    const en = catalogue('en', 'record-thread')
-    const it = catalogue('it', 'record-thread')
-    expect(en['allOfCustomer.answer']).toBe('Answer')
-    expect(it['allOfCustomer.answer']).toBe('Rispondi')
-    expect(en['allOfCustomer.answerLabel']).toBe('Answer in the thread of {record}')
+  // tw- W2.5 (10-design §9): the door is the bubble's menu row "Answer in its thread" / "Rispondi nel suo thread".
+  it('the door is "Answer in its thread" / "Rispondi nel suo thread" — a row of each bubble’s menu', () => {
+    const en = catalogue('en', 'record-thread-card')
+    const it = catalogue('it', 'record-thread-card')
+    expect(en['menu.answerThere']).toBe('Answer in its thread')
+    expect(it['menu.answerThere']).toBe('Rispondi nel suo thread')
+    expect(catalogue('en', 'record-thread')['allOfCustomer.answer']).toBeUndefined()
   })
 
   it('catalogue parity: the same keys and the same placeholders in en and it (the Head, All of <Customer>, the frame\'s keys)', () => {

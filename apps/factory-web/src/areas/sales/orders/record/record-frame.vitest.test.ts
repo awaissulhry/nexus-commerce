@@ -732,7 +732,7 @@ describe('F-OP-217 — every dock scope drawn in the one card (design cases), th
     expect(dockOf(draw('f-op-217-dock-work-order'))).toContain('fw-thread-pick-lock')
     expect(textOf(dockOf(draw('f-op-217-dock-general')))).toContain('Moto Demo S.r.l.')
   })
-  it('All of <customer>: the card with the pick band, its Head, compact lines and the foot "Read only. Write in:" — both languages', () => {
+  it('All of <customer>: the card with the pick, its Head, the read-only bubbles and the foot "Read only. Write in:" — both languages', () => {
     for (const locale of ['en', 'it'] as const) {
       const dock = dockOf(draw('f-op-217-dock-all', locale))
       const at = (part: string) => dock.indexOf(part)
@@ -742,8 +742,10 @@ describe('F-OP-217 — every dock scope drawn in the one card (design cases), th
       expect(at('class="fw-thread-pick"')).toBeLessThan(at('class="fw-rt-scroll"'))
       expect(at('class="fw-rth fw-aoc-head"')).toBeLessThan(at('class="fw-rt-scroll"'))
       expect(at('class="fw-rt-scroll"')).toBeLessThan(at('class="fw-rt-foot"'))
-      expect(dock.match(/<article class="fw-aoc-line/g)?.length, locale).toBe(5)
-      expect(dock).toContain('class="fw-aoc-line is-office"')
+      // tw- W2.5: the thread's own bubbles, read only — five messages, an office note among them.
+      expect(dock.match(/<article class="fw-aoc-item/g)?.length, locale).toBe(5)
+      expect(dock).toContain('fw-rt-msg is-note')
+      expect(dock).not.toContain('fw-aoc-line')
       expect(textOf(dock)).toContain(locale === 'en' ? 'Read only. Write in:' : 'Sola lettura. Scrivi in:')
       expect(leftKeys(dock, ['allOfCustomer', 'record.dock', 'width', 'more'])).toEqual([])
     }
