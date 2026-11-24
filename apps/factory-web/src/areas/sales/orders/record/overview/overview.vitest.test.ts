@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs' // F-CO-K2: readdirSync — every stylesheet of the order area
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import type { ComponentType } from 'react'
 import { LOCALES } from '../../../../../lib/i18n/locales'
@@ -1547,24 +1547,36 @@ describe('F-CO-K1: the Overview is drawn by the shared overview kit — the same
     for (const [theirs] of COPIES) expect(orders, theirs).toContain(`${theirs} {`)
   })
 
-  it('the stylesheets keep their order: the kit\'s file is first imported after where.css (the strips\' and the hand row\'s alignment rests on it until co-k2)', () => {
-    const kitAt = (text: string): number => text.indexOf("_shared/record-overview/Overview'")
-    const where = read('../view/overview/WhereCard.tsx')
-    expect(kitAt(where)).toBeGreaterThan(where.indexOf("import './where.css'"))
-    expect(kitAt(where)).toBeGreaterThan(where.indexOf("from './StripRow'"))
-    const page = read('../view/OrderRecordView.tsx')
-    expect(kitAt(page)).toBeGreaterThan(page.indexOf("import { ProductionTab } from './ProductionTab'"))
-    expect(kitAt(page)).toBeGreaterThan(page.indexOf("from './OverviewTab'"))
-    expect(page.indexOf("import { ProductionTab } from './ProductionTab'")).toBeGreaterThan(-1)
-    // Each card imports the kit after its own stylesheet.
-    for (const [card, css] of [['ProgressCard', './progress.css'], ['PeopleCard', './people.css'], ['DatesCard', './dates.css'], ['RequestsCard', './requests.css'], ['LinkedCard', './linked.css'], ['FactsCard', './facts.css']] as const) {
-      const text = read(`../view/overview/${card}.tsx`)
-      expect(text.indexOf(`import '${css}'`), card).toBeGreaterThan(-1)
-      expect(kitAt(text), card).toBeGreaterThan(text.indexOf(`import '${css}'`))
-    }
-    // The clash the order rests on is still in the two files (co-k2 deletes the dead declaration, then no order decides).
+  // F-CO-K2 (settle S4, 13-backend §2.8): this replaces co-k1's "the stylesheets keep their order" — the two dead `align-items: start`
+  // (the strip's, the hand row's) are deleted, so NO stylesheet order decides the alignment any more, on Overview or on Production:
+  // no rule of the kit or of the order area sets align-items on a strip or on the hand row; the shared row says baseline; both ARE it.
+  it('no stylesheet order decides a look: no rule sets align-items on a strip or on the hand row; both are the shared row (baseline)', () => {
+    const uncommented = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//g, '')
+    /** Every innermost rule of a stylesheet: its selector list and its declarations. */
+    const rulesOf = (css: string): (readonly [string, string])[] => [...uncommented(css).matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => [match[1]!.trim(), match[2]!] as const)
+    const sheets = [KIT_CSS, ...(readdirSync(new URL('../../', import.meta.url), { recursive: true }) as string[]).filter((file) => file.endsWith('.css')).map((file) => `../../${file.split('\\').join('/')}`)]
+    for (const sheet of ['../../orders.css', '../../record/view/overview/where.css', '../../record/view/overview/progress.css']) expect(sheets, sheet).toContain(sheet)
+    let strips = 0
+    for (const sheet of sheets)
+      for (const [selectors, body] of rulesOf(read(sheet)))
+        for (const selector of selectors.split(',').map((one) => one.trim()))
+          if (/\.fw-so-(?:strip|hand)(?![\w-])[^\s>+~]*$/.test(selector)) {
+            strips += 1
+            expect(body, `${sheet}: ${selector}`).not.toMatch(/\balign-items\s*:/)
+          }
+    // The rules themselves stay (the strip's in the kit, the hand row's in where.css; their tones too), each with its one comment.
+    expect(strips).toBeGreaterThanOrEqual(5)
+    expect(uncommented(read(KIT_CSS))).toMatch(/\n\.fw-so-strip \{\s*padding-block: var\(--nds-space-2\);/)
+    expect(uncommented(read('../view/overview/where.css'))).toMatch(/\n\.fw-so-hand \{\s*padding-block: var\(--nds-space-2\);/)
+    for (const css of [read(KIT_CSS), read('../view/overview/where.css')]) expect(css.split("/* No align-items here: the row's baseline wins (measured 2026-11-23). */")).toHaveLength(2)
+    // The shared row says baseline; a strip and the hand row ARE that row (so no other rule can give them another alignment).
     expect(read(KIT_CSS)).toMatch(/\.fw-so-ov-row \{[^}]*align-items: baseline;/)
-    expect(read('../view/overview/where.css')).toMatch(/\.fw-so-strip \{\s*align-items: start;/)
+    expect(read('../../../../_shared/record-overview/Overview.tsx')).toContain('<li className="fw-so-ov-row fw-so-strip" data-tone={tone} ')
+    expect(read('../view/overview/WhereCard.tsx')).toContain('<div className="fw-so-ov-row fw-so-hand" data-tone={row.tone}>')
+    // No order file draws a strip by hand any more: StripRow, the failed read's row and the gate rows are the kit's Strip.
+    for (const file of ['../view/overview/WhereCard.tsx', '../view/overview/StripRow.tsx', '../links/view/OrderLinks.tsx']) expect(read(file), file).not.toContain('fw-so-strip')
+    // The cards that keep a stylesheet of their own still import it.
+    for (const [card, css] of [['ProgressCard', './progress.css'], ['PeopleCard', './people.css'], ['DatesCard', './dates.css']] as const) expect(read(`../view/overview/${card}.tsx`), card).toContain(`import '${css}'`)
   })
 })
 // ---- end F-CO-K1

@@ -4,6 +4,10 @@
     "failed": "Couldn't load {part}",
     "retry": "Try again"
   },
+  "strips": {
+    "showMore": "Show {count} more",
+    "showFewer": "Show fewer"
+  },
   "lab": {
     "room": "A {width} px card",
     "where": "Where it is now",

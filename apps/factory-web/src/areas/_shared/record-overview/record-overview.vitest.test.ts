@@ -11,6 +11,7 @@ import { everyCase, leftKeys, render, textOf } from '../../../lib/record-thread/
 import { designScreen } from './fixtures'
 import { GROUP_ROWS_SHOWN, OVERVIEW_NS, STRIPS_SHOWN } from './model'
 import { CardState, Headline, Overview, OverviewCard, OverviewPair, useOverviewWords } from './Overview'
+import { Strip, StripSaid, Strips } from './Overview' // F-CO-K2: the strips
 import { LAB_WIDTHS } from './view/OverviewLab'
 
 /**
@@ -20,6 +21,7 @@ import { LAB_WIDTHS } from './view/OverviewLab'
  *     stylesheet for the parts;
  *   - each frame part's markup — the markup the order's Overview drew by hand before it moved here;
  *   - its lab: every case draws in both languages with no key left.
+ * F-CO-K2: the rows' parts too (the strips, the ONE list, the facts, the groups) and their rules.
  */
 
 const HERE = fileURLToPath(new URL('.', import.meta.url))
@@ -54,7 +56,8 @@ describe('the kit knows no page: it imports no order, no party and no purchasing
       expect(text, file).not.toContain('fetch(')
     }
     // The parts' file itself: the DS, the i18n plumbing, its own model and stylesheet — nothing else.
-    expect(importsOf(source('Overview.tsx')).sort()).toEqual(['../../../lib/i18n/messages', '../../../lib/i18n/provider', '../../../record-panels/i18n', './model', './record-overview.css', '@nexus/ui/components', '@nexus/ui/primitives', 'react'].sort())
+    // F-CO-K2: + the failed strip's mark (the DS's icon set).
+    expect(importsOf(source('Overview.tsx')).sort()).toEqual(['../../../lib/i18n/messages', '../../../lib/i18n/provider', '../../../record-panels/i18n', './model', './record-overview.css', '@nexus/ui/components', '@nexus/ui/primitives', 'lucide-react', 'react'].sort())
     expect(importsOf(source('model.ts'))).toEqual([])
   })
 
@@ -184,6 +187,80 @@ describe('the frame parts draw the markup the order\'s Overview drew by hand', (
     expect(textOf(bare(createElement(Overview, null, createElement(CardState, { part: 'Persone', problem: 'La linea è ferma.', onRetry: () => undefined })), 'it'))).toBe('Impossibile caricare Persone La linea è ferma. Riprova')
   })
 })
+
+// ---- F-CO-K2 (the shared overview kit's rows): the strips ----------------------------------------------------------------------------
+describe('F-CO-K2: the strips — Strips, Strip and StripSaid draw the markup the order\'s strips drew by hand', () => {
+  /** A strip of the made-up record. */
+  const row = (key: string): ReactNode => createElement(Strip, { key, tone: 'warning', mark: 'M' }, `Held ${key}`)
+
+  it('the stylesheet: the box, the list, the row\'s tone rule (DS tone tokens) — and NO rule sets align-items on a strip', () => {
+    const text = css()
+    for (const rule of ['.fw-so-strips-box {', '.fw-so-strips {', '.fw-so-strip {', ".fw-so-strip[data-tone='danger'] {", ".fw-so-strip[data-tone='info'] {", '.fw-so-strip-mark {', '.fw-so-strip-said {', '.fw-so-strip-reading {']) expect(text.split(`\n${rule}`), rule).toHaveLength(2)
+    expect(text).toMatch(/\n\.fw-so-strip \{[^}]*border-inline-start: var\(--nds-space-3\) solid var\(--nds-warning\);/)
+    expect(text).toMatch(/\n\.fw-so-strip\[data-tone='danger'\] \{\s*border-inline-start-color: var\(--nds-danger\);/)
+    // The row's baseline (.fw-so-ov-row) is the only alignment a strip has: whichever stylesheet a page loads first.
+    const plain = text.replace(/\/\*[\s\S]*?\*\//g, '')
+    let strips = 0
+    for (const [, selectors, body] of plain.matchAll(/([^{}]+)\{([^{}]*)\}/g))
+      if (/\.fw-so-strip(?![\w-])/.test(selectors!)) {
+        strips += 1
+        expect(body, selectors).not.toMatch(/\balign-items\s*:/)
+      }
+    expect(strips).toBe(3)
+    expect(text).toContain("/* No align-items here: the row's baseline wins (measured 2026-11-23). */")
+  })
+
+  it('Strip: the shared row with its tone, its mark, what it says — and its doors only when handed over; an anchor is its id', () => {
+    expect(render(createElement(Strip, { tone: 'warning', mark: createElement('i') }, 'Held'))).toBe('<li class="fw-so-ov-row fw-so-strip" data-tone="warning"><span class="fw-so-strip-mark"><i></i></span><span class="fw-so-strip-said">Held</span></li>')
+    expect(render(createElement(Strip, { tone: 'danger', mark: 'M', doors: createElement('a', { href: '#x' }, 'Open ›') }, 'Held'))).toBe('<li class="fw-so-ov-row fw-so-strip" data-tone="danger"><span class="fw-so-strip-mark">M</span><span class="fw-so-strip-said">Held</span><span class="fw-so-ov-doors"><a href="#x">Open ›</a></span></li>')
+    // No door handed over (left out or null): no doors cell — a strip never draws an empty one.
+    for (const doors of [undefined, null]) expect(render(createElement(Strip, { tone: 'info', mark: 'M', doors }, 'Held'))).toBe('<li class="fw-so-ov-row fw-so-strip" data-tone="info"><span class="fw-so-strip-mark">M</span><span class="fw-so-strip-said">Held</span></li>')
+    // The DOM's attribute order: class, data-tone, id, tabindex (a link reaches the row: it takes the focus).
+    expect(render(createElement(Strip, { tone: 'danger', mark: 'M', anchor: 'about-X-1' }, 'Held'))).toBe('<li class="fw-so-ov-row fw-so-strip" data-tone="danger" id="about-X-1" tabindex="-1"><span class="fw-so-strip-mark">M</span><span class="fw-so-strip-said">Held</span></li>')
+  })
+
+  it('StripSaid: the title with its age (its exact day in the title), then each quiet line in the kit\'s hint', () => {
+    expect(render(createElement(StripSaid, { title: 'Quality hold', since: { iso: '2026-11-02T09:00:00Z', day: '02/11/2026', words: '3 d' }, lines: ['on 1 work order', 'Quality releases it'] }))).toBe('<span>Quality hold · <time datetime="2026-11-02T09:00:00Z" title="02/11/2026">3 d</time></span><span class="fw-ro-hint">on 1 work order</span><span class="fw-ro-hint">Quality releases it</span>')
+    expect(render(createElement(StripSaid, { title: 'Paused' }))).toBe('<span>Paused</span>')
+    expect(render(createElement(StripSaid, { title: 'Paused', since: null, lines: [] }))).toBe('<span>Paused</span>')
+    // Inside a strip: what it says sits in the strip's words cell.
+    expect(render(createElement(Strip, { tone: 'info', mark: 'M' }, createElement(StripSaid, { title: 'Paused', lines: ['Asked by the customer'] })))).toContain('<span class="fw-so-strip-said"><span>Paused</span><span class="fw-ro-hint">Asked by the customer</span></span>')
+  })
+
+  it('Strips: five rows → four drawn and "Show 1 more" (the kit\'s cap); four or fewer: no button; no row: the box and its list still', () => {
+    const five = ['a', 'b', 'c', 'd', 'e'].map(row)
+    const html = render(createElement(Strips, { label: 'What holds it', rows: five }))
+    expect(html.startsWith('<div class="fw-so-strips-box"><ul class="fw-so-strips" aria-label="What holds it"><li class="fw-so-ov-row fw-so-strip"')).toBe(true)
+    expect(html.match(/<li class="fw-so-ov-row fw-so-strip"/g)).toHaveLength(STRIPS_SHOWN)
+    expect(textOf(html)).not.toContain('Held e')
+    expect(html).toMatch(/<\/ul><button[^>]*aria-expanded="false"[^>]*>Show 1 more<\/button><\/div>$/)
+    expect(textOf(render(createElement(Strips, { label: 'X', rows: five }), 'it'))).toContain('Mostra altri 1')
+    expect(render(createElement(Strips, { label: 'X', rows: five.slice(0, 4) }))).not.toContain('<button')
+    // A page may hand a cap of its own.
+    expect(render(createElement(Strips, { label: 'X', rows: five, cap: 2 })).match(/<li /g)).toHaveLength(2)
+    expect(textOf(render(createElement(Strips, { label: 'X', rows: five, cap: 2 })))).toContain('Show 3 more')
+    expect(render(createElement(Strips, { label: 'X', rows: [] }))).toBe('<div class="fw-so-strips-box"><ul class="fw-so-strips" aria-label="X"></ul></div>')
+  })
+
+  it('Strips: while read, one quiet row after the rows; a failed read is the last row (danger, its mark, the page\'s words), Try again only with a retry', () => {
+    expect(render(createElement(Strips, { label: 'X', rows: [row('a')], reading: true }))).toMatch(/<\/li><li class="fw-so-strip-reading"><span class="nds-skeleton"[^>]*><\/span><\/li><\/ul><\/div>$/)
+    const failed = render(createElement(Strips, { label: 'X', rows: [row('a')], failed: { words: 'Holds could not be read', onRetry: () => undefined } }))
+    expect(failed).toMatch(/<\/li><li class="fw-so-ov-row fw-so-strip" data-tone="danger"><span class="fw-so-strip-mark"><svg[^>]*aria-hidden="true"[\s\S]*?<\/svg><\/span><span class="fw-so-strip-said">Holds could not be read<\/span><span class="fw-so-ov-doors"><button[^>]*>Try again<\/button><\/span><\/li><\/ul><\/div>$/)
+    expect(textOf(render(createElement(Strips, { label: 'X', rows: [], failed: { words: 'Impossibile leggere i blocchi', onRetry: () => undefined } }), 'it'))).toBe('Impossibile leggere i blocchi Riprova')
+    expect(render(createElement(Strips, { label: 'X', rows: [], failed: { words: 'Holds could not be read' } }))).not.toContain('<button')
+    expect(render(createElement(Strips, { label: 'X', rows: [row('a')], failed: null }))).not.toContain('data-tone="danger"')
+  })
+
+  it('the strips\' words need no provider: "Show {count} more", "Show fewer" in both languages', () => {
+    function Probe(): ReactNode {
+      const words = useOverviewWords()
+      return createElement('p', null, [words.showMore(2), words.showFewer].join(' | '))
+    }
+    expect(textOf(bare(createElement(Probe), 'en'))).toBe('Show 2 more | Show fewer')
+    expect(textOf(bare(createElement(Probe), 'it'))).toBe('Mostra altri 2 | Mostra meno')
+  })
+})
+// ---- end F-CO-K2 (strips)
 
 describe('the /design/record-overview lab', () => {
   it('has its own screen id (the design index finds every fixtures.ts by itself) and the frame\'s cases', () => {

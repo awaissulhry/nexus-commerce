@@ -4,6 +4,10 @@
     "failed": "Impossibile caricare {part}",
     "retry": "Riprova"
   },
+  "strips": {
+    "showMore": "Mostra altri {count}",
+    "showFewer": "Mostra meno"
+  },
   "lab": {
     "room": "Scheda da {width} px",
     "where": "A che punto è",

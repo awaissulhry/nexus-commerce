@@ -1,12 +1,13 @@
 'use client'
 
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { Card, EmptyState } from '@nexus/ui/components'
 import { Button, Skeleton, Spinner } from '@nexus/ui/primitives'
+import { CircleAlert } from 'lucide-react' // F-CO-K2: the failed read's strip mark
 import { catalogueFor, createTranslator } from '../../../lib/i18n/messages'
 import { useLocale, useReader } from '../../../lib/i18n/provider'
 import { WithMessages } from '../../../record-panels/i18n'
-import { OVERVIEW_NS } from './model'
+import { OVERVIEW_NS, STRIPS_SHOWN, type StripTone } from './model'
 import './record-overview.css'
 
 /**
@@ -16,9 +17,10 @@ import './record-overview.css'
  * order's Overview drew by hand before it moved here; the Overview-only class names are kept (fw-so-overview, fw-so-ov-*,
  * fw-so-where*, fw-so-headline), the text classes a part draws are the kit's own (fw-ro-*).
  *
- * The frame (this step): `Overview` (the tab's column and the room its pairs read), `OverviewPair` (two cards side by side from
+ * The frame (F-CO-K1): `Overview` (the tab's column and the room its pairs read), `OverviewPair` (two cards side by side from
  * 720 px of the Overview, one below; a card alone takes the row), `OverviewCard` (the card with its title), `Headline` (the lead
  * card's sentence and its quiet line), `CardState` (a card while its part loads, or when its read failed), `useOverviewWords`.
+ * The rows (F-CO-K2): `Strips`, `Strip`, `StripSaid` (what stops the record, one row each, most blocking first).
  */
 
 /** The kit's own words in the page's language. */
@@ -29,6 +31,12 @@ export interface OverviewWords {
   readonly failed: (part: string) => string
   /** "Try again" */
   readonly retry: string
+  // ---- F-CO-K2: the rows' words ----
+  /** "Show {count} more" (the strips under their cap) */
+  readonly showMore: (count: number) => string
+  /** "Show fewer" */
+  readonly showFewer: string
+  // ---- end F-CO-K2
 }
 
 /**
@@ -44,6 +52,9 @@ export function useOverviewWords(): OverviewWords {
       loading: (part) => t('state.loading', { part }),
       failed: (part) => t('state.failed', { part }),
       retry: t('state.retry'),
+      // F-CO-K2: the rows' words
+      showMore: (count) => t('strips.showMore', { count }),
+      showFewer: t('strips.showFewer'),
     }
   }, [locale, reader])
 }
@@ -133,3 +144,90 @@ export function CardState({ part, problem, onRetry }: { part: string; problem: s
     </Card>
   )
 }
+
+// ---- F-CO-K2 (the shared overview kit's rows): the strips — what stops the record, one row each, most blocking first ----------------
+/**
+ * The strips' list under the lead card's headline: at most `cap` rows, the rest behind "Show {n} more" (its own state); while the
+ * page still reads them, one quiet row; a failed read is the list's last row, with Try again when the page hands a retry. `rows` are
+ * the page's `Strip`s, ALL of them (the cap is the kit's). The box is always drawn: "no strips at all" is the page's to decide.
+ */
+export function Strips({ label, rows, cap = STRIPS_SHOWN, reading = false, failed = null }: { label: string; rows: readonly ReactNode[]; cap?: number; reading?: boolean; failed?: { words: string; onRetry?: () => void } | null }): ReactNode {
+  const words = useOverviewWords()
+  const [all, setAll] = useState(false)
+  const shown = all ? rows : rows.slice(0, cap)
+  return (
+    <div className="fw-so-strips-box">
+      <ul className="fw-so-strips" aria-label={label}>
+        {shown}
+        {reading && (
+          <li className="fw-so-strip-reading">
+            <Skeleton height={22} />
+          </li>
+        )}
+        {failed && (
+          <Strip
+            tone="danger"
+            mark={<CircleAlert size={14} aria-hidden />}
+            doors={
+              failed.onRetry ? (
+                <Button size="sm" onClick={failed.onRetry}>
+                  {words.retry}
+                </Button>
+              ) : undefined
+            }
+          >
+            {failed.words}
+          </Strip>
+        )}
+      </ul>
+      {rows.length > cap && (
+        <Button size="sm" variant="quiet" aria-expanded={all} onClick={() => setAll(!all)}>
+          {all ? words.showFewer : words.showMore(rows.length - cap)}
+        </Button>
+      )}
+    </div>
+  )
+}
+
+/**
+ * One strip: the shared card row (mark | words | doors) with a left rule in its tone. `children` is what the row says (a
+ * `StripSaid`, or the page's own words). `doors`: the doors cell is drawn only when doors are handed over. `anchor`: the row's own
+ * address (an `id`, reached by a link: it takes the focus then).
+ */
+export function Strip({ tone, mark, doors, anchor, children }: { tone: StripTone; mark: ReactNode; doors?: ReactNode; anchor?: string; children?: ReactNode }): ReactNode {
+  return (
+    <li className="fw-so-ov-row fw-so-strip" data-tone={tone} id={anchor} tabIndex={anchor === undefined ? undefined : -1}>
+      <span className="fw-so-strip-mark">{mark}</span>
+      <span className="fw-so-strip-said">{children}</span>
+      {doors ? <span className="fw-so-ov-doors">{doors}</span> : null}
+    </li>
+  )
+}
+
+/**
+ * What a strip says: its title with how long it has stood ("· 3 d", its exact day in the title), then its quiet lines, one under
+ * the other. `since` null: no age is said.
+ */
+export function StripSaid({ title, since = null, lines = [] }: { title: ReactNode; since?: { iso: string; day: string; words: string } | null; lines?: readonly string[] }): ReactNode {
+  return (
+    <>
+      <span>
+        {title}
+        {since ? (
+          <>
+            {' · '}
+            <time dateTime={since.iso} title={since.day}>
+              {since.words}
+            </time>
+          </>
+        ) : null}
+      </span>
+      {lines.map((line) => (
+        <span key={line} className="fw-ro-hint">
+          {line}
+        </span>
+      ))}
+    </>
+  )
+}
+// ---- end F-CO-K2 (strips)
