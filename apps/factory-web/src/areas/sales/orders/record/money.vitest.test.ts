@@ -48,7 +48,8 @@ describe('F-OP-118: Money = this order\'s share', () => {
     // F-CM-k1 (Z13, 13-backend §3.4): the list is the shared part — the section hands the sixth column's head, the part draws it.
     expect(invoices).toContain("extraHead={t('money.share')}")
     expect(readFileSync(new URL('./money/view/parts.tsx', import.meta.url), 'utf8')).toContain('<div className="fw-om-ir-am fw-om-ir-share">{extraHead}</div>')
-    expect(invoices).toContain("t('money.statement', { customer: order.party.legalName })")
+    expect(invoices).toContain("t('money.allMoney', { customer: order.party.legalName })") // F-CM-104 (W1.4): "All money of <customer> ›"
+    expect(invoices).toContain('?tab=money#invoices`') // F-CM-104: it lands on the customer's Invoices & credit notes
     const totals = readFileSync(new URL('./money/view/TotalsSection.tsx', import.meta.url), 'utf8')
     expect(totals).toContain('const totals = totalsOf({ order, settlement: settlementPart?.value ?? null, can: model.can,')
     for (const file of [invoices, totals]) expect(file).not.toMatch(/customerBalance|partyBalance|openCredit|creditLimit/)
@@ -76,7 +77,7 @@ describe('F-OP-118: Money = this order\'s share', () => {
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
       for (const key of ['money.share', 'money.alsoBills']) expect(t(key), `${locale} ${key}`).not.toBe(key) // F-OM-303: money.invoiceWhole left (no screen read it)
-      for (const [key, params] of [['money.freight', { amount: '€ 40' }], ['money.statement', { customer: 'Brand Alpha' }], ['money.alsoBillsHidden', { count: 2 }]] as const) expect(t(key, params), `${locale} ${key}`).not.toBe(key)
+      for (const [key, params] of [['money.freight', { amount: '€ 40' }], ['money.allMoney', { customer: 'Brand Alpha' }] /* F-CM-104 */, ['money.alsoBillsHidden', { count: 2 }]] as const) expect(t(key, params), `${locale} ${key}`).not.toBe(key)
     }
   })
 })

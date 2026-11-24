@@ -89,6 +89,9 @@ export const ageingRowSchema = z.object({
   remindersWaiting: z.number(),
   // B-W2b-304: the share of the credit limit used (whole percent), null without a limit or the price grain.
   creditLimitUsed: z.number().int().nullable(),
+  // F-CM-103 (customer MONEY tab; the API's S7, cm-s): how many open invoices are LATE (a count, not money). Optional: an older API sends
+  // none (the customer tab then counts them from the open items' due days).
+  lateInvoices: z.number().optional(),
 })
 export type AgeingRow = z.infer<typeof ageingRowSchema>
 

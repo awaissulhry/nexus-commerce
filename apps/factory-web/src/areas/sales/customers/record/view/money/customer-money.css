@@ -1,0 +1,105 @@
+/*
+ * F-CM-101 (customer page › MONEY tab, 10-design §1, §8; 18-lead-settles L2) — ONLY what is new for the customer's Money tab, under
+ * `.fw-cm`, tokens only. Every other look is the Production kit's (production.css) and the order Money's (money.css, owned by the shared
+ * parts): this sheet restyles none of their classes. The tab lays out by the ROOM it has (the kit's `sec` container, and the customer
+ * list's own `cmls`), never the viewport.
+ *
+ *   (0) the answer's lines        one sentence per currency, each its own line
+ *   (1) Balance                   the figures in two groups (each a DS MetricStrip sm), What needs you (two columns from 1200 px)
+ *   (2) the cells row             a few figures of ONE thing on one line (the open invoices by age); rows under 560 px
+ *   (3) THE customer row          what · when · words · amount · ONE act · ⋯ — one shape for every list of the tab
+ *   (6) nothing here yet          the quiet lines of the sections with nothing share ONE card
+ */
+
+/* (0) the answer: each currency's sentence on its own line, the quiet lines under them */
+.fw-cm-ans { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
+.fw-cm-al { display: block; overflow-wrap: anywhere; }
+.fw-cm-also { display: inline; }
+
+/* (1) Balance: the figures in two groups (two directions, never one net). A group asks 150 px per tile: both on one line when the
+   room has it, else one group per line — every line is full, never a hole. */
+.fw-cm-bal { display: flex; flex-direction: column; gap: var(--nds-space-14); min-width: 0; }
+.fw-cm-h3 { padding-bottom: var(--nds-space-6); border-bottom: 1px solid var(--nds-border); }
+.fw-cm-needs { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: var(--nds-space-22); min-width: 0; }
+@container sec (min-width: 1200px) {
+  .fw-cm-needs { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .fw-cm-needs > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
+.fw-cm-figs { display: flex; flex-wrap: wrap; gap: var(--nds-space-10) var(--nds-space-16); min-width: 0; }
+.fw-cm-fig { flex: var(--n, 1) 1 calc(var(--n, 1) * 150px); min-width: 0; display: flex; flex-direction: column; gap: var(--nds-space-4); }
+.fw-cm-cur { font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-bold); color: var(--nds-text-strong); letter-spacing: 0.03em; }
+@container sec (max-width: 559px) {
+  .fw-cm-fig { flex-basis: 100%; }
+}
+
+/* (2) the cells row */
+.fw-cm-cells { display: grid; grid-template-columns: repeat(var(--n, 5), minmax(0, 1fr)); margin: 0; border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg); background: var(--nds-surface-raised); min-width: 0; }
+.fw-cm-cells > div { display: flex; flex-direction: column; gap: var(--nds-space-2); padding: var(--nds-space-6) var(--nds-space-10); border-left: 1px solid var(--nds-border-subtle); min-width: 0; }
+.fw-cm-cells > div:first-child { border-left: 0; }
+.fw-cm-cells dt { font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-muted); }
+.fw-cm-cells dd { margin: 0; font-size: var(--nds-font-size-sm-plus); font-weight: var(--nds-font-weight-bold); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fw-cm-cells .is-none dd { font-weight: var(--nds-font-weight-normal); color: var(--nds-text-muted); }
+.fw-cm-cells .is-danger dd { color: var(--nds-danger-text); }
+@container sec (max-width: 559px) {
+  .fw-cm-cells { grid-template-columns: minmax(0, 1fr); }
+  .fw-cm-cells > div { flex-direction: row; justify-content: space-between; align-items: baseline; border-left: 0; border-top: 1px solid var(--nds-border-subtle); }
+  .fw-cm-cells > div:first-child { border-top: 0; }
+}
+.fw-cm-blk { display: flex; flex-direction: column; gap: var(--nds-space-6); min-width: 0; }
+
+/* (3) THE customer row. Its list is a size container: S under 560 (blocks, the act full width, 44 px to tap) · M from 560: what |
+   amount | act | ⋯ · L from 1000: + when as its own column · XL from 1500: + the words as their own column. The amount and act
+   columns have a fixed width so they line up row to row — the order's plan row's own numbers (560 / 1000 / 1500; 150 / 216). A list
+   without amounts (no price grain) or without acts gives those columns back to the words: no empty column. */
+.fw-cm-list { container: cmls / inline-size; display: flex; flex-direction: column; min-width: 0; }
+.fw-cm-row { border-bottom: 1px solid var(--nds-border-subtle); padding: var(--nds-space-10) var(--nds-space-2); min-width: 0; scroll-margin-top: 96px; }
+.fw-cm-row:last-child { border-bottom: 0; }
+.fw-cm-row:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-xs); }
+.fw-cm-row-g { --m: 150px; --a: 216px; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "k o" "d d" "n n" "m m" "a a"; gap: var(--nds-space-2) 0; align-items: start; min-width: 0; }
+.fw-cm-list.is-np .fw-cm-row-g { --m: 0px; }
+.fw-cm-list.is-np .fw-cm-row-m { display: none; }
+.fw-cm-list.is-na .fw-cm-row-g { --a: 0px; }
+.fw-cm-list.is-na .fw-cm-row-a { display: none; }
+.fw-cm-row-g > div { min-width: 0; }
+.fw-cm-row-k { grid-area: k; display: flex; flex-direction: column; gap: var(--nds-space-2); font-size: var(--nds-font-size-sm); }
+.fw-cm-row-kt { display: flex; gap: var(--nds-space-4) var(--nds-space-8); align-items: center; flex-wrap: wrap; min-width: 0; min-height: 22px; }
+.fw-cm-row-kt > b { font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); }
+.fw-cm-row-d { grid-area: d; display: flex; gap: var(--nds-space-4) var(--nds-space-8); align-items: center; flex-wrap: wrap; font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+.fw-cm-row-n { grid-area: n; display: flex; flex-direction: column; gap: var(--nds-space-2); font-size: var(--nds-font-size-xs); color: var(--nds-text-2); }
+.fw-cm-row-n > span { display: flex; gap: var(--nds-space-6); align-items: flex-start; min-width: 0; }
+.fw-cm-row-n > span > span { min-width: 0; overflow-wrap: anywhere; }
+.fw-cm-row-n > span > svg { flex: none; margin-top: 1px; color: var(--nds-text-muted); }
+.fw-cm-row-n > .is-warning { color: var(--nds-warning-text); }
+.fw-cm-row-n > .is-warning > svg { color: var(--nds-warning); }
+.fw-cm-row-n > .is-danger { color: var(--nds-danger-text); }
+.fw-cm-row-n > .is-danger > svg { color: var(--nds-danger); }
+.fw-cm-row-m { grid-area: m; display: flex; flex-direction: column; gap: var(--nds-space-2); font-variant-numeric: tabular-nums; }
+.fw-cm-row-a { grid-area: a; display: flex; gap: var(--nds-space-6); align-items: center; flex-wrap: wrap; margin-top: var(--nds-space-6); }
+.fw-cm-row-a:empty { display: none; }
+.fw-cm-row-a > * { min-height: 44px; flex: 1 1 auto; justify-content: center; }
+.fw-cm-row-o { grid-area: o; display: flex; justify-content: flex-end; padding-left: var(--nds-space-12); }
+.fw-cm-of { font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); }
+@container cmls (min-width: 560px) {
+  .fw-cm-row-g { grid-template-columns: minmax(0, 1fr) var(--m) var(--a) 44px; grid-template-areas: "k m a o" "d m a o" "n m a o"; }
+  .fw-cm-row-m { align-items: flex-end; text-align: right; padding-left: var(--nds-space-14); }
+  .fw-cm-row-a { justify-content: flex-end; flex-wrap: nowrap; margin-top: 0; padding-left: var(--nds-space-14); }
+  .fw-cm-row-a:empty { display: flex; }
+  .fw-cm-row-a > * { min-height: var(--nds-control-h-sm); flex: none; }
+}
+@container cmls (min-width: 1000px) {
+  .fw-cm-row-g { grid-template-columns: minmax(0, 1fr) 204px var(--m) var(--a) 44px; grid-template-areas: "k d m a o" "n d m a o"; }
+  .fw-cm-row-d { flex-direction: column; align-items: flex-start; padding-left: var(--nds-space-14); }
+}
+@container cmls (min-width: 1500px) {
+  .fw-cm-row-g { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) 214px var(--m) var(--a) 44px; grid-template-areas: "k n d m a o"; }
+  .fw-cm-row-n { padding-left: var(--nds-space-14); }
+}
+.fw-cm-more { align-self: flex-start; margin-top: var(--nds-space-4); }
+.fw-cm-foot { margin: 0; padding-top: var(--nds-space-6); font-size: var(--nds-font-size-sm); color: var(--nds-text-2); display: flex; flex-wrap: wrap; gap: var(--nds-space-4) var(--nds-space-14); align-items: center; }
+
+/* (6) the sections with nothing: their quiet lines share ONE card at the foot of the tab */
+.fw-cm-none { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.fw-cm-none > li { display: flex; flex-wrap: wrap; gap: var(--nds-space-2) var(--nds-space-10); padding: var(--nds-space-6) var(--nds-space-2); border-bottom: 1px solid var(--nds-border-subtle); font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); scroll-margin-top: 96px; }
+.fw-cm-none > li:last-child { border-bottom: 0; }
+.fw-cm-none > li > b { flex: 0 0 230px; max-width: 100%; font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); }
+.fw-cm-none > li > span { flex: 1 1 260px; min-width: 0; }

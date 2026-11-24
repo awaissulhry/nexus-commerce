@@ -641,11 +641,12 @@ describe('F-SA-279: the dock follows the row — the address term `dock=`', () =
     expect(dockAddress(base, '?tab=work', { kind: 'record', type: 'Quote', id: ORDER }, 'm9')).toBe(`${base}?tab=work&dock=Quote.${ORDER}&message=m9`)
     expect(dockAddress(base, '', GENERAL_DOCK)).toBe(base)
   })
-  it('a record docks on Work and Quotes & incoming only; All of <customer> on every tab', () => {
-    expect(DOCK_TABS).toEqual(['work', 'quotes'])
+  it('a record docks on Work, Quotes & incoming and Money only; All of <customer> on every tab', () => {
+    expect(DOCK_TABS).toEqual(['work', 'quotes', 'money']) // F-CM-104 (W1.4): a To-collect row's "Show in the thread" docks its order
     const record = { kind: 'record', type: 'SalesOrder', id: ORDER } as const
     expect(dockOnTab('work', record)).toBe(record)
     expect(dockOnTab('quotes', record)).toBe(record)
+    expect(dockOnTab('money', record)).toBe(record) // F-CM-104
     expect(dockOnTab('overview', record)).toEqual(GENERAL_DOCK)
     expect(dockOnTab('money', { kind: 'all' })).toEqual({ kind: 'all' })
   })
@@ -749,7 +750,7 @@ describe('F-SA-279: the page wires it (the sources)', () => {
   })
   it('Work\'s dock a third; the band\'s button below 1280 px names the record docked', () => {
     const view = readFileSync(new URL('./view/CustomerRecordView.tsx', import.meta.url), 'utf8')
-    expect(view).toContain("defaultWidth={tab === 'work' || tab === 'quotes' || tab === 'overview' ? 'third' : undefined}") // F-CQ-301: Quotes & incoming docks a third too; F-CO-103 (S13): the Overview a third too — Money, People, Terms and Portal stay 40 %
+    expect(view).toContain("defaultWidth={tab === 'work' || tab === 'quotes' || tab === 'overview' || tab === 'money' ? 'third' : undefined}") // F-CQ-301: Quotes & incoming docks a third too; F-CO-103 (S13): the Overview a third too; F-CM-104 (D2): Money a third too — People, Terms and Portal stay 40 %
     expect(view).toContain('dockTab={tab}')
     const page = readFileSync(new URL('./CustomerRecord.tsx', import.meta.url), 'utf8')
     expect(page).toContain("const threadButton = customerDock.shown ? t('customers.work.dock.button', { record: customerDock.shown.label }) : null")
@@ -1248,7 +1249,7 @@ describe('F-CP-141: the Not equal view', () => {
     expect(sales).not.toContain('Prices differ')
     expect(sales).not.toContain('priceMatch')
     expect(html('tab-money-price-differ', 'it')).toContain('Prezzi diversi su 2 ordini ›')
-    const tab = readFileSync(new URL('./view/MoneyTab.tsx', import.meta.url), 'utf8')
+    const tab = readFileSync(new URL('./view/money/CustomerMoneyTab.tsx', import.meta.url), 'utf8') // F-CM-104 (W1.4): the new tab's layout
     expect(tab).toContain('const differ = price && can.orders && priceDiffer !== null && priceDiffer > 0 ? priceDiffer : null')
   })
 
