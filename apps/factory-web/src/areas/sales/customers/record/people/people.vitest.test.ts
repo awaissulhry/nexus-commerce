@@ -296,8 +296,9 @@ describe('the views of the tab', () => {
 
   it('the golden flow\'s words stay: the heads say "Add contact" and "Add address" (the shared catalogue\'s own)', () => {
     expect(views.find((view) => view.name === 'PeopleSection.tsx')!.source).toContain("say(said('parties:contact.add'))")
-    expect(views.find((view) => view.name === 'AddressesSection.tsx')!.source).toContain("say(said('parties:address.add'))")
-    expect(views.find((view) => view.name === 'AddressesSection.tsx')!.source).not.toContain('address.addRegistered') // "Add address" at every state, as the golden flow presses it
+    expect(views.find((view) => view.name === 'AddressesSection.tsx')!.source).toContain("'parties:address.add'")
+    expect(views.find((view) => view.name === 'AddressesSection.tsx')!.source).toContain("'parties:address.addRegistered'") // Z22: the picture's word when none
+    expect(CATALOGUE.en.parties!['address.addRegistered']).toBe('Add the registered office')
     expect(CATALOGUE.en.parties!['contact.add']).toBe('Add contact')
     expect(CATALOGUE.en.parties!['address.add']).toBe('Add address')
   })

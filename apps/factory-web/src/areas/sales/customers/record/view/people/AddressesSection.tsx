@@ -20,7 +20,7 @@ import { menuItemOf, sentenceOf, usePeopleSay } from './say'
  * one row per address — the lines and the delivery notes, what it is for and its defaults as words, which one the e-invoices use, who
  * is there, what it is used on (D3, words: no list takes an address filter). An address the customer added in the portal waits for our
  * check: Approve (one click) and Refuse… (the reason the customer reads) right on the row, for a reader who manages orders; a refused
- * one stays in view 30 days. Head: Add address (the golden flow's word at every state) · ⋯ (Show archived, History ›, Copy link) · ⓘ.
+ * one stays in view 30 days. Head: Add address (Add the registered office when none) · ⋯ (Show archived, History ›, Copy link) · ⓘ.
  * The foot says that a change never changes what was sent. Draws its model; reads nothing.
  */
 
@@ -29,13 +29,12 @@ export function AddressesSection({ model, actions }: { model: PeopleTabModel; ac
   const locale = useLocale()
   const addresses = model.addresses
   const title = say(said('parties:address.title'))
+  const none = addresses.all.every((row) => row.address.status !== 'ACTIVE')
   const archivedHeld = model.can.manage && !model.editable ? say(said('parties:held.archived')) : null
   const buttons = model.can.manage
     ? [
         <Button key="add" size="sm" heldReason={archivedHeld} onClick={() => actions?.onAddAddress?.()}>
-          {/* The golden flow's word, at every state (tests/golden-flow/01-customer.ts presses "Add address" on a customer with none): the
-              window itself starts the first address as the registered office. */}
-          <Plus size={14} aria-hidden /> {say(said('parties:address.add'))}
+          <Plus size={14} aria-hidden /> {say(said(none ? 'parties:address.addRegistered' : 'parties:address.add'))}
         </Button>,
       ]
     : []
