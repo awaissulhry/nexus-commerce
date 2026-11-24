@@ -66,6 +66,8 @@ describe('F-OM-101: the shell — five sections that stack, in the kit, by the r
       const text = readFileSync(new URL(file, dir), 'utf8')
       expect(text, file).not.toMatch(/lib\/api|use-money-acts|useMoneyActs|fetch\(/)
     }
+    // F-CM-k1 (13-backend §3.4): the shared parts (parts.tsx, in this folder) take no order — no value of the orders API, no record model.
+    expect(source('./view/parts.tsx')).not.toMatch(/record-model|^import (?!type )[^\n]*'\.\.\/\.\.\/\.\.\/api'/m)
   })
 })
 
