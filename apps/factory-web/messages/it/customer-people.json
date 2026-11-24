@@ -130,7 +130,8 @@
     "portalRequests_other": "{count} richieste d'ordine dal portale",
     "changeRequests_one": "{count} richiesta di modifica",
     "changeRequests_other": "{count} richieste di modifica",
-    "notOnWork": "Non in lavori aperti"
+    "notOnWork": "Non in lavori aperti",
+    "failed": "Impossibile leggere i lavori aperti che li riguardano"
   },
   "portal": {
     "none": "Nessun accesso al portale",

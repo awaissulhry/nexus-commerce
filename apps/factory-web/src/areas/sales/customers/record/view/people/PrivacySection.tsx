@@ -35,6 +35,7 @@ export function PrivacySection({ model, actions }: { model: PeopleTabModel; acti
     <>
       <p>{say(said('privacy.info'))}</p>
       <p>{say(said('sales-customers-depth:privacy.rule'))}</p>
+      <p>{say(said('keys'))}</p>
     </>
   )
   const head = { id: peopleKitId('personal-data'), title, info, more: <LineMenuButton label={say(said('privacy.more'))} items={more} /> }

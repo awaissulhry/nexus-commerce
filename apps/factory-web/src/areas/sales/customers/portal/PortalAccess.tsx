@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'next/navigation' // F-SA-274
+import { usePathname, useRouter, useSearchParams } from 'next/navigation' // F-SA-274; F-CA-fx5: + the address leaves `?invite=`
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { isApiError } from '../../../../lib/api/errors'
 import { recordAddress } from '../../../../lib/records/record-links'
@@ -29,6 +29,7 @@ import { openPreview } from '../../../admin/users/partners/preview'
 import { limitsApply, productionPreviewAddress } from './limits/model' // F-PR-07
 import { useLimits } from './limits/use-limits' // F-PR-07
 import type { PortalAccessActions, PortalAccessModel, PortalDialog, PortalNotice, PortalSide, RequestRow } from './model'
+import { queryWithoutInvite } from './model' // F-CA-fx5 (walk W-11)
 import { PORTAL_PARTS, PortalAccessView, type PortalPart } from './view/PortalAccessView' // F-SA-274: + the parts
 
 const SENTENCE: Readonly<Record<RowAction, string>> = {
@@ -230,13 +231,19 @@ export function usePortalAccess({ side, party, parts, enabled }: PortalAccessInp
 
   // ---- F-SA-274: an invitation asked by the address, once it can open.
   const search = useSearchParams()
+  const router = useRouter() // F-CA-fx5
+  const pathname = usePathname() // F-CA-fx5
   const invited = useRef(false)
   useEffect(() => {
     const email = search?.get('invite')?.trim()
-    // F-CA-fx3 (P0-B1): only for who may invite — the in-page Invite's own right (`partners.invite`); a reader without it gets no window.
-    if (invited.current || !can.invite || !email || !access || !(parts ?? PORTAL_PARTS).includes('people')) return
+    // F-CA-fx5 (walk W-11): read once the people are read, by a mount that draws them — with or without the right — then the address
+    // leaves `invite` and `inviteName` (as People's `&add=`). A mount without the people (Portal settings, the requests) reads nothing.
+    const left = queryWithoutInvite(search?.toString() ?? '')
+    if (invited.current || left === null || !access || !(parts ?? PORTAL_PARTS).includes('people')) return
     invited.current = true
-    setDialog({ kind: 'invite', email, ...(search?.get('inviteName') ? { name: search.get('inviteName')! } : {}) })
+    // F-CA-fx3 (P0-B1): only for who may invite — the in-page Invite's own right (`partners.invite`); a reader without it gets no window.
+    if (can.invite && email) setDialog({ kind: 'invite', email, ...(search?.get('inviteName') ? { name: search.get('inviteName')! } : {}) })
+    router.replace(`${pathname}${left ? `?${left}` : ''}${typeof window === 'undefined' ? '' : window.location.hash}`, { scroll: false }) // F-CA-fx5
     // Once the people are read.
   }, [access])
   // ---- end F-SA-274

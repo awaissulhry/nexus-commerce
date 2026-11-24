@@ -130,7 +130,8 @@
     "portalRequests_other": "{count} portal order requests",
     "changeRequests_one": "{count} change request",
     "changeRequests_other": "{count} change requests",
-    "notOnWork": "Not on open work"
+    "notOnWork": "Not on open work",
+    "failed": "Couldn't read what is open on them"
   },
   "portal": {
     "none": "No portal access",

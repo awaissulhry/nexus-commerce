@@ -33,7 +33,7 @@ describe('the tabs and the old addresses', () => {
   })
 
   it('every old ?tab= keeps working (R-8); a customer’s Documents shows the thread (its Files view holds the files)', () => {
-    expect(MERGED_TABS.customers).toEqual({ orders: 'work', addresses: 'people', tax: 'terms', requirements: 'terms', documents: 'overview', activity: 'overview' }) // F-SA-271
+    expect(MERGED_TABS.customers).toEqual({ orders: 'work', addresses: 'people', tax: 'terms', requirements: 'terms', holds: 'terms', documents: 'overview', activity: 'overview' }) // F-SA-271; F-CT-404: a quote's "customer on hold" door
     expect(MERGED_TABS.suppliers).toEqual({ contacts: 'overview', questionnaire: 'documents', activity: 'overview' })
     for (const [side, merged] of Object.entries(MERGED_TABS) as [keyof typeof MERGED_TABS, Record<string, string>][]) {
       for (const [old, now] of Object.entries(merged)) expect(partyTabOf(side, old), `${side} ${old}`).toBe(now)

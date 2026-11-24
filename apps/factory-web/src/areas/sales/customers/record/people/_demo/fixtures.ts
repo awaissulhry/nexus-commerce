@@ -401,7 +401,7 @@ export const RIDER: CaCustomer = customerOf(RIDER_PARTY, {
     profile(70, RIDER_PARTY, { contactId: RIDER_C.id, riderName: 'Pilota Seed', garmentType: 'SUIT', revision: 2, baseSize: '50', review: { status: 'CONFIRMED', at: '2026-02-04T10:00:00.000Z' }, openUnits: 1, nextFittingAt: '2026-11-12T14:00:00.000Z', takenAt: '2026-02-02T10:00:00.000Z', privacyNoticeAt: '2026-02-02T10:00:00.000Z' }),
     profile(71, RIDER_PARTY, { contactId: RIDER_C.id, riderName: 'Pilota Seed', garmentType: 'BOOTS', baseSize: '43', byLink: true, takenAt: '2026-10-21T18:00:00.000Z', privacyNoticeAt: '2026-10-21T17:58:00.000Z' }),
   ],
-  team: { id: SEED_RACING_ID, code: 'SEED-RACING', legalName: SEED_LEGAL, status: 'ACTIVE' },
+  team: { id: SEED_RACING_ID, code: 'SEED-RACING', legalName: SEED_LEGAL, tradeName: 'Seed Racing' /* F-CA-fx4 (W-07): named as its own page names it */, status: 'ACTIVE' },
 })
 
 // Many rows: 14 people, 7 addresses, 15 riders (each list shows its first rows and "Show N more").
@@ -535,7 +535,7 @@ const FOUND_RIDERS: readonly FoundParty[] = [
   { id: uid('ca01', 21), code: 'SEED-P04', name: 'Pilota Prova', city: 'Parma', version: 1 },
 ]
 const OTHER_TEAM: FoundParty = { id: uid('ca01', 23), code: 'SEED-CORSE', name: 'Seed Corse Due', city: 'Modena', version: 4 }
-const TEAM: TeamDialog = { riderId: RIDER_PARTY.id, riderName: RIDER_PARTY.legalName, version: RIDER_PARTY.version, current: { id: SEED_RACING_ID, name: SEED_LEGAL }, choice: 'move', search: 'seed', found: readyRead<readonly FoundParty[]>([OTHER_TEAM]), picked: OTHER_TEAM, tried: false, busy: false, problem: null }
+const TEAM: TeamDialog = { riderId: RIDER_PARTY.id, riderName: RIDER_PARTY.legalName, version: RIDER_PARTY.version, current: { id: SEED_RACING_ID, name: 'Seed Racing' /* F-CA-fx4 (W-07) */ }, choice: 'move', search: 'seed', found: readyRead<readonly FoundParty[]>([OTHER_TEAM]), picked: OTHER_TEAM, tried: false, busy: false, problem: null }
 
 const busy = (over: Partial<CaCaseModel> = {}): CaCaseModel => ({ customer: BUSY, role: 'owner', ...over })
 const ALL_READS = ['portal', 'privacy', 'usage', 'profiles', 'riders'] as const
@@ -570,7 +570,7 @@ export const CA_CASES: readonly { readonly id: string; readonly label: string; r
   { id: 'ca-failed-all', label: 'ca · Every read failed: each part its own Try again; the contacts and addresses still draw', ca: busy({ reads: every('failed') }) },
   { id: 'ca-failed-portal', label: 'ca · The portal read failed: its own Try again, the contacts draw', ca: busy({ reads: { portal: 'failed' } }) },
   { id: 'ca-failed-privacy', label: 'ca · The personal data read failed: its own Try again', ca: busy({ reads: { privacy: 'failed' } }) },
-  { id: 'ca-failed-usage', label: 'ca · The usage read failed: the "Used on" lines are left out (never 0)', ca: busy({ reads: { usage: 'failed' } }) },
+  { id: 'ca-failed-usage', label: 'ca · The usage read failed: ONE quiet line in People and ONE in Addresses with its Try again (Z25) — never 0, never a line per row', ca: busy({ reads: { usage: 'failed' } }) },
   { id: 'ca-failed-profiles', label: 'ca · The profiles read failed: its own Try again, the riders\' names still draw', ca: busy({ reads: { profiles: 'failed' } }) },
   { id: 'ca-failed-riders', label: 'ca · The riders read failed: its own Try again', ca: busy({ reads: { riders: 'failed' } }) },
   // The rooms (every list chooses its columns by the room it has).

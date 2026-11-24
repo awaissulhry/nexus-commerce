@@ -39,9 +39,9 @@ export interface PeopleFacts {
   readonly portalRight: boolean
   /** The privacy read is in (the lawful-basis chip needs it). */
   readonly privacyIn: boolean
-  /** Riders of this organisation (the glance's count; null: not read, or withheld). */
+  /** Riders of this organisation (null: a riders read still out or failed — never a partial count; or withheld). */
   readonly riders: number | null
-  /** The team of a rider (a person customer; the glance's), else null. */
+  /** The team of a rider (a person customer), by its display name (trade name, else legal name), else null. */
   readonly team: string | null
 }
 
@@ -101,9 +101,12 @@ export function peopleAnswer(facts: PeopleFacts): PeopleAnswer {
   const active = facts.addresses.filter((row) => row.address.status === 'ACTIVE')
   const words: Said[] = []
   const organisation = facts.kind === 'ORGANISATION'
-  if (live.length === 0 && facts.addresses.length === 0 && !(organisation && (facts.riders ?? 0) > 0) && !(!organisation && facts.team)) words.push(said('answer.nothing'))
+  // F-CA-fx4 (walk W-06): nobody and no address is said as such — the riders or a rider's team follow it, never "0 people · 0 addresses".
+  if (live.length === 0 && facts.addresses.length === 0) words.push(said('answer.nothing'))
   else {
     words.push(said('answer.people', { params: { count: live.length } }))
+    // F-CA-fx4 (walk W-01): a portal that is off while people still hold an account says so (they are counted among the people).
+    if (facts.portal && !facts.portal.on && facts.people.some((row) => row.portal !== null && row.portal.status !== 'DEACTIVATED')) words.push(said('people.answer.portalOff'))
     if (facts.portal?.on) {
       const portal = portalLive(facts)
       const signIn = portal.filter((row) => row.portal!.status === 'ACTIVE').length
@@ -113,9 +116,9 @@ export function peopleAnswer(facts: PeopleFacts): PeopleAnswer {
       words.push(seats ? said('answer.portal.withSeats', { words: { who, seats } }) : who)
     }
     words.push(said('answer.addresses', { params: { count: active.length } }))
-    if (organisation && facts.riders !== null && facts.riders > 0) words.push(said('answer.riders', { params: { count: facts.riders } }))
-    if (!organisation && facts.team) words.push(said('answer.riderOf', { params: { team: facts.team } }))
   }
+  if (organisation && facts.riders !== null && facts.riders > 0) words.push(said('answer.riders', { params: { count: facts.riders } }))
+  if (!organisation && facts.team) words.push(said('answer.riderOf', { params: { team: facts.team } }))
   const chips: AnswerChip[] = []
   const waiting = facts.addresses.filter((row) => row.waiting).length
   if (waiting > 0) chips.push({ id: 'check', tone: 'warning', label: said('chip.check', { params: { count: waiting } }), section: 'addresses', filters: true })
@@ -145,7 +148,8 @@ export function peopleSectionAnswer(facts: PeopleFacts): Said[] {
   const contacts = activeContacts(facts)
   if (live.length === 0) return [said('people.answer.none')]
   const out: Said[] = []
-  const portalOnly = facts.portal?.on ? live.filter((row) => row.contact === null).length : 0
+  // F-CA-fx4 (walk W-01): the people only in the portal count whenever they are shown (the portal read in — on or off).
+  const portalOnly = live.filter((row) => row.contact === null).length
   out.push(portalOnly > 0 ? said('people.answer.contactsAndPortal', { words: { contacts: said('people.answer.contacts', { params: { count: contacts.length } }) }, params: { count: portalOnly } }) : said('people.answer.contacts', { params: { count: contacts.length } }))
   if (facts.portal?.on && facts.portal.seats.max !== null) out.push(said(seatsFull(facts.portal) ? 'people.answer.seatsFull' : 'people.answer.seats', { params: { taken: facts.portal.seats.taken, max: facts.portal.seats.max } }))
   const quotes = contacts.filter(getsQuotes)
