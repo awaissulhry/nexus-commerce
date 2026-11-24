@@ -170,7 +170,7 @@ describe('L2-G11: a request’s note becomes its first pinned note', { timeout: 
 
 // ── tw-s S.2 (the thread rebuild; B3, the worker-privacy wall: one gate for the card, the quote, the pin and the search) ──
 describe('tw-s S.2: a pinned floor note goes through the site’s gate, as its card does', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
-  it('a pinned floor note with the site’s gate shut names nobody in the office’s pins; with it open, the worker', async () => {
+  it("a pinned floor note with the site's gate shut names nobody in the office's pins; with it open, the worker", async () => {
     const FLOOR_NAME = 'Made-up Floor Person'
     const floorWorker = newId()
     const workOrder = (await admin<{ id: string }>(`SELECT id FROM "WorkOrder" WHERE "tenantId" = $1 AND number = 'SEED-WO-0001'`, [world.tenantId]))[0]!.id

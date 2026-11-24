@@ -377,7 +377,7 @@ describe('attachments (COL-045, COL-050)', () => {
   })
 
   // ---- tw-s S.3 (the thread rebuild; B5): "One file you cannot open" is the office's word only.
-  it('a link or portal read of GET /threads never says how many files it cannot open; the office’s read does', async () => {
+  it("a link or portal read of GET /threads never says how many files it cannot open; the office's read does", async () => {
     const portal = await file('Quote', quote, { visibility: ['OFFICE', 'PARTNER'], partyId: partyOne })
     const link = await file('Quote', quote, { visibility: ['OFFICE', 'LINK'], partyId: partyOne })
     const sent = await sendToParty(quote, 'Made-up: one file for the portal, one for the link.', [portal, link])

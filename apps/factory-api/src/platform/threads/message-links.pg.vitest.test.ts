@@ -376,7 +376,7 @@ describe('tw-s: a quote carries its own data, through the reader’s own walls',
     await admin('INSERT INTO "User" (id, "tenantId", email, "displayName", status, locale) VALUES ($1, $2, $3, $4, \'ACTIVE\', \'en\')', [PRICEY, T, 'tws-pricey@example.com', 'Made-up price reader'])
   })
 
-  it('a quote names its writer’s kind, says erased, and counts the files the READER may open; a priced file is never the quote’s file for a reader without the price grain', async () => {
+  it("a quote names its writer's kind, says erased, and counts the files the READER may open; a priced file is never the quote's file for a reader without the price grain", async () => {
     const record: Ref = { type: 'SalesOrder', id: orders[1]! }
     const priced = await officeFile(record, 'Made-up order confirmation.pdf', 'DOCUMENT', 'application/pdf', true)
     const photo = await officeFile(record, 'Made-up sleeve.jpg', 'PHOTO', 'image/jpeg', false)
