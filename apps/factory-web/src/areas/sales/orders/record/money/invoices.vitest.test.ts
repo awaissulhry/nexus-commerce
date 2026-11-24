@@ -200,7 +200,8 @@ describe('F-OM-fx5w: the walk\'s gaps in Invoices & credit notes', () => {
     expect(parts).toContain("const sub = [...(row.issueDate ? [formatDate(dayInstant(row.issueDate), { locale })] : []), ...row.subs.map(say)].join(' · ')")
     expect(view).toContain("label: t('moneyTab.menu.copyLinkRow'),")
     for (const file of [parts, view]) expect(file).not.toContain('items.length > 0 ? <LineMenuButton')
-    expect(parts).toContain('<LineMenuButton label={t(\'moneyTab.invoices.more\', { number })} items={[...items]} />')
+    // cm-fx4 #1961 (M-8): the shared row's OPTIONAL `name` names its ⋯ when the number cannot tell rows apart; absent: the number (as before).
+    expect(parts).toContain('<LineMenuButton label={t(\'moneyTab.invoices.more\', { number: row.name ?? number })} items={[...items]} />')
   })
 })
 
