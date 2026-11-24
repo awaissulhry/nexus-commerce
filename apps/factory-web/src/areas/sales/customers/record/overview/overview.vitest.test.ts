@@ -667,6 +667,12 @@ describe('source pins (15-steps T.2)', () => {
     expect(VIEW.match(/<WorkBand /g)).toHaveLength(1)
   })
 
+  it('co-fx2 (walk CO-W-1): every link-like door inside a value wraps at its spaces — the DS\'s own `wrap` (`.nds-btn` is nowrap): a long task title never runs past its card', () => {
+    const links = VIEW.match(/<Button variant="link"[^>]*>/g) ?? []
+    expect(links).toHaveLength(2)
+    for (const tag of links) expect(tag).toMatch(/\binline wrap\b/)
+  })
+
   it('the Overview\'s files hold no stylesheet and write no kit class: a kit part has no look prop, the host uses the kit\'s text classes on its own content only (S32)', () => {
     for (const folder of ['./', '../view/overview/']) {
       const files = readdirSync(new URL(folder, import.meta.url))
