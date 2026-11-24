@@ -131,6 +131,15 @@ const LIFT_REASON = 'Made-up: the lining roll came in (TH9).' // F-PT T.2
 const FV = words('record-thread-files-view')
 const FA = words('file-asks')
 const RF = words('record-files')
+// ---- F-CM T.3 (customer MONEY tab, 15-steps T.3): step 17's words — the tab's own (customer-money) and Finance's ----
+const CMW = words('customer-money')
+const FIN = words('finance')
+const MOVE_REASON = 'Made-up: the customer asked one more day for the balance (TH9 step 17).'
+/** YYYY-MM-DD as the office writes a day in English (formatDate: en-GB, 2-digit day and month). */
+const dayWords = (iso: string) => iso.split('-').reverse().join('/')
+/** The day after `iso` (YYYY-MM-DD). */
+const nextDay = (iso: string) => new Date(Date.parse(`${iso}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10)
+// ---- end F-CM T.3
 const FILES_WORDS = {
   ask: 'Made-up: the pattern PDF for size 52, with seam allowances (TH9 step 16).',
   again: 'Made-up: the seam allowance is missing on the back panel (TH9 step 16).',
@@ -1683,5 +1692,75 @@ export default defineStage({
       await flow.shot(reader.page, 'files-reader')
     })
     // ---- end F-OF T.2
+
+    // ---- F-CM T.3 (customer MONEY tab, 15-steps T.3; Z5, Z12, Z18): the customer's Money tab at the end, on P1 (Brand Alpha) ----
+    await flow.step('17 · the customer’s Money tab: Finance reads the answer; the money order’s open balance is a row of To collect; its ⋯ Move due day… opens THE ORDER’S window, one day later with a reason → the row shows the new day with no reload; ?tab=money#credit brings Credit & terms into view; Sales reads no amount and finds no money act; Read-only finds no act', async () => {
+      // Step 14's world (th9-money-world.ts, made once there): T-TH9-MONEY-0001's balance before shipping is open, its day moved once.
+      const customer = await flow.seedId('party:P1')
+      const finance = await flow.desk('finance')
+      const { page } = finance
+      const found = await flow.read(page, `/sales/orders?q=${encodeURIComponent(MONEY_WORDS.moneyRef)}`)
+      const listed = (found.orders ?? found.items ?? []) as Json[]
+      const order = listed.find((entry) => entry.customerRef === MONEY_WORDS.moneyRef) ?? (listed.length === 1 ? listed[0] : undefined)
+      expect(order, `step 14's money order (${MONEY_WORDS.moneyRef})`).toBeDefined()
+      const balanceOf = async (): Promise<Json | undefined> => ((await scheduleOf(flow, order!.id as string)).steps as Json[]).find((entry) => entry.kind === 'BEFORE_SHIPPING' && entry.status !== 'CANCELLED' && entry.depositRequestId)
+      const now = await balanceOf()
+      expect(now, 'its balance before shipping, open with its request').toBeDefined()
+      await finance.go(`/sales/customers/${customer}?tab=money`)
+      const tab = page.locator('.fw-om')
+      // The answer: ONE line on the tab (the order Money's own answer part), never "Nothing open" for a customer who owes.
+      const answer = tab.locator('.fw-om-head').first()
+      await seen(answer, 60_000)
+      await expect(answer).not.toContainText(lead(CMW('cm.answer.nothing')))
+      // To collect: the balance's request is its own row (sorted by due day; past the first rows, "Show n more rows" opens them).
+      const collect = page.locator('#collect')
+      await seen(collect, 60_000)
+      const row = page.locator(`#cm-DepositRequest-${now!.depositRequestId as string}`)
+      if ((await row.count()) === 0) await press(collect.getByRole('button', { name: /^Show \d+ more rows?$/ }))
+      await seen(row, 60_000)
+      const later = nextDay(now!.dueDate as string)
+      await expect(row).toContainText(dayWords(now!.dueDate as string))
+      // Its ⋯ Move due day… opens the ORDER's own hand window (its title in the order's words), in place on the customer's tab.
+      await press(row.getByRole('button', { name: startsWith(lead(CMW('cm.collect.rowMore'))) }).first())
+      await press(page.getByRole('menuitem', { name: OD('moneyTab.plan.act.MOVE_DUE'), exact: true }))
+      const moveBox = dialog(page)
+      await expect(moveBox).toContainText(lead(OD('moneyTab.hand.MOVE_DUE.title')), { timeout: 60_000 })
+      await pickDate(moveBox, OD('moneyTab.hand.field.day'), later)
+      await moveBox.getByRole('textbox', { name: startsWith(OD('moneyTab.hand.reason')) }).fill(MOVE_REASON)
+      await answerOf(page, 'POST', /^\/sales\/orders\/[^/]+\/money-plan$/, () => press(moveBox.getByRole('button', { name: startsWith(OD('moneyTab.hand.MOVE_DUE.go')) })))
+      await flow.settle()
+      // No reload: the tab reads its money again by itself (the door's done → the tab's burst; the live bus on this customer's money).
+      await expect(row).toContainText(dayWords(later), { timeout: 60_000 })
+      const moved = (await balanceOf())
+      expect(moved, 'the balance moved by hand from the customer’s tab').toMatchObject({ dueDate: later, byHand: { act: 'MOVE_DUE' } })
+      await flow.shot(page, 'customer-money-moved')
+
+      // The address #credit lands: Credit & terms comes into view.
+      await finance.go(`/sales/customers/${customer}?tab=money#credit`)
+      await expect(page.locator('#credit')).toBeInViewport({ timeout: 60_000 })
+      await flow.shot(page, 'customer-money-credit')
+
+      // The money wall: Sales reads the tab in words — no amount, no money act, no Price check, no Margin; nothing of Brand Beta.
+      const acts = [OD('deposit.record'), OD('moneyTab.plan.act.send'), FIN('recordPay.title'), `${FIN('recordPay.title')} ›`, CMW('tab.changeLimit'), CMW('cm.credit.set'), CMW('cm.chase.statement')]
+      await sales.go(`/sales/customers/${customer}?tab=money`)
+      const salesTab = sales.page.locator('.fw-om')
+      await seen(salesTab.locator('.fw-om-head').first(), 60_000)
+      await expect(salesTab).not.toContainText('€')
+      for (const name of acts) await expect(salesTab.getByRole('button', { name, exact: true }), name).toHaveCount(0)
+      await expect(salesTab.locator('#price-check')).toHaveCount(0)
+      await expect(salesTab.locator('#margin')).toHaveCount(0)
+      await expectNothingOf(sales.page, BRAND_BETA, world.betaNumbers, "A's customer Money tab")
+      await flow.shot(sales.page, 'customer-money-sales')
+
+      // Read-only reads the whole tab and finds no act.
+      const reader = await flow.desk('reader')
+      await reader.go(`/sales/customers/${customer}?tab=money`)
+      const readTab = reader.page.locator('.fw-om')
+      await seen(readTab.locator('.fw-om-head').first(), 60_000)
+      for (const name of [...acts, OD('moneyTab.plan.act.MOVE_DUE'), OD('moneyTab.plan.act.waive')]) await expect(readTab.getByRole('button', { name, exact: true }), name).toHaveCount(0)
+      await expect(readTab).not.toContainText('€')
+      await flow.shot(reader.page, 'customer-money-read-only')
+    })
+    // ---- end F-CM T.3
   },
 })
