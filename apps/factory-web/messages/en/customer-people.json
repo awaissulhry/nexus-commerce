@@ -17,6 +17,8 @@
     },
     "addresses_one": "{count} address",
     "addresses_other": "{count} addresses",
+    "noAddress": "no address yet",
+    "nobody": "Nobody yet",
     "riders_one": "{count} rider",
     "riders_other": "{count} riders",
     "riderOf": "rider of {team}",
