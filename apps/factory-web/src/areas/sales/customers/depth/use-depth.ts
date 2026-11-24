@@ -26,7 +26,6 @@ import {
   replaceRequirement,
   searchStyles,
   setLawfulBasis,
-  setPoNumberRequired,
   type CompanyTerms,
   type Glance,
   type Hold,
@@ -49,8 +48,6 @@ import {
   holdDraftProblem,
   holdRefusal,
   LOADING,
-  poChanges,
-  poRows,
   privacyRefusal,
   problemOf,
   ready,
@@ -60,7 +57,6 @@ import {
   requirementRefusal,
   todayOf,
   objectionAt, // F-CA-228
-  valueOf,
   wordsProblem,
   type HoldDialog,
   type Notice,
@@ -140,6 +136,13 @@ export function useCustomerDepth(partyId: string) {
   useEffect(() => () => (pending.current ? clearTimeout(pending.current) : undefined), [])
 
   const [notice, setNotice] = useState<Notice>(null)
+  // F-CT-401 (customer Terms & requirements, ct-w1 W1.4; 18-lead-settles Z5): the notice of the hold, PO and requirement acts made on
+  // Terms — drawn in the record's ONE notice area there (TermsNotices); `notice` is then the personal-data acts' only (People's line).
+  const [termsNotice, setTermsNotice] = useState<Notice>(null)
+  const actNotice = (next: Notice) => {
+    if (tab === 'terms') setTermsNotice(next)
+  }
+  // F-CT-401: end
 
   // ---- Tax & terms › Hold ----
   const [holdDialog, setHoldDialog] = useState<HoldDialog | null>(null)
@@ -161,50 +164,15 @@ export function useCustomerDepth(partyId: string) {
           : await releaseHold(api, partyId, dialog.hold.id, { version: dialog.hold.version, words: dialog.draft.words.trim() }, newIdempotencyKey())
       setHolds(ready(answer))
       setHoldDialog(null)
-      setNotice({ tone: 'success', words: { key: dialog.kind === 'place' ? 'hold.placed' : 'hold.released' } })
-      void loadGlance()
+      actNotice({ tone: 'success', words: { key: dialog.kind === 'place' ? 'hold.placed' : 'hold.released' } }) // F-CT-401 (Z5)
+      if (tab !== 'terms') void loadGlance() // F-CT-401: the glance is Money's and the Overview's (Terms draws the holds read itself)
     } catch (error) {
       setHoldDialog({ ...dialog, busy: false, failed: holdRefusal(error), tried: true })
       if (isApiError(error) && error.kind === 'conflict') void loadHolds()
     }
   }
-  const toggleHold = (on: boolean) => {
-    const read = valueOf(holds)
-    if (!read) return
-    if (on) openPlace()
-    else {
-      const inForce = read.holds.filter((hold) => hold.inForce)
-      if (inForce.length === 1) openRelease(inForce[0]!)
-    }
-  }
-
-  // ---- Customer PO number required ----
-  const [poDraft, setPoDraft] = useState<Readonly<Record<string, boolean>>>({})
-  const [poSaving, setPoSaving] = useState(false)
-  const [poFailed, setPoFailed] = useState<string | null>(null)
-  const savePo = async () => {
-    const read = valueOf(terms)
-    if (!read || poSaving) return
-    const changes = poChanges(poRows(read), poDraft)
-    if (changes.length === 0) {
-      setPoDraft({})
-      return
-    }
-    setPoSaving(true)
-    setPoFailed(null)
-    try {
-      let answer: CompanyTerms = read
-      for (const row of changes) answer = await setPoNumberRequired(api, partyId, row.companyId, { ...(row.version !== null ? { version: row.version } : {}), poNumberRequired: poDraft[row.companyId]! }, newIdempotencyKey())
-      setTerms(ready(answer))
-      setPoDraft({})
-      setNotice({ tone: 'success', words: { key: 'po.saved', params: { count: changes.length } } })
-    } catch (error) {
-      setPoFailed(problemOf(error))
-      void loadTerms()
-    } finally {
-      setPoSaving(false)
-    }
-  }
+  // F-CT-401 (ct-w1 W1.4): the hold's on/off switch went (Put on hold… / Release… are the acts, S1); the PO rule is ONE PUT per act and
+  // company from the tab's own company window (record/terms/use-terms-tab.ts) — its answer lands here (`terms.onAnswer`), no loop.
 
   // ---- Requirements ----
   const [reqDialog, setReqDialog] = useState<RequirementDialog | null>(null)
@@ -246,8 +214,8 @@ export function useCustomerDepth(partyId: string) {
             : await addRequirement(api, partyId, requirementBody(dialog.draft), newIdempotencyKey())
       setRequirements(ready(answer))
       setReqDialog(null)
-      setNotice({ tone: 'success', words: { key: `req.done.${dialog.kind}` } })
-      void loadGlance()
+      actNotice({ tone: 'success', words: { key: `req.done.${dialog.kind}` } }) // F-CT-401 (Z5)
+      if (tab !== 'terms') void loadGlance() // F-CT-401
     } catch (error) {
       setReqDialog({ ...dialog, busy: false, failed: requirementRefusal(error), tried: true })
       if (isApiError(error) && error.kind === 'conflict') void loadRequirements()
@@ -311,28 +279,23 @@ export function useCustomerDepth(partyId: string) {
       reloadParty.current = reload
     },
     glance: { read: glance, onRetry: () => void loadGlance() },
+    // F-CT-401 (Z5): the notice of the acts made on Terms.
+    termsNotice,
+    onDismissTermsNotice: () => setTermsNotice(null),
     holds: {
       read: holds,
       dialog: holdDialog,
       onPlace: openPlace,
       onRelease: openRelease,
-      onToggle: toggleHold,
       onDraft: (dialog: HoldDialog) => setHoldDialog(dialog),
       onConfirm: () => void confirmHold(),
       onClose: () => setHoldDialog(null),
       onRetry: () => void loadHolds(),
     },
-    po: {
+    // F-CT-401 (ct-w1 W1.4): the terms per company — the ONE read (Terms; W2.3: Money and the Overview), and a write's answer kept.
+    terms: {
       read: terms,
-      draft: poDraft,
-      saving: poSaving,
-      failed: poFailed,
-      onToggle: (company: string, on: boolean) => setPoDraft((current) => ({ ...current, [company]: on })),
-      onSave: () => void savePo(),
-      onDiscard: () => {
-        setPoDraft({})
-        setPoFailed(null)
-      },
+      onAnswer: (answer: CompanyTerms) => setTerms(ready(answer)),
       onRetry: () => void loadTerms(),
     },
     requirements: {

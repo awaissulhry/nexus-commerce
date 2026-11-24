@@ -59,6 +59,8 @@ export function CustomerRecordView({
   quotesTabNote, // F-CQ-306
   moneyTab, // F-CM-104
   moneyTabNote, // F-CM-104
+  termsTab, // F-CT-406
+  termsNotice, // F-CT-406
 }: {
   model: PartyRecordModel
   actions?: PartyRecordActions
@@ -107,11 +109,16 @@ export function CustomerRecordView({
   moneyTab?: ReactNode
   /** F-CM-104 (Z27): the reader asked for Money, a tab it may not open: the Work tab shows, with one line why. */
   moneyTabNote?: boolean
+  // F-CT-406 (customer page › Terms & requirements, lane ct-; 13-backend §6.4): the tab (drawn by the container or a design case) and its
+  // notices in the record's ONE notice area.
+  termsTab?: ReactNode
+  termsNotice?: ReactNode
+  // F-CT-406: end
 }) {
   return (
     <WithMessages namespaces={[CUSTOMER_MONEY_NAMESPACE]}>
       <PartiesMessages>
-        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} overviewTab={overviewTab /* F-CO-103 */} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} peopleTab={peopleTab /* F-CA-119 */} peopleBadge={peopleBadge /* F-CA-119 */} peopleNotice={peopleNotice /* F-CA-119 */} work={work} workCount={workCount} quotesIncoming={quotesIncoming} threadButton={threadButton ?? null} onNewOrder={onNewOrder} onImport={onImport} priceDiffer={priceDiffer ?? null /* F-CP-141 */} quotesBadge={quotesBadge /* F-CQ-302 */} quotesTabNote={quotesTabNote /* F-CQ-306 */} moneyTab={moneyTab /* F-CM-104 */} moneyTabNote={moneyTabNote /* F-CM-104 */} />
+        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} overviewTab={overviewTab /* F-CO-103 */} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} peopleTab={peopleTab /* F-CA-119 */} peopleBadge={peopleBadge /* F-CA-119 */} peopleNotice={peopleNotice /* F-CA-119 */} work={work} workCount={workCount} quotesIncoming={quotesIncoming} threadButton={threadButton ?? null} onNewOrder={onNewOrder} onImport={onImport} priceDiffer={priceDiffer ?? null /* F-CP-141 */} quotesBadge={quotesBadge /* F-CQ-302 */} quotesTabNote={quotesTabNote /* F-CQ-306 */} moneyTab={moneyTab /* F-CM-104 */} moneyTabNote={moneyTabNote /* F-CM-104 */} termsTab={termsTab /* F-CT-406 */} termsNotice={termsNotice /* F-CT-406 */} />
       </PartiesMessages>
     </WithMessages>
   )
@@ -143,6 +150,8 @@ interface CustomerProps {
   quotesTabNote?: boolean // F-CQ-306: the reader asked for Quotes & incoming, a tab it may not open (the page shows Work)
   moneyTab?: ReactNode // F-CM-104
   moneyTabNote?: boolean // F-CM-104 (Z27)
+  termsTab?: ReactNode // F-CT-406
+  termsNotice?: ReactNode // F-CT-406
 }
 
 function Customer(props: CustomerProps) {
@@ -211,7 +220,7 @@ function ScrollOnArrival({ id }: { id: string }) {
   return null
 }
 
-function CustomerBody({ model, party, actions, thread, printThread, overviewTab /* F-CO-103 */, terms, portal, depth, onAddTask, taskDialog, money: moneyModel, peopleTab, peopleBadge, peopleNotice /* F-CA-119 */, work, workCount, quotesIncoming, threadButton /* F-SA-279 */, onNewOrder, onImport /* F-CP-104 */, quotesBadge /* F-CQ-302 */, quotesTabNote /* F-CQ-306 */, moneyTab /* F-CM-104 */, moneyTabNote /* F-CM-104 */ }: CustomerProps & { party: Party }) {
+function CustomerBody({ model, party, actions, thread, printThread, overviewTab /* F-CO-103 */, portal, depth, onAddTask, taskDialog, money: moneyModel, peopleTab, peopleBadge, peopleNotice /* F-CA-119 */, work, workCount, quotesIncoming, threadButton /* F-SA-279 */, onNewOrder, onImport /* F-CP-104 */, quotesBadge /* F-CQ-302 */, quotesTabNote /* F-CQ-306 */, moneyTab /* F-CM-104 */, moneyTabNote /* F-CM-104 */, termsTab, termsNotice /* F-CT-406 */ }: CustomerProps & { party: Party }) {
   const t = useT('parties')
   const side = model.side
   const config = SIDES[side]
@@ -287,7 +296,8 @@ function CustomerBody({ model, party, actions, thread, printThread, overviewTab 
         // F-CM-104 (customer Money plan D2, the Owner's pick): Money a third too (865 px at 1440, the order's Money room); People, Terms
         // and Portal stay 40 %.
         // F-CA-119 (customer People plan D2, the Owner's pick 2026-11-24): People a third too (865 px at 1440); Terms and Portal stay 40 %.
-        defaultWidth={tab === 'work' || tab === 'quotes' || tab === 'overview' || tab === 'money' || tab === 'people' ? 'third' : undefined}
+        // F-CT-406 (customer Terms plan D3, the Owner's pick 2026-11-24): Terms a third too (865 px at 1440); Portal stays 40 %.
+        defaultWidth={tab === 'work' || tab === 'quotes' || tab === 'overview' || tab === 'money' || tab === 'people' || tab === 'terms' ? 'third' : undefined}
         dockTab={tab}
         threadButton={threadButton ?? null}
       >
@@ -298,7 +308,8 @@ function CustomerBody({ model, party, actions, thread, printThread, overviewTab 
           {/* F-CO-103 (plan §6.7): on the Overview the headline and the first strip say Blocked / Archived — its notice area keeps the
               receipt, "someone else changed" and "You can view, not change"; every other tab keeps the shared notice area whole. */}
           {/* F-CA-119 (Z15): People's own notices (an address checked, a portal act) in the same ONE notice area. */}
-          {tab === 'overview' ? <OverviewNotices model={model} party={party} actions={actions} /> : <PartyNotices model={model} party={party} actions={actions}>{tab === 'people' ? peopleNotice : null}</PartyNotices>}
+          {/* F-CT-406 (Z5): Terms' own notices (a window saved, a hold placed or released, a requirement's act) there too. */}
+          {tab === 'overview' ? <OverviewNotices model={model} party={party} actions={actions} /> : <PartyNotices model={model} party={party} actions={actions}>{tab === 'people' ? peopleNotice : tab === 'terms' ? termsNotice : null}</PartyNotices>}
 
           {/* F-SA-276: Work — the waiting strip and the Orders sheet locked to the customer (no tabs inside the tab, R5). */}
           {/* F-CQ-306 (cq fx3 W2-1b; 10-design §10): asked for Quotes & incoming without its right, the page shows Work and says why once. */}
@@ -316,25 +327,11 @@ function CustomerBody({ model, party, actions, thread, printThread, overviewTab 
               ca-w2, today's riders / profiles and personal-data cards under them): cu/record/view/people/PeopleTab.tsx. */}
           {tab === 'people' && peopleTab}
           {tab === 'terms' && (
-            // F-SA-272: Terms & requirements — an anchor line (in-page jumps, not tabs), then the Commercial terms first (the most used),
-            // the hold and PO number required (B-W2b-324), the requirements in force, the tax identity and VIES.
+            // F-CT-406 (customer page › Terms & requirements, lane ct-; 10-design §1, §7): the tab — the answer line, Hold (always first) and
+            // Commercial terms (the container's: cu/record/view/terms/TermsTab.tsx; the anchor line went: the answer line's chips are the
+            // doors); today's Requirements and Tax identity cards stand under it until ct-w2 (their ids are the doors' addresses).
             <div className="fw-pty-stack">
-              <nav className="fw-pty-actions" aria-label={t('customers.anchor.label')}>
-                {terms && <a className="fw-pty-link" href="#party-commercial">{t('customers.anchor.commercial')}</a>}
-                {depth?.tax && <a className="fw-pty-link" href="#party-hold">{t('customers.anchor.hold')}</a>}
-                {depth?.requirements && <a className="fw-pty-link" href="#party-requirements">{t('customers.requirementsLabel')}</a>}
-                <a className="fw-pty-link" href="#party-identity">{t('customers.anchor.identity')}</a>
-              </nav>
-              {terms && (
-                <section id="party-commercial" className="fw-pty-anchor" aria-label={t('customers.anchor.commercial')}>
-                  {terms}
-                </section>
-              )}
-              {depth?.tax && (
-                <section id="party-hold" className="fw-pty-anchor" aria-label={t('customers.anchor.hold')}>
-                  {depth.tax}
-                </section>
-              )}
+              {termsTab}
               {depth?.requirements && (
                 <section id="party-requirements" className="fw-pty-anchor" aria-label={t('customers.requirementsLabel')}>
                   {depth.requirements}

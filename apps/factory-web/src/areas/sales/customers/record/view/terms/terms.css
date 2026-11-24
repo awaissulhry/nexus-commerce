@@ -1,0 +1,107 @@
+/*
+ * F-CT-310 (customer page › TERMS & REQUIREMENTS tab, lane ct-; 10-design §1, §8; 18-lead-settles Z21) — ONLY what is new for the tab,
+ * in its own `fw-ctr-*` classes (the prefix `fw-ct-` is taken by cu/terms/terms.css and Production › Cutting), tokens only. Every
+ * other look is the Production kit's (production.css: Section, InfoTip, PartReading, PartFailed, Quiet, .fw-pt-h3, .fw-pt-blk,
+ * .fw-pt-hint, .fw-pt-link), Money's Facts (money.css) or a DS part's (Banner, FilterChip, Tag, Button, Menu, Modal, RadioCard,
+ * Toggle): this sheet restyles none of their classes. Every part lays out by the ROOM it has (each list, the groups and the windows
+ * are their own size containers), never the viewport.
+ *
+ *   (1) the answer line           one sentence + the chips of what waits on us (each a door to exactly its rows)
+ *   (2) shared bits               a value with its sub-lines and source, the quiet "none", a fold's place, the foot
+ *   (3) Commercial terms          How it pays · Ordering rules · Delivery STACKED (Z21: side by side left 47–114 px holes); the width
+ *                                 is spent inside each group (Money's facts join one column at a time)
+ *   (4) THE lists                 one row shape per list (holds · waiting quotes · companies · ended rows); columns join as the
+ *                                 LIST grows: S < 560 (blocks) · M ≥ 560 / ≥ 640 (columns and a head row)
+ *   (5) the windows' insides      the DS Modal draws the frame (it is portaled: these classes stand on their own)
+ */
+
+/* (1) the answer line */
+.fw-ctr-ans { min-width: 0; }
+.fw-ctr-ans-t { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
+.fw-ctr-chips { display: flex; flex-wrap: wrap; gap: var(--nds-space-6); align-items: center; margin-top: var(--nds-space-6); min-width: 0; }
+.fw-ctr-chips > button { white-space: normal; text-align: left; }
+.fw-ctr-chips > button svg { flex: none; margin-right: var(--nds-space-4); vertical-align: -2px; }
+.fw-ctr-chips > button.is-warning svg { color: var(--nds-warning); }
+.fw-ctr-chips > button.is-danger svg { color: var(--nds-danger); }
+
+/* (2) shared bits */
+.fw-ctr-val { display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-2); min-width: 0; }
+.fw-ctr-sub { font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); line-height: 1.45; overflow-wrap: anywhere; }
+.fw-ctr-none { font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+.fw-ctr-src { display: flex; flex-wrap: wrap; gap: var(--nds-space-4); margin-top: var(--nds-space-2); }
+.fw-ctr-name { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-4) var(--nds-space-8); min-width: 0; }
+.fw-ctr-name > b { font-size: var(--nds-font-size-sm-plus); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); overflow-wrap: anywhere; }
+.fw-ctr-name svg { flex: none; vertical-align: -2px; }
+.fw-ctr-foldw { display: flex; }
+.fw-ctr-foot { margin: 0; display: flex; gap: var(--nds-space-6); align-items: flex-start; font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); line-height: 1.45; }
+.fw-ctr-foot > svg { flex: none; margin-top: 1px; }
+
+/* (3) Commercial terms: three groups STACKED; inside each, Money's facts join one column at a time as the room grows */
+.fw-ctr-gw { container: ctg / inline-size; min-width: 0; }
+.fw-ctr-grp { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-14); }
+.fw-ctr-g { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
+.fw-ctr-g.is-order, .fw-ctr-g.is-deliv { padding-top: var(--nds-space-12); border-top: 1px solid var(--nds-border-subtle); }
+.fw-ctr-wpo { display: flex; flex-direction: column; gap: var(--nds-space-4); margin-top: var(--nds-space-4); }
+.fw-ctr-wi { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-4); font-size: var(--nds-font-size-sm); color: var(--nds-warning-text); padding: 2px 4px; scroll-margin-top: 96px; }
+.fw-ctr-wi > svg { flex: none; }
+.fw-ctr-wi.is-mark { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-lg); }
+
+/* (4) THE lists: S < 560 (blocks) · M ≥ 560 (columns + a head row) — of the LIST's own width */
+.fw-ctr-ls { container: ctls / inline-size; display: flex; flex-direction: column; min-width: 0; }
+.fw-ctr-row, .fw-ctr-hd { gap: var(--nds-space-4) var(--nds-space-14); align-items: start; min-width: 0; }
+.fw-ctr-row { display: grid; padding: var(--nds-space-10) var(--nds-space-2); border-bottom: 1px solid var(--nds-border-subtle); scroll-margin-top: 96px; }
+.fw-ctr-row:last-child { border-bottom: 0; }
+.fw-ctr-row > div { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-2); font-size: var(--nds-font-size-sm); }
+.fw-ctr-row.is-mark { background: var(--nds-wash-primary); border-radius: var(--nds-radius-lg); }
+.fw-ctr-hd { display: none; padding: 0 var(--nds-space-2) var(--nds-space-6); border-bottom: 1px solid var(--nds-border); font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-muted); }
+.fw-ctr-row > .fw-ctr-o { align-items: flex-end; }
+
+/* holds in force: reason | why | since | Release… | ⋯ */
+.fw-ctr-row.is-h { grid-template-columns: minmax(0, 1fr) 44px; grid-template-areas: "who o" "why why" "when when" "act act"; }
+.fw-ctr-who { grid-area: who; }
+.fw-ctr-why { grid-area: why; }
+.fw-ctr-when { grid-area: when; }
+.fw-ctr-act { grid-area: act; }
+.fw-ctr-o { grid-area: o; }
+@container ctls (min-width: 560px) {
+  .fw-ctr-row.is-h, .fw-ctr-hd.is-h { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.7fr) minmax(0, 0.8fr) auto 44px; grid-template-areas: "who why when act o"; }
+  .fw-ctr-hd.is-h { display: grid; }
+  .fw-ctr-row.is-h > .fw-ctr-act { align-items: flex-end; }
+}
+
+/* the accepted quotes that wait: the quote | their PO | company | why */
+.fw-ctr-row.is-w { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding-block: var(--nds-space-6); }
+@container ctls (min-width: 560px) { .fw-ctr-row.is-w { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr); align-items: center; } }
+
+/* the terms with each company: company | payment terms | price list | deposit | PO number | ⋯ */
+.fw-ctr-row.is-c { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px; grid-template-areas: "co co o" "pt pl o" "dep po o"; }
+.fw-ctr-co { grid-area: co; }
+.fw-ctr-pt { grid-area: pt; }
+.fw-ctr-pl { grid-area: pl; }
+.fw-ctr-dep { grid-area: dep; }
+.fw-ctr-po { grid-area: po; }
+@container ctls (min-width: 640px) {
+  .fw-ctr-row.is-c, .fw-ctr-hd.is-c { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 0.75fr) minmax(0, 0.9fr) 44px; grid-template-areas: "co pt pl dep po o"; }
+  .fw-ctr-hd.is-c { display: grid; }
+}
+
+/* ended / released rows: one block of words */
+.fw-ctr-row.is-e { grid-template-columns: minmax(0, 1fr); padding-block: var(--nds-space-8); }
+.fw-ctr-row.is-e > div > span:not(.fw-ctr-sub):not(.fw-ctr-name) { color: var(--nds-text-2); }
+
+/* (5) the windows' insides */
+.fw-ctr-win { container: ctw / inline-size; display: flex; flex-direction: column; gap: var(--nds-space-14); min-width: 0; margin: 0; padding: 0; border: 0; }
+.fw-ctr-fgrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-12) var(--nds-space-16); min-width: 0; }
+@container ctw (min-width: 520px) { .fw-ctr-fgrid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.fw-ctr-fs { display: flex; flex-direction: column; gap: var(--nds-space-6); min-width: 0; margin: 0; padding: 0; border: 0; }
+.fw-ctr-legend { padding: 0; margin-bottom: var(--nds-space-2); font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-strong); }
+.fw-ctr-who-line { margin: 0; display: flex; gap: var(--nds-space-6); align-items: flex-start; font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); line-height: 1.45; }
+.fw-ctr-who-line > svg { flex: none; margin-top: 1px; }
+.fw-ctr-fnote { font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); flex: 1 1 220px; min-width: 0; }
+.fw-ctr-err { margin: 0; font-size: var(--nds-font-size-xs); color: var(--nds-danger-text); }
+.fw-ctr-sw { display: flex; gap: var(--nds-space-10); align-items: flex-start; padding: var(--nds-space-10) var(--nds-space-12); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-lg); background: var(--nds-surface); }
+.fw-ctr-sw > span { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; font-size: var(--nds-font-size-sm); }
+.fw-ctr-p { margin: 0; font-size: var(--nds-font-size-sm); color: var(--nds-text); line-height: 1.5; }
+.fw-ctr-lines { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--nds-space-6); }
+.fw-ctr-lines > li { padding: var(--nds-space-8) var(--nds-space-10); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg); background: var(--nds-surface-raised); font-size: var(--nds-font-size-sm); color: var(--nds-text-2); line-height: 1.5; }
+.fw-ctr-lines > li.is-warning { border-left: 3px solid var(--nds-warning); background: var(--nds-warning-soft); color: var(--nds-warning-text); }

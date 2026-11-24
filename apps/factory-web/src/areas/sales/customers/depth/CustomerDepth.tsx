@@ -7,11 +7,9 @@ import type { SupplierDepth } from '../../../parties/_shared/view/PartyRecordVie
 import { WithMessages } from '../../../../record-panels/i18n'
 import { NS } from './model'
 import { useCustomerDepth, type CustomerDepthState } from './use-depth'
-import { HoldCard } from './view/HoldCard'
 import { HoldDialogView } from './view/HoldCard' // F-CM-301: Money's Credit & terms opens the same window
-import { NoticeLine } from './view/parts'
-import { PoNumberCard } from './view/PoNumberCard'
 import { RequirementsTab } from './view/RequirementsTab'
+import type { TermsDepth } from '../record/terms/use-terms-tab' // F-CT-402: the Terms & requirements tab's part of the provider
 import './depth.css'
 
 /** The catalogues every part of the customer's depth reads. */
@@ -68,6 +66,28 @@ export function useCustomerHold(party: Party): { readonly place: () => void; rea
 }
 // ---- end F-CM-301
 
+// ---- F-CT-402 (customer Terms & requirements, ct-w1 W1.4; 13-backend §6.5; Z5): the tab's part of the provider — its ONE holds,
+// company-terms and requirements reads (Money and the Overview read them too), the hold window (HoldDialogView, the one Money opens:
+// one state), a company-terms write's answer kept here, and the notice of the acts made on Terms. No second read of any of it.
+export function useCustomerTerms(party: Party | null | undefined): TermsDepth | null {
+  const state = useDepth()
+  const { prefix } = useAddresses()
+  if (!party) return null
+  return {
+    holds: state.holds.read,
+    companyTerms: state.terms.read,
+    requirements: state.requirements.read,
+    hold: { model: { read: state.holds.read, can: state.can, status: party.status, prefix, dialog: state.holds.dialog, companies: state.companies }, actions: state.holds },
+    onCompanyTerms: state.terms.onAnswer,
+    onRetryHolds: state.holds.onRetry,
+    onRetryCompanyTerms: state.terms.onRetry,
+    onRetryRequirements: state.requirements.onRetry,
+    notice: state.termsNotice,
+    onDismissNotice: state.onDismissTermsNotice,
+  }
+}
+// ---- end F-CT-402
+
 /** `/w/<company>` of the office addresses, from the page's path. */
 function useAddresses(): { prefix: string } {
   const pathname = usePathname() ?? ''
@@ -79,12 +99,13 @@ function useAddresses(): { prefix: string } {
  * connector to the state above. F-CO-203 (co-w2 W2.3): the Overview's old parts (the key-number tiles, Now's samples and repairs,
  * the status card, the side panel) went — the Overview's own rules read the glance (`useCustomerGlance` above).
  */
-export function customerDepthSlot(party: Party, reload: () => void): SupplierDepth {
+export function customerDepthSlot(party: Party): SupplierDepth {
   // F-CA-229 (customer People & addresses ca-w2 W2.5): People's riders / profiles card and its personal-data card went — the tab's own
   // Riders & measurements and Personal data sections draw them (cu/record/view/people), the personal-data windows through
   // useCustomerPrivacy. Terms & requirements keeps its two parts.
+  // F-CT-402 (ct-w1 W1.4): the hold and PO-number cards went — the tab's Hold and Commercial terms sections draw them; Requirements
+  // stays until ct-w2. The record's reload reaches the state through useCustomerPrivacy (the page calls it on every tab).
   return {
-    tax: <TaxPart party={party} reload={reload} />,
     requirements: <RequirementsPart party={party} />,
   }
 }
@@ -100,25 +121,11 @@ function useSync(reload?: () => void) {
   return state
 }
 
-function TaxPart({ party, reload }: { party: Party; reload: () => void }) {
-  const state = useSync(reload)
-  const { prefix } = useAddresses()
-  return (
-    <div className="fw-cdp-stack">
-      <NoticeLine notice={state.notice} onDismiss={state.onDismissNotice} />
-      <div className="fw-cdp-two-wide">
-        <HoldCard model={{ read: state.holds.read, can: state.can, status: party.status, prefix, dialog: state.holds.dialog, companies: state.companies }} actions={state.holds} />
-        <PoNumberCard model={{ read: state.po.read, can: state.can, status: party.status, draft: state.po.draft, saving: state.po.saving, failed: state.po.failed }} actions={state.po} />
-      </div>
-    </div>
-  )
-}
-
 function RequirementsPart({ party }: { party: Party }) {
   const state = useDepth()
   return (
+    // F-CT-402 (Z5): the requirement acts' notice is the record's ONE notice area's on Terms (TermsNotices), no second line here.
     <div className="fw-cdp-stack">
-      <NoticeLine notice={state.notice} onDismiss={state.onDismissNotice} />
       <RequirementsTab
         model={{ read: state.requirements.read, can: state.can, status: party.status, dialog: state.requirements.dialog, styles: state.requirements.styles, files: state.requirements.files, companies: state.companies }}
         actions={state.requirements}

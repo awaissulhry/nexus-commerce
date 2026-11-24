@@ -109,26 +109,39 @@ export const WITHHELD: Partial<Glance> = { promises: null, credit: null, samples
 
 // ---- holds, terms ------------------------------------------------------------------------------------------------------
 
+// F-CT-201 (customer Terms & requirements, ct-w1 W1.2): every field of the widened read — S3's `mayRelease`, S4's `waitsFor` and counts.
 export const HOLDS: Holds = {
   onHold: true,
   holds: [
-    { id: uid('g324', 2), companyId: null, company: null, reason: 'QUALITY_DISPUTE', words: 'Waiting for the answer on the September claim (made-up).', inForce: true, placedAt: at(28, 14), placedBy: 'Alex Demo', releasedAt: null, releasedBy: null, releaseWords: null, version: 1 },
-    { id: uid('g324', 3), companyId: COMPANY.id, company: { code: COMPANY.code, name: COMPANY.name }, reason: 'CREDIT', words: 'Two invoices overdue in August (made-up).', inForce: false, placedAt: at(2, 8), placedBy: null, releasedAt: at(9, 11), releasedBy: 'Bea Esempio', releaseWords: 'Paid in full on 9 Oct (made-up).', version: 2 },
+    { id: uid('g324', 2), companyId: null, company: null, reason: 'QUALITY_DISPUTE', words: 'Waiting for the answer on the September claim (made-up).', inForce: true, placedAt: at(28, 14), placedBy: 'Alex Demo', releasedAt: null, releasedBy: null, releaseWords: null, version: 1, mayRelease: true },
+    { id: uid('g324', 3), companyId: COMPANY.id, company: { code: COMPANY.code, name: COMPANY.name }, reason: 'CREDIT', words: 'Two invoices overdue in August (made-up).', inForce: false, placedAt: at(2, 8), placedBy: null, releasedAt: at(9, 11), releasedBy: 'Bea Esempio', releaseWords: 'Paid in full on 9 Oct (made-up).', version: 2, mayRelease: false },
   ],
-  ordersWaiting: [{ quoteId: uid('h324', 1), number: 'Q-2026-0118', revision: 2, quoteVersionId: uid('h324', 2), companyId: COMPANY.id, customerRef: null }],
+  ordersWaiting: [{ quoteId: uid('h324', 1), number: 'Q-2026-0118', revision: 2, quoteVersionId: uid('h324', 2), companyId: COMPANY.id, customerRef: null, waitsFor: 'ACCOUNT_ON_HOLD' }],
   mayPlace: true,
+  ordersWaitingCount: { onHold: 1, poNumber: 0, other: 0 },
 }
-export const NO_HOLDS: Holds = { onHold: false, holds: [], ordersWaiting: [], mayPlace: true }
+export const NO_HOLDS: Holds = { onHold: false, holds: [], ordersWaiting: [], mayPlace: true, ordersWaitingCount: { onHold: 0, poNumber: 0, other: 0 } }
 export const TWO_HOLDS: Holds = {
   ...HOLDS,
-  holds: [HOLDS.holds[0]!, { ...HOLDS.holds[1]!, id: uid('g324', 4), reason: 'LEGAL', words: 'Contract wording under review (made-up).', inForce: true, releasedAt: null, releasedBy: null, releaseWords: null, version: 1 }],
+  holds: [HOLDS.holds[0]!, { ...HOLDS.holds[1]!, id: uid('g324', 4), reason: 'LEGAL', words: 'Contract wording under review (made-up).', inForce: true, releasedAt: null, releasedBy: null, releaseWords: null, version: 1, mayRelease: true }],
 }
 
+// F-CT-201 (ct-w1 W1.2): the company-terms read in FULL (every field of the server's view; S5's named terms in force).
+const OWN_IN_FORCE = { paymentTermsId: null, paymentTermsText: null, priceListId: null, depositPct: null, source: { paymentTerms: 'PARTY', priceList: 'PARTY', deposit: 'PARTY' }, paymentTerms: null, priceList: null } as const
 export const TERMS: CompanyTerms = {
+  partyId: MODA.id,
+  code: MODA.code,
   tenantWide: true,
+  partyVersion: MODA.version,
   companies: [
-    { company: COMPANY, terms: { id: uid('i324', 1), companyId: COMPANY.id, poNumberRequired: true, setBy: 'Alex Demo', setAt: at(15, 10), version: 2 }, inForce: { poNumberRequired: true }, mayChange: true },
-    { company: OTHER, terms: null, inForce: { poNumberRequired: false }, mayChange: true },
+    {
+      company: COMPANY,
+      terms: { id: uid('i324', 1), companyId: COMPANY.id, paymentTermsId: null, paymentTermsLabel: null, paymentTermsText: null, priceListId: null, priceListLabel: null, depositPct: null, poNumberRequired: true, creditLimitAmount: null, creditLimitCurrency: null, setBy: 'Alex Demo', setAt: at(15, 10), endedAt: null, endedBy: null, version: 2 },
+      inForce: { ...OWN_IN_FORCE, poNumberRequired: true },
+      mayChange: true,
+      history: [],
+    },
+    { company: OTHER, terms: null, inForce: { ...OWN_IN_FORCE, poNumberRequired: false }, mayChange: true, history: [] },
   ],
 }
 
@@ -152,6 +165,7 @@ const requirement = (n: number, over: Partial<Requirement>): Requirement => ({
   endedBy: null,
   endReason: null,
   version: 1,
+  mayChange: true, // F-CT-201 (ct-s S3)
   ...over,
 })
 export const REQUIREMENTS: Requirements = {
@@ -160,7 +174,8 @@ export const REQUIREMENTS: Requirements = {
     requirement(2, { kind: 'DOCUMENT', companyId: null, companyCode: null, words: 'The routing guide travels with every pallet (made-up).', appliesAt: ['SHIPMENT'], file: { id: uid('j324', 1), fileName: 'Routing guide demo.pdf' } }),
     requirement(3, { kind: 'LABEL', words: 'Care label in Italian and German for the track jacket (made-up).', appliesAt: ['QUOTE', 'ORDER'], everyStyle: false, styles: [{ id: uid('b324', 1), code: 'JKT-DEMO-01', name: 'Giacca Demo Pista' }], supersedesId: uid('f324', 4), createdAt: at(20, 9) }),
   ],
-  ended: [requirement(4, { kind: 'LABEL', words: 'Care label in Italian only (made-up).', appliesAt: ['QUOTE', 'ORDER'], active: false, endedAt: at(20, 9), endedBy: 'Alex Demo', endReason: 'German added for the new market (made-up).', version: 2 })],
+  ended: [requirement(4, { kind: 'LABEL', words: 'Care label in Italian only (made-up).', appliesAt: ['QUOTE', 'ORDER'], active: false, endedAt: at(20, 9), endedBy: 'Alex Demo', endReason: 'German added for the new market (made-up).', version: 2, mayChange: false })],
+  mayAdd: true, // F-CT-201 (ct-s S3)
 }
 export const STYLES: readonly StyleOption[] = [
   { id: uid('b324', 1), code: 'JKT-DEMO-01', name: 'Giacca Demo Pista' },

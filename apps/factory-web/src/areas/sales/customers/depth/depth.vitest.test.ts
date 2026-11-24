@@ -213,6 +213,11 @@ describe('every word in both languages', () => {
       for (const match of readFileSync(file, 'utf8').matchAll(/(?:\bt|say)\('([a-zA-Z]+(?:\.[a-zA-Z]+)+)'/g)) keys.add(match[1]!)
       for (const match of readFileSync(file, 'utf8').matchAll(/key: '([a-zA-Z]+(?:\.[a-zA-Z]+)+)'/g)) keys.add(match[1]!)
     }
+    // F-CT-407 (customer Terms & requirements, ct-w1 W1.4; Z18): the scan also reads the tab's new folders — this catalogue's words they
+    // say (`said('sales-customers-depth:…')`; their own keys are another catalogue's) — so a part that moves there still counts; the
+    // threshold is kept.
+    const terms = ['../record/terms', '../record/view/terms'].flatMap((folder) => readdirSync(join(__dirname, folder)).filter((name) => /\.tsx?$/.test(name) && !name.includes('.test.')).map((name) => join(__dirname, folder, name)))
+    for (const file of terms) for (const match of readFileSync(file, 'utf8').matchAll(/said\(\s*'sales-customers-depth:([a-zA-Z]+(?:\.[a-zA-Z]+)+)'/g)) keys.add(match[1]!)
     expect(keys.size).toBeGreaterThan(150)
     for (const locale of LOCALES) {
       const t = catalogue(locale)
