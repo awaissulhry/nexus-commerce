@@ -694,8 +694,8 @@ describe('the page mounts the tab (W1.4)', () => {
 
   it('the record builds the container on every tab (it reads only on Terms) and the view only on ?tab=terms; the old card left the slot', () => {
     const cr = source('../CustomerRecord.tsx')
-    expect(cr).toContain("const terms = useTermsTab({ partyId, party: record.party, model: record.model, reload: record.reload, depth: termsDepth, enabled: tab === 'terms' })")
-    expect(cr).toContain("const termsTab = named && record.party && tab === 'terms' ? <TermsTab model={terms.model} actions={terms.actions} hold={terms.hold} /> : null")
+    expect(cr).toContain("const terms = useTermsTab({ partyId, party: record.party, model: record.model, reload: record.reload, actions: record.actions /* F-CT-516 */, moreHistory: record.moreHistory, depth: termsDepth, enabled: tab === 'terms' })")
+    expect(cr).toContain("const termsTab = named && record.party && tab === 'terms' ? <TermsTab model={terms.model} actions={terms.actions} hold={terms.hold} requirements={terms.requirementsWindow /* F-CT-508 */} /> : null")
     expect(cr).toContain('const termsNotice = <TermsNotices notices={terms.notices} />')
     expect(cr).not.toMatch(/CommercialTerms\b|terms: \(party, reload\)/)
     // People's notice line is untouched (Z5: the depth's notice is split instead).
@@ -1009,13 +1009,14 @@ describe('the old parts went; the supplier\'s record stays as it was (W2.4; D1)'
   it('the list\'s office chip opens Tax identity & e-invoice; the words nothing says any more went, in both languages', () => {
     expect(read('../../list/columns.tsx')).toContain("href={`${recordHref(prefix, SIDES.customers, row.id, 'terms')}#party-identity`")
     for (const locale of LOCALES) {
-      const words = (ns: string) => JSON.stringify(messagesFor(locale, [ns])[ns] ?? {})
-      expect(words('parties'), locale).not.toMatch(/"notApplicable"|"recheck"/)
-      expect(JSON.parse(words('parties')).customers.anchor ?? {}, locale).not.toHaveProperty('identity')
-      const depth = JSON.parse(words('sales-customers-depth'))
-      expect(Object.keys(depth.po ?? {}), locale).toEqual(expect.not.arrayContaining(['toggle', 'save', 'setBy']))
-      expect(Object.keys(depth.hold ?? {}), locale).toEqual(expect.not.arrayContaining(['toggle', 'toggleMany', 'on', 'off']))
-      expect(JSON.parse(words('customer-terms')).termsField ?? {}, locale).not.toHaveProperty('carrier')
+      // ct-w2 lead fix: the catalogues are FLAT maps ("vies.notApplicable"), so the keys are checked as they are — each a real check.
+      const keys = (ns: string): string[] => Object.keys(messagesFor(locale, [ns])[ns] ?? {})
+      expect(keys('parties').length, locale).toBeGreaterThan(400)
+      expect(keys('parties').filter((key) => /\.(notApplicable|recheck)$/.test(key) || key.startsWith('customers.anchor.')), locale).toEqual([])
+      expect(keys('sales-customers-depth').filter((key) => ['po.toggle', 'po.save', 'po.setBy', 'hold.toggle', 'hold.toggleMany', 'hold.on', 'hold.off'].includes(key)), locale).toEqual([])
+      expect(keys('sales-customers-depth').length, locale).toBeGreaterThan(50)
+      expect(keys('customer-terms'), locale).not.toContain('termsField.carrier')
+      expect(keys('customer-terms'), locale).toContain('termsField.paymentTerms')
     }
   })
 })

@@ -159,11 +159,6 @@
       "importOrders": "Importa ordini per {customer}…",
       "workOrders": "Ordini di lavoro di {customer} ›"
     },
-    "anchor": {
-      "label": "Parti di Condizioni e requisiti",
-      "commercial": "Condizioni commerciali",
-      "hold": "Blocco e numero d’ordine del cliente"
-    },
     "work": {
       "strip": {
         "label": "Cosa aspetta",

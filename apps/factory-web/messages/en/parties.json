@@ -159,11 +159,6 @@
       "importOrders": "Import orders for {customer}…",
       "workOrders": "Work orders of {customer} ›"
     },
-    "anchor": {
-      "label": "Parts of Terms & requirements",
-      "commercial": "Commercial terms",
-      "hold": "Hold and PO number"
-    },
     "work": {
       "strip": {
         "label": "What waits",
