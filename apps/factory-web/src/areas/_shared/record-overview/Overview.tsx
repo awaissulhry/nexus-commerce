@@ -15,7 +15,8 @@ import './record-overview.css'
  * page: a part has NO look prop; a page hands it data and doors (a ReactNode), nothing else. A part owns its stylesheet (this file
  * imports it), fetches nothing, imports no area and speaks only its own catalogue (`record-overview`). Each part emits the DOM the
  * order's Overview drew by hand before it moved here; the Overview-only class names are kept (fw-so-overview, fw-so-ov-*,
- * fw-so-where*, fw-so-headline), the text classes a part draws are the kit's own (fw-ro-*).
+ * fw-so-where*, fw-so-headline; F-CO-K2: fw-so-strip*, fw-so-fact*, fw-so-rq-*), the text classes a part draws are the kit's own
+ * (fw-ro-*).
  *
  * The frame (F-CO-K1): `Overview` (the tab's column and the room its pairs read), `OverviewPair` (two cards side by side from
  * 720 px of the Overview, one below; a card alone takes the row), `OverviewCard` (the card with its title), `Headline` (the lead

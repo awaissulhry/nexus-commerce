@@ -424,6 +424,7 @@ describe('the /design/record-overview lab', () => {
     expect(html('overview').match(/<div class="fw-so-overview"><div class="nds-card pad fw-so-where">/g)).toHaveLength(LAB_WIDTHS.length)
     expect(html('overview').match(/<div class="fw-so-ov-pair">/g)).toHaveLength(2 * LAB_WIDTHS.length)
   })
+
   // F-CO-K2: the rows' cases show what their names say (in each of the three rooms).
   it('the rows\' cases: the strips, the ONE list, the facts, the groups — and Italian words in Italian', () => {
     const html = (id: string, locale: Locale = 'en'): string => drawnOf(id, locale)
