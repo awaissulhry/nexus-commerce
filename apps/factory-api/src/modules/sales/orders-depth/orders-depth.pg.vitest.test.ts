@@ -469,6 +469,25 @@ describe('several orders from one quote (SAL-201)', () => {
   })
 })
 
+// ---- F-CA-S3 (ca-s S.3; R-B11): the confirmation's default recipient is never an archived contact --------------------------
+
+describe("the confirmation's default recipient (R-B11)", () => {
+  it('an archived quote contact: the oldest ACTIVE orders contact with an e-mail gets the confirmation', async () => {
+    const left = `left.buyer.${run}@example.com`
+    const added = await ok('sales', 'POST', `/parties/${p1}/contacts`, { name: 'Made-up Buyer Who Left', email: left, roles: ['ORDERS'] }, 201)
+    const contact = (added.party.contacts as Json[]).find((row) => row.email === left)!
+    // The order's quote names that contact (made up past the guards), then the contact leaves (archived on the People tab).
+    const row = await orderRow(fromQuote.id)
+    await force(`UPDATE "Quote" SET "contactId" = $2 WHERE id = (SELECT "quoteId" FROM "QuoteVersion" WHERE id = $1)`, [row.quoteVersionId, contact.id])
+    await ok('sales', 'PATCH', `/parties/${p1}/contacts/${contact.id}`, { version: contact.version, status: 'ARCHIVED' })
+    const sent = await ok('owner', 'POST', `/sales/orders/${fromQuote.id}/confirmation/send`, {}, 201)
+    const outbound = await one<Json>(`SELECT "to" FROM "EmailOutbound" WHERE id = $1`, [sent.outboundId])
+    // SEED-C1's buyer: its oldest ACTIVE ORDERS contact with an e-mail (the seeds'), never the archived one.
+    expect(outbound.to).toEqual(['buyer.p1@example.com'])
+  })
+})
+// ---- F-CA-S3 end ---------------------------------------------------------------------------------------------------------------
+
 // ---- import orders from a sheet (SAL-215) -------------------------------------------------------------------------------------
 
 const sha256 = (body: Buffer): string => createHash('sha256').update(body).digest('hex')

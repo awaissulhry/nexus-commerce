@@ -95,9 +95,11 @@ export async function confirmAccept(caller: CommandCaller, ids: AcceptedIds, cau
     if (!version || version.status !== 'ACCEPTED') throw new InvalidStateError('The quote version is not accepted.')
     const quote = await tx.quote.findUniqueOrThrow({ where: { id: ids.quoteId }, select: { companyId: true, number: true, contactId: true } })
     const acceptance = await tx.quoteAcceptance.findFirstOrThrow({ where: { versionId: version.id }, select: { signerName: true, acceptedAt: true } })
-    const contact = quote.contactId ? await tx.partyContact.findUnique({ where: { id: quote.contactId }, select: { email: true } }) : null
+    const contact = quote.contactId ? await tx.partyContact.findUnique({ where: { id: quote.contactId }, select: { email: true, status: true, erasedAt: true } }) : null
     const link = await tx.quoteAcceptance.findFirst({ where: { versionId: version.id }, select: { link: { select: { email: true } } } })
-    const to = link?.link?.email ?? contact?.email ?? null
+    // F-CA-S3 (ca-s S.3; R-B11): the link's address first (the person who accepted); the quote's contact only while it is
+    // ACTIVE and not erased — an archived or erased contact is never mailed by default (no address: audited, not mailed).
+    const to = link?.link?.email ?? (contact && contact.status === 'ACTIVE' && contact.erasedAt === null ? contact.email : null) ?? null
     const language = version.language === 'en' ? 'en' : 'it'
     const number = quoteDocumentNumber(quote.number, version.revision)
     const deposit = await depositOfVersion(tx, version.id)

@@ -307,9 +307,14 @@ export async function sendConfirmation(files: FilesRuntime, caller: CommandCalle
   const prepared = await prepare(files, caller, order, body.language)
   const recipient = await caller.withClient(async (db) => {
     const version = order.quoteVersionId ? await db.quoteVersion.findUnique({ where: { id: order.quoteVersionId }, select: { quote: { select: { contactId: true } } } }) : null
-    const contact = version?.quote.contactId
-      ? await db.partyContact.findUnique({ where: { id: version.quote.contactId }, select: { name: true, email: true } })
-      : await db.partyContact.findFirst({ where: { partyId: order.partyId, status: 'ACTIVE', roles: { has: 'ORDERS' }, email: { not: null } }, select: { name: true, email: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
+    // F-CA-S3 (ca-s S.3; R-B11): the quote's contact only while it is ACTIVE and not erased (the delay notice's own check,
+    // planning/promise-keep/store.ts recipientsOf); else the oldest ACTIVE ORDERS contact with an e-mail, as a typed order.
+    const quoted = version?.quote.contactId ? await db.partyContact.findUnique({ where: { id: version.quote.contactId }, select: { name: true, email: true, status: true, erasedAt: true } }) : null
+    const contact =
+      quoted && quoted.status === 'ACTIVE' && quoted.erasedAt === null
+        ? { name: quoted.name, email: quoted.email }
+        : await db.partyContact.findFirst({ where: { partyId: order.partyId, status: 'ACTIVE', erasedAt: null, roles: { has: 'ORDERS' }, email: { not: null } }, select: { name: true, email: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
+    // F-CA-S3 end
     const sender = await db.user.findUnique({ where: { id: context.actorId }, select: { id: true, displayName: true, email: true } })
     return { contact, sender }
   })
