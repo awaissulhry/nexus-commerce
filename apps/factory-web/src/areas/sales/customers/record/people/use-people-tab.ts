@@ -13,6 +13,7 @@ import { getProductionLimits } from '../../../../admin/users/partners/api'
 import { partnerCan, personReach, type RowAction } from '../../../../admin/users/partners/model'
 import { usePortalAccess } from '../../portal/PortalAccess'
 import type { PortalAccessActions, PortalAccessModel } from '../../portal/model'
+import { queryWithoutInvite } from '../../portal/model' // F-CA-fx5 (walk W-11)
 import type { Privacy, PrivacyContact } from '../../depth/api'
 import { listProfiles, listTemplates, type ProfilesView, type TemplateOption } from '../../../mtm/api' // F-CA-204
 import { mtmCan, recordHref } from '../../../mtm/model' // F-CA-208
@@ -191,9 +192,12 @@ export function usePeopleTab(input: PeopleTabInput): PeopleTabContainer {
     if (arrived.current) return
     arrived.current = true
     const add = search?.get('add')
-    if (add) {
-      if (editable && (add === 'contact' || add === 'address')) recordActions.onDialog?.(add === 'contact' ? { kind: 'contact' } : { kind: 'address' })
-      const next = new URLSearchParams(search?.toString() ?? '')
+    // F-CA-fx5 (walk W-11): a reader who reads no portal here (no partners.view) never reads `?invite=`: it leaves the address now, with
+    // `&add=`; for every other reader the portal hook reads it once the people are read, then drops it (with or without the right).
+    const left = can.portal ? null : queryWithoutInvite(search?.toString() ?? '')
+    if (add || left !== null) {
+      if (add && editable && (add === 'contact' || add === 'address')) recordActions.onDialog?.(add === 'contact' ? { kind: 'contact' } : { kind: 'address' })
+      const next = new URLSearchParams(left ?? search?.toString() ?? '')
       next.delete('add')
       const query = next.toString()
       router.replace(`${pathname}${query ? `?${query}` : ''}${typeof window === 'undefined' ? '' : window.location.hash}`, { scroll: false })

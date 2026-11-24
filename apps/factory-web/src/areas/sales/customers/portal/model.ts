@@ -102,3 +102,17 @@ export const personOf = (model: Pick<PortalAccessModel, 'access'>, userId: strin
 
 /** Suppliers and workshops never see a price (Owner answer C2): their tab has no prices column, one line says so. */
 export const showsPrices = (access: Pick<PortalAccess, 'kinds'>) => access.kinds.includes('CUSTOMER') || access.kinds.includes('GUEST')
+
+// ---- F-CA-fx5 (customer People & addresses, walk W-11): the address `?invite=<e-mail>&inviteName=` is read ONCE on arrival — with the
+// right to invite it opens the invitation, without it nothing — and then the address leaves it (as People's `&add=`): a reload or a
+// copied address never asks again.
+export const INVITE_PARAMS = ['invite', 'inviteName'] as const
+
+/** The query without `invite` and `inviteName`; null: it holds neither (the address asks nothing). */
+export function queryWithoutInvite(query: string): string | null {
+  const next = new URLSearchParams(query)
+  if (!INVITE_PARAMS.some((name) => next.has(name))) return null
+  for (const name of INVITE_PARAMS) next.delete(name)
+  return next.toString()
+}
+// ---- end F-CA-fx5
