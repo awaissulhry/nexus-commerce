@@ -37,7 +37,6 @@ import type { PoNumberModel } from '../depth/view/PoNumberCard'
 // ---- F-CT-408 (customer page › Terms & requirements, lane ct-; 13-backend §6.8): the tab's own parts — its ONE model rule, its view,
 // the Change terms… window's inside (an edit case draws it under the tab: never a Modal open here), its notices.
 import { Card } from '@nexus/ui/components'
-import { useLocale } from '../../../../lib/i18n/provider'
 import type { CarrierAccount } from './terms/api'
 import { said, termsCan, TERMS_TAB_NAMESPACES } from './terms/model'
 import { TERMS_TAB_START, termsTabModel, type TermsTabReads } from './terms/tab'
