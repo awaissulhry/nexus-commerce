@@ -29,6 +29,13 @@ import { languageName } from '../../../../_shared/reasons/model'
 export type CommandDialogModel = Pick<OrderRecordModel, 'busy' | 'draft' | 'can' | 'dialogProblem' | 'cancelCheck' | 'prefix'>
 export type CommandDialogActions = Pick<OrderRecordActions, 'onDialog' | 'onReady' | 'onClose' | 'onCancelOrder' | 'onRetryPart'>
 // ---- end F-CP-108
+// ---- F-CM-k2 (customer MONEY tab, 13-backend §4.1; the F-CP-108 way): TYPE ONLY — the money windows (Send the page…, Record a payment…,
+// Send to SDI… here; Money's own in money/view/MoneyDialogs.tsx) read only these parts of the record's model and actions, so the money
+// door (record/money/door) mounts THESE windows on the customer's Money tab, never a copy. The record passes its whole model and actions,
+// as before: nothing here changes what they do.
+export type MoneyDialogModel = Pick<OrderRecordModel, 'busy' | 'draft' | 'can' | 'dialog' | 'dialogProblem' | 'today' | 'schedule' | 'scheduleSteps' | 'settlement' | 'moneyPlan' | 'sentLink' | 'recorded' | 'margin' | 'priceCheck'>
+export type MoneyDialogActions = Pick<OrderRecordActions, 'onDialog' | 'onSendLink' | 'onRecordPayment' | 'onSendSdi' | 'scheduleSteps' | 'onPlanPreview' | 'onPlanAct' | 'onUndoPayment' | 'onPriceAccept' | 'onPriceUnaccept' | 'onCostLineAdd' | 'onCostLineRemove' | 'onMarginTarget' | 'onStopPage'>
+// ---- end F-CM-k2
 
 /**
  * The order studio's dialogs: Change promise date (the order or chosen lines, the reason; the first promise never
@@ -286,7 +293,7 @@ export /* F-CP-108 */ function CloseDialog({ order, model, actions }: { order: O
   )
 }
 
-function LinkDialog({ order, requestId, model, actions }: { order: Order; requestId: string; model: OrderRecordModel; actions?: OrderRecordActions }) {
+export /* F-CM-k2 */ function LinkDialog({ order, requestId, model, actions }: { order: Order; requestId: string; model: MoneyDialogModel; actions?: MoneyDialogActions } /* F-CM-k2: type only */) {
   const t = useT('orders')
   const locale = useLocale()
   const request = order.chain.depositRequests.find((entry) => entry.id === requestId)
@@ -342,7 +349,7 @@ function LinkDialog({ order, requestId, model, actions }: { order: Order; reques
   )
 }
 
-function PaymentDialog({ order, requestId, model, actions }: { order: Order; requestId: string; model: OrderRecordModel; actions?: OrderRecordActions }) {
+export /* F-CM-k2 */ function PaymentDialog({ order, requestId, model, actions }: { order: Order; requestId: string; model: MoneyDialogModel; actions?: MoneyDialogActions } /* F-CM-k2: type only */) {
   const t = useT('orders')
   const locale = useLocale()
   const request = order.chain.depositRequests.find((entry) => entry.id === requestId)
@@ -431,7 +438,7 @@ function PaymentDialog({ order, requestId, model, actions }: { order: Order; req
   )
 }
 
-function SdiDialog({ order, invoiceId, model, actions }: { order: Order; invoiceId: string; model: OrderRecordModel; actions?: OrderRecordActions }) {
+function SdiDialog({ order, invoiceId, model, actions }: { order: Order; invoiceId: string; model: MoneyDialogModel; actions?: MoneyDialogActions } /* F-CM-k2: type only */) {
   const t = useT('orders')
   const locale = useLocale()
   const invoice = order.chain.invoices.find((entry) => entry.id === invoiceId)
