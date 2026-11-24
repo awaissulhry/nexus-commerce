@@ -13,6 +13,7 @@ import { getProductionLimits } from '../../../../admin/users/partners/api'
 import { partnerCan, personReach, type RowAction } from '../../../../admin/users/partners/model'
 import { usePortalAccess } from '../../portal/PortalAccess'
 import type { PortalAccessActions, PortalAccessModel } from '../../portal/model'
+import { queryWithoutInvite } from '../../portal/model' // F-CA-fx5 (walk W-11)
 import type { Privacy, PrivacyContact } from '../../depth/api'
 import { listProfiles, listTemplates, type ProfilesView, type TemplateOption } from '../../../mtm/api' // F-CA-204
 import { mtmCan, recordHref } from '../../../mtm/model' // F-CA-208
@@ -24,7 +25,7 @@ import { readProblem } from '../../../orders/model'
 import { approveDeliveryAddress, createRider, readPartyUsage, readRiders, refuseDeliveryAddress, setRiderTeam, type PartyUsage, type RidersView } from './api'
 import type { PeopleChip } from './answer'
 import { addressShort, addressText, type AddressAct, type AddressRow } from './addresses'
-import { addressAnchor, failedRead, peopleCan, personAnchor, READING, readyRead, said, valueOf, type Read } from './model'
+import { addressAnchor, failedRead, peopleCan, personAnchor, READING, readyRead, readsSettled /* F-CA-fx5 */, said, valueOf, type Read } from './model'
 import type { PersonAct, PersonRow } from './people'
 import { riderAnchor, type RiderAct, type RiderRow } from './riders' // F-CA-208
 import { addRiderProblem, PEOPLE_TAB_START, peopleTabModel, teamProblem, type AddRiderDialog, type FoundParty, type TeamDialog, type PeopleMtm, type PeopleNotice, type PeopleNotices, type PeopleTabActions, type PeopleTabModel, type PeopleTabState } from './tab'
@@ -182,26 +183,57 @@ export function usePeopleTab(input: PeopleTabInput): PeopleTabContainer {
   const router = useRouter()
   const pathname = usePathname()
   const arrived = useRef(false)
+  const landing = useRef<string | null>(null) // F-CA-fx5 (walk W-03; Z26): the anchor a door asked for, until the tab's reads settle
   const editable = can.manage && party?.status !== 'ARCHIVED'
   useEffect(() => {
     if (!on) {
       arrived.current = false
+      landing.current = null // F-CA-fx5
       return
     }
     if (arrived.current) return
     arrived.current = true
     const add = search?.get('add')
-    if (add) {
-      if (editable && (add === 'contact' || add === 'address')) recordActions.onDialog?.(add === 'contact' ? { kind: 'contact' } : { kind: 'address' })
-      const next = new URLSearchParams(search?.toString() ?? '')
+    // F-CA-fx5 (walk W-11): a reader who reads no portal here (no partners.view) never reads `?invite=`: it leaves the address now, with
+    // `&add=`; for every other reader the portal hook reads it once the people are read, then drops it (with or without the right).
+    const left = can.portal ? null : queryWithoutInvite(search?.toString() ?? '')
+    if (add || left !== null) {
+      if (add && editable && (add === 'contact' || add === 'address')) recordActions.onDialog?.(add === 'contact' ? { kind: 'contact' } : { kind: 'address' })
+      const next = new URLSearchParams(left ?? search?.toString() ?? '')
       next.delete('add')
       const query = next.toString()
       router.replace(`${pathname}${query ? `?${query}` : ''}${typeof window === 'undefined' ? '' : window.location.hash}`, { scroll: false })
     }
     const hash = typeof window === 'undefined' ? '' : window.location.hash.slice(1)
-    if (hash) requestAnimationFrame(() => document.getElementById(decodeURIComponent(hash))?.scrollIntoView({ block: 'start' }))
+    if (hash) {
+      const target = decodeURIComponent(hash)
+      landing.current = target // F-CA-fx5: lands again once the reads settle (below)
+      requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ block: 'start' }))
+    }
     // Once per visit of the tab, after the party is read.
   }, [on])
+  // ---- F-CA-fx5 (walk W-03; 18-lead-settles Z26): the parts above a section grow while their reads land (the portal's rows, the usage
+  // lines, the riders), so the door lands ONCE more when every read the tab started has answered (ready or failed) — unless the reader
+  // moved first (a wheel, a touch, a key, a press): then their place wins and nothing scrolls.
+  const settled = readsSettled([usage ?? READING, riders ?? READING, can.measurements ? (profiles ?? READING) : null, input.privacy ?? READING, can.portal && !portal.model.access && !portal.model.problem ? READING : null])
+  useEffect(() => {
+    if (!on) return
+    const moved = () => {
+      landing.current = null
+    }
+    const kinds = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const
+    for (const kind of kinds) window.addEventListener(kind, moved, { capture: true, passive: true })
+    return () => {
+      for (const kind of kinds) window.removeEventListener(kind, moved, { capture: true })
+    }
+  }, [on])
+  useEffect(() => {
+    const target = landing.current
+    if (!on || !settled || !target) return
+    landing.current = null
+    requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ block: 'start' }))
+  }, [on, settled])
+  // ---- end F-CA-fx5
 
   // ---- the check of an address added in the portal (orders.manage)
   const failedWrite = (error: unknown) => {
