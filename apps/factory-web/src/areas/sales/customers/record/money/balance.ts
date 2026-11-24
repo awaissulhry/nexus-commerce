@@ -4,7 +4,7 @@ import type { Loaded } from '../../../../parties/_shared/model'
 import type { CustomerMoneyModel } from '../../money/overview'
 import { customerTabHref, priceDifferHref, receivablesHref, workOpenOrdersHref } from './doors'
 import { figuresOf, standingOf, type CurrencyFigures } from './head'
-import { daysLateOf, isReading, orderProblemOf, partReady, READING, type MoneyTabCan, type MoneyTabInput, type OpenItemsRead, type Part } from './model'
+import { daysFrom, daysLateOf, isReading, orderProblemOf, partReady, paymentTermsOf, READING, type MoneyTabCan, type MoneyTabInput, type OpenItemsRead, type Part } from './model'
 
 /**
  * F-CM-104 (customer page › MONEY tab, 10-design §5.1; 18-lead-settles Z4, Z11, Z24) — section 1, Balance (#balance): the figures in
@@ -161,8 +161,10 @@ export function needsOf(input: MoneyTabInput, figures: readonly CurrencyFigures[
   }
   // 7 shipped, not invoiced (invoices.view).
   const shipped = input.can.invoices ? (input.shipped?.value ?? null) : null
+  // M-11 (cm-fx4): an "invoice by" day already past is said as past ("… 13 days ago") and is danger.
+  const pastBy = shipped?.invoiceBy ? daysFrom(shipped.invoiceBy, input.today) : 0
   if (shipped && shipped.shipments > 0)
-    out.push({ code: 'shipped', tone: 'warning', words: shipped.invoiceBy ? word('cm.needs.shippedBy', { params: { count: shipped.shipments }, days: { date: shipped.invoiceBy } }) : word('cm.needs.shipped', { params: { count: shipped.shipments } }), down: 'invoices', fallback: { kind: 'href', href: `${prefix}/finance/invoices`, label: word('cm.door.finance') } /* W1.5: every count a door — Finance › Invoices until the section is drawn (cm-w2) */ })
+    out.push({ code: 'shipped', tone: pastBy > 0 ? 'danger' : 'warning', words: shipped.invoiceBy ? (pastBy > 0 ? word('cm.needs.shippedByPast', { params: { count: shipped.shipments }, days: { date: shipped.invoiceBy }, words: { ago: word('cm.daysAgo', { params: { count: pastBy } }) } }) : word('cm.needs.shippedBy', { params: { count: shipped.shipments }, days: { date: shipped.invoiceBy } })) : word('cm.needs.shipped', { params: { count: shipped.shipments } }), down: 'invoices', fallback: { kind: 'href', href: `${prefix}/finance/invoices`, label: word('cm.door.finance') } /* W1.5: every count a door — Finance › Invoices until the section is drawn (cm-w2) */ })
   // 8 can't be invoiced yet (Z32): the party read's own block — the Overview strip's source, no read of its own; its home is Terms.
   if (input.party.invoiceBlocked) {
     const why = (input.party.blocking ?? [])[0]
@@ -184,12 +186,15 @@ export function balanceOf(input: MoneyTabInput, prefix: string): BalanceModel {
   const needs = reading ? [] : needsOf(input, figures, prefix)
   const counts: MoneyWord[] = []
   const open = sumOf(figures.map((entry) => entry.openInvoices))
-  const late = sumOf(figures.map((entry) => entry.lateInvoices ?? 0)) + sumOf(figures.map((entry) => entry.requestsLate))
+  // M-9 (cm-fx4): what is late is said for what it is — invoices late beside the invoices, deposits late beside the deposits.
+  const lateInvoices = sumOf(figures.map((entry) => entry.lateInvoices ?? 0))
+  const lateRequests = sumOf(figures.map((entry) => entry.requestsLate))
   const asked = sumOf(figures.map((entry) => entry.requests))
   const back = sumOf(figures.map((entry) => entry.toGiveBack))
   if (open > 0) counts.push(word('finance-receivables:tiles.invoices', { params: { count: open } }))
-  if (late > 0) counts.push(word('cm.answer.lateCount', { params: { count: late } }))
+  if (lateInvoices > 0) counts.push(word('cm.answer.invoicesLate', { params: { count: lateInvoices } }))
   if (asked > 0) counts.push(word('cm.answer.depositsWords', { params: { count: asked } }))
+  if (lateRequests > 0) counts.push(word('cm.answer.depositsLate', { params: { count: lateRequests } }))
   if (figures.some((entry) => entry.onAccount)) counts.push(word('cm.answer.onAccountWords'))
   if (back > 0) counts.push(word('cm.answer.refundsWords', { params: { count: back } }))
   const ordered = input.summary?.value?.all.orders.count ?? null
@@ -211,7 +216,11 @@ export function balanceOf(input: MoneyTabInput, prefix: string): BalanceModel {
   const facts: Fact[] = []
   const last = lastPaymentOf(input.ageing?.value ?? null)
   if (input.can.receivables && last) facts.push({ key: 'lastPayment', label: word('finance-receivables:col.lastPayment'), value: word('cm.day', { days: { date: last } }) })
-  facts.push({ key: 'paymentTerms', label: word('tab.paymentTerms'), value: input.party.paymentTerms ? word('cm.text', { params: { text: input.party.paymentTerms } }) : word('cm.balance.noTerms') })
+  // M-2 (cm-fx4): the payment terms from the ONE helper Credit & terms uses — said once its read has answered (never one text, then another).
+  if (!(input.terms && isReading(input.terms))) {
+    const terms = paymentTermsOf(input.terms?.value ?? null, input.party)
+    facts.push({ key: 'paymentTerms', label: word('tab.paymentTerms'), value: terms ? word('cm.text', { params: { text: terms } }) : word('cm.balance.noTerms') })
+  }
   if (!input.can.price && notInvoiced !== null && notInvoiced > 0)
     facts.push({ key: 'notInvoiced', label: word('cm.balance.notInvoiced'), value: word('cm.balance.ordersDoor', { params: { count: notInvoiced } }), href: workOpenOrdersHref(prefix, input.party.id) })
   return {
