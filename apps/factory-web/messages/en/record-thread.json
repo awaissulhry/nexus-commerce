@@ -39,7 +39,9 @@
     "openAgain": "Open again: the thread is back in the work lists.",
     "doneFailed": "Done could not be changed. Try again.",
     "outOfReach": "That message is out of your reach.",
-    "viewAll": "Showing all messages"
+    "viewAll": "Showing all messages",
+    "textCopied": "Text copied.",
+    "textFailed": "The text could not be copied: this browser does not allow it here."
   },
   "pane": {
     "label": "Reading pane",

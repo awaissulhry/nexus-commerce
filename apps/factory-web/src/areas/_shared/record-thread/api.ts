@@ -40,6 +40,18 @@ export const officeMessageSchema = messageSchema.extend({
   skippedAttachments: z.array(skippedSchema).optional(),
   // F-SA-265 (B-SA-061): office only — the part of its order the message is about (null: none, or a work order out of the reader's reach).
   about: z.object({ kind: z.string(), id: z.string() }).nullable().optional(),
+  // tw- W2.2 (tw-s part 7; B7, Z2): office only — an INBOUND email's headers and sender checks (null: no mail row). The verdicts stay
+  // strings here (an unknown one is "not checked", never a failed read): the Email details window says each in words.
+  mail: z
+    .object({
+      from: z.object({ address: z.string().nullable(), name: z.string().nullable() }),
+      to: z.array(z.string()),
+      cc: z.array(z.string()),
+      subject: z.string().nullable(),
+      verdicts: z.object({ spf: z.string(), dkim: z.string(), dmarc: z.string() }),
+    })
+    .nullable()
+    .optional(),
 })
 export type OfficeMessage = z.infer<typeof officeMessageSchema>
 export const waitingMailSchema = z.object({ count: z.number().int(), reasons: z.array(z.string()), mayReview: z.boolean() })

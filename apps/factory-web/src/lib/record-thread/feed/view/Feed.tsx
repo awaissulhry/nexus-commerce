@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { ChevronDown, Lock, MailOpen, Pin, WifiOff } from 'lucide-react'
 // B-TH-255: the pills of what the View hides and of the mail that waits for a person.
 import { EyeOff, MailWarning } from 'lucide-react'
@@ -76,7 +76,7 @@ const FLOAT_MS = 1200
  * reader is higher up, with the count of what arrived below (nothing jumps under the pointer); a jump lights the whole row. J / K walk
  * the messages and R answers the focused one while the feed has the focus. Draws its model; the container reads and re-reads.
  */
-export function Feed({ model, actions, remind }: { model: FeedModel; actions?: FeedActions; remind?: (messageId: string) => ReactNode }) {
+export function Feed({ model, actions }: { model: FeedModel; actions?: FeedActions }) {
   const t = useT('record-thread-feed')
   const locale = useLocale()
   const [shownChanges, setShownChanges] = useState<ReadonlySet<string>>(new Set())
@@ -395,7 +395,6 @@ export function Feed({ model, actions, remind }: { model: FeedModel; actions?: F
                 today={today}
                 context={model.context}
                 actions={actions}
-                remind={remind}
                 paper={model.paper === true}
                 flash={row.kind === 'message' ? flashOf(row.message.id) : null}
                 showChanges={shownChanges.has(row.key)}
@@ -445,7 +444,6 @@ function Row({
   today,
   context,
   actions,
-  remind,
   paper,
   flash,
   showChanges,
@@ -457,7 +455,6 @@ function Row({
   today: string
   context: CardContext
   actions?: FeedActions
-  remind?: (messageId: string) => ReactNode
   paper: boolean
   flash: { seq: number; onEnd: () => void } | null
   showChanges: boolean
@@ -484,7 +481,7 @@ function Row({
   if (row.kind === 'message') {
     return (
       <div className="fw-rt-feed-item" data-day={dayText(dayOf(row.message.at), today, locale, t)}>
-        <MessageCard message={row.message} context={context} actions={actions} remind={remind?.(row.message.id)} run={row.run} flash={flash} paper={paper} />
+        <MessageCard message={row.message} context={context} actions={actions} run={row.run} flash={flash} paper={paper} />
       </div>
     )
   }

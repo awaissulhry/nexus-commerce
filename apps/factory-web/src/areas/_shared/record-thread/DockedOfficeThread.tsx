@@ -152,7 +152,7 @@ const latestOf = (files: readonly ThreadFile[]): ThreadFile[] => fileSeries(file
  * (W06, W08, W24, W25, W34): Ask and Share reach only this record's party (the dialogs and the API check it again), the files are this
  * record's only, the @ list is office readers only (B-TH-208).
  */
-export function DockedOfficeThread(props: { host: DockedHost; model: RecordThreadModel; actions: RecordThreadActions; base: RecordThreadBase; reminder: { mine: { remindAt: string | null; followUp?: boolean | undefined } | null; open: (messageId: string | null) => void; dialog: ReactNode }; remind?: (messageId: string) => ReactNode }) {
+export function DockedOfficeThread(props: { host: DockedHost; model: RecordThreadModel; actions: RecordThreadActions; base: RecordThreadBase; reminder: { mine: { remindAt: string | null; followUp?: boolean | undefined } | null; open: (messageId: string | null) => void; dialog: ReactNode } }) {
   return (
     <WithMessages namespaces={NAMESPACES}>
       <Docked {...props} />
@@ -160,7 +160,7 @@ export function DockedOfficeThread(props: { host: DockedHost; model: RecordThrea
   )
 }
 
-function Docked({ host, model, actions, base, reminder, remind }: { host: DockedHost; model: RecordThreadModel; actions: RecordThreadActions; base: RecordThreadBase; reminder: { mine: { remindAt: string | null; followUp?: boolean | undefined } | null; open: (messageId: string | null) => void; dialog: ReactNode }; remind?: (messageId: string) => ReactNode }) {
+function Docked({ host, model, actions, base, reminder }: { host: DockedHost; model: RecordThreadModel; actions: RecordThreadActions; base: RecordThreadBase; reminder: { mine: { remindAt: string | null; followUp?: boolean | undefined } | null; open: (messageId: string | null) => void; dialog: ReactNode } }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const locale = useLocale()
@@ -1068,5 +1068,5 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
 
   const helpers = mayReply ? <SavedReplies model={{ ...replies, held: offline ? th('held.offline') : null }} onPick={pickReply} onRetry={() => setRepliesSeq((value) => value + 1)} /> : null
 
-  return <RecordThread model={shownModel} actions={threadActions} remind={remind} slots={{ top: pickBand /* F-OP-202; tw- W2.1: the head's title */, head: headSlot, helpers, overlays }} />
+  return <RecordThread model={shownModel} actions={threadActions} slots={{ top: pickBand /* F-OP-202; tw- W2.1: the head's title */, head: headSlot, helpers, overlays }} />
 }

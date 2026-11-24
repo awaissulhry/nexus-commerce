@@ -38,7 +38,7 @@
     "retry": "Try again"
   },
   "original": {
-    "title": "Original e-mail",
+    "title": "Email details",
     "noSubject": "(no subject)",
     "from": "From",
     "to": "To",
@@ -66,7 +66,11 @@
     "picturesBlocked_other": "{count} pictures from the internet are not shown, so the sender cannot see that the mail was opened.",
     "showPictures": "Show pictures",
     "frame": "The e-mail as it arrived (links shown as text, nothing runs)",
-    "empty": "This mail has no text."
+    "empty": "This mail has no text.",
+    "subject": "Subject",
+    "sent": "Sent",
+    "status": "Status",
+    "asItCame": "The email as it came"
   },
   "leave": {
     "title": "Leave with unsent text?",

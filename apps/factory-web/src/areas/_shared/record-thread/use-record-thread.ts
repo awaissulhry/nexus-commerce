@@ -12,7 +12,8 @@ import type { FeedPin } from '../../../lib/record-thread/feed/model'
 import { JUMP_LIMIT, JUMP_PAGE, type OfficeMessage } from './api'
 import { barPinsOf } from '../../../lib/record-thread/head/pins-bar' // tw- W2.1: the pinned bar (Z14: every host)
 import { jumpRefusal } from './state'
-import { cardDepth } from '../../../lib/record-thread/card/model' // B-TH-255
+import { cardDepth, copyTextOf } from '../../../lib/record-thread/card/model' // B-TH-255; tw- W2.2: Copy text
+import { askRemindMe } from '../../../shell/panels/remind-me/model' // tw- W2.2: a message's Remind me
 import { startDraft, switchMode, type ComposerContext, type ComposerDraft } from '../../../lib/record-thread/composer/model'
 // TH-1c's helpers (B-TH-208) and pop-ups (B-TH-211): the draft kept on this device, @mentions, the leave guard.
 import { draftKey, mentionsIn, readDraft, writeDraft, type LocalDraft } from '../../../lib/record-thread/helpers/model'
@@ -625,6 +626,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
       canPin: can.post && offline === null,
       // tw- W1.4 (D4, Z12): Reply on every message, the way the reader may answer — an office note, the customer by email, the portal.
       replyWays: { note: can.post, email: can.email && party !== null, portal: context.portal === true },
+      // tw- W2.2: "Remind me" on a message — the reader's own reminders live on Home (home.view).
+      canRemind: held.has('home.view'),
     },
     more: server.more,
     older: server.older,
@@ -1159,6 +1162,17 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     // ---- B-TH-283 (B-TH-083): files that go up as measurement sheets.
     onSheets: (dropped) => addFiles(dropped, true),
     // ---- end B-TH-236 / B-TH-283
+    // tw- W2.2 (10-design §9): Copy text — the message's own words; said copied (or why not) as Copy link says it.
+    onCopyText: (messageId) => {
+      const words = copyTextOf(cards.find((card) => card.id === messageId) ?? {})
+      if (words === null) return
+      navigator.clipboard
+        ?.writeText(words)
+        .then(() => setNotice({ ns: 'record-thread', key: 'notice.textCopied', tone: 'success' }))
+        .catch(() => setNotice({ ns: 'record-thread', key: 'notice.textFailed', tone: 'warning' }))
+    },
+    // tw- W2.2: Remind me — the record's ONE Remind me dialog about this message (use-thread-reminder answers the window event).
+    ...(held.has('home.view') ? { onRemind: (messageId: string) => askRemindMe({ recordType: key.type, recordId: key.id, messageId }) } : {}),
     onCopyLink: (messageId) => {
       const base = host.recordHref ?? `${window.location.pathname}${window.location.search}`
       const address = `${window.location.origin}${messageLink(base, messageId)}`

@@ -39,7 +39,9 @@
     "openAgain": "Riaperta: la conversazione torna negli elenchi di lavoro.",
     "doneFailed": "Non è stato possibile cambiare «Fatta». Riprova.",
     "outOfReach": "Quel messaggio è fuori dalla tua portata.",
-    "viewAll": "Mostro tutti i messaggi"
+    "viewAll": "Mostro tutti i messaggi",
+    "textCopied": "Testo copiato.",
+    "textFailed": "Non è stato possibile copiare il testo: questo browser non lo permette qui."
   },
   "pane": {
     "label": "Riquadro di lettura",

@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, type KeyboardEvent, type ReactNode } from 'react'
+import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Banner } from '@nexus/ui/components'
 import { useT } from '../i18n/provider'
 import { AttachmentLines, AttachmentTray, ClipMenu, FromRecordPicker } from './attachments/view/AttachmentTray'
@@ -22,6 +22,10 @@ import { FollowUpTick, type FollowUpModel } from './helpers/view/FollowUp'
 import { HeadPickProvider } from './head/view/HeadPick'
 import { PinnedBar } from './head/view/PinnedBar'
 import type { BarPin } from './head/pins-bar'
+// tw- W2.2 (B7, Z2): the ONE Email details window, opened from a message's menu, for every host.
+import { emailDetailsOf, type CardMessage } from './card/model'
+import { verdictOf } from './popups/model'
+import { OriginalEmail, type OriginalEmailModel } from './popups/view/OriginalEmail'
 import './record-thread.css'
 
 export interface ThreadComposerModel {
@@ -118,16 +122,20 @@ export interface RecordThreadSlots {
  * messages while the feed has the focus. Office only (PR-15: the portal keeps the DS PartnerThread). Draws its model: the office
  * container (areas/_shared/record-thread) reads, re-reads live and sends.
  */
-export function RecordThread({ model, actions, remind, slots }: { model: RecordThreadModel; actions: RecordThreadActions; remind?: (messageId: string) => ReactNode; slots?: RecordThreadSlots }) {
+export function RecordThread({ model, actions, slots }: { model: RecordThreadModel; actions: RecordThreadActions; slots?: RecordThreadSlots }) {
   return (
     <ThreadMessages>
-      <Column model={model} actions={actions} remind={remind} slots={slots} />
+      <Column model={model} actions={actions} slots={slots} />
     </ThreadMessages>
   )
 }
 
-function Column({ model, actions, remind, slots }: { model: RecordThreadModel; actions: RecordThreadActions; remind?: (messageId: string) => ReactNode; slots?: RecordThreadSlots }) {
+function Column({ model, actions, slots }: { model: RecordThreadModel; actions: RecordThreadActions; slots?: RecordThreadSlots }) {
   const t = useT('record-thread')
+  const card = useT('record-thread-card')
+  // tw- W2.2: the message whose Email details are open (the window reads the message as the feed holds it: nothing is fetched).
+  const [detailsOf, setDetailsOf] = useState<string | null>(null)
+  const details = detailsOf ? emailWindowOf(model.feed.state === 'ready' ? model.feed.messages.find((one) => one.id === detailsOf) : undefined, card) : null
   const attach = useT('record-thread-attach')
   const send = useT('record-thread-send')
   const notice = useT(model.notice?.ns ?? 'record-thread')
@@ -192,8 +200,8 @@ function Column({ model, actions, remind, slots }: { model: RecordThreadModel; a
               actions.onCorrect?.(messageId)
               focusBox()
             },
+            onEmailDetails: (messageId) => setDetailsOf(messageId), // tw- W2.2
           }}
-          remind={remind}
         />
         {model.feed.state !== 'forbidden' && (
           <Composer
@@ -245,11 +253,30 @@ function Column({ model, actions, remind, slots }: { model: RecordThreadModel; a
           actions={{ onBack: actions.onCheckBack, onRetry: actions.onCheckRetry, onOutside: actions.onOutside, onConfirm: actions.onConfirm }}
         />
         {model.leaving && <LeaveConfirm files={composer.files.filter((file) => file.phase !== 'refused').length} onStay={actions.onStay} onDiscard={actions.onDiscard} />}
+        {details && <OriginalEmail model={details} onClose={() => setDetailsOf(null)} />}
         </HeadPickProvider>
       </section>
       {slots?.overlays}
     </>
   )
+}
+
+/** tw- W2.2: a message's Email details as the window says them (our email's state in its words; an inbound one's checks); null: none. */
+export function emailWindowOf(message: CardMessage | undefined, card: (key: string) => string): OriginalEmailModel | null {
+  const details = message ? emailDetailsOf(message) : null
+  if (!details) return null
+  return {
+    from: details.from,
+    to: details.to,
+    cc: details.cc,
+    subject: details.subject,
+    receivedAt: details.at,
+    bodyHtml: null,
+    bodyText: details.text,
+    verdicts: details.verdicts ? { spf: verdictOf(details.verdicts.spf), dkim: verdictOf(details.verdicts.dkim), dmarc: verdictOf(details.verdicts.dmarc) } : null,
+    sent: details.sent,
+    status: details.status ? card(`delivery.${details.status}`) : null,
+  }
 }
 
 /** tw- W2.1 (P19): a head of its title alone — the dock's pick — when the thread may not be read (no tools, no count). */

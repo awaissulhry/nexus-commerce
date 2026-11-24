@@ -48,3 +48,4 @@
 
 /* F-OP-127: a photo of a walk of every file, drawn whole in the viewer's window. */
 .fw-rtp-photo { display: block; max-width: 100%; max-height: min(68vh, 760px); margin: 0 auto; object-fit: contain; border-radius: var(--nds-radius-md); background: var(--nds-surface-sunken); }
+.fw-rtp-astitle { margin: var(--nds-space-4) 0 0; font-size: var(--nds-font-size-sm); font-weight: 600; color: var(--nds-text-2); }

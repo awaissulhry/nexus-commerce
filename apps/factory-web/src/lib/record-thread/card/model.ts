@@ -116,6 +116,21 @@ export interface CardMessage {
   // none (R5: never a run, never a person colour). `senderKeyOf` makes it.
   senderKey?: string
   // ---- end tw- W1.1
+  // ---- tw- W2.2 (B7, Z2; 10-design §9): office only — an INBOUND email's headers and sender checks as the mail came (tw-s part 7);
+  // null or absent: Email details says the sender, the time and the words only. And the reader's own follow-up on their message
+  // ("remind me if no answer"): the bell in its foot, for its sender only (reminders are personal).
+  mail?: CardInboundMail | null
+  followUp?: { readonly at: string } | null
+  // ---- end tw- W2.2
+}
+
+/** tw- W2.2 (Z2): an inbound email's headers and the sender checks (office read; the verdicts as the server's MAIL_VERDICTS words). */
+export interface CardInboundMail {
+  readonly from: { readonly address: string | null; readonly name: string | null }
+  readonly to: readonly string[]
+  readonly cc: readonly string[]
+  readonly subject: string | null
+  readonly verdicts: { readonly spf: string; readonly dkim: string; readonly dmarc: string }
 }
 
 // ---- B-TH-255: a file of an inbound mail that was not kept (the API's skippedAttachments; never a signature logo).
@@ -182,6 +197,8 @@ export interface CardContext {
    * Reply on the customer's message only, for a reader who may answer it (`canReply`), as before.
    */
   replyWays?: { readonly note: boolean; readonly email: boolean; readonly portal: boolean }
+  /** tw- W2.2: "Remind me" on a message — the reader's own reminders (home.view). Absent: not offered. */
+  canRemind?: boolean
 }
 
 // ── the words of a bubble's foot (tw- W1.2) ─────────────────────────────────────────────────────────────────────────
@@ -313,7 +330,10 @@ export const sizeWords = (bytes: number, intlLocale: string): string =>
 
 // ── the card's ⋯ menu (T3-F07, F09, F10) ─────────────────────────────────────────────────────────────────────────────
 
-export type CardAction = 'reply' | 'replyPrivately' | 'correct' | 'task' | 'link' | 'useOn' | 'pin' | 'unpin'
+export type CardAction = 'reply' | 'replyPrivately' | 'copyText' | 'link' | 'pin' | 'unpin' | 'remind' | 'task' | 'answer' | 'correct' | 'emailDetails' | 'useOn'
+
+/** tw- W2.2 (S8): the ONE order of a message's menu — whatever a row's right, a row keeps its place. */
+export const MENU_ORDER: readonly CardAction[] = ['reply', 'replyPrivately', 'copyText', 'link', 'pin', 'unpin', 'remind', 'task', 'answer', 'correct', 'emailDetails', 'useOn']
 
 // ---- tw- W1.1 (D4, Z12, P15; 10-design §9 "Reply keeps the audience") ------------------------------------------------------------
 /** How a reply goes: an office note, the customer by email, or the customer's portal (the composer's modes). */
@@ -354,28 +374,78 @@ export function repliesPrivately(message: Pick<CardMessage, 'kind' | 'outbox'> &
 // ---- end tw- W1.1
 
 /**
- * What the ⋯ of a card offers: Reply (tw- W1.1: on every message the reader may answer, `replyWay`; Reply privately beside it on the
- * customer's message), Make a task (where the host has tasks), Copy link to message (always: it opens the record with this message
- * in view). Remind me is the host's own part beside the menu (B-W2b-388). B-TH-236: Correct on one's own message (`correctionWay`);
- * a message on its way offers nothing yet.
+ * What a message's menu offers (tw- W2.2, 10-design §9: ONE menu, ONE order — `MENU_ORDER`; a row without its right is not drawn, never
+ * a hint line under a row): Reply (on every message the reader may answer, `replyWay`) · Reply privately (beside it on the customer's
+ * message) · Copy text (a message with words) · Copy link (always) · Pin / Unpin (for everyone) · Remind me (the reader's own reminder,
+ * home.view) · Make a task (where the host has tasks) · Answer… (the customer's ask the reader may answer now) · Correct (one's own
+ * message, by the way it went) · Email details (an email, ours or theirs) · Use on another record… (its files). A message on its way
+ * offers nothing yet; the system's line is a pill (no menu). Never Forward, Star, Delete, Edit, Message info, Report or React (R15).
+ * The view drops a row whose door the host does not give (Answer…, Remind me, Email details).
  */
 export function cardActions(
-  message: Pick<CardMessage, 'kind' | 'outbox'> & Partial<Pick<CardMessage, 'channel' | 'authorKind' | 'mine' | 'email' | 'pinned'>> & { files?: readonly Pick<CardFile, 'status'>[] },
-  context: Pick<CardContext, 'canReply' | 'canTask' | 'canUseOn' | 'canCorrect' | 'canPin' | 'replyWays'> & { readonly canReadFiles?: boolean },
+  message: Pick<CardMessage, 'kind' | 'outbox'> &
+    Partial<Pick<CardMessage, 'channel' | 'authorKind' | 'mine' | 'email' | 'pinned' | 'body' | 'erased' | 'ask'>> & { files?: readonly Pick<CardFile, 'status'>[] },
+  context: Pick<CardContext, 'canReply' | 'canTask' | 'canUseOn' | 'canCorrect' | 'canPin' | 'replyWays' | 'canRemind'> & { readonly canReadFiles?: boolean },
 ): CardAction[] {
   if (message.outbox) return []
-  const actions: CardAction[] = []
-  if (replyWay(message, context) !== null) actions.push('reply')
-  if (repliesPrivately(message, context)) actions.push('replyPrivately')
-  // B-TH-236 (B-TH-050): Correct on one's own message, by the way it went (never an edit: a new message linked to the old one).
-  if (correctionWay(message, context) !== null) actions.push('correct')
-  if (context.canTask) actions.push('task')
-  // B-TH-231: "Use on another record…" when the message has a file the reader opens and may add files elsewhere (files.upload).
-  if (context.canUseOn && context.canReadFiles && (message.files ?? []).some((file) => file.status === 'AVAILABLE')) actions.push('useOn')
+  if (message.kind === 'note' && message.authorKind === 'SYSTEM') return []
+  const offered = new Set<CardAction>()
+  if (replyWay(message, context) !== null) offered.add('reply')
+  if (repliesPrivately(message, context)) offered.add('replyPrivately')
+  if (copyTextOf(message) !== null) offered.add('copyText')
+  offered.add('link')
   // B-TH-286 (B-TH-091): pinned for everyone, or unpinned; never a mail in its undo window or taken back (the API refuses it too).
-  if (context.canPin && (message.pinned || pinnable(message))) actions.push(message.pinned ? 'unpin' : 'pin')
-  actions.push('link')
-  return actions
+  if (context.canPin && (message.pinned || pinnable(message))) offered.add(message.pinned ? 'unpin' : 'pin')
+  if (context.canRemind && pinnable(message)) offered.add('remind')
+  if (context.canTask) offered.add('task')
+  if (message.ask?.answer) offered.add('answer') // F-SA-244: the customer's ask, when the reader may answer it now
+  // B-TH-236 (B-TH-050): Correct on one's own message, by the way it went (never an edit: a new message linked to the old one).
+  if (correctionWay(message, context) !== null) offered.add('correct')
+  if (message.channel === 'EMAIL' && (message.kind === 'theirs' || (message.kind === 'ours' && message.email))) offered.add('emailDetails')
+  // B-TH-231: "Use on another record…" when the message has a file the reader opens and may add files elsewhere (files.upload).
+  if (context.canUseOn && context.canReadFiles && (message.files ?? []).some((file) => file.status === 'AVAILABLE')) offered.add('useOn')
+  return MENU_ORDER.filter((action) => offered.has(action))
+}
+
+/** tw- W2.2: the words "Copy text" copies — the message's own words; none when erased or when it only carries files. */
+export function copyTextOf(message: Partial<Pick<CardMessage, 'body' | 'erased'>>): string | null {
+  if (message.erased) return null
+  const text = (message.body ?? '').trim()
+  return text === '' ? null : text
+}
+
+/**
+ * tw- W2.2 (B7, Z2; 10-design §9 "Email details"): what the one Email details window shows of a message — our email: To, Cc, Subject,
+ * its state, the date and our words; an inbound one: From, To, Cc, Subject and the sender checks as the mail came (tw-s part 7), else
+ * the sender's name, the time and the words. Null: not an email. Pure; the window draws it (popups/view/OriginalEmail).
+ */
+export interface EmailDetails {
+  readonly from: string
+  readonly to: readonly string[]
+  readonly cc: readonly string[]
+  readonly subject: string | null
+  readonly at: string
+  /** Ours: sent (its delivery state below); theirs: received (its sender checks, when the mail row was read). */
+  readonly sent: boolean
+  readonly status: Delivery | null
+  readonly verdicts: { readonly spf: string; readonly dkim: string; readonly dmarc: string } | null
+  readonly text: string
+}
+
+export function emailDetailsOf(message: Pick<CardMessage, 'kind' | 'channel' | 'author' | 'at' | 'body'> & Partial<Pick<CardMessage, 'email' | 'mail' | 'erased'>>): EmailDetails | null {
+  if (message.channel !== 'EMAIL') return null
+  const text = message.erased ? '' : message.body
+  if (message.kind === 'ours') {
+    const mail = message.email
+    if (!mail) return null
+    return { from: message.author ?? '', to: mail.to, cc: mail.cc ?? [], subject: mail.subject, at: message.at, sent: true, status: mail.status, verdicts: null, text }
+  }
+  if (message.kind !== 'theirs') return null
+  const mail = message.mail ?? null
+  if (!mail) return { from: message.author ?? '', to: [], cc: [], subject: null, at: message.at, sent: false, status: null, verdicts: null, text }
+  const name = mail.from.name ?? message.author
+  const from = name && mail.from.address ? `${name} <${mail.from.address}>` : (mail.from.address ?? name ?? '')
+  return { from, to: mail.to, cc: mail.cc, subject: mail.subject, at: message.at, sent: false, status: null, verdicts: mail.verdicts, text }
 }
 
 // ---- B-TH-286 (B-TH-091): what may be pinned — a message the server holds (never one on its way), and not a mail still in its 10
@@ -487,10 +557,15 @@ export function skippedLine(skipped: readonly SkippedFile[] | undefined): { read
   return items.length === 0 ? null : { count: items.length, items }
 }
 
-/** The API message's depth as the card carries it (the office read's `erased` and `skippedAttachments`). */
-export function cardDepth(message: { readonly erased?: boolean | undefined; readonly skippedAttachments?: readonly SkippedFile[] | undefined }): Pick<CardMessage, 'erased' | 'skipped'> {
+/** The API message's depth as the card carries it (the office read's `erased`, `skippedAttachments` and — tw- W2.2 — the inbound `mail`). */
+export function cardDepth(message: {
+  readonly erased?: boolean | undefined
+  readonly skippedAttachments?: readonly SkippedFile[] | undefined
+  readonly mail?: CardInboundMail | null | undefined
+}): Pick<CardMessage, 'erased' | 'skipped' | 'mail'> {
   return {
     ...(message.erased ? { erased: true } : {}),
+    ...(message.mail ? { mail: message.mail } : {}),
     ...(message.skippedAttachments && message.skippedAttachments.length > 0 ? { skipped: message.skippedAttachments.map((file) => ({ name: file.name, contentType: file.contentType, sizeBytes: file.sizeBytes, reason: file.reason })) } : {}),
   }
 }

@@ -38,7 +38,7 @@
     "retry": "Riprova"
   },
   "original": {
-    "title": "E-mail originale",
+    "title": "Dettagli email",
     "noSubject": "(senza oggetto)",
     "from": "Da",
     "to": "A",
@@ -66,7 +66,11 @@
     "picturesBlocked_other": "{count} immagini da internet non sono mostrate, così il mittente non può vedere che la mail è stata aperta.",
     "showPictures": "Mostra le immagini",
     "frame": "La e-mail come è arrivata (link mostrati come testo, non si esegue nulla)",
-    "empty": "Questa mail non ha testo."
+    "empty": "Questa mail non ha testo.",
+    "subject": "Oggetto",
+    "sent": "Inviata",
+    "status": "Stato",
+    "asItCame": "L'email come è arrivata"
   },
   "leave": {
     "title": "Uscire con un testo non inviato?",

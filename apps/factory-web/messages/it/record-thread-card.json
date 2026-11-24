@@ -44,17 +44,21 @@
     "replyHint": "A viene compilato da questa email",
     "task": "Crea un'attività",
     "taskHint": "testo da questo messaggio, scadenza, persona",
-    "link": "Copia il link al messaggio",
+    "link": "Copia il link",
     "linkHint": "apre il record con questo messaggio aperto",
     "useOn": "Usa su un altro record…",
     "useOnHint": "Copia i suoi file su un ordine, un preventivo o un modello dello stesso cliente",
     "correct": "Correggi",
     "correctHint": "un nuovo messaggio legato a questo; nulla viene modificato",
-    "pin": "Fissa per tutti",
+    "pin": "Fissa",
     "pinHint": "tutti su questo record lo trovano tra i «fissati»; non è un segnalibro personale",
     "unpin": "Togli dai fissati",
     "unpinHint": "esce dai «fissati» per tutti; il messaggio resta",
-    "replyPrivately": "Rispondi in privato"
+    "replyPrivately": "Rispondi in privato",
+    "copyText": "Copia il testo",
+    "remind": "Ricordamelo",
+    "emailDetails": "Dettagli email",
+    "answerThere": "Rispondi nel suo thread"
   },
   "body": {
     "showAll": "Mostra tutto ({count} righe)",
@@ -188,7 +192,8 @@
     "corrected": "Corretto",
     "floor": "Anche in reparto",
     "fromFloor": "Dal reparto",
-    "sending": "Invio"
+    "sending": "Invio",
+    "followUp": "Te lo ricorda il {date} se non rispondono"
   },
   "org": {
     "floor": "Reparto"
