@@ -113,12 +113,6 @@
   background: var(--nds-info);
 }
 
-.fw-aoc-older {
-  display: flex;
-  justify-content: center;
-  padding-bottom: var(--nds-space-6);
-}
-
 .fw-aoc-foot {
   display: flex;
   flex-direction: column;

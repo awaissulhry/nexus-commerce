@@ -44,23 +44,30 @@ export default defineStage({
 
     // F-OP-218 (order page plan N4; 11-dock §0, §2): the work order's dock is the same ONE card (the pick band inside it when an order's
     // thread may be read, the work order's notes office only); the order page offers the work order's notes in its own dock.
-    await flow.step('the dock: the work order’s pick band in the one card; the order page’s Work orders scope, office only', async () => {
+    // tw- T.3 (W2.1, Z4): the pick is the head's title — ONE menu; an office-only thread shows the lock in it.
+    await flow.step('the dock: the work order’s pick in the head’s title; the order page’s Work orders scope, office only (the lock)', async () => {
       const OD = words('orders')
       const card = (where: typeof page) => where.locator('.fw-rcf.has-thread > aside.fw-rcf-dock section.fw-rt-column.is-docked')
       await planner.go(`/production/work-orders/${workOrder.id}`)
       await expect(card(page)).toHaveCount(1, { timeout: 60_000 })
-      const band = card(page).locator('.fw-rt-top')
-      if ((await band.count()) > 0) await expect(band.locator('.fw-thread-pick-line.is-office')).toBeVisible()
-      else test.info().annotations.push({ type: 'not here', description: 'no order thread the planner may read beside the work order: its dock has no pick band' })
+      const title = card(page).locator('.fw-rth-title button.fw-thread-pick-title')
+      if ((await title.count()) > 0) await expect(title.locator('.fw-thread-pick-lock')).toBeVisible() // the work order's notes: office only
+      else test.info().annotations.push({ type: 'not here', description: 'no order thread the planner may read beside the work order: its head names the record, no pick' })
       const sales = await flow.desk('sales')
       await sales.go(`/sales/orders/${order.id}`)
-      const segment = card(sales.page).locator('.fw-rt-top').getByRole('radio', { name: startsWith(OD('record.dock.workOrders')) })
-      if ((await segment.count()) > 0) {
-        await segment.click()
+      const pick = card(sales.page).locator('.fw-rth-title button.fw-thread-pick-title')
+      await expect(pick).toHaveCount(1, { timeout: 60_000 })
+      await pick.click()
+      const row = sales.page.getByRole('menuitemcheckbox', { name: startsWith(OD('record.dock.workOrders')) })
+      if ((await row.count()) > 0) {
+        await row.click()
         await expect(sales.page).toHaveURL(/[?&]thread=wo%3A/)
-        await expect(card(sales.page).locator('.fw-thread-pick-line.is-office')).toBeVisible()
+        await expect(card(sales.page).locator('.fw-rth-title .fw-thread-pick-lock')).toBeVisible()
         await flow.shot(sales.page, 'order-dock-work-order')
-      } else test.info().annotations.push({ type: 'not here', description: 'sales reads no work order here (workorders.view): the order dock offers no Work orders scope' })
+      } else {
+        await sales.page.keyboard.press('Escape')
+        test.info().annotations.push({ type: 'not here', description: 'sales reads no work order here (workorders.view): the order dock offers no Work orders scope' })
+      }
     })
   },
 })

@@ -10,6 +10,8 @@ import { DEMO_FILE_SOURCES, DEMO_FILES, DEMO_FILES_PARTY } from './files/fixture
 import { demoHead } from './head/fixtures'
 import type { HeadModel } from './head/model'
 import type { SavedRepliesModel } from './helpers/model'
+import type { FeedEvent } from './feed/model' // tw- T.1
+import type { CardMessage } from './card/model' // tw- T.1
 
 /**
  * SCR-006-thread — RecordThread v1 (B-TH-212; pictures 1–5 in one column): the feed, the cards and the box for Incoming's reading
@@ -150,6 +152,97 @@ export function recordDockedThread(input: RecordDockedInput, head: Partial<HeadM
 // ---- end B-TH-257…264
 
 const DOCKED = dockedThread()
+
+// ---- tw- T.1 (THE THREAD REBUILD; 20-preview-thread.html; B13): the picture's cases, made-up data only (Brand Alpha, Bea Esempio,
+// example.com) — docked at a third (433 / 593) beside the 40 % ones, every role and every state; nothing opened on the server render.
+const THIRD = (model: ThreadCaseModel): ThreadCaseModel => ({ ...model, docked: { ...model.docked!, head: { ...model.docked!.head, width: 'third' } } })
+const withMessages = (model: ThreadCaseModel, messages: (all: readonly CardMessage[]) => readonly CardMessage[], events: readonly FeedEvent[] = []): ThreadCaseModel => ({
+  ...model,
+  thread: { ...model.thread, feed: { ...model.thread.feed, messages: messages(model.thread.feed.messages), events } },
+})
+const withFeed = (model: ThreadCaseModel, feed: Partial<RecordThreadModel['feed']>): ThreadCaseModel => ({ ...model, thread: { ...model.thread, feed: { ...model.thread.feed, ...feed } } })
+const withContext = (model: ThreadCaseModel, context: Partial<CardContext>, can?: Partial<RecordThreadModel['composer']['context']['can']>): ThreadCaseModel => ({
+  ...model,
+  thread: {
+    ...model.thread,
+    feed: { ...model.thread.feed, context: { ...model.thread.feed.context, ...context } },
+    composer: can ? { ...model.thread.composer, context: { ...model.thread.composer.context, can: { ...model.thread.composer.context.can, ...can } } } : model.thread.composer,
+  },
+})
+const ALL_WAYS = { note: true, email: true, portal: true }
+const step = (id: string, minutes: number, status: { from: string | null; to: string | null } | null, verb = 'setStatus'): FeedEvent => ({
+  id,
+  at: new Date(Date.parse(DEMO_NOW) - minutes * 60_000).toISOString(),
+  who: 'Bea Esempio',
+  actorAudience: 'OFFICE',
+  verb,
+  action: `sales.orders.${verb}`,
+  status,
+  values: [],
+  fields: [],
+})
+const TW_PINS = (all: readonly CardMessage[]) =>
+  all.slice(0, 3).map((message, index) => ({ messageId: message.id, pinnedAt: new Date(Date.parse(DEMO_NOW) - index * 3_600_000).toISOString(), author: message.authorHidden ? null : message.author, hidden: message.authorHidden === true, excerpt: message.body.slice(0, 80), office: message.kind === 'note' || message.kind === 'floor', files: message.files.length, removed: false }))
+const BUSY = THIRD(withContext(DOCKED, { replyWays: ALL_WAYS, canPin: true, canRemind: true, canTask: true }))
+const TW_CASES = [
+  { id: 'tw-busy-third', label: 'tw- Busy order thread at a third (433 / 593): four senders, runs, mine on the right', model: BUSY, note: 'The thread’s bubbles in runs (one tile and one name per run, in the sender’s colour); the head ONE row; the composer ONE row.' },
+  { id: 'tw-busy-forty', label: 'tw- The same at 40 %', model: withContext(DOCKED, { replyWays: ALL_WAYS, canPin: true, canRemind: true }) },
+  { id: 'tw-note-beside-shared', label: 'tw- An office note beside a shared message', model: THIRD(withMessages(DOCKED, (all) => all.filter((message) => message.kind === 'note' || message.kind === 'theirs').slice(-4))), note: 'The office note is the one yellow, with the lock and “Office only” in its foot (R17); the customer’s message plain.' },
+  {
+    id: 'tw-mail-bounce',
+    label: 'tw- A mail in and out, with a bounce',
+    model: THIRD(
+      withMessages(DOCKED, (all) =>
+        all.map((message) =>
+          message.kind === 'theirs' && message.channel === 'EMAIL'
+            ? { ...message, mail: { from: { address: 'buyer@brand-alpha.example', name: message.author }, to: ['orders@example.com'], cc: [], subject: 'Sizes', verdicts: { spf: 'PASS', dkim: 'PASS', dmarc: 'PASS' } } }
+            : message.kind === 'ours' && message.email
+              ? { ...message, email: { ...message.email, status: 'BOUNCED' as const } }
+              : message,
+        ),
+      ),
+    ),
+    note: 'Our email bounced: the red line and Open task; the ticks are grey, never “read”. Email details is a row of each email’s menu.',
+  },
+  {
+    id: 'tw-quote-far',
+    label: 'tw- A reply quoting a message far up',
+    model: THIRD(withMessages(DOCKED, (all) => [...all, { ...all[all.length - 1]!, id: 'tw-quote', body: 'Yes — as in your first message.', replyTo: { id: all[0]!.id, author: all[0]!.author, excerpt: all[0]!.body.slice(0, 90), at: all[0]!.at, ...(all[0]!.senderKey ? { senderKey: all[0]!.senderKey } : {}) } }])),
+    note: 'The quote at the bubble’s top; Enter or a click jumps up to it and lights its row for 1.5 s.',
+  },
+  { id: 'tw-pins', label: 'tw- Three pinned messages: the pinned bar', model: THIRD({ ...DOCKED, thread: { ...DOCKED.thread, pinned: TW_PINS(DOCKED.thread.feed.messages) } }), note: 'Under the head: marks · pin · “Sender: text”; a click goes to it and shows the next.' },
+  {
+    id: 'tw-hidden-floor',
+    label: 'tw- Hidden floor writers',
+    model: THIRD(
+      withMessages(DOCKED, (all) => [
+        ...all,
+        ...[1, 2].map((n): CardMessage => ({ id: `tw-floor-${n}`, kind: 'floor', channel: 'APP', author: null, authorKind: 'WORKER', authorHidden: true, at: new Date(Date.parse(DEMO_NOW) + n * 60_000).toISOString(), body: n === 1 ? 'Collar cut, 24 pieces.' : 'Sleeves next.', mentions: [], files: [] })),
+      ]),
+    ),
+    note: '“A person on the floor”, the neutral tile “?”, never a person colour and never a run (R5): two hidden notes are two runs.',
+  },
+  {
+    id: 'tw-pills',
+    label: 'tw- Steps, changes and an approval as pills',
+    model: THIRD(withMessages(DOCKED, (all) => all, [step('tw-s1', 300, { from: 'CONFIRMED', to: 'IN_PRODUCTION' }), step('tw-s2', 200, { from: 'IN_PRODUCTION', to: 'SOME_CODE_WITHOUT_WORDS' }), step('tw-s3', 100, null, 'update')])),
+    note: 'Centred pills, one line each; a status in the record type’s words, never a code (a code without words: the step’s label alone).',
+  },
+  { id: 'tw-empty', label: 'tw- An empty thread', model: THIRD(withMessages(DOCKED, () => [])) },
+  // ---- roles
+  { id: 'tw-role-owner', label: 'tw- Role: Owner (every way, Close thread…)', model: THIRD(withContext(DOCKED, { replyWays: ALL_WAYS, canPin: true, canRemind: true, canTask: true, canUseOn: true }, { manage: true })) },
+  { id: 'tw-role-sales', label: 'tw- Role: Sales', model: THIRD(withContext(DOCKED, { replyWays: ALL_WAYS, canPin: true, canRemind: true })) },
+  { id: 'tw-role-production', label: 'tw- Role: Production manager (the portal way only)', model: THIRD(withContext(DOCKED, { replyWays: { note: true, email: false, portal: true }, canPin: true, canRemind: true }, { email: false })) },
+  { id: 'tw-role-read-only', label: 'tw- Role: Read-only', model: THIRD(withContext(DOCKED, { replyWays: { note: false, email: false, portal: false }, canReply: false, canRemind: true }, { post: false, email: false })), note: 'The composer is one line: “You can read this thread; writing in it needs another role.”' },
+  // ---- states
+  { id: 'tw-state-loading', label: 'tw- State: reading (skeleton bubbles)', model: THIRD(withFeed(DOCKED, { state: 'loading' })) },
+  { id: 'tw-state-error', label: 'tw- State: could not be read', model: THIRD(withFeed(DOCKED, { state: 'error' })) },
+  { id: 'tw-state-forbidden', label: 'tw- State: no right to read', model: THIRD(withFeed(DOCKED, { state: 'forbidden' })) },
+  { id: 'tw-state-step-up', label: 'tw- State: confirm it’s you (the second step)', model: THIRD(withFeed(DOCKED, { state: 'forbidden', forbiddenWhy: 'stepUp' })) },
+  { id: 'tw-state-offline', label: 'tw- State: offline', model: THIRD(withFeed(DOCKED, { offline: { since: DEMO_NOW } })) },
+  { id: 'tw-state-closed', label: 'tw- State: closed', model: THIRD({ ...DOCKED, thread: { ...DOCKED.thread, composer: { ...DOCKED.thread.composer, context: { ...DOCKED.thread.composer.context, closed: { by: 'Bea Esempio', at: DEMO_NOW } } } } }) },
+]
+// ---- end tw- T.1
 const reply =(thread: RecordThreadModel): RecordThreadModel => ({ ...thread, composer: { ...thread.composer, draft: { mode: 'reply', body: 'Hello Alma,\nthe quote follows tomorrow morning.\nAlex', forFloor: false } } })
 
 export const designScreen = defineDesignScreen<ThreadCaseModel>({
@@ -186,5 +279,6 @@ export const designScreen = defineDesignScreen<ThreadCaseModel>({
     },
     { id: 'docked-no-files', label: 'Docked: no files', model: { ...DOCKED, docked: { ...DOCKED.docked!, files: [] } }, note: 'The Files icon without a number; the feed starts under the Head.' },
     { id: 'docked-brand-beta', label: 'Docked: Brand Beta’s order (brand wall)', model: dockedThread(BRAND_BETA), note: 'Brand Beta’s order shows nothing of Brand Alpha: its own files only (none here), its own name on Reply.' },
+    ...TW_CASES,
   ],
 })

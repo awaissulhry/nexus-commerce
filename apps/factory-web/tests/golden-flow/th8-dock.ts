@@ -11,7 +11,7 @@ import { startsWith, words } from './_harness/words'
  * after 07-order (stages.ts AFTER_STAGES) or alone on a fresh stack (`--stages th8-dock`): it makes its own world once — the seeded P1
  * as Brand Alpha with its portal buyer (two-brands.ts), an order for A, A's message in its order's conversation (the portal's screens),
  * an office note in A's general thread (set-up: no screen writes it here). Then, as Sales at 1440 × 900:
- *   1  per scope (This order, <Customer> (general), All of <Customer>): ONE card in the dock — the pick band first, the Head 44 px,
+ *   1  per scope (This order, <Customer> (general), All of <Customer>): ONE card in the dock — tw- T.3: the pick is the head's title, the head ONE row,
  *      the body that scrolls (the page does not), the foot or the box inside the viewport, at 40 % (Overview) and a third (Lines);
  *   2  the scope stays across tabs, the band's Change the lines (the dock stays put while the save bar shows; Discard on the bar)
  *      and a reload; an arrival from the orders list starts on This order;
@@ -29,6 +29,7 @@ const RT = words('record-thread')
 const BOX = words('record-thread-composer')
 const FRAME = words('record-frame')
 const HEAD = words('record-thread-head')
+const CARD = words('record-thread-card') // tw- T.3: a bubble's menu (Answer in its thread)
 const DS = words('ds-words')
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -47,9 +48,19 @@ type Made = { id: string; number: string }
 /** The office record frame's dock, its ONE card and its bands. */
 const dockOf = (page: Page): Locator => page.locator('.fw-rcf.has-thread > aside.fw-rcf-dock')
 const cardOf = (page: Page): Locator => dockOf(page).locator('section.fw-rt-column.is-docked')
-const pickOf = (page: Page): Locator => cardOf(page).locator('.fw-rt-top').getByRole('radiogroup', { name: OD('record.dock.label'), exact: true })
-/** A segment by its long or its short words (a card of 480 px or less shows the short ones). */
-const segment = (page: Page, long: string, short?: string): Locator => pickOf(page).getByRole('radio', { name: new RegExp(`^(${escape(long)}${short ? `|${escape(short)}` : ''})`) })
+/** tw- T.3 (W2.1, Z4, P0-B4): the pick is the head's title — ONE menu named "<Which thread>: <the picked thread>", one label per thread. */
+const pickOf = (page: Page): Locator => cardOf(page).locator('.fw-rth-title button.fw-thread-pick-title')
+const pickedName = (long: string) => `${OD('record.dock.label')}: ${long}`
+async function expectPicked(page: Page, long: string, timeout = 30_000): Promise<void> {
+  await expect(pickOf(page)).toHaveAttribute('aria-label', pickedName(long), { timeout })
+}
+/** A message of All of <Customer> (tw- W2.5: the thread's own bubble, read only). */
+const allItem = (page: Page, words: string): Locator => cardOf(page).locator('article.fw-aoc-item').filter({ hasText: words })
+/** A bubble's menu row (its arrow in the corner; the menu portals to the page). */
+async function fromBubbleMenu(page: Page, bubble: Locator, row: string): Promise<void> {
+  await bubble.hover()
+  await chooseFromMenu(bubble.locator('button.fw-rt-msg-more').first(), page.getByRole('menuitem', { name: row, exact: true }))
+}
 const feedHead = (page: Page): Locator => cardOf(page).locator('.fw-rth.fw-aoc-head')
 
 async function boxOf(locator: Locator): Promise<{ x: number; y: number; width: number; height: number }> {
@@ -58,16 +69,20 @@ async function boxOf(locator: Locator): Promise<{ x: number; y: number; width: n
   return box!
 }
 
-/** The card's bands in their order, its Head 44 px high, its foot (or box) inside the viewport. */
+/** The card: ONE head row (its title the pick, a line under it), no band above it, its foot (or box) inside the viewport. */
 async function expectCard(page: Page, where: string, kind: 'thread' | 'all'): Promise<void> {
   const card = cardOf(page)
   await expect(card, where).toHaveCount(1)
-  await seen(card.locator('.fw-rt-top'))
+  await expect(card.locator('.fw-rt-top'), `${where}: no pick band (tw- W2.1)`).toHaveCount(0)
   const head = kind === 'all' ? feedHead(page) : card.locator('.fw-rth').first()
   await seen(head)
-  expect(Math.round((await boxOf(head)).height), `${where}: the Head is one 44 px row`).toBe(44)
-  const top = await boxOf(card.locator('.fw-rt-top'))
-  expect(top.y, `${where}: the pick band is the card's first band`).toBeLessThan((await boxOf(head)).y)
+  await seen(head.locator('.fw-thread-pick'))
+  const height = Math.round((await boxOf(head)).height)
+  expect(height, `${where}: the Head is ONE row of two lines (56 px, P0-B1)`).toBeGreaterThanOrEqual(44)
+  expect(height, `${where}: the Head is ONE row of two lines (56 px, P0-B1)`).toBeLessThanOrEqual(72)
+  const headBox = await boxOf(head)
+  const cardBox = await boxOf(card)
+  expect(headBox.y - cardBox.y, `${where}: the head is the card's first band`).toBeLessThanOrEqual(2)
   const foot = kind === 'all' ? card.locator('.fw-rt-foot') : card.locator('.fw-rt-composer').first()
   await seen(foot)
   const viewport = page.viewportSize()!
@@ -96,14 +111,14 @@ async function expectBodyScrolls(page: Page, where: string, kind: 'thread' | 'al
   expect(await pageTop(), `${where}: the page did not move under the wheel`).toBe(before)
 }
 
-async function pick(page: Page, long: string, short?: string): Promise<void> {
-  await segment(page, long, short).click()
-  await expect(segment(page, long, short)).toHaveAttribute('aria-checked', 'true')
+async function pick(page: Page, long: string): Promise<void> {
+  await chooseFromMenu(pickOf(page), page.getByRole('menuitemcheckbox', { name: new RegExp(`^${escape(long)}`) }))
+  await expectPicked(page, long)
 }
 
 export default defineStage({
   proves:
-    'the order page’s dock: every scope (This order, General, All of) in ONE card — pick band, 44 px Head, a body that scrolls alone, the foot in view at 40 %, a third and 375 px; the scope kept across tabs, Amend and a reload, This order on an arrival; five picks write the address with no router request; Answer opens the line’s thread with the box focused (Reply on the customer’s line, Office note on a note); the keyboard walk; light and dark',
+    'the order page’s dock: every scope (This order, General, All of) in ONE card — the pick in the one-row Head, a body that scrolls alone, the foot in view at 40 %, a third and 375 px; the scope kept across tabs, Amend and a reload, This order on an arrival; five picks write the address with no router request; Answer opens the line’s thread with the box focused (Reply on the customer’s line, Office note on a note); the keyboard walk; light and dark',
   async run(flow: Flow) {
     const sales = await flow.desk('sales')
     const { page } = sales
@@ -143,20 +158,20 @@ export default defineStage({
 
     const go = (search = '') => sales.go(`/sales/orders/${order.id}${search}`)
 
-    await flow.step('1 · every scope in ONE card: the pick band, the 44 px Head, the body that scrolls alone, the foot in view (40 %, a third)', async () => {
+    await flow.step('1 · every scope in ONE card: the pick as the Head’s title, the body that scrolls alone, the foot in view (40 %, a third)', async () => {
       await page.setViewportSize({ width: 1440, height: 900 })
       await go('?tab=overview')
       await seen(pickOf(page), 60_000)
       await expectCard(page, 'This order · 40 %', 'thread')
       await expectBodyScrolls(page, 'This order', 'thread')
-      await pick(page, OD('record.dock.general', { customer }), OD('record.dock.writeGeneral'))
+      await pick(page, OD('record.dock.general', { customer }))
       await expectCard(page, 'General · 40 %', 'thread')
       await seen(cardOf(page).getByText(GENERAL_NOTE))
-      await pick(page, OD('record.dock.all', { customer }), RT('allOfCustomer.view.all'))
+      await pick(page, OD('record.dock.all', { customer }))
       await expectCard(page, 'All of · 40 %', 'all')
-      await expect(cardOf(page).locator('.fw-rt-top').getByText(lead(RT('allOfCustomer.line', { customer })))).toBeVisible()
+      await expect(feedHead(page).locator('.fw-rth-line')).toContainText(lead(HEAD('allOf.line'))) // "Read only · N threads"
       await expect(cardOf(page).locator('.fw-rt-foot')).toContainText(`${OD('record.dock.readOnly')}. ${OD('record.dock.writeIn')}`)
-      await seen(cardOf(page).locator('article.fw-aoc-line').filter({ hasText: FROM_ALPHA }), 60_000)
+      await seen(allItem(page, FROM_ALPHA), 60_000)
       await expectBodyScrolls(page, 'All of', 'all')
       await flow.shot(page, 'dock-all-forty')
       // Lines: a third under 1600 px (a grid tab), the same card.
@@ -169,7 +184,7 @@ export default defineStage({
 
     await flow.step('2 · the scope stays across tabs, Change the lines and a reload; an arrival from the orders list starts on This order', async () => {
       await go('?tab=overview')
-      await pick(page, OD('record.dock.all', { customer }), RT('allOfCustomer.view.all'))
+      await pick(page, OD('record.dock.all', { customer }))
       await page.waitForURL(/[?&]thread=all/)
       const tabs = page.getByRole('navigation', { name: OD('record.tabsLabel'), exact: true })
       for (const tab of ['tab.lines', 'tab.production', 'tab.money']) {
@@ -213,13 +228,13 @@ export default defineStage({
       }
       await page.reload()
       await seen(feedHead(page), 60_000)
-      await expect(segment(page, OD('record.dock.all', { customer }), RT('allOfCustomer.view.all'))).toHaveAttribute('aria-checked', 'true')
+      await expectPicked(page, OD('record.dock.all', { customer }))
       // An arrival from outside (the list) has no scope: This order.
       await sales.go(`/sales/orders?q=${encodeURIComponent(DOCK_REF)}`)
       await page.getByRole('link', { name: order.number, exact: true }).first().click()
       await page.waitForURL(new RegExp(`/sales/orders/${order.id}`))
       await expect(page).not.toHaveURL(/[?&]thread=/)
-      await expect(segment(page, OD('record.dock.order'))).toHaveAttribute('aria-checked', 'true', { timeout: 60_000 })
+      await expectPicked(page, OD('record.dock.order'), 60_000)
     })
 
     await flow.step('3 · no loop: five picks over 10 s — no router request, no document, at most 6 writes of the address', async () => {
@@ -227,11 +242,11 @@ export default defineStage({
       await seen(pickOf(page), 60_000)
       await page.waitForTimeout(3_000) // the page's own first reads and a build's prefetches are done before the window opens
       const seenNow = await routerActivity(page, 10_000, async () => {
-        await pick(page, OD('record.dock.general', { customer }), OD('record.dock.writeGeneral'))
-        await pick(page, OD('record.dock.all', { customer }), RT('allOfCustomer.view.all'))
+        await pick(page, OD('record.dock.general', { customer }))
+        await pick(page, OD('record.dock.all', { customer }))
         await pick(page, OD('record.dock.order'))
-        await pick(page, OD('record.dock.all', { customer }), RT('allOfCustomer.view.all'))
-        await pick(page, OD('record.dock.general', { customer }), OD('record.dock.writeGeneral'))
+        await pick(page, OD('record.dock.all', { customer }))
+        await pick(page, OD('record.dock.general', { customer }))
       })
       const said = seenNow.lines.join('\n')
       // F-OP-209: a pick is the frame's ONE history write — the server is never asked for the page again.
@@ -245,43 +260,42 @@ export default defineStage({
 
     await flow.step('4 · Answer: A’s line → This order with the box focused on a reply; the general note → General, Office note', async () => {
       await go('?tab=overview&thread=all')
-      const line = cardOf(page).locator('article.fw-aoc-line').filter({ hasText: FROM_ALPHA })
+      // tw- T.3 (W2.5): Answer is the bubble's menu row "Answer in its thread".
+      const line = allItem(page, FROM_ALPHA)
       await seen(line, 60_000)
-      await line.getByRole('button', { name: startsWith(lead(RT('allOfCustomer.answerLabel'))) }).click()
-      await expect(segment(page, OD('record.dock.order'))).toHaveAttribute('aria-checked', 'true', { timeout: 30_000 })
+      await fromBubbleMenu(page, line, CARD('menu.answerThere'))
+      await expectPicked(page, OD('record.dock.order'))
       const box = cardOf(page).locator('.fw-rt-composer textarea').first()
       await expect(box, 'the box takes the focus').toBeFocused({ timeout: 30_000 })
-      const modes = cardOf(page).getByRole('radiogroup', { name: BOX('modeLabel'), exact: true })
-      await expect(modes.getByRole('radio', { name: BOX('mode.note'), exact: true }), 'a reply, not an office note').toHaveAttribute('aria-checked', 'false')
-      await seen(cardOf(page).getByText(startsWith(lead(BOX('link.replying')))))
+      // W2.3: the audience chip (its name "Who reads what you write: …") and the box's data-mode say it is a reply, not an office note.
+      await expect(cardOf(page).locator('.fw-rt-composer').first(), 'a reply, not an office note').not.toHaveAttribute('data-mode', 'note')
+      await expect(cardOf(page).locator('.fw-rt-cx-chipbtn').first()).not.toHaveAttribute('aria-label', `${BOX('modeLabel')}: ${BOX('mode.note')}`)
+      await seen(cardOf(page).getByRole('group', { name: startsWith(lead(BOX('link.replying'))) }))
       await flow.shot(page, 'answer-reply')
 
       await go('?tab=overview&thread=all')
-      const note = cardOf(page).locator('article.fw-aoc-line').filter({ hasText: GENERAL_NOTE })
+      const note = allItem(page, GENERAL_NOTE)
       await seen(note, 60_000)
-      await note.getByRole('button', { name: startsWith(lead(RT('allOfCustomer.answerLabel'))) }).click()
-      await expect(segment(page, OD('record.dock.general', { customer }), OD('record.dock.writeGeneral'))).toHaveAttribute('aria-checked', 'true', { timeout: 30_000 })
+      await fromBubbleMenu(page, note, CARD('menu.answerThere'))
+      await expectPicked(page, OD('record.dock.general', { customer }))
       await expect(cardOf(page).locator('.fw-rt-composer textarea').first()).toBeFocused({ timeout: 30_000 })
-      await expect(cardOf(page).getByRole('radiogroup', { name: BOX('modeLabel'), exact: true }).getByRole('radio', { name: BOX('mode.note'), exact: true })).toHaveAttribute('aria-checked', 'true')
+      await expect(cardOf(page).locator('.fw-rt-composer').first()).toHaveAttribute('data-mode', 'note')
+      await expect(cardOf(page).locator('.fw-rt-cx-chipbtn').first()).toHaveAttribute('aria-label', `${BOX('modeLabel')}: ${BOX('mode.note')}`)
       // Leave the box empty: nothing is written by this check.
       await page.keyboard.press('Escape')
     })
 
     await flow.step('5 · the keyboard walk of All of; light and dark; the phone (375: the full-width view, ← Back)', async () => {
       await go('?tab=overview&thread=all')
-      const lines = cardOf(page).locator('article.fw-aoc-line')
+      // tw- T.3 (W2.5): the messages are the thread's bubbles (oldest at the top); J / K walk them, one tab stop.
+      const lines = cardOf(page).locator('article.fw-aoc-item')
       await seen(lines.first(), 60_000)
-      expect(await lines.count(), 'two lines at least to walk').toBeGreaterThanOrEqual(2)
+      expect(await lines.count(), 'two messages at least to walk').toBeGreaterThanOrEqual(2)
       await lines.first().focus()
       await page.keyboard.press('j')
       await expect(lines.nth(1)).toBeFocused()
       await page.keyboard.press('k')
       await expect(lines.first()).toBeFocused()
-      const more = lines.first().getByRole('button', { name: RT('allOfCustomer.more'), exact: true })
-      await page.keyboard.press(' ')
-      await expect(lines.first().getByRole('button', { name: RT('allOfCustomer.less'), exact: true })).toHaveAttribute('aria-expanded', 'true')
-      await page.keyboard.press(' ')
-      await expect(more).toHaveAttribute('aria-expanded', 'false')
       // The keys are said in the foot's ONE info icon.
       await expect(cardOf(page).locator('.fw-rt-foot .info')).toHaveAttribute('aria-label', RT('allOfCustomer.keysTip'))
 
@@ -303,9 +317,9 @@ export default defineStage({
       await expect(page).toHaveURL(/[?&]thread=all/)
       await seen(feedHead(page))
       await page.setViewportSize({ width: 1440, height: 900 })
-      // The width menu and ⋯ never fold away on All of (D6).
+      // The ⋮ never folds away on All of (D6); tw- T.0: the width is its ⋮ › Width, as in the record thread's head.
       await go('?tab=overview&thread=all')
-      await seen(feedHead(page).getByRole('button', { name: HEAD('width.label'), exact: true }))
+      await expect(feedHead(page).getByRole('button', { name: HEAD('width.label'), exact: true })).toHaveCount(0)
       await chooseFromMenu(feedHead(page).getByRole('button', { name: HEAD('more.label'), exact: true }), page.getByRole('menuitem', { name: startsWith(HEAD('width.reset')) }))
     })
 

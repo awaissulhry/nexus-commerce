@@ -1,13 +1,14 @@
 'use client'
 
-import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Lock } from 'lucide-react'
 import { Banner, EmptyState } from '@nexus/ui/components'
 import { Button, InfoTip, Skeleton } from '@nexus/ui/primitives'
 import { useT } from '../../../../../lib/i18n/provider'
 import { MessageCard } from '../../../../../lib/record-thread/card/view/MessageCard'
 import { copyTextOf } from '../../../../../lib/record-thread/card/model' // tw- W2.5: Copy text
-import { WIDTH_NS } from '../../../../../lib/record-thread/head/view/WidthMenu' // F-OP-204: the Head's words (width, ⋯)
+import { shouldLoadOlder } from '../../../../../lib/record-thread/feed/model' // tw- T.0: the record thread's own rule
+import { HEAD_NS } from '../../../../../lib/record-thread/head/view/RecordThreadHead' // F-OP-204: the Head's words (width, ⋮)
 import { RecordTypeIcon } from '../../../../search/RecordTypeIcon'
 import { PickedDockColumn } from '../../ThreadPick' // F-OP-204: the dock's one card
 import { opensItself, type AllOfCustomerModel, type FeedKindChoice, type FeedView, type Words } from '../model'
@@ -15,10 +16,11 @@ import { answerOf, type FeedDoor } from '../model' // F-OP-207
 import { feedRowsOf } from '../model' // tw- W2.5: oldest at the top, a run ends where the record changes
 import { feedKeyOf, linePlaceOf, rovingIndexOf } from '../keys' // F-OP-206: the list's keys, one tab stop
 import { FeedHead } from './FeedHead' // F-OP-204
+import '../../../../../lib/record-thread/feed/feed.css' // tw- T.0: the thread's sentinel, its older pill and Retry
 import '../all-of-customer.css'
 
 /** The catalogues the view reads (the host loads them: WithMessages). F-OP-204: + the Head's (FeedHead's width menu and ⋯). */
-export const ALL_OF_CUSTOMER_NS = ['record-thread', 'record-thread-card', WIDTH_NS] as const
+export const ALL_OF_CUSTOMER_NS = ['record-thread', 'record-thread-card', HEAD_NS] as const
 
 /** A record a line belongs to (the door's target). */
 export interface FeedRecordRef {
@@ -125,6 +127,29 @@ export function AllOfCustomerFeed({ model, actions }: { model: AllOfCustomerMode
     scroller.addEventListener('scroll', onScroll, { passive: true })
     return () => scroller.removeEventListener('scroll', onScroll)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps -- once per visit
+  // tw- T.0 (one behaviour per act): the top of the list reads the next older page ONCE per page as the person reaches it — the record
+  // thread's own sentinel and rule (`shouldLoadOlder`, 240 px ahead); no button.
+  const topRef = useRef<HTMLDivElement>(null)
+  const askedAt = useRef<number | null>(null)
+  const onOlder = actions?.onOlder
+  const olderState = model.older
+  const count = model.items.length
+  useEffect(() => {
+    const top = topRef.current
+    const scroller = root.current?.closest<HTMLElement>('.fw-rt-scroll') ?? null
+    if (!top || model.status !== 'ready' || !onOlder || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return
+        if (!shouldLoadOlder({ more: model.more, older: olderState, count, askedAt: askedAt.current })) return
+        askedAt.current = count
+        onOlder()
+      },
+      { root: scroller, rootMargin: '240px 0px 0px 0px' },
+    )
+    observer.observe(top)
+    return () => observer.disconnect()
+  }, [model.status, model.more, olderState, count, onOlder])
   // tw- W2.5: older messages come in at the TOP — the person keeps what they were reading (the list keeps its distance from the bottom).
   const oldest = rows[0]?.item.key ?? null
   const kept = useRef<{ oldest: string | null; fromBottom: number }>({ oldest, fromBottom: 0 })
@@ -190,14 +215,21 @@ export function AllOfCustomerFeed({ model, actions }: { model: AllOfCustomerMode
             : {})}
         />
       ) : (
-        // F-OP-206: a feed (busy while older messages are read), each message an article with its place in it. tw- W2.5: Show older on top.
+        // F-OP-206: a feed (busy while older messages are read), each message an article with its place in it. tw- T.0: older messages
+        // come ON SCROLL — the same top sentinel as the record thread (one behaviour per act); Retry only on a failed page.
         <div className="fw-aoc-list" role="feed" aria-busy={model.older === 'loading'} aria-label={t('allOfCustomer.feedLabel', { customer })}>
-          {model.more && (
-            <div className="fw-aoc-older">
-              <Button size="sm" variant="quiet" aria-busy={model.older === 'loading'} onClick={() => actions?.onOlder?.()}>
-                {t(model.older === 'loading' ? 'allOfCustomer.olderLoading' : model.older === 'failed' ? 'allOfCustomer.olderFailed' : 'allOfCustomer.showOlder')}
-              </Button>
+          <div ref={topRef} className="fw-rt-sentinel" aria-hidden="true" />
+          {model.more && model.older === 'loading' && (
+            <div className="fw-rt-pillrow" role="status">
+              <span className="fw-rt-pill">{t('allOfCustomer.olderLoading')}</span>
             </div>
+          )}
+          {model.more && model.older === 'failed' && (
+            <p className="fw-rt-older-failed" role="alert">
+              <Button size="sm" onClick={() => actions?.onOlder?.()}>
+                {t('allOfCustomer.olderFailed')}
+              </Button>
+            </p>
           )}
           {rows.map((row, index) => (
             <FeedBubble

@@ -448,14 +448,15 @@ describe('B-TH-288 — Done and search in the thread head', () => {
 // ---- end B-TH-288
 
 // ---- F-OP-204 (order page plan N4; 11-dock §1, §3.1; D6): ONE width menu — the thread's Head and All of <Customer>'s Head draw it ------
-describe('F-OP-204 — the width menu is one part', () => {
+describe('F-OP-204 / tw- T.0 — the width is ONE behaviour: ⋮ › Width in the thread Head and in All of <Customer>’s Head', () => {
   const draw = (node: ReturnType<typeof createElement>) => renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, node))
-  it('drawn where the thread is docked (a width), never without one; it brings its own words', async () => {
-    const { WidthMenu, WIDTH_NS } = await import('./view/WidthMenu')
-    const { HEAD_NS } = await import('./view/RecordThreadHead')
-    expect(WIDTH_NS).toBe(HEAD_NS)
-    expect(draw(createElement(WidthMenu, { width: 'forty' }))).toContain('aria-label="Thread width"')
-    expect(draw(createElement(WidthMenu, { width: null }))).toBe('')
+  it('no width button anywhere: the WidthMenu part is gone; All of’s Head builds its ⋮ › Width from the same DOCK_WIDTHS', () => {
+    const feed = readFileSync(new URL('../../../areas/_shared/record-thread/all-of-customer/view/FeedHead.tsx', import.meta.url), 'utf8')
+    expect(feed).not.toContain('WidthMenu')
+    expect(feed).toContain("{ id: 'width-heading', heading: true, label: th('width.title') }")
+    expect(feed).toContain('...DOCK_WIDTHS.map((choice) => ({ id: `width-${choice}`')
+    expect(feed).toContain("{ id: 'width-hide', label: th('width.hide')")
+    expect(feed).toContain("{ id: 'width-reset', label: th('width.reset')")
   })
   // tw- W2.1 (10-design §8): the width is a part of the ⋮ (Width: the four widths, Hide, Default width) — ONE list, from the model.
   it('the thread Head says the widths in its ⋮, from ONE list (DOCK_WIDTHS through menuRows); none without a dock', () => {
@@ -466,8 +467,6 @@ describe('F-OP-204 — the width menu is one part', () => {
     const head = readFileSync(new URL('./view/RecordThreadHead.tsx', import.meta.url), 'utf8')
     expect(head).not.toContain('<WidthMenu')
     expect(head).not.toContain('DOCK_WIDTHS')
-    const menu = readFileSync(new URL('./view/WidthMenu.tsx', import.meta.url), 'utf8')
-    for (const id of ["id: 'hide'", "id: 'reset'", 'DOCK_WIDTHS.map(']) expect(menu).toContain(id)
     expect(draw(createElement(RecordThreadHead, { model: base() }))).not.toContain('aria-label="Thread width"')
   })
 })

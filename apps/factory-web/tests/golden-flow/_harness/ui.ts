@@ -192,3 +192,16 @@ export async function routerActivity(page: Page, ms: number, action: () => Promi
   }
   return seen
 }
+
+// ---- tw- T.3 (W2.3, 10-design §10): the composer's audience chip — ONE menu of radio rows ("Office note · Reply to X by email · In X's
+// portal"); its name says the audience in use ("Who reads what you write: Office note"). Rows are matched with the party left open.
+const COMPOSER = words('record-thread-composer')
+export const audienceChip = (scope: Page | Locator): Locator => scope.getByRole('button', { name: new RegExp(`^${escapeText(COMPOSER('modeLabel'))}: `) })
+/** A row of the chip's menu: `note`, `reply` (by email) or `portal`, whatever the party's name. */
+export const audienceRow = (way: 'note' | 'reply' | 'portal'): RegExp =>
+  way === 'note' ? new RegExp(`^${escapeText(COMPOSER('mode.note'))}$`) : new RegExp(`^${escapeText(COMPOSER(way === 'reply' ? 'modeMenu.reply' : 'modeMenu.portal', { party: '@@' })).replace('@@', '.+')}$`)
+export async function chooseAudience(page: Page, scope: Page | Locator, way: 'note' | 'reply' | 'portal'): Promise<void> {
+  await chooseFromMenu(audienceChip(scope).first(), page.getByRole('menuitemcheckbox', { name: audienceRow(way) }))
+  await expect(audienceChip(scope).first()).toHaveAttribute('aria-label', way === 'note' ? `${COMPOSER('modeLabel')}: ${COMPOSER('mode.note')}` : new RegExp(`^${escapeText(COMPOSER('modeLabel'))}: `))
+}
+// ---- end tw- T.3

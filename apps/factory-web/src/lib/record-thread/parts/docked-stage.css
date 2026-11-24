@@ -85,6 +85,11 @@
     grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   }
 
+  /* tw- T.1 (B13): the dock at a third — 433 px at 1440, 593 px at 1920 (the stage's own padding aside). */
+  .fw-rt-stage.is-third {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+
   .fw-rt-stage-body {
     display: flex;
   }

@@ -127,7 +127,7 @@ function Case({ model, onWidth, top }: { model: ThreadCaseModel; onWidth?: (choi
       />
     </div>
   )
-  if (docked && !model.fill) return <DockedStage>{element}</DockedStage>
+  if (docked && !model.fill) return <DockedStage width={width === 'third' ? 'third' : 'forty'}>{element}</DockedStage>
   if (!model.pane) return element
   return (
     <div className="fw-rt-thread-case">
