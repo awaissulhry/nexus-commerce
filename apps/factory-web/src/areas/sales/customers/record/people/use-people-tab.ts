@@ -6,8 +6,8 @@ import { newIdempotencyKey } from '../../../../../lib/api/client'
 import { isApiError } from '../../../../../lib/api/errors'
 import { useOfficeApi, useOfficeSession } from '../../../../../lib/session/context'
 import { useLiveBus } from '../../../../../shell/live/use-live'
-import type { Party } from '../../../../parties/_shared/api'
-import { blankContact, problemKey, type ContactDraft, type PartyRecordModel } from '../../../../parties/_shared/model'
+import { listParties, type Party, type PartyRow } from '../../../../parties/_shared/api'
+import { blankContact, partyName, problemKey, suggestCode, type ContactDraft, type PartyRecordModel } from '../../../../parties/_shared/model'
 import type { PartyRecordActions } from '../../../../parties/_shared/view/PartyRecordView'
 import { getProductionLimits } from '../../../../admin/users/partners/api'
 import { partnerCan, personReach, type RowAction } from '../../../../admin/users/partners/model'
@@ -21,13 +21,13 @@ import { useLinkDialog } from '../../../mtm/use-dialogs' // F-CA-208
 import { useLocale } from '../../../../../lib/i18n/provider' // F-CA-208: a measurement link's language
 import type { Read as DepthRead } from '../../depth/model'
 import { readProblem } from '../../../orders/model'
-import { approveDeliveryAddress, readPartyUsage, readRiders, refuseDeliveryAddress, type PartyUsage, type RidersView } from './api'
+import { approveDeliveryAddress, createRider, readPartyUsage, readRiders, refuseDeliveryAddress, setRiderTeam, type PartyUsage, type RidersView } from './api'
 import type { PeopleChip } from './answer'
 import { addressShort, addressText, type AddressAct, type AddressRow } from './addresses'
 import { addressAnchor, failedRead, peopleCan, personAnchor, READING, readyRead, said, valueOf, type Read } from './model'
 import type { PersonAct, PersonRow } from './people'
 import { riderAnchor, type RiderAct, type RiderRow } from './riders' // F-CA-208
-import { PEOPLE_TAB_START, peopleTabModel, type PeopleMtm, type PeopleNotice, type PeopleNotices, type PeopleTabActions, type PeopleTabModel, type PeopleTabState } from './tab'
+import { addRiderProblem, PEOPLE_TAB_START, peopleTabModel, teamProblem, type AddRiderDialog, type FoundParty, type TeamDialog, type PeopleMtm, type PeopleNotice, type PeopleNotices, type PeopleTabActions, type PeopleTabModel, type PeopleTabState } from './tab'
 
 /**
  * F-CA-107 (customer page › PEOPLE & ADDRESSES tab, lane ca-; 13-backend §1, §3, §5.3, §5.7; 18-lead-settles Z13, Z15, Z16, Z17) — the
@@ -296,7 +296,123 @@ export function usePeopleTab(input: PeopleTabInput): PeopleTabContainer {
       readTemplates()
       link.openFor({ profileId: profile.id, riderName: profile.riderName, garmentType: profile.garmentType, contactId: profile.contactId, pointCount: pointsOf(profile.garmentType) })
     } else if (act === 'editContact' && row.contact) recordActions.onDialog?.({ kind: 'contact', contactId: row.contact.id })
+    else if (act === 'team') {
+      teamKey.current = null
+      openTeam(row)
+    }
     else if (act === 'copyLink') copy(linkTo(riderAnchor(row.id)))
+  }
+
+  // ---- F-CA-214 (ca-w2 W2.3; 10-design §6 windows 4 and 5; Z10): Add rider… (an organisation's) and Change team…. Add rider = the two
+  // existing commands (POST /parties, then PUT /parties/:rider/team), one Idempotency-Key each per attempt; when the second fails the
+  // rider exists, not yet under the team: the window says so and Try again sends only the team change. A search names customers on the
+  // server (the reader's own); a 409 reads the riders again.
+  const patchAdd = (next: Partial<AddRiderDialog>) => setState((current) => (current.addRider ? { ...current, addRider: { ...current.addRider, ...next } } : current))
+  const patchTeam = (next: Partial<TeamDialog>) => setState((current) => (current.team ? { ...current, team: { ...current.team, ...next } } : current))
+  const foundOf = (row: PartyRow): FoundParty => ({ id: row.id, code: row.code, name: row.tradeName ?? row.legalName, city: row.city, version: row.version })
+  const searchKind = state.addRider?.kind === 'own' && !state.addRider.picked ? 'PERSON' : state.team?.choice === 'move' ? 'ORGANISATION' : null
+  const searchText = (searchKind === 'PERSON' ? state.addRider?.search : state.team?.search) ?? ''
+  useEffect(() => {
+    if (!searchKind || searchText.trim().length < 2) return
+    const controller = new AbortController()
+    const put = (found: AddRiderDialog['found']) => (searchKind === 'PERSON' ? patchAdd({ found }) : patchTeam({ found }))
+    put(READING)
+    const timer = setTimeout(() => {
+      listParties(api, { roles: ['CUSTOMER'], kind: searchKind, q: searchText, limit: 10 }, controller.signal)
+        .then((page) => put(readyRead(page.parties.filter((row) => row.id !== partyId).map(foundOf))))
+        .catch((error: unknown) => {
+          if (!controller.signal.aborted) put(failedRead(problemKey(error)))
+        })
+    }, 300)
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
+    // The search's words and kind are the dependency.
+  }, [api, searchKind, searchText, partyId])
+  const riderKeys = useRef<{ create: string | null; team: string | null }>({ create: null, team: null })
+  const confirmAddRider = async () => {
+    const dialog = state.addRider
+    if (!dialog || dialog.busy || !party) return
+    if (dialog.kind === 'kept') {
+      // A rider kept on the team = a contact with the role Rider: the record's own Add contact window, Rider ticked.
+      patch({ addRider: null })
+      setPreset(blankContact(['RIDER']))
+      recordActions.onDialog?.({ kind: 'contact' })
+      return
+    }
+    if (addRiderProblem(dialog)) {
+      patchAdd({ tried: true })
+      return
+    }
+    patchAdd({ tried: true, busy: true, problem: null })
+    let rider = dialog.made ?? (dialog.picked ? { id: dialog.picked.id, name: dialog.picked.name, version: dialog.picked.version } : null)
+    if (!rider) {
+      const name = dialog.name.trim()
+      const email = dialog.email.trim()
+      const phone = dialog.phone.trim()
+      try {
+        const createKey = (riderKeys.current.create ??= newIdempotencyKey())
+        const made = await createRider(
+          api,
+          { companyId: party.companyId, code: suggestCode(name), kind: 'PERSON', legalName: name, roles: ['CUSTOMER'], country: party.country, currency: party.currency, language: dialog.language, status: 'ACTIVE', ...(email || phone ? { contacts: [{ name, email: email || null, phone: phone || null, roles: ['RIDER'], language: dialog.language }] } : {}) },
+          createKey,
+        )
+        riderKeys.current.create = null
+        rider = { id: made.id, name: partyName(made), version: made.version }
+      } catch (error) {
+        patchAdd({ busy: false, problem: problemKey(error) })
+        return
+      }
+    }
+    try {
+      const teamKeyOf = (riderKeys.current.team ??= newIdempotencyKey())
+      await setRiderTeam(api, rider.id, { version: rider.version, teamPartyId: partyId }, teamKeyOf)
+      riderKeys.current = { create: null, team: null }
+      patch({ addRider: null })
+      setNotice({ tone: 'success', words: said('done.riderAdded', { params: { name: rider.name, team: customerQ } }), link: { href: `${record.prefix}/sales/customers/${encodeURIComponent(rider.id)}?tab=people#riders`, label: said('riders.row.open', { params: { name: rider.name } }) } })
+      void loadRiders()
+    } catch (error) {
+      // The half-failure (a new rider): it exists, not yet under the team — the window keeps it; Try again sends only the team change.
+      if (isApiError(error) && error.kind === 'conflict') riderKeys.current.team = null
+      patchAdd({ busy: false, problem: problemKey(error), ...(dialog.picked ? {} : { made: rider }) })
+    }
+  }
+  const openTeam = (row: RiderRow | null) => {
+    const view = valueOf(riders)
+    if (row?.party) {
+      patch({ team: { riderId: row.party.id, riderName: row.name, version: row.party.version, current: { id: partyId, name: customerQ }, choice: 'move', search: '', found: null, picked: null, tried: false, busy: false, problem: null } })
+    } else if (!row && party) {
+      patch({ team: { riderId: partyId, riderName: customerQ, version: view?.version ?? party.version, current: view?.team ? { id: view.team.id, name: view.team.legalName } : null, choice: view?.team ? 'keep' : 'move', search: '', found: null, picked: null, tried: false, busy: false, problem: null } })
+    }
+  }
+  const teamKey = useRef<string | null>(null)
+  const confirmTeam = async () => {
+    const dialog = state.team
+    if (!dialog || dialog.busy) return
+    if (dialog.choice === 'keep') {
+      patch({ team: null })
+      return
+    }
+    if (teamProblem(dialog)) {
+      patchTeam({ tried: true })
+      return
+    }
+    patchTeam({ tried: true, busy: true, problem: null })
+    try {
+      const key = (teamKey.current ??= newIdempotencyKey())
+      await setRiderTeam(api, dialog.riderId, { version: dialog.version, teamPartyId: dialog.choice === 'off' ? null : dialog.picked!.id }, key)
+      teamKey.current = null
+      patch({ team: null })
+      setNotice({ tone: 'success', words: dialog.choice === 'off' ? said('done.teamOff', { params: { name: dialog.riderName } }) : said('done.teamMoved', { params: { name: dialog.riderName, team: dialog.picked?.name ?? '' } }) })
+      void loadRiders()
+      if (dialog.riderId === partyId) reload() // this customer's own version moved
+    } catch (error) {
+      const conflict = isApiError(error) && error.kind === 'conflict'
+      teamKey.current = null
+      patchTeam({ busy: false, problem: problemKey(error) })
+      if (conflict) void loadRiders()
+    }
   }
 
   const linkTo = (anchor: string) => (typeof window === 'undefined' ? '' : `${window.location.origin}${window.location.pathname}${window.location.search}#${anchor}`)
@@ -339,6 +455,21 @@ export function usePeopleTab(input: PeopleTabInput): PeopleTabContainer {
 
   const actions: PeopleTabActions = {
     onRiderAct, // F-CA-208
+    // ---- F-CA-214: Add rider… and Change team…
+    onAddRider: () => {
+      riderKeys.current = { create: null, team: null }
+      patch({ addRider: { kind: 'own', name: '', email: '', phone: '', language: party?.language ?? 'it', search: '', found: null, picked: null, tried: false, busy: false, problem: null, made: null } })
+    },
+    onAddRiderDraft: (next) => patchAdd(next),
+    onAddRiderConfirm: () => void confirmAddRider(),
+    onAddRiderClose: () => patch({ addRider: null }),
+    onChangeTeam: (row) => {
+      teamKey.current = null
+      openTeam(row)
+    },
+    onTeamDraft: (next) => patchTeam(next),
+    onTeamConfirm: () => void confirmTeam(),
+    onTeamClose: () => patch({ team: null }),
     onNewMeasurements: () => measurements.openNew({ partyId, customerQ }),
     onSendLink: () => {
       readTemplates()

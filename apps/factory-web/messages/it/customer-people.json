@@ -234,7 +234,10 @@
     "copied": "Copiato.",
     "copyFailed": "Non copiato: seleziona il testo e copialo a mano.",
     "measured": "Nuove misure salvate (revisione {revision}): attendono il controllo della fabbrica.",
-    "openProfile": "Apri il profilo ›"
+    "openProfile": "Apri il profilo ›",
+    "riderAdded": "{name} ora è un pilota di {team}: la sua pagina è pronta per le misure.",
+    "teamMoved": "{name} ora corre per {team}.",
+    "teamOff": "{name} ora non corre per nessuna squadra."
   },
   "part": {
     "portal": "l'accesso al portale",
@@ -309,5 +312,53 @@
     "showMore_other": "Mostra altri {count} piloti",
     "reading": "Lettura dei piloti e dei loro profili…",
     "addRider": "Aggiungi pilota…"
+  },
+  "rider": {
+    "title": "Aggiungi un pilota a {team}",
+    "sub": "Chi indossa un capo su misura per questa squadra",
+    "kind": "Che tipo di pilota",
+    "own": "Un pilota con una pagina propria",
+    "ownLine": "Un cliente a sé (una persona) sotto {team}: le sue misure, i suoi ordini e i suoi dati personali. Per un pilota che ordina anche da solo.",
+    "kept": "Un pilota tenuto su {team}",
+    "keptLine": "Un contatto di {team} con il ruolo Pilota: misurato e ordinato dalla squadra. Si apre la finestra Aggiungi contatto con Pilota spuntato.",
+    "name": "Nome",
+    "email": "E-mail",
+    "emailHint": "Qui arrivano i link per le misure e gli inviti alle prove.",
+    "phone": "Telefono",
+    "language": "Lingua",
+    "existing": "Oppure metti un cliente esistente sotto {team}",
+    "existingHint": "Cerca un cliente persona per nome o codice (almeno due lettere); un pilota di un'altra squadra si sposta qui.",
+    "searching": "Ricerca…",
+    "noneFound": "Nessun cliente persona trovato.",
+    "pickedLine": "{name} va sotto {team}.",
+    "clearPick": "Crea invece un nuovo pilota",
+    "twoSteps": "Due passi: si crea il nuovo cliente, poi lo si mette sotto {team}.",
+    "confirm": "Aggiungi pilota",
+    "next": "Apri Aggiungi contatto",
+    "retry": "Riprova",
+    "made": "{name} è stato creato, ma non è ancora sotto {team}: riprova.",
+    "problem": {
+      "name": "Indica il nome del pilota.",
+      "nameLong": "Al massimo 120 caratteri.",
+      "email": "Questo non è un indirizzo e-mail."
+    }
+  },
+  "team": {
+    "title": "Cambia la squadra di {name}",
+    "sub": "Oggi sotto {team}",
+    "subNone": "Oggi senza squadra",
+    "label": "Squadra",
+    "keep": "Tieni sotto {team}",
+    "keepNone": "Lascia senza squadra",
+    "move": "Sposta in un'altra squadra",
+    "movePicked": "In {team}",
+    "off": "Togli da ogni squadra",
+    "offLine": "{name} resta un cliente a sé, con i suoi ordini e le sue misure.",
+    "find": "Cerca un cliente squadra (almeno due lettere)",
+    "noneFound": "Nessun cliente squadra trovato.",
+    "kept": "Gli ordini già fatti mantengono il loro cliente e le loro misure: una squadra ordina solo con le misure tenute sulla squadra.",
+    "problem": {
+      "pick": "Scegli la squadra in cui spostarlo."
+    }
   }
 }

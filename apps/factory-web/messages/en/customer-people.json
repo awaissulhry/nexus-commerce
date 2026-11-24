@@ -234,7 +234,10 @@
     "copied": "Copied.",
     "copyFailed": "Couldn't copy: select the text and copy it by hand.",
     "measured": "New measurements saved (revision {revision}): they wait for the factory review.",
-    "openProfile": "Open the profile ›"
+    "openProfile": "Open the profile ›",
+    "riderAdded": "{name} is a rider of {team} now: its own page is ready for measurements.",
+    "teamMoved": "{name} now rides for {team}.",
+    "teamOff": "{name} rides for no team now."
   },
   "part": {
     "portal": "the portal access",
@@ -309,5 +312,53 @@
     "showMore_other": "Show {count} more riders",
     "reading": "Reading the riders and their profiles…",
     "addRider": "Add rider…"
+  },
+  "rider": {
+    "title": "Add a rider to {team}",
+    "sub": "Who wears a made-to-measure garment for this team",
+    "kind": "What kind of rider",
+    "own": "A rider with their own page",
+    "ownLine": "A customer of their own (a person) under {team}: their own measurements, orders and personal data. For a rider who also orders alone.",
+    "kept": "A rider kept on {team}",
+    "keptLine": "A contact of {team} with the role Rider: measured and ordered by the team. This opens the Add contact window with Rider ticked.",
+    "name": "Name",
+    "email": "E-mail",
+    "emailHint": "Measurement links and fitting invites go here.",
+    "phone": "Phone",
+    "language": "Language",
+    "existing": "Or put an existing customer under {team}",
+    "existingHint": "Find a person customer by name or code (two letters at least); a rider of another team moves here.",
+    "searching": "Searching…",
+    "noneFound": "No person customer found.",
+    "pickedLine": "{name} goes under {team}.",
+    "clearPick": "Make a new rider instead",
+    "twoSteps": "Two steps: the new customer is made, then put under {team}.",
+    "confirm": "Add rider",
+    "next": "Open Add contact",
+    "retry": "Try again",
+    "made": "{name} was made, not yet under {team}: Try again.",
+    "problem": {
+      "name": "Give the rider's name.",
+      "nameLong": "At most 120 characters.",
+      "email": "This is not an e-mail address."
+    }
+  },
+  "team": {
+    "title": "Change the team of {name}",
+    "sub": "Today under {team}",
+    "subNone": "Today under no team",
+    "label": "Team",
+    "keep": "Keep under {team}",
+    "keepNone": "Keep without a team",
+    "move": "Move to another team",
+    "movePicked": "To {team}",
+    "off": "Take off any team",
+    "offLine": "{name} stays a customer of its own, with its orders and measurements.",
+    "find": "Find a team customer (two letters at least)",
+    "noneFound": "No team customer found.",
+    "kept": "Orders already made keep their customer and their measurements: a team orders only with the measurements kept on the team.",
+    "problem": {
+      "pick": "Pick the team to move to."
+    }
   }
 }

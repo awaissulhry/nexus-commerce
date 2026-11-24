@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { ADDRESS_APPROVALS } from '@nexus/factory-domain/parties/address-approval'
 import type { ApiClient } from '../../../../../lib/api/client'
+import { partySchema, type Party } from '../../../../parties/_shared/api' // F-CA-210
 
 /**
  * F-CA-102 (customer page › PEOPLE & ADDRESSES tab, lane ca-; 13-backend §5.2; 18-lead-settles Z10, D3) — the tab's own calls. Every one
@@ -106,4 +107,26 @@ export async function readRiders(api: ApiClient, partyId: string, signal?: Abort
 /** Put a rider under a team, move it, or take it off (null): parties.manage on the RIDER, the rider's version; answers the rider's view. */
 export async function setRiderTeam(api: ApiClient, riderId: string, body: { readonly version: number; readonly teamPartyId: string | null }, key: string): Promise<RidersView> {
   return (await api.request('PUT', `/parties/${enc(riderId)}/team`, { body, idempotencyKey: key, schema: ridersAnswer })).riders
+}
+
+// ---- F-CA-210 (ca-w2 W2.3; Z10: `teamPartyId` on POST /parties is a later job): Add rider… = the two existing commands ----
+
+/** A new rider: a person customer of the team's company (a rider rides for a team of its own company), its contact for the links. */
+export interface NewRiderBody {
+  readonly companyId: string | null
+  readonly code: string
+  readonly kind: 'PERSON'
+  readonly legalName: string
+  readonly roles: readonly ['CUSTOMER']
+  readonly country: string
+  readonly currency: string
+  readonly language: string
+  readonly status: 'ACTIVE'
+  /** The rider as its own contact (role Rider: its measurement links and fitting invites go to it), when an e-mail or a phone is given. */
+  readonly contacts?: ReadonlyArray<{ readonly name: string; readonly email: string | null; readonly phone: string | null; readonly roles: readonly ['RIDER']; readonly language: string }>
+}
+
+/** POST /parties (parties.manage): the rider made, not yet under the team (setRiderTeam puts it there). */
+export async function createRider(api: ApiClient, body: NewRiderBody, key: string): Promise<Party> {
+  return (await api.post('/parties', { body, idempotencyKey: key, schema: z.object({ party: partySchema }) })).party
 }

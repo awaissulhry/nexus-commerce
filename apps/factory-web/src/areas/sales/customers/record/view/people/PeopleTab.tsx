@@ -11,6 +11,8 @@ import type { PeopleMtm, PeopleTabActions, PeopleTabModel } from '../../people/t
 import { LinkDialog } from '../../../../mtm/view/LinkDialog' // F-CA-209: Made-to-measure's own windows, in place
 import { MeasurementsDialog } from '../../../../mtm/view/MeasurementsDialog' // F-CA-209
 import { RidersSection } from './RidersSection' // F-CA-209
+import { AddRiderDialog } from './AddRiderDialog' // F-CA-215: the NEW windows of Riders
+import { ChangeTeamDialog } from './ChangeTeamDialog' // F-CA-215
 import { AddressesSection } from './AddressesSection'
 import { PeopleAnswer } from './PeopleAnswer'
 import { PeopleSection } from './PeopleSection'
@@ -80,6 +82,8 @@ function PeopleTabBody({ model, actions, portal, recordHref, after, mtm }: Peopl
       ) : null}
       {mtm?.measurements ? <MeasurementsDialog model={mtm.measurements} actions={mtm.measurementsActions} /> : null}
       {mtm?.link ? <LinkDialog model={mtm.link} can={mtm.can} actions={mtm.linkActions} /> : null}
+      {model.addRider ? <AddRiderDialog dialog={model.addRider} team={model.name} actions={actions} /> : null}
+      {model.team ? <ChangeTeamDialog dialog={model.team} actions={actions} /> : null}
       {model.refuse && refused ? <RefuseAddressDialog dialog={model.refuse} address={refused.address} customer={model.name} actions={actions} /> : null}
     </div>
   )

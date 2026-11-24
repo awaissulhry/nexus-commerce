@@ -35,9 +35,75 @@ export interface PeopleTabState {
   readonly approving: string | null
   /** The Refuse… window (null: closed). */
   readonly refuse: RefuseDialog | null
+  /** F-CA-211 (W2.3): the Add rider… window (null: closed). */
+  readonly addRider: AddRiderDialog | null
+  /** F-CA-211 (W2.3): the Change team… window (null: closed). */
+  readonly team: TeamDialog | null
 }
 
-export const PEOPLE_TAB_START: PeopleTabState = { filter: null, showArchivedContacts: false, showArchivedAddresses: false, ticking: false, morePeople: false, moreAddresses: false, moreRiders: false, approving: null, refuse: null }
+/** F-CA-211: a customer found by the search of a window (a person to put under the team, or a team to move a rider to). */
+export interface FoundParty {
+  readonly id: string
+  readonly code: string
+  readonly name: string
+  readonly city: string | null
+  readonly version: number
+}
+
+/**
+ * F-CA-211 (10-design §6 window 4): Add a rider to {team} — a rider with its own page (a person customer made, then put under the team:
+ * the two existing commands; Z10 — `teamPartyId` on POST /parties is a later job) or a rider kept on the team (the record's own Add
+ * contact window, Rider ticked); or an existing person customer put under the team.
+ */
+export interface AddRiderDialog {
+  readonly kind: 'own' | 'kept'
+  readonly name: string
+  readonly email: string
+  readonly phone: string
+  readonly language: string
+  readonly search: string
+  /** The search's answer (null: nothing asked yet). */
+  readonly found: Read<readonly FoundParty[]> | null
+  readonly picked: FoundParty | null
+  readonly tried: boolean
+  readonly busy: boolean
+  /** A refusal (a `parties` problem key), else null. */
+  readonly problem: string | null
+  /** The rider was made and is not yet under the team (its second command failed): Try again sends only that one. */
+  readonly made: { readonly id: string; readonly name: string; readonly version: number } | null
+}
+
+/** F-CA-211 (10-design §6 window 5): Change the team of {rider} — keep it, move it to another team, or take it off any team. */
+export interface TeamDialog {
+  readonly riderId: string
+  readonly riderName: string
+  /** The rider's version (its row's): the team change names it. */
+  readonly version: number
+  readonly current: { readonly id: string; readonly name: string } | null
+  readonly choice: 'keep' | 'move' | 'off'
+  readonly search: string
+  readonly found: Read<readonly FoundParty[]> | null
+  readonly picked: FoundParty | null
+  readonly tried: boolean
+  readonly busy: boolean
+  readonly problem: string | null
+}
+
+/** What Add rider still needs before it can be sent (a key of the tab's words), or null. */
+export function addRiderProblem(dialog: AddRiderDialog): string | null {
+  if (dialog.kind === 'kept') return null
+  if (dialog.picked) return null
+  const name = dialog.name.trim()
+  if (name === '') return 'rider.problem.name'
+  if (name.length > 120) return 'rider.problem.nameLong'
+  if (dialog.email.trim() !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(dialog.email.trim())) return 'rider.problem.email'
+  return null
+}
+
+/** What Change team still needs (moving needs a team picked), or null. */
+export const teamProblem = (dialog: TeamDialog): string | null => (dialog.choice === 'move' && !dialog.picked ? 'team.problem.pick' : null)
+
+export const PEOPLE_TAB_START: PeopleTabState = { filter: null, showArchivedContacts: false, showArchivedAddresses: false, ticking: false, morePeople: false, moreAddresses: false, moreRiders: false, approving: null, refuse: null, addRider: null, team: null }
 
 /** The Refuse the delivery address window: the reason the customer reads (3–500 characters). */
 export interface RefuseDialog {
@@ -154,6 +220,8 @@ export interface PeopleTabModel {
   readonly addresses: AddressesSectionModel
   readonly riders: RidersSectionModel // F-CA-203
   readonly refuse: RefuseDialog | null
+  readonly addRider: AddRiderDialog | null // F-CA-211
+  readonly team: TeamDialog | null // F-CA-211
 }
 
 /** The tab's model from its reads and its state. */
@@ -263,6 +331,8 @@ export function peopleTabModel(reads: PeopleTabReads, state: PeopleTabState): Pe
       menu: { can, prefix: reads.prefix, status: party.status },
     },
     refuse: state.refuse,
+    addRider: state.addRider,
+    team: state.team,
   }
 }
 
@@ -303,6 +373,13 @@ export interface PeopleTabActions {
   readonly onAddRider?: () => void
   /** Change team… — of a rider with its own page (its row), or of this customer itself (a rider's own page: null). */
   readonly onChangeTeam?: (row: RiderRow | null) => void
+  // ---- F-CA-211: the two windows' drafts and acts
+  readonly onAddRiderDraft?: (patch: Partial<Pick<AddRiderDialog, 'kind' | 'name' | 'email' | 'phone' | 'language' | 'search' | 'picked'>>) => void
+  readonly onAddRiderConfirm?: () => void
+  readonly onAddRiderClose?: () => void
+  readonly onTeamDraft?: (patch: Partial<Pick<TeamDialog, 'choice' | 'search' | 'picked'>>) => void
+  readonly onTeamConfirm?: () => void
+  readonly onTeamClose?: () => void
 }
 
 /** The tab's notices for the record's ONE notice area (the portal container's own, and the tab's). */

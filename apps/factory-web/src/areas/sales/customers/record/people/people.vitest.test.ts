@@ -10,7 +10,7 @@ import { customerAccess, CUSTOMER_PEOPLE, portalModel as portalModelOf } from '.
 import type { PrivacyContact } from '../../depth/api'
 import { addressRows, invoiceAddressOf, refusedInView, shownAddresses, addressMenu } from './addresses'
 import { peopleAnswer, peopleBadge, peopleSectionAnswer, personFilterOf, type PeopleFacts } from './answer'
-import { CP, failedRead, PEOPLE_SECTIONS, PEOPLE_TAB_NAMESPACES, peopleCan, READING, readyRead, sayOf, type Said } from './model'
+import { CP, failedRead, PEOPLE_SECTIONS, PEOPLE_TAB_NAMESPACES, peopleCan, READING, readyRead, said, sayOf, type Said } from './model'
 import { partyUsageSchema, type PartyUsage, type RidersView } from './api'
 import { riderMenu, riderRows, ridersAnswer } from './riders'
 import type { ProfileRow, ProfilesView } from '../../../mtm/api'
@@ -21,7 +21,7 @@ import { renderToString } from 'react-dom/server'
 import type { DesignScreen } from '../../../../../lib/design/design-screen'
 import { I18nProvider } from '../../../../../lib/i18n/provider'
 import { designScreen as customerRecordScreen } from '../fixtures'
-import { PEOPLE_TAB_START, peopleTabModel, type PeopleTabReads } from './tab'
+import { addRiderProblem, PEOPLE_TAB_START, peopleTabModel, teamProblem, type AddRiderDialog, type PeopleTabReads } from './tab'
 import { peopleRows, personMenu, shownPeople, type PeopleInput } from './people'
 
 /**
@@ -465,5 +465,46 @@ describe('Riders & measurements on the tab, Made-to-measure\'s windows in place 
     expect(view).not.toMatch(/profile\.(measurements|measuredPlace|takenBy)|fitNotes/)
     expect(view).toContain("'sales-mtm:list.new'")
     expect(view).toContain("'sales-mtm:list.sendLink'")
+  })
+})
+
+// ---- ca-w2 W2.3: Add rider… and Change team…
+describe('Add rider… and Change team… (W2.3)', () => {
+  const RIDERS: RidersView = { partyId: MODA.id, code: MODA.code, kind: 'ORGANISATION', team: null, riders: [], version: MODA.version }
+  const reads = (can = ALL_MEASURED) => ({ party: MODA, prefix: '/w/DEMO', can, now: NOW, portal: null, privacy: null, usage: null, approverId: null, profiles: null, riders: readyRead(RIDERS) })
+  const blank: AddRiderDialog = { kind: 'own', name: '', email: '', phone: '', language: 'it', search: '', found: null, picked: null, tried: false, busy: false, problem: null, made: null }
+
+  it('Add rider is offered only with parties.manage, on an organisation (a rider\'s own page offers Change team instead)', () => {
+    expect(peopleTabModel(reads(), PEOPLE_TAB_START).riders.head.addRider).toBe(true)
+    expect(peopleTabModel(reads(peopleCan(['parties.view', 'sales.measurements.view'])), PEOPLE_TAB_START).riders.head.addRider).toBe(false)
+    expect(peopleTabModel(reads(), PEOPLE_TAB_START).riders.head.changeTeam).toBe(false)
+  })
+
+  it('a new rider needs a name (and a real e-mail when one is given); a picked customer or a rider kept on the team needs nothing more', () => {
+    expect(addRiderProblem(blank)).toBe('rider.problem.name')
+    expect(addRiderProblem({ ...blank, name: 'Marco Valli', email: 'not-an-address' })).toBe('rider.problem.email')
+    expect(addRiderProblem({ ...blank, name: 'Marco Valli', email: 'marco@example.com' })).toBeNull()
+    expect(addRiderProblem({ ...blank, picked: { id: 'p9', code: 'CUS-0191', name: 'Marco Valli', city: null, version: 2 } })).toBeNull()
+    expect(addRiderProblem({ ...blank, kind: 'kept' })).toBeNull()
+    expect(teamProblem({ riderId: 'r1', riderName: 'Marco Valli', version: 3, current: null, choice: 'move', search: '', found: null, picked: null, tried: false, busy: false, problem: null })).toBe('team.problem.pick')
+  })
+
+  it('the half-failure: the rider was made, not yet under the team — said in words, and Try again sends only the team change', () => {
+    expect(say('en')(said('rider.made', { params: { name: 'Marco Valli', team: 'Moda Demo' } }))).toBe('Marco Valli was made, not yet under Moda Demo: Try again.')
+    expect(say('it')(said('rider.made', { params: { name: 'Marco Valli', team: 'Moda Demo' } }))).toBe('Marco Valli è stato creato, ma non è ancora sotto Moda Demo: riprova.')
+    const container = readFileSync(new URL('./use-people-tab.ts', import.meta.url), 'utf8')
+    // A made rider is kept by the window: the next try skips the create and sends only PUT /parties/:rider/team.
+    expect(container).toContain('let rider = dialog.made ?? (dialog.picked ?')
+    expect(container).toContain("patchAdd({ busy: false, problem: problemKey(error), ...(dialog.picked ? {} : { made: rider }) })")
+    expect(container).toContain('await setRiderTeam(api, rider.id, { version: rider.version, teamPartyId: partyId }, teamKeyOf)')
+    // The rider is a person customer of the team's own company (a rider rides for a team of its company).
+    expect(container).toContain("{ companyId: party.companyId, code: suggestCode(name), kind: 'PERSON', legalName: name, roles: ['CUSTOMER']")
+  })
+
+  it('Change team sends the rider\'s version; taking it off sends null; a rider kept on the team opens the record\'s Add contact, Rider ticked', () => {
+    const container = readFileSync(new URL('./use-people-tab.ts', import.meta.url), 'utf8')
+    expect(container).toContain("teamPartyId: dialog.choice === 'off' ? null : dialog.picked!.id }, key)")
+    expect(container).toContain("setPreset(blankContact(['RIDER']))")
+    expect(readFileSync(new URL('../view/people/PeopleTab.tsx', import.meta.url), 'utf8')).toContain('<ChangeTeamDialog dialog={model.team} actions={actions} />')
   })
 })
