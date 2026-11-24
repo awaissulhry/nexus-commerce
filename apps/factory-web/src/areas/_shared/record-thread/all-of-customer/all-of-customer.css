@@ -97,22 +97,6 @@
   outline-offset: 2px;
 }
 
-.fw-aoc-new {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--nds-space-4);
-  color: var(--nds-info-text);
-  font-size: var(--nds-font-size-xs);
-  font-weight: 600;
-}
-
-.fw-aoc-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--nds-info);
-}
-
 .fw-aoc-foot {
   display: flex;
   flex-direction: column;
@@ -185,3 +169,8 @@
 }
 /* ── end F-OP-305 */
 .fw-aoc-readonly { min-width: 0; color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); }
+
+/* tw- fx2 (walk G-9): All of's list on the sunken ground, as a thread's feed. */
+.fw-rt-column.is-docked .fw-rt-scroll:has(> .fw-aoc) {
+  background: var(--nds-surface-sunken);
+}

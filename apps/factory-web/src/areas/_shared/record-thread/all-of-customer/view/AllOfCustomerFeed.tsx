@@ -8,6 +8,7 @@ import { useT } from '../../../../../lib/i18n/provider'
 import { MessageCard } from '../../../../../lib/record-thread/card/view/MessageCard'
 import { copyTextOf } from '../../../../../lib/record-thread/card/model' // tw- W2.5: Copy text
 import { shouldLoadOlder } from '../../../../../lib/record-thread/feed/model' // tw- T.0: the record thread's own rule
+import { tonesFor } from '../../../../../lib/record-thread/parts/tones' // tw- fx2 (G-7)
 import { HEAD_NS } from '../../../../../lib/record-thread/head/view/RecordThreadHead' // F-OP-204: the Head's words (width, ⋮)
 import { RecordTypeIcon } from '../../../../search/RecordTypeIcon'
 import { PickedDockColumn } from '../../ThreadPick' // F-OP-204: the dock's one card
@@ -20,7 +21,7 @@ import '../../../../../lib/record-thread/feed/feed.css' // tw- T.0: the thread's
 import '../all-of-customer.css'
 
 /** The catalogues the view reads (the host loads them: WithMessages). F-OP-204: + the Head's (FeedHead's width menu and ⋯). */
-export const ALL_OF_CUSTOMER_NS = ['record-thread', 'record-thread-card', HEAD_NS] as const
+export const ALL_OF_CUSTOMER_NS = ['record-thread', 'record-thread-card', HEAD_NS, /* tw- fx2 (G-8): the ONE unread band */ 'record-thread-feed'] as const
 
 /** A record a line belongs to (the door's target). */
 export interface FeedRecordRef {
@@ -104,6 +105,13 @@ export function AllOfCustomerFeed({ model, actions }: { model: AllOfCustomerMode
   const words = (text: Words) => t(text.key, text.params)
   const filtered = model.view !== 'all' || model.kind !== 'every'
   const rows = useMemo(() => feedRowsOf(model.items), [model.items])
+  // tw- fx2 (walk G-7): one colour per person inside this list.
+  const listModel = useMemo(() => ({ ...model, card: { ...model.card, tones: tonesFor(model.items.map((item) => item.card.senderKey)) } }), [model])
+  // tw- fx2 (walk G-8): the reader's new messages are said ONCE — the feed's own band above the first of them.
+  const feedWords = useT('record-thread-feed')
+  const firstNew = rows.findIndex((row) => row.item.isNew)
+  const newCount = rows.filter((row) => row.item.isNew).length
+  const unreadWords = newCount > 200 ? feedWords('unread.lineMany') : feedWords('unread.line', { count: newCount })
   // F-OP-206 (11-dock §3.3, D7): ONE tab stop for the list — the line last focused holds it; J / K and the arrows walk the lines.
   const [active, setActive] = useState(-1) // -1: the newest (the list opens at the bottom)
   const lineRefs = useRef<Array<HTMLElement | null>>([])
@@ -231,11 +239,20 @@ export function AllOfCustomerFeed({ model, actions }: { model: AllOfCustomerMode
               </Button>
             </p>
           )}
-          {rows.map((row, index) => (
+          {rows.flatMap((row, index) => [
+            // tw- fx2 (walk G-8): ONE "N unread messages" band above the first new message — no "• New" on each message. One flat
+            // keyed list, so an older page loaded on top keeps every bubble (no remount).
+            ...(index === firstNew
+              ? [
+                  <div key="unread" className="fw-rt-unread" data-feed-new="" role="separator" aria-label={unreadWords}>
+                    <span className="fw-rt-pill is-unread">{unreadWords}</span>
+                  </div>,
+                ]
+              : []),
             <FeedBubble
               key={row.item.key}
               row={row}
-              model={model}
+              model={listModel}
               actions={actions}
               chip={words(row.item.chip)}
               place={linePlaceOf(index, rows.length, model.more)}
@@ -250,8 +267,8 @@ export function AllOfCustomerFeed({ model, actions }: { model: AllOfCustomerMode
                 if (act.kind === 'move') moveTo(act.to)
                 return act
               }}
-            />
-          ))}
+            />,
+          ])}
         </div>
       )}
 
@@ -317,7 +334,7 @@ function FeedBubble({
   return (
     <article
       ref={lineRef}
-      className={`fw-aoc-item${row.recordStart ? ' is-recstart' : ''}${item.isNew ? ' is-new' : ''}`}
+      className={`fw-aoc-item${row.recordStart ? ' is-recstart' : ''}`}
       tabIndex={current ? 0 : -1}
       aria-posinset={place.posinset}
       aria-setsize={place.setsize}
@@ -329,6 +346,8 @@ function FeedBubble({
         const act = onKey(event)
         if (!act) return
         event.preventDefault()
+        // tw- fx2 (walk G-12): the list's keys are the list's — a host's own J / K (a sheet beside it) never gets them too.
+        event.stopPropagation()
         if (act.kind === 'answer') answerThere?.()
       }}
     >
@@ -360,12 +379,6 @@ function FeedBubble({
       ) : (
         <span id={`${base}-chip`} className="nds-vh">
           {chip}
-        </span>
-      )}
-      {item.isNew && (
-        <span className="fw-aoc-new">
-          <span className="fw-aoc-dot" aria-hidden />
-          {t('allOfCustomer.new')}
         </span>
       )}
       <MessageCard
