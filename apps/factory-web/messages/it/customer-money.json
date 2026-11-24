@@ -254,6 +254,9 @@
     "none": {
       "title": "Qui ancora niente",
       "collect": "Niente da incassare: nessun acconto richiesto e nessuna fattura aperta."
+    },
+    "note": {
+      "noTab": "Importi richiede il diritto di vedere prezzi, crediti o fidi: questa è la scheda Lavori, che il tuo ruolo può aprire."
     }
   }
 }

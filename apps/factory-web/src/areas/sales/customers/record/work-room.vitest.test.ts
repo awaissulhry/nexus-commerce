@@ -73,7 +73,7 @@ describe('F-CW-103: wide by the room the tab really has (S11)', () => {
     expect(tab).not.toMatch(/sizes\.|setWidth\(|defaultWidth/)
     // The dock's default width on Work stays the record's own line (never touched here).
     const view = readFileSync(new URL('./view/CustomerRecordView.tsx', import.meta.url), 'utf8')
-    expect(view).toContain("defaultWidth={tab === 'work' || tab === 'quotes' || tab === 'overview' ? 'third' : undefined}") // F-CQ-301: Quotes & incoming a third too; F-CO-103 (S13): the Overview a third too — Money, People, Terms and Portal stay 40 %
+    expect(view).toContain("defaultWidth={tab === 'work' || tab === 'quotes' || tab === 'overview' || tab === 'money' ? 'third' : undefined}") // F-CQ-301: Quotes & incoming a third too; F-CO-103 (S13): the Overview a third too; F-CM-104 (D2): Money a third too — People, Terms and Portal stay 40 %
   })
 })
 

@@ -401,3 +401,29 @@ describe('F-CM-101: the views (cm-w1 W1.3; 10-design §1, §2; 18-lead-settles L
     expect(view('say.ts')).toContain('useScopedT(CM)')
   })
 })
+
+describe('F-CM-104: the page (cm-w1 W1.4; 13-backend §5.3–§5.6; Z11, Z27, D2)', () => {
+  const page = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+
+  it('the container builds the tab only on Money; the view mounts it, counts what is late, docks a third, says why a role is sent to Work', () => {
+    const container = page('../CustomerRecord.tsx')
+    expect(container).toContain("const moneyTab = named && record.party && tab === 'money' ? <CustomerMoney party={record.party} prefix={prefix} money={money}")
+    expect(container).toContain("if (record.model.tab === 'money' && tab !== 'money') setMoneyTabNote(true)")
+    const view = page('../view/CustomerRecordView.tsx')
+    expect(view).toContain("{tab === 'money' && moneyTab}")
+    expect(view).toContain("{tab === 'work' && moneyTabNote && <MoneyTabNote />}")
+    expect(view).toContain('moneyBadgeOf({ can: { receivables: moneyModel.can.receivables, payments: !!moneyModel.can.payments, price: moneyModel.can.price }')
+    expect(view).toContain("id === 'money' ? moneyCount : undefined")
+    // The old tab is no longer mounted (it goes in cm-w3 W3.4, after a grep on main).
+    expect(view).not.toContain('<MoneyTab ')
+  })
+
+  it('the order\'s one planned change: its Invoices foot link lands on the customer\'s #invoices, "All money of <customer> ›"', () => {
+    expect(page('../../../orders/record/money/view/InvoicesSection.tsx')).toContain('?tab=money#invoices`')
+    for (const locale of LOCALES) {
+      const words = messagesFor(locale, ['orders']).orders!
+      expect(words['money.allMoney'], locale).toBeTruthy()
+      expect(words['money.statement'], locale).toBeUndefined()
+    }
+  })
+})

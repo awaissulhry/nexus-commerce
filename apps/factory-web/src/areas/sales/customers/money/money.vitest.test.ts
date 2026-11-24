@@ -96,9 +96,11 @@ describe('the W2a design cases draw in both languages with no key on screen', ()
     expect(full).toContain('2 open · oldest RMA-2026-0007, asked 12/09/2026')
     expect(full).toContain('1 open · next answer CMP-2026-0004 due 05/11/2026')
     expect(full).toContain('/finance/receivables?party=')
-    // F-SA-273: "Returns in <year>" is a key number of the Money tab now (F-SA-272: the Overview keeps at most six doors).
+    // F-CM-104 (customer Money plan §10.1): the Money tab is the new one (the answer line, Balance, To collect…); "Returns in <year>" left
+    // it for the Overview (a return's money is its credit note).
     const money = render(screen, screen.cases.find((entry) => entry.id === 'tab-money')!.model, 'en')
-    expect(money).toContain('Returns in 2026')
+    expect(money).toContain('class="fw-pt fw-om fw-cm"')
+    expect(money).not.toContain('Returns in 2026')
     const none = render(screen, screen.cases.find((entry) => entry.id === 'w2a-numbers-no-receivables')!.model, 'en')
     expect(none).not.toContain('€4,270.00')
     expect(none).not.toContain('/finance/receivables?party=')
@@ -152,6 +154,9 @@ describe('F-SA-273: the customer’s Money tab', () => {
     for (const locale of LOCALES) {
       const html = renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(View, { model: item.model })))
       expect(html).not.toMatch(/\btab\.(openToPay|credit|openInvoices|deposits|paymentTerms)\b/)
+      // F-CM-104 (W1.4): the same case on the new tab — its layout, and none of its own keys left on screen.
+      expect(html).toContain('class="fw-pt fw-om fw-cm"')
+      expect(html).not.toMatch(/\bcm\.(answer|balance|collect|needs|door|none|more)\.[a-zA-Z]+/)
     }
   })
 })

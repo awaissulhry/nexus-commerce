@@ -395,7 +395,7 @@ describe('cq W3: the page around the tab', () => {
     expect(page).toContain('const tab = shownTab(recordTabs(SIDES.customers, can), record.model.tab)')
     const view = readFileSync(new URL('../view/CustomerRecordView.tsx', import.meta.url), 'utf8')
     expect(view).toContain('const tab: RecordTab = shownTab(tabs, model.tab)')
-    expect(view).toContain("defaultWidth={tab === 'work' || tab === 'quotes' || tab === 'overview' ? 'third' : undefined}") // F-CO-103 (S13): the Overview a third too — Money, People, Terms and Portal stay 40 %
+    expect(view).toContain("defaultWidth={tab === 'work' || tab === 'quotes' || tab === 'overview' || tab === 'money' ? 'third' : undefined}") // F-CO-103 (S13): the Overview a third too; F-CM-104 (D2): Money a third too — People, Terms and Portal stay 40 %
   })
 
   it('F-CQ-302: the page reads the counts ONCE (every tab); the badge = what waits on us there, marked; the band and the Work line read it', () => {

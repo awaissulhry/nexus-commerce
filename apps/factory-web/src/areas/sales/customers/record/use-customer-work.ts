@@ -537,7 +537,8 @@ export const DOCK_PARAM = 'dock'
 /** The keys' rest before the dock follows the focused row. */
 export const DOCK_FOLLOW_MS = 300
 /** The tabs whose rows drive the dock (leaving them drops a record's dock: the other tabs are about the account). */
-export const DOCK_TABS: readonly string[] = Object.freeze(['work', 'quotes'])
+// F-CM-104 (cm-w1 W1.4; 13-backend §5.5): + Money — a To-collect row's "Show in the thread" docks its order beside the tab.
+export const DOCK_TABS: readonly string[] = Object.freeze(['work', 'quotes', 'money'])
 
 /**
  * The records the customer page may dock beside the customer's own conversation: the customer-side conversations (the merged feed's
