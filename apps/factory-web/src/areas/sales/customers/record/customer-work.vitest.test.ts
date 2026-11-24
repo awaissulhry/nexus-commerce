@@ -1257,6 +1257,10 @@ describe('F-CP-141: the Not equal view', () => {
     expect(html('tab-money-price-differ', 'it')).toContain('Prezzi diversi su 2 ordini ›')
     const tab = readFileSync(new URL('./view/money/CustomerMoneyTab.tsx', import.meta.url), 'utf8') // F-CM-104 (W1.4): the new tab's layout
     expect(tab).toContain('const differ = price && can.orders && priceDiffer !== null && priceDiffer > 0 ? priceDiffer : null')
+    // F-CM-303 (cm-w3 W3.3): the door lives in the Price check section now (Balance's need points ↓ to it; without it, its own door).
+    const section = readFileSync(new URL('./view/money/PriceCheckSection.tsx', import.meta.url), 'utf8')
+    expect(section).toContain("{say(word('parties:customers.work.priceDiffer', { params: { count: model.differ.count } }))}")
+    expect(readFileSync(new URL('./money/worth.ts', import.meta.url), 'utf8')).toContain('{ count: input.priceDiffer, href: priceDifferHref(prefix, input.party.id) }')
   })
 
   it('a non-holder opens a shared view with the term: one line + Show all orders, no read carries it, no address write', () => {

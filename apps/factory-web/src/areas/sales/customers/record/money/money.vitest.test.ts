@@ -23,6 +23,15 @@ import { CM, MONEY_TAB_NAMESPACES, moneyChangeIsOurs, moneyTabCanOf, partFailed,
 import { sayOf } from './say'
 import { CUSTOMER_MONEY_ANCHORS, CUSTOMER_MONEY_SECTIONS } from './sections'
 import { recordPaymentForCustomerHref } from './doors' // F-CM-204
+import { creditOf } from './credit' // F-CM-301
+import { chaseOf } from './chase' // F-CM-302
+import { marginOf, priceCheckOf } from './worth' // F-CM-303
+import { returnsCreditOf } from './received' // F-CM-303 (E52)
+import type { LimitRow } from '../../../../finance/receivables/credit/api'
+import type { CommercialTerms } from '../../terms/api'
+import type { Margins } from '../../../../finance/margins/api'
+import type { OrderRow } from '../../../orders/api'
+import type { CustomerReturn } from '../../money/api'
 
 /**
  * F-CM-101…105 (customer page › MONEY tab, cm-w1 W1.1; 10-design §4–§5.2; 18-lead-settles Z3–Z11, Z20, Z21, Z26) — the pure rules of
@@ -597,3 +606,176 @@ describe('F-CM-204: "Record a payment ›" — Finance\'s window with this custo
     expect(balance).not.toMatch(/heldReason/)
   })
 })
+
+// ---- F-CM-301…304 (customer page › MONEY tab, cm-w3; 10-design §5.5–§5.8; 13-backend §4.2, §5.10, §5.11; Z31, Z32, E52) ----
+describe('F-CM-301…304: the account sections, Finance\'s windows in place, the old code out (cm-w3)', () => {
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+  const view = (name: string) => source(`../view/money/${name}`)
+  const terms = partReady({ currency: 'EUR', defaultDepositPct: '30', invoiceTiming: 'ON_SHIPMENT' } as unknown as CommercialTerms)
+  const limitRow = (held = { orders: 0, shipments: 0, releases: 0 }): LimitRow => ({ company: COMPANY_A, currency: 'EUR', limit: 2000000, used: 1688000, available: 312000, overLimitBy: null, overdue: 244000, held, version: 3 }) as unknown as LimitRow
+  const glanced = (credit: Partial<NonNullable<Glance['credit']>>, hold = false) => ({ status: 'ready' as const, value: { ...glanceOf({ onHold: hold }), credit: { ...glanceOf().credit!, ...credit } } })
+  const can = (role: Role, more: readonly string[] = []) => moneyTabCanOf([...ROLES[role], ...more])
+
+  it('W3.1 Credit & terms: no row → no "held" line (never "0 held"); a row says only what waits', () => {
+    expect(creditOf(input('owner'), partReady(null), terms, PREFIX).waiting).toBeNull()
+    expect(creditOf(input('owner'), partReady(limitRow()), terms, PREFIX).waiting).toBeNull()
+    const held = creditOf(input('owner'), partReady(limitRow({ orders: 2, shipments: 0, releases: 1 })), terms, PREFIX)
+    expect(held.waiting!.map((said) => said.key)).toEqual(['cm.credit.waitOrders', 'cm.credit.waitReleases'])
+    expect(sayIn('en')(held.waiting![0]!)).toBe('2 orders wait for a yes')
+    expect(sayIn('it')(held.waiting![1]!)).toBe('1 rilascio rifiutato')
+  })
+
+  it('W3.1 Change limit… only with sales.credit.limits and prices (hidden, never held); Set a limit… without a limit; the hold with Release…', () => {
+    expect(creditOf(input('owner'), null, terms, PREFIX).change).toBe('change')
+    for (const role of ['sales', 'readonly'] as const) expect(creditOf(input(role), null, terms, PREFIX).change, role).toBeNull()
+    expect(creditOf(input('owner', { glance: glanced({ state: 'NONE', limit: null, used: null, available: null }) }), null, terms, PREFIX).change).toBe('set')
+    const onHold = creditOf(input('owner', { glance: glanced({}, true) }), null, terms, PREFIX)
+    expect(onHold.hold).not.toBeNull()
+    expect(onHold.mayHold).toBe(true)
+    expect(onHold.answer.map((said) => said.key)).toContain('cm.credit.holdSince')
+    expect(creditOf(input('readonly'), null, terms, PREFIX).mayHold).toBe(false)
+    const section = view('CreditSection.tsx')
+    expect(section).toContain('const buttons = model.change && onChangeLimit ?')
+    expect(section).not.toMatch(/heldReason|disabled=/)
+  })
+
+  it('W3.1 the cells, the share used and the terms\' door with prices; no amount without them', () => {
+    const owner = creditOf(input('owner'), partReady(limitRow()), terms, PREFIX)
+    expect(owner.cells!.map((cell) => cell.key)).toEqual(['limit', 'used', 'free'])
+    expect(owner.usedPct).toBe(84)
+    expect(owner.termsHref).toBe(`${PREFIX}/sales/customers/p-1?tab=terms#party-commercial`)
+    expect(owner.facts.map((fact) => fact.key)).toEqual(['paymentTerms', 'deposit', 'invoicing', 'currency'])
+    const over = creditOf(input('owner', { glance: glanced({ state: 'OVER', used: 2420000, available: null, overLimitBy: 420000 }) }), null, terms, PREFIX)
+    expect(over.cells!.find((cell) => cell.key === 'over')).toMatchObject({ amount: 420000, danger: true })
+    const sales = creditOf(input('sales'), partReady(limitRow()), terms, PREFIX)
+    expect([sales.cells, sales.usedPct, sales.overdue]).toEqual([null, null, null])
+    for (const said of [...sales.answer, ...sales.facts.map((fact) => fact.value)]) expect(amountsOf(said), said.key).toEqual([])
+  })
+
+  it('W3.2 Statement & reminders: OFF said once; a held reminder says why; a waiting one waits for a person; the door ?reminder=<id>', () => {
+    const reminder = (id: string, status: string, held: readonly string[], preparedAt: string) => ({ id, level: 1, action: 'EMAIL', status, held: held.map((code) => ({ code })), preparedAt, sentAt: status === 'SENT' ? preparedAt : null, invoices: [{ id: 'inv-1', number: 'FT-2026-00001' }], amountDue: 244000, interestAmount: 0, currency: 'EUR' }) as unknown as Reminder
+    const reminders = partReady([reminder('r-1', 'PREPARED', ['STOP_DISPUTE'], '2026-11-20T09:00:00Z'), reminder('r-2', 'PREPARED', [], '2026-11-21T09:00:00Z'), reminder('r-3', 'CANCELLED', [], '2026-11-19T09:00:00Z')])
+    const off = partReady({ switch: { on: false } } as never)
+    const model = chaseOf(input('owner', { reminders }), null, off, PREFIX, true)!
+    expect(model.off).toEqual({ key: 'finance-receivables:switch.offTitle' })
+    expect(model.reminders.map((row) => row.id)).toEqual(['r-2', 'r-1'])
+    expect(model.reminders[0]!.notes.map((note) => note.key)).toEqual(['cm.chase.waits'])
+    expect(model.reminders[1]!.notes.map((note) => note.key)).toEqual(['finance-receivables:heldReason.STOP_DISPUTE'])
+    expect(model.reminders[0]!.href).toBe(`${PREFIX}/finance/receivables?reminder=r-2`)
+    expect(model.answer.map((said) => said.key)).toEqual(['cm.needs.reminders', 'cm.chase.noStop'])
+    expect(chaseOf(input('owner', { reminders }), null, partReady({ switch: { on: true } } as never), PREFIX, true)!.off).toBeNull()
+  })
+
+  it('W3.2 Statement… only with prices and something to state; a stop is lifted only with its right and its own verdict', () => {
+    expect(chaseOf(input('owner'), null, null, PREFIX, true)!.statement).toBe(true)
+    expect(chaseOf(input('owner'), null, null, PREFIX, false)!.statement).toBe(false)
+    expect(chaseOf(input('sales'), null, null, PREFIX, true)!.statement).toBe(false)
+    const stop: ReminderStop = { id: 's-1', company: COMPANY_A, customer: CUSTOMER, invoice: { id: 'inv-1', number: 'FT-2026-00001' }, reason: 'PROMISE_TO_PAY', until: '2026-11-30', note: null, state: 'holding', holdsReminders: [], createdAt: '2026-11-20T09:00:00Z', createdBy: null, liftedAt: null, liftedBy: null, liftReason: null, can: { change: true, lift: true }, version: 1 }
+    expect(chaseOf(input('owner', { stops: partReady([stop]) }), null, null, PREFIX, true)!.stops.map((row) => row.liftable)).toEqual([true])
+    expect(chaseOf(input('sales', { stops: partReady([stop]) }), null, null, PREFIX, true)!.stops.map((row) => row.liftable)).toEqual([false])
+    expect(chaseOf(input('owner', { stops: partReady([{ ...stop, can: { change: true, lift: false } }]) }), null, null, PREFIX, true)!.stops.map((row) => row.liftable)).toEqual([false])
+    expect(chaseOf(input('owner', { can: { ...can('owner'), receivables: false } }), null, null, PREFIX, true)).toBeNull()
+  })
+
+  it('W3.3 the grains: no Price check without prices, no Margin & cost without the margin grain and costing.view — and their reads are not made', () => {
+    expect(priceCheckOf(input('sales', { priceDiffer: 2 }), null, PREFIX)).toBeNull()
+    expect(marginOf(input('owner'), READING, PREFIX)).toBeNull() // the owner of this file holds no costing.view
+    expect(marginOf(input('owner', { can: can('owner', ['costing.view']) }), READING, PREFIX)!.reading).toBe(true)
+    expect(marginOf(input('sales', { can: can('sales', ['costing.view']) }), READING, PREFIX)).toBeNull()
+    const hook = source('./use-customer-money-tab.ts')
+    expect(hook).toContain("const priceRows = useLazyRead(wanted.has('priceRows'), can.orders && can.price,")
+    expect(hook).toContain("const margin = useLazyRead(wanted.has('margin'), can.margin && can.costing,")
+    expect(hook).toContain('// Margin & cost is never read again on a burst')
+    expect(hook).not.toMatch(/margin\.load\(true\)/)
+  })
+
+  it('W3.3 Price check: one row per order with the door to its own #price-check; the orders with no customer price; calm when none differs', () => {
+    const order = { id: 'o-2', number: 'SEED-SO-0002', currency: 'EUR', netAmount: 520000, brandPrice: 500000, priceDiff: 20000, priceNotEqualLines: 2, priceAccepted: false } as unknown as OrderRow
+    const model = priceCheckOf(input('owner', { priceDiffer: 1, priceMissing: 3 }), partReady([order]), PREFIX)!
+    expect(model.rows.map((row) => [row.number, row.href, row.diff])).toEqual([['SEED-SO-0002', `${PREFIX}/sales/orders/o-2?tab=money#price-check`, 20000]])
+    expect(model.differ!.href).toBe(`${PREFIX}/sales/customers/p-1?tab=work&rows=all&priceMatch=NOT_EQUAL`)
+    expect(model.missing).toEqual({ count: 3, href: `${PREFIX}/sales/customers/p-1?tab=work&rows=all&priceMatch=NO_BRAND_PRICE` })
+    expect(priceCheckOf(input('owner', { priceDiffer: 0 }), null, PREFIX)!.calm).toEqual({ key: 'cm.price.calm' })
+  })
+
+  it('W3.3 Margin & cost: the tiles in one currency, danger below the floor, its door; the cost only with its grain; no supplier total', () => {
+    const margins = (estimateCost: number | undefined, currency: string | null = 'EUR') => partReady({ tiles: { currency, orders: 4, belowFloor: 1 }, byCustomer: [{ value: 1200000, estimateCost, marginPct: '18.0', orders: 4 }], rows: [{ floor: { pct: '20.0' } }] } as unknown as Margins)
+    const owner = marginOf(input('owner', { can: can('owner', ['costing.view', 'money.cost']) }), margins(984000), PREFIX)!
+    expect(owner.tiles).toEqual({ value: 1200000, cost: 984000, pct: '18.0', currency: 'EUR', danger: true })
+    expect(owner.below).toEqual({ count: 1, href: `${PREFIX}/finance/margins?party=p-1&floor=below` })
+    expect(owner.answer.map((said) => said.key)).toEqual(['cm.margin.now', 'cm.margin.belowFloor'])
+    expect(marginOf(input('owner', { can: can('owner', ['costing.view']) }), margins(984000), PREFIX)!.tiles!.cost).toBeNull()
+    expect(marginOf(input('owner', { can: can('owner', ['costing.view']) }), margins(undefined, null), PREFIX)!).toMatchObject({ tiles: null, twoCurrencies: true })
+    const tab = readdirSync(new URL('../view/money/', import.meta.url)).map((name) => view(name)).join('\n') + source('./worth.ts')
+    expect(tab).not.toMatch(/finance\/payables|\/payables\//)
+  })
+
+  it('Z31: every need of "What needs you" points ↓ to its own section; no Finance or Terms stand-in where the section exists', () => {
+    const busy = balanceOf(input('owner', { priceDiffer: 2, glance: glanced({ state: 'OVER', used: 2420000, available: null, overLimitBy: 420000 }, true) }), PREFIX)
+    expect(busy.needs.map((need) => [need.code, need.down])).toEqual([
+      ['depositLate', 'collect'],
+      ['invoicesLate', 'collect'],
+      ['onHold', 'credit'],
+      ['overLimit', 'credit'],
+      ['onAccount', 'on-account'],
+      ['giveBack', 'give-back'],
+      ['priceDiffer', 'price-check'],
+    ])
+    expect(sayIn('en')(busy.needs.at(-1)!.words)).toBe('Prices differ on 2 orders')
+    const balance = view('BalanceSection.tsx')
+    expect(balance).toContain("credit: 'cm.credit.title', statement: 'cm.chase.title', 'price-check': 'orders:moneyTab.price.title'")
+    const tab = view('CustomerMoneyTab.tsx')
+    expect(tab).not.toMatch(/tab\.openStatement|statementOf\(|id: 'changeLimit'/)
+    expect(tab).toContain("const LAZY_OF: Readonly<Record<string, LazyRead>> = { invoices: 'documents', received: 'received' /* F-CM-203 */, credit: 'credit', statement: 'statement', 'price-check': 'priceRows', margin: 'margin' /* F-CM-301…303 */ }")
+  })
+
+  it('Z32: "Can\'t be invoiced yet" from the party read (the Overview strip\'s source), its home on Terms', () => {
+    const blocked = balanceOf(input('owner', { party: { ...input().party, invoiceBlocked: true, blocking: ['NO_TAX_IDENTITY'] } }), PREFIX)
+    const need = blocked.needs.find((entry) => entry.code === 'cantInvoice')!
+    expect(need).toMatchObject({ tone: 'danger', down: null, fallback: { kind: 'href', href: `${PREFIX}/sales/customers/p-1?tab=terms#party-identity` } })
+    for (const locale of LOCALES) expect(sayIn(locale)(need.words), locale).not.toMatch(/cm\.|parties:|warning\./)
+    expect(balanceOf(input('owner', { party: { ...input().party, invoiceBlocked: true } }), PREFIX).needs.find((entry) => entry.code === 'cantInvoice')!.words).toEqual({ key: 'parties:list.cannotInvoice' })
+    expect(balanceOf(input('owner'), PREFIX).needs.map((entry) => entry.code)).not.toContain('cantInvoice')
+    expect(source('./CustomerMoney.tsx')).toContain('blocking: party.warnings.filter((warning) => warning.blocksInvoice).map((warning) => warning.code),')
+  })
+
+  it('E52: the credit value of this year\'s returns (price grain, one currency); nothing without prices or in two currencies', () => {
+    const ret = (id: string, requestedAt: string, creditTotal: number | undefined, currency = 'EUR'): CustomerReturn => ({ id, number: `RMA-${id}`, companyId: COMPANY_A.id, status: 'CLOSED', units: 1, requestedAt, late: false, ...(creditTotal === undefined ? {} : { creditTotal }), currency })
+    const rows = [ret('1', '2026-03-02T09:00:00Z', 12000), ret('2', '2026-10-02T09:00:00Z', 8000), ret('3', '2025-12-30T09:00:00Z', 50000), ret('4', '2026-11-02T09:00:00Z', 0)]
+    const returns = { rows, year: '2026', href: `${PREFIX}/sales/returns?party=p-1` }
+    expect(returnsCreditOf(input('owner', { returns }))).toEqual({ year: '2026', amount: 20000, count: 2, currency: 'EUR', href: returns.href })
+    expect(returnsCreditOf(input('sales', { returns }))).toBeNull()
+    expect(returnsCreditOf(input('owner', { returns: { ...returns, rows: [...rows, ret('5', '2026-11-10T09:00:00Z', 3000, 'CHF')] } }))).toBeNull()
+    expect(returnsCreditOf(input('owner'))).toBeNull()
+    expect(sayIn('en')({ key: 'cm.received.returns', params: { year: '2026', count: 2 }, money: { amount: 20000 } })).toBe(`Credit value of its returns in 2026: ${m(20000, 'en')} on 2 returns`)
+  })
+
+  it('Finance\'s windows opened as they are (never copied); the hold is the Terms tab\'s own window, one state with Terms', () => {
+    const windows = source('./AccountWindowsView.tsx')
+    expect(windows).toContain("import { ChangeLimitDialog } from '../../../../finance/receivables/credit/view/ChangeLimitDialog'")
+    expect(windows).toContain("import { StatementDialog } from '../../../../finance/receivables/view/StatementDialog'")
+    expect(windows).not.toMatch(/<DialogFrame|<form|<Modal/)
+    const drivers = source('./use-account-windows.ts')
+    expect(drivers).toContain('await setCreditLimit(api, change.partyId, change.companyId,')
+    expect(drivers).toContain('await sendStatement(api, statement.ref.partyId,')
+    expect(MONEY_TAB_NAMESPACES).toEqual(expect.arrayContaining(['sales-credit', 'customer-terms', 'finance-receivables', 'sales-customers-depth']))
+    const depth = source('../../depth/CustomerDepth.tsx')
+    expect(depth).toContain('export function useCustomerHold(party: Party)')
+    expect(depth).toContain('window: <HoldDialogView model={{ read: state.holds.read, can: state.can, status: party.status, prefix, dialog: state.holds.dialog, companies: state.companies }} actions={state.holds} />,')
+    expect(source('../../depth/view/HoldCard.tsx')).toContain('export function HoldDialogView(')
+    expect(source('../../depth/use-depth.ts')).toContain("else if (tab === 'money') void Promise.all([loadGlance(), loadHolds()])")
+    expect(source('./CustomerMoney.tsx')).toContain('const hold = useCustomerHold(party) // F-CM-301')
+  })
+
+  it('W3.4: the 200 newest orders are no longer read for a customer; the supplier\'s purchase orders as before; the dead reads went', () => {
+    const hook = source('../../../../parties/_shared/PartyRecord.tsx')
+    expect(hook).not.toContain('listSalesOrdersOf')
+    expect(hook).toContain('const [orders] = useState<Loaded<SalesOrderRow>>(loading())')
+    expect(hook).toContain("if (side === 'suppliers' && can.purchaseOrders)")
+    expect(hook).toContain('listPurchaseOrdersOf(api, partyId).then(')
+    const api = source('../../../../parties/_shared/api.ts')
+    expect(api).not.toMatch(/listQuotesOf|listSalesOrdersOf/)
+    expect(api).toContain('export async function listPurchaseOrdersOf(')
+  })
+})
+// ---- end F-CM-301…304
