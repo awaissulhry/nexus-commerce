@@ -19,6 +19,8 @@ export interface CustomerMoneyCan {
   readonly orders?: boolean
   readonly credit?: boolean
   readonly creditLimits?: boolean
+  // F-CM-103 (cm-w1): the open items and the money on account (payments.view) — the Money tab's To collect and the tab's count.
+  readonly payments?: boolean
 }
 
 export function customerMoneyCanOf(permissions: readonly string[]): CustomerMoneyCan {
@@ -31,6 +33,7 @@ export function customerMoneyCanOf(permissions: readonly string[]): CustomerMone
     orders: held.has('orders.view'), // F-SA-273
     credit: held.has('sales.credit.view'), // F-SA-273
     creditLimits: held.has('sales.credit.limits'), // F-SA-273
+    payments: held.has('payments.view'), // F-CM-103
   }
 }
 

@@ -169,3 +169,28 @@ export function currenciesOf(found: Iterable<string>, own: string | null): strin
   const set = new Set(found)
   return [...set].sort((a, b) => (a === own ? -1 : b === own ? 1 : a.localeCompare(b)))
 }
+
+// ---- F-CM-103 (13-backend §5.2): the live rule — is a money event this customer's? ------------------------------------------
+
+/** Money events (payments, refunds, invoices, deposit requests, credit, reminders and stops). */
+const MONEY_EVENT = /^(payment\.|refund\.|invoice\.|deposit_request\.|credit_|receivables\.|reminder)/
+/** The events that never carry the customer's id to the browser (a finished lane's pin, B-SA-004): matched by the ids the tab holds. */
+const MATCHED_BY_ID: ReadonlySet<string> = new Set(['payment.allocated', 'payment.allocation_reversed', 'payment.voided', 'refund.changed'])
+const ID_FIELDS = ['paymentId', 'targetId', 'refundId', 'invoiceId', 'depositRequestId'] as const
+
+/**
+ * Ours when the event names THIS customer (`partyId`, S1 of cm-s; an order event of this customer moves its plan too) · or it is one
+ * of the four events that never name a customer and one of its ids is an id the tab holds · or (until cm-s lands) a money event that
+ * names no customer at all ("may be ours": the glance's own rule). Pure; the hooks coalesce what it lets through into ONE re-read.
+ */
+export function moneyChangeIsOurs(change: { readonly type: string; readonly fields: Readonly<Record<string, unknown>> }, partyId: string, held: ReadonlySet<string>): boolean {
+  const about = change.fields.partyId ?? change.fields.customerId
+  const money = MONEY_EVENT.test(change.type)
+  if (typeof about === 'string') return about === partyId && (money || change.type.startsWith('sales_order.'))
+  if (!money) return false
+  if (MATCHED_BY_ID.has(change.type)) return ID_FIELDS.some((field) => typeof change.fields[field] === 'string' && held.has(change.fields[field] as string))
+  return true
+}
+
+/** The live re-read waits this long after the last event (one burst for many events). */
+export const LIVE_COALESCE_MS = 800

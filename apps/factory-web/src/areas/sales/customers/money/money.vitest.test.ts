@@ -30,9 +30,10 @@ describe('the lists mirror factory-domain', () => {
 
 describe('the numbers', () => {
   it('who sees what', () => {
-    expect(customerMoneyCanOf(['receivables.view', 'money.price'])).toEqual({ receivables: true, price: true, returns: false, complaints: false, orders: false, credit: false, creditLimits: false })
+    expect(customerMoneyCanOf(['receivables.view', 'money.price'])).toEqual({ receivables: true, price: true, returns: false, complaints: false, orders: false, credit: false, creditLimits: false, payments: false /* F-CM-103 */ })
     // F-SA-273: the Money tab's cards each by their own right — the open orders' deposits, the credit, and Change limit….
-    expect(customerMoneyCanOf(['orders.view', 'sales.credit.view', 'sales.credit.limits'])).toEqual({ receivables: false, price: false, returns: false, complaints: false, orders: true, credit: true, creditLimits: true })
+    expect(customerMoneyCanOf(['orders.view', 'sales.credit.view', 'sales.credit.limits'])).toEqual({ receivables: false, price: false, returns: false, complaints: false, orders: true, credit: true, creditLimits: true, payments: false /* F-CM-103 */ })
+    expect(customerMoneyCanOf(['payments.view']).payments).toBe(true) // F-CM-103: the open items, the money on account
   })
 
   it('overdue per customer and currency; a customer owing nothing late is absent', () => {

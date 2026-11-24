@@ -15,7 +15,7 @@ import type { Glance } from '../../depth/api'
 import { balanceOf, moneyBadgeOf } from './balance'
 import { collectOf, COLLECT_SHOWN, IN_PLACE_ACTS } from './collect'
 import { moneyAnswerOf, type CustomerAnswer } from './head'
-import { CM, MONEY_TAB_NAMESPACES, moneyTabCanOf, partFailed, partReady, READING, type MoneyTabInput } from './model'
+import { CM, MONEY_TAB_NAMESPACES, moneyChangeIsOurs, moneyTabCanOf, partFailed, partReady, READING, type MoneyTabInput } from './model'
 import { sayOf } from './say'
 import { CUSTOMER_MONEY_ANCHORS, CUSTOMER_MONEY_SECTIONS } from './sections'
 
@@ -313,5 +313,37 @@ describe('F-CM-101: the walls, the sections, the words', () => {
     const [en, it_] = LOCALES.map((locale) => Object.keys(messagesFor(locale, [CM])[CM] ?? {}).filter((key) => key.startsWith('cm.')).sort())
     expect(en).toEqual(it_)
     expect(en!.length).toBeGreaterThan(100)
+  })
+})
+
+describe('F-CM-103: the reads (cm-w1 W1.2; 13-backend §1.3, §1.4, §5.2)', () => {
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+
+  it('every read names THIS customer, and no hook filters a list by customer (the ageing is split by COMPANY only)', () => {
+    const tab = source('./use-customer-money-tab.ts')
+    const page = source('../../money/hooks.ts')
+    for (const call of ['openRefunds(api', 'listStops(api', 'listReminders(api', 'getOrderSummary(api', 'shippedOfCustomer(api']) {
+      const line = tab.split('\n').find((text) => text.includes(call))
+      expect(line, call).toBeDefined()
+      expect(line, call).toContain('partyId')
+    }
+    for (const call of ['getCustomerAgeing(api, partyId, null', 'openItemsFor(api, { companyId, partyId }']) expect(page, call).toContain(call)
+    for (const [name, text] of [['use-customer-money-tab.ts', tab], ['hooks.ts', page], ['api.ts', source('./api.ts')]] as const) expect(text, name).not.toMatch(/customer\.id\s*[!=]==|partyId\s*[!=]==/)
+    // The ageing keeps its shape for the Overview: this company's rows; the others go to `ageingElsewhere` ("Also owes …", 0 requests).
+    expect(page).toContain('const here = companyId ? value.customers.filter((row) => row.company.id === companyId) : value.customers')
+  })
+
+  it('the live rule: this customer\'s money event → ours; another customer\'s → not; an event that never names one → by the ids the tab holds', () => {
+    const held = new Set(['inv-1', 'rf-1'])
+    expect(moneyChangeIsOurs({ type: 'payment.recorded', fields: { partyId: 'p-1', paymentId: 'pay-1' } }, 'p-1', held)).toBe(true)
+    expect(moneyChangeIsOurs({ type: 'payment.recorded', fields: { partyId: 'p-2', paymentId: 'pay-1' } }, 'p-1', held)).toBe(false)
+    expect(moneyChangeIsOurs({ type: 'sales_order.updated', fields: { partyId: 'p-1' } }, 'p-1', held)).toBe(true)
+    expect(moneyChangeIsOurs({ type: 'sales_order.updated', fields: {} }, 'p-1', held)).toBe(false)
+    expect(moneyChangeIsOurs({ type: 'payment.allocated', fields: { paymentId: 'pay-9', target: 'INVOICE', targetId: 'inv-1' } }, 'p-1', held)).toBe(true)
+    expect(moneyChangeIsOurs({ type: 'payment.allocated', fields: { paymentId: 'pay-9', target: 'INVOICE', targetId: 'inv-7' } }, 'p-1', held)).toBe(false)
+    expect(moneyChangeIsOurs({ type: 'refund.changed', fields: { refundId: 'rf-1' } }, 'p-1', held)).toBe(true)
+    // Until cm-s (S1) lands, a money event that names no customer may be ours: one coalesced re-read.
+    expect(moneyChangeIsOurs({ type: 'deposit_request.created', fields: { depositRequestId: 'rq-new' } }, 'p-1', held)).toBe(true)
+    expect(moneyChangeIsOurs({ type: 'quote.sent', fields: {} }, 'p-1', held)).toBe(false)
   })
 })

@@ -42,9 +42,12 @@ export type Refund = z.infer<typeof refundSchema>
 const refundPage = z.object({ refunds: z.array(refundSchema), nextCursor: z.string().nullable() })
 export type RefundPage = z.infer<typeof refundPage>
 
-/** The refunds, newest first (payments.view): due, paid, closed (cancelled or voided) or all. */
-export function listRefunds(api: ApiClient, query: { view?: RefundView; creditNoteId?: string; paymentId?: string; cursor?: string | null; limit?: number }, signal?: AbortSignal): Promise<RefundPage> {
-  return api.get('/payments/refunds', { query: { view: query.view, creditNoteId: query.creditNoteId, paymentId: query.paymentId, cursor: query.cursor ?? undefined, limit: query.limit ?? 50 }, schema: refundPage, signal })
+/**
+ * The refunds, newest first (payments.view): due, paid, closed (cancelled or voided) or all. F-CM-103 (customer MONEY tab): optional
+ * `companyId` and `partyId` — one customer's refunds (the API's own terms); absent: the request of today.
+ */
+export function listRefunds(api: ApiClient, query: { view?: RefundView; creditNoteId?: string; paymentId?: string; cursor?: string | null; limit?: number; companyId?: string | null; partyId?: string | null }, signal?: AbortSignal): Promise<RefundPage> {
+  return api.get('/payments/refunds', { query: { view: query.view, creditNoteId: query.creditNoteId, paymentId: query.paymentId, cursor: query.cursor ?? undefined, limit: query.limit ?? 50, companyId: query.companyId ?? undefined, partyId: query.partyId ?? undefined }, schema: refundPage, signal })
 }
 
 export const toRefundSchema = z.object({
@@ -73,9 +76,12 @@ export const openRefundsSchema = z.object({
 })
 export type OpenRefunds = z.infer<typeof openRefundsSchema>
 
-/** "Refunds to make" (payments.view): the DUE refunds, oldest due first, and the credit notes with money left to refund. */
-export function openRefunds(api: ApiClient, signal?: AbortSignal): Promise<OpenRefunds> {
-  return api.get('/payments/refunds/open', { schema: openRefundsSchema, signal })
+/**
+ * "Refunds to make" (payments.view): the DUE refunds, oldest due first, and the credit notes with money left to refund. F-CM-103
+ * (customer MONEY tab): an optional `scope` — one customer in one company (the API's own terms); absent: the request of today.
+ */
+export function openRefunds(api: ApiClient, signal?: AbortSignal, scope?: { readonly companyId?: string | null; readonly partyId?: string | null }): Promise<OpenRefunds> {
+  return api.get('/payments/refunds/open', { ...(scope ? { query: { companyId: scope.companyId ?? undefined, partyId: scope.partyId ?? undefined } } : {}), schema: openRefundsSchema, signal })
 }
 
 const one = z.object({ refund: refundSchema })
