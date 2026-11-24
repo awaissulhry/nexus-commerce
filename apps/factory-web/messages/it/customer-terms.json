@@ -225,7 +225,35 @@
     "co": {
       "backHeld": "Con {company} è impostato un fido: le condizioni proprie restano finché c'è il fido.",
       "customersTerms": "i termini di pagamento del cliente",
-      "customersDeposit": "quello del cliente"
-    }
+      "customersDeposit": "quello del cliente",
+      "problem": {
+        "terms": "Scegli i termini di pagamento dalla libreria, o usa quelli del cliente.",
+        "list": "Scegli il listino, o usa quello del cliente."
+      },
+      "saved": "Le condizioni con {company} sono state salvate.",
+      "poSaved": "La regola del numero d'ordine è stata salvata per {company}."
+    },
+    "deliv": {
+      "problem": {
+        "number": "Il numero di conto è quello del corriere: da 3 a 40 lettere, cifre, spazi, punti, barre o trattini.",
+        "numberEmpty": "Scrivi il nuovo numero, o tieni il conto registrato.",
+        "needsAccount": "Il cliente o un terzo paga solo sul suo conto presso il corriere: indica il conto, o paghiamo noi.",
+        "needsCarrier": "Un servizio o un conto è di un corriere: scegli il corriere.",
+        "service": "Al massimo 100 caratteri."
+      },
+      "saved": "Consegna salvata: le nuove spedizioni di {customer} prenotano {carrier}.",
+      "savedAccount": "Consegna salvata: le nuove spedizioni di {customer} prenotano {carrier} sul suo conto.",
+      "savedEnds": "Consegna salvata: le nuove spedizioni di {customer} prenotano {carrier} sul suo conto, che finisce con {ends}.",
+      "savedNone": "Consegna salvata: le nuove spedizioni di {customer} prendono il corriere scelto a ogni spedizione."
+    },
+    "end": {
+      "terms": "Termini di pagamento: {own} → quelli del cliente, {party}",
+      "deposit": "Acconto: {own} → {party}",
+      "po": "Va via anche la regola del numero d'ordine: gli ordini con {company} non chiederanno più il numero d'ordine del cliente.",
+      "openKeep": "Preventivi e ordini aperti tengono i loro.",
+      "done": "Le condizioni con {company} sono terminate: i nuovi preventivi e ordini prendono quelle del cliente.",
+      "refusedCredit": "Nel frattempo con questa azienda è stato impostato un fido: le condizioni proprie restano finché c'è il fido."
+    },
+    "copied": "Copiato: un link che apre questa parte della scheda."
   }
 }

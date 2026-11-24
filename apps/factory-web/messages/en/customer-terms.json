@@ -225,7 +225,35 @@
     "co": {
       "backHeld": "A credit limit is set with {company} (Money): its own terms stay while the limit is set.",
       "customersTerms": "the customer's payment terms",
-      "customersDeposit": "the customer's"
-    }
+      "customersDeposit": "the customer's",
+      "problem": {
+        "terms": "Pick its payment terms from the library, or use the customer's.",
+        "list": "Pick its price list, or use the customer's."
+      },
+      "saved": "The terms with {company} were saved.",
+      "poSaved": "The PO number rule was saved for {company}."
+    },
+    "deliv": {
+      "problem": {
+        "number": "The account number is the carrier's: 3 to 40 letters, digits, spaces, dots, slashes or hyphens.",
+        "numberEmpty": "Type the new number, or keep the account on file.",
+        "needsAccount": "The customer or someone else pays only on its own account with the carrier: give the account, or let us pay.",
+        "needsCarrier": "A service or an account is of one carrier: pick the carrier.",
+        "service": "At most 100 characters."
+      },
+      "saved": "Delivery saved: new shipments of {customer} book {carrier}.",
+      "savedAccount": "Delivery saved: new shipments of {customer} book {carrier} on its own account.",
+      "savedEnds": "Delivery saved: new shipments of {customer} book {carrier} on its own account, ending {ends}.",
+      "savedNone": "Delivery saved: new shipments of {customer} take the carrier picked for each."
+    },
+    "end": {
+      "terms": "Payment terms: {own} → the customer's {party}",
+      "deposit": "Deposit: {own} → {party}",
+      "po": "The PO number rule goes too: orders with {company} will no longer need the customer's PO number.",
+      "openKeep": "Open quotes and orders keep their own.",
+      "done": "The terms with {company} ended: new quotes and orders take the customer's.",
+      "refusedCredit": "A credit limit is set with this company meanwhile: its own terms stay while the limit is set."
+    },
+    "copied": "Copied: a link that opens this part of the tab."
   }
 }

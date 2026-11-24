@@ -5,12 +5,20 @@ import { CATALOGUE, createScopedTranslator, messagesFor } from '../../../../../l
 import type { Party, TaxIdentity } from '../../../../parties/_shared/api'
 import { CUSTOMERS } from '../../../../parties/_shared/fixtures'
 import type { CommercialTerms } from '../../terms/api'
+import type { Holds } from '../../depth/api'
 import { ready, failedRead, LOADING } from '../../depth/model'
 import { identityFactsOf, termsAnswer, type TermsFacts } from './answer'
 import { commercialSection, type CarrierFacts, type CommercialInput, type CompanyTermsRead, type CompanyTermsReadEntry, type CompanyTermsRow } from './commercial'
 import { holdSection, waitingOf, type HoldFacts, type HoldsFacts, type HoldsInput } from './holds'
 import { depositInForce, paymentTermsInForce, termsInForce, type TermsSources } from './in-force'
 import { CT, said, sayOf, sentenceOf, TERMS_SECTIONS, TERMS_TAB_NAMESPACES, termsCan, type Said } from './model'
+import { createApiClient, type ApiClient } from '../../../../../lib/api/client'
+import { ApiError } from '../../../../../lib/api/errors'
+import { termsAbilitiesOf } from '../../terms/model'
+import { TERMS as COMPANY_TERMS } from '../../depth/_demo/fixtures'
+import { endCompanyTerms, readCarrierAccount, setCarrierAccount, setCompanyTerms, type CarrierAccount } from './api'
+import { TERMS_TAB_START, termsTabModel, type TermsTabReads } from './tab'
+import { companyBody, companyProblems, companyWindowOf, deliveryBody, deliveryProblems, deliveryRefusal, deliveryWindowOf, endLines, termsWindowOf, termsWindowPatch } from './windows'
 
 /**
  * F-CT-101…105 (customer page › TERMS & REQUIREMENTS tab, lane ct-; 15-steps W1.1) — the tab's pure rules: the ONE source of the terms
@@ -109,7 +117,7 @@ const identity = (over: Partial<TaxIdentity> = {}): TaxIdentity => ({ id: '0190f
 const partyWith = (over: Partial<Party>): Party => ({ ...MODA, ...over })
 
 const hold = (over: Partial<HoldFacts> = {}): HoldFacts => ({ id: '0190f0e2-c700-7000-8000-000000000601', companyId: null, company: null, reason: 'DATA_MISSING', words: 'Waiting for the tax identity (made-up).', inForce: true, placedAt: '2026-11-20T08:00:00.000Z', placedBy: 'Alex Demo', releasedAt: null, releasedBy: null, releaseWords: null, version: 1, ...over })
-const HOLDS: HoldsFacts = {
+const HOLDS: Holds = {
   onHold: true,
   holds: [hold(), hold({ id: '0190f0e2-c700-7000-8000-000000000602', reason: 'CREDIT', inForce: false, placedBy: null, words: 'Two invoices overdue (made-up).', releasedAt: '2026-10-09T11:00:00.000Z', releasedBy: 'Franca Finance', releaseWords: 'Paid in full (made-up).' })],
   ordersWaiting: [
@@ -432,5 +440,120 @@ describe('the words and the walls', () => {
 
   it('the four sections keep their addresses (doors from Money, the Overview, the list and the tests land)', () => {
     expect([...TERMS_SECTIONS]).toEqual(['party-hold', 'party-commercial', 'party-requirements', 'party-identity'])
+  })
+})
+
+// ---- W1.2: the reads, the windows' commands ------------------------------------------------------------------------------------
+
+describe('the calls (W1.2): methods, paths, bodies, one Idempotency-Key per attempt', () => {
+  function recorder(answers: Record<string, unknown>) {
+    const calls: { method: string; url: string; body: unknown; key: string | null }[] = []
+    const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      const headers = new Headers(init?.headers)
+      calls.push({ method: init?.method ?? 'GET', url, body: init?.body ? JSON.parse(String(init.body)) : undefined, key: headers.get('idempotency-key') })
+      const path = new URL(url, 'http://x').pathname
+      const answer = Object.entries(answers).find(([suffix]) => path.endsWith(suffix))?.[1] ?? {}
+      return new Response(JSON.stringify(answer), { status: 200, headers: { 'content-type': 'application/json' } })
+    }) as typeof fetch
+    const api: ApiClient = createApiClient({ baseUrl: '/api', fetch: fetchFn, csrfToken: () => 'csrf' })
+    return { api, calls }
+  }
+  const ACCOUNT: CarrierAccount = { partyId: 'p', code: 'SEED-ONE', name: 'Seed Customer One S.r.l.', carrierCode: 'brt', carrierName: 'BRT', accountOnFile: true, freightBilling: 'COLLECT', defaultCarrierService: null, version: 7 }
+
+  it('R19 reads the carrier block; R20 sends ONE command at the party version; R5 the full company body; R6 the end at the row version', async () => {
+    const { api, calls } = recorder({ '/customer-carrier-accounts/p': { account: { ...ACCOUNT, freightBillingWords: 'never drawn' }, endsIn: '1234' }, '/company-terms/c1': { terms: COMPANY_TERMS }, '/company-terms/c1/end': { terms: COMPANY_TERMS } })
+    const account = await readCarrierAccount(api, 'p')
+    expect(account).toEqual(ACCOUNT) // the server's English is dropped by the page's own schema
+    await setCarrierAccount(api, 'p', { version: 7, carrierCode: 'gls', accountNumber: null, freightBilling: 'SENDER' }, 'k1')
+    await setCompanyTerms(api, 'p', 'c1', { version: 2, paymentTermsId: 't1', depositPct: '40', poNumberRequired: true }, 'k2')
+    await setCompanyTerms(api, 'p', 'c1', { poNumberRequired: true }, 'k3')
+    await endCompanyTerms(api, 'p', 'c1', { version: 2 }, 'k4')
+    expect(calls.map((call) => [call.method, new URL(call.url, 'http://x').pathname, call.key])).toEqual([
+      ['GET', '/api/shipping/customer-carrier-accounts/p', null],
+      ['PUT', '/api/shipping/customer-carrier-accounts/p', 'k1'],
+      ['PUT', '/api/parties/p/company-terms/c1', 'k2'],
+      ['PUT', '/api/parties/p/company-terms/c1', 'k3'],
+      ['POST', '/api/parties/p/company-terms/c1/end', 'k4'],
+    ])
+    expect(calls.map((call) => call.body)).toEqual([undefined, { version: 7, carrierCode: 'gls', accountNumber: null, freightBilling: 'SENDER' }, { version: 2, paymentTermsId: 't1', depositPct: '40', poNumberRequired: true }, { poNumberRequired: true }, { version: 2 }])
+  })
+
+  it('Change delivery… sends only what changed; another carrier drops the account on file; who pays needs an account (Z24)', () => {
+    const start = deliveryWindowOf(ACCOUNT)
+    expect(deliveryBody(start, ACCOUNT)).toBeNull()
+    expect(deliveryBody({ ...start, carrier: 'gls', service: '' }, ACCOUNT)).toEqual({ version: 7, carrierCode: 'gls', accountNumber: null })
+    expect(deliveryProblems({ ...start, carrier: 'gls', service: '' }, ACCOUNT)).toEqual({ freight: 'ct.deliv.problem.needsAccount' })
+    expect(deliveryBody({ ...start, account: 'replace', number: 'FAKE-0000-9876' }, ACCOUNT)).toEqual({ version: 7, accountNumber: 'FAKE-0000-9876' })
+    expect(deliveryBody({ ...start, account: 'remove', freight: 'SENDER' }, ACCOUNT)).toEqual({ version: 7, accountNumber: null, freightBilling: 'SENDER' })
+    expect(deliveryProblems({ ...start, account: 'replace', number: 'no' }, ACCOUNT)).toEqual({ number: 'ct.deliv.problem.number' })
+    expect(deliveryRefusal(new ApiError('invalid', 400, 'invalid', 'x', null, [{ path: 'body/accountNumber' }]))).toEqual({ key: 'ct.deliv.problem.number', field: 'number' })
+  })
+
+  it('Set terms for {company}… sends that company\'s row only, what changed, at its version; a customer of ONE company: the PO switch only (Z26)', () => {
+    const party = own()
+    const live = entry(A, row({ paymentTermsId: DEP30.id, paymentTermsLabel: { code: DEP30.code, name: DEP30.name }, depositPct: '40' }), party)
+    const window = companyWindowOf(live, false)
+    expect([window.payment, window.deposit, window.list, window.po]).toEqual(['own', 'own', 'party', false])
+    const manage = termsAbilitiesOf(['pricelists.manage'])
+    expect(companyBody(window, live, manage)).toBeNull()
+    expect(companyBody({ ...window, deposit: 'party', po: true }, live, manage)).toEqual({ version: 2, depositPct: null, poNumberRequired: true })
+    expect(companyBody({ ...window, depositPct: '40.0' }, live, manage)).toBeNull() // the same percent, typed another way
+    expect(companyProblems({ ...window, payment: 'own', paymentTermsId: '' }, manage)).toEqual({ paymentTermsId: 'ct.co.problem.terms' })
+    const fresh = entry(B, null, party)
+    expect(companyBody({ ...companyWindowOf(fresh, false), deposit: 'own', depositPct: '25' }, fresh, termsAbilitiesOf([]))).toEqual({ depositPct: '25' }) // no row yet: made, no version
+    const single = companyWindowOf(entry(A, null, party), true)
+    expect(companyBody({ ...single, payment: 'own', paymentTermsId: 'x', po: true }, entry(A, null, party), manage)).toEqual({ poNumberRequired: true })
+  })
+
+  it('Change terms… is today\'s form moved: its rules, never the carrier (Change delivery… keeps it)', () => {
+    const party = own({ preferredCarrierCode: 'BRT' })
+    const window = termsWindowOf(party)
+    expect(termsWindowPatch({ ...window, draft: { ...window.draft, preferredCarrierCode: '' } }, party, { price: true, listsManage: true })).toEqual({})
+    expect(termsWindowPatch({ ...window, draft: { ...window.draft, invoiceTiming: 'MONTHLY', language: 'en' } }, party, { price: true, listsManage: true })).toEqual({ invoiceTiming: 'MONTHLY', language: 'en' })
+  })
+
+  it('Back to the customer\'s terms… says only what is true: terms, deposit, the PO rule going, open documents keep theirs', () => {
+    const party = own()
+    const live = entry(A, row({ paymentTermsId: DEP30.id, paymentTermsLabel: { code: DEP30.code, name: DEP30.name }, depositPct: '40', poNumberRequired: true }), party)
+    const lines = endLines(live, party, 'en').map((line) => [line.tone, said1(line.words)])
+    expect(lines).toEqual([
+      ['info', `Payment terms: ${DEP30.name} → the customer's Net 30 end of month`],
+      ['info', 'Deposit: 40 % → 30 %'],
+      ['warning', "The PO number rule goes too: orders with Seed Company A will no longer need the customer's PO number."],
+      ['info', 'Open quotes and orders keep their own.'],
+    ])
+  })
+})
+
+describe('the tab model (tab.ts): the container and the gallery build it alike', () => {
+  const reads = (over: Partial<TermsTabReads> = {}): TermsTabReads => ({
+    party: partyWith({ id: PARTY_ID, taxIdentities: [], warnings: [], vies: { ...MODA.vies, state: 'NOT_APPLICABLE' } }),
+    prefix: '/w/SEEDA',
+    can: OWNER,
+    locale: 'en',
+    now: NOW,
+    companyId: A.id,
+    companyNames: NAMES,
+    commercial: ready(own()),
+    carrier: ready({ partyId: PARTY_ID, code: 'SEED-ONE', name: 'Seed Customer One S.r.l.', carrierCode: null, carrierName: null, accountOnFile: false, freightBilling: 'SENDER', defaultCarrierService: null, version: 7 }),
+    holds: ready(HOLDS),
+    companies: ready(COMPANY_TERMS),
+    requirements: null,
+    library: null,
+    lists: null,
+    ...over,
+  })
+
+  it('a chip marks exactly its rows; a door chip marks none', () => {
+    const model = termsTabModel(reads(), { ...TERMS_TAB_START, chip: 'hold' })
+    expect(model.chip).toBe('hold')
+    expect(model.marked).toEqual([model.hold.inForce[0]!.anchor])
+    expect(termsTabModel(reads(), TERMS_TAB_START).marked).toEqual([])
+  })
+
+  it('the requirements are counted only once read; the answer reads while R1 does', () => {
+    expect(termsTabModel(reads({ commercial: LOADING }), TERMS_TAB_START).answerReading).toBe(true)
+    expect(sentence(termsTabModel(reads(), TERMS_TAB_START).answer, 'en')).not.toMatch(/requirement/)
   })
 })
