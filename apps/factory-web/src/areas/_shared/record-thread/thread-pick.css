@@ -2,6 +2,7 @@
    sentence went — the pick is ONE menu in the head's title: the picked thread's one label (cut with "…" only when wider than the head)
    with ▾ (a lock when office only); the second select and the quieter note under it. --nds-space-N is N px. Tokens only. */
 .fw-thread-pick {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: var(--nds-space-2);
@@ -17,8 +18,11 @@
   display: inline-flex;
   align-items: center;
   gap: var(--nds-space-4);
+  /* tw- fx1 (walk: "Seed Racing (gene…" with room to spare): no 100 % width cap beside the negative start margin — the menu's width
+     is the button's width less those 6 px, so 100 % cut the label by 6 px. The button only shrinks (with "…") when the head truly
+     has no room (min-width 0 in its flex row; the title block takes the free space first, the tools never shrink). */
+  flex: 0 1 auto;
   min-width: 0;
-  max-width: 100%;
   margin-inline-start: calc(-1 * var(--nds-space-6));
   padding: var(--nds-space-2) var(--nds-space-6);
   border: none;
