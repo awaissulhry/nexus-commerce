@@ -196,7 +196,7 @@ function SourceCell({ value, none, source, company, say }: { value: string; none
   return (
     <>
       <span className={none ? 'fw-ctr-none' : undefined}>{value}</span>
-      {source === 'COMPANY' ? <Tag tone="info">{say(sourceWords({ from: 'COMPANY', company }))}</Tag> : <span className="fw-ctr-sub">{say(said('ct.com.customerDefault'))}</span>}
+      {source === 'COMPANY' ? <Tag tone="info" className="fw-ctr-tag">{say(sourceWords({ from: 'COMPANY', company }))}</Tag> : <span className="fw-ctr-sub">{say(said('ct.com.customerDefault'))}</span>}
     </>
   )
 }
@@ -222,7 +222,7 @@ function CompanyList({ rows, marked, say, actions }: { rows: readonly CompanyRow
             <div className="fw-ctr-co">
               <span className="fw-ctr-name">
                 <b>{row.name}</b>
-                {row.current ? <Tag tone="info">{say(said('ct.com.youWork'))}</Tag> : null}
+                {row.current ? <Tag tone="info" className="fw-ctr-tag">{say(said('ct.com.youWork'))}</Tag> : null}
               </span>
               <span className="fw-ctr-sub">{say(row.own && row.changed ? said('ct.com.ownSince', { days: { date: row.changed } }) : said('ct.com.usesCustomer'))}</span>
             </div>
@@ -235,7 +235,7 @@ function CompanyList({ rows, marked, say, actions }: { rows: readonly CompanyRow
             <div className="fw-ctr-dep">
               <SourceCell value={say(row.deposit.value)} source={row.deposit.source} company={row.name} say={say} />
             </div>
-            <div className="fw-ctr-po">{row.po ? <Tag tone="warning">{say(said('ct.com.poTag'))}</Tag> : <span className="fw-ctr-none">{say(said('ct.com.poNot'))}</span>}</div>
+            <div className="fw-ctr-po">{row.po ? <Tag tone="warning" className="fw-ctr-tag">{say(said('ct.com.poTag'))}</Tag> : <span className="fw-ctr-none">{say(said('ct.com.poNot'))}</span>}</div>
             <div className="fw-ctr-o">
               <LineMenuButton label={say(said('ct.co.more', { params: { company: row.name } }))} items={items} />
             </div>

@@ -142,6 +142,10 @@
   .fw-ctr-hd.is-v { display: grid; }
 }
 
+/* ct-fx3 G-W04 (walk W-04): a company row's tags wrap inside their cell (Italian at 865: "Numero d'ordine obbligatorio" ran under the
+   row's ⋯) — the DS's own wrap pattern (components.css, the media board's tags), on our class, inside our rows only. */
+.fw-ctr-row.is-c .fw-ctr-tag { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: start; }
+
 /* (5) the windows' insides */
 .fw-ctr-win { container: ctw / inline-size; display: flex; flex-direction: column; gap: var(--nds-space-14); min-width: 0; margin: 0; padding: 0; border: 0; }
 .fw-ctr-fgrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-12) var(--nds-space-16); min-width: 0; }
