@@ -296,9 +296,29 @@ describe('the strips: what stops the customer, most blocking first', () => {
     const bare = stripOf(stripsOf(input({ money: { ...NO_MONEY, ageing: loaded(LATE.map((row) => ({ ...row, open: undefined, overdue: undefined, buckets: undefined }))) } })).rows, 'overdue')
     expect(said(bare.title)).toBe('Invoices are late')
     expect(said(bare.title, 'it')).toBe('Ci sono fatture scadute')
-    // The ageing rows hold 3 open invoices: the strip says no number of invoices at all.
+    // The ageing rows hold 3 open invoices and no late count of the API's (S39's field absent): the strip says no number of invoices.
     for (const strip of [priced, bare]) for (const locale of LOCALES) expect([said(strip.title, locale), ...strip.lines.map((line) => said(line, locale))].join(' ')).not.toMatch(/\d+\s+(invoices?|fattur[ae])/i)
     expect([said(bare.title), ...bare.lines.map((line) => said(line))].join(' ')).not.toMatch(/€|\d[\d.,]*\s?EUR/)
+  })
+
+  it('S39: with the price grain the API\'s own count of late invoices joins the quiet line; Sales keeps the words; a row without the field says no count', () => {
+    const overdueWith = (rows: readonly AgeingRow[], can: OverviewCan = CAN) => stripOf(stripsOf(input({ can, money: { ...NO_MONEY, ageing: loaded(rows) } })).rows, 'overdue')
+    // This customer's ageing rows (one per company and currency) carry the API's count: the strip says their sum.
+    const withCount = LATE.map((row, index) => ({ ...row, lateInvoices: index === 0 ? 2 : 1 }))
+    const sum = withCount.reduce((total, row) => total + row.lateInvoices, 0)
+    const owner = overdueWith(withCount)
+    expect(owner.lines.map((line) => said(line))).toEqual([`${sum} invoices late · Oldest 38 days late`])
+    expect(owner.lines.map((line) => said(line, 'it'))).toEqual([`${sum} fatture scadute · La più vecchia: 38 giorni di ritardo`])
+    // Another customer's row in the same answer never counts (one customer's reads).
+    const another = { ...withCount[0]!, customer: { ...withCount[0]!.customer, id: 'another-made-up-customer' }, lateInvoices: 9 }
+    expect(overdueWith([...withCount, another]).lines.map((line) => said(line))).toEqual([`${sum} invoices late · Oldest 38 days late`])
+    // Sales (no price grain): the words, never the count — even when the read carries it.
+    const sales = overdueWith(withCount, { ...CAN, price: false })
+    expect(said(sales.title)).toBe('Invoices are late')
+    for (const locale of LOCALES) expect([said(sales.title, locale), ...sales.lines.map((line) => said(line, locale))].join(' '), locale).not.toMatch(/\d+\s+(invoices?|fattur[ae])/i)
+    // A row without the field: no count at all (absent ≠ 0); a count of 0: none said.
+    expect(overdueWith([{ ...withCount[0]!, lateInvoices: undefined }, ...withCount.slice(1)]).lines.map((line) => said(line))).toEqual(['Oldest 38 days late'])
+    expect(overdueWith(withCount.map((row) => ({ ...row, lateInvoices: 0 }))).lines.map((line) => said(line))).toEqual(['Oldest 38 days late'])
   })
 
   it('a door or a button without its right is NOT there (never held for a right); held with words only by state', () => {
