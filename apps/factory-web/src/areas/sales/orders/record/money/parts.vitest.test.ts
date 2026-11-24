@@ -249,4 +249,21 @@ describe('F-CM-k1: the parts file', () => {
     // No look prop: a part takes data and doors only.
     expect(parts).not.toMatch(/className\?: string|variant\?:|look\?:/)
   })
+
+  it('K1.2: the sections draw the parts (one place for each markup), each `./parts` import AFTER the file\'s Kit import', () => {
+    for (const file of ['./view/TotalsSection.tsx', './view/PaymentsSection.tsx', './view/PriceCheckSection.tsx', './view/MarginSection.tsx']) {
+      const text = source(file)
+      expect(text.indexOf("from '../../view/production/Kit'"), file).toBeGreaterThan(-1)
+      expect(text.indexOf("from './parts'"), file).toBeGreaterThan(text.indexOf("from '../../view/production/Kit'"))
+      expect(text, file).toContain('<Fold ')
+      expect(text, file).not.toContain('className="fw-om-fold"')
+    }
+    const totals = source('./view/TotalsSection.tsx')
+    expect(totals).toContain('<GapRow ok words={say(totals.settledRow)} />')
+    expect(totals).toContain('<Facts')
+    expect(totals).not.toMatch(/className="fw-om-gap|className="fw-om-facts"/)
+    const head = source('./view/MoneyHead.tsx')
+    expect(head).toContain('<MoneyAnswer tone={head.tone} reading={head.reading}')
+    expect(head).not.toMatch(/<Banner|fw-om-head-wall/)
+  })
 })

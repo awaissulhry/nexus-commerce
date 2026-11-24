@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
-import { ChevronDown, ChevronRight, Hand, Scale, TrendingDown } from 'lucide-react'
+import { Hand, Scale, TrendingDown } from 'lucide-react'
 import { MetricStrip, type MenuItemDef } from '@nexus/ui/components'
 import { Button, Tag } from '@nexus/ui/primitives'
 import { MarginMeter } from '@nexus/ui/charts/margin-meter/index'
@@ -18,9 +18,10 @@ import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { LineMenuButton } from '../../view/LineMenu'
 import { PartFailed, PartReading, Section } from '../../view/production/Kit' // F-OM-101 (L6): the Production kit, in place
 import { marginOf, type MarginView } from '../margin'
+import { Fold } from './parts' // F-CM-k1: the shared fold
 import { lineOf, pctOf, useSay, type Say } from './say'
 
-type Fold = 'lines' | 'workOrders' | 'why'
+type FoldId = 'lines' | 'workOrders' | 'why' // F-CM-k1: was `Fold` (the shared part's name now)
 
 /**
  * F-OM-302 (order MONEY tab, 10-design §8) — section 5, Margin (#margin), in the kit (replaces margin/view/MarginTab.tsx): ONE card —
@@ -68,7 +69,7 @@ function Filled({ order, model, actions, detail, title, info }: { order: Order; 
   const locale = useLocale()
   const ds = useDsWords()
   const say = useSay(detail.currency)
-  const [fold, setFold] = useState<Fold | null>(null)
+  const [fold, setFold] = useState<FoldId | null>(null)
   const marginCan = model.margin!.can
   const view = marginOf({ detail, order, can: model.can, marginCan, prefix: model.prefix })
 
@@ -120,10 +121,7 @@ function Filled({ order, model, actions, detail, title, info }: { order: Order; 
               ['why', t('moneyTab.margin.fold.why')],
             ] as const
           ).map(([id, label]) => (
-            <button key={id} type="button" className="fw-om-fold" aria-expanded={fold === id} onClick={() => setFold((now) => (now === id ? null : id))}>
-              {fold === id ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
-              {label}
-            </button>
+            <Fold key={id} open={fold === id} onToggle={() => setFold((now) => (now === id ? null : id))} label={label} />
           ))}
         </div>
         {fold === 'lines' || fold === 'workOrders' ? (
