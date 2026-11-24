@@ -2,7 +2,6 @@
 
 import { useState, type ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { AlertCircle, CheckCircle2, ChevronDown, ChevronRight } from 'lucide-react'
 import { MetricStrip, type MenuItemDef } from '@nexus/ui/components'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { TabLink } from '../../../../../../lib/tab-link/TabLink'
@@ -13,6 +12,7 @@ import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { LineMenuButton } from '../../view/LineMenu'
 import { PartFailed, Section } from '../../view/production/Kit' // F-OM-101 (L6): the Production kit, in place
 import { totalsOf, type TotalsDoor } from '../totals'
+import { Facts, Fold, GapRow } from './parts' // F-CM-k1: the shared parts (a gap, the fold, the facts)
 import { useSay } from './say'
 
 /** A hash link: the browser scrolls to the section (and its address names it). */
@@ -90,28 +90,13 @@ export function TotalsSection({ order, model, actions }: { order: Order; model: 
         <div className="fw-om-tt-r">
           {totals.settledRow || totals.gaps.length > 0 ? <h3 className="fw-pt-h3">{totals.settled ? t('moneyTab.totals.nothingLeft') : t('moneyTab.totals.whatIsLeft', { count: totals.gaps.length })}</h3> : null}
           {totals.settledRow ? (
-            <p className="fw-om-gap is-ok">
-              <CheckCircle2 size={14} aria-hidden />
-              <span>{say(totals.settledRow)}</span>
-            </p>
+            <GapRow ok words={say(totals.settledRow)} />
           ) : (
-            totals.gaps.map((gap) => (
-              <p key={gap.code} className="fw-om-gap">
-                <AlertCircle size={14} aria-hidden />
-                <span>
-                  {say(gap.words)}
-                  {gap.extra ? <b> {say(gap.extra)}</b> : null}
-                </span>
-                {gap.door ? doorOf(gap.door) : null}
-              </p>
-            ))
+            totals.gaps.map((gap) => <GapRow key={gap.code} words={say(gap.words)} extra={gap.extra ? say(gap.extra) : undefined} door={gap.door ? doorOf(gap.door) : undefined} />)
           )}
           {totals.adds ? (
             <>
-              <button type="button" className="fw-om-fold" aria-expanded={adding} onClick={() => setAdding((now) => !now)}>
-                {adding ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
-                {t('moneyTab.totals.adds.title')} <span>· {t('moneyTab.totals.adds.hint')}</span>
-              </button>
+              <Fold open={adding} onToggle={() => setAdding((now) => !now)} label={t('moneyTab.totals.adds.title')} hint={t('moneyTab.totals.adds.hint')} />
               {adding ? (
                 <table className="fw-om-adds">
                   <tbody>
@@ -131,22 +116,20 @@ export function TotalsSection({ order, model, actions }: { order: Order; model: 
           ) : null}
         </div>
         ) : null}
-        <dl className="fw-om-facts">
-          {totals.facts.map((fact) => (
-            <div key={fact.label.key}>
-              <dt>{say(fact.label)}</dt>
-              <dd>
-                {fact.door ? (
-                  <a className="fw-pt-link" href={`#${fact.door}`}>
-                    {t('moneyTab.totals.fact.door', { value: say(fact.value) })}
-                  </a>
-                ) : (
-                  say(fact.value)
-                )}
-              </dd>
-            </div>
-          ))}
-        </dl>
+        <Facts
+          facts={totals.facts.map((fact) => ({
+            key: fact.label.key,
+            label: say(fact.label),
+            // a fact's door stays this page's: Margin now › lands on #margin
+            value: fact.door ? (
+              <a className="fw-pt-link" href={`#${fact.door}`}>
+                {t('moneyTab.totals.fact.door', { value: say(fact.value) })}
+              </a>
+            ) : (
+              say(fact.value)
+            ),
+          }))}
+        />
       </div>
     </Section>
   )
