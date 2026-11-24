@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ADDRESS_KINDS, MASTER_STATUSES } from '@nexus/factory-domain/parties/addresses'
+import { ADDRESS_APPROVALS } from '@nexus/factory-domain/parties/address-approval' // F-CA-101
 import { CONTACT_ROLES } from '@nexus/factory-domain/parties/contacts'
 import { PARTY_KINDS, PARTY_ROLES, PARTY_STATUSES } from '@nexus/factory-domain/parties/rules'
 import { PARTY_SORTS, PARTY_WORK_GROUPS } from '@nexus/factory-domain/parties/contracts' // F-CL-201
@@ -101,6 +102,12 @@ export const addressSchema = z.object({
   isDefaultBillTo: z.boolean(),
   isDefaultShipTo: z.boolean(),
   status: z.enum(MASTER_STATUSES),
+  // F-CA-101 (customer People & addresses, lane ca-; 13-backend §5.2): our check of a delivery address the customer added in the portal
+  // (factory-domain parties/contracts.ts addressView.approval; null: an address of the office's own). Optional: absent = as before.
+  approval: z
+    .object({ status: z.enum(ADDRESS_APPROVALS), requestedAt: z.string().nullable(), requestedBy: z.string().nullable(), decidedAt: z.string().nullable(), decidedBy: z.string().nullable(), refuseReason: z.string().nullable() })
+    .nullable()
+    .optional(),
   version: z.number(),
   createdAt: z.string(),
   updatedAt: z.string(),

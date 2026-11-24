@@ -910,7 +910,7 @@
     "email": "Email",
     "emailHint": "Qui arrivano i documenti dei suoi ruoli",
     "contactLanguage": "Lingua",
-    "partyLanguage": "Come la scheda",
+    "partyLanguage": "Lingua predefinita",
     "belongsTo": "Appartiene a",
     "belongsToHint": "Una scheda per tutte le aziende è vista da tutte",
     "everyCompany": "Tutte le aziende",
@@ -988,7 +988,7 @@
       "name": "Serve il nome del contatto (al massimo 120 caratteri)",
       "email": "Non è un indirizzo email",
       "emailForDocuments": "Chi riceve ordini, fatture o documenti di qualità ha un’email",
-      "emailTwice": "Un altro contatto di questa scheda ha questa email",
+      "emailTwice": "Un altro contatto qui ha questa e-mail",
       "phone": "Cifre, con + ( ) . / - e spazi",
       "language": "Scegli una lingua"
     }

@@ -1,0 +1,243 @@
+{
+  "answer": {
+    "nothing": "Ancora nessuno e nessun indirizzo",
+    "people_one": "{count} persona",
+    "people_other": "{count} persone",
+    "portal": {
+      "signIn_one": "{count} accede al portale",
+      "signIn_other": "{count} accedono al portale",
+      "invited_one": "{count} invitato",
+      "invited_other": "{count} invitati",
+      "invitedOnly_one": "{count} invitato al portale",
+      "invitedOnly_other": "{count} invitati al portale",
+      "nobody": "ancora nessuno nel portale",
+      "both": "{signIn}, {invited}",
+      "seats": "({taken} di {max} posti)",
+      "withSeats": "{who} {seats}"
+    },
+    "addresses_one": "{count} indirizzo",
+    "addresses_other": "{count} indirizzi",
+    "riders_one": "{count} pilota",
+    "riders_other": "{count} piloti",
+    "riderOf": "pilota di {team}",
+    "chipsLabel": "Cosa aspetta noi qui"
+  },
+  "chip": {
+    "check_one": "{count} indirizzo attende il nostro controllo",
+    "check_other": "{count} indirizzi attendono il nostro controllo",
+    "basis": "{count} senza base giuridica",
+    "expired_one": "{count} invito scaduto",
+    "expired_other": "{count} inviti scaduti",
+    "ends_one": "{count} accesso scade entro 14 giorni",
+    "ends_other": "{count} accessi scadono entro 14 giorni",
+    "seats": "Posti esauriti ({taken} di {max})",
+    "noQuotes": "Nessuno riceve preventivi e conferme",
+    "noInvoices": "Nessuno riceve le fatture",
+    "registered": "{count} sedi legali",
+    "noRegistered": "Nessuna sede legale: non si può ancora fatturare"
+  },
+  "filter": {
+    "check_one": "È mostrato {count} indirizzo che attende il nostro controllo.",
+    "check_other": "Sono mostrati i {count} indirizzi che attendono il nostro controllo.",
+    "basis_one": "È mostrata {count} persona senza base giuridica.",
+    "basis_other": "Sono mostrate le {count} persone senza base giuridica.",
+    "expired_one": "È mostrata {count} persona con l'invito scaduto.",
+    "expired_other": "Sono mostrate le {count} persone con l'invito scaduto.",
+    "ends_one": "È mostrata {count} persona il cui accesso scade entro 14 giorni.",
+    "ends_other": "Sono mostrate le {count} persone il cui accesso scade entro 14 giorni.",
+    "seats_one": "È mostrata {count} persona che occupa un posto.",
+    "seats_other": "Sono mostrate le {count} persone che occupano un posto.",
+    "noQuotes": "Nessuno riceve preventivi e conferme: dai a un contatto con un'e-mail il ruolo Ordini.",
+    "noInvoices": "Nessuno riceve fatture e solleciti: dai a un contatto con un'e-mail il ruolo Fatture.",
+    "registered": "Sono mostrate le {count} sedi legali.",
+    "showAllPeople_one": "Mostra {count} persona",
+    "showAllPeople_other": "Mostra tutte le {count} persone",
+    "showAllAddresses_one": "Mostra {count} indirizzo",
+    "showAllAddresses_other": "Mostra tutti i {count} indirizzi"
+  },
+  "people": {
+    "title": "Persone",
+    "more": "Altro per Persone",
+    "info": "Riceve per e-mail: a chi vanno di base le nostre mail. Preventivi e conferme d'ordine al contatto Ordini con e-mail aggiunto per primo; avvisi di spedizione a ogni contatto Ordini; avvisi di ritardo a fino a 3 di loro; fatture, solleciti ed estratti conto a ogni contatto Fatture; pagine di acconto al primo contatto Fatture, altrimenti Ordini; avvisi di richiamo al contatto Qualità.",
+    "infoQuote": "Il contatto scelto su un preventivo vale per le sue mail (la sua conferma, la sua pagina di acconto, il suo avviso di ritardo). Una persona del portale che non è un contatto riceve solo ciò che dicono le sue impostazioni del portale.",
+    "answer": {
+      "none": "Ancora nessuno: aggiungi la persona che ordina — preventivi e conferme vanno a lei.",
+      "contacts_one": "{count} contatto",
+      "contacts_other": "{count} contatti",
+      "contactsAndPortal": "{contacts} e {count} solo nel portale",
+      "seats": "{taken} di {max} posti nel portale",
+      "seatsFull": "{taken} di {max} posti nel portale (esauriti)",
+      "allTo": "preventivi, conferme, fatture e solleciti vanno a {name}",
+      "quotesTo": "preventivi e conferme vanno a {name}",
+      "noQuotes": "nessuno riceve preventivi e conferme",
+      "invoicesTo": "fatture e solleciti a {names}",
+      "noInvoices": "nessuno riceve fatture e solleciti",
+      "portalHidden": "l'accesso al portale non è mostrato per il tuo ruolo",
+      "portalOff": "il portale è spento per questo cliente"
+    },
+    "col": {
+      "person": "Persona",
+      "reach": "E-mail e telefono",
+      "gets": "Riceve per e-mail",
+      "portal": "Portale",
+      "privacy": "Dati personali"
+    },
+    "listLabel": "Persone di {name}",
+    "portalOnly": "Solo portale",
+    "sameName": "Stesso nome del contatto {name}: controlla l'e-mail",
+    "blanked": "Cancellati per sempre",
+    "noEmail": "Nessuna e-mail",
+    "writesIn": "scrive in {language}",
+    "showArchived": "Mostra i contatti archiviati ({count})",
+    "hideArchived": "Nascondi i contatti archiviati",
+    "hideLeft": "Nascondi chi ha lasciato",
+    "tick": "Seleziona più persone del portale…",
+    "portalSettings": "Impostazioni del portale ›",
+    "history": "Storico dei contatti ›",
+    "showMore_one": "Mostra {count} altra persona",
+    "showMore_other": "Mostra altre {count} persone"
+  },
+  "gets": {
+    "QUOTES_AND_CONFIRMATIONS": "Preventivi e conferme",
+    "SHIPPING_NOTICES": "Avvisi di spedizione",
+    "DELAY_NOTICES": "Avvisi di ritardo",
+    "DEPOSIT_PAGES": "Pagine di acconto",
+    "INVOICES_AND_REMINDERS": "Fatture e solleciti",
+    "RECALLS": "Avvisi di richiamo",
+    "none": "Nessuna mail per ruolo",
+    "archived": "Nulla: archiviato",
+    "noEmail": "Non riceve nulla: manca l'e-mail. Le mail di ordini, fatture e qualità ne hanno bisogno.",
+    "portalOnly": "Non è un contatto: nessuna mail per ruolo. Gli avvisi del portale seguono le loro impostazioni."
+  },
+  "used": {
+    "quotes_one": "{count} preventivo aperto",
+    "quotes_other": "{count} preventivi aperti",
+    "complaints_one": "{count} reclamo aperto",
+    "complaints_other": "{count} reclami aperti",
+    "returns_one": "{count} reso aperto",
+    "returns_other": "{count} resi aperti",
+    "service_one": "{count} pratica di assistenza aperta",
+    "service_other": "{count} pratiche di assistenza aperte",
+    "mailIn": "ultima mail ricevuta il {date}",
+    "on": "Usato in {what}",
+    "draftQuotes_one": "{count} preventivo in bozza",
+    "draftQuotes_other": "{count} preventivi in bozza",
+    "shipments_one": "{count} spedizione preparata",
+    "shipments_other": "{count} spedizioni preparate",
+    "samples_one": "{count} spedizione di campioni",
+    "samples_other": "{count} spedizioni di campioni",
+    "portalRequests_one": "{count} richiesta d'ordine dal portale",
+    "portalRequests_other": "{count} richieste d'ordine dal portale",
+    "changeRequests_one": "{count} richiesta di modifica",
+    "changeRequests_other": "{count} richieste di modifica",
+    "notOnWork": "Non in lavori aperti"
+  },
+  "portal": {
+    "none": "Nessun accesso al portale",
+    "approver": "Approva la produzione",
+    "expired": "Invito scaduto",
+    "endsIn": "Accesso fino al {date} · tra {count} g",
+    "lastSignIn": "Ultimo accesso {date}",
+    "never": "Non ha ancora fatto l'accesso",
+    "prices": "Vede i prezzi",
+    "noPrices": "Senza prezzi"
+  },
+  "privacy": {
+    "onlyPortal": "Solo nel portale"
+  },
+  "row": {
+    "menu": "Azioni per {name}",
+    "addContact": "Aggiungi come contatto…",
+    "copyEmail": "Copia l'e-mail",
+    "history": "Storico ›",
+    "copyLink": "Copia il link a questa riga",
+    "erasedLine": "Contatto cancellato",
+    "erasedHeld": "Questo contatto è stato cancellato: non si può fare altro."
+  },
+  "held": {
+    "noEmailInvite": "Un invito ha bisogno di un'e-mail: aggiungila prima al contatto."
+  },
+  "bulk": {
+    "label": "Azioni sulle persone del portale selezionate",
+    "ticked_one": "{count} persona selezionata",
+    "ticked_other": "{count} persone selezionate",
+    "none": "Seleziona le persone del portale su cui agire insieme",
+    "done": "Fatto",
+    "tick": "Seleziona {name}"
+  },
+  "addresses": {
+    "more": "Altro per Indirizzi",
+    "info": "Predefiniti: un nuovo preventivo e un nuovo ordine partono dall'indirizzo predefinito per le fatture e per le consegne. Le fatture elettroniche indicano la sede legale attiva più vecchia (altrimenti l'indirizzo predefinito per le fatture).",
+    "infoCheck": "Un indirizzo che il cliente aggiunge nel portale attende il nostro controllo: non si usa per le consegne finché un collega che gestisce gli ordini non lo approva. Rifiutalo con le parole che il cliente legge.",
+    "answer": {
+      "none": "Ancora nessun indirizzo: le fatture indicano la sede legale; le consegne vanno all'indirizzo di consegna predefinito.",
+      "invoicesTo": "le fatture vanno a {where}",
+      "noInvoices": "nessun predefinito per le fatture",
+      "deliveriesTo": "le consegne vanno a {where}",
+      "deliveriesToo": "anche le consegne lì",
+      "noDeliveries": "nessun predefinito per le consegne: i nuovi ordini ne chiedono uno",
+      "waits_one": "{count} attende il nostro controllo",
+      "waits_other": "{count} attendono il nostro controllo",
+      "registered": "{count} sedi legali: le fatture elettroniche usano la più vecchia"
+    },
+    "col": {
+      "used": "Usato in"
+    },
+    "listLabel": "Indirizzi di {name}",
+    "defaultBillTo": "Predefinito per le fatture",
+    "defaultShipTo": "Predefinito per le consegne",
+    "einvoice": "Le fatture elettroniche usano questo indirizzo",
+    "otherRegistered": "Anche questa è una sede legale, ma le fatture elettroniche usano la più vecchia ({city}). Archivia quella non più giusta.",
+    "nobodyAt": "Nessun referente sul posto",
+    "showArchived": "Mostra gli indirizzi archiviati ({count})",
+    "hideArchived": "Nascondi gli indirizzi archiviati",
+    "history": "Storico degli indirizzi ›",
+    "showMore_one": "Mostra {count} altro indirizzo",
+    "showMore_other": "Mostra altri {count} indirizzi"
+  },
+  "address": {
+    "copy": "Copia l'indirizzo",
+    "setBillTo": "Imposta come predefinito per le fatture",
+    "setShipTo": "Imposta come predefinito per le consegne",
+    "waitingHeld": "Attende il nostro controllo: può essere predefinito una volta approvato.",
+    "refusedLine": "Indirizzo rifiutato",
+    "refusedHeld": "Un indirizzo rifiutato non cambia più: il cliente può aggiungerne un altro."
+  },
+  "check": {
+    "label": "Controllo di {name}",
+    "waits": "Attende il nostro controllo",
+    "added": "aggiunto nel portale da {name} il {date}",
+    "addedNoName": "aggiunto nel portale il {date}",
+    "notUsed": "Non si usa per le consegne finché non è approvato; prima non può essere predefinito.",
+    "colleague": "Lo approva o lo rifiuta un collega che gestisce gli ordini.",
+    "approve": "Approva",
+    "approving": "Approvazione…",
+    "refuse": "Rifiuta…",
+    "refusedOn": "Rifiutato il {date} da {name}",
+    "refusedOnNoName": "Rifiutato il {date}",
+    "reason": "“{reason}” — il cliente legge queste parole. Un indirizzo rifiutato non torna più: può aggiungerne un altro."
+  },
+  "refuse": {
+    "title": "Rifiuta l'indirizzo di consegna",
+    "sub": "{customer} · aggiunto nel portale da {name} il {date}",
+    "why": "Perché (il cliente legge queste parole)",
+    "never": "Un indirizzo rifiutato non torna più e non si può modificare: il cliente può aggiungerne un altro.",
+    "noOrder": "Nessun ordine lo usa ancora: attendeva il nostro controllo.",
+    "confirm": "Rifiuta l'indirizzo",
+    "sending": "Rifiuto in corso…",
+    "tooShort": "Di' perché l'indirizzo non è accettato: il cliente lo legge.",
+    "tooLong": "Al massimo {max} caratteri."
+  },
+  "done": {
+    "approved": "L'indirizzo di consegna “{name}” è approvato: ora si può scegliere per le consegne, in ufficio e nel portale.",
+    "refused": "L'indirizzo di consegna “{name}” è rifiutato: il cliente legge il perché.",
+    "copied": "Copiato.",
+    "copyFailed": "Non copiato: seleziona il testo e copialo a mano."
+  },
+  "part": {
+    "portal": "l'accesso al portale"
+  },
+  "linkTo": "Copia il link a {section}",
+  "keys": "Tasti: Tab passa all'azione successiva, Invio o Spazio la apre; Esc chiude un menu o una finestra.",
+  "showFewer": "Mostra meno"
+}

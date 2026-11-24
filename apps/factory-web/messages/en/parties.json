@@ -910,7 +910,7 @@
     "email": "Email",
     "emailHint": "Documents for their roles go here",
     "contactLanguage": "Language",
-    "partyLanguage": "As the party",
+    "partyLanguage": "Default language",
     "belongsTo": "Belongs to",
     "belongsToHint": "A party for every company is seen by all of them",
     "everyCompany": "Every company",
@@ -988,7 +988,7 @@
       "name": "The contact's name is needed (at most 120 characters)",
       "email": "This is not an email address",
       "emailForDocuments": "A contact who receives orders, invoices or quality documents has an email",
-      "emailTwice": "Another contact of this party has this email",
+      "emailTwice": "Another contact here has this e-mail",
       "phone": "Digits, with + ( ) . / - and spaces",
       "language": "Choose a language"
     }
