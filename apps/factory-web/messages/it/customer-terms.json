@@ -176,7 +176,34 @@
       "releasedOn": "Tolto il {date} da {name}: “{words}”",
       "releasedOnBare": "Tolto il {date} da {name}",
       "placedOn": "Messo il {date} da {name}: “{words}”",
-      "placedOnCheck": "Messo il {date} da un controllo del fido: “{words}”"
+      "placedOnCheck": "Messo il {date} da un controllo del fido: “{words}”",
+      "part": "i blocchi",
+      "another": "Metti in blocco per un altro motivo…",
+      "releasedFold": "Tolti in passato ({count})",
+      "releasedInline": "Tolti in passato ({count}) ›",
+      "hideReleased": "Nascondi i blocchi tolti",
+      "orderWaitsDoor": "Preventivi › Accettati, l’ordine aspetta ›",
+      "since": "Dal",
+      "sinceDate": "Dal {date}",
+      "by": "da {name}",
+      "byCheck": "da un controllo del fido",
+      "with": "Con {company}",
+      "cause": "La causa: nessuna identità fiscale ↓",
+      "causeMenu": "La causa: Identità fiscale e fattura elettronica ↓",
+      "copyLink": "Copia il link a questo blocco",
+      "rowMore": "Azioni per il blocco {reason}",
+      "waitingTitle_one": "In attesa dello sblocco: {count} preventivo accettato senza ordine",
+      "waitingTitle_other": "In attesa dello sblocco: {count} preventivi accettati senza ordine",
+      "waitingList": "Preventivi accettati in attesa dello sblocco",
+      "theirPo": "Loro ordine {ref}",
+      "noPo": "Ancora nessun numero d'ordine",
+      "waitsTag": "Attende lo sblocco",
+      "waitingHint": "Lo sblocco non crea ordini: creali in",
+      "info": {
+        "what": "Blocco: ferma i nuovi ordini e le spedizioni di questo cliente — per un’azienda o per tutte — con un motivo che si legge sul preventivo, sull’ordine e sulla spedizione. I preventivi proseguono con un avviso; fatture e pagamenti proseguono.",
+        "release": "Togliere un blocco non crea ordini: i preventivi accettati in attesa diventano ordini da Preventivi › Accettati, l’ordine aspetta.",
+        "block": "Blocca… nel ⋯ della scheda è un altro stop (tutta la scheda). Il fido è di Importi."
+      }
     },
     "com": {
       "answer": "I nuovi preventivi e ordini prendono queste; quelli aperti tengono le loro.",
@@ -215,7 +242,41 @@
       "baseList": "Listino base",
       "salesSettings": "Impostazioni vendite",
       "foot": "Cosa vede il cliente: la pagina Account del suo portale mostra i suoi termini di pagamento e la valuta, in sola lettura, con “Qualcosa non va? Chiedici”.",
-      "footMulti": "Cosa vede il cliente: la pagina Account del suo portale mostra i termini di pagamento propri del cliente e la valuta, in sola lettura, con “Qualcosa non va? Chiedici”."
+      "footMulti": "Cosa vede il cliente: la pagina Account del suo portale mostra i termini di pagamento propri del cliente e la valuta, in sola lettura, con “Qualcosa non va? Chiedici”.",
+      "part": "le condizioni commerciali",
+      "carrierPart": "il corriere",
+      "companiesPart": "le condizioni con ciascuna azienda",
+      "changeTerms": "Modifica condizioni…",
+      "changeDelivery": "Modifica consegna…",
+      "setTermsFor": "Imposta condizioni per {company}…",
+      "poAct": "Numero d'ordine del cliente…",
+      "endedFold": "Condizioni di azienda terminate ({count})",
+      "hideEnded": "Nascondi le condizioni di azienda terminate",
+      "endedList": "Condizioni di azienda terminate",
+      "library": "Libreria dei termini di pagamento ›",
+      "priceListDoor": "Listino {code} ›",
+      "moneyDoor": "Fido e condizioni in Importi ›",
+      "history": "Storico delle condizioni ›",
+      "pays": "Come paga",
+      "order": "Regole per gli ordini",
+      "delivery": "Consegna",
+      "companies": "Con ciascuna delle nostre aziende",
+      "companiesList": "Condizioni con ciascuna delle nostre aziende",
+      "colPo": "Numero d'ordine",
+      "youWork": "Ci lavori tu",
+      "ownSince": "Condizioni proprie · modificate il {date}",
+      "usesCustomer": "Usa le condizioni del cliente",
+      "poTag": "Numero d'ordine obbligatorio",
+      "change": "Modifica…",
+      "waitsForIt": "lo attende",
+      "waitsForCount_one": "{count} preventivo accettato lo attende",
+      "waitsForCount_other": "{count} preventivi accettati lo attendono",
+      "info": {
+        "what": "Condizioni commerciali: quello che prende un NUOVO preventivo o ordine di questo cliente. Ogni preventivo e ordine tiene la sua copia: cambiare le condizioni qui non li cambia mai.",
+        "companies": "Con due o più delle nostre aziende, un’azienda può avere termini di pagamento, listino, acconto e regola del numero d’ordine propri; il resto viene dal cliente (“Predefinito del cliente”).",
+        "po": "Numero d'ordine del cliente: quando è obbligatorio, un ordine senza il numero attende (l'ordine di un preventivo accettato) o viene rifiutato (un ordine scritto a mano o importato).",
+        "copies": "La valuta è quella dei suoi listini e del portale; i termini di consegna servono all’Intrastat. Nessuno dei due si copia ancora su preventivi o ordini."
+      }
     },
     "freight": {
       "SENDER": "Il trasporto lo paghiamo noi",
@@ -231,7 +292,12 @@
         "list": "Scegli il listino, o usa quello del cliente."
       },
       "saved": "Le condizioni con {company} sono state salvate.",
-      "poSaved": "La regola del numero d'ordine è stata salvata per {company}."
+      "poSaved": "La regola del numero d'ordine è stata salvata per {company}.",
+      "more": "Azioni per le condizioni con {company}",
+      "back": "Torna alle condizioni del cliente…",
+      "endedTerms": "{terms} · acconto {deposit}",
+      "endedOn": "Terminato il {date} da {name}",
+      "endedOnBare": "Terminato il {date}"
     },
     "deliv": {
       "problem": {
@@ -247,13 +313,96 @@
       "savedNone": "Consegna salvata: le nuove spedizioni di {customer} prendono il corriere scelto a ogni spedizione."
     },
     "end": {
-      "terms": "Termini di pagamento: {own} → quelli del cliente, {party}",
-      "deposit": "Acconto: {own} → {party}",
+      "terms": "Termini di pagamento: {own} → quelli del cliente, {theirs}",
+      "deposit": "Acconto: {own} → {theirs}",
       "po": "Va via anche la regola del numero d'ordine: gli ordini con {company} non chiederanno più il numero d'ordine del cliente.",
       "openKeep": "Preventivi e ordini aperti tengono i loro.",
       "done": "Le condizioni con {company} sono terminate: i nuovi preventivi e ordini prendono quelle del cliente.",
       "refusedCredit": "Nel frattempo con questa azienda è stato impostato un fido: le condizioni proprie restano finché c'è il fido."
     },
-    "copied": "Copiato: un link che apre questa parte della scheda."
+    "copied": "Copiato: un link che apre questa parte della scheda.",
+    "reading": "Lettura in corso…",
+    "more": "Altro per {section}",
+    "copyLink": "Copia il link a {section}",
+    "copyRowLink": "Copia il link a questa riga",
+    "keys": "Tasti: Tab passa da una riga all'altra · Invio apre il ⋯ della riga · Esc chiude un menu o una finestra.",
+    "win": {
+      "listByColleague": "Il listino lo assegna un collega che gestisce i listini.",
+      "terms": {
+        "title": "Modifica le condizioni di {customer}",
+        "sub": "Le condizioni proprie del cliente: quello che prende un nuovo preventivo o ordine",
+        "note": "{companies} tengono termini di pagamento o acconto propri: restano. Cambiali con Imposta condizioni per {company}…",
+        "ptHint": "Vuoto: un nuovo preventivo prende le impostazioni vendite",
+        "ptNone": "Nessuno (le impostazioni vendite)",
+        "currencyHint": "I suoi listini e il portale; un listino in un’altra valuta cambia con essa",
+        "timing": {
+          "PER_SHIPMENT": "Ogni spedizione si fattura da sola",
+          "MONTHLY": "Le spedizioni del mese in una fattura differita"
+        },
+        "group": "Gruppo di sconto: {group} — viene con il listino.",
+        "oneCommand": "Un solo comando (il salvataggio delle condizioni) alla versione del cliente. Il corriere non è più qui: è in Modifica consegna…"
+      },
+      "deliv": {
+        "title": "Modifica la consegna di {customer}",
+        "sub": "Come viaggia la sua merce: un solo comando (il conto presso il corriere)",
+        "carrierHint": "Il corriere che le sue spedizioni usano per primo",
+        "service": "Servizio predefinito",
+        "serviceHint": "Cambiare il corriere lo azzera",
+        "who": "Chi paga il trasporto",
+        "pays": {
+          "SENDER": "Paghiamo noi",
+          "COLLECT": "Paga il cliente, sul suo conto",
+          "THIRD_PARTY": "Paga un terzo, sul suo conto"
+        },
+        "paysSub": {
+          "SENDER": "Sul nostro contratto o alle tariffe della piattaforma",
+          "COLLECT": "Porto assegnato: l'etichetta va sul suo conto presso il corriere",
+          "THIRD_PARTY": "Per esempio un marchio che paga per il suo rivenditore"
+        },
+        "account": {
+          "keep": "Tieni il conto registrato",
+          "replace": "Sostituiscilo",
+          "remove": "Toglilo"
+        },
+        "accountSub": {
+          "keep": "Il numero non si mostra mai",
+          "replace": "Scrivi il nuovo numero: viene sigillato, il vecchio cancellato",
+          "remove": "Il trasporto torna a noi"
+        },
+        "number": "Il nuovo numero di conto",
+        "numberHint": "Serve quando paga il cliente o un terzo. Viene sigillato: nessuno lo rilegge.",
+        "another": "Un altro corriere ha bisogno del suo conto: cambiare il corriere toglie il conto e il servizio.",
+        "foot": "Le etichette comprate da ora usano questi dati; quelle già comprate tengono i loro.",
+        "save": "Salva consegna"
+      },
+      "co": {
+        "title": "Imposta condizioni per {company}",
+        "sub": "{customer} con {company} · {since}",
+        "since": "condizioni proprie dal {date}",
+        "today": "oggi: le condizioni del cliente",
+        "theirs": "Del cliente",
+        "own": "Proprie per {company}",
+        "pick": "I suoi termini di pagamento",
+        "pickList": "Il suo listino",
+        "pickOne": "Scegline uno",
+        "depositHint": "Percentuale del totale lordo, sopra 0 e al massimo 100",
+        "po": "Numero d'ordine del cliente obbligatorio",
+        "poHint": "Un ordine con {company} senza il numero attende (da preventivo) o viene rifiutato (scritto a mano).",
+        "oneCommand": "Un solo comando per {company} (la sua riga di condizioni, alla sua versione); il risultato si dice solo per {company}.",
+        "foot": "I nuovi preventivi e ordini con {company} prendono queste; quelli aperti tengono le loro.",
+        "save": "Salva per {company}"
+      },
+      "po": {
+        "sub": "{customer} · i suoi ordini con {company}",
+        "oneCommand": "Un solo comando per {company} (la sua riga di condizioni), con il suo risultato.",
+        "foot": "Gli ordini aperti tengono il loro numero d'ordine, o nessuno."
+      },
+      "end": {
+        "title": "Tornare alle condizioni del cliente con {company}?",
+        "sub": "{customer} · condizioni proprie dal {date}",
+        "what": "{company} smette di usare le sue condizioni: i nuovi preventivi e ordini con essa prendono quelle del cliente. Le condizioni terminate restano in “Condizioni di azienda terminate”.",
+        "confirm": "Torna alle condizioni del cliente"
+      }
+    }
   }
 }

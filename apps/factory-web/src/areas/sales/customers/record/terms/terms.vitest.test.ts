@@ -17,8 +17,17 @@ import { ApiError } from '../../../../../lib/api/errors'
 import { termsAbilitiesOf } from '../../terms/model'
 import { TERMS as COMPANY_TERMS } from '../../depth/_demo/fixtures'
 import { endCompanyTerms, readCarrierAccount, setCarrierAccount, setCompanyTerms, type CarrierAccount } from './api'
-import { TERMS_TAB_START, termsTabModel, type TermsTabReads } from './tab'
-import { companyBody, companyProblems, companyWindowOf, deliveryBody, deliveryProblems, deliveryRefusal, deliveryWindowOf, endLines, termsWindowOf, termsWindowPatch } from './windows'
+import { TERMS_TAB_START, termsTabModel, type TermsTabReads, type TermsTabState } from './tab'
+import { companyBody, companyEndWindowOf, companyProblems, companyWindowOf, deliveryBody, deliveryProblems, deliveryRefusal, deliveryWindowOf, endLines, termsWindowOf, termsWindowPatch } from './windows'
+import { createElement, type ReactElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { I18nProvider } from '../../../../../lib/i18n/provider'
+import { WithMessages } from '../../../../../record-panels/i18n'
+import { TermsTab } from '../view/terms/TermsTab'
+import { ChangeTermsBody } from '../view/terms/ChangeTermsDialog'
+import { DeliveryBody } from '../view/terms/DeliveryDialog'
+import { CompanyEndBody, CompanyTermsBody } from '../view/terms/CompanyTermsDialog'
+import { TermsNotices } from '../view/terms/TermsNotices'
 
 /**
  * F-CT-101…105 (customer page › TERMS & REQUIREMENTS tab, lane ct-; 15-steps W1.1) — the tab's pure rules: the ONE source of the terms
@@ -415,10 +424,12 @@ describe('Commercial terms (commercial.ts, 10-design §5.2; Z2, Z11, Z21, Z29, Z
 describe('the words and the walls', () => {
   const folder = new URL('./', import.meta.url)
   const rules = readdirSync(folder).filter((name) => /\.ts$/.test(name) && !name.includes('.test.')).map((name) => ({ name, source: readFileSync(new URL(name, folder), 'utf8') }))
+  const viewFolder = new URL('../view/terms/', import.meta.url)
+  const views = readdirSync(viewFolder).filter((name) => /\.tsx?$/.test(name)).map((name) => ({ name, source: readFileSync(new URL(name, viewFolder), 'utf8') }))
 
   it("every said('…') key of the tab's rules is in its catalogue, in Italian and in English; the ct block has the same keys in both", () => {
-    const keys = new Set(rules.flatMap(({ source }) => [...source.matchAll(/said\(\s*'([^'$]+)'/g)].map((match) => match[1]!)))
-    expect(keys.size).toBeGreaterThan(60)
+    const keys = new Set([...rules, ...views].flatMap(({ source }) => [...source.matchAll(/said\(\s*'([^'$]+)'/g)].map((match) => match[1]!)))
+    expect(keys.size).toBeGreaterThan(200)
     for (const locale of LOCALES)
       for (const key of keys) {
         const [namespace, path] = key.includes(':') ? (key.split(':') as [string, string]) : [CT, key]
@@ -435,7 +446,7 @@ describe('the words and the walls', () => {
   })
 
   it("W4: the payment-terms library's count of OTHER customers is never read by the tab", () => {
-    for (const { name, source } of rules) expect(source, name).not.toMatch(/\.customers\b/)
+    for (const { name, source } of [...rules, ...views]) expect(source, name).not.toMatch(/\.customers\b/)
   })
 
   it('the four sections keep their addresses (doors from Money, the Overview, the list and the tests land)', () => {
@@ -555,5 +566,116 @@ describe('the tab model (tab.ts): the container and the gallery build it alike',
   it('the requirements are counted only once read; the answer reads while R1 does', () => {
     expect(termsTabModel(reads({ commercial: LOADING }), TERMS_TAB_START).answerReading).toBe(true)
     expect(sentence(termsTabModel(reads(), TERMS_TAB_START).answer, 'en')).not.toMatch(/requirement/)
+  })
+})
+
+// ---- W1.3: the views ------------------------------------------------------------------------------------------------------------
+
+describe('the views of the tab (W1.3)', () => {
+  const folder = new URL('../view/terms/', import.meta.url)
+  const views = readdirSync(folder).filter((name) => /\.tsx?$/.test(name)).map((name) => ({ name, source: readFileSync(new URL(name, folder), 'utf8') }))
+  const source = (name: string) => views.find((view) => view.name === name)!.source
+
+  it('terms.css restyles no kit, party, Money, depth or old-terms class — only its own fw-ctr-* classes, tokens only, by the ROOM', () => {
+    const css = readFileSync(new URL('terms.css', folder), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(css).not.toMatch(/\.fw-(pt|pty|om|cdp|ct|co|cm|ca|pa)[-\s{.,:>]/)
+    expect(css).not.toMatch(/\.nds-[a-z]/)
+    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b/i)
+    expect(css).not.toMatch(/@media/)
+    const selectors = (css.match(/[^{}]+(?=\{)/g) ?? []).map((selector) => selector.trim()).filter((selector) => selector !== '' && !selector.startsWith('@'))
+    expect(selectors.length).toBeGreaterThan(30)
+    for (const selector of selectors) for (const part of selector.split(',')) expect(part.trim(), part).toMatch(/^\.fw-ctr/)
+  })
+
+  it('a view fetches nothing (no API client, no session, no fetching hook, never its container) and draws no AG grid', () => {
+    expect(views.length).toBeGreaterThanOrEqual(10)
+    for (const { name, source: text } of views) {
+      expect(text, name).not.toMatch(/lib\/api\/|lib\/session\/|use-terms-tab|use-depth|fetch\(|useRouter/)
+      expect(text, name).not.toMatch(/@nexus\/ui\/grid|ListFrame|ag-grid/)
+    }
+  })
+
+  it('the hold window is the depth provider\'s own HoldDialogView, imported and mounted as it is — never copied', () => {
+    expect(source('TermsTab.tsx')).toContain("import { HoldDialogView, type HoldCardActions, type HoldCardModel } from '../../../depth/view/HoldCard'")
+    expect(source('TermsTab.tsx')).toContain('<HoldDialogView model={hold.model} actions={hold.actions} />')
+    for (const { name, source: text } of views) {
+      expect(text, name).not.toMatch(/function HoldDialogView|hold\.dialog\./)
+      expect(text, name).not.toMatch(/Kit\.tsx'|production\.css'/) // the kit is imported by its module, never its files edited or copied
+    }
+  })
+
+  it('the tab is the kit used in place: its root, its words, its sections by their addresses, at most three head buttons', () => {
+    expect(source('TermsTab.tsx')).toContain('<div className="fw-pt fw-ctr">')
+    expect(source('TermsTab.tsx')).toContain('<WithMessages namespaces={TERMS_TAB_NAMESPACES}>')
+    expect([...TERMS_TAB_NAMESPACES]).toEqual(['orders', CT, 'sales-customers-depth', 'parties', 'customer-money'])
+    expect(source('HoldSection.tsx')).toContain("id: termsKitId('party-hold')")
+    expect(source('CommercialSection.tsx')).toContain("id: termsKitId('party-commercial')")
+    // Money's own parts, in place (Facts for every label → value fact, Fold for a fold): a fact Money also shows LOOKS the same.
+    expect(source('CommercialSection.tsx')).toContain("import { Facts, Fold } from '../../../../orders/record/money/view/parts'")
+    expect(source('HoldSection.tsx').match(/<Button key=/g)?.length ?? 0).toBeLessThanOrEqual(3)
+    expect(source('CommercialSection.tsx').match(/<Button key=/g)?.length ?? 0).toBeLessThanOrEqual(3)
+  })
+
+  it('the four NEW windows are centred DS Modals (never a drawer), each with its inside exported for a design case', () => {
+    for (const name of ['ChangeTermsDialog.tsx', 'DeliveryDialog.tsx', 'CompanyTermsDialog.tsx']) {
+      expect(source(name), name).toContain("import { Modal } from '../../../../../../lib/i18n/ds-parts'")
+      expect(source(name), name).not.toMatch(/Drawer|Sheet\b/)
+    }
+    expect(source('ChangeTermsDialog.tsx')).toContain('export function ChangeTermsBody')
+    expect(source('DeliveryDialog.tsx')).toContain('export function DeliveryBody')
+    expect(source('CompanyTermsDialog.tsx')).toMatch(/export function CompanyTermsBody[\s\S]*export function CompanyEndBody/)
+    // Z8: ONE editor — the record window's currency Select and LanguageSelect, mounted as they are
+    expect(source('ChangeTermsDialog.tsx')).toContain("import { LanguageSelect } from '../../../../../parties/_shared/view/dialogs'")
+    expect(source('ChangeTermsDialog.tsx')).toContain('CURRENCY_CHOICES')
+    expect(source('ChangeTermsDialog.tsx')).not.toMatch(/preferredCarrierCode/) // the carrier is Change delivery…'s
+  })
+
+  // ---- the tab and the windows' insides drawn on the server, in both languages, with no key left
+  const LEFT = /\b(?:ct|terms|termsField|hold|reason|po|cm|tab|common|win|com|co|deliv|end)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*/
+  const draw = (node: ReactElement, locale: Locale) => renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(WithMessages, { namespaces: [...TERMS_TAB_NAMESPACES] }, node)))
+  const left = (html: string) => html.replace(/href="[^"]*"/g, '').replace(/id="[^"]*"/g, '').match(LEFT)?.[0] ?? null
+  const party = partyWith({ id: PARTY_ID, taxIdentities: [], warnings: [], vies: { ...MODA.vies, state: 'NOT_APPLICABLE' } })
+  const carrier: CarrierAccount = { partyId: PARTY_ID, code: 'SEED-ONE', name: 'Seed Customer One S.r.l.', carrierCode: 'brt', carrierName: 'BRT', accountOnFile: true, freightBilling: 'COLLECT', defaultCarrierService: 'Express 24h', version: 7 }
+  const two = { ...COMPANY_TERMS, companies: COMPANY_TERMS.companies.map((item, at) => (at === 0 ? { ...item, terms: { ...item.terms!, creditLimitCurrency: 'EUR' }, history: [{ ...item.terms!, id: '0190f0e2-c700-7000-8000-000000000499', endedAt: '2026-10-01T09:00:00.000Z', endedBy: 'Alex Demo' }] } : item)) }
+  const reads = (locale: Locale): TermsTabReads => ({ party, prefix: '/w/SEEDA', can: OWNER, locale, now: NOW, companyId: two.companies[0]!.company.id, companyNames: {}, commercial: ready(own({ incoterm: 'DAP' })), carrier: ready(carrier), holds: ready(HOLDS), companies: ready(two), requirements: ready({ inForce: [], ended: [] }), library: ready([]), lists: ready([]) })
+
+  it('the whole tab draws in English and in Italian with no key left (on hold, two companies, every fold open)', () => {
+    for (const locale of LOCALES) {
+      const model = termsTabModel(reads(locale), { ...TERMS_TAB_START, chip: 'hold', releasedOpen: true, endedOpen: true })
+      const html = draw(createElement(TermsTab, { model }), locale)
+      expect(left(html), locale).toBeNull()
+      expect(html).toContain('id="party-hold"')
+      expect(html).toContain('id="party-commercial"')
+      expect(html.indexOf('id="party-hold"')).toBeLessThan(html.indexOf('id="party-commercial"')) // Z10: Hold first
+      expect(html).toContain('fw-ctr-row is-h is-mark') // the pressed chip marks its row
+    }
+  })
+
+  it('a reader without rights: the facts only — no act button, no minimum, the credit a door — in both languages', () => {
+    for (const locale of LOCALES) {
+      const html = draw(createElement(TermsTab, { model: termsTabModel({ ...reads(locale), can: PM }, TERMS_TAB_START) }), locale)
+      expect(left(html), locale).toBeNull()
+      const say = sayOf(createScopedTranslator(locale, messagesFor(locale, [...TERMS_TAB_NAMESPACES]), CT), locale)
+      for (const act of ['ct.com.changeTerms', 'ct.com.changeDelivery', 'sales-customers-depth:hold.release', 'sales-customers-depth:hold.place']) expect(html, act).not.toContain(say(said(act)))
+      expect(html).not.toContain(say(said('termsField.minimum')))
+    }
+  })
+
+  it('the four NEW windows\' insides draw in both languages with no key left', () => {
+    for (const locale of LOCALES) {
+      const model = termsTabModel(reads(locale), TERMS_TAB_START)
+      const entry = two.companies[0]!
+      const windows = (window: TermsTabState['window']) => termsTabModel(reads(locale), { ...TERMS_TAB_START, window }).windows
+      const bodies = [
+        createElement(ChangeTermsBody, { window: termsWindowOf(own({ incoterm: 'DAP' })), windows: windows(termsWindowOf(own())) }),
+        createElement(DeliveryBody, { window: deliveryWindowOf(carrier), windows: windows(deliveryWindowOf(carrier)) }),
+        createElement(CompanyTermsBody, { window: companyWindowOf(entry, false), windows: windows(companyWindowOf(entry, false)) }),
+        createElement(CompanyTermsBody, { window: companyWindowOf(entry, true), windows: windows(companyWindowOf(entry, true)) }),
+        createElement(CompanyEndBody, { window: companyEndWindowOf(entry.company.id), windows: windows(companyEndWindowOf(entry.company.id)) }),
+        createElement(TermsNotices, { notices: { own: { tone: 'success', words: said('ct.co.saved', { params: { company: 'Seed Company A' } }) }, depth: null } }),
+      ]
+      expect(model.windows.window).toBeNull()
+      for (const body of bodies) expect(left(draw(body, locale)), locale).toBeNull()
+    }
   })
 })

@@ -265,11 +265,11 @@ export function endLines(entry: CompanyTermsReadEntry, own: OwnTermsRead | null,
   const lines: Array<{ tone: 'info' | 'warning'; words: Said }> = []
   if (live.paymentTermsLabel || live.paymentTermsText) {
     const theirs = paymentTermsInForce(customer, locale)
-    lines.push({ tone: 'info', words: said('ct.end.terms', { words: { own: text(live.paymentTermsLabel?.name ?? live.paymentTermsText ?? ''), party: theirs ? text(theirs.name) : said('ct.com.ptNoneShort') } }) })
+    lines.push({ tone: 'info', words: said('ct.end.terms', { words: { own: text(live.paymentTermsLabel?.name ?? live.paymentTermsText ?? ''), theirs: theirs ? text(theirs.name) : said('ct.com.ptNoneShort') } }) })
   }
   if (live.depositPct) {
     const theirs = depositInForce(customer)
-    lines.push({ tone: 'info', words: said('ct.end.deposit', { pcts: { own: live.depositPct }, words: { party: theirs.pct ? said('customer-money:cm.credit.pct', { pcts: { pct: theirs.pct } }) : said('terms.depositSettings') } }) })
+    lines.push({ tone: 'info', words: said('ct.end.deposit', { pcts: { own: live.depositPct }, words: { theirs: theirs.pct ? said('customer-money:cm.credit.pct', { pcts: { pct: theirs.pct } }) : said('terms.depositSettings') } }) })
   }
   if (live.poNumberRequired) lines.push({ tone: 'warning', words: said('ct.end.po', { params: { company: entry.company.name } }) })
   lines.push({ tone: 'info', words: said('ct.end.openKeep') })
