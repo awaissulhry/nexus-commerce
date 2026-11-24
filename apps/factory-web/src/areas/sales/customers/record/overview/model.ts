@@ -159,6 +159,20 @@ export interface OverviewMoney {
   readonly returnsHref: string | null
 }
 
+/**
+ * S33 (the new lead's settle): a count of open returns or complaints — counted from the customer's own walled list, as no count read
+ * exists — is said ONLY when that list is whole. The complaints read asks the open ones `limit: 50` and keeps no next page
+ * (`listCustomerComplaints`, ../../money/api.ts): a list of 50 may be cut. The returns read is capped by the API, which says so
+ * (`truncated`, kept as `more`).
+ */
+export const COMPLAINTS_READ = 50
+
+/** The returns read holds every return of the customer (the API did not cut it). */
+export const wholeReturns = (read: Loaded<CustomerReturn>): boolean => read.items !== null && read.more !== true
+
+/** The open-complaints read holds every open complaint of the customer (it came back shorter than its limit). */
+export const wholeComplaints = (read: Loaded<CustomerComplaint>): boolean => read.items !== null && read.items.length < COMPLAINTS_READ
+
 /** The customer's own urgency as its production limits say it (partners.view; office only). */
 export type UrgencyState = ProductionLimitsView['urgency']
 

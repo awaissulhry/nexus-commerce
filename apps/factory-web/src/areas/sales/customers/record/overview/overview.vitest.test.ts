@@ -15,7 +15,7 @@ import { COMPLAINTS, OVERDUE_ROWS, RETURNS } from '../../money/_demo/fixtures'
 import type { WorkReads } from '../use-customer-work'
 import { MONEY_ANCHORS, moneyDoor, promiseDoor, termsDoor } from './doors'
 import { boardNumbersOf, headlineOf, HEADLINE_PARTS, waitsOnUsOf } from './headline'
-import { OVERVIEW_NAMESPACES, sayOf, sayToolsOf, type OverviewCan, type OverviewHeadline, type OverviewInput, type OverviewMoney, type OverviewRow, type OverviewStrip, type Say } from './model'
+import { COMPLAINTS_READ, OVERVIEW_NAMESPACES, sayOf, sayToolsOf, type OverviewCan, type OverviewHeadline, type OverviewInput, type OverviewMoney, type OverviewRow, type OverviewStrip, type Say } from './model'
 import { bandStateOf, datesOf, factsOf, linkedOf, overviewOf, peopleOf, requestsOf } from './rows'
 import { stripsOf } from './strips'
 
@@ -414,10 +414,10 @@ describe('the cards: People, Next dates, Requests & changes, Linked records, Cus
     expect(valueOf(rowOf(linked.rows, 'repairs'))).toMatch(/^1 in progress · oldest RP-2026-0007, opened \d{2}\/10\/2026$/)
     expect(valueOf(rowOf(linked.rows, 'returns'))).toBe('2 open · oldest RMA-2026-0007, asked 12/09/2026')
     expect(valueOf(rowOf(linked.rows, 'returns'), 'it')).toBe('2 aperti · il più vecchio RMA-2026-0007, richiesto il 12/09/2026')
-    // S28: the complaint's door is the NAMED complaint's own page.
+    // S28: a complaints list with the customer as its term exists (Quality › Complaints reads ?partyId=): the row opens it.
     const complaints = rowOf(linked.rows, 'complaints')
     expect(valueOf(complaints)).toBe('1 open · next answer CMP-2026-0004 due 05/11/2026')
-    expect(hrefOf({ door: complaints.parts[0]!.door! })).toBe(`/w/DEMO/quality/complaints/${COMPLAINTS[0]!.id}`)
+    expect(hrefOf({ door: complaints.parts[0]!.door! })).toBe(`/w/DEMO/quality/complaints?partyId=${ID}`)
     expect(valueOf(rowOf(linked.rows, 'projects'))).toBe('1 open of 2')
     expect(linked.none).toEqual([])
     expect(linked.quiet.map((door) => hrefOf(door))).toEqual([`/w/DEMO/production/work-orders?party=${ID}`, `/w/DEMO/finance/receivables?party=${ID}`])
@@ -433,6 +433,43 @@ describe('the cards: People, Next dates, Requests & changes, Linked records, Cus
     // A failed read says so in its row.
     expect(rowOf(linkedOf(input({ money: { ...NO_MONEY, returns: failed('problem.unavailable') } })).rows, 'returns').state).toBe('unread')
     expect(rowOf(linkedOf(input({ reads: reads({ board: { status: 'reading' } }) })).rows, 'orders').state).toBe('reading')
+  })
+
+  it('S33: "n open" of returns and complaints only from a WHOLE read; a cut read says "Open" and its door — no number, no named one', () => {
+    // The complaints read's limit is the one the page asks (../../money/api.ts): the rule's constant follows it, letter for letter.
+    expect(readFileSync(new URL('../../money/api.ts', import.meta.url), 'utf8')).toContain(`query: { partyId, view: 'open', limit: ${COMPLAINTS_READ} }`)
+    const RETURNS_HREF = `/w/DEMO/sales/returns?partyId=${ID}`
+    const complaintsOf = (count: number) => Array.from({ length: count }, (_, index) => ({ ...COMPLAINTS[0]!, id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`, number: `CMP-2026-${String(index + 1).padStart(4, '0')}` }))
+    const linkedWith = (returns: OverviewMoney['returns'], complaints: OverviewMoney['complaints']) => linkedOf(input({ money: { ...NO_MONEY, returns, complaints, returnsHref: RETURNS_HREF } }))
+
+    // Whole: the API did not cut the returns (more false); the open complaints came back shorter than the limit.
+    const whole = linkedWith(loaded(RETURNS, false), loaded(complaintsOf(COMPLAINTS_READ - 1)))
+    expect(valueOf(rowOf(whole.rows, 'returns'))).toBe('2 open · oldest RMA-2026-0007, asked 12/09/2026')
+    expect(valueOf(rowOf(whole.rows, 'complaints'))).toBe(`${COMPLAINTS_READ - 1} open · next answer CMP-2026-0001 due 05/11/2026`)
+
+    // Cut: the API says more returns exist; the complaints filled the limit. The state and the door — no figure, no named one.
+    const cut = linkedWith(loaded(RETURNS, true), loaded(complaintsOf(COMPLAINTS_READ)))
+    for (const key of ['returns', 'complaints'] as const) {
+      const row = rowOf(cut.rows, key)
+      expect(row.parts).toHaveLength(1)
+      for (const locale of LOCALES) {
+        expect(valueOf(row, locale), `${key} ${locale}`).toBe(locale === 'en' ? 'Open' : 'Aperti')
+        expect(valueOf(row, locale), `${key} ${locale}`).not.toMatch(/\d/)
+      }
+    }
+    expect(hrefOf({ door: rowOf(cut.rows, 'returns').parts[0]!.door! })).toBe(RETURNS_HREF)
+    expect(hrefOf({ door: rowOf(cut.rows, 'complaints').parts[0]!.door! })).toBe(`/w/DEMO/quality/complaints?partyId=${ID}`)
+    expect(cut.none).toEqual([])
+    // Next dates names the complaint whose answer is due first only from a whole read (a cut one may miss it).
+    const datesWith = (count: number) => (datesOf(input({ money: { ...NO_MONEY, complaints: loaded(complaintsOf(count)) } }))?.rows ?? []).map((row) => row.key)
+    expect(datesWith(COMPLAINTS_READ - 1)).toContain('complaint')
+    expect(datesWith(COMPLAINTS_READ)).not.toContain('complaint')
+
+    // Cut with no open one in it: neither a row nor "None yet" (an older one may still be open; a whole read with none says "None yet").
+    const closedOnly = RETURNS.filter((entry) => entry.status === 'CLOSED')
+    expect(linkedWith(loaded(closedOnly, true), loaded([])).rows.some((row) => row.key === 'returns')).toBe(false)
+    expect(linkedWith(loaded(closedOnly, true), loaded([])).none.map((label) => said(label))).not.toContain('Returns')
+    expect(linkedWith(loaded(closedOnly, false), loaded([])).none.map((label) => said(label))).toContain('Returns')
   })
 
   it('Customer facts: ONE Edit (parties.manage); the credit only when the read carries it; what is to complete with today\'s own step', () => {

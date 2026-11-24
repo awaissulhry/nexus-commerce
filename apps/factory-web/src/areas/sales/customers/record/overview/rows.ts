@@ -2,7 +2,7 @@ import { WARNING_ACTION, type NextAction } from '../../../../parties/_shared/mod
 import { openAfterSales } from '../../money/model'
 import { requestsDoorOf, tileOf, type TileRead } from '../use-customer-work'
 import { valueOf as tileValueOf } from '../work-band'
-import { complaintDoor, depositDoor, moneyDoor, ordersDoor, projectsDoor, promiseDoor, quotesDoor, receivablesDoor, repairsDoor, sampleDoor, samplesDoor, tabDoor, termsDoor, workOrdersDoor } from './doors'
+import { complaintDoor, complaintsDoor, depositDoor, moneyDoor, ordersDoor, projectsDoor, promiseDoor, quotesDoor, receivablesDoor, repairsDoor, sampleDoor, samplesDoor, tabDoor, termsDoor, workOrdersDoor } from './doors'
 import { boardNumbersOf, boardOf, headlineOf, nextPromiseOf } from './headline'
 import { overAmountsOf, stepDoorOf, stripsOf } from './strips'
 import {
@@ -37,6 +37,8 @@ import {
   type RowPart,
   type RowTag,
   type Say,
+  wholeComplaints,
+  wholeReturns,
 } from './model'
 
 /**
@@ -180,10 +182,11 @@ export function datesOf(input: OverviewInput): DatesCard | null {
   const task = tasks.status === 'ready' ? earliestOf(tasks.value.items, (item) => item.dueDate) : null
   if (task) put({ key: 'task', label: ov('dates.task'), parts: [{ say: ov('dates.titled', { title: task.item.title, date: dayOf(task.at) }), door: { kind: 'window', window: 'tasks' } }], tag: dayTagOf(task.at, today) }, task.at)
 
-  // The next answer a complaint waits for (quality.complaints.view): its door is the NAMED complaint's own page (S28).
+  // The next answer a complaint waits for (quality.complaints.view): its door is the NAMED complaint's own page (S28). S33: only from
+  // a whole read — the read is newest first, so a cut one may miss the complaint whose answer is due first (Linked records says "Open").
   const complaints = can.complaints ? input.money.complaints : null
   if (complaints && complaints.items === null && !complaints.problem) reading = true
-  const complaint = complaints?.items ? earliestOf(openAfterSales([], complaints.items).complaints, (entry) => entry.answerDueOn) : null
+  const complaint = complaints?.items && wholeComplaints(complaints) ? earliestOf(openAfterSales([], complaints.items).complaints, (entry) => entry.answerDueOn) : null
   if (complaint) put({ key: 'complaint', label: ov('dates.complaint'), parts: [{ say: named(complaint.item.number, complaint.at), door: href(complaintDoor(prefix, complaint.item.id)) }], tag: dayTagOf(complaint.at, today) }, complaint.at)
 
   // Until when the VIES proof counts (a fact of the party: no door).
@@ -349,17 +352,23 @@ export function linkedOf(input: OverviewInput): LinkedCard {
     kind('repairs', ov('linked.repairs'), glance.repairs.count > 0 ? [{ say: joined(said), door: href(repairsDoor(prefix, party.code)) }] : [])
   }
 
-  // Returns and complaints: the customer's own after-sales reads (the Money lane's rule for "open").
+  // Returns and complaints: the customer's own after-sales reads (the Money lane's rule for "open"). S33: "n open" and the oldest /
+  // next one are said only when the read is whole; a cut read (both are newest first: the cut is the OLDEST end) says "Open" and its
+  // door, with no number and no named one — and a cut read with no open one in it is left out (no claim either way).
   if (can.returns) {
     const label = ov('linked.returns')
     const read = input.money.returns
     if (read.items === null) stated('returns', label, read.problem ? 'unread' : 'reading')
     else {
       const open = openAfterSales(read.items, []).returns
-      const oldest = earliestOf(open, (entry) => entry.requestedAt)
-      const said: Param[] = [ov('linked.open', { count: open.length })]
-      if (oldest) said.push(ov('linked.oldestAsked', { number: oldest.item.number, date: dayOf(oldest.at) }))
-      kind('returns', label, open.length > 0 ? [{ say: joined(said), ...through(input.money.returnsHref) }] : [])
+      if (!wholeReturns(read)) {
+        if (open.length > 0) rows.push({ key: 'returns', label, parts: [{ say: ov('linked.someOpen'), ...through(input.money.returnsHref) }] })
+      } else {
+        const oldest = earliestOf(open, (entry) => entry.requestedAt)
+        const said: Param[] = [ov('linked.open', { count: open.length })]
+        if (oldest) said.push(ov('linked.oldestAsked', { number: oldest.item.number, date: dayOf(oldest.at) }))
+        kind('returns', label, open.length > 0 ? [{ say: joined(said), ...through(input.money.returnsHref) }] : [])
+      }
     }
   }
   if (can.complaints) {
@@ -368,12 +377,20 @@ export function linkedOf(input: OverviewInput): LinkedCard {
     if (read.items === null) stated('complaints', label, read.problem ? 'unread' : 'reading')
     else {
       const open = openAfterSales([], read.items).complaints
-      const next = earliestOf(open, (entry) => entry.answerDueOn)
-      const said: Param[] = [ov('linked.open', { count: open.length })]
-      if (next) said.push(ov('linked.nextAnswer', { number: next.item.number, date: dayOf(next.at) }))
-      // S28: the door is the NAMED complaint's own page (the next to answer, else the newest open one).
-      const named = next?.item ?? open[0] ?? null
-      kind('complaints', label, named ? [{ say: joined(said), door: href(complaintDoor(prefix, named.id)) }] : [])
+      // S28: the customer's complaints list (it reads the customer as its term); not built here: the NAMED complaint's own page.
+      const list = complaintsDoor(prefix, id)
+      if (!wholeComplaints(read)) {
+        const newest = open[0] ?? null
+        const address = list ?? (newest ? complaintDoor(prefix, newest.id) : null)
+        if (open.length > 0) rows.push({ key: 'complaints', label, parts: [{ say: ov('linked.someOpen'), ...through(address) }] })
+      } else {
+        const next = earliestOf(open, (entry) => entry.answerDueOn)
+        const said: Param[] = [ov('linked.open', { count: open.length })]
+        if (next) said.push(ov('linked.nextAnswer', { number: next.item.number, date: dayOf(next.at) }))
+        const named = next?.item ?? open[0] ?? null
+        const address = list ?? (named ? complaintDoor(prefix, named.id) : null)
+        kind('complaints', label, open.length > 0 ? [{ say: joined(said), ...through(address) }] : [])
+      }
     }
   }
 

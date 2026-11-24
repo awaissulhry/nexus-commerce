@@ -1,4 +1,4 @@
-import { recordAddress } from '../../../../../lib/records/record-links'
+import { listAddress, recordAddress } from '../../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import { recordHref, SIDES, type CustomerTab } from '../../../../parties/_shared/model'
 import { workDoor, type WorkDoorTerm } from '../../list/doors'
@@ -57,10 +57,20 @@ export const quotesDoor = (prefix: string, partyId: string, group: 'WRITING' | '
 /** A deposit that is due: Money at what is to collect — for a reader without the Money tab, the Work tab's orders waiting for a deposit. */
 export const depositDoor = (prefix: string, partyId: string, moneyTab: boolean): string => (moneyTab ? moneyDoor(prefix, partyId, 'collect') : ordersDoor(prefix, partyId, { kind: 'deposit' }))
 
-/** A record's own page (the sample round, the named complaint — S28: no list of complaints by customer is assumed). */
+/** A record's own page (the sample round, a named complaint). */
 const recordDoor = (prefix: string, type: string, id: string): string => `${prefix}${recordAddress({ type, id }, OFFICE_PAGES)}`
 export const sampleDoor = (prefix: string, id: string): string => recordDoor(prefix, 'SampleRound', id)
 export const complaintDoor = (prefix: string, id: string): string => recordDoor(prefix, 'Complaint', id)
+
+/**
+ * S28: the builder checked — Quality › Complaints reads the customer as its term (`?partyId=`, its `addressOf` / `queryOf`; the
+ * open ones are its first view). So Linked records' Complaints row opens that list; null: the page is not built here (the row then
+ * opens the named complaint's own page).
+ */
+export function complaintsDoor(prefix: string, partyId: string): string | null {
+  const page = listAddress('/quality/complaints', { partyId }, OFFICE_PAGES)
+  return page ? `${prefix}${page}` : null
+}
 
 /** The customer's sample rounds, the earliest due first (Products › Samples with this customer). */
 export const samplesDoor = (prefix: string, partyId: string): string => `${prefix}/products/samples?party=${enc(partyId)}`

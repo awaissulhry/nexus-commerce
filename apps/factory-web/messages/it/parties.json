@@ -442,6 +442,7 @@
         "openOf": "{open} aperti su {total}",
         "open_one": "{count} aperto",
         "open_other": "{count} aperti",
+        "someOpen": "Aperti",
         "inProgress": "{count} in corso",
         "priorityTop": "Priorità Massima {count}",
         "priorityHigh": "Priorità Alta {count}",

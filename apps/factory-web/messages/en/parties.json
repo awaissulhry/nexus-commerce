@@ -442,6 +442,7 @@
         "openOf": "{open} open of {total}",
         "open_one": "{count} open",
         "open_other": "{count} open",
+        "someOpen": "Open",
         "inProgress": "{count} in progress",
         "priorityTop": "Priority Top {count}",
         "priorityHigh": "Priority High {count}",
