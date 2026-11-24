@@ -120,5 +120,112 @@
       "contract": "La risposta non corrisponde a questa pagina: ricarica la pagina.",
       "internal": "Qualcosa è andato storto sul server."
     }
+  },
+  "ct": {
+    "text": "{text}",
+    "amount": "{amount}",
+    "language": "{name}",
+    "answer": {
+      "with": "Con {company}:",
+      "nothingSet": "ancora niente di impostato: un nuovo preventivo prende le impostazioni vendite",
+      "noTerms": "nessun termine di pagamento (un nuovo preventivo prende le impostazioni vendite)",
+      "deposit": "acconto {pct}",
+      "depositSettings": "acconto dalle impostazioni vendite",
+      "po": "numero d'ordine del cliente obbligatorio",
+      "requirements_one": "{count} requisito",
+      "requirements_other": "{count} requisiti",
+      "noRequirements": "nessun requisito particolare",
+      "sdi": "fatture elettroniche via codice SDI",
+      "pec": "fatture elettroniche via PEC",
+      "noSdi": "nessun codice SDI o PEC",
+      "viesValid": "partita IVA valida fino al {date}",
+      "viesInvalid": "partita IVA non valida in VIES",
+      "viesUnchecked": "partita IVA non controllata con VIES",
+      "noIdentity": "nessuna identità fiscale",
+      "fallback": "Le condizioni con ciascuna azienda non si sono potute leggere: queste sono le condizioni proprie del cliente.",
+      "chipsLabel": "Cosa aspetta noi qui"
+    },
+    "chip": {
+      "hold": "In blocco: {reason}",
+      "holds": "In blocco: {count} blocchi",
+      "waitHold_one": "{count} preventivo accettato attende lo sblocco",
+      "waitHold_other": "{count} preventivi accettati attendono lo sblocco",
+      "waitPo_one": "{count} preventivo accettato attende il numero d'ordine",
+      "waitPo_other": "{count} preventivi accettati attendono il numero d'ordine",
+      "noIdentity": "Nessuna identità fiscale: non si può fatturare",
+      "noSdi": "Nessun codice SDI o PEC",
+      "viesEnds_one": "La prova VIES scade tra {count} giorno",
+      "viesEnds_other": "La prova VIES scade tra {count} giorni",
+      "viesInvalid": "VIES: non valida — si applica l'IVA italiana",
+      "viesUnchecked": "Partita IVA non controllata con VIES"
+    },
+    "hold": {
+      "none": "Non in blocco: nuovi ordini e spedizioni procedono.",
+      "answer": {
+        "every": "In blocco dal {date}, per tutte le aziende ({reason}).",
+        "with": "In blocco dal {date} con {company} ({reason}).",
+        "many": "{count} blocchi in vigore: {holds}.",
+        "item": "{reason} ({company})",
+        "itemEvery": "{reason} (tutte le aziende)"
+      },
+      "stops": {
+        "every": "Nuovi ordini e spedizioni di {customer} attendono lo sblocco.",
+        "with": "Nuovi ordini e spedizioni con {companies} attendono lo sblocco.",
+        "desc": "I preventivi proseguono, ognuno con un avviso. Fatture e pagamenti proseguono come sempre."
+      },
+      "releasedOn": "Tolto il {date} da {name}: “{words}”",
+      "releasedOnBare": "Tolto il {date} da {name}",
+      "placedOn": "Messo il {date} da {name}: “{words}”",
+      "placedOnCheck": "Messo il {date} da un controllo del fido: “{words}”"
+    },
+    "com": {
+      "answer": "I nuovi preventivi e ordini prendono queste; quelli aperti tengono le loro.",
+      "shownFor": "Mostrate per {company}, l'azienda in cui lavori; ogni azienda è più sotto.",
+      "nothingSet": "Ancora niente di impostato: un nuovo preventivo prende termini di pagamento e acconto dalle impostazioni vendite, in EUR e in italiano, fatturato per spedizione (TD01); il trasporto lo paghiamo noi.",
+      "setFor": "Impostato per {company}",
+      "customerDefault": "Predefinito del cliente",
+      "depositFromTerms": "{pct} — dai suoi termini di pagamento",
+      "ptNone": "Nessuno: un nuovo preventivo prende le impostazioni vendite",
+      "ptNoneShort": "Nessuno",
+      "list": "{code} · {name}",
+      "listDoor": "{code} · {name} ›",
+      "currencySub": "I suoi listini e il portale",
+      "credit": "Limite di fido",
+      "inMoney": "In Importi ›",
+      "limitWith": "Un fido è impostato con {companies}",
+      "notRead": "Non si è potuto leggere",
+      "poRequired": "Obbligatorio sui suoi ordini",
+      "poNot": "Non obbligatorio",
+      "poNotWith": "Non con {companies}",
+      "changed": "Modificato il {date}",
+      "languageSub": "Preventivi, PDF e mail, quando il contatto non ha una lingua",
+      "incoterm": "Termini di consegna (Intrastat)",
+      "incotermSub": "Per l'Intrastat; preventivo e ordine tengono i loro",
+      "incotermNone": "Nessuno: l'Intrastat li chiede",
+      "carrier": "Corriere",
+      "carrierService": "{carrier} · {service}",
+      "serviceSub": "Il suo servizio predefinito",
+      "noService": "Nessun servizio predefinito: scelto a ogni spedizione",
+      "carrierNone": "Nessuno: scelto a ogni spedizione",
+      "freight": "Trasporto",
+      "account": "Conto presso il corriere",
+      "onFile": "Registrato",
+      "neverShown": "Il numero non si mostra mai",
+      "accountNone": "Nessuno",
+      "baseList": "Listino base",
+      "salesSettings": "Impostazioni vendite",
+      "foot": "Cosa vede il cliente: la pagina Account del suo portale mostra i suoi termini di pagamento e la valuta, in sola lettura, con “Qualcosa non va? Chiedici”.",
+      "footMulti": "Cosa vede il cliente: la pagina Account del suo portale mostra i termini di pagamento propri del cliente e la valuta, in sola lettura, con “Qualcosa non va? Chiedici”."
+    },
+    "freight": {
+      "SENDER": "Il trasporto lo paghiamo noi",
+      "COLLECT": "Lo paga il cliente, sul suo conto (porto assegnato)",
+      "THIRD_PARTY": "Lo paga un terzo, sul suo conto"
+    },
+    "co": {
+      "backHeld": "Con {company} è impostato un fido: le condizioni proprie restano finché c'è il fido.",
+      "customersTerms": "i termini di pagamento del cliente",
+      "customersDeposit": "quello del cliente"
+    }
   }
 }

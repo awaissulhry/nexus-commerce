@@ -120,5 +120,112 @@
       "contract": "The answer did not match this page: reload the page.",
       "internal": "Something went wrong on the server."
     }
+  },
+  "ct": {
+    "text": "{text}",
+    "amount": "{amount}",
+    "language": "{name}",
+    "answer": {
+      "with": "With {company}:",
+      "nothingSet": "nothing set yet: a new quote takes the sales settings",
+      "noTerms": "no payment terms set (a new quote takes the sales settings)",
+      "deposit": "{pct} deposit",
+      "depositSettings": "deposit from the sales settings",
+      "po": "PO number required",
+      "requirements_one": "{count} requirement",
+      "requirements_other": "{count} requirements",
+      "noRequirements": "no special requirements",
+      "sdi": "e-invoices by SDI code",
+      "pec": "e-invoices by PEC",
+      "noSdi": "no SDI code or PEC",
+      "viesValid": "VAT valid until {date}",
+      "viesInvalid": "VAT not valid in VIES",
+      "viesUnchecked": "VAT not checked with VIES",
+      "noIdentity": "no tax identity",
+      "fallback": "The terms with each company could not be read: these are the customer's own terms.",
+      "chipsLabel": "What waits on us here"
+    },
+    "chip": {
+      "hold": "On hold: {reason}",
+      "holds": "On hold: {count} holds",
+      "waitHold_one": "{count} accepted quote waits for the hold",
+      "waitHold_other": "{count} accepted quotes wait for the hold",
+      "waitPo_one": "{count} accepted quote waits for a PO number",
+      "waitPo_other": "{count} accepted quotes wait for a PO number",
+      "noIdentity": "No tax identity: it cannot be invoiced",
+      "noSdi": "No SDI code or PEC",
+      "viesEnds_one": "VIES proof ends in {count} day",
+      "viesEnds_other": "VIES proof ends in {count} days",
+      "viesInvalid": "VIES: not valid — Italian VAT applies",
+      "viesUnchecked": "VAT number not checked with VIES"
+    },
+    "hold": {
+      "none": "Not on hold: new orders and shipments go ahead.",
+      "answer": {
+        "every": "On hold since {date}, for every company ({reason}).",
+        "with": "On hold since {date} with {company} ({reason}).",
+        "many": "{count} holds in force: {holds}.",
+        "item": "{reason} ({company})",
+        "itemEvery": "{reason} (every company)"
+      },
+      "stops": {
+        "every": "New orders and shipments of {customer} wait until the hold is released.",
+        "with": "New orders and shipments with {companies} wait until the hold is released.",
+        "desc": "Quotes go on, with a warning on each. Invoices and payments go on as usual."
+      },
+      "releasedOn": "Released on {date} by {name}: “{words}”",
+      "releasedOnBare": "Released on {date} by {name}",
+      "placedOn": "Placed on {date} by {name}: “{words}”",
+      "placedOnCheck": "Placed on {date} by a credit check: “{words}”"
+    },
+    "com": {
+      "answer": "New quotes and orders take these; open ones keep their own.",
+      "shownFor": "Shown for {company}, the company you work in; each company is below.",
+      "nothingSet": "Nothing set yet: a new quote takes the sales settings' payment terms and deposit, in EUR and Italian, invoiced per shipment (TD01); we pay the freight.",
+      "setFor": "Set for {company}",
+      "customerDefault": "Customer default",
+      "depositFromTerms": "{pct} — from its payment terms",
+      "ptNone": "None: a new quote takes the sales settings",
+      "ptNoneShort": "None",
+      "list": "{code} · {name}",
+      "listDoor": "{code} · {name} ›",
+      "currencySub": "Its price lists and portal",
+      "credit": "Credit limit",
+      "inMoney": "In Money ›",
+      "limitWith": "A limit is set with {companies}",
+      "notRead": "Couldn't be read",
+      "poRequired": "Required on its orders",
+      "poNot": "Not required",
+      "poNotWith": "Not with {companies}",
+      "changed": "Changed {date}",
+      "languageSub": "Its quotes, PDFs and mails, when the contact has none",
+      "incoterm": "Delivery terms (Intrastat)",
+      "incotermSub": "For Intrastat; a quote or order keeps its own",
+      "incotermNone": "None: Intrastat asks for them",
+      "carrier": "Carrier",
+      "carrierService": "{carrier} · {service}",
+      "serviceSub": "Its default service",
+      "noService": "No default service: picked per shipment",
+      "carrierNone": "None: picked per shipment",
+      "freight": "Freight",
+      "account": "Carrier account",
+      "onFile": "On file",
+      "neverShown": "The number is never shown",
+      "accountNone": "None",
+      "baseList": "Base list",
+      "salesSettings": "Sales settings",
+      "foot": "What the customer sees: its portal Account page shows its payment terms and currency, read only, with “Something wrong? Ask us”.",
+      "footMulti": "What the customer sees: its portal Account page shows the customer's own payment terms and currency, read only, with “Something wrong? Ask us”."
+    },
+    "freight": {
+      "SENDER": "We pay the freight",
+      "COLLECT": "The customer pays, on its own account (porto assegnato)",
+      "THIRD_PARTY": "Someone else pays, on their own account"
+    },
+    "co": {
+      "backHeld": "A credit limit is set with {company} (Money): its own terms stay while the limit is set.",
+      "customersTerms": "the customer's payment terms",
+      "customersDeposit": "the customer's"
+    }
   }
 }

@@ -1,0 +1,436 @@
+import { readdirSync, readFileSync } from 'node:fs'
+import { describe, expect, it } from 'vitest'
+import { LOCALES, type Locale } from '../../../../../lib/i18n/locales'
+import { CATALOGUE, createScopedTranslator, messagesFor } from '../../../../../lib/i18n/messages'
+import type { Party, TaxIdentity } from '../../../../parties/_shared/api'
+import { CUSTOMERS } from '../../../../parties/_shared/fixtures'
+import type { CommercialTerms } from '../../terms/api'
+import { ready, failedRead, LOADING } from '../../depth/model'
+import { identityFactsOf, termsAnswer, type TermsFacts } from './answer'
+import { commercialSection, type CarrierFacts, type CommercialInput, type CompanyTermsRead, type CompanyTermsReadEntry, type CompanyTermsRow } from './commercial'
+import { holdSection, waitingOf, type HoldFacts, type HoldsFacts, type HoldsInput } from './holds'
+import { depositInForce, paymentTermsInForce, termsInForce, type TermsSources } from './in-force'
+import { CT, said, sayOf, sentenceOf, TERMS_SECTIONS, TERMS_TAB_NAMESPACES, termsCan, type Said } from './model'
+
+/**
+ * F-CT-101…105 (customer page › TERMS & REQUIREMENTS tab, lane ct-; 15-steps W1.1) — the tab's pure rules: the ONE source of the terms
+ * in force (a company's own row wins, field by field, and says so; the customer's own next; the typed text last; "30 %" as Money says
+ * it), the answer line and its chips in both languages, Hold and Commercial terms, every act HIDDEN without its right and held only by
+ * state, and the walls (no other customer's count of the payment-terms library). Made-up data only.
+ */
+
+const NOW = '2026-11-24T09:00:00.000Z'
+const say = (locale: Locale) => sayOf(createScopedTranslator(locale, messagesFor(locale, [...TERMS_TAB_NAMESPACES]), CT), locale)
+const said1 = (words: Said, locale: Locale = 'en') => say(locale)(words)
+const sentence = (answer: ReturnType<typeof termsAnswer>, locale: Locale) => [answer.lead ? say(locale)(answer.lead) : '', sentenceOf(answer.words.map(say(locale)), locale)].filter(Boolean).join(' ')
+
+// ---- made-up reads ------------------------------------------------------------------------------------------------------------
+
+const A = { id: '0190f0e2-c700-7000-8000-000000000001', code: 'SEEDA', name: 'Seed Company A' }
+const B = { id: '0190f0e2-c700-7000-8000-000000000002', code: 'SEEDB', name: 'Seed Company B' }
+const PARTY_ID = '0190f0e2-c700-7000-8000-000000000101'
+const NET30 = { id: '0190f0e2-c700-7000-8000-000000000201', code: 'NET30EOM', name: 'Net 30 end of month', nameI18n: { en: 'Net 30 end of month', it: 'Netto 30 fine mese' }, companyId: null, status: 'ACTIVE', summary: { en: 'Paid 30 days after the end of the invoice month', it: 'Pagato 30 giorni dopo la fine del mese della fattura' }, deposit: null }
+const DEP30 = { id: '0190f0e2-c700-7000-8000-000000000202', code: 'DEP30', name: '30% deposit, balance before shipping', nameI18n: { en: '30% deposit, balance before shipping', it: 'Acconto 30%, saldo prima della spedizione' }, companyId: null, status: 'ACTIVE', summary: { en: '30% with the order, the rest before shipping', it: "30% all'ordine, il resto prima della spedizione" }, deposit: { sharePct: '30', days: 0 } }
+
+function own(over: Partial<CommercialTerms> = {}): CommercialTerms {
+  return {
+    partyId: PARTY_ID,
+    code: 'SEED-ONE',
+    companyId: null,
+    currency: 'EUR',
+    language: 'it',
+    paymentTermsId: NET30.id,
+    paymentTerms: NET30,
+    paymentTermsText: null,
+    priceListId: '0190f0e2-c700-7000-8000-000000000301',
+    priceList: { id: '0190f0e2-c700-7000-8000-000000000301', code: 'SEED-LIST', name: 'Seed list 2026', kind: 'CUSTOMER', currency: 'EUR', status: 'ACTIVE', companyId: null },
+    discountGroup: null,
+    priceChain: [],
+    defaultDepositPct: '30',
+    invoiceTiming: 'PER_SHIPMENT',
+    invoiceTypePreset: 'TD01',
+    incoterm: null,
+    preferredCarrierCode: null,
+    minimumOrderAmount: 150_000,
+    version: 7,
+    ...over,
+  }
+}
+
+const row = (over: Partial<CompanyTermsRow> = {}): CompanyTermsRow => ({
+  id: '0190f0e2-c700-7000-8000-000000000401',
+  paymentTermsId: null,
+  paymentTermsLabel: null,
+  paymentTermsText: null,
+  priceListId: null,
+  priceListLabel: null,
+  depositPct: null,
+  poNumberRequired: false,
+  creditLimitCurrency: null,
+  setAt: '2026-11-04T10:00:00.000Z',
+  endedAt: null,
+  endedBy: null,
+  version: 2,
+  ...over,
+})
+
+/** One company's entry: its live row (or none) and what is in force, by the server's own rule (a row's field wins). */
+function entry(company: typeof A, live: CompanyTermsRow | null, party: CommercialTerms, over: Partial<CompanyTermsReadEntry> = {}): CompanyTermsReadEntry {
+  const terms = live !== null && (live.paymentTermsId !== null || live.paymentTermsText !== null)
+  const list = live !== null && live.priceListId !== null
+  const deposit = live !== null && live.depositPct !== null
+  return {
+    company,
+    terms: live,
+    inForce: {
+      paymentTermsId: terms ? live!.paymentTermsId : party.paymentTermsId,
+      paymentTermsText: terms ? live!.paymentTermsText : party.paymentTermsText,
+      priceListId: list ? live!.priceListId : party.priceListId,
+      depositPct: deposit ? live!.depositPct : party.defaultDepositPct,
+      poNumberRequired: live?.poNumberRequired ?? false,
+      source: { paymentTerms: terms ? 'COMPANY' : 'PARTY', priceList: list ? 'COMPANY' : 'PARTY', deposit: deposit ? 'COMPANY' : 'PARTY' },
+    },
+    mayChange: true,
+    history: [],
+    ...over,
+  }
+}
+
+const OWNER = termsCan(['parties.view', 'parties.manage', 'parties.hold', 'parties.vies', 'paymentterms.view', 'pricelists.view', 'pricelists.manage', 'money.price', 'quotes.view', 'files.read', 'product.styles.view', 'audit.read', 'invoices.view'])
+/** Sales (10-design §9): every act its rights allow, no selling prices. */
+const SALES = termsCan(['parties.view', 'parties.manage', 'parties.hold', 'parties.vies', 'paymentterms.view', 'pricelists.view', 'quotes.view', 'files.read', 'sales.credit.view'])
+/** Production manager: the facts only, no quote numbers. */
+const PM = termsCan(['parties.view', 'files.read', 'audit.read'])
+/** Read-only: the facts only. */
+const RO = termsCan(['parties.view', 'quotes.view', 'files.read', 'receivables.view'])
+
+const MODA = CUSTOMERS.find((party) => party.code === 'MODA-DEMO')!
+const identity = (over: Partial<TaxIdentity> = {}): TaxIdentity => ({ id: '0190f0e2-c700-7000-8000-000000000501', country: 'IT', taxMode: 'IT_B2B', vatNumber: 'IT00000000000', fiscalCode: null, sdiRecipientCode: 'FAKE001', pec: null, validFrom: '2026-01-01', current: true, version: 1, createdAt: NOW, updatedAt: NOW, ...over })
+const partyWith = (over: Partial<Party>): Party => ({ ...MODA, ...over })
+
+const hold = (over: Partial<HoldFacts> = {}): HoldFacts => ({ id: '0190f0e2-c700-7000-8000-000000000601', companyId: null, company: null, reason: 'DATA_MISSING', words: 'Waiting for the tax identity (made-up).', inForce: true, placedAt: '2026-11-20T08:00:00.000Z', placedBy: 'Alex Demo', releasedAt: null, releasedBy: null, releaseWords: null, version: 1, ...over })
+const HOLDS: HoldsFacts = {
+  onHold: true,
+  holds: [hold(), hold({ id: '0190f0e2-c700-7000-8000-000000000602', reason: 'CREDIT', inForce: false, placedBy: null, words: 'Two invoices overdue (made-up).', releasedAt: '2026-10-09T11:00:00.000Z', releasedBy: 'Franca Finance', releaseWords: 'Paid in full (made-up).' })],
+  ordersWaiting: [
+    { quoteId: '0190f0e2-c700-7000-8000-000000000701', number: 'Q-2026-0118', revision: 2, quoteVersionId: '0190f0e2-c700-7000-8000-000000000711', companyId: A.id, customerRef: 'FAKE-PO-1', waitsFor: 'ACCOUNT_ON_HOLD' },
+    { quoteId: '0190f0e2-c700-7000-8000-000000000702', number: 'Q-2026-0121', revision: 1, quoteVersionId: '0190f0e2-c700-7000-8000-000000000712', companyId: A.id, customerRef: null, waitsFor: 'PO_NUMBER_REQUIRED' },
+  ],
+  mayPlace: true,
+  ordersWaitingCount: { onHold: 1, poNumber: 1, other: 0 },
+}
+const NAMES = { [A.id]: A.name, [B.id]: B.name }
+const holdsInput = (over: Partial<HoldsInput> = {}): HoldsInput => ({ read: ready(HOLDS), can: OWNER, archived: false, hasIdentity: false, customer: 'Seed Customer One S.r.l.', companyNames: NAMES, prefix: '/w/SEEDA', partyId: PARTY_ID, releasedOpen: false, ...over })
+
+// ---- the one source ------------------------------------------------------------------------------------------------------------
+
+describe('the ONE source: the terms in force with a company (in-force.ts, 13-backend §4.1, Z32)', () => {
+  const party = own()
+  const company = row({ paymentTermsId: DEP30.id, paymentTermsLabel: { code: DEP30.code, name: DEP30.name }, depositPct: '40' })
+  const sources = (over: Partial<TermsSources> = {}): TermsSources => ({ commercial: party, companies: { tenantWide: true, companies: [entry(A, company, party), entry(B, null, party)] }, companyId: A.id, typed: null, ...over })
+
+  it("a company's own terms win, field by field, and say their source; the customer's own are next; the typed text last", () => {
+    const withA = termsInForce(sources(), 'en')
+    expect(withA.paymentTerms).toMatchObject({ code: 'DEP30', source: 'COMPANY', company: 'Seed Company A', typed: false })
+    expect(withA.deposit).toEqual({ pct: '40', from: 'COMPANY', source: 'COMPANY' })
+    expect(withA.priceList).toMatchObject({ code: 'SEED-LIST', source: 'PARTY' }) // the row gives no list: the customer's own
+    const withB = termsInForce(sources({ companyId: B.id }), 'en')
+    expect(withB.paymentTerms).toMatchObject({ code: 'NET30EOM', name: 'Net 30 end of month', source: 'PARTY', company: null })
+    expect(withB.deposit).toEqual({ pct: '30', from: 'PARTY', source: 'PARTY' })
+    const typed = paymentTermsInForce({ commercial: null, companies: null, companyId: A.id, typed: '60 days, bank transfer (typed, made-up)' }, 'en')
+    expect(typed).toMatchObject({ name: '60 days, bank transfer (typed, made-up)', typed: true, source: 'PARTY' })
+    expect(paymentTermsInForce({ commercial: null, companies: null, companyId: null, typed: null }, 'en')).toBeNull()
+  })
+
+  it('the payment terms are named in the page language, with their meaning (P0-B8)', () => {
+    expect(paymentTermsInForce(sources({ companyId: B.id }), 'it')).toMatchObject({ name: 'Netto 30 fine mese', meaning: 'Pagato 30 giorni dopo la fine del mese della fattura' })
+    // S5 on main: the company row's terms named in both languages too.
+    const named = entry(A, company, party)
+    const s5 = { ...named, inForce: { ...named.inForce, paymentTerms: DEP30 } }
+    expect(paymentTermsInForce(sources({ companies: { tenantWide: true, companies: [s5] } }), 'it')).toMatchObject({ name: 'Acconto 30%, saldo prima della spedizione', source: 'COMPANY', orderShare: '30' })
+  })
+
+  it("the deposit: the company's percent › the customer's percent › the order share of the terms in force › the sales settings (P17)", () => {
+    const noPct = own({ defaultDepositPct: null, paymentTerms: DEP30, paymentTermsId: DEP30.id })
+    expect(depositInForce({ commercial: noPct, companies: null, companyId: null, typed: null })).toEqual({ pct: '30', from: 'TERMS', source: 'PARTY' })
+    expect(depositInForce({ commercial: own({ defaultDepositPct: null }), companies: null, companyId: null, typed: null })).toEqual({ pct: null, from: 'SETTINGS', source: 'PARTY' })
+  })
+
+  it("invoicing and currency are always the customer's own; without the company read the customer's own terms answer (and the PO rule is unknown)", () => {
+    const monthly = own({ invoiceTiming: 'MONTHLY', currency: 'CHF' })
+    expect(termsInForce({ commercial: monthly, companies: { tenantWide: true, companies: [entry(A, company, monthly)] }, companyId: A.id, typed: null }, 'en')).toMatchObject({ invoicing: 'MONTHLY', currency: 'CHF', companyRead: true })
+    const alone = termsInForce({ commercial: party, companies: null, companyId: A.id, typed: null }, 'en')
+    expect(alone).toMatchObject({ companyRead: false, poNumberRequired: null })
+    expect(alone.paymentTerms?.source).toBe('PARTY')
+  })
+
+  it('a customer of one company: its one row answers whatever company is asked', () => {
+    const single = row({ poNumberRequired: true })
+    expect(termsInForce({ commercial: party, companies: { tenantWide: false, companies: [entry(A, single, party)] }, companyId: B.id, typed: null }, 'en').poNumberRequired).toBe(true)
+  })
+
+  it('"30 %" as Money says it (one percent format: pctOf), in both languages', () => {
+    expect(said1(said('customer-money:cm.credit.pct', { pcts: { pct: '30' } }), 'en')).toBe('30 %')
+    expect(said1(said('customer-money:cm.credit.pct', { pcts: { pct: '30.5' } }), 'it')).toBe('30,5 %')
+  })
+})
+
+// ---- the answer line ------------------------------------------------------------------------------------------------------------
+
+describe('the answer line and its chips (answer.ts, 10-design §4)', () => {
+  const holds = holdSection(holdsInput())
+  const facts = (over: Partial<TermsFacts> = {}): TermsFacts => ({
+    multi: false,
+    company: A.name,
+    inForce: termsInForce({ commercial: own(), companies: { tenantWide: false, companies: [entry(A, row({ poNumberRequired: true }), own())] }, companyId: A.id, typed: null }, 'en'),
+    companiesFailed: false,
+    blank: false,
+    holds: [],
+    waiting: waitingOf(null, OWNER, NAMES, '/w/SEEDA', PARTY_ID),
+    requirements: 4,
+    identity: identityFactsOf(partyWith({ taxIdentities: [identity()], warnings: [], vies: { ...MODA.vies, state: 'NOT_APPLICABLE' } })),
+    now: NOW,
+    ...over,
+  })
+
+  it('a busy brand: one sentence, in English and in Italian', () => {
+    const answer = termsAnswer(facts())
+    expect(sentence(answer, 'en')).toBe('Net 30 end of month · 30 % deposit · PO number required · 4 requirements · e-invoices by SDI code.')
+    const it_ = termsAnswer({ ...facts(), inForce: termsInForce({ commercial: own(), companies: { tenantWide: false, companies: [entry(A, row({ poNumberRequired: true }), own())] }, companyId: A.id, typed: null }, 'it') })
+    expect(sentence(it_, 'it')).toBe("Netto 30 fine mese · acconto 30 % · numero d'ordine del cliente obbligatorio · 4 requisiti · fatture elettroniche via codice SDI.")
+    expect(answer.chips).toEqual([])
+    expect(answer.tone).toBe('info')
+  })
+
+  it('a new customer with nothing set: the sales settings, no requirement, no tax identity', () => {
+    const nothing = termsInForce({ commercial: own({ paymentTermsId: null, paymentTerms: null, defaultDepositPct: null }), companies: { tenantWide: false, companies: [entry(A, null, own())] }, companyId: A.id, typed: null }, 'en')
+    const blank = termsAnswer(facts({ blank: true, inForce: nothing, requirements: 0, identity: identityFactsOf(partyWith({ taxIdentities: [], warnings: [], vies: { ...MODA.vies, state: 'NOT_APPLICABLE' } })) }))
+    expect(sentence(blank, 'en')).toBe('Nothing set yet: a new quote takes the sales settings · no special requirements · no tax identity.')
+    expect(sentence(blank, 'it')).toBe('Ancora niente di impostato: un nuovo preventivo prende le impostazioni vendite · nessun requisito particolare · nessuna identità fiscale.')
+    expect(blank.chips.map((chip) => [chip.id, chip.tone, chip.section])).toEqual([['noIdentity', 'danger', 'party-identity']])
+    expect(said1(blank.chips[0]!.label, 'it')).toBe('Nessuna identità fiscale: non si può fatturare')
+  })
+
+  it('on hold for missing data with two accepted quotes waiting: each chip opens EXACTLY its rows on this tab (Z6, Z27)', () => {
+    const answer = termsAnswer(facts({ holds: holds.inForce, waiting: holds.waiting, identity: identityFactsOf(partyWith({ taxIdentities: [], warnings: [], vies: { ...MODA.vies, state: 'NOT_APPLICABLE' } })) }))
+    expect(answer.chips.map((chip) => [chip.id, chip.tone, chip.section, chip.rows.length, chip.door])).toEqual([
+      ['hold', 'danger', 'party-hold', 1, null],
+      ['waitHold', 'warning', 'party-hold', 1, null],
+      ['waitPo', 'warning', 'party-commercial', 1, null],
+      ['noIdentity', 'danger', 'party-identity', 0, null],
+    ])
+    expect(answer.chips.map((chip) => said1(chip.label, 'en'))).toEqual(['On hold: data missing', '1 accepted quote waits for the hold', '1 accepted quote waits for a PO number', 'No tax identity: it cannot be invoiced'])
+    const reasonIt = said1(said('sales-customers-depth:reason.DATA_MISSING'), 'it').toLocaleLowerCase('it-IT')
+    expect(answer.chips.map((chip) => said1(chip.label, 'it'))).toEqual([`In blocco: ${reasonIt}`, '1 preventivo accettato attende lo sblocco', "1 preventivo accettato attende il numero d'ordine", 'Nessuna identità fiscale: non si può fatturare'])
+    expect(answer.tone).toBe('danger')
+  })
+
+  it('before S4 nobody can say why each quote waits: ONE chip, the count, a door to Quotes › Order waits (Z6)', () => {
+    const old: HoldsFacts = { ...HOLDS, ordersWaitingCount: undefined, ordersWaiting: HOLDS.ordersWaiting.map(({ waitsFor: _drop, ...rest }) => rest) }
+    const waiting = waitingOf(old, OWNER, NAMES, '/w/SEEDA', PARTY_ID)
+    expect(waiting.byReason).toBe(false)
+    const answer = termsAnswer(facts({ waiting }))
+    expect(answer.chips.map((chip) => [chip.id, chip.door])).toEqual([['waitOrder', `/w/SEEDA/sales/customers/${PARTY_ID}?tab=quotes&group=ORDER_WAITS`]])
+    expect(said1(answer.chips[0]!.label, 'en')).toBe('2 accepted quotes wait for their order')
+  })
+
+  it('no SDI code or PEC is a WARNING (the fiscal drawer), never "cannot be invoiced" (Z3); VIES: no answer is never "not valid" (Z23)', () => {
+    const drawer = termsAnswer(facts({ identity: identityFactsOf(partyWith({ taxIdentities: [identity({ sdiRecipientCode: '0000000' })], warnings: [{ code: 'FISCAL_DRAWER', message: 'made-up', blocksInvoice: false }], vies: { ...MODA.vies, state: 'NOT_APPLICABLE' } })) }))
+    expect(drawer.chips.map((chip) => [chip.id, chip.tone])).toEqual([['noSdi', 'warning']])
+    expect(sentence(drawer, 'en')).toContain('no SDI code or PEC')
+    const eu = (state: Party['vies']['state'], validUntil: string | null) => termsAnswer(facts({ identity: identityFactsOf(partyWith({ taxIdentities: [identity({ country: 'DE', taxMode: 'EU_B2B', vatNumber: 'DE000000000', sdiRecipientCode: null })], warnings: [], vies: { ...MODA.vies, state, validUntil } })) }))
+    const ends = eu('VALID', '2026-11-27T09:00:00.000Z')
+    expect(ends.chips.map((chip) => [chip.id, chip.tone, said1(chip.label, 'en')])).toEqual([['viesEnds', 'warning', 'VIES proof ends in 3 days']])
+    expect(sentence(ends, 'en')).toContain('VAT valid until 27/11/2026')
+    expect(eu('INVALID', null).chips.map((chip) => [chip.id, chip.tone])).toEqual([['viesInvalid', 'danger']])
+    expect(eu('HELD', null).chips.map((chip) => [chip.id, chip.tone])).toEqual([['viesUnchecked', 'warning']])
+    expect(sentence(eu('HELD', null), 'en')).not.toContain('not valid')
+  })
+
+  it('two or more of our companies: "With {company}: …"; the company read failed: the customer\'s own terms, and it says so', () => {
+    const multi = termsAnswer(facts({ multi: true }))
+    expect(sentence(multi, 'en').startsWith('With Seed Company A: Net 30 end of month')).toBe(true)
+    expect(sentence(multi, 'it').startsWith('Con Seed Company A:')).toBe(true)
+    const failed = termsAnswer(facts({ multi: true, companiesFailed: true, inForce: termsInForce({ commercial: own(), companies: null, companyId: A.id, typed: null }, 'en'), holds: holds.inForce, waiting: holds.waiting }))
+    expect(failed.fallback && said1(failed.fallback, 'en')).toBe("The terms with each company could not be read: these are the customer's own terms.")
+    expect(failed.chips.some((chip) => chip.id === 'waitPo')).toBe(false)
+    expect(sentence(failed, 'en')).not.toContain('PO number required')
+  })
+})
+
+// ---- Hold ----------------------------------------------------------------------------------------------------------------------
+
+describe('Hold (holds.ts, 10-design §5.1; Z10, Z22)', () => {
+  it('not on hold: one quiet line, "Put on hold…" in the head, the released ones folded', () => {
+    const none = holdSection(holdsInput({ read: ready({ ...HOLDS, onHold: false, holds: [HOLDS.holds[1]!], ordersWaiting: [], ordersWaitingCount: { onHold: 0, poNumber: 0, other: 0 } }) }))
+    expect(said1(none.answer!, 'en')).toBe('Not on hold: new orders and shipments go ahead.')
+    expect(said1(none.answer!, 'it')).toBe('Non in blocco: nuovi ordini e spedizioni procedono.')
+    expect(none.inForce).toEqual([])
+    expect(none.released.map((released) => released.reason)).toEqual(['CREDIT'])
+    expect(none.place).toEqual({ shown: true, held: null })
+    expect(none.placeInHead).toBe(true)
+    expect(none.stops).toBeNull()
+  })
+
+  it('in force: since when, for whom, why — in both languages; what stops and what goes on; its cause a door only without an identity (P19)', () => {
+    const one = holdSection(holdsInput())
+    expect(said1(one.answer!, 'en')).toBe(`On hold since 20/11/2026, for every company (${said1(said('sales-customers-depth:reason.DATA_MISSING'), 'en').toLowerCase()}).`)
+    expect(said1(one.answer!, 'it').startsWith('In blocco dal 20/11/2026, per tutte le aziende (')).toBe(true)
+    expect(said1(one.stops!.title, 'en')).toBe('New orders and shipments of Seed Customer One S.r.l. wait until the hold is released.')
+    expect(said1(one.stops!.desc, 'it')).toBe('I preventivi proseguono, ognuno con un avviso. Fatture e pagamenti proseguono come sempre.')
+    expect(one.inForce[0]!.cause).toBe(true)
+    expect(holdSection(holdsInput({ hasIdentity: true })).inForce[0]!.cause).toBe(false)
+    expect(one.placeInHead).toBe(false) // Z22: the ⋯ keeps "Put on hold for another reason…"
+    const two = holdSection(holdsInput({ read: ready({ ...HOLDS, holds: [hold(), hold({ id: '0190f0e2-c700-7000-8000-000000000603', reason: 'LEGAL', companyId: B.id, company: { code: B.code, name: B.name } })] }) }))
+    expect(said1(two.answer!, 'en')).toMatch(/^2 holds in force: .+ \(every company\) and legal \(Seed Company B\)\.$/)
+    expect(said1(two.stops!.title, 'en')).toBe('New orders and shipments of Seed Customer One S.r.l. wait until the hold is released.')
+  })
+
+  it('the waiting quotes by reason, with their numbers only with quotes.view (else the counts)', () => {
+    const owner = holdSection(holdsInput())
+    expect(owner.waiting.hold.map((row) => said1(row.quote))).toEqual(['Q-2026-0118 rev. 2'])
+    expect(owner.waiting.po.map((row) => row.ref)).toEqual([null])
+    expect(owner.waitingForHold).toBe(1)
+    const pm = holdSection(holdsInput({ can: PM }))
+    expect(pm.waiting.rowsShown).toBe(false)
+    expect(pm.waiting.hold).toEqual([])
+    expect(pm.waiting.counts).toEqual({ hold: 1, po: 1, other: 0 })
+  })
+
+  it('hidden, never held, for a right; held only by state (an archived customer)', () => {
+    for (const can of [PM, RO]) {
+      const model = holdSection(holdsInput({ can }))
+      expect(model.place.shown).toBe(false)
+      expect(model.inForce.every((row) => !row.release.shown && row.release.held === null)).toBe(true)
+    }
+    const refused = holdSection(holdsInput({ read: ready({ ...HOLDS, mayPlace: false, holds: [hold({ mayRelease: false })] }) }))
+    expect(refused.place.shown).toBe(false)
+    expect(refused.inForce[0]!.release.shown).toBe(false)
+    const archived = holdSection(holdsInput({ can: SALES, archived: true }))
+    expect(archived.inForce[0]!.release.shown).toBe(true)
+    expect(said1(archived.inForce[0]!.release.held!, 'en')).toBe('Archived: reactivate it to change its terms')
+  })
+
+  it('a failed read is never "not on hold": the kit\'s own Try again', () => {
+    const failed = holdSection(holdsInput({ read: failedRead('problem.offline') }))
+    expect(failed.problem).toBe('problem.read.unavailable')
+    expect(failed.answer).toBeNull()
+    expect(holdSection(holdsInput({ read: LOADING })).reading).toBe(true)
+  })
+})
+
+// ---- Commercial terms ------------------------------------------------------------------------------------------------------------
+
+describe('Commercial terms (commercial.ts, 10-design §5.2; Z2, Z11, Z21, Z29, Z31)', () => {
+  const CARRIER: CarrierFacts = { carrierCode: 'brt', carrierName: 'BRT', accountOnFile: true, freightBilling: 'COLLECT', defaultCarrierService: 'Express 24h', version: 7 }
+  const party = own()
+  const two: CompanyTermsRead = { tenantWide: true, companies: [entry(A, row({ paymentTermsId: DEP30.id, paymentTermsLabel: { code: DEP30.code, name: DEP30.name }, poNumberRequired: true, creditLimitCurrency: 'EUR' }), party), entry(B, null, party)] }
+  const input = (over: Partial<CommercialInput> = {}): CommercialInput => ({ commercial: ready(party), companies: ready(two), carrier: ready(CARRIER), companyId: A.id, typed: null, can: OWNER, archived: false, prefix: '/w/SEEDA', partyId: PARTY_ID, poWaiting: [], poWaitingCount: 0, endedOpen: false, locale: 'en', ...over })
+  const fact = (model: ReturnType<typeof commercialSection>, group: 'pays' | 'order' | 'delivery', key: string) => model[group].find((item) => item.key === key)
+
+  it('the facts are the terms IN FORCE with the company you work in, each with its source (two or more companies)', () => {
+    const model = commercialSection(input())
+    expect(said1(fact(model, 'pays', 'paymentTerms')!.value)).toBe(DEP30.name)
+    expect(fact(model, 'pays', 'paymentTerms')!.source).toEqual({ from: 'COMPANY', company: 'Seed Company A' })
+    expect(said1(fact(model, 'pays', 'deposit')!.label)).toBe('Default deposit') // Money's word (Z29)
+    expect(said1(fact(model, 'pays', 'deposit')!.value)).toBe('30 %')
+    expect(model.answer.map((words) => said1(words))).toEqual(['New quotes and orders take these; open ones keep their own.', 'Shown for Seed Company A, the company you work in; each company is below.'])
+    expect(model.companies!.map((company) => [company.name, company.current, company.own, company.po])).toEqual([['Seed Company A', true, true, true], ['Seed Company B', false, false, false]])
+    expect(said1(model.foot)).toContain("the customer's own payment terms")
+  })
+
+  it('the money wall: the minimum order only with the price grain (said once without it); the credit limit a door, never an amount', () => {
+    const owner = commercialSection(input())
+    expect(fact(owner, 'pays', 'minimum')).toBeDefined()
+    expect(fact(owner, 'pays', 'credit')!.href).toBe(`/w/SEEDA/sales/customers/${PARTY_ID}?tab=money#credit`)
+    for (const can of [SALES, PM, RO]) {
+      const model = commercialSection(input({ can }))
+      expect(fact(model, 'pays', 'minimum'), 'no minimum').toBeUndefined()
+      expect(model.noPrice).toBe(true)
+      for (const item of model.pays) expect(JSON.stringify(item)).not.toMatch(/amounts|150000|1[.,]500/)
+    }
+    expect(fact(commercialSection(input({ can: PM })), 'pays', 'credit')).toBeUndefined() // PM does not open Money
+  })
+
+  it('Delivery: the carrier and its service, who pays, "On file · The number is never shown" (Z2)', () => {
+    const model = commercialSection(input())
+    expect(model.delivery.map((item) => said1(item.value))).toEqual(['None: Intrastat asks for them', 'BRT · Express 24h', 'The customer pays, on its own account (porto assegnato)', 'On file'])
+    expect(fact(model, 'delivery', 'account')!.subs!.map((words) => said1(words))).toEqual(['The number is never shown'])
+    expect(JSON.stringify(model.delivery)).not.toContain('endsIn')
+  })
+
+  it('a company row says "changed <date>", never "set by" (Z11); Back… is held while a credit limit is set; hidden without the company\'s right', () => {
+    const model = commercialSection(input())
+    expect(model.companies![0]!.changed).toBe('2026-11-04T10:00:00.000Z')
+    expect(JSON.stringify(model)).not.toMatch(/setBy|Set by/)
+    expect(model.companies![0]!.back.shown).toBe(true)
+    expect(said1(model.companies![0]!.back.held!)).toBe('A credit limit is set with Seed Company A (Money): its own terms stay while the limit is set.')
+    expect(model.companies![1]!.back.shown).toBe(false) // no own row: nothing to go back from
+    const other = commercialSection(input({ companies: ready({ ...two, companies: two.companies.map((item) => ({ ...item, mayChange: item.company.id === B.id })) }) }))
+    expect(other.companies!.map((company) => company.set.shown)).toEqual([false, true])
+    expect(other.menu.setFor.map((item) => item.name)).toEqual(['Seed Company B'])
+  })
+
+  it('a customer of ONE company: its PO rule with "Change…" (the company window with the PO switch only, Z26)', () => {
+    const single = commercialSection(input({ companies: ready({ tenantWide: false, companies: [entry(A, row({ poNumberRequired: true }), party)] }) }))
+    expect(single.companies).toBeNull()
+    expect(said1(fact(single, 'order', 'po')!.value)).toBe('Required on its orders')
+    expect(single.poChange).toEqual({ shown: true, held: null })
+    expect(single.menu.po).toEqual({ companyId: A.id, act: { shown: true, held: null } })
+    expect(commercialSection(input({ can: RO, companies: ready({ tenantWide: false, companies: [entry(A, null, party)] }) })).poChange.shown).toBe(false)
+  })
+
+  it('nothing set: ONE line, no body; a read that failed is never "none"', () => {
+    const blank = own({ paymentTermsId: null, paymentTerms: null, priceListId: null, priceList: null, defaultDepositPct: null, minimumOrderAmount: null })
+    const model = commercialSection(input({ commercial: ready(blank), carrier: ready({ ...CARRIER, carrierCode: null, carrierName: null, accountOnFile: false, freightBilling: 'SENDER', defaultCarrierService: null }), companies: ready({ tenantWide: false, companies: [entry(A, null, blank)] }) }))
+    expect(model.blank).toBe(true)
+    expect(said1(model.answer[0]!, 'it').startsWith('Ancora niente di impostato')).toBe(true)
+    const failed = commercialSection(input({ companies: failedRead('problem.offline') }))
+    expect(failed.companiesProblem).toBe('problem.read.unavailable')
+    expect(said1(fact(failed, 'order', 'po')!.value)).toBe("Couldn't be read")
+    expect(commercialSection(input({ commercial: failedRead('problem.read.internal') })).problem).toBe('problem.read.internal')
+  })
+
+  it('every act hidden without its right (the server\'s mayChange first), held only by state', () => {
+    for (const can of [PM, RO]) {
+      const model = commercialSection(input({ can }))
+      expect([model.head.change.shown, model.head.delivery.shown, model.menu.setFor.length, model.menu.po]).toEqual([false, false, 0, null])
+    }
+    expect(commercialSection(input({ commercial: ready({ ...party, mayChange: false }) })).head.change.shown).toBe(false)
+    const archived = commercialSection(input({ archived: true }))
+    expect(said1(archived.head.change.held!)).toBe('Archived: reactivate it to change its terms')
+  })
+})
+
+// ---- words and walls -----------------------------------------------------------------------------------------------------------
+
+describe('the words and the walls', () => {
+  const folder = new URL('./', import.meta.url)
+  const rules = readdirSync(folder).filter((name) => /\.ts$/.test(name) && !name.includes('.test.')).map((name) => ({ name, source: readFileSync(new URL(name, folder), 'utf8') }))
+
+  it("every said('…') key of the tab's rules is in its catalogue, in Italian and in English; the ct block has the same keys in both", () => {
+    const keys = new Set(rules.flatMap(({ source }) => [...source.matchAll(/said\(\s*'([^'$]+)'/g)].map((match) => match[1]!)))
+    expect(keys.size).toBeGreaterThan(60)
+    for (const locale of LOCALES)
+      for (const key of keys) {
+        const [namespace, path] = key.includes(':') ? (key.split(':') as [string, string]) : [CT, key]
+        const words = CATALOGUE[locale][namespace] ?? {}
+        expect(words[path] !== undefined || words[`${path}_other`] !== undefined, `${locale} ${key}`).toBe(true)
+      }
+    const ct = (locale: Locale) => Object.keys(CATALOGUE[locale][CT] ?? {}).filter((key) => key.startsWith('ct.')).sort()
+    expect(ct('it')).toEqual(ct('en'))
+  })
+
+  it('"Customer" on screen, never "party"; Italian "Termini di pagamento" (Z30)', () => {
+    for (const [key, words] of Object.entries(CATALOGUE.en[CT] ?? {})) if (key.startsWith('ct.')) expect(words, key).not.toMatch(/\bpart(y|ies)\b/i)
+    expect(CATALOGUE.it[CT]?.['termsField.paymentTerms']).toBe('Termini di pagamento')
+  })
+
+  it("W4: the payment-terms library's count of OTHER customers is never read by the tab", () => {
+    for (const { name, source } of rules) expect(source, name).not.toMatch(/\.customers\b/)
+  })
+
+  it('the four sections keep their addresses (doors from Money, the Overview, the list and the tests land)', () => {
+    expect([...TERMS_SECTIONS]).toEqual(['party-hold', 'party-commercial', 'party-requirements', 'party-identity'])
+  })
+})
