@@ -205,11 +205,21 @@ export function usePartyRecord(side: Side, partyId: string, slots: PartySlots = 
   const loadHistory = useCallback(async () => {
     try {
       const answer = await viesHistory(api, partyId)
-      setHistory(loaded(answer.checks, answer.nextCursor !== null))
+      setHistory({ ...loaded(answer.checks, answer.nextCursor !== null), next: answer.nextCursor }) // F-CT-513 (Z7): the cursor is kept
     } catch (error) {
       setHistory(failed(problemKey(error)))
     }
   }, [api, partyId])
+  // F-CT-513 (customer Terms & requirements, ct-w2 W2.2; Z7): "Show 50 more" — the next page by the server's cursor, after the ones read.
+  const moreHistory = async () => {
+    if (!history.next) return
+    try {
+      const answer = await viesHistory(api, partyId, history.next)
+      setHistory((current) => ({ ...loaded([...(current.items ?? []), ...answer.checks], answer.nextCursor !== null), next: answer.nextCursor }))
+    } catch (error) {
+      setHistory((current) => ({ ...current, problem: problemKey(error) }))
+    }
+  }
 
   useEffect(() => {
     void load()
@@ -407,6 +417,7 @@ export function usePartyRecord(side: Side, partyId: string, slots: PartySlots = 
     // F-SA-270: the party read, and how to read it again (the customer view's own reads beside it).
     party,
     reload: () => void load(),
+    moreHistory: () => void moreHistory(), // F-CT-513: the VIES checks' next page (Terms & requirements)
     actions: {
       onRetry: () => {
         setProblem(null)

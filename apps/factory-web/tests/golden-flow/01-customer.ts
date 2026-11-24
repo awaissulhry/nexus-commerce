@@ -274,7 +274,8 @@ export default defineStage({
 
     await flow.step('VIES: the tax tab says an Italian number is not a VIES question (EU numbers outside Italy only)', async () => {
       await sales.go(`/sales/customers/${party.id}?tab=tax`)
-      await expect(page.getByText('VIES checks EU VAT numbers outside Italy. This party has none to check.')).toBeVisible()
+      // F-CT-518 (ct-w2 W2.2): the old tax tab opens Terms & requirements; its Tax identity section says it in ONE quiet line.
+      await expect(page.getByText('VIES is not needed: it checks EU VAT numbers outside Italy.')).toBeVisible()
       await expect(page.getByRole('button', { name: 'Check VIES' })).toHaveCount(0)
       await flow.shot(page, 'tax-vies')
     })

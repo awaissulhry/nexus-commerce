@@ -854,6 +854,8 @@ function TermsDesign({ record, party, terms: termsOfCase, depth }: { record: Par
     requirements: depth?.requirements?.read ?? null,
     library: terms.library ? ready(terms.library) : null,
     lists: terms.lists ? ready(terms.lists) : null,
+    history: record.history, // F-CT-519 (W2.2): the case's VIES checks, as the record reads them
+    viesRunning: record.viesRunning === true,
   }
   const edit = terms.draft ? { kind: 'terms' as const, draft: terms.draft, busy: terms.busy, tried: true, problem: terms.saveProblem } : null
   const model = termsTabModel(reads, { ...TERMS_TAB_START, window: edit })

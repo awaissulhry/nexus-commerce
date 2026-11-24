@@ -11,6 +11,7 @@ import { CommercialSection } from './CommercialSection'
 import { CompanyEndDialog, CompanyTermsDialog } from './CompanyTermsDialog'
 import { DeliveryDialog } from './DeliveryDialog'
 import { HoldSection } from './HoldSection'
+import { IdentitySection } from './IdentitySection' // F-CT-518 (W2.2)
 import { RequirementsSection } from './RequirementsSection' // F-CT-507 (W2.1)
 import { TermsAnswer } from './TermsAnswer'
 import './terms.css'
@@ -63,6 +64,7 @@ function TermsTabBody({ model, actions, hold, requirements }: TermsTabProps) {
       <HoldSection model={model} actions={actions} />
       <CommercialSection model={model} actions={actions} />
       <RequirementsSection model={model} actions={actions} />
+      <IdentitySection model={model} actions={actions} />
       {hold ? <HoldDialogView model={hold.model} actions={hold.actions} /> : null}
       {requirements ? <RequirementWindows model={requirements.model} actions={requirements.actions} /> : null}
       {open?.kind === 'terms' ? <ChangeTermsDialog window={open} windows={model.windows} actions={actions} /> : null}

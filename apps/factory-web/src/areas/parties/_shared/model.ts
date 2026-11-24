@@ -189,6 +189,8 @@ export interface Loaded<T> {
   problem?: string | null
   /** More exist than were read. */
   more?: boolean
+  /** F-CT-513 (customer Terms & requirements, ct-w2 W2.2; Z7): the server's cursor of the next page (null: none). */
+  next?: string | null
 }
 export const loading = <T>(): Loaded<T> => ({ items: null, problem: null })
 export const loaded = <T>(items: readonly T[], more = false): Loaded<T> => ({ items, problem: null, more })
@@ -211,8 +213,14 @@ export function problemKey(error: unknown): string {
       return 'problem.forbidden'
     case 'not_found':
       return 'problem.notFound'
-    case 'conflict':
-      return 'problem.conflict'
+    case 'conflict': {
+      // F-CT-512 (customer Terms & requirements, ct-w2 W2.2; 18-lead-settles Z37): a conflict that names a field (a VAT number or a
+      // codice fiscale another business partner holds, ct-s S2) is a refused value — the window marks that field (refusedFields) with
+      // the words of the create window's same refusal — not "someone else changed it". Data-driven: suppliers get the same.
+      const fields = refusedFields(error).filter((field) => field !== 'version')
+      if (fields.some((field) => field === 'vatNumber' || field === 'fiscalCode')) return 'new.conflictNumber'
+      return fields.length > 0 ? 'problem.invalid' : 'problem.conflict'
+    }
     case 'invalid':
       return 'problem.invalid'
     case 'rate_limited':

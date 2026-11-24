@@ -8,10 +8,10 @@ import { Button } from '@nexus/ui/primitives'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { useT } from '../../../../../lib/i18n/provider'
 import type { Party } from '../../../../parties/_shared/api'
-import { identitiesOf, partyName, recordTabs, sideHref, SIDES, writable, type PartyRecordModel, type RecordTab } from '../../../../parties/_shared/model'
+import { partyName, recordTabs, sideHref, SIDES, type PartyRecordModel, type RecordTab } from '../../../../parties/_shared/model'
 import { shownTab } from '../../../../parties/_shared/model' // F-CQ-301 (P0-B2)
 import { PartyRecordGate, usePartyBand, type PartyRecordActions, type SupplierDepth } from '../../../../parties/_shared/view/PartyRecordView'
-import { IdentityCard, PartyDialogs, PartyNotices, ShowThreadOnArrival, ViesCard } from '../../../../parties/_shared/view/cards' // F-CA-119: the contacts and addresses cards stay the supplier's
+import { PartyDialogs, PartyNotices, ShowThreadOnArrival } from '../../../../parties/_shared/view/cards' // F-CA-119: the contacts and addresses cards stay the supplier's
 import { PartiesMessages } from '../../../../parties/_shared/view/parts'
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { rightRef } from '../../../../../lib/i18n/rights' // F-SA-271
@@ -225,7 +225,6 @@ function CustomerBody({ model, party, actions, thread, printThread, overviewTab 
   const side = model.side
   const config = SIDES[side]
   const can = model.can
-  const editable = writable(party, can)
   const tabs = recordTabs(config, can)
   // F-SA-271: no tab asked (or one the reader may not see): the first tab the reader sees.
   // ---- F-CQ-301 (P0-B2): the same pure rule as the page's container (its slots are built for this tab).
@@ -275,8 +274,7 @@ function CustomerBody({ model, party, actions, thread, printThread, overviewTab 
         </Button>
       )
     ) : party.status === 'PROSPECT' ? undefined : null
-  const { band, viesHeld } = usePartyBand(model, party, actions, { primary, viesInMore: true, more: customerMore(model, party, t, onAddTask, onImport /* F-CP-104 */) })
-  const { current } = identitiesOf(party)
+  const { band } = usePartyBand(model, party, actions, { primary, viesInMore: true, more: customerMore(model, party, t, onAddTask, onImport /* F-CP-104 */) })
 
   return (
     <>
@@ -326,18 +324,9 @@ function CustomerBody({ model, party, actions, thread, printThread, overviewTab 
           {/* F-CA-119 (customer page › People & addresses, lane ca-): the container's tab — the answer line, People, Addresses (and, until
               ca-w2, today's riders / profiles and personal-data cards under them): cu/record/view/people/PeopleTab.tsx. */}
           {tab === 'people' && peopleTab}
-          {tab === 'terms' && (
-            // F-CT-406 (customer page › Terms & requirements, lane ct-; 10-design §1, §7): the tab — the answer line, Hold (always first) and
-            // Commercial terms (the container's: cu/record/view/terms/TermsTab.tsx; the anchor line went: the answer line's chips are the
-            // doors); today's Requirements and Tax identity cards stand under it until ct-w2 (their ids are the doors' addresses).
-            <div className="fw-pty-stack">
-              {termsTab}
-              <section id="party-identity" className="fw-pty-anchor fw-pty-two-wide" aria-label={t('customers.anchor.identity')}>
-                <IdentityCard model={model} party={party} current={current} actions={actions} editable={editable} />
-                <ViesCard model={model} party={party} actions={actions} viesHeld={viesHeld} />
-              </section>
-            </div>
-          )}
+          {/* F-CT-406 / F-CT-518 (customer page › Terms & requirements, lane ct-; 10-design §1, §7): the tab — the answer line, Hold (always
+              first), Commercial terms, Requirements, Tax identity & e-invoice (the container's: cu/record/view/terms/TermsTab.tsx). */}
+          {tab === 'terms' && termsTab}
           {/* B-W2b-180: Portal settings (areas/sales/customers/portal; a refused invite keeps its real reason). */}
           {tab === 'portal' && portal}
         </div>

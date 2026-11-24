@@ -8,6 +8,7 @@ import { useLocale } from '../../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../../lib/session/context'
 import type { Party } from '../../../../parties/_shared/api'
 import type { PartyRecordModel } from '../../../../parties/_shared/model'
+import type { PartyRecordActions } from '../../../../parties/_shared/view/PartyRecordView' // F-CT-516 (W2.2): the record's own identity window and VIES act
 import { readProblem } from '../../../orders/model'
 import { copyLinkTo } from '../../../orders/record/shipments/view/hrefs'
 import { listPriceLists, type PriceListRow } from '../../../pricelists/api'
@@ -77,6 +78,10 @@ export interface TermsTabInput {
   readonly model: PartyRecordModel
   /** Read the party again (after a terms or carrier save: their version moved; on a 409). */
   readonly reload: () => void
+  /** F-CT-516 (W2.2): the record's own acts — Correct… / New identity from a date… (its identity window), Check VIES. */
+  readonly actions?: PartyRecordActions | undefined
+  /** F-CT-516 (W2.2; Z7): the record's VIES checks, the next page by the server's cursor. */
+  readonly moreHistory?: (() => void) | undefined
   /** The depth provider's part; null: not handed (the sections then read). */
   readonly depth: TermsDepth | null
   /** Terms & requirements is the tab shown: only then does the tab read. */
@@ -308,6 +313,8 @@ export function useTermsTab(input: TermsTabInput): TermsTabContainer {
             requirements: depth?.requirements ?? null,
             library: library?.read ?? null,
             lists,
+            history: input.model.history, // F-CT-516
+            viesRunning: input.model.viesRunning === true,
           },
           state,
         )
@@ -322,7 +329,8 @@ export function useTermsTab(input: TermsTabInput): TermsTabContainer {
       }
       patch({ chip })
     },
-    onFold: (fold, open) => patch(fold === 'released' ? { releasedOpen: open } : fold === 'requirementsEnded' ? { requirementsEndedOpen: open } : { endedOpen: open }),
+    onFold: (fold, open) =>
+      patch(fold === 'released' ? { releasedOpen: open } : fold === 'requirementsEnded' ? { requirementsEndedOpen: open } : fold === 'earlier' ? { earlierOpen: open } : fold === 'later' ? { laterOpen: open } : fold === 'checks' ? { checksOpen: open } : { endedOpen: open }),
     onPlaceHold: () => depth?.hold.actions.onPlace?.(),
     onReleaseHold: (hold) => {
       const row = depth?.holds.status === 'ready' ? depth.holds.value.holds.find((entry) => entry.id === hold.id) : undefined
@@ -384,6 +392,11 @@ export function useTermsTab(input: TermsTabInput): TermsTabContainer {
       void navigator.clipboard?.writeText(words).catch(() => undefined)
       setNotice({ tone: 'info', words: said('ct.req.wordsCopied') })
     },
+    // ---- F-CT-516 (ct-w2 W2.2): the record's own identity window and VIES act (their results land in the record's notice area)
+    onCorrectIdentity: () => input.actions?.onDialog?.({ kind: 'identity', mode: 'correct' }),
+    onNewIdentity: () => input.actions?.onDialog?.({ kind: 'identity', mode: 'new' }),
+    onCheckVies: () => input.actions?.onCheckVies?.(),
+    onMoreChecks: () => input.moreHistory?.(),
   }
 
   return {
