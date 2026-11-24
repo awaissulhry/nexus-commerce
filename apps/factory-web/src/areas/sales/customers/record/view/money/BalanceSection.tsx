@@ -6,7 +6,7 @@ import { MetricStrip, type MenuItemDef, type Metric } from '@nexus/ui/components
 import { useLocale } from '../../../../../../lib/i18n/provider'
 import { money } from '../../../../quotes/model'
 import { Facts, GapRow } from '../../../../orders/record/money/view/parts'
-import { sentenceOf } from '../../../../orders/record/money/view/say'
+import { keepNumbers, sentenceOf } from '../../../../orders/record/money/view/say'
 import { word } from '../../../../orders/record/money/word'
 import { copyLinkTo } from '../../../../orders/record/shipments/view/hrefs'
 import { LineMenuButton } from '../../../../orders/record/view/LineMenu'
@@ -87,7 +87,7 @@ export function BalanceSection({ model, present, sayIn, unit, asOf, menu, failed
           {text}
         </Link>
       )
-    return need.code === 'priceDiffer' ? text : sentenceOf([text])
+    return need.code === 'priceDiffer' ? text : keepNumbers(sentenceOf([text]))
   }
   const items: MenuItemDef[] = [...menu, { id: 'link', label: say(word('cm.linkTo', { params: { section: title } })), onSelect: () => copyLinkTo('balance') }]
   const info = (

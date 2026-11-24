@@ -26,9 +26,6 @@ import { currenciesOf, daysLateOf, isFailed, isReading, type MoneyTabInput } fro
  * Every word of the customer's own catalogue is a `cm.*` key; a reused word names its catalogue (`orders:…`, `sales-customers-depth:…`).
  */
 
-/** The ageing row with the server's late-invoice count (S7, `cm-s`; optional: until it lands the open items count them). */
-type AgeingRowLate = AgeingRow & { readonly lateInvoices?: number | null }
-
 /** What the customer owes and holds in ONE currency (never added across currencies). Amounts: price grain only, else null. */
 export interface CurrencyFigures {
   readonly currency: string
@@ -70,7 +67,7 @@ export function figuresOf(input: MoneyTabInput): CurrencyFigures[] {
   for (const refund of refunds?.refundsDue ?? []) found.push(refund.currency)
   for (const note of refunds?.creditNotesToRefund ?? []) found.push(note.currency)
   return currenciesOf(found, input.party.currency).map((currency) => {
-    const rows = (ageing ?? []).filter((row) => row.currency === currency) as AgeingRowLate[]
+    const rows = (ageing ?? []).filter((row) => row.currency === currency)
     const lateRows = rows.filter((row) => (row.daysLate ?? 0) > 0 || (row.overdue ?? 0) > 0)
     const invoicesHere = (items ?? []).filter((item) => item.target === 'INVOICE' && item.currency === currency)
     const requestsHere = (items ?? []).filter((item) => item.target === 'DEPOSIT_REQUEST' && item.currency === currency)
@@ -242,8 +239,8 @@ const EMPTY_FIGURES: CurrencyFigures = { currency: '', openInvoices: 0, open: nu
  * the company term, split by company — one customer's own rows, never a filter over customers). Counts only: no amount crosses a company.
  */
 export function alsoOwesOf(input: MoneyTabInput): AlsoOwes[] {
-  const rows = (input.ageingElsewhere?.value ?? []) as AgeingRowLate[]
-  const byCompany = new Map<string, AgeingRowLate[]>()
+  const rows = input.ageingElsewhere?.value ?? []
+  const byCompany = new Map<string, AgeingRow[]>()
   for (const row of rows) if (row.invoices > 0 && row.company.id !== input.company?.id) byCompany.set(row.company.id, [...(byCompany.get(row.company.id) ?? []), row])
   return [...byCompany.values()]
     .map((own) => {

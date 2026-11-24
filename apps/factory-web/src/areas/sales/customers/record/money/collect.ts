@@ -101,12 +101,15 @@ export function requestKindOf(item: Pick<OpenItem, 'stepKind' | 'orderId' | 'due
   return order?.deposit.extraOpenDue && order.deposit.extraOpenDue === item.dueDate ? 'EXTRA' : 'DEPOSIT'
 }
 
-/** "3 d late" · "today" · "in 2 d" (null: no due day). */
+/**
+ * "3 days late" · "today" · "in 2 d" (null: no due day) — the catalogue's own day words (Z30): the customer's `cell.daysLate` (10-design
+ * §13.3) and the customers list's promise words (`customers-list prom.today`, `prom.in`), never a second word.
+ */
 export function dayTagOf(late: number | null): { readonly word: MoneyWord; readonly tone: 'danger' | 'warning' | 'neutral' } | null {
   if (late === null) return null
-  if (late > 0) return { word: word('cm.tag.late', { params: { count: late } }), tone: 'danger' }
-  if (late === 0) return { word: word('cm.tag.today'), tone: 'warning' }
-  return { word: word('cm.tag.in', { params: { count: -late } }), tone: 'neutral' }
+  if (late > 0) return { word: word('cell.daysLate', { params: { count: late } }), tone: 'danger' }
+  if (late === 0) return { word: word('customers-list:prom.today'), tone: 'warning' }
+  return { word: word('customers-list:prom.in', { params: { days: -late } }), tone: 'neutral' }
 }
 
 /** The stop in force on an invoice, else its newest reminder (the two reads joined by the invoice's id, in the browser). */

@@ -32,9 +32,6 @@ import './customer-money.css'
  * Draws its models (money/*.ts); reads nothing.
  */
 
-/** The catalogues the tab says words from (the shared parts' `orders`; the reused Finance, depth, parties and frame words). */
-export const CUSTOMER_MONEY_TAB_MESSAGES: readonly string[] = [...MONEY_TAB_NAMESPACES, 'parties', 'finance-payments-depth']
-
 export interface CustomerMoneyTabProps {
   readonly input: MoneyTabInput
   /** `/w/<company>`: every door names this customer. */
@@ -51,7 +48,7 @@ export interface CustomerMoneyTabProps {
 
 export function CustomerMoneyTab(props: CustomerMoneyTabProps) {
   return (
-    <WithMessages namespaces={CUSTOMER_MONEY_TAB_MESSAGES}>
+    <WithMessages namespaces={MONEY_TAB_NAMESPACES}>
       <CustomerMoneyBody {...props} />
     </WithMessages>
   )

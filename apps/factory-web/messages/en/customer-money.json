@@ -151,13 +151,6 @@
       "someLate": "some late",
       "openWith": "Open with {company} ›"
     },
-    "tag": {
-      "late_one": "{count} d late",
-      "late_other": "{count} d late",
-      "today": "today",
-      "in_one": "in {count} d",
-      "in_other": "in {count} d"
-    },
     "door": {
       "finance": "Open in Finance ›",
       "terms": "Terms & requirements ›",

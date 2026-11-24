@@ -24,8 +24,12 @@ import type { OpenOrderMoney } from '../../money/api'
 /** The `customer-money` catalogue: the tab's own words live under `cm.*` (the old tab's `tab.*` go in cm-w3). */
 export const CM = 'customer-money'
 
-/** The catalogues the tab says words from (the kit and the shared parts say `orders` words; a reused word names its catalogue). */
-export const MONEY_TAB_NAMESPACES = ['orders', CM, 'sales-customers-depth', 'finance-receivables', 'record-frame'] as const
+/**
+ * Every catalogue the tab says words from (the kit and the shared parts say `orders` words; a reused word names its catalogue): the
+ * tab's WithMessages loads exactly this list, and a test holds every `namespace:` the rules and views name inside it (Z29: a raw key can
+ * never show).
+ */
+export const MONEY_TAB_NAMESPACES = ['orders', CM, 'sales-customers-depth', 'finance-receivables', 'finance-payments-depth', 'record-frame', 'parties', 'customers-list'] as const
 
 export interface MoneyTabCan {
   /** money.price — every amount (the server drops them without it). */

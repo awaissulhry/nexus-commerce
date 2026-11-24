@@ -151,13 +151,6 @@
       "someLate": "alcune scadute",
       "openWith": "Apri con {company} ›"
     },
-    "tag": {
-      "late_one": "{count} g di ritardo",
-      "late_other": "{count} g di ritardo",
-      "today": "oggi",
-      "in_one": "tra {count} g",
-      "in_other": "tra {count} g"
-    },
     "door": {
       "finance": "Apri in Amministrazione ›",
       "terms": "Condizioni e requisiti ›",

@@ -117,7 +117,7 @@ function input(role: Role = 'owner', over: Partial<MoneyTabInput> = {}): MoneyTa
   }
 }
 
-const sayIn = (locale: Locale, currency = 'EUR') => sayOf(createScopedTranslator(locale, messagesFor(locale, [...MONEY_TAB_NAMESPACES, 'parties', 'finance-payments-depth']), CM), locale, currency)
+const sayIn = (locale: Locale, currency = 'EUR') => sayOf(createScopedTranslator(locale, messagesFor(locale, MONEY_TAB_NAMESPACES), CM), locale, currency)
 const lineOf = (answer: CustomerAnswer, locale: Locale, at = 0) => sentenceOf(answer.lines[at]!.parts.map(sayIn(locale, answer.lines[at]!.currency ?? 'EUR')))
 const m = (minor: number, locale: Locale, currency = 'EUR') => money(minor, currency, locale)
 const d = (day: string, locale: Locale) => formatDate(dayInstant(day), { locale })
@@ -225,7 +225,7 @@ describe('F-CM-104: Balance (10-design §5.1; Z4, Z11, Z24)', () => {
     expect(moneyBadgeOf({ ...base, ageing: READING, openItems: busy.openItems })).toBeNull()
     expect(moneyBadgeOf({ ...base, ageing: partReady([]), openItems: partReady({ items: [], creditBalance: [] }) })).toBeUndefined()
     // The server's count (S7) wins over the open items' due days when every row has it.
-    expect(moneyBadgeOf({ ...base, ageing: partReady([{ ...ageingRow(), lateInvoices: 2 } as AgeingRow]), openItems: busy.openItems })).toBe(3)
+    expect(moneyBadgeOf({ ...base, ageing: partReady([ageingRow({ lateInvoices: 2 })]), openItems: busy.openItems })).toBe(3)
   })
 })
 
@@ -379,6 +379,21 @@ describe('F-CM-101: the views (cm-w1 W1.3; 10-design §1, §2; 18-lead-settles L
     expect(view('CollectSection.tsx')).toContain("const head = { id: kitId('collect')")
     // A shared part is never redrawn here (no copy of its markup), and the kit is used in place.
     for (const file of ['CustomerMoneyTab.tsx', 'BalanceSection.tsx', 'CollectSection.tsx']) expect(view(file), file).not.toMatch(/className="fw-om-(head|gap|facts|fold|il)\b/)
+  })
+
+  it('Z29: the wrapper loads EVERY catalogue the rules, the views and the shared parts name — a raw key can never show', () => {
+    expect(view('CustomerMoneyTab.tsx')).toContain('<WithMessages namespaces={MONEY_TAB_NAMESPACES}>')
+    const named = new Set<string>(['orders' /* the kit, the shared parts, the line menu */])
+    const files = [
+      ...readdirSync(new URL('./', import.meta.url)).filter((name) => /\.tsx?$/.test(name) && !name.includes('vitest')).map((name) => source(`./${name}`)),
+      ...readdirSync(new URL('../view/money/', import.meta.url)).filter((name) => /\.tsx?$/.test(name)).map(view),
+    ]
+    const code = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '') // the words in comments are not keys
+    for (const text of files) for (const match of code(text).matchAll(/['`]([a-z][a-z-]*):[a-zA-Z]/g)) named.add(match[1]!)
+    for (const namespace of named) expect(MONEY_TAB_NAMESPACES as readonly string[], namespace).toContain(namespace)
+    // Z30: the day tags are the catalogue's own words, never a second word.
+    expect(source('./collect.ts')).toContain("word('cell.daysLate', { params: { count: late } })")
+    expect(source('./collect.ts')).toContain("word('customers-list:prom.in', { params: { days: -late } })")
   })
 
   it('the tab says its own words from customer-money and names the catalogue of every word it reuses (Z15: never a customer word of `orders`)', () => {
