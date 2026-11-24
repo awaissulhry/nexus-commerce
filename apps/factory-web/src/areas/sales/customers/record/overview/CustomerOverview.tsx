@@ -2,6 +2,8 @@
 
 import { useMemo, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
+import { withheldParts } from '@nexus/factory-domain/sales/customer-360/glance'
+import { useOfficeSession } from '../../../../../lib/session/context'
 import { romeToday } from '../../../../finance/costing/model'
 import type { Party } from '../../../../parties/_shared/api'
 import type { PartyRecordModel } from '../../../../parties/_shared/model'
@@ -56,6 +58,9 @@ export interface CustomerOverviewProps {
 export function CustomerOverview({ party, model, actions, reads, counts, before, money, standing, onWindow, onRetry, fields, supervisor }: CustomerOverviewProps) {
   const router = useRouter()
   const glance = useCustomerGlance()
+  const session = useOfficeSession()
+  // The glance's parts this reader may read — the API's own rule (the domain's PART_PERMISSIONS), so a failed glance still knows them.
+  const withheld = useMemo(() => withheldParts((permission) => session.permissions.includes(permission)), [session.permissions])
   const today = useMemo(() => romeToday(), [])
   const { prefix } = model
   const id = party.id
@@ -73,6 +78,9 @@ export function CustomerOverview({ party, model, actions, reads, counts, before,
     block: model.can.block,
     vies: model.can.vies,
     workorders: model.can.workorders === true,
+    samples: !withheld.includes('samples'),
+    repairs: !withheld.includes('repairs'),
+    credit: !withheld.includes('credit'),
   }
   const input: OverviewInput = {
     prefix,

@@ -252,7 +252,7 @@ function Cards({ model, band, before = [], actions, supervisor, fields }: Custom
         <OverviewCard title={t('customers.overview.facts.title')} aside={facts.edit ? <DoorButton door={facts.edit} words={words} actions={actions} icon={<Pencil size={13} aria-hidden />} /> : undefined}>
           <FactCols>
             {facts.rows.map((row) => (
-              <FactView key={row.key} row={row} words={words} actions={actions} />
+              <FactView key={row.key} row={row} words={words} unread={kit.unreadOne} actions={actions} />
             ))}
           </FactCols>
         </OverviewCard>
@@ -414,8 +414,8 @@ function RequestsView({ card, title, problem, words, ageOfStart, actions }: { ca
   )
 }
 
-/** One fact: the kit's `Fact` — its label (and tag), its value, its step's button (held by state with words). */
-function FactView({ row, words, actions }: { row: FactRow; words: Words; actions?: OverviewActions | undefined }) {
+/** One fact: the kit's `Fact` — its label (and tag), its value (still read: a skeleton; failed: the kit's "Could not be read"), its step's button (held by state with words). */
+function FactView({ row, words, unread, actions }: { row: FactRow; words: Words; unread: string; actions?: OverviewActions | undefined }) {
   const label = row.labelTag ? (
     <>
       {words.said(row.label)} <Tag tone="neutral">{words.said(row.labelTag)}</Tag>
@@ -423,7 +423,16 @@ function FactView({ row, words, actions }: { row: FactRow; words: Words; actions
   ) : (
     words.said(row.label)
   )
-  const value = row.empty ? <span className="fw-ro-hint">{row.parts.map((part) => words.said(part.say)).join(' · ')}</span> : <ValueView parts={row.parts} under={row.under} words={words} actions={actions} />
+  const value =
+    row.state === 'reading' ? (
+      <Skeleton height={16} width={64} />
+    ) : row.state === 'unread' ? (
+      <span className="fw-ro-hint">{unread}</span>
+    ) : row.empty ? (
+      <span className="fw-ro-hint">{row.parts.map((part) => words.said(part.say)).join(' · ')}</span>
+    ) : (
+      <ValueView parts={row.parts} under={row.under} words={words} actions={actions} />
+    )
   const step = row.door
   return (
     <Fact

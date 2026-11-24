@@ -222,7 +222,8 @@ export function datesOf(input: OverviewInput): DatesCard | null {
   if (vies.state === 'VALID' && vies.validUntil) put({ key: 'vies', label: ov('dates.vies'), parts: [{ say: daySay(vies.validUntil) }] }, vies.validUntil, false)
 
   const rows = [...dated].sort((a, b) => Number(b.late) - Number(a.late) || (a.at ?? '9999').localeCompare(b.at ?? '9999')).map((entry) => entry.row)
-  const failed = input.glance.status === 'error' ? ov('dates.failed') : null
+  // The failed line names the sample dates: only for a reader who may read them (a part without its right is left out).
+  const failed = can.samples && input.glance.status === 'error' ? ov('dates.failed') : null
   if (rows.length === 0 && !reading && failed === null) return null
   return { rows, reading: rows.length === 0 && reading, failed }
 }
@@ -365,15 +366,21 @@ export function linkedOf(input: OverviewInput): LinkedCard {
     }
   }
 
-  // Sample rounds and repairs: the glance's own counts (null: withheld — left out), the next / the oldest one named.
+  // Sample rounds and repairs: the glance's own counts, each under its own right (without it: left out); the glance still read: the
+  // row's skeleton; failed: "Could not be read" in the row; null in the answer: withheld — left out. The next / the oldest one named.
   const glance = glanceOf(input.glance)
-  if (glance?.samples) {
+  const glanceState = (key: string, label: Say): boolean => {
+    if (input.glance.status === 'ready') return false
+    stated(key, label, input.glance.status === 'loading' ? 'reading' : 'unread')
+    return true
+  }
+  if (can.samples && !glanceState('samples', ov('linked.samples')) && glance?.samples) {
     const next = earliestKeptOf('samples', glance.samples.rows.length >= glance.samples.count, glance.samples.rows, (round) => round.dueDate)
     const said: Param[] = [ov('linked.inProgress', { count: glance.samples.count })]
     if (next) said.push(next.at.slice(0, 10) === input.today ? ov('linked.nextDueToday', { number: next.item.number }) : ov('linked.nextDue', { number: next.item.number, date: dayOf(next.at) }))
     kind('samples', ov('linked.samples'), glance.samples.count > 0 ? [{ say: joined(said), door: href(samplesDoor(prefix, id)) }] : [])
   }
-  if (glance?.repairs) {
+  if (can.repairs && !glanceState('repairs', ov('linked.repairs')) && glance?.repairs) {
     const oldest = earliestKeptOf('repairs', glance.repairs.rows.length >= glance.repairs.count, glance.repairs.rows, (repair) => repair.createdAt)
     const said: Param[] = [ov('linked.inProgress', { count: glance.repairs.count })]
     if (oldest) said.push(ov('linked.oldestOpened', { number: oldest.item.number, date: dayOf(oldest.at) }))
@@ -468,8 +475,14 @@ export function factsOf(input: OverviewInput): FactsCard {
     rows.push({ key: 'identity', label: say('identity.title'), parts: [{ say: joined(said), door: identityDoor }, { say: ov('facts.validFrom', { date: dayOf(identity.validFrom) }), quiet: true }] })
   } else rows.push({ key: 'identity', label: say('identity.title'), parts: [{ say: say('list.noIdentity'), door: identityDoor }] })
 
-  // The requirements in force and the credit: the glance's (the credit part is absent without sales.credit.view).
+  // The requirements in force and the credit: the glance's (the credit part is absent without sales.credit.view). The glance still
+  // read: the fact's skeleton; failed: "Could not be read" in the fact (the requirements need no right beyond the page's own).
   const glance = glanceOf(input.glance)
+  if (input.glance.status !== 'ready') {
+    const state = input.glance.status === 'loading' ? 'reading' : 'unread'
+    rows.push({ key: 'requirements', label: say('customers.requirementsLabel'), parts: [], state })
+    if (can.credit) rows.push({ key: 'credit', label: say('customer-money:tab.credit'), parts: [], state })
+  }
   if (glance) {
     const count = glance.requirements.count
     rows.push(
@@ -477,7 +490,7 @@ export function factsOf(input: OverviewInput): FactsCard {
         ? { key: 'requirements', label: say('customers.requirementsLabel'), parts: [{ say: text(String(count)), door: href(termsDoor(prefix, id, 'requirements')) }] }
         : { key: 'requirements', label: say('customers.requirementsLabel'), parts: [{ say: depth('reqSide.none') }], empty: true },
     )
-    const credit = glance.credit
+    const credit = can.credit ? glance.credit : null
     if (credit) {
       const door: Pick<RowPart, 'door'> = can.moneyTab ? { door: href(moneyDoor(prefix, id, 'credit')) } : {}
       const over = can.price && credit.state === 'OVER' ? overAmountsOf(credit) : null

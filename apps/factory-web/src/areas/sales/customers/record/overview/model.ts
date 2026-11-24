@@ -146,6 +146,14 @@ export interface OverviewCan {
   readonly vies: boolean
   /** workorders.view: "Work orders of <customer> ›". */
   readonly workorders: boolean
+  /**
+   * The glance's own parts, each with the right the API asks for it (the domain's `withheldParts`): sales.samples.view (Sample
+   * rounds), sales.repairs.view (Repairs), sales.credit.view (the Credit fact). With it, a glance still read says so in the row and a
+   * failed one says "Could not be read"; without it the row is left out — whatever the glance's state.
+   */
+  readonly samples: boolean
+  readonly repairs: boolean
+  readonly credit: boolean
 }
 
 /** The money reads the page already makes (../../money/hooks.ts), each under its own right. */
@@ -343,6 +351,8 @@ export interface FactRow {
   /** Quiet words (no note, no requirement). */
   readonly empty?: boolean
   readonly door?: LabelledDoor
+  /** The value is still read (a skeleton) or could not be read ("Could not be read", the kit's word of one). */
+  readonly state?: 'reading' | 'unread'
 }
 export interface FactsCard {
   readonly rows: readonly FactRow[]

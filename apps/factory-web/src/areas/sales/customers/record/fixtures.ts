@@ -811,14 +811,17 @@ function OverviewDesign({ record, party, money, depth, supervisor }: { record: P
     groups: { WRITING: can.orders ? 2 : null, TO_ANSWER: toAnswer, PREPARING: can.quotes ? 1 : null, APPROVAL: can.quotes ? 0 : null, WAITING_CUSTOMER: can.quotes ? 2 : null, ORDER_WAITS: orderWaits, WON: can.quotes ? 4 : null, MOVED: can.inquiries === true ? 0 : null, LOST: can.quotes ? 1 : null },
     byKind: { quotes: null, requests: null, portalOrders: null, drafts: null },
   }
+  // The glance's parts this case's reader may read: what its own answer withholds (a glance not in yet: every part, as the Owner).
+  const glanceRead = depth?.glance ?? ready(plainGlance(party))
+  const mayRead = (part: 'samples' | 'repairs' | 'credit'): boolean => glanceRead.status !== 'ready' || !glanceRead.value.withheld.includes(part)
   const input: OverviewInput = {
     prefix: record.prefix,
     party,
-    can: { orders: can.orders, quotesTab, moneyTab: can.money === true, receivables: moneyCan.receivables, price: can.price, returns: moneyCan.returns, complaints: moneyCan.complaints, partners: can.partners === true, manage: can.manage, block: can.block, vies: can.vies, workorders: can.workorders === true },
+    can: { orders: can.orders, quotesTab, moneyTab: can.money === true, receivables: moneyCan.receivables, price: can.price, returns: moneyCan.returns, complaints: moneyCan.complaints, partners: can.partners === true, manage: can.manage, block: can.block, vies: can.vies, workorders: can.workorders === true, samples: mayRead('samples'), repairs: mayRead('repairs'), credit: mayRead('credit') },
     today: TODAY,
     reads,
     counts: { counts, failed: false },
-    glance: depth?.glance ?? ready(plainGlance(party)),
+    glance: glanceRead,
     money: money ? { ageing: money.ageing, returns: money.returns, complaints: money.complaints, orders: money.orders ?? null, returnsHref: money.returnsHref } : { ageing: loading(), returns: loading(), complaints: loading(), orders: null, returnsHref: null },
     // This customer's row of the joined read (asked only with orders.view).
     standing: can.orders ? { status: 'ready', value: { partyId: party.id, orders: 9, phases: [], late: 1, waitsForYes: 0, depositOpen: 1, requests: { open: 2, firstId: null }, replies: 3, customerUrgent: { count: 0, byCompany: [] }, priority: { top: 0, high: 0 }, nextPromise: '2026-11-14', lastOrderDate: '2026-10-21' } } : OFF_READ,

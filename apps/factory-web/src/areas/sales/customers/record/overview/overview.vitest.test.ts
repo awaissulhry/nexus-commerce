@@ -66,7 +66,7 @@ const OVER: NonNullable<Glance['credit']> = { state: 'OVER', currency: 'EUR', li
 
 const NO_MONEY: OverviewMoney = { ageing: loaded<AgeingRow>([]), returns: loaded([]), complaints: loaded([]), orders: loaded([]), returnsHref: null }
 const LATE = OVERDUE_ROWS.filter((row) => row.customer.id === ID)
-const CAN: OverviewCan = { orders: true, quotesTab: true, moneyTab: true, receivables: true, price: true, returns: true, complaints: true, partners: true, manage: true, block: true, vies: true, workorders: true }
+const CAN: OverviewCan = { orders: true, quotesTab: true, moneyTab: true, receivables: true, price: true, returns: true, complaints: true, partners: true, manage: true, block: true, vies: true, workorders: true, samples: true, repairs: true, credit: true }
 const input = (over: Partial<OverviewInput> = {}): OverviewInput => ({
   prefix: '/w/DEMO',
   party: party(),
@@ -496,6 +496,30 @@ describe('the cards: People, Next dates, Requests & changes, Linked records, Cus
     const repairsSaid = (value: NonNullable<Glance['repairs']>): string => valueOf(rowOf(linkedOf(input({ glance: ready(glance({ repairs: value })) })).rows, 'repairs'))
     expect(repairsSaid(repairs)).toMatch(/^1 in progress · oldest RP-2026-0007, opened \d{2}\/10\/2026$/)
     expect(repairsSaid({ ...repairs, count: 7 })).toBe('7 in progress')
+  })
+
+  it('the glance\'s parts (10-design §7, §9; picture 20, failed): still read → the row\'s skeleton, failed → "Could not be read" in the row; without the part\'s own right → left out', () => {
+    const stateOf = (rows: readonly { readonly key: string; readonly state?: 'reading' | 'unread' }[], key: string) => rows.find((row) => row.key === key)?.state ?? null
+    for (const [read, state] of [[LOADING, 'reading'], [failedRead('problem.unavailable'), 'unread']] as const) {
+      const linked = linkedOf(input({ glance: read })).rows
+      expect(stateOf(linked, 'samples'), state).toBe(state)
+      expect(stateOf(linked, 'repairs'), state).toBe(state)
+      const facts = factsOf(input({ glance: read })).rows
+      expect(stateOf(facts, 'requirements'), state).toBe(state)
+      expect(stateOf(facts, 'credit'), state).toBe(state)
+      // Without its right a part is never named, whatever the glance's state (the requirements need no right beyond the page's).
+      const walled = { ...CAN, samples: false, repairs: false, credit: false }
+      expect(linkedOf(input({ glance: read, can: walled })).rows.some((row) => row.key === 'samples' || row.key === 'repairs'), state).toBe(false)
+      expect(factsOf(input({ glance: read, can: walled })).rows.map((row) => row.key).filter((key) => key === 'requirements' || key === 'credit'), state).toEqual(['requirements'])
+    }
+    // The facts keep their place in the card while the glance is out (requirements, then credit, then since).
+    expect(factsOf(input({ glance: LOADING })).rows.map((row) => row.key).slice(4, 8)).toEqual(['identity', 'requirements', 'credit', 'since'])
+    // Read: the credit only with its right, even when the answer carries it.
+    expect(factsOf(input({ glance: ready(glance({ credit: OVER })), can: { ...CAN, credit: false } })).rows.some((row) => row.key === 'credit')).toBe(false)
+    // Next dates' failed line names the sample dates: only for a reader who may read them.
+    const calm: Partial<OverviewInput> = { reads: reads({ board: board({ COMPLETED: 2 }), ...QUIET }), standing: { status: 'ready', value: standing({ nextPromise: null }) } }
+    expect(datesOf(input({ ...calm, glance: failedRead('problem.unavailable') }))?.failed).not.toBeNull()
+    expect(datesOf(input({ ...calm, glance: failedRead('problem.unavailable'), can: { ...CAN, samples: false } }))).toBeNull()
   })
 
   it('Customer facts: ONE Edit (parties.manage); the credit only when the read carries it; what is to complete with today\'s own step', () => {
