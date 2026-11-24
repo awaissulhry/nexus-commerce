@@ -11,7 +11,7 @@ import { dayInstant } from '../../../orders/model'
 import { money } from '../../../quotes/model'
 import { sentenceOf } from '../../../orders/record/money/view/say'
 import { amountsOf, type MoneyWord } from '../../../orders/record/money/word'
-import type { Glance } from '../../depth/api'
+import type { CompanyTerms, Glance } from '../../depth/api'
 import { balanceOf, moneyBadgeOf } from './balance'
 import { collectOf, COLLECT_SHOWN, IN_PLACE_ACTS } from './collect'
 import { documentQueryOf, documentsOf, DOCUMENTS_SHOWN, paymentWordOf } from './documents' // F-CM-202
@@ -936,6 +936,33 @@ describe('cm-fx4: the walk\'s gaps', () => {
     expect(balanceOf(input('owner'), PREFIX).facts.find((fact) => fact.key === 'paymentTerms')!.value).toEqual({ key: 'cm.text', params: { text: '30 days end of month' } })
     for (const file of ['./balance.ts', './credit.ts']) expect(source(file), file).toContain('paymentTermsOf(')
     expect(source('./balance.ts')).not.toContain('input.party.paymentTerms ?')
+  })
+
+  // F-CT-523 (customer Terms & requirements, ct-w2 W2.3; 13-backend §4, Z32): the ONE helper of the three tabs — a company's own row wins.
+  it('a company\'s own terms win: Balance and Credit & terms say this company\'s payment terms and deposit, in the page\'s language', () => {
+    const terms = partReady({ paymentTerms: { name: 'Deposit 30% at acceptance, balance at delivery' }, paymentTermsText: null, currency: 'EUR', defaultDepositPct: '30', invoiceTiming: 'ON_SHIPMENT' } as unknown as CommercialTerms)
+    const named = { id: 'pt-60', code: 'NET60', name: 'Net 60 days', nameI18n: { en: 'Net 60 days', it: 'Netto 60 giorni' }, summary: { en: 'Paid 60 days after the invoice', it: 'Pagato 60 giorni dopo la fattura' }, deposit: null }
+    const own = (companyId: string) => ({
+      company: { id: companyId, code: 'SEED-X', name: 'Seed Company X' },
+      terms: { paymentTermsLabel: { code: 'NET60', name: 'Net 60 days' }, priceListLabel: null },
+      inForce: { paymentTermsId: 'pt-60', paymentTermsText: null, priceListId: null, depositPct: '50', poNumberRequired: false, source: { paymentTerms: 'COMPANY', priceList: 'PARTY', deposit: 'COMPANY' }, paymentTerms: named, priceList: null },
+    })
+    const companyTerms = partReady({ tenantWide: false, companies: [own(COMPANY_A.id), own('co-b')] } as unknown as CompanyTerms)
+    for (const locale of ['en', 'it'] as const) {
+      const ruled = input('owner', { terms, companyTerms, locale })
+      const balanceFact = balanceOf(ruled, PREFIX).facts.find((fact) => fact.key === 'paymentTerms')!
+      const credit = creditOf(ruled, null, terms, PREFIX)
+      expect(balanceFact.value, locale).toEqual(credit.facts.find((fact) => fact.key === 'paymentTerms')!.value)
+      expect(balanceFact.value, locale).toEqual({ key: 'cm.text', params: { text: locale === 'en' ? 'Net 60 days' : 'Netto 60 giorni' } })
+      expect(sayIn(locale)(credit.facts.find((fact) => fact.key === 'deposit')!.value), locale).toBe(sayIn(locale)({ key: 'cm.credit.pct', pcts: { pct: '50' } }))
+    }
+    // Another company's own row never answers for this one: without this company's row, the customer's own terms.
+    const elsewhere = partReady({ tenantWide: false, companies: [own('co-b'), { ...own(COMPANY_A.id), terms: null, inForce: { ...own(COMPANY_A.id).inForce, source: { paymentTerms: 'PARTY', priceList: 'PARTY', deposit: 'PARTY' }, depositPct: '30', paymentTerms: null } }] } as unknown as CompanyTerms)
+    expect(balanceOf(input('owner', { terms, companyTerms: elsewhere }), PREFIX).facts.find((fact) => fact.key === 'paymentTerms')!.value).toEqual({ key: 'cm.text', params: { text: 'Deposit 30% at acceptance, balance at delivery' } })
+    // While the company terms are read Balance says none (never one text, then another).
+    expect(balanceOf(input('owner', { terms, companyTerms: READING }), PREFIX).facts.map((fact) => fact.key)).not.toContain('paymentTerms')
+    expect(source('./model.ts')).toContain("from '../terms/in-force'")
+    expect(source('./use-customer-money-tab.ts')).toContain('readCompanyTerms(api, partyId, signal)')
   })
 
   it('M-3: a late need is drawn in danger (the shared line\'s optional tone); the order page passes none', () => {

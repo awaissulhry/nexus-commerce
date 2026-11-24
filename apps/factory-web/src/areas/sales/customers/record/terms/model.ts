@@ -1,7 +1,7 @@
 import { formatDate } from '../../../../../lib/i18n/format'
 import { INTL_LOCALE, type Locale } from '../../../../../lib/i18n/locales'
 import type { Translate } from '../../../../../lib/i18n/messages'
-import { languageName } from '../../../../parties/_shared/model'
+import { countryName, languageName } from '../../../../parties/_shared/model'
 import { money } from '../../../quotes/model'
 import { pctOf } from '../../../orders/record/money/view/say'
 import type { SectionId } from '../../../orders/record/production/layout'
@@ -104,6 +104,8 @@ export interface Said {
   readonly pcts?: Readonly<Record<string, string>>
   readonly amounts?: Readonly<Record<string, { readonly minor: number; readonly currency: string }>>
   readonly languages?: Readonly<Record<string, string>>
+  /** F-CT-514 (W2.2): country codes said as their names ("IT" → "Italy" · "Italia"). */
+  readonly countries?: Readonly<Record<string, string>>
   readonly words?: Readonly<Record<string, Said>>
   readonly lower?: Readonly<Record<string, Said>>
   readonly lists?: Readonly<Record<string, readonly string[]>>
@@ -124,6 +126,7 @@ export function sayOf(t: Translate, locale: Locale): Say {
     for (const [name, pct] of Object.entries(words.pcts ?? {})) values[name] = pctOf(pct, locale)
     for (const [name, amount] of Object.entries(words.amounts ?? {})) values[name] = money(amount.minor, amount.currency, locale)
     for (const [name, code] of Object.entries(words.languages ?? {})) values[name] = languageName(code, INTL_LOCALE[locale])
+    for (const [name, code] of Object.entries(words.countries ?? {})) values[name] = countryName(code, INTL_LOCALE[locale])
     for (const [name, inner] of Object.entries(words.words ?? {})) values[name] = say(inner)
     for (const [name, inner] of Object.entries(words.lower ?? {})) values[name] = say(inner).toLocaleLowerCase(INTL_LOCALE[locale])
     for (const [name, names] of Object.entries(words.lists ?? {})) values[name] = list.format(names)

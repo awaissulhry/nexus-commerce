@@ -16,7 +16,7 @@ import type { CustomerMoneyModel } from '../money/overview'
 import { PortalAccess } from '../portal/PortalAccess'
 import type { PortalPart } from '../portal/view/PortalAccessView' // F-SA-274
 // B-W2b-324: Customer 360 and customers in depth (the glance, requirements, the hold, PO number, consent and personal data).
-import { CustomerDepthProvider, customerDepthSlot } from '../depth/CustomerDepth'
+import { CustomerDepthProvider } from '../depth/CustomerDepth'
 import { useCustomerGlance } from '../depth/CustomerDepth' // F-CM-104: the Money tab's credit standing (the hold, over the limit)
 import { CustomerMoney } from './money/CustomerMoney' // F-CM-104: the Money tab's container
 import { CustomerRecordView } from './view/CustomerRecordView'
@@ -102,7 +102,6 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
     // B-W2b-180: Portal access (`?tab=portal`).
     // F-SA-274: Portal settings draws its settings, preview, limits and requests; the people with access are People & addresses'.
     portal: (party) => <PortalAccess side="customers" party={{ id: party.id, name: party.tradeName ?? party.legalName, companyId: party.companyId }} parts={PORTAL_SETTINGS_PARTS} />,
-    depth: (party) => customerDepthSlot(party), // F-CT-405: the reload reaches the depth through useCustomerPrivacy below
   })
   const task = useCustomerTask(partyId, record.party?.code ?? null)
   // ---- F-SA-276: the Work tab's reads (its strip and the tab's count, on every tab), the row the dock follows on Work (and on Quotes &
@@ -241,8 +240,8 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
   // F-CT-405 (customer page › Terms & requirements, lane ct-; 13-backend §6.3; Z5): the tab's container, built on every tab (it reads only
   // while Terms shows), its view only on `?tab=terms`; today's Requirements and Tax identity cards stand under it until ct-w2.
   const termsDepth = useCustomerTerms(record.party)
-  const terms = useTermsTab({ partyId, party: record.party, model: record.model, reload: record.reload, depth: termsDepth, enabled: tab === 'terms' })
-  const termsTab = named && record.party && tab === 'terms' ? <TermsTab model={terms.model} actions={terms.actions} hold={terms.hold} /> : null
+  const terms = useTermsTab({ partyId, party: record.party, model: record.model, reload: record.reload, actions: record.actions /* F-CT-516 */, moreHistory: record.moreHistory, depth: termsDepth, enabled: tab === 'terms' })
+  const termsTab = named && record.party && tab === 'terms' ? <TermsTab model={terms.model} actions={terms.actions} hold={terms.hold} requirements={terms.requirementsWindow /* F-CT-508 */} /> : null
   const termsNotice = <TermsNotices notices={terms.notices} />
   // F-CT-405: end
   return (
@@ -250,7 +249,7 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
       {windows /* F-SA-278 */}
       {/* F-OF-301 (T): the docked order's Versions… — the page's ONE depth window (as on the order page). */}
       <DepthDialogs depth={customerDock.fileDepth.model} actions={customerDock.fileDepth.actions} />
-      <CustomerRecordView model={recordModel /* F-CA-118 */} actions={record.actions} thread={dock /* F-SA-276 */} threadButton={threadButton /* F-SA-279 */} work={workTab} workCount={work.attention} quotesIncoming={quotesTab /* F-SA-277 */} overviewTab={overviewTab /* F-CO-102 */} printThread={record.printThread} termsTab={termsTab /* F-CT-405 */} termsNotice={termsNotice /* F-CT-405 */} portal={record.portal} money={money} depth={record.depth} onAddTask={task.open} taskDialog={task.dialog} peopleTab={peopleTab /* F-CA-118 */} peopleBadge={peopleBadge /* F-CA-118 */} peopleNotice={peopleNotice /* F-CA-118 */} {...doors /* F-CP-104 */} priceDiffer={priceDifferOf(work.prices) /* F-CP-141 */} quotesBadge={quotesBadge /* F-CQ-302 */} quotesTabNote={quotesTabNote && tab === 'work' /* F-CQ-306 */} moneyTab={moneyTab /* F-CM-104 */} moneyTabNote={moneyTabNote && tab === 'work' /* F-CM-104 */} />
+      <CustomerRecordView model={recordModel /* F-CA-118 */} actions={record.actions} thread={dock /* F-SA-276 */} threadButton={threadButton /* F-SA-279 */} work={workTab} workCount={work.attention} quotesIncoming={quotesTab /* F-SA-277 */} overviewTab={overviewTab /* F-CO-102 */} printThread={record.printThread} termsTab={termsTab /* F-CT-405 */} termsNotice={termsNotice /* F-CT-405 */} portal={record.portal} money={money} onAddTask={task.open} taskDialog={task.dialog} peopleTab={peopleTab /* F-CA-118 */} peopleBadge={peopleBadge /* F-CA-118 */} peopleNotice={peopleNotice /* F-CA-118 */} {...doors /* F-CP-104 */} priceDiffer={priceDifferOf(work.prices) /* F-CP-141 */} quotesBadge={quotesBadge /* F-CQ-302 */} quotesTabNote={quotesTabNote && tab === 'work' /* F-CQ-306 */} moneyTab={moneyTab /* F-CM-104 */} moneyTabNote={moneyTabNote && tab === 'work' /* F-CM-104 */} />
     </>
   )
 }

@@ -129,13 +129,14 @@ export default defineStage({
       await flow.shot(page, 'customer-dock-all')
     })
 
-    await flow.step('payment terms on the identity card', async () => {
-      // F-SA-271 (sales page plan, pick R5): a customer opens on Work for Sales; the identity card is the Overview's.
-      await sales.go(`/sales/customers/${party.id}?tab=overview`)
-      await press(page.getByRole('button', { name: 'Edit', exact: true }).first())
-      await dialog(page).getByRole('textbox', { name: 'Payment terms', exact: true }).fill('Bonifico 30 gg d.f.')
-      await answerOf(page, 'PATCH', /^\/parties\/[0-9a-f-]+$/, () => press(dialog(page).getByRole('button', { name: 'Save' })))
-      await expect(page.getByText('Saved.').first()).toBeVisible()
+    // F-CT-527 (customer page › Terms & requirements, ct-w2 W2.3; Z8): the payment terms have ONE editor — Change terms… on Terms &
+    // requirements (the Edit window no longer carries them): a term of the library (the base seed's BB30FM), PATCH …/commercial-terms.
+    await flow.step('payment terms on Terms & requirements: Change terms… picks a term of the library', async () => {
+      await sales.go(`/sales/customers/${party.id}?tab=terms#party-commercial`)
+      await press(page.getByRole('button', { name: 'Change terms…', exact: true }).first())
+      await dialog(page).getByRole('combobox', { name: 'Payment terms', exact: true }).selectOption({ label: 'BB30FM · Bank transfer 30 days end of month' })
+      await answerOf(page, 'PATCH', /^\/parties\/[0-9a-f-]+\/commercial-terms$/, () => press(dialog(page).getByRole('button', { name: 'Save terms', exact: true })))
+      await expect(page.getByText('Commercial terms saved.', { exact: false }).first()).toBeVisible()
     })
 
     // ---- co T.3 (customer page › Overview, co-w1 / co-w2; 15-steps T.3): the Overview on the seeded customer, WRITING NOTHING — its
@@ -274,7 +275,8 @@ export default defineStage({
 
     await flow.step('VIES: the tax tab says an Italian number is not a VIES question (EU numbers outside Italy only)', async () => {
       await sales.go(`/sales/customers/${party.id}?tab=tax`)
-      await expect(page.getByText('VIES checks EU VAT numbers outside Italy. This party has none to check.')).toBeVisible()
+      // F-CT-518 (ct-w2 W2.2): the old tax tab opens Terms & requirements; its Tax identity section says it in ONE quiet line.
+      await expect(page.getByText('VIES is not needed: it checks EU VAT numbers outside Italy.')).toBeVisible()
       await expect(page.getByRole('button', { name: 'Check VIES' })).toHaveCount(0)
       await flow.shot(page, 'tax-vies')
     })

@@ -108,7 +108,8 @@ export function useCustomerDepth(partyId: string) {
 
   const loadTab = useCallback(() => {
     // F-SA-271: the glance also on Money (the credit) and People & addresses (riders and profiles).
-    if (tab === 'overview') void loadGlance()
+    // F-CT-525 (customer Terms & requirements, ct-w2 W2.3; Z32): the Overview also reads the terms per company (its Payment fact).
+    if (tab === 'overview') void Promise.all([loadGlance(), loadTerms()])
     // F-CM-301 (customer MONEY tab, 13-backend §4.2): Money also reads the holds — Release… needs the hold's version (the glance has none).
     else if (tab === 'money') void Promise.all([loadGlance(), loadHolds()])
     // B-TH-260: Terms & requirements reads the hold, the PO-number terms and the requirements in force together.
@@ -179,16 +180,36 @@ export function useCustomerDepth(partyId: string) {
   const [reqDialog, setReqDialog] = useState<RequirementDialog | null>(null)
   const [styles, setStyles] = useState<Read<readonly StyleOption[]> | null>(null)
   const [files, setFiles] = useState<Read<readonly PartyFile[]> | null>(null)
-  const loadPickers = () => {
-    if (can.styles && styles === null) {
+  // F-CT-502 (customer Terms & requirements, ct-w2 W2.1; S1): the style picker searches on the server — our own styles and THIS customer's
+  // (`forCustomer`), one search per typed pause (300 ms; an older answer never lands over a newer one); the styles picked stay chosen.
+  const [styleQuery, setStyleQuery] = useState('')
+  const pickingStyles = reqDialog !== null && reqDialog.kind !== 'end' && can.styles
+  useEffect(() => {
+    if (!pickingStyles) return
+    const controller = new AbortController()
+    const timer = setTimeout(() => {
       setStyles(LOADING)
-      void readOne(() => searchStyles(api, ''), setStyles)
+      searchStyles(api, styleQuery, partyId, controller.signal)
+        .then((rows) => {
+          if (!controller.signal.aborted) setStyles(ready(rows))
+        })
+        .catch((error: unknown) => {
+          if (!controller.signal.aborted) setStyles(failedRead(problemOf(error)))
+        })
+    }, 300)
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
     }
+  }, [api, partyId, pickingStyles, styleQuery])
+  const loadPickers = () => {
+    setStyleQuery('')
     if (can.files && files === null) {
       setFiles(LOADING)
       void readOne(() => readPartyFiles(api, partyId), setFiles)
     }
   }
+  // F-CT-502: end
   const openAdd = () => {
     loadPickers()
     setReqDialog({ kind: 'add', target: null, draft: blankRequirement(companyId), busy: false, failed: null, tried: false })
@@ -304,6 +325,8 @@ export function useCustomerDepth(partyId: string) {
       dialog: reqDialog,
       styles,
       files,
+      styleQuery, // F-CT-502
+      onStyleSearch: setStyleQuery, // F-CT-502
       onAdd: openAdd,
       onReplace: openReplace,
       onEnd: openEnd,

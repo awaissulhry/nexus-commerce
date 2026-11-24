@@ -159,12 +159,6 @@
       "importOrders": "Import orders for {customer}…",
       "workOrders": "Work orders of {customer} ›"
     },
-    "anchor": {
-      "label": "Parts of Terms & requirements",
-      "commercial": "Commercial terms",
-      "hold": "Hold and PO number",
-      "identity": "Tax identity and VIES"
-    },
     "work": {
       "strip": {
         "label": "What waits",
@@ -656,9 +650,7 @@
     "traderAddress": "Address as VIES gave it",
     "notYet": "Not checked yet. Check now: the answer is kept as the proof.",
     "noAnswer": "VIES didn't answer (member state unavailable) — not a refusal. Try again.",
-    "recheck": "Re-checks are not scheduled yet: a proof counts for {days} days, so check again before a zero-rated sale.",
     "history": "Every check (kept, never changed)",
-    "notApplicable": "VIES checks EU VAT numbers outside Italy. This party has none to check.",
     "refused": "VIES was not asked: the connection may not be set up, or our company has no VAT number. Nothing was recorded.",
     "noneToCheck": "No EU business in this list has a VAT number to check.",
     "afterCreateFailed": "Created. VIES didn't answer yet: check again from Tax & terms.",
@@ -776,7 +768,7 @@
   },
   "edit": {
     "title": "Edit identity",
-    "subtitle": "The names, roles and language its documents use. Sent documents keep their own copy."
+    "subtitle": "The names, kind and roles. Its payment terms, currency and document language are changed in Terms & requirements. Sent documents keep their own copy."
   },
   "block": {
     "stops": "What it stops",

@@ -7,7 +7,7 @@ import type { AgeingRow } from '../../../../finance/receivables/api'
 import type { Party } from '../../../../parties/_shared/api'
 import { CUSTOMERS } from '../../../../parties/_shared/fixtures'
 import { failed, loaded, loading } from '../../../../parties/_shared/model'
-import type { Glance } from '../../depth/api'
+import type { CompanyTerms, Glance } from '../../depth/api'
 import { glanceOf as demoGlance, withoutPrices } from '../../depth/_demo/fixtures'
 import { failedRead, LOADING, ready } from '../../depth/model'
 import type { CustomerWork } from '../../list/api'
@@ -803,5 +803,46 @@ describe('the walls (13-backend §4)', () => {
       expect(text.match(/\b(?:customers|status|side|record|warning|step|vies|held|field|kind|taxMode|identity|list|common|credit|promises|reason|hold|prom|col|work|group|urgency|limits|customerCard|tab)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/)?.[0] ?? null, locale).toBeNull()
       expect(text).not.toMatch(/\{[a-z]+\}/)
     }
+  })
+})
+
+// ---- F-CT-524 (customer page › Terms & requirements, ct-w2 W2.3; 13-backend §4, Z32, D2): the Payment fact asks the ONE helper of the
+// three tabs; the codice fiscale of a person only for those who may change customers.
+describe('the Payment fact and the codice fiscale (ct-w2 W2.3)', () => {
+  const rowOfFacts = (over: Partial<OverviewInput>, key: string) => factsOf(input(over)).rows.find((row) => row.key === key)!
+  const valueOfRow = (row: { readonly parts: readonly { readonly say: Say }[] }, locale: Locale = 'en') => row.parts.map((part) => said(part.say, locale)).join(' · ')
+  const named = { id: 'pt-60', code: 'NET60', name: 'Net 60 days', nameI18n: { en: 'Net 60 days', it: 'Netto 60 giorni' }, summary: { en: 'Paid 60 days after the invoice', it: 'Pagato 60 giorni dopo la fattura' }, deposit: null }
+  const entry = (companyId: string, source: 'COMPANY' | 'PARTY') => ({
+    company: { id: companyId, code: 'SEED-X', name: 'Seed Company X' },
+    terms: source === 'COMPANY' ? { paymentTermsLabel: { code: 'NET60', name: 'Net 60 days' }, priceListLabel: null } : null,
+    inForce: { paymentTermsId: source === 'COMPANY' ? 'pt-60' : null, paymentTermsText: source === 'COMPANY' ? null : 'Bonifico 30 gg d.f.', priceListId: null, depositPct: null, poNumberRequired: false, source: { paymentTerms: source, priceList: 'PARTY', deposit: 'PARTY' }, paymentTerms: source === 'COMPANY' ? named : null, priceList: null },
+  })
+  const customer = party({ paymentTerms: 'Bonifico 30 gg d.f.', currency: 'EUR' })
+
+  it('this company\'s own row wins, in the page\'s language; the fact is a door to Commercial terms', () => {
+    const companyTerms = ready({ tenantWide: false, companies: [entry('co-a', 'COMPANY'), entry('co-b', 'PARTY')] } as unknown as CompanyTerms)
+    const payment = rowOfFacts({ party: customer, companyTerms, companyId: 'co-a', locale: 'it' }, 'payment')
+    expect(valueOfRow(payment, 'it')).toBe('Netto 60 giorni · EUR')
+    expect(hrefOf(payment.parts[0] as never)).toBe(`${BASE}?tab=terms#party-commercial`)
+    expect(termsDoor('/w/DEMO', ID, 'commercial')).toBe(`${BASE}?tab=terms#party-commercial`)
+    // Another company's row never answers for this one: there, the customer's own (the typed text).
+    expect(valueOfRow(rowOfFacts({ party: customer, companyTerms, companyId: 'co-b' }, 'payment'))).toBe('Bonifico 30 gg d.f. · EUR')
+    // Not read (or failed): the text typed on the customer; while it is read: the fact's skeleton, never one text, then another.
+    expect(valueOfRow(rowOfFacts({ party: customer }, 'payment'))).toBe('Bonifico 30 gg d.f. · EUR')
+    expect(valueOfRow(rowOfFacts({ party: customer, companyTerms: failedRead('problem.offline') }, 'payment'))).toBe('Bonifico 30 gg d.f. · EUR')
+    expect(rowOfFacts({ party: customer, companyTerms: LOADING }, 'payment')).toMatchObject({ parts: [], state: 'reading' })
+    const source = readFileSync(new URL('./rows.ts', import.meta.url), 'utf8')
+    expect(source).toContain("from '../terms/in-force'")
+    expect(source).not.toContain("text(party.paymentTerms?.trim() || '—')")
+  })
+
+  it('a sole trader\'s codice fiscale only to those who may change customers (D2)', () => {
+    const current = MODA.taxIdentities.find((row) => row.current)!
+    const identity = { ...current, fiscalCode: 'XXXXXX00X00X000X' }
+    const person = party({ kind: 'PERSON', taxIdentities: [identity] })
+    expect(valueOfRow(rowOfFacts({ party: person, can: CAN }, 'identity'))).toContain('Codice fiscale XXXXXX00X00X000X')
+    for (const locale of LOCALES) expect(valueOfRow(rowOfFacts({ party: person, can: { ...CAN, manage: false } }, 'identity'), locale), locale).not.toContain('XXXXXX00X00X000X')
+    // An organisation's codice fiscale is no personal data: it stays for every reader.
+    expect(valueOfRow(rowOfFacts({ party: party({ taxIdentities: [identity] }), can: { ...CAN, manage: false } }, 'identity'))).toContain('Codice fiscale XXXXXX00X00X000X')
   })
 })

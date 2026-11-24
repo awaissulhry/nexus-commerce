@@ -183,8 +183,10 @@ export async function endRequirement(api: ApiClient, partyId: string, requiremen
 /** The styles a requirement may name (Products › Styles; products.styles.view). */
 const styleSchema = z.object({ id: z.string(), code: z.string(), name: z.string() })
 export type StyleOption = z.infer<typeof styleSchema>
-export async function searchStyles(api: ApiClient, q: string, signal?: AbortSignal): Promise<StyleOption[]> {
-  return (await api.get('/product/styles', { query: { q: q.trim() || undefined, status: 'OPEN', limit: 50 }, schema: z.object({ styles: z.array(styleSchema) }), ...signalOf(signal) })).styles
+// F-CT-502 (customer Terms & requirements, ct-w2 W2.1; ct-s S1 — the wall): `forCustomer` — only our own styles and THIS customer's, searched
+// on the server (a customer the reader may not see answers 404); never another brand's.
+export async function searchStyles(api: ApiClient, q: string, forCustomer: string, signal?: AbortSignal): Promise<StyleOption[]> {
+  return (await api.get('/product/styles', { query: { q: q.trim() || undefined, status: 'OPEN', limit: 50, forCustomer }, schema: z.object({ styles: z.array(styleSchema) }), ...signalOf(signal) })).styles
 }
 
 /** The record's files (a routing guide is one of the customer's files: B-W2b-290), through the record panels' call. */
