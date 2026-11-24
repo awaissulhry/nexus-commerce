@@ -108,6 +108,7 @@ beforeAll(async () => {
   office('noOrders', 'sales', 'all', ['orders.view'])
   office('noMeasurements', 'sales', 'all', ['sales.measurements.view']) // F-CA-S4: parties.view, no measurements right
   office('noParties', 'sales', 'all', ['parties.view']) // F-CA-S5: no parties.view
+  office('noQuotes', 'sales', 'all', ['quotes.view']) // F-CT-S4: parties.view, no quotes.view
   for (const [key, actorId] of Object.entries(ACTORS)) await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, $3, $4, 'ACTIVE')`, [actorId, A.tenant, `w2b290-${key}-${run}@example.com`, `Made-up ${key}`])
   const colourway = await one<{ id: string; size: string }>(`SELECT c.id, (s.sizes)[1] AS size FROM "Colourway" c JOIN "Style" s ON s.id = c."styleId" WHERE c."tenantId" = $1 AND c."styleId" = (SELECT "styleIds"[1] FROM "CustomerRequirement" WHERE "tenantId" = $1 AND "supersedesId" IS NOT NULL) ORDER BY c."createdAt", c.id LIMIT 1`, [A.tenant])
   LINE.colourwayId = colourway.id
@@ -243,6 +244,24 @@ describe('account on hold (SAL-023)', () => {
     expect(holds.ordersWaiting).toEqual([expect.objectContaining({ number: 'SEED-Q-0002', quoteVersionId: q2.versionId })])
   })
 
+  // F-CT-S4 (customer terms lane, S4): why each accepted quote waits for its order.
+  it('each accepted quote says why it waits; without quotes.view only the counts', async () => {
+    // SEED-Q-0002 (accepted above) waits for the hold with company A first — before its missing PO number, as the order asks.
+    const { holds } = await ok('sales', 'GET', `/parties/${A.p1}/holds`)
+    expect(holds.ordersWaiting).toEqual([expect.objectContaining({ number: 'SEED-Q-0002', quoteVersionId: q2.versionId, companyId: A.companyA, waitsFor: 'ACCOUNT_ON_HOLD' })])
+    expect(holds.ordersWaitingCount).toEqual({ onHold: 1, poNumber: 0, other: 0 })
+    // A reader of customers without quotes.view: no quote number, no PO reference, no link — the counts only.
+    const blind = await ok('noQuotes', 'GET', `/parties/${A.p1}/holds`)
+    expect(blind.holds.ordersWaiting).toEqual([])
+    expect(blind.holds.ordersWaitingCount).toEqual({ onHold: 1, poNumber: 0, other: 0 })
+    expect(JSON.stringify(blind)).not.toContain('SEED-Q-0002')
+    expect(JSON.stringify(blind)).not.toContain(q2.id)
+    // A person of company B: neither A's quotes nor their count.
+    const ofB = await ok('salesB', 'GET', `/parties/${A.p1}/holds`)
+    expect(ofB.holds.ordersWaiting).toEqual([])
+    expect(ofB.holds.ordersWaitingCount).toEqual({ onHold: 0, poNumber: 0, other: 0 })
+  })
+
   it('releases the hold with words; the history stays; then the PO number its terms require is asked at confirm', async () => {
     await no('finance', 'POST', `/parties/${A.p1}/holds/${holdId}/release`, { version: holdVersion, words: '' }, 400)
     const { holds } = await ok('finance', 'POST', `/parties/${A.p1}/holds/${holdId}/release`, { version: holdVersion, words: 'Both invoices paid.' })
@@ -252,12 +271,18 @@ describe('account on hold (SAL-023)', () => {
     expect(again.message).toContain('released already')
     const { quote } = await ok('sales', 'GET', `/sales/quotes/${q2.id}`)
     expect(quote.issues.some((issue: Json) => issue.code === 'ACCOUNT_ON_HOLD')).toBe(false)
+    // F-CT-S4: released, SEED-Q-0002 now waits for the PO number its terms with A require.
+    const waiting = (await ok('sales', 'GET', `/parties/${A.p1}/holds`)).holds
+    expect(waiting.ordersWaiting).toEqual([expect.objectContaining({ number: 'SEED-Q-0002', waitsFor: 'PO_NUMBER_REQUIRED' })])
+    expect(waiting.ordersWaitingCount).toEqual({ onHold: 0, poNumber: 1, other: 0 })
     // SEED-C1 with company A needs its PO number (SAL-013): the quote had none.
     const missing = await no('sales', 'POST', '/sales/orders', { quoteVersionId: q2.versionId }, 400)
     expect(paths(missing)).toEqual(['body/customerRef'])
     expect(missing.message).toContain("needs its purchase order number on every order with")
     const made = await ok('sales', 'POST', '/sales/orders', { quoteVersionId: q2.versionId, customerRef: 'PO-290-77' }, 201)
     expect(made.order).toMatchObject({ customerRef: 'PO-290-77', partyId: A.p1 })
+    // F-CT-S4: its order made, nothing waits.
+    expect((await ok('sales', 'GET', `/parties/${A.p1}/holds`)).holds).toMatchObject({ ordersWaiting: [], ordersWaitingCount: { onHold: 0, poNumber: 0, other: 0 } })
   })
 
   it('a typed order without the PO number is refused at confirm, with it taken', async () => {

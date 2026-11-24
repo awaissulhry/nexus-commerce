@@ -3,13 +3,16 @@ import { DomainError, ForbiddenError, InvalidStateError, NotFoundError, Validati
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can, type Actor } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { poNumberProblem } from '@nexus/factory-domain/parties/company-terms/terms'
 import { HOLD_REASONS, holdsInForceFor, holdWordsProblem, REASON_WORDS, type HoldReason } from '@nexus/factory-domain/parties/holds/holds'
 import { PARTIES_HOLD } from '@nexus/factory-domain/parties/holds/permissions'
 import { PARTIES_VIEW } from '@nexus/factory-domain/parties/permissions'
 import { isCustomer, type PartyRole } from '@nexus/factory-domain/parties/rules'
+import { QUOTES_VIEW } from '@nexus/factory-domain/sales/quotes/permissions'
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { assertMayWrite, contextOf, isUniqueViolation, lockParty, mayWrite, readParty } from '../store'
+import type { OrderWait } from './stops'
 
 /**
  * A customer's account on hold (B-W2b-290; SAL-023; design sales.customers record › Tax & terms › Hold; rules
@@ -74,10 +77,39 @@ function holdViewOf(row: HoldRow, names: ReadonlyMap<string, string>, companies:
   }
 }
 
-/** The accepted quote versions of the party (of `companyIds`) that have no order yet: they wait for a release (or a PO number). */
-async function ordersWaitingOf(db: Reader, partyId: string, companyIds: readonly string[]) {
-  const versions = await db.quoteVersion.findMany({ where: { partyId, status: 'ACCEPTED', salesOrders: { none: {} }, quote: { companyId: { in: [...companyIds] } } }, select: { id: true, revision: true, quote: { select: { id: true, number: true, companyId: true, customerRef: true } } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: 50 })
-  return versions.map((version) => ({ quoteId: version.quote.id, number: version.quote.number, revision: version.revision, quoteVersionId: version.id, companyId: version.quote.companyId, customerRef: version.quote.customerRef }))
+/** The most accepted quotes the read lists (the count says them all). */
+const WAITING_ROWS = 50
+
+/**
+ * The accepted quote versions of the party (of `companyIds`) that have no order yet: they wait for a release (or a PO number).
+ * F-CT-S4 (customer terms lane, S4): each says why, in orderWaitFor's order (./stops.ts: a hold in force for its company
+ * first, then a blank PO number where the company's live terms require one; else null) from the holds already read and the
+ * live terms rows; rows only where the reader may see the quotes (quotes.view over its company and the customer), the
+ * count by reason over every one.
+ */
+async function ordersWaitingOf(db: Reader, actor: Actor, party: { readonly id: string; readonly code: string }, companyIds: readonly string[], holds: readonly HoldRow[]) {
+  const partyId = party.id
+  const versions = await db.quoteVersion.findMany({ where: { partyId, status: 'ACCEPTED', salesOrders: { none: {} }, quote: { companyId: { in: [...companyIds] } } }, select: { id: true, revision: true, quote: { select: { id: true, number: true, companyId: true, customerRef: true } } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
+  const poRequired = new Set((await db.partyCompanyTerms.findMany({ where: { partyId, companyId: { in: [...companyIds] }, endedAt: null, poNumberRequired: true }, select: { companyId: true } })).map((row) => row.companyId))
+  const waitFor = (companyId: string, customerRef: string | null): OrderWait | null =>
+    holdsInForceFor(holds, companyId).length > 0 ? 'ACCOUNT_ON_HOLD' : poNumberProblem(poRequired.has(companyId), customerRef, { code: party.code, company: companyId }) !== null ? 'PO_NUMBER_REQUIRED' : null
+  const rows = versions.map((version) => ({
+    quoteId: version.quote.id,
+    number: version.quote.number,
+    revision: version.revision,
+    quoteVersionId: version.id,
+    companyId: version.quote.companyId,
+    customerRef: version.quote.customerRef,
+    waitsFor: waitFor(version.quote.companyId, version.quote.customerRef),
+  }))
+  return {
+    ordersWaiting: rows.filter((row) => can(actor, QUOTES_VIEW, { companyId: row.companyId, partyId })).slice(0, WAITING_ROWS),
+    ordersWaitingCount: {
+      onHold: rows.filter((row) => row.waitsFor === 'ACCOUNT_ON_HOLD').length,
+      poNumber: rows.filter((row) => row.waitsFor === 'PO_NUMBER_REQUIRED').length,
+      other: rows.filter((row) => row.waitsFor === null).length,
+    },
+  }
 }
 
 /** The party's holds as the record's Hold card reads them. */
@@ -94,7 +126,7 @@ export async function holdsOf(db: Reader, context: OfficeContext, partyId: strin
     code: party.code,
     onHold: views.some((view) => view.inForce),
     holds: [...views.filter((view) => view.inForce), ...views.filter((view) => !view.inForce)],
-    ordersWaiting: await ordersWaitingOf(db, partyId, [...companies.keys()]),
+    ...(await ordersWaitingOf(db, actor, party, [...companies.keys()], rows)), // F-CT-S4: ordersWaiting + ordersWaitingCount
     mayPlace: [...companies.keys()].some((companyId) => can(actor, PARTIES_HOLD, { companyId, partyId })),
     reasons: HOLD_REASONS.map((reason) => ({ reason, words: REASON_WORDS[reason] })),
   }
