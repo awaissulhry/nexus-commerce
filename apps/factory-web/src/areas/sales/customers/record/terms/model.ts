@@ -141,7 +141,7 @@ export function sentenceOf(parts: readonly string[], locale: Locale): string {
   return /[.:!?…]$/.test(first) ? first : `${first}.`
 }
 
-/** A failed read's key — the depth's (`problem.offline` …) or the orders' (`problem.read.*`) — as the kit's `orders` key, for PartFailed. */
+/** A failed read's key — the depth's (offline, forbidden …) or the orders' (read.*) problem keys — as the kit's `orders` key, for PartFailed. */
 export function kitProblemOf(problem: string): string {
   if (problem.startsWith('problem.read.')) return problem
   const kind = problem.replace(/^problem\./, '')
