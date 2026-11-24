@@ -104,7 +104,8 @@ export function peopleAnswer(facts: PeopleFacts): PeopleAnswer {
   // F-CA-fx4 (walk W-06): nobody and no address is said as such — the riders or a rider's team follow it, never "0 people · 0 addresses".
   if (live.length === 0 && facts.addresses.length === 0) words.push(said('answer.nothing'))
   else {
-    words.push(said('answer.people', { params: { count: live.length } }))
+    // F-CA-fx7 (re-walk R-01): a part with nothing says it in words, never "0 people" / "0 addresses".
+    words.push(live.length > 0 ? said('answer.people', { params: { count: live.length } }) : said('answer.nobody'))
     // F-CA-fx4 (walk W-01): a portal that is off while people still hold an account says so (they are counted among the people).
     if (facts.portal && !facts.portal.on && facts.people.some((row) => row.portal !== null && row.portal.status !== 'DEACTIVATED')) words.push(said('people.answer.portalOff'))
     if (facts.portal?.on) {
@@ -115,7 +116,7 @@ export function peopleAnswer(facts: PeopleFacts): PeopleAnswer {
       const who = signIn > 0 ? (invited > 0 ? said('answer.portal.both', { words: { signIn: said('answer.portal.signIn', { params: { count: signIn } }), invited: said('answer.portal.invited', { params: { count: invited } }) } }) : said('answer.portal.signIn', { params: { count: signIn } })) : invited > 0 ? said('answer.portal.invitedOnly', { params: { count: invited } }) : said('answer.portal.nobody')
       words.push(seats ? said('answer.portal.withSeats', { words: { who, seats } }) : who)
     }
-    words.push(said('answer.addresses', { params: { count: active.length } }))
+    words.push(active.length > 0 ? said('answer.addresses', { params: { count: active.length } }) : said('answer.noAddress')) // F-CA-fx7 (R-01)
   }
   if (organisation && facts.riders !== null && facts.riders > 0) words.push(said('answer.riders', { params: { count: facts.riders } }))
   if (!organisation && facts.team) words.push(said('answer.riderOf', { params: { team: facts.team } }))

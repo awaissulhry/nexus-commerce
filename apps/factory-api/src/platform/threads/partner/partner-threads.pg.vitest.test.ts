@@ -280,3 +280,54 @@ describe('the party’s conversations (Messages list; Home’s recent messages f
     expect(supplier).not.toContain('Quote')
   })
 })
+
+// ── tw-s S.1 (the thread rebuild; wall R1: a quote is drawn only from the reader's own read) ──
+describe('tw-s R1: a portal read quotes only messages shared with its own customer', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('R1: every replyTo / corrects of a portal read is a shared message of the same customer, with no authorId, no audience, never an office note', async () => {
+    const order = await idOf('SalesOrder', 'SEED-SO-0001')
+    // The office: a note, our mail, our mail correcting it, an office note answering our mail (never the portal's).
+    const by = { kind: 'USER' as const, id: world.officeId, name: 'Seed Owner' }
+    const { result: written } = await command(office(), { name: 'email.send', input: { type: 'SalesOrder', order, tws: 'R1' } }, async (tools) => {
+      const { thread } = await ensureThread(tools, { type: 'SalesOrder', id: order }, world.officeId)
+      const note = await writeMessage(tools, thread, { direction: 'INTERNAL_NOTE', channel: 'APP', author: by, bodyText: 'Made-up R1: internal, the lining is late.' })
+      const mail = await writeMessage(tools, thread, { direction: 'OUTBOUND', channel: 'EMAIL', author: by, bodyText: 'Made-up R1: the jackets ship on Friday.' })
+      const fixed = await writeMessage(tools, thread, { direction: 'OUTBOUND', channel: 'EMAIL', author: by, bodyText: 'Made-up R1: correction, they ship on Monday.', correctsMessageId: mail.id })
+      const aside = await writeMessage(tools, thread, { direction: 'INTERNAL_NOTE', channel: 'APP', author: by, bodyText: 'Made-up R1: an office note on our mail.', replyToMessageId: mail.id })
+      return { note: note.id, mail: mail.id, fixed: fixed.id, aside: aside.id }
+    })
+    // The buyer writes in the portal; our answer in the portal quotes the buyer's post.
+    const asked = await post(buyer, 'SalesOrder', order, { body: 'Made-up R1: Monday works for us.' }, newId())
+    expect(asked.status, JSON.stringify(asked.body)).toBe(201)
+    const { result: answered } = await command(office(), { name: 'threads.reply', input: { type: 'SalesOrder', order, tws: 'R1-answer' } }, async (tools) => {
+      const { thread } = await ensureThread(tools, { type: 'SalesOrder', id: order }, world.officeId)
+      const answer = await writeMessage(tools, thread, { direction: 'OUTBOUND', channel: 'PORTAL', author: by, bodyText: 'Made-up R1: noted, Monday it is.', replyToMessageId: asked.body.message.id })
+      return { answer: answer.id }
+    })
+
+    const page = await thread(buyer, 'SalesOrder', order, '?limit=200')
+    expect(page.status, JSON.stringify(page.body)).toBe(200)
+    const messages = page.body.messages as Json[]
+    const quotes = messages.flatMap((message) => [message.replyTo, message.corrects]).filter((quote): quote is Json => quote !== null && quote !== undefined)
+    const quotedIds = [...new Set(quotes.map((quote) => quote.id as string))]
+    expect(quotedIds).toEqual(expect.arrayContaining([written.mail, asked.body.message.id]))
+    // Every quote is a message shared with this customer (the database says so) — never an office note, never another customer's.
+    const rows = await admin<{ id: string; audience: string; partyId: string | null }>('SELECT id, audience, "partyId" FROM "Message" WHERE id = ANY($1::uuid[])', [quotedIds])
+    expect(rows.length).toBe(quotedIds.length)
+    for (const row of rows) expect(row, row.id).toMatchObject({ audience: 'PARTNER', partyId: world.p1 })
+    for (const quote of quotes) {
+      expect([written.note, written.aside], quote.id).not.toContain(quote.id)
+      expect(quote, quote.id).not.toHaveProperty('authorId')
+      expect(quote, quote.id).not.toHaveProperty('audience')
+      expect(quote, quote.id).toMatchObject({ authorKind: expect.stringMatching(/^(USER|PARTY|SYSTEM)$/), mine: expect.any(Boolean), fileCount: expect.any(Number) })
+    }
+    expect(JSON.stringify(page.body)).not.toMatch(/Made-up R1: internal|an office note on our mail/)
+    // Our correction quotes our mail; our answer quotes the buyer's own post ("mine" for the buyer, a colleague's for the viewer).
+    const of = (body: Json, id: string): Json => (body.messages as Json[]).find((message) => message.id === id)!
+    expect(of(page.body, written.fixed).corrects).toMatchObject({ id: written.mail, authorKind: 'USER', authorName: 'Seed Owner', mine: false, fileCount: 0, firstFile: null })
+    expect(of(page.body, answered.answer).replyTo).toMatchObject({ id: asked.body.message.id, authorKind: 'PARTY', mine: true })
+    const asViewer = await thread(viewer, 'SalesOrder', order, '?limit=200')
+    expect(asViewer.status, JSON.stringify(asViewer.body)).toBe(200)
+    expect(of(asViewer.body, answered.answer).replyTo).toMatchObject({ id: asked.body.message.id, mine: false })
+  })
+})
+// ── end tw-s ──

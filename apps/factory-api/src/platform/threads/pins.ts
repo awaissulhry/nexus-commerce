@@ -5,13 +5,14 @@ import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { SALES_INQUIRIES_MANAGE } from '@nexus/factory-domain/sales/inquiries/permissions'
-import { cleanBody, excerptOf, MAX_BODY_LENGTH } from '@nexus/factory-domain/threads/rules'
+import { cleanBody, excerptOf, MAX_BODY_LENGTH, type AuthorKind } from '@nexus/factory-domain/threads/rules'
 import { command, type CommandCaller, type CommandTx } from '../../core/command'
 import { actorOf } from '../../core/context'
 import { erasedAmong, erasedForOutside } from './feed-depth'
 import { mayOnThread, mayShare, wallScopeOf } from './records'
 import { contextOf, ensureThread, officeRecord, scopeOfThread, writeMessage, type RecordRef } from './threads'
 import { walledForOutside } from '../files/content-wall' // fix-wall-1
+import { workerGatesFor } from '../../modules/people/privacy/worker-gate' // tw-s S.2: a pinned floor note behind the site's gate
 
 /**
  * B-TH-091 (threads plan TH-9, N4, L2-G11; T2-F07 "2 pinned", T3-F12 "Pin for everyone", PROJ.thread-F06, O-SAL-INQ-LIST.pane-facts-F06;
@@ -64,7 +65,10 @@ export interface PinView {
   /** Office only: who pinned it. */
   readonly pinnedBy?: { readonly id: string; readonly name: string | null }
   readonly message: {
+    /** Null: a floor worker the site's gate keeps back (tw-s S.2, as the note's card). */
     readonly authorName: string | null
+    /** tw-s S.2, office only: who wrote it (a WORKER with no name: "A person on the floor"). */
+    readonly authorKind?: AuthorKind
     /** One line of its words (empty when it carries files only). */
     readonly excerpt: string
     readonly at: string
@@ -79,11 +83,11 @@ export interface PinView {
 type Reader = FactoryClient | CommandTx
 
 /** The pins of a thread as the reader's client reads them (a portal client: its own customer's only), with their messages. */
-async function pinsOf(client: Reader, threadId: string, office: boolean): Promise<{ pins: Omit<PinView, 'message'>[]; messages: Map<string, { id: string; authorName: string | null; bodyText: string; at: Date; audience: 'OFFICE' | 'PARTNER'; attachmentFileIds: string[] }> }> {
+async function pinsOf(client: Reader, threadId: string, office: boolean): Promise<{ pins: Omit<PinView, 'message'>[]; messages: Map<string, { id: string; authorKind: AuthorKind; authorName: string | null; bodyText: string; at: Date; audience: 'OFFICE' | 'PARTNER'; attachmentFileIds: string[] }> }> {
   const rows: { messageId: string; pinnedAt: Date; pinnedById: string | null }[] = office
     ? await client.threadPin.findMany({ where: { threadId }, orderBy: [{ pinnedAt: 'asc' }, { id: 'asc' }], take: PINS_MAX, select: { messageId: true, pinnedAt: true, pinnedById: true } })
     : (await client.threadPin.findMany({ where: { threadId, partyId: { not: null } }, orderBy: [{ pinnedAt: 'asc' }, { id: 'asc' }], take: PINS_MAX, select: { messageId: true, pinnedAt: true } })).map((row) => ({ ...row, pinnedById: null as string | null }))
-  const messageRows = rows.length === 0 ? [] : await client.message.findMany({ where: { threadId, id: { in: rows.map((row) => row.messageId) }, ...(office ? {} : { audience: 'PARTNER' as const }) }, select: { id: true, authorName: true, bodyText: true, at: true, audience: true, attachmentFileIds: true } })
+  const messageRows = rows.length === 0 ? [] : await client.message.findMany({ where: { threadId, id: { in: rows.map((row) => row.messageId) }, ...(office ? {} : { audience: 'PARTNER' as const }) }, select: { id: true, /* tw-s S.2 */ authorKind: true, authorName: true, bodyText: true, at: true, audience: true, attachmentFileIds: true } })
   const messages = new Map(messageRows.map((row) => [row.id, row]))
   const names = office ? new Map((await client.user.findMany({ where: { id: { in: [...new Set(rows.flatMap((row) => (row.pinnedById ? [row.pinnedById] : [])))] } }, select: { id: true, displayName: true } })).map((user) => [user.id, user.displayName])) : new Map<string, string>()
   return {
@@ -92,12 +96,14 @@ async function pinsOf(client: Reader, threadId: string, office: boolean): Promis
   }
 }
 
-function viewsOf(read: Awaited<ReturnType<typeof pinsOf>>, removed: ReadonlySet<string>, office: boolean, /* fix-wall-1 */ walled: ReadonlySet<string> = new Set()): PinView[] {
+/** `workerShown` (tw-s S.2, B3): the site's PERFORMANCE gate lets the office read who wrote a floor note; else the pin names nobody. */
+function viewsOf(read: Awaited<ReturnType<typeof pinsOf>>, removed: ReadonlySet<string>, office: boolean, /* fix-wall-1 */ walled: ReadonlySet<string>, /* tw-s S.2 */ workerShown: boolean): PinView[] {
   return read.pins.map((pin) => {
     const message = read.messages.get(pin.messageId)!
+    const hidden = message.authorKind === 'WORKER' && !workerShown // tw-s S.2
     return {
       ...pin,
-      message: { authorName: message.authorName, excerpt: excerptOf(message.bodyText), at: toUtcIso(message.at), ...(office ? { audience: message.audience } : {}), attachmentCount: message.attachmentFileIds.filter((fileId) => !walled.has(fileId)).length /* fix-wall-1 */, removed: removed.has(message.id) },
+      message: { authorName: hidden ? null : message.authorName, excerpt: excerptOf(message.bodyText), at: toUtcIso(message.at), ...(office ? { audience: message.audience, /* tw-s S.2 */ authorKind: message.authorKind } : {}), attachmentCount: message.attachmentFileIds.filter((fileId) => !walled.has(fileId)).length /* fix-wall-1 */, removed: removed.has(message.id) },
     }
   })
 }
@@ -115,19 +121,23 @@ export async function listPins(caller: CommandCaller, record: RecordRef): Promis
       if (!mayOnThread(actor, THREADS_READ, record.type, found.scope)) throw new NotFoundError('Record not found.')
       if (!found.thread) return null
       const pins = await pinsOf(client, found.thread.id, true)
-      return { pins, removed: await erasedAmong(client, [...pins.messages.values()]) }
+      // tw-s S.2 (B3, worker privacy): a pinned floor note names its writer only through the thread's site's gate, as its card does —
+      // the gate read once, and only when a pinned message is a floor worker's.
+      const gates = await workerGatesFor(client, [...pins.messages.values()].some((message) => message.authorKind === 'WORKER') ? [found.thread.siteId] : [])
+      return { pins, removed: await erasedAmong(client, [...pins.messages.values()]), workerShown: gates.at(found.thread.siteId).open }
     }
     // Row-level security shows a partner only its own party's thread and pins; "none" and "not yours" look the same.
     const partyId = context.audience === 'partner' ? context.partyId : null
     const thread = await client.thread.findFirst({ where: { recordType: record.type, recordId: record.id }, select: { id: true, companyId: true, siteId: true, partyId: true } })
     if (!thread || partyId === null || thread.partyId !== partyId || !mayOnThread(actor, THREADS_READ, record.type, scopeOfThread(thread))) return null
-    return { pins: await pinsOf(client, thread.id, false), removed: null }
+    // A portal reader never reads a floor note (an office note): no gate to read.
+    return { pins: await pinsOf(client, thread.id, false), removed: null, workerShown: false }
   })
   if (!read) return { pins: [] }
   const removed = read.removed ?? (await erasedForOutside(caller, context.tenantId, [...read.pins.messages.values()]))
   // fix-wall-1: a portal reader's count leaves out a file whose content is another customer's (it never sees it).
   const walled = office ? new Set<string>() : await walledForOutside(caller, [...read.pins.messages.values()].flatMap((message) => message.attachmentFileIds))
-  return { pins: viewsOf(read.pins, removed, office, walled) }
+  return { pins: viewsOf(read.pins, removed, office, walled, read.workerShown) }
 }
 
 /** The office writer's thread of the record (threads.post over it), or the refusal. */

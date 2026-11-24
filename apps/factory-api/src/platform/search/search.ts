@@ -10,6 +10,9 @@ import { ApiError } from '../../core/errors'
 // B-TH-097: each message hit is read again against its thread (the record type's gate, the thread's scope now).
 import { mayOnThread } from '../threads/records'
 import { wallScopesOf } from '../threads/records' // B-PR-08a part 2: a work order's, hold's or NCR's message hit through its customer
+// tw-s S.4: a message hit names its sender as its thread shows it — a floor worker only through the site's gate.
+import type { AuthorKind } from '@nexus/factory-domain/threads/rules'
+import { workerGatesFor } from '../../modules/people/privacy/worker-gate'
 
 /**
  * GET /search (B-W2a-32; PLT-153; design shell.search: the palette's Exact number and Records groups, the All results
@@ -144,14 +147,25 @@ export interface SearchParams {
  */
 export const MESSAGE_TYPE = 'Message'
 
-async function messageRecords(client: FactoryClient, actor: Actor, ids: readonly string[]): Promise<Map<string, { type: string; id: string }>> {
-  const seen = new Map<string, { type: string; id: string }>()
+/** A message hit read again: the record it opens and (tw-s S.4) when and by whom it was written, as its thread shows it. */
+interface MessageHit {
+  readonly record: { readonly type: string; readonly id: string }
+  readonly message: { readonly at: string; readonly authorName: string | null; readonly authorKind: AuthorKind }
+}
+
+async function messageRecords(client: FactoryClient, actor: Actor, ids: readonly string[]): Promise<Map<string, MessageHit>> {
+  const seen = new Map<string, MessageHit>()
   if (ids.length === 0) return seen
-  const rows = await client.message.findMany({ where: { id: { in: [...ids] } }, select: { id: true, thread: { select: { recordType: true, recordId: true, companyId: true, siteId: true, partyId: true } } } })
+  const rows = await client.message.findMany({ where: { id: { in: [...ids] } }, select: { id: true, /* tw-s S.4 */ at: true, authorKind: true, authorName: true, thread: { select: { recordType: true, recordId: true, companyId: true, siteId: true, partyId: true } } } })
   const scopeOf = await wallScopesOf(client, rows.map((row) => row.thread)) // B-PR-08a part 2: the thread's customer now
-  for (const row of rows) {
-    if (mayOnThread(actor, THREADS_READ, row.thread.recordType, scopeOf(row.thread))) seen.set(row.id, { type: row.thread.recordType, id: row.thread.recordId })
+  const readable = rows.filter((row) => mayOnThread(actor, THREADS_READ, row.thread.recordType, scopeOf(row.thread)))
+  // ---- tw-s S.4 (W-112, wall R10): a floor worker is named only while their thread's site's gate is open (each site read once).
+  const gates = await workerGatesFor(client, readable.filter((row) => row.authorKind === 'WORKER').map((row) => row.thread.siteId))
+  for (const row of readable) {
+    const hidden = row.authorKind === 'WORKER' && !gates.at(row.thread.siteId).open
+    seen.set(row.id, { record: { type: row.thread.recordType, id: row.thread.recordId }, message: { at: toUtcIso(row.at), authorName: hidden ? null : row.authorName, authorKind: row.authorKind } })
   }
+  // ---- end tw-s S.4
   return seen
 }
 // ---- end B-TH-097
@@ -219,7 +233,7 @@ export async function searchRecords(caller: CommandCaller, params: SearchParams)
         siteId: row.siteId,
         match: matchOf(row),
         indexedAt: toUtcIso(new Date(row.indexedAt)),
-        ...(records.has(row.recordId) ? { record: records.get(row.recordId)! } : {}),
+        ...(records.has(row.recordId) ? { record: records.get(row.recordId)!.record, /* tw-s S.4 */ message: records.get(row.recordId)!.message } : {}),
       })),
       counts,
       total,

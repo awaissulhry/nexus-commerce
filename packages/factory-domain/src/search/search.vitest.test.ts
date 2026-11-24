@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { FACTORY_PERMISSIONS } from '../auth/permissions/catalogue'
 import { templateOf } from '../auth/roles/templates'
 import { EVENT_CATALOGUE } from '../events/catalogue'
-import { searchAnswer, searchQuery } from './contracts'
+import { MESSAGE_AUTHOR_KINDS, searchAnswer, searchQuery } from './contracts'
+import { AUTHOR_KINDS } from '../threads/rules' // tw-s S.4
 import { hasExactHit, matchedParts } from './highlight'
 import { foldSearchText, holdsAmount, looksLikeNumber, queryWords, SEARCH_LIMITS, searchTextOf, SearchTextError, withoutAmounts } from './text'
 
@@ -95,5 +96,30 @@ describe('B-TH-097: a message in the index holds no amount', () => {
       expect(holdsAmount(cut), text).toBe(false)
       expect(() => searchTextOf({ title: 'SO-1', words: [cut] }), text).not.toThrow()
     }
+  })
+})
+
+// ---- tw-s S.4 (the thread rebuild W-112; wall R10): a message hit's time and sender.
+describe('tw-s S.4: a message hit says when and by whom', () => {
+  it('names the threads’ own author kinds, and keeps a hit’s time and sender (a hidden floor worker: no name)', () => {
+    expect([...MESSAGE_AUTHOR_KINDS]).toEqual([...AUTHOR_KINDS])
+    const hit = {
+      recordType: 'Message',
+      recordId: '01890a5d-ac96-774b-bcce-b302099a8057',
+      number: null,
+      title: 'SO-1',
+      subtitle: 'Made-up: the lining arrives on Friday.',
+      status: 'INTERNAL_NOTE',
+      area: 'sales',
+      companyId: null,
+      siteId: null,
+      match: 'words',
+      indexedAt: '2026-11-24T10:00:00.000Z',
+      record: { type: 'WorkOrder', id: '01890a5d-ac96-774b-bcce-b302099a8058' },
+      message: { at: '2026-11-24T09:12:00.000Z', authorName: null, authorKind: 'WORKER' },
+    }
+    const answer = searchAnswer.parse({ query: 'lining', words: ['lining'], tooShort: false, results: [hit], counts: [{ recordType: 'Message', count: 1 }], total: 1, nextOffset: null, asOf: null })
+    expect(answer.results[0]?.message).toEqual({ at: '2026-11-24T09:12:00.000Z', authorName: null, authorKind: 'WORKER' })
+    expect(() => searchAnswer.parse({ ...answer, results: [{ ...hit, message: { ...hit.message, authorKind: 'FLOOR' } }] })).toThrow()
   })
 })

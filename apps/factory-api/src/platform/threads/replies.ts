@@ -173,7 +173,9 @@ export async function postPortalReply(caller: CommandCaller, record: RecordRef, 
       await clearDraftInCommand(tools, context.actorId, record) // B-TH-092
       const current = await tools.tx.thread.findUniqueOrThrow({ where: { id: thread.id }, select: THREAD_OFFICE })
       const attachments = await visibleAttachments(tools.tx, context, message.attachmentFileIds)
-      return { thread: threadViewOf(current), message: messageViewOf(message, attachments, true, await messageLinksOf(tools.tx, thread.id, [message], { sharedOnly: false, workerShown: true })) }
+      // tw-s S.1: the quote counts the files of what it answers through the writer's own file walls.
+      const linked = await messageLinksOf(tools.tx, thread.id, [message], { sharedOnly: false, workerShown: true, visibleFiles: (fileIds) => visibleAttachments(tools.tx, context, fileIds) })
+      return { thread: threadViewOf(current), message: messageViewOf(message, attachments, true, linked) }
     },
   )
   return result

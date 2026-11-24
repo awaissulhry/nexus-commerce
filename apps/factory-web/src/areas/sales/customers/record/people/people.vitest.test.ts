@@ -627,8 +627,8 @@ describe('the walk\'s fixes (ca-fx4)', () => {
     expect(model.people.rows.map((row) => row.id).sort()).toEqual(['u-u1', 'u-u2', 'u-u3', 'u-u4'])
     expect(model.people.portalColumn).toBe(true)
     expect(model.people.menu.access).not.toBeNull()
-    expect(sentence(model.answer.words, 'en')).toBe('4 people · the portal is off for this customer · 0 addresses')
-    expect(sentence(model.answer.words, 'it')).toBe('4 persone · il portale è spento per questo cliente · 0 indirizzi')
+    expect(sentence(model.answer.words, 'en')).toBe('4 people · the portal is off for this customer · no address yet')
+    expect(sentence(model.answer.words, 'it')).toBe('4 persone · il portale è spento per questo cliente · ancora nessun indirizzo')
     expect(sentence(model.people.answer, 'en')).toBe('0 contacts and 4 only in the portal · nobody gets quotes & confirmations · nobody gets invoices & reminders · the portal is off for this customer')
     expect(sentence(model.people.answer, 'it')).toContain('il portale è spento per questo cliente')
     // Off and nobody holds an account: no portal column (today's look), and nothing at all is said as such.
@@ -683,5 +683,21 @@ describe('the walk\'s fixes (ca-fx4)', () => {
     expect([say('en')(said('used.failed')), say('it')(said('used.failed'))]).toEqual(["Couldn't read what is open on them", 'Impossibile leggere i lavori aperti che li riguardano'])
     const container = readFileSync(new URL('./use-people-tab.ts', import.meta.url), 'utf8')
     expect(container).toContain('onRetryUsage: () => {\n      setUsage(READING)\n      void loadUsage()\n    },')
+  })
+})
+
+// ---- F-CA-fx7 (re-walk R-01, design/customer-people-2026-11-24/30-walk.md §12): a part with nothing says it in words.
+describe('F-CA-fx7: the answer line never says "0 people" or "0 addresses"', () => {
+  it('people without an address: "… · no address yet"; an address without people: "nobody yet · …" — in English and in Italian', () => {
+    const noAddress = peopleAnswer(facts({ ...MODA, addresses: [] }, null))
+    expect(sentence(noAddress.words, 'en')).toBe('2 people · no address yet')
+    expect(sentence(noAddress.words, 'it')).toBe('2 persone · ancora nessun indirizzo')
+    const nobody = peopleAnswer(facts({ ...MODA, contacts: [] }, null))
+    expect(sentence(nobody.words, 'en')).toBe('Nobody yet · 2 addresses')
+    expect(sentence(nobody.words, 'it')).toBe('Ancora nessuno · 2 indirizzi')
+    for (const lang of ['en', 'it'] as const) {
+      expect(sentence(noAddress.words, lang)).not.toMatch(/(^|· )0 /)
+      expect(sentence(nobody.words, lang)).not.toMatch(/(^|· )0 /)
+    }
   })
 })

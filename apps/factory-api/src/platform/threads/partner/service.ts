@@ -21,6 +21,7 @@ import type { AttachmentView } from '../contract'
 import { afterCursor, cursorOf, ensureThread, type RecordRef } from '../threads'
 // ---- B-TH-050: what a shared message answers or corrects, as the partner may see it.
 import { messageLinksOf, NO_LINKS, type MessageLinks } from '../threads'
+import { finishedLinks } from '../threads' // tw-s S.1: the quotes finished after the partner's read (mine, erased, walled files)
 // ---- B-TH-085: the customer attaches files to its own record from the portal (behind the outside-upload gate and the scanner).
 import { PORTAL_UPLOAD } from '@nexus/factory-domain/auth/partners/permissions'
 import { FILES_MANAGE, FILES_UPLOAD } from '@nexus/factory-domain/auth/permissions/catalogue'
@@ -150,8 +151,11 @@ async function visibleAttachments(client: FactoryClient | CommandTx, caller: Par
   return seen
 }
 
-/** The messages of these ids the reader wrote in the portal (their posts' audit rows name them), read as the system. */
-async function minePosts(request: FastifyRequest, caller: PartnerCaller, rows: readonly MessageRow[]): Promise<Set<string>> {
+/**
+ * The messages of these ids the reader wrote in the portal (their posts' audit rows name them), read as the system. tw-s S.1: a page's
+ * messages and the messages they quote, in one call.
+ */
+async function minePosts(request: FastifyRequest, caller: PartnerCaller, rows: readonly { readonly id: string; readonly authorKind: string; readonly channel: string }[]): Promise<Set<string>> {
   const ids = rows.filter((row) => row.authorKind === 'PARTY' && row.channel === 'PORTAL').map((row) => row.id)
   if (ids.length === 0) return new Set()
   const audits = await systemCallerOf(request)(caller.context.tenantId).withClient((client) =>
@@ -235,20 +239,26 @@ export async function readPartnerThread(request: FastifyRequest, ref: RecordRef,
       attachments: await visibleAttachments(client, caller, shown.flatMap((row) => row.attachmentFileIds)),
       composer: await composerFor(client, caller, scope, thread),
       // B-TH-050: the shared messages these answer or correct, and their corrections (the partner's own scope: shared only).
-      links: thread ? await messageLinksOf(client, thread.id, shown, { sharedOnly: true, workerShown: false }) : NO_LINKS,
+      // tw-s S.1: their files through the partner's own file rules (no author id, no audience: shared only).
+      links: thread ? await messageLinksOf(client, thread.id, shown, { sharedOnly: true, workerShown: false, visibleFiles: (fileIds) => visibleAttachments(client, caller, fileIds) }) : NO_LINKS,
       // B-TH-027: the person's own reading.
       reading: thread ? await readingOf(client, thread.id, { userId: caller.context.actorId, office: false }) : null,
     }
   })
-  const mine = await minePosts(request, caller, read.shown)
-  // fix-wall-1: a walled file is left out of its message's files (and so of what the page counts).
-  for (const fileId of await walledForOutside(request as CommandCaller, read.attachments.keys())) read.attachments.delete(fileId)
+  // ---- tw-s S.1: the messages the page quotes are told with it — one call each over the page and what it quotes.
+  const quoted = [...(read.links.sources?.values() ?? [])]
+  const mine = await minePosts(request, caller, [...read.shown, ...quoted])
+  // fix-wall-1: a walled file is left out of its message's files (and so of what the page counts) — tw-s: and of every quote's count.
+  const walled = await walledForOutside(request as CommandCaller, [...read.attachments.keys(), ...quoted.flatMap((source) => (source.files ?? []).map((file) => file.id))])
+  for (const fileId of walled) read.attachments.delete(fileId)
   const last = read.shown.at(-1)
-  const erased = await erasedForOutside(request as CommandCaller, caller.context.tenantId, read.shown) // B-TH-079
+  const erased = await erasedForOutside(request as CommandCaller, caller.context.tenantId, [...read.shown, ...quoted]) // B-TH-079
+  const links = finishedLinks(read.links, { erased, mine, walled })
+  // ---- end tw-s S.1
   return {
     record: recordViewOf(ref.type, read.record),
     thread: read.thread ? { id: read.thread.id, status: read.thread.status } : null,
-    messages: read.shown.map((row) => ({ ...messageViewOf(caller, row, read.attachments, mine, read.links), ...(erased.has(row.id) ? { erased: true } : {}) })),
+    messages: read.shown.map((row) => ({ ...messageViewOf(caller, row, read.attachments, mine, links), ...(erased.has(row.id) ? { erased: true } : {}) })),
     nextCursor: read.rows.length > page.limit && last ? encodeCursor(last) : null,
     composer: read.composer,
     reading: read.reading,
