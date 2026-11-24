@@ -48,7 +48,7 @@ export async function ridersOf(db: Reader, context: OfficeContext, partyId: stri
     code: party.code,
     kind: party.kind as PartyKind,
     /** This party's team, when it is a rider (and the team is one the caller may see). */
-    team: team && can(actor, PARTIES_VIEW, { companyId: team.companyId, partyId: team.id }) ? { id: team.id, code: team.code, legalName: team.legalName, status: team.status } : null,
+    team: team && can(actor, PARTIES_VIEW, { companyId: team.companyId, partyId: team.id }) ? { id: team.id, code: team.code, legalName: team.legalName, tradeName: team.tradeName /* F-CA-fx4 (W-07) */, status: team.status } : null,
     riders: riders.map((rider) => ({
       id: rider.id,
       code: rider.code,

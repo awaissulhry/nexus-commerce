@@ -15,6 +15,7 @@ import { PEOPLE_ROWS, peopleKitId, personAnchor, said, type Say } from '../../pe
 import { personMenu, portalStateOf, tickable, type PersonRow } from '../../people/people'
 import type { PeopleTabActions, PeopleTabModel } from '../../people/tab'
 import { menuItemOf, sentenceOf, usePeopleSay } from './say'
+import { UsageFailed } from './UsageFailed' // F-CA-fx4 (Z25)
 
 /**
  * F-CA-110 (customer page › PEOPLE & ADDRESSES tab, lane ca-; 10-design §5.1; 18-lead-settles Z1, Z6, Z7, Z17) — section 1, People
@@ -97,6 +98,7 @@ export function PeopleSection({ model, actions, recordHref }: { model: PeopleTab
         </div>
       ) : null}
       {people.portalReading ? <PartReading rows={1} height={18} /> : null}
+      {people.usageProblem && list.length > 0 ? <UsageFailed problem={people.usageProblem} onRetry={actions?.onRetryUsage} /> : null}
       {!filter && people.listed > list.length ? (
         <Button size="sm" variant="quiet" className="fw-ca-more" onClick={() => actions?.onMore?.('people', true)}>
           {say(said('people.showMore', { params: { count: people.listed - list.length } }))}

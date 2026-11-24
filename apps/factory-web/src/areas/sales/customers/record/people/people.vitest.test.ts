@@ -48,7 +48,7 @@ const input = (contacts: readonly Contact[], portal: readonly PartnerPerson[] | 
 const address = (n: number, over: Partial<Address> = {}): Address => ({ ...MODA.addresses[0]!, id: `a${n}`, createdAt: `2026-0${n}-01T00:00:00.000Z`, ...over })
 const facts = (party: Pick<Party, 'kind' | 'contacts' | 'addresses'>, portal: PortalAccess | null, over: Partial<PeopleFacts> = {}): PeopleFacts => ({
   kind: party.kind,
-  people: peopleRows(input(party.contacts, portal?.settings.portalOn ? portal.people : null)),
+  people: peopleRows(input(party.contacts, portal ? portal.people : null)), // F-CA-fx4 (W-01): the portal's people whenever its read is in, on or off
   addresses: addressRows(party.addresses, null),
   portal: portal ? { on: portal.settings.portalOn, seats: portal.seats } : null,
   portalRight: true,
@@ -409,11 +409,16 @@ describe('Riders & measurements (W2.1)', () => {
 
   it('a rider\'s own page (a person customer) shows its team, and its own profiles as ONE row', () => {
     const rider = { ...MODA, id: 'p-rider', kind: 'PERSON' as const, tradeName: null, legalName: 'Marco Valli', contacts: [], addresses: [] }
-    const team: RidersView = { ...RIDERS, partyId: rider.id, kind: 'PERSON', team: { id: MODA.id, code: MODA.code, legalName: 'Moda Demo S.r.l.', status: 'ACTIVE' }, riders: [] }
+    // F-CA-fx4 (walk W-07): the team is named as its own page names it — its trade name, else its legal name.
+    const team: RidersView = { ...RIDERS, partyId: rider.id, kind: 'PERSON', team: { id: MODA.id, code: MODA.code, legalName: 'Moda Demo S.r.l.', tradeName: 'Moda Demo', status: 'ACTIVE' }, riders: [] }
     const model = peopleTabModel({ party: rider, prefix: '/w/DEMO', can: ALL_MEASURED, now: NOW, portal: null, privacy: null, usage: null, approverId: null, profiles: readyRead({ rows: [profile(4, { partyId: rider.id })], matching: 1 } as unknown as ProfilesView), riders: readyRead(team) }, PEOPLE_TAB_START)
-    expect(model.riders.team?.name).toBe('Moda Demo S.r.l.')
+    expect(model.riders.team?.name).toBe('Moda Demo')
     expect(model.riders.all.map((row) => row.kind)).toEqual(['self'])
-    expect(sentence(model.answer.words, 'en')).toContain('rider of Moda Demo S.r.l.')
+    expect(sentence(model.answer.words, 'en')).toContain('rider of Moda Demo')
+    expect(sentence(model.answer.words, 'en')).not.toContain('S.r.l.')
+    // No trade name: the legal name (the record title's own rule).
+    const legal = peopleTabModel({ party: rider, prefix: '/w/DEMO', can: ALL_MEASURED, now: NOW, portal: null, privacy: null, usage: null, approverId: null, profiles: readyRead({ rows: [], matching: 0 } as unknown as ProfilesView), riders: readyRead({ ...team, team: { ...team.team!, tradeName: null } }) }, PEOPLE_TAB_START)
+    expect(legal.riders.team?.name).toBe('Moda Demo S.r.l.')
     expect(model.riders.head.changeTeam).toBe(true)
     expect(model.riders.head.addRider).toBe(false)
   })
@@ -604,5 +609,79 @@ describe('the old People parts are out (W2.5)', () => {
     expect(readdirSync(new URL('../../depth/view/', import.meta.url))).not.toContain('GlanceParts.tsx')
     expect(source('../../depth/view/PrivacyCard.tsx')).not.toContain('export function PrivacyCard(')
     expect(source('../../portal/view/PeopleCard.tsx')).not.toMatch(/contactEmails|isContact/)
+  })
+})
+
+// ---- F-CA-fx4: the walk's gaps (design/customer-people-2026-11-24/30-walk.md W-01, W-02, W-04, W-06, W-07, W-09; 18-lead-settles Z25)
+describe('the walk\'s fixes (ca-fx4)', () => {
+  const OWN: RidersView = { partyId: MODA.id, code: MODA.code, kind: 'ORGANISATION', team: null, riders: [{ id: 'r1', code: 'CUS-0191', legalName: 'Marco Valli', tradeName: null, status: 'ACTIVE', country: 'IT', language: 'it', measurementProfiles: 2, version: 3, updatedAt: NOW }], version: MODA.version }
+  const KEPT = readyRead({ rows: [{ ...MTM_ROWS[0]!, id: 'pr-1', partyId: MODA.id, contactId: null, riderName: 'Sara Neri' }], matching: 1 } as unknown as ProfilesView)
+  const NONE = readyRead({ rows: [], matching: 0 } as unknown as ProfilesView)
+  const base = (over: Partial<PeopleTabReads> = {}): PeopleTabReads => ({ party: MODA, prefix: '/w/DEMO', can: ALL_MEASURED, now: NOW, portal: null, privacy: null, usage: null, approverId: null, profiles: KEPT, riders: readyRead(OWN), ...over })
+  const off = (people: readonly PartnerPerson[]) => portalModelOf('customers', { access: customerAccess({ settings: { portalOn: false, maxUsers: 5, allowedRoleKeys: [], version: 2 }, seats: { taken: people.length, max: 5 }, people: [...people] }) })
+  const EMPTY = { ...MODA, contacts: [], addresses: [] }
+
+  it('W-01: a portal that is OFF keeps its accounts on People — one row each, the portal column and its acts — and both answers say it is off', () => {
+    const four = ['Uno', 'Due', 'Tre', 'Quattro'].map((name, n) => person(`u${n + 1}`, `${name} Seed`, `${name.toLowerCase()}@example.com`, { status: 'ACTIVE' }))
+    const model = peopleTabModel(base({ party: EMPTY, can: ALL, portal: off(four), profiles: null, riders: readyRead({ ...OWN, riders: [] }) }), PEOPLE_TAB_START)
+    expect(model.people.rows.map((row) => row.id).sort()).toEqual(['u-u1', 'u-u2', 'u-u3', 'u-u4'])
+    expect(model.people.portalColumn).toBe(true)
+    expect(model.people.menu.access).not.toBeNull()
+    expect(sentence(model.answer.words, 'en')).toBe('4 people · the portal is off for this customer · 0 addresses')
+    expect(sentence(model.answer.words, 'it')).toBe('4 persone · il portale è spento per questo cliente · 0 indirizzi')
+    expect(sentence(model.people.answer, 'en')).toBe('0 contacts and 4 only in the portal · nobody gets quotes & confirmations · nobody gets invoices & reminders · the portal is off for this customer')
+    expect(sentence(model.people.answer, 'it')).toContain('il portale è spento per questo cliente')
+    // Off and nobody holds an account: no portal column (today's look), and nothing at all is said as such.
+    const nobody = peopleTabModel(base({ party: EMPTY, can: ALL, portal: off([]), profiles: null, riders: readyRead({ ...OWN, riders: [] }) }), PEOPLE_TAB_START)
+    expect(nobody.people.portalColumn).toBe(false)
+    expect(sentence(nobody.answer.words, 'en')).toBe('Nobody and no address yet')
+  })
+
+  it('W-04 · W-02: Riders reads while ANY of its reads is out (the riders or the profiles) — never a partial count, in the section or the answer line', () => {
+    const ridersOut = peopleTabModel(base({ riders: READING }), PEOPLE_TAB_START)
+    expect(ridersOut.riders.reading).toBe(true)
+    expect(sentence(ridersOut.answer.words, 'en')).not.toMatch(/rider/)
+    const profilesOut = peopleTabModel(base({ profiles: READING }), PEOPLE_TAB_START)
+    expect(profilesOut.riders.reading).toBe(true)
+    expect(sentence(profilesOut.answer.words, 'en')).not.toMatch(/rider/)
+    // Both in: counted (2 riders: one kept here, one with its own page).
+    expect(sentence(peopleTabModel(base(), PEOPLE_TAB_START).answer.words, 'en')).toContain('2 riders')
+  })
+
+  it('W-04 · W-02: a failed rider read is never a number and never "nobody" — no count, no "No rider yet" / "No measurements yet"', () => {
+    for (const reads of [{ riders: failedRead('problem.read.unavailable') }, { profiles: failedRead('problem.read.unavailable') }]) {
+      const model = peopleTabModel(base(reads), PEOPLE_TAB_START)
+      expect(model.riders.reading).toBe(false)
+      expect(sentence(model.answer.words, 'en')).not.toMatch(/rider/)
+      const words = sentence(model.riders.answer, 'en')
+      expect(words, JSON.stringify(reads)).not.toMatch(/\d+ riders?\b|No rider yet/)
+    }
+    const rider = { ...EMPTY, id: 'p-rider', kind: 'PERSON' as const, tradeName: null, legalName: 'Marco Valli' }
+    const self = peopleTabModel(base({ party: rider, profiles: failedRead('problem.read.unavailable'), riders: readyRead({ ...OWN, partyId: rider.id, kind: 'PERSON', riders: [] }) }), PEOPLE_TAB_START)
+    expect(self.riders.profilesProblem).toBe('problem.read.unavailable')
+    expect(sentence(self.riders.answer, 'en')).not.toContain('No measurements yet')
+  })
+
+  it('W-06 · W-07: a rider\'s own page with nothing says "Nobody and no address yet" and its team by its display name — never "0 people · 0 addresses"', () => {
+    const rider = { ...EMPTY, id: 'p-rider', kind: 'PERSON' as const, tradeName: null, legalName: 'Marco Valli' }
+    const team: RidersView = { ...OWN, partyId: rider.id, kind: 'PERSON', team: { id: MODA.id, code: MODA.code, legalName: 'Moda Demo S.r.l.', tradeName: 'Moda Demo', status: 'ACTIVE' }, riders: [] }
+    const model = peopleTabModel(base({ party: rider, profiles: NONE, riders: readyRead(team) }), PEOPLE_TAB_START)
+    expect(sentence(model.answer.words, 'en')).toBe('Nobody and no address yet · rider of Moda Demo')
+    expect(sentence(model.answer.words, 'it')).toBe('Ancora nessuno e nessun indirizzo · pilota di Moda Demo')
+    expect(model.riders.team).toEqual({ id: MODA.id, code: MODA.code, name: 'Moda Demo' })
+    // The Change team window names the current team the same way.
+    expect(readFileSync(new URL('./use-people-tab.ts', import.meta.url), 'utf8')).toContain('name: partyName({ tradeName: view.team.tradeName ?? null, legalName: view.team.legalName })')
+  })
+
+  it('W-09 (Z25): while the usage read reads nothing is said; failed: ONE problem per section (People, Addresses) with Try again of that read only', () => {
+    const reading = peopleTabModel(base({ usage: READING }), PEOPLE_TAB_START)
+    expect([reading.people.usageProblem, reading.addresses.usageProblem]).toEqual([null, null])
+    const failed = peopleTabModel(base({ usage: failedRead('problem.unavailable') }), PEOPLE_TAB_START)
+    expect([failed.people.usageProblem, failed.addresses.usageProblem]).toEqual(['problem.read.unavailable', 'problem.read.unavailable'])
+    expect(failed.people.all.every((row) => row.usage === null)).toBe(true)
+    expect(failed.addresses.usageIn).toBe(false)
+    expect([say('en')(said('used.failed')), say('it')(said('used.failed'))]).toEqual(["Couldn't read what is open on them", 'Impossibile leggere i lavori aperti che li riguardano'])
+    const container = readFileSync(new URL('./use-people-tab.ts', import.meta.url), 'utf8')
+    expect(container).toContain('onRetryUsage: () => {\n      setUsage(READING)\n      void loadUsage()\n    },')
   })
 })

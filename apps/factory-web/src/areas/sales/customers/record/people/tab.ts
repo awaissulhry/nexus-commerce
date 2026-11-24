@@ -1,5 +1,6 @@
 import { mailsOfContacts } from '@nexus/factory-domain/parties/contact-mails'
 import type { Party } from '../../../../parties/_shared/api'
+import { partyName } from '../../../../parties/_shared/model' // F-CA-fx4 (W-07): one display name per customer (trade name, else legal name)
 import type { PortalAccess } from '../../../../admin/users/partners/api'
 import { inviteHeld, type RowAction } from '../../../../admin/users/partners/model'
 import type { PortalAccessModel } from '../../portal/model'
@@ -128,7 +129,7 @@ export interface PeopleTabReads {
   readonly portal: PortalAccessModel | null
   /** The contacts' personal data (the depth provider's read on People); null: not handed. */
   readonly privacy: DepthRead<Privacy> | null
-  /** The usage read (D3); null: not made. While it reads or when it failed, the usage lines are left out. */
+  /** The usage read (D3); null: not made. While it reads, the usage lines are left out; failed: ONE quiet line per section (Z25). */
   readonly usage: Read<PartyUsage> | null
   /** The portal user who approves production (the limits read; null: anyone, not read or failed). */
   readonly approverId: string | null
@@ -148,7 +149,7 @@ export interface RidersSectionModel {
   readonly more: boolean
   /** The reader sees measurement profiles (else the riders' names only, said once). */
   readonly measurements: boolean
-  /** The first reads are still out (the section's skeleton). */
+  /** A read of the section is still out — the riders or the profiles (the section's skeleton: never a partial count; walk W-04). */
   readonly reading: boolean
   /** The profiles read failed (a kit key), else null: the riders' names still draw. */
   readonly profilesProblem: string | null
@@ -183,6 +184,8 @@ export interface PeopleSectionModel {
   readonly portalProblem: string | null
   /** The portal still reads (the column waits; the contacts draw). */
   readonly portalReading: boolean
+  /** F-CA-fx4 (Z25, walk W-09): the usage read failed (a kit key): ONE quiet line with its Try again — never a 0, never a row line. */
+  readonly usageProblem: string | null
   readonly ticking: boolean
   readonly ticked: readonly string[]
   /** The reader may tick (partners.invite or partners.manage) and the column shows. */
@@ -205,6 +208,8 @@ export interface AddressesSectionModel {
   readonly approving: string | null
   /** The usage read is in (an address with nothing open then says "Not on open work"; while it reads or failed: nothing). */
   readonly usageIn: boolean
+  /** F-CA-fx4 (Z25, walk W-09): the usage read failed (a kit key): ONE quiet line with its Try again — never a 0, never a row line. */
+  readonly usageProblem: string | null
   readonly menu: AddressMenuContext
 }
 
@@ -261,13 +266,20 @@ export function peopleTabModel(reads: PeopleTabReads, state: PeopleTabState): Pe
   const portalModel = reads.portal
   const access = can.portal ? (portalModel?.access ?? null) : null
   const portalOn = access?.settings.portalOn ?? false
-  // The portal's people only where the column shows (a portal that is off shows no one: "the portal is off for this customer").
-  const portalPeople = access && portalOn ? access.people : null
+  // F-CA-fx4 (walk W-01; Z1): the portal's people show whenever the portal read is in — a portal that is OFF still has its accounts, and
+  // the answers say the portal is off; the column shows when the portal is on or anyone holds an account.
+  const portalPeople = access ? access.people : null
   const privacy = reads.privacy && reads.privacy.status === 'ready' ? reads.privacy.value : null
   const usage = valueOf(reads.usage)
+  const usageProblem = reads.usage?.status === 'error' ? kitProblemOf(reads.usage.problem) : null // F-CA-fx4 (Z25)
   // F-CA-203: the riders of both kinds (the profiles only with the measurements right: body data).
   const profileRead = can.measurements ? reads.profiles : null
   const ridersRead = valueOf(reads.riders)
+  // F-CA-fx4 (walk W-04, W-02): the section reads while ANY of its reads is out (never a partial count); a rider count is said only once
+  // every rider read is in (the riders read, and the profiles read when the reader may make it) — a failed read is never a number.
+  const ridersReading = reads.riders === null || reads.riders.status === 'loading' || profileRead?.status === 'loading'
+  const ridersComplete = ridersRead !== null && (profileRead === null || profileRead.status === 'ready')
+  const team = ridersRead?.team ? { id: ridersRead.team.id, code: ridersRead.team.code, name: partyName({ tradeName: ridersRead.team.tradeName ?? null, legalName: ridersRead.team.legalName }) } : null // W-07
   const riderList = riderRows({ kind: party.kind, partyId: party.id, partyName: party.tradeName ?? party.legalName, contacts: party.contacts, profiles: valueOf(profileRead)?.rows ?? null, riders: ridersRead })
   const mails = mailsOfContacts(party.contacts.map((contact) => ({ id: contact.id, name: contact.name, email: contact.email, roles: contact.roles, status: contact.status, createdAt: contact.createdAt })))
   const all = peopleRows({ contacts: party.contacts, portal: portalPeople, privacy: privacy?.contacts ?? null, mails, usage: usage?.contacts ?? null, approverId: reads.approverId, now })
@@ -279,16 +291,16 @@ export function peopleTabModel(reads: PeopleTabReads, state: PeopleTabState): Pe
     portal: access && portalOn ? { on: true, seats: access.seats } : access ? { on: false, seats: access.seats } : null,
     portalRight: can.portal,
     privacyIn: privacy !== null,
-    // F-CA-203: the riders' count once a riders read is in (never 0 for "not read"); a rider's team from the riders read.
-    riders: ridersRead !== null || valueOf(profileRead) !== null ? riderList.length : null,
-    team: ridersRead?.team?.legalName ?? null,
+    // F-CA-203: the riders' count once every riders read is in (F-CA-fx4 W-04: never a partial count); a rider's team by its display name.
+    riders: ridersComplete ? riderList.length : null,
+    team: team?.name ?? null,
   }
   const showLeft = portalModel?.showLeft ?? false
   // ---- People
   const personFilter = personFilterOf(state.filter)
   const listedPeople = shownPeople(all, { archived: state.showArchivedContacts, left: showLeft })
   const peopleList = personFilter ? all.filter(personFilter) : listedPeople
-  const portalColumn = access !== null && portalOn
+  const portalColumn = access !== null && (portalOn || access.people.length > 0) // F-CA-fx4 (W-01)
   const inviteWords = access ? inviteHeld(access, { view: can.portal, invite: can.invite, manage: can.portalManage, preview: false, requests: false }) : null
   const people: PeopleSectionModel = {
     answer: peopleSectionAnswer(facts),
@@ -303,6 +315,7 @@ export function peopleTabModel(reads: PeopleTabReads, state: PeopleTabState): Pe
     portalColumn,
     portalProblem: can.portal && portalModel?.problem && !portalModel.access ? kitProblemOf(portalModel.problem) : null,
     portalReading: can.portal && portalModel !== null && !portalModel.access && !portalModel.problem,
+    usageProblem,
     ticking: state.ticking && portalColumn,
     ticked: (portalModel?.selected ?? []).filter((id) => all.some((row) => row.portal?.id === id && tickable(row))),
     mayTick: portalColumn && (can.invite || can.portalManage),
@@ -335,20 +348,21 @@ export function peopleTabModel(reads: PeopleTabReads, state: PeopleTabState): Pe
       more: state.moreAddresses,
       approving: state.approving,
       usageIn: usage !== null,
+      usageProblem,
       menu: { can, archivedCustomer, prefix: reads.prefix },
     },
     riders: {
       kind: party.kind,
-      answer: ridersAnswer({ kind: party.kind, rows: riderList, measurements: can.measurements, matching: valueOf(profileRead)?.matching ?? null }),
+      answer: ridersAnswer({ kind: party.kind, rows: riderList, measurements: can.measurements, matching: valueOf(profileRead)?.matching ?? null, complete: ridersComplete }),
       all: riderList,
       rows: state.moreRiders ? riderList : riderList.slice(0, RIDER_ROWS),
       more: state.moreRiders,
       measurements: can.measurements,
-      reading: (reads.riders === null || reads.riders.status === 'loading') && (profileRead === null || profileRead.status === 'loading'),
+      reading: ridersReading,
       profilesProblem: profileRead?.status === 'error' ? profileRead.problem : null,
       ridersProblem: reads.riders?.status === 'error' ? reads.riders.problem : null,
       matching: valueOf(profileRead)?.matching ?? null,
-      team: ridersRead?.team ? { id: ridersRead.team.id, code: ridersRead.team.code, name: ridersRead.team.legalName } : null,
+      team,
       head: {
         newShown: can.measurements && can.mtmRecord,
         newHeld: archivedCustomer ? said('parties:held.archived') : newMeasurementsHeld(party.status),
@@ -421,6 +435,8 @@ export interface PeopleTabActions {
   readonly onBulk?: (action: RowAction) => void
   readonly onMore?: (section: 'people' | 'addresses' | 'riders', more: boolean) => void
   readonly onRetryPortal?: () => void
+  /** F-CA-fx4 (Z25): the usage read failed — Try again reads only the usage read again. */
+  readonly onRetryUsage?: () => void
   readonly onRefuseDraft?: (reason: string) => void
   readonly onRefuseConfirm?: () => void
   readonly onRefuseClose?: () => void

@@ -8,7 +8,8 @@ const ridersView = output({
   partyId: id(),
   code: z.string(),
   kind: z.enum(PARTY_KINDS),
-  team: output({ id: id(), code: z.string(), legalName: z.string(), status: z.enum(PARTY_STATUSES) }).nullable(),
+  /** F-CA-fx4 (walk W-07): + the team's trade name — the office names a customer by its trade name, else its legal name. */
+  team: output({ id: id(), code: z.string(), legalName: z.string(), tradeName: z.string().nullable(), status: z.enum(PARTY_STATUSES) }).nullable(),
   riders: z.array(
     output({
       id: id(),

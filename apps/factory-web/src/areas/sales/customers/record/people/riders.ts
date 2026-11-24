@@ -82,14 +82,20 @@ export interface RidersFacts {
   readonly measurements: boolean
   /** How many profiles the MTM read matches for this customer (null: not read). */
   readonly matching: number | null
+  /**
+   * F-CA-fx4 (walk W-04, W-02): every rider read is in (the riders read, and the profiles read when the reader may make it). false: a
+   * read failed — the riders are not counted and "No rider yet" is not said (a failed read is never a number, never "nobody").
+   */
+  readonly complete?: boolean
 }
 
 /** Riders & measurements' answer (10-design §5.3): the riders of both kinds, the profiles' review state, the next fitting; said once. */
 export function ridersAnswer(facts: RidersFacts): Said[] {
   const organisation = facts.kind === 'ORGANISATION'
   const out: Said[] = []
-  if (facts.rows.length === 0) return [said(organisation ? 'riders.answer.none' : 'riders.answer.noneSelf')]
-  if (organisation) {
+  const complete = facts.complete ?? true
+  if (complete && facts.rows.length === 0) return [said(organisation ? 'riders.answer.none' : 'riders.answer.noneSelf')]
+  if (organisation && complete) {
     const own = facts.rows.filter((row) => row.kind === 'own').length
     out.push(own > 0 ? said('riders.answer.ridersBoth', { words: { riders: said('answer.riders', { params: { count: facts.rows.length } }) }, params: { here: facts.rows.length - own, own } }) : said('answer.riders', { params: { count: facts.rows.length } }))
   }
