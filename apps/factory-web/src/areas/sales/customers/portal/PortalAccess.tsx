@@ -233,7 +233,8 @@ export function usePortalAccess({ side, party, parts, enabled }: PortalAccessInp
   const invited = useRef(false)
   useEffect(() => {
     const email = search?.get('invite')?.trim()
-    if (invited.current || !email || !access || !(parts ?? PORTAL_PARTS).includes('people')) return
+    // F-CA-fx3 (P0-B1): only for who may invite — the in-page Invite's own right (`partners.invite`); a reader without it gets no window.
+    if (invited.current || !can.invite || !email || !access || !(parts ?? PORTAL_PARTS).includes('people')) return
     invited.current = true
     setDialog({ kind: 'invite', email, ...(search?.get('inviteName') ? { name: search.get('inviteName')! } : {}) })
     // Once the people are read.

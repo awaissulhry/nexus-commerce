@@ -538,3 +538,31 @@ describe('walk L5: SCR-033-portal — an adviser’s portal: Sales sees the Acco
   })
 })
 // ---- end L5
+
+// ---- F-CA-fx3 (P0-B1): the address `?invite=` opens the invitation only for who may invite (imported here, below the lines above)
+import { partnerCan } from '../../../admin/users/partners/model'
+
+describe('F-CA-fx3 (P0-B1): `?invite=` opens the invitation only for who may invite — the in-page Invite button\'s own right', () => {
+  it('a reader without partners.invite gets no window from the address; with the right the window is the same as before, filled in', () => {
+    // The right the in-page Invite button reads (PeopleCard: inviteHeld(access, model.can)) — partners.invite, no new right.
+    expect(partnerCan(['partners.view']).invite).toBe(false)
+    expect(inviteHeld(customerAccess(), partnerCan(['partners.view']))).toBe('right.invite')
+    expect(partnerCan(['partners.view', 'partners.invite']).invite).toBe(true)
+    expect(inviteHeld(customerAccess(), READ_ONLY)).toBe('right.invite')
+    const container = readFileSync(new URL('./PortalAccess.tsx', import.meta.url), 'utf8')
+    expect(container).toContain('const can = useMemo(() => partnerCan(session.permissions), [session.permissions])')
+    const start = container.indexOf('const invited = useRef(false)')
+    expect(start).toBeGreaterThan(-1)
+    const effect = container.slice(start, container.indexOf('// ---- end F-SA-274', start))
+    // The address door checks the right BEFORE it marks itself used and opens the window.
+    const guard = "if (invited.current || !can.invite || !email || !access || !(parts ?? PORTAL_PARTS).includes('people')) return"
+    expect(effect).toContain(guard)
+    expect(effect.indexOf(guard)).toBeLessThan(effect.indexOf('invited.current = true'))
+    expect(effect.indexOf('invited.current = true')).toBeLessThan(effect.indexOf("setDialog({ kind: 'invite', email,"))
+    // With the right: the same window as before (its e-mail and name from the address).
+    expect(effect).toContain("setDialog({ kind: 'invite', email, ...(search?.get('inviteName') ? { name: search.get('inviteName')! } : {}) })")
+    // The address is the container's only door that opens the invitation by itself (the button and People's ⋯ hand it to onDialog).
+    expect(container.match(/setDialog\(\{ kind: 'invite'/g)).toHaveLength(1)
+  })
+})
+// ---- end F-CA-fx3
