@@ -143,12 +143,43 @@ export interface ReadMarker {
  * message seen meanwhile goes right after). A failed call is forgotten quietly (the next message seen tries again): a mark is the
  * reader's own convenience, never a "seen by" record.
  */
-export function readMarker(send: (messageId: string) => Promise<void>): ReadMarker {
+/** tw- fx2 (walk: up to 25 `POST …/read` a session): at most one mark in this many ms. */
+export const READ_MARK_GAP_MS = 5_000
+
+export function readMarker(
+  send: (messageId: string) => Promise<void>,
+  // tw- fx2: the clock and the timer, for the 5 s gap (a test passes its own; gapMs 0: no gap).
+  options: { readonly gapMs?: number; readonly now?: () => number; readonly later?: (run: () => void, ms: number) => unknown } = {},
+): ReadMarker {
+  const gapMs = options.gapMs ?? READ_MARK_GAP_MS
+  const now = options.now ?? (() => Date.now())
+  const later = options.later ?? ((run: () => void, ms: number) => setTimeout(run, ms))
   let mark: { id: string; at: string } | null = null
   let flying: { id: string; at: string } | null = null
   let next: { id: string; at: string } | null = null
+  // tw- fx2: the newest message ever sent (never sent twice, even after a failed call) and when; a wait for the gap in progress.
+  let lastSent: string | null = null
+  let lastAt = Number.NEGATIVE_INFINITY
+  let waiting = false
   const go = (target: { id: string; at: string }) => {
+    if (target.id === lastSent) return
+    const wait = lastAt + gapMs - now()
+    if (wait > 0) {
+      next = ahead(target, next) ? target : next
+      if (!waiting) {
+        waiting = true
+        later(() => {
+          waiting = false
+          const queued = next
+          next = null
+          if (queued && ahead(queued, mark) && !flying) go(queued)
+        }, wait)
+      }
+      return
+    }
     flying = target
+    lastSent = target.id
+    lastAt = now()
     send(target.id)
       .then(() => {
         if (ahead(target, mark)) mark = target
@@ -156,6 +187,7 @@ export function readMarker(send: (messageId: string) => Promise<void>): ReadMark
       .catch(() => undefined)
       .finally(() => {
         flying = null
+        if (waiting) return
         const queued = next
         next = null
         if (queued && ahead(queued, mark)) go(queued)
@@ -164,8 +196,8 @@ export function readMarker(send: (messageId: string) => Promise<void>): ReadMark
   return {
     seen: (message) => {
       if (!ahead(message, mark)) return
-      if (flying) {
-        if (ahead(message, flying) && ahead(message, next)) next = message
+      if (flying || waiting) {
+        if ((!flying || ahead(message, flying)) && ahead(message, next)) next = message
         return
       }
       go(message)

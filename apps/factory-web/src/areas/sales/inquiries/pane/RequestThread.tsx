@@ -111,7 +111,9 @@ export function RequestThread({ host, ask = null, onAsk, replyLanguage = null }:
 function useRequestReplies(host: RecordThreadHost, thread: ReturnType<typeof useRecordThread>, language: string | null) {
   const api = useOfficeApi()
   const locale = useLocale()
-  const mayReply = thread.base.held.has('email.send') || thread.base.held.has('threads.post')
+  // tw- fx2 (walk G-2): saved replies are the route's own right (email.send, GET /templates/replies) — never a request the reader
+  // has no right to (the walk saw a 403 for the production manager), and so on every host the same.
+  const mayReply = thread.base.held.has('email.send')
   // th-backend-g step 3 (B-TH-098 web half): the customer's language first — any of the five (it, en, de, fr, es).
   const first = isReplyLanguage(language) ? language : locale === 'en' ? 'en' : 'it'
   const [model, setModel] = useState<SavedRepliesModel>({ status: 'loading', replies: [], language: first })

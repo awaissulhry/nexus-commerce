@@ -10,7 +10,6 @@
     "forbidden": "You cannot read this thread",
     "forbiddenBody": "Your role does not include it.",
     "empty": "No messages yet",
-    "emptyBody": "Write the first one below.",
     "offline": "Offline · as of {time}",
     "offlineBody": "These are the messages until then. New ones show when you are back online; what you type stays on this device.",
     "stepUp": "Confirm it's you to read it: sign in again with your second step."

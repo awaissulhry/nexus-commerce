@@ -7,12 +7,13 @@ import { addDropped, contentTypeOf, draftOfRecordFile, kindOf, sendable, uploadA
 import { messageLink, type CardMessage } from '../../../lib/record-thread/card/model'
 // tw- W1.4 (THE THREAD REBUILD): Reply on every message keeps the audience (D4), its bar's words; the jump's pages, words and flash.
 import { excerptOf, replyWay } from '../../../lib/record-thread/card/model'
-import { senderTone } from '../../../lib/record-thread/parts/tones'
+import { senderTone, tonesFor } from '../../../lib/record-thread/parts/tones'
 import type { FeedPin } from '../../../lib/record-thread/feed/model'
 import { JUMP_LIMIT, JUMP_PAGE, type OfficeMessage } from './api'
 import { barPinsOf } from '../../../lib/record-thread/head/pins-bar' // tw- W2.1: the pinned bar (Z14: every host)
 import { jumpRefusal } from './state'
 import { cardDepth, copyTextOf } from '../../../lib/record-thread/card/model' // B-TH-255; tw- W2.2: Copy text
+import { centreInList } from '../../../lib/record-thread/parts/scroll' // tw- fx2 (G-3)
 import { askRemindMe } from '../../../shell/panels/remind-me/model' // tw- W2.2: a message's Remind me
 import { startDraft, switchMode, type ComposerContext, type ComposerDraft } from '../../../lib/record-thread/composer/model'
 // TH-1c's helpers (B-TH-208) and pop-ups (B-TH-211): the draft kept on this device, @mentions, the leave guard.
@@ -585,6 +586,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     () => server.messages.map((message) => ({ ...cardOf(message, { emails, deliveries, names, taskHref: (taskId) => `${prefix}/home/tasks?open=${encodeURIComponent(taskId)}`, me: session.user.id, undo: undoable }), ...cardDepth(message), ...(pinnedIds.has(message.id) ? { pinned: true } : {}) /* B-TH-286 */ })),
     [server.messages, emails, deliveries, names, prefix, session.user.id, undoable, pinnedIds],
   )
+  const tones = useMemo(() => tonesFor(cards.map((card) => card.senderKey)), [cards]) // tw- fx2 (G-7)
   const closed = server.thread?.status === 'CLOSED' ? closedBy(changes, names) : null
   const lastSubject = useMemo(() => {
     const mails = server.messages.filter((message) => emails.has(message.id))
@@ -629,6 +631,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
       replyWays: { note: can.post, email: can.email && party !== null, portal: context.portal === true },
       // tw- W2.2: "Remind me" on a message — the reader's own reminders live on Home (home.view).
       canRemind: held.has('home.view'),
+      // tw- fx2 (walk G-7): one colour per person in this thread (the reply bar's quote takes the same).
+      tones,
     },
     more: server.more,
     older: server.older,
@@ -983,7 +987,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
       setFlash((now) => ({ id: messageId, seq: (now?.seq ?? 0) + 1 }))
       requestAnimationFrame(() => {
         const target = document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`)
-        target?.scrollIntoView({ block: 'center' })
+        centreInList(target) // tw- fx2 (G-3): the list scrolls, never the page
         target?.focus({ preventScroll: true })
       })
       return true
@@ -1009,7 +1013,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
       who: message.authorHidden ? null : message.author.name,
       at: message.at,
       audience: card.kind === 'note' || card.kind === 'floor' ? 'note' : 'shared',
-      quote: { name: message.authorHidden ? null : message.author.name, ...(card.mine ? { you: true } : {}), tone: senderTone(card.senderKey), line: excerptOf(card.body) },
+      before: workRef.current.draft.link?.kind === 'reply' ? (workRef.current.draft.link.before ?? workRef.current.draft.mode) : workRef.current.draft.mode, // tw- fx2 (G-24)
+      quote: { name: message.authorHidden ? null : message.author.name, ...(card.mine ? { you: true } : {}), tone: (card.senderKey ? tones.get(card.senderKey) : undefined) ?? senderTone(card.senderKey), line: excerptOf(card.body) },
     }
     setWork((now) => ({
       ...now,

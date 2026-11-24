@@ -18,6 +18,8 @@ import { arrivedAtEnd, byTime, feedRows, shouldLoadOlder, walkTarget, whoWords, 
 import { stepsWordsOf, stepVerbKey } from '../model' // F-OP-214: other modules' words, the run of steps
 import { hiddenNewLine, waitingMailLine, type FeedWaitingMail } from '../model' // B-TH-255
 import '../../parts/parts.css'
+import { centreInList, revealInList } from '../../parts/scroll' // tw- fx2 (G-1, G-3)
+import { tonesFor } from '../../parts/tones' // tw- fx2 (G-7)
 import '../feed.css'
 
 export interface FeedModel {
@@ -82,6 +84,8 @@ export function Feed({ model, actions }: { model: FeedModel; actions?: FeedActio
   const t = useT('record-thread-feed')
   const locale = useLocale()
   const [shownChanges, setShownChanges] = useState<ReadonlySet<string>>(new Set())
+  // tw- fx2 (walk G-7): one colour per person inside this list (the host's when it gave them).
+  const listContext = useMemo(() => (model.context.tones ? model.context : { ...model.context, tones: tonesFor(model.messages.map((message) => message.senderKey)) }), [model.context, model.messages])
   const [newCount, setNewCount] = useState(model.newCount ?? 0)
   const [scrolledUp, setScrolledUp] = useState(false)
   const [announce, setAnnounce] = useState('')
@@ -108,16 +112,28 @@ export function Feed({ model, actions }: { model: FeedModel; actions?: FeedActio
 
   // The first read: open at the message a link names (in view, focused, its row lit), else at the unread band (B-TH-229, T4-F01),
   // else at the newest message. New messages below the screen wait behind the down button.
+  // tw- fx2 (G-1): a feed drawn hidden (the phone's thread view before it is opened) has no height yet — it opens once it has one.
   const opened = useRef(false)
+  const [shown, setShown] = useState(0)
+  useEffect(() => {
+    const feed = feedRef.current
+    if (!feed || opened.current || model.state !== 'ready' || feed.clientHeight > 0 || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => {
+      if (feed.clientHeight > 0) setShown((count) => count + 1)
+    })
+    observer.observe(feed)
+    return () => observer.disconnect()
+  }, [model.state, shown])
   useLayoutEffect(() => {
     const feed = feedRef.current
     if (!feed || opened.current || model.state !== 'ready') return
+    if (feed.clientHeight === 0 && typeof ResizeObserver !== 'undefined') return // tw- fx2 (G-1): not shown yet
     opened.current = true
     const anchorId = model.context.anchorId ?? null
     const anchor = anchorId ? feed.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(anchorId)}"]`) : null
     const line = feed.querySelector<HTMLElement>('[data-feed-new]')
     if (anchor && anchorId) {
-      anchor.scrollIntoView({ block: 'center' })
+      centreInList(anchor) // tw- fx2 (G-3)
       anchor.focus({ preventScroll: true })
       setArrival(anchorId)
     } else if (line) {
@@ -126,7 +142,7 @@ export function Feed({ model, actions }: { model: FeedModel; actions?: FeedActio
     atBottom.current = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 48
     setScrolledUp(!atBottom.current)
     if (line && !atBottom.current) setNewCount(model.newSince ?? 0)
-  }, [model.state, model.context.anchorId, model.newSince, rows])
+  }, [model.state, model.context.anchorId, model.newSince, rows, shown])
 
   // B-TH-229 (T1-F04): what the person has seen — the newest message on screen for a second while the page is in view — goes to
   // the container, which marks the thread read up to it (forward only, once). Never a "seen by" list: the mark is the reader's own.
@@ -299,8 +315,10 @@ export function Feed({ model, actions }: { model: FeedModel; actions?: FeedActio
     const element = items.find((item) => item.dataset.feedItem === next)
     if (element) {
       event.preventDefault()
-      element.focus()
-      element.scrollIntoView({ block: 'nearest' })
+      // tw- fx2 (walk G-12): the list's J / K are the list's — a page's own list keys (a ListFrame's window listener) never get them too.
+      event.stopPropagation()
+      element.focus({ preventScroll: true })
+      revealInList(element) // tw- fx2 (G-3): the list only
     }
   }
 
@@ -367,7 +385,8 @@ export function Feed({ model, actions }: { model: FeedModel; actions?: FeedActio
         {model.messages.length === 0 && model.events.length === 0 ? (
           <>
             <div className="fw-rt-empty">
-              <EmptyState icon={<MailOpen size={22} aria-hidden />} title={t('state.empty')} description={t('state.emptyBody')} />
+              {/* tw- fx2 (walk G-15; 10-design § 14): ONE line, "No messages yet" — the box below says how to write. */}
+              <EmptyState icon={<MailOpen size={22} aria-hidden />} title={t('state.empty')} />
             </div>
             {/* B-TH-255: a view that hides everything, or mail that waits, still says so under the empty state. */}
             <EndLines model={model} actions={actions} t={t} />
@@ -395,7 +414,7 @@ export function Feed({ model, actions }: { model: FeedModel; actions?: FeedActio
                 t={t}
                 locale={locale}
                 today={today}
-                context={model.context}
+                context={listContext}
                 actions={actions}
                 paper={model.paper === true}
                 flash={row.kind === 'message' ? flashOf(row.message.id) : null}
