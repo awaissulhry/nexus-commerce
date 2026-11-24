@@ -59,14 +59,23 @@ export type RequirementRow = Prisma.CustomerRequirementGetPayload<{ select: type
 
 type Reader = FactoryClient | CommandTx
 
-async function labelsOf(db: Reader, rows: readonly RequirementRow[]) {
+/**
+ * The names the rows show. F-CT-S1 (the brand wall): a style is labelled only when it is our own (no brand) or `partyId`'s own;
+ * another brand's style a row named before the save checked it reads like a style no longer offered (no code, no name).
+ */
+async function labelsOf(db: Reader, rows: readonly RequirementRow[], partyId: string) {
   const people = [...new Set(rows.flatMap((row) => [row.createdById, row.endedById]).filter((id): id is string => id !== null))]
   const styles = [...new Set(rows.flatMap((row) => row.styleIds))]
   const files = [...new Set(rows.flatMap((row) => (row.fileId ? [row.fileId] : [])))]
   const companies = [...new Set(rows.flatMap((row) => (row.companyId ? [row.companyId] : [])))]
   return {
     people: new Map((people.length > 0 ? await db.user.findMany({ where: { id: { in: people } }, select: { id: true, displayName: true } }) : []).map((row) => [row.id, row.displayName])),
-    styles: new Map((styles.length > 0 ? await db.style.findMany({ where: { id: { in: styles } }, select: { id: true, code: true, name: true } }) : []).map((row) => [row.id, { code: row.code, name: row.name }])),
+    styles: new Map(
+      (styles.length > 0 ? await db.style.findMany({ where: { id: { in: styles }, OR: [{ brandPartyId: null }, { brandPartyId: partyId }] }, select: { id: true, code: true, name: true } }) : []).map((row) => [
+        row.id,
+        { code: row.code, name: row.name },
+      ]),
+    ),
     files: new Map((files.length > 0 ? await db.storedFile.findMany({ where: { id: { in: files } }, select: { id: true, originalName: true } }) : []).map((row) => [row.id, row.originalName])),
     companies: new Map((companies.length > 0 ? await db.company.findMany({ where: { id: { in: companies } }, select: { id: true, code: true } }) : []).map((row) => [row.id, row.code])),
   }
@@ -105,7 +114,7 @@ export async function requirementsOf(db: Reader, context: OfficeContext, partyId
   const rows = (await db.customerRequirement.findMany({ where: { partyId }, select: REQUIREMENT_COLUMNS, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] })).filter(
     (row) => row.companyId === null || can(actor, PARTIES_VIEW, { companyId: row.companyId, partyId }),
   )
-  const labels = await labelsOf(db, rows)
+  const labels = await labelsOf(db, rows, partyId)
   const views = rows.map((row) => requirementViewOf(row, labels))
   return { partyId: party.id, code: party.code, inForce: views.filter((view) => view.active), ended: views.filter((view) => !view.active) }
 }
@@ -150,8 +159,10 @@ async function checkBody(caller: CommandCaller, context: OfficeContext, party: P
   const styleIds = body.styleIds ?? []
   if (styleIds.some((id) => !isUuid(id))) issues.push({ path: 'body/styleIds', message: 'Expected style ids.' })
   else if (styleIds.length > 0) {
-    const found = await caller.withClient((client) => client.style.findMany({ where: { id: { in: [...styleIds] } }, select: { id: true, companyId: true } }))
-    const fit = (style: { companyId: string | null }) => style.companyId === null || companyId === null || style.companyId === companyId
+    const found = await caller.withClient((client) => client.style.findMany({ where: { id: { in: [...styleIds] } }, select: { id: true, companyId: true, brandPartyId: true } }))
+    // F-CT-S1 (the brand wall): our own styles (no brand) or THIS customer's own, never another brand's (the same refusal).
+    const ours = (style: { brandPartyId: string | null }) => style.brandPartyId === null || style.brandPartyId === party.id
+    const fit = (style: { companyId: string | null; brandPartyId: string | null }) => ours(style) && (style.companyId === null || companyId === null || style.companyId === companyId)
     if (found.length !== new Set(styleIds).size || !found.every(fit)) issues.push({ path: 'body/styleIds', message: "Styles of the rule's company, or of every company." })
   }
   if (body.fileId) {
@@ -310,7 +321,7 @@ export async function requirementsForRecord(caller: CommandCaller, recordType: R
     if (!place || !can(actor, place.permission, { companyId: place.companyId, partyId: place.partyId, ...(place.siteId ? { siteId: place.siteId } : {}) })) throw new NotFoundError(`${recordType} not found.`)
     const stages = RECORD_STAGES[recordType]
     const rows = await requirementsApplying(client, place.partyId, { companyId: place.companyId, stages, styleIds: place.styleIds })
-    const labels = await labelsOf(client, rows)
+    const labels = await labelsOf(client, rows, place.partyId)
     const party = await client.party.findUnique({ where: { id: place.partyId }, select: { code: true, legalName: true } })
     const views = rows.map((row) => requirementViewOf(row, labels))
     return {

@@ -159,6 +159,37 @@ describe('customer requirements (SAL-014)', () => {
     await no('reader', 'POST', `/parties/${A.p1}/requirements`, { companyId: null, kind: 'OTHER', words: 'A rule.', appliesAt: ['ORDER'] }, 403)
   })
 
+  // F-CT-S1 (customer terms lane, S1 — Owner rule 2026-11-16: "One brand must not be able to see anything related to any other brand").
+  it("a requirement names only our own styles and this customer's: another brand's style is refused on save and never labelled", async () => {
+    const styleOf = async (code: string) => one<{ id: string; brandPartyId: string | null }>(`SELECT id::text AS id, "brandPartyId"::text AS "brandPartyId" FROM "Style" WHERE "tenantId" = $1 AND code = $2`, [A.tenant, code])
+    const ours = await styleOf('SEED-TRS-01') // our own collection: no brand
+    const theirs = await styleOf('SEED-JKT-B2') // Seed Brand Two's own label (seed/two-brands.ts)
+    expect(ours.brandPartyId).toBeNull()
+    expect(theirs.brandPartyId).not.toBeNull()
+    expect(theirs.brandPartyId).not.toBe(A.p1)
+    // Our own style and SEED-C1's own jacket: saved, each with its code.
+    const saved = await ok('sales', 'POST', `/parties/${A.p1}/requirements`, { companyId: A.companyA, kind: 'LABEL', words: 'Hangtag with the brand logo (made up).', appliesAt: ['ORDER'], styleIds: [ours.id, jacketStyleId] }, 201)
+    const row = saved.requirements.inForce.find((entry: Json) => entry.id === saved.requirementId)
+    expect(row.styles.map((style: Json) => style.id).sort()).toEqual([ours.id, jacketStyleId].sort())
+    expect(row.styles.find((style: Json) => style.id === ours.id)).toMatchObject({ code: 'SEED-TRS-01' })
+    expect(row.styles.every((style: Json) => style.code !== '')).toBe(true)
+    // Another brand's style: refused on a new rule and on a replace, in the words of a style that does not fit.
+    const refused = await no('sales', 'POST', `/parties/${A.p1}/requirements`, { companyId: A.companyA, kind: 'LABEL', words: 'A label (made up).', appliesAt: ['ORDER'], styleIds: [theirs.id] }, 400)
+    expect(paths(refused)).toEqual(['body/styleIds'])
+    expect(JSON.stringify(refused)).not.toContain('SEED-JKT-B2')
+    const replaced = await no('sales', 'POST', `/parties/${A.p1}/requirements/${row.id}/replace`, { version: row.version, companyId: A.companyA, kind: 'LABEL', words: 'A label (made up).', appliesAt: ['ORDER'], styleIds: [ours.id, theirs.id] }, 400)
+    expect(paths(replaced)).toEqual(['body/styleIds'])
+    // A row that named it before the save checked (test data, past the route): read like a style no longer offered.
+    await force(`UPDATE "CustomerRequirement" SET "styleIds" = $2::uuid[] WHERE id = $1`, [row.id, [ours.id, theirs.id]])
+    const read = await ok('sales', 'GET', `/parties/${A.p1}/requirements`)
+    const old = read.requirements.inForce.find((entry: Json) => entry.id === row.id)
+    expect(old.styles).toEqual(expect.arrayContaining([{ id: theirs.id, code: '', name: '' }, expect.objectContaining({ id: ours.id, code: 'SEED-TRS-01' })]))
+    expect(JSON.stringify(read)).not.toContain('SEED-JKT-B2')
+    expect(JSON.stringify(read)).not.toContain('Seed Brand Two jacket')
+    // The rule ends: the reads after this test stay as they were.
+    await ok('sales', 'POST', `/parties/${A.p1}/requirements/${row.id}/end`, { version: old.version, reason: 'Test data (made up).' })
+  })
+
   it('shows the requirements where they apply: the order (ORDER), the shipment (pick & pack, shipping checklist)', async () => {
     const onOrder = await ok('sales', 'GET', `/parties/requirements/for/SalesOrder/${so1.id}`)
     expect(onOrder.record).toMatchObject({ type: 'SalesOrder', number: 'SEED-SO-0001', companyId: A.companyA })

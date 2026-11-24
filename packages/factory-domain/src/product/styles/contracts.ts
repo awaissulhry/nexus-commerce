@@ -168,6 +168,12 @@ export const listStylesQuery = input({
    * prices each one (`colourways`). An order the person may not see answers like an unknown one (404).
    */
   forOrder: id().optional(),
+  // F-CT-S1 (customer terms lane, S1 — the brand wall): the style search of a customer's requirement.
+  /**
+   * A customer (party id) the person reads: only our own collection (no brand) and that customer's own private-label styles,
+   * never another brand's. A customer the person may not see answers like an unknown one (404).
+   */
+  forCustomer: id().optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   cursor: z.string().max(200).optional(),
 })
