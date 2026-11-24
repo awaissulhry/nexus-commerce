@@ -1005,5 +1005,19 @@ describe('cm-fx4: the walk\'s gaps', () => {
     expect(css).toContain('.fw-cm-list.is-np.is-na .fw-cm-row-g { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) 214px var(--m) var(--a) 44px; grid-template-areas: "k n d m a o"; }')
     expect(css).toContain('@container cmls (min-width: 1000px) {\n  .fw-cm-list.is-np.is-na')
   })
+
+  // ---- cm-fx5: the re-walk's gaps R-2, R-3 (30-walk.md §6)
+  it('R-2: an invoice row of To collect is named by its kind and number — never the same ⋯ name as its row in Invoices', () => {
+    const collect = view('CollectSection.tsx')
+    expect(collect).toContain('const name = row.invoice?.number ? `${what} · ${row.invoice.number}` : row.order?.number ? `${what} · ${row.order.number}` : what')
+    expect(collect).not.toContain('const name = row.invoice?.number ??')
+  })
+
+  it('R-3: a list where no row has words gives the words column back (what · when), after the M-14 rules so it wins', () => {
+    const css = view('customer-money.css')
+    const rule = '.fw-cm-list:not(:has(.fw-cm-row-n:not(:empty))) .fw-cm-row-g { grid-template-columns: minmax(0, 1fr) 204px var(--m) var(--a) 44px; grid-template-areas: "k d m a o" "n d m a o"; }'
+    expect(css).toContain(`@container cmls (min-width: 1000px) {\n  ${rule}`)
+    expect(css.indexOf(rule)).toBeGreaterThan(css.lastIndexOf('.fw-cm-list.is-np .fw-cm-row-g, .fw-cm-list.is-na .fw-cm-row-g'))
+  })
 })
-// ---- end cm-fx4
+// ---- end cm-fx4 + cm-fx5
