@@ -18,6 +18,8 @@ import { startHarness, type Harness } from '../auth/sessions/testing/harness'
 import { ensureThread, messageLinkProblems, messageLinksOf, writeMessage, type MessageLinkInput } from './threads'
 // B-SA-061: what a message is about.
 import { ABOUT_WORDS, type About } from './about'
+// tw-s S.3: a quoted floor note names its writer only through the site's PERFORMANCE gate.
+import { switchOnPerformance } from '../../modules/people/privacy/testing/performance-gate'
 
 /**
  * B-TH-050 (threads plan TH-3, thread-G19, thread-G20; features T3-F07 Reply, T3-F09 Make a task, T3-F11 Correct; wall W08: "the
@@ -413,6 +415,43 @@ describe('tw-s: a quote carries its own data, through the reader’s own walls',
     expect(onErased.message.replyTo).toMatchObject(erasedQuote)
     // A quote of a message that is not erased never says so.
     expect(byId(asWriter, onFiles.message.id).replyTo).not.toHaveProperty('erased')
+  })
+
+  it('a quote of a floor note names its writer when the gate is open, also on a page with no floor note; nobody when it is shut', async () => {
+    const FLOOR_NAME = 'Made-up Floor Person'
+    const floorWorker = newId()
+    const { result: floor } = await command(callerFor(h.database, office()), { name: 'production.postFloorNote', input: { workOrder, tws: 'S.3' } }, async (tools) => {
+      const { thread } = await ensureThread(tools, { type: 'WorkOrder', id: workOrder }, null)
+      const written = await writeMessage(tools, thread, { direction: 'INTERNAL_NOTE', channel: 'APP', author: { kind: 'WORKER', id: floorWorker, name: FLOOR_NAME }, bodyText: 'Made-up: the left sleeve is cut 1 cm short.' })
+      return { id: written.id, companyId: thread.companyId, siteId: thread.siteId }
+    })
+    expect(floor.siteId, 'a work order’s thread sits on its site').toBeTruthy()
+    // The office answers the floor note; the answer's own quote names nobody while the gate is shut.
+    const answer = await note('WorkOrder', workOrder, { body: 'Made-up: re-cut the sleeve, please.', replyToMessageId: floor.id })
+    const hidden = { id: floor.id, authorKind: 'WORKER', authorName: null, authorId: null, audience: 'OFFICE', excerpt: 'Made-up: the left sleeve is cut 1 cm short.' }
+    expect(answer.message.replyTo).toMatchObject(hidden)
+    expect(JSON.stringify(answer)).not.toContain(FLOOR_NAME)
+    // A page of the answer alone: no floor note on it, the quote still goes through the gate.
+    const pageOfAnswer = async (): Promise<{ raw: string; quote: Json }> => {
+      const response = await call('writer', 'GET', `/threads/WorkOrder/${workOrder}?limit=1`)
+      expect(response.statusCode, response.body).toBe(200)
+      const messages = (response.json() as Json).messages as Json[]
+      expect(messages.map((message) => message.id)).toEqual([answer.message.id])
+      expect(messages.every((message) => message.author.kind !== 'WORKER')).toBe(true)
+      return { raw: response.body, quote: messages[0]!.replyTo }
+    }
+    const shut = await pageOfAnswer()
+    expect(shut.quote).toMatchObject(hidden)
+    expect(shut.raw).not.toContain(FLOOR_NAME)
+    expect(shut.raw).not.toContain(floorWorker)
+    // The gate open: the quote names the worker, as the card does; shut again: nobody again.
+    const gateOff = await switchOnPerformance(admin, { tenantId: T, companyId: floor.companyId!, siteId: floor.siteId!, byId: WRITER })
+    try {
+      expect((await pageOfAnswer()).quote).toMatchObject({ id: floor.id, authorKind: 'WORKER', authorName: FLOOR_NAME, authorId: floorWorker })
+    } finally {
+      await gateOff()
+    }
+    expect((await pageOfAnswer()).quote).toMatchObject(hidden)
   })
 })
 // ── end tw-s ──

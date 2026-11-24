@@ -264,7 +264,8 @@ function messageViewOf(row: MessageRow, attachments: ReadonlyMap<string, Attachm
       return seen ? [seen] : []
     }),
     // ---- B-TH-231 / B-TH-029: files of the message the reader may not see are counted, never silently dropped ("One file you cannot open").
-    ...hiddenOf(row.attachmentFileIds, attachments),
+    // tw-s S.3 (B5): the office's read only — a portal or link reader is never told that a file it cannot open exists.
+    ...('authorId' in row ? hiddenOf(row.attachmentFileIds, attachments) : {}),
     // ---- B-TH-049: the typed amount, the office's only (the answer drops it for a reader without the price grain: money.price).
     ...('amount' in row ? { amount: asMoney('price', row.amount === null || row.amount === undefined || !row.amountCurrency ? null : { value: row.amount, currency: row.amountCurrency }) } : {}),
     // ---- B-TH-050: what it answers or corrects, and the newest correction of it, as far as the reader may see them.
@@ -591,7 +592,8 @@ export async function readThread(caller: CommandCaller, record: RecordRef, page:
     const attachments = await visibleAttachments(client, context, shown.flatMap((row) => row.attachmentFileIds))
     const last = shown.at(-1)
     // A thread sits on one site: its gate is read once, and only for a page with a floor note (the office's: others read none).
-    const gates = await workerGatesFor(client, office && shown.some((row) => row.authorKind === 'WORKER') ? [thread.siteId] : [])
+    // tw-s S.3 (B4): or with a reply or a correction — a quoted floor note names its writer through the gate, also on a page without one.
+    const gates = await workerGatesFor(client, office && shown.some((row) => row.authorKind === 'WORKER' || Boolean(row.replyToMessageId) || Boolean(row.correctsMessageId)) ? [thread.siteId] : [])
     // ---- B-TH-027: the reader's own reading (office and portal people; a link has none). B-TH-028: the office's head only (W08).
     const who = whoOf(context)
     const reading = who ? await readingOf(client, thread.id, who) : null
@@ -1034,7 +1036,9 @@ export async function postNote(caller: CommandCaller, record: RecordRef, input: 
       await clearDraftInCommand(tools, context.actorId, record) // B-TH-092
       const current = await tools.tx.thread.findUniqueOrThrow({ where: { id: thread.id }, select: THREAD_OFFICE })
       const attachments = await visibleAttachments(tools.tx, context, message.attachmentFileIds)
-      const linked = await messageLinksOf(tools.tx, thread.id, [message], { sharedOnly: false, workerShown: true, /* tw-s S.1 */ visibleFiles: (fileIds) => visibleAttachments(tools.tx, context, fileIds) }) // B-TH-050
+      // tw-s S.3 (B4): the answer's quote names a floor worker only through the site's gate, as the thread's read does.
+      const gates = await workerGatesFor(tools.tx, links.replyToMessageId || links.correctsMessageId ? [thread.siteId] : [])
+      const linked = await messageLinksOf(tools.tx, thread.id, [message], { sharedOnly: false, workerShown: gates.at(thread.siteId).open, /* tw-s S.1 */ visibleFiles: (fileIds) => visibleAttachments(tools.tx, context, fileIds) }) // B-TH-050
       return { thread: threadViewOf(current), message: messageViewOf(message, attachments, true, linked) }
     },
   )

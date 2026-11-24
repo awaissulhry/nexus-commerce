@@ -139,7 +139,7 @@ export const messageView = output({
   mentions: z.array(id()).optional(),
   /** The attached files the reader may see, in order; the others are left out. */
   attachments: z.array(attachmentView),
-  /** B-TH-231 (B-TH-029): how many attached files the reader may not see (left out above; absent when none): "One file you cannot open". */
+  /** B-TH-231 (B-TH-029): Office only (tw-s S.3) — how many attached files the reader may not see (left out above; absent when none): "One file you cannot open". */
   hiddenAttachments: z.number().int().min(1).optional(),
   // ---- B-TH-049 (N7, T8-F04): the price typed in the amount field (minor units of its currency); office only, and only for a reader
   // holding the price grain (money.price: the answer drops it for everyone else). Null: the note has none.

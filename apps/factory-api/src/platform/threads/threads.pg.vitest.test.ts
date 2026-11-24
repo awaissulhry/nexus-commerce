@@ -375,6 +375,26 @@ describe('attachments (COL-045, COL-050)', () => {
     // An office reader without files.read sees the message, not its files.
     expect(await attachmentsOf('reader')).toEqual([])
   })
+
+  // ---- tw-s S.3 (the thread rebuild; B5): "One file you cannot open" is the office's word only.
+  it('a link or portal read of GET /threads never says how many files it cannot open; the office’s read does', async () => {
+    const portal = await file('Quote', quote, { visibility: ['OFFICE', 'PARTNER'], partyId: partyOne })
+    const link = await file('Quote', quote, { visibility: ['OFFICE', 'LINK'], partyId: partyOne })
+    const sent = await sendToParty(quote, 'Made-up: one file for the portal, one for the link.', [portal, link])
+    expect(sent.problems).toEqual([])
+    const seen = async (session: string): Promise<Json> => ((await thread(session, 'Quote', quote)).messages as Json[]).find((message) => message.id === sent.id)!
+    // Each outside reader sees its own file, and nothing says another one is there.
+    const asPortal = await seen('partner-one')
+    expect(asPortal.attachments.map((attachment: Json) => attachment.id)).toEqual([portal])
+    expect(asPortal).not.toHaveProperty('hiddenAttachments')
+    const asLink = await seen('link-one')
+    expect(asLink.attachments.map((attachment: Json) => attachment.id)).toEqual([link])
+    expect(asLink).not.toHaveProperty('hiddenAttachments')
+    // The office: a reader without files.read is told how many it cannot open; the author sees both and is told nothing.
+    expect(await seen('reader')).toMatchObject({ attachments: [], hiddenAttachments: 2 })
+    expect(await seen('author')).not.toHaveProperty('hiddenAttachments')
+  })
+  // ---- end tw-s S.3
 })
 
 describe('mentions (COL-006) and events', () => {
