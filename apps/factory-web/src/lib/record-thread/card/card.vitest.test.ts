@@ -621,7 +621,7 @@ describe('tw- W1.1 — Reply keeps the audience of what it answers (D4), for eve
     const NONE = { note: true, email: false, portal: false }
     expect(way(card('theirs', 'EMAIL'), NONE)).toBe('note')
     expect(way(card('ours', 'EMAIL'), NONE)).toBe('note')
-    expect(repliesPrivately(card('theirs', 'EMAIL'), { replyWays: NONE })).toBe(false)
+    expect(repliesPrivately(card('theirs', 'EMAIL'), { canReply: false, replyWays: NONE })).toBe(false)
     expect(cardActions(card('theirs', 'EMAIL'), { canReply: false, replyWays: NONE })).toEqual(['reply', 'link'])
   })
 
@@ -629,7 +629,7 @@ describe('tw- W1.1 — Reply keeps the audience of what it answers (D4), for eve
     expect(cardActions(card('theirs', 'EMAIL'), { canReply: true, replyWays: ALL })).toEqual(['reply', 'replyPrivately', 'link'])
     expect(cardActions(card('ours', 'EMAIL'), { canReply: true, replyWays: ALL })).toEqual(['reply', 'link'])
     expect(cardActions(card('note', 'APP'), { canReply: true, replyWays: ALL })).toEqual(['reply', 'link'])
-    expect(repliesPrivately(card('theirs', 'PORTAL'), { replyWays: { note: false, email: true, portal: true } })).toBe(false)
+    expect(repliesPrivately(card('theirs', 'PORTAL'), { canReply: true, replyWays: { note: false, email: true, portal: true } })).toBe(false)
   })
 
   it('Read-only (no way at all): no Reply anywhere', () => {
