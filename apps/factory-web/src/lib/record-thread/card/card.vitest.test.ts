@@ -388,7 +388,8 @@ describe('B-TH-255 — erased after a privacy request vs files only; the files a
     const text = textOf(card(mail))
     expect(text).toContain('2 files in this email were not kept: logo.ai (type not accepted), clip.mov (too large)')
     expect(text).not.toContain('sig.png')
-    expect(textOf(card({ ...mail, skipped: [mail.skipped![1]!] }, 'it'))).toContain('1 file di questa e-mail non è stato tenuto: clip.mov (troppo grande)')
+    // tw- W2.4 (§13: "email" spelled once, IT too).
+    expect(textOf(card({ ...mail, skipped: [mail.skipped![1]!] }, 'it'))).toContain('1 file di questa email non è stato tenuto: clip.mov (troppo grande)')
     expect(textOf(card(MAIL))).not.toContain('were not kept')
     for (const locale of ['en', 'it'] as const) {
       const words = CATALOGUE[locale]['record-thread-card'] ?? {}
@@ -818,10 +819,14 @@ describe('tw- W2.2 — the message menu per kind and per reader (10-design §9)'
     expect(opensOnRightClick({ target: { closest: () => null } as unknown as EventTarget }, 'selected words')).toBe(false)
   })
 
-  it('a row whose door the host does not give is not drawn (Copy text, Remind me, Email details, Answer…); read-only (All of) draws no menu', () => {
+  // tw- W2.5 (10-design §9 "All of"): read only, a card's menu is Answer in its thread · Copy text · Copy link, each by its door — no
+  // Reply, no Pin, whatever the reader's rights; no door, no menu.
+  it('a row whose door the host does not give is not drawn (Copy text, Remind me, Email details, Answer…); read-only (All of) draws only its own rows', () => {
     const source = readFileSync(new URL('./view/MessageCard.tsx', import.meta.url), 'utf8')
     expect(source).toContain('cardActions(message, context).filter((action) => !DOOR_OF[action] || Boolean(actions?.[DOOR_OF[action]!]))')
-    expect(render(createElement(MessageCard, { message: THEIR_MAIL, context: OWNER, actions: { onCopyLink: () => undefined }, readOnly: true }))).not.toContain('fw-rt-msg-more')
+    expect(render(createElement(MessageCard, { message: THEIR_MAIL, context: OWNER, actions: { onReply: () => undefined, onPin: () => undefined }, readOnly: true }))).not.toContain('fw-rt-msg-more')
+    expect(render(createElement(MessageCard, { message: THEIR_MAIL, context: OWNER, actions: { onCopyLink: () => undefined }, readOnly: true }))).toContain('fw-rt-msg-more')
+    expect(source).toContain("READ_ONLY_MENU.filter((action) => Boolean(actions?.[READ_ONLY_DOOR[action]!]) && (action !== 'copyText' || copyTextOf(message) !== null))")
   })
 })
 

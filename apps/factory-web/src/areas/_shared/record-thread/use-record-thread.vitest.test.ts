@@ -540,7 +540,16 @@ describe('F-SA-260 — ThreadPick: which ONE thread the dock shows, and the one 
     expect(workOrder).not.toContain('SegmentedControl')
     expect(readFileSync(new URL('../../production/_shared/production.css', import.meta.url), 'utf8')).not.toMatch(/\.fw-pr-threadpick\s*\{/)
     const css = readFileSync(new URL('./thread-pick.css', import.meta.url), 'utf8')
-    expect(css).toMatch(/\.fw-thread-pick \{\s*display: flex;\s*flex-direction: column;/)
+    expect(css).toMatch(/\.fw-thread-pick \{\s*flex: 1 1 auto;\s*display: flex;\s*flex-direction: column;/)
+    // tw- fx1 (walk: the title cut with room to spare): the title takes the free space first; no `max-width: 100%` beside the
+    // button's negative start margin (it cut the label by those 6 px); the head's tools never shrink.
+    const title = css.slice(css.indexOf('.fw-thread-pick-title {'), css.indexOf('}', css.indexOf('.fw-thread-pick-title {')))
+    expect(title).toContain('flex: 0 1 auto;')
+    expect(title).toContain('min-width: 0;')
+    expect(title).not.toContain('max-width')
+    const head = readFileSync(new URL('../../../lib/record-thread/head/head.css', import.meta.url), 'utf8')
+    expect(head).toMatch(/\.fw-rth-titleblock \{\s*flex: 1 1 auto;\s*min-width: 0;/)
+    expect(head).toMatch(/\.fw-rth-tools \{\s*flex: none;/)
     expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|color-mix/i)
     const source = readFileSync(new URL('./ThreadPick.tsx', import.meta.url), 'utf8')
     expect(source).not.toContain('SegmentedControl')
@@ -831,7 +840,8 @@ describe('tw- W1.4 — one door to a message, the jump, Reply on every message, 
     expect(viewKeeps('shared', { kind: 'ours' })).toBe(true)
     expect(docked).toContain("base.notify({ ns: 'record-thread', key: 'notice.viewAll', tone: 'info' })")
     expect(docked).toContain('onJump: (messageId) => void jumpInView(messageId),')
-    expect(docked).toContain('onPin: (messageId) => void jumpInView(messageId)')
+    // tw- W2.1: the pins moved from the files line to the pinned bar — RecordThread hands it the host's ONE jump door (onJump above).
+    expect(readFileSync(new URL('../../../lib/record-thread/RecordThread.tsx', import.meta.url), 'utf8')).toContain('<PinnedBar pins={model.pinned} onJump={actions.onJump} />')
     expect(docked).toContain('void jumpInView(messageId) // tw- W1.4: the one door (older pages read, the row lit)')
     expect(docked).toContain('latestCompose.current = { onReply: actions.onReply, jumpTo: jumpInView, messages: base.server.messages }')
     expect(docked).not.toMatch(/void base\.jumpTo\(/)

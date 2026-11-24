@@ -12,7 +12,7 @@ import './thread-pick.css'
  * F-SA-260 (sales page plan N4, picks P9, P19; 10-order-page §6.1, 11-customer-page §9.1; review C-13) — THE pick of a record's dock:
  * which ONE thread the dock shows (PL1 "one thread per page"), lifted from the work order's dock (B-TH-265, WorkOrderThreads) so the
  * work order, the order page and the customer page pick their thread with the same part and the same look: a design-system
- * SegmentedControl (small, wrapping) at the dock's top and, under it, ONE line that says whose the picked thread is — who reads what
+ * segmented pick (small, wrapping) at the dock's top and, under it, ONE line that says whose the picked thread is — who reads what
  * is written there — so nobody writes to a customer believing it stays in the office. The dock's children are the picked thread.
  *
  * The host names its choices (only those the reader may read, each with its words and its line) and the value; a value that is not

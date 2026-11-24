@@ -198,7 +198,9 @@ describe('the doors (R-ACT)', () => {
     const html = render(base({ canManage: true, closed, reopenWithRecord: true }))
     expect(html).toContain('Closed by Alex Demo')
     expect(html).not.toContain('>Reopen<')
-    expect(render(base({ canManage: true, closed }))).toContain('>Reopen<')
+    // tw- W2.1: Reopen is the ⋮'s last row on a closed thread (the head is one row; its line says Closed by …).
+    expect(menuRows(base({ canManage: true, closed })).at(-1)).toEqual({ kind: 'reopen' })
+    expect(render(base({ canManage: true, closed }))).toContain('Closed by Alex Demo')
   })
   // ---- end TH-5 follow-up
 
@@ -631,7 +633,8 @@ describe('tw- W2.1 — the pinned bar (W-080 / W-081, R12): newest pin first, "S
     expect(BAR_MARKS).toBe(4)
     expect(barState(six, 0)).toMatchObject({ index: 0, count: 6, marks: [true, false, false, false], next: 1 })
     expect(barState(six, 5)).toMatchObject({ index: 5, marks: [false, false, false, true], next: 0 })
-    expect(barState(six, 4)!.marks).toEqual([false, false, true, false])
+    expect(barState(six, 4)!.marks).toEqual([false, false, false, true]) // the window ends at the pin shown (it never leaves it)
+    expect(barState(six, 2)!.marks).toEqual([false, false, true, false])
     expect(barState(six.slice(0, 2), 1)).toMatchObject({ marks: [false, true], next: 0 })
     expect(barState([], 0)).toBeNull()
     // One pin: no marks at all; none: no bar.
