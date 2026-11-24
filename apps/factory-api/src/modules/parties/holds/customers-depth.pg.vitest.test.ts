@@ -363,6 +363,81 @@ describe("contacts' personal data (SAL-022)", () => {
     await no('sales', 'POST', `/parties/${A.p1}/contacts/${buyer()}/erase`, { version: 1, words: 'No.' }, 403)
     expect(await outbox('party.contact_erased')).toEqual([{ partyId: A.p3, code: 'SEED-C2', contactId: p3Buyer() }])
   })
+
+  // ── F-CA-S1 (ca-s S.1; R-W1, R-W3 — the brand wall): one address, two customers ──
+  it("the access copy and the erase count read only this customer's mails", async () => {
+    const agent = `agent.${run}@example.com`
+    const contactOf = (answer: Json): Json => (answer.party.contacts as Json[]).find((row) => row.email === agent)!
+    // The same made-up agent is a contact of customer A (SEED-C1) and of customer B (SEED-C2).
+    const inA = contactOf(await ok('sales', 'POST', `/parties/${A.p1}/contacts`, { name: 'Made-up Agent', email: agent, roles: [] }, 201))
+    const inB = contactOf(await ok('sales', 'POST', `/parties/${A.p3}/contacts`, { name: 'Made-up Agent', email: agent, roles: [] }, 201))
+    // A's thread (the seeds' quote of A) and a thread of B (made from it past the guards: B's party, its own record and token).
+    const threadA = id('threads:quote:Q1')
+    expect(await one<Json>(`SELECT "partyId" FROM "Thread" WHERE id = $1`, [threadA])).toEqual({ partyId: A.p1 })
+    const threadB = newId()
+    const token = Array.from(randomBytes(26), (byte) => 'abcdefghijklmnopqrstuvwxyz234567'[byte % 32]).join('')
+    await force(`INSERT INTO "Thread" (id, "tenantId", "companyId", "partyId", "recordType", "recordId", "replyToken") SELECT $1, "tenantId", "companyId", $2, "recordType", $3, $4 FROM "Thread" WHERE id = $5`, [threadB, A.p3, newId(), token, threadA])
+    /** A copy of a seeded received mail, from the agent, matched to `partyId` (and the contact, or its domain alone). */
+    const received = async (subject: string, partyId: string, contactId: string | null): Promise<void> => {
+      const source = await one<{ id: string }>(`SELECT id FROM "InboundEmail" WHERE "tenantId" = $1 ORDER BY id LIMIT 1`, [A.tenant])
+      await admin(`CREATE TEMP TABLE _ca_in AS SELECT * FROM "InboundEmail" WHERE id = $1`, [source.id])
+      try {
+        await admin(
+          `UPDATE _ca_in SET id = $1, "sesMessageId" = $2, "emailMessageId" = NULL, "fromAddress" = $3, subject = $4, "senderPartyId" = $5, "senderContactId" = $6,
+             "threadId" = NULL, "messageId" = NULL, "matchedBy" = NULL, status = 'RECEIVED', "heldReason" = NULL, "rejectReason" = NULL, "receivedAt" = now()`,
+          [newId(), `ca-s-${newId()}`, agent, subject, partyId, contactId],
+        )
+        await force(`INSERT INTO "InboundEmail" SELECT * FROM _ca_in`)
+      } finally {
+        await admin('DROP TABLE IF EXISTS _ca_in')
+      }
+    }
+    /** A copy of a seeded outbound mail, to the agent, on `threadId` (its record's mail). */
+    const sent = async (subject: string, threadId: string): Promise<void> => {
+      const source = await one<{ id: string }>(`SELECT id FROM "EmailOutbound" WHERE "tenantId" = $1 ORDER BY id LIMIT 1`, [A.tenant])
+      const outboundId = newId()
+      await admin(`CREATE TEMP TABLE _ca_out AS SELECT * FROM "EmailOutbound" WHERE id = $1`, [source.id])
+      try {
+        await admin(
+          `UPDATE _ca_out SET id = $1, "emailMessageId" = $2, "sesMessageId" = NULL, "threadId" = $3, "messageId" = NULL, "recordType" = 'Quote',
+             "recordId" = (SELECT "recordId" FROM "Thread" WHERE id = $3), "to" = ARRAY[$4::text], cc = '{}', bcc = '{}', subject = $5, "queuedAt" = now()`,
+          [outboundId, `<${outboundId}@example.com>`, threadId, agent, subject],
+        )
+        await force(`INSERT INTO "EmailOutbound" SELECT * FROM _ca_out`)
+      } finally {
+        await admin('DROP TABLE IF EXISTS _ca_out')
+      }
+    }
+    await received('Made-up mail to A from its contact', A.p1, inA.id)
+    await received('Made-up mail to A from its domain', A.p1, null)
+    await received('Made-up mail to B', A.p3, inB.id)
+    await sent("Made-up answer on A's thread", threadA)
+    await sent("Made-up answer on B's thread", threadB)
+    const words = { words: 'Asked by mail (made up).' }
+    const mailsOf = (copy: Json) => ({ received: copy.mailsReceived.map((row: Json) => row.subject).sort(), sent: copy.mailsSent.map((row: Json) => row.subject).sort() })
+    // A's copy holds A's mails only; B's copy holds B's only (the same address in both).
+    const ofA = (await ok('sales', 'POST', `/parties/${A.p1}/contacts/${inA.id}/access-copy`, words, 201)).copy
+    expect(mailsOf(ofA)).toEqual({ received: ['Made-up mail to A from its contact', 'Made-up mail to A from its domain'], sent: ["Made-up answer on A's thread"] })
+    const ofB = (await ok('sales', 'POST', `/parties/${A.p3}/contacts/${inB.id}/access-copy`, words, 201)).copy
+    expect(mailsOf(ofB)).toEqual({ received: ['Made-up mail to B'], sent: ["Made-up answer on B's thread"] })
+    // A person limited to A gets A's copy whole, and nothing of B (not found, as an unknown customer).
+    SESSIONS.limitedA = { audience: 'office', tenantId: A.tenant, actorId: ACTORS.sales!, grants: grantsOf('sales').map((grant) => ({ ...grant, parties: [A.p1] })) }
+    const limited = (await ok('limitedA', 'POST', `/parties/${A.p1}/contacts/${inA.id}/access-copy`, words, 201)).copy
+    expect(mailsOf(limited)).toEqual(mailsOf(ofA))
+    await no('limitedA', 'POST', `/parties/${A.p3}/contacts/${inB.id}/access-copy`, words, 404)
+    // The erase of B's contact counts what stays of B's mails: its one, never A's two (the same address).
+    h.clock.set(new Date(Date.now() - 4 * 60_000))
+    const user = await addUser(h, TENANT, { email: `w2b290-ca-eraser-${run}@example.com`, role: 'finance' })
+    const browser = new Browser(h.app)
+    expect((await browser.signIn(TENANT.slug, user.email, user.password)).body.status).toBe('signed_in')
+    const secret = await enrolTotp(h, browser)
+    await stepUp(h, browser, secret)
+    const current = (await ok('finance', 'GET', `/parties/${A.p3}/contacts/privacy`)).privacy.contacts.find((row: Json) => row.id === inB.id)
+    const erased = await browser.send('POST', `/parties/${A.p3}/contacts/${inB.id}/erase`, { version: current.version, words: 'Erasure asked by letter (made up).' }, { headers: { 'idempotency-key': freshKey() } })
+    expect(erased.status, JSON.stringify(erased.body)).toBe(200)
+    expect((erased.body as Json).kept.find((entry: Json) => entry.kind === 'inboundMails')).toMatchObject({ count: 1 })
+  })
+  // ── F-CA-S1 end ──
 })
 
 describe('riders under a team (SAL-021)', () => {

@@ -183,19 +183,53 @@ export async function recordObjection(caller: CommandCaller, partyId: string, co
 const LIMIT = 200
 const excerpt = (text: string | null | undefined, length = 500): string | null => (text ? (text.length > length ? `${text.slice(0, length)}…` : text) : null)
 
+// F-CA-S1 (ca-s S.1; R-W1, R-W3 — the brand wall): a person's address can be a contact of several customers (an agent, a
+// buyer who moved). The copy and the erase count read only THIS customer's mails, never every mail that names the address.
+
+/** The mails received from the person by THIS customer: matched to the contact, or from its address matched to this party. */
+function ownInboundWhere(contact: ContactRow, partyId: string): Prisma.InboundEmailWhereInput {
+  return { OR: [{ senderContactId: contact.id }, ...(contact.email ? [{ fromAddress: contact.email, senderPartyId: partyId }] : [])] }
+}
+
+/**
+ * The mails sent to the person's address by THIS customer's records: a mail of one of its threads, or a record mail with no
+ * thread whose record carries this party in its key (its portal people's sign-in and notice mails, its one-off links, inquiry
+ * receipts, fitting invites, measurement mails, approvals and shares asked of it). The record types are the ones the senders
+ * write without a thread (platform/auth/partners/mail.ts, platform/links/mail.ts, sales/inquiries/receipt.ts,
+ * sales/fittings/mail.ts, sales/mtm/review.ts, platform/approvals-out/mail.ts, platform/shares/notify.ts); each model keys
+ * its row by its party.
+ */
+async function ownOutboundWhere(db: Reader, email: string, partyId: string): Promise<Prisma.EmailOutboundWhereInput> {
+  const idsOf = (rows: readonly { readonly id: string }[]): string[] => rows.map((row) => row.id)
+  const records: Readonly<Record<string, readonly string[]>> = {
+    User: idsOf(await db.user.findMany({ where: { partyId }, select: { id: true } })),
+    OneOffLink: idsOf(await db.oneOffLink.findMany({ where: { partyId }, select: { id: true } })),
+    Inquiry: idsOf(await db.inquiry.findMany({ where: { partyId }, select: { id: true } })),
+    Appointment: idsOf(await db.appointment.findMany({ where: { partyId }, select: { id: true } })),
+    MeasurementProfile: idsOf(await db.measurementProfile.findMany({ where: { partyId }, select: { id: true } })),
+    ApprovalRequest: idsOf(await db.approvalRequest.findMany({ where: { partyId }, select: { id: true } })),
+    RecordShare: idsOf(await db.recordShare.findMany({ where: { partyId }, select: { id: true } })),
+  }
+  const recordMails: Prisma.EmailOutboundWhereInput[] = Object.entries(records)
+    .filter(([, ids]) => ids.length > 0)
+    .map(([recordType, ids]) => ({ threadId: null, recordType, recordId: { in: [...ids] } }))
+  return { AND: [{ OR: [{ to: { has: email } }, { cc: { has: email } }] }, { OR: [{ thread: { partyId } }, ...recordMails] }] }
+}
+// F-CA-S1 end
+
 /** What we hold about the person, read in one client (the copy's content). */
 async function copyOf(db: Reader, contact: ContactRow, party: PartyRowData) {
   const email = contact.email
   const quotes = await db.quote.findMany({ where: { contactId: contact.id }, select: { id: true, number: true, status: true, createdAt: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: LIMIT })
   const inquiries = await db.inquiry.findMany({ where: { contactId: contact.id }, select: { id: true, number: true, status: true, receivedAt: true }, orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }], take: LIMIT })
   const mailsIn = await db.inboundEmail.findMany({
-    where: { OR: [{ senderContactId: contact.id }, ...(email ? [{ fromAddress: email }] : [])] },
+    where: ownInboundWhere(contact, party.id), // F-CA-S1
     select: { id: true, receivedAt: true, fromAddress: true, fromName: true, subject: true, bodyText: true, status: true },
     orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }],
     take: LIMIT,
   })
   const mailsOut = email
-    ? await db.emailOutbound.findMany({ where: { OR: [{ to: { has: email } }, { cc: { has: email } }] }, select: { id: true, queuedAt: true, subject: true, status: true, recordType: true, recordId: true }, orderBy: [{ queuedAt: 'asc' }, { id: 'asc' }], take: LIMIT })
+    ? await db.emailOutbound.findMany({ where: await ownOutboundWhere(db, email, party.id) /* F-CA-S1 */, select: { id: true, queuedAt: true, subject: true, status: true, recordType: true, recordId: true }, orderBy: [{ queuedAt: 'asc' }, { id: 'asc' }], take: LIMIT })
     : []
   const messages = await db.message.findMany({ where: { authorKind: 'PARTY', authorId: contact.id }, select: { id: true, threadId: true, at: true, authorName: true, bodyText: true }, orderBy: [{ at: 'asc' }, { id: 'asc' }], take: LIMIT })
   const links = await db.oneOffLink.findMany({ where: { contactId: contact.id }, select: { id: true, purpose: true, recordType: true, email: true, createdAt: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: LIMIT })
@@ -266,11 +300,10 @@ export async function accessCopy(caller: CommandCaller, partyId: string, contact
 
 // ---- erasure (art. 17) ---------------------------------------------------------------------------------------------------
 
-async function keptOf(db: Reader, contact: ContactRow) {
-  const email = contact.email
+async function keptOf(db: Reader, contact: ContactRow, partyId: string) {
   const count = {
     documents: (await db.quote.count({ where: { contactId: contact.id } })) + (await db.inquiry.count({ where: { contactId: contact.id } })) + (await db.returnAuthorisation.count({ where: { contactId: contact.id } })) + (await db.complaint.count({ where: { contactId: contact.id } })),
-    inboundMails: await db.inboundEmail.count({ where: { OR: [{ senderContactId: contact.id }, ...(email ? [{ fromAddress: email }] : [])] } }),
+    inboundMails: await db.inboundEmail.count({ where: ownInboundWhere(contact, partyId) }), // F-CA-S1 (R-W3): this customer's mails only
     messages: await db.message.count({ where: { authorKind: 'PARTY', authorId: contact.id } }),
     auditRows: await db.auditLog.count({ where: { recordType: 'PartyContact', recordId: contact.id } }),
     links: await db.oneOffLink.count({ where: { contactId: contact.id } }),
@@ -297,7 +330,7 @@ export async function eraseContact(caller: CommandCaller, partyId: string, conta
     const { tx, now } = tools
     await lockParty(tx, partyId)
     await bumpVersion(tx, 'contact', contactId, body.version)
-    const kept = await keptOf(tx, contact)
+    const kept = await keptOf(tx, contact, partyId)
     await tx.partyContact.update({ where: { id: contactId }, data: { name: '', email: null, phone: null, status: 'ARCHIVED', erasedAt: now, erasedById: context.actorId, updatedAt: now }, select: { id: true } })
     // No personal data in the audit: what was asked (the words), when, by whom, and what stays.
     tools.audit({ action: 'parties.eraseContact', recordType: 'PartyContact', recordId: contactId, companyId: party.companyId, before: { erased: false, status: contact.status }, after: { erasedAt: toUtcIso(now), status: 'ARCHIVED', kept: kept.map((entry) => ({ kind: entry.kind, count: entry.count })) }, reason: body.words.trim() })
