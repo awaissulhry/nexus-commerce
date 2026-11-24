@@ -266,4 +266,15 @@ describe('F-CM-k1: the parts file', () => {
     expect(head).toContain('<MoneyAnswer tone={head.tone} reading={head.reading}')
     expect(head).not.toMatch(/<Banner|fw-om-head-wall/)
   })
+
+  it('K1.3: Invoices & credit notes draws the shared list — it builds each row\'s ⋯ and hands the sixth column; the row markup lives in the part only', () => {
+    const text = source('./view/InvoicesSection.tsx')
+    expect(text.indexOf("from './parts'")).toBeGreaterThan(text.indexOf("from '../../view/production/Kit'"))
+    expect(text).toContain("<InvoiceList rows={rows} price={price} extraHead={t('money.share')} menuOf={menuOf} onRetrySdi={() => actions?.onRetryPart?.('sdi')} />")
+    expect(text).toContain('extra: row.share === null ? null : money(row.share, order.currency, locale),')
+    expect(text).not.toMatch(/className="fw-om-ir|className=\{`fw-om-il/)
+    // The order's row carries the plain fields the list draws (its `invoice` stays, for the row's ⋯).
+    const rows = source('./invoices.ts')
+    for (const field of ['number: invoice.number,', 'issueDate: invoice.issueDate,', 'currency: order.currency,', '      href,', '      invoice,']) expect(rows, field).toContain(field)
+  })
 })

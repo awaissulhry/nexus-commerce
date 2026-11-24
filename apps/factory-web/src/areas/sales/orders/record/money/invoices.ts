@@ -42,6 +42,12 @@ export interface InvoiceDoor {
 export interface InvoiceRow {
   readonly id: string
   readonly anchor: string
+  // F-CM-k1: the plain fields the shared list draws (view/parts.tsx InvoiceListRow) — the number (null: a draft), the day of issue,
+  // the currency its amounts and words are said in (the order's), the document's own page (Finance). `invoice` stays: the row's ⋯.
+  readonly number: string | null
+  readonly issueDate: string | null
+  readonly currency: string
+  readonly href: string
   readonly invoice: ChainInvoice
   readonly kind: MoneyWord
   readonly state: { readonly word: MoneyWord; readonly tone: Tone }
@@ -133,6 +139,10 @@ export function invoicesOf(input: { readonly order: Order; readonly settlement: 
     return {
       id: invoice.id,
       anchor: `about-Invoice-${invoice.id}`,
+      number: invoice.number, // F-CM-k1: the plain fields (above)
+      issueDate: invoice.issueDate,
+      currency: order.currency,
+      href,
       invoice,
       kind: word(`docType.${invoice.docType}`),
       state,
