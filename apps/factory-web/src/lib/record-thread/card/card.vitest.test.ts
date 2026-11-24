@@ -303,7 +303,8 @@ describe('B-TH-236: Correct, “In reply to”, “Corrected below”, the amoun
     const html = card({ ...NOTE, amount: { value: 125_000, currency: 'EUR' } })
     expect(textOf(html)).toContain('Amount €1,250.00')
     expect(html).toContain('class="fw-rt-bline fw-rt-amount"')
-    expect(textOf(card({ ...NOTE, amount: { value: 125_000, currency: 'EUR' } }, CONTEXT, 'it'))).toMatch(/Importo 1\.250,00\s?€/)
+    // Italian numbers group from five digits (CLDR minimumGroupingDigits 2): 1250,00 €, 18.450,00 €.
+    expect(textOf(card({ ...NOTE, amount: { value: 125_000, currency: 'EUR' } }, CONTEXT, 'it'))).toMatch(/Importo 1\.?250,00\s?€/)
     expect(textOf(card(NOTE))).not.toContain('Amount')
   })
 

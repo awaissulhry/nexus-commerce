@@ -9,7 +9,7 @@ import './parts.css'
  *
  * tw- W1.2 (THE THREAD REBUILD; 10-design §2, W-016): the bubble's tile — 28 px (`run`), the PERSON's initials (never their
  * company's: a customer's person shows their own), in the sender's ONE colour (parts/tones); "?" in the neutral grey for a floor
- * writer the site's gate keeps back (R5: never a person colour). Never a photo (R6).
+ * writer the site's gate keeps back (R5: never a person colour). Initials only, never a picture of the person (R6).
  */
 export interface AvatarProps {
   /** The person's or organisation's name; null when the reader may not see who (a floor worker behind the site's gate). */
