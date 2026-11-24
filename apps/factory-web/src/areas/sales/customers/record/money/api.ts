@@ -41,3 +41,16 @@ export async function shippedOfCustomer(api: ApiClient, input: { readonly compan
     ddtIds: rows.flatMap((row) => row.ddts.map((ddt) => ddt.ddtId)), // F-CM-202
   }
 }
+
+// ── F-CM-203 (cm-w2 W2.3; 13-backend §1.1): the payments that hold the money on account (GET /payments/credit-balance: payments.view,
+// amounts with the price grain) — the "On account" box says which payment it comes from and how long it waits. ──
+const creditBalanceSchema = z.object({
+  balances: z.array(z.object({ currency: z.string(), amount: z.number().optional() })),
+  payments: z.array(z.object({ id: z.string(), receivedOn: z.string(), externalRef: z.string(), currency: z.string(), amount: z.number().optional(), unplacedAmount: z.number().optional() })),
+})
+export type CreditBalanceRead = z.infer<typeof creditBalanceSchema>
+
+/** This customer's money on account in a company and the payments that hold it. */
+export function creditBalanceOf(api: ApiClient, input: { readonly companyId: string; readonly partyId: string }, signal?: AbortSignal): Promise<CreditBalanceRead> {
+  return api.get('/payments/credit-balance', { query: { companyId: input.companyId, partyId: input.partyId }, schema: creditBalanceSchema, signal })
+}

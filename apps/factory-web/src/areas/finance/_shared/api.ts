@@ -504,11 +504,13 @@ export interface PaymentQuery {
   to?: string | null
   cursor?: string | null
   limit?: number
+  /** F-CM-203 (customer MONEY tab): one company (the API's own term); absent: the request of today. */
+  companyId?: string | null
 }
 
 export function listPayments(api: ApiClient, query: PaymentQuery, signal?: AbortSignal): Promise<PaymentsPage> {
   return api.get('/payments', {
-    query: { status: query.status ?? undefined, partyId: query.partyId ?? undefined, from: query.from ?? undefined, to: query.to ?? undefined, cursor: query.cursor ?? undefined, limit: query.limit ?? 50 },
+    query: { status: query.status ?? undefined, partyId: query.partyId ?? undefined, from: query.from ?? undefined, to: query.to ?? undefined, cursor: query.cursor ?? undefined, limit: query.limit ?? 50, companyId: query.companyId ?? undefined },
     schema: paymentsPageSchema,
     signal,
   })
