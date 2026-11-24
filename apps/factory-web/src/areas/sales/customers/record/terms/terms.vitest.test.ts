@@ -1215,3 +1215,13 @@ describe('ct-fx3 G-W09: a chip with no rows of its own marks its section (B)', (
     expect(css).toContain('.fw-ctr-sa.is-mark { outline: 2px solid var(--nds-primary);')
   })
 })
+
+describe('ct-fx3 G-W10: the nothing-set sentence has no company lead (one colon, §4)', () => {
+  it('a customer of two companies with nothing set: no "With {company}:" before "Nothing set yet: …"; with terms the lead stays', () => {
+    const nothing = termsInForce({ commercial: own({ paymentTermsId: null, paymentTerms: null, defaultDepositPct: null }), companies: { tenantWide: true, companies: [entry(A, null, own()), entry(B, null, own())] }, companyId: A.id, typed: null }, 'en')
+    const blank = termsAnswer(gapFacts({ multi: true, blank: true, inForce: nothing }))
+    expect(blank.lead).toBeNull()
+    for (const locale of LOCALES) expect((sentence(blank, locale).match(/:/g) ?? []).length, locale).toBe(1)
+    expect(termsAnswer(gapFacts({ multi: true })).lead).toEqual(said('ct.answer.with', { params: { company: A.name } }))
+  })
+})

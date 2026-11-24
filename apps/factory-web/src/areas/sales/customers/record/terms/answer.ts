@@ -138,7 +138,8 @@ export function termsAnswer(facts: TermsFacts): TermsAnswer {
   }
   chips.push(...identityChips(facts.identity, facts.now))
   return {
-    lead: facts.multi && facts.company ? said('ct.answer.with', { params: { company: facts.company } }) : null,
+    // ct-fx3 G-W10 (walk W-10): no "With {company}:" before the nothing-set sentence (nothing there is per company; never two colons).
+    lead: facts.multi && facts.company && !facts.blank ? said('ct.answer.with', { params: { company: facts.company } }) : null,
     words,
     fallback: inForce && facts.companiesFailed ? said('ct.answer.fallback') : null,
     chips,
