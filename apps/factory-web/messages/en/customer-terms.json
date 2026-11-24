@@ -464,12 +464,12 @@
         "italianModeHow": "{mode} · {how}.",
         "italianMode": "{mode}.",
         "other": "{mode} · {country}.",
-        "viesValid": "{mode} · {country} · VAT {vat} · VIES: valid until {date}.",
-        "viesValidNoAnswer": "{mode} · {country} · VAT {vat} · VIES: valid until {date}; the last check got no answer.",
-        "viesInvalid": "{mode} · {country} · VAT {vat} · VIES: not valid at the last check.",
-        "viesHeld": "{mode} · {country} · VAT {vat} · VIES: no answer yet, not a refusal; check again later.",
-        "viesExpired": "{mode} · {country} · VAT {vat} · VIES: the proof is too old; check again.",
-        "viesUnchecked": "{mode} · {country} · VAT {vat} · VIES: not checked yet."
+        "viesValid": "{mode} in {country} · VAT {vat} · VIES: valid until {date}.",
+        "viesValidNoAnswer": "{mode} in {country} · VAT {vat} · VIES: valid until {date}; the last check got no answer.",
+        "viesInvalid": "{mode} in {country} · VAT {vat} · VIES: not valid at the last check.",
+        "viesHeld": "{mode} in {country} · VAT {vat} · VIES: no answer yet, not a refusal; check again later.",
+        "viesExpired": "{mode} in {country} · VAT {vat} · VIES: the proof is too old; check again.",
+        "viesUnchecked": "{mode} in {country} · VAT {vat} · VIES: not checked yet."
       },
       "einvoice": "E-invoice",
       "bySdi": "By SDI code {code}",

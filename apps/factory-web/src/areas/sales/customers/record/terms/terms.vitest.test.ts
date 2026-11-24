@@ -863,7 +863,7 @@ describe('Tax identity & e-invoice (W2.2, 10-design §5.4; D2, Z3, Z7, Z21, Z23,
     expect(model.vies!.noAnswer).toEqual({ at: '2026-11-24T08:00:00.000Z' })
     expect(model.vies!.proof).toEqual({ result: 'VALID', at: '2026-11-20T08:00:00.000Z', stillCounts: true })
     expect(model.vies!.until).toEqual({ date: '2026-11-28T08:00:00.000Z', days: 3, warning: true })
-    expect(said1(model.answer)).toBe('EU business · Germany · VAT 000000000 · VIES: valid until 28/11/2026; the last check got no answer.')
+    expect(said1(model.answer)).toBe('EU business in Germany · VAT 000000000 · VIES: valid until 28/11/2026; the last check got no answer.')
     const held = identitySection(input(eu({ viesChecks: [check({ result: 'ERROR' })], vies: { ...outage.vies, state: 'HELD', proofCheckId: null, validUntil: null } })))
     for (const model of [identitySection(input(outage)), held]) expect(all(model)).not.toMatch(/not valid/i)
     expect(said1(held.answer, 'it')).toBe('Azienda UE · Germania · Partita IVA 000000000 · VIES: ancora senza risposta, non è un rifiuto; ricontrolla più tardi.')

@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import { CheckCircle2, CircleAlert, Eye, Hourglass, Pencil, Plus, RefreshCw } from 'lucide-react'
 import { Button, Tag } from '@nexus/ui/primitives'
 import { Facts, Fold } from '../../../../orders/record/money/view/parts'
@@ -21,7 +21,7 @@ import { menuOf, useTermsSay } from './say'
  * ⋯ · ⓘ — the record's own identity window; Check again the record's own act. Draws its model; reads nothing.
  */
 
-export function IdentitySection({ model, actions }: { model: TermsTabModel; actions?: TermsTabActions | undefined }) {
+export function IdentitySection({ model, actions }: { model: TermsTabModel; actions?: TermsTabActions | undefined }): ReactElement {
   const say = useTermsSay()
   const id = model.identity
   const title = say(said('ct.id.title'))

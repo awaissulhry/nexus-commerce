@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactElement } from 'react'
 import { FileText, Plus } from 'lucide-react'
 import { Button, FilterChip, Tag } from '@nexus/ui/primitives'
 import { Fold } from '../../../../orders/record/money/view/parts'
@@ -19,7 +20,7 @@ import { actItem, menuOf, useTermsSay } from './say'
  * apart. Add / Replace with a new version… / End… open the depth provider's own windows. Rows lay out by the LIST's room. Draws its model.
  */
 
-export function RequirementsSection({ model, actions }: { model: TermsTabModel; actions?: TermsTabActions | undefined }) {
+export function RequirementsSection({ model, actions }: { model: TermsTabModel; actions?: TermsTabActions | undefined }): ReactElement {
   const say = useTermsSay()
   const req = model.requirements
   const title = say(said('ct.req.title'))

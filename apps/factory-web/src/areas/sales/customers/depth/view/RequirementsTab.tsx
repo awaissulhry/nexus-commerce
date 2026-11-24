@@ -1,5 +1,6 @@
 'use client'
 
+import type { ReactElement } from 'react'
 import { Banner, Field } from '@nexus/ui/components'
 import { Button, Checkbox, Input, Radio, Select } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
@@ -45,7 +46,7 @@ export interface RequirementsActions {
  * windows in place (Add requirement · Replace with a new version… · End…), the depth provider's ONE state. Inside, the style picker
  * searches on the server (our own styles and THIS customer's, S1) and the words say where a rule really shows (Z12).
  */
-export function RequirementWindows({ model, actions }: { model: RequirementsModel; actions?: RequirementsActions | undefined }) {
+export function RequirementWindows({ model, actions }: { model: RequirementsModel; actions?: RequirementsActions | undefined }): ReactElement | null {
   const { t, say } = useSay()
   const ct = useT('customer-terms') // F-CT-503: the tab's new words
   const dialog = model.dialog

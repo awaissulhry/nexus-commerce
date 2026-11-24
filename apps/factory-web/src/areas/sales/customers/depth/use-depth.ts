@@ -190,7 +190,9 @@ export function useCustomerDepth(partyId: string) {
     const timer = setTimeout(() => {
       setStyles(LOADING)
       searchStyles(api, styleQuery, partyId, controller.signal)
-        .then((rows) => setStyles(ready(rows)))
+        .then((rows) => {
+          if (!controller.signal.aborted) setStyles(ready(rows))
+        })
         .catch((error: unknown) => {
           if (!controller.signal.aborted) setStyles(failedRead(problemOf(error)))
         })
