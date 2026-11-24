@@ -1,4 +1,5 @@
 import { mentionsIn } from '../helpers/model'
+import type { SenderTone } from '../parts/tones' // tw- W1.4: the reply bar's colour
 // B-TH-236: the amount field and the floor's price check (B-TH-049).
 import { amountProblem, floorPriceFound } from '../helpers/amount'
 
@@ -81,6 +82,11 @@ export interface DraftLink {
   way?: ComposerMode
   /** The note corrected was on the floor's tablets: the correction goes there too. */
   forFloor?: boolean
+  // ---- tw- W1.4 (D4, R4): who reads the message a reply answers — an office note's quote never goes to the customer — and the
+  // reply bar's words (the quoted sender's name and colour, "You", one line). Absent (a draft kept on the server): as before.
+  audience?: 'note' | 'shared'
+  quote?: { readonly name: string | null; readonly you?: boolean; readonly tone: SenderTone; readonly line: string }
+  // ---- end tw- W1.4
 }
 
 export interface ComposerDraft {
@@ -278,8 +284,10 @@ export function switchMode(draft: ComposerDraft, to: ComposerMode, people: reado
   if (draft.mode === to) return { draft, notes: [] }
   // B-TH-236: a correction keeps the way of the message it corrects; leaving that way lets the correction go (said).
   const correction = draft.link?.kind === 'correct' && draft.link.way && draft.link.way !== to
-  const keptLink = draft.link && !correction ? { link: draft.link } : {}
-  const linkNotes: SwitchNote[] = correction ? [{ key: 'switch.correction' }] : []
+  // tw- W1.4 (R4): a reply that quotes an office note going to the customer drops the quote (said); the server refuses it anyway.
+  const quoteDropped = draft.link?.kind === 'reply' && draft.link.audience === 'note' && toCustomer(to)
+  const keptLink = draft.link && !correction && !quoteDropped ? { link: draft.link } : {}
+  const linkNotes: SwitchNote[] = correction ? [{ key: 'switch.correction' }] : quoteDropped ? [{ key: 'switch.quote' }] : []
   if (to === 'note') {
     // F-SA-282a: an office note is never checked for another customer's name: the portal's hold and its tick go.
     // F-CP-147: another audience, another check — the price warning goes too.

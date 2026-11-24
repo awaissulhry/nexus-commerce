@@ -113,9 +113,9 @@
     "arrived_other": "{count} new messages in the thread"
   },
   "unread": {
-    "line_one": "New since your last visit · {count} message",
-    "line_other": "New since your last visit · {count} messages",
-    "lineMany": "New since your last visit · 200+ messages"
+    "line_one": "{count} unread message",
+    "line_other": "{count} unread messages",
+    "lineMany": "200+ unread messages"
   },
   "hidden": {
     "line_one": "{count} new message hidden by this view",
@@ -141,5 +141,11 @@
       "TRIAGE": "not sorted yet",
       "other": "to be checked"
     }
+  },
+  "down": {
+    "label": "Go to the newest message"
+  },
+  "pinned": {
+    "pill": "{who} pinned a message"
   }
 }

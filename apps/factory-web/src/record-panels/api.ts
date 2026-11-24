@@ -46,7 +46,23 @@ export const attachmentSchema = z.object({
 })
 
 /** B-TH-236 (B-TH-050): a message another points at ("In reply to Anna, 14 Nov: …"); the author is null for a floor worker kept back. */
-const linkedSchema = z.object({ id: z.string(), authorName: z.string().nullable(), excerpt: z.string(), at: z.string() })
+const linkedSchema = z.object({
+  id: z.string(),
+  authorName: z.string().nullable(),
+  excerpt: z.string(),
+  at: z.string(),
+  // ---- tw- W1.1 (tw-s S.1; the final shapes, build/notes tw-s): the quote's details for THIS reader — every one optional, so the web
+  // never waits for the server: the writer's kind, its id and the audience (office reads only), erased (sent only as true), mine
+  // (portal reads only), the files THIS reader may open and the first of them (kind: the FILE_KINDS enum).
+  authorKind: z.enum(AUTHOR_KINDS).optional(),
+  authorId: z.string().nullable().optional(),
+  audience: z.enum(MESSAGE_AUDIENCES).optional(),
+  erased: z.boolean().optional(),
+  mine: z.boolean().optional(),
+  fileCount: z.number().int().min(0).optional(),
+  firstFile: z.object({ id: z.string(), kind: z.enum(FILE_KINDS), contentType: z.string() }).nullable().optional(),
+  // ---- end tw- W1.1
+})
 
 export const messageSchema = z.object({
   id: z.string(),

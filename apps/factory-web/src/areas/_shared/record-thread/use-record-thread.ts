@@ -5,6 +5,12 @@ import { useRouter } from 'next/navigation'
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { addDropped, contentTypeOf, draftOfRecordFile, kindOf, sendable, uploadAudience, type DraftFile, type RecordFile } from '../../../lib/record-thread/attachments/model'
 import { messageLink, type CardMessage } from '../../../lib/record-thread/card/model'
+// tw- W1.4 (THE THREAD REBUILD): Reply on every message keeps the audience (D4), its bar's words; the jump's pages, words and flash.
+import { excerptOf, replyWay } from '../../../lib/record-thread/card/model'
+import { senderTone } from '../../../lib/record-thread/parts/tones'
+import type { FeedPin } from '../../../lib/record-thread/feed/model'
+import { JUMP_LIMIT, JUMP_PAGE, type OfficeMessage } from './api'
+import { jumpRefusal } from './state'
 import { cardDepth } from '../../../lib/record-thread/card/model' // B-TH-255
 import { startDraft, switchMode, type ComposerContext, type ComposerDraft } from '../../../lib/record-thread/composer/model'
 // TH-1c's helpers (B-TH-208) and pop-ups (B-TH-211): the draft kept on this device, @mentions, the leave guard.
@@ -110,7 +116,7 @@ export interface RecordThreadBase {
   readonly pins: readonly ApiPin[] | null
   readonly unpin: (messageId: string) => Promise<void>
   // ---- B-TH-288 (B-TH-097): a message found by the Head's search, or a pin's line — older pages read until it is on screen, then
-  // unfolded and focused (false: it is not in this conversation any more, or out of reach).
+  // in view and focused (false: it is not in this conversation any more, or out of reach). tw- W1.4: its row lights up (the flash).
   readonly jumpTo: (messageId: string) => Promise<boolean>
 }
 
@@ -161,6 +167,9 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   // ---- B-TH-286: the conversation's pins (null until read; read again with the thread).
   const [pins, setPins] = useState<ApiPin[] | null>(null)
   useEffect(() => setPins(null), [key])
+  // ---- tw- W1.4 (13-backend §1.3): the row a jump lit up last (`seq` lights it again on the next jump).
+  const [flash, setFlash] = useState<{ id: string; seq: number } | null>(null)
+  useEffect(() => setFlash(null), [key])
   // ---- B-TH-287: the draft on the server — its state for the line, the version last read, the arrival read done.
   const [saved, setSaved] = useState<DraftSaved | null>(null)
   // ---- B-TH-289: the follow-ups set on messages this screen sent (a mail taken back in its 10 seconds takes its follow-up with it).
@@ -565,6 +574,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   const names = useMemo(() => new Map<string, string>([...people.map((person) => [person.id, person.name] as const), [session.user.id, session.user.displayName]]), [people, session.user])
   // B-TH-286: the pinned messages (the card's pin and its ⋯ "Unpin").
   const pinnedIds = useMemo(() => new Set((pins ?? []).map((pin) => pin.messageId)), [pins])
+  // tw- W1.3 (10-design §7): "Alex Demo pinned a message" — the office's pins with who pinned them (this container is office only).
+  const pinPills = useMemo<FeedPin[]>(() => (pins ?? []).flatMap((pin) => (pin.pinnedBy?.name ? [{ messageId: pin.messageId, at: pin.pinnedAt, by: pin.pinnedBy.name }] : [])), [pins])
   const cards = useMemo<CardMessage[]>(
     // B-TH-255 (T3-F14, T3-F15): each card also says whether its writer was erased and which files of its mail were not kept.
     () => server.messages.map((message) => ({ ...cardOf(message, { emails, deliveries, names, taskHref: (taskId) => `${prefix}/home/tasks?open=${encodeURIComponent(taskId)}`, me: session.user.id, undo: undoable }), ...cardDepth(message), ...(pinnedIds.has(message.id) ? { pinned: true } : {}) /* B-TH-286 */ })),
@@ -609,6 +620,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
       canCorrect: { note: can.post, email: can.email && party !== null, portal: context.portal === true },
       // B-TH-286 (B-TH-091): pin for everyone — whoever may write on the conversation, online.
       canPin: can.post && offline === null,
+      // tw- W1.4 (D4, Z12): Reply on every message, the way the reader may answer — an office note, the customer by email, the portal.
+      replyWays: { note: can.post, email: can.email && party !== null, portal: context.portal === true },
     },
     more: server.more,
     older: server.older,
@@ -620,6 +633,9 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     // B-TH-255 (T4-F10): the mail for this conversation that waits for a person; Review opens Home › Mail to sort (email.triage only:
     // the API's `mayReview` says whether this reader may; anyone else reads that a reply waits for a colleague, never why or from whom).
     waitingMail: server.waitingMail ? { ...server.waitingMail, reviewHref: server.waitingMail.mayReview ? `${prefix}/home/mail-to-sort` : null } : null,
+    // tw- W1.3 / W1.4: the row a jump lit up; the office's pin pills.
+    flash,
+    pins: pinPills,
   }
 
   const model: RecordThreadModel = {
@@ -796,6 +812,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   // ---- end B-TH-237
 
   const retries = useRef(new Map<string, () => Promise<void>>())
+  // tw- W1.4: a message on its way is the reader's own — on the right, in their run.
+  const mineOf = { mine: true, senderKey: `USER:${session.user.id}` } as const
 
   const send = () => {
     const now = workRef.current
@@ -811,7 +829,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     const links = { ...linksOf(now.draft.link), ...(about ? { about } : {}) }
     // ---- B-TH-237: in the portal — ours, on the PORTAL channel, no mail.
     if (now.draft.mode === 'portal') {
-      const card: CardMessage = { id: outboxKey, kind: 'ours', channel: 'PORTAL', author: session.user.displayName, authorKind: 'USER', at: new Date().toISOString(), body: now.draft.body, mentions: [], files: [] }
+      const card: CardMessage = { id: outboxKey, kind: 'ours', channel: 'PORTAL', author: session.user.displayName, authorKind: 'USER', at: new Date().toISOString(), body: now.draft.body, mentions: [], files: [], ...mineOf }
       const item = { key: outboxKey, idempotencyKey, body: now.draft.body, attachments, links, snapshot: now, /* F-SA-282a */ namesNoOtherCustomer: namesNoOtherCustomerOf(now.draft), /* F-CP-147 */ pricesInWordsOk: pricesInWordsOkOf(now.draft) }
       retries.current.set(outboxKey, () => sendPortal(item))
       setWork((latest) => ({ ...latest, draft: { mode: latest.draft.mode, body: '', forFloor: false }, notes: [], files: [], followUp: false /* B-TH-289 */, outbox: [...latest.outbox, { key: outboxKey, card, state: 'sending' }] }))
@@ -824,7 +842,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     const amount = amountBody(now.draft.amount, now.draft.currency)
     // F-SA-265: a part the conversation cannot keep goes as the note's first line.
     const noteBody = bodyWithAbout(now.draft)
-    const card: CardMessage = { id: outboxKey, kind: 'note', channel: 'APP', author: session.user.displayName, authorKind: 'USER', at: new Date().toISOString(), body: noteBody, forFloor, mentions: [], files: [], ...(amount ? { amount } : {}) }
+    const card: CardMessage = { id: outboxKey, kind: 'note', channel: 'APP', author: session.user.displayName, authorKind: 'USER', at: new Date().toISOString(), body: noteBody, forFloor, mentions: [], files: [], ...(amount ? { amount } : {}), ...mineOf }
     const item = { key: outboxKey, idempotencyKey, body: noteBody, mentions: mentionsIn(now.draft.body, context.people), attachments, forFloor, card, amount, links, snapshot: now, /* F-CP-147 */ pricesInWordsOk: pricesInWordsOkOf(now.draft) }
     retries.current.set(outboxKey, () => sendNote(item))
     setWork((latest) => ({ ...latest, draft: { mode: latest.draft.mode, body: '', forFloor: false }, notes: [], files: [], outbox: [...latest.outbox, { key: outboxKey, card, state: 'sending' }] }))
@@ -854,7 +872,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     const body = { ...sendBody({ to: now.to, cc: now.cc, subject, body: now.draft.body, attachments: sendable(now.files).map((file) => file.fileId as string), outside }), ...linksOf(now.draft.link), ...(about ? { about } : {}) }
     const outboxKey = `local-${newIdempotencyKey()}`
     const idempotencyKey = newIdempotencyKey()
-    const card: CardMessage = { id: outboxKey, kind: 'ours', channel: 'EMAIL', author: session.user.displayName, authorKind: 'USER', at: new Date().toISOString(), body: now.draft.body, mentions: [], files: [], email: { to: body.to, subject, status: 'QUEUED' } }
+    const card: CardMessage = { id: outboxKey, kind: 'ours', channel: 'EMAIL', author: session.user.displayName, authorKind: 'USER', at: new Date().toISOString(), body: now.draft.body, mentions: [], files: [], email: { to: body.to, subject, status: 'QUEUED' }, ...mineOf }
     const snapshot = now
     const go = async () => {
       setSending(true)
@@ -923,26 +941,38 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   }
   // ---- end B-TH-286
 
-  // ---- B-TH-288 (B-TH-097): to a message — older pages read until it is there (a search hit, a pin), then unfolded and focused.
+  // ---- B-TH-288 (B-TH-097) / tw- W1.4 (13-backend §1.3; Z10, B10): to a message — older pages of 200 read until it is there (at
+  // most 1,000 older messages), ONE render for them all, then in view (centred, at once: rows may still arrive), focused and its whole
+  // row lit (the flash). Not reached: the words say why (a page could not be read; too far back; out of the reader's reach).
   const serverRef = useRef(server)
   serverRef.current = server
   const jumpTo = useCallback(
     async (messageId: string): Promise<boolean> => {
       let current = serverRef.current
-      for (let pages = 0; !current.messages.some((message) => message.id === messageId) && current.cursor && pages < 20; pages += 1) {
+      const read: OfficeMessage[] = []
+      let failed = false
+      let pages = 0
+      while (!current.messages.some((message) => message.id === messageId) && current.cursor && pages * JUMP_PAGE < JUMP_LIMIT) {
         try {
-          const page = await readThreadPage(api, key, current.cursor)
+          const page = await readThreadPage(api, key, current.cursor, undefined, JUMP_PAGE)
           current = applyOlder(current, page)
-          setServer((now) => applyOlder(now, page))
+          read.push(...page.messages)
         } catch {
+          failed = true
           break
         }
+        pages += 1
       }
-      if (!current.messages.some((message) => message.id === messageId)) {
-        setNotice({ ns: 'record-thread', key: 'notice.messageGone', tone: 'warning' })
+      if (pages > 0) {
+        const cursor = current.cursor
+        setServer((now) => applyOlder(now, { messages: read, nextCursor: cursor }))
+      }
+      const refusal = jumpRefusal({ found: current.messages.some((message) => message.id === messageId), failed, cursor: current.cursor })
+      if (refusal) {
+        setNotice({ ...refusal, tone: 'warning' })
         return false
       }
-      setAnchor(messageId)
+      setFlash((now) => ({ id: messageId, seq: (now?.seq ?? 0) + 1 }))
       requestAnimationFrame(() => {
         const target = document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`)
         target?.scrollIntoView({ block: 'center' })
@@ -952,6 +982,35 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     },
     [api, key],
   )
+
+  // ---- tw- W1.4 (D4, Z12, P15, R4): Reply on EVERY message keeps the audience of what it answers (`replyWay`); Reply privately is an
+  // office note that quotes the customer's message. The box names the message it answers (its bar: name, colour, one line).
+  const answer = (messageId: string, privately: boolean) => {
+    const card = cards.find((item) => item.id === messageId)
+    const message = server.messages.find((item) => item.id === messageId)
+    if (!card || !message) return
+    const way: ComposerMode | null = privately ? (can.post ? 'note' : null) : replyWay(card, feed.context)
+    if (!way) return
+    // The link of an earlier reply or correction gives way to this one (no note about the old one).
+    const switched = switchMode({ ...workRef.current.draft, link: undefined }, way, context.people)
+    const contact = card.kind === 'theirs' ? contacts.find((item) => item.name === message.author.name && cleanAddress(item.email)) : undefined
+    const mail = card.kind === 'ours' ? emails.get(messageId) : undefined
+    const link: DraftLink = {
+      kind: 'reply',
+      messageId: message.id,
+      who: message.authorHidden ? null : message.author.name,
+      at: message.at,
+      audience: card.kind === 'note' || card.kind === 'floor' ? 'note' : 'shared',
+      quote: { name: message.authorHidden ? null : message.author.name, ...(card.mine ? { you: true } : {}), tone: senderTone(card.senderKey), line: excerptOf(card.body) },
+    }
+    setWork((now) => ({
+      ...now,
+      draft: { ...switched.draft, link },
+      notes: switched.notes,
+      // By email: the customer's person who wrote it; our own mail's recipients when it answers ours (P15).
+      to: way === 'reply' && contact ? [{ address: contact.email.toLowerCase(), name: contact.name, kind: 'PARTY', organisation: party?.name ?? null } satisfies Recipient] : way === 'reply' && mail ? mail.to.map((address) => ({ address, name: null, kind: null, organisation: null }) satisfies Recipient) : now.to,
+    }))
+  }
   // ---- end B-TH-288
 
   const actions: RecordThreadActions = {
@@ -1022,21 +1081,11 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
       setWork((now) => ({ ...now, outbox: now.outbox.map((entry) => (entry.key === messageId ? { ...entry, state: 'sending', reason: undefined } : entry)) }))
       void again()
     },
-    onReply: (messageId) => {
-      const message = server.messages.find((item) => item.id === messageId)
-      // B-TH-237: a message from the portal is answered in the portal when it is offered; else by e-mail (or the portal alone).
-      const way: ComposerMode = message?.channel === 'PORTAL' && context.portal ? 'portal' : can.email && party ? 'reply' : context.portal ? 'portal' : 'reply'
-      const switched = switchMode(workRef.current.draft, way, context.people)
-      const contact = contacts.find((item) => item.name === message?.author.name && cleanAddress(item.email))
-      // B-TH-236 (B-TH-050): the box names the message it answers ("Replying to Alma, 14 Nov ×").
-      const link: DraftLink | undefined = message ? { kind: 'reply', messageId: message.id, who: message.authorHidden ? null : message.author.name, at: message.at } : undefined
-      setWork((now) => ({
-        ...now,
-        draft: { ...switched.draft, ...(link ? { link } : {}) },
-        notes: switched.notes,
-        to: contact && way === 'reply' ? [{ address: contact.email.toLowerCase(), name: contact.name, kind: 'PARTY', organisation: party?.name ?? null } satisfies Recipient] : now.to,
-      }))
-    },
+    // ---- tw- W1.4: Reply on every message, Reply privately, and the doors of a quote / "Correction of" / "Corrected" (a pane host has no
+    // View: the docked host puts its View back to All first, jumpInView).
+    onReply: (messageId) => answer(messageId, false),
+    onReplyPrivately: (messageId) => answer(messageId, true),
+    onJump: (messageId) => void jumpTo(messageId),
     // ---- B-TH-236 (B-TH-050): Correct — a new message linked to the old one, the way it went (never an edit).
     onCorrect: (messageId) => {
       const card = cards.find((item) => item.id === messageId)

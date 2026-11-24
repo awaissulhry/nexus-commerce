@@ -1,4 +1,5 @@
-import type { CardFileStatus, CardMessage, Delivery } from './card/model'
+import type { CardFileStatus, CardLink, CardMessage, Delivery } from './card/model'
+import { senderKeyOf } from './card/model' // tw- W1.1: runs and one colour per sender
 import type { ActorAudience, FeedEvent } from './feed/model'
 
 /**
@@ -42,6 +43,19 @@ export interface LinkedApiMessage {
   authorName: string | null
   excerpt: string
   at: string
+  // ---- tw- W1.1 (tw-server § "Shapes", S10 (1)): the quote's details — every one optional, sent for THIS reader only.
+  authorKind?: 'USER' | 'PARTY' | 'WORKER' | 'SYSTEM' | undefined
+  /** Office reads only; null for a hidden worker. */
+  authorId?: string | null | undefined
+  /** Office reads only. */
+  audience?: 'OFFICE' | 'PARTNER' | undefined
+  erased?: boolean | undefined
+  /** Portal reads only: the reader's own post. */
+  mine?: boolean | undefined
+  fileCount?: number | undefined
+  /** `kind`: the API's FILE_KINDS (record-panels parses it). */
+  firstFile?: { id: string; kind: string; contentType: string } | null | undefined
+  // ---- end tw- W1.1
 }
 
 /** A mail of the thread (GET …/emails). */
@@ -119,6 +133,37 @@ export function cardOf(message: ThreadApiMessage, sources: CardSources): CardMes
     bounceTask: email?.status === 'BOUNCED' && delivery?.task && delivery.task.status === 'OPEN' && sources.taskHref ? { href: sources.taskHref(delivery.task.id) } : null,
     ...linksOf(message, sources),
     ...(message.about ? { about: { kind: message.about.kind, id: message.about.id } } : {}), // F-SA-265
+    ...senderOf(message), // tw- W1.1
+  }
+}
+
+/** tw- W1.1 (10-design §3): the sender's key (runs, one colour per person); a writer the gate keeps back and the system have none. */
+function senderOf(message: Pick<ThreadApiMessage, 'author' | 'authorHidden'>): Pick<CardMessage, 'senderKey'> {
+  const senderKey = senderKeyOf(message.author, message.authorHidden)
+  return senderKey ? { senderKey } : {}
+}
+
+/**
+ * tw- W1.1 (S10 (1)): a linked message as the quote draws it — only what the server sent for THIS reader on the reply's own link
+ * (R1: never a look-up among the loaded messages). "You" when the reader wrote it (the office: a user with the reader's id; the
+ * portal: the server's `mine`); the writer's key for their colour (none for a writer the gate keeps back).
+ */
+export function cardLinkOf(linked: LinkedApiMessage, me: string | undefined): CardLink {
+  const kind = linked.authorKind
+  const senderKey = kind ? senderKeyOf({ kind, id: linked.authorId ?? null, name: linked.authorName }, linked.authorName === null && kind === 'WORKER') : undefined
+  const mine = linked.mine === true || (me !== undefined && kind === 'USER' && linked.authorId === me)
+  return {
+    id: linked.id,
+    author: linked.authorName,
+    excerpt: linked.excerpt,
+    at: linked.at,
+    ...(kind ? { authorKind: kind } : {}),
+    ...(senderKey ? { senderKey } : {}),
+    ...(linked.audience ? { audience: linked.audience } : {}),
+    ...(linked.erased ? { erased: true } : {}),
+    ...(mine ? { mine: true } : {}),
+    ...(linked.fileCount !== undefined ? { fileCount: linked.fileCount } : {}),
+    ...(linked.firstFile !== undefined ? { firstFile: linked.firstFile ? { id: linked.firstFile.id, kind: linked.firstFile.kind, contentType: linked.firstFile.contentType } : null } : {}),
   }
 }
 
@@ -135,7 +180,7 @@ function mailExtras(message: ThreadApiMessage, email: ThreadApiEmail, sources: C
 
 /** The amount, the links to other messages, and whether the reader wrote it (a card offers Correct on one's own message only). */
 function linksOf(message: ThreadApiMessage, sources: CardSources): Pick<CardMessage, 'amount' | 'replyTo' | 'corrects' | 'correctedBy' | 'mine'> {
-  const link = (linked: LinkedApiMessage | null | undefined) => (linked ? { id: linked.id, author: linked.authorName, excerpt: linked.excerpt, at: linked.at } : null)
+  const link = (linked: LinkedApiMessage | null | undefined) => (linked ? cardLinkOf(linked, sources.me) : null) // tw- W1.1: the quote's details
   const mine = sources.me !== undefined && message.author.kind === 'USER' && message.author.id === sources.me
   return {
     ...(message.amount ? { amount: { value: message.amount.value, currency: message.amount.currency } } : {}),
@@ -249,8 +294,22 @@ export type FeedView = 'all' | 'shared' | 'notes' | 'changes'
 export function feedForView<F extends { readonly messages: readonly CardMessage[]; readonly events: readonly FeedEvent[] }>(feed: F, view: FeedView): F {
   if (view === 'all') return feed
   if (view === 'changes') return { ...feed, messages: [] }
-  const keep = view === 'shared' ? (card: CardMessage) => card.kind === 'theirs' || card.kind === 'ours' : (card: CardMessage) => card.kind === 'note' || card.kind === 'floor'
-  return { ...feed, messages: feed.messages.filter(keep), events: [] }
+  return { ...feed, messages: feed.messages.filter((card) => viewKeeps(view, card)), events: [] }
+}
+
+/** tw- W1.4: whether the View draws a message (the one rule `feedForView` filters by). */
+export function viewKeeps(view: FeedView, card: Pick<CardMessage, 'kind'>): boolean {
+  if (view === 'all') return true
+  if (view === 'changes') return false
+  return view === 'shared' ? card.kind === 'theirs' || card.kind === 'ours' : card.kind === 'note' || card.kind === 'floor'
+}
+
+/**
+ * tw- W1.4 (Z10, 13-backend §1.3): a door to a message (a quote, "Correction of", "Corrected", a pin, a search hit, an ask, the file
+ * viewer) puts the View back to All first when the View hides it — or when it is not loaded yet (it may be hidden once read).
+ */
+export function viewHides(view: FeedView, card: Pick<CardMessage, 'kind'> | undefined): boolean {
+  return view !== 'all' && (!card || !viewKeeps(view, card))
 }
 
 /** What the Head's View offers for this thread (a kind the thread does not hold is not offered). */

@@ -53,7 +53,8 @@
     "pin": "Pin for everyone",
     "pinHint": "everyone on this record finds it under “pinned”; not a personal bookmark",
     "unpin": "Unpin",
-    "unpinHint": "it leaves “pinned” for everyone; the message stays"
+    "unpinHint": "it leaves “pinned” for everyone; the message stays",
+    "replyPrivately": "Reply privately"
   },
   "body": {
     "showAll": "Show all ({count} lines)",
@@ -93,8 +94,8 @@
     "email": "To {to} · Subject: {subject}"
   },
   "bounce": {
-    "text": "{to} could not get this mail: the mail service said so.",
-    "task": "Task made for you · Open",
+    "text": "{to} could not get this email",
+    "task": "Open task",
     "complained": "The recipient marked this mail as spam: no more mail goes to the address until an administrator clears it.",
     "failed": "The mail service did not take this mail after its retries. Write it again to send it."
   },
@@ -118,7 +119,7 @@
     "correctedBelow": "Corrected below · {time}"
   },
   "amount": {
-    "line": "Amount: {amount} · office only, for those who see prices"
+    "line": "Amount {amount}"
   },
   "undo": {
     "sending": "Sending to {party}…",
@@ -169,5 +170,27 @@
   "place": {
     "line": "The talk is in the order's conversation",
     "open": "Open"
+  },
+  "quote": {
+    "you": "You",
+    "removed": "Message removed",
+    "photos_one": "Photo",
+    "photos_other": "{count} photos",
+    "files_one": "{count} file",
+    "files_other": "{count} files",
+    "label": "Go to the message of {who} at {time}"
+  },
+  "foot": {
+    "office": "Office only",
+    "email": "Email",
+    "portal": "In the portal",
+    "pinned": "Pinned",
+    "corrected": "Corrected",
+    "floor": "Also on the floor",
+    "fromFloor": "From the floor",
+    "sending": "Sending"
+  },
+  "org": {
+    "floor": "Floor"
   }
 }

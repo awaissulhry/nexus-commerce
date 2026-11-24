@@ -1,6 +1,9 @@
 /*
- * The record thread's feed (B-TH-204, T4; picture 1's RecordThread draft): one scrolling column, oldest at the top. Day lines,
- * the fold line, folded one-line messages, quiet record steps, the "N new messages" bar and the states. DS tokens only.
+ * The record thread's feed (B-TH-204, T4; tw- W1.3 THE THREAD REBUILD, 10-design §2, §6, §7; the picture's p3b-tw.css): one
+ * scrolling list on the flat ground (`--nds-surface-sunken`, no artwork), oldest at the top. The bubbles keep their own gaps (2 inside
+ * a run, 12 between runs: card.css); every row that is not a message is a centred pill; the band "3 unread messages"; the day that
+ * floats while scrolling; the round down button; the flash of a jump (FLASH_MS, one named constant in feed/model.ts, handed to the
+ * row as --fw-rt-flash-ms; the colour the token --nds-tonal-border at .7: Z5, Z22 P2). DS tokens only.
  */
 .fw-rt-feedwrap {
   position: relative;
@@ -8,25 +11,27 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  background: var(--nds-surface-sunken);
 }
 
 .fw-rt-feed {
   position: relative;
   flex: 1;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   overflow-anchor: auto;
-  padding: 12px 16px 16px;
+  padding: 8px 0 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  background: var(--nds-surface-sunken);
   outline: none;
 }
 
 .fw-rt-feed:focus-visible {
   outline: 2px solid var(--nds-text);
-  outline-offset: -3px;
+  outline-offset: -2px;
 }
 
 .fw-rt-feed > * {
@@ -37,13 +42,18 @@
   min-width: 0;
 }
 
-.fw-rt-older {
-  display: flex;
-  justify-content: center;
+/* The top of the list: when it comes near, the next older page is read (W-153). */
+.fw-rt-sentinel {
+  height: 1px;
+  margin-bottom: -1px;
+}
+
+.fw-rt-empty {
+  padding: 24px 16px;
 }
 
 .fw-rt-older-failed {
-  margin: 0;
+  margin: 8px 16px 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -53,166 +63,83 @@
   color: var(--nds-danger-text);
 }
 
-.fw-rt-day {
+/* ── the pills (W-046, W-047): the day, a step, changes, a pin, what the View hides, the mail that waits ── */
+.fw-rt-pillrow {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 6px 0 0;
-  font-size: var(--nds-font-size-xs);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--nds-text-2);
-}
-
-.fw-rt-day::before,
-.fw-rt-day::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--nds-border-subtle);
-}
-
-/* B-TH-229 (T4-F04): "New since your last visit" — the day line's form in the link colour, above the first new message. */
-.fw-rt-newline {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 6px 0 0;
-  font-size: var(--nds-font-size-xs);
-  font-weight: 700;
-  color: var(--nds-text-link);
-}
-
-.fw-rt-newline::before,
-.fw-rt-newline::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--nds-info);
-}
-
-.fw-rt-fold {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
+  justify-content: center;
   min-width: 0;
-  padding: 7px 10px;
-  border: 1px dashed var(--nds-border-strong);
-  border-radius: var(--nds-radius-lg);
+  margin-top: 12px;
+  padding: 0 16px;
+}
+
+.fw-rt-pill {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px 6px;
+  max-width: min(100%, 520px);
+  margin: 0;
+  padding: 5px 12px 6px;
+  border-radius: var(--nds-radius-md);
   background: var(--nds-surface-raised);
   color: var(--nds-text-2);
-  font: inherit;
   font-size: var(--nds-font-size-sm-plus);
-  font-weight: 600;
-  text-align: start;
-  cursor: pointer;
+  line-height: 1.35;
+  text-align: center;
+  overflow-wrap: anywhere;
+  outline: none;
 }
 
-.fw-rt-fold:hover {
-  background: var(--nds-surface-hover);
-  color: var(--nds-text);
-}
-
-.fw-rt-fold-range {
-  font-weight: 500;
-  color: var(--nds-text-muted);
-}
-
-.fw-rt-fold-act {
-  margin-inline-start: auto;
-  color: var(--nds-text-link);
-}
-
-.fw-rt-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-width: 0;
-  padding: 6px 10px;
-  border: 1px solid var(--nds-border-subtle);
-  border-inline-start-width: 3px;
-  border-inline-start-color: var(--nds-info);
-  border-radius: var(--nds-radius-lg);
-  background: var(--nds-surface);
-  color: var(--nds-text);
-  font: inherit;
-  font-size: var(--nds-font-size-sm-plus);
-  text-align: start;
-  cursor: pointer;
-}
-
-.fw-rt-line:hover {
-  background: var(--nds-surface-hover);
-}
-
-.fw-rt-line.is-note,
-.fw-rt-line.is-floor {
-  border-inline-start-color: var(--nds-warning);
-  background: var(--nds-warning-soft);
-}
-
-.fw-rt-line-who {
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.fw-rt-line-gist {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--nds-text-muted);
-}
-
-.fw-rt-line time,
-.fw-rt-event time {
+.fw-rt-pill > svg {
   flex: none;
-  margin-inline-start: auto;
-  font-size: var(--nds-font-size-xs);
-  color: var(--nds-text-muted);
-  font-variant-numeric: tabular-nums;
 }
 
-.fw-rt-fold:focus-visible,
-.fw-rt-line:focus-visible {
+.fw-rt-pill:focus-visible {
   outline: 2px solid var(--nds-text);
   outline-offset: 2px;
 }
 
-.fw-rt-event {
-  display: flex;
+.fw-rt-pill-line {
+  display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 2px 6px;
   margin: 0;
-  padding: 0 4px;
-  min-width: 0;
-  font-size: var(--nds-font-size-sm);
-  line-height: 1.4;
+}
+
+.fw-rt-pill time {
   color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  font-variant-numeric: tabular-nums;
 }
 
-.fw-rt-event > span {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.fw-rt-event .nds-btn.link {
+.fw-rt-pill .nds-btn.link {
   padding: 0 2px;
-  font-size: var(--nds-font-size-sm);
+  font-size: inherit;
+}
+
+.fw-rt-pill.is-day {
+  font-weight: 500;
+}
+
+.fw-rt-pill.is-open {
+  flex-direction: column;
+  align-items: stretch;
 }
 
 .fw-rt-changes {
-  margin: -4px 0 0 26px;
+  width: 100%;
+  margin: 6px 0 0;
   padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  font-size: var(--nds-font-size-sm);
+  gap: 2px;
   color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  text-align: start;
   overflow-wrap: anywhere;
 }
 
@@ -220,15 +147,134 @@
   display: none;
 }
 
-.fw-rt-newbar {
-  position: absolute;
-  left: 50%;
-  bottom: 12px;
-  transform: translateX(-50%);
-  z-index: 2;
-  box-shadow: var(--nds-shadow-menu);
+/* Not yellow: in the thread yellow means one thing only, "not sent to the customer". */
+.fw-rt-endline.is-waiting svg {
+  color: var(--nds-info);
 }
 
+.fw-rt-endline-link {
+  font-weight: 600;
+  color: var(--nds-text-link);
+}
+
+/* ── "3 unread messages" (W-152, P12): a full-width band; the thread opens there ── */
+.fw-rt-unread {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+  padding: 4px 16px;
+  background: var(--nds-surface-raised);
+}
+
+.fw-rt-unread .fw-rt-pill {
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text);
+  font-weight: 600;
+}
+
+/* ── the day that floats at the top while scrolling (W-150) ── */
+.fw-rt-float {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  z-index: 5;
+  margin: 0;
+  transform: translateX(-50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--nds-duration-panel) var(--nds-easing-standard);
+}
+
+.fw-rt-float.is-on {
+  opacity: 1;
+}
+
+/* ── the round down button whenever the reader is higher up, with the count of what arrived below (W-033, W-151) ── */
+.fw-rt-down {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--nds-surface);
+  color: var(--nds-text-2);
+  box-shadow: var(--nds-shadow-menu);
+  cursor: pointer;
+}
+
+.fw-rt-down:hover {
+  color: var(--nds-text);
+}
+
+.fw-rt-down:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 2px;
+}
+
+.fw-rt-down-n {
+  position: absolute;
+  top: -6px;
+  right: -4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-primary);
+  color: var(--nds-text-inverse);
+  font-size: var(--nds-font-size-micro-plus);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── the flash after a jump (W-032): the WHOLE row, the token colour at .7, held then faded over FLASH_MS; a still tint for
+   FLASH_MS with reduced motion. The row (card.css .fw-rt-msg) is positioned; the tint sits under the bubble. ── */
+.fw-rt-msg[data-flash]::before {
+  content: '';
+  position: absolute;
+  inset: -1px 0;
+  background: var(--nds-tonal-border);
+  opacity: 0;
+  pointer-events: none;
+  animation: fw-rt-flash var(--fw-rt-flash-ms) var(--nds-easing-standard) forwards;
+}
+
+@keyframes fw-rt-flash {
+  0%,
+  66% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fw-rt-msg[data-flash]::before {
+    animation-name: fw-rt-flash-still;
+    animation-timing-function: step-end;
+  }
+}
+
+@keyframes fw-rt-flash-still {
+  from {
+    opacity: 0.7;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* ── the states ── */
 .fw-rt-state {
   flex: 1;
   min-height: 0;
@@ -262,41 +308,3 @@
   flex: none;
   margin: 10px 12px 0;
 }
-
-/* ---- B-TH-255 (T1-F05, T4-F10): the quiet lines at the end of the feed — what the View hides ("1 new message hidden by this view ·
-   Show all") and the mail that waits for a person ("… waits in Mail to sort — sender not a contact · Review"). A dashed edge like the
-   fold: a line about the conversation, never a message. Semantic tokens only. */
-.fw-rt-endline {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
-  margin: 0;
-  padding: 7px 10px;
-  min-width: 0;
-  border: 1px dashed var(--nds-border-strong);
-  border-radius: var(--nds-radius-md);
-  font-size: var(--nds-font-size-sm);
-  line-height: 1.4;
-  color: var(--nds-text-2);
-  overflow-wrap: anywhere;
-}
-
-.fw-rt-endline svg {
-  flex: none;
-}
-
-.fw-rt-endline > span:not([aria-hidden]) {
-  min-width: 0;
-}
-
-/* Not yellow: in the thread yellow means one thing only, "not sent to the customer" (design kit §3). */
-.fw-rt-endline.is-waiting svg {
-  color: var(--nds-info);
-}
-
-.fw-rt-endline-link {
-  font-weight: 600;
-  color: var(--nds-text-link);
-}
-/* ---- end B-TH-255 */

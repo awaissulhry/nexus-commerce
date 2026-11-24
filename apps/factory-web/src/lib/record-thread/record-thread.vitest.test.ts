@@ -255,8 +255,10 @@ describe('F-OP-201 — the one card: the pick band inside the column, DockColumn
     expect(css).toMatch(/\.fw-rt-scroll \{[^}]*flex: 1 1 auto;[^}]*min-height: 0;[^}]*overflow-y: auto;[^}]*overscroll-behavior: contain;/)
     expect(css).toMatch(/\.fw-rt-foot \{[^}]*flex: none;[^}]*border-top: 1px solid var\(--nds-border-subtle\);/)
     expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i)
-    // The same container (fw-rtcol) for both: the card measures itself.
-    expect(css).toMatch(/\.fw-rt-column\.is-docked \{\s*container: fw-rtcol \/ inline-size;\s*\}/)
+    // The same container (fw-rtcol) for both: the card measures itself. tw- W1.4 (B12, D14): EVERY column is the container now (the
+    // rule moved from .is-docked to .fw-rt-column, the same strictness), with the list's width L for the bubble's one width rule.
+    expect(css).toMatch(/^\.fw-rt-column \{[^}]*--L: calc\(100cqi - 34px\);[^}]*container: fw-rtcol \/ inline-size;/m)
+    expect(css).not.toMatch(/\.fw-rt-column\.is-docked \{/)
     const dock = readFileSync(new URL('./DockColumn.tsx', import.meta.url), 'utf8')
     expect(dock).toContain("import './record-thread.css'")
     expect(dock).toContain('className="fw-rt-column is-docked"')
