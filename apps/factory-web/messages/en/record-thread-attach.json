@@ -45,10 +45,10 @@
   },
   "clip": {
     "label": "Add files",
-    "device": "Upload from this device",
-    "photo": "Take a photo",
+    "device": "Document",
+    "photo": "Photos",
     "photoHint": "the phone's camera; elsewhere the file picker",
-    "record": "From this record…",
+    "record": "From this record",
     "noRight": "Adding files needs the right to upload or read files",
     "noUpload": "needs the right to upload files",
     "noRead": "needs the right to read files",

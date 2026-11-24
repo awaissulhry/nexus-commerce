@@ -32,8 +32,7 @@
     "closed": "Closed by {who}, {date}",
     "closedPlain": "This thread is closed.",
     "reopen": "Reopen",
-    "noRight": "You can read this thread; writing in it needs another role.",
-    "noParty": "This record has no customer: notes only."
+    "noRight": "You can read this thread; writing in it needs another role."
   },
   "prospect": {
     "line": "{party} is a prospect, not a customer yet.",

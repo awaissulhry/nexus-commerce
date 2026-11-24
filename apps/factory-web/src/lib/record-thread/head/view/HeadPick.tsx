@@ -17,3 +17,18 @@ export function HeadPickProvider({ pick, children }: { pick: ReactNode; children
 export function useHeadPick(): ReactNode {
   return useContext(HeadPickContext)
 }
+
+/**
+ * tw- fx2 (walk G-21; 10-design § 8): the head's title is the CURRENT thread's record label ("SO-2026-0142", "Seed Racing (general)"),
+ * the pick's menu keeps the long labels. The thread's head hands its record label to the pick it draws; All of's head hands none (its
+ * title is the pick's own "All of …").
+ */
+const HeadTitleContext = createContext<string | null>(null)
+
+export function HeadTitleProvider({ title, children }: { title: string | null; children?: ReactNode }) {
+  return <HeadTitleContext.Provider value={title}>{children}</HeadTitleContext.Provider>
+}
+
+export function useHeadTitle(): string | null {
+  return useContext(HeadTitleContext)
+}

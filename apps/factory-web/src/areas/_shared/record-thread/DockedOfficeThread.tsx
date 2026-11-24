@@ -86,7 +86,8 @@ import { useApprovalHistory } from '../../../shell/panels/approvals/use-approval
 import { ApprovalHistory } from '../../../shell/panels/approvals/view/ApprovalHistory'
 // ---- end B-TH-280
 // tw- W2.1: the pins went to the pinned bar (RecordThread); the head counts the files.
-import { headFiles } from '../../../lib/record-thread/head/model' // tw- W2.1: the Files icon's count
+import { headFiles } from '../../../lib/record-thread/head/model'
+import { centreInList } from '../../../lib/record-thread/parts/scroll' // tw- fx2 (G-3) // tw- W2.1: the Files icon's count
 // B-TH-287 (B-TH-098): saved replies in the customer's language first (th-backend-g step 3 reads the five languages).
 import { readMessageLanguage } from './api'
 import { replyLanguageOf } from '../../../lib/record-thread/helpers/model'
@@ -594,7 +595,7 @@ function Docked({ host, model, actions, base, reminder }: { host: DockedHost; mo
     }
     requestAnimationFrame(() => {
       const target = document.querySelector<HTMLElement>(`[data-event-ids~="${CSS.escape(step)}"]`)
-      target?.scrollIntoView({ block: 'center' })
+      centreInList(target) // tw- fx2 (G-3): the list scrolls, never the page
       target?.focus({ preventScroll: true })
     })
   }, [showAsk, clearShow, key, notify])
@@ -691,13 +692,16 @@ function Docked({ host, model, actions, base, reminder }: { host: DockedHost; mo
       return
     }
     const controller = new AbortController()
+    // tw- fx2 (walk G-22): a hit's words are its loaded message's whole text when the feed holds it (the server's line may stop before
+    // the searched word), so the list can cut the snippet around the word and mark it; else the server's line.
+    const hitWords = (id: string, line: string | null) => latestCompose.current.messages.find((one) => one.id === id)?.body || line
     const timer = setTimeout(() => {
       setSearch((now) => (now ? { ...now, state: 'searching' } : now))
       searchThread(api, key, searchQuery, controller.signal)
         .then((answer) =>
           setSearch((now) =>
             now && now.query === searchQuery
-              ? { ...now, state: answer.tooShort ? 'short' : 'ready', words: answer.words, total: answer.total, hits: answer.results.map((hit) => ({ id: hit.recordId, excerpt: hit.subtitle, direction: hit.status, ...(hit.message ? { at: hit.message.at, sender: { name: hit.message.authorName, kind: hit.message.authorKind } } : {}) /* tw- W2.4 */ })) }
+              ? { ...now, state: answer.tooShort ? 'short' : 'ready', words: answer.words, total: answer.total, hits: answer.results.map((hit) => ({ id: hit.recordId, excerpt: hitWords(hit.recordId, hit.subtitle), direction: hit.status, ...(hit.message ? { at: hit.message.at, sender: { name: hit.message.authorName, kind: hit.message.authorKind } } : {}) /* tw- W2.4 */ })) }
               : now,
           ),
         )
@@ -745,6 +749,8 @@ function Docked({ host, model, actions, base, reminder }: { host: DockedHost; mo
   const closed = base.closed?.at ? { by: base.closed.by, at: base.closed.at } : null
   const head: HeadModel = {
     record: host.recordLabel,
+    // tw- fx2 (G-21): a customer's (or supplier's) general thread is titled by the pick's "<name> (general)", not by its code.
+    ...(key.type === 'Party' ? { pickTitle: null } : {}),
     party: party ? { name: party.name, role } : null,
     // B-TH-229: the API's one waiting rule and owner; a thread read without them (a design case) keeps the clock-time reading.
     answers: base.server.head ? answersOf(base.server.head.waiting) : whoAnswers(base.server.messages, partyId !== null),

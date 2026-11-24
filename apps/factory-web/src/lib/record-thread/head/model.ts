@@ -220,6 +220,11 @@ export interface HeadParty {
 export interface HeadModel {
   /** The record as its page names it ("SO-2026-0142"): the region's name and the phone head's title. */
   readonly record: string
+  /**
+   * tw- fx2 (walk G-21): the title a dock's pick shows for this thread — absent: `record` ("SO-2026-0142", "SEED-WO-B001"); null: the pick's
+   * own label (a customer's general thread: "Seed Racing (general)", never its code).
+   */
+  readonly pickTitle?: string | null
   readonly party: HeadParty | null
   /** Who answers next (whoAnswers), or null: no pill. */
   readonly answers: Answers | null
@@ -310,6 +315,33 @@ export const hitSideKey = (direction: string | null): string => (direction === '
 
 /** The query is long enough to ask the server (factory-domain SEARCH_LIMITS.minQuery: two letters). */
 export const searchReady = (query: string): boolean => query.trim().length >= 2
+
+/**
+ * tw- fx2 (walk G-4 / G-5): the ⋮ draws only the rows the reader may use — a row held for a missing right (or any other reason) is
+ * not drawn, and with it its hint sentence (10-design § 8, S12). `menuRows` still says why a row is held (the doors keep it).
+ */
+export function drawnRows(rows: readonly MenuRow[]): MenuRow[] {
+  return rows.filter((row) => !('held' in row) || row.held === null || row.held === undefined)
+}
+
+/**
+ * tw- fx2 (walk G-22): a hit's snippet around the first searched word it holds (a long message's word may sit past the line the list
+ * shows), "…" where it was cut; a long text without the words is its start.
+ */
+export function snippetAround(text: string, words: readonly string[], room = 90): string {
+  const plain = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  const haystack = plain(text)
+  const at = words
+    .map((word) => plain(word.trim()))
+    .filter((word) => word.length >= 2)
+    .map((word) => haystack.indexOf(word))
+    .filter((index) => index >= 0)
+    .sort((a, b) => a - b)[0]
+  if (text.length <= room) return text
+  const start = at === undefined || at < room / 3 ? 0 : at - Math.floor(room / 3)
+  const end = Math.min(text.length, start + room)
+  return `${start > 0 ? '…' : ''}${text.slice(start, end)}${end < text.length ? '…' : ''}`
+}
 
 /** A hit's line cut in parts, the query's words marked (case and accents aside), for the list. */
 export function markWords(text: string, words: readonly string[]): { readonly text: string; readonly hit: boolean }[] {

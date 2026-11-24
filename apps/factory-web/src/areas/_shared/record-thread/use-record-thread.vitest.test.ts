@@ -7,7 +7,7 @@ import { checkReply, officeOnly, postNoteKeyed, readContacts, sendReplyKeyed, sh
 import { afterRead, applyNewest, applyOlder, checkProblemOf, EMPTY_SERVER, readStatusOf, replyRefusal, sendReason, uploadReason, type Work } from './state'
 // B-TH-229
 import { markThreadRead, setThreadOwner } from './api'
-import { readMarker } from './state'
+import { READ_MARK_GAP_MS, readMarker } from './state'
 // B-TH-255
 import { readHiddenNew, readThreadPage } from './api'
 // F-SA-260: THE dock pick, and the work order's dock that draws it.
@@ -72,7 +72,7 @@ describe('B-TH-229 — reading marks the thread read once, forward only', () => 
 
   it('one call per message seen later than the mark; the same or an older message never sends again', async () => {
     const sent: string[] = []
-    const marker = readMarker(async (id) => void sent.push(id))
+    const marker = readMarker(async (id) => void sent.push(id), { gapMs: 0 })
     marker.seen({ id: 'm2', at: at(2) })
     await settle()
     marker.seen({ id: 'm2', at: at(2) })
@@ -86,7 +86,7 @@ describe('B-TH-229 — reading marks the thread read once, forward only', () => 
 
   it('the server’s own mark is known first: nothing at or before it sends', async () => {
     const sent: string[] = []
-    const marker = readMarker(async (id) => void sent.push(id))
+    const marker = readMarker(async (id) => void sent.push(id), { gapMs: 0 })
     marker.known({ id: 'm5', at: at(5) })
     marker.seen({ id: 'm4', at: at(4) })
     marker.seen({ id: 'm5', at: at(5) })
@@ -100,7 +100,7 @@ describe('B-TH-229 — reading marks the thread read once, forward only', () => 
     const marker = readMarker((id) => {
       sent.push(id)
       return id === 'm1' ? new Promise<void>((resolve) => (release = resolve)) : Promise.resolve()
-    })
+    }, { gapMs: 0 })
     marker.seen({ id: 'm1', at: at(1) })
     marker.seen({ id: 'm2', at: at(2) })
     marker.seen({ id: 'm3', at: at(3) })
@@ -111,18 +111,43 @@ describe('B-TH-229 — reading marks the thread read once, forward only', () => 
     expect(sent).toEqual(['m1', 'm3'])
   })
 
-  it('a failed call is forgotten quietly: the next message seen tries again', async () => {
+  // tw- fx2 (walk: up to 25 marks a session): a mark only when the newest seen message CHANGES — the same message never sends twice,
+  // not even after a failed call; the next newer message tries again.
+  it('a failed call is forgotten quietly: the same message never sends again, the next newer one does', async () => {
     const sent: string[] = []
     const marker = readMarker(async (id) => {
       sent.push(id)
       if (id === 'm1') throw new Error('offline')
-    })
+    }, { gapMs: 0 })
     marker.seen({ id: 'm1', at: at(1) })
     await settle()
     await settle()
     marker.seen({ id: 'm1', at: at(1) })
     await settle()
-    expect(sent).toEqual(['m1', 'm1'])
+    expect(sent).toEqual(['m1'])
+    marker.seen({ id: 'm2', at: at(2) })
+    await settle()
+    expect(sent).toEqual(['m1', 'm2'])
+  })
+
+  it('tw- fx2: at most one mark in 5 s — the newest seen meanwhile goes once the 5 s are over, the ones between never', async () => {
+    const sent: string[] = []
+    let clock = 0
+    const timers: Array<{ at: number; run: () => void }> = []
+    const marker = readMarker(async (id) => void sent.push(id), { now: () => clock, later: (run, ms) => timers.push({ at: clock + ms, run }) })
+    expect(READ_MARK_GAP_MS).toBe(5_000)
+    marker.seen({ id: 'm1', at: at(1) })
+    await settle()
+    clock = 1_000
+    marker.seen({ id: 'm2', at: at(2) })
+    marker.seen({ id: 'm3', at: at(3) })
+    await settle()
+    expect(sent).toEqual(['m1'])
+    expect(timers.map((timer) => timer.at)).toEqual([5_000])
+    clock = 5_000
+    timers.shift()!.run()
+    await settle()
+    expect(sent).toEqual(['m1', 'm3'])
   })
 
   it('the calls: POST …/read names the message; PUT …/owner names a person or null (the record’s own); never anyone else’s mark (W08)', async () => {
@@ -825,7 +850,9 @@ describe('tw- W1.4 — one door to a message, the jump, Reply on every message, 
 
   it('the found message is lit (the flash, seq again on the next jump), centred at once and focused — no anchor ring', () => {
     expect(container).toContain('setFlash((now) => ({ id: messageId, seq: (now?.seq ?? 0) + 1 }))')
-    expect(container).toMatch(/target\?\.scrollIntoView\(\{ block: 'center' \}\)\s*target\?\.focus\(\{ preventScroll: true \}\)/)
+    // tw- fx2 (G-3): centred in its LIST only (never scrollIntoView, which also scrolled the office page).
+    expect(container).toMatch(/centreInList\(target\) \/\/ tw- fx2 \(G-3\): the list scrolls, never the page\s*target\?\.focus\(\{ preventScroll: true \}\)/)
+    for (const file of ['../../../lib/record-thread/feed/view/Feed.tsx', './DockedOfficeThread.tsx', './use-record-thread.ts']) expect(readFileSync(new URL(file, import.meta.url), 'utf8'), file).not.toContain('scrollIntoView(')
     expect(container).not.toMatch(/setAnchor\(messageId\)/)
     expect(container).toMatch(/\n\s*flash,\n\s*pins: pinPills,/)
   })
@@ -875,3 +902,15 @@ describe('tw- W1.4 — one door to a message, the jump, Reply on every message, 
 })
 // ---- end tw- W1.4
 
+
+// ---- tw- fx2 (walk G-2) ---------------------------------------------------------------------------------------------------------------
+describe('tw- fx2 — no request the reader has no right to', () => {
+  it('G-2: saved replies are read only with their own right (email.send, GET /templates/replies) — on Incoming as on every host', () => {
+    const pane = readFileSync(new URL('../../sales/inquiries/pane/RequestThread.tsx', import.meta.url), 'utf8')
+    expect(pane).toContain("const mayReply = thread.base.held.has('email.send')\n")
+    expect(pane).not.toContain("held.has('email.send') || thread.base.held.has('threads.post')")
+    const docked = readFileSync(new URL('./DockedOfficeThread.tsx', import.meta.url), 'utf8')
+    expect(docked).toContain('const mayReply = can.email && isReplyRecordType(key.type)')
+  })
+})
+// ---- end tw- fx2

@@ -141,12 +141,15 @@ describe('tw- W1.1 — sides and runs: one sender, one audience, one day, nothin
     expect(cardOf({ id: 'm', direction: 'INBOUND', channel: 'EMAIL', author: { kind: 'PARTY', id: 'p1', name: 'Lia Modello' }, authorHidden: false, forFloor: false, body: 'x', attachments: [], at: at(1) }, { emails: new Map(), names: new Map() }).senderKey).toBe('PARTY:p1')
   })
 
-  it('one tone per sender: the same key the same tone everywhere; six person tones, never yellow or red; slate without a key', () => {
+  // tw- fx2 (walk G-7, Z27): every DS group tone but yellow (the office note's) — eight; slate stays the no-key tone.
+  it('one tone per sender: the same key the same tone everywhere; eight person tones, never yellow; slate without a key', () => {
     expect(senderTone('USER:u1')).toBe(senderTone('USER:u1'))
-    expect([...SENDER_TONES]).toEqual(['purple', 'emerald', 'pink', 'orange', 'blue', 'cyan'])
+    expect([...SENDER_TONES]).toEqual(['purple', 'emerald', 'pink', 'orange', 'blue', 'cyan', 'violet'])
+    expect(SENDER_TONES as readonly string[]).not.toContain('red')
+    expect(SENDER_TONES as readonly string[]).not.toContain('yellow')
     const seen = new Set(Array.from({ length: 200 }, (_, index) => senderTone(`USER:${index}`)))
     expect([...seen].sort()).toEqual([...SENDER_TONES].sort())
-    for (const tone of seen) expect(['yellow', 'red', 'amber', 'slate']).not.toContain(tone)
+    for (const tone of seen) expect(['yellow', 'amber', 'slate']).not.toContain(tone)
     expect(senderTone(null)).toBe('slate')
     expect(senderTone(undefined)).toBe('slate')
   })
@@ -240,7 +243,9 @@ describe('SCR-006-feed: every state in words, both languages', () => {
 
   it('the states say what to do next', () => {
     const text = (id: string, locale: 'en' | 'it' = 'en') => textOf(cases.find(([l, c]) => l === locale && c === id)?.[2] ?? '')
-    expect(text('empty')).toContain('No messages yet Write the first one below.')
+    // tw- fx2 (G-15): ONE line.
+    expect(text('empty')).toContain('No messages yet')
+    expect(text('empty')).not.toContain('Write the first one below.')
     expect(text('loading')).toContain('Reading the thread…')
     expect(text('error')).toContain('Could not load the thread What you typed in the box below is kept.')
     expect(text('older-failed')).toContain('Could not load earlier messages Retry')
@@ -639,3 +644,29 @@ describe('tw- W2.4 — the states in the new face (S13, B6)', () => {
   })
 })
 // ---- end tw- W2.4
+
+// ---- tw- fx2 (the walk: G-1, G-7, G-12, G-15) ---------------------------------------------------------------------------------------
+describe('tw- fx2 — the feed after the walk', () => {
+  const feedSource = () => readFileSync(new URL('./view/Feed.tsx', import.meta.url), 'utf8')
+  it('G-1: a feed drawn hidden (the phone before its thread view opens) opens once it has a height — at the band, else the newest', () => {
+    const source = feedSource()
+    expect(source).toContain("if (feed.clientHeight === 0 && typeof ResizeObserver !== 'undefined') return // tw- fx2 (G-1): not shown yet")
+    expect(source).toContain('if (feed.clientHeight > 0) setShown((count) => count + 1)')
+    expect(source).toContain('}, [model.state, model.context.anchorId, model.newSince, rows, shown])')
+    expect(source).toContain('if (line && !atBottom.current) setNewCount(model.newSince ?? 0)')
+  })
+
+  it('G-7: one colour per person inside the list (the list’s tones handed to every bubble)', () => {
+    const source = feedSource()
+    expect(source).toContain('tones: tonesFor(model.messages.map((message) => message.senderKey))')
+    expect(source).toContain('context={listContext}')
+  })
+
+  it('G-12: J / K walk the list and stop there (a page’s own list keys never get them too)', () => {
+    const source = feedSource()
+    const walk = source.slice(source.indexOf("if (key !== 'j' && key !== 'k') return"), source.indexOf('revealInList(element) // tw- fx2 (G-3): the list only'))
+    expect(walk).toContain('event.preventDefault()')
+    expect(walk).toContain('event.stopPropagation()')
+  })
+})
+// ---- end tw- fx2

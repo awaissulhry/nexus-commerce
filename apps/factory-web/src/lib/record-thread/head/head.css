@@ -71,3 +71,14 @@
 .fw-rth-search-side { font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); }
 .fw-rth-search-words { font-size: var(--nds-font-size-sm); color: var(--nds-text); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .fw-rth-search-words mark { background: var(--nds-warning-soft); color: var(--nds-text-strong); border-radius: var(--nds-radius-xs); padding: 0 1px; }
+
+/*
+ * tw- fx2 (walk G-17): the head's line drops WHOLE parts when it does not fit — the owner first (before the waiting), never a stub like
+ * "Own" (at 433 px the owner had 82 px, at 375 27 px). An owner alone keeps the line (cut with "…").
+ */
+@container fw-rth (max-width: 520px) {
+  .fw-rth-line:has(.fw-rth-linepart.is-wait) .fw-rth-linepart.is-owner,
+  .fw-rth-linesep.is-owner {
+    display: none;
+  }
+}

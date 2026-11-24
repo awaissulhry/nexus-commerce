@@ -185,7 +185,7 @@ describe('F-SA-261 the view, in both languages', () => {
 
   // F-OP-204: the card — its Head (the filters, "1 new · Show"), the feed, the foot's info icon; the one line is the pick band's now.
   // tw- W2.5 (10-design §9; S1): the thread's own bubbles, read only; each bubble's menu Answer in its thread · Copy text · Copy link.
-  it('read only: the filters, the chips, "1 new · Show", the New dot, the bubble’s menu, Show older, what is left out', () => {
+  it('read only: the filters, the chips, "1 new · Show", the one unread band, the bubble’s menu, Show older, what is left out', () => {
     const html = render(createElement(AllOfCustomerDock, { label: 'All of Brand Alpha · Read only', model: model(state), actions: { onAnswer: () => undefined } }))
     const text = textOf(html)
     // F-OP-206: the foot's ONE info icon says the keys and that seeing a message marks nothing read.
@@ -195,7 +195,9 @@ describe('F-SA-261 the view, in both languages', () => {
     expect(text).toContain('SO-0142 · Your order 12')
     expect(text).toContain('Brand Alpha (general)')
     expect(text).toContain('1 new · Show')
-    expect(text).toContain('New')
+    // tw- fx2 (G-8): ONE "N unread messages" band (m3 is new), never "• New" on each message.
+    expect(text).toContain('1 unread message')
+    expect(html).not.toMatch(/fw-aoc-new(?!s)/) // the head's "1 new · Show" (fw-aoc-news) stays
     expect(text).toContain('Read only · 2 threads')
     // Each bubble is the thread's own, read only, with its small menu (Answer in its thread · Copy text · Copy link).
     expect(html.match(/class="fw-rt-msg /g)?.length).toBe(3)
@@ -353,10 +355,12 @@ describe('F-OP-205 — compact lines, expand in place, the states inside the car
     const html = render(createElement(AllOfCustomerFeed, { model: model(state), actions: { onAnswer: () => undefined } }))
     expect(html.match(/class="fw-rt-msg /g)?.length).toBe(2)
     expect(html).toContain('fw-rt-msg is-note')
-    expect(html).toContain('class="fw-aoc-item is-new"')
+    // tw- fx2 (G-8): the new message is under the ONE unread band, never marked "New" itself.
+    expect(html.indexOf('fw-rt-unread')).toBeLessThan(html.indexOf('Message m2'))
+    expect(html.indexOf('fw-rt-unread')).toBeGreaterThan(html.indexOf('Message m1'))
     const text = textOf(html)
     expect(text).toContain('Message m2')
-    expect(text).toContain('New')
+    expect(text).not.toMatch(/\bNew\b/)
     expect(html).not.toContain('fw-aoc-line')
     expect(html).not.toContain('aria-expanded="true"')
     expect(leftKeys(render(createElement(AllOfCustomerFeed, { model: model(state) }), 'it'), ['allOfCustomer', 'erased', 'menu', 'foot'])).toEqual([])
@@ -673,3 +677,28 @@ describe('tw- T.0 — All of loads older messages on scroll, as the record threa
   })
 })
 // ---- end tw- T.0
+
+// ---- tw- fx2 (the walk: G-7, G-8, G-9, G-12) ----------------------------------------------------------------------------------------
+describe('tw- fx2 — All of after the walk', () => {
+  const view = () => readFileSync(new URL('./view/AllOfCustomerFeed.tsx', import.meta.url), 'utf8')
+  it('G-9: the list lies on the sunken ground, as a thread’s feed', () => {
+    const css = readFileSync(new URL('./all-of-customer.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-rt-column\.is-docked \.fw-rt-scroll:has\(> \.fw-aoc\) \{\s*background: var\(--nds-surface-sunken\);/)
+    expect(css).not.toContain('.fw-aoc-new {')
+  })
+
+  it('G-12: J / K walk the list on every host — the keys stop at the list (a page’s ListFrame never takes them)', () => {
+    const source = view()
+    const keys = source.slice(source.indexOf('const act = onKey(event)'), source.indexOf("if (act.kind === 'answer') answerThere?.()"))
+    expect(keys).toContain('event.preventDefault()')
+    expect(keys).toContain('event.stopPropagation()')
+  })
+
+  it('G-7 / G-8: the list’s colours, one per person; the ONE band, never "New" per message', () => {
+    const source = view()
+    expect(source).toContain('tones: tonesFor(model.items.map((item) => item.card.senderKey))')
+    expect(source).toContain('<div key="unread" className="fw-rt-unread" data-feed-new="" role="separator" aria-label={unreadWords}>')
+    expect(source).not.toContain("t('allOfCustomer.new')")
+  })
+})
+// ---- end tw- fx2

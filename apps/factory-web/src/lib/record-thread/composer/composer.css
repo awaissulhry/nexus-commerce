@@ -186,10 +186,32 @@
   white-space: nowrap;
 }
 
-/* Under 420 px the chip gives way to its icon (its name stays for a screen reader). */
+/* tw- fx2 (walk G-13; 10-design § 10 / P6): under 420 px the audience chip takes its own row, IN WORDS, above "+ · box · send". */
 @container fw-rtcol (max-width: 420px) {
-  .fw-rt-cx-aud-word {
-    display: none;
+  .fw-rt-cx-row:has(> .fw-rt-cx-aud, > .fw-rt-cx-chipbtn) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: 'chip chip chip' 'plus box send';
+    align-items: end;
+  }
+
+  .fw-rt-cx-row > .fw-rt-cx-aud,
+  .fw-rt-cx-row > .fw-rt-cx-chipbtn {
+    grid-area: chip;
+    justify-self: start;
+  }
+
+  .fw-rt-cx-row > .fw-rt-clip,
+  .fw-rt-cx-row > .fw-rt-clip-menu {
+    grid-area: plus;
+  }
+
+  .fw-rt-cx-row > .fw-rt-cx-box {
+    grid-area: box;
+  }
+
+  .fw-rt-cx-row > .fw-rt-cx-send {
+    grid-area: send;
   }
 }
 
@@ -230,17 +252,18 @@
   display: block;
   width: 100%;
   box-shadow: none;
-  min-height: 24px;
-  max-height: calc(8 * 1.55em + 12px);
+  min-height: 30px;
+  max-height: calc(8 * 22px + 8px);
   resize: none;
   border: none;
   outline: none;
   background: transparent;
   color: var(--nds-text);
   font: inherit;
-  font-size: var(--nds-font-size-base);
-  line-height: 1.55;
-  padding: 3px 0;
+  /* tw- fx2 (walk G-19; 10-design § 2): the box as drawn — text 15 / 22. */
+  font-size: var(--nds-font-size-md);
+  line-height: 22px;
+  padding: 4px 0;
   overflow-y: hidden;
 }
 
@@ -370,4 +393,39 @@
   flex: 1;
   min-height: 0;
   background: var(--nds-surface-raised);
+}
+
+/*
+ * tw- fx2 (walk G-19; 10-design § 2): the round box is 40 px at rest; the "+" a round outlined button; Send 40 and grey while it waits.
+ * Scoped under the composer so the DS's own button tiers (`.nds-btn.sm`, `.nds-btn.icon.sm`, `.nds-btn.primary`) give way here only.
+ */
+.fw-rt-composer .fw-rt-cx-box {
+  min-height: 40px;
+}
+
+.fw-rt-composer .fw-rt-cx-row > .fw-rt-clip .nds-btn,
+.fw-rt-composer .fw-rt-cx-row > .fw-rt-clip-menu > .nds-btn {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface);
+}
+
+.fw-rt-composer .fw-rt-cx-row > .fw-rt-clip .nds-btn:hover,
+.fw-rt-composer .fw-rt-cx-row > .fw-rt-clip-menu > .nds-btn:hover {
+  background: var(--nds-surface-hover);
+}
+
+.fw-rt-composer .fw-rt-cx-send.nds-btn {
+  height: 40px;
+  min-width: 40px;
+}
+
+.fw-rt-composer .fw-rt-cx-send.nds-btn[aria-disabled='true'],
+.fw-rt-composer .fw-rt-cx-send.nds-btn:disabled {
+  border-color: var(--nds-border);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-muted);
+  opacity: 1;
 }

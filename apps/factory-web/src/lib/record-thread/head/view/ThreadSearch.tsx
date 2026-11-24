@@ -5,7 +5,7 @@ import { Search, X } from 'lucide-react'
 import { Button, Input, Spinner } from '@nexus/ui/primitives'
 import { useLocale, useT } from '../../../i18n/provider'
 import { dayOf, shortDateOf, timeOf } from '../../parts/time'
-import { hitSideKey, hitWho, markWords, type ThreadSearchModel } from '../model'
+import { hitSideKey, hitWho, markWords, snippetAround, type ThreadSearchModel } from '../model'
 
 /** The Head's catalogue (RecordThreadHead's HEAD_NS; named here so the two files do not import each other). */
 const HEAD_NS = 'record-thread-head'
@@ -130,7 +130,7 @@ export function ThreadSearch({ record, model, actions }: { record: string; model
                       })()}
                     </span>
                     <span className="fw-rth-search-words">
-                      {markWords(words, model.words).map((part, at) => (part.hit ? <mark key={at}>{part.text}</mark> : <span key={at}>{part.text}</span>))}
+                      {markWords(snippetAround(words, model.words), model.words).map((part, at) => (part.hit ? <mark key={at}>{part.text}</mark> : <span key={at}>{part.text}</span>))}
                     </span>
                   </li>
                 )

@@ -86,7 +86,6 @@
     "notShown_one": "1 thread of {customer} you cannot open is left out.",
     "notShown_other": "{count} threads of {customer} you cannot open are left out.",
     "openRecord": "Open {record}",
-    "new": "New",
     "writeFirst": "Write the first one in {thread}",
     "showEverything": "Show everything",
     "chip": {

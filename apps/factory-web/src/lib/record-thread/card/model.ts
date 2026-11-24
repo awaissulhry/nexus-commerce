@@ -1,4 +1,5 @@
 import type { Tone } from '@nexus/ui/primitives'
+import type { SenderTone } from '../parts/tones' // tw- fx2 (G-7)
 
 /**
  * B-TH-298 — the message card (threads plan T3; picture 2, approved 2026-11-17): what ONE message of a record's thread draws,
@@ -199,6 +200,8 @@ export interface CardContext {
   replyWays?: { readonly note: boolean; readonly email: boolean; readonly portal: boolean }
   /** tw- W2.2: "Remind me" on a message — the reader's own reminders (home.view). Absent: not offered. */
   canRemind?: boolean
+  /** tw- fx2 (walk G-7): the list's colours by sender key (`tonesFor`): one colour per person inside the list. Absent: the key's own. */
+  tones?: ReadonlyMap<string, SenderTone>
 }
 
 // ── the words of a bubble's foot (tw- W1.2) ─────────────────────────────────────────────────────────────────────────
@@ -214,7 +217,9 @@ export function footMarks(message: Pick<CardMessage, 'kind' | 'channel' | 'forFl
   if (message.kind === 'floor') return [{ key: 'foot.office', icon: 'lock' }, { key: 'foot.fromFloor', icon: 'tablet' }]
   if (message.channel === 'PORTAL') return [{ key: 'foot.portal', icon: 'globe' }]
   if (message.channel === 'EMAIL') return [{ key: 'foot.email', icon: 'mail' }]
-  return []
+  // tw- fx2 (walk G-11; R17): a shared message of channel APP (written in the app, read by the customer in their portal) carries the
+  // portal's icon — never "shared" by colour alone.
+  return [{ key: 'foot.portal', icon: 'globe' }]
 }
 
 /** The audience read out for a screen reader (T3-F17: side and audience in words, never colour alone). */

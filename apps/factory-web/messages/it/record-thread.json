@@ -86,7 +86,6 @@
     "notShown_one": "1 thread di {customer} che non puoi aprire è escluso.",
     "notShown_other": "{count} thread di {customer} che non puoi aprire sono esclusi.",
     "openRecord": "Apri {record}",
-    "new": "Nuovo",
     "writeFirst": "Scrivi il primo in {thread}",
     "showEverything": "Mostra tutto",
     "chip": {

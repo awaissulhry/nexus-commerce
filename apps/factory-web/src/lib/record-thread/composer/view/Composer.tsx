@@ -32,7 +32,7 @@ import {
   type SwitchNote,
 } from '../model'
 // F-SA-282a (B-SA-073): the portal's hold of a text that names another customer, and the writer's tick.
-import { draftAfter, namesOtherAsked } from '../model'
+import { draftAfter, namesOtherAsked, withoutLink } from '../model'
 // F-SA-265 (Discuss): the chip "About: …" in the box's audience words, removable.
 import { aboutWords, withoutAbout } from '../model'
 // F-CP-147 (B-CP-020): the API held words that look like a price — the box warns (no amount repeated) and Send becomes "Send anyway".
@@ -202,7 +202,9 @@ export function Composer(props: ComposerProps) {
       send()
     } else if (event.key === 'Escape') {
       event.preventDefault()
-      props.onEscape?.()
+      // tw- fx2 (walk G-12): Esc drops the reply (or correction) bar and the focus stays in the box; with no bar it leaves the box.
+      if (link) dropLink()
+      else props.onEscape?.()
     } else if (event.key === '/' && draft.body === '' && openReplies()) {
       event.preventDefault()
     }
@@ -237,10 +239,10 @@ export function Composer(props: ComposerProps) {
   }
   // B-TH-236: what the message answers or corrects, said above the box with × to let it go.
   const link = draft.link ?? null
+  // tw- fx2 (walk G-24): × on a reply bar puts the audience back to what it was before Reply (the safe default); a correction's × as before.
   const dropLink = () => {
-    const { link: _link, ...rest } = draft
-    void _link
-    props.onDraft(rest, notes)
+    const next = withoutLink(draft, modes, context.people)
+    props.onDraft(next.draft, next.notes ?? notes)
   }
   const amount = amountOffered(draft.mode, context.can.price)
   const lockedFloor = floorLocked(draft)
@@ -305,9 +307,38 @@ export function Composer(props: ComposerProps) {
 
   // ── the chips row (Follow up, Amount, For the floor, About): only when one is on (P6: at rest the composer is one row) ──
   const about = aboutWords(draft)
+  // ── the audience chip: a menu of radio rows (today's words), the lock / mail / globe; one audience alone is a plain chip ──
+  const chipNode =
+    modes.length > 1 ? (
+      <Menu
+        className="fw-rt-cx-aud"
+        label={
+          <>
+            <ModeIcon size={13} aria-hidden />
+            <span className="fw-rt-cx-aud-word">{modeWords(draft.mode)}</span>
+            <ChevronDown size={13} aria-hidden />
+          </>
+        }
+        items={modes.map((mode) => {
+          const Icon = MODE_ICON[mode]
+          return { id: `mode-${mode}`, label: mode === 'note' ? t('mode.note') : t(mode === 'portal' ? 'modeMenu.portal' : 'modeMenu.reply', { party }), icon: <Icon size={14} aria-hidden />, checked: mode === draft.mode, onSelect: () => setMode(mode) }
+        })}
+        triggerProps={{ className: 'fw-rt-cx-chipbtn', 'aria-label': `${t('modeLabel')}: ${modeWords(draft.mode)}` }}
+      />
+    ) : modes.length === 1 ? (
+      <span className="fw-rt-cx-chipbtn is-static" title={modeWords(draft.mode)}>
+        <ModeIcon size={13} aria-hidden />
+        <span className="fw-rt-cx-aud-word">{modeWords(draft.mode)}</span>
+      </span>
+    ) : null
+
+  // tw- fx2 (walk G-13; 10-design § 10 / P6): in a customer mode, or with an Amount, For the floor or About chip on, the chips take
+  // their own row above "+ · box · send" — the audience chip first, in words. At rest (an office note, no chip) it stays in the one row.
+  const chipInChips = toCustomer(draft.mode) || (amount && draft.amount !== undefined) || (floor && (draft.forFloor || lockedFloor)) || Boolean(about)
   const chips =
-    (toCustomer(draft.mode) && props.followUp) || (amount && draft.amount !== undefined) || (floor && (draft.forFloor || lockedFloor)) || about ? (
+    chipInChips ? (
       <div className="fw-rt-cx-chips">
+        {chipNode}
         {toCustomer(draft.mode) && props.followUp}
         {amount && draft.amount !== undefined && (
           <AmountField
@@ -354,31 +385,6 @@ export function Composer(props: ComposerProps) {
       </div>
     ) : null
 
-  // ── the audience chip: a menu of radio rows (today's words), the lock / mail / globe; one audience alone is a plain chip ──
-  const chip =
-    modes.length > 1 ? (
-      <Menu
-        className="fw-rt-cx-aud"
-        label={
-          <>
-            <ModeIcon size={13} aria-hidden />
-            <span className="fw-rt-cx-aud-word">{modeWords(draft.mode)}</span>
-            <ChevronDown size={13} aria-hidden />
-          </>
-        }
-        items={modes.map((mode) => {
-          const Icon = MODE_ICON[mode]
-          return { id: `mode-${mode}`, label: mode === 'note' ? t('mode.note') : t(mode === 'portal' ? 'modeMenu.portal' : 'modeMenu.reply', { party }), icon: <Icon size={14} aria-hidden />, checked: mode === draft.mode, onSelect: () => setMode(mode) }
-        })}
-        triggerProps={{ className: 'fw-rt-cx-chipbtn', 'aria-label': `${t('modeLabel')}: ${modeWords(draft.mode)}` }}
-      />
-    ) : modes.length === 1 ? (
-      <span className="fw-rt-cx-chipbtn is-static" title={modeWords(draft.mode)}>
-        <ModeIcon size={13} aria-hidden />
-        <span className="fw-rt-cx-aud-word">{modeWords(draft.mode)}</span>
-      </span>
-    ) : null
-
   return (
     <div className="fw-rt-composer" data-mode={draft.mode}>
       {bar}
@@ -386,7 +392,7 @@ export function Composer(props: ComposerProps) {
       {chips}
       <div className="fw-rt-cx-row">
         {plus}
-        {chip}
+        {!chipInChips && chipNode}
         <div
           ref={boxRef}
           className={`fw-rt-cx-box${dragging ? ' is-dragging' : ''}`}
@@ -457,7 +463,6 @@ export function Composer(props: ComposerProps) {
         </p>
       )}
       {props.lines}
-      {modes.length === 1 && modes[0] === 'note' && !context.party && !context.prospect && <p className="fw-rt-cx-line">{t('box.noParty')}</p>}
       {props.hint}
       <p className="fw-rt-sr" aria-live="polite">
         {announce}

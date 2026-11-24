@@ -679,13 +679,16 @@ describe('tw- W1.2 — the bubble', () => {
 
   it('a quote is drawn only from the message’s own replyTo / corrects (R1): the card never looks a quoted message up among loaded ones', () => {
     const card = readFileSync(new URL('./view/MessageCard.tsx', import.meta.url), 'utf8')
-    expect(card).toContain('<QuoteBlock link={message.replyTo} onJump={onJump} />')
+    expect(card).toContain('<QuoteBlock link={message.replyTo} onJump={onJump} tones={context.tones} />') // tw- fx2 (G-7): the list's colours
     expect(card).toContain('<CorrectionLink link={message.corrects} onJump={onJump} />')
     for (const file of ['./view/MessageCard.tsx', './view/QuoteBlock.tsx', './quote.ts']) {
       const source = readFileSync(new URL(file, import.meta.url), 'utf8')
       expect(source, file).not.toMatch(/\.find\(|messages\.(filter|some)\(|\bmessages\b\s*[:=]/)
     }
-    expect(readFileSync(new URL('./view/QuoteBlock.tsx', import.meta.url), 'utf8')).toContain('const quote = quoteOf(link)')
+    // tw- fx2 (G-7): the quote is still its link's own; only its colour is the list's (by the quoted sender's key).
+    const block = readFileSync(new URL('./view/QuoteBlock.tsx', import.meta.url), 'utf8')
+    expect(block).toContain('const own = quoteOf(link)')
+    expect(block).toContain("const quote = own.tone !== 'slate' && link.senderKey && tones?.get(link.senderKey) ? { ...own, tone: tones.get(link.senderKey)! } : own")
   })
 
   it('mine on the right with no tile and no name; someone else’s run starts with the tile, the name and the tail; inside a run neither', () => {
@@ -916,3 +919,38 @@ describe('tw- W2.2 — the walls of the face: never forward, star, delete, edit,
   })
 })
 // ---- end tw- W2.2
+
+// ---- tw- fx2 (the walk: G-7, G-11, G-18) --------------------------------------------------------------------------------------------
+import { SENDER_TONES, tonesFor } from '../parts/tones'
+
+describe('tw- fx2 — colours, audience icons and the touch arrow after the walk', () => {
+  it('G-7: seven person tones (no yellow, no red, no slate); one colour per person inside a list, deterministic', () => {
+    expect([...SENDER_TONES]).toEqual(['purple', 'emerald', 'pink', 'orange', 'blue', 'cyan', 'violet'])
+    expect(SENDER_TONES as readonly string[]).not.toContain('red')
+    expect(SENDER_TONES as readonly string[]).not.toContain('yellow')
+    const keys = ['USER:mario', 'PARTY:bianca', 'USER:paula', 'WORKER:walter', 'USER:bea']
+    const tones = tonesFor(keys)
+    expect(new Set(keys.map((key) => tones.get(key))).size).toBe(5)
+    expect(tonesFor([...keys].reverse())).toEqual(tones)
+    expect(tonesFor([null, undefined, 'USER:mario']).size).toBe(1)
+    const many = Array.from({ length: 7 }, (_, index) => `USER:${index}`)
+    expect(new Set(many.map((key) => tonesFor(many).get(key))).size).toBe(7)
+    // An eighth sender shares a tone (there are seven), the same way every time.
+    const eight = Array.from({ length: 8 }, (_, index) => `USER:${index}`)
+    expect(new Set(eight.map((key) => tonesFor(eight).get(key))).size).toBe(7)
+    expect(tonesFor([...eight].reverse())).toEqual(tonesFor(eight))
+  })
+
+  it('G-11: a shared message of channel APP carries the portal icon (never shared by colour alone)', () => {
+    expect(footMarks({ kind: 'theirs', channel: 'APP' })).toEqual([{ key: 'foot.portal', icon: 'globe' }])
+    expect(footMarks({ kind: 'ours', channel: 'APP' })).toEqual([{ key: 'foot.portal', icon: 'globe' }])
+    expect(footMarks({ kind: 'note', channel: 'APP' })).toEqual([{ key: 'foot.office', icon: 'lock' }])
+  })
+
+  it('G-18: on touch the arrow sits by the time in the foot, the foot makes room — never over the words', () => {
+    const css = readFileSync(new URL('./card.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/@media \(hover: none\) \{\s*\.fw-rt-tools \{\s*top: auto;\s*bottom: 2px;/)
+    expect(css).toMatch(/\.fw-rt-bub:has\(> \.fw-rt-tools\) \.fw-rt-meta \{\s*margin-inline-end: 22px;/)
+  })
+})
+// ---- end tw- fx2

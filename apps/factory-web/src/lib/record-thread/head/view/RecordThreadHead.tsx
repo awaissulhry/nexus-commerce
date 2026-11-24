@@ -8,7 +8,8 @@ import { Button, Tooltip } from '@nexus/ui/primitives'
 import { formatDate, formatTime } from '../../../i18n/format'
 import { useLocale, useT } from '../../../i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
-import { HEAD_KEYS, headLine, inProjectWords, menuRows, waitingWords, type DockWidth, type HeadDoor, type HeadModel, type ThreadView } from '../model'
+import { drawnRows, HEAD_KEYS, headLine, inProjectWords, menuRows, waitingWords, type DockWidth, type HeadDoor, type HeadModel, type ThreadView } from '../model'
+import { HeadTitleProvider } from './HeadPick' // tw- fx2 (G-21): the pick's title is this thread's record label
 import { useHeadPick } from './HeadPick'
 // B-TH-288: "Search in the thread".
 import { ThreadSearch, type ThreadSearchActions } from './ThreadSearch'
@@ -84,7 +85,7 @@ function Head({ model, actions }: { model: HeadModel; actions?: HeadActions | un
   // ── the ⋮: ONE order (model.menuRows), the counts on their rows, held rows with why (R-ACT), no other line under a row ──
   const items: MenuItemDef[] = []
   let group: string | null = null
-  for (const row of menuRows(model)) {
+  for (const row of drawnRows(menuRows(model))) { // tw- fx2 (G-4, G-5): only the rows the reader may use
     const next = row.kind === 'view' ? 'views' : row.kind === 'width' ? 'width' : row.kind === 'print' || row.kind === 'close' || row.kind === 'reopen' ? 'end' : 'doors'
     if (group !== null && group !== next) items.push({ id: `sep-${next}`, separator: true })
     if (group !== next && next === 'views') items.push({ id: 'views-heading', heading: true, label: t('view.label') })
@@ -114,7 +115,7 @@ function Head({ model, actions }: { model: HeadModel; actions?: HeadActions | un
   return (
     <div className={`fw-rth${compact ? ' is-compact' : ''}`} role="group" aria-label={t('label', { record: model.record })}>
       <div className="fw-rth-titleblock">
-        <div className="fw-rth-title">{pick ?? <span className="fw-rth-title-words">{model.record}</span>}</div>
+        <div className="fw-rth-title">{pick ? <HeadTitleProvider title={model.pickTitle === undefined ? model.record : model.pickTitle}>{pick}</HeadTitleProvider> : <span className="fw-rth-title-words">{model.record}</span>}</div>
         {(line || inProject) && (
           <p className="fw-rth-line">
             {line && <LineWords line={line} model={model} role={role} viewWord={viewWord} onShowAll={() => actions?.onView?.('all')} />}
@@ -209,7 +210,7 @@ function LineWords({ line, model, role, viewWord, onShowAll }: { line: NonNullab
           </span>
         </Tooltip>
       )}
-      {waiting && ownerWords && <span aria-hidden="true">·</span>}
+      {waiting && ownerWords && <span className="fw-rth-linesep is-owner" aria-hidden="true">·</span>}
       {ownerWords && <span className="fw-rth-linepart is-owner">{ownerWords}</span>}
     </>
   )

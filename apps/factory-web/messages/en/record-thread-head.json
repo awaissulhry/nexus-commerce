@@ -203,6 +203,7 @@
     "shiftEnterKey": "Shift+Enter"
   },
   "allOf": {
-    "line": "Read only · {count} threads"
+    "line_one": "Read only · 1 thread",
+    "line_other": "Read only · {count} threads"
   }
 }

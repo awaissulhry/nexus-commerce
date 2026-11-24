@@ -203,6 +203,7 @@
     "shiftEnterKey": "Maiusc+Invio"
   },
   "allOf": {
-    "line": "Sola lettura · {count} thread"
+    "line_one": "Sola lettura · 1 thread",
+    "line_other": "Sola lettura · {count} thread"
   }
 }

@@ -701,3 +701,60 @@ describe('tw- W2.4 — the thread’s catalogues: the same keys in it and en, an
   })
 })
 // ---- end tw- W2.4 catalogue
+
+// ---- tw- fx2 (the walk: G-4, G-5, G-10, G-17, G-21, G-22) ---------------------------------------------------------------------------
+import { drawnRows, snippetAround } from './model'
+
+describe('tw- fx2 — the head after the walk', () => {
+  it('G-4 / G-5: the ⋮ draws only the rows the reader may use — no greyed row, no hint sentence (the untrue "never shared" one too)', () => {
+    const holds = doorHolds({ can: { ...ALL, approve: false, share: false }, hasParty: true, offline: false, rights: { approve: 'Ask partners to approve' } })
+    const rows = drawnRows(menuRows(base({ holds, ownerHeld: { key: 'held.noRight', params: { right: 'Write in threads' } }, done: null, doneHeld: { key: 'held.offline' } })))
+    expect(rows.some((row) => 'held' in row && row.held !== null && row.held !== undefined)).toBe(false)
+    expect(rows.map((row) => (row.kind === 'door' ? row.door : row.kind))).not.toContain('approve')
+    expect(rows.map((row) => (row.kind === 'door' ? row.door : row.kind))).not.toContain('owner')
+    expect(rows.map((row) => (row.kind === 'door' ? row.door : row.kind))).not.toContain('mute') // held "follow first"
+    const source = readFileSync(new URL('./view/RecordThreadHead.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('for (const row of drawnRows(menuRows(model))) {')
+  })
+
+  it('G-10: "Read only · 1 thread" / "… 2 threads", in both languages', () => {
+    for (const [locale, one, two] of [['en', 'Read only · 1 thread', 'Read only · 2 threads'], ['it', 'Sola lettura · 1 thread', 'Sola lettura · 2 thread']] as const) {
+      const t = createTranslator(locale, messagesFor(locale, ['record-thread-head'])['record-thread-head'] ?? {})
+      expect(t('allOf.line', { count: 1 })).toBe(one)
+      expect(t('allOf.line', { count: 2 })).toBe(two)
+    }
+  })
+
+  it('G-17: the line drops WHOLE parts when it does not fit — the owner (and its dot) first — never a stub like "Own"', () => {
+    const css = readFileSync(new URL('./head.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/@container fw-rth \(max-width: 520px\) \{\s*\.fw-rth-line:has\(\.fw-rth-linepart\.is-wait\) \.fw-rth-linepart\.is-owner,\s*\.fw-rth-linesep\.is-owner \{\s*display: none;/)
+    expect(head({ answers: { on: 'us', since: '2026-11-17T06:40:00.000Z' }, owner: { id: 'u1', name: 'Bea Esempio', active: true, source: 'SET' }, ownerHeld: null })).toContain('class="fw-rth-linesep is-owner"')
+  })
+
+  it('G-21: the title is the thread’s record label; the pick keeps the long label in its menu and its name', () => {
+    const source = readFileSync(new URL('./view/RecordThreadHead.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('<HeadTitleProvider title={model.pickTitle === undefined ? model.record : model.pickTitle}>{pick}</HeadTitleProvider>')
+    const docked = readFileSync(new URL('../../../areas/_shared/record-thread/DockedOfficeThread.tsx', import.meta.url), 'utf8')
+    expect(docked).toContain("...(key.type === 'Party' ? { pickTitle: null } : {}),")
+    const pick = readFileSync(new URL('../../../areas/_shared/record-thread/ThreadPick.tsx', import.meta.url), 'utf8')
+    expect(pick).toContain('const title = useHeadTitle() ?? shown.long')
+    expect(pick).toContain('<span className="fw-thread-pick-long">{title}</span>')
+  })
+
+  it('G-22: a hit’s snippet is cut around the searched word, so the mark shows', () => {
+    const long = `${'Hello! Here is our size list for the jackets, every size and colour as agreed last week. '.repeat(2)}The tannery confirms the leather.`
+    const cut = snippetAround(long, ['tannery'])
+    expect(cut.startsWith('…')).toBe(true)
+    expect(cut).toContain('tannery')
+    expect(markWords(cut, ['tannery']).some((part) => part.hit)).toBe(true)
+    expect(snippetAround('Short words', ['tannery'])).toBe('Short words')
+    expect(snippetAround(long, ['absent'])).toBe(`${long.slice(0, 90)}…`)
+    expect(snippetAround(long, ['hello'])).toBe(`${long.slice(0, 90)}…`)
+    const docked = readFileSync(new URL('../../../areas/_shared/record-thread/DockedOfficeThread.tsx', import.meta.url), 'utf8')
+    expect(docked).toContain('const hitWords = (id: string, line: string | null) => latestCompose.current.messages.find((one) => one.id === id)?.body || line')
+    expect(docked).toContain('excerpt: hitWords(hit.recordId, hit.subtitle)')
+    expect(readFileSync(new URL('./view/ThreadSearch.tsx', import.meta.url), 'utf8')).toContain('markWords(snippetAround(words, model.words), model.words)')
+  })
+  const head = (over: Partial<HeadModel> = {}) => drawAll(createElement(RecordThreadHead, { model: base(over) }))
+})
+// ---- end tw- fx2
