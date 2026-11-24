@@ -694,7 +694,7 @@ describe('the page mounts the tab (W1.4)', () => {
 
   it('the record builds the container on every tab (it reads only on Terms) and the view only on ?tab=terms; the old card left the slot', () => {
     const cr = source('../CustomerRecord.tsx')
-    expect(cr).toContain("const terms = useTermsTab({ partyId, party: record.party, model: record.model, reload: record.reload, actions: record.actions /* F-CT-516 */, moreHistory: record.moreHistory, depth: termsDepth, enabled: tab === 'terms' })")
+    expect(cr).toContain("const terms = useTermsTab({ partyId, party: record.party, model: record.model, reload: record.reload, actions: record.actions /* F-CT-516 */, moreHistory: record.moreHistory, retryHistory: record.retryHistory /* ct-fx3 G-W08 */, depth: termsDepth, enabled: tab === 'terms' })")
     expect(cr).toContain("const termsTab = named && record.party && tab === 'terms' ? <TermsTab model={terms.model} actions={terms.actions} hold={terms.hold} requirements={terms.requirementsWindow /* F-CT-508 */} /> : null")
     expect(cr).toContain('const termsNotice = <TermsNotices notices={terms.notices} />')
     expect(cr).not.toMatch(/CommercialTerms\b|terms: \(party, reload\)/)
@@ -1165,5 +1165,19 @@ describe('ct-fx3 G-W07: the refused page sends no Terms read (P0-B3, Z43)', () =
     expect(depth).toContain('}, [loadGlance, loadHolds, loadPrivacy, loadRequirements, loadTerms, readsCustomer, tab])')
     expect(depth).toContain("const readsCustomer = session.permissions.includes('parties.view') // F-CA-fx5")
     expect(depth.match(/F-CA-fx5/g)).toHaveLength(2)
+  })
+})
+
+describe('ct-fx3 G-W08: a failed VIES-checks read has its Try again (§2: PartFailed + Try again)', () => {
+  it('the VIES row\'s failed part retries the record\'s own read of the checks', () => {
+    const view = readFileSync(new URL('../view/terms/IdentitySection.tsx', import.meta.url), 'utf8')
+    expect(view).toMatch(/<PartFailed part=\{say\(said\('ct\.id\.checksPart'\)\)\} problem=\{kitProblemOf\(vies\.checksProblem\)\} onRetry=\{actions\?\.onRetryChecks/)
+    expect(readFileSync(new URL('./use-terms-tab.ts', import.meta.url), 'utf8')).toContain('onRetryChecks: () => input.retryHistory?.(),')
+    expect(readFileSync(new URL('../../../../parties/_shared/PartyRecord.tsx', import.meta.url), 'utf8')).toContain('retryHistory: () => void loadHistory(),')
+    // every PartFailed of the tab's views has a Try again
+    for (const name of ['HoldSection.tsx', 'CommercialSection.tsx', 'RequirementsSection.tsx', 'IdentitySection.tsx']) {
+      const text = readFileSync(new URL(`../view/terms/${name}`, import.meta.url), 'utf8')
+      for (const part of text.match(/<PartFailed [^>]*\/>/g) ?? []) expect(part, name).toContain('onRetry=')
+    }
   })
 })

@@ -83,6 +83,8 @@ export interface TermsTabInput {
   readonly actions?: PartyRecordActions | undefined
   /** F-CT-516 (W2.2; Z7): the record's VIES checks, the next page by the server's cursor. */
   readonly moreHistory?: (() => void) | undefined
+  /** ct-fx3 G-W08 (walk W-08): the record's VIES checks read again (their failed part's Try again). */
+  readonly retryHistory?: (() => void) | undefined
   /** The depth provider's part; null: not handed (the sections then read). */
   readonly depth: TermsDepth | null
   /** Terms & requirements is the tab shown: only then does the tab read. */
@@ -399,6 +401,7 @@ export function useTermsTab(input: TermsTabInput): TermsTabContainer {
     onNewIdentity: () => input.actions?.onDialog?.({ kind: 'identity', mode: 'new' }),
     onCheckVies: () => input.actions?.onCheckVies?.(),
     onMoreChecks: () => input.moreHistory?.(),
+    onRetryChecks: () => input.retryHistory?.(), // ct-fx3 G-W08
   }
 
   return {

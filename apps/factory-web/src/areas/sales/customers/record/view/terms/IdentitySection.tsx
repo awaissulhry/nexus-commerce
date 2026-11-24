@@ -166,7 +166,7 @@ function ViesRow({ vies, marked, say, actions }: { vies: ViesRowModel; marked: b
       )}
       {vies.facts.length > 0 ? <BalancedFacts facts={vies.facts.map((fact) => ({ key: fact.key, label: say(fact.label), value: <FactValue fact={fact} marked={false} say={say} /> }))} /> : null}
       {vies.checksProblem ? (
-        <PartFailed part={say(said('ct.id.checksPart'))} problem={kitProblemOf(vies.checksProblem)} />
+        <PartFailed part={say(said('ct.id.checksPart'))} problem={kitProblemOf(vies.checksProblem)} onRetry={actions?.onRetryChecks /* ct-fx3 G-W08 */} />
       ) : vies.checks.length > 0 ? (
         <>
           <div className="fw-ctr-foldw">

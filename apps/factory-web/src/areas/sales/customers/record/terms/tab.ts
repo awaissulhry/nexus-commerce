@@ -227,4 +227,6 @@ export interface TermsTabActions {
   readonly onNewIdentity?: () => void
   readonly onCheckVies?: () => void
   readonly onMoreChecks?: () => void
+  /** ct-fx3 G-W08 (walk W-08): the VIES checks read again after it failed. */
+  readonly onRetryChecks?: () => void
 }
