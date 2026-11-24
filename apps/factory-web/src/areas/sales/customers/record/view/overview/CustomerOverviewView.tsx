@@ -391,9 +391,8 @@ function RequestsView({ card, title, problem, words, ageOfStart, actions }: { ca
               const age = ageOfStart(row.since)
               return (
                 <GroupRow key={row.key} age={<RowAge since={age?.iso ?? null} words={age?.words ?? null} title={age?.day} />} doors={row.door ? <DoorButton door={row.door} words={words} actions={actions} quiet /> : undefined}>
-                  <span>
-                    {words.said(row.words)} <b>{row.count}</b>
-                  </span>
+                  {/* The kit wraps what waits in its ONE span (as the order's rows): words, then the count. */}
+                  {words.said(row.words)} <b>{row.count}</b>
                 </GroupRow>
               )
             })}
