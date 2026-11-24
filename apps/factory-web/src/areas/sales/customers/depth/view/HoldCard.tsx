@@ -127,7 +127,8 @@ export function HoldCard({ model, actions }: { model: HoldCardModel; actions?: H
   )
 }
 
-function HoldDialogView({ model, actions }: { model: HoldCardModel; actions?: HoldCardActions | undefined }) {
+/** F-CM-301 (customer MONEY tab, 13-backend §4.2): exported — the Money tab's Credit & terms opens this same window (one state with Terms). */
+export function HoldDialogView({ model, actions }: { model: HoldCardModel; actions?: HoldCardActions | undefined }) {
   const { t, say } = useSay()
   const dialog = model.dialog
   if (!dialog) return null

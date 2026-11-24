@@ -4,10 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useOfficeApi } from '../../../../../lib/session/context'
 import { useLiveBus } from '../../../../../shell/live/use-live'
 import { listRefunds, openRefunds, type OpenRefunds, type Refund } from '../../../../finance/payments/refunds/api'
-import { listReminders, type Reminder } from '../../../../finance/receivables/api'
+import { getReceivablesSettings, listReminders, type Reminder, type ReceivablesSettings } from '../../../../finance/receivables/api'
+import { getCreditLimits, type LimitRow } from '../../../../finance/receivables/credit/api' // F-CM-301
+import { customerTrust, type CustomerTrust } from '../../../../finance/receivables/reminder-stops/api' // F-CM-302
+import { getMargins, type Margins } from '../../../../finance/margins/api' // F-CM-303
+import { getCommercialTerms, type CommercialTerms } from '../../terms/api' // F-CM-301
 import { listInvoices, listPayments } from '../../../../finance/_shared/api' // F-CM-202, F-CM-203
 import { listStops, type ReminderStop } from '../../../../finance/receivables/reminder-stops/api'
-import { getOrderSummary, type OrderSummary } from '../../../orders/api'
+import { getOrderSummary, listOrders, type OrderRow, type OrderSummary } from '../../../orders/api'
 import { readProblem } from '../../../orders/model'
 import { creditBalanceOf, shippedOfCustomer, type CreditBalanceRead } from './api'
 import { PAYMENTS_READ, type PaymentsRead } from './received' // F-CM-203
@@ -51,6 +55,46 @@ export interface CustomerMoneyTabReads {
   /** The refunds made, cancelled or voided (read when the fold opens). */
   readonly refundsMade: Part<readonly Refund[]> | null
   readonly morePayments: () => void
+  // ── F-CM-301…303: Credit & terms, Statement & reminders, Price check, Margin & cost (each read when its section nears) ──
+  /** This customer's credit row (S2: only a customer WITH a limit has one — null then); sales.credit.view. */
+  readonly creditRow: Part<LimitRow | null> | null
+  /** The customer's commercial terms (payment terms, default deposit, invoicing, currency). */
+  readonly terms: Part<CommercialTerms> | null
+  /** The customer's trusted level (receivables.view). */
+  readonly trust: Part<CustomerTrust> | null
+  /** Reminders ON or OFF for the company (receivables.view). */
+  readonly settings: Part<ReceivablesSettings> | null
+  /** The orders whose prices differ, the first 10 (orders.view + the price grain). */
+  readonly priceRows: Part<readonly OrderRow[]> | null
+  /** The customer's margin (costing.view + the margin grain; the slowest read: only when reached, never on a burst). */
+  readonly margin: Part<Margins> | null
+}
+
+/** F-CM-301: one lazy read — made when wanted, read again on demand (`again` keeps what it shows), its own abort. */
+function useLazyRead<T>(wanted: boolean, allowed: boolean, read: (signal: AbortSignal) => Promise<T>): { readonly part: Part<T>; readonly load: (again: boolean) => void } {
+  const [part, setPart] = useState<Part<T>>(READING)
+  const abort = useRef<AbortController | null>(null)
+  const latest = useRef(read)
+  latest.current = read
+  const load = useCallback(
+    (again: boolean) => {
+      if (!allowed) return
+      abort.current?.abort()
+      const controller = new AbortController()
+      abort.current = controller
+      if (!again) setPart(READING)
+      latest
+        .current(controller.signal)
+        .then((value) => !controller.signal.aborted && setPart(partReady(value)))
+        .catch((error: unknown) => !controller.signal.aborted && setPart({ value: null, problem: readProblem(error) }))
+    },
+    [allowed],
+  )
+  useEffect(() => {
+    if (wanted) load(false)
+  }, [wanted, load])
+  useEffect(() => () => abort.current?.abort(), [])
+  return { part, load }
 }
 
 /** At most this many reminders of the customer (the read's own page cap). */
@@ -203,13 +247,32 @@ export function useCustomerMoneyTab(input: { readonly partyId: string; readonly 
     const next = payments.value?.next ?? null
     if (next) loadReceived('next', next)
   }, [payments.value?.next, loadReceived])
-  const lazyNow = useRef({ wanted, loadDocuments, loadReceived, loadMade })
-  lazyNow.current = { wanted, loadDocuments, loadReceived, loadMade }
+  // F-CM-301…303: the account's sections. The credit row names THIS customer on the server (S2): its one row, never a filter here.
+  const wantsCredit = wanted.has('credit')
+  const creditRow = useLazyRead(wantsCredit, can.credit, () => getCreditLimits(api, { companyId, view: 'ALL', q: null, partyId }).then((answer) => answer.rows[0] ?? null))
+  const terms = useLazyRead(wantsCredit, true, (signal) => getCommercialTerms(api, partyId, signal))
+  const wantsStatement = wanted.has('statement')
+  const trust = useLazyRead(wantsStatement, can.receivables, (signal) => customerTrust(api, partyId, signal))
+  const settings = useLazyRead(wantsStatement, can.receivables, (signal) => getReceivablesSettings(api, companyId, signal))
+  const priceRows = useLazyRead(wanted.has('priceRows'), can.orders && can.price, (signal) => listOrders(api, { partyId, companyId, priceMatch: 'NOT_EQUAL', limit: 10 }, signal).then((page) => page.orders))
+  const margin = useLazyRead(wanted.has('margin'), can.margin && can.costing, (signal) => getMargins(api, { partyId, companyId, limit: 1 }, signal))
+  const lazyNow = useRef({ wanted, loadDocuments, loadReceived, loadMade, creditRow, terms, trust, settings, priceRows })
+  lazyNow.current = { wanted, loadDocuments, loadReceived, loadMade, creditRow, terms, trust, settings, priceRows }
   const againLazy = useCallback(() => {
     const now = lazyNow.current
     if (now.wanted.has('documents')) now.loadDocuments('again', null)
     if (now.wanted.has('received')) now.loadReceived('again', null)
     if (now.wanted.has('refundsMade')) now.loadMade(true)
+    if (now.wanted.has('credit')) {
+      now.creditRow.load(true)
+      now.terms.load(true)
+    }
+    if (now.wanted.has('statement')) {
+      now.trust.load(true)
+      now.settings.load(true)
+    }
+    if (now.wanted.has('priceRows')) now.priceRows.load(true)
+    // Margin & cost is never read again on a burst (13-backend L14: its read computes every order of the customer).
   }, [])
   const moreDocuments = useCallback(() => {
     const next = documents.value?.next ?? null
@@ -232,9 +295,31 @@ export function useCustomerMoneyTab(input: { readonly partyId: string; readonly 
   useEffect(() => () => (timer.current ? clearTimeout(timer.current) : undefined), [])
   useLiveBus({ onChange: (change) => (moneyChangeIsOurs(change, partyId, held.current) ? burst() : undefined), onReconnect: burst })
 
+  const retryAccount = useCallback((read: 'credit' | 'statement' | 'priceRows' | 'margin') => {
+    const now = lazyNow.current
+    if (read === 'credit') {
+      now.creditRow.load(false)
+      now.terms.load(false)
+    } else if (read === 'statement') {
+      now.trust.load(false)
+      now.settings.load(false)
+    } else if (read === 'priceRows') now.priceRows.load(false)
+  }, [])
+  const marginLoad = margin.load
   const retry = useCallback(
-    (read: TabRead | LazyRead) => (read === 'documents' ? loadDocuments('first', null) : read === 'received' ? loadReceived('first', null) : read === 'refundsMade' ? loadMade(false) : load(read, false)),
-    [load, loadDocuments, loadReceived, loadMade],
+    (read: TabRead | LazyRead) =>
+      read === 'documents'
+        ? loadDocuments('first', null)
+        : read === 'received'
+          ? loadReceived('first', null)
+          : read === 'refundsMade'
+            ? loadMade(false)
+            : read === 'margin'
+              ? marginLoad(false)
+              : read === 'credit' || read === 'statement' || read === 'priceRows'
+                ? retryAccount(read)
+                : load(read, false),
+    [load, loadDocuments, loadReceived, loadMade, marginLoad, retryAccount],
   )
   const reload = useCallback(() => {
     for (const read of TAB_READS) load(read, true)
@@ -258,7 +343,13 @@ export function useCustomerMoneyTab(input: { readonly partyId: string; readonly 
       credit: can.payments ? credit : null,
       refundsMade: can.payments ? refundsMade : null,
       morePayments,
+      creditRow: can.credit ? creditRow.part : null,
+      terms: terms.part,
+      trust: can.receivables ? trust.part : null,
+      settings: can.receivables ? settings.part : null,
+      priceRows: can.orders && can.price ? priceRows.part : null,
+      margin: can.margin && can.costing ? margin.part : null,
     }),
-    [allowed, refunds, stops, reminders, summary, shipped, retry, reload, want, can.invoices, documents, chip, moreDocuments, can.payments, payments, credit, refundsMade, morePayments],
+    [allowed, refunds, stops, reminders, summary, shipped, retry, reload, want, can.invoices, documents, chip, moreDocuments, can.payments, payments, credit, refundsMade, morePayments, can.credit, creditRow.part, terms.part, can.receivables, trust.part, settings.part, can.orders, can.price, priceRows.part, can.margin, can.costing, margin.part],
   )
 }

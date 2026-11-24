@@ -5,7 +5,7 @@ import type { ReminderStop } from '../../../../finance/receivables/reminder-stop
 import type { Glance } from '../../depth/api'
 import type { Read } from '../../depth/model'
 import type { OrderSummary } from '../../../orders/api'
-import type { OpenOrderMoney } from '../../money/api'
+import type { CustomerReturn, OpenOrderMoney } from '../../money/api'
 import { doorCanOf, type DoorCan } from '../../../orders/record/money/door/model' // F-CM-201: a row's acts are the money door's rule
 import { stopsCanOf } from '../../../../finance/receivables/reminder-stops/model' // F-CM-201: Finance's own rule decides the stop's door
 
@@ -67,6 +67,10 @@ export interface MoneyTabCan {
   readonly hold: boolean
   /** F-CM-201 (W2.1): the money door's rights for a To-collect request row, by the order page's own rule (door/model.ts doorCanOf). */
   readonly door: DoorCan
+  /** F-CM-303 (W3.3): costing.view — Margin & cost's read (with the margin grain). */
+  readonly costing: boolean
+  /** F-CM-303: money.cost — the estimated cost figure. */
+  readonly cost: boolean
 }
 
 export function moneyTabCanOf(permissions: readonly string[]): MoneyTabCan {
@@ -91,6 +95,8 @@ export function moneyTabCanOf(permissions: readonly string[]): MoneyTabCan {
     statementsSend: held.has('receivables.statements.send'),
     hold: held.has('parties.hold'),
     door: doorCanOf(permissions), // F-CM-201
+    costing: held.has('costing.view'), // F-CM-303
+    cost: held.has('money.cost'), // F-CM-303
   }
 }
 
@@ -136,7 +142,16 @@ export function orderProblemOf(problem: string): string {
  * split is the ageing BY COMPANY (this company's rows, the others' rows: one customer's own rows).
  */
 export interface MoneyTabInput {
-  readonly party: { readonly id: string; readonly name: string; readonly currency: string | null; readonly paymentTerms: string | null }
+  readonly party: {
+    readonly id: string
+    readonly name: string
+    readonly currency: string | null
+    readonly paymentTerms: string | null
+    /** F-CM-301 (Z32): the party read's own "can't be invoiced" — the Overview strip's source (no read of its own). */
+    readonly invoiceBlocked?: boolean
+    /** The warnings that block an invoice (their codes: `parties:warning.<CODE>`). */
+    readonly blocking?: readonly string[]
+  }
   /** The company the page works in (the session's). */
   readonly company: { readonly id: string; readonly name: string } | null
   /** How many companies the reader reaches ("With {company}." only when more than one). */
@@ -166,6 +181,10 @@ export interface MoneyTabInput {
   readonly openOrders: readonly OpenOrderMoney[] | null
   /** Prices differ on N orders (the page's price counts; the price grain). */
   readonly priceDiffer: number | null
+  /** F-CM-303 (W3.3): orders with no customer price yet (the same counts read; the price grain); absent: not read. */
+  readonly priceMissing?: number | null
+  /** F-CM-303 (E52): the customer's returns (the page's read: sales.returns.view) — the credit value of this year's; absent: not read. */
+  readonly returns?: { readonly rows: readonly CustomerReturn[]; readonly year: string; readonly href: string | null } | null
 }
 
 // ---- days ----------------------------------------------------------------------------------------------------------------
@@ -210,7 +229,7 @@ export const LIVE_COALESCE_MS = 800
 export const TAB_READS = ['refunds', 'stops', 'reminders', 'summary', 'shipped'] as const
 export type TabRead = (typeof TAB_READS)[number]
 /** F-CM-202: the tab's reads made only when their section nears the room (13-backend §1.4 "scrolling to the end"). */
-export const LAZY_READS = ['documents', 'received', 'refundsMade'] as const // F-CM-203: + Payments & refunds, and its folded Refunds made
+export const LAZY_READS = ['documents', 'received', 'refundsMade', 'credit', 'statement', 'priceRows', 'margin'] as const // F-CM-203: + Payments & refunds, its folded Refunds made; F-CM-301…303: + Credit & terms, Statement & reminders, Price check, Margin & cost
 export type LazyRead = (typeof LAZY_READS)[number]
 /** What a section's Try again reads again: the page's money reads (the ageing, the open items) or one of the tab's own. */
 export type MoneyRead = 'page' | TabRead | LazyRead

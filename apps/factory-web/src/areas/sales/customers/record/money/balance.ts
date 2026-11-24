@@ -268,4 +268,4 @@ export function moneyBadgeOf(input: { readonly can: Pick<MoneyTabCan, 'receivabl
   return count > 0 ? count : undefined
 }
 
-const BADGE_CAN: MoneyTabCan = { price: false, margin: false, receivables: false, payments: false, paymentsRecord: false, paymentsRefund: false, paymentsVoid: false, invoices: false, invoicesManage: false, invoicesIssue: false, orders: false, moneyPlan: false, waive: false, credit: false, creditLimits: false, remindersManage: false, statementsSend: false, hold: false, door: { recordPayment: false, price: false, moneyPlan: false, waive: false } }
+const BADGE_CAN: MoneyTabCan = { price: false, margin: false, receivables: false, payments: false, paymentsRecord: false, paymentsRefund: false, paymentsVoid: false, invoices: false, invoicesManage: false, invoicesIssue: false, orders: false, moneyPlan: false, waive: false, credit: false, creditLimits: false, remindersManage: false, statementsSend: false, hold: false, door: { recordPayment: false, price: false, moneyPlan: false, waive: false }, costing: false, cost: false }
