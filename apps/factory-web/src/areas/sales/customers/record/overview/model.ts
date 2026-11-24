@@ -11,6 +11,8 @@ import type { Read as GlanceRead } from '../../depth/model'
 import type { CustomerWork } from '../../list/api'
 import type { CustomersWorkModel } from '../../list/model'
 import type { CustomerComplaint, CustomerReturn, OpenOrderMoney } from '../../money/api'
+import type { DesignerModel } from '../../portal/designer/model' // F-CO-201
+import type { SupervisorModel } from '../../portal/limits/model' // F-CO-201
 import type { Read, WorkReads } from '../use-customer-work'
 
 /**
@@ -31,7 +33,7 @@ import type { Read, WorkReads } from '../use-customer-work'
 // ---- words: a key with its figures (the view says them; the tests say them in both languages) --------------------------------
 
 /** The catalogues the Overview's words live in (the page's own `parties`, and the ones whose existing words it reuses). */
-export const OVERVIEW_NAMESPACES: readonly string[] = Object.freeze(['parties', 'sales-customers-depth', 'customers-list', 'customer-money', 'before-order', 'orders-sheet', 'portal-access', 'production'])
+export const OVERVIEW_NAMESPACES: readonly string[] = Object.freeze(['parties', 'sales-customers-depth', 'customers-list', 'customer-money', 'before-order', 'orders-sheet', 'portal-access', 'production', 'production-supervisor' /* F-CO-201: a person no longer active */])
 
 /** A calendar day (`YYYY-MM-DD`) or an instant, said as the page writes a day. */
 export interface DayParam {
@@ -206,6 +208,12 @@ export interface OverviewInput {
   readonly standing: Read<CustomerWork | null>
   /** `off`: not read on this tab (no partners.view). */
   readonly urgency: Read<UrgencyState>
+  /**
+   * F-CO-201 (W2.1): "Who looks after" — the customer's production read (supervisor, backup) and the factory designer's slot, as their
+   * own hooks hold them (../../portal/CustomerSupervisor.tsx useWhoLooksAfter). null: no partners.view (never read: People shows the
+   * customer's own contacts only). `designer` null: its read is not on this page.
+   */
+  readonly looksAfter: LooksAfter | null
   /** The party's projects (threads.read; null: not read or not readable). */
   readonly projects: { readonly open: number; readonly all: number } | null
   /** A VIES check runs now (its button is held with words). */
@@ -215,7 +223,7 @@ export interface OverviewInput {
 // ---- what the tab draws ------------------------------------------------------------------------------------------------------
 
 /** The acts of the page the Overview's buttons run (the record's own commands and dialogs — never a copy). */
-export type OverviewAct = 'edit' | 'identity' | 'correctIdentity' | 'checkVies' | 'retryGlance'
+export type OverviewAct = 'edit' | 'identity' | 'correctIdentity' | 'checkVies' | 'retryGlance' | 'changeSupervisor' | 'changeDesigner' | 'retryPeople' | 'retryDesigner' // F-CO-201: People's two Change… windows and their reads again
 /** The Work tab's two windows (they open ON the Work tab: the page goes there first). */
 export type OverviewWindow = 'customer' | 'tasks'
 
@@ -279,7 +287,9 @@ export interface RowPart {
 }
 export interface RowTag {
   readonly say: Say
-  readonly tone: 'danger' | 'warning' | 'neutral'
+  readonly tone: 'danger' | 'warning' | 'neutral' | 'info'
+  /** F-CO-201: the tag's mark — office only (a lock), the customer sees this name (an eye), a person no longer reached (a warning). */
+  readonly mark?: 'office' | 'seen' | 'warning'
 }
 
 /** One row of People, Next dates or Linked records: label · value · its own buttons. */
@@ -300,6 +310,9 @@ export interface PeopleCard {
   readonly rows: readonly OverviewRow[]
   /** "People & addresses ›" in the card's head. */
   readonly head: LabelledDoor
+  /** F-CO-201 (10-design §4): the supervisor's read still out → the card's skeleton; failed → the card's failed state, `problem` its words. */
+  readonly state: 'ready' | 'reading' | 'failed'
+  readonly problem: Say | null
 }
 
 export interface DatesCard {
@@ -393,6 +406,20 @@ export function standingOf(enabled: boolean, work: Pick<CustomersWorkModel, 'byP
   if (!enabled) return { status: 'off' }
   if (work.byParty) return { status: 'ready', value: work.byParty.get(partyId) ?? null }
   return work.problem ? { status: 'failed' } : { status: 'reading' }
+}
+
+/** F-CO-201: the two reads of "Who looks after", as their hooks hold them. */
+export interface LooksAfter {
+  readonly supervisor: SupervisorModel
+  readonly designer: DesignerModel | null
+}
+
+/** F-CO-201 (W2.1): the customer's own urgency, from the SAME production read as People's supervisor (no second read). */
+export function urgencyOf(looksAfter: LooksAfter | null): Read<UrgencyState> {
+  if (!looksAfter) return { status: 'off' }
+  const { state, read } = looksAfter.supervisor
+  if (read) return { status: 'ready', value: read.production.urgency }
+  return state === 'error' ? { status: 'failed' } : { status: 'reading' }
 }
 
 /** Whole days from one calendar day to another (`YYYY-MM-DD`; an instant counts by its day): negative when `to` is before `from`. */

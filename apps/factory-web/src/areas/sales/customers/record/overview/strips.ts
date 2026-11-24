@@ -15,8 +15,9 @@ import { amountOf, dayOf, depth, glanceOf, joined, linkDoor, ov, readyOf, say, s
  *   3 Over the credit limit        only when no Credit hold says it; door → Money at the credit
  *   4 Can't invoice yet            one line per warning that blocks an invoice, today's own step per kind (at most three)
  *   5 VIES not proven              the standing in words; Check VIES in place
- *   6 Overdue                      NEVER a count of invoices (S22): the amounts per currency when the read carries them, else the
- *                                  words "Invoices are late"; "Oldest N days late"; door → Money at what is to collect
+ *   6 Overdue                      the amounts per currency when the read carries them, else the words "Invoices are late";
+ *                                  "Oldest N days late"; door → Money at what is to collect. S39 (after S22): with the price grain the
+ *                                  API's own count of late invoices joins the quiet line — never without it, never when not sent
  *   7 Accepted quotes wait         the page's count read; door → Quotes & incoming at "Accepted, order waits"
  *   8 Customer urgency             over its limit, or off with marks kept; door → Portal settings
  *
@@ -143,13 +144,22 @@ export function stripsOf(input: OverviewInput): OverviewStrips {
         if (entry.amount === null) priced = false
         else amounts.push(amountOf(entry.amount, entry.currency))
       }
+      // S39: how many invoices are late — the API's own count on each ageing row (`lateInvoices`), summed over THIS customer's rows (one
+      // per company and currency); only with the price grain (Sales keeps the words); a row without the field: no count (absent ≠ 0).
+      let lateInvoices: number | null = can.price ? 0 : null
+      for (const row of input.money.ageing.items) {
+        if (row.customer.id !== id || lateInvoices === null) continue
+        lateInvoices = typeof row.lateInvoices === 'number' ? lateInvoices + row.lateInvoices : null
+      }
+      const oldest = overdue.daysLate ? ov('strip.oldest', { count: overdue.daysLate }) : null
+      const counted = lateInvoices !== null && lateInvoices > 0 ? say('customer-money:cm.answer.invoicesLate', { count: lateInvoices }) : null
       rows.push({
         key: 'overdue',
         kind: 'overdue',
         tone: 'warning',
         title: priced ? ov('strip.overdue', { amount: joined(amounts) }) : ov('strip.invoicesLate'),
         since: null,
-        lines: overdue.daysLate ? [ov('strip.oldest', { count: overdue.daysLate })] : [],
+        lines: counted && oldest ? [joined([counted, oldest])] : counted ? [counted] : oldest ? [oldest] : [],
         doors: can.moneyTab ? [linkDoor('money', say('customers.tab.money'), moneyDoor(prefix, id, 'collect'))] : [],
       })
     }

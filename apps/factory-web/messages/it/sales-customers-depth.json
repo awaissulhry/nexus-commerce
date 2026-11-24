@@ -36,32 +36,19 @@
     "files": "Per scegliere un file serve il permesso di vedere i file della scheda."
   },
   "numbers": {
-    "freeCredit": "Fido disponibile",
-    "promises": "Date promesse",
     "reading": "Lettura…",
-    "failed": "Impossibile contare",
-    "unknown": "—",
-    "creditWithheld": "Il tuo ruolo non vede il fido",
-    "promisesWithheld": "Il tuo ruolo non vede gli ordini"
+    "failed": "Impossibile contare"
   },
   "credit": {
-    "noLimit": "Nessun fido",
-    "noLimitHint": "Nessun fido impostato con questa azienda",
-    "available": "{amount}",
     "ofLimit": "su un fido di {limit}",
     "overBy": "Oltre di {amount}",
     "over": "Oltre il fido",
-    "within": "Entro il fido",
-    "noPrice": "Gli importi richiedono i prezzi di vendita"
+    "within": "Entro il fido"
   },
   "promises": {
     "none": "Nessun ordine aperto",
-    "noneHint": "Nulla di promesso ora",
     "late_one": "{count} in ritardo",
     "late_other": "{count} in ritardo",
-    "onTime_one": "{count} nei tempi",
-    "onTime_other": "Tutti i {count} nei tempi",
-    "next": "Prossima {date}",
     "without_one": "{count} senza data promessa",
     "without_other": "{count} senza data promessa",
     "noneComing": "Nessuna data promessa in vista"
@@ -72,7 +59,6 @@
     "repairs": "Non mostrato: il tuo ruolo non vede le riparazioni."
   },
   "glance": {
-    "seeAll": "Vedi tutti ({count})",
     "more_one": "altro {count}",
     "more_other": "altri {count}"
   },
@@ -80,22 +66,7 @@
     "title": "Adesso"
   },
   "samples": {
-    "title": "Campioni in corso",
-    "hint": "Giri campione per questo cliente non ancora decisi, prima i più vicini alla scadenza.",
-    "none": "Nessun campione in corso.",
-    "col": {
-      "number": "Giro",
-      "style": "Modello",
-      "kind": "Tipo",
-      "stage": "Fase",
-      "due": "Scadenza"
-    },
-    "kindRound": "{kind} · giro {round}",
-    "late_one": "In ritardo di {count} giorno",
-    "late_other": "In ritardo di {count} giorni",
-    "dueToday": "Scade oggi",
-    "due": "Scade il {date}",
-    "noDue": "Senza scadenza"
+    "title": "Campioni in corso"
   },
   "profiles": {
     "title": "Profili di misura",
@@ -121,17 +92,6 @@
       "profiles": "Profili"
     }
   },
-  "repairs": {
-    "title": "Riparazioni e modifiche in corso",
-    "hint": "Capi di questo cliente in riparazione o modifica.",
-    "none": "Nessuna riparazione in corso.",
-    "col": {
-      "number": "Riparazione",
-      "kind": "Tipo",
-      "stage": "Fase",
-      "opened": "Aperta il"
-    }
-  },
   "status": {
     "notOnHold": "Non in blocco.",
     "onHold": "In blocco",
@@ -141,15 +101,10 @@
     "openHold": "Apri il blocco"
   },
   "team": {
-    "title": "Squadra",
-    "hint": "Questo pilota è sotto questa squadra o rivenditore."
+    "title": "Squadra"
   },
   "reqSide": {
-    "title": "Requisiti in vigore",
-    "none": "Nessun requisito particolare.",
-    "all_one": "Vedi il requisito",
-    "all_other": "Vedi tutti i {count} requisiti",
-    "open": "Apri Requisiti"
+    "none": "Nessun requisito particolare."
   },
   "hold": {
     "title": "Blocco",
