@@ -4,6 +4,7 @@ import { recordHref, SIDES, type CustomerTab } from '../../../../parties/_shared
 import { workDoor, type WorkDoorTerm } from '../../list/doors'
 import { receivablesOfCustomer } from '../../money/model'
 import { quotesGroupDoor } from '../before-order'
+import type { GroupDoor } from '../work-band'
 
 /**
  * F-CO-101 (customer page › Overview; 13-backend §3.7; lead settles S21, S28) — the Overview's doors, composed: never a new rule.
@@ -37,6 +38,15 @@ export const termsDoor = (prefix: string, partyId: string, anchor: TermsAnchor):
 
 /** The Work tab on exactly the orders a count counts (the Customers list's own doors; `open`: the open orders). */
 export const ordersDoor = (prefix: string, partyId: string, term: WorkDoorTerm): string => workDoor(prefix, partyId, term)
+
+/**
+ * A group of the band (S6): the Work tab on exactly its orders — its phase; for an older answer without phases its one state;
+ * null: a count with no door (never a held door, never a guess).
+ */
+export function groupDoor(prefix: string, partyId: string, door: GroupDoor): string | null {
+  if (door === null) return null
+  return door.kind === 'phase' ? ordersDoor(prefix, partyId, { kind: 'phase', phase: door.phase }) : `${tabDoor(prefix, partyId, 'work')}&status=${door.status}`
+}
 
 /** The open orders by promise date, the nearest first: the row "Next promise" opens the list it is the first of. */
 export const promiseDoor = (prefix: string, partyId: string): string => `${ordersDoor(prefix, partyId, { kind: 'open' })}&sort=promise`

@@ -34,7 +34,7 @@ export function stepDoorOf(action: NextAction, prefix: string, partyId: string, 
   return null
 }
 
-/** How far over the limit, and the limit — only when the read carries the amounts (the price grain); else null. */
+/** How far over the limit, and the limit — only when the read carries the amounts; else null (the caller asks money.price first). */
 export function overAmountsOf(credit: NonNullable<Glance['credit']>): { readonly over: MoneyParam; readonly limit: MoneyParam } | null {
   if (credit.currency === null || typeof credit.limit !== 'number') return null
   const over = typeof credit.overLimitBy === 'number' && credit.overLimitBy > 0 ? credit.overLimitBy : typeof credit.available === 'number' ? -credit.available : null
@@ -67,7 +67,7 @@ export function stripsOf(input: OverviewInput): OverviewStrips {
     if (hold.reason === 'CREDIT') {
       creditSaid = true
       if (credit?.state === 'OVER') {
-        const amounts = overAmountsOf(credit)
+        const amounts = can.price ? overAmountsOf(credit) : null
         lines.push(amounts ? ov('strip.overLimit', { amount: amounts.over, limit: amounts.limit }) : depth('credit.over'))
       }
     }
@@ -85,7 +85,7 @@ export function stripsOf(input: OverviewInput): OverviewStrips {
 
   // 3 — Over the credit limit, when no Credit hold says it (the API sends no credit part without sales.credit.view).
   if (credit?.state === 'OVER' && !creditSaid) {
-    const amounts = overAmountsOf(credit)
+    const amounts = can.price ? overAmountsOf(credit) : null
     rows.push({
       key: 'credit',
       kind: 'credit',
@@ -132,12 +132,13 @@ export function stripsOf(input: OverviewInput): OverviewStrips {
     })
   }
 
-  // 6 — Overdue (receivables.view). S22: never a count of late invoices; an amount only when every late group carries one.
+  // 6 — Overdue (receivables.view). S22: never a count of late invoices; an amount only with the price grain AND when every late
+  // group carries one.
   if (can.receivables && input.money.ageing.items) {
     const overdue = overdueOf(input.money.ageing.items, id)
     if (overdue) {
       const amounts: MoneyParam[] = []
-      let priced = overdue.amounts.length > 0
+      let priced = can.price && overdue.amounts.length > 0
       for (const entry of overdue.amounts) {
         if (entry.amount === null) priced = false
         else amounts.push(amountOf(entry.amount, entry.currency))

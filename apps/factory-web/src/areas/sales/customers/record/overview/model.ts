@@ -9,6 +9,7 @@ import { languageName, type Loaded } from '../../../../parties/_shared/model'
 import type { Glance } from '../../depth/api'
 import type { Read as GlanceRead } from '../../depth/model'
 import type { CustomerWork } from '../../list/api'
+import type { CustomersWorkModel } from '../../list/model'
 import type { CustomerComplaint, CustomerReturn, OpenOrderMoney } from '../../money/api'
 import type { Read, WorkReads } from '../use-customer-work'
 
@@ -130,6 +131,8 @@ export interface OverviewCan {
   readonly moneyTab: boolean
   /** receivables.view: Overdue, "Receivables & credit ›". */
   readonly receivables: boolean
+  /** money.price: an amount is said only with it AND when the read carries the field (the money wall: web and server). */
+  readonly price: boolean
   /** sales.returns.view · quality.complaints.view: the two after-sales kinds. */
   readonly returns: boolean
   readonly complaints: boolean
@@ -356,6 +359,17 @@ export interface CustomerOverviewModel {
 export const readyOf = <T>(read: Read<T>): T | null => (read.status === 'ready' ? read.value : null)
 /** The glance once it is in. */
 export const glanceOf = (read: GlanceRead<Glance>): Glance | null => (read.status === 'ready' ? read.value : null)
+
+/**
+ * S11: THIS customer's row of the joined read (the Customers list's own hook, asked for ONE id — only on the Overview, only with
+ * orders.view). `off`: never asked; ready with null: the answer holds no row for this customer (the reader's orders do not reach
+ * it) — ABSENT, never zeros. Only this id's row is ever read.
+ */
+export function standingOf(enabled: boolean, work: Pick<CustomersWorkModel, 'byParty' | 'problem'>, partyId: string): Read<CustomerWork | null> {
+  if (!enabled) return { status: 'off' }
+  if (work.byParty) return { status: 'ready', value: work.byParty.get(partyId) ?? null }
+  return work.problem ? { status: 'failed' } : { status: 'reading' }
+}
 
 /** Whole days from one calendar day to another (`YYYY-MM-DD`; an instant counts by its day): negative when `to` is before `from`. */
 export function daysBetween(from: string, to: string): number {

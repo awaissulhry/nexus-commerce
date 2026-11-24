@@ -66,7 +66,7 @@ const OVER: NonNullable<Glance['credit']> = { state: 'OVER', currency: 'EUR', li
 
 const NO_MONEY: OverviewMoney = { ageing: loaded<AgeingRow>([]), returns: loaded([]), complaints: loaded([]), orders: loaded([]), returnsHref: null }
 const LATE = OVERDUE_ROWS.filter((row) => row.customer.id === ID)
-const CAN: OverviewCan = { orders: true, quotesTab: true, moneyTab: true, receivables: true, returns: true, complaints: true, partners: true, manage: true, block: true, vies: true, workorders: true }
+const CAN: OverviewCan = { orders: true, quotesTab: true, moneyTab: true, receivables: true, price: true, returns: true, complaints: true, partners: true, manage: true, block: true, vies: true, workorders: true }
 const input = (over: Partial<OverviewInput> = {}): OverviewInput => ({
   prefix: '/w/DEMO',
   party: party(),
@@ -499,6 +499,10 @@ describe('the walls (13-backend §4)', () => {
       expect(words, locale).toContain(locale === 'en' ? 'Over the credit limit' : 'Oltre il fido')
       expect(words, locale).toContain(locale === 'en' ? 'Invoices are late' : 'Ci sono fatture scadute')
     }
+    // The web's own half of the wall: even if a read carried the fields, a reader without money.price is said no amount.
+    const leaked = overviewOf(input({ can: { ...CAN, price: false }, glance: ready(glance({ hold: { onHold: true, holds: [hold('CREDIT')] }, credit: OVER })), money: { ...NO_MONEY, ageing: loaded(LATE) } }))
+    for (const locale of LOCALES) expect(allWords(leaked, locale), locale).not.toMatch(/€|\d[\d.,]*\s?(EUR|€)/)
+    expect(allWords(overviewOf(input({ can: { ...CAN, price: false }, glance: ready(glance({ credit: { ...OVER, state: 'WITHIN', available: 1_580_000 } })) })), 'en')).toContain('Within the limit')
     // With the grain the same reads carry them.
     expect(allWords(overviewOf(input({ glance: ready(glance({ credit: OVER })), money: { ...NO_MONEY, ageing: loaded(LATE) } })), 'en')).toContain('€4,270.00')
   })

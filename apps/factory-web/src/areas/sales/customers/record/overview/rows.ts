@@ -434,8 +434,8 @@ export function factsOf(input: OverviewInput): FactsCard {
     const credit = glance.credit
     if (credit) {
       const door: Pick<RowPart, 'door'> = can.moneyTab ? { door: href(moneyDoor(prefix, id, 'credit')) } : {}
-      const over = credit.state === 'OVER' ? overAmountsOf(credit) : null
-      const free = credit.state === 'WITHIN' && credit.currency !== null && typeof credit.available === 'number' && typeof credit.limit === 'number' ? { amount: amountOf(credit.available, credit.currency), limit: amountOf(credit.limit, credit.currency) } : null
+      const over = can.price && credit.state === 'OVER' ? overAmountsOf(credit) : null
+      const free = can.price && credit.state === 'WITHIN' && credit.currency !== null && typeof credit.available === 'number' && typeof credit.limit === 'number' ? { amount: amountOf(credit.available, credit.currency), limit: amountOf(credit.limit, credit.currency) } : null
       const words: Say =
         credit.state === 'NONE' ? say('customer-money:tab.noLimit') : credit.state === 'OVER' ? (over ? ov('strip.overLimit', { amount: over.over, limit: over.limit }) : depth('credit.over')) : free ? ov('facts.creditFree', free) : depth('credit.within')
       rows.push({ key: 'credit', label: say('customer-money:tab.credit'), parts: [{ say: words, ...(credit.state === 'NONE' ? {} : door) }] })
