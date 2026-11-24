@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { ADDRESS_APPROVALS } from '@nexus/factory-domain/parties/address-approval'
 import type { ApiClient } from '../../../../../lib/api/client'
+import { partySchema, type Party } from '../../../../parties/_shared/api' // F-CA-210
 
 /**
  * F-CA-102 (customer page › PEOPLE & ADDRESSES tab, lane ca-; 13-backend §5.2; 18-lead-settles Z10, D3) — the tab's own calls. Every one
@@ -64,4 +65,68 @@ export function approveDeliveryAddress(api: ApiClient, addressId: string, body: 
 /** `POST /sales/delivery-addresses/:addressId/refuse` (orders.manage): refused for good, with the words the customer reads. */
 export function refuseDeliveryAddress(api: ApiClient, addressId: string, body: { readonly version: number; readonly reason: string }, key: string): Promise<AddressCheckAnswer> {
   return api.post(`/sales/delivery-addresses/${enc(addressId)}/refuse`, { body, idempotencyKey: key, schema: addressCheckAnswer })
+}
+
+// ---- F-CA-201 (ca-w2 W2.1; 13-backend §5.2): the riders of THIS customer — a team's riders with their own page, or a rider's team ----
+
+const partyKind = z.enum(['ORGANISATION', 'PERSON'])
+/** `GET /parties/:partyId/riders` and `PUT /parties/:partyId/team` (modules/parties/riders/contract.ts): one shape, the RIDER's view after a PUT. */
+export const ridersSchema = z.object({
+  partyId: z.string(),
+  code: z.string(),
+  kind: partyKind,
+  /** This party's team, when it is a rider (and a team the reader may see). */
+  team: z.object({ id: z.string(), code: z.string(), legalName: z.string(), status: z.string() }).nullable(),
+  riders: z.array(
+    z.object({
+      id: z.string(),
+      code: z.string(),
+      legalName: z.string(),
+      tradeName: z.string().nullable(),
+      status: z.string(),
+      country: z.string(),
+      language: z.string(),
+      /** ca-s S.4 (R-B10): null without the measurements right over the rider — never 0 for "not shown". */
+      measurementProfiles: z.number().int().nullable(),
+      version: z.number(),
+      updatedAt: z.string(),
+    }),
+  ),
+  /** The party's own version (a rider's: the one its team change names). */
+  version: z.number(),
+})
+export type RidersView = z.infer<typeof ridersSchema>
+export type RiderParty = RidersView['riders'][number]
+const ridersAnswer = z.object({ riders: ridersSchema })
+
+/** The riders of THIS customer (parties.view; only those the reader may see), or its team when it is a rider. */
+export async function readRiders(api: ApiClient, partyId: string, signal?: AbortSignal): Promise<RidersView> {
+  return (await api.get(`/parties/${enc(partyId)}/riders`, { schema: ridersAnswer, ...(signal ? { signal } : {}) })).riders
+}
+
+/** Put a rider under a team, move it, or take it off (null): parties.manage on the RIDER, the rider's version; answers the rider's view. */
+export async function setRiderTeam(api: ApiClient, riderId: string, body: { readonly version: number; readonly teamPartyId: string | null }, key: string): Promise<RidersView> {
+  return (await api.request('PUT', `/parties/${enc(riderId)}/team`, { body, idempotencyKey: key, schema: ridersAnswer })).riders
+}
+
+// ---- F-CA-210 (ca-w2 W2.3; Z10: `teamPartyId` on POST /parties is a later job): Add rider… = the two existing commands ----
+
+/** A new rider: a person customer of the team's company (a rider rides for a team of its own company), its contact for the links. */
+export interface NewRiderBody {
+  readonly companyId: string | null
+  readonly code: string
+  readonly kind: 'PERSON'
+  readonly legalName: string
+  readonly roles: readonly ['CUSTOMER']
+  readonly country: string
+  readonly currency: string
+  readonly language: string
+  readonly status: 'ACTIVE'
+  /** The rider as its own contact (role Rider: its measurement links and fitting invites go to it), when an e-mail or a phone is given. */
+  readonly contacts?: ReadonlyArray<{ readonly name: string; readonly email: string | null; readonly phone: string | null; readonly roles: readonly ['RIDER']; readonly language: string }>
+}
+
+/** POST /parties (parties.manage): the rider made, not yet under the team (setRiderTeam puts it there). */
+export async function createRider(api: ApiClient, body: NewRiderBody, key: string): Promise<Party> {
+  return (await api.post('/parties', { body, idempotencyKey: key, schema: z.object({ party: partySchema }) })).party
 }

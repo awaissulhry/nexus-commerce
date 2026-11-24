@@ -143,7 +143,36 @@
     "noPrices": "Senza prezzi"
   },
   "privacy": {
-    "onlyPortal": "Solo nel portale"
+    "onlyPortal": "Solo nel portale",
+    "title": "Dati personali",
+    "more": "Altro per Dati personali",
+    "reading": "Lettura dei dati personali dei contatti…",
+    "listLabel": "Le persone i cui dati personali vanno guardati",
+    "answer": {
+      "none": "Ancora nessun contatto: qui compare la base giuridica di ogni persona.",
+      "basis": "Base giuridica registrata per {count} contatti su {total}",
+      "noObjection": "nessuna opposizione",
+      "objections_one": "{count} opposizione",
+      "objections_other": "{count} opposizioni",
+      "nothingErased": "nessuna cancellazione",
+      "erasedOn": "1 cancellato il {date}",
+      "erased": "{count} cancellati"
+    },
+    "basisMissing": "Base giuridica mancante",
+    "inPeople": "In Persone ↑",
+    "ex": {
+      "basis": "Non è ancora registrato perché possiamo conservare i dati di questa persona.",
+      "objected": "Registrata una volta, mai revocata. Le mail non si fermano ancora da sole: avvisa i colleghi che scrivono.",
+      "erasedOn": "Cancellato il {date}",
+      "erasedBy": "Da {name}. Nome, e-mail e telefono sono cancellati per sempre.",
+      "kept": "Resta ciò che la legge conserva (i documenti, le mail ricevute). La cancellazione rapida non vale per le controversie aperte e lascia i nomi nelle mail e nella cronologia: per questo, apri una richiesta."
+    },
+    "allGood": "Ogni contatto ha una base giuridica; nessuna opposizione, nessuna cancellazione.",
+    "foot": "I dati dei contatti (nomi, e-mail, telefoni) li vede ogni ruolo che apre i clienti: Titolare, Commerciale, Amministrazione contabile, Acquisti, Responsabile di produzione, Magazzino, Designer della fabbrica e Sola lettura. Le azioni sono nel ⋯ di ogni persona in Persone.",
+    "request": "Apri una richiesta in Amministrazione › Privacy ›",
+    "info": "Dati personali (GDPR): perché possiamo conservare i dati di ogni persona (art. 6), un'opposizione (art. 21), una copia di ciò che conserviamo (art. 15), una cancellazione (art. 17). Ogni azione è nel ⋯ della persona in Persone; qui solo ciò che va guardato.",
+    "objectionDay": "Quando la persona si è opposta",
+    "objectionDayHint": "Oggi o prima: viene registrata con quel giorno."
   },
   "row": {
     "menu": "Azioni per {name}",
@@ -152,7 +181,9 @@
     "history": "Storico ›",
     "copyLink": "Copia il link a questa riga",
     "erasedLine": "Contatto cancellato",
-    "erasedHeld": "Questo contatto è stato cancellato: non si può fare altro."
+    "erasedHeld": "Questo contatto è stato cancellato: non si può fare altro.",
+    "archive": "Archivia…",
+    "changeBasis": "Cambia la base giuridica…"
   },
   "held": {
     "noEmailInvite": "Un invito ha bisogno di un'e-mail: aggiungila prima al contatto."
@@ -232,12 +263,167 @@
     "approved": "L'indirizzo di consegna “{name}” è approvato: ora si può scegliere per le consegne, in ufficio e nel portale.",
     "refused": "L'indirizzo di consegna “{name}” è rifiutato: il cliente legge il perché.",
     "copied": "Copiato.",
-    "copyFailed": "Non copiato: seleziona il testo e copialo a mano."
+    "copyFailed": "Non copiato: seleziona il testo e copialo a mano.",
+    "measured": "Nuove misure salvate (revisione {revision}): attendono il controllo della fabbrica.",
+    "openProfile": "Apri il profilo ›",
+    "riderAdded": "{name} ora è un pilota di {team}: la sua pagina è pronta per le misure.",
+    "teamMoved": "{name} ora corre per {team}.",
+    "teamOff": "{name} ora non corre per nessuna squadra."
   },
   "part": {
-    "portal": "l'accesso al portale"
+    "portal": "l'accesso al portale",
+    "profiles": "i profili di misura",
+    "riders": "i piloti",
+    "privacy": "i dati personali dei contatti"
   },
   "linkTo": "Copia il link a {section}",
   "keys": "Tasti: Tab passa all'azione successiva, Invio o Spazio la apre; Esc chiude un menu o una finestra.",
-  "showFewer": "Mostra meno"
+  "showFewer": "Mostra meno",
+  "riders": {
+    "title": "Piloti e misure",
+    "answer": {
+      "none": "Ancora nessun pilota: aggiungi un pilota o registra le prime misure.",
+      "noneSelf": "Ancora nessuna misura.",
+      "ridersBoth": "{riders} ({here} tenuti qui, {own} con una pagina propria)",
+      "profiles_one": "{count} profilo tenuto qui",
+      "profiles_other": "{count} profili tenuti qui",
+      "profilesWith_one": "{count} profilo tenuto qui: {states}",
+      "profilesWith_other": "{count} profili tenuti qui: {states}",
+      "waiting": "{count} in attesa di controllo",
+      "needMore": "{count} da completare",
+      "old": "{count} da rimisurare",
+      "and": "{a}, {b}",
+      "nextFitting": "prossima prova {date}, {rider}",
+      "nextFittingSelf": "prossima prova {date}",
+      "hidden": "i profili non sono mostrati: il tuo ruolo non vede i profili di misura"
+    },
+    "held": {
+      "notActive": "Le nuove misure richiedono un cliente attivo: attivalo prima.",
+      "noProfile": "Un link richiede prima un profilo: registra le prime misure."
+    },
+    "row": {
+      "open": "Apri la pagina di {name} ›",
+      "orders": "Ordini di {name} ›",
+      "ordersOf": "Ordini di {name} · {garment} ›",
+      "team": "Cambia squadra…",
+      "newFor": "Nuove misure per {name}",
+      "linkOf": "Invia un link per le misure · {garment}…",
+      "reviewOf": "Controlla le misure · {garment}",
+      "fittingOf": "Fissa una prova · {garment}",
+      "editContact": "Modifica il contatto…",
+      "menu": "Azioni per il pilota {name}"
+    },
+    "kind": {
+      "contact": "Pilota · contatto di {customer}",
+      "name": "Pilota · nome sui profili di {customer}",
+      "self": "Questo cliente",
+      "own": "Cliente a sé · {code} · {status}"
+    },
+    "ownPage": "Pagina propria ›",
+    "ownProfiles_one": "{count} profilo sulla sua pagina ›",
+    "ownProfiles_other": "{count} profili sulla sua pagina ›",
+    "profile": {
+      "rev": "{garment} · Rev. {revision} ›",
+      "size": "Taglia più vicina {size}",
+      "measured": "Misurato il {date}",
+      "openOrders_one": "{count} ordine aperto ›",
+      "openOrders_other": "{count} ordini aperti ›",
+      "nextFitting": "Prossima prova {date}"
+    },
+    "noMeasurements": "Ancora nessuna misura",
+    "team": "Squadra: {name} ›",
+    "teamLine": "{name} ordina ed è misurato sulla sua pagina; {team} lo elenca tra i suoi piloti.",
+    "seeAll": "Vedi tutto in Su misura ›",
+    "seeAllCount": "Vedi tutti i {count} in Su misura ›",
+    "foot": "Le misure restano su ogni profilo, per i ruoli che possono vederle: mai in una riga o in un suggerimento.",
+    "more": "Altro per Piloti e misure",
+    "mtm": "Su misura ›",
+    "info": "Due tipi di pilota. Tenuti qui: un contatto con il ruolo Pilota, o un nome sui profili di questo cliente — misurati e ordinati dalla squadra. Con una pagina propria: un cliente a sé sotto questa squadra — le sue misure, i suoi ordini e i suoi dati personali; la squadra non può ordinare con le sue misure.",
+    "listLabel": "Piloti di {name}",
+    "showMore_one": "Mostra {count} altro pilota",
+    "showMore_other": "Mostra altri {count} piloti",
+    "reading": "Lettura dei piloti e dei loro profili…",
+    "addRider": "Aggiungi pilota…"
+  },
+  "rider": {
+    "title": "Aggiungi un pilota a {team}",
+    "sub": "Chi indossa un capo su misura per questa squadra",
+    "kind": "Che tipo di pilota",
+    "own": "Un pilota con una pagina propria",
+    "ownLine": "Un cliente a sé (una persona) sotto {team}: le sue misure, i suoi ordini e i suoi dati personali. Per un pilota che ordina anche da solo.",
+    "kept": "Un pilota tenuto su {team}",
+    "keptLine": "Un contatto di {team} con il ruolo Pilota: misurato e ordinato dalla squadra. Si apre la finestra Aggiungi contatto con Pilota spuntato.",
+    "name": "Nome",
+    "email": "E-mail",
+    "emailHint": "Qui arrivano i link per le misure e gli inviti alle prove.",
+    "phone": "Telefono",
+    "language": "Lingua",
+    "existing": "Oppure metti un cliente esistente sotto {team}",
+    "existingHint": "Cerca un cliente persona per nome o codice (almeno due lettere); un pilota di un'altra squadra si sposta qui.",
+    "searching": "Ricerca…",
+    "noneFound": "Nessun cliente persona trovato.",
+    "pickedLine": "{name} va sotto {team}.",
+    "clearPick": "Crea invece un nuovo pilota",
+    "twoSteps": "Due passi: si crea il nuovo cliente, poi lo si mette sotto {team}.",
+    "confirm": "Aggiungi pilota",
+    "next": "Apri Aggiungi contatto",
+    "retry": "Riprova",
+    "made": "{name} è stato creato, ma non è ancora sotto {team}: riprova.",
+    "problem": {
+      "name": "Indica il nome del pilota.",
+      "nameLong": "Al massimo 120 caratteri.",
+      "email": "Questo non è un indirizzo e-mail."
+    }
+  },
+  "team": {
+    "title": "Cambia la squadra di {name}",
+    "sub": "Oggi sotto {team}",
+    "subNone": "Oggi senza squadra",
+    "label": "Squadra",
+    "keep": "Tieni sotto {team}",
+    "keepNone": "Lascia senza squadra",
+    "move": "Sposta in un'altra squadra",
+    "movePicked": "In {team}",
+    "off": "Togli da ogni squadra",
+    "offLine": "{name} resta un cliente a sé, con i suoi ordini e le sue misure.",
+    "find": "Cerca un cliente squadra (almeno due lettere)",
+    "noneFound": "Nessun cliente squadra trovato.",
+    "kept": "Gli ordini già fatti mantengono il loro cliente e le loro misure: una squadra ordina solo con le misure tenute sulla squadra.",
+    "problem": {
+      "pick": "Scegli la squadra in cui spostarlo."
+    }
+  },
+  "archive": {
+    "confirm": "Archivia",
+    "contact": {
+      "title": "Archiviare {name}?",
+      "never": "Archiviato, mai cancellato: Ripristina riporta {name}. Preventivi, ordini e documenti mantengono la loro copia.",
+      "quotesNext": "Ora riceve preventivi e conferme: dopo, vanno a {name} (il prossimo contatto Ordini con e-mail).",
+      "quotesNobody": "L'unico contatto che riceve preventivi e conferme: dopo, nessuno li riceve finché un altro contatto non ha il ruolo Ordini.",
+      "invoicesStill": "Ora riceve fatture e solleciti; {names} continuerà a riceverli.",
+      "invoicesNobody": "L'unico contatto che riceve fatture e solleciti: dopo, nessuno li riceve e i solleciti non possono partire.",
+      "signsIn": "Accede ancora al portale: l'archiviazione non lo ferma. Disattiva anche il suo accesso al portale, da questa riga.",
+      "invited": "È ancora invitato al portale: l'archiviazione non lo ferma. Revoca anche l'invito, da questa riga.",
+      "approver": "L'approvatore della produzione nominato nel portale: nominane un altro in Impostazioni del portale, o le approvazioni non aspettano nessuno.",
+      "openQuotes_one": "Indicato su {count} preventivo aperto: mantiene questo contatto; la sua conferma va poi a {name}, mai a un contatto archiviato.",
+      "openQuotes_other": "Indicato su {count} preventivi aperti: mantengono questo contatto; le loro conferme vanno poi a {name}, mai a un contatto archiviato.",
+      "openQuotesNobody_one": "Indicato su {count} preventivo aperto: senza nessun altro in Ordini, la sua conferma non avrebbe destinatario.",
+      "openQuotesNobody_other": "Indicato su {count} preventivi aperti: senza nessun altro in Ordini, le loro conferme non avrebbero destinatario.",
+      "mailIn": "La sua prossima e-mail non viene più abbinata alle conversazioni di {customer}."
+    },
+    "address": {
+      "title": "Archiviare “{name}”?",
+      "never": "Archiviato, mai cancellato: Ripristina lo riporta.",
+      "copies": "Gli ordini aperti mantengono la loro copia dell'indirizzo: nessuno cambia.",
+      "shipTo": "Il predefinito per le consegne: dopo non ce n'è uno finché non lo imposti — i nuovi preventivi e ordini chiedono un indirizzo di consegna.",
+      "billTo": "Il predefinito per le fatture: dopo non ce n'è uno finché non lo imposti.",
+      "einvoiceOther": "Le fatture elettroniche usano questo indirizzo: useranno la sede legale di {city}.",
+      "einvoiceBillTo": "Le fatture elettroniche usano questo indirizzo: useranno l'indirizzo predefinito per le fatture di {city}.",
+      "einvoiceNone": "Le fatture elettroniche usano questo indirizzo: senza, il cliente non si può fatturare finché non c'è un'altra sede legale o un indirizzo predefinito per le fatture.",
+      "draftQuotes_one": "Indicato su {count} preventivo in bozza: non si può inviare finché non si sceglie un altro indirizzo.",
+      "draftQuotes_other": "Indicato su {count} preventivi in bozza: non si possono inviare finché non si sceglie un altro indirizzo.",
+      "shipments_one": "{count} spedizione preparata va qui: mantiene questo indirizzo.",
+      "shipments_other": "{count} spedizioni preparate vanno qui: mantengono questo indirizzo."
+    }
+  }
 }

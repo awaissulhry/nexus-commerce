@@ -4,6 +4,7 @@ import type { Contact } from '../../../../parties/_shared/api'
 import type { PartnerPerson, PortalAccess } from '../../../../admin/users/partners/api'
 import { inviteHeld, type PartnerCan, type RowAction } from '../../../../admin/users/partners/model'
 import type { PrivacyContact } from '../../depth/api'
+import { privacyHeld } from '../../depth/model' // F-CA-217: the personal-data acts' state reasons (the right reasons stay hidden)
 import type { ContactUsage } from './api'
 import { ACCESS_ENDS_WITHIN_DAYS, daysUntil, personAnchor, said, type PeopleCan, type Said } from './model'
 
@@ -170,7 +171,10 @@ export const tickable = (row: PersonRow): boolean => row.portal !== null && row.
 // ---- the row's ⋯ -------------------------------------------------------------------------------------------------------------
 
 /** What an item of a row's ⋯ does (the view runs it through the tab's container). */
-export type PersonAct = 'edit' | 'addContact' | 'copyEmail' | 'invite' | RowAction | 'change' | 'archive' | 'restore' | 'link'
+export type PersonAct = 'edit' | 'addContact' | 'copyEmail' | 'invite' | RowAction | 'change' | 'archive' | 'restore' | 'link' | PrivacyAct // F-CA-217: + the personal-data acts
+
+/** F-CA-217 (ca-w2 W2.4; Z14): the personal-data acts on a person's ⋯ (the depth provider's own windows). */
+export type PrivacyAct = 'basis' | 'objection' | 'copy' | 'erase'
 
 export interface PersonItem {
   readonly id: string
@@ -241,12 +245,33 @@ export function personMenu(row: PersonRow, context: PersonMenuContext): PersonIt
     }
   }
   groups.push(portal)
-  // 3. History (audit.read): the contact's own changes.
+  // 3. F-CA-217 (ca-w2 W2.4; Z14): the personal-data acts, moved here from today's table in the SAME step that drops it (one window per
+  // act). Each its own right (parties.privacy; Erase: parties.erase) — hidden without it; held only by state: an objection recorded once,
+  // the customer archived, an erase while a login still uses the e-mail (R-B5: Deactivate first, on this row).
+  const privacy = row.privacy
+  if (contact && privacy && (can.privacy || can.erase)) {
+    const status = context.archivedCustomer ? 'ARCHIVED' : 'ACTIVE'
+    const depthCan = { manage: can.manage, hold: false, privacy: can.privacy, erase: can.erase, price: false, styles: false, files: false }
+    const held = (act: PrivacyAct): Said | undefined => {
+      if (act === 'erase' && row.portal && row.portal.status !== 'DEACTIVATED') return said('sales-customers-depth:privacy.refused.portalUser')
+      const reason = privacyHeld(privacy, act, depthCan, status)
+      return reason ? said(`sales-customers-depth:${reason}`) : undefined
+    }
+    const item = (act: PrivacyAct, label: string): PersonItem => {
+      const reason = held(act)
+      return { id: act, label: said(label), act, ...(reason ? { held: reason } : {}), ...(act === 'erase' ? { danger: true } : {}) }
+    }
+    groups.push([
+      ...(can.privacy ? [item('basis', privacy.lawfulBasis ? 'row.changeBasis' : 'sales-customers-depth:privacy.act.basis'), item('objection', 'sales-customers-depth:privacy.act.objection'), item('copy', 'sales-customers-depth:privacy.act.copy')] : []),
+      ...(can.erase ? [item('erase', 'sales-customers-depth:privacy.act.erase')] : []),
+    ])
+  }
+  // 4. History (audit.read): the contact's own changes.
   groups.push(contact && can.audit ? [{ id: 'history', label: said('row.history'), href: `${context.prefix}/admin/audit?${new URLSearchParams({ type: 'PartyContact', record: contact.id }).toString()}` }] : [])
-  // 4. Archive / Restore (today's one-click PATCH; the Archive window with its warnings comes in ca-w2).
+  // 5. Archive… (F-CA-217: the NEW window with what it would change) / Restore (one click, as today).
   const status: PersonItem[] = []
   if (contact && can.manage) {
-    if (contact.status === 'ACTIVE') status.push({ id: 'archive', label: said('parties:contact.archive'), act: 'archive', ...(manageHeld ? { held: manageHeld } : {}) })
+    if (contact.status === 'ACTIVE') status.push({ id: 'archive', label: said('row.archive'), act: 'archive', ...(manageHeld ? { held: manageHeld } : {}) })
     else status.push({ id: 'restore', label: said('parties:contact.restore'), act: 'restore', ...(manageHeld ? { held: manageHeld } : {}) })
   }
   groups.push(status)

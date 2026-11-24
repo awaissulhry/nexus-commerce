@@ -39,15 +39,15 @@ export type { PortalAccessActions, PortalAccessModel } from '../model'
 export const PORTAL_PARTS = ['settings', 'preview', 'limits', 'people', 'requests'] as const
 export type PortalPart = (typeof PORTAL_PARTS)[number]
 
-export function PortalAccessView({ model, actions, parts = PORTAL_PARTS, contactEmails }: { model: PortalAccessModel; actions?: PortalAccessActions; parts?: readonly PortalPart[]; contactEmails?: ReadonlySet<string> | undefined }) {
+export function PortalAccessView({ model, actions, parts = PORTAL_PARTS }: { model: PortalAccessModel; actions?: PortalAccessActions; parts?: readonly PortalPart[] }) {
   return (
     <PortalAccessMessages>
-      <PortalAccessTab model={model} actions={actions} parts={parts} contactEmails={contactEmails} />
+      <PortalAccessTab model={model} actions={actions} parts={parts} />
     </PortalAccessMessages>
   )
 }
 
-function PortalAccessTab({ model, actions, parts, contactEmails }: { model: PortalAccessModel; actions?: PortalAccessActions | undefined; parts: readonly PortalPart[]; contactEmails?: ReadonlySet<string> | undefined }) {
+function PortalAccessTab({ model, actions, parts }: { model: PortalAccessModel; actions?: PortalAccessActions | undefined; parts: readonly PortalPart[] }) {
   const has = (part: PortalPart) => parts.includes(part) // F-SA-274
   const t = usePortalT()
   if (!model.can.view) return <EmptyState title={t('noAccess.title')} description={heldWords(t, 'right.view') ?? undefined} />
@@ -92,7 +92,7 @@ function PortalAccessTab({ model, actions, parts, contactEmails }: { model: Port
         {has('limits') && model.limits && (
           <LimitsCard model={model.limits} partyName={model.access.party.name} portalOn={model.access.settings.portalOn} people={model.access.people} can={{ preview: model.can.preview }} previewing={model.previewing} actions={actions?.limits} />
         )}
-        {has('people') && <PeopleCard model={model} actions={actions} contactEmails={contactEmails} />}
+        {has('people') && <PeopleCard model={model} actions={actions} />}
         {has('requests') && <RequestsCard model={model} actions={actions} />}
       </div>
       <PortalStepUp model={model.stepUp} onSubmit={actions?.onStepUp} onClose={actions?.onStepUpClose} />

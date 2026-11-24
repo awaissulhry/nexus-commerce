@@ -19,6 +19,20 @@ import {
 import type { MeasurementsDialogActions, MeasurementsDialogModel } from './view-model'
 
 /**
+ * F-CA-206 (customer People & addresses, lane ca- W2.2; 13-backend §3): New measurements opened from a customer's page starts with that
+ * customer chosen (its name as the search, its id picked) and, from a rider's row, that rider. Absent: the window opens as it always did.
+ */
+export interface MeasurementsPreset {
+  readonly partyId: string
+  /** The customer's name, as the customer search starts. */
+  readonly customerQ: string
+  /** The rider kept as a contact of the customer (the row's), else none. */
+  readonly contactId?: string | null
+  /** The rider known only by name on the customer's profiles. */
+  readonly riderName?: string | null
+}
+
+/**
  * The measurement dialog's work, for both containers (the list's New measurements, the record's New revision): the pickers read
  * on open (customers searched as typed, the customer's contacts, the garment types, the office people, the MTM styles), the
  * template's points read when a garment type is picked, B-W2b-248's check run on what is typed (debounced; only while the
@@ -31,6 +45,7 @@ export function useMeasurementsDialog({ api, can, me, companyId, offline, onSave
   const current = useRef<MeasurementsDialogModel | null>(null)
   current.current = model
   const revisionOf = useRef<{ profileId: string; notice: { ref: string; at: string } } | null>(null)
+  const presetRider = useRef<Pick<MeasurementsPreset, 'contactId' | 'riderName'> | null>(null) // F-CA-206
   const patch = useCallback((next: Partial<MeasurementsDialogModel>) => setModel((now) => (now ? { ...now, ...next } : now)), [])
 
   const readShared = useCallback(() => {
@@ -46,18 +61,19 @@ export function useMeasurementsDialog({ api, can, me, companyId, offline, onSave
   }, [api, can.people, can.styles, companyId, patch])
 
   /** New measurements (design mtm.new). */
-  const openNew = useCallback(() => {
+  const openNew = useCallback((preset?: MeasurementsPreset) => {
     key.current = null
     revisionOf.current = null
+    presetRider.current = preset ? { contactId: preset.contactId ?? null, riderName: preset.riderName ?? null } : null // F-CA-206
     const now = new Date().toISOString()
     setModel({
       mode: 'new',
       customers: { items: null, problem: null },
-      customerQ: '',
-      partyId: '',
+      customerQ: preset?.customerQ ?? '', // F-CA-206: absent = '' (as before)
+      partyId: preset?.partyId ?? '',
       contacts: { items: [], problem: null },
       contactId: '',
-      riderName: '',
+      riderName: preset?.riderName ?? '',
       templates: { items: null, problem: null },
       garmentType: '',
       template: null,
@@ -147,8 +163,11 @@ export function useMeasurementsDialog({ api, can, me, companyId, offline, onSave
     patch({ contacts: { items: null, problem: null }, contactId: '' })
     listContacts(api, partyId, controller.signal)
       .then((items) => {
-        const rider = items.find((contact) => contact.roles.includes('RIDER'))
-        patch({ contacts: { items, problem: null }, contactId: rider?.id ?? '', riderName: rider?.name ?? current.current?.riderName ?? '' })
+        // F-CA-206: the rider a customer's page asked for (its contact, or a name only), once; else the first Rider contact (as before).
+        const asked = presetRider.current
+        presetRider.current = null
+        const rider = asked?.contactId ? items.find((contact) => contact.id === asked.contactId) : asked?.riderName ? undefined : items.find((contact) => contact.roles.includes('RIDER'))
+        patch({ contacts: { items, problem: null }, contactId: rider?.id ?? '', riderName: rider?.name ?? asked?.riderName ?? current.current?.riderName ?? '' })
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) patch({ contacts: { items: [], problem: readProblem(error) } })

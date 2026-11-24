@@ -3,17 +3,22 @@ import type { Party } from '../../../../parties/_shared/api'
 import type { PortalAccess } from '../../../../admin/users/partners/api'
 import { inviteHeld, type RowAction } from '../../../../admin/users/partners/model'
 import type { PortalAccessModel } from '../../portal/model'
-import type { Glance, Privacy } from '../../depth/api'
-import type { Read as DepthRead } from '../../depth/model'
-import type { PartyUsage } from './api'
-import { addressFilterOf, addressesSectionAnswer, peopleAnswer, peopleSectionAnswer, personFilterOf, type PeopleAnswer, type PeopleChip, type PeopleFacts } from './answer'
+import type { Privacy } from '../../depth/api'
+import type { ProfilesView } from '../../../mtm/api' // F-CA-203
+import type { MtmCan } from '../../../mtm/model' // F-CA-208
+import type { LinkDialogActions, LinkDialogModel, MeasurementsDialogActions, MeasurementsDialogModel } from '../../../mtm/view-model' // F-CA-208
+import type { Notice as DepthNotice, Read as DepthRead } from '../../depth/model'
+import type { PartyUsage, RidersView } from './api'
+import { addressFilterOf, addressesSectionAnswer, peopleAnswer, peopleSectionAnswer, personFilterOf, privacyExceptions, privacySectionAnswer, type PeopleAnswer, type PeopleChip, type PeopleFacts, type PrivacyException } from './answer'
+import { addressArchiveWarnings, contactArchiveWarnings, type ArchiveWarning } from './archive' // F-CA-219
 import { addressRows, archivedCount, shownAddresses, type AddressAct, type AddressMenuContext, type AddressRow } from './addresses'
-import { ADDRESS_ROWS, kitProblemOf, PEOPLE_ROWS, said, valueOf, type PeopleCan, type Read, type Said } from './model'
+import { ADDRESS_ROWS, kitProblemOf, PEOPLE_ROWS, RIDER_ROWS, said, valueOf, type PeopleCan, type Read, type Said } from './model'
 import { hiddenCounts, peopleRows, shownPeople, tickable, type PersonAct, type PersonMenuContext, type PersonRow } from './people'
+import { linkHeldOf, newMeasurementsHeld, profilesOf, riderRows, ridersAnswer, type RiderAct, type RiderMenuContext, type RiderRow } from './riders' // F-CA-203
 
 /**
  * F-CA-106 (customer page › PEOPLE & ADDRESSES tab, lane ca-; 13-backend §5.1) — the tab's ONE model, pure: the reads the container holds
- * (the party, the portal of THIS customer, its contacts' personal data, the usage read, the production approver, the glance) and the
+ * (the party, the portal of THIS customer, its contacts' personal data, the usage read, the production approver, the riders) and the
  * tab's own state (the chip pressed, the toggles, the ticks, the windows) become what the view draws. The container builds it on the
  * page; a design case builds it from made-up reads — one rule for both.
  */
@@ -26,13 +31,82 @@ export interface PeopleTabState {
   readonly ticking: boolean
   readonly morePeople: boolean
   readonly moreAddresses: boolean
+  readonly moreRiders: boolean // F-CA-203
   /** The address being approved (one click), else null. */
   readonly approving: string | null
   /** The Refuse… window (null: closed). */
   readonly refuse: RefuseDialog | null
+  /** F-CA-211 (W2.3): the Add rider… window (null: closed). */
+  readonly addRider: AddRiderDialog | null
+  /** F-CA-211 (W2.3): the Change team… window (null: closed). */
+  readonly team: TeamDialog | null
+  /** F-CA-219 (W2.4): the Archive… window of a contact or an address (null: closed). */
+  readonly archive: { readonly kind: 'contact' | 'address'; readonly id: string } | null
 }
 
-export const PEOPLE_TAB_START: PeopleTabState = { filter: null, showArchivedContacts: false, showArchivedAddresses: false, ticking: false, morePeople: false, moreAddresses: false, approving: null, refuse: null }
+/** F-CA-211: a customer found by the search of a window (a person to put under the team, or a team to move a rider to). */
+export interface FoundParty {
+  readonly id: string
+  readonly code: string
+  readonly name: string
+  readonly city: string | null
+  readonly version: number
+}
+
+/**
+ * F-CA-211 (10-design §6 window 4): Add a rider to {team} — a rider with its own page (a person customer made, then put under the team:
+ * the two existing commands; Z10 — `teamPartyId` on POST /parties is a later job) or a rider kept on the team (the record's own Add
+ * contact window, Rider ticked); or an existing person customer put under the team.
+ */
+export interface AddRiderDialog {
+  readonly kind: 'own' | 'kept'
+  readonly name: string
+  readonly email: string
+  readonly phone: string
+  readonly language: string
+  readonly search: string
+  /** The search's answer (null: nothing asked yet). */
+  readonly found: Read<readonly FoundParty[]> | null
+  readonly picked: FoundParty | null
+  readonly tried: boolean
+  readonly busy: boolean
+  /** A refusal (a `parties` problem key), else null. */
+  readonly problem: string | null
+  /** The rider was made and is not yet under the team (its second command failed): Try again sends only that one. */
+  readonly made: { readonly id: string; readonly name: string; readonly version: number } | null
+}
+
+/** F-CA-211 (10-design §6 window 5): Change the team of {rider} — keep it, move it to another team, or take it off any team. */
+export interface TeamDialog {
+  readonly riderId: string
+  readonly riderName: string
+  /** The rider's version (its row's): the team change names it. */
+  readonly version: number
+  readonly current: { readonly id: string; readonly name: string } | null
+  readonly choice: 'keep' | 'move' | 'off'
+  readonly search: string
+  readonly found: Read<readonly FoundParty[]> | null
+  readonly picked: FoundParty | null
+  readonly tried: boolean
+  readonly busy: boolean
+  readonly problem: string | null
+}
+
+/** What Add rider still needs before it can be sent (a key of the tab's words), or null. */
+export function addRiderProblem(dialog: AddRiderDialog): string | null {
+  if (dialog.kind === 'kept') return null
+  if (dialog.picked) return null
+  const name = dialog.name.trim()
+  if (name === '') return 'rider.problem.name'
+  if (name.length > 120) return 'rider.problem.nameLong'
+  if (dialog.email.trim() !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(dialog.email.trim())) return 'rider.problem.email'
+  return null
+}
+
+/** What Change team still needs (moving needs a team picked), or null. */
+export const teamProblem = (dialog: TeamDialog): string | null => (dialog.choice === 'move' && !dialog.picked ? 'team.problem.pick' : null)
+
+export const PEOPLE_TAB_START: PeopleTabState = { filter: null, showArchivedContacts: false, showArchivedAddresses: false, ticking: false, morePeople: false, moreAddresses: false, moreRiders: false, approving: null, refuse: null, addRider: null, team: null, archive: null }
 
 /** The Refuse the delivery address window: the reason the customer reads (3–500 characters). */
 export interface RefuseDialog {
@@ -58,8 +132,35 @@ export interface PeopleTabReads {
   readonly usage: Read<PartyUsage> | null
   /** The portal user who approves production (the limits read; null: anyone, not read or failed). */
   readonly approverId: string | null
-  /** The customer at a glance (the riders' count, a rider's team; null: not handed). */
-  readonly glance: DepthRead<Glance> | null
+  // F-CA-203 (ca-w2 W2.1): Riders & measurements' two reads (the glance is no longer read on People).
+  /** The profiles kept on THIS customer (the MTM list's read; null: not made — no measurements right). */
+  readonly profiles: Read<ProfilesView> | null
+  /** The riders of THIS customer, or its team (null: not made). */
+  readonly riders: Read<RidersView> | null
+}
+
+/** F-CA-203: Riders & measurements (#riders), as the view draws it. */
+export interface RidersSectionModel {
+  readonly kind: Party['kind']
+  readonly answer: readonly Said[]
+  readonly all: readonly RiderRow[]
+  readonly rows: readonly RiderRow[]
+  readonly more: boolean
+  /** The reader sees measurement profiles (else the riders' names only, said once). */
+  readonly measurements: boolean
+  /** The first reads are still out (the section's skeleton). */
+  readonly reading: boolean
+  /** The profiles read failed (a kit key), else null: the riders' names still draw. */
+  readonly profilesProblem: string | null
+  /** The riders read failed (a kit key), else null. */
+  readonly ridersProblem: string | null
+  /** How many profiles Made-to-measure holds for this customer (the read is a page of them); null: not read. */
+  readonly matching: number | null
+  /** A rider's own page: its team (a customer the reader may see). */
+  readonly team: { readonly id: string; readonly code: string; readonly name: string } | null
+  /** The head's acts, each with its own right; held only by state. */
+  readonly head: { readonly newShown: boolean; readonly newHeld: Said | null; readonly linkShown: boolean; readonly linkHeld: Said | null; readonly addRider: boolean; readonly changeTeam: boolean; readonly held: Said | null }
+  readonly menu: RiderMenuContext
 }
 
 export interface PeopleSectionModel {
@@ -120,7 +221,37 @@ export interface PeopleTabModel {
   readonly filter: PeopleChip | null
   readonly people: PeopleSectionModel
   readonly addresses: AddressesSectionModel
+  readonly riders: RidersSectionModel // F-CA-203
   readonly refuse: RefuseDialog | null
+  readonly addRider: AddRiderDialog | null // F-CA-211
+  readonly team: TeamDialog | null // F-CA-211
+  readonly privacy: PrivacySectionModel // F-CA-219
+  readonly archive: ArchiveModel | null // F-CA-219
+}
+
+/** F-CA-219 (W2.4; 10-design §5.4): Personal data (#personal-data) — the summary and ONLY the people who need a look. */
+export interface PrivacySectionModel {
+  readonly answer: readonly Said[]
+  /** The privacy read is still out (its skeleton). */
+  readonly reading: boolean
+  /** The privacy read failed (a kit key), else null. */
+  readonly problem: string | null
+  readonly exceptions: ReadonlyArray<{ readonly row: PersonRow; readonly kind: PrivacyException }>
+  /** "Record the lawful basis…" on an exception: parties.privacy (hidden without it); held when the customer is archived. */
+  readonly mayRecord: boolean
+  readonly recordHeld: Said | null
+  /** Admin › Privacy › a new data request (privacy.view + privacy.requests.manage), else null. */
+  readonly requestsHref: string | null
+}
+
+/** F-CA-219 (10-design §6 windows 2 and 3): Archive {name}? / Archive "{address}"? — what it would change, from data already read. */
+export interface ArchiveModel {
+  readonly kind: 'contact' | 'address'
+  readonly id: string
+  readonly name: string
+  /** The roles (a contact) or what it is for (an address), as words. */
+  readonly what: readonly Said[]
+  readonly warnings: readonly ArchiveWarning[]
 }
 
 /** The tab's model from its reads and its state. */
@@ -134,7 +265,10 @@ export function peopleTabModel(reads: PeopleTabReads, state: PeopleTabState): Pe
   const portalPeople = access && portalOn ? access.people : null
   const privacy = reads.privacy && reads.privacy.status === 'ready' ? reads.privacy.value : null
   const usage = valueOf(reads.usage)
-  const glance = reads.glance && reads.glance.status === 'ready' ? reads.glance.value : null
+  // F-CA-203: the riders of both kinds (the profiles only with the measurements right: body data).
+  const profileRead = can.measurements ? reads.profiles : null
+  const ridersRead = valueOf(reads.riders)
+  const riderList = riderRows({ kind: party.kind, partyId: party.id, partyName: party.tradeName ?? party.legalName, contacts: party.contacts, profiles: valueOf(profileRead)?.rows ?? null, riders: ridersRead })
   const mails = mailsOfContacts(party.contacts.map((contact) => ({ id: contact.id, name: contact.name, email: contact.email, roles: contact.roles, status: contact.status, createdAt: contact.createdAt })))
   const all = peopleRows({ contacts: party.contacts, portal: portalPeople, privacy: privacy?.contacts ?? null, mails, usage: usage?.contacts ?? null, approverId: reads.approverId, now })
   const addresses = addressRows(party.addresses, usage?.addresses ?? null)
@@ -145,8 +279,9 @@ export function peopleTabModel(reads: PeopleTabReads, state: PeopleTabState): Pe
     portal: access && portalOn ? { on: true, seats: access.seats } : access ? { on: false, seats: access.seats } : null,
     portalRight: can.portal,
     privacyIn: privacy !== null,
-    riders: glance?.riders ? glance.riders.count : null,
-    team: glance?.team?.name ?? null,
+    // F-CA-203: the riders' count once a riders read is in (never 0 for "not read"); a rider's team from the riders read.
+    riders: ridersRead !== null || valueOf(profileRead) !== null ? riderList.length : null,
+    team: ridersRead?.team?.legalName ?? null,
   }
   const showLeft = portalModel?.showLeft ?? false
   // ---- People
@@ -202,14 +337,72 @@ export function peopleTabModel(reads: PeopleTabReads, state: PeopleTabState): Pe
       usageIn: usage !== null,
       menu: { can, archivedCustomer, prefix: reads.prefix },
     },
+    riders: {
+      kind: party.kind,
+      answer: ridersAnswer({ kind: party.kind, rows: riderList, measurements: can.measurements, matching: valueOf(profileRead)?.matching ?? null }),
+      all: riderList,
+      rows: state.moreRiders ? riderList : riderList.slice(0, RIDER_ROWS),
+      more: state.moreRiders,
+      measurements: can.measurements,
+      reading: (reads.riders === null || reads.riders.status === 'loading') && (profileRead === null || profileRead.status === 'loading'),
+      profilesProblem: profileRead?.status === 'error' ? profileRead.problem : null,
+      ridersProblem: reads.riders?.status === 'error' ? reads.riders.problem : null,
+      matching: valueOf(profileRead)?.matching ?? null,
+      team: ridersRead?.team ? { id: ridersRead.team.id, code: ridersRead.team.code, name: ridersRead.team.legalName } : null,
+      head: {
+        newShown: can.measurements && can.mtmRecord,
+        newHeld: archivedCustomer ? said('parties:held.archived') : newMeasurementsHeld(party.status),
+        linkShown: can.measurements && can.mtmLink,
+        linkHeld: archivedCustomer ? said('parties:held.archived') : linkHeldOf(profilesOf(riderList)),
+        addRider: party.kind === 'ORGANISATION' && can.manage,
+        changeTeam: party.kind === 'PERSON' && can.manage,
+        held: archivedCustomer ? said('parties:held.archived') : null,
+      },
+      menu: { can, prefix: reads.prefix, status: party.status },
+    },
     refuse: state.refuse,
+    addRider: state.addRider,
+    team: state.team,
+    privacy: {
+      answer: privacySectionAnswer(all),
+      reading: reads.privacy === null || reads.privacy.status === 'loading',
+      problem: reads.privacy?.status === 'error' ? kitProblemOf(reads.privacy.problem) : null,
+      exceptions: privacyExceptions(all),
+      mayRecord: can.privacy,
+      recordHeld: archivedCustomer ? said('parties:held.archived') : null,
+      requestsHref: can.privacyRequests ? `${reads.prefix}/admin/privacy?view=requests&new=1` : null,
+    },
+    archive: archiveOf(state.archive, { party, all, addresses, portalColumn }),
   }
+}
+
+/** The Archive window's model: the contact's or the address's warnings from what is read (P14: warns, never refuses). */
+function archiveOf(archive: PeopleTabState['archive'], facts: { readonly party: Party; readonly all: readonly PersonRow[]; readonly addresses: readonly AddressRow[]; readonly portalColumn: boolean }): ArchiveModel | null {
+  if (!archive) return null
+  const customer = facts.party.tradeName ?? facts.party.legalName
+  if (archive.kind === 'contact') {
+    const row = facts.all.find((entry) => entry.contact?.id === archive.id)
+    if (!row?.contact) return null
+    const person = facts.portalColumn && row.portal && row.portal.status !== 'DEACTIVATED' ? row.portal.status : null
+    return {
+      kind: 'contact',
+      id: archive.id,
+      name: row.contact.name,
+      what: row.contact.roles.map((role) => said(`parties:contactRole.${role}`)),
+      warnings: contactArchiveWarnings({ contact: row.contact, contacts: facts.party.contacts, customer, portal: person, approver: row.approver, usage: row.usage }),
+    }
+  }
+  const row = facts.addresses.find((entry) => entry.id === archive.id)
+  if (!row) return null
+  return { kind: 'address', id: archive.id, name: row.address.name ?? row.address.line1, what: row.address.kinds.map((kind) => said(`parties:addressKind.${kind}`)), warnings: addressArchiveWarnings({ address: row.address, addresses: facts.party.addresses, usage: row.usage }) }
 }
 
 /** A result of the tab's own acts (an address checked, a copy), for the record's ONE notice area. */
 export interface PeopleNotice {
   readonly tone: 'success' | 'info' | 'warning' | 'danger'
   readonly words: Said
+  /** F-CA-208: a door with it (new measurements: "Open the profile ›"). */
+  readonly link?: { readonly href: string; readonly label: Said }
 }
 
 /** What the view asks of its container (each act through the owner's own window or command). */
@@ -226,11 +419,32 @@ export interface PeopleTabActions {
   readonly onTicking?: (ticking: boolean) => void
   readonly onTick?: (userId: string, ticked: boolean) => void
   readonly onBulk?: (action: RowAction) => void
-  readonly onMore?: (section: 'people' | 'addresses', more: boolean) => void
+  readonly onMore?: (section: 'people' | 'addresses' | 'riders', more: boolean) => void
   readonly onRetryPortal?: () => void
   readonly onRefuseDraft?: (reason: string) => void
   readonly onRefuseConfirm?: () => void
   readonly onRefuseClose?: () => void
+  // ---- F-CA-203 (ca-w2): Riders & measurements
+  readonly onRiderAct?: (act: RiderAct, row: RiderRow, profileId?: string) => void
+  readonly onNewMeasurements?: () => void
+  readonly onSendLink?: () => void
+  readonly onRetryProfiles?: () => void
+  readonly onRetryRiders?: () => void
+  /** Add rider… (an organisation's head ⋯). */
+  readonly onAddRider?: () => void
+  /** Change team… — of a rider with its own page (its row), or of this customer itself (a rider's own page: null). */
+  readonly onChangeTeam?: (row: RiderRow | null) => void
+  // ---- F-CA-211: the two windows' drafts and acts
+  readonly onAddRiderDraft?: (patch: Partial<Pick<AddRiderDialog, 'kind' | 'name' | 'email' | 'phone' | 'language' | 'search' | 'picked'>>) => void
+  readonly onAddRiderConfirm?: () => void
+  readonly onAddRiderClose?: () => void
+  readonly onTeamDraft?: (patch: Partial<Pick<TeamDialog, 'choice' | 'search' | 'picked'>>) => void
+  readonly onTeamConfirm?: () => void
+  readonly onTeamClose?: () => void
+  // ---- F-CA-219 (W2.4): the Archive window, a personal-data act from an exception
+  readonly onArchiveConfirm?: () => void
+  readonly onArchiveClose?: () => void
+  readonly onRetryPrivacy?: () => void
 }
 
 /** The tab's notices for the record's ONE notice area (the portal container's own, and the tab's). */
@@ -239,4 +453,16 @@ export interface PeopleNotices {
   readonly own: PeopleNotice | null
   readonly onDismissPortal?: () => void
   readonly onDismissOwn?: () => void
+  /** F-CA-219 (W2.4): the personal-data windows' notice (the depth provider's own), now that its card left the tab. */
+  readonly depth?: DepthNotice
+  readonly onDismissDepth?: () => void
+}
+
+/** F-CA-208: Made-to-measure's windows as the tab mounts them (its own models and acts, unchanged). */
+export interface PeopleMtm {
+  readonly can: MtmCan
+  readonly measurements: MeasurementsDialogModel | null
+  readonly measurementsActions?: MeasurementsDialogActions
+  readonly link: LinkDialogModel | null
+  readonly linkActions?: LinkDialogActions
 }

@@ -267,7 +267,7 @@ function Privacy({ row, say, day }: { row: PersonRow; say: Say; day: (at: string
   const flags = [
     row.basisMissing ? (
       <Tag key="basis" tone="warning">
-        {say(said('sales-customers-depth:privacy.basisMissing'))}
+        {say(said('privacy.basisMissing')) /* F-CA-226: the tab's own word (10-design §10); the depth's says "Not recorded" */}
       </Tag>
     ) : null,
     privacy.objectedAt ? (

@@ -58,10 +58,6 @@
     "profiles": "Not shown: your role does not see measurement profiles.",
     "repairs": "Not shown: your role does not see repairs."
   },
-  "glance": {
-    "more_one": "{count} more",
-    "more_other": "{count} more"
-  },
   "now": {
     "title": "Now"
   },
@@ -69,28 +65,10 @@
     "title": "Samples in progress"
   },
   "profiles": {
-    "title": "Measurement profiles",
-    "hint": "The newest revision per rider and garment; the measurements stay in the profile.",
-    "none": "No measurement profile kept for this customer.",
-    "noneRider": "No measurement profile for this rider yet.",
-    "col": {
-      "rider": "Rider",
-      "garment": "Garment",
-      "revision": "Revision",
-      "base": "Closest size",
-      "taken": "Measured on"
-    },
-    "rev": "Rev. {revision}"
+    "title": "Measurement profiles"
   },
   "riders": {
-    "title": "Riders",
-    "hint": "The people under this team or dealer.",
-    "none": "No rider under this customer.",
-    "col": {
-      "rider": "Rider",
-      "status": "Status",
-      "profiles": "Profiles"
-    }
+    "title": "Riders"
   },
   "status": {
     "notOnHold": "Not on hold.",
@@ -272,34 +250,18 @@
   },
   "privacy": {
     "title": "Personal data of the contacts",
-    "hint": "Why we may keep each person’s details (GDPR art. 6), their consent, and what they may ask: a copy of what we hold (art. 15) and erasure (art. 17).",
-    "notRecorded_one": "{count} contact has no lawful basis recorded yet.",
-    "notRecorded_other": "{count} contacts have no lawful basis recorded yet.",
-    "none": "No contacts yet.",
-    "col": {
-      "contact": "Contact",
-      "basis": "Lawful basis",
-      "consent": "Consent",
-      "objection": "Objection",
-      "state": "State"
-    },
     "erasedName": "Erased contact",
     "basisMissing": "Not recorded",
     "objectedOn": "Objected {date}",
     "erased": "Erased",
     "erasedOn": "{date} by {by}",
-    "menu": "Personal-data actions for {name}",
     "rule": "Personal data stays inside this record: it is never a filter, a group or a total.",
     "openPortal": "Open Portal access",
     "act": {
       "basis": "Record the lawful basis…",
-      "basisHint": "Why we may keep this person’s details.",
       "objection": "Record an objection…",
-      "objectionHint": "The person objects to how we use their details (art. 21).",
       "copy": "Access copy…",
-      "copyHint": "Everything we hold about the person (art. 15).",
-      "erase": "Erase…",
-      "eraseHint": "Blank the person’s details for good; documents the law keeps stay (art. 17)."
+      "erase": "Erase…"
     },
     "problem": {
       "basis": "Pick the lawful basis.",
@@ -473,10 +435,6 @@
     "PROSPECT": "Prospect",
     "ACTIVE": "Active",
     "BLOCKED": "Blocked",
-    "ARCHIVED": "Archived"
-  },
-  "contactStatus": {
-    "ACTIVE": "Active",
     "ARCHIVED": "Archived"
   }
 }

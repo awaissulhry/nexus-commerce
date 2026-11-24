@@ -58,10 +58,6 @@
     "profiles": "Non mostrato: il tuo ruolo non vede i profili di misura.",
     "repairs": "Non mostrato: il tuo ruolo non vede le riparazioni."
   },
-  "glance": {
-    "more_one": "altro {count}",
-    "more_other": "altri {count}"
-  },
   "now": {
     "title": "Adesso"
   },
@@ -69,28 +65,10 @@
     "title": "Campioni in corso"
   },
   "profiles": {
-    "title": "Profili di misura",
-    "hint": "L’ultima revisione per pilota e capo; le misure restano nel profilo.",
-    "none": "Nessun profilo di misura per questo cliente.",
-    "noneRider": "Ancora nessun profilo di misura per questo pilota.",
-    "col": {
-      "rider": "Pilota",
-      "garment": "Capo",
-      "revision": "Revisione",
-      "base": "Taglia più vicina",
-      "taken": "Misurato il"
-    },
-    "rev": "Rev. {revision}"
+    "title": "Profili di misura"
   },
   "riders": {
-    "title": "Piloti",
-    "hint": "Le persone sotto questa squadra o rivenditore.",
-    "none": "Nessun pilota sotto questo cliente.",
-    "col": {
-      "rider": "Pilota",
-      "status": "Stato",
-      "profiles": "Profili"
-    }
+    "title": "Piloti"
   },
   "status": {
     "notOnHold": "Non in blocco.",
@@ -272,34 +250,18 @@
   },
   "privacy": {
     "title": "Dati personali dei contatti",
-    "hint": "Perché possiamo tenere i dati di ogni persona (GDPR art. 6), il loro consenso e cosa possono chiedere: una copia di ciò che teniamo (art. 15) e la cancellazione (art. 17).",
-    "notRecorded_one": "{count} contatto non ha ancora una base giuridica registrata.",
-    "notRecorded_other": "{count} contatti non hanno ancora una base giuridica registrata.",
-    "none": "Ancora nessun contatto.",
-    "col": {
-      "contact": "Contatto",
-      "basis": "Base giuridica",
-      "consent": "Consenso",
-      "objection": "Opposizione",
-      "state": "Stato"
-    },
     "erasedName": "Contatto cancellato",
     "basisMissing": "Non registrata",
     "objectedOn": "Opposizione {date}",
     "erased": "Cancellato",
     "erasedOn": "{date} da {by}",
-    "menu": "Azioni sui dati personali di {name}",
     "rule": "I dati personali restano in questa scheda: mai un filtro, un raggruppamento o un totale.",
     "openPortal": "Apri Accesso al portale",
     "act": {
       "basis": "Registra la base giuridica…",
-      "basisHint": "Perché possiamo tenere i dati di questa persona.",
       "objection": "Registra un’opposizione…",
-      "objectionHint": "La persona si oppone a come usiamo i suoi dati (art. 21).",
       "copy": "Copia dei dati…",
-      "copyHint": "Tutto ciò che teniamo sulla persona (art. 15).",
-      "erase": "Cancella…",
-      "eraseHint": "Cancella per sempre i dati della persona; i documenti che la legge conserva restano (art. 17)."
+      "erase": "Cancella…"
     },
     "problem": {
       "basis": "Scegli la base giuridica.",
@@ -473,10 +435,6 @@
     "PROSPECT": "Potenziale",
     "ACTIVE": "Attivo",
     "BLOCKED": "Bloccato",
-    "ARCHIVED": "Archiviato"
-  },
-  "contactStatus": {
-    "ACTIVE": "Attivo",
     "ARCHIVED": "Archiviato"
   }
 }

@@ -138,7 +138,7 @@ export function addressMenu(row: AddressRow, context: AddressMenuContext): Addre
   }
   groups.push(own)
   groups.push([copy, ...(can.audit ? [{ id: 'history', label: said('row.history'), href: `${context.prefix}/admin/audit?${new URLSearchParams({ type: 'PartyAddress', record: address.id }).toString()}` }] : [])])
-  if (can.manage) groups.push([address.status === 'ACTIVE' ? { id: 'archive', label: said('parties:address.archive'), act: 'archive', ...(held ? { held } : {}) } : { id: 'restore', label: said('parties:address.restore'), act: 'restore', ...(held ? { held } : {}) }])
+  if (can.manage) groups.push([address.status === 'ACTIVE' ? { id: 'archive', label: said('row.archive') /* F-CA-217: the NEW window */, act: 'archive', ...(held ? { held } : {}) } : { id: 'restore', label: said('parties:address.restore'), act: 'restore', ...(held ? { held } : {}) }])
   groups.push([link])
   const items: AddressItem[] = []
   groups

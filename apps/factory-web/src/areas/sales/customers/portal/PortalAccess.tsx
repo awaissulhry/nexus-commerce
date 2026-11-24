@@ -51,15 +51,16 @@ const SENTENCE: Readonly<Record<RowAction, string>> = {
  * freeze points), Apply after a fresh code, the freeze dialog; "Open My production as …" previews `/p/<code>/production`.
  */
 /**
- * F-SA-274: `parts` — what this mount draws (a customer's Portal settings and People & addresses each mount their own; default every
- * part); `contactEmails` tag people who are also contacts; `onPeople` hands the page the people's e-mails (its contacts' "Has portal
- * access"); an address `?invite=<e-mail>&inviteName=` opens the invitation filled in, once.
+ * F-SA-274: `parts` — what this mount draws (a customer's Portal settings draws its own; default every part); an address
+ * `?invite=<e-mail>&inviteName=` opens the invitation filled in, once (People & addresses, through usePortalAccess below).
+ * F-CA-229 (customer People & addresses ca-w2 W2.5): the e-mail tags between contacts and portal people went — People draws ONE row
+ * per person (cu/record/people).
  */
-export function PortalAccess({ side, party, parts, contactEmails, onPeople }: { side: PortalSide; party: { id: string; name: string; companyId: string | null }; parts?: readonly PortalPart[]; contactEmails?: ReadonlySet<string>; onPeople?: (emails: ReadonlySet<string>) => void }) {
+export function PortalAccess({ side, party, parts }: { side: PortalSide; party: { id: string; name: string; companyId: string | null }; parts?: readonly PortalPart[] }) {
   // F-CA-102 (customer People & addresses, lane ca-; 13-backend §3; Z13): the container's state and acts live in usePortalAccess (below,
   // moved as is) so People & addresses opens the same windows in place; this mount draws them with the tab's view, as before.
-  const { model, actions } = usePortalAccess({ side, party, parts, onPeople })
-  return <PortalAccessView parts={parts} contactEmails={contactEmails} model={model} actions={actions} />
+  const { model, actions } = usePortalAccess({ side, party, parts })
+  return <PortalAccessView parts={parts} model={model} actions={actions} />
 }
 
 /** F-CA-102: what a mount of the portal container asks — its side, the party, the parts it draws; `enabled` false reads nothing (absent: on). */
@@ -67,7 +68,6 @@ export interface PortalAccessInput {
   readonly side: PortalSide
   readonly party: { id: string; name: string; companyId: string | null }
   readonly parts?: readonly PortalPart[] | undefined
-  readonly onPeople?: ((emails: ReadonlySet<string>) => void) | undefined
   /** F-CA-102: a mount that is not shown yet (People & addresses on another tab) reads and listens to nothing. Absent: on. */
   readonly enabled?: boolean | undefined
 }
@@ -77,7 +77,7 @@ export interface PortalAccessInput {
  * mount draws them, R-B15), its live events, every change after a fresh code when asked, the dialogs' state. A mount draws `model`
  * with `actions` (PortalAccessView, or People & addresses' rows with PortalDialogs).
  */
-export function usePortalAccess({ side, party, parts, onPeople, enabled }: PortalAccessInput): { model: PortalAccessModel; actions: PortalAccessActions } {
+export function usePortalAccess({ side, party, parts, enabled }: PortalAccessInput): { model: PortalAccessModel; actions: PortalAccessActions } {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const can = useMemo(() => partnerCan(session.permissions), [session.permissions])
@@ -228,9 +228,7 @@ export function usePortalAccess({ side, party, parts, onPeople, enabled }: Porta
 
   const today = dayOf(now)
 
-  // ---- F-SA-274: the people's e-mails for the page (its contacts' tags), and an invitation asked by the address, once it can open.
-  const peopleEmails = useMemo(() => new Set((access?.people ?? []).filter((person) => person.status !== 'DEACTIVATED').map((person) => person.email.trim().toLowerCase())), [access])
-  useEffect(() => onPeople?.(peopleEmails), [onPeople, peopleEmails])
+  // ---- F-SA-274: an invitation asked by the address, once it can open.
   const search = useSearchParams()
   const invited = useRef(false)
   useEffect(() => {

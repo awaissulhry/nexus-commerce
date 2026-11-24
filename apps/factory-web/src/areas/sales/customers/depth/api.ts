@@ -235,7 +235,8 @@ export async function readPrivacy(api: ApiClient, partyId: string, signal?: Abor
 export async function setLawfulBasis(api: ApiClient, partyId: string, contactId: string, body: { version: number; lawfulBasis: LawfulBasis; consentAt: string | null; consentSource: string | null }, key: string): Promise<Privacy> {
   return (await api.request('PUT', `${party(partyId)}/contacts/${enc(contactId)}/lawful-basis`, { body, schema: privacySchema, ...write(key) })).privacy
 }
-export async function recordObjection(api: ApiClient, partyId: string, contactId: string, body: { version: number; words: string }, key: string): Promise<Privacy> {
+// F-CA-228 (ca-w2 W2.5; R-B7): + `at`, the day the person objected (the API records it; absent: now).
+export async function recordObjection(api: ApiClient, partyId: string, contactId: string, body: { version: number; words: string; at?: string | null }, key: string): Promise<Privacy> {
   return (await api.post(`${party(partyId)}/contacts/${enc(contactId)}/objection`, { body, schema: privacySchema, ...write(key) })).privacy
 }
 
