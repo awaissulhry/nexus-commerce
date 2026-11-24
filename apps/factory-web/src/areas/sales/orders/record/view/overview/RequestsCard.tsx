@@ -1,7 +1,6 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Card } from '@nexus/ui/components'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import type { Order } from '../../../api'
 import { readOnlyOnPage } from '../../../model' // F-OO-205: Read-only sees no moves (the band's own rule)
@@ -18,6 +17,7 @@ import { useSearchParams } from 'next/navigation'
 import { tabHref } from '../../../../../_shared/record-frame/address'
 import { TabLink } from '../../../../../../lib/tab-link/TabLink'
 import './requests.css' // F-OO-205: the card's own rows
+import { OverviewCard } from '../../../../../_shared/record-overview/Overview' // F-CO-K1: the card's frame is the shared overview kit's
 
 /** F-OO-205 (11-design §5.2, Q10): the rows a customer's or a Still to do group shows before "N more on Changes ›"; every row waiting on us shows. */
 export const REQUESTS_SHOWN = 3
@@ -56,13 +56,15 @@ export function RequestsCard({ order, model, actions, waiting }: { order: Order;
       </TabLink>
     ) : null
   return (
-    <Card padded className="fw-so-rq">
-      <div className="fw-so-card-head">
-        <h2 className="fw-so-h2">{t('overview.requests.title')}</h2>
+    <OverviewCard
+      className="fw-so-rq"
+      title={t('overview.requests.title')}
+      aside={
         <TabLink className="fw-so-link fw-so-hint" href={changes}>
           {t('requests.changesCount', { count: changesBadgeOf(card) })}
         </TabLink>
-      </div>
+      }
+    >
       {card.nothing ? (
         <div className="fw-so-stack-tight">
           <p className="fw-so-hint">{t('overview.requests.nothing')}</p>
@@ -97,7 +99,7 @@ export function RequestsCard({ order, model, actions, waiting }: { order: Order;
         </div>
       )}
       {told !== null && <p className="fw-so-hint fw-so-rq-foot">{t('told.aboutChanges', { count: told })}</p>}
-    </Card>
+    </OverviewCard>
   )
 }
 

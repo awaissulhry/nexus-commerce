@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { ChevronDown } from 'lucide-react' // F-OO-126
-import { Card, EmptyState, Menu, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
+import { EmptyState, Menu, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
 import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
 import { DetailModal } from '../../../../../../lib/i18n/ds-parts'
 import { formatDate, formatTime } from '../../../../../../lib/i18n/format'
@@ -32,6 +32,7 @@ import { PartState } from '../OrderRecordView'
 import { useSearchParams } from 'next/navigation'
 import { tabHref } from '../../../../../_shared/record-frame/address'
 import { TabLink } from '../../../../../../lib/tab-link/TabLink'
+import { OverviewCard } from '../../../../../_shared/record-overview/Overview' // F-CO-K1: the card's frame is the shared overview kit's (after ./progress.css)
 
 /**
  * F-OO-100 (order overview lane: one file per card) — "Progress by line", moved out of OverviewTab.tsx unchanged (F-SA-232: the
@@ -134,14 +135,13 @@ export function ProgressCard({ order, model, actions }: { order: Order; model: O
   const moves = useLineMoves(order, model, actions) // F-OO-122 (a hook: before the early returns)
   if (!state || state.status === 'loading') {
     return (
-      <Card padded aria-busy="true">
-        <h2 className="fw-so-h2">{t('overview.progress')}</h2>
+      <OverviewCard busy title={t('overview.progress')}>
         <div className="fw-so-stack" role="status" aria-label={w.t('parts.pieces.loading')}>
           {[0, 1, 2].map((index) => (
             <Skeleton key={index} height={22} />
           ))}
         </div>
-      </Card>
+      </OverviewCard>
     )
   }
   if (state.status === 'failed' || !read?.lines) return <PartState problem={state.status === 'failed' ? state.problem : 'problem.read.internal'} label={t('overview.progress')} onRetry={() => actions?.onRetryProduction?.()} />
@@ -155,12 +155,9 @@ export function ProgressCard({ order, model, actions }: { order: Order; model: O
   const columns = [t('overview.col.line'), ...LINE_COLUMNS.map((column) => w.t(`parts.pieces.stages.${COLUMN_STAGE[column]}`)), ...(moves.shown ? [t('wo.col.acts')] : [])]
   const open = model.overviewLine ? (rows.find((row) => row.id === model.overviewLine) ?? null) : null
   return (
-    <Card padded>
-      {/* F-OO-121: the hint went; "Pieces as of 19:36" stands at the head's right (OW-7: said, never hidden). */}
-      <div className="fw-so-card-head">
-        <h2 className="fw-so-h2">{t('overview.progress')}</h2>
-        {rows.length > 0 && <span className="fw-so-hint">{t('overview.piecesAsOf', { time: formatTime(read.asOf, { locale }) })}</span>}
-      </div>
+    // F-OO-121: the hint went; "Pieces as of 19:36" stands at the head's right (OW-7: said, never hidden). F-CO-K1: the head row stays
+    // when no line is there to say it of (`aside` null, not left out).
+    <OverviewCard title={t('overview.progress')} aside={rows.length > 0 ? <span className="fw-so-hint">{t('overview.piecesAsOf', { time: formatTime(read.asOf, { locale }) })}</span> : null}>
       {rows.length === 0 ? (
         <EmptyState title={w.t('parts.pieces.none')} />
       ) : (
@@ -214,7 +211,7 @@ export function ProgressCard({ order, model, actions }: { order: Order; model: O
         </>
       )}
       {open && <LineSizes order={order} row={open} rows={rows} label={nameOf(open)} sub={subOf(open)} pills={linePillsOf(open, pillInput, Number.POSITIVE_INFINITY)} moves={moves} model={model} actions={actions} />}
-    </Card>
+    </OverviewCard>
   )
 }
 

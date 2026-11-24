@@ -105,7 +105,10 @@ describe('F-OO-131: People — one aligned list, label | value | one door; Follo
 
   it('the source: Followers in the head (its own words), the rows on the shared card row, no Made by and no Told line left', () => {
     const view = source('../view/overview/PeopleCard.tsx')
-    expect(view.indexOf('<FollowersDoor />')).toBeGreaterThan(view.indexOf('<div className="fw-so-card-head">'))
+    // F-CO-K1 (K1.3): the head is the kit's card's — Followers is its right side (`aside`).
+    expect(view.indexOf('<OverviewCard ')).toBeGreaterThan(-1)
+    expect(view.indexOf('<FollowersDoor />')).toBeGreaterThan(view.indexOf('<OverviewCard '))
+    expect(view).toContain('aside={<FollowersDoor />}')
     expect(view.indexOf('<FollowersDoor />')).toBeLessThan(view.indexOf('fw-so-people-list'))
     expect(view).toContain("import './people.css'")
     expect(view).not.toContain('madeBy')
@@ -370,7 +373,7 @@ describe('F-OO-135: People › "Followers · N ›" — the reported count shown
   const inFrame = (thread: boolean, locale: 'en' | 'it' = 'en') =>
     render(createElement(RecordFrame, { recordType: 'SalesOrder', personId: 'u1', band, thread: thread ? createElement('div', null, 'thread') : null, threadLabel: 'The order’s thread', record: { type: 'SalesOrder', id: value.id }, children: createElement(PeopleCard, { order: value, model: record }) }), locale)
   /** The card's head (title and its link), before the rows. */
-  const headOf = (html: string) => html.slice(html.indexOf('<div class="fw-so-card-head">'), html.indexOf('<ul class="fw-so-people-list">'))
+  const headOf = (html: string) => html.slice(html.indexOf('<div class="fw-ro-head">') /* F-CO-K1: the kit's card head */, html.indexOf('<ul class="fw-so-people-list">'))
 
   it('the reported count is shown: "Followers · 4 ›" / "Chi segue · 4 ›"; none known yet: "Followers ›"; a count of 0 is said too', () => {
     const link = (count: number | null, locale: 'en' | 'it' = 'en') => textOf(render(createElement(FollowersLink, { count, onOpen: () => undefined }), locale))
