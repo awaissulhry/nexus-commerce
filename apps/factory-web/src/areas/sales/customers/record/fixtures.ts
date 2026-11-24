@@ -14,6 +14,7 @@ import { withheldParts } from '@nexus/factory-domain/sales/customer-360/glance' 
 import { moneyTabDemo } from '../money/_demo/fixtures' // F-CM-104: the Money tab's made-up reads
 import { CustomerMoneyTab } from './view/money/CustomerMoneyTab' // F-CM-104: the Money tab's view
 import { CM_CASES, cmHeld, CmMoneyDesign, type CmCaseModel } from './money/_demo/fixtures' // F-CM T.1: the Money tab's cm-* cases
+import { CA_CASES, caHeld, CaPeopleDesign, type CaCaseModel } from './people/_demo/fixtures' // F-CA T.1: the People tab's ca-* cases
 import type { CustomerMoneyModel } from '../money/overview'
 import { CustomerRecordView } from './view/CustomerRecordView'
 // F-SA-272 → F-CO-201: who looks after the customer, as People's rows and their two Change… windows (made-up people of the portal demo).
@@ -174,7 +175,7 @@ const OPEN_ORDER_MONEY: OpenOrderMoney[] = [
 /** A case: the record, (B-W2a-49) the Commercial terms card of its Terms & requirements tab (B-TH-260), (B-W2a-81) its money and after-sales reads, (B-W2b-324) its depth. */
 // F-SA-272: + the Overview's "Who looks after <customer>" card (the supervisor and backup, moved from Portal settings).
 // F-SA-274 → F-CA-120: + People's portal (one row per person: the portal state on the contact of the same e-mail).
-type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase; supervisor?: SupervisorModel; people?: PeopleCase /* F-CA-120 */; work?: WorkCase /* F-SA-276 */; designer?: DesignerModel /* F-CP-155 */; priceDiffer?: number /* F-CP-141 */; shipmentLine?: boolean /* cw T.1: the docked ORDER's thread with the draft shipment's office line */; supervisorOpen?: boolean /* F-CO-201: People's Change… (the supervisor) open — the form's own states */; overview?: OverviewOver /* F-CO-301: the Overview's own state */; cm?: CmCaseModel /* F-CM T.1: a cm-* case of the Money tab */ }
+type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase; supervisor?: SupervisorModel; people?: PeopleCase /* F-CA-120 */; work?: WorkCase /* F-SA-276 */; designer?: DesignerModel /* F-CP-155 */; priceDiffer?: number /* F-CP-141 */; shipmentLine?: boolean /* cw T.1: the docked ORDER's thread with the draft shipment's office line */; supervisorOpen?: boolean /* F-CO-201: People's Change… (the supervisor) open — the form's own states */; overview?: OverviewOver /* F-CO-301: the Overview's own state */; cm?: CmCaseModel /* F-CM T.1: a cm-* case of the Money tab */; ca?: CaCaseModel /* F-CA T.1: a ca-* case of the People tab */ }
 
 // F-CA-120: what a People case adds — the portal of THIS customer as its container would read it (null: none read).
 interface PeopleCase {
@@ -1020,7 +1021,7 @@ const warning = (code: Party['warnings'][number]['code'], blocksInvoice: boolean
 // ---- end F-CO-301 (helpers)
 
 function CustomerDesign({ model }: { model: CustomerCase }) {
-  const { terms, money, depth, supervisor, people, work, designer, priceDiffer, shipmentLine, supervisorOpen, overview, ...record } = model
+  const { terms, money, depth, supervisor, people, work, designer, priceDiffer, shipmentLine, supervisorOpen, overview, ca, ...record } = model
   // ---- cq W3 (T part 2): Quotes & incoming — the tab's own gallery parts (quotes-tab/fixtures.ts) for this customer; a Work case's
   // portal drafts are its "Customer is writing" (F-CQ-303).
   const quotesIncoming = record.party && record.tab === 'quotes' ? (work?.drafts ? createElement(DraftsTabDesign, { work, party: record.party }) : createElement(QuotesTabDesign, { model: quotesTabFor({ id: record.party.id, name: record.party.tradeName ?? record.party.legalName }) })) : null
@@ -1039,14 +1040,17 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
   // rule over the case's models; today's riders / profiles and personal-data cards under it (the depth slot's, until ca-w2).
   const nodes = depthNodes(depth)
   const portal = record.can.partners ? (people?.portal ?? null) : null
+  // F-CA T.1: a ca-* case draws the tab from its customer's reads, in its room, with a window's inside under it (people/_demo/fixtures.ts).
   const peopleTab =
     party && shownTab(recordTabs(SIDES.customers, record.can), record.tab) === 'people'
-      ? createElement(PeopleTab, {
-          model: peopleTabModel({ party, prefix: record.prefix, can: peopleCanOf(record.can, depth?.privacy?.can), now: NOW, portal, privacy: depth?.privacy?.read ?? privacyOfCase(party), usage: null, approverId: null, profiles: null, riders: ridersOfCase(party, depth?.glance) }, PEOPLE_TAB_START),
-          portal: portal ? { model: portal } : null,
-          recordHref: `${record.prefix}/sales/customers/${id}`,
-          privacy: depth?.privacy ? { model: depth.privacy } : null /* F-CA-226: the case's personal-data windows (its dialog cases draw them) */,
-        })
+      ? ca
+        ? createElement(CaPeopleDesign, { ca })
+        : createElement(PeopleTab, {
+            model: peopleTabModel({ party, prefix: record.prefix, can: peopleCanOf(record.can, depth?.privacy?.can), now: NOW, portal, privacy: depth?.privacy?.read ?? privacyOfCase(party), usage: null, approverId: null, profiles: null, riders: ridersOfCase(party, depth?.glance) }, PEOPLE_TAB_START),
+            portal: portal ? { model: portal } : null,
+            recordHref: `${record.prefix}/sales/customers/${id}`,
+            privacy: depth?.privacy ? { model: depth.privacy } : null /* F-CA-226: the case's personal-data windows (its dialog cases draw them) */,
+          })
       : null
   // F-CA-120: end
   return inShell(
@@ -1314,6 +1318,11 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     // F-CA-120 (Z1): a contact and the portal person with its e-mail are ONE row (its portal state on it); a portal person who is no contact
     // is "Portal only"; ⋯ Invite to the portal… for the other contact (the portal's own window, in place).
     { id: 'people-portal', label: 'F-SA-274 → F-CA-120 · People & addresses: one row per person — the contact with portal access shows its portal state; a portal-only person; ⋯ Invite to the portal… for the others', model: { ...record('MODA-DEMO', { tab: 'people', can: { ...RECORD_CAN, partners: true } }), people: { portal: portalDemo('customers', { access: customerAccess({ people: PEOPLE_PORTAL }) }) } } },
+    // ---- F-CA T.1 (ca-t; 15-steps T.1): the People tab's ca-* cases — the customers of the picture (with what each person and address is
+    // used on), no partners.view, no sales.measurements.view, each read reading and failed, the office roles (their template's REAL
+    // grant), the rooms 343 / 865 / 1314 / 1794, and the NEW windows' insides on a plain card (people/_demo/fixtures.ts).
+    ...CA_CASES.map((item) => ({ id: item.id, label: item.label, model: { ...recordModel('customers', item.ca.customer.party, { tab: 'people', can: recordCanOf(new Set(caHeld(item.ca))) }), ca: item.ca } })),
+    // ---- end F-CA T.1
     // ---- B-TH-260: the thread docked (the rule of picture 38); Activity and Documents are gone, their tools in the thread's "⋯" (R-ACT)
     // and its Files view.
     { id: 'thread-docked', label: 'TH-6 · The customer’s thread docked beside the Overview (40 %): Reply to this customer only', model: record('MODA-DEMO'), note: 'The band sits in the shell’s band row with ONE pill; "Projects (2)" opens this customer’s projects. The thread is docked at 40 %, sticky while the body scrolls, ⌘J hides it. Its "⋯" holds Activity’s tools (Add task, Ask a partner to approve, Share with a partner, Followers, Remind me); its Files view the old Documents tab’s files. An old ?tab=activity or ?tab=documents opens the thread; ?tab=tax and ?tab=requirements land on Terms & requirements.' },
