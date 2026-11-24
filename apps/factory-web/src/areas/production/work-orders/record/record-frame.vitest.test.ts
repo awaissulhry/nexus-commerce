@@ -118,7 +118,9 @@ describe('B-TH-265 — the work order on RecordFrame', () => {
     const dock = textOf(dockOf(html))
     // tw- W2.1 (Z4): the pick is the head's title — ONE menu (its rows closed on the server render): the order picked by its label,
     // whose thread it is in its hover words; the work order's notes are its other row.
-    expect(dock).toContain(`${WO.orders[0]!.number} · ${WO.orders[0]!.partyName}`)
+    // tw- fx2 (walk G-21): the visible title is the order's number; the pick's name (its aria-label) says whose thread it is.
+    expect(dock).toContain(WO.orders[0]!.number)
+    expect(dockOf(html)).toContain(`${WO.orders[0]!.number} · ${WO.orders[0]!.partyName}`)
     expect(dockOf(html)).toContain(`is shared with ${WO.orders[0]!.partyName}`)
     expect(readFileSync(new URL('./view/WorkOrderThreads.tsx', import.meta.url), 'utf8')).toContain("{ value: 'workOrder', label: t('thread.workOrder')")
     expect(html.match(/class="fw-rt-column[ "]/g)?.length).toBe(1)

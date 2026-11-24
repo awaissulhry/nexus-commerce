@@ -316,7 +316,10 @@ describe('B-TH-266: the NCR on RecordFrame — five tabs, its own thread docked 
     const dock = textOf(page.slice(page.indexOf('class="fw-rcf-dock"')))
     // The docked thread is the NCR's own (the band names NCR-DEMO-0031; the dock reads its notes) and says it has no outside party.
     expect(page).toContain('aria-label="The NCR’s thread"')
-    expect(dock).toContain('This record has no customer: notes only.')
+    // tw- fx2 (walk G-15): no helper sentence — the composer's ONE audience is a fixed "Office note" chip (no menu, no customer way).
+    expect(page).toContain('class="fw-rt-cx-chipbtn is-static"')
+    expect(dock).toContain('Office note')
+    expect(dock).not.toMatch(/In the portal/)
     expect(dock).not.toMatch(/Reply to/)
     expect(dock).not.toMatch(/Brand Alpha|Brand Beta/)
     expect(textOf(html('thread-docked', 'it'))).toContain('Problema ed evidenze')
