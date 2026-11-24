@@ -91,12 +91,9 @@ const MARK: Readonly<Record<StripKind, ReactNode>> = {
   urgency: <Flag size={14} aria-hidden />,
 }
 
-/** A door's arrow never stands alone on a line: the space before "›" does not break. */
-const glued = (words: string): string => words.replace(/ ›$/, `${String.fromCharCode(160)}›`)
-
 interface Words {
   readonly said: (words: Say) => string
-  /** A door's words: "<label> ›" (the kit's own word) when it leaves the card. */
+  /** A door's words: "<label> ›" (the kit's own word, S31: its "›" never stands alone on a line) when it leaves the card. */
   readonly doorWords: (door: LabelledDoor) => string
 }
 
@@ -108,7 +105,7 @@ function Cards({ model, band, before = [], actions, supervisor, fields }: Custom
   const tools = useMemo(() => sayToolsOf(locale, t), [locale, t])
   const words: Words = {
     said: (say) => sayOf(say, tools),
-    doorWords: (door) => (door.arrow ? glued(kit.door(sayOf(door.label, tools))) : sayOf(door.label, tools)),
+    doorWords: (door) => (door.arrow ? kit.door(sayOf(door.label, tools)) : sayOf(door.label, tools)),
   }
   const { said } = words
   const customer = model.customer
