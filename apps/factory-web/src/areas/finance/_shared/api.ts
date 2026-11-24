@@ -74,6 +74,8 @@ export const invoiceRowSchema = z.object({
   dueDate: z.string().nullable().default(null),
   version: z.number(),
   createdAt: instant,
+  // F-CM-202 (customer MONEY tab; the API's S8, cm-s): the number of the order it bills (not money). Optional: an older API sends none.
+  orderNumber: z.string().nullable().optional(),
 })
 export type InvoiceRow = z.infer<typeof invoiceRowSchema>
 
@@ -87,11 +89,13 @@ export interface InvoiceQuery {
   partyId?: string | null
   cursor?: string | null
   limit?: number
+  /** F-CM-202 (customer MONEY tab): one company (the API's own term); absent: the request of today. */
+  companyId?: string | null
 }
 
 export function listInvoices(api: ApiClient, query: InvoiceQuery, signal?: AbortSignal): Promise<InvoicePage> {
   return api.get('/invoicing/invoices', {
-    query: { docType: query.docType ?? undefined, status: query.status ?? undefined, partyId: query.partyId ?? undefined, cursor: query.cursor ?? undefined, limit: query.limit ?? 50 },
+    query: { docType: query.docType ?? undefined, status: query.status ?? undefined, partyId: query.partyId ?? undefined, cursor: query.cursor ?? undefined, limit: query.limit ?? 50, companyId: query.companyId ?? undefined },
     schema: pageSchema,
     signal,
   })
@@ -500,11 +504,13 @@ export interface PaymentQuery {
   to?: string | null
   cursor?: string | null
   limit?: number
+  /** F-CM-203 (customer MONEY tab): one company (the API's own term); absent: the request of today. */
+  companyId?: string | null
 }
 
 export function listPayments(api: ApiClient, query: PaymentQuery, signal?: AbortSignal): Promise<PaymentsPage> {
   return api.get('/payments', {
-    query: { status: query.status ?? undefined, partyId: query.partyId ?? undefined, from: query.from ?? undefined, to: query.to ?? undefined, cursor: query.cursor ?? undefined, limit: query.limit ?? 50 },
+    query: { status: query.status ?? undefined, partyId: query.partyId ?? undefined, from: query.from ?? undefined, to: query.to ?? undefined, cursor: query.cursor ?? undefined, limit: query.limit ?? 50, companyId: query.companyId ?? undefined },
     schema: paymentsPageSchema,
     signal,
   })

@@ -97,6 +97,21 @@
 .fw-cm-more { align-self: flex-start; margin-top: var(--nds-space-4); }
 .fw-cm-foot { margin: 0; padding-top: var(--nds-space-6); font-size: var(--nds-font-size-sm); color: var(--nds-text-2); display: flex; flex-wrap: wrap; gap: var(--nds-space-4) var(--nds-space-14); align-items: center; }
 
+/* F-CM-202: the chips of Invoices & credit notes; F-CM-203: a row's chips (what a payment was placed on) */
+.fw-cm-filters { display: flex; flex-wrap: wrap; gap: var(--nds-space-6); align-items: center; }
+.fw-cm-chips { display: flex; flex-wrap: wrap; gap: var(--nds-space-4) var(--nds-space-6); align-items: center; min-width: 0; }
+
+/* (4) F-CM-203: money on account — the amount that sits on no invoice, with its two acts (one line when the room has it) */
+.fw-cm-acct { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8) var(--nds-space-16); padding: var(--nds-space-10) var(--nds-space-12); border: 1px solid var(--nds-border-subtle); border-left: 3px solid var(--nds-warning); border-radius: var(--nds-radius-lg); background: var(--nds-surface-raised); min-width: 0; scroll-margin-top: 96px; }
+.fw-cm-acct-t { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: var(--nds-space-2); font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+.fw-cm-acct-t > b { font-size: var(--nds-font-size-md); font-weight: var(--nds-font-weight-bold); color: var(--nds-text); font-variant-numeric: tabular-nums; }
+.fw-cm-acct-a { display: flex; gap: var(--nds-space-6); flex-wrap: wrap; align-items: center; }
+@container sec (max-width: 559px) {
+  .fw-cm-acct-a { flex: 1 1 100%; }
+  .fw-cm-acct-a > * { min-height: 44px; flex: 1 1 auto; justify-content: center; }
+}
+.fw-cm-blk[id] { scroll-margin-top: 96px; }
+
 /* (6) the sections with nothing: their quiet lines share ONE card at the foot of the tab */
 .fw-cm-none { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
 .fw-cm-none > li { display: flex; flex-wrap: wrap; gap: var(--nds-space-2) var(--nds-space-10); padding: var(--nds-space-6) var(--nds-space-2); border-bottom: 1px solid var(--nds-border-subtle); font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); scroll-margin-top: 96px; }

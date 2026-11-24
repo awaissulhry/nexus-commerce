@@ -3,6 +3,7 @@
 import { Fragment, type CSSProperties, type ReactNode } from 'react'
 import Link from 'next/link'
 import { MetricStrip, type MenuItemDef, type Metric } from '@nexus/ui/components'
+import { Button } from '@nexus/ui/primitives' // F-CM-204
 import { useLocale } from '../../../../../../lib/i18n/provider'
 import { money } from '../../../../quotes/model'
 import { Facts, GapRow } from '../../../../orders/record/money/view/parts'
@@ -36,7 +37,7 @@ function TileLink({ href, className, title, children }: { href: string; classNam
 }
 
 /** The words of a section a need scrolls to ("To collect ↓"); a section not drawn yet has none (its need takes its address). */
-const DOWN_TITLE: Readonly<Record<string, string>> = { collect: 'cm.collect.title' }
+const DOWN_TITLE: Readonly<Record<string, string>> = { collect: 'cm.collect.title', invoices: 'orders:moneyTab.invoices.title' /* F-CM-202 */, received: 'cm.received.title', 'on-account': 'cm.received.title', 'give-back': 'cm.balance.giveBack' /* F-CM-203 */ }
 
 export interface BalanceSectionProps {
   readonly model: BalanceModel
@@ -52,9 +53,11 @@ export interface BalanceSectionProps {
   /** The page's money read failed (an `orders` problem key) — one line with its own Try again. */
   readonly failed: string | null
   readonly onRetry: () => void
+  /** F-CM-204: "Record a payment ›" — Finance's window with this customer chosen (payments.record + price); null: not drawn. */
+  readonly recordPaymentHref?: string | null
 }
 
-export function BalanceSection({ model, present, sayIn, unit, asOf, menu, failed, onRetry }: BalanceSectionProps) {
+export function BalanceSection({ model, present, sayIn, unit, asOf, menu, failed, onRetry, recordPaymentHref }: BalanceSectionProps) {
   const locale = useLocale()
   const say = sayIn(unit)
   const title = say(word('cm.balance.title'))
@@ -97,7 +100,23 @@ export function BalanceSection({ model, present, sayIn, unit, asOf, menu, failed
     </>
   )
   return (
-    <Section id={kitId('balance')} title={title} answer={model.answer.map(say).join(' · ')} asOf={asOf} more={<LineMenuButton label={say(word('cm.balance.more'))} items={items} />} info={info}>
+    <Section
+      id={kitId('balance')}
+      title={title}
+      answer={model.answer.map(say).join(' · ')}
+      asOf={asOf}
+      buttons={
+        recordPaymentHref
+          ? [
+              <Button key="record" size="sm" asChild>
+                <Link href={recordPaymentHref}>{`${say(word('finance:recordPay.title'))} ›`}</Link>
+              </Button>,
+            ]
+          : []
+      }
+      more={<LineMenuButton label={say(word('cm.balance.more'))} items={items} />}
+      info={info}
+    >
       <div className="fw-cm-bal">
         {failed ? <PartFailed part={say(word('cm.balance.part'))} problem={failed} onRetry={onRetry} /> : null}
         {model.reading && !failed ? <PartReading rows={3} /> : null}
