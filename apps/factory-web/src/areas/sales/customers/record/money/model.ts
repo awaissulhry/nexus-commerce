@@ -9,6 +9,7 @@ import type { CustomerReturn, OpenOrderMoney } from '../../money/api'
 import { doorCanOf, type DoorCan } from '../../../orders/record/money/door/model' // F-CM-201: a row's acts are the money door's rule
 import { stopsCanOf } from '../../../../finance/receivables/reminder-stops/model' // F-CM-201: Finance's own rule decides the stop's door
 import { readProblem } from '../../../orders/model' // cm-fx2: the orders catalogue's own key of a failed read (its rule, never a literal here)
+import type { CommercialTerms } from '../../terms/api' // M-2 (cm-fx4)
 
 /**
  * F-CM-101 (customer page › MONEY tab, 10-design §1–§4; 18-lead-settles Z3–Z11, Z18–Z25) — what the customer's Money tab is handed and
@@ -110,6 +111,14 @@ export const READING: Part<never> = { value: null, problem: null }
 export const partReady = <T>(value: T): Part<T> => ({ value, problem: null })
 export const partFailed = (problem: string): Part<never> => ({ value: null, problem })
 export const isReading = (part: Part<unknown> | null): boolean => part !== null && part.value === null && part.problem === null
+
+/**
+ * M-2 (cm-fx4): the customer's payment terms in ONE place, for Balance and Credit & terms alike — the commercial terms first (their
+ * named terms, else their own text), the party's field as the fallback; null: none anywhere.
+ */
+export function paymentTermsOf(terms: CommercialTerms | null, party: MoneyTabInput['party']): string | null {
+  return terms?.paymentTerms?.name ?? terms?.paymentTermsText ?? party.paymentTerms ?? null
+}
 export const isFailed = (part: Part<unknown> | null): boolean => part !== null && part.problem !== null
 
 /** The customer's shipped goods not invoiced yet (GET /invoicing/shipped-not-invoiced?partyId: one customer's row, or none). */
@@ -184,6 +193,11 @@ export interface MoneyTabInput {
   readonly priceDiffer: number | null
   /** F-CM-303 (W3.3): orders with no customer price yet (the same counts read; the price grain); absent: not read. */
   readonly priceMissing?: number | null
+  /**
+   * M-2 (cm-fx4): the customer's commercial terms (the tab's read, made with Balance: the payment terms are said once, from ONE source);
+   * absent or null: not read (the party's own field then).
+   */
+  readonly terms?: Part<CommercialTerms> | null
   /** F-CM-303 (E52): the customer's returns (the page's read: sales.returns.view) — the credit value of this year's; absent: not read. */
   readonly returns?: { readonly rows: readonly CustomerReturn[]; readonly year: string; readonly href: string | null } | null
 }
@@ -230,7 +244,7 @@ export const LIVE_COALESCE_MS = 800
 export const TAB_READS = ['refunds', 'stops', 'reminders', 'summary', 'shipped'] as const
 export type TabRead = (typeof TAB_READS)[number]
 /** F-CM-202: the tab's reads made only when their section nears the room (13-backend §1.4 "scrolling to the end"). */
-export const LAZY_READS = ['documents', 'received', 'refundsMade', 'credit', 'statement', 'priceRows', 'margin'] as const // F-CM-203: + Payments & refunds, its folded Refunds made; F-CM-301…303: + Credit & terms, Statement & reminders, Price check, Margin & cost
+export const LAZY_READS = ['documents', 'received', 'refundsMade', 'credit', 'statement', 'priceRows', 'margin', 'terms' /* M-2 (cm-fx4): Balance's payment terms */] as const // F-CM-203: + Payments & refunds, its folded Refunds made; F-CM-301…303: + Credit & terms, Statement & reminders, Price check, Margin & cost
 export type LazyRead = (typeof LAZY_READS)[number]
 /** What a section's Try again reads again: the page's money reads (the ageing, the open items) or one of the tab's own. */
 export type MoneyRead = 'page' | TabRead | LazyRead

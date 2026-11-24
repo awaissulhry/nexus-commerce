@@ -59,10 +59,13 @@ export function Fold({ open, onToggle, label, hint }: { open: boolean; onToggle:
   )
 }
 
-/** A line of what is left (AlertCircle), or the settled line (`ok`: CheckCircle2): its words, the extra in bold, then its door. */
-export function GapRow({ ok, words, extra, door }: { ok?: boolean; words: ReactNode; extra?: ReactNode; door?: ReactNode }): ReactElement {
+/**
+ * A line of what is left (AlertCircle), or the settled line (`ok`: CheckCircle2): its words, the extra in bold, then its door.
+ * cm-fx4 (M-3): `tone: 'danger'` — a line that is late (data, not a look switch); absent: the markup as before, letter for letter.
+ */
+export function GapRow({ ok, words, extra, door, tone }: { ok?: boolean; words: ReactNode; extra?: ReactNode; door?: ReactNode; tone?: 'danger' }): ReactElement {
   return (
-    <p className={ok ? 'fw-om-gap is-ok' : 'fw-om-gap'}>
+    <p className={ok ? 'fw-om-gap is-ok' : tone === 'danger' ? 'fw-om-gap is-danger' : 'fw-om-gap'}>
       {ok ? <CheckCircle2 size={14} aria-hidden /> : <AlertCircle size={14} aria-hidden />}
       <span>
         {words}
@@ -112,6 +115,8 @@ export interface InvoiceListRow {
   readonly also: { readonly orders: readonly { readonly id: string; readonly number: string; readonly href: string }[]; readonly hidden: number } | null
   /** The sixth column's cell (price grain): the order page hands this order's share, the customer page its order's door. */
   readonly extra: ReactNode
+  /** cm-fx4 (M-8): the ⋯'s own name when the number cannot tell rows apart (two drafts); absent: the number, or "Draft" (as before). */
+  readonly name?: string
 }
 
 /**
@@ -214,7 +219,7 @@ function InvoiceListRowView({ row, price, words, items, onRetrySdi }: { row: Inv
         <div className="fw-om-ir-p">{row.payment ? <Tag tone={row.payment.tone}>{say(row.payment.word)}</Tag> : null}</div>
       ) : null}
       <div className="fw-om-ir-o">
-        <LineMenuButton label={t('moneyTab.invoices.more', { number })} items={[...items]} />
+        <LineMenuButton label={t('moneyTab.invoices.more', { number: row.name ?? number })} items={[...items]} />
       </div>
     </div>
   )

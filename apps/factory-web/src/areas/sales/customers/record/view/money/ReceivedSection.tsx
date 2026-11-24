@@ -68,7 +68,8 @@ export function ReceivedSection({ model, input, made, sayIn, unit, menu, onRetry
     <div key={box.currency} className="fw-cm-acct" id={index === 0 ? 'on-account' : undefined} tabIndex={-1}>
       <div className="fw-cm-acct-t">
         <span className="fw-pt-label">{say(word('cm.received.onAccountTitle'))}</span>
-        <b>{box.amount !== null ? amount(box.amount, box.currency) : say(word('cm.answer.onAccountWords'))}</b>
+        {/* M-13 (cm-fx4): without prices the label says it once ("On account — paid, placed on nothing"): no second line of the same words. */}
+        {box.amount !== null ? <b>{amount(box.amount, box.currency)}</b> : null}
         <span>{box.from && box.waits !== null ? say(word('cm.received.from', { days: { date: box.from.receivedOn }, words: { days: word('cm.days', { params: { count: box.waits } }) } })) : say(word('cm.received.held'))}</span>
       </div>
       <div className="fw-cm-acct-a">
@@ -164,7 +165,7 @@ export function ReceivedSection({ model, input, made, sayIn, unit, menu, onRetry
                   <div className="fw-cm-row-n" />
                   <div className="fw-cm-row-m">{row.amount !== null ? <span className="fw-om-amt">{amount(row.amount, row.refund.currency)}</span> : null}</div>
                   <div className="fw-cm-row-a" />
-                  <div className="fw-cm-row-o">{menuItems.length > 0 ? <LineMenuButton label={rowSay(word('cm.collect.rowMore', { params: { row: rowSay(row.title) } }))} items={menuItems} /> : null}</div>
+                  <div className="fw-cm-row-o">{menuItems.length > 0 ? <LineMenuButton label={rowSay(word('cm.collect.rowMore', { params: { row: row.day ? `${rowSay(row.title)} · ${rowSay(word('cm.received.madeOn', { days: { date: row.day } }))}` : rowSay(row.title) } }))} items={menuItems} /> : null /* M-8 (cm-fx4): named with its day */}</div>
                 </div>
               </div>
             )
@@ -252,7 +253,7 @@ function GiveBackRowView({ row, say, amount, onRefund, onMove }: { row: GiveBack
         <div className="fw-cm-row-m">{amount !== null ? <span className="fw-om-amt">{amount}</span> : null}</div>
         <div className="fw-cm-row-a">{act}</div>
         <div className="fw-cm-row-o">
-          <LineMenuButton label={say(word('cm.collect.rowMore', { params: { row: say(row.title) } }))} items={items} />
+          <LineMenuButton label={say(word('cm.collect.rowMore', { params: { row: `${say(row.title)} · ${say(word('cm.balance.giveBack'))}` } }))} items={items} /* M-8 (cm-fx4): what it is to us, beside the payment it comes from */ />
         </div>
       </div>
     </div>
@@ -288,7 +289,7 @@ function PaymentRowView({ row, say, amount }: { row: PaymentItem; say: CustomerS
         <div className="fw-cm-row-m">{amount !== null ? <span className="fw-om-amt">{amount}</span> : null}</div>
         <div className="fw-cm-row-a" />
         <div className="fw-cm-row-o">
-          <LineMenuButton label={say(word('cm.collect.rowMore', { params: { row: say(word('cm.received.ofPayment', { days: { date: row.day } })) } }))} items={items} />
+          <LineMenuButton label={say(word('cm.collect.rowMore', { params: { row: `${say(word('cm.received.ofPayment', { days: { date: row.day } }))} · ${row.reference}` } }))} items={items} /* M-8 (cm-fx4): its bank reference tells two payments of one day apart */ />
         </div>
       </div>
     </div>

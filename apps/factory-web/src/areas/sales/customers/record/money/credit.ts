@@ -1,8 +1,8 @@
 import type { LimitRow } from '../../../../finance/receivables/credit/api'
 import { word, type MoneyWord } from '../../../orders/record/money/word'
 import type { CommercialTerms } from '../../terms/api'
-import { customerTabHref } from './doors'
-import { isFailed, isReading, type MoneyTabInput, type Part } from './model'
+import { customerTabHref, receivablesHref } from './doors'
+import { isFailed, isReading, paymentTermsOf, type MoneyTabInput, type Part } from './model'
 
 /**
  * F-CM-301 (customer page › MONEY tab, cm-w3 W3.1; 10-design §5.5; 18-lead-settles Z8) — section 5, Credit & terms (#credit): may it
@@ -27,6 +27,12 @@ export interface CreditModel {
   readonly hold: { readonly reason: MoneyWord; readonly words: string; readonly since: MoneyWord | null; readonly stops: MoneyWord } | null
   /** "Waiting for credit: 2 orders wait for a yes · 1 shipment held · 1 release refused" — only with the S2 row. */
   readonly waiting: readonly MoneyWord[] | null
+  /**
+   * M-12 (cm-fx4): the orders the credit row names as waiting (its first ones: number + door to the order), and the door to Finance ›
+   * Receivables & credit with this customer chosen (where a person says yes); null: nothing waits.
+   */
+  readonly waitingOrders: readonly { readonly id: string; readonly number: string; readonly href: string }[] | null
+  readonly waitingDoor: string | null
   /** Limit · Used · Free / Over by (price grain; null without it or without a limit). */
   readonly cells: readonly CreditCell[] | null
   readonly currency: string
@@ -45,8 +51,9 @@ export interface CreditModel {
   readonly problem: string | null
 }
 
+/** M-2 (cm-fx4): the payment terms from the ONE helper Balance uses too. */
 const paysOf = (terms: CommercialTerms | null, party: MoneyTabInput['party']): MoneyWord | null => {
-  const text = terms?.paymentTerms?.name ?? terms?.paymentTermsText ?? party.paymentTerms
+  const text = paymentTermsOf(terms, party)
   return text ? word('cm.text', { params: { text } }) : null
 }
 
@@ -115,6 +122,8 @@ export function creditOf(input: MoneyTabInput, creditRow: Part<LimitRow | null> 
     answer,
     hold,
     waiting: waiting && waiting.length > 0 ? waiting : null,
+    waitingOrders: waiting && waiting.length > 0 && row ? row.held.firstOrders.map((order) => ({ id: order.id, number: order.number, href: `${prefix}/sales/orders/${encodeURIComponent(order.id)}` })) : null,
+    waitingDoor: waiting && waiting.length > 0 ? receivablesHref(prefix, input.party.id) : null,
     cells,
     currency,
     usedPct,

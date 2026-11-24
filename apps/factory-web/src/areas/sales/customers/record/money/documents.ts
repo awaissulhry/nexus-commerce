@@ -4,7 +4,7 @@ import type { InvoiceListRow } from '../../../orders/record/money/view/parts'
 import { word, type MoneyWord } from '../../../orders/record/money/word'
 import { invoiceHref, orderMoneyHref, recordPaymentOnInvoiceHref } from './doors'
 import { figuresOf } from './head'
-import { isFailed, isReading, type MoneyTabInput, type Part, type ShippedNotInvoiced } from './model'
+import { daysFrom, isFailed, isReading, type MoneyTabInput, type Part, type ShippedNotInvoiced } from './model'
 import { readProblem } from '../../../orders/model' // cm-fx2: the orders catalogue's own key of a failed read (its rule, never a literal here)
 
 /**
@@ -71,6 +71,8 @@ export interface DocumentsModel {
   readonly answer: readonly MoneyWord[]
   /** "Shipped, not invoiced: 1 shipment · € 1,952.00, invoice by 15/12/2026" (its own line, a door with invoices.manage). */
   readonly shipped: MoneyWord | null
+  /** M-11 (cm-fx4): its "invoice by" day is past (the line is danger). */
+  readonly shippedLate: boolean
   /** Finance's "Invoice shipped goods" window with this customer's DDTs chosen (invoices.manage; something shipped not invoiced). */
   readonly invoiceShipped: string | null
   /** The read has another page (its cursor). */
@@ -148,10 +150,13 @@ export function documentRowOf(row: InvoiceRow, all: readonly InvoiceRow[], input
 }
 
 /** "Shipped, not invoiced: 1 shipment · € 1,952.00, invoice by 15/12/2026" (the value only with the price grain). */
-function shippedWordsOf(shipped: ShippedNotInvoiced, price: boolean): MoneyWord {
+function shippedWordsOf(shipped: ShippedNotInvoiced, price: boolean, today: string): MoneyWord {
   const count = word('cm.invoices.shipments', { params: { count: shipped.shipments } })
   const valued = price && shipped.value !== null ? word('cm.dot', { words: { first: count, second: word('cm.amount', { money: { amount: shipped.value } }) } }) : count
-  const what = shipped.invoiceBy ? word('cm.answer.pair', { words: { first: valued, second: word('cm.invoices.invoiceBy', { days: { date: shipped.invoiceBy } }) } }) : valued
+  // M-11 (cm-fx4): a day already past is said as past.
+  const past = shipped.invoiceBy ? daysFrom(shipped.invoiceBy, today) : 0
+  const by = shipped.invoiceBy ? (past > 0 ? word('cm.invoices.invoiceByPast', { days: { date: shipped.invoiceBy }, words: { ago: word('cm.daysAgo', { params: { count: past } }) } }) : word('cm.invoices.invoiceBy', { days: { date: shipped.invoiceBy } })) : null
+  const what = by ? word('cm.answer.pair', { words: { first: valued, second: by } }) : valued
   return word('cm.invoices.shipped', { words: { what } })
 }
 
@@ -159,12 +164,13 @@ function shippedWordsOf(shipped: ShippedNotInvoiced, price: boolean): MoneyWord 
 export function documentsOf(input: MoneyTabInput, read: Part<DocumentsRead> | null, chip: DocumentChip, prefix: string): DocumentsModel | null {
   if (!input.can.invoices || !read) return null
   const shippedRead = input.shipped?.value ?? null
-  const shipped = shippedRead && shippedRead.shipments > 0 ? shippedWordsOf(shippedRead, input.can.price) : null
+  const shipped = shippedRead && shippedRead.shipments > 0 ? shippedWordsOf(shippedRead, input.can.price, input.today) : null
+  const shippedLate = !!shippedRead?.invoiceBy && shippedRead.shipments > 0 && daysFrom(shippedRead.invoiceBy, input.today) > 0 // M-11
   // Finance's own From-DDTs window with the DDTs chosen (`ord/list/sheet/overall.ts` fromDdtsHref's address).
   const invoiceShipped = shippedRead && shippedRead.ddtIds.length > 0 && input.can.invoicesManage ? `${prefix}/finance/invoices?${new URLSearchParams({ new: '1', ddts: shippedRead.ddtIds.join(','), party: input.party.id }).toString()}` : null
-  if (isReading(read)) return { reading: true, problem: null, rows: [], answer: [word('cm.invoices.reading')], shipped, invoiceShipped, more: false }
+  if (isReading(read)) return { reading: true, problem: null, rows: [], answer: [word('cm.invoices.reading')], shipped, shippedLate, invoiceShipped, more: false }
   const value = read.value
-  if (isFailed(read) || !value) return { reading: false, problem: read.problem ?? readProblem(null), rows: [], answer: [], shipped, invoiceShipped, more: false }
+  if (isFailed(read) || !value) return { reading: false, problem: read.problem ?? readProblem(null), rows: [], answer: [], shipped, shippedLate, invoiceShipped, more: false }
   const rows = value.rows.map((row) => documentRowOf(row, value.rows, input, prefix))
   const more = value.next !== null
   const answer: MoneyWord[] = []
@@ -176,5 +182,5 @@ export function documentsOf(input: MoneyTabInput, read: Part<DocumentsRead> | nu
   if (drafts > 0 && chip !== 'drafts') answer.push(word('cm.invoices.drafts', { params: { count: drafts } }))
   const rejected = value.rows.filter((row) => row.status === 'REJECTED').length
   if (rejected > 0) answer.push(word('cm.invoices.rejected', { params: { count: rejected } }))
-  return { reading: false, problem: null, rows, answer, shipped, invoiceShipped, more }
+  return { reading: false, problem: null, rows, answer, shipped, shippedLate, invoiceShipped, more }
 }

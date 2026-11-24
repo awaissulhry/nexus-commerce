@@ -85,6 +85,17 @@ export function CreditSection({ model, sayIn, unit, menu, onRetry, onChangeLimit
           <p className="fw-cm-foot">
             <b>{say(word('sales-credit:col.held'))}</b>
             <span>{model.waiting.map(say).join(' · ')}</span>
+            {/* M-12 (cm-fx4): the orders that wait, each its door; then where a person says yes (Finance, this customer chosen). */}
+            {(model.waitingOrders ?? []).map((order) => (
+              <Link key={order.id} className="fw-pt-link" href={order.href}>
+                <span className="fw-om-num">{order.number}</span> ›
+              </Link>
+            ))}
+            {model.waitingDoor ? (
+              <Link className="fw-pt-link" href={model.waitingDoor}>
+                {say(word('cm.door.receivables'))}
+              </Link>
+            ) : null}
           </p>
         ) : null}
         <div className={`fw-cm-two${pair ? ' is-pair' : ''}`}>

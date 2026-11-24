@@ -100,7 +100,11 @@
       "lateOfThem_one": "{count} late",
       "lateOfThem_other": "{count} late",
       "someLate": "some late",
-      "openWith": "Open with {company} ›"
+      "openWith": "Open with {company} ›",
+      "refundsWordsBy_one": "{count} refund to make by {date}",
+      "refundsWordsBy_other": "{count} refunds to make, the first by {date}",
+      "depositsLate_one": "{count} deposit late",
+      "depositsLate_other": "{count} deposits late"
     },
     "door": {
       "finance": "Open in Finance ›",
@@ -183,7 +187,9 @@
       "reminders_other": "{count} reminders wait for a yes",
       "cantInvoice": "Can’t be invoiced yet: {why}",
       "priceDiffer_one": "Prices differ on {count} order",
-      "priceDiffer_other": "Prices differ on {count} orders"
+      "priceDiffer_other": "Prices differ on {count} orders",
+      "shippedByPast_one": "{count} shipment is not invoiced yet (invoice by {date} — {ago})",
+      "shippedByPast_other": "{count} shipments are not invoiced yet (invoice by {date} — {ago})"
     },
     "collect": {
       "title": "To collect",
@@ -261,7 +267,8 @@
         "drafts": "Drafts"
       },
       "chips": "Which documents",
-      "noneChip": "No document under this filter."
+      "noneChip": "No document under this filter.",
+      "invoiceByPast": "invoice by {date} — {ago}"
     },
     "note": {
       "noTab": "Money needs the right to see prices, receivables or credit: this is the Work tab, which your role may open."
@@ -353,7 +360,11 @@
       "statement": "Statement…",
       "sendStatement": "Send statement…",
       "theirFigures": "Their figures ›",
-      "riba": "Ri.Ba. ›"
+      "riba": "Ri.Ba. ›",
+      "heldCount_one": "{count} held",
+      "heldCount_other": "{count} held",
+      "approvedCount_one": "{count} approved, not sent yet",
+      "approvedCount_other": "{count} approved, not sent yet"
     },
     "price": {
       "part": "the orders whose prices differ",
@@ -389,6 +400,8 @@
       "seeThem": "See them ›",
       "honest": "What its orders cost us: materials used, work, and subcontract work. A supplier’s invoice is on the ORDER’s Margin › Documents — never a supplier’s total here.",
       "twoCurrencies": "Its orders are in two currencies: no one figure is honest."
-    }
+    },
+    "daysAgo_one": "{count} day ago",
+    "daysAgo_other": "{count} days ago"
   }
 }

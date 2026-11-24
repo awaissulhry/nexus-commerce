@@ -100,7 +100,11 @@
       "lateOfThem_one": "{count} scaduta",
       "lateOfThem_other": "{count} scadute",
       "someLate": "alcune scadute",
-      "openWith": "Apri con {company} ›"
+      "openWith": "Apri con {company} ›",
+      "refundsWordsBy_one": "{count} rimborso da fare entro il {date}",
+      "refundsWordsBy_other": "{count} rimborsi da fare, il primo entro il {date}",
+      "depositsLate_one": "{count} acconto in ritardo",
+      "depositsLate_other": "{count} acconti in ritardo"
     },
     "door": {
       "finance": "Apri in Amministrazione ›",
@@ -183,7 +187,9 @@
       "reminders_other": "{count} solleciti aspettano un sì",
       "cantInvoice": "Non ancora fatturabile: {why}",
       "priceDiffer_one": "Prezzi diversi su {count} ordine",
-      "priceDiffer_other": "Prezzi diversi su {count} ordini"
+      "priceDiffer_other": "Prezzi diversi su {count} ordini",
+      "shippedByPast_one": "{count} spedizione non è ancora fatturata (da fatturare entro il {date} — {ago})",
+      "shippedByPast_other": "{count} spedizioni non sono ancora fatturate (da fatturare entro il {date} — {ago})"
     },
     "collect": {
       "title": "Da incassare",
@@ -261,7 +267,8 @@
         "drafts": "Bozze"
       },
       "chips": "Quali documenti",
-      "noneChip": "Nessun documento con questo filtro."
+      "noneChip": "Nessun documento con questo filtro.",
+      "invoiceByPast": "da fatturare entro il {date} — {ago}"
     },
     "note": {
       "noTab": "Importi richiede il diritto di vedere prezzi, crediti o fidi: questa è la scheda Lavori, che il tuo ruolo può aprire."
@@ -353,7 +360,11 @@
       "statement": "Estratto conto…",
       "sendStatement": "Invia l’estratto conto…",
       "theirFigures": "Le loro cifre ›",
-      "riba": "Ri.Ba. ›"
+      "riba": "Ri.Ba. ›",
+      "heldCount_one": "{count} fermo",
+      "heldCount_other": "{count} fermi",
+      "approvedCount_one": "{count} approvato, non ancora inviato",
+      "approvedCount_other": "{count} approvati, non ancora inviati"
     },
     "price": {
       "part": "gli ordini con prezzi diversi",
@@ -389,6 +400,8 @@
       "seeThem": "Vedili ›",
       "honest": "Quanto ci costano i suoi ordini: materiali usati, lavoro e lavorazioni esterne. La fattura di un fornitore è sull’ordine, in Margine › Documenti: qui mai il totale di un fornitore.",
       "twoCurrencies": "I suoi ordini sono in due valute: nessuna cifra unica è onesta."
-    }
+    },
+    "daysAgo_one": "{count} giorno fa",
+    "daysAgo_other": "{count} giorni fa"
   }
 }

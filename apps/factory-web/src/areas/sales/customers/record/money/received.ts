@@ -222,7 +222,8 @@ export function receivedOf(input: MoneyTabInput, payments: Part<PaymentsRead> | 
     const total = price && amounts.every((amount) => amount !== null) && new Set(giveBack.map((row) => row.currency)).size === 1 ? amounts.reduce<number>((sum, amount) => sum + (amount ?? 0), 0) : null
     const back = total !== null ? word('cm.answer.giveBack', { money: { amount: total } }) : word('cm.answer.refundsWords', { params: { count: giveBack.length } })
     const firstDay = due.map((row) => row.due).filter((day): day is string => !!day).sort()[0] ?? null
-    answer.push(due.length > 0 && firstDay ? word('cm.answer.pair', { words: { first: back, second: word('cm.needs.refundsBy', { params: { count: due.length }, days: { date: firstDay } }) } }) : back)
+    // M-6 (cm-fx4): in words (no prices) the refund is said ONCE, with its day ("1 refund to make by 03/12/2026").
+    answer.push(due.length > 0 && firstDay ? (total !== null ? word('cm.answer.pair', { words: { first: back, second: word('cm.needs.refundsBy', { params: { count: due.length }, days: { date: firstDay } }) } }) : word('cm.answer.refundsWordsBy', { params: { count: giveBack.length }, days: { date: firstDay } })) : back)
   }
   return { reading: false, problem: null, answer, onAccount, giveBack, payments: items, more, refundable, returnsCredit }
 }

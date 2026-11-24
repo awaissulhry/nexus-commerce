@@ -112,7 +112,8 @@ function CollectRowView({ row, say, companyId, onPick, onAct, drawable }: { row:
   const locale = useLocale()
   const tag = dayTagOf(row.late)
   const what = say(row.chip)
-  const name = row.invoice?.number ?? row.order?.number ?? what
+  // M-8 (cm-fx4): a request is named by what it is AND its order (a deposit and a balance of one order are two rows).
+  const name = row.invoice?.number ?? (row.order?.number ? `${what} · ${row.order.number}` : what)
   const items: MenuItemDef[] = []
   for (const item of row.more) {
     if (item.held) items.push({ id: item.id, label: say(item.label), disabled: true, description: say(item.held) })

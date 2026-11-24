@@ -66,9 +66,9 @@ export function ChaseSection({ model, sayIn, unit, menu, onRetry, onStatement, o
             {model.reminders.length > 0 ? (
               <div>
                 <h3 className="fw-pt-h3 fw-cm-h3">{say(word('cm.chase.remindersTitle', { params: { count: model.reminders.length } }))}</h3>
-                <div className={`fw-cm-list${model.reminders.some((row) => row.amount !== null) ? '' : ' is-np'}`} role="list" aria-label={say(word('cm.chase.remindersTitle', { params: { count: model.reminders.length } }))}>
+                <div className={`fw-cm-list${model.reminders.some((row) => row.amount !== null) ? '' : ' is-np'}${model.reminders.some((row) => row.href !== null) ? '' : ' is-na'}`} role="list" aria-label={say(word('cm.chase.remindersTitle', { params: { count: model.reminders.length } }))}>
                   {model.reminders.map((row) => (
-                    <ReminderRowView key={row.anchor} row={row} say={sayIn(row.currency)} menu={menu} />
+                    <ReminderRowView key={row.anchor} row={row} say={sayIn(row.currency)} />
                   ))}
                 </div>
               </div>
@@ -90,7 +90,7 @@ export function ChaseSection({ model, sayIn, unit, menu, onRetry, onStatement, o
   )
 }
 
-function ReminderRowView({ row, say, menu }: { row: ReminderRow; say: CustomerSay; menu: readonly MenuItemDef[] }) {
+function ReminderRowView({ row, say }: { row: ReminderRow; say: CustomerSay }) {
   const locale = useLocale()
   return (
     <div className="fw-cm-row" id={row.anchor} role="listitem" tabIndex={-1}>
@@ -117,12 +117,16 @@ function ReminderRowView({ row, say, menu }: { row: ReminderRow; say: CustomerSa
           {row.interest !== null ? <span className="fw-cm-of">{say(word('cm.chase.interest', { money: { amount: row.interest } }))}</span> : null}
         </div>
         <div className="fw-cm-row-a">
-          <Button size="sm" asChild>
-            <Link href={row.href}>{say(word('cm.chase.review'))}</Link>
-          </Button>
+          {/* M-1 (cm-fx4): the act only for who decides reminders (receivables.reminders.manage) — hidden, never held. */}
+          {row.href ? (
+            <Button size="sm" asChild>
+              <Link href={row.href}>{say(word('cm.chase.review'))}</Link>
+            </Button>
+          ) : null}
         </div>
         <div className="fw-cm-row-o">
-          <LineMenuButton label={say(word('cm.collect.rowMore', { params: { row: say(row.title) } }))} items={[...menu, { id: 'link', label: say(word('orders:moneyTab.menu.copyLinkRow')), onSelect: () => copyLinkTo(row.anchor) }]} />
+          {/* M-5: the row's own line only (the head's doors are not repeated); M-8: named for this reminder (its level, act and day). */}
+          <LineMenuButton label={say(word('cm.collect.rowMore', { params: { row: `${say(row.title)} · ${say(row.when)}` } }))} items={[{ id: 'link', label: say(word('orders:moneyTab.menu.copyLinkRow')), onSelect: () => copyLinkTo(row.anchor) }]} />
         </div>
       </div>
     </div>
