@@ -103,6 +103,15 @@ export const failedRead = (problem: string): Read<never> => ({ status: 'error', 
 export const valueOf = <T>(read: Read<T> | null | undefined): T | null => (read && read.status === 'ready' ? read.value : null)
 
 /**
+ * F-CA-fx5 (walk W-03; 18-lead-settles Z26): every read the tab started has answered (ready or failed). Until then a part above a
+ * section can still grow (the portal's rows, the usage lines), so a door's arrival lands once more when this turns true. Pass each read
+ * the reader makes (one not asked yet as READING); `null` = a read this reader does not make.
+ */
+export function readsSettled(reads: readonly ({ readonly status: string } | null)[]): boolean {
+  return reads.every((read) => read === null || read.status !== 'loading')
+}
+
+/**
  * Words a rule hands the view: a key (the tab's own catalogue, or `namespace:key`), its values, the instants said as a day, the inner
  * words said first, the names said as a list ("Anna, Bruno and Carla").
  */

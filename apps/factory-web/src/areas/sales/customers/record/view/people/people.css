@@ -13,6 +13,12 @@
  *   (6) the Refuse window         its inside (the DS Modal draws the frame)
  */
 
+/* F-CA-fx5 (walk W-03; 18-lead-settles Z26): a door to a section or a row lands UNDER the record's sticky band, never behind it. The
+   record frame measures its band (RecordFrame: --fw-rcf-top = the band + 16 px, the same line the docked thread starts on); before it
+   has measured, the band's own size in tokens (48 + 16). The kit's 4 px margin (production.css) stays as it is: ours wins on our ids. */
+.fw-ca { --fw-ca-land: var(--fw-rcf-top, calc(var(--nds-space-48) + var(--nds-space-16))); }
+.fw-ca > :is(#answer, #people, #addresses, #riders, #personal-data) { scroll-margin-top: var(--fw-ca-land); }
+
 /* (1) the answer line */
 .fw-ca-ans { min-width: 0; }
 .fw-ca-chips { display: flex; flex-wrap: wrap; gap: var(--nds-space-6); align-items: center; margin-top: var(--nds-space-6); min-width: 0; }
@@ -29,7 +35,7 @@
 /* (3) THE lists */
 .fw-ca-ls { container: cals / inline-size; display: flex; flex-direction: column; min-width: 0; }
 .fw-ca-row, .fw-ca-hd { gap: var(--nds-space-4) var(--nds-space-14); align-items: start; min-width: 0; }
-.fw-ca-row { display: grid; padding: var(--nds-space-10) var(--nds-space-2); border-bottom: 1px solid var(--nds-border-subtle); scroll-margin-top: 96px; }
+.fw-ca-row { display: grid; padding: var(--nds-space-10) var(--nds-space-2); border-bottom: 1px solid var(--nds-border-subtle); scroll-margin-top: var(--fw-ca-land); /* F-CA-fx5 (Z26): was 96px */ }
 .fw-ca-row:last-child { border-bottom: 0; }
 .fw-ca-row:target { background: var(--nds-wash-primary); border-radius: var(--nds-radius-lg); }
 .fw-ca-row > div { min-width: 0; display: flex; flex-direction: column; gap: var(--nds-space-2); font-size: var(--nds-font-size-sm); }
