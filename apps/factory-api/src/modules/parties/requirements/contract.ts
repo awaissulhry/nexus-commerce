@@ -24,8 +24,17 @@ export const requirementView = output({
   endedBy: z.string().nullable(),
   endReason: z.string().nullable(),
   version: z.number().int(),
+  /** F-CT-S3 (customer terms lane): in force, and the reader may replace or end it; false once ended. */
+  mayChange: z.boolean(),
 })
-const requirementsView = output({ partyId: id(), code: z.string(), inForce: z.array(requirementView), ended: z.array(requirementView) })
+const requirementsView = output({
+  partyId: id(),
+  code: z.string(),
+  inForce: z.array(requirementView),
+  ended: z.array(requirementView),
+  /** F-CT-S3: the reader may add a rule (for every company, or for one of ours they see this customer with). */
+  mayAdd: z.boolean(),
+})
 
 const party = input({ partyId: id() })
 const one = input({ partyId: id(), requirementId: id() })

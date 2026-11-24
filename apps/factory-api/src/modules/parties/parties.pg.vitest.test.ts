@@ -575,6 +575,44 @@ describe('the tenant and company walls', () => {
     expect([first.count, second.count]).toEqual([vies.count, vies.count])
     expect((await call('viewer', 'GET', '/parties?attention=EVERYTHING')).statusCode).toBe(400)
   })
+
+  // F-CT-S2 (customer terms lane, S2 — Owner rule 2026-11-16: "One brand must not be able to see anything related to any other brand").
+  it("a person limited to customer A never learns another customer's code from a duplicate VAT number or codice fiscale", async () => {
+    // A made-up sole trader with a personal codice fiscale (place code Z999 does not exist), beside CLI-001's Partita IVA.
+    const sole = await create('sales', { code: 'CT-SOLE', kind: 'PERSON', legalName: 'Made-up Sole Trader', roles: ['CUSTOMER'], taxIdentity: { country: 'IT', taxMode: 'IT_B2C', fiscalCode: 'TSTPRV80A41Z999I', sdiRecipientCode: '0000000', validFrom: '2026-01-01' } })
+    const byVat = { country: 'IT', taxMode: 'IT_B2B', vatNumber: ITALIAN_VAT, sdiRecipientCode: '0000000', validFrom: '2099-03-01' }
+    const byCode = { country: 'IT', taxMode: 'IT_B2C', fiscalCode: 'TSTPRV80A41Z999I', sdiRecipientCode: '0000000', validFrom: '2099-03-01' }
+    limitedTo.push(ownId)
+    try {
+      // oneCustomer reaches C1-OWN only: the numbers of CLI-001 and CT-SOLE are refused without naming either.
+      const vat = await call('oneCustomer', 'POST', `/parties/${ownId}/tax-identities`, byVat)
+      expect(vat.statusCode, vat.body).toBe(409)
+      expect(vat.json().error.message).toBe('This VAT number belongs to another business partner: one record per business partner.')
+      expect(vat.json().error.issues.map((issue: Json) => issue.path)).toEqual(['body/vatNumber'])
+      const code = await call('oneCustomer', 'POST', `/parties/${ownId}/tax-identities`, byCode)
+      expect(code.statusCode, code.body).toBe(409)
+      expect(code.json().error.message).toBe('This codice fiscale belongs to another business partner: one record per business partner.')
+      expect(code.json().error.issues.map((issue: Json) => issue.path)).toEqual(['body/fiscalCode'])
+      for (const answer of [vat, code]) {
+        expect(answer.body).not.toContain('CLI-001')
+        expect(answer.body).not.toContain('CT-SOLE')
+        expect(answer.body).not.toContain(sole.id)
+      }
+    } finally {
+      limitedTo.length = 0
+    }
+    // A reader who sees the holder reads its code, as before, and the field the number was typed in.
+    const seen = await call('sales', 'POST', `/parties/${ownId}/tax-identities`, byCode)
+    expect(seen.statusCode, seen.body).toBe(409)
+    expect(seen.json().error.message).toBe('This codice fiscale belongs to party CT-SOLE: one record per business partner. Open that party, or give it the role it lacks.')
+    expect(seen.json().error.issues.map((issue: Json) => issue.path)).toEqual(['body/fiscalCode'])
+    // The create body's identity: the field under taxIdentity.
+    const twin = await call('sales', 'POST', '/parties', { code: 'CT-TWIN', legalName: 'Made-up Twin S.r.l.', roles: ['CUSTOMER'], taxIdentity: { country: 'IT', taxMode: 'IT_B2B', vatNumber: ITALIAN_VAT, sdiRecipientCode: '0000000', validFrom: '2026-01-01' } })
+    expect(twin.statusCode, twin.body).toBe(409)
+    expect(twin.json().error.issues.map((issue: Json) => issue.path)).toEqual(['body/taxIdentity/vatNumber'])
+    expect(await admin('SELECT id FROM "Party" WHERE code = $1', ['CT-TWIN'])).toEqual([])
+    expect(await admin('SELECT id FROM "PartyTaxIdentity" WHERE "partyId" = $1 AND "validFrom" = $2', [ownId, '2099-03-01'])).toEqual([])
+  })
 })
 
 describe('the customers and suppliers import (SCM-289, PLT-176)', () => {
