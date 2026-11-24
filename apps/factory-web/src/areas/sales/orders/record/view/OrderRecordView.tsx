@@ -75,8 +75,8 @@ import type { MilestonesActions, MilestonesModel } from '../../../../planning/mi
 // ---- end F-PT-202
 import { askPresetOf, askStarterOf } from '../production/asks' // F-PT-103: the band's "Ask for an update…" is a ready ask
 // ---- end F-SA-232
-// ---- F-CO-K1 (the shared overview kit): PartState draws the kit's CardState. Imported last — after ProductionTab and OverviewTab, so
-// the kit's stylesheet keeps its place after where.css (the strips' and the hand row's alignment rests on that order until co-k2). ----
+// ---- F-CO-K1 (the shared overview kit): PartState draws the kit's CardState. F-CO-K2: no stylesheet order decides a look any more
+// (the two dead align-items went), so the kit's stylesheet may load before or after the order's own (Changes reaches it first). ----
 import { CardState } from '../../../../_shared/record-overview/Overview'
 // ---- end F-CO-K1
 

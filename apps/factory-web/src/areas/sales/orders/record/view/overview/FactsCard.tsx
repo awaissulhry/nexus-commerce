@@ -1,7 +1,7 @@
 'use client'
 
-import { useId, type ReactNode } from 'react'
-import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
+import type { ReactNode } from 'react'
+import { Skeleton, Tag } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../../record-panels/i18n'
@@ -13,8 +13,9 @@ import { dayInstant, readOnlyOnPage, type Phrase } from '../../../model'
 import { NAMESPACE as DEPTH } from '../../../depth/model'
 import { factsDoorsOf, incotermOf, languageOf, madeOf, shipToOf } from '../../overview/facts'
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
-import './facts.css'
 import { OverviewCard } from '../../../../../_shared/record-overview/Overview' // F-CO-K1: the card's frame is the shared overview kit's
+// F-CO-K2: the facts' list, each fact and its door are the kit's parts (their look comes with them); "Could not be read" is its word
+import { Door, Fact, FactCols, useOverviewWords } from '../../../../../_shared/record-overview/Overview'
 
 /** The quote's delivery terms words (the Incoterm's name, ship complete / as ready): the words the quote showed (one word per meaning). */
 const QUOTE_TERMS = 'sales-quotes-depth'
@@ -27,6 +28,8 @@ const QUOTE_TERMS = 'sales-quotes-depth'
  * depthEditHeld: a closed or cancelled order holds them all); a read-only reader sees the facts and no door. Fetches nothing.
  * F-OO-210 (Owner D4): the office note as the last, whole row — "Only the office sees it", Change… opens its dialog in the page's
  * one slot ({ kind: 'note' }), saved by the Orders sheet's own write.
+ * F-CO-K2: the list, each fact and its door are the shared overview kit's `FactCols`, `Fact`, `Door` (moved out of this file as
+ * they were); this card hands them the order's facts, words and commands.
  */
 export function FactsCard({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   return (
@@ -40,6 +43,7 @@ function Facts({ order, model, actions }: { order: Order; model: OrderRecordMode
   const t = useT('orders')
   const d = useT(DEPTH)
   const q = useT(QUOTE_TERMS)
+  const kit = useOverviewWords() // F-CO-K2: the kit's words
   const locale = useLocale()
   const readOnly = readOnlyOnPage(model.can, { assignSupervisor: model.people?.mayAssign, qualityHold: model.workOrderActs?.can.qualityHold })
   const doors = factsDoorsOf(order, { can: model.can, readOnly, busy: model.busy, depthCan: model.depth?.can })
@@ -48,7 +52,7 @@ function Facts({ order, model, actions }: { order: Order; model: OrderRecordMode
   const say = (phrase: Phrase | null) => (phrase ? t(phrase.key, phrase.params) : null)
   // The depth's own part: Skeleton while it reads, "—" + "Could not be read" when it failed (never drawn as a fact).
   const depthValue = (value: (depth: NonNullable<typeof read>) => string): ReactNode =>
-    read ? value(read) : depth && depth.problem === null ? <Skeleton height={16} /> : depth?.problem ? `— · ${t('facts.unread')}` : '—'
+    read ? value(read) : depth && depth.problem === null ? <Skeleton height={16} /> : depth?.problem ? `— · ${kit.unreadOne}` : '—'
   const made = madeOf(order)
   const madeWords = [
     t(made.by ? 'facts.madeBy' : 'facts.madeNoName', { date: formatDate(order.createdAt, { locale }), name: made.by ?? '', changed: formatDate(order.updatedAt, { locale }) }),
@@ -63,7 +67,7 @@ function Facts({ order, model, actions }: { order: Order; model: OrderRecordMode
   const search = useSearchParams()?.toString() ?? '' // F-OM-204: the terms row's door keeps the dock's scope
   return (
     <OverviewCard title={t('overview.facts.title')}>
-      <ul className="fw-so-ov-cols fw-so-facts">
+      <FactCols>
         <Fact
           label={t('overview.facts.customerRef')}
           value={order.customerRef ?? '—'}
@@ -121,29 +125,7 @@ function Facts({ order, model, actions }: { order: Order; model: OrderRecordMode
             door={doors ? (describedBy) => <Door label={t('doors.change')} held={say(doors.note)} describedBy={describedBy} onClick={() => actions?.onDialog?.({ kind: 'note' })} /> : null}
           />
         )}
-      </ul>
+      </FactCols>
     </OverviewCard>
-  )
-}
-
-/** One fact: its label, its value, and its door (Change… / Set…, held with words) or "Fixed" — the Overview's shared card row. */
-function Fact({ label, value, door, wide = false }: { label: ReactNode; value: ReactNode; door: ((describedBy: string) => ReactNode) | null; /* F-OO-210: the whole row */ wide?: boolean }) {
-  const id = useId()
-  return (
-    <li className={wide ? 'fw-so-ov-row fw-so-fact fw-so-fact-note' : 'fw-so-ov-row fw-so-fact'}>
-      <span id={id} className="fw-so-fact-label">
-        {label}
-      </span>
-      <span className="fw-so-fact-value">{value}</span>
-      {door && <span className="fw-so-ov-doors">{door(id)}</span>}
-    </li>
-  )
-}
-
-function Door({ label, held, describedBy, onClick }: { label: string; held: string | null; describedBy: string; onClick: () => void }) {
-  return (
-    <Button size="sm" variant="quiet" heldReason={held} aria-describedby={describedBy} onClick={onClick}>
-      {label}
-    </Button>
   )
 }

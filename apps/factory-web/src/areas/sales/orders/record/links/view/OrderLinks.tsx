@@ -14,6 +14,7 @@ import type { OrderGate, OrderRePromise } from '../api'
 import '../links.css'
 import { declineHeld, decideHeld, gateHref, type LinksActions, type LinksModel } from '../model'
 import { gateAnchorsOf, gatesOf } from '../model' // F-SC-W4 (+ W7: each row's anchor its gate's own id)
+import { Strip } from '../../../../../_shared/record-overview/Overview' // F-CO-K2: a gate row is the shared overview kit's strip
 
 /**
  * B-TH-256 — what points at the order, drawn (O-SAL-ORD-REC.notice-F04, -F06, .body-F07; picture 29):
@@ -116,7 +117,8 @@ function GateDoor({ href }: { href: string }) {
 /**
  * Production › Problems & holds: each refusal still blocking the order, one row of "What stops it" in the strips' own row shape (mark |
  * words | door, the danger tone) — the notice's title, style code, sentence and door, its anchor `about-GateEvent-…`. Items of the
- * section's strips list (<li>): the section counts them in its answer line.
+ * section's strips list (<li>): the section counts them in its answer line. F-CO-K2: each row is the shared overview kit's `Strip`
+ * (the same row as the order's strips), its words the notice's own parts.
  */
 export function GateRows({ model, prefix }: { model: LinksModel | null | undefined; prefix: string }) {
   const title = useGateTitle()
@@ -127,20 +129,10 @@ export function GateRows({ model, prefix }: { model: LinksModel | null | undefin
       {gates.map((gate, index) => {
         const href = gateHref(prefix, gate)
         return (
-          <li key={anchors[index]} className="fw-so-ov-row fw-so-strip" data-tone="danger" id={anchors[index]} tabIndex={-1}>
-            <span className="fw-so-strip-mark">
-              <ShieldAlert size={14} aria-hidden />
-            </span>
-            <span className="fw-so-strip-said">
-              <span>{title(gate)}</span>
-              <GateSaid gate={gate} href={href} />
-            </span>
-            {href ? (
-              <span className="fw-so-ov-doors">
-                <GateDoor href={href} />
-              </span>
-            ) : null}
-          </li>
+          <Strip key={anchors[index]} tone="danger" mark={<ShieldAlert size={14} aria-hidden />} anchor={anchors[index]} doors={href ? <GateDoor href={href} /> : undefined}>
+            <span>{title(gate)}</span>
+            <GateSaid gate={gate} href={href} />
+          </Strip>
         )
       })}
     </>

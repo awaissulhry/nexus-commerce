@@ -1,12 +1,13 @@
 'use client'
 
-import { useMemo, type ReactNode } from 'react'
+import { useId, useMemo, useState, type ReactNode } from 'react'
 import { Card, EmptyState } from '@nexus/ui/components'
 import { Button, Skeleton, Spinner } from '@nexus/ui/primitives'
+import { CircleAlert } from 'lucide-react' // F-CO-K2: the failed read's strip mark
 import { catalogueFor, createTranslator } from '../../../lib/i18n/messages'
 import { useLocale, useReader } from '../../../lib/i18n/provider'
 import { WithMessages } from '../../../record-panels/i18n'
-import { OVERVIEW_NS } from './model'
+import { OVERVIEW_NS, STRIPS_SHOWN, type StripTone } from './model'
 import './record-overview.css'
 
 /**
@@ -14,11 +15,16 @@ import './record-overview.css'
  * page: a part has NO look prop; a page hands it data and doors (a ReactNode), nothing else. A part owns its stylesheet (this file
  * imports it), fetches nothing, imports no area and speaks only its own catalogue (`record-overview`). Each part emits the DOM the
  * order's Overview drew by hand before it moved here; the Overview-only class names are kept (fw-so-overview, fw-so-ov-*,
- * fw-so-where*, fw-so-headline), the text classes a part draws are the kit's own (fw-ro-*).
+ * fw-so-where*, fw-so-headline; F-CO-K2: fw-so-strip*, fw-so-fact*, fw-so-rq-*), the text classes a part draws are the kit's own
+ * (fw-ro-*).
  *
- * The frame (this step): `Overview` (the tab's column and the room its pairs read), `OverviewPair` (two cards side by side from
+ * The frame (F-CO-K1): `Overview` (the tab's column and the room its pairs read), `OverviewPair` (two cards side by side from
  * 720 px of the Overview, one below; a card alone takes the row), `OverviewCard` (the card with its title), `Headline` (the lead
  * card's sentence and its quiet line), `CardState` (a card while its part loads, or when its read failed), `useOverviewWords`.
+ * The rows (F-CO-K2): `Strips`, `Strip`, `StripSaid` (what stops the record, one row each, most blocking first); `RowList`, `Row`,
+ * `QuietLine` (a card's ONE list: label | value | doors, on the list's own columns); `FactCols`, `Fact`, `Door` (a record's facts in
+ * one or two column sets, each with its quiet door); `Groups`, `Group`, `GroupRow`, `RowAge` (a to-do list grouped by who waits: each
+ * row `words | age | door`).
  */
 
 /** The kit's own words in the page's language. */
@@ -29,6 +35,22 @@ export interface OverviewWords {
   readonly failed: (part: string) => string
   /** "Try again" */
   readonly retry: string
+  // ---- F-CO-K2: the rows' words ----
+  /** "Show {count} more" (the strips under their cap) */
+  readonly showMore: (count: number) => string
+  /** "Show fewer" */
+  readonly showFewer: string
+  /** "None yet: {kinds}" (a list's kinds at zero, in one quiet line) */
+  readonly none: (kinds: string) => string
+  /** "{value} ›" — a door's words; its arrow never stands alone on a line (a no-break space before "›") */
+  readonly door: (value: string) => string
+  /** "{label}: {value}" */
+  readonly labelled: (label: string, value: string) => string
+  /** "Could not be read" (of several: a row of a list) */
+  readonly unreadMany: string
+  /** "Could not be read" (of one: a fact) */
+  readonly unreadOne: string
+  // ---- end F-CO-K2
 }
 
 /**
@@ -44,6 +66,15 @@ export function useOverviewWords(): OverviewWords {
       loading: (part) => t('state.loading', { part }),
       failed: (part) => t('state.failed', { part }),
       retry: t('state.retry'),
+      // F-CO-K2: the rows' words
+      showMore: (count) => t('strips.showMore', { count }),
+      showFewer: t('strips.showFewer'),
+      none: (kinds) => t('row.none', { kinds }),
+      // S31: the order's own rule (F-OM-fx6), now the kit's for every page — "Open ›" never breaks before its arrow.
+      door: (value) => t('row.door', { value }).replace(/ ›$/, '\u00a0›'),
+      labelled: (label, value) => t('row.labelled', { label, value }),
+      unreadMany: t('row.unreadMany'),
+      unreadOne: t('row.unreadOne'),
     }
   }, [locale, reader])
 }
@@ -133,3 +164,206 @@ export function CardState({ part, problem, onRetry }: { part: string; problem: s
     </Card>
   )
 }
+
+// ---- F-CO-K2 (the shared overview kit's rows): the strips — what stops the record, one row each, most blocking first ----------------
+/**
+ * The strips' list under the lead card's headline: at most `cap` rows, the rest behind "Show {n} more" (its own state); while the
+ * page still reads them, one quiet row; a failed read is the list's last row, with Try again when the page hands a retry. `rows` are
+ * the page's `Strip`s, ALL of them (the cap is the kit's). The box is always drawn: "no strips at all" is the page's to decide.
+ */
+export function Strips({ label, rows, cap = STRIPS_SHOWN, reading = false, failed = null }: { label: string; rows: readonly ReactNode[]; cap?: number; reading?: boolean; failed?: { words: string; onRetry?: () => void } | null }): ReactNode {
+  const words = useOverviewWords()
+  const [all, setAll] = useState(false)
+  const shown = all ? rows : rows.slice(0, cap)
+  return (
+    <div className="fw-so-strips-box">
+      <ul className="fw-so-strips" aria-label={label}>
+        {shown}
+        {reading && (
+          <li className="fw-so-strip-reading">
+            <Skeleton height={22} />
+          </li>
+        )}
+        {failed && (
+          <Strip
+            tone="danger"
+            mark={<CircleAlert size={14} aria-hidden />}
+            doors={
+              failed.onRetry ? (
+                <Button size="sm" onClick={failed.onRetry}>
+                  {words.retry}
+                </Button>
+              ) : undefined
+            }
+          >
+            {failed.words}
+          </Strip>
+        )}
+      </ul>
+      {rows.length > cap && (
+        <Button size="sm" variant="quiet" aria-expanded={all} onClick={() => setAll(!all)}>
+          {all ? words.showFewer : words.showMore(rows.length - cap)}
+        </Button>
+      )}
+    </div>
+  )
+}
+
+/**
+ * One strip: the shared card row (mark | words | doors) with a left rule in its tone. `children` is what the row says (a
+ * `StripSaid`, or the page's own words). `doors`: the doors cell is drawn only when doors are handed over. `anchor`: the row's own
+ * address (an `id`, reached by a link: it takes the focus then).
+ */
+export function Strip({ tone, mark, doors, anchor, children }: { tone: StripTone; mark: ReactNode; doors?: ReactNode; anchor?: string; children?: ReactNode }): ReactNode {
+  return (
+    <li className="fw-so-ov-row fw-so-strip" data-tone={tone} id={anchor} tabIndex={anchor === undefined ? undefined : -1}>
+      <span className="fw-so-strip-mark">{mark}</span>
+      <span className="fw-so-strip-said">{children}</span>
+      {doors ? <span className="fw-so-ov-doors">{doors}</span> : null}
+    </li>
+  )
+}
+
+/**
+ * What a strip says: its title with how long it has stood ("· 3 d", its exact day in the title), then its quiet lines, one under
+ * the other. `since` null: no age is said.
+ */
+export function StripSaid({ title, since = null, lines = [] }: { title: ReactNode; since?: { iso: string; day: string; words: string } | null; lines?: readonly string[] }): ReactNode {
+  return (
+    <>
+      <span>
+        {title}
+        {since ? (
+          <>
+            {' · '}
+            <time dateTime={since.iso} title={since.day}>
+              {since.words}
+            </time>
+          </>
+        ) : null}
+      </span>
+      {lines.map((line) => (
+        <span key={line} className="fw-ro-hint">
+          {line}
+        </span>
+      ))}
+    </>
+  )
+}
+// ---- end F-CO-K2 (strips)
+
+// ---- F-CO-K2 (the shared overview kit's rows): the ONE list — label | value | doors, every row on the list's own columns ----------
+/**
+ * A card's list of rows. Its rows lie on the list's own columns (subgrid), so every label, value and door lines up with the rows
+ * above it; below a 480 px card the doors wrap under the value, to the right; below a 360 px card (a phone) a row stacks. `label`:
+ * the list's name for a screen reader (left out: none).
+ */
+export function RowList({ label, children }: { label?: string; children?: ReactNode }): ReactNode {
+  return (
+    <ul className="fw-so-ov-list" aria-label={label}>
+      {children}
+    </ul>
+  )
+}
+
+/**
+ * One row: its label (quiet), then what the page hands as `children` (the value: words, a link, a part that draws its own value and
+ * doors), then its doors. `doors` left out (undefined): no doors cell; `null`: an EMPTY doors cell (a list whose rows keep the
+ * door's column even when one has none).
+ */
+export function Row({ label, doors, children }: { label: ReactNode; doors?: ReactNode; children?: ReactNode }): ReactNode {
+  return (
+    <li className="fw-so-ov-row">
+      <span className="fw-so-ov-label">{label}</span>
+      {children}
+      {doors === undefined ? null : <span className="fw-so-ov-doors">{doors}</span>}
+    </li>
+  )
+}
+
+/** A quiet line of the list, the whole row wide ("None yet: …", where the record came from, a list held for this reader). */
+export function QuietLine({ children }: { children?: ReactNode }): ReactNode {
+  return <li className="fw-so-ov-quiet fw-ro-hint">{children}</li>
+}
+// ---- end F-CO-K2 (the ONE list)
+
+// ---- F-CO-K2 (the shared overview kit's rows): the facts — label | value | door, one label column for the whole card ------------------
+/**
+ * The facts' list: every fact lies on the list's own columns (one label column for the card, so every value starts at the same x);
+ * from an 800 px card two such column sets side by side; below a 360 px card a fact stacks, its door under it to the right.
+ */
+export function FactCols({ children }: { children?: ReactNode }): ReactNode {
+  return <ul className="fw-so-ov-cols fw-so-facts">{children}</ul>
+}
+
+/**
+ * One fact: its label, its value, and its door — handed the label's id (the door's `aria-describedby`); `null`: no door. A door can
+ * be quiet words in its place too ("Fixed"). `wide`: the whole row (both column sets), the value under its label and its door.
+ */
+export function Fact({ label, value, door, wide = false }: { label: ReactNode; value: ReactNode; door: ((describedBy: string) => ReactNode) | null; wide?: boolean }): ReactNode {
+  const id = useId()
+  return (
+    <li className={wide ? 'fw-so-ov-row fw-so-fact fw-so-fact-note' : 'fw-so-ov-row fw-so-fact'}>
+      <span id={id} className="fw-so-fact-label">
+        {label}
+      </span>
+      <span className="fw-so-fact-value">{value}</span>
+      {door && <span className="fw-so-ov-doors">{door(id)}</span>}
+    </li>
+  )
+}
+
+/** A fact's quiet door (Change…, Set…): the page's command, held with words, described by its fact's label. */
+export function Door({ label, held, describedBy, onClick }: { label: string; held: string | null; describedBy: string; onClick: () => void }): ReactNode {
+  return (
+    <Button size="sm" variant="quiet" heldReason={held} aria-describedby={describedBy} onClick={onClick}>
+      {label}
+    </Button>
+  )
+}
+// ---- end F-CO-K2 (facts)
+
+// ---- F-CO-K2 (the shared overview kit's rows): the groups — a to-do list grouped by who waits, each row `words | age | door` -----------
+/** The groups of a card, one under the other (S32: a page draws this part, never the class itself). */
+export function Groups({ children }: { children?: ReactNode }): ReactNode {
+  return <div className="fw-so-rq-groups">{children}</div>
+}
+
+/**
+ * One group: its head (`title`: its words say its count), its rows on the list's own columns (subgrid: the ages and the doors line
+ * up), and `more` — the page's "n more ›" door — under them when the page cut the rows (at `GROUP_ROWS_SHOWN`, its choice).
+ */
+export function Group({ title, more, children }: { title: string; more?: ReactNode; children?: ReactNode }): ReactNode {
+  return (
+    <section className="fw-so-rq-group">
+      <h3 className="fw-ro-h3">{title}</h3>
+      <ul className="fw-so-rq-list">{children}</ul>
+      {more}
+    </section>
+  )
+}
+
+/**
+ * One row of a group: what waits (`children`, in ONE span), its age (a `RowAge`), its doors. The doors cell is ALWAYS drawn —
+ * empty for a reader with no door — so the rows' columns line up.
+ */
+export function GroupRow({ age, doors, children }: { age: ReactNode; doors?: ReactNode; children?: ReactNode }): ReactNode {
+  return (
+    <li className="fw-so-ov-row fw-so-rq-row">
+      <span>{children}</span>
+      {age}
+      <span className="fw-so-ov-doors">{doors}</span>
+    </li>
+  )
+}
+
+/** How long a row waits ("15 d", the page's words), its exact day in the title; no start known, or no words: "—". */
+export function RowAge({ since, words, title }: { since: string | null; words: string | null; title?: string }): ReactNode {
+  if (!since || words === null) return <span className="fw-so-rq-age">—</span>
+  return (
+    <time className="fw-so-rq-age" dateTime={since} title={title}>
+      {words}
+    </time>
+  )
+}
+// ---- end F-CO-K2 (groups)
