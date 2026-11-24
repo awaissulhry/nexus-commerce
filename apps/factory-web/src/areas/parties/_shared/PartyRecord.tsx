@@ -18,7 +18,6 @@ import {
   checkVies,
   getParty,
   listPurchaseOrdersOf,
-  listSalesOrdersOf,
   moveParty,
   projectCounts,
   setDefaultAddresses,
@@ -166,7 +165,9 @@ export function usePartyRecord(side: Side, partyId: string, slots: PartySlots = 
   // F-CO-202 (customer Overview co-w2 W2.2; 13-backend §1.3; S11, S12): the customer's 200 newest quotes are no longer read — no part of
   // the page reads them (the Overview and the Quotes tab's badge read the page's ONE count read); the model keeps its shape.
   const [quotes] = useState<Loaded<QuoteRow>>(loading())
-  const [orders, setOrders] = useState<Loaded<SalesOrderRow>>(loading())
+  // F-CM-304 (customer MONEY tab, cm-w3 W3.4; 13-backend §1.3, §5.10): nor are the customer's 200 newest orders — no part of the page
+  // reads them (the Money tab reads the open orders' money and its own lazy reads); the model keeps its shape.
+  const [orders] = useState<Loaded<SalesOrderRow>>(loading())
   const [purchaseOrders, setPurchaseOrders] = useState<Loaded<PurchaseOrderRow>>(loading())
   const [viesRunning, setViesRunning] = useState(false)
   const [saving, setSaving] = useState<string | null>(null)
@@ -191,13 +192,6 @@ export function usePartyRecord(side: Side, partyId: string, slots: PartySlots = 
   const loadBeside = useCallback(async () => {
     if (!can.view) return
     const reads: Array<Promise<void>> = []
-    if (side === 'customers' && can.orders)
-      reads.push(
-        listSalesOrdersOf(api, partyId).then(
-          (answer) => setOrders(loaded(answer.rows, answer.more)),
-          (error: unknown) => setOrders(failed(problemKey(error))),
-        ),
-      )
     if (side === 'suppliers' && can.purchaseOrders)
       reads.push(
         listPurchaseOrdersOf(api, partyId).then(
@@ -206,7 +200,7 @@ export function usePartyRecord(side: Side, partyId: string, slots: PartySlots = 
         ),
       )
     await Promise.all(reads)
-  }, [api, can.orders, can.purchaseOrders, can.view, partyId, side])
+  }, [api, can.purchaseOrders, can.view, partyId, side])
 
   const loadHistory = useCallback(async () => {
     try {

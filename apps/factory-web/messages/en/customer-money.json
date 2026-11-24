@@ -23,27 +23,6 @@
     "returns": "Returns in {year}",
     "returnsHint": "{units} units · {open} open"
   },
-  "now": {
-    "title": "Open returns and claims",
-    "reading": "Reading…",
-    "nothingOpen": "No open return or claim.",
-    "return": "Return",
-    "complaint": "Complaint",
-    "late": "goods late",
-    "requested": "Asked {date} · {units} units",
-    "answerDue": "Answer due {date}",
-    "received": "Received {date}",
-    "col": {
-      "type": "Type",
-      "number": "Number",
-      "state": "State",
-      "when": "When"
-    },
-    "more_one": "{count} more open: see the lists.",
-    "more_other": "{count} more open: see the lists.",
-    "owes": "What this customer owes, by age:",
-    "receivables": "Finance › Receivables & credit"
-  },
   "returnStatus": {
     "REQUESTED": "Requested",
     "AUTHORISED": "Authorised",
@@ -72,39 +51,11 @@
   },
   "tab": {
     "openToPay": "Open to pay",
-    "openToPayHint": "Every open invoice",
-    "nothingOpen": "Nothing open",
-    "depositsWaiting": "Deposits waiting",
-    "depositsWaitingHint": "Open orders whose deposit is asked",
     "credit": "Credit",
     "noLimit": "No limit set",
     "changeLimit": "Change limit…",
-    "changeLimitHeld": "Changing a credit limit needs the right to set credit limits.",
     "paymentTerms": "Payment terms",
-    "editTerms": "Edit in Terms & requirements",
-    "openInvoices": "Open invoices",
-    "noOpenInvoice": "No open invoice",
-    "bucket": {
-      "NOT_DUE": "Current",
-      "D1_30": "1–30",
-      "D31_60": "31–60",
-      "D61_90": "61–90",
-      "OVER_90": "90+"
-    },
-    "openStatement": "Open statement",
-    "deposits": "Deposits and balances of open orders",
-    "noOrderOwes": "No open order owes money",
-    "deposit": {
-      "NOT_NEEDED": "No deposit",
-      "MISSING": "Deposit not asked",
-      "OPEN": "Deposit open",
-      "PAID": "Deposit paid",
-      "WAIVED": "Deposit waived"
-    },
-    "depositDue": "due {date}",
-    "paid": "paid {amount}",
-    "balance": "still to pay {amount}",
-    "seeAll": "See all · Work › All orders"
+    "editTerms": "Edit in Terms & requirements"
   },
   "cm": {
     "days_one": "{count} day",
@@ -372,8 +323,7 @@
       "usedIs": "used = open invoices + orders not invoiced yet",
       "terms": "Terms",
       "set": "Set a limit…",
-      "onHold": "On hold — {reason}",
-      "none": "No credit limit"
+      "onHold": "On hold — {reason}"
     },
     "chase": {
       "title": "Statement & reminders",
