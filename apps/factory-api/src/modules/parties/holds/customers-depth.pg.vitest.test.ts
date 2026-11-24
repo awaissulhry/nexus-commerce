@@ -107,6 +107,7 @@ beforeAll(async () => {
   office('salesB', 'sales', [A.companyB])
   office('noOrders', 'sales', 'all', ['orders.view'])
   office('noMeasurements', 'sales', 'all', ['sales.measurements.view']) // F-CA-S4: parties.view, no measurements right
+  office('noParties', 'sales', 'all', ['parties.view']) // F-CA-S5: no parties.view
   for (const [key, actorId] of Object.entries(ACTORS)) await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, $3, $4, 'ACTIVE')`, [actorId, A.tenant, `w2b290-${key}-${run}@example.com`, `Made-up ${key}`])
   const colourway = await one<{ id: string; size: string }>(`SELECT c.id, (s.sizes)[1] AS size FROM "Colourway" c JOIN "Style" s ON s.id = c."styleId" WHERE c."tenantId" = $1 AND c."styleId" = (SELECT "styleIds"[1] FROM "CustomerRequirement" WHERE "tenantId" = $1 AND "supersedesId" IS NOT NULL) ORDER BY c."createdAt", c.id LIMIT 1`, [A.tenant])
   LINE.colourwayId = colourway.id
@@ -484,3 +485,90 @@ describe('riders under a team (SAL-021)', () => {
   })
   // ── F-CA-S4 end ──
 })
+
+// ── F-CA-S5 (ca-s S.5; Owner decision D3, 2026-11-24): the usage read of the People & addresses tab ──
+describe('the usage read of a customer (ca-s S.5)', () => {
+  const usage = async (session: string, partyId: string): Promise<Json> => ok(session, 'GET', `/parties/${partyId}/usage`)
+  const contactUse = (answer: Json, contactId: string): Json | undefined => (answer.contacts as Json[]).find((row) => row.contactId === contactId)
+  const addressUse = (answer: Json, addressId: string): Json | undefined => (answer.addresses as Json[]).find((row) => row.addressId === addressId)
+  const ownIds = (partyId: string) =>
+    one<{ contacts: string[]; addresses: string[] }>(`SELECT ARRAY(SELECT id::text FROM "PartyContact" WHERE "partyId" = $1) AS contacts, ARRAY(SELECT id::text FROM "PartyAddress" WHERE "partyId" = $1) AS addresses`, [partyId])
+  const timeless = (answer: Json): Json => ({ ...answer, asOf: null })
+
+  it("the usage read counts only this customer's records", async () => {
+    const a = await usage('sales', A.p1)
+    expect(Object.keys(a).sort()).toEqual(['addresses', 'asOf', 'contacts', 'partyId'])
+    expect(a.partyId).toBe(A.p1)
+    expect(Number.isNaN(Date.parse(a.asOf))).toBe(false)
+    // Every row is one of A's own contacts or addresses, with counts and dates only (no name, subject, amount or record id).
+    const own = await ownIds(A.p1)
+    expect(a.contacts.length + a.addresses.length).toBeGreaterThan(0)
+    for (const row of a.contacts as Json[]) {
+      expect(own.contacts).toContain(row.contactId)
+      expect(Object.keys(row).sort()).toEqual(['contactId', 'lastMailInAt', 'lastQuoteAt', 'openComplaints', 'openQuotes', 'openReturns', 'openServiceCases'])
+    }
+    for (const row of a.addresses as Json[]) {
+      expect(own.addresses).toContain(row.addressId)
+      expect(Object.keys(row).sort()).toEqual(['addressId', 'draftQuoteVersions', 'openChangeRequests', 'openPortalRequests', 'openSampleShipments', 'preparedShipments'])
+    }
+    const b = await usage('sales', A.p3)
+    const ownB = await ownIds(A.p3)
+    for (const row of b.contacts as Json[]) expect(ownB.contacts).toContain(row.contactId)
+    for (const row of b.addresses as Json[]) expect(ownB.addresses).toContain(row.addressId)
+    // A new quote of B (its DRAFT version names B's office as bill-to AND ship-to: one version, counted once) moves B's
+    // answer, never A's.
+    const officeB = id('party-address:P3:office')
+    await ok('sales', 'POST', '/sales/quotes', { companyId: A.companyA, partyId: A.p3, customerRef: 'RFQ-CA-S5-B' }, 201)
+    expect(addressUse(await usage('sales', A.p3), officeB)?.draftQuoteVersions).toBe((addressUse(b, officeB)?.draftQuoteVersions ?? 0) + 1)
+    expect(timeless(await usage('sales', A.p1))).toEqual(timeless(a))
+    // A person limited to A reads A's answer whole; B is not found, in the words of an unknown customer; no parties.view: 403.
+    SESSIONS.usageA = { audience: 'office', tenantId: A.tenant, actorId: ACTORS.sales!, grants: grantsOf('sales').map((grant) => ({ ...grant, parties: [A.p1] })) }
+    expect(timeless(await usage('usageA', A.p1))).toEqual(timeless(a))
+    const hidden = await no('usageA', 'GET', `/parties/${A.p3}/usage`, undefined, 404)
+    expect(hidden.message).toBe((await no('usageA', 'GET', `/parties/${newId()}/usage`, undefined, 404)).message)
+    await no('noParties', 'GET', `/parties/${A.p1}/usage`, undefined, 403)
+  })
+
+  it('one count per kind: a DRAFT quote version naming the address is 1, a SENT one 0; a PACKED shipment 1, a SHIPPED one 0', async () => {
+    const email = `usage.${run}@example.com`
+    const contact = ((await ok('sales', 'POST', `/parties/${A.p1}/contacts`, { name: 'Made-up Usage Buyer', email, roles: [] }, 201)).party.contacts as Json[]).find((row) => row.email === email)!
+    const label = `Usage ${run}`
+    const address = ((await ok('sales', 'POST', `/parties/${A.p1}/addresses`, { kinds: ['SHIP_TO'], name: label, line1: 'Via Esempio 99', postalCode: '00000', city: 'Seedville', province: 'MI', country: 'IT' }, 201)).party.addresses as Json[]).find((row) => row.name === label)!
+    // Nothing names them yet: no row (never a row of zeros).
+    let answer = await usage('sales', A.p1)
+    expect([contactUse(answer, contact.id), addressUse(answer, address.id)]).toEqual([undefined, undefined])
+    // A quote of the contact whose DRAFT version ships to the address: one open quote, one draft version.
+    const { quote } = await ok('sales', 'POST', '/sales/quotes', { companyId: A.companyA, partyId: A.p1, contactId: contact.id, customerRef: 'RFQ-CA-S5-A' }, 201)
+    await force(`UPDATE "QuoteVersion" SET "shipToAddressId" = $2 WHERE id = $1`, [quote.current.id, address.id])
+    answer = await usage('sales', A.p1)
+    expect(contactUse(answer, contact.id)).toEqual({ contactId: contact.id, openQuotes: 1, lastQuoteAt: expect.any(String), openReturns: 0, openComplaints: 0, openServiceCases: 0, lastMailInAt: null })
+    expect(addressUse(answer, address.id)).toEqual({ addressId: address.id, draftQuoteVersions: 1, preparedShipments: 0, openSampleShipments: 0, openPortalRequests: 0, openChangeRequests: 0 })
+    // SENT: the version holds its own copy of the address now (0: no row); a sent quote is still open.
+    await force(`UPDATE "QuoteVersion" SET status = 'SENT' WHERE id = $1`, [quote.current.id])
+    await force(`UPDATE "Quote" SET status = 'SENT' WHERE id = $1`, [quote.id])
+    answer = await usage('sales', A.p1)
+    expect(addressUse(answer, address.id)).toBeUndefined()
+    expect(contactUse(answer, contact.id)).toMatchObject({ openQuotes: 1 })
+    // Cancelled: no open quote; the row stays for the last quote's day.
+    await force(`UPDATE "Quote" SET status = 'CANCELLED' WHERE id = $1`, [quote.id])
+    answer = await usage('sales', A.p1)
+    expect(contactUse(answer, contact.id)).toMatchObject({ openQuotes: 0, lastQuoteAt: expect.any(String) })
+    // A PACKED shipment to the address: 1; once SHIPPED: 0 (a copy of a seeded shipment of A, past the guards).
+    const source = await one<{ id: string }>(`SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND "partyId" = $2 ORDER BY id LIMIT 1`, [A.tenant, A.p1])
+    expect(source, 'a seeded shipment of A').toBeTruthy()
+    const shipmentId = newId()
+    await admin(`CREATE TEMP TABLE _ca_ship AS SELECT * FROM "Shipment" WHERE id = $1`, [source.id])
+    try {
+      await admin(`UPDATE _ca_ship SET id = $1, number = $2, "shipToAddressId" = $3, status = 'PACKED', "externalDdtNumber" = NULL, "externalDdtDate" = NULL, "splitFromId" = NULL, "manifestId" = NULL`, [shipmentId, `CA-S5-${run}`, address.id])
+      await force(`INSERT INTO "Shipment" SELECT * FROM _ca_ship`)
+    } finally {
+      await admin('DROP TABLE IF EXISTS _ca_ship')
+    }
+    answer = await usage('sales', A.p1)
+    expect(addressUse(answer, address.id)).toMatchObject({ preparedShipments: 1, draftQuoteVersions: 0 })
+    await force(`UPDATE "Shipment" SET status = 'SHIPPED' WHERE id = $1`, [shipmentId])
+    answer = await usage('sales', A.p1)
+    expect(addressUse(answer, address.id)).toBeUndefined()
+  })
+})
+// ── F-CA-S5 end ──

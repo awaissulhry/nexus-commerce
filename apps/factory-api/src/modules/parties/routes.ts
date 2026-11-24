@@ -37,6 +37,9 @@ import { addRequirementContract, endRequirementContract, getRequirementsContract
 import { addRequirement, assertRecordType, endRequirement, getRequirements, replaceRequirement, requirementsForRecord } from './requirements/requirements'
 import { getRidersContract, setTeamContract } from './riders/contract'
 import { getRiders, setTeam } from './riders/riders'
+// F-CA-S5 (ca-s S.5; Owner decision D3): the usage read of the People & addresses tab.
+import { getPartyUsageContract } from './contract'
+import { getPartyUsage } from './usage'
 
 /**
  * Customers and suppliers (parties module, B-W1-07; A2 SCR-032 "Customers", SCR-033 "Customer record", SCR-056
@@ -128,4 +131,7 @@ export default defineRoutes('parties', manifest, async (app) => {
   // B-W2b-290 (SAL-021): riders (people) under a team or dealer.
   app.get('/parties/:partyId/riders', { schema: getRidersContract }, async (request) => getRiders(request, request.params.partyId))
   app.put('/parties/:partyId/team', { schema: setTeamContract }, async (request) => setTeam(request, request.params.partyId, request.body, idempotencyKeyFrom(request)))
+
+  // F-CA-S5 (ca-s S.5): how many open records name each contact and address of this customer (counts and dates only).
+  app.get('/parties/:partyId/usage', { schema: getPartyUsageContract }, async (request) => getPartyUsage(request, request.params.partyId))
 })

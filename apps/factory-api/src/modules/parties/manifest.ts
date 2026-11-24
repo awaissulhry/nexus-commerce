@@ -54,4 +54,6 @@ export const manifest = defineManifest({
   // B-W2b-290 (SAL-021): riders under a team or dealer.
   'GET /parties/:partyId/riders': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
   'PUT /parties/:partyId/team': { audiences: ['office'], permission: 'parties.manage', scope: 'record' },
+  // F-CA-S5 (ca-s S.5; Owner decision D3): the usage read of the People & addresses tab (the record read's own right).
+  'GET /parties/:partyId/usage': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
 })
