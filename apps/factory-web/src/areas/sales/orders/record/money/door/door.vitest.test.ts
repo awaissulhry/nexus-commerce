@@ -134,6 +134,34 @@ describe('F-CM-k2: the words', () => {
   })
 })
 
+describe('F-CM-k2: the hook (K2.3) — the order page\'s own acts, ONE window at a time, nothing read before open()', () => {
+  const hook = source('./use-order-money-door.ts')
+
+  it('runs the order page\'s acts — useMoneyActs unchanged, with no order — and writes through no route of its own; the fresh code is the order page\'s', () => {
+    expect(hook).toContain("import { useMoneyActs } from '../../use-money-acts'")
+    expect(hook).toMatch(/useMoneyActs\(\{[\s\S]*?\n {4}order: null,\n/)
+    expect(hook).not.toMatch(/recordDepositPayment|sendDepositLink|applyMoneyPlan|previewMoneyPlan|undoDepositPayment|stopDepositPage|newIdempotencyKey|api\.(post|put|patch|delete)\(/)
+    expect(hook).toContain('const { stepUp, guard, ensureFresh, submitStepUp, cancelStepUp } = useStepUp(api)')
+    expect(hook).toContain('stepUp: { ensureFresh, guard },')
+    // useMoneyActs keeps its shape: the order as read is optional input (null: the From-DDTs lookup does not run).
+    expect(source('../../use-money-acts.ts')).toContain('readonly order: Order | null')
+  })
+
+  it('reads nothing before open(): no effect; the order, its plan and (invoices.view) its settlement are each read in ONE place', () => {
+    expect(hook).not.toContain('useEffect')
+    for (const read of ['getOrder(api, id)', 'getSchedule(api, order.id)', 'getSettlement(api, order.id)']) expect(hook.split(read).length - 1, read).toBe(1)
+    expect(hook).toContain('if (input.can.viewInvoices) {')
+  })
+
+  it('the act is ruled ONCE, on the order as first read (the plan\'s rule); a window\'s Cancel or Done closes the door; a write on its way finishes first', () => {
+    expect(hook).toContain('if (!was || mine !== turn.current || was.ruling || !was.order || !was.schedule?.value) return')
+    expect(hook).toContain('const ruling = doorRulingOf({')
+    expect(hook).toContain('if (!next) close()')
+    expect(hook).toContain('if (busyNow.current) return')
+    expect(hook).toContain('if (wrote.current) return finish(wrote.current.words)')
+  })
+})
+
 describe('F-CM-k2: the order side is changed by TYPE only (K2.1, the F-CP-108 way)', () => {
   it('the money windows take a Pick of the record\'s model; Send the page… and Record a payment… are exported for the door', () => {
     const dialogs = source('../../view/Dialogs.tsx')
