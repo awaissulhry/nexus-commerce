@@ -162,6 +162,26 @@ describe('F-CM-k2: the hook (K2.3) — the order page\'s own acts, ONE window at
   })
 })
 
+describe('F-CM-k2: the window (K2.4) — the order page\'s own windows, never a copy', () => {
+  const win = source('./OrderMoneyWindow.tsx')
+
+  it('defines no window of its own: it imports them from ../view/MoneyDialogs and ../../view/Dialogs', () => {
+    expect(win).toContain("import { Frame, LinkDialog, PaymentDialog } from '../../view/Dialogs'")
+    expect(win).toContain("import { MoneyDialogs } from '../view/MoneyDialogs'")
+    expect(win).not.toMatch(/function \w*Dialog\b|<Field\b|<Input\b|<Textarea\b|<Select\b|<DateField\b|<form\b/)
+    for (const drawn of ['<PaymentDialog order={order}', '<LinkDialog order={order}', '<MoneyDialogs order={order} model={model.dialogs} actions={actions?.dialogs} />', '<StepUpModal']) expect(win, drawn).toContain(drawn)
+  })
+
+  it('reading · failed with Try again · held on the order as read — in the order page\'s words; it fetches nothing', () => {
+    expect(win).toContain("<WithMessages namespaces={['orders', SHEET]}>")
+    expect(win).toContain("s('commands.reading', { number })")
+    expect(win).toContain("s('commands.readFailed', { number, problem: t(problem) })")
+    expect(win).toContain('if (model.ruling.held) {')
+    expect(win).toContain("import '../../../orders.css'")
+    expect(win).not.toMatch(/lib\/api|use-money-acts|useMoneyActs|use-order-money-door|fetch\(/)
+  })
+})
+
 describe('F-CM-k2: the order side is changed by TYPE only (K2.1, the F-CP-108 way)', () => {
   it('the money windows take a Pick of the record\'s model; Send the page… and Record a payment… are exported for the door', () => {
     const dialogs = source('../../view/Dialogs.tsx')

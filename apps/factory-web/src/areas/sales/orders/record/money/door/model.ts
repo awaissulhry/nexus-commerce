@@ -1,8 +1,10 @@
 import type { DepositRequest, Order, Schedule, Settlement } from '../../../api'
-import { abilitiesOf, isFinal, type OrderAbilities } from '../../../model'
-import type { MoneyDialog } from '../../record-model'
+import type { StepUpState } from '../../../hooks'
+import { abilitiesOf, isFinal, type OrderAbilities, type Phrase } from '../../../model'
+import type { MoneyDialog, Part } from '../../record-model'
 import type { WaiveTarget } from '../../schedule/api'
 import { stepAbilitiesOf, type StepAbilities } from '../../schedule/model'
+import type { MoneyDialogActions, MoneyDialogModel } from '../../view/Dialogs'
 import { planOf, type PlanAct, type PlanRow } from '../plan'
 import { stillToPayOf } from '../totals'
 import { word, type MoneyWord } from '../word'
@@ -140,4 +142,44 @@ function startOf(act: DoorActId, row: PlanRow, request: DepositRequest): DoorSta
         stepKind: row.kind === 'BEFORE_SHIPPING' ? 'BEFORE_SHIPPING' : 'DEPOSIT',
       }
   }
+}
+
+// ---- the door's window: its model and acts (the hook fills them, OrderMoneyWindow.tsx draws them) ----
+
+/** The door's window as it stands: what is asked, the order and its plan as read, the plan's rule on them, the order's windows. */
+export interface OrderMoneyDoorModel {
+  readonly target: { readonly id: string; readonly number: string }
+  readonly ask: DoorAsk
+  /** The order as read; null while it reads, or when the read failed (`problem`). */
+  readonly order: Order | null
+  /** The order's read failed: its words (`orders` problem.read.*; an order out of the reader's reach answers 404, said neutrally). */
+  readonly problem: string | null
+  /** The payment plan's read (value null while it reads). */
+  readonly schedule: Part<Schedule> | null
+  /** The settlement's read (invoices.view); null without the right. */
+  readonly settlement: Part<Settlement> | null
+  /** The plan's rule on the order as FIRST read (model.ts doorRulingOf); null while it reads. A read after a write never rules again. */
+  readonly ruling: DoorRuling | null
+  /** What the order page's money windows read (a Pick of the record's model: rec/view/Dialogs.tsx MoneyDialogModel). */
+  readonly dialogs: MoneyDialogModel
+  /** The fresh authenticator code's dialog (the order page's own state: useStepUp). */
+  readonly stepUp: StepUpState
+}
+
+export interface OrderMoneyDoorActions {
+  readonly onClose: () => void
+  /** A failed read: read the order and its plan again. */
+  readonly onRetry: () => void
+  /** The order page's money windows' acts — the record's own (useMoneyActs); a window's Cancel or Done closes the door. */
+  readonly dialogs: MoneyDialogActions
+  readonly onStepUpSubmit: (code: string) => void
+  readonly onStepUpCancel: () => void
+}
+
+/** An act went: its order and act, and the order page's own words for it when it has some (else the host says its own). */
+export interface OrderMoneyDoorDone {
+  readonly id: string
+  readonly number: string
+  readonly act: DoorActId
+  readonly words: Phrase | null
 }
