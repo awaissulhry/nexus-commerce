@@ -282,15 +282,104 @@ export interface LinkedMessage {
   readonly authorName: string | null
   readonly excerpt: string
   readonly at: string
+  // ---- tw-s S.1 (thread rebuild W-030 / W-031): what the quote draws (contract linkedMessageView).
+  readonly authorKind?: AuthorKind
+  /** Office only; null for a floor worker the gate keeps back. */
+  readonly authorId?: string | null
+  /** Office only. */
+  readonly audience?: 'OFFICE' | 'PARTNER'
+  readonly erased?: boolean
+  /** Portal only: the reader's own post. */
+  readonly mine?: boolean
+  /** The files of it THIS reader may open (absent: its files were not read). */
+  readonly fileCount?: number
+  readonly firstFile?: { readonly id: string; readonly kind: AttachmentView['kind']; readonly contentType: string } | null
+  // ---- end tw-s S.1
 }
 /** The messages a page's messages point at, and the newest correction of each, as far as its reader may see them. */
 export interface MessageLinks {
   readonly linked: ReadonlyMap<string, LinkedMessage>
   readonly correctedBy: ReadonlyMap<string, { readonly id: string; readonly at: string }>
+  /** tw-s S.1: the linked messages as read — a portal caller finishes them after its own read (`finishedLinks`). */
+  readonly sources?: ReadonlyMap<string, LinkedSource>
 }
 export const NO_LINKS: MessageLinks = Object.freeze({ linked: new Map(), correctedBy: new Map() })
 /** How long the excerpt of a message pointed at is. */
 export const LINKED_EXCERPT_LENGTH = 140
+
+// ---- tw-s S.1 (thread rebuild W-030 / W-031; walls R1, R2): the quote's own data, each reader's file walls its own.
+/**
+ * A message pointed at, as read, before the facts its reader adds after its own read (a portal reader: which it posted, which were
+ * erased, which files are walled for it — read in the tenant's scope, outside the partner's own transaction).
+ */
+export interface LinkedSource {
+  readonly id: string
+  readonly authorKind: AuthorKind
+  /** As stored (the erasure check reads it); the quote names nobody when `hidden`. */
+  readonly authorName: string | null
+  /** A floor worker the site's gate keeps back (no name, no id). */
+  readonly hidden: boolean
+  readonly channel: MessageChannel
+  readonly bodyText: string
+  readonly at: Date
+  /** Office only: never read on a shared-only read (the partner role has no grant on Message.authorId). */
+  readonly authorId?: string | null
+  readonly audience?: 'OFFICE' | 'PARTNER'
+  /** Its files as the reader's own file walls show them, in order (a locked one included, never counted); null: not read. */
+  readonly files: readonly AttachmentView[] | null
+}
+
+/** What every reader reads of a message pointed at (the partner role's grant included). */
+const LINKED_COMMON = { id: true, authorKind: true, authorName: true, bodyText: true, channel: true, attachmentFileIds: true, at: true } as const satisfies Prisma.MessageSelect
+/** The office's read adds who wrote it and its audience. THE TRAP: never on a shared-only read, or every portal read fails at the database. */
+const LINKED_OFFICE = { ...LINKED_COMMON, authorId: true, audience: true } as const satisfies Prisma.MessageSelect
+type LinkedRow = Prisma.MessageGetPayload<{ select: typeof LINKED_COMMON }> & { authorId?: string | null; audience?: 'OFFICE' | 'PARTNER' }
+
+function sourceOf(row: LinkedRow, files: ReadonlyMap<string, AttachmentView> | null, workerShown: boolean): LinkedSource {
+  return {
+    id: row.id,
+    authorKind: row.authorKind,
+    authorName: row.authorName,
+    hidden: row.authorKind === 'WORKER' && !workerShown,
+    channel: row.channel,
+    bodyText: row.bodyText,
+    at: row.at,
+    ...('authorId' in row ? { authorId: row.authorId ?? null, audience: row.audience } : {}),
+    files: files === null ? null : [...new Set(row.attachmentFileIds)].flatMap((fileId) => {
+      const seen = files.get(fileId)
+      return seen ? [seen] : []
+    }),
+  }
+}
+
+/** The quote of a message pointed at, for its reader: its files counted from those THIS reader may open (never a locked or walled one). */
+function linkedViewOf(source: LinkedSource, told: { readonly erased: boolean; readonly mine?: boolean; readonly walled?: ReadonlySet<string> }): LinkedMessage {
+  const open = source.files?.filter((file) => file.locked === undefined && file.status === 'AVAILABLE' && !(told.walled?.has(file.id) ?? false)) ?? null
+  const first = open?.[0]
+  return {
+    id: source.id,
+    authorName: source.hidden ? null : source.authorName,
+    excerpt: excerptOf(source.bodyText, LINKED_EXCERPT_LENGTH),
+    at: toUtcIso(source.at),
+    authorKind: source.authorKind,
+    ...('authorId' in source ? { authorId: source.hidden ? null : (source.authorId ?? null) } : {}),
+    ...(source.audience ? { audience: source.audience } : {}),
+    ...(told.erased ? { erased: true } : {}),
+    ...(told.mine !== undefined ? { mine: told.mine } : {}),
+    ...(open === null ? {} : { fileCount: open.length, firstFile: first ? { id: first.id, kind: first.kind, contentType: first.contentType } : null }),
+  }
+}
+
+/**
+ * The links of a portal page finished with what its caller read after its own read, in the tenant's scope: which messages pointed at were
+ * erased, which the reader posted (`mine`), which of their files are walled for it (fix-wall-1: never counted, never the quote's file).
+ */
+export function finishedLinks(links: MessageLinks, told: { readonly erased: ReadonlySet<string>; readonly mine: ReadonlySet<string>; readonly walled: ReadonlySet<string> }): MessageLinks {
+  if (!links.sources || links.sources.size === 0) return links
+  const linked = new Map([...links.sources.values()].map((source) => [source.id, linkedViewOf(source, { erased: told.erased.has(source.id), mine: told.mine.has(source.id), walled: told.walled })] as const))
+  return { ...links, linked }
+}
+// ---- end tw-s S.1
 
 function linksOf(row: Pick<MessageRow, 'id'> & { replyToMessageId?: string | null; correctsMessageId?: string | null }, links: MessageLinks) {
   if (!('replyToMessageId' in row)) return {}
@@ -303,26 +392,40 @@ function linksOf(row: Pick<MessageRow, 'id'> & { replyToMessageId?: string | nul
  * `sharedOnly`: a portal reader — only messages shared with the party (row-level security keeps out a mail still waiting or taken
  * back); a link never points across (the database: a shared message points only at a shared one). `workerShown`: a floor worker's
  * name only while the site's gate is open (B-W2b-F4).
+ * tw-s S.1: each message pointed at says who wrote it (its kind; the office also its id and audience — never read when `sharedOnly`:
+ * the partner role has no grant on authorId), whether it was erased (the office's client reads the erasure records; a portal caller
+ * tells it after its read, `finishedLinks`), and how many of its files THIS reader may open: `visibleFiles` is the caller's own file
+ * walls (the office's visibleAttachments; the portal's own, its walled files left out after its read). Without it no file is counted.
  */
 export async function messageLinksOf(
   client: FactoryClient | CommandTx,
   threadId: string,
   rows: readonly { readonly id: string; readonly replyToMessageId?: string | null; readonly correctsMessageId?: string | null }[],
-  options: { readonly sharedOnly: boolean; readonly workerShown: boolean },
+  options: {
+    readonly sharedOnly: boolean
+    readonly workerShown: boolean
+    /** tw-s S.1: the files of these ids the reader may see, by its own file rules (a locked one marked `locked`). */
+    readonly visibleFiles?: (fileIds: readonly string[]) => Promise<ReadonlyMap<string, AttachmentView>>
+  },
 ): Promise<MessageLinks> {
   if (rows.length === 0) return NO_LINKS
   const shared: Prisma.MessageWhereInput = options.sharedOnly ? { audience: 'PARTNER' } : {}
   const targets = [...new Set(rows.flatMap((row) => [row.replyToMessageId, row.correctsMessageId]).filter((id): id is string => typeof id === 'string'))]
-  const [linkedRows, corrections] = await Promise.all([
-    targets.length === 0 ? [] : client.message.findMany({ where: { AND: [{ threadId, id: { in: targets } }, shared] }, select: { id: true, authorKind: true, authorName: true, bodyText: true, at: true } }),
+  const [found, corrections] = await Promise.all([
+    targets.length === 0 ? [] : client.message.findMany({ where: { AND: [{ threadId, id: { in: targets } }, shared] }, select: options.sharedOnly ? LINKED_COMMON : LINKED_OFFICE }),
     client.message.findMany({ where: { AND: [{ threadId, correctsMessageId: { in: rows.map((row) => row.id) } }, shared] }, orderBy: [{ at: 'desc' }, { id: 'desc' }], select: { id: true, at: true, correctsMessageId: true } }),
   ])
-  const linked = new Map<string, LinkedMessage>(
-    linkedRows.map((row) => [row.id, { id: row.id, authorName: row.authorKind === 'WORKER' && !options.workerShown ? null : row.authorName, excerpt: excerptOf(row.bodyText, LINKED_EXCERPT_LENGTH), at: toUtcIso(row.at) }]),
-  )
+  const linkedRows = found as LinkedRow[]
+  // ---- tw-s S.1: the reader's own file walls over the files of the messages pointed at (one read), and — the office — which were erased.
+  const fileIds = linkedRows.flatMap((row) => row.attachmentFileIds)
+  const files = options.visibleFiles ? (fileIds.length === 0 ? new Map<string, AttachmentView>() : await options.visibleFiles(fileIds)) : null
+  const erased = options.sharedOnly ? new Set<string>() : await erasedAmong(client, linkedRows)
+  const sources = new Map(linkedRows.map((row) => [row.id, sourceOf(row, files, options.workerShown)] as const))
+  const linked = new Map<string, LinkedMessage>([...sources.values()].map((source) => [source.id, linkedViewOf(source, { erased: erased.has(source.id) })]))
+  // ---- end tw-s S.1
   const correctedBy = new Map<string, { id: string; at: string }>()
   for (const row of corrections) if (row.correctsMessageId && !correctedBy.has(row.correctsMessageId)) correctedBy.set(row.correctsMessageId, { id: row.id, at: toUtcIso(row.at) })
-  return { linked, correctedBy }
+  return { linked, correctedBy, sources }
 }
 
 /** The message a new one answers or corrects (at most one of the two), as a route takes it. */
@@ -500,7 +603,8 @@ export async function readThread(caller: CommandCaller, record: RecordRef, page:
     // ---- end B-TH-027 / B-TH-028
     // ---- B-TH-050: the office's page points at what its messages answer or correct (a portal or link reader: GET /portal/threads).
     const workerShown = gates.at(thread.siteId).open
-    const links = office ? await messageLinksOf(client, thread.id, shown, { sharedOnly: false, workerShown }) : NO_LINKS
+    // tw-s S.1: a quote counts the files of what it quotes through the reader's own file walls (visibleAttachments).
+    const links = office ? await messageLinksOf(client, thread.id, shown, { sharedOnly: false, workerShown, visibleFiles: (fileIds) => visibleAttachments(client, context, fileIds) }) : NO_LINKS
     // ---- B-TH-079: the office reads which messages were erased, an inbound mail's skipped files and the mail waiting for a person.
     const erased = office ? await erasedAmong(client, shown) : new Set<string>()
     const skipped = office ? await skippedPartsOf(client, shown) : new Map<string, SkippedPart[]>()
@@ -930,7 +1034,7 @@ export async function postNote(caller: CommandCaller, record: RecordRef, input: 
       await clearDraftInCommand(tools, context.actorId, record) // B-TH-092
       const current = await tools.tx.thread.findUniqueOrThrow({ where: { id: thread.id }, select: THREAD_OFFICE })
       const attachments = await visibleAttachments(tools.tx, context, message.attachmentFileIds)
-      const linked = await messageLinksOf(tools.tx, thread.id, [message], { sharedOnly: false, workerShown: true }) // B-TH-050
+      const linked = await messageLinksOf(tools.tx, thread.id, [message], { sharedOnly: false, workerShown: true, /* tw-s S.1 */ visibleFiles: (fileIds) => visibleAttachments(tools.tx, context, fileIds) }) // B-TH-050
       return { thread: threadViewOf(current), message: messageViewOf(message, attachments, true, linked) }
     },
   )

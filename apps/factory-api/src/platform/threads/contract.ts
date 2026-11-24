@@ -77,7 +77,29 @@ export const attachmentView = output({
 export type AttachmentView = z.infer<typeof attachmentView>
 
 // ---- B-TH-050 (thread-G20): a message another points at, as a card shows it ("In reply to Anna, 14 Nov: …", "Corrects …").
-export const linkedMessageView = output({ id: id(), /** Null: a floor worker the site's gate keeps back. */ authorName: z.string().nullable(), excerpt: z.string(), at: instant() })
+// ---- tw-s S.1 (thread rebuild W-030 / W-031; walls R1, R2): what the quote draws — who wrote it, erased, the files THIS reader may open.
+// Words only: a quote never carries an amount nor a file's name or preview.
+export const linkedMessageView = output({
+  id: id(),
+  /** Null: a floor worker the site's gate keeps back. */
+  authorName: z.string().nullable(),
+  excerpt: z.string(),
+  at: instant(),
+  /** tw-s: who wrote it; a floor worker the gate keeps back is a WORKER with no name ("A person on the floor"). */
+  authorKind: z.enum(AUTHOR_KINDS).optional(),
+  /** tw-s, office only (never read on a shared-only read: the partner role has no grant on it); null for a floor worker the gate keeps back. */
+  authorId: id().nullable().optional(),
+  /** tw-s, office only: OFFICE (a note) or PARTNER (shared with the customer or supplier). */
+  audience: z.enum(MESSAGE_AUDIENCES).optional(),
+  /** tw-s: erased after a privacy request ("Message removed", no name). */
+  erased: z.boolean().optional(),
+  /** tw-s, portal only: the reader wrote it in the portal. */
+  mine: z.boolean().optional(),
+  /** tw-s: how many of its files THIS reader may open — a locked one (priced without the price grain, a measurement sheet) or a walled one never counts. */
+  fileCount: z.number().int().min(0).optional(),
+  /** tw-s: the first of those files (never a locked or walled one); null: none. */
+  firstFile: output({ id: id(), kind: z.enum(FILE_KINDS), contentType: z.string() }).nullable().optional(),
+})
 /** B-TH-050: what a new message answers or corrects — one at most, a message of the same conversation. */
 export const messageLinkInput = {
   /** "Reply" on a message: the message it answers. */

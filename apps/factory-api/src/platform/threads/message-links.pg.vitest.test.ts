@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto' // tw-s: the made-up files of a quote
 import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -48,11 +49,14 @@ const partyA = seedUuid(NS, 'party:P1')
 const partyB = seedUuid(NS, 'party:P3')
 const WRITER = newId()
 const ALPHA_DESK = newId() // B-SA-061: an office person limited to customer A
+const PRICEY = newId() // tw-s S.1: an office reader who sees prices (the price grain)
 const grant = (permissions: string[], parties: Grant['parties'] = 'all'): Grant => ({ permissions: permissions as Permission[], companies: 'all', sites: 'all', parties })
 const SESSIONS: Record<string, SessionContext> = {
   writer: { audience: 'office', tenantId: T, actorId: WRITER, grants: [grant(['threads.read', 'threads.post', 'files.read', 'tasks.manage', 'home.view'])] },
   // B-SA-061
   alphaDesk: { audience: 'office', tenantId: T, actorId: ALPHA_DESK, grants: [grant(['threads.read', 'threads.post', 'files.read'], [partyA])] },
+  // tw-s S.1
+  pricey: { audience: 'office', tenantId: T, actorId: PRICEY, grants: [grant(['threads.read', 'files.read', 'money.price'])] },
 }
 
 let h: Harness
@@ -333,3 +337,82 @@ describe('B-SA-061: a message says which part of its order it is about', { timeo
   })
 })
 // ── end B-SA-061 ──
+
+// ── tw-s (the thread rebuild: the record thread looks and works like a group chat; walls R1, R2, worker privacy): what a quote carries ──
+describe('tw-s: a quote carries its own data, through the reader’s own walls', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  type Ref = { type: string; id: string }
+  const read = async (who: string, url: string): Promise<Json> => {
+    const response = await call(who, 'GET', url)
+    expect(response.statusCode, response.body).toBe(200)
+    return response.json() as Json
+  }
+  const byId = (page: Json, id: string): Json => (page.messages as Json[]).find((message) => message.id === id)!
+  /** An AVAILABLE office file of the record, written straight into the table (the files flow is platform/files'). */
+  async function officeFile(record: Ref, name: string, kind: 'DOCUMENT' | 'PHOTO', contentType: string, priced: boolean): Promise<string> {
+    const id = newId()
+    const [owner] = await admin<{ companyId: string }>(`SELECT "companyId" FROM "${record.type}" WHERE id = $1`, [record.id])
+    const [store] = await admin<{ id: string }>(`SELECT id FROM "IntegrationAccount" WHERE "tenantId" = $1 AND provider = 'R2' ORDER BY id LIMIT 1`, [T])
+    await admin(
+      `INSERT INTO "StoredFile" (id, "tenantId", "companyId", "recordType", "recordId", kind, "originalName", "contentType", "sizeBytes", sha256,
+         "storeAccountId", "storageKey", status, visibility, "partyId", "availableAt", priced)
+       VALUES ($1, $2, $3, $4, $5, $6::"FileKind", $7, $8, 100, $9, $10, $11, 'AVAILABLE', '{OFFICE}'::"FileAudience"[], NULL, now(), $12)`,
+      [id, T, owner!.companyId, record.type, record.id, kind, name, contentType, createHash('sha256').update(id).digest('hex'), store!.id, `t/${T}/c/${owner!.companyId}/2026/${newId()}`, priced],
+    )
+    return id
+  }
+  /** Test data past the guards (replica mode, the one admin connection). */
+  async function pastGuards(work: () => Promise<void>): Promise<void> {
+    await admin('SET session_replication_role = replica')
+    try {
+      await work()
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
+  }
+
+  beforeAll(async () => {
+    await admin('INSERT INTO "User" (id, "tenantId", email, "displayName", status, locale) VALUES ($1, $2, $3, $4, \'ACTIVE\', \'en\')', [PRICEY, T, 'tws-pricey@example.com', 'Made-up price reader'])
+  })
+
+  it('a quote names its writer’s kind, says erased, and counts the files the READER may open; a priced file is never the quote’s file for a reader without the price grain', async () => {
+    const record: Ref = { type: 'SalesOrder', id: orders[1]! }
+    const priced = await officeFile(record, 'Made-up order confirmation.pdf', 'DOCUMENT', 'application/pdf', true)
+    const photo = await officeFile(record, 'Made-up sleeve.jpg', 'PHOTO', 'image/jpeg', false)
+    // An office note with the priced file first, then the photo; a customer's mail later erased after a privacy request.
+    const { result } = await command(callerFor(h.database, office()), { name: 'threads.test.quoted', input: { record } }, async (tools) => {
+      const { thread } = await ensureThread(tools, record, WRITER)
+      const withFiles = await writeMessage(tools, thread, { direction: 'INTERNAL_NOTE', channel: 'APP', author: { kind: 'USER', id: WRITER, name: 'Made-up writer' }, bodyText: 'Made-up: the confirmation and the sleeve.', attachments: [priced, photo] })
+      const asked = await writeMessage(tools, thread, { direction: 'INBOUND', channel: 'EMAIL', author: { kind: 'PARTY', id: null, name: 'Made-up rider' }, bodyText: 'Made-up: my home address is …' })
+      return { withFiles: withFiles.id, asked: asked.id, companyId: thread.companyId }
+    })
+    await pastGuards(async () => {
+      await admin(`UPDATE "Message" SET "authorName" = NULL, "bodyText" = '', "bodyHtml" = NULL WHERE id = $1`, [result.asked])
+      await admin(
+        `INSERT INTO "ErasureRecord" (id, "tenantId", "companyId", "sweepId", "recordType", "recordId", method, "erasedFields", "keptFields", "erasedAt")
+         VALUES ($1, $2, $3, $4, 'Message', $5, 'ANONYMISED', '{authorName,bodyText,bodyHtml}', '{}', now())`,
+        [newId(), T, result.companyId, newId(), result.asked],
+      )
+    })
+    const onFiles = await note(record.type, record.id, { body: 'Made-up: filed, thanks.', replyToMessageId: result.withFiles })
+    const onErased = await note(record.type, record.id, { body: 'Made-up: noted.', replyToMessageId: result.asked })
+
+    // The writer does not see prices: the priced file never counts and is never the quote's file — the photo is.
+    const quoteOfFiles = { id: result.withFiles, authorKind: 'USER', authorId: WRITER, audience: 'OFFICE', authorName: 'Made-up writer', excerpt: 'Made-up: the confirmation and the sleeve.', at: expect.any(String), fileCount: 1, firstFile: { id: photo, kind: 'PHOTO', contentType: 'image/jpeg' } }
+    expect(onFiles.message.replyTo).toEqual(quoteOfFiles)
+    const asWriter = await read('writer', `/threads/${record.type}/${record.id}?limit=200`)
+    expect(byId(asWriter, onFiles.message.id).replyTo).toEqual(quoteOfFiles)
+    expect(JSON.stringify(byId(asWriter, onFiles.message.id).replyTo)).not.toContain(priced)
+    // The card of the quoted note still shows the priced file locked (counted, never named): the quote only leaves it out.
+    expect(byId(asWriter, result.withFiles).attachments).toEqual(expect.arrayContaining([expect.objectContaining({ id: priced, originalName: '', locked: 'PRICED' })]))
+    // A reader with the price grain opens both: the priced file is first.
+    const asPricey = await read('pricey', `/threads/${record.type}/${record.id}?limit=200`)
+    expect(byId(asPricey, onFiles.message.id).replyTo).toMatchObject({ id: result.withFiles, fileCount: 2, firstFile: { id: priced, kind: 'DOCUMENT', contentType: 'application/pdf' } })
+    // The erased message is said so: no name, no words, its kind and audience kept, no file.
+    const erasedQuote = { id: result.asked, authorKind: 'PARTY', authorId: null, audience: 'PARTNER', authorName: null, excerpt: '', erased: true, fileCount: 0, firstFile: null }
+    expect(byId(asWriter, onErased.message.id).replyTo).toMatchObject(erasedQuote)
+    expect(onErased.message.replyTo).toMatchObject(erasedQuote)
+    // A quote of a message that is not erased never says so.
+    expect(byId(asWriter, onFiles.message.id).replyTo).not.toHaveProperty('erased')
+  })
+})
+// ── end tw-s ──
