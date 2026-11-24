@@ -925,7 +925,9 @@ import { SENDER_TONES, tonesFor } from '../parts/tones'
 
 describe('tw- fx2 — colours, audience icons and the touch arrow after the walk', () => {
   it('G-7: eight person tones (no yellow, no slate); one colour per person inside a list, deterministic', () => {
-    expect([...SENDER_TONES]).toEqual(['purple', 'emerald', 'pink', 'orange', 'blue', 'cyan', 'violet', 'red'])
+    expect([...SENDER_TONES]).toEqual(['purple', 'emerald', 'pink', 'orange', 'blue', 'cyan', 'violet'])
+    expect(SENDER_TONES as readonly string[]).not.toContain('red')
+    expect(SENDER_TONES as readonly string[]).not.toContain('yellow')
     const keys = ['USER:mario', 'PARTY:bianca', 'USER:paula', 'WORKER:walter', 'USER:bea']
     const tones = tonesFor(keys)
     expect(new Set(keys.map((key) => tones.get(key))).size).toBe(5)
