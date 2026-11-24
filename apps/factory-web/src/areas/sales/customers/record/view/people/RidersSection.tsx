@@ -99,7 +99,8 @@ export function RidersSection({ model, actions }: { model: PeopleTabModel; actio
           {say(said('showFewer'))}
         </Button>
       ) : null}
-      {riders.measurements && (riders.kind === 'ORGANISATION' || shownProfiles > 0) ? (
+      {/* F-CA-fx4 (walk W-10): an empty section is the head only — the foot comes with the riders. */}
+      {riders.measurements && riders.all.length > 0 && (riders.kind === 'ORGANISATION' || shownProfiles > 0) ? (
         <p className="fw-ca-foot">
           <Lock size={13} aria-hidden />
           <span>
@@ -151,7 +152,7 @@ function RiderRowView({ row, model, actions, say }: { row: RiderRow; model: Peop
             ) : null
           ) : row.profiles.length > 0 ? (
             row.profiles.map((profile) => <ProfileLine key={profile.id} profile={profile} model={model} say={say} />)
-          ) : (
+          ) : riders.profilesProblem ? null /* F-CA-fx4 (walk W-02): the profiles read failed — its ONE "Couldn't load" + Try again is above, never "No measurements yet" */ : (
             <div className="fw-ca-pr">
               <div className="fw-ca-none">{say(said('riders.noMeasurements'))}</div>
             </div>

@@ -14,6 +14,7 @@ import { addressMenu, addressUsageWords, type AddressRow } from '../../people/ad
 import { ADDRESS_ROWS, addressAnchor, peopleKitId, said, type Say } from '../../people/model'
 import type { PeopleTabActions, PeopleTabModel } from '../../people/tab'
 import { menuItemOf, sentenceOf, usePeopleSay } from './say'
+import { UsageFailed } from './UsageFailed' // F-CA-fx4 (Z25)
 
 /**
  * F-CA-111 (customer page › PEOPLE & ADDRESSES tab, lane ca-; 10-design §5.2; 18-lead-settles Z17) — section 2, Addresses (#addresses):
@@ -78,6 +79,7 @@ export function AddressesSection({ model, actions }: { model: PeopleTabModel; ac
           ))}
         </div>
       ) : null}
+      {addresses.usageProblem && addresses.rows.length > 0 ? <UsageFailed problem={addresses.usageProblem} onRetry={actions?.onRetryUsage} /> : null}
       {!filter && addresses.listed > addresses.rows.length ? (
         <Button size="sm" variant="quiet" className="fw-ca-more" onClick={() => actions?.onMore?.('addresses', true)}>
           {say(said('addresses.showMore', { params: { count: addresses.listed - addresses.rows.length } }))}

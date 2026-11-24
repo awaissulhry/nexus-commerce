@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs'
-import type { ComponentType } from 'react'
+import { createElement, type ComponentType } from 'react'
 import { describe, expect, it } from 'vitest'
 import { LOCALES, type Locale } from '../../../../../lib/i18n/locales'
-import { leftKeys, renderView, textOf } from '../../../../../lib/record-thread/parts/testing'
+import { leftKeys, render, renderView, textOf } from '../../../../../lib/record-thread/parts/testing'
 import { designScreen } from '../fixtures'
-import { CA_CASES, CA_PARTS } from './_demo/fixtures'
+import { PeopleTab } from '../view/people/PeopleTab'
+import { CA_CASES, CA_PARTS, caTabOf } from './_demo/fixtures'
 
 /**
  * F-CA T.1 / T.2 (customer page › PEOPLE & ADDRESSES tab, lane ca- ca-t; 15-steps T.1, T.2) — the gallery's `ca-*` cases of SCR-033: all
@@ -54,7 +55,7 @@ describe('F-CA T.1: the People tab\'s gallery cases (SCR-033, ids ca-*)', () => 
     ['ca-privacy', ['Lawful basis missing', 'Erased contact', 'Objected 03/10/2026'], ['Base giuridica mancante', 'Contatto cancellato', 'Opposizione 03/10/2026']],
     ['ca-seats', ['Seats full (5 of 5)', '1 invitation expired', '1 access ends within 14 days'], ['Posti esauriti (5 di 5)', '1 invito scaduto', '1 accesso scade entro 14 giorni']],
     ['ca-invoices', ['Nobody gets invoices', '2 registered offices'], ['Nessuno riceve le fatture', '2 sedi legali']],
-    ['ca-rider', ['Team: Seed Customer One S.r.l. ›'], ['Squadra: Seed Customer One S.r.l. ›']],
+    ['ca-rider', ['Team: Seed Racing ›'], ['Squadra: Seed Racing ›']], // F-CA-fx4 (walk W-07): the team's display name, as its own page
     ['ca-many', ['Show 4 more people', 'Show 5 more riders', 'Show 1 more address'], ['Mostra altre 4 persone', 'Mostra altri 5 piloti', 'Mostra 1 altro indirizzo']],
     ['ca-chip-check', ['Showing the 1 address that waits for our check.'], ['È mostrato 1 indirizzo che attende il nostro controllo.']],
     ['ca-no-portal-right', ['portal access is not shown for your role'], ['l\'accesso al portale non è mostrato per il tuo ruolo']],
@@ -65,6 +66,7 @@ describe('F-CA T.1: the People tab\'s gallery cases (SCR-033, ids ca-*)', () => 
     ['ca-failed-privacy', ['Couldn\'t load the personal data of the contacts'], ['Impossibile caricare i dati personali dei contatti']],
     ['ca-failed-profiles', ['Couldn\'t load the measurement profiles'], ['Impossibile caricare i profili di misura']],
     ['ca-failed-riders', ['Couldn\'t load the riders'], ['Impossibile caricare i piloti']],
+    ['ca-failed-usage', ['Couldn\'t read what is open on them. The factory server is not answering'], ['Impossibile leggere i lavori aperti che li riguardano. Il server della fabbrica non risponde']], // F-CA-fx4 (Z25)
     ['ca-failed-all', ['Couldn\'t load the portal access', 'Couldn\'t load the personal data of the contacts', 'Couldn\'t load the measurement profiles', 'Couldn\'t load the riders'], ['Impossibile caricare l\'accesso al portale', 'Impossibile caricare i piloti']],
   ]
   for (const locale of LOCALES) {
@@ -82,6 +84,33 @@ describe('F-CA T.1: the People tab\'s gallery cases (SCR-033, ids ca-*)', () => 
     expect(words('ca-failed-portal')).not.toContain('Sees prices')
     expect(words('ca-busy')).toContain('2 open quotes')
     for (const id of ['ca-failed-usage', 'ca-reading-all']) expect(words(id), id).not.toContain('2 open quotes')
+  })
+
+  // F-CA-fx4: the walk's gaps on screen (30-walk.md W-02, W-09, W-10; 18-lead-settles Z25).
+  it('W-09 (Z25): a failed usage read says so ONCE in People and ONCE in Addresses — never per row; reading or read: never', () => {
+    const lines = (id: string, locale: Locale = 'en') => words(id, locale).split(locale === 'en' ? "Couldn't read what is open on them" : 'Impossibile leggere i lavori aperti che li riguardano').length - 1
+    for (const locale of LOCALES) expect(lines('ca-failed-usage', locale), locale).toBe(2)
+    for (const id of ['ca-busy', 'ca-reading-all', 'ca-new']) expect(lines(id), id).toBe(0)
+    expect(textOf(draw('ca-failed-usage').slice(draw('ca-failed-usage').indexOf('id="riders"')))).not.toContain("Couldn't read what is open on them")
+    // Handed its act (the page's container), each line carries its own Try again — the usage read only.
+    const retried: string[] = []
+    const tab = (id: string, locale: Locale) => textOf(render(createElement(PeopleTab, { model: caTabOf(CA_CASES.find((item) => item.id === id)!.ca).model, actions: { onRetryUsage: () => void retried.push(id) }, recordHref: '/w/DEMO/sales/customers/x' }), locale))
+    expect(tab('ca-failed-usage', 'en').split('Try again').length - 1).toBe(2)
+    expect(tab('ca-failed-usage', 'it').split('Riprova').length - 1).toBe(2)
+    expect(tab('ca-busy', 'en')).not.toContain('Try again')
+  })
+
+  it('W-02: a rider kept here never says "No measurements yet" while its profiles read failed (its one "Couldn\'t load" + Try again says it)', () => {
+    expect(words('ca-busy')).not.toContain('No measurements yet')
+    expect(words('ca-failed-profiles')).toContain('Couldn\'t load the measurement profiles')
+    expect(words('ca-failed-profiles')).not.toContain('No measurements yet')
+    expect(words('ca-failed-profiles', 'it')).not.toContain('Ancora nessuna misura')
+  })
+
+  it('W-10: an empty Riders section is the head only — the foot "See all in Made-to-measure ›" comes with the riders', () => {
+    expect(words('ca-busy')).toContain('See all in Made-to-measure ›')
+    expect(words('ca-new')).not.toContain('See all in Made-to-measure')
+    expect(words('ca-new', 'it')).not.toContain('Vedi tutto in Su misura')
   })
 
   it('an archived customer holds every change by its state, with its words', () => {

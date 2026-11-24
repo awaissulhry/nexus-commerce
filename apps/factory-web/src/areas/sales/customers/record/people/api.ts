@@ -75,8 +75,8 @@ export const ridersSchema = z.object({
   partyId: z.string(),
   code: z.string(),
   kind: partyKind,
-  /** This party's team, when it is a rider (and a team the reader may see). */
-  team: z.object({ id: z.string(), code: z.string(), legalName: z.string(), status: z.string() }).nullable(),
+  /** This party's team, when it is a rider (and a team the reader may see); F-CA-fx4 (W-07): its trade name, so it is named as its own page names it. */
+  team: z.object({ id: z.string(), code: z.string(), legalName: z.string(), tradeName: z.string().nullable().optional(), status: z.string() }).nullable(),
   riders: z.array(
     z.object({
       id: z.string(),

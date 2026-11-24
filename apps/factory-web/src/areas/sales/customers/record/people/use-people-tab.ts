@@ -386,7 +386,7 @@ export function usePeopleTab(input: PeopleTabInput): PeopleTabContainer {
     if (row?.party) {
       patch({ team: { riderId: row.party.id, riderName: row.name, version: row.party.version, current: { id: partyId, name: customerQ }, choice: 'move', search: '', found: null, picked: null, tried: false, busy: false, problem: null } })
     } else if (!row && party) {
-      patch({ team: { riderId: partyId, riderName: customerQ, version: view?.version ?? party.version, current: view?.team ? { id: view.team.id, name: view.team.legalName } : null, choice: view?.team ? 'keep' : 'move', search: '', found: null, picked: null, tried: false, busy: false, problem: null } })
+      patch({ team: { riderId: partyId, riderName: customerQ, version: view?.version ?? party.version, current: view?.team ? { id: view.team.id, name: partyName({ tradeName: view.team.tradeName ?? null, legalName: view.team.legalName }) /* F-CA-fx4 (W-07) */ } : null, choice: view?.team ? 'keep' : 'move', search: '', found: null, picked: null, tried: false, busy: false, problem: null } })
     }
   }
   const teamKey = useRef<string | null>(null)
@@ -513,6 +513,11 @@ export function usePeopleTab(input: PeopleTabInput): PeopleTabContainer {
       void loadRiders()
     },
     onRetryPortal: () => portalActions.onRetry?.(),
+    // F-CA-fx4 (Z25): only the usage read again (the lines are left out while it reads).
+    onRetryUsage: () => {
+      setUsage(READING)
+      void loadUsage()
+    },
     onRefuseDraft: (reason) => setState((current) => (current.refuse ? { ...current, refuse: { ...current.refuse, reason } } : current)),
     onRefuseConfirm: () => void confirmRefuse(),
     onRefuseClose: () => {
