@@ -1,4 +1,4 @@
-import { createElement, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createElement, Fragment, useMemo, useRef, useState, type ReactNode } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { ARCHIVED_CUSTOMER, at, CUSTOMERS, inShell, NOW, ORDERS, partyThread, QUOTES, RECORD_CAN, recordModel, withoutMoney } from '../../../parties/_shared/fixtures'
 import { loaded, loading, type PartyRecordModel } from '../../../parties/_shared/model'
@@ -9,8 +9,8 @@ import type { CommercialTermsModel } from '../terms/view/CommercialTermsCard'
 import { MONEY_CAN, MONEY_STATES, moneyModel } from '../money/_demo/fixtures'
 import type { CustomerMoneyModel } from '../money/overview'
 import { CustomerRecordView } from './view/CustomerRecordView'
-// F-SA-272: the supervisor card's states (made-up people of the portal demo).
-import { CustomerSupervisorCard } from '../portal/view/CustomerSupervisorCard'
+// F-SA-272 → F-CO-201: who looks after the customer, as People's rows and their two Change… windows (made-up people of the portal demo).
+import { DesignerWindow, SupervisorWindow } from '../portal/view/CustomerSupervisorCard'
 import { SUPERVISOR_CASES } from '../portal/demo'
 import { DESIGNER_CASES } from '../portal/demo' // F-CP-155
 import type { DesignerModel } from '../portal/designer/model' // F-CP-155
@@ -117,7 +117,7 @@ import type { WorkRoom } from './view/WorkTab'
 import type { BeforeOrderCountsAnswer } from '@nexus/factory-domain/sales/before-order/contracts'
 import { customerMoneyCanOf } from '../money/model'
 import { customerHref, workOrdersDoor } from './overview/doors'
-import type { OverviewInput } from './overview/model'
+import { urgencyOf as looksUrgencyOf, type LooksAfter, type OverviewInput } from './overview/model' // F-CO-201: the urgency from who looks after
 import { overviewOf } from './overview/rows'
 import { CustomerOverviewView } from './view/overview/CustomerOverviewView'
 // ---- end F-CO-103
@@ -151,7 +151,7 @@ const OPEN_ORDER_MONEY: OpenOrderMoney[] = [
 /** A case: the record, (B-W2a-49) the Commercial terms card of its Terms & requirements tab (B-TH-260), (B-W2a-81) its money and after-sales reads, (B-W2b-324) its depth. */
 // F-SA-272: + the Overview's "Who looks after <customer>" card (the supervisor and backup, moved from Portal settings).
 // F-SA-274: + the e-mails of the people with portal access (the contacts' "Has portal access").
-type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase; supervisor?: SupervisorModel; portalEmails?: readonly string[]; work?: WorkCase /* F-SA-276 */; designer?: DesignerModel /* F-CP-155 */; priceDiffer?: number /* F-CP-141 */; shipmentLine?: boolean /* cw T.1: the docked ORDER's thread with the draft shipment's office line */ }
+type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase; supervisor?: SupervisorModel; portalEmails?: readonly string[]; work?: WorkCase /* F-SA-276 */; designer?: DesignerModel /* F-CP-155 */; priceDiffer?: number /* F-CP-141 */; shipmentLine?: boolean /* cw T.1: the docked ORDER's thread with the draft shipment's office line */; supervisorOpen?: boolean /* F-CO-201: People's Change… (the supervisor) open — the form's own states */ }
 
 // ---- F-SA-276: the Work tab's cases — the strip's reads and the sheet's rows (made-up; the production part as the API sends it) ----
 interface WorkCase {
@@ -788,7 +788,7 @@ const plainGlance = (party: Party): Glance => ({
   readAt: NOW,
 })
 
-function OverviewDesign({ record, party, money, depth, supervisor }: { record: PartyRecordModel; party: Party; money?: CustomerMoneyModel | undefined; depth?: DepthCase | undefined; supervisor?: ReactNode }) {
+function OverviewDesign({ record, party, money, depth, supervisor, designer, supervisorOpen = false }: { record: PartyRecordModel; party: Party; money?: CustomerMoneyModel | undefined; depth?: DepthCase | undefined; supervisor?: SupervisorModel | undefined; designer?: DesignerModel | undefined; supervisorOpen?: boolean }) {
   const can = record.can
   const moneyCan = money?.can ?? customerMoneyCanOf([])
   const quotesTab = can.quotes || can.inquiries === true
@@ -811,6 +811,7 @@ function OverviewDesign({ record, party, money, depth, supervisor }: { record: P
     groups: { WRITING: can.orders ? 2 : null, TO_ANSWER: toAnswer, PREPARING: can.quotes ? 1 : null, APPROVAL: can.quotes ? 0 : null, WAITING_CUSTOMER: can.quotes ? 2 : null, ORDER_WAITS: orderWaits, WON: can.quotes ? 4 : null, MOVED: can.inquiries === true ? 0 : null, LOST: can.quotes ? 1 : null },
     byKind: { quotes: null, requests: null, portalOrders: null, drafts: null },
   }
+  const looks: LooksAfter | null = supervisor ? { supervisor, designer: designer ?? null } : null
   // The glance's parts this case's reader may read: what its own answer withholds (a glance not in yet: every part, as the Owner).
   const glanceRead = depth?.glance ?? ready(plainGlance(party))
   const mayRead = (part: 'samples' | 'repairs' | 'credit'): boolean => glanceRead.status !== 'ready' || !glanceRead.value.withheld.includes(part)
@@ -825,7 +826,9 @@ function OverviewDesign({ record, party, money, depth, supervisor }: { record: P
     money: money ? { ageing: money.ageing, returns: money.returns, complaints: money.complaints, orders: money.orders ?? null, returnsHref: money.returnsHref } : { ageing: loading(), returns: loading(), complaints: loading(), orders: null, returnsHref: null },
     // This customer's row of the joined read (asked only with orders.view).
     standing: can.orders ? { status: 'ready', value: { partyId: party.id, orders: 9, phases: [], late: 1, waitsForYes: 0, depositOpen: 1, requests: { open: 2, firstId: null }, replies: 3, customerUrgent: { count: 0, byCompany: [] }, priority: { top: 0, high: 0 }, nextPromise: '2026-11-14', lastOrderDate: '2026-10-21' } } : OFF_READ,
-    urgency: OFF_READ,
+    // F-CO-201: who looks after (partners.view: the case's own models) — People's rows, and the urgency from the same read.
+    urgency: looksUrgencyOf(looks),
+    looksAfter: looks,
     projects: can.projects ? (record.projects ?? null) : null,
     viesRunning: record.viesRunning === true,
   }
@@ -838,12 +841,20 @@ function OverviewDesign({ record, party, money, depth, supervisor }: { record: P
         actions: { onGroup: () => undefined, onAll: () => undefined },
       }
     : null
-  return createElement(CustomerOverviewView, { model: overviewOf(input), band, before, supervisor })
+  const overview = overviewOf(input)
+  // People's two Change… windows, the page's own (a case opens the supervisor's to show its form; the designer's opens by its model).
+  return createElement(
+    Fragment,
+    null,
+    createElement(CustomerOverviewView, { model: overview, band, before }),
+    supervisor && supervisorOpen ? createElement(SupervisorWindow, { model: supervisor, name: overview.customer, onClose: () => undefined }) : null,
+    designer ? createElement(DesignerWindow, { model: designer, name: overview.customer }) : null,
+  )
 }
 // ---- end F-CO-103
 
 function CustomerDesign({ model }: { model: CustomerCase }) {
-  const { terms, money, depth, supervisor, portalEmails, work, designer, priceDiffer, shipmentLine, ...record } = model
+  const { terms, money, depth, supervisor, portalEmails, work, designer, priceDiffer, shipmentLine, supervisorOpen, ...record } = model
   // ---- cq W3 (T part 2): Quotes & incoming — the tab's own gallery parts (quotes-tab/fixtures.ts) for this customer; a Work case's
   // portal drafts are its "Customer is writing" (F-CQ-303).
   const quotesIncoming = record.party && record.tab === 'quotes' ? (work?.drafts ? createElement(DraftsTabDesign, { work, party: record.party }) : createElement(QuotesTabDesign, { model: quotesTabFor({ id: record.party.id, name: record.party.tradeName ?? record.party.legalName }) })) : null
@@ -852,8 +863,7 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
   const id = party?.id ?? 'x'
   // F-CO-103: the Overview tab, built for the tab the page shows (as the live container builds it); until its rows land in People,
   // the "Who looks after <customer>" card (F-SA-272, F-CP-155) stands under the People pair, as it is.
-  const supervisorCard = supervisor && party ? createElement(CustomerSupervisorCard, { model: supervisor, name: party.tradeName ?? party.legalName, designer: designer ?? null /* F-CP-155 */ }) : null
-  const overviewTab = party && shownTab(recordTabs(SIDES.customers, record.can), record.tab) === 'overview' ? createElement(OverviewDesign, { record, party, money, depth, supervisor: supervisorCard }) : null
+  const overviewTab = party && shownTab(recordTabs(SIDES.customers, record.can), record.tab) === 'overview' ? createElement(OverviewDesign, { record, party, money, depth, supervisor, designer, supervisorOpen: supervisorOpen === true }) : null
   return inShell(
     `/sales/customers/${id}`,
     createElement(
@@ -1068,11 +1078,11 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'band-doors', label: 'F-SA-271 · ⋯ Check VIES, Add task for <customer>…, Import orders…, Open in Sales › Orders, Work orders of <customer> ›', model: record('MODA-DEMO', { can: { ...RECORD_CAN, ordersManage: true, tasks: true, workorders: true } }) },
     // ---- F-SA-272: the Overview — key numbers as doors, Also open, and who looks after the customer (moved from Portal settings).
     { id: 'overview-supervisor', label: 'F-SA-272 · Overview: Who looks after <customer> — supervisor Bea Esempio, backup Carlo Prova (office only)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved } },
-    { id: 'overview-supervisor-new', label: 'F-SA-272 · A first supervisor picked — "moves 7 orders that have no supervisor of their own" before Apply', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.first } },
+    { id: 'overview-supervisor-new', label: 'F-SA-272 · A first supervisor picked — "moves 7 orders that have no supervisor of their own" before Apply', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.first, supervisorOpen: true /* F-CO-201: the form's state, in People's Change… window */ } },
     { id: 'overview-supervisor-held', label: 'F-SA-272 · The supervisor held — no production.brand.manage', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.held } },
     { id: 'overview-supervisor-every-company', label: 'F-SA-272 · The supervisor held — the reader does not manage this customer at every company', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.everyCompany } },
-    { id: 'overview-supervisor-nobody', label: 'F-SA-272 · Nobody may supervise yet (what a supervisor needs, in words)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.nobody } },
-    { id: 'overview-supervisor-refused', label: 'F-SA-272 · Apply refused: the supervisor cannot open measurement sheets', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.refused } },
+    { id: 'overview-supervisor-nobody', label: 'F-SA-272 · Nobody may supervise yet (what a supervisor needs, in words)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.nobody, supervisorOpen: true /* F-CO-201: the form's state, in People's Change… window */ } },
+    { id: 'overview-supervisor-refused', label: 'F-SA-272 · Apply refused: the supervisor cannot open measurement sheets', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.refused, supervisorOpen: true /* F-CO-201: the form's state, in People's Change… window */ } },
     // ---- F-CP-155: the Factory designer + Backup under Supervisor / Backup (the only names of ours the customer sees) ----
     { id: 'overview-designer', label: 'F-CP-155 · Who looks after <customer>: Factory designer Giulia Verdi + Backup Elena Rossi — "<customer> sees this name"', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.set } },
     { id: 'overview-designer-change', label: 'F-CP-155 · Change…: ONE window, two pick lists (office people who read and answer its conversations), Apply with the version', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.change } },

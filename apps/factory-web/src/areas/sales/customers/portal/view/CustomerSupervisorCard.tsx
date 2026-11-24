@@ -37,11 +37,8 @@ export function CustomerSupervisorCard({ model, actions, name, notice, onDismiss
 
 function SupervisorCard({ model, actions, name, notice, onDismissNotice, designer, designerActions }: { model: SupervisorModel; actions?: SupervisorActions | undefined; name: string; notice: PortalNotice | null; onDismissNotice?: (() => void) | undefined; designer: DesignerModel | null; designerActions?: DesignerActions | undefined }) {
   const t = usePortalT()
-  const ts = useT(SUPERVISOR_NS)
   const read = model.read
-  const [draft, setDraft] = useState<LimitsDraft | null>(model.draft ?? (read ? limitsDraftOf(read.production) : null))
-  // A save (or someone else's change) moves the version: the card starts again from what is stored.
-  useEffect(() => setDraft(model.draft ?? (read ? limitsDraftOf(read.production) : null)), [read?.production.version, read?.party.id])
+  const [draft, setDraft] = useSupervisorDraft(model)
   // F-CP-155: the designer rows stand on their own read (a supervisor read that failed or still reads never hides them).
   const designerPart = designer ? <DesignerBlock model={designer} actions={designerActions} name={name} /> : null
   if (model.state === 'error' && !read)
@@ -70,7 +67,39 @@ function SupervisorCard({ model, actions, name, notice, onDismissNotice, designe
         </div>
       </Card>
     )
-  const saved = read.production
+  return (
+    <Card padded>
+      <div className="fw-pa">
+        {/* F-CO-201: the card's inside is the ONE supervisor form — framed: its legend and the unsaved bar (Discard · Apply). */}
+        <SupervisorForm model={model} actions={actions} name={name} draft={draft} onDraft={setDraft} notice={notice} onDismissNotice={onDismissNotice} framed />
+        {designerPart /* F-CP-155: under Supervisor / Backup (its own Change…, never the supervisor's Apply) */}
+      </div>
+    </Card>
+  )
+}
+
+// ---- F-CO-201 (customer page › Overview, co-w2 W2.1; 13-backend §3.6; 10-design §4): the supervisor form, split from the card so
+// that People's Change… opens ONE window holding the SAME form — the same pick lists, the same command (PUT
+// /production/brands/:id/supervisor), the same right. The card keeps its export and its output.
+
+/** The form's draft: what the reader picked, started from what is stored (a save, or someone else's change, starts it again). */
+function useSupervisorDraft(model: SupervisorModel): [LimitsDraft | null, (draft: LimitsDraft | ((current: LimitsDraft | null) => LimitsDraft | null)) => void] {
+  const read = model.read
+  const [draft, setDraft] = useState<LimitsDraft | null>(model.draft ?? (read ? limitsDraftOf(read.production) : null))
+  // A save (or someone else's change) moves the version: the form starts again from what is stored.
+  useEffect(() => setDraft(model.draft ?? (read ? limitsDraftOf(read.production) : null)), [read?.production.version, read?.party.id])
+  return [draft, setDraft]
+}
+
+/**
+ * The supervisor's form: the receipt, a refused save, then Supervisor and Backup from the people who may take it. ONE form, two
+ * hosts: the card (`framed`: its legend names who looks after; the unsaved bar holds Discard · Apply) and People's Change… window
+ * (`framed` false: the window's title names it, its foot holds Cancel · Save — ./CustomerSupervisorCard.tsx SupervisorWindow).
+ */
+export function SupervisorForm({ model, actions, name, draft, onDraft, notice = null, onDismissNotice, framed }: { model: SupervisorModel; actions?: SupervisorActions | undefined; name: string; draft: LimitsDraft; onDraft: (draft: LimitsDraft | ((current: LimitsDraft | null) => LimitsDraft | null)) => void; notice?: PortalNotice | null; onDismissNotice?: (() => void) | undefined; framed: boolean }) {
+  const t = usePortalT()
+  const ts = useT(SUPERVISOR_NS)
+  const saved = model.read!.production
   const heldReason = supervisorHeld(model.supervise, model.pick)
   const held = heldReason ? (heldReason.ns === 'production-supervisor' ? ts(heldReason.key) : t(heldReason.key)) : null
   const move = supervisorMove(saved, draft, model.pick)
@@ -80,41 +109,127 @@ function SupervisorCard({ model, actions, name, notice, onDismissNotice, designe
     if (count === 0 || Object.keys(problems).length > 0 || model.busy) return
     void actions?.onApply?.(draft)
   }
+  const onPatch = (patch: Partial<LimitsDraft>) => onDraft((current) => (current ? { ...current, ...patch } : current))
   return (
-    <Card padded>
-      <div className="fw-pa">
-        <NoticeLine notice={notice} onDismiss={onDismissNotice} />
-        {model.saveProblem && (
-          <Banner
-            tone="danger"
-            title={model.saveProblem.ns === 'production-supervisor' ? ts(model.saveProblem.key) : t(model.saveProblem.key)}
-            action={
-              <Button size="sm" variant="quiet" onClick={() => actions?.onDismissProblem?.()}>
-                {t('common.dismiss')}
-              </Button>
-            }
-          />
-        )}
-        <SupervisorBlock model={model} draft={draft} name={name} held={held} move={move} onDraft={(patch) => setDraft((current) => (current ? { ...current, ...patch } : current))} actions={actions} />
-        {count > 0 && (
-          <EditModeBar
-            count={count}
-            message={t('limits.unsaved', { count })}
-            applyLabel={t('limits.apply')}
-            busy={model.busy}
-            applyHeldReason={Object.keys(problems).length > 0 ? t('settings.fixFirst') : null}
-            onDiscard={() => setDraft(limitsDraftOf(saved))}
-            onApply={apply}
-          />
-        )}
-        {designerPart /* F-CP-155: under Supervisor / Backup (its own Change…, never the supervisor's Apply) */}
-      </div>
-    </Card>
+    <>
+      <NoticeLine notice={notice} onDismiss={onDismissNotice} />
+      {model.saveProblem && (
+        <Banner
+          tone="danger"
+          title={model.saveProblem.ns === 'production-supervisor' ? ts(model.saveProblem.key) : t(model.saveProblem.key)}
+          action={
+            <Button size="sm" variant="quiet" onClick={() => actions?.onDismissProblem?.()}>
+              {t('common.dismiss')}
+            </Button>
+          }
+        />
+      )}
+      {framed ? (
+        <SupervisorBlock model={model} draft={draft} name={name} held={held} move={move} onDraft={onPatch} actions={actions} />
+      ) : (
+        <div className="fw-pa-stack">
+          <SupervisorFields model={model} draft={draft} held={held} move={move} onDraft={onPatch} actions={actions} />
+        </div>
+      )}
+      {framed && count > 0 && (
+        <EditModeBar
+          count={count}
+          message={t('limits.unsaved', { count })}
+          applyLabel={t('limits.apply')}
+          busy={model.busy}
+          applyHeldReason={Object.keys(problems).length > 0 ? t('settings.fixFirst') : null}
+          onDiscard={() => onDraft(limitsDraftOf(saved))}
+          onApply={apply}
+        />
+      )}
+    </>
   )
 }
 
-/** Who looks after the customer here — office only (R-41, R-53): the supervisor and the backup, from the people who may take it. */
+/**
+ * People's Change… (the supervisor): ONE centred window (560 px) around the same form. Its title names who looks after, with "Office
+ * only"; its foot: Cancel · Save. Save is the card's own command; once it is saved the window closes and People reads again.
+ */
+export function SupervisorWindow({ model, actions, name, onClose }: { model: SupervisorModel; actions?: SupervisorActions | undefined; name: string; onClose: () => void }) {
+  return (
+    <PortalAccessMessages>
+      <WithMessages namespaces={[SUPERVISOR_NS, 'parties']}>
+        <SupervisorWindowBody model={model} actions={actions} name={name} onClose={onClose} />
+      </WithMessages>
+    </PortalAccessMessages>
+  )
+}
+
+function SupervisorWindowBody({ model, actions, name, onClose }: { model: SupervisorModel; actions?: SupervisorActions | undefined; name: string; onClose: () => void }) {
+  const t = usePortalT()
+  const ts = useT(SUPERVISOR_NS)
+  const p = useT('parties')
+  const [draft, setDraft] = useSupervisorDraft(model)
+  const read = model.read
+  const heldReason = supervisorHeld(model.supervise, model.pick)
+  const count = read && draft ? changeCount(read.production, draft) : 0
+  const fix = draft ? Object.keys(limitsProblems(draft)).length > 0 : false
+  // Save is held with words: the right or the reach it needs, a save on its way, nothing changed yet, a field to fix first.
+  const saveHeld = heldReason ? (heldReason.ns === 'production-supervisor' ? ts(heldReason.key) : t(heldReason.key)) : model.busy ? t('common.saving') : count === 0 ? t('person.nothing') : fix ? t('settings.fixFirst') : null
+  const save = () => {
+    if (!draft || saveHeld) return
+    void actions?.onApply?.(draft).then((done) => {
+      if (done) onClose()
+    })
+  }
+  return (
+    <Modal
+      open
+      size="md"
+      sheet
+      onClose={onClose}
+      closeHeld={model.busy ? t('common.saving') : null}
+      title={
+        <span className="fw-pa-cell">
+          {t('limits.supervisor.title', { name })} <Tag tone="info">{t('limits.supervisor.officeOnly')}</Tag>
+        </span>
+      }
+      footer={
+        <>
+          <span className="grow" />
+          <Button size="sm" heldReason={model.busy ? t('common.saving') : null} onClick={onClose}>
+            {p('common.cancel')}
+          </Button>
+          <Button size="sm" variant="primary" heldReason={saveHeld} onClick={save}>
+            {p('common.save')}
+          </Button>
+        </>
+      }
+    >
+      {read && draft ? (
+        <SupervisorForm model={model} actions={actions} name={name} draft={draft} onDraft={setDraft} framed={false} />
+      ) : (
+        <div role="status" aria-label={ts('dialog.reading')}>
+          <Skeleton height={96} />
+        </div>
+      )}
+    </Modal>
+  )
+}
+// ---- end F-CO-201 (the supervisor form and its window)
+
+/** Who looks after the customer here — office only (R-41, R-53): the card's frame (its legend) around the supervisor's fields. */
 function SupervisorBlock({ model, draft, name, held, move, onDraft, actions }: { model: SupervisorModel; draft: LimitsDraft; name: string; held: string | null; move: { key: string; count: number } | null; onDraft: (patch: Partial<LimitsDraft>) => void; actions?: SupervisorActions | undefined }) {
+  const t = usePortalT()
+  return (
+    <fieldset className="fw-pa-fieldset fw-pa-lim-office">
+      <legend className="fw-pa-legend">
+        <span className="fw-pa-cell">
+          <UserCog size={14} aria-hidden /> {t('limits.supervisor.title', { name })} <Tag tone="info">{t('limits.supervisor.officeOnly')}</Tag>
+        </span>
+      </legend>
+      <SupervisorFields model={model} draft={draft} held={held} move={move} onDraft={onDraft} actions={actions} />
+    </fieldset>
+  )
+}
+
+/** F-CO-201: the supervisor and the backup, from the people who may take it — the card's and the Change… window's same fields. */
+function SupervisorFields({ model, draft, held, move, onDraft, actions }: { model: SupervisorModel; draft: LimitsDraft; held: string | null; move: { key: string; count: number } | null; onDraft: (patch: Partial<LimitsDraft>) => void; actions?: SupervisorActions | undefined }) {
   const t = usePortalT()
   const ts = useT(SUPERVISOR_NS)
   const saved = model.read!.production
@@ -134,12 +249,7 @@ function SupervisorBlock({ model, draft, name, held, move, onDraft, actions }: {
       <span className="fw-pa-hint">{t('limits.supervisor.none')}</span>
     )
   return (
-    <fieldset className="fw-pa-fieldset fw-pa-lim-office">
-      <legend className="fw-pa-legend">
-        <span className="fw-pa-cell">
-          <UserCog size={14} aria-hidden /> {t('limits.supervisor.title', { name })} <Tag tone="info">{t('limits.supervisor.officeOnly')}</Tag>
-        </span>
-      </legend>
+    <>
       <p className="fw-pa-hint">{t('limits.supervisor.intro')}</p>
       {held && <p className="fw-pa-hint">{held}</p>}
       {pick.status === 'loading' && model.supervise && (
@@ -184,7 +294,7 @@ function SupervisorBlock({ model, draft, name, held, move, onDraft, actions }: {
       )}
       {pick.status === 'ready' && !pick.complete && <p className="fw-pa-hint">{ts('dialog.partial')}</p>}
       <p className="fw-pa-hint">{ts('dialog.hint')}</p>
-    </fieldset>
+    </>
   )
 }
 
@@ -200,7 +310,7 @@ function SupervisorBlock({ model, draft, name, held, move, onDraft, actions }: {
 function DesignerBlock({ model, actions, name }: { model: DesignerModel; actions?: DesignerActions | undefined; name: string }) {
   const t = usePortalT()
   const p = useT('parties')
-  const say = (phrase: Phrase) => (phrase.ns === 'portal-access' ? (heldWords(t, phrase.key) ?? t(phrase.key)) : p(phrase.key, { customer: name, ...phrase.params }))
+  const say = useDesignerSay(name)
   const held = changeHeldOf(model.manage, model.read)
   return (
     <section className="fw-pa-fieldset fw-pa-lim-office" aria-labelledby="fw-pa-designer-title">
@@ -344,3 +454,28 @@ function DesignerChangeWindow({ model, slot, name, say, actions }: { model: Desi
   )
 }
 // ── end F-CP-155 ──
+
+// ---- F-CO-201 (customer page › Overview, co-w2 W2.1; 13-backend §3.6): the designer's words, and its Change… window for People ----
+/** The designer's words: the partners screens' own for a right ("Needs the right: …"), else the parties catalogue, the customer named. */
+function useDesignerSay(name: string): (phrase: Phrase) => string {
+  const t = usePortalT()
+  const p = useT('parties')
+  return (phrase) => (phrase.ns === 'portal-access' ? (heldWords(t, phrase.key) ?? t(phrase.key)) : p(phrase.key, { customer: name, ...phrase.params }))
+}
+
+/** People's Change… (the factory designer): today's own window, unchanged — mounted by the page while the designer's hook holds it open. */
+export function DesignerWindow({ model, actions, name }: { model: DesignerModel; actions?: DesignerActions | undefined; name: string }) {
+  return (
+    <PortalAccessMessages>
+      <WithMessages namespaces={['parties']}>
+        <DesignerWindowHost model={model} actions={actions} name={name} />
+      </WithMessages>
+    </PortalAccessMessages>
+  )
+}
+
+function DesignerWindowHost({ model, actions, name }: { model: DesignerModel; actions?: DesignerActions | undefined; name: string }) {
+  const say = useDesignerSay(name)
+  return model.read.status === 'ready' && model.dialog ? <DesignerChangeWindow model={model} slot={model.read.slot} name={name} say={say} actions={actions} /> : null
+}
+// ---- end F-CO-201

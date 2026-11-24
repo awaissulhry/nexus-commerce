@@ -13,9 +13,10 @@ import { failedRead, LOADING, ready } from '../../depth/model'
 import type { CustomerWork } from '../../list/api'
 import { COMPLAINTS, OVERDUE_ROWS, RETURNS } from '../../money/_demo/fixtures'
 import type { WorkReads } from '../use-customer-work'
+import { DESIGNER_CASES, DESIGNERS, OFFICE_PEOPLE, SUPERVISOR_CASES } from '../../portal/demo' // F-CO-201: made-up office people
 import { MONEY_ANCHORS, moneyDoor, promiseDoor, termsDoor } from './doors'
 import { boardNumbersOf, headlineOf, HEADLINE_PARTS, waitsOnUsOf } from './headline'
-import { COMPLAINTS_READ, OVERVIEW_NAMESPACES, sayOf, sayToolsOf, type OverviewCan, type OverviewHeadline, type OverviewInput, type OverviewMoney, type OverviewRow, type OverviewStrip, type Say } from './model'
+import { COMPLAINTS_READ, OVERVIEW_NAMESPACES, sayOf, sayToolsOf, urgencyOf, type LooksAfter, type OverviewCan, type OverviewHeadline, type OverviewInput, type OverviewMoney, type OverviewRow, type OverviewStrip, type Say } from './model'
 import { bandStateOf, datesOf, EARLIEST_FIRST, factsOf, linkedOf, overviewOf, peopleOf, requestsOf } from './rows'
 import { stripsOf } from './strips'
 
@@ -78,6 +79,7 @@ const input = (over: Partial<OverviewInput> = {}): OverviewInput => ({
   money: NO_MONEY,
   standing: { status: 'ready', value: standing() },
   urgency: { status: 'off' },
+  looksAfter: null,
   projects: null,
   viesRunning: false,
   ...over,
@@ -340,6 +342,59 @@ describe('the cards: People, Next dates, Requests & changes, Linked records, Cus
     expect(nobody.map((row) => valueOf(row))).toEqual(['Nobody yet'])
     expect(nobody[0]!.doors?.map((door) => door.key)).toEqual(['contact'])
     expect(peopleOf(input({ party: party({ contacts: [] }), can: { ...CAN, manage: false } })).rows[0]!.doors).toBeUndefined()
+  })
+
+  it('People, both sides (F-CO-201, S10): who looks after — office only, each Change… under its OWN right, a window of the page — then the contacts and the portal', () => {
+    const looks = (over: Partial<LooksAfter> = {}): LooksAfter => ({ supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.set, ...over })
+    const people = peopleOf(input({ looksAfter: looks() }))
+    expect(people.state).toBe('ready')
+    const keys = people.rows.map((row) => row.key)
+    expect(keys.slice(0, 3)).toEqual(['supervisor', 'backup', 'designer'])
+    expect(keys.slice(3, -1).every((key) => key.startsWith('contact-'))).toBe(true)
+    expect(keys.at(-1)).toBe('portal')
+    const row = (key: string) => rowOf(people.rows, key)
+    expect(valueOf(row('supervisor'))).toBe(OFFICE_PEOPLE.bea.name)
+    expect([said(row('supervisor').tag!.say), said(row('supervisor').tag!.say, 'it'), row('supervisor').tag!.mark]).toEqual(['Office only', 'Solo ufficio', 'office'])
+    expect(row('supervisor').doors!.map((door) => [door.key, door.door, door.held])).toEqual([['changeSupervisor', { kind: 'act', act: 'changeSupervisor' }, null]])
+    expect(valueOf(row('backup'))).toBe(OFFICE_PEOPLE.carlo.name)
+    expect(valueOf(row('designer'))).toBe(`${DESIGNERS.giulia.name} · backup ${DESIGNERS.elena.name}`)
+    expect(valueOf(row('designer'), 'it')).toBe(`${DESIGNERS.giulia.name} · sostituto ${DESIGNERS.elena.name}`)
+    expect(said(row('designer').tag!.say)).toBe('Seed Racing sees this name')
+    expect(row('designer').under!.map((line) => said(line))).toEqual(["Seed Racing sees only this person's name when it asks for design help."])
+    expect(row('designer').doors!.map((door) => door.door)).toEqual([{ kind: 'act', act: 'changeDesigner' }])
+    expect(valueOf(row('portal'))).toBe('On · Portal settings')
+    expect(valueOf(row('portal'), 'it')).toBe('Attivo · Impostazioni del portale')
+    expect(hrefOf({ door: row('portal').parts[1]!.door! })).toBe(`${BASE}?tab=portal`)
+    // Each Change… reads its OWN right: without it, no button (never held for a right).
+    const noRights = peopleOf(input({ looksAfter: looks({ supervisor: SUPERVISOR_CASES.held, designer: DESIGNER_CASES.held }) }))
+    expect(rowOf(noRights.rows, 'supervisor').doors).toBeUndefined()
+    expect(rowOf(noRights.rows, 'designer').doors).toBeUndefined()
+    // Held with words only by reach (not at every company the customer works with) or state (archived).
+    const reach = peopleOf(input({ looksAfter: looks({ supervisor: SUPERVISOR_CASES.everyCompany, designer: DESIGNER_CASES.everyCompany }) }))
+    for (const key of ['supervisor', 'designer']) expect(said(rowOf(reach.rows, key).doors![0]!.held!), key).toContain('every company')
+    const archived = peopleOf(input({ party: party({ status: 'ARCHIVED' }), looksAfter: looks() }))
+    for (const key of ['supervisor', 'designer']) expect(said(rowOf(archived.rows, key).doors![0]!.held!), key).toBe('Archived: reactivate it first')
+    // The supervisor's read out: the card's skeleton; failed: the card says so (its Try again is the page's retryPeople).
+    expect(peopleOf(input({ looksAfter: looks({ supervisor: { ...SUPERVISOR_CASES.saved, state: 'loading', read: null } }) }))).toMatchObject({ rows: [], state: 'reading', problem: null })
+    const lost = peopleOf(input({ looksAfter: looks({ supervisor: { ...SUPERVISOR_CASES.saved, state: 'error', read: null, problem: 'failed.title' } }) }))
+    expect(lost.state).toBe('failed')
+    expect(said(lost.problem!)).toBe("Couldn't load the portal access")
+    // The designer's read alone: its row (and the portal's) say it; the supervisor's rows stand.
+    const designerOut = peopleOf(input({ looksAfter: looks({ designer: DESIGNER_CASES.error }) }))
+    expect(said(rowOf(designerOut.rows, 'designer').parts[0]!.say)).toBe("Couldn't read the factory designer")
+    expect(rowOf(designerOut.rows, 'designer').doors!.map((door) => door.door)).toEqual([{ kind: 'act', act: 'retryDesigner' }])
+    expect(rowOf(designerOut.rows, 'portal').state).toBe('unread')
+    expect(valueOf(rowOf(designerOut.rows, 'supervisor'))).toBe(OFFICE_PEOPLE.bea.name)
+    expect(rowOf(peopleOf(input({ looksAfter: looks({ designer: DESIGNER_CASES.loading }) })).rows, 'designer').state).toBe('reading')
+    // Office names to the office only: without partners.view nothing is read — the customer's own contacts, no Portal row.
+    expect(peopleOf(input()).rows.every((each) => each.key.startsWith('contact-') || each.key.startsWith('nobody'))).toBe(true)
+    expect(allWords(overviewOf(input()), 'en')).not.toContain(OFFICE_PEOPLE.bea.name)
+    expect(allWords(overviewOf(input({ looksAfter: looks() })), 'en')).toContain(OFFICE_PEOPLE.bea.name)
+    // The customer's urgency: the SAME production read (no second read); off without partners.view.
+    expect(urgencyOf(null)).toEqual({ status: 'off' })
+    expect(urgencyOf(looks())).toEqual({ status: 'ready', value: SUPERVISOR_CASES.saved.read!.production.urgency })
+    expect(urgencyOf(looks({ supervisor: { ...SUPERVISOR_CASES.saved, state: 'loading', read: null } }))).toEqual({ status: 'reading' })
+    expect(urgencyOf(looks({ supervisor: { ...SUPERVISOR_CASES.saved, state: 'error', read: null } }))).toEqual({ status: 'failed' })
   })
 
   it('Next dates: a late one first, then the nearest; the VALUE is the door; nothing at all → the card is left out (S24)', () => {
@@ -607,7 +662,12 @@ describe('the walls (13-backend §4)', () => {
     expect(words).toContain('Alex Demo')
     expect(words).toContain('Anna Demo')
     // No read of the Overview is a portal route, and none names a floor worker (the reads are the office's: see ../CustomerRecord.tsx).
-    for (const source of RULES) expect(source).not.toMatch(/\/portal\/|operator|worker/i)
+    // F-CO-201: the rules read "Who looks after" through the office side's own folder (Customer › Portal settings, cu/portal/*: its
+    // models, read with partners.view) — the ONLY "portal" path they may name; never a portal route.
+    for (const source of RULES) {
+      expect(source).not.toMatch(/['"`]\/portal\/|operator|worker/i)
+      expect(source.replace(/\.\.\/\.\.\/portal\/(?:designer|limits)\/(?:model|api)'/g, '').replace(/\.\.\/\.\.\/portal\/CustomerSupervisor\.tsx/g, '')).not.toMatch(/\/portal\//)
+    }
   })
 
   it('left out, hidden, never held for a right: every held word is a STATE\'s, in both languages no key is left', () => {

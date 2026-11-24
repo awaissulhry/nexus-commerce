@@ -407,7 +407,8 @@
         "contactOrders": "Il loro contatto per gli ordini",
         "contactInvoices": "Il loro contatto per le fatture",
         "contactBoth": "Il loro contatto per ordini e fatture",
-        "nobody": "Ancora nessuno"
+        "nobody": "Ancora nessuno",
+        "backupNamed": "sostituto {name}"
       },
       "dates": {
         "title": "Prossime date",

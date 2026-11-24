@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Ban, Banknote, Clock, FileCheck, Flag, Pause, Pencil, Receipt, ShieldAlert } from 'lucide-react'
+import { Ban, Banknote, Clock, Eye, FileCheck, Flag, Lock, Pause, Pencil, Receipt, ShieldAlert, TriangleAlert } from 'lucide-react'
 import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
 import { useLocale, useScopedT } from '../../../../../../lib/i18n/provider'
 import { ageOf } from '../../../../../../lib/production/model'
@@ -24,6 +24,7 @@ import {
   type OverviewWindow,
   type RequestsCard,
   type RowPart,
+  type RowTag,
   type Say,
   type StripKind,
 } from '../../overview/model'
@@ -36,8 +37,8 @@ import { WorkBand, type WorkBandActions, type WorkBandModel } from '../WorkBand'
  *   1  Where <customer> stands      the headline (one sentence) · its quiet note · the strips (what stops the customer)
  *   2  All orders of <customer>     the Work tab's own band (WorkBand, no chips, no group pressed) INSIDE a card (S6) — a press is a
  *                                   door into Work; a customer with no order: one quiet line and the "Before an order" doors
- *   3 · 4  People · Next dates      a pair; no date at all: Next dates is left out and People takes the row (S24)
- *   (until its rows land in People: today's "Who looks after <customer>" card, as it is, full width)
+ *   3 · 4  People · Next dates      a pair; no date at all: Next dates is left out and People takes the row (S24); People holds both
+ *                                   sides — who looks after the customer here (each Change… a window the PAGE mounts) and its contacts
  *   5 · 6  Requests & changes · Linked records   a pair; nothing waits: Requests is left out and Linked takes the row (S24)
  *   7 · 8  Customer facts · Custom fields        a pair; no field applies: Customer facts takes the row
  *
@@ -63,8 +64,6 @@ export interface CustomerOverviewViewProps {
   /** The "Before an order" doors (a customer with no order at all says them under its one quiet line). */
   readonly before?: readonly BeforeLinePart[]
   readonly actions?: OverviewActions
-  /** Until its rows land in People: today's "Who looks after <customer>" card, as it is, full width under the People pair. */
-  readonly supervisor?: ReactNode
   /** The record's custom fields: the last pair's second card. */
   readonly fields?: ReactNode
 }
@@ -91,13 +90,20 @@ const MARK: Readonly<Record<StripKind, ReactNode>> = {
   urgency: <Flag size={14} aria-hidden />,
 }
 
+/** F-CO-201: a tag's mark — told by its words too, never the mark alone. */
+const TAG_MARK: Readonly<Record<NonNullable<RowTag['mark']>, ReactNode>> = {
+  office: <Lock size={12} aria-hidden />,
+  seen: <Eye size={12} aria-hidden />,
+  warning: <TriangleAlert size={12} aria-hidden />,
+}
+
 interface Words {
   readonly said: (words: Say) => string
   /** A door's words: "<label> ›" (the kit's own word, S31: its "›" never stands alone on a line) when it leaves the card. */
   readonly doorWords: (door: LabelledDoor) => string
 }
 
-function Cards({ model, band, before = [], actions, supervisor, fields }: CustomerOverviewViewProps) {
+function Cards({ model, band, before = [], actions, fields }: CustomerOverviewViewProps) {
   const t = useScopedT('parties')
   const locale = useLocale()
   const kit = useOverviewWords()
@@ -173,24 +179,32 @@ function Cards({ model, band, before = [], actions, supervisor, fields }: Custom
         </OverviewCard>
       )}
 
-      {/* 3 · 4 — People · Next dates. */}
+      {/* 3 · 4 — People · Next dates. People waits for who looks after (a skeleton), and says it when that read failed (10-design §4). */}
       <OverviewPair>
-        <OverviewCard
-          title={peopleTitle}
-          aside={
-            people.head.door.kind === 'href' ? (
-              <Link className="fw-ro-link fw-ro-hint" href={people.head.door.href}>
-                {words.doorWords(people.head)}
-              </Link>
-            ) : null
-          }
-        >
-          <RowList>
-            {people.rows.map((row) => (
-              <RowView key={row.key} row={row} words={words} unread={kit.unreadMany} actions={actions} />
-            ))}
-          </RowList>
-        </OverviewCard>
+        {people.state === 'failed' ? (
+          <CardState part={peopleTitle} problem={people.problem ? said(people.problem) : t('problem.unavailable')} onRetry={() => actions?.onAct?.('retryPeople')} />
+        ) : (
+          <OverviewCard
+            title={peopleTitle}
+            aside={
+              people.head.door.kind === 'href' ? (
+                <Link className="fw-ro-link fw-ro-hint" href={people.head.door.href}>
+                  {words.doorWords(people.head)}
+                </Link>
+              ) : null
+            }
+          >
+            {people.state === 'reading' ? (
+              <Skeleton height={44} />
+            ) : (
+              <RowList>
+                {people.rows.map((row) => (
+                  <RowView key={row.key} row={row} words={words} unread={kit.unreadMany} actions={actions} />
+                ))}
+              </RowList>
+            )}
+          </OverviewCard>
+        )}
         {dates && (
           <OverviewCard title={datesTitle}>
             {dates.reading ? (
@@ -214,8 +228,6 @@ function Cards({ model, band, before = [], actions, supervisor, fields }: Custom
         )}
       </OverviewPair>
 
-      {/* Until its rows land in People (S10): today's "Who looks after <customer>" card, as it is. */}
-      {supervisor}
 
       {/* 5 · 6 — Requests & changes · Linked records. */}
       <OverviewPair>
@@ -345,7 +357,10 @@ function ValueView({ parts, tag, under, words, actions }: { parts: readonly RowP
   const tagged = tag ? (
     <>
       {' '}
-      <Tag tone={tag.tone}>{words.said(tag.say)}</Tag>
+      <Tag tone={tag.tone}>
+        {tag.mark ? <>{TAG_MARK[tag.mark]} </> : null}
+        {words.said(tag.say)}
+      </Tag>
     </>
   ) : null
   const line = (

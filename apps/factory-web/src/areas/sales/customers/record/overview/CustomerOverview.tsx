@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { withheldParts } from '@nexus/factory-domain/sales/customer-360/glance'
 import { useOfficeSession } from '../../../../../lib/session/context'
@@ -11,6 +11,8 @@ import type { PartyRecordActions } from '../../../../parties/_shared/view/PartyR
 import { useCustomerGlance } from '../../depth/CustomerDepth'
 import type { CustomersWorkModel } from '../../list/model'
 import type { CustomerMoneyModel } from '../../money/overview'
+import { useWhoLooksAfter } from '../../portal/CustomerSupervisor' // F-CO-201: who looks after, read ONCE (People + the urgency strip)
+import { DesignerWindow, SupervisorWindow } from '../../portal/view/CustomerSupervisorCard' // F-CO-201: People's two Change… windows
 import { beforeLineOf, type BeforeOrderCounts } from '../before-order'
 import type { PageCounts } from '../quotes-tab/use-before-order-counts'
 import type { WorkReads } from '../use-customer-work'
@@ -18,7 +20,7 @@ import { CustomerOverviewView, type OverviewActions } from '../view/overview/Cus
 import type { WorkBandActions, WorkBandModel } from '../view/WorkBand'
 import { bandOf, whysOf } from '../work-band'
 import { customerHref, groupDoor, tabDoor, workOrdersDoor } from './doors'
-import { standingOf, type OverviewAct, type OverviewCan, type OverviewInput } from './model'
+import { standingOf, urgencyOf, type LooksAfter, type OverviewAct, type OverviewCan, type OverviewInput } from './model'
 import { overviewOf } from './rows'
 
 /**
@@ -35,8 +37,10 @@ import { overviewOf } from './rows'
  *                                        the customer-urgent count
  *
  * Card 2 is the Work tab's band (`bandOf`, `whysOf`, `beforeLineOf`: no chips, no group pressed): a group's press is a door into
- * Work on exactly its orders. The two windows open ON the Work tab (`onWindow`: the page goes there first). Until its rows land in
- * People, today's "Who looks after <customer>" card (`supervisor`) stands under the People pair, as it is.
+ * Work on exactly its orders. The two windows open ON the Work tab (`onWindow`: the page goes there first).
+ * F-CO-201 (co-w2 W2.1; S10): "Who looks after" is read here ONCE (`useWhoLooksAfter`, partners.view): People's rows, and the
+ * customer's urgency for its strip. People's two Change… open the page's own windows, mounted here: the supervisor's form
+ * (`SupervisorWindow`) and the factory designer's (`DesignerWindow`, today's own window).
  */
 export interface CustomerOverviewProps {
   readonly party: Party
@@ -52,12 +56,13 @@ export interface CustomerOverviewProps {
   /** The work reads again (a failed band, a failed Requests & changes). */
   readonly onRetry: () => void
   readonly fields?: ReactNode
-  readonly supervisor?: ReactNode
 }
 
-export function CustomerOverview({ party, model, actions, reads, counts, before, money, standing, onWindow, onRetry, fields, supervisor }: CustomerOverviewProps) {
+export function CustomerOverview({ party, model, actions, reads, counts, before, money, standing, onWindow, onRetry, fields }: CustomerOverviewProps) {
   const router = useRouter()
   const glance = useCustomerGlance()
+  const looksAfter = useWhoLooksAfter(party.id)
+  const [supervisorOpen, setSupervisorOpen] = useState(false)
   const session = useOfficeSession()
   // The glance's parts this reader may read — the API's own rule (the domain's PART_PERMISSIONS), so a failed glance still knows them.
   const withheld = useMemo(() => withheldParts((permission) => session.permissions.includes(permission)), [session.permissions])
@@ -82,6 +87,8 @@ export function CustomerOverview({ party, model, actions, reads, counts, before,
     repairs: !withheld.includes('repairs'),
     credit: !withheld.includes('credit'),
   }
+  // F-CO-201: who looks after, as its hooks hold it (null without partners.view: never read).
+  const looks: LooksAfter | null = looksAfter.supervisor ? { supervisor: looksAfter.supervisor.model, designer: looksAfter.designer?.model ?? null } : null
   const input: OverviewInput = {
     prefix,
     party,
@@ -92,8 +99,9 @@ export function CustomerOverview({ party, model, actions, reads, counts, before,
     glance: glance.read,
     money: { ageing: money.ageing, returns: money.returns, complaints: money.complaints, orders: money.orders ?? null, returnsHref: money.returnsHref },
     standing: standingOf(can.orders, standing, id),
-    // The customer's own urgency is read with "Who looks after": its strip joins when those reads are lifted to the page.
-    urgency: { status: 'off' },
+    // F-CO-201: the customer's own urgency — the SAME production read as People's supervisor (partners.view; off without).
+    urgency: urgencyOf(looks),
+    looksAfter: looks,
     projects: model.can.projects ? (model.projects ?? null) : null,
     viesRunning: model.viesRunning === true,
   }
@@ -117,6 +125,10 @@ export function CustomerOverview({ party, model, actions, reads, counts, before,
     else if (act === 'identity') actions?.onDialog?.({ kind: 'identity', mode: 'new' })
     else if (act === 'correctIdentity') actions?.onDialog?.({ kind: 'identity', mode: 'correct' })
     else if (act === 'checkVies') actions?.onCheckVies?.()
+    else if (act === 'changeSupervisor') setSupervisorOpen(true) // F-CO-201
+    else if (act === 'changeDesigner') looksAfter.designer?.actions.onChange?.()
+    else if (act === 'retryPeople') looksAfter.supervisor?.actions.onRetry?.()
+    else if (act === 'retryDesigner') looksAfter.designer?.actions.onRetry?.()
     else glance.onRetry()
   }
   const overviewActions: OverviewActions = {
@@ -127,5 +139,12 @@ export function CustomerOverview({ party, model, actions, reads, counts, before,
       counts.onRetry()
     },
   }
-  return <CustomerOverviewView model={overview} band={can.orders ? { model: band, actions: bandActions } : null} before={beforeLine} actions={overviewActions} supervisor={supervisor} fields={fields} />
+  return (
+    <>
+      <CustomerOverviewView model={overview} band={can.orders ? { model: band, actions: bandActions } : null} before={beforeLine} actions={overviewActions} fields={fields} />
+      {/* F-CO-201: People's two Change… windows — the page's own, mounted while open. */}
+      {supervisorOpen && looksAfter.supervisor && <SupervisorWindow model={looksAfter.supervisor.model} actions={looksAfter.supervisor.actions} name={overview.customer} onClose={() => setSupervisorOpen(false)} />}
+      {looksAfter.designer && <DesignerWindow model={looksAfter.designer.model} actions={looksAfter.designer.actions} name={overview.customer} />}
+    </>
+  )
 }
