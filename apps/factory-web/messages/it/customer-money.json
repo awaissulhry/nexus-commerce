@@ -327,7 +327,6 @@
       "pays": "paga: {terms}",
       "deposit": "Acconto predefinito",
       "pct": "{pct}",
-      "noDeposit": "Nessun acconto",
       "usedIs": "utilizzato = fatture aperte + ordini non ancora fatturati",
       "terms": "Condizioni",
       "set": "Imposta un fido…",

@@ -316,7 +316,14 @@ const NOT_KEYS: ReadonlySet<string> = new Set(['identity.vatNumber', 'identity.f
 const CUSTOMER_PEOPLE = 'customer-people'
 const PEOPLE_TAB_DIRS = [join('customers', 'record', 'people'), join('customers', 'record', 'view', 'people')]
 const speaksPeople = (path: string): boolean => PEOPLE_TAB_DIRS.some((dir) => path.includes(`${dir}${sep}`))
-function literalKeys(catalogue: 'parties' | typeof CUSTOMER_PEOPLE = 'parties'): string[] {
+// F-CT-602 (customer page › Terms & requirements tab, lane ct-, ct-t): the tab's two folders speak `customer-terms` (CT scope; a reused
+// word names its catalogue, `parties:…`). Their key-shaped words are scanned with the SAME pattern and checked in THAT catalogue, in
+// both languages — never taken for parties keys, never left unchecked (a stray word there was ct-w1's red).
+const CUSTOMER_TERMS = 'customer-terms'
+const TERMS_TAB_DIRS = [join('customers', 'record', 'terms'), join('customers', 'record', 'view', 'terms')]
+const speaksTerms = (path: string): boolean => TERMS_TAB_DIRS.some((dir) => path.includes(`${dir}${sep}`))
+const speaks = (path: string): 'parties' | typeof CUSTOMER_PEOPLE | typeof CUSTOMER_TERMS => (speaksPeople(path) ? CUSTOMER_PEOPLE : speaksTerms(path) ? CUSTOMER_TERMS : 'parties')
+function literalKeys(catalogue: 'parties' | typeof CUSTOMER_PEOPLE | typeof CUSTOMER_TERMS = 'parties'): string[] {
   const pattern = new RegExp(`['"\`]((?:${PREFIXES.join('|')})\\.[A-Za-z0-9_.]*[A-Za-z0-9_])['"\`]`, 'g')
   const keys = new Set<string>()
   for (const dir of ['parties', 'sales/customers', 'purchasing/suppliers'])
@@ -325,7 +332,7 @@ function literalKeys(catalogue: 'parties' | typeof CUSTOMER_PEOPLE = 'parties'):
     // B-W2b-172: the Questionnaire tab (purchasing/suppliers/questionnaire) speaks `purchasing-questionnaire` (its own test).
     // B-W2b-334: the supplier in depth (purchasing/suppliers/depth, /list) speaks `purchasing-suppliers-depth` (its own test).
     // B-W2b-324: the customer in depth (sales/customers/depth) speaks `sales-customers-depth` (its own test).
-    for (const file of sources(join(SRC, dir)).filter((path) => !path.includes(`${join('suppliers', 'sources')}`) && !path.includes(`${join('customers', 'portal')}`) && !path.includes(`${join('suppliers', 'portal')}`) && !path.includes(`${join('suppliers', 'questionnaire')}`) && !path.includes(`${join('suppliers', 'depth')}`) && !path.includes(`${join('suppliers', 'list')}`) && !path.includes(`${join('customers', 'depth')}`) && !path.includes(`${join('customers', 'list')}`) /* T.2: the list folder speaks customers-list (its own key test) */).filter((path) => speaksPeople(path) === (catalogue === CUSTOMER_PEOPLE)))
+    for (const file of sources(join(SRC, dir)).filter((path) => !path.includes(`${join('suppliers', 'sources')}`) && !path.includes(`${join('customers', 'portal')}`) && !path.includes(`${join('suppliers', 'portal')}`) && !path.includes(`${join('suppliers', 'questionnaire')}`) && !path.includes(`${join('suppliers', 'depth')}`) && !path.includes(`${join('suppliers', 'list')}`) && !path.includes(`${join('customers', 'depth')}`) && !path.includes(`${join('customers', 'list')}`) /* T.2: the list folder speaks customers-list (its own key test) */).filter((path) => speaks(path) === catalogue /* F-CA-fx2, F-CT-602 */))
       for (const match of readFileSync(file, 'utf8').matchAll(pattern)) if (!NOT_KEYS.has(match[1]!) && !ORDERS_READ.test(match.input.slice(Math.max(0, match.index - 2), match.index))) keys.add(match[1]!)
   return [...keys].sort()
 }
@@ -403,6 +410,11 @@ describe('every string of the four screens exists in it and en (PLAN §4.6)', ()
     const peopleKeys = literalKeys(CUSTOMER_PEOPLE)
     expect(peopleKeys.length).toBeGreaterThan(50)
     expect(peopleKeys.filter((key) => !inCatalogue(CUSTOMER_PEOPLE, key))).toEqual([])
+    // F-CT-602: the Terms & requirements tab's keys, each in ITS catalogue (customer-terms), in it and en; the scan reads them (its one
+    // key-shaped word today is the Change terms window's Try again), none skipped.
+    const termsKeys = literalKeys(CUSTOMER_TERMS)
+    expect(termsKeys).toContain('common.retry')
+    expect(termsKeys.filter((key) => !inCatalogue(CUSTOMER_TERMS, key))).toEqual([])
     // op-fx1: the keys read through the orders translator exist in the orders catalogue, in both languages.
     // F-CP-113: + the made order's toast of the lines window (an orders word).
     expect(ordersReadKeys()).toEqual(['newOrder.window.made', 'record.dock.writeGeneral', 'record.dock.writeIn', 'rows.IN_PRODUCTION' /* F-CW-101 (cw W1): the Work tab's started-orders view */])

@@ -965,6 +965,29 @@ describe('cm-fx4: the walk\'s gaps', () => {
     expect(source('./use-customer-money-tab.ts')).toContain('readCompanyTerms(api, partyId, signal)')
   })
 
+  // F-CT-601 (customer Terms & requirements, ct-t T.5; 18-lead-settles Z41, Z42): the terms per company could not be read — never quietly
+  // shown as if in force: the customer's own terms, said so in ONE quiet line with Try again (Terms' own words).
+  it('the terms per company could not be read: Credit & terms says the customer\'s own are shown, once, with Try again', () => {
+    const terms = partReady({ paymentTerms: { name: 'Deposit 30% at acceptance, balance at delivery' }, paymentTermsText: null, currency: 'EUR', defaultDepositPct: '30', invoiceTiming: 'ON_SHIPMENT' } as unknown as CommercialTerms)
+    const failed = creditOf(input('owner', { terms, companyTerms: partFailed('problem.read.unavailable') }), null, terms, PREFIX)
+    expect(failed.termsFallback).toEqual({ key: 'customer-terms:ct.answer.fallback' })
+    expect(failed.facts.find((fact) => fact.key === 'paymentTerms')!.value).toEqual({ key: 'cm.text', params: { text: 'Deposit 30% at acceptance, balance at delivery' } })
+    for (const locale of LOCALES) expect(sayIn(locale)(failed.termsFallback!), locale).toBe(locale === 'en' ? "The terms with each company could not be read: these are the customer's own terms." : 'Le condizioni con ciascuna azienda non si sono potute leggere: queste sono le condizioni proprie del cliente.')
+    // read, still reading, or not asked: no line
+    for (const companyTerms of [partReady({ tenantWide: false, companies: [] } as unknown as CompanyTerms), READING, null]) expect(creditOf(input('owner', { terms, companyTerms }), null, terms, PREFIX).termsFallback).toBeNull()
+    const section = view('CreditSection.tsx')
+    expect(section).toContain('{model.termsFallback ? (')
+    expect(section).toMatch(/<Quiet>\s*\{say\(model\.termsFallback\)\}[\s\S]*?onClick=\{onRetry\}/)
+  })
+
+  it('T.6 (Z41): the deposit word nothing says any more went, in both languages; the words it sits beside stay', () => {
+    for (const locale of LOCALES) {
+      const flat = messagesFor(locale, ['customer-money'])['customer-money'] ?? {}
+      expect('cm.credit.deposit' in flat, locale).toBe(true)
+      expect('cm.credit.noDeposit' in flat, locale).toBe(false)
+    }
+  })
+
   it('M-3: a late need is drawn in danger (the shared line\'s optional tone); the order page passes none', () => {
     expect(view('BalanceSection.tsx')).toContain("{...(need.tone === 'danger' ? { tone: 'danger' as const } : {})")
     expect(view('customer-money.css')).toContain('.fw-cm-needs > .is-danger > svg { color: var(--nds-danger); }')
