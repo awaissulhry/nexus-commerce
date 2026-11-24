@@ -1,5 +1,6 @@
+import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 import { CATALOGUE } from '../../i18n/messages'
 import { BRAND_ALPHA, BRAND_BETA } from '../../testing/two-brands'
 import { scanText } from '../../testing/brand-scan'
@@ -11,9 +12,9 @@ import {
   audienceKey,
   cardActions,
   cardFiles,
-  cardMarks,
+  deliveryMark,
   DELIVERY_STATES,
-  DELIVERY_TONE,
+  footMarks,
   longFold,
   messageLink,
   splitQuoted,
@@ -35,56 +36,76 @@ const CONTEXT: CardContext = { partyName: BRAND_ALPHA.tradeName, canReadFiles: t
 const [MAIL, NOTE, BOUNCED, OURS, FLOOR_NOTE, STATION] = demoCards(BRAND_ALPHA)
 const card = (message: CardMessage, context: CardContext = CONTEXT, locale: 'en' | 'it' = 'en') => render(createElement(MessageCard, { message, context }), locale)
 
-describe('each kind of card says its side and audience in words and colour', () => {
-  it('the customer’s mail: the info card, the organisation tile and name, the channel', () => {
+// tw- W1.2 (10-design §2 – §4; R17): the bubble — mine right, everyone else left with the person's tile; who reads it in words and
+// icons in the foot, never by side or colour alone; no side words, no head marks.
+describe('each kind of bubble says who reads it in words and icons, never by side or colour alone (R17)', () => {
+  it('the customer’s mail: left, the PERSON’s 28 px tile, the name with their company (P3), the mail icon with its word', () => {
     const html = card(MAIL)
-    expect(html).toContain('fw-rt-msg is-theirs')
-    expect(html).toContain('fw-rt-av is-org')
-    expect(textOf(html)).toContain(`${BRAND_ALPHA.contact.name} ${BRAND_ALPHA.tradeName} Email`)
+    expect(html).toContain('fw-rt-msg is-theirs is-others is-start')
+    expect(html).toContain('fw-rt-av is-run fw-rt-tone-')
+    expect(html).not.toContain('fw-rt-av is-org')
+    expect(textOf(html)).toContain(`${BRAND_ALPHA.contact.name} ${BRAND_ALPHA.tradeName}`)
+    expect(html).toContain('title="Email"')
     expect(html).toContain(`aria-label="${BRAND_ALPHA.contact.name}, message from ${BRAND_ALPHA.tradeName}, 16:05"`)
+    expect(textOf(html)).not.toMatch(/\bUs\b|Email to /)
   })
 
-  it('our mail: “Us”, “Email to <customer>”, the delivery word and the details line', () => {
-    const text = textOf(card(OURS))
-    expect(text).toContain('Alex Demo Us Email to Brand Alpha Delivered')
+  it('our mail: no "Us", no "Email to", the delivery as two grey ticks with its word; To and Subject stay a quiet line until Email details', () => {
+    const html = card(OURS)
+    const text = textOf(html)
+    expect(text).not.toMatch(/\bUs\b|Email to /)
+    expect(html).toContain('class="fw-rt-mi is-ok" title="Delivered"')
     expect(text).toContain(`To ${BRAND_ALPHA.contact.email} · Subject:`)
   })
 
-  it('an Office note: yellow with the lock and “Office only”, never the customer’s edge', () => {
+  it('an Office note: the one yellow, the lock with "Office only", the @name coloured in its words (no "Mentioned:" line)', () => {
     const html = card(NOTE)
     expect(html).toContain('fw-rt-msg is-note')
     expect(html).not.toContain('is-theirs')
     expect(html).not.toContain('is-ours')
-    expect(textOf(html)).toContain('Office note · Office only')
-    expect(textOf(html)).toContain('Mentioned: Alex Demo')
+    expect(html).toContain('class="fw-rt-mi fw-rt-lock" title="Office only"')
+    expect(html).toContain('<span class="fw-rt-mention">@Alex Demo</span>')
+    expect(textOf(html)).not.toContain('Mentioned:')
     expect(html).toContain('aria-label="Bea Esempio, Office note, office only, 17:30"')
-    expect(textOf(card(NOTE, CONTEXT, 'it'))).toContain("Nota d'ufficio · Solo ufficio")
+    expect(card(NOTE, CONTEXT, 'it')).toContain('title="Solo ufficio"')
   })
 
-  it('the floor: a ticked note says “Also on the floor”; a station’s comment “From the floor”, with no worker name', () => {
-    expect(textOf(card(FLOOR_NOTE))).toContain('Office note · Office only Also on the floor')
-    const station = textOf(card(STATION))
-    expect(station).toContain('A person on the floor From the floor')
-    expect(cardMarks(STATION)).toEqual([{ key: 'mark.fromFloor', icon: 'tablet' }])
+  it('the floor: a ticked note says "Also on the floor"; a station’s comment "From the floor" with the "?" tile and no worker name', () => {
+    expect(card(FLOOR_NOTE)).toContain('title="Also on the floor"')
+    const station = card(STATION)
+    expect(textOf(station)).toContain('A person on the floor')
+    expect(station).toContain('<span class="fw-rt-av is-run is-hidden" aria-hidden="true">?</span>')
+    expect(station).toContain('title="From the floor"')
+    expect(footMarks(STATION)).toEqual([{ key: 'foot.office', icon: 'lock' }, { key: 'foot.fromFloor', icon: 'tablet' }])
     expect(audienceKey(STATION)).toBe('audience.floor')
   })
 
-  it('at most two marks in a head', () => {
-    for (const message of demoCards(BRAND_ALPHA)) expect(cardMarks(message).length).toBeLessThanOrEqual(2)
+  it('at most two audience icons in a foot, each with its word in both languages', () => {
+    for (const message of demoCards(BRAND_ALPHA)) {
+      const marks = footMarks(message)
+      expect(marks.length).toBeLessThanOrEqual(2)
+      for (const locale of ['en', 'it'] as const) for (const mark of marks) expect(CATALOGUE[locale]['record-thread-card'][mark.key], `${locale} ${mark.key}`).toBeTruthy()
+    }
   })
 
-  it('a bounce says why and opens the task it made', () => {
+  it('a bounce says why in one red line and opens the task it made', () => {
     const html = card(BOUNCED)
-    expect(textOf(html)).toContain('could not get this mail: the mail service said so.')
+    expect(textOf(html)).toContain('could not get this email')
     expect(html).toContain('href="/w/demo/home/tasks?open=task-1"')
-    expect(textOf(html)).toContain('Task made for you · Open')
+    expect(textOf(html)).toContain('Open task')
+    expect(html).toContain('class="fw-rt-mi is-bad" title="Bounced"')
   })
 
-  it('every delivery state has its word in both languages; Delivered is the only success tone', () => {
+  it('every delivery state has its word in both languages; delivered is two ticks in the time’s grey — never blue, never "read"', () => {
     for (const locale of ['en', 'it'] as const) for (const state of DELIVERY_STATES) expect(CATALOGUE[locale]['record-thread-card'][`delivery.${state}`]).toBeTruthy()
-    expect(DELIVERY_STATES.filter((state) => DELIVERY_TONE[state] === 'success')).toEqual(['DELIVERED'])
+    expect(DELIVERY_STATES.filter((state) => deliveryMark(state).icon === 'checks')).toEqual(['DELIVERED'])
+    expect(deliveryMark('DELIVERED').tone).toBe('plain')
+    for (const state of ['BOUNCED', 'COMPLAINED', 'FAILED'] as const) expect(deliveryMark(state)).toEqual({ icon: 'alert', tone: 'bad' })
     expect(CATALOGUE.en['record-thread-card']['delivery.QUEUED']).toBe('Waiting to send')
     expect(CATALOGUE.en['record-thread-card']['delivery.COMPLAINED']).toBe('Marked as spam')
+    const css = readFileSync(new URL('./card.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-rt-mi\.is-ok \{\s*color: inherit;\s*\}/)
+    for (const words of Object.values(CATALOGUE.en['record-thread-card'] ?? {})) expect(words).not.toMatch(/\b(read by|seen by|typing)\b/i)
   })
 })
 
@@ -111,11 +132,17 @@ describe('the body folds, nothing is deleted', () => {
 })
 
 describe('files on a card', () => {
-  it('pictures for JPEG/PNG/WebP, a row for the rest, the first six and “+N”', () => {
+  // tw- W1.2 (Z1, W-041, P18): pictures are tiles in a 2 × 2 album; the 4th tile says "+N"; other files a row with type and size.
+  it('pictures for JPEG/PNG/WebP as an album of tiles (3 and “+N” past 4), a row for the rest', () => {
     const many = Array.from({ length: 20 }, (_, i) => ({ id: `f${i}`, name: `p${i}.jpg`, sizeBytes: 10, contentType: 'image/jpeg', status: 'AVAILABLE' as const }))
     expect(cardFiles(many, true)).toMatchObject({ more: 14, hidden: 0 })
     expect(cardFiles(many, true).photos).toHaveLength(6)
-    expect(textOf(card({ ...OURS, files: many }))).toContain('+14 14 more')
+    const album = card({ ...OURS, files: many })
+    expect(album.match(/class="fw-rt-tile"/g)?.length).toBe(3)
+    expect(textOf(album)).toContain('+17')
+    expect(album).toContain('aria-label="Show 17 more files"')
+    expect(card(OURS)).toContain('aria-label="Open Label placement v2.pdf"')
+    expect(textOf(card(OURS))).toMatch(/PDF · \d+ KB/)
     const split = cardFiles(OURS.files, true)
     expect(split.photos.map((file) => file.name)).toEqual(['sample-front.jpg', 'label-detail.jpg'])
     expect(split.others.map((file) => file.name)).toEqual(['Label placement v2.pdf'])
@@ -129,7 +156,8 @@ describe('files on a card', () => {
 })
 
 describe('the ⋯ menu and the message on its way', () => {
-  it('Reply only on the customer’s message for a reader who may answer; a task where the host has tasks; the link always', () => {
+  // tw- W1.1: with the reader's ways (replyWays) Reply is on every message (the W1.1 tests); without them, as before.
+  it('a host that does not say its ways: Reply only on the customer’s message for a reader who may answer; a task where the host has tasks; the link always', () => {
     expect(cardActions(MAIL, CONTEXT)).toEqual(['reply', 'task', 'link'])
     expect(cardActions(MAIL, { canReply: false, canTask: false })).toEqual(['link'])
     expect(cardActions(NOTE, CONTEXT)).toEqual(['task', 'link'])
@@ -158,6 +186,17 @@ describe('the Avatar (built here first, B-TH-294 moves it on the Owner’s word)
     expect(initialsOf('alex')).toBe('A')
     expect(initialsOf(null)).toBe('?')
     expect(render(createElement(Avatar, { name: 'Brand Beta', kind: 'organisation' }))).toBe('<span class="fw-rt-av is-org" aria-hidden="true">BB</span>')
+  })
+
+  // tw- W1.2 (W-016, R5, R6): the bubble's tile — 28 px, the PERSON's initials in their colour; "?" in the neutral grey; never a photo.
+  it('the bubble’s tile: 28 px, the person’s initials in their tone; "?" neutral for a writer kept back', () => {
+    expect(render(createElement(Avatar, { name: 'Lia Modello', size: 'run', tone: 'purple' }))).toBe('<span class="fw-rt-av is-run fw-rt-tone-purple" aria-hidden="true">LM</span>')
+    expect(render(createElement(Avatar, { name: null, size: 'run', tone: 'slate' }))).toBe('<span class="fw-rt-av is-run is-hidden" aria-hidden="true">?</span>')
+    // The customer's person shows their own initials, never the company's tile.
+    expect(card(MAIL)).toContain(`>${initialsOf(BRAND_ALPHA.contact.name)}</span>`)
+    const css = readFileSync(new URL('../parts/parts.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-rt-av\.is-run \{[^}]*width: 28px;[^}]*height: 28px;/)
+    expect(readFileSync(new URL('../parts/Avatar.tsx', import.meta.url), 'utf8')).not.toMatch(/<img|photo|src=/i)
   })
 })
 
@@ -222,38 +261,53 @@ describe('B-TH-236: Correct, “In reply to”, “Corrected below”, the amoun
     expect(textOf(card(MINE_MAIL, { ...CONTEXT, canCorrect: CAN }))).not.toContain('Correction of')
   })
 
-  it('the correction says “Correction of 09:12” in its head (two marks at most); the old one “Corrected below”', () => {
+  // tw- W1.2 / W1.4 (B1, Z10): "Correction of 09:12" on top and "Corrected" in the foot are doors (the host's jump), never a dead hash link.
+  it('the correction says “Correction of 09:12” on top; the old one “Corrected” in its foot; both go to the other message', () => {
     const correction: CardMessage = { ...MINE_MAIL, id: 'c-1', at: '2026-11-17T08:20:00.000Z', body: 'Sorry, one change: Thursday.', files: [], corrects: { id: OURS.id, author: 'Alex Demo', excerpt: 'Good morning', at: OURS.at } }
     const text = textOf(card(correction))
     expect(text).toContain('Correction of 09:12')
-    expect(card(correction)).toContain(`href="#message-${OURS.id}"`)
-    expect(textOf(card({ ...MINE_MAIL, correctedBy: { id: 'c-1', at: '2026-11-17T08:20:00.000Z' } }))).toContain('Corrected below · 09:20')
-    expect(textOf(card({ ...MINE_MAIL, correctedBy: { id: 'c-1', at: '2026-11-17T08:20:00.000Z' } }, CONTEXT, 'it'))).toContain('Corretto più sotto · 09:20')
-    // A corrected floor note: the audience mark stays in the head, "Also on the floor" moves to the details line.
-    const floorFix = textOf(card({ ...FLOOR_NOTE, corrects: { id: 'n-1', author: 'Carlo Prova', excerpt: 'grey mesh', at: FLOOR_NOTE.at } }))
-    expect(floorFix).toContain('Office note · Office only Correction of')
-    expect(floorFix).toContain('Also on the floor')
+    expect(card(correction)).not.toContain('href="#message-')
+    const jumping = (message: CardMessage) => render(createElement(MessageCard, { message, context: CONTEXT, actions: { onJump: () => undefined } }))
+    expect(jumping(correction)).toContain('<button type="button" class="fw-rt-corr">')
+    const corrected = { ...MINE_MAIL, correctedBy: { id: 'c-1', at: '2026-11-17T08:20:00.000Z' } }
+    expect(textOf(card(corrected))).toContain('Corrected')
+    expect(textOf(card(corrected, CONTEXT, 'it'))).toContain('Corretto')
+    expect(jumping(corrected)).toContain('<button type="button" class="fw-rt-corrected">Corrected</button>')
+    expect(card(corrected)).not.toContain('href="#message-')
+    // A corrected floor note: "Correction of" on top, the lock and the tablet with their words in the foot.
+    const floorFix = card({ ...FLOOR_NOTE, corrects: { id: 'n-1', author: 'Carlo Prova', excerpt: 'grey mesh', at: FLOOR_NOTE.at } })
+    expect(textOf(floorFix)).toContain('Correction of')
+    expect(floorFix).toContain('title="Office only"')
+    expect(floorFix).toContain('title="Also on the floor"')
   })
 
-  it('a reply names the message it answers above its words (W08: only this thread’s message, its excerpt)', () => {
+  // tw- W1.2 (W-030, R1): the quote block — the quoted sender's colour bar and name, their words; a button that goes to the message.
+  it('a reply carries the quote of the message it answers (W08: only this thread’s message, its excerpt), a door to it', () => {
     const reply: CardMessage = { ...MINE_MAIL, id: 'r-1', channel: 'PORTAL', email: null, body: 'Yes, both sizes.', files: [], replyTo: { id: MAIL.id, author: BRAND_ALPHA.portalPerson.name, excerpt: 'Is the label 3 cm from the hem on both sizes?', at: '2026-11-17T09:41:00.000Z' } }
-    const text = textOf(card(reply))
-    expect(text).toContain(`In reply to ${BRAND_ALPHA.portalPerson.name}, 17 Nov`)
-    expect(text).toContain('“Is the label 3 cm from the hem on both sizes?”')
-    expect(text).toContain(`In the portal · ${BRAND_ALPHA.tradeName}`)
+    const html = card(reply)
+    const text = textOf(html)
+    expect(html).toContain('class="fw-rt-quote fw-rt-tone-slate"')
+    expect(text).toContain(`${BRAND_ALPHA.portalPerson.name} Is the label 3 cm from the hem on both sizes?`)
+    expect(text).not.toContain('In reply to')
+    expect(html).toContain('title="In the portal"')
+    const door = render(createElement(MessageCard, { message: reply, context: CONTEXT, actions: { onJump: () => undefined } }))
+    expect(door).toContain(`aria-label="Go to the message of ${BRAND_ALPHA.portalPerson.name} at 10:41"`)
+    expect(render(createElement(MessageCard, { message: reply, context: CONTEXT, actions: { onJump: () => undefined } }), 'it')).toContain(`aria-label="Vai al messaggio di ${BRAND_ALPHA.portalPerson.name} delle 10:41"`)
     expect(excerptOf('x'.repeat(200)).length).toBe(90)
     expect(scanText(text, BRAND_BETA)).toEqual([])
   })
 
-  it('an office note’s amount in the reader’s numbers, said office only (the API sends it to price readers only)', () => {
+  it('an office note’s amount in the reader’s numbers, on its own line with the lock (the API sends it to price readers only)', () => {
     expect(amountWords({ value: 1_845_000, currency: 'EUR' }, 'en-GB')).toBe('€18,450.00')
     expect(amountWords({ value: 1_845_000, currency: 'EUR' }, 'it-IT')).toMatch(/18\.450,00\s?€/)
-    const text = textOf(card({ ...NOTE, amount: { value: 125_000, currency: 'EUR' } }))
-    expect(text).toContain('Amount: €1,250.00 · office only, for those who see prices')
-    expect(textOf(card(NOTE))).not.toContain('Amount:')
+    const html = card({ ...NOTE, amount: { value: 125_000, currency: 'EUR' } })
+    expect(textOf(html)).toContain('Amount €1,250.00')
+    expect(html).toContain('class="fw-rt-bline fw-rt-amount"')
+    expect(textOf(card({ ...NOTE, amount: { value: 125_000, currency: 'EUR' } }, CONTEXT, 'it'))).toMatch(/Importo 1\.250,00\s?€/)
+    expect(textOf(card(NOTE))).not.toContain('Amount')
   })
 
-  it('Undo for 10 seconds: “Sending to <customer>… · Undo (7)” for the sender only, gone when the window passed', () => {
+  it('Undo for 10 seconds: “Sending · Undo (7)” in the foot for the sender only, the time back when the window passed', () => {
     const now = Date.parse('2026-11-17T10:00:00.000Z')
     const waiting: CardMessage = { ...MINE_MAIL, files: [], email: { to: [BRAND_ALPHA.contact.email], subject: 'Re: sizes', status: 'QUEUED', id: 'mail-1', undoUntil: '2026-11-17T10:00:07.000Z' } }
     expect(undoLeft(waiting.email!.undoUntil, now)).toBe(7)
@@ -263,9 +317,12 @@ describe('B-TH-236: Correct, “In reply to”, “Corrected below”, the amoun
     expect(showsUndo({ ...waiting, email: { ...waiting.email!, status: 'SENT' } }, now)).toBe(false)
     expect(showsUndo({ ...waiting, email: { ...waiting.email!, undoUntil: undefined } }, now)).toBe(false)
     const html = render(createElement(MessageCard, { message: waiting, context: { ...CONTEXT, now }, actions: { onUndo: () => undefined } }))
-    expect(textOf(html)).toContain(`Sending to ${BRAND_ALPHA.tradeName}… Undo (7)`)
-    expect(textOf(render(createElement(MessageCard, { message: waiting, context: { ...CONTEXT, now }, actions: { onUndo: () => undefined } }), 'it'))).toContain(`Invio a ${BRAND_ALPHA.tradeName} in corso… Annulla (7)`)
-    expect(textOf(render(createElement(MessageCard, { message: waiting, context: { ...CONTEXT, now: now + 8_000 }, actions: { onUndo: () => undefined } })))).not.toContain('Undo (')
+    expect(textOf(html)).toContain('Sending · Undo (7)')
+    expect(html).toContain('aria-label="Take the mail back: 7 seconds left"')
+    expect(textOf(render(createElement(MessageCard, { message: waiting, context: { ...CONTEXT, now }, actions: { onUndo: () => undefined } }), 'it'))).toContain('Invio · Annulla (7)')
+    const passed = textOf(render(createElement(MessageCard, { message: waiting, context: { ...CONTEXT, now: now + 8_000 }, actions: { onUndo: () => undefined } })))
+    expect(passed).not.toContain('Undo (')
+    expect(passed).toMatch(/\d\d:\d\d/)
   })
 
   it('the new cases draw with no key left on screen; Brand Beta’s copy stays clean', () => {
@@ -373,11 +430,12 @@ describe('B-TH-286 — pin a message for everyone, by right', () => {
     expect(pinnable({ ...OURS, email: { to: ['buyer@example.com'], subject: 'S', status: 'DELIVERED' as const } })).toBe(true)
   })
 
+  // tw- W1.2: the pin is a small icon in the foot, its word "Pinned" as the tooltip and for screen readers.
   it('a pinned card says so in words (not colour alone), in it and en; the menu words are there', () => {
     for (const locale of ['en', 'it'] as const) {
       const html = card({ ...MAIL, pinned: true }, { ...CONTEXT, canPin: true }, locale)
       expect(html).toContain('fw-rt-pinned')
-      expect(textOf(html)).toContain(locale === 'en' ? 'Pinned for everyone on this record' : 'Fissato per tutti su questo record')
+      expect(html).toContain(locale === 'en' ? 'title="Pinned"' : 'title="Fissato"')
       expect(leftKeys(html, ['pin', 'menu'])).toEqual([])
       for (const key of ['menu.pin', 'menu.pinHint', 'menu.unpin', 'menu.unpinHint', 'pin.pinned']) expect(CATALOGUE[locale]['record-thread-card']?.[key]).toBeTruthy()
     }
@@ -487,17 +545,19 @@ describe('tw- W1.1 — the quote says who and what, in both languages, words onl
     expect(said(quoteOf(link)).name).not.toContain('Brand Alpha')
   })
 
-  it('a message of files: "Photo", "PDF", "Document", "2 files" — the caption instead when it has words', () => {
-    const files = (count: number, kind: 'IMAGE' | 'DOCUMENT' | 'OTHER', contentType: string) => ({ ...link, excerpt: '', fileCount: count, firstFile: { id: 'f1', kind, contentType } })
-    expect(said(quoteOf(files(1, 'IMAGE', 'image/jpeg')))).toMatchObject({ text: 'Photo' })
-    expect(said(quoteOf(files(1, 'IMAGE', 'image/jpeg')), 'it')).toMatchObject({ text: 'Foto' })
+  // The lead's final shape (tw-s): firstFile.kind is the API's FILE_KINDS — PHOTO, DOCUMENT, ATTACHMENT, CERTIFICATE, FISCAL_ARCHIVE, AUDIO.
+  it('a message of files: "Photo", "PDF", "File", "2 files" — the caption instead when it has words', () => {
+    const files = (count: number, kind: string, contentType: string) => ({ ...link, excerpt: '', fileCount: count, firstFile: { id: 'f1', kind, contentType } })
+    expect(said(quoteOf(files(1, 'PHOTO', 'image/jpeg')))).toMatchObject({ text: 'Photo' })
+    expect(said(quoteOf(files(1, 'PHOTO', 'image/jpeg')), 'it')).toMatchObject({ text: 'Foto' })
+    expect(said(quoteOf(files(1, 'ATTACHMENT', 'image/png')))).toMatchObject({ text: 'Photo' })
     expect(said(quoteOf(files(1, 'DOCUMENT', 'application/pdf')))).toMatchObject({ text: 'PDF' })
-    expect(said(quoteOf(files(1, 'DOCUMENT', 'application/vnd.ms-excel')))).toMatchObject({ text: 'Document' })
-    expect(said(quoteOf(files(1, 'DOCUMENT', 'application/vnd.ms-excel')), 'it')).toMatchObject({ text: 'Documento' })
-    expect(said(quoteOf(files(2, 'IMAGE', 'image/jpeg')))).toMatchObject({ text: '2 files' })
-    expect(said(quoteOf(files(2, 'IMAGE', 'image/jpeg')), 'it')).toMatchObject({ text: '2 file' })
-    expect(quoteOf(files(2, 'IMAGE', 'image/jpeg'))).toMatchObject({ lines: 1, media: 'files' })
-    expect(said(quoteOf({ ...files(1, 'IMAGE', 'image/png'), excerpt: 'The sleeve' }))).toMatchObject({ text: 'The sleeve' })
+    expect(said(quoteOf(files(1, 'DOCUMENT', 'application/vnd.ms-excel')))).toMatchObject({ text: 'File' })
+    expect(said(quoteOf(files(1, 'CERTIFICATE', 'application/zip')), 'it')).toMatchObject({ text: 'File' })
+    expect(said(quoteOf(files(2, 'PHOTO', 'image/jpeg')))).toMatchObject({ text: '2 files' })
+    expect(said(quoteOf(files(2, 'PHOTO', 'image/jpeg')), 'it')).toMatchObject({ text: '2 file' })
+    expect(quoteOf(files(2, 'PHOTO', 'image/jpeg'))).toMatchObject({ lines: 1, media: 'files' })
+    expect(said(quoteOf({ ...files(1, 'PHOTO', 'image/png'), excerpt: 'The sleeve' }))).toMatchObject({ text: 'The sleeve' })
     // A file the reader may not open never counts (the server's fileCount): no files left, the words alone.
     expect(quoteMediaOf({ fileCount: 0, firstFile: null })).toBeNull()
   })
@@ -592,3 +652,80 @@ describe('tw- W1.1 — Reply keeps the audience of what it answers (D4), for eve
   })
 })
 // ---- end tw- W1.1
+
+// ---- tw- W1.2 (10-design §2, §3; R1, R17; PR-15): the bubble's type wall, the quote's source, the run, the width rule ----------------
+import type { BubbleModel } from './view/Bubble'
+
+describe('tw- W1.2 — the bubble', () => {
+  it('BubbleModel has no audience, note, author id or office field (the narrow shell a portal may reuse)', () => {
+    expectTypeOf<keyof BubbleModel>().toEqualTypeOf<'side' | 'run' | 'name' | 'senderTone'>()
+    const source = readFileSync(new URL('./view/Bubble.tsx', import.meta.url), 'utf8')
+    const model = source.slice(source.indexOf('export interface BubbleModel {'), source.indexOf('\n}\n', source.indexOf('export interface BubbleModel {')))
+    expect(model).not.toMatch(/\b(audience|note|office|authorId|author|kind|channel|amount)\??:/)
+    expect(source).not.toMatch(/from '[^']*(areas|portal|shell|record-panels|lib\/api|lib\/session)\//)
+  })
+
+  it('a quote is drawn only from the message’s own replyTo / corrects (R1): the card never looks a quoted message up among loaded ones', () => {
+    const card = readFileSync(new URL('./view/MessageCard.tsx', import.meta.url), 'utf8')
+    expect(card).toContain('<QuoteBlock link={message.replyTo} onJump={onJump} />')
+    expect(card).toContain('<CorrectionLink link={message.corrects} onJump={onJump} />')
+    for (const file of ['./view/MessageCard.tsx', './view/QuoteBlock.tsx', './quote.ts']) {
+      const source = readFileSync(new URL(file, import.meta.url), 'utf8')
+      expect(source, file).not.toMatch(/\.find\(|messages\.(filter|some)\(|\bmessages\b\s*[:=]/)
+    }
+    expect(readFileSync(new URL('./view/QuoteBlock.tsx', import.meta.url), 'utf8')).toContain('const quote = quoteOf(link)')
+  })
+
+  it('mine on the right with no tile and no name; someone else’s run starts with the tile, the name and the tail; inside a run neither', () => {
+    const mine = render(createElement(MessageCard, { message: { ...NOTE, mine: true }, context: CONTEXT }))
+    expect(mine).toContain('fw-rt-msg is-note is-mine is-start')
+    expect(mine).not.toContain('fw-rt-av')
+    expect(mine).not.toContain('class="fw-rt-name')
+    expect(mine).toContain('class="fw-rt-bub is-mine is-tail"')
+    const first = render(createElement(MessageCard, { message: NOTE, context: CONTEXT, run: { side: 'others', first: true, last: false, showName: true } }))
+    expect(first).toContain('fw-rt-av is-run')
+    expect(first).toContain('class="fw-rt-bub is-others is-tail"')
+    expect(first).toContain('class="fw-rt-name fw-rt-tone-')
+    const inside = render(createElement(MessageCard, { message: NOTE, context: CONTEXT, run: { side: 'others', first: false, last: true, showName: false } }))
+    expect(inside).not.toContain('fw-rt-av')
+    expect(inside).not.toContain('is-tail')
+    expect(inside).not.toContain('class="fw-rt-name')
+    expect(inside).toContain('fw-rt-msg is-note is-others"')
+  })
+
+  it('the hover arrow keeps fw-rt-msg-more (on hover AND focus), no hint rows under its items; a read-only card has none', () => {
+    const html = card(MAIL)
+    expect(html).toContain('fw-rt-msg-more')
+    expect(html).toContain('class="fw-rt-tools"')
+    const css = readFileSync(new URL('./card.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-rt-bub:hover \.fw-rt-tools,\s*\.fw-rt-bub:focus-within \.fw-rt-tools/)
+    expect(readFileSync(new URL('./view/MessageCard.tsx', import.meta.url), 'utf8')).not.toContain('Hint`)')
+    expect(render(createElement(MessageCard, { message: MAIL, context: CONTEXT, readOnly: true }))).not.toContain('fw-rt-msg-more')
+  })
+
+  it('the system’s own office line is one centred pill with its lock and time, and no menu', () => {
+    const line: CardMessage = { ...NOTE, id: 'sys-1', author: null, authorKind: 'SYSTEM', body: 'On draft shipment SH-0012.', mentions: [] }
+    const html = card(line)
+    expect(html).toContain('fw-rt-msg is-note is-system')
+    expect(html).toContain('class="fw-rt-sys"')
+    expect(html).not.toContain('fw-rt-msg-more')
+    expect(html).toContain('data-message-id="sys-1"')
+  })
+
+  it('one css rule for the width (on the list, P17); words at 72ch; corners 7; tokens only — no rgba, no color-mix, no raw colour', () => {
+    const css = readFileSync(new URL('./card.css', import.meta.url), 'utf8')
+    expect(css).toContain('max-width: min(var(--L, 100%) - 64px, max(var(--L, 100%) * 0.65, 340px));')
+    expect(css).toMatch(/^\.fw-rt-bub \{[^}]*border-radius: var\(--nds-radius-md\);/m)
+    expect(css).toMatch(/^\.fw-rt-body \{[^}]*max-width: 72ch;/m)
+    for (const file of ['./card.css', '../parts/parts.css']) {
+      const text = readFileSync(new URL(file, import.meta.url), 'utf8')
+      expect(text, file).not.toMatch(/rgba?\(|hsla?\(|color-mix\(|#[0-9a-f]{3,8}\b|box-shadow/i)
+    }
+  })
+
+  it('every new word of the bubble draws in both languages, no key left on screen', () => {
+    for (const [locale, id, html] of everyCase(designScreen)) expect(leftKeys(html, ['foot', 'quote', 'org', 'link', 'amount', 'undo']), `${locale} ${id}`).toEqual([])
+  })
+})
+// ---- end tw- W1.2
+

@@ -1,133 +1,207 @@
 /*
- * The message card (B-TH-298, T3; picture 2 and the design kit §3). Each audience has its card and its 3 px edge, always with
- * words beside the colour: the customer's message (info tint, info edge), ours to the customer (raised, info edge: the customer
- * reads it), an Office note and the floor's (warning tint, warning edge: one yellow means "not sent to the customer"). DS
- * semantic tokens only, so light and dark follow the theme.
+ * The message bubble (tw- W1.2, THE THREAD REBUILD; 10-design §2 – §5; the picture's p3b-tw.css): the row is the whole list width
+ * (`.fw-rt-msg`: a jump lights it up), mine on the right, everyone else on the left with the 28 px tile of the person on a run's first
+ * bubble. The bubble is as wide as its words, at most min(L − 64px, max(65 % of L, 340px)) of the list L (`--L`, set on the column
+ * that measures itself), corners 7, a tail on a run's first bubble, no shadow and no border (Z5: told from the ground by token contrast
+ * only). Colours A (the Owner's pick P1): others the raised surface, mine `--nds-pill-success-bg`, every office note the ONE yellow on
+ * either side — always with its lock and its words too (R17). DS semantic tokens only: light and dark follow the theme.
  */
+
+/* ── the row ── */
 .fw-rt-msg {
+  position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: flex-start;
   min-width: 0;
-  padding: 10px 12px 12px;
-  border: 1px solid var(--nds-border-subtle);
-  border-inline-start-width: 3px;
-  border-radius: var(--nds-radius-lg);
-  background: var(--nds-surface-raised);
+  margin-top: 2px;
+  padding: 0 16px;
   color: var(--nds-text);
-  font-size: var(--nds-font-size-base);
+  font-size: var(--nds-font-size-md-minus);
   outline: none;
 }
 
-.fw-rt-msg.is-theirs {
-  background: var(--nds-info-soft);
-  border-color: transparent;
-  border-inline-start-color: var(--nds-info);
+.fw-rt-msg.is-start {
+  margin-top: 12px;
 }
 
-.fw-rt-msg.is-ours {
-  border-inline-start-color: var(--nds-info);
+/* 16 (the tile's edge) + 28 (the tile) + 8 */
+.fw-rt-msg.is-others {
+  padding-inline-start: 52px;
 }
 
-.fw-rt-msg.is-note,
-.fw-rt-msg.is-floor {
-  background: var(--nds-warning-soft);
-  border-inline-start-color: var(--nds-warning);
+.fw-rt-msg.is-mine {
+  justify-content: flex-end;
 }
 
-.fw-rt-msg.is-pending {
-  opacity: 0.75;
+.fw-rt-msg.is-system {
+  justify-content: center;
+  margin-top: 12px;
 }
 
-.fw-rt-msg.is-failed {
-  border-inline-start-color: var(--nds-danger);
+.fw-rt-msg > .fw-rt-av.is-run {
+  position: absolute;
+  top: 0;
+  inset-inline-start: 16px;
 }
 
-.fw-rt-msg.is-anchor {
-  box-shadow: 0 0 0 2px var(--nds-tonal-border);
-}
-
-.fw-rt-msg:focus-visible {
+.fw-rt-msg:focus-visible > .fw-rt-bub,
+.fw-rt-msg:focus-visible > .fw-rt-sys {
   outline: 2px solid var(--nds-text);
   outline-offset: 2px;
 }
 
-.fw-rt-msg-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
-  min-width: 0;
-}
-
-.fw-rt-who {
-  font-weight: 600;
+/* ── the bubble ── */
+.fw-rt-bub {
+  --fw-rt-bub-bg: var(--nds-surface-raised);
+  position: relative;
+  display: flow-root;
+  min-width: 72px;
+  max-width: min(var(--L, 100%) - 64px, max(var(--L, 100%) * 0.65, 340px));
+  padding: 6px 9px 8px;
+  border-radius: var(--nds-radius-md);
+  background: var(--fw-rt-bub-bg);
   color: var(--nds-text);
+  font-size: var(--nds-font-size-md-minus);
+  line-height: 1.45;
   overflow-wrap: anywhere;
 }
 
-.fw-rt-side {
+.fw-rt-msg.is-mine .fw-rt-bub {
+  --fw-rt-bub-bg: var(--nds-pill-success-bg);
+}
+
+/* One yellow means one thing everywhere: not sent to the customer (an office note, the floor's) — on either side. */
+.fw-rt-msg.is-note .fw-rt-bub,
+.fw-rt-msg.is-floor .fw-rt-bub {
+  --fw-rt-bub-bg: var(--nds-warning-soft);
+}
+
+.fw-rt-bub.is-tail.is-others {
+  border-start-start-radius: 0;
+}
+
+.fw-rt-bub.is-tail.is-mine {
+  border-start-end-radius: 0;
+}
+
+.fw-rt-bub.is-tail::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 8px;
+  height: 13px;
+  background: inherit;
+}
+
+.fw-rt-bub.is-tail.is-others::before {
+  inset-inline-start: -8px;
+  clip-path: polygon(100% 0, 0 0, 100% 100%);
+}
+
+.fw-rt-bub.is-tail.is-mine::before {
+  inset-inline-end: -8px;
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+
+.fw-rt-msg.is-pending .fw-rt-bub {
+  opacity: 0.75;
+}
+
+.fw-rt-msg.is-erased .fw-rt-bub {
+  color: var(--nds-text-muted);
+}
+
+/* The name line: the person in their own colour (parts.css tones); their company muted, cut first. */
+.fw-rt-name {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding-inline-end: 18px;
+  color: var(--fw-rt-tone-fg, var(--nds-text-2));
   font-size: var(--nds-font-size-sm-plus);
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.fw-rt-name-who {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-rt-name-org {
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--nds-text-muted);
-  white-space: nowrap;
+  font-weight: 400;
 }
 
-.fw-rt-mark {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--nds-font-size-sm);
-  font-weight: 600;
-  color: var(--nds-text-2);
-  white-space: nowrap;
-}
-
-.fw-rt-msg.is-note .fw-rt-mark,
-.fw-rt-msg.is-floor .fw-rt-mark {
-  color: var(--nds-warning-text);
-}
-
-.fw-rt-msg-end {
-  margin-inline-start: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.fw-rt-msg-end time {
-  font-size: var(--nds-font-size-xs);
-  color: var(--nds-text-muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  margin-inline-end: 4px;
-}
-
-.fw-rt-msg-more {
-  min-width: 26px;
-  padding-inline: 4px;
-}
-
+/* ── the words: at most 72 characters a line (kept: record-thread.vitest pins it) ── */
 .fw-rt-body {
+  display: flow-root;
   margin: 0;
   max-width: 72ch;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  line-height: 1.55;
-  color: var(--nds-text);
+  line-height: 1.45;
+  color: inherit;
 }
 
 .fw-rt-body.is-folded {
-  max-height: calc(1.55em * 12);
+  max-height: calc(1.45em * 12);
   overflow: hidden;
   -webkit-mask-image: linear-gradient(180deg, var(--nds-text) 80%, transparent);
   mask-image: linear-gradient(180deg, var(--nds-text) 80%, transparent);
 }
 
+.fw-rt-mention {
+  color: var(--nds-text-link);
+  font-weight: 500;
+}
+
+.fw-rt-link {
+  color: var(--nds-text-link);
+}
+
+.fw-rt-quoted {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  margin-inline-start: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+  font-weight: 700;
+  vertical-align: 1px;
+  cursor: pointer;
+}
+
+.fw-rt-quoted-text {
+  margin: 4px 0 0;
+  padding: 2px 0 2px 10px;
+  border-inline-start: 2px solid var(--nds-border-strong);
+  max-width: 72ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm-plus);
+}
+
 .fw-rt-showall {
-  align-self: flex-start;
+  padding: 0;
   border: none;
   background: none;
-  padding: 2px 0;
   color: var(--nds-text-link);
   font: inherit;
   font-size: var(--nds-font-size-sm);
@@ -139,122 +213,423 @@
   text-decoration: underline;
 }
 
-.fw-rt-showall:focus-visible,
+/* ── the foot: the icons and the time at the end of the last line; a line of its own when that one is full ── */
+.fw-rt-meta {
+  position: relative;
+  float: right;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 5px 0 0 8px;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  font-style: normal;
+  font-weight: 400;
+  line-height: 15px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-rt-bline > .fw-rt-meta,
+.fw-rt-erased > .fw-rt-meta,
+.fw-rt-change > .fw-rt-meta {
+  float: none;
+  margin: 0 0 0 auto;
+}
+
+.fw-rt-mi {
+  display: inline-flex;
+  align-items: center;
+}
+
+.fw-rt-lock,
+.fw-rt-mi.fw-rt-lock {
+  color: var(--nds-warning-text);
+}
+
+/* lead Z20: delivered ticks in the time's own grey — never blue (blue reads as "read"). */
+.fw-rt-mi.is-ok {
+  color: inherit;
+}
+
+.fw-rt-mi.is-bad {
+  color: var(--nds-danger-strong);
+}
+
+.fw-rt-pinned {
+  color: inherit;
+}
+
+.fw-rt-corrected,
+.fw-rt-undo {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+
+button.fw-rt-corrected {
+  cursor: pointer;
+}
+
+button.fw-rt-corrected:hover {
+  color: var(--nds-text);
+  text-decoration: underline;
+}
+
+.fw-rt-undo {
+  color: var(--nds-text-link);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ── the arrow inside the top-right corner, on hover AND on keyboard focus (W-060); always on a touch screen ── */
+.fw-rt-tools {
+  position: absolute;
+  top: 2px;
+  inset-inline-end: 2px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: flex-start;
+  padding-inline-start: 12px;
+  border-radius: var(--nds-radius-md);
+  background: linear-gradient(to right, transparent, var(--fw-rt-bub-bg) 45%);
+  opacity: 0;
+  transition: opacity var(--nds-duration-panel) var(--nds-easing-standard);
+}
+
+.fw-rt-bub:hover .fw-rt-tools,
+.fw-rt-bub:focus-within .fw-rt-tools,
+.fw-rt-msg:focus-visible .fw-rt-tools,
+.fw-rt-tools:has([aria-expanded='true']) {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .fw-rt-tools {
+    opacity: 1;
+  }
+}
+
+.fw-rt-msg-more {
+  display: inline-flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  min-width: 26px;
+  height: 22px;
+  padding: 2px 3px 0 0;
+  border: none;
+  border-radius: var(--nds-radius-md);
+  background: none;
+  color: var(--nds-text-2);
+  cursor: pointer;
+}
+
+.fw-rt-msg-more:hover {
+  color: var(--nds-text);
+}
+
+.fw-rt-msg-more:focus-visible,
+.fw-rt-quote:focus-visible,
+.fw-rt-corr:focus-visible,
+.fw-rt-about:focus-visible,
+.fw-rt-tile:focus-visible,
+.fw-rt-file:focus-visible,
 .fw-rt-quoted:focus-visible,
-.fw-rt-photo button:focus-visible,
+.fw-rt-showall:focus-visible,
+.fw-rt-corrected:focus-visible,
+.fw-rt-undo:focus-visible,
 .fw-rt-bounce-link:focus-visible {
   outline: 2px solid var(--nds-text);
   outline-offset: 1px;
 }
 
-.fw-rt-quoted {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  height: 20px;
-  padding: 0 9px;
-  border: 1px solid var(--nds-border);
-  border-radius: var(--nds-radius-pill);
-  background: var(--nds-surface);
-  color: var(--nds-text-2);
-  font-size: var(--nds-font-size-xs);
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.fw-rt-quoted-text {
-  margin: 0;
-  padding: 2px 0 2px 10px;
-  border-inline-start: 2px solid var(--nds-border-strong);
-  max-width: 72ch;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  line-height: 1.5;
-  color: var(--nds-text-2);
-  font-size: var(--nds-font-size-sm-plus);
-}
-
-.fw-rt-details {
-  margin: 0;
-  font-size: var(--nds-font-size-xs-plus);
-  color: var(--nds-text-muted);
-  overflow-wrap: anywhere;
-}
-
-.fw-rt-attach {
+/* ── TOP: the quote (S5), the correction, what it is about ── */
+.fw-rt-quote {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 2px;
-}
-
-.fw-rt-attach .nds-filerow {
-  max-width: 360px;
-}
-
-.fw-rt-photos {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0;
+  align-items: stretch;
+  width: calc(100% + 10px);
+  min-width: 0;
+  margin: 0 -5px 5px;
   padding: 0;
-  list-style: none;
-}
-
-.fw-rt-photo {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 96px;
-  font-size: var(--nds-font-size-xs);
-  color: var(--nds-text-muted);
-}
-
-.fw-rt-photo button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 96px;
-  height: 72px;
-  padding: 0;
-  border: 1px solid var(--nds-border);
-  border-radius: var(--nds-radius-sm);
+  border: none;
+  border-radius: var(--nds-radius-md);
   background: var(--nds-surface-sunken);
-  color: var(--nds-text-2);
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  overflow: hidden;
+}
+
+button.fw-rt-quote {
   cursor: pointer;
 }
 
-.fw-rt-photo-more {
-  font-weight: 700;
-  font-size: var(--nds-font-size-sm-plus);
+button.fw-rt-quote:hover .fw-rt-quote-text {
+  color: var(--nds-text);
 }
 
-.fw-rt-photo span {
+.fw-rt-quote-bar {
+  flex: none;
+  width: 4px;
+  background: var(--fw-rt-tone-fg, var(--nds-border-strong));
+}
+
+.fw-rt-quote-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 9px 6px 8px;
+}
+
+.fw-rt-quote-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--fw-rt-tone-fg, var(--nds-text-2));
+  font-size: var(--nds-font-size-sm-plus);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.fw-rt-quote-name > span {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.fw-rt-held-file {
-  margin: 0;
-  display: inline-flex;
+.fw-rt-quote-name svg {
+  flex: none;
+  color: var(--nds-warning-text);
+}
+
+.fw-rt-quote-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-base);
+  font-style: normal;
+  line-height: 1.4;
+}
+
+.fw-rt-quote-text.is-one {
+  -webkit-line-clamp: 1;
+}
+
+.fw-rt-quote-text.is-gone {
+  font-style: italic;
+}
+
+.fw-rt-quote-text svg {
+  margin-inline-end: 3px;
+  vertical-align: -2px;
+}
+
+.fw-rt-corr {
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--nds-text-2);
+  font: inherit;
+  font-size: var(--nds-font-size-sm-plus);
+  font-weight: 600;
+}
+
+button.fw-rt-corr {
+  color: var(--nds-text-link);
+  cursor: pointer;
+}
+
+.fw-rt-about {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 5px;
+  padding: 1px 8px;
+  border: none;
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+  font: inherit;
   font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ── files: the album of tiles (Z1, P18: the 2 × 2 shape stays when real pictures come), the file rows ── */
+.fw-rt-attach {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fw-rt-album {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  width: min(300px, calc(100% + 12px));
+  margin: 0 -6px 4px;
+  padding: 0;
+  border-radius: var(--nds-radius-md);
+  list-style: none;
+  overflow: hidden;
+}
+
+.fw-rt-album.is-one {
+  grid-template-columns: 1fr;
+}
+
+.fw-rt-album > li {
+  display: flex;
+  min-width: 0;
+}
+
+.fw-rt-tile {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  aspect-ratio: 4 / 3;
+  padding: 6px;
+  border: none;
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+  font: inherit;
+  font-size: var(--nds-font-size-xs);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.fw-rt-tile > span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-rt-album.is-one .fw-rt-tile {
+  flex-direction: row;
+  justify-content: flex-start;
+  aspect-ratio: auto;
+  padding: 8px 10px;
+}
+
+.fw-rt-tile.is-more {
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-lg);
+  font-weight: 600;
+}
+
+.fw-rt-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(300px, calc(100% + 12px));
+  min-width: 0;
+  margin: 0 -6px 4px;
+  padding: 7px 9px;
+  border: none;
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.fw-rt-file > svg {
+  flex: none;
   color: var(--nds-text-2);
 }
 
-.fw-rt-bounce {
+.fw-rt-file-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: var(--nds-font-size-base);
+  line-height: 1.3;
+}
+
+.fw-rt-file-name b {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-rt-file-name small {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-rt-held-file {
   margin: 0;
-  padding: 7px 10px;
-  border-radius: var(--nds-radius-md);
-  background: var(--nds-danger-soft);
-  color: var(--nds-danger-text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--nds-text-2);
   font-size: var(--nds-font-size-sm);
+}
+
+/* ── the lines under the words: the amount, a bounce, the quiet lines, "Not sent · Retry" ── */
+.fw-rt-bline {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 8px;
+  gap: 2px 6px;
+  min-width: 0;
+  margin: 4px 0 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm-plus);
+  line-height: 1.4;
+}
+
+.fw-rt-bline > svg {
+  flex: none;
+}
+
+.fw-rt-bline.is-quiet {
+  color: var(--nds-text-muted);
+}
+
+.fw-rt-bline.is-bad {
+  color: var(--nds-danger-text);
+  font-weight: 600;
+}
+
+.fw-rt-bline.is-bad > svg {
+  color: var(--nds-danger-strong);
+}
+
+.fw-rt-bline.is-foot {
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+
+.fw-rt-amount {
+  color: var(--nds-text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .fw-rt-bounce-link {
@@ -263,142 +638,87 @@
   text-decoration: underline;
 }
 
-.fw-rt-failline {
-  margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--nds-font-size-sm);
-  color: var(--nds-danger-text);
-  font-weight: 600;
-}
-
-/* B-TH-236: "In reply to …" above the words, "Correction of 09:12" in the head, "Corrected below", the office amount, Undo. */
-.fw-rt-linkline {
-  display: inline-flex;
-  align-items: flex-start;
-  gap: 6px;
-  max-width: 72ch;
-  padding: 3px 8px;
-  border-inline-start: 2px solid var(--nds-border-strong);
-  border-radius: var(--nds-radius-sm);
-  background: var(--nds-surface-sunken);
-  color: var(--nds-text-2);
-  font-size: var(--nds-font-size-sm);
-  line-height: 1.4;
-  text-decoration: none;
-  overflow-wrap: anywhere;
-}
-
-.fw-rt-linkline:hover span,
-.fw-rt-link-to:hover {
-  text-decoration: underline;
-}
-
-.fw-rt-mark-link {
-  text-decoration: none;
-}
-
-.fw-rt-mark-link:hover {
-  text-decoration: underline;
-}
-
-.fw-rt-link-to {
-  color: var(--nds-text-link);
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.fw-rt-linkline:focus-visible,
-.fw-rt-mark-link:focus-visible,
-.fw-rt-link-to:focus-visible {
-  outline: 2px solid var(--nds-text);
-  outline-offset: 1px;
-}
-
-.fw-rt-amount {
-  margin: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  align-self: flex-start;
-  padding: 2px 8px;
-  border: 1px solid var(--nds-warning);
-  border-radius: var(--nds-radius-pill);
-  background: var(--nds-surface);
-  color: var(--nds-warning-text);
-  font-size: var(--nds-font-size-sm);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.fw-rt-undo {
-  margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 10px;
-  padding: 6px 10px;
-  border-radius: var(--nds-radius-md);
-  background: var(--nds-info-soft);
-  color: var(--nds-info-text);
-  font-size: var(--nds-font-size-sm);
-  font-weight: 600;
-}
-
-/* SCR-006-card (design review): the cards in one column, as the thread draws them. */
-.fw-rt-card-gallery {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 16px;
-  min-width: 0;
-  background: var(--nds-surface);
-}
-
-/* ---- B-TH-255 (T3-F14, T3-F15): the erased card's line (the privacy reason in words, muted, italic — never an empty grey card) and
-   the files an inbound mail did not keep (a quiet note under the message, the office only). Semantic tokens only. */
-.fw-rt-erased,
-.fw-rt-skipped {
-  margin: 0;
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  max-width: 72ch;
-  font-size: var(--nds-font-size-sm);
-  color: var(--nds-text-muted);
-  overflow-wrap: anywhere;
-}
-
+/* B-TH-255 (T3-F14): the erased message's words — muted, italic, the privacy reason in words (never an empty grey card). */
 .fw-rt-erased {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  max-width: 72ch;
+  color: var(--nds-text-muted);
   font-style: italic;
+  overflow-wrap: anywhere;
 }
 
-.fw-rt-erased svg,
-.fw-rt-skipped svg {
+.fw-rt-erased > svg,
+.fw-rt-skipped > svg {
   flex: none;
   margin-top: 3px;
 }
 
-.fw-rt-skipped {
-  color: var(--nds-text-2);
-}
-/* ---- end B-TH-255 */
-
-/* B-TH-286 (T3-F12): a pinned card's pin beside its time (the files line's "2 pinned" lists it). */
-.fw-rt-pinned {
-  display: inline-flex;
-  align-items: center;
-  color: var(--nds-text-2);
-  margin-inline-end: 2px;
+/* F-SA-244: the conversation side of a change — the ask's chip and Answer…, a change's Still to do and told times. */
+.fw-rt-details {
+  margin: 4px 0 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs-plus);
+  overflow-wrap: anywhere;
 }
 
-/* ---- F-SA-244: the conversation side of a change — the ask's chip and Answer…, a change's Still to do and told times (layout only). */
 .fw-rt-change {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 10px;
 }
-/* ---- end F-SA-244 */
+
+/* ── the system's own office line: one centred pill (10-design §7, §9) ── */
+.fw-rt-sys {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  max-width: min(100%, 520px);
+  padding: 5px 12px 6px;
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-raised);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm-plus);
+  line-height: 1.35;
+  text-align: center;
+}
+
+.fw-rt-sys-line {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px 6px;
+  margin: 0;
+}
+
+.fw-rt-sys-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.fw-rt-sys time {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-rt-sys .fw-rt-change {
+  justify-content: center;
+}
+
+/* SCR-006-card (design review): the bubbles on the thread's ground, in a column that measures itself like the thread's. */
+.fw-rt-card-gallery {
+  --L: calc(100cqi - 32px);
+  container: fw-rtcol / inline-size;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 8px 0 16px;
+  background: var(--nds-surface-sunken);
+}

@@ -32,16 +32,18 @@ export type CardChannel = (typeof CARD_CHANNELS)[number]
 export const DELIVERY_STATES = ['QUEUED', 'SENDING', 'SENT', 'DELIVERED', 'BOUNCED', 'COMPLAINED', 'FAILED', 'WITHDRAWN'] as const
 export type Delivery = (typeof DELIVERY_STATES)[number]
 
-/** "Delivered" is the DS success pill only after the mail service's webhook said so; amber while it waits. */
-export const DELIVERY_TONE: Readonly<Record<Delivery, Tone>> = {
-  QUEUED: 'warning',
-  SENDING: 'info',
-  SENT: 'neutral',
-  DELIVERED: 'success',
-  BOUNCED: 'danger',
-  COMPLAINED: 'danger',
-  FAILED: 'danger',
-  WITHDRAWN: 'neutral', // B-TH-048: taken back by its sender in its 10 seconds (no failure)
+/**
+ * tw- W1.2 (10-design §2 "Foot"; W-022, Z20, P13): our email's state as a small icon beside the time — a clock while it waits or goes,
+ * one tick sent, two ticks delivered (only after the mail service's webhook said so) in the time's own grey, NEVER blue (blue reads
+ * as "read", and nobody is shown who read what), the alert in danger for bounced, spam and not sent; taken back (B-TH-048) its own
+ * mark. The honest word (`delivery.<state>`) is the tooltip and the screen-reader text.
+ */
+export function deliveryMark(status: Delivery): { readonly icon: 'clock' | 'check' | 'checks' | 'alert' | 'back'; readonly tone: 'plain' | 'bad' } {
+  if (status === 'QUEUED' || status === 'SENDING') return { icon: 'clock', tone: 'plain' }
+  if (status === 'SENT') return { icon: 'check', tone: 'plain' }
+  if (status === 'DELIVERED') return { icon: 'checks', tone: 'plain' }
+  if (status === 'WITHDRAWN') return { icon: 'back', tone: 'plain' }
+  return { icon: 'alert', tone: 'bad' }
 }
 
 export const CARD_FILE_STATUSES = ['PENDING_UPLOAD', 'AVAILABLE', 'QUARANTINED', 'DELETED'] as const
@@ -146,8 +148,8 @@ export interface CardLink {
   mine?: boolean
   /** The files of the quoted message THIS reader may open (a locked or walled one never counts). */
   fileCount?: number
-  /** The first of those files: "Photo" / "PDF" / "Document". */
-  firstFile?: { id: string; kind: 'IMAGE' | 'DOCUMENT' | 'OTHER'; contentType: string } | null
+  /** The first of those files ("Photo" / "PDF" / "File"); `kind` is the API's FILE_KINDS (PHOTO, DOCUMENT, ATTACHMENT, …). */
+  firstFile?: { id: string; kind: string; contentType: string } | null
   // ---- end tw- W1.1
 }
 
@@ -182,25 +184,20 @@ export interface CardContext {
   replyWays?: { readonly note: boolean; readonly email: boolean; readonly portal: boolean }
 }
 
-// ── the words of a card's head ──────────────────────────────────────────────────────────────────────────────────────
+// ── the words of a bubble's foot (tw- W1.2) ─────────────────────────────────────────────────────────────────────────
 
-/** The marks in a card's head, at most two (design kit §3): the audience first, then the floor mark. Keys of record-thread-card. */
-export function cardMarks(message: Pick<CardMessage, 'kind' | 'channel' | 'forFloor'>): Array<{ key: string; icon: 'lock' | 'mail' | 'globe' | 'tablet' }> {
-  if (message.kind === 'note') {
-    const marks: Array<{ key: string; icon: 'lock' | 'mail' | 'globe' | 'tablet' }> = [{ key: 'mark.note', icon: 'lock' }]
-    if (message.forFloor) marks.push({ key: 'mark.alsoFloor', icon: 'tablet' })
-    return marks
-  }
-  if (message.kind === 'floor') return [{ key: 'mark.fromFloor', icon: 'tablet' }]
-  if (message.kind === 'theirs') return [{ key: message.channel === 'PORTAL' ? 'mark.portal' : 'mark.email', icon: message.channel === 'PORTAL' ? 'globe' : 'mail' }]
-  return [{ key: message.channel === 'PORTAL' ? 'mark.toPortal' : 'mark.toEmail', icon: message.channel === 'PORTAL' ? 'globe' : 'mail' }]
-}
-
-/** The side in words beside the writer: the customer's name on their side, "Us" on ours; a note says nothing more (its mark does). */
-export function sideKey(kind: CardKind): 'side.theirs' | 'side.ours' | null {
-  if (kind === 'theirs') return 'side.theirs'
-  if (kind === 'ours') return 'side.ours'
-  return null
+/**
+ * tw- W1.2 (10-design §2 "Foot", §12 homes 1–3; R17): who reads it, as small icons beside the time — the lock on an office note
+ * ("Office only"; the tablet too when the floor reads it), the lock and the tablet on a station's comment ("From the floor"), the mail
+ * or the globe on what the customer reads. Never told by side or colour alone: each icon carries its word (record-thread-card `foot.*`)
+ * as the tooltip and for screen readers, and the bubble's name says it in full (`audienceKey`).
+ */
+export function footMarks(message: Pick<CardMessage, 'kind' | 'channel' | 'forFloor'>): Array<{ key: string; icon: 'lock' | 'mail' | 'globe' | 'tablet' }> {
+  if (message.kind === 'note') return message.forFloor ? [{ key: 'foot.office', icon: 'lock' }, { key: 'foot.floor', icon: 'tablet' }] : [{ key: 'foot.office', icon: 'lock' }]
+  if (message.kind === 'floor') return [{ key: 'foot.office', icon: 'lock' }, { key: 'foot.fromFloor', icon: 'tablet' }]
+  if (message.channel === 'PORTAL') return [{ key: 'foot.portal', icon: 'globe' }]
+  if (message.channel === 'EMAIL') return [{ key: 'foot.email', icon: 'mail' }]
+  return []
 }
 
 /** The audience read out for a screen reader (T3-F17: side and audience in words, never colour alone). */

@@ -94,8 +94,8 @@
     "email": "To {to} · Subject: {subject}"
   },
   "bounce": {
-    "text": "{to} could not get this mail: the mail service said so.",
-    "task": "Task made for you · Open",
+    "text": "{to} could not get this email",
+    "task": "Open task",
     "complained": "The recipient marked this mail as spam: no more mail goes to the address until an administrator clears it.",
     "failed": "The mail service did not take this mail after its retries. Write it again to send it."
   },
@@ -119,7 +119,7 @@
     "correctedBelow": "Corrected below · {time}"
   },
   "amount": {
-    "line": "Amount: {amount} · office only, for those who see prices"
+    "line": "Amount {amount}"
   },
   "undo": {
     "sending": "Sending to {party}…",
@@ -187,7 +187,8 @@
     "pinned": "Pinned",
     "corrected": "Corrected",
     "floor": "Also on the floor",
-    "fromFloor": "From the floor"
+    "fromFloor": "From the floor",
+    "sending": "Sending"
   },
   "org": {
     "floor": "Floor"

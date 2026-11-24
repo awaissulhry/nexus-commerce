@@ -94,8 +94,8 @@
     "email": "A {to} · Oggetto: {subject}"
   },
   "bounce": {
-    "text": "{to} non ha potuto ricevere questa email: lo ha detto il servizio di posta.",
-    "task": "Attività creata per te · Apri",
+    "text": "{to} non ha potuto ricevere questa email",
+    "task": "Apri l'attività",
     "complained": "Il destinatario ha segnalato questa email come spam: all'indirizzo non va più posta finché un amministratore non lo sblocca.",
     "failed": "Il servizio di posta non ha preso questa email dopo i suoi tentativi. Scrivila di nuovo per inviarla."
   },
@@ -119,7 +119,7 @@
     "correctedBelow": "Corretto più sotto · {time}"
   },
   "amount": {
-    "line": "Importo: {amount} · solo ufficio, per chi vede i prezzi"
+    "line": "Importo {amount}"
   },
   "undo": {
     "sending": "Invio a {party} in corso…",
@@ -187,7 +187,8 @@
     "pinned": "Fissato",
     "corrected": "Corretto",
     "floor": "Anche in reparto",
-    "fromFloor": "Dal reparto"
+    "fromFloor": "Dal reparto",
+    "sending": "Invio"
   },
   "org": {
     "floor": "Reparto"

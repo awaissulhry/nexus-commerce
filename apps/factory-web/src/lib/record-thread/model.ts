@@ -53,7 +53,8 @@ export interface LinkedApiMessage {
   /** Portal reads only: the reader's own post. */
   mine?: boolean | undefined
   fileCount?: number | undefined
-  firstFile?: { id: string; kind: 'IMAGE' | 'DOCUMENT' | 'OTHER'; contentType: string } | null | undefined
+  /** `kind`: the API's FILE_KINDS (record-panels parses it). */
+  firstFile?: { id: string; kind: string; contentType: string } | null | undefined
   // ---- end tw- W1.1
 }
 

@@ -10,7 +10,7 @@ import type { CardLink } from './model'
  *   short or long words      tone, name · up to 3 lines, then "…" (one line when short)
  *   mine                     "You" · the words
  *   a colleague / the customer   their name (no company in a quote) · the words
- *   a picture / a file / files   "Photo" / "PDF" or "Document" / "2 files" (the caption instead when it has words)
+ *   a picture / a file / files   "Photo" / "PDF" or "File" / "2 files" (the caption instead when it has words)
  *   erased                   slate bar, no name (the erasure blanks the writer too) · "Message removed"
  *   a hidden floor writer    slate, "A person on the floor" · the words
  *   a quoted office note     a small lock after the name (an office read only)
@@ -21,7 +21,7 @@ import type { CardLink } from './model'
 export type QuoteName = { readonly text: string } | { readonly key: string } | null
 
 /** A message of files: which icon, which word. */
-export type QuoteMedia = 'photo' | 'pdf' | 'document' | 'files'
+export type QuoteMedia = 'photo' | 'pdf' | 'file' | 'files'
 
 export interface QuoteModel {
   readonly id: string
@@ -43,10 +43,11 @@ export function quoteMediaOf(link: Pick<CardLink, 'fileCount' | 'firstFile'>): {
   const count = link.fileCount ?? 0
   if (count <= 0) return null
   const first = link.firstFile ?? null
+  // The kind is the API's FILE_KINDS (PHOTO, DOCUMENT, ATTACHMENT, CERTIFICATE, FISCAL_ARCHIVE, AUDIO): a photo by its kind or its type.
   if (count === 1 && first) {
-    if (first.kind === 'IMAGE' || first.contentType.toLowerCase().startsWith('image/')) return { media: 'photo', key: 'quote.photos', count: 1 }
+    if (first.kind === 'PHOTO' || first.contentType.toLowerCase().startsWith('image/')) return { media: 'photo', key: 'quote.photos', count: 1 }
     if (first.contentType.toLowerCase() === 'application/pdf') return { media: 'pdf', key: 'file.kind.pdf', count: 1 }
-    return { media: 'document', key: 'file.kind.document', count: 1 }
+    return { media: 'file', key: 'file.kind.file', count: 1 }
   }
   // Several files: "3 files" — never "3 photos" unless the reader could tell every one is a picture (the read names the first only).
   return { media: 'files', key: 'quote.files', count }
