@@ -15,6 +15,17 @@
  *   (5) the windows' insides      the DS Modal draws the frame (it is portaled: these classes stand on their own)
  */
 
+/* ct-fx3 G-W02 (walk W-02; 18-lead-settles Z26; People's F-CA-fx5): a door to a section or a row lands UNDER the record's sticky band,
+   never behind it. The record frame measures its band (RecordFrame: --fw-rcf-top = the band + 16 px, the same line the docked thread
+   starts on); before it has measured, the band's own size in tokens (48 + 16). The kit's 4 px margin (production.css) stays as it is:
+   ours wins on our ids; the rows land on the same line. */
+.fw-ctr { --fw-ctr-land: var(--fw-rcf-top, calc(var(--nds-space-48) + var(--nds-space-16))); }
+.fw-ctr > #answer,
+.fw-ctr > #party-hold,
+.fw-ctr > #party-commercial,
+.fw-ctr > #party-requirements,
+.fw-ctr > #party-identity { scroll-margin-top: var(--fw-ctr-land); }
+
 /* (1) the answer line */
 .fw-ctr-ans { min-width: 0; }
 .fw-ctr-ans-t { display: flex; flex-direction: column; gap: var(--nds-space-2); min-width: 0; }
@@ -42,14 +53,14 @@
 .fw-ctr-g { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
 .fw-ctr-g.is-order, .fw-ctr-g.is-deliv { padding-top: var(--nds-space-12); border-top: 1px solid var(--nds-border-subtle); }
 .fw-ctr-wpo { display: flex; flex-direction: column; gap: var(--nds-space-4); margin-top: var(--nds-space-4); }
-.fw-ctr-wi { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-4); font-size: var(--nds-font-size-sm); color: var(--nds-warning-text); padding: 2px 4px; scroll-margin-top: 96px; }
+.fw-ctr-wi { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-4); font-size: var(--nds-font-size-sm); color: var(--nds-warning-text); padding: 2px 4px; scroll-margin-top: var(--fw-ctr-land); }
 .fw-ctr-wi > svg { flex: none; }
 .fw-ctr-wi.is-mark { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-lg); }
 
 /* (4) THE lists: S < 560 (blocks) · M ≥ 560 (columns + a head row) — of the LIST's own width */
 .fw-ctr-ls { container: ctls / inline-size; display: flex; flex-direction: column; min-width: 0; }
 .fw-ctr-row, .fw-ctr-hd { gap: var(--nds-space-4) var(--nds-space-14); align-items: start; min-width: 0; }
-.fw-ctr-row { display: grid; padding: var(--nds-space-10) var(--nds-space-2); border-bottom: 1px solid var(--nds-border-subtle); scroll-margin-top: 96px; }
+.fw-ctr-row { display: grid; padding: var(--nds-space-10) var(--nds-space-2); border-bottom: 1px solid var(--nds-border-subtle); scroll-margin-top: var(--fw-ctr-land); }
 .fw-ctr-row:last-child { border-bottom: 0; }
 .fw-ctr-row > div { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-2); font-size: var(--nds-font-size-sm); }
 .fw-ctr-row.is-mark { background: var(--nds-wash-primary); border-radius: var(--nds-radius-lg); }
@@ -118,7 +129,7 @@
 .fw-ctr-warn { display: inline-flex; gap: var(--nds-space-4); align-items: flex-start; color: var(--nds-warning-text); }
 .fw-ctr-warn > svg { flex: none; margin-top: 2px; }
 .fw-ctr-val.is-mark { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-md); }
-.fw-ctr-vies { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; padding: var(--nds-space-12); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-lg); background: var(--nds-surface-raised); scroll-margin-top: 96px; }
+.fw-ctr-vies { display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; padding: var(--nds-space-12); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-lg); background: var(--nds-surface-raised); scroll-margin-top: var(--fw-ctr-land); }
 .fw-ctr-vies.is-mark { outline: 2px solid var(--nds-primary); outline-offset: 2px; }
 .fw-ctr-vh { display: flex; flex-wrap: wrap; gap: var(--nds-space-8); align-items: center; justify-content: space-between; min-width: 0; }
 .fw-ctr-vh > h3 { margin: 0; }

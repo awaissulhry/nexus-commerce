@@ -1056,3 +1056,16 @@ describe('ct-fx3 G-W01: the terms per company in flight are reading — never th
     expect(termsTabModel(reads({ companies: failedRead('problem.offline') }), TERMS_TAB_START).commercial.reading).toBe(false)
   })
 })
+
+describe('ct-fx3 G-W02: a door lands under the record\'s sticky band (Z26; People\'s F-CA-fx5)', () => {
+  it('the answer line and the four sections land on the band\'s measured line; the rows land on the same line', () => {
+    const css = readFileSync(new URL('../view/terms/terms.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(css).toContain('.fw-ctr { --fw-ctr-land: var(--fw-rcf-top, calc(var(--nds-space-48) + var(--nds-space-16))); }')
+    for (const id of ['answer', 'party-hold', 'party-commercial', 'party-requirements', 'party-identity']) expect(css, id).toMatch(new RegExp(`\\.fw-ctr > #${id}[,\\s][^}]*scroll-margin-top: var\\(--fw-ctr-land\\)`))
+    expect(css).not.toContain('96px')
+    expect(css.match(/scroll-margin-top: var\(--fw-ctr-land\)/g)).toHaveLength(4) // the five ids' one rule + the warning chip, rows, VIES row
+    // the ids are the tab root's own children (a `>` rule reaches them)
+    const tab = readFileSync(new URL('../view/terms/TermsTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toMatch(/<div className="fw-pt fw-ctr">\s*<TermsAnswer [^>]*\/>\s*<HoldSection [^>]*\/>\s*<CommercialSection [^>]*\/>\s*<RequirementsSection [^>]*\/>\s*<IdentitySection [^>]*\/>/)
+  })
+})
