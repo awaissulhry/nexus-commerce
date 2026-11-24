@@ -464,7 +464,8 @@ export function factsOf(input: OverviewInput): FactsCard {
     if (identity.fiscalCode && identity.fiscalCode !== identity.vatNumber) said.push(text(identity.fiscalCode))
     if (identity.sdiRecipientCode) said.push(ov('facts.sdi', { code: identity.sdiRecipientCode }))
     if (identity.pec) said.push(ov('facts.pec', { pec: identity.pec }))
-    rows.push({ key: 'identity', label: say('identity.title'), parts: [{ say: joined(said), door: identityDoor }], under: [ov('facts.validFrom', { date: dayOf(identity.validFrom) })] })
+    // "valid from …" as quiet words after the door, on the same line (10-design §8; picture 20), as the next promise's quiet part.
+    rows.push({ key: 'identity', label: say('identity.title'), parts: [{ say: joined(said), door: identityDoor }, { say: ov('facts.validFrom', { date: dayOf(identity.validFrom) }), quiet: true }] })
   } else rows.push({ key: 'identity', label: say('identity.title'), parts: [{ say: say('list.noIdentity'), door: identityDoor }] })
 
   // The requirements in force and the credit: the glance's (the credit part is absent without sales.credit.view).

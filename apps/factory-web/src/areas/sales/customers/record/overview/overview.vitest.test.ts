@@ -504,7 +504,10 @@ describe('the cards: People, Next dates, Requests & changes, Linked records, Cus
     expect(facts.rows.map((row) => row.key)).toEqual(['legalName', 'tradeName', 'kind', 'payment', 'identity', 'requirements', 'credit', 'since', 'complete-NO_DEFAULT_SHIP_TO', 'complete-NO_DEFAULT_BILL_TO', 'note'])
     expect(value('kind')).toBe('Company · Italian')
     expect(value('kind', 'it')).toBe('Azienda · Italiano')
-    expect(value('identity')).toBe('Italian business · VAT IT00000000000 · 00000000000 · SDI DEMO123')
+    // "valid from …": quiet words after the door, on the same line (10-design §8; picture 20) — no door of its own.
+    expect(value('identity')).toBe('Italian business · VAT IT00000000000 · 00000000000 · SDI DEMO123 · valid from 01/01/2026')
+    const identity = facts.rows.find((row) => row.key === 'identity')!
+    expect(identity.parts.map((part) => [part.door?.kind ?? null, part.quiet === true])).toEqual([['href', false], [null, true]])
     expect(value('requirements')).toBe('3')
     expect(value('credit')).toBe('€15,800.00 free of a €20,000.00 limit')
     expect(value('since')).toBe('28/10/2025 · changed 20/11/2026')

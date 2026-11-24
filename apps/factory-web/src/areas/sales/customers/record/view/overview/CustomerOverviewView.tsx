@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Ban, Banknote, Clock, FileCheck, Flag, Pause, Receipt, ShieldAlert } from 'lucide-react'
+import { Ban, Banknote, Clock, FileCheck, Flag, Pause, Pencil, Receipt, ShieldAlert } from 'lucide-react'
 import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
 import { useLocale, useScopedT } from '../../../../../../lib/i18n/provider'
 import { ageOf } from '../../../../../../lib/production/model'
@@ -248,7 +248,8 @@ function Cards({ model, band, before = [], actions, supervisor, fields }: Custom
 
       {/* 7 · 8 — Customer facts · Custom fields (no field applies: it draws nothing and Customer facts takes the row). */}
       <OverviewPair>
-        <OverviewCard title={t('customers.overview.facts.title')} aside={facts.edit ? <DoorButton door={facts.edit} words={words} actions={actions} /> : undefined}>
+        {/* Its ONE Edit looks as the Custom fields card's Edit beside it (the pencil, then the word). */}
+        <OverviewCard title={t('customers.overview.facts.title')} aside={facts.edit ? <DoorButton door={facts.edit} words={words} actions={actions} icon={<Pencil size={13} aria-hidden />} /> : undefined}>
           <FactCols>
             {facts.rows.map((row) => (
               <FactView key={row.key} row={row} words={words} actions={actions} />
@@ -262,8 +263,15 @@ function Cards({ model, band, before = [], actions, supervisor, fields }: Custom
 }
 
 /** A door or a button: a real link for an address, the page's own command for an act, the Work tab's window. */
-function DoorButton({ door, words, actions, quiet = false, describedBy }: { door: LabelledDoor; words: Words; actions?: OverviewActions | undefined; quiet?: boolean; describedBy?: string }) {
-  const label = words.doorWords(door)
+function DoorButton({ door, words, actions, quiet = false, describedBy, icon }: { door: LabelledDoor; words: Words; actions?: OverviewActions | undefined; quiet?: boolean; describedBy?: string; icon?: ReactNode }) {
+  const said = words.doorWords(door)
+  const label = icon ? (
+    <>
+      {icon} {said}
+    </>
+  ) : (
+    said
+  )
   const held = door.held ? words.said(door.held) : null
   const target = door.door
   if (target.kind === 'href') {
@@ -333,20 +341,23 @@ function PartView({ part, words, actions }: { part: RowPart; words: Words; actio
 
 /** A value: its parts joined by " · ", its tag, then its quiet lines under it. */
 function ValueView({ parts, tag, under, words, actions }: { parts: readonly RowPart[]; tag?: OverviewRow['tag']; under?: readonly Say[] | undefined; words: Words; actions?: OverviewActions | undefined }) {
+  // The tag stands right after the part it tells of (a date's "in 4 d"), before the quiet words that follow (10-design §5).
+  const tagged = tag ? (
+    <>
+      {' '}
+      <Tag tone={tag.tone}>{words.said(tag.say)}</Tag>
+    </>
+  ) : null
   const line = (
     <span>
       {parts.map((part, index) => (
         <Fragment key={index}>
           {index > 0 && ' · '}
           <PartView part={part} words={words} actions={actions} />
+          {index === 0 && tagged}
         </Fragment>
       ))}
-      {tag && (
-        <>
-          {' '}
-          <Tag tone={tag.tone}>{words.said(tag.say)}</Tag>
-        </>
-      )}
+      {parts.length === 0 && tagged}
     </span>
   )
   if (!under || under.length === 0) return line
