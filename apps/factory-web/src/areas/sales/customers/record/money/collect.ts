@@ -6,6 +6,7 @@ import { word, type MoneyWord } from '../../../orders/record/money/word'
 import { invoiceHref, orderMoneyHref, recordPaymentOnInvoiceHref, requestRowAnchor } from './doors'
 import { daysFrom, isFailed, isReading, type MoneyTabInput } from './model'
 import { collectAnchor } from './sections'
+import { readProblem } from '../../../orders/model' // cm-fx2: the orders catalogue's own key of a failed read (its rule, never a literal here)
 
 /**
  * F-CM-105 (customer page › MONEY tab, 10-design §5.2; 18-lead-settles Z5, Z21, Z25, Z26) — section 2, To collect (#collect): every OPEN
@@ -217,7 +218,7 @@ export function collectOf(input: MoneyTabInput, prefix: string): CollectModel | 
   if (!input.can.payments || !input.openItems) return null
   const part = input.openItems
   if (isReading(part)) return { reading: true, problem: null, rows: [], answer: [word('cm.collect.reading')], anyAct: false }
-  if (isFailed(part) || !part.value) return { reading: false, problem: part.problem ?? 'problem.read.internal', rows: [], answer: [], anyAct: false }
+  if (isFailed(part) || !part.value) return { reading: false, problem: part.problem ?? readProblem(null), rows: [], answer: [], anyAct: false }
   const rows = part.value.items.map((item) => collectRowOf(item, input, prefix)).sort(byDue)
   const invoices = rows.filter((row) => row.target === 'INVOICE').length
   const requests = rows.length - invoices

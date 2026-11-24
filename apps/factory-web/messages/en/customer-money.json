@@ -109,7 +109,7 @@
       "down": "{section} ↓",
       "invoices": "Open in Finance › Invoices ›",
       "payments": "Open in Finance › Payments ›",
-      "refunds": "Open in Finance › Refunds ›",
+      "refunds": "Open in Finance › Payments › Refunds ›",
       "margins": "Open in Finance › Margins ›"
     },
     "more": {
@@ -214,7 +214,8 @@
       "foot": "What each order has paid and still owes, also what is not asked yet:",
       "footDoor": "Work › All orders ›",
       "ofTotal": "of {amount}",
-      "stopTitle": "Stop reminders of {invoice}"
+      "stopTitle": "Stop reminders of {invoice}",
+      "stopDone": "Done"
     },
     "none": {
       "title": "Nothing here yet",

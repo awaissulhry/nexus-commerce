@@ -16,7 +16,6 @@ import type { StopAsk } from './use-money-windows'
  */
 export function StopWindow({ partyId, ask, onClose, onChanged }: { partyId: string; ask: StopAsk; onClose: () => void; onChanged: () => void }) {
   const t = useT(CM)
-  const o = useT('orders')
   const invoice = ask.invoice
   return (
     <Modal
@@ -28,7 +27,7 @@ export function StopWindow({ partyId, ask, onClose, onChanged }: { partyId: stri
         <>
           <span className="grow" />
           <Button size="sm" onClick={onClose}>
-            {o('common.done')}
+            {t('cm.collect.stopDone') /* cm-fx2: our own word (the customer screens read no orders word but the pinned four) */}
           </Button>
         </>
       }

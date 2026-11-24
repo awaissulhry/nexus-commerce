@@ -3,6 +3,7 @@ import type { OrderRow } from '../../../orders/api'
 import { word, type MoneyWord } from '../../../orders/record/money/word'
 import { customerHref, orderMoneyHref, priceDifferHref } from './doors'
 import { isFailed, isReading, type MoneyTabInput, type Part } from './model'
+import { readProblem } from '../../../orders/model' // cm-fx2: the orders catalogue's own key of a failed read (its rule, never a literal here)
 
 /**
  * F-CM-303 (customer page › MONEY tab, cm-w3 W3.3; 10-design §5.7, §5.8; 18-lead-settles L13, L14, D1) — sections 7 and 8.
@@ -88,7 +89,7 @@ export function marginOf(input: MoneyTabInput, read: Part<Margins> | null, prefi
   const financeHref = `${prefix}/finance/margins?party=${party}`
   if (isReading(read)) return { reading: true, problem: null, answer: [word('cm.margin.reading')], tiles: null, below: null, financeHref, twoCurrencies: false }
   const value = read.value
-  if (isFailed(read) || !value) return { reading: false, problem: read.problem ?? 'problem.read.internal', answer: [], tiles: null, below: null, financeHref, twoCurrencies: false }
+  if (isFailed(read) || !value) return { reading: false, problem: read.problem ?? readProblem(null), answer: [], tiles: null, below: null, financeHref, twoCurrencies: false }
   // The read names THIS customer (`partyId`): its group is its own; a second currency leaves the one figure out (never added).
   const group = value.byCustomer[0] ?? null
   const currency = value.tiles.currency
