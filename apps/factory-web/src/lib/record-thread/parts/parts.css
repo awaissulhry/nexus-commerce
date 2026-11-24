@@ -46,20 +46,10 @@
 }
 
 /* tw- W1.1 (10-design §3 "Tones"): ONE colour per sender — the name, the tile and the quote bar read these; the DS group tones
-   (AA+ in light and dark). Slate is the colour of no key: a floor writer kept back, the system. Never yellow or red. */
+   (AA+ in light and dark). Slate is the colour of no key: a floor writer kept back, the system. Never yellow, red or violet (G-25). */
 .fw-rt-tone-slate {
   --fw-rt-tone-bg: var(--nds-grid-tone-slate-bg);
   --fw-rt-tone-fg: var(--nds-grid-tone-slate-fg);
-}
-
-.fw-rt-tone-violet {
-  --fw-rt-tone-bg: var(--nds-grid-tone-violet-bg);
-  --fw-rt-tone-fg: var(--nds-grid-tone-violet-fg);
-}
-
-.fw-rt-tone-red {
-  --fw-rt-tone-bg: var(--nds-grid-tone-red-bg);
-  --fw-rt-tone-fg: var(--nds-grid-tone-red-fg);
 }
 
 .fw-rt-tone-purple {
