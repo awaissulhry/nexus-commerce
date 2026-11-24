@@ -41,7 +41,7 @@ export const CUSTOMER = {
 }
 
 export default defineStage({
-  proves: 'Italian B2B customer with tax identity; VIES proof (fake): an Italian VAT number is not a VIES question, and the screen says so; the customer page opens on All orders (rows=all, one document, no loop), New order and its lines open in place, Clear all goes back to All orders, a docked order shows its own files line (F-CP-112); on the Work tab a band door shows exactly its count, the order says Most urgent first, ticked rows show the bar with words and Ask production opens with Needs an answer ticked, nothing written (cw T.2); on Quotes & incoming the band shows, a door opens exactly its count, Sort ▾ says Most urgent first, one ticked row shows at most 3 acts and More ▾ with words, nothing written (cq T.2)',
+  proves: 'Italian B2B customer with tax identity; VIES proof (fake): an Italian VAT number is not a VIES question, and the screen says so; the customer page opens on All orders (rows=all, one document, no loop), New order and its lines open in place, Clear all goes back to All orders, a docked order shows its own files line (F-CP-112); on the Work tab a band door shows exactly its count, the order says Most urgent first, ticked rows show the bar with words and Ask production opens with Needs an answer ticked, nothing written (cw T.2); on Quotes & incoming the band shows, a door opens exactly its count, Sort ▾ says Most urgent first, one ticked row shows at most 3 acts and More ▾ with words, nothing written (cq T.2); the Overview shows its sentence and a group of its band opens Work on exactly the orders it counts, nothing written (co T.3)',
   async run(flow) {
     const sales = await flow.desk('sales')
     const { page } = sales
@@ -137,6 +137,62 @@ export default defineStage({
       await answerOf(page, 'PATCH', /^\/parties\/[0-9a-f-]+$/, () => press(dialog(page).getByRole('button', { name: 'Save' })))
       await expect(page.getByText('Saved.').first()).toBeVisible()
     })
+
+    // ---- co T.3 (customer page › Overview, co-w1 / co-w2; 15-steps T.3): the Overview on the seeded customer, WRITING NOTHING — its
+    // sentence (the kit's `.fw-so-headline`, as on the order page); the Work tab's own band inside its card: a group (found by its
+    // word) opens Work on exactly its orders (`phase=`), the sheet shows the count the group said; back to the Overview; what stops the
+    // customer is a list by its name when something does. Selectors verified look-only on the test server (the lead, 2026-11-24).
+    await flow.step('the Overview: its sentence; a group of the band opens Work on exactly its orders (phase=, the count it says); back; what stops the customer is a named list (nothing written)', async () => {
+      const P = words('parties')
+      const S = words('orders-sheet')
+      const O = words('orders')
+      const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const P1 = await flow.seedId('party:P1')
+      await sales.go(`/sales/customers/${P1}?tab=overview`)
+      // The sentence: the kit's own class, ONE on the tab (th9 reads the same class on the order page).
+      await seen(page.locator('.fw-so-headline'), 60_000)
+      await expect(page.locator('.fw-so-headline')).toHaveCount(1)
+      // The band: the Work tab's own group "Orders by where they are" inside its card — found by the GROUP (the card's title says the
+      // region's words too). Cancelled is not in the group.
+      const group = page.getByRole('group', { name: P('customers.work.band.pipeline'), exact: true })
+      await seen(group, 60_000)
+      const PHASES: ReadonlyArray<readonly [string, string]> = [
+        ['NOT_SENT', S('phase.NOT_SENT')],
+        ['NOT_STARTED', S('phase.NOT_STARTED')],
+        ['IN_PRODUCTION', O('rows.IN_PRODUCTION')],
+        ['READY', O('rows.READY')],
+        ['SHIPPED', O('rows.SHIPPED')],
+        ['DONE', S('phase.DONE')],
+      ]
+      const named = (word: string) => new RegExp(`^${escape(word)}\\b`)
+      let picked: { readonly phase: string; readonly word: string; readonly count: number } | null = null
+      for (const [phase, word] of PHASES) {
+        const button = group.getByRole('button', { name: named(word) })
+        await expect(button, word).toHaveCount(1)
+        // Its name is the word, a space, the count.
+        const count = Number((await button.innerText()).match(/(\d+)\s*$/)?.[1] ?? '0')
+        if (count > 0 && picked === null) picked = { phase, word, count }
+      }
+      expect(picked, 'the seeded customer has an order in a group of the band').not.toBeNull()
+      const { phase, word, count } = picked!
+      await press(group.getByRole('button', { name: named(word) }))
+      // The door: the Work tab on exactly that group's orders (its entry adds the lock and every order, once); the group pressed there.
+      await expect(page).toHaveURL(new RegExp(`[?&]phase=${phase}(&|$)`), { timeout: 30_000 })
+      await expect(page).toHaveURL(/[?&]tab=work(&|$)/)
+      await expect(page.getByRole('group', { name: P('customers.work.band.pipeline'), exact: true }).getByRole('button', { name: named(word) })).toHaveAttribute('aria-pressed', 'true', { timeout: 30_000 })
+      // The sheet passes through 0 rows first: polled, never one read.
+      await expect.poll(() => shownRows(page), { timeout: 60_000 }).toBe(count)
+      await flow.shot(page, 'customer-overview-group-door')
+      // Back: the Overview again, with its sentence.
+      await page.goBack()
+      await expect(page).toHaveURL(/[?&]tab=overview(&|$)/, { timeout: 30_000 })
+      await seen(page.locator('.fw-so-headline'), 60_000)
+      // What stops the customer: a list by its name (its role and its catalogue word) — drawn only when something stops it.
+      const stops = page.getByRole('list', { name: new RegExp(`^${escape(P('customers.overview.strip.label', { customer: '@@' })).replace('@@', '.+')}$`) })
+      if ((await stops.count()) > 0) await expect(stops.getByRole('listitem').first()).toBeVisible()
+      await flow.shot(page, 'customer-overview')
+    })
+    // ---- end co T.3
 
     await flow.step('addresses: registered office + invoices; the warehouse for deliveries', async () => {
       await sales.go(`/sales/customers/${party.id}?tab=addresses`)
