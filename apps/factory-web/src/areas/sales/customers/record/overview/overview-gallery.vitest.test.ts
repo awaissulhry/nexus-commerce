@@ -49,8 +49,17 @@ describe('the co-* states are in the gallery (15-steps T.1)', () => {
     expect(CO_CASES).toEqual(
       expect.arrayContaining(['co-busy', 'co-hold', 'co-blocked', 'co-invoice-vies', 'co-prospect', 'co-quotes-only', 'co-no-open', 'co-archived', 'co-five-strips', 'co-reading', 'co-failed', 'co-no-orders', ...OVERVIEW_ROLES.map((role) => `co-role-${role.replace('_', '-')}`)]),
     )
-    // The two windows' insides are cases of their own (never a Modal open on a server render).
-    for (const id of ['overview-supervisor-new', 'overview-supervisor-nobody', 'overview-supervisor-refused', 'overview-designer-change', 'overview-designer-refused']) expect(draw(id, 'en'), id).not.toContain('role="dialog"')
+    // The two windows' insides are cases of their own, drawn on the tab (never a Modal open on a server render).
+    for (const id of ['overview-supervisor-new', 'overview-supervisor-nobody', 'overview-supervisor-refused']) {
+      const part = overviewOf(draw(id, 'en'))
+      expect(part, id).not.toContain('role="dialog"')
+      expect(textOf(part), id).toContain('Who looks after')
+    }
+    for (const id of ['overview-designer-change', 'overview-designer-refused']) {
+      const part = overviewOf(draw(id, 'en'))
+      expect(part, id).not.toContain('role="dialog"')
+      expect(textOf(part), id).toContain('Factory designer for')
+    }
   })
 })
 
