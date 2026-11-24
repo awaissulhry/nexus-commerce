@@ -380,7 +380,11 @@ describe('the /design/record-overview lab', () => {
   it('has its own screen id (the design index finds every fixtures.ts by itself) and the frame\'s cases', () => {
     expect(designScreen.screen).toBe('record-overview')
     expect(readFileSync(fileURLToPath(new URL('../../../lib/design/design-screen.ts', import.meta.url)), 'utf8')).toContain("| 'record-overview'")
-    expect(designScreen.cases.map((item) => item.id)).toEqual(['card', 'card-aside', 'card-aside-none', 'card-lead', 'card-busy', 'state-loading', 'state-failed', 'state-failed-no-retry', 'headline', 'headline-quiet', 'headline-reading', 'pair-two', 'pair-one', 'overview'])
+    expect(designScreen.cases.map((item) => item.id)).toEqual([
+      ...['card', 'card-aside', 'card-aside-none', 'card-lead', 'card-busy', 'state-loading', 'state-failed', 'state-failed-no-retry', 'headline', 'headline-quiet', 'headline-reading', 'pair-two', 'pair-one', 'overview'],
+      // F-CO-K2: the rows' cases
+      ...['strips-tones', 'strips-more', 'strips-reading', 'strips-failed', 'strips-doors', 'strips-lines', 'rows', 'rows-doors', 'rows-quiet', 'facts', 'facts-note', 'groups', 'groups-more', 'overview-rows'],
+    ])
     expect(LAB_WIDTHS).toEqual([343, 425, 829])
   })
 
@@ -388,7 +392,7 @@ describe('the /design/record-overview lab', () => {
     const drawn = everyCase(designScreen)
     expect(drawn).toHaveLength(designScreen.cases.length * LOCALES.length)
     for (const [locale, id, html] of drawn) {
-      expect(leftKeys(html, ['lab', 'state']), `${locale}/${id}`).toEqual([])
+      expect(leftKeys(html, ['lab', 'state', 'strips', 'row']), `${locale}/${id}`).toEqual([])
       // One room per width, each with ONE Overview of its own (the room is the Overview's width).
       expect([...html.matchAll(/<section class="fw-rol-room" style="width:(\d+)px"/g)].map((match) => Number(match[1])), `${locale}/${id}`).toEqual([...LAB_WIDTHS])
       expect(html.match(/<div class="fw-so-overview">/g), `${locale}/${id}`).toHaveLength(LAB_WIDTHS.length)
@@ -419,6 +423,46 @@ describe('the /design/record-overview lab', () => {
     expect(html('pair-one').match(/<div class="fw-so-ov-pair"><div class="nds-card pad"><h2 class="fw-ro-h2">Linked records<\/h2><p class="fw-ro-hint">[^<]+<\/p><\/div><\/div>/g)).toHaveLength(LAB_WIDTHS.length)
     expect(html('overview').match(/<div class="fw-so-overview"><div class="nds-card pad fw-so-where">/g)).toHaveLength(LAB_WIDTHS.length)
     expect(html('overview').match(/<div class="fw-so-ov-pair">/g)).toHaveLength(2 * LAB_WIDTHS.length)
+  })
+  // F-CO-K2: the rows' cases show what their names say (in each of the three rooms).
+  it('the rows\' cases: the strips, the ONE list, the facts, the groups — and Italian words in Italian', () => {
+    const html = (id: string, locale: Locale = 'en'): string => drawnOf(id, locale)
+    const rooms = LAB_WIDTHS.length
+    const strips = (id: string): number => html(id).match(/<li class="fw-so-ov-row fw-so-strip"/g)?.length ?? 0
+    expect(['warning', 'danger', 'info'].map((tone) => html('strips-tones').match(new RegExp(`data-tone="${tone}"`, 'g'))?.length)).toEqual([rooms, rooms, rooms])
+    expect(strips('strips-more')).toBe(4 * rooms)
+    expect(html('strips-more').match(/>Show 1 more<\/button>/g)).toHaveLength(rooms)
+    expect(textOf(html('strips-more', 'it'))).toContain('Mostra altri 1')
+    expect(html('strips-reading').match(/<li class="fw-so-strip-reading">/g)).toHaveLength(rooms)
+    expect(html('strips-failed').match(/<span class="fw-so-strip-said">The holds could not be read<\/span><span class="fw-so-ov-doors"><button[^>]*>Try again<\/button>/g)).toHaveLength(rooms)
+    expect(html('strips-doors').match(/<span class="fw-so-ov-doors"><button[^>]*>Lift the hold…<\/button><button[^>]*>Open ›<\/button><\/span>/g)).toHaveLength(rooms)
+    expect(html('strips-lines').match(/<span class="fw-ro-hint">Quality releases it<\/span>/g)).toHaveLength(rooms)
+    expect(html('strips-lines')).toContain('<time datetime="2026-11-21T09:00:00Z" title="21/11/2026">3 d</time>')
+    // The ONE list: plain rows have no doors cell; Linked's shape keeps an empty one; quiet lines span the row.
+    expect(html('rows')).not.toContain('fw-so-ov-doors')
+    expect(html('rows').match(/<ul class="fw-so-ov-list">/g)).toHaveLength(rooms)
+    expect(html('rows-doors').match(/<span class="fw-so-ov-doors"><button[^>]*>Change…<\/button><\/span>/g)).toHaveLength(rooms)
+    expect(html('rows-quiet').match(/<ul class="fw-so-ov-list" aria-label="Linked records">/g)).toHaveLength(rooms)
+    expect(html('rows-quiet').match(/<span class="fw-so-ov-doors"><\/span>/g)).toHaveLength(rooms)
+    expect(html('rows-quiet').match(/<li class="fw-so-ov-quiet fw-ro-hint">None yet: Shipments · Invoices<\/li>/g)).toHaveLength(rooms)
+    expect(html('rows-quiet')).toContain('Waiting on us · 2\u00a0›')
+    // The facts: the list, a held door says why, "Fixed" in a door's place; the note takes the whole row.
+    expect(html('facts').match(/<ul class="fw-so-ov-cols fw-so-facts">/g)).toHaveLength(rooms)
+    expect(html('facts')).toMatch(/aria-description="The factory server is not answering: check the connection and try again\."/)
+    expect(html('facts')).not.toContain('fw-so-fact-note')
+    expect(html('facts-note').match(/<li class="fw-so-ov-row fw-so-fact fw-so-fact-note">/g)).toHaveLength(rooms)
+    // The groups: three, each its h3; ages with their day or "—"; a cut group's door under its rows.
+    expect(html('groups').match(/<section class="fw-so-rq-group"><h3 class="fw-ro-h3">/g)).toHaveLength(3 * rooms)
+    expect(html('groups').match(/<div class="fw-so-rq-groups">/g)).toHaveLength(rooms)
+    expect(html('groups')).toContain('<time class="fw-so-rq-age" datetime="2026-11-03T09:00:00Z" title="since 03/11/2026, 10:00">15 d</time>')
+    expect(html('groups')).toContain('<span class="fw-so-rq-age">—</span>')
+    expect(html('groups')).not.toContain('2 more ›')
+    expect(html('groups-more').match(/<\/ul><a class="fw-ro-link fw-ro-hint" href="#record-overview-lab">2 more ›<\/a><\/section>/g)).toHaveLength(rooms)
+    // The frame with its rows: the lead card with four strips, three pairs.
+    expect(strips('overview-rows')).toBe(4 * rooms)
+    expect(html('overview-rows').match(/<div class="fw-so-ov-pair">/g)).toHaveLength(3 * rooms)
+    for (const id of ['strips-lines', 'rows-quiet', 'facts-note', 'groups-more']) expect(textOf(html(id, 'it')), id).not.toMatch(/Quality releases|None yet|Office note|Waiting on us|Shipments/)
+    for (const word of ['Lo sblocca la qualità', 'Ancora nessuno: Spedizioni · Fatture', 'Nota dell\'ufficio', 'Tocca a noi · 2']) expect(['strips-lines', 'rows-quiet', 'facts-note', 'groups-more'].map((id) => textOf(html(id, 'it'))).join(' '), word).toContain(word)
   })
 })
 

@@ -652,6 +652,8 @@ export default defineStage({
         const shown = strips.locator('li.fw-so-strip')
         const count = await shown.count()
         expect(count, 'at most four strips in view').toBeLessThanOrEqual(4)
+        // F-CO-K2 (settle S4): a strip is the shared row on its baseline, whichever stylesheet loads first (its dead align-items went).
+        if (count > 0) expect(await shown.first().evaluate((row) => getComputedStyle(row).alignItems), 'a strip sits on the shared row’s baseline').toBe('baseline')
         for (let index = 0; index < count; index += 1) {
           expect(await shown.nth(index).getByRole('button').count(), `strip ${index + 1}: at most three buttons`).toBeLessThanOrEqual(3)
           expect((await shown.nth(index).locator('.fw-so-strip-said').innerText()).trim(), `strip ${index + 1} says why`).not.toBe('')
@@ -853,6 +855,8 @@ export default defineStage({
       // The headline and the hand row: who and why, the office's note, no work order records it (it stands until cleared).
       await expect(headline).toHaveText(`${OD('status.IN_PRODUCTION')} · ${stageWord('SEWING')}`, { timeout: 60_000 })
       await seen(handRow, 60_000)
+      // F-CO-K2 (settle S4): the hand row is the shared row on its baseline too (its dead align-items went: no stylesheet order decides).
+      expect(await handRow.evaluate((row) => getComputedStyle(row).alignItems), 'the hand row sits on the shared row’s baseline').toBe('baseline')
       for (const text of [OD('where.manual.tag'), OD('where.manual.by', { who }), OD('where.manual.reasons.OUTAGE'), OD('where.manual.noWork'), HAND_NOTE]) await expect(handRow, text).toContainText(text)
       await flow.shot(page, 'hand-stage-set')
 

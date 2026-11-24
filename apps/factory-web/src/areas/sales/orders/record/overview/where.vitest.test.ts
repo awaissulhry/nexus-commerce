@@ -444,10 +444,14 @@ describe('F-OO-105: the strips\' doors — the band\'s yes, the payment, the row
   })
 
   it('the words exist in both languages, office "tu" in Italian', () => {
-    const KEYS = ['where.strips', 'where.strip.yes.waits', 'where.strip.yes.asked', 'where.strip.yes.nobody', 'where.strip.credit.waits', 'where.strip.credit.asked' /* walk #2 */, 'where.strip.credit.nobody', 'where.strip.reviewUnits', 'where.strip.reviewDoor.open', 'where.strip.reviewDoor.noRight', 'where.strip.reviewDoor.several', 'where.strip.deposit.waiting', 'where.strip.deposit.overdue', 'where.strip.deposit.open', 'where.strip.quality', 'where.strip.qualityPlain', 'where.strip.production', 'where.strip.productionPlain', 'where.strip.pause', 'where.strip.andMore', 'where.strip.qualityWho', 'where.strip.release', 'where.strip.releaseOf', 'where.strip.openWo', 'where.strip.failed', 'where.strip.showMore', 'where.strip.showFewer']
+    const KEYS = ['where.strips', 'where.strip.yes.waits', 'where.strip.yes.asked', 'where.strip.yes.nobody', 'where.strip.credit.waits', 'where.strip.credit.asked' /* walk #2 */, 'where.strip.credit.nobody', 'where.strip.reviewUnits', 'where.strip.reviewDoor.open', 'where.strip.reviewDoor.noRight', 'where.strip.reviewDoor.several', 'where.strip.deposit.waiting', 'where.strip.deposit.overdue', 'where.strip.deposit.open', 'where.strip.quality', 'where.strip.qualityPlain', 'where.strip.production', 'where.strip.productionPlain', 'where.strip.pause', 'where.strip.andMore', 'where.strip.qualityWho', 'where.strip.release', 'where.strip.releaseOf', 'where.strip.openWo', 'where.strip.failed']
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
       for (const key of KEYS) expect(t(key, { who: 'X', date: 'D', reasons: 'R', numbers: 'N', number: 'N', count: 2 }), `${locale} ${key}`).not.toBe(key)
+      // F-CO-K2: "Show {n} more" / "Show fewer" are the shared overview kit's words now (its Strips part says them); the order's went.
+      const kit = createTranslator(locale, messagesFor(locale, ['record-overview'])['record-overview']!)
+      for (const key of ['strips.showMore', 'strips.showFewer']) expect(kit(key, { count: 2 }), `${locale} ${key}`).not.toBe(key)
+      for (const key of ['where.strip.showMore', 'where.strip.showFewer']) expect(t(key, { count: 2 }), `${locale} ${key}`).toBe(key)
       for (const key of ['where.strip.review', 'where.strip.on', 'where.strip.notReached', 'where.strip.onlyNotReached', 'where.strip.shared']) for (const count of [1, 2]) expect(t(key, { count, numbers: 'N' }), `${locale} ${key} ${count}`).not.toBe(key)
     }
     const en = createTranslator('en', messagesFor('en', ['orders']).orders!)

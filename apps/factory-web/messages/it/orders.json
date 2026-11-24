@@ -1153,7 +1153,6 @@
     "fixed": "Fisso",
     "fixedTitle": "Fissato quando l'ordine è stato creato; non cambia.",
     "set": "Imposta…",
-    "unread": "Non è stato possibile leggerlo",
     "note": {
       "label": "Nota dell'ufficio",
       "tag": "Solo l'ufficio la vede",
@@ -1697,9 +1696,7 @@
       "release": "Sblocca in Qualità ›",
       "releaseOf": "Sblocca in Qualità: i blocchi di {number}",
       "openWo": "Apri {number} ›",
-      "failed": "Impossibile leggere i blocchi",
-      "showMore": "Mostra altri {count}",
-      "showFewer": "Mostra meno"
+      "failed": "Impossibile leggere i blocchi"
     },
     "moves": "Le azioni dell'ordine",
     "more": "Altro",
@@ -2376,10 +2373,6 @@
     "seeDates": "Date in attesa: vedi Prossime date"
   },
   "linked": {
-    "value": "{value} ›",
-    "labelled": "{label}: {value}",
-    "none": "Ancora nessuno: {kinds}",
-    "unread": "Non è stato possibile leggerli",
     "wo": {
       "inWork_one": "{count} in lavorazione",
       "inWork_other": "{count} in lavorazione",
