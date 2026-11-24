@@ -63,7 +63,7 @@ export function DocumentsSection({ model, price, chip, onChip, onMore, sayIn, un
     </div>
   )
   const shipped = model.shipped ? (
-    <p className="fw-cm-foot">
+    <p className={model.shippedLate ? 'fw-cm-foot is-danger' : 'fw-cm-foot'}>
       {model.invoiceShipped ? (
         <Link className="fw-pt-link" href={model.invoiceShipped}>
           {say(model.shipped)} ›
@@ -90,8 +90,11 @@ export function DocumentsSection({ model, price, chip, onChip, onMore, sayIn, un
     )
   const shown = all ? model.rows : model.rows.slice(0, DOCUMENTS_SHOWN)
   const hidden = model.rows.length - shown.length
+  // M-8 (cm-fx4): a draft has no number, so its ⋯ is named for the order it bills and its place among the drafts ("Draft 2 · SEED-SO-0002").
+  let drafts = 0
   const rows: InvoiceListRow[] = shown.map((row) => ({
     ...row.list,
+    ...(row.list.number ? {} : { name: [`${say(word('orders:money.draft'))} ${(drafts += 1)}`, ...(row.order?.number ? [row.order.number] : [])].join(' · ') }),
     extra: row.order ? (
       <Link className="fw-pt-link" href={row.order.href}>
         {row.order.number ? `${row.order.number} ›` : say(word('cm.invoices.orderDoor'))}
@@ -131,5 +134,7 @@ function rowMenuOf(row: DocumentRow, say: CustomerSay, companyId: string | null,
   if (onPick && order) items.push({ id: 'show', label: say(word('record-frame:discuss.showInThread')), onSelect: () => onPick({ type: 'SalesOrder', id: order.id, label: order.number ?? '', companyId }) })
   const number = row.list.number
   if (number) items.push({ id: 'copy', label: say(word('orders:moneyTab.invoices.copyNumber')), onSelect: () => void navigator.clipboard?.writeText(number) })
+  // M-4 (cm-fx4): a row's last line is Copy link (the kit's rule, as the order page's rows) — a draft's ⋯ is never empty.
+  items.push({ id: 'link', label: say(word('orders:moneyTab.menu.copyLinkRow')), onSelect: () => copyLinkTo(row.list.anchor) })
   return items
 }

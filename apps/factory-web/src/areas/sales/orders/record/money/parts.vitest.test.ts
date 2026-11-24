@@ -186,6 +186,9 @@ describe('F-CM-k1: the five parts draw the order Money\'s markup letter for lett
     expect(render(h(GapRow, { ok: true, words: 'Settled on 20/11/2026' }))).toBe(render(todaySettled('Settled on 20/11/2026')))
     expect(render(h(GapRow, { words: 'Not invoiced yet', extra: '€ 1,200.00' }))).toContain('<span>Not invoiced yet<b> € 1,200.00</b></span>')
     expect(render(h(GapRow, { ok: true, words: 'Settled' }))).toContain('<p class="fw-om-gap is-ok">')
+    // cm-fx4 (M-3): the optional danger tone (a late line, the customer's Money) — the same markup with `is-danger`; without it, today's.
+    expect(render(h(GapRow, { words: 'A deposit is late', door, tone: 'danger' }))).toBe(render(todayGap('A deposit is late', null, door)).replace('<p class="fw-om-gap">', '<p class="fw-om-gap is-danger">'))
+    expect(render(h(GapRow, { words: 'A deposit is late', door }))).toBe(render(todayGap('A deposit is late', null, door)))
   })
 
   it('Facts: one label → value pair each; a value may be the host\'s door', () => {
@@ -225,6 +228,14 @@ describe('F-CM-k1: the five parts draw the order Money\'s markup letter for lett
         expect(textOf(html)).not.toMatch(/€|\d[.,]\d{2}\b/)
       }
       expect(without).not.toContain('fw-om-ir-p')
+    })
+
+    it(`${locale}: InvoiceList — a row's own ⋯ name (two drafts told apart, cm-fx4 M-8); absent, the number or "Draft" as before`, () => {
+      const t = tOf(locale)
+      const named = render(h(InvoiceList, { rows: [{ ...DRAFT, name: 'Draft 2 · SEED-SO-0002' }], price: true, extraHead: t('money.share'), menuOf: () => ITEMS }), locale)
+      expect(named).toContain(`aria-label="${esc(t('moneyTab.invoices.more', { number: 'Draft 2 · SEED-SO-0002' }))}"`)
+      const plain = render(h(InvoiceList, { rows: [DRAFT], price: true, extraHead: t('money.share'), menuOf: () => ITEMS }), locale)
+      expect(plain).toBe(render(h(TodayList, { rows: [DRAFT], price: true, items: ITEMS }), locale))
     })
   }
 

@@ -162,7 +162,7 @@ export function BalanceSection({ model, present, sayIn, unit, asOf, menu, failed
             <h3 className="fw-pt-h3 fw-cm-h3">{say(word('cm.balance.needsTitle', { params: { count: model.needs.length } }))}</h3>
             <div className="fw-cm-needs">
               {model.needs.map((need) => (
-                <GapRow key={`${need.code}-${need.currency ?? ''}`} words={needWords(need)} door={doorOf(need)} />
+                <GapRow key={`${need.code}-${need.currency ?? ''}`} words={needWords(need)} door={doorOf(need)} {...(need.tone === 'danger' ? { tone: 'danger' as const } : {}) /* M-3 (cm-fx4): a late need is red */} />
               ))}
             </div>
           </div>
