@@ -987,6 +987,17 @@ describe('cm-fx4: the walk\'s gaps', () => {
     expect(creditOf(input('owner', { terms }), null, terms, PREFIX).reading).toBe(false) // not asked (the gallery's cm-* cases): as before
   })
 
+  it('ct-fx3 G-W11 (walk W-11): Balance says it too when the terms per company could not be read — once, with Try again', () => {
+    const terms = partReady({ paymentTerms: { name: 'Deposit 30% at acceptance, balance at delivery' }, paymentTermsText: null, currency: 'EUR', defaultDepositPct: '30', invoiceTiming: 'ON_SHIPMENT' } as unknown as CommercialTerms)
+    const failed = balanceOf(input('owner', { terms, companyTerms: partFailed('problem.read.unavailable') }), PREFIX)
+    expect(failed.facts.find((fact) => fact.key === 'paymentTerms')!.value).toEqual({ key: 'cm.text', params: { text: 'Deposit 30% at acceptance, balance at delivery' } })
+    expect(failed.termsFallback).toEqual({ key: 'customer-terms:ct.answer.fallback' })
+    for (const companyTerms of [partReady({ tenantWide: false, companies: [] } as unknown as CompanyTerms), READING, null]) expect(balanceOf(input('owner', { terms, companyTerms }), PREFIX).termsFallback ?? null).toBeNull()
+    const section = view('BalanceSection.tsx')
+    expect(section).toMatch(/\{!model\.reading && model\.termsFallback \? \(\s*<Quiet>\s*\{say\(model\.termsFallback\)\}[\s\S]*?onClick=\{onRetryTerms\}/)
+    expect(source('../view/money/CustomerMoneyTab.tsx')).toContain("onRetryTerms={() => onRetry('terms') /* ct-fx3 G-W11 */}")
+  })
+
   it('T.6 (Z41): the deposit word nothing says any more went, in both languages; the words it sits beside stay', () => {
     for (const locale of LOCALES) {
       const flat = messagesFor(locale, ['customer-money'])['customer-money'] ?? {}

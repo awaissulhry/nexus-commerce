@@ -110,9 +110,17 @@ export function IdentitySection({ model, actions }: { model: TermsTabModel; acti
 
 function FactValue({ fact, marked, say }: { fact: IdentityFact; marked: boolean; say: Say }) {
   const words = say(fact.value)
+  // ct-fx3 G-W11: a code inside the words is monospace on its own ("By SDI code ‹FAKE001›"), the sentence keeps the text face.
+  const at = fact.code ? words.indexOf(fact.code) : -1
   const value: ReactNode = fact.warning ? (
     <span className="fw-ctr-warn">
       <CircleAlert size={13} aria-hidden /> {words}
+    </span>
+  ) : at >= 0 ? (
+    <span>
+      {words.slice(0, at)}
+      <span className="fw-ctr-mono">{fact.code}</span>
+      {words.slice(at + fact.code!.length)}
     </span>
   ) : (
     <span className={fact.none ? 'fw-ctr-none' : fact.mono ? 'fw-ctr-mono' : undefined}>{words}</span>

@@ -25,6 +25,8 @@ export interface IdentityFact {
   readonly none?: boolean
   readonly mono?: boolean
   readonly warning?: boolean
+  /** ct-fx3 G-W11: a code inside the words, drawn monospace on its own (the rest of the sentence in the text face). */
+  readonly code?: string
   readonly subs?: readonly Said[]
   /** The fact's own address (a chip marks it). */
   readonly anchor?: string
@@ -104,7 +106,8 @@ export function datedIdentities(party: Pick<Party, 'taxIdentities'>): { readonly
 /** The e-invoice of an Italian identity as ONE fact: by SDI code, by PEC, else the fiscal drawer (a warning, never "cannot be invoiced", Z3). */
 function einvoiceFact(identity: TaxIdentity): IdentityFact {
   const base = { key: 'einvoice', label: said('ct.id.einvoice'), anchor: IDENTITY_ROWS.einvoice }
-  if (realSdi(identity.sdiRecipientCode)) return { ...base, value: said('ct.id.bySdi', { params: { code: identity.sdiRecipientCode } }), mono: true }
+  // ct-fx3 G-W11 (walk W-11): only the code is monospace, never the sentence around it.
+  if (realSdi(identity.sdiRecipientCode)) return { ...base, value: said('ct.id.bySdi', { params: { code: identity.sdiRecipientCode } }), code: identity.sdiRecipientCode }
   if (identity.pec) return { ...base, value: said('ct.id.byPec', { params: { pec: identity.pec } }) }
   // said once: the drawer's own words name the missing SDI code and PEC
   return { ...base, value: said('parties:warning.FISCAL_DRAWER'), warning: true }

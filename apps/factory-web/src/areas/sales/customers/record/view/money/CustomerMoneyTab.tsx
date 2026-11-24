@@ -263,7 +263,7 @@ function CustomerMoneyBody({ input, prefix, asOf, onRetry, onPick, onAct, lazy }
   return (
     <div className="fw-pt fw-om fw-cm">
       <MoneyAnswer tone={answer.tone} reading={answer.reading} title={title} below={answer.wall.map(say)} />
-      <BalanceSection model={balance} present={present} sayIn={sayIn} unit={unit} asOf={asOf} menu={balanceMenu} failed={pageFailed} onRetry={() => onRetry('page')} recordPaymentHref={can.paymentsRecord && can.price ? recordPaymentForCustomerHref(prefix, partyId) : null /* F-CM-204 */} {...(chase?.statement && onStatement ? { onStatement: () => onStatement(false) } : {}) /* F-CM-302 */} />
+      <BalanceSection model={balance} present={present} sayIn={sayIn} unit={unit} asOf={asOf} menu={balanceMenu} failed={pageFailed} onRetry={() => onRetry('page')} onRetryTerms={() => onRetry('terms') /* ct-fx3 G-W11 */} recordPaymentHref={can.paymentsRecord && can.price ? recordPaymentForCustomerHref(prefix, partyId) : null /* F-CM-204 */} {...(chase?.statement && onStatement ? { onStatement: () => onStatement(false) } : {}) /* F-CM-302 */} />
       {collect && present.has('collect') ? (
         <CollectSection model={collect} sayIn={sayIn} unit={unit} companyId={input.company?.id ?? null} menu={receivables} onRetry={() => onRetry('page')} onPick={onPick} onAct={onAct} allOrdersHref={workAllOrdersHref(prefix, partyId)} />
       ) : null}

@@ -4,7 +4,7 @@ import type { Loaded } from '../../../../parties/_shared/model'
 import type { CustomerMoneyModel } from '../../money/overview'
 import { customerTabHref, priceDifferHref, receivablesHref, workOpenOrdersHref } from './doors'
 import { figuresOf, standingOf, type CurrencyFigures } from './head'
-import { daysFrom, daysLateOf, isReading, orderProblemOf, partReady, paymentTermsOf, READING, type MoneyTabCan, type MoneyTabInput, type OpenItemsRead, type Part } from './model'
+import { daysFrom, daysLateOf, isFailed, isReading, orderProblemOf, partReady, paymentTermsOf, READING, type MoneyTabCan, type MoneyTabInput, type OpenItemsRead, type Part } from './model'
 
 /**
  * F-CM-104 (customer page › MONEY tab, 10-design §5.1; 18-lead-settles Z4, Z11, Z24) — section 1, Balance (#balance): the figures in
@@ -74,6 +74,11 @@ export interface BalanceModel {
   /** "Nothing needs you: nothing is late, nothing waits." (no need). */
   readonly calm: MoneyWord | null
   readonly facts: readonly Fact[]
+  /**
+   * ct-fx3 G-W11 (walk W-11; Z32, Z41): the terms per company could not be read — the Payment terms fact above is the customer's own,
+   * said so in ONE quiet line with Try again (as Credit & terms); else null.
+   */
+  readonly termsFallback?: MoneyWord | null
 }
 
 const sumOf = (values: readonly number[]): number => values.reduce((total, value) => total + value, 0)
@@ -231,6 +236,7 @@ export function balanceOf(input: MoneyTabInput, prefix: string): BalanceModel {
     needs,
     calm: reading || needs.length > 0 ? null : ordered === 0 ? word('cm.balance.calmNew', { params: { customer: input.party.name } }) : word('cm.balance.calm'),
     facts,
+    termsFallback: facts.some((fact) => fact.key === 'paymentTerms') && isFailed(input.companyTerms ?? null) ? word('customer-terms:ct.answer.fallback') : null, // ct-fx3 G-W11
   }
 }
 

@@ -1225,3 +1225,18 @@ describe('ct-fx3 G-W10: the nothing-set sentence has no company lead (one colon,
     expect(termsAnswer(gapFacts({ multi: true })).lead).toEqual(said('ct.answer.with', { params: { company: A.name } }))
   })
 })
+
+describe('ct-fx3 G-W11: in "By SDI code …" only the code is monospace', () => {
+  it('the e-invoice fact names its code apart; drawn, the code alone takes the mono face, in both languages', () => {
+    const party = partyWith({ taxIdentities: [identity({ sdiRecipientCode: 'FAKE001' })], warnings: [], vies: { ...MODA.vies, state: 'NOT_APPLICABLE' } })
+    const model = identitySection({ party, can: OWNER, history: { items: [] }, viesRunning: false, now: NOW, earlierOpen: false, laterOpen: false, checksOpen: false })
+    const einvoice = model.facts.find((fact) => fact.key === 'einvoice')!
+    expect([einvoice.code, einvoice.mono ?? false]).toEqual(['FAKE001', false])
+    const reads: TermsTabReads = { party, prefix: '/w/SEEDA', can: OWNER, locale: 'en', now: NOW, companyId: A.id, companyNames: NAMES, commercial: ready(own()), carrier: null, holds: ready(HOLDS), companies: ready(COMPANY_TERMS), requirements: null, library: null, lists: null, history: { items: [] }, viesRunning: false }
+    for (const locale of LOCALES) {
+      const html = renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(WithMessages, { namespaces: [...TERMS_TAB_NAMESPACES] }, createElement(TermsTab, { model: termsTabModel({ ...reads, locale }, TERMS_TAB_START) }))))
+      expect(html, locale).toContain('<span class="fw-ctr-mono">FAKE001</span>')
+      expect(html, locale).not.toMatch(/class="fw-ctr-mono">(By SDI|Via codice)/)
+    }
+  })
+})
