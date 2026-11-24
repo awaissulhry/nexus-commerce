@@ -331,3 +331,19 @@ describe('tw-s R1: a portal read quotes only messages shared with its own custom
   })
 })
 // ── end tw-s ──
+
+// ── pt-s (S.6, the portal reply link; walls: the office note, the held mail, the brand): a portal post may answer a shared message ──
+describe('pt-s S.6: a portal post answers a shared message of its own record', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('a portal post naming correctsMessageId is refused (unknown key)', async () => {
+    const order = await idOf('SalesOrder', 'SEED-SO-0001')
+    const { mail } = await officeWrites('SalesOrder', order)
+    const body = 'Made-up pt-s S.1: a correction the portal never sends.'
+    // Even of a message shared with the customer: a portal person answers, never corrects (the strict input refuses the key).
+    const refused = await post(buyer, 'SalesOrder', order, { body, correctsMessageId: mail }, newId())
+    expect(refused.status, JSON.stringify(refused.body)).toBe(400)
+    expect(refused.body.error.code).toBe('validation_failed')
+    expect(JSON.stringify(refused.body.error.issues)).toContain('correctsMessageId')
+    expect(await admin('SELECT id FROM "Message" WHERE "tenantId" = $1 AND "bodyText" = $2', [world.tenantId, body])).toEqual([])
+  })
+})
+// ── end pt-s ──

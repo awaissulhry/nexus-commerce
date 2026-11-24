@@ -365,6 +365,8 @@ export interface PartnerPostInput {
   readonly attachments?: readonly string[] | undefined
   /** B-CP-079: also ask the customer's factory designer (one ask per message; ./designer-ask.ts). */
   readonly askFactoryDesigner?: boolean | undefined
+  /** pt-s S.1: the shared message of this record's conversation the post answers (never a correction: the portal does not correct). */
+  readonly replyToMessageId?: string | undefined
 }
 
 /** POST /portal/threads/<type>/<id>/messages: the person's post into the record's thread (COL-060). */
