@@ -1,0 +1,7 @@
+{
+  "state": {
+    "loading": "Loading {part}…",
+    "failed": "Couldn't load {part}",
+    "retry": "Try again"
+  }
+}

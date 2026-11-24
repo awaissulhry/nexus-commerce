@@ -1,0 +1,7 @@
+{
+  "state": {
+    "loading": "Caricamento di {part}…",
+    "failed": "Impossibile caricare {part}",
+    "retry": "Riprova"
+  }
+}
