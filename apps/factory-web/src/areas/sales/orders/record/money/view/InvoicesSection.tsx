@@ -56,10 +56,12 @@ export function InvoicesSection({ order, model, actions }: { order: Order; model
         </Button>,
       ]
     : []
-  const statementHref = `${model.prefix}/sales/customers/${encodeURIComponent(order.partyId)}?tab=money`
+  // F-CM-104 (cm-w1 W1.4; plan §10.4): the order page's ONE planned change — the foot link lands on the customer's Money at its
+  // Invoices & credit notes (`#invoices`) and says so: "All money of <customer> ›".
+  const statementHref = `${model.prefix}/sales/customers/${encodeURIComponent(order.partyId)}?tab=money#invoices`
   const statement = order.party ? (
     <Link className="fw-pt-link" href={statementHref}>
-      {t('money.statement', { customer: order.party.legalName })}
+      {t('money.allMoney', { customer: order.party.legalName })}
     </Link>
   ) : null
   // F-OM-fx3 (W-07, W-08): nothing invoiced is the head's one line, never a box — the statement then lives in the head's ⋯, beside
@@ -67,7 +69,7 @@ export function InvoicesSection({ order, model, actions }: { order: Order; model
   const empty = view.rows.length === 0 && !model.settlement?.problem
   const more: MenuItemDef[] = [
     { id: 'finance', label: t('moneyTab.invoices.finance'), href: `${model.prefix}/finance/invoices` },
-    ...(empty && order.party ? [{ id: 'statement', label: t('money.statement', { customer: order.party.legalName }), href: statementHref }] : []),
+    ...(empty && order.party ? [{ id: 'statement', label: t('money.allMoney', { customer: order.party.legalName }), href: statementHref }] : []),
   ]
   // F-CM-k1: each row's ⋯ — this page's own lines; the shared list draws the button.
   const itemsOf = (row: InvoiceRow): MenuItemDef[] => {

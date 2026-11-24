@@ -846,7 +846,7 @@
     "alsoBillsHidden_one": "e {count} altro ordine che non puoi aprire",
     "alsoBillsHidden_other": "e altri {count} ordini che non puoi aprire",
     "freight": "Il trasporto {amount} è in fattura, in nessun ordine",
-    "statement": "Estratto conto di {customer} ›"
+    "allMoney": "Tutti gli importi di {customer} ›"
   },
   "docType": {
     "TD01": "Fattura (TD01)",

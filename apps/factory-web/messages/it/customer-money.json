@@ -293,6 +293,9 @@
       },
       "chips": "Quali documenti",
       "noneChip": "Nessun documento con questo filtro."
+    },
+    "note": {
+      "noTab": "Importi richiede il diritto di vedere prezzi, crediti o fidi: questa è la scheda Lavori, che il tuo ruolo può aprire."
     }
   }
 }

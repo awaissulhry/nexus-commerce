@@ -23,6 +23,8 @@ export type WorkDoorTerm =
   | { readonly kind: 'quotes'; readonly group: 'TO_ANSWER' | 'OPEN_QUOTES' }
   /** "+n more": the Work tab as it opens. */
   | { readonly kind: 'work' }
+  // F-CO-101 (customer Overview, 13-backend §3.7): the customer's OPEN orders — the count its Overview says ("8 open of 14").
+  | { readonly kind: 'open' }
 
 /** The customer page's address for a count: its Work tab on exactly those orders, its quotes, its thread or its review window. */
 export function workDoor(prefix: string, partyId: string, term: WorkDoorTerm): string {
@@ -72,6 +74,11 @@ export function workDoor(prefix: string, partyId: string, term: WorkDoorTerm): s
       break
     case 'work':
       query.set('tab', 'work')
+      break
+    // F-CO-101: the open orders (the Work tab's own view term; the entry adds the customer's lock, once).
+    case 'open':
+      query.set('tab', 'work')
+      query.set('rows', 'open')
       break
   }
   return `${base}?${query.toString()}`

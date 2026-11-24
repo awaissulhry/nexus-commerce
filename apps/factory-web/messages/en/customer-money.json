@@ -293,6 +293,9 @@
       },
       "chips": "Which documents",
       "noneChip": "No document under this filter."
+    },
+    "note": {
+      "noTab": "Money needs the right to see prices, receivables or credit: this is the Work tab, which your role may open."
     }
   }
 }

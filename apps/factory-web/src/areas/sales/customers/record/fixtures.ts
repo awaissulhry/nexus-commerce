@@ -2,10 +2,13 @@ import { createElement, useMemo, useRef, useState, type ReactNode } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { ARCHIVED_CUSTOMER, at, CUSTOMERS, inShell, NOW, ORDERS, partyThread, QUOTES, RECORD_CAN, recordModel, withoutMoney } from '../../../parties/_shared/fixtures'
 import { loaded, loading, type PartyRecordModel } from '../../../parties/_shared/model'
+import { recordTabs, shownTab, SIDES } from '../../../parties/_shared/model' // F-CO-103: the tab the page shows (the Overview is built for it)
 import type { Party } from '../../../parties/_shared/api'
 import { BLANK_TERMS, editing, GROUP_TERMS, PAYMENT_TERMS, TERMS, TERMS_CAN, termsCard, termsModel } from '../_demo/fixtures'
 import type { CommercialTermsModel } from '../terms/view/CommercialTermsCard'
 import { MONEY_CAN, MONEY_STATES, moneyModel } from '../money/_demo/fixtures'
+import { moneyTabDemo } from '../money/_demo/fixtures' // F-CM-104: the Money tab's made-up reads
+import { CustomerMoneyTab } from './view/money/CustomerMoneyTab' // F-CM-104: the Money tab's view
 import type { CustomerMoneyModel } from '../money/overview'
 import { CustomerRecordView } from './view/CustomerRecordView'
 // F-SA-272: the supervisor card's states (made-up people of the portal demo).
@@ -66,6 +69,7 @@ import { workViewCounts } from './use-customer-work' // F-CP-103: the Views ▾ 
 import { ORDER_PHASES, phaseCountsOf } from '@nexus/factory-domain/production-brand/stages'
 import { IN_PRODUCTION_VIEW } from './use-customer-work'
 import { beforeLineOf, NO_BEFORE_ORDER } from './before-order'
+import { beforeOrderFor } from './before-order' // F-CO-103: the Overview's band says the same "Before an order" line
 import { quotesGroupDoor } from './before-order' // F-CQ-303: the drafts' door is Quotes & incoming at WRITING
 import { bandOf, chipsOf, whysOf } from './work-band'
 import { WorkBand } from './view/WorkBand'
@@ -111,6 +115,14 @@ import { workFootOf, type UrgencyFoot } from './urgency-foot'
 import { WorkFoot } from './view/WorkFoot'
 import type { WorkRoom } from './view/WorkTab'
 // ---- end cw T.1
+// ---- F-CO-103 (customer page › Overview): the tab's rules over each case's own models, drawn by the shared overview kit's parts ----
+import type { BeforeOrderCountsAnswer } from '@nexus/factory-domain/sales/before-order/contracts'
+import { customerMoneyCanOf } from '../money/model'
+import { customerHref, workOrdersDoor } from './overview/doors'
+import type { OverviewInput } from './overview/model'
+import { overviewOf } from './overview/rows'
+import { CustomerOverviewView } from './view/overview/CustomerOverviewView'
+// ---- end F-CO-103
 
 /**
  * SCR-033 Customer record — made-up customers only. Each case is one state the Owner reviews: an Italian business that
@@ -756,6 +768,82 @@ function depthNodes(depth: DepthCase | undefined, partyId: string): SupplierDept
   }
 }
 
+// ---- F-CO-103 (customer page › Overview; 13-backend §3.9): the Overview tab of a case — the tab's own rules (./overview) over the
+// case's models, with made-up work reads, counts and standing, so every case that drew the old Overview draws the new one. A read
+// the case's reader has no right for is `off` / null, as the page and the API leave it (never a zero). Made-up data only.
+const OFF_READ = { status: 'off' } as const
+
+/** A plain glance for a case that hands none: nothing on hold, no part of the depth read. */
+const plainGlance = (party: Party): Glance => ({
+  party: { id: party.id, code: party.code, name: party.tradeName ?? party.legalName, kind: party.kind, status: party.status },
+  company: { id: DEMO_COMPANIES[0].id, code: DEMO_COMPANIES[0].code, name: DEMO_COMPANIES[0].name },
+  hold: { onHold: false, holds: [] },
+  team: null,
+  requirements: { count: 0, rows: [] },
+  promises: null,
+  credit: null,
+  samples: null,
+  profiles: null,
+  riders: null,
+  repairs: null,
+  withheld: [],
+  readAt: NOW,
+})
+
+function OverviewDesign({ record, party, money, depth, supervisor }: { record: PartyRecordModel; party: Party; money?: CustomerMoneyModel | undefined; depth?: DepthCase | undefined; supervisor?: ReactNode }) {
+  const can = record.can
+  const moneyCan = money?.can ?? customerMoneyCanOf([])
+  const quotesTab = can.quotes || can.inquiries === true
+  const reads: WorkReads = {
+    board: can.orders ? STRIP_READY.board : OFF_READ,
+    requests: can.orders || can.workorders === true ? STRIP_READY.requests : OFF_READ,
+    replies: can.threads ? STRIP_READY.replies : OFF_READ,
+    asks: can.partners === true ? STRIP_READY.asks : OFF_READ,
+    tasks: can.threads ? STRIP_READY.tasks : OFF_READ,
+  }
+  // The page's ONE count read as the API answers it: a part the reader has no right for is null (left out), never 0.
+  const toAnswer = can.inquiries === true ? 1 : null
+  const orderWaits = can.quotes ? 0 : null
+  const counts: BeforeOrderCountsAnswer = {
+    partyId: party.id,
+    asOf: NOW,
+    sampleRounds: null,
+    openQuotes: can.quotes ? 3 : null,
+    waitsOnUs: toAnswer === null && orderWaits === null ? null : (toAnswer ?? 0) + (orderWaits ?? 0),
+    groups: { WRITING: can.orders ? 2 : null, TO_ANSWER: toAnswer, PREPARING: can.quotes ? 1 : null, APPROVAL: can.quotes ? 0 : null, WAITING_CUSTOMER: can.quotes ? 2 : null, ORDER_WAITS: orderWaits, WON: can.quotes ? 4 : null, MOVED: can.inquiries === true ? 0 : null, LOST: can.quotes ? 1 : null },
+    byKind: { quotes: null, requests: null, portalOrders: null, drafts: null },
+  }
+  // The glance's parts this case's reader may read: what its own answer withholds (a glance not in yet: every part, as the Owner).
+  const glanceRead = depth?.glance ?? ready(plainGlance(party))
+  const mayRead = (part: 'samples' | 'repairs' | 'credit'): boolean => glanceRead.status !== 'ready' || !glanceRead.value.withheld.includes(part)
+  const input: OverviewInput = {
+    prefix: record.prefix,
+    party,
+    can: { orders: can.orders, quotesTab, moneyTab: can.money === true, receivables: moneyCan.receivables, price: can.price, returns: moneyCan.returns, complaints: moneyCan.complaints, partners: can.partners === true, manage: can.manage, block: can.block, vies: can.vies, workorders: can.workorders === true, samples: mayRead('samples'), repairs: mayRead('repairs'), credit: mayRead('credit') },
+    today: TODAY,
+    reads,
+    counts: { counts, failed: false },
+    glance: glanceRead,
+    money: money ? { ageing: money.ageing, returns: money.returns, complaints: money.complaints, orders: money.orders ?? null, returnsHref: money.returnsHref } : { ageing: loading(), returns: loading(), complaints: loading(), orders: null, returnsHref: null },
+    // This customer's row of the joined read (asked only with orders.view).
+    standing: can.orders ? { status: 'ready', value: { partyId: party.id, orders: 9, phases: [], late: 1, waitsForYes: 0, depositOpen: 1, requests: { open: 2, firstId: null }, replies: 3, customerUrgent: { count: 0, byCompany: [] }, priority: { top: 0, high: 0 }, nextPromise: '2026-11-14', lastOrderDate: '2026-10-21' } } : OFF_READ,
+    urgency: OFF_READ,
+    projects: can.projects ? (record.projects ?? null) : null,
+    viesRunning: record.viesRunning === true,
+  }
+  const recordHref = customerHref(record.prefix, party.id)
+  const before = beforeLineOf(can.orders ? beforeOrderFor(counts, quotesTab) : NO_BEFORE_ORDER, recordHref)
+  // Card 2: the Work tab's band as the page builds it for the Overview — no chips, no group pressed (a press does nothing here: made-up).
+  const band = can.orders
+    ? {
+        model: { customer: party.tradeName ?? party.legalName, picture: bandOf(reads.board), shown: null, whys: whysOf(reads.board), before, chips: [], workOrdersHref: can.workorders === true ? workOrdersDoor(record.prefix, party.id) : null },
+        actions: { onGroup: () => undefined, onAll: () => undefined },
+      }
+    : null
+  return createElement(CustomerOverviewView, { model: overviewOf(input), band, before, supervisor })
+}
+// ---- end F-CO-103
+
 function CustomerDesign({ model }: { model: CustomerCase }) {
   const { terms, money, depth, supervisor, portalEmails, work, designer, priceDiffer, shipmentLine, ...record } = model
   // ---- cq W3 (T part 2): Quotes & incoming — the tab's own gallery parts (quotes-tab/fixtures.ts) for this customer; a Work case's
@@ -764,13 +852,21 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
   // ---- end cq W3
   const party = record.party
   const id = party?.id ?? 'x'
+  // F-CO-103: the Overview tab, built for the tab the page shows (as the live container builds it); until its rows land in People,
+  // the "Who looks after <customer>" card (F-SA-272, F-CP-155) stands under the People pair, as it is.
+  const supervisorCard = supervisor && party ? createElement(CustomerSupervisorCard, { model: supervisor, name: party.tradeName ?? party.legalName, designer: designer ?? null /* F-CP-155 */ }) : null
+  const overviewTab = party && shownTab(recordTabs(SIDES.customers, record.can), record.tab) === 'overview' ? createElement(OverviewDesign, { record, party, money, depth, supervisor: supervisorCard }) : null
+  // ---- F-CM-104 (cm-w1 W1.4): the Money tab, built for the tab the page shows (as the live container builds it) from made-up reads —
+  // Finance's view with the price grain, else Sales' (words only); a case's priceDiffer is the page's price count.
+  const moneyTab = party && shownTab(recordTabs(SIDES.customers, record.can), record.tab) === 'money' ? createElement(CustomerMoneyTab, { input: moneyTabDemo(record.can.price ? 'finance' : 'sales', { priceDiffer: priceDiffer ?? null }), prefix: record.prefix, asOf: '2026-10-31T09:44:00.000Z', onRetry: () => undefined }) : null
+  // ---- end F-CM-104
   return inShell(
     `/sales/customers/${id}`,
     createElement(
       WithMessages,
       { namespaces: DEPTH_NAMESPACES },
       // B-TH-260: the customer's docked thread (Activity and Documents went to it), with threads.read.
-      createElement(CustomerRecordView, { model: record, thread: party ? (shipmentLine && record.can.threads ? createElement(ShipmentLineThread, { party }) /* cw T.1 */ : partyThread(party, 'customers', record.can)) : null, terms: termsCard(terms ?? termsModel()), money, depth: depthNodes(depth, id), supervisor: supervisor && party ? createElement(CustomerSupervisorCard, { model: supervisor, name: party.tradeName ?? party.legalName, designer: designer ?? null /* F-CP-155 */ }) : null, ...(portalEmails ? { portalEmails: new Set(portalEmails) } : {}), work: work && party ? createElement(WithMessages, { namespaces: ['orders'] /* F-CW-101: as the live Work tab loads them */ }, createElement(WorkDesign, { work, party })) : null /* F-SA-276 */, workCount: work ? { count: 5, attention: true } : null, priceDiffer: priceDiffer ?? null /* F-CP-141 */, workBoard: STRIP_READY.board /* F-CW-101: the Overview's In production and Late */, quotesIncoming /* cq W3 */ }),
+      createElement(CustomerRecordView, { model: record, thread: party ? (shipmentLine && record.can.threads ? createElement(ShipmentLineThread, { party }) /* cw T.1 */ : partyThread(party, 'customers', record.can)) : null, terms: termsCard(terms ?? termsModel()), money, depth: depthNodes(depth, id), overviewTab /* F-CO-103 */, ...(portalEmails ? { portalEmails: new Set(portalEmails) } : {}), work: work && party ? createElement(WithMessages, { namespaces: ['orders'] /* F-CW-101: as the live Work tab loads them */ }, createElement(WorkDesign, { work, party })) : null /* F-SA-276 */, workCount: work ? { count: 5, attention: true } : null, priceDiffer: priceDiffer ?? null /* F-CP-141 */, quotesIncoming /* cq W3 */, moneyTab /* F-CM-104 */ }),
     ),
   )
 }
@@ -969,11 +1065,11 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'tabs-overview-first', label: 'F-SA-271 · A reader without orders.view lands on the Overview', model: record('MODA-DEMO', { tab: 'overview', can: { ...RECORD_CAN, orders: false } }) },
     { id: 'tab-quotes', label: 'F-SA-277 / cq W3 · Quotes & incoming on the page: the band, Requests & portal orders, Quotes, Customer is writing; the dock a third (F-CQ-301); the tab\'s badge = what waits on us there (F-CQ-302)', model: record('MODA-DEMO', { tab: 'quotes', can: { ...RECORD_CAN, inquiries: true } }), note: 'The whole tab\'s cases (every role, bar, window, width): its own screen SCR-033-quotes.' },
     // F-SA-273: the Money tab with every card's right (the made-up ageing, returns and open orders of money/_demo).
-    { id: 'tab-money', label: 'F-SA-273 · Money: key numbers, credit, open invoices per currency, deposits and balances, payment terms', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true } }), money: moneyModel({ ...MONEY_CAN.finance, orders: true, credit: true, creditLimits: true }, { orders: loaded(OPEN_ORDER_MONEY) }) } }, // B-CP-011
+    { id: 'tab-money', label: 'F-CM-104 · Money (Finance): the answer line, Balance with What needs you, To collect by due day', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true } }), money: moneyModel({ ...MONEY_CAN.finance, orders: true, credit: true, creditLimits: true }, { orders: loaded(OPEN_ORDER_MONEY) }) } }, // B-CP-011
     // F-CP-141: "Prices differ on {count} orders ›" — the door to the Work tab's Not equal view; nothing of it without the price grain.
-    { id: 'tab-money-price-differ', label: 'F-CP-141 · Money: "Prices differ on 2 orders ›" under the key numbers (opens Work › Not equal)', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true } }), money: moneyModel({ ...MONEY_CAN.finance, orders: true, credit: true, creditLimits: true }, { orders: loaded(OPEN_ORDER_MONEY) }), priceDiffer: 2 } }, // B-CP-011
-    { id: 'tab-money-price-differ-no-price', label: 'F-CP-141 · Money as Sales worker: no line, no count (the page reads none)', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true, price: false } }), money: moneyModel(MONEY_CAN.sales, { orders: loaded(OPEN_ORDER_MONEY.map((row) => ({ id: row.id, number: row.number, currency: row.currency, deposit: row.deposit }))) }), priceDiffer: 2 } }, // B-CP-011
-    { id: 'tab-money-blind', label: 'F-SA-273 · Money without the price grain and without sales.credit.limits: counts only, Change limit… held', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true, price: false } }), money: moneyModel(MONEY_CAN.sales, { orders: loaded(OPEN_ORDER_MONEY.map((row) => ({ id: row.id, number: row.number, currency: row.currency, deposit: row.deposit }))) }) } }, // B-CP-011
+    { id: 'tab-money-price-differ', label: 'F-CM-104 · Money: "Prices differ on 2 orders ›" in What needs you (opens Work › Not equal until Price check)', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true } }), money: moneyModel({ ...MONEY_CAN.finance, orders: true, credit: true, creditLimits: true }, { orders: loaded(OPEN_ORDER_MONEY) }), priceDiffer: 2 } }, // B-CP-011
+    { id: 'tab-money-price-differ-no-price', label: 'F-CM-104 · Money as Sales: words only — no line, no count, no amount, no act', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true, price: false } }), money: moneyModel(MONEY_CAN.sales, { orders: loaded(OPEN_ORDER_MONEY.map((row) => ({ id: row.id, number: row.number, currency: row.currency, deposit: row.deposit }))) }), priceDiffer: 2 } }, // B-CP-011
+    { id: 'tab-money-blind', label: 'F-CM-104 · Money without the price grain: the answer in words, no figures, no act (nothing held)', model: { ...record('MODA-DEMO', { tab: 'money', can: { ...RECORD_CAN, money: true, price: false } }), money: moneyModel(MONEY_CAN.sales, { orders: loaded(OPEN_ORDER_MONEY.map((row) => ({ id: row.id, number: row.number, currency: row.currency, deposit: row.deposit }))) }) } }, // B-CP-011
     { id: 'band-held', label: 'F-SA-271 · New order and Add task held with why (no orders.manage, no tasks.manage)', model: record('MODA-DEMO', { can: { ...RECORD_CAN, ordersManage: false, tasks: false, workorders: true } }) },
     { id: 'band-doors', label: 'F-SA-271 · ⋯ Check VIES, Add task for <customer>…, Import orders…, Open in Sales › Orders, Work orders of <customer> ›', model: record('MODA-DEMO', { can: { ...RECORD_CAN, ordersManage: true, tasks: true, workorders: true } }) },
     // ---- F-SA-272: the Overview — key numbers as doors, Also open, and who looks after the customer (moved from Portal settings).
@@ -1018,7 +1114,7 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'not-found', label: 'Not found', model: record('MODA-DEMO', { party: null, problem: 'problem.notFound' }) },
     { id: 'error', label: "The API didn't answer", model: record('MODA-DEMO', { party: null, problem: 'problem.unavailable' }) },
     { id: 'no-access', label: 'No permission', model: record('MODA-DEMO', { can: { ...RECORD_CAN, view: false } }) },
-    { id: 'notices', label: 'TH-6 · One notice: blocked shows, a refusal and the read-only notice wait behind "2 more notices"', model: record('BLOCCATO-DEMO', { can: { ...RECORD_CAN, manage: false }, notice: { key: 'problem.conflict', tone: 'warning' }, asOf: NOW }) },
+    { id: 'notices', label: 'TH-6 · One notice: blocked shows, a refusal and the read-only notice wait behind "2 more notices"', model: record('BLOCCATO-DEMO', { tab: 'people' /* F-CO-103: the Overview's own notice area leaves the Blocked banner to its headline and strip; the shared notice area is whole on every other tab */, can: { ...RECORD_CAN, manage: false }, notice: { key: 'problem.conflict', tone: 'warning' }, asOf: NOW }) },
     // B-W2a-49 (design customer.tax.terms, SAL-012): the customer's commercial terms below identity and VIES.
     { id: 'terms', label: 'W2a: Commercial terms — library terms, its price list and the list it falls back to', model: termsCase('MODA-DEMO', termsModel()), note: 'Payment terms in words (deposit 30 % at once); the price list links to its record; minimum order with the price grain.' },
     { id: 'terms-group', label: 'W2a: Commercial terms — a dealer in a discount group (read only: the group list gives it)', model: termsCase('MODA-DEMO', termsModel({ terms: GROUP_TERMS })) },

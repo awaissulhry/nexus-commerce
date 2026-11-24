@@ -3,33 +3,34 @@
 import { useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
 import { CircleAlert } from 'lucide-react' // F-SA-276: the Work tab's mark (something waits on us)
-import { Card, KeyValue, MetricStrip, RecordLayout, Tabs, type MenuItemDef, type Metric, type TabItem } from '@nexus/ui/components'
+import { Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
 import { Button } from '@nexus/ui/primitives'
 import { WithMessages } from '../../../../../record-panels/i18n'
-import { useLocale, useT } from '../../../../../lib/i18n/provider'
+import { useT } from '../../../../../lib/i18n/provider'
 import type { Party } from '../../../../parties/_shared/api'
-import { countryName, identitiesOf, keyNumbers, languageName, money, partyName, recordTabs, sideHref, SIDES, writable, type PartyRecordModel, type RecordTab } from '../../../../parties/_shared/model'
+import { identitiesOf, partyName, recordTabs, sideHref, SIDES, writable, type PartyRecordModel, type RecordTab } from '../../../../parties/_shared/model'
 import { shownTab } from '../../../../parties/_shared/model' // F-CQ-301 (P0-B2)
-import { PartyRecordGate, usePartyBand, type OverviewSlot, type PartyRecordActions, type SupplierDepth } from '../../../../parties/_shared/view/PartyRecordView'
-import { AddressesCard, CardHead, ContactsCard, IdentityCard, PartyDialogs, PartyNotices, ShowThreadOnArrival, SidePanel, ViesCard, type TabProps } from '../../../../parties/_shared/view/cards'
-import { dash, PartiesMessages, RoleTags } from '../../../../parties/_shared/view/parts'
+import { PartyRecordGate, usePartyBand, type PartyRecordActions, type SupplierDepth } from '../../../../parties/_shared/view/PartyRecordView'
+import { AddressesCard, ContactsCard, IdentityCard, PartyDialogs, PartyNotices, ShowThreadOnArrival, ViesCard } from '../../../../parties/_shared/view/cards'
+import { PartiesMessages } from '../../../../parties/_shared/view/parts'
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { rightRef } from '../../../../../lib/i18n/rights' // F-SA-271
 import { CUSTOMER_MONEY_NAMESPACE } from '../../money/model'
-import { useCustomerOverview, type CustomerMoneyModel } from '../../money/overview'
-import { MoneyTab } from './MoneyTab' // F-SA-273
-import { overdueOf } from '../../money/model' // F-SA-273
-import { workDoor } from '../use-customer-work' // F-CP-103: each tile opens the view it counts
-import { phaseCountOf, type Read } from '../use-customer-work' // F-CW-101: the Overview's In production and Late read the board
-import type { OrderBoard } from '../../../orders/api' // F-CW-101
+import type { CustomerMoneyModel } from '../../money/overview'
+import { moneyBadgeOf, pagePartsOf } from '../money/balance' // F-CM-104: the tab's count (late invoices + late deposit requests)
+import { romeToday } from '../../../../finance/costing/model' // F-CM-104
+import { OverviewNotices } from './overview/Notices' // F-CO-103: the Overview's notices (no Blocked / Archived banner on that tab)
 
 /**
  * SCR-033 Customer record (design sales.customers "records: Customer"; F-SA-270, sales page plan N5, picks P10, R5): the customer's
  * own view, split from the supplier's (areas/parties/_shared/view/PartyRecordView.tsx draws the supplier's record, unchanged). The
  * record's reads and writes are the shared hook's (usePartyRecord); the band, the notices, the cards and the dialogs are the shared
  * ones (PartyRecordView's usePartyBand and PartyRecordGate, ./cards). On RecordFrame with the customer's thread docked (B-TH-260).
- * Terms & requirements adds the customer's Commercial terms card (B-W2a-49, `terms`); the Overview's Overdue and Returns this year
- * tiles and the open returns and claims under Now come from `money` (B-W2a-81); the customer in depth from `depth` (B-W2b-324).
+ * Terms & requirements adds the customer's Commercial terms card (B-W2a-49, `terms`); the Money tab's numbers come from `money`
+ * (B-W2a-81); the customer in depth from `depth` (B-W2b-324).
+ * F-CO-103 (customer page › Overview): the Overview is its own tab body, built by the container from the shared overview kit's
+ * parts (`overviewTab`: ./overview/CustomerOverviewView.tsx) — as Work and Quotes & incoming are; on that tab the thread docks a
+ * third and the notice area leaves the Blocked / Archived banner to the tab's headline and first strip.
  * Fetches nothing: areas/sales/customers/record/CustomerRecord.tsx reads and writes; a design case passes made-up models.
  */
 export function CustomerRecordView({
@@ -37,14 +38,13 @@ export function CustomerRecordView({
   actions,
   thread,
   printThread,
-  fields,
+  overviewTab, // F-CO-103
   terms,
   portal,
   money: moneyModel,
   depth,
   onAddTask,
   taskDialog,
-  supervisor,
   portalPeople,
   portalEmails,
   work,
@@ -54,18 +54,21 @@ export function CustomerRecordView({
   onNewOrder,
   onImport,
   priceDiffer, // F-CP-141
-  workBoard, // F-CW-101
-  openQuotesHref, // F-CW-101
   quotesBadge, // F-CQ-302
   quotesTabNote, // F-CQ-306
+  moneyTab, // F-CM-104
+  moneyTabNote, // F-CM-104
 }: {
   model: PartyRecordModel
   actions?: PartyRecordActions
   /** B-TH-260: the customer's docked thread (a design case's; the page mounts OfficeRecordThread). */
   thread?: ReactNode
   printThread?: ReactNode
-  /** B-TH-280: the custom fields, on the Overview only. */
-  fields?: ReactNode
+  /**
+   * F-CO-103: the Overview tab (the customer's standing, the bigger picture, People, Next dates, Requests & changes, Linked records,
+   * Customer facts with the custom fields beside them — drawn by the container or a design case from the shared overview kit).
+   */
+  overviewTab?: ReactNode
   terms?: ReactNode
   /** B-W2b-180: Portal access (`?tab=portal`). */
   portal?: ReactNode
@@ -75,8 +78,6 @@ export function CustomerRecordView({
   /** F-SA-271: the band's ⋯ "Add task for <customer>…" (the record's New task dialog, drawn by the container). */
   onAddTask?: () => void
   taskDialog?: ReactNode
-  /** F-SA-272: "Who looks after <customer>" on the Overview (CustomerSupervisorCard, drawn by the container or a design case). */
-  supervisor?: ReactNode
   /** F-SA-274: People & addresses' people with portal access (Portal access's people part) and their e-mails (the contacts' tags). */
   portalPeople?: ReactNode
   portalEmails?: ReadonlySet<string>
@@ -93,23 +94,20 @@ export function CustomerRecordView({
   onImport?: () => void
   /** F-CP-141: how many of the customer's orders read Not equal (a price holder's only; null: none read, or no price grain). */
   priceDiffer?: number | null
-  /**
-   * F-CW-101 (A1-B5; lead settle S3): the customer's board (the Work tab's own count read, walled to the customer by the API) — the
-   * Overview's "In production" (the STARTED orders: the phase) and "Late" read it, so each tile counts what its door opens.
-   */
-  workBoard?: Read<OrderBoard>
-  /** F-CW-101 (S29): where the Overview's "Open quotes" tile leads (Quotes & incoming at its open quotes); absent: the tab. */
-  openQuotesHref?: string | null
   /** F-CQ-302 (13-backend R13; 10-design §2.5): Quotes & incoming's badge — what waits on us there (To answer + Accepted, order waits),
    *  from the page's ONE count read, marked when > 0; null while it is read; absent: the old count of the newest quotes. */
   quotesBadge?: { readonly count: number | null; readonly attention: boolean } | null
   /** F-CQ-306 (cq fx3 W2-1b): the reader asked for Quotes & incoming, a tab it may not open: the Work tab shows, with one line why. */
   quotesTabNote?: boolean
+  /** F-CM-104 (cm-w1 W1.4): the Money tab (the answer line, Balance, To collect…, drawn by the container or a design case). */
+  moneyTab?: ReactNode
+  /** F-CM-104 (Z27): the reader asked for Money, a tab it may not open: the Work tab shows, with one line why. */
+  moneyTabNote?: boolean
 }) {
   return (
     <WithMessages namespaces={[CUSTOMER_MONEY_NAMESPACE]}>
       <PartiesMessages>
-        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} supervisor={supervisor} portalPeople={portalPeople} portalEmails={portalEmails} work={work} workCount={workCount} quotesIncoming={quotesIncoming} threadButton={threadButton ?? null} onNewOrder={onNewOrder} onImport={onImport} priceDiffer={priceDiffer ?? null /* F-CP-141 */} workBoard={workBoard} openQuotesHref={openQuotesHref ?? null /* F-CW-101 */} quotesBadge={quotesBadge /* F-CQ-302 */} quotesTabNote={quotesTabNote /* F-CQ-306 */} />
+        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} overviewTab={overviewTab /* F-CO-103 */} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} portalPeople={portalPeople} portalEmails={portalEmails} work={work} workCount={workCount} quotesIncoming={quotesIncoming} threadButton={threadButton ?? null} onNewOrder={onNewOrder} onImport={onImport} priceDiffer={priceDiffer ?? null /* F-CP-141 */} quotesBadge={quotesBadge /* F-CQ-302 */} quotesTabNote={quotesTabNote /* F-CQ-306 */} moneyTab={moneyTab /* F-CM-104 */} moneyTabNote={moneyTabNote /* F-CM-104 */} />
       </PartiesMessages>
     </WithMessages>
   )
@@ -120,14 +118,13 @@ interface CustomerProps {
   actions?: PartyRecordActions | undefined
   thread?: ReactNode
   printThread?: ReactNode
-  fields?: ReactNode
+  overviewTab?: ReactNode // F-CO-103
   terms?: ReactNode
   portal?: ReactNode
   money: CustomerMoneyModel | null
   depth?: SupplierDepth | undefined
   onAddTask?: (() => void) | undefined
   taskDialog?: ReactNode
-  supervisor?: ReactNode
   portalPeople?: ReactNode
   portalEmails?: ReadonlySet<string> | undefined
   work?: ReactNode // F-SA-276
@@ -137,17 +134,16 @@ interface CustomerProps {
   onNewOrder?: (() => void) | undefined // F-CP-104
   onImport?: (() => void) | undefined // F-CP-104
   priceDiffer?: number | null // F-CP-141
-  workBoard?: Read<OrderBoard> | undefined // F-CW-101
-  openQuotesHref?: string | null // F-CW-101
   quotesBadge?: { readonly count: number | null; readonly attention: boolean } | null | undefined // F-CQ-302
   quotesTabNote?: boolean // F-CQ-306: the reader asked for Quotes & incoming, a tab it may not open (the page shows Work)
+  moneyTab?: ReactNode // F-CM-104
+  moneyTabNote?: boolean // F-CM-104 (Z27)
 }
 
 function Customer(props: CustomerProps) {
-  const overview = useCustomerOverview(props.money)
   return (
     <PartyRecordGate model={props.model} actions={props.actions}>
-      {(party) => <CustomerBody {...props} party={party} overview={overview} />}
+      {(party) => <CustomerBody {...props} party={party} />}
     </PartyRecordGate>
   )
 }
@@ -190,6 +186,17 @@ function QuotesTabNoteLine() {
 }
 // ---- end F-CQ-306
 
+// ---- F-CM-104 (cm-w1 W1.4; Z27): the one line that says why the Work tab shows instead of Money (the Quotes line's pattern).
+function MoneyTabNote() {
+  const t = useT(CUSTOMER_MONEY_NAMESPACE)
+  return (
+    <p className="fw-cw-line" role="status">
+      {t('cm.note.noTab')}
+    </p>
+  )
+}
+// ---- end F-CM-104
+
 /** F-SA-271: an old address that asked for a part of a tab (Requirements) opens at it, once. */
 function ScrollOnArrival({ id }: { id: string }) {
   useEffect(() => {
@@ -199,7 +206,7 @@ function ScrollOnArrival({ id }: { id: string }) {
   return null
 }
 
-function CustomerBody({ model, party, actions, thread, printThread, fields, terms, portal, overview, depth, onAddTask, taskDialog, supervisor, money: moneyModel, portalPeople, portalEmails, work, workCount, quotesIncoming, threadButton /* F-SA-279 */, onNewOrder, onImport /* F-CP-104 */, priceDiffer /* F-CP-141 */, workBoard, openQuotesHref /* F-CW-101 */, quotesBadge /* F-CQ-302 */, quotesTabNote /* F-CQ-306 */ }: CustomerProps & { party: Party; overview?: OverviewSlot | undefined }) {
+function CustomerBody({ model, party, actions, thread, printThread, overviewTab /* F-CO-103 */, terms, portal, depth, onAddTask, taskDialog, money: moneyModel, portalPeople, portalEmails, work, workCount, quotesIncoming, threadButton /* F-SA-279 */, onNewOrder, onImport /* F-CP-104 */, quotesBadge /* F-CQ-302 */, quotesTabNote /* F-CQ-306 */, moneyTab /* F-CM-104 */, moneyTabNote /* F-CM-104 */ }: CustomerProps & { party: Party }) {
   const t = useT('parties')
   const side = model.side
   const config = SIDES[side]
@@ -217,14 +224,17 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
   // ---- F-CQ-302: with the page's count read, what waits on us there (To answer + Accepted, order waits), marked when > 0.
   const quotesCount = quotesBadge !== undefined ? (quotesBadge?.count ?? null) : model.quotes.items && !model.quotes.more ? model.quotes.items.length : null
   // ---- end F-CQ-302
-  const overdueCount = moneyModel?.can.receivables ? (moneyModel.ageing.items ? (overdueOf(moneyModel.ageing.items, party.id)?.invoices ?? 0) : null) : undefined
+  // F-CM-104 (Z11): Money counts what is LATE — late invoices + late deposit requests (the page's ageing and open items); null while
+  // read; no chip at all when nothing is late or nothing can be counted (never "0").
+  const page = pagePartsOf(moneyModel)
+  const moneyCount = moneyModel && (page.ageing || page.openItems) ? moneyBadgeOf({ can: { receivables: moneyModel.can.receivables, payments: !!moneyModel.can.payments, price: moneyModel.can.price }, today: romeToday(), ageing: page.ageing, openItems: page.openItems, currency: party.currency }) : undefined
   const tabItems: TabItem[] = tabs.map((id) => ({
     id,
     href: `${recordPath}?tab=${id}`,
     label: t(`${side}.tab.${id}`),
-    // F-SA-273: Money counts the overdue invoices (receivables.view; null while reading).
+    // F-CM-104 (Z11): Money counts the late invoices and the late deposit requests (null while reading; none: no chip).
     // F-SA-276: Work counts what waits on us (requests to answer + replies waiting on us), marked when something does.
-    count: id === 'people' ? activeAddresses.length + activeContacts.length : id === 'work' ? (workCount?.count ?? null) : id === 'quotes' ? quotesCount : id === 'money' ? overdueCount : undefined,
+    count: id === 'people' ? activeAddresses.length + activeContacts.length : id === 'work' ? (workCount?.count ?? null) : id === 'quotes' ? quotesCount : id === 'money' ? moneyCount : undefined,
     ...(id === 'work' && workCount?.attention ? { icon: <CircleAlert size={12} role="img" aria-label={t('customers.work.attention', { count: workCount.count ?? 0 })} /> } : {}),
     // ---- F-CQ-302: Quotes & incoming marked as Work is, when something waits on us there.
     ...(id === 'quotes' && quotesBadge?.attention ? { icon: <CircleAlert size={12} role="img" aria-label={t('customers.work.attention', { count: quotesBadge.count ?? 0 })} /> } : {}),
@@ -263,12 +273,15 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
         threadLabel={t('record.dockLabelOf', { name: partyName(party) })}
         thread={thread ?? null}
         printThread={printThread}
-        fields={fields /* B-TH-280: the custom fields, on the Overview only */}
         band={band}
         // F-SA-279 (11-customer-page §2.5, P11): Work's dock a third at every width, every other tab 40 %; a width the person picks is
         // kept for that tab, "hidden" for every customer (the record type is Party, even while the dock shows an order).
         // F-CQ-301 (10-design §1.2, L17): Quotes & incoming docks a third too (its body 863 px at 1440, as Work's).
-        defaultWidth={tab === 'work' || tab === 'quotes' ? 'third' : undefined}
+        // F-CO-103 (customer Overview plan §6.1; lead settle S13): the Overview a third too (its tab 865 px at 1440, the room the
+        // order's Overview has) — written for the Overview ONLY: Money, People, Terms and Portal stay 40 %.
+        // F-CM-104 (customer Money plan D2, the Owner's pick): Money a third too (865 px at 1440, the order's Money room); People, Terms
+        // and Portal stay 40 %.
+        defaultWidth={tab === 'work' || tab === 'quotes' || tab === 'overview' || tab === 'money' ? 'third' : undefined}
         dockTab={tab}
         threadButton={threadButton ?? null}
       >
@@ -276,17 +289,22 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
           {model.threadOnArrival && <ShowThreadOnArrival />}
           {model.anchorOnArrival && <ScrollOnArrival id={model.anchorOnArrival} />}
           <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabItems} active={tab} size="sm" overflow="scroll" />
-          <PartyNotices model={model} party={party} actions={actions} />
+          {/* F-CO-103 (plan §6.7): on the Overview the headline and the first strip say Blocked / Archived — its notice area keeps the
+              receipt, "someone else changed" and "You can view, not change"; every other tab keeps the shared notice area whole. */}
+          {tab === 'overview' ? <OverviewNotices model={model} party={party} actions={actions} /> : <PartyNotices model={model} party={party} actions={actions} />}
 
           {/* F-SA-276: Work — the waiting strip and the Orders sheet locked to the customer (no tabs inside the tab, R5). */}
           {/* F-CQ-306 (cq fx3 W2-1b; 10-design §10): asked for Quotes & incoming without its right, the page shows Work and says why once. */}
           {tab === 'work' && quotesTabNote && <QuotesTabNote />}
+          {/* F-CM-104 (Z27): asked for Money without its right, the page shows Work and says why once. */}
+          {tab === 'work' && moneyTabNote && <MoneyTabNote />}
           {tab === 'work' && work}
           {/* F-SA-277: Quotes & incoming — two lists stacked (Quotes, then Incoming requests), each its own list locked to the customer. */}
           {tab === 'quotes' && quotesIncoming}
-          {tab === 'overview' && <CustomerOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} overview={overview} depth={depth} supervisor={supervisor} workBoard={workBoard} openQuotesHref={openQuotesHref ?? null /* F-CW-101 */} />}
-          {/* F-SA-273: Money — key numbers, credit, open invoices, the open orders' deposits and balances, payment terms. */}
-          {tab === 'money' && <MoneyTab model={model} party={party} money={moneyModel} overview={overview} depth={depth} priceDiffer={priceDiffer ?? null /* F-CP-141 */} />}
+          {/* F-CO-103: the Overview — the container's tab (the shared overview kit's parts; the custom fields are its last pair's). */}
+          {tab === 'overview' && overviewTab}
+          {/* F-CM-104 (cm-w1 W1.4): Money — the answer line, Balance, To collect… (the container's tab, cu/record/money/CustomerMoney.tsx). */}
+          {tab === 'money' && moneyTab}
           {tab === 'people' && (
             // F-SA-274: People & addresses — the contacts ("Has portal access" on an exact e-mail match, ⋯ Invite to the portal…), the
             // people with portal access (moved as is from Portal settings, "Contact" on the same e-mail), the addresses, the riders and
@@ -338,118 +356,5 @@ function CustomerBody({ model, party, actions, thread, printThread, fields, term
       <PartyDialogs model={model} party={party} actions={actions} />
       {taskDialog}
     </>
-  )
-}
-
-// ---- Overview (moved from PartyRecordView.tsx, F-SA-270) ---------------------------------------------------------------
-
-/**
- * F-SA-272 (11-customer-page §4): who they are, how they stand, who looks after them — Key numbers (at most 6, each a door: Open
- * orders · In production · Late → Work on the view each counts (F-CP-103), Open quotes → Quotes & incoming, Overdue → Money), Identity, Also open (samples, repairs,
- * open returns and claims), the custom fields (the frame's, on this tab only); beside it Status, Who looks after <customer> (the
- * supervisor and backup, moved from Portal settings), Next steps, VIES, the team and the requirements in force, the main contacts.
- * Ordered in <year>, Returns in <year> and Free credit went to Money; the Now card to Work and Quotes & incoming.
- * F-CW-101 (A1-B5; lead settles S3, S29): In production and Late are the customer's BOARD's counts (the read the Work tab's band
- * makes: the API's own rule, walled to the customer), never counted here from the record's newest orders — so each tile says the
- * number its door opens; In production = the started orders (`phase=IN_PRODUCTION`); Open quotes opens Quotes & incoming at them.
- */
-function CustomerOverview({ model, party, actions, editable, viesHeld, overview, depth, supervisor, workBoard, openQuotesHref }: TabProps & { viesHeld: string | null; overview?: OverviewSlot | undefined; depth?: SupplierDepth | undefined; supervisor?: ReactNode; workBoard?: Read<OrderBoard> | undefined; openQuotesHref?: string | null }) {
-  const t = useT('parties')
-  const locale = useLocale()
-  const can = model.can
-  const year = String(new Date().getUTCFullYear())
-  const numbers = keyNumbers(model.quotes, model.orders, year)
-  const amount = (value: number | null | undefined, currency: string | null) => (can.price && value !== null && value !== undefined && currency ? money(value, currency, locale) : null)
-  const recordHref = sideHref(model.prefix, SIDES.customers, `/${encodeURIComponent(party.id)}`)
-  const tabHref = (tab: string) => `${recordHref}?tab=${tab}`
-  const ordersHint = t(model.orders.problem ? 'tile.unknown' : 'numbers.reading')
-  // F-CW-101: the board's own counts ("—" while read or when it could not be read; never a guess from the states).
-  const board = workBoard?.status === 'ready' ? workBoard.value : null
-  const started = board ? phaseCountOf(board, 'IN_PRODUCTION') : null
-  const late = board ? (board.tiles.find((tile) => tile.key === 'late')?.count ?? 0) : null
-  const boardHint = t(workBoard?.status === 'failed' || (board !== null && started === null) ? 'tile.unknown' : 'numbers.reading')
-  const metrics: Metric[] = [
-    ...(can.orders
-      ? [
-          {
-            label: t('numbers.backlog'),
-            value: numbers.backlog ? String(numbers.backlog.count) : '—',
-            hint: numbers.backlog ? [t('numbers.units', { count: numbers.backlog.units }), amount(numbers.backlog.amount, numbers.backlog.currency)].filter(Boolean).join(' · ') : ordersHint,
-            href: workDoor(recordHref, 'open'), // F-CP-103: the open orders it counts
-          },
-          { label: t('numbers.inProduction'), value: started !== null ? String(started) : '—', hint: started !== null ? t('numbers.inProductionHint') : boardHint, href: workDoor(recordHref, 'inProduction') /* F-CP-103; F-CW-101 (S3): the started orders */ },
-          {
-            label: t('numbers.late'),
-            value: late !== null ? String(late) : '—',
-            hint: late !== null ? t('numbers.lateHint') : boardHint,
-            href: workDoor(recordHref, 'late'), // F-CP-103: the late orders it counts
-          },
-        ]
-      : []),
-    ...(can.quotes
-      ? [
-          {
-            label: t('numbers.openQuotes'),
-            value: numbers.openQuotes ? String(numbers.openQuotes.count) : '—',
-            hint: numbers.openQuotes ? (amount(numbers.openQuotes.amount, numbers.openQuotes.currency) ?? t('numbers.quotesHint')) : t(model.quotes.problem ? 'tile.unknown' : 'numbers.reading'),
-            href: openQuotesHref ?? tabHref('quotes'), // F-CW-101 (S29): Quotes & incoming at its open quotes
-          },
-        ]
-      : []),
-    // B-W2a-81: what the customer owes that is overdue — its door is Money (F-SA-272), else the tile as the money read gave it.
-    ...(overview?.overdue ? [can.money ? { label: overview.overdue.label, value: overview.overdue.value, hint: overview.overdue.hint, href: tabHref('money') } : overview.overdue] : []),
-  ].slice(0, 6)
-  const main = (
-    <div className="fw-pty-stack">
-      {metrics.length > 0 && <MetricStrip metrics={metrics} />}
-      <Card padded>
-        <div className="fw-pty-card-body">
-          <CardHead
-            title={t('overview.identity')}
-            action={
-              <Button size="sm" onClick={() => actions?.onDialog?.({ kind: 'edit' })} heldReason={editable ? null : can.manage ? t('held.archived') : t('held.manage')}>
-                {t('common.edit')}
-              </Button>
-            }
-          />
-          <KeyValue
-            columns={2}
-            labelCase="sentence"
-            items={[
-              { label: t('field.legalName'), value: party.legalName },
-              { label: t('field.tradeName'), value: dash(party.tradeName) },
-              { label: t('field.kind'), value: t(`kind.${party.kind}`) },
-              { label: t('field.roles'), value: <RoleTags roles={party.roles} /> },
-              { label: t('field.country'), value: countryName(party.country, locale) },
-              { label: t('field.language'), value: languageName(party.language, locale) },
-              { label: t('field.currency'), value: party.currency },
-              { label: t('field.code'), value: <span className="fw-pty-code">{party.code}</span> },
-              ...(party.paymentTerms ? [{ label: t('field.paymentTerms'), value: party.paymentTerms }] : []),
-            ]}
-          />
-        </div>
-      </Card>
-      {/* F-SA-272: Also open — samples in progress, repairs and alterations (Sales' depth slot), open returns and claims (B-W2a-81). */}
-      {(depth?.now || overview?.now) && (
-        <section className="fw-pty-stack" aria-label={t('overview.alsoOpen')}>
-          <h2 className="fw-pty-card-title">{t('overview.alsoOpen')}</h2>
-          {depth?.now}
-          {overview?.now}
-        </section>
-      )}
-    </div>
-  )
-  return (
-    <RecordLayout
-      main={main}
-      aside={
-        <SidePanel model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} status={depth?.status}>
-          {/* F-SA-272: who looks after the customer (office only), moved from Portal settings › Production limits. */}
-          {supervisor}
-          {depth?.aside}
-        </SidePanel>
-      }
-      asideLabel={t('side.label')}
-    />
   )
 }

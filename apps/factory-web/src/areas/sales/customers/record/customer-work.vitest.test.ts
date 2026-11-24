@@ -641,11 +641,12 @@ describe('F-SA-279: the dock follows the row — the address term `dock=`', () =
     expect(dockAddress(base, '?tab=work', { kind: 'record', type: 'Quote', id: ORDER }, 'm9')).toBe(`${base}?tab=work&dock=Quote.${ORDER}&message=m9`)
     expect(dockAddress(base, '', GENERAL_DOCK)).toBe(base)
   })
-  it('a record docks on Work and Quotes & incoming only; All of <customer> on every tab', () => {
-    expect(DOCK_TABS).toEqual(['work', 'quotes'])
+  it('a record docks on Work, Quotes & incoming and Money only; All of <customer> on every tab', () => {
+    expect(DOCK_TABS).toEqual(['work', 'quotes', 'money']) // F-CM-104 (W1.4): a To-collect row's "Show in the thread" docks its order
     const record = { kind: 'record', type: 'SalesOrder', id: ORDER } as const
     expect(dockOnTab('work', record)).toBe(record)
     expect(dockOnTab('quotes', record)).toBe(record)
+    expect(dockOnTab('money', record)).toBe(record) // F-CM-104
     expect(dockOnTab('overview', record)).toEqual(GENERAL_DOCK)
     expect(dockOnTab('money', { kind: 'all' })).toEqual({ kind: 'all' })
   })
@@ -749,7 +750,7 @@ describe('F-SA-279: the page wires it (the sources)', () => {
   })
   it('Work\'s dock a third; the band\'s button below 1280 px names the record docked', () => {
     const view = readFileSync(new URL('./view/CustomerRecordView.tsx', import.meta.url), 'utf8')
-    expect(view).toContain("defaultWidth={tab === 'work' || tab === 'quotes' ? 'third' : undefined}") // F-CQ-301: Quotes & incoming docks a third too
+    expect(view).toContain("defaultWidth={tab === 'work' || tab === 'quotes' || tab === 'overview' || tab === 'money' ? 'third' : undefined}") // F-CQ-301: Quotes & incoming docks a third too; F-CO-103 (S13): the Overview a third too; F-CM-104 (D2): Money a third too — People, Terms and Portal stay 40 %
     expect(view).toContain('dockTab={tab}')
     const page = readFileSync(new URL('./CustomerRecord.tsx', import.meta.url), 'utf8')
     expect(page).toContain("const threadButton = customerDock.shown ? t('customers.work.dock.button', { record: customerDock.shown.label }) : null")
@@ -988,18 +989,31 @@ describe('F-CP-103: each tile opens the rows it counts; the Views counts come fr
     const entered = new URL(`https://x${workEntry(RECORD, ALPHA, params(workDoor(RECORD, 'inProduction').split('?')[1]!))!}`).searchParams
     expect(viewOf(`${RECORD}?${entered.toString()}`)).toBe('all')
     expect(rowsQuery('all', '', null, ALPHA, { extra: extraFromAddress(entered, 'all') })).toMatchObject({ phase: 'IN_PRODUCTION', partyId: ALPHA })
+    // F-CO-103 (customer page › Overview; 13-backend §3.10): the number tiles went — the headline, the band and Linked records say
+    // the numbers, by the Overview's own rules (./overview/headline.ts, ./overview/rows.ts). A1-B5 still holds, and wider: every
+    // number is the board's own count (the API's rule) or the page's count read's — nothing is counted in the browser from a list
+    // of orders or quotes; the view draws the model and counts nothing.
     const view = readFileSync(new URL('./view/CustomerRecordView.tsx', import.meta.url), 'utf8')
-    for (const door of ['open', 'inProduction', 'late']) expect(view).toContain(`href: workDoor(recordHref, '${door}')`)
-    // A1-B5: In production and Late are the board's counts (the API's rule), no longer counted in the browser from the record's orders.
-    expect(view).toContain("const started = board ? phaseCountOf(board, 'IN_PRODUCTION') : null")
-    expect(view).toContain("const late = board ? (board.tiles.find((tile) => tile.key === 'late')?.count ?? 0) : null")
+    expect(view).not.toContain('keyNumbers(')
     expect(view).not.toContain("order.status === 'IN_PRODUCTION'")
     expect(view).not.toContain('order.promiseDate < today')
-    // S29: Open quotes opens Quotes & incoming at its open quotes.
-    expect(view).toContain("href: openQuotesHref ?? tabHref('quotes')")
+    for (const file of ['./overview/headline.ts', './overview/rows.ts']) {
+      const rules = readFileSync(new URL(file, import.meta.url), 'utf8')
+      expect(rules, file).not.toContain('.items.length')
+      expect(rules, file).not.toContain('.filter(')
+    }
+    const headline = readFileSync(new URL('./overview/headline.ts', import.meta.url), 'utf8')
+    // Open orders = the board's counts by state (the domain's open states); Late = the board's own tile.
+    expect(headline).toContain('if (openStates.includes(entry.status)) open += entry.count')
+    expect(headline).toContain("late: board.tiles.find((tile) => tile.key === 'late')?.count ?? 0")
+    // S29: the open quotes are the page's count read's own number, and open Quotes & incoming at its open quotes.
+    const rows = readFileSync(new URL('./overview/rows.ts', import.meta.url), 'utf8')
+    expect(rows).toContain("if (before.openQuotes > 0) parts.push({ say: ov('linked.open', { count: before.openQuotes }), ...group('OPEN_QUOTES') })")
+    // F-CO-102: the container builds the tab from the reads the page ALREADY holds (no second read of any of them).
     const page = readFileSync(new URL('./CustomerRecord.tsx', import.meta.url), 'utf8')
-    expect(page).toContain("openQuotesHref={quotesGroupDoor(`${prefix}/sales/customers/${encodeURIComponent(partyId)}`, 'OPEN_QUOTES')")
-    expect(page).toContain('workBoard={work.reads.board')
+    expect(page).toMatch(/<CustomerOverview [^\n]*reads=\{work\.reads\}[^\n]*counts=\{pageCounts\}/)
+    // S11: the ONE read that joins — only on the Overview, only with orders.view.
+    expect(page).toContain("const standing = useCustomersWork(api, standingRows, tab === 'overview' && can.orders)")
   })
 
   it('a door arrives with its view: the entry adds the lock once and no default beside the view (fx-12)', () => {
@@ -1235,7 +1249,7 @@ describe('F-CP-141: the Not equal view', () => {
     expect(sales).not.toContain('Prices differ')
     expect(sales).not.toContain('priceMatch')
     expect(html('tab-money-price-differ', 'it')).toContain('Prezzi diversi su 2 ordini ›')
-    const tab = readFileSync(new URL('./view/MoneyTab.tsx', import.meta.url), 'utf8')
+    const tab = readFileSync(new URL('./view/money/CustomerMoneyTab.tsx', import.meta.url), 'utf8') // F-CM-104 (W1.4): the new tab's layout
     expect(tab).toContain('const differ = price && can.orders && priceDiffer !== null && priceDiffer > 0 ? priceDiffer : null')
   })
 

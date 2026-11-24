@@ -37,6 +37,13 @@ const useDepth = () => {
   return state
 }
 
+// ---- F-CO-102 (customer page › Overview, 13-backend §3.2): the glance for the Overview's container — the provider's ONE read
+// (holds, credit, samples, repairs, riders, requirements, a rider's team) and its retry; no second read of any of it.
+export function useCustomerGlance(): CustomerDepthState['glance'] {
+  return useDepth().glance
+}
+// ---- end F-CO-102
+
 /** `/w/<company>` and the record's own address, from the page's path. */
 function useAddresses(party: Party): { prefix: string; recordHref: string } {
   const pathname = usePathname() ?? ''
