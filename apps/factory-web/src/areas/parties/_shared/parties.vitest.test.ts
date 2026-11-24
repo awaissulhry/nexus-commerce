@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
@@ -310,7 +310,13 @@ const PREFIXES = [
 ]
 /** Strings shaped like keys that are not: the New dialog's field paths. */
 const NOT_KEYS: ReadonlySet<string> = new Set(['identity.vatNumber', 'identity.fiscalCode'])
-function literalKeys(): string[] {
+// F-CA-fx2 (customer page › People & addresses tab, lane ca-): the tab's two folders speak `customer-people` (every key without a
+// prefix goes through useScopedT('customer-people'); a reused word names its catalogue, `parties:…`). Their keys are scanned with
+// the SAME pattern below and checked in THAT catalogue, in both languages — never taken for parties keys, never left unchecked.
+const CUSTOMER_PEOPLE = 'customer-people'
+const PEOPLE_TAB_DIRS = [join('customers', 'record', 'people'), join('customers', 'record', 'view', 'people')]
+const speaksPeople = (path: string): boolean => PEOPLE_TAB_DIRS.some((dir) => path.includes(`${dir}${sep}`))
+function literalKeys(catalogue: 'parties' | typeof CUSTOMER_PEOPLE = 'parties'): string[] {
   const pattern = new RegExp(`['"\`]((?:${PREFIXES.join('|')})\\.[A-Za-z0-9_.]*[A-Za-z0-9_])['"\`]`, 'g')
   const keys = new Set<string>()
   for (const dir of ['parties', 'sales/customers', 'purchasing/suppliers'])
@@ -319,7 +325,7 @@ function literalKeys(): string[] {
     // B-W2b-172: the Questionnaire tab (purchasing/suppliers/questionnaire) speaks `purchasing-questionnaire` (its own test).
     // B-W2b-334: the supplier in depth (purchasing/suppliers/depth, /list) speaks `purchasing-suppliers-depth` (its own test).
     // B-W2b-324: the customer in depth (sales/customers/depth) speaks `sales-customers-depth` (its own test).
-    for (const file of sources(join(SRC, dir)).filter((path) => !path.includes(`${join('suppliers', 'sources')}`) && !path.includes(`${join('customers', 'portal')}`) && !path.includes(`${join('suppliers', 'portal')}`) && !path.includes(`${join('suppliers', 'questionnaire')}`) && !path.includes(`${join('suppliers', 'depth')}`) && !path.includes(`${join('suppliers', 'list')}`) && !path.includes(`${join('customers', 'depth')}`) && !path.includes(`${join('customers', 'list')}`) /* T.2: the list folder speaks customers-list (its own key test) */))
+    for (const file of sources(join(SRC, dir)).filter((path) => !path.includes(`${join('suppliers', 'sources')}`) && !path.includes(`${join('customers', 'portal')}`) && !path.includes(`${join('suppliers', 'portal')}`) && !path.includes(`${join('suppliers', 'questionnaire')}`) && !path.includes(`${join('suppliers', 'depth')}`) && !path.includes(`${join('suppliers', 'list')}`) && !path.includes(`${join('customers', 'depth')}`) && !path.includes(`${join('customers', 'list')}`) /* T.2: the list folder speaks customers-list (its own key test) */).filter((path) => speaksPeople(path) === (catalogue === CUSTOMER_PEOPLE)))
       for (const match of readFileSync(file, 'utf8').matchAll(pattern)) if (!NOT_KEYS.has(match[1]!) && !ORDERS_READ.test(match.input.slice(Math.max(0, match.index - 2), match.index))) keys.add(match[1]!)
   return [...keys].sort()
 }
@@ -332,8 +338,9 @@ function ordersReadKeys(): string[] {
   return [...keys].sort()
 }
 // ---- end op-fx1
-const has = (key: string) =>
-  LOCALES.every((locale) => key in (CATALOGUE[locale].parties ?? {}) || (`${key}_one` in (CATALOGUE[locale].parties ?? {}) && `${key}_other` in (CATALOGUE[locale].parties ?? {})))
+const inCatalogue = (namespace: string, key: string): boolean =>
+  LOCALES.every((locale) => key in (CATALOGUE[locale][namespace] ?? {}) || (`${key}_one` in (CATALOGUE[locale][namespace] ?? {}) && `${key}_other` in (CATALOGUE[locale][namespace] ?? {})))
+const has = (key: string) => inCatalogue('parties', key)
 
 const built = [
   ...PARTY_STATUSES.map((value) => `status.${value}`),
@@ -392,6 +399,10 @@ describe('every string of the four screens exists in it and en (PLAN §4.6)', ()
     const keys = [...literalKeys(), ...built]
     expect(keys.length).toBeGreaterThan(400)
     expect([...new Set(keys)].filter((key) => !has(key))).toEqual([])
+    // F-CA-fx2: the People & addresses tab's keys, each in ITS catalogue (customer-people), in it and en; none skipped.
+    const peopleKeys = literalKeys(CUSTOMER_PEOPLE)
+    expect(peopleKeys.length).toBeGreaterThan(50)
+    expect(peopleKeys.filter((key) => !inCatalogue(CUSTOMER_PEOPLE, key))).toEqual([])
     // op-fx1: the keys read through the orders translator exist in the orders catalogue, in both languages.
     // F-CP-113: + the made order's toast of the lines window (an orders word).
     expect(ordersReadKeys()).toEqual(['newOrder.window.made', 'record.dock.writeGeneral', 'record.dock.writeIn', 'rows.IN_PRODUCTION' /* F-CW-101 (cw W1): the Work tab's started-orders view */])
