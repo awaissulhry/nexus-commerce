@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
@@ -310,7 +310,13 @@ const PREFIXES = [
 ]
 /** Strings shaped like keys that are not: the New dialog's field paths. */
 const NOT_KEYS: ReadonlySet<string> = new Set(['identity.vatNumber', 'identity.fiscalCode'])
-function literalKeys(): string[] {
+// F-CA-fx2 (customer page › People & addresses tab, lane ca-): the tab's two folders speak `customer-people` (every key without a
+// prefix goes through useScopedT('customer-people'); a reused word names its catalogue, `parties:…`). Their keys are scanned with
+// the SAME pattern below and checked in THAT catalogue, in both languages — never taken for parties keys, never left unchecked.
+const CUSTOMER_PEOPLE = 'customer-people'
+const PEOPLE_TAB_DIRS = [join('customers', 'record', 'people'), join('customers', 'record', 'view', 'people')]
+const speaksPeople = (path: string): boolean => PEOPLE_TAB_DIRS.some((dir) => path.includes(`${dir}${sep}`))
+function literalKeys(catalogue: 'parties' | typeof CUSTOMER_PEOPLE = 'parties'): string[] {
   const pattern = new RegExp(`['"\`]((?:${PREFIXES.join('|')})\\.[A-Za-z0-9_.]*[A-Za-z0-9_])['"\`]`, 'g')
   const keys = new Set<string>()
   for (const dir of ['parties', 'sales/customers', 'purchasing/suppliers'])
@@ -319,7 +325,7 @@ function literalKeys(): string[] {
     // B-W2b-172: the Questionnaire tab (purchasing/suppliers/questionnaire) speaks `purchasing-questionnaire` (its own test).
     // B-W2b-334: the supplier in depth (purchasing/suppliers/depth, /list) speaks `purchasing-suppliers-depth` (its own test).
     // B-W2b-324: the customer in depth (sales/customers/depth) speaks `sales-customers-depth` (its own test).
-    for (const file of sources(join(SRC, dir)).filter((path) => !path.includes(`${join('suppliers', 'sources')}`) && !path.includes(`${join('customers', 'portal')}`) && !path.includes(`${join('suppliers', 'portal')}`) && !path.includes(`${join('suppliers', 'questionnaire')}`) && !path.includes(`${join('suppliers', 'depth')}`) && !path.includes(`${join('suppliers', 'list')}`) && !path.includes(`${join('customers', 'depth')}`) && !path.includes(`${join('customers', 'list')}`) /* T.2: the list folder speaks customers-list (its own key test) */))
+    for (const file of sources(join(SRC, dir)).filter((path) => !path.includes(`${join('suppliers', 'sources')}`) && !path.includes(`${join('customers', 'portal')}`) && !path.includes(`${join('suppliers', 'portal')}`) && !path.includes(`${join('suppliers', 'questionnaire')}`) && !path.includes(`${join('suppliers', 'depth')}`) && !path.includes(`${join('suppliers', 'list')}`) && !path.includes(`${join('customers', 'depth')}`) && !path.includes(`${join('customers', 'list')}`) /* T.2: the list folder speaks customers-list (its own key test) */).filter((path) => speaksPeople(path) === (catalogue === CUSTOMER_PEOPLE)))
       for (const match of readFileSync(file, 'utf8').matchAll(pattern)) if (!NOT_KEYS.has(match[1]!) && !ORDERS_READ.test(match.input.slice(Math.max(0, match.index - 2), match.index))) keys.add(match[1]!)
   return [...keys].sort()
 }
@@ -332,8 +338,9 @@ function ordersReadKeys(): string[] {
   return [...keys].sort()
 }
 // ---- end op-fx1
-const has = (key: string) =>
-  LOCALES.every((locale) => key in (CATALOGUE[locale].parties ?? {}) || (`${key}_one` in (CATALOGUE[locale].parties ?? {}) && `${key}_other` in (CATALOGUE[locale].parties ?? {})))
+const inCatalogue = (namespace: string, key: string): boolean =>
+  LOCALES.every((locale) => key in (CATALOGUE[locale][namespace] ?? {}) || (`${key}_one` in (CATALOGUE[locale][namespace] ?? {}) && `${key}_other` in (CATALOGUE[locale][namespace] ?? {})))
+const has = (key: string) => inCatalogue('parties', key)
 
 const built = [
   ...PARTY_STATUSES.map((value) => `status.${value}`),
@@ -354,7 +361,7 @@ const built = [
   ...['ACTIVE', 'ARCHIVED'].map((value) => `master.${value}`),
   ...['block', 'unblock', 'reactivate', 'activate', 'archive'].map((value) => `done.${value}`),
   ...['vies', 'archive', 'block'].flatMap((value) => [`bulk.${value}.title`, `bulk.${value}.done`]),
-  ...['billTo', 'shipTo'].map((value) => `address.default.${value}`),
+  // F-CA-fx2 (Z23): `address.default.billTo|shipTo` went with the customer's default toggles (pinned gone below, in both catalogues).
   ...['open', 'won', 'lost', 'all', 'quote', 'order'].map((value) => `deals.${value}`),
   ...Object.values(SIDES).flatMap((side) => [
     ...side.views.map((view) => `view.${view}`),
@@ -392,6 +399,10 @@ describe('every string of the four screens exists in it and en (PLAN §4.6)', ()
     const keys = [...literalKeys(), ...built]
     expect(keys.length).toBeGreaterThan(400)
     expect([...new Set(keys)].filter((key) => !has(key))).toEqual([])
+    // F-CA-fx2: the People & addresses tab's keys, each in ITS catalogue (customer-people), in it and en; none skipped.
+    const peopleKeys = literalKeys(CUSTOMER_PEOPLE)
+    expect(peopleKeys.length).toBeGreaterThan(50)
+    expect(peopleKeys.filter((key) => !inCatalogue(CUSTOMER_PEOPLE, key))).toEqual([])
     // op-fx1: the keys read through the orders translator exist in the orders catalogue, in both languages.
     // F-CP-113: + the made order's toast of the lines window (an orders word).
     expect(ordersReadKeys()).toEqual(['newOrder.window.made', 'record.dock.writeGeneral', 'record.dock.writeIn', 'rows.IN_PRODUCTION' /* F-CW-101 (cw W1): the Work tab's started-orders view */])
@@ -545,6 +556,41 @@ describe('F-SA-274 → F-CA-120: People & addresses', () => {
   })
 })
 // ---- end F-SA-274 → F-CA-120
+
+// ---- F-CA-fx2 (customer People & addresses, lane ca-; Z23; 30-domdiff: SCR-057 differs by Z6's two words only): the shared
+// ContactsCard / AddressesCard draw the supplier's only (their one mount: PartyRecordView, always `side: 'suppliers'`); the customer's
+// branches went with the words only they said — a customer's people and addresses are its People & addresses tab
+describe('Z23: the shared contacts and addresses cards are the supplier\'s (F-CA-fx2)', () => {
+  const cards = readFileSync(new URL('./view/cards.tsx', import.meta.url), 'utf8')
+  const record = readFileSync(new URL('./view/PartyRecordView.tsx', import.meta.url), 'utf8')
+  const GONE = ['contact.hasPortal', 'contact.title', 'address.col.billTo', 'address.col.shipTo', 'address.default.billTo', 'address.default.shipTo']
+
+  it('no customer branch is left in the two cards, nothing passes one, and the depth slot has no people part', () => {
+    for (const gone of ['isCustomer', "model.side === 'customers'", "model.side === 'suppliers'", 'portalEmails', 'inviteHref', 'address.default.', ...GONE.map((key) => `'${key}'`)]) expect(cards, gone).not.toContain(gone)
+    expect(record).toContain('<ContactsCard model={model} party={party} actions={actions} editable={editable} />')
+    expect(record).toContain('<AddressesCard model={model} party={party} actions={actions} editable={editable} />')
+    expect(record).not.toMatch(/readonly people\?: ReactNode/)
+  })
+
+  it('the words only those branches said are gone from both catalogues; the words the People tab reuses stay', () => {
+    for (const locale of LOCALES) {
+      const words = CATALOGUE[locale].parties ?? {}
+      for (const key of GONE) expect(key in words, `${locale} ${key}`).toBe(false)
+      for (const key of ['contact.invite', 'address.col.address', 'address.col.kinds', 'address.col.contact', 'suppliers.contacts.title', 'contact.col.receivesPos']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+    }
+  })
+
+  it('the supplier still sees its contacts with what each receives and its addresses with their five columns, in it and en', () => {
+    const contacts = supplierRecordScreen.cases.find((item) => item.id === 'contacts')!.model
+    for (const locale of LOCALES) {
+      const words = CATALOGUE[locale].parties!
+      const html = render(supplierRecordScreen as DesignScreen<unknown>, contacts, locale)
+      for (const key of ['suppliers.contacts.title', 'contact.col.receivesPos', 'address.title', 'address.col.kinds', 'address.col.contact', 'address.col.status']) expect(html, `${locale} ${key}`).toContain(words[key]!)
+      expect(html, locale).not.toContain(words['contact.invite']!)
+    }
+  })
+})
+// ---- end F-CA-fx2
 
 // ---- F-CL-101 (customers list plan §2, K12, settles T10 / T15 / T16): the shared rule fixes, on Customers and Suppliers alike ---
 // (imported here, below the pinned lines above, so those lines stay where they were)

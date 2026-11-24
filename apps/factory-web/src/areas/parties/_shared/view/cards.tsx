@@ -3,7 +3,7 @@
 import { useEffect, type ReactNode } from 'react'
 import { MapPin, MoreHorizontal, Plus, Users } from 'lucide-react'
 import { Banner, Card, KeyValue, Menu, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
-import { Button, Checkbox, Tag, Toggle } from '@nexus/ui/primitives'
+import { Button, Checkbox, Tag } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { Address, Contact, Party, TaxIdentity } from '../api'
@@ -290,38 +290,21 @@ export function SidePanel({ model, party, actions, editable, viesHeld, children 
 
 // ---- Addresses and contacts -------------------------------------------------------------------------------------------
 
+/**
+ * The supplier's addresses (its one mount: PartyRecordView, always `side: 'suppliers'`). F-CA-fx2 (lane ca-, Z23): the customer's
+ * branch (the two default columns) went — a customer's addresses are its People & addresses tab (cu/record/view/people).
+ */
 export function AddressesCard({ model, party, actions, editable }: TabProps) {
   const t = useT('parties')
   const locale = useLocale()
   const held = editable ? null : model.can.manage ? t('held.archived') : t('held.manage')
   const rows = party.addresses
-  const toggle = (address: Address, which: 'billTo' | 'shipTo') => {
-    const on = which === 'billTo' ? address.isDefaultBillTo : address.isDefaultShipTo
-    const kind = which === 'billTo' ? 'BILL_TO' : 'SHIP_TO'
-    // A default needs its use; an archived address is no default; without the right the value is text, not a greyed switch.
-    if (!address.kinds.includes(kind) || address.status !== 'ACTIVE') return <span className="fw-pty-hint">—</span>
-    if (!editable) return t(on ? 'common.yes' : 'common.no')
-    return (
-      <span className="fw-pty-cell-row">
-        <Toggle
-          size="sm"
-          checked={on}
-          aria-label={t(`address.default.${which}`, { name: address.name ?? address.line1 })}
-          onChange={(next) => {
-            if (!model.saving) actions?.onDefault?.(which, next ? address.id : null)
-          }}
-        />
-        {model.saving === `${which}:${address.id}` && <span className="fw-pty-hint">{t('common.saving')}</span>}
-      </span>
-    )
-  }
   const menu = (address: Address): MenuItemDef[] => [
     { id: 'edit', label: t('common.edit'), onSelect: () => actions?.onDialog?.({ kind: 'address', addressId: address.id }), disabled: !editable, description: held ?? undefined },
     address.status === 'ACTIVE'
       ? { id: 'archive', label: t('address.archive'), onSelect: () => actions?.onAddressStatus?.(address.id, 'ARCHIVED'), disabled: !editable, description: held ?? t('address.archiveHint') }
       : { id: 'restore', label: t('address.restore'), onSelect: () => actions?.onAddressStatus?.(address.id, 'ACTIVE'), disabled: !editable, description: held ?? undefined },
   ]
-  const isCustomer = model.side === 'customers'
   return (
     <Card padded>
       <div className="fw-pty-card-body">
@@ -357,12 +340,11 @@ export function AddressesCard({ model, party, actions, editable }: TabProps) {
                 t('address.col.kinds'),
                 t('address.col.address'),
                 t('address.col.contact'),
-                ...(isCustomer ? [t('address.col.billTo'), t('address.col.shipTo')] : []),
                 t('address.col.status'),
                 t('list.col.actions'),
               ]}
-              widths={isCustomer ? ['17%', '29%', '16%', '9%', '9%', '10%', '80px'] : ['22%', '34%', '20%', '12%', '80px']}
-              align={Array.from({ length: isCustomer ? 7 : 5 }, () => 'left' as const)}
+              widths={['22%', '34%', '20%', '12%', '80px']}
+              align={Array.from({ length: 5 }, () => 'left' as const)}
               rows={rows.map((address) => ({
                 id: address.id,
                 cells: [
@@ -381,7 +363,6 @@ export function AddressesCard({ model, party, actions, editable }: TabProps) {
                     <span>{dash(address.contactName)}</span>
                     {address.phone && <span className="fw-pty-hint">{address.phone}</span>}
                   </span>,
-                  ...(isCustomer ? [toggle(address, 'billTo'), toggle(address, 'shipTo')] : []),
                   address.status === 'ACTIVE' ? (
                     <Tag key="s" tone="success">
                       {t('master.ACTIVE')}
@@ -408,25 +389,20 @@ export function AddressesCard({ model, party, actions, editable }: TabProps) {
 }
 
 /**
- * F-SA-274 (a customer's People & addresses): `portalEmails` — the e-mails of its people with portal access: a contact with the same
- * e-mail is tagged "Has portal access" (a hint from two reads: the data holds no link between the two); `inviteHref` — a contact's
- * ⋯ "Invite to the portal…" (the invitation with its e-mail filled in; null: none offered).
+ * The supplier's contacts and what each receives (its one mount: PartyRecordView, always `side: 'suppliers'`). F-CA-fx2 (lane ca-,
+ * Z23): the customer's branch (F-SA-274's portal tag and Invite, its columns) went — a customer's people are its People & addresses
+ * tab (cu/record/view/people: one row per person, the portal state joined, Invite in place).
  */
-export function ContactsCard({ model, party, actions, editable, portalEmails, inviteHref }: TabProps & { portalEmails?: ReadonlySet<string> | undefined; inviteHref?: ((contact: Contact) => string | null) | undefined }) {
+export function ContactsCard({ model, party, actions, editable }: TabProps) {
   const t = useT('parties')
   const locale = useLocale()
   const held = editable ? null : model.can.manage ? t('held.archived') : t('held.manage')
-  const supplier = model.side === 'suppliers'
   const rows = party.contacts
   const menu = (contact: Contact): MenuItemDef[] => [
     { id: 'edit', label: t('common.edit'), onSelect: () => actions?.onDialog?.({ kind: 'contact', contactId: contact.id }), disabled: !editable, description: held ?? undefined },
     contact.status === 'ACTIVE'
       ? { id: 'archive', label: t('contact.archive'), onSelect: () => actions?.onContactStatus?.(contact.id, 'ARCHIVED'), disabled: !editable, description: held ?? t('contact.archiveHint') }
       : { id: 'restore', label: t('contact.restore'), onSelect: () => actions?.onContactStatus?.(contact.id, 'ACTIVE'), disabled: !editable, description: held ?? undefined },
-    // F-SA-274: an active contact with an e-mail and no portal access yet.
-    ...(inviteHref && contact.status === 'ACTIVE' && contact.email && !portalEmails?.has(contact.email.trim().toLowerCase()) && inviteHref(contact)
-      ? [{ id: 'invite', label: t('contact.invite'), href: inviteHref(contact) ?? undefined }]
-      : []),
   ]
   const receives = (contact: Contact) => {
     const on = contact.roles.includes('ORDERS')
@@ -450,7 +426,7 @@ export function ContactsCard({ model, party, actions, editable, portalEmails, in
     <Card padded>
       <div className="fw-pty-card-body">
         <CardHead
-          title={t(supplier ? 'suppliers.contacts.title' : 'contact.title')}
+          title={t('suppliers.contacts.title')}
           action={
             <Button size="sm" onClick={() => actions?.onDialog?.({ kind: 'contact' })} heldReason={held}>
               <Plus size={14} aria-hidden /> {t('contact.add')}
@@ -473,38 +449,30 @@ export function ContactsCard({ model, party, actions, editable, portalEmails, in
           />
         ) : (
           <SummaryTable
-            label={t(supplier ? 'suppliers.contacts.title' : 'contact.title')}
+            label={t('suppliers.contacts.title')}
             stackOnPhone
             density="roomy"
             columns={[
               t('contact.col.name'),
               t('contact.col.email'),
               t('contact.col.phone'),
-              ...(supplier ? [t('contact.col.receivesPos')] : []),
+              t('contact.col.receivesPos'),
               t('contact.col.roles'),
               t('contact.col.language'),
               t('contact.col.status'),
               t('list.col.actions'),
             ]}
-            widths={supplier ? ['17%', '20%', '12%', '14%', '14%', '8%', '8%', '80px'] : ['20%', '24%', '13%', '17%', '10%', '8%', '80px']}
-            align={Array.from({ length: supplier ? 8 : 7 }, () => 'left' as const)}
+            widths={['17%', '20%', '12%', '14%', '14%', '8%', '8%', '80px']}
+            align={Array.from({ length: 8 }, () => 'left' as const)}
             rows={rows.map((contact) => ({
               id: contact.id,
               cells: [
                 <span key="n" className="fw-pty-name">
                   {contact.name}
                 </span>,
-                // F-SA-274: "Has portal access" on an exact e-mail match.
-                contact.email && portalEmails?.has(contact.email.trim().toLowerCase()) ? (
-                  <span key="e" className="fw-pty-tags">
-                    <span>{contact.email}</span>
-                    <Tag tone="info">{t('contact.hasPortal')}</Tag>
-                  </span>
-                ) : (
-                  dash(contact.email)
-                ),
+                dash(contact.email),
                 dash(contact.phone),
-                ...(supplier ? [receives(contact)] : []),
+                receives(contact),
                 contact.roles.length === 0 ? (
                   <span key="r" className="fw-pty-hint">
                     {t('contact.noRole')}
