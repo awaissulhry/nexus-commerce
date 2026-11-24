@@ -807,10 +807,6 @@
     "sentKeepCopy": "Cambiare un indirizzo non cambia preventivi, ordini o documenti già inviati: conservano la loro copia.",
     "defaultBillTo": "Indirizzo di fatturazione predefinito",
     "defaultShipTo": "Indirizzo di consegna predefinito",
-    "default": {
-      "billTo": "Fatturazione predefinita: {name}",
-      "shipTo": "Consegna predefinita: {name}"
-    },
     "archive": "Archivia",
     "archiveHint": "Un indirizzo in uso si archivia, non si cancella",
     "restore": "Ripristina",
@@ -819,13 +815,10 @@
       "kinds": "Uso",
       "address": "Indirizzo",
       "contact": "Referente sul posto",
-      "billTo": "Fatture (predef.)",
-      "shipTo": "Consegne (predef.)",
       "status": "Stato"
     }
   },
   "contact": {
-    "title": "Contatti",
     "add": "Aggiungi contatto",
     "newTitle": "Aggiungi un contatto",
     "editTitle": "Modifica contatto",
@@ -845,7 +838,6 @@
       "language": "Lingua",
       "status": "Stato"
     },
-    "hasPortal": "Ha accesso al portale",
     "invite": "Invita al portale…"
   },
   "identity": {

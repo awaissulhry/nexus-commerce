@@ -361,7 +361,7 @@ const built = [
   ...['ACTIVE', 'ARCHIVED'].map((value) => `master.${value}`),
   ...['block', 'unblock', 'reactivate', 'activate', 'archive'].map((value) => `done.${value}`),
   ...['vies', 'archive', 'block'].flatMap((value) => [`bulk.${value}.title`, `bulk.${value}.done`]),
-  ...['billTo', 'shipTo'].map((value) => `address.default.${value}`),
+  // F-CA-fx2 (Z23): `address.default.billTo|shipTo` went with the customer's default toggles (pinned gone below, in both catalogues).
   ...['open', 'won', 'lost', 'all', 'quote', 'order'].map((value) => `deals.${value}`),
   ...Object.values(SIDES).flatMap((side) => [
     ...side.views.map((view) => `view.${view}`),
@@ -556,6 +556,41 @@ describe('F-SA-274 → F-CA-120: People & addresses', () => {
   })
 })
 // ---- end F-SA-274 → F-CA-120
+
+// ---- F-CA-fx2 (customer People & addresses, lane ca-; Z23; 30-domdiff: SCR-057 differs by Z6's two words only): the shared
+// ContactsCard / AddressesCard draw the supplier's only (their one mount: PartyRecordView, always `side: 'suppliers'`); the customer's
+// branches went with the words only they said — a customer's people and addresses are its People & addresses tab
+describe('Z23: the shared contacts and addresses cards are the supplier\'s (F-CA-fx2)', () => {
+  const cards = readFileSync(new URL('./view/cards.tsx', import.meta.url), 'utf8')
+  const record = readFileSync(new URL('./view/PartyRecordView.tsx', import.meta.url), 'utf8')
+  const GONE = ['contact.hasPortal', 'contact.title', 'address.col.billTo', 'address.col.shipTo', 'address.default.billTo', 'address.default.shipTo']
+
+  it('no customer branch is left in the two cards, nothing passes one, and the depth slot has no people part', () => {
+    for (const gone of ['isCustomer', "model.side === 'customers'", "model.side === 'suppliers'", 'portalEmails', 'inviteHref', 'address.default.', ...GONE.map((key) => `'${key}'`)]) expect(cards, gone).not.toContain(gone)
+    expect(record).toContain('<ContactsCard model={model} party={party} actions={actions} editable={editable} />')
+    expect(record).toContain('<AddressesCard model={model} party={party} actions={actions} editable={editable} />')
+    expect(record).not.toMatch(/readonly people\?: ReactNode/)
+  })
+
+  it('the words only those branches said are gone from both catalogues; the words the People tab reuses stay', () => {
+    for (const locale of LOCALES) {
+      const words = CATALOGUE[locale].parties ?? {}
+      for (const key of GONE) expect(key in words, `${locale} ${key}`).toBe(false)
+      for (const key of ['contact.invite', 'address.col.address', 'address.col.kinds', 'address.col.contact', 'suppliers.contacts.title', 'contact.col.receivesPos']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+    }
+  })
+
+  it('the supplier still sees its contacts with what each receives and its addresses with their five columns, in it and en', () => {
+    const contacts = supplierRecordScreen.cases.find((item) => item.id === 'contacts')!.model
+    for (const locale of LOCALES) {
+      const words = CATALOGUE[locale].parties!
+      const html = render(supplierRecordScreen as DesignScreen<unknown>, contacts, locale)
+      for (const key of ['suppliers.contacts.title', 'contact.col.receivesPos', 'address.title', 'address.col.kinds', 'address.col.contact', 'address.col.status']) expect(html, `${locale} ${key}`).toContain(words[key]!)
+      expect(html, locale).not.toContain(words['contact.invite']!)
+    }
+  })
+})
+// ---- end F-CA-fx2
 
 // ---- F-CL-101 (customers list plan §2, K12, settles T10 / T15 / T16): the shared rule fixes, on Customers and Suppliers alike ---
 // (imported here, below the pinned lines above, so those lines stay where they were)

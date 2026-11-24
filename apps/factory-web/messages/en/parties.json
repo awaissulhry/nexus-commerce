@@ -807,10 +807,6 @@
     "sentKeepCopy": "Changing an address doesn't change quotes, orders or documents already sent: they keep their own copy.",
     "defaultBillTo": "Default invoice address",
     "defaultShipTo": "Default delivery address",
-    "default": {
-      "billTo": "Default invoice address: {name}",
-      "shipTo": "Default delivery address: {name}"
-    },
     "archive": "Archive",
     "archiveHint": "An address in use is archived, never deleted",
     "restore": "Restore",
@@ -819,13 +815,10 @@
       "kinds": "For",
       "address": "Address",
       "contact": "Contact at the address",
-      "billTo": "Invoices (default)",
-      "shipTo": "Deliveries (default)",
       "status": "Status"
     }
   },
   "contact": {
-    "title": "Contacts",
     "add": "Add contact",
     "newTitle": "Add a contact",
     "editTitle": "Edit contact",
@@ -845,7 +838,6 @@
       "language": "Language",
       "status": "Status"
     },
-    "hasPortal": "Has portal access",
     "invite": "Invite to the portal…"
   },
   "identity": {
