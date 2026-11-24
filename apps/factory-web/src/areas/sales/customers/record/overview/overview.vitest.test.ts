@@ -15,6 +15,8 @@ import { COMPLAINTS, OVERDUE_ROWS, RETURNS } from '../../money/_demo/fixtures'
 import type { WorkReads } from '../use-customer-work'
 import { DESIGNER_CASES, designerModel, DESIGNERS, OFFICE_PEOPLE, SUPERVISOR_CASES } from '../../portal/demo' // F-CO-201: made-up office people
 import { MONEY_ANCHORS, moneyDoor, promiseDoor, termsDoor } from './doors'
+import { PEOPLE_ANCHORS, peopleDoor } from './doors' // F-CA-121
+import { PEOPLE_SECTIONS } from '../people/model' // F-CA-121
 import { boardNumbersOf, headlineOf, HEADLINE_PARTS, waitsOnUsOf } from './headline'
 import { COMPLAINTS_READ, OVERVIEW_NAMESPACES, sayOf, sayToolsOf, urgencyOf, type LooksAfter, type OverviewCan, type OverviewHeadline, type OverviewInput, type OverviewMoney, type OverviewRow, type OverviewStrip, type Say } from './model'
 import { bandStateOf, datesOf, EARLIEST_FIRST, factsOf, linkedOf, overviewOf, peopleOf, requestsOf } from './rows'
@@ -279,10 +281,13 @@ describe('the strips: what stops the customer, most blocking first', () => {
     const invoice = stripOf(rows, 'invoice')
     expect(invoice.doors.map((door) => door.key)).toEqual(['identity', 'address'])
     expect(invoice.doors[0]!.door).toEqual({ kind: 'act', act: 'identity' })
-    expect(hrefOf(invoice.doors[1])).toBe(`${BASE}?tab=people`)
+    expect(hrefOf(invoice.doors[1])).toBe(`${BASE}?tab=people&add=address`) // F-CA-121 (W1.6): the Add address window opens on arrival
     expect(stripOf(rows, 'vies').doors[0]!.door).toEqual({ kind: 'act', act: 'checkVies' })
     // S21: the money doors come from ONE constant.
     expect(MONEY_ANCHORS).toEqual({ collect: 'collect', credit: 'credit' })
+    // F-CA-121 (W1.6; Z21): People & addresses' doors come from ONE constant — the tab's own section ids.
+    expect(Object.values(PEOPLE_ANCHORS)).toEqual([...PEOPLE_SECTIONS])
+    expect(peopleDoor('/w/DEMO', ID, 'riders')).toBe(`${BASE}?tab=people#riders`)
     expect(moneyDoor('/w/DEMO', ID, 'collect')).toBe(`${BASE}?tab=money#collect`)
     expect(termsDoor('/w/DEMO', ID, 'requirements')).toBe(`${BASE}?tab=terms#party-requirements`)
     expect(promiseDoor('/w/DEMO', ID)).toBe(`${BASE}?tab=work&rows=open&sort=promise`)
@@ -355,12 +360,13 @@ describe('the cards: People, Next dates, Requests & changes, Linked records, Cus
       ['Their contact for orders', 'Anna Demo'],
       ['Their contact for invoices', 'Bruno Esempio'],
     ])
-    expect(hrefOf(people.head)).toBe(`${BASE}?tab=people`)
+    expect(hrefOf(people.head)).toBe(`${BASE}?tab=people#people`) // F-CA-121 (W1.6)
     const both = peopleOf(input({ party: party({ contacts: [{ ...MODA.contacts[0]!, roles: ['ORDERS', 'INVOICES'] }] }) }))
     expect(both.rows.map((row) => said(row.label, 'it'))).toEqual(['Il loro contatto per ordini e fatture'])
     const nobody = peopleOf(input({ party: party({ contacts: [] }) })).rows
     expect(nobody.map((row) => valueOf(row))).toEqual(['Nobody yet'])
     expect(nobody[0]!.doors?.map((door) => door.key)).toEqual(['contact'])
+    expect(hrefOf(nobody[0]!.doors?.[0])).toBe(`${BASE}?tab=people&add=contact`) // F-CA-121 (W1.6): the Add contact window opens on arrival
     expect(peopleOf(input({ party: party({ contacts: [] }), can: { ...CAN, manage: false } })).rows[0]!.doors).toBeUndefined()
   })
 

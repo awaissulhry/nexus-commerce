@@ -3,6 +3,7 @@ import { WARNING_ACTION, type NextAction } from '../../../../parties/_shared/mod
 import type { Glance } from '../../depth/api'
 import { overdueOf } from '../../money/model'
 import { moneyDoor, quotesDoor, tabDoor, termsDoor } from './doors'
+import { peopleAddDoor } from './doors' // F-CA-121
 import { amountOf, dayOf, depth, glanceOf, joined, linkDoor, ov, readyOf, say, stepDoor, text, type LabelledDoor, type MoneyParam, type OverviewInput, type OverviewStrip, type OverviewStrips, type Say } from './model'
 
 /**
@@ -31,7 +32,8 @@ export function stepDoorOf(action: NextAction, prefix: string, partyId: string, 
   if (action === 'correctIdentity') return stepDoor('correctIdentity', say('step.action.correctIdentity'), { kind: 'act', act: 'correctIdentity' }, held)
   if (action === 'edit') return stepDoor('edit', say('step.action.edit'), { kind: 'act', act: 'edit' }, held)
   // A customer's addresses and contacts are added on People & addresses (as today's Next steps).
-  if (action === 'address' || action === 'contact') return stepDoor(action, say(`step.action.${action}`), { kind: 'href', href: tabDoor(prefix, partyId, 'people') }, held)
+  // F-CA-121 (W1.6): …with the record's own window open on arrival (People & addresses' `&add=`).
+  if (action === 'address' || action === 'contact') return stepDoor(action, say(`step.action.${action}`), { kind: 'href', href: peopleAddDoor(prefix, partyId, action) }, held)
   return null
 }
 
