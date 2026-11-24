@@ -106,6 +106,8 @@ beforeAll(async () => {
   office('reader', 'read_only')
   office('salesB', 'sales', [A.companyB])
   office('noOrders', 'sales', 'all', ['orders.view'])
+  office('noMeasurements', 'sales', 'all', ['sales.measurements.view']) // F-CA-S4: parties.view, no measurements right
+  office('noParties', 'sales', 'all', ['parties.view']) // F-CA-S5: no parties.view
   for (const [key, actorId] of Object.entries(ACTORS)) await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, $3, $4, 'ACTIVE')`, [actorId, A.tenant, `w2b290-${key}-${run}@example.com`, `Made-up ${key}`])
   const colourway = await one<{ id: string; size: string }>(`SELECT c.id, (s.sizes)[1] AS size FROM "Colourway" c JOIN "Style" s ON s.id = c."styleId" WHERE c."tenantId" = $1 AND c."styleId" = (SELECT "styleIds"[1] FROM "CustomerRequirement" WHERE "tenantId" = $1 AND "supersedesId" IS NOT NULL) ORDER BY c."createdAt", c.id LIMIT 1`, [A.tenant])
   LINE.colourwayId = colourway.id
@@ -358,11 +360,95 @@ describe("contacts' personal data (SAL-022)", () => {
     await no('sales', 'POST', `/parties/${A.p3}/contacts/${p3Buyer()}/access-copy`, { words: 'Again (made up).' }, 409)
     const patched = await no('sales', 'PATCH', `/parties/${A.p3}/contacts/${p3Buyer()}`, { version: row.version, name: 'Back again', roles: [] }, 409)
     expect(paths(patched)).toEqual(['privacy/CONTACT_ERASED'])
+    // F-CA-S2 (ca-s S.2; R-B4): an Edit without a name and a Restore are refused in the same words, before any other rule
+    // (no "The contact is not valid." for the blank name), and nothing changes.
+    const edited = await no('sales', 'PATCH', `/parties/${A.p3}/contacts/${p3Buyer()}`, { version: row.version, roles: ['ORDERS'] }, 409)
+    expect(paths(edited)).toEqual(['privacy/CONTACT_ERASED'])
+    expect(edited.message).toContain('This contact was erased on request')
+    const restored = await no('sales', 'PATCH', `/parties/${A.p3}/contacts/${p3Buyer()}`, { version: row.version, status: 'ACTIVE' }, 409)
+    expect(paths(restored)).toEqual(['privacy/CONTACT_ERASED'])
+    expect(await one<Json>(`SELECT name, status::text AS status, version FROM "PartyContact" WHERE id = $1`, [p3Buyer()])).toMatchObject({ name: '', status: 'ARCHIVED', version: row.version })
+    // F-CA-S2 end
     await no('sales', 'PUT', `/parties/${A.p3}/contacts/${p3Buyer()}/lawful-basis`, { version: row.version, lawfulBasis: 'CONSENT' }, 409)
     // sales holds parties.privacy, not parties.erase.
     await no('sales', 'POST', `/parties/${A.p1}/contacts/${buyer()}/erase`, { version: 1, words: 'No.' }, 403)
     expect(await outbox('party.contact_erased')).toEqual([{ partyId: A.p3, code: 'SEED-C2', contactId: p3Buyer() }])
   })
+
+  // ── F-CA-S1 (ca-s S.1; R-W1, R-W3 — the brand wall): one address, two customers ──
+  it("the access copy and the erase count read only this customer's mails", async () => {
+    const agent = `agent.${run}@example.com`
+    const contactOf = (answer: Json): Json => (answer.party.contacts as Json[]).find((row) => row.email === agent)!
+    // The same made-up agent is a contact of customer A (SEED-C1) and of customer B (SEED-C2).
+    const inA = contactOf(await ok('sales', 'POST', `/parties/${A.p1}/contacts`, { name: 'Made-up Agent', email: agent, roles: [] }, 201))
+    const inB = contactOf(await ok('sales', 'POST', `/parties/${A.p3}/contacts`, { name: 'Made-up Agent', email: agent, roles: [] }, 201))
+    // A's thread (the seeds' quote of A) and a thread of B (made from it past the guards: B's party, its own record and token).
+    const threadA = id('threads:quote:Q1')
+    expect(await one<Json>(`SELECT "partyId" FROM "Thread" WHERE id = $1`, [threadA])).toEqual({ partyId: A.p1 })
+    const threadB = newId()
+    const token = Array.from(randomBytes(26), (byte) => 'abcdefghijklmnopqrstuvwxyz234567'[byte % 32]).join('')
+    await force(`INSERT INTO "Thread" (id, "tenantId", "companyId", "partyId", "recordType", "recordId", "replyToken") SELECT $1, "tenantId", "companyId", $2, "recordType", $3, $4 FROM "Thread" WHERE id = $5`, [threadB, A.p3, newId(), token, threadA])
+    /** A copy of a seeded received mail, from the agent, matched to `partyId` (and the contact, or its domain alone). */
+    const received = async (subject: string, partyId: string, contactId: string | null): Promise<void> => {
+      const source = await one<{ id: string }>(`SELECT id FROM "InboundEmail" WHERE "tenantId" = $1 ORDER BY id LIMIT 1`, [A.tenant])
+      await admin(`CREATE TEMP TABLE _ca_in AS SELECT * FROM "InboundEmail" WHERE id = $1`, [source.id])
+      try {
+        await admin(
+          `UPDATE _ca_in SET id = $1, "sesMessageId" = $2, "emailMessageId" = NULL, "fromAddress" = $3, subject = $4, "senderPartyId" = $5, "senderContactId" = $6,
+             "threadId" = NULL, "messageId" = NULL, "matchedBy" = NULL, status = 'RECEIVED', "heldReason" = NULL, "rejectReason" = NULL, "receivedAt" = now()`,
+          [newId(), `ca-s-${newId()}`, agent, subject, partyId, contactId],
+        )
+        await force(`INSERT INTO "InboundEmail" SELECT * FROM _ca_in`)
+      } finally {
+        await admin('DROP TABLE IF EXISTS _ca_in')
+      }
+    }
+    /** A copy of a seeded outbound mail, to the agent, on `threadId` (its record's mail). */
+    const sent = async (subject: string, threadId: string): Promise<void> => {
+      const source = await one<{ id: string }>(`SELECT id FROM "EmailOutbound" WHERE "tenantId" = $1 ORDER BY id LIMIT 1`, [A.tenant])
+      const outboundId = newId()
+      await admin(`CREATE TEMP TABLE _ca_out AS SELECT * FROM "EmailOutbound" WHERE id = $1`, [source.id])
+      try {
+        await admin(
+          `UPDATE _ca_out SET id = $1, "emailMessageId" = $2, "sesMessageId" = NULL, "threadId" = $3, "messageId" = NULL, "recordType" = 'Quote',
+             "recordId" = (SELECT "recordId" FROM "Thread" WHERE id = $3), "to" = ARRAY[$4::text], cc = '{}', bcc = '{}', subject = $5, "queuedAt" = now()`,
+          [outboundId, `<${outboundId}@example.com>`, threadId, agent, subject],
+        )
+        await force(`INSERT INTO "EmailOutbound" SELECT * FROM _ca_out`)
+      } finally {
+        await admin('DROP TABLE IF EXISTS _ca_out')
+      }
+    }
+    await received('Made-up mail to A from its contact', A.p1, inA.id)
+    await received('Made-up mail to A from its domain', A.p1, null)
+    await received('Made-up mail to B', A.p3, inB.id)
+    await sent("Made-up answer on A's thread", threadA)
+    await sent("Made-up answer on B's thread", threadB)
+    const words = { words: 'Asked by mail (made up).' }
+    const mailsOf = (copy: Json) => ({ received: copy.mailsReceived.map((row: Json) => row.subject).sort(), sent: copy.mailsSent.map((row: Json) => row.subject).sort() })
+    // A's copy holds A's mails only; B's copy holds B's only (the same address in both).
+    const ofA = (await ok('sales', 'POST', `/parties/${A.p1}/contacts/${inA.id}/access-copy`, words, 201)).copy
+    expect(mailsOf(ofA)).toEqual({ received: ['Made-up mail to A from its contact', 'Made-up mail to A from its domain'], sent: ["Made-up answer on A's thread"] })
+    const ofB = (await ok('sales', 'POST', `/parties/${A.p3}/contacts/${inB.id}/access-copy`, words, 201)).copy
+    expect(mailsOf(ofB)).toEqual({ received: ['Made-up mail to B'], sent: ["Made-up answer on B's thread"] })
+    // A person limited to A gets A's copy whole, and nothing of B (not found, as an unknown customer).
+    SESSIONS.limitedA = { audience: 'office', tenantId: A.tenant, actorId: ACTORS.sales!, grants: grantsOf('sales').map((grant) => ({ ...grant, parties: [A.p1] })) }
+    const limited = (await ok('limitedA', 'POST', `/parties/${A.p1}/contacts/${inA.id}/access-copy`, words, 201)).copy
+    expect(mailsOf(limited)).toEqual(mailsOf(ofA))
+    await no('limitedA', 'POST', `/parties/${A.p3}/contacts/${inB.id}/access-copy`, words, 404)
+    // The erase of B's contact counts what stays of B's mails: its one, never A's two (the same address).
+    h.clock.set(new Date(Date.now() - 4 * 60_000))
+    const user = await addUser(h, TENANT, { email: `w2b290-ca-eraser-${run}@example.com`, role: 'finance' })
+    const browser = new Browser(h.app)
+    expect((await browser.signIn(TENANT.slug, user.email, user.password)).body.status).toBe('signed_in')
+    const secret = await enrolTotp(h, browser)
+    await stepUp(h, browser, secret)
+    const current = (await ok('finance', 'GET', `/parties/${A.p3}/contacts/privacy`)).privacy.contacts.find((row: Json) => row.id === inB.id)
+    const erased = await browser.send('POST', `/parties/${A.p3}/contacts/${inB.id}/erase`, { version: current.version, words: 'Erasure asked by letter (made up).' }, { headers: { 'idempotency-key': freshKey() } })
+    expect(erased.status, JSON.stringify(erased.body)).toBe(200)
+    expect((erased.body as Json).kept.find((entry: Json) => entry.kind === 'inboundMails')).toMatchObject({ count: 1 })
+  })
+  // ── F-CA-S1 end ──
 })
 
 describe('riders under a team (SAL-021)', () => {
@@ -386,4 +472,103 @@ describe('riders under a team (SAL-021)', () => {
       expect.objectContaining({ partyId: rider.id, teamPartyId: null, previousTeamPartyId: A.p1 }),
     ])
   })
+
+  // ── F-CA-S4 (ca-s S.4; R-B10 — body data) ──
+  it('a reader without the measurements right reads no profile count on riders', async () => {
+    const counted = (await ok('sales', 'GET', `/parties/${A.p1}/riders`)).riders.riders as Json[]
+    expect(counted.length).toBeGreaterThan(0)
+    for (const row of counted) expect(typeof row.measurementProfiles).toBe('number')
+    const withheld = (await ok('noMeasurements', 'GET', `/parties/${A.p1}/riders`)).riders.riders as Json[]
+    // The same riders (names and codes: parties.view), never how many profiles each one has.
+    expect(withheld.map((row) => row.id)).toEqual(counted.map((row) => row.id))
+    expect(withheld.map((row) => row.measurementProfiles)).toEqual(withheld.map(() => null))
+  })
+  // ── F-CA-S4 end ──
 })
+
+// ── F-CA-S5 (ca-s S.5; Owner decision D3, 2026-11-24): the usage read of the People & addresses tab ──
+describe('the usage read of a customer (ca-s S.5)', () => {
+  const usage = async (session: string, partyId: string): Promise<Json> => ok(session, 'GET', `/parties/${partyId}/usage`)
+  const contactUse = (answer: Json, contactId: string): Json | undefined => (answer.contacts as Json[]).find((row) => row.contactId === contactId)
+  const addressUse = (answer: Json, addressId: string): Json | undefined => (answer.addresses as Json[]).find((row) => row.addressId === addressId)
+  const ownIds = (partyId: string) =>
+    one<{ contacts: string[]; addresses: string[] }>(`SELECT ARRAY(SELECT id::text FROM "PartyContact" WHERE "partyId" = $1) AS contacts, ARRAY(SELECT id::text FROM "PartyAddress" WHERE "partyId" = $1) AS addresses`, [partyId])
+  const timeless = (answer: Json): Json => ({ ...answer, asOf: null })
+
+  it("the usage read counts only this customer's records", async () => {
+    const a = await usage('sales', A.p1)
+    expect(Object.keys(a).sort()).toEqual(['addresses', 'asOf', 'contacts', 'partyId'])
+    expect(a.partyId).toBe(A.p1)
+    expect(Number.isNaN(Date.parse(a.asOf))).toBe(false)
+    // Every row is one of A's own contacts or addresses, with counts and dates only (no name, subject, amount or record id).
+    const own = await ownIds(A.p1)
+    expect(a.contacts.length + a.addresses.length).toBeGreaterThan(0)
+    for (const row of a.contacts as Json[]) {
+      expect(own.contacts).toContain(row.contactId)
+      expect(Object.keys(row).sort()).toEqual(['contactId', 'lastMailInAt', 'lastQuoteAt', 'openComplaints', 'openQuotes', 'openReturns', 'openServiceCases'])
+    }
+    for (const row of a.addresses as Json[]) {
+      expect(own.addresses).toContain(row.addressId)
+      expect(Object.keys(row).sort()).toEqual(['addressId', 'draftQuoteVersions', 'openChangeRequests', 'openPortalRequests', 'openSampleShipments', 'preparedShipments'])
+    }
+    const b = await usage('sales', A.p3)
+    const ownB = await ownIds(A.p3)
+    for (const row of b.contacts as Json[]) expect(ownB.contacts).toContain(row.contactId)
+    for (const row of b.addresses as Json[]) expect(ownB.addresses).toContain(row.addressId)
+    // A new quote of B (its DRAFT version names B's office as bill-to AND ship-to: one version, counted once) moves B's
+    // answer, never A's.
+    const officeB = id('party-address:P3:office')
+    await ok('sales', 'POST', '/sales/quotes', { companyId: A.companyA, partyId: A.p3, customerRef: 'RFQ-CA-S5-B' }, 201)
+    expect(addressUse(await usage('sales', A.p3), officeB)?.draftQuoteVersions).toBe((addressUse(b, officeB)?.draftQuoteVersions ?? 0) + 1)
+    expect(timeless(await usage('sales', A.p1))).toEqual(timeless(a))
+    // A person limited to A reads A's answer whole; B is not found, in the words of an unknown customer; no parties.view: 403.
+    SESSIONS.usageA = { audience: 'office', tenantId: A.tenant, actorId: ACTORS.sales!, grants: grantsOf('sales').map((grant) => ({ ...grant, parties: [A.p1] })) }
+    expect(timeless(await usage('usageA', A.p1))).toEqual(timeless(a))
+    const hidden = await no('usageA', 'GET', `/parties/${A.p3}/usage`, undefined, 404)
+    expect(hidden.message).toBe((await no('usageA', 'GET', `/parties/${newId()}/usage`, undefined, 404)).message)
+    await no('noParties', 'GET', `/parties/${A.p1}/usage`, undefined, 403)
+  })
+
+  it('one count per kind: a DRAFT quote version naming the address is 1, a SENT one 0; a PACKED shipment 1, a SHIPPED one 0', async () => {
+    const email = `usage.${run}@example.com`
+    const contact = ((await ok('sales', 'POST', `/parties/${A.p1}/contacts`, { name: 'Made-up Usage Buyer', email, roles: [] }, 201)).party.contacts as Json[]).find((row) => row.email === email)!
+    const label = `Usage ${run}`
+    const address = ((await ok('sales', 'POST', `/parties/${A.p1}/addresses`, { kinds: ['SHIP_TO'], name: label, line1: 'Via Esempio 99', postalCode: '00000', city: 'Seedville', province: 'MI', country: 'IT' }, 201)).party.addresses as Json[]).find((row) => row.name === label)!
+    // Nothing names them yet: no row (never a row of zeros).
+    let answer = await usage('sales', A.p1)
+    expect([contactUse(answer, contact.id), addressUse(answer, address.id)]).toEqual([undefined, undefined])
+    // A quote of the contact whose DRAFT version ships to the address: one open quote, one draft version.
+    const { quote } = await ok('sales', 'POST', '/sales/quotes', { companyId: A.companyA, partyId: A.p1, contactId: contact.id, customerRef: 'RFQ-CA-S5-A' }, 201)
+    await force(`UPDATE "QuoteVersion" SET "shipToAddressId" = $2 WHERE id = $1`, [quote.current.id, address.id])
+    answer = await usage('sales', A.p1)
+    expect(contactUse(answer, contact.id)).toEqual({ contactId: contact.id, openQuotes: 1, lastQuoteAt: expect.any(String), openReturns: 0, openComplaints: 0, openServiceCases: 0, lastMailInAt: null })
+    expect(addressUse(answer, address.id)).toEqual({ addressId: address.id, draftQuoteVersions: 1, preparedShipments: 0, openSampleShipments: 0, openPortalRequests: 0, openChangeRequests: 0 })
+    // SENT: the version holds its own copy of the address now (0: no row); a sent quote is still open.
+    await force(`UPDATE "QuoteVersion" SET status = 'SENT' WHERE id = $1`, [quote.current.id])
+    await force(`UPDATE "Quote" SET status = 'SENT' WHERE id = $1`, [quote.id])
+    answer = await usage('sales', A.p1)
+    expect(addressUse(answer, address.id)).toBeUndefined()
+    expect(contactUse(answer, contact.id)).toMatchObject({ openQuotes: 1 })
+    // Cancelled: no open quote; the row stays for the last quote's day.
+    await force(`UPDATE "Quote" SET status = 'CANCELLED' WHERE id = $1`, [quote.id])
+    answer = await usage('sales', A.p1)
+    expect(contactUse(answer, contact.id)).toMatchObject({ openQuotes: 0, lastQuoteAt: expect.any(String) })
+    // A PACKED shipment to the address: 1; once SHIPPED: 0 (a copy of a seeded shipment of A, past the guards).
+    const source = await one<{ id: string }>(`SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND "partyId" = $2 ORDER BY id LIMIT 1`, [A.tenant, A.p1])
+    expect(source, 'a seeded shipment of A').toBeTruthy()
+    const shipmentId = newId()
+    await admin(`CREATE TEMP TABLE _ca_ship AS SELECT * FROM "Shipment" WHERE id = $1`, [source.id])
+    try {
+      await admin(`UPDATE _ca_ship SET id = $1, number = $2, "shipToAddressId" = $3, status = 'PACKED', "externalDdtNumber" = NULL, "externalDdtDate" = NULL, "splitFromId" = NULL, "manifestId" = NULL`, [shipmentId, `CA-S5-${run}`, address.id])
+      await force(`INSERT INTO "Shipment" SELECT * FROM _ca_ship`)
+    } finally {
+      await admin('DROP TABLE IF EXISTS _ca_ship')
+    }
+    answer = await usage('sales', A.p1)
+    expect(addressUse(answer, address.id)).toMatchObject({ preparedShipments: 1, draftQuoteVersions: 0 })
+    await force(`UPDATE "Shipment" SET status = 'SHIPPED' WHERE id = $1`, [shipmentId])
+    answer = await usage('sales', A.p1)
+    expect(addressUse(answer, address.id)).toBeUndefined()
+  })
+})
+// ── F-CA-S5 end ──

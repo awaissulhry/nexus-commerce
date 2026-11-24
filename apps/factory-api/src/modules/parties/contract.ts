@@ -25,6 +25,7 @@ import {
   viesHistoryQuery,
   viesStandingView,
 } from '@nexus/factory-domain/parties/contracts'
+import { partyUsageAnswer } from '@nexus/factory-domain/parties/usage' // F-CA-S5
 
 /** The party routes' contracts (A2 SCR-032, 033, 056, 057): the bodies and answers are factory-domain's parties/contracts. */
 
@@ -104,3 +105,7 @@ export const updateCommercialTermsContract = defineContract({
   }),
   response: { 200: output({ terms: commercialTermsView }) },
 })
+
+// F-CA-S5 (ca-s S.5; Owner decision D3): the usage read of the People & addresses tab — its answer is factory-domain
+// parties/usage itself (no wrapper), the shape the web parses with its own schema.
+export const getPartyUsageContract = defineContract({ params: party, response: { 200: partyUsageAnswer } })

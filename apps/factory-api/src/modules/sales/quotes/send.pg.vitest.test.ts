@@ -19,7 +19,7 @@ import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { addTenant, addUser, Browser, enrolTotp, startHarness, stepUp, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
 import { systemContext } from '../../../platform/outbox/system'
-import { afterAcceptanceHandler } from './after-acceptance'
+import { afterAcceptanceHandler, confirmAccept } from './after-acceptance' // F-CA-S3: confirmAccept
 
 /**
  * Sending and accepting a quote (B-W1-24; A1 §2.5 "sending freezes a version; accept only on the latest version, through a
@@ -505,6 +505,33 @@ describe('the office withdraws, sends a new link; the customer declines, asks fo
     }
   })
 })
+
+// ── F-CA-S3 (ca-s S.3; R-B11): after an acceptance, an archived contact is never mailed by default ──
+describe('the acceptance confirmation and an archived contact (R-B11)', () => {
+  it('accepted in the office (no link address), its contact archived since: no mail to it, the audit says why', async () => {
+    const left = 'left.buyer.quote-send@example.com'
+    const added = await as(sales, 'POST', `/parties/${P1}/contacts`, { name: 'Made-up Buyer Who Left', email: left, roles: ['ORDERS'] }, 201)
+    const contact = (added.party.contacts as Json[]).find((row) => row.email === left)!
+    const sent = await send(await newQuote({ contactId: contact.id, customerRef: 'RFQ-CA-S3' }))
+    tokens.push(sent.token)
+    const quote = sent.answer.quote
+    const versionId: string = quote.current.id
+    // The contact leaves (archived on the People tab); the customer's signed reply is then recorded by the office: no link.
+    await as(sales, 'PATCH', `/parties/${P1}/contacts/${contact.id}`, { version: contact.version, status: 'ARCHIVED' })
+    // Two statements in one query: one transaction, the version ACCEPTED first (the acceptance names an ACCEPTED version).
+    await admin(
+      `UPDATE "QuoteVersion" SET status = 'ACCEPTED', "closedAt" = now() WHERE id = '${versionId}';
+       INSERT INTO "QuoteAcceptance" (id, "tenantId", "versionId", "partyId", channel, "signerName", "documentSha256", "termsVersion", "acceptedAt", "requestId")
+       VALUES ('${newId()}', '${tenant}', '${versionId}', '${P1}', 'OFFICE', 'Made-up Buyer', (SELECT "documentSha256" FROM "QuoteVersion" WHERE id = '${versionId}'), 'default-business-1', now(), 'made-up-ca-s3')`,
+    )
+    await admin(`UPDATE "Quote" SET status = 'ACCEPTED' WHERE id = $1`, [quote.id])
+    const caller = callerFor(h.database, systemContext(tenant, newId()))
+    expect(await confirmAccept(caller, { quoteId: quote.id, versionId })).toEqual({ outboundId: null })
+    expect((await admin(`SELECT count(*)::int AS n FROM "EmailOutbound" WHERE "recordId" = $1 AND subject LIKE 'Conferma%'`, [quote.id]))[0]!.n).toBe(0)
+    expect((await one(`SELECT after FROM "AuditLog" WHERE action = 'quotes.confirmAccept' AND "recordId" = $1`, [quote.id])).after).toMatchObject({ versionId, mailed: false, why: 'no address' })
+  })
+})
+// ── F-CA-S3 end ──
 
 describe('walls (A1 §2.2, §2.6)', () => {
   it('a link session sees only its own quote: another party is behind the wall, another purpose opens no quote', async () => {

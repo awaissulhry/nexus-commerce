@@ -18,7 +18,8 @@ const ridersView = output({
       status: z.enum(PARTY_STATUSES),
       country: z.string(),
       language: z.string(),
-      measurementProfiles: z.number().int(),
+      /** F-CA-S4 (R-B10): null without the measurements right over the rider. */
+      measurementProfiles: z.number().int().nullable(),
       version: z.number().int(),
       updatedAt: instant(),
     }),
