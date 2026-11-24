@@ -7,6 +7,10 @@ import type { Party } from '../../../parties/_shared/api'
 import { BLANK_TERMS, editing, GROUP_TERMS, PAYMENT_TERMS, TERMS, TERMS_CAN, termsCard, termsModel } from '../_demo/fixtures'
 import type { CommercialTermsModel } from '../terms/view/CommercialTermsCard'
 import { MONEY_CAN, MONEY_STATES, moneyModel } from '../money/_demo/fixtures'
+import { OVERDUE_ROWS } from '../money/_demo/fixtures' // F-CO-301: Moda Demo's late money
+import { grantOf } from '@nexus/factory-domain/auth/roles/roles' // F-CO-301: a role's REAL grant
+import { templateOf } from '@nexus/factory-domain/auth/roles/templates' // F-CO-301
+import { withheldParts } from '@nexus/factory-domain/sales/customer-360/glance' // F-CO-301: the glance's parts by right
 import { moneyTabDemo } from '../money/_demo/fixtures' // F-CM-104: the Money tab's made-up reads
 import { CustomerMoneyTab } from './view/money/CustomerMoneyTab' // F-CM-104: the Money tab's view
 import type { CustomerMoneyModel } from '../money/overview'
@@ -62,6 +66,8 @@ import { ListToolsContext } from '../../../../list-frame/tools/transport'
 import { memoryStore, memoryTransport, type MemoryToolsModel } from '../../../_shared/list-tools/memory'
 import { OrdersListView } from '../../orders/list/view/OrdersListView'
 import { WORK_DEFAULT_ROWS, type WorkReads } from './use-customer-work'
+import type { Read as WorkRead } from './use-customer-work' // F-CO-301: the work reads' own states (reading · ready · failed · off)
+import type { CustomerWork } from '../list/api' // F-CO-301: this customer's row of the joined read
 import { priceWindowOf, type PriceWindowCase } from '../../orders/price-check/fixtures' // F-CP-114
 import { workViewCounts } from './use-customer-work' // F-CP-103: the Views ▾ counts
 // ---- F-CW-101: the band in the strip's place (made-up counts: the domain's own rule over the made-up states) ----
@@ -152,7 +158,7 @@ const OPEN_ORDER_MONEY: OpenOrderMoney[] = [
 /** A case: the record, (B-W2a-49) the Commercial terms card of its Terms & requirements tab (B-TH-260), (B-W2a-81) its money and after-sales reads, (B-W2b-324) its depth. */
 // F-SA-272: + the Overview's "Who looks after <customer>" card (the supervisor and backup, moved from Portal settings).
 // F-SA-274: + the e-mails of the people with portal access (the contacts' "Has portal access").
-type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase; supervisor?: SupervisorModel; portalEmails?: readonly string[]; work?: WorkCase /* F-SA-276 */; designer?: DesignerModel /* F-CP-155 */; priceDiffer?: number /* F-CP-141 */; shipmentLine?: boolean /* cw T.1: the docked ORDER's thread with the draft shipment's office line */; supervisorOpen?: boolean /* F-CO-201: People's Change… (the supervisor) open — the form's own states */ }
+type CustomerCase = PartyRecordModel & { terms?: CommercialTermsModel; money?: CustomerMoneyModel; depth?: DepthCase; supervisor?: SupervisorModel; portalEmails?: readonly string[]; work?: WorkCase /* F-SA-276 */; designer?: DesignerModel /* F-CP-155 */; priceDiffer?: number /* F-CP-141 */; shipmentLine?: boolean /* cw T.1: the docked ORDER's thread with the draft shipment's office line */; supervisorOpen?: boolean /* F-CO-201: People's Change… (the supervisor) open — the form's own states */; overview?: OverviewOver /* F-CO-301: the Overview's own state */ }
 
 // ---- F-SA-276: the Work tab's cases — the strip's reads and the sheet's rows (made-up; the production part as the API sends it) ----
 interface WorkCase {
@@ -777,21 +783,35 @@ const plainGlance = (party: Party): Glance => ({
   readAt: NOW,
 })
 
-function OverviewDesign({ record, party, money, depth, supervisor, designer, supervisorOpen = false }: { record: PartyRecordModel; party: Party; money?: CustomerMoneyModel | undefined; depth?: DepthCase | undefined; supervisor?: SupervisorModel | undefined; designer?: DesignerModel | undefined; supervisorOpen?: boolean }) {
+// ---- F-CO-301 (customer Overview co-t T.1): what a case changes of the Overview's made-up reads — each a state its label promises.
+// A read the case's reader has no right for stays `off` / null whatever the case says (as the page and the API leave it).
+interface OverviewOver {
+  /** The Work tab's reads (the board, requests, replies, our asks, tasks). */
+  readonly reads?: Partial<WorkReads>
+  /** The page's ONE count read: its parts (a part the reader may not read stays null), or still read, or failed. */
+  readonly counts?: { readonly openQuotes?: number | null; readonly waitsOnUs?: number | null; readonly groups?: Partial<BeforeOrderCountsAnswer['groups']> } | 'reading' | 'failed'
+  /** THIS customer's row of the joined read. */
+  readonly standing?: WorkRead<CustomerWork | null>
+  /** The glance (the depth provider's one read). */
+  readonly glance?: Read<Glance>
+}
+
+function OverviewDesign({ record, party, money, depth, supervisor, designer, supervisorOpen = false, over = {} }: { record: PartyRecordModel; party: Party; money?: CustomerMoneyModel | undefined; depth?: DepthCase | undefined; supervisor?: SupervisorModel | undefined; designer?: DesignerModel | undefined; supervisorOpen?: boolean; over?: OverviewOver }) {
   const can = record.can
   const moneyCan = money?.can ?? customerMoneyCanOf([])
   const quotesTab = can.quotes || can.inquiries === true
+  const given = { ...STRIP_READY, ...over.reads }
   const reads: WorkReads = {
-    board: can.orders ? STRIP_READY.board : OFF_READ,
-    requests: can.orders || can.workorders === true ? STRIP_READY.requests : OFF_READ,
-    replies: can.threads ? STRIP_READY.replies : OFF_READ,
-    asks: can.partners === true ? STRIP_READY.asks : OFF_READ,
-    tasks: can.threads ? STRIP_READY.tasks : OFF_READ,
+    board: can.orders ? given.board : OFF_READ,
+    requests: can.orders || can.workorders === true ? given.requests : OFF_READ,
+    replies: can.threads ? given.replies : OFF_READ,
+    asks: can.partners === true ? given.asks : OFF_READ,
+    tasks: can.threads ? given.tasks : OFF_READ,
   }
   // The page's ONE count read as the API answers it: a part the reader has no right for is null (left out), never 0.
   const toAnswer = can.inquiries === true ? 1 : null
   const orderWaits = can.quotes ? 0 : null
-  const counts: BeforeOrderCountsAnswer = {
+  const derived: BeforeOrderCountsAnswer = {
     partyId: party.id,
     asOf: NOW,
     sampleRounds: null,
@@ -800,9 +820,20 @@ function OverviewDesign({ record, party, money, depth, supervisor, designer, sup
     groups: { WRITING: can.orders ? 2 : null, TO_ANSWER: toAnswer, PREPARING: can.quotes ? 1 : null, APPROVAL: can.quotes ? 0 : null, WAITING_CUSTOMER: can.quotes ? 2 : null, ORDER_WAITS: orderWaits, WON: can.quotes ? 4 : null, MOVED: can.inquiries === true ? 0 : null, LOST: can.quotes ? 1 : null },
     byKind: { quotes: null, requests: null, portalOrders: null, drafts: null },
   }
+  // A case's own counts keep the right's gate: a part the reader may not read stays null.
+  const gated = <T,>(mine: T | null, theirs: T | null | undefined): T | null => (mine === null ? null : theirs === undefined ? mine : theirs)
+  const overCounts = typeof over.counts === 'object' ? over.counts : null
+  const counts: BeforeOrderCountsAnswer = overCounts
+    ? {
+        ...derived,
+        openQuotes: gated(derived.openQuotes, overCounts.openQuotes),
+        waitsOnUs: gated(derived.waitsOnUs, overCounts.waitsOnUs),
+        groups: Object.fromEntries(Object.entries(derived.groups).map(([group, count]) => [group, gated(count, overCounts.groups?.[group as keyof BeforeOrderCountsAnswer['groups']])])) as BeforeOrderCountsAnswer['groups'],
+      }
+    : derived
   const looks: LooksAfter | null = supervisor ? { supervisor, designer: designer ?? null } : null
   // The glance's parts this case's reader may read: what its own answer withholds (a glance not in yet: every part, as the Owner).
-  const glanceRead = depth?.glance ?? ready(plainGlance(party))
+  const glanceRead = over.glance ?? depth?.glance ?? ready(plainGlance(party))
   const mayRead = (part: 'samples' | 'repairs' | 'credit'): boolean => glanceRead.status !== 'ready' || !glanceRead.value.withheld.includes(part)
   const input: OverviewInput = {
     prefix: record.prefix,
@@ -810,11 +841,11 @@ function OverviewDesign({ record, party, money, depth, supervisor, designer, sup
     can: { orders: can.orders, quotesTab, moneyTab: can.money === true, receivables: moneyCan.receivables, price: can.price, returns: moneyCan.returns, complaints: moneyCan.complaints, partners: can.partners === true, manage: can.manage, block: can.block, vies: can.vies, workorders: can.workorders === true, samples: mayRead('samples'), repairs: mayRead('repairs'), credit: mayRead('credit') },
     today: TODAY,
     reads,
-    counts: { counts, failed: false },
+    counts: over.counts === 'reading' ? { counts: null, failed: false } : over.counts === 'failed' ? { counts: null, failed: true } : { counts, failed: false },
     glance: glanceRead,
     money: money ? { ageing: money.ageing, returns: money.returns, complaints: money.complaints, orders: money.orders ?? null, returnsHref: money.returnsHref } : { ageing: loading(), returns: loading(), complaints: loading(), orders: null, returnsHref: null },
     // This customer's row of the joined read (asked only with orders.view).
-    standing: can.orders ? { status: 'ready', value: { partyId: party.id, orders: 9, phases: [], late: 1, waitsForYes: 0, depositOpen: 1, requests: { open: 2, firstId: null }, replies: 3, customerUrgent: { count: 0, byCompany: [] }, priority: { top: 0, high: 0 }, nextPromise: '2026-11-14', lastOrderDate: '2026-10-21' } } : OFF_READ,
+    standing: can.orders ? over.standing ?? { status: 'ready', value: { partyId: party.id, orders: 9, phases: [], late: 1, waitsForYes: 0, depositOpen: 1, requests: { open: 2, firstId: null }, replies: 3, customerUrgent: { count: 0, byCompany: [] }, priority: { top: 0, high: 0 }, nextPromise: '2026-11-14', lastOrderDate: '2026-10-21' } } : OFF_READ,
     // F-CO-201: who looks after (partners.view: the case's own models) — People's rows, and the urgency from the same read.
     urgency: looksUrgencyOf(looks),
     looksAfter: looks,
@@ -822,7 +853,7 @@ function OverviewDesign({ record, party, money, depth, supervisor, designer, sup
     viesRunning: record.viesRunning === true,
   }
   const recordHref = customerHref(record.prefix, party.id)
-  const before = beforeLineOf(can.orders ? beforeOrderFor(counts, quotesTab) : NO_BEFORE_ORDER, recordHref)
+  const before = beforeLineOf(can.orders && typeof over.counts !== 'string' ? beforeOrderFor(counts, quotesTab) : NO_BEFORE_ORDER, recordHref)
   // Card 2: the Work tab's band as the page builds it for the Overview — no chips, no group pressed (a press does nothing here: made-up).
   const band = can.orders
     ? {
@@ -831,19 +862,127 @@ function OverviewDesign({ record, party, money, depth, supervisor, designer, sup
       }
     : null
   const overview = overviewOf(input)
-  // People's two Change… windows, the page's own (a case opens the supervisor's to show its form; the designer's opens by its model).
+  // People's two Change… windows, the page's own — in a design case their INSIDE on a plain card, under the tab (F-CO-301: never a
+  // Modal open on a server render). A case opens the supervisor's to show its form; the designer's opens by its model.
   return createElement(
     Fragment,
     null,
     createElement(CustomerOverviewView, { model: overview, band, before }),
-    supervisor && supervisorOpen ? createElement(SupervisorWindow, { model: supervisor, name: overview.customer, onClose: () => undefined }) : null,
-    designer ? createElement(DesignerWindow, { model: designer, name: overview.customer }) : null,
+    supervisor && supervisorOpen ? createElement(SupervisorWindow, { model: supervisor, name: overview.customer, onClose: () => undefined, inside: true }) : null,
+    designer ? createElement(DesignerWindow, { model: designer, name: overview.customer, inside: true }) : null,
   )
 }
 // ---- end F-CO-103
 
+// ---- F-CO-301 (customer Overview co-t T.1; 15-steps T.1; 13-backend §4): the Overview's own states (ids `co-*`) and the Overview as
+// each office role reads it. Made-up data only (Moda Demo and the Seed people, SEED-* numbers, example.com). A role's rights are its
+// template's REAL grant (the domain's role templates: permissions + grains as money.*); the glance's parts follow the domain's own rule
+// (withheldParts), the money reads the Money lane's (customerMoneyCanOf); the record's rights mirror usePartyRecord's keys (a test
+// holds the two together).
+export const OVERVIEW_ROLES = ['owner', 'sales', 'production_manager', 'warehouse', 'finance', 'read_only'] as const
+export type OverviewRole = (typeof OVERVIEW_ROLES)[number]
+
+/** What a role's session holds on every company: its template's grant (its permissions, its grains as money.*). */
+export const roleHeld = (role: OverviewRole): ReadonlySet<string> => new Set<string>(grantOf(templateOf(role)!, { allCompanies: true, companyIds: [], siteIds: [], partyIds: [] }).permissions)
+
+/** The customer record's rights for what a session holds — usePartyRecord's own keys (areas/parties/_shared/PartyRecord.tsx). */
+export function recordCanOf(held: ReadonlySet<string>): PartyRecordModel['can'] {
+  return {
+    ...RECORD_CAN,
+    view: held.has('parties.view'),
+    manage: held.has('parties.manage'),
+    block: held.has('parties.block'),
+    vies: held.has('parties.vies'),
+    quotes: held.has('quotes.view'),
+    orders: held.has('orders.view'),
+    price: held.has('money.price'),
+    cost: held.has('money.cost'),
+    threads: held.has('threads.read'),
+    partners: held.has('partners.view'),
+    projects: held.has('threads.read'),
+    projectsManage: held.has('projects.manage'),
+    inquiries: held.has('sales.inquiries.view'),
+    money: held.has('money.price') || held.has('receivables.view') || held.has('sales.credit.view'),
+    ordersManage: held.has('orders.manage'),
+    tasks: held.has('tasks.manage'),
+    workorders: held.has('workorders.view'),
+  }
+}
+
+const MODA_ID = by('MODA-DEMO').id
+/** Moda Demo's ageing rows as the API sends them now: with its count of late invoices (S39; the API's cm-s). */
+const LATE_AGEING = OVERDUE_ROWS.filter((row) => row.customer.id === MODA_ID).map((row, index) => ({ ...row, lateInvoices: index === 0 ? 3 : 1 }))
+/** The same for a reader without the price grain: the server drops every amount (the count stays: it is no money). */
+const noAmounts = (rows: typeof LATE_AGEING) => rows.map((row) => ({ ...row, open: undefined, overdue: undefined, buckets: undefined }))
+
+/** Moda Demo at a glance for a role: on hold (a credit check, a quality dispute), over the limit — each part with its right only. */
+function roleGlance(held: ReadonlySet<string>): Glance {
+  const withheld = withheldParts((permission) => held.has(permission))
+  const full = glanceOf('MODA-DEMO', HELD_GLANCE)
+  const hidden = (part: (typeof withheld)[number]): boolean => withheld.includes(part)
+  const shown: Glance = {
+    ...full,
+    promises: hidden('promises') ? null : full.promises,
+    credit: hidden('credit') ? null : full.credit,
+    samples: hidden('samples') ? null : full.samples,
+    profiles: hidden('profiles') ? null : full.profiles,
+    riders: hidden('riders') ? null : full.riders,
+    repairs: hidden('repairs') ? null : full.repairs,
+    withheld,
+  }
+  return held.has('money.price') ? shown : withoutPrices(shown)
+}
+
+/** Who looks after, for a role: read with partners.view only; Change… (supervisor) with production.brand.manage, (designer) partners.manage. */
+function roleLooks(held: ReadonlySet<string>): Pick<CustomerCase, 'supervisor' | 'designer'> {
+  if (!held.has('partners.view')) return {}
+  const supervise = held.has('production.brand.manage')
+  return {
+    supervisor: { ...SUPERVISOR_CASES.saved, supervise, ...(supervise ? {} : { pick: { status: 'held', key: 'held.noRight', ns: 'production-supervisor' } as const }) },
+    designer: designerModel({ manage: held.has('partners.manage') }),
+  }
+}
+
+/** The Overview of Moda Demo (on hold, over the limit, invoices late) as a role reads it. */
+export function roleCase(role: OverviewRole): CustomerCase {
+  const held = roleHeld(role)
+  const price = held.has('money.price')
+  return {
+    ...record('MODA-DEMO', { tab: 'overview', can: recordCanOf(held) }),
+    money: moneyModel(customerMoneyCanOf([...held]), { ageing: loaded(price ? LATE_AGEING : noAmounts(LATE_AGEING)) }),
+    ...roleLooks(held),
+    overview: { glance: ready(roleGlance(held)) },
+  }
+}
+
+/** A board of the case's own counts by state (the phases follow the states, as the API counts them; nothing late). */
+function boardOfStates(byStatus: Partial<Record<OrderRow['status'], number>>): WorkReads['board'] {
+  const phases = phaseCountsOf(byStatus, 1)
+  return {
+    status: 'ready',
+    value: {
+      ...BOARD,
+      byStatus: (Object.entries(byStatus) as Array<[OrderRow['status'], number]>).map(([status, count]) => ({ status, count })),
+      byPhase: ORDER_PHASES.map((phase) => ({ phase, count: phases[phase] })),
+      notSent: { waitsForYes: 0, waitsForDeposit: 0 },
+      tiles: BOARD.tiles.map((tile) => ({ ...tile, count: 0 })),
+    },
+  }
+}
+
+/** A case of Moda Demo on its Overview, made of the case's own reads. */
+const coCase = (over: { code?: string; record?: Partial<PartyRecordModel>; money?: CustomerMoneyModel; overview?: OverviewOver; looks?: boolean } = {}): CustomerCase => ({
+  ...record(over.code ?? 'MODA-DEMO', { tab: 'overview', ...over.record }),
+  money: over.money ?? moneyModel(MONEY_CAN.finance, { ageing: loaded(LATE_AGEING) }),
+  ...(over.looks === false ? {} : { supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.set }),
+  ...(over.overview ? { overview: over.overview } : {}),
+})
+const NOTHING_LATE = moneyModel(MONEY_CAN.finance, { ageing: loaded([]), returns: loaded([]), complaints: loaded([]) })
+const warning = (code: Party['warnings'][number]['code'], blocksInvoice: boolean): Party['warnings'][number] => ({ code, message: '', blocksInvoice })
+// ---- end F-CO-301 (helpers)
+
 function CustomerDesign({ model }: { model: CustomerCase }) {
-  const { terms, money, depth, supervisor, portalEmails, work, designer, priceDiffer, shipmentLine, supervisorOpen, ...record } = model
+  const { terms, money, depth, supervisor, portalEmails, work, designer, priceDiffer, shipmentLine, supervisorOpen, overview, ...record } = model
   // ---- cq W3 (T part 2): Quotes & incoming — the tab's own gallery parts (quotes-tab/fixtures.ts) for this customer; a Work case's
   // portal drafts are its "Customer is writing" (F-CQ-303).
   const quotesIncoming = record.party && record.tab === 'quotes' ? (work?.drafts ? createElement(DraftsTabDesign, { work, party: record.party }) : createElement(QuotesTabDesign, { model: quotesTabFor({ id: record.party.id, name: record.party.tradeName ?? record.party.legalName }) })) : null
@@ -852,7 +991,7 @@ function CustomerDesign({ model }: { model: CustomerCase }) {
   const id = party?.id ?? 'x'
   // F-CO-103: the Overview tab, built for the tab the page shows (as the live container builds it); F-CO-201: who looks after is
   // People's rows (the case's supervisor and designer models), each Change… the page's own window.
-  const overviewTab = party && shownTab(recordTabs(SIDES.customers, record.can), record.tab) === 'overview' ? createElement(OverviewDesign, { record, party, money, depth, supervisor, designer, supervisorOpen: supervisorOpen === true }) : null
+  const overviewTab = party && shownTab(recordTabs(SIDES.customers, record.can), record.tab) === 'overview' ? createElement(OverviewDesign, { record, party, money, depth, supervisor, designer, supervisorOpen: supervisorOpen === true, ...(overview ? { over: overview } : {}) }) : null
   // ---- F-CM-104 (cm-w1 W1.4): the Money tab, built for the tab the page shows (as the live container builds it) from made-up reads —
   // Finance's view with the price grain, else Sales' (words only); a case's priceDiffer is the page's price count.
   const moneyTab = party && shownTab(recordTabs(SIDES.customers, record.can), record.tab) === 'money' ? createElement(CustomerMoneyTab, { input: moneyTabDemo(record.can.price ? 'finance' : 'sales', { priceDiffer: priceDiffer ?? null }), prefix: record.prefix, asOf: '2026-10-31T09:44:00.000Z', onRetry: () => undefined }) : null
@@ -899,22 +1038,22 @@ export const designScreen = defineDesignScreen<CustomerCase>({
       id: 'overview',
       label: 'Overview: an Italian business ready to invoice',
       model: record('MODA-DEMO'),
-      note: 'Key numbers and Now come from its quotes and orders; the side panel says nothing waits.',
+      note: 'F-CO-301: the Overview from the shared kit — the sentence, the band in its card, People both sides, Next dates, Requests & changes, Linked records, Customer facts.',
     },
     {
       id: 'overview-missing',
       label: "Overview: a prospect that can't be invoiced yet",
       model: record('NUOVO-PROVA', { quotes: loaded([]), orders: loaded([]) }),
-      note: 'Each next step has the button that fixes it; Activate is the primary action.',
+      note: "F-CO-301: the sentence says Prospect; Can't invoice yet with each step's own button; what is still to complete sits in Customer facts.",
     },
     { id: 'overview-fiscal-drawer', label: 'Overview: a brand without SDI code or PEC', model: record('MARCHIO-ESEMPIO') },
     // B-W2a-81: Overdue and Returns this year (key numbers), Open returns and claims (Now), Finance › Receivables.
-    { id: 'w2a-numbers', label: 'Overview (W2a): Overdue, Returns this year, open returns and claims', model: { ...record('MODA-DEMO'), money: moneyModel(MONEY_CAN.finance) }, note: 'Overdue 4,270.00, oldest 38 days late (opens Finance › Receivables for this customer); 3 returns in 2026, 6 units, 2 open; one complaint being investigated.' }, // B-CP-011
-    { id: 'w2a-numbers-no-price', label: 'Overview (W2a) without the price grain: late invoices counted, no amount', model: { ...record('MODA-DEMO', { can: { ...RECORD_CAN, price: false }, quotes: loaded(withoutMoney(QUOTES)), orders: loaded(withoutMoney(ORDERS)) }), money: moneyModel(MONEY_CAN.noPrice) } },
+    { id: 'w2a-numbers', label: 'Overview (W2a): the Overdue strip with its amount and its oldest day; open returns and complaints in Linked records; Receivables & credit ›', model: { ...record('MODA-DEMO'), money: moneyModel(MONEY_CAN.finance) }, note: 'Overdue · €4,270.00, oldest 38 days late (a door to Money); 2 open returns, the oldest named, and 1 open complaint with its next answer, in Linked records.' }, // B-CP-011
+    { id: 'w2a-numbers-no-price', label: 'Overview (W2a) without the price grain: "Invoices are late", the oldest day — no amount, no count of invoices', model: { ...record('MODA-DEMO', { can: { ...RECORD_CAN, price: false }, quotes: loaded(withoutMoney(QUOTES)), orders: loaded(withoutMoney(ORDERS)) }), money: moneyModel(MONEY_CAN.noPrice) } },
     { id: 'w2a-numbers-nothing', label: 'Overview (W2a): nothing late, no return this year, nothing open', model: { ...record('MODA-DEMO'), money: moneyModel(MONEY_CAN.finance, { ageing: loaded([]), returns: loaded([]), complaints: loaded([]) }) } },
-    { id: 'w2a-numbers-loading', label: 'Overview (W2a) reading: tiles "—"', model: { ...record('MODA-DEMO'), money: moneyModel(MONEY_CAN.finance, MONEY_STATES.loading) } },
-    { id: 'w2a-numbers-failed', label: "Overview (W2a): Overdue and returns couldn't be read", model: { ...record('MODA-DEMO'), money: moneyModel(MONEY_CAN.finance, MONEY_STATES.failed) } },
-    { id: 'w2a-numbers-no-receivables', label: 'Overview (W2a) without receivables.view: no Overdue tile', model: { ...record('MODA-DEMO'), money: moneyModel(MONEY_CAN.none) } },
+    { id: 'w2a-numbers-loading', label: 'Overview (W2a): the money reads still out — Returns and Complaints read in Linked records', model: { ...record('MODA-DEMO'), money: moneyModel(MONEY_CAN.finance, MONEY_STATES.loading) } },
+    { id: 'w2a-numbers-failed', label: "Overview (W2a): the ageing and the returns couldn't be read — no Overdue strip; Returns says Could not be read", model: { ...record('MODA-DEMO'), money: moneyModel(MONEY_CAN.finance, MONEY_STATES.failed) } },
+    { id: 'w2a-numbers-no-receivables', label: 'Overview (W2a) without receivables.view: no Overdue strip, no Receivables & credit door', model: { ...record('MODA-DEMO'), money: moneyModel(MONEY_CAN.none) } },
     { id: 'overview-eu-valid', label: 'Overview: EU business, VIES valid', model: record('DE-BEISPIEL') },
     { id: 'overview-person', label: 'Overview: a private person (rider)', model: record('PILOTA-DEMO', { quotes: loaded([]), orders: loaded([]) }) },
     { id: 'overview-extra-eu', label: 'Overview: a customer outside the EU (CHF)', model: record('CH-DEMO', { quotes: loaded([]), orders: loaded([]) }) },
@@ -927,6 +1066,27 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'blocked', label: 'Blocked, with its reason', model: record('BLOCCATO-DEMO') },
     { id: 'archived', label: 'Archived: read only until reactivated', model: record('ARCHIVIATO-DEMO', { quotes: loaded([]), orders: loaded([]) }) },
     { id: 'read-only', label: 'Read-only rights: you can view, not change', model: record('MODA-DEMO', { can: { ...RECORD_CAN, manage: false, block: false, vies: false } }) },
+    // ---- F-CO-301 (customer Overview co-t T.1; 15-steps T.1): the Overview's own states — made-up data only ----
+    { id: 'co-busy', label: 'co · A busy customer: the sentence, the seven groups in their card, People both sides, Next dates, Requests & changes, Linked records (Urgent (customer), Priority Top / High), Customer facts', model: coCase({ overview: { glance: ready(glanceOf('MODA-DEMO')), standing: { status: 'ready', value: { partyId: MODA_ID, orders: 14, phases: [], late: 1, waitsForYes: 0, depositOpen: 1, requests: { open: 2, firstId: null }, replies: 3, customerUrgent: { count: 3, byCompany: [] }, priority: { top: 1, high: 1 }, nextPromise: '2026-11-14', lastOrderDate: '2026-10-21' } } } }) },
+    { id: 'co-hold', label: 'co · On hold (a credit check and a quality dispute) and over the credit limit — ONE strip for the credit hold, the limit its line; Overdue with its amount and how many invoices are late', model: coCase({ overview: { glance: ready(glanceOf('MODA-DEMO', HELD_GLANCE)) } }) },
+    { id: 'co-blocked', label: 'co · Blocked: "Blocked since …", its reason, and "Unblock it from the ⋯ menu above." (no button on the strip)', model: coCase({ code: 'BLOCCATO-DEMO', money: NOTHING_LATE }) },
+    { id: 'co-invoice-vies', label: "co · Can't invoice yet (no tax identity: its own step) and VIES not proven (Check VIES in place)", model: coCase({ record: { party: { ...by('MODA-DEMO'), invoiceBlocked: true, warnings: [warning('NO_TAX_IDENTITY', true), warning('VIES_NOT_PROVEN', false)] } }, money: NOTHING_LATE }) },
+    { id: 'co-prospect', label: 'co · A prospect with no order: "Prospect", activate it to take orders; the band says no order yet with the Before-an-order doors', model: coCase({ code: 'NUOVO-PROVA', money: NOTHING_LATE, overview: { reads: { board: boardOfStates({}) } } }) },
+    { id: 'co-quotes-only', label: 'co · No order yet, quotes only: "No order yet"; the band\'s one quiet line and its Before-an-order doors; Linked records says the open quotes', model: coCase({ money: NOTHING_LATE, overview: { reads: { board: boardOfStates({}) }, counts: { openQuotes: 2, groups: { WRITING: 1, ORDER_WAITS: 0 } } } }) },
+    { id: 'co-no-open', label: 'co · No open order (five done, one cancelled): "No open order" with the last order; Next dates is left out and People takes the row', model: coCase({ money: NOTHING_LATE, overview: { reads: { board: boardOfStates({ COMPLETED: 5, CANCELLED: 1 }), requests: { status: 'ready', value: { items: [], open: 0, countered: 0 } }, replies: { status: 'ready', value: { rows: [], count: 0, complete: true } }, tasks: { status: 'ready', value: { items: [], total: 0, complete: true } } }, standing: { status: 'ready', value: { partyId: MODA_ID, orders: 6, phases: [], late: 0, waitsForYes: 0, depositOpen: 0, requests: { open: 0, firstId: null }, replies: 0, customerUrgent: { count: 0, byCompany: [] }, priority: { top: 0, high: 0 }, nextPromise: null, lastOrderDate: '2026-09-03' } } } }) },
+    { id: 'co-archived', label: 'co · Archived: "Archived", read only until it is reactivated; every button held with "Archived: reactivate it first"', model: coCase({ code: 'ARCHIVIATO-DEMO', money: NOTHING_LATE }) },
+    { id: 'co-five-strips', label: 'co · Six things stop the customer: Blocked, two holds, Can\'t invoice yet, VIES not proven, Overdue — the first four, then "Show 2 more"', model: coCase({ code: 'BLOCCATO-DEMO', record: { party: { ...by('BLOCCATO-DEMO'), invoiceBlocked: true, warnings: [warning('NO_TAX_IDENTITY', true), warning('VIES_NOT_PROVEN', false)] } }, overview: { glance: ready(glanceOf('MODA-DEMO', HELD_GLANCE)) } }) },
+    { id: 'co-reading', label: 'co · Every read still out: the sentence\'s placeholder, the strips\' reading row, each card\'s skeleton, Requests & changes loading', model: { ...coCase({ looks: false, money: moneyModel(MONEY_CAN.finance, MONEY_STATES.loading), overview: { reads: { board: { status: 'reading' }, requests: { status: 'reading' }, replies: { status: 'reading' }, asks: { status: 'reading' }, tasks: { status: 'reading' } }, counts: 'reading', standing: { status: 'reading' }, glance: LOADING } }), supervisor: { ...SUPERVISOR_CASES.saved, state: 'loading', read: null }, designer: DESIGNER_CASES.loading } },
+    { id: 'co-failed', label: 'co · Every read failed: the holds and the credit could not be read (Try again, the last strip), the band and Requests & changes with Try again, People\'s failed state, rows that say "Could not be read"', model: { ...coCase({ looks: false, money: moneyModel(MONEY_CAN.finance, MONEY_STATES.failed), overview: { reads: { board: { status: 'failed' }, requests: { status: 'failed' }, replies: { status: 'failed' }, asks: { status: 'failed' }, tasks: { status: 'failed' } }, counts: 'failed', standing: { status: 'failed' }, glance: failedRead('problem.unavailable') } }), supervisor: { ...SUPERVISOR_CASES.saved, state: 'error', read: null, problem: 'failed.title' }, designer: DESIGNER_CASES.error } },
+    { id: 'co-no-orders', label: 'co · A reader without orders.view: the status word, then only what its reads say — no band, no order row, no next promise', model: coCase({ record: { can: { ...RECORD_CAN, orders: false } } }) },
+    // The Overview as each office role reads it (the role template's real grant): Moda Demo on hold, over the limit, invoices late.
+    { id: 'co-role-owner', label: 'co · As Owner: every card, every amount, both Change…', model: roleCase('owner') },
+    { id: 'co-role-sales', label: 'co · As Sales (no price grain): "Invoices are late" and the credit in words — no amount, no count of invoices; Change… on the designer only', model: roleCase('sales') },
+    { id: 'co-role-production-manager', label: 'co · As Production manager: no money strip, no Credit fact, no Money door; Change… on the supervisor only; "You can view, not change"', model: roleCase('production_manager') },
+    { id: 'co-role-warehouse', label: 'co · As Warehouse: the sentence, the band, the contacts, the order dates, requests and tasks, orders / repairs / returns, the facts — no office people, no portal, no money; no button', model: roleCase('warehouse') },
+    { id: 'co-role-finance', label: 'co · As Finance: the money with its amounts, quotes, repairs, returns — no office people, no portal, no samples, no complaints', model: roleCase('finance') },
+    { id: 'co-role-read-only', label: 'co · As Read-only: every card, no amount, no button; "You can view, not change"', model: roleCase('read_only') },
+    // ---- end F-CO-301 (cases)
     { id: 'addresses', label: 'People & addresses', model: record('MODA-DEMO', { tab: 'people' }), note: 'The default switches save at once; Edit opens the address.' },
     { id: 'addresses-saving', label: 'Addresses: a default being saved', model: record('MODA-DEMO', { tab: 'people', saving: `shipTo:${by('MODA-DEMO').addresses[1]!.id}` }) },
     { id: 'addresses-empty', label: 'People & addresses: none yet', model: record('NUOVO-PROVA', { tab: 'people' }) },
@@ -1070,20 +1230,20 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'band-held', label: 'F-SA-271 · New order and Add task held with why (no orders.manage, no tasks.manage)', model: record('MODA-DEMO', { can: { ...RECORD_CAN, ordersManage: false, tasks: false, workorders: true } }) },
     { id: 'band-doors', label: 'F-SA-271 · ⋯ Check VIES, Add task for <customer>…, Import orders…, Open in Sales › Orders, Work orders of <customer> ›', model: record('MODA-DEMO', { can: { ...RECORD_CAN, ordersManage: true, tasks: true, workorders: true } }) },
     // ---- F-SA-272: the Overview — key numbers as doors, Also open, and who looks after the customer (moved from Portal settings).
-    { id: 'overview-supervisor', label: 'F-SA-272 · Overview: Who looks after <customer> — supervisor Bea Esempio, backup Carlo Prova (office only)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved } },
-    { id: 'overview-supervisor-new', label: 'F-SA-272 · A first supervisor picked — "moves 7 orders that have no supervisor of their own" before Apply', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.first, supervisorOpen: true /* F-CO-201: the form's state, in People's Change… window */ } },
-    { id: 'overview-supervisor-held', label: 'F-SA-272 · The supervisor held — no production.brand.manage', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.held } },
-    { id: 'overview-supervisor-every-company', label: 'F-SA-272 · The supervisor held — the reader does not manage this customer at every company', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.everyCompany } },
-    { id: 'overview-supervisor-nobody', label: 'F-SA-272 · Nobody may supervise yet (what a supervisor needs, in words)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.nobody, supervisorOpen: true /* F-CO-201: the form's state, in People's Change… window */ } },
-    { id: 'overview-supervisor-refused', label: 'F-SA-272 · Apply refused: the supervisor cannot open measurement sheets', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.refused, supervisorOpen: true /* F-CO-201: the form's state, in People's Change… window */ } },
+    { id: 'overview-supervisor', label: 'F-SA-272 → F-CO-201 · People: Production supervisor Bea Esempio (Office only), Backup Carlo Prova; Change… opens ONE window', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved } },
+    { id: 'overview-supervisor-new', label: 'F-SA-272 · The Change… window (its inside): a first supervisor picked — "moves 7 orders that have no supervisor of their own" before Save', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.first, supervisorOpen: true /* F-CO-201: the form's state, in People's Change… window */ } },
+    { id: 'overview-supervisor-held', label: 'F-SA-272 · Without production.brand.manage: the supervisor\'s row, no Change… (never held for a right)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.held } },
+    { id: 'overview-supervisor-every-company', label: 'F-SA-272 · Change… held in words: the reader does not manage this customer at every company', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.everyCompany } },
+    { id: 'overview-supervisor-nobody', label: 'F-SA-272 · The Change… window (its inside): nobody may supervise yet (what a supervisor needs, in words)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.nobody, supervisorOpen: true /* F-CO-201: the form's state, in People's Change… window */ } },
+    { id: 'overview-supervisor-refused', label: 'F-SA-272 · The Change… window (its inside): Save refused — the supervisor cannot open measurement sheets', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.refused, supervisorOpen: true /* F-CO-201: the form's state, in People's Change… window */ } },
     // ---- F-CP-155: the Factory designer + Backup under Supervisor / Backup (the only names of ours the customer sees) ----
     { id: 'overview-designer', label: 'F-CP-155 · Who looks after <customer>: Factory designer Giulia Verdi + Backup Elena Rossi — "<customer> sees this name"', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.set } },
-    { id: 'overview-designer-change', label: 'F-CP-155 · Change…: ONE window, two pick lists (office people who read and answer its conversations), Apply with the version', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.change } },
-    { id: 'overview-designer-refused', label: 'F-CP-155 · Apply refused at the field: "This person does not work with <customer>…"', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.refused } },
+    { id: 'overview-designer-change', label: 'F-CP-155 · The designer\'s Change… window (its inside): two pick lists (office people who read and answer its conversations), Apply with the version', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.change } },
+    { id: 'overview-designer-refused', label: 'F-CP-155 · The designer\'s Change… window (its inside): Apply refused at the field — "This person does not work with <customer>…"', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.refused } },
     { id: 'overview-designer-lost', label: 'F-CP-155 · The designer no longer reaches the customer: the portal names the backup', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.lost } },
     { id: 'overview-designer-portal-off', label: 'F-CP-155 · Portal off: the name shows once the portal is on', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.portalOff } },
     { id: 'overview-designer-empty', label: 'F-CP-155 · No factory designer named yet', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.empty } },
-    { id: 'overview-designer-held', label: 'F-CP-155 · Change… held: "Needs the right: …" (no partners.manage)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.held, designer: DESIGNER_CASES.held } },
+    { id: 'overview-designer-held', label: 'F-CP-155 · Without partners.manage (nor production.brand.manage): both rows, no Change… (never held for a right)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.held, designer: DESIGNER_CASES.held } },
     { id: 'overview-designer-every-company', label: 'F-CP-155 · Change… held: not at every company the customer works with', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.everyCompany } },
     { id: 'overview-designer-loading', label: 'F-CP-155 · The designer rows reading (the supervisor is drawn)', model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.loading } },
     { id: 'overview-designer-error', label: "F-CP-155 · The designer couldn't be read: Try again (the supervisor stays)", model: { ...record('MODA-DEMO', { tab: 'overview' }), supervisor: SUPERVISOR_CASES.saved, designer: DESIGNER_CASES.error } },
@@ -1132,12 +1292,12 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'terms-loading', label: 'W2a: Commercial terms loading', model: termsCase('MODA-DEMO', termsModel({ terms: null })) },
     { id: 'terms-error', label: "W2a: Commercial terms couldn't be read", model: termsCase('MODA-DEMO', termsModel({ terms: null, problem: 'problem.read.unavailable' })) },
     // B-W2b-324 (SAL-019): the customer at a glance, the hold, the PO number, requirements, consent and personal data.
-    { id: 'w2b-324-overview', label: 'W2b Customer 360: free credit, promises, samples in progress, repairs, requirements in force', model: glanceCase('MODA-DEMO', ready(glanceOf('MODA-DEMO'))), note: 'One read for the screen\'s company; the W1 quotes and orders and the W2a money keep their own reads.' },
+    { id: 'w2b-324-overview', label: 'W2b Customer 360 on the Overview: the Credit fact, the next promise, Sample rounds and Repairs in Linked records, the requirements in force', model: glanceCase('MODA-DEMO', ready(glanceOf('MODA-DEMO'))), note: 'One read for the screen\'s company; the W1 quotes and orders and the W2a money keep their own reads.' },
     { id: 'w2b-324-overview-hold', label: 'W2b Customer 360: on hold (a credit check and a quality dispute), over the credit limit', model: glanceCase('MODA-DEMO', ready(glanceOf('MODA-DEMO', HELD_GLANCE))) },
-    { id: 'w2b-324-overview-team', label: 'W2b Customer 360: a team with its riders and their measurement profiles', model: glanceCase('MARCHIO-ESEMPIO', ready(glanceOf('MARCHIO-ESEMPIO'))) },
-    { id: 'w2b-324-overview-rider', label: 'W2b Customer 360: a rider (a person) under a team, with a profile', model: glanceCase('PILOTA-DEMO', ready(glanceOf('PILOTA-DEMO')), { quotes: loaded([]), orders: loaded([]) }) },
+    { id: 'w2b-324-overview-team', label: 'W2b Customer 360: a team — its riders and their measurement profiles counted in Linked records', model: glanceCase('MARCHIO-ESEMPIO', ready(glanceOf('MARCHIO-ESEMPIO'))) },
+    { id: 'w2b-324-overview-rider', label: 'W2b Customer 360: a rider (a person) — its team named in People', model: glanceCase('PILOTA-DEMO', ready(glanceOf('PILOTA-DEMO')), { quotes: loaded([]), orders: loaded([]) }) },
     { id: 'w2b-324-overview-no-price', label: 'W2b Customer 360 without the price grain: credit said in words, no amount', model: glanceCase('MODA-DEMO', ready(withoutPrices(glanceOf('MODA-DEMO', HELD_GLANCE))), { can: { ...DEPTH_CAN, price: false }, quotes: loaded(withoutMoney(QUOTES)), orders: loaded(withoutMoney(ORDERS)) }) },
-    { id: 'w2b-324-overview-withheld', label: 'W2b Customer 360: parts the role may not read say what they need', model: glanceCase('MARCHIO-ESEMPIO', ready(glanceOf('MARCHIO-ESEMPIO', WITHHELD))) },
+    { id: 'w2b-324-overview-withheld', label: 'W2b Customer 360: the parts the role may not read are left out (never "Not shown")', model: glanceCase('MARCHIO-ESEMPIO', ready(glanceOf('MARCHIO-ESEMPIO', WITHHELD))) },
     { id: 'w2b-324-overview-nothing', label: 'W2b Customer 360: nothing open, no limit, no rule', model: glanceCase('PILOTA-DEMO', ready(glanceOf('PILOTA-DEMO', { team: null, profiles: { count: 0, rows: [] } })), { quotes: loaded([]), orders: loaded([]) }) },
     { id: 'w2b-324-overview-loading', label: 'W2b Customer 360 reading', model: glanceCase('MODA-DEMO', LOADING) },
     { id: 'w2b-324-overview-error', label: "W2b Customer 360 couldn't be read", model: glanceCase('MODA-DEMO', failedRead('problem.offline')) },

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import type { BeforeOrderCountsAnswer } from '@nexus/factory-domain/sales/before-order/contracts'
 import { describe, expect, it } from 'vitest'
 import { LOCALES, type Locale } from '../../../../../lib/i18n/locales'
@@ -13,7 +13,7 @@ import { failedRead, LOADING, ready } from '../../depth/model'
 import type { CustomerWork } from '../../list/api'
 import { COMPLAINTS, OVERDUE_ROWS, RETURNS } from '../../money/_demo/fixtures'
 import type { WorkReads } from '../use-customer-work'
-import { DESIGNER_CASES, DESIGNERS, OFFICE_PEOPLE, SUPERVISOR_CASES } from '../../portal/demo' // F-CO-201: made-up office people
+import { DESIGNER_CASES, designerModel, DESIGNERS, OFFICE_PEOPLE, SUPERVISOR_CASES } from '../../portal/demo' // F-CO-201: made-up office people
 import { MONEY_ANCHORS, moneyDoor, promiseDoor, termsDoor } from './doors'
 import { boardNumbersOf, headlineOf, HEADLINE_PARTS, waitsOnUsOf } from './headline'
 import { COMPLAINTS_READ, OVERVIEW_NAMESPACES, sayOf, sayToolsOf, urgencyOf, type LooksAfter, type OverviewCan, type OverviewHeadline, type OverviewInput, type OverviewMoney, type OverviewRow, type OverviewStrip, type Say } from './model'
@@ -406,6 +406,10 @@ describe('the cards: People, Next dates, Requests & changes, Linked records, Cus
     expect(rowOf(designerOut.rows, 'portal').state).toBe('unread')
     expect(valueOf(rowOf(designerOut.rows, 'supervisor'))).toBe(OFFICE_PEOPLE.bea.name)
     expect(rowOf(peopleOf(input({ looksAfter: looks({ designer: DESIGNER_CASES.loading }) })).rows, 'designer').state).toBe('reading')
+    // F-CO-301: after a change of the designer, its receipt stays under the row (as the card drew it under its rows).
+    const saved = rowOf(peopleOf(input({ looksAfter: looks({ designer: designerModel({ notice: { key: 'customers.designer.done' } }) }) })).rows, 'designer')
+    expect(saved.under!.map((line) => said(line))).toEqual(["Seed Racing sees only this person's name when it asks for design help.", "Seed Racing's factory designer is saved."])
+    expect(row('designer').under).toHaveLength(1)
     // Office names to the office only: without partners.view nothing is read — the customer's own contacts, no Portal row.
     expect(peopleOf(input()).rows.every((each) => each.key.startsWith('contact-') || each.key.startsWith('nobody'))).toBe(true)
     expect(allWords(overviewOf(input()), 'en')).not.toContain(OFFICE_PEOPLE.bea.name)
@@ -646,6 +650,52 @@ describe('the tab\'s reads (S11, S12; 13-backend §1.3)', () => {
     expect(hook).toContain('listSalesOrdersOf(api, partyId).then(')
     expect(hook).toContain("if (side === 'suppliers' && can.purchaseOrders)")
     expect(hook).toContain('listPurchaseOrdersOf(api, partyId).then(')
+  })
+})
+
+describe('source pins (15-steps T.2)', () => {
+  const VIEW = readFileSync(new URL('../view/overview/CustomerOverviewView.tsx', import.meta.url), 'utf8')
+
+  it('S6: the band is the Work tab\'s own band INSIDE a kit card — never a direct child of the kit\'s root (its size container and phone fold stay)', () => {
+    const start = VIEW.indexOf('<OverviewCard title={bandTitle}>')
+    expect(start).toBeGreaterThan(-1)
+    const card = VIEW.slice(start, VIEW.indexOf('</OverviewCard>', start))
+    expect(card).toContain('<WorkBand model={band.model} actions={band.actions} />')
+    expect(VIEW.match(/<WorkBand /g)).toHaveLength(1)
+  })
+
+  it('the Overview\'s files hold no stylesheet and write no kit class: a kit part has no look prop, the host uses the kit\'s text classes on its own content only (S32)', () => {
+    for (const folder of ['./', '../view/overview/']) {
+      const files = readdirSync(new URL(folder, import.meta.url))
+      expect(files.filter((file) => file.endsWith('.css')), folder).toEqual([])
+      for (const file of files.filter((name) => /\.tsx?$/.test(name) && !name.includes('vitest'))) {
+        const source = readFileSync(new URL(folder + file, import.meta.url), 'utf8')
+        expect(source, file).not.toMatch(/import\s+['"][^'"]+\.css['"]/)
+        expect(source, file).not.toContain('fw-so-')
+        expect(source, file).not.toMatch(/\.fw-ro-[a-z-]+\s*\{/)
+        expect(source, file).not.toMatch(/style=\{/)
+      }
+    }
+  })
+
+  it('the Overview\'s notices: the receipt, "changed meanwhile", "You can view, not change" — no Blocked or Archived banner (the sentence and the strip say them)', () => {
+    const notices = readFileSync(new URL('../view/overview/Notices.tsx', import.meta.url), 'utf8')
+    expect(notices).toContain('<NoticeBanner notice={model.notice}')
+    expect(notices).toContain("t('record.changed'")
+    expect(notices).toContain("t('record.readOnly')")
+    expect(notices).not.toMatch(/record\.archivedBanner|record\.blockedReason/)
+    const crv = readFileSync(new URL('../view/CustomerRecordView.tsx', import.meta.url), 'utf8')
+    expect(crv).toContain("{tab === 'overview' ? <OverviewNotices model={model} party={party} actions={actions} /> : <PartyNotices model={model} party={party} actions={actions} />}")
+  })
+
+  it('S11: the joined read only on the Overview and only with orders.view; the container reads only this customer\'s row of it', () => {
+    const page = readFileSync(new URL('../CustomerRecord.tsx', import.meta.url), 'utf8')
+    expect(page).toContain("const standing = useCustomersWork(api, standingRows, tab === 'overview' && can.orders)")
+    expect(page).toContain('const standingRows = useMemo(() => [{ id: partyId }], [partyId])')
+    const container = readFileSync(new URL('./CustomerOverview.tsx', import.meta.url), 'utf8')
+    expect(container).toContain('standing: standingOf(can.orders, standing, id)')
+    const model = readFileSync(new URL('./model.ts', import.meta.url), 'utf8')
+    expect(model).toContain('if (work.byParty) return { status: \'ready\', value: work.byParty.get(partyId) ?? null }')
   })
 })
 

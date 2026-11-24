@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { UserCog } from 'lucide-react'
 import { Eye, Palette, TriangleAlert } from 'lucide-react' // F-CP-155: the factory designer rows' marks
 import { Banner, Card, Field } from '@nexus/ui/components'
@@ -150,17 +150,17 @@ export function SupervisorForm({ model, actions, name, draft, onDraft, notice = 
  * People's Change… (the supervisor): ONE centred window (560 px) around the same form. Its title names who looks after, with "Office
  * only"; its foot: Cancel · Save. Save is the card's own command; once it is saved the window closes and People reads again.
  */
-export function SupervisorWindow({ model, actions, name, onClose }: { model: SupervisorModel; actions?: SupervisorActions | undefined; name: string; onClose: () => void }) {
+export function SupervisorWindow({ model, actions, name, onClose, inside = false }: { model: SupervisorModel; actions?: SupervisorActions | undefined; name: string; onClose: () => void; /** F-CO-301: its inside on a plain card (a design case: never a Modal open on a server render). */ inside?: boolean }) {
   return (
     <PortalAccessMessages>
       <WithMessages namespaces={[SUPERVISOR_NS, 'parties']}>
-        <SupervisorWindowBody model={model} actions={actions} name={name} onClose={onClose} />
+        <SupervisorWindowBody model={model} actions={actions} name={name} onClose={onClose} inside={inside} />
       </WithMessages>
     </PortalAccessMessages>
   )
 }
 
-function SupervisorWindowBody({ model, actions, name, onClose }: { model: SupervisorModel; actions?: SupervisorActions | undefined; name: string; onClose: () => void }) {
+function SupervisorWindowBody({ model, actions, name, onClose, inside }: { model: SupervisorModel; actions?: SupervisorActions | undefined; name: string; onClose: () => void; inside: boolean }) {
   const t = usePortalT()
   const ts = useT(SUPERVISOR_NS)
   const p = useT('parties')
@@ -178,10 +178,9 @@ function SupervisorWindowBody({ model, actions, name, onClose }: { model: Superv
     })
   }
   return (
-    <Modal
-      open
+    <WindowFrame
+      inside={inside}
       size="md"
-      sheet
       onClose={onClose}
       closeHeld={model.busy ? t('common.saving') : null}
       title={
@@ -208,7 +207,32 @@ function SupervisorWindowBody({ model, actions, name, onClose }: { model: Superv
           <Skeleton height={96} />
         </div>
       )}
-    </Modal>
+    </WindowFrame>
+  )
+}
+
+/**
+ * F-CO-301 (customer Overview co-t T.1): ONE window body, two frames — the centred Modal the page opens, or (`inside`) the same
+ * title, body and foot on a plain card: the design index draws a window's states this way (never a Modal open on a server render).
+ */
+function WindowFrame({ inside, size, onClose, closeHeld, title, subtitle, footer, children }: { inside: boolean; size: 'sm' | 'md'; onClose: () => void; closeHeld: string | null; title: ReactNode; subtitle?: ReactNode; footer: ReactNode; children?: ReactNode }) {
+  if (!inside)
+    return (
+      <Modal open size={size} sheet onClose={onClose} closeHeld={closeHeld} title={title} subtitle={subtitle} footer={footer}>
+        {children}
+      </Modal>
+    )
+  return (
+    <Card padded>
+      <div className="fw-pa">
+        <div className="fw-pa-stack">
+          <h2 className="fw-pa-legend">{title}</h2>
+          {subtitle ? <p className="fw-pa-hint">{subtitle}</p> : null}
+        </div>
+        {children}
+        <div className="fw-pa-head">{footer}</div>
+      </div>
+    </Card>
   )
 }
 // ---- end F-CO-201 (the supervisor form and its window)
@@ -382,7 +406,7 @@ function DesignerRows({ slot, say }: { slot: DesignerSlot; say: (phrase: Phrase)
 }
 
 /** The ONE Change… window: two pick lists (eligible office people only), Apply with the stored version; refusals at the field. */
-function DesignerChangeWindow({ model, slot, name, say, actions }: { model: DesignerModel; slot: DesignerSlot; name: string; say: (phrase: Phrase) => string; actions?: DesignerActions | undefined }) {
+function DesignerChangeWindow({ model, slot, name, say, actions, inside = false }: { model: DesignerModel; slot: DesignerSlot; name: string; say: (phrase: Phrase) => string; actions?: DesignerActions | undefined; inside?: boolean }) {
   const t = usePortalT()
   const dialog = model.dialog!
   const problems = { ...draftProblems(dialog.draft), ...dialog.fields }
@@ -393,10 +417,9 @@ function DesignerChangeWindow({ model, slot, name, say, actions }: { model: Desi
   const backups = ready ? choicesOf(ready, slot.backup, dialog.draft.designerId) : []
   const none = { value: '', label: say({ key: 'customers.designer.none' }) }
   return (
-    <Modal
-      open
+    <WindowFrame
+      inside={inside}
       size="sm"
-      sheet
       onClose={() => actions?.onClose?.()}
       closeHeld={dialog.busy ? say({ key: 'customers.designer.saving' }) : null}
       title={say({ key: 'customers.designer.title', params: { customer: name } })}
@@ -450,7 +473,7 @@ function DesignerChangeWindow({ model, slot, name, say, actions }: { model: Desi
           </>
         )}
       </div>
-    </Modal>
+    </WindowFrame>
   )
 }
 // ── end F-CP-155 ──
@@ -464,18 +487,18 @@ function useDesignerSay(name: string): (phrase: Phrase) => string {
 }
 
 /** People's Change… (the factory designer): today's own window, unchanged — mounted by the page while the designer's hook holds it open. */
-export function DesignerWindow({ model, actions, name }: { model: DesignerModel; actions?: DesignerActions | undefined; name: string }) {
+export function DesignerWindow({ model, actions, name, inside = false }: { model: DesignerModel; actions?: DesignerActions | undefined; name: string; /** F-CO-301: its inside on a plain card (a design case). */ inside?: boolean }) {
   return (
     <PortalAccessMessages>
       <WithMessages namespaces={['parties']}>
-        <DesignerWindowHost model={model} actions={actions} name={name} />
+        <DesignerWindowHost model={model} actions={actions} name={name} inside={inside} />
       </WithMessages>
     </PortalAccessMessages>
   )
 }
 
-function DesignerWindowHost({ model, actions, name }: { model: DesignerModel; actions?: DesignerActions | undefined; name: string }) {
+function DesignerWindowHost({ model, actions, name, inside }: { model: DesignerModel; actions?: DesignerActions | undefined; name: string; inside: boolean }) {
   const say = useDesignerSay(name)
-  return model.read.status === 'ready' && model.dialog ? <DesignerChangeWindow model={model} slot={model.read.slot} name={name} say={say} actions={actions} /> : null
+  return model.read.status === 'ready' && model.dialog ? <DesignerChangeWindow model={model} slot={model.read.slot} name={name} say={say} actions={actions} inside={inside} /> : null
 }
 // ---- end F-CO-201

@@ -219,7 +219,8 @@ function officeRowsOf(input: OverviewInput, looksAfter: LooksAfter): OverviewRow
     label,
     parts,
     ...(slot.designer ? { tag: tagOf(slot.designer) } : {}),
-    under: [phraseSay(portalLineOf(slot), customer)],
+    // F-CO-301 (co-t T.1): after a change, its receipt stays under the row ("Saved: …"), as the card drew it under its rows.
+    under: [phraseSay(portalLineOf(slot), customer), ...(designer.notice ? [phraseSay(designer.notice, customer)] : [])],
     ...(designer.manage ? { doors: [stepDoor('changeDesigner', say('customers.designer.change'), { kind: 'act', act: 'changeDesigner' }, archived ?? (reachDesigner ? phraseSay(reachDesigner, customer) : null))] } : {}),
   })
   return rows
