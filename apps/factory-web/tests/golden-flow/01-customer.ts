@@ -135,6 +135,10 @@ export default defineStage({
       await sales.go(`/sales/customers/${party.id}?tab=terms#party-commercial`)
       await press(page.getByRole('button', { name: 'Change terms…', exact: true }).first())
       await dialog(page).getByRole('combobox', { name: 'Payment terms', exact: true }).selectOption({ label: 'BB30FM · Bank transfer 30 days end of month' })
+      // ct-fx2: BB30FM asks no share on the order, so a new quote would carry NO deposit (quoteDefaultsOf: terms with no order
+      // share → none) — the later stages (06a accept, 06b TD02, 07 order, 10 release) read the deposit the sales settings gave
+      // before (30 %). The customer's own default deposit keeps it: 30 %.
+      await dialog(page).getByRole('textbox', { name: 'Default deposit %', exact: true }).fill('30')
       await answerOf(page, 'PATCH', /^\/parties\/[0-9a-f-]+\/commercial-terms$/, () => press(dialog(page).getByRole('button', { name: 'Save terms', exact: true })))
       await expect(page.getByText('Commercial terms saved.', { exact: false }).first()).toBeVisible()
     })
