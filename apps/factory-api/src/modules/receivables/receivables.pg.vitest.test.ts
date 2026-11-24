@@ -163,6 +163,22 @@ describe('what customers owe and the statement (FIN-109, FIN-110)', () => {
     expect((await ok(call('finance', 'GET', `/receivables/ageing?asOf=2026-10-01&partyId=${ids.P1}`))).customers).toEqual([])
   })
 
+  // F-CM-S7 (customer MONEY tab, 13-backend §2.4): each row counts its late invoices — an open instalment past its due day, the overdue's
+  // own rule. A count, not money: every reader of the row reads it; the row's wall holds (another company, another customer: no row).
+  it("lateInvoices: P1's open invoice is not late on 20 Nov and late on 1 and 10 Dec; the same without the price grain; no row for another customer's reader", async () => {
+    const on = async (session: string, asOf: string) => (await ok(call(session, 'GET', `/receivables/ageing?asOf=${asOf}&partyId=${ids.P1}`))).customers.find((entry: Json) => entry.customer.id === ids.P1)
+    expect(await on('finance', '2026-11-20')).toMatchObject({ invoices: 1, lateInvoices: 0, daysLate: null })
+    expect(await on('finance', '2026-12-01')).toMatchObject({ invoices: 1, lateInvoices: 1, daysLate: 4 })
+    expect(await on('finance', '2026-12-10')).toMatchObject({ invoices: 1, lateInvoices: 1, daysLate: 13 })
+    const blind = await on('viewer', '2026-12-10')
+    expect(blind).toMatchObject({ invoices: 1, lateInvoices: 1 })
+    expect(blind.open).toBeUndefined()
+    // A reader over another customer only (receivables.view and the price grain): P1's row is never sent.
+    SESSIONS.otherCustomer = office(newId(), [{ ...grant(['receivables.view', 'money.price']), parties: [newId()] }])
+    expect((await ok(call('otherCustomer', 'GET', `/receivables/ageing?partyId=${ids.P1}`))).customers).toEqual([])
+    expect((await ok(call('companyB', 'GET', `/receivables/ageing?partyId=${ids.P1}`))).customers).toEqual([])
+  })
+
   it('the statement: opening + invoices − payments − credits = running balance; the open items; the PDF', async () => {
     const statement = await ok(call('finance', 'GET', `/receivables/customers/${ids.P1}/statement?companyId=${ids.companyA}&from=2026-10-01&to=2026-12-10&language=it`))
     expect(statement).toMatchObject({ currency: 'EUR', from: '2026-10-01', to: '2026-12-10', opening: 0 })
