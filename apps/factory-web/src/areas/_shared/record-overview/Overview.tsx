@@ -20,7 +20,8 @@ import './record-overview.css'
  * The frame (F-CO-K1): `Overview` (the tab's column and the room its pairs read), `OverviewPair` (two cards side by side from
  * 720 px of the Overview, one below; a card alone takes the row), `OverviewCard` (the card with its title), `Headline` (the lead
  * card's sentence and its quiet line), `CardState` (a card while its part loads, or when its read failed), `useOverviewWords`.
- * The rows (F-CO-K2): `Strips`, `Strip`, `StripSaid` (what stops the record, one row each, most blocking first).
+ * The rows (F-CO-K2): `Strips`, `Strip`, `StripSaid` (what stops the record, one row each, most blocking first); `RowList`, `Row`,
+ * `QuietLine` (a card's ONE list: label | value | doors, on the list's own columns).
  */
 
 /** The kit's own words in the page's language. */
@@ -36,6 +37,16 @@ export interface OverviewWords {
   readonly showMore: (count: number) => string
   /** "Show fewer" */
   readonly showFewer: string
+  /** "None yet: {kinds}" (a list's kinds at zero, in one quiet line) */
+  readonly none: (kinds: string) => string
+  /** "{value} ›" — a door's words; its arrow never stands alone on a line (a no-break space before "›") */
+  readonly door: (value: string) => string
+  /** "{label}: {value}" */
+  readonly labelled: (label: string, value: string) => string
+  /** "Could not be read" (of several: a row of a list) */
+  readonly unreadMany: string
+  /** "Could not be read" (of one: a fact) */
+  readonly unreadOne: string
   // ---- end F-CO-K2
 }
 
@@ -55,6 +66,12 @@ export function useOverviewWords(): OverviewWords {
       // F-CO-K2: the rows' words
       showMore: (count) => t('strips.showMore', { count }),
       showFewer: t('strips.showFewer'),
+      none: (kinds) => t('row.none', { kinds }),
+      // S31: the order's own rule (F-OM-fx6), now the kit's for every page — "Open ›" never breaks before its arrow.
+      door: (value) => t('row.door', { value }).replace(/ ›$/, '\u00a0›'),
+      labelled: (label, value) => t('row.labelled', { label, value }),
+      unreadMany: t('row.unreadMany'),
+      unreadOne: t('row.unreadOne'),
     }
   }, [locale, reader])
 }
@@ -231,3 +248,38 @@ export function StripSaid({ title, since = null, lines = [] }: { title: ReactNod
   )
 }
 // ---- end F-CO-K2 (strips)
+
+// ---- F-CO-K2 (the shared overview kit's rows): the ONE list — label | value | doors, every row on the list's own columns ----------
+/**
+ * A card's list of rows. Its rows lie on the list's own columns (subgrid), so every label, value and door lines up with the rows
+ * above it; below a 480 px card the doors wrap under the value, to the right; below a 360 px card (a phone) a row stacks. `label`:
+ * the list's name for a screen reader (left out: none).
+ */
+export function RowList({ label, children }: { label?: string; children?: ReactNode }): ReactNode {
+  return (
+    <ul className="fw-so-ov-list" aria-label={label}>
+      {children}
+    </ul>
+  )
+}
+
+/**
+ * One row: its label (quiet), then what the page hands as `children` (the value: words, a link, a part that draws its own value and
+ * doors), then its doors. `doors` left out (undefined): no doors cell; `null`: an EMPTY doors cell (a list whose rows keep the
+ * door's column even when one has none).
+ */
+export function Row({ label, doors, children }: { label: ReactNode; doors?: ReactNode; children?: ReactNode }): ReactNode {
+  return (
+    <li className="fw-so-ov-row">
+      <span className="fw-so-ov-label">{label}</span>
+      {children}
+      {doors === undefined ? null : <span className="fw-so-ov-doors">{doors}</span>}
+    </li>
+  )
+}
+
+/** A quiet line of the list, the whole row wide ("None yet: …", where the record came from, a list held for this reader). */
+export function QuietLine({ children }: { children?: ReactNode }): ReactNode {
+  return <li className="fw-so-ov-quiet fw-ro-hint">{children}</li>
+}
+// ---- end F-CO-K2 (the ONE list)

@@ -717,7 +717,7 @@ describe('F-OO-201: the Overview draws two full-width cards, then three pairs; a
     expect(orders).not.toContain('.fw-so-overview {')
     expect(orders).toContain('areas/_shared/record-overview/record-overview.css')
     expect(css).toMatch(/\.fw-so-overview \{\s*display: flex;\s*flex-direction: column;\s*gap: var\(--nds-space-16\);\s*min-width: 0;\s*\}/)
-    // F-OO-207: Linked records' count chips left with their card's rows (record/view/overview/linked.css).
+    // F-OO-207: Linked records' count chips left with their card's rows (F-CO-K2: now the shared overview kit's ONE list).
     for (const gone of ['.fw-so-linked {', '.fw-so-countbtn {']) expect(orders, gone).not.toContain(gone)
     // F-OO-103: "Where it is now"'s own rules left it for the card's own file. F-CO-K1: the card's column went on to the kit (its lead card).
     expect(css).toContain('.fw-so-where {')

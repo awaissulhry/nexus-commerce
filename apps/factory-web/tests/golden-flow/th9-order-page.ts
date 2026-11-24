@@ -680,11 +680,11 @@ export default defineStage({
       // 3 · People: one list — the supervisor, the backup, who answers the customer (a name and why, or "No owner yet": never "—"),
       // where it is made; or, for a reader who does not follow production, the card says who sees it.
       const people = page.locator('.fw-so-people')
-      const supervisorRow = people.locator('li').filter({ has: page.locator('.fw-so-people-label', { hasText: OD('people.supervisor') }) })
+      const supervisorRow = people.locator('li').filter({ has: page.locator('.fw-so-ov-label', { hasText: OD('people.supervisor') }) })
       await seen(supervisorRow.first().or(people.getByText(OD('overview.people.held'))), 60_000)
       if ((await supervisorRow.count()) > 0) {
-        for (const label of [OD('overview.people.backup'), OD('overview.people.answers'), OD('overview.people.where')]) await seen(people.locator('.fw-so-people-label', { hasText: label }).first())
-        const answers = people.locator('li').filter({ has: page.locator('.fw-so-people-label', { hasText: OD('overview.people.answers') }) }).first()
+        for (const label of [OD('overview.people.backup'), OD('overview.people.answers'), OD('overview.people.where')]) await seen(people.locator('.fw-so-ov-label', { hasText: label }).first())
+        const answers = people.locator('li').filter({ has: page.locator('.fw-so-ov-label', { hasText: OD('overview.people.answers') }) }).first()
         expect((await answers.innerText()).replace(OD('overview.people.answers'), '').trim(), 'who answers the customer is named (or "No owner yet"), never "—"').not.toMatch(/^—/)
       }
 
@@ -716,7 +716,7 @@ export default defineStage({
       const linked = cardOf(page, OD('overview.linked.title'))
       await seen(linked, 60_000)
       for (const [label, tab] of [[OD('overview.linked.workOrders'), 'production'], [OD('overview.linked.shipments'), 'shipments']] as const) {
-        const row = linked.locator('li.fw-so-ov-row').filter({ has: page.locator('.fw-so-linked-label', { hasText: label }) })
+        const row = linked.locator('li.fw-so-ov-row').filter({ has: page.locator('.fw-so-ov-label', { hasText: label }) })
         const badge = await badgeOf(page, tab)
         if ((await row.count()) === 0) {
           // None yet (the quiet line): no number on the card, and none (or 0) on the tab.

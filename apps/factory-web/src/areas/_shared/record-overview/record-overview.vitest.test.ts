@@ -12,6 +12,7 @@ import { designScreen } from './fixtures'
 import { GROUP_ROWS_SHOWN, OVERVIEW_NS, STRIPS_SHOWN } from './model'
 import { CardState, Headline, Overview, OverviewCard, OverviewPair, useOverviewWords } from './Overview'
 import { Strip, StripSaid, Strips } from './Overview' // F-CO-K2: the strips
+import { QuietLine, Row, RowList } from './Overview' // F-CO-K2: the ONE list
 import { LAB_WIDTHS } from './view/OverviewLab'
 
 /**
@@ -261,6 +262,58 @@ describe('F-CO-K2: the strips — Strips, Strip and StripSaid draw the markup th
   })
 })
 // ---- end F-CO-K2 (strips)
+
+// ---- F-CO-K2: the ONE list (People's and Linked records' lists, merged: settle S3) -------------------------------------------------
+describe('F-CO-K2: the ONE list — RowList, Row and QuietLine; the rows\' words', () => {
+  it('the stylesheet: one list rule set (the list, its rows on its columns, the label, the quiet line, the 480 / 360 rules), tokens only', () => {
+    const text = css()
+    const block = text.slice(text.indexOf("/* ── F-CO-K2 (the shared overview kit's rows): the ONE list"), text.indexOf('/* ── end F-CO-K2 (the ONE list) ── */'))
+    expect(block.length).toBeGreaterThan(100)
+    expect(block).toMatch(/\n\.fw-so-ov-list \{\s*display: grid;\s*grid-template-columns: max-content minmax\(0, 1fr\) auto;\s*gap: var\(--nds-space-10\) var\(--nds-space-12\);\s*margin: 0;\s*padding: 0;\s*list-style: none;\s*min-width: 0;\s*\}/)
+    expect(block).toMatch(/\n\.fw-so-ov-list > \.fw-so-ov-row \{\s*grid-column: 1 \/ -1;\s*grid-template-columns: subgrid;\s*\}/)
+    expect(block).toMatch(/\n\.fw-so-ov-label \{\s*color: var\(--nds-text-muted\);\s*\}/)
+    expect(block).toMatch(/\n\.fw-so-ov-quiet \{\s*grid-column: 1 \/ -1;\s*margin: 0;\s*\}/)
+    expect(block).toMatch(/@container fw-so-ov-card \(max-width: 479px\) \{\s*\.fw-so-ov-list \{\s*grid-template-columns: max-content minmax\(0, 1fr\);/)
+    expect(block).toMatch(/@container fw-so-ov-card \(max-width: 359px\) \{\s*\.fw-so-ov-list \{\s*grid-template-columns: minmax\(0, 1fr\);/)
+    // ONE list: its rules are said once in the file; no near-copy of another name.
+    for (const rule of ['.fw-so-ov-list {', '.fw-so-ov-label {', '.fw-so-ov-quiet {']) expect(text.split(`\n${rule}`), rule).toHaveLength(2)
+    expect(text).not.toMatch(/fw-so-(?:people|linked)-(?:list|label|line)\b/)
+    // The quiet line is not Progress by line's row (.fw-so-ov-line, the order's own progress.css): a different name.
+    expect(text).not.toMatch(/\.fw-so-ov-line\b/)
+  })
+
+  it('RowList: a list, named only when the page names it', () => {
+    expect(render(createElement(RowList, null, 'rows'))).toBe('<ul class="fw-so-ov-list">rows</ul>')
+    expect(render(createElement(RowList, { label: 'Linked records' }, 'rows'))).toBe('<ul class="fw-so-ov-list" aria-label="Linked records">rows</ul>')
+  })
+
+  it('Row: the label, the value the page hands, the doors — left out: no doors cell; null: an EMPTY one; given: the doors', () => {
+    expect(render(createElement(Row, { label: 'Backup' }, createElement('span', null, 'Bea Esempio')))).toBe('<li class="fw-so-ov-row"><span class="fw-so-ov-label">Backup</span><span>Bea Esempio</span></li>')
+    expect(render(createElement(Row, { label: 'Shipments', doors: null }, createElement('span', null, '2')))).toBe('<li class="fw-so-ov-row"><span class="fw-so-ov-label">Shipments</span><span>2</span><span class="fw-so-ov-doors"></span></li>')
+    expect(render(createElement(Row, { label: 'Answers', doors: createElement('button', null, 'Change…') }, createElement('span', null, 'Bea Esempio')))).toBe('<li class="fw-so-ov-row"><span class="fw-so-ov-label">Answers</span><span>Bea Esempio</span><span class="fw-so-ov-doors"><button>Change…</button></span></li>')
+    // A part that draws its own value and doors is handed as the value (no doors of the row then).
+    expect(render(createElement(Row, { label: 'Supervisor' }, createElement('span', { className: 'x-value' }, 'V'), createElement('span', { className: 'x-doors' }, 'D')))).toBe('<li class="fw-so-ov-row"><span class="fw-so-ov-label">Supervisor</span><span class="x-value">V</span><span class="x-doors">D</span></li>')
+  })
+
+  it('QuietLine: the whole row wide, in the kit\'s hint', () => {
+    expect(render(createElement(QuietLine, null, 'None yet: Shipments'))).toBe('<li class="fw-so-ov-quiet fw-ro-hint">None yet: Shipments</li>')
+    expect(render(createElement(RowList, null, createElement(Row, { label: 'A' }, 'a'), createElement(QuietLine, null, 'q')))).toBe('<ul class="fw-so-ov-list"><li class="fw-so-ov-row"><span class="fw-so-ov-label">A</span>a</li><li class="fw-so-ov-quiet fw-ro-hint">q</li></ul>')
+  })
+
+  it('the rows\' words need no provider; a door\'s arrow never stands alone on a line (a no-break space before "›")', () => {
+    function Probe(): ReactNode {
+      const words = useOverviewWords()
+      return createElement('p', null, [words.none('Shipments · Invoices'), words.door('Quote: Q-1'), words.labelled('Quote', 'Q-1'), words.unreadMany, words.unreadOne].join(' | '))
+    }
+    expect(textOf(bare(createElement(Probe), 'en'))).toBe('None yet: Shipments · Invoices | Quote: Q-1 › | Quote: Q-1 | Could not be read | Could not be read')
+    expect(textOf(bare(createElement(Probe), 'it'))).toBe('Ancora nessuno: Shipments · Invoices | Quote: Q-1 › | Quote: Q-1 | Non è stato possibile leggerli | Non è stato possibile leggerlo')
+    // door(): the catalogue word is "{value} ›"; what a part draws keeps "›" with its last word.
+    expect(bare(createElement(Probe), 'en')).toContain('Quote: Q-1\u00a0›')
+    expect(bare(createElement(Probe), 'en')).not.toContain('Quote: Q-1 ›')
+    for (const locale of LOCALES) expect(CATALOGUE[locale][OVERVIEW_NS]!['row.door'], locale).toBe('{value} ›')
+  })
+})
+// ---- end F-CO-K2 (the ONE list)
 
 describe('the /design/record-overview lab', () => {
   it('has its own screen id (the design index finds every fixtures.ts by itself) and the frame\'s cases', () => {

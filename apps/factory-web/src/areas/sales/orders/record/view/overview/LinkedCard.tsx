@@ -11,11 +11,11 @@ import { linkedRowsOf, type LinkCount, type LinkedDoor, type LinkedQuiet, type L
 import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { useSearchParams } from 'next/navigation'
 import { TabLink } from '../../../../../../lib/tab-link/TabLink'
-import './linked.css' // F-OO-207: the card's own rows
 import { OverviewCard } from '../../../../../_shared/record-overview/Overview' // F-CO-K1: the card's frame is the shared overview kit's
-
-/** F-OM-fx6 (re-walk): a door's arrow never stands alone on a line — the space before "›" does not break. */
-const door = (words: string): string => words.replace(/ ›$/, '\u00a0›')
+// ---- F-CO-K2: its rows are the kit's ONE list (its look comes with it: no stylesheet of the card's own); the rows' words are the
+// kit's (useOverviewWords: "None yet: …", "… ›" whose arrow never stands alone on a line — F-OM-fx6, now the kit's door(), S31) ----
+import { QuietLine, Row, RowList, useOverviewWords } from '../../../../../_shared/record-overview/Overview'
+// ---- end F-CO-K2
 
 /**
  * F-OO-100 (order overview lane: one file per card) — moved out of OverviewTab.tsx.
@@ -26,9 +26,12 @@ const door = (words: string): string => words.replace(/ ›$/, '\u00a0›')
  * line ("None yet: Shipments · Invoices"); a last quiet line: the quote (or the request, or "Typed by the office"), the deposit
  * when it waits for nothing, the orders of the same quote. Every number is the domain's ONE count rule (overview/linked.ts).
  * Read-only: the same rows, no door.
+ * F-CO-K2: drawn with the shared overview kit's ONE list (`RowList`, `Row` — its doors cell always drawn here, empty when no record is
+ * due — and `QuietLine`); "None yet", "… ›" and "Could not be read" are the kit's words.
  */
 export function LinkedCard({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
   const t = useT('orders')
+  const words = useOverviewWords() // F-CO-K2
   const search = useSearchParams()?.toString() ?? '' // F-OP-104: the order's own tabs keep the dock's scope
   const links = model.links ?? null
   /** Complaints or returns from GET …/links: not read on this page or no right: not drawn; still read; could not be read. */
@@ -49,33 +52,29 @@ export function LinkedCard({ order, model, actions }: { order: Order; model: Ord
   const label = (kind: LinkedRow['kind']) => t(`overview.linked.${kind}`)
   return (
     <OverviewCard title={t('overview.linked.title')}>
-      <ul className="fw-so-linked-list" aria-label={t('overview.linked.title')}>
+      <RowList label={t('overview.linked.title')}>
         {view.rows.map((row) =>
           row.held ? (
             // F-OP-306 (walk #21): a list held for this reader says the Money tab's own sentence, alone (no label, no number).
-            <li key={row.kind} className="fw-so-linked-line fw-so-hint">
-              {t(row.held.key)}
-            </li>
+            <QuietLine key={row.kind}>{t(row.held.key)}</QuietLine>
           ) : (
-            <li key={row.kind} className="fw-so-ov-row">
-              <span className="fw-so-linked-label">{label(row.kind)}</span>
+            <Row key={row.kind} label={label(row.kind)} doors={row.door ? <DoorView door={row.door} model={model} actions={actions} /> : null}>
               <RowValue row={row} />
-              <span className="fw-so-ov-doors">{row.door ? <DoorView door={row.door} model={model} actions={actions} /> : null}</span>
-            </li>
+            </Row>
           ),
         )}
-        {view.none.length > 0 && <li className="fw-so-linked-line fw-so-hint">{t('linked.none', { kinds: view.none.map(label).join(' · ') })}</li>}
+        {view.none.length > 0 && <QuietLine>{words.none(view.none.map(label).join(' · '))}</QuietLine>}
         {view.quiet.length > 0 && (
-          <li className="fw-so-linked-line fw-so-hint">
+          <QuietLine>
             {view.quiet.map((part, index) => (
               <Fragment key={`${part.kind}-${index}`}>
                 {index > 0 ? ' · ' : null}
                 <QuietPart part={part} />
               </Fragment>
             ))}
-          </li>
+          </QuietLine>
         )}
-      </ul>
+      </RowList>
     </OverviewCard>
   )
 }
@@ -83,13 +82,14 @@ export function LinkedCard({ order, model, actions }: { order: Order; model: Ord
 /** A row's value: its number and its parts joined with " · ", a real link to its tab (no prefetch: TabLink, F-OP-210). */
 function RowValue({ row }: { row: LinkedRow }) {
   const t = useT('orders')
+  const words = useOverviewWords() // F-CO-K2: "… ›" and "Could not be read" are the kit's words
   if (row.state === 'reading') return <Skeleton height={16} width={64} />
-  if (row.state === 'unread') return <span className="fw-so-hint">{t('linked.unread')}</span>
+  if (row.state === 'unread') return <span className="fw-so-hint">{words.unreadMany}</span>
   // Walk #8: a part that holds others says them in it ("3 issued (1 credit note, 1 deposit invoice)").
   const value = [...(row.count !== null ? [String(row.count)] : []), ...row.parts.map((part) => t(part.key, part.of ? { ...part.params, of: part.of.map((inner) => t(inner.key, inner.params)).join(', ') } : part.params))].join(' · ')
   return row.href ? (
     <TabLink className="fw-so-link" href={row.href}>
-      {door(t('linked.value', { value }))}
+      {words.door(value)}
     </TabLink>
   ) : (
     <span>{value}</span>
@@ -99,12 +99,13 @@ function RowValue({ row }: { row: LinkedRow }) {
 /** A part of the quiet line, a link where it opens something. */
 function QuietPart({ part }: { part: LinkedQuiet }) {
   const t = useT('orders')
+  const kit = useOverviewWords() // F-CO-K2: "{label}: {value}" and "… ›" are the kit's words
   const locale = useLocale() // F-OM-fx5w (N1): the extra deposit's due day
   if (part.kind === 'quote' || part.kind === 'origin') {
-    const words = part.kind === 'quote' ? t('linked.labelled', { label: t('overview.linked.quote'), value: t('chain.quoteValue', { number: part.number, revision: part.revision }) }) : t(part.words.key, part.words.params)
+    const words = part.kind === 'quote' ? kit.labelled(t('overview.linked.quote'), t('chain.quoteValue', { number: part.number, revision: part.revision })) : t(part.words.key, part.words.params)
     return part.href ? (
       <Link className="fw-so-link" href={part.href}>
-        {door(t('linked.value', { value: words }))}
+        {kit.door(words)}
       </Link>
     ) : (
       <span>{words}</span>
@@ -115,13 +116,13 @@ function QuietPart({ part }: { part: LinkedQuiet }) {
     const state = part.extraDue ? t('moneyTab.totals.fact.notNeededExtraWords', { date: formatDate(dayInstant(part.extraDue), { locale }) }) : t(`gate.state.${part.state}`)
     return (
       <TabLink className="fw-so-link" href={part.href}>
-        {door(t('linked.value', { value: t('linked.labelled', { label: t('overview.linked.deposit'), value: state }) }))}
+        {kit.door(kit.labelled(t('overview.linked.deposit'), state))}
       </TabLink>
     )
   }
   return (
     <Link className="fw-so-link" href={part.href}>
-      {door(t('linked.value', { value: t('linked.labelled', { label: t('overview.linked.sameQuote'), value: part.number }) }))}
+      {kit.door(kit.labelled(t('overview.linked.sameQuote'), part.number))}
     </Link>
   )
 }

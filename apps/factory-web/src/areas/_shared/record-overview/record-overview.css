@@ -239,3 +239,45 @@ p.fw-ro-hint[role='status'] {
 .fw-so-strip-reading {
   align-self: stretch;
 }
+
+/* ── F-CO-K2 (the shared overview kit's rows): the ONE list — People's and Linked records' identical list rules, merged (moved from
+   the order page's record/view/overview/people.css and linked.css: F-OO-131, F-OO-207). Each row is the shared card row
+   (.fw-so-ov-row above) laid on the list's own columns (subgrid), so every label, value and door lines up with the rows above it.
+   A quiet line spans the row. Below a 480 px card the doors wrap under the value, to the right (the shared rule); below a 360 px
+   card (a phone) a row stacks: the label above its value, the doors under it. Layout only, tokens only. ── */
+.fw-so-ov-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) auto;
+  gap: var(--nds-space-10) var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-so-ov-list > .fw-so-ov-row {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.fw-so-ov-label {
+  color: var(--nds-text-muted);
+}
+
+.fw-so-ov-quiet {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+@container fw-so-ov-card (max-width: 479px) {
+  .fw-so-ov-list {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+}
+
+@container fw-so-ov-card (max-width: 359px) {
+  .fw-so-ov-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* ── end F-CO-K2 (the ONE list) ── */

@@ -8,6 +8,13 @@
     "showMore": "Show {count} more",
     "showFewer": "Show fewer"
   },
+  "row": {
+    "none": "None yet: {kinds}",
+    "door": "{value} ›",
+    "labelled": "{label}: {value}",
+    "unreadMany": "Could not be read",
+    "unreadOne": "Could not be read"
+  },
   "lab": {
     "room": "A {width} px card",
     "where": "Where it is now",

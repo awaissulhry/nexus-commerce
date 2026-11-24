@@ -8,6 +8,13 @@
     "showMore": "Mostra altri {count}",
     "showFewer": "Mostra meno"
   },
+  "row": {
+    "none": "Ancora nessuno: {kinds}",
+    "door": "{value} ›",
+    "labelled": "{label}: {value}",
+    "unreadMany": "Non è stato possibile leggerli",
+    "unreadOne": "Non è stato possibile leggerlo"
+  },
   "lab": {
     "room": "Scheda da {width} px",
     "where": "A che punto è",
