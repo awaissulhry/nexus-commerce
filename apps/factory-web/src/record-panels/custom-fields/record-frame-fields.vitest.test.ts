@@ -46,12 +46,20 @@ describe('B-TH-280 — every record page that takes custom fields shows them aga
     })
   }
 
-  it("F-SA-270: the customer's page and the supplier's page both pass the party hook's section on to their view", () => {
+  it("F-SA-270: the supplier's page passes the party hook's section on to its view; F-CO-103: the customer's page hands it to its Overview, the last pair's second card — never to the frame too", () => {
     expect(read('areas/parties/_shared/PartyRecord.tsx')).toMatch(/<PartyRecordView [^\n]*fields=\{record\.fields\}/)
-    expect(read('areas/sales/customers/record/CustomerRecord.tsx')).toMatch(/<CustomerRecordView [^\n]*fields=\{record\.fields\}/)
-    const view = read('areas/sales/customers/record/view/CustomerRecordView.tsx')
-    expect(view).toContain('fields?: ReactNode')
-    expect(view).toMatch(/fields=\{fields \/\* B-TH-280/)
+    // F-CO-103 (customer page › Overview, 13-backend §3.5): the party hook's section goes to the Overview's container …
+    const page = read('areas/sales/customers/record/CustomerRecord.tsx')
+    expect(page).toMatch(/<CustomerOverview [^\n]*fields=\{record\.fields\}/)
+    expect(page).not.toMatch(/<CustomerRecordView [^\n]*\bfields=\{/)
+    // … the customer view hands the frame no fields (they are never drawn twice) …
+    expect(read('areas/sales/customers/record/view/CustomerRecordView.tsx')).not.toMatch(/\bfields=\{/)
+    // … and the Overview draws them beside Customer facts, after it, inside the last pair (alone, Customer facts takes the row).
+    const overview = read('areas/sales/customers/record/view/overview/CustomerOverviewView.tsx')
+    expect(overview).toContain('readonly fields?: ReactNode')
+    const pair = overview.slice(overview.lastIndexOf('<OverviewPair>'), overview.lastIndexOf('</OverviewPair>'))
+    expect(pair.indexOf('<FactCols>')).toBeGreaterThan(-1)
+    expect(pair.indexOf('{fields}')).toBeGreaterThan(pair.indexOf('<FactCols>'))
   })
 
   it('the work order only hands the slot down to RecordFrame: no tab body draws it (agreement T1: the production lane’s bodies)', () => {
