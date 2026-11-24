@@ -201,7 +201,9 @@ describe('F-SA-261 the view, in both languages', () => {
     expect(html.match(/class="fw-rt-msg /g)?.length).toBe(3)
     expect(html).toContain('fw-rt-msg-more')
     expect(html).not.toContain('fw-aoc-line')
-    expect(text).toContain('Show older')
+    // tw- T.0: older messages come on scroll (the thread's sentinel), never a button.
+    expect(text).not.toContain('Show older')
+    expect(html).toContain('class="fw-rt-sentinel"')
     expect(text).toContain('1 thread of Brand Alpha you cannot open is left out.')
     // The chip is a real link to the record (⌘-click opens a new tab).
     expect(html).toContain('href="/w/x/sales/orders/so-1"')
@@ -220,7 +222,7 @@ describe('F-SA-261 the view, in both languages', () => {
     const html = render(createElement(AllOfCustomerFeed, { model: model(state) }))
     expect(html.indexOf('Message m1')).toBeLessThan(html.indexOf('Message m2'))
     expect(html.indexOf('Message m2')).toBeLessThan(html.indexOf('Message m3'))
-    expect(html.indexOf('Show older')).toBeLessThan(html.indexOf('Message m1'))
+    expect(html.indexOf('fw-rt-sentinel')).toBeLessThan(html.indexOf('Message m1'))
     // m1 (the order) · m2 (general) · m3 (the order again): three runs, three chips.
     expect(html.match(/<a class="fw-aoc-chip"/g)?.length).toBe(3)
     const one = render(createElement(AllOfCustomerFeed, { model: model(afterFirst(EMPTY_FEED, answer([entry('m3', 30), entry('m2', 20), entry('m1', 10)]))) }))
@@ -301,12 +303,14 @@ describe('F-OP-204 — All of <Customer> inside the card: FeedHead, the width me
     expect(withPage).toContain('aria-label="Thread tools"')
   })
 
-  it('the sources: the SAME width menu as the thread Head; the ⋯ hides, resets and opens the customer; icon-only filters below 481 px', () => {
+  // tw- T.0: the width is the ⋮ › Width of the record thread's head (no width button); the ⋮ also opens the customer.
+  it('the sources: ⋮ › Width as in the thread Head (four widths, Hide, Default width); the ⋮ opens the customer; icon-only filters below 481 px', () => {
     const head = readFileSync(new URL('./view/FeedHead.tsx', import.meta.url), 'utf8')
-    expect(head).toContain("import { WIDTH_NS, WidthMenu } from '../../../../../lib/record-thread/head/view/WidthMenu'")
-    expect(head).toContain('<WidthMenu width={width} onWidth={frame ? (choice) => frame.choose(choice) : undefined} />')
+    expect(head).not.toContain('WidthMenu')
+    expect(head).toContain('checked: choice === width, onSelect: () => frame.choose(choice)')
     expect(head).toContain("onSelect: () => frame.choose('hide')")
     expect(head).toContain("onSelect: () => frame.choose('reset')")
+    expect(head).toContain('<MoreVertical size={18} aria-hidden />')
     expect(head).toContain("t('allOfCustomer.openRecord', { record: model.customerName }), href: customerHref")
     const css = readFileSync(new URL('./all-of-customer.css', import.meta.url), 'utf8')
     expect(css).toMatch(/@container fw-rtcol \(max-width: 480px\) \{\s*\.fw-aoc-menu-words \{\s*display: none;/)
@@ -648,3 +652,24 @@ describe('tw- W2.5 — All of <Customer> in the thread’s own face', () => {
   })
 })
 // ---- end tw- W2.5
+
+// ---- tw- T.0 (the Owner: "no inconsistencies at all"; one behaviour per act): older on scroll, Retry only on a failed page ------------
+describe('tw- T.0 — All of loads older messages on scroll, as the record thread does', () => {
+  const model = (state: FeedState) => feedModel(state, { customerName: 'Brand Alpha', prefix: '/w/x', view: 'all', kind: 'every', canReadFiles: true })
+  const state = afterFirst(EMPTY_FEED, answer([entry('m2', 20), entry('m1', 10)], 'c-1'))
+
+  it('the top sentinel reads the next page once per page (the thread’s own rule); reading says so; a failed page offers Retry', () => {
+    const view = readFileSync(new URL('./view/AllOfCustomerFeed.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('<div ref={topRef} className="fw-rt-sentinel" aria-hidden="true" />')
+    expect(view).toContain('if (!shouldLoadOlder({ more: model.more, older: olderState, count, askedAt: askedAt.current })) return')
+    expect(view).toContain("{ root: scroller, rootMargin: '240px 0px 0px 0px' }")
+    const feed = readFileSync(new URL('../../../../lib/record-thread/feed/view/Feed.tsx', import.meta.url), 'utf8')
+    expect(feed).toContain("{ root: feed, rootMargin: '240px 0px 0px 0px' }")
+    expect(textOf(render(createElement(AllOfCustomerFeed, { model: model({ ...state, older: 'loading' }) })))).toContain('Reading older messages…')
+    const failed = render(createElement(AllOfCustomerFeed, { model: model({ ...state, older: 'failed' }) }))
+    expect(failed).toContain('class="fw-rt-older-failed" role="alert"')
+    expect(textOf(failed)).toContain("Couldn't read older messages · Try again")
+    expect(textOf(render(createElement(AllOfCustomerFeed, { model: model(state) })))).not.toMatch(/Show older|Reading older/)
+  })
+})
+// ---- end tw- T.0

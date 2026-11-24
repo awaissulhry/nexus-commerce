@@ -80,7 +80,6 @@
     "emptyFiltered": "Niente con questa vista e questo tipo: scegli Tutto e Ogni tipo per vedere ogni messaggio.",
     "feedLabel": "Messaggi con {customer}, dal più vecchio",
     "keysTip": "J / K scorrono · Invio risponde nel suo thread. Vedere un messaggio qui non segna nulla come letto: apri il suo thread.",
-    "showOlder": "Mostra i più vecchi",
     "olderLoading": "Lettura dei messaggi più vecchi…",
     "olderFailed": "Non è stato possibile leggere i messaggi più vecchi · Riprova",
     "older": "Conversazioni più vecchie: apri il loro record",

@@ -1,11 +1,12 @@
 'use client'
 
-import { ChevronDown, Eye, Filter, Layers, MoreHorizontal } from 'lucide-react'
+import { ChevronDown, Eye, Filter, Layers, MoreVertical } from 'lucide-react'
 import { Menu, type MenuItemDef } from '@nexus/ui/components'
 import { Button } from '@nexus/ui/primitives'
 import { useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
-import { WIDTH_NS, WidthMenu } from '../../../../../lib/record-thread/head/view/WidthMenu'
+import { HEAD_NS } from '../../../../../lib/record-thread/head/view/RecordThreadHead' // the head's words: width, ⋮, allOf.line
+import { DOCK_WIDTHS } from '../../../../../lib/record-thread/head/model' // tw- T.0: ⋮ › Width, as the record thread's head
 import { useHeadPick } from '../../../../../lib/record-thread/head/view/HeadPick' // tw- W2.1: the dock's pick is this head's title
 import { useRecordFrame } from '../../../record-frame/RecordFrame'
 import { FEED_KIND_CHOICES, FEED_VIEWS, type AllOfCustomerModel } from '../model'
@@ -31,7 +32,7 @@ export interface FeedHeadProps {
  */
 export function FeedHead(props: FeedHeadProps) {
   return (
-    <WithMessages namespaces={['record-thread', WIDTH_NS /* the head's words: width, ⋯, tw- W2.5 allOf.line */]}>
+    <WithMessages namespaces={['record-thread', HEAD_NS]}>
       <Head {...props} />
     </WithMessages>
   )
@@ -39,19 +40,25 @@ export function FeedHead(props: FeedHeadProps) {
 
 function Head({ title, model, actions, customerHref }: FeedHeadProps) {
   const t = useT('record-thread')
-  const th = useT(WIDTH_NS)
+  const th = useT(HEAD_NS)
   const frame = useRecordFrame()
   const width = frame?.width ?? null
   const viewItems: MenuItemDef[] = FEED_VIEWS.map((view) => ({ id: `view-${view}`, label: t(`allOfCustomer.view.${view}`), checked: view === model.view, onSelect: () => actions?.onView?.(view) }))
   const kindItems: MenuItemDef[] = FEED_KIND_CHOICES.map((kind) => ({ id: `kind-${kind}`, label: t(`allOfCustomer.kind.${kind}`), checked: kind === model.kind, onSelect: () => actions?.onKind?.(kind) }))
-  const moreItems: MenuItemDef[] = [
-    ...(frame && width !== null
+  // tw- T.0 (one behaviour per act): the width lives in the ⋮ › Width, exactly as in the record thread's head — the four widths (the
+  // one in use checked), Hide, Default width; then Open <customer>. No width button of its own.
+  const widthRows: MenuItemDef[] =
+    frame && width !== null
       ? [
-          { id: 'hide', label: th('width.hide'), onSelect: () => frame.choose('hide') },
-          { id: 'reset', label: th('width.reset'), onSelect: () => frame.choose('reset') },
+          { id: 'width-heading', heading: true, label: th('width.title') },
+          ...DOCK_WIDTHS.map((choice) => ({ id: `width-${choice}`, label: th(`width.${choice}`), checked: choice === width, onSelect: () => frame.choose(choice) })),
+          { id: 'width-hide', label: th('width.hide'), onSelect: () => frame.choose('hide') },
+          { id: 'width-reset', label: th('width.reset'), onSelect: () => frame.choose('reset') },
         ]
-      : []),
-    ...(customerHref ? [{ id: 'customer', label: t('allOfCustomer.openRecord', { record: model.customerName }), href: customerHref }] : []),
+      : []
+  const moreItems: MenuItemDef[] = [
+    ...widthRows,
+    ...(customerHref ? [...(widthRows.length > 0 ? [{ id: 'sep-customer', separator: true }] : []), { id: 'customer', label: t('allOfCustomer.openRecord', { record: model.customerName }), href: customerHref }] : []),
   ]
   const pick = useHeadPick()
   // tw- W2.5 (10-design §8): the one line under the title — "Read only · 3 threads" (the threads its messages come from).
@@ -113,8 +120,7 @@ function Head({ title, model, actions, customerHref }: FeedHeadProps) {
       <span className="nds-vh" role="status" aria-live="polite">
         {model.pending > 0 ? t('allOfCustomer.newStatus', { count: model.pending }) : ''}
       </span>
-      <WidthMenu width={width} onWidth={frame ? (choice) => frame.choose(choice) : undefined} />
-      {moreItems.length > 0 && <Menu align="right" className="fw-rth-menu" label={<MoreHorizontal size={16} aria-hidden />} items={moreItems} triggerProps={{ className: 'nds-btn sm icon', 'aria-label': th('more.label') }} />}
+      {moreItems.length > 0 && <Menu align="right" className="fw-rth-menu" label={<MoreVertical size={18} aria-hidden />} items={moreItems} triggerProps={{ className: 'nds-btn sm quiet icon', 'aria-label': th('more.label') }} />}
     </div>
   )
 }
