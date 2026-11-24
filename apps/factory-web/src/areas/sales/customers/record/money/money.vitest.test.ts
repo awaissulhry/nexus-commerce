@@ -687,6 +687,8 @@ describe('F-CM-301…304: the account sections, Finance\'s windows in place, the
     expect(hook).toContain("const margin = useLazyRead(wanted.has('margin'), can.margin && can.costing,")
     expect(hook).toContain('// Margin & cost is never read again on a burst')
     expect(hook).not.toMatch(/margin\.load\(true\)/)
+    // W3.5 (13-backend §1.4, a burst ≤ 13): the terms and the reminders' switch are not read again on a burst.
+    expect(hook).not.toMatch(/now\.terms\.load\(true\)|now\.settings\.load\(true\)/)
   })
 
   it('W3.3 Price check: one row per order with the door to its own #price-check; the orders with no customer price; calm when none differs', () => {

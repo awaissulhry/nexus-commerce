@@ -145,7 +145,7 @@ function CustomerMoneyBody({ input, prefix, asOf, onRetry, onPick, onAct, lazy }
   // F-CM-202: Invoices with nothing goes to the foot only under "All" (a chip with nothing keeps its section, so the chips stay).
   const documentsEmpty = !!documents && !documents.reading && !documents.problem && documents.rows.length === 0 && chip === 'all'
   // F-CM-203: Payments & refunds with nothing at all (no payment, nothing on account, nothing to give back) goes to the foot.
-  const receivedEmpty = !!received && !received.reading && !received.problem && received.payments.length === 0 && received.onAccount.length === 0 && received.giveBack.length === 0
+  const receivedEmpty = !!received && !received.reading && !received.problem && received.payments.length === 0 && received.onAccount.length === 0 && received.giveBack.length === 0 && !received.returnsCredit /* E52 */
   // F-CM-302…303: nothing to list (and no Statement… to offer), no price to compare, no order to count — each a line at the foot.
   // The account's sections are drawn by the container (its lazy reads); a design case without them draws none of them.
   const account = !!lazy

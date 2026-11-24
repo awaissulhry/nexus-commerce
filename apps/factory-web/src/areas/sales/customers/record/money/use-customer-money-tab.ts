@@ -263,14 +263,9 @@ export function useCustomerMoneyTab(input: { readonly partyId: string; readonly 
     if (now.wanted.has('documents')) now.loadDocuments('again', null)
     if (now.wanted.has('received')) now.loadReceived('again', null)
     if (now.wanted.has('refundsMade')) now.loadMade(true)
-    if (now.wanted.has('credit')) {
-      now.creditRow.load(true)
-      now.terms.load(true)
-    }
-    if (now.wanted.has('statement')) {
-      now.trust.load(true)
-      now.settings.load(true)
-    }
+    // F-CM-305 (W3.5; 13-backend §1.4, a burst ≤ 13): the commercial terms and the reminders' switch do not move with money — not read again.
+    if (now.wanted.has('credit')) now.creditRow.load(true)
+    if (now.wanted.has('statement')) now.trust.load(true)
     if (now.wanted.has('priceRows')) now.priceRows.load(true)
     // Margin & cost is never read again on a burst (13-backend L14: its read computes every order of the customer).
   }, [])
