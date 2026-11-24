@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
 import { TERMS_LIMITS } from '@nexus/factory-domain/parties/company-terms/terms'
+import { paymentTermsLabelView } from '../contract' // F-CT-S5: the SAME object as the commercial terms' paymentTerms
 
 /** The terms-per-company routes' contracts (B-W2b-290; SAL-028, SAL-013; modules/parties/company-terms). */
 
@@ -42,6 +43,10 @@ const companyTermsView = output({
         depositPct: z.string().nullable(),
         poNumberRequired: z.boolean(),
         source: output({ paymentTerms: source, priceList: notMoney(source), deposit: source }),
+        /** F-CT-S5: the payment terms in force, named (from the company's row or the customer's own); null: none from the library. */
+        paymentTerms: paymentTermsLabelView.nullable(),
+        /** F-CT-S5: the price list in force, named; null: none. */
+        priceList: notMoney(output({ id: id(), code: z.string(), name: z.string() }).nullable()),
       }),
       mayChange: z.boolean(),
       history: z.array(termsView),

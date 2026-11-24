@@ -31,6 +31,8 @@ import { typeDefaultsForNewStyle } from '../types/types'
 import { afterCursor, decodeCursor, encodeCursor } from './cursor'
 // B-OL-033: the style search for an order (the order's own module reads the order and its price list).
 import { orderStyleSearch } from '../../sales/orders/style-search'
+// F-CT-S1: the style search for a customer's requirement reads the customer as the person may see it.
+import { readParty } from '../../parties/store'
 import { rowExtras } from './row-extras'
 import { applyMatrixPlan, emitSkus } from './skus'
 import {
@@ -76,8 +78,13 @@ export async function listStyles(caller: CommandCaller, query: ListStylesQuery):
   // row with its active colourways and whether the customer's list prices them (sales/orders/style-search.ts); an order the
   // person may not see is not found, in the words of an unknown one.
   const forOrder = query.forOrder ? await orderStyleSearch(caller, query.forOrder) : null
+  // F-CT-S1 (customer terms lane, S1 — Owner rule 2026-11-16, the brand wall): the search for a customer's requirement — our
+  // own collection and that customer's own styles only, never another brand's; a customer the person may not see is not
+  // found (readParty: 404, in the words of an unknown one).
+  const forCustomer = query.forCustomer ? await readParty(caller, query.forCustomer) : null
   const filters: Prisma.StyleWhereInput[] = [
     forOrder ? forOrder.where : {}, // B-OL-033
+    forCustomer ? { OR: [{ brandPartyId: null }, { brandPartyId: forCustomer.id }] } : {}, // F-CT-S1
     scopeWhere(actorOf(context), PRODUCT_STYLES_VIEW, STYLE_SCOPE) as Prisma.StyleWhereInput,
     query.status === 'ALL' ? {} : query.status === 'OPEN' ? { status: { in: ['DRAFT', 'ACTIVE'] } } : { status: query.status },
     search

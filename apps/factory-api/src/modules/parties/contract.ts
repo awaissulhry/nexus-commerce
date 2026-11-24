@@ -65,6 +65,20 @@ export const viesHistoryContract = defineContract({ params: party, querystring: 
 export const checkViesContract = defineContract({ params: party, body: viesCheckBody, response: { 201: output({ check: viesCheckView, vies: viesStandingView, party: partyView }) } })
 
 // B-W2a-19 (SAL-012): the customer's commercial terms (modules/parties commercial-terms.ts).
+/**
+ * F-CT-S5 (customer terms lane): payment terms of the library as a customer's terms name them — the commercial terms'
+ * `paymentTerms` and the company terms' `inForce.paymentTerms` (company-terms/contract.ts), ONE helper (paymentTermsLabel).
+ */
+export const paymentTermsLabelView = output({
+  id: id(),
+  code: z.string(),
+  name: z.string(),
+  nameI18n: z.record(z.string(), z.string()).nullable(),
+  companyId: id().nullable(),
+  status: z.string(),
+  summary: output({ it: z.string(), en: z.string() }),
+  deposit: output({ sharePct: z.string(), days: z.number().int() }).nullable(),
+})
 const chainList = output({ id: id(), code: z.string(), name: z.string(), kind: z.enum(PRICE_LIST_KINDS), currency: z.string(), status: z.string(), companyId: id().nullable() })
 export const commercialTermsView = output({
   partyId: id(),
@@ -73,7 +87,7 @@ export const commercialTermsView = output({
   currency: z.string(),
   language: z.string(),
   paymentTermsId: id().nullable(),
-  paymentTerms: output({ id: id(), code: z.string(), name: z.string(), companyId: id().nullable(), status: z.string(), summary: output({ it: z.string(), en: z.string() }), deposit: output({ sharePct: z.string(), days: z.number().int() }).nullable() }).nullable(),
+  paymentTerms: paymentTermsLabelView.nullable(), // F-CT-S5: + nameI18n
   paymentTermsText: z.string().nullable(),
   priceListId: notMoney(id().nullable()),
   priceList: notMoney(chainList.nullable()),
@@ -86,6 +100,8 @@ export const commercialTermsView = output({
   preferredCarrierCode: z.string().nullable(),
   minimumOrderAmount: money.price(z.number().int().nullable()),
   version: z.number().int(),
+  /** F-CT-S3 (customer terms lane): the reader may change these terms (the PATCH's right over this customer). */
+  mayChange: z.boolean(),
 })
 export const getCommercialTermsContract = defineContract({ params: party, response: { 200: output({ terms: commercialTermsView }) } })
 export const updateCommercialTermsContract = defineContract({

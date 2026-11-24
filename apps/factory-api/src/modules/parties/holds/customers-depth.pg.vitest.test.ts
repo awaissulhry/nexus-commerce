@@ -108,6 +108,7 @@ beforeAll(async () => {
   office('noOrders', 'sales', 'all', ['orders.view'])
   office('noMeasurements', 'sales', 'all', ['sales.measurements.view']) // F-CA-S4: parties.view, no measurements right
   office('noParties', 'sales', 'all', ['parties.view']) // F-CA-S5: no parties.view
+  office('noQuotes', 'sales', 'all', ['quotes.view']) // F-CT-S4: parties.view, no quotes.view
   for (const [key, actorId] of Object.entries(ACTORS)) await admin(`INSERT INTO "User" (id, "tenantId", email, "displayName", status) VALUES ($1, $2, $3, $4, 'ACTIVE')`, [actorId, A.tenant, `w2b290-${key}-${run}@example.com`, `Made-up ${key}`])
   const colourway = await one<{ id: string; size: string }>(`SELECT c.id, (s.sizes)[1] AS size FROM "Colourway" c JOIN "Style" s ON s.id = c."styleId" WHERE c."tenantId" = $1 AND c."styleId" = (SELECT "styleIds"[1] FROM "CustomerRequirement" WHERE "tenantId" = $1 AND "supersedesId" IS NOT NULL) ORDER BY c."createdAt", c.id LIMIT 1`, [A.tenant])
   LINE.colourwayId = colourway.id
@@ -157,6 +158,37 @@ describe('customer requirements (SAL-014)', () => {
     expect(paths(empty)).toEqual(['body/words', 'body/appliesAt'])
     await no('salesB', 'POST', `/parties/${A.p1}/requirements`, { companyId: A.companyA, kind: 'OTHER', words: 'A rule.', appliesAt: ['ORDER'] }, 403)
     await no('reader', 'POST', `/parties/${A.p1}/requirements`, { companyId: null, kind: 'OTHER', words: 'A rule.', appliesAt: ['ORDER'] }, 403)
+  })
+
+  // F-CT-S1 (customer terms lane, S1 — Owner rule 2026-11-16: "One brand must not be able to see anything related to any other brand").
+  it("a requirement names only our own styles and this customer's: another brand's style is refused on save and never labelled", async () => {
+    const styleOf = async (code: string) => one<{ id: string; brandPartyId: string | null }>(`SELECT id::text AS id, "brandPartyId"::text AS "brandPartyId" FROM "Style" WHERE "tenantId" = $1 AND code = $2`, [A.tenant, code])
+    const ours = await styleOf('SEED-TRS-01') // our own collection: no brand
+    const theirs = await styleOf('SEED-JKT-B2') // Seed Brand Two's own label (seed/two-brands.ts)
+    expect(ours.brandPartyId).toBeNull()
+    expect(theirs.brandPartyId).not.toBeNull()
+    expect(theirs.brandPartyId).not.toBe(A.p1)
+    // Our own style and SEED-C1's own jacket: saved, each with its code.
+    const saved = await ok('sales', 'POST', `/parties/${A.p1}/requirements`, { companyId: A.companyA, kind: 'LABEL', words: 'Hangtag with the brand logo (made up).', appliesAt: ['ORDER'], styleIds: [ours.id, jacketStyleId] }, 201)
+    const row = saved.requirements.inForce.find((entry: Json) => entry.id === saved.requirementId)
+    expect(row.styles.map((style: Json) => style.id).sort()).toEqual([ours.id, jacketStyleId].sort())
+    expect(row.styles.find((style: Json) => style.id === ours.id)).toMatchObject({ code: 'SEED-TRS-01' })
+    expect(row.styles.every((style: Json) => style.code !== '')).toBe(true)
+    // Another brand's style: refused on a new rule and on a replace, in the words of a style that does not fit.
+    const refused = await no('sales', 'POST', `/parties/${A.p1}/requirements`, { companyId: A.companyA, kind: 'LABEL', words: 'A label (made up).', appliesAt: ['ORDER'], styleIds: [theirs.id] }, 400)
+    expect(paths(refused)).toEqual(['body/styleIds'])
+    expect(JSON.stringify(refused)).not.toContain('SEED-JKT-B2')
+    const replaced = await no('sales', 'POST', `/parties/${A.p1}/requirements/${row.id}/replace`, { version: row.version, companyId: A.companyA, kind: 'LABEL', words: 'A label (made up).', appliesAt: ['ORDER'], styleIds: [ours.id, theirs.id] }, 400)
+    expect(paths(replaced)).toEqual(['body/styleIds'])
+    // A row that named it before the save checked (test data, past the route): read like a style no longer offered.
+    await force(`UPDATE "CustomerRequirement" SET "styleIds" = $2::uuid[] WHERE id = $1`, [row.id, [ours.id, theirs.id]])
+    const read = await ok('sales', 'GET', `/parties/${A.p1}/requirements`)
+    const old = read.requirements.inForce.find((entry: Json) => entry.id === row.id)
+    expect(old.styles).toEqual(expect.arrayContaining([{ id: theirs.id, code: '', name: '' }, expect.objectContaining({ id: ours.id, code: 'SEED-TRS-01' })]))
+    expect(JSON.stringify(read)).not.toContain('SEED-JKT-B2')
+    expect(JSON.stringify(read)).not.toContain('Seed Brand Two jacket')
+    // The rule ends: the reads after this test stay as they were.
+    await ok('sales', 'POST', `/parties/${A.p1}/requirements/${row.id}/end`, { version: old.version, reason: 'Test data (made up).' })
   })
 
   it('shows the requirements where they apply: the order (ORDER), the shipment (pick & pack, shipping checklist)', async () => {
@@ -212,6 +244,24 @@ describe('account on hold (SAL-023)', () => {
     expect(holds.ordersWaiting).toEqual([expect.objectContaining({ number: 'SEED-Q-0002', quoteVersionId: q2.versionId })])
   })
 
+  // F-CT-S4 (customer terms lane, S4): why each accepted quote waits for its order.
+  it('each accepted quote says why it waits; without quotes.view only the counts', async () => {
+    // SEED-Q-0002 (accepted above) waits for the hold with company A first — before its missing PO number, as the order asks.
+    const { holds } = await ok('sales', 'GET', `/parties/${A.p1}/holds`)
+    expect(holds.ordersWaiting).toEqual([expect.objectContaining({ number: 'SEED-Q-0002', quoteVersionId: q2.versionId, companyId: A.companyA, waitsFor: 'ACCOUNT_ON_HOLD' })])
+    expect(holds.ordersWaitingCount).toEqual({ onHold: 1, poNumber: 0, other: 0 })
+    // A reader of customers without quotes.view: no quote number, no PO reference, no link — the counts only.
+    const blind = await ok('noQuotes', 'GET', `/parties/${A.p1}/holds`)
+    expect(blind.holds.ordersWaiting).toEqual([])
+    expect(blind.holds.ordersWaitingCount).toEqual({ onHold: 1, poNumber: 0, other: 0 })
+    expect(JSON.stringify(blind)).not.toContain('SEED-Q-0002')
+    expect(JSON.stringify(blind)).not.toContain(q2.id)
+    // A person of company B: neither A's quotes nor their count.
+    const ofB = await ok('salesB', 'GET', `/parties/${A.p1}/holds`)
+    expect(ofB.holds.ordersWaiting).toEqual([])
+    expect(ofB.holds.ordersWaitingCount).toEqual({ onHold: 0, poNumber: 0, other: 0 })
+  })
+
   it('releases the hold with words; the history stays; then the PO number its terms require is asked at confirm', async () => {
     await no('finance', 'POST', `/parties/${A.p1}/holds/${holdId}/release`, { version: holdVersion, words: '' }, 400)
     const { holds } = await ok('finance', 'POST', `/parties/${A.p1}/holds/${holdId}/release`, { version: holdVersion, words: 'Both invoices paid.' })
@@ -221,12 +271,18 @@ describe('account on hold (SAL-023)', () => {
     expect(again.message).toContain('released already')
     const { quote } = await ok('sales', 'GET', `/sales/quotes/${q2.id}`)
     expect(quote.issues.some((issue: Json) => issue.code === 'ACCOUNT_ON_HOLD')).toBe(false)
+    // F-CT-S4: released, SEED-Q-0002 now waits for the PO number its terms with A require.
+    const waiting = (await ok('sales', 'GET', `/parties/${A.p1}/holds`)).holds
+    expect(waiting.ordersWaiting).toEqual([expect.objectContaining({ number: 'SEED-Q-0002', waitsFor: 'PO_NUMBER_REQUIRED' })])
+    expect(waiting.ordersWaitingCount).toEqual({ onHold: 0, poNumber: 1, other: 0 })
     // SEED-C1 with company A needs its PO number (SAL-013): the quote had none.
     const missing = await no('sales', 'POST', '/sales/orders', { quoteVersionId: q2.versionId }, 400)
     expect(paths(missing)).toEqual(['body/customerRef'])
     expect(missing.message).toContain("needs its purchase order number on every order with")
     const made = await ok('sales', 'POST', '/sales/orders', { quoteVersionId: q2.versionId, customerRef: 'PO-290-77' }, 201)
     expect(made.order).toMatchObject({ customerRef: 'PO-290-77', partyId: A.p1 })
+    // F-CT-S4: its order made, nothing waits.
+    expect((await ok('sales', 'GET', `/parties/${A.p1}/holds`)).holds).toMatchObject({ ordersWaiting: [], ordersWaitingCount: { onHold: 0, poNumber: 0, other: 0 } })
   })
 
   it('a typed order without the PO number is refused at confirm, with it taken', async () => {
@@ -255,6 +311,41 @@ describe('terms per company (SAL-028, SAL-013)', () => {
     const sales = await ok('sales', 'GET', `/parties/${A.p1}/company-terms`)
     expect(sales.terms.companies.find((row: Json) => row.company.id === A.companyA).terms).toMatchObject({ poNumberRequired: true, depositPct: '30' })
     expect(sales.terms.companies.find((row: Json) => row.company.id === A.companyA).terms).not.toHaveProperty('creditLimitAmount')
+  })
+
+  // F-CT-S5 (customer terms lane, S5): ONE source of the terms in force, named the same way by both reads.
+  it("the terms in force name their payment terms in both languages, from the company's row or the customer's own", async () => {
+    const own = (await ok('sales', 'GET', `/parties/${A.p1}/commercial-terms`)).terms
+    // SEED-C1's own terms: DEP30 (seed/pricing.ts) — its name, its English name, what it means in Italian and English, its deposit.
+    expect(own.paymentTerms).toMatchObject({
+      code: 'DEP30',
+      name: "30% all'ordine, saldo prima della spedizione",
+      nameI18n: { en: '30% with the order, the balance before shipping' },
+      summary: { it: expect.any(String), en: expect.any(String) },
+      deposit: { sharePct: '30', days: 0 },
+    })
+    expect(own.paymentTerms.summary.it).not.toBe('')
+    expect(own.paymentTerms.summary.en).not.toBe(own.paymentTerms.summary.it)
+    const { terms } = await ok('sales', 'GET', `/parties/${A.p1}/company-terms`)
+    const a = terms.companies.find((row: Json) => row.company.id === A.companyA)
+    const b = terms.companies.find((row: Json) => row.company.id === A.companyB)
+    // With B the row names no payment terms or list: the customer's own, the SAME object the commercial terms read gives.
+    expect(b.inForce.source).toMatchObject({ paymentTerms: 'PARTY', priceList: 'PARTY' })
+    expect(b.inForce.paymentTerms).toEqual(own.paymentTerms)
+    expect(b.inForce.priceList).toEqual({ id: own.priceList.id, code: own.priceList.code, name: own.priceList.name })
+    // With A the company's own row: its library terms, named the same way, in both languages.
+    const library = await one<{ id: string; code: string; name: string; nameI18n: Json | null }>(
+      `SELECT t.id::text AS id, t.code, t.name, t."nameI18n" FROM "PaymentTerms" t JOIN "PartyCompanyTerms" c ON c."paymentTermsId" = t.id WHERE c."partyId" = $1 AND c."companyId" = $2 AND c."endedAt" IS NULL`,
+      [A.p1, A.companyA],
+    )
+    expect(a.inForce.source).toMatchObject({ paymentTerms: 'COMPANY', priceList: 'COMPANY' })
+    expect(a.inForce.paymentTerms).toMatchObject({ id: library.id, code: library.code, name: library.name, nameI18n: library.nameI18n, summary: { it: expect.any(String), en: expect.any(String) } })
+    expect(a.inForce.paymentTerms.summary.en).not.toBe('')
+    expect(a.inForce.paymentTerms.code).toBe(a.terms.paymentTermsLabel.code)
+    expect(a.inForce.priceList).toMatchObject({ id: a.terms.priceListId, code: a.terms.priceListLabel.code, name: a.terms.priceListLabel.name })
+    // A person of B reads B's row only: the customer's own terms, named.
+    const ofB = (await ok('salesB', 'GET', `/parties/${A.p1}/company-terms`)).terms.companies
+    expect(ofB.map((row: Json) => [row.company.id, row.inForce.paymentTerms?.code])).toEqual([[A.companyB, 'DEP30']])
   })
 
   it('makes, changes and ends one company’s terms; a person of B changes only B’s', async () => {
@@ -286,6 +377,75 @@ describe('terms per company (SAL-028, SAL-013)', () => {
     expect(Number(quote.current.depositPct)).toBe(40)
     const inA = await ok('sales', 'POST', '/sales/quotes', { companyId: A.companyA, partyId: A.p1, customerRef: 'RFQ-290-A' }, 201)
     expect(Number(inA.quote.current.depositPct)).toBe(30)
+  })
+
+  // F-CT-S3 (customer terms lane, S3): each read says what its reader may change, so a screen hides what the server refuses.
+  it("a person of company B reads mayChange false on A's rule, hold and terms, true on B's", async () => {
+    // A made-up customer of company B only, beside SEED-C1 (a customer of every company: changed only by a role over every company).
+    const onlyB = newId()
+    await admin(`INSERT INTO "Party" (id, "tenantId", "companyId", code, kind, "legalName", roles, status) VALUES ($1, $2, $3, $4, 'ORGANISATION', 'Made-up Customer of B S.r.l.', '{CUSTOMER}', 'ACTIVE')`, [onlyB, A.tenant, A.companyB, `CT-B-${run}`.toUpperCase()])
+
+    // Commercial terms (the read and the PATCH's answer).
+    const termsOf = async (session: string, partyId: string): Promise<Json> => (await ok(session, 'GET', `/parties/${partyId}/commercial-terms`)).terms
+    expect((await termsOf('sales', A.p1)).mayChange).toBe(true)
+    expect((await termsOf('salesB', A.p1)).mayChange).toBe(false)
+    expect((await termsOf('reader', onlyB)).mayChange).toBe(false)
+    const own = await termsOf('salesB', onlyB)
+    expect(own.mayChange).toBe(true)
+    const patched = await ok('salesB', 'PATCH', `/parties/${onlyB}/commercial-terms`, { version: own.version, incoterm: 'EXW' })
+    expect(patched.terms).toMatchObject({ incoterm: 'EXW', mayChange: true })
+    await no('salesB', 'PATCH', `/parties/${A.p1}/commercial-terms`, { version: (await termsOf('salesB', A.p1)).version, incoterm: 'EXW' }, 403)
+    // Terms per company: a person of B reads B's row only, and may change it.
+    const perCompany = (await ok('salesB', 'GET', `/parties/${A.p1}/company-terms`)).terms.companies
+    expect(perCompany.map((row: Json) => [row.company.id, row.mayChange])).toEqual([[A.companyB, true]])
+
+    // Requirements: A's rule is not even read by a person of B; every company's rule is read, not changed; B's is changed.
+    const ruleA = (await ok('sales', 'POST', `/parties/${A.p1}/requirements`, { companyId: A.companyA, kind: 'OTHER', words: 'A rule with company A (made up).', appliesAt: ['ORDER'] }, 201)).requirementId
+    const ruleB = (await ok('salesB', 'POST', `/parties/${A.p1}/requirements`, { companyId: A.companyB, kind: 'OTHER', words: 'A rule with company B (made up).', appliesAt: ['ORDER'] }, 201)).requirementId
+    const rulesOf = async (session: string): Promise<Json> => (await ok(session, 'GET', `/parties/${A.p1}/requirements`)).requirements
+    const ruleIn = (read: Json, ruleId: string): Json | undefined => read.inForce.find((row: Json) => row.id === ruleId)
+    const forB = await rulesOf('salesB')
+    expect(forB.mayAdd).toBe(true)
+    expect(ruleIn(forB, ruleB)).toMatchObject({ mayChange: true })
+    expect(ruleIn(forB, ruleA)).toBeUndefined()
+    const everyCompany = forB.inForce.filter((row: Json) => row.companyId === null)
+    expect(everyCompany.length).toBeGreaterThan(0)
+    expect(everyCompany.every((row: Json) => row.mayChange === false)).toBe(true)
+    const forAll = await rulesOf('sales')
+    expect(forAll.mayAdd).toBe(true)
+    expect([ruleIn(forAll, ruleA)?.mayChange, ruleIn(forAll, ruleB)?.mayChange]).toEqual([true, true])
+    expect(forAll.ended.length).toBeGreaterThan(0)
+    expect(forAll.ended.every((row: Json) => row.mayChange === false)).toBe(true)
+    const forReader = await rulesOf('reader')
+    expect(forReader.mayAdd).toBe(false)
+    expect([...forReader.inForce, ...forReader.ended].every((row: Json) => row.mayChange === false)).toBe(true)
+    // The record's read shares the rule's view: SEED-SO-0001 (company A) says the same for the same reader.
+    const onOrder = await ok('sales', 'GET', `/parties/requirements/for/SalesOrder/${so1.id}`)
+    expect(onOrder.stages[0].requirements.find((row: Json) => row.id === ruleA)).toMatchObject({ mayChange: true })
+    // The server refuses what the flag hides.
+    await no('salesB', 'POST', `/parties/${A.p1}/requirements/${everyCompany[0].id}/end`, { version: everyCompany[0].version, reason: 'No.' }, 403)
+
+    // Holds: one of every company, one with B; A's (the released CREDIT hold) is not read by a person of B.
+    const holdsOf = async (session: string): Promise<Json> => (await ok(session, 'GET', `/parties/${A.p1}/holds`)).holds
+    const holdIn = (read: Json, holdId: string): Json | undefined => read.holds.find((row: Json) => row.id === holdId)
+    const everyHold = (await ok('finance', 'POST', `/parties/${A.p1}/holds`, { companyId: null, reason: 'OTHER', words: 'A hold of every company (made up).' }, 201)).holds.holds.find((row: Json) => row.inForce && row.companyId === null).id
+    const holdB = (await ok('salesB', 'POST', `/parties/${A.p1}/holds`, { companyId: A.companyB, reason: 'DATA_MISSING', words: 'A hold with company B (made up).' }, 201)).holds.holds.find((row: Json) => row.inForce && row.companyId === A.companyB).id
+    const heldB = await holdsOf('salesB')
+    expect(heldB.mayPlace).toBe(true)
+    expect([holdIn(heldB, everyHold)?.mayRelease, holdIn(heldB, holdB)?.mayRelease]).toEqual([false, true])
+    expect(heldB.holds.some((row: Json) => row.companyId === A.companyA)).toBe(false)
+    const heldAll = await holdsOf('finance')
+    expect([holdIn(heldAll, everyHold)?.mayRelease, holdIn(heldAll, holdB)?.mayRelease]).toEqual([true, true])
+    expect(heldAll.holds.filter((row: Json) => !row.inForce).length).toBeGreaterThan(0)
+    expect(heldAll.holds.filter((row: Json) => !row.inForce).every((row: Json) => row.mayRelease === false)).toBe(true)
+    const heldReader = await holdsOf('reader')
+    expect(heldReader.mayPlace).toBe(false)
+    expect(heldReader.holds.every((row: Json) => row.mayRelease === false)).toBe(true)
+    await no('salesB', 'POST', `/parties/${A.p1}/holds/${everyHold}/release`, { version: holdIn(heldB, everyHold)!.version, words: 'No.' }, 403)
+
+    // Test data out again: the holds released, the two rules ended (the tests after this one read SEED-C1 as before).
+    for (const holdId of [everyHold, holdB]) await ok('finance', 'POST', `/parties/${A.p1}/holds/${holdId}/release`, { version: holdIn(heldAll, holdId)!.version, words: 'Test data (made up).' })
+    for (const ruleId of [ruleA, ruleB]) await ok('sales', 'POST', `/parties/${A.p1}/requirements/${ruleId}/end`, { version: ruleIn(forAll, ruleId)!.version, reason: 'Test data (made up).' })
   })
 })
 

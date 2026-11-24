@@ -64,6 +64,11 @@ const SESSIONS: Record<string, SessionContext> = Object.fromEntries(
     return [key, { audience: 'office', tenantId: person.tenantId, actorId: IDS[key]!, grants: [grant] }]
   }),
 )
+// F-CT-S1 (customer terms lane): the style search of a customer's requirement — a reader of every customer, and a person
+// whose grant is limited to the brand's own customer record.
+const CUSTOMER_READS: Permission[] = [VIEW, 'parties.view']
+SESSIONS.customers = { audience: 'office', tenantId: tenantA, actorId: newId(), grants: [{ permissions: CUSTOMER_READS, companies: 'all', sites: 'all', parties: 'all' }] }
+SESSIONS.brandOnly = { audience: 'office', tenantId: tenantA, actorId: newId(), grants: [{ permissions: CUSTOMER_READS, companies: 'all', sites: 'all', parties: [brand] }] }
 
 type Json = Record<string, any>
 const admin = async <T = Json>(sql: string, values: unknown[] = []): Promise<T[]> => (await db.admin.query(sql, values)).rows as T[]
@@ -493,6 +498,42 @@ describe('lists, archive, idempotency and the walls', () => {
     expect((await call('materialsOnly', 'GET', '/product/styles')).statusCode).toBe(403)
     expect((await call('materialsOnly', 'POST', '/product/size-scales', EU)).statusCode).toBe(403)
     expect((await call('viewer', 'POST', '/product/styles', { code: 'V-1', name: 'x', productType: 'OTHER', sizeScaleId: euScale.id })).statusCode).toBe(403)
+  })
+
+  // F-CT-S1 (customer terms lane, S1 — Owner rule 2026-11-16: "One brand must not be able to see anything related to any other brand").
+  it("forCustomer lists our own styles and that customer's only; a person limited to A asking for B gets 404", async () => {
+    const brandTwo = newId()
+    await admin(`INSERT INTO "Party" (id, "tenantId", code, kind, "legalName", roles, status) VALUES ($1, $2, 'BRAND-2', 'ORGANISATION', 'Secondo Marchio Esempio S.r.l.', '{CUSTOMER,BRAND}', 'ACTIVE')`, [brandTwo, tenantA])
+    await ok('maker', 'POST', '/product/styles', { code: 'B2-JKT-01', name: 'Second brand jacket (made up)', productType: 'JACKET', sizeScaleId: euScale.id, brandPartyId: brandTwo }, 201)
+    const codesFor = async (session: string, customerId: string): Promise<string[]> => (await ok(session, 'GET', `/product/styles?forCustomer=${customerId}&status=ALL&limit=200`)).styles.map((row: Json) => row.code)
+    // Without the filter a reader of every brand meets both brands' jackets.
+    const every = (await ok('customers', 'GET', '/product/styles?status=ALL&limit=200')).styles.map((row: Json) => row.code)
+    expect(every).toEqual(expect.arrayContaining(['GT-JKT-01', 'B2-JKT-01', 'GT-TRS-01']))
+    // The brand's requirement: its own jacket and our own collection, never the second brand's.
+    const forBrand = await codesFor('customers', brand)
+    expect(forBrand).toEqual(expect.arrayContaining(['GT-JKT-01', 'GT-TRS-01']))
+    expect(forBrand).not.toContain('B2-JKT-01')
+    const forBrandTwo = await codesFor('customers', brandTwo)
+    expect(forBrandTwo).toEqual(expect.arrayContaining(['B2-JKT-01', 'GT-TRS-01']))
+    expect(forBrandTwo).not.toContain('GT-JKT-01')
+    // A customer with no styles of its own: our own collection only.
+    const forCustomer = await codesFor('customers', customer)
+    expect(forCustomer).toContain('GT-TRS-01')
+    expect(forCustomer).not.toContain('GT-JKT-01')
+    expect(forCustomer).not.toContain('B2-JKT-01')
+    // The count is the filtered one.
+    expect((await ok('customers', 'GET', `/product/styles?forCustomer=${customer}&status=ALL&limit=1`)).count).toBe(forCustomer.length)
+    // A person limited to the brand: its own search answers; another customer's is not found, in the words of an unknown one.
+    expect(await codesFor('brandOnly', brand)).toEqual(expect.arrayContaining(['GT-JKT-01', 'GT-TRS-01']))
+    const other = await call('brandOnly', 'GET', `/product/styles?forCustomer=${brandTwo}`)
+    expect(other.statusCode).toBe(404)
+    expect(other.json().error.message).toBe('Party not found.')
+    expect(other.body).not.toContain('B2-JKT-01')
+    expect((await call('brandOnly', 'GET', `/product/styles?forCustomer=${newId()}`)).json().error.message).toBe('Party not found.')
+    // Without parties.view no customer is read: no search for one.
+    expect((await call('viewer', 'GET', `/product/styles?forCustomer=${brand}`)).statusCode).toBe(404)
+    expect((await call('otherTenant', 'GET', `/product/styles?forCustomer=${brand}`)).statusCode).toBe(404)
+    expect((await call('customers', 'GET', '/product/styles?forCustomer=not-an-id')).statusCode).toBe(400)
   })
 
   it('gives a style its record thread (COL-001): its company, and its brand as the party', async () => {
