@@ -22,6 +22,7 @@ import { afterCursor, cursorOf, ensureThread, type RecordRef } from '../threads'
 // ---- B-TH-050: what a shared message answers or corrects, as the partner may see it.
 import { messageLinksOf, NO_LINKS, type MessageLinks } from '../threads'
 import { finishedLinks } from '../threads' // tw-s S.1: the quotes finished after the partner's read (mine, erased, walled files)
+import type { LinkedMessage } from '../threads' // pt-s S.4: the quote of what a portal post answers
 // ---- B-TH-085: the customer attaches files to its own record from the portal (behind the outside-upload gate and the scanner).
 import { PORTAL_UPLOAD } from '@nexus/factory-domain/auth/partners/permissions'
 import { FILES_MANAGE, FILES_UPLOAD } from '@nexus/factory-domain/auth/permissions/catalogue'
@@ -375,6 +376,25 @@ function replyRefusal(caller: PartnerCaller): DomainError {
 }
 // ---- end pt-s S.2
 
+// ---- pt-s S.4: the quote of what a portal post answers, as the portal read quotes it ----------------------------------------------
+/**
+ * The shared message a portal post answers, quoted as readPartnerThread quotes it: read in the person's own scope (shared only: no
+ * author id, no audience, a floor writer never named; its files by the partner's own file rules), then finished as the read finishes
+ * it — `mine` for the reader's own post, erased after a privacy request, a walled file never counted. Read after the post's command,
+ * as the read reads its quotes after its own read: a repeated request (its Idempotency-Key) answers with the same quote, and the
+ * stored answer stays plain JSON. Null: not there for this reader.
+ */
+async function quoteOfPost(request: FastifyRequest, caller: PartnerCaller, threadId: string, message: { readonly id: string; readonly replyToMessageId: string }): Promise<LinkedMessage | null> {
+  const read = await request.withClient((client) => messageLinksOf(client, threadId, [message], { sharedOnly: true, workerShown: false, visibleFiles: (fileIds) => visibleAttachments(client, caller, fileIds) }))
+  const quoted = [...(read.sources?.values() ?? [])]
+  if (quoted.length === 0) return null
+  const mine = await minePosts(request, caller, quoted)
+  const walled = await walledForOutside(request as CommandCaller, quoted.flatMap((source) => (source.files ?? []).map((file) => file.id)))
+  const erased = await erasedForOutside(request as CommandCaller, caller.context.tenantId, quoted)
+  return finishedLinks(read, { erased, mine, walled }).linked.get(message.replyToMessageId) ?? null
+}
+// ---- end pt-s S.4
+
 export interface PartnerPostInput {
   readonly body: string
   readonly attachments?: readonly string[] | undefined
@@ -490,9 +510,11 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
     },
   )
   await touchThread(request, caller, result.thread.id, new Date(result.message.at))
+  // ---- pt-s S.4: the answer quotes what the post answers, as the read does (a repeated request reads it again: the same quote).
+  const message: PartnerMessageView = replyToMessageId === null ? result.message : { ...result.message, replyTo: await quoteOfPost(request, caller, result.thread.id, { id: result.message.id, replyToMessageId }) }
   // ---- B-CP-079: the note that asks the factory designer (over the day's cap: posted without it, and the answer says so).
   const designerAsk: DesignerAskAnswer | null = askPlan === null ? null : askPlan.capped ? cappedAnswer(caller) : await askDesignerAfterPost(request, caller, ref, result, draft.bodyText, askPlan, idempotencyKey)
-  return { ...result, designerAsk }
+  return { ...result, message, designerAsk }
   // ---- end B-CP-079
 }
 

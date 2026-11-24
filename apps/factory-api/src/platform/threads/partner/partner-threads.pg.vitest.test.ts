@@ -447,6 +447,45 @@ describe('pt-s S.6: a portal post answers a shared message of its own record', {
     expect(await admin('SELECT id FROM "Message" WHERE "tenantId" = $1 AND "bodyText" = $2', [world.tenantId, body])).toEqual([])
   })
 
+  it('the post’s answer quotes what it answers, as the read does: no authorId, no audience, mine for the writer', async () => {
+    const order = await idOf('SalesOrder', 'SEED-SO-0001')
+    const { mail } = await officeWrites('SalesOrder', order)
+    // The buyer asks; then answers our mail; then answers its own question.
+    const asked = await post(buyer, 'SalesOrder', order, { body: 'Made-up pt-s S.4: can the zip be red?' }, newId())
+    expect(asked.status, JSON.stringify(asked.body)).toBe(201)
+    const toMail = await post(buyer, 'SalesOrder', order, { body: 'Made-up pt-s S.4: thanks, noted.', replyToMessageId: mail }, newId())
+    const key = newId()
+    const toOwn = await post(buyer, 'SalesOrder', order, { body: 'Made-up pt-s S.4: and the lining blue.', replyToMessageId: asked.body.message.id }, key)
+    for (const answer of [toMail, toOwn]) {
+      expect(answer.status, JSON.stringify(answer.body)).toBe(201)
+      expect(answer.body.message.replyTo, answer.body.message.id).not.toHaveProperty('authorId')
+      expect(answer.body.message.replyTo, answer.body.message.id).not.toHaveProperty('audience')
+      expect(answer.body.message.corrects ?? null).toBeNull()
+    }
+    expect(toMail.body.message.replyTo).toMatchObject({ id: mail, authorKind: 'USER', authorName: 'Seed Owner', excerpt: 'Your order is confirmed; it ships next week.', mine: false, fileCount: 0, firstFile: null })
+    expect(toOwn.body.message.replyTo).toMatchObject({ id: asked.body.message.id, authorKind: 'PARTY', authorName: 'Seed Portal Buyer', excerpt: 'Made-up pt-s S.4: can the zip be red?', mine: true, fileCount: 0, firstFile: null })
+
+    // As the read does: the read's quote of the same message is the answer's, field for field.
+    const page = await thread(buyer, 'SalesOrder', order, '?limit=200')
+    expect(page.status, JSON.stringify(page.body)).toBe(200)
+    const read = (body: Json, id: string): Json => (body.messages as Json[]).find((message) => message.id === id)!
+    expect(read(page.body, toMail.body.message.id).replyTo).toEqual(toMail.body.message.replyTo)
+    expect(read(page.body, toOwn.body.message.id).replyTo).toEqual(toOwn.body.message.replyTo)
+    // "mine" is the writer's own: a colleague of the same customer reads the same quote as not theirs.
+    const asViewer = await thread(viewer, 'SalesOrder', order, '?limit=200')
+    expect(read(asViewer.body, toOwn.body.message.id).replyTo).toMatchObject({ id: asked.body.message.id, mine: false })
+
+    // The same request again (its Idempotency-Key): no second message, the same quote. The same key answering another message is
+    // another request: refused (409), nothing written.
+    const count = await messagesOf(toOwn.body.thread.id)
+    const again = await post(buyer, 'SalesOrder', order, { body: 'Made-up pt-s S.4: and the lining blue.', replyToMessageId: asked.body.message.id }, key)
+    expect(again.status, JSON.stringify(again.body)).toBe(201)
+    expect(again.body.message).toMatchObject({ id: toOwn.body.message.id, replyTo: toOwn.body.message.replyTo })
+    const reused = await post(buyer, 'SalesOrder', order, { body: 'Made-up pt-s S.4: and the lining blue.', replyToMessageId: mail }, key)
+    expect(reused.status, JSON.stringify(reused.body)).toBe(409)
+    expect(await messagesOf(toOwn.body.thread.id)).toBe(count)
+  })
+
   it('a portal post naming correctsMessageId is refused (unknown key)', async () => {
     const order = await idOf('SalesOrder', 'SEED-SO-0001')
     const { mail } = await officeWrites('SalesOrder', order)
