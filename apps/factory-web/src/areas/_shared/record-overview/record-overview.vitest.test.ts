@@ -14,6 +14,7 @@ import { CardState, Headline, Overview, OverviewCard, OverviewPair, useOverviewW
 import { Strip, StripSaid, Strips } from './Overview' // F-CO-K2: the strips
 import { QuietLine, Row, RowList } from './Overview' // F-CO-K2: the ONE list
 import { Door, Fact, FactCols } from './Overview' // F-CO-K2: the facts
+import { Group, GroupRow, Groups, RowAge } from './Overview' // F-CO-K2: the groups (S32: Groups)
 import { LAB_WIDTHS } from './view/OverviewLab'
 
 /**
@@ -345,6 +346,35 @@ describe('F-CO-K2: the facts — FactCols, Fact and Door (moved out of the order
   })
 })
 // ---- end F-CO-K2 (facts)
+
+// ---- F-CO-K2: the groups (Groups: settle S32) -----------------------------------------------------------------------------------------
+describe('F-CO-K2: the groups — Groups, Group, GroupRow and RowAge draw the markup the order\'s Requests & changes drew by hand', () => {
+  it('the stylesheet: the groups\' block moved whole (the groups, a group, its list on the row\'s columns, the age, the 480 / 360 rules)', () => {
+    const text = css()
+    for (const rule of ['.fw-so-rq-groups {', '.fw-so-rq-group {', '.fw-so-rq-list {', '.fw-so-rq-list > .fw-so-ov-row {', '.fw-so-rq-age {', '.fw-so-rq-more {', '.fw-so-rq-foot {']) expect(text.split(`\n${rule}`), rule).toHaveLength(2)
+    expect(text).toMatch(/\n\.fw-so-rq-list \{\s*display: grid;\s*grid-template-columns: minmax\(0, 1fr\) max-content auto;/)
+    expect(text).toMatch(/@container fw-so-ov-card \(max-width: 359px\) \{\s*\.fw-so-rq-list > \.fw-so-ov-row \{\s*display: flex;/)
+  })
+
+  it('Groups: the groups\' column (a page never writes the class itself); Group: its section, its h3 in the kit\'s text class, its list, its door', () => {
+    expect(render(createElement(Groups, null, 'groups'))).toBe('<div class="fw-so-rq-groups">groups</div>')
+    expect(render(createElement(Group, { title: 'Waiting on us · 3' }, 'rows'))).toBe('<section class="fw-so-rq-group"><h3 class="fw-ro-h3">Waiting on us · 3</h3><ul class="fw-so-rq-list">rows</ul></section>')
+    expect(render(createElement(Group, { title: 'Still to do · 5', more: createElement('a', { href: '#still' }, '2 more ›') }, 'rows'))).toBe('<section class="fw-so-rq-group"><h3 class="fw-ro-h3">Still to do · 5</h3><ul class="fw-so-rq-list">rows</ul><a href="#still">2 more ›</a></section>')
+  })
+
+  it('GroupRow: the words in ONE span, the age, the doors cell — ALWAYS drawn (empty for a reader with no door)', () => {
+    const age = createElement('span', { className: 'fw-so-rq-age' }, '—')
+    expect(render(createElement(GroupRow, { age, doors: createElement('button', null, 'Answer…') }, 'Size change', createElement('span', null, ' · Sales')))).toBe('<li class="fw-so-ov-row fw-so-rq-row"><span>Size change<span> · Sales</span></span><span class="fw-so-rq-age">—</span><span class="fw-so-ov-doors"><button>Answer…</button></span></li>')
+    for (const doors of [undefined, null]) expect(render(createElement(GroupRow, { age, doors }, 'Size change'))).toBe('<li class="fw-so-ov-row fw-so-rq-row"><span>Size change</span><span class="fw-so-rq-age">—</span><span class="fw-so-ov-doors"></span></li>')
+  })
+
+  it('RowAge: a time with its exact day in the title (class, datetime, title); no start or no words: "—"', () => {
+    expect(render(createElement(RowAge, { since: '2026-11-03T09:00:00Z', words: '15 d', title: 'since 03/11/2026, 10:00' }))).toBe('<time class="fw-so-rq-age" datetime="2026-11-03T09:00:00Z" title="since 03/11/2026, 10:00">15 d</time>')
+    expect(render(createElement(RowAge, { since: null, words: '15 d' }))).toBe('<span class="fw-so-rq-age">—</span>')
+    expect(render(createElement(RowAge, { since: '2026-11-03T09:00:00Z', words: null }))).toBe('<span class="fw-so-rq-age">—</span>')
+  })
+})
+// ---- end F-CO-K2 (groups)
 
 describe('the /design/record-overview lab', () => {
   it('has its own screen id (the design index finds every fixtures.ts by itself) and the frame\'s cases', () => {

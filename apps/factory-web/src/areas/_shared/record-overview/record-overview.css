@@ -1,9 +1,10 @@
 /* ── F-CO-K1 (customer overview lane: the shared overview kit) — the ONE stylesheet of a record page's Overview ────────────────────
    The parts (./Overview.tsx) import this file, so every page that draws a part has its rules: a part owns its stylesheet, and no
    host file restyles a class of this file. Layout by the room the tab has (the two size containers below), never the viewport.
-   The Overview-only names (fw-so-overview, fw-so-ov-*, fw-so-where*, fw-so-headline) kept their names when their rules moved here
-   from the order page (areas/sales/orders: orders.css, record/view/overview/overview.css, record/view/overview/where.css); the text
-   classes a part draws are the kit's own (fw-ro-*). Tokens only. ── */
+   The Overview-only names (fw-so-overview, fw-so-ov-*, fw-so-where*, fw-so-headline, fw-so-strip*, fw-so-fact*, fw-so-rq-*) kept
+   their names when their rules moved here from the order page (areas/sales/orders: orders.css, record/view/overview/overview.css,
+   where.css; F-CO-K2: the rows from where.css, people.css, linked.css, facts.css, requests.css); the text classes a part draws are
+   the kit's own (fw-ro-*). Tokens only. ── */
 
 /* The Overview's column: its cards one under the other (moved from the order area's orders.css, F-SA-232). */
 .fw-so-overview {
@@ -363,4 +364,77 @@ p.fw-ro-hint[role='status'] {
 
 .fw-so-fact-text {
   white-space: pre-wrap;
+}
+
+/* ── F-CO-K2 (the shared overview kit's rows): the groups (Groups, Group, GroupRow, RowAge), moved whole from the order page's
+   record/view/overview/requests.css. ── */
+/* ── F-OO-205 (order overview lane; 11-design §5.2) — Requests & changes: a to-do list grouped by who waits ─────────────────────
+   Three groups — Waiting on us · Waiting on <customer> · Still to do — each its head with its count and a list of rows
+   `words | age | door`. A group's rows lie on the list's own columns (subgrid), so its ages and its doors line up. Below a 480 px
+   card the door wraps under the words, kept to the right (the shared row's rule above); below a 360 px card (a phone) the
+   words take their own line and the age and the door share the next one, to the right. "Told about changes" is the quiet foot.
+   Layout only, tokens only. */
+.fw-so-rq-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-so-rq-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-so-rq-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content auto;
+  gap: var(--nds-space-10) var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.fw-so-rq-list > .fw-so-ov-row {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.fw-so-rq-age {
+  color: var(--nds-text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-so-rq-more {
+  align-self: flex-end;
+}
+
+.fw-so-rq-foot {
+  margin: 0;
+  padding-top: var(--nds-space-10);
+  border-top: 1px solid var(--nds-border);
+}
+
+@container fw-so-ov-card (max-width: 479px) {
+  .fw-so-rq-list {
+    grid-template-columns: minmax(0, 1fr) max-content;
+  }
+}
+
+@container fw-so-ov-card (max-width: 359px) {
+  .fw-so-rq-list > .fw-so-ov-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: baseline;
+    column-gap: var(--nds-space-8);
+  }
+
+  .fw-so-rq-list > .fw-so-ov-row > :first-child {
+    flex: 1 1 100%;
+  }
 }

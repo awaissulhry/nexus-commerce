@@ -22,7 +22,8 @@ import './record-overview.css'
  * card's sentence and its quiet line), `CardState` (a card while its part loads, or when its read failed), `useOverviewWords`.
  * The rows (F-CO-K2): `Strips`, `Strip`, `StripSaid` (what stops the record, one row each, most blocking first); `RowList`, `Row`,
  * `QuietLine` (a card's ONE list: label | value | doors, on the list's own columns); `FactCols`, `Fact`, `Door` (a record's facts in
- * one or two column sets, each with its quiet door).
+ * one or two column sets, each with its quiet door); `Groups`, `Group`, `GroupRow`, `RowAge` (a to-do list grouped by who waits: each
+ * row `words | age | door`).
  */
 
 /** The kit's own words in the page's language. */
@@ -320,3 +321,48 @@ export function Door({ label, held, describedBy, onClick }: { label: string; hel
   )
 }
 // ---- end F-CO-K2 (facts)
+
+// ---- F-CO-K2 (the shared overview kit's rows): the groups — a to-do list grouped by who waits, each row `words | age | door` -----------
+/** The groups of a card, one under the other (S32: a page draws this part, never the class itself). */
+export function Groups({ children }: { children?: ReactNode }): ReactNode {
+  return <div className="fw-so-rq-groups">{children}</div>
+}
+
+/**
+ * One group: its head (`title`: its words say its count), its rows on the list's own columns (subgrid: the ages and the doors line
+ * up), and `more` — the page's "n more ›" door — under them when the page cut the rows (at `GROUP_ROWS_SHOWN`, its choice).
+ */
+export function Group({ title, more, children }: { title: string; more?: ReactNode; children?: ReactNode }): ReactNode {
+  return (
+    <section className="fw-so-rq-group">
+      <h3 className="fw-ro-h3">{title}</h3>
+      <ul className="fw-so-rq-list">{children}</ul>
+      {more}
+    </section>
+  )
+}
+
+/**
+ * One row of a group: what waits (`children`, in ONE span), its age (a `RowAge`), its doors. The doors cell is ALWAYS drawn —
+ * empty for a reader with no door — so the rows' columns line up.
+ */
+export function GroupRow({ age, doors, children }: { age: ReactNode; doors?: ReactNode; children?: ReactNode }): ReactNode {
+  return (
+    <li className="fw-so-ov-row fw-so-rq-row">
+      <span>{children}</span>
+      {age}
+      <span className="fw-so-ov-doors">{doors}</span>
+    </li>
+  )
+}
+
+/** How long a row waits ("15 d", the page's words), its exact day in the title; no start known, or no words: "—". */
+export function RowAge({ since, words, title }: { since: string | null; words: string | null; title?: string }): ReactNode {
+  if (!since || words === null) return <span className="fw-so-rq-age">—</span>
+  return (
+    <time className="fw-so-rq-age" dateTime={since} title={title}>
+      {words}
+    </time>
+  )
+}
+// ---- end F-CO-K2 (groups)

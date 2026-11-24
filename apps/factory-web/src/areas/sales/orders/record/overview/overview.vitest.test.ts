@@ -1226,21 +1226,30 @@ describe('F-OO-205: Requests & changes — Waiting on us · N, Waiting on <custo
     expect(cardOf(draw('f-oo-205-requests'))).toContain('nds-btn')
   })
 
-  it('source and css: the ONE Still to do door, its own requests.css (the shared row, subgrid, the 480 / 360 rules, tokens only, no container)', () => {
+  // F-CO-K2: requests.css moved whole into the shared overview kit's ONE stylesheet (its Groups, Group, GroupRow, RowAge): the card
+  // imports no stylesheet; the same rules, read there with the same strictness (tokens only; the kit names no container but its two).
+  it('source and css: the ONE Still to do door, the kit\'s groups (the shared row, subgrid, the 480 / 360 rules, tokens only, no container)', () => {
     const card = read('../view/overview/RequestsCard.tsx')
-    expect(card).toContain("import './requests.css'")
+    expect(card).not.toContain("import './requests.css'")
+    expect(card).not.toMatch(/import '[^']*\.css'/)
+    expect(card).toContain("import { Group, GroupRow, Groups } from '../../../../../_shared/record-overview/Overview'")
+    expect(card).not.toMatch(/function Group\(|className="fw-so-rq-groups"|className="fw-so-h3"/)
     expect(card).toContain('<StillDoorView row={row} order={order} model={model} actions={actions} />')
     expect(card).toContain('changesBadgeOf(card)')
     expect(card).toContain("t('told.aboutChanges', { count: told })")
     for (const gone of ['card.latest', 'overview.requests.latest', '<StillRow', 'WithMessages']) expect(card, gone).not.toContain(gone)
     for (const gone of ['readonly latest', 'latestRevision']) expect(read('./model.ts'), gone).not.toContain(gone)
-    const css = read('../view/overview/requests.css')
+    const kit = read(KIT_CSS)
+    const css = kit.slice(kit.indexOf("/* ── F-CO-K2 (the shared overview kit's rows): the groups"))
+    expect(css.length).toBeGreaterThan(100)
     expect(css).toMatch(/\.fw-so-rq-list \{\s*display: grid;\s*grid-template-columns: minmax\(0, 1fr\) max-content auto;/)
     expect(css).toMatch(/\.fw-so-rq-list > \.fw-so-ov-row \{\s*grid-column: 1 \/ -1;\s*grid-template-columns: subgrid;/)
     expect(css).toMatch(/@container fw-so-ov-card \(max-width: 479px\)/)
     expect(css).toMatch(/@container fw-so-ov-card \(max-width: 359px\)/)
     expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/)
     expect(css).not.toContain('container:')
+    // The groups' rules are said once, in the kit only.
+    for (const rule of ['.fw-so-rq-groups {', '.fw-so-rq-group {', '.fw-so-rq-list {', '.fw-so-rq-age {', '.fw-so-rq-more {', '.fw-so-rq-foot {']) expect(kit.split(`\n${rule}`), rule).toHaveLength(2)
     for (const locale of LOCALES) {
       const words = messagesFor(locale, ['orders']).orders!
       for (const key of ['requests.changesCount', 'requests.more_one', 'requests.more_other', 'requests.seeHolds', 'requests.seeDates', 'overview.requests.nothing', 'overview.requests.still', 'told.aboutChanges_one', 'told.aboutChanges_other']) expect(words[key]?.trim(), `${locale} ${key}`).toBeTruthy()
