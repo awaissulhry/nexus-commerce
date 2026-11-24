@@ -15,6 +15,8 @@ import { LOCAL_COOKIE_SECRET } from '../../env'
 import { BRAND_ALPHA, BRAND_BETA, findMarkers, fixtureMarkers } from '../../golden-flow/portal/testing/two-brands'
 import { systemContext } from '../outbox/system'
 import { ensureThread, writeMessage, type MessageInput, type RecordRef } from '../threads/threads'
+// tw-s S.4: a hit names a floor worker only through the site's PERFORMANCE gate.
+import { switchOnPerformance } from '../../modules/people/privacy/testing/performance-gate'
 import type { SearchIndexer } from './indexer'
 import { indexEvent, rebuildIndex } from './indexing'
 import { loadIndexers } from './registry'
@@ -167,6 +169,44 @@ describe('B-TH-097: search inside messages (office only)', () => {
       expect(entry.subtitle ?? '').not.toMatch(/€|EUR|45,00|1200/)
     }
   })
+
+  // ---- tw-s S.4 (the thread rebuild W-112; wall R10): a hit says when and by whom, as the thread shows it.
+  it('a hit names its time and its sender as the thread shows it; a floor note with the gate shut names nobody', async () => {
+    const FLOOR_WORD = 'qwvbrindle'
+    const FLOOR_NAME = 'Made-up Floor Person'
+    const workOrder = (await admin<{ id: string }>('SELECT id FROM "WorkOrder" WHERE "tenantId" = $1 AND number = $2', [tenantId, 'SEED-WO-0001']))[0]!.id
+    await write({ type: 'SalesOrder', id: alphaOrder }, { senderNote: note(`Made-up: ${FLOOR_WORD} buttons for the order.`) })
+    await write({ type: 'WorkOrder', id: workOrder }, { floorNote: { direction: 'INTERNAL_NOTE', channel: 'APP', author: { kind: 'WORKER', id: newId(), name: FLOOR_NAME }, bodyText: `Made-up: ${FLOOR_WORD} buttons sewn at table 3.` } })
+    const hits = async (): Promise<Map<string, Json>> => new Map(((await search('everyBrand', `q=${FLOOR_WORD}&type=Message&limit=50`)).results as Json[]).map((row) => [row.recordId as string, row]))
+    const cardOf = async (record: RecordRef, messageId: string): Promise<Json> => {
+      const response = await app.inject({ method: 'GET', url: `/threads/${record.type}/${record.id}?limit=200`, headers: { 'x-test-session': 'everyBrand' } })
+      expect(response.statusCode, response.body).toBe(200)
+      return ((response.json() as Json).messages as Json[]).find((message) => message.id === messageId)!
+    }
+    const shut = await hits()
+    // The office note: its time and its writer, exactly as the thread's card shows them.
+    const card = await cardOf({ type: 'SalesOrder', id: alphaOrder }, written.senderNote!)
+    expect(card.author.name).toBe('Made-up Office')
+    expect(shut.get(written.senderNote!)?.message).toEqual({ at: card.at, authorName: card.author.name, authorKind: 'USER' })
+    // The floor note: its time, a floor worker, nobody named — as its card says.
+    const floorCard = await cardOf({ type: 'WorkOrder', id: workOrder }, written.floorNote!)
+    expect(floorCard.author).toMatchObject({ kind: 'WORKER', name: null })
+    expect(shut.get(written.floorNote!)?.message).toEqual({ at: floorCard.at, authorName: null, authorKind: 'WORKER' })
+    expect(JSON.stringify([...shut.values()])).not.toContain(FLOOR_NAME)
+    // The gate open: the hit names the worker, as the card does; shut again: nobody again.
+    const [where] = await admin<{ companyId: string; siteId: string }>('SELECT "companyId", "siteId" FROM "Thread" WHERE "tenantId" = $1 AND "recordType" = $2 AND "recordId" = $3', [tenantId, 'WorkOrder', workOrder])
+    expect(where?.siteId, 'a work order’s thread sits on its site').toBeTruthy()
+    const gateOff = await switchOnPerformance(admin, { tenantId, companyId: where!.companyId, siteId: where!.siteId, byId: OFFICE_ACTOR })
+    try {
+      expect((await hits()).get(written.floorNote!)?.message).toMatchObject({ authorName: FLOOR_NAME, authorKind: 'WORKER' })
+    } finally {
+      await gateOff()
+    }
+    expect((await hits()).get(written.floorNote!)?.message.authorName).toBeNull()
+    // A record's result never carries a message's facts (messages only when asked).
+    expect(((await search('everyBrand', `q=${FLOOR_WORD}&limit=50`)).results as Json[]).every((row) => !('message' in row))).toBe(true)
+  })
+  // ---- end tw-s S.4
 
   it('each hit is read again against its thread now: a thread that took brand B since is never brand A’s hit', async () => {
     const inquiry = (await admin<{ id: string }>('SELECT id FROM "Inquiry" WHERE "tenantId" = $1 AND number = $2', [tenantId, 'SEED-INQ-0001']))[0]!.id

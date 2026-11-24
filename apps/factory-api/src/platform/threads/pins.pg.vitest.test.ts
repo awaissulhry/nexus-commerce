@@ -13,6 +13,8 @@ import { freshGuard } from '../auth/portal/testing/portal'
 import { startHarness, type Browser, type Harness } from '../auth/sessions/testing/harness'
 import { inTenant, partnerWorld, signIn, type PartnerWorld, type Person } from '../search/partner/testing/world'
 import { PIN_WORDS } from './pins'
+// tw-s S.2: a pinned floor note names its writer only through the site's PERFORMANCE gate.
+import { switchOnPerformance } from '../../modules/people/privacy/testing/performance-gate'
 import { ensureThread, writeMessage } from './threads'
 
 /**
@@ -165,3 +167,41 @@ describe('L2-G11: a request’s note becomes its first pinned note', { timeout: 
     expect(JSON.stringify((await alpha.get(`/threads/Inquiry/${ids.request}/pins`)).body)).not.toContain('calls after 15:00')
   })
 })
+
+// ── tw-s S.2 (the thread rebuild; B3, the worker-privacy wall: one gate for the card, the quote, the pin and the search) ──
+describe('tw-s S.2: a pinned floor note goes through the site’s gate, as its card does', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it("a pinned floor note with the site's gate shut names nobody in the office's pins; with it open, the worker", async () => {
+    const FLOOR_NAME = 'Made-up Floor Person'
+    const floorWorker = newId()
+    const workOrder = (await admin<{ id: string }>(`SELECT id FROM "WorkOrder" WHERE "tenantId" = $1 AND number = 'SEED-WO-0001'`, [world.tenantId]))[0]!.id
+    const seam = callerFor(h.database, { audience: 'office', tenantId: world.tenantId, actorId: world.officeId, grants: [], requestId: newId() })
+    const { result } = await command(seam, { name: 'production.postFloorNote', input: { workOrder, tws: 'S.2' } }, async (tools) => {
+      const { thread } = await ensureThread(tools, { type: 'WorkOrder', id: workOrder }, null)
+      const floor = await writeMessage(tools, thread, { direction: 'INTERNAL_NOTE', channel: 'APP', author: { kind: 'WORKER', id: floorWorker, name: FLOOR_NAME }, bodyText: 'Made-up: the seam tape ran out at table 2.' })
+      return { message: floor.id, companyId: thread.companyId, siteId: thread.siteId }
+    })
+    expect(result.siteId, 'a work order’s thread sits on its site').toBeTruthy()
+    const url = `/threads/WorkOrder/${workOrder}/pins`
+    const pinOf = (answer: { body: Json }): Json => (answer.body.pins as Json[]).find((pin) => pin.messageId === result.message)!
+    // Pinned by the office; the pin's own answer and the pins read name nobody while the gate is shut.
+    const pinnedNow = await call('writer', 'PUT', `${url}/${result.message}`)
+    expect(pinnedNow.status, JSON.stringify(pinnedNow.body)).toBe(200)
+    expect(pinOf(pinnedNow).message).toMatchObject({ authorName: null, authorKind: 'WORKER', audience: 'OFFICE', excerpt: 'Made-up: the seam tape ran out at table 2.' })
+    const shut = await call('reader', 'GET', url)
+    expect(shut.status, JSON.stringify(shut.body)).toBe(200)
+    expect(pinOf(shut).message).toMatchObject({ authorName: null, authorKind: 'WORKER' })
+    expect(JSON.stringify(shut.body)).not.toContain(FLOOR_NAME)
+    expect(JSON.stringify(pinnedNow.body)).not.toContain(FLOOR_NAME)
+    // The gate open: the pin names the worker, as the card does; shut again: nobody again.
+    const gateOff = await switchOnPerformance(admin, { tenantId: world.tenantId, companyId: result.companyId!, siteId: result.siteId!, byId: world.officeId })
+    try {
+      const open = await call('reader', 'GET', url)
+      expect(open.status, JSON.stringify(open.body)).toBe(200)
+      expect(pinOf(open).message).toMatchObject({ authorName: FLOOR_NAME, authorKind: 'WORKER' })
+    } finally {
+      await gateOff()
+    }
+    expect(pinOf(await call('reader', 'GET', url)).message.authorName).toBeNull()
+  })
+})
+// ── end tw-s ──

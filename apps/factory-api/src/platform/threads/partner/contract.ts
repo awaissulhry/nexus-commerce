@@ -50,6 +50,8 @@ export const partnerMessageView = output({
   attachments: z.array(attachmentView),
   // ---- B-TH-050 (thread-G20): the shared message it answers or corrects, and the newest shared message that corrects it ("Corrected
   // below"). A shared message points only at a shared one (the database's rule): never at an office note or a mail taken back.
+  // tw-s S.1: a portal quote says who wrote it (its kind), erased, `mine` and the files the reader may open — never the office-only
+  // `authorId` or `audience` (not read on a shared-only read).
   replyTo: linkedMessageView.nullable().optional(),
   corrects: linkedMessageView.nullable().optional(),
   correctedBy: output({ id: id(), at: instant() }).nullable().optional(),

@@ -14,6 +14,7 @@ import { MESSAGE_AMOUNT_MAX } from '@nexus/factory-domain/threads/price-check'
 import { FILE_AUDIENCES, FILE_KINDS, FILE_STATUSES } from '../files/rules'
 // ---- B-TH-079: the feed's audience view, the skipped files of an inbound mail, the mail waiting for a person.
 import { HELD_REASONS, SKIP_REASONS } from '@nexus/factory-domain/email-in/rules'
+import { MAIL_VERDICTS } from '@nexus/factory-domain/email-in/rules' // tw-s S.5: an inbound mail's checks
 import { FEED_AUDIENCES } from '@nexus/factory-domain/threads/timeline'
 // ---- B-SA-061: what a message is about (a part of its order).
 import { ABOUT_KINDS } from './about'
@@ -26,6 +27,16 @@ export const waitingMailView = output({
   /** The reader may open them in Mail to sort (email.triage): "Review"; else "A reply waits for a colleague to check it". */
   mayReview: z.boolean(),
 })
+// ---- tw-s S.5 (the thread rebuild; Z2 "Email details"): office only — an inbound mail's header From, To and Cc (lower case), its
+// subject and SES's checks, as Mail to sort names them (email-in contract: from, verdicts).
+export const inboundMailView = output({
+  from: output({ address: z.string().nullable(), name: z.string().nullable() }),
+  to: z.array(z.string()),
+  cc: z.array(z.string()),
+  subject: z.string().nullable(),
+  verdicts: output({ spf: z.enum(MAIL_VERDICTS), dkim: z.enum(MAIL_VERDICTS), dmarc: z.enum(MAIL_VERDICTS) }),
+})
+// ---- end tw-s S.5
 /** The audience view ("View ▾"): ALL, PARTNER ("With the customer") or OFFICE ("Office notes"); outside the office it only narrows. */
 const feedAudience = z.enum(FEED_AUDIENCES).default('ALL')
 // ---- end B-TH-079
@@ -77,7 +88,29 @@ export const attachmentView = output({
 export type AttachmentView = z.infer<typeof attachmentView>
 
 // ---- B-TH-050 (thread-G20): a message another points at, as a card shows it ("In reply to Anna, 14 Nov: …", "Corrects …").
-export const linkedMessageView = output({ id: id(), /** Null: a floor worker the site's gate keeps back. */ authorName: z.string().nullable(), excerpt: z.string(), at: instant() })
+// ---- tw-s S.1 (thread rebuild W-030 / W-031; walls R1, R2): what the quote draws — who wrote it, erased, the files THIS reader may open.
+// Words only: a quote never carries an amount nor a file's name or preview.
+export const linkedMessageView = output({
+  id: id(),
+  /** Null: a floor worker the site's gate keeps back. */
+  authorName: z.string().nullable(),
+  excerpt: z.string(),
+  at: instant(),
+  /** tw-s: who wrote it; a floor worker the gate keeps back is a WORKER with no name ("A person on the floor"). */
+  authorKind: z.enum(AUTHOR_KINDS).optional(),
+  /** tw-s, office only (never read on a shared-only read: the partner role has no grant on it); null for a floor worker the gate keeps back. */
+  authorId: id().nullable().optional(),
+  /** tw-s, office only: OFFICE (a note) or PARTNER (shared with the customer or supplier). */
+  audience: z.enum(MESSAGE_AUDIENCES).optional(),
+  /** tw-s: erased after a privacy request ("Message removed", no name). */
+  erased: z.boolean().optional(),
+  /** tw-s, portal only: the reader wrote it in the portal. */
+  mine: z.boolean().optional(),
+  /** tw-s: how many of its files THIS reader may open — a locked one (priced without the price grain, a measurement sheet) or a walled one never counts. */
+  fileCount: z.number().int().min(0).optional(),
+  /** tw-s: the first of those files (never a locked or walled one); null: none. */
+  firstFile: output({ id: id(), kind: z.enum(FILE_KINDS), contentType: z.string() }).nullable().optional(),
+})
 /** B-TH-050: what a new message answers or corrects — one at most, a message of the same conversation. */
 export const messageLinkInput = {
   /** "Reply" on a message: the message it answers. */
@@ -117,7 +150,7 @@ export const messageView = output({
   mentions: z.array(id()).optional(),
   /** The attached files the reader may see, in order; the others are left out. */
   attachments: z.array(attachmentView),
-  /** B-TH-231 (B-TH-029): how many attached files the reader may not see (left out above; absent when none): "One file you cannot open". */
+  /** B-TH-231 (B-TH-029): Office only (tw-s S.3) — how many attached files the reader may not see (left out above; absent when none): "One file you cannot open". */
   hiddenAttachments: z.number().int().min(1).optional(),
   // ---- B-TH-049 (N7, T8-F04): the price typed in the amount field (minor units of its currency); office only, and only for a reader
   // holding the price grain (money.price: the answer drops it for everyone else). Null: the note has none.
@@ -134,6 +167,8 @@ export const messageView = output({
   erased: z.boolean().optional(),
   skippedAttachments: z.array(skippedAttachmentView).optional(),
   // ---- end B-TH-079
+  // ---- tw-s S.5: office only — on an inbound mail, its details ("Email details"; null: the mail is not found). Never on a portal or link read.
+  mail: inboundMailView.nullable().optional(),
   at: instant(),
 })
 export type MessageView = z.infer<typeof messageView>
@@ -553,7 +588,10 @@ const pinView = output({
   /** Office only: who pinned it. */
   pinnedBy: output({ id: id(), name: z.string().nullable() }).optional(),
   message: output({
+    /** Null: a floor worker the site's gate keeps back (tw-s S.2, as the note's card), or no name. */
     authorName: z.string().nullable(),
+    /** tw-s S.2, office only: who wrote it (a WORKER with no name: "A person on the floor"). */
+    authorKind: z.enum(AUTHOR_KINDS).optional(),
     /** One line of its words (empty when it carries files only). */
     excerpt: z.string(),
     at: instant(),
