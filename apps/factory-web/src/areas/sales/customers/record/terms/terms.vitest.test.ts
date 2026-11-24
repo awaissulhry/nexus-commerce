@@ -1157,3 +1157,13 @@ describe('ct-fx3 G-W06: the facts are balanced by their count — no line holds 
     for (const name of ['CommercialSection.tsx', 'IdentitySection.tsx']) expect(readFileSync(new URL(`../view/terms/${name}`, import.meta.url), 'utf8'), name).not.toMatch(/<Facts facts=\{(?!facts\})/)
   })
 })
+
+describe('ct-fx3 G-W07: the refused page sends no Terms read (P0-B3, Z43)', () => {
+  it('the depth provider\'s tab loads return at once for a reader without parties.view (People\'s F-CA-fx5 lines kept)', () => {
+    const depth = readFileSync(new URL('../../depth/use-depth.ts', import.meta.url), 'utf8')
+    expect(depth).toMatch(/const loadTab = useCallback\(\(\) => \{\s*\/\/[^\n]*\n\s*if \(!readsCustomer\) return\n[\s\S]*?else if \(tab === 'terms'\) void Promise\.all\(\[loadHolds\(\), loadTerms\(\), loadRequirements\(\)\]\)/)
+    expect(depth).toContain('}, [loadGlance, loadHolds, loadPrivacy, loadRequirements, loadTerms, readsCustomer, tab])')
+    expect(depth).toContain("const readsCustomer = session.permissions.includes('parties.view') // F-CA-fx5")
+    expect(depth.match(/F-CA-fx5/g)).toHaveLength(2)
+  })
+})
