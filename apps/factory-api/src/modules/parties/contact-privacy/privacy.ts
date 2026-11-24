@@ -108,7 +108,8 @@ async function readContact(caller: CommandCaller, partyId: string, contactId: st
   return row
 }
 
-const erasedRefusal = () =>
+/** The refusal of any change to an erased contact (also W1's contact PATCH, ../children.ts updateContact: F-CA-S2). */
+export const erasedRefusal = (): DomainError =>
   new DomainError('conflict', 'This contact was erased on request: its name, e-mail and phone stay blank and it stays archived. Add a new contact for new details.', [{ path: 'privacy/CONTACT_ERASED', message: 'Erased.' }])
 
 async function writable(caller: CommandCaller, partyId: string, contactId: string, permission: typeof PARTIES_PRIVACY | typeof PARTIES_ERASE): Promise<{ context: OfficeContext; party: PartyRowData; contact: ContactRow }> {

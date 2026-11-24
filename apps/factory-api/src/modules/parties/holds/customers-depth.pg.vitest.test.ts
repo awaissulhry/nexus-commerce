@@ -358,6 +358,15 @@ describe("contacts' personal data (SAL-022)", () => {
     await no('sales', 'POST', `/parties/${A.p3}/contacts/${p3Buyer()}/access-copy`, { words: 'Again (made up).' }, 409)
     const patched = await no('sales', 'PATCH', `/parties/${A.p3}/contacts/${p3Buyer()}`, { version: row.version, name: 'Back again', roles: [] }, 409)
     expect(paths(patched)).toEqual(['privacy/CONTACT_ERASED'])
+    // F-CA-S2 (ca-s S.2; R-B4): an Edit without a name and a Restore are refused in the same words, before any other rule
+    // (no "The contact is not valid." for the blank name), and nothing changes.
+    const edited = await no('sales', 'PATCH', `/parties/${A.p3}/contacts/${p3Buyer()}`, { version: row.version, roles: ['ORDERS'] }, 409)
+    expect(paths(edited)).toEqual(['privacy/CONTACT_ERASED'])
+    expect(edited.message).toContain('This contact was erased on request')
+    const restored = await no('sales', 'PATCH', `/parties/${A.p3}/contacts/${p3Buyer()}`, { version: row.version, status: 'ACTIVE' }, 409)
+    expect(paths(restored)).toEqual(['privacy/CONTACT_ERASED'])
+    expect(await one<Json>(`SELECT name, status::text AS status, version FROM "PartyContact" WHERE id = $1`, [p3Buyer()])).toMatchObject({ name: '', status: 'ARCHIVED', version: row.version })
+    // F-CA-S2 end
     await no('sales', 'PUT', `/parties/${A.p3}/contacts/${p3Buyer()}/lawful-basis`, { version: row.version, lawfulBasis: 'CONSENT' }, 409)
     // sales holds parties.privacy, not parties.erase.
     await no('sales', 'POST', `/parties/${A.p1}/contacts/${buyer()}/erase`, { version: 1, words: 'No.' }, 403)
