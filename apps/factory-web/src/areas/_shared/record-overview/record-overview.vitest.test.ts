@@ -223,7 +223,7 @@ describe('F-CO-K2: the strips — Strips, Strip and StripSaid draw the markup th
   })
 
   it('StripSaid: the title with its age (its exact day in the title), then each quiet line in the kit\'s hint', () => {
-    expect(render(createElement(StripSaid, { title: 'Quality hold', since: { iso: '2026-11-02T09:00:00Z', day: '02/11/2026', words: '3 d' }, lines: ['on 1 work order', 'Quality releases it'] }))).toBe('<span>Quality hold · <time datetime="2026-11-02T09:00:00Z" title="02/11/2026">3 d</time></span><span class="fw-ro-hint">on 1 work order</span><span class="fw-ro-hint">Quality releases it</span>')
+    expect(render(createElement(StripSaid, { title: 'Quality hold', since: { iso: '2026-11-02T09:00:00Z', day: '02/11/2026', words: '3 d' }, lines: ['on 1 work order', 'Quality releases it'] }))).toBe('<span>Quality hold · <time dateTime="2026-11-02T09:00:00Z" title="02/11/2026">3 d</time></span><span class="fw-ro-hint">on 1 work order</span><span class="fw-ro-hint">Quality releases it</span>')
     expect(render(createElement(StripSaid, { title: 'Paused' }))).toBe('<span>Paused</span>')
     expect(render(createElement(StripSaid, { title: 'Paused', since: null, lines: [] }))).toBe('<span>Paused</span>')
     // Inside a strip: what it says sits in the strip's words cell.
@@ -369,7 +369,7 @@ describe('F-CO-K2: the groups — Groups, Group, GroupRow and RowAge draw the ma
   })
 
   it('RowAge: a time with its exact day in the title (class, datetime, title); no start or no words: "—"', () => {
-    expect(render(createElement(RowAge, { since: '2026-11-03T09:00:00Z', words: '15 d', title: 'since 03/11/2026, 10:00' }))).toBe('<time class="fw-so-rq-age" datetime="2026-11-03T09:00:00Z" title="since 03/11/2026, 10:00">15 d</time>')
+    expect(render(createElement(RowAge, { since: '2026-11-03T09:00:00Z', words: '15 d', title: 'since 03/11/2026, 10:00' }))).toBe('<time class="fw-so-rq-age" dateTime="2026-11-03T09:00:00Z" title="since 03/11/2026, 10:00">15 d</time>')
     expect(render(createElement(RowAge, { since: null, words: '15 d' }))).toBe('<span class="fw-so-rq-age">—</span>')
     expect(render(createElement(RowAge, { since: '2026-11-03T09:00:00Z', words: null }))).toBe('<span class="fw-so-rq-age">—</span>')
   })
@@ -438,7 +438,7 @@ describe('the /design/record-overview lab', () => {
     expect(html('strips-failed').match(/<span class="fw-so-strip-said">The holds could not be read<\/span><span class="fw-so-ov-doors"><button[^>]*>Try again<\/button>/g)).toHaveLength(rooms)
     expect(html('strips-doors').match(/<span class="fw-so-ov-doors"><button[^>]*>Lift the hold…<\/button><button[^>]*>Open ›<\/button><\/span>/g)).toHaveLength(rooms)
     expect(html('strips-lines').match(/<span class="fw-ro-hint">Quality releases it<\/span>/g)).toHaveLength(rooms)
-    expect(html('strips-lines')).toContain('<time datetime="2026-11-21T09:00:00Z" title="21/11/2026">3 d</time>')
+    expect(html('strips-lines')).toContain('<time dateTime="2026-11-21T09:00:00Z" title="21/11/2026">3 d</time>')
     // The ONE list: plain rows have no doors cell; Linked's shape keeps an empty one; quiet lines span the row.
     expect(html('rows')).not.toContain('fw-so-ov-doors')
     expect(html('rows').match(/<ul class="fw-so-ov-list">/g)).toHaveLength(rooms)
@@ -455,7 +455,7 @@ describe('the /design/record-overview lab', () => {
     // The groups: three, each its h3; ages with their day or "—"; a cut group's door under its rows.
     expect(html('groups').match(/<section class="fw-so-rq-group"><h3 class="fw-ro-h3">/g)).toHaveLength(3 * rooms)
     expect(html('groups').match(/<div class="fw-so-rq-groups">/g)).toHaveLength(rooms)
-    expect(html('groups')).toContain('<time class="fw-so-rq-age" datetime="2026-11-03T09:00:00Z" title="since 03/11/2026, 10:00">15 d</time>')
+    expect(html('groups')).toContain('<time class="fw-so-rq-age" dateTime="2026-11-03T09:00:00Z" title="since 03/11/2026, 10:00">15 d</time>')
     expect(html('groups')).toContain('<span class="fw-so-rq-age">—</span>')
     expect(html('groups')).not.toContain('2 more ›')
     expect(html('groups-more').match(/<\/ul><a class="fw-ro-link fw-ro-hint" href="#record-overview-lab">2 more ›<\/a><\/section>/g)).toHaveLength(rooms)

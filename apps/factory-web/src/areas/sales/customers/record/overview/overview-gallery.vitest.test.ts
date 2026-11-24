@@ -41,6 +41,12 @@ const overviewOf = (html: string): string => {
   expect(from, 'the Overview is drawn').toBeGreaterThan(-1)
   return html.slice(from, dock > from ? dock : undefined)
 }
+/**
+ * co-fx1: the same words with each element's text kept apart (" | " between elements) — so a count is a count only INSIDE one element
+ * (S39's "3 invoices late" is one line), never a date of one element followed by the next element's first word ("…21/10/2026 |
+ * Invoices are late"). Read at the end check: that join made a date and the strip's words look like a count.
+ */
+const cellsOf = (html: string): string => textOf(html.replace(/<!-- -->/g, '').replace(/<[^>]+>/g, ' | '))
 const LEFT_KEY = /\b(?:customers|overview|record|status|side|warning|step|vies|held|field|kind|taxMode|identity|list|common|credit|promises|reason|hold|prom|col|work|group|urgency|limits|customerCard|tab|state|row|strips|cm|settings|fact|dialog|designer|people|dates|linked|facts|strip|headline|quiet|team|reqSide|problem)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*/
 const CO_CASES = screen.cases.filter((entry) => entry.id.startsWith('co-')).map((entry) => entry.id)
 
@@ -77,7 +83,7 @@ for (const locale of LOCALES) {
       for (const id of ['w2a-numbers-no-price', 'w2b-324-overview-no-price', 'co-role-sales', 'co-role-read-only', 'co-role-production-manager', 'co-role-warehouse']) {
         const text = textOf(overviewOf(draw(id, locale)))
         expect(text, `${id} (${locale})`).not.toMatch(/€|\d[\d.,]*\s?EUR\b/)
-        expect(text, `${id} (${locale})`).not.toMatch(/\d+\s+(invoices?|fattur[ae])\b/i)
+        expect(cellsOf(overviewOf(draw(id, locale))), `${id} (${locale})`).not.toMatch(/\d+\s+(invoices?|fattur[ae])\b/i)
       }
       // Sales and Read-only read the receivables: the words "Invoices are late", the credit as words.
       for (const id of ['co-role-sales', 'co-role-read-only']) {
@@ -165,9 +171,15 @@ describe('the rights per office role: a part without its right is left out, a bu
   }
 
   it('a reader without orders.view: no band, no order row — the status word', () => {
-    const text = textOf(overviewOf(draw('co-no-orders', 'en')))
+    const part = overviewOf(draw('co-no-orders', 'en'))
+    const text = textOf(part)
     expect(text).not.toContain('All orders of')
-    expect(text).not.toMatch(/open of \d+/)
+    // co-fx1: no Orders row — its own label (Linked records' row "Orders"); "n open of N" alone also says the Projects row.
+    expect(cellsOf(part)).not.toMatch(/\| Orders \|/)
+    expect(cellsOf(part)).toMatch(/\| Projects \|/)
+    // The same reader with orders.view (co-busy): the Orders row is there, its label and its "n open of N".
+    const busy = cellsOf(overviewOf(draw('co-busy', 'en')))
+    expect(busy).toMatch(/\| Orders (?:\| )+\d+ open of \d+ ›/)
     expect(text).toContain('Active')
   })
 })
