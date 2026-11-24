@@ -4,9 +4,7 @@
   },
   "terms": {
     "title": "Condizioni commerciali",
-    "intro": "I valori che un nuovo preventivo o ordine di questo cliente prende.",
     "edit": "Modifica",
-    "close": "Chiudi",
     "save": "Salva condizioni",
     "saved": "Condizioni commerciali salvate. I preventivi aperti tengono le loro; i nuovi preventivi e ordini prendono queste.",
     "unsaved_one": "{count} modifica non salvata",
@@ -14,7 +12,6 @@
     "fixFirst_one": "Correggi prima {count} campo",
     "fixFirst_other": "Correggi prima {count} campi",
     "failed": "Impossibile caricare le condizioni",
-    "viewOnly": "Puoi vedere, non modificare",
     "none": "Nessuno",
     "noList": "Nessuno: prezzato dal listino base",
     "baseList": "Nessuno (lo prezza il listino base)",
@@ -23,25 +20,18 @@
     "archivedTerms": "archiviati",
     "typedOnly": "Scritti sul cliente, non dalla libreria",
     "useTyped": "Nessuno dalla libreria (stampa “{text}”)",
-    "depositFromTerms": "{pct} dai suoi termini di pagamento",
     "depositSettings": "Dalle impostazioni vendite",
     "noPrice": "Il valore minimo d'ordine non è nel tuo ruolo (niente prezzi di vendita).",
-    "currencyHint": "I suoi preventivi e il listino sono in questa valuta.",
-    "paymentHint": "Cosa si paga e quando; l'acconto segue la rata all'ordine.",
     "listHint": "Listini attivi in {currency} di questa azienda o di tutte.",
-    "groupHint": "Solo lettura: un cliente entra in un gruppo di sconto ricevendo il listino del gruppo (o uno che lo usa come riserva).",
-    "carrierHint": "Il codice del corriere da usare per primo (es. BRT, GLS).",
     "depositHint": "Percentuale del totale lordo; vuoto: dai termini di pagamento, altrimenti dalle impostazioni vendite.",
     "minimumHint": "Netto, in {currency}; un preventivo sotto lo segnala.",
     "languageHint": "La lingua di preventivi, PDF e mail.",
-    "invoicingHint": "TD01 una fattura per spedizione, TD24 una fattura differita al mese.",
     "choicesFailed": "Impossibile leggere i termini di pagamento o i listini da scegliere: gli altri campi si salvano lo stesso.",
     "held": {
       "notCustomer": "Le condizioni commerciali sono per i clienti",
       "archived": "Archiviato: riattivalo per cambiare le condizioni",
       "noManage": "Il tuo ruolo può vedere i clienti, non modificarli",
-      "noTerms": "Il tuo ruolo non può leggere la libreria dei termini di pagamento",
-      "noListsManage": "Dare un listino richiede il permesso di gestire i listini"
+      "noTerms": "Il tuo ruolo non può leggere la libreria dei termini di pagamento"
     },
     "problem": {
       "currency": "Un codice valuta come EUR o CHF",
@@ -67,8 +57,6 @@
     "paymentTerms": "Termini di pagamento",
     "priceList": "Listino",
     "discountGroup": "Gruppo di sconto",
-    "incoterm": "Incoterms",
-    "carrier": "Corriere preferito",
     "deposit": "Acconto predefinito %",
     "minimum": "Valore minimo d'ordine",
     "language": "Lingua dei documenti",
@@ -76,8 +64,7 @@
   },
   "language": {
     "it": "Italiano",
-    "en": "Inglese",
-    "other": "Altra ({code})"
+    "en": "Inglese"
   },
   "invoicing": {
     "PER_SHIPMENT": "Una fattura per spedizione (TD01)",

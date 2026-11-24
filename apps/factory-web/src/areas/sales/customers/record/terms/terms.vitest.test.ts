@@ -594,7 +594,8 @@ describe('the views of the tab (W1.3)', () => {
   })
 
   it('a view fetches nothing (no API client, no session, no fetching hook, never its container) and draws no AG grid', () => {
-    expect(views.length).toBeGreaterThanOrEqual(10)
+    // ct-fx (People end check): the floor was miscounted (ct-w1 shipped 9 views, not 10) — the guard is the TRUE list of the tab's views.
+    expect(views.map((view) => view.name).sort()).toEqual(['ChangeTermsDialog.tsx', 'CommercialSection.tsx', 'CompanyTermsDialog.tsx', 'DeliveryDialog.tsx', 'HoldSection.tsx', 'IdentitySection.tsx', 'RequirementsSection.tsx', 'TermsAnswer.tsx', 'TermsNotices.tsx', 'TermsTab.tsx', 'say.ts'])
     for (const { name, source: text } of views) {
       expect(text, name).not.toMatch(/lib\/api\/|lib\/session\/|use-terms-tab|use-depth|fetch\(|useRouter/)
       expect(text, name).not.toMatch(/@nexus\/ui\/grid|ListFrame|ag-grid/)
@@ -740,8 +741,9 @@ describe('the page mounts the tab (W1.4)', () => {
 
   it('P0-B1 (Z15, Z33): every .fw-cdp-stack has its column again — CSS only', () => {
     const css = source('../../depth/depth.css').replace(/\/\*[\s\S]*?\*\//g, '')
-    expect(css).toMatch(/\.fw-cdp-loading,\s*\.fw-cdp-stack \{\s*display: flex;\s*flex-direction: column;/)
-    expect(css).not.toMatch(/fw-cdp-two-wide|fw-cdp-now/)
+    expect(css).toMatch(/\.fw-cdp-stack \{\s*display: flex;\s*flex-direction: column;/)
+    // F-CT-534 (ct-w2 W2.4): the old cards' rules went with them (no reader left).
+    expect(css).not.toMatch(/fw-cdp-(two-wide|now|loading|card|head|title|toggle-row|bar|clip|code|tags)\b/)
   })
 
   it('every Terms case of the gallery draws the new tab (its id kept): the answer line, Hold first, Commercial terms', () => {
@@ -972,6 +974,48 @@ describe('one source, one editor (W2.3; 13-backend §4, Z8, Z32)', () => {
       const words = createScopedTranslator(locale, messagesFor(locale, ['parties']), 'parties')('edit.subtitle')
       expect(words, locale).toContain(locale === 'en' ? 'Terms & requirements' : 'Condizioni e requisiti')
       expect(words, locale).not.toMatch(/\bparty\b/i)
+    }
+  })
+})
+
+// ---- W2.4: the old code out ----------------------------------------------------------------------------------------------------
+
+describe('the old parts went; the supplier\'s record stays as it was (W2.4; D1)', () => {
+  const at = (path: string) => new URL(path, import.meta.url)
+  const read = (path: string) => readFileSync(at(path), 'utf8')
+  const gone = (path: string) => expect(() => readFileSync(at(path), 'utf8'), path).toThrow()
+
+  it('the old Commercial terms card, its container and styles, the PO number card and the Hold card are gone; the hold window stays', () => {
+    for (const path of ['../../terms/CommercialTerms.tsx', '../../terms/view/CommercialTermsCard.tsx', '../../terms/terms.css', '../../depth/view/PoNumberCard.tsx']) gone(path)
+    const hold = read('../../depth/view/HoldCard.tsx')
+    expect(hold).toContain('export function HoldDialogView(')
+    expect(hold).not.toMatch(/export function HoldCard\(|onToggle|DepthCard|ReadOr/)
+    expect(read('../../depth/view/parts.tsx')).not.toMatch(/export function (DepthCard|ReadOr|Head)\(/)
+    expect(read('../../depth/model.ts')).not.toMatch(/toggleHeld|poRows|poChanges|poHeld|shownOnKeys|export const valueOf/)
+    // cu/terms/api.ts and model.ts stay (the Quotes record and Home approvals read them)
+    for (const path of ['../../terms/api.ts', '../../terms/model.ts']) expect(read(path).length, path).toBeGreaterThan(0)
+    expect(read('../view/CustomerRecordView.tsx')).not.toMatch(/SupplierDepth|\bdepth=\{|\bterms=\{/)
+    expect(read('../CustomerRecord.tsx')).not.toContain('depth={record.depth}')
+  })
+
+  it('D1: the VIES card was the customer\'s only — it went; the supplier keeps its compact identity card and its VIES row', () => {
+    const cards = read('../../../../parties/_shared/view/cards.tsx')
+    expect(cards).not.toContain('export function ViesCard(')
+    expect(cards).toContain('export function IdentityCard({ model, party, current, actions, editable, compact = false, viesHeld }')
+    expect(cards).toContain('...(compact && viesApplies(party)')
+    expect(read('../../../../parties/_shared/view/PartyRecordView.tsx')).toMatch(/<IdentityCard [^>]*compact viesHeld=\{viesHeld\} \/>/)
+  })
+
+  it('the list\'s office chip opens Tax identity & e-invoice; the words nothing says any more went, in both languages', () => {
+    expect(read('../../list/columns.tsx')).toContain("href={`${recordHref(prefix, SIDES.customers, row.id, 'terms')}#party-identity`")
+    for (const locale of LOCALES) {
+      const words = (ns: string) => JSON.stringify(messagesFor(locale, [ns])[ns] ?? {})
+      expect(words('parties'), locale).not.toMatch(/"notApplicable"|"recheck"/)
+      expect(JSON.parse(words('parties')).customers.anchor ?? {}, locale).not.toHaveProperty('identity')
+      const depth = JSON.parse(words('sales-customers-depth'))
+      expect(Object.keys(depth.po ?? {}), locale).toEqual(expect.not.arrayContaining(['toggle', 'save', 'setBy']))
+      expect(Object.keys(depth.hold ?? {}), locale).toEqual(expect.not.arrayContaining(['toggle', 'toggleMany', 'on', 'off']))
+      expect(JSON.parse(words('customer-terms')).termsField ?? {}, locale).not.toHaveProperty('carrier')
     }
   })
 })

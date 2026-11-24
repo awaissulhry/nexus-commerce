@@ -1,18 +1,16 @@
 'use client'
 
-import Link from 'next/link'
-import { Banner, Field, SummaryTable } from '@nexus/ui/components'
-import { Button, Select, Tag, Toggle } from '@nexus/ui/primitives'
-import { Modal, Textarea, Timeline } from '../../../../../lib/i18n/ds-parts'
+import { Banner, Field } from '@nexus/ui/components'
+import { Button, Select } from '@nexus/ui/primitives'
+import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import type { Holds } from '../api'
-import { holdDraftProblem, REASONS, toggleHeld, valueOf, writeHeld, type DepthCan, type HoldDialog, type Read } from '../model'
-import { DepthCard, ReadOr, useSay } from './parts'
+import { holdDraftProblem, REASONS, type DepthCan, type HoldDialog, type Read } from '../model'
+import { useSay } from './parts'
 
 /**
- * Tax & terms › Hold (B-W2b-324; SAL-023; design sales.customers record customer.tax.hold): On hold (the Toggle: on asks
- * the reason and the words; off releases the one hold in force, with words), each hold in force with its reason, company,
- * words, who and when (the system for a credit check) and its own Release, the accepted quotes whose order waits for the
- * release, and the history (released holds, who released them and why). Fetches nothing.
+ * The hold window (B-W2b-324; SAL-023): Put on hold… asks the company, the reason and the words; Release… the words. F-CT-531 (ct-w2
+ * W2.4): the old Hold card went — Terms & requirements' Hold section draws the holds (cu/record/view/terms/HoldSection.tsx); this window
+ * stays the ONE hold window Terms and Money open (HoldDialogView). Fetches nothing.
  */
 
 export interface HoldCardModel {
@@ -27,104 +25,10 @@ export interface HoldCardModel {
 export interface HoldCardActions {
   onPlace?: () => void
   onRelease?: (hold: Holds['holds'][number]) => void
-  onToggle?: (on: boolean) => void
   onDraft?: (dialog: HoldDialog) => void
   onConfirm?: () => void
   onClose?: () => void
   onRetry?: () => void
-}
-
-export function HoldCard({ model, actions }: { model: HoldCardModel; actions?: HoldCardActions }) {
-  const { t, day, when } = useSay()
-  const read = valueOf(model.read)
-  const held = writeHeld(model.can, 'hold', model.status)
-  const inForce = read?.holds.filter((hold) => hold.inForce) ?? []
-  const released = read?.holds.filter((hold) => !hold.inForce) ?? []
-  const toggle = read ? toggleHeld(read.holds, held) : held
-  return (
-    <DepthCard
-      title={t('hold.title')}
-      hint={t('hold.hint')}
-      action={
-        <Button size="sm" onClick={() => actions?.onPlace?.()} heldReason={held ? t(held) : null}>
-          {t('hold.place')}
-        </Button>
-      }
-    >
-      <ReadOr status={model.read.status} problem={model.read.status === 'error' ? model.read.problem : undefined} title={t('hold.title')} onRetry={actions?.onRetry}>
-        {read ? (
-          <div className="fw-cdp-stack">
-            <div className="fw-cdp-toggle-row">
-              <Toggle checked={inForce.length > 0} onChange={(on) => actions?.onToggle?.(on)} disabled={toggle !== null} aria-label={t('hold.toggle')} />
-              <span className="fw-cdp-name">{t(inForce.length > 0 ? 'hold.on' : 'hold.off')}</span>
-              {toggle ? <span className="fw-cdp-hint">{t(toggle)}</span> : null}
-            </div>
-            {inForce.length > 0 ? (
-              <SummaryTable
-                label={t('hold.inForce')}
-                stackOnPhone
-                density="roomy"
-                columns={[t('hold.col.reason'), t('hold.col.company'), t('hold.col.words'), t('hold.col.placed'), '']}
-                widths={['16%', '16%', '34%', '22%', '12%']}
-                rows={inForce.map((hold) => ({
-                  id: hold.id,
-                  cells: [
-                    <Tag key="r" tone="danger">
-                      {t(`reason.${hold.reason}`)}
-                    </Tag>,
-                    hold.company ? hold.company.name : t('hold.everyCompany'),
-                    <span key="w" className="fw-cdp-clip">
-                      {hold.words}
-                    </span>,
-                    hold.placedBy ? t('hold.placedBy', { date: when(hold.placedAt), by: hold.placedBy }) : t('hold.placedSystem', { date: when(hold.placedAt) }),
-                    <Button key="a" size="sm" onClick={() => actions?.onRelease?.(hold)} heldReason={held ? t(held) : null}>
-                      {t('hold.release')}
-                    </Button>,
-                  ],
-                }))}
-              />
-            ) : (
-              <p className="fw-cdp-hint">{t('hold.none')}</p>
-            )}
-            {inForce.length > 0 && <Banner tone="warning" title={t('hold.stops')} />}
-            {read.ordersWaiting.length > 0 && (
-              <div className="fw-cdp-stack">
-                <h3 className="fw-cdp-subtitle">{t('hold.waiting', { count: read.ordersWaiting.length })}</h3>
-                <ul className="fw-cdp-list">
-                  {read.ordersWaiting.map((order) => (
-                    <li key={order.quoteVersionId}>
-                      <Link className="fw-cdp-code" href={`${model.prefix}/sales/quotes/${encodeURIComponent(order.quoteId)}`}>
-                        {t('hold.quoteRev', { number: order.number, revision: order.revision })}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-                <p className="fw-cdp-hint">{t('hold.waitingHint')}</p>
-              </div>
-            )}
-            <div className="fw-cdp-stack">
-              <h3 className="fw-cdp-subtitle">{t('hold.history')}</h3>
-              {released.length === 0 ? (
-                <p className="fw-cdp-hint">{t('hold.noHistory')}</p>
-              ) : (
-                <Timeline
-                  label={t('hold.history')}
-                  steps={released.map((hold) => ({
-                    key: hold.id,
-                    tone: 'neutral',
-                    at: hold.releasedAt,
-                    label: t('hold.releasedLine', { reason: t(`reason.${hold.reason}`), by: hold.releasedBy ?? t('hold.system') }),
-                    detail: `${hold.releaseWords ?? ''} · ${t('hold.placedLine', { date: day(hold.placedAt), words: hold.words })}`,
-                  }))}
-                />
-              )}
-            </div>
-          </div>
-        ) : null}
-      </ReadOr>
-      <HoldDialogView model={model} actions={actions} />
-    </DepthCard>
-  )
 }
 
 /** F-CM-301 (customer MONEY tab, 13-backend §4.2): exported — the Money tab's Credit & terms opens this same window (one state with Terms). */

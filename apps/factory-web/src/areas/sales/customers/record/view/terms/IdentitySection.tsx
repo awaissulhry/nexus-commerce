@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { CheckCircle2, CircleAlert, Eye, Hourglass, Pencil, Plus, RefreshCw } from 'lucide-react'
 import { Button, Tag } from '@nexus/ui/primitives'
 import { Facts, Fold } from '../../../../orders/record/money/view/parts'
+import { RESULT_TONE } from '../../../../../parties/_shared/model' // the record's own tones of a VIES result
 import { LineMenuButton } from '../../../../orders/record/view/LineMenu'
 import { PartFailed, Quiet, Section } from '../../../../orders/record/view/production/Kit'
 import type { DatedIdentityRow, IdentityFact, ViesRowModel } from '../../terms/identity'
@@ -125,8 +126,6 @@ function FactValue({ fact, marked, say }: { fact: IdentityFact; marked: boolean;
     </span>
   )
 }
-
-const RESULT_TONE = { VALID: 'success', INVALID: 'danger', ERROR: 'warning' } as const
 
 function ViesRow({ vies, marked, say, actions }: { vies: ViesRowModel; marked: boolean; say: Say; actions?: TermsTabActions | undefined }) {
   return (

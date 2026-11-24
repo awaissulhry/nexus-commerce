@@ -4,8 +4,7 @@ import { ARCHIVED_CUSTOMER, at, CUSTOMERS, inShell, NOW, ORDERS, partyThread, QU
 import { loaded, loading, type PartyRecordModel } from '../../../parties/_shared/model'
 import { recordTabs, shownTab, SIDES } from '../../../parties/_shared/model' // F-CO-103: the tab the page shows (the Overview is built for it)
 import type { Party } from '../../../parties/_shared/api'
-import { BLANK_TERMS, editing, GROUP_TERMS, PAYMENT_TERMS, TERMS, TERMS_CAN, termsModel } from '../_demo/fixtures'
-import type { CommercialTermsModel } from '../terms/view/CommercialTermsCard'
+import { BLANK_TERMS, editing, GROUP_TERMS, PAYMENT_TERMS, TERMS, TERMS_CAN, termsModel, type CommercialTermsModel } from '../_demo/fixtures' // F-CT-530: the cases' own shape (the old card went)
 import { MONEY_CAN, MONEY_STATES, moneyModel } from '../money/_demo/fixtures'
 import { OVERDUE_ROWS } from '../money/_demo/fixtures' // F-CO-301: Moda Demo's late money
 import { grantOf } from '@nexus/factory-domain/auth/roles/roles' // F-CO-301: a role's REAL grant
@@ -27,12 +26,11 @@ import type { OpenOrderMoney } from '../money/api' // F-SA-273
 import type { SupervisorModel } from '../portal/limits/model'
 // B-W2b-324: the customer in depth (made-up data in ../depth/_demo/fixtures.ts).
 import { WithMessages } from '../../../../record-panels/i18n'
-import type { Glance, Privacy } from '../depth/api'
+import type { CompanyTerms, Glance, Privacy } from '../depth/api'
 import { DEPTH_NAMESPACES } from '../depth/CustomerDepth'
 import { ALL_CAN, COMPANIES, COPY, FILES, glanceOf, HELD_GLANCE, HOLDS, KEPT, NO_HOLDS, PRIVACY, READ_CAN, REQUIREMENTS, SALES_CAN, STYLES, TERMS as COMPANY_TERMS, TODAY, TWO_HOLDS, WITHHELD, withoutPrices } from '../depth/_demo/fixtures'
 import { basisDraftOf, blankRequirement, failedRead, LOADING, ready, requirementDraftOf, type DepthCan, type Read } from '../depth/model'
 import type { HoldCardModel } from '../depth/view/HoldCard'
-import type { PoNumberModel } from '../depth/view/PoNumberCard'
 // ---- F-CT-408 (customer page › Terms & requirements, lane ct-; 13-backend §6.8): the tab's own parts — its ONE model rule, its view,
 // the Change terms… window's inside (an edit case draws it under the tab: never a Modal open here), its notices.
 import { Card } from '@nexus/ui/components'
@@ -169,7 +167,8 @@ const record = (code: string, over: Partial<PartyRecordModel> = {}) => recordMod
 interface DepthCase {
   glance?: Read<Glance>
   hold?: HoldCardModel
-  po?: PoNumberModel
+  /** F-CT-532 (ct-w2 W2.4): the terms per company of a case (the old PO number card went; Commercial terms draws its rule). */
+  po?: { readonly read: Read<CompanyTerms>; readonly can: DepthCan }
   requirements?: RequirementsModel
   privacy?: PrivacyModel
 }
@@ -1141,8 +1140,8 @@ const DEPTH_CAN = { ...RECORD_CAN, depth: true }
 type GlanceCode = 'MODA-DEMO' | 'MARCHIO-ESEMPIO' | 'PILOTA-DEMO'
 const glanceCase = (code: GlanceCode, glance: Read<Glance>, over: Partial<PartyRecordModel> = {}): CustomerCase => ({ ...record(code, { can: DEPTH_CAN, ...over }), depth: { glance } })
 const holdModel = (over: Partial<HoldCardModel> = {}, can: DepthCan = ALL_CAN): HoldCardModel => ({ read: ready(HOLDS), can, status: 'ACTIVE', prefix: '/w/DEMO', dialog: null, companies: COMPANIES, ...over })
-const poModel = (over: Partial<PoNumberModel> = {}, can: DepthCan = ALL_CAN): PoNumberModel => ({ read: ready(COMPANY_TERMS), can, status: 'ACTIVE', draft: {}, saving: false, failed: null, ...over })
-const taxCase = (hold: Partial<HoldCardModel> = {}, po: Partial<PoNumberModel> = {}, can: DepthCan = ALL_CAN, over: Partial<PartyRecordModel> = {}): CustomerCase => ({
+const poModel = (over: { readonly read?: Read<CompanyTerms> } = {}, can: DepthCan = ALL_CAN): NonNullable<DepthCase['po']> => ({ read: ready(COMPANY_TERMS), can, ...over })
+const taxCase = (hold: Partial<HoldCardModel> = {}, po: { readonly read?: Read<CompanyTerms> } = {}, can: DepthCan = ALL_CAN, over: Partial<PartyRecordModel> = {}): CustomerCase => ({
   ...record('MARCHIO-ESEMPIO', { tab: 'terms', can: DEPTH_CAN, ...over }),
   depth: { hold: holdModel(hold, can), po: poModel(po, can) },
 })
@@ -1447,7 +1446,6 @@ export const designScreen = defineDesignScreen<CustomerCase>({
     { id: 'w2b-324-tax-place-problem', label: 'W2b Put on hold: held until a reason is picked', model: taxCase({ read: ready(NO_HOLDS), dialog: { kind: 'place', draft: { companyId: null, reason: null, words: '' }, busy: false, failed: null, tried: true } }) },
     { id: 'w2b-324-tax-place-refused', label: 'W2b Put on hold refused: one for that reason is in force', model: taxCase({ dialog: { kind: 'place', draft: { companyId: null, reason: 'QUALITY_DISPUTE', words: 'Again (made-up).' }, busy: false, failed: 'hold.refused.same', tried: true } }) },
     { id: 'w2b-324-tax-release', label: 'W2b Release the hold, with why', model: taxCase({ dialog: { kind: 'release', hold: HOLDS.holds[0]!, draft: { holdId: HOLDS.holds[0]!.id, words: 'Answered and closed (made-up).' }, ...dialogState } }) },
-    { id: 'w2b-324-tax-po-changed', label: 'W2b Customer PO number: one change waiting for Save (⌘S)', model: taxCase({}, { draft: { [COMPANIES[1]!.id]: true } }) },
     { id: 'w2b-324-tax-read-only', label: 'W2b Terms & requirements for a reader: Put on hold, Release and the switches held with why', model: taxCase({}, {}, READ_CAN, { can: { ...DEPTH_CAN, manage: false, block: false } }) },
     { id: 'w2b-324-tax-loading', label: 'W2b Terms & requirements: hold and PO number reading', model: taxCase({ read: LOADING }, { read: LOADING }) },
     { id: 'w2b-324-tax-error', label: "W2b Terms & requirements: hold and PO number couldn't be read", model: taxCase({ read: failedRead('problem.unavailable') }, { read: failedRead('problem.unavailable') }) },

@@ -28,16 +28,11 @@ import {
   KEPT_KINDS,
   keptKey,
   NS,
-  poChanges,
-  poHeld,
-  poRows,
   privacyHeld,
   privacyRefusal,
   requirementBody,
   requirementDraftOf,
   requirementProblems,
-  shownOnKeys,
-  toggleHeld,
   wordsProblem,
   writeHeld,
 } from './model'
@@ -53,7 +48,7 @@ import {
 // F-CO-203 (customer Overview co-w2 W2.3): the glance's tiles (free credit, promises) and a round's due words went with the Overview's
 // old parts; the Overview's own rules and tests say them (areas/sales/customers/record/overview/overview.vitest.test.ts).
 
-describe('the hold and the PO number', () => {
+describe('the hold', () => {
   it('asks a reason and words to place, words to release', () => {
     expect(holdDraftProblem({ reason: null, words: 'x' }, 'place')).toEqual({ key: 'hold.problem.reason' })
     expect(holdDraftProblem({ reason: 'CREDIT', words: '  ' }, 'place')).toEqual({ key: 'hold.problem.why' })
@@ -62,9 +57,8 @@ describe('the hold and the PO number', () => {
     expect(holdDraftProblem({ reason: 'LEGAL', words: 'A made-up dispute.' }, 'place')).toBeNull()
   })
 
-  it('holds the toggle with several holds in force, and every write without its right', () => {
-    expect(toggleHeld(HOLDS.holds, null)).toBeNull()
-    expect(toggleHeld([HOLDS.holds[0]!, { ...HOLDS.holds[0]!, id: 'x' }], null)).toBe('hold.toggleMany')
+  // F-CT-535 (ct-w2 W2.4): the Hold card's toggle went with the card (Terms & requirements' Hold section has none).
+  it('holds every write without its right', () => {
     expect(writeHeld(READ_CAN, 'hold', 'ACTIVE')).toBe('held.hold')
     expect(writeHeld(ALL_CAN, 'hold', 'ARCHIVED')).toBe('held.archived')
     expect(writeHeld(ALL_CAN, 'manage', 'ACTIVE')).toBeNull()
@@ -75,17 +69,7 @@ describe('the hold and the PO number', () => {
     expect(holdRefusal(new ApiError('invalid', 400, 'validation', 'English', null, [{ path: 'body/companyId', message: 'x' }]))).toBe('hold.refused.company')
     expect(holdRefusal(new ApiError('unavailable', 503, 'unavailable', 'English', null, []))).toBe('problem.offline')
   })
-
-  it('reads the PO number per company and sends only what changed', () => {
-    const rows = poRows(TERMS)
-    expect(rows.map((row) => [row.code, row.required, row.own, row.version])).toEqual([
-      ['DEMO', true, true, 2],
-      ['ESEMPIO', false, false, null],
-    ])
-    expect(poChanges(rows, { [rows[0]!.companyId]: true, [rows[1]!.companyId]: true }).map((row) => row.code)).toEqual(['ESEMPIO'])
-    expect(poHeld({ ...rows[0]!, mayChange: false }, ALL_CAN, 'ACTIVE')).toBe('held.manageCompany')
-    expect(poHeld(rows[0]!, READ_CAN, 'ACTIVE')).toBe('held.manage')
-  })
+  // F-CT-535: the PO number card's rows went with it — Commercial terms says the rule per company (cu/record/terms commercial.ts).
 })
 
 describe('requirements', () => {
@@ -96,7 +80,6 @@ describe('requirements', () => {
     const replaced = requirementDraftOf(REQUIREMENTS.inForce[2]!)
     expect(replaced).toMatchObject({ everyStyle: false, styles: [{ code: 'JKT-DEMO-01' }], reason: '' })
     expect(requirementBody(replaced).styleIds).toHaveLength(1)
-    expect(shownOnKeys(['SHIPMENT', 'QUOTE'])).toEqual(['stage.QUOTE', 'stage.SHIPMENT'])
   })
 })
 
@@ -218,6 +201,15 @@ describe('every word in both languages', () => {
     // threshold is kept.
     const terms = ['../record/terms', '../record/view/terms'].flatMap((folder) => readdirSync(join(__dirname, folder)).filter((name) => /\.tsx?$/.test(name) && !name.includes('.test.')).map((name) => join(__dirname, folder, name)))
     for (const file of terms) for (const match of readFileSync(file, 'utf8').matchAll(/said\(\s*'sales-customers-depth:([a-zA-Z]+(?:\.[a-zA-Z]+)+)'/g)) keys.add(match[1]!)
+    // F-CT-536 (ct-w2 W2.4; Z18): the old Hold, PO number and Requirements cards went — their words are said where the parts moved: the
+    // Terms tab (above), Money's Credit & terms and People (`'sales-customers-depth:…'`), the Overview (its `depth('…')`). The scan reads
+    // them too; the threshold is kept.
+    const moved = ['../record/money', '../record/view/money', '../record/people', '../record/view/people', '../record/overview'].flatMap((folder) => readdirSync(join(__dirname, folder)).filter((name) => /\.tsx?$/.test(name) && !name.includes('.test.') && name !== 'fixtures.ts').map((name) => join(__dirname, folder, name)))
+    for (const file of moved) {
+      const text = readFileSync(file, 'utf8')
+      for (const match of text.matchAll(/'sales-customers-depth:([a-zA-Z]+(?:\.[a-zA-Z]+)+)'/g)) keys.add(match[1]!)
+      if (file.includes('/overview/')) for (const match of text.matchAll(/\bdepth\('([a-zA-Z]+(?:\.[a-zA-Z]+)+)'/g)) keys.add(match[1]!)
+    }
     expect(keys.size).toBeGreaterThan(150)
     for (const locale of LOCALES) {
       const t = catalogue(locale)

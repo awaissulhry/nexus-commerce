@@ -162,8 +162,7 @@
     "anchor": {
       "label": "Parti di Condizioni e requisiti",
       "commercial": "Condizioni commerciali",
-      "hold": "Blocco e numero d’ordine del cliente",
-      "identity": "Identità fiscale e VIES"
+      "hold": "Blocco e numero d’ordine del cliente"
     },
     "work": {
       "strip": {
@@ -656,9 +655,7 @@
     "traderAddress": "Indirizzo come da VIES",
     "notYet": "Non ancora controllato. Controlla ora: la risposta resta come prova.",
     "noAnswer": "VIES non ha risposto (Stato membro non disponibile) — non è un rifiuto. Riprova.",
-    "recheck": "I ricontrolli non sono ancora programmati: una prova vale {days} giorni, quindi ricontrolla prima di una vendita non imponibile.",
     "history": "Tutti i controlli (conservati, mai modificati)",
-    "notApplicable": "VIES controlla le partite IVA UE fuori dall’Italia. Questa scheda non ne ha da controllare.",
     "refused": "VIES non è stato interrogato: il collegamento potrebbe non essere configurato, o la nostra azienda non ha partita IVA. Nulla è stato registrato.",
     "noneToCheck": "Nessuna azienda UE di questo elenco ha una partita IVA da controllare.",
     "afterCreateFailed": "Creato. VIES non ha ancora risposto: ricontrolla da Fisco e condizioni.",

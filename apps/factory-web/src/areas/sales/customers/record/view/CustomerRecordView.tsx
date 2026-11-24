@@ -10,7 +10,7 @@ import { useT } from '../../../../../lib/i18n/provider'
 import type { Party } from '../../../../parties/_shared/api'
 import { partyName, recordTabs, sideHref, SIDES, type PartyRecordModel, type RecordTab } from '../../../../parties/_shared/model'
 import { shownTab } from '../../../../parties/_shared/model' // F-CQ-301 (P0-B2)
-import { PartyRecordGate, usePartyBand, type PartyRecordActions, type SupplierDepth } from '../../../../parties/_shared/view/PartyRecordView'
+import { PartyRecordGate, usePartyBand, type PartyRecordActions } from '../../../../parties/_shared/view/PartyRecordView'
 import { PartyDialogs, PartyNotices, ShowThreadOnArrival } from '../../../../parties/_shared/view/cards' // F-CA-119: the contacts and addresses cards stay the supplier's
 import { PartiesMessages } from '../../../../parties/_shared/view/parts'
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
@@ -26,8 +26,8 @@ import { OverviewNotices } from './overview/Notices' // F-CO-103: the Overview's
  * own view, split from the supplier's (areas/parties/_shared/view/PartyRecordView.tsx draws the supplier's record, unchanged). The
  * record's reads and writes are the shared hook's (usePartyRecord); the band, the notices, the cards and the dialogs are the shared
  * ones (PartyRecordView's usePartyBand and PartyRecordGate, ./cards). On RecordFrame with the customer's thread docked (B-TH-260).
- * Terms & requirements adds the customer's Commercial terms card (B-W2a-49, `terms`); the Money tab's numbers come from `money`
- * (B-W2a-81); the customer in depth from `depth` (B-W2b-324).
+ * The Money tab's numbers come from `money` (B-W2a-81). F-CT-538 (ct-w2 W2.4): Terms & requirements is the container's tab
+ * (`termsTab`); the old Commercial terms card (`terms`) and the depth slot (`depth`) went with their parts.
  * F-CO-103 (customer page › Overview): the Overview is its own tab body, built by the container from the shared overview kit's
  * parts (`overviewTab`: ./overview/CustomerOverviewView.tsx) — as Work and Quotes & incoming are; on that tab the thread docks a
  * third and the notice area leaves the Blocked / Archived banner to the tab's headline and first strip.
@@ -39,10 +39,8 @@ export function CustomerRecordView({
   thread,
   printThread,
   overviewTab, // F-CO-103
-  terms,
   portal,
   money: moneyModel,
-  depth,
   onAddTask,
   taskDialog,
   peopleTab, // F-CA-119
@@ -72,12 +70,9 @@ export function CustomerRecordView({
    * Customer facts with the custom fields beside them — drawn by the container or a design case from the shared overview kit).
    */
   overviewTab?: ReactNode
-  terms?: ReactNode
   /** B-W2b-180: Portal access (`?tab=portal`). */
   portal?: ReactNode
   money?: CustomerMoneyModel | null
-  /** B-W2b-324: the customer in depth (the shared record's `depth` slot), drawn from made-up models in the design. */
-  depth?: SupplierDepth
   /** F-SA-271: the band's ⋯ "Add task for <customer>…" (the record's New task dialog, drawn by the container). */
   onAddTask?: () => void
   taskDialog?: ReactNode
@@ -118,7 +113,7 @@ export function CustomerRecordView({
   return (
     <WithMessages namespaces={[CUSTOMER_MONEY_NAMESPACE]}>
       <PartiesMessages>
-        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} overviewTab={overviewTab /* F-CO-103 */} terms={terms} portal={portal} money={moneyModel ?? null} depth={depth} onAddTask={onAddTask} taskDialog={taskDialog} peopleTab={peopleTab /* F-CA-119 */} peopleBadge={peopleBadge /* F-CA-119 */} peopleNotice={peopleNotice /* F-CA-119 */} work={work} workCount={workCount} quotesIncoming={quotesIncoming} threadButton={threadButton ?? null} onNewOrder={onNewOrder} onImport={onImport} priceDiffer={priceDiffer ?? null /* F-CP-141 */} quotesBadge={quotesBadge /* F-CQ-302 */} quotesTabNote={quotesTabNote /* F-CQ-306 */} moneyTab={moneyTab /* F-CM-104 */} moneyTabNote={moneyTabNote /* F-CM-104 */} termsTab={termsTab /* F-CT-406 */} termsNotice={termsNotice /* F-CT-406 */} />
+        <Customer model={{ ...model, side: 'customers' }} actions={actions} thread={thread} printThread={printThread} overviewTab={overviewTab /* F-CO-103 */} portal={portal} money={moneyModel ?? null} onAddTask={onAddTask} taskDialog={taskDialog} peopleTab={peopleTab /* F-CA-119 */} peopleBadge={peopleBadge /* F-CA-119 */} peopleNotice={peopleNotice /* F-CA-119 */} work={work} workCount={workCount} quotesIncoming={quotesIncoming} threadButton={threadButton ?? null} onNewOrder={onNewOrder} onImport={onImport} priceDiffer={priceDiffer ?? null /* F-CP-141 */} quotesBadge={quotesBadge /* F-CQ-302 */} quotesTabNote={quotesTabNote /* F-CQ-306 */} moneyTab={moneyTab /* F-CM-104 */} moneyTabNote={moneyTabNote /* F-CM-104 */} termsTab={termsTab /* F-CT-406 */} termsNotice={termsNotice /* F-CT-406 */} />
       </PartiesMessages>
     </WithMessages>
   )
@@ -130,10 +125,8 @@ interface CustomerProps {
   thread?: ReactNode
   printThread?: ReactNode
   overviewTab?: ReactNode // F-CO-103
-  terms?: ReactNode
   portal?: ReactNode
   money: CustomerMoneyModel | null
-  depth?: SupplierDepth | undefined
   onAddTask?: (() => void) | undefined
   taskDialog?: ReactNode
   peopleTab?: ReactNode // F-CA-119

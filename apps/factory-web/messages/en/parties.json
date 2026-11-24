@@ -162,8 +162,7 @@
     "anchor": {
       "label": "Parts of Terms & requirements",
       "commercial": "Commercial terms",
-      "hold": "Hold and PO number",
-      "identity": "Tax identity and VIES"
+      "hold": "Hold and PO number"
     },
     "work": {
       "strip": {
@@ -656,9 +655,7 @@
     "traderAddress": "Address as VIES gave it",
     "notYet": "Not checked yet. Check now: the answer is kept as the proof.",
     "noAnswer": "VIES didn't answer (member state unavailable) — not a refusal. Try again.",
-    "recheck": "Re-checks are not scheduled yet: a proof counts for {days} days, so check again before a zero-rated sale.",
     "history": "Every check (kept, never changed)",
-    "notApplicable": "VIES checks EU VAT numbers outside Italy. This party has none to check.",
     "refused": "VIES was not asked: the connection may not be set up, or our company has no VAT number. Nothing was recorded.",
     "noneToCheck": "No EU business in this list has a VAT number to check.",
     "afterCreateFailed": "Created. VIES didn't answer yet: check again from Tax & terms.",

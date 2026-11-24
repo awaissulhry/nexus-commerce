@@ -4,9 +4,7 @@
   },
   "terms": {
     "title": "Commercial terms",
-    "intro": "The defaults a new quote or order of this customer takes.",
     "edit": "Edit",
-    "close": "Close",
     "save": "Save terms",
     "saved": "Commercial terms saved. Open quotes keep theirs; new quotes and orders take these.",
     "unsaved_one": "{count} change not saved",
@@ -14,7 +12,6 @@
     "fixFirst_one": "Fix {count} field first",
     "fixFirst_other": "Fix {count} fields first",
     "failed": "Couldn't load terms",
-    "viewOnly": "You can view, not change",
     "none": "None",
     "noList": "None: priced from the base list",
     "baseList": "None (the base list prices it)",
@@ -23,25 +20,18 @@
     "archivedTerms": "archived",
     "typedOnly": "Typed on the customer, not from the library",
     "useTyped": "None from the library (prints “{text}”)",
-    "depositFromTerms": "{pct} from its payment terms",
     "depositSettings": "From the sales settings",
     "noPrice": "The minimum order value is not in your role (no selling prices).",
-    "currencyHint": "Its quotes and price list are in this currency.",
-    "paymentHint": "What is paid when; the deposit follows the order instalment.",
     "listHint": "Active lists in {currency} of this company or every company.",
-    "groupHint": "Read only: a customer joins a discount group by getting the group's list (or a list that falls back to it).",
-    "carrierHint": "The carrier code its shipments use first (e.g. BRT, GLS).",
     "depositHint": "Percent of the gross total; empty: from its payment terms, else the sales settings.",
     "minimumHint": "Net, in {currency}; a quote under it says so.",
     "languageHint": "The language its quotes, PDFs and mails are written in.",
-    "invoicingHint": "TD01 an invoice per shipment, TD24 one deferred invoice a month.",
     "choicesFailed": "Couldn't read the payment terms or the price lists to pick from: the other fields still save.",
     "held": {
       "notCustomer": "Commercial terms are for customers",
       "archived": "Archived: reactivate it to change its terms",
       "noManage": "Your role can see customers, not change them",
-      "noTerms": "Your role cannot read the payment terms library",
-      "noListsManage": "Giving a price list needs the right to keep price lists"
+      "noTerms": "Your role cannot read the payment terms library"
     },
     "problem": {
       "currency": "A currency code such as EUR or CHF",
@@ -67,8 +57,6 @@
     "paymentTerms": "Payment terms",
     "priceList": "Price list",
     "discountGroup": "Discount group",
-    "incoterm": "Incoterms",
-    "carrier": "Preferred carrier",
     "deposit": "Default deposit %",
     "minimum": "Minimum order value",
     "language": "Document language",
@@ -76,8 +64,7 @@
   },
   "language": {
     "it": "Italian",
-    "en": "English",
-    "other": "Other ({code})"
+    "en": "English"
   },
   "invoicing": {
     "PER_SHIPMENT": "An invoice per shipment (TD01)",
