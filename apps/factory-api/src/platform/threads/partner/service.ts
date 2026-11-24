@@ -360,6 +360,21 @@ function closedRefusal(caller: PartnerCaller): DomainError {
   return new DomainError('invalid_state', words, [{ path: 'thread/CLOSED', message: words }])
 }
 
+// ---- pt-s S.2 (S.6, the portal reply link; walls: the office note, the held mail, the brand) ----------------------------------------
+/** Where the refusal of a reply is told: ONE neutral issue for every case (the web reads it, never which case it was). */
+const REPLY_REFUSED_ISSUE = 'refusal/REPLY_REFUSED'
+
+/**
+ * A portal post answers only a shared message of this record's conversation that the person reads: a message that is not there for
+ * them, an office note, a mail held or taken back, another record's or another customer's — all refused alike (409), in the person's
+ * language, and nothing is written.
+ */
+function replyRefusal(caller: PartnerCaller): DomainError {
+  const words = partnerThreadWords('REPLY_REFUSED', caller.session.person.locale, caller.session.company.name)
+  return new DomainError('conflict', words, [{ path: REPLY_REFUSED_ISSUE, message: words }])
+}
+// ---- end pt-s S.2
+
 export interface PartnerPostInput {
   readonly body: string
   readonly attachments?: readonly string[] | undefined
@@ -388,6 +403,7 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
   const draft = { bodyText: cleanBody(input.body), attachments: uniqueIds(input.attachments) }
   const problems = postProblems(draft)
   if (problems.length > 0) throw new ValidationError('The message is not valid.', problems)
+  const replyToMessageId = input.replyToMessageId ?? null // pt-s S.2: the message it answers (null: none)
 
   const opened = await request.withClient(async (client) => {
     const { scope } = await openRecord(client, caller, ref, partnerReaderOf(request, caller))
@@ -395,6 +411,8 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
     if (!options.firstOfRequest && !options.requester && !can(caller.actor, PORTAL_COMMENT, scope)) throw new ForbiddenError(partnerThreadWords('NO_COMMENT', caller.session.person.locale, caller.session.company.name))
     return threadOf(client, ref)
   })
+  // ---- pt-s S.2 (A9): no conversation yet, so nothing to answer — refused BEFORE the thread is made, so a refused reply writes nothing.
+  if (replyToMessageId !== null && opened === null) throw replyRefusal(caller)
   // ---- B-CP-079: the ask is checked BEFORE anything is posted (409 in words: nothing is written, the box keeps the text).
   const askPlan = input.askFactoryDesigner === true ? await planDesignerAsk(request, caller, ref) : null
   // ---- end B-CP-079
@@ -407,12 +425,21 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
   const walled = await walledForOutside(request as CommandCaller, draft.attachments)
   const { result } = await command(
     request as CommandCaller,
-    { name: POST_ACTION, idempotencyKey, input: { recordType: ref.type, recordId: ref.id, ...draft } },
+    // pt-s S.2: the message it answers is part of the request (a repeated key with another one is refused); absent, the input is as before.
+    { name: POST_ACTION, idempotencyKey, input: { recordType: ref.type, recordId: ref.id, ...draft, ...(replyToMessageId === null ? {} : { replyToMessageId }) } },
     async (tools) => {
       // The thread as it is now, as the partner reads it (closed meanwhile? still the party's?).
       const current = await threadOf(tools.tx, ref)
       if (!current || current.id !== known.id || current.partyId !== caller.context.partyId) throw new NotFoundError('Record not found.')
       if (current.status === 'CLOSED') throw closedRefusal(caller)
+      // ---- pt-s S.2: what it answers, read AS THE PERSON and only its id. Row-level security keeps out an office note, a mail held or
+      // taken back and another customer's message; the thread keeps out another record's. THE TRAP: never `messageLinkProblems` here —
+      // it reads Message.forFloor, which the partner role has no grant on, so every portal reply would fail at the database.
+      if (replyToMessageId !== null) {
+        const target = await tools.tx.message.findFirst({ where: { id: replyToMessageId, threadId: current.id, audience: 'PARTNER' }, select: { id: true } })
+        if (!target) throw replyRefusal(caller)
+      }
+      // ---- end pt-s S.2
       const issues = await attachmentProblems(tools.tx, caller, current, draft.attachments, walled)
       if (issues.length > 0) throw new ValidationError('The message is not valid.', issues)
       const id = newId()

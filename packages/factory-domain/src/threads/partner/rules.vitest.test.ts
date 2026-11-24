@@ -32,6 +32,13 @@ describe('a record thread as the partner sees it (B-W2b-168; COL-059, COL-060)',
     }
   })
 
+  it('pt-s S.2: one neutral sentence refuses a reply, in the person’s language — it never names an office note, a held mail or another customer', () => {
+    expect(partnerThreadWords('REPLY_REFUSED', 'en', 'Made-up Factory')).toBe('That message cannot be answered here.')
+    expect(partnerThreadWords('REPLY_REFUSED', 'it', 'Made-up Factory')).toBe('A quel messaggio non si può rispondere qui.')
+    expect(partnerThreadWords('REPLY_REFUSED', null, 'Made-up Factory')).toBe('A quel messaggio non si può rispondere qui.')
+    for (const words of Object.values(PARTNER_THREAD_WORDS.REPLY_REFUSED)) expect(words).not.toMatch(/note|nota|office|ufficio|held|sospes|customer|client|brand|marchio|Made-up/i)
+  })
+
   it('needs text or a file, within the limits', () => {
     expect(postProblems({ bodyText: 'When does it ship?', attachments: [] })).toEqual([])
     expect(postProblems({ bodyText: '', attachments: ['f'] })).toEqual([])

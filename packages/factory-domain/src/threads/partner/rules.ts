@@ -69,7 +69,12 @@ export const PARTNER_THREAD_WORDS = Object.freeze({
     it: 'Potete anche rispondere alle nostre e-mail: la risposta arriva qui.',
     en: 'You can also answer our e-mails: your reply lands here.',
   },
-} satisfies Record<ComposerReason | 'REPLY_BY_EMAIL', Record<PartnerThreadLocale, string>>)
+  // ---- pt-s S.2 (S.6, the portal reply link): ONE neutral sentence for every reply the person may not send — a message that is not
+  // there for them, an office note, a mail held or taken back, another record's or another customer's. It never says which (the
+  // database words it so: "in the same words as one that is not there").
+  REPLY_REFUSED: { it: 'A quel messaggio non si può rispondere qui.', en: 'That message cannot be answered here.' },
+  // ---- end pt-s S.2
+} satisfies Record<ComposerReason | 'REPLY_BY_EMAIL' | 'REPLY_REFUSED', Record<PartnerThreadLocale, string>>)
 
 export type PartnerThreadWord = keyof typeof PARTNER_THREAD_WORDS
 
