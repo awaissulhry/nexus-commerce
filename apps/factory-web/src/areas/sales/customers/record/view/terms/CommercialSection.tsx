@@ -5,12 +5,11 @@ import Link from 'next/link'
 import { Clock, Eye, Lock, Pencil, Truck } from 'lucide-react'
 import type { MenuItemDef } from '@nexus/ui/components'
 import { Button, Tag } from '@nexus/ui/primitives'
-import { useLocale } from '../../../../../../lib/i18n/provider'
 import { Facts, Fold } from '../../../../orders/record/money/view/parts'
 import { LineMenuButton } from '../../../../orders/record/view/LineMenu'
 import { PartFailed, PartReading, Section } from '../../../../orders/record/view/production/Kit'
 import { sourceWords, type CompanyRow, type EndedCompanyRow, type Fact } from '../../terms/commercial'
-import { said, sentenceOf, termsKitId, type Say } from '../../terms/model'
+import { said, termsKitId, type Say } from '../../terms/model'
 import type { TermsTabActions, TermsTabModel } from '../../terms/tab'
 import { actItem, menuOf, useTermsSay } from './say'
 
@@ -25,7 +24,6 @@ import { actItem, menuOf, useTermsSay } from './say'
 
 export function CommercialSection({ model, actions }: { model: TermsTabModel; actions?: TermsTabActions | undefined }) {
   const say = useTermsSay()
-  const locale = useLocale()
   const com = model.commercial
   const title = say(said('terms.title'))
   const marked = new Set(model.marked)
@@ -84,7 +82,7 @@ export function CommercialSection({ model, actions }: { model: TermsTabModel; ac
     )
   if (com.blank)
     return (
-      <Section {...head} answer={sentenceOf(com.answer.map(say), locale)}>
+      <Section {...head} answer={com.answer.map(say).join(' ') /* whole sentences, one after the other (the picture's) */}>
         {null}
       </Section>
     )
@@ -118,7 +116,7 @@ export function CommercialSection({ model, actions }: { model: TermsTabModel; ac
     </>
   )
   return (
-    <Section {...head} answer={sentenceOf(com.answer.map(say), locale)}>
+    <Section {...head} answer={com.answer.map(say).join(' ') /* whole sentences, one after the other (the picture's) */}>
       <div className="fw-ctr-gw">
         <div className="fw-ctr-grp">
           <div className="fw-ctr-g is-pays">
