@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import Link from 'next/link'
 import { Clock, Eye, Lock, Pencil, Truck } from 'lucide-react'
 import type { MenuItemDef } from '@nexus/ui/components'
@@ -12,6 +12,7 @@ import { sourceWords, type CompanyRow, type EndedCompanyRow, type Fact } from '.
 import { said, termsKitId, type Say } from '../../terms/model'
 import type { TermsTabActions, TermsTabModel } from '../../terms/tab'
 import { actItem, menuOf, useTermsSay } from './say'
+import { SectionAnswer } from './TermsAnswer' // ct-fx3 G-W09: a chip with no rows marks its section's answer line
 
 /**
  * F-CT-304 (customer page › TERMS & REQUIREMENTS tab, lane ct-; 10-design §5.2; 18-lead-settles Z2, Z11, Z21, Z24–Z26, Z29, Z31) —
@@ -116,12 +117,12 @@ export function CommercialSection({ model, actions }: { model: TermsTabModel; ac
     </>
   )
   return (
-    <Section {...head} answer={com.answer.map(say).join(' ') /* whole sentences, one after the other (the picture's) */}>
+    <Section {...head} answer={<SectionAnswer marked={marked.has('party-commercial')}>{com.answer.map(say).join(' ') /* whole sentences, one after the other (the picture's) */}</SectionAnswer>}>
       <div className="fw-ctr-gw">
         <div className="fw-ctr-grp">
           <div className="fw-ctr-g is-pays">
             <h3 className="fw-pt-h3">{say(said('ct.com.pays'))}</h3>
-            <Facts facts={factsOf(com.pays, say)} />
+            <BalancedFacts facts={factsOf(com.pays, say)} />
             {com.noPrice ? (
               <p className="fw-pt-hint">
                 <Lock size={13} aria-hidden />
@@ -131,12 +132,12 @@ export function CommercialSection({ model, actions }: { model: TermsTabModel; ac
           </div>
           <div className="fw-ctr-g is-order">
             <h3 className="fw-pt-h3">{say(said('ct.com.order'))}</h3>
-            <Facts facts={factsOf(com.order, say, { po: poExtra })} />
+            <BalancedFacts facts={factsOf(com.order, say, { po: poExtra })} />
             {com.companiesProblem ? <PartFailed part={say(said('ct.com.companiesPart'))} problem={com.companiesProblem} onRetry={actions?.onRetryCompanies} /> : null}
           </div>
           <div className="fw-ctr-g is-deliv">
             <h3 className="fw-pt-h3">{say(said('ct.com.delivery'))}</h3>
-            <Facts facts={factsOf(com.delivery, say)} />
+            <BalancedFacts facts={factsOf(com.delivery, say)} />
             {com.deliveryProblem ? <PartFailed part={say(said('ct.com.carrierPart'))} problem={com.deliveryProblem} onRetry={actions?.onRetryCarrier} /> : com.deliveryReading ? <PartReading rows={1} height={30} /> : null}
           </div>
         </div>
@@ -162,6 +163,18 @@ export function CommercialSection({ model, actions }: { model: TermsTabModel; ac
 }
 
 /** The rules' facts as Money's Facts takes them (label → value; a value may be a door, with its sub-lines and source). */
+/**
+ * ct-fx3 G-W06 (walk W-06; AAA "no dead space"): Money's facts, unchanged, in a box that says how many they are — terms.css balances the
+ * columns by that count (6 → 3 + 3, never 5 + a lone one with a hole), by the box's own room.
+ */
+export function BalancedFacts({ facts }: { facts: readonly { key: string; label: string; value: ReactNode }[] }): ReactElement {
+  return (
+    <div className="fw-ctr-fx" data-n={facts.length}>
+      <Facts facts={facts} />
+    </div>
+  )
+}
+
 function factsOf(facts: readonly Fact[], say: Say, extra: Readonly<Record<string, ReactNode>> = {}): Array<{ key: string; label: string; value: ReactNode }> {
   return facts.map((fact) => ({ key: fact.key, label: say(fact.label), value: <FactValue fact={fact} say={say} extra={extra[fact.key]} /> }))
 }
@@ -196,7 +209,7 @@ function SourceCell({ value, none, source, company, say }: { value: string; none
   return (
     <>
       <span className={none ? 'fw-ctr-none' : undefined}>{value}</span>
-      {source === 'COMPANY' ? <Tag tone="info">{say(sourceWords({ from: 'COMPANY', company }))}</Tag> : <span className="fw-ctr-sub">{say(said('ct.com.customerDefault'))}</span>}
+      {source === 'COMPANY' ? <Tag tone="info" className="fw-ctr-tag">{say(sourceWords({ from: 'COMPANY', company }))}</Tag> : <span className="fw-ctr-sub">{say(said('ct.com.customerDefault'))}</span>}
     </>
   )
 }
@@ -222,7 +235,7 @@ function CompanyList({ rows, marked, say, actions }: { rows: readonly CompanyRow
             <div className="fw-ctr-co">
               <span className="fw-ctr-name">
                 <b>{row.name}</b>
-                {row.current ? <Tag tone="info">{say(said('ct.com.youWork'))}</Tag> : null}
+                {row.current ? <Tag tone="info" className="fw-ctr-tag">{say(said('ct.com.youWork'))}</Tag> : null}
               </span>
               <span className="fw-ctr-sub">{say(row.own && row.changed ? said('ct.com.ownSince', { days: { date: row.changed } }) : said('ct.com.usesCustomer'))}</span>
             </div>
@@ -235,7 +248,7 @@ function CompanyList({ rows, marked, say, actions }: { rows: readonly CompanyRow
             <div className="fw-ctr-dep">
               <SourceCell value={say(row.deposit.value)} source={row.deposit.source} company={row.name} say={say} />
             </div>
-            <div className="fw-ctr-po">{row.po ? <Tag tone="warning">{say(said('ct.com.poTag'))}</Tag> : <span className="fw-ctr-none">{say(said('ct.com.poNot'))}</span>}</div>
+            <div className="fw-ctr-po">{row.po ? <Tag tone="warning" className="fw-ctr-tag">{say(said('ct.com.poTag'))}</Tag> : <span className="fw-ctr-none">{say(said('ct.com.poNot'))}</span>}</div>
             <div className="fw-ctr-o">
               <LineMenuButton label={say(said('ct.co.more', { params: { company: row.name } }))} items={items} />
             </div>

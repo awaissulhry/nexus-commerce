@@ -148,7 +148,8 @@ export function creditOf(input: MoneyTabInput, creditRow: Part<LimitRow | null> 
     termsHref: customerTabHref(prefix, input.party.id, 'terms', 'party-commercial'),
     change: can.creditLimits && price && credit ? (credit.state === 'NONE' ? 'set' : 'change') : null,
     mayHold: can.hold,
-    reading: isReading(terms) || (input.glance?.status === 'loading' && can.credit),
+    // ct-fx3 G-W01 (walk W-01): the terms per company in flight are reading too (as Balance waits): never the customer's own as if in force.
+    reading: isReading(terms) || isReading(input.companyTerms ?? null) || (input.glance?.status === 'loading' && can.credit),
     problem: isFailed(terms) ? terms!.problem : isFailed(creditRow) ? creditRow!.problem : null,
   }
 }

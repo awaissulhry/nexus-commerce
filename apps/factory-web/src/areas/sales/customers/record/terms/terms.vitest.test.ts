@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { LOCALES, type Locale } from '../../../../../lib/i18n/locales'
 import { CATALOGUE, createScopedTranslator, messagesFor } from '../../../../../lib/i18n/messages'
 import type { Party, TaxIdentity, ViesCheck } from '../../../../parties/_shared/api'
-import { CUSTOMERS } from '../../../../parties/_shared/fixtures'
+import { CUSTOMERS, RECORD_CAN, recordModel } from '../../../../parties/_shared/fixtures'
 import type { CommercialTerms } from '../../terms/api'
 import type { Holds, Requirement, Requirements } from '../../depth/api'
 import { ready, failedRead, LOADING } from '../../depth/model'
@@ -20,7 +20,9 @@ import { endCompanyTerms, readCarrierAccount, setCarrierAccount, setCompanyTerms
 import { TERMS_TAB_START, termsTabModel, type TermsTabReads, type TermsTabState } from './tab'
 import { endedLine, keptWords, requirementsSection, versionsOf, type RequirementsInput } from './requirements'
 import { datedIdentities, fiscalCodeHidden, identitySection, type IdentityInput } from './identity'
-import { problemKey, refusedFields } from '../../../../parties/_shared/model'
+import { problemKey, refusedFields, viesApplies, type PartyRecordModel } from '../../../../parties/_shared/model'
+import { usePartyBand } from '../../../../parties/_shared/view/PartyRecordView' // ct-fx3 G-W12
+import { render as renderAll, textOf } from '../../../../../lib/record-thread/parts/testing' // ct-fx3 G-W12
 import { companyBody, companyEndWindowOf, companyProblems, companyWindowOf, deliveryBody, deliveryProblems, deliveryRefusal, deliveryWindowOf, endLines, termsWindowOf, termsWindowPatch } from './windows'
 import { createElement, type ComponentType, type ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -694,7 +696,7 @@ describe('the page mounts the tab (W1.4)', () => {
 
   it('the record builds the container on every tab (it reads only on Terms) and the view only on ?tab=terms; the old card left the slot', () => {
     const cr = source('../CustomerRecord.tsx')
-    expect(cr).toContain("const terms = useTermsTab({ partyId, party: record.party, model: record.model, reload: record.reload, actions: record.actions /* F-CT-516 */, moreHistory: record.moreHistory, depth: termsDepth, enabled: tab === 'terms' })")
+    expect(cr).toContain("const terms = useTermsTab({ partyId, party: record.party, model: record.model, reload: record.reload, actions: record.actions /* F-CT-516 */, moreHistory: record.moreHistory, retryHistory: record.retryHistory /* ct-fx3 G-W08 */, depth: termsDepth, enabled: tab === 'terms' })")
     expect(cr).toContain("const termsTab = named && record.party && tab === 'terms' ? <TermsTab model={terms.model} actions={terms.actions} hold={terms.hold} requirements={terms.requirementsWindow /* F-CT-508 */} /> : null")
     expect(cr).toContain('const termsNotice = <TermsNotices notices={terms.notices} />')
     expect(cr).not.toMatch(/CommercialTerms\b|terms: \(party, reload\)/)
@@ -1018,5 +1020,247 @@ describe('the old parts went; the supplier\'s record stays as it was (W2.4; D1)'
       expect(keys('customer-terms'), locale).not.toContain('termsField.carrier')
       expect(keys('customer-terms'), locale).toContain('termsField.paymentTerms')
     }
+  })
+})
+
+// ---- ct-fx3: the walk's gaps (30-walk.md) ---------------------------------------------------------------------------------------
+
+describe('ct-fx3 G-W01: the terms per company in flight are reading — never the customer\'s own as if in force (P0-B4, Z32)', () => {
+  const reads = (over: Partial<TermsTabReads> = {}): TermsTabReads => ({
+    party: partyWith({ id: PARTY_ID, taxIdentities: [], warnings: [], vies: { ...MODA.vies, state: 'NOT_APPLICABLE' } }),
+    prefix: '/w/SEEDA',
+    can: OWNER,
+    locale: 'en',
+    now: NOW,
+    companyId: A.id,
+    companyNames: NAMES,
+    commercial: ready(own()),
+    carrier: ready({ partyId: PARTY_ID, code: 'SEED-ONE', name: 'Seed Customer One S.r.l.', carrierCode: null, carrierName: null, accountOnFile: false, freightBilling: 'SENDER', defaultCarrierService: null, version: 7 }),
+    holds: ready(HOLDS),
+    companies: ready(COMPANY_TERMS),
+    requirements: null,
+    library: null,
+    lists: null,
+    history: { items: [] },
+    viesRunning: false,
+    ...over,
+  })
+
+  it('the answer line and Commercial terms wait (the kit\'s reading state) while the company-terms read is not in', () => {
+    for (const companies of [LOADING, null]) {
+      const model = termsTabModel(reads({ companies }), TERMS_TAB_START)
+      expect(model.answerReading, String(companies)).toBe(true)
+      expect(model.commercial.reading, String(companies)).toBe(true)
+    }
+    const answered = termsTabModel(reads(), TERMS_TAB_START)
+    expect([answered.answerReading, answered.commercial.reading]).toEqual([false, false])
+    // a failed read is no reading: the fallback says so (Z41)
+    expect(termsTabModel(reads({ companies: failedRead('problem.offline') }), TERMS_TAB_START).commercial.reading).toBe(false)
+  })
+})
+
+describe('ct-fx3 G-W02: a door lands under the record\'s sticky band (Z26; People\'s F-CA-fx5)', () => {
+  it('the answer line and the four sections land on the band\'s measured line; the rows land on the same line', () => {
+    const css = readFileSync(new URL('../view/terms/terms.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(css).toContain('.fw-ctr { --fw-ctr-land: var(--fw-rcf-top, calc(var(--nds-space-48) + var(--nds-space-16))); }')
+    for (const id of ['answer', 'party-hold', 'party-commercial', 'party-requirements', 'party-identity']) expect(css, id).toMatch(new RegExp(`\\.fw-ctr > #${id}[,\\s][^}]*scroll-margin-top: var\\(--fw-ctr-land\\)`))
+    expect(css).not.toContain('96px')
+    expect(css.match(/scroll-margin-top: var\(--fw-ctr-land\)/g)).toHaveLength(4) // the five ids' one rule + the warning chip, rows, VIES row
+    // the ids are the tab root's own children (a `>` rule reaches them)
+    const tab = readFileSync(new URL('../view/terms/TermsTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toMatch(/<div className="fw-pt fw-ctr">\s*<TermsAnswer [^>]*\/>\s*<HoldSection [^>]*\/>\s*<CommercialSection [^>]*\/>\s*<RequirementsSection [^>]*\/>\s*<IdentitySection [^>]*\/>/)
+  })
+})
+
+describe('ct-fx3 G-W03: the requirement\'s file opens where this browser reaches it (Z12)', () => {
+  it('the file door opens the store address through storeUrl, as Work and the order page do (a local store\'s path goes through /api)', async () => {
+    const container = readFileSync(new URL('./use-terms-tab.ts', import.meta.url), 'utf8')
+    expect(container).toContain("window.open(storeUrl(url), '_blank', 'noopener')")
+    expect(container).not.toMatch(/window\.open\(url,/)
+    const { storeUrl } = await import('../../../../../record-panels/store')
+    expect(storeUrl('/local-files?token=made-up')).toBe('/api/local-files?token=made-up')
+    expect(storeUrl('https://files.example.com/a.pdf')).toBe('https://files.example.com/a.pdf')
+  })
+})
+
+describe('ct-fx3 G-W04: a company row\'s tags wrap inside their cell (Italian at 865)', () => {
+  it('the row\'s tags carry the tab\'s own class, and only inside a company row they wrap (the DS\'s own wrap pattern; no DS class restyled)', () => {
+    const css = readFileSync(new URL('../view/terms/terms.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(css).toContain('.fw-ctr-row.is-c .fw-ctr-tag { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-align: start; }')
+    expect(css).not.toMatch(/\.nds-/)
+    const view = readFileSync(new URL('../view/terms/CommercialSection.tsx', import.meta.url), 'utf8')
+    expect(view.match(/className="fw-ctr-tag"/g)).toHaveLength(3) // the source tag, "You work here", the PO tag
+    const it_ = createScopedTranslator('it', messagesFor('it', [...TERMS_TAB_NAMESPACES]), CT)('ct.com.poTag')
+    expect(it_.length).toBeGreaterThan(20) // the Italian word that ran out of its cell
+  })
+})
+
+/** The answer's facts for the walk's gaps (the answer line's own describe keeps its own). */
+const gapFacts = (over: Partial<TermsFacts> = {}): TermsFacts => ({
+  multi: false,
+  company: A.name,
+  inForce: termsInForce({ commercial: own(), companies: { tenantWide: false, companies: [entry(A, row({ poNumberRequired: true }), own())] }, companyId: A.id, typed: null }, 'en'),
+  companiesFailed: false,
+  blank: false,
+  holds: [],
+  waiting: waitingOf(null, OWNER, NAMES, '/w/SEEDA', PARTY_ID),
+  requirements: 4,
+  identity: identityFactsOf(partyWith({ taxIdentities: [identity()], warnings: [], vies: { ...MODA.vies, state: 'NOT_APPLICABLE' } })),
+  now: NOW,
+  ...over,
+})
+
+describe('ct-fx3 G-W05: an Italian consumer\'s answer says no e-invoice word (only what a section shows; Z3)', () => {
+  const facts = gapFacts
+  it('IT_B2C: no "no SDI code or PEC" in the answer, as Tax identity draws no E-invoice fact; IT_B2B keeps its word', () => {
+    const consumer = partyWith({ kind: 'PERSON', taxIdentities: [identity({ taxMode: 'IT_B2C', vatNumber: null, fiscalCode: 'XXXXXX00X00X000X', sdiRecipientCode: '0000000' })], warnings: [], vies: { ...MODA.vies, state: 'NOT_APPLICABLE' } })
+    const answer = termsAnswer(facts({ identity: identityFactsOf(consumer) }))
+    for (const locale of LOCALES) expect(sentence(answer, locale), locale).not.toContain(said1(said('ct.answer.noSdi'), locale))
+    for (const key of ['ct.answer.noSdi', 'ct.answer.sdi', 'ct.answer.pec']) expect(answer.words.map((words) => words.key), key).not.toContain(key)
+    expect(identitySection({ party: consumer, can: OWNER, history: { items: [] }, viesRunning: false, now: NOW, earlierOpen: false, laterOpen: false, checksOpen: false }).facts.map((fact) => fact.key)).not.toContain('einvoice')
+    const business = partyWith({ taxIdentities: [identity({ sdiRecipientCode: '0000000' })], warnings: [], vies: { ...MODA.vies, state: 'NOT_APPLICABLE' } })
+    expect(termsAnswer(facts({ identity: identityFactsOf(business) })).words.map((words) => words.key)).toContain('ct.answer.noSdi')
+  })
+})
+
+describe('ct-fx3 G-W06: the facts are balanced by their count — no line holds a lone fact beside a hole (AAA)', () => {
+  /** The columns the auto-fit grid gives in a room (190 px + 20 px gap), and the ones terms.css sets instead (by count). */
+  const css = readFileSync(new URL('../view/terms/terms.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+  const autoFit = (width: number, n: number) => Math.max(1, Math.min(n, Math.floor((width + 20) / 210)))
+  const set = (width: number, n: number): number | null => {
+    for (const block of css.matchAll(/@container ctfx \(min-width: (\d+)px\) and \(max-width: ([\d.]+)px\) \{([\s\S]*?)\n\}/g)) {
+      if (width < Number(block[1]) || width > Number(block[2])) continue
+      for (const rule of block[3]!.matchAll(/([^{}]+)\{ grid-template-columns: repeat\((\d), minmax\(0, 1fr\)\); \}/g)) if (rule[1]!.includes(`[data-n="${n}"]`)) return Number(rule[2])
+    }
+    return null
+  }
+
+  it('every count from 4 to 9, at every room from a phone to the widest: the last line is full, or holds at least half a line', () => {
+    let checked = 0
+    for (let width = 190; width <= 1900; width += 5) {
+      for (let n = 4; n <= 9; n += 1) {
+        const columns = set(width, n) ?? autoFit(width, n)
+        const last = n % columns
+        if (columns >= 3) expect(last === 0 || last >= columns / 2, `${n} facts in ${width} px: ${columns} columns`).toBe(true)
+        checked += 1
+      }
+    }
+    expect(checked).toBeGreaterThan(1500)
+    // the walk's own cases: 6 facts at 1150 px (1920 open) and at 830 px (1440 open), 4 VIES facts at 801 px
+    expect([set(1150, 6), set(830, 6), set(801, 4)]).toEqual([3, 3, 2])
+  })
+
+  it('the sections draw Money\'s facts in the counted box (Facts itself untouched); the box is its own size container', () => {
+    expect(css).toContain('.fw-ctr-fx { container: ctfx / inline-size; min-width: 0; }')
+    const commercial = readFileSync(new URL('../view/terms/CommercialSection.tsx', import.meta.url), 'utf8')
+    expect(commercial).toContain('<div className="fw-ctr-fx" data-n={facts.length}>')
+    expect(commercial.match(/<BalancedFacts /g)).toHaveLength(3)
+    expect(readFileSync(new URL('../view/terms/IdentitySection.tsx', import.meta.url), 'utf8').match(/<BalancedFacts /g)).toHaveLength(2)
+    for (const name of ['CommercialSection.tsx', 'IdentitySection.tsx']) expect(readFileSync(new URL(`../view/terms/${name}`, import.meta.url), 'utf8'), name).not.toMatch(/<Facts facts=\{(?!facts\})/)
+  })
+})
+
+describe('ct-fx3 G-W07: the refused page sends no Terms read (P0-B3, Z43)', () => {
+  it('the depth provider\'s tab loads return at once for a reader without parties.view (People\'s F-CA-fx5 lines kept)', () => {
+    const depth = readFileSync(new URL('../../depth/use-depth.ts', import.meta.url), 'utf8')
+    expect(depth).toMatch(/const loadTab = useCallback\(\(\) => \{\s*\/\/[^\n]*\n\s*if \(!readsCustomer\) return\n[\s\S]*?else if \(tab === 'terms'\) void Promise\.all\(\[loadHolds\(\), loadTerms\(\), loadRequirements\(\)\]\)/)
+    expect(depth).toContain('}, [loadGlance, loadHolds, loadPrivacy, loadRequirements, loadTerms, readsCustomer, tab])')
+    expect(depth).toContain("const readsCustomer = session.permissions.includes('parties.view') // F-CA-fx5")
+    expect(depth.match(/F-CA-fx5/g)).toHaveLength(2)
+  })
+})
+
+describe('ct-fx3 G-W08: a failed VIES-checks read has its Try again (§2: PartFailed + Try again)', () => {
+  it('the VIES row\'s failed part retries the record\'s own read of the checks', () => {
+    const view = readFileSync(new URL('../view/terms/IdentitySection.tsx', import.meta.url), 'utf8')
+    expect(view).toMatch(/<PartFailed part=\{say\(said\('ct\.id\.checksPart'\)\)\} problem=\{kitProblemOf\(vies\.checksProblem\)\} onRetry=\{actions\?\.onRetryChecks/)
+    expect(readFileSync(new URL('./use-terms-tab.ts', import.meta.url), 'utf8')).toContain('onRetryChecks: () => input.retryHistory?.(),')
+    expect(readFileSync(new URL('../../../../parties/_shared/PartyRecord.tsx', import.meta.url), 'utf8')).toContain('retryHistory: () => void loadHistory(),')
+    // every PartFailed of the tab's views has a Try again
+    for (const name of ['HoldSection.tsx', 'CommercialSection.tsx', 'RequirementsSection.tsx', 'IdentitySection.tsx']) {
+      const text = readFileSync(new URL(`../view/terms/${name}`, import.meta.url), 'utf8')
+      for (const part of text.match(/<PartFailed [^>]*\/>/g) ?? []) expect(part, name).toContain('onRetry=')
+    }
+  })
+})
+
+describe('ct-fx3 G-W09: a chip with no rows of its own marks its section (B)', () => {
+  const reads = (over: Partial<TermsTabReads> = {}): TermsTabReads => ({
+    party: partyWith({ id: PARTY_ID, taxIdentities: [], warnings: [], vies: { ...MODA.vies, state: 'NOT_APPLICABLE' } }),
+    prefix: '/w/SEEDA',
+    can: OWNER,
+    locale: 'en',
+    now: NOW,
+    companyId: A.id,
+    companyNames: NAMES,
+    commercial: ready(own()),
+    carrier: ready({ partyId: PARTY_ID, code: 'SEED-ONE', name: 'Seed Customer One S.r.l.', carrierCode: null, carrierName: null, accountOnFile: false, freightBilling: 'SENDER', defaultCarrierService: null, version: 7 }),
+    holds: ready(HOLDS),
+    companies: ready(COMPANY_TERMS),
+    requirements: null,
+    library: null,
+    lists: null,
+    history: { items: [] },
+    viesRunning: false,
+    ...over,
+  })
+
+  it('"No tax identity" marks Tax identity\'s answer line; a chip with rows still marks exactly its rows', () => {
+    const model = termsTabModel(reads(), { ...TERMS_TAB_START, chip: 'noIdentity' })
+    expect(model.answer.chips.find((chip) => chip.id === 'noIdentity')!.rows).toEqual([])
+    expect(model.marked).toEqual(['party-identity'])
+    const html = renderToStaticMarkup(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(WithMessages, { namespaces: [...TERMS_TAB_NAMESPACES] }, createElement(TermsTab, { model }))))
+    expect(html).toContain('class="fw-ctr-sa is-mark"')
+    expect(html.match(/fw-ctr-sa is-mark/g)).toHaveLength(1)
+    expect(termsTabModel(reads(), { ...TERMS_TAB_START, chip: 'hold' }).marked).toEqual([termsTabModel(reads(), TERMS_TAB_START).hold.inForce[0]!.anchor])
+    const css = readFileSync(new URL('../view/terms/terms.css', import.meta.url), 'utf8')
+    expect(css).toContain('.fw-ctr-sa.is-mark { outline: 2px solid var(--nds-primary);')
+  })
+})
+
+describe('ct-fx3 G-W10: the nothing-set sentence has no company lead (one colon, §4)', () => {
+  it('a customer of two companies with nothing set: no "With {company}:" before "Nothing set yet: …"; with terms the lead stays', () => {
+    const nothing = termsInForce({ commercial: own({ paymentTermsId: null, paymentTerms: null, defaultDepositPct: null }), companies: { tenantWide: true, companies: [entry(A, null, own()), entry(B, null, own())] }, companyId: A.id, typed: null }, 'en')
+    const blank = termsAnswer(gapFacts({ multi: true, blank: true, inForce: nothing }))
+    expect(blank.lead).toBeNull()
+    for (const locale of LOCALES) expect((sentence(blank, locale).match(/:/g) ?? []).length, locale).toBe(1)
+    expect(termsAnswer(gapFacts({ multi: true })).lead).toEqual(said('ct.answer.with', { params: { company: A.name } }))
+  })
+})
+
+describe('ct-fx3 G-W11: in "By SDI code …" only the code is monospace', () => {
+  it('the e-invoice fact names its code apart; drawn, the code alone takes the mono face, in both languages', () => {
+    const party = partyWith({ taxIdentities: [identity({ sdiRecipientCode: 'FAKE001' })], warnings: [], vies: { ...MODA.vies, state: 'NOT_APPLICABLE' } })
+    const model = identitySection({ party, can: OWNER, history: { items: [] }, viesRunning: false, now: NOW, earlierOpen: false, laterOpen: false, checksOpen: false })
+    const einvoice = model.facts.find((fact) => fact.key === 'einvoice')!
+    expect([einvoice.code, einvoice.mono ?? false]).toEqual(['FAKE001', false])
+    const reads: TermsTabReads = { party, prefix: '/w/SEEDA', can: OWNER, locale: 'en', now: NOW, companyId: A.id, companyNames: NAMES, commercial: ready(own()), carrier: null, holds: ready(HOLDS), companies: ready(COMPANY_TERMS), requirements: null, library: null, lists: null, history: { items: [] }, viesRunning: false }
+    for (const locale of LOCALES) {
+      const html = renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(WithMessages, { namespaces: [...TERMS_TAB_NAMESPACES] }, createElement(TermsTab, { model: termsTabModel({ ...reads, locale }, TERMS_TAB_START) }))))
+      expect(html, locale).toContain('<span class="fw-ctr-mono">FAKE001</span>')
+      expect(html, locale).not.toMatch(/class="fw-ctr-mono">(By SDI|Via codice)/)
+    }
+  })
+})
+
+describe('ct-fx3 G-W12: the customer band\'s Check VIES is hidden without the right, held only by state', () => {
+  /** The band's ⋯ items as the shared hook builds them for the customer's record (viesInMore). */
+  function BandProbe({ model, party }: { model: PartyRecordModel; party: Party }): ReactElement {
+    const { band } = usePartyBand(model, party, undefined, { primary: null, viesInMore: true })
+    return createElement('pre', null, JSON.stringify((band.more ?? []).map((item) => [item.id, item.disabled === true])))
+  }
+  const itemsOf = (model: PartyRecordModel, party: Party): Array<[string, boolean]> => JSON.parse(textOf(renderAll(createElement(BandProbe, { model, party })))) as Array<[string, boolean]>
+  const eu = CUSTOMERS.find((item) => viesApplies(item) && item.status === 'ACTIVE')!
+
+  it('without parties.vies: no Check VIES in the band\'s ⋯; with it: drawn, held only while archived or a check runs', () => {
+    expect(eu).toBeDefined()
+    const vies = (model: PartyRecordModel, party: Party = eu) => itemsOf(model, party).find(([id]) => id === 'vies') ?? null
+    expect(vies(recordModel('customers', eu, { can: { ...RECORD_CAN, vies: false } }))).toBeNull()
+    expect(vies(recordModel('customers', eu, { can: RECORD_CAN }))).toEqual(['vies', false])
+    expect(vies(recordModel('customers', eu, { can: RECORD_CAN, viesRunning: true }))).toEqual(['vies', true])
+    expect(vies(recordModel('customers', { ...eu, status: 'ARCHIVED' }, { can: RECORD_CAN }), { ...eu, status: 'ARCHIVED' })).toEqual(['vies', true])
+    const view = readFileSync(new URL('../../../../parties/_shared/view/PartyRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("const viesInMenu = viesLine && (options.viesInMore === true ? can.vies : party.status === 'PROSPECT')")
+    expect(view).toContain("const viesLine = side === 'customers' && viesApplies(party)") // the supplier's band never has the line
   })
 })

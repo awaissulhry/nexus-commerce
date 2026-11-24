@@ -11,6 +11,7 @@ import { placedLine, releasedLine, type HoldRow, type ReleasedRow, type WaitingR
 import { said, termsKitId, text, type Said, type Say } from '../../terms/model'
 import type { TermsTabActions, TermsTabModel } from '../../terms/tab'
 import { actItem, menuOf, useTermsSay } from './say'
+import { SectionAnswer } from './TermsAnswer' // ct-fx3 G-W09: a chip with no rows marks its section's answer line
 
 /**
  * F-CT-303 (customer page › TERMS & REQUIREMENTS tab, lane ct-; 10-design §5.1; 18-lead-settles Z10, Z22, Z27, Z31) — section 1, Hold
@@ -91,7 +92,7 @@ export function HoldSection({ model, actions }: { model: TermsTabModel; actions?
   const waiting = hold.waiting
   const waitBlock = waiting.byReason ? hold.waitingForHold > 0 : waiting.total > 0
   return (
-    <Section {...head} answer={hold.answer ? say(hold.answer) : undefined}>
+    <Section {...head} answer={hold.answer ? <SectionAnswer marked={marked.has('party-hold')}>{say(hold.answer)}</SectionAnswer> : undefined}>
       {hold.stops ? <Banner tone="danger" icon={<Ban size={18} aria-hidden />} title={say(hold.stops.title)}>{say(hold.stops.desc)}</Banner> : null}
       <div className="fw-ctr-ls" role="list" aria-label={say(said('sales-customers-depth:hold.inForce'))}>
         <div className="fw-ctr-hd is-h" aria-hidden>

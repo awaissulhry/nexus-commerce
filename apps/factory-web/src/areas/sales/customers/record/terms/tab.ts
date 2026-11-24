@@ -158,9 +158,11 @@ export function termsTabModel(reads: TermsTabReads, state: TermsTabState): Terms
     archived,
     editable: can.manage && !archived,
     answer,
-    answerReading: reads.commercial === null || reads.commercial.status === 'loading',
+    // ct-fx3 G-W01 (walk W-01; P0-B4, Z32): the terms per company in flight are reading too — never the customer's own as if in force.
+    answerReading: reads.commercial === null || reads.commercial.status === 'loading' || reads.companies === null || reads.companies.status === 'loading',
     chip: pressed ? pressed.id : null,
-    marked: pressed ? pressed.rows : [],
+    // ct-fx3 G-W09 (walk W-09): a chip with no rows of its own (no tax identity; a waiting count without quotes.view) marks its SECTION.
+    marked: pressed ? (pressed.rows.length > 0 ? pressed.rows : pressed.door ? [] : [pressed.section]) : [],
     hold,
     commercial,
     requirements: requirementsSection({ read: reads.requirements, can, archived, companyNames: names, kind: state.kind, more: state.moreRequirements, endedOpen: state.requirementsEndedOpen }), // F-CT-504
@@ -226,4 +228,6 @@ export interface TermsTabActions {
   readonly onNewIdentity?: () => void
   readonly onCheckVies?: () => void
   readonly onMoreChecks?: () => void
+  /** ct-fx3 G-W08 (walk W-08): the VIES checks read again after it failed. */
+  readonly onRetryChecks?: () => void
 }

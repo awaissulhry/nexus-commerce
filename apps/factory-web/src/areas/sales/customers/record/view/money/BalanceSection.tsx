@@ -11,7 +11,7 @@ import { keepNumbers, sentenceOf } from '../../../../orders/record/money/view/sa
 import { word } from '../../../../orders/record/money/word'
 import { copyLinkTo } from '../../../../orders/record/shipments/view/hrefs'
 import { LineMenuButton } from '../../../../orders/record/view/LineMenu'
-import { PartFailed, PartReading, Section } from '../../../../orders/record/view/production/Kit'
+import { PartFailed, PartReading, Quiet, Section } from '../../../../orders/record/view/production/Kit'
 import type { BalanceModel, BalanceTile, Need } from '../../money/balance'
 import { kitId } from '../../money/sections'
 import type { CustomerSay } from '../../money/say'
@@ -53,13 +53,15 @@ export interface BalanceSectionProps {
   /** The page's money read failed (an `orders` problem key) — one line with its own Try again. */
   readonly failed: string | null
   readonly onRetry: () => void
+  /** ct-fx3 G-W11: the terms (the customer's own and per company) read again — the quiet fallback line's Try again. */
+  readonly onRetryTerms?: () => void
   /** F-CM-204: "Record a payment ›" — Finance's window with this customer chosen (payments.record + price); null: not drawn. */
   readonly recordPaymentHref?: string | null
   /** F-CM-302: Statement… — Finance's statement window, in place (receivables.view + price, something to state); absent: not drawn. */
   readonly onStatement?: () => void
 }
 
-export function BalanceSection({ model, present, sayIn, unit, asOf, menu, failed, onRetry, recordPaymentHref, onStatement }: BalanceSectionProps) {
+export function BalanceSection({ model, present, sayIn, unit, asOf, menu, failed, onRetry, onRetryTerms, recordPaymentHref, onStatement }: BalanceSectionProps) {
   const locale = useLocale()
   const say = sayIn(unit)
   const title = say(word('cm.balance.title'))
@@ -184,6 +186,20 @@ export function BalanceSection({ model, present, sayIn, unit, asOf, menu, failed
             }))}
           />
         )}
+        {/* ct-fx3 G-W11 (walk W-11; Z41): the terms per company could not be read — the customer's own, said so once, with Try again. */}
+        {!model.reading && model.termsFallback ? (
+          <Quiet>
+            {say(model.termsFallback)}
+            {onRetryTerms ? (
+              <>
+                {' '}
+                <Button size="sm" variant="link" onClick={onRetryTerms}>
+                  {say(word('orders:common.retry'))}
+                </Button>
+              </>
+            ) : null}
+          </Quiet>
+        ) : null}
       </div>
     </Section>
   )
