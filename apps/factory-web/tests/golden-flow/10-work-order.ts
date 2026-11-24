@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { defineStage } from './_harness/stages'
 import { answerOf, dialog, press } from './_harness/ui'
-import { startsWith, words } from './_harness/words' // F-OP-218
+import { words } from './_harness/words' // F-OP-218
 
 export default defineStage({
   proves: 'work order released with a frozen spec: every release check green (revision, label, certificate, materials in stock, the deposit paid); the order follows (IN_PRODUCTION)',
@@ -58,7 +58,8 @@ export default defineStage({
       const pick = card(sales.page).locator('.fw-rth-title button.fw-thread-pick-title')
       await expect(pick).toHaveCount(1, { timeout: 60_000 })
       await pick.click()
-      const row = sales.page.getByRole('menuitemcheckbox', { name: startsWith(OD('record.dock.workOrders')) })
+      const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const row = sales.page.getByRole('menuitemcheckbox', { name: new RegExp(`^(?:✓\\s*)?${escape(OD('record.dock.workOrders'))}`) }) // the row in use starts with the DS's "✓"
       if ((await row.count()) > 0) {
         await row.click()
         await expect(sales.page).toHaveURL(/[?&]thread=wo%3A/)

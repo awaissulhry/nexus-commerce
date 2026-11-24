@@ -197,9 +197,14 @@ export async function routerActivity(page: Page, ms: number, action: () => Promi
 // portal"); its name says the audience in use ("Who reads what you write: Office note"). Rows are matched with the party left open.
 const COMPOSER = words('record-thread-composer')
 export const audienceChip = (scope: Page | Locator): Locator => scope.getByRole('button', { name: new RegExp(`^${escapeText(COMPOSER('modeLabel'))}: `) })
-/** A row of the chip's menu: `note`, `reply` (by email) or `portal`, whatever the party's name. */
+/**
+ * A row of the chip's menu: `note`, `reply` (by email) or `portal`, whatever the party's name. tw- fx1 (end check 1, th5): the DS
+ * draws the row in use with a "✓" before its words (`[aria-checked='true']::before`, part of its accessible name) — the row may
+ * start with it.
+ */
+const TICK = '(?:✓\\s*)?'
 export const audienceRow = (way: 'note' | 'reply' | 'portal'): RegExp =>
-  way === 'note' ? new RegExp(`^${escapeText(COMPOSER('mode.note'))}$`) : new RegExp(`^${escapeText(COMPOSER(way === 'reply' ? 'modeMenu.reply' : 'modeMenu.portal', { party: '@@' })).replace('@@', '.+')}$`)
+  way === 'note' ? new RegExp(`^${TICK}${escapeText(COMPOSER('mode.note'))}$`) : new RegExp(`^${TICK}${escapeText(COMPOSER(way === 'reply' ? 'modeMenu.reply' : 'modeMenu.portal', { party: '@@' })).replace('@@', '.+')}$`)
 export async function chooseAudience(page: Page, scope: Page | Locator, way: 'note' | 'reply' | 'portal'): Promise<void> {
   await chooseFromMenu(audienceChip(scope).first(), page.getByRole('menuitemcheckbox', { name: audienceRow(way) }))
   await expect(audienceChip(scope).first()).toHaveAttribute('aria-label', way === 'note' ? `${COMPOSER('modeLabel')}: ${COMPOSER('mode.note')}` : new RegExp(`^${escapeText(COMPOSER('modeLabel'))}: `))

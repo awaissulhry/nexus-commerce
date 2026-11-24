@@ -112,7 +112,8 @@ async function expectBodyScrolls(page: Page, where: string, kind: 'thread' | 'al
 }
 
 async function pick(page: Page, long: string): Promise<void> {
-  await chooseFromMenu(pickOf(page), page.getByRole('menuitemcheckbox', { name: new RegExp(`^${escape(long)}`) }))
+  // tw- fx1: the row in use starts with the DS's "✓" (part of its name).
+  await chooseFromMenu(pickOf(page), page.getByRole('menuitemcheckbox', { name: new RegExp(`^(?:✓\\s*)?${escape(long)}`) }))
   await expectPicked(page, long)
 }
 
