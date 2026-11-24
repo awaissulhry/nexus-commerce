@@ -329,6 +329,10 @@ export function Composer(props: ComposerProps) {
             <span className="fw-rt-cx-chip is-floor" tabIndex={0}>
               <HardHat size={13} aria-hidden />
               {t('floor.label')}
+              {/* The rule for a screen reader too (a tooltip alone is hover-only). */}
+              <span className="nds-vh">
+                {` ${t('floor.on', { record: context.recordLabel, limit: FLOOR_TEXT })}${lockedFloor ? ` ${t('floor.locked')}` : ''}`}
+              </span>
               {!lockedFloor && (
                 <button type="button" className="fw-rt-cx-chip-x" aria-label={`${t('floor.label')} ×`} onClick={() => change({ forFloor: false })}>
                   <X size={12} aria-hidden />

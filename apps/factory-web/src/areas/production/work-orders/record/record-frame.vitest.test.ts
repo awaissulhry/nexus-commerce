@@ -116,9 +116,11 @@ describe('B-TH-265 — the work order on RecordFrame', () => {
   it('the order’s thread is picked beside the work order’s notes, says whose it is, and is that customer’s alone', () => {
     const html = draw('thread-order')
     const dock = textOf(dockOf(html))
-    expect(dock).toContain('Work order notes')
+    // tw- W2.1 (Z4): the pick is the head's title — ONE menu (its rows closed on the server render): the order picked by its label,
+    // whose thread it is in its hover words; the work order's notes are its other row.
     expect(dock).toContain(`${WO.orders[0]!.number} · ${WO.orders[0]!.partyName}`)
-    expect(dock).toContain(`is shared with ${WO.orders[0]!.partyName}`)
+    expect(dockOf(html)).toContain(`is shared with ${WO.orders[0]!.partyName}`)
+    expect(readFileSync(new URL('./view/WorkOrderThreads.tsx', import.meta.url), 'utf8')).toContain("{ value: 'workOrder', label: t('thread.workOrder')")
     expect(html.match(/class="fw-rt-column[ "]/g)?.length).toBe(1)
     // Not offered when the route says the order's thread may not be read; nothing to pick without an order.
     expect(textOf(dockOf(draw('thread-no-order-thread')))).not.toContain('Work order notes')

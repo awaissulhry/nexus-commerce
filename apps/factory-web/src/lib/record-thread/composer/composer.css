@@ -216,14 +216,20 @@
   box-shadow: 0 0 0 2px var(--nds-text);
 }
 
-/* The text box is TH-1c's MentionInput (a DS Textarea): inside the coloured box the box itself is the field (its focus ring is
-   the box's), so the textarea draws no border or ground of its own. */
-.fw-rt-cx-box .fw-rt-cx-text {
+/* The text box is TH-1c's MentionInput (a DS Textarea, inside its .fw-rtm wrapper — the wrapper is the row's flex item): inside the
+   round box the box itself is the field (its focus ring is the box's), so the textarea draws no border or ground of its own. */
+.fw-rt-cx-box > .fw-rtm {
   flex: 1 1 160px;
-  width: auto;
+  min-width: 0;
+}
+
+/* tw- fx1 (P0-B2; the real page drew the empty box ~170 px: the DS `.nds-textarea { min-height: 168px }` won) — ONE height rule,
+   owned here and stronger than the DS's: one line at rest (never 0 px), up to about 8 lines while typing (the view sets the height
+   between them), then it scrolls inside. */
+.fw-rt-composer .fw-rt-cx-box textarea.fw-rt-cx-text {
+  display: block;
+  width: 100%;
   box-shadow: none;
-  /* tw- W2.3 (P0-B2): ONE height rule, owned here — one line at rest (never 0 px, whatever the DS textarea's own minimum), up to
-     about 8 lines while typing (the view sets the height between them), then it scrolls inside. */
   min-height: 24px;
   max-height: calc(8 * 1.55em + 12px);
   resize: none;
@@ -238,13 +244,13 @@
   overflow-y: hidden;
 }
 
-.fw-rt-cx-box .fw-rt-cx-text:focus,
-.fw-rt-cx-box .fw-rt-cx-text:focus-visible {
+.fw-rt-composer .fw-rt-cx-box textarea.fw-rt-cx-text:focus,
+.fw-rt-composer .fw-rt-cx-box textarea.fw-rt-cx-text:focus-visible {
   outline: none;
   box-shadow: none;
 }
 
-.fw-rt-cx-box .fw-rt-cx-text::placeholder {
+.fw-rt-composer .fw-rt-cx-box textarea.fw-rt-cx-text::placeholder {
   color: var(--nds-placeholder);
 }
 

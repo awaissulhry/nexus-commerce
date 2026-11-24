@@ -35,8 +35,10 @@ describe('starts on Office note, safe by default (P3)', () => {
   it('“Reply to <customer>” names only this record’s customer (W20)', () => {
     const text = textOf(composer(ORDER, draft()))
     expect(text).toContain('Office note')
-    expect(text).toContain(`Reply to ${BRAND_ALPHA.tradeName}`)
     expect(text).toContain('Add note')
+    // tw- W2.3: the audiences are the chip's rows (a closed menu on the server render); the reply names this record's customer.
+    expect(composerModes(ORDER)).toEqual(['note', 'reply'])
+    expect(composer(ORDER, draft({ mode: 'reply' }))).toContain(`aria-label="Who reads what you write: Reply to ${BRAND_ALPHA.tradeName}"`)
     const beta = textOf(composer({ ...ORDER, party: { name: BRAND_BETA.tradeName } }, draft({ mode: 'reply' })))
     expect(beta).toContain(`Send to ${BRAND_BETA.tradeName}`)
     expect(scanText(beta, BRAND_ALPHA)).toEqual([])
@@ -197,15 +199,19 @@ describe('B-TH-236: what the message answers or corrects, the amount, the floor�
     expect(floorLocked(fixFloor)).toBe(true)
     expect(floorLocked(draft())).toBe(false)
     const html = composer(wo, fixFloor)
+    // tw- W2.3: "For the floor" is a chip — on and locked (no × to take it off); its rule is said for a screen reader too.
     expect(textOf(html)).toContain('The note you correct is on the tablets: the correction goes there too.')
-    expect(html).toMatch(/type="checkbox"[^>]*checked=""[^>]*disabled=""|type="checkbox"[^>]*disabled=""[^>]*checked=""|disabled=""[^>]*type="checkbox"[^>]*checked=""|checked=""[^>]*disabled=""[^>]*type="checkbox"/)
+    expect(html).toContain('fw-rt-cx-chip is-floor')
+    expect(html).not.toContain('fw-rt-cx-chip-x')
   })
 
   it('the amount field: on an office note for a price reader only; Send is held while it is not a number or with “For the floor”', () => {
     const priced = { ...ORDER, can: { ...ORDER.can, price: true } }
-    expect(textOf(composer(priced, draft({ body: 'x' })))).toContain('Amount')
-    expect(textOf(composer(ORDER, draft({ body: 'x' })))).not.toContain('Amount')
-    expect(textOf(composer(priced, draft({ mode: 'reply', body: 'x' })))).not.toContain('Amount')
+    // tw- W2.3: "Amount" is a row of the "+" (the composer's own rows after the files'), for a price reader on an office note only.
+    const rows = (context: ComposerContext, value: ComposerDraft) => textOf(render(createElement(Composer, { context, draft: value, onDraft: () => undefined, onSend: () => undefined, plus: (more) => createElement('i', null, more.map((row) => String(row.label)).join(' | ')) })))
+    expect(rows(priced, draft({ body: 'x' }))).toContain('Amount')
+    expect(rows(ORDER, draft({ body: 'x' }))).not.toContain('Amount')
+    expect(rows(priced, draft({ mode: 'reply', body: 'x' }))).not.toContain('Amount')
     expect(heldReason(draft({ body: 'x', amount: '12,50' }), ORDER)).toBeNull()
     expect(heldReason(draft({ body: 'x', amount: 'twelve' }), ORDER)).toEqual({ key: 'held.amount' })
     expect(heldReason(draft({ body: 'x', amount: '12', forFloor: true }), ORDER)).toEqual({ key: 'held.amountFloor' })
@@ -590,7 +596,10 @@ describe('tw- W2.3 — the composer is ONE row at rest: + · the audience chip �
 
   it('P0-B2: ONE height rule for the box, owned by composer.css — one line at rest, never 0 px, about 8 lines at most', () => {
     const css = readFileSync(new URL('./composer.css', import.meta.url), 'utf8')
-    expect(css).toMatch(/\.fw-rt-cx-box \.fw-rt-cx-text \{[^}]*min-height: 24px;[^}]*max-height: calc\(8 \* 1\.55em \+ 12px\);/)
+    // tw- fx1: stronger than the DS's `.nds-textarea { min-height: 168px }` (the real page drew ~170 px), the wrapper the flex item.
+    expect(css).toMatch(/\.fw-rt-composer \.fw-rt-cx-box textarea\.fw-rt-cx-text \{[^}]*min-height: 24px;[^}]*max-height: calc\(8 \* 1\.55em \+ 12px\);/)
+    expect(css).toMatch(/\.fw-rt-cx-box > \.fw-rtm \{\s*flex: 1 1 160px;\s*min-width: 0;/)
+    expect(css).not.toMatch(/^\.fw-rt-cx-box \.fw-rt-cx-text \{/m)
     const source = readFileSync(new URL('./view/Composer.tsx', import.meta.url), 'utf8')
     expect(source).not.toContain('honourRows')
     expect(source).toContain('rows={1}')

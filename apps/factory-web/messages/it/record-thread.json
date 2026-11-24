@@ -64,7 +64,7 @@
       "ORDERS": "Ordini",
       "QUOTES": "Preventivi",
       "REQUESTS": "Richieste",
-      "GENERAL": "Conversazione generale",
+      "GENERAL": "Thread generale",
       "PROJECTS": "Progetti",
       "AFTER_SALES": "Post-vendita"
     },
@@ -82,7 +82,7 @@
     "keysTip": "J / K scorrono · Invio risponde nel suo thread. Vedere un messaggio qui non segna nulla come letto: apri il suo thread.",
     "olderLoading": "Lettura dei messaggi più vecchi…",
     "olderFailed": "Non è stato possibile leggere i messaggi più vecchi · Riprova",
-    "older": "Conversazioni più vecchie: apri il loro record",
+    "older": "Thread più vecchi: apri il loro record",
     "notShown_one": "1 thread di {customer} che non puoi aprire è escluso.",
     "notShown_other": "{count} thread di {customer} che non puoi aprire sono esclusi.",
     "openRecord": "Apri {record}",

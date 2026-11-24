@@ -121,7 +121,7 @@ export default defineStage({
       await expect(pick).toBeVisible()
       await expect(pick).toHaveAttribute('aria-label', new RegExp(`^${escape(P('customers.work.dock.label'))}: `))
       const allWords = P('customers.work.dock.all', { customer: CUSTOMER.legalName })
-      await chooseFromMenu(pick, page.getByRole('menuitemcheckbox', { name: new RegExp(`^${escape(allWords)}`) }))
+      await chooseFromMenu(pick, page.getByRole('menuitemcheckbox', { name: new RegExp(`^(?:✓\\s*)?${escape(allWords)}`) })) // the row in use starts with the DS's "✓"
       await expect(pick).toHaveAttribute('aria-label', `${P('customers.work.dock.label')}: ${allWords}`)
       await expect(page).toHaveURL(/[?&]dock=all/)
       await expect(card.locator('.fw-rth.fw-aoc-head')).toBeVisible()
