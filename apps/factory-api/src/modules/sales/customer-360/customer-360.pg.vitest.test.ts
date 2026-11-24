@@ -196,6 +196,17 @@ describe('the customer at a glance (SAL-019)', () => {
     expect(reader.requirements.count).toBeGreaterThan(0)
   })
 
+  // F-CM-S6 (customer MONEY tab, 13-backend §2.3): usedPct is a ratio of the price grain's figures — said only beside them, as the credit
+  // list and a record's credit say it.
+  it('without the price grain credit.usedPct is null; with it, a number', async () => {
+    const noPrice = await glance('sales', A.p1)
+    expect(noPrice.credit.state).toMatch(/^(WITHIN|OVER)$/)
+    expect(noPrice.credit.usedPct).toBeNull()
+    const owner = await glance('owner', A.p1)
+    expect(owner.credit).toHaveProperty('limit')
+    expect(typeof owner.credit.usedPct).toBe('number')
+  })
+
   it('refuses without a company, a company not seen, a customer of another company, a customer not seen, and the floor', async () => {
     expect((await no('sales', `/sales/customer-360/${A.p1}`, 400)).issues.map((issue: Json) => issue.path)).toContain('query/companyId')
     expect((await no('salesB', `/sales/customer-360/${A.p1}?companyId=${A.companyA}`, 400)).issues.map((issue: Json) => issue.path)).toContain('query/companyId')

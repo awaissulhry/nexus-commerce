@@ -1,6 +1,6 @@
 import type { Prisma } from '@nexus/factory-db'
 import { ForbiddenError, ValidationError } from '@nexus/factory-domain/core/errors'
-import { can, scopeWhere, type Actor, type Permission } from '@nexus/factory-domain/core/permissions'
+import { can, holds, scopeWhere, type Actor, type Permission } from '@nexus/factory-domain/core/permissions' // F-CM-S6: + holds
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import type { HoldReason } from '@nexus/factory-domain/parties/holds/holds'
@@ -68,7 +68,7 @@ export async function readGlance(caller: CommandCaller, partyId: string, query: 
       team,
       requirements: await requirementsOf(db, context, party.id, companyId),
       promises: allowed('promises') ? await promisesFor(db, context, party.id, companyId, today) : null,
-      credit: allowed('credit') ? await creditOf(db, party.id, companyId, now) : null,
+      credit: allowed('credit') ? await creditOf(db, party.id, companyId, now, holds(actor, 'money.price') /* F-CM-S6 */) : null,
       samples: allowed('samples') ? await samplesOf(db, context, party.id, companyId, today) : null,
       profiles: allowed('profiles') ? await profilesOf(db, party.id) : null,
       riders: party.kind === 'ORGANISATION' ? await ridersOf(db, context, party.id, companyId) : null,
@@ -136,8 +136,11 @@ async function promisesFor(db: Reader, context: OfficeContext, partyId: string, 
   )
 }
 
-/** Free credit with the company now (B-W2b-304's reading): NONE without a limit. */
-async function creditOf(db: Reader, partyId: string, companyId: string, now: Date) {
+/**
+ * Free credit with the company now (B-W2b-304's reading): NONE without a limit. F-CM-S6: `usedPct` is a ratio of price-grain figures,
+ * so it is said only beside them (`seesPrices`: the reader holds money.price), as the credit list and a record's credit say it.
+ */
+async function creditOf(db: Reader, partyId: string, companyId: string, now: Date, seesPrices: boolean) {
   const reading = await readCredit(db, { partyId, companyId, now })
   if (!reading) {
     const none = asMoney('price', null)
@@ -152,7 +155,7 @@ async function creditOf(db: Reader, partyId: string, companyId: string, now: Dat
     available: asMoney('price', available),
     overLimitBy: asMoney('price', overLimitBy(reading)),
     overdue: asMoney('price', reading.overdue),
-    usedPct: usedPercent(reading),
+    usedPct: seesPrices ? usedPercent(reading) : null, // F-CM-S6
     onHold: reading.onHold,
   }
 }

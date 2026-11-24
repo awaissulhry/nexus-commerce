@@ -339,7 +339,8 @@ describe('F-CW-101: "Before an order" — ONE file for the read, its mapping and
     // tab; it reads again on this module's events (a quote, request or portal order of THIS customer; every order event).
     const page = readFileSync(new URL('./CustomerRecord.tsx', import.meta.url), 'utf8')
     // F-CQ-306 (cq fx3 W2-1): only for a reader who can open Quotes & incoming (every part is a door there; Warehouse: no line).
-    expect(page).toContain("const before = useMemo(() => (tab === 'work' && can.orders ? beforeOrderFor(pageCounts.counts, opensQuotesTab) : NO_BEFORE_ORDER), [tab, can.orders, pageCounts.counts, opensQuotesTab])")
+    // F-CO-102 (customer page › Overview): the Overview's card 2 is this same band, so the line is built on Work AND on Overview.
+    expect(page).toContain("const before = useMemo(() => ((tab === 'work' || tab === 'overview') && can.orders ? beforeOrderFor(pageCounts.counts, opensQuotesTab) : NO_BEFORE_ORDER), [tab, can.orders, pageCounts.counts, opensQuotesTab])")
     const file = readFileSync(new URL('./quotes-tab/use-before-order-counts.ts', import.meta.url), 'utf8')
     expect(file).toContain('countsMoved(change, partyId) || (!COUNTS_EVENTS.test(change.type) && beforeOrderTouched(change.type))')
     // The band's order numbers come from the board alone: the line's counts never enter them.

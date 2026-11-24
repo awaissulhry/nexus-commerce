@@ -88,9 +88,13 @@ describe('the W2a design cases draw in both languages with no key on screen', ()
   it('the record shows Overdue and Returns this year; without receivables.view no Overdue tile', () => {
     const screen = customerScreen as unknown as DesignScreen<unknown>
     const full = render(screen, screen.cases.find((entry) => entry.id === 'w2a-numbers')!.model, 'en')
-    expect(full).toContain('Overdue')
-    expect(full).toContain('€4,270.00')
-    expect(full).toContain('Open returns and claims')
+    // F-CO-103 (customer page › Overview, 13-backend §3.10): the Overdue tile is the Overdue STRIP now (its amount with the price
+    // grain, never a count of invoices); the open returns and claims are Linked records' two rows, each naming the oldest / the
+    // next one; Finance › Receivables & credit is Linked records' plain door.
+    expect(full).toContain('Overdue · €4,270.00')
+    expect(full).toContain('Oldest 38 days late')
+    expect(full).toContain('2 open · oldest RMA-2026-0007, asked 12/09/2026')
+    expect(full).toContain('1 open · next answer CMP-2026-0004 due 05/11/2026')
     expect(full).toContain('/finance/receivables?party=')
     // F-SA-273: "Returns in <year>" is a key number of the Money tab now (F-SA-272: the Overview keeps at most six doors).
     const money = render(screen, screen.cases.find((entry) => entry.id === 'tab-money')!.model, 'en')

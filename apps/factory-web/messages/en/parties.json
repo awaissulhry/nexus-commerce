@@ -372,6 +372,102 @@
         "onHint": "{customer}'s people may add made-to-measure lines to their portal drafts (accepted, such a draft becomes a quote first).",
         "offHint": "Made-to-measure lines are closed in {customer}'s portal drafts: they ask us in the messages."
       }
+    },
+    "overview": {
+      "where": "Where {customer} stands",
+      "headline": {
+        "onHold": "On hold ({reason})",
+        "onHoldMany": "On hold ({count} holds)",
+        "openOrders_one": "{count} open order",
+        "openOrders_other": "{count} open orders",
+        "waitYes_one": "{count} order waits for a yes",
+        "waitYes_other": "{count} orders wait for a yes",
+        "nextPromise": "next promise {date}"
+      },
+      "quiet": {
+        "archived": "Read only until it is reactivated (⋯ › Reactivate).",
+        "blocked": "No new quotes, orders or shipments.",
+        "prospect": "Activate it to take orders.",
+        "lastOrder": "Last order {date}"
+      },
+      "strip": {
+        "label": "What stops {customer}",
+        "unblock": "Unblock it from the ⋯ menu above.",
+        "hold": "On hold — {reason} · {company}",
+        "overLimit": "Over the credit limit: over by {amount} of a {limit} limit",
+        "invoicesLate": "Invoices are late",
+        "overdue": "Overdue · {amount}",
+        "oldest_one": "Oldest {count} day late",
+        "oldest_other": "Oldest {count} days late",
+        "urgencyOver": "Customer urgency over its limit",
+        "failed": "The holds and the credit could not be read"
+      },
+      "people": {
+        "title": "People",
+        "contactOrders": "Their contact for orders",
+        "contactInvoices": "Their contact for invoices",
+        "contactBoth": "Their contact for orders and invoices",
+        "nobody": "Nobody yet"
+      },
+      "dates": {
+        "title": "Next dates",
+        "late_one": "{count} order past the promise date",
+        "late_other": "{count} orders past the promise date",
+        "deposit": "Deposit due",
+        "sample": "Sample due",
+        "ask": "Our ask due",
+        "task": "Task due",
+        "complaint": "Complaint answer",
+        "vies": "VIES proof until",
+        "titled": "“{title}” · {date}",
+        "tag": {
+          "late": "late",
+          "daysLate": "{count} d late"
+        },
+        "failed": "The sample dates could not be read"
+      },
+      "requests": {
+        "title": "Requests & changes"
+      },
+      "linked": {
+        "title": "Linked records",
+        "orders": "Orders",
+        "quotes": "Quotes",
+        "incoming": "Incoming",
+        "samples": "Sample rounds",
+        "repairs": "Repairs",
+        "returns": "Returns",
+        "complaints": "Complaints",
+        "projects": "Projects",
+        "openOf": "{open} open of {total}",
+        "open_one": "{count} open",
+        "open_other": "{count} open",
+        "someOpen": "Open",
+        "inProgress": "{count} in progress",
+        "priorityTop": "Priority Top {count}",
+        "priorityHigh": "Priority High {count}",
+        "nextDue": "next {number} due {date}",
+        "nextDueToday": "next {number} due today",
+        "oldestOpened": "oldest {number}, opened {date}",
+        "oldestAsked": "oldest {number}, asked {date}",
+        "nextAnswer": "next answer {number} due {date}",
+        "receivables": "Receivables & credit"
+      },
+      "facts": {
+        "title": "Customer facts",
+        "kindLanguage": "Kind · language",
+        "payment": "Payment · currency",
+        "since": "Customer since",
+        "sinceValue": "{date} · changed {changed}",
+        "toComplete": "To complete",
+        "validFrom": "valid from {date}",
+        "creditFree": "{amount} free of a {limit} limit",
+        "noteTag": "Only the office sees it",
+        "noNote": "No note",
+        "vat": "VAT {number}",
+        "sdi": "SDI {code}",
+        "pec": "PEC {pec}"
+      }
     }
   },
   "suppliers": {

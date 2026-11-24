@@ -66,7 +66,7 @@ export const events = [
     context: 'invoicing',
     description: 'An invoice was issued: it has its number and date from the fiscal series and never changes again.',
     payload: z.strictObject({ invoiceId: z.uuid(), docType, number: z.string(), issueDate: z.string(), partyId: z.uuid(), depositRequestId: z.uuid().nullable() }),
-    live: { permission: 'invoices.view', fields: ['invoiceId', 'docType', 'number'] },
+    live: { permission: 'invoices.view', fields: ['invoiceId', 'docType', 'number', 'partyId' /* F-CM-S1 */] },
   }),
   defineEvent({
     type: 'invoice.files_attached',
@@ -128,7 +128,7 @@ export const events = [
     context: 'invoicing',
     description: 'A credit note was issued on an invoice paid beyond what it is now worth: a refund is due to the customer.',
     payload: z.strictObject({ invoiceId: z.uuid(), creditOfId: z.uuid(), partyId: z.uuid() }),
-    live: { permission: 'invoices.view', fields: ['invoiceId', 'creditOfId'] },
+    live: { permission: 'invoices.view', fields: ['invoiceId', 'creditOfId', 'partyId' /* F-CM-S1 */] },
   }),
   defineEvent({
     type: 'order.fully_settled',

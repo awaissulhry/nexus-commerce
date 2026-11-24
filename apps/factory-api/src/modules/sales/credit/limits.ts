@@ -37,6 +37,8 @@ export type LimitView = (typeof LIMIT_VIEWS)[number]
 
 export interface LimitsQuery {
   readonly companyId?: string | undefined
+  /** F-CM-S2: one customer's row (the customer's Money tab); only a customer WITH a limit has one. Each row is walled as before. */
+  readonly partyId?: string | undefined
   readonly q?: string | undefined
   readonly view?: LimitView | undefined
   readonly cursor?: number | undefined
@@ -127,11 +129,12 @@ const heldCount = (row: LimitRow): number => row.held.orders + row.held.releases
 export async function listLimits(caller: CommandCaller, query: LimitsQuery) {
   const context = officeOf(caller)
   if (query.companyId !== undefined && !isUuid(query.companyId)) throw new ValidationError('Not a company.', [{ path: 'query/companyId', message: 'A company id.' }])
+  if (query.partyId !== undefined && !isUuid(query.partyId)) throw new ValidationError('Not a customer.', [{ path: 'query/partyId', message: 'A customer id.' }]) // F-CM-S2
   const view = query.view ?? 'ALL'
   const size = Math.min(Math.max(query.limit ?? 100, 1), 200)
   const start = Math.max(query.cursor ?? 0, 0)
   return caller.withClient(async (db) => {
-    const all = await readRows(db, context, { companyId: query.companyId })
+    const all = await readRows(db, context, { companyId: query.companyId, partyId: query.partyId /* F-CM-S2 */ })
     const needle = query.q?.trim().toLowerCase() ?? ''
     const matching = needle ? all.filter((row) => row.party.code.toLowerCase().includes(needle) || row.party.name.toLowerCase().includes(needle)) : all
     const over = (row: LimitRow) => row.findings.includes('OVER_LIMIT') || (row.available !== null && (row.available as number) < 0)

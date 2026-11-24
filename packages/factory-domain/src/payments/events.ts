@@ -34,6 +34,13 @@ import { PAYMENT_METHODS } from './payments'
 const target = z.enum(['DEPOSIT_REQUEST', 'INVOICE'])
 const live = { permission: 'payments.view', fields: ['paymentId'] } as const
 const refundLive = { permission: 'payments.view', fields: ['refundId'] } as const
+// ---- F-CM-S1 (customer MONEY tab, 13-backend §2.1): the customer's id travels with the money events that name it, so the customer's
+// Money tab re-reads on its own customer's events only. The wall is unchanged (events/live.ts: a person limited to some customers gets
+// a message only when every customer it names is theirs). payment.voided keeps `live` and refund.changed `refundLive` (no partyId:
+// matched by the ids the tab holds); payment.allocated / allocation_reversed / voided stay as B-SA-004 pins them (never copied).
+const recordedLive = { permission: 'payments.view', fields: ['paymentId', 'partyId'] } as const
+const refundPartyLive = { permission: 'payments.view', fields: ['refundId', 'partyId'] } as const
+// ---- end F-CM-S1
 
 export const events = [
   defineEvent({
@@ -41,7 +48,7 @@ export const events = [
     context: 'payments',
     description: 'A payment received (a bank transfer, or a card or SEPA debit payment of a payment intent) was recorded.',
     payload: z.strictObject({ paymentId: z.uuid(), partyId: z.uuid(), method: z.enum(PAYMENT_METHODS) }),
-    live,
+    live: recordedLive, // F-CM-S1
   }),
   defineEvent({
     type: 'payment.allocated',
@@ -69,7 +76,7 @@ export const events = [
     context: 'payments',
     description: 'The payments allocated to a deposit request cover it: the request is PAID.',
     payload: z.strictObject({ depositRequestId: z.uuid(), partyId: z.uuid(), orderId: z.uuid().nullable() }),
-    live: { permission: 'payments.view', fields: ['depositRequestId'] },
+    live: { permission: 'payments.view', fields: ['depositRequestId', 'partyId' /* F-CM-S1 */] },
   }),
   // B-W2a-61: refunds and the credit balance.
   defineEvent({
@@ -77,7 +84,7 @@ export const events = [
     context: 'payments',
     description: 'A refund to a customer was recorded: due (to make) or paid (made), of a credit note or of a payment not placed.',
     payload: z.strictObject({ refundId: z.uuid(), partyId: z.uuid(), source: z.enum(['CREDIT_NOTE', 'PAYMENT']), sourceId: z.uuid(), status: z.enum(['DUE', 'PAID']) }),
-    live: refundLive,
+    live: refundPartyLive, // F-CM-S1
   }),
   defineEvent({
     type: 'refund.changed',
@@ -91,28 +98,28 @@ export const events = [
     context: 'payments',
     description: "A due refund was paid: the transfer's value date and the bank's reference are recorded.",
     payload: z.strictObject({ refundId: z.uuid(), partyId: z.uuid() }),
-    live: refundLive,
+    live: refundPartyLive, // F-CM-S1
   }),
   defineEvent({
     type: 'refund.cancelled',
     context: 'payments',
     description: 'A due refund is not paid after all (the customer keeps the credit).',
     payload: z.strictObject({ refundId: z.uuid(), partyId: z.uuid() }),
-    live: refundLive,
+    live: refundPartyLive, // F-CM-S1
   }),
   defineEvent({
     type: 'refund.voided',
     context: 'payments',
     description: 'A refund recorded as paid by mistake was voided.',
     payload: z.strictObject({ refundId: z.uuid(), partyId: z.uuid() }),
-    live: refundLive,
+    live: refundPartyLive, // F-CM-S1
   }),
   defineEvent({
     type: 'payment.overpayment_released',
     context: 'payments',
     description: "An invoice paid beyond what it is worth after a credit note gave the excess back to its payments' unplaced part (the customer's credit balance).",
     payload: z.strictObject({ invoiceId: z.uuid(), partyId: z.uuid(), paymentIds: z.array(z.uuid()).min(1) }),
-    live: { permission: 'payments.view', fields: ['invoiceId'] },
+    live: { permission: 'payments.view', fields: ['invoiceId', 'partyId' /* F-CM-S1 */] },
   }),
   // B-W2b-21: a deposit paid without a deposit invoice, carried onto the order's invoice.
   defineEvent({
