@@ -235,7 +235,7 @@ describe('SCR-006-feed: every state in words, both languages', () => {
   const cases = everyCase(designScreen)
 
   it('draws every case with no message key left on screen', () => {
-    for (const [locale, id, html] of cases) expect(leftKeys(html, ['state', 'older', 'day', 'fold', 'folded', 'step', 'changes', 'who', 'verb', 'live', 'feed', 'mark', 'delivery']), `${locale} ${id}`).toEqual([])
+    for (const [locale, id, html] of cases) expect(leftKeys(html, ['state', 'older', 'day', 'fold', 'folded', 'step', 'changes', 'who', 'verb', 'live', 'feed', 'mark', 'delivery', 'down', 'pinned', 'unread', 'foot', 'quote', 'org']), `${locale} ${id}`).toEqual([])
   })
 
   it('the states say what to do next', () => {
@@ -247,18 +247,21 @@ describe('SCR-006-feed: every state in words, both languages', () => {
     expect(text('offline')).toContain('Offline · as of 10:44')
     expect(text('forbidden')).toContain('You cannot read this thread')
     expect(text('forbidden')).not.toContain('threads.read')
-    expect(text('conversation')).toContain('13 earlier messages')
     expect(text('conversation')).toContain('5 changes by Bea Esempio · Show')
     expect(text('conversation')).toContain('Today')
-    expect(text('conversation', 'it')).toContain('13 messaggi precedenti')
-    expect(text('conversation')).toContain('Show 50 earlier')
+    // tw- W1.3: no fold and no "Show 50 earlier" — older pages come as the person scrolls up; a pill only while one is read.
+    expect(text('conversation')).not.toMatch(/earlier messages|Show 50 earlier/)
+    expect(text('conversation', 'it')).not.toMatch(/messaggi precedenti|Mostra i 50 precedenti/)
+    expect(text('older-loading')).toContain('Reading earlier messages…')
+    expect(text('older-loading', 'it')).toContain('Lettura dei messaggi precedenti…')
   })
 
+  // tw- W1.3: every message is an article (no fold any more: the count is the case's messages).
   it('the feed is a named feed of articles', () => {
     const html = renderView(FeedCase, designScreen.cases[0].model)
     expect(html).toContain('role="feed"')
     expect(html).toContain('aria-label="Thread messages, oldest first"')
-    expect((html.match(/<article /g) ?? []).length).toBe(3)
+    expect((html.match(/<article /g) ?? []).length).toBe(designScreen.cases[0].model.messages.length)
   })
 
   it('the brand wall: Brand Beta’s copy shows nothing of Brand Alpha (B-TH-203)', () => {
@@ -328,23 +331,22 @@ describe('B-TH-255 — the held-mail line by right, the hidden-new line, folded 
     expect(textOf(renderView(FeedCase, { ...base, messages: [], events: [], more: false, hiddenNew: 4 }))).toContain('4 new messages hidden by this view')
   })
 
-  it('a folded erased message says so; a folded message of files only names its files — never an empty line that looks erased', () => {
-    expect(foldedGist({ body: '', files: [], erased: true })).toEqual({ key: 'erased.short' })
-    expect(foldedGist({ body: '', files: [{ id: 'f', name: 'a.jpg', sizeBytes: 1, contentType: 'image/jpeg', status: 'AVAILABLE' }] })).toEqual({ key: 'filesOnly.line', count: 1 })
-    expect(foldedGist({ body: '', files: [], hiddenFiles: 2 })).toEqual({ key: 'filesOnly.line', count: 2 })
-    expect(foldedGist({ body: 'Hello\nthere', files: [] })).toEqual({ text: 'Hello' })
-    const depth = designScreen.cases.find((item) => item.id === 'folded-depth')!
-    const text = textOf(renderView(FeedCase, depth.model))
-    expect(text).toContain('Message removed (privacy request)')
-    expect(text).toContain('2 files')
+  // tw- W1.3: nothing folds — an erased message and one of files only are drawn whole, each in its own words.
+  it('an erased message says so in the feed; a message of files only shows its files — never an empty bubble that looks erased', () => {
+    const depth = designScreen.cases.find((item) => item.id === 'erased-files')!
+    const html = renderView(FeedCase, depth.model)
+    const text = textOf(html)
+    expect(text).toContain('Message removed after a privacy request')
+    expect(text).toContain('collar.jpg')
+    expect(html).toContain('aria-label="Open sizes.pdf"')
   })
 
   it('the B-TH-255 cases draw with no key left; Brand Beta never shows in Brand Alpha’s lines', () => {
     for (const [locale, id, rendered] of everyCase(designScreen)) {
       expect(leftKeys(rendered, ['waiting', 'hidden', 'erased', 'filesOnly']), `${locale} ${id}`).toEqual([])
-      if (id.startsWith('waiting') || id === 'hidden-new' || id === 'folded-depth') expect(scanText(textOf(rendered), BRAND_BETA), `${locale} ${id}`).toEqual([])
+      if (id.startsWith('waiting') || id === 'hidden-new' || id === 'erased-files' || id === 'runs') expect(scanText(textOf(rendered), BRAND_BETA), `${locale} ${id}`).toEqual([])
     }
-    expect(designScreen.cases.map((item) => item.id)).toEqual(expect.arrayContaining(['waiting-review', 'waiting-two', 'waiting-colleague', 'hidden-new', 'folded-depth']))
+    expect(designScreen.cases.map((item) => item.id)).toEqual(expect.arrayContaining(['waiting-review', 'waiting-two', 'waiting-colleague', 'hidden-new', 'erased-files']))
   })
 })
 // ---- end B-TH-255
@@ -499,3 +501,88 @@ describe('F-MS-107 — the History says a stage set by hand, cleared, or ended b
   })
 })
 // ---- end F-MS-107
+
+// ---- tw- W1.3 (10-design §6, §7; D10, P12, P20; R13): no fold, the top sentinel, pills, the unread band, the down button, the flash -----
+import { FLASH_MS, shouldLoadOlder } from './model'
+
+describe('tw- W1.3 — the feed: older pages on scroll, pills, one unread count, the flash', () => {
+  const view = readFileSync(new URL('./view/Feed.tsx', import.meta.url), 'utf8')
+  const css = readFileSync(new URL('./feed.css', import.meta.url), 'utf8')
+  const caseOf = (id: string) => designScreen.cases.find((item) => item.id === id)!.model
+
+  it('the top sentinel asks for the next older page once per page — never while one is read, after a failure (Retry) or with none left', () => {
+    expect(shouldLoadOlder({ more: true, older: 'idle', count: 50, askedAt: null })).toBe(true)
+    expect(shouldLoadOlder({ more: true, older: 'idle', count: 50, askedAt: 50 })).toBe(false)
+    expect(shouldLoadOlder({ more: true, older: 'idle', count: 100, askedAt: 50 })).toBe(true)
+    expect(shouldLoadOlder({ more: true, older: 'loading', count: 100, askedAt: 50 })).toBe(false)
+    expect(shouldLoadOlder({ more: true, older: 'failed', count: 100, askedAt: 50 })).toBe(false)
+    expect(shouldLoadOlder({ more: false, older: 'idle', count: 100, askedAt: null })).toBe(false)
+    expect(view).toContain('new IntersectionObserver(')
+    expect(view).toContain('if (!shouldLoadOlder({ more, older, count: ids.length, askedAt: askedAt.current })) return')
+    expect(view).toContain('askedAt.current = ids.length')
+    expect(view).not.toContain("t('older.show'")
+  })
+
+  it('every row that is not a message is a centred pill; the day pill has no time-zone tooltip; a pin pill says who pinned', () => {
+    const html = renderView(FeedCase, caseOf('conversation'))
+    expect(html).toContain('class="fw-rt-pillrow is-day"')
+    expect(html).not.toContain('title="Days and times')
+    expect(html).toMatch(/class="fw-rt-pill fw-rt-event[^"]*" data-event-ids=/)
+    const rows = feedRows({ messages: [], events: [], pins: [{ messageId: 'm1', at: '2026-11-17T08:11:00.000Z', by: 'Alex Demo' }] })
+    expect(kinds(rows)).toEqual(['day', 'pin'])
+    expect(textOf(renderView(FeedCase, caseOf('runs')))).toContain('Alex Demo pinned a message')
+    expect(textOf(renderView(FeedCase, caseOf('runs'), 'it'))).toContain('Alex Demo ha fissato un messaggio')
+  })
+
+  it('the runs case: one tile and one name for Carlo’s three notes, mine with neither, two hidden floor writers two runs', () => {
+    const html = renderView(FeedCase, caseOf('runs'))
+    expect(textOf(html).match(/Carlo Prova/g)?.length).toBe(2) // once on his run (+ once in Bea's @mention)
+    expect(html.match(/fw-rt-av is-run is-hidden/g)?.length).toBe(2)
+    expect(html).toContain('data-message-id="run-6"')
+    expect(html).toMatch(/class="fw-rt-msg is-ours is-mine is-start" id="message-run-6"/)
+    expect(html).toContain('class="fw-rt-quote fw-rt-tone-')
+  })
+
+  it('ONE unread count (P12): the band "3 unread messages" (200+ said), the round down button with the reader’s own newCount (R13)', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const band = renderView(FeedCase, caseOf('unread'), locale)
+      expect(textOf(band)).toContain(locale === 'en' ? '2 unread messages' : '2 messaggi non letti')
+      expect(band).toContain('data-feed-new')
+      expect(textOf(band)).not.toMatch(/New since your last visit|Nuovo dalla tua ultima visita/)
+      expect(textOf(renderView(FeedCase, caseOf('unread-many'), locale))).toContain(locale === 'en' ? '200+ unread messages' : 'oltre 200 messaggi non letti')
+      const down = renderView(FeedCase, caseOf('unread-bar'), locale)
+      expect(down).toContain(`aria-label="${locale === 'en' ? 'Go to the newest message' : 'Vai al messaggio più recente'}"`)
+      expect(down).toContain('<span class="fw-rt-down-n">8</span>')
+    }
+    expect(renderView(FeedCase, caseOf('conversation'))).not.toContain('fw-rt-down')
+    // The count is the reader's own: what the model says, then what arrived while they were higher up — nobody else's reading.
+    expect(view).toContain('useState(model.newCount ?? 0)')
+    expect(view).toContain('if (line && !atBottom.current) setNewCount(model.newSince ?? 0)')
+    expect(view).toContain('setNewCount((count) => count + arrived)')
+    expect(view).not.toContain('fw-rt-newbar')
+  })
+
+  it('the flash names the row: the whole row of the jumped-to message, FLASH_MS as ONE constant, a still tint with reduced motion', () => {
+    const html = renderView(FeedCase, caseOf('flash'))
+    expect(html.match(/data-flash=""/g)?.length).toBe(1)
+    expect(html).toMatch(/<article class="fw-rt-msg [^"]*" id="message-run-1" data-message-id="run-1"[^>]* data-flash=""/)
+    expect(html).toContain(`--fw-rt-flash-ms:${FLASH_MS}ms`)
+    expect(FLASH_MS).toBe(1500)
+    expect(css).toMatch(/\.fw-rt-msg\[data-flash\]::before \{[^}]*background: var\(--nds-tonal-border\);[^}]*animation: fw-rt-flash var\(--fw-rt-flash-ms\)/)
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.fw-rt-msg\[data-flash\]::before \{\s*animation-name: fw-rt-flash-still;/)
+    // One constant: no other 1500 in the feed's or the card's code and styles.
+    for (const file of ['./view/Feed.tsx', './feed.css', '../card/view/MessageCard.tsx', '../card/card.css']) expect(readFileSync(new URL(file, import.meta.url), 'utf8'), file).not.toMatch(/1500|1\.5s/)
+    expect(renderView(FeedCase, caseOf('conversation'))).not.toContain('data-flash')
+  })
+
+  it('R answers the focused message (its own way); J / K stay; the floating day; nothing yellow in the feed’s own pills', () => {
+    expect(view).toContain("if (key === 'r') {")
+    expect(view).toContain('replyWay(message, model.context) !== null')
+    expect(view).toContain('actions.onReply(message.id)')
+    expect(view).toContain('fw-rt-float')
+    expect(css).not.toMatch(/warning/)
+    expect(css).not.toMatch(/rgba?\(|hsla?\(|color-mix\(|#[0-9a-f]{3,8}\b/i)
+  })
+})
+// ---- end tw- W1.3
+
