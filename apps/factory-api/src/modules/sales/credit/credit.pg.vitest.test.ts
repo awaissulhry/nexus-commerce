@@ -163,6 +163,22 @@ describe('Finance › Receivables › Credit limits (SAL-237)', () => {
     await no('warehouse', 'GET', '/sales/credit/limits', undefined, 403)
   })
 
+  // F-CM-S2 (customer MONEY tab, 13-backend §2.2): the customer's own row (its Money tab), each row walled as before. Only a customer
+  // WITH a limit has a row: a customer without one reads none (never a zero row).
+  it("with partyId: that customer's row only; a customer without a limit: no row; a reader limited to another customer: no row", async () => {
+    const own = await ok('finance', 'GET', `/sales/credit/limits?companyId=${A.companyA}&partyId=${p1}`)
+    expect(own.rows.map((entry: Json) => entry.party.id)).toEqual([p1])
+    expect(own.count).toBe(1)
+    expect(own.tiles.customers).toBe(1)
+    expect((await ok('finance', 'GET', `/sales/credit/limits?companyId=${A.companyA}&partyId=${p3}`)).rows).toEqual([])
+    // Finance over another customer only (p3): p1's row is never sent, asked by its id or not.
+    SESSIONS.financeOfP3 = { ...SESSIONS.finance!, grants: SESSIONS.finance!.grants.map((grant) => ({ ...grant, parties: [p3] })) }
+    expect((await ok('financeOfP3', 'GET', `/sales/credit/limits?companyId=${A.companyA}&partyId=${p1}`)).rows).toEqual([])
+    expect((await ok('financeOfP3', 'GET', `/sales/credit/limits?companyId=${A.companyA}`)).rows.map((entry: Json) => entry.party.id)).not.toContain(p1)
+    // Not a customer's id: refused by the contract.
+    await no('finance', 'GET', '/sales/credit/limits?partyId=not-an-id', undefined, 400)
+  })
+
   it('changes a limit with its reason (logged); refuses sales, a bad amount, no reason, a stale version', async () => {
     await no('sales', 'PUT', `/sales/credit/limits/${p1}/${A.companyA}`, { version: termsA.version, amount: 1, currency: 'EUR', reason: 'x' }, 403)
     expect(paths(await no('finance', 'PUT', `/sales/credit/limits/${p1}/${A.companyA}`, { version: termsA.version, amount: -5, currency: 'EUR', reason: 'x' }, 400))).toEqual(['body/amount'])

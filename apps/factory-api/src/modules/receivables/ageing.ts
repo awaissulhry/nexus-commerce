@@ -1,7 +1,7 @@
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import type { AgeingQuery } from '@nexus/factory-domain/receivables/contracts'
-import { AGEING_BUCKETS, addToAgeing, BUCKET_WORDS, daysBetween, emptyAgeing, firstOpenDueDate, mergeAgeing, type AgeingTotals } from '@nexus/factory-domain/receivables/ledger'
+import { AGEING_BUCKETS, addToAgeing, bucketOf, BUCKET_WORDS, daysBetween, emptyAgeing, firstOpenDueDate, mergeAgeing, type AgeingTotals } from '@nexus/factory-domain/receivables/ledger' // F-CM-S7: + bucketOf
 import { RECEIVABLES_VIEW } from '@nexus/factory-domain/receivables/permissions'
 import type { CommandCaller } from '../../core/command'
 import { mayOn, officeContextOf, openInvoices, receivablesClock, today } from './store'
@@ -27,6 +27,8 @@ interface Group {
   readonly currency: string
   readonly totals: AgeingTotals
   invoices: number
+  /** F-CM-S7: the invoices with an open instalment past its due day (the overdue's own rule, bucketOf): a count, not money. */
+  lateInvoices: number
   oldestDueDate: string | null
 }
 
@@ -38,9 +40,11 @@ export async function ageing(caller: CommandCaller, query: AgeingQuery) {
     const groups = new Map<string, Group>()
     for (const row of rows) {
       const key = `${row.companyId}|${row.partyId}|${row.currency}`
-      const group = groups.get(key) ?? { companyId: row.companyId, partyId: row.partyId, currency: row.currency, totals: emptyAgeing(), invoices: 0, oldestDueDate: null }
+      const group = groups.get(key) ?? { companyId: row.companyId, partyId: row.partyId, currency: row.currency, totals: emptyAgeing(), invoices: 0, lateInvoices: 0, oldestDueDate: null }
       addToAgeing(group.totals, row.instalments, asOf)
       group.invoices++
+      // F-CM-S7: late = an open instalment in an overdue bucket (the same rule that ages its amount as overdue).
+      if (row.instalments.some((instalment) => instalment.open > 0 && bucketOf(instalment.dueDate, asOf) !== 'NOT_DUE')) group.lateInvoices++
       const due = firstOpenDueDate(row.instalments)
       if (due && (group.oldestDueDate === null || due < group.oldestDueDate)) group.oldestDueDate = due
       groups.set(key, group)
@@ -101,6 +105,7 @@ export async function ageing(caller: CommandCaller, query: AgeingQuery) {
           overdue: asMoney('price', group.totals.overdue),
           buckets: asMoney('price', { ...group.totals.buckets }),
           invoices: group.invoices,
+          lateInvoices: group.lateInvoices, // F-CM-S7
           oldestDueDate: group.oldestDueDate,
           daysLate: lateDays !== null && lateDays > 0 ? lateDays : null,
           lastPaymentOn: lastPayment ? lastPayment.toISOString().slice(0, 10) : null,

@@ -82,6 +82,7 @@ export async function listInvoices(caller: CommandCaller, query: ListInvoicesQue
         paymentTerms: true,
         creditOfId: true,
         salesOrderId: true,
+        salesOrder: { select: { number: true } }, // F-CM-S8: the order's number (its row says "of SEED-SO-0002")
         version: true,
         createdAt: true,
         buyer: { select: { legalName: true } },
@@ -119,6 +120,7 @@ export async function listInvoices(caller: CommandCaller, query: ListInvoicesQue
         depositRequestId: row.depositRequestId,
         creditOfId: row.creditOfId,
         salesOrderId: row.salesOrderId,
+        orderNumber: row.salesOrder?.number ?? null, // F-CM-S8
         filesPending: filesPending(row),
         paidAmount: asMoney('price', paidAmount),
         creditedAmount: asMoney('price', creditedAmount),
