@@ -1,0 +1,478 @@
+import { WARNING_ACTION, type NextAction } from '../../../../parties/_shared/model'
+import { openAfterSales } from '../../money/model'
+import { requestsDoorOf, tileOf, type TileRead } from '../use-customer-work'
+import { valueOf as tileValueOf } from '../work-band'
+import { complaintDoor, depositDoor, moneyDoor, ordersDoor, projectsDoor, promiseDoor, quotesDoor, receivablesDoor, repairsDoor, sampleDoor, samplesDoor, tabDoor, termsDoor, workOrdersDoor } from './doors'
+import { boardNumbersOf, boardOf, headlineOf, nextPromiseOf } from './headline'
+import { overAmountsOf, stepDoorOf, stripsOf } from './strips'
+import {
+  amountOf,
+  dayOf,
+  daysBetween,
+  daySay,
+  depth,
+  glanceOf,
+  joined,
+  linkDoor,
+  ov,
+  readyOf,
+  say,
+  stepDoor,
+  text,
+  type BandState,
+  type CustomerOverviewModel,
+  type DatesCard,
+  type FactRow,
+  type FactsCard,
+  type LabelledDoor,
+  type LinkedCard,
+  type OverviewDoor,
+  type OverviewInput,
+  type OverviewRow,
+  type Param,
+  type PeopleCard,
+  type RequestGroup,
+  type RequestRow,
+  type RequestsCard,
+  type RowPart,
+  type RowTag,
+  type Say,
+} from './model'
+
+/**
+ * F-CO-101 (customer page › Overview; 10-design §3–§8; lead settles S5, S9, S24, S25, S28) — the cards under the standing, as rows:
+ * People (their contacts; a rider's team), Next dates (the next one of each kind, a late one first), Requests & changes (grouped by
+ * who waits: the Work band's own counts, `tileOf`, and the page's ONE count read), Linked records (one row per kind whose VALUE names
+ * the next one) and Customer facts. Pure: a row is words, a tone and a door; the view draws it with the kit's parts.
+ *
+ * The orders' and quotes' numbers are the board's and the count reads' own (the API's rules, walled to the customer): this file
+ * walks a list only to find the NEXT or the OLDEST one of a kind (a date and a name, never a count of orders or quotes).
+ */
+
+const href = (address: string): OverviewDoor => ({ kind: 'href', href: address })
+
+/** The item with the earliest day among those that have one (null: none has). */
+function earliestOf<T>(items: readonly T[], at: (item: T) => string | null | undefined): { readonly item: T; readonly at: string } | null {
+  let best: { item: T; at: string } | null = null
+  for (const item of items) {
+    const when = at(item)
+    if (when && (best === null || when < best.at)) best = { item, at: when }
+  }
+  return best
+}
+
+// ---- card 2: the bigger picture ----------------------------------------------------------------------------------------------
+
+/** The band, or — for a customer with no order at all — one quiet line and the "Before an order" doors; `off` without orders.view. */
+export function bandStateOf(input: Pick<OverviewInput, 'can' | 'reads'>): BandState {
+  const board = boardOf(input)
+  if (board.status === 'off') return 'off'
+  return board.status === 'ready' && boardNumbersOf(board.value).total === 0 ? 'none' : 'band'
+}
+
+// ---- card 3: People ----------------------------------------------------------------------------------------------------------
+
+/**
+ * The customer's side: who receives orders and who receives invoices — each person ONCE (both roles: one row that says so); nobody:
+ * "Nobody yet" with Add contact (parties.manage). A rider's team when the glance sends it. Our own people (the production
+ * supervisor, the backup, the factory designer) stand in today's card under this one until its rows land here.
+ */
+export function peopleOf(input: OverviewInput): PeopleCard {
+  const { party, can, prefix } = input
+  const id = party.id
+  const rows: OverviewRow[] = []
+  let orders = false
+  let invoices = false
+  // The contacts for orders first (a person with both roles is listed once, here), then those for invoices only.
+  for (const pass of ['ORDERS', 'INVOICES'] as const) {
+    for (const contact of party.contacts) {
+      if (contact.status !== 'ACTIVE') continue
+      const forOrders = contact.roles.includes('ORDERS')
+      const forInvoices = contact.roles.includes('INVOICES')
+      if (pass === 'ORDERS' ? !forOrders : forOrders || !forInvoices) continue
+      orders ||= forOrders
+      invoices ||= forInvoices
+      rows.push({
+        key: `contact-${contact.id}`,
+        label: ov(forOrders && forInvoices ? 'people.contactBoth' : forOrders ? 'people.contactOrders' : 'people.contactInvoices'),
+        parts: [{ say: text(contact.name) }],
+        ...(contact.email ? { under: [text(contact.email)] } : {}),
+      })
+    }
+  }
+  const add: LabelledDoor[] = can.manage ? [stepDoor('contact', say('step.action.contact'), href(tabDoor(prefix, id, 'people')), party.status === 'ARCHIVED' ? say('held.archived') : null)] : []
+  const nobody = (key: string, label: string): OverviewRow => ({ key, label: ov(label), parts: [{ say: ov('people.nobody') }], ...(add.length > 0 ? { doors: add } : {}) })
+  if (!orders && !invoices) rows.push(nobody('nobody', 'people.contactBoth'))
+  else if (!orders) rows.unshift(nobody('nobody-orders', 'people.contactOrders'))
+  else if (!invoices) rows.push(nobody('nobody-invoices', 'people.contactInvoices'))
+  // A rider: its team (named only when the glance sends it: the reader may see that customer).
+  const team = glanceOf(input.glance)?.team ?? null
+  if (team) rows.push({ key: 'team', label: depth('team.title'), parts: [{ say: text(team.name), door: href(tabDoor(prefix, team.id, 'overview')) }] })
+  return { rows, head: linkDoor('people', say('customers.tab.people'), tabDoor(prefix, id, 'people')) }
+}
+
+// ---- card 4: Next dates ------------------------------------------------------------------------------------------------------
+
+/** A date's tag: late by N days (danger), today (warning), in N days (neutral). */
+export function dayTagOf(day: string, today: string): RowTag {
+  const days = daysBetween(today, day)
+  if (days < 0) return { say: ov('dates.tag.daysLate', { count: -days }), tone: 'danger' }
+  if (days === 0) return { say: say('customers-list:prom.today'), tone: 'warning' }
+  return { say: say('customers-list:prom.in', { days }), tone: 'neutral' }
+}
+
+interface DatedRow {
+  readonly row: OverviewRow
+  /** The row's day (null: none — it stands last; empty: before every date); `late` rows stand first. */
+  readonly at: string | null
+  readonly late: boolean
+}
+
+/**
+ * The next date of each kind, a late one first, then the nearest first (S5: short labels, the VALUE is the door, "n without a
+ * promise date" as plain words in the next-promise row; S25: "next promise"). null: no date at all and nothing still read — the
+ * card is LEFT OUT (S24). A failed glance is never silent: its rows are left out and one line says so.
+ */
+export function datesOf(input: OverviewInput): DatesCard | null {
+  const { party, can, prefix, today } = input
+  const id = party.id
+  const dated: DatedRow[] = []
+  const put = (row: OverviewRow, at: string | null, late = at !== null && at < today) => dated.push({ row, at, late })
+  const named = (number: string, day: string): Say => joined([text(number), dayOf(day)])
+  let reading = false
+
+  // The board's late orders, and the next promise over every company (this customer's row of the joined read).
+  const board = boardOf(input)
+  if (board.status === 'reading') reading = true
+  const numbers = board.status === 'ready' ? boardNumbersOf(board.value) : null
+  if (numbers && numbers.late > 0) {
+    // The late orders stand first of all (no day of their own: the empty day sorts before every date).
+    put({ key: 'late', label: say('customers.work.tile.late'), parts: [{ say: ov('dates.late', { count: numbers.late }), door: href(ordersDoor(prefix, id, { kind: 'late' })) }], tag: { say: ov('dates.tag.late'), tone: 'danger' } }, '', true)
+  }
+  if (input.standing.status === 'reading') reading = true
+  const glance = glanceOf(input.glance)
+  if (input.glance.status === 'loading') reading = true
+  if (numbers && numbers.open > 0 && readyOf(input.standing)) {
+    const next = nextPromiseOf(input)
+    const without = glance?.promises?.noPromise ?? 0
+    const quiet: RowPart[] = without > 0 ? [{ say: depth('promises.without', { count: without }), quiet: true }] : []
+    if (next !== null) put({ key: 'promise', label: say('customers-list:col.nextPromise'), parts: [{ say: daySay(next), door: href(promiseDoor(prefix, id)) }, ...quiet], tag: dayTagOf(next, today) }, next)
+    else put({ key: 'promise', label: say('customers-list:col.nextPromise'), parts: [{ say: depth('promises.noneComing'), door: href(promiseDoor(prefix, id)) }, ...quiet] }, null)
+  }
+
+  // The next deposit an open order waits for (the open orders' own read: orders.view).
+  const deposits = can.orders ? input.money.orders : null
+  if (deposits && deposits.items === null && !deposits.problem) reading = true
+  const deposit = deposits?.items ? earliestOf(deposits.items, (order) => (order.deposit.state === 'OPEN' ? order.deposit.dueDate : null)) : null
+  if (deposit) put({ key: 'deposit', label: ov('dates.deposit'), parts: [{ say: named(deposit.item.number, deposit.at), door: href(depositDoor(prefix, id, can.moneyTab)) }], tag: dayTagOf(deposit.at, today) }, deposit.at)
+
+  // The next sample round due (the glance sends them earliest due first; withheld without the samples right).
+  const sample = glance?.samples ? earliestOf(glance.samples.rows, (round) => round.dueDate) : null
+  if (sample) put({ key: 'sample', label: ov('dates.sample'), parts: [{ say: named(sample.item.number, sample.at), door: href(sampleDoor(prefix, sample.item.id)) }], tag: dayTagOf(sample.at, today) }, sample.at)
+
+  // What we asked of the customer (partners.view) and the open tasks: their windows open on the Work tab.
+  const asks = input.reads.asks
+  if (asks.status === 'reading') reading = true
+  const ask = asks.status === 'ready' ? earliestOf(asks.value.items, (item) => (item.status === 'OPEN' ? item.dueAt : null)) : null
+  if (ask) put({ key: 'ask', label: ov('dates.ask'), parts: [{ say: ov('dates.titled', { title: ask.item.words, date: dayOf(ask.at) }), door: { kind: 'window', window: 'customer' } }], tag: dayTagOf(ask.at, today) }, ask.at)
+  const tasks = input.reads.tasks
+  if (tasks.status === 'reading') reading = true
+  const task = tasks.status === 'ready' ? earliestOf(tasks.value.items, (item) => item.dueDate) : null
+  if (task) put({ key: 'task', label: ov('dates.task'), parts: [{ say: ov('dates.titled', { title: task.item.title, date: dayOf(task.at) }), door: { kind: 'window', window: 'tasks' } }], tag: dayTagOf(task.at, today) }, task.at)
+
+  // The next answer a complaint waits for (quality.complaints.view): its door is the NAMED complaint's own page (S28).
+  const complaints = can.complaints ? input.money.complaints : null
+  if (complaints && complaints.items === null && !complaints.problem) reading = true
+  const complaint = complaints?.items ? earliestOf(openAfterSales([], complaints.items).complaints, (entry) => entry.answerDueOn) : null
+  if (complaint) put({ key: 'complaint', label: ov('dates.complaint'), parts: [{ say: named(complaint.item.number, complaint.at), door: href(complaintDoor(prefix, complaint.item.id)) }], tag: dayTagOf(complaint.at, today) }, complaint.at)
+
+  // Until when the VIES proof counts (a fact of the party: no door).
+  const vies = party.vies
+  if (vies.state === 'VALID' && vies.validUntil) put({ key: 'vies', label: ov('dates.vies'), parts: [{ say: daySay(vies.validUntil) }] }, vies.validUntil, false)
+
+  const rows = [...dated].sort((a, b) => Number(b.late) - Number(a.late) || (a.at ?? '9999').localeCompare(b.at ?? '9999')).map((entry) => entry.row)
+  const failed = input.glance.status === 'error' ? ov('dates.failed') : null
+  if (rows.length === 0 && !reading && failed === null) return null
+  return { rows, reading: rows.length === 0 && reading, failed }
+}
+
+// ---- card 5: Requests & changes ----------------------------------------------------------------------------------------------
+
+const counted = (read: TileRead): boolean => read.status === 'ready' && (read.count > 0 || read.more)
+
+/**
+ * What waits, grouped by who waits — the SAME counts as the Work band's chips (`tileOf`) and the page's ONE count read; each row
+ * its count, the oldest one's age and the door that opens exactly those. A row or a group with 0 is left out; nothing waits: null —
+ * the card is LEFT OUT (S24). While a read is out: the reading state; a failed read: the failed state with Try again.
+ */
+export function requestsOf(input: OverviewInput): RequestsCard | null {
+  const { party, can, prefix, reads } = input
+  const id = party.id
+  const customer = party.tradeName ?? party.legalName
+  const tile = (kind: 'requests' | 'replies' | 'tasks'): TileRead | null => (reads[kind].status === 'off' ? null : tileOf(kind, reads))
+  const requests = tile('requests')
+  const replies = tile('replies')
+  const tasks = tile('tasks')
+  const waiting = reads.asks.status === 'off' && reads.requests.status === 'off' && reads.board.status === 'off' ? null : tileOf('customer', reads)
+  const page = input.counts
+  const before = page.counts
+  const toAnswer = before?.groups.TO_ANSWER ?? null
+  const orderWaits = before?.groups.ORDER_WAITS ?? null
+  const tiles = [requests, replies, tasks, waiting].flatMap((read) => (read ? [read] : []))
+  if (tiles.length === 0 && before !== null && toAnswer === null && orderWaits === null) return null
+  if (tiles.some((read) => read.status === 'reading') || (before === null && !page.failed)) return { state: 'reading', groups: [] }
+  if (tiles.some((read) => read.status === 'failed') || page.failed) return { state: 'failed', groups: [] }
+
+  // The Work tab's own doors (it exists only with orders.view): the review window, the customer's thread, the two windows.
+  const work = (key: string, door: OverviewDoor): LabelledDoor | null => (can.orders ? { key, label: say('customers.tab.work'), arrow: true, door, held: null } : null)
+  const quotes = (key: string, group: 'TO_ANSWER' | 'ORDER_WAITS'): LabelledDoor | null => (can.quotesTab ? linkDoor(key, say('customers.tab.quotes'), quotesDoor(prefix, id, group)) : null)
+  const asked = readyOf(reads.requests)?.items ?? []
+  const us: RequestRow[] = []
+  if (requests && counted(requests)) {
+    const oldest = earliestOf(asked, (request) => (request.waitingOn === 'US' ? request.askedAt : null))
+    us.push({ key: 'requests', words: say('customers.work.tile.requests'), count: tileValueOf(requests), since: oldest?.at ?? null, door: work('requests', href(ordersDoor(prefix, id, { kind: 'requests', firstId: requestsDoorOf(asked).ids[0] ?? null }))) })
+  }
+  if (replies && counted(replies)) {
+    const oldest = earliestOf(readyOf(reads.replies)?.rows ?? [], (row) => row.waiting.since)
+    us.push({ key: 'replies', words: say('customers.work.tile.replies'), count: tileValueOf(replies), since: oldest?.at ?? null, door: work('replies', href(ordersDoor(prefix, id, { kind: 'replies' }))) })
+  }
+  if (toAnswer !== null && toAnswer > 0) us.push({ key: 'toAnswer', words: say('before-order:group.TO_ANSWER'), count: String(toAnswer), since: null, door: quotes('toAnswer', 'TO_ANSWER') })
+  if (orderWaits !== null && orderWaits > 0) us.push({ key: 'orderWaits', words: say('before-order:group.ORDER_WAITS'), count: String(orderWaits), since: null, door: quotes('orderWaits', 'ORDER_WAITS') })
+  const them: RequestRow[] = []
+  if (waiting && counted(waiting)) {
+    const ours = earliestOf(readyOf(reads.asks)?.items ?? [], (item) => (item.status === 'OPEN' ? item.createdAt : null))
+    const countered = earliestOf(asked, (request) => (request.waitingOn === 'CUSTOMER' ? request.askedAt : null))
+    const since = ours && countered ? (ours.at < countered.at ? ours.at : countered.at) : (ours?.at ?? countered?.at ?? null)
+    them.push({ key: 'customer', words: say('customers.work.tile.customer', { customer }), count: tileValueOf(waiting), since, door: work('customer', { kind: 'window', window: 'customer' }) })
+  }
+  const todo: RequestRow[] = []
+  if (tasks && counted(tasks)) {
+    const oldest = earliestOf(readyOf(reads.tasks)?.items ?? [], (item) => item.createdAt)
+    todo.push({ key: 'tasks', words: say('customers.work.tile.tasks'), count: tileValueOf(tasks), since: oldest?.at ?? null, door: work('tasks', { kind: 'window', window: 'tasks' }) })
+  }
+
+  // A group's number: its rows added up ("100+" when one of them is past a capped read).
+  const total = (rows: readonly RequestRow[]): string => {
+    let sum = 0
+    let more = false
+    for (const row of rows) {
+      sum += Number.parseInt(row.count, 10) || 0
+      if (row.count.endsWith('+')) more = true
+    }
+    return `${sum}${more ? '+' : ''}`
+  }
+  const groups: RequestGroup[] = []
+  if (us.length > 0) groups.push({ key: 'us', title: say('customers.work.strip.us'), count: total(us), rows: us })
+  if (them.length > 0) groups.push({ key: 'them', title: say('customers.work.strip.them', { customer }), count: total(them), rows: them })
+  if (todo.length > 0) groups.push({ key: 'tasks', title: say('customers.work.strip.tasks'), count: total(todo), rows: todo })
+  return groups.length > 0 ? { state: 'ready', groups } : null
+}
+
+// ---- card 6: Linked records --------------------------------------------------------------------------------------------------
+
+/**
+ * One row per kind — its label, then a value that is the door: the count and its state in words; samples, repairs, returns and
+ * complaints name the next (or the oldest) one (S9). A kind without its right is left out; a kind with nothing joins ONE quiet line
+ * ("None yet: …"); a failed read says "Could not be read" in its row.
+ */
+export function linkedOf(input: OverviewInput): LinkedCard {
+  const { party, can, prefix } = input
+  const id = party.id
+  const customer = party.tradeName ?? party.legalName
+  const rows: OverviewRow[] = []
+  const none: Say[] = []
+  const kind = (key: string, label: Say, parts: readonly RowPart[]) => {
+    if (parts.length > 0) rows.push({ key, label, parts })
+    else none.push(label)
+  }
+  const stated = (key: string, label: Say, state: 'reading' | 'unread') => rows.push({ key, label, parts: [], state })
+  const through = (address: string | null): Pick<RowPart, 'door'> => (address ? { door: href(address) } : {})
+
+  // Orders: the board's numbers, then this customer's row of the joined read (customer-urgent, Priority Top / High).
+  const board = boardOf(input)
+  const ordersLabel = ov('linked.orders')
+  if (board.status === 'reading') stated('orders', ordersLabel, 'reading')
+  else if (board.status === 'failed') stated('orders', ordersLabel, 'unread')
+  else if (board.status === 'ready') {
+    const numbers = boardNumbersOf(board.value)
+    const parts: RowPart[] = []
+    if (numbers.total > 0) {
+      parts.push({ say: ov('linked.openOf', { open: numbers.open, total: numbers.total }), door: href(ordersDoor(prefix, id, { kind: 'open' })) })
+      if (numbers.late > 0) parts.push({ say: depth('promises.late', { count: numbers.late }), door: href(ordersDoor(prefix, id, { kind: 'late' })) })
+      const standing = readyOf(input.standing)
+      if (standing) {
+        if (standing.customerUrgent.count > 0) parts.push({ say: joined([say('orders-sheet:urgency.bare'), standing.customerUrgent.count], ' '), door: href(ordersDoor(prefix, id, { kind: 'customerUrgent' })) })
+        if (standing.priority.top > 0) parts.push({ say: ov('linked.priorityTop', { count: standing.priority.top }), door: href(ordersDoor(prefix, id, { kind: 'priority', level: 'URGENT' })) })
+        if (standing.priority.high > 0) parts.push({ say: ov('linked.priorityHigh', { count: standing.priority.high }), door: href(ordersDoor(prefix, id, { kind: 'priority', level: 'HIGH' })) })
+      }
+    }
+    kind('orders', ordersLabel, parts)
+  }
+
+  // Quotes and Incoming: the page's ONE count read (a part the reader has no right for is null: left out).
+  const quotesLabel = ov('linked.quotes')
+  const incomingLabel = ov('linked.incoming')
+  const before = input.counts.counts
+  if (before === null) {
+    if (can.quotesTab) stated('quotes', quotesLabel, input.counts.failed ? 'unread' : 'reading')
+  } else {
+    const group = (name: 'WRITING' | 'TO_ANSWER' | 'OPEN_QUOTES' | 'ORDER_WAITS'): Pick<RowPart, 'door'> => through(can.quotesTab ? quotesDoor(prefix, id, name) : null)
+    if (before.openQuotes !== null) {
+      const parts: RowPart[] = []
+      if (before.openQuotes > 0) parts.push({ say: ov('linked.open', { count: before.openQuotes }), ...group('OPEN_QUOTES') })
+      const waits = before.groups.ORDER_WAITS ?? 0
+      if (waits > 0) parts.push({ say: say('customers.work.band.before.orderWaits', { count: waits }), ...group('ORDER_WAITS') })
+      kind('quotes', quotesLabel, parts)
+    }
+    const toAnswer = before.groups.TO_ANSWER
+    const drafts = before.groups.WRITING
+    if (toAnswer !== null || drafts !== null) {
+      const parts: RowPart[] = []
+      if (toAnswer !== null && toAnswer > 0) parts.push({ say: say('customers.work.band.before.toAnswer', { count: toAnswer }), ...group('TO_ANSWER') })
+      if (drafts !== null && drafts > 0) parts.push({ say: say('customers.work.band.before.drafts', { count: drafts }), ...group('WRITING') })
+      kind('incoming', incomingLabel, parts)
+    }
+  }
+
+  // Sample rounds and repairs: the glance's own counts (null: withheld — left out), the next / the oldest one named.
+  const glance = glanceOf(input.glance)
+  if (glance?.samples) {
+    const next = earliestOf(glance.samples.rows, (round) => round.dueDate)
+    const said: Param[] = [ov('linked.inProgress', { count: glance.samples.count })]
+    if (next) said.push(next.at.slice(0, 10) === input.today ? ov('linked.nextDueToday', { number: next.item.number }) : ov('linked.nextDue', { number: next.item.number, date: dayOf(next.at) }))
+    kind('samples', ov('linked.samples'), glance.samples.count > 0 ? [{ say: joined(said), door: href(samplesDoor(prefix, id)) }] : [])
+  }
+  if (glance?.repairs) {
+    const oldest = earliestOf(glance.repairs.rows, (repair) => repair.createdAt)
+    const said: Param[] = [ov('linked.inProgress', { count: glance.repairs.count })]
+    if (oldest) said.push(ov('linked.oldestOpened', { number: oldest.item.number, date: dayOf(oldest.at) }))
+    kind('repairs', ov('linked.repairs'), glance.repairs.count > 0 ? [{ say: joined(said), door: href(repairsDoor(prefix, party.code)) }] : [])
+  }
+
+  // Returns and complaints: the customer's own after-sales reads (the Money lane's rule for "open").
+  if (can.returns) {
+    const label = ov('linked.returns')
+    const read = input.money.returns
+    if (read.items === null) stated('returns', label, read.problem ? 'unread' : 'reading')
+    else {
+      const open = openAfterSales(read.items, []).returns
+      const oldest = earliestOf(open, (entry) => entry.requestedAt)
+      const said: Param[] = [ov('linked.open', { count: open.length })]
+      if (oldest) said.push(ov('linked.oldestAsked', { number: oldest.item.number, date: dayOf(oldest.at) }))
+      kind('returns', label, open.length > 0 ? [{ say: joined(said), ...through(input.money.returnsHref) }] : [])
+    }
+  }
+  if (can.complaints) {
+    const label = ov('linked.complaints')
+    const read = input.money.complaints
+    if (read.items === null) stated('complaints', label, read.problem ? 'unread' : 'reading')
+    else {
+      const open = openAfterSales([], read.items).complaints
+      const next = earliestOf(open, (entry) => entry.answerDueOn)
+      const said: Param[] = [ov('linked.open', { count: open.length })]
+      if (next) said.push(ov('linked.nextAnswer', { number: next.item.number, date: dayOf(next.at) }))
+      // S28: the door is the NAMED complaint's own page (the next to answer, else the newest open one).
+      const named = next?.item ?? open[0] ?? null
+      kind('complaints', label, named ? [{ say: joined(said), door: href(complaintDoor(prefix, named.id)) }] : [])
+    }
+  }
+
+  // Projects (threads.read), then a team's riders and the measurement profiles (only when there are some).
+  if (input.projects) kind('projects', ov('linked.projects'), input.projects.all > 0 ? [{ say: ov('linked.openOf', { open: input.projects.open, total: input.projects.all }), door: href(projectsDoor(prefix, id)) }] : [])
+  if (glance?.riders && glance.riders.count > 0) rows.push({ key: 'riders', label: depth('riders.title'), parts: [{ say: text(String(glance.riders.count)), door: href(tabDoor(prefix, id, 'people')) }] })
+  if (glance?.profiles && glance.profiles.count > 0) rows.push({ key: 'profiles', label: depth('profiles.title'), parts: [{ say: text(String(glance.profiles.count)), door: href(tabDoor(prefix, id, 'people')) }] })
+
+  // Plain doors with no count read.
+  const quiet: LabelledDoor[] = []
+  if (can.workorders) quiet.push({ key: 'workOrders', label: say('customers.band.workOrders', { customer }), arrow: false, door: href(workOrdersDoor(prefix, id)), held: null })
+  if (can.receivables) quiet.push(linkDoor('receivables', ov('linked.receivables'), receivablesDoor(prefix, id)))
+  return { rows, none, quiet }
+}
+
+// ---- card 7: Customer facts --------------------------------------------------------------------------------------------------
+
+/** The warnings that block nothing and are said nowhere else on the tab (VIES is a strip; the orders contact is People's). */
+const TO_COMPLETE: readonly string[] = ['FISCAL_DRAWER', 'TAX_COUNTRY_DIFFERS', 'NO_DEFAULT_BILL_TO', 'NO_DEFAULT_SHIP_TO']
+
+/**
+ * The facts found nowhere else on the page (the band above says the code, the country and the roles): names, kind · language,
+ * payment · currency, the tax identity in force, the requirements in force, the credit (only when the read carries it), since
+ * when, what is still to complete (each with today's own step), the office note. ONE Edit in the head (today's Edit window).
+ */
+export function factsOf(input: OverviewInput): FactsCard {
+  const { party, can, prefix } = input
+  const id = party.id
+  const archived = party.status === 'ARCHIVED'
+  const held = archived ? say('held.archived') : null
+  const rows: FactRow[] = []
+  rows.push({ key: 'legalName', label: say('field.legalName'), parts: [{ say: text(party.legalName) }] })
+  rows.push({ key: 'tradeName', label: say('field.tradeName'), parts: [{ say: text(party.tradeName ?? '—') }], empty: party.tradeName === null })
+  rows.push({ key: 'kind', label: ov('facts.kindLanguage'), parts: [{ say: joined([say(`kind.${party.kind}`), { language: party.language }]) }] })
+  rows.push({ key: 'payment', label: ov('facts.payment'), parts: [{ say: joined([text(party.paymentTerms?.trim() || '—'), text(party.currency)]) }] })
+
+  // The tax identity in force: a door to its part of Terms & requirements.
+  const identity = party.taxIdentities.find((entry) => entry.current) ?? null
+  const identityDoor = href(termsDoor(prefix, id, 'identity'))
+  if (identity) {
+    const said: Param[] = [say(`taxMode.${identity.taxMode}`)]
+    if (identity.vatNumber) said.push(ov('facts.vat', { number: identity.vatNumber }))
+    if (identity.fiscalCode && identity.fiscalCode !== identity.vatNumber) said.push(text(identity.fiscalCode))
+    if (identity.sdiRecipientCode) said.push(ov('facts.sdi', { code: identity.sdiRecipientCode }))
+    if (identity.pec) said.push(ov('facts.pec', { pec: identity.pec }))
+    rows.push({ key: 'identity', label: say('identity.title'), parts: [{ say: joined(said), door: identityDoor }], under: [ov('facts.validFrom', { date: dayOf(identity.validFrom) })] })
+  } else rows.push({ key: 'identity', label: say('identity.title'), parts: [{ say: say('list.noIdentity'), door: identityDoor }] })
+
+  // The requirements in force and the credit: the glance's (the credit part is absent without sales.credit.view).
+  const glance = glanceOf(input.glance)
+  if (glance) {
+    const count = glance.requirements.count
+    rows.push(
+      count > 0
+        ? { key: 'requirements', label: say('customers.requirementsLabel'), parts: [{ say: text(String(count)), door: href(termsDoor(prefix, id, 'requirements')) }] }
+        : { key: 'requirements', label: say('customers.requirementsLabel'), parts: [{ say: depth('reqSide.none') }], empty: true },
+    )
+    const credit = glance.credit
+    if (credit) {
+      const door: Pick<RowPart, 'door'> = can.moneyTab ? { door: href(moneyDoor(prefix, id, 'credit')) } : {}
+      const over = credit.state === 'OVER' ? overAmountsOf(credit) : null
+      const free = credit.state === 'WITHIN' && credit.currency !== null && typeof credit.available === 'number' && typeof credit.limit === 'number' ? { amount: amountOf(credit.available, credit.currency), limit: amountOf(credit.limit, credit.currency) } : null
+      const words: Say =
+        credit.state === 'NONE' ? say('customer-money:tab.noLimit') : credit.state === 'OVER' ? (over ? ov('strip.overLimit', { amount: over.over, limit: over.limit }) : depth('credit.over')) : free ? ov('facts.creditFree', free) : depth('credit.within')
+      rows.push({ key: 'credit', label: say('customer-money:tab.credit'), parts: [{ say: words, ...(credit.state === 'NONE' ? {} : door) }] })
+    }
+  }
+  rows.push({ key: 'since', label: ov('facts.since'), parts: [{ say: ov('facts.sinceValue', { date: dayOf(party.createdAt), changed: dayOf(party.updatedAt) }) }] })
+
+  // To complete: one wide row per warning, ONE button per kind of step (three address warnings get one "Add address").
+  const seen = new Set<NextAction>()
+  for (const warning of party.warnings) {
+    if (warning.blocksInvoice || !TO_COMPLETE.includes(warning.code)) continue
+    const action = WARNING_ACTION[warning.code]
+    const door = can.manage && !seen.has(action) ? stepDoorOf(action, prefix, id, held) : null
+    seen.add(action)
+    rows.push({ key: `complete-${warning.code}`, label: ov('facts.toComplete'), parts: [{ say: say(`warning.${warning.code}`) }], wide: true, ...(door ? { door } : {}) })
+  }
+
+  // The office note, the whole row (shown even when empty: a note that can be typed is shown somewhere).
+  const note = party.internalNote?.trim() ?? ''
+  rows.push({ key: 'note', label: say('field.internalNote'), labelTag: ov('facts.noteTag'), parts: [{ say: note !== '' ? text(note) : ov('facts.noNote') }], wide: true, empty: note === '' })
+
+  return { rows, edit: can.manage ? stepDoor('edit', say('common.edit'), { kind: 'act', act: 'edit' }, held) : null }
+}
+
+// ---- the whole tab -----------------------------------------------------------------------------------------------------------
+
+/** The Overview as it is drawn, from the reads the page already holds (the container builds it; a design case hands made-up reads). */
+export function overviewOf(input: OverviewInput): CustomerOverviewModel {
+  return {
+    customer: input.party.tradeName ?? input.party.legalName,
+    headline: headlineOf(input),
+    strips: stripsOf(input),
+    band: bandStateOf(input),
+    people: peopleOf(input),
+    dates: datesOf(input),
+    requests: requestsOf(input),
+    linked: linkedOf(input),
+    facts: factsOf(input),
+  }
+}
