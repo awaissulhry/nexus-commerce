@@ -119,7 +119,8 @@ export const SIDES: Readonly<Record<Side, SideConfig>> = {
 // opens the thread); a supplier's Contacts → Overview & contacts, Questionnaire → Documents & questionnaire, Activity → the overview.
 export const MERGED_TABS: Readonly<Record<Side, Readonly<Record<string, RecordTab>>>> = Object.freeze({
   // F-SA-271: + Quotes & orders → Work (All orders), Addresses & contacts → People & addresses.
-  customers: Object.freeze({ orders: 'work', addresses: 'people', tax: 'terms', requirements: 'terms', documents: 'overview', activity: 'overview' }),
+  // F-CT-404 (customer Terms & requirements, ct-w1 W1.4; T2-B9): + Holds → Terms & requirements (a quote's "customer on hold" door).
+  customers: Object.freeze({ orders: 'work', addresses: 'people', tax: 'terms', requirements: 'terms', holds: 'terms', documents: 'overview', activity: 'overview' }),
   suppliers: Object.freeze({ contacts: 'overview', questionnaire: 'documents', activity: 'overview' }),
 })
 
@@ -141,8 +142,9 @@ export const MERGED_TERMS: Readonly<Record<Side, Readonly<Record<string, Readonl
   customers: Object.freeze({ orders: Object.freeze({ rows: 'all' }) }),
   suppliers: Object.freeze({}),
 })
-/** The part of its tab an old address opens at (the element id), or null. */
-export const anchorOnArrival = (side: Side, asked: string | null | undefined): string | null => (side === 'customers' && asked === 'requirements' ? 'party-requirements' : null)
+/** The part of its tab an old address opens at (the element id), or null. F-CT-404: `holds` lands on Hold (#party-hold). */
+const ARRIVAL_ANCHORS: Readonly<Record<string, string>> = Object.freeze({ requirements: 'party-requirements', holds: 'party-hold' })
+export const anchorOnArrival = (side: Side, asked: string | null | undefined): string | null => (side === 'customers' && asked && Object.hasOwn(ARRIVAL_ANCHORS, asked) ? ARRIVAL_ANCHORS[asked]! : null)
 // ---- end F-SA-271
 
 /** An old address whose tab went to the thread (a customer's Documents: its files are the thread's Files view): show the thread. */

@@ -64,15 +64,20 @@
   color: var(--nds-danger-text);
 }
 
+/* F-CT-403 (customer Terms & requirements, ct-w1 W1.4; P0-B1; 18-lead-settles Z15, Z33): the stacks have their column again — co-w2
+   (7d1e0522b5) removed the rule that carried it together with `.fw-cdp-hold`, so their gap did nothing. It reaches every
+   `.fw-cdp-stack`: HoldCard (HoldDialogView's body: the hold window Money and Terms open), PrivacyCard (People's personal-data
+   windows), RequirementsTab (the card and its windows) and CustomerDepth's RequirementsPart. CSS only: the DOM does not change.
+   `.fw-cdp-now` had no reader left; `.fw-cdp-two-wide` lost its last two (the old Tax part and its gallery cases, W1.4). */
 .fw-cdp-loading,
-.fw-cdp-stack,
-.fw-cdp-now,
-.fw-cdp-now {
-  gap: var(--nds-space-14);
+.fw-cdp-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
 }
 
-.fw-cdp-two,
-.fw-cdp-two-wide {
+.fw-cdp-two {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--nds-space-14);
@@ -82,12 +87,6 @@
 @media (min-width: 720px) {
   .fw-cdp-two {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-}
-
-@media (min-width: 1280px) {
-  .fw-cdp-two-wide {
-    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   }
 }
 

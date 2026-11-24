@@ -719,7 +719,8 @@ describe('source pins (15-steps T.2)', () => {
     const crv = readFileSync(new URL('../view/CustomerRecordView.tsx', import.meta.url), 'utf8')
     // ca-fx3 (customer People & addresses ca-w1 W1.4, Z15): People's notices join the ONE notice area as PartyNotices' children — the
     // Overview's branch is the same; every other tab keeps the shared notice area whole (no children off People).
-    expect(crv).toContain("{tab === 'overview' ? <OverviewNotices model={model} party={party} actions={actions} /> : <PartyNotices model={model} party={party} actions={actions}>{tab === 'people' ? peopleNotice : null}</PartyNotices>}")
+    // F-CT-406 (ct-w1 W1.4): the pin follows the line — the notice area's children name Terms' notices too.
+    expect(crv).toContain("{tab === 'overview' ? <OverviewNotices model={model} party={party} actions={actions} /> : <PartyNotices model={model} party={party} actions={actions}>{tab === 'people' ? peopleNotice : tab === 'terms' ? termsNotice : null}</PartyNotices>}")
   })
 
   it('S11: the joined read only on the Overview and only with orders.view; the container reads only this customer\'s row of it', () => {
