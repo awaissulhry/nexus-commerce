@@ -11,9 +11,8 @@ import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { money } from '../../../../quotes/model'
 import { MILESTONE_KINDS, SHORT_WHYS, type MilestoneKind, type MoneyPlanAct, type Order, type PlanFigures } from '../../../api'
 import { dayInstant } from '../../../model'
-import type { OrderRecordActions, OrderRecordModel } from '../../record-model'
 import { OpenStepDialog, WaiveDialog } from '../../schedule/view/StepVerbs'
-import { DialogProblem, Frame } from '../../view/Dialogs'
+import { DialogProblem, Frame, type MoneyDialogActions, type MoneyDialogModel } from '../../view/Dialogs' // F-CM-k2: the windows' Pick of the model (type only)
 import { beforeAfterOf, HAND_LABEL_MAX, HAND_REASON, handBodyOf, handInputOf, handWindowOf, reasonProblemOf, type HandInput } from '../hand'
 import { planOf, type PlanRefusal } from '../plan'
 import { acceptBodyOf, diffWordOf } from '../price' // F-OM-301
@@ -31,7 +30,7 @@ import './money.css' // F-CM-k1 (M2-B1): the windows own their stylesheet — mo
  * before → after (its preview, read again as it is typed), What happens, The customer, What never changes, Why (required, office
  * only) and who and when; and Undo this payment…. A refusal stays in the window in this page's words; what was typed stays.
  */
-export function MoneyDialogs({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+export function MoneyDialogs({ order, model, actions }: { order: Order; model: MoneyDialogModel; actions?: MoneyDialogActions }) {
   const steps = model.scheduleSteps
   const dialog = model.dialog
   return (
@@ -88,7 +87,7 @@ function HandParts({ happens, told, never, reason, onReason, reasonError, code, 
   )
 }
 
-function PlanDialog({ order, act, stepId, requestId, model, actions }: { order: Order; act: MoneyPlanAct; stepId: string | null; requestId: string | null; model: OrderRecordModel; actions?: OrderRecordActions }) {
+function PlanDialog({ order, act, stepId, requestId, model, actions }: { order: Order; act: MoneyPlanAct; stepId: string | null; requestId: string | null; model: MoneyDialogModel; actions?: MoneyDialogActions }) {
   const t = useT('orders')
   const locale = useLocale()
   const say = useSay(order.currency)
@@ -257,7 +256,7 @@ function PlanDialog({ order, act, stepId, requestId, model, actions }: { order: 
  * F-OM-202 (B-OM-017, 10-design D3): Undo this payment… — the payment is taken off this request and voided when it then pays nothing
  * else, in one step; never deleted (Voided, with the reason). A SOFT-locked month asks why it goes in anyway.
  */
-function UndoPaymentDialog({ order, requestId, paymentId, model, actions }: { order: Order; requestId: string; paymentId: string; model: OrderRecordModel; actions?: OrderRecordActions }) {
+function UndoPaymentDialog({ order, requestId, paymentId, model, actions }: { order: Order; requestId: string; paymentId: string; model: MoneyDialogModel; actions?: MoneyDialogActions }) {
   const t = useT('orders')
   const locale = useLocale()
   const payment = model.schedule?.value?.requests?.find((entry) => entry.id === requestId)?.payments?.find((entry) => entry.paymentId === paymentId) ?? null
@@ -290,7 +289,7 @@ function UndoPaymentDialog({ order, requestId, paymentId, model, actions }: { or
 }
 
 /** F-OM-301 / 302: the server's refusal of the last act in the domain's own words (EN / IT), else the page's write words. */
-function Refusal({ model, currency }: { model: OrderRecordModel; currency: string }) {
+function Refusal({ model, currency }: { model: MoneyDialogModel; currency: string }) {
   const locale = useLocale()
   const say = useSay(currency)
   const refused = model.moneyPlan?.refused ?? null
@@ -303,7 +302,7 @@ function Refusal({ model, currency }: { model: OrderRecordModel; currency: strin
  * Accepted by hand" with the name, the day and the reason, and opens again by itself when either price changes; the customer is not
  * told. Undo the acceptance…: the check says "Not equal" again; the history keeps the acceptance. Each with its reason (office only).
  */
-function PriceAcceptDialog({ order, undo, model, actions }: { order: Order; undo: boolean; model: OrderRecordModel; actions?: OrderRecordActions }) {
+function PriceAcceptDialog({ order, undo, model, actions }: { order: Order; undo: boolean; model: MoneyDialogModel; actions?: MoneyDialogActions }) {
   const t = useT('orders')
   const locale = useLocale()
   const say = useSay(order.currency)
@@ -350,7 +349,7 @@ function PriceAcceptDialog({ order, undo, model, actions }: { order: Order; undo
  * Commission · Bank charges · Other cost; replacing a computed part is a later job), in the order's currency. Now and Actual use it; At
  * quote stays as sold; Put back removes it. The customer never sees margins or costs. costing.ledger.manage + the cost grain.
  */
-function CostLineDialog({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+function CostLineDialog({ order, model, actions }: { order: Order; model: MoneyDialogModel; actions?: MoneyDialogActions }) {
   const t = useT('orders')
   const locale = useLocale()
   const say = useSay(order.currency)
@@ -403,7 +402,7 @@ function CostLineDialog({ order, model, actions }: { order: Order; model: OrderR
 }
 
 /** F-OM-302: Put back — the line set by hand is removed (its reason kept in the history); Now and Actual go back to the computed cost. */
-function CostLineRemoveDialog({ order, lineId, model, actions }: { order: Order; lineId: string; model: OrderRecordModel; actions?: OrderRecordActions }) {
+function CostLineRemoveDialog({ order, lineId, model, actions }: { order: Order; lineId: string; model: MoneyDialogModel; actions?: MoneyDialogActions }) {
   const t = useT('orders')
   const locale = useLocale()
   const say = useSay(order.currency)
@@ -431,7 +430,7 @@ function CostLineRemoveDialog({ order, lineId, model, actions }: { order: Order;
  * F-OM-302 (B-OM-021; L4) — Set target… · {number}: the order's target margin (a percent; empty: none, the floor applies again). The
  * meter marks it; below it, the order is flagged. costing.ledger.manage + the cost and the margin grains (the Owner and Finance).
  */
-function MarginTargetDialog({ order, model, actions }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions }) {
+function MarginTargetDialog({ order, model, actions }: { order: Order; model: MoneyDialogModel; actions?: MoneyDialogActions }) {
   const t = useT('orders')
   const locale = useLocale()
   const say = useSay(order.currency)
@@ -467,7 +466,7 @@ function MarginTargetDialog({ order, model, actions }: { order: Order; model: Or
  * F-OM-202 (B-OM-022, 10-design §10: the Owner only) — Stop the page sent to {to}?: the bank-details page stops working at once (the
  * customer sees it is no longer valid); the payment request stays open (send a new page when it is needed). A reason, office only.
  */
-function StopPageDialog({ order, requestId, model, actions }: { order: Order; requestId: string; model: OrderRecordModel; actions?: OrderRecordActions }) {
+function StopPageDialog({ order, requestId, model, actions }: { order: Order; requestId: string; model: MoneyDialogModel; actions?: MoneyDialogActions }) {
   const t = useT('orders')
   const say = useSay(order.currency)
   const link = order.chain.depositRequests.find((request) => request.id === requestId)?.link ?? null
