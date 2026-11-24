@@ -31,6 +31,25 @@ export function Recipients({ to, cc, subject, contacts, partyName, ccOpen = fals
   const ccInput = useRef<HTMLInputElement>(null)
   const set = (next: Partial<{ to: Recipient[]; cc: Recipient[]; subject: string }>) => onChange({ to: [...to], cc: [...cc], subject, ...next })
   const taken = [...to, ...cc].map((item) => item.address)
+  // tw- W2.3 (10-design §10): the email's To · Cc · Subject as ONE line ("To Lia Modello · Subject Re: …") until it is opened; it opens
+  // by itself whenever something needs a look — nobody in To, a Cc, an address of another customer or one not known yet (W20).
+  const [opened, setOpened] = useState(false)
+  const needsLook = to.length === 0 || cc.length > 0 || ccOpen || to.some((item) => item.kind !== 'PARTY')
+  if (!opened && !needsLook) {
+    return (
+      <div className="fw-rt-rcpt is-line">
+        <button type="button" className="fw-rt-rcpt-line" aria-expanded={false} onClick={() => setOpened(true)}>
+          <span>
+            {t('to')} {to.map((item) => item.name ?? item.address).join(', ')}
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>
+            {t('subject')} {subject}
+          </span>
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="fw-rt-rcpt">

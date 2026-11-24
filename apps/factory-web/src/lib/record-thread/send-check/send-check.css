@@ -216,3 +216,10 @@
 .fw-rt-contents {
   display: contents;
 }
+
+/* tw- W2.3 (10-design §10): To · Subject as ONE line until opened (it opens by itself when something needs a look). */
+.fw-rt-rcpt.is-line { padding: 0; }
+.fw-rt-rcpt-line { display: flex; align-items: center; gap: var(--nds-space-6); width: 100%; min-width: 0; padding: var(--nds-space-2) var(--nds-space-4); border: none; border-radius: var(--nds-radius-md); background: none; color: var(--nds-text-2); font: inherit; font-size: var(--nds-font-size-sm); text-align: start; cursor: pointer; }
+.fw-rt-rcpt-line > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fw-rt-rcpt-line:hover { background: var(--nds-surface-hover); }
+.fw-rt-rcpt-line:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }

@@ -67,6 +67,8 @@
     "set": "Te lo ricorda il {date} se non rispondono",
     "failed": "Il promemoria non è stato impostato: impostalo da Ricordami sul messaggio.",
     "held": "I promemoria sono nella Home: serve il permesso «{right}».",
-    "offline": "Sei offline: il promemoria si imposta quando il messaggio parte."
+    "offline": "Sei offline: il promemoria si imposta quando il messaggio parte.",
+    "chip": "Promemoria",
+    "chipOn": "Promemoria tra {days} giorni"
   }
 }

@@ -215,7 +215,8 @@ function Column({ model, actions, slots }: { model: RecordThreadModel; actions: 
             recipients={<Recipients to={composer.to} cc={composer.cc} subject={composer.subject} contacts={composer.contacts} partyName={party} onChange={actions.onLines} />}
             tray={<AttachmentTray files={composer.files} partyName={party} onRemove={actions.onRemoveFile} onRetry={actions.onRetryFile} />}
             lines={<AttachmentLines files={composer.files} mode={mode} partyName={party} canShare={composer.canShare} overMailLimit={mailBytes(composer.files) > MAIL_MAX} onShare={actions.onShareFile} onRemove={actions.onRemoveFile} />}
-            clip={<ClipMenu canUpload={composer.canUpload} canPick={composer.canPick} onFiles={actions.onFiles} onPick={() => actions.onPicker(true)} onSheets={actions.onSheets} />}
+            // tw- W2.3: the "+" — the files' rows, then the composer's own (Saved replies · Amount · For the floor).
+            plus={(more) => <ClipMenu canUpload={composer.canUpload} canPick={composer.canPick} onFiles={actions.onFiles} onPick={() => actions.onPicker(true)} onSheets={actions.onSheets} more={more} />}
             onDraft={actions.onDraft}
             onSend={actions.onSend}
             onReopen={actions.onReopen}
@@ -224,17 +225,9 @@ function Column({ model, actions, slots }: { model: RecordThreadModel; actions: 
             onFiles={composer.canUpload ? actions.onFiles : undefined}
             onSheets={composer.canUpload ? actions.onSheets : undefined}
             hint={<DraftLine draft={model.kept ?? null} saved={model.saved ?? null} onRetry={actions.onRetryDraft} /* B-TH-287 */ />}
-            helpers={
-              composer.followUp ? (
-                <>
-                  {slots?.helpers}
-                  {/* B-TH-289: beside Saved replies, on a message to the customer. */}
-                  <FollowUpTick model={composer.followUp} onChange={actions.onFollowUp} />
-                </>
-              ) : (
-                slots?.helpers
-              )
-            }
+            helpers={slots?.helpers}
+            // B-TH-289 / tw- W2.3: the Follow up chip, in the chips row on a message to the customer.
+            followUp={composer.followUp ? <FollowUpTick model={composer.followUp} onChange={actions.onFollowUp} /> : null}
           />
         )}
         <FromRecordPicker open={model.pickerOpen ?? false} files={composer.recordFiles} mode={mode} partyName={party} record={composer.context.recordLabel} onClose={() => actions.onPicker(false)} onAdd={actions.onAddRecordFiles} />

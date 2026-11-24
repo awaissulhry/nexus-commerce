@@ -4,18 +4,9 @@
     "note": "Office note",
     "reply": "Reply to {party}",
     "replyProspect": "Reply to {party} (new)",
-    "portal": "In the portal only"
+    "portal": "In the portal"
   },
-  "mark": {
-    "note": "Office note · only your colleagues read it",
-    "reply": "Email to {party} · the people in To and Cc read it",
-    "portal": "In {party}’s portal · no e-mail"
-  },
-  "placeholder": {
-    "note": "Write an office note for your colleagues · @ mentions a colleague",
-    "reply": "Write to {party}",
-    "portal": "Write to {party}: they read it in their portal"
-  },
+  "placeholder": "Write a message",
   "send": {
     "note": "Add note",
     "reply": "Send to {party}",
@@ -38,8 +29,8 @@
     "namesOther": "The text names another customer: change it, or tick “This text names no other customer”."
   },
   "box": {
-    "closed": "Closed by {who}, {date}. The customer cannot write here.",
-    "closedPlain": "This thread is closed. The customer cannot write here.",
+    "closed": "Closed by {who}, {date}",
+    "closedPlain": "This thread is closed.",
     "reopen": "Reopen",
     "noRight": "You can read this thread; writing in it needs another role.",
     "noParty": "This record has no customer: notes only."
@@ -59,7 +50,6 @@
   "floor": {
     "label": "For the floor",
     "on": "The tablets of {record} show it: no prices, the first {limit} characters, for 14 days, no file, no name. Nobody records who read it.",
-    "off": "Off: only the office reads this note.",
     "long": "The tablet shows the first {limit} characters.",
     "locked": "The note you correct is on the tablets: the correction goes there too."
   },
@@ -70,16 +60,13 @@
     "sheets": "As measurement sheets (body data)"
   },
   "counter": "{count} characters left",
-  "portal": {
-    "line": "{party} reads it in their portal. No e-mail is sent: their mail setting decides when they hear of it (as it happens, unless they changed it)."
-  },
   "link": {
     "replying": "Replying to {who}, {when}",
     "someone": "a person on the floor",
     "correcting": {
-      "note": "Correcting your office note of {time}: the old one stays and says “Corrected below”",
-      "reply": "Correcting your mail of {time}: whoever got it gets the correction",
-      "portal": "Correcting your message of {time} in {party}’s portal"
+      "note": "Correcting your note of {time}",
+      "reply": "Correcting your email of {time}",
+      "portal": "Correcting your message of {time}"
     },
     "dropReply": "Not a reply to that message any more",
     "dropCorrect": "Not a correction any more"
@@ -94,5 +81,9 @@
   "about": {
     "chip": "About: {thing}",
     "drop": "Remove the reference"
+  },
+  "modeMenu": {
+    "reply": "Reply to {party} by email",
+    "portal": "In {party}’s portal"
   }
 }

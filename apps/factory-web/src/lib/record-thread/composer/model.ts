@@ -215,6 +215,9 @@ export const COUNTER_FROM = 18_000
  * The modes offered, in order: a note needs threads.post; a reply needs email.send AND a customer (or a prospect, held);
  * B-TH-237: "In the portal only" needs threads.post, a customer, and the record offered to the portal (`portal`).
  */
+/** tw- W2.3 (D5, Z3): Enter sends in one thread; in Reply to N (`many`) only ⌘/Ctrl+Enter does — a post to N records has no Undo. */
+export const enterSends = (context: Pick<ComposerContext, 'many'>): boolean => context.many !== true
+
 export function composerModes(context: Pick<ComposerContext, 'can' | 'party' | 'prospect'> & Partial<Pick<ComposerContext, 'portal' | 'many'>>): ComposerMode[] {
   // F-SA-282: N mode offers the portal only (and nothing when the record's customer may not read it there).
   if (context.many) return context.portal && context.can.post && context.party ? ['portal'] : []
