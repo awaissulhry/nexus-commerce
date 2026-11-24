@@ -1,5 +1,8 @@
 import { WARNING_ACTION, type NextAction } from '../../../../parties/_shared/model'
 import { openAfterSales } from '../../money/model'
+import type { DesignerPerson } from '../../portal/designer/api' // F-CO-201
+import { changeHeldOf, personTagOf, portalLineOf, type Phrase } from '../../portal/designer/model' // F-CO-201
+import { supervisorHeld } from '../../portal/limits/model' // F-CO-201
 import { requestsDoorOf, tileOf, type TileRead } from '../use-customer-work'
 import { valueOf as tileValueOf } from '../work-band'
 import { complaintDoor, complaintsDoor, depositDoor, moneyDoor, ordersDoor, projectsDoor, promiseDoor, quotesDoor, receivablesDoor, repairsDoor, sampleDoor, samplesDoor, tabDoor, termsDoor, workOrdersDoor } from './doors'
@@ -26,6 +29,7 @@ import {
   type FactsCard,
   type LabelledDoor,
   type LinkedCard,
+  type LooksAfter,
   type OverviewDoor,
   type OverviewInput,
   type OverviewRow,
@@ -103,14 +107,24 @@ export function bandStateOf(input: Pick<OverviewInput, 'can' | 'reads'>): BandSt
 // ---- card 3: People ----------------------------------------------------------------------------------------------------------
 
 /**
- * The customer's side: who receives orders and who receives invoices — each person ONCE (both roles: one row that says so); nobody:
- * "Nobody yet" with Add contact (parties.manage). A rider's team when the glance sends it. Our own people (the production
- * supervisor, the backup, the factory designer) stand in today's card under this one until its rows land here.
+ * People, both sides (10-design §4; lead settle S10): who looks after the customer here — the production supervisor ("Office only"),
+ * its backup, the factory designer and its backup ("<customer> sees this name") — then the customer's own contacts for orders and for
+ * invoices (each person ONCE; nobody: "Nobody yet" with Add contact, parties.manage), whether its portal is on, a rider's team.
+ * "Who looks after" is read with partners.view only (`looksAfter` null without: its rows and the Portal row are left out). Its two
+ * Change… open ONE window each, each under its OWN right (production.brand.manage, partners.manage: without it, no button); held with
+ * words only by state or reach. While the supervisor's read is out the card is a skeleton; when it failed, the card says so.
  */
 export function peopleOf(input: OverviewInput): PeopleCard {
   const { party, can, prefix } = input
   const id = party.id
-  const rows: OverviewRow[] = []
+  const head = linkDoor('people', say('customers.tab.people'), tabDoor(prefix, id, 'people'))
+  const looksAfter = input.looksAfter
+  if (looksAfter && !looksAfter.supervisor.read) {
+    const supervisor = looksAfter.supervisor
+    if (supervisor.state === 'error') return { rows: [], head, state: 'failed', problem: say(`portal-access:${supervisor.problem ?? 'failed.title'}`) }
+    return { rows: [], head, state: 'reading', problem: null }
+  }
+  const contacts: OverviewRow[] = []
   let orders = false
   let invoices = false
   // The contacts for orders first (a person with both roles is listed once, here), then those for invoices only.
@@ -122,7 +136,7 @@ export function peopleOf(input: OverviewInput): PeopleCard {
       if (pass === 'ORDERS' ? !forOrders : forOrders || !forInvoices) continue
       orders ||= forOrders
       invoices ||= forInvoices
-      rows.push({
+      contacts.push({
         key: `contact-${contact.id}`,
         label: ov(forOrders && forInvoices ? 'people.contactBoth' : forOrders ? 'people.contactOrders' : 'people.contactInvoices'),
         parts: [{ say: text(contact.name) }],
@@ -132,13 +146,97 @@ export function peopleOf(input: OverviewInput): PeopleCard {
   }
   const add: LabelledDoor[] = can.manage ? [stepDoor('contact', say('step.action.contact'), href(tabDoor(prefix, id, 'people')), party.status === 'ARCHIVED' ? say('held.archived') : null)] : []
   const nobody = (key: string, label: string): OverviewRow => ({ key, label: ov(label), parts: [{ say: ov('people.nobody') }], ...(add.length > 0 ? { doors: add } : {}) })
-  if (!orders && !invoices) rows.push(nobody('nobody', 'people.contactBoth'))
-  else if (!orders) rows.unshift(nobody('nobody-orders', 'people.contactOrders'))
-  else if (!invoices) rows.push(nobody('nobody-invoices', 'people.contactInvoices'))
+  if (!orders && !invoices) contacts.push(nobody('nobody', 'people.contactBoth'))
+  else if (!orders) contacts.unshift(nobody('nobody-orders', 'people.contactOrders'))
+  else if (!invoices) contacts.push(nobody('nobody-invoices', 'people.contactInvoices'))
+  const rows: OverviewRow[] = [...(looksAfter ? officeRowsOf(input, looksAfter) : []), ...contacts]
+  const portal = looksAfter ? portalRowOf(input, looksAfter) : null
+  if (portal) rows.push(portal)
   // A rider: its team (named only when the glance sends it: the reader may see that customer).
   const team = glanceOf(input.glance)?.team ?? null
   if (team) rows.push({ key: 'team', label: depth('team.title'), parts: [{ say: text(team.name), door: href(tabDoor(prefix, team.id, 'overview')) }] })
-  return { rows, head: linkDoor('people', say('customers.tab.people'), tabDoor(prefix, id, 'people')) }
+  return { rows, head, state: 'ready', problem: null }
+}
+
+/** F-CO-201: a designer word (its own `Phrase`: the parties catalogue with the customer named, or the partners screens' own). */
+function phraseSay(phrase: Phrase, customer: string): Say {
+  return say(phrase.ns ? `${phrase.ns}:${phrase.key}` : phrase.key, { customer, ...(phrase.params ?? {}) })
+}
+
+/**
+ * F-CO-201: our people for this customer — office only, read with partners.view. Production supervisor (the name + "Office only"; a
+ * person no longer active says so) · Backup · Factory designer (the name + what the customer sees of it, " · backup <name>", the line
+ * of what the portal names now). Each Change… is the page's own window.
+ */
+function officeRowsOf(input: OverviewInput, looksAfter: LooksAfter): OverviewRow[] {
+  const { party } = input
+  const customer = party.tradeName ?? party.legalName
+  const archived = party.status === 'ARCHIVED' ? say('held.archived') : null
+  const supervisor = looksAfter.supervisor
+  const production = supervisor.read!.production
+  const rows: OverviewRow[] = []
+  const inactive = (person: { readonly active: boolean }): RowPart[] => (person.active ? [] : [{ say: say('production-supervisor:fact.inactive'), quiet: true }])
+  // Change… (the supervisor) only with production.brand.manage; held by state (archived) or reach (not at every company).
+  const reach = supervisorHeld(supervisor.supervise, supervisor.pick)
+  const changeSupervisor: LabelledDoor[] = supervisor.supervise ? [stepDoor('changeSupervisor', say('production-supervisor:fact.change'), { kind: 'act', act: 'changeSupervisor' }, archived ?? (reach ? say(`${reach.ns}:${reach.key}`) : null))] : []
+  const named = production.supervisor
+  rows.push({
+    key: 'supervisor',
+    label: say('portal-access:limits.supervisor.label'),
+    parts: named ? [{ say: text(named.name) }, ...inactive(named)] : [{ say: say('portal-access:limits.supervisor.none') }],
+    ...(named ? { tag: { say: say('portal-access:limits.supervisor.officeOnly'), tone: 'info' as const, mark: 'office' as const } } : {}),
+    ...(changeSupervisor.length > 0 ? { doors: changeSupervisor } : {}),
+  })
+  rows.push({ key: 'backup', label: say('portal-access:limits.supervisor.backup'), parts: production.backup ? [{ say: text(production.backup.name) }, ...inactive(production.backup)] : [{ say: text('—') }] })
+
+  const designer = looksAfter.designer
+  if (!designer) return rows
+  const label = say('customers.designer.label')
+  const read = designer.read
+  if (read.status === 'loading') {
+    rows.push({ key: 'designer', label, parts: [], state: 'reading' })
+    return rows
+  }
+  if (read.status === 'error') {
+    // Its own words and Try again (the supervisor's rows stand: a designer read that failed never hides them).
+    rows.push({ key: 'designer', label, parts: [{ say: say('customers.designer.readFailed'), quiet: true }], doors: [stepDoor('retryDesigner', say('portal-access:common.retry'), { kind: 'act', act: 'retryDesigner' })] })
+    return rows
+  }
+  const slot = read.slot
+  const tagOf = (person: DesignerPerson): RowTag => {
+    const tag = personTagOf(person)
+    return { say: phraseSay(tag.words, customer), tone: tag.tone, mark: tag.tone === 'info' ? 'seen' : 'warning' }
+  }
+  const parts: RowPart[] = [{ say: slot.designer ? text(slot.designer.name) : say('customers.designer.none') }]
+  if (slot.backup) {
+    parts.push({ say: ov('people.backupNamed', { name: slot.backup.name }) })
+    if (slot.backup.state !== 'OK') parts.push({ say: phraseSay(personTagOf(slot.backup).words, customer), quiet: true })
+  }
+  // Change… (the designer) only with partners.manage; held by state (archived) or reach (not at every company the customer works with).
+  const reachDesigner = changeHeldOf(true, read)
+  rows.push({
+    key: 'designer',
+    label,
+    parts,
+    ...(slot.designer ? { tag: tagOf(slot.designer) } : {}),
+    under: [phraseSay(portalLineOf(slot), customer)],
+    ...(designer.manage ? { doors: [stepDoor('changeDesigner', say('customers.designer.change'), { kind: 'act', act: 'changeDesigner' }, archived ?? (reachDesigner ? phraseSay(reachDesigner, customer) : null))] } : {}),
+  })
+  return rows
+}
+
+/** F-CO-201: whether the customer's portal is on (the designer's slot says it) and the door to Portal settings (partners.view). */
+function portalRowOf(input: OverviewInput, looksAfter: LooksAfter): OverviewRow | null {
+  const designer = looksAfter.designer
+  if (!designer) return null
+  const label = say('portal-access:settings.title')
+  const read = designer.read
+  if (read.status !== 'ready') return { key: 'portal', label, parts: [], state: read.status === 'loading' ? 'reading' : 'unread' }
+  return {
+    key: 'portal',
+    label,
+    parts: [{ say: say(read.slot.portalOn ? 'portal-access:settings.on' : 'portal-access:settings.off') }, { say: say('customers.tab.portal'), door: href(tabDoor(input.prefix, input.party.id, 'portal')) }],
+  }
 }
 
 // ---- card 4: Next dates ------------------------------------------------------------------------------------------------------

@@ -16,15 +16,13 @@ import { I18nProvider } from '../../../../lib/i18n/provider'
 import { designScreen as listScreen } from '../fixtures'
 import { designScreen as recordScreen } from '../record/fixtures'
 import { addRequirement, eraseContact, placeHold, readGlance, releaseHold, setLawfulBasis, setPoNumberRequired } from './api'
-import { ALL_CAN, glanceOf, HELD_GLANCE, HOLDS, PRIVACY, READ_CAN, REQUIREMENTS, TERMS, TODAY, withoutPrices } from './_demo/fixtures'
+import { ALL_CAN, glanceOf, HOLDS, PRIVACY, READ_CAN, REQUIREMENTS, TERMS, TODAY } from './_demo/fixtures'
 import {
   basisBody,
   basisProblems,
   blankRequirement,
   copyCounts,
-  creditTile,
   depthCan,
-  dueWords,
   holdDraftProblem,
   holdRefusal,
   KEPT_KINDS,
@@ -35,7 +33,6 @@ import {
   poRows,
   privacyHeld,
   privacyRefusal,
-  promisesTile,
   requirementBody,
   requirementDraftOf,
   requirementProblems,
@@ -43,44 +40,18 @@ import {
   toggleHeld,
   wordsProblem,
   writeHeld,
-  type Words,
 } from './model'
 
 /**
- * Customer 360 and customers in depth (B-W2b-324): the glance's words (free credit by grain, promises, due days), the
+ * Customer 360 and customers in depth (B-W2b-324): the
  * hold, requirement, PO-number and personal-data drafts and what each still needs, the refusals in words, the calls as
  * the API takes them (version and Idempotency-Key), every word in both languages, and every new design case of SCR-032
  * and SCR-033 drawn with no key left on screen.
  */
 
-const money = (minor: number, currency: string) => `${currency} ${(minor / 100).toFixed(2)}`
-const day = (value: string) => value
 
-describe('the customer at a glance', () => {
-  it('says free credit by the price grain: the amount, over by, no limit, or words only', () => {
-    expect(creditTile(glanceOf('MODA-DEMO').credit, money)).toEqual({ value: { key: 'credit.available', params: { amount: 'EUR 18800.00' } }, hint: { key: 'credit.ofLimit', params: { limit: 'EUR 50000.00' } } })
-    expect(creditTile(glanceOf('MODA-DEMO', HELD_GLANCE).credit, money).value).toEqual({ key: 'credit.overBy', params: { amount: 'EUR 3100.00' } })
-    expect(creditTile(withoutPrices(glanceOf('MODA-DEMO', HELD_GLANCE)).credit, money)).toEqual({ value: { key: 'credit.over' }, hint: { key: 'credit.noPrice' } })
-    expect(creditTile(withoutPrices(glanceOf('MODA-DEMO')).credit, money).value).toEqual({ key: 'credit.within' })
-    expect(creditTile(glanceOf('PILOTA-DEMO').credit, money).value).toEqual({ key: 'credit.noLimit' })
-    expect(creditTile(null, money).hint).toEqual({ key: 'numbers.creditWithheld' })
-  })
-
-  it('says the promises: late, on time, the next one, none', () => {
-    expect(promisesTile({ open: 4, late: 1, noPromise: 0, next: '2026-11-14' }, day)).toEqual({ value: { key: 'promises.late', params: { count: 1 } }, hint: { key: 'promises.next', params: { date: '2026-11-14' } } })
-    expect(promisesTile({ open: 2, late: 0, noPromise: 2, next: null }, day)).toEqual({ value: { key: 'promises.onTime', params: { count: 2 } }, hint: { key: 'promises.without', params: { count: 2 } } })
-    expect(promisesTile({ open: 0, late: 0, noPromise: 0, next: null }, day).value).toEqual({ key: 'promises.none' })
-    expect(promisesTile(null, day).hint).toEqual({ key: 'numbers.promisesWithheld' })
-  })
-
-  it('says a round late, due today, due on a day, or without a due day', () => {
-    expect(dueWords({ dueDate: '2026-10-24', daysLate: 5 }, day)).toEqual({ key: 'samples.late', params: { count: 5 } })
-    expect(dueWords({ dueDate: '2026-10-29', daysLate: 0 }, day)).toEqual({ key: 'samples.dueToday' })
-    expect(dueWords({ dueDate: '2026-11-06', daysLate: -8 }, day)).toEqual({ key: 'samples.due', params: { date: '2026-11-06' } })
-    expect(dueWords({ dueDate: null, daysLate: null }, day)).toEqual({ key: 'samples.noDue' })
-  })
-
-})
+// F-CO-203 (customer Overview co-w2 W2.3): the glance's tiles (free credit, promises) and a round's due words went with the Overview's
+// old parts; the Overview's own rules and tests say them (areas/sales/customers/record/overview/overview.vitest.test.ts).
 
 describe('the hold and the PO number', () => {
   it('asks a reason and words to place, words to release', () => {
@@ -231,8 +202,6 @@ describe('every word in both languages', () => {
       }
       for (const right of ['manage', 'hold', 'privacy', 'erase'] as const) has(writeHeld(READ_CAN, right, 'ACTIVE')!)
       for (const part of ['samples', 'profiles', 'repairs']) has(`withheld.${part}`)
-      const said = (words: Words) => t(words.key, words.params)
-      expect(said(creditTile(glanceOf('MODA-DEMO').credit, money).hint)).not.toMatch(/\{/)
     }
   })
 

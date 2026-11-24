@@ -21,7 +21,9 @@ import { noExtra, withoutExtra } from '../../orders/model' // F-CW-105
 // ---- F-CP-103 ----
 import { OPEN_STATUSES } from '@nexus/factory-domain/sales/orders/orders'
 import { OPEN_ORDERS } from '../../../parties/_shared/model'
-import { workDoor, workViewCounts } from './use-customer-work'
+import { workViewCounts } from './use-customer-work'
+// F-CO-203 (co-w2 W2.3; 13-backend §3.7): the record's own copy of these three doors went — the Customers list's doors are THE doors.
+import { workDoor as listWorkDoor } from '../list/doors'
 // ---- end F-CP-103
 // ---- F-CP-104 ----
 import { rightRef } from '../../../../lib/i18n/rights'
@@ -54,6 +56,9 @@ import { designScreen } from './fixtures'
 const ALPHA = '11111111-1111-4111-8111-111111111111'
 const BETA = '22222222-2222-4222-8222-222222222222'
 const BASE = `/w/acme/sales/customers/${ALPHA}`
+// F-CO-203: Open orders · In production (the started orders) · Late — each the list's own door term, on this record's address (BASE).
+const TILE_TERMS = { open: { kind: 'open' }, inProduction: { kind: 'phase', phase: 'IN_PRODUCTION' }, late: { kind: 'late' } } as const
+const tileDoor = (door: keyof typeof TILE_TERMS): string => listWorkDoor('/w/acme', ALPHA, TILE_TERMS[door])
 const params = (query: string) => new URLSearchParams(query)
 const board = (tiles: Record<string, number>) => ({ status: 'ready' as const, value: { byStatus: [], tiles: Object.entries(tiles).map(([key, count]) => ({ key, count, filter: {} })) } as never })
 const reads = (over: Partial<WorkReads> = {}): WorkReads => ({ board: { status: 'reading' }, requests: { status: 'reading' }, replies: { status: 'reading' }, asks: { status: 'reading' }, tasks: { status: 'reading' }, ...over })
@@ -977,16 +982,17 @@ describe('F-CP-103: each tile opens the rows it counts; the Views counts come fr
   // F-CW-101 (lead settle S3): "In production" means ONE thing on the customer page — the STARTED orders (the phase IN_PRODUCTION):
   // the Overview's tile, the Views ▾ item and the band's group count the same orders and open the same door.
   it('Open orders → rows=open, In production → phase=IN_PRODUCTION, Late → late=true (the views the tiles count)', () => {
-    expect(workDoor(RECORD, 'open')).toBe(`${RECORD}?tab=work&rows=open`)
-    expect(workDoor(RECORD, 'inProduction')).toBe(`${RECORD}?tab=work&phase=IN_PRODUCTION`)
-    expect(workDoor(RECORD, 'late')).toBe(`${RECORD}?tab=work&late=true`)
-    expect([viewOf(workDoor(RECORD, 'open')), viewOf(workDoor(RECORD, 'late'))]).toEqual(['open', 'late'])
+    expect(RECORD).toBe(BASE)
+    expect(tileDoor('open')).toBe(`${RECORD}?tab=work&rows=open`)
+    expect(tileDoor('inProduction')).toBe(`${RECORD}?tab=work&phase=IN_PRODUCTION`)
+    expect(tileDoor('late')).toBe(`${RECORD}?tab=work&late=true`)
+    expect([viewOf(tileDoor('open')), viewOf(tileDoor('late'))]).toEqual(['open', 'late'])
     // The rows each door reads are the rows its tile counts: Open = the open states, Late = open and promised before today,
     // In production = every order (`rows=all`, written by the entry) in the phase IN_PRODUCTION (the API's own rule).
     expect([...OPEN_ORDERS].sort()).toEqual([...OPEN_STATUSES].sort())
     expect(rowsQuery('open', '', null, ALPHA)).toMatchObject({ open: true, partyId: ALPHA })
     expect(rowsQuery('late', '', null, ALPHA)).toMatchObject({ late: true, partyId: ALPHA })
-    const entered = new URL(`https://x${workEntry(RECORD, ALPHA, params(workDoor(RECORD, 'inProduction').split('?')[1]!))!}`).searchParams
+    const entered = new URL(`https://x${workEntry(RECORD, ALPHA, params(tileDoor('inProduction').split('?')[1]!))!}`).searchParams
     expect(viewOf(`${RECORD}?${entered.toString()}`)).toBe('all')
     expect(rowsQuery('all', '', null, ALPHA, { extra: extraFromAddress(entered, 'all') })).toMatchObject({ phase: 'IN_PRODUCTION', partyId: ALPHA })
     // F-CO-103 (customer page › Overview; 13-backend §3.10): the number tiles went — the headline, the band and Linked records say
@@ -1018,7 +1024,7 @@ describe('F-CP-103: each tile opens the rows it counts; the Views counts come fr
 
   it('a door arrives with its view: the entry adds the lock once and no default beside the view (fx-12)', () => {
     for (const door of ['open', 'inProduction', 'late'] as const) {
-      const query = workDoor(BASE, door).split('?')[1]!
+      const query = tileDoor(door).split('?')[1]!
       const once = workEntry(BASE, ALPHA, params(query))!
       const written = new URL(`https://x${once}`).searchParams
       expect(written.get('party'), door).toBe(ALPHA)

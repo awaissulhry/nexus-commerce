@@ -219,7 +219,7 @@ describe('F-SA-272: who looks after the customer moved to its Overview', () => {
     expect(calls).toEqual([`supervisor v4 ${OFFICE_PEOPLE.bea.id}`])
   })
 
-  it('the limits card no longer draws the supervisor; the Overview card does, office only', () => {
+  it('the limits card no longer draws the supervisor; the Overview\'s People does, office only (F-CO-201: rows + ONE Change… window)', () => {
     const card = readFileSync(new URL('./view/LimitsCard.tsx', import.meta.url), 'utf8')
     expect(card).not.toContain('function SupervisorBlock')
     const moved = readFileSync(new URL('./view/CustomerSupervisorCard.tsx', import.meta.url), 'utf8')
@@ -230,11 +230,23 @@ describe('F-SA-272: who looks after the customer moved to its Overview', () => {
       const item = (customerRecordScreen as DesignScreen<unknown>).cases.find((entry) => entry.id === id)!
       return renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(View, { model: item.model })))
     }
+    // F-CO-201 (customer Overview, co-w2 W2.1; S10): People's rows — the supervisor named with "Office only", the backup; ONE Change…
+    // (production.brand.manage) opens the window with the same form. The card under the People pair is gone.
     const html = draw('overview-supervisor')
-    expect(html).toContain('Who looks after')
+    expect(html).toContain('Production supervisor')
     expect(html).toContain(OFFICE_PEOPLE.bea.name)
+    expect(html).toContain(OFFICE_PEOPLE.carlo.name)
     expect(html).toContain('Office only')
-    expect(draw('overview-supervisor-held')).toContain('Who looks after')
+    expect(html).not.toContain('Who looks after')
+    expect(html.match(/Change…/g)?.length).toBe(1)
+    // The form's words are its window's: its title names who looks after; the first pick says what it moves.
+    const form = draw('overview-supervisor-new')
+    expect(form).toContain('Who looks after')
+    expect(form).toContain('Changing the supervisor moves')
+    // Without production.brand.manage: the row stands, its Change… is not drawn (never held for a right).
+    const held = draw('overview-supervisor-held')
+    expect(held).toContain('Production supervisor')
+    expect(held).not.toContain('Change…')
     expect(SUPERVISOR_CASES.first.draft?.supervisorId).toBe(OFFICE_PEOPLE.bea.id)
   })
 })

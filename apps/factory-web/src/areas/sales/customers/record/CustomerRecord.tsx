@@ -21,7 +21,6 @@ import { CustomerDepthProvider, customerDepthSlot } from '../depth/CustomerDepth
 import { useCustomerGlance } from '../depth/CustomerDepth' // F-CM-104: the Money tab's credit standing (the hold, over the limit)
 import { CustomerMoney } from './money/CustomerMoney' // F-CM-104: the Money tab's container
 import { CustomerRecordView } from './view/CustomerRecordView'
-import { CustomerSupervisor } from '../portal/CustomerSupervisor' // F-SA-272
 import { partyName } from '../../../parties/_shared/model'
 import { recordTabs, shownTab, SIDES } from '../../../parties/_shared/model' // F-CQ-301 (P0-B2)
 // ---- F-SA-276: the Work tab (the strip's reads, the Orders sheet locked to the customer) and the dock that follows its rows ----
@@ -89,7 +88,7 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
     // B-W2b-180: Portal access (`?tab=portal`).
     // F-SA-274: Portal settings draws its settings, preview, limits and requests; the people with access are People & addresses'.
     portal: (party) => <PortalAccess side="customers" party={{ id: party.id, name: party.tradeName ?? party.legalName, companyId: party.companyId }} parts={PORTAL_SETTINGS_PARTS} />,
-    depth: (party, reload) => customerDepthSlot(party, reload, prefix),
+    depth: (party, reload) => customerDepthSlot(party, reload),
   })
   const task = useCustomerTask(partyId, record.party?.code ?? null)
   // ---- F-SA-276: the Work tab's reads (its strip and the tab's count, on every tab), the row the dock follows on Work (and on Quotes &
@@ -190,10 +189,10 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
     if (address) router.replace(address, { scroll: false })
   }
   // The Overview tab, built here like Work and Quotes & incoming (a view fetches nothing): the reads the page already holds, the
-  // custom fields (its last pair's second card) and — until its rows land in People — today's "Who looks after <customer>" card.
+  // custom fields (its last pair's second card). F-CO-201: "Who looks after" is the Overview container's own read (People's rows).
   const overviewTab =
     named && record.party && tab === 'overview' ? (
-      <CustomerOverview party={record.party} model={record.model} actions={record.actions} reads={work.reads} counts={pageCounts} before={before} money={money} standing={standing} onWindow={windowOnWork} onRetry={work.reload} fields={record.fields} supervisor={<CustomerSupervisor partyId={partyId} name={named.name} /> /* F-SA-272 */} />
+      <CustomerOverview party={record.party} model={record.model} actions={record.actions} reads={work.reads} counts={pageCounts} before={before} money={money} standing={standing} onWindow={windowOnWork} onRetry={work.reload} fields={record.fields} />
     ) : null
   // ---- end F-CO-102
   // ---- F-CM-104 (cm-w1 W1.4; 13-backend §5.3): the Money tab, built here like Work, Quotes and the Overview (a view fetches nothing) —

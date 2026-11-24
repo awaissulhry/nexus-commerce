@@ -18,7 +18,6 @@ import {
   checkVies,
   getParty,
   listPurchaseOrdersOf,
-  listQuotesOf,
   listSalesOrdersOf,
   moveParty,
   projectCounts,
@@ -164,7 +163,9 @@ export function usePartyRecord(side: Side, partyId: string, slots: PartySlots = 
   const [dialogProblem, setDialogProblem] = useState<string | null>(null)
   const [refused, setRefused] = useState<readonly string[]>([])
   const [history, setHistory] = useState<Loaded<ViesCheck>>(loading())
-  const [quotes, setQuotes] = useState<Loaded<QuoteRow>>(loading())
+  // F-CO-202 (customer Overview co-w2 W2.2; 13-backend §1.3; S11, S12): the customer's 200 newest quotes are no longer read — no part of
+  // the page reads them (the Overview and the Quotes tab's badge read the page's ONE count read); the model keeps its shape.
+  const [quotes] = useState<Loaded<QuoteRow>>(loading())
   const [orders, setOrders] = useState<Loaded<SalesOrderRow>>(loading())
   const [purchaseOrders, setPurchaseOrders] = useState<Loaded<PurchaseOrderRow>>(loading())
   const [viesRunning, setViesRunning] = useState(false)
@@ -190,13 +191,6 @@ export function usePartyRecord(side: Side, partyId: string, slots: PartySlots = 
   const loadBeside = useCallback(async () => {
     if (!can.view) return
     const reads: Array<Promise<void>> = []
-    if (side === 'customers' && can.quotes)
-      reads.push(
-        listQuotesOf(api, partyId).then(
-          (answer) => setQuotes(loaded(answer.rows, answer.more)),
-          (error: unknown) => setQuotes(failed(problemKey(error))),
-        ),
-      )
     if (side === 'customers' && can.orders)
       reads.push(
         listSalesOrdersOf(api, partyId).then(
@@ -212,7 +206,7 @@ export function usePartyRecord(side: Side, partyId: string, slots: PartySlots = 
         ),
       )
     await Promise.all(reads)
-  }, [api, can.orders, can.purchaseOrders, can.quotes, can.view, partyId, side])
+  }, [api, can.orders, can.purchaseOrders, can.view, partyId, side])
 
   const loadHistory = useCallback(async () => {
     try {

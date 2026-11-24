@@ -36,32 +36,19 @@
     "files": "Picking a file needs the right to see the record’s files."
   },
   "numbers": {
-    "freeCredit": "Free credit",
-    "promises": "Promises",
     "reading": "Reading…",
-    "failed": "Couldn’t count",
-    "unknown": "—",
-    "creditWithheld": "Your role does not see credit",
-    "promisesWithheld": "Your role does not see orders"
+    "failed": "Couldn’t count"
   },
   "credit": {
-    "noLimit": "No limit",
-    "noLimitHint": "No credit limit is set with this company",
-    "available": "{amount}",
     "ofLimit": "of a {limit} limit",
     "overBy": "Over by {amount}",
     "over": "Over the credit limit",
-    "within": "Within the limit",
-    "noPrice": "Amounts need selling prices"
+    "within": "Within the limit"
   },
   "promises": {
     "none": "No open order",
-    "noneHint": "Nothing promised now",
     "late_one": "{count} late",
     "late_other": "{count} late",
-    "onTime_one": "{count} on time",
-    "onTime_other": "All {count} on time",
-    "next": "Next {date}",
     "without_one": "{count} without a promise date",
     "without_other": "{count} without a promise date",
     "noneComing": "No promise date ahead"
@@ -72,7 +59,6 @@
     "repairs": "Not shown: your role does not see repairs."
   },
   "glance": {
-    "seeAll": "See all {count}",
     "more_one": "{count} more",
     "more_other": "{count} more"
   },
@@ -80,22 +66,7 @@
     "title": "Now"
   },
   "samples": {
-    "title": "Samples in progress",
-    "hint": "Sample rounds for this customer not decided yet, the earliest due first.",
-    "none": "No sample in progress.",
-    "col": {
-      "number": "Round",
-      "style": "Style",
-      "kind": "Kind",
-      "stage": "Stage",
-      "due": "Due"
-    },
-    "kindRound": "{kind} · round {round}",
-    "late_one": "{count} day late",
-    "late_other": "{count} days late",
-    "dueToday": "Due today",
-    "due": "Due {date}",
-    "noDue": "No due date"
+    "title": "Samples in progress"
   },
   "profiles": {
     "title": "Measurement profiles",
@@ -121,17 +92,6 @@
       "profiles": "Profiles"
     }
   },
-  "repairs": {
-    "title": "Repairs and alterations in progress",
-    "hint": "Garments of this customer being repaired or altered.",
-    "none": "No repair in progress.",
-    "col": {
-      "number": "Repair",
-      "kind": "Kind",
-      "stage": "Stage",
-      "opened": "Opened"
-    }
-  },
   "status": {
     "notOnHold": "Not on hold.",
     "onHold": "On hold",
@@ -141,15 +101,10 @@
     "openHold": "Open the hold"
   },
   "team": {
-    "title": "Team",
-    "hint": "This rider is under this team or dealer."
+    "title": "Team"
   },
   "reqSide": {
-    "title": "Requirements in force",
-    "none": "No special requirements.",
-    "all_one": "See the requirement",
-    "all_other": "See all {count} requirements",
-    "open": "Open Requirements"
+    "none": "No special requirements."
   },
   "hold": {
     "title": "Hold",

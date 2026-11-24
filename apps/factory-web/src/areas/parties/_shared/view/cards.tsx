@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, type ReactNode } from 'react'
-import Link from 'next/link'
 import { MapPin, MoreHorizontal, Plus, Users } from 'lucide-react'
 import { Banner, Card, KeyValue, Menu, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
 import { Button, Checkbox, Tag, Toggle } from '@nexus/ui/primitives'
@@ -21,13 +20,10 @@ import {
   partyDraftOf,
   partyName,
   RESULT_TONE,
-  sideHref,
-  SIDES,
   viesApplies,
   WARNING_ACTION,
   type PartyRecordModel,
   type RecordDialog,
-  type RecordTab,
 } from '../model'
 import { AddressModal, ArchiveModal, BlockModal, ContactModal, EditPartyModal, IdentityModal } from './dialogs'
 import { dash, NoticeBanner, ReadState, StatusPill, ViesMark } from './parts'
@@ -184,7 +180,6 @@ export function NextSteps({ model, party, actions, editable, viesHeld }: TabProp
   const t = useT('parties')
   const steps = nextSteps(party.warnings)
   const side = model.side
-  const tabHref = (tab: RecordTab) => `${sideHref(model.prefix, SIDES[side], `/${encodeURIComponent(party.id)}`)}?tab=${tab}`
   const button = (code: (typeof steps)[number]['code']) => {
     const action = WARNING_ACTION[code]
     const held = action === 'vies' ? viesHeld : editable ? null : t('held.manage')
@@ -201,13 +196,9 @@ export function NextSteps({ model, party, actions, editable, viesHeld }: TabProp
                 ? () => actions?.onDialog?.({ kind: 'contact' })
                 : () => actions?.onDialog?.({ kind: 'edit' })
     if (action === 'edit' && side === 'suppliers') return null
-    if ((action === 'address' || action === 'contact') && side === 'customers') {
-      return (
-        <Button size="sm" asChild>
-          <Link href={tabHref('people') /* F-SA-271: People & addresses */}>{t(`step.action.${action}`)}</Link>
-        </Button>
-      )
-    }
+    // F-CO-203 (customer Overview co-w2 W2.3): the customer's branch (Add address / contact as links to People & addresses) went —
+    // the side panel is the supplier's only (its one mount: PartyRecordView, always `side: 'suppliers'`); the customer's Overview
+    // says what is to complete in its own facts (areas/sales/customers/record/overview/rows.ts factsOf).
     return (
       <Button size="sm" onClick={onClick} heldReason={held}>
         {t(`step.action.${action}`)}
@@ -231,13 +222,12 @@ export function NextSteps({ model, party, actions, editable, viesHeld }: TabProp
   )
 }
 
-export function SidePanel({ model, party, actions, editable, viesHeld, children, status }: TabProps & { viesHeld: string | null; children?: ReactNode; status?: ReactNode }) {
+export function SidePanel({ model, party, actions, editable, viesHeld, children }: TabProps & { viesHeld: string | null; children?: ReactNode }) {
   const t = useT('parties')
   const locale = useLocale()
   const lastCheck = party.viesChecks[0] ?? null
   const role = 'ORDERS' as const
   const receivers = mainContacts(party, role)
-  const invoices = mainContacts(party, 'INVOICES')
   return (
     <div className="fw-pty-side">
       <Card padded>
@@ -245,15 +235,12 @@ export function SidePanel({ model, party, actions, editable, viesHeld, children,
           <CardHead title={t('side.status')} />
           <span className="fw-pty-tags">
             <StatusPill status={party.status} />
-            {party.invoiceBlocked && model.side === 'customers' && <Tag tone="danger">{t('list.cannotInvoice')}</Tag>}
           </span>
           <p className="fw-pty-hint">
             {party.status === 'BLOCKED' && party.blocked
               ? t('side.blockedSince', { date: formatDate(party.blocked.at, { locale }) })
               : t('side.createdOn', { date: formatDate(party.createdAt, { locale }) })}
           </p>
-          {/* B-W2b-324: the hold and its reason (a customer's depth slot). */}
-          {status}
         </div>
       </Card>
       <Card padded>
@@ -275,11 +262,12 @@ export function SidePanel({ model, party, actions, editable, viesHeld, children,
       <Card padded>
         <div className="fw-pty-card-body">
           <CardHead title={t(`${model.side}.side.contacts`)} />
-          {receivers.length === 0 && (model.side === 'suppliers' || invoices.length === 0) ? (
+          {/* F-CO-203: the supplier's side panel only (the customer's invoice contacts went with the customer's old Overview). */}
+          {receivers.length === 0 ? (
             <p className="fw-pty-hint">{t(`${model.side}.side.noContacts`)}</p>
           ) : (
             <ul className="fw-pty-list">
-              {[...receivers.map((contact) => ({ contact, role: 'ORDERS' as const })), ...(model.side === 'customers' ? invoices.map((contact) => ({ contact, role: 'INVOICES' as const })) : [])].map(
+              {receivers.map((contact) => ({ contact, role: 'ORDERS' as const })).map(
                 ({ contact, role: held }) => (
                   <li key={`${contact.id}-${held}`}>
                     <span className="fw-pty-cell">
