@@ -133,10 +133,16 @@ export const postPartnerMessageContract = defineContract({
     attachments: z.array(id()).max(MAX_ATTACHMENTS).optional(),
     /** B-CP-079: also ask your factory designer (409 in words when it cannot be asked here; nothing is posted then). */
     askFactoryDesigner: z.boolean().optional(),
+    // ---- pt-s S.1 (S.6, the portal reply link): the shared message of this record's conversation the post answers (409 in words when
+    // it cannot be answered here; nothing is posted then). No correctsMessageId: a portal person never corrects (the strict input
+    // refuses an unknown key).
+    replyToMessageId: id().optional(),
+    // ---- end pt-s S.1
   }),
   response: {
     201: output({
       thread: output({ id: id(), status: z.enum(THREAD_STATUSES) }),
+      /** pt-s S.4: with `replyTo` as the portal read quotes it (no author id, no audience; `mine` for the writer's own post). */
       message: partnerMessageView,
       /** B-CP-079: asked (the name: "We asked Giulia Verdi."), or posted without the ask (the day's asks used up), in words; null: not asked for. */
       designerAsk: output({ asked: z.boolean(), name: z.string().nullable(), words: z.string() }).nullable().optional(),

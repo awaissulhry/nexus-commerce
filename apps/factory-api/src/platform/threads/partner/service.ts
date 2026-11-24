@@ -22,6 +22,7 @@ import { afterCursor, cursorOf, ensureThread, type RecordRef } from '../threads'
 // ---- B-TH-050: what a shared message answers or corrects, as the partner may see it.
 import { messageLinksOf, NO_LINKS, type MessageLinks } from '../threads'
 import { finishedLinks } from '../threads' // tw-s S.1: the quotes finished after the partner's read (mine, erased, walled files)
+import type { LinkedMessage } from '../threads' // pt-s S.4: the quote of what a portal post answers
 // ---- B-TH-085: the customer attaches files to its own record from the portal (behind the outside-upload gate and the scanner).
 import { PORTAL_UPLOAD } from '@nexus/factory-domain/auth/partners/permissions'
 import { FILES_MANAGE, FILES_UPLOAD } from '@nexus/factory-domain/auth/permissions/catalogue'
@@ -360,11 +361,47 @@ function closedRefusal(caller: PartnerCaller): DomainError {
   return new DomainError('invalid_state', words, [{ path: 'thread/CLOSED', message: words }])
 }
 
+// ---- pt-s S.2 (S.6, the portal reply link; walls: the office note, the held mail, the brand) ----------------------------------------
+/** Where the refusal of a reply is told: ONE neutral issue for every case (the web reads it, never which case it was). */
+const REPLY_REFUSED_ISSUE = 'refusal/REPLY_REFUSED'
+
+/**
+ * A portal post answers only a shared message of this record's conversation that the person reads: a message that is not there for
+ * them, an office note, a mail held or taken back, another record's or another customer's — all refused alike (409), in the person's
+ * language, and nothing is written.
+ */
+function replyRefusal(caller: PartnerCaller): DomainError {
+  const words = partnerThreadWords('REPLY_REFUSED', caller.session.person.locale, caller.session.company.name)
+  return new DomainError('conflict', words, [{ path: REPLY_REFUSED_ISSUE, message: words }])
+}
+// ---- end pt-s S.2
+
+// ---- pt-s S.4: the quote of what a portal post answers, as the portal read quotes it ----------------------------------------------
+/**
+ * The shared message a portal post answers, quoted as readPartnerThread quotes it: read in the person's own scope (shared only: no
+ * author id, no audience, a floor writer never named; its files by the partner's own file rules), then finished as the read finishes
+ * it — `mine` for the reader's own post, erased after a privacy request, a walled file never counted. Read after the post's command,
+ * as the read reads its quotes after its own read: a repeated request (its Idempotency-Key) answers with the same quote, and the
+ * stored answer stays plain JSON. Null: not there for this reader.
+ */
+async function quoteOfPost(request: FastifyRequest, caller: PartnerCaller, threadId: string, message: { readonly id: string; readonly replyToMessageId: string }): Promise<LinkedMessage | null> {
+  const read = await request.withClient((client) => messageLinksOf(client, threadId, [message], { sharedOnly: true, workerShown: false, visibleFiles: (fileIds) => visibleAttachments(client, caller, fileIds) }))
+  const quoted = [...(read.sources?.values() ?? [])]
+  if (quoted.length === 0) return null
+  const mine = await minePosts(request, caller, quoted)
+  const walled = await walledForOutside(request as CommandCaller, quoted.flatMap((source) => (source.files ?? []).map((file) => file.id)))
+  const erased = await erasedForOutside(request as CommandCaller, caller.context.tenantId, quoted)
+  return finishedLinks(read, { erased, mine, walled }).linked.get(message.replyToMessageId) ?? null
+}
+// ---- end pt-s S.4
+
 export interface PartnerPostInput {
   readonly body: string
   readonly attachments?: readonly string[] | undefined
   /** B-CP-079: also ask the customer's factory designer (one ask per message; ./designer-ask.ts). */
   readonly askFactoryDesigner?: boolean | undefined
+  /** pt-s S.1: the shared message of this record's conversation the post answers (never a correction: the portal does not correct). */
+  readonly replyToMessageId?: string | undefined
 }
 
 /** POST /portal/threads/<type>/<id>/messages: the person's post into the record's thread (COL-060). */
@@ -386,6 +423,7 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
   const draft = { bodyText: cleanBody(input.body), attachments: uniqueIds(input.attachments) }
   const problems = postProblems(draft)
   if (problems.length > 0) throw new ValidationError('The message is not valid.', problems)
+  const replyToMessageId = input.replyToMessageId ?? null // pt-s S.2: the message it answers (null: none)
 
   const opened = await request.withClient(async (client) => {
     const { scope } = await openRecord(client, caller, ref, partnerReaderOf(request, caller))
@@ -393,6 +431,8 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
     if (!options.firstOfRequest && !options.requester && !can(caller.actor, PORTAL_COMMENT, scope)) throw new ForbiddenError(partnerThreadWords('NO_COMMENT', caller.session.person.locale, caller.session.company.name))
     return threadOf(client, ref)
   })
+  // ---- pt-s S.2 (A9): no conversation yet, so nothing to answer — refused BEFORE the thread is made, so a refused reply writes nothing.
+  if (replyToMessageId !== null && opened === null) throw replyRefusal(caller)
   // ---- B-CP-079: the ask is checked BEFORE anything is posted (409 in words: nothing is written, the box keeps the text).
   const askPlan = input.askFactoryDesigner === true ? await planDesignerAsk(request, caller, ref) : null
   // ---- end B-CP-079
@@ -405,12 +445,21 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
   const walled = await walledForOutside(request as CommandCaller, draft.attachments)
   const { result } = await command(
     request as CommandCaller,
-    { name: POST_ACTION, idempotencyKey, input: { recordType: ref.type, recordId: ref.id, ...draft } },
+    // pt-s S.2: the message it answers is part of the request (a repeated key with another one is refused); absent, the input is as before.
+    { name: POST_ACTION, idempotencyKey, input: { recordType: ref.type, recordId: ref.id, ...draft, ...(replyToMessageId === null ? {} : { replyToMessageId }) } },
     async (tools) => {
       // The thread as it is now, as the partner reads it (closed meanwhile? still the party's?).
       const current = await threadOf(tools.tx, ref)
       if (!current || current.id !== known.id || current.partyId !== caller.context.partyId) throw new NotFoundError('Record not found.')
       if (current.status === 'CLOSED') throw closedRefusal(caller)
+      // ---- pt-s S.2: what it answers, read AS THE PERSON and only its id. Row-level security keeps out an office note, a mail held or
+      // taken back and another customer's message; the thread keeps out another record's. THE TRAP: never `messageLinkProblems` here —
+      // it reads Message.forFloor, which the partner role has no grant on, so every portal reply would fail at the database.
+      if (replyToMessageId !== null) {
+        const target = await tools.tx.message.findFirst({ where: { id: replyToMessageId, threadId: current.id, audience: 'PARTNER' }, select: { id: true } })
+        if (!target) throw replyRefusal(caller)
+      }
+      // ---- end pt-s S.2
       const issues = await attachmentProblems(tools.tx, caller, current, draft.attachments, walled)
       if (issues.length > 0) throw new ValidationError('The message is not valid.', issues)
       const id = newId()
@@ -430,6 +479,8 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
           emailMessageId: null,
           at: tools.now,
           createdAt: tools.now,
+          // pt-s S.3: the shared message it answers (checked above; the database's composer guard reads it as the person again).
+          ...(replyToMessageId === null ? {} : { replyToMessageId }),
         },
         select: MESSAGE_PARTNER,
       })
@@ -438,7 +489,8 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
         recordId: id,
         companyId: current.companyId,
         siteId: current.siteId,
-        after: { threadId: current.id, recordType: current.recordType, recordId: current.recordId, direction: 'INBOUND', audience: 'PARTNER', channel: 'PORTAL', attachments: [...draft.attachments] },
+        // pt-s S.3: + the message it answers, when it answers one.
+        after: { threadId: current.id, recordType: current.recordType, recordId: current.recordId, direction: 'INBOUND', audience: 'PARTNER', channel: 'PORTAL', attachments: [...draft.attachments], ...(replyToMessageId === null ? {} : { replyToMessageId }) },
       })
       tools.emit(
         eventFor(messagePosted, {
@@ -458,9 +510,11 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
     },
   )
   await touchThread(request, caller, result.thread.id, new Date(result.message.at))
+  // ---- pt-s S.4: the answer quotes what the post answers, as the read does (a repeated request reads it again: the same quote).
+  const message: PartnerMessageView = replyToMessageId === null ? result.message : { ...result.message, replyTo: await quoteOfPost(request, caller, result.thread.id, { id: result.message.id, replyToMessageId }) }
   // ---- B-CP-079: the note that asks the factory designer (over the day's cap: posted without it, and the answer says so).
   const designerAsk: DesignerAskAnswer | null = askPlan === null ? null : askPlan.capped ? cappedAnswer(caller) : await askDesignerAfterPost(request, caller, ref, result, draft.bodyText, askPlan, idempotencyKey)
-  return { ...result, designerAsk }
+  return { ...result, message, designerAsk }
   // ---- end B-CP-079
 }
 
