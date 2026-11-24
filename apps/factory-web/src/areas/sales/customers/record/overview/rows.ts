@@ -450,8 +450,10 @@ export function linkedOf(input: OverviewInput): LinkedCard {
       stated('quotes', quotesLabel, input.counts.failed ? 'unread' : 'reading')
       stated('incoming', incomingLabel, input.counts.failed ? 'unread' : 'reading')
     }
-  } else {
-    const group = (name: 'WRITING' | 'TO_ANSWER' | 'OPEN_QUOTES' | 'ORDER_WAITS'): Pick<RowPart, 'door'> => through(can.quotesTab ? quotesDoor(prefix, id, name) : null)
+  } else if (can.quotesTab) {
+    // co-fx2 (walk CO-W-2; 10-design §7, §9): both kinds are the Quotes & incoming tab's — without its right neither row is drawn nor
+    // named in "None yet", whatever the count read answers (it answers the portal drafts' count with orders.view).
+    const group = (name: 'WRITING' | 'TO_ANSWER' | 'OPEN_QUOTES' | 'ORDER_WAITS'): Pick<RowPart, 'door'> => through(quotesDoor(prefix, id, name))
     if (before.openQuotes !== null) {
       const parts: RowPart[] = []
       if (before.openQuotes > 0) parts.push({ say: ov('linked.open', { count: before.openQuotes }), ...group('OPEN_QUOTES') })
@@ -571,7 +573,8 @@ export function factsOf(input: OverviewInput): FactsCard {
   if (identity) {
     const said: Param[] = [say(`taxMode.${identity.taxMode}`)]
     if (identity.vatNumber) said.push(ov('facts.vat', { number: identity.vatNumber }))
-    if (identity.fiscalCode && identity.fiscalCode !== identity.vatNumber) said.push(text(identity.fiscalCode))
+    // co-fx2 (walk CO-W-6): the codice fiscale with its label (the identity form's own word), as VAT and SDI carry theirs.
+    if (identity.fiscalCode && identity.fiscalCode !== identity.vatNumber) said.push(joined([say('field.fiscalCode'), text(identity.fiscalCode)], ' '))
     if (identity.sdiRecipientCode) said.push(ov('facts.sdi', { code: identity.sdiRecipientCode }))
     if (identity.pec) said.push(ov('facts.pec', { pec: identity.pec }))
     // "valid from …" as quiet words after the door, on the same line (10-design §8; picture 20), as the next promise's quiet part.

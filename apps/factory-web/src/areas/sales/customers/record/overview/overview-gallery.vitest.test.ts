@@ -119,14 +119,16 @@ interface RoleView {
   readonly moneyDoor: boolean
   /** "You can view, not change" (no parties.manage). */
   readonly viewOnly: boolean
+  /** co-fx2 (walk CO-W-2): Linked records' Quotes and Incoming rows — the Quotes & incoming tab's (quotes.view or sales.inquiries.view). */
+  readonly quotesTab: boolean
 }
 const ROLE_VIEWS: Readonly<Record<OverviewRole, RoleView>> = {
-  owner: { officePeople: true, changes: 2, amounts: true, lateWords: false, credit: true, edit: true, moneyDoor: true, viewOnly: false },
-  sales: { officePeople: true, changes: 1, amounts: false, lateWords: true, credit: true, edit: true, moneyDoor: true, viewOnly: false },
-  production_manager: { officePeople: true, changes: 1, amounts: false, lateWords: false, credit: false, edit: false, moneyDoor: false, viewOnly: true },
-  warehouse: { officePeople: false, changes: 0, amounts: false, lateWords: false, credit: false, edit: false, moneyDoor: false, viewOnly: true },
-  finance: { officePeople: false, changes: 0, amounts: true, lateWords: false, credit: true, edit: true, moneyDoor: true, viewOnly: false },
-  read_only: { officePeople: true, changes: 0, amounts: false, lateWords: true, credit: true, edit: false, moneyDoor: true, viewOnly: true },
+  owner: { officePeople: true, changes: 2, amounts: true, lateWords: false, credit: true, edit: true, moneyDoor: true, viewOnly: false, quotesTab: true },
+  sales: { officePeople: true, changes: 1, amounts: false, lateWords: true, credit: true, edit: true, moneyDoor: true, viewOnly: false, quotesTab: true },
+  production_manager: { officePeople: true, changes: 1, amounts: false, lateWords: false, credit: false, edit: false, moneyDoor: false, viewOnly: true, quotesTab: true },
+  warehouse: { officePeople: false, changes: 0, amounts: false, lateWords: false, credit: false, edit: false, moneyDoor: false, viewOnly: true, quotesTab: false },
+  finance: { officePeople: false, changes: 0, amounts: true, lateWords: false, credit: true, edit: true, moneyDoor: true, viewOnly: false, quotesTab: true },
+  read_only: { officePeople: true, changes: 0, amounts: false, lateWords: true, credit: true, edit: false, moneyDoor: true, viewOnly: true, quotesTab: true },
 }
 
 describe('the rights per office role: a part without its right is left out, a button without its right is hidden', () => {
@@ -142,6 +144,7 @@ describe('the rights per office role: a part without its right is left out, a bu
       expect(view.edit, role).toBe(held.has('parties.manage'))
       expect(view.moneyDoor, role).toBe(held.has('money.price') || held.has('receivables.view') || held.has('sales.credit.view'))
       expect(view.viewOnly, role).toBe(!held.has('parties.manage'))
+      expect(view.quotesTab, role).toBe(held.has('quotes.view') || held.has('sales.inquiries.view'))
     }
   })
 
@@ -161,6 +164,10 @@ describe('the rights per office role: a part without its right is left out, a bu
       expect(/\bEdit\b/.test(text), `${id} Edit`).toBe(view.edit)
       expect(/Money ›/.test(text), `${id} money door`).toBe(view.moneyDoor)
       expect(textOf(html).includes('You can view, not change'), `${id} view only`).toBe(view.viewOnly)
+      // co-fx2 (walk CO-W-2): without the Quotes tab's right, no Incoming and no Quotes row (the count read answers drafts anyway).
+      expect(/\| Incoming \|/.test(cellsOf(part)), `${id} Incoming`).toBe(view.quotesTab)
+      // The Quotes row also needs the open quotes' count (quotes.view): the tab through sales.inquiries.view alone shows Incoming only.
+      expect(/\| Quotes \|/.test(cellsOf(part)), `${id} Quotes`).toBe(view.quotesTab && roleHeld(role).has('quotes.view'))
       // Never "Not shown: your role", never a button held for a right — on this tab, in both languages.
       for (const locale of LOCALES) {
         const words = textOf(overviewOf(draw(id, locale)))

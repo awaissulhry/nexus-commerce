@@ -339,13 +339,15 @@ function PartView({ part, words, actions }: { part: RowPart; words: Words; actio
   }
   if (door.kind === 'window') {
     return (
-      <Button variant="link" inline aria-haspopup="dialog" onClick={() => actions?.onWindow?.(door.window)}>
+      // co-fx2 (walk CO-W-1): a value's door wraps at its spaces like the words around it (the DS's own opt-in `wrap`: `.nds-btn` is
+      // nowrap) — a long task title never runs past its card, its date and "›" never cut.
+      <Button variant="link" inline wrap aria-haspopup="dialog" onClick={() => actions?.onWindow?.(door.window)}>
         {label}
       </Button>
     )
   }
   return (
-    <Button variant="link" inline onClick={() => actions?.onAct?.(door.act)}>
+    <Button variant="link" inline wrap onClick={() => actions?.onAct?.(door.act)}>
       {label}
     </Button>
   )

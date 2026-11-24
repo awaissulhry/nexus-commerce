@@ -607,6 +607,21 @@ describe('the cards: People, Next dates, Requests & changes, Linked records, Cus
     expect(datesOf(input({ ...calm, glance: failedRead('problem.unavailable'), can: { ...CAN, samples: false } }))).toBeNull()
   })
 
+  it('co-fx2 (walk CO-W-2): Quotes and Incoming only with the Quotes & incoming tab — left out without it, whatever the count read answers', () => {
+    const answered = { counts: counts({ TO_ANSWER: 1, WRITING: 2 }, { openQuotes: 0 }), failed: false }
+    const noTab = linkedOf(input({ can: { ...CAN, quotesTab: false }, counts: answered }))
+    expect(noTab.rows.filter((row) => row.key === 'incoming' || row.key === 'quotes')).toEqual([])
+    expect(noTab.none.map((label) => said(label))).not.toContain('Incoming')
+    expect(noTab.none.map((label) => said(label))).not.toContain('Quotes')
+    // While the count read is out, or when it failed: no row says so either.
+    for (const failed of [false, true]) expect(linkedOf(input({ can: { ...CAN, quotesTab: false }, counts: { counts: null, failed } })).rows.filter((row) => row.key === 'incoming' || row.key === 'quotes')).toEqual([])
+    // With the tab: Incoming says its parts, each a door to its group; Quotes with no open quote joins "None yet".
+    const withTab = linkedOf(input({ counts: answered }))
+    expect(valueOf(rowOf(withTab.rows, 'incoming'))).toBe('1 to answer · 2 drafts')
+    expect(rowOf(withTab.rows, 'incoming').parts.map((part) => hrefOf({ door: part.door! }))).toEqual([`${BASE}?tab=quotes&group=TO_ANSWER`, `${BASE}?tab=quotes&group=WRITING`])
+    expect(withTab.none.map((label) => said(label))).toContain('Quotes')
+  })
+
   it('Customer facts: ONE Edit (parties.manage); the credit only when the read carries it; what is to complete with today\'s own step', () => {
     const facts = factsOf(input({ party: party({ internalNote: 'Made-up office note.', warnings: [{ code: 'NO_DEFAULT_SHIP_TO', message: '', blocksInvoice: false }, { code: 'NO_DEFAULT_BILL_TO', message: '', blocksInvoice: false }] }), glance: ready(glance({ credit: { ...OVER, state: 'WITHIN', available: 1_580_000, overLimitBy: 0 }, requirements: demoGlance('MODA-DEMO').requirements })) }))
     const value = (key: string, locale: Locale = 'en') => facts.rows.find((row) => row.key === key)!.parts.map((part) => said(part.say, locale)).join(' · ')
@@ -614,7 +629,9 @@ describe('the cards: People, Next dates, Requests & changes, Linked records, Cus
     expect(value('kind')).toBe('Company · Italian')
     expect(value('kind', 'it')).toBe('Azienda · Italiano')
     // "valid from …": quiet words after the door, on the same line (10-design §8; picture 20) — no door of its own.
-    expect(value('identity')).toBe('Italian business · VAT IT00000000000 · 00000000000 · SDI DEMO123 · valid from 01/01/2026')
+    // co-fx2 (walk CO-W-6): no bare number — the codice fiscale says its label, in both languages.
+    expect(value('identity')).toBe('Italian business · VAT IT00000000000 · Codice fiscale 00000000000 · SDI DEMO123 · valid from 01/01/2026')
+    expect(value('identity', 'it')).toContain('P. IVA IT00000000000 · Codice fiscale 00000000000 · SDI DEMO123')
     const identity = facts.rows.find((row) => row.key === 'identity')!
     expect(identity.parts.map((part) => [part.door?.kind ?? null, part.quiet === true])).toEqual([['href', false], [null, true]])
     expect(value('requirements')).toBe('3')
@@ -665,6 +682,12 @@ describe('source pins (15-steps T.2)', () => {
     const card = VIEW.slice(start, VIEW.indexOf('</OverviewCard>', start))
     expect(card).toContain('<WorkBand model={band.model} actions={band.actions} />')
     expect(VIEW.match(/<WorkBand /g)).toHaveLength(1)
+  })
+
+  it('co-fx2 (walk CO-W-1): every link-like door inside a value wraps at its spaces — the DS\'s own `wrap` (`.nds-btn` is nowrap): a long task title never runs past its card', () => {
+    const links = VIEW.match(/<Button variant="link"[^>]*>/g) ?? []
+    expect(links).toHaveLength(2)
+    for (const tag of links) expect(tag).toMatch(/\binline wrap\b/)
   })
 
   it('the Overview\'s files hold no stylesheet and write no kit class: a kit part has no look prop, the host uses the kit\'s text classes on its own content only (S32)', () => {
