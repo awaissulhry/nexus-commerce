@@ -5,6 +5,7 @@ import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { PARTIES_MANAGE, PARTIES_VIEW } from '@nexus/factory-domain/parties/permissions'
 import { teamProblem, type RiderFacts } from '@nexus/factory-domain/parties/riders/riders'
+import { SALES_MEASUREMENTS_VIEW } from '@nexus/factory-domain/sales/measure-link/permissions' // F-CA-S4
 import type { PartyKind, PartyRole, PartyStatus } from '@nexus/factory-domain/parties/rules'
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
@@ -37,7 +38,10 @@ export async function ridersOf(db: Reader, context: OfficeContext, partyId: stri
   const actor = actorOf(context)
   const team = party.teamPartyId ? await db.party.findUnique({ where: { id: party.teamPartyId }, select: RIDER_COLUMNS }) : null
   const riders = await db.party.findMany({ where: { AND: [{ teamPartyId: partyId }, scopeWhere(actor, PARTIES_VIEW, PARTY_SCOPE) as Prisma.PartyWhereInput] }, select: RIDER_COLUMNS, orderBy: [{ code: 'asc' }, { id: 'asc' }] })
-  const profiles = riders.length > 0 ? await db.measurementProfile.groupBy({ by: ['partyId'], where: { partyId: { in: riders.map((rider) => rider.id) } }, _count: { _all: true } }) : []
+  // F-CA-S4 (ca-s S.4; R-B10): a rider's measurement profiles are body data: counted only for a reader with the measurements
+  // right over that rider (as GET /sales/mtm/profiles), else null (never 0: the screen says nothing of them).
+  const measured = new Set(riders.filter((rider) => can(actor, SALES_MEASUREMENTS_VIEW, { companyId: rider.companyId, partyId: rider.id })).map((rider) => rider.id))
+  const profiles = measured.size > 0 ? await db.measurementProfile.groupBy({ by: ['partyId'], where: { partyId: { in: [...measured] } }, _count: { _all: true } }) : []
   const counts = new Map(profiles.map((row) => [row.partyId, row._count._all]))
   return {
     partyId: party.id,
@@ -53,7 +57,7 @@ export async function ridersOf(db: Reader, context: OfficeContext, partyId: stri
       status: rider.status,
       country: rider.country,
       language: rider.language,
-      measurementProfiles: counts.get(rider.id) ?? 0,
+      measurementProfiles: measured.has(rider.id) ? (counts.get(rider.id) ?? 0) : null, // F-CA-S4
       version: rider.version,
       updatedAt: toUtcIso(rider.updatedAt),
     })),

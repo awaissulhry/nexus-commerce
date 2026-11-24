@@ -5,6 +5,7 @@ import { changeContact, checkContact } from '@nexus/factory-domain/parties/conta
 import type { AddressBody, ContactBody, DefaultAddressesBody, PartyView, UpdateAddressBody, UpdateContactBody } from '@nexus/factory-domain/parties/contracts'
 import { PARTIES_MANAGE } from '@nexus/factory-domain/parties/permissions'
 import { command, type CommandCaller, type CommandTools } from '../../core/command'
+import { erasedRefusal } from './contact-privacy/privacy' // F-CA-S2
 import { getParty, viewInTx } from './parties'
 import {
   ADDRESS_COLUMNS,
@@ -207,8 +208,11 @@ export async function addContact(caller: CommandCaller, partyId: string, body: C
 export async function updateContact(caller: CommandCaller, partyId: string, contactId: string, body: UpdateContactBody, idempotencyKey?: string): Promise<PartyView> {
   const party = await writableParty(caller, partyId)
   if (!isUuid(contactId)) throw new NotFoundError('Contact not found.')
-  const seen = await caller.withClient((client) => client.partyContact.findUnique({ where: { id: contactId }, select: CONTACT_COLUMNS }))
+  const seen = await caller.withClient((client) => client.partyContact.findUnique({ where: { id: contactId }, select: { ...CONTACT_COLUMNS, erasedAt: true } }))
   if (!seen || seen.partyId !== partyId) throw new NotFoundError('Contact not found.')
+  // F-CA-S2 (ca-s S.2; R-B4): an erased contact stays blank and archived for good (GDPR art. 17): an edit or a restore is
+  // refused in words first (the same refusal as the privacy acts), never "the contact is not valid" for its blank name.
+  if (seen.erasedAt !== null) throw erasedRefusal()
   const { version, status, ...patch } = body
   const preview = changeContact(contactFieldsOf(seen), patch)
   if (!preview.ok) throw new ValidationError('The contact is not valid.', prefixed(preview.issues))
@@ -218,7 +222,8 @@ export async function updateContact(caller: CommandCaller, partyId: string, cont
     const { tx } = tools
     await lockWritable(tools, partyId)
     await bumpVersion(tx, 'contact', contactId, version)
-    const row = await tx.partyContact.findUniqueOrThrow({ where: { id: contactId }, select: CONTACT_COLUMNS })
+    const row = await tx.partyContact.findUniqueOrThrow({ where: { id: contactId }, select: { ...CONTACT_COLUMNS, erasedAt: true } })
+    if (row.erasedAt !== null) throw erasedRefusal() // F-CA-S2: erased while this change waited for the lock
     const change = changeContact(contactFieldsOf(row), patch)
     if (!change.ok) throw new ValidationError('The contact is not valid.', prefixed(change.issues))
     const nextStatus = status ?? row.status
