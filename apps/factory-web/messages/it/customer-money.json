@@ -230,7 +230,9 @@
       "shipped_other": "{count} spedizioni non sono ancora fatturate",
       "reminders_one": "{count} sollecito aspetta un sì",
       "reminders_other": "{count} solleciti aspettano un sì",
-      "cantInvoice": "Non ancora fatturabile: {why}"
+      "cantInvoice": "Non ancora fatturabile: {why}",
+      "priceDiffer_one": "Prezzi diversi su {count} ordine",
+      "priceDiffer_other": "Prezzi diversi su {count} ordini"
     },
     "collect": {
       "title": "Da incassare",
@@ -277,7 +279,9 @@
       "send": "Pagina di pagamento inviata per {number}.",
       "saved": "{number}: salvato.",
       "refund": "Rimborso registrato.",
-      "refundMoved": "Rimborso salvato."
+      "refundMoved": "Rimborso salvato.",
+      "limit": "Fido salvato.",
+      "statement": "Estratto conto inviato."
     },
     "amount": "{amount}",
     "invoices": {
@@ -368,7 +372,8 @@
       "usedIs": "utilizzato = fatture aperte + ordini non ancora fatturati",
       "terms": "Condizioni",
       "set": "Imposta un fido…",
-      "onHold": "In blocco — {reason}"
+      "onHold": "In blocco — {reason}",
+      "none": "Nessun fido"
     },
     "chase": {
       "title": "Estratto conto e solleciti",

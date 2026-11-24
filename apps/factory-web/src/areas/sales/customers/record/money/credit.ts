@@ -97,7 +97,7 @@ export function creditOf(input: MoneyTabInput, creditRow: Part<LimitRow | null> 
   // The answer: the standing (in words without prices), the hold's day, how it pays.
   const answer: MoneyWord[] = []
   if (credit) {
-    if (credit.state === 'NONE') answer.push(price && input.company ? word('cm.credit.noneWith', { params: { company: input.company.name } }) : word('sales-customers-depth:credit.noLimit'))
+    if (credit.state === 'NONE') answer.push(price && input.company ? word('cm.credit.noneWith', { params: { company: input.company.name } }) : word('cm.credit.none'))
     else if (isOver) answer.push(over !== null ? word('cm.needs.overBy', { money: { amount: over } }) : word('sales-customers-depth:credit.over'))
     else answer.push(free !== null && limit !== null ? word('cm.credit.within', { money: { free, limit } }) : word('sales-customers-depth:credit.within'))
   }

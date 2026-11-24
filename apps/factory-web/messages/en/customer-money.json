@@ -230,7 +230,9 @@
       "shipped_other": "{count} shipments are not invoiced yet",
       "reminders_one": "{count} reminder waits for a yes",
       "reminders_other": "{count} reminders wait for a yes",
-      "cantInvoice": "Can’t be invoiced yet: {why}"
+      "cantInvoice": "Can’t be invoiced yet: {why}",
+      "priceDiffer_one": "Prices differ on {count} order",
+      "priceDiffer_other": "Prices differ on {count} orders"
     },
     "collect": {
       "title": "To collect",
@@ -277,7 +279,9 @@
       "send": "Pay page sent for {number}.",
       "saved": "{number}: saved.",
       "refund": "Refund recorded.",
-      "refundMoved": "Refund saved."
+      "refundMoved": "Refund saved.",
+      "limit": "Credit limit saved.",
+      "statement": "Statement sent."
     },
     "amount": "{amount}",
     "invoices": {
@@ -368,7 +372,8 @@
       "usedIs": "used = open invoices + orders not invoiced yet",
       "terms": "Terms",
       "set": "Set a limit…",
-      "onHold": "On hold — {reason}"
+      "onHold": "On hold — {reason}",
+      "none": "No credit limit"
     },
     "chase": {
       "title": "Statement & reminders",

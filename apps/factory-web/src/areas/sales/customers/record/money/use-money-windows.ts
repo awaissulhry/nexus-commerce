@@ -34,6 +34,8 @@ export interface MoneyWindows {
   readonly stop: StopAsk | null
   readonly onAct: (act: CollectInPlace, row: CollectRow) => void
   readonly closeStop: () => void
+  /** F-CM-302: Finance's stop container on one invoice (a stop's Lift… in Statement & reminders). */
+  readonly onStop: (invoice: StopAsk['invoice']) => void
   /** F-CM-203: Finance's refund windows — Refund… (a credit note, a payment's money on account, or chosen in it), Mark made… · Cancel… · Void…. */
   readonly refunds: RefundWindows
 }
@@ -82,6 +84,7 @@ export function useMoneyWindows(input: { readonly prefix: string; readonly onBur
     [open],
   )
   const closeStop = useCallback(() => setStop(null), [])
+  const onStop = useCallback((invoice: StopAsk['invoice']) => setStop({ invoice }), [])
 
   // ---- F-CM-203: the refund windows — Finance's own commands (refunds/api.ts), its own rules (refunds/model.ts), its own words ----
   const refundCan = useMemo(() => refundAbilitiesOf(session.permissions), [session.permissions])
@@ -136,5 +139,5 @@ export function useMoneyWindows(input: { readonly prefix: string; readonly onBur
       setProblem(null)
     },
   }
-  return { door: { model: door.model, actions: door.actions }, stop, onAct, closeStop, refunds }
+  return { door: { model: door.model, actions: door.actions }, stop, onAct, closeStop, onStop, refunds }
 }

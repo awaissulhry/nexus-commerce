@@ -31,16 +31,18 @@ export interface CreditSectionProps {
   readonly onRetry: () => void
   /** Finance's Change limit window, in place. Absent: not drawn. */
   readonly onChangeLimit?: () => void
-  /** The Terms tab's own hold window: put on hold / release (one state with Terms). Absent: not drawn (cm-w3 W3.1 connector). */
-  readonly onHold?: (kind: 'place' | 'release') => void
+  /** The Terms tab's own hold window: Put on hold… (one state with Terms). Absent: not drawn. */
+  readonly onPlaceHold?: () => void
+  /** …and Release… of the one hold in force (absent: none, or several — Terms lists each one). */
+  readonly onReleaseHold?: () => void
 }
 
-export function CreditSection({ model, sayIn, unit, menu, onRetry, onChangeLimit, onHold }: CreditSectionProps) {
+export function CreditSection({ model, sayIn, unit, menu, onRetry, onChangeLimit, onPlaceHold, onReleaseHold }: CreditSectionProps) {
   const locale = useLocale()
   const say = sayIn(model.currency || unit)
   const title = say(word('cm.credit.title'))
   const items: MenuItemDef[] = [
-    ...(model.mayHold && !model.hold && onHold ? [{ id: 'hold', label: say(word('sales-customers-depth:hold.place')), onSelect: () => onHold('place') }] : []),
+    ...(model.mayHold && !model.hold && onPlaceHold ? [{ id: 'hold', label: say(word('sales-customers-depth:hold.place')), onSelect: onPlaceHold }] : []),
     ...menu,
     { id: 'link', label: say(word('cm.linkTo', { params: { section: title } })), onSelect: () => copyLinkTo('credit') },
   ]
@@ -72,8 +74,8 @@ export function CreditSection({ model, sayIn, unit, menu, onRetry, onChangeLimit
               <span>{model.hold.since ? say(model.hold.since) : null}</span>
               <span>{say(model.hold.stops)}</span>
             </span>
-            {model.mayHold && onHold ? (
-              <Button size="sm" onClick={() => onHold('release')}>
+            {model.mayHold && onReleaseHold ? (
+              <Button size="sm" onClick={onReleaseHold}>
                 {say(word('sales-customers-depth:hold.release'))}
               </Button>
             ) : null}

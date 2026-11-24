@@ -31,7 +31,7 @@ export const CM = 'customer-money'
  * tab's WithMessages loads exactly this list, and a test holds every `namespace:` the rules and views name inside it (Z29: a raw key can
  * never show).
  */
-export const MONEY_TAB_NAMESPACES = ['orders', CM, 'sales-customers-depth', 'finance-receivables', 'finance-payments-depth', 'record-frame', 'parties', 'customers-list', 'finance', 'finance-daily' /* F-CM-203, F-CM-204 */] as const
+export const MONEY_TAB_NAMESPACES = ['orders', CM, 'sales-customers-depth', 'finance-receivables', 'finance-payments-depth', 'record-frame', 'parties', 'customers-list', 'finance', 'finance-daily' /* F-CM-203, F-CM-204 */, 'sales-credit', 'customer-terms' /* F-CM-301 */] as const
 
 export interface MoneyTabCan {
   /** money.price — every amount (the server drops them without it). */

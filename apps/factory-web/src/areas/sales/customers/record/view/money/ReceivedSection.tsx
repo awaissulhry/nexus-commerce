@@ -185,6 +185,22 @@ export function ReceivedSection({ model, input, made, sayIn, unit, menu, onRetry
         {giveBack}
         {paymentsPart}
         {fold}
+        {/* F-CM-303 (E52): the credit value of this year's returns (price grain), with its door to Sales › Returns. */}
+        {model.returnsCredit ? (
+          <p className="fw-cm-foot">
+            <span>
+              {sayIn(model.returnsCredit.currency)(word('cm.received.returns', { params: { year: model.returnsCredit.year, count: model.returnsCredit.count }, money: { amount: model.returnsCredit.amount } }))}
+              {model.returnsCredit.href ? (
+                <>
+                  {' · '}
+                  <Link className="fw-pt-link" href={model.returnsCredit.href}>
+                    {say(word('cm.received.returnsDoor'))}
+                  </Link>
+                </>
+              ) : null}
+            </span>
+          </p>
+        ) : null}
       </div>
     </Section>
   )
