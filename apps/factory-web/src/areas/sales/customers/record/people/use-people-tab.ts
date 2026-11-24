@@ -138,7 +138,8 @@ export function usePeopleTab(input: PeopleTabInput): PeopleTabContainer {
       if (editable && (add === 'contact' || add === 'address')) recordActions.onDialog?.(add === 'contact' ? { kind: 'contact' } : { kind: 'address' })
       const next = new URLSearchParams(search?.toString() ?? '')
       next.delete('add')
-      router.replace(`${pathname}?${next.toString()}${typeof window === 'undefined' ? '' : window.location.hash}`, { scroll: false })
+      const query = next.toString()
+      router.replace(`${pathname}${query ? `?${query}` : ''}${typeof window === 'undefined' ? '' : window.location.hash}`, { scroll: false })
     }
     const hash = typeof window === 'undefined' ? '' : window.location.hash.slice(1)
     if (hash) requestAnimationFrame(() => document.getElementById(decodeURIComponent(hash))?.scrollIntoView({ block: 'start' }))
