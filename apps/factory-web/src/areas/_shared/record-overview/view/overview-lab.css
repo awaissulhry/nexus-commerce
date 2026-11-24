@@ -1,0 +1,26 @@
+/* The shared overview kit's lab (/design/record-overview, F-CO-K1): the rooms one under the other, each as wide as the card width
+   it shows (its width is the room's own data) and never wider than the frame. The lab's own classes only: it styles no class of
+   the kit. Semantic tokens only. */
+.fw-rol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-24);
+  padding: var(--nds-space-16);
+  min-width: 0;
+  background: var(--nds-bg);
+  color: var(--nds-text);
+}
+
+.fw-rol-room {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.fw-rol-label {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+}

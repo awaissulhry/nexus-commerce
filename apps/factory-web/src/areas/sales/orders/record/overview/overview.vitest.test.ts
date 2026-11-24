@@ -1496,6 +1496,45 @@ describe('F-CO-K1: the Overview is drawn by the shared overview kit — the same
     for (const card of ['ProgressCard', 'PeopleCard', 'RequestsCard']) expect(read(`../view/overview/${card}.tsx`), card).toMatch(/return <PartState problem=\{/)
   })
 
+  it('the kit\'s seven text rules are copies of the order area\'s, declaration for declaration, in the same order (so a frame looks as it did)', () => {
+    const orders = read('../../orders.css')
+    const kit = read(KIT_CSS)
+    /** A rule's declarations, spaces folded: the rule whose selector (the last of its list) starts the line `at` finds. */
+    const bodyAt = (css: string, at: number): string => {
+      if (at < 0) throw new Error('no such rule')
+      return css.slice(css.indexOf('{', at) + 1, css.indexOf('}', at)).replace(/\s+/g, ' ').trim()
+    }
+    const first = (css: string, selector: string): string => bodyAt(css, css.indexOf(`\n${selector} {`))
+    const last = (css: string, selector: string): string => bodyAt(css, css.lastIndexOf(`\n${selector} {`))
+    const COPIES: readonly (readonly [string, string])[] = [
+      ['.fw-so-card-head', '.fw-ro-head'],
+      ['.fw-so-hint', '.fw-ro-hint'],
+      ["p.fw-so-hint[role='status']", "p.fw-ro-hint[role='status']"],
+      ['.fw-so-link', '.fw-ro-link'],
+      ['.fw-so-link:focus-visible', '.fw-ro-link:focus-visible'],
+      ['.fw-so-stack-tight', '.fw-ro-stack'],
+      ['.fw-so-h2', '.fw-ro-h2'],
+    ]
+    for (const [theirs, ours] of COPIES) {
+      expect(first(kit, ours), ours).toBe(first(orders, theirs))
+      expect(first(kit, ours).length, ours).toBeGreaterThan(10)
+    }
+    // h2 and h3 share one rule (found by its last selector, .fw-…-h3), then each says its own size.
+    expect(first(kit, '.fw-ro-h3')).toBe(first(orders, '.fw-so-h3'))
+    expect(first(kit, '.fw-ro-h3')).toContain('font-weight: var(--nds-font-weight-semibold);')
+    expect(last(kit, '.fw-ro-h3')).toBe(last(orders, '.fw-so-h3'))
+    expect(last(kit, '.fw-ro-h3')).toBe('font-size: var(--nds-font-size-sm);')
+    // The same order in both files: head, hint, its status line, link, stack, the titles.
+    const orderOf = (css: string, names: readonly string[]): number[] => names.map((name) => css.indexOf(`\n${name} {`))
+    for (const [css, names] of [[orders, COPIES.map(([theirs]) => theirs)], [kit, COPIES.map(([, ours]) => ours)]] as const) {
+      const at = orderOf(css, names)
+      expect(at.every((index) => index > 0), names.join(' ')).toBe(true)
+      expect([...at].sort((a, b) => a - b), names.join(' ')).toEqual(at)
+    }
+    // The order area keeps its own rules (its Lines, dialogs and lists read them): nothing left orders.css but the Overview's column.
+    for (const [theirs] of COPIES) expect(orders, theirs).toContain(`${theirs} {`)
+  })
+
   it('the stylesheets keep their order: the kit\'s file is first imported after where.css (the strips\' and the hand row\'s alignment rests on it until co-k2)', () => {
     const kitAt = (text: string): number => text.indexOf("_shared/record-overview/Overview'")
     const where = read('../view/overview/WhereCard.tsx')

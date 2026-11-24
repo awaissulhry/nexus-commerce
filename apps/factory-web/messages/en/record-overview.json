@@ -3,5 +3,18 @@
     "loading": "Loading {part}…",
     "failed": "Couldn't load {part}",
     "retry": "Try again"
+  },
+  "lab": {
+    "room": "A {width} px card",
+    "where": "Where it is now",
+    "people": "People",
+    "dates": "Next dates",
+    "linked": "Linked records",
+    "sentence": "In work · Pattern making",
+    "quiet": "Its stages are set by the sample room.",
+    "fresh": "Read at 10:42",
+    "link": "All dates ›",
+    "body": "The card's own rows come here.",
+    "problem": "The factory server is not answering: check the connection and try again."
   }
 }

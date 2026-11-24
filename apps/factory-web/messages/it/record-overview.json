@@ -3,5 +3,18 @@
     "loading": "Caricamento di {part}…",
     "failed": "Impossibile caricare {part}",
     "retry": "Riprova"
+  },
+  "lab": {
+    "room": "Scheda da {width} px",
+    "where": "A che punto è",
+    "people": "Persone",
+    "dates": "Prossime date",
+    "linked": "Record collegati",
+    "sentence": "In lavorazione · Modellistica",
+    "quiet": "Le sue fasi le segna la sala campioni.",
+    "fresh": "Letto alle 10:42",
+    "link": "Tutte le date ›",
+    "body": "Qui vanno le righe della scheda.",
+    "problem": "Il server della fabbrica non risponde: controlla la connessione e riprova."
   }
 }
