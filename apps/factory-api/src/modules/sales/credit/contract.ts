@@ -97,6 +97,7 @@ const limitRow = output({
 export const listLimitsContract = defineContract({
   querystring: input({
     companyId: id().optional(),
+    partyId: id().optional(), // F-CM-S2: one customer's row (only a customer with a limit has one)
     q: z.string().max(100).optional(),
     view: z.enum(LIMIT_VIEWS).optional(),
     cursor: z.coerce.number().int().min(0).optional(),
