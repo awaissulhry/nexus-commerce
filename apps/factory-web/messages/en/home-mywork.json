@@ -14,7 +14,6 @@
   "remind": {
     "title": "Remind me: {what}",
     "titleMessage": "Remind me about a message on {what}",
-    "aboutMessage": "Remind me about this message",
     "body": "It comes back to your Today at the time you choose, or when something changes on the record.",
     "note": "Your note",
     "noteHint": "Optional, at most {count} characters. Only you see it.",

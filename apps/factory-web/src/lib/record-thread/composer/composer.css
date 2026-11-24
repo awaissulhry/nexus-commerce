@@ -1,6 +1,7 @@
 /*
- * The composer (B-TH-205, T5; picture 3): the box takes the audience's colour — warning-soft with the lock for an Office note,
- * info-soft for a reply — and the words say it too (colour-blind safe). DS tokens only.
+ * The composer (B-TH-205, T5; tw- W2.3 THE THREAD REBUILD, 10-design §10): one row at rest — "+" · the audience chip (the audience's
+ * colour and its word: warning-soft with the lock for an Office note, info-soft for the customer) · the round box · the Send arrow.
+ * DS tokens only.
  */
 .fw-rt-composer {
   flex: none;
@@ -14,76 +15,217 @@
   min-width: 0;
 }
 
-.fw-rt-cx-top {
+/* tw- W2.3 (10-design §10, S9; P6): ONE row at rest — "+" · the audience chip · the box · the Send arrow; the chips row and ONE bar
+   above it only when there is something to say. */
+.fw-rt-cx-row {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-6);
+  min-width: 0;
 }
 
-.fw-rt-composer[data-mode='note'] .fw-rt-cx-seg [role='radio'][aria-checked='true'] {
+.fw-rt-cx-row > .fw-rt-clip,
+.fw-rt-cx-row > .fw-rt-clip-menu,
+.fw-rt-cx-row > .fw-rt-cx-aud,
+.fw-rt-cx-row > .fw-rt-cx-chipbtn,
+.fw-rt-cx-send {
+  flex: none;
+}
+
+.fw-rt-cx-chipbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  max-width: 180px;
+  height: 32px;
+  padding: 0 var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface);
+  color: var(--nds-text-strong);
+  font: inherit;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.fw-rt-cx-chipbtn.is-static {
+  cursor: default;
+}
+
+.fw-rt-cx-chipbtn:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 1px;
+}
+
+.fw-rt-cx-aud-word {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The chip in the audience's colour, and its word (colour-blind safe): yellow with the lock for an Office note, blue otherwise. */
+.fw-rt-composer[data-mode='note'] .fw-rt-cx-chipbtn {
+  background: var(--nds-warning-soft);
+  border-color: var(--nds-warning);
+  color: var(--nds-warning-text);
+}
+
+.fw-rt-composer[data-mode='reply'] .fw-rt-cx-chipbtn,
+.fw-rt-composer[data-mode='portal'] .fw-rt-cx-chipbtn {
+  background: var(--nds-info-soft);
+  border-color: var(--nds-info);
+  color: var(--nds-info-text);
+}
+
+.fw-rt-cx-send {
+  height: 32px;
+  min-width: 32px;
+  border-radius: var(--nds-radius-pill);
+}
+
+/* Saved replies: an icon inside the box (its word and arrow give way; the button keeps its name). */
+.fw-rt-cx-helpers {
+  flex: none;
+  align-self: flex-end;
+}
+
+.fw-rt-cx-helpers .fw-rtm-replies-word,
+.fw-rt-cx-helpers .nds-menu-wrap > button > svg:last-child {
+  display: none;
+}
+
+.fw-rt-cx-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-rt-cx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  max-width: 100%;
+  min-height: 26px;
+  padding: 0 var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-rt-cx-chip.is-floor {
+  background: var(--nds-warning-soft);
+  border-color: var(--nds-warning);
+  color: var(--nds-warning-text);
+}
+
+.fw-rt-cx-chip-x {
+  display: inline-flex;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.fw-rt-cx-chip:focus-visible,
+.fw-rt-cx-chip-x:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 1px;
+}
+
+/* ONE bar above the box: a hold, the reply (the quoted sender's colour bar, the name, one line, ×), the correction, a switch note. */
+.fw-rt-cx-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+  margin: 0;
+  padding: var(--nds-space-4) var(--nds-space-4) var(--nds-space-4) var(--nds-space-10);
+  border-inline-start: 3px solid var(--fw-rt-tone-fg, var(--nds-border-strong));
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.fw-rt-cx-bar.is-held {
+  flex-wrap: wrap;
+  border-inline-start-color: var(--nds-warning);
   background: var(--nds-warning-soft);
   color: var(--nds-warning-text);
 }
 
-.fw-rt-composer[data-mode='reply'] .fw-rt-cx-seg [role='radio'][aria-checked='true'],
-.fw-rt-composer[data-mode='portal'] .fw-rt-cx-seg [role='radio'][aria-checked='true'] {
-  background: var(--nds-info-soft);
-  color: var(--nds-info-text);
+.fw-rt-cx-quote {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fw-rt-cx-quote.is-correct {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-rt-cx-quote > b {
+  color: var(--fw-rt-tone-fg, var(--nds-text));
+  font-weight: 600;
+}
+
+.fw-rt-cx-quote > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Under 420 px the chip gives way to its icon (its name stays for a screen reader). */
+@container fw-rtcol (max-width: 420px) {
+  .fw-rt-cx-aud-word {
+    display: none;
+  }
 }
 
 .fw-rt-cx-box {
   position: relative;
+  flex: 1 1 auto;
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: flex-end;
   gap: 6px;
-  padding: 8px 10px;
+  padding: 5px 6px 5px 12px;
   border: 1px solid var(--nds-border);
-  border-radius: var(--nds-radius-lg);
+  border-radius: 18px;
   background: var(--nds-surface);
-  transition: background 0.15s ease, border-color 0.15s ease;
   min-width: 0;
 }
 
-.fw-rt-composer[data-mode='note'] .fw-rt-cx-box {
-  background: var(--nds-warning-soft);
-  border-color: var(--nds-warning);
-}
-
-.fw-rt-composer[data-mode='reply'] .fw-rt-cx-box,
-.fw-rt-composer[data-mode='portal'] .fw-rt-cx-box {
-  background: var(--nds-info-soft);
-  border-color: var(--nds-info);
+.fw-rt-cx-box > .fw-rt-attach,
+.fw-rt-cx-box > .fw-rt-tray {
+  flex-basis: 100%;
 }
 
 .fw-rt-cx-box:focus-within {
   box-shadow: 0 0 0 2px var(--nds-text);
 }
 
-.fw-rt-cx-mark {
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--nds-font-size-sm);
-  font-weight: 700;
-}
-
-.fw-rt-composer[data-mode='note'] .fw-rt-cx-mark {
-  color: var(--nds-warning-text);
-}
-
-.fw-rt-composer[data-mode='reply'] .fw-rt-cx-mark,
-.fw-rt-composer[data-mode='portal'] .fw-rt-cx-mark {
-  color: var(--nds-info-text);
-}
-
 /* The text box is TH-1c's MentionInput (a DS Textarea): inside the coloured box the box itself is the field (its focus ring is
    the box's), so the textarea draws no border or ground of its own. */
 .fw-rt-cx-box .fw-rt-cx-text {
-  width: 100%;
+  flex: 1 1 160px;
+  width: auto;
   box-shadow: none;
-  min-height: 40px;
+  /* tw- W2.3 (P0-B2): ONE height rule, owned here — one line at rest (never 0 px, whatever the DS textarea's own minimum), up to
+     about 8 lines while typing (the view sets the height between them), then it scrolls inside. */
+  min-height: 24px;
+  max-height: calc(8 * 1.55em + 12px);
   resize: none;
   border: none;
   outline: none;
@@ -92,7 +234,7 @@
   font: inherit;
   font-size: var(--nds-font-size-base);
   line-height: 1.55;
-  padding: 0;
+  padding: 3px 0;
   overflow-y: hidden;
 }
 
@@ -150,26 +292,13 @@
   gap: 4px 8px;
 }
 
-.fw-rt-cx-floor,
-/* F-SA-282a: the tick "This text names no other customer" sits like the floor's tick. */
+/* F-SA-282a: the tick "This text names no other customer", in the bar. */
 .fw-rt-cx-tick {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.fw-rt-cx-foot {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.fw-rt-cx-grow {
-  flex: 1 1 auto;
-}
-
-.fw-rt-cx-heldtext,
 .fw-rt-cx-count {
   font-size: var(--nds-font-size-xs-plus);
   color: var(--nds-text-2);
@@ -197,25 +326,6 @@
 
 .fw-rt-cx-held > span {
   flex: 1 1 200px;
-}
-
-/* B-TH-236: what the message answers or corrects, above the box ("Replying to Alma, 14 Nov ×"). */
-.fw-rt-cx-link {
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  padding: 2px 4px 2px 10px;
-  border-inline-start: 2px solid var(--nds-border-strong);
-  color: var(--nds-text-2);
-  font-size: var(--nds-font-size-sm);
-}
-
-.fw-rt-cx-link > span {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow-wrap: anywhere;
 }
 
 /* B-TH-283: a drag over the box offers two sides — the message's files, or measurement sheets (body data). */

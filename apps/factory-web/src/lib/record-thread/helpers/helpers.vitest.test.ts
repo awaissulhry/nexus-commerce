@@ -297,13 +297,15 @@ describe('B-TH-289 — “Remind me in 3 days if no answer”', () => {
     expect(followUpAt(Date.UTC(2026, 10, 17, 10, 0))).toBe('2026-11-20T10:00:00.000Z')
   })
 
-  it('the tick says who stops it (only the customer’s answer), held with why, in it and en', () => {
+  // tw- W2.3 (10-design §10): a chip in the composer's chips row — "Follow up" / "Follow up in 3 days" (pressed); the rule in its tooltip.
+  it('the chip says who stops it (only the customer’s answer), held with why, in it and en', () => {
     for (const locale of LOCALES) {
       const html = drawAll(createElement(FollowUpTick, { model: { on: true, held: null, party: BRAND_BETA.tradeName } }), locale)
       const text = textOf(html)
-      expect(text).toContain(locale === 'en' ? 'Remind me in 3 days if no answer' : 'Ricordamelo tra 3 giorni se non rispondono')
+      expect(text).toContain(locale === 'en' ? 'Follow up in 3 days' : 'Promemoria tra 3 giorni')
       expect(text).toContain(BRAND_BETA.tradeName)
-      expect(html).toContain('checked')
+      expect(html).toContain('aria-pressed="true"')
+      expect(textOf(drawAll(createElement(FollowUpTick, { model: { on: false, held: null, party: BRAND_BETA.tradeName } }), locale))).toContain(locale === 'en' ? 'Follow up' : 'Promemoria')
       const held = drawAll(createElement(FollowUpTick, { model: { on: true, held: { key: 'followUp.offline' }, party: BRAND_BETA.tradeName } }), locale)
       expect(held).toContain('disabled')
       expect(held).not.toContain('checked=""')

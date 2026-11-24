@@ -10,8 +10,10 @@ import { excerptOf, replyWay } from '../../../lib/record-thread/card/model'
 import { senderTone } from '../../../lib/record-thread/parts/tones'
 import type { FeedPin } from '../../../lib/record-thread/feed/model'
 import { JUMP_LIMIT, JUMP_PAGE, type OfficeMessage } from './api'
+import { barPinsOf } from '../../../lib/record-thread/head/pins-bar' // tw- W2.1: the pinned bar (Z14: every host)
 import { jumpRefusal } from './state'
-import { cardDepth } from '../../../lib/record-thread/card/model' // B-TH-255
+import { cardDepth, copyTextOf } from '../../../lib/record-thread/card/model' // B-TH-255; tw- W2.2: Copy text
+import { askRemindMe } from '../../../shell/panels/remind-me/model' // tw- W2.2: a message's Remind me
 import { startDraft, switchMode, type ComposerContext, type ComposerDraft } from '../../../lib/record-thread/composer/model'
 // TH-1c's helpers (B-TH-208) and pop-ups (B-TH-211): the draft kept on this device, @mentions, the leave guard.
 import { draftKey, mentionsIn, readDraft, writeDraft, type LocalDraft } from '../../../lib/record-thread/helpers/model'
@@ -41,7 +43,7 @@ import { heldForNamesPrice, pricesInWordsOkOf } from '../../../lib/record-thread
 import { namesPriceRefused } from '../../../lib/record-thread/send-check/model'
 import { refusalCode } from './state'
 import { aboutRefOf, bodyWithAbout } from '../../../lib/record-thread/composer/model' // F-SA-265 (Discuss)
-import { afterRead, applyNewest, applyOlder, checkProblemOf, EMPTY_SERVER, readStatusOf, replyRefusal, sendReason, uploadReason, type ServerThread, type Work } from './state'
+import { afterRead, applyNewest, applyOlder, checkProblemOf, EMPTY_SERVER, readStatusOf, replyRefusal, sendReason, stepUpOf, uploadReason, type ServerThread, type Work } from './state'
 // B-TH-229: the person's own read mark (B-TH-027).
 import { markThreadRead } from './api'
 import { readMarker } from './state'
@@ -195,7 +197,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
         return next
       })
     } catch (error) {
-      setServer((current) => (current.status === 'ready' ? current : { ...current, status: readStatusOf(error) }))
+      setServer((current) => (current.status === 'ready' ? current : { ...current, status: readStatusOf(error), ...(stepUpOf(error) ? { stepUp: true } : {}) /* tw- W2.4 (B6) */ }))
     }
   }, [api, key])
   const loadOlder = useCallback(async () => {
@@ -575,6 +577,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   // B-TH-286: the pinned messages (the card's pin and its ⋯ "Unpin").
   const pinnedIds = useMemo(() => new Set((pins ?? []).map((pin) => pin.messageId)), [pins])
   // tw- W1.3 (10-design §7): "Alex Demo pinned a message" — the office's pins with who pinned them (this container is office only).
+  // tw- W2.1 (W-080, P11, R12): the pinned bar's pins, newest first (a writer kept back by the gate: "A person on the floor").
+  const pinned = useMemo(() => barPinsOf(pins ?? []), [pins])
   const pinPills = useMemo<FeedPin[]>(() => (pins ?? []).flatMap((pin) => (pin.pinnedBy?.name ? [{ messageId: pin.messageId, at: pin.pinnedAt, by: pin.pinnedBy.name }] : [])), [pins])
   const cards = useMemo<CardMessage[]>(
     // B-TH-255 (T3-F14, T3-F15): each card also says whether its writer was erased and which files of its mail were not kept.
@@ -607,6 +611,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   }
   const feed: FeedModel = {
     state: server.status,
+    ...(server.status === 'forbidden' && server.stepUp ? { forbiddenWhy: 'stepUp' as const } : {}), // tw- W2.4 (B6)
     messages: withOutbox(cards, work.outbox),
     events: changes.filter(feedShowsChange).map((entry) => eventOf(entry, names)),
     context: {
@@ -622,6 +627,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
       canPin: can.post && offline === null,
       // tw- W1.4 (D4, Z12): Reply on every message, the way the reader may answer — an office note, the customer by email, the portal.
       replyWays: { note: can.post, email: can.email && party !== null, portal: context.portal === true },
+      // tw- W2.2: "Remind me" on a message — the reader's own reminders live on Home (home.view).
+      canRemind: held.has('home.view'),
     },
     more: server.more,
     older: server.older,
@@ -666,6 +673,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     kept,
     notice,
     saved, // B-TH-287
+    pinned, // tw- W2.1
   }
 
   // ── doing ────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -1155,6 +1163,17 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     // ---- B-TH-283 (B-TH-083): files that go up as measurement sheets.
     onSheets: (dropped) => addFiles(dropped, true),
     // ---- end B-TH-236 / B-TH-283
+    // tw- W2.2 (10-design §9): Copy text — the message's own words; said copied (or why not) as Copy link says it.
+    onCopyText: (messageId) => {
+      const words = copyTextOf(cards.find((card) => card.id === messageId) ?? {})
+      if (words === null) return
+      navigator.clipboard
+        ?.writeText(words)
+        .then(() => setNotice({ ns: 'record-thread', key: 'notice.textCopied', tone: 'success' }))
+        .catch(() => setNotice({ ns: 'record-thread', key: 'notice.textFailed', tone: 'warning' }))
+    },
+    // tw- W2.2: Remind me — the record's ONE Remind me dialog about this message (use-thread-reminder answers the window event).
+    ...(held.has('home.view') ? { onRemind: (messageId: string) => askRemindMe({ recordType: key.type, recordId: key.id, messageId }) } : {}),
     onCopyLink: (messageId) => {
       const base = host.recordHref ?? `${window.location.pathname}${window.location.search}`
       const address = `${window.location.origin}${messageLink(base, messageId)}`

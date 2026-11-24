@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, type KeyboardEvent, type ReactNode } from 'react'
+import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Banner } from '@nexus/ui/components'
 import { useT } from '../i18n/provider'
 import { AttachmentLines, AttachmentTray, ClipMenu, FromRecordPicker } from './attachments/view/AttachmentTray'
@@ -18,6 +18,14 @@ import { ThreadMessages } from './parts/ThreadMessages'
 // B-TH-287: the draft on the server; B-TH-289: "Remind me in 3 days if no answer".
 import type { DraftSaved } from './composer/server-draft'
 import { FollowUpTick, type FollowUpModel } from './helpers/view/FollowUp'
+// tw- W2.1 (Z4, Z14): the pick goes into the head's title; the pinned bar lives here, for every host.
+import { HeadPickProvider } from './head/view/HeadPick'
+import { PinnedBar } from './head/view/PinnedBar'
+import type { BarPin } from './head/pins-bar'
+// tw- W2.2 (B7, Z2): the ONE Email details window, opened from a message's menu, for every host.
+import { emailDetailsOf, type CardMessage } from './card/model'
+import { verdictOf } from './popups/model'
+import { OriginalEmail, type OriginalEmailModel } from './popups/view/OriginalEmail'
 import './record-thread.css'
 
 export interface ThreadComposerModel {
@@ -55,6 +63,8 @@ export interface RecordThreadModel {
   notice?: { ns: string; key: string; params?: Record<string, string | number>; tone: 'success' | 'info' | 'warning' | 'danger' } | null
   /** B-TH-287 (B-TH-092): the draft on the server — "Draft saved 10:42", "Not saved · Retry"; null: the device line. */
   saved?: DraftSaved | null
+  /** tw- W2.1 (W-080, Z14): the pins, newest first, for the pinned bar under the head (every host; the Incoming pane too). */
+  pinned?: readonly BarPin[]
 }
 
 export interface RecordThreadActions extends FeedActions {
@@ -87,19 +97,17 @@ export interface RecordThreadActions extends FeedActions {
 }
 
 /**
- * The docked thread's bands above the feed (B-TH-300; pictures 6–11): the Head with Activity's doors (T1) and the files line (T2),
- * and the helpers beside the box (T8). Slots drawn by the office container: this view imports no office code.
+ * The docked thread's bands above the feed (B-TH-300; pictures 6–11): the Head with Activity's doors (T1; tw- W2.1: one row, the pick
+ * as its title, Files as an icon), and the helpers beside the box (T8). Slots drawn by the office container: this view imports no office code.
  */
 export interface RecordThreadSlots {
-  // ---- F-OP-201 (order page plan N4; 11-dock §0.1, §1): the dock's pick band (ThreadPick's, handed down by the docked container) —
-  // the FIRST band inside the column, drawn also when the feed is forbidden (the person must be able to pick another thread). Absent
-  // on a page without a pick (a quote, an invoice): nothing is drawn, the column is as before.
+  // ---- F-OP-201 (order page plan N4; 11-dock §0.1, §1): the dock's pick (ThreadPick's, handed down by the docked container). tw- W2.1
+  // (Z4): no band of its own — the head draws it as its title (HeadPick); when the feed is forbidden only that title is drawn (P19:
+  // the person can still pick another thread). Absent on a page without a pick (a quote, an invoice): the head shows the record.
   top?: ReactNode
   // ---- end F-OP-201
-  /** The Head (lib/record-thread/head): one 44 px row; not drawn without threads.read. */
+  /** The Head (lib/record-thread/head): one row of two lines; not drawn without threads.read (its title alone then, with the pick). */
   head?: ReactNode
-  /** The files line (lib/record-thread/files): absent with no files. */
-  filesLine?: ReactNode
   /** Saved replies ▾ beside the @ button. */
   helpers?: ReactNode
   /** The pop-ups the bands open (file viewer, Files view, the doors' dialogs): drawn after the column. */
@@ -109,21 +117,25 @@ export interface RecordThreadSlots {
 /**
  * RecordThread (B-TH-212 v1, B-TH-300 docked; pictures 1–11): a record's thread in ONE column — the feed (oldest at the top) and the
  * box at the bottom, with its files, To / Cc and the send check — for Incoming's reading pane and the request's full page; docked on
- * a record page (RecordFrame) the Head and the files line join above the feed (3 bands above the first message with the band in the
- * shell's row) and the helpers beside the box. R and N switch the box from anywhere in the column outside a field; J / K walk the
+ * a record page (RecordFrame) the Head joins above the feed and, with a pin, the pinned bar (tw- W2.1: at most these 2 bands above the
+ * first message) and the helpers beside the box. R and N switch the box from anywhere in the column outside a field; J / K walk the
  * messages while the feed has the focus. Office only (PR-15: the portal keeps the DS PartnerThread). Draws its model: the office
  * container (areas/_shared/record-thread) reads, re-reads live and sends.
  */
-export function RecordThread({ model, actions, remind, slots }: { model: RecordThreadModel; actions: RecordThreadActions; remind?: (messageId: string) => ReactNode; slots?: RecordThreadSlots }) {
+export function RecordThread({ model, actions, slots }: { model: RecordThreadModel; actions: RecordThreadActions; slots?: RecordThreadSlots }) {
   return (
     <ThreadMessages>
-      <Column model={model} actions={actions} remind={remind} slots={slots} />
+      <Column model={model} actions={actions} slots={slots} />
     </ThreadMessages>
   )
 }
 
-function Column({ model, actions, remind, slots }: { model: RecordThreadModel; actions: RecordThreadActions; remind?: (messageId: string) => ReactNode; slots?: RecordThreadSlots }) {
+function Column({ model, actions, slots }: { model: RecordThreadModel; actions: RecordThreadActions; slots?: RecordThreadSlots }) {
   const t = useT('record-thread')
+  const card = useT('record-thread-card')
+  // tw- W2.2: the message whose Email details are open (the window reads the message as the feed holds it: nothing is fetched).
+  const [detailsOf, setDetailsOf] = useState<string | null>(null)
+  const details = detailsOf ? emailWindowOf(model.feed.state === 'ready' ? model.feed.messages.find((one) => one.id === detailsOf) : undefined, card) : null
   const attach = useT('record-thread-attach')
   const send = useT('record-thread-send')
   const notice = useT(model.notice?.ns ?? 'record-thread')
@@ -158,10 +170,11 @@ function Column({ model, actions, remind, slots }: { model: RecordThreadModel; a
   return (
     <>
       <section ref={column} className={`fw-rt-column${slots?.head || slots?.top /* F-OP-201 */ ? ' is-docked' : ''}`} aria-label={t('label', { record: model.title })} onKeyDown={onKeyDown}>
-        {/* F-OP-201: the pick band first — kept when the feed is forbidden (the Head and the files line hide then). */}
-        {slots?.top ? <div className="fw-rt-top">{slots.top}</div> : null}
-        {model.feed.state !== 'forbidden' && slots?.head}
-        {model.feed.state !== 'forbidden' && slots?.filesLine}
+        <HeadPickProvider pick={slots?.top ?? null}>
+        {/* tw- W2.1 (Z4, P19): the head with the pick as its title; a forbidden feed keeps only the title (the pick), no tools. */}
+        {model.feed.state !== 'forbidden' && slots?.head ? slots.head : slots?.top ? <TitleOnly pick={slots.top} /> : null}
+        {/* tw- W2.1 (W-080, Z14): the pinned bar — the second and last band above the first message (S7). */}
+        {model.feed.state !== 'forbidden' && model.pinned && model.pinned.length > 0 ? <PinnedBar pins={model.pinned} onJump={actions.onJump} /> : null}
         {model.notice && (
           <div className="fw-rt-notice" role={model.notice.tone === 'danger' ? 'alert' : 'status'}>
             <Banner tone={model.notice.tone} onDismiss={actions.onDismissNotice}>
@@ -187,8 +200,8 @@ function Column({ model, actions, remind, slots }: { model: RecordThreadModel; a
               actions.onCorrect?.(messageId)
               focusBox()
             },
+            onEmailDetails: (messageId) => setDetailsOf(messageId), // tw- W2.2
           }}
-          remind={remind}
         />
         {model.feed.state !== 'forbidden' && (
           <Composer
@@ -202,7 +215,8 @@ function Column({ model, actions, remind, slots }: { model: RecordThreadModel; a
             recipients={<Recipients to={composer.to} cc={composer.cc} subject={composer.subject} contacts={composer.contacts} partyName={party} onChange={actions.onLines} />}
             tray={<AttachmentTray files={composer.files} partyName={party} onRemove={actions.onRemoveFile} onRetry={actions.onRetryFile} />}
             lines={<AttachmentLines files={composer.files} mode={mode} partyName={party} canShare={composer.canShare} overMailLimit={mailBytes(composer.files) > MAIL_MAX} onShare={actions.onShareFile} onRemove={actions.onRemoveFile} />}
-            clip={<ClipMenu canUpload={composer.canUpload} canPick={composer.canPick} onFiles={actions.onFiles} onPick={() => actions.onPicker(true)} onSheets={actions.onSheets} />}
+            // tw- W2.3: the "+" — the files' rows, then the composer's own (Saved replies · Amount · For the floor).
+            plus={(more) => <ClipMenu canUpload={composer.canUpload} canPick={composer.canPick} onFiles={actions.onFiles} onPick={() => actions.onPicker(true)} onSheets={actions.onSheets} more={more} />}
             onDraft={actions.onDraft}
             onSend={actions.onSend}
             onReopen={actions.onReopen}
@@ -211,17 +225,9 @@ function Column({ model, actions, remind, slots }: { model: RecordThreadModel; a
             onFiles={composer.canUpload ? actions.onFiles : undefined}
             onSheets={composer.canUpload ? actions.onSheets : undefined}
             hint={<DraftLine draft={model.kept ?? null} saved={model.saved ?? null} onRetry={actions.onRetryDraft} /* B-TH-287 */ />}
-            helpers={
-              composer.followUp ? (
-                <>
-                  {slots?.helpers}
-                  {/* B-TH-289: beside Saved replies, on a message to the customer. */}
-                  <FollowUpTick model={composer.followUp} onChange={actions.onFollowUp} />
-                </>
-              ) : (
-                slots?.helpers
-              )
-            }
+            helpers={slots?.helpers}
+            // B-TH-289 / tw- W2.3: the Follow up chip, in the chips row on a message to the customer.
+            followUp={composer.followUp ? <FollowUpTick model={composer.followUp} onChange={actions.onFollowUp} /> : null}
           />
         )}
         <FromRecordPicker open={model.pickerOpen ?? false} files={composer.recordFiles} mode={mode} partyName={party} record={composer.context.recordLabel} onClose={() => actions.onPicker(false)} onAdd={actions.onAddRecordFiles} />
@@ -240,8 +246,39 @@ function Column({ model, actions, remind, slots }: { model: RecordThreadModel; a
           actions={{ onBack: actions.onCheckBack, onRetry: actions.onCheckRetry, onOutside: actions.onOutside, onConfirm: actions.onConfirm }}
         />
         {model.leaving && <LeaveConfirm files={composer.files.filter((file) => file.phase !== 'refused').length} onStay={actions.onStay} onDiscard={actions.onDiscard} />}
+        {details && <OriginalEmail model={details} onClose={() => setDetailsOf(null)} />}
+        </HeadPickProvider>
       </section>
       {slots?.overlays}
     </>
+  )
+}
+
+/** tw- W2.2: a message's Email details as the window says them (our email's state in its words; an inbound one's checks); null: none. */
+export function emailWindowOf(message: CardMessage | undefined, card: (key: string) => string): OriginalEmailModel | null {
+  const details = message ? emailDetailsOf(message) : null
+  if (!details) return null
+  return {
+    from: details.from,
+    to: details.to,
+    cc: details.cc,
+    subject: details.subject,
+    receivedAt: details.at,
+    bodyHtml: null,
+    bodyText: details.text,
+    verdicts: details.verdicts ? { spf: verdictOf(details.verdicts.spf), dkim: verdictOf(details.verdicts.dkim), dmarc: verdictOf(details.verdicts.dmarc) } : null,
+    sent: details.sent,
+    status: details.status ? card(`delivery.${details.status}`) : null,
+  }
+}
+
+/** tw- W2.1 (P19): a head of its title alone — the dock's pick — when the thread may not be read (no tools, no count). */
+function TitleOnly({ pick }: { pick: ReactNode }) {
+  return (
+    <div className="fw-rth is-title-only">
+      <div className="fw-rth-titleblock">
+        <div className="fw-rth-title">{pick}</div>
+      </div>
+    </div>
   )
 }

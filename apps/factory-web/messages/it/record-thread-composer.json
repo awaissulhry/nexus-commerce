@@ -4,18 +4,9 @@
     "note": "Nota d'ufficio",
     "reply": "Rispondi a {party}",
     "replyProspect": "Rispondi a {party} (nuovo)",
-    "portal": "Solo nel portale"
+    "portal": "Nel portale"
   },
-  "mark": {
-    "note": "Nota d'ufficio · la leggono solo i tuoi colleghi",
-    "reply": "Email a {party} · la leggono le persone in A e Cc",
-    "portal": "Nel portale di {party} · nessuna e-mail"
-  },
-  "placeholder": {
-    "note": "Scrivi una nota d'ufficio per i colleghi · @ menziona un collega",
-    "reply": "Scrivi a {party}",
-    "portal": "Scrivi a {party}: lo legge nel suo portale"
-  },
+  "placeholder": "Scrivi un messaggio",
   "send": {
     "note": "Aggiungi la nota",
     "reply": "Invia a {party}",
@@ -24,7 +15,7 @@
   "live": {
     "note": "Nota d'ufficio — la leggono solo i tuoi colleghi",
     "reply": "Rispondi a {party} — {party} la legge",
-    "portal": "Solo nel portale — {party} lo legge nel suo portale, nessuna e-mail"
+    "portal": "Nel portale — {party} lo legge nel suo portale, nessuna email"
   },
   "held": {
     "offline": "Sei offline · il tuo testo resta su questo dispositivo",
@@ -38,10 +29,10 @@
     "namesOther": "Il testo nomina un altro cliente: cambialo, oppure spunta «Questo testo non nomina altri clienti»."
   },
   "box": {
-    "closed": "Chiusa da {who}, {date}. Il cliente non può scrivere qui.",
-    "closedPlain": "Questa conversazione è chiusa. Il cliente non può scrivere qui.",
+    "closed": "Chiuso da {who}, {date}",
+    "closedPlain": "Questo thread è chiuso.",
     "reopen": "Riapri",
-    "noRight": "Puoi leggere questa conversazione; per scrivere serve un altro ruolo.",
+    "noRight": "Puoi leggere questo thread; per scrivere serve un altro ruolo.",
     "noParty": "Questo record non ha un cliente: solo note."
   },
   "prospect": {
@@ -59,7 +50,6 @@
   "floor": {
     "label": "Per il reparto",
     "on": "I tablet di {record} la mostrano: niente prezzi, i primi {limit} caratteri, per 14 giorni, nessun file, nessun nome. Nessuno registra chi l'ha letta.",
-    "off": "Spenta: questa nota la legge solo l'ufficio.",
     "long": "Il tablet mostra i primi {limit} caratteri.",
     "locked": "La nota che correggi è sui tablet: anche la correzione va lì."
   },
@@ -70,16 +60,13 @@
     "sheets": "Come schede misure (dati del corpo)"
   },
   "counter": "Restano {count} caratteri",
-  "portal": {
-    "line": "{party} lo legge nel suo portale. Nessuna e-mail viene inviata: le sue impostazioni di posta decidono quando lo sa (subito, se non le ha cambiate)."
-  },
   "link": {
     "replying": "In risposta a {who}, {when}",
     "someone": "una persona del reparto",
     "correcting": {
-      "note": "Correggi la tua nota d'ufficio delle {time}: la vecchia resta e dice “Corretto più sotto”",
-      "reply": "Correggi la tua mail delle {time}: chi l'ha ricevuta riceve la correzione",
-      "portal": "Correggi il tuo messaggio delle {time} nel portale di {party}"
+      "note": "Correggi la tua nota delle {time}",
+      "reply": "Correggi la tua email delle {time}",
+      "portal": "Correggi il tuo messaggio delle {time}"
     },
     "dropReply": "Non più una risposta a quel messaggio",
     "dropCorrect": "Non più una correzione"
@@ -94,5 +81,9 @@
   "about": {
     "chip": "Riguardo: {thing}",
     "drop": "Togli il riferimento"
+  },
+  "modeMenu": {
+    "reply": "Rispondi a {party} via email",
+    "portal": "Nel portale di {party}"
   }
 }

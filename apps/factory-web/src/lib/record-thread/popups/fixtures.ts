@@ -88,7 +88,5 @@ export const designScreen = defineDesignScreen<PopupsCaseModel>({
     { id: 'leave', label: 'Leave with unsent text?', model: { show: 'leave', files: 2 }, note: 'Stay has the focus; Discard drops the words and the two files.' },
     { id: 'close', label: 'Close thread? (threads.manage)', model: { show: 'close', record: 'SO-2026-0142', party: BRAND_ALPHA.tradeName, problem: null }, note: 'The consequence in words before the click; Reopen undoes it exactly.' },
     { id: 'close-conflict', label: 'Close thread? — changed meanwhile', model: { show: 'close', record: 'SO-2026-0142', party: BRAND_ALPHA.tradeName, problem: 'close.conflict' } },
-    { id: 'count', label: 'One count popover', model: { show: 'count', count: { kind: 'tasks', count: 7, lines: [{ id: 'a', label: 'Check the collar piping on the sample', meta: 'Bea Esempio · due 14 Nov' }, { id: 'b', label: 'Send the size chart', meta: 'Alex Demo · due 18 Nov' }, { id: 'c', label: 'Book the courier', meta: 'Carlo Prova' }, { id: 'd', label: 'Confirm the lining colour', meta: 'Dora Campione' }, { id: 'e', label: 'Print the labels', meta: 'Alex Demo' }], held: null } }, note: 'Enter opens it; five lines, "and 2 more", one action; Esc closes and the focus returns to the chip.' },
-    { id: 'count-held', label: 'Count popover — the action held', model: { show: 'count', count: { kind: 'followers', count: 2, lines: [{ id: 'a', label: 'Alex Demo', meta: 'made it' }, { id: 'b', label: 'Bea Esempio', meta: 'was mentioned' }], held: 'You need the right “Write in threads”.' } } },
   ],
 })

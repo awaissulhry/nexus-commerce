@@ -10,7 +10,6 @@ import { SavedReplies } from '../../../../lib/record-thread/helpers/view/SavedRe
 import { useLocale } from '../../../../lib/i18n/provider'
 import { useOfficeApi } from '../../../../lib/session/context'
 import { fillReply, listReplies } from '../../../_shared/document-send/template/api'
-import { MessageRemindMe } from '../../../../shell/panels/remind-me/view/MessageRemindMe'
 import { useRecordThread, type RecordThreadHost } from '../../../_shared/record-thread/use-record-thread'
 
 /**
@@ -99,7 +98,8 @@ export function RequestThread({ host, ask = null, onAsk, replyLanguage = null }:
   // B-TH-289: the question of Ask for info goes through the request's own route (Need info: the request waits on the customer by its
   // state) — no follow-up tick there; any other reply keeps it.
   const model = askingNow ? { ...thread.model, composer: { ...thread.model.composer, followUp: null } } : thread.model
-  return <RecordThread model={model} actions={actions} remind={(messageId) => <MessageRemindMe record={host.record} messageId={messageId} />} slots={replies ? { helpers: replies } : undefined} />
+  // tw- W2.2: a message's Remind me is a row of its menu (the container's door), no button of the host's.
+  return <RecordThread model={model} actions={actions} slots={replies ? { helpers: replies } : undefined} />
 }
 
 /**

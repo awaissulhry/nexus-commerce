@@ -2,7 +2,7 @@
 
 import { useId } from 'react'
 import { BellRing } from 'lucide-react'
-import { Checkbox, Tooltip } from '@nexus/ui/primitives'
+import { Tooltip } from '@nexus/ui/primitives'
 import { useT } from '../../../i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { FOLLOW_UP_DAYS } from '../model'
@@ -36,15 +36,17 @@ function Tick({ model, onChange }: { model: FollowUpModel; onChange?: ((on: bool
   const t = useT(HELPERS_NS)
   const hintId = useId()
   const hint = model.held ? t(model.held.key, model.held.params) : t('followUp.hint', { party: model.party })
+  const on = model.on && !model.held
+  // tw- W2.3 (10-design §10): a chip in the chips row — "Follow up" / "Follow up in 3 days" (pressed); the rule in its tooltip.
   return (
     <Tooltip label={hint} portal>
-      <span className="fw-rtm-followup">
+      <button type="button" className={`fw-rt-cx-chip fw-rtm-followup${on ? ' is-on' : ''}`} aria-pressed={on} disabled={model.held !== null} aria-describedby={hintId} onClick={() => onChange?.(!on)}>
         <BellRing size={13} aria-hidden />
-        <Checkbox label={t('followUp.label', { days: FOLLOW_UP_DAYS })} checked={model.on && !model.held} disabled={model.held !== null} onChange={(event) => onChange?.(event.target.checked)} aria-describedby={hintId} />
+        {on ? t('followUp.chipOn', { days: FOLLOW_UP_DAYS }) : t('followUp.chip')}
         <span id={hintId} className="nds-vh">
           {hint}
         </span>
-      </span>
+      </button>
     </Tooltip>
   )
 }

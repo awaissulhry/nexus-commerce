@@ -50,12 +50,15 @@ describe('each kind of bubble says who reads it in words and icons, never by sid
     expect(textOf(html)).not.toMatch(/\bUs\b|Email to /)
   })
 
-  it('our mail: no "Us", no "Email to", the delivery as two grey ticks with its word; To and Subject stay a quiet line until Email details', () => {
+  // tw- W2.2 (B7): To · Cc · Subject moved into the menu's Email details — no line of them in the bubble.
+  it('our mail: no "Us", no "Email to", the delivery as two grey ticks with its word; To and Subject only in Email details', () => {
     const html = card(OURS)
     const text = textOf(html)
     expect(text).not.toMatch(/\bUs\b|Email to /)
     expect(html).toContain('class="fw-rt-mi is-ok" title="Delivered"')
-    expect(text).toContain(`To ${BRAND_ALPHA.contact.email} · Subject:`)
+    expect(text).not.toContain(BRAND_ALPHA.contact.email)
+    expect(text).not.toContain('Subject:')
+    expect(emailDetailsOf(OURS)).toMatchObject({ to: [BRAND_ALPHA.contact.email], sent: true, status: 'DELIVERED' })
   })
 
   it('an Office note: the one yellow, the lock with "Office only", the @name coloured in its words (no "Mentioned:" line)', () => {
@@ -157,10 +160,12 @@ describe('files on a card', () => {
 
 describe('the ⋯ menu and the message on its way', () => {
   // tw- W1.1: with the reader's ways (replyWays) Reply is on every message (the W1.1 tests); without them, as before.
+  // tw- W2.2 (S8): ONE order — Reply · Reply privately · Copy text · Copy link · Pin · Remind me · Make a task · Answer… · Correct ·
+  // Email details · Use on another record…
   it('a host that does not say its ways: Reply only on the customer’s message for a reader who may answer; a task where the host has tasks; the link always', () => {
-    expect(cardActions(MAIL, CONTEXT)).toEqual(['reply', 'task', 'link'])
-    expect(cardActions(MAIL, { canReply: false, canTask: false })).toEqual(['link'])
-    expect(cardActions(NOTE, CONTEXT)).toEqual(['task', 'link'])
+    expect(cardActions(MAIL, CONTEXT)).toEqual(['reply', 'copyText', 'link', 'task', 'emailDetails'])
+    expect(cardActions(MAIL, { canReply: false, canTask: false })).toEqual(['copyText', 'link', 'emailDetails'])
+    expect(cardActions(NOTE, CONTEXT)).toEqual(['copyText', 'link', 'task'])
     expect(cardActions({ ...OURS, outbox: { state: 'sending' } }, CONTEXT)).toEqual([])
   })
 
@@ -229,10 +234,10 @@ describe('B-TH-231: hidden files counted, a sheet named as locked, “Use on ano
   })
 
   it('“Use on another record…” only for a reader who may add files and a message with a file they open', () => {
-    expect(cardActions(OURS, { ...CONTEXT, canUseOn: true })).toEqual(['task', 'useOn', 'link'])
-    expect(cardActions(OURS, { ...CONTEXT, canUseOn: false })).toEqual(['task', 'link'])
-    expect(cardActions({ ...OURS, files: [] }, { ...CONTEXT, canUseOn: true })).toEqual(['task', 'link'])
-    expect(cardActions(OURS, { ...CONTEXT, canUseOn: true, canReadFiles: false })).toEqual(['task', 'link'])
+    expect(cardActions(OURS, { ...CONTEXT, canUseOn: true })).toEqual(['copyText', 'link', 'task', 'emailDetails', 'useOn'])
+    expect(cardActions(OURS, { ...CONTEXT, canUseOn: false })).toEqual(['copyText', 'link', 'task', 'emailDetails'])
+    expect(cardActions({ ...OURS, files: [] }, { ...CONTEXT, canUseOn: true })).toEqual(['copyText', 'link', 'task', 'emailDetails'])
+    expect(cardActions(OURS, { ...CONTEXT, canUseOn: true, canReadFiles: false })).toEqual(['copyText', 'link', 'task', 'emailDetails'])
   })
 })
 // ---- end B-TH-231
@@ -256,8 +261,8 @@ describe('B-TH-236: Correct, “In reply to”, “Corrected below”, the amoun
     expect(correctionWay({ ...MINE_MAIL, email: { ...MINE_MAIL.email!, status: 'QUEUED', undoUntil: '2026-11-17T10:00:07Z' } }, { canCorrect: CAN })).toBeNull()
     expect(correctionWay({ ...MINE_MAIL, email: { ...MINE_MAIL.email!, status: 'WITHDRAWN' } }, { canCorrect: CAN })).toBeNull()
     expect(correctionWay({ ...MINE_MAIL, email: { ...MINE_MAIL.email!, status: 'FAILED' } }, { canCorrect: CAN })).toBeNull()
-    expect(cardActions(MINE_MAIL, { ...CONTEXT, canCorrect: CAN })).toEqual(['correct', 'task', 'link'])
-    expect(cardActions(MAIL, { ...CONTEXT, canCorrect: CAN })).toEqual(['reply', 'task', 'link'])
+    expect(cardActions(MINE_MAIL, { ...CONTEXT, canCorrect: CAN })).toEqual(['copyText', 'link', 'task', 'correct', 'emailDetails'])
+    expect(cardActions(MAIL, { ...CONTEXT, canCorrect: CAN })).toEqual(['reply', 'copyText', 'link', 'task', 'emailDetails'])
     expect(textOf(card(MINE_MAIL, { ...CONTEXT, canCorrect: CAN }))).not.toContain('Correction of')
   })
 
@@ -303,7 +308,8 @@ describe('B-TH-236: Correct, “In reply to”, “Corrected below”, the amoun
     const html = card({ ...NOTE, amount: { value: 125_000, currency: 'EUR' } })
     expect(textOf(html)).toContain('Amount €1,250.00')
     expect(html).toContain('class="fw-rt-bline fw-rt-amount"')
-    expect(textOf(card({ ...NOTE, amount: { value: 125_000, currency: 'EUR' } }, CONTEXT, 'it'))).toMatch(/Importo 1\.250,00\s?€/)
+    // Italian numbers group from five digits (CLDR minimumGroupingDigits 2): 1250,00 €, 18.450,00 €.
+    expect(textOf(card({ ...NOTE, amount: { value: 125_000, currency: 'EUR' } }, CONTEXT, 'it'))).toMatch(/Importo 1\.?250,00\s?€/)
     expect(textOf(card(NOTE))).not.toContain('Amount')
   })
 
@@ -380,7 +386,7 @@ describe('B-TH-255 — erased after a privacy request vs files only; the files a
       ],
     }
     const text = textOf(card(mail))
-    expect(text).toContain('2 files in this e-mail were not kept: logo.ai (type not accepted), clip.mov (too large)')
+    expect(text).toContain('2 files in this email were not kept: logo.ai (type not accepted), clip.mov (too large)')
     expect(text).not.toContain('sig.png')
     expect(textOf(card({ ...mail, skipped: [mail.skipped![1]!] }, 'it'))).toContain('1 file di questa e-mail non è stato tenuto: clip.mov (troppo grande)')
     expect(textOf(card(MAIL))).not.toContain('were not kept')
@@ -416,8 +422,8 @@ describe('B-TH-286 — pin a message for everyone, by right', () => {
     expect(cardActions({ ...MAIL, pinned: true }, { ...CONTEXT, canPin: true })).not.toContain('pin')
     expect(cardActions(MAIL, CONTEXT)).not.toContain('pin')
     expect(cardActions(MAIL, { ...CONTEXT, canPin: false })).not.toContain('pin')
-    // Copy link stays last.
-    expect(cardActions(NOTE, { ...CONTEXT, canPin: true }).at(-1)).toBe('link')
+    // tw- W2.2 (S8): Pin right after Copy link, in the one order.
+    expect(cardActions(NOTE, { ...CONTEXT, canPin: true })).toEqual(['copyText', 'link', 'pin', 'task'])
   })
 
   it('never pins a message on its way, a mail in its 10 seconds or a mail taken back (the API’s HELD)', () => {
@@ -437,7 +443,7 @@ describe('B-TH-286 — pin a message for everyone, by right', () => {
       expect(html).toContain('fw-rt-pinned')
       expect(html).toContain(locale === 'en' ? 'title="Pinned"' : 'title="Fissato"')
       expect(leftKeys(html, ['pin', 'menu'])).toEqual([])
-      for (const key of ['menu.pin', 'menu.pinHint', 'menu.unpin', 'menu.unpinHint', 'pin.pinned']) expect(CATALOGUE[locale]['record-thread-card']?.[key]).toBeTruthy()
+      for (const key of ['menu.pin', 'menu.unpin', 'foot.pinned']) expect(CATALOGUE[locale]['record-thread-card']?.[key]).toBeTruthy()
     }
     expect(card(MAIL, { ...CONTEXT, canPin: true })).not.toContain('fw-rt-pinned')
   })
@@ -477,15 +483,20 @@ describe('F-SA-244: the customer\'s ask and a change\'s line on their cards (off
     expect(withChangeSide(ASK, null)).toBe(ASK)
   })
 
-  it('their ask: "Request · waiting on us" and Answer… — a real link to the page\'s window, a plain click stays on the page', () => {
-    const asked: string[] = []
-    const html = withActions({ ...ASK, ask: { requestId: 'r1', state: 'OPEN', stillToDo: 0, answer: true } }, { onAnswer: (id: string) => asked.push(id), answerHref: (id: string) => `/w/acme/sales/orders/o1?tab=overview&open=${id}` })
+  // tw- W2.2 (10-design §12 home 38): the chip in the bubble; Answer… is a row of the message's menu — a real link to the page's window
+  // (MessageMenu: a plain click stays on the page, ⌘ / Ctrl / Shift open a new tab).
+  it('their ask: "Request · waiting on us" in the bubble and Answer… in its menu — offered only when the reader may answer it now', () => {
+    const html = withActions({ ...ASK, ask: { requestId: 'r1', state: 'OPEN', stillToDo: 0, answer: true } }, { onAnswer: () => undefined, answerHref: (id: string) => `/w/acme/sales/orders/o1?tab=overview&open=${id}` })
     expect(textOf(html)).toContain('Request · waiting on us')
-    expect(html).toContain('href="/w/acme/sales/orders/o1?tab=overview&amp;open=r1"')
-    expect(textOf(html)).toContain('Answer…')
-    // No door from the page (another host, or the reader may not answer): the chip alone.
-    expect(textOf(withActions({ ...ASK, ask: { requestId: 'r1', state: 'OPEN', stillToDo: 0, answer: false } }, { onAnswer: () => undefined, answerHref: () => '/x' }))).not.toContain('Answer…')
-    expect(textOf(withActions({ ...ASK, ask: { requestId: 'r1', state: 'OPEN', stillToDo: 0, answer: true } }, {}))).not.toContain('Answer…')
+    expect(textOf(html)).not.toContain('Answer…') // a row of the menu (closed on the server render), never a button in the bubble
+    expect(cardActions({ ...ASK, ask: { requestId: 'r1', state: 'OPEN', stillToDo: 0, answer: true } }, CONTEXT)).toContain('answer')
+    // The reader may not answer it now: no row.
+    expect(cardActions({ ...ASK, ask: { requestId: 'r1', state: 'OPEN', stillToDo: 0, answer: false } }, CONTEXT)).not.toContain('answer')
+    const menu = readFileSync(new URL('./view/MessageMenu.tsx', import.meta.url), 'utf8')
+    expect(menu).toContain("action === 'answer' && answerHref ? { id: action, label: t(ROW_KEY[action]), href: answerHref }")
+    expect(menu).toContain('if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return')
+    // No door from the page (another host): the row is not drawn (MessageCard drops a row whose door is absent).
+    expect(readFileSync(new URL('./view/MessageCard.tsx', import.meta.url), 'utf8')).toContain("const DOOR_OF: Partial<Record<CardAction, keyof CardActions>> = { answer: 'onAnswer', remind: 'onRemind', emailDetails: 'onEmailDetails', copyText: 'onCopyText' }")
     expect(textOf(withActions({ ...ASK, ask: { requestId: 'r1', state: 'ACCEPTED', stillToDo: 2, answer: false } }, {}, 'it'))).toContain('Richiesta · accettata · ancora 2 da fare')
     // The merged customer feed (read only) draws neither.
     expect(textOf(withActions({ ...ASK, ask: { requestId: 'r1', state: 'OPEN', stillToDo: 0, answer: true } }, { onAnswer: () => undefined }, 'en', true))).not.toContain('Request · waiting on us')
@@ -622,13 +633,13 @@ describe('tw- W1.1 — Reply keeps the audience of what it answers (D4), for eve
     expect(way(card('theirs', 'EMAIL'), NONE)).toBe('note')
     expect(way(card('ours', 'EMAIL'), NONE)).toBe('note')
     expect(repliesPrivately(card('theirs', 'EMAIL'), { canReply: false, replyWays: NONE })).toBe(false)
-    expect(cardActions(card('theirs', 'EMAIL'), { canReply: false, replyWays: NONE })).toEqual(['reply', 'link'])
+    expect(cardActions(card('theirs', 'EMAIL'), { canReply: false, replyWays: NONE })).toEqual(['reply', 'copyText', 'link', 'emailDetails'])
   })
 
   it('Reply privately only on the customer’s message, beside a Reply that goes to the customer', () => {
-    expect(cardActions(card('theirs', 'EMAIL'), { canReply: true, replyWays: ALL })).toEqual(['reply', 'replyPrivately', 'link'])
-    expect(cardActions(card('ours', 'EMAIL'), { canReply: true, replyWays: ALL })).toEqual(['reply', 'link'])
-    expect(cardActions(card('note', 'APP'), { canReply: true, replyWays: ALL })).toEqual(['reply', 'link'])
+    expect(cardActions(card('theirs', 'EMAIL'), { canReply: true, replyWays: ALL })).toEqual(['reply', 'replyPrivately', 'copyText', 'link', 'emailDetails'])
+    expect(cardActions(card('ours', 'EMAIL'), { canReply: true, replyWays: ALL })).toEqual(['reply', 'copyText', 'link'])
+    expect(cardActions(card('note', 'APP'), { canReply: true, replyWays: ALL })).toEqual(['reply', 'copyText', 'link'])
     expect(repliesPrivately(card('theirs', 'PORTAL'), { canReply: true, replyWays: { note: false, email: true, portal: true } })).toBe(false)
   })
 
@@ -729,3 +740,173 @@ describe('tw- W1.2 — the bubble', () => {
 })
 // ---- end tw- W1.2
 
+
+// ---- tw- W2.2 (THE THREAD REBUILD; 10-design §9, S8; B7, Z2; W-060, W-061; R6–R9, R15, R16): ONE menu, ONE order, Email details ----
+import { readdirSync, statSync } from 'node:fs'
+import { copyTextOf, emailDetailsOf, MENU_ORDER } from './model'
+import { opensOnRightClick } from './view/MessageMenu'
+import { emailWindowOf } from '../RecordThread'
+import { verdictOf } from '../popups/model'
+
+describe('tw- W2.2 — the message menu per kind and per reader (10-design §9)', () => {
+  const OWNER: CardContext = { partyName: BRAND_ALPHA.tradeName, canReadFiles: true, canReply: true, canTask: true, canPin: true, canRemind: true, canUseOn: true, canCorrect: { note: true, email: true, portal: true }, replyWays: { note: true, email: true, portal: true } }
+  const PRODUCTION: CardContext = { ...OWNER, canUseOn: false, canCorrect: { note: true, email: false, portal: true }, replyWays: { note: true, email: false, portal: true } }
+  const READ_ONLY: CardContext = { partyName: BRAND_ALPHA.tradeName, canReadFiles: true, canReply: false, canRemind: true, replyWays: { note: false, email: false, portal: false } }
+  const at = '2026-11-19T08:20:00.000Z'
+  const msg = (more: Partial<CardMessage>): CardMessage => ({ id: 'm1', kind: 'theirs', channel: 'EMAIL', author: 'Lia Modello', authorKind: 'PARTY', at, body: 'The final size split.', mentions: [], files: [{ id: 'f1', name: 'sizes.pdf', sizeBytes: 1, contentType: 'application/pdf', status: 'AVAILABLE' }], ...more })
+  const THEIR_MAIL = msg({})
+  const COLLEAGUE_NOTE = msg({ kind: 'note', channel: 'APP', author: 'Carlo Prova', authorKind: 'USER', files: [] })
+  const MY_MAIL = msg({ kind: 'ours', author: 'Bea Esempio', authorKind: 'USER', mine: true, files: [], email: { to: ['lia@brand-alpha.example'], subject: 'Re: sizes', status: 'DELIVERED' } })
+  const MY_PORTAL = msg({ kind: 'ours', channel: 'PORTAL', author: 'Bea Esempio', authorKind: 'USER', mine: true, files: [], email: null })
+  const FLOOR = msg({ kind: 'floor', channel: 'APP', author: null, authorKind: 'WORKER', authorHidden: true, files: [] })
+  const SYSTEM = msg({ kind: 'note', channel: 'APP', author: null, authorKind: 'SYSTEM', files: [] })
+
+  it('Owner / Sales: the customer’s email · a colleague’s note · my email · my portal reply · a floor note · the system’s line', () => {
+    expect(cardActions(THEIR_MAIL, OWNER)).toEqual(['reply', 'replyPrivately', 'copyText', 'link', 'pin', 'remind', 'task', 'emailDetails', 'useOn'])
+    expect(cardActions(COLLEAGUE_NOTE, OWNER)).toEqual(['reply', 'copyText', 'link', 'pin', 'remind', 'task'])
+    expect(cardActions(MY_MAIL, OWNER)).toEqual(['reply', 'copyText', 'link', 'pin', 'remind', 'task', 'correct', 'emailDetails'])
+    expect(cardActions(MY_PORTAL, OWNER)).toEqual(['reply', 'copyText', 'link', 'pin', 'remind', 'task', 'correct'])
+    expect(cardActions(FLOOR, OWNER)).toEqual(['reply', 'copyText', 'link', 'pin', 'remind', 'task'])
+    // The system's own line is a pill: no menu at all.
+    expect(cardActions(SYSTEM, OWNER)).toEqual([])
+    // A message with the customer's ask the reader may answer now: + Answer…, in its place.
+    expect(cardActions({ ...THEIR_MAIL, ask: { requestId: 'r1', state: 'OPEN', stillToDo: 0, answer: true } }, OWNER)).toEqual(['reply', 'replyPrivately', 'copyText', 'link', 'pin', 'remind', 'task', 'answer', 'emailDetails', 'useOn'])
+  })
+
+  it('a Production manager (portal way only): Reply goes to the portal; no Use on…; a Read-only reader: Copy text · Copy link · Remind me · Email details', () => {
+    expect(cardActions(THEIR_MAIL, PRODUCTION)).toEqual(['reply', 'replyPrivately', 'copyText', 'link', 'pin', 'remind', 'task', 'emailDetails'])
+    expect(cardActions(THEIR_MAIL, READ_ONLY)).toEqual(['copyText', 'link', 'remind', 'emailDetails'])
+    expect(cardActions(COLLEAGUE_NOTE, READ_ONLY)).toEqual(['copyText', 'link', 'remind'])
+    expect(cardActions(FLOOR, READ_ONLY)).toEqual(['copyText', 'link', 'remind'])
+  })
+
+  it('every row keeps its place in ONE order; a message with no words has no Copy text; one on its way no menu', () => {
+    expect(MENU_ORDER).toEqual(['reply', 'replyPrivately', 'copyText', 'link', 'pin', 'unpin', 'remind', 'task', 'answer', 'correct', 'emailDetails', 'useOn'])
+    for (const message of [THEIR_MAIL, COLLEAGUE_NOTE, MY_MAIL, MY_PORTAL, FLOOR]) {
+      const rows = cardActions(message, OWNER)
+      expect(rows, message.id).toEqual([...rows].sort((a, b) => MENU_ORDER.indexOf(a) - MENU_ORDER.indexOf(b)))
+    }
+    expect(copyTextOf({ body: '  ' })).toBeNull()
+    expect(copyTextOf({ body: 'Collar cut', erased: true })).toBeNull()
+    expect(copyTextOf({ body: ' Collar cut ' })).toBe('Collar cut')
+    expect(cardActions({ ...THEIR_MAIL, body: '' }, OWNER)).not.toContain('copyText')
+    expect(cardActions({ ...MY_MAIL, outbox: { state: 'sending' } }, OWNER)).toEqual([])
+  })
+
+  it('the menu words in both languages, one line each — no hint row under any row (B9)', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const words = CATALOGUE[locale]['record-thread-card'] ?? {}
+      for (const key of ['menu.reply', 'menu.replyPrivately', 'menu.copyText', 'menu.link', 'menu.pin', 'menu.unpin', 'menu.remind', 'menu.task', 'ask.answer', 'menu.correct', 'menu.emailDetails', 'menu.useOn', 'menu.answerThere', 'foot.followUp']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+    }
+    expect(CATALOGUE.en['record-thread-card']?.['menu.link']).toBe('Copy link')
+    expect(CATALOGUE.it['record-thread-card']?.['menu.emailDetails']).toBe('Dettagli email')
+    const menu = readFileSync(new URL('./view/MessageMenu.tsx', import.meta.url), 'utf8')
+    expect(menu).not.toMatch(/description:|Hint/)
+  })
+
+  it('the arrow sits inside the bubble’s top-right corner on hover and keyboard focus; a right-click opens the same menu (a link or selected text keep the browser’s)', () => {
+    const withDoors = render(createElement(MessageCard, { message: THEIR_MAIL, context: OWNER, actions: { onReply: () => undefined, onCopyText: () => undefined, onRemind: () => undefined, onEmailDetails: () => undefined } }))
+    expect(withDoors).toContain('class="fw-rt-tools"')
+    expect(withDoors).toContain(`aria-label="More for the message of Lia Modello at`)
+    const css = readFileSync(new URL('./card.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-rt-bub:hover \.fw-rt-tools,\s*\.fw-rt-bub:focus-within \.fw-rt-tools,/)
+    const source = readFileSync(new URL('./view/MessageCard.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('onContextMenu={onContextMenu}')
+    expect(opensOnRightClick({ target: { closest: () => null } as unknown as EventTarget }, '')).toBe(true)
+    expect(opensOnRightClick({ target: { closest: () => ({}) } as unknown as EventTarget }, '')).toBe(false)
+    expect(opensOnRightClick({ target: { closest: () => null } as unknown as EventTarget }, 'selected words')).toBe(false)
+  })
+
+  it('a row whose door the host does not give is not drawn (Copy text, Remind me, Email details, Answer…); read-only (All of) draws no menu', () => {
+    const source = readFileSync(new URL('./view/MessageCard.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('cardActions(message, context).filter((action) => !DOOR_OF[action] || Boolean(actions?.[DOOR_OF[action]!]))')
+    expect(render(createElement(MessageCard, { message: THEIR_MAIL, context: OWNER, actions: { onCopyLink: () => undefined }, readOnly: true }))).not.toContain('fw-rt-msg-more')
+  })
+})
+
+describe('tw- W2.2 — Email details (B7, Z2): one window for our email and an inbound one', () => {
+  const at = '2026-11-19T08:20:00.000Z'
+  const base: CardMessage = { id: 'm1', kind: 'theirs', channel: 'EMAIL', author: 'Lia Modello', authorKind: 'PARTY', at, body: 'The final size split.', mentions: [], files: [] }
+  const words = (key: string) => key
+
+  it('our email: To, Cc, Subject, the date and its delivery state in words — never "read"', () => {
+    const ours: CardMessage = { ...base, kind: 'ours', author: 'Bea Esempio', authorKind: 'USER', email: { to: ['lia@brand-alpha.example'], cc: ['bea@example.com'], subject: 'Re: sizes', status: 'DELIVERED' } }
+    expect(emailDetailsOf(ours)).toEqual({ from: 'Bea Esempio', to: ['lia@brand-alpha.example'], cc: ['bea@example.com'], subject: 'Re: sizes', at, sent: true, status: 'DELIVERED', verdicts: null, text: 'The final size split.' })
+    expect(emailWindowOf(ours, words)).toMatchObject({ sent: true, status: 'delivery.DELIVERED', verdicts: null, bodyHtml: null })
+    expect(CATALOGUE.en['record-thread-card']?.['delivery.DELIVERED']).toBe('Delivered')
+  })
+
+  it('an inbound email: From with the address, To, Cc, Subject and the sender checks as it came; without its mail row the sender, the time and the words', () => {
+    const mail = { from: { address: 'lia@brand-alpha.example', name: 'Lia Modello' }, to: ['orders@example.com'], cc: [], subject: 'Sizes', verdicts: { spf: 'PASS', dkim: 'FAIL', dmarc: 'SOMETHING_NEW' } }
+    expect(emailDetailsOf({ ...base, mail })).toMatchObject({ from: 'Lia Modello <lia@brand-alpha.example>', to: ['orders@example.com'], subject: 'Sizes', sent: false, status: null })
+    expect(emailWindowOf({ ...base, mail }, words)?.verdicts).toEqual({ spf: 'PASS', dkim: 'FAIL', dmarc: 'DISABLED' })
+    expect(verdictOf('GRAY')).toBe('GRAY')
+    expect(emailDetailsOf(base)).toEqual({ from: 'Lia Modello', to: [], cc: [], subject: null, at, sent: false, status: null, verdicts: null, text: 'The final size split.' })
+    expect(emailDetailsOf({ ...base, mail: { ...mail, from: { address: 'lia@brand-alpha.example', name: null } } })?.from).toBe('Lia Modello <lia@brand-alpha.example>')
+    // Not an email: no window. An erased one keeps no words.
+    expect(emailDetailsOf({ ...base, channel: 'PORTAL' })).toBeNull()
+    expect(emailDetailsOf({ ...base, erased: true })?.text).toBe('')
+  })
+
+  it('the window is the ONE OriginalEmail, mounted by RecordThread for every host (nothing fetched); its words in both languages', () => {
+    const thread = readFileSync(new URL('../RecordThread.tsx', import.meta.url), 'utf8')
+    expect(thread).toContain('{details && <OriginalEmail model={details} onClose={() => setDetailsOf(null)} />}')
+    expect(thread).toContain('onEmailDetails: (messageId) => setDetailsOf(messageId), // tw- W2.2')
+    for (const locale of ['en', 'it'] as const) {
+      const popups = CATALOGUE[locale]['record-thread-popups'] ?? {}
+      for (const key of ['original.title', 'original.subject', 'original.sent', 'original.status', 'original.asItCame', 'original.from', 'original.to', 'original.cc', 'original.received']) expect(popups[key], `${locale} ${key}`).toBeTruthy()
+    }
+    expect(CATALOGUE.en['record-thread-popups']?.['original.title']).toBe('Email details')
+  })
+})
+
+describe('tw- W2.2 — the follow-up bell in the foot, for its sender only', () => {
+  it('a bell with "Reminds you … if no answer" on the reader’s own message with a follow-up; none on another’s', () => {
+    const mine: CardMessage = { ...OURS, mine: true, followUp: { at: '2026-11-22T08:00:00.000Z' } }
+    for (const [locale, words] of [['en', 'Reminds you'], ['it', 'Te lo ricorda']] as const) {
+      const html = card(mine, CONTEXT, locale)
+      expect(html, locale).toContain('fw-rt-followup')
+      expect(html, locale).toMatch(new RegExp(`title="${words}[^"]+"`))
+    }
+    expect(card({ ...mine, mine: false })).not.toContain('fw-rt-followup')
+    expect(card({ ...OURS, mine: true })).not.toContain('fw-rt-followup')
+  })
+})
+
+describe('tw- W2.2 — the walls of the face: never forward, star, delete, edit, info, report, react, previews, photos, read-by, typing', () => {
+  const sources = (dir: URL): string[] => {
+    const out: string[] = []
+    for (const name of readdirSync(dir)) {
+      const at = new URL(name, dir)
+      if (statSync(at).isDirectory()) out.push(...sources(new URL(`${name}/`, dir)))
+      else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$|fixtures\.ts$|Case\.tsx$|Gallery\.tsx$/.test(name)) out.push(readFileSync(at, 'utf8'))
+    }
+    return out
+  }
+  const rt = sources(new URL('../', import.meta.url))
+  const srt = sources(new URL('../../../areas/_shared/record-thread/', import.meta.url))
+
+  it('R15: no Forward, Star, Delete, Edit, Message info or Report row anywhere in rt/', () => {
+    const menu = readFileSync(new URL('./view/MessageMenu.tsx', import.meta.url), 'utf8')
+    expect(menu).not.toMatch(/\b(forward|star|delete|edit|info|report|react)\b\s*:/i)
+    for (const action of MENU_ORDER) expect(action).not.toMatch(/forward|star|delete|edit|info|report|react/i)
+    for (const words of Object.keys(CATALOGUE.en['record-thread-card'] ?? {}).filter((key) => key.startsWith('menu.'))) expect(words).not.toMatch(/forward|star|delete|edit|messageInfo|report|react/i)
+  })
+
+  it('R16: links open, nothing is fetched for them — no link preview in rt/ or srt/', () => {
+    for (const source of [...rt, ...srt]) expect(source).not.toMatch(/linkPreview|og:image|unfurl/i)
+  })
+
+  it('R6–R9: no photo of a person, no reaction, no "seen by" / "read by" / "typing" field or word in rt/ + srt/', () => {
+    for (const source of [...rt, ...srt]) {
+      expect(source).not.toMatch(/\bavatarUrl\b|\bphotoUrl\b|\breactions?\s*[:=]/)
+      expect(source).not.toMatch(/\b(seenBy|readBy|isTyping|typingNow)\b/)
+    }
+    for (const locale of ['en', 'it'] as const) {
+      for (const name of ['record-thread', 'record-thread-card', 'record-thread-feed', 'record-thread-head']) {
+        for (const [key, text] of Object.entries(CATALOGUE[locale][name] ?? {})) expect(text, `${locale} ${name} ${key}`).not.toMatch(/\b(seen by|read by|is typing|visto da|letto da|sta scrivendo)\b/i)
+      }
+    }
+  })
+})
+// ---- end tw- W2.2

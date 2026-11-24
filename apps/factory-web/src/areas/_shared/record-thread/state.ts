@@ -16,6 +16,8 @@ import type { ThreadDone } from './api' // B-TH-288
 
 export interface ServerThread {
   status: 'loading' | 'ready' | 'error' | 'forbidden'
+  /** tw- W2.4 (B6): forbidden only until the person confirms it is them (the second step): the feed says how. */
+  stepUp?: boolean
   thread: { status: 'OPEN' | 'CLOSED'; version: number; partyId: string | null } | null
   /** Oldest first. B-TH-255: the office read's messages (erased, an inbound mail's files not kept). */
   messages: OfficeMessage[]
@@ -177,6 +179,8 @@ export function readMarker(send: (messageId: string) => Promise<void>): ReadMark
 
 /** A failed first read: no right (the thread is not drawn) or a fault (Try again; the box keeps the text). */
 export const readStatusOf = (error: unknown): 'forbidden' | 'error' => (isApiError(error) && (error.kind === 'forbidden' || error.kind === 'step_up') ? 'forbidden' : 'error')
+/** tw- W2.4 (B6): the read waits for the second step (403 `stepUp`), not for a right. */
+export const stepUpOf = (error: unknown): boolean => isApiError(error) && error.kind === 'step_up'
 
 const paths = (error: ApiError) => error.issues.map((issue) => issuePath(issue).replace(/\./g, '/'))
 

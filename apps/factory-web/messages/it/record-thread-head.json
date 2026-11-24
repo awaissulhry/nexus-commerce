@@ -1,10 +1,10 @@
 {
   "label": "Thread di {record}",
   "answers": {
-    "us": "Conversazione: tocca a noi · {wait}",
-    "customer": "Conversazione: tocca al cliente · {wait}",
-    "supplier": "Conversazione: tocca al fornitore · {wait}",
-    "partner": "Conversazione: tocca al partner · {wait}",
+    "us": "Tocca a noi · {wait}",
+    "customer": "Tocca al cliente · {wait}",
+    "supplier": "Tocca al fornitore · {wait}",
+    "partner": "Tocca al partner · {wait}",
     "tipUs": "{party} ha scritto per ultimo, {when}. Contato in ore di orologio da quel messaggio.",
     "tipParty": "Abbiamo scritto per ultimi a {party}, {when}. Contato in ore di orologio da quel messaggio."
   },
@@ -19,7 +19,7 @@
   },
   "offline": "Offline · aggiornato alle {time}",
   "view": {
-    "label": "Vista",
+    "label": "Mostra",
     "menu": "Scegli cosa mostra il thread",
     "all": "Tutto",
     "shared": {
@@ -44,7 +44,8 @@
     "half": "Metà",
     "full": "Tutta la larghezza",
     "hide": "Nascondi il thread",
-    "reset": "Larghezza predefinita"
+    "reset": "Larghezza predefinita",
+    "title": "Larghezza"
   },
   "more": {
     "label": "Strumenti del thread"
@@ -74,7 +75,7 @@
     "openAgain": "Riapri",
     "openAgainHint": "Di nuovo negli elenchi di lavoro.",
     "followUpSet": "Promemoria il {at} se non rispondono",
-    "search": "Cerca nella conversazione"
+    "search": "Cerca nel thread"
   },
   "held": {
     "noRight": "Ti serve il diritto “{right}”.",
@@ -96,11 +97,6 @@
     "frame375": "Telefono, 375 px",
     "frameLabel": "Colonna del thread larga {width} px"
   },
-  "new": {
-    "count_one": "{count} nuovo",
-    "count_other": "{count} nuovi",
-    "many": "99+ nuovi"
-  },
   "owner": {
     "label": "Responsabile: {name}",
     "nobody": "Nessun responsabile",
@@ -108,13 +104,13 @@
     "change": "Cambia responsabile…",
     "now": "Ora: {name}",
     "title": "Cambia responsabile",
-    "subtitle": "Chi risponde nella conversazione di {record}",
-    "hint": "Le persone dell'ufficio che leggono questa conversazione. Se non scegli nessuno risponde il responsabile del record (l'assegnatario della richiesta, il supervisore dell'ordine, altrimenti chi l'ha creato).",
+    "subtitle": "Chi risponde nel thread di {record}",
+    "hint": "Le persone dell'ufficio che leggono questo thread. Se non scegli nessuno risponde il responsabile del record (l'assegnatario della richiesta, il supervisore dell'ordine, altrimenti chi l'ha creato).",
     "search": "Cerca persone",
-    "listLabel": "Persone che possono essere responsabili della conversazione",
+    "listLabel": "Persone che possono essere responsabili del thread",
     "recordOwn": "Il responsabile del record",
     "me": "{name} (io)",
-    "noPeople": "Nessun altro legge ancora questa conversazione.",
+    "noPeople": "Nessun altro legge ancora questo thread.",
     "done": "Ora risponde {name}.",
     "doneRecord": "Risponde di nuovo il responsabile del record.",
     "failed": "Non è stato possibile cambiare il responsabile: {reason}",
@@ -126,14 +122,14 @@
     },
     "cancel": "Annulla",
     "problem": {
-      "forbidden": "non puoi scrivere in questa conversazione.",
-      "invalid": "questa persona non legge la conversazione o non è più attiva.",
+      "forbidden": "non puoi scrivere in questo thread.",
+      "invalid": "questa persona non legge il thread o non è più attiva.",
       "notFound": "il record non c'è più.",
       "network": "la rete non risponde; riprova.",
       "failed": "qualcosa è andato storto; riprova."
     },
-    "loading": "Lettura di chi legge questa conversazione…",
-    "peopleFailed": "Non è stato possibile leggere chi legge questa conversazione.",
+    "loading": "Lettura di chi legge questo thread…",
+    "peopleFailed": "Non è stato possibile leggere chi legge questo thread.",
     "retry": "Riprova"
   },
   "rule": {
@@ -162,7 +158,7 @@
     "tip": "Segnata come fatta: fuori dagli elenchi di lavoro. Non chiusa: il cliente può ancora scrivere e un nuovo messaggio la riapre."
   },
   "search": {
-    "open": "Cerca nella conversazione ( / )",
+    "open": "Cerca nel thread",
     "label": "Cerca nei messaggi di {record}",
     "placeholder": "Parole o nome di un file",
     "close": "Chiudi la ricerca",
@@ -184,5 +180,26 @@
       "note": "Nota d'ufficio",
       "other": "Messaggio"
     }
+  },
+  "viewShowing": "Mostro {view}",
+  "viewShowAll": "Mostra tutto",
+  "files": {
+    "label": "File ({count})"
+  },
+  "pinbar": {
+    "label": "Messaggio fissato {n} di {count}: vai al messaggio"
+  },
+  "keys": {
+    "title": "Tasti",
+    "jk": "messaggio successivo / precedente",
+    "r": "rispondi al messaggio selezionato; altrimenti scrivi al cliente",
+    "n": "nota d'ufficio",
+    "quote": "su una citazione: vai al messaggio",
+    "slash": "cerca nel thread",
+    "enter": "invia",
+    "shiftEnter": "nuova riga",
+    "esc": "chiudi un menu, togli la risposta",
+    "enterKey": "Invio",
+    "shiftEnterKey": "Maiusc+Invio"
   }
 }

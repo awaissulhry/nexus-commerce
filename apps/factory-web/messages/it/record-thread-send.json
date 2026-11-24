@@ -97,7 +97,7 @@
     }
   },
   "namesPrice": {
-    "note": "Questo messaggio indica un prezzo. Leggono questa conversazione anche persone che non vedono i prezzi. Usa il campo Importo, oppure invialo comunque.",
+    "note": "Questo messaggio indica un prezzo. Leggono questo thread anche persone che non vedono i prezzi. Usa il campo Importo, oppure invialo comunque.",
     "reply": "Questa risposta indica un prezzo. La leggono anche nostri colleghi che non vedono i prezzi. Inviarla comunque?",
     "send": "Invia comunque"
   }

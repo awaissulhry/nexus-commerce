@@ -1,33 +1,46 @@
-/* B-TH-209 — the thread's Head (T1): one 44 px row, design-system tokens only (light and dark come from the tokens). */
+/* B-TH-209 — the thread's Head (T1). tw- W2.1 (THE THREAD REBUILD; 10-design §8; P0-B1, P8): ONE row of two lines — the title (the
+   record, or the dock's pick as one menu) and one line under it — and at the right only Files · Search · ⓘ · ⋮, every control inside a
+   433 px dock. The pinned bar under it (W-080). Design-system tokens only (light and dark come from the tokens). */
 
-.fw-rth { container: fw-rth / inline-size; flex: none; height: 44px; display: flex; align-items: center; gap: var(--nds-space-8); padding: 0 var(--nds-space-8) 0 var(--nds-space-12); border-bottom: 1px solid var(--nds-border-subtle); background: var(--nds-surface); min-width: 0; }
-.fw-rth-grow { flex: 1; min-width: 0; }
-.fw-rth-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--nds-text-strong); font-size: var(--nds-font-size-base); }
-.fw-rth-pillwrap { display: inline-flex; min-width: 0; border-radius: var(--nds-radius-pill); }
-.fw-rth-pillwrap:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
-.fw-rth-closed { display: inline-flex; align-items: center; gap: var(--nds-space-6); min-width: 0; font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
-.fw-rth-closed > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fw-rth-viewchip { flex: none; display: inline-flex; align-items: center; gap: var(--nds-space-4); height: 26px; padding: 0 var(--nds-space-8) 0 var(--nds-space-10); border: 1px solid var(--nds-tonal-border); border-radius: var(--nds-radius-pill); background: var(--nds-info-soft); color: var(--nds-info-text); font: inherit; font-size: var(--nds-font-size-sm); font-weight: 600; cursor: pointer; white-space: nowrap; }
-.fw-rth-viewchip:hover { background: var(--nds-surface-hover); }
-.fw-rth-viewchip:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
-.fw-rth-counts { display: inline-flex; align-items: center; gap: var(--nds-space-4); flex: none; }
-.fw-rth-count { display: inline-flex; align-items: center; gap: var(--nds-space-4); font-variant-numeric: tabular-nums; }
+.fw-rth { container: fw-rth / inline-size; flex: none; display: flex; align-items: center; gap: var(--nds-space-4); min-height: 56px; padding: var(--nds-space-6) var(--nds-space-6) var(--nds-space-6) var(--nds-space-12); border-bottom: 1px solid var(--nds-border-subtle); background: var(--nds-surface); min-width: 0; }
+.fw-rth-titleblock { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.fw-rth-title { display: flex; align-items: center; min-width: 0; color: var(--nds-text); font-size: var(--nds-font-size-md); font-weight: 700; }
+.fw-rth-title-words { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fw-rth-line { margin: 0; display: flex; align-items: center; gap: var(--nds-space-6); min-width: 0; overflow: hidden; color: var(--nds-text-muted); font-size: var(--nds-font-size-sm); white-space: nowrap; }
+.fw-rth-linepart { display: inline-flex; align-items: center; gap: var(--nds-space-4); min-width: 0; overflow: hidden; text-overflow: ellipsis; border-radius: var(--nds-radius-xs); }
+.fw-rth-linepart.is-wait { flex: none; }
+.fw-rth-linepart.is-amber { color: var(--nds-warning-text); font-weight: 600; }
+.fw-rth-linepart:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
+.fw-rth-linkbtn { flex: none; padding: 0; border: none; background: none; color: var(--nds-text-link); font: inherit; font-weight: 600; cursor: pointer; }
+.fw-rth-linkbtn:hover { text-decoration: underline; }
+.fw-rth-linkbtn:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
+.fw-rth-tools { flex: none; display: flex; align-items: center; gap: var(--nds-space-2); }
+.fw-rth-files { display: inline-flex; align-items: center; gap: var(--nds-space-4); font-variant-numeric: tabular-nums; }
+.fw-rth-files-n { font-size: var(--nds-font-size-sm); font-weight: 600; }
 .fw-rth-menu { flex: none; }
-/* B-TH-229 (T1-F03): the owner's tile — a 24 px round button (the name in its tooltip and accessible name). */
-.fw-rth-owner { flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 28px; min-height: 28px; padding: 0; border: 0; border-radius: var(--nds-radius-pill); background: transparent; color: var(--nds-text-2); cursor: pointer; }
-span.fw-rth-owner { cursor: default; }
-.fw-rth-owner:hover { background: var(--nds-surface-hover); }
-.fw-rth-owner:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
-.fw-rth-owner-none { font-size: var(--nds-font-size-sm); }
+.fw-rth-keylist { margin: 0; display: flex; flex-direction: column; gap: var(--nds-space-6); min-width: 240px; max-width: 320px; padding: var(--nds-space-4); }
+.fw-rth-keyrow { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: var(--nds-space-10); font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+.fw-rth-keyrow dt,
+.fw-rth-keyrow dd { margin: 0; }
 .fw-rth.is-compact { padding-left: var(--nds-space-12); }
-/* B-TH-251 (PROJ.linked-F05): "In project: FW27 airbag line" — a quiet chip that opens the project (a real link). */
-.fw-rth-project { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: var(--nds-space-4); height: 26px; padding: 0 var(--nds-space-8); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-pill); color: var(--nds-text-link); font-size: var(--nds-font-size-sm); text-decoration: none; white-space: nowrap; }
-.fw-rth-project:hover { background: var(--nds-surface-hover); }
+/* B-TH-251 (PROJ.linked-F05): "In project: FW27 airbag line" — a quiet link in the line that opens the project. */
+.fw-rth-project { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: var(--nds-space-4); color: var(--nds-text-link); text-decoration: none; white-space: nowrap; border-radius: var(--nds-radius-xs); }
+.fw-rth-project:hover { text-decoration: underline; }
 .fw-rth-project:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
 .fw-rth-project-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .fw-rth-project-more { flex: none; color: var(--nds-text-2); font-variant-numeric: tabular-nums; }
-/* The count chips fold into the "⋯" on a narrow dock from the first paint (the view's measure then adds their counts to the doors). */
-@container fw-rth (max-width: 559px) { .fw-rth-counts { display: none; } }
+
+/* tw- W2.1 (W-080 / W-081, P11): the pinned bar — marks · pin · "Sender: text" one line (a lock on an office note). */
+.fw-rt-pinbar { flex: none; display: flex; align-items: center; gap: var(--nds-space-10); width: 100%; min-width: 0; min-height: 44px; padding: var(--nds-space-6) var(--nds-space-14) var(--nds-space-6) var(--nds-space-12); border: none; border-bottom: 1px solid var(--nds-border-subtle); background: var(--nds-surface); color: var(--nds-text-2); font: inherit; font-size: var(--nds-font-size-base); text-align: start; cursor: pointer; }
+.fw-rt-pinbar:hover { background: var(--nds-surface-hover); }
+.fw-rt-pinbar:focus-visible { outline: 2px solid var(--nds-text); outline-offset: -2px; }
+.fw-rt-pinmarks { flex: none; align-self: stretch; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.fw-rt-pinmarks i { display: block; flex: 1 1 0; width: 3px; min-height: 4px; max-height: 10px; border-radius: 2px; background: var(--nds-border-strong); }
+.fw-rt-pinmarks i.is-on { background: var(--nds-text-2); }
+.fw-rt-pinicon { flex: none; color: var(--nds-text-muted); }
+.fw-rt-pintext { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fw-rt-pintext b { font-weight: 600; color: var(--nds-text); }
+.fw-rt-pinlock { flex: none; color: var(--nds-warning-text); }
 
 /* The portal's plain line (no office count, no owner, no waiting time). */
 .fw-rth-portal { margin: 0; min-height: 44px; display: flex; align-items: center; gap: var(--nds-space-8); padding: 0 var(--nds-space-16); border-bottom: 1px solid var(--nds-border-subtle); color: var(--nds-text-2); font-size: var(--nds-font-size-base); }

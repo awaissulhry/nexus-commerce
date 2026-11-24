@@ -1,9 +1,9 @@
 'use client'
 
-import { Fragment, useEffect, useId, useState, type AnimationEvent, type CSSProperties, type ReactNode } from 'react'
-import { Check, CheckCheck, ChevronDown, CircleAlert, Clock, CornerDownRight, EyeOff, FileText, FileX, Globe, ImageIcon, Layers, Lock, Mail, Pin, RotateCw, Tablet, Trash2, Undo2 } from 'lucide-react'
-import { Menu } from '@nexus/ui/components'
+import { Fragment, useEffect, useId, useState, type AnimationEvent, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
+import { Bell, Check, CheckCheck, CircleAlert, Clock, CornerDownRight, EyeOff, FileText, FileX, Globe, ImageIcon, Layers, Lock, Mail, Pin, RotateCw, Tablet, Trash2, Undo2 } from 'lucide-react'
 import { Button, Pill } from '@nexus/ui/primitives'
+import { formatDate } from '../../../i18n/format'
 import { INTL_LOCALE } from '../../../i18n/locales'
 import { useLocale, useT } from '../../../i18n/provider'
 import { FLASH_MS } from '../../feed/model'
@@ -16,6 +16,7 @@ import {
   amountWords,
   showsUndo,
   undoLeft,
+  type CardAction,
   type CardLink,
   audienceKey,
   authorWords,
@@ -33,6 +34,7 @@ import {
 import { bodyKind, skippedLine } from '../model' // B-TH-255
 import { askChip, changeChip, type CardAsk, type CardChange } from '../model' // F-SA-244
 import { Bubble, BubbleFoot } from './Bubble'
+import { MessageMenu, opensOnRightClick } from './MessageMenu' // tw- W2.2
 import { QuoteBlock } from './QuoteBlock'
 import '../card.css'
 
@@ -74,7 +76,15 @@ export interface CardActions {
   // ---- tw- W1.2 (Z10): a quote, "Correction of 09:12" and "Corrected" go to the message they name (the host's ONE door: the View
   // back to All when it hides it, older pages read, the row lit). Absent: the quote is drawn, nothing to click.
   onJump?: (messageId: string) => void
+  // ---- tw- W2.2 (10-design §9): the menu's rows the host carries — Copy text (the host says it was copied), Remind me (the reader's
+  // own reminder, its one dialog) and Email details (the one window). Absent: the row is not drawn.
+  onCopyText?: (messageId: string) => void
+  onRemind?: (messageId: string) => void
+  onEmailDetails?: (messageId: string) => void
 }
+
+/** tw- W2.2: a row whose door the host does not give is not drawn. */
+const DOOR_OF: Partial<Record<CardAction, keyof CardActions>> = { answer: 'onAnswer', remind: 'onRemind', emailDetails: 'onEmailDetails', copyText: 'onCopyText' }
 
 const MARK_ICON = { lock: Lock, mail: Mail, globe: Globe, tablet: Tablet } as const
 const DELIVERY_ICON = { clock: Clock, check: Check, checks: CheckCheck, alert: CircleAlert, back: Undo2 } as const
@@ -88,7 +98,7 @@ interface TailLine {
 }
 
 // F-SA-261 (sales page plan R4, P9; "All of <Customer>"): `readOnly` draws the card as the merged customer feed shows it — the same
-// card, its audience, words and files, with no ⋯ menu, no Remind me, no Undo and no Retry: nothing is done on it there.
+// card, its audience, words and files, with no menu, no Undo and no Retry: nothing is done on it there.
 /**
  * One message of a record's thread (B-TH-298, T3), as a chat bubble (tw- W1.2; THE THREAD REBUILD, 10-design §2 – §5): the row is
  * the whole list width (`.fw-rt-msg`, the row a jump lights up); mine on the right with no tile and no name, everyone else on the
@@ -105,7 +115,6 @@ export function MessageCard({
   message,
   context,
   actions,
-  remind,
   readOnly = false,
   run,
   flash = null,
@@ -114,7 +123,6 @@ export function MessageCard({
   message: CardMessage
   context: CardContext
   actions?: CardActions
-  remind?: ReactNode
   readOnly?: boolean
   /** tw- W1.2: its place in the run (the feed's); alone: a run of its own. */
   run?: RunPlace
@@ -132,6 +140,7 @@ export function MessageCard({
   const [quotedOpen, setQuotedOpen] = useState(false)
   const [allShown, setAllShown] = useState(false)
   const [allFiles, setAllFiles] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false) // tw- W2.2: the arrow or a right-click opens it
 
   const party = context.partyName || t('side.theParty')
   const who = authorWords(message)
@@ -146,7 +155,8 @@ export function MessageCard({
   const fold = longFold(text)
   const folded = fold.folds && !allShown
   const files = cardFiles(message.files, context.canReadFiles, true, { hidden: message.hiddenFiles ?? 0, sheets: message.lockedSheets ?? 0, priced: message.lockedPriced ?? 0 /* B-CP-014 */ })
-  const menu = readOnly ? [] : cardActions(message, context) // F-SA-261
+  // F-SA-261: none read-only. tw- W2.2: ONE order; a row whose door the host does not give is not drawn.
+  const menu = readOnly ? [] : cardActions(message, context).filter((action) => !DOOR_OF[action] || Boolean(actions?.[DOOR_OF[action]!]))
   const failed = message.outbox?.state === 'failed'
   const sending = message.outbox?.state === 'sending'
   const label = t('label', { author, audience: t(audienceKey(message), { party }), time })
@@ -256,7 +266,7 @@ export function MessageCard({
   // F-SA-244: their ask's live chip and Answer…; a change's line: its Still to do, when the floor and the workshop were told.
   if (!readOnly && message.ask) {
     const ask = message.ask
-    tail.push({ key: 'ask', draw: (foot) => <AskLine ask={ask} actions={actions} foot={foot} /> })
+    tail.push({ key: 'ask', draw: (foot) => <AskLine ask={ask} foot={foot} /> })
   }
   if (!readOnly && message.change && changeShown(message.change, actions)) {
     const change = message.change
@@ -290,9 +300,7 @@ export function MessageCard({
       ),
     })
   }
-  const mail = message.email
-  // Our mail's To and Subject: a quiet line until the menu's Email details holds them (tw- W2.2), so nothing is lost meanwhile.
-  if (mail && message.kind === 'ours') quiet('mail', t('details.email', { to: mail.to.join(', '), subject: mail.subject }), null)
+  const mail = message.email // tw- W2.2: its To · Cc · Subject live in the menu's Email details
   if (mail?.status === 'BOUNCED' || mail?.status === 'COMPLAINED' || mail?.status === 'FAILED') {
     tail.push({
       key: 'bounce',
@@ -348,6 +356,8 @@ export function MessageCard({
   const foot = (
     <BubbleFoot>
       {message.pinned && <FootIcon className="fw-rt-pinned" word={t('foot.pinned')} icon={<Pin size={13} aria-hidden />} />}
+      {/* tw- W2.2 (10-design §2 "Foot"): the reader's own follow-up on their message — a bell, for its sender only. */}
+      {message.followUp && message.mine && <FootIcon className="fw-rt-followup" word={t('foot.followUp', { date: formatDate(message.followUp.at, { locale }) })} icon={<Bell size={13} aria-hidden />} />}
       {correctedBy &&
         (onJump && !readOnly ? (
           <button type="button" className="fw-rt-corrected" onClick={() => onJump(correctedBy.id)}>
@@ -371,37 +381,36 @@ export function MessageCard({
     </BubbleFoot>
   )
 
+  const pick = (action: CardAction) => {
+    if (action === 'reply') actions?.onReply?.(message.id)
+    else if (action === 'replyPrivately') actions?.onReplyPrivately?.(message.id) // tw- W1.1
+    else if (action === 'copyText') actions?.onCopyText?.(message.id)
+    else if (action === 'link') actions?.onCopyLink?.(message.id)
+    else if (action === 'pin') actions?.onPin?.(message.id) // B-TH-286
+    else if (action === 'unpin') actions?.onUnpin?.(message.id) // B-TH-286
+    else if (action === 'remind') actions?.onRemind?.(message.id)
+    else if (action === 'task') actions?.onTask?.(message.id)
+    else if (action === 'answer' && message.ask) actions?.onAnswer?.(message.ask.requestId) // F-SA-244
+    else if (action === 'correct') actions?.onCorrect?.(message.id)
+    else if (action === 'emailDetails') actions?.onEmailDetails?.(message.id)
+    else if (action === 'useOn') actions?.onUseOn?.(message.id)
+  }
   const tools =
-    (!message.outbox && !readOnly && remind) || menu.length > 0 ? (
-      <>
-        {!message.outbox && !readOnly /* F-SA-261 */ && remind}
-        {menu.length > 0 && (
-          <Menu
-            align="right"
-            className="fw-rt-msg-menu"
-            label={<ChevronDown size={16} aria-hidden />}
-            triggerProps={{ 'aria-label': t('menu.label', { author, time }), className: 'fw-rt-msg-more' }}
-            items={menu.map((action) => ({
-              id: action,
-              label: t(`menu.${action}`),
-              onSelect: () => {
-                if (action === 'reply') actions?.onReply?.(message.id)
-                if (action === 'replyPrivately') actions?.onReplyPrivately?.(message.id) // tw- W1.1
-                if (action === 'correct') actions?.onCorrect?.(message.id)
-                if (action === 'task') actions?.onTask?.(message.id)
-                if (action === 'link') actions?.onCopyLink?.(message.id)
-                if (action === 'useOn') actions?.onUseOn?.(message.id)
-                if (action === 'pin') actions?.onPin?.(message.id) // B-TH-286
-                if (action === 'unpin') actions?.onUnpin?.(message.id) // B-TH-286
-              },
-            }))}
-          />
-        )}
-      </>
+    menu.length > 0 ? (
+      <MessageMenu rows={menu} label={t('menu.label', { author, time })} open={menuOpen} onOpenChange={setMenuOpen} onPick={pick} answerHref={message.ask ? (actions?.answerHref?.(message.ask.requestId) ?? null) : null} />
     ) : null
+  // tw- W2.2 (W-060): a right-click on the message opens the same menu (a link or selected text keeps the browser's own).
+  const onContextMenu =
+    menu.length > 0
+      ? (event: MouseEvent<HTMLElement>) => {
+          if (!opensOnRightClick(event, typeof window === 'undefined' ? '' : (window.getSelection()?.toString() ?? ''))) return
+          event.preventDefault()
+          setMenuOpen(true)
+        }
+      : undefined
 
   return (
-    <article className={cls} id={`message-${message.id}`} data-message-id={message.id} data-feed-item={message.id} tabIndex={-1} aria-label={label} {...lit}>
+    <article className={cls} id={`message-${message.id}`} data-message-id={message.id} data-feed-item={message.id} tabIndex={-1} aria-label={label} onContextMenu={onContextMenu} {...lit}>
       {place.side === 'others' && place.first && !paper && <Avatar name={message.authorHidden ? null : message.author} size="run" tone={tone} />}
       <Bubble model={{ side: place.side, run: { first: place.first, last: place.last }, name, senderTone: tone }} tools={tools}>
         {/* TOP: the correction, the quote — both from this message's OWN links (R1) — and what it is about. */}
@@ -573,33 +582,13 @@ function UndoFoot({ until, start, onUndo, done }: { until: string; start?: numbe
 const changeShown = (change: CardChange, actions: CardActions | undefined): boolean => Boolean(changeChip(change) || change.floorAt || change.workshopAt || actions?.onWhoWasTold)
 
 /** "Request · waiting on us · Answer…" under the customer's ask (the chip lives: it reads the request as the page reads it now). */
-function AskLine({ ask, actions, foot }: { ask: CardAsk; actions?: CardActions | undefined; foot?: ReactNode }) {
+function AskLine({ ask, foot }: { ask: CardAsk; foot?: ReactNode }) {
   const t = useT('record-thread-card')
   const chip = askChip(ask)
-  const href = actions?.answerHref?.(ask.requestId) ?? null
-  const onAnswer = actions?.onAnswer
+  // tw- W2.2 (10-design §12 home 38): the chip in the bubble; Answer… is a row of the message's menu.
   return (
     <p className="fw-rt-details fw-rt-change">
       <Pill tone={chip.tone}>{t(chip.key, chip.params)}</Pill>
-      {ask.answer && onAnswer && href ? (
-        <Button size="xs" variant="primary" asChild>
-          <a
-            href={href}
-            onClick={(event) => {
-              // A plain click stays on the page (the window opens over it); ⌘ / Ctrl / Shift / the middle button open a new tab.
-              if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return
-              event.preventDefault()
-              onAnswer(ask.requestId)
-            }}
-          >
-            {t('ask.answer')}
-          </a>
-        </Button>
-      ) : ask.answer && onAnswer ? (
-        <Button size="xs" variant="primary" onClick={() => onAnswer(ask.requestId)}>
-          {t('ask.answer')}
-        </Button>
-      ) : null}
       {foot}
     </p>
   )

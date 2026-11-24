@@ -497,59 +497,63 @@ describe('F-SA-260 — ThreadPick: which ONE thread the dock shows, and the one 
     expect(pickShown([])).toBe(false)
   })
 
-  it('draws the DS SegmentedControl (small, wrapping, named), the picked segment checked, and the picked choice’s line under it', () => {
+  // tw- W2.1 (Z4, P0-B4): the pick is ONE menu in the head's title — the picked thread's one label with ▾, whose thread it is on hover.
+  it('draws ONE menu as the title: the picked thread’s label, its name and whose thread it is on hover; no line under it', () => {
     const html = render(createElement(ThreadPick, { label: 'Which thread', choices, value: 'order-1', children: createElement(Card) }))
-    expect(html).toContain('role="radiogroup" aria-label="Which thread"')
-    expect(html).toContain('class="nds-seg sm wrap"')
-    expect(html).toMatch(/role="radio" aria-checked="true"[^>]*title="SO-0142 · Brand Alpha"><span class="fw-thread-pick-long">SO-0142 · Brand Alpha<\/span>/)
-    expect(html).toMatch(/role="radio" aria-checked="false"[^>]*title="Work order notes · Office only\."><span class="fw-thread-pick-long">Work order notes<\/span>/)
-    expect(html).toContain('<span>SO-0142’s thread is shared with Brand Alpha.</span></p>')
-    expect(html.indexOf('fw-thread-pick-line')).toBeLessThan(html.indexOf('THE THREAD'))
-    // One choice: the thread alone, no pick and no line.
+    expect(html).toContain('<button type="button" class="fw-thread-pick-title" aria-label="Which thread: SO-0142 · Brand Alpha" title="SO-0142 · Brand Alpha · SO-0142’s thread is shared with Brand Alpha." aria-haspopup="menu"')
+    expect(html).toContain('<span class="fw-thread-pick-long">SO-0142 · Brand Alpha</span>')
+    expect(html).not.toContain('radiogroup')
+    expect(html).not.toContain('aria-live="polite"')
+    expect(html).not.toContain('<span>SO-0142’s thread is shared with Brand Alpha.</span>')
+    expect(html.indexOf('fw-thread-pick-title')).toBeLessThan(html.indexOf('THE THREAD'))
+    // The rows: every thread offered, in order, the picked one checked; the hover words keep whose thread it is.
+    expect(pickRows(choices, 'order-1')).toEqual([
+      { value: 'workOrder', label: 'Work order notes', title: 'Work order notes · Office only. · Office only: never shared with a customer.', count: 0, checked: false },
+      { value: 'order-1', label: 'SO-0142 · Brand Alpha', title: 'SO-0142 · Brand Alpha · SO-0142’s thread is shared with Brand Alpha.', count: 0, checked: true },
+    ])
+    // One choice: the thread alone, no pick.
     const alone = render(createElement(ThreadPick, { label: 'Which thread', choices: choices.slice(0, 1), value: 'workOrder', children: createElement(Card) }))
-    expect(alone).not.toContain('radiogroup')
-    expect(alone).not.toContain('fw-rt-top')
+    expect(alone).not.toContain('fw-thread-pick')
     expect(alone).toContain('THE THREAD')
   })
 
-  it('the work order page behaves exactly as today: its own words, its orders as choices, an unknown pick shows its notes', () => {
+  it('the work order page: its own words, its orders as rows, an unknown pick shows its notes with the lock (never colour alone)', () => {
     const orders = [{ orderId: 'order-1', number: 'SO-0142', party: { id: 'p1', name: 'Brand Alpha' }, customerRef: null, companyId: 'c1' }]
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['production']).production!)
       const picked = render(createElement(WorkOrderThreads, { choices: orders, pick: 'order-1', children: createElement(Card) }), locale)
-      expect(picked, locale).toContain(`aria-label="${escaped(t('thread.pickLabel'))}"`)
+      expect(picked, locale).toContain(`aria-label="${escaped(t('thread.pickLabel'))}: SO-0142 · Brand Alpha"`)
       expect(picked, locale).toContain(escaped(t('thread.orderShared', { number: 'SO-0142', customer: 'Brand Alpha' })))
-      // F-OP-203: each order with its icon (the bag), the work order's notes with the Lock.
-      expect(picked, locale).toMatch(/aria-checked="true"[^>]*><span class="nds-seg-icon"><svg[^>]*lucide-shopping-bag[^>]*>.*?<\/svg><\/span><span class="fw-thread-pick-long">SO-0142 · Brand Alpha</)
-      expect(picked, locale).toMatch(/aria-checked="false"[^>]*><span class="nds-seg-icon"><svg[^>]*lucide-lock[^>]*>/)
-      expect(picked, locale).toContain(`title="${escaped(`${t('thread.workOrder')} · ${t('thread.workOrderHint')}`)}"`)
+      expect(picked, locale).not.toContain('fw-thread-pick-lock')
       const unknown = render(createElement(WorkOrderThreads, { choices: orders, pick: 'gone', children: createElement(Card) }), locale)
-      expect(unknown, locale).toContain(`aria-checked="true" tabindex="0" class="nds-seg-opt on" title="${escaped(`${t('thread.workOrder')} · ${t('thread.workOrderHint')}`)}"`)
-      // The work order's notes: office only, their line under the pick in the office tone (F-OP-203).
-      expect(unknown, locale).toContain('<p class="fw-thread-pick-line is-office" aria-live="polite">')
-      expect(unknown, locale).toContain(`<span>${escaped(t('thread.workOrderHint'))}</span></p>`)
+      expect(unknown, locale).toContain(`<span class="fw-thread-pick-long">${escaped(t('thread.workOrder'))}</span>`)
+      expect(unknown, locale).toContain('fw-thread-pick-lock')
+      expect(unknown, locale).toContain(`title="${escaped(`${t('thread.workOrder')} · ${t('thread.workOrderHint')}`)}`)
       // No order thread the reader may read: the work order's notes alone, no pick.
-      expect(render(createElement(WorkOrderThreads, { choices: [], pick: 'workOrder', children: createElement(Card) }), locale), locale).not.toContain('radiogroup')
+      expect(render(createElement(WorkOrderThreads, { choices: [], pick: 'workOrder', children: createElement(Card) }), locale), locale).not.toContain('fw-thread-pick')
     }
   })
 
-  it('one part, never a fork: the work order draws the shared pick; its old class and rule went; the same look (flex column, gap 7, muted small line)', () => {
+  it('one part, never a fork: the work order draws the shared pick; its old class and rule went; the look in tokens only', () => {
     const workOrder = readFileSync(new URL('../../production/work-orders/record/view/WorkOrderThreads.tsx', import.meta.url), 'utf8')
     expect(workOrder).toContain("from '../../../../_shared/record-thread/ThreadPick'")
     expect(workOrder).not.toContain('SegmentedControl')
     expect(readFileSync(new URL('../../production/_shared/production.css', import.meta.url), 'utf8')).not.toMatch(/\.fw-pr-threadpick\s*\{/)
     const css = readFileSync(new URL('./thread-pick.css', import.meta.url), 'utf8')
-    expect(css).toMatch(/\.fw-thread-pick \{\s*display: flex;\s*flex-direction: column;\s*gap: var\(--nds-space-7\);\s*min-width: 0;\s*\}/)
-    expect(css).toMatch(/\.fw-thread-pick-line \{\s*display: flex;\s*align-items: flex-start;\s*gap: var\(--nds-space-6\);\s*margin: 0;\s*color: var\(--nds-text-muted\);\s*font-size: var\(--nds-font-size-sm\);\s*line-height: 1\.45;\s*\}/)
-    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i)
+    expect(css).toMatch(/\.fw-thread-pick \{\s*display: flex;\s*flex-direction: column;/)
+    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|color-mix/i)
+    const source = readFileSync(new URL('./ThreadPick.tsx', import.meta.url), 'utf8')
+    expect(source).not.toContain('SegmentedControl')
+    expect(source).toContain("import { Menu, type MenuItemDef } from '@nexus/ui/components'")
   })
 })
 // ── end F-SA-260
 
-// ── F-OP-202 (order page plan N4; 11-dock §0.1, §2; review R-13): the pick band INSIDE the card ────────────────────────────────────────
+// ── F-OP-202 (order page plan N4; 11-dock §0.1, §2; review R-13) → tw- W2.1 (Z4): the pick INSIDE the card, as its head's title ──────
 import { DockColumn } from '../../../lib/record-thread/DockColumn'
-import { lineClassOf, PickedDockColumn, segmentOf, useDockTop } from './ThreadPick'
-describe('F-OP-202 — the pick band inside the dock’s one card: icons, long / short words, "N new" as a Pill, the whose-line', () => {
+import { RecordThreadHead } from '../../../lib/record-thread/head/view/RecordThreadHead'
+import { pickRows, PickedDockColumn, segmentOf, useDockTop } from './ThreadPick'
+describe('F-OP-202 / tw- W2.1 — the pick in the head’s title: ONE label per thread, "N new" in words on its row, the lock', () => {
   const choices: ThreadChoice[] = [
     { value: 'order', label: 'This order', count: 2, icon: createElement('i', { 'data-icon': 'bag' }), line: 'This order’s thread is shared with Brand Alpha.' },
     { value: 'general', label: 'Brand Alpha S.r.l. (general)', short: 'General', count: 0, line: 'Brand Alpha’s general thread.' },
@@ -557,89 +561,68 @@ describe('F-OP-202 — the pick band inside the dock’s one card: icons, long /
     { value: 'wo', label: 'Work orders', count: 1, tone: 'office', line: 'WO-1 notes: office only.' },
   ]
 
-  it('the pick model: long and short words, the full words on hover, the count (never below 0), the office tone', () => {
-    expect(segmentOf(choices[0]!)).toEqual({ long: 'This order', short: null, title: 'This order', count: 2 })
-    expect(segmentOf(choices[1]!)).toEqual({ long: 'Brand Alpha S.r.l. (general)', short: 'General', title: 'Brand Alpha S.r.l. (general)', count: 0 })
-    expect(segmentOf(choices[2]!)).toEqual({ long: 'All of Brand Alpha S.r.l.', short: 'All', title: 'All of Brand Alpha S.r.l. · Read only', count: 0 })
-    // A short word equal to the label is no short word; a count that is not a number, or below 0, is none.
-    expect(segmentOf({ value: 'x', label: 'Projects', short: 'Projects', line: null }).short).toBeNull()
+  it('the pick model: ONE label (P0-B4: a short word is never shown), the full words on hover, the count (never below 0)', () => {
+    expect(segmentOf(choices[0]!)).toEqual({ long: 'This order', title: 'This order · This order’s thread is shared with Brand Alpha.', count: 2 })
+    expect(segmentOf(choices[1]!)).toEqual({ long: 'Brand Alpha S.r.l. (general)', title: 'Brand Alpha S.r.l. (general) · Brand Alpha’s general thread.', count: 0 })
+    expect(segmentOf(choices[2]!)).toEqual({ long: 'All of Brand Alpha S.r.l.', title: 'All of Brand Alpha S.r.l. · Read only', count: 0 })
     expect(segmentOf({ value: 'x', label: 'X', count: -3, line: null }).count).toBe(0)
     expect(segmentOf({ value: 'x', label: 'X', count: Number.NaN, line: null }).count).toBe(0)
     expect(segmentOf({ value: 'x', label: 'X', count: 2.7, line: null }).count).toBe(2)
-    expect(lineClassOf(choices[3]!)).toBe('fw-thread-pick-line is-office')
-    expect(lineClassOf(choices[0]!)).toBe('fw-thread-pick-line')
+    expect(pickRows(choices, 'general').map((row) => [row.value, row.count, row.checked])).toEqual([['order', 2, false], ['general', 0, true], ['all', 0, false], ['wo', 1, false]])
   })
 
-  it('"N new" is a DS Pill size sm — the number visible, "2 new" its name (R-13: never compact, which hides the words)', () => {
-    for (const [locale, two, one] of [['en', '2 new', '1 new'], ['it', '2 nuovi', '1 nuovo']] as const) {
-      const html = render(createElement(ThreadPick, { label: 'Which thread', choices, value: 'order', children: createElement(Card) }), locale)
-      expect(html, locale).toContain(`<span class="nds-pill info fw-thread-pick-new" aria-label="${two}" title="${two}">2</span>`)
-      expect(html, locale).toContain(`<span class="nds-pill info fw-thread-pick-new" aria-label="${one}" title="${one}">1</span>`)
-      expect(html, locale).not.toMatch(/nds-pill[^"]*compact/)
-      // No pill for 0 new.
-      expect(html.match(/fw-thread-pick-new/g)?.length, locale).toBe(2)
-    }
-    const source = readFileSync(new URL('./ThreadPick.tsx', import.meta.url), 'utf8')
-    expect(source).toContain('<Pill tone="info" size="sm" className="fw-thread-pick-new" aria-label={fresh} title={fresh}>')
-    expect(source).not.toMatch(/<Pill[^>]*\bcompact\b/)
-  })
-
-  it('each segment: its icon, its long words (one line, whole — F-OP-303), its short words for a card of 480 px or less', () => {
+  it('"N new" are words on the thread’s row, never a pill in the title; the title says the label and nothing else at any width', () => {
     const html = render(createElement(ThreadPick, { label: 'Which thread', choices, value: 'general', children: createElement(Card) }))
-    expect(html).toContain('<span class="nds-seg-icon"><i data-icon="bag"></i></span><span class="fw-thread-pick-long">This order</span>')
-    expect(html).toContain('<span class="fw-thread-pick-long has-short">Brand Alpha S.r.l. (general)</span><span class="fw-thread-pick-short">General</span>')
-    expect(html).toContain('title="All of Brand Alpha S.r.l. · Read only"><span class="fw-thread-pick-long has-short">All of Brand Alpha S.r.l.</span><span class="fw-thread-pick-short">All</span>')
+    expect(html).not.toContain('fw-thread-pick-new')
+    expect(html).not.toContain('fw-thread-pick-short')
+    expect(html).toContain('<span class="fw-thread-pick-long">Brand Alpha S.r.l. (general)</span>')
+    const source = readFileSync(new URL('./ThreadPick.tsx', import.meta.url), 'utf8')
+    expect(source).toContain("row.count > 0 ? `${row.label} · ${t('dock.newCount', { count: row.count })}` : row.label")
+    expect(source).not.toMatch(/<Pill\b/)
     const css = readFileSync(new URL('./thread-pick.css', import.meta.url), 'utf8')
-    // F-OP-303 (walk #11): no 22-character cap — the names show whole (the segments wrap); only words wider than the card end in "…".
-    expect(css).toMatch(/\.fw-thread-pick-long \{[^}]*max-width: 100%;[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap;/)
-    expect(css).not.toContain('22ch')
-    expect(css).toMatch(/\.fw-thread-pick-short \{\s*display: none;\s*\}/)
-    expect(css).toMatch(/@container fw-rtcol \(max-width: 480px\) \{\s*\.fw-thread-pick-long\.has-short \{\s*display: none;\s*\}\s*\.fw-thread-pick-short \{\s*display: inline;\s*\}\s*\}/)
-    expect(css).toMatch(/\.fw-thread-pick-line\.is-office \{\s*color: var\(--nds-warning-text\);\s*\}/)
+    expect(css).toMatch(/\.fw-thread-pick-long \{[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap;/)
+    expect(css).not.toContain('.fw-thread-pick-short')
   })
 
-  it('the whose-line is ONE polite live line with its Info icon; the office tone on an office-only thread; none for All (it says it itself)', () => {
-    const order = render(createElement(ThreadPick, { label: 'Which thread', choices, value: 'order', children: createElement(Card) }))
-    expect(order).toMatch(/<p class="fw-thread-pick-line" aria-live="polite"><svg[^>]*lucide-info[^>]*>.*?<\/svg><span>This order’s thread is shared with Brand Alpha\.<\/span><\/p>/)
-    expect(order.match(/aria-live="polite"/g)?.length).toBe(1)
-    const wo = render(createElement(ThreadPick, { label: 'Which thread', choices, value: 'wo', children: createElement(Card) }))
-    expect(wo).toContain('<p class="fw-thread-pick-line is-office" aria-live="polite">')
-    const all = render(createElement(ThreadPick, { label: 'Which thread', choices, value: 'all', children: createElement(Card) }))
-    expect(all).not.toContain('fw-thread-pick-line')
+  it('an office-only thread shows a lock in the title; a shared one none', () => {
+    expect(render(createElement(ThreadPick, { label: 'Which thread', choices, value: 'wo', children: createElement(Card) }))).toContain('fw-thread-pick-lock')
+    expect(render(createElement(ThreadPick, { label: 'Which thread', choices, value: 'order', children: createElement(Card) }))).not.toContain('fw-thread-pick-lock')
   })
 
-  it('the second select sits under the segments; the quieter note under the line', () => {
+  it('the second select sits under the title; the quieter note under it', () => {
     const html = render(createElement(ThreadPick, { label: 'Which thread', choices, value: 'order', note: 'Draft kept on SO-1', extra: createElement('select', { 'aria-label': 'Which project' }), children: createElement(Card) }))
-    const segments = html.indexOf('role="radiogroup"')
+    const title = html.indexOf('class="fw-thread-pick-title"')
     const extra = html.indexOf('<div class="fw-thread-pick-extra"><select aria-label="Which project">')
-    const line = html.indexOf('fw-thread-pick-line"')
     const note = html.indexOf('<p class="fw-thread-pick-line is-note">Draft kept on SO-1</p>')
-    expect(extra).toBeGreaterThan(segments)
-    expect(line).toBeGreaterThan(extra)
-    expect(note).toBeGreaterThan(line)
+    expect(extra).toBeGreaterThan(title)
+    expect(note).toBeGreaterThan(extra)
   })
 
-  it('ThreadPick draws nothing outside the column: its band goes down to the card, which draws it first', () => {
-    // A child that is no card: no pick at all (nothing above the children any more).
+  it('ThreadPick draws nothing outside the column: the card hands the pick to its head as the title (no band of its own)', () => {
+    // A child that is no card: no pick at all (nothing above the children).
     const bare = render(createElement(ThreadPick, { label: 'Which thread', choices, value: 'order', children: createElement('p', null, 'THE THREAD') }))
     expect(bare).toBe('<p>THE THREAD</p>')
-    // A card: the band is its first band, inside the column.
+    // A card without a head: the title alone, inside the column, before the body.
     const html = render(createElement(ThreadPick, { label: 'Which thread', choices, value: 'order', children: createElement(Card) }))
-    expect(html.startsWith('<section class="fw-rt-column is-docked" aria-label="The card"><div class="fw-rt-top"><div class="fw-thread-pick">')).toBe(true)
-    expect(html.indexOf('THE THREAD')).toBeGreaterThan(html.indexOf('fw-thread-pick-line'))
-    // The same band reaches any card the host draws (DockColumn handed useDockTop()).
+    expect(html.startsWith('<section class="fw-rt-column is-docked" aria-label="The card"><div class="fw-rth is-title-only"><div class="fw-rth-titleblock"><div class="fw-rth-title"><div class="fw-thread-pick">')).toBe(true)
+    expect(html).not.toContain('fw-rt-top')
+    // A card with a head: the pick IS the head's title (the record's own label is not drawn then).
+    const Headed = () => createElement(DockColumn, { label: 'Own', top: useDockTop(), head: createElement(RecordThreadHead, { model: { record: 'SO-1', party: null, answers: null, closed: null, offline: null, view: 'all', views: ['all'], counts: {}, holds: { task: null, approve: null, share: null, follow: null, mute: null, followers: null, remind: null }, follow: { following: false, muted: false }, reminder: null, canManage: false, width: null, now: 0 } }), body: 'B' })
+    const headed = render(createElement(ThreadPick, { label: 'Which thread', choices, value: 'order', children: createElement(Headed) }))
+    expect(headed.indexOf('class="fw-thread-pick"')).toBeGreaterThan(headed.indexOf('class="fw-rth-title"'))
+    expect(headed.indexOf('class="fw-thread-pick"')).toBeLessThan(headed.indexOf('class="fw-rth-tools"'))
+    expect(headed).not.toContain('<span class="fw-rth-title-words">SO-1</span>')
+    // Outside a ThreadPick: the head names the record.
     const Own = () => createElement(DockColumn, { label: 'Own', top: useDockTop(), body: 'B' })
-    expect(render(createElement(ThreadPick, { label: 'Which thread', choices, value: 'order', children: createElement(Own) }))).toContain('<div class="fw-rt-top"><div class="fw-thread-pick">')
-    // Outside a ThreadPick: no band.
-    expect(render(createElement(Own))).not.toContain('fw-rt-top')
+    expect(render(createElement(Own))).not.toContain('fw-rth')
     const source = readFileSync(new URL('./ThreadPick.tsx', import.meta.url), 'utf8')
-    const pick = source.slice(source.indexOf('export function ThreadPick<'), source.indexOf('/** F-OP-202: the pick band'))
+    const pick = source.slice(source.indexOf('export function ThreadPick<'), source.indexOf('/**\n * tw- W2.1: the pick as the head'))
     expect(pick).toContain('<DockTop.Provider value={band}>{children}</DockTop.Provider>')
     expect(pick).not.toContain('className=')
-    // The office thread draws it as its first band (RecordThread's slots.top, kept when the thread is forbidden).
+    // The office thread hands it to its head (RecordThread's slots.top: the title, kept alone when the thread is forbidden).
     const docked = readFileSync(new URL('./DockedOfficeThread.tsx', import.meta.url), 'utf8')
     expect(docked).toContain('const pickBand = useDockTop()')
-    expect(docked).toContain('slots={{ top: pickBand /* F-OP-202 */, head: headSlot, filesLine, helpers, overlays }}')
+    expect(docked).toContain('slots={{ top: pickBand /* F-OP-202; tw- W2.1: the head\'s title */, head: headSlot, helpers, overlays }}')
     // A record page's design case draws it inside its card too (as on the page).
     const design = readFileSync(new URL('../record-frame/fixtures.ts', import.meta.url), 'utf8')
     expect(design).toContain('const top = useDockTop()')

@@ -14,7 +14,6 @@
   "remind": {
     "title": "Ricordamelo: {what}",
     "titleMessage": "Ricordami un messaggio su {what}",
-    "aboutMessage": "Ricordami questo messaggio",
     "body": "Torna nel tuo Oggi all'ora che scegli, oppure quando qualcosa cambia sul record.",
     "note": "La tua nota",
     "noteHint": "Facoltativa, al massimo {count} caratteri. La vedi solo tu.",

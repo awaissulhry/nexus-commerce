@@ -1,8 +1,8 @@
 'use client'
 
 import { createContext, useContext, type ReactNode } from 'react'
-import { Info } from 'lucide-react'
-import { Pill, SegmentedControl } from '@nexus/ui/primitives'
+import { ChevronDown, Lock } from 'lucide-react'
+import { Menu, type MenuItemDef } from '@nexus/ui/components'
 import { useT } from '../../../lib/i18n/provider'
 import { DockColumn, type DockColumnProps } from '../../../lib/record-thread/DockColumn' // F-OP-202
 import { WithMessages } from '../../../record-panels/i18n'
@@ -25,28 +25,33 @@ import './thread-pick.css'
  * `PickedDockColumn`. Hosts keep their shape (`<ThreadPick …>{thread}</ThreadPick>`). Each segment: its icon, its long words (one
  * line, whole: F-OP-303) or, in a card of 480 px or less, its short words; its full words on hover; "N new" as a small Pill
  * with the number visible ("2 new" for a screen reader). The whose-line is a polite live line (office tone on work-order notes).
+ *
+ * tw- W2.1 (THE THREAD REBUILD; Z4, P0-B4; 10-design §8): the pick band and its sentence GO — the pick is ONE menu in the head's title
+ * (the card hands it to its head: rt/head/view/HeadPick): the picked thread's ONE label (the long one, cut with "…" only when it is
+ * wider than the head; never other words at another width) with ▾, a lock when it is office only (never told by colour alone), and
+ * each thread a row of the menu with its "N new" in words. The second select and the quieter note stay, under the title.
  */
 
 /** One thread the dock may show. */
 export interface ThreadChoice<V extends string = string> {
   readonly value: V
-  /** The segment's words ("Work order notes", "SO-0142 · Brand Alpha"). */
+  /** The thread's ONE label ("Work order notes", "SO-0142 · Brand Alpha"). */
   readonly label: string
   /** The segment's hover words. */
   readonly title?: string
   /**
-   * The ONE line under the pick while this choice is picked: whose thread it is (who reads what is written there). F-SA-279: null
-   * when the picked view says it itself (All of <customer>'s own read-only line).
+   * Whose thread it is (who reads what is written there). tw- W2.1: no line under the title any more — these words are its row's
+   * tooltip in the pick. F-SA-279: null when the view says it itself (All of <customer>).
    */
   readonly line: string | null
   // ---- F-OP-202: the segment's look inside the card
-  /** The short words of a narrow card (≤ 480 px): "General", "Projects", "Work orders", "All". Absent: the label at every width. */
+  /** tw- W2.1 (P0-B4): ignored — one label per thread at every width (hosts may still name it). */
   readonly short?: string
   /** The segment's icon (a 14 px lucide glyph, aria-hidden). */
   readonly icon?: ReactNode
   /** The reader's new messages in this thread ("N new"); 0 or absent: no pill. */
   readonly count?: number
-  /** 'office': the whose-line in the office tone (a work order's notes: never shared with a customer). */
+  /** 'office': an office-only thread (a work order's notes: never shared with a customer) — tw- W2.1: a lock in the title. */
   readonly tone?: 'office'
   // ---- end F-OP-202
 }
@@ -77,24 +82,35 @@ export const pickShown = (choices: readonly ThreadChoice[]): boolean => choices.
 
 // ---- F-OP-202: the pick model (what one segment shows) and the band handed down to the card ----
 
-/** What one segment shows: its long words, its short words (null: the long ones at every width), its full words on hover, its count. */
+/** What one thread shows in the pick: its ONE label (P0-B4: never other words at another width), its full words on hover, its count. */
 export interface PickSegment {
   readonly long: string
-  readonly short: string | null
   readonly title: string
   readonly count: number
 }
 
 export function segmentOf(choice: ThreadChoice): PickSegment {
-  const short = choice.short && choice.short !== choice.label ? choice.short : null
-  // The hover keeps every word the segment may cut (long words wider than the card; the short ones drop the customer).
-  const title = choice.title && choice.title !== choice.label ? `${choice.label} · ${choice.title}` : choice.label
+  // The hover keeps every word the title may cut, and whose thread it is.
+  const title = [...new Set([choice.label, choice.title, choice.line].filter((words): words is string => Boolean(words)))].join(' · ')
   const count = Number.isFinite(choice.count) ? Math.max(0, Math.trunc(choice.count ?? 0)) : 0
-  return { long: choice.label, short, title, count }
+  return { long: choice.label, title, count }
 }
 
-/** The whose-line's class: the office tone for an office-only thread. */
-export const lineClassOf = (choice: Pick<ThreadChoice, 'tone'>): string => `fw-thread-pick-line${choice.tone === 'office' ? ' is-office' : ''}`
+/** tw- W2.1: the pick's rows — every thread the host offers, in its order, the picked one checked, its "N new" count and hover words. */
+export interface PickRow<V extends string = string> {
+  readonly value: V
+  readonly label: string
+  readonly title: string
+  readonly count: number
+  readonly checked: boolean
+}
+
+export function pickRows<V extends string>(choices: readonly ThreadChoice<V>[], picked: V): PickRow<V>[] {
+  return choices.map((choice) => {
+    const segment = segmentOf(choice)
+    return { value: choice.value, label: segment.long, title: segment.title, count: segment.count, checked: choice.value === picked }
+  })
+}
 
 /** The catalogue the band reads ("N new"); ThreadPick brings it, so every host's card has it. */
 export const THREAD_PICK_NS = ['record-thread'] as const
@@ -126,49 +142,33 @@ export function ThreadPick<V extends string>({ label, choices, value, onPick, ch
   )
 }
 
-/** F-OP-202: the pick band — the segments, the second select under them, the ONE whose-line, the quieter note. */
+/**
+ * tw- W2.1: the pick as the head's title — ONE menu (each thread a row, its "N new" in words), the picked thread's ONE label with ▾ and
+ * a lock when it is office only; the second select and the quieter note under it.
+ */
 function PickBand<V extends string>({ label, choices, picked, onPick, note, extra }: { label: string; choices: readonly ThreadChoice<V>[]; picked: ThreadChoice<V>; onPick: ((value: V) => void) | undefined; note: string | null; extra: ReactNode }) {
   const t = useT('record-thread')
+  const shown = segmentOf(picked)
+  const icons = new Map(choices.map((choice) => [choice.value, choice.icon] as const))
+  const items: MenuItemDef[] = pickRows(choices, picked.value).map((row) => {
+    const icon = icons.get(row.value)
+    return { id: `pick-${row.value}`, label: row.count > 0 ? `${row.label} · ${t('dock.newCount', { count: row.count })}` : row.label, ...(icon ? { icon } : {}), checked: row.checked, title: row.title, onSelect: () => onPick?.(row.value) }
+  })
   return (
     <div className="fw-thread-pick">
-      <SegmentedControl
-        size="sm"
-        wrap
-        ariaLabel={label}
-        value={picked.value}
-        onChange={(next) => {
-          const chosen = choices.find((choice) => choice.value === next)
-          if (chosen) onPick?.(chosen.value)
-        }}
-        options={choices.map((choice) => {
-          const segment = segmentOf(choice)
-          const fresh = segment.count > 0 ? t('dock.newCount', { count: segment.count }) : null
-          return {
-            value: choice.value,
-            label: (
-              <>
-                <span className={`fw-thread-pick-long${segment.short ? ' has-short' : ''}`}>{segment.long}</span>
-                {segment.short && <span className="fw-thread-pick-short">{segment.short}</span>}
-                {/* R-13: size sm, not compact (compact hides the words): the number shows, the words are its name. */}
-                {fresh && (
-                  <Pill tone="info" size="sm" className="fw-thread-pick-new" aria-label={fresh} title={fresh}>
-                    {segment.count}
-                  </Pill>
-                )}
-              </>
-            ),
-            title: segment.title,
-            ...(choice.icon ? { icon: choice.icon } : {}),
-          }
-        })}
+      <Menu
+        className="fw-thread-pick-menu"
+        label={
+          <>
+            <span className="fw-thread-pick-long">{shown.long}</span>
+            {picked.tone === 'office' && <Lock size={13} className="fw-thread-pick-lock" aria-hidden />}
+            <ChevronDown size={14} aria-hidden />
+          </>
+        }
+        items={items}
+        triggerProps={{ className: 'fw-thread-pick-title', 'aria-label': `${label}: ${shown.long}`, title: shown.title }}
       />
       {extra ? <div className="fw-thread-pick-extra">{extra /* F-SA-262 */}</div> : null}
-      {picked.line && (
-        <p className={lineClassOf(picked)} aria-live="polite">
-          <Info size={14} aria-hidden />
-          <span>{picked.line}</span>
-        </p>
-      )}
       {note && <p className="fw-thread-pick-line is-note">{note}</p> /* F-SA-279 */}
     </div>
   )

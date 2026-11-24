@@ -1,10 +1,10 @@
 {
   "label": "Thread of {record}",
   "answers": {
-    "us": "This thread waits on us · {wait}",
-    "customer": "This thread waits on the customer · {wait}",
-    "supplier": "This thread waits on the supplier · {wait}",
-    "partner": "This thread waits on the partner · {wait}",
+    "us": "Waiting on us · {wait}",
+    "customer": "Waiting on the customer · {wait}",
+    "supplier": "Waiting on the supplier · {wait}",
+    "partner": "Waiting on the partner · {wait}",
     "tipUs": "{party} wrote last, {when}. Counted in clock hours since that message.",
     "tipParty": "We wrote to {party} last, {when}. Counted in clock hours since that message."
   },
@@ -19,7 +19,7 @@
   },
   "offline": "Offline · as of {time}",
   "view": {
-    "label": "View",
+    "label": "Show",
     "menu": "Choose what the thread shows",
     "all": "All",
     "shared": {
@@ -44,7 +44,8 @@
     "half": "Half",
     "full": "Full width",
     "hide": "Hide the thread",
-    "reset": "Default width"
+    "reset": "Default width",
+    "title": "Width"
   },
   "more": {
     "label": "Thread tools"
@@ -95,11 +96,6 @@
     "frame718": "Wide dock, about 718 px",
     "frame375": "Phone, 375 px",
     "frameLabel": "Thread column {width} px wide"
-  },
-  "new": {
-    "count_one": "{count} new",
-    "count_other": "{count} new",
-    "many": "99+ new"
   },
   "owner": {
     "label": "Owner: {name}",
@@ -162,7 +158,7 @@
     "tip": "Marked done: off the work lists. Not closed — the customer can still write, and a new message opens it again."
   },
   "search": {
-    "open": "Search in the thread ( / )",
+    "open": "Search in the thread",
     "label": "Search the messages of {record}",
     "placeholder": "Words or a file name",
     "close": "Close the search",
@@ -184,5 +180,26 @@
       "note": "Office note",
       "other": "Message"
     }
+  },
+  "viewShowing": "Showing {view}",
+  "viewShowAll": "Show all",
+  "files": {
+    "label": "Files ({count})"
+  },
+  "pinbar": {
+    "label": "Pinned message {n} of {count}: go to it"
+  },
+  "keys": {
+    "title": "Keys",
+    "jk": "next / previous message",
+    "r": "reply to the message in focus; else write to the customer",
+    "n": "office note",
+    "quote": "on a quote: go to the message",
+    "slash": "search in the thread",
+    "enter": "send",
+    "shiftEnter": "new line",
+    "esc": "close a menu, drop the reply",
+    "enterKey": "Enter",
+    "shiftEnterKey": "Shift+Enter"
   }
 }

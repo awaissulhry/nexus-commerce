@@ -22,7 +22,6 @@ import {
   walk,
   type ViewerFile,
 } from './model'
-import { CountPopover } from './view/CountPopover'
 
 /**
  * B-TH-211 — the thread's shared pop-ups (T-POP): the viewer by kind and only what the reader may open (W25), the original
@@ -132,7 +131,6 @@ describe('the words', () => {
         'original.check.gray', 'original.check.notChecked',
         ...['scanPending', 'infected', 'scanFailed', 'checks'].map((key) => `viewer.held.${key}`),
         ...['heic', 'audio', 'office', 'other'].map((key) => `viewer.card.${key}`),
-        ...['tasks', 'approvals', 'partners', 'followers'].flatMap((kind) => [`count.title.${kind}`, `count.none.${kind}`, `count.action.${kind}`]),
         ...['ATTACHMENT', 'DOCUMENT', 'PHOTO', 'CERTIFICATE', 'FISCAL_ARCHIVE', 'AUDIO'].map((kind) => `kind.${kind}`),
         'close.conflict', 'leave.title', 'send.title',
       ]
@@ -148,12 +146,5 @@ describe('the words', () => {
         expect(html, `${item.id} ${locale}`).not.toMatch(KEY_ON_SCREEN)
       }
     }
-  })
-
-  it('a count popover names its count for screen readers', () => {
-    const html = renderToString(
-      createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(CountPopover, { model: { kind: 'tasks', count: 2, lines: [] }, trigger: '2', triggerLabel: 'Tasks (2)' })),
-    )
-    expect(html).toContain('Tasks (2)')
   })
 })

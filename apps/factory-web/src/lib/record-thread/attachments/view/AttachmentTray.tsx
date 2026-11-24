@@ -1,8 +1,8 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import { Camera, FileText, ImageIcon, Layers, Lock, Paperclip, RotateCw, Ruler, Upload, X } from 'lucide-react'
-import { Menu, ProgressBar } from '@nexus/ui/components'
+import { Camera, FileText, ImageIcon, Layers, Lock, Plus, RotateCw, Ruler, Upload, X } from 'lucide-react'
+import { Menu, ProgressBar, type MenuItemDef } from '@nexus/ui/components'
 import { Button, Input } from '@nexus/ui/primitives'
 import { Modal } from '../../../i18n/ds-parts'
 import { INTL_LOCALE } from '../../../i18n/locales'
@@ -82,16 +82,20 @@ export function AttachmentTray({ files, partyName, onRemove, onRetry }: { files:
  * The paper clip (T6-F01): Upload from this device · Take a photo (the phone's camera; elsewhere the file picker) · From this
  * record. Held with the reason when the person may not upload or read the record's files.
  */
-export function ClipMenu({ canUpload, canPick, onFiles, onPick, onSheets }: { canUpload: boolean; canPick: boolean; onFiles: (files: File[]) => void; onPick: () => void; onSheets?: (files: File[]) => void }) {
+/**
+ * The "+" of the box (B-TH-206; tw- W2.3, 10-design §10): Document · Photos · (Measurement sheet…) · From this record, then the
+ * composer's own rows (`more`: Saved replies · Amount · For the floor). A row without its right says why; no other hint line.
+ */
+export function ClipMenu({ canUpload, canPick, onFiles, onPick, onSheets, more = [] }: { canUpload: boolean; canPick: boolean; onFiles: (files: File[]) => void; onPick: () => void; onSheets?: (files: File[]) => void; more?: readonly MenuItemDef[] }) {
   const t = useT('record-thread-attach')
   const device = useRef<HTMLInputElement>(null)
   const camera = useRef<HTMLInputElement>(null)
   // B-TH-283: "Measurement sheet…" — the files chosen go up as measurement sheets (a PDF or a photo).
   const sheets = useRef<HTMLInputElement>(null)
-  if (!canUpload && !canPick) {
+  if (!canUpload && !canPick && more.length === 0) {
     return (
-      <Button size="sm" variant="quiet" heldReason={t('clip.noRight')} aria-label={t('clip.label')}>
-        <Paperclip size={15} aria-hidden />
+      <Button size="sm" variant="quiet" className="icon" heldReason={t('clip.noRight')} aria-label={t('clip.label')}>
+        <Plus size={16} aria-hidden />
       </Button>
     )
   }
@@ -104,13 +108,14 @@ export function ClipMenu({ canUpload, canPick, onFiles, onPick, onSheets }: { ca
     <span className="fw-rt-clip">
       <Menu
         className="fw-rt-clip-menu"
-        label={<Paperclip size={15} aria-hidden />}
-        triggerProps={{ 'aria-label': t('clip.label'), className: 'nds-btn quiet sm' }}
+        label={<Plus size={16} aria-hidden />}
+        triggerProps={{ 'aria-label': t('clip.label'), className: 'nds-btn quiet sm icon' }}
         items={[
-          { id: 'device', label: t('clip.device'), icon: <Upload size={14} aria-hidden />, disabled: !canUpload, description: canUpload ? undefined : t('clip.noUpload'), onSelect: () => device.current?.click() },
-          { id: 'photo', label: t('clip.photo'), icon: <Camera size={14} aria-hidden />, disabled: !canUpload, description: canUpload ? t('clip.photoHint') : t('clip.noUpload'), onSelect: () => camera.current?.click() },
-          ...(onSheets ? [{ id: 'sheet', label: t('clip.sheet'), icon: <Ruler size={14} aria-hidden />, disabled: !canUpload, description: canUpload ? t('clip.sheetHint') : t('clip.noUpload'), onSelect: () => sheets.current?.click() }] : []),
-          { id: 'record', label: t('clip.record'), icon: <Layers size={14} aria-hidden />, disabled: !canPick, description: canPick ? undefined : t('clip.noRead'), onSelect: onPick },
+          { id: 'device', label: t('clip.device'), icon: <Upload size={14} aria-hidden />, disabled: !canUpload, ...(canUpload ? {} : { description: t('clip.noUpload') }), onSelect: () => device.current?.click() },
+          { id: 'photo', label: t('clip.photo'), icon: <Camera size={14} aria-hidden />, disabled: !canUpload, ...(canUpload ? {} : { description: t('clip.noUpload') }), onSelect: () => camera.current?.click() },
+          ...(onSheets ? [{ id: 'sheet', label: t('clip.sheet'), icon: <Ruler size={14} aria-hidden />, disabled: !canUpload, ...(canUpload ? {} : { description: t('clip.noUpload') }), onSelect: () => sheets.current?.click() }] : []),
+          { id: 'record', label: t('clip.record'), icon: <Layers size={14} aria-hidden />, disabled: !canPick, ...(canPick ? {} : { description: t('clip.noRead') }), onSelect: onPick },
+          ...(more.length > 0 ? [{ id: 'more-sep', separator: true }, ...more] : []),
         ]}
       />
       {onSheets && <input ref={sheets} type="file" multiple accept="application/pdf,image/*" hidden tabIndex={-1} aria-hidden="true" onChange={(event) => take(event.currentTarget, onSheets)} />}

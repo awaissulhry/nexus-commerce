@@ -122,22 +122,11 @@
 
 /* ── F-OP-201 (order page plan N4; 11-dock §0.1, §1): the bands of the ONE card a record's dock draws in every scope. RecordThread's
    docked column and DockColumn (a read-only view: All of <Customer>) use these same classes — one copy, so the two never drift:
-   the pick band on top, the body that scrolls (RecordThread's feed scrolls itself: .fw-rt-feed), the fixed foot (RecordThread's foot
-   is its composer). --nds-space-N is N px.
+   the body that scrolls (RecordThread's feed scrolls itself: .fw-rt-feed), the fixed foot (RecordThread's foot is its composer).
+   tw- W2.1 (Z4): the pick band went — the pick is the head's title (head.css). --nds-space-N is N px.
    F-OP-304 (walk #12): the body that scrolls is .fw-rt-scroll — it was .fw-rt-body, the class of a message's words (card.css), so each
    took the other's rules: the dock's list stopped at 72ch (~120 px short of the card's edge at 1920) and every message's words got the
    scroller's 12 / 16 px padding. ── */
-.fw-rt-top {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-7);
-  min-width: 0;
-  padding: var(--nds-space-10) var(--nds-space-12) var(--nds-space-9);
-  border-bottom: 1px solid var(--nds-border-subtle);
-  background: var(--nds-surface);
-}
-
 .fw-rt-scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -171,10 +160,6 @@
 
   .fw-rt-foot {
     gap: var(--nds-space-6) var(--nds-space-8);
-  }
-
-  .fw-rt-top {
-    padding: var(--nds-space-8) var(--nds-space-10);
   }
 }
 /* ── end F-OP-217 */

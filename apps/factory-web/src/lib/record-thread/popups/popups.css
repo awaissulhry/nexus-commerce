@@ -33,18 +33,10 @@
 .fw-rtp-outside { display: flex; flex-direction: column; gap: var(--nds-space-8); }
 
 /* One count popover */
-.fw-rtp-countchip { display: inline-flex; align-items: center; gap: var(--nds-space-4); height: 26px; padding: 0 var(--nds-space-8); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-pill); background: var(--nds-surface); color: var(--nds-text-strong); font-size: var(--nds-font-size-sm); font-weight: 600; cursor: pointer; white-space: nowrap; }
-.fw-rtp-countchip:hover { background: var(--nds-surface-hover); }
-.fw-rtp-countchip:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
-.fw-rtp-countchip-in { display: inline-flex; align-items: center; gap: var(--nds-space-4); }
-.fw-rtp-count { display: flex; flex-direction: column; align-items: flex-start; gap: var(--nds-space-8); min-width: 220px; max-width: 320px; }
-.fw-rtp-count-title { margin: 0; font-weight: 600; color: var(--nds-text-strong); }
-.fw-rtp-count-lines { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--nds-space-6); width: 100%; }
-.fw-rtp-count-lines li { display: flex; flex-direction: column; gap: 2px; }
-.fw-rtp-count-label { color: var(--nds-text); overflow-wrap: anywhere; }
 
 /* The design stage */
 .fw-rtp-stage { display: flex; align-items: center; gap: var(--nds-space-8); padding: var(--nds-space-16); }
 
 /* F-OP-127: a photo of a walk of every file, drawn whole in the viewer's window. */
 .fw-rtp-photo { display: block; max-width: 100%; max-height: min(68vh, 760px); margin: 0 auto; object-fit: contain; border-radius: var(--nds-radius-md); background: var(--nds-surface-sunken); }
+.fw-rtp-astitle { margin: var(--nds-space-4) 0 0; font-size: var(--nds-font-size-sm); font-weight: 600; color: var(--nds-text-2); }

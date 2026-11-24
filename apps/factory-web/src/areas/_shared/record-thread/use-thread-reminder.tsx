@@ -11,13 +11,20 @@ const REMINDER_EVENTS = new Set(['reminder.set', 'reminder.came_back', 'reminder
 
 /**
  * B-TH-300 — Remind me in the office thread (T1 "Remind me", the cards' own Remind me, B-W2b-388; B-TH-280: the old record panels'
- * Remind me control went with them): a message's "Remind me" (it sends `factory:remind-me`) and the Head's door open the SAME
- * existing dialog here, and the person's next open reminder on the record is read for the Head's line ("Reminder
- * set for 18 Nov"). Reminders are Home's (home.view): without it the door is held and nothing is read.
+ * Remind me control went with them): a message's "Remind me" (its menu's row: it sends `factory:remind-me`) and the Head's door open
+ * the SAME existing dialog here, and the person's next open reminder on the record is read for the Head's line ("Reminder
+ * set for 18 Nov") — tw- W2.2: with their follow-ups by message, for the bell in its foot. Reminders are Home's (home.view): without
+ * it the door is held and nothing is read.
  */
-export function useThreadReminder(record: { readonly type: string; readonly id: string }, label: string, allowed: boolean): { readonly mine: Reminder | null; readonly open: (messageId: string | null) => void; readonly dialog: ReactNode } {
+export function useThreadReminder(
+  record: { readonly type: string; readonly id: string },
+  label: string,
+  allowed: boolean,
+): { readonly mine: Reminder | null; readonly followUps: ReadonlyMap<string, string>; readonly open: (messageId: string | null) => void; readonly dialog: ReactNode } {
   const api = useOfficeApi()
   const [mine, setMine] = useState<Reminder | null>(null)
+  // tw- W2.2 (10-design §2 "Foot"): the reader's own waiting follow-ups by message ("if no answer"), for the bell in its foot.
+  const [followUps, setFollowUps] = useState<ReadonlyMap<string, string>>(new Map())
   const [asking, setAsking] = useState<{ readonly messageId: string | null; readonly now: number } | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
 
@@ -27,6 +34,7 @@ export function useThreadReminder(record: { readonly type: string; readonly id: 
       const answer = await fetchReminders(api, { view: 'OPEN', record })
       const waiting = answer.items.filter((item) => item.state === 'WAITING' && item.remindAt !== null).sort((a, b) => (a.remindAt! < b.remindAt! ? -1 : 1))
       setMine(waiting[0] ?? null)
+      setFollowUps(new Map(waiting.flatMap((item) => (item.followUp && item.messageId ? [[item.messageId, item.remindAt!] as const] : []))))
     } catch {
       // Only the Head's line: without it the door still opens.
     }
@@ -48,7 +56,7 @@ export function useThreadReminder(record: { readonly type: string; readonly id: 
     setProblem(null)
     setAsking({ messageId, now: Date.now() })
   }, [])
-  // A message's own "Remind me" (MessageRemindMe) asks through the window event.
+  // A message's own "Remind me" (its menu's row, tw- W2.2) asks through the window event.
   useEffect(() => {
     if (!allowed) return
     const onAsk = (event: Event) => {
@@ -80,5 +88,5 @@ export function useThreadReminder(record: { readonly type: string; readonly id: 
       onClose={() => setAsking(null)}
     />
   ) : null
-  return { mine, open, dialog }
+  return { mine, followUps, open, dialog }
 }

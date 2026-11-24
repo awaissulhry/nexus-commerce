@@ -9,7 +9,7 @@ import { scanText } from '../../testing/brand-scan'
 import { designScreen } from './fixtures'
 import { DEFAULT_DOCK_WIDTH, doorHolds, menuRows, R_ACT_ORDER, viewsOffered, waitWords, whoAnswers, widthKey, type HeadAbilities, type HeadModel } from './model'
 // B-TH-229
-import { answersOf, newWords, waitingWords } from './model'
+import { answersOf, waitingWords } from './model'
 import { OwnerDialog } from './view/OwnerDialog'
 import { readWidth, writeWidth } from './use-thread-width'
 import { PortalHeadLine } from './view/PortalHeadLine'
@@ -90,33 +90,32 @@ describe('B-TH-229 — waiting words and the amber rule, the owner, 2 new', () =
     expect(waitingWords(us(242, false, 1, false)!, NOW)).toEqual(waitWords('2026-11-13T08:10:00.000Z', NOW))
   })
 
+  // tw- W2.1 (10-design §8): the waiting is words in the head's ONE line (amber by the rule), the rule for screen readers beside it.
   it('amber only by the rule: past the threshold while it waits on US; waiting on the customer is never amber', () => {
     const amber = render(base({ answers: us(1460, true) }))
-    expect(amber).toMatch(/nds-pill warning[^"]*"[^>]*>(<span[^>]*>)?This thread waits on us · 3 d/) // F-OP-216: the pill names the thread
+    expect(amber).toMatch(/class="fw-rth-linepart is-wait is-amber"[^>]*>Waiting on us · 3 d</)
     expect(amber).toContain('Amber after 1 working day waiting on us.')
     const calm = render(base({ answers: us(242, false, 3) }))
-    expect(calm).toMatch(/nds-pill neutral[^"]*"[^>]*>(<span[^>]*>)?This thread waits on us · 4 h/)
+    expect(calm).toMatch(/class="fw-rth-linepart is-wait"[^>]*>Waiting on us · 4 h</)
     expect(calm).toContain('Amber after 3 working days waiting on us.')
     const theirs = render(base({ answers: answersOf({ on: 'CUSTOMER', since: '2026-11-11T09:00:00.000Z', workingMinutes: 2380, calendar: true, amber: false, thresholdDays: 3 }) }))
-    expect(theirs).toContain('This thread waits on the customer · 4 d')
+    expect(theirs).toContain('Waiting on the customer · 4 d')
     expect(theirs).toContain('Never amber while it waits on the other side.')
     expect(render(base({ answers: us(242, false, 3, false) }))).toContain('No company calendar: counted in clock hours.')
-    expect(render(base({ answers: us(242, false) }), 'it')).toContain('Conversazione: tocca a noi · 4 h')
+    expect(render(base({ answers: us(242, false) }), 'it')).toContain('Tocca a noi · 4 h')
   })
 
-  it('the owner: a tile named on hover and for screen readers; inactive said; nobody "—"; Change owner held with the right', () => {
+  // tw- W2.1: the owner is words in the line ("Owner: Bea Esempio"); Change owner… is a row of the ⋮, held with the right.
+  it('the owner: said in the line; inactive said; nobody "No owner yet"; Change owner held with the right', () => {
     const owner = { id: 'u1', name: 'Bea Esempio', active: true, source: 'ASSIGNEE' as const }
-    const html = render(base({ owner, ownerHeld: null }))
-    expect(html).toContain('aria-label="Owner: Bea Esempio · Change owner…"')
+    expect(render(base({ owner, ownerHeld: null }))).toContain('<span class="fw-rth-linepart is-owner">Owner: Bea Esempio</span>')
     expect(render(base({ owner: { ...owner, active: false }, ownerHeld: null }))).toContain('Owner: Bea Esempio (inactive)')
     expect(render(base({ owner: null, ownerHeld: null }))).toContain('No owner yet')
-    // Without the head read (a design case of before): no tile at all.
-    expect(render(base())).not.toContain('fw-rth-owner')
+    // Without the head read (a design case of before): no owner words at all.
+    expect(render(base())).not.toMatch(/Owner:|No owner yet/)
     const rows = menuRows(base({ ownerHeld: { key: 'held.noRight', params: { right: 'Write in threads' } } }))
     expect(rows.find((row) => row.kind === 'owner')).toEqual({ kind: 'owner', held: { key: 'held.noRight', params: { right: 'Write in threads' } } })
     expect(menuRows(base()).some((row) => row.kind === 'owner')).toBe(false)
-    const held = render(base({ owner, ownerHeld: { key: 'held.noRight', params: { right: 'Write in threads' } } }))
-    expect(held).toContain('role="img" aria-label="Owner: Bea Esempio"')
   })
 
   it('Change owner: the readers, me first; "reading" and "could not be read" in words, never "nobody" before it knows', () => {
@@ -130,14 +129,10 @@ describe('B-TH-229 — waiting words and the amber rule, the owner, 2 new', () =
     for (const state of ['loading', 'failed'] as const) expect(dialog(state)).not.toContain('Nobody else reads this thread yet')
   })
 
-  it('"2 new": the reader’s own new messages, 99+ above 99, nothing at 0', () => {
-    expect(newWords(0)).toBeNull()
-    expect(newWords(2)).toEqual({ key: 'new.count', n: 2 })
-    expect(newWords(120)).toEqual({ key: 'new.many', n: 99 })
-    expect(render(base({ newCount: 2 }))).toContain('2 new')
-    expect(render(base({ newCount: 2 }), 'it')).toContain('2 nuovi')
-    expect(render(base({ newCount: 120 }))).toContain('99+ new')
-    expect(render(base({ newCount: 0 }))).not.toMatch(/\d+ new/)
+  // tw- W2.1 (P12): ONE unread count — the feed's band and its down button; the head's "N new" pill went.
+  it('no "N new" pill in the head (P12: one unread count, in the feed)', () => {
+    expect(render(base({ answers: us(242, false) }))).not.toMatch(/\d+ new|99\+ new/)
+    expect(readFileSync(new URL('./view/RecordThreadHead.tsx', import.meta.url), 'utf8')).not.toMatch(/newWords|newCount/)
   })
 
   it('every B-TH-229 case keeps the brand wall: only Brand Alpha’s own thread (W08)', () => {
@@ -150,9 +145,11 @@ describe('B-TH-229 — waiting words and the amber rule, the owner, 2 new', () =
 // ---- end B-TH-229
 
 describe('the doors (R-ACT)', () => {
-  it('always offers the five tools in the same order, also at count 0', () => {
+  // tw- W2.1 (10-design §8): ONE order in the ⋮ — Follow · Mute · Remind me · (Change owner) · Ask · Share · Followers · Add task.
+  it('always offers the five tools in ONE order, also at count 0', () => {
     const rows = menuRows(base())
-    expect(rows.filter((row) => row.kind === 'door').map((row) => (row.kind === 'door' ? row.door : null))).toEqual([...R_ACT_ORDER])
+    expect(rows.filter((row) => row.kind === 'door').map((row) => (row.kind === 'door' ? row.door : null))).toEqual(['follow', 'mute', 'remind', 'approve', 'share', 'followers', 'task'])
+    expect([...R_ACT_ORDER].sort()).toEqual(['approve', 'follow', 'followers', 'mute', 'remind', 'share', 'task'])
   })
 
   it('holds a door with the reason instead of hiding it', () => {
@@ -205,10 +202,12 @@ describe('the doors (R-ACT)', () => {
   })
   // ---- end TH-5 follow-up
 
-  it('folds the counts onto their doors when the chips do not fit', () => {
+  // tw- W2.1: the counts are words on their rows ("Add task · 2 open"), never chips in the row.
+  it('says the counts on their rows of the ⋮; a count of 0 says nothing', () => {
     const counts = { tasks: { kind: 'tasks' as const, count: 2, lines: [] } }
-    expect(menuRows(base({ counts }), true)[0]).toMatchObject({ hint: { key: 'act.openTasks', params: { count: 2 } } })
-    expect(menuRows(base({ counts }), false)[0]).not.toHaveProperty('hint')
+    expect(menuRows(base({ counts })).find((row) => row.kind === 'door' && row.door === 'task')).toMatchObject({ count: { key: 'act.openTasks', params: { count: 2 } } })
+    expect(menuRows(base()).find((row) => row.kind === 'door' && row.door === 'task')).not.toHaveProperty('count')
+    expect(readFileSync(new URL('./view/RecordThreadHead.tsx', import.meta.url), 'utf8')).not.toContain('CountPopover')
   })
 
   it('offers only the views the thread holds; Changes only with audit.read', () => {
@@ -319,7 +318,7 @@ describe('the words', () => {
   it('the office Head names the thread for screen readers and says who answers', () => {
     const html = renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(designScreen.view as ComponentType<{ model: unknown }>, { model: designScreen.cases[0]!.model })))
     expect(html).toContain('Thread of SO-2026-0142')
-    expect(html).toContain('This thread waits on us · 4 h')
+    expect(html).toContain('Waiting on us · 4 h')
     expect(html).toContain('aria-label="Thread tools"')
   })
 })
@@ -339,18 +338,17 @@ describe('B-TH-255 — the View filters by audience: choices by what the thread 
     expect(viewsOffered({ ...feedKinds([{ kind: 'theirs' }, { kind: 'ours' }]), canAudit: false })).toEqual(['all', 'shared'])
     expect(viewsOffered({ ...feedKinds([{ kind: 'note' }, { kind: 'floor' }]), canAudit: false })).toEqual(['all', 'notes'])
     expect(viewsOffered({ ...feedKinds([]), canAudit: false })).toEqual(['all'])
-    // One choice only (All): no View menu at all.
-    expect(render(base({ views: ['all'] }))).not.toContain('aria-label="Choose what the thread shows"')
-    expect(render(base({ views: ['all', 'shared'] }))).toContain('aria-label="Choose what the thread shows"')
+    // One choice only (All): no Show rows in the ⋮; with more, a radio row each.
+    expect(menuRows(base({ views: ['all'] })).some((row) => row.kind === 'view')).toBe(false)
+    expect(menuRows(base({ views: ['all', 'shared'] })).filter((row) => row.kind === 'view')).toEqual([{ kind: 'view', view: 'all', checked: true }, { kind: 'view', view: 'shared', checked: false }])
   })
 
-  it('a chip names the active view (the party kind’s own words); its × shows all again; none on All', () => {
-    const supplier = render(base({ party: { name: 'Supplier Demo', role: 'supplier' }, view: 'shared', views: ['all', 'shared'] }))
-    expect(supplier).toContain('aria-label="Showing With the supplier: show all messages"')
-    const customer = render(base({ view: 'shared', views: ['all', 'shared', 'notes'] }))
-    expect(customer).toContain('aria-label="Showing With the customer: show all messages"')
-    expect(render(base({ view: 'notes', views: ['all', 'shared', 'notes'] }), 'it')).toContain('Mostra Note d&#x27;ufficio: mostra tutti i messaggi')
-    expect(render(base())).not.toContain('fw-rth-viewchip')
+  // tw- W2.1 (10-design §8): the head's line names the View ("Showing With the customer · Show all"); none on All.
+  it('the line names the active view (the party kind’s own words) with Show all; none on All', () => {
+    const supplier = textOf(render(base({ party: { name: 'Supplier Demo', role: 'supplier' }, view: 'shared', views: ['all', 'shared'] })))
+    expect(supplier).toContain('Showing With the supplier · Show all')
+    expect(textOf(render(base({ view: 'notes', views: ['all', 'shared', 'notes'] }), 'it'))).toContain("Mostro Note d'ufficio · Mostra tutto")
+    expect(render(base())).not.toContain('Show all')
   })
 
   it('the hidden-new line belongs to the feed (record-thread-feed), in both languages with the same placeholders', () => {
@@ -411,8 +409,8 @@ describe('B-TH-288 — Done and search in the thread head', () => {
     expect(open).toContain('role="search"')
     expect(textOf(open)).toContain('1 message matches')
     expect(open).toContain('<mark>Collar</mark>')
-    // The phone head has no room for the icon: the ⋯ carries it.
-    expect(menuRows(base({ compact: true, search: search({ open: false }) }))).toContainEqual({ kind: 'search' })
+    // tw- W2.1 (P0-B1): the icon fits every head, the phone's too (Files · Search · ⓘ · ⋮).
+    expect(head({ compact: true, search: search({ open: false, query: '', state: 'idle', hits: [], total: 0, words: [] }) })).toContain('aria-keyshortcuts="/"')
   })
 
   it('says every state in words: hint, too short, searching, none, failed — in it and en, no key left on screen', () => {
@@ -443,8 +441,8 @@ describe('B-TH-288 — Done and search in the thread head', () => {
 
   it('a follow-up reminder says “if no answer” on the Remind me line', () => {
     const rows = menuRows(base({ reminder: { at: '2026-11-20T09:00:00.000Z', followUp: true } }))
-    expect(rows.find((row) => row.kind === 'door' && row.door === 'remind')).toMatchObject({ hint: { key: 'act.followUpSet' } })
-    expect(menuRows(base({ reminder: { at: '2026-11-20T09:00:00.000Z' } })).find((row) => row.kind === 'door' && row.door === 'remind')).toMatchObject({ hint: { key: 'act.reminderSet' } })
+    expect(rows.find((row) => row.kind === 'door' && row.door === 'remind')).toMatchObject({ count: { key: 'act.followUpSet' } })
+    expect(menuRows(base({ reminder: { at: '2026-11-20T09:00:00.000Z' } })).find((row) => row.kind === 'door' && row.door === 'remind')).toMatchObject({ count: { key: 'act.reminderSet' } })
   })
 })
 // ---- end B-TH-288
@@ -459,18 +457,18 @@ describe('F-OP-204 — the width menu is one part', () => {
     expect(draw(createElement(WidthMenu, { width: 'forty' }))).toContain('aria-label="Thread width"')
     expect(draw(createElement(WidthMenu, { width: null }))).toBe('')
   })
-  it('the thread Head draws THE part (no width items of its own); All of <Customer>\'s Head the same', () => {
+  // tw- W2.1 (10-design §8): the width is a part of the ⋮ (Width: the four widths, Hide, Default width) — ONE list, from the model.
+  it('the thread Head says the widths in its ⋮, from ONE list (DOCK_WIDTHS through menuRows); none without a dock', () => {
+    const rows = menuRows(base()).filter((row) => row.kind === 'width')
+    expect(rows.map((row) => (row.kind === 'width' ? row.width : null))).toEqual(['third', 'forty', 'half', 'full', 'hide', 'reset'])
+    expect(rows.find((row) => row.kind === 'width' && row.width === 'forty')).toMatchObject({ checked: true })
+    expect(menuRows(base({ width: null })).some((row) => row.kind === 'width')).toBe(false)
     const head = readFileSync(new URL('./view/RecordThreadHead.tsx', import.meta.url), 'utf8')
-    expect(head).toContain('<WidthMenu width={model.width} onWidth={actions?.onWidth} /* F-OP-204 */ />')
-    expect(head).not.toContain('widthItems')
+    expect(head).not.toContain('<WidthMenu')
     expect(head).not.toContain('DOCK_WIDTHS')
     const menu = readFileSync(new URL('./view/WidthMenu.tsx', import.meta.url), 'utf8')
     for (const id of ["id: 'hide'", "id: 'reset'", 'DOCK_WIDTHS.map(']) expect(menu).toContain(id)
-    const feed = readFileSync(new URL('../../../areas/_shared/record-thread/all-of-customer/view/FeedHead.tsx', import.meta.url), 'utf8')
-    expect(feed).toContain('<WidthMenu ')
-    // The docked Head still offers the widths (the phone's compact Head does not).
-    expect(draw(createElement(RecordThreadHead, { model: base() }))).toContain('aria-label="Thread width"')
-    expect(draw(createElement(RecordThreadHead, { model: base({ width: null }) }))).not.toContain('aria-label="Thread width"')
+    expect(draw(createElement(RecordThreadHead, { model: base() }))).not.toContain('aria-label="Thread width"')
   })
 })
 // ---- end F-OP-204
@@ -483,15 +481,16 @@ describe('F-OP-216 — the dock\'s words, one word each, the same keys in both l
   const catalogue = (locale: 'en' | 'it', name: string) => flat(JSON.parse(readFileSync(new URL(`../../../../messages/${locale}/${name}.json`, import.meta.url), 'utf8')) as Record<string, unknown>)
   const placeholders = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((match) => match[1]).sort().join(',')
 
-  it('the Head\'s pill says whose turn it is in THIS thread (R-21: the dock never shows an order-level count)', () => {
+  // tw- W2.1 (10-design §13): the head's line says whose turn it is, in THIS thread's head ("Waiting on us · 2 d" / "Tocca a noi · 2 g").
+  it('the Head\'s line says whose turn it is in THIS thread (R-21: the dock never shows an order-level count)', () => {
     const en = catalogue('en', 'record-thread-head')
     const it = catalogue('it', 'record-thread-head')
     for (const side of ['us', 'customer', 'supplier', 'partner']) {
-      expect(en[`answers.${side}`], side).toMatch(/^This thread waits on (us|the (customer|supplier|partner)) · \{wait\}$/)
-      expect(it[`answers.${side}`], side).toMatch(/^Conversazione: tocca (a noi|al (cliente|fornitore|partner)) · \{wait\}$/)
+      expect(en[`answers.${side}`], side).toMatch(/^Waiting on (us|the (customer|supplier|partner)) · \{wait\}$/)
+      expect(it[`answers.${side}`], side).toMatch(/^Tocca (a noi|al (cliente|fornitore|partner)) · \{wait\}$/)
     }
     const t = createTranslator('en', messagesFor('en', ['record-thread-head'])['record-thread-head']!)
-    expect(t('answers.customer', { wait: '2 d' })).toBe('This thread waits on the customer · 2 d')
+    expect(t('answers.customer', { wait: '2 d' })).toBe('Waiting on the customer · 2 d')
     // The order dock draws no waiting of its own (the order band and Overview own the order's).
     const dock = readFileSync(new URL('../../../areas/sales/orders/record/dock/OrderDock.tsx', import.meta.url), 'utf8')
     expect(dock).not.toMatch(/waitingOf|requests\.onUs|answers\./)
@@ -529,3 +528,172 @@ describe('F-OP-216 — the dock\'s words, one word each, the same keys in both l
   })
 })
 // ---- end F-OP-216
+
+// ---- tw- W2.1 (THE THREAD REBUILD; 10-design §8; W-080 / W-081, Z7, Z14, R12): the head's one row, the ⓘ, the Files icon, the pinned bar ----
+import { BAR_MARKS, barPinsOf, barState, barWords, type PinInput } from './pins-bar'
+import { PinnedBar } from './view/PinnedBar'
+import { HEAD_KEYS, headLine } from './model'
+
+describe('tw- W2.1 — the head: ONE row (title + one line · Files · Search · ⓘ · ⋮), every control inside a 433 px dock (P0-B1)', () => {
+  const head = (over: Partial<HeadModel> = {}, locale: 'it' | 'en' = 'en') => drawAll(createElement(RecordThreadHead, { model: base(over) }), locale)
+
+  it('the right holds only Files · Search · ⓘ · ⋮ — no pill, no chip, no View chip, no width menu, no owner tile in the row', () => {
+    const html = head({ files: { count: 4 }, search: { open: false, query: '', state: 'idle', hits: [], total: 0, words: [] } })
+    const tools = html.slice(html.indexOf('class="fw-rth-tools"'))
+    expect(tools.match(/<button/g)?.length).toBe(4)
+    expect(tools).toContain('aria-label="Files (4)"')
+    expect(tools).toContain('aria-keyshortcuts="/"')
+    expect(tools).toContain('fw-rth-keys')
+    expect(tools).toContain('aria-label="Thread tools"')
+    for (const gone of ['nds-pill', 'fw-rth-viewchip', 'fw-rth-count', 'fw-rth-owner', 'aria-label="Thread width"']) expect(html, gone).not.toContain(gone)
+    // No Files icon where the reader may not read files (null); 0 files: the icon without a number.
+    expect(head({ files: null })).not.toContain('fw-rth-files')
+    expect(head({ files: { count: 0 } })).not.toContain('fw-rth-files-n')
+    expect(head({ files: { count: 120 } })).toContain('<span class="fw-rth-files-n">99+</span>')
+  })
+
+  it('the line: closed › done › the View › offline › waiting + owner — one at a time, in that order; nothing to say: no line', () => {
+    const closed = { by: 'Alex Demo', at: '2026-11-12T16:00:00.000Z' }
+    const done = { at: '2026-11-17T09:00:00.000Z', by: 'Alex Demo' }
+    expect(headLine(base({ closed, done, view: 'notes', views: ['all', 'notes'] }))).toMatchObject({ kind: 'closed' })
+    expect(headLine(base({ done, view: 'notes', views: ['all', 'notes'] }))).toMatchObject({ kind: 'done' })
+    expect(headLine(base({ view: 'notes', views: ['all', 'notes'], offline: { asOf: '2026-11-17T09:42:00.000Z' } }))).toMatchObject({ kind: 'view', view: 'notes' })
+    expect(headLine(base({ offline: { asOf: '2026-11-17T09:42:00.000Z' } }))).toMatchObject({ kind: 'offline' })
+    expect(headLine(base())).toBeNull()
+    expect(head()).not.toContain('fw-rth-line')
+    expect(textOf(head({ closed }))).toContain('Closed by Alex Demo')
+  })
+
+  it('the ⓘ is the ONE place for key hints (P8): J / K, R, N, Enter on a quote, /, Enter, Shift+Enter, Esc — in it and en', () => {
+    expect(HEAD_KEYS.map((row) => row.key)).toEqual(['keys.jk', 'keys.r', 'keys.n', 'keys.quote', 'keys.slash', 'keys.enter', 'keys.shiftEnter', 'keys.esc'])
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['record-thread-head'])['record-thread-head'] ?? {})
+      for (const row of HEAD_KEYS) {
+        expect(t(row.key), `${locale} ${row.key}`).not.toBe(row.key)
+        if (typeof row.glyph !== 'string') expect(t(row.glyph.key), locale).not.toBe(row.glyph.key)
+      }
+      expect(head({}, locale)).toContain(`aria-label="${t('keys.title')}"`)
+    }
+    // No hint rows under the menu's items (B9): a held row says why; nothing else has a second line.
+    const source = readFileSync(new URL('./view/RecordThreadHead.tsx', import.meta.url), 'utf8')
+    expect(source).not.toMatch(/Hint'\)|hint: /)
+  })
+
+  it('the ⋮ holds, in ONE order: Show · Done · the doors with their counts · Change owner · Width · Print · Close', () => {
+    const rows = menuRows(base({ views: ['all', 'shared'], done: null, doneHeld: null, ownerHeld: null, print: true, canManage: true, counts: { approvals: { kind: 'approvals', count: 1, lines: [] } } }))
+    const order = rows.map((row) => (row.kind === 'door' ? row.door : row.kind === 'width' ? 'width' : row.kind))
+    expect([...new Set(order)]).toEqual(['view', 'done', 'follow', 'mute', 'remind', 'owner', 'approve', 'share', 'followers', 'task', 'width', 'print', 'close'])
+    expect(rows.find((row) => row.kind === 'door' && row.door === 'approve')).toMatchObject({ count: { key: 'act.openApprovals', params: { count: 1 } } })
+  })
+
+  it('every head control fits a 433 px dock: the title shrinks ("…"), the tools never wrap or leave the row (P0-B1)', () => {
+    const css = readFileSync(new URL('./head.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-rth \{[^}]*display: flex;[^}]*min-width: 0;/)
+    expect(css).toMatch(/\.fw-rth-titleblock \{[^}]*flex: 1 1 auto;[^}]*min-width: 0;/)
+    expect(css).toMatch(/\.fw-rth-tools \{[^}]*flex: none;/)
+    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|color-mix/i)
+  })
+})
+
+describe('tw- W2.1 — the pinned bar (W-080 / W-081, R12): newest pin first, "Sender: text", a click jumps and shows the next', () => {
+  const pin = (n: number, over: Partial<PinInput['message']> = {}, pinnedAt = `2026-11-1${n}T09:00:00.000Z`): PinInput => ({ messageId: `m${n}`, pinnedAt, message: { authorName: 'Bea Esempio', excerpt: `Words ${n}`, audience: 'PARTNER', attachmentCount: 0, removed: false, authorKind: 'USER', ...over } })
+
+  it('R12: the pinned bar names a hidden floor writer as "A person on the floor" (never a name, in it and en)', () => {
+    const hidden = barPinsOf([pin(1, { authorName: null, authorKind: 'WORKER', audience: 'OFFICE' })])
+    expect(hidden[0]).toMatchObject({ hidden: true, author: null, office: true })
+    expect(barWords(hidden[0]!).who).toEqual({ key: 'author.floorPerson' })
+    for (const [locale, words] of [['en', 'A person on the floor'], ['it', 'Una persona in reparto']] as const) {
+      const html = drawAll(createElement(PinnedBar, { pins: hidden }), locale)
+      expect(textOf(html), locale).toContain(`${words}: Words 1`)
+      expect(html, locale).toContain('fw-rt-pinlock')
+    }
+    // An automatic message (SYSTEM, no name) is the system's name, never "a person on the floor".
+    expect(barWords(barPinsOf([pin(2, { authorName: null, authorKind: 'SYSTEM' })])[0]!).who).toEqual({ key: 'author.SYSTEM' })
+  })
+
+  it('newest pin first; a removed message says so with no writer; files only says how many; a lock only on an office note', () => {
+    const pins = barPinsOf([pin(1), pin(3, { removed: true, authorName: 'Bea Esempio', excerpt: 'gone words' }), pin(2, { excerpt: ' ', attachmentCount: 2 })])
+    expect(pins.map((one) => one.messageId)).toEqual(['m3', 'm2', 'm1'])
+    expect(barWords(pins[0]!)).toEqual({ who: null, what: { key: 'quote.removed' } })
+    expect(pins[0]!.excerpt).toBe('')
+    expect(barWords(pins[1]!)).toEqual({ who: { text: 'Bea Esempio' }, what: { key: 'quote.files', count: 2 } })
+    expect(barWords(pins[2]!)).toEqual({ who: { text: 'Bea Esempio' }, what: { text: 'Words 1' } })
+    const html = drawAll(createElement(PinnedBar, { pins }))
+    expect(textOf(html)).toContain('Message removed')
+    expect(html).not.toContain('gone words')
+    expect(html).not.toContain('fw-rt-pinlock')
+    expect(html).toContain('aria-label="Pinned message 1 of 3: go to it"')
+  })
+
+  it('the marks: one per pin up to 4, a window of 4 past it with the current one on; a click shows the next older (and wraps)', () => {
+    const six = barPinsOf([1, 2, 3, 4, 5, 6].map((n) => pin(n)))
+    expect(BAR_MARKS).toBe(4)
+    expect(barState(six, 0)).toMatchObject({ index: 0, count: 6, marks: [true, false, false, false], next: 1 })
+    expect(barState(six, 5)).toMatchObject({ index: 5, marks: [false, false, false, true], next: 0 })
+    expect(barState(six, 4)!.marks).toEqual([false, false, true, false])
+    expect(barState(six.slice(0, 2), 1)).toMatchObject({ marks: [false, true], next: 0 })
+    expect(barState([], 0)).toBeNull()
+    // One pin: no marks at all; none: no bar.
+    expect(drawAll(createElement(PinnedBar, { pins: six.slice(0, 1) }))).not.toContain('fw-rt-pinmarks')
+    expect(drawAll(createElement(PinnedBar, { pins: [] }))).toBe('')
+  })
+
+  it('in RecordThread itself, under the head and above the feed (≤ 2 bands, S7); never on a forbidden thread', () => {
+    const thread = readFileSync(new URL('../RecordThread.tsx', import.meta.url), 'utf8')
+    expect(thread).toContain("{model.feed.state !== 'forbidden' && model.pinned && model.pinned.length > 0 ? <PinnedBar pins={model.pinned} onJump={actions.onJump} /> : null}")
+    expect(thread.indexOf('<PinnedBar')).toBeGreaterThan(thread.indexOf('<TitleOnly pick={slots.top} />'))
+    expect(thread.indexOf('<PinnedBar')).toBeLessThan(thread.indexOf('<Feed'))
+    const host = readFileSync(new URL('../../../areas/_shared/record-thread/use-record-thread.ts', import.meta.url), 'utf8')
+    expect(host).toContain('const pinned = useMemo(() => barPinsOf(pins ?? []), [pins])')
+  })
+})
+// ---- end tw- W2.1
+
+// ---- tw- W2.4 (tw-s part 5; R10): a search hit says who wrote it and when ----------------------------------------------------------
+import { hitWho } from './model'
+
+describe('tw- W2.4 — search hits with the writer and the time', () => {
+  const head = (search: ThreadSearchModel, locale: 'it' | 'en' = 'en') => drawAll(createElement(RecordThreadHead, { model: base({ search }) }), locale)
+  const open = (hits: ThreadSearchModel['hits']): ThreadSearchModel => ({ open: true, query: 'collar', state: 'ready', hits, total: hits.length, words: ['collar'] })
+
+  it('R10: a hit on a floor note with the gate shut shows "A person on the floor" — never a name', () => {
+    const hidden = { id: 'm-9', excerpt: 'Collar cut', direction: 'INTERNAL_NOTE', at: '2026-11-17T09:40:00.000Z', sender: { name: null, kind: 'WORKER' } }
+    expect(hitWho(hidden)).toEqual({ key: 'author.floorPerson' })
+    expect(textOf(head(open([hidden])))).toContain('A person on the floor')
+    expect(textOf(head(open([hidden]), 'it'))).toContain('Una persona in reparto')
+    expect(hitWho({ sender: { name: null, kind: 'SYSTEM' } })).toEqual({ key: 'author.SYSTEM' })
+  })
+
+  it('a named writer and the time beside the hit’s side; a hit the server says nothing of stays as before', () => {
+    const named = { id: 'm-1', excerpt: 'Collar in yellow piping', direction: 'INBOUND', at: '2026-11-17T09:40:00.000Z', sender: { name: 'Lia Modello', kind: 'PARTY' } }
+    const text = textOf(head(open([named])))
+    expect(text).toMatch(/Lia Modello · \d{1,2} Nov \d\d:\d\d/)
+    expect(hitWho({ sender: null })).toBeNull()
+    expect(head(open([{ id: 'm-2', excerpt: 'Collar', direction: 'INBOUND' }]))).not.toContain('fw-rth-search-who')
+    const api = readFileSync(new URL('../../../areas/_shared/record-thread/api.ts', import.meta.url), 'utf8')
+    expect(api).toContain('message: z.object({ at: z.string(), authorName: z.string().nullable(), authorKind: z.string() }).optional(),')
+  })
+})
+// ---- end tw- W2.4
+
+// ---- tw- W2.4: the catalogue scan — both catalogues hold every key; no removed word is read anywhere ----------------------------
+describe('tw- W2.4 — the thread’s catalogues: the same keys in it and en, and the words this rebuild removed are read nowhere', () => {
+  const GONE: Readonly<Record<string, readonly string[]>> = {
+    'record-thread-head': ['new.count_one', 'new.count_other', 'new.many'],
+    'record-thread-card': ['menu.replyHint', 'menu.taskHint', 'menu.linkHint', 'menu.useOnHint', 'menu.correctHint', 'menu.pinHint', 'menu.unpinHint', 'mentioned.list', 'mentioned.more', 'details.email', 'undo.sending', 'erased.short', 'filesOnly.line_one'],
+    'record-thread-composer': ['mark.note', 'mark.reply', 'mark.portal', 'placeholder.note', 'placeholder.reply', 'placeholder.portal', 'portal.line', 'floor.off'],
+    'record-thread-feed': ['fold.count_one', 'fold.range', 'fold.show', 'fold.label_one', 'folded.label'],
+    'record-thread-files': ['pins.chip_one', 'pins.go', 'pins.unpin', 'design.frame519'],
+  }
+
+  it('every thread namespace has the same keys in it and en', () => {
+    for (const name of ['record-thread', 'record-thread-head', 'record-thread-card', 'record-thread-composer', 'record-thread-feed', 'record-thread-files', 'record-thread-popups', 'record-thread-helpers', 'record-thread-attach', 'record-thread-send']) {
+      expect(Object.keys(CATALOGUE.it[name] ?? {}).sort(), name).toEqual(Object.keys(CATALOGUE.en[name] ?? {}).sort())
+    }
+  })
+
+  it('a removed word is in neither catalogue', () => {
+    for (const [name, keys] of Object.entries(GONE)) for (const key of keys) for (const locale of ['en', 'it'] as const) expect(CATALOGUE[locale][name]?.[key], `${locale} ${name} ${key}`).toBeUndefined()
+  })
+})
+// ---- end tw- W2.4 catalogue

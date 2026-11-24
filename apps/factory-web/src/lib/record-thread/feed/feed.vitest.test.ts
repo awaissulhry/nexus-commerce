@@ -299,9 +299,9 @@ describe('B-TH-255 — the held-mail line by right, the hidden-new line, folded 
     })
     expect(waitingMailLine({ count: 50, reasons: ['SPAM'], mayReview: true, reviewHref: REVIEW })?.key).toBe('waiting.reviewMany')
     const text = textOf(html({ ...base, waitingMail: { count: 1, reasons: ['UNKNOWN_SENDER'], mayReview: true, reviewHref: REVIEW } }))
-    expect(text).toContain('1 mail for this conversation waits in Mail to sort — sender not a contact · Review')
+    expect(text).toContain('1 email waits in Mail to sort — sender not a contact · Review') // tw- W2.4 (§13): one word set
     expect(html({ ...base, waitingMail: { count: 1, reasons: ['UNKNOWN_SENDER'], mayReview: true, reviewHref: REVIEW } })).toContain(`href="${REVIEW}"`)
-    expect(textOf(html({ ...base, waitingMail: { count: 2, reasons: ['UNKNOWN_SENDER', 'THREAD_CLOSED'], mayReview: true, reviewHref: REVIEW } }, 'it'))).toContain('2 e-mail per questa conversazione attendono in Posta da smistare — mittente non tra i contatti, questa conversazione è chiusa · Controlla')
+    expect(textOf(html({ ...base, waitingMail: { count: 2, reasons: ['UNKNOWN_SENDER', 'THREAD_CLOSED'], mayReview: true, reviewHref: REVIEW } }, 'it'))).toContain('2 email attendono in Posta da smistare — mittente non tra i contatti, questo thread è chiuso · Controlla')
   })
 
   it('without email.triage: "A reply waits for a colleague to check it" — never why, never a sender, never a link (W07, W08, W22, W34)', () => {
@@ -586,3 +586,56 @@ describe('tw- W1.3 — the feed: older pages on scroll, pills, one unread count,
 })
 // ---- end tw- W1.3
 
+
+// ---- tw- W2.4 (THE THREAD REBUILD; the lead's rule for pills; B6; S13): status words, never a code; the second step said ----------
+import { statusMove } from './view/Feed'
+import { createTranslator as wordsOf, messagesFor as catalogueOf } from '../../i18n/messages'
+
+describe('tw- W2.4 — the step and change pills show the record types’ status WORDS, never a raw code', () => {
+  const feedT = (locale: 'en' | 'it') => wordsOf(locale, catalogueOf(locale, ['record-thread-feed'])['record-thread-feed']!)
+  const statusT = (locale: 'en' | 'it') => wordsOf(locale, catalogueOf(locale, ['search'])['search']!)
+
+  it('a known move in words ("Confirmed → Shipped"); only the new status has words: it alone; no words at all: the step’s label alone', () => {
+    const t = feedT('en')
+    const s = statusT('en')
+    expect(statusMove({ from: 'CONFIRMED', to: 'SHIPPED' }, t, s)).toBe(`${s('status.CONFIRMED')} → ${s('status.SHIPPED')}`)
+    expect(statusMove({ from: 'CONFIRMED', to: 'SHIPPED' }, t, s)).not.toMatch(/CONFIRMED|SHIPPED/)
+    expect(statusMove({ from: 'SOME_NEW_CODE', to: 'SHIPPED' }, t, s)).toBe(s('status.SHIPPED'))
+    expect(statusMove({ from: 'CONFIRMED', to: 'SOME_NEW_CODE' }, t, s)).toBeNull()
+    expect(statusMove(null, t, s)).toBeNull()
+    expect(statusMove({ from: 'CONFIRMED', to: 'SHIPPED' }, feedT('it'), statusT('it'))).not.toMatch(/CONFIRMED|SHIPPED/)
+  })
+
+  it('the feed never draws a status code: the step pill and the change list both say it through statusMove', () => {
+    const source = readFileSync(new URL('./view/Feed.tsx', import.meta.url), 'utf8')
+    expect(source).not.toContain("t('step.status', { from: event.status.from ?? '—', to: event.status.to ?? '—' })")
+    expect(source).toContain('const move = statusMove(event.status, t, statusWords)')
+    expect(source).toContain("value.field === 'status' ? (statusMove({ from: value.before, to: value.after }, t, statusWords) ?? value.field)")
+    const thread = readFileSync(new URL('../parts/ThreadMessages.tsx', import.meta.url), 'utf8')
+    expect(thread).toContain("'search'] as const")
+  })
+})
+
+describe('tw- W2.4 — the states in the new face (S13, B6)', () => {
+  it('a read that waits for the second step says how to open it; a missing right says the role, in both languages', () => {
+    for (const [locale, words, role] of [['en', 'Confirm it’s you', 'Your role does not include it.'], ['it', 'Conferma che sei tu', 'Il tuo ruolo non lo comprende.']] as const) {
+      const t = feedT(locale)
+      expect(t('state.stepUp').replace("'", '’')).toContain(words)
+      expect(t('state.forbiddenBody')).toBe(role)
+    }
+    const source = readFileSync(new URL('./view/Feed.tsx', import.meta.url), 'utf8')
+    expect(source).toContain("description={model.forbiddenWhy === 'stepUp' ? t('state.stepUp')")
+  })
+  const feedT = (locale: 'en' | 'it') => wordsOf(locale, catalogueOf(locale, ['record-thread-feed'])['record-thread-feed']!)
+
+  it('one word set: "thread" (IT too) and "email" in the thread’s words, never "conversation" / "conversazione" / "e-mail" (All of keeps its words until its own step)', () => {
+    for (const locale of ['en', 'it'] as const) {
+      for (const name of ['record-thread-feed', 'record-thread-card', 'record-thread-composer', 'record-thread-head', 'record-thread-files-view', 'record-thread-popups', 'record-thread-attach']) {
+        // files-view `upload.happens` names the order's file group as the API words it ("Ordine e conversazione"): the server's name, kept.
+        for (const [key, text] of Object.entries(CATALOGUE[locale][name] ?? {}).filter(([key]) => key !== 'upload.happens')) expect(text, `${locale} ${name} ${key}`).not.toMatch(/conversation|conversazion|e-mail/i)
+      }
+      for (const [key, text] of Object.entries(CATALOGUE[locale]['record-thread'] ?? {}).filter(([key]) => !key.startsWith('allOfCustomer.'))) expect(text, `${locale} ${key}`).not.toMatch(/conversation|conversazion|e-mail/i)
+    }
+  })
+})
+// ---- end tw- W2.4

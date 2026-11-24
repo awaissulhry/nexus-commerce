@@ -8,7 +8,7 @@ import { I18nProvider, useLocale } from '../../i18n/provider'
  * The record thread's own catalogues (`messages/<locale>/record-thread*.json`), added to the page's in the page's language:
  * the office layouts load `shell` only, and the same parts draw in the design index (which has every catalogue).
  */
-export const THREAD_NAMESPACES = ['record-thread', 'record-thread-feed', 'record-thread-card', 'record-thread-composer', 'record-thread-attach', 'record-thread-send', /* B-CP-014: the priced lock's words */ 'record-files'] as const
+export const THREAD_NAMESPACES = ['record-thread', 'record-thread-feed', 'record-thread-card', 'record-thread-composer', 'record-thread-attach', 'record-thread-send', /* B-CP-014: the priced lock's words */ 'record-files', /* tw- W2.3: the composer's "+ › Saved replies" */ 'record-thread-helpers', /* tw- W2.4: status words in step pills */ 'search'] as const
 
 export function ThreadMessages({ children }: { children?: ReactNode }) {
   const locale = useLocale()

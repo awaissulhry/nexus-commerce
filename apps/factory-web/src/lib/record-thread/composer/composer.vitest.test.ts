@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { describe, expect, it } from 'vitest'
 import { BRAND_ALPHA, BRAND_BETA } from '../../testing/two-brands'
@@ -41,13 +42,16 @@ describe('starts on Office note, safe by default (P3)', () => {
     expect(scanText(beta, BRAND_ALPHA)).toEqual([])
   })
 
-  it('the whole box takes the audience: data-mode note (yellow, lock) or reply (blue), and Send names it', () => {
+  // tw- W2.3 (10-design §10): the audience chip takes the audience's colour and says it; Send (an arrow) names it for a screen reader.
+  it('the chip takes the audience: data-mode note (yellow, lock) or reply (blue), its word, and Send names it', () => {
     expect(composer(ORDER, draft())).toContain('data-mode="note"')
     const reply = composer(ORDER, draft({ mode: 'reply', body: 'Hi' }))
     expect(reply).toContain('data-mode="reply"')
-    expect(textOf(reply)).toContain(`Email to ${BRAND_ALPHA.tradeName} · the people in To and Cc read it`)
+    expect(reply).toContain(`aria-label="Who reads what you write: Reply to ${BRAND_ALPHA.tradeName}"`)
+    expect(reply).toContain(`aria-label="Send to ${BRAND_ALPHA.tradeName}"`)
     expect(textOf(reply)).toContain(`Send to ${BRAND_ALPHA.tradeName}`)
-    expect(textOf(composer(ORDER, draft({ body: 'x' }), 'it'))).toContain("Nota d'ufficio · la leggono solo i tuoi colleghi")
+    expect(textOf(composer(ORDER, draft({ body: 'x' }), 'it'))).toContain("Nota d'ufficio")
+    expect(composer(ORDER, draft())).not.toContain('fw-rt-cx-mark')
   })
 })
 
@@ -83,7 +87,10 @@ describe('held box states and the floor', () => {
   it('closed replaces the box (Reopen for who manages threads); no right says why', () => {
     expect(boxState({ ...ORDER, closed: { by: 'Bea Esempio', at: '2026-11-12T15:00:00Z' } })).toBe('closed')
     const closed = textOf(render(createElement(Composer, { context: { ...ORDER, can: { ...ORDER.can, manage: true }, closed: { by: 'Bea Esempio', at: '2026-11-12T15:00:00Z' } }, draft: draft(), now: '2026-11-17T10:00:00Z', onDraft: () => undefined, onSend: () => undefined, onReopen: () => undefined })))
-    expect(closed).toContain('Closed by Bea Esempio, 12 Nov. The customer cannot write here. Reopen')
+    // tw- W2.3: one line — "Closed by Bea Esempio, 12 Nov · Reopen".
+    expect(closed).toContain('Closed by Bea Esempio, 12 Nov')
+    expect(closed).toContain('Reopen')
+    expect(closed).not.toContain('The customer cannot write here')
     expect(boxState({ ...ORDER, can: { post: false, email: false, manage: false } })).toBe('noRight')
     expect(textOf(composer({ ...ORDER, can: { post: false, email: false, manage: false } }, draft()))).toContain('You can read this thread; writing in it needs another role.')
   })
@@ -94,8 +101,15 @@ describe('held box states and the floor', () => {
     expect(floorOffered({ recordType: 'SalesOrder' }, 'note')).toBe(false)
     expect(textOf(composer(ORDER, draft()))).not.toContain('For the floor')
     const wo = { ...ORDER, recordType: 'WorkOrder', recordLabel: 'WO-2026-0311', party: null }
-    expect(textOf(composer(wo, draft()))).toContain('For the floor Off: only the office reads this note.')
-    expect(textOf(composer(wo, draft({ forFloor: true })))).toContain('The tablets of WO-2026-0311 show it: no prices, the first 1000 characters, for 14 days, no file, no name.')
+    // tw- W2.3: "+ › For the floor" — off at rest (no sentence under the box); on, a chip whose tooltip says the tablets' rule.
+    expect(textOf(composer(wo, draft()))).not.toContain('For the floor')
+    expect(textOf(composer(wo, draft()))).not.toContain('only the office reads this note')
+    const on = composer(wo, draft({ forFloor: true }))
+    expect(on).toContain('fw-rt-cx-chip is-floor')
+    expect(textOf(on)).toContain('For the floor')
+    const source = readFileSync(new URL('./view/Composer.tsx', import.meta.url), 'utf8')
+    expect(source).toContain("<Tooltip label={`${t('floor.on', { record: context.recordLabel, limit: FLOOR_TEXT })}")
+    expect(source).toContain("{ id: 'floor', label: t('floor.label')")
     expect(floorTooLong(draft({ forFloor: true, body: 'x'.repeat(1001) }))).toBe(true)
   })
 
@@ -136,9 +150,9 @@ describe('B-TH-237: “In the portal only” — offered by the customer’s por
     const html = composer(PORTAL, draft({ mode: 'portal', body: 'Yes, both sizes.' }))
     expect(html).toContain('data-mode="portal"')
     const text = textOf(html)
-    expect(text).toContain('In the portal only')
-    expect(text).toContain(`In ${BRAND_ALPHA.tradeName}’s portal · no e-mail`)
-    expect(text).toContain('their mail setting decides when they hear of it')
+    // tw- W2.3: the chip says "In the portal"; no sentence of the portal under the box (the chip's menu row names the customer).
+    expect(text).toContain('In the portal')
+    expect(text).not.toContain('their mail setting decides when they hear of it')
     expect(text).toContain(`Post to ${BRAND_ALPHA.tradeName}`)
     expect(sendKey('portal')).toBe('send.portal')
     expect(textOf(composer(PORTAL, draft({ mode: 'portal', body: 'x' }), 'it'))).toContain(`Pubblica per ${BRAND_ALPHA.tradeName}`)
@@ -159,10 +173,14 @@ describe('B-TH-236: what the message answers or corrects, the amount, the floor�
   const FIX = { kind: 'correct' as const, messageId: 'm-2', who: null, at: '2026-11-17T08:12:00.000Z', way: 'reply' as const }
 
   it('the box names the message: “Replying to Anna Alfieri, 17 Nov” or “Correcting your mail of 09:12”, with ×', () => {
-    expect(textOf(composer({ ...ORDER, portal: true }, draft({ mode: 'portal', link: REPLY }), 'en'))).toContain('Replying to Anna Alfieri, 17 Nov')
+    // tw- W2.3: ONE bar above the box — the reply (the name, one line, ×; its full words for a screen reader) or the correction.
+    const replying = composer({ ...ORDER, portal: true }, draft({ mode: 'portal', link: REPLY }), 'en')
+    expect(replying).toContain('aria-label="Replying to Anna Alfieri, 17 Nov"')
+    expect(textOf(replying)).toContain('Anna Alfieri')
+    expect(replying).toContain('aria-label="Not a reply to that message any more"')
     const fix = textOf(composer(ORDER, draft({ mode: 'reply', body: 'Thursday.', link: FIX })))
-    expect(fix).toContain('Correcting your mail of 09:12: whoever got it gets the correction')
-    expect(textOf(composer(ORDER, draft({ mode: 'reply', body: 'x', link: FIX }), 'it'))).toContain('Correggi la tua mail delle 09:12')
+    expect(fix).toContain('Correcting your email of 09:12')
+    expect(textOf(composer(ORDER, draft({ mode: 'reply', body: 'x', link: FIX }), 'it'))).toContain('Correggi la tua email delle 09:12')
   })
 
   it('a reply link survives a switch; a correction keeps its way — leaving it lets the correction go (said)', () => {
@@ -512,3 +530,90 @@ describe('tw- W1.4 — a reply to an office note never takes its quote to the cu
   })
 })
 // ---- end tw- W1.4
+
+// ---- tw- W2.3 (THE THREAD REBUILD; 10-design §10, S9; P0-B2, D5, Z3, P6): the composer in one row ----------------------------------
+import { enterSends } from './model'
+import { ClipMenu } from '../attachments/view/AttachmentTray'
+
+describe('tw- W2.3 — the composer is ONE row at rest: + · the audience chip · the box · the Send arrow', () => {
+  const PORTAL: ComposerContext = { ...ORDER, portal: true }
+  const HELD = heldForNamesOther(draft({ mode: 'portal', body: 'Same trims as last season.' }))
+  const REPLY = { kind: 'reply' as const, messageId: 'm-1', who: 'Anna Alfieri', at: '2026-11-17T09:41:00.000Z' }
+  const words = (locale: 'en' | 'it') => translatorFor(locale, wordsFor(locale, ['record-thread-composer'])['record-thread-composer']!)
+  it('at rest (Office note): one row, no chips row, no bar, no sentence under the box, no 3-way switch, no mark line', () => {
+    const html = composer(ORDER, draft())
+    expect(html.match(/class="fw-rt-cx-row"/g)?.length).toBe(1)
+    for (const gone of ['fw-rt-cx-chips', 'fw-rt-cx-bar', 'nds-seg', 'radiogroup', 'fw-rt-cx-mark', 'fw-rt-cx-foot']) expect(html, gone).not.toContain(gone)
+    const row = html.slice(html.indexOf('class="fw-rt-cx-row"'))
+    expect(row.indexOf('fw-rt-cx-chipbtn')).toBeLessThan(row.indexOf('fw-rt-cx-box'))
+    expect(row.indexOf('fw-rt-cx-box')).toBeLessThan(row.indexOf('fw-rt-cx-send'))
+    expect(html).toContain('placeholder="Write a message"')
+    expect(composer(ORDER, draft(), 'it')).toContain('placeholder="Scrivi un messaggio"')
+  })
+
+  it('the chip is ONE menu of radio rows with today’s words — Office note · Reply to X by email · In X’s portal', () => {
+    const source = readFileSync(new URL('./view/Composer.tsx', import.meta.url), 'utf8')
+    expect(source).toContain("label: mode === 'note' ? t('mode.note') : t(mode === 'portal' ? 'modeMenu.portal' : 'modeMenu.reply', { party })")
+    expect(source).toContain('checked: mode === draft.mode')
+    for (const locale of ['en', 'it'] as const) {
+      const t = words(locale)
+      expect(t('modeMenu.reply', { party: 'Brand Alpha' })).toBe(locale === 'en' ? 'Reply to Brand Alpha by email' : 'Rispondi a Brand Alpha via email')
+      expect(t('modeMenu.portal', { party: 'Brand Alpha' })).toBe(locale === 'en' ? 'In Brand Alpha’s portal' : 'Nel portale di Brand Alpha')
+    }
+  })
+
+  it('the "+" holds the files’ rows then Saved replies · Amount · For the floor; a row without its right says why, nothing else', () => {
+    const html = render(createElement(ClipMenu, { canUpload: true, canPick: true, onFiles: () => undefined, onPick: () => undefined, more: [{ id: 'amount', label: 'Amount' }] }))
+    expect(html).toContain('aria-label="Add files"')
+    expect(html).toContain('lucide-plus')
+    const tray = readFileSync(new URL('../attachments/view/AttachmentTray.tsx', import.meta.url), 'utf8')
+    expect(tray).not.toContain("t('clip.photoHint')")
+    expect(tray).not.toContain("t('clip.sheetHint')")
+    expect(tray).toContain("...(more.length > 0 ? [{ id: 'more-sep', separator: true }, ...more] : [])")
+  })
+
+  it('a chips row only when a chip is on: Follow up on a message to the customer, the Amount, For the floor, About', () => {
+    expect(render(createElement(Composer, { context: ORDER, draft: draft({ mode: 'reply', body: 'x' }), followUp: createElement('b', null, 'FOLLOW'), onDraft: () => undefined, onSend: () => undefined }))).toContain('<div class="fw-rt-cx-chips"><b>FOLLOW</b>')
+    expect(render(createElement(Composer, { context: ORDER, draft: draft({ body: 'x' }), followUp: createElement('b', null, 'FOLLOW'), onDraft: () => undefined, onSend: () => undefined }))).not.toContain('FOLLOW')
+  })
+
+  it('D5 / Z3: Enter sends in one thread, Shift+Enter is a new line; Reply to N never sends on Enter (⌘/Ctrl+Enter there)', () => {
+    expect(enterSends(ORDER)).toBe(true)
+    expect(enterSends({ ...ORDER, many: true })).toBe(false)
+    const source = readFileSync(new URL('./view/Composer.tsx', import.meta.url), 'utf8')
+    expect(source).toContain("if (event.key === 'Enter' && !event.shiftKey && !event.altKey && (enterSends(context) || event.metaKey || event.ctrlKey)) {")
+    expect(source).toContain('if (event.nativeEvent.isComposing) return')
+    // The @ list takes its own Enter first (it inserts the colleague; the message does not go).
+    const mention = readFileSync(new URL('../helpers/view/MentionInput.tsx', import.meta.url), 'utf8')
+    expect(mention.indexOf("if ((event.key === 'Enter' || event.key === 'Tab')")).toBeLessThan(mention.indexOf('onKeyDown?.(event)'))
+  })
+
+  it('P0-B2: ONE height rule for the box, owned by composer.css — one line at rest, never 0 px, about 8 lines at most', () => {
+    const css = readFileSync(new URL('./composer.css', import.meta.url), 'utf8')
+    expect(css).toMatch(/\.fw-rt-cx-box \.fw-rt-cx-text \{[^}]*min-height: 24px;[^}]*max-height: calc\(8 \* 1\.55em \+ 12px\);/)
+    const source = readFileSync(new URL('./view/Composer.tsx', import.meta.url), 'utf8')
+    expect(source).not.toContain('honourRows')
+    expect(source).toContain('rows={1}')
+    expect(source).toContain("area.style.removeProperty('height')")
+    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|color-mix/i)
+  })
+
+  it('ONE bar above the box: a hold before the reply, the reply before a switch note; never two', () => {
+    const both = composer(PORTAL, { ...HELD, link: REPLY })
+    expect(both.match(/fw-rt-cx-bar/g)?.length).toBe(1)
+    expect(both).toContain('fw-rt-cx-bar is-held fw-rt-cx-tick')
+    const withNotes = render(createElement(Composer, { context: ORDER, draft: draft({ mode: 'reply', link: REPLY }), notes: [{ key: 'switch.about' }], onDraft: () => undefined, onSend: () => undefined }))
+    expect(withNotes.match(/class="fw-rt-cx-bar/g)?.length).toBe(1)
+    expect(withNotes).toContain('fw-rt-cx-bar is-link')
+  })
+
+  it('the words: no key on screen in it and en; the gone words are gone from the catalogue', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const t = words(locale)
+      for (const key of ['mark.note', 'mark.reply', 'mark.portal', 'placeholder.note', 'portal.line', 'floor.off']) expect(t(key), `${locale} ${key}`).toBe(key)
+      expect(t('placeholder')).not.toBe('placeholder')
+      expect(t('mode.portal')).toBe(locale === 'en' ? 'In the portal' : 'Nel portale')
+    }
+  })
+})
+// ---- end tw- W2.3

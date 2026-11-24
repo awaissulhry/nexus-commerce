@@ -1,24 +1,16 @@
 'use client'
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { BadgeCheck, ChevronDown, Filter, Handshake, ListChecks, Lock, MoreHorizontal, Users, WifiOff, X } from 'lucide-react'
-import { Menu, type MenuItemDef } from '@nexus/ui/components'
-import { Button, Pill, Tooltip } from '@nexus/ui/primitives'
+import { Folder, FolderKanban, Info, Lock, MoreVertical, Search } from 'lucide-react'
+import Link from 'next/link'
+import { useId } from 'react'
+import { DetailPopover, Menu, type MenuItemDef } from '@nexus/ui/components'
+import { Button, Tooltip } from '@nexus/ui/primitives'
 import { formatDate, formatTime } from '../../../i18n/format'
 import { useLocale, useT } from '../../../i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
-import { CountPopover } from '../../popups/view/CountPopover'
-import type { CountKind } from '../../popups/model'
-import { menuRows, newWords, waitingWords, type DockWidth, type HeadDoor, type HeadModel, type ThreadView } from '../model'
-import { WidthMenu } from './WidthMenu' // F-OP-204: the one width menu (All of <Customer>'s Head draws the same part)
-// B-TH-229: the owner's tile (the factory web's Avatar, B-TH-298).
-import { Avatar } from '../../parts/Avatar'
-// B-TH-251: "In project …" (a link to the project's page).
-import Link from 'next/link'
-import { FolderKanban } from 'lucide-react'
-import { inProjectWords } from '../model'
-// B-TH-288: Done and "Search in the thread".
-import { CheckCircle2, Search } from 'lucide-react'
+import { HEAD_KEYS, headLine, inProjectWords, menuRows, waitingWords, type DockWidth, type HeadDoor, type HeadModel, type ThreadView } from '../model'
+import { useHeadPick } from './HeadPick'
+// B-TH-288: "Search in the thread".
 import { ThreadSearch, type ThreadSearchActions } from './ThreadSearch'
 import '../head.css'
 
@@ -41,243 +33,185 @@ export interface HeadActions {
   onSearch?: (open: boolean) => void
   search?: ThreadSearchActions
   // ---- end B-TH-288
+  /** tw- W2.1: the Files icon — the record's Files window (or, on the order, its Files tab). */
+  onFiles?: () => void
 }
-
-/** The door a count popover's one action opens. */
-const COUNT_DOOR: Readonly<Record<CountKind, HeadDoor>> = { tasks: 'task', approvals: 'approve', partners: 'share', followers: 'followers' }
-const COUNT_ICON: Readonly<Record<CountKind, ReactNode>> = {
-  tasks: <ListChecks size={14} aria-hidden />,
-  approvals: <BadgeCheck size={14} aria-hidden />,
-  partners: <Handshake size={14} aria-hidden />,
-  followers: <Users size={14} aria-hidden />,
-}
-const COUNT_ORDER: readonly CountKind[] = ['tasks', 'approvals', 'partners', 'followers']
-/** Below this width the count chips fold into the "⋯" (their counts go on the doors' lines). */
-const FOLD_BELOW = 560
 
 /**
- * The thread's Head (B-TH-209, T1; picture 7 drawn to the approved pictures' look): ONE 44 px row at ~438 and ~718 px —
- * who must answer next and how long they wait (the last shared message, in clock time), the closed or offline state, a chip
- * naming the View when it is not All, the count chips when not zero (each one popover, one action), View ▾, the width menu,
- * and the "⋯" that ALWAYS holds Activity's doors (R-ACT), held with the reason when the person cannot use one; "Close
- * thread…" only with threads.manage. The phone head: the record and the pill, the rest in the "⋯". Draws one view model,
- * fetches nothing; the container (B-TH-300) loads it and opens the existing dialogs.
+ * The thread's Head (B-TH-209, T1; tw- W2.1 THE THREAD REBUILD, 10-design §8; P0-B1, P0-B4, P8, P12): ONE row of two lines — the title
+ * (the record, or the dock's pick: ONE menu, one label per thread) with ONE line under it (closed · done · the View with Show all ·
+ * offline · who answers next, how long, the owner; "In project: …") — and at the right only Files (its count) · Search · ⓘ (the keys,
+ * the ONE place for key hints) · ⋮ (every other tool, in one order, the counts said on their rows, held rows with why: R-ACT). Every
+ * control stays inside a 433 px dock. Draws one view model, fetches nothing; the container (B-TH-300) loads it and opens the dialogs.
  */
 export function RecordThreadHead({ model, actions }: { model: HeadModel; actions?: HeadActions }) {
   return (
-    <WithMessages namespaces={[HEAD_NS]}>
+    <WithMessages namespaces={[HEAD_NS, 'record-thread-card' /* tw- W2.4: a search hit's writer */]}>
       <Head model={model} actions={actions} />
     </WithMessages>
+  )
+}
+
+/** tw- W2.1: the Files icon with its count ("Files (4)" for a screen reader); the same part wherever a head shows files. */
+export function HeadFiles({ count, onFiles }: { count: number; onFiles?: (() => void) | undefined }) {
+  return (
+    <WithMessages namespaces={[HEAD_NS]}>
+      <FilesButton count={count} onFiles={onFiles} />
+    </WithMessages>
+  )
+}
+
+function FilesButton({ count, onFiles }: { count: number; onFiles?: (() => void) | undefined }) {
+  const t = useT(HEAD_NS)
+  return (
+    <Button size="sm" variant="quiet" className="fw-rth-files" aria-label={t('files.label', { count })} onClick={() => onFiles?.()}>
+      <Folder size={18} aria-hidden />
+      {count > 0 && <span className="fw-rth-files-n">{count > 99 ? '99+' : count}</span>}
+    </Button>
   )
 }
 
 function Head({ model, actions }: { model: HeadModel; actions?: HeadActions | undefined }) {
   const t = useT(HEAD_NS)
   const locale = useLocale()
+  const pick = useHeadPick()
   const place = { locale, ...(model.timeZone ? { timeZone: model.timeZone } : {}) }
-  const tipId = useId()
-  const ref = useRef<HTMLDivElement>(null)
-  const [folded, setFolded] = useState(false)
-  useEffect(() => {
-    const element = ref.current
-    if (!element || typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(([entry]) => setFolded((entry?.contentRect.width ?? 1000) < FOLD_BELOW))
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [])
   const compact = model.compact ?? false
   const role = model.party?.role ?? 'customer'
   const words = (row: { key: string; params?: Readonly<Record<string, string | number>> }) => t(row.key, dated(row.params, place))
-
   const viewWord = (view: ThreadView) => (view === 'shared' ? t(`view.shared.${role}`) : t(`view.${view}`))
-  const viewItems: MenuItemDef[] = model.views.map((view) => ({ id: view, label: viewWord(view), checked: view === model.view, onSelect: () => actions?.onView?.(view) }))
-  const rows = menuRows(model, folded || compact)
-  const moreItems: MenuItemDef[] = []
-  let section: string | null = null
-  for (const row of rows) {
-    const group = row.kind === 'door' ? 'doors' : row.kind === 'view' ? 'views' : 'end'
-    if (section !== null && section !== group) moreItems.push({ id: `sep-${group}`, separator: true })
-    if (group === 'views' && section !== 'views') moreItems.push({ id: 'views-heading', heading: true, label: t('view.label') })
-    section = group
-    if (row.kind === 'door') {
-      moreItems.push({
-        id: row.door,
-        label: words(row.label),
-        disabled: row.held !== null,
-        ...(row.held ? { description: words(row.held) } : row.hint ? { description: words(row.hint) } : {}),
-        onSelect: () => actions?.onDoor?.(row.door),
-      })
-    } else if (row.kind === 'view') {
-      moreItems.push({ id: `view-${row.view}`, label: viewWord(row.view), checked: row.checked, onSelect: () => actions?.onView?.(row.view) })
-    } else if (row.kind === 'print') {
-      moreItems.push({ id: 'print', label: t('act.print'), onSelect: () => actions?.onPrint?.() })
-    } else if (row.kind === 'owner') {
-      moreItems.push({ id: 'owner', label: t('owner.change'), disabled: row.held !== null, ...(row.held ? { description: words(row.held) } : model.owner ? { description: t('owner.now', { name: model.owner.name }) } : {}), onSelect: () => actions?.onOwner?.() })
-    } else if (row.kind === 'done') {
-      // B-TH-288: Done is not Close — said in the line under it.
-      moreItems.push({ id: 'done', label: t(row.done ? 'act.openAgain' : 'act.done'), disabled: row.held !== null, description: row.held ? words(row.held) : t(row.done ? 'act.openAgainHint' : 'act.doneHint'), onSelect: () => actions?.onDone?.(!row.done) })
-    } else if (row.kind === 'search') {
-      moreItems.push({ id: 'search', label: t('act.search'), onSelect: () => actions?.onSearch?.(true) })
-    } else if (row.kind === 'close') {
-      moreItems.push({ id: 'close', label: t('act.close'), description: t('act.closeHint'), tone: 'danger', onSelect: () => actions?.onCloseThread?.() })
-    } else {
-      moreItems.push({ id: 'reopen', label: t('act.reopen'), onSelect: () => actions?.onReopen?.() })
-    }
+
+  // ── the ⋮: ONE order (model.menuRows), the counts on their rows, held rows with why (R-ACT), no other line under a row ──
+  const items: MenuItemDef[] = []
+  let group: string | null = null
+  for (const row of menuRows(model)) {
+    const next = row.kind === 'view' ? 'views' : row.kind === 'width' ? 'width' : row.kind === 'print' || row.kind === 'close' || row.kind === 'reopen' ? 'end' : 'doors'
+    if (group !== null && group !== next) items.push({ id: `sep-${next}`, separator: true })
+    if (group !== next && next === 'views') items.push({ id: 'views-heading', heading: true, label: t('view.label') })
+    if (group !== next && next === 'width') items.push({ id: 'width-heading', heading: true, label: t('width.title') })
+    group = next
+    if (row.kind === 'view') items.push({ id: `view-${row.view}`, label: viewWord(row.view), checked: row.checked, onSelect: () => actions?.onView?.(row.view) })
+    else if (row.kind === 'done') items.push({ id: 'done', label: t(row.done ? 'act.openAgain' : 'act.done'), disabled: row.held !== null, ...(row.held ? { description: words(row.held) } : {}), onSelect: () => actions?.onDone?.(!row.done) })
+    else if (row.kind === 'door') items.push({ id: row.door, label: row.count ? `${words(row.label)} · ${words(row.count)}` : words(row.label), disabled: row.held !== null, ...(row.held ? { description: words(row.held) } : {}), onSelect: () => actions?.onDoor?.(row.door) })
+    else if (row.kind === 'owner') items.push({ id: 'owner', label: t('owner.change'), disabled: row.held !== null, ...(row.held ? { description: words(row.held) } : {}), onSelect: () => actions?.onOwner?.() })
+    else if (row.kind === 'width') items.push({ id: `width-${row.width}`, label: t(`width.${row.width}`), ...(row.width === 'hide' || row.width === 'reset' ? {} : { checked: row.checked }), onSelect: () => actions?.onWidth?.(row.width) })
+    else if (row.kind === 'print') items.push({ id: 'print', label: t('act.print'), onSelect: () => actions?.onPrint?.() })
+    else if (row.kind === 'close') items.push({ id: 'close', label: t('act.close'), tone: 'danger', onSelect: () => actions?.onCloseThread?.() })
+    else items.push({ id: 'reopen', label: t('act.reopen'), onSelect: () => actions?.onReopen?.() })
   }
 
-  // B-TH-229: the API's ONE waiting rule (working time on the company calendar, amber only while it waits on us past its threshold);
-  // without it (a design case), the clock-time reading of the messages.
-  const wait = model.answers ? waitingWords(model.answers, model.now) : null
-  const pillWords = model.answers && wait ? (model.answers.on === 'us' ? t('answers.us', { wait: t(wait.key, { n: wait.n }) }) : t(`answers.${role}`, { wait: t(wait.key, { n: wait.n }) })) : null
-  const when = model.answers ? `${formatDate(model.answers.since, place)} ${formatTime(model.answers.since, place)}` : ''
-  const tip = model.answers
-    ? model.answers.workingMinutes === undefined
-      ? t(model.answers.on === 'us' ? 'answers.tipUs' : 'answers.tipParty', { party: model.party?.name ?? '', when })
-      : [
-          t(model.answers.on === 'us' ? 'rule.sinceUs' : `rule.since.${role}`, { when }),
-          t(model.answers.calendar ? 'rule.working' : 'rule.clock'),
-          model.answers.on === 'us' ? t('rule.amber', { count: model.answers.thresholdDays ?? 1 }) : t('rule.notAmber'),
-        ].join(' ')
-    : null
-  const amber = model.answers?.amber === true
-  const fresh = newWords(model.newCount ?? 0)
-  const owner = model.owner
-  const ownerName = owner ? (owner.active ? owner.name : t('owner.inactive', { name: owner.name })) : null
-  const ownerLabel = owner === undefined ? null : ownerName ? t('owner.label', { name: ownerName }) : t('owner.nobody')
-  const ownerOpens = model.ownerHeld === null && !compact
-  const inProject = inProjectWords(model.projects) // B-TH-251
-  // B-TH-288 (T1-F13): Done — off the work lists, not closed (a new message opens it again).
-  const done = model.done && !model.closed ? model.done : null
-  const doneWords = done ? (done.by ? t('done.by', { name: done.by, date: formatDate(done.at, place) }) : t('done.noName', { date: formatDate(done.at, place) })) : null
   // B-TH-288 (T1-F08): the search field lies over the Head row while it is open.
   if (model.search?.open) {
     return (
-      <div ref={ref} className={`fw-rth is-searching${compact ? ' is-compact' : ''}`} role="group" aria-label={t('label', { record: model.record })}>
+      <div className={`fw-rth is-searching${compact ? ' is-compact' : ''}`} role="group" aria-label={t('label', { record: model.record })}>
         <ThreadSearch record={model.record} model={model.search} actions={{ ...actions?.search, onClose: () => actions?.onSearch?.(false) }} />
       </div>
     )
   }
 
+  const line = headLine(model)
+  const inProject = compact ? null : inProjectWords(model.projects) // B-TH-251
   return (
-    <div ref={ref} className={`fw-rth${compact ? ' is-compact' : ''}`} role="group" aria-label={t('label', { record: model.record })}>
-      {compact && <span className="fw-rth-title">{model.record}</span>}
-      {model.closed ? (
-        <span className="fw-rth-closed">
-          <Lock size={14} aria-hidden />
-          <span>{model.closed.by ? t('closed.by', { name: model.closed.by, date: formatDate(model.closed.at, place) }) : t('closed.noName', { date: formatDate(model.closed.at, place) })}</span>
-          {/* TH-5 follow-up: a closed project reopens its thread from its own band, never from here. */}
-          {model.canManage && !model.reopenWithRecord && (
-            <Button size="sm" variant="quiet" onClick={() => actions?.onReopen?.()}>
-              {t('act.reopen')}
-            </Button>
-          )}
-        </span>
-      ) : doneWords ? (
-        // B-TH-288: done in words, with why it is not closed.
-        <Tooltip label={t('done.tip')} portal>
-          <span className="fw-rth-pillwrap" tabIndex={0}>
-            <Pill tone="success" icon={<CheckCircle2 size={12} aria-hidden />} truncate>
-              {doneWords}
-            </Pill>
-          </span>
-        </Tooltip>
-      ) : pillWords && tip ? (
+    <div className={`fw-rth${compact ? ' is-compact' : ''}`} role="group" aria-label={t('label', { record: model.record })}>
+      <div className="fw-rth-titleblock">
+        <div className="fw-rth-title">{pick ?? <span className="fw-rth-title-words">{model.record}</span>}</div>
+        {(line || inProject) && (
+          <p className="fw-rth-line">
+            {line && <LineWords line={line} model={model} role={role} viewWord={viewWord} onShowAll={() => actions?.onView?.('all')} />}
+            {/* B-TH-251 (PROJ.linked-F05): "In project: FW27 airbag line" (+2: the tooltip names them all); never a project the reader may not open. */}
+            {inProject && (
+              <Tooltip label={inProject.more > 0 ? t('project.all', { names: inProject.all }) : `${inProject.first.number} ${inProject.first.label}`} portal>
+                <Link className="fw-rth-project" href={inProject.first.href} aria-label={inProject.more > 0 ? t('project.labelMore', { name: inProject.first.label, count: inProject.more }) : t('project.in', { name: inProject.first.label })}>
+                  <FolderKanban size={12} aria-hidden />
+                  <span className="fw-rth-project-name">{t('project.in', { name: inProject.first.label })}</span>
+                  {inProject.more > 0 && <span className="fw-rth-project-more">{t('project.more', { count: inProject.more })}</span>}
+                </Link>
+              </Tooltip>
+            )}
+          </p>
+        )}
+      </div>
+      <div className="fw-rth-tools">
+        {model.files && <FilesButton count={model.files.count} onFiles={actions?.onFiles} />}
+        {model.search && (
+          <Button size="sm" variant="quiet" className="icon" aria-label={t('search.open')} aria-keyshortcuts="/" onClick={() => actions?.onSearch?.(true)}>
+            <Search size={18} aria-hidden />
+          </Button>
+        )}
+        {/* P8: the ONE ⓘ — the only place key hints live (PR-14, S12). */}
+        <DetailPopover trigger={<Info size={18} aria-hidden />} triggerLabel={t('keys.title')} triggerClassName="nds-btn sm quiet icon fw-rth-keys" label={t('keys.title')} hoverDelay={0}>
+          <dl className="fw-rth-keylist">
+            {HEAD_KEYS.map((row) => (
+              <div key={row.key} className="fw-rth-keyrow">
+                <dt>
+                  <kbd className="nds-kbd">{typeof row.glyph === 'string' ? row.glyph : t(row.glyph.key)}</kbd>
+                </dt>
+                <dd>{t(row.key)}</dd>
+              </div>
+            ))}
+          </dl>
+        </DetailPopover>
+        <Menu align="right" className="fw-rth-menu" label={<MoreVertical size={18} aria-hidden />} items={items} triggerProps={{ className: 'nds-btn sm quiet icon', 'aria-label': t('more.label') }} />
+      </div>
+    </div>
+  )
+}
+
+/** The head's ONE line, in words (10-design §8; P9: today's side words; the owner reuses `owner.label`). */
+function LineWords({ line, model, role, viewWord, onShowAll }: { line: NonNullable<ReturnType<typeof headLine>>; model: HeadModel; role: string; viewWord: (view: ThreadView) => string; onShowAll: () => void }) {
+  const t = useT(HEAD_NS)
+  const locale = useLocale()
+  const tipId = useId()
+  const place = { locale, ...(model.timeZone ? { timeZone: model.timeZone } : {}) }
+  if (line.kind === 'closed') {
+    return (
+      <span className="fw-rth-linepart">
+        <Lock size={12} aria-hidden />
+        {line.by ? t('closed.by', { name: line.by, date: formatDate(line.at, place) }) : t('closed.noName', { date: formatDate(line.at, place) })}
+      </span>
+    )
+  }
+  if (line.kind === 'done') return <span className="fw-rth-linepart">{line.by ? t('done.by', { name: line.by, date: formatDate(line.at, place) }) : t('done.noName', { date: formatDate(line.at, place) })}</span>
+  if (line.kind === 'view') {
+    return (
+      <>
+        <span className="fw-rth-linepart">{t('viewShowing', { view: viewWord(line.view) })}</span>
+        <span aria-hidden="true">·</span>
+        <button type="button" className="fw-rth-linkbtn" onClick={onShowAll}>
+          {t('viewShowAll')}
+        </button>
+      </>
+    )
+  }
+  if (line.kind === 'offline') return <span className="fw-rth-linepart">{t('offline', { time: formatTime(line.asOf, place) })}</span>
+  // Waiting: the API's ONE rule (working time on the company calendar, amber only while it waits on us past its threshold); the rule
+  // itself in the tooltip; then who owns it.
+  const answers = line.answers
+  const wait = answers ? waitingWords(answers, model.now) : null
+  const waiting = answers && wait ? (answers.on === 'us' ? t('answers.us', { wait: t(wait.key, { n: wait.n }) }) : t(`answers.${role}`, { wait: t(wait.key, { n: wait.n }) })) : null
+  const when = answers ? `${formatDate(answers.since, place)} ${formatTime(answers.since, place)}` : ''
+  const tip = answers
+    ? answers.workingMinutes === undefined
+      ? t(answers.on === 'us' ? 'answers.tipUs' : 'answers.tipParty', { party: model.party?.name ?? '', when })
+      : [t(answers.on === 'us' ? 'rule.sinceUs' : `rule.since.${role}`, { when }), t(answers.calendar ? 'rule.working' : 'rule.clock'), answers.on === 'us' ? t('rule.amber', { count: answers.thresholdDays ?? 1 }) : t('rule.notAmber')].join(' ')
+    : null
+  const owner = line.owner
+  const ownerWords = owner === undefined ? null : owner ? t('owner.label', { name: owner.active ? owner.name : t('owner.inactive', { name: owner.name }) }) : t('owner.nobody')
+  return (
+    <>
+      {waiting && tip && (
         <Tooltip label={tip} portal>
-          <span className="fw-rth-pillwrap" tabIndex={0} aria-describedby={tipId}>
-            <Pill tone={amber ? 'warning' : 'neutral'} truncate>
-              {pillWords}
-            </Pill>
+          <span className={`fw-rth-linepart is-wait${answers?.amber ? ' is-amber' : ''}`} tabIndex={0} aria-describedby={tipId}>
+            {waiting}
             <span id={tipId} className="nds-vh">
               {tip}
             </span>
           </span>
         </Tooltip>
-      ) : null}
-      {fresh && (
-        // B-TH-229 (T1-F04): the reader's own new messages since their last visit; the band's Thread button says the same.
-        <Pill tone="info">{t(fresh.key, { count: fresh.n })}</Pill>
       )}
-      {ownerLabel && !compact && (
-        // B-TH-229 (T1-F03): who answers it, as a tile; the name on hover and for screen readers; a click changes it (threads.post).
-        <Tooltip label={ownerLabel} portal>
-          {ownerOpens ? (
-            <button type="button" className="fw-rth-owner" aria-label={`${ownerLabel} · ${t('owner.change')}`} onClick={() => actions?.onOwner?.()}>
-              {owner ? <Avatar name={owner.name} size="sm" /> : <span className="fw-rth-owner-none">—</span>}
-            </button>
-          ) : (
-            <span className="fw-rth-owner" tabIndex={0} role="img" aria-label={ownerLabel}>
-              {owner ? <Avatar name={owner.name} size="sm" /> : <span className="fw-rth-owner-none">—</span>}
-            </span>
-          )}
-        </Tooltip>
-      )}
-      {/* B-TH-251 (PROJ.linked-F05): "In project: FW27 airbag line" (+2: the tooltip names them all); never a project the reader may not open. */}
-      {inProject && !compact && (
-        <Tooltip label={inProject.more > 0 ? t('project.all', { names: inProject.all }) : `${inProject.first.number} ${inProject.first.label}`} portal>
-          <Link className="fw-rth-project" href={inProject.first.href} aria-label={inProject.more > 0 ? t('project.labelMore', { name: inProject.first.label, count: inProject.more }) : t('project.in', { name: inProject.first.label })}>
-            <FolderKanban size={13} aria-hidden />
-            <span className="fw-rth-project-name">{t('project.in', { name: inProject.first.label })}</span>
-            {inProject.more > 0 && <span className="fw-rth-project-more">{t('project.more', { count: inProject.more })}</span>}
-          </Link>
-        </Tooltip>
-      )}
-      {model.offline && (
-        <Pill tone="warning" icon={<WifiOff size={12} aria-hidden />}>
-          {t('offline', { time: formatTime(model.offline.asOf, place) })}
-        </Pill>
-      )}
-      {!compact && model.view !== 'all' && (
-        <button type="button" className="fw-rth-viewchip" onClick={() => actions?.onView?.('all')} aria-label={t('view.clear', { view: viewWord(model.view) })}>
-          {viewWord(model.view)} <X size={12} aria-hidden />
-        </button>
-      )}
-      {!compact && !folded && (
-        <span className="fw-rth-counts">
-          {COUNT_ORDER.map((kind) => {
-            const count = model.counts[kind]
-            if (!count || count.count <= 0) return null
-            const held = model.holds[COUNT_DOOR[kind]]
-            return (
-              <CountPopover
-                key={kind}
-                model={{ ...count, held: held ? words(held) : null }}
-                trigger={
-                  <span className="fw-rth-count">
-                    {COUNT_ICON[kind]} {count.count > 99 ? '99+' : count.count}
-                  </span>
-                }
-                triggerLabel={t(`count.${kind}`, { count: count.count })}
-                onAction={() => actions?.onDoor?.(COUNT_DOOR[kind])}
-              />
-            )
-          })}
-        </span>
-      )}
-      <span className="fw-rth-grow" />
-      {/* B-TH-288 (T1-F08): "Search in the thread" — office only, offered once the server indexes messages (B-TH-097). */}
-      {!compact && model.search && (
-        <Tooltip label={t('search.open')} portal>
-          <Button size="sm" variant="quiet" className="icon" aria-label={t('search.open')} aria-keyshortcuts="/" onClick={() => actions?.onSearch?.(true)}>
-            <Search size={16} aria-hidden />
-          </Button>
-        </Tooltip>
-      )}
-      {!compact && model.views.length > 1 && (
-        <Menu
-          align="right"
-          className="fw-rth-menu"
-          label={
-            <>
-              <Filter size={14} aria-hidden /> {t('view.label')} <ChevronDown size={14} aria-hidden />
-            </>
-          }
-          items={viewItems}
-          triggerProps={{ className: 'nds-btn sm', 'aria-label': t('view.menu') }}
-        />
-      )}
-      {!compact && <WidthMenu width={model.width} onWidth={actions?.onWidth} /* F-OP-204 */ />}
-      <Menu align="right" className="fw-rth-menu" label={<MoreHorizontal size={16} aria-hidden />} items={moreItems} triggerProps={{ className: 'nds-btn sm icon', 'aria-label': t('more.label') }} />
-    </div>
+      {waiting && ownerWords && <span aria-hidden="true">·</span>}
+      {ownerWords && <span className="fw-rth-linepart is-owner">{ownerWords}</span>}
+    </>
   )
 }
 

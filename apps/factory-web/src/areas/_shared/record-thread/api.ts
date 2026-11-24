@@ -40,6 +40,18 @@ export const officeMessageSchema = messageSchema.extend({
   skippedAttachments: z.array(skippedSchema).optional(),
   // F-SA-265 (B-SA-061): office only — the part of its order the message is about (null: none, or a work order out of the reader's reach).
   about: z.object({ kind: z.string(), id: z.string() }).nullable().optional(),
+  // tw- W2.2 (tw-s part 7; B7, Z2): office only — an INBOUND email's headers and sender checks (null: no mail row). The verdicts stay
+  // strings here (an unknown one is "not checked", never a failed read): the Email details window says each in words.
+  mail: z
+    .object({
+      from: z.object({ address: z.string().nullable(), name: z.string().nullable() }),
+      to: z.array(z.string()),
+      cc: z.array(z.string()),
+      subject: z.string().nullable(),
+      verdicts: z.object({ spf: z.string(), dkim: z.string(), dmarc: z.string() }),
+    })
+    .nullable()
+    .optional(),
 })
 export type OfficeMessage = z.infer<typeof officeMessageSchema>
 export const waitingMailSchema = z.object({ count: z.number().int(), reasons: z.array(z.string()), mayReview: z.boolean() })
@@ -288,6 +300,8 @@ export const pinSchema = z.object({
     audience: z.enum(['OFFICE', 'PARTNER']).optional(),
     attachmentCount: z.number().int(),
     removed: z.boolean(),
+    // tw- W2.1 (tw-s S.2): the writer's kind, office only; a hidden floor worker is a WORKER with no name (R12).
+    authorKind: z.enum(['USER', 'WORKER', 'PARTY', 'SYSTEM']).optional(),
   }),
 })
 export type ApiPin = z.infer<typeof pinSchema>
@@ -374,7 +388,18 @@ export async function setThreadDone(api: ApiClient, record: RecordKey, done: boo
 const threadHits = z.object({
   words: z.array(z.string()),
   tooShort: z.boolean(),
-  results: z.array(z.object({ recordId: z.string(), subtitle: z.string().nullable(), status: z.string().nullable(), indexedAt: z.string() }).passthrough()),
+  results: z.array(
+    z
+      .object({
+        recordId: z.string(),
+        subtitle: z.string().nullable(),
+        status: z.string().nullable(),
+        indexedAt: z.string(),
+        // tw- W2.4 (tw-s part 5; R10): when it was written and by whom — a floor writer the gate keeps back has no name.
+        message: z.object({ at: z.string(), authorName: z.string().nullable(), authorKind: z.string() }).optional(),
+      })
+      .passthrough(),
+  ),
   total: z.number().int(),
   nextOffset: z.number().int().nullable(),
 })

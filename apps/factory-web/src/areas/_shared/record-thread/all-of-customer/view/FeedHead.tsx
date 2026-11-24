@@ -6,6 +6,7 @@ import { Button } from '@nexus/ui/primitives'
 import { useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { WIDTH_NS, WidthMenu } from '../../../../../lib/record-thread/head/view/WidthMenu'
+import { useHeadPick } from '../../../../../lib/record-thread/head/view/HeadPick' // tw- W2.1: the dock's pick is this head's title
 import { useRecordFrame } from '../../../record-frame/RecordFrame'
 import { FEED_KIND_CHOICES, FEED_VIEWS, type AllOfCustomerModel } from '../model'
 import type { AllOfCustomerFeedActions } from './AllOfCustomerFeed'
@@ -52,12 +53,20 @@ function Head({ title, model, actions, customerHref }: FeedHeadProps) {
       : []),
     ...(customerHref ? [{ id: 'customer', label: t('allOfCustomer.openRecord', { record: model.customerName }), href: customerHref }] : []),
   ]
+  const pick = useHeadPick()
   return (
     <div className="fw-rth fw-aoc-head" role="group" aria-label={title}>
-      <span className="fw-aoc-title" title={title}>
-        <Eye size={14} aria-hidden />
-        <span className="fw-aoc-title-words">{title}</span>
-      </span>
+      {/* tw- W2.1 (Z4): the dock's pick as the title (one look for every scope), else the card's own name. */}
+      {pick ? (
+        <div className="fw-rth-titleblock">
+          <div className="fw-rth-title">{pick}</div>
+        </div>
+      ) : (
+        <span className="fw-aoc-title" title={title}>
+          <Eye size={14} aria-hidden />
+          <span className="fw-aoc-title-words">{title}</span>
+        </span>
+      )}
       <Menu
         align="right"
         className="fw-rth-menu fw-aoc-menu"

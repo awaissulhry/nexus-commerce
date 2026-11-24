@@ -92,6 +92,10 @@ export function heldWordKey(reason: QuarantineReason | null): string {
 /** factory-domain email-in/rules.ts MAIL_VERDICTS. */
 export const MAIL_VERDICTS = ['PASS', 'FAIL', 'GRAY', 'PROCESSING_FAILED', 'DISABLED'] as const
 export type MailVerdict = (typeof MAIL_VERDICTS)[number]
+/** tw- W2.2: a verdict as the office read sends it (a string); a word this app does not know is "not checked", never a failed read. */
+export function verdictOf(value: string): MailVerdict {
+  return (MAIL_VERDICTS as readonly string[]).includes(value) ? (value as MailVerdict) : 'DISABLED'
+}
 export type SenderCheck = 'spf' | 'dkim' | 'dmarc'
 export const SENDER_CHECKS: readonly SenderCheck[] = ['spf', 'dkim', 'dmarc']
 
@@ -153,5 +157,3 @@ export interface CountPopoverModel {
   readonly held?: string | null
 }
 
-/** At most this many lines in a popover; the rest are counted ("and 3 more"). */
-export const COUNT_LINES_MAX = 5

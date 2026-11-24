@@ -22,9 +22,7 @@ import { OwnerDialog } from '../../../lib/record-thread/head/view/OwnerDialog'
 import { setThreadOwner } from './api'
 import { isApiError } from '../../../lib/api/errors'
 import { HEAD_NS, RecordThreadHead } from '../../../lib/record-thread/head/view/RecordThreadHead'
-import { fileSeries, fromApiFile, recordFiles, toViewerFile, type FilesParty, type ThreadFile } from '../../../lib/record-thread/files/model'
-import { useStripOpen } from '../../../lib/record-thread/files/use-strip-open'
-import { FILES_NS, FileStrip } from '../../../lib/record-thread/files/view/FileStrip'
+import { fileSeries, fromApiFile, recordFiles, toViewerFile, type ThreadFile } from '../../../lib/record-thread/files/model'
 import type { MissingDocument } from '../../../lib/record-thread/files-view/model'
 import { FILES_VIEW_NS, FilesView } from '../../../lib/record-thread/files-view/view/FilesView'
 import { useOrderFiles } from './use-order-files' // F-SA-237
@@ -87,8 +85,8 @@ import { SharesWindow } from '../../../record-panels/share/view/SharesWindow'
 import { useApprovalHistory } from '../../../shell/panels/approvals/use-approval-history'
 import { ApprovalHistory } from '../../../shell/panels/approvals/view/ApprovalHistory'
 // ---- end B-TH-280
-// B-TH-286: the pins on the files line (B-TH-091).
-import { lineShown, pinLinesOf } from '../../../lib/record-thread/files/model'
+// tw- W2.1: the pins went to the pinned bar (RecordThread); the head counts the files.
+import { headFiles } from '../../../lib/record-thread/head/model' // tw- W2.1: the Files icon's count
 // B-TH-287 (B-TH-098): saved replies in the customer's language first (th-backend-g step 3 reads the five languages).
 import { readMessageLanguage } from './api'
 import { replyLanguageOf } from '../../../lib/record-thread/helpers/model'
@@ -132,6 +130,8 @@ export interface DockedHost extends RecordThreadHost {
   // ---- end F-OO-133
 }
 
+// tw- W2.1: the files line went (the head's Files icon opens the Files window); the files' own catalogue stays for the viewer's words.
+const FILES_NS = 'record-thread-files'
 const NAMESPACES = [HEAD_NS, FILES_NS, FILES_VIEW_NS, POPUPS_NS, HELPERS_NS, 'records', 'record-approvals', SHARES_NS, 'record-files', 'home-mywork', /* F-SA-244: the place door */ 'record-thread-card']
 
 /** B-TH-288: the search before anything is typed (closed). */
@@ -145,14 +145,14 @@ const latestOf = (files: readonly ThreadFile[]): ThreadFile[] => fileSeries(file
  * (the same container, use-record-thread) with the Head — who answers next, the View, the counts, the width menu of the frame, and
  * the "⋯" that ALWAYS holds Activity's doors (rule R-ACT): Add task, Ask a partner to approve, Share with a partner, Followers,
  * Follow / Mute, Remind me — each opening the EXISTING dialog of the record-panels modules, plus Print and "Close thread…" for
- * threads.manage —, the files line and its strip, the ONE file viewer, the Files view, and Saved replies beside the box. B-TH-280:
+ * threads.manage —, the Files icon (tw- W2.1: the files line went), the ONE file viewer, the Files view, and Saved replies beside the box. B-TH-280:
  * the old record panels went; their Files tab in depth (type and expiry, Versions, Mark up) lives in the Files view's slots, their
  * Approvals and Partners tabs in windows the Ask / Share doors open once something is asked or shared (Withdraw, Change, Revoke,
  * the record's approval history). Brand wall
  * (W06, W08, W24, W25, W34): Ask and Share reach only this record's party (the dialogs and the API check it again), the files are this
  * record's only, the @ list is office readers only (B-TH-208).
  */
-export function DockedOfficeThread(props: { host: DockedHost; model: RecordThreadModel; actions: RecordThreadActions; base: RecordThreadBase; reminder: { mine: { remindAt: string | null; followUp?: boolean | undefined } | null; open: (messageId: string | null) => void; dialog: ReactNode }; remind?: (messageId: string) => ReactNode }) {
+export function DockedOfficeThread(props: { host: DockedHost; model: RecordThreadModel; actions: RecordThreadActions; base: RecordThreadBase; reminder: { mine: { remindAt: string | null; followUp?: boolean | undefined } | null; open: (messageId: string | null) => void; dialog: ReactNode } }) {
   return (
     <WithMessages namespaces={NAMESPACES}>
       <Docked {...props} />
@@ -160,7 +160,7 @@ export function DockedOfficeThread(props: { host: DockedHost; model: RecordThrea
   )
 }
 
-function Docked({ host, model, actions, base, reminder, remind }: { host: DockedHost; model: RecordThreadModel; actions: RecordThreadActions; base: RecordThreadBase; reminder: { mine: { remindAt: string | null; followUp?: boolean | undefined } | null; open: (messageId: string | null) => void; dialog: ReactNode }; remind?: (messageId: string) => ReactNode }) {
+function Docked({ host, model, actions, base, reminder }: { host: DockedHost; model: RecordThreadModel; actions: RecordThreadActions; base: RecordThreadBase; reminder: { mine: { remindAt: string | null; followUp?: boolean | undefined } | null; open: (messageId: string | null) => void; dialog: ReactNode } }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const locale = useLocale()
@@ -346,9 +346,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   // ---- end B-TH-280
 
   // ── the files line, the viewer and the Files view (T2, T9, T-POP) ──────────────────────────────────────────────────────
-  const strip = useStripOpen(session.user.id)
   const threadFiles = useMemo(() => recordFiles(base.files.map((file) => fromApiFile(file)), key), [base.files, key])
-  const filesParty: FilesParty | null = partyId ? { id: partyId, role } : null
   const lineFiles = can.readFiles ? (base.filesRead ? threadFiles : null) : []
   // F-OP-215: the files line of the order's own thread draws the order's file set from the page's container (null while it is read).
   const hostFiles = key.type === 'SalesOrder' ? (host.orderFiles ?? null) : null
@@ -699,7 +697,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
         .then((answer) =>
           setSearch((now) =>
             now && now.query === searchQuery
-              ? { ...now, state: answer.tooShort ? 'short' : 'ready', words: answer.words, total: answer.total, hits: answer.results.map((hit) => ({ id: hit.recordId, excerpt: hit.subtitle, direction: hit.status })) }
+              ? { ...now, state: answer.tooShort ? 'short' : 'ready', words: answer.words, total: answer.total, hits: answer.results.map((hit) => ({ id: hit.recordId, excerpt: hit.subtitle, direction: hit.status, ...(hit.message ? { at: hit.message.at, sender: { name: hit.message.authorName, kind: hit.message.authorKind } } : {}) /* tw- W2.4 */ })) }
               : now,
           ),
         )
@@ -752,7 +750,8 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     answers: base.server.head ? answersOf(base.server.head.waiting) : whoAnswers(base.server.messages, partyId !== null),
     owner: base.server.head ? base.server.head.owner : undefined,
     ownerHeld: base.server.head ? (offline ? { key: 'held.offline' } : can.post ? null : { key: 'held.noRight', params: { right: rightRef('threads.post') } }) : undefined,
-    newCount: base.newCount,
+    // tw- W2.1: the Files icon — the order's set on the order's own thread (its Files tab's count), else the record's documents.
+    files: can.readFiles ? { count: stripFiles ? (headFiles(stripFiles)?.count ?? 0) : 0 } : null,
     projects: inProject, // B-TH-251
     closed,
     offline: base.offline ? { asOf: base.offline.since } : null,
@@ -904,6 +903,8 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
           // ---- B-TH-288
           onDone: (done) => void markDone(done),
           onSearch: openSearch,
+          // tw- W2.1: the Files icon — on the order's own thread its Files tab, else the record's Files window.
+          onFiles: () => (hostFiles ? hostFiles.onAll() : setFilesOpen(true)),
           search: {
             onQuery: (query) => setSearch((now) => (now ? { ...now, query, ...(query.trim() === '' ? { state: 'idle' as const, hits: [], total: 0 } : {}) } : now)),
             onPick: pickHit,
@@ -937,22 +938,6 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
       )}
     </>
   )
-
-  // B-TH-286 (B-TH-091; T2-F07): the pins lead the line ("2 pinned"); a line with neither pins nor files is not drawn (T2-F09).
-  const pinLines = base.pins ? pinLinesOf(base.pins) : null
-  // F-OP-215: on the order's own thread the line is the order's file set; its tiles and "All files" go to the order's Files tab.
-  const filesLine = lineShown(stripFiles, pinLines) ? (
-    <FileStrip
-      model={{ files: stripFiles, party: filesParty, open: strip.open, pins: pinLines, canUnpin: can.post && !offline }}
-      actions={{
-        onToggle: strip.toggle,
-        onOpen: (fileId, opener) => (hostFiles ? hostFiles.onOpen(fileId, opener) : openViewer(latestOf(threadFiles), fileId, opener)),
-        onAllFiles: () => (hostFiles ? hostFiles.onAll() : setFilesOpen(true)),
-        onPin: (messageId) => void jumpInView(messageId), // tw- W1.4: the one door
-        onUnpin: (messageId) => void base.unpin(messageId),
-      }}
-    />
-  ) : null
 
   const overlays = (
     <>
@@ -1083,5 +1068,5 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
 
   const helpers = mayReply ? <SavedReplies model={{ ...replies, held: offline ? th('held.offline') : null }} onPick={pickReply} onRetry={() => setRepliesSeq((value) => value + 1)} /> : null
 
-  return <RecordThread model={shownModel} actions={threadActions} remind={remind} slots={{ top: pickBand /* F-OP-202 */, head: headSlot, filesLine, helpers, overlays }} />
+  return <RecordThread model={shownModel} actions={threadActions} slots={{ top: pickBand /* F-OP-202; tw- W2.1: the head's title */, head: headSlot, helpers, overlays }} />
 }

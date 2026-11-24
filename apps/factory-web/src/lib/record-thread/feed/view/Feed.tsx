@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { ChevronDown, Lock, MailOpen, Pin, WifiOff } from 'lucide-react'
 // B-TH-255: the pills of what the View hides and of the mail that waits for a person.
 import { EyeOff, MailWarning } from 'lucide-react'
@@ -23,6 +23,8 @@ import '../feed.css'
 export interface FeedModel {
   /** ready: the messages are read; loading: the first read; error: it failed; forbidden: the reader may not read threads. */
   state: 'loading' | 'error' | 'forbidden' | 'ready'
+  /** tw- W2.4 (B6): forbidden only until the person confirms it is them (the second step): the words say how. Absent: a right is missing. */
+  forbiddenWhy?: 'stepUp'
   messages: readonly CardMessage[]
   events: readonly FeedEvent[]
   context: CardContext
@@ -76,7 +78,7 @@ const FLOAT_MS = 1200
  * reader is higher up, with the count of what arrived below (nothing jumps under the pointer); a jump lights the whole row. J / K walk
  * the messages and R answers the focused one while the feed has the focus. Draws its model; the container reads and re-reads.
  */
-export function Feed({ model, actions, remind }: { model: FeedModel; actions?: FeedActions; remind?: (messageId: string) => ReactNode }) {
+export function Feed({ model, actions }: { model: FeedModel; actions?: FeedActions }) {
   const t = useT('record-thread-feed')
   const locale = useLocale()
   const [shownChanges, setShownChanges] = useState<ReadonlySet<string>>(new Set())
@@ -348,7 +350,7 @@ export function Feed({ model, actions, remind }: { model: FeedModel; actions?: F
     return (
       <div className="fw-rt-feedwrap">
         <div className="fw-rt-state is-center">
-          <EmptyState icon={<Lock size={22} aria-hidden />} title={t('state.forbidden')} description={t('state.forbiddenBody', { right: rightWords(locale, 'threads.read') })} />
+          <EmptyState icon={<Lock size={22} aria-hidden />} title={t('state.forbidden')} description={model.forbiddenWhy === 'stepUp' ? t('state.stepUp') : t('state.forbiddenBody', { right: rightWords(locale, 'threads.read') })} />
         </div>
       </div>
     )
@@ -395,7 +397,6 @@ export function Feed({ model, actions, remind }: { model: FeedModel; actions?: F
                 today={today}
                 context={model.context}
                 actions={actions}
-                remind={remind}
                 paper={model.paper === true}
                 flash={row.kind === 'message' ? flashOf(row.message.id) : null}
                 showChanges={shownChanges.has(row.key)}
@@ -445,7 +446,6 @@ function Row({
   today,
   context,
   actions,
-  remind,
   paper,
   flash,
   showChanges,
@@ -457,12 +457,12 @@ function Row({
   today: string
   context: CardContext
   actions?: FeedActions
-  remind?: (messageId: string) => ReactNode
   paper: boolean
   flash: { seq: number; onEnd: () => void } | null
   showChanges: boolean
   onToggleChanges: () => void
 }) {
+  const statusWords = useT('search') // tw- W2.4: the record types' status words (THREAD_NAMESPACES loads them)
   if (row.kind === 'day') {
     // tw- W1.1 (S12): the day pill says the day; no time-zone tooltip per day.
     const words = dayText(row.day, today, locale, t)
@@ -484,7 +484,7 @@ function Row({
   if (row.kind === 'message') {
     return (
       <div className="fw-rt-feed-item" data-day={dayText(dayOf(row.message.at), today, locale, t)}>
-        <MessageCard message={row.message} context={context} actions={actions} remind={remind?.(row.message.id)} run={row.run} flash={flash} paper={paper} />
+        <MessageCard message={row.message} context={context} actions={actions} run={row.run} flash={flash} paper={paper} />
       </div>
     )
   }
@@ -502,13 +502,15 @@ function Row({
   if (row.kind === 'step') {
     const event = row.event
     const who = whoWords(event)
+    const move = statusMove(event.status, t, statusWords)
     return (
       // F-SA-265: "Show in the thread" (a history row of the page) finds its step by its id.
       <div className="fw-rt-pillrow">
         <p className="fw-rt-pill fw-rt-event" data-event-ids={event.id} tabIndex={-1}>
           <span>
             {t('step.text', { who: 'text' in who ? who.text : t(who.key), verb: t(stepVerbKey(event)) /* F-OP-214 */ })}
-            {event.status && (event.status.from || event.status.to) ? ` · ${t('step.status', { from: event.status.from ?? '—', to: event.status.to ?? '—' })}` : ''}
+            {/* tw- W2.4 (the lead's rule): the status in the record type's own words, never a code; no words: the step's label alone. */}
+            {move ? ` · ${move}` : ''}
           </span>
           <time dateTime={event.at}>{timeOf(event.at, locale)}</time>
         </p>
@@ -550,7 +552,7 @@ function Row({
   // ---- end F-OP-214
   const first = row.events[0]
   const who = whoWords(first)
-  const lines = row.events.flatMap((event) => (event.values.length > 0 ? event.values.map((value) => `${value.field}: ${value.before} → ${value.after}`) : event.fields.length > 0 ? [t('changes.fields', { fields: event.fields.join(', ') })] : []))
+  const lines = row.events.flatMap((event) => (event.values.length > 0 ? event.values.map((value) => (value.field === 'status' ? (statusMove({ from: value.before, to: value.after }, t, statusWords) ?? value.field) : `${value.field}: ${value.before} → ${value.after}`)) : event.fields.length > 0 ? [t('changes.fields', { fields: event.fields.join(', ') })] : []))
   const count = row.events.reduce((sum, event) => sum + Math.max(1, event.values.length || event.fields.length), 0)
   const listId = `changes-${first.id}`
   return (
@@ -630,4 +632,22 @@ function EndLines({ model, actions, t }: { model: FeedModel; actions?: FeedActio
       )}
     </>
   )
+}
+
+/**
+ * tw- W2.4 (the lead's rule for step and change pills): a status move in words — the record types' own status words (the search
+ * catalogue's `status.<code>`, the words every list says them in); a code with no words is never shown: the step's own label says it.
+ */
+export function statusMove(status: { readonly from: string | null; readonly to: string | null } | null, t: Translate, statusWords: Translate): string | null {
+  if (!status) return null
+  const said = (code: string | null): string | null => {
+    if (!code) return null
+    const key = `status.${code}`
+    const words = statusWords(key)
+    return words === key ? null : words
+  }
+  const from = said(status.from)
+  const to = said(status.to)
+  if (!to) return null
+  return from ? t('step.status', { from, to }) : to
 }

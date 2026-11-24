@@ -78,11 +78,12 @@ describe('B-TH-265 — the work order on RecordFrame', () => {
   })
 
   it('the work order’s own thread has no party: Office notes only — no "Reply to", no customer e-mail in it (W27)', () => {
-    // The thread itself, from its Head on (F-OP-202: the pick band at the card's top names the order's customer: that is the other
-    // thread's door).
+    // The thread itself, from its Head's tools on (tw- W2.1: the pick is the head's title and names the order's customer: that is the
+    // other thread's door).
     const dock = dockOf(draw('thread-docked'))
-    expect(dock.indexOf('class="fw-rt-top"')).toBeGreaterThan(dock.indexOf('fw-rt-column'))
-    const column = textOf(dock.slice(dock.indexOf('class="fw-rth')))
+    expect(dock.indexOf('class="fw-thread-pick"')).toBeGreaterThan(dock.indexOf('fw-rt-column'))
+    expect(dock).not.toContain('class="fw-rt-top"')
+    const column = textOf(dock.slice(dock.indexOf('class="fw-rth-tools"')))
     expect(column).not.toMatch(/Reply to (?!the customer)/)
     expect(column).not.toMatch(/@[a-z0-9-]+\.example/)
     expect(column).not.toContain(WO.orders[0]!.partyName)

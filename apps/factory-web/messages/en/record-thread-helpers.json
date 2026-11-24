@@ -67,6 +67,8 @@
     "set": "Reminds you {date} if no answer",
     "failed": "The follow-up could not be set: set it from Remind me on the message.",
     "held": "Reminders are on Home: they need the right “{right}”.",
-    "offline": "You are offline: the follow-up is set once the message goes."
+    "offline": "You are offline: the follow-up is set once the message goes.",
+    "chip": "Follow up",
+    "chipOn": "Follow up in {days} days"
   }
 }

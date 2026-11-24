@@ -113,6 +113,12 @@ describe('F-SA-282: the composer\'s text box in N mode (rule 24: the same box)',
     expect(heldReason(held, context)).toEqual({ key: 'held.namesOther' })
     expect(heldReason({ ...held, namesNoOtherCustomer: true }, context)).toBeNull()
   })
+  // tw- W2.3 (Z3, D5): the same one-row composer, but Enter never sends to N records (no Undo for N): ⌘/Ctrl+Enter or the arrow.
+  it('Reply to N never sends on Enter', async () => {
+    const { enterSends } = await import('../../../../lib/record-thread/composer/model')
+    expect(enterSends(replyComposerContext(BRAND_ALPHA.tradeName))).toBe(false)
+    expect(enterSends({ ...replyComposerContext(BRAND_ALPHA.tradeName), many: false })).toBe(true)
+  })
   it('no files: the window gives no clip (a file belongs to one order)', () => {
     const dialog = readFileSync(new URL('./view/ReplyManyDialog.tsx', import.meta.url), 'utf8')
     expect(dialog).toContain('context={replyComposerContext(customer)}')
