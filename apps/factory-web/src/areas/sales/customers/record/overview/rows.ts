@@ -63,6 +63,34 @@ function earliestOf<T>(items: readonly T[], at: (item: T) => string | null | und
   return best
 }
 
+/**
+ * S37 (with S35): the reads a row names "the next" or "the oldest" one from, and whether each is ORDERED earliest first by that day
+ * where it is cut — checked in the API, 2026-11-24. Only such a read cannot hide the earliest one behind its cut.
+ */
+export const EARLIEST_FIRST = Object.freeze({
+  /** GET /sales/orders?partyId&open=true: newest order first (`id` desc); cut: `more` (a next page). */
+  deposits: false,
+  /** GET /tasks?scope=PARTY: the 200 NEWEST by creation are read, THEN sorted by due day; cut: `complete` false. */
+  tasks: false,
+  /** GET /partners/:partyId/tasks?status=OPEN: the 1,000 NEWEST by creation, THEN sorted by due day; cut: `complete` false. */
+  asks: false,
+  /** GET /quality/complaints?view=open: newest received first; cut: the read's 50 rows filled (S35). */
+  complaints: false,
+  /** The glance's sample rounds: by due day, nearest first (5 rows); cut: fewer rows than its count. */
+  samples: true,
+  /** The glance's repairs: newest first (5 rows); cut: fewer rows than its count — the oldest is exactly what the cut hides. */
+  repairs: false,
+} as const)
+export type NamedRead = keyof typeof EARLIEST_FIRST
+
+/**
+ * S37: the earliest one of a read — from a WHOLE read always; from a read that may be cut only when that read is ordered earliest first
+ * by that day (else null: the row, or the part that names it, is left out — never a wrong "next" or "oldest").
+ */
+export function earliestKeptOf<T>(read: NamedRead, whole: boolean, items: readonly T[], at: (item: T) => string | null | undefined): { readonly item: T; readonly at: string } | null {
+  return whole || EARLIEST_FIRST[read] ? earliestOf(items, at) : null
+}
+
 // ---- card 2: the bigger picture ----------------------------------------------------------------------------------------------
 
 /** The band, or — for a customer with no order at all — one quiet line and the "Before an order" doors; `off` without orders.view. */
@@ -165,28 +193,28 @@ export function datesOf(input: OverviewInput): DatesCard | null {
   // The next deposit an open order waits for (the open orders' own read: orders.view).
   const deposits = can.orders ? input.money.orders : null
   if (deposits && deposits.items === null && !deposits.problem) reading = true
-  const deposit = deposits?.items ? earliestOf(deposits.items, (order) => (order.deposit.state === 'OPEN' ? order.deposit.dueDate : null)) : null
+  const deposit = deposits?.items ? earliestKeptOf('deposits', deposits.more !== true, deposits.items, (order) => (order.deposit.state === 'OPEN' ? order.deposit.dueDate : null)) : null
   if (deposit) put({ key: 'deposit', label: ov('dates.deposit'), parts: [{ say: named(deposit.item.number, deposit.at), door: href(depositDoor(prefix, id, can.moneyTab)) }], tag: dayTagOf(deposit.at, today) }, deposit.at)
 
   // The next sample round due (the glance sends them earliest due first; withheld without the samples right).
-  const sample = glance?.samples ? earliestOf(glance.samples.rows, (round) => round.dueDate) : null
+  const sample = glance?.samples ? earliestKeptOf('samples', glance.samples.rows.length >= glance.samples.count, glance.samples.rows, (round) => round.dueDate) : null
   if (sample) put({ key: 'sample', label: ov('dates.sample'), parts: [{ say: named(sample.item.number, sample.at), door: href(sampleDoor(prefix, sample.item.id)) }], tag: dayTagOf(sample.at, today) }, sample.at)
 
   // What we asked of the customer (partners.view) and the open tasks: their windows open on the Work tab.
   const asks = input.reads.asks
   if (asks.status === 'reading') reading = true
-  const ask = asks.status === 'ready' ? earliestOf(asks.value.items, (item) => (item.status === 'OPEN' ? item.dueAt : null)) : null
+  const ask = asks.status === 'ready' ? earliestKeptOf('asks', asks.value.complete, asks.value.items, (item) => (item.status === 'OPEN' ? item.dueAt : null)) : null
   if (ask) put({ key: 'ask', label: ov('dates.ask'), parts: [{ say: ov('dates.titled', { title: ask.item.words, date: dayOf(ask.at) }), door: { kind: 'window', window: 'customer' } }], tag: dayTagOf(ask.at, today) }, ask.at)
   const tasks = input.reads.tasks
   if (tasks.status === 'reading') reading = true
-  const task = tasks.status === 'ready' ? earliestOf(tasks.value.items, (item) => item.dueDate) : null
+  const task = tasks.status === 'ready' ? earliestKeptOf('tasks', tasks.value.complete, tasks.value.items, (item) => item.dueDate) : null
   if (task) put({ key: 'task', label: ov('dates.task'), parts: [{ say: ov('dates.titled', { title: task.item.title, date: dayOf(task.at) }), door: { kind: 'window', window: 'tasks' } }], tag: dayTagOf(task.at, today) }, task.at)
 
   // The next answer a complaint waits for (quality.complaints.view): its door is the NAMED complaint's own page (S28). S33: only from
   // a whole read — the read is newest first, so a cut one may miss the complaint whose answer is due first (Linked records says "Open").
   const complaints = can.complaints ? input.money.complaints : null
   if (complaints && complaints.items === null && !complaints.problem) reading = true
-  const complaint = complaints?.items && wholeComplaints(complaints) ? earliestOf(openAfterSales([], complaints.items).complaints, (entry) => entry.answerDueOn) : null
+  const complaint = complaints?.items ? earliestKeptOf('complaints', wholeComplaints(complaints), openAfterSales([], complaints.items).complaints, (entry) => entry.answerDueOn) : null
   if (complaint) put({ key: 'complaint', label: ov('dates.complaint'), parts: [{ say: named(complaint.item.number, complaint.at), door: href(complaintDoor(prefix, complaint.item.id)) }], tag: dayTagOf(complaint.at, today) }, complaint.at)
 
   // Until when the VIES proof counts (a fact of the party: no door).
@@ -340,13 +368,13 @@ export function linkedOf(input: OverviewInput): LinkedCard {
   // Sample rounds and repairs: the glance's own counts (null: withheld — left out), the next / the oldest one named.
   const glance = glanceOf(input.glance)
   if (glance?.samples) {
-    const next = earliestOf(glance.samples.rows, (round) => round.dueDate)
+    const next = earliestKeptOf('samples', glance.samples.rows.length >= glance.samples.count, glance.samples.rows, (round) => round.dueDate)
     const said: Param[] = [ov('linked.inProgress', { count: glance.samples.count })]
     if (next) said.push(next.at.slice(0, 10) === input.today ? ov('linked.nextDueToday', { number: next.item.number }) : ov('linked.nextDue', { number: next.item.number, date: dayOf(next.at) }))
     kind('samples', ov('linked.samples'), glance.samples.count > 0 ? [{ say: joined(said), door: href(samplesDoor(prefix, id)) }] : [])
   }
   if (glance?.repairs) {
-    const oldest = earliestOf(glance.repairs.rows, (repair) => repair.createdAt)
+    const oldest = earliestKeptOf('repairs', glance.repairs.rows.length >= glance.repairs.count, glance.repairs.rows, (repair) => repair.createdAt)
     const said: Param[] = [ov('linked.inProgress', { count: glance.repairs.count })]
     if (oldest) said.push(ov('linked.oldestOpened', { number: oldest.item.number, date: dayOf(oldest.at) }))
     kind('repairs', ov('linked.repairs'), glance.repairs.count > 0 ? [{ say: joined(said), door: href(repairsDoor(prefix, party.code)) }] : [])

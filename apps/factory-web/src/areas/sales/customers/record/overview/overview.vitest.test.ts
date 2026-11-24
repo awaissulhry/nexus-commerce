@@ -16,7 +16,7 @@ import type { WorkReads } from '../use-customer-work'
 import { MONEY_ANCHORS, moneyDoor, promiseDoor, termsDoor } from './doors'
 import { boardNumbersOf, headlineOf, HEADLINE_PARTS, waitsOnUsOf } from './headline'
 import { COMPLAINTS_READ, OVERVIEW_NAMESPACES, sayOf, sayToolsOf, type OverviewCan, type OverviewHeadline, type OverviewInput, type OverviewMoney, type OverviewRow, type OverviewStrip, type Say } from './model'
-import { bandStateOf, datesOf, factsOf, linkedOf, overviewOf, peopleOf, requestsOf } from './rows'
+import { bandStateOf, datesOf, EARLIEST_FIRST, factsOf, linkedOf, overviewOf, peopleOf, requestsOf } from './rows'
 import { stripsOf } from './strips'
 
 /**
@@ -470,6 +470,32 @@ describe('the cards: People, Next dates, Requests & changes, Linked records, Cus
     expect(linkedWith(loaded(closedOnly, true), loaded([])).rows.some((row) => row.key === 'returns')).toBe(false)
     expect(linkedWith(loaded(closedOnly, true), loaded([])).none.map((label) => said(label))).not.toContain('Returns')
     expect(linkedWith(loaded(closedOnly, false), loaded([])).none.map((label) => said(label))).toContain('Returns')
+  })
+
+  it('S37: a next date (or an oldest one) from a read that may be cut is named only when that read is ordered earliest first by that day; else it is left out', () => {
+    // How each read is ordered where it is cut (checked in the API): only the glance's sample rounds are earliest first.
+    expect(EARLIEST_FIRST).toEqual({ deposits: false, tasks: false, asks: false, complaints: false, samples: true, repairs: false })
+    const keysOf = (given: Partial<OverviewInput>): string[] => (datesOf(input(given))?.rows ?? []).map((row) => row.key)
+    // Deposits (the open orders' read, newest order first): whole → named; a next page exists → left out.
+    expect(keysOf({ money: { ...NO_MONEY, orders: loaded([{ id: 'o13', number: 'SEED-SO-0013', currency: 'EUR', deposit: { state: 'OPEN', dueDate: '2026-11-25' } }], false) } })).toContain('deposit')
+    expect(keysOf({ money: { ...NO_MONEY, orders: loaded([{ id: 'o13', number: 'SEED-SO-0013', currency: 'EUR', deposit: { state: 'OPEN', dueDate: '2026-11-25' } }], true) } })).not.toContain('deposit')
+    // Tasks and our asks (the newest by creation are read, then sorted by due day): complete → named; not complete → left out.
+    const TASKS = [{ id: 't1', title: 'Made-up task', dueDate: '2026-11-26' }] as never
+    const ASKS = [{ id: 'a1', status: 'OPEN', dueAt: '2026-11-26T10:00:00.000Z', words: { it: 'Una richiesta inventata', en: 'A made-up ask' } }] as never
+    for (const complete of [true, false]) {
+      const keys = keysOf({ reads: reads({ tasks: { status: 'ready', value: { items: TASKS, total: 1, complete } }, asks: { status: 'ready', value: { items: ASKS, complete } } }) })
+      expect(keys.includes('task'), `tasks complete: ${complete}`).toBe(complete)
+      expect(keys.includes('ask'), `asks complete: ${complete}`).toBe(complete)
+    }
+    // Sample rounds (by due day, nearest first): named from a cut read too (3 in progress, 2 rows sent).
+    const samples = demoGlance('MODA-DEMO').samples!
+    expect(samples.rows.length).toBeLessThan(samples.count)
+    expect(keysOf({ glance: ready(glance({ samples })) })).toContain('sample')
+    // Linked records' repairs (newest first): "oldest …" only when every repair is in the read; the count is a count read and stays.
+    const repairs = demoGlance('MODA-DEMO').repairs!
+    const repairsSaid = (value: NonNullable<Glance['repairs']>): string => valueOf(rowOf(linkedOf(input({ glance: ready(glance({ repairs: value })) })).rows, 'repairs'))
+    expect(repairsSaid(repairs)).toMatch(/^1 in progress · oldest RP-2026-0007, opened \d{2}\/10\/2026$/)
+    expect(repairsSaid({ ...repairs, count: 7 })).toBe('7 in progress')
   })
 
   it('Customer facts: ONE Edit (parties.manage); the credit only when the read carries it; what is to complete with today\'s own step', () => {
