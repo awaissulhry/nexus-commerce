@@ -205,7 +205,9 @@ export function usePartyBand(model: PartyRecordModel, party: Party, actions?: Pa
       </Button>
     ) : null
   const primary = options.primary !== undefined ? options.primary : shared
-  const viesInMenu = viesLine && (options.viesInMore === true || party.status === 'PROSPECT')
+  // ct-fx3 G-W12 (walk §3 b; Terms rule "hidden, never held for a right"): on the customer's band (viesInMore) Check VIES is drawn only for
+  // a reader who may check (parties.vies) — held with words only by state (archived, a check running). The supplier band is untouched.
+  const viesInMenu = viesLine && (options.viesInMore === true ? can.vies : party.status === 'PROSPECT')
 
   const menu: MenuItemDef[] = [
     ...(viesInMenu ? [{ id: 'vies', label: t('vies.checkNow'), onSelect: () => actions?.onCheckVies?.(), disabled: !!viesHeld, description: viesHeld ?? undefined }] : []),

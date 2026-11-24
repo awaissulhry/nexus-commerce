@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { LOCALES, type Locale } from '../../../../../lib/i18n/locales'
 import { CATALOGUE, createScopedTranslator, messagesFor } from '../../../../../lib/i18n/messages'
 import type { Party, TaxIdentity, ViesCheck } from '../../../../parties/_shared/api'
-import { CUSTOMERS } from '../../../../parties/_shared/fixtures'
+import { CUSTOMERS, RECORD_CAN, recordModel } from '../../../../parties/_shared/fixtures'
 import type { CommercialTerms } from '../../terms/api'
 import type { Holds, Requirement, Requirements } from '../../depth/api'
 import { ready, failedRead, LOADING } from '../../depth/model'
@@ -20,7 +20,9 @@ import { endCompanyTerms, readCarrierAccount, setCarrierAccount, setCompanyTerms
 import { TERMS_TAB_START, termsTabModel, type TermsTabReads, type TermsTabState } from './tab'
 import { endedLine, keptWords, requirementsSection, versionsOf, type RequirementsInput } from './requirements'
 import { datedIdentities, fiscalCodeHidden, identitySection, type IdentityInput } from './identity'
-import { problemKey, refusedFields } from '../../../../parties/_shared/model'
+import { problemKey, refusedFields, viesApplies, type PartyRecordModel } from '../../../../parties/_shared/model'
+import { usePartyBand } from '../../../../parties/_shared/view/PartyRecordView' // ct-fx3 G-W12
+import { render as renderAll, textOf } from '../../../../../lib/record-thread/parts/testing' // ct-fx3 G-W12
 import { companyBody, companyEndWindowOf, companyProblems, companyWindowOf, deliveryBody, deliveryProblems, deliveryRefusal, deliveryWindowOf, endLines, termsWindowOf, termsWindowPatch } from './windows'
 import { createElement, type ComponentType, type ReactElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -1238,5 +1240,27 @@ describe('ct-fx3 G-W11: in "By SDI code …" only the code is monospace', () => 
       expect(html, locale).toContain('<span class="fw-ctr-mono">FAKE001</span>')
       expect(html, locale).not.toMatch(/class="fw-ctr-mono">(By SDI|Via codice)/)
     }
+  })
+})
+
+describe('ct-fx3 G-W12: the customer band\'s Check VIES is hidden without the right, held only by state', () => {
+  /** The band's ⋯ items as the shared hook builds them for the customer's record (viesInMore). */
+  function BandProbe({ model, party }: { model: PartyRecordModel; party: Party }): ReactElement {
+    const { band } = usePartyBand(model, party, undefined, { primary: null, viesInMore: true })
+    return createElement('pre', null, JSON.stringify((band.more ?? []).map((item) => [item.id, item.disabled === true])))
+  }
+  const itemsOf = (model: PartyRecordModel, party: Party): Array<[string, boolean]> => JSON.parse(textOf(renderAll(createElement(BandProbe, { model, party })))) as Array<[string, boolean]>
+  const eu = CUSTOMERS.find((item) => viesApplies(item) && item.status === 'ACTIVE')!
+
+  it('without parties.vies: no Check VIES in the band\'s ⋯; with it: drawn, held only while archived or a check runs', () => {
+    expect(eu).toBeDefined()
+    const vies = (model: PartyRecordModel, party: Party = eu) => itemsOf(model, party).find(([id]) => id === 'vies') ?? null
+    expect(vies(recordModel('customers', eu, { can: { ...RECORD_CAN, vies: false } }))).toBeNull()
+    expect(vies(recordModel('customers', eu, { can: RECORD_CAN }))).toEqual(['vies', false])
+    expect(vies(recordModel('customers', eu, { can: RECORD_CAN, viesRunning: true }))).toEqual(['vies', true])
+    expect(vies(recordModel('customers', { ...eu, status: 'ARCHIVED' }, { can: RECORD_CAN }), { ...eu, status: 'ARCHIVED' })).toEqual(['vies', true])
+    const view = readFileSync(new URL('../../../../parties/_shared/view/PartyRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("const viesInMenu = viesLine && (options.viesInMore === true ? can.vies : party.status === 'PROSPECT')")
+    expect(view).toContain("const viesLine = side === 'customers' && viesApplies(party)") // the supplier's band never has the line
   })
 })
