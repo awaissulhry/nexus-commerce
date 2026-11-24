@@ -538,7 +538,9 @@ describe('the cards: People, Next dates, Requests & changes, Linked records, Cus
     }
     expect(hrefOf({ door: rowOf(cut.rows, 'returns').parts[0]!.door! })).toBe(RETURNS_HREF)
     expect(hrefOf({ door: rowOf(cut.rows, 'complaints').parts[0]!.door! })).toBe(`/w/DEMO/quality/complaints?partyId=${ID}`)
-    expect(cut.none).toEqual([])
+    // A cut read never joins "None yet": the line holds exactly the OTHER kinds with nothing here (no open quote, no sample round, no
+    // repair in this input) — never Returns, never Complaints (co-fx1: the end check read the line whole).
+    expect(cut.none.map((label) => said(label))).toEqual(['Quotes', 'Sample rounds', 'Repairs'])
     // Next dates names the complaint whose answer is due first only from a whole read (a cut one may miss it).
     const datesWith = (count: number) => (datesOf(input({ money: { ...NO_MONEY, complaints: loaded(complaintsOf(count)) } }))?.rows ?? []).map((row) => row.key)
     expect(datesWith(COMPLAINTS_READ - 1)).toContain('complaint')
