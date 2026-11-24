@@ -1,7 +1,7 @@
 import { HOLD_LIMITS, HOLD_REASONS } from '@nexus/factory-domain/parties/holds/holds'
 import { LAWFUL_BASES, PRIVACY_LIMITS } from '@nexus/factory-domain/parties/contact-privacy/privacy'
 import { REQUIREMENT_KINDS, REQUIREMENT_LIMITS, REQUIREMENT_STAGES } from '@nexus/factory-domain/parties/requirements/requirements'
-import type { AccessCopy, CompanyTerms, Erased, Glance, Hold, HoldReason, LawfulBasis, PrivacyContact, Requirement, RequirementBody, RequirementKind, RequirementStage } from './api'
+import type { AccessCopy, CompanyTerms, Erased, Hold, HoldReason, LawfulBasis, PrivacyContact, Requirement, RequirementBody, RequirementKind, RequirementStage } from './api'
 
 /**
  * Customer 360 and customers in depth (B-W2b-324), pure: who may do what (`depthCan`), the glance's words (free credit,
@@ -131,34 +131,8 @@ export function writeHeld(can: DepthCan, right: 'manage' | 'hold' | 'privacy' | 
 
 // ---- the glance -----------------------------------------------------------------------------------------------------------
 
-/** The free-credit tile: value and hint as words (amounts only when the answer carries them: the price grain). */
-export function creditTile(credit: Glance['credit'], money: (minor: number, currency: string) => string): { value: Words; hint: Words } {
-  if (!credit) return { value: say('numbers.unknown'), hint: say('numbers.creditWithheld') }
-  if (credit.state === 'NONE') return { value: say('credit.noLimit'), hint: say('credit.noLimitHint') }
-  const amounts = credit.currency !== null && typeof credit.available === 'number' && typeof credit.limit === 'number'
-  if (credit.state === 'OVER') {
-    return amounts && typeof credit.overLimitBy === 'number'
-      ? { value: say('credit.overBy', { amount: money(credit.overLimitBy > 0 ? credit.overLimitBy : -credit.available!, credit.currency!) }), hint: say('credit.ofLimit', { limit: money(credit.limit!, credit.currency!) }) }
-      : { value: say('credit.over'), hint: say('credit.noPrice') }
-  }
-  return amounts ? { value: say('credit.available', { amount: money(credit.available!, credit.currency!) }), hint: say('credit.ofLimit', { limit: money(credit.limit!, credit.currency!) }) } : { value: say('credit.within'), hint: say('credit.noPrice') }
-}
-
-/** The promises tile: how many open orders are late, and the next promise. */
-export function promisesTile(promises: Glance['promises'], date: (day: string) => string): { value: Words; hint: Words } {
-  if (!promises) return { value: say('numbers.unknown'), hint: say('numbers.promisesWithheld') }
-  if (promises.open === 0) return { value: say('promises.none'), hint: say('promises.noneHint') }
-  const hint = promises.next ? say('promises.next', { date: date(promises.next) }) : promises.noPromise > 0 ? say('promises.without', { count: promises.noPromise }) : say('promises.noneComing')
-  return { value: promises.late > 0 ? say('promises.late', { count: promises.late }) : say('promises.onTime', { count: promises.open }), hint }
-}
-
-/** A sample round's due words: late by N days, due today, due on a day, or no due day. */
-export function dueWords(row: { readonly dueDate: string | null; readonly daysLate: number | null }, date: (day: string) => string): Words {
-  if (!row.dueDate || row.daysLate === null) return say('samples.noDue')
-  if (row.daysLate > 0) return say('samples.late', { count: row.daysLate })
-  if (row.daysLate === 0) return say('samples.dueToday')
-  return say('samples.due', { date: date(row.dueDate) })
-}
+// F-CO-203 (customer Overview co-w2 W2.3): the free-credit and promises tiles and a sample round's due words went with the Overview's
+// old parts; the Overview's rules say the credit, the promises and the samples' days (areas/sales/customers/record/overview).
 
 // ---- Tax & terms › Hold ---------------------------------------------------------------------------------------------------
 

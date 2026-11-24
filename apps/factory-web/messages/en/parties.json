@@ -1045,23 +1045,11 @@
     "tabs": "Next / previous tab (in the tab bar)",
     "save": "Save the form"
   },
-  "overview": {
-    "identity": "Identity",
-    "alsoOpen": "Also open"
-  },
   "numbers": {
     "openQuotes": "Open quotes",
-    "quotesHint": "Draft, waiting or sent",
-    "backlog": "Open orders",
-    "units_one": "{count} unit to ship",
-    "units_other": "{count} units to ship",
     "thisYear": "Ordered in {year}",
     "ordersHint": "Orders not cancelled",
-    "reading": "Reading…",
-    "inProduction": "In production",
-    "inProductionHint": "Being made now",
-    "late": "Late",
-    "lateHint": "The promise passed, not shipped yet"
+    "reading": "Reading…"
   },
   "side": {
     "label": "Status and next step",

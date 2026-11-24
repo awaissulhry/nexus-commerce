@@ -147,14 +147,9 @@ export type WorkAsk = 'new' | 'import'
 export const workAskAddress = (recordHref: string, tab: string): string | null => (tab === 'work' ? null : `${recordHref}?tab=work`)
 // ---- end F-CP-104
 
-// ---- F-CP-103 (customer page plan C1; review A4): the Overview's tiles open their own view; Views ▾ counts each view ------------------
-
-/** The Work view each Overview tile counts (its door shows exactly those rows): Open orders, In production, Late. */
-// F-CW-101 (lead settle S3): "In production" means ONE thing on the customer page — the started orders (the phase IN_PRODUCTION).
-export const WORK_DOORS = Object.freeze({ open: 'rows=open', inProduction: 'phase=IN_PRODUCTION', late: 'late=true' } as const)
-
-/** A tile's door: the record's Work tab on the view the tile counts (the entry then adds the lock, once). */
-export const workDoor = (recordHref: string, door: keyof typeof WORK_DOORS): string => `${recordHref}?tab=work&${WORK_DOORS[door]}`
+// ---- F-CP-103 (customer page plan C1; review A4): Views ▾ counts each view ------------------------------------------------------
+// F-CO-203 (co-w2 W2.3): the Overview's three tiles and their doors (WORK_DOORS, workDoor) went with the tiles — the Overview opens
+// Work through the Customers list's own doors (../list/doors.ts workDoor: `open`, `phase`, `late`).
 
 // ---- F-CW-101 (lead settles S3, S16, S19): the phase doors ----
 /** A phase's door from anywhere (the band, the Overview, the Customers list): the entry completes it (`party`, `rows=all`), once. */

@@ -1045,23 +1045,11 @@
     "tabs": "Scheda successiva / precedente (nella barra)",
     "save": "Salva il modulo"
   },
-  "overview": {
-    "identity": "Anagrafica",
-    "alsoOpen": "Ancora aperti"
-  },
   "numbers": {
     "openQuotes": "Preventivi aperti",
-    "quotesHint": "In bozza, in attesa o inviati",
-    "backlog": "Ordini aperti",
-    "units_one": "{count} pezzo da spedire",
-    "units_other": "{count} pezzi da spedire",
     "thisYear": "Ordinato nel {year}",
     "ordersHint": "Ordini non annullati",
-    "reading": "Lettura…",
-    "inProduction": "In produzione",
-    "inProductionHint": "In lavorazione ora",
-    "late": "In ritardo",
-    "lateHint": "La data promessa è passata, non ancora spedito"
+    "reading": "Lettura…"
   },
   "side": {
     "label": "Stato e prossimo passo",

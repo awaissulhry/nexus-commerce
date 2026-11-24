@@ -20,14 +20,13 @@ import { designerModel, designerSlot, DESIGNERS } from '../portal/demo' // F-CP-
 import type { OpenOrderMoney } from '../money/api' // F-SA-273
 import type { SupervisorModel } from '../portal/limits/model'
 // B-W2b-324: the customer in depth (made-up data in ../depth/_demo/fixtures.ts).
-import type { Metric } from '@nexus/ui/components'
 import { WithMessages } from '../../../../record-panels/i18n'
 import type { SupplierDepth } from '../../../parties/_shared/view/PartyRecordView'
 import type { Glance } from '../depth/api'
 import { DEPTH_NAMESPACES } from '../depth/CustomerDepth'
 import { ALL_CAN, COMPANIES, COPY, FILES, glanceOf, HELD_GLANCE, HOLDS, KEPT, NO_HOLDS, PRIVACY, READ_CAN, REQUIREMENTS, SALES_CAN, STYLES, TERMS as COMPANY_TERMS, TODAY, TWO_HOLDS, WITHHELD, withoutPrices } from '../depth/_demo/fixtures'
 import { basisDraftOf, blankRequirement, failedRead, LOADING, ready, requirementDraftOf, type DepthCan, type Read } from '../depth/model'
-import { GlanceAside, GlanceNow, GlanceStatus, GlanceTileText } from '../depth/view/GlanceParts'
+import { GlanceNow } from '../depth/view/GlanceParts'
 import { HoldCard, type HoldCardModel } from '../depth/view/HoldCard'
 import { PoNumberCard, type PoNumberModel } from '../depth/view/PoNumberCard'
 import { PrivacyCard, type PrivacyModel } from '../depth/view/PrivacyCard'
@@ -746,22 +745,10 @@ function depthNodes(depth: DepthCase | undefined, partyId: string): SupplierDept
   if (!depth) return undefined
   const recordHref = `/w/DEMO/sales/customers/${partyId}`
   const glance = depth.glance ? { read: depth.glance, prefix: '/w/DEMO', recordHref } : null
-  const tile = (part: 'credit' | 'promises') => ({
-    label: createElement(GlanceTileText, { read: depth.glance!, part, field: 'label' }),
-    value: createElement(GlanceTileText, { read: depth.glance!, part, field: 'value' }),
-    hint: createElement(GlanceTileText, { read: depth.glance!, part, field: 'hint' }),
-  })
   return {
-    ...(glance
-      ? {
-          numbers: [tile('credit'), { ...tile('promises'), href: `${recordHref}?tab=work` }] satisfies Metric[],
-          // F-SA-274: samples and repairs on the Overview, riders and measurement profiles on People & addresses.
-          now: createElement(GlanceNow, { model: glance, parts: ['samples', 'repairs'] }),
-          people: createElement(GlanceNow, { model: glance, parts: ['profiles', 'riders'] }),
-          status: createElement(GlanceStatus, { model: glance }),
-          aside: createElement(GlanceAside, { model: glance }),
-        }
-      : {}),
+    // F-SA-274: riders and measurement profiles on People & addresses. F-CO-203: the Overview's old parts (tiles, Now's samples and
+    // repairs, the status card, the side panel) went — the Overview's rules read the case's glance (OverviewDesign below).
+    ...(glance ? { people: createElement(GlanceNow, { model: glance, parts: ['profiles', 'riders'] }) } : {}),
     tax: depth.hold || depth.po ? createElement('div', { className: 'fw-cdp-two-wide' }, depth.hold ? createElement(HoldCard, { model: depth.hold }) : null, depth.po ? createElement(PoNumberCard, { model: depth.po }) : null) : null,
     requirements: depth.requirements ? createElement(RequirementsTab, { model: depth.requirements }) : null,
     contacts: depth.privacy ? createElement(PrivacyCard, { model: depth.privacy }) : null,

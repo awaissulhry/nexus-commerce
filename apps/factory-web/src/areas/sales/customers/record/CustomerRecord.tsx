@@ -88,7 +88,7 @@ function CustomerPage({ partyId, prefix, money }: { partyId: string; prefix: str
     // B-W2b-180: Portal access (`?tab=portal`).
     // F-SA-274: Portal settings draws its settings, preview, limits and requests; the people with access are People & addresses'.
     portal: (party) => <PortalAccess side="customers" party={{ id: party.id, name: party.tradeName ?? party.legalName, companyId: party.companyId }} parts={PORTAL_SETTINGS_PARTS} />,
-    depth: (party, reload) => customerDepthSlot(party, reload, prefix),
+    depth: (party, reload) => customerDepthSlot(party, reload),
   })
   const task = useCustomerTask(partyId, record.party?.code ?? null)
   // ---- F-SA-276: the Work tab's reads (its strip and the tab's count, on every tab), the row the dock follows on Work (and on Quotes &

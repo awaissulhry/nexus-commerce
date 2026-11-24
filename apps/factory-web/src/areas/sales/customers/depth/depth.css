@@ -58,10 +58,6 @@
   color: var(--nds-warning-text);
 }
 
-.fw-cdp-danger {
-  color: var(--nds-danger-text);
-}
-
 .fw-cdp-error {
   margin: 0;
   font-size: var(--nds-font-size-sm);
@@ -71,13 +67,6 @@
 .fw-cdp-loading,
 .fw-cdp-stack,
 .fw-cdp-now,
-.fw-cdp-hold {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-10);
-  min-width: 0;
-}
-
 .fw-cdp-now {
   gap: var(--nds-space-14);
 }

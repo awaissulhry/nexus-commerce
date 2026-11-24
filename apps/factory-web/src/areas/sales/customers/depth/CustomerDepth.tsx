@@ -2,13 +2,12 @@
 
 import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react'
 import { usePathname } from 'next/navigation'
-import type { Metric } from '@nexus/ui/components'
 import type { Party } from '../../../parties/_shared/api'
 import type { SupplierDepth } from '../../../parties/_shared/view/PartyRecordView'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { NS } from './model'
 import { useCustomerDepth, type CustomerDepthState } from './use-depth'
-import { GlanceAside, GlanceNow, type GlanceNowPart, GlanceStatus, GlanceTileText, type GlanceModel } from './view/GlanceParts'
+import { GlanceNow, type GlanceNowPart, type GlanceModel } from './view/GlanceParts'
 import { HoldCard } from './view/HoldCard'
 import { NoticeLine } from './view/parts'
 import { PoNumberCard } from './view/PoNumberCard'
@@ -51,25 +50,15 @@ function useAddresses(party: Party): { prefix: string; recordHref: string } {
   return { prefix, recordHref: `${prefix}/sales/customers/${encodeURIComponent(party.id)}` }
 }
 
-/** A key-number tile's words, read from the state (the slot is built outside a component: the words are components). */
-function TileText({ part, field }: { part: 'credit' | 'promises'; field: 'label' | 'value' | 'hint' }) {
-  return <GlanceTileText read={useDepth().glance.read} part={part} field={field} />
-}
-
 /**
  * The slot of the shared party record (areas/parties/_shared PartyRecord `depth`, B-W2b-334's) for a customer: each part a
- * connector to the state above. `prefix`: `/w/<company>` (the Promises tile opens the record's Work, F-SA-271).
+ * connector to the state above. F-CO-203 (co-w2 W2.3): the Overview's old parts (the key-number tiles, Now's samples and repairs,
+ * the status card, the side panel) went — the Overview's own rules read the glance (`useCustomerGlance` above).
  */
-export function customerDepthSlot(party: Party, reload: () => void, prefix: string): SupplierDepth {
-  const tile = (part: 'credit' | 'promises') => ({ label: <TileText part={part} field="label" />, value: <TileText part={part} field="value" />, hint: <TileText part={part} field="hint" /> })
-  const numbers: Metric[] = [tile('credit'), { ...tile('promises'), href: `${prefix}/sales/customers/${encodeURIComponent(party.id)}?tab=work` /* F-SA-271: Work */ }]
+export function customerDepthSlot(party: Party, reload: () => void): SupplierDepth {
   return {
-    numbers,
-    // F-SA-274: samples and repairs stay on the Overview ("Also open"); riders and measurement profiles go to People & addresses.
-    now: <NowPart party={party} parts={['samples', 'repairs']} />,
+    // F-SA-274: riders and measurement profiles on People & addresses.
     people: <NowPart party={party} parts={['profiles', 'riders']} />,
-    status: <StatusPart party={party} />,
-    aside: <AsidePart party={party} />,
     tax: <TaxPart party={party} reload={reload} />,
     requirements: <RequirementsPart party={party} />,
     contacts: <ContactsPart party={party} reload={reload} />,
@@ -94,14 +83,6 @@ function useGlanceModel(party: Party): GlanceModel {
 
 function NowPart({ party, parts }: { party: Party; /* F-SA-274 */ parts?: readonly GlanceNowPart[] }) {
   return <GlanceNow model={useGlanceModel(party)} {...(parts ? { parts } : {})} />
-}
-
-function StatusPart({ party }: { party: Party }) {
-  return <GlanceStatus model={useGlanceModel(party)} />
-}
-
-function AsidePart({ party }: { party: Party }) {
-  return <GlanceAside model={useGlanceModel(party)} />
 }
 
 function TaxPart({ party, reload }: { party: Party; reload: () => void }) {
