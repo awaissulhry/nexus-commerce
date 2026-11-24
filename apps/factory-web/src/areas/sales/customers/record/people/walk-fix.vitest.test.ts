@@ -21,3 +21,16 @@ describe('W-05: the refused page (no parties.view) sends no People read', () => 
     expect(source('../../../../parties/_shared/PartyRecord.tsx')).toContain("view: held.has('parties.view'),")
   })
 })
+
+describe('W-08: every section\'s ⓘ holds its meaning and the keys sentence — Personal data too', () => {
+  it('the four sections\' info say the keys (one ⓘ per section, no key hint elsewhere)', () => {
+    for (const file of ['PeopleSection.tsx', 'AddressesSection.tsx', 'RidersSection.tsx', 'PrivacySection.tsx']) {
+      const view = source(`../view/people/${file}`)
+      const start = view.indexOf('const info = (')
+      expect(start, file).toBeGreaterThan(-1)
+      const info = view.slice(start, view.indexOf('</>', start))
+      expect(info, file).toContain("<p>{say(said('keys'))}</p>")
+      expect(view.match(/said\('keys'\)/g), file).toHaveLength(1)
+    }
+  })
+})
