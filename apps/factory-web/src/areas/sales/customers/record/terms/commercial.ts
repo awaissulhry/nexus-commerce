@@ -337,7 +337,8 @@ export function commercialSection(input: CommercialInput): CommercialSectionMode
       : []
 
   return {
-    reading: input.commercial === null || input.commercial.status === 'loading',
+    // ct-fx3 G-W01 (walk W-01): the kit's reading state until BOTH the customer's own terms and the terms per company have answered.
+    reading: input.commercial === null || input.commercial.status === 'loading' || input.companies === null || input.companies.status === 'loading',
     problem: input.commercial?.status === 'error' ? kitProblemOf(input.commercial.problem) : null,
     answer,
     blank,

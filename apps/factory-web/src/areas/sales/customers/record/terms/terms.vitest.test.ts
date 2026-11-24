@@ -1020,3 +1020,39 @@ describe('the old parts went; the supplier\'s record stays as it was (W2.4; D1)'
     }
   })
 })
+
+// ---- ct-fx3: the walk's gaps (30-walk.md) ---------------------------------------------------------------------------------------
+
+describe('ct-fx3 G-W01: the terms per company in flight are reading — never the customer\'s own as if in force (P0-B4, Z32)', () => {
+  const reads = (over: Partial<TermsTabReads> = {}): TermsTabReads => ({
+    party: partyWith({ id: PARTY_ID, taxIdentities: [], warnings: [], vies: { ...MODA.vies, state: 'NOT_APPLICABLE' } }),
+    prefix: '/w/SEEDA',
+    can: OWNER,
+    locale: 'en',
+    now: NOW,
+    companyId: A.id,
+    companyNames: NAMES,
+    commercial: ready(own()),
+    carrier: ready({ partyId: PARTY_ID, code: 'SEED-ONE', name: 'Seed Customer One S.r.l.', carrierCode: null, carrierName: null, accountOnFile: false, freightBilling: 'SENDER', defaultCarrierService: null, version: 7 }),
+    holds: ready(HOLDS),
+    companies: ready(COMPANY_TERMS),
+    requirements: null,
+    library: null,
+    lists: null,
+    history: { items: [] },
+    viesRunning: false,
+    ...over,
+  })
+
+  it('the answer line and Commercial terms wait (the kit\'s reading state) while the company-terms read is not in', () => {
+    for (const companies of [LOADING, null]) {
+      const model = termsTabModel(reads({ companies }), TERMS_TAB_START)
+      expect(model.answerReading, String(companies)).toBe(true)
+      expect(model.commercial.reading, String(companies)).toBe(true)
+    }
+    const answered = termsTabModel(reads(), TERMS_TAB_START)
+    expect([answered.answerReading, answered.commercial.reading]).toEqual([false, false])
+    // a failed read is no reading: the fallback says so (Z41)
+    expect(termsTabModel(reads({ companies: failedRead('problem.offline') }), TERMS_TAB_START).commercial.reading).toBe(false)
+  })
+})

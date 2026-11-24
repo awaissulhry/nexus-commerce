@@ -158,7 +158,8 @@ export function termsTabModel(reads: TermsTabReads, state: TermsTabState): Terms
     archived,
     editable: can.manage && !archived,
     answer,
-    answerReading: reads.commercial === null || reads.commercial.status === 'loading',
+    // ct-fx3 G-W01 (walk W-01; P0-B4, Z32): the terms per company in flight are reading too — never the customer's own as if in force.
+    answerReading: reads.commercial === null || reads.commercial.status === 'loading' || reads.companies === null || reads.companies.status === 'loading',
     chip: pressed ? pressed.id : null,
     marked: pressed ? pressed.rows : [],
     hold,

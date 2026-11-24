@@ -980,6 +980,13 @@ describe('cm-fx4: the walk\'s gaps', () => {
     expect(section).toMatch(/<Quiet>\s*\{say\(model\.termsFallback\)\}[\s\S]*?onClick=\{onRetry\}/)
   })
 
+  it('ct-fx3 G-W01 (walk W-01): Credit & terms waits while the terms per company are read (as Balance does) — never the customer\'s own as if in force', () => {
+    const terms = partReady({ paymentTerms: { name: 'Deposit 30% at acceptance, balance at delivery' }, paymentTermsText: null, currency: 'EUR', defaultDepositPct: '30', invoiceTiming: 'ON_SHIPMENT' } as unknown as CommercialTerms)
+    expect(creditOf(input('owner', { terms, companyTerms: READING }), null, terms, PREFIX).reading).toBe(true)
+    expect(creditOf(input('owner', { terms, companyTerms: partReady({ tenantWide: false, companies: [] } as unknown as CompanyTerms) }), null, terms, PREFIX).reading).toBe(false)
+    expect(creditOf(input('owner', { terms }), null, terms, PREFIX).reading).toBe(false) // not asked (the gallery's cm-* cases): as before
+  })
+
   it('T.6 (Z41): the deposit word nothing says any more went, in both languages; the words it sits beside stay', () => {
     for (const locale of LOCALES) {
       const flat = messagesFor(locale, ['customer-money'])['customer-money'] ?? {}
