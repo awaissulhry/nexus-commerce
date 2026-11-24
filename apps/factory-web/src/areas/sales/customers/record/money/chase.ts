@@ -28,7 +28,8 @@ export interface ReminderRow {
   readonly amount: number | null
   readonly interest: number | null
   readonly currency: string
-  readonly href: string
+  /** M-1 (cm-fx4): Review in Finance › — only with receivables.reminders.manage (a person who decides reminders); null: no act. */
+  readonly href: string | null
 }
 
 export interface StopRow {
@@ -80,7 +81,7 @@ export function chaseOf(input: MoneyTabInput, trust: Part<CustomerTrust> | null,
       amount: price && typeof reminder.amountDue === 'number' ? reminder.amountDue : null,
       interest: price && typeof reminder.interestAmount === 'number' && reminder.interestAmount > 0 ? reminder.interestAmount : null,
       currency: reminder.currency,
-      href: `${prefix}/finance/receivables?reminder=${encodeURIComponent(reminder.id)}`,
+      href: can.remindersManage ? `${prefix}/finance/receivables?reminder=${encodeURIComponent(reminder.id)}` : null,
     }))
   const stops: StopRow[] = (input.stops.value ?? [])
     .filter((stop) => stop.state === 'holding')
@@ -94,10 +95,16 @@ export function chaseOf(input: MoneyTabInput, trust: Part<CustomerTrust> | null,
       recorded: stop.createdBy?.name ? word('cm.chase.recordedBy', { instants: { date: stop.createdAt }, params: { name: stop.createdBy.name } }) : word('cm.chase.recorded', { instants: { date: stop.createdAt } }),
       liftable: can.remindersManage && stop.can.lift,
     }))
+  // M-7 (cm-fx4): every reminder listed is counted in the answer — waiting for a yes, held (and why, on its row), approved, sent.
   const waiting = reminders.filter((row) => row.notes.length === 1 && row.notes[0]!.key === 'cm.chase.waits').length
+  const prepared = reminders.filter((row) => row.state.word.key.endsWith('.PREPARED')).length
+  const held = prepared - waiting
+  const approved = reminders.filter((row) => row.state.word.key.endsWith('.APPROVED')).length
   const sent = reminders.filter((row) => row.state.word.key.endsWith('.SENT')).length
   const answer: MoneyWord[] = []
   if (waiting > 0) answer.push(word('cm.needs.reminders', { params: { count: waiting } }))
+  if (held > 0) answer.push(word('cm.chase.heldCount', { params: { count: held } }))
+  if (approved > 0) answer.push(word('cm.chase.approvedCount', { params: { count: approved } }))
   if (sent > 0) answer.push(word('cm.chase.sentCount', { params: { count: sent } }))
   answer.push(stops.length > 0 ? word('cm.chase.stops', { params: { count: stops.length } }) : word('cm.chase.noStop'))
   const level = trust?.value?.level ?? null
