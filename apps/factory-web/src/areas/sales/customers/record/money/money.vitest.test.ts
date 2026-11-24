@@ -22,6 +22,7 @@ import { moneyAnswerOf, type CustomerAnswer } from './head'
 import { CM, MONEY_TAB_NAMESPACES, moneyChangeIsOurs, moneyTabCanOf, partFailed, partReady, READING, type MoneyTabInput } from './model'
 import { sayOf } from './say'
 import { CUSTOMER_MONEY_ANCHORS, CUSTOMER_MONEY_SECTIONS } from './sections'
+import { recordPaymentForCustomerHref } from './doors' // F-CM-204
 
 /**
  * F-CM-101…105 (customer page › MONEY tab, cm-w1 W1.1; 10-design §4–§5.2; 18-lead-settles Z3–Z11, Z20, Z21, Z26) — the pure rules of
@@ -583,5 +584,16 @@ describe('F-CM-203: Payments & refunds (cm-w2 W2.3; 10-design §5.4; Z7, Z18, Z2
     // The section is the fourth: Invoices & credit notes first, then Payments & refunds.
     const tab = readFileSync(new URL('../view/money/CustomerMoneyTab.tsx', import.meta.url), 'utf8')
     expect(tab.indexOf('<ReceivedSection')).toBeGreaterThan(tab.indexOf('<DocumentsSection'))
+  })
+})
+
+describe('F-CM-204: "Record a payment ›" — Finance\'s window with this customer chosen (cm-w2 W2.4; 13-backend §4.3; S3)', () => {
+  it('the door names THIS customer; Balance draws it only with payments.record and prices (hidden, never held)', () => {
+    expect(recordPaymentForCustomerHref(PREFIX, 'p-1')).toBe(`${PREFIX}/finance/payments?new=1&party=p-1`)
+    const tab = readFileSync(new URL('../view/money/CustomerMoneyTab.tsx', import.meta.url), 'utf8')
+    expect(tab).toContain('recordPaymentHref={can.paymentsRecord && can.price ? recordPaymentForCustomerHref(prefix, partyId) : null')
+    const balance = readFileSync(new URL('../view/money/BalanceSection.tsx', import.meta.url), 'utf8')
+    expect(balance).toContain("<Link href={recordPaymentHref}>{`${say(word('finance:recordPay.title'))} ›`}</Link>")
+    expect(balance).not.toMatch(/heldReason/)
   })
 })

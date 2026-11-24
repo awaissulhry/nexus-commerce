@@ -12,7 +12,7 @@ import { statementOf } from '../../../money/model'
 import { balanceOf } from '../../money/balance'
 import { collectOf, type CollectInPlace, type CollectRow } from '../../money/collect'
 import { documentsOf, type DocumentChip, type DocumentsRead } from '../../money/documents' // F-CM-202
-import { otherCompanyHref, receivablesHref, workAllOrdersHref } from '../../money/doors'
+import { otherCompanyHref, receivablesHref, recordPaymentForCustomerHref, workAllOrdersHref } from '../../money/doors'
 import { moneyAnswerOf } from '../../money/head'
 import { MONEY_TAB_NAMESPACES, type LazyRead, type MoneyRead, type MoneyTabInput, type Part } from '../../money/model'
 import { kitId, NOTHING_YET, type CustomerMoneySectionId } from '../../money/sections'
@@ -204,7 +204,7 @@ function CustomerMoneyBody({ input, prefix, asOf, onRetry, onPick, onAct, lazy }
   return (
     <div className="fw-pt fw-om fw-cm">
       <MoneyAnswer tone={answer.tone} reading={answer.reading} title={title} below={answer.wall.map(say)} />
-      <BalanceSection model={balance} present={present} sayIn={sayIn} unit={unit} asOf={asOf} menu={balanceMenu} failed={pageFailed} onRetry={() => onRetry('page')} />
+      <BalanceSection model={balance} present={present} sayIn={sayIn} unit={unit} asOf={asOf} menu={balanceMenu} failed={pageFailed} onRetry={() => onRetry('page')} recordPaymentHref={can.paymentsRecord && can.price ? recordPaymentForCustomerHref(prefix, partyId) : null /* F-CM-204 */} />
       {collect && present.has('collect') ? (
         <CollectSection model={collect} sayIn={sayIn} unit={unit} companyId={input.company?.id ?? null} menu={receivables} onRetry={() => onRetry('page')} onPick={onPick} onAct={onAct} allOrdersHref={workAllOrdersHref(prefix, partyId)} />
       ) : null}

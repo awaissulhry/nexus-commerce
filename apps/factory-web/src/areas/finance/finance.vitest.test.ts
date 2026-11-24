@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs' // F-CM-204: the address rule of Payments, read in its file
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -330,3 +331,21 @@ describe('?new=1&ddts= opens Invoice shipped goods with those DDTs chosen (B-TH-
   })
 })
 // ── end B-TH-244 ──
+
+// ---- F-CM-204 (customer MONEY tab, cm-w2 W2.4; 13-backend §4.3): the customer's Money tab's "Record a payment ›" ----
+describe('?new=1&party= opens Record a payment with that customer chosen (F-CM-204)', () => {
+  const page = readFileSync(new URL('./payments/list/PaymentsPage.tsx', import.meta.url), 'utf8')
+
+  it('party alone: the customer read and chosen in the page\'s company, its open items read; an invoice wins over a party; unread: the empty dialog', () => {
+    expect(page).toContain("const partyId = invoiceId ? null : params.get('party')")
+    expect(page).toContain('const party = await getParty(api, partyId)')
+    expect(page).toContain('const customer = { id: party.id, name: party.legalName, companyId }')
+    // As the invoice's branch: the dialog at its first step with the customer, and its open items read.
+    const branch = page.slice(page.indexOf("const partyId = invoiceId ? null : params.get('party')"), page.indexOf('if (!invoiceId) {'))
+    expect(branch).toContain("setDialog({ kind: 'record', step: 1, customer, invoiceId: null })")
+    expect(branch).toContain('void readItems(customer)')
+    expect(branch).toContain("setDialog({ kind: 'record', step: 1, customer: null, invoiceId: null })")
+    // Only with new=1 and the right to record payments (the rule's own first line, unchanged).
+    expect(page).toContain("if (opened.current || params?.get('new') !== '1' || !can.recordPayments) return")
+  })
+})

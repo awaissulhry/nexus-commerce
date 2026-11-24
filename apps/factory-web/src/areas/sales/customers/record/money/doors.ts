@@ -43,6 +43,9 @@ export const invoiceHref = (prefix: string, invoice: { readonly id: string; read
 /** Finance's Record a payment with ONE invoice chosen — the order page's own door (rec/money/view/PlanRow.tsx). */
 export const recordPaymentOnInvoiceHref = (prefix: string, invoiceId: string): string => `${prefix}/finance/payments?new=1&invoice=${enc(invoiceId)}`
 
+/** F-CM-204 (S3): Finance's Record a payment with THIS customer chosen — ONE payment onto several invoices and requests, oldest first. */
+export const recordPaymentForCustomerHref = (prefix: string, partyId: string): string => `${prefix}/finance/payments?new=1&party=${enc(partyId)}`
+
 /** Finance › Receivables & credit with this customer chosen (the API's own `partyId`). */
 export const receivablesHref = (prefix: string, partyId: string): string => receivablesOfCustomer(prefix, partyId)
 
