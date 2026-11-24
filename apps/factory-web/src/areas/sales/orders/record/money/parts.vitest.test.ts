@@ -149,6 +149,8 @@ const ROWS = [GOODS, DRAFT, READING, FAILED]
 const noPrice = (row: InvoiceListRow): InvoiceListRow => ({ ...row, total: null, open: null, extra: null })
 const ITEMS: MenuItemDef[] = [{ id: 'copy', label: 'Copy number', onSelect: noop }]
 const tOf = (locale: Locale) => createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+/** A word as React writes it in markup ("This order's share" → "This order&#x27;s share"). */
+const esc = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;')
 
 describe('F-CM-k1: the five parts draw the order Money\'s markup letter for letter', () => {
   it('MoneyAnswer: the tone\'s icon (reading first), the answer as the title, the wall line only when there is one', () => {
@@ -201,7 +203,7 @@ describe('F-CM-k1: the five parts draw the order Money\'s markup letter for lett
       const html = render(h(InvoiceList, { rows: ROWS, price: true, extraHead: t('money.share'), menuOf: (row: InvoiceListRow) => (asked.push(row.id), ITEMS), onRetrySdi: noop }), locale)
       expect(html).toBe(render(h(TodayList, { rows: ROWS, price: true, items: ITEMS }), locale))
       expect(html).toContain('<div class="fw-om-il">')
-      expect(html).toContain(`<div class="fw-om-ir-am fw-om-ir-share">${t('money.share')}</div>`)
+      expect(html).toContain(`<div class="fw-om-ir-am fw-om-ir-share">${esc(t('money.share'))}</div>`)
       // The host builds each row's ⋯ (asked once per row, in order).
       expect(asked).toEqual(ROWS.map((row) => row.id))
     })
