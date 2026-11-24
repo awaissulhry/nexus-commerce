@@ -607,6 +607,21 @@ describe('the cards: People, Next dates, Requests & changes, Linked records, Cus
     expect(datesOf(input({ ...calm, glance: failedRead('problem.unavailable'), can: { ...CAN, samples: false } }))).toBeNull()
   })
 
+  it('co-fx2 (walk CO-W-2): Quotes and Incoming only with the Quotes & incoming tab — left out without it, whatever the count read answers', () => {
+    const answered = { counts: counts({ TO_ANSWER: 1, WRITING: 2 }, { openQuotes: 0 }), failed: false }
+    const noTab = linkedOf(input({ can: { ...CAN, quotesTab: false }, counts: answered }))
+    expect(noTab.rows.filter((row) => row.key === 'incoming' || row.key === 'quotes')).toEqual([])
+    expect(noTab.none.map((label) => said(label))).not.toContain('Incoming')
+    expect(noTab.none.map((label) => said(label))).not.toContain('Quotes')
+    // While the count read is out, or when it failed: no row says so either.
+    for (const failed of [false, true]) expect(linkedOf(input({ can: { ...CAN, quotesTab: false }, counts: { counts: null, failed } })).rows.filter((row) => row.key === 'incoming' || row.key === 'quotes')).toEqual([])
+    // With the tab: Incoming says its parts, each a door to its group; Quotes with no open quote joins "None yet".
+    const withTab = linkedOf(input({ counts: answered }))
+    expect(valueOf(rowOf(withTab.rows, 'incoming'))).toBe('1 to answer · 2 drafts')
+    expect(rowOf(withTab.rows, 'incoming').parts.map((part) => hrefOf({ door: part.door! }))).toEqual([`${BASE}?tab=quotes&group=TO_ANSWER`, `${BASE}?tab=quotes&group=WRITING`])
+    expect(withTab.none.map((label) => said(label))).toContain('Quotes')
+  })
+
   it('Customer facts: ONE Edit (parties.manage); the credit only when the read carries it; what is to complete with today\'s own step', () => {
     const facts = factsOf(input({ party: party({ internalNote: 'Made-up office note.', warnings: [{ code: 'NO_DEFAULT_SHIP_TO', message: '', blocksInvoice: false }, { code: 'NO_DEFAULT_BILL_TO', message: '', blocksInvoice: false }] }), glance: ready(glance({ credit: { ...OVER, state: 'WITHIN', available: 1_580_000, overLimitBy: 0 }, requirements: demoGlance('MODA-DEMO').requirements })) }))
     const value = (key: string, locale: Locale = 'en') => facts.rows.find((row) => row.key === key)!.parts.map((part) => said(part.say, locale)).join(' · ')

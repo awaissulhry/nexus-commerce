@@ -450,8 +450,10 @@ export function linkedOf(input: OverviewInput): LinkedCard {
       stated('quotes', quotesLabel, input.counts.failed ? 'unread' : 'reading')
       stated('incoming', incomingLabel, input.counts.failed ? 'unread' : 'reading')
     }
-  } else {
-    const group = (name: 'WRITING' | 'TO_ANSWER' | 'OPEN_QUOTES' | 'ORDER_WAITS'): Pick<RowPart, 'door'> => through(can.quotesTab ? quotesDoor(prefix, id, name) : null)
+  } else if (can.quotesTab) {
+    // co-fx2 (walk CO-W-2; 10-design §7, §9): both kinds are the Quotes & incoming tab's — without its right neither row is drawn nor
+    // named in "None yet", whatever the count read answers (it answers the portal drafts' count with orders.view).
+    const group = (name: 'WRITING' | 'TO_ANSWER' | 'OPEN_QUOTES' | 'ORDER_WAITS'): Pick<RowPart, 'door'> => through(quotesDoor(prefix, id, name))
     if (before.openQuotes !== null) {
       const parts: RowPart[] = []
       if (before.openQuotes > 0) parts.push({ say: ov('linked.open', { count: before.openQuotes }), ...group('OPEN_QUOTES') })
