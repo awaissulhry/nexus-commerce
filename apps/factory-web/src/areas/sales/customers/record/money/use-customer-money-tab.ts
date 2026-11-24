@@ -29,6 +29,8 @@ export interface CustomerMoneyTabReads {
   readonly shipped: Part<ShippedNotInvoiced | null> | null
   /** A section's Try again: that read again. */
   readonly retry: (read: TabRead) => void
+  /** F-CM-201: after a write in place, every read of the tab again (keeping what it shows while it reads). */
+  readonly reload: () => void
 }
 
 /** At most this many reminders of the customer (the read's own page cap). */
@@ -111,6 +113,9 @@ export function useCustomerMoneyTab(input: { readonly partyId: string; readonly 
   useLiveBus({ onChange: (change) => (moneyChangeIsOurs(change, partyId, held.current) ? burst() : undefined), onReconnect: burst })
 
   const retry = useCallback((read: TabRead) => load(read, false), [load])
+  const reload = useCallback(() => {
+    for (const read of TAB_READS) load(read, true)
+  }, [load])
   return useMemo(
     () => ({
       refunds: allowed.refunds ? refunds : null,
@@ -119,7 +124,8 @@ export function useCustomerMoneyTab(input: { readonly partyId: string; readonly 
       summary: allowed.summary ? summary : null,
       shipped: allowed.shipped ? shipped : null,
       retry,
+      reload,
     }),
-    [allowed, refunds, stops, reminders, summary, shipped, retry],
+    [allowed, refunds, stops, reminders, summary, shipped, retry, reload],
   )
 }

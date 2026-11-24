@@ -249,11 +249,17 @@
       "euroOnly": "Payments are recorded in euro only today: this invoice is in {currency}.",
       "foot": "What each order has paid and still owes, also what is not asked yet:",
       "footDoor": "Work › All orders ›",
-      "ofTotal": "of {amount}"
+      "ofTotal": "of {amount}",
+      "stopTitle": "Stop reminders of {invoice}"
     },
     "none": {
       "title": "Nothing here yet",
       "collect": "Nothing to collect: no deposit is asked and no invoice is open."
+    },
+    "done": {
+      "record": "Payment recorded on {number}.",
+      "send": "Pay page sent for {number}.",
+      "saved": "{number}: saved."
     }
   }
 }

@@ -6,6 +6,8 @@ import type { Glance } from '../../depth/api'
 import type { Read } from '../../depth/model'
 import type { OrderSummary } from '../../../orders/api'
 import type { OpenOrderMoney } from '../../money/api'
+import { doorCanOf, type DoorCan } from '../../../orders/record/money/door/model' // F-CM-201: a row's acts are the money door's rule
+import { stopsCanOf } from '../../../../finance/receivables/reminder-stops/model' // F-CM-201: Finance's own rule decides the stop's door
 
 /**
  * F-CM-101 (customer page › MONEY tab, 10-design §1–§4; 18-lead-settles Z3–Z11, Z18–Z25) — what the customer's Money tab is handed and
@@ -63,6 +65,8 @@ export interface MoneyTabCan {
   readonly statementsSend: boolean
   /** parties.hold — Put on hold… · Release… */
   readonly hold: boolean
+  /** F-CM-201 (W2.1): the money door's rights for a To-collect request row, by the order page's own rule (door/model.ts doorCanOf). */
+  readonly door: DoorCan
 }
 
 export function moneyTabCanOf(permissions: readonly string[]): MoneyTabCan {
@@ -83,9 +87,10 @@ export function moneyTabCanOf(permissions: readonly string[]): MoneyTabCan {
     waive: held.has('orders.waive'),
     credit: held.has('sales.credit.view'),
     creditLimits: held.has('sales.credit.limits'),
-    remindersManage: held.has('receivables.reminders.manage'),
+    remindersManage: stopsCanOf(permissions).manage, // F-CM-201: Finance's stop rule (receivables.reminders.manage)
     statementsSend: held.has('receivables.statements.send'),
     hold: held.has('parties.hold'),
+    door: doorCanOf(permissions), // F-CM-201
   }
 }
 

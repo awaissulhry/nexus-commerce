@@ -249,11 +249,17 @@
       "euroOnly": "Oggi gli incassi si registrano solo in euro: questa fattura è in {currency}.",
       "foot": "Quanto ha pagato e quanto deve ancora ogni ordine, anche ciò che non è ancora richiesto:",
       "footDoor": "Lavori › Tutti gli ordini ›",
-      "ofTotal": "di {amount}"
+      "ofTotal": "di {amount}",
+      "stopTitle": "Blocca i solleciti di {invoice}"
     },
     "none": {
       "title": "Qui ancora niente",
       "collect": "Niente da incassare: nessun acconto richiesto e nessuna fattura aperta."
+    },
+    "done": {
+      "record": "Incasso registrato su {number}.",
+      "send": "Pagina di pagamento inviata per {number}.",
+      "saved": "{number}: salvato."
     }
   }
 }

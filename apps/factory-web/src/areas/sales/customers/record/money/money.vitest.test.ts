@@ -401,3 +401,33 @@ describe('F-CM-101: the views (cm-w1 W1.3; 10-design §1, §2; 18-lead-settles L
     expect(view('say.ts')).toContain('useScopedT(CM)')
   })
 })
+
+describe('F-CM-201: To collect\'s acts in place (cm-w2 W2.1; 13-backend §4.1, §4.2; Z5)', () => {
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+
+  it('a request row\'s acts are the money door\'s ONE rule (cm-k2 rowActsOf), hidden without the right; Finance\'s stopsCanOf decides the stop', () => {
+    expect(source('./collect.ts')).toContain('rowActsOf({ stepKind: item.stepKind ?? null')
+    expect(source('./model.ts')).toContain('door: doorCanOf(permissions)')
+    expect(source('./model.ts')).toContain('remindersManage: stopsCanOf(permissions).manage')
+    const invoice = (role: Role) => collectOf(input(role), PREFIX)!.rows.find((row) => row.id === 'inv-1')!.more.map((item) => item.id)
+    expect(invoice('owner')).toContain('stop')
+    expect(invoice('finance')).toContain('stop')
+    for (const role of ['sales', 'readonly'] as const) expect(invoice(role), role).not.toContain('stop')
+  })
+
+  it('the windows are the owners\' own, mounted in place, never copied: the order\'s through the door, Finance\'s stop container in ONE centred window', () => {
+    const container = source('./CustomerMoney.tsx')
+    expect(container).toContain('<OrderMoneyWindow model={windows.door.model} actions={windows.door.actions} />')
+    expect(container).toContain('<StopWindow partyId={party.id} ask={windows.stop}')
+    const stop = source('./StopWindow.tsx')
+    expect(stop).toContain('<ReminderDepth reminder={{ customer: { id: partyId }')
+    expect(stop).not.toMatch(/<form|<Field|<Select|<DateInput/)
+    expect(source('./use-money-windows.ts')).toContain('useOrderMoneyDoor(api, {')
+    // Finance's container: ONE type line (the fields it reads), nothing else.
+    expect(source('../../../../finance/receivables/reminder-stops/ReminderDepth.tsx')).toContain("reminder: Pick<Reminder, 'status' | 'invoices' | 'trusted'> & { readonly customer: { readonly id: string } }")
+    // The door is opened only for a request row with its order; the stop only for an invoice row.
+    const windows = source('./use-money-windows.ts')
+    expect(windows).toContain("if (row.target === 'INVOICE') setStop(")
+    expect(windows).toContain("if (row.target === 'DEPOSIT_REQUEST' && row.order) open(")
+  })
+})
