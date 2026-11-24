@@ -11,7 +11,7 @@ import { Facts } from '../../../../orders/record/money/view/parts'
 import { word } from '../../../../orders/record/money/word'
 import { copyLinkTo } from '../../../../orders/record/shipments/view/hrefs'
 import { LineMenuButton } from '../../../../orders/record/view/LineMenu'
-import { PartFailed, PartReading, Section } from '../../../../orders/record/view/production/Kit'
+import { PartFailed, PartReading, Quiet, Section } from '../../../../orders/record/view/production/Kit'
 import type { CreditModel } from '../../money/credit'
 import { kitId } from '../../money/sections'
 import type { CustomerSay } from '../../money/say'
@@ -129,6 +129,15 @@ export function CreditSection({ model, sayIn, unit, menu, onRetry, onChangeLimit
               </Link>
             </h3>
             <Facts facts={model.facts.map((fact) => ({ key: fact.key, label: say(fact.label), value: say(fact.value) }))} />
+            {/* F-CT-601 (ct-t T.5; Z41): the terms per company could not be read — the customer's own terms, said so once, with Try again. */}
+            {model.termsFallback ? (
+              <Quiet>
+                {say(model.termsFallback)}{' '}
+                <Button size="sm" variant="link" onClick={onRetry}>
+                  {say(word('orders:common.retry'))}
+                </Button>
+              </Quiet>
+            ) : null}
           </div>
         </div>
       </div>

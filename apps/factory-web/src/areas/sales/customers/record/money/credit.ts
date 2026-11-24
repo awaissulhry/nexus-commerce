@@ -43,6 +43,11 @@ export interface CreditModel {
   readonly overdue: MoneyWord | null
   /** The terms as facts (each label → value). */
   readonly facts: readonly { readonly key: string; readonly label: MoneyWord; readonly value: MoneyWord }[]
+  /**
+   * F-CT-601 (customer Terms & requirements, ct-t T.5; 18-lead-settles Z41, Z42): the terms per company could not be read — the facts
+   * above are the customer's own, said so in ONE quiet line with Try again (never shown as if in force with every company); else null.
+   */
+  readonly termsFallback: MoneyWord | null
   readonly termsHref: string
   /** Change limit… (a limit) / Set a limit… (none) — Finance's window in place; null: hidden. */
   readonly change: 'change' | 'set' | null
@@ -139,6 +144,7 @@ export function creditOf(input: MoneyTabInput, creditRow: Part<LimitRow | null> 
     usedPct,
     overdue,
     facts,
+    termsFallback: t && isFailed(input.companyTerms ?? null) ? word('customer-terms:ct.answer.fallback') : null, // F-CT-601: Terms' own words
     termsHref: customerTabHref(prefix, input.party.id, 'terms', 'party-commercial'),
     change: can.creditLimits && price && credit ? (credit.state === 'NONE' ? 'set' : 'change') : null,
     mayHold: can.hold,
