@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ApiClient } from '../../../../lib/api/client'
 import { useLiveBus } from '../../../../shell/live/use-live'
-import type { PartyRow } from '../../../parties/_shared/api'
 import { problemKey } from '../../../parties/_shared/model'
 import { CUSTOMERS_WORK_MAX, readCustomersWork, type CustomerWork } from './api'
 import { workTouchedBy, type CustomersWorkModel } from './model'
@@ -16,7 +15,9 @@ export const WORK_REREAD_MS = 800
  * (coalesced, in place) after a live change of an order, a deposit, a change request, a production or a waiting thread (the Work
  * strip's own sources). Only with orders.view (`enabled`); never per row.
  */
-export function useCustomersWork(api: ApiClient, rows: readonly PartyRow[], enabled: boolean): CustomersWorkModel {
+// F-CO-102 (customer page › Overview, 13-backend §1.2): it uses only each row's id — the customer's Overview asks it for ONE customer
+// (`[{ id }]`); a type narrowing, no line of the list changes.
+export function useCustomersWork(api: ApiClient, rows: readonly { readonly id: string }[], enabled: boolean): CustomersWorkModel {
   const ids = useMemo(() => rows.map((row) => row.id), [rows])
   const key = ids.join(',')
   const [model, setModel] = useState<CustomersWorkModel>({ byParty: null, problem: null, repliesComplete: true, limited: false })

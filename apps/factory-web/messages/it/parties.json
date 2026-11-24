@@ -372,6 +372,102 @@
         "onHint": "Le persone di {customer} possono aggiungere righe su misura alle bozze del portale (accettata, una bozza così diventa prima un preventivo).",
         "offHint": "Le righe su misura sono chiuse nelle bozze del portale di {customer}: ce le chiedono nei messaggi."
       }
+    },
+    "overview": {
+      "where": "La situazione di {customer}",
+      "headline": {
+        "onHold": "In blocco ({reason})",
+        "onHoldMany": "In blocco ({count} blocchi)",
+        "openOrders_one": "{count} ordine aperto",
+        "openOrders_other": "{count} ordini aperti",
+        "waitYes_one": "{count} ordine aspetta un sì",
+        "waitYes_other": "{count} ordini aspettano un sì",
+        "nextPromise": "prossima promessa {date}"
+      },
+      "quiet": {
+        "archived": "Solo lettura finché non viene riattivato (⋯ › Riattiva).",
+        "blocked": "Niente nuovi preventivi, ordini o spedizioni.",
+        "prospect": "Attivalo per poter prendere ordini.",
+        "lastOrder": "Ultimo ordine {date}"
+      },
+      "strip": {
+        "label": "Cosa ferma {customer}",
+        "unblock": "Sbloccalo dal menu ⋯ qui sopra.",
+        "hold": "In blocco — {reason} · {company}",
+        "overLimit": "Oltre il fido: oltre di {amount} su un fido di {limit}",
+        "invoicesLate": "Ci sono fatture scadute",
+        "overdue": "Scaduto · {amount}",
+        "oldest_one": "La più vecchia: {count} giorno di ritardo",
+        "oldest_other": "La più vecchia: {count} giorni di ritardo",
+        "urgencyOver": "Urgenza cliente oltre il limite",
+        "failed": "Impossibile leggere i blocchi e il fido"
+      },
+      "people": {
+        "title": "Persone",
+        "contactOrders": "Il loro contatto per gli ordini",
+        "contactInvoices": "Il loro contatto per le fatture",
+        "contactBoth": "Il loro contatto per ordini e fatture",
+        "nobody": "Ancora nessuno"
+      },
+      "dates": {
+        "title": "Prossime date",
+        "late_one": "{count} ordine oltre la data promessa",
+        "late_other": "{count} ordini oltre la data promessa",
+        "deposit": "Acconto entro",
+        "sample": "Campione entro",
+        "ask": "Nostra richiesta entro",
+        "task": "Attività entro",
+        "complaint": "Risposta al reclamo",
+        "vies": "Prova VIES fino al",
+        "titled": "«{title}» · {date}",
+        "tag": {
+          "late": "in ritardo",
+          "daysLate": "{count} g di ritardo"
+        },
+        "failed": "Impossibile leggere le date dei campioni"
+      },
+      "requests": {
+        "title": "Richieste e modifiche"
+      },
+      "linked": {
+        "title": "Record collegati",
+        "orders": "Ordini",
+        "quotes": "Preventivi",
+        "incoming": "In arrivo",
+        "samples": "Campionature",
+        "repairs": "Riparazioni",
+        "returns": "Resi",
+        "complaints": "Reclami",
+        "projects": "Progetti",
+        "openOf": "{open} aperti su {total}",
+        "open_one": "{count} aperto",
+        "open_other": "{count} aperti",
+        "someOpen": "Aperti",
+        "inProgress": "{count} in corso",
+        "priorityTop": "Priorità Massima {count}",
+        "priorityHigh": "Priorità Alta {count}",
+        "nextDue": "prossima {number} entro il {date}",
+        "nextDueToday": "prossima {number} entro oggi",
+        "oldestOpened": "la più vecchia {number}, aperta il {date}",
+        "oldestAsked": "il più vecchio {number}, richiesto il {date}",
+        "nextAnswer": "prossima risposta {number} entro il {date}",
+        "receivables": "Crediti e fidi"
+      },
+      "facts": {
+        "title": "Dati del cliente",
+        "kindLanguage": "Tipo · lingua",
+        "payment": "Pagamento · valuta",
+        "since": "Cliente dal",
+        "sinceValue": "{date} · modificato il {changed}",
+        "toComplete": "Da completare",
+        "validFrom": "valida dal {date}",
+        "creditFree": "{amount} disponibili su un fido di {limit}",
+        "noteTag": "Solo l'ufficio la vede",
+        "noNote": "Nessuna nota",
+        "vat": "P. IVA {number}",
+        "sdi": "SDI {code}",
+        "pec": "PEC {pec}"
+      }
     }
   },
   "suppliers": {
