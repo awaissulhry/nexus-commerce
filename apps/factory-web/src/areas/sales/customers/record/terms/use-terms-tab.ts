@@ -11,6 +11,7 @@ import type { PartyRecordModel } from '../../../../parties/_shared/model'
 import type { PartyRecordActions } from '../../../../parties/_shared/view/PartyRecordView' // F-CT-516 (W2.2): the record's own identity window and VIES act
 import { readProblem } from '../../../orders/model'
 import { copyLinkTo } from '../../../orders/record/shipments/view/hrefs'
+import { storeUrl } from '../../../../../record-panels/store' // ct-fx3 G-W03: the file door's address, as Work and the order page open it
 import { listPriceLists, type PriceListRow } from '../../../pricelists/api'
 import type { CompanyTerms, Holds, Requirements } from '../../depth/api'
 import { failedRead, LOADING, ready, type Notice, type Read } from '../../depth/model'
@@ -384,7 +385,8 @@ export function useTermsTab(input: TermsTabInput): TermsTabContainer {
     onOpenFile: (fileId) => {
       fileDoor(api, fileId)
         .then((url) => {
-          if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener')
+          // ct-fx3 G-W03 (walk W-03): the address as this browser reaches it (a local store's path goes through /api), as Work does.
+          if (typeof window !== 'undefined') window.open(storeUrl(url), '_blank', 'noopener')
         })
         .catch(() => setNotice({ tone: 'danger', words: said('ct.req.fileFailed') }))
     },

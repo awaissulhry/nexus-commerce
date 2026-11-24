@@ -1069,3 +1069,14 @@ describe('ct-fx3 G-W02: a door lands under the record\'s sticky band (Z26; Peopl
     expect(tab).toMatch(/<div className="fw-pt fw-ctr">\s*<TermsAnswer [^>]*\/>\s*<HoldSection [^>]*\/>\s*<CommercialSection [^>]*\/>\s*<RequirementsSection [^>]*\/>\s*<IdentitySection [^>]*\/>/)
   })
 })
+
+describe('ct-fx3 G-W03: the requirement\'s file opens where this browser reaches it (Z12)', () => {
+  it('the file door opens the store address through storeUrl, as Work and the order page do (a local store\'s path goes through /api)', async () => {
+    const container = readFileSync(new URL('./use-terms-tab.ts', import.meta.url), 'utf8')
+    expect(container).toContain("window.open(storeUrl(url), '_blank', 'noopener')")
+    expect(container).not.toMatch(/window\.open\(url,/)
+    const { storeUrl } = await import('../../../../../record-panels/store')
+    expect(storeUrl('/local-files?token=made-up')).toBe('/api/local-files?token=made-up')
+    expect(storeUrl('https://files.example.com/a.pdf')).toBe('https://files.example.com/a.pdf')
+  })
+})
