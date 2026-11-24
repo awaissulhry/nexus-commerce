@@ -14,6 +14,7 @@ import { MESSAGE_AMOUNT_MAX } from '@nexus/factory-domain/threads/price-check'
 import { FILE_AUDIENCES, FILE_KINDS, FILE_STATUSES } from '../files/rules'
 // ---- B-TH-079: the feed's audience view, the skipped files of an inbound mail, the mail waiting for a person.
 import { HELD_REASONS, SKIP_REASONS } from '@nexus/factory-domain/email-in/rules'
+import { MAIL_VERDICTS } from '@nexus/factory-domain/email-in/rules' // tw-s S.5: an inbound mail's checks
 import { FEED_AUDIENCES } from '@nexus/factory-domain/threads/timeline'
 // ---- B-SA-061: what a message is about (a part of its order).
 import { ABOUT_KINDS } from './about'
@@ -26,6 +27,16 @@ export const waitingMailView = output({
   /** The reader may open them in Mail to sort (email.triage): "Review"; else "A reply waits for a colleague to check it". */
   mayReview: z.boolean(),
 })
+// ---- tw-s S.5 (the thread rebuild; Z2 "Email details"): office only — an inbound mail's header From, To and Cc (lower case), its
+// subject and SES's checks, as Mail to sort names them (email-in contract: from, verdicts).
+export const inboundMailView = output({
+  from: output({ address: z.string().nullable(), name: z.string().nullable() }),
+  to: z.array(z.string()),
+  cc: z.array(z.string()),
+  subject: z.string().nullable(),
+  verdicts: output({ spf: z.enum(MAIL_VERDICTS), dkim: z.enum(MAIL_VERDICTS), dmarc: z.enum(MAIL_VERDICTS) }),
+})
+// ---- end tw-s S.5
 /** The audience view ("View ▾"): ALL, PARTNER ("With the customer") or OFFICE ("Office notes"); outside the office it only narrows. */
 const feedAudience = z.enum(FEED_AUDIENCES).default('ALL')
 // ---- end B-TH-079
@@ -156,6 +167,8 @@ export const messageView = output({
   erased: z.boolean().optional(),
   skippedAttachments: z.array(skippedAttachmentView).optional(),
   // ---- end B-TH-079
+  // ---- tw-s S.5: office only — on an inbound mail, its details ("Email details"; null: the mail is not found). Never on a portal or link read.
+  mail: inboundMailView.nullable().optional(),
   at: instant(),
 })
 export type MessageView = z.infer<typeof messageView>

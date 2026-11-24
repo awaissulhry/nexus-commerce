@@ -55,7 +55,8 @@ import { excerptOf } from '@nexus/factory-domain/threads/rules'
 // ---- end B-TH-049 / B-TH-050
 // ---- B-TH-079: the feed tells everything (the audience view, erased messages, mail waiting for a person, an inbound mail's skipped files).
 import type { FeedAudience } from '@nexus/factory-domain/threads/timeline'
-import { erasedAmong, erasedForOutside, feedAudienceWhere, skippedPartsOf, waitingMailOf, type SkippedPart, type WaitingMail } from './feed-depth'
+import { erasedAmong, erasedForOutside, feedAudienceWhere, waitingMailOf, type SkippedPart, type WaitingMail } from './feed-depth'
+import { inboundMailsOf, NO_INBOUND_MAILS, type MailDetails } from './feed-depth' // tw-s S.5: an inbound mail's details, office only
 // ---- end B-TH-079
 // ---- B-TH-092: what was typed has gone out — the sender's draft of the record is removed in the send's own command.
 import { clearDraftInCommand } from './draft-keys'
@@ -536,10 +537,18 @@ export interface ThreadPage {
   readonly place?: { readonly type: string; readonly id: string } | null
 }
 
-/** B-TH-079: a message as the page shows it, told erased (privacy) and, for the office, with an inbound mail's skipped files. */
-function withDepth(view: MessageView, erased: ReadonlySet<string>, skipped: ReadonlyMap<string, SkippedPart[]>): MessageView {
+/**
+ * B-TH-079: a message as the page shows it, told erased (privacy) and, for the office, with an inbound mail's skipped files. tw-s S.5: and,
+ * for the office (`mails`; null: a portal or link reader, never told), every inbound mail with its details (null: its mail is not found).
+ */
+function withDepth(view: MessageView, erased: ReadonlySet<string>, skipped: ReadonlyMap<string, SkippedPart[]>, mails: ReadonlyMap<string, MailDetails> | null): MessageView {
   const parts = skipped.get(view.id)
-  return { ...view, ...(erased.has(view.id) ? { erased: true } : {}), ...(parts ? { skippedAttachments: parts } : {}) }
+  return {
+    ...view,
+    ...(erased.has(view.id) ? { erased: true } : {}),
+    ...(parts ? { skippedAttachments: parts } : {}),
+    ...(mails !== null && view.direction === 'INBOUND' && view.channel === 'EMAIL' ? { mail: mails.get(view.id) ?? null } : {}),
+  }
 }
 
 const EMPTY: ThreadPage = Object.freeze({ thread: null, messages: [], nextCursor: null })
@@ -609,13 +618,14 @@ export async function readThread(caller: CommandCaller, record: RecordRef, page:
     const links = office ? await messageLinksOf(client, thread.id, shown, { sharedOnly: false, workerShown, visibleFiles: (fileIds) => visibleAttachments(client, context, fileIds) }) : NO_LINKS
     // ---- B-TH-079: the office reads which messages were erased, an inbound mail's skipped files and the mail waiting for a person.
     const erased = office ? await erasedAmong(client, shown) : new Set<string>()
-    const skipped = office ? await skippedPartsOf(client, shown) : new Map<string, SkippedPart[]>()
+    // tw-s S.5 ("Email details"): ONE read of the page's inbound mails — their skipped files and their details, the office's only.
+    const inbound = office ? await inboundMailsOf(client, shown) : NO_INBOUND_MAILS
     const waitingMail = office ? await waitingMailOf(client, actor, thread.id) : undefined
     // ---- B-SA-061: a message about a work order this reader does not reach is read without it (the wall).
     const aboutHeld = office ? await aboutsHeldBack(client, actor, shown) : NONE_HELD
     return {
       thread: threadViewOf(thread),
-      messages: shown.map((row) => withDepth(messageViewOf(row, attachments, workerShown, links, aboutHeld), erased, skipped)),
+      messages: shown.map((row) => withDepth(messageViewOf(row, attachments, workerShown, links, aboutHeld), erased, inbound.skipped, office ? inbound.mails : null)),
       nextCursor: rows.length > page.limit && last ? encodeCursor(last) : null,
       reading,
       ...(head ? { head } : {}),
