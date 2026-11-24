@@ -217,8 +217,9 @@ export function balanceOf(input: MoneyTabInput, prefix: string): BalanceModel {
   const last = lastPaymentOf(input.ageing?.value ?? null)
   if (input.can.receivables && last) facts.push({ key: 'lastPayment', label: word('finance-receivables:col.lastPayment'), value: word('cm.day', { days: { date: last } }) })
   // M-2 (cm-fx4): the payment terms from the ONE helper Credit & terms uses — said once its read has answered (never one text, then another).
-  if (!(input.terms && isReading(input.terms))) {
-    const terms = paymentTermsOf(input.terms?.value ?? null, input.party)
+  // F-CT-521 (ct-w2 W2.3; Z32): the same helper with this company's own row — said once BOTH reads have answered.
+  if (!(input.terms && isReading(input.terms)) && !(input.companyTerms && isReading(input.companyTerms))) {
+    const terms = paymentTermsOf(input.terms?.value ?? null, input)
     facts.push({ key: 'paymentTerms', label: word('tab.paymentTerms'), value: terms ? word('cm.text', { params: { text: terms } }) : word('cm.balance.noTerms') })
   }
   if (!input.can.price && notInvoiced !== null && notInvoiced > 0)

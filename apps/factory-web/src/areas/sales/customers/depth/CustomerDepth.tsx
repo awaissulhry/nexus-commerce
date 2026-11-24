@@ -38,6 +38,12 @@ export function useCustomerGlance(): CustomerDepthState['glance'] {
 }
 // ---- end F-CO-102
 
+// F-CT-525 (customer Terms & requirements, ct-w2 W2.3; 13-backend §4, Z32): the terms per company for the Overview's Payment fact — the
+// provider's ONE company-terms read (read on the Overview and on Terms), no second read of it.
+export function useCustomerCompanyTerms(): CustomerDepthState['terms']['read'] {
+  return useDepth().terms.read
+}
+
 // F-CA-115 (customer People & addresses, lane ca-; 13-backend §3, §5.5): the contacts' personal data for the People tab's container —
 // the provider's ONE privacy read (read on People), no second read of it.
 // F-CA-223 (ca-w2 W2.4; Z14): + its windows' rights, today and their notice (the acts moved onto each person's ⋯); `reload` reads the

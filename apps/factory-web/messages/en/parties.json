@@ -776,7 +776,7 @@
   },
   "edit": {
     "title": "Edit identity",
-    "subtitle": "The names, roles and language its documents use. Sent documents keep their own copy."
+    "subtitle": "The names, kind and roles. Its payment terms, currency and document language are changed in Terms & requirements. Sent documents keep their own copy."
   },
   "block": {
     "stops": "What it stops",

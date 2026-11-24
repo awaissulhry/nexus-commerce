@@ -7,6 +7,8 @@ import { requestsDoorOf, tileOf, type TileRead } from '../use-customer-work'
 import { valueOf as tileValueOf } from '../work-band'
 import { complaintDoor, complaintsDoor, depositDoor, moneyDoor, ordersDoor, projectsDoor, promiseDoor, quotesDoor, receivablesDoor, repairsDoor, sampleDoor, samplesDoor, tabDoor, termsDoor, workOrdersDoor } from './doors'
 import { peopleAddDoor, peopleDoor } from './doors' // F-CA-121: People & addresses' section ids
+import { paymentTermsInForce } from '../terms/in-force' // F-CT-524 (ct-w2 W2.3; Z32): the ONE source of the terms in force
+import { fiscalCodeHidden } from '../terms/identity' // F-CT-524 (D2): the Terms tab's ONE codice fiscale rule
 import { boardNumbersOf, boardOf, headlineOf, nextPromiseOf } from './headline'
 import { overAmountsOf, stepDoorOf, stripsOf } from './strips'
 import {
@@ -566,7 +568,14 @@ export function factsOf(input: OverviewInput): FactsCard {
   rows.push({ key: 'legalName', label: say('field.legalName'), parts: [{ say: text(party.legalName) }] })
   rows.push({ key: 'tradeName', label: say('field.tradeName'), parts: [{ say: text(party.tradeName ?? '—') }], empty: party.tradeName === null })
   rows.push({ key: 'kind', label: ov('facts.kindLanguage'), parts: [{ say: joined([say(`kind.${party.kind}`), { language: party.language }]) }] })
-  rows.push({ key: 'payment', label: ov('facts.payment'), parts: [{ say: joined([text(party.paymentTerms?.trim() || '—'), text(party.currency)]) }] })
+  // F-CT-524 (ct-w2 W2.3; Z32): the payment terms in force with this company — the ONE helper of the three tabs — a door to them on
+  // Terms & requirements; while the terms per company are read, the fact's skeleton (never one text, then another).
+  if (input.companyTerms?.status === 'loading') rows.push({ key: 'payment', label: ov('facts.payment'), parts: [], state: 'reading' })
+  else {
+    const companies = input.companyTerms?.status === 'ready' ? input.companyTerms.value : null
+    const pays = paymentTermsInForce({ commercial: null, companies, companyId: input.companyId ?? null, typed: party.paymentTerms }, input.locale ?? 'en')
+    rows.push({ key: 'payment', label: ov('facts.payment'), parts: [{ say: joined([text(pays?.name.trim() || '—'), text(party.currency)]), door: href(termsDoor(prefix, id, 'commercial')) }] })
+  }
 
   // The tax identity in force: a door to its part of Terms & requirements.
   const identity = party.taxIdentities.find((entry) => entry.current) ?? null
@@ -575,7 +584,8 @@ export function factsOf(input: OverviewInput): FactsCard {
     const said: Param[] = [say(`taxMode.${identity.taxMode}`)]
     if (identity.vatNumber) said.push(ov('facts.vat', { number: identity.vatNumber }))
     // co-fx2 (walk CO-W-6): the codice fiscale with its label (the identity form's own word), as VAT and SDI carry theirs.
-    if (identity.fiscalCode && identity.fiscalCode !== identity.vatNumber) said.push(joined([say('field.fiscalCode'), text(identity.fiscalCode)], ' '))
+    // D2 (ct-w2 W2.3): a PERSON's codice fiscale (it holds the birth date) only for those who may change customers.
+    if (identity.fiscalCode && identity.fiscalCode !== identity.vatNumber && !fiscalCodeHidden(party, can)) said.push(joined([say('field.fiscalCode'), text(identity.fiscalCode)], ' '))
     if (identity.sdiRecipientCode) said.push(ov('facts.sdi', { code: identity.sdiRecipientCode }))
     if (identity.pec) said.push(ov('facts.pec', { pec: identity.pec }))
     // "valid from …" as quiet words after the door, on the same line (10-design §8; picture 20), as the next promise's quiet part.

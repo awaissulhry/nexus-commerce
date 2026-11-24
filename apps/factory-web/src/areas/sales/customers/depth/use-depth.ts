@@ -108,7 +108,8 @@ export function useCustomerDepth(partyId: string) {
 
   const loadTab = useCallback(() => {
     // F-SA-271: the glance also on Money (the credit) and People & addresses (riders and profiles).
-    if (tab === 'overview') void loadGlance()
+    // F-CT-525 (customer Terms & requirements, ct-w2 W2.3; Z32): the Overview also reads the terms per company (its Payment fact).
+    if (tab === 'overview') void Promise.all([loadGlance(), loadTerms()])
     // F-CM-301 (customer MONEY tab, 13-backend §4.2): Money also reads the holds — Release… needs the hold's version (the glance has none).
     else if (tab === 'money') void Promise.all([loadGlance(), loadHolds()])
     // B-TH-260: Terms & requirements reads the hold, the PO-number terms and the requirements in force together.

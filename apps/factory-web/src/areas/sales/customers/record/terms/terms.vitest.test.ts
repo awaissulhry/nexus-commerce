@@ -946,3 +946,32 @@ describe('Tax identity & e-invoice (W2.2, 10-design §5.4; D2, Z3, Z7, Z21, Z23,
     expect(readFileSync(new URL('../../../../parties/_shared/view/PartyRecordView.tsx', import.meta.url), 'utf8')).toContain('<IdentityCard')
   })
 })
+
+// ---- W2.3: one source in Money and the Overview; one editor ------------------------------------------------------------------------
+
+describe('one source, one editor (W2.3; 13-backend §4, Z8, Z32)', () => {
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+
+  it('Terms, Money and the Overview ask the ONE helper — no tab says the payment terms its own way', () => {
+    expect(read('../money/model.ts')).toMatch(/export function paymentTermsOf\([\s\S]*?paymentTermsInForce\(moneyTermsSources\(terms, input\)/)
+    expect(read('../money/credit.ts')).toContain('termsInForce(moneyTermsSources(terms.value, input)')
+    expect(read('../overview/rows.ts')).toContain('paymentTermsInForce({ commercial: null, companies, companyId: input.companyId ?? null, typed: party.paymentTerms }')
+    // The Overview's terms per company are the depth provider's ONE read (read on the Overview and on Terms), no second read.
+    expect(read('../../depth/use-depth.ts')).toContain("if (tab === 'overview') void Promise.all([loadGlance(), loadTerms()])")
+    expect(read('../../depth/CustomerDepth.tsx')).toContain('export function useCustomerCompanyTerms(): CustomerDepthState[\'terms\'][\'read\'] {')
+    expect(read('../overview/CustomerOverview.tsx')).toContain('const companyTerms = useCustomerCompanyTerms()')
+  })
+
+  it('Z8: the customer\'s Edit window leaves out currency, document language and payment terms; New and the supplier\'s form keep them', () => {
+    const dialogs = read('../../../../parties/_shared/view/dialogs.tsx')
+    expect(dialogs).toContain('side={side} withTerms withCommercial={false} roles={')
+    expect(dialogs.match(/withCommercial=\{false\}/g)).toHaveLength(1)
+    expect(dialogs).toContain('withCommercial = true,')
+    expect(read('../../../../parties/_shared/view/PartyRecordView.tsx')).not.toContain('withCommercial')
+    for (const locale of LOCALES) {
+      const words = createScopedTranslator(locale, messagesFor(locale, ['parties']), 'parties')('edit.subtitle')
+      expect(words, locale).toContain(locale === 'en' ? 'Terms & requirements' : 'Condizioni e requisiti')
+      expect(words, locale).not.toMatch(/\bparty\b/i)
+    }
+  })
+})

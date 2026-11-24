@@ -159,6 +159,7 @@ export function PartyFields({
   withCode = true,
   withTerms = false,
   withCountry = true,
+  withCommercial = true,
   roles,
 }: {
   draft: PartyDraft
@@ -170,6 +171,11 @@ export function PartyFields({
   withTerms?: boolean
   /** The country field (New takes it from the tax country above). */
   withCountry?: boolean
+  /**
+   * F-CT-526 (customer Terms & requirements, ct-w2 W2.3; Z8): the document language, the currency and the payment terms. The customer's
+   * Edit window leaves them out — their ONE editor is Change terms… on Terms & requirements; New and the supplier's form keep them.
+   */
+  withCommercial?: boolean
   /** The roles offered (default the side's; an edit offers all five: one record carries every role). */
   roles?: readonly PartyRole[]
 }) {
@@ -221,23 +227,29 @@ export function PartyFields({
           <CountrySelect value={draft.country} onChange={(value) => set('country', value)} onBlur={() => leave('country')} />
         </Field>
       )}
-      <Field label={t('field.language')} hint={t('field.languageHint')} error={shown('language')}>
-        <LanguageSelect value={draft.language} onChange={(value) => set('language', value)} />
-      </Field>
-      <Field label={t('field.currency')} error={shown('currency')}>
-        <Select value={draft.currency} onChange={(event) => set('currency', event.target.value)}>
-          {(CURRENCY_CHOICES.includes(draft.currency as (typeof CURRENCY_CHOICES)[number]) ? CURRENCY_CHOICES : [draft.currency, ...CURRENCY_CHOICES]).map((code) => (
-            <option key={code} value={code}>
-              {code}
-            </option>
-          ))}
-        </Select>
-      </Field>
+      {withCommercial && (
+        <>
+          <Field label={t('field.language')} hint={t('field.languageHint')} error={shown('language')}>
+            <LanguageSelect value={draft.language} onChange={(value) => set('language', value)} />
+          </Field>
+          <Field label={t('field.currency')} error={shown('currency')}>
+            <Select value={draft.currency} onChange={(event) => set('currency', event.target.value)}>
+              {(CURRENCY_CHOICES.includes(draft.currency as (typeof CURRENCY_CHOICES)[number]) ? CURRENCY_CHOICES : [draft.currency, ...CURRENCY_CHOICES]).map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </>
+      )}
       {withTerms && (
         <>
-          <Field label={t('field.paymentTerms')} hint={t('field.paymentTermsHint')} error={shown('paymentTerms')} className="fw-pty-form-wide">
-            <Input value={draft.paymentTerms} maxLength={500} onChange={(event) => set('paymentTerms', event.target.value)} onBlur={() => leave('paymentTerms')} />
-          </Field>
+          {withCommercial && (
+            <Field label={t('field.paymentTerms')} hint={t('field.paymentTermsHint')} error={shown('paymentTerms')} className="fw-pty-form-wide">
+              <Input value={draft.paymentTerms} maxLength={500} onChange={(event) => set('paymentTerms', event.target.value)} onBlur={() => leave('paymentTerms')} />
+            </Field>
+          )}
           <Field label={t('field.internalNote')} hint={t('field.internalNoteHint')} error={shown('internalNote')} className="fw-pty-form-wide">
             <Textarea rows={3} value={draft.internalNote} onChange={(event) => set('internalNote', event.target.value)} onBlur={() => leave('internalNote')} />
           </Field>
@@ -561,7 +573,9 @@ export function EditPartyModal({
         onKeyDown={submitKeys(submit)}
       >
         {problem && <Banner tone={problem === 'problem.conflict' ? 'warning' : 'danger'} title={t(problem)} />}
-        <PartyFields draft={draft} onChange={setDraft} shown={form.shown} leave={form.leave} side={side} withTerms roles={['CUSTOMER', 'BRAND', 'SUPPLIER', 'SUBCONTRACTOR', 'CARRIER']} />
+        {/* F-CT-526 (Z8): the customer's Edit window (the supplier never opens it: cards.tsx NextSteps) — names, kind, roles, country and
+            the office note; currency, document language and payment terms are Change terms… on Terms & requirements. */}
+        <PartyFields draft={draft} onChange={setDraft} shown={form.shown} leave={form.leave} side={side} withTerms withCommercial={false} roles={['CUSTOMER', 'BRAND', 'SUPPLIER', 'SUBCONTRACTOR', 'CARRIER']} />
       </form>
     </Modal>
   )

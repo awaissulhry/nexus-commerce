@@ -41,8 +41,8 @@ export const peopleDoor = (prefix: string, partyId: string, anchor: PeopleAnchor
 export const peopleAddDoor = (prefix: string, partyId: string, what: 'contact' | 'address'): string => `${tabDoor(prefix, partyId, 'people')}&add=${what}`
 // F-CA-121: end
 
-/** The parts of Terms & requirements (the element ids the customer page draws: `party-hold`, `party-requirements`, `party-identity`). */
-export const TERMS_ANCHORS = Object.freeze({ hold: 'party-hold', requirements: 'party-requirements', identity: 'party-identity' } as const)
+/** The parts of Terms & requirements (the element ids the customer page draws: `party-hold`, `party-commercial`, `party-requirements`, `party-identity`). */
+export const TERMS_ANCHORS = Object.freeze({ hold: 'party-hold', commercial: 'party-commercial' /* F-CT-524 (W2.3): the Payment fact's door */, requirements: 'party-requirements', identity: 'party-identity' } as const)
 export type TermsAnchor = keyof typeof TERMS_ANCHORS
 export const termsDoor = (prefix: string, partyId: string, anchor: TermsAnchor): string => `${tabDoor(prefix, partyId, 'terms')}#${TERMS_ANCHORS[anchor]}`
 

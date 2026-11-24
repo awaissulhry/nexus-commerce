@@ -6,7 +6,7 @@ import { moneyText } from '../../../../finance/costing/model'
 import type { AgeingRow } from '../../../../finance/receivables/api'
 import type { Party } from '../../../../parties/_shared/api'
 import { languageName, type Loaded } from '../../../../parties/_shared/model'
-import type { Glance } from '../../depth/api'
+import type { CompanyTerms, Glance } from '../../depth/api'
 import type { Read as GlanceRead } from '../../depth/model'
 import type { CustomerWork } from '../../list/api'
 import type { CustomersWorkModel } from '../../list/model'
@@ -218,6 +218,15 @@ export interface OverviewInput {
   readonly projects: { readonly open: number; readonly all: number } | null
   /** A VIES check runs now (its button is held with words). */
   readonly viesRunning: boolean
+  /**
+   * F-CT-524 (customer Terms & requirements, ct-w2 W2.3; 13-backend §4, Z32): the terms per company — the depth provider's ONE read on
+   * the Overview — for the Payment fact through the ONE helper of the three tabs (cu/record/terms/in-force.ts); absent: not read (the
+   * text typed on the customer then).
+   */
+  readonly companyTerms?: GlanceRead<CompanyTerms> | null
+  /** F-CT-524: the company the page works in (the session's) and the page's language (the payment terms' name in it). */
+  readonly companyId?: string | null
+  readonly locale?: Locale
 }
 
 // ---- what the tab draws ------------------------------------------------------------------------------------------------------
