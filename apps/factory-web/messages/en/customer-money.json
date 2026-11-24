@@ -109,7 +109,7 @@
       "down": "{section} ↓",
       "invoices": "Open in Finance › Invoices ›",
       "payments": "Open in Finance › Payments ›",
-      "refunds": "Open in Finance › Refunds ›",
+      "refunds": "Open in Finance › Payments › Refunds ›",
       "margins": "Open in Finance › Margins ›"
     },
     "more": {
