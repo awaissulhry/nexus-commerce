@@ -783,3 +783,196 @@ describe('B-CP-076: "Your price" in the draft, frozen at Send, carried onto the 
   })
 })
 // ---- end B-CP-076
+
+// ---- od-ts (order start, 13-backend § 7; addendum R1): the walls of ONE draft filled from both doors, through the app -------------
+describe('od-ts: the office fills the customer’s draft — brand, money, styles and who saved it stay behind their walls', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  // Office people of the ready-made roles signed in through the app (their can() and grain filter): a Sales worker (orders.manage,
+  // no price grain), a Production manager (orders.view and product.styles.manage, no price grain), an Owner (every right, prices).
+  let sales: OfficeBrowser
+  let production: OfficeBrowser
+  let owner: OfficeBrowser
+  let salesName = ''
+  const P3 = seedUuid(NS, 'party:P3') // another customer of the seeds (SEED-C2), with a delivery address of its own
+  const P3_OFFICE = seedUuid(NS, 'party-address:P3:office')
+  const WORKSHOP = seedUuid(NS, 'party-address:P1:workshop') // P1's own delivery address (ACTIVE, the office's, never checked)
+  // The money keys of the draft's record (both doors) and of the office's record: gone, never null-but-present, without the grain.
+  const RECORD_PRICE_KEYS = /"(unitPriceShown|priceNow|amount|net|brandUnitPrice|draftValueAmount)":/
+  const OFFICE_PRICE_KEYS = /"(unitPriceShown|listPriceNow|amountShown|netShown|brandUnitPrice|draftValueAmount|priceDiff|priceMatch)":/
+  const OWN_PRICE = "The customer's own price is typed by the customer."
+
+  async function officeDesk(email: string, role: string): Promise<{ browser: OfficeBrowser; name: string }> {
+    const user = await addUser(h, tenant, { email, role })
+    const browser = new OfficeBrowser(h.app)
+    expect((await browser.signIn(NS, user.email, user.password)).status).toBe(200)
+    await enrolTotp(h, browser)
+    return { browser, name: (await one<{ displayName: string }>('SELECT "displayName" FROM "User" WHERE id = $1', [user.id])).displayName }
+  }
+
+  beforeAll(async () => {
+    const desk = await officeDesk('sara.sales.odts@example.com', 'sales')
+    sales = desk.browser
+    salesName = desk.name
+    production = (await officeDesk('piero.production.odts@example.com', 'production_manager')).browser
+    owner = (await officeDesk('olga.owner.odts@example.com', 'owner')).browser
+    h.clock.set(new Date(Date.now() - 2_000))
+  }, 120_000)
+
+  it("WS-OD-9: after an office save the portal says 'the factory', never a worker's name, also in the 409", async () => {
+    const made = await ok(browsers.buyer, 'POST', '/portal/order-requests', { subject: 'Made-up: the winter team kit' }, 201)
+    const url = `/portal/order-requests/${made.request.id}`
+    expect(made.request.savedBy.who).toBe('YOU')
+    // The office saves the customer's draft (the office names its saver: the name exists to leak).
+    const saved = await ok(sales, 'PATCH', `/sales/order-requests/${made.request.id}`, { version: made.request.version, note: 'Made-up: the factory notes the delivery window.' })
+    expect(saved.request.savedBy).toEqual({ who: 'YOU', name: salesName })
+    const now = saved.request.version as number
+    expect(now).toBeGreaterThan(made.request.version)
+    // The portal: "the factory", no name, no colleague's name either.
+    const read = await ok(browsers.buyer, 'GET', url)
+    expect(read.request).toMatchObject({ note: 'Made-up: the factory notes the delivery window.', savedBy: { who: 'FACTORY', name: null }, lastEditedBy: null })
+    const listed = await ok(browsers.buyer, 'GET', '/portal/order-requests')
+    const row = (listed.requests as Json[]).find((entry) => entry.id === made.request.id)!
+    expect(row.draft).toMatchObject({ title: 'Made-up: the winter team kit', startedBy: { who: 'YOU' }, savedBy: { who: 'FACTORY', name: null } })
+    for (const answer of [read, listed]) expect(JSON.stringify(answer)).not.toContain(salesName)
+    // A portal write with the version read before the office's save: 409 in the factory's words, no name in its issues.
+    const stale = await call(browsers.buyer, 'PATCH', url, { version: made.request.version, customerRef: 'PO-T-OD9' })
+    expect(stale.status, JSON.stringify(stale.body)).toBe(409)
+    expect(stale.body.error.message).toBe(`The factory changed this draft since you read it (now version ${now}): read it again.`)
+    expect((stale.body.error.issues as Json[]).map((issue) => issue.path)).toEqual(['version'])
+    expect(JSON.stringify(stale.body)).not.toContain(salesName)
+    expect((await one('SELECT version, "customerRef" FROM "PortalOrderRequest" WHERE id = $1', [made.request.id]))).toEqual({ version: now, customerRef: null })
+  })
+
+  it('WS-OD-2: an office draft of brand A lists and defaults only brand A’s delivery addresses', async () => {
+    // The delivery-address cases above left P1 without a default delivery address: its workshop is the default again.
+    await admin('UPDATE "PartyAddress" SET "isDefaultShipTo" = false, version = version + 1 WHERE "partyId" = $1 AND "isDefaultShipTo" AND id <> $2', [P1, WORKSHOP])
+    await admin('UPDATE "PartyAddress" SET "isDefaultShipTo" = true, version = version + 1 WHERE id = $1 AND NOT "isDefaultShipTo"', [WORKSHOP])
+    // Customer B's address is there, active, a delivery address: the refusals below are the wall, not a missing row.
+    expect(await one(`SELECT "partyId", status::text AS status, 'SHIP_TO' = ANY(kinds) AS "shipTo" FROM "PartyAddress" WHERE id = $1`, [P3_OFFICE])).toEqual({ partyId: P3, status: 'ACTIVE', shipTo: true })
+    // The office starts A's draft with no address: A's default, and A's delivery addresses only.
+    const started = await ok(sales, 'POST', '/sales/order-requests', { companyId: companyA, partyId: P1, subject: 'Made-up: rain covers for the team' }, 201)
+    expect(started.request.shipToAddressId).toBe(WORKSHOP)
+    const own = (await admin<{ id: string }>(`SELECT id FROM "PartyAddress" WHERE "partyId" = $1 AND 'SHIP_TO' = ANY(kinds)`, [P1])).map((address) => address.id).sort()
+    const listed = (started.addresses as Json[]).map((address) => address.id as string)
+    expect([...listed].sort()).toEqual(own)
+    expect(listed).not.toContain(P3_OFFICE)
+    expect(started.addresses.find((address: Json) => address.id === WORKSHOP)).toMatchObject({ isDefault: true, status: 'ACTIVE' })
+    // B's address on A's draft: "choose one of yours", in a change and in a start.
+    const changed = await call(sales, 'PATCH', `/sales/order-requests/${started.request.id}`, { version: started.request.version, shipToAddressId: P3_OFFICE })
+    expect(changed.status, JSON.stringify(changed.body)).toBe(400)
+    expect(changed.body.error.message).toBe('Choose one of your active delivery addresses.')
+    const named = await call(sales, 'POST', '/sales/order-requests', { companyId: companyA, partyId: P1, shipToAddressId: P3_OFFICE })
+    expect(named.status, JSON.stringify(named.body)).toBe(400)
+    expect(named.body.error.message).toBe('Choose one of your active delivery addresses.')
+    expect(await one('SELECT version, "shipToAddressId" FROM "PortalOrderRequest" WHERE id = $1', [started.request.id])).toEqual({ version: started.request.version, shipToAddressId: WORKSHOP })
+  })
+
+  it('WS-OD-4: no portal answer carries styleIds; the office’s style draft reaches the portal as designStarted only', async () => {
+    const made = await ok(browsers.buyer, 'POST', '/portal/order-requests', { subject: 'Made-up: a new race jacket for the team' }, 201)
+    expect(made.request.designStarted).toBe(false)
+    // The Production manager (product.styles.manage) makes a style draft on the customer's draft.
+    const scale = (await one<{ sizeScaleId: string }>('SELECT "sizeScaleId" FROM "Style" WHERE id = $1', [jkt01])).sizeScaleId
+    const code = `OD4-${newId().slice(-8)}`.toUpperCase()
+    const drafted = await ok(production, 'POST', `/sales/order-requests/${made.request.id}/style-draft`, { version: made.request.version, code, productType: 'JACKET', sizeScaleId: scale, sizes: ['50', '52'], baseSize: '52', ppeCategory: 'NOT_PPE' })
+    expect(drafted).toMatchObject({ code, version: made.request.version + 1 })
+    const madeStyle = drafted.styleId as string
+    // The office reads its style draft on the request; the request keeps it (office only).
+    expect((await officeRequestView(office(), made.request.id)).request.styles.map((style) => style.id)).toEqual([madeStyle])
+    expect((await one<{ styleIds: string[] }>('SELECT "styleIds" FROM "PortalOrderRequest" WHERE id = $1', [made.request.id])).styleIds).toEqual([madeStyle])
+    // Every portal answer: no styleIds, no style id or code; the record says only that the design started.
+    const url = `/portal/order-requests/${made.request.id}`
+    const read = await ok(browsers.buyer, 'GET', url)
+    expect(read.request.designStarted).toBe(true)
+    const changed = await ok(browsers.buyer, 'PATCH', url, { version: read.request.version, note: 'Made-up: our logo on the chest' })
+    expect(changed.request.designStarted).toBe(true)
+    const listed = await ok(browsers.buyer, 'GET', '/portal/order-requests')
+    expect((listed.requests as Json[]).map((row) => row.id)).toContain(made.request.id)
+    for (const answer of [made, read, changed, listed]) {
+      const text = JSON.stringify(answer)
+      expect(text).not.toMatch(/"styleIds"/)
+      expect(text).not.toContain(madeStyle)
+      expect(text).not.toContain(code)
+    }
+  })
+
+  // Extends M-CP-1 (B-CP-076 above) to the office's door: the office stamps the list price on a catalogue row (W4), never shown
+  // to a person without the price grain, in the office or in the portal.
+  it('WS-OD-5: Sales and the Production manager write and read a draft with no price; the office stamp never shows; the portal Designer reads none after an office save', async () => {
+    // The Designer's draft: a catalogue row stored with no price shown (the Designer never had one to see).
+    const made = await ok(browsers.designer, 'POST', '/portal/order-requests', { subject: 'Made-up: team jackets, red after all' }, 201)
+    const url = `/portal/order-requests/${made.request.id}`
+    const filled = await ok(browsers.designer, 'POST', `${url}/lines`, { version: made.request.version, lines: [{ styleId: jkt02, colourwayId: blk02, sizes: [{ size: '50', quantity: 3 }] }] })
+    const lineId = filled.request.lines[0].id as string
+    const shown = () => one<{ price: string | null }>('SELECT "unitPriceShown"::text AS price FROM "PortalOrderRequestLine" WHERE id = $1', [lineId]).then((row) => row.price)
+    expect(await shown()).toBeNull()
+    const door = `/sales/order-requests/${made.request.id}`
+    // Sales changes the row's colour through the office door: the office stamps the list price today (W4) ...
+    const recoloured = await ok(sales, 'PUT', `${door}/lines/${lineId}`, { version: filled.request.version, colourwayId: red02 })
+    expect(await shown()).not.toBeNull()
+    // ... adds a row in its own words, and reads the draft and the office record: no price key in any answer.
+    const added = await ok(sales, 'POST', `${door}/custom-lines`, { version: recoloured.request.version, line: { description: 'Made-up rain covers, our logo on the back', quantity: 4 } })
+    const read = await ok(sales, 'GET', `${door}/draft`)
+    expect(read.request.lines).toEqual([expect.objectContaining({ id: lineId, colourway: expect.objectContaining({ id: red02 }) })])
+    expect(read.request.customLines).toHaveLength(1)
+    for (const answer of [recoloured, added, read]) {
+      expect(JSON.stringify(answer)).not.toMatch(RECORD_PRICE_KEYS)
+      expect(answer.seesPrices).toBe(false)
+    }
+    expect(JSON.stringify(await ok(sales, 'GET', door))).not.toMatch(OFFICE_PRICE_KEYS)
+    // The Production manager reads it with no price (orders.view) and changes nothing (no orders.manage: 403).
+    const seen = await ok(production, 'GET', `${door}/draft`)
+    expect(JSON.stringify(seen)).not.toMatch(RECORD_PRICE_KEYS)
+    expect(seen.seesPrices).toBe(false)
+    expect(JSON.stringify(await ok(production, 'GET', door))).not.toMatch(OFFICE_PRICE_KEYS)
+    expect((await call(production, 'PATCH', door, { version: read.request.version, note: 'Made-up: not mine to change' })).status).toBe(403)
+    // The portal Designer after the office's saves: no price either; the Buyer (the price grain) reads the office's stamp.
+    const designer = await ok(browsers.designer, 'GET', url)
+    expect(JSON.stringify(designer)).not.toMatch(RECORD_PRICE_KEYS)
+    expect(designer.seesPrices).toBe(false)
+    const buyer = await ok(browsers.buyer, 'GET', url)
+    expect(buyer.request.lines.find((line: Json) => line.id === lineId).unitPriceShown).toEqual(expect.any(String))
+  })
+
+  it('WS-OD-6: an office person, even with the price grain, cannot type the customer’s own price', async () => {
+    const made = await ok(browsers.buyer, 'POST', '/portal/order-requests', { subject: 'Made-up: the price stays the customer’s' }, 201)
+    const url = `/portal/order-requests/${made.request.id}`
+    const filled = await ok(browsers.buyer, 'POST', `${url}/lines`, { version: made.request.version, lines: [{ styleId: jkt02, colourwayId: blk02, sizes: [{ size: '50', quantity: 2 }], brandUnitPrice: '400' }] })
+    const described = await ok(browsers.buyer, 'POST', `${url}/custom-lines`, { version: filled.request.version, line: { kind: 'DESCRIBED', description: 'Made-up team vests', quantity: 5 } })
+    const lineId = filled.request.lines[0].id as string
+    const customId = described.request.customLines[0].id as string
+    const version = described.request.version as number
+    const door = `/sales/order-requests/${made.request.id}`
+    const bodies = [
+      ['POST', `${door}/custom-lines`, { version, line: { description: 'Made-up caps', quantity: 10, brandUnitPrice: '12.5' } }],
+      ['PUT', `${door}/custom-lines/${customId}`, { version, brandUnitPrice: '99' }],
+      ['PUT', `${door}/lines/${lineId}`, { version, brandUnitPrice: '1' }],
+      ['PUT', `${door}/lines/${lineId}`, { version, brandUnitPrice: null }],
+    ] as const
+    // The Owner (the price grain): refused in words on every door that takes a row.
+    for (const [method, path, body] of bodies) {
+      const answer = await call(owner, method, path, body)
+      expect(answer.status, `${method} ${path}: ${JSON.stringify(answer.body)}`).toBe(400)
+      expect(answer.body.error.message, `${method} ${path}`).toBe(OWN_PRICE)
+    }
+    // Sales (no price grain): the grain filter refuses the money field first (403).
+    for (const [method, path, body] of bodies) {
+      const answer = await call(sales, method, path, body)
+      expect(answer.status, `${method} ${path}: ${JSON.stringify(answer.body)}`).toBe(403)
+      expect(answer.body.error.message, `${method} ${path}`).toBe('This request sends money fields you may not see.')
+    }
+    // Nothing moved: the customer's own price is the customer's.
+    expect(await one('SELECT version FROM "PortalOrderRequest" WHERE id = $1', [made.request.id])).toEqual({ version })
+    expect((await one<{ price: string | null }>('SELECT "brandUnitPrice"::text AS price FROM "PortalOrderRequestLine" WHERE id = $1', [lineId])).price).toBe('400.000000')
+    expect((await admin('SELECT 1 FROM "PortalOrderRequestLine" WHERE "requestId" = $1', [made.request.id])).length).toBe(2)
+  })
+
+  it('R1: the customer sends a draft with nothing in it', async () => {
+    const made = await ok(browsers.buyer, 'POST', '/portal/order-requests', {}, 201)
+    expect(made.request).toMatchObject({ status: 'DRAFT', subject: null, lines: [], customLines: [], held: null, may: { send: true } })
+    const sent = await ok(browsers.buyer, 'POST', `/portal/order-requests/${made.request.id}/send`, { version: made.request.version })
+    expect(sent.request).toMatchObject({ status: 'SENT', number: expect.stringMatching(/^RQ-\d{4}$/) })
+    expect(sent.sent.number).toBe(sent.request.number)
+    expect(await one('SELECT status, number, "sentById" FROM "PortalOrderRequest" WHERE id = $1', [made.request.id])).toEqual({ status: 'SENT', number: sent.request.number, sentById: userIds.buyer })
+    expect((await admin('SELECT 1 FROM "PortalOrderRequestLine" WHERE "requestId" = $1', [made.request.id])).length).toBe(0)
+  })
+})
+// ---- end od-ts

@@ -25,6 +25,8 @@ export const manifest = defineManifest({
   'POST /portal/order-requests/:requestId/files': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
   'POST /portal/order-requests/:requestId/files/:fileId/complete': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
   'DELETE /portal/order-requests/:requestId/files/:fileId': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
+  // od-ts t.6: a file moved between the draft's logos and references (the handler also asks portal.upload, as the upload).
+  'PATCH /portal/order-requests/:requestId/files/:fileId': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
   // B-CP-075: described and made-to-measure lines, and the people of a by-person line (a draft's: portal.orderDrafts.edit).
   'POST /portal/order-requests/:requestId/custom-lines': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
   'PUT /portal/order-requests/:requestId/custom-lines/:lineId': { audiences: ['partner'], permission: 'portal.orderDrafts.edit', scope: 'party' },
@@ -67,6 +69,8 @@ export const manifest = defineManifest({
   'POST /sales/order-requests/:requestId/files': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'POST /sales/order-requests/:requestId/files/:fileId/complete': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'DELETE /sales/order-requests/:requestId/files/:fileId': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
+  // od-ts t.6: the office's twin (orders.manage + files.upload over the draft's company and customer: the handler).
+  'PATCH /sales/order-requests/:requestId/files/:fileId': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },
   'POST /sales/order-requests/:requestId/style-draft': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   // od-s s.4 (Owner yes 2a): Confirm = send (if still a draft) + the accept, in ONE command (quotes.manage too for a quote: the handler).
   'POST /sales/order-requests/:requestId/confirm': { audiences: ['office'], permission: 'orders.manage', scope: 'record' },

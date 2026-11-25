@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { seed as seedCore, type CoreSeed } from '../seed/_core'
+import { seed as seedOptions } from '../seed/options'
 import { seed as seedPortalSales, type PortalSalesSeed } from '../seed/portal-sales'
 import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type FactoryScope } from './client'
 import { classifiedModels, personalDataOf } from './ownership'
@@ -24,7 +25,9 @@ import { seedDay, seedIso } from './seed-calendar' // B-W2b-F53: the seeds' futu
  *   - payment intents: CREATED on a payment provider account, paying one open deposit request or issued invoice, moved
  *     forward only, no card number in any column, a succeeded one names its payment once;
  *   - measurements by link: the link, the notice shown, three body photos; never edited but the photos' deletion date;
- *   - the sales settings' cut-off rules; TRUNCATE refused.
+ *   - the sales settings' cut-off rules; TRUNCATE refused;
+ *   - OD t.4 (order start): the seed's two more drafts of P1 (its buyer's race kit, a draft the office started) pass the guards;
+ *     the options seed runs first, as the CLI runs it (name order), so the office names SEED-JKT-05 as the race kit's style draft.
  * The refusals are check_violation (SQLSTATE 23514); their messages are read through raw SQL.
  */
 
@@ -128,6 +131,8 @@ beforeAll(async () => {
   db = await migratedDatabase('portalsalesw2b')
   factory = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 4 } })
   a = await seedCore({ db: factory, namespace: NS })
+  // OD t.4: seed/options.ts first, as the CLI runs it (name order): the race kit's style draft is its SEED-JKT-05.
+  await seedOptions({ db: factory, namespace: NS })
   seeded = await seedPortalSales({ db: factory, namespace: NS })
 }, 1_500_000)
 
@@ -156,8 +161,11 @@ describe('grants and the seed', () => {
     expect(profile.factory_partner_runtime).toMatchObject({ privileges: ['select', 'insert'], hiddenColumns: ['internalNote', 'createdById', 'measuredByUserId', 'reviewedById'] })
   })
 
-  it('the seed: a draft, three sent requests decided or waiting, three change requests, two payment intents, a profile sent by link', async () => {
+  // OD t.4 (order start): + two drafts of P1, its buyer's race kit and one the office started (was "a draft").
+  it('the seed: three drafts (one started in the office), three sent requests decided or waiting, three change requests, two payment intents, a profile sent by link', async () => {
     expect(await sql(office(), `SELECT r.status::text AS status, r.number FROM "PortalOrderRequest" r ORDER BY r.status`)).toEqual([
+      { status: 'DRAFT', number: null },
+      { status: 'DRAFT', number: null },
       { status: 'DRAFT', number: null },
       { status: 'SENT', number: 'SEED-RQ-0001' },
       { status: 'ACCEPTED', number: 'SEED-RQ-0002' },
@@ -194,8 +202,78 @@ describe('grants and the seed', () => {
     ])
   })
 
+  // OD t.4 (order start; addendum R1-R3): the race kit P1's buyer started like a mail (a subject, a message, one row of each
+  // sizing) and the draft the office's Sales person started for P1, written through the guards; the office named SEED-JKT-05
+  // (P1's own label, tenant-wide) as the race kit's style draft after the insert (a new request names none).
+  it("the seed (OD t.4): the race kit's three rows and six riders, a draft the office started, the race kit's style draft", async () => {
+    const start = seeded.orderStart
+    expect(await sql(office(), `SELECT id::text AS id, "brandPartyId"::text AS brand, "companyId" AS company FROM "Style" WHERE code = 'SEED-JKT-05'`)).toEqual([{ id: start.styleDraftId, brand: P1, company: null }])
+    expect(
+      await sql(
+        office(),
+        `SELECT id::text AS id, subject, note IS NOT NULL AS message, "laterParts"::text[] AS later, "createdById"::text AS "startedBy", "lastEditedById"::text AS "savedBy", "styleIds"::text[] AS styles, version
+           FROM "PortalOrderRequest" WHERE id IN ($1::uuid, $2::uuid) ORDER BY subject`,
+        start.raceKit,
+        start.officeDraft,
+      ),
+    ).toEqual([
+      { id: start.raceKit, subject: 'Race team kit for 2027', message: true, later: [], startedBy: seeded.buyerId, savedBy: seeded.buyerId, styles: [start.styleDraftId], version: 2 },
+      { id: start.officeDraft, subject: 'Winter jackets reorder', message: false, later: [], startedBy: start.officeStartedById, savedBy: start.officeStartedById, styles: [], version: 1 },
+    ])
+    expect(
+      await sql(
+        office(),
+        `SELECT l.id::text AS id, l.seq, l.kind::text AS kind, l.sizing::text AS sizing, l."byPerson" AS "byPerson", l.description, (SELECT st.code FROM "Style" st WHERE st.id = l."styleId") AS style,
+                l."colourwayId" IS NOT NULL AS coloured, l.quantity, l.choices,
+                (SELECT coalesce(array_agg(s.size || ':' || s.quantity ORDER BY s.size), ARRAY[]::text[]) FROM "PortalOrderRequestSize" s WHERE s."lineId" = l.id) AS sizes,
+                (SELECT count(*)::int FROM "PortalOrderRequestPerson" p WHERE p."lineId" = l.id) AS people
+           FROM "PortalOrderRequestLine" l WHERE l."requestId" = $1::uuid ORDER BY l.seq`,
+        start.raceKit,
+      ),
+    ).toEqual([
+      {
+        id: start.raceKitLines[0],
+        seq: 1,
+        kind: 'MADE_TO_MEASURE',
+        sizing: 'MADE_TO_MEASURE',
+        byPerson: true,
+        description: 'Custom race suit',
+        style: null,
+        coloured: false,
+        quantity: null,
+        choices: [
+          { topic: 'Leather', options: ['Cowhide', 'Kangaroo'], picked: null },
+          { topic: 'Protection class', options: ['AA', 'AAA'], picked: null },
+        ],
+        sizes: [],
+        people: 6,
+      },
+      { id: start.raceKitLines[1], seq: 2, kind: 'CATALOGUE', sizing: 'STANDARD', byPerson: false, description: null, style: 'SEED-JKT-02', coloured: true, quantity: null, choices: null, sizes: ['50:1', '52:2', '54:1'], people: 0 },
+      { id: start.raceKitLines[2], seq: 3, kind: 'DESCRIBED', sizing: null, byPerson: false, description: 'Team gloves', style: null, coloured: false, quantity: null, choices: null, sizes: [], people: 0 },
+    ])
+    // The race suit's riders: five by a size of the jacket range, one later.
+    expect(
+      await sql(
+        office(),
+        `SELECT "measureBy"::text AS measure, count(*)::int AS n, array_agg(DISTINCT size) FILTER (WHERE size IS NOT NULL) AS sizes
+           FROM "PortalOrderRequestPerson" WHERE "lineId" = $1::uuid GROUP BY "measureBy" ORDER BY 1`,
+        start.raceKitLines[0],
+      ),
+    ).toEqual([
+      { measure: 'LATER', n: 1, sizes: null },
+      { measure: 'SIZE', n: 5, sizes: ['50', '52', '54'] },
+    ])
+    expect(await sql(office(), `SELECT id::text AS id, kind::text AS kind, sizing::text AS sizing, quantity, "createdById"::text AS creator FROM "PortalOrderRequestLine" WHERE "requestId" = $1::uuid`, start.officeDraft)).toEqual([
+      { id: start.officeDraftLine, kind: 'DESCRIBED', sizing: 'STANDARD', quantity: 20, creator: start.officeStartedById },
+    ])
+    // P1's portal reads both drafts (one draft, both doors), never the style drafts named on them.
+    expect(await sql(partner(), `SELECT subject FROM "PortalOrderRequest" WHERE id IN ($1::uuid, $2::uuid) ORDER BY subject`, start.raceKit, start.officeDraft)).toEqual([{ subject: 'Race team kit for 2027' }, { subject: 'Winter jackets reorder' }])
+    await expect(sql(partner(), `SELECT "styleIds" FROM "PortalOrderRequest" WHERE id = $1::uuid`, start.raceKit)).rejects.toThrow(DENIED)
+  })
+
   it('a partner reads its own party only, never who decided or answered nor the provider account; the floor reads none of it', async () => {
-    expect((await sql(partner(), 'SELECT id FROM "PortalOrderRequest"')).length).toBe(4)
+    // OD t.4: six, the draft the office started for P1 among them (one draft, both doors).
+    expect((await sql(partner(), 'SELECT id FROM "PortalOrderRequest"')).length).toBe(6)
     expect((await sql(partner(), 'SELECT id FROM "OrderChangeRequest"')).length).toBe(3)
     expect((await sql(partner(), 'SELECT id FROM "PaymentIntent"')).length).toBe(2)
     for (const table of ['PortalOrderRequest', 'PortalOrderRequestLine', 'PortalOrderRequestSize', 'OrderChangeRequest', 'OrderChangeRequestLine', 'PaymentIntent']) {
@@ -214,7 +292,7 @@ describe('grants and the seed', () => {
 
 describe('order requests', () => {
   // OD s.1 (…_order_start_guards; Owner's yes 1a): the office edits a customer's draft too. Was "the office never does".
-  it('the customer and the office edit its draft, its draft columns only; a draft is discarded whole', async () => {
+  it('WS-OD-11: the customer and the office edit its draft, its draft columns only; a draft is discarded whole', async () => {
     const draft = await newDraft()
     expect(await update(partner(), 'PortalOrderRequest', draft, `"customerRef" = 'PO-T-1', note = 'Two more styles', version = version + 1`)).toBe(1)
     expect(await update(office(), 'PortalOrderRequest', draft, `note = 'office words', version = version + 1`)).toBe(1)
@@ -237,7 +315,7 @@ describe('order requests', () => {
   })
 
   // OD s.1 (…_order_start_guards; addendum R1): Send needs no line and no pieces (was "at least one line, each with its pieces").
-  it('sending: a number, when and who; no line or pieces needed; a date not before the day it is sent', async () => {
+  it('WS-OD-11: sending: a number, when and who; nothing needed (no line, no pieces); a date not before the day it is sent', async () => {
     const empty = await newDraft()
     expect(await send(empty)).toBe(1)
     const bare = await newDraft()
@@ -256,7 +334,7 @@ describe('order requests', () => {
     expect(await sql(office(), `SELECT status::text, number FROM "PortalOrderRequest" WHERE id = $1::uuid`, early)).toEqual([{ status: 'SENT', number: 'RQ-T-FIXED' }])
   })
 
-  it('a sent request is frozen but for its decision or withdrawal; its lines and sizes change only while DRAFT', async () => {
+  it('WS-OD-11: a sent request is frozen but for its decision, its withdrawal or (the office) its style drafts; its lines and sizes change only while DRAFT', async () => {
     const id = seeded.requests.sent
     // OD s.1: SENT → SENT is the office's move for the style drafts only (was "not SENT → SENT" for everyone).
     await expect(update(partner(), 'PortalOrderRequest', id, `note = 'later words'`)).rejects.toThrow(/was sent; only the office names the style drafts it made for it/)

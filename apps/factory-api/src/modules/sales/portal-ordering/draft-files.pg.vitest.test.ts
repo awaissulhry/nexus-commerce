@@ -240,6 +240,31 @@ describe('B-CP-072: a draft order’s files', { timeout: SLOW_TEST_TIMEOUT_MS },
     expect(await admin('SELECT id FROM "StoredFile" WHERE "tenantId" = $1 AND "partyId" = $2 AND "recordId" = ANY($3::uuid[])', [T, partyB, [G.draft.id, G.draft.lineId]])).toEqual([])
   })
 
+  // od-ts t.6 (the Owner's picture: a "Logo" toggle on each attachment).
+  it('od-ts t.6: the Logo toggle moves A’s own file between logos and references (the version moves); customer B moves none of A’s files (404); a measurement sheet stays one (409)', async () => {
+    const read = await ok('aBuyer', 'GET', `/portal/order-requests/${G.draft.id}`)
+    const base = `/portal/order-requests/${G.draft.id}/files`
+    // Customer B: A's draft and A's files are not B's to name (not found, as a wrong id), not even through B's own draft.
+    for (const file of [G.logo, G.sheet]) expect((await call('bBuyer', 'PATCH', `${base}/${file.id}`, { version: read.request.version, part: 'REFERENCE' })).status).toBe(404)
+    const theirs = await ok('bBuyer', 'POST', '/portal/order-requests', {}, 201)
+    expect((await call('bBuyer', 'PATCH', `/portal/order-requests/${theirs.request.id}/files/${G.logo.id}`, { version: theirs.request.version, part: 'REFERENCE' })).status).toBe(404)
+    // Nothing of A's moved: the logo is still filed as artwork, the draft at its version.
+    expect((await admin<{ category: string | null }>('SELECT category FROM "StoredFile" WHERE id = $1', [G.logo.id]))[0]!.category).toBe('ARTWORK')
+    expect((await ok('aBuyer', 'GET', `/portal/order-requests/${G.draft.id}`)).request.version).toBe(read.request.version)
+    // A's own: the logo becomes a reference (one version up), and a logo again.
+    const moved = await ok('aBuyer', 'PATCH', `${base}/${G.logo.id}`, { version: read.request.version, part: 'REFERENCE' })
+    expect(moved.request.version).toBe(read.request.version + 1)
+    expect(moved.request.files.references.map((file: Json) => file.id)).toContain(G.logo.id)
+    expect(moved.request.files.logos.map((file: Json) => file.id)).not.toContain(G.logo.id)
+    expect((await admin<{ category: string | null }>('SELECT category FROM "StoredFile" WHERE id = $1', [G.logo.id]))[0]!.category).toBeNull()
+    const back = await ok('aBuyer', 'PATCH', `${base}/${G.logo.id}`, { version: moved.request.version, part: 'LOGO' })
+    expect(back.request.files.logos.map((file: Json) => file.id)).toContain(G.logo.id)
+    // A measurement sheet is body data: it stays one (in words).
+    const sheet = await call('aBuyer', 'PATCH', `${base}/${G.sheet.id}`, { version: back.request.version, part: 'LOGO' })
+    expect(sheet.status).toBe(409)
+    expect(issuesOf(sheet)).toEqual([{ path: 'refusal/SHEET_STAYS', message: DRAFT_FILE_WORDS.SHEET_STAYS.en }])
+  })
+
   it('refused in words: no upload capability (and the read says so), a sent request; closed on staging without the scanner (the e-mail way)', async () => {
     const draft = await draftWithLine()
     const held = await call('aNoUpload', 'POST', `/portal/order-requests/${draft.id}/files`, meta('LOGO', 'made-up.png', 'image/png', png('held')))

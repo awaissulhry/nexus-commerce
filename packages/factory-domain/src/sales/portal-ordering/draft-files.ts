@@ -35,7 +35,11 @@ export const DRAFT_FILE_RECORDS = Object.freeze({ draft: 'PortalOrderRequest', l
 /** The most files the customer keeps on one draft (its own and its lines' together). */
 export const DRAFT_FILES_MAX = 50
 
-export const DRAFT_FILE_REFUSALS = ['TOO_MANY_FILES'] as const
+export const DRAFT_FILE_REFUSALS = ['TOO_MANY_FILES', /* od-ts t.6 */ 'SHEET_STAYS'] as const
+
+/** od-ts t.6 (the "Logo" toggle on an attachment): the parts a draft's file moves between; a measurement sheet stays one (body data). */
+export const MOVABLE_DRAFT_FILE_PARTS = ['LOGO', 'REFERENCE'] as const
+export type MovableDraftFilePart = (typeof MOVABLE_DRAFT_FILE_PARTS)[number]
 export type DraftFileRefusal = (typeof DRAFT_FILE_REFUSALS)[number]
 
 /** The portal's words for a refused draft file ("voi"), Italian and English; never naming another customer. */
@@ -43,6 +47,11 @@ export const DRAFT_FILE_WORDS = Object.freeze({
   TOO_MANY_FILES: {
     it: 'Questa bozza ha già {max} file: toglietene uno o scriveteci nei messaggi per il resto.',
     en: 'This draft already holds {max} files: remove one, or write to us in the messages for the rest.',
+  },
+  // od-ts t.6: a measurement sheet is not moved to the logos or the references.
+  SHEET_STAYS: {
+    it: 'Una scheda misure resta una scheda misure: toglietela e aggiungete di nuovo il file come logo o riferimento.',
+    en: 'A measurement sheet stays a measurement sheet: remove it and add the file again as a logo or a reference.',
   },
 } satisfies Record<DraftFileRefusal, { readonly it: string; readonly en: string }>)
 

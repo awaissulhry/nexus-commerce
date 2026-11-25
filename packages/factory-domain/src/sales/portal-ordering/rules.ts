@@ -464,6 +464,8 @@ export const OFFICE_DRAFT_WORDS = Object.freeze({
   SHEET_HELD: { it: 'Indicare una scheda misure richiede il permesso sulle misure.', en: 'Naming a measurement sheet needs the measurements right.' },
   /** The customer's own price ("Your price") typed from the office (money wall: the customer types it). */
   OWN_PRICE: { it: 'Il prezzo del cliente lo scrive il cliente.', en: "The customer's own price is typed by the customer." },
+  /** od-ts t.6: a measurement sheet is not moved to the logos or the references (the office voice). */
+  SHEET_STAYS: { it: 'Una scheda misure resta una scheda misure: toglila e aggiungi di nuovo il file come logo o riferimento.', en: 'A measurement sheet stays a measurement sheet: remove it and add the file again as a logo or a reference.' },
 })
 // ---- end od-s s.2
 

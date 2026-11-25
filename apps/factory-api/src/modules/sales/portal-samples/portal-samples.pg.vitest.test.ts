@@ -24,6 +24,9 @@ import { TECH_PACK_OPEN_ACTION } from './download'
  * The office makes the tech pack copies through B-W2b-230's route (a BRAND copy for P1, an internal and a workshop copy);
  * P1's buyer reads, opens and decides in the portal (the portal answer path of B-W2b-184 + B-W2b-252's settle, end to
  * end); P1's viewer reads but may not decide; P1's finance person has no samples page; another brand (Brand Alpha) sees none of P1's.
+ * od-ts (order start, 13-backend § 7 WS-OD-3, API half): the Production manager makes a style draft on P1's draft order (the office's
+ * Make style draft route): P1's own label in development, on P1's Samples page only; the draft's portal read says only that the
+ * design started (no style id, no styleIds key).
  * Every name and number is made up. Run with `node scripts/factory/run-pg-tests.mjs modules/sales/portal-samples`.
  */
 
@@ -238,5 +241,34 @@ describe('another brand and other roles', () => {
   it('the customer’s finance person has no samples page (403)', async () => {
     await as(finance, 'GET', '/portal/samples', undefined, 403)
     await as(finance, 'POST', `/portal/samples/tech-packs/${copies.brand}/download`, { mode: 'preview' }, 403)
+  })
+})
+
+// ---- od-ts (order start, 13-backend § 7 WS-OD-3, API half; the database half is factory-db's customer-page.pg) ------------------
+describe('a style draft made on a draft order (od-ts)', () => {
+  it('WS-OD-3 a draft’s style draft shows on its own brand’s Samples page only', async () => {
+    const subject = 'Made-up: team jackets with our logo'
+    const started = await as(buyer, 'POST', '/portal/order-requests', { subject }, 201)
+    const draftId = started.request.id as string
+    expect(started.request).toMatchObject({ status: 'DRAFT', subject, designStarted: false })
+    const sizeScaleId = (await one('SELECT "sizeScaleId" FROM "Style" WHERE id = $1', [jacket1])).sizeScaleId as string
+    const code = 'OD3-TEAM-JKT'
+    // The Production manager (orders.view + product.styles.manage) makes it on P1's draft: a DRAFT style of P1's own label, named
+    // as the draft's subject, appended to the draft's style drafts (the office's column).
+    const made = await as(manager, 'POST', `/sales/order-requests/${draftId}/style-draft`, { version: started.request.version, code, productType: 'JACKET', sizeScaleId, sizes: ['50', '52'], baseSize: '52', ppeCategory: 'NOT_PPE' })
+    expect(made).toMatchObject({ styleId: expect.any(String), code, name: subject, status: 'DRAFT', version: started.request.version + 1, files: { carried: [], notCarried: [] } })
+    expect(await one('SELECT "brandPartyId", "companyId" FROM "Style" WHERE id = $1', [made.styleId])).toEqual({ brandPartyId: P1, companyId: companyA })
+    expect(await one('SELECT "styleIds"::text[] AS "styleIds" FROM "PortalOrderRequest" WHERE id = $1', [draftId])).toEqual({ styleIds: [made.styleId] })
+    // Brand A's (P1's) Samples page lists it among its own styles in development; brand B's (Brand Alpha's) never.
+    const mine = await as(buyer, 'GET', '/portal/samples')
+    expect((mine.styles as Json[]).find((row) => row.id === made.styleId)).toMatchObject({ code, openRounds: 0, waiting: 0, latestRound: null, techPack: null, techPacks: [] })
+    const theirs = await as(other, 'GET', '/portal/samples')
+    expect(JSON.stringify(theirs)).not.toContain(made.styleId)
+    expect(JSON.stringify(theirs)).not.toContain(code)
+    // The draft's portal read: the design started — never a style id, never the styleIds key.
+    const read = await as(buyer, 'GET', `/portal/order-requests/${draftId}`)
+    expect(read.request.designStarted).toBe(true)
+    expect(keysOf(read)).not.toContain('styleIds')
+    expect(JSON.stringify(read)).not.toContain(made.styleId)
   })
 })
