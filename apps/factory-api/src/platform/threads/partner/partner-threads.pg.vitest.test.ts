@@ -9,7 +9,7 @@ import { usePortalOptions } from '../../auth/portal/service'
 import { freshGuard } from '../../auth/portal/testing/portal'
 import { startHarness, type Browser, type Harness } from '../../auth/sessions/testing/harness'
 import { sortFactsOf, type MailFacts } from '../../email-in/match'
-import { inTenant, partnerWorld, signIn, type PartnerWorld } from '../../search/partner/testing/world'
+import { inTenant, partnerWorld, signIn, type PartnerWorld, type Person } from '../../search/partner/testing/world'
 import { ensureThread, writeMessage } from '../threads'
 
 /**
@@ -331,3 +331,171 @@ describe('tw-s R1: a portal read quotes only messages shared with its own custom
   })
 })
 // ── end tw-s ──
+
+// ── pt-s (S.6, the portal reply link; walls: the office note, the held mail, the brand): a portal post may answer a shared message ──
+describe('pt-s S.6: a portal post answers a shared message of its own record', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  // The ONE neutral refusal (409), pinned as the web reads it: its issue path, and the words of a reader of Italian (the seeded buyers).
+  const REPLY_ISSUE = 'refusal/REPLY_REFUSED'
+  const REFUSED_IT = 'A quel messaggio non si può rispondere qui.'
+  const messagesOf = async (threadId: string): Promise<number> => (await admin<{ n: number }>('SELECT count(*)::int AS n FROM "Message" WHERE "threadId" = $1', [threadId]))[0]!.n
+  const postsBy = async (actorId: string): Promise<number> => (await admin<{ n: number }>('SELECT count(*)::int AS n FROM "AuditLog" WHERE action = $1 AND "actorId" = $2', ['portal.postMessage', actorId]))[0]!.n
+  const threadIdOf = async (type: string, recordId: string): Promise<string> => (await admin<{ id: string }>('SELECT id FROM "Thread" WHERE "tenantId" = $1 AND "recordType" = $2 AND "recordId" = $3', [world.tenantId, type, recordId]))[0]!.id
+  /** Test data past the guards, on the one admin connection (a mail in its undo window). */
+  const pastGuards = async (work: () => Promise<unknown>): Promise<void> => {
+    await admin('SET session_replication_role = replica')
+    try {
+      await work()
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
+  }
+  /** A9: a record of brand A its portal opens that has no conversation yet (a read makes none). */
+  async function recordWithNoThread(): Promise<{ type: string; id: string }> {
+    for (const type of ['SalesOrder', 'Quote', 'ReturnAuthorisation', 'Complaint']) {
+      const rows = await admin<{ id: string }>(
+        `SELECT r.id FROM "${type}" r WHERE r."tenantId" = $1 AND r."partyId" = $2
+           AND NOT EXISTS (SELECT 1 FROM "Thread" t WHERE t."tenantId" = r."tenantId" AND t."recordType" = $3 AND t."recordId" = r.id) ORDER BY r.id`,
+        [world.tenantId, world.p1, type],
+      )
+      for (const row of rows) {
+        const read = await thread(buyer, type, row.id)
+        if (read.status === 200 && read.body.thread === null) return { type, id: row.id }
+      }
+    }
+    throw new Error('the seeds give brand A no record its portal opens without a conversation')
+  }
+
+  // Brand B (the threads' second brand, SEED-C2B, its order SEED-SO-B001): its buyer may write on its own records, as brand A's may.
+  let beta: Browser
+  let betaId = ''
+  beforeAll(async () => {
+    freshGuard(h)
+    const brandB = (await admin<{ id: string }>(`SELECT id FROM "Party" WHERE "tenantId" = $1 AND code = 'SEED-C2B'`, [world.tenantId]))[0]!.id
+    const buyerB = (await admin<{ id: string; email: string; displayName: string }>(`SELECT id, email, "displayName" FROM "User" WHERE "tenantId" = $1 AND "partyId" = $2 AND email LIKE 'buyer.second-brand.%' LIMIT 1`, [world.tenantId, brandB]))[0]!
+    await inTenant(h, world, async (client) => {
+      await client.portalSettings.updateMany({ where: { partyId: brandB }, data: { portalOn: true } })
+      const role = await client.role.findFirstOrThrow({ where: { key: 'partner-comment', audience: 'PARTNER' }, select: { id: true } })
+      await client.roleAssignment.create({ data: { id: newId(), userId: buyerB.id, roleId: role.id, allCompanies: true, partyIds: [brandB], validFrom: new Date(h.clock.now().getTime() - 60_000) }, select: { id: true } })
+    })
+    betaId = buyerB.id
+    beta = await signIn(h, world, { id: buyerB.id, email: buyerB.email, name: buyerB.displayName } satisfies Person)
+  }, 600_000)
+
+  it('a portal post answers a shared message of its record; an office note, a held mail or another record’s message is refused in words and nothing is written', async () => {
+    const order = await idOf('SalesOrder', 'SEED-SO-0001')
+    const by = { kind: 'USER' as const, id: world.officeId, name: 'Seed Owner' }
+    const { result: written } = await command(office(), { name: 'email.send', input: { type: 'SalesOrder', order, pts: 'S.2' } }, async (tools) => {
+      const { thread } = await ensureThread(tools, { type: 'SalesOrder', id: order }, world.officeId)
+      const note = await writeMessage(tools, thread, { direction: 'INTERNAL_NOTE', channel: 'APP', author: by, bodyText: 'Made-up pt-s S.2: internal, the lining is late.' })
+      const mail = await writeMessage(tools, thread, { direction: 'OUTBOUND', channel: 'EMAIL', author: by, bodyText: 'Made-up pt-s S.2: the jackets ship on Friday.' })
+      const held = await writeMessage(tools, thread, { direction: 'OUTBOUND', channel: 'EMAIL', author: by, bodyText: 'Made-up pt-s S.2: a mail still in its undo window.' })
+      return { threadId: thread.id, note: note.id, mail: mail.id, held: held.id }
+    })
+    await pastGuards(() => admin('UPDATE "Message" SET held = true WHERE id = $1', [written.held]))
+    // Another record's message shared with the same customer: the buyer's own question on its account.
+    const elsewhere = await post(buyer, 'Party', world.p1, { body: 'Made-up pt-s S.2: a question on our account.' }, newId())
+    expect(elsewhere.status, JSON.stringify(elsewhere.body)).toBe(201)
+
+    // The answer to our mail lands.
+    const answered = await post(buyer, 'SalesOrder', order, { body: 'Made-up pt-s S.2: Friday works for us.', replyToMessageId: written.mail }, newId())
+    expect(answered.status, JSON.stringify(answered.body)).toBe(201)
+    // S.3: the stored message carries the link (never a correction), and its audit row names it.
+    const [stored] = await admin('SELECT "replyToMessageId", "correctsMessageId", direction, audience, channel, "authorKind", "authorId" FROM "Message" WHERE id = $1', [answered.body.message.id])
+    expect(stored).toEqual({ replyToMessageId: written.mail, correctsMessageId: null, direction: 'INBOUND', audience: 'PARTNER', channel: 'PORTAL', authorKind: 'PARTY', authorId: null })
+    const [audit] = await admin('SELECT after FROM "AuditLog" WHERE "recordType" = $1 AND "recordId" = $2 AND action = $3', ['Message', answered.body.message.id, 'portal.postMessage'])
+    expect(audit!.after).toMatchObject({ threadId: written.threadId, replyToMessageId: written.mail, direction: 'INBOUND', audience: 'PARTNER', channel: 'PORTAL' })
+
+    // An office note, a held mail, another record's message, a message that is not there: refused alike — 409, ONE neutral sentence in
+    // the person's language, never which case it was — and nothing written (no message, no audit row, the conversation as it was).
+    const before = { messages: await messagesOf(written.threadId), posts: await postsBy(world.people.buyer.id) }
+    for (const target of [written.note, written.held, elsewhere.body.message.id as string, newId()]) {
+      const body = `Made-up pt-s S.2: an answer that never lands (${target.slice(-4)}).`
+      const refused = await post(buyer, 'SalesOrder', order, { body, replyToMessageId: target }, newId())
+      expect(refused.status, `${target}: ${JSON.stringify(refused.body)}`).toBe(409)
+      expect(refused.body.error).toMatchObject({ code: 'conflict', message: REFUSED_IT, issues: [{ path: REPLY_ISSUE, message: REFUSED_IT }] })
+      expect(JSON.stringify([refused.body.error.message, refused.body.error.issues]), target).not.toMatch(/note|nota|ufficio|office|internal|held|undo|account|lining/i)
+      expect(await admin('SELECT id FROM "Message" WHERE "tenantId" = $1 AND "bodyText" = $2', [world.tenantId, body])).toEqual([])
+    }
+    expect({ messages: await messagesOf(written.threadId), posts: await postsBy(world.people.buyer.id) }).toEqual(before)
+
+    // A9: a record with no conversation yet — nothing to answer; refused in the same words BEFORE a thread is made (none is made).
+    const fresh = await recordWithNoThread()
+    const none = await post(buyer, fresh.type, fresh.id, { body: 'Made-up pt-s A9: an answer to nothing here.', replyToMessageId: written.mail }, newId())
+    expect(none.status, JSON.stringify(none.body)).toBe(409)
+    expect(none.body.error.issues).toEqual([{ path: REPLY_ISSUE, message: REFUSED_IT }])
+    expect(await admin('SELECT id FROM "Thread" WHERE "tenantId" = $1 AND "recordType" = $2 AND "recordId" = $3', [world.tenantId, fresh.type, fresh.id])).toEqual([])
+    expect(await postsBy(world.people.buyer.id)).toBe(before.posts)
+  })
+
+  it('brand B’s portal post answering brand A’s message is refused in the same words; nothing is written in either thread', async () => {
+    const orderA = await idOf('SalesOrder', 'SEED-SO-0001')
+    const orderB = await idOf('SalesOrder', 'SEED-SO-B001')
+    const { mail } = await officeWrites('SalesOrder', orderA)
+    const [threadA, threadB] = [await threadIdOf('SalesOrder', orderA), await threadIdOf('SalesOrder', orderB)]
+    // The control: brand B opens its own order, so its refusal below is about brand A's message, never about the record.
+    expect((await thread(beta, 'SalesOrder', orderB)).status).toBe(200)
+    const before = { a: await messagesOf(threadA), b: await messagesOf(threadB), posts: await postsBy(betaId) }
+    const body = 'Made-up pt-s S.2: brand B answers a message it never had.'
+    // On its own order: brand A's message is not of this conversation, and never brand B's to read — the same neutral words.
+    const refused = await post(beta, 'SalesOrder', orderB, { body, replyToMessageId: mail }, newId())
+    expect(refused.status, JSON.stringify(refused.body)).toBe(409)
+    expect(refused.body.error).toMatchObject({ code: 'conflict', message: REFUSED_IT, issues: [{ path: REPLY_ISSUE, message: REFUSED_IT }] })
+    expect(JSON.stringify(refused.body)).not.toMatch(/Seed Owner|ships next week|SEED-SO-0001|SEED-PO-77/)
+    // On brand A's order: not found, as if it did not exist.
+    expect((await post(beta, 'SalesOrder', orderA, { body, replyToMessageId: mail }, newId())).status).toBe(404)
+    expect({ a: await messagesOf(threadA), b: await messagesOf(threadB), posts: await postsBy(betaId) }).toEqual(before)
+    expect(await admin('SELECT id FROM "Message" WHERE "tenantId" = $1 AND "bodyText" = $2', [world.tenantId, body])).toEqual([])
+  })
+
+  it('the post’s answer quotes what it answers, as the read does: no authorId, no audience, mine for the writer', async () => {
+    const order = await idOf('SalesOrder', 'SEED-SO-0001')
+    const { mail } = await officeWrites('SalesOrder', order)
+    // The buyer asks; then answers our mail; then answers its own question.
+    const asked = await post(buyer, 'SalesOrder', order, { body: 'Made-up pt-s S.4: can the zip be red?' }, newId())
+    expect(asked.status, JSON.stringify(asked.body)).toBe(201)
+    const toMail = await post(buyer, 'SalesOrder', order, { body: 'Made-up pt-s S.4: thanks, noted.', replyToMessageId: mail }, newId())
+    const key = newId()
+    const toOwn = await post(buyer, 'SalesOrder', order, { body: 'Made-up pt-s S.4: and the lining blue.', replyToMessageId: asked.body.message.id }, key)
+    for (const answer of [toMail, toOwn]) {
+      expect(answer.status, JSON.stringify(answer.body)).toBe(201)
+      expect(answer.body.message.replyTo, answer.body.message.id).not.toHaveProperty('authorId')
+      expect(answer.body.message.replyTo, answer.body.message.id).not.toHaveProperty('audience')
+      expect(answer.body.message.corrects ?? null).toBeNull()
+    }
+    expect(toMail.body.message.replyTo).toMatchObject({ id: mail, authorKind: 'USER', authorName: 'Seed Owner', excerpt: 'Your order is confirmed; it ships next week.', mine: false, fileCount: 0, firstFile: null })
+    expect(toOwn.body.message.replyTo).toMatchObject({ id: asked.body.message.id, authorKind: 'PARTY', authorName: 'Seed Portal Buyer', excerpt: 'Made-up pt-s S.4: can the zip be red?', mine: true, fileCount: 0, firstFile: null })
+
+    // As the read does: the read's quote of the same message is the answer's, field for field.
+    const page = await thread(buyer, 'SalesOrder', order, '?limit=200')
+    expect(page.status, JSON.stringify(page.body)).toBe(200)
+    const read = (body: Json, id: string): Json => (body.messages as Json[]).find((message) => message.id === id)!
+    expect(read(page.body, toMail.body.message.id).replyTo).toEqual(toMail.body.message.replyTo)
+    expect(read(page.body, toOwn.body.message.id).replyTo).toEqual(toOwn.body.message.replyTo)
+    // "mine" is the writer's own: a colleague of the same customer reads the same quote as not theirs.
+    const asViewer = await thread(viewer, 'SalesOrder', order, '?limit=200')
+    expect(read(asViewer.body, toOwn.body.message.id).replyTo).toMatchObject({ id: asked.body.message.id, mine: false })
+
+    // The same request again (its Idempotency-Key): no second message, the same quote. The same key answering another message is
+    // another request: refused (409), nothing written.
+    const count = await messagesOf(toOwn.body.thread.id)
+    const again = await post(buyer, 'SalesOrder', order, { body: 'Made-up pt-s S.4: and the lining blue.', replyToMessageId: asked.body.message.id }, key)
+    expect(again.status, JSON.stringify(again.body)).toBe(201)
+    expect(again.body.message).toMatchObject({ id: toOwn.body.message.id, replyTo: toOwn.body.message.replyTo })
+    const reused = await post(buyer, 'SalesOrder', order, { body: 'Made-up pt-s S.4: and the lining blue.', replyToMessageId: mail }, key)
+    expect(reused.status, JSON.stringify(reused.body)).toBe(409)
+    expect(await messagesOf(toOwn.body.thread.id)).toBe(count)
+  })
+
+  it('a portal post naming correctsMessageId is refused (unknown key)', async () => {
+    const order = await idOf('SalesOrder', 'SEED-SO-0001')
+    const { mail } = await officeWrites('SalesOrder', order)
+    const body = 'Made-up pt-s S.1: a correction the portal never sends.'
+    // Even of a message shared with the customer: a portal person answers, never corrects (the strict input refuses the key).
+    const refused = await post(buyer, 'SalesOrder', order, { body, correctsMessageId: mail }, newId())
+    expect(refused.status, JSON.stringify(refused.body)).toBe(400)
+    expect(refused.body.error.code).toBe('validation_failed')
+    expect(JSON.stringify(refused.body.error.issues)).toContain('correctsMessageId')
+    expect(await admin('SELECT id FROM "Message" WHERE "tenantId" = $1 AND "bodyText" = $2', [world.tenantId, body])).toEqual([])
+  })
+})
+// ── end pt-s ──
