@@ -189,8 +189,12 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
       for (const tab of RECORD_TABS) expect(html, `${locale} ${tab}`).toContain(`?tab=${tab}"`)
       expect(html, locale).toContain('aria-current="page"')
     }
-    const files = recordScreen.cases.find((item) => item.id === 'files')!
-    expect(textOf(render(createElement(recordScreen.view, { model: files.model }), 'en'))).toContain(CATALOGUE.en['portal-orders']!['docs.filesTitle']!)
+    // Each tab its own part: Overview its lead card; Files the order's documents (the design case holds the library; "Files of this
+    // order" — the shared files body — draws only with a files read, which this case does not make).
+    expect(textOf(render(createElement(recordScreen.view, { model: entry.model }), 'en'))).toContain(CATALOGUE.en['portal-orders']!['tracker.title']!)
+    const files = textOf(render(createElement(recordScreen.view, { model: recordScreen.cases.find((item) => item.id === 'files')!.model }), 'en'))
+    expect(files).toContain('DDT-2026-0144')
+    expect(files).not.toContain(CATALOGUE.en['portal-orders']!['tracker.title']!)
   })
 
   it('My production opens an order on Overview (its row, its "Ask us" for an urgent order)', () => {

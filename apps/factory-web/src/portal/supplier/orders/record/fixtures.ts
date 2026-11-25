@@ -7,6 +7,7 @@ import type { OrderPage } from '../api'
 import type { RecordTab } from '../model'
 import { SupplierCase, type SupplierCaseBuilder } from '../view/SupplierCase'
 import type { OrderRecordViewModel } from '../view/OrderRecordView'
+import { withThreadButton } from '../../../shell/fixtures' // pp-fx1: the band's "Messages (2 new)", as the live frame sets it
 
 /**
  * SCR-189 › one purchase order (design portal.supplier.orders rec "Purchase order"; B-W2b-179; B-TH-277 tabs 5 → 3), MADE-UP data
@@ -51,7 +52,7 @@ function recordCase(page: OrderPage, tab: RecordTab, over: (locale: Locale) => P
     const model = recordModel(page, { tab, ...over(locale) })
     const held = shell.preview ? t('held.preview') : page.answer.mayAnswer ? null : t('held.mayAnswer')
     return {
-      shell: shellOf(locale, { path: `/orders/${page.order.id}`, preview: shell.preview ?? false, band: orderBandOf({ t, locale, page, tab, prefix: PREFIX, done: model.done !== null, confirmHeld: held, notices: model.notices.state === 'ready' ? model.notices.items.length : null }) }),
+      shell: shellOf(locale, { path: `/orders/${page.order.id}`, preview: shell.preview ?? false, band: withThreadButton(orderBandOf({ t, locale, page, tab, prefix: PREFIX, done: model.done !== null, confirmHeld: held, notices: model.notices.state === 'ready' ? model.notices.items.length : null }), shell.frame) }),
       // B-TH-277: the PO's conversation docks beside every tab (no Messages tab).
       body: { kind: 'record', model, thread: threadOf(locale), ...(shell.frame ? { frame: shell.frame } : {}) },
     }

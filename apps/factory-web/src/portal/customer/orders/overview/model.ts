@@ -409,7 +409,7 @@ export function factsOf(input: OverviewInput): FactsModel {
       { id: 'ordered', label: t('facts.orderedOn'), value: day(order.orderDate) },
       { id: 'shipTo', label: t('facts.shipTo'), value: shipTo.length > 0 ? shipTo.join(', ') : '—', lines: shipTo },
       { id: 'terms', label: t('facts.paymentTerms'), value: order.paymentTerms ?? '—' },
-      { id: 'currency', label: t('col.currency'), value: order.currency },
+      { id: 'currency', label: t('facts.currency'), value: order.currency },
       ...(order.noWithdrawal ? [{ id: 'withdrawal', label: t('facts.withdrawal'), value: t('facts.noWithdrawal') }] : []),
     ],
   }

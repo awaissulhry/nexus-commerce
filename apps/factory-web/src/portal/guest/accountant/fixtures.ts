@@ -8,6 +8,7 @@ import { choicesOf, dayWords, exportRowsOf, invoiceRowsOf, kindOf, periodWords, 
 import { AccountantCase, type AccountantCaseBuilder } from './view/AccountantCase'
 import type { AccountantViewModel } from './view/AccountantView'
 import type { ListSection } from './view/Lists'
+import { withThreadButton } from '../../shell/fixtures' // pp-fx1: the band's "Messages (2 new)", as the live frame sets it
 
 /**
  * SCR-268 — the accountant's room (design portal.guest.accountant; FIN-158, PLT-022; B-W2b-201), every state with MADE-UP
@@ -91,7 +92,10 @@ function frameCase(frame: { mode: 'docked' | 'stacked'; viewOpen?: boolean; newC
   const build = caseOf()
   return (locale) => {
     const built = build(locale)
-    return built.page.kind === 'page' ? { ...built, page: { ...built.page, frame } } : built
+    if (built.page.kind !== 'page') return built
+    // pp-fx1: the band carries "Messages (2 new)" (the live frame sets it there: usePortalBandThread), only beside a room.
+    const band = built.shell.band && built.page.thread ? withThreadButton(built.shell.band, frame) : built.shell.band
+    return { ...built, shell: { ...built.shell, band }, page: { ...built.page, frame } }
   }
 }
 

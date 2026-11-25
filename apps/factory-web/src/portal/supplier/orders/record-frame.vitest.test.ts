@@ -30,6 +30,15 @@ const jobT = createTranslator('en', CATALOGUE.en['portal-jobs'] ?? {})
 const deliveryT = createTranslator('en', CATALOGUE.en['portal-deliveries'] ?? {})
 const PREFIX = '/p/CONCERIA-PROVA'
 
+// pp-fx1 (pp-w1 w1.1): under 1280 px "Messages (2 new)" rides in the band — the live frame sets it there (usePortalBandThread), the
+// design case's band carries it (withThreadButton) — ONE button, before the page's main; the body draws no row of its own.
+const inBand = (html: string, label: string) => {
+  expect(html, label).toContain('class="fw-pband-thread')
+  expect(html.indexOf('fw-pband-thread'), label).toBeLessThan(html.indexOf('id="main-content"'))
+  expect(html.match(/Messages \(2 new\)/g)?.length, label).toBe(1)
+  expect(html, label).toContain('aria-label="Messages, 2 new"')
+}
+
 describe('the purchase order: tabs 5 → 3 (Lines · Confirm or propose · Ship notices)', () => {
   it('no Messages and no Documents tab: the conversation docks, the documents went where they do work', () => {
     expect(RECORD_TABS).toEqual(['lines', 'confirm', 'asn'])
@@ -100,8 +109,11 @@ describe('every record page docks its ONE conversation (the portal record frame)
       if (id === 'sheet') continue
       expect(dock(html), `${id} (${locale})`).toBe(MISSING.has(id) ? 0 : 1)
     }
-    const phone = everyCase(jobScreen as unknown as DesignScreen<unknown>).find(([locale, id]) => locale === 'en' && id === 'phone')
-    expect(textOf(phone![2])).toContain('Messages (2 new)')
+    const phone = (screen: unknown) => everyCase(screen as DesignScreen<unknown>).find(([locale, id]) => locale === 'en' && id === 'phone')![2]
+    inBand(phone(jobScreen), 'job')
+    inBand(phone(recordScreen), 'order')
+    inBand(phone(noticeScreen), 'delivery notice')
+    expect(textOf(phone(jobScreen))).toContain('Messages (2 new)')
   })
 
   it('SCR-227-notice and -announce: the order’s conversation docks once the order is known; choosing an order has no dock', () => {

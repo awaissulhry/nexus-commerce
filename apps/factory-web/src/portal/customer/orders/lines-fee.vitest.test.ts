@@ -102,8 +102,12 @@ describe('PW-O03 — an order with a charge line (FEE) loads', () => {
   // and the rules' contract.
   it('the Change dialog offers no charge line: it draws the change rules, which never list one (the API leaves charges out)', () => {
     const dialogs = readFileSync(new URL('./view/Dialogs.tsx', import.meta.url), 'utf8')
-    expect(dialogs).toContain('{rules.lines.map((line) => (')
-    expect(dialogs).not.toMatch(/record\.lines|order\.lines\b/)
+    // The Change dialog's own source (the Re-confirm's RevisionReview, below it, draws the revised order's lines: not the record's).
+    const change = dialogs.slice(dialogs.indexOf('export function ChangeDialog('), dialogs.indexOf('export function ChangeReviewStep('))
+    expect(change.length).toBeGreaterThan(500)
+    expect(change).toContain('{rules.lines.map((line) => (')
+    expect(change).not.toMatch(/record\.lines|order\.lines\b/)
+    expect(dialogs).not.toMatch(/record\.lines/)
     expect(rulesOf().lines.some((line) => (line.kind as string) === 'FEE')).toBe(false)
     expect(rulesSchema.safeParse({ ...rulesOf(), lines: [{ ...rulesOf().lines[0]!, kind: 'FEE' }] }).success).toBe(false)
   })
