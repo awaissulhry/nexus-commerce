@@ -12,7 +12,7 @@ import { seed as seedRoles } from '../../../../../packages/factory-db/seed/roles
 import { seed as seedSalesIntake } from '../../../../../packages/factory-db/seed/sales-intake'
 import { seedUuid } from '../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../core/app'
-import { callerFor, command } from '../../core/command'
+import { callerFor, command, COMMAND_SETTINGS, runCommand, type CommandSettings } from '../../core/command'
 import { testAuthenticator, type RequestContext, type SessionContext } from '../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../env'
 import { startHarness, type Harness } from '../auth/sessions/testing/harness'
@@ -23,6 +23,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { readOwnMessage } from './reads'
 import { systemContext } from '../outbox/system'
+import { fixedClock } from '@nexus/factory-domain/core/time' // pg-fx2: a command's clock ahead of the database's
 
 /**
  * B-TH-027 — each person's own read mark (threads plan TH-2, G10; wall W08 / T08) through the app's real routes on a throwaway
@@ -209,10 +210,10 @@ describe('pg-s1 S1.4: a portal person’s own message never counts as new to the
   const markOf = async (userId: string, threadId: string) => (await admin('SELECT "lastReadMessageId"::text AS id FROM "ThreadRead" WHERE "userId" = $1 AND "threadId" = $2', [userId, threadId]))[0]?.id ?? null
 
   /** The person's words as the partner scope writes them (the portal post, the order page's ask): INBOUND PORTAL by their name. */
-  async function partnerPost(session: 'anna' | 'alba' | 'berta', recordId: string, body: string): Promise<{ id: string; moved: boolean }> {
+  async function partnerPost(session: 'anna' | 'alba' | 'berta', recordId: string, body: string, settings: CommandSettings = COMMAND_SETTINGS): Promise<{ id: string; moved: boolean }> {
     const context = contextOf(session)
     const thread = await threadOf(recordId)
-    const { result } = await command(callerFor(h.database, context), { name: 'portal.postMessage', input: { recordId, body } }, async (tools) => {
+    const { result } = await runCommand(callerFor(h.database, context), { name: 'portal.postMessage', input: { recordId, body } }, async (tools) => {
       const id = newId()
       const row = await tools.tx.message.create({
         data: { id, threadId: thread.id, partyId: thread.partyId, direction: 'INBOUND', audience: 'PARTNER', channel: 'PORTAL', authorKind: 'PARTY', authorName: `Made-up ${session}`, bodyText: body, bodyHtml: null, attachmentFileIds: [], emailMessageId: null, at: tools.now, createdAt: tools.now },
@@ -220,7 +221,7 @@ describe('pg-s1 S1.4: a portal person’s own message never counts as new to the
       })
       tools.audit({ recordType: 'Message', recordId: id, companyId: thread.companyId, siteId: thread.siteId, after: { threadId: thread.id, direction: 'INBOUND', audience: 'PARTNER', channel: 'PORTAL' } })
       return { id: row.id, moved: await readOwnMessage(tools, thread, { userId: context.actorId }, row) }
-    })
+    }, settings)
     return result
   }
 
@@ -291,6 +292,24 @@ describe('pg-s1 S1.4: a portal person’s own message never counts as new to the
     const aMessage = (await one('SELECT id, at FROM "Message" WHERE id = $1', [M.answer])) as { id: string; at: Date }
     await expect(command(callerFor(h.database, contextOf('berta')), { name: 'threads.markRead', input: { messageId: M.answer } }, async (tools) => ({ moved: await readOwnMessage(tools, aThread, { userId: PEOPLE.berta }, aMessage) }))).rejects.toThrow()
     expect(await markOf(PEOPLE.berta, aThread.id)).toBeNull()
+  })
+
+  // pg-fx2 (end check: the order page's asks of brand-requests.pg answered 409 'This cannot be saved as it is.' once the test
+  // world's clock ran more than 5 minutes ahead of the database's — ThreadRead_guard 'read at a time not in the future').
+  it('a command’s clock more than 5 minutes ahead of the database’s: the writer’s words are still saved and read, at the database’s time', async () => {
+    const own = (await ok('ada', 'POST', '/sales/inquiries', { companyId: idOf('company:A'), source: 'PHONE', partyId: P1, request: 'Made-up: five rain capes.', lines: [{ description: 'Made-up: rain cape', quantity: 5 }] }, 201)).inquiry.id as string
+    await command(callerFor(h.database, contextOf('ada')), { name: 'threads.postNote', input: { body: 'Made-up question to Brand A' } }, async (tools) => {
+      const { thread } = await ensureThread(tools, { type: 'Inquiry', id: own }, PEOPLE.ada)
+      return { id: (await writeMessage(tools, thread, { direction: 'OUTBOUND', channel: 'PORTAL', author: { kind: 'USER', id: PEOPLE.ada, name: 'Made-up ada' }, bodyText: 'Made-up question to Brand A: which length?' })).id }
+    })
+    expect(await countOn('anna', own)).toBe(1)
+    const ahead = { ...COMMAND_SETTINGS, clock: fixedClock(new Date(Date.now() + 10 * 60_000)) }
+    const posted = await partnerPost('anna', own, 'Made-up words of Anna: knee length, please.', ahead)
+    expect(posted.moved).toBe(true)
+    expect(await countOn('anna', own)).toBe(0)
+    expect(await countOn('alba', own)).toBe(2)
+    const thread = await threadOf(own)
+    expect(await one('SELECT "lastReadMessageId"::text AS id, "readAt" <= now() AS "notAhead" FROM "ThreadRead" WHERE "userId" = $1 AND "threadId" = $2', [PEOPLE.anna, thread.id])).toEqual({ id: posted.id, notAhead: true })
   })
 
   it('every portal write path moves the writer’s mark through the one helper (no copy of it)', () => {
