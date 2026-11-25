@@ -435,3 +435,10 @@ export const OFFICE_DRAFT_WORDS = Object.freeze({
   OWN_PRICE: { it: 'Il prezzo del cliente lo scrive il cliente.', en: "The customer's own price is typed by the customer." },
 })
 // ---- end od-s s.2
+
+// ---- od-s s.3 (L5): "Make style draft" on a draft order (409 refusal/<CODE>, in words) ----------------------------------------
+export const STYLE_DRAFT_WORDS = Object.freeze({
+  CLOSED: { it: 'Questa richiesta è già decisa: una bozza di modello si crea mentre è una bozza o è inviata.', en: 'This request is already decided: a style draft is made while it is a draft or sent.' },
+  STYLE_DRAFTS_FULL: { it: 'Questa richiesta indica già 50 bozze di modello, il massimo per una richiesta.', en: 'This request already names 50 style drafts, the most one request names.' },
+})
+// ---- end od-s s.3

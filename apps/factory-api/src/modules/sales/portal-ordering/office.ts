@@ -5,6 +5,9 @@ import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { asMoney, markMoney, type Money } from '@nexus/factory-domain/money/marked'
 import { ORDERS_MANAGE, ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
+// od-s s.3: Make style draft on a draft or a sent request (the style library's right; at most 50 per request).
+import { PRODUCT_STYLES_MANAGE } from '@nexus/factory-domain/product/styles/permissions'
+import { STYLE_DRAFTS_MAX } from '@nexus/factory-domain/sales/inquiries/rules'
 import { decisionProblem, draftReadiness, refuseReasonProblem, type AcceptAs, type DraftLaterPart, type DraftPart, type DraftPartState } from '@nexus/factory-domain/sales/portal-ordering/office'
 import { draftTotals, headerProblems, lineAmount, lineProblems, piecesOfSizes, priceShown, REQUEST_STATUS_WORDS, type RequestSource, type RequestStatus } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { QUOTES_MANAGE } from '@nexus/factory-domain/sales/quotes/permissions'
@@ -272,7 +275,7 @@ async function draftViews(caller: CommandCaller, actor: Actor, rows: readonly Re
       startedAt: iso(row.createdAt)!,
       lastEditedBy: editorId ? (names.get(editorId) ?? null) : null,
       lastEditedAt: iso(row.lastEditedAt ?? row.updatedAt)!,
-      title: first ? `${first.code} ${first.name}`.trim() : ownWords, // B-CP-005: else the line's own words
+      title: row.subject ?? (first ? `${first.code} ${first.name}`.trim() : ownWords), // B-CP-005: else the line's own words; od-s s.3: the subject first
       people: roster.length, // B-CP-075
       readiness: { ...readiness, parts: [...readiness.parts] },
       later, // B-CP-075
@@ -339,7 +342,8 @@ async function listDrafts(caller: CommandCaller, actor: Actor, partyId: string |
 
 async function officeRequest(caller: CommandCaller, requestId: string) {
   const context = officeContextOf(caller)
-  const row = isUuid(requestId) ? await caller.withClient((client) => client.portalOrderRequest.findUnique({ where: { id: requestId }, select: { ...REQUEST_COLUMNS, decidedById: true } })) : null
+  // od-s s.3: + the style drafts made for it (office only: the partner role cannot read styleIds).
+  const row = isUuid(requestId) ? await caller.withClient((client) => client.portalOrderRequest.findUnique({ where: { id: requestId }, select: { ...REQUEST_COLUMNS, decidedById: true, styleIds: true } })) : null
   // B-CP-071 (D10): a draft is read too (read-only: a decision on it is held by decisionProblem); out of reach is not found.
   if (!row) throw new NotFoundError('Order request not found.')
   assertMay(context, ORDERS_VIEW, { companyId: row.companyId, partyId: row.partyId }, 'Order request')
@@ -400,6 +404,14 @@ export async function officeRequestView(caller: CommandCaller, requestId: string
   const totals = draftTotals(lines.map((line) => ({ sizes: line.sizes, unitPriceShown: priceOrNull(line.unitPriceShown), pieces: piecesOfLine(line, people) /* B-CP-075 */ })), true)
   const open = row.status === 'SENT'
   const draft = row.status === 'DRAFT' ? ((await draftViews(caller, actor, [row], lines, people)).get(row.id) ?? null) : null // B-CP-071
+  // ---- od-s s.3 (L5, L6; Owner yes 2a, 4a): the style drafts made for it, in the order made; Confirm (a draft or a sent request,
+  // orders.manage) and Make style draft (a draft or a sent request, product.styles.manage over its company, fewer than 50).
+  const styleRows = row.styleIds.length === 0 ? [] : await caller.withClient((client) => client.style.findMany({ where: { id: { in: [...row.styleIds] } }, select: { id: true, code: true, name: true, status: true } }))
+  const styles = row.styleIds.flatMap((styleId) => styleRows.filter((style) => style.id === styleId)).map((style) => ({ id: style.id, code: style.code, name: style.name, status: style.status as string }))
+  const undecided = row.status === 'DRAFT' || row.status === 'SENT'
+  const mayConfirm = undecided && can(actor, ORDERS_MANAGE, scope)
+  const mayStyleDraft = undecided && row.styleIds.length < STYLE_DRAFTS_MAX && can(actor, PRODUCT_STYLES_MANAGE, { companyId: row.companyId })
+  // ---- end od-s s.3
   return {
     request: {
       id: row.id,
@@ -427,8 +439,10 @@ export async function officeRequestView(caller: CommandCaller, requestId: string
       draft, // B-CP-071: a draft's office facts (null once sent)
       customLines: customViews, // B-CP-075
       acceptMap: acceptMapOf(lines), // B-CP-077: the lines to map before the accept, and why it is not an order
+      subject: row.subject, // od-s s.3 (addendum R2)
+      styles, // od-s s.3: the style drafts made for it (office only)
     },
-    may: { order: open && can(actor, ORDERS_MANAGE, scope), quote: open && can(actor, ORDERS_MANAGE, scope) && can(actor, QUOTES_MANAGE, scope), refuse: open && can(actor, ORDERS_MANAGE, scope) },
+    may: { order: open && can(actor, ORDERS_MANAGE, scope), quote: open && can(actor, ORDERS_MANAGE, scope) && can(actor, QUOTES_MANAGE, scope), refuse: open && can(actor, ORDERS_MANAGE, scope), confirm: mayConfirm, styleDraft: mayStyleDraft },
   }
 }
 

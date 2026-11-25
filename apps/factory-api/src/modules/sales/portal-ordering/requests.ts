@@ -104,6 +104,8 @@ import { ownPriceView, type OwnPriced } from './people'
 
 const MAX_DRAFTS = 20
 const LIST_MAX = 200
+/** od-s s.3 (addendum R2): a draft's subject, as a mail's (the database holds 1 to 200 trimmed). */
+export const SUBJECT_MAX = 200
 
 const blankToNull = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
 const today = (app: FastifyInstance): BusinessDate => businessDate(appClock(app).now())
@@ -150,6 +152,15 @@ export async function savedByAll(writer: DraftWriter, partyId: string, userIds: 
 
 export async function savedByOf(writer: DraftWriter, partyId: string, userId: string | null): Promise<SavedBy> {
   return (await savedByAll(writer, partyId, [userId]))(userId)
+}
+
+/**
+ * od-s s.3 (L5): whether the factory made a style draft for the request (`styleIds` not empty) — read in the tenant's scope as the
+ * person (the partner role has no grant on the column), answered as a yes/no only: no style id reaches the portal.
+ */
+async function designStartedOf(writer: DraftWriter, requestId: string): Promise<boolean> {
+  const row = await writer.inTenant((db) => db.portalOrderRequest.findFirst({ where: { id: requestId, partyId: writer.partyId }, select: { styleIds: true } }))
+  return (row?.styleIds.length ?? 0) > 0
 }
 
 /** Whether an office person started the draft (od-s s.2, Owner yes 1a: the office discards only such a draft). */
@@ -319,6 +330,7 @@ export async function requestView(writer: DraftWriter, row: RequestRow) {
       status: row.status as RequestStatus,
       words: REQUEST_STATUS_WORDS[row.status as RequestStatus],
       source: row.source as RequestSource,
+      subject: row.subject, // od-s s.3 (addendum R2): the draft's title
       customerRef: row.customerRef,
       shipToAddressId: row.shipToAddressId,
       requestedDate: dayText(row.requestedDate),
@@ -353,6 +365,8 @@ export async function requestView(writer: DraftWriter, row: RequestRow) {
       madeToMeasure: draft ? { open: mtm.open, words: mtm.open ? null : MTM_CLOSED_WORDS, garmentTypes: mtm.open ? [...mtm.garmentTypes] : [] } : null,
       // ---- end B-CP-075
       savedBy, // od-s s.2 (W2)
+      // od-s s.3 (L5): the portal reads only whether the factory works on the design, never a style id (the office reads its own styles).
+      ...(writer.door === 'portal' ? { designStarted: await designStartedOf(writer, row.id) } : {}),
     },
     addresses: addresses.map(({ approvalStatus, refuseReason, ...address }) => ({ ...address, isDefault: address.isDefaultShipTo, approval: approvalView({ approvalStatus, refuseReason }) })),
     seesPrices: writer.seesPrices,
@@ -438,7 +452,8 @@ export async function listRequests(writer: DraftWriter, query: { readonly status
   const draftOf = (row: RequestRow) => {
     if (row.status !== 'DRAFT') return null
     const first = firstLines.get(row.id)
-    return { title: first ? (isCatalogueLine(first) ? (styleNames.get(first.styleId) ?? null) : ownWordsOf(first)) : null, startedBy: whoSaved(row.createdById), savedBy: whoSaved(row.lastEditedById), savedAt: iso(row.lastEditedAt ?? row.updatedAt)! }
+    // od-s s.3 (addendum R2): the subject is the title; else line 1's words or style.
+    return { title: row.subject ?? (first ? (isCatalogueLine(first) ? (styleNames.get(first.styleId) ?? null) : ownWordsOf(first)) : null), startedBy: whoSaved(row.createdById), savedBy: whoSaved(row.lastEditedById), savedAt: iso(row.lastEditedAt ?? row.updatedAt)! }
   }
   // ---- end od-s s.2
   return {
@@ -451,6 +466,7 @@ export async function listRequests(writer: DraftWriter, query: { readonly status
         status: row.status as RequestStatus,
         words: REQUEST_STATUS_WORDS[row.status as RequestStatus],
         source: row.source as RequestSource,
+        subject: row.subject, // od-s s.3
         customerRef: row.customerRef,
         requestedDate: dayText(row.requestedDate),
         lines: totals.lines,
@@ -478,6 +494,8 @@ export async function getRequest(writer: DraftWriter, requestId: string) {
 // ---- the draft's header ------------------------------------------------------------------------------------------------
 
 export interface HeaderBody {
+  /** od-s s.3 (addendum R2): the draft's subject, as a mail's (1 to 200; null clears it) — its title. */
+  readonly subject?: string | null | undefined
   readonly customerRef?: string | null | undefined
   readonly shipToAddressId?: string | null | undefined
   readonly requestedDate?: BusinessDate | null | undefined
@@ -497,6 +515,7 @@ async function headerIssues(writer: DraftWriter, body: HeaderBody, day: Business
     if (!address || address.status !== 'ACTIVE' || !address.kinds.includes('SHIP_TO')) issues.push({ path: 'body/shipToAddressId', message: 'Choose one of your active delivery addresses.' })
   }
   if (body.requestedDate && body.requestedDate < day) issues.push({ path: 'body/requestedDate', message: 'The requested delivery date is today or later.' })
+  if (body.subject && body.subject.trim().length > SUBJECT_MAX) issues.push({ path: 'body/subject', message: `A subject is at most ${SUBJECT_MAX} characters.` }) // od-s s.3
   if (body.customerRef && body.customerRef.trim().length > ORDERING_LIMITS.customerRef) issues.push({ path: 'body/customerRef', message: `At most ${ORDERING_LIMITS.customerRef} characters.` })
   if (body.note && body.note.trim().length > ORDERING_LIMITS.note) issues.push({ path: 'body/note', message: `At most ${ORDERING_LIMITS.note} characters.` })
   if (body.laterParts && new Set(body.laterParts).size !== body.laterParts.length) issues.push({ path: 'body/laterParts', message: 'Name each part sent later once.' }) // B-CP-075
@@ -504,6 +523,7 @@ async function headerIssues(writer: DraftWriter, body: HeaderBody, day: Business
 }
 
 const headerData = (body: HeaderBody) => ({
+  ...(body.subject !== undefined ? { subject: blankToNull(body.subject) } : {}), // od-s s.3
   ...(body.customerRef !== undefined ? { customerRef: blankToNull(body.customerRef) } : {}),
   ...(body.shipToAddressId !== undefined ? { shipToAddressId: body.shipToAddressId } : {}),
   ...(body.requestedDate !== undefined ? { requestedDate: body.requestedDate === null ? null : dayValue(body.requestedDate) } : {}),

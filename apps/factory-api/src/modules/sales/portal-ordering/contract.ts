@@ -15,6 +15,8 @@ import { CUSTOM_LINE_KINDS, CUSTOM_LINE_LIMITS } from '@nexus/factory-domain/sal
 import { ACCEPT_MAP_LIMITS } from '@nexus/factory-domain/sales/portal-ordering/office'
 import { MAX_TEXT } from '@nexus/factory-domain/sales/quotes/quotes'
 import { pictureIds, smallPicturesView } from '../../product/images/small-pictures' // B-CQ-030
+// od-s s.3 (order start): the draft's subject; Make style draft takes the Inquiry's body.
+import { styleDraftBody } from '@nexus/factory-domain/sales/inquiries/contracts'
 
 /**
  * Portal ordering (B-W2b-190; SAL-071, SAL-072, SAL-073, SAL-074, SAL-079; design portal.customer.catalogue,
@@ -193,6 +195,8 @@ const requestBody = output({
   status: z.enum(REQUEST_STATUSES),
   words,
   source: z.enum(SOURCES),
+  /** od-s s.3 (addendum R2): the draft's subject, as a mail's — its title (null: none; the page says line 1's words or "Draft order"). */
+  subject: z.string().nullable(),
   customerRef: z.string().nullable(),
   shipToAddressId: id().nullable(),
   requestedDate: day.nullable(),
@@ -237,6 +241,8 @@ const requestBody = output({
   // ---- end B-CP-075
   /** od-s s.2 (W2): who saved it last, from the reader's side ("Saved 10:52 by the factory" in the portal). */
   savedBy,
+  /** od-s s.3 (L5): the portal's read only — the factory made a style draft for it ("The factory is working on the design."); never an id. */
+  designStarted: z.boolean().optional(),
 })
 
 const address = output({
@@ -261,6 +267,8 @@ const address = output({
 const record = output({ request: requestBody, addresses: z.array(address), seesPrices: notMoney(z.boolean()) })
 
 const header = {
+  /** od-s s.3 (addendum R2): the subject, as a mail's (1 to 200; null or '' clears it). Nothing is required to start. */
+  subject: z.string().trim().max(200).nullish(),
   customerRef: z.string().trim().max(ORDERING_LIMITS.customerRef).nullish(),
   shipToAddressId: id().nullish(),
   requestedDate: day.nullish(),
@@ -282,6 +290,7 @@ export const listRequestsContract = defineContract({
           status: z.enum(REQUEST_STATUSES),
           words,
           source: z.enum(SOURCES),
+          subject: z.string().nullable(), // od-s s.3
           customerRef: z.string().nullable(),
           requestedDate: day.nullable(),
           lines: z.number().int(),
@@ -606,8 +615,16 @@ const officeRecord = output({
      * order; none: nothing to map), and why it is not accepted as an order (a made-to-measure line: a quote first; null: it may be).
      */
     acceptMap: output({ lineIds: z.array(id()), orderHeld: z.string().nullable() }),
+    /** od-s s.3 (addendum R2): the draft's subject. */
+    subject: z.string().nullable(),
+    /** od-s s.3 (L5): the style drafts the office made for it, in the order made (office only; the portal reads a yes/no). */
+    styles: z.array(output({ id: id(), code: z.string(), name: z.string(), status: z.string() })),
   }),
-  may: output({ order: z.boolean(), quote: z.boolean(), refuse: z.boolean() }),
+  /**
+   * od-s s.3: + confirm (a draft or a sent request, orders.manage: POST …/confirm sends it if still a draft and accepts it) and
+   * styleDraft (a draft or a sent request, product.styles.manage over its company, fewer than 50 style drafts).
+   */
+  may: output({ order: z.boolean(), quote: z.boolean(), refuse: z.boolean(), confirm: z.boolean(), styleDraft: z.boolean() }),
 })
 
 export const officeListContract = defineContract({
@@ -643,6 +660,29 @@ export const officeListContract = defineContract({
 })
 
 export const officeGetContract = defineContract({ params: requestParams, response: { 200: officeRecord } })
+
+// ---- od-s s.3 (order start, 13-backend § 4; Owner yes 1a): the office's door to a customer's draft — the portal's bodies and its
+// record for the SAME commands (the office's twins reuse the portal's line, people and file contracts). The office never sends the
+// customer's own price (`brandUnitPrice`: 403 without the price grain, else 400 in words).
+export const officeStartContract = defineContract({ body: input({ companyId: id(), partyId: id(), source: z.enum(SOURCES).optional(), ...header }), response: { 201: record } })
+export const officeDraftContract = defineContract({ params: requestParams, response: { 200: record } })
+export const styleDraftContract = defineContract({
+  params: requestParams,
+  body: styleDraftBody,
+  response: {
+    200: output({
+      styleId: id(),
+      code: z.string(),
+      name: z.string(),
+      status: z.string(),
+      /** The request's version after it (the style is appended to its style drafts). */
+      version,
+      /** The draft's logos and references carried to the style (Use on…), and those not, with why. */
+      files: output({ carried: z.array(output({ sourceFileId: id(), fileId: id(), name: z.string() })), notCarried: z.array(output({ sourceFileId: id(), name: z.string(), reason: z.string() })) }),
+    }),
+  },
+})
+// ---- end od-s s.3
 
 // ---- B-CQ-030 (customer page › Quotes & incoming, L12): the small pictures of a page of portal orders (drafts too) in ONE read, the
 // one picture helper and answer shape (modules/product/images/small-pictures.ts): orders.view over each one's company and customer.

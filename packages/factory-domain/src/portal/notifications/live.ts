@@ -10,7 +10,7 @@ import { PORTAL_SHIP_NOTICES_VIEW } from '../../purchasing/ship-notices/permissi
 import { PORTAL_SUPPLIER_DOCUMENTS_VIEW, PORTAL_SUPPLIER_PROFILE_VIEW } from '../../purchasing/portal-profile/permissions'
 // B-W2b-196: the customer's Account page (its colleagues, its delivery addresses).
 import { PORTAL_COLLEAGUES_VIEW } from '../../auth/partners/permissions'
-import { PORTAL_ADDRESSES_VIEW } from '../../sales/portal-ordering/permissions'
+import { PORTAL_ADDRESSES_VIEW, PORTAL_ORDER_DRAFTS_EDIT } from '../../sales/portal-ordering/permissions'
 // B-TH-011: a customer's requests (its list, tiles and request page update).
 import { PORTAL_SALES_ORDERS_VIEW } from '../../sales/portal-orders/permissions'
 // B-PR-16: the customer's own production (stage, health, urgency, hold).
@@ -99,6 +99,11 @@ export const PARTNER_LIVE_EVENTS: Readonly<Record<string, PartnerLiveRule>> = Ob
   'order_change_request.answered': { permission: PORTAL_SALES_ORDERS_VIEW, party: 'partyId', partyFrom: 'payload', fields: ['requestId', 'orderId', 'kind', 'answer'] },
   'order_change_request.countered': { permission: PORTAL_SALES_ORDERS_VIEW, party: 'partyId', partyFrom: 'payload', fields: ['requestId', 'orderId', 'kind'] },
   // ── end B-SA-055
+  // ── od-s s.3 (order start, W3): a draft order changed — by the office too — reaches the SAME customer's portal sessions that keep
+  // drafts (portal.orderDrafts.edit), so the open draft reads again; the request's id only (never who changed it or what), the
+  // party from the payload (the office rule keeps it out of its fields), never another customer's session.
+  'portal_order_request.draft_changed': { permission: PORTAL_ORDER_DRAFTS_EDIT, party: 'partyId', partyFrom: 'payload', fields: ['requestId'] },
+  // ── end od-s s.3
 })
 
 /**

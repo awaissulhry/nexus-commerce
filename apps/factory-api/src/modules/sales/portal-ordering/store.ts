@@ -36,6 +36,9 @@ export const REQUEST_COLUMNS = {
   laterParts: true,
   lastEditedById: true,
   lastEditedAt: true,
+  // od-s s.3 (addendum R2): the draft's subject (its title), partner-readable. NEVER `styleIds` here: the partner role cannot read it
+  // (every portal read would fail); the office reads it on its own (./office.ts, ./style-draft.ts), the portal only as a yes/no.
+  subject: true,
 } as const satisfies Prisma.PortalOrderRequestSelect
 
 export const LINE_COLUMNS = {
