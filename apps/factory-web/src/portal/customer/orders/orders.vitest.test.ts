@@ -638,7 +638,7 @@ describe('B-TH-246 — the customer\'s own sheet in its portal', () => {
   it('the band\'s ⋯ offers Download all (and says while the file is prepared)', () => {
     const words = { t, locale: 'en', time: (value: string) => value, day } as unknown as Parameters<typeof listBandOf>[0]['words']
     const band = listBandOf({ words, asOf: null, onDownloadAll: () => undefined })
-    expect(band.more?.find((item) => item.id === 'download-all')?.label).toBe('Download all (Excel)')
+    expect(band.more?.find((item) => item.id === 'download-all')?.label).toBe('Download (Excel)') // pg-w2 (Z8): one export, the group shown
     expect(listBandOf({ words, asOf: null, onDownloadAll: () => undefined, downloading: true }).more?.find((item) => item.id === 'download-all')?.disabled).toBe(true)
     expect(listBandOf({ words, asOf: null }).more?.some((item) => item.id === 'download-all')).toBe(false)
   })
