@@ -1,7 +1,7 @@
 import { formatNumber } from '../i18n/format'
 import type { Locale } from '../i18n/locales'
 import { addressLine } from '../address-line'
-import { LIMITS, STILL_OPEN_KINDS, type CustomLine, type CustomLineKind, type DraftChoice, type DraftFile, type DraftLine, type DraftPerson, type DraftRecord, type DraftRequest, type HeaderBody, type MadeToMeasure, type MeasureBy, type NoticeCode, type PersonFields, type Problem, type SavedBy, type ShipTo, type SizeAsk, type Sizing, type StillOpen, type StillOpenKind } from './schema'
+import { LIMITS, STILL_OPEN_KINDS, type CustomLine, type CustomLineKind, type DraftChoice, type DraftFile, type DraftLine, type DraftPerson, type DraftRecord, type DraftRequest, type HeaderBody, type MadeToMeasure, type MeasureBy, type NoticeCode, type OwnNumber, type PersonFields, type Problem, type SavedBy, type ShipTo, type SizeAsk, type Sizing, type StillOpen, type StillOpenKind } from './schema'
 import { DRAFT_FILES_MAX } from '@nexus/factory-domain/sales/portal-ordering/draft-files'
 import { PEOPLE_LIMITS } from '@nexus/factory-domain/sales/portal-ordering/people'
 
@@ -507,6 +507,23 @@ export interface ProductRow {
   readonly choices: readonly DraftChoice[]
   readonly files: readonly DraftFile[]
   readonly problems: readonly Problem[]
+  /** od-fx2 (B-TH-304): a catalogue row copied from a past order — the customer's own number and PO only (never the office's SO-…). */
+  readonly from?: RowFrom | null
+}
+
+/** Where a reordered row came from: the customer's own order number, its PO, its day. */
+export interface RowFrom {
+  readonly yourNumber: OwnNumber
+  readonly customerRef: string | null
+  readonly orderDate: string | null
+}
+
+/** Where a reorder line came from, in words: "from your order 12 (your PO BA-PO-4410)", else by its day — never SO-…. */
+export function fromOrderText(source: RowFrom, t: Translate, day: (date: string) => string): string {
+  const ref = source.customerRef
+  if (source.yourNumber) return ref ? t('lines.fromOwnRef', { seq: source.yourNumber.seq, ref }) : t('lines.fromOwn', { seq: source.yourNumber.seq })
+  const when = source.orderDate ? day(source.orderDate) : '—'
+  return ref ? t('lines.fromDayRef', { day: when, ref }) : t('lines.fromDay', { day: when })
 }
 
 /** The rows of the table, in one order by seq (catalogue and the customer's own words together). */
@@ -533,6 +550,7 @@ export function productRowsOf(request: Pick<DraftViewRequest, 'lines' | 'files'>
         choices: line.choices ?? [],
         files: filesOf(line.id),
         problems: line.problems,
+        from: line.source ? { yourNumber: line.source.yourNumber, customerRef: line.source.customerRef, orderDate: line.source.orderDate } : null,
       }
     }
     const line = entry.line
