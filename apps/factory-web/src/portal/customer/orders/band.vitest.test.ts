@@ -201,6 +201,18 @@ describe('w1.3 — the tab strip: Overview · Lines · Shipments · Files, in th
     expect(productionRowHref('/p/X', { id: 'o1' })).toBe('/p/X/orders/o1?tab=overview')
   })
 
+  // pp-fx5 (walk W-13): at 375 "Files 1" sat under the › arrow, "‹ ew" at the left — the strip's own width moved after the DS revealed the
+  // tab. The portal brings the tab you are on to the strip's middle whenever the strip or a tab changes size (sideways only, never the page).
+  it('W-13: the tab you are on is brought whole into view, sideways only, whenever the strip or a tab changes size', () => {
+    const html = render(createElement(recordScreen.view, { model: recordScreen.cases.find((item) => item.id === 'files')!.model }), 'en')
+    expect(html.search(/<div class="fw-pord-tabs">[\s\S]*?<nav[^>]*aria-label="Order"/)).toBeGreaterThanOrEqual(0)
+    const view = readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("const tab = strip.querySelector<HTMLElement>('[aria-current=\"page\"]')")
+    expect(view).toContain('strip.scrollLeft += own.left + own.width / 2 - (box.left + box.width / 2)')
+    expect(view).toContain('observer.observe(strip)')
+    expect(view).not.toMatch(/scrollIntoView\(/)
+  })
+
   it('G10: on a phone the band’s row 1 holds ‹ · the title · ⋯; the reference, the pills and Pages go to row 2 (one shell rule)', () => {
     const css = readFileSync(new URL('../../shell/portal-shell.css', import.meta.url), 'utf8')
     const phone = css.slice(css.indexOf('@media (max-width: 719px)'))
