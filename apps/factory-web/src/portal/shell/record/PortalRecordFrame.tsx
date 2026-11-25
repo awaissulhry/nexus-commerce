@@ -319,6 +319,12 @@ export function PortalRecordFrame({ thread, threadLabel, children, design }: Por
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
     const scroller = scrollerOf(element)
     if (scroller) observer?.observe(scroller)
+    // pp-fx4 (walk W-04): the dock's top moves after the first measure — the page fills the band after mounting (a supplier order's band
+    // grows by its tabs row, 47 px), and the body above the frame loads (notices). The band and the main are watched too.
+    const band = scroller?.querySelector<HTMLElement>(':scope > .fw-pband') ?? null
+    if (band) observer?.observe(band)
+    const main = element.closest('main')
+    if (main) observer?.observe(main)
     window.addEventListener('resize', measure)
     return () => {
       observer?.disconnect()

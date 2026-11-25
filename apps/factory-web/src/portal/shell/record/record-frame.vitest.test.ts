@@ -197,6 +197,14 @@ describe('B-TH-273 — no Ask modal: "Ask a question" focuses the docked box, el
     expect(frame).toContain('const giveUp = setTimeout(done, BOX_WAIT_MS)')
     expect(frame).toContain('if (asked.focus) setFocusAsked(true)')
   })
+  // pp-fx4 (walk W-04): a supplier order's band grows by its tabs row after the first measure (the page fills the band after mounting): the
+  // dock's height is measured again whenever the band or the main changes size, so Send is on screen at first load on every host (G2).
+  it('G2 on every host: the dock is measured again when the band or the main changes size, not only the scroller', () => {
+    const frame = readFileSync(new URL('./PortalRecordFrame.tsx', import.meta.url), 'utf8')
+    expect(frame).toContain('if (scroller) observer?.observe(scroller)')
+    expect(frame).toContain('if (band) observer?.observe(band)')
+    expect(frame).toContain('if (main) observer?.observe(main)')
+  })
   // pt-w2 W2.3: the docked conversation's own tests (its count, read only while on screen, a removed message) live with the thread now:
   // portal/shell/thread/thread.vitest.test.ts.
 })
