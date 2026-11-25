@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { PROBLEM_CODES as DOMAIN_PROBLEMS, REQUEST_STATUSES as DOMAIN_STATUSES, SOURCES as DOMAIN_SOURCES } from '@nexus/factory-domain/sales/portal-ordering/rules'
+import { holdsSend, PROBLEM_CODES as DOMAIN_PROBLEMS, REQUEST_STATUSES as DOMAIN_STATUSES, SOURCES as DOMAIN_SOURCES } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import { REORDER_NOTICES as DOMAIN_NOTICES } from '@nexus/factory-domain/sales/portal-ordering/reorder'
 import type { DesignScreen } from '../../../lib/design/design-screen'
 import { CATALOGUE, createTranslator, messagesFor } from '../../../lib/i18n/messages'
@@ -13,7 +13,7 @@ import { LIMITS, NOTICE_CODES, PROBLEM_CODES, SOURCES, STATUSES } from './api'
 import { ADDRESSES, catalogueRead, draftRecord, lineOf, pastOrder, styleDetail, STYLES } from './design-data'
 // F-CP-150: the draft order page.
 import { LINE_TROUSERS } from './design-data'
-import { closedOf, draftBannerOf, draftDiscardHeld, draftSendHeld, draftStateOf, draftTitleOf, linesInOrder, mayOf, reorderHeldKey, SEND_HOLDING, whoMayOrder } from './model'
+import { closedOf, draftBannerOf, draftDiscardHeld, draftSendHeld, draftStateOf, draftTitleOf, linesInOrder, mayOf, reorderHeldKey, whoMayOrder } from './model'
 import { OrderingCase } from './view/OrderingCase'
 // F-CP-151: the draft's files.
 import { announceDraftFile, completeDraftFile, removeDraftFile } from './api'
@@ -210,7 +210,8 @@ describe('the send', () => {
     expect(sendHeld({ ...record.request, problems: missing }, facts)).toBeNull()
     const problems = [...missing, { code: 'DATE_PAST' as const, lineId: null, size: null }, { code: 'PRICE_CHANGED' as const, lineId: 'l1', size: null }]
     expect(sendHeld({ ...record.request, problems }, facts)).toEqual({ key: 'held.problems', count: 2 })
-    for (const code of missing.map((problem) => problem.code)) expect(SEND_HOLDING.has(code), code).toBe(false)
+    for (const code of missing.map((problem) => problem.code)) expect(holdsSend(code), code).toBe(false)
+    for (const code of ['DATE_PAST', 'PRICE_CHANGED', 'SIZES_NOT_TOTAL'] as const) expect(holdsSend(code), code).toBe(true)
     expect(t('en')('held.problems', { count: 2 })).toBe('2 problems to fix — Show me')
     expect(writeHeld({ preview: false, offline: false, busy: true })).toBe('held.busy')
   })
@@ -424,6 +425,9 @@ describe('B-TH-220 — New order as an e-mail', () => {
     expect(kept).toMatchObject({ subject: 'Mine', message: 'Hello\n\n- a\n- b' })
     const record = { order: { yourNumber: customerNumberOf('ORDER', 12) }, lines: [{ id: 'l1', style: { code: 'BX-200', name: 'Rain jacket' }, colourway: { code: 'NAV', name: 'Navy' }, description: null, quantity: 9, sizes: [{ size: 'S', ordered: 4 }, { size: 'M', ordered: 5 }, { size: 'L', ordered: 0 }] }] } as unknown as Parameters<typeof reorderText>[0]
     expect(reorderText(record, null, 'en', t('en'))).toEqual({ subject: 'Reorder · Your order 12', lines: ['Please make again:', '- BX-200 Rain jacket, Navy: S × 4, M × 5'], yours: 'Your order 12' })
+    // A charge line (FEE, pp-w1) is no product to make again: never copied into the message.
+    const withFee = { ...record, lines: [...record.lines, { id: 'f1', kind: 'FEE', style: null, colourway: null, description: 'Rush fee', quantity: 1, sizes: [] }] } as unknown as Parameters<typeof reorderText>[0]
+    expect(reorderText(withFee, null, 'en', t('en')).lines).toEqual(['Please make again:', '- BX-200 Rain jacket, Navy: S × 4, M × 5'])
   })
 
   it('offers the customer’s own delivery addresses: never a refused one; a new one waiting for our check is said', () => {

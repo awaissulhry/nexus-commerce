@@ -1,6 +1,7 @@
 import { formatNumber } from '../../../lib/i18n/format'
 import type { Locale } from '../../../lib/i18n/locales'
-import type { DraftRecord, DraftRequest, PastLine, ProblemCode, RequestSource, RequestStatus, Verdict } from './api'
+import type { DraftRecord, DraftRequest, PastLine, RequestSource, RequestStatus, Verdict } from './api'
+import { holdsSend } from '@nexus/factory-domain/sales/portal-ordering/rules'
 // B-TH-304: the customer's own order numbers.
 import type { OwnNumber } from './api'
 // od-w1.1: the ONE draft order's pure parts live in src/lib/order-draft (both doors draw them); the portal's own stay here.
@@ -83,19 +84,14 @@ export function priceText(value: string | null | undefined, currency: string, lo
 /** The sizes a past order's line asked that the copy leaves out. */
 export const droppedOf = (line: Pick<PastLine, 'sizesOrdered' | 'sizes'>): string[] => line.sizesOrdered.map((row) => row.size).filter((size) => !line.sizes.some((row) => row.size === size))
 
-/**
- * od-w1.2 (THE SIMPLE ORDER START R1): the problems that hold Send — an INVALID value only (a date that passed, an address no longer in
- * use, a style no longer sold, a stale price …), never a missing one (no line, no sizes, no total, no people). The server's own rule
- * (factory-domain `holdsSend`, od-s); a draft may go with nothing in it.
- */
-export const SEND_HOLDING: ReadonlySet<ProblemCode> = new Set<ProblemCode>(['TOO_MANY_LINES', 'DATE_PAST', 'SHIP_TO_ARCHIVED', 'STYLE_NOT_SOLD', 'COLOUR_DISCONTINUED', 'SIZE_NOT_OFFERED', 'SIZES_NOT_TOTAL', 'MTM_CLOSED', 'GARMENT_TYPE_GONE', 'PRICE_CHANGED'])
-
 /** Why the send cannot go (key + count), or null: an invalid value only (R1). Typed work is saved first by the send itself. */
 export function sendHeld(request: Pick<DraftRequest, 'problems' | 'status'>, facts: WriteFacts): { key: string; count?: number } | null {
   const held = writeHeld(facts)
   if (held) return { key: held }
   if (request.status !== 'DRAFT') return { key: 'held.notDraft' }
-  const holding = request.problems.filter((problem) => SEND_HOLDING.has(problem.code)).length
+  // od-w1.2 (R1): the domain's own rule (od-s `holdsSend`) — an INVALID value holds it (a date that passed, a stale price …), never
+  // a missing one (no line, no sizes, no total, no people): a draft may go with nothing in it.
+  const holding = request.problems.filter((problem) => holdsSend(problem.code)).length
   return holding > 0 ? { key: 'held.problems', count: holding } : null
 }
 

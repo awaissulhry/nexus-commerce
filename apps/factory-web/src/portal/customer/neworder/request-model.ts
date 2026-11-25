@@ -96,8 +96,10 @@ export function reorderLineText(line: OrderRecord['lines'][number], t: Translate
 /** The subject and message lines for "Reorder this line" (one line) or a whole past order. */
 export function reorderText(record: Pick<OrderRecord, 'order' | 'lines'> & { order: { yourNumber?: OrderRecord['order']['yourNumber'] } }, lineId: string | null, locale: Locale, t: Translate): { subject: string; lines: string[]; yours: string } {
   const yours = yourNumberText(record.order.yourNumber ?? null, locale) ?? t('request.theOrder')
-  const chosen = lineId ? record.lines.filter((line) => line.id === lineId) : record.lines
-  const lines = (chosen.length > 0 ? chosen : record.lines).map((line) => reorderLineText(line, t))
+  // A charge line (FEE, pp-w1) is no product to make again: never copied into the message.
+  const products = record.lines.filter((line) => line.kind !== 'FEE')
+  const chosen = lineId ? products.filter((line) => line.id === lineId) : products
+  const lines = (chosen.length > 0 ? chosen : products).map((line) => reorderLineText(line, t))
   return { subject: t('request.reorderSubject', { yours }), lines: [t('request.reorderIntro'), ...lines], yours }
 }
 
